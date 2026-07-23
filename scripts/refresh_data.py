@@ -191,8 +191,59 @@ def sealevel():
     print(f"  wrote {len(years)} yr of budget + {len(alt_t)} altimetry samples")
 
 
+RGI_REGIONS = [
+    "01_alaska", "02_western_canada_usa", "03_arctic_canada_north", "04_arctic_canada_south",
+    "05_greenland_periphery", "06_iceland", "07_svalbard_jan_mayen", "08_scandinavia",
+    "09_russian_arctic", "10_north_asia", "11_central_europe", "12_caucasus_middle_east",
+    "13_central_asia", "14_south_asia_west", "15_south_asia_east", "16_low_latitudes",
+    "17_southern_andes", "18_new_zealand", "19_subantarctic_antarctic_islands",
+]
+RGI_NAMES = {  # o1region → short label for tooltips
+    "01": "Alaska", "02": "W Canada & US", "03": "Arctic Canada N", "04": "Arctic Canada S",
+    "05": "Greenland periphery", "06": "Iceland", "07": "Svalbard", "08": "Scandinavia",
+    "09": "Russian Arctic", "10": "North Asia", "11": "Central Europe", "12": "Caucasus & M.East",
+    "13": "Central Asia", "14": "South Asia West", "15": "South Asia East", "16": "Low latitudes",
+    "17": "Southern Andes", "18": "New Zealand", "19": "Subantarctic & Antarctic",
+}
+
+
+def glaciers():
+    """Every glacier in the Randomph Glacier Inventory v7 (~275k) as centroid +
+    area, from the RGI7 attribute CSVs. Compact parallel arrays keep the file small."""
+    import csv, io, tarfile
+    base = "https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/l4_rgi7b0_tar/"
+    lon, lat, area, reg = [], [], [], []
+    for r in RGI_REGIONS:
+        url = f"{base}RGI2000-v7.0-C-{r}.tar.gz"
+        print(f"RGI7: {r} ...")
+        raw = urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=300).read()
+        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tf:
+            member = next(m for m in tf.getmembers() if m.name.endswith("-attributes.csv"))
+            rows = csv.DictReader(io.TextIOWrapper(tf.extractfile(member), encoding="utf-8"))
+            for row in rows:
+                try:
+                    lon.append(round(float(row["cenlon"]), 3))
+                    lat.append(round(float(row["cenlat"]), 3))
+                    area.append(round(float(row["area_km2"]), 3))
+                    reg.append(row["o1region"])
+                except (ValueError, KeyError):
+                    continue
+    payload = {
+        "source": "Randolph Glacier Inventory v7.0 (RGI2000-v7.0-C), rgidata.org, CC BY 4.0",
+        "note": "One point per glacier at its centroid, sized by area (km2). ~275k glaciers.",
+        "region_names": RGI_NAMES,
+        "count": len(lon),
+        "total_area_km2": round(sum(area)),
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "lon": lon, "lat": lat, "area": area, "region": reg,
+    }
+    with open(os.path.join(DATA, "glaciers.json"), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    print(f"  wrote {len(lon)} glaciers, total {payload['total_area_km2']:,} km2")
+
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["climatetrace", "argo", "rapid", "sealevel"]
+    which = sys.argv[1:] or ["climatetrace", "argo", "rapid", "sealevel", "glaciers"]
     for w in which:
-        {"climatetrace": climatetrace, "argo": argo, "rapid": rapid, "sealevel": sealevel}[w]()
+        {"climatetrace": climatetrace, "argo": argo, "rapid": rapid, "sealevel": sealevel, "glaciers": glaciers}[w]()
     print("done")

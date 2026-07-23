@@ -146,3 +146,22 @@ test.describe("species.json", () => {
     expect(s.note.toLowerCase()).toContain("presence");
   });
 });
+
+test.describe("glaciers.json", () => {
+  const g = read("glaciers.json");
+
+  test("RGI v7 glaciers: aligned arrays, plausible count/area, valid coords", () => {
+    expect(g.count).toBeGreaterThan(150000);          // RGI7 C-product ~193k
+    expect(g.lon).toHaveLength(g.count);
+    expect(g.lat).toHaveLength(g.count);
+    expect(g.area).toHaveLength(g.count);
+    expect(g.total_area_km2).toBeGreaterThan(600000);  // ~706k km² global total
+    expect(g.total_area_km2).toBeLessThan(800000);
+    // spot-check coordinate/area validity across the array
+    for (let i = 0; i < g.count; i += 5000) {
+      expect(Math.abs(g.lon[i])).toBeLessThanOrEqual(180);
+      expect(Math.abs(g.lat[i])).toBeLessThanOrEqual(90);
+      expect(g.area[i]).toBeGreaterThan(0);
+    }
+  });
+});

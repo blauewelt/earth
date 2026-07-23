@@ -1102,6 +1102,32 @@ for (const kind of ["climatetrace", "argo"]) {
   });
 }
 
+/* Randolph Glacier Inventory v7 — ~193k glaciers as centroid points sized by
+ * area. Display-only (no per-point pick) so 193k marks stay performant. */
+let glacierCollection = null;
+async function loadGlaciers() {
+  if (glacierCollection) { glacierCollection.show = true; return; }
+  const j = await (await fetch("data/glaciers.json")).json();
+  const col = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
+  const cold = Cesium.Color.fromCssColorString("#8fd3ff");
+  const big = Cesium.Color.fromCssColorString("#ffffff");
+  for (let i = 0; i < j.lon.length; i++) {
+    const a = j.area[i];
+    col.add({
+      position: Cesium.Cartesian3.fromDegrees(j.lon[i], j.lat[i]),
+      pixelSize: Math.max(1.5, Math.min(12, 1.5 + Math.sqrt(a) * 0.9)),
+      color: (a > 50 ? big : cold).withAlpha(0.8),
+    });
+  }
+  glacierCollection = col;
+  const meta = document.getElementById("meta-glaciers");
+  if (meta) meta.textContent = `${j.count.toLocaleString()} glaciers · ${j.total_area_km2.toLocaleString()} km² · RGI v7 · snapshot ${j.snapshot}`;
+}
+document.getElementById("toggle-glaciers").addEventListener("change", (e) => {
+  if (e.target.checked) loadGlaciers();
+  else if (glacierCollection) glacierCollection.show = false;
+});
+
 /* ------------------------------------------------- biodiversity (GBIF) layer */
 
 /* GBIF occurrence-density tiles are key-free PNGs on a standard power-of-two
@@ -1699,6 +1725,8 @@ window.__earth = {
   loadSeaLevel,
   linTrend,
   probeValueAt,
+  loadGlaciers,
+  get glacierCollection() { return glacierCollection; },
   updateGbifLayer,
   get gbifLayer() { return gbifLayer; },
   get gbifSpecies() { return gbifSpecies; },

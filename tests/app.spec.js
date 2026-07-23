@@ -510,3 +510,15 @@ test("hover value probe reads the actual value from the top colormapped layer", 
     window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-30, 5)));
   expect(none).toBeNull();
 });
+
+test("glacier layer (RGI v7) loads the full inventory as points", async ({ page }) => {
+  await page.check("#toggle-glaciers");
+  await expect
+    .poll(() => page.evaluate(() => window.__earth.glacierCollection?.length ?? 0), { timeout: 20000 })
+    .toBeGreaterThan(150000);
+  await expect(page.locator("#meta-glaciers")).toContainText("glaciers");
+  await expect(page.locator("#meta-glaciers")).toContainText("km²");
+  // toggling off hides but keeps the collection
+  await page.uncheck("#toggle-glaciers");
+  expect(await page.evaluate(() => window.__earth.glacierCollection.show)).toBe(false);
+});
