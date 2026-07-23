@@ -187,3 +187,62 @@ test("every layer entry links to documentation", async ({ page }) => {
     expect(href).toMatch(/^https:\/\//);
   }
 });
+
+test("legends appear for active layers and follow toggles", async ({ page }) => {
+  // SST is on by default → its legend is showing
+  await expect(page.locator("#legend-panel")).toBeVisible();
+  await expect(page.locator("#legend-panel .legend-item")).toHaveCount(1);
+  await expect(page.locator("#legend-panel .legend-item img")).toHaveAttribute(
+    "src", /GHRSST_Sea_Surface_Temperature_H\.svg/);
+  await page.check('#layer-list input[data-id="precip"]');
+  await expect(page.locator("#legend-panel .legend-item")).toHaveCount(2);
+  await page.uncheck('#layer-list input[data-id="precip"]');
+  await page.uncheck('#layer-list input[data-id="sst"]');
+  await expect(page.locator("#legend-panel")).toBeHidden();
+});
+
+test("colormap parser and delta colorization are correct", async ({ page }) => {
+  const r = await page.evaluate(() => {
+    const xml = `
+      <ColorMapEntry rgb="10,20,30" transparent="false" sourceValue="[5.00,5.05)" value="[5.00,5.05)" ref="1"/>
+      <ColorMapEntry rgb="0,0,0" transparent="true" nodata="true" ref="0"/>
+      <ColorMapEntry rgb="40,50,60" transparent="false" sourceValue="[-INF,0.00)" value="[-INF,0.00)" ref="2"/>`;
+    const lut = window.__earth.parseColormap(xml);
+    return {
+      size: lut.size,
+      mid: lut.get((10 << 16) | (20 << 8) | 30),
+      inf: lut.get((40 << 16) | (50 << 8) | 60),
+      warm: window.__earth.deltaColor(3),
+      cool: window.__earth.deltaColor(-3),
+      zero: window.__earth.deltaColor(0),
+    };
+  });
+  expect(r.size).toBe(2);              // transparent/nodata entries excluded
+  expect(r.mid).toBeCloseTo(5.025, 3); // midpoint of the range
+  expect(r.inf).toBe(0);               // open-ended range uses the finite bound
+  expect(r.warm[0]).toBeGreaterThan(r.warm[2]); // warmer → red
+  expect(r.cool[2]).toBeGreaterThan(r.cool[0]); // cooler → blue
+  expect(r.zero[3]).toBe(0);           // no change → transparent
+  expect(r.warm[3]).toBeGreaterThan(150); // strong delta → strongly visible
+});
+
+test("computed-difference mode replaces the SST split with a delta layer", async ({ page }) => {
+  await page.selectOption("#compare-select", "10");
+  await expect(page.locator("#compare-mode-row")).toBeVisible();
+  await page.selectOption("#compare-mode", "delta");
+  const r = await page.evaluate(() => {
+    const e = window.__earth.state.layers["sst"];
+    return {
+      isDelta: e.isDelta,
+      noTwin: !e.cmpLayer,
+      providerIsDelta: e.layer.imageryProvider instanceof window.__earth.SSTDeltaProvider,
+    };
+  });
+  expect(r.isDelta && r.noTwin && r.providerIsDelta).toBe(true);
+  await expect(page.locator("#split-handle")).toBeHidden(); // no swipe in delta mode
+  await expect(page.locator("#legend-panel")).toContainText("Δ SST");
+  // back to split restores the swipe pair
+  await page.selectOption("#compare-mode", "split");
+  await expect(page.locator("#split-handle")).toBeVisible();
+  expect(await page.evaluate(() => !!window.__earth.state.layers["sst"].cmpLayer)).toBe(true);
+});

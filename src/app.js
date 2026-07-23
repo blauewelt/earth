@@ -93,6 +93,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "sst",
+    legend: "https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_H.svg",
     doc: "https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1",
     layer: "GHRSST_L4_MUR_Sea_Surface_Temperature",
     title: "Sea surface temperature (MUR 1 km)",
@@ -102,6 +103,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "sst-anom",
+    legend: "https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_Anomalies_H.svg",
     doc: "https://podaac.jpl.nasa.gov/dataset/MUR25-JPL-L4-GLOB-v04.2",
     layer: "GHRSST_L4_MUR25_Sea_Surface_Temperature_Anomalies",
     title: "SST anomalies (MUR 25 km)",
@@ -111,6 +113,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "precip",
+    legend: "https://gibs.earthdata.nasa.gov/legends/GPM_Precipitation_Rate_H.svg",
     doc: "https://gpm.nasa.gov/data/imerg",
     layer: "IMERG_Precipitation_Rate",
     title: "Precipitation rate (IMERG)",
@@ -120,6 +123,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "seaice",
+    legend: "https://gibs.earthdata.nasa.gov/legends/AMSR_Sea_Ice_Concentration_H.svg",
     doc: "https://nsidc.org/data/au_si12",
     layer: "AMSRU2_Sea_Ice_Concentration_12km",
     title: "Sea ice concentration (AMSR2)",
@@ -129,6 +133,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "snow",
+    legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_NDSI_Snow_Cover_H.svg",
     doc: "https://nsidc.org/data/mod10a1",
     layer: "MODIS_Terra_NDSI_Snow_Cover",
     title: "Snow cover (MODIS NDSI)",
@@ -138,6 +143,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "aod",
+    legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_Combined_Value_Added_AOD_H.svg",
     doc: "https://atmosphere-imager.gsfc.nasa.gov/products/aerosol",
     layer: "MODIS_Combined_Value_Added_AOD",
     title: "Aerosol optical depth (MODIS)",
@@ -254,7 +260,7 @@ document.getElementById("zoom-home").addEventListener("click", () => {
 
 /* ------------------------------------------------------------ layer control */
 
-const state = { date: defaultDate(), compareYears: 0, layers: {} };
+const state = { date: defaultDate(), compareYears: 0, compareMode: "split", layers: {} };
 
 function defaultDate() {
   const d = new Date(Date.now() - 2 * 864e5); // two days ago: safely available on GIBS
@@ -268,18 +274,144 @@ function compareDate() {
   return `${y - state.compareYears}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+
+/* ------------------------------------------------- computed-delta (SST) mode */
+
+const DELTA_LAYER_ID = "sst";
+const DELTA_RANGE = 4; // °C, legend/scale limit
+const DELTA_COOL = [37, 99, 235];   // cooler than N years ago
+const DELTA_WARM = [230, 59, 46];   // warmer than N years ago
+
+function parseColormap(xml) {
+  // GIBS colormap v1.3: <ColorMapEntry rgb="r,g,b" transparent="false" ... value="[lo,hi)"/>
+  const lut = new Map();
+  const re = /<ColorMapEntry\s+rgb="(\d+),(\d+),(\d+)"\s+transparent="false"[^>]*?\svalue="\[([^,]+),([^)\]]+)[\)\]]"/g;
+  let m;
+  while ((m = re.exec(xml))) {
+    const key = (+m[1] << 16) | (+m[2] << 8) | +m[3];
+    const lo = parseFloat(m[4]);
+    const hi = parseFloat(m[5]);
+    const v = Number.isFinite(lo) && Number.isFinite(hi) ? (lo + hi) / 2
+      : Number.isFinite(lo) ? lo : hi;
+    if (Number.isFinite(v)) lut.set(key, v);
+  }
+  return lut;
+}
+
+function deltaColor(d) {
+  // diverging: blue = cooler, red = warmer; opacity scales with |delta|
+  const t = Cesium.Math.clamp(d / DELTA_RANGE, -1, 1);
+  const a = Math.round(Math.min(1, Math.abs(t) + 0.06) * 235);
+  if (Math.abs(d) < 0.05) return [0, 0, 0, 0];
+  const c = t > 0 ? DELTA_WARM : DELTA_COOL;
+  return [c[0], c[1], c[2], a];
+}
+
+let sstLUTPromise = null;
+function getSstLUT() {
+  if (!sstLUTPromise) {
+    sstLUTPromise = fetch("https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature.xml")
+      .then((r) => r.text())
+      .then(parseColormap);
+  }
+  return sstLUTPromise;
+}
+
+/* Minimal custom ImageryProvider: fetches the SST tile for two dates, inverts
+ * the GIBS colormap to °C, and renders the per-pixel difference. */
+class SSTDeltaProvider {
+  constructor(cfg, dateNow, datePast) {
+    this._cfg = cfg;
+    this._now = dateNow;
+    this._past = datePast;
+    this.tilingScheme = new GIBSGeographicTilingScheme();
+    this.rectangle = this.tilingScheme.rectangle;
+    this.tileWidth = 512;
+    this.tileHeight = 512;
+    this.maximumLevel = cfg.maxLevel;
+    this.minimumLevel = 0;
+    this.errorEvent = new Cesium.Event();
+    this.credit = new Cesium.Credit("Δ computed client-side from NASA GIBS MUR SST");
+    this.tileDiscardPolicy = undefined;
+    this.hasAlphaChannel = true;
+    this.proxy = undefined;
+    this.ready = true;
+  }
+  getTileCredits() { return undefined; }
+  pickFeatures() { return undefined; }
+  _url(date, x, y, level) {
+    return GIBS_URL
+      .replace("{layer}", this._cfg.layer)
+      .replace("{time}", date)
+      .replace("{tms}", this._cfg.tms)
+      .replace("{ext}", this._cfg.ext)
+      .replace("{TileMatrix}", level)
+      .replace("{TileRow}", y)
+      .replace("{TileCol}", x);
+  }
+  async _fetchTile(url) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      return await createImageBitmap(await r.blob());
+    } catch {
+      return null;
+    }
+  }
+  async requestImage(x, y, level) {
+    const lut = await getSstLUT();
+    const [imgNow, imgPast] = await Promise.all([
+      this._fetchTile(this._url(this._now, x, y, level)),
+      this._fetchTile(this._url(this._past, x, y, level)),
+    ]);
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!imgNow || !imgPast) return canvas; // transparent tile on failure
+    ctx.drawImage(imgNow, 0, 0);
+    const dNow = ctx.getImageData(0, 0, 512, 512).data;
+    ctx.clearRect(0, 0, 512, 512);
+    ctx.drawImage(imgPast, 0, 0);
+    const dPast = ctx.getImageData(0, 0, 512, 512).data;
+    const out = ctx.createImageData(512, 512);
+    const o = out.data;
+    for (let i = 0; i < dNow.length; i += 4) {
+      if (dNow[i + 3] === 0 || dPast[i + 3] === 0) continue;
+      const vNow = lut.get((dNow[i] << 16) | (dNow[i + 1] << 8) | dNow[i + 2]);
+      const vPast = lut.get((dPast[i] << 16) | (dPast[i + 1] << 8) | dPast[i + 2]);
+      if (vNow === undefined || vPast === undefined) continue;
+      const [r, g, b, a] = deltaColor(vNow - vPast);
+      o[i] = r; o[i + 1] = g; o[i + 2] = b; o[i + 3] = a;
+    }
+    ctx.clearRect(0, 0, 512, 512);
+    ctx.putImageData(out, 0, 0);
+    return canvas;
+  }
+}
+
 function addLayer(cfg) {
-  const entry = { cfg, layer: null, cmpLayer: null, alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
-  entry.layer = viewer.imageryLayers.addImageryProvider(gibsProvider(cfg, state.date));
-  entry.layer.alpha = entry.alpha;
+  const entry = { cfg, layer: null, cmpLayer: null, isDelta: false, alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
   const cmp = compareDate();
-  if (cmp && cfg.timed) {
-    entry.layer.splitDirection = Cesium.SplitDirection.RIGHT;      // right = current
-    entry.cmpLayer = viewer.imageryLayers.addImageryProvider(gibsProvider(cfg, cmp));
-    entry.cmpLayer.alpha = entry.alpha;
-    entry.cmpLayer.splitDirection = Cesium.SplitDirection.LEFT;    // left = past
+  if (cmp && cfg.timed && state.compareMode === "delta" && cfg.id === DELTA_LAYER_ID) {
+    // computed per-pixel difference: value(now) - value(cmp)
+    entry.layer = viewer.imageryLayers.addImageryProvider(
+      new SSTDeltaProvider(cfg, state.date, cmp)
+    );
+    entry.layer.alpha = entry.alpha;
+    entry.isDelta = true;
+  } else {
+    entry.layer = viewer.imageryLayers.addImageryProvider(gibsProvider(cfg, state.date));
+    entry.layer.alpha = entry.alpha;
+    if (cmp && cfg.timed && state.compareMode === "split") {
+      entry.layer.splitDirection = Cesium.SplitDirection.RIGHT;      // right = current
+      entry.cmpLayer = viewer.imageryLayers.addImageryProvider(gibsProvider(cfg, cmp));
+      entry.cmpLayer.alpha = entry.alpha;
+      entry.cmpLayer.splitDirection = Cesium.SplitDirection.LEFT;    // left = past
+    }
   }
   state.layers[cfg.id] = entry;
+  updateLegends();
 }
 
 function removeLayer(id) {
@@ -289,6 +421,8 @@ function removeLayer(id) {
   if (entry.cmpLayer) viewer.imageryLayers.remove(entry.cmpLayer, true);
   entry.layer = null;
   entry.cmpLayer = null;
+  entry.isDelta = false;
+  updateLegends();
 }
 
 function refreshTimedLayers() {
@@ -311,7 +445,8 @@ const splitHandle = document.getElementById("split-handle");
 const splitLabels = document.getElementById("split-labels");
 
 function updateSplitUI() {
-  const active = state.compareYears > 0 && anyTimedActive();
+  document.getElementById("compare-mode-row").classList.toggle("hidden", state.compareYears === 0);
+  const active = state.compareYears > 0 && anyTimedActive() && state.compareMode === "split";
   splitHandle.classList.toggle("hidden", !active);
   splitLabels.classList.toggle("hidden", !active);
   if (active) {
@@ -347,6 +482,31 @@ document.getElementById("compare-select").addEventListener("change", (e) => {
   state.compareYears = Number(e.target.value);
   refreshTimedLayers();
 });
+
+document.getElementById("compare-mode").addEventListener("change", (e) => {
+  state.compareMode = e.target.value;
+  refreshTimedLayers();
+});
+
+/* --------------------------------------------------------------- legends */
+
+function updateLegends() {
+  const panel = document.getElementById("legend-panel");
+  if (!panel) return;
+  const items = [];
+  for (const e of Object.values(state.layers)) {
+    if (!e.layer) continue;
+    if (e.isDelta) {
+      items.push(`<div class="legend-item"><div class="legend-title">Δ SST: ${state.date} minus ${compareDate()} (°C)</div>
+        <div class="delta-scale"><span>−${DELTA_RANGE}</span><div class="delta-bar"></div><span>+${DELTA_RANGE}</span></div>
+        <div class="legend-note">blue = cooler than then · red = warmer · transparent = little change</div></div>`);
+    } else if (e.cfg.legend) {
+      items.push(`<div class="legend-item"><div class="legend-title">${e.cfg.title}</div><img src="${e.cfg.legend}" alt="${e.cfg.title} legend"/></div>`);
+    }
+  }
+  panel.innerHTML = items.join("");
+  panel.classList.toggle("hidden", items.length === 0);
+}
 
 /* ----------------------------------------------------------- GIBS layer panel */
 
@@ -742,12 +902,16 @@ for (const t of Object.keys(tabs)) {
 /* --------------------------------------------------------------------- init */
 
 buildLayerPanel();
+updateLegends();
 loadStations();
 loadCatalog();
 
 /* Test hook: stable handle for the Playwright suite (tests/) — not a public API. */
 window.__earth = {
   viewer,
+  parseColormap,
+  deltaColor,
+  SSTDeltaProvider,
   state,
   pointLayers,
   GIBS_LAYERS,

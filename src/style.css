@@ -162,3 +162,26 @@ footer a { color: var(--fg-dim); }
   font-size: 11px; color: var(--fg); white-space: nowrap; pointer-events: none;
 }
 .hidden { display: none !important; }
+
+/* ---- legends ---- */
+#legend-panel {
+  position: absolute; right: 12px; bottom: 34px; z-index: 20;
+  display: flex; flex-direction: column; gap: 6px; width: 300px;
+}
+.legend-item {
+  background: rgba(22, 27, 34, 0.92); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 8px;
+}
+.legend-title { font-size: 10.5px; color: var(--fg-dim); margin-bottom: 4px; }
+.legend-item img {
+  display: block; width: 100%; background: #f2f2f0;
+  border-radius: 4px; padding: 2px 3px; box-sizing: border-box;
+}
+.legend-note { font-size: 9.5px; color: var(--fg-dim); margin-top: 3px; }
+.delta-scale { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--fg); }
+.delta-bar {
+  flex: 1; height: 10px; border-radius: 5px; border: 1px solid var(--border);
+  background: linear-gradient(to right,
+    rgb(37, 99, 235) 0%, rgba(37, 99, 235, 0) 50%,
+    rgba(230, 59, 46, 0) 50%, rgb(230, 59, 46) 100%);
+}
