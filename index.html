@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>earth — open climate data on a globe</title>
+  <meta name="description" content="A 3D globe for the world's open climate data: NASA GIBS layers, AMOC monitoring network, and a 241-dataset open-data catalog." />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
+  <link rel="stylesheet" href="src/style.css" />
+  <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
+</head>
+<body>
+  <div id="sidebar">
+    <header>
+      <h1>earth</h1>
+      <p class="tagline">open climate data on a globe</p>
+      <nav>
+        <button id="tab-layers" class="tab active">Layers</button>
+        <button id="tab-catalog" class="tab">Catalog</button>
+        <button id="tab-about" class="tab">About</button>
+      </nav>
+    </header>
+
+    <section id="panel-layers" class="panel">
+      <div class="control-row">
+        <label for="layer-date">Date</label>
+        <input type="date" id="layer-date" />
+      </div>
+      <p class="hint">Daily NASA GIBS imagery — most layers update within hours; a few lag by days or have ended (they render empty past their range).</p>
+      <div id="layer-list"></div>
+      <div class="control-row">
+        <label><input type="checkbox" id="toggle-stations" checked /> AMOC &amp; GHG monitoring stations</label>
+      </div>
+      <button id="fly-atlantic" class="wide">Fly to the North Atlantic (AMOC)</button>
+    </section>
+
+    <section id="panel-catalog" class="panel hidden">
+      <input type="search" id="catalog-search" placeholder="Search 241 datasets…" />
+      <div class="control-row filters">
+        <select id="catalog-domain"><option value="">All domains</option></select>
+      </div>
+      <div class="control-row filters">
+        <label><input type="checkbox" id="filter-amoc" /> AMOC-relevant</label>
+        <label><input type="checkbox" id="filter-globe" /> Globe-ready</label>
+      </div>
+      <div id="catalog-count" class="hint"></div>
+      <div id="catalog-list"></div>
+    </section>
+
+    <section id="panel-about" class="panel hidden">
+      <h2>What is this?</h2>
+      <p><strong>earth</strong> is a prototype for exploring the world's open climate data on a 3D globe — and, eventually, for generating predictions from it (e.g., <em>will the AMOC collapse, and when?</em>).</p>
+      <p>It renders time-dynamic NASA GIBS imagery with zero API keys, marks the AMOC monitoring arrays and reference GHG stations, and ships a machine-readable catalog of 241 open climate datasets.</p>
+      <h2>Roadmap</h2>
+      <ul>
+        <li>Zarr-streamed gridded fields (ERA5, CMIP6) rendered client-side</li>
+        <li>Live point layers: Climate TRACE facilities, Argo floats, OpenAQ</li>
+        <li>AMOC dashboard: RAPID/OSNAP transports + early-warning indicators</li>
+        <li>Prediction pipeline: statistical tipping-time estimation (Ditlevsen 2023, van Westen 2024)</li>
+      </ul>
+      <p><a href="docs/CATALOG.md">Data catalog (readable)</a> · <a href="data/catalog.json">catalog.json</a></p>
+    </section>
+
+    <footer>
+      Imagery: <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api">NASA GIBS</a> · No API keys required
+    </footer>
+  </div>
+  <div id="cesiumContainer"></div>
+  <script src="src/app.js"></script>
+</body>
+</html>
