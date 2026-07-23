@@ -11,18 +11,25 @@ const CDN = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1";
 test.beforeEach(async ({ page, baseURL }) => {
   if (process.env.MIRROR) {
     await page.route(/https:\/\/cdnjs\.cloudflare\.com\/.*/, async (route) => {
-      const url = route.request().url()
-        .replace(CDN, `${baseURL}/_vendor/cesium`)
-        .replace("widgets.min.css", "widgets.css");
-      const resp = await page.request.get(url);
-      await route.fulfill({ response: resp });
+      try {
+        const url = route.request().url()
+          .replace(CDN, `${baseURL}/_vendor/cesium`)
+          .replace("widgets.min.css", "widgets.css");
+        const resp = await page.request.get(url);
+        await route.fulfill({ response: resp });
+      } catch {
+        await route.abort().catch(() => {});
+      }
     });
     await page.route(/https:\/\/gibs\.earthdata\.nasa\.gov\/.*/, async (route) => {
-      const url = route.request().url()
-        .replace("https://gibs.earthdata.nasa.gov", "http://localhost:8081");
-      const resp = await page.request.get(url).catch(() => null);
-      if (resp) await route.fulfill({ response: resp });
-      else await route.abort();
+      try {
+        const url = route.request().url()
+          .replace("https://gibs.earthdata.nasa.gov", "http://localhost:8081");
+        const resp = await page.request.get(url);
+        await route.fulfill({ response: resp });
+      } catch {
+        await route.abort().catch(() => {});
+      }
     });
   }
   page.__errors = [];
@@ -189,16 +196,57 @@ test("every layer entry links to documentation", async ({ page }) => {
 });
 
 test("legends appear for active layers and follow toggles", async ({ page }) => {
-  // SST is on by default → its legend is showing
+  // SST is on by default → its legend is showing, rendered from the GIBS colormap
   await expect(page.locator("#legend-panel")).toBeVisible();
   await expect(page.locator("#legend-panel .legend-item")).toHaveCount(1);
-  await expect(page.locator("#legend-panel .legend-item img")).toHaveAttribute(
-    "src", /GHRSST_Sea_Surface_Temperature_H\.svg/);
+  await expect(page.locator("#legend-panel .legend-item canvas.legend-bar")).toHaveCount(1);
+  await expect(page.locator("#legend-panel .legend-range").first()).toContainText("°C");
   await page.check('#layer-list input[data-id="precip"]');
   await expect(page.locator("#legend-panel .legend-item")).toHaveCount(2);
   await page.uncheck('#layer-list input[data-id="precip"]');
   await page.uncheck('#layer-list input[data-id="sst"]');
   await expect(page.locator("#legend-panel")).toBeHidden();
+});
+
+test("hovering a legend shows the exact value of that color", async ({ page }) => {
+  const bar = page.locator("#legend-panel canvas.legend-bar").first();
+  await expect(bar).toBeVisible();
+  const box = await bar.boundingBox();
+  // hover mid-scale → tooltip with a number + units
+  await bar.hover({ position: { x: box.width / 2, y: 7 } });
+  const tip = page.locator("#legend-panel .legend-tip").first();
+  await expect(tip).toBeVisible();
+  await expect(tip).toContainText("°C");
+  const mid = parseFloat(await tip.textContent());
+  expect(Number.isFinite(mid)).toBe(true);
+  // hover near the left end → smaller value than mid-scale
+  await bar.hover({ position: { x: 4, y: 7 } });
+  const left = parseFloat(await tip.textContent());
+  expect(left).toBeLessThan(mid);
+  // parser sanity on the real SST colormap: ~200+ ordered entries in °C
+  const cm = await page.evaluate(async () => {
+    const xml = await (await fetch("https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature.xml")).text();
+    const p = window.__earth.parseColormapEntries(xml);
+    return { units: p.units, n: p.entries.length, first: p.entries[0].lo, last: p.entries[p.entries.length - 1].hi };
+  });
+  expect(cm.units).toBe("°C");
+  expect(cm.n).toBeGreaterThan(150);
+  expect(cm.first).toBeLessThan(cm.last);
+});
+
+test("delta legend hover shows the signed difference in °C", async ({ page }) => {
+  await page.selectOption("#compare-select", "10");
+  await page.selectOption("#compare-mode", "delta");
+  const bar = page.locator("#legend-panel .delta-bar").first();
+  await expect(bar).toBeVisible();
+  const box = await bar.boundingBox();
+  await bar.hover({ position: { x: box.width * 0.9, y: 5 } });
+  const tip = page.locator("#legend-panel .legend-tip").first();
+  await expect(tip).toBeVisible();
+  await expect(tip).toContainText("+");
+  await expect(tip).toContainText("warmer");
+  await bar.hover({ position: { x: box.width * 0.1, y: 5 } });
+  await expect(tip).toContainText("cooler");
 });
 
 test("colormap parser and delta colorization are correct", async ({ page }) => {
@@ -245,4 +293,39 @@ test("computed-difference mode replaces the SST split with a delta layer", async
   await page.selectOption("#compare-mode", "split");
   await expect(page.locator("#split-handle")).toBeVisible();
   expect(await page.evaluate(() => !!window.__earth.state.layers["sst"].cmpLayer)).toBe(true);
+});
+
+test("period-mean difference modes: sample dates and provider wiring", async ({ page }) => {
+  // sample-date generator
+  const d = await page.evaluate(() => ({
+    day: window.__earth.periodSampleDates("2026-07-21", "day"),
+    month: window.__earth.periodSampleDates("2026-07-21", "month"),
+    year: window.__earth.periodSampleDates("2026-07-21", "year"),
+  }));
+  expect(d.day).toEqual(["2026-07-21"]);
+  expect(d.month).toHaveLength(5);
+  expect(d.month.every((x) => x.startsWith("2026-07-"))).toBe(true);
+  expect(d.year).toHaveLength(12);
+  expect(d.year[0]).toBe("2026-01-15");
+  expect(d.year[11]).toBe("2026-12-15");
+  // annual-mean mode wires a year-period provider with capped zoom
+  await page.selectOption("#compare-select", "10");
+  await page.selectOption("#compare-mode", "delta-year");
+  const r = await page.evaluate(() => {
+    const e = window.__earth.state.layers["sst"];
+    const p = e.layer.imageryProvider;
+    return { isDelta: e.isDelta, period: p.period, maxLevel: p.maximumLevel };
+  });
+  expect(r.isDelta).toBe(true);
+  expect(r.period).toBe("year");
+  expect(r.maxLevel).toBe(3);
+  await expect(page.locator("#legend-panel")).toContainText("mean minus");
+  // monthly-mean mode
+  await page.selectOption("#compare-mode", "delta-month");
+  const r2 = await page.evaluate(() => {
+    const p = window.__earth.state.layers["sst"].layer.imageryProvider;
+    return { period: p.period, maxLevel: p.maximumLevel };
+  });
+  expect(r2.period).toBe("month");
+  expect(r2.maxLevel).toBe(4);
 });

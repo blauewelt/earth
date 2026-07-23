@@ -93,6 +93,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "sst",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_H.svg",
     doc: "https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1",
     layer: "GHRSST_L4_MUR_Sea_Surface_Temperature",
@@ -103,6 +104,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "sst-anom",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature_Anomalies.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_Anomalies_H.svg",
     doc: "https://podaac.jpl.nasa.gov/dataset/MUR25-JPL-L4-GLOB-v04.2",
     layer: "GHRSST_L4_MUR25_Sea_Surface_Temperature_Anomalies",
@@ -113,6 +115,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "precip",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/GPM_Precipitation_Rate.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/GPM_Precipitation_Rate_H.svg",
     doc: "https://gpm.nasa.gov/data/imerg",
     layer: "IMERG_Precipitation_Rate",
@@ -123,6 +126,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "seaice",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/AMSR_Sea_Ice_Concentration.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/AMSR_Sea_Ice_Concentration_H.svg",
     doc: "https://nsidc.org/data/au_si12",
     layer: "AMSRU2_Sea_Ice_Concentration_12km",
@@ -133,6 +137,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "snow",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/MODIS_NDSI_Snow_Cover.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_NDSI_Snow_Cover_H.svg",
     doc: "https://nsidc.org/data/mod10a1",
     layer: "MODIS_Terra_NDSI_Snow_Cover",
@@ -143,6 +148,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "aod",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/MODIS_Combined_Value_Added_AOD.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_Combined_Value_Added_AOD_H.svg",
     doc: "https://atmosphere-imager.gsfc.nasa.gov/products/aerosol",
     layer: "MODIS_Combined_Value_Added_AOD",
@@ -307,6 +313,16 @@ function deltaColor(d) {
   return [c[0], c[1], c[2], a];
 }
 
+/* Sample dates used to approximate a period mean from daily GIBS tiles:
+ * month → 5 days spread across the month; year → the 15th of each month. */
+function periodSampleDates(dateStr, period) {
+  const [y, m] = dateStr.split("-").map(Number);
+  const pad = (n) => String(n).padStart(2, "0");
+  if (period === "day") return [dateStr];
+  if (period === "month") return [3, 9, 15, 21, 27].map((d) => `${y}-${pad(m)}-${pad(d)}`);
+  return Array.from({ length: 12 }, (_, i) => `${y}-${pad(i + 1)}-15`); // year
+}
+
 let sstLUTPromise = null;
 function getSstLUT() {
   if (!sstLUTPromise) {
@@ -320,23 +336,30 @@ function getSstLUT() {
 /* Minimal custom ImageryProvider: fetches the SST tile for two dates, inverts
  * the GIBS colormap to °C, and renders the per-pixel difference. */
 class SSTDeltaProvider {
-  constructor(cfg, dateNow, datePast) {
+  constructor(cfg, dateNow, datePast, period = "day") {
     this._cfg = cfg;
-    this._now = dateNow;
-    this._past = datePast;
+    this._period = period;
+    this._datesNow = periodSampleDates(dateNow, period);
+    this._datesPast = periodSampleDates(datePast, period);
     this.tilingScheme = new GIBSGeographicTilingScheme();
     this.rectangle = this.tilingScheme.rectangle;
     this.tileWidth = 512;
     this.tileHeight = 512;
-    this.maximumLevel = cfg.maxLevel;
+    // averaged modes fetch many tiles per tile — cap the zoom to keep it snappy
+    this.maximumLevel = period === "day" ? cfg.maxLevel : period === "month" ? 4 : 3;
     this.minimumLevel = 0;
     this.errorEvent = new Cesium.Event();
-    this.credit = new Cesium.Credit("Δ computed client-side from NASA GIBS MUR SST");
+    this.credit = new Cesium.Credit(
+      period === "day"
+        ? "Δ computed client-side from NASA GIBS MUR SST"
+        : `Δ of sampled ${period}ly means, computed client-side from NASA GIBS MUR SST`
+    );
     this.tileDiscardPolicy = undefined;
     this.hasAlphaChannel = true;
     this.proxy = undefined;
     this.ready = true;
   }
+  get period() { return this._period; }
   getTileCredits() { return undefined; }
   pickFeatures() { return undefined; }
   _url(date, x, y, level) {
@@ -358,30 +381,43 @@ class SSTDeltaProvider {
       return null;
     }
   }
+  /* Mean value per pixel across the period's sample dates (NaN where no data). */
+  async _meanField(dates, x, y, level, lut, ctx) {
+    const N = 512 * 512;
+    const sum = new Float32Array(N);
+    const cnt = new Uint8Array(N);
+    const imgs = await Promise.all(dates.map((d) => this._fetchTile(this._url(d, x, y, level))));
+    for (const img of imgs) {
+      if (!img) continue;
+      ctx.clearRect(0, 0, 512, 512);
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, 512, 512).data;
+      for (let p = 0, i = 0; p < N; p++, i += 4) {
+        if (d[i + 3] === 0) continue;
+        const v = lut.get((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+        if (v === undefined) continue;
+        sum[p] += v;
+        cnt[p]++;
+      }
+    }
+    return { sum, cnt };
+  }
   async requestImage(x, y, level) {
     const lut = await getSstLUT();
-    const [imgNow, imgPast] = await Promise.all([
-      this._fetchTile(this._url(this._now, x, y, level)),
-      this._fetchTile(this._url(this._past, x, y, level)),
-    ]);
     const canvas = document.createElement("canvas");
     canvas.width = 512;
     canvas.height = 512;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!imgNow || !imgPast) return canvas; // transparent tile on failure
-    ctx.drawImage(imgNow, 0, 0);
-    const dNow = ctx.getImageData(0, 0, 512, 512).data;
-    ctx.clearRect(0, 0, 512, 512);
-    ctx.drawImage(imgPast, 0, 0);
-    const dPast = ctx.getImageData(0, 0, 512, 512).data;
+    const [now, past] = await Promise.all([
+      this._meanField(this._datesNow, x, y, level, lut, ctx),
+      this._meanField(this._datesPast, x, y, level, lut, ctx),
+    ]);
     const out = ctx.createImageData(512, 512);
     const o = out.data;
-    for (let i = 0; i < dNow.length; i += 4) {
-      if (dNow[i + 3] === 0 || dPast[i + 3] === 0) continue;
-      const vNow = lut.get((dNow[i] << 16) | (dNow[i + 1] << 8) | dNow[i + 2]);
-      const vPast = lut.get((dPast[i] << 16) | (dPast[i + 1] << 8) | dPast[i + 2]);
-      if (vNow === undefined || vPast === undefined) continue;
-      const [r, g, b, a] = deltaColor(vNow - vPast);
+    for (let p = 0, i = 0; p < 512 * 512; p++, i += 4) {
+      if (now.cnt[p] === 0 || past.cnt[p] === 0) continue;
+      const d = now.sum[p] / now.cnt[p] - past.sum[p] / past.cnt[p];
+      const [r, g, b, a] = deltaColor(d);
       o[i] = r; o[i + 1] = g; o[i + 2] = b; o[i + 3] = a;
     }
     ctx.clearRect(0, 0, 512, 512);
@@ -393,10 +429,12 @@ class SSTDeltaProvider {
 function addLayer(cfg) {
   const entry = { cfg, layer: null, cmpLayer: null, isDelta: false, alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
   const cmp = compareDate();
-  if (cmp && cfg.timed && state.compareMode === "delta" && cfg.id === DELTA_LAYER_ID) {
-    // computed per-pixel difference: value(now) - value(cmp)
+  if (cmp && cfg.timed && state.compareMode.startsWith("delta") && cfg.id === DELTA_LAYER_ID) {
+    // computed per-pixel difference: value(now) - value(cmp); optionally of period means
+    const period = state.compareMode === "delta" ? "day"
+      : state.compareMode === "delta-month" ? "month" : "year";
     entry.layer = viewer.imageryLayers.addImageryProvider(
-      new SSTDeltaProvider(cfg, state.date, cmp)
+      new SSTDeltaProvider(cfg, state.date, cmp, period)
     );
     entry.layer.alpha = entry.alpha;
     entry.isDelta = true;
@@ -493,19 +531,154 @@ document.getElementById("compare-mode").addEventListener("change", (e) => {
 function updateLegends() {
   const panel = document.getElementById("legend-panel");
   if (!panel) return;
-  const items = [];
+  panel.innerHTML = "";
+  let any = false;
   for (const e of Object.values(state.layers)) {
     if (!e.layer) continue;
     if (e.isDelta) {
-      items.push(`<div class="legend-item"><div class="legend-title">Δ SST: ${state.date} minus ${compareDate()} (°C)</div>
-        <div class="delta-scale"><span>−${DELTA_RANGE}</span><div class="delta-bar"></div><span>+${DELTA_RANGE}</span></div>
-        <div class="legend-note">blue = cooler than then · red = warmer · transparent = little change</div></div>`);
-    } else if (e.cfg.legend) {
-      items.push(`<div class="legend-item"><div class="legend-title">${e.cfg.title}</div><img src="${e.cfg.legend}" alt="${e.cfg.title} legend"/></div>`);
+      panel.appendChild(deltaLegendEl());
+      any = true;
+    } else if (e.cfg.colormap || e.cfg.legend) {
+      panel.appendChild(layerLegendEl(e.cfg));
+      any = true;
     }
   }
-  panel.innerHTML = items.join("");
-  panel.classList.toggle("hidden", items.length === 0);
+  panel.classList.toggle("hidden", !any);
+}
+
+/* Interactive legends: rendered from the layer's GIBS colormap so hovering
+ * reveals the exact value (with units) of the color under the cursor. */
+
+const colormapCache = new Map();
+function getColormapEntries(url) {
+  if (!colormapCache.has(url)) {
+    colormapCache.set(
+      url,
+      fetch(url).then((r) => r.text()).then(parseColormapEntries).catch(() => null)
+    );
+  }
+  return colormapCache.get(url);
+}
+
+function parseColormapEntries(xml) {
+  const units = (xml.match(/units="([^"]+)"/) || [])[1] || "";
+  const entries = [];
+  const re = /<ColorMapEntry\s+rgb="(\d+),(\d+),(\d+)"\s+transparent="false"[^>]*?\svalue="[\[\(]([^,]+),([^)\]]+)[\)\]]"/g;
+  let m;
+  while ((m = re.exec(xml))) {
+    let lo = parseFloat(m[4]);
+    let hi = parseFloat(m[5]);
+    if (!Number.isFinite(lo) && !Number.isFinite(hi)) continue;
+    if (!Number.isFinite(lo)) lo = hi;
+    if (!Number.isFinite(hi)) hi = lo;
+    entries.push({ rgb: [+m[1], +m[2], +m[3]], lo, hi });
+  }
+  entries.sort((a, b) => a.lo - b.lo);
+  return { units, entries };
+}
+
+function fmtVal(v) {
+  const a = Math.abs(v);
+  return a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2);
+}
+
+function layerLegendEl(cfg) {
+  const div = document.createElement("div");
+  div.className = "legend-item";
+  div.innerHTML = `<div class="legend-title">${cfg.title}</div>`;
+  const fallback = () => {
+    if (cfg.legend) {
+      div.insertAdjacentHTML(
+        "beforeend",
+        `<img src="${cfg.legend}" alt="${cfg.title} legend"/>`
+      );
+    }
+  };
+  if (cfg.colormap) {
+    getColormapEntries(cfg.colormap).then((cm) => {
+      if (cm && cm.entries.length >= 2) buildLegendBar(div, cm);
+      else fallback();
+    });
+  } else {
+    fallback();
+  }
+  return div;
+}
+
+function buildLegendBar(container, cm) {
+  const wrap = document.createElement("div");
+  wrap.className = "legend-bar-wrap";
+  const canvas = document.createElement("canvas");
+  const W = 268, H = 14;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.height = H + "px";
+  canvas.className = "legend-bar";
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  const n = cm.entries.length;
+  for (let i = 0; i < n; i++) {
+    const [r, g, b] = cm.entries[i].rgb;
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect((i / n) * W, 0, W / n + 1, H);
+  }
+  const tip = document.createElement("div");
+  tip.className = "legend-tip hidden";
+  const range = document.createElement("div");
+  range.className = "legend-range";
+  range.innerHTML = `<span>${fmtVal(cm.entries[0].lo)}</span><span>${cm.units}</span><span>${fmtVal(cm.entries[n - 1].hi)}</span>`;
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const frac = Cesium.Math.clamp((e.clientX - rect.left) / rect.width, 0, 0.9999);
+    const entry = cm.entries[Math.floor(frac * n)];
+    const wide = entry.hi - entry.lo > 1;
+    tip.textContent = (wide
+      ? `${fmtVal(entry.lo)} – ${fmtVal(entry.hi)} ${cm.units}`
+      : `${fmtVal((entry.lo + entry.hi) / 2)} ${cm.units}`).trim();
+    tip.style.left = `${Math.min(Math.max(frac * rect.width - 28, 0), rect.width - 80)}px`;
+    tip.classList.remove("hidden");
+  });
+  canvas.addEventListener("mouseleave", () => tip.classList.add("hidden"));
+  wrap.appendChild(tip);
+  wrap.appendChild(canvas);
+  container.appendChild(wrap);
+  container.appendChild(range);
+}
+
+function deltaLegendEl() {
+  const div = document.createElement("div");
+  div.className = "legend-item";
+  const cmp = compareDate();
+  const label = state.compareMode === "delta-month"
+    ? `Δ SST: ${state.date.slice(0, 7)} mean minus ${cmp.slice(0, 7)} mean (sampled, °C)`
+    : state.compareMode === "delta-year"
+      ? `Δ SST: ${state.date.slice(0, 4)} mean minus ${cmp.slice(0, 4)} mean (sampled, °C)`
+      : `Δ SST: ${state.date} minus ${cmp} (°C)`;
+  div.innerHTML = `<div class="legend-title">${label}</div>`;
+  const wrap = document.createElement("div");
+  wrap.className = "legend-bar-wrap";
+  const bar = document.createElement("div");
+  bar.className = "delta-bar";
+  const tip = document.createElement("div");
+  tip.className = "legend-tip hidden";
+  bar.addEventListener("mousemove", (e) => {
+    const rect = bar.getBoundingClientRect();
+    const frac = Cesium.Math.clamp((e.clientX - rect.left) / rect.width, 0, 1);
+    const v = -DELTA_RANGE + frac * 2 * DELTA_RANGE;
+    tip.textContent = `Δ ${v >= 0 ? "+" : ""}${v.toFixed(1)} °C ${Math.abs(v) < 0.2 ? "(little change)" : v > 0 ? "warmer than then" : "cooler than then"}`;
+    tip.style.left = `${Math.min(Math.max(frac * rect.width - 40, 0), rect.width - 130)}px`;
+    tip.classList.remove("hidden");
+  });
+  bar.addEventListener("mouseleave", () => tip.classList.add("hidden"));
+  wrap.appendChild(tip);
+  wrap.appendChild(bar);
+  div.appendChild(wrap);
+  const range = document.createElement("div");
+  range.className = "legend-range";
+  range.innerHTML = `<span>−${DELTA_RANGE}</span><span>°C</span><span>+${DELTA_RANGE}</span>`;
+  div.appendChild(range);
+  return div;
 }
 
 /* ----------------------------------------------------------- GIBS layer panel */
@@ -910,6 +1083,8 @@ loadCatalog();
 window.__earth = {
   viewer,
   parseColormap,
+  parseColormapEntries,
+  periodSampleDates,
   deltaColor,
   SSTDeltaProvider,
   state,

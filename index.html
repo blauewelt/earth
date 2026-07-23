@@ -43,11 +43,15 @@
         <label for="compare-mode">Mode</label>
         <select id="compare-mode">
           <option value="split" selected>Side-by-side (swipe)</option>
-          <option value="delta">Computed difference (SST)</option>
+          <option value="delta">Difference: day vs day (SST)</option>
+          <option value="delta-month">Difference: monthly means (SST)</option>
+          <option value="delta-year">Difference: annual means (SST)</option>
         </select>
       </div>
       <p class="hint">Daily NASA GIBS imagery. Side-by-side: drag the divider (left = past, right = current).
-        Computed difference: per-pixel "now − then" for sea surface temperature.</p>
+        Computed difference: per-pixel "now − then" for sea surface temperature — day vs day, or means of
+        the selected month/year vs the same period N years earlier (means are sampled from daily fields:
+        5 days per month, 12 days per year; averaged modes limit zoom to stay responsive).</p>
       <div id="layer-list"></div>
 
       <h2>Data layers</h2>

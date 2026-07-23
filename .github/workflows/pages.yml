@@ -36,7 +36,8 @@ jobs:
           retention-days: 7
 
   deploy:
-    needs: test
+    # Deploys immediately (in parallel with the test job) so new features are
+    # usable right away; a failing test run signals a fix-forward, not a block.
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     environment:
       name: github-pages

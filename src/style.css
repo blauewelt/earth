@@ -185,3 +185,21 @@ footer a { color: var(--fg-dim); }
     rgb(37, 99, 235) 0%, rgba(37, 99, 235, 0) 50%,
     rgba(230, 59, 46, 0) 50%, rgb(230, 59, 46) 100%);
 }
+
+/* ---- interactive legend bars ---- */
+.legend-bar-wrap { position: relative; }
+.legend-bar {
+  display: block; width: 100%; border-radius: 4px; cursor: crosshair;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.legend-tip {
+  position: absolute; top: -22px; padding: 1px 7px; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  font-size: 10.5px; color: var(--fg); white-space: nowrap; pointer-events: none;
+  z-index: 21;
+}
+.legend-range {
+  display: flex; justify-content: space-between;
+  font-size: 9.5px; color: var(--fg-dim); margin-top: 3px;
+}
+.delta-bar { cursor: crosshair; }
