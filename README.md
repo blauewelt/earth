@@ -19,6 +19,7 @@ The long-term goal: layer enough observational and model data onto the globe to 
 - **Live data layers** — Climate TRACE's top 1,000 facility emitters and the ~3,800-float Argo fleet as clickable points (`scripts/refresh_data.py` refreshes snapshots).
 - **AMOC dashboard** — the RAPID 26.5°N overturning transport record (2004–2024) with stat tiles and a hoverable chart.
 - **Sea-level budget dashboard** — observed global mean sea level 1900–2018 decomposed into its causes (thermal expansion, glaciers, Greenland, Antarctica, land water), with the summed budget tracking the observed line to show *closure*, plus modern satellite altimetry (Frederikse et al. 2020 + NOAA).
+- **Biodiversity layer** — GBIF occurrence-density tiles (3.9 B records, key-free), with a curated set of climate-indicator species (Atlantic mackerel, emperor penguin, staghorn coral …) whose shifting ranges are a visible fingerprint of warming. See [docs/SPECIES_AND_CLIMATE.md](docs/SPECIES_AND_CLIMATE.md).
 - **Zoom** — scroll, touch pinch, trackpad pinch (ctrl+wheel), and on-globe buttons.
 - **AMOC monitoring network** — the RAPID, OSNAP, MOVE, SAMBA arrays, the Florida Current cable, the subpolar "cold blob" fingerprint region, plus reference GHG stations (Mauna Loa, Jungfraujoch, …) as clickable markers with data links.
 - **Dataset catalog browser** — search and filter all 241 cataloged datasets by domain, AMOC relevance, and globe-readiness, straight from [`data/catalog.json`](data/catalog.json).
@@ -37,6 +38,10 @@ npm ci
 npx playwright install --with-deps chromium
 npx playwright test
 ```
+
+In CI the suite reaches the real CDN, NASA GIBS, and GBIF. In a network-restricted
+sandbox, set `MIRROR=1` and run small local proxies for GIBS (`:8081`) and GBIF
+(`:8082`) plus the vendored Cesium under `_vendor/cesium`.
 
 ## Run it
 

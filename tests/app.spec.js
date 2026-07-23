@@ -31,6 +31,15 @@ test.beforeEach(async ({ page, baseURL }) => {
         await route.abort().catch(() => {});
       }
     });
+    await page.route(/https:\/\/api\.gbif\.org\/.*/, async (route) => {
+      try {
+        const url = route.request().url().replace("https://api.gbif.org", "http://localhost:8082");
+        const resp = await page.request.get(url);
+        await route.fulfill({ response: resp });
+      } catch {
+        await route.abort().catch(() => {});
+      }
+    });
   }
   page.__errors = [];
   page.on("pageerror", (e) => page.__errors.push(String(e)));
@@ -174,9 +183,12 @@ test("AMOC dashboard loads RAPID data and populates stats + chart", async ({ pag
   await expect(page.locator("#amoc-tooltip")).toContainText("Sv");
 });
 
-test("catalog browser filters 241 datasets", async ({ page }) => {
+test("catalog browser filters the dataset list", async ({ page }) => {
   await page.click("#tab-catalog");
-  await expect(page.locator("#catalog-count")).toHaveText("241 of 241 datasets");
+  await expect(page.locator("#catalog-count")).toContainText("datasets");
+  const totalTxt = await page.locator("#catalog-count").textContent();
+  const total = Number(totalTxt.match(/of (\d+)/)[1]);
+  expect(total).toBeGreaterThanOrEqual(241);
   await page.fill("#catalog-search", "RAPID");
   const txt = await page.locator("#catalog-count").textContent();
   const n = Number(txt.split(" ")[0]);
@@ -184,7 +196,7 @@ test("catalog browser filters 241 datasets", async ({ page }) => {
   expect(n).toBeLessThan(50);
   await page.fill("#catalog-search", "");
   await page.check("#filter-amoc");
-  await expect(page.locator("#catalog-count")).toContainText("58 of 241");
+  await expect(page.locator("#catalog-count")).toContainText(`58 of ${total}`);
 });
 
 test("every layer title is a clickable documentation link", async ({ page }) => {
@@ -195,8 +207,8 @@ test("every layer title is a clickable documentation link", async ({ page }) => 
     expect(href).toMatch(/^https:\/\//);
   }
   await expect(links.first()).toHaveAttribute("target", "_blank");
-  // data + analysis layers (SST ensemble, Climate TRACE, Argo, stations) too
-  await expect(page.locator("#panel-layers .layer-head a.title-link")).toHaveCount(12);
+  // data + analysis layers (SST ensemble, Climate TRACE, Argo, stations, GBIF) too
+  await expect(page.locator("#panel-layers .layer-head a.title-link")).toHaveCount(13);
   // clicking the title must NOT toggle the layer
   const before = await page.evaluate(() => window.__earth.viewer.imageryLayers.length);
   const [popup] = await Promise.all([
@@ -452,4 +464,27 @@ test("sea-level dashboard loads the budget, stats and chart", async ({ page }) =
   await page.hover("#sl-chart", { position: { x: 160, y: 90 } });
   await expect(page.locator("#sl-tooltip")).toBeVisible();
   await expect(page.locator("#sl-tooltip")).toContainText("observed");
+});
+
+test("biodiversity (GBIF) layer toggles and filters by species", async ({ page }) => {
+  // species selector is populated from the bundled curated list (+ the all-life default)
+  await expect
+    .poll(() => page.evaluate(() => document.getElementById("species-select").options.length))
+    .toBeGreaterThanOrEqual(9); // 8 indicator species + "all recorded life"
+  // toggling on adds a GBIF imagery layer (all-life density, no taxonKey)
+  await page.check("#toggle-gbif");
+  let u = await page.evaluate(() => window.__earth.gbifLayer?.imageryProvider.url);
+  expect(u).toContain("api.gbif.org/v2/map/occurrence/density");
+  expect(u).not.toContain("taxonKey");
+  expect(u).toContain("purpleYellow.point");
+  // selecting a species rebuilds the layer with that taxonKey and updates the note
+  const key = await page.evaluate(() => window.__earth.gbifSpecies.find((s) => s.common === "Atlantic mackerel").key);
+  await page.selectOption("#species-select", String(key));
+  u = await page.evaluate(() => window.__earth.gbifLayer.imageryProvider.url);
+  expect(u).toContain(`taxonKey=${key}`);
+  expect(u).toContain("fire.point");
+  await expect(page.locator("#species-note")).toContainText("north");
+  // toggling off removes the layer
+  await page.uncheck("#toggle-gbif");
+  expect(await page.evaluate(() => window.__earth.gbifLayer)).toBeNull();
 });

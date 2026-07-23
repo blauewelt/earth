@@ -90,6 +90,15 @@
           <a class="title-link" href="https://github.com/AMOCcommunity/amocatlas" target="_blank" rel="noopener" title="Open dataset documentation">AMOC &amp; GHG monitoring stations</a></div>
         <div class="meta">RAPID, OSNAP, MOVE, SAMBA arrays · Mauna Loa, Jungfraujoch … (click a marker for its own data link)</div>
       </div>
+      <div class="layer-item">
+        <div class="layer-head"><input type="checkbox" id="toggle-gbif" title="Show / hide layer"/>
+          <a class="title-link" href="https://www.gbif.org" target="_blank" rel="noopener" title="Open dataset documentation">Biodiversity occurrences (GBIF)</a></div>
+        <div class="control-row" style="margin:6px 0 2px">
+          <label for="species-select">Species</label>
+          <select id="species-select"><option value="" selected>All recorded life (3.9 B)</option></select>
+        </div>
+        <div class="meta" id="species-note">Where species have been recorded (presence, not abundance). Pick a climate-indicator species to see its range.</div>
+      </div>
       <button id="fly-atlantic" class="wide">Fly to the North Atlantic (AMOC)</button>
     </section>
 
@@ -168,6 +177,7 @@
         <li>Zoom: scroll, pinch (touch or trackpad), or the +/− buttons</li>
         <li>Compare: pick "vs N years ago" and drag the divider across the globe</li>
         <li>Click any point for details; click a station marker for its data link</li>
+        <li>Biodiversity: pick a climate-indicator species to see its shifting range</li>
       </ul>
       <h2>Roadmap</h2>
       <ul>
@@ -175,6 +185,8 @@
         <li>AMOC early-warning statistics (variance, autocorrelation) and more arrays</li>
         <li>Prediction pipeline: statistical tipping-time estimation</li>
       </ul>
+      <p>Analysis notes: <a href="docs/COMBINING_DATASETS.md">combining datasets</a> ·
+        <a href="docs/SPECIES_AND_CLIMATE.md">species &amp; climate</a></p>
       <p><a href="docs/CATALOG.md">Data catalog (readable)</a> · <a href="data/catalog.json">catalog.json</a></p>
     </section>
 

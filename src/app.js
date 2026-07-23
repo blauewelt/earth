@@ -1102,6 +1102,55 @@ for (const kind of ["climatetrace", "argo"]) {
   });
 }
 
+/* ------------------------------------------------- biodiversity (GBIF) layer */
+
+/* GBIF occurrence-density tiles are key-free PNGs on a standard power-of-two
+ * geographic pyramid (2×1 at z0), so Cesium's built-in GeographicTilingScheme
+ * fits directly. taxonKey filters to a single species; omit for all life. */
+let gbifLayer = null;
+let gbifSpecies = null;
+
+async function initSpeciesUI() {
+  const sel = document.getElementById("species-select");
+  if (!sel) return;
+  gbifSpecies = (await (await fetch("data/species.json")).json()).species;
+  for (const s of gbifSpecies) {
+    const o = document.createElement("option");
+    o.value = s.key;
+    o.textContent = `${s.common} (${Number(s.records).toLocaleString()} records)`;
+    o.title = s.note;
+    sel.appendChild(o);
+  }
+  document.getElementById("toggle-gbif").addEventListener("change", updateGbifLayer);
+  sel.addEventListener("change", () => {
+    document.getElementById("toggle-gbif").checked = true;
+    updateGbifLayer();
+    const s = gbifSpecies.find((x) => String(x.key) === sel.value);
+    document.getElementById("species-note").textContent = s ? s.note : "";
+  });
+}
+
+function updateGbifLayer() {
+  if (gbifLayer) { viewer.imageryLayers.remove(gbifLayer, true); gbifLayer = null; }
+  if (!document.getElementById("toggle-gbif").checked) return;
+  const taxon = document.getElementById("species-select").value;
+  const taxonParam = taxon ? `&taxonKey=${taxon}` : "";
+  // point styles keep the background transparent so occurrences overlay the globe;
+  // a warm palette for a single species, cool for all-life density
+  const style = taxon ? "fire.point" : "purpleYellow.point";
+  const url = `https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@1x.png` +
+    `?srs=EPSG:4326&style=${style}${taxonParam}`;
+  gbifLayer = viewer.imageryLayers.addImageryProvider(
+    new Cesium.UrlTemplateImageryProvider({
+      url,
+      tilingScheme: new Cesium.GeographicTilingScheme({ numberOfLevelZeroTilesX: 2, numberOfLevelZeroTilesY: 1 }),
+      tileWidth: 512, tileHeight: 512, maximumLevel: 14,
+      credit: new Cesium.Credit("Biodiversity: GBIF.org"),
+    })
+  );
+  gbifLayer.alpha = 1.0;
+}
+
 // Click-picking for point primitives → info card
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((click) => {
   const picked = viewer.scene.pick(click.position);
@@ -1509,6 +1558,7 @@ for (const t of Object.keys(tabs)) {
 
 buildLayerPanel();
 updateLegends();
+initSpeciesUI();
 loadStations();
 loadCatalog();
 
@@ -1536,5 +1586,8 @@ window.__earth = {
   get sealevel() { return seaLevelData; },
   loadSeaLevel,
   linTrend,
+  updateGbifLayer,
+  get gbifLayer() { return gbifLayer; },
+  get gbifSpecies() { return gbifSpecies; },
   get catalog() { return CATALOG; },
 };

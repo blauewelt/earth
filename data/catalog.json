@@ -2,15 +2,15 @@
  "catalog": "Global Climate Open Data Catalog",
  "compiled": "2026-07",
  "purpose": "Reference of open climate data worldwide for a 3D-globe visualization and prediction pipelines (incl. AMOC collapse timing).",
- "record_count": 241,
+ "record_count": 243,
  "records_by_domain": {
   "Atmosphere/Reanalysis/Surface": 39,
-  "Ocean & AMOC": 42,
+  "Ocean & AMOC": 43,
   "Cryosphere": 30,
   "Satellite EO & Cloud Platforms": 24,
   "Model Projections & Tipping Points": 29,
   "GHG, Emissions & Composition": 41,
-  "Paleo, Hydrology, Extremes & Impacts": 36
+  "Paleo, Hydrology, Extremes & Impacts": 37
  },
  "field_definitions": {
   "id": "short slug",
@@ -4368,6 +4368,42 @@
    "globe": true,
    "amoc": false,
    "notes": "ERA5 backbone + annual climate summaries"
+  },
+  {
+   "id": "obis",
+   "name": "OBIS (Ocean Biodiversity Information System)",
+   "domain": "Ocean & AMOC",
+   "subdomain": "Biodiversity",
+   "provider": "IODE/UNESCO-IOC",
+   "url": "https://obis.org",
+   "access": "REST API; mapper; R/Python robis/pyobis",
+   "formats": "JSON;CSV;Darwin Core",
+   "variables": "marine species occurrences",
+   "spatial": "global ocean",
+   "temporal": "historical-present",
+   "cadence": "continuous",
+   "license": "CC BY",
+   "globe": true,
+   "amoc": false,
+   "notes": "Marine counterpart to GBIF; tracks poleward/deeper shifts of ocean life"
+  },
+  {
+   "id": "lpi",
+   "name": "Living Planet Index",
+   "domain": "Paleo, Hydrology, Extremes & Impacts",
+   "subdomain": "Biodiversity",
+   "provider": "WWF / ZSL",
+   "url": "https://www.livingplanetindex.org/",
+   "access": "Download portal; data request",
+   "formats": "CSV",
+   "variables": "vertebrate population abundance trends",
+   "spatial": "~35,000 populations global",
+   "temporal": "1970-present",
+   "cadence": "~biennial",
+   "license": "Free (registration)",
+   "globe": false,
+   "amoc": false,
+   "notes": "Closest global *abundance* dataset (~73% avg decline since 1970); complements GBIF presence data"
   }
  ]
 }

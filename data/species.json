@@ -1,0 +1,62 @@
+{
+ "source": "GBIF (gbif.org) occurrence density tiles, CC BY-NC 4.0 map API",
+ "note": "Occurrence records show where a species has been *recorded* (presence), heavily shaped by observer effort; they are not population counts.",
+ "species": [
+  {
+   "key": 2374149,
+   "sci": "Scomber scombrus Linnaeus, 1758",
+   "common": "Atlantic mackerel",
+   "note": "Marine fish shifting north into Icelandic & Greenland waters as seas warm",
+   "records": 280167
+  },
+  {
+   "key": 2475443,
+   "sci": "Merops apiaster Linnaeus, 1758",
+   "common": "European bee-eater",
+   "note": "Mediterranean bird now breeding in Britain & Scandinavia as Europe warms",
+   "records": 796198
+  },
+  {
+   "key": 1898544,
+   "sci": "Polygonia c-album (Linnaeus, 1758)",
+   "common": "Comma butterfly",
+   "note": "Textbook northward range expansion across Britain over recent decades",
+   "records": 1613217
+  },
+  {
+   "key": 2480876,
+   "sci": "Egretta garzetta (Linnaeus, 1766)",
+   "common": "Little egret",
+   "note": "Wetland bird expanding rapidly northward in Europe",
+   "records": 3852225
+  },
+  {
+   "key": 2481661,
+   "sci": "Aptenodytes forsteri G.R.Gray, 1844",
+   "common": "Emperor penguin",
+   "note": "Sea-ice-dependent; colonies threatened by Antarctic ice loss",
+   "records": 132370
+  },
+  {
+   "key": 7673664,
+   "sci": "Acropora",
+   "common": "Staghorn coral",
+   "note": "Reef-building coral hit hardest by marine heatwaves & bleaching",
+   "records": 162675
+  },
+  {
+   "key": 5219303,
+   "sci": "Vulpes lagopus (Linnaeus, 1758)",
+   "common": "Arctic fox",
+   "note": "Tundra species squeezed as red fox moves north with warming",
+   "records": 31736
+  },
+  {
+   "key": 1340503,
+   "sci": "Bombus terrestris (Linnaeus, 1758)",
+   "common": "Buff-tailed bumblebee",
+   "note": "Pollinator whose range is compressing at warm southern edges",
+   "records": 602549
+  }
+ ]
+}

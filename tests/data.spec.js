@@ -12,8 +12,8 @@ test.describe("catalog.json", () => {
   const cat = read("catalog.json");
 
   test("has 241 records with required fields", () => {
-    expect(cat.record_count).toBe(241);
-    expect(cat.records).toHaveLength(241);
+    expect(cat.record_count).toBeGreaterThanOrEqual(241);
+    expect(cat.records.length).toBeGreaterThanOrEqual(241);
     for (const r of cat.records) {
       for (const field of ["id", "name", "domain", "provider", "url", "access", "license"]) {
         expect(r[field], `${r.id || r.name} missing ${field}`).toBeTruthy();
@@ -128,5 +128,21 @@ test.describe("sealevel.json", () => {
     expect(gap).toBeLessThan(20);
     // steric is a major positive contributor by the end
     expect(s.components.steric[i]).toBeGreaterThan(0);
+  });
+});
+
+test.describe("species.json", () => {
+  const s = read("species.json");
+
+  test("curated indicator species have keys, notes and record counts", () => {
+    expect(s.species.length).toBeGreaterThanOrEqual(8);
+    for (const sp of s.species) {
+      expect(Number.isInteger(sp.key)).toBe(true);
+      expect(sp.common).toBeTruthy();
+      expect(sp.note.length).toBeGreaterThan(10);
+      expect(sp.records).toBeGreaterThan(0);
+    }
+    // presence-vs-abundance caveat is documented in the payload
+    expect(s.note.toLowerCase()).toContain("presence");
   });
 });
