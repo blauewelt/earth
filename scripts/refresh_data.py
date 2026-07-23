@@ -208,39 +208,53 @@ RGI_NAMES = {  # o1region → short label for tooltips
 
 
 def glaciers():
-    """Every glacier in the Randomph Glacier Inventory v7 (~275k) as centroid +
-    area, from the RGI7 attribute CSVs. Compact parallel arrays keep the file small."""
+    """Every glacier in RGI v7 (G product, ~274k) as centroid + area, joined with
+    per-glacier elevation-change rate (dhdt, m/yr, 2000-2020) from Hugonnet et al.
+    2021 — so each glacier can be coloured by how fast it is actually thinning."""
     import csv, io, tarfile
+    import pandas as pd
     base = "https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/l4_rgi7b0_tar/"
-    lon, lat, area, reg = [], [], [], []
+    regions = [r.replace("_", "_", 1) for r in RGI_REGIONS]
+
+    print("RGI7: Hugonnet 2021 per-glacier dhdt ...")
+    hug = pd.read_parquet(io.BytesIO(urllib.request.urlopen(urllib.request.Request(
+        "https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/"
+        "hugonnet_2021_ds_rgi70_pergla_rates_10_20.parquet", headers=UA), timeout=300).read()))
+    hug = hug[hug["period"] == "2000-01-01_2020-01-01"]
+    dhdt_by_id = hug["dhdt"].to_dict()   # rgiid -> m/yr
+
+    lon, lat, area, dhdt = [], [], [], []
     for r in RGI_REGIONS:
-        url = f"{base}RGI2000-v7.0-C-{r}.tar.gz"
-        print(f"RGI7: {r} ...")
+        url = f"{base}RGI2000-v7.0-G-{r}.tar.gz"
+        print(f"RGI7 G: {r} ...")
         raw = urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=300).read()
         with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tf:
             member = next(m for m in tf.getmembers() if m.name.endswith("-attributes.csv"))
-            rows = csv.DictReader(io.TextIOWrapper(tf.extractfile(member), encoding="utf-8"))
-            for row in rows:
+            for row in csv.DictReader(io.TextIOWrapper(tf.extractfile(member), encoding="utf-8")):
                 try:
                     lon.append(round(float(row["cenlon"]), 3))
                     lat.append(round(float(row["cenlat"]), 3))
                     area.append(round(float(row["area_km2"]), 3))
-                    reg.append(row["o1region"])
+                    d = dhdt_by_id.get(row["rgi_id"])
+                    dhdt.append(round(float(d), 3) if d is not None and d == d else None)
                 except (ValueError, KeyError):
                     continue
+    matched = sum(1 for d in dhdt if d is not None)
     payload = {
-        "source": "Randolph Glacier Inventory v7.0 (RGI2000-v7.0-C), rgidata.org, CC BY 4.0",
-        "note": "One point per glacier at its centroid, sized by area (km2). ~275k glaciers.",
+        "source": "Randolph Glacier Inventory v7.0 (rgidata.org, CC BY 4.0); "
+                  "elevation-change rate: Hugonnet et al. 2021, Nature (doi:10.1038/s41586-021-03436-z)",
+        "note": "One point per glacier at its centroid, sized by area. dhdt = surface "
+                "elevation change rate 2000-2020 (m/yr); negative = thinning/melting.",
         "region_names": RGI_NAMES,
         "count": len(lon),
         "total_area_km2": round(sum(area)),
+        "dhdt_matched": matched,
         "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "lon": lon, "lat": lat, "area": area, "region": reg,
+        "lon": lon, "lat": lat, "area": area, "dhdt": dhdt,
     }
     with open(os.path.join(DATA, "glaciers.json"), "w") as f:
         json.dump(payload, f, separators=(",", ":"))
-    print(f"  wrote {len(lon)} glaciers, total {payload['total_area_km2']:,} km2")
-
+    print(f"  wrote {len(lon)} glaciers ({matched} with dhdt), total {payload['total_area_km2']:,} km2")
 
 def gistemp():
     """GISTEMP v4 global temperature anomaly (NASA GISS): land+ocean and land-only

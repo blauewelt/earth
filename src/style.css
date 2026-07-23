@@ -260,3 +260,12 @@ footer a { color: var(--fg-dim); }
 /* ---- inline checkbox rows ---- */
 .check-inline { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg); cursor: pointer; }
 .check-inline input { flex: none; }
+
+/* ---- glacier change legend ---- */
+#glacier-mode { flex: 1; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; font-size: 12px; }
+.glacier-legend { margin: 4px 0 2px; }
+.glacier-scale {
+  height: 10px; border-radius: 5px; border: 1px solid var(--border);
+  background: linear-gradient(to right, #f22 0%, #f2bf26 45%, #8fb0d0 60%, #388ff2 100%);
+}
+.glacier-scale-labels { display: flex; justify-content: space-between; font-size: 9px; color: var(--fg-dim); margin-top: 2px; }

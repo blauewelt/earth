@@ -653,3 +653,28 @@ test("grayscale globe toggle desaturates the base map", async ({ page }) => {
   await page.uncheck("#toggle-grayscale");
   expect(await sat()).toBe(1.0);                 // colour restored
 });
+
+test("glacier layer can colour by 2000-2020 melt rate", async ({ page }) => {
+  await page.selectOption("#glacier-mode", "change");
+  await expect
+    .poll(() => page.evaluate(() => window.__earth.glacierData?.dhdt_matched ?? 0), { timeout: 25000 })
+    .toBeGreaterThan(200000);
+  await expect(page.locator("#glacier-legend")).toBeVisible();   // melt-rate scale shown
+  // a strongly-thinning glacier renders warm (red-ish), a growing one cool (blue)
+  const c = await page.evaluate(() => {
+    const melt = window.__earth.glacierColor ? null : null; // colorGlaciers applied on load
+    // sample the collection colours directly
+    const col = window.__earth.glacierCollection;
+    const d = window.__earth.glacierData;
+    let warm = null, cool = null;
+    for (let i = 0; i < d.dhdt.length && (!warm || !cool); i++) {
+      if (d.dhdt[i] != null && d.dhdt[i] < -1 && !warm) warm = col.get(i).color;
+      if (d.dhdt[i] != null && d.dhdt[i] > 0.2 && !cool) cool = col.get(i).color;
+    }
+    return { warmR: warm?.red, warmB: warm?.blue, coolB: cool?.blue, coolR: cool?.red };
+  });
+  expect(c.warmR).toBeGreaterThan(c.warmB);   // melting → red > blue
+  expect(c.coolB).toBeGreaterThan(c.coolR);   // growing → blue > red
+  await page.selectOption("#glacier-mode", "extent");
+  await expect(page.locator("#glacier-legend")).toBeHidden();
+});

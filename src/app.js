@@ -1213,31 +1213,63 @@ for (const kind of ["climatetrace", "argo"]) {
   });
 }
 
-/* Randolph Glacier Inventory v7 — ~193k glaciers as centroid points sized by
- * area. Display-only (no per-point pick) so 193k marks stay performant. */
-let glacierCollection = null;
+/* Randolph Glacier Inventory v7 — ~274k glaciers as centroid points sized by area.
+ * Two colourings: by extent (area), or by 2000-2020 thinning rate (Hugonnet 2021),
+ * so you can see which glaciers are actually melting. Display-only for performance. */
+let glacierCollection = null, glacierData = null;
+const GLACIER_COLD = Cesium.Color.fromCssColorString("#8fd3ff");
+const GLACIER_BIG = Cesium.Color.fromCssColorString("#ffffff");
+const GLACIER_NODATA = Cesium.Color.fromCssColorString("#6b7280");
+
+function glacierColor(mode, dhdt, area) {
+  if (mode !== "change") return (area > 50 ? GLACIER_BIG : GLACIER_COLD).withAlpha(0.8);
+  if (dhdt == null) return GLACIER_NODATA.withAlpha(0.35);
+  // negative dhdt = thinning/melting → warm (red); positive = growing → cool (blue)
+  const t = Cesium.Math.clamp(dhdt / 1.5, -1, 1);       // ±1.5 m/yr scale
+  const a = 0.55 + 0.4 * Math.min(1, Math.abs(t) + 0.1);
+  if (dhdt < 0) {                                        // melting: yellow → red by intensity
+    const f = Math.min(1, -dhdt / 1.5);
+    return new Cesium.Color(0.95, 0.75 - 0.6 * f, 0.15, a);
+  }
+  return new Cesium.Color(0.22, 0.55, 0.95, a);          // growing/stable: blue
+}
+
+function colorGlaciers() {
+  if (!glacierCollection || !glacierData) return;
+  const mode = document.getElementById("glacier-mode").value;
+  for (let i = 0; i < glacierCollection.length; i++) {
+    glacierCollection.get(i).color = glacierColor(mode, glacierData.dhdt[i], glacierData.area[i]);
+  }
+  const legend = document.getElementById("glacier-legend");
+  if (legend) legend.classList.toggle("hidden", mode !== "change");
+}
+
 async function loadGlaciers() {
   if (glacierCollection) { glacierCollection.show = true; return; }
-  const j = await (await fetch("data/glaciers.json")).json();
+  glacierData = await (await fetch("data/glaciers.json")).json();
+  const j = glacierData;
   const col = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
-  const cold = Cesium.Color.fromCssColorString("#8fd3ff");
-  const big = Cesium.Color.fromCssColorString("#ffffff");
+  const mode = document.getElementById("glacier-mode").value;
   for (let i = 0; i < j.lon.length; i++) {
-    const a = j.area[i];
     col.add({
       position: Cesium.Cartesian3.fromDegrees(j.lon[i], j.lat[i]),
-      pixelSize: Math.max(1.5, Math.min(12, 1.5 + Math.sqrt(a) * 0.9)),
-      color: (a > 50 ? big : cold).withAlpha(0.8),
+      pixelSize: Math.max(1.5, Math.min(12, 1.5 + Math.sqrt(j.area[i]) * 0.9)),
+      color: glacierColor(mode, j.dhdt[i], j.area[i]),
     });
   }
   glacierCollection = col;
+  colorGlaciers();
   const meta = document.getElementById("meta-glaciers");
-  if (meta) meta.textContent = `${j.count.toLocaleString()} glaciers · ${j.total_area_km2.toLocaleString()} km² · RGI v7 · snapshot ${j.snapshot}`;
+  if (meta) meta.textContent = `${j.count.toLocaleString()} glaciers · ${j.total_area_km2.toLocaleString()} km² · RGI v7 · ${j.dhdt_matched.toLocaleString()} with 2000–2020 melt rate`;
 }
 document.getElementById("toggle-glaciers").addEventListener("change", (e) => {
   if (e.target.checked) loadGlaciers().then(updateDeltaHint);
   else if (glacierCollection) glacierCollection.show = false;
   updateDeltaHint();
+});
+document.getElementById("glacier-mode").addEventListener("change", () => {
+  document.getElementById("toggle-glaciers").checked = true;
+  loadGlaciers().then(colorGlaciers);
 });
 
 /* ------------------------------------------------- biodiversity (GBIF) layer */
@@ -1976,6 +2008,8 @@ window.__earth = {
   probeValueAt,
   loadGlaciers,
   get glacierCollection() { return glacierCollection; },
+  get glacierData() { return glacierData; },
+  colorGlaciers,
   updateGbifLayer,
   get gbifLayer() { return gbifLayer; },
   get gbifSpecies() { return gbifSpecies; },

@@ -151,12 +151,15 @@ test.describe("glaciers.json", () => {
   const g = read("glaciers.json");
 
   test("RGI v7 glaciers: aligned arrays, plausible count/area, valid coords", () => {
-    expect(g.count).toBeGreaterThan(150000);          // RGI7 C-product ~193k
-    expect(g.lon).toHaveLength(g.count);
-    expect(g.lat).toHaveLength(g.count);
-    expect(g.area).toHaveLength(g.count);
+    expect(g.count).toBeGreaterThan(250000);           // RGI7 G-product ~274k
+    for (const k of ["lon", "lat", "area", "dhdt"]) expect(g[k]).toHaveLength(g.count);
     expect(g.total_area_km2).toBeGreaterThan(600000);  // ~706k km² global total
     expect(g.total_area_km2).toBeLessThan(800000);
+    // most glaciers carry a 2000-2020 melt rate, and the majority are thinning
+    expect(g.dhdt_matched).toBeGreaterThan(200000);
+    const rates = g.dhdt.filter((v) => v != null);
+    const thinning = rates.filter((v) => v < 0).length / rates.length;
+    expect(thinning).toBeGreaterThan(0.6);             // ~78% thinning
     // spot-check coordinate/area validity across the array
     for (let i = 0; i < g.count; i += 5000) {
       expect(Math.abs(g.lon[i])).toBeLessThanOrEqual(180);
