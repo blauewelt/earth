@@ -281,9 +281,9 @@ test("delta legend hover shows the signed difference in °C", async ({ page }) =
   const tip = page.locator("#legend-panel .legend-tip").first();
   await expect(tip).toBeVisible();
   await expect(tip).toContainText("+");
-  await expect(tip).toContainText("warmer");
+  await expect(tip).toContainText("increase");
   await bar.hover({ position: { x: box.width * 0.1, y: 5 } });
-  await expect(tip).toContainText("cooler");
+  await expect(tip).toContainText("decrease");
 });
 
 test("colormap parser and delta colorization are correct", async ({ page }) => {
@@ -408,13 +408,19 @@ test("aggregation window is orthogonal to the display mode", async ({ page }) =>
   expect(r.name).not.toBe("SSTAggregateProvider");
 });
 
-test("computed-difference hint appears only for non-SST layers in delta mode", async ({ page }) => {
+test("computed-difference hint appears for non-differenceable layers in delta mode", async ({ page }) => {
   await page.selectOption("#compare-select", "10");
   await page.selectOption("#compare-mode", "delta");
-  await expect(page.locator("#delta-hint")).toBeHidden(); // only SST on by default
+  await expect(page.locator("#delta-hint")).toBeHidden(); // SST alone is differenceable
+  // precipitation has no deltaRange (instantaneous/log) → hint appears
   await page.check('#layer-list input[data-id="precip"]');
   await expect(page.locator("#delta-hint")).toBeVisible();
-  await expect(page.locator("#delta-hint")).toContainText("sea surface temperature only");
+  await expect(page.locator("#delta-hint")).toContainText("no per-pixel time series");
+  await page.uncheck('#layer-list input[data-id="precip"]');
+  await expect(page.locator("#delta-hint")).toBeHidden();
+  // a point/snapshot layer (glaciers) also triggers the hint in delta mode
+  await page.check("#toggle-glaciers");
+  await expect(page.locator("#delta-hint")).toBeVisible();
   await page.selectOption("#compare-mode", "split");
   await expect(page.locator("#delta-hint")).toBeHidden();
 });
@@ -572,4 +578,21 @@ test("computed difference generalises to sea ice, not to point/instantaneous lay
   expect(p.name).not.toBe("DeltaProvider");
   await expect(page.locator("#delta-hint")).toBeVisible();
   await expect(page.locator("#delta-hint")).toContainText("no per-pixel time series");
+});
+
+test("hover probe reports the delta (not absolute) when a difference layer is active", async ({ page }) => {
+  await page.selectOption("#compare-select", "10");
+  await page.selectOption("#compare-mode", "delta");
+  await page.evaluate(() => {
+    const s = document.getElementById("window-days");
+    s.value = "60"; s.dispatchEvent(new Event("change"));
+  });
+  const r = await page.evaluate(async () => {
+    const warm = await window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-40, 45)); // N Atlantic
+    return warm;
+  });
+  expect(r.delta).toBe(true);
+  expect(r.units).toBe("°C");
+  // a decade-scale SST change is a small number, not an absolute ~10–25 °C reading
+  if (!r.noData) expect(Math.abs(r.value)).toBeLessThan(8);
 });

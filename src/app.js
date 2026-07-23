@@ -1159,8 +1159,9 @@ document.getElementById("ensemble-mode").addEventListener("change", () => {
 
 for (const kind of ["climatetrace", "argo"]) {
   document.getElementById(`toggle-${kind}`).addEventListener("change", (e) => {
-    if (e.target.checked) loadPointLayer(kind);
+    if (e.target.checked) loadPointLayer(kind).then(updateDeltaHint);
     else if (pointLayers[kind]) pointLayers[kind].collection.show = false;
+    updateDeltaHint();
   });
 }
 
@@ -1186,8 +1187,9 @@ async function loadGlaciers() {
   if (meta) meta.textContent = `${j.count.toLocaleString()} glaciers · ${j.total_area_km2.toLocaleString()} km² · RGI v7 · snapshot ${j.snapshot}`;
 }
 document.getElementById("toggle-glaciers").addEventListener("change", (e) => {
-  if (e.target.checked) loadGlaciers();
+  if (e.target.checked) loadGlaciers().then(updateDeltaHint);
   else if (glacierCollection) glacierCollection.show = false;
+  updateDeltaHint();
 });
 
 /* ------------------------------------------------- biodiversity (GBIF) layer */
@@ -1220,7 +1222,7 @@ async function initSpeciesUI() {
 
 function updateGbifLayer() {
   if (gbifLayer) { viewer.imageryLayers.remove(gbifLayer, true); gbifLayer = null; }
-  if (!document.getElementById("toggle-gbif").checked) return;
+  if (!document.getElementById("toggle-gbif").checked) { updateDeltaHint(); return; }
   const taxon = document.getElementById("species-select").value;
   const taxonParam = taxon ? `&taxonKey=${taxon}` : "";
   // point styles keep the background transparent so occurrences overlay the globe;
@@ -1237,6 +1239,7 @@ function updateGbifLayer() {
     })
   );
   gbifLayer.alpha = 1.0;
+  updateDeltaHint();
 }
 
 // Click-picking for point primitives → info card
@@ -1300,29 +1303,61 @@ function topColormapLayer() {
   return best;
 }
 
+// value of one pixel from a single source tile, colormap-inverted (or null)
+async function probePixel(cfg, date, z, x, y, px, py, valueLut) {
+  const img = await fetchProbeTile(cfg, date, z, x, y);
+  if (!img) return null;
+  probeCtx.clearRect(0, 0, 512, 512);
+  probeCtx.drawImage(img, 0, 0);
+  const d = probeCtx.getImageData(px, py, 1, 1).data;
+  if (d[3] === 0) return null;
+  const v = valueLut.get((d[0] << 16) | (d[1] << 8) | d[2]);
+  return v === undefined ? null : v;
+}
+// mean pixel value across a set of sample dates (rolling-window mean)
+async function probePixelMean(cfg, dates, z, x, y, px, py, valueLut) {
+  const vals = await Promise.all(dates.map((dt) => probePixel(cfg, dt, z, x, y, px, py, valueLut)));
+  const ok = vals.filter((v) => v != null);
+  return ok.length ? ok.reduce((s, v) => s + v, 0) / ok.length : null;
+}
+
 async function probeValueAt(carto) {
   const entry = topColormapLayer();
   if (!entry) return null;
   const cfg = entry.cfg;
   const lon = Cesium.Math.toDegrees(carto.longitude);
   const lat = Cesium.Math.toDegrees(carto.latitude);
-  const z = cfg.maxLevel;
+  const win = entry.isDelta || entry.isAggregate ? state.windowDays : 1;
+  // match the rendered resolution (delta/aggregate cap the level)
+  const z = (entry.isDelta || entry.isAggregate) ? windowMaxLevel(cfg, win) : cfg.maxLevel;
   const span = (0.5625 / 2 ** z) * 512;               // degrees per tile at level z
   const x = Math.floor((lon + 180) / span);
   const y = Math.floor((90 - lat) / span);
   const tileWest = -180 + x * span, tileNorth = 90 - y * span;
   const px = Math.min(511, Math.max(0, Math.floor((lon - tileWest) / span * 512)));
   const py = Math.min(511, Math.max(0, Math.floor((tileNorth - lat) / span * 512)));
-  const [inv, img] = await Promise.all([getInvLut(cfg.colormap), fetchProbeTile(cfg, state.date, z, x, y)]);
-  if (!inv || !img) return null;
-  probeCtx.clearRect(0, 0, 512, 512);
-  probeCtx.drawImage(img, 0, 0);
-  const d = probeCtx.getImageData(px, py, 1, 1).data;
-  const base = { title: cfg.title, units: inv.units, lon, lat, aggregated: entry.isAggregate };
-  if (d[3] === 0) return { ...base, noData: true };
-  const e = inv.lut.get((d[0] << 16) | (d[1] << 8) | d[2]);
-  if (!e) return { ...base, noData: true };
-  return { ...base, lo: e.lo, hi: e.hi, value: (e.lo + e.hi) / 2 };
+  const vlut = await getValueLut(cfg.colormap);
+  if (!vlut) return null;
+  const base = { title: cfg.title, units: vlut.units, lon, lat };
+
+  if (entry.isDelta) {
+    // Δ = window-mean(now) − window-mean(past), matching the rendered delta
+    const cmp = compareDate();
+    const [now, past] = await Promise.all([
+      probePixelMean(cfg, windowSampleDates(state.date, win), z, x, y, px, py, vlut.lut),
+      probePixelMean(cfg, windowSampleDates(cmp, win), z, x, y, px, py, vlut.lut),
+    ]);
+    if (now == null || past == null) return { ...base, delta: true, noData: true };
+    return { ...base, delta: true, value: now - past };
+  }
+  if (entry.isAggregate) {
+    const v = await probePixelMean(cfg, windowSampleDates(state.date, win), z, x, y, px, py, vlut.lut);
+    if (v == null) return { ...base, aggregated: true, noData: true };
+    return { ...base, aggregated: true, value: v };
+  }
+  const v = await probePixel(cfg, state.date, z, x, y, px, py, vlut.lut);
+  if (v == null) return { ...base, noData: true };
+  return { ...base, value: v };
 }
 
 const probeEl = document.getElementById("value-probe");
@@ -1335,12 +1370,15 @@ function renderProbe(res, sx, sy) {
   let head;
   if (res.noData) {
     head = `<span class="vp-val vp-nd">no data</span>`;
+  } else if (res.delta) {
+    const v = `${res.value >= 0 ? "+" : "−"}${fmtVal(Math.abs(res.value))}`;
+    head = `<span class="vp-val">Δ ${v}</span> <span class="vp-unit">${res.units}</span>`;
   } else {
-    const wide = res.hi - res.lo > 1;
-    const v = wide ? `${fmtVal(res.lo)}–${fmtVal(res.hi)}` : fmtVal(res.value);
-    head = `<span class="vp-val">${v}</span> <span class="vp-unit">${res.units}</span>`;
+    head = `<span class="vp-val">${fmtVal(res.value)}</span> <span class="vp-unit">${res.units}</span>`;
   }
-  probeEl.innerHTML = `${head}<div class="vp-meta">${res.title}${res.aggregated ? " · window mean" : ""}<br/>${coord}</div>`;
+  const suffix = res.delta ? ` · Δ vs ${compareDate()}${state.windowDays > 1 ? ", " + windowLabel(state.windowDays) + " mean" : ""}`
+    : res.aggregated ? ` · ${windowLabel(state.windowDays)} mean` : "";
+  probeEl.innerHTML = `${head}<div class="vp-meta">${res.title}${suffix}<br/>${coord}</div>`;
   probeEl.style.left = `${Math.min(sx + 14, viewer.scene.canvas.clientWidth - 150)}px`;
   probeEl.style.top = `${Math.max(sy - 10, 4)}px`;
   probeEl.classList.remove("hidden");
