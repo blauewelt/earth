@@ -247,3 +247,12 @@ footer a { color: var(--fg-dim); }
 #value-probe .vp-unit { font-size: 12px; color: var(--fg-dim); }
 #value-probe .vp-nd { font-size: 13px; font-weight: 500; color: var(--fg-dim); }
 #value-probe .vp-meta { font-size: 10px; color: var(--fg-dim); margin-top: 2px; line-height: 1.35; }
+
+/* ---- temperature dashboard (reuses sea-level chart styles) ---- */
+#temp-chart-wrap { position: relative; margin: 8px 0 4px; }
+#temp-chart { display: block; width: 100%; }
+#temp-tooltip {
+  position: absolute; top: -4px; padding: 4px 8px; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  font-size: 10.5px; line-height: 1.5; color: var(--fg); white-space: nowrap; pointer-events: none;
+}

@@ -161,6 +161,18 @@ const GIBS_LAYERS = [
     meta: "Smoke, dust and haze",
   },
   {
+    id: "lst",
+    deltaRange: 10,  // K, land skin-temperature change
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/MODIS_Land_Surface_Temp.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_Land_Surface_Temp_H.svg",
+    doc: "https://lpdaac.usgs.gov/products/mod11a1v061/",
+    layer: "MODIS_Terra_Land_Surface_Temp_Day",
+    title: "Land surface temperature (MODIS)",
+    ext: "png", tms: "1km", maxLevel: 6,
+    start: "2022-10-23", timed: true, on: false,
+    meta: "Daytime land skin temperature (K) — the actual temperature of the ground",
+  },
+  {
     id: "nightlights",
     doc: "https://blackmarble.gsfc.nasa.gov/",
     layer: "VIIRS_Black_Marble",
@@ -1361,7 +1373,6 @@ async function probeValueAt(carto) {
 }
 
 const probeEl = document.getElementById("value-probe");
-let probeBusy = false, probePending = null;
 
 function renderProbe(res, sx, sy) {
   if (!res) { probeEl.classList.add("hidden"); return; }
@@ -1384,21 +1395,32 @@ function renderProbe(res, sx, sy) {
   probeEl.classList.remove("hidden");
 }
 
-new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
-  if (!topColormapLayer()) { probeEl.classList.add("hidden"); return; }
-  const cart = viewer.camera.pickEllipsoid(m.endPosition, viewer.scene.globe.ellipsoid);
+/* The probe only fires after the cursor *rests* (dwell), so rotating/panning the
+ * globe never triggers per-frame tile reads. Any movement hides it and restarts
+ * the dwell timer; it computes once the mouse has been still for PROBE_DWELL ms. */
+const PROBE_DWELL = 650;
+let probeDwellTimer = null;
+async function runProbe(x, y) {
+  const cart = viewer.camera.pickEllipsoid({ x, y }, viewer.scene.globe.ellipsoid);
   if (!cart) { probeEl.classList.add("hidden"); return; }
-  probePending = { carto: Cesium.Cartographic.fromCartesian(cart), x: m.endPosition.x, y: m.endPosition.y };
-  if (probeBusy) return;
-  probeBusy = true;
-  const run = async () => {
-    const job = probePending; probePending = null;
-    try { renderProbe(await probeValueAt(job.carto), job.x, job.y); }
-    catch { probeEl.classList.add("hidden"); }
-    if (probePending) setTimeout(run, 50); else probeBusy = false;
-  };
-  run();
+  try { renderProbe(await probeValueAt(Cesium.Cartographic.fromCartesian(cart)), x, y); }
+  catch { probeEl.classList.add("hidden"); }
+}
+new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
+  probeEl.classList.add("hidden");           // hide immediately while moving
+  if (probeDwellTimer) clearTimeout(probeDwellTimer);
+  if (!topColormapLayer()) return;
+  const x = m.endPosition.x, y = m.endPosition.y;
+  probeDwellTimer = setTimeout(() => runProbe(x, y), PROBE_DWELL);
 }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+// Clicking reads the value immediately (no dwell wait).
+new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((c) => {
+  if (probeDwellTimer) clearTimeout(probeDwellTimer);
+  if (topColormapLayer() && !viewer.scene.pick(c.position)?.id?.kind) {
+    runProbe(c.position.x, c.position.y);
+  }
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+window.__runProbe = runProbe; // for tests
 
 /* ----------------------------------------------------------------- stations */
 
@@ -1777,9 +1799,95 @@ function drawSeaLevelChart() {
   canvas.onmouseleave = () => { tip.classList.add("hidden"); draw(null); };
 }
 
+/* --------------------------------------------------- global temperature (GISTEMP) */
+
+let gistempData = null;
+async function loadTemp() {
+  if (gistempData) return;
+  gistempData = await (await fetch("data/gistemp.json")).json();
+  const { years, land_ocean, land_only } = gistempData;
+  const iLast = land_ocean.length - 1;
+  document.querySelector("#temp-lo .stat-value").textContent = `+${land_ocean[iLast].toFixed(2)}`;
+  const lastLand = [...land_only].reverse().find((v) => v != null);
+  document.querySelector("#temp-land .stat-value").textContent = `+${lastLand.toFixed(2)}`;
+  document.querySelector("#temp-since .stat-value").textContent =
+    `+${(land_ocean[iLast] - land_ocean[0]).toFixed(2)}`;
+  document.getElementById("temp-legend").innerHTML =
+    `<span style="color:#d95926">━ Land only</span><span style="color:#3987e5">━ Land + ocean</span>`;
+  drawTempChart();
+  window.addEventListener("resize", () => {
+    if (!document.getElementById("panel-temp").classList.contains("hidden")) drawTempChart();
+  });
+}
+
+function drawTempChart() {
+  const { years, land_ocean, land_only } = gistempData;
+  const canvas = document.getElementById("temp-chart");
+  const wrap = canvas.parentElement;
+  const cssW = wrap.clientWidth, cssH = 200;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  canvas.style.width = cssW + "px"; canvas.style.height = cssH + "px";
+  const ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr);
+  const M = { l: 30, r: 8, t: 8, b: 18 };
+  const W = cssW - M.l - M.r, H = cssH - M.t - M.b;
+  const all = [...land_ocean, ...land_only].filter((v) => v != null);
+  const y0 = Math.floor(Math.min(...all) * 2) / 2, y1 = Math.ceil(Math.max(...all) * 2) / 2;
+  const X = (yr) => M.l + ((yr - years[0]) / (years[years.length - 1] - years[0])) * W;
+  const Y = (v) => M.t + (1 - (v - y0) / (y1 - y0)) * H;
+  const line = (arr) => {
+    ctx.beginPath(); let started = false;
+    for (let i = 0; i < years.length; i++) {
+      if (arr[i] == null) { started = false; continue; }
+      if (!started) { ctx.moveTo(X(years[i]), Y(arr[i])); started = true; }
+      else ctx.lineTo(X(years[i]), Y(arr[i]));
+    }
+    ctx.stroke();
+  };
+  const draw = (hoverYear) => {
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.font = "10px system-ui, sans-serif";
+    for (let v = y0; v <= y1; v += 0.5) {
+      ctx.strokeStyle = v === 0 ? "#4a4a47" : "#2c2c2a"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(M.l, Y(v)); ctx.lineTo(cssW - M.r, Y(v)); ctx.stroke();
+      ctx.fillStyle = "#898781"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.fillText(v.toFixed(1), M.l - 4, Y(v));
+    }
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let yr = 1900; yr <= years[years.length - 1]; yr += 20) {
+      ctx.fillStyle = "#898781"; ctx.fillText(String(yr), X(yr), M.t + H + 5);
+    }
+    ctx.lineWidth = 1.8; ctx.lineJoin = "round";
+    ctx.strokeStyle = "#d95926"; line(land_only);   // land warms faster
+    ctx.strokeStyle = "#3987e5"; line(land_ocean);
+    if (hoverYear != null) {
+      const i = hoverYear - years[0];
+      if (i >= 0 && i < years.length) {
+        ctx.strokeStyle = "#52514e"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(X(years[i]), M.t); ctx.lineTo(X(years[i]), M.t + H); ctx.stroke();
+      }
+    }
+  };
+  draw(null);
+  const tip = document.getElementById("temp-tooltip");
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const yr = Math.round(years[0] + ((e.clientX - rect.left - M.l) / W) * (years[years.length - 1] - years[0]));
+    const i = yr - years[0];
+    if (i < 0 || i >= years.length) { tip.classList.add("hidden"); return; }
+    draw(yr);
+    const lo = land_ocean[i], la = land_only[i];
+    tip.innerHTML = `<b>${yr}</b><br/><span style="color:#d95926">land</span> ${la != null ? "+" + la.toFixed(2) : "–"} °C<br/>` +
+      `<span style="color:#3987e5">land+ocean</span> ${lo != null ? "+" + lo.toFixed(2) : "–"} °C`;
+    tip.style.left = `${Math.min(Math.max(e.clientX - rect.left - 55, 4), cssW - 120)}px`;
+    tip.classList.remove("hidden");
+  };
+  canvas.onmouseleave = () => { tip.classList.add("hidden"); draw(null); };
+}
+
 /* --------------------------------------------------------------------- tabs */
 
-const tabs = { layers: "panel-layers", amoc: "panel-amoc", sealevel: "panel-sealevel",
+const tabs = { layers: "panel-layers", temp: "panel-temp", amoc: "panel-amoc", sealevel: "panel-sealevel",
   catalog: "panel-catalog", about: "panel-about" };
 for (const t of Object.keys(tabs)) {
   document.getElementById(`tab-${t}`).addEventListener("click", () => {
@@ -1789,6 +1897,7 @@ for (const t of Object.keys(tabs)) {
     }
     if (t === "amoc") loadAmoc();
     if (t === "sealevel") loadSeaLevel();
+    if (t === "temp") loadTemp();
   });
 }
 
@@ -1824,6 +1933,8 @@ window.__earth = {
   get rapid() { return rapidData; },
   get sealevel() { return seaLevelData; },
   loadSeaLevel,
+  loadTemp,
+  get gistemp() { return gistempData; },
   linTrend,
   probeValueAt,
   loadGlaciers,

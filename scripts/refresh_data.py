@@ -242,8 +242,44 @@ def glaciers():
     print(f"  wrote {len(lon)} glaciers, total {payload['total_area_km2']:,} km2")
 
 
+def gistemp():
+    """GISTEMP v4 global temperature anomaly (NASA GISS): land+ocean and land-only
+    (met-station) annual means, 1880-present. Land warms faster than the global mean."""
+    import csv, io
+    def series(url):
+        txt = urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=120).read().decode()
+        yrs, vals = [], []
+        for row in csv.reader(io.StringIO(txt)):
+            if not row or not row[0].isdigit():
+                continue
+            jd = row[13]  # J-D = annual mean column
+            if jd in ("", "***", "*****"):
+                continue
+            yrs.append(int(row[0]))
+            vals.append(round(float(jd), 2))
+        return yrs, vals
+    print("GISTEMP: land+ocean and land-only ...")
+    ly, lo = series("https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.csv")
+    ky, land = series("https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts.csv")
+    # align on common years
+    landmap = dict(zip(ky, land))
+    payload = {
+        "source": "NASA GISS Surface Temperature Analysis (GISTEMP v4)",
+        "citation": "GISTEMP Team 2026; Lenssen et al. 2019, doi:10.1029/2018JD029522",
+        "baseline": "anomaly vs 1951-1980 mean (°C)",
+        "units": "°C",
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "years": ly,
+        "land_ocean": lo,
+        "land_only": [landmap.get(y) for y in ly],
+    }
+    with open(os.path.join(DATA, "gistemp.json"), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    print(f"  wrote {len(ly)} yr ({ly[0]}-{ly[-1]}); latest land+ocean {lo[-1]}, land {landmap.get(ly[-1])}")
+
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["climatetrace", "argo", "rapid", "sealevel", "glaciers"]
+    which = sys.argv[1:] or ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
     for w in which:
-        {"climatetrace": climatetrace, "argo": argo, "rapid": rapid, "sealevel": sealevel, "glaciers": glaciers}[w]()
+        {"climatetrace": climatetrace, "argo": argo, "rapid": rapid, "sealevel": sealevel, "glaciers": glaciers, "gistemp": gistemp}[w]()
     print("done")

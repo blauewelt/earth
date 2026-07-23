@@ -2,9 +2,9 @@
  "catalog": "Global Climate Open Data Catalog",
  "compiled": "2026-07",
  "purpose": "Reference of open climate data worldwide for a 3D-globe visualization and prediction pipelines (incl. AMOC collapse timing).",
- "record_count": 243,
+ "record_count": 244,
  "records_by_domain": {
-  "Atmosphere/Reanalysis/Surface": 39,
+  "Atmosphere/Reanalysis/Surface": 40,
   "Ocean & AMOC": 43,
   "Cryosphere": 30,
   "Satellite EO & Cloud Platforms": 24,
@@ -4404,6 +4404,24 @@
    "globe": false,
    "amoc": false,
    "notes": "Closest global *abundance* dataset (~73% avg decline since 1970); complements GBIF presence data"
+  },
+  {
+   "id": "modis-lst",
+   "name": "MODIS Land Surface Temperature",
+   "domain": "Atmosphere/Reanalysis/Surface",
+   "subdomain": "Land temperature",
+   "provider": "NASA LP DAAC",
+   "url": "https://lpdaac.usgs.gov/products/mod11a1v061/",
+   "access": "Earthdata; GIBS WMTS tiles (key-free)",
+   "formats": "HDF-EOS;GeoTIFF;PNG tiles",
+   "variables": "land skin temperature (day/night), emissivity",
+   "spatial": "Global 1km",
+   "temporal": "2000-present",
+   "cadence": "daily",
+   "license": "Open (Earthdata)",
+   "globe": true,
+   "amoc": false,
+   "notes": "Actual ground/skin temperature over land; key-free GIBS tiles (used in the globe's land-surface-temperature layer)"
   }
  ]
 }

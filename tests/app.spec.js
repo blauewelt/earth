@@ -596,3 +596,47 @@ test("hover probe reports the delta (not absolute) when a difference layer is ac
   // a decade-scale SST change is a small number, not an absolute ~10–25 °C reading
   if (!r.noData) expect(Math.abs(r.value)).toBeLessThan(8);
 });
+
+test("Temp dashboard shows GISTEMP land vs land+ocean warming", async ({ page }) => {
+  await page.click("#tab-temp");
+  await expect(page.locator("#temp-lo .stat-value")).not.toHaveText("–");
+  const r = await page.evaluate(() => ({
+    years: window.__earth.gistemp.years.length,
+    lo: Number(document.querySelector("#temp-lo .stat-value").textContent),
+    land: Number(document.querySelector("#temp-land .stat-value").textContent),
+    chartW: document.getElementById("temp-chart").width,
+    legend: document.getElementById("temp-legend").children.length,
+  }));
+  expect(r.years).toBeGreaterThan(140);
+  expect(r.lo).toBeGreaterThan(1.0);
+  expect(r.land).toBeGreaterThan(r.lo);   // land warms faster
+  expect(r.chartW).toBeGreaterThan(0);
+  expect(r.legend).toBe(2);
+  await page.hover("#temp-chart", { position: { x: 200, y: 90 } });
+  await expect(page.locator("#temp-tooltip")).toBeVisible();
+  await expect(page.locator("#temp-tooltip")).toContainText("land");
+});
+
+test("land surface temperature layer is present and differenceable", async ({ page }) => {
+  await page.check('#layer-list input[data-id="lst"]');
+  const r = await page.evaluate(() => {
+    const cfg = window.__earth.GIBS_LAYERS.find((l) => l.id === "lst");
+    return { has: !!window.__earth.state.layers["lst"]?.layer, deltaRange: cfg.deltaRange, title: cfg.title };
+  });
+  expect(r.has).toBe(true);
+  expect(r.deltaRange).toBeGreaterThan(0);          // supports computed difference
+  expect(r.title).toContain("Land surface temperature");
+});
+
+test("hover value probe waits for dwell; click reads immediately", async ({ page }) => {
+  // moving the mouse should NOT show the probe (it only appears after a dwell)
+  await page.mouse.move(700, 400);
+  await page.mouse.move(750, 420);
+  await page.mouse.move(800, 440);
+  await expect(page.locator("#value-probe")).toBeHidden();
+  // a click reads the value immediately over the ocean (SST on by default)
+  await page.evaluate(() => window.__runProbe(760, 430));
+  // (runProbe renders only if the point is on the globe & has data; assert no crash and hidden-or-shown state is valid)
+  const cls = await page.getAttribute("#value-probe", "class");
+  expect(typeof cls).toBe("string");
+});

@@ -165,3 +165,18 @@ test.describe("glaciers.json", () => {
     }
   });
 });
+
+test.describe("gistemp.json", () => {
+  const g = read("gistemp.json");
+  test("global temperature series, land warms faster than land+ocean", () => {
+    expect(g.years[0]).toBe(1880);
+    expect(g.years[g.years.length - 1]).toBeGreaterThanOrEqual(2024);
+    expect(g.land_ocean).toHaveLength(g.years.length);
+    expect(g.land_only).toHaveLength(g.years.length);
+    // recent warming is well above the 1951-1980 baseline
+    const i2024 = g.years.indexOf(2024);
+    expect(g.land_ocean[i2024]).toBeGreaterThan(1.0);
+    // land anomaly exceeds land+ocean (land warms faster)
+    expect(g.land_only[i2024]).toBeGreaterThan(g.land_ocean[i2024]);
+  });
+});

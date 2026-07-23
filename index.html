@@ -17,6 +17,7 @@
       <p class="tagline">open climate data on a globe</p>
       <nav>
         <button id="tab-layers" class="tab active">Layers</button>
+        <button id="tab-temp" class="tab">Temp</button>
         <button id="tab-amoc" class="tab">AMOC</button>
         <button id="tab-sealevel" class="tab">Sea level</button>
         <button id="tab-catalog" class="tab">Catalog</button>
@@ -110,6 +111,29 @@
       <button id="fly-atlantic" class="wide">Fly to the North Atlantic (AMOC)</button>
     </section>
 
+    <section id="panel-temp" class="panel hidden">
+      <h2>Global temperature (GISTEMP v4)</h2>
+      <div class="stat-row">
+        <div class="stat" id="temp-lo"><div class="stat-value">–</div><div class="stat-sub">°C land+ocean, latest</div></div>
+        <div class="stat" id="temp-land"><div class="stat-value">–</div><div class="stat-sub">°C land only, latest</div></div>
+        <div class="stat" id="temp-since"><div class="stat-value">–</div><div class="stat-sub">°C since 1880</div></div>
+      </div>
+      <div id="temp-chart-wrap">
+        <canvas id="temp-chart"></canvas>
+        <div id="temp-tooltip" class="hidden"></div>
+      </div>
+      <div id="temp-legend" class="sl-legend"></div>
+      <p class="hint">Annual global surface-temperature anomaly vs the 1951–1980 mean.
+        The <strong>land-only</strong> curve runs well above land+ocean — land warms faster than
+        the sea because water stores and mixes heat. NASA GISS GISTEMP v4. Hover for values.</p>
+      <h2>Land vs ocean warming</h2>
+      <p>Land has warmed roughly twice as fast as the ocean surface. That contrast drives shifting
+        climate zones, heatwaves, and the poleward species shifts in the Biodiversity layer — and it
+        is why a "global" number understates what continents actually experience. For land temperature
+        <em>in space</em>, turn on the <em>Land surface temperature (MODIS)</em> layer on the globe.</p>
+      <p>Source: <a href="https://data.giss.nasa.gov/gistemp/" target="_blank" rel="noopener">NASA GISS GISTEMP v4</a>.</p>
+    </section>
+
     <section id="panel-amoc" class="panel hidden">
       <h2>AMOC — RAPID array, 26.5°N</h2>
       <div class="stat-row">
@@ -186,6 +210,7 @@
         <li>Compare: pick "vs N years ago" and drag the divider across the globe</li>
         <li>Click any point for details; click a station marker for its data link</li>
         <li>Biodiversity: pick a climate-indicator species to see its shifting range</li>
+        <li>Hover-and-rest (or click) the globe to read a raster layer's value at that point</li>
       </ul>
       <h2>Roadmap</h2>
       <ul>
