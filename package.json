@@ -1,0 +1,14 @@
+{
+  "name": "earth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open climate data on a 3D globe",
+  "license": "MIT",
+  "scripts": {
+    "serve": "python3 -m http.server 8080",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.0"
+  }
+}

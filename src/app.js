@@ -84,6 +84,7 @@ class GIBSGeographicTilingScheme {
 const GIBS_LAYERS = [
   {
     id: "viirs-truecolor",
+    doc: "https://www.earthdata.nasa.gov/data/instruments/viirs",
     layer: "VIIRS_SNPP_CorrectedReflectance_TrueColor",
     title: "True color (VIIRS, daily)",
     ext: "jpg", tms: "250m", maxLevel: 8,
@@ -92,6 +93,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "sst",
+    doc: "https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1",
     layer: "GHRSST_L4_MUR_Sea_Surface_Temperature",
     title: "Sea surface temperature (MUR 1 km)",
     ext: "png", tms: "1km", maxLevel: 6,
@@ -100,6 +102,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "sst-anom",
+    doc: "https://podaac.jpl.nasa.gov/dataset/MUR25-JPL-L4-GLOB-v04.2",
     layer: "GHRSST_L4_MUR25_Sea_Surface_Temperature_Anomalies",
     title: "SST anomalies (MUR 25 km)",
     ext: "png", tms: "2km", maxLevel: 5,
@@ -108,6 +111,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "precip",
+    doc: "https://gpm.nasa.gov/data/imerg",
     layer: "IMERG_Precipitation_Rate",
     title: "Precipitation rate (IMERG)",
     ext: "png", tms: "2km", maxLevel: 5,
@@ -116,6 +120,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "seaice",
+    doc: "https://nsidc.org/data/au_si12",
     layer: "AMSRU2_Sea_Ice_Concentration_12km",
     title: "Sea ice concentration (AMSR2)",
     ext: "png", tms: "2km", maxLevel: 5,
@@ -124,6 +129,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "snow",
+    doc: "https://nsidc.org/data/mod10a1",
     layer: "MODIS_Terra_NDSI_Snow_Cover",
     title: "Snow cover (MODIS NDSI)",
     ext: "png", tms: "500m", maxLevel: 7,
@@ -132,6 +138,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "aod",
+    doc: "https://atmosphere-imager.gsfc.nasa.gov/products/aerosol",
     layer: "MODIS_Combined_Value_Added_AOD",
     title: "Aerosol optical depth (MODIS)",
     ext: "png", tms: "2km", maxLevel: 5,
@@ -140,6 +147,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "nightlights",
+    doc: "https://blackmarble.gsfc.nasa.gov/",
     layer: "VIIRS_Black_Marble",
     title: "Night lights (Black Marble)",
     ext: "png", tms: "500m", maxLevel: 7,
@@ -349,7 +357,7 @@ function buildLayerPanel() {
     div.className = "layer-item";
     div.innerHTML = `
       <label><input type="checkbox" data-id="${cfg.id}" ${cfg.on ? "checked" : ""}/> ${cfg.title}</label>
-      <div class="meta">${cfg.meta}${cfg.timed ? ` · from ${cfg.start}` : ""}</div>
+      <div class="meta">${cfg.meta}${cfg.timed ? ` · from ${cfg.start}` : ""}${cfg.doc ? ` · <a href="${cfg.doc}" target="_blank" rel="noopener">docs ↗</a>` : ""}</div>
       <input type="range" min="0" max="100" value="100" data-alpha="${cfg.id}"
              ${cfg.on ? "" : "style='display:none'"} title="opacity"/>`;
     list.appendChild(div);
@@ -736,3 +744,16 @@ for (const t of Object.keys(tabs)) {
 buildLayerPanel();
 loadStations();
 loadCatalog();
+
+/* Test hook: stable handle for the Playwright suite (tests/) — not a public API. */
+window.__earth = {
+  viewer,
+  state,
+  pointLayers,
+  GIBS_LAYERS,
+  GIBSGeographicTilingScheme,
+  compareDate,
+  get stations() { return stationsDs; },
+  get rapid() { return rapidData; },
+  get catalog() { return CATALOG; },
+};
