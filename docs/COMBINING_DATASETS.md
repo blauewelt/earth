@@ -186,3 +186,53 @@ rather than instantaneous IMERG. The app reflects this: computed-difference and
 multi-day aggregation are offered for SST only, and a hint appears if another
 layer is active in difference mode. Extending honest aggregation to precipitation
 (accumulated totals from a monthly product) is a sensible future addition.
+
+## Climatology grid layers (GPCP, E-OBS, OISST, MeteoSwiss)
+
+Some of the most useful precipitation and ocean products have no global tile
+service, so the app bakes them into static regular lon/lat grids
+(`data/<id>.json`) and paints them client-side with a colour ramp. Because these
+are **long-term means**, they answer the question instantaneous IMERG cannot —
+"how wet is this place, normally?" — and sidestep the per-pixel differencing
+problem described above entirely.
+
+- **GPCP v2.3** — the gauge-satellite blended, global mean-annual precipitation
+  climatology (2.5°). This is the honest "precipitation on the globe": every
+  cell is a defined multi-decadal average, so the tropical rain band and the
+  subtropical deserts read cleanly. IMERG remains the layer for *where it is
+  raining now*; GPCP is *where it rains on average*.
+- **E-OBS v31** — the same quantity as GPCP but from dense European rain gauges
+  at 0.25°, land only. It is a **regional** layer (a bounded rectangle over
+  Europe); everything outside stays transparent. Use it to see the orographic
+  detail — wet Alpine and Norwegian coasts, dry Iberian interior — that a 2.5°
+  global product blurs away.
+- **MeteoSwiss OGD** — the Swiss 1991–2020 precipitation *normal* at ~2 km, the
+  highest-resolution member of the same family, showing the sharp Alpine
+  precipitation gradients within a single country.
+- **OISST v2.1** — a 1991–2020 SST climatology (0.25°→1°). It complements the
+  live MUR SST tile layer: MUR shows today's field and supports the difference
+  tool; OISST is the long-term baseline those anomalies are measured against.
+
+Three of these (GPCP↔E-OBS↔MeteoSwiss) measure **the same physical quantity**
+at coarsening spatial scales, so they are directly comparable — a nice
+illustration of how a global product, a regional gridded product, and a national
+high-resolution product nest together.
+
+## Same quantity, different mission: chlorophyll and salinity
+
+Two of the requested ocean datasets have a natural on-globe counterpart already
+served as NASA GIBS tiles, so the app shows the tile version and treats the
+climate-record version as its scientific sibling:
+
+- **Chlorophyll-a** — the app's live layer is NASA Ocean Color (PACE/OCI). The
+  **ESA OC-CCI** record measures the same variable but merges SeaWiFS, MODIS,
+  MERIS, VIIRS and OLCI into a bias-corrected multi-decadal climate data record;
+  it is the one to use for *trends*, where a single-sensor daily field is not.
+- **Sea surface salinity** — the app's live layer is SMAP L3 (monthly). **SMOS**
+  (ESA, via CATDS/BEC) retrieves the same L-band surface salinity from a
+  different platform; Aquarius covers the earlier 2011–2015 era. Cross-mission
+  agreement between SMAP and SMOS is itself a validation signal.
+
+OC-CCI and SMOS are catalogued (`data/catalog.json`) with their access details;
+adding them as their own grid layers is a straightforward follow-up once an
+unauthenticated subset endpoint is wired into `scripts/refresh_data.py`.

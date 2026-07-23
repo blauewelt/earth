@@ -215,13 +215,13 @@ test("catalog browser filters the dataset list", async ({ page }) => {
 test("every layer title is a clickable documentation link", async ({ page }) => {
   // GIBS layers: title itself links to the dataset docs, checkbox toggles separately
   const links = page.locator("#layer-list .layer-head a.title-link");
-  await expect(links).toHaveCount(8);
+  await expect(links).toHaveCount(16);
   for (const href of await links.evaluateAll((as) => as.map((a) => a.href))) {
     expect(href).toMatch(/^https:\/\//);
   }
   await expect(links.first()).toHaveAttribute("target", "_blank");
   // data + analysis layers (SST ensemble, Climate TRACE, Argo, stations, GBIF) too
-  await expect(page.locator("#panel-layers .layer-head a.title-link")).toHaveCount(13);
+  await expect(page.locator("#panel-layers .layer-head a.title-link")).toHaveCount(22);
   // clicking the title must NOT toggle the layer
   const before = await page.evaluate(() => window.__earth.viewer.imageryLayers.length);
   const [popup] = await Promise.all([
@@ -677,4 +677,75 @@ test("glacier layer can colour by 2000-2020 melt rate", async ({ page }) => {
   expect(c.coolB).toBeGreaterThan(c.coolR);   // growing → blue > red
   await page.selectOption("#glacier-mode", "extent");
   await expect(page.locator("#glacier-legend")).toBeHidden();
+});
+
+test("gridded climatology layers paint tiles and probe exact cell values", async ({ page }) => {
+  // GPCP (global precip), OISST (global SST, ocean), E-OBS (Europe), MeteoSwiss (CH)
+  const cases = [
+    { id: "gpcp", lon: -60, lat: -3, min: 1500, units: "mm/yr" },   // Amazon, very wet
+    { id: "oisst", lon: -140, lat: 0, min: 20, units: "°C" },        // equatorial Pacific, warm
+    { id: "eobs", lon: 2.3, lat: 48.9, min: 300, units: "mm/yr" },   // Paris
+    { id: "meteoswiss", lon: 8.2, lat: 46.8, min: 800, units: "mm/yr" }, // central Switzerland
+  ];
+  const r = await page.evaluate(async (cases) => {
+    const E = window.__earth, out = {};
+    for (const c of cases) {
+      const cfg = E.GIBS_LAYERS.find((l) => l.id === c.id);
+      const g = await E.loadGrid(cfg);
+      // geographic tile (level 5) containing the point
+      const lvl = 5, nx = 2 * 2 ** lvl, ny = 2 ** lvl;
+      const tx = Math.floor((c.lon + 180) / 360 * nx);
+      const ty = Math.floor((90 - c.lat) / 180 * ny);
+      const canvas = await new E.GridProvider(cfg).requestImage(tx, ty, lvl);
+      const d = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+      let painted = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) painted++;
+      out[c.id] = { painted, sample: E.sampleGrid(g, c.lon, c.lat), isGrid: cfg.grid === true };
+    }
+    return out;
+  }, cases);
+  for (const c of cases) {
+    expect(r[c.id].isGrid, `${c.id} is a grid layer`).toBe(true);
+    expect(r[c.id].painted, `${c.id} tile painted`).toBeGreaterThan(50);
+    expect(r[c.id].sample, `${c.id} sample`).toBeGreaterThan(c.min);
+  }
+  // probe reads the exact value straight from the grid (units + magnitude)
+  await page.check('#layer-list input[data-id="meteoswiss"]');
+  const probe = await page.evaluate(async () => {
+    const E = window.__earth, C = window.Cesium;
+    return await E.probeValueAt(C.Cartographic.fromDegrees(8.2, 46.8));
+  });
+  expect(probe.units).toBe("mm/yr");
+  expect(probe.value).toBeGreaterThan(800);
+  // grid legend shows a ramp bar with min/mid/max labels
+  await expect(page.locator("#legend-panel")).toContainText("MeteoSwiss");
+  await expect(page.locator("#legend-panel .legend-item").filter({ hasText: "MeteoSwiss" })
+    .locator("canvas.legend-bar")).toHaveCount(1);
+  expect(page.__errors).toEqual([]);
+});
+
+test("new native GIBS layers toggle; salinity snaps to first-of-month", async ({ page }) => {
+  const before = await page.evaluate(() => window.__earth.viewer.imageryLayers.length);
+  for (const id of ["precip-30min", "chlor", "salinity"]) {
+    await page.check(`#layer-list input[data-id="${id}"]`);
+  }
+  const info = await page.evaluate(() => {
+    const E = window.__earth;
+    // WMTS provider ctor name is mangled in the vendored build; assert our own
+    // GIBS tiling scheme instead — a reliable marker of a real GIBS tile layer.
+    const scheme = (id) => E.state.layers[id].layer.imageryProvider.tilingScheme.constructor.name;
+    const salCfg = E.GIBS_LAYERS.find((l) => l.id === "salinity");
+    return {
+      count: E.viewer.imageryLayers.length,
+      p30: scheme("precip-30min"),
+      chl: scheme("chlor"),
+      sal: scheme("salinity"),
+      monthlySnap: E.gibsTime(salCfg, "2024-03-15"),
+      dailyNoSnap: E.gibsTime(E.GIBS_LAYERS.find((l) => l.id === "precip"), "2024-03-15"),
+    };
+  });
+  expect(info.count).toBe(before + 3);
+  for (const s of [info.p30, info.chl, info.sal]) expect(s).toBe("GIBSGeographicTilingScheme");
+  expect(info.monthlySnap).toBe("2024-03-01");   // monthly layers request first-of-month
+  expect(info.dailyNoSnap).toBe("2024-03-15");   // daily layers use the raw date
+  expect(page.__errors).toEqual([]);
 });
