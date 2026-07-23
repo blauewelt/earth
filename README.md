@@ -40,7 +40,7 @@ npx playwright test
 No build step. Serve the directory with any static server:
 
 ```bash
-git clone https://github.com/chfrank-cgn/earth
+git clone https://github.com/blauewelt/earth
 cd earth
 python3 -m http.server 8080
 # open http://localhost:8080
