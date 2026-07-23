@@ -640,3 +640,14 @@ test("hover value probe waits for dwell; click reads immediately", async ({ page
   const cls = await page.getAttribute("#value-probe", "class");
   expect(typeof cls).toBe("string");
 });
+
+test("base globe desaturates to grey while a difference layer is active", async ({ page }) => {
+  const sat = () => page.evaluate(() =>
+    window.__earth.viewer.imageryLayers.get(0).saturation);
+  expect(await sat()).toBe(1.0);                 // full colour normally
+  await page.selectOption("#compare-select", "10");
+  await page.selectOption("#compare-mode", "delta");
+  expect(await sat()).toBe(0.0);                 // grayscale under the delta
+  await page.selectOption("#compare-mode", "split");
+  expect(await sat()).toBe(1.0);                 // colour restored
+});

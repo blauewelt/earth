@@ -239,6 +239,15 @@ const viewer = new Cesium.Viewer("cesiumContainer", {
 viewer.scene.globe.enableLighting = false;
 viewer.scene.skyAtmosphere.show = true;
 
+// The base Blue-Marble layer; desaturated to grayscale while a computed-difference
+// layer is active so the red/blue Δ pops instead of blue-on-blue over the ocean.
+const baseImageryLayer = viewer.imageryLayers.get(0);
+function updateBaseAppearance() {
+  const deltaActive = Object.values(state.layers).some((e) => e.layer && e.isDelta);
+  baseImageryLayer.saturation = deltaActive ? 0.0 : 1.0;
+  baseImageryLayer.brightness = deltaActive ? 0.55 : 1.0;
+}
+
 /* Zoom gestures: mouse wheel, touch pinch, AND trackpad pinch.
  * Browsers report a MacBook-style trackpad pinch as a wheel event with
  * ctrlKey set, which Cesium ignores unless registered explicitly. */
@@ -833,6 +842,7 @@ function updateLegends() {
   }
   panel.classList.toggle("hidden", !any);
   updateDeltaHint();
+  updateBaseAppearance();
 }
 
 /* Interactive legends: rendered from the layer's GIBS colormap so hovering
@@ -1031,7 +1041,7 @@ function deltaLegendEl(cfg) {
     rangeEl.innerHTML = `<span>−${range}</span><span>${u}</span><span>+${range}</span>`;
   });
   div.appendChild(rangeEl);
-  div.insertAdjacentHTML("beforeend", `<div class="legend-note">blue = decrease · red = increase vs then</div>`);
+  div.insertAdjacentHTML("beforeend", `<div class="legend-note">blue = decrease · red = increase vs then · globe shown grey so the change stands out</div>`);
   return div;
 }
 
@@ -1912,6 +1922,7 @@ loadCatalog();
 /* Test hook: stable handle for the Playwright suite (tests/) — not a public API. */
 window.__earth = {
   viewer,
+  get baseImageryLayer() { return baseImageryLayer; },
   parseColormap,
   parseColormapEntries,
   windowSampleDates,
