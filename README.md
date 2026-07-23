@@ -18,6 +18,7 @@ The long-term goal: layer enough observational and model data onto the globe to 
 - **SST ensemble** — combines independent GHRSST L4 analyses (MUR, OISST, GAMSSA) client-side into a **mean** or a **spread** map; the spread highlights where analyses disagree (fronts, eddies, under-observed ocean).
 - **Live data layers** — Climate TRACE's top 1,000 facility emitters and the ~3,800-float Argo fleet as clickable points (`scripts/refresh_data.py` refreshes snapshots).
 - **AMOC dashboard** — the RAPID 26.5°N overturning transport record (2004–2024) with stat tiles and a hoverable chart.
+- **Sea-level budget dashboard** — observed global mean sea level 1900–2018 decomposed into its causes (thermal expansion, glaciers, Greenland, Antarctica, land water), with the summed budget tracking the observed line to show *closure*, plus modern satellite altimetry (Frederikse et al. 2020 + NOAA).
 - **Zoom** — scroll, touch pinch, trackpad pinch (ctrl+wheel), and on-globe buttons.
 - **AMOC monitoring network** — the RAPID, OSNAP, MOVE, SAMBA arrays, the Florida Current cable, the subpolar "cold blob" fingerprint region, plus reference GHG stations (Mauna Loa, Jungfraujoch, …) as clickable markers with data links.
 - **Dataset catalog browser** — search and filter all 241 cataloged datasets by domain, AMOC relevance, and globe-readiness, straight from [`data/catalog.json`](data/catalog.json).
@@ -58,6 +59,10 @@ src/app.js              CesiumJS globe, GIBS layers, stations, catalog UI
 src/style.css           dark UI theme
 data/catalog.json       241-dataset open climate data catalog (machine-readable)
 data/stations.geojson   AMOC arrays + GHG reference stations
+data/rapid_moc.json     RAPID 26.5N AMOC transport series
+data/sealevel.json      sea-level budget (Frederikse 2020) + NOAA altimetry
+data/climatetrace.json  top-1000 facility emitters · data/argo.json  active float fleet
+scripts/refresh_data.py regenerates every snapshot above
 docs/CATALOG.md         the catalog as a readable reference document
 .github/workflows/      GitHub Pages deployment
 ```

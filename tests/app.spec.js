@@ -429,3 +429,27 @@ test("SST ensemble layer renders mean and spread with matching legends", async (
   expect(sp.zero).toBe(0);         // no disagreement → transparent
   expect(sp.big).toBeGreaterThan(150);
 });
+
+test("sea-level dashboard loads the budget, stats and chart", async ({ page }) => {
+  await page.click("#tab-sealevel");
+  await expect(page.locator("#sl-total .stat-value")).not.toHaveText("–");
+  const r = await page.evaluate(() => ({
+    years: window.__earth.sealevel.years.length,
+    total: Number(document.querySelector("#sl-total .stat-value").textContent),
+    rate: Number(document.querySelector("#sl-rate .stat-value").textContent),
+    chartW: document.getElementById("sl-chart").width,
+    legend: document.getElementById("sl-legend").children.length,
+    trend: window.__earth.linTrend([2000, 2010, 2020], [0, 30, 60]),
+  }));
+  expect(r.years).toBeGreaterThan(110);
+  expect(r.total).toBeGreaterThan(150);           // ~209 mm since 1900
+  expect(r.rate).toBeGreaterThan(2.5);            // satellite-era ~3.2 mm/yr
+  expect(r.rate).toBeLessThan(4.5);
+  expect(r.chartW).toBeGreaterThan(0);
+  expect(r.legend).toBe(8);                       // observed + summed + 5 components + altimetry
+  expect(r.trend).toBeCloseTo(3, 5);              // linear-trend helper is correct
+  // hover produces a breakdown tooltip
+  await page.hover("#sl-chart", { position: { x: 160, y: 90 } });
+  await expect(page.locator("#sl-tooltip")).toBeVisible();
+  await expect(page.locator("#sl-tooltip")).toContainText("observed");
+});

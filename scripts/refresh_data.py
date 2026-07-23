@@ -133,8 +133,66 @@ def rapid(step=20):
     print(f"  wrote {len(dts)} samples ({dts[0]} .. {dts[-1]})")
 
 
+def sealevel():
+    """Global sea-level budget: observed GMSL vs its components (steric, glaciers,
+    Greenland, Antarctica, terrestrial water storage), 1900-2018, from
+    Frederikse et al. 2020 (Nature); plus the satellite-altimetry total from
+    NOAA STAR for the modern era. Illustrates budget closure: total ≈ sum of parts."""
+    import io
+    import openpyxl
+    print("Sea level: Frederikse et al. 2020 global budget ...")
+    raw = urllib.request.urlopen(urllib.request.Request(
+        "https://zenodo.org/records/3862995/files/global_basin_timeseries.xlsx", headers=UA), timeout=120).read()
+    wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True)
+    ws = wb["Global"]
+    col = {  # column index → output key (means only)
+        2: "observed", 5: "sum", 8: "steric", 11: "glaciers",
+        14: "greenland", 17: "antarctica", 20: "tws",
+    }
+    years, series = [], {k: [] for k in col.values()}
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[0] is None:
+            continue
+        years.append(int(float(row[0])))
+        for i, k in col.items():
+            v = row[i]
+            series[k].append(round(float(v), 1) if v is not None else None)
+
+    print("Sea level: NOAA STAR satellite altimetry ...")
+    txt = urllib.request.urlopen(urllib.request.Request(
+        "https://www.star.nesdis.noaa.gov/socd/lsa/SeaLevelRise/slr/slr_sla_gbl_keep_all_66.csv",
+        headers=UA), timeout=120).read().decode()
+    alt_t, alt_v = [], []
+    for line in txt.splitlines():
+        if line.startswith("#") or line.startswith("year") or not line.strip():
+            continue
+        parts = line.split(",")
+        t = float(parts[0])
+        vals = [float(p) for p in parts[1:] if p.strip()]
+        if vals:
+            alt_t.append(round(t, 3))
+            alt_v.append(round(vals[-1], 1))  # latest available mission
+    # rebase altimetry so its 2005 value ~ observed-2005 (both mm, arbitrary datum)
+    base_alt = next((v for t, v in zip(alt_t, alt_v) if t >= 2005), alt_v[0])
+    base_obs = series["observed"][years.index(2005)] if 2005 in years else 0
+    alt_v = [round(v - base_alt + base_obs, 1) for v in alt_v]
+
+    payload = {
+        "source": "Frederikse et al. 2020, Nature (doi:10.1038/s41586-020-2591-3); "
+                  "satellite altimetry: NOAA/NESDIS Laboratory for Satellite Altimetry",
+        "units": "mm (relative to 2002-2018 mean baseline of the source)",
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "years": years,
+        "components": series,           # observed, steric, glaciers, greenland, antarctica, tws
+        "altimetry": {"t": alt_t, "v": alt_v},
+    }
+    with open(os.path.join(DATA, "sealevel.json"), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    print(f"  wrote {len(years)} yr of budget + {len(alt_t)} altimetry samples")
+
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["climatetrace", "argo", "rapid"]
+    which = sys.argv[1:] or ["climatetrace", "argo", "rapid", "sealevel"]
     for w in which:
-        {"climatetrace": climatetrace, "argo": argo, "rapid": rapid}[w]()
+        {"climatetrace": climatetrace, "argo": argo, "rapid": rapid, "sealevel": sealevel}[w]()
     print("done")

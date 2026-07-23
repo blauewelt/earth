@@ -104,3 +104,29 @@ test.describe("stations.geojson", () => {
     }
   });
 });
+
+test.describe("sealevel.json", () => {
+  const s = read("sealevel.json");
+
+  test("budget components and altimetry are present and aligned", () => {
+    expect(s.years[0]).toBe(1900);
+    expect(s.years[s.years.length - 1]).toBeGreaterThanOrEqual(2018);
+    for (const k of ["observed", "sum", "steric", "glaciers", "greenland", "antarctica", "tws"]) {
+      expect(s.components[k], `${k} length`).toHaveLength(s.years.length);
+    }
+    expect(s.altimetry.t.length).toBeGreaterThan(500);
+    expect(s.altimetry.t.length).toBe(s.altimetry.v.length);
+  });
+
+  test("budget approximately closes and shows the expected rise", () => {
+    const i = s.years.length - 1;
+    const rise = s.components.observed[i] - s.components.observed[0];
+    expect(rise).toBeGreaterThan(150);  // ~200 mm over the 20th century
+    expect(rise).toBeLessThan(260);
+    // summed budget tracks observed within a reasonable residual
+    const gap = Math.abs(s.components.observed[i] - s.components.sum[i]);
+    expect(gap).toBeLessThan(20);
+    // steric is a major positive contributor by the end
+    expect(s.components.steric[i]).toBeGreaterThan(0);
+  });
+});

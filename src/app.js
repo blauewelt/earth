@@ -1352,9 +1352,148 @@ function renderCatalog() {
     .join("");
 }
 
+/* ---------------------------------------------------- sea-level budget dashboard */
+
+let seaLevelData = null;
+const SL_COMPONENTS = [
+  { key: "steric", label: "Thermal expansion (steric)", color: "#3987e5" },
+  { key: "glaciers", label: "Glaciers", color: "#d95926" },
+  { key: "greenland", label: "Greenland Ice Sheet", color: "#199e70" },
+  { key: "antarctica", label: "Antarctic Ice Sheet", color: "#c98500" },
+  { key: "tws", label: "Land water storage", color: "#d55181" },
+];
+
+async function loadSeaLevel() {
+  if (seaLevelData) return;
+  seaLevelData = await (await fetch("data/sealevel.json")).json();
+  const { years, components, altimetry } = seaLevelData;
+  const obs = components.observed;
+
+  // headline stats
+  const total = obs[obs.length - 1] - obs[0];
+  setStat("sl-total", total, "mm rise, 1900–2018");
+  // satellite-era rate: linear fit of altimetry (mm vs decimal year)
+  const rate = linTrend(altimetry.t, altimetry.v);
+  document.querySelector("#sl-rate .stat-value").textContent = rate.toFixed(1);
+  document.querySelector("#sl-rate .stat-sub").textContent = "mm/yr (satellite era)";
+  // largest contributor over the record
+  let big = SL_COMPONENTS[0], bigv = -1e9;
+  for (const c of SL_COMPONENTS) {
+    const v = components[c.key][components[c.key].length - 1] - components[c.key][0];
+    if (v > bigv) { bigv = v; big = c; }
+  }
+  document.querySelector("#sl-driver .stat-value").textContent = `${Math.round(bigv)}`;
+  document.querySelector("#sl-driver .stat-sub").textContent = `mm from ${big.label.split(" (")[0].toLowerCase()}`;
+
+  const leg = document.getElementById("sl-legend");
+  leg.innerHTML = `<span style="color:#fff"><b>━ Observed GMSL</b></span>` +
+    `<span style="color:#898781">┄ Summed budget</span>` +
+    SL_COMPONENTS.map((c) => `<span style="color:${c.color}">━ ${c.label}</span>`).join("") +
+    `<span style="color:#4493f8">┈ Satellite altimetry</span>`;
+  drawSeaLevelChart();
+  window.addEventListener("resize", () => { if (!document.getElementById("panel-sealevel").classList.contains("hidden")) drawSeaLevelChart(); });
+}
+
+function linTrend(t, v) {
+  const n = t.length;
+  const mt = t.reduce((s, x) => s + x, 0) / n;
+  const mv = v.reduce((s, x) => s + x, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) { num += (t[i] - mt) * (v[i] - mv); den += (t[i] - mt) ** 2; }
+  return num / den;
+}
+
+function drawSeaLevelChart() {
+  const { years, components, altimetry } = seaLevelData;
+  const canvas = document.getElementById("sl-chart");
+  const wrap = canvas.parentElement;
+  const cssW = wrap.clientWidth, cssH = 210;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  canvas.style.width = cssW + "px"; canvas.style.height = cssH + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+
+  const M = { l: 30, r: 8, t: 8, b: 18 };
+  const W = cssW - M.l - M.r, H = cssH - M.t - M.b;
+  const compVals = SL_COMPONENTS.flatMap((c) => components[c.key]);
+  const allV = [...components.observed, ...components.sum, ...compVals, ...altimetry.v];
+  const y0 = Math.floor(Math.min(...allV) / 25) * 25;
+  const y1 = Math.ceil(Math.max(...allV) / 25) * 25;
+  const X = (yr) => M.l + ((yr - years[0]) / (years[years.length - 1] - years[0])) * W;
+  const Y = (v) => M.t + (1 - (v - y0) / (y1 - y0)) * H;
+  const line = (xs, ys, i0 = 0) => {
+    ctx.beginPath();
+    let started = false;
+    for (let i = i0; i < xs.length; i++) {
+      if (ys[i] == null) { started = false; continue; }
+      if (!started) { ctx.moveTo(X(xs[i]), Y(ys[i])); started = true; }
+      else ctx.lineTo(X(xs[i]), Y(ys[i]));
+    }
+    ctx.stroke();
+  };
+
+  const draw = (hoverYear) => {
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.font = "10px system-ui, sans-serif";
+    for (let v = y0; v <= y1; v += 50) {
+      ctx.strokeStyle = "#2c2c2a"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(M.l, Y(v)); ctx.lineTo(cssW - M.r, Y(v)); ctx.stroke();
+      ctx.fillStyle = "#898781"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.fillText(String(v), M.l - 4, Y(v));
+    }
+    // zero reference line
+    if (y0 < 0 && y1 > 0) {
+      ctx.strokeStyle = "#4a4a47"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(M.l, Y(0)); ctx.lineTo(cssW - M.r, Y(0)); ctx.stroke();
+    }
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let yr = 1900; yr <= years[years.length - 1]; yr += 20) {
+      ctx.fillStyle = "#898781"; ctx.fillText(String(yr), X(yr), M.t + H + 5);
+    }
+    // component lines
+    ctx.lineWidth = 1.5; ctx.lineJoin = "round";
+    for (const c of SL_COMPONENTS) { ctx.strokeStyle = c.color; line(years, components[c.key]); }
+    // summed budget (grey dashed) — should track observed = closure
+    ctx.strokeStyle = "#898781"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 3]);
+    line(years, components.sum); ctx.setLineDash([]);
+    // observed GMSL (white, thick)
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2.5; line(years, components.observed);
+    // satellite altimetry (accent dashed, modern era)
+    ctx.strokeStyle = "#4493f8"; ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]);
+    line(altimetry.t, altimetry.v); ctx.setLineDash([]);
+    // hover crosshair
+    if (hoverYear != null) {
+      const i = hoverYear - years[0];
+      if (i >= 0 && i < years.length) {
+        ctx.strokeStyle = "#52514e"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(X(years[i]), M.t); ctx.lineTo(X(years[i]), M.t + H); ctx.stroke();
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath(); ctx.arc(X(years[i]), Y(components.observed[i]), 3, 0, 7); ctx.fill();
+      }
+    }
+  };
+  draw(null);
+
+  const tip = document.getElementById("sl-tooltip");
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const yr = Math.round(years[0] + ((e.clientX - rect.left - M.l) / W) * (years[years.length - 1] - years[0]));
+    const i = yr - years[0];
+    if (i < 0 || i >= years.length) { tip.classList.add("hidden"); return; }
+    draw(yr);
+    const parts = SL_COMPONENTS.map((c) => `<span style="color:${c.color}">■</span> ${c.label.split(" (")[0]}: ${(components[c.key][i] ?? 0).toFixed(0)} mm`).join("<br/>");
+    tip.innerHTML = `<b>${yr}</b> · observed ${components.observed[i].toFixed(0)} mm<br/>${parts}`;
+    tip.style.left = `${Math.min(Math.max(e.clientX - rect.left - 70, 4), cssW - 150)}px`;
+    tip.classList.remove("hidden");
+  };
+  canvas.onmouseleave = () => { tip.classList.add("hidden"); draw(null); };
+}
+
 /* --------------------------------------------------------------------- tabs */
 
-const tabs = { layers: "panel-layers", amoc: "panel-amoc", catalog: "panel-catalog", about: "panel-about" };
+const tabs = { layers: "panel-layers", amoc: "panel-amoc", sealevel: "panel-sealevel",
+  catalog: "panel-catalog", about: "panel-about" };
 for (const t of Object.keys(tabs)) {
   document.getElementById(`tab-${t}`).addEventListener("click", () => {
     for (const [k, panel] of Object.entries(tabs)) {
@@ -1362,6 +1501,7 @@ for (const t of Object.keys(tabs)) {
       document.getElementById(`tab-${k}`).classList.toggle("active", k === t);
     }
     if (t === "amoc") loadAmoc();
+    if (t === "sealevel") loadSeaLevel();
   });
 }
 
@@ -1393,5 +1533,8 @@ window.__earth = {
   compareDate,
   get stations() { return stationsDs; },
   get rapid() { return rapidData; },
+  get sealevel() { return seaLevelData; },
+  loadSeaLevel,
+  linTrend,
   get catalog() { return CATALOG; },
 };

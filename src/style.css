@@ -221,3 +221,15 @@ footer a { color: var(--fg-dim); }
 /* ---- aggregation slider ---- */
 #window-days { flex: 1; accent-color: var(--accent); }
 .window-value { font-size: 11px; color: var(--fg-dim); min-width: 78px; text-align: right; }
+
+/* ---- sea-level dashboard ---- */
+#sl-chart-wrap { position: relative; margin: 8px 0 4px; }
+#sl-chart { display: block; width: 100%; }
+#sl-tooltip {
+  position: absolute; top: -4px; padding: 4px 8px; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  font-size: 10.5px; line-height: 1.5; color: var(--fg); white-space: nowrap; pointer-events: none;
+}
+.sl-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 8px; }
+.sl-legend span { font-size: 10.5px; color: var(--fg-dim); }
+.sl-legend b { font-weight: 600; }

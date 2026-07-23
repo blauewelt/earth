@@ -18,6 +18,7 @@
       <nav>
         <button id="tab-layers" class="tab active">Layers</button>
         <button id="tab-amoc" class="tab">AMOC</button>
+        <button id="tab-sealevel" class="tab">Sea level</button>
         <button id="tab-catalog" class="tab">Catalog</button>
         <button id="tab-about" class="tab">About</button>
       </nav>
@@ -115,6 +116,34 @@
         this dashboard tracks the primary observational record. Roadmap: OSNAP &amp;
         Florida Current series, SST-fingerprint indices, variance / autocorrelation
         early-warning statistics.</p>
+    </section>
+
+    <section id="panel-sealevel" class="panel hidden">
+      <h2>Global sea-level budget</h2>
+      <div class="stat-row">
+        <div class="stat" id="sl-total"><div class="stat-value">–</div><div class="stat-sub">mm since 1900</div></div>
+        <div class="stat" id="sl-rate"><div class="stat-value">–</div><div class="stat-sub">mm/yr now</div></div>
+        <div class="stat" id="sl-driver"><div class="stat-value">–</div><div class="stat-sub">top driver</div></div>
+      </div>
+      <div id="sl-chart-wrap">
+        <canvas id="sl-chart"></canvas>
+        <div id="sl-tooltip" class="hidden"></div>
+      </div>
+      <div id="sl-legend" class="sl-legend"></div>
+      <p class="hint">Observed global mean sea level (white) and its causes as separate lines; the grey
+        dashed line is the summed budget — it tracking the observed line <em>is</em> budget closure.
+        Blue dots are satellite altimetry. 1900–2018 budget from Frederikse et al. 2020; altimetry from
+        NOAA. Hover for the year-by-year breakdown.</p>
+      <h2>Why this matters — budget closure</h2>
+      <p>Sea-level rise is a physical accounting identity: the observed rise must equal thermal
+        expansion of warming water plus the mass added by melting glaciers, Greenland, Antarctica,
+        and changes in land water storage. That these independent measurements sum to the observed
+        total ("closure") is one of the strongest cross-checks in climate science — and it decomposes
+        <em>why</em> the ocean is rising: roughly a third thermal expansion, the rest added ice mass.
+        A small residual between the observed line and the summed stack reflects remaining
+        measurement uncertainty.</p>
+      <p>Sources: <a href="https://www.nature.com/articles/s41586-020-2591-3" target="_blank" rel="noopener">Frederikse et al. 2020</a>,
+        <a href="https://www.star.nesdis.noaa.gov/socd/lsa/SeaLevelRise/" target="_blank" rel="noopener">NOAA STAR altimetry</a>.</p>
     </section>
 
     <section id="panel-catalog" class="panel hidden">
