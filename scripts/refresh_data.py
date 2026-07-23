@@ -292,8 +292,195 @@ def gistemp():
     print(f"  wrote {len(ly)} yr ({ly[0]}-{ly[-1]}); latest land+ocean {lo[-1]}, land {landmap.get(ly[-1])}")
 
 
+# --------------------------------------------------------------- gridded fields
+# GPCP, E-OBS, OISST and MeteoSwiss have no global tile service, so we bake a
+# static regular lon/lat grid the browser paints with GridProvider. One helper
+# resamples any source (regular or curvilinear) onto a target grid by nearest
+# scatter-binning, so every dataset flows through the same code path.
+
+def _download(url, path, note=""):
+    if os.path.exists(path):
+        print(f"  cached {os.path.basename(path)}{note}")
+        return path
+    print(f"  downloading {url} ...")
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=600) as r, open(path, "wb") as f:
+        while True:
+            chunk = r.read(1 << 20)
+            if not chunk:
+                break
+            f.write(chunk)
+    print(f"    {os.path.getsize(path) / 1e6:.0f} MB{note}")
+    return path
+
+
+def _bin_to_grid(lon, lat, val, west, south, east, north, nx, ny):
+    """Nearest scatter-bin source points (any shape) onto a regular grid.
+    Returns a flat row-major list (row 0 = southmost), None for empty cells."""
+    import numpy as np
+    lon = np.asarray(lon, float).ravel()
+    lat = np.asarray(lat, float).ravel()
+    val = np.asarray(val, float).ravel()
+    lon = ((lon + 180.0) % 360.0) - 180.0          # wrap to [-180,180)
+    m = np.isfinite(val) & np.isfinite(lon) & np.isfinite(lat)
+    lon, lat, val = lon[m], lat[m], val[m]
+    dlon = (east - west) / nx
+    dlat = (north - south) / ny
+    ix = np.floor((lon - west) / dlon).astype(int)
+    iy = np.floor((lat - south) / dlat).astype(int)
+    keep = (ix >= 0) & (ix < nx) & (iy >= 0) & (iy < ny)
+    ix, iy, val = ix[keep], iy[keep], val[keep]
+    flat = iy * nx + ix
+    ssum = np.bincount(flat, weights=val, minlength=nx * ny)
+    scnt = np.bincount(flat, minlength=nx * ny)
+    out = np.where(scnt > 0, ssum / np.maximum(scnt, 1), np.nan)
+    return out, scnt, dlon, dlat
+
+
+def _write_grid(id, path, lon, lat, val, bounds, nx, ny, *, units, title,
+                source, citation, ramp, vmin, vmax, decimals=0, doc=""):
+    import numpy as np
+    west, south, east, north = bounds
+    out, scnt, dlon, dlat = _bin_to_grid(lon, lat, val, west, south, east, north, nx, ny)
+    vals = [None if not np.isfinite(v) else round(float(v), decimals) for v in out]
+    if decimals == 0:
+        vals = [None if v is None else int(v) for v in vals]
+    filled = int((scnt > 0).sum())
+    payload = {
+        "id": id, "title": title, "units": units, "source": source,
+        "citation": citation, "doc": doc, "ramp": ramp,
+        "vmin": vmin, "vmax": vmax,
+        "west": west, "south": south, "east": east, "north": north,
+        "dlon": round(dlon, 6), "dlat": round(dlat, 6), "nx": nx, "ny": ny,
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "values": vals,
+    }
+    with open(os.path.join(DATA, path), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    vfin = [v for v in vals if v is not None]
+    print(f"  wrote {path}: {nx}x{ny}, {filled} filled cells, "
+          f"value range {min(vfin):.0f}..{max(vfin):.0f} {units}")
+
+
+def gpcp():
+    """GPCP v2.3 global monthly precipitation (NOAA PSL), 2.5 deg. We average the
+    full record into a mean-annual climatology (mm/year). Global, coarse, complete."""
+    import numpy as np
+    print("GPCP v2.3: global precipitation climatology ...")
+    nc = _download("https://downloads.psl.noaa.gov/Datasets/gpcp/precip.mon.mean.nc",
+                   "/tmp/nc/gpcp.nc")
+    import netCDF4
+    d = netCDF4.Dataset(nc)
+    lat = d.variables["lat"][:]
+    lon = d.variables["lon"][:]
+    p = d.variables["precip"]
+    clim = np.ma.filled(p[:].mean(axis=0), np.nan) * 365.25   # mm/day -> mm/year
+    lon2, lat2 = np.meshgrid(lon, lat)
+    _write_grid("gpcp", "gpcp.json", lon2, lat2, clim,
+                (-180, -90, 180, 90), 144, 72,
+                units="mm/yr", title="Precipitation climatology (GPCP v2.3)",
+                source="NOAA GPCP v2.3 monthly (PSL)",
+                citation="Adler et al. 2018, doi:10.3390/atmos9040138",
+                doc="https://psl.noaa.gov/data/gridded/data.gpcp.html",
+                ramp="precip", vmin=0, vmax=3000)
+
+
+def eobs():
+    """E-OBS v31 daily precipitation (rr) ensemble mean, 0.25 deg, Europe. We read
+    the record in time-chunks to bound memory, average to mean-annual mm/year."""
+    import numpy as np
+    print("E-OBS v31: European precipitation climatology ...")
+    nc = _download(
+        "https://knmi-ecad-assets-prd.s3.amazonaws.com/ensembles/data/"
+        "Grid_0.25deg_reg_ensemble/rr_ens_mean_0.25deg_reg_v31.0e.nc",
+        "/tmp/nc/eobs_rr.nc", note=" (E-OBS is Europe-only)")
+    import netCDF4
+    d = netCDF4.Dataset(nc)
+    lat = d.variables["latitude"][:]
+    lon = d.variables["longitude"][:]
+    rr = d.variables["rr"]
+    nt = rr.shape[0]
+    ssum = np.zeros(rr.shape[1:], np.float64)
+    scnt = np.zeros(rr.shape[1:], np.float64)
+    step = 730
+    for t0 in range(0, nt, step):
+        block = rr[t0:t0 + step]                       # (chunk, ny, nx) masked mm/day
+        arr = np.ma.filled(block.astype(np.float64), np.nan)
+        ssum += np.nansum(arr, axis=0)
+        scnt += np.sum(np.isfinite(arr), axis=0)
+    mean_daily = np.where(scnt > 0, ssum / np.maximum(scnt, 1), np.nan)
+    clim = mean_daily * 365.25                          # mm/day -> mm/year
+    lon2, lat2 = np.meshgrid(lon, lat)
+    west, east = float(lon.min()), float(lon.max())
+    south, north = float(lat.min()), float(lat.max())
+    nx, ny = len(lon), len(lat)
+    _write_grid("eobs", "eobs.json", lon2, lat2, clim,
+                (west, south, east, north), nx, ny,
+                units="mm/yr", title="Precipitation climatology (E-OBS v31, Europe)",
+                source="E-OBS v31 0.25 deg ensemble mean (ECA&D / Copernicus)",
+                citation="Cornes et al. 2018, doi:10.1029/2017JD028200",
+                doc="https://surfobs.climate.copernicus.eu/dataaccess/access_eobs.php",
+                ramp="precip", vmin=0, vmax=2500)
+
+
+def oisst():
+    """NOAA OISST v2.1 high-res sea-surface temperature (PSL), 1991-2020 monthly
+    long-term-mean climatology. Global 0.25 deg source, coarsened to 1 deg."""
+    import numpy as np
+    print("OISST v2.1: mean SST climatology ...")
+    nc = _download(
+        "https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2.highres/sst.mon.ltm.1991-2020.nc",
+        "/tmp/nc/oisst_ltm.nc")
+    import netCDF4
+    d = netCDF4.Dataset(nc)
+    lat = d.variables["lat"][:]
+    lon = d.variables["lon"][:]
+    sst = d.variables["sst"]
+    clim = np.ma.filled(sst[:].mean(axis=0), np.nan)   # annual mean of 12 monthly LTMs, deg C
+    lon2, lat2 = np.meshgrid(lon, lat)
+    _write_grid("oisst", "oisst.json", lon2, lat2, clim,
+                (-180, -90, 180, 90), 360, 180,
+                units="°C", title="Sea surface temperature climatology (OISST v2.1)",
+                source="NOAA OISST v2.1 1991-2020 LTM (PSL)",
+                citation="Huang et al. 2021, doi:10.1175/JCLI-D-20-0166.1",
+                doc="https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html",
+                ramp="sst", vmin=-2, vmax=32, decimals=1)
+
+
+def meteoswiss():
+    """MeteoSwiss OGD gridded climate normals: mean yearly precipitation 1991-2020
+    (RnormY9120) over Switzerland. Curvilinear source ships lon/lat, so no reproj."""
+    import numpy as np
+    print("MeteoSwiss OGD: Swiss precipitation normal 1991-2020 ...")
+    nc = _download(
+        "https://data.geo.admin.ch/ch.meteoschweiz.ogd-climate-normals-grid/ch/"
+        "ogd-climate-normals-grid.rnormy9120_ch01r.swiss.lv95_19910101000000_19910101000000.nc",
+        "/tmp/nc/ch_precip.nc")
+    import netCDF4
+    d = netCDF4.Dataset(nc)
+    lon = d.variables["lon"][:]
+    lat = d.variables["lat"][:]
+    rr = np.ma.filled(d.variables["RnormY9120"][0].astype(float), np.nan)   # mm/year
+    west, east = float(np.nanmin(lon)), float(np.nanmax(lon))
+    south, north = float(np.nanmin(lat)), float(np.nanmax(lat))
+    nx = int(round((east - west) / 0.02))
+    ny = int(round((north - south) / 0.02))
+    _write_grid("meteoswiss", "meteoswiss.json", lon, lat, rr,
+                (west, south, east, north), nx, ny,
+                units="mm/yr", title="Precipitation normal (MeteoSwiss, 1991-2020)",
+                source="MeteoSwiss OGD climate normals grid (ch01r, CC BY 4.0)",
+                citation="MeteoSwiss OGD; RnormY9120 1991-2020",
+                doc="https://opendatadocs.meteoswiss.ch/",
+                ramp="precip", vmin=0, vmax=2500)
+
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
+    os.makedirs("/tmp/nc", exist_ok=True)
+    default = ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
+    which = sys.argv[1:] or default
+    fns = {"climatetrace": climatetrace, "argo": argo, "rapid": rapid,
+           "sealevel": sealevel, "glaciers": glaciers, "gistemp": gistemp,
+           "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss}
     for w in which:
-        {"climatetrace": climatetrace, "argo": argo, "rapid": rapid, "sealevel": sealevel, "glaciers": glaciers, "gistemp": gistemp}[w]()
+        fns[w]()
     print("done")

@@ -121,10 +121,21 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/GPM_Precipitation_Rate_H.svg",
     doc: "https://gpm.nasa.gov/data/imerg",
     layer: "IMERG_Precipitation_Rate",
-    title: "Precipitation rate (IMERG)",
+    title: "Precipitation rate (GPM IMERG V07)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2000-06-01", timed: true, on: false,
-    meta: "GPM merged precipitation",
+    meta: "GPM IMERG V07 daily merged precipitation (mm/hr)",
+  },
+  {
+    id: "precip-30min",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/GPM_Precipitation_Rate.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/GPM_Precipitation_Rate_H.svg",
+    doc: "https://gpm.nasa.gov/data/imerg",
+    layer: "IMERG_Precipitation_Rate_30min",
+    title: "Precipitation rate (IMERG V07, 30-min)",
+    ext: "png", tms: "2km", maxLevel: 5,
+    start: "2000-06-01", timed: true, subDaily: true, on: false,
+    meta: "GPM IMERG V07 half-hourly rate — sub-daily storm structure",
   },
   {
     id: "seaice",
@@ -173,6 +184,64 @@ const GIBS_LAYERS = [
     meta: "Daytime land skin temperature (K) — the actual temperature of the ground",
   },
   {
+    id: "chlor",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/MODIS_Chlorophyll.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_Chlorophyll_H.svg",
+    doc: "https://oceancolor.gsfc.nasa.gov/",
+    layer: "OCI_PACE_Chlorophyll_a",
+    title: "Chlorophyll-a (NASA Ocean Color, PACE)",
+    ext: "png", tms: "1km", maxLevel: 6,
+    start: "2024-02-25", timed: true, on: false,
+    meta: "PACE/OCI ocean-colour chlorophyll — phytoplankton, log mg/m³",
+  },
+  {
+    id: "salinity",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/SMAP_Sea_Surface_Salinity.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/SMAP_Sea_Surface_Salinity_H.svg",
+    doc: "https://www.catds.fr/",
+    layer: "SMAP_L3_Sea_Surface_Salinity_CAP_Monthly",
+    title: "Sea surface salinity (SMAP, monthly)",
+    ext: "png", tms: "2km", maxLevel: 5,
+    start: "2015-04-01", timed: true, monthly: true, on: false,
+    meta: "SMAP L-band salinity (PSU) — same quantity as SMOS/CATDS",
+  },
+  {
+    id: "gpcp",
+    grid: true, gridFile: "data/gpcp.json",
+    ramp: "precip", vmin: 0, vmax: 3000, units: "mm/yr", maxLevel: 6,
+    doc: "https://psl.noaa.gov/data/gridded/data.gpcp.html",
+    title: "Precipitation climatology (GPCP v2.3)",
+    meta: "Global mean-annual precipitation, 2.5° (NOAA GPCP)",
+    on: false,
+  },
+  {
+    id: "oisst",
+    grid: true, gridFile: "data/oisst.json",
+    ramp: "sst", vmin: -2, vmax: 32, units: "°C", maxLevel: 6,
+    doc: "https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html",
+    title: "SST climatology (OISST v2.1)",
+    meta: "NOAA OI SST 1991–2020 mean, 0.25° → 1°",
+    on: false,
+  },
+  {
+    id: "eobs",
+    grid: true, gridFile: "data/eobs.json", bounds: [-40.375, 25.375, 75.375, 75.375],
+    ramp: "precip", vmin: 0, vmax: 2500, units: "mm/yr", maxLevel: 7,
+    doc: "https://surfobs.climate.copernicus.eu/dataaccess/access_eobs.php",
+    title: "Precipitation climatology (E-OBS v31, Europe)",
+    meta: "European 0.25° gridded observations — regional (land only)",
+    on: false,
+  },
+  {
+    id: "meteoswiss",
+    grid: true, gridFile: "data/meteoswiss.json", bounds: [5.761, 45.689, 10.692, 47.882],
+    ramp: "precip", vmin: 0, vmax: 2500, units: "mm/yr", maxLevel: 9,
+    doc: "https://opendatadocs.meteoswiss.ch/",
+    title: "Precipitation normal (MeteoSwiss, Switzerland)",
+    meta: "Swiss 1991–2020 precipitation normal, ~2 km — regional",
+    on: false,
+  },
+  {
     id: "nightlights",
     doc: "https://blackmarble.gsfc.nasa.gov/",
     layer: "VIIRS_Black_Marble",
@@ -183,8 +252,17 @@ const GIBS_LAYERS = [
   },
 ];
 
+// GIBS TIME value for a layer: monthly products must be requested at the first
+// of the month (a mid-month date returns a blank tile), sub-daily/daily use the
+// raw date, and untimed layers use their fixed snapshot.
+function gibsTime(cfg, dateStr) {
+  if (!cfg.timed) return cfg.fixedTime || "default";
+  if (cfg.monthly) return dateStr.slice(0, 8) + "01";
+  return dateStr;
+}
+
 function gibsProvider(cfg, dateStr) {
-  const time = cfg.timed ? dateStr : (cfg.fixedTime || "default");
+  const time = gibsTime(cfg, dateStr);
   const url = GIBS_URL
     .replace("{layer}", cfg.layer)
     .replace("{time}", time)
@@ -672,6 +750,103 @@ class DeltaProvider {
   }
 }
 
+/* ----------------------------------------------------------- grid overlays */
+/* GPCP, E-OBS, OISST and MeteoSwiss have no global tile service, so they ship
+ * as a static regular lon/lat grid (data/<id>.json) that GridProvider paints on
+ * the fly: for each tile pixel it looks up the nearest grid cell and maps the
+ * value through a colour ramp. Regional grids (E-OBS, MeteoSwiss) declare a
+ * bounded rectangle; everything outside a grid's coverage stays transparent. */
+
+const RAMPS = {
+  // low → high: white → teal → blue → indigo → violet (wetter = deeper)
+  precip: [[0, 247, 252, 253], [0.15, 204, 236, 230], [0.35, 123, 204, 196],
+           [0.55, 67, 162, 202], [0.75, 37, 78, 155], [1, 84, 39, 143]],
+  // cold → warm thermal ramp for SST
+  sst: [[0, 49, 54, 149], [0.25, 116, 173, 209], [0.5, 255, 255, 191],
+        [0.75, 244, 109, 67], [1, 165, 0, 38]],
+};
+
+function rampColor(name, t) {
+  const stops = RAMPS[name] || RAMPS.precip;
+  t = Math.max(0, Math.min(1, t));
+  for (let i = 1; i < stops.length; i++) {
+    if (t <= stops[i][0]) {
+      const a = stops[i - 1], b = stops[i];
+      const f = (t - a[0]) / (b[0] - a[0] || 1);
+      return [Math.round(a[1] + f * (b[1] - a[1])),
+              Math.round(a[2] + f * (b[2] - a[2])),
+              Math.round(a[3] + f * (b[3] - a[3]))];
+    }
+  }
+  const l = stops[stops.length - 1];
+  return [l[1], l[2], l[3]];
+}
+
+function sampleGrid(g, lonDeg, latDeg) {
+  if (lonDeg < g.west || lonDeg >= g.east || latDeg < g.south || latDeg >= g.north) return null;
+  const ix = Math.floor((lonDeg - g.west) / g.dlon);
+  const iy = Math.floor((latDeg - g.south) / g.dlat);
+  if (ix < 0 || ix >= g.nx || iy < 0 || iy >= g.ny) return null;
+  const v = g.values[iy * g.nx + ix];
+  return v == null ? null : v;
+}
+
+const gridCache = new Map();
+function loadGrid(cfg) {
+  if (!gridCache.has(cfg.id)) {
+    gridCache.set(cfg.id, fetch(cfg.gridFile).then((r) => r.json()).catch(() => null));
+  }
+  return gridCache.get(cfg.id);
+}
+
+class GridProvider {
+  constructor(cfg) {
+    this._cfg = cfg;
+    this.tilingScheme = new Cesium.GeographicTilingScheme();
+    this.rectangle = cfg.bounds
+      ? Cesium.Rectangle.fromDegrees(cfg.bounds[0], cfg.bounds[1], cfg.bounds[2], cfg.bounds[3])
+      : this.tilingScheme.rectangle;
+    this.tileWidth = 256;
+    this.tileHeight = 256;
+    this.maximumLevel = cfg.maxLevel || 6;
+    this.minimumLevel = 0;
+    this.errorEvent = new Cesium.Event();
+    this.credit = new Cesium.Credit(cfg.source || cfg.title);
+    this.hasAlphaChannel = true;
+    this.ready = true;
+  }
+  get layerId() { return this._cfg.id; }
+  getTileCredits() { return undefined; }
+  pickFeatures() { return undefined; }
+  async requestImage(x, y, level) {
+    const g = await loadGrid(this._cfg);
+    const W = this.tileWidth, H = this.tileHeight;
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!g) return canvas;
+    const rect = this.tilingScheme.tileXYToRectangle(x, y, level);
+    const west = Cesium.Math.toDegrees(rect.west), east = Cesium.Math.toDegrees(rect.east);
+    const north = Cesium.Math.toDegrees(rect.north), south = Cesium.Math.toDegrees(rect.south);
+    const { vmin, vmax, ramp } = this._cfg;
+    const out = ctx.createImageData(W, H);
+    const o = out.data;
+    for (let j = 0; j < H; j++) {
+      const lat = north - ((j + 0.5) / H) * (north - south);
+      for (let i = 0; i < W; i++) {
+        const lon = west + ((i + 0.5) / W) * (east - west);
+        const v = sampleGrid(g, lon, lat);
+        if (v == null) continue;
+        const c = rampColor(ramp, (v - vmin) / (vmax - vmin));
+        const k = (j * W + i) * 4;
+        o[k] = c[0]; o[k + 1] = c[1]; o[k + 2] = c[2]; o[k + 3] = 225;
+      }
+    }
+    ctx.putImageData(out, 0, 0);
+    return canvas;
+  }
+}
+
 function addLayer(cfg) {
   const entry = { cfg, layer: null, cmpLayer: null, isDelta: false, isAggregate: false,
     alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
@@ -683,6 +858,15 @@ function addLayer(cfg) {
   const windowed = win > 1 && isSST;                     // rolling-window mean render is SST-only
 
   const add = (provider) => viewer.imageryLayers.addImageryProvider(provider);
+
+  if (cfg.grid) {
+    // Static climatology grid painted client-side from data/<id>.json
+    entry.layer = add(new GridProvider(cfg));
+    entry.layer.alpha = entry.alpha;
+    state.layers[cfg.id] = entry;
+    updateLegends();
+    return;
+  }
 
   if (comparing && state.compareMode === "delta" && deltaable) {
     // Computed per-pixel difference of window means (single-day if win === 1)
@@ -861,6 +1045,9 @@ function updateLegends() {
     if (e.isDelta) {
       panel.appendChild(deltaLegendEl(e.cfg));
       any = true;
+    } else if (e.cfg.grid) {
+      panel.appendChild(gridLegendEl(e.cfg));
+      any = true;
     } else if (e.cfg.colormap || e.cfg.legend) {
       panel.appendChild(layerLegendEl(e.cfg, e.isAggregate ? `${e.cfg.title} · ${windowLabel(state.windowDays)} mean` : null));
       any = true;
@@ -993,6 +1180,49 @@ function buildLegendBar(container, cm) {
   wrap.appendChild(canvas);
   container.appendChild(wrap);
   container.appendChild(range);
+}
+
+/* Legend for a client-rendered grid overlay: a ramp bar with min/mid/max and a
+ * hover read-out, mirroring the GIBS colormap legends. */
+function gridLegendEl(cfg) {
+  const div = document.createElement("div");
+  div.className = "legend-item";
+  div.innerHTML = `<div class="legend-title">${cfg.title}</div>`;
+  const wrap = document.createElement("div");
+  wrap.className = "legend-bar-wrap";
+  const canvas = document.createElement("canvas");
+  const W = 268, H = 14, dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.height = H + "px";
+  canvas.className = "legend-bar";
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  const N = 120;
+  for (let i = 0; i < N; i++) {
+    const c = rampColor(cfg.ramp, i / (N - 1));
+    ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+    ctx.fillRect((i / N) * W, 0, W / N + 1, H);
+  }
+  const tip = document.createElement("div");
+  tip.className = "legend-tip hidden";
+  const range = document.createElement("div");
+  range.className = "legend-range";
+  range.innerHTML = `<span>${cfg.vmin}</span><span>${cfg.units}</span><span>${cfg.vmax}</span>`;
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const frac = Cesium.Math.clamp((e.clientX - rect.left) / rect.width, 0, 1);
+    const v = cfg.vmin + frac * (cfg.vmax - cfg.vmin);
+    tip.textContent = `${fmtVal(v)} ${cfg.units}`.trim();
+    tip.style.left = `${Math.min(Math.max(frac * rect.width - 28, 0), rect.width - 80)}px`;
+    tip.classList.remove("hidden");
+  });
+  canvas.addEventListener("mouseleave", () => tip.classList.add("hidden"));
+  wrap.appendChild(tip);
+  wrap.appendChild(canvas);
+  div.appendChild(wrap);
+  div.appendChild(range);
+  return div;
 }
 
 function ensembleLegendEl(mode) {
@@ -1356,7 +1586,7 @@ const probeTileCache = new Map();   // "layer|date|z|x|y" → Promise<ImageBitma
 function fetchProbeTile(cfg, date, z, x, y) {
   const key = `${cfg.layer}|${date}|${z}|${x}|${y}`;
   if (!probeTileCache.has(key)) {
-    const time = cfg.timed ? date : (cfg.fixedTime || "default");
+    const time = gibsTime(cfg, date);
     const url = GIBS_URL
       .replace("{layer}", cfg.layer).replace("{time}", time)
       .replace("{tms}", cfg.tms).replace("{ext}", cfg.ext)
@@ -1375,7 +1605,7 @@ const probeCtx = probeCanvas.getContext("2d", { willReadFrequently: true });
 function topColormapLayer() {
   let best = null, bestIdx = -1;
   for (const e of Object.values(state.layers)) {
-    if (e.layer && e.cfg.colormap) {
+    if (e.layer && (e.cfg.colormap || e.cfg.grid)) {
       const idx = viewer.imageryLayers.indexOf(e.layer);
       if (idx > bestIdx) { bestIdx = idx; best = e; }
     }
@@ -1407,6 +1637,14 @@ async function probeValueAt(carto) {
   const cfg = entry.cfg;
   const lon = Cesium.Math.toDegrees(carto.longitude);
   const lat = Cesium.Math.toDegrees(carto.latitude);
+  if (cfg.grid) {
+    // Grid overlays: read the exact cell value straight from the loaded grid.
+    const g = await loadGrid(cfg);
+    const base = { title: cfg.title, units: cfg.units, lon, lat };
+    if (!g) return { ...base, noData: true };
+    const v = sampleGrid(g, lon, lat);
+    return v == null ? { ...base, noData: true } : { ...base, value: v };
+  }
   const win = entry.isDelta || entry.isAggregate ? state.windowDays : 1;
   // match the rendered resolution (delta/aggregate cap the level)
   const z = (entry.isDelta || entry.isAggregate) ? windowMaxLevel(cfg, win) : cfg.maxLevel;
@@ -2014,4 +2252,9 @@ window.__earth = {
   get gbifLayer() { return gbifLayer; },
   get gbifSpecies() { return gbifSpecies; },
   get catalog() { return CATALOG; },
+  GridProvider,
+  loadGrid,
+  sampleGrid,
+  rampColor,
+  gibsTime,
 };
