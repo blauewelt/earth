@@ -195,8 +195,8 @@ test("every layer title is a clickable documentation link", async ({ page }) => 
     expect(href).toMatch(/^https:\/\//);
   }
   await expect(links.first()).toHaveAttribute("target", "_blank");
-  // data layers (Climate TRACE, Argo, stations) too
-  await expect(page.locator("#panel-layers .layer-head a.title-link")).toHaveCount(11);
+  // data + analysis layers (SST ensemble, Climate TRACE, Argo, stations) too
+  await expect(page.locator("#panel-layers .layer-head a.title-link")).toHaveCount(12);
   // clicking the title must NOT toggle the layer
   const before = await page.evaluate(() => window.__earth.viewer.imageryLayers.length);
   const [popup] = await Promise.all([
@@ -307,37 +307,125 @@ test("computed-difference mode replaces the SST split with a delta layer", async
   expect(await page.evaluate(() => !!window.__earth.state.layers["sst"].cmpLayer)).toBe(true);
 });
 
-test("period-mean difference modes: sample dates and provider wiring", async ({ page }) => {
-  // sample-date generator
+test("rolling window: fixed-length interval, correct sampling", async ({ page }) => {
   const d = await page.evaluate(() => ({
-    day: window.__earth.periodSampleDates("2026-07-21", "day"),
-    month: window.__earth.periodSampleDates("2026-07-21", "month"),
-    year: window.__earth.periodSampleDates("2026-07-21", "year"),
+    one: window.__earth.windowSampleDates("2026-07-21", 1),
+    d30: window.__earth.windowSampleDates("2026-07-21", 30),
+    d365: window.__earth.windowSampleDates("2026-07-21", 365),
+    add: window.__earth.addDays("2026-01-01", -1),
+    label1: window.__earth.windowLabel(1),
+    label30: window.__earth.windowLabel(30),
   }));
-  expect(d.day).toEqual(["2026-07-21"]);
-  expect(d.month).toHaveLength(5);
-  expect(d.month.every((x) => x.startsWith("2026-07-"))).toBe(true);
-  expect(d.year).toHaveLength(12);
-  expect(d.year[0]).toBe("2026-01-15");
-  expect(d.year[11]).toBe("2026-12-15");
-  // annual-mean mode wires a year-period provider with capped zoom
+  expect(d.one).toEqual(["2026-07-21"]);
+  // window always ends on the date and spans exactly N days back (fixed length)
+  expect(d.d30[0]).toBe("2026-07-21");
+  expect(d.d30[d.d30.length - 1]).toBe("2026-06-22"); // 29 days before → 30-day span
+  expect(d.d30.length).toBeLessThanOrEqual(12);
+  expect(d.d365[0]).toBe("2026-07-21");
+  expect(d.d365[d.d365.length - 1]).toBe("2025-07-22"); // ~365-day span
+  expect(d.add).toBe("2025-12-31"); // date arithmetic across year boundary
+  expect(d.label1).toBe("single day");
+  expect(d.label30).toBe("past 30 days");
+});
+
+test("aggregation window is orthogonal to the display mode", async ({ page }) => {
+  const setWindow = (v) => page.evaluate((val) => {
+    const s = document.getElementById("window-days");
+    s.value = String(val);
+    s.dispatchEvent(new Event("change"));
+  }, v);
+
   await page.selectOption("#compare-select", "10");
-  await page.selectOption("#compare-mode", "delta-year");
-  const r = await page.evaluate(() => {
+
+  // delta mode + 30-day window → delta provider carrying the window
+  await page.selectOption("#compare-mode", "delta");
+  await setWindow(30);
+  let r = await page.evaluate(() => {
     const e = window.__earth.state.layers["sst"];
-    const p = e.layer.imageryProvider;
-    return { isDelta: e.isDelta, period: p.period, maxLevel: p.maximumLevel };
+    return { win: window.__earth.state.windowDays, isDelta: e.isDelta,
+             provWin: e.layer.imageryProvider.window, label: document.getElementById("window-value").textContent };
   });
+  expect(r.win).toBe(30);
   expect(r.isDelta).toBe(true);
-  expect(r.period).toBe("year");
-  expect(r.maxLevel).toBe(3);
-  await expect(page.locator("#legend-panel")).toContainText("mean minus");
-  // monthly-mean mode
-  await page.selectOption("#compare-mode", "delta-month");
-  const r2 = await page.evaluate(() => {
-    const p = window.__earth.state.layers["sst"].layer.imageryProvider;
-    return { period: p.period, maxLevel: p.maximumLevel };
+  expect(r.provWin).toBe(30);
+  expect(r.label).toBe("past 30 days");
+  await expect(page.locator("#legend-panel")).toContainText("past 30 days mean");
+
+  // same window, switch to side-by-side → aggregate providers on both sides
+  await page.selectOption("#compare-mode", "split");
+  r = await page.evaluate(() => {
+    const e = window.__earth.state.layers["sst"];
+    return { isAgg: e.isAggregate, main: e.layer.imageryProvider.constructor.name,
+             cmp: e.cmpLayer.imageryProvider.constructor.name };
   });
-  expect(r2.period).toBe("month");
-  expect(r2.maxLevel).toBe(4);
+  expect(r.isAgg).toBe(true);
+  expect(r.main).toBe("SSTAggregateProvider");
+  expect(r.cmp).toBe("SSTAggregateProvider");
+  await expect(page.locator("#split-handle")).toBeVisible();
+
+  // window applies even without comparison (single aggregated layer)
+  await page.selectOption("#compare-select", "0");
+  r = await page.evaluate(() => {
+    const e = window.__earth.state.layers["sst"];
+    return { isAgg: e.isAggregate, name: e.layer.imageryProvider.constructor.name, hasCmp: !!e.cmpLayer };
+  });
+  expect(r.isAgg).toBe(true);
+  expect(r.name).toBe("SSTAggregateProvider");
+  expect(r.hasCmp).toBe(false);
+
+  // back to a single day → plain GIBS provider
+  await setWindow(1);
+  r = await page.evaluate(() => {
+    const e = window.__earth.state.layers["sst"];
+    return { isAgg: e.isAggregate, name: e.layer.imageryProvider.constructor.name };
+  });
+  expect(r.isAgg).toBe(false);
+  expect(r.name).not.toBe("SSTAggregateProvider");
+});
+
+test("computed-difference hint appears only for non-SST layers in delta mode", async ({ page }) => {
+  await page.selectOption("#compare-select", "10");
+  await page.selectOption("#compare-mode", "delta");
+  await expect(page.locator("#delta-hint")).toBeHidden(); // only SST on by default
+  await page.check('#layer-list input[data-id="precip"]');
+  await expect(page.locator("#delta-hint")).toBeVisible();
+  await expect(page.locator("#delta-hint")).toContainText("sea surface temperature only");
+  await page.selectOption("#compare-mode", "split");
+  await expect(page.locator("#delta-hint")).toBeHidden();
+});
+
+test("SST ensemble layer renders mean and spread with matching legends", async ({ page }) => {
+  await page.check("#toggle-sst-ensemble");
+  await expect
+    .poll(() => page.evaluate(() => !!window.__earth.ensembleLayer))
+    .toBe(true);
+  // mean mode uses the GHRSST scale
+  await expect(page.locator("#legend-panel")).toContainText("SST ensemble mean");
+  const r = await page.evaluate(() => {
+    const prov = window.__earth.ensembleLayer.imageryProvider;
+    return { name: prov.constructor.name, mode: prov.mode };
+  });
+  expect(r.name).toBe("SSTEnsembleProvider");
+  expect(r.mode).toBe("mean");
+  // provider produces opaque pixels over ocean tiles
+  const opaque = await page.evaluate(async () => {
+    const prov = new window.__earth.SSTEnsembleProvider(
+      [{ name: "MUR", layer: "GHRSST_L4_MUR_Sea_Surface_Temperature", tms: "1km" },
+       { name: "GAMSSA", layer: "GHRSST_L4_GAMSSA_GDS2_Sea_Surface_Temperature", tms: "2km" }],
+      window.__earth.state.date, "mean");
+    const c = await prov.requestImage(4, 2, 3);
+    const d = c.getContext("2d").getImageData(0, 0, 512, 512).data;
+    let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+    return n;
+  });
+  expect(opaque).toBeGreaterThan(10000);
+  // spread mode swaps the legend and colour semantics
+  await page.selectOption("#ensemble-mode", "spread");
+  await expect(page.locator("#legend-panel")).toContainText("ensemble spread");
+  const sp = await page.evaluate(() => ({
+    zero: window.__earth.spreadColor(0)[3],
+    big: window.__earth.spreadColor(2)[3],
+  }));
+  expect(sp.zero).toBe(0);         // no disagreement → transparent
+  expect(sp.big).toBeGreaterThan(150);
 });

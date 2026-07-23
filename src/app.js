@@ -264,12 +264,172 @@ document.getElementById("zoom-home").addEventListener("click", () => {
   });
 });
 
+/* ------------------------------------------------- SST ensemble (mean/spread) */
+
+/* Independent, key-free GHRSST L4 analyses that share the GIBS SST colormap,
+ * so each tile can be inverted to °C with one LUT and combined per pixel.
+ * MUR (JPL) + GAMSSA (Australian BoM) cover recent dates; OISST (NOAA) adds a
+ * third member for the pre-2020 era. MUR25 is excluded — it is MUR regridded,
+ * not an independent estimate. The provider uses whichever members return a
+ * tile for the chosen date and needs at least two to render. */
+const SST_ENSEMBLE_MEMBERS = [
+  { name: "MUR (JPL)", layer: "GHRSST_L4_MUR_Sea_Surface_Temperature", tms: "1km" },
+  { name: "OISST (NOAA)", layer: "GHRSST_L4_AVHRR-OI_Sea_Surface_Temperature", tms: "2km" },
+  { name: "GAMSSA (BoM)", layer: "GHRSST_L4_GAMSSA_GDS2_Sea_Surface_Temperature", tms: "2km" },
+];
+const SPREAD_MAX = 2.0; // °C, top of the spread colour scale
+
+// Forward colour lookup (value → rgb) built from the GHRSST colormap.
+let sstForwardPromise = null;
+function getSstForward() {
+  if (!sstForwardPromise) {
+    sstForwardPromise = getColormapEntries(
+      "https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature.xml"
+    ).then((cm) => {
+      const e = cm.entries;
+      return (v) => {
+        if (v <= e[0].lo) return e[0].rgb;
+        if (v >= e[e.length - 1].hi) return e[e.length - 1].rgb;
+        let lo = 0, hi = e.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (v < e[mid].lo) hi = mid - 1;
+          else if (v >= e[mid].hi) lo = mid + 1;
+          else return e[mid].rgb;
+        }
+        return e[lo].rgb;
+      };
+    });
+  }
+  return sstForwardPromise;
+}
+
+// Sequential ramp for spread (°C): transparent → cyan → yellow → magenta.
+function spreadColor(s) {
+  if (!(s > 0.02)) return [0, 0, 0, 0];
+  const t = Cesium.Math.clamp(s / SPREAD_MAX, 0, 1);
+  const stops = [
+    [0.0, [8, 48, 107]], [0.35, [33, 145, 140]],
+    [0.7, [253, 231, 37]], [1.0, [240, 59, 46]],
+  ];
+  let a = stops[0], b = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t >= stops[i][0] && t <= stops[i + 1][0]) { a = stops[i]; b = stops[i + 1]; break; }
+  }
+  const f = (t - a[0]) / (b[0] - a[0] || 1);
+  const c = a[1].map((av, i) => Math.round(av + (b[1][i] - av) * f));
+  return [c[0], c[1], c[2], Math.round((0.35 + 0.6 * t) * 255)];
+}
+
+class SSTEnsembleProvider {
+  constructor(members, date, mode) {
+    this._members = members;
+    this._date = date;
+    this._mode = mode; // "mean" | "spread"
+    this.tilingScheme = new GIBSGeographicTilingScheme();
+    this.rectangle = this.tilingScheme.rectangle;
+    this.tileWidth = 512;
+    this.tileHeight = 512;
+    this.maximumLevel = 5; // limited by the 2 km members
+    this.minimumLevel = 0;
+    this.errorEvent = new Cesium.Event();
+    this.credit = new Cesium.Credit("SST ensemble computed client-side from NASA GIBS (GHRSST L4)");
+    this.hasAlphaChannel = true;
+    this.ready = true;
+  }
+  get mode() { return this._mode; }
+  getTileCredits() { return undefined; }
+  pickFeatures() { return undefined; }
+  _url(m, x, y, level) {
+    return GIBS_URL
+      .replace("{layer}", m.layer).replace("{time}", this._date)
+      .replace("{tms}", m.tms).replace("{ext}", "png")
+      .replace("{TileMatrix}", level).replace("{TileRow}", y).replace("{TileCol}", x);
+  }
+  async _tile(m, x, y, level, lut, ctx) {
+    try {
+      const r = await fetch(this._url(m, x, y, level));
+      if (!r.ok) return null;
+      const img = await createImageBitmap(await r.blob());
+      ctx.clearRect(0, 0, 512, 512);
+      ctx.drawImage(img, 0, 0);
+      return ctx.getImageData(0, 0, 512, 512).data;
+    } catch { return null; }
+  }
+  async requestImage(x, y, level) {
+    const [lut, forward] = await Promise.all([getSstLUT(), getSstForward()]);
+    const canvas = document.createElement("canvas");
+    canvas.width = 512; canvas.height = 512;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const fields = [];
+    for (const m of this._members) {
+      const d = await this._tile(m, x, y, level, lut, ctx);
+      if (d) fields.push(d);
+    }
+    const out = ctx.createImageData(512, 512);
+    const o = out.data;
+    if (fields.length >= 2) {
+      const N = 512 * 512;
+      for (let p = 0, i = 0; p < N; p++, i += 4) {
+        let sum = 0, sumSq = 0, cnt = 0;
+        for (const d of fields) {
+          if (d[i + 3] === 0) continue;
+          const v = lut.get((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+          if (v === undefined) continue;
+          sum += v; sumSq += v * v; cnt++;
+        }
+        if (cnt < 2) continue;
+        const mean = sum / cnt;
+        let rgba;
+        if (this._mode === "spread") {
+          rgba = spreadColor(Math.sqrt(Math.max(0, sumSq / cnt - mean * mean)));
+        } else {
+          const c = forward(mean);
+          rgba = [c[0], c[1], c[2], 235];
+        }
+        o[i] = rgba[0]; o[i + 1] = rgba[1]; o[i + 2] = rgba[2]; o[i + 3] = rgba[3];
+      }
+    }
+    ctx.clearRect(0, 0, 512, 512);
+    ctx.putImageData(out, 0, 0);
+    return canvas;
+  }
+}
+
+let sstEnsembleLayer = null;
+async function updateEnsembleLayer() {
+  if (sstEnsembleLayer) {
+    viewer.imageryLayers.remove(sstEnsembleLayer, true);
+    sstEnsembleLayer = null;
+  }
+  const on = document.getElementById("toggle-sst-ensemble").checked;
+  if (!on) { updateLegends(); return; }
+  const mode = document.getElementById("ensemble-mode").value;
+  sstEnsembleLayer = viewer.imageryLayers.addImageryProvider(
+    new SSTEnsembleProvider(SST_ENSEMBLE_MEMBERS, state.date, mode)
+  );
+  sstEnsembleLayer.__ensembleMode = mode;
+  updateLegends();
+}
+
 /* ------------------------------------------------------------ layer control */
 
-const state = { date: defaultDate(), compareYears: 0, compareMode: "split", layers: {} };
+const state = {
+  date: defaultDate(),
+  compareYears: 0,       // comparison offset (0 = not comparing)
+  compareMode: "split",  // "split" | "delta" — display mode, orthogonal to the window
+  windowDays: 1,         // rolling aggregation window ending at `date` (1 = single day)
+  layers: {},
+};
 
 function defaultDate() {
   const d = new Date(Date.now() - 2 * 864e5); // two days ago: safely available on GIBS
+  return d.toISOString().slice(0, 10);
+}
+
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 
@@ -313,14 +473,28 @@ function deltaColor(d) {
   return [c[0], c[1], c[2], a];
 }
 
-/* Sample dates used to approximate a period mean from daily GIBS tiles:
- * month → 5 days spread across the month; year → the 15th of each month. */
-function periodSampleDates(dateStr, period) {
-  const [y, m] = dateStr.split("-").map(Number);
-  const pad = (n) => String(n).padStart(2, "0");
-  if (period === "day") return [dateStr];
-  if (period === "month") return [3, 9, 15, 21, 27].map((d) => `${y}-${pad(m)}-${pad(d)}`);
-  return Array.from({ length: 12 }, (_, i) => `${y}-${pad(i + 1)}-15`); // year
+/* Rolling window: sample up to 12 evenly-spaced days over the `windowDays`
+ * ending at `endDate` (always the same interval length, independent of the
+ * calendar month). windowDays === 1 → the single day. Averaging these samples
+ * approximates the mean field over the window from daily GIBS tiles. */
+function windowSampleDates(endDate, windowDays) {
+  const w = Math.max(1, Math.round(windowDays));
+  if (w <= 1) return [endDate];
+  const samples = Math.min(12, w);
+  const step = (w - 1) / (samples - 1);
+  const out = [];
+  for (let i = 0; i < samples; i++) out.push(addDays(endDate, -Math.round(i * step)));
+  return [...new Set(out)];
+}
+
+// Zoom cap: single day → full detail; any averaged window fetches ~12 tiles per
+// rendered tile, so cap the level to stay responsive.
+function windowMaxLevel(cfg, windowDays) {
+  return windowDays <= 1 ? cfg.maxLevel : 4;
+}
+
+function windowLabel(windowDays) {
+  return windowDays <= 1 ? "single day" : `past ${Math.round(windowDays)} days`;
 }
 
 let sstLUTPromise = null;
@@ -333,75 +507,107 @@ function getSstLUT() {
   return sstLUTPromise;
 }
 
-/* Minimal custom ImageryProvider: fetches the SST tile for two dates, inverts
- * the GIBS colormap to °C, and renders the per-pixel difference. */
-class SSTDeltaProvider {
-  constructor(cfg, dateNow, datePast, period = "day") {
+/* Shared helpers for the client-side SST providers below. */
+function sstFetchUrl(cfg, date, x, y, level) {
+  return GIBS_URL
+    .replace("{layer}", cfg.layer).replace("{time}", date)
+    .replace("{tms}", cfg.tms).replace("{ext}", cfg.ext)
+    .replace("{TileMatrix}", level).replace("{TileRow}", y).replace("{TileCol}", x);
+}
+async function sstFetchBitmap(url) {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    return await createImageBitmap(await r.blob());
+  } catch {
+    return null;
+  }
+}
+/* Mean °C per pixel across a set of sample dates (colormap-inverted). */
+async function sstMeanField(cfg, dates, x, y, level, lut, ctx) {
+  const N = 512 * 512;
+  const sum = new Float32Array(N);
+  const cnt = new Uint8Array(N);
+  const imgs = await Promise.all(dates.map((d) => sstFetchBitmap(sstFetchUrl(cfg, d, x, y, level))));
+  for (const img of imgs) {
+    if (!img) continue;
+    ctx.clearRect(0, 0, 512, 512);
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, 512, 512).data;
+    for (let p = 0, i = 0; p < N; p++, i += 4) {
+      if (d[i + 3] === 0) continue;
+      const v = lut.get((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+      if (v === undefined) continue;
+      sum[p] += v;
+      cnt[p]++;
+    }
+  }
+  return { sum, cnt };
+}
+
+/* Colorized mean SST over the rolling window (used for single-layer display and
+ * for each side of a windowed side-by-side comparison). */
+class SSTAggregateProvider {
+  constructor(cfg, endDate, windowDays) {
     this._cfg = cfg;
-    this._period = period;
-    this._datesNow = periodSampleDates(dateNow, period);
-    this._datesPast = periodSampleDates(datePast, period);
+    this._dates = windowSampleDates(endDate, windowDays);
+    this._window = windowDays;
     this.tilingScheme = new GIBSGeographicTilingScheme();
     this.rectangle = this.tilingScheme.rectangle;
     this.tileWidth = 512;
     this.tileHeight = 512;
-    // averaged modes fetch many tiles per tile — cap the zoom to keep it snappy
-    this.maximumLevel = period === "day" ? cfg.maxLevel : period === "month" ? 4 : 3;
+    this.maximumLevel = windowMaxLevel(cfg, windowDays);
+    this.minimumLevel = 0;
+    this.errorEvent = new Cesium.Event();
+    this.credit = new Cesium.Credit(`SST mean over ${windowLabel(windowDays)}, from NASA GIBS`);
+    this.hasAlphaChannel = true;
+    this.ready = true;
+  }
+  get window() { return this._window; }
+  getTileCredits() { return undefined; }
+  pickFeatures() { return undefined; }
+  async requestImage(x, y, level) {
+    const [lut, forward] = await Promise.all([getSstLUT(), getSstForward()]);
+    const canvas = document.createElement("canvas");
+    canvas.width = 512; canvas.height = 512;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const f = await sstMeanField(this._cfg, this._dates, x, y, level, lut, ctx);
+    const out = ctx.createImageData(512, 512);
+    const o = out.data;
+    for (let p = 0, i = 0; p < 512 * 512; p++, i += 4) {
+      if (f.cnt[p] === 0) continue;
+      const c = forward(f.sum[p] / f.cnt[p]);
+      o[i] = c[0]; o[i + 1] = c[1]; o[i + 2] = c[2]; o[i + 3] = 235;
+    }
+    ctx.clearRect(0, 0, 512, 512);
+    ctx.putImageData(out, 0, 0);
+    return canvas;
+  }
+}
+
+/* Per-pixel difference of two rolling-window SST means: value(now) − value(past). */
+class SSTDeltaProvider {
+  constructor(cfg, dateNow, datePast, windowDays = 1) {
+    this._cfg = cfg;
+    this._window = windowDays;
+    this._datesNow = windowSampleDates(dateNow, windowDays);
+    this._datesPast = windowSampleDates(datePast, windowDays);
+    this.tilingScheme = new GIBSGeographicTilingScheme();
+    this.rectangle = this.tilingScheme.rectangle;
+    this.tileWidth = 512;
+    this.tileHeight = 512;
+    this.maximumLevel = windowMaxLevel(cfg, windowDays);
     this.minimumLevel = 0;
     this.errorEvent = new Cesium.Event();
     this.credit = new Cesium.Credit(
-      period === "day"
-        ? "Δ computed client-side from NASA GIBS MUR SST"
-        : `Δ of sampled ${period}ly means, computed client-side from NASA GIBS MUR SST`
+      `Δ SST (${windowLabel(windowDays)}) computed client-side from NASA GIBS`
     );
-    this.tileDiscardPolicy = undefined;
     this.hasAlphaChannel = true;
-    this.proxy = undefined;
     this.ready = true;
   }
-  get period() { return this._period; }
+  get window() { return this._window; }
   getTileCredits() { return undefined; }
   pickFeatures() { return undefined; }
-  _url(date, x, y, level) {
-    return GIBS_URL
-      .replace("{layer}", this._cfg.layer)
-      .replace("{time}", date)
-      .replace("{tms}", this._cfg.tms)
-      .replace("{ext}", this._cfg.ext)
-      .replace("{TileMatrix}", level)
-      .replace("{TileRow}", y)
-      .replace("{TileCol}", x);
-  }
-  async _fetchTile(url) {
-    try {
-      const r = await fetch(url);
-      if (!r.ok) return null;
-      return await createImageBitmap(await r.blob());
-    } catch {
-      return null;
-    }
-  }
-  /* Mean value per pixel across the period's sample dates (NaN where no data). */
-  async _meanField(dates, x, y, level, lut, ctx) {
-    const N = 512 * 512;
-    const sum = new Float32Array(N);
-    const cnt = new Uint8Array(N);
-    const imgs = await Promise.all(dates.map((d) => this._fetchTile(this._url(d, x, y, level))));
-    for (const img of imgs) {
-      if (!img) continue;
-      ctx.clearRect(0, 0, 512, 512);
-      ctx.drawImage(img, 0, 0);
-      const d = ctx.getImageData(0, 0, 512, 512).data;
-      for (let p = 0, i = 0; p < N; p++, i += 4) {
-        if (d[i + 3] === 0) continue;
-        const v = lut.get((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
-        if (v === undefined) continue;
-        sum[p] += v;
-        cnt[p]++;
-      }
-    }
-    return { sum, cnt };
-  }
   async requestImage(x, y, level) {
     const lut = await getSstLUT();
     const canvas = document.createElement("canvas");
@@ -409,8 +615,8 @@ class SSTDeltaProvider {
     canvas.height = 512;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const [now, past] = await Promise.all([
-      this._meanField(this._datesNow, x, y, level, lut, ctx),
-      this._meanField(this._datesPast, x, y, level, lut, ctx),
+      sstMeanField(this._cfg, this._datesNow, x, y, level, lut, ctx),
+      sstMeanField(this._cfg, this._datesPast, x, y, level, lut, ctx),
     ]);
     const out = ctx.createImageData(512, 512);
     const o = out.data;
@@ -427,26 +633,35 @@ class SSTDeltaProvider {
 }
 
 function addLayer(cfg) {
-  const entry = { cfg, layer: null, cmpLayer: null, isDelta: false, alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
+  const entry = { cfg, layer: null, cmpLayer: null, isDelta: false, isAggregate: false,
+    alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
   const cmp = compareDate();
-  if (cmp && cfg.timed && state.compareMode.startsWith("delta") && cfg.id === DELTA_LAYER_ID) {
-    // computed per-pixel difference: value(now) - value(cmp); optionally of period means
-    const period = state.compareMode === "delta" ? "day"
-      : state.compareMode === "delta-month" ? "month" : "year";
-    entry.layer = viewer.imageryLayers.addImageryProvider(
-      new SSTDeltaProvider(cfg, state.date, cmp, period)
-    );
+  const comparing = cmp && cfg.timed;
+  const isSST = cfg.id === DELTA_LAYER_ID;               // only SST can be inverted → aggregated / differenced
+  const win = state.windowDays;
+  const windowed = win > 1 && isSST;                     // rolling-window mean applies to SST only
+
+  const add = (provider) => viewer.imageryLayers.addImageryProvider(provider);
+
+  if (comparing && state.compareMode === "delta" && isSST) {
+    // Computed per-pixel difference of window means (single-day if win === 1)
+    entry.layer = add(new SSTDeltaProvider(cfg, state.date, cmp, win));
     entry.layer.alpha = entry.alpha;
     entry.isDelta = true;
-  } else {
-    entry.layer = viewer.imageryLayers.addImageryProvider(gibsProvider(cfg, state.date));
+  } else if (comparing && state.compareMode === "split") {
+    // Side-by-side: right = current, left = past. Windowed means for SST, raw tiles otherwise.
+    entry.layer = add(windowed ? new SSTAggregateProvider(cfg, state.date, win) : gibsProvider(cfg, state.date));
     entry.layer.alpha = entry.alpha;
-    if (cmp && cfg.timed && state.compareMode === "split") {
-      entry.layer.splitDirection = Cesium.SplitDirection.RIGHT;      // right = current
-      entry.cmpLayer = viewer.imageryLayers.addImageryProvider(gibsProvider(cfg, cmp));
-      entry.cmpLayer.alpha = entry.alpha;
-      entry.cmpLayer.splitDirection = Cesium.SplitDirection.LEFT;    // left = past
-    }
+    entry.layer.splitDirection = Cesium.SplitDirection.RIGHT;
+    entry.cmpLayer = add(windowed ? new SSTAggregateProvider(cfg, cmp, win) : gibsProvider(cfg, cmp));
+    entry.cmpLayer.alpha = entry.alpha;
+    entry.cmpLayer.splitDirection = Cesium.SplitDirection.LEFT;
+    entry.isAggregate = windowed;
+  } else {
+    // Not comparing: single layer — windowed mean for SST, raw tile otherwise
+    entry.layer = add(windowed ? new SSTAggregateProvider(cfg, state.date, win) : gibsProvider(cfg, state.date));
+    entry.layer.alpha = entry.alpha;
+    entry.isAggregate = windowed;
   }
   state.layers[cfg.id] = entry;
   updateLegends();
@@ -460,6 +675,7 @@ function removeLayer(id) {
   entry.layer = null;
   entry.cmpLayer = null;
   entry.isDelta = false;
+  entry.isAggregate = false;
   updateLegends();
 }
 
@@ -488,8 +704,9 @@ function updateSplitUI() {
   splitHandle.classList.toggle("hidden", !active);
   splitLabels.classList.toggle("hidden", !active);
   if (active) {
-    document.getElementById("split-label-left").textContent = compareDate();
-    document.getElementById("split-label-right").textContent = state.date;
+    const win = state.windowDays > 1 ? ` (${windowLabel(state.windowDays)})` : "";
+    document.getElementById("split-label-left").textContent = compareDate() + win;
+    document.getElementById("split-label-right").textContent = state.date + win;
     positionSplit(viewer.scene.splitPosition || 0.5);
   }
 }
@@ -523,8 +740,33 @@ document.getElementById("compare-select").addEventListener("change", (e) => {
 
 document.getElementById("compare-mode").addEventListener("change", (e) => {
   state.compareMode = e.target.value;
+  updateDeltaHint();
   refreshTimedLayers();
 });
+
+// Aggregation window slider (1..730 days) — orthogonal to the display mode.
+const windowSlider = document.getElementById("window-days");
+const windowValue = document.getElementById("window-value");
+function syncWindowLabel() {
+  windowValue.textContent = windowLabel(Number(windowSlider.value));
+}
+windowSlider.addEventListener("input", syncWindowLabel);
+windowSlider.addEventListener("change", () => {
+  state.windowDays = Number(windowSlider.value);
+  syncWindowLabel();
+  refreshTimedLayers();
+  if (sstEnsembleLayer) updateEnsembleLayer();
+});
+syncWindowLabel();
+
+// Note shown when a non-SST layer is active in computed-difference mode.
+function updateDeltaHint() {
+  const hint = document.getElementById("delta-hint");
+  if (!hint) return;
+  const show = state.compareMode === "delta" &&
+    Object.values(state.layers).some((e) => e.layer && e.cfg.timed && e.cfg.id !== DELTA_LAYER_ID);
+  hint.classList.toggle("hidden", !show);
+}
 
 /* --------------------------------------------------------------- legends */
 
@@ -533,17 +775,22 @@ function updateLegends() {
   if (!panel) return;
   panel.innerHTML = "";
   let any = false;
+  if (sstEnsembleLayer) {
+    panel.appendChild(ensembleLegendEl(sstEnsembleLayer.__ensembleMode));
+    any = true;
+  }
   for (const e of Object.values(state.layers)) {
     if (!e.layer) continue;
     if (e.isDelta) {
       panel.appendChild(deltaLegendEl());
       any = true;
     } else if (e.cfg.colormap || e.cfg.legend) {
-      panel.appendChild(layerLegendEl(e.cfg));
+      panel.appendChild(layerLegendEl(e.cfg, e.isAggregate ? `${e.cfg.title} · ${windowLabel(state.windowDays)} mean` : null));
       any = true;
     }
   }
   panel.classList.toggle("hidden", !any);
+  updateDeltaHint();
 }
 
 /* Interactive legends: rendered from the layer's GIBS colormap so hovering
@@ -582,10 +829,10 @@ function fmtVal(v) {
   return a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2);
 }
 
-function layerLegendEl(cfg) {
+function layerLegendEl(cfg, titleOverride) {
   const div = document.createElement("div");
   div.className = "legend-item";
-  div.innerHTML = `<div class="legend-title">${cfg.title}</div>`;
+  div.innerHTML = `<div class="legend-title">${titleOverride || cfg.title}</div>`;
   const fallback = () => {
     if (cfg.legend) {
       div.insertAdjacentHTML(
@@ -646,15 +893,48 @@ function buildLegendBar(container, cm) {
   container.appendChild(range);
 }
 
+function ensembleLegendEl(mode) {
+  const div = document.createElement("div");
+  div.className = "legend-item";
+  if (mode === "spread") {
+    div.innerHTML = `<div class="legend-title">SST ensemble spread — inter-analysis σ (°C)</div>`;
+    const wrap = document.createElement("div");
+    wrap.className = "legend-bar-wrap";
+    const bar = document.createElement("div");
+    bar.className = "spread-bar";
+    const tip = document.createElement("div");
+    tip.className = "legend-tip hidden";
+    bar.addEventListener("mousemove", (e) => {
+      const rect = bar.getBoundingClientRect();
+      const frac = Cesium.Math.clamp((e.clientX - rect.left) / rect.width, 0, 1);
+      tip.textContent = `${(frac * SPREAD_MAX).toFixed(2)} °C disagreement`;
+      tip.style.left = `${Math.min(Math.max(frac * rect.width - 40, 0), rect.width - 110)}px`;
+      tip.classList.remove("hidden");
+    });
+    bar.addEventListener("mouseleave", () => tip.classList.add("hidden"));
+    wrap.appendChild(tip); wrap.appendChild(bar);
+    div.appendChild(wrap);
+    const range = document.createElement("div");
+    range.className = "legend-range";
+    range.innerHTML = `<span>0</span><span>°C</span><span>${SPREAD_MAX.toFixed(1)}+</span>`;
+    div.appendChild(range);
+    div.insertAdjacentHTML("beforeend", `<div class="legend-note">bright = analyses disagree (fronts, eddies, under-observed ocean)</div>`);
+  } else {
+    div.innerHTML = `<div class="legend-title">SST ensemble mean (°C)</div>`;
+    getColormapEntries("https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature.xml")
+      .then((cm) => { if (cm) buildLegendBar(div, cm); });
+    div.insertAdjacentHTML("beforeend", `<div class="legend-note">mean of independent GHRSST L4 analyses (MUR, OISST, GAMSSA) available for the date</div>`);
+  }
+  return div;
+}
+
 function deltaLegendEl() {
   const div = document.createElement("div");
   div.className = "legend-item";
   const cmp = compareDate();
-  const label = state.compareMode === "delta-month"
-    ? `Δ SST: ${state.date.slice(0, 7)} mean minus ${cmp.slice(0, 7)} mean (sampled, °C)`
-    : state.compareMode === "delta-year"
-      ? `Δ SST: ${state.date.slice(0, 4)} mean minus ${cmp.slice(0, 4)} mean (sampled, °C)`
-      : `Δ SST: ${state.date} minus ${cmp} (°C)`;
+  const label = state.windowDays > 1
+    ? `Δ SST: ${state.date} minus ${cmp}, ${windowLabel(state.windowDays)} mean (°C)`
+    : `Δ SST: ${state.date} minus ${cmp} (°C)`;
   div.innerHTML = `<div class="legend-title">${label}</div>`;
   const wrap = document.createElement("div");
   wrap.className = "legend-bar-wrap";
@@ -737,6 +1017,7 @@ function buildLayerPanel() {
     if (!dateInput.value) return;
     state.date = dateInput.value;
     refreshTimedLayers();
+    if (sstEnsembleLayer) updateEnsembleLayer();
   });
 }
 
@@ -807,6 +1088,12 @@ function esc(s) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
 }
+
+document.getElementById("toggle-sst-ensemble").addEventListener("change", updateEnsembleLayer);
+document.getElementById("ensemble-mode").addEventListener("change", () => {
+  document.getElementById("toggle-sst-ensemble").checked = true;
+  updateEnsembleLayer();
+});
 
 for (const kind of ["climatetrace", "argo"]) {
   document.getElementById(`toggle-${kind}`).addEventListener("change", (e) => {
@@ -1090,7 +1377,13 @@ window.__earth = {
   viewer,
   parseColormap,
   parseColormapEntries,
-  periodSampleDates,
+  windowSampleDates,
+  addDays,
+  windowLabel,
+  SSTAggregateProvider,
+  SSTEnsembleProvider,
+  spreadColor,
+  get ensembleLayer() { return sstEnsembleLayer; },
   deltaColor,
   SSTDeltaProvider,
   state,

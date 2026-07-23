@@ -13,7 +13,9 @@ The long-term goal: layer enough observational and model data onto the globe to 
 - **Zero API keys.** All imagery streams from [NASA GIBS](https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api) WMTS — no registration, no tokens, no build step.
 - **Time-dynamic layers** with a date picker, per-layer opacity, per-layer **doc links and legends**:
   sea surface temperature (MUR 1 km), SST anomalies, true-color VIIRS, IMERG precipitation, AMSR2 sea ice, MODIS snow cover, aerosol optical depth, Black Marble night lights.
-- **Comparison mode** — any dated layer vs 1/2/5/10/20 years ago: side-by-side swipe with a draggable divider, or a **computed per-pixel difference** for SST (GIBS colormap inverted to °C client-side, rendered as a diverging warmer/cooler layer).
+- **Comparison** — any dated layer vs 1/2/5/10/20 years ago: side-by-side swipe with a draggable divider, or a **computed per-pixel difference** for SST (GIBS colormap inverted to °C client-side, diverging warmer/cooler).
+- **Rolling aggregation** — an *Aggregate* slider (1–730 days) averages SST over the past N days ending on the chosen date, independent of the comparison mode. "Past 365 days vs 10 years ago" reveals broad ocean warming and the subpolar cold blob cleanly, without daily weather noise.
+- **SST ensemble** — combines independent GHRSST L4 analyses (MUR, OISST, GAMSSA) client-side into a **mean** or a **spread** map; the spread highlights where analyses disagree (fronts, eddies, under-observed ocean).
 - **Live data layers** — Climate TRACE's top 1,000 facility emitters and the ~3,800-float Argo fleet as clickable points (`scripts/refresh_data.py` refreshes snapshots).
 - **AMOC dashboard** — the RAPID 26.5°N overturning transport record (2004–2024) with stat tiles and a hoverable chart.
 - **Zoom** — scroll, touch pinch, trackpad pinch (ctrl+wheel), and on-globe buttons.
@@ -59,6 +61,13 @@ data/stations.geojson   AMOC arrays + GHG reference stations
 docs/CATALOG.md         the catalog as a readable reference document
 .github/workflows/      GitHub Pages deployment
 ```
+
+## Analysis notes
+
+[docs/COMBINING_DATASETS.md](docs/COMBINING_DATASETS.md) analyses which of the catalog's
+datasets measure the same quantity, which combinations are scientifically sound (SST
+ensembles, the sea-level budget, the AMOC state vector, land+ocean temperature blends),
+and why per-pixel differencing works for SST but not precipitation.
 
 ## The data catalog
 

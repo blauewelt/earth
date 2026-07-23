@@ -40,19 +40,38 @@
         </select>
       </div>
       <div class="control-row hidden" id="compare-mode-row">
-        <label for="compare-mode">Mode</label>
+        <label for="compare-mode">Display</label>
         <select id="compare-mode">
           <option value="split" selected>Side-by-side (swipe)</option>
-          <option value="delta">Difference: day vs day (SST)</option>
-          <option value="delta-month">Difference: monthly means (SST)</option>
-          <option value="delta-year">Difference: annual means (SST)</option>
+          <option value="delta">Computed difference (SST)</option>
         </select>
       </div>
-      <p class="hint">Daily NASA GIBS imagery. Side-by-side: drag the divider (left = past, right = current).
-        Computed difference: per-pixel "now − then" for sea surface temperature — day vs day, or means of
-        the selected month/year vs the same period N years earlier (means are sampled from daily fields:
-        5 days per month, 12 days per year; averaged modes limit zoom to stay responsive).</p>
+      <div class="control-row">
+        <label for="window-days">Aggregate</label>
+        <input type="range" id="window-days" min="1" max="730" step="1" value="1" />
+        <span id="window-value" class="window-value">single day</span>
+      </div>
+      <p class="hint">Daily NASA GIBS imagery. <strong>Aggregate</strong> averages sea-surface temperature over
+        the past N days ending on the chosen date (1–730; drag to <em>past 30 / 365 days</em>) — this is
+        independent of the comparison mode. Side-by-side: drag the divider (left = past, right = current).
+        Computed difference: per-pixel "now − then". Averaged views cap zoom to stay responsive.</p>
+      <p class="hint hidden" id="delta-hint">⚠ Computed difference and multi-day aggregation apply to
+        sea surface temperature only. Other active layers show the single chosen date.</p>
       <div id="layer-list"></div>
+
+      <h2>Analysis layers</h2>
+      <div class="layer-item">
+        <div class="layer-head"><input type="checkbox" id="toggle-sst-ensemble" title="Show / hide layer"/>
+          <a class="title-link" href="https://podaac.jpl.nasa.gov/GHRSST" target="_blank" rel="noopener" title="About GHRSST L4 analyses">SST ensemble (multi-analysis)</a></div>
+        <div class="control-row" style="margin:6px 0 2px">
+          <label for="ensemble-mode">Show</label>
+          <select id="ensemble-mode">
+            <option value="mean" selected>Mean (°C)</option>
+            <option value="spread">Spread — where analyses disagree</option>
+          </select>
+        </div>
+        <div class="meta">Combines independent GHRSST L4 analyses (MUR · OISST · GAMSSA) client-side. Spread reveals where the ocean is poorly observed.</div>
+      </div>
 
       <h2>Data layers</h2>
       <div class="layer-item">

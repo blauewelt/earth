@@ -162,3 +162,27 @@ A supporting improvement to the catalog itself: add a `family` field (e.g. `sst`
 `ocean-heat-content`, `gmst-blend`, `precipitation`, `sea-level`, `amoc-index`) so these
 relationships become machine-readable and the app can show "related datasets" on every
 entry.
+
+---
+
+## Appendix: why per-pixel differences work for SST but not precipitation
+
+The globe's "computed difference" tool inverts a layer's GIBS colormap back to
+physical units per pixel and subtracts two dates. This is meaningful only for a
+**smooth, continuous, always-present field** — sea surface temperature is the
+canonical example: every ocean pixel has a defined value that changes slowly, so
+"today minus a year ago" is a clean anomaly.
+
+Precipitation fails all three conditions. IMERG (the catalog's precipitation
+layer) is an **instantaneous rate in mm/hr** on a **logarithmic** colour scale,
+and it is **transparent below 0.1 mm/hr** — most of the map is "no rain right
+now." Differencing two daily snapshots therefore measures whether it happened to
+be raining at the satellite overpass, not a climate signal; the result is sparse,
+noisy salt-and-pepper. The physically correct comparison for precipitation is an
+**accumulation or mean rate over a window** (e.g. total mm over 30 days) vs the
+same window in another year — a different operation from per-pixel differencing,
+and one that needs the gauge-calibrated monthly products (GPCP, GPCC, CHIRPS)
+rather than instantaneous IMERG. The app reflects this: computed-difference and
+multi-day aggregation are offered for SST only, and a hint appears if another
+layer is active in difference mode. Extending honest aggregation to precipitation
+(accumulated totals from a monthly product) is a sensible future addition.
