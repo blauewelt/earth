@@ -93,6 +93,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "sst",
+    deltaRange: 4,
     colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_H.svg",
     doc: "https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1",
@@ -104,6 +105,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "sst-anom",
+    deltaRange: 3,
     colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/GHRSST_Sea_Surface_Temperature_Anomalies.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/GHRSST_Sea_Surface_Temperature_Anomalies_H.svg",
     doc: "https://podaac.jpl.nasa.gov/dataset/MUR25-JPL-L4-GLOB-v04.2",
@@ -126,6 +128,7 @@ const GIBS_LAYERS = [
   },
   {
     id: "seaice",
+    deltaRange: 50,
     colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/AMSR_Sea_Ice_Concentration.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/AMSR_Sea_Ice_Concentration_H.svg",
     doc: "https://nsidc.org/data/au_si12",
@@ -453,10 +456,10 @@ function compareDate() {
 
 /* ------------------------------------------------- computed-delta (SST) mode */
 
-const DELTA_LAYER_ID = "sst";
-const DELTA_RANGE = 4; // °C, legend/scale limit
-const DELTA_COOL = [37, 99, 235];   // cooler than N years ago
-const DELTA_WARM = [230, 59, 46];   // warmer than N years ago
+const DELTA_LAYER_ID = "sst";        // the layer that also supports windowed aggregation
+const DELTA_RANGE = 4;               // default ± scale (°C) for the SST legend helpers
+const DELTA_COOL = [37, 99, 235];    // negative Δ (less / cooler than N years ago)
+const DELTA_WARM = [230, 59, 46];    // positive Δ (more / warmer than N years ago)
 
 function parseColormap(xml) {
   // GIBS colormap v1.3: <ColorMapEntry rgb="r,g,b" transparent="false" ... value="[lo,hi)"/>
@@ -474,11 +477,11 @@ function parseColormap(xml) {
   return lut;
 }
 
-function deltaColor(d) {
-  // diverging: blue = cooler, red = warmer; opacity scales with |delta|
-  const t = Cesium.Math.clamp(d / DELTA_RANGE, -1, 1);
+function deltaColor(d, range = DELTA_RANGE) {
+  // diverging: blue = decrease, red = increase; opacity scales with |delta|
+  const t = Cesium.Math.clamp(d / range, -1, 1);
+  if (Math.abs(d) < range * 0.0125) return [0, 0, 0, 0]; // small dead-zone
   const a = Math.round(Math.min(1, Math.abs(t) + 0.06) * 235);
-  if (Math.abs(d) < 0.05) return [0, 0, 0, 0];
   const c = t > 0 ? DELTA_WARM : DELTA_COOL;
   return [c[0], c[1], c[2], a];
 }
@@ -595,10 +598,14 @@ class SSTAggregateProvider {
   }
 }
 
-/* Per-pixel difference of two rolling-window SST means: value(now) − value(past). */
-class SSTDeltaProvider {
+/* Per-pixel difference of two rolling-window means for ANY continuous
+ * colormapped layer (SST, SST anomalies, sea ice, …): value(now) − value(past),
+ * with the layer's own colormap inverted to physical units and a ±deltaRange
+ * diverging scale. */
+class DeltaProvider {
   constructor(cfg, dateNow, datePast, windowDays = 1) {
     this._cfg = cfg;
+    this._range = cfg.deltaRange || DELTA_RANGE;
     this._window = windowDays;
     this._datesNow = windowSampleDates(dateNow, windowDays);
     this._datesPast = windowSampleDates(datePast, windowDays);
@@ -610,30 +617,32 @@ class SSTDeltaProvider {
     this.minimumLevel = 0;
     this.errorEvent = new Cesium.Event();
     this.credit = new Cesium.Credit(
-      `Δ SST (${windowLabel(windowDays)}) computed client-side from NASA GIBS`
+      `Δ ${cfg.title} (${windowLabel(windowDays)}) computed client-side from NASA GIBS`
     );
     this.hasAlphaChannel = true;
     this.ready = true;
   }
   get window() { return this._window; }
+  get layerId() { return this._cfg.id; }
   getTileCredits() { return undefined; }
   pickFeatures() { return undefined; }
   async requestImage(x, y, level) {
-    const lut = await getSstLUT();
+    const vlut = await getValueLut(this._cfg.colormap);
     const canvas = document.createElement("canvas");
     canvas.width = 512;
     canvas.height = 512;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!vlut) return canvas;
     const [now, past] = await Promise.all([
-      sstMeanField(this._cfg, this._datesNow, x, y, level, lut, ctx),
-      sstMeanField(this._cfg, this._datesPast, x, y, level, lut, ctx),
+      sstMeanField(this._cfg, this._datesNow, x, y, level, vlut.lut, ctx),
+      sstMeanField(this._cfg, this._datesPast, x, y, level, vlut.lut, ctx),
     ]);
     const out = ctx.createImageData(512, 512);
     const o = out.data;
     for (let p = 0, i = 0; p < 512 * 512; p++, i += 4) {
       if (now.cnt[p] === 0 || past.cnt[p] === 0) continue;
       const d = now.sum[p] / now.cnt[p] - past.sum[p] / past.cnt[p];
-      const [r, g, b, a] = deltaColor(d);
+      const [r, g, b, a] = deltaColor(d, this._range);
       o[i] = r; o[i + 1] = g; o[i + 2] = b; o[i + 3] = a;
     }
     ctx.clearRect(0, 0, 512, 512);
@@ -647,15 +656,16 @@ function addLayer(cfg) {
     alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
   const cmp = compareDate();
   const comparing = cmp && cfg.timed;
-  const isSST = cfg.id === DELTA_LAYER_ID;               // only SST can be inverted → aggregated / differenced
+  const isSST = cfg.id === DELTA_LAYER_ID;               // SST also supports windowed aggregation
+  const deltaable = cfg.deltaRange != null;              // continuous field with an invertible colormap
   const win = state.windowDays;
-  const windowed = win > 1 && isSST;                     // rolling-window mean applies to SST only
+  const windowed = win > 1 && isSST;                     // rolling-window mean render is SST-only
 
   const add = (provider) => viewer.imageryLayers.addImageryProvider(provider);
 
-  if (comparing && state.compareMode === "delta" && isSST) {
+  if (comparing && state.compareMode === "delta" && deltaable) {
     // Computed per-pixel difference of window means (single-day if win === 1)
-    entry.layer = add(new SSTDeltaProvider(cfg, state.date, cmp, win));
+    entry.layer = add(new DeltaProvider(cfg, state.date, cmp, win));
     entry.layer.alpha = entry.alpha;
     entry.isDelta = true;
   } else if (comparing && state.compareMode === "split") {
@@ -769,12 +779,22 @@ windowSlider.addEventListener("change", () => {
 });
 syncWindowLabel();
 
-// Note shown when a non-SST layer is active in computed-difference mode.
+// Note shown in computed-difference mode when a layer that can't be differenced
+// is active — either a non-continuous raster (precip/aerosol) or a point/snapshot
+// layer (glaciers, emissions, floats, biodiversity) that has no per-pixel time series.
+function pointLayerActive() {
+  return (glacierCollection && glacierCollection.show) ||
+    (pointLayers.climatetrace && pointLayers.climatetrace.collection.show) ||
+    (pointLayers.argo && pointLayers.argo.collection.show) ||
+    !!gbifLayer;
+}
 function updateDeltaHint() {
   const hint = document.getElementById("delta-hint");
   if (!hint) return;
-  const show = state.compareMode === "delta" &&
-    Object.values(state.layers).some((e) => e.layer && e.cfg.timed && e.cfg.id !== DELTA_LAYER_ID);
+  if (state.compareMode !== "delta") { hint.classList.add("hidden"); return; }
+  const rasterNoDelta = Object.values(state.layers)
+    .some((e) => e.layer && e.cfg.timed && e.cfg.deltaRange == null);
+  const show = rasterNoDelta || pointLayerActive();
   hint.classList.toggle("hidden", !show);
 }
 
@@ -792,7 +812,7 @@ function updateLegends() {
   for (const e of Object.values(state.layers)) {
     if (!e.layer) continue;
     if (e.isDelta) {
-      panel.appendChild(deltaLegendEl());
+      panel.appendChild(deltaLegendEl(e.cfg));
       any = true;
     } else if (e.cfg.colormap || e.cfg.legend) {
       panel.appendChild(layerLegendEl(e.cfg, e.isAggregate ? `${e.cfg.title} · ${windowLabel(state.windowDays)} mean` : null));
@@ -820,18 +840,42 @@ function getColormapEntries(url) {
 function parseColormapEntries(xml) {
   const units = (xml.match(/units="([^"]+)"/) || [])[1] || "";
   const entries = [];
-  const re = /<ColorMapEntry\s+rgb="(\d+),(\d+),(\d+)"\s+transparent="false"[^>]*?\svalue="[\[\(]([^,]+),([^)\]]+)[\)\]]"/g;
+  // Handles both range entries value="[lo,hi)" and single-value entries
+  // value="N" / value="[N]" (e.g. sea ice %, NDSI snow cover).
+  const re = /<ColorMapEntry\s+rgb="(\d+),(\d+),(\d+)"\s+transparent="false"[^>]*?\svalue="([^"]+)"/g;
   let m;
   while ((m = re.exec(xml))) {
-    let lo = parseFloat(m[4]);
-    let hi = parseFloat(m[5]);
+    const rgb = [+m[1], +m[2], +m[3]];
+    let lo, hi;
+    const rng = m[4].match(/^[\[(]\s*([^,]+),\s*([^)\]]+)[)\]]$/);
+    if (rng) { lo = parseFloat(rng[1]); hi = parseFloat(rng[2]); }
+    else {
+      const single = m[4].match(/^[\[(]?\s*(-?[\d.eE+]+)\s*[)\]]?$/);
+      if (!single) continue;
+      lo = hi = parseFloat(single[1]);
+    }
     if (!Number.isFinite(lo) && !Number.isFinite(hi)) continue;
     if (!Number.isFinite(lo)) lo = hi;
     if (!Number.isFinite(hi)) hi = lo;
-    entries.push({ rgb: [+m[1], +m[2], +m[3]], lo, hi });
+    entries.push({ rgb, lo, hi });
   }
   entries.sort((a, b) => a.lo - b.lo);
   return { units, entries };
+}
+
+/* rgb → representative value map (+ units), from any GIBS colormap. Generalises
+ * the SST LUT so the delta tool works for any continuous colormapped layer. */
+const valueLutCache = new Map();
+function getValueLut(url) {
+  if (!valueLutCache.has(url)) {
+    valueLutCache.set(url, getColormapEntries(url).then((cm) => {
+      if (!cm) return null;
+      const lut = new Map();
+      for (const e of cm.entries) lut.set((e.rgb[0] << 16) | (e.rgb[1] << 8) | e.rgb[2], (e.lo + e.hi) / 2);
+      return { units: cm.units, lut };
+    }).catch(() => null));
+  }
+  return valueLutCache.get(url);
 }
 
 function fmtVal(v) {
@@ -938,25 +982,29 @@ function ensembleLegendEl(mode) {
   return div;
 }
 
-function deltaLegendEl() {
+function deltaLegendEl(cfg) {
+  const range = cfg.deltaRange || DELTA_RANGE;
   const div = document.createElement("div");
   div.className = "legend-item";
   const cmp = compareDate();
-  const label = state.windowDays > 1
-    ? `Δ SST: ${state.date} minus ${cmp}, ${windowLabel(state.windowDays)} mean (°C)`
-    : `Δ SST: ${state.date} minus ${cmp} (°C)`;
-  div.innerHTML = `<div class="legend-title">${label}</div>`;
+  const win = state.windowDays > 1 ? `, ${windowLabel(state.windowDays)} mean` : "";
+  div.innerHTML = `<div class="legend-title">Δ ${cfg.title}: ${state.date} minus ${cmp}${win}</div>`;
   const wrap = document.createElement("div");
   wrap.className = "legend-bar-wrap";
   const bar = document.createElement("div");
   bar.className = "delta-bar";
   const tip = document.createElement("div");
   tip.className = "legend-tip hidden";
+  // resolve units from the layer's colormap
+  let units = "";
+  getValueLut(cfg.colormap).then((v) => { if (v) units = v.units; });
+  const more = "increase", less = "decrease";
   bar.addEventListener("mousemove", (e) => {
     const rect = bar.getBoundingClientRect();
     const frac = Cesium.Math.clamp((e.clientX - rect.left) / rect.width, 0, 1);
-    const v = -DELTA_RANGE + frac * 2 * DELTA_RANGE;
-    tip.textContent = `Δ ${v >= 0 ? "+" : ""}${v.toFixed(1)} °C ${Math.abs(v) < 0.2 ? "(little change)" : v > 0 ? "warmer than then" : "cooler than then"}`;
+    const v = -range + frac * 2 * range;
+    const dir = Math.abs(v) < range * 0.05 ? "(little change)" : v > 0 ? more : less;
+    tip.textContent = `Δ ${v >= 0 ? "+" : ""}${fmtVal(v)} ${units} ${dir}`.replace("  ", " ");
     tip.style.left = `${Math.min(Math.max(frac * rect.width - 40, 0), rect.width - 130)}px`;
     tip.classList.remove("hidden");
   });
@@ -964,10 +1012,14 @@ function deltaLegendEl() {
   wrap.appendChild(tip);
   wrap.appendChild(bar);
   div.appendChild(wrap);
-  const range = document.createElement("div");
-  range.className = "legend-range";
-  range.innerHTML = `<span>−${DELTA_RANGE}</span><span>°C</span><span>+${DELTA_RANGE}</span>`;
-  div.appendChild(range);
+  const rangeEl = document.createElement("div");
+  rangeEl.className = "legend-range";
+  getValueLut(cfg.colormap).then((v) => {
+    const u = v ? v.units : "";
+    rangeEl.innerHTML = `<span>−${range}</span><span>${u}</span><span>+${range}</span>`;
+  });
+  div.appendChild(rangeEl);
+  div.insertAdjacentHTML("beforeend", `<div class="legend-note">blue = decrease · red = increase vs then</div>`);
   return div;
 }
 
@@ -1719,11 +1771,12 @@ window.__earth = {
   addDays,
   windowLabel,
   SSTAggregateProvider,
+  DeltaProvider,
+  getValueLut,
   SSTEnsembleProvider,
   spreadColor,
   get ensembleLayer() { return sstEnsembleLayer; },
   deltaColor,
-  SSTDeltaProvider,
   state,
   pointLayers,
   GIBS_LAYERS,

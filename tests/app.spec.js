@@ -320,12 +320,12 @@ test("computed-difference mode replaces the SST split with a delta layer", async
     return {
       isDelta: e.isDelta,
       noTwin: !e.cmpLayer,
-      providerIsDelta: e.layer.imageryProvider instanceof window.__earth.SSTDeltaProvider,
+      providerIsDelta: e.layer.imageryProvider instanceof window.__earth.DeltaProvider,
     };
   });
   expect(r.isDelta && r.noTwin && r.providerIsDelta).toBe(true);
   await expect(page.locator("#split-handle")).toBeHidden(); // no swipe in delta mode
-  await expect(page.locator("#legend-panel")).toContainText("Δ SST");
+  await expect(page.locator("#legend-panel")).toContainText("Δ Sea surface temperature");
   // back to split restores the swipe pair
   await page.selectOption("#compare-mode", "split");
   await expect(page.locator("#split-handle")).toBeVisible();
@@ -534,4 +534,42 @@ test("glacier layer (RGI v7) loads the full inventory as points", async ({ page 
   // toggling off hides but keeps the collection
   await page.uncheck("#toggle-glaciers");
   expect(await page.evaluate(() => window.__earth.glacierCollection.show)).toBe(false);
+});
+
+test("computed difference generalises to sea ice, not to point/instantaneous layers", async ({ page }) => {
+  // a winter date where AMSR2 sea ice exists (the recent default lags mission data)
+  await page.fill("#layer-date", "2024-03-01");
+  await page.dispatchEvent("#layer-date", "change");
+  await page.selectOption("#compare-select", "10");
+  await page.selectOption("#compare-mode", "delta");
+
+  // sea ice is a continuous raster with deltaRange → becomes a DeltaProvider and paints
+  await page.check('#layer-list input[data-id="seaice"]');
+  const r = await page.evaluate(async () => {
+    const e = window.__earth.state.layers["seaice"];
+    const prov = e.layer.imageryProvider;
+    const c = await prov.requestImage(1, 0, 2);          // northern tile
+    const d = c.getContext("2d").getImageData(0, 0, 512, 512).data;
+    let painted = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) painted++;
+    const vlut = await window.__earth.getValueLut(e.cfg.colormap);
+    return { isDelta: e.isDelta, name: prov.constructor.name, layerId: prov.layerId,
+             painted, units: vlut?.units, lut: vlut?.lut.size };
+  });
+  expect(r.isDelta).toBe(true);
+  expect(r.name).toBe("DeltaProvider");
+  expect(r.layerId).toBe("seaice");
+  expect(r.units).toBe("%");
+  expect(r.lut).toBeGreaterThan(50);                     // single-value colormap now parses
+  expect(r.painted).toBeGreaterThan(1000);               // real sea-ice change over the Arctic
+
+  // precipitation has no deltaRange → stays a normal layer, and the hint appears
+  await page.check('#layer-list input[data-id="precip"]');
+  const p = await page.evaluate(() => {
+    const e = window.__earth.state.layers["precip"];
+    return { isDelta: e.isDelta, name: e.layer.imageryProvider.constructor.name };
+  });
+  expect(p.isDelta).toBe(false);
+  expect(p.name).not.toBe("DeltaProvider");
+  await expect(page.locator("#delta-hint")).toBeVisible();
+  await expect(page.locator("#delta-hint")).toContainText("no per-pixel time series");
 });
