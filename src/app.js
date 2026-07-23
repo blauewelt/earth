@@ -1162,6 +1162,118 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((click) =
   }
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
+/* ------------------------------------------------- hover value probe (raster) */
+
+/* On hover, read the actual value of the top colormapped layer at the cursor by
+ * inverting that layer's GIBS colormap on its source tile — so you get the value
+ * in physical units, not just where it sits on the legend. */
+
+const invLutCache = new Map();      // colormap URL → Promise<{units, lut: Map}>
+function getInvLut(url) {
+  if (!invLutCache.has(url)) {
+    invLutCache.set(url, getColormapEntries(url).then((cm) => {
+      if (!cm) return null;
+      const lut = new Map();
+      for (const e of cm.entries) lut.set((e.rgb[0] << 16) | (e.rgb[1] << 8) | e.rgb[2], e);
+      return { units: cm.units, lut };
+    }).catch(() => null));
+  }
+  return invLutCache.get(url);
+}
+
+const probeTileCache = new Map();   // "layer|date|z|x|y" → Promise<ImageBitmap|null>
+function fetchProbeTile(cfg, date, z, x, y) {
+  const key = `${cfg.layer}|${date}|${z}|${x}|${y}`;
+  if (!probeTileCache.has(key)) {
+    const time = cfg.timed ? date : (cfg.fixedTime || "default");
+    const url = GIBS_URL
+      .replace("{layer}", cfg.layer).replace("{time}", time)
+      .replace("{tms}", cfg.tms).replace("{ext}", cfg.ext)
+      .replace("{TileMatrix}", z).replace("{TileRow}", y).replace("{TileCol}", x);
+    probeTileCache.set(key, sstFetchBitmap(url));
+    if (probeTileCache.size > 48) probeTileCache.delete(probeTileCache.keys().next().value);
+  }
+  return probeTileCache.get(key);
+}
+
+const probeCanvas = document.createElement("canvas");
+probeCanvas.width = probeCanvas.height = 512;
+const probeCtx = probeCanvas.getContext("2d", { willReadFrequently: true });
+
+// topmost active layer that has an invertible colormap
+function topColormapLayer() {
+  let best = null, bestIdx = -1;
+  for (const e of Object.values(state.layers)) {
+    if (e.layer && e.cfg.colormap) {
+      const idx = viewer.imageryLayers.indexOf(e.layer);
+      if (idx > bestIdx) { bestIdx = idx; best = e; }
+    }
+  }
+  return best;
+}
+
+async function probeValueAt(carto) {
+  const entry = topColormapLayer();
+  if (!entry) return null;
+  const cfg = entry.cfg;
+  const lon = Cesium.Math.toDegrees(carto.longitude);
+  const lat = Cesium.Math.toDegrees(carto.latitude);
+  const z = cfg.maxLevel;
+  const span = (0.5625 / 2 ** z) * 512;               // degrees per tile at level z
+  const x = Math.floor((lon + 180) / span);
+  const y = Math.floor((90 - lat) / span);
+  const tileWest = -180 + x * span, tileNorth = 90 - y * span;
+  const px = Math.min(511, Math.max(0, Math.floor((lon - tileWest) / span * 512)));
+  const py = Math.min(511, Math.max(0, Math.floor((tileNorth - lat) / span * 512)));
+  const [inv, img] = await Promise.all([getInvLut(cfg.colormap), fetchProbeTile(cfg, state.date, z, x, y)]);
+  if (!inv || !img) return null;
+  probeCtx.clearRect(0, 0, 512, 512);
+  probeCtx.drawImage(img, 0, 0);
+  const d = probeCtx.getImageData(px, py, 1, 1).data;
+  const base = { title: cfg.title, units: inv.units, lon, lat, aggregated: entry.isAggregate };
+  if (d[3] === 0) return { ...base, noData: true };
+  const e = inv.lut.get((d[0] << 16) | (d[1] << 8) | d[2]);
+  if (!e) return { ...base, noData: true };
+  return { ...base, lo: e.lo, hi: e.hi, value: (e.lo + e.hi) / 2 };
+}
+
+const probeEl = document.getElementById("value-probe");
+let probeBusy = false, probePending = null;
+
+function renderProbe(res, sx, sy) {
+  if (!res) { probeEl.classList.add("hidden"); return; }
+  const coord = `${Math.abs(res.lat).toFixed(2)}°${res.lat >= 0 ? "N" : "S"}, ` +
+                `${Math.abs(res.lon).toFixed(2)}°${res.lon >= 0 ? "E" : "W"}`;
+  let head;
+  if (res.noData) {
+    head = `<span class="vp-val vp-nd">no data</span>`;
+  } else {
+    const wide = res.hi - res.lo > 1;
+    const v = wide ? `${fmtVal(res.lo)}–${fmtVal(res.hi)}` : fmtVal(res.value);
+    head = `<span class="vp-val">${v}</span> <span class="vp-unit">${res.units}</span>`;
+  }
+  probeEl.innerHTML = `${head}<div class="vp-meta">${res.title}${res.aggregated ? " · window mean" : ""}<br/>${coord}</div>`;
+  probeEl.style.left = `${Math.min(sx + 14, viewer.scene.canvas.clientWidth - 150)}px`;
+  probeEl.style.top = `${Math.max(sy - 10, 4)}px`;
+  probeEl.classList.remove("hidden");
+}
+
+new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
+  if (!topColormapLayer()) { probeEl.classList.add("hidden"); return; }
+  const cart = viewer.camera.pickEllipsoid(m.endPosition, viewer.scene.globe.ellipsoid);
+  if (!cart) { probeEl.classList.add("hidden"); return; }
+  probePending = { carto: Cesium.Cartographic.fromCartesian(cart), x: m.endPosition.x, y: m.endPosition.y };
+  if (probeBusy) return;
+  probeBusy = true;
+  const run = async () => {
+    const job = probePending; probePending = null;
+    try { renderProbe(await probeValueAt(job.carto), job.x, job.y); }
+    catch { probeEl.classList.add("hidden"); }
+    if (probePending) setTimeout(run, 50); else probeBusy = false;
+  };
+  run();
+}, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
 /* ----------------------------------------------------------------- stations */
 
 let stationsDs = null;
@@ -1586,6 +1698,7 @@ window.__earth = {
   get sealevel() { return seaLevelData; },
   loadSeaLevel,
   linTrend,
+  probeValueAt,
   updateGbifLayer,
   get gbifLayer() { return gbifLayer; },
   get gbifSpecies() { return gbifSpecies; },

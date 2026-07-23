@@ -488,3 +488,25 @@ test("biodiversity (GBIF) layer toggles and filters by species", async ({ page }
   await page.uncheck("#toggle-gbif");
   expect(await page.evaluate(() => window.__earth.gbifLayer)).toBeNull();
 });
+
+test("hover value probe reads the actual value from the top colormapped layer", async ({ page }) => {
+  // SST is on by default; probe a warm tropical Atlantic point
+  const r = await page.evaluate(async () => {
+    const warm = await window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-30, 5));
+    const cold = await window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-20, 68));
+    const land = await window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(10, 47));
+    return { warm, cold, land };
+  });
+  // tropical ocean SST is warm (~24–30 °C), subpolar much colder — both in physical units
+  expect(r.warm.units).toBe("°C");
+  expect(r.warm.value).toBeGreaterThan(20);
+  expect(r.warm.value).toBeLessThan(32);
+  expect(r.cold.value).toBeLessThan(r.warm.value);   // subpolar cooler than tropics
+  // continental interior has no SST → flagged no-data, not a bogus number
+  expect(r.land.noData).toBe(true);
+  // with no colormapped layer active, the probe returns null
+  await page.uncheck('#layer-list input[data-id="sst"]');
+  const none = await page.evaluate(async () =>
+    window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-30, 5)));
+  expect(none).toBeNull();
+});
