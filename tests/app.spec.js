@@ -580,7 +580,7 @@ test("computed difference generalises to sea ice, not to point/instantaneous lay
   expect(p.isDelta).toBe(false);
   expect(p.name).not.toBe("DeltaProvider");
   await expect(page.locator("#delta-hint")).toBeVisible();
-  await expect(page.locator("#delta-hint")).toContainText("no per-pixel time series");
+  await expect(page.locator("#delta-hint")).toContainText("instantaneous");
 });
 
 test("hover probe reports the delta (not absolute) when a difference layer is active", async ({ page }) => {
