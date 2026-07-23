@@ -203,3 +203,9 @@ footer a { color: var(--fg-dim); }
   font-size: 9.5px; color: var(--fg-dim); margin-top: 3px;
 }
 .delta-bar { cursor: crosshair; }
+
+/* ---- clickable layer titles ---- */
+.layer-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.layer-head .title-link { color: var(--fg); text-decoration: none; }
+.layer-head .title-link:hover { color: var(--accent); text-decoration: underline; }
+.layer-head .title-link::after { content: " ↗"; font-size: 10px; color: var(--fg-dim); }

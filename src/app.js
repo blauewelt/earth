@@ -688,9 +688,15 @@ function buildLayerPanel() {
   for (const cfg of GIBS_LAYERS) {
     const div = document.createElement("div");
     div.className = "layer-item";
+    const title = cfg.doc
+      ? `<a class="title-link" href="${cfg.doc}" target="_blank" rel="noopener" title="Open dataset documentation">${cfg.title}</a>`
+      : `<span>${cfg.title}</span>`;
     div.innerHTML = `
-      <label><input type="checkbox" data-id="${cfg.id}" ${cfg.on ? "checked" : ""}/> ${cfg.title}</label>
-      <div class="meta">${cfg.meta}${cfg.timed ? ` · from ${cfg.start}` : ""}${cfg.doc ? ` · <a href="${cfg.doc}" target="_blank" rel="noopener">docs ↗</a>` : ""}</div>
+      <div class="layer-head">
+        <input type="checkbox" data-id="${cfg.id}" ${cfg.on ? "checked" : ""} title="Show / hide layer"/>
+        ${title}
+      </div>
+      <div class="meta">${cfg.meta}${cfg.timed ? ` · from ${cfg.start}` : ""}</div>
       <input type="range" min="0" max="100" value="100" data-alpha="${cfg.id}"
              ${cfg.on ? "" : "style='display:none'"} title="opacity"/>`;
     list.appendChild(div);

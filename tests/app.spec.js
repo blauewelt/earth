@@ -187,12 +187,24 @@ test("catalog browser filters 241 datasets", async ({ page }) => {
   await expect(page.locator("#catalog-count")).toContainText("58 of 241");
 });
 
-test("every layer entry links to documentation", async ({ page }) => {
-  const links = page.locator('#layer-list .layer-item a[href^="http"]');
-  await expect(links).toHaveCount(8); // one per GIBS layer
+test("every layer title is a clickable documentation link", async ({ page }) => {
+  // GIBS layers: title itself links to the dataset docs, checkbox toggles separately
+  const links = page.locator("#layer-list .layer-head a.title-link");
+  await expect(links).toHaveCount(8);
   for (const href of await links.evaluateAll((as) => as.map((a) => a.href))) {
     expect(href).toMatch(/^https:\/\//);
   }
+  await expect(links.first()).toHaveAttribute("target", "_blank");
+  // data layers (Climate TRACE, Argo, stations) too
+  await expect(page.locator("#panel-layers .layer-head a.title-link")).toHaveCount(11);
+  // clicking the title must NOT toggle the layer
+  const before = await page.evaluate(() => window.__earth.viewer.imageryLayers.length);
+  const [popup] = await Promise.all([
+    page.context().waitForEvent("page"),
+    page.locator('#layer-list .layer-head a.title-link').first().click(),
+  ]);
+  await popup.close();
+  expect(await page.evaluate(() => window.__earth.viewer.imageryLayers.length)).toBe(before);
 });
 
 test("legends appear for active layers and follow toggles", async ({ page }) => {
