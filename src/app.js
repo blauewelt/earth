@@ -239,13 +239,13 @@ const viewer = new Cesium.Viewer("cesiumContainer", {
 viewer.scene.globe.enableLighting = false;
 viewer.scene.skyAtmosphere.show = true;
 
-// The base Blue-Marble layer; desaturated to grayscale while a computed-difference
-// layer is active so the red/blue Δ pops instead of blue-on-blue over the ocean.
+// The base Blue-Marble layer. A manual "Grayscale globe" toggle desaturates it so
+// coloured overlays (e.g. a blue/red difference) stand out instead of blue-on-blue.
 const baseImageryLayer = viewer.imageryLayers.get(0);
 function updateBaseAppearance() {
-  const deltaActive = Object.values(state.layers).some((e) => e.layer && e.isDelta);
-  baseImageryLayer.saturation = deltaActive ? 0.0 : 1.0;
-  baseImageryLayer.brightness = deltaActive ? 0.55 : 1.0;
+  const gray = document.getElementById("toggle-grayscale")?.checked;
+  baseImageryLayer.saturation = gray ? 0.0 : 1.0;
+  baseImageryLayer.brightness = gray ? 0.6 : 1.0;
 }
 
 /* Zoom gestures: mouse wheel, touch pinch, AND trackpad pinch.
@@ -800,6 +800,8 @@ windowSlider.addEventListener("change", () => {
 });
 syncWindowLabel();
 
+document.getElementById("toggle-grayscale").addEventListener("change", updateBaseAppearance);
+
 // Note shown in computed-difference mode when a layer that can't be differenced
 // is active — either a non-continuous raster (precip/aerosol) or a point/snapshot
 // layer (glaciers, emissions, floats, biodiversity) that has no per-pixel time series.
@@ -809,14 +811,38 @@ function pointLayerActive() {
     (pointLayers.argo && pointLayers.argo.collection.show) ||
     !!gbifLayer;
 }
+function glaciersActive() {
+  return glacierCollection && glacierCollection.show;
+}
 function updateDeltaHint() {
   const hint = document.getElementById("delta-hint");
   if (!hint) return;
-  if (state.compareMode !== "delta") { hint.classList.add("hidden"); return; }
-  const rasterNoDelta = Object.values(state.layers)
-    .some((e) => e.layer && e.cfg.timed && e.cfg.deltaRange == null);
-  const show = rasterNoDelta || pointLayerActive();
-  hint.classList.toggle("hidden", !show);
+  if (!state.compareYears) { hint.classList.add("hidden"); return; } // only when comparing
+  // Point/snapshot layers can't be compared over time (they have one state) —
+  // relevant in BOTH side-by-side and computed-difference modes.
+  if (pointLayerActive()) {
+    hint.innerHTML = glaciersActive()
+      ? "⚠ The glacier layer is a single inventory (Randolph Glacier Inventory, ~year 2000), " +
+        "so it can't be split or differenced by date — both sides would be identical. " +
+        "Glacier <em>change</em> needs a time series; see the Temp/Sea-level tabs for the ice-loss signal."
+      : "⚠ Point &amp; snapshot layers (emissions, floats, biodiversity) show a single state, " +
+        "so they don't split or difference by date.";
+    hint.classList.remove("hidden");
+    return;
+  }
+  // In computed-difference mode, instantaneous/log rasters aren't differenceable.
+  if (state.compareMode === "delta") {
+    const rasterNoDelta = Object.values(state.layers)
+      .some((e) => e.layer && e.cfg.timed && e.cfg.deltaRange == null);
+    if (rasterNoDelta) {
+      hint.innerHTML = "⚠ Computed difference works on continuous rasters (SST, SST anomalies, " +
+        "sea ice, land surface temperature). Precipitation &amp; aerosol are instantaneous and noisy, " +
+        "so they are shown as-is.";
+      hint.classList.remove("hidden");
+      return;
+    }
+  }
+  hint.classList.add("hidden");
 }
 
 /* --------------------------------------------------------------- legends */

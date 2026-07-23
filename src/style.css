@@ -256,3 +256,7 @@ footer a { color: var(--fg-dim); }
   background: var(--bg); border: 1px solid var(--border);
   font-size: 10.5px; line-height: 1.5; color: var(--fg); white-space: nowrap; pointer-events: none;
 }
+
+/* ---- inline checkbox rows ---- */
+.check-inline { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg); cursor: pointer; }
+.check-inline input { flex: none; }

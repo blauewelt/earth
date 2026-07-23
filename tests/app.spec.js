@@ -408,20 +408,23 @@ test("aggregation window is orthogonal to the display mode", async ({ page }) =>
   expect(r.name).not.toBe("SSTAggregateProvider");
 });
 
-test("computed-difference hint appears for non-differenceable layers in delta mode", async ({ page }) => {
+test("comparison hint explains non-differenceable & point layers in both modes", async ({ page }) => {
   await page.selectOption("#compare-select", "10");
   await page.selectOption("#compare-mode", "delta");
   await expect(page.locator("#delta-hint")).toBeHidden(); // SST alone is differenceable
-  // precipitation has no deltaRange (instantaneous/log) → hint appears
+  // precipitation has no deltaRange (instantaneous/log) → hint appears in delta mode
   await page.check('#layer-list input[data-id="precip"]');
   await expect(page.locator("#delta-hint")).toBeVisible();
-  await expect(page.locator("#delta-hint")).toContainText("no per-pixel time series");
+  await expect(page.locator("#delta-hint")).toContainText("instantaneous");
   await page.uncheck('#layer-list input[data-id="precip"]');
   await expect(page.locator("#delta-hint")).toBeHidden();
-  // a point/snapshot layer (glaciers) also triggers the hint in delta mode
+  // glaciers: single-snapshot note appears in delta AND side-by-side modes
   await page.check("#toggle-glaciers");
   await expect(page.locator("#delta-hint")).toBeVisible();
+  await expect(page.locator("#delta-hint")).toContainText("single inventory");
   await page.selectOption("#compare-mode", "split");
+  await expect(page.locator("#delta-hint")).toBeVisible(); // still shown in side-by-side
+  await page.uncheck("#toggle-glaciers");
   await expect(page.locator("#delta-hint")).toBeHidden();
 });
 
@@ -641,13 +644,12 @@ test("hover value probe waits for dwell; click reads immediately", async ({ page
   expect(typeof cls).toBe("string");
 });
 
-test("base globe desaturates to grey while a difference layer is active", async ({ page }) => {
+test("grayscale globe toggle desaturates the base map", async ({ page }) => {
   const sat = () => page.evaluate(() =>
     window.__earth.viewer.imageryLayers.get(0).saturation);
-  expect(await sat()).toBe(1.0);                 // full colour normally
-  await page.selectOption("#compare-select", "10");
-  await page.selectOption("#compare-mode", "delta");
-  expect(await sat()).toBe(0.0);                 // grayscale under the delta
-  await page.selectOption("#compare-mode", "split");
+  expect(await sat()).toBe(1.0);                 // full colour by default
+  await page.check("#toggle-grayscale");
+  expect(await sat()).toBe(0.0);                 // grayscale on
+  await page.uncheck("#toggle-grayscale");
   expect(await sat()).toBe(1.0);                 // colour restored
 });
