@@ -122,23 +122,36 @@ test("comparison mode creates split layers, labels, and a draggable divider", as
   expect(await page.evaluate(() => !!window.__earth.state.layers["sst"].cmpLayer)).toBe(false);
 });
 
-test("zoom buttons change camera height; trackpad pinch is registered", async ({ page }) => {
+test("zoom buttons and wheel zoom move the camera briskly", async ({ page }) => {
   const height = () =>
     page.evaluate(() => window.__earth.viewer.camera.positionCartographic.height);
+
+  // buttons
   const h0 = await height();
   await page.click("#zoom-in");
   await expect.poll(height).toBeLessThan(h0 * 0.7);
+  const hIn = await height();
   await page.click("#zoom-out");
-  await expect.poll(height).toBeGreaterThan((await height()) - 1); // sanity: no throw
-  // ctrl+wheel (browser encoding of a trackpad pinch) must be a registered zoom gesture
-  const registered = await page.evaluate(() => {
-    const types = window.__earth.viewer.scene.screenSpaceCameraController.zoomEventTypes;
-    return types.some(
-      (t) => t && t.eventType === Cesium.CameraEventType.WHEEL &&
-             t.modifier === Cesium.KeyboardEventModifier.CTRL
-    ) && types.includes(Cesium.CameraEventType.PINCH);
-  });
-  expect(registered).toBe(true);
+  await expect.poll(height).toBeGreaterThan(hIn); // zooms back out
+
+  // wheel: one notch covers a big fraction of the height (fast zoom)
+  const before = await height();
+  await page.evaluate(() =>
+    window.__wheelZoom({ deltaY: 120, deltaMode: 0, ctrlKey: false, preventDefault() {} }));
+  const afterWheel = await height();
+  expect(afterWheel).toBeLessThan(before * 0.35); // ~0.85 of height per notch → big jump
+
+  // touch pinch stays native
+  const hasPinch = await page.evaluate(() =>
+    window.__earth.viewer.scene.screenSpaceCameraController.zoomEventTypes
+      .includes(Cesium.CameraEventType.PINCH));
+  expect(hasPinch).toBe(true);
+
+  // trackpad pinch (ctrlKey) with a small delta still zooms meaningfully
+  const b2 = await height();
+  await page.evaluate(() =>
+    window.__wheelZoom({ deltaY: 20, deltaMode: 0, ctrlKey: true, preventDefault() {} }));
+  expect(await height()).toBeLessThan(b2 * 0.7);
 });
 
 test("Climate TRACE and Argo point layers load with expected counts", async ({ page }) => {

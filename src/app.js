@@ -228,18 +228,28 @@ viewer.scene.skyAtmosphere.show = true;
  * Browsers report a MacBook-style trackpad pinch as a wheel event with
  * ctrlKey set, which Cesium ignores unless registered explicitly. */
 const sscc = viewer.scene.screenSpaceCameraController;
-sscc.minimumZoomDistance = 40000; // keep zoom sane
-sscc.zoomEventTypes = [
-  Cesium.CameraEventType.WHEEL,
-  Cesium.CameraEventType.PINCH,
-  { eventType: Cesium.CameraEventType.WHEEL, modifier: Cesium.KeyboardEventModifier.CTRL },
-];
-// keep the browser from page-zooming on trackpad pinch over the globe
-viewer.scene.canvas.addEventListener(
-  "wheel",
-  (e) => { if (e.ctrlKey) e.preventDefault(); },
-  { passive: false }
-);
+sscc.minimumZoomDistance = 20000;  // allow getting closer (20 km)
+// Keep native touch-pinch zoom; drive wheel/trackpad zoom ourselves (below) so
+// one gesture covers far more distance than Cesium's default.
+sscc.zoomEventTypes = [Cesium.CameraEventType.PINCH];
+
+// Strong, distance-proportional wheel zoom. deltaY is normalised across devices;
+// trackpad pinch (ctrlKey) gets extra gain since its deltas are tiny. The amount
+// is a fraction of the current camera height, capped so it can't shoot through
+// the globe — so it's fast far out and still controllable up close.
+function wheelZoom(e) {
+  e.preventDefault();
+  let dy = e.deltaY;
+  if (e.deltaMode === 1) dy *= 16;            // lines → ~px
+  else if (e.deltaMode === 2) dy *= 400;      // pages → ~px
+  const gain = e.ctrlKey ? 0.025 : 0.008;     // trackpad pinch vs mouse wheel
+  const frac = Cesium.Math.clamp(dy * gain, -0.85, 0.85);
+  const amount = cameraHeight() * frac;
+  if (amount > 0) viewer.camera.zoomIn(amount);
+  else if (amount < 0) viewer.camera.zoomOut(-amount);
+}
+viewer.scene.canvas.addEventListener("wheel", wheelZoom, { passive: false });
+window.__wheelZoom = wheelZoom; // exposed for tests
 
 const HOME = { lon: -30, lat: 28, height: 1.5e7 };
 viewer.camera.setView({
@@ -252,10 +262,10 @@ function cameraHeight() {
   return viewer.camera.positionCartographic.height;
 }
 document.getElementById("zoom-in").addEventListener("click", () => {
-  viewer.camera.zoomIn(cameraHeight() * 0.45);
+  viewer.camera.zoomIn(cameraHeight() * 0.6);
 });
 document.getElementById("zoom-out").addEventListener("click", () => {
-  viewer.camera.zoomOut(cameraHeight() * 0.8);
+  viewer.camera.zoomOut(cameraHeight() * 1.5);
 });
 document.getElementById("zoom-home").addEventListener("click", () => {
   viewer.camera.flyTo({
