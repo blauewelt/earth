@@ -48,7 +48,7 @@ nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
 
 .control-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; }
 .control-row.filters { gap: 14px; }
-.control-row input[type="date"], #catalog-search, #catalog-domain {
+.control-row input[type="date"], #catalog-search, #catalog-domain, #compare-select {
   flex: 1; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
   border-radius: 6px; padding: 6px 8px; font-size: 13px;
 }
@@ -101,3 +101,64 @@ footer a { color: var(--fg-dim); }
   #sidebar { width: 100%; height: 45%; bottom: auto; border-right: none; border-bottom: 1px solid var(--border); }
   #cesiumContainer { left: 0; top: 45%; }
 }
+
+/* ---- zoom controls ---- */
+#zoom-controls {
+  position: absolute; right: 12px; top: 70px; z-index: 20;
+  display: flex; flex-direction: column; gap: 6px;
+}
+#zoom-controls button {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: rgba(22, 27, 34, 0.88); color: var(--fg);
+  border: 1px solid var(--border); font-size: 18px; line-height: 1;
+  cursor: pointer;
+}
+#zoom-controls button:hover { border-color: var(--accent); }
+
+/* ---- comparison split ---- */
+#split-handle {
+  position: absolute; top: 0; bottom: 0; left: 50%; width: 4px; z-index: 19;
+  background: rgba(255, 255, 255, 0.65); cursor: ew-resize;
+  touch-action: none;
+}
+#split-handle::after {
+  content: "⇔"; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--bg2); color: var(--fg); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center; font-size: 13px;
+}
+#split-labels { position: absolute; top: 12px; left: 0; right: 0; z-index: 18; pointer-events: none; }
+#split-labels span {
+  position: absolute; top: 0; padding: 3px 10px; border-radius: 12px;
+  background: rgba(22, 27, 34, 0.88); border: 1px solid var(--border);
+  font-size: 12px; color: var(--fg);
+}
+#split-label-left { left: 12px; }
+#split-label-right { right: 60px; }
+
+/* ---- pick card ---- */
+#pick-card {
+  position: absolute; left: 12px; bottom: 34px; z-index: 20; max-width: 300px;
+  background: rgba(22, 27, 34, 0.94); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5;
+  color: var(--fg);
+}
+#pick-card a { color: var(--accent); text-decoration: none; }
+
+/* ---- AMOC dashboard ---- */
+.stat-row { display: flex; gap: 8px; margin: 10px 0 4px; }
+.stat {
+  flex: 1; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 6px; text-align: center;
+}
+.stat-value { font-size: 20px; font-weight: 650; color: var(--fg); }
+.stat-sub { font-size: 9.5px; color: var(--fg-dim); margin-top: 2px; }
+#amoc-chart-wrap { position: relative; margin: 8px 0 4px; }
+#amoc-chart { display: block; width: 100%; }
+#amoc-tooltip {
+  position: absolute; top: -6px; padding: 2px 8px; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  font-size: 11px; color: var(--fg); white-space: nowrap; pointer-events: none;
+}
+.hidden { display: none !important; }

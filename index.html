@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>earth — open climate data on a globe</title>
-  <meta name="description" content="A 3D globe for the world's open climate data: NASA GIBS layers, AMOC monitoring network, and a 241-dataset open-data catalog." />
+  <meta name="description" content="A 3D globe for the world's open climate data: NASA GIBS layers, AMOC monitoring network, live data layers, and a 241-dataset open-data catalog." />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
   <link rel="stylesheet" href="src/style.css" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
@@ -17,6 +17,7 @@
       <p class="tagline">open climate data on a globe</p>
       <nav>
         <button id="tab-layers" class="tab active">Layers</button>
+        <button id="tab-amoc" class="tab">AMOC</button>
         <button id="tab-catalog" class="tab">Catalog</button>
         <button id="tab-about" class="tab">About</button>
       </nav>
@@ -27,12 +28,59 @@
         <label for="layer-date">Date</label>
         <input type="date" id="layer-date" />
       </div>
-      <p class="hint">Daily NASA GIBS imagery — most layers update within hours; a few lag by days or have ended (they render empty past their range).</p>
-      <div id="layer-list"></div>
       <div class="control-row">
+        <label for="compare-select">Compare</label>
+        <select id="compare-select">
+          <option value="0" selected>Off</option>
+          <option value="1">vs 1 year ago</option>
+          <option value="2">vs 2 years ago</option>
+          <option value="5">vs 5 years ago</option>
+          <option value="10">vs 10 years ago</option>
+          <option value="20">vs 20 years ago</option>
+        </select>
+      </div>
+      <p class="hint">Daily NASA GIBS imagery. With Compare on, drag the divider on the globe: left = past, right = current date.</p>
+      <div id="layer-list"></div>
+
+      <h2>Data layers</h2>
+      <div class="layer-item">
+        <label><input type="checkbox" id="toggle-climatetrace" /> Facility emissions (Climate TRACE)</label>
+        <div class="meta" id="meta-climatetrace">Top 1,000 emitting facilities worldwide · CC BY 4.0</div>
+      </div>
+      <div class="layer-item">
+        <label><input type="checkbox" id="toggle-argo" /> Argo floats (active fleet)</label>
+        <div class="meta" id="meta-argo">Latest reported position of every float · Argo GDAC</div>
+      </div>
+      <div class="layer-item">
         <label><input type="checkbox" id="toggle-stations" checked /> AMOC &amp; GHG monitoring stations</label>
+        <div class="meta">RAPID, OSNAP, MOVE, SAMBA arrays · Mauna Loa, Jungfraujoch …</div>
       </div>
       <button id="fly-atlantic" class="wide">Fly to the North Atlantic (AMOC)</button>
+    </section>
+
+    <section id="panel-amoc" class="panel hidden">
+      <h2>AMOC — RAPID array, 26.5°N</h2>
+      <div class="stat-row">
+        <div class="stat" id="amoc-latest"><div class="stat-value">–</div><div class="stat-sub">Sv · latest</div></div>
+        <div class="stat" id="amoc-early"><div class="stat-value">–</div><div class="stat-sub">Sv · 2004–08</div></div>
+        <div class="stat" id="amoc-recent"><div class="stat-value">–</div><div class="stat-sub">Sv · last 5 yr</div></div>
+      </div>
+      <p class="hint" id="amoc-delta"></p>
+      <div id="amoc-chart-wrap">
+        <canvas id="amoc-chart"></canvas>
+        <div id="amoc-tooltip" class="hidden"></div>
+      </div>
+      <p class="hint">Atlantic overturning transport at 26.5°N, 10-day means, Apr 2004 – Mar 2024.
+        1 Sv = 10⁶ m³/s. Hover the chart for values.</p>
+      <p>Data: <a href="https://rapid.ac.uk/data/data-download" target="_blank" rel="noopener">RAPID-MOCHA-WBTS</a>
+        (NOC / U. Miami / NOAA). Refresh with <code>scripts/refresh_data.py</code>.</p>
+      <h2>Context</h2>
+      <p>The AMOC carries ~17 Sv of warm water north at this latitude on average. Statistical
+        early-warning studies (Ditlevsen &amp; Ditlevsen 2023) and model experiments
+        (van Westen et al. 2024) suggest weakening toward a possible tipping point —
+        this dashboard tracks the primary observational record. Roadmap: OSNAP &amp;
+        Florida Current series, SST-fingerprint indices, variance / autocorrelation
+        early-warning statistics.</p>
     </section>
 
     <section id="panel-catalog" class="panel hidden">
@@ -51,22 +99,44 @@
     <section id="panel-about" class="panel hidden">
       <h2>What is this?</h2>
       <p><strong>earth</strong> is a prototype for exploring the world's open climate data on a 3D globe — and, eventually, for generating predictions from it (e.g., <em>will the AMOC collapse, and when?</em>).</p>
-      <p>It renders time-dynamic NASA GIBS imagery with zero API keys, marks the AMOC monitoring arrays and reference GHG stations, and ships a machine-readable catalog of 241 open climate datasets.</p>
+      <p>It renders time-dynamic NASA GIBS imagery with zero API keys, shows facility-level emissions (Climate TRACE) and the live Argo float fleet, marks the AMOC monitoring arrays, and ships a machine-readable catalog of 241 open climate datasets.</p>
+      <h2>Tips</h2>
+      <ul>
+        <li>Zoom: scroll, pinch (touch or trackpad), or the +/− buttons</li>
+        <li>Compare: pick "vs N years ago" and drag the divider across the globe</li>
+        <li>Click any point for details; click a station marker for its data link</li>
+      </ul>
       <h2>Roadmap</h2>
       <ul>
         <li>Zarr-streamed gridded fields (ERA5, CMIP6) rendered client-side</li>
-        <li>Live point layers: Climate TRACE facilities, Argo floats, OpenAQ</li>
-        <li>AMOC dashboard: RAPID/OSNAP transports + early-warning indicators</li>
-        <li>Prediction pipeline: statistical tipping-time estimation (Ditlevsen 2023, van Westen 2024)</li>
+        <li>AMOC early-warning statistics (variance, autocorrelation) and more arrays</li>
+        <li>Prediction pipeline: statistical tipping-time estimation</li>
       </ul>
       <p><a href="docs/CATALOG.md">Data catalog (readable)</a> · <a href="data/catalog.json">catalog.json</a></p>
     </section>
 
     <footer>
-      Imagery: <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api">NASA GIBS</a> · No API keys required
+      Imagery: <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api">NASA GIBS</a> ·
+      <a href="https://climatetrace.org">Climate TRACE</a> ·
+      <a href="https://argo.ucsd.edu">Argo</a> ·
+      <a href="https://rapid.ac.uk">RAPID</a>
     </footer>
   </div>
-  <div id="cesiumContainer"></div>
+
+  <div id="cesiumContainer">
+    <div id="zoom-controls">
+      <button id="zoom-in" title="Zoom in">+</button>
+      <button id="zoom-out" title="Zoom out">−</button>
+      <button id="zoom-home" title="Reset view">⌂</button>
+    </div>
+    <div id="split-handle" class="hidden" title="Drag to compare"></div>
+    <div id="split-labels" class="hidden">
+      <span id="split-label-left"></span>
+      <span id="split-label-right"></span>
+    </div>
+    <div id="pick-card" class="hidden"></div>
+  </div>
+
   <script src="src/app.js"></script>
 </body>
 </html>
