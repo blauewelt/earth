@@ -790,8 +790,8 @@ test("every layer entry has a hover card with record, interval, spatial facts", 
   });
   expect(gibs.tips).toBe(gibs.items);                     // no layer without facts
   // static analysis/data layers each carry a hand-written tip too
-  const staticTips = await page.locator("#panel-layers > .layer-item .layer-tip, #panel-layers h2 ~ .layer-item .layer-tip").count();
-  expect(staticTips - gibs.tips).toBeGreaterThanOrEqual(6);
+  const allTips = await page.locator("#panel-layers .layer-tip").count();
+  expect(allTips - gibs.tips).toBeGreaterThanOrEqual(6);
   // each card states the three facts
   const rows = await page.evaluate(() => {
     const tip = document.querySelector('#layer-list .layer-item .layer-tip');
