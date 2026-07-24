@@ -105,6 +105,17 @@ The dev sandbox's *browser* cannot reach external hosts (curl can). Therefore:
 - The vendored Cesium build mangles class names — assert on our own classes
   (e.g. `GIBSGeographicTilingScheme`) rather than Cesium constructor names.
 
+### 4b. Date-independence must be announced
+
+Enabling any layer with no per-date data fires an animated warning toast
+(`showToast` / `datelessToast(id)`) so the date selector's lack of effect is
+never a silent mystery. This applies to grid climatologies, night lights
+(fixed composite), and the data/point layers (GBIF all-time, Climate TRACE
+annual inventory, Argo latest positions, stations, glaciers single inventory).
+Any NEW layer that ignores the date selector must be added to `datelessToast`;
+date-driven rasters must return `null` there. Keep the toast copy consistent:
+name the layer in `<strong>` and state "the date selector doesn't change it".
+
 ### 5. UI conventions
 
 - Labels terse ("Grayscale globe", not a sentence). Explanations live in hover

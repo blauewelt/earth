@@ -990,18 +990,30 @@ test("enabling a date-independent layer fires an animated warning toast", async 
   await expect(toast).toBeVisible();
   await expect(toast).toContainText("climatology");
   await expect(toast).toContainText("date selector doesn't change it");
-  // it is actually animated (CSS keyframe applied)
-  const anim = await toast.evaluate((el) => getComputedStyle(el).animationName);
-  expect(anim).toContain("toast-in");
-  // dismissible
-  await toast.locator(".toast-close").click();
+  // it is actually animated — the entrance + shake keyframes are defined and
+  // the element carries a non-zero animation
+  const anim = await page.evaluate(() => {
+    let names = new Set();
+    for (const ss of document.styleSheets) {
+      let rules; try { rules = ss.cssRules; } catch { continue; }
+      for (const r of rules || []) if (r.type === CSSRule.KEYFRAMES_RULE) names.add(r.name);
+    }
+    const el = document.querySelector("#toast-host .toast");
+    return { keyframes: [...names], dur: el && getComputedStyle(el).animationDuration };
+  });
+  expect(anim.keyframes).toContain("toast-in");
+  expect(anim.keyframes).toContain("toast-shake");
+  expect(anim.dur).not.toBe("0s");
+  // dismissible — close via an in-page click (no actionability wait, so the
+  // 8 s auto-dismiss can't race the test)
+  await page.evaluate(() => document.querySelector("#toast-host .toast .toast-close").click());
   await expect(page.locator("#toast-host .toast")).toHaveCount(0);
 
-  // date-DRIVEN layers must NOT toast
-  await page.check('#layer-list input[data-id="precip"]');
-  await page.waitForTimeout(200);
+  // date-DRIVEN layers must NOT toast (pure logic, no timing)
   expect(await page.evaluate(() => window.__earth.datelessToast("precip"))).toBeNull();
   expect(await page.evaluate(() => window.__earth.datelessToast("sst"))).toBeNull();
+  await page.check('#layer-list input[data-id="precip"]');
+  await page.waitForTimeout(300);
   await expect(page.locator("#toast-host .toast")).toHaveCount(0);
 
   // data/point + all-time layers toast with a tailored message
