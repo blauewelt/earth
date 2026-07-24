@@ -741,11 +741,17 @@ test("new native GIBS layers toggle; salinity snaps to first-of-month", async ({
       sal: scheme("salinity"),
       monthlySnap: E.gibsTime(salCfg, "2024-03-15"),
       dailyNoSnap: E.gibsTime(E.GIBS_LAYERS.find((l) => l.id === "precip"), "2024-03-15"),
+      currentMonthFallback: E.gibsTime(salCfg, E.state.date),
+      january: E.gibsTime(salCfg, new Date().toISOString().slice(0, 4) + "-01-15"),
+      today: E.state.date,
     };
   });
   expect(info.count).toBe(before + 3);
   for (const s of [info.p30, info.chl, info.sal]) expect(s).toBe("GIBSGeographicTilingScheme");
   expect(info.monthlySnap).toBe("2024-03-01");   // monthly layers request first-of-month
   expect(info.dailyNoSnap).toBe("2024-03-15");   // daily layers use the raw date
+  // the current month's composite is unpublished → fall back to previous month
+  expect(info.currentMonthFallback < info.today.slice(0, 8) + "01").toBe(true);
+  expect(info.currentMonthFallback).toMatch(/-01$/);
   expect(page.__errors).toEqual([]);
 });

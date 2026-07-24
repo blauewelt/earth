@@ -203,7 +203,7 @@ const GIBS_LAYERS = [
     title: "Sea surface salinity (SMAP, monthly)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2015-04-01", timed: true, monthly: true, on: false,
-    meta: "SMAP L-band salinity (PSU) — same quantity as SMOS/CATDS",
+    meta: "SMAP L-band salinity (PSU) — same quantity as SMOS/CATDS · monthly composite; 2024 has a mission data gap",
   },
   {
     id: "gpcp",
@@ -254,10 +254,21 @@ const GIBS_LAYERS = [
 
 // GIBS TIME value for a layer: monthly products must be requested at the first
 // of the month (a mid-month date returns a blank tile), sub-daily/daily use the
-// raw date, and untimed layers use their fixed snapshot.
+// raw date, and untimed layers use their fixed snapshot. The current month's
+// composite is still accumulating and not yet published (GIBS 404s → an
+// invisible layer), so a date in the current month falls back to the previous
+// complete month.
 function gibsTime(cfg, dateStr) {
   if (!cfg.timed) return cfg.fixedTime || "default";
-  if (cfg.monthly) return dateStr.slice(0, 8) + "01";
+  if (cfg.monthly) {
+    let d = dateStr.slice(0, 8) + "01";
+    const currentMonth = defaultDate().slice(0, 8) + "01";
+    if (d >= currentMonth) {
+      const [y, m] = d.split("-").map(Number);
+      d = m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, "0")}-01`;
+    }
+    return d;
+  }
   return dateStr;
 }
 
