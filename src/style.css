@@ -79,6 +79,10 @@ nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
   pointer-events: none;
 }
 .layer-item:hover .layer-tip { opacity: 1; visibility: visible; transition-delay: 0.35s; }
+.layer-tip .tip-sum {
+  margin: 0 0 7px; padding-bottom: 7px; border-bottom: 1px solid var(--border);
+  color: var(--fg); font-size: 11px; line-height: 1.5;
+}
 .layer-tip div { display: flex; gap: 8px; }
 .layer-tip span {
   flex: 0 0 62px; color: var(--fg-dim); text-transform: uppercase;

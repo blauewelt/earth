@@ -1318,28 +1318,92 @@ function deltaLegendEl(cfg) {
  * shown as a hover card on the layer entry. "Recorded" is the span of the
  * underlying measurement record (≠ the date currently displayed). */
 const LAYER_FACTS = {
-  "viirs-truecolor": { rec: "2015-11 → present", int: "daily (mosaic of ~14 orbits)", sp: "250 m/pixel" },
-  "sst":             { rec: "2002-06 → present", int: "daily (gap-free L4 analysis)", sp: "1 km grid" },
-  "sst-anom":        { rec: "2002-09 → present", int: "daily", sp: "25 km grid" },
-  "precip":          { rec: "2000-06 → present", int: "daily (sum of 30-min scans)", sp: "~10 km (0.1°)" },
-  "precip-30min":    { rec: "2000-06 → present", int: "every 30 minutes", sp: "~10 km (0.1°)" },
-  "seaice":          { rec: "2012-07 → present, with gaps", int: "daily", sp: "12 km grid" },
-  "snow":            { rec: "2000-02 → present", int: "daily", sp: "500 m grid" },
-  "aod":             { rec: "2017-04 → present (this layer; MODIS record from 2000)", int: "daily", sp: "10 km grid" },
-  "lst":             { rec: "2022-10 → present (this layer; MODIS record from 2000)", int: "daily (daytime pass)", sp: "1 km grid" },
-  "chlor":           { rec: "2024-02 → present (PACE; ocean-colour record from 1997)", int: "daily", sp: "~1.2 km" },
-  "salinity":        { rec: "2015-04 → present (2024 data gap)", int: "monthly composite", sp: "~60 km" },
-  "gpcp":            { rec: "1979 → present (record); shown: whole-record mean", int: "monthly source · mean-annual shown", sp: "2.5° (~275 km)" },
-  "oisst":           { rec: "1991–2020 (closed climatology)", int: "monthly normals · annual mean shown", sp: "0.25° source → 1° shown" },
-  "eobs":            { rec: "1950 → 2024 (v31); shown: whole-record mean", int: "daily source · mean-annual shown", sp: "0.25° (~28 km), Europe land" },
-  "meteoswiss":      { rec: "1991–2020 (closed normal period)", int: "single 30-year normal", sp: "~2 km, Switzerland" },
-  "nightlights":     { rec: "2016 (annual composite)", int: "one composite of a full year", sp: "500 m grid" },
+  "viirs-truecolor": { rec: "2015-11 → present", int: "daily (mosaic of ~14 orbits)", sp: "250 m/pixel",
+    sum: "What Earth actually looked like on the chosen day, stitched from the VIIRS " +
+         "imager's ~14 daily orbits. Clouds, dust storms, wildfire smoke, algal blooms " +
+         "and snow appear exactly as photographed — the visual ground truth under all " +
+         "the other layers." },
+  "sst": { rec: "2002-06 → present", int: "daily (gap-free L4 analysis)", sp: "1 km grid",
+    sum: "The temperature of the ocean surface, every day, with no gaps: MUR blends " +
+         "infrared and microwave satellites plus buoys into a 1 km analysis. The " +
+         "workhorse layer for eddies, marine heatwaves, and the North Atlantic 'cold " +
+         "blob' south of Greenland — a suspected AMOC fingerprint." },
+  "sst-anom": { rec: "2002-09 → present", int: "daily", sp: "25 km grid",
+    sum: "How unusual today's ocean temperature is: the same MUR analysis minus its " +
+         "own climatology, so persistent warm/cold departures stand out regardless of " +
+         "season. Marine heatwaves and the cold blob read directly in °C above or " +
+         "below normal." },
+  "precip": { rec: "2000-06 → present", int: "daily (sum of 30-min scans)", sp: "~10 km (0.1°)",
+    sum: "Where it is raining or snowing right now: IMERG merges the GPM core " +
+         "satellite with a constellation of microwave sensors into a global " +
+         "precipitation map. An instantaneous weather field — for 'how much rain is " +
+         "normal here', see the GPCP/E-OBS/MeteoSwiss climatologies." },
+  "precip-30min": { rec: "2000-06 → present", int: "every 30 minutes", sp: "~10 km (0.1°)",
+    sum: "The same IMERG merged precipitation at its native half-hourly cadence — " +
+         "sharp enough to watch individual storm systems and tropical cyclones " +
+         "develop within a single day rather than as a daily average." },
+  "seaice": { rec: "2012-07 → present, with gaps", int: "daily", sp: "12 km grid",
+    sum: "The fraction of ocean covered by sea ice at both poles, sensed by passive " +
+         "microwave (AMSR2), which sees through clouds and polar night. The " +
+         "September Arctic minimum and its long-term decline are the field's " +
+         "headline climate signal." },
+  "snow": { rec: "2000-02 → present", int: "daily", sp: "500 m grid",
+    sum: "Daily snow-covered area from MODIS's normalised-difference snow index. " +
+         "Snow cover sets Earth's reflectivity (albedo) and spring meltwater supply; " +
+         "its retreat is both a symptom and an amplifier of warming." },
+  "aod": { rec: "this map: 2017-04 → present · MODIS has measured since 2000, but older dates aren't served as map tiles", int: "daily", sp: "10 km grid",
+    sum: "How much smoke, dust and haze is in the air column: aerosol optical depth " +
+         "from MODIS. Wildfire plumes, Saharan dust outbreaks and pollution episodes " +
+         "show as bright bands; aerosols are also the largest source of uncertainty " +
+         "in climate forcing." },
+  "lst": { rec: "this map: 2022-10 → present · MODIS has measured since 2000, but older dates aren't served as map tiles", int: "daily (one daytime satellite pass)", sp: "1 km grid",
+    sum: "The temperature of the ground itself (not the air above it), measured by " +
+         "MODIS thermal infrared. Coverage on any single day is patchy by nature: " +
+         "only cloud-free pixels seen on that day's pass can be measured — the gaps " +
+         "are clouds, not missing data. Deserts exceed 60 °C; cities show as heat " +
+         "islands." },
+  "chlor": { rec: "this map: 2024-02 → present (PACE mission) · earlier ocean-colour missions reach back to 1997", int: "daily", sp: "~1.2 km",
+    sum: "Phytoplankton concentration inferred from the colour of the ocean, from " +
+         "NASA's newest ocean-colour mission (PACE). Phytoplankton are the base of " +
+         "the marine food web and fix about as much carbon as all land plants; " +
+         "blooms trace nutrient-rich currents and upwelling." },
+  "salinity": { rec: "2015-04 → present (2024 data gap)", int: "monthly composite", sp: "~60 km",
+    sum: "How salty the ocean surface is, sensed by SMAP's L-band radiometer. " +
+         "Salinity traces the water cycle (river plumes, evaporation, rainfall) and " +
+         "sets seawater density — a key control on the deep overturning circulation " +
+         "watched in the AMOC tab. Same quantity as ESA's SMOS mission." },
+  "gpcp": { rec: "measurements 1979 → present · the map shows the average over the whole record (not one date)", int: "source: monthly · shown: mean annual total", sp: "2.5° (~275 km)",
+    sum: "The long-term average of global rainfall: gauge and satellite records " +
+         "blended since 1979, shown here as mean annual precipitation. The tropical " +
+         "rain band, monsoon regions and desert belts emerge cleanly — this is " +
+         "'where it rains on average', complementing IMERG's 'where it rains now'." },
+  "oisst": { rec: "average of the years 1991–2020 (a fixed 30-year baseline, not one date)", int: "source: monthly · shown: annual mean", sp: "0.25° source → 1° shown",
+    sum: "The 30-year (1991–2020) average state of sea surface temperature from " +
+         "NOAA's OISST record — the baseline against which today's anomalies are " +
+         "judged. Compare with the live MUR layer to see how the current ocean " +
+         "departs from its long-term normal." },
+  "eobs": { rec: "measurements 1950 → 2024 (v31) · the map shows the average over the whole record (not one date)", int: "source: daily gauges · shown: mean annual total", sp: "0.25° (~28 km), Europe land",
+    sum: "Europe's rainfall climate from thousands of ground rain gauges gridded " +
+         "since 1950 (Copernicus E-OBS). At 0.25° the orographic detail appears — " +
+         "wet Atlantic coasts and Alpine flanks, dry Iberian and Pannonian " +
+         "interiors — that global products blur away. Land only, Europe only." },
+  "meteoswiss": { rec: "average of the years 1991–2020 (the official 'normal period', not one date)", int: "one 30-year average", sp: "~2 km, Switzerland",
+    sum: "The official Swiss precipitation normal at ~2 km, from MeteoSwiss's " +
+         "open-data gridded climatology. The sharpest view in the app of how " +
+         "mountains make rain: valley floors receive under 600 mm/yr while nearby " +
+         "Alpine crests exceed 3,000 mm/yr." },
+  "nightlights": { rec: "a composite of the whole year 2016 (fixed — ignores the date selector)", int: "one composite of a full year", sp: "500 m grid",
+    sum: "Human presence seen from orbit at night: a cloud-free annual composite of " +
+         "VIIRS low-light imagery (Black Marble). Cities, highways, gas flares and " +
+         "fishing fleets shine; it doubles as a proxy map of energy use and " +
+         "economic activity." },
 };
 
 function layerTipHtml(id) {
   const f = LAYER_FACTS[id];
   if (!f) return "";
   return `<div class="layer-tip">
+      ${f.sum ? `<p class="tip-sum">${f.sum}</p>` : ""}
       <div><span>Recorded</span>${f.rec}</div>
       <div><span>Interval</span>${f.int}</div>
       <div><span>Spatial</span>${f.sp}</div>

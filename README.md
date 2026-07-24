@@ -59,18 +59,24 @@ Or just open the GitHub Pages deployment (enabled via the included workflow).
 ## Repository layout
 
 ```
+CLAUDE.md               standing instructions + holistic project documentation
 index.html              the app shell
 src/app.js              CesiumJS globe, GIBS layers, stations, catalog UI
 src/style.css           dark UI theme
-data/catalog.json       241-dataset open climate data catalog (machine-readable)
+data/catalog.json       244-dataset open climate data catalog (machine-readable)
 data/stations.geojson   AMOC arrays + GHG reference stations
 data/rapid_moc.json     RAPID 26.5N AMOC transport series
 data/sealevel.json      sea-level budget (Frederikse 2020) + NOAA altimetry
 data/climatetrace.json  top-1000 facility emitters · data/argo.json  active float fleet
+data/*.json             gridded climatologies (gpcp, eobs, oisst, meteoswiss), glaciers, gistemp
 scripts/refresh_data.py regenerates every snapshot above
+scripts/build_primer.py rebuilds docs/PRIMER.pdf (background-knowledge primer)
 docs/CATALOG.md         the catalog as a readable reference document
 .github/workflows/      GitHub Pages deployment
 ```
+
+Conventions and the full record of what has been built live in
+[CLAUDE.md](CLAUDE.md) — read it before contributing.
 
 ## Analysis notes
 

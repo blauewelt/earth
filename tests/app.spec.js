@@ -809,3 +809,27 @@ test("every layer entry has a hover card with record, interval, spatial facts", 
   const metas = await page.locator("#layer-list .meta").allTextContents();
   for (const m of metas) expect(m).not.toMatch(/· from \d{4}/);
 });
+
+test("every layer hover card carries a gist paragraph in clear language", async ({ page }) => {
+  // every tip (dynamic and static) has a non-trivial summary paragraph
+  const sums = await page.evaluate(() =>
+    [...document.querySelectorAll("#panel-layers .layer-tip")].map((t) => ({
+      sum: t.querySelector(".tip-sum")?.textContent.trim() || "",
+      rec: [...t.querySelectorAll("div")].find((d) => d.textContent.startsWith("Recorded"))?.textContent || "",
+    })));
+  expect(sums.length).toBeGreaterThanOrEqual(22);
+  for (const s of sums) {
+    expect(s.sum.length, "gist paragraph present").toBeGreaterThan(80);
+  }
+  // no ambiguous "record from <year>" shorthand anywhere (misread as data
+  // being fixed to that year) — instrument-vs-tiles must be spelled out
+  for (const s of sums) expect(s.rec).not.toMatch(/record from \d{4}\)/);
+  // LST specifically: tile availability vs instrument record is explicit,
+  // and the patchy clear-sky coverage is explained in the gist
+  const lst = page.locator('#layer-list .layer-item', { hasText: "Land surface temperature" });
+  await expect(lst.locator(".layer-tip")).toContainText("aren't served as map tiles");
+  await expect(lst.locator(".layer-tip")).toContainText("clouds, not missing data");
+  // climatologies say "not one date"
+  const ms = page.locator('#layer-list .layer-item', { hasText: "MeteoSwiss" });
+  await expect(ms.locator(".layer-tip")).toContainText("not one date");
+});
