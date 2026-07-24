@@ -155,6 +155,7 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_NDSI_Snow_Cover_H.svg",
     doc: "https://nsidc.org/data/mod10a1",
     layer: "MODIS_Terra_NDSI_Snow_Cover",
+    deltaRange: 50,  // NDSI %, snow-line advance/retreat between dates
     title: "Snow cover (MODIS NDSI)",
     ext: "png", tms: "500m", maxLevel: 7,
     start: "2000-02-24", timed: true, on: false,
@@ -166,6 +167,7 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_Combined_Value_Added_AOD_H.svg",
     doc: "https://atmosphere-imager.gsfc.nasa.gov/products/aerosol",
     layer: "MODIS_Combined_Value_Added_AOD",
+    aggregable: true,  // mean AOD over a window is standard; day-vs-day differencing is noise
     title: "Aerosol optical depth (MODIS)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2017-04-19", timed: true, on: false,
@@ -189,6 +191,7 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_Chlorophyll_H.svg",
     doc: "https://oceancolor.gsfc.nasa.gov/",
     layer: "OCI_PACE_Chlorophyll_a",
+    aggregable: true,  // time-averaging fills swath/cloud gaps; differencing a log-scaled field is unsound
     title: "Chlorophyll-a (NASA Ocean Color, PACE)",
     ext: "png", tms: "1km", maxLevel: 6,
     start: "2024-02-25", timed: true, on: false,
@@ -200,6 +203,7 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/SMAP_Sea_Surface_Salinity_H.svg",
     doc: "https://www.catds.fr/",
     layer: "SMAP_L3_Sea_Surface_Salinity_CAP_Monthly",
+    deltaRange: 1.5,  // PSU, freshening/salinification between dates
     title: "Sea surface salinity (SMAP, monthly)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2015-04-01", timed: true, monthly: true, on: false,
@@ -704,7 +708,10 @@ async function sstMeanField(cfg, dates, x, y, level, lut, ctx) {
 class AggregateProvider {
   constructor(cfg, endDate, windowDays) {
     this._cfg = cfg;
-    this._dates = windowSampleDates(endDate, windowDays);
+    // Snap sample dates to what the layer can actually serve (monthly layers →
+    // first-of-month) and dedupe, so a 60-day window over a monthly product
+    // averages 2-3 distinct months instead of re-counting the same composite.
+    this._dates = [...new Set(windowSampleDates(endDate, windowDays).map((d) => gibsTime(cfg, d)))];
     this._window = windowDays;
     this.tilingScheme = new GIBSGeographicTilingScheme();
     this.rectangle = this.tilingScheme.rectangle;
@@ -901,10 +908,12 @@ function addLayer(cfg) {
   const comparing = cmp && cfg.timed;
   const deltaable = cfg.deltaRange != null;              // continuous field with an invertible colormap
   const win = state.windowDays;
-  // Rolling-window mean render applies to every continuous colormapped layer
-  // (SST, SST anomalies, sea ice, land surface temperature) — essential for
-  // clear-sky products where any single day is mostly gaps.
-  const windowed = win > 1 && deltaable && !!cfg.colormap && cfg.timed;
+  // Rolling-window mean render applies to every layer whose values may be
+  // meaningfully averaged: differenceable fields (deltaRange) plus fields
+  // flagged aggregable-only (chlorophyll, aerosol — averaging fills gaps, but
+  // day-vs-day differencing would be unsound). Essential for clear-sky
+  // products where any single day is mostly gaps.
+  const windowed = win > 1 && (deltaable || cfg.aggregable) && !!cfg.colormap && cfg.timed;
 
   const add = (provider) => viewer.imageryLayers.addImageryProvider(provider);
 
@@ -1068,9 +1077,10 @@ function updateDeltaHint() {
     const rasterNoDelta = Object.values(state.layers)
       .some((e) => e.layer && e.cfg.timed && e.cfg.deltaRange == null);
     if (rasterNoDelta) {
-      hint.innerHTML = "⚠ Computed difference works on continuous rasters (SST, SST anomalies, " +
-        "sea ice, land surface temperature). Precipitation &amp; aerosol are instantaneous and noisy, " +
-        "so they are shown as-is.";
+      hint.innerHTML = "⚠ Computed difference works on continuous rasters (SST &amp; anomalies, " +
+        "sea ice, snow, land temperature, salinity). Precipitation is instantaneous and noisy, and " +
+        "aerosol &amp; chlorophyll too erratic day-to-day, so those are shown as-is " +
+        "(aerosol &amp; chlorophyll can still be time-averaged with the Aggregate slider).";
       hint.classList.remove("hidden");
       return;
     }

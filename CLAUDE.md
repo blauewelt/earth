@@ -49,8 +49,30 @@ A new layer is not done until it has **all** of:
 3. **A legend** if colormapped (GIBS colormap-driven or ramp-driven for grid
    layers) with hover value read-out.
 4. **Value probe support** — click/dwell on the globe reads the actual value.
-5. **Computed-difference support** (`deltaRange`) if and only if the field is
-   continuous (see §Domain lore — precipitation is not differenceable).
+5. **An explicit aggregation/difference decision.** Every timed raster layer
+   must declare one of three postures, and the choice must be justified in a
+   code comment next to the flag:
+   - `deltaRange: <n>` — continuous field: both time-averaging (Aggregate
+     slider) and per-pixel differencing are sound.
+   - `aggregable: true` — averaging over a window is sound (fills swath/cloud
+     gaps) but day-vs-day differencing is not (log-scaled or too erratic).
+   - neither — the layer is shown as-is (photographic composites,
+     instantaneous sparse fields like precipitation).
+
+   Current matrix (keep in sync when adding layers):
+
+   | Layer | Aggregate | Difference | Why |
+   |---|---|---|---|
+   | SST (MUR), SST anomalies | ✓ | ✓ | continuous, gap-free L4 |
+   | Sea ice (AMSR2) | ✓ | ✓ | continuous fraction |
+   | Snow cover (NDSI) | ✓ | ✓ | continuous %, clear-sky gaps fill by averaging |
+   | Land surface temp (MODIS) | ✓ | ✓ | continuous K, clear-sky gaps fill by averaging |
+   | Salinity (SMAP monthly) | ✓ | ✓ | continuous PSU; sample dates snap & dedupe to months |
+   | Chlorophyll-a (PACE) | ✓ | ✗ | log-scaled; differencing bin-centres of a log palette is unsound |
+   | Aerosol optical depth | ✓ | ✗ | windowed mean is standard; day-vs-day is noise |
+   | Precipitation (IMERG daily & 30-min) | ✗ | ✗ | instantaneous, log, mostly transparent — use the climatology grids |
+   | True colour, night lights | ✗ | ✗ | photographs, no colormap to invert |
+   | Grid climatologies | ✗ | ✗ | already multi-decade averages, not timed |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set
    `globe: true` and append "Live globe layer in this app." to its notes.
 7. **Tests** — at least one behavioural test in `tests/app.spec.js` and, if it
@@ -129,8 +151,10 @@ The dev sandbox's *browser* cannot reach external hosts (curl can). Therefore:
 - **Precipitation cannot be per-pixel differenced.** IMERG is an instantaneous,
   log-scaled, mostly-transparent field; differencing two snapshots measures
   overpass luck. Rain climate questions are answered by the climatology grids
-  (GPCP/E-OBS/MeteoSwiss) instead. `deltaRange` is set only on continuous
-  fields (SST, SST anomalies, sea ice, LST).
+  (GPCP/E-OBS/MeteoSwiss) instead. `deltaRange` marks fully continuous fields
+  (SST, SST anomalies, sea ice, snow, LST, salinity); `aggregable: true` marks
+  average-but-don't-difference fields (chlorophyll, aerosol) — see the matrix
+  in Part 1 §2.5.
 - **Monthly composites lag.** A monthly GIBS layer (SMAP salinity) 404s for the
   current month; `gibsTime()` snaps monthly layers to first-of-month AND falls
   back to the previous month when the requested month is the current one.
@@ -170,8 +194,9 @@ rectangle) · OISST v2.1 SST 1991–2020 (1°) · MeteoSwiss Swiss precip normal
 **Analysis features:**
 - *Comparison*: side-by-side split (draggable divider) or computed per-pixel
   difference vs 1/2/5/10/20 years ago, for continuous layers.
-- *Aggregation*: rolling window 1–730 days for every continuous colormapped
-  layer (SST, SST anomalies, sea ice, LST), orthogonal to comparison. The mean
+- *Aggregation*: rolling window 1–730 days for every layer in the aggregation
+  matrix (SST & anomalies, sea ice, snow, LST, salinity, chlorophyll, aerosol),
+  orthogonal to comparison. The mean
   is per pixel with missing samples excluded: each pixel divides by the number
   of sampled days on which it was actually observed (`sum[p]/cnt[p]`), so
   clear-sky products fill their cloud gaps; only never-observed pixels stay

@@ -870,3 +870,51 @@ test("aggregation generalises to LST and fills clear-sky gaps", async ({ page })
   expect(ui.isAgg).toBe(true);
   expect(ui.name).toBe("AggregateProvider");
 });
+
+test("aggregation/difference matrix: every timed raster has an explicit posture", async ({ page }) => {
+  const m = await page.evaluate(() => {
+    const out = {};
+    for (const l of window.__earth.GIBS_LAYERS) {
+      out[l.id] = { delta: l.deltaRange != null, agg: l.deltaRange != null || !!l.aggregable,
+                    timed: !!l.timed, grid: !!l.grid };
+    }
+    return out;
+  });
+  // both average & difference: fully continuous fields
+  for (const id of ["sst", "sst-anom", "seaice", "snow", "lst", "salinity"]) {
+    expect(m[id].delta, `${id} differenceable`).toBe(true);
+  }
+  // average-only: sound to time-average, unsound to difference day-vs-day
+  for (const id of ["chlor", "aod"]) {
+    expect(m[id].agg, `${id} aggregable`).toBe(true);
+    expect(m[id].delta, `${id} not differenceable`).toBe(false);
+  }
+  // neither: photographs and instantaneous sparse fields
+  for (const id of ["viirs-truecolor", "nightlights", "precip", "precip-30min"]) {
+    expect(m[id].delta, `${id} no delta`).toBe(false);
+    expect(m[id].agg, `${id} no aggregate`).toBe(false);
+  }
+  // a window turns an aggregable-only layer into an AggregateProvider too
+  await page.check('#layer-list input[data-id="aod"]');
+  await page.evaluate(() => {
+    const s = document.getElementById("window-days");
+    s.value = "30";
+    s.dispatchEvent(new Event("change"));
+  });
+  const aod = await page.evaluate(() => {
+    const e = window.__earth.state.layers["aod"];
+    return { isAgg: e.isAggregate, name: e.layer.imageryProvider.constructor.name };
+  });
+  expect(aod.isAgg).toBe(true);
+  expect(aod.name).toBe("AggregateProvider");
+  // monthly salinity: sample dates snap to first-of-month and dedupe
+  const sal = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "salinity");
+    const p = new E.AggregateProvider(cfg, "2023-06-15", 60);
+    return { dates: p._dates, allFirsts: p._dates.every((d) => d.endsWith("-01")) };
+  });
+  expect(sal.allFirsts).toBe(true);
+  expect(sal.dates.length).toBeLessThanOrEqual(3);       // 60 days ≈ 2-3 distinct months
+  expect(new Set(sal.dates).size).toBe(sal.dates.length); // deduped
+});

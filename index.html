@@ -66,12 +66,13 @@
         <label class="check-inline"><input type="checkbox" id="toggle-grayscale" /> Grayscale globe</label>
       </div>
       <p class="hint">Daily NASA GIBS imagery. <strong>Aggregate</strong> averages any continuous layer
-        (SST, SST anomalies, sea ice, land surface temperature) per pixel over the past N days ending on
-        the chosen date (1–730) — missing pixels (clouds, night) are excluded and each pixel divides by
-        the days it was actually observed, so cloudy-day gaps fill in. Independent of the comparison
-        mode. Side-by-side: drag the divider (left = past, right = current). Computed difference:
-        per-pixel "now − then" for the same continuous layers. Averaged views cap zoom to stay
-        responsive and sample up to 12 days from the window.</p>
+        (SST &amp; anomalies, sea ice, snow, land temperature, salinity, chlorophyll, aerosol) per pixel
+        over the past N days ending on the chosen date (1–730) — missing pixels (clouds, night) are
+        excluded and each pixel divides by the days it was actually observed, so cloudy-day gaps fill in.
+        Independent of the comparison mode. Side-by-side: drag the divider (left = past, right =
+        current). Computed difference: per-pixel "now − then" for the continuous layers except
+        chlorophyll &amp; aerosol (too erratic day-to-day; precipitation is excluded from both).
+        Averaged views cap zoom to stay responsive and sample up to 12 days from the window.</p>
       <p class="hint hidden" id="delta-hint">⚠ Computed difference works on continuous raster layers
         (SST, SST anomalies, sea ice). Precipitation/aerosol are instantaneous &amp; noisy, and point or
         snapshot layers — glaciers, emissions, floats, biodiversity — have no per-pixel time series to
