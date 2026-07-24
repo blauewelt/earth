@@ -30,6 +30,15 @@
         <label for="layer-date">Date</label>
         <input type="date" id="layer-date" />
       </div>
+      <div class="control-row date-steps" id="date-steps">
+        <button data-step="-1y" title="back one year">−1y</button>
+        <button data-step="-1m" title="back one month">−1m</button>
+        <button data-step="-1d" title="back one day">−1d</button>
+        <button data-step="+1d" title="forward one day">+1d</button>
+        <button data-step="+1m" title="forward one month">+1m</button>
+        <button data-step="+1y" title="forward one year">+1y</button>
+        <button data-step="today" title="jump to the most recent date">Today</button>
+      </div>
       <div class="control-row">
         <label for="compare-select">Compare</label>
         <select id="compare-select">
@@ -54,7 +63,7 @@
         <span id="window-value" class="window-value">single day</span>
       </div>
       <div class="control-row">
-        <label class="check-inline"><input type="checkbox" id="toggle-grayscale" /> Grayscale globe (makes coloured overlays &amp; differences pop)</label>
+        <label class="check-inline"><input type="checkbox" id="toggle-grayscale" /> Grayscale globe</label>
       </div>
       <p class="hint">Daily NASA GIBS imagery. <strong>Aggregate</strong> averages sea-surface temperature over
         the past N days ending on the chosen date (1–730; drag to <em>past 30 / 365 days</em>) — this is

@@ -1370,6 +1370,41 @@ function buildLayerPanel() {
     refreshTimedLayers();
     if (sstEnsembleLayer) updateEnsembleLayer();
   });
+
+  // Quick date stepping: real calendar arithmetic (−1m from Mar 31 → Feb 28,
+  // −1y from Feb 29 → Feb 28), clamped to [layer availability, most recent].
+  document.getElementById("date-steps").addEventListener("click", (e) => {
+    const step = e.target.getAttribute?.("data-step");
+    if (!step) return;
+    let next;
+    if (step === "today") {
+      next = defaultDate();
+    } else {
+      const d = new Date(state.date + "T00:00:00Z");
+      const n = step.startsWith("-") ? -1 : 1;
+      const unit = step.slice(-1);
+      if (unit === "d") d.setUTCDate(d.getUTCDate() + n);
+      else if (unit === "m") {
+        const day = d.getUTCDate();
+        d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + n);
+        const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+        d.setUTCDate(Math.min(day, last));
+      } else {
+        const day = d.getUTCDate(), mon = d.getUTCMonth();
+        d.setUTCDate(1); d.setUTCFullYear(d.getUTCFullYear() + n); d.setUTCMonth(mon);
+        const last = new Date(Date.UTC(d.getUTCFullYear(), mon + 1, 0)).getUTCDate();
+        d.setUTCDate(Math.min(day, last));
+      }
+      next = d.toISOString().slice(0, 10);
+    }
+    if (next > defaultDate()) next = defaultDate();
+    if (next < "2000-01-01") next = "2000-01-01";
+    if (next === state.date) return;
+    state.date = next;
+    dateInput.value = next;
+    refreshTimedLayers();
+    if (sstEnsembleLayer) updateEnsembleLayer();
+  });
 }
 
 /* ----------------------------------------------------- point data layers */

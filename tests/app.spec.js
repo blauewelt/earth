@@ -755,3 +755,26 @@ test("new native GIBS layers toggle; salinity snaps to first-of-month", async ({
   expect(info.currentMonthFallback).toMatch(/-01$/);
   expect(page.__errors).toEqual([]);
 });
+
+test("date stepper: calendar-correct steps, clamped to available range", async ({ page }) => {
+  const start = await page.inputValue("#layer-date");
+  await page.click('#date-steps button[data-step="-1y"]');
+  const back1y = await page.evaluate(() => window.__earth.state.date);
+  expect(Number(back1y.slice(0, 4))).toBe(Number(start.slice(0, 4)) - 1);
+  expect(back1y.slice(5)).toBe(start.slice(5));            // same month-day
+  await page.click('#date-steps button[data-step="-1m"]');
+  const back1m = await page.evaluate(() => window.__earth.state.date);
+  expect(back1m < back1y).toBe(true);
+  await page.click('#date-steps button[data-step="+1d"]');
+  const fwd = await page.evaluate(() => window.__earth.state.date);
+  expect(fwd > back1m).toBe(true);
+  // Today returns to the most recent date, and +1d cannot pass it
+  await page.click('#date-steps button[data-step="today"]');
+  const today = await page.evaluate(() => window.__earth.state.date);
+  expect(today).toBe(start);                                // default IS most recent
+  await page.click('#date-steps button[data-step="+1d"]');
+  expect(await page.evaluate(() => window.__earth.state.date)).toBe(today);
+  // stepping refreshes timed layers (date input mirrors state)
+  expect(await page.inputValue("#layer-date")).toBe(today);
+  expect(page.__errors).toEqual([]);
+});

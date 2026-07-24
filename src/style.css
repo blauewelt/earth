@@ -54,6 +54,13 @@ nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
 }
 #catalog-search { width: 100%; margin-bottom: 4px; }
 
+.date-steps { gap: 4px; margin-top: -2px; }
+.date-steps button {
+  flex: 1; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 0; font-size: 12px; cursor: pointer;
+}
+.date-steps button:hover { border-color: var(--accent, #3987e5); color: var(--accent, #3987e5); }
+
 .hint { font-size: 11px; color: var(--fg-dim); margin: 6px 0 10px; }
 
 .layer-item {
