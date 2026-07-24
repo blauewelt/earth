@@ -264,6 +264,8 @@ footer a { color: var(--fg-dim); }
 
 /* ---- species selector ---- */
 #species-select { flex: 1; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; font-size: 12px; }
+#species-select optgroup { color: var(--fg-dim); font-style: normal; font-weight: 600; background: var(--bg); }
+#species-select option { color: var(--fg); font-weight: 400; background: var(--bg); }
 
 /* ---- hover value probe ---- */
 #value-probe {

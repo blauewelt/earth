@@ -1731,23 +1731,52 @@ document.getElementById("glacier-mode").addEventListener("change", () => {
 let gbifLayer = null;
 let gbifSpecies = null;
 
+let gbifData = null;
 async function initSpeciesUI() {
   const sel = document.getElementById("species-select");
   if (!sel) return;
-  gbifSpecies = (await (await fetch("data/species.json")).json()).species;
+  gbifData = await (await fetch("data/species.json")).json();
+  gbifSpecies = gbifData.species;
+  const fmt = (n) => Number(n).toLocaleString();
+
+  // Broad taxonomic categories (kingdoms, major groups, humans), each an
+  // <optgroup>, so the whole 3.9 B partitions into pickable slices.
+  for (const cat of gbifData.categories || []) {
+    const og = document.createElement("optgroup");
+    og.label = cat.label;
+    for (const it of cat.items) {
+      const o = document.createElement("option");
+      o.value = it.key;
+      o.innerHTML = `${it.name} (${fmt(it.records)})`;
+      o.dataset.note = it.name;
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+  // Climate-indicator species
+  const sog = document.createElement("optgroup");
+  sog.label = "Climate-indicator species";
   for (const s of gbifSpecies) {
     const o = document.createElement("option");
     o.value = s.key;
-    o.textContent = `${s.common} (${Number(s.records).toLocaleString()} records)`;
-    o.title = s.note;
-    sel.appendChild(o);
+    o.innerHTML = `${s.common} (${fmt(s.records)})`;
+    o.dataset.note = s.note;
+    sog.appendChild(o);
   }
+  sel.appendChild(sog);
+
+  // Composition note explaining what "all recorded life" contains
+  const noteEl = document.getElementById("species-note");
+  const defaultNote = gbifData.note || noteEl.textContent;
+  noteEl.textContent = defaultNote;
+
   document.getElementById("toggle-gbif").addEventListener("change", updateGbifLayer);
   sel.addEventListener("change", () => {
     document.getElementById("toggle-gbif").checked = true;
     updateGbifLayer();
+    const opt = sel.selectedOptions[0];
     const s = gbifSpecies.find((x) => String(x.key) === sel.value);
-    document.getElementById("species-note").textContent = s ? s.note : "";
+    noteEl.textContent = sel.value === "" ? defaultNote : (s ? s.note : (opt?.dataset.note || ""));
   });
 }
 
@@ -2473,6 +2502,7 @@ window.__earth = {
   updateGbifLayer,
   get gbifLayer() { return gbifLayer; },
   get gbifSpecies() { return gbifSpecies; },
+  get gbifData() { return gbifData; },
   get catalog() { return CATALOG; },
   GridProvider,
   loadGrid,

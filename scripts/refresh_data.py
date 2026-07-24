@@ -474,13 +474,86 @@ def meteoswiss():
                 ramp="precip", vmin=0, vmax=2500)
 
 
+def species():
+    """GBIF biodiversity picker: live occurrence counts per broad taxonomic group
+    (kingdoms, major animal/plant classes, humans) plus curated climate-indicator
+    species. The 'all recorded life' total splits into eight kingdoms; a residual
+    is identified only to 'life' (no kingdom)."""
+    def cnt(k):
+        u = f"https://api.gbif.org/v1/occurrence/search?limit=0&taxonKey={k}"
+        return fetch_json(u)["count"]
+    total = fetch_json("https://api.gbif.org/v1/occurrence/search?limit=0")["count"]
+    print(f"GBIF: total occurrences {total:,}")
+    groups = {
+        "Kingdoms (all life splits into these)": [
+            (1, "Animals (Animalia)"), (6, "Plants (Plantae)"), (5, "Fungi"),
+            (3, "Bacteria"), (4, "Algae &amp; protists (Chromista)"),
+            (7, "Protozoa"), (2, "Archaea"), (8, "Viruses")],
+        "Major animal groups": [
+            (212, "Birds (Aves)"), (216, "Insects (Insecta)"), (359, "Mammals (Mammalia)"),
+            (131, "Amphibians (Amphibia)"), (11592253, "Reptiles: lizards &amp; snakes (Squamata)"),
+            (121, "Sharks &amp; rays (Elasmobranchii)"), (367, "Arachnids (Arachnida)"),
+            (225, "Snails &amp; slugs (Gastropoda)")],
+        "Major plant groups": [
+            (220, "Flowering plants — dicots (Magnoliopsida)"),
+            (196, "Monocots: grasses, orchids (Liliopsida)")],
+        "Us": [(2436436, "Humans (Homo sapiens)")],
+    }
+    categories, kingdom_sum = [], 0
+    for label, items in groups.items():
+        out = []
+        for k, name in items:
+            c = cnt(k)
+            out.append({"key": k, "name": name, "records": c})
+            if label.startswith("Kingdoms"):
+                kingdom_sum += c
+        categories.append({"label": label, "items": out})
+    indicators = [
+        {"key": 2480876, "common": "Little egret", "records": cnt(2480876),
+         "note": "Wetland wading bird expanding poleward as winters warm — a visible marker of range shift."},
+        {"key": 2475443, "common": "European bee-eater", "records": cnt(2475443),
+         "note": "Warmth-loving bird now breeding far poleward of its former Mediterranean range."},
+        {"key": 1898544, "common": "Comma butterfly", "records": cnt(1898544),
+         "note": "One of the fastest range-expanding butterflies as the climate warms."},
+        {"key": 1340503, "common": "Buff-tailed bumblebee", "records": cnt(1340503),
+         "note": "Pollinator whose range and phenology are shifting poleward with temperature."},
+        {"key": 2374149, "common": "Atlantic mackerel", "records": cnt(2374149),
+         "note": "Fish stock shifting poleward with ocean warming, straining fishery treaties."},
+        {"key": 2481661, "common": "Emperor penguin", "records": cnt(2481661),
+         "note": "Sea-ice-dependent breeder; a climate-vulnerability icon of Antarctica."},
+        {"key": 7673664, "common": "Staghorn coral", "records": cnt(7673664),
+         "note": "Reef-building coral acutely sensitive to marine heatwaves and bleaching."},
+        {"key": 5219303, "common": "Arctic fox", "records": cnt(5219303),
+         "note": "Cold-adapted mammal squeezed poleward by the advancing red fox."},
+    ]
+    payload = {
+        "source": "GBIF.org occurrence counts (live snapshot). Map tiles: GBIF occurrence density.",
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "total": total, "unplaced": total - kingdom_sum,
+        "note": ("GBIF holds ~%.1f billion dated, located records of where life has been observed. "
+                 "Every record rolls up into one of eight kingdoms; ~%.1f M are identified only to "
+                 "'life' (no kingdom). Coverage is wildly uneven — birds alone are the majority of "
+                 "animal records, a birdwatching effect, not because birds outnumber insects. Humans "
+                 "are recorded too (Homo sapiens), but GBIF restricts human occurrences for privacy, "
+                 "so despite 8 billion of us only tens of thousands of records exist."
+                 % (total / 1e9, (total - kingdom_sum) / 1e6)),
+        "categories": categories,
+        "species": indicators,
+    }
+    with open(os.path.join(DATA, "species.json"), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    print(f"  wrote species.json: {sum(len(c['items']) for c in categories)} groups + "
+          f"{len(indicators)} species; unplaced {total - kingdom_sum:,}")
+
+
 if __name__ == "__main__":
     os.makedirs("/tmp/nc", exist_ok=True)
     default = ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
     which = sys.argv[1:] or default
     fns = {"climatetrace": climatetrace, "argo": argo, "rapid": rapid,
            "sealevel": sealevel, "glaciers": glaciers, "gistemp": gistemp,
-           "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss}
+           "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss,
+           "species": species}
     for w in which:
         fns[w]()
     print("done")

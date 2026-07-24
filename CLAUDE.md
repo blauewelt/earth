@@ -212,8 +212,13 @@ rectangle) · OISST v2.1 SST 1991–2020 (1°) · MeteoSwiss Swiss precip normal
 **Point/data layers:** Climate TRACE top-1000 emitters · Argo active floats ·
 AMOC & GHG stations (RAPID, OSNAP, MOVE, SAMBA, Mauna Loa, Jungfraujoch…) ·
 RGI v7 glaciers (274k; colour by extent or by Hugonnet 2000–2020 melt rate
-with diverging legend) · GBIF biodiversity occurrences with climate-indicator
-species picker.
+with diverging legend) · GBIF biodiversity occurrences with a grouped picker:
+broad taxonomic categories (8 kingdoms, major animal/plant classes, humans)
+plus curated climate-indicator species. `data/species.json` carries live GBIF
+counts (`scripts/refresh_data.py species`); the default note explains that the
+~3.9 B "all recorded life" splits into eight kingdoms with ~14.5 M unplaced,
+that birds dominate (~60%, a birdwatching bias), and that Homo sapiens is
+present but privacy-restricted to ~tens of thousands of records.
 
 **Dashboards (tabs):** *Temp* — GISTEMP v4 land vs land+ocean warming with
 trends; *AMOC* — RAPID 26.5°N overturning transport series + stats;

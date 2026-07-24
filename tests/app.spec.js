@@ -490,24 +490,44 @@ test("sea-level dashboard loads the budget, stats and chart", async ({ page }) =
   await expect(page.locator("#sl-tooltip")).toContainText("observed");
 });
 
-test("biodiversity (GBIF) layer toggles and filters by species", async ({ page }) => {
-  // species selector is populated from the bundled curated list (+ the all-life default)
-  await expect
-    .poll(() => page.evaluate(() => document.getElementById("species-select").options.length))
-    .toBeGreaterThanOrEqual(9); // 8 indicator species + "all recorded life"
+test("biodiversity (GBIF) layer: broad taxonomic groups + indicator species", async ({ page }) => {
+  // selector now offers all-life + broad-group optgroups (kingdoms, animal &
+  // plant groups, humans) + indicator species
+  const opts = await page.evaluate(() => {
+    const sel = document.getElementById("species-select");
+    return {
+      total: sel.options.length,
+      groups: [...sel.querySelectorAll("optgroup")].map((g) => g.label),
+    };
+  });
+  expect(opts.total).toBeGreaterThanOrEqual(25);            // 8 kingdoms + 8 animal + 2 plant + human + 8 species + default
+  expect(opts.groups).toContain("Kingdoms (all life splits into these)");
+  expect(opts.groups).toContain("Major animal groups");
+  expect(opts.groups).toContain("Climate-indicator species");
   // toggling on adds a GBIF imagery layer (all-life density, no taxonKey)
   await page.check("#toggle-gbif");
   let u = await page.evaluate(() => window.__earth.gbifLayer?.imageryProvider.url);
   expect(u).toContain("api.gbif.org/v2/map/occurrence/density");
   expect(u).not.toContain("taxonKey");
   expect(u).toContain("purpleYellow.point");
-  // selecting a species rebuilds the layer with that taxonKey and updates the note
+  // the default note explains the composition of "all recorded life" incl. humans
+  await expect(page.locator("#species-note")).toContainText("kingdom");
+  await expect(page.locator("#species-note")).toContainText("Homo sapiens");
+  // picking a kingdom (Animalia, key 1) filters the map by that taxonKey
+  await page.selectOption("#species-select", "1");
+  u = await page.evaluate(() => window.__earth.gbifLayer.imageryProvider.url);
+  expect(u).toContain("taxonKey=1");
+  expect(u).toContain("fire.point");
+  // humans are present as their own pickable taxon
+  const human = await page.evaluate(() =>
+    [...document.querySelectorAll("#species-select option")].some((o) => /Homo sapiens/.test(o.textContent)));
+  expect(human).toBe(true);
+  // selecting an indicator species updates the note
   const key = await page.evaluate(() => window.__earth.gbifSpecies.find((s) => s.common === "Atlantic mackerel").key);
   await page.selectOption("#species-select", String(key));
   u = await page.evaluate(() => window.__earth.gbifLayer.imageryProvider.url);
   expect(u).toContain(`taxonKey=${key}`);
-  expect(u).toContain("fire.point");
-  await expect(page.locator("#species-note")).toContainText("north");
+  await expect(page.locator("#species-note")).toContainText("poleward");
   // toggling off removes the layer
   await page.uncheck("#toggle-gbif");
   expect(await page.evaluate(() => window.__earth.gbifLayer)).toBeNull();
