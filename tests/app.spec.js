@@ -920,3 +920,39 @@ test("aggregation/difference matrix: every timed raster has an explicit posture"
   expect(sal.dates.length).toBeLessThanOrEqual(3);       // 60 days ≈ 2-3 distinct months
   expect(new Set(sal.dates).size).toBe(sal.dates.length); // deduped
 });
+
+test("non-aggregatable layers are hidden + warned under an active window", async ({ page }) => {
+  const setWin = (v) => page.evaluate((val) => {
+    const s = document.getElementById("window-days"); s.value = String(val);
+    s.dispatchEvent(new Event("change"));
+  }, v);
+  // precipitation cannot be time-averaged; single day → it renders
+  await page.check('#layer-list input[data-id="precip"]');
+  let r = await page.evaluate(() => window.__earth.state.layers["precip"]);
+  expect(!!r.layer).toBe(true);
+  // a window suppresses it entirely rather than showing a misleading single day
+  await setWin(90);
+  r = await page.evaluate(() => {
+    const e = window.__earth.state.layers["precip"];
+    return { has: !!e.layer, suppressed: !!e.suppressed };
+  });
+  expect(r.has).toBe(false);
+  expect(r.suppressed).toBe(true);
+  await expect(page.locator("#delta-hint")).toBeVisible();
+  await expect(page.locator("#delta-hint")).toContainText("Precipitation rate");
+  await expect(page.locator("#delta-hint")).toContainText("hidden while");
+  // an aggregatable layer under the same window still shows (as an average)
+  const sst = await page.evaluate(() => {
+    const e = window.__earth.state.layers["sst"];
+    return { has: !!e.layer, agg: e.isAggregate };
+  });
+  expect(sst.has && sst.agg).toBe(true);
+  // returning to a single day restores the suppressed layer and clears the note
+  await setWin(1);
+  r = await page.evaluate(() => {
+    const e = window.__earth.state.layers["precip"];
+    return { has: !!e.layer, suppressed: !!e.suppressed };
+  });
+  expect(r.has).toBe(true);
+  expect(r.suppressed).toBe(false);
+});

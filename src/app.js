@@ -913,7 +913,21 @@ function addLayer(cfg) {
   // flagged aggregable-only (chlorophyll, aerosol — averaging fills gaps, but
   // day-vs-day differencing would be unsound). Essential for clear-sky
   // products where any single day is mostly gaps.
-  const windowed = win > 1 && (deltaable || cfg.aggregable) && !!cfg.colormap && cfg.timed;
+  const canWindow = (deltaable || cfg.aggregable) && !!cfg.colormap;
+  const windowed = win > 1 && canWindow && cfg.timed;
+
+  // While an aggregation window is active, everything on screen must actually
+  // BE an average. A timed raster that cannot be time-averaged (photographic
+  // true colour, instantaneous precipitation) would silently show one day's
+  // data under a "past N days" label — so it displays NOTHING instead, and
+  // the panel hint explains why. (Untimed composites and the climatology
+  // grids stay: they already are long-period averages.)
+  if (win > 1 && cfg.timed && !canWindow) {
+    entry.suppressed = true;
+    state.layers[cfg.id] = entry;
+    updateLegends();
+    return;
+  }
 
   const add = (provider) => viewer.imageryLayers.addImageryProvider(provider);
 
@@ -959,12 +973,15 @@ function removeLayer(id) {
   entry.cmpLayer = null;
   entry.isDelta = false;
   entry.isAggregate = false;
+  entry.suppressed = false;
   updateLegends();
 }
 
 function refreshTimedLayers() {
+  // Suppressed entries (hidden because the active window can't average them)
+  // must also refresh, so they reappear when the window returns to 1 day.
   for (const [id, entry] of Object.entries(state.layers)) {
-    if (entry.layer && entry.cfg.timed) {
+    if ((entry.layer || entry.suppressed) && entry.cfg.timed) {
       removeLayer(id);
       addLayer(entry.cfg);
     }
@@ -1059,33 +1076,46 @@ function glaciersActive() {
 function updateDeltaHint() {
   const hint = document.getElementById("delta-hint");
   if (!hint) return;
-  if (!state.compareYears) { hint.classList.add("hidden"); return; } // only when comparing
-  // Point/snapshot layers can't be compared over time (they have one state) —
-  // relevant in BOTH side-by-side and computed-difference modes.
-  if (pointLayerActive()) {
-    hint.innerHTML = glaciersActive()
-      ? "⚠ The glacier layer is a single inventory (Randolph Glacier Inventory, ~year 2000), " +
-        "so it can't be split or differenced by date — both sides would be identical. " +
-        "Glacier <em>change</em> needs a time series; see the Temp/Sea-level tabs for the ice-loss signal."
-      : "⚠ Point &amp; snapshot layers (emissions, floats, biodiversity) show a single state, " +
-        "so they don't split or difference by date.";
-    hint.classList.remove("hidden");
-    return;
+  const msgs = [];
+
+  // Aggregation warning — independent of comparison mode. A checked layer
+  // that can't be time-averaged is hidden while a window is active; say so.
+  const suppressed = Object.values(state.layers)
+    .filter((e) => e.suppressed).map((e) => e.cfg.title);
+  if (suppressed.length) {
+    msgs.push(`⚠ <strong>${suppressed.join(", ")}</strong>: hidden while ` +
+      `“${windowLabel(state.windowDays)}” aggregation is on — ` +
+      (suppressed.length > 1 ? "these layers show" : "this layer shows") +
+      " an instant, not an average, so a single day's picture under an averaged " +
+      "label would mislead. Set Aggregate back to <em>single day</em> to show " +
+      (suppressed.length > 1 ? "them" : "it") + " again.");
   }
-  // In computed-difference mode, instantaneous/log rasters aren't differenceable.
-  if (state.compareMode === "delta") {
-    const rasterNoDelta = Object.values(state.layers)
-      .some((e) => e.layer && e.cfg.timed && e.cfg.deltaRange == null);
-    if (rasterNoDelta) {
-      hint.innerHTML = "⚠ Computed difference works on continuous rasters (SST &amp; anomalies, " +
-        "sea ice, snow, land temperature, salinity). Precipitation is instantaneous and noisy, and " +
-        "aerosol &amp; chlorophyll too erratic day-to-day, so those are shown as-is " +
-        "(aerosol &amp; chlorophyll can still be time-averaged with the Aggregate slider).";
-      hint.classList.remove("hidden");
-      return;
+
+  if (state.compareYears) {
+    // Point/snapshot layers can't be compared over time (they have one state) —
+    // relevant in BOTH side-by-side and computed-difference modes.
+    if (pointLayerActive()) {
+      msgs.push(glaciersActive()
+        ? "⚠ The glacier layer is a single inventory (Randolph Glacier Inventory, ~year 2000), " +
+          "so it can't be split or differenced by date — both sides would be identical. " +
+          "Glacier <em>change</em> needs a time series; see the Temp/Sea-level tabs for the ice-loss signal."
+        : "⚠ Point &amp; snapshot layers (emissions, floats, biodiversity) show a single state, " +
+          "so they don't split or difference by date.");
+    } else if (state.compareMode === "delta") {
+      // In computed-difference mode, instantaneous/log rasters aren't differenceable.
+      const rasterNoDelta = Object.values(state.layers)
+        .some((e) => e.layer && e.cfg.timed && e.cfg.deltaRange == null);
+      if (rasterNoDelta) {
+        msgs.push("⚠ Computed difference works on continuous rasters (SST &amp; anomalies, " +
+          "sea ice, snow, land temperature, salinity). Precipitation is instantaneous and noisy, and " +
+          "aerosol &amp; chlorophyll too erratic day-to-day, so those are shown as-is " +
+          "(aerosol &amp; chlorophyll can still be time-averaged with the Aggregate slider).");
+      }
     }
   }
-  hint.classList.add("hidden");
+
+  hint.innerHTML = msgs.join("<br/>");
+  hint.classList.toggle("hidden", msgs.length === 0);
 }
 
 /* --------------------------------------------------------------- legends */

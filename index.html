@@ -72,7 +72,10 @@
         Independent of the comparison mode. Side-by-side: drag the divider (left = past, right =
         current). Computed difference: per-pixel "now − then" for the continuous layers except
         chlorophyll &amp; aerosol (too erratic day-to-day; precipitation is excluded from both).
-        Averaged views cap zoom to stay responsive and sample up to 12 days from the window.</p>
+        While a window is active, layers that can't be averaged (true colour, precipitation) are
+        hidden rather than shown as a misleading single day — a note appears below when that
+        happens. Averaged views cap zoom to stay responsive and sample up to 12 days from the
+        window.</p>
       <p class="hint hidden" id="delta-hint">⚠ Computed difference works on continuous raster layers
         (SST, SST anomalies, sea ice). Precipitation/aerosol are instantaneous &amp; noisy, and point or
         snapshot layers — glaciers, emissions, floats, biodiversity — have no per-pixel time series to
