@@ -518,10 +518,16 @@ test("biodiversity (GBIF) layer: broad taxonomic groups + indicator species", as
   u = await page.evaluate(() => window.__earth.gbifLayer.imageryProvider.url);
   expect(u).toContain("taxonKey=1");
   expect(u).toContain("fire.point");
-  // humans are present as their own pickable taxon
+  // the layer is all-time — the note says the date selector doesn't affect it
+  await expect(page.locator("#species-note")).toContainText("all-time");
+  // humans are present as their own pickable taxon, with a sparsity + privacy note
   const human = await page.evaluate(() =>
     [...document.querySelectorAll("#species-select option")].some((o) => /Homo sapiens/.test(o.textContent)));
   expect(human).toBe(true);
+  await page.selectOption("#species-select", "2436436");   // Homo sapiens
+  await expect(page.locator("#species-note")).toContainText("privacy");
+  await expect(page.locator("#species-note")).toContainText("very sparse");
+  await expect(page.locator("#species-note")).toContainText("not a date problem");
   // selecting an indicator species updates the note
   const key = await page.evaluate(() => window.__earth.gbifSpecies.find((s) => s.common === "Atlantic mackerel").key);
   await page.selectOption("#species-select", String(key));

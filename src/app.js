@@ -1732,6 +1732,7 @@ let gbifLayer = null;
 let gbifSpecies = null;
 
 let gbifData = null;
+let gbifIndex = {};
 async function initSpeciesUI() {
   const sel = document.getElementById("species-select");
   if (!sel) return;
@@ -1765,6 +1766,13 @@ async function initSpeciesUI() {
   }
   sel.appendChild(sog);
 
+  // Flat lookup key → {name, records} across every category + species, so the
+  // note can report the count and warn when a taxon is too sparse to see.
+  gbifIndex = {};
+  for (const cat of gbifData.categories || [])
+    for (const it of cat.items) gbifIndex[it.key] = it;
+  for (const s of gbifSpecies) gbifIndex[s.key] = { name: s.common, records: s.records, note: s.note };
+
   // Composition note explaining what "all recorded life" contains
   const noteEl = document.getElementById("species-note");
   const defaultNote = gbifData.note || noteEl.textContent;
@@ -1774,16 +1782,40 @@ async function initSpeciesUI() {
   sel.addEventListener("change", () => {
     document.getElementById("toggle-gbif").checked = true;
     updateGbifLayer();
-    const opt = sel.selectedOptions[0];
-    const s = gbifSpecies.find((x) => String(x.key) === sel.value);
-    noteEl.textContent = sel.value === "" ? defaultNote : (s ? s.note : (opt?.dataset.note || ""));
+    noteEl.innerHTML = gbifNoteFor(sel.value, defaultNote);
   });
+}
+
+// Human-readable note for a GBIF selection, including a sparsity warning (so a
+// rare taxon that paints only a few faint dots doesn't look broken) and the
+// reminder that this layer is all-time and ignores the date selector.
+const GBIF_SPARSE = 150000;   // fewer records worldwide → likely invisible when zoomed out
+function gbifNoteFor(value, defaultNote) {
+  const dateNote = "<em>Occurrences are all-time — the date selector doesn't change this layer.</em>";
+  if (value === "") return `${defaultNote}<br/>${dateNote}`;
+  const it = gbifIndex[value];
+  if (!it) return `${defaultNote}<br/>${dateNote}`;
+  const n = Number(it.records);
+  let msg = it.note ? it.note : `${it.name.replace(/&amp;/g, "&")} — ${n.toLocaleString()} records.`;
+  if (String(value) === "2436436") {
+    msg = `Humans are recorded like any other species, but GBIF restricts human ` +
+      `occurrences for privacy — only ${n.toLocaleString()} records worldwide.`;
+  }
+  if (n < GBIF_SPARSE) {
+    msg += ` ⚠ Only ${n.toLocaleString()} records — dots are very sparse and easy to ` +
+      `miss when zoomed out. Zoom in (or nothing may appear at global scale). This is ` +
+      `expected, not a date problem.`;
+  }
+  return `${msg}<br/>${dateNote}`;
 }
 
 function updateGbifLayer() {
   if (gbifLayer) { viewer.imageryLayers.remove(gbifLayer, true); gbifLayer = null; }
   if (!document.getElementById("toggle-gbif").checked) { updateDeltaHint(); return; }
-  const taxon = document.getElementById("species-select").value;
+  const sel = document.getElementById("species-select");
+  const noteEl = document.getElementById("species-note");
+  if (noteEl && gbifData) noteEl.innerHTML = gbifNoteFor(sel.value, gbifData.note);
+  const taxon = sel.value;
   const taxonParam = taxon ? `&taxonKey=${taxon}` : "";
   // point styles keep the background transparent so occurrences overlay the globe;
   // a warm palette for a single species, cool for all-life density

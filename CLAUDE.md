@@ -159,6 +159,13 @@ The dev sandbox's *browser* cannot reach external hosts (curl can). Therefore:
   current month; `gibsTime()` snaps monthly layers to first-of-month AND falls
   back to the previous month when the requested month is the current one.
   SMAP also has a real 2024 mission data gap — a blank year is data truth.
+- **GBIF is all-time and date-independent.** The occurrence-density map ignores
+  the app's date selector (it has no `year` filter wired). Sparse taxa render
+  almost nothing at global zoom — Homo sapiens has only ~24 k records worldwide
+  (privacy-restricted) and paints ~700 px vs birds' ~200 k. The picker note
+  warns when a selection is below `GBIF_SPARSE` (150 k records) and always
+  states the layer is all-time, so sparse ≠ broken and users don't blame the
+  date.
 - **RGI v7 is a single ~2000 snapshot** — a map slider cannot show glacier
   change. Real before/after comes from joining Hugonnet et al. 2021 per-glacier
   dh/dt (2000–2020, parquet keyed by `rgi_id`) — 240,542 of 274,531 glaciers
