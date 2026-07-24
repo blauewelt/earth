@@ -566,7 +566,6 @@ function compareDate() {
 
 /* ------------------------------------------------- computed-delta (SST) mode */
 
-const DELTA_LAYER_ID = "sst";        // the layer that also supports windowed aggregation
 const DELTA_RANGE = 4;               // default ± scale (°C) for the SST legend helpers
 const DELTA_COOL = [37, 99, 235];    // negative Δ (less / cooler than N years ago)
 const DELTA_WARM = [230, 59, 46];    // positive Δ (more / warmer than N years ago)
@@ -630,12 +629,38 @@ function getSstLUT() {
   return sstLUTPromise;
 }
 
-/* Shared helpers for the client-side SST providers below. */
+/* Shared helpers for the client-side aggregate/delta providers below. */
 function sstFetchUrl(cfg, date, x, y, level) {
   return GIBS_URL
-    .replace("{layer}", cfg.layer).replace("{time}", date)
+    .replace("{layer}", cfg.layer).replace("{time}", gibsTime(cfg, date))
     .replace("{tms}", cfg.tms).replace("{ext}", cfg.ext)
     .replace("{TileMatrix}", level).replace("{TileRow}", y).replace("{TileCol}", x);
+}
+
+/* Forward colour lookup (value → rgb) for ANY layer colormap, cached per URL.
+ * The inverse of getValueLut: mean values are painted back through the layer's
+ * own palette, so an aggregated layer looks like the original. */
+const forwardCache = new Map();
+function getForward(url) {
+  if (!forwardCache.has(url)) {
+    forwardCache.set(url, getColormapEntries(url).then((cm) => {
+      if (!cm || cm.entries.length < 2) return null;
+      const e = cm.entries;
+      return (v) => {
+        if (v <= e[0].lo) return e[0].rgb;
+        if (v >= e[e.length - 1].hi) return e[e.length - 1].rgb;
+        let lo = 0, hi = e.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (v < e[mid].lo) hi = mid - 1;
+          else if (v >= e[mid].hi) lo = mid + 1;
+          else return e[mid].rgb;
+        }
+        return e[Math.max(0, lo)].rgb;
+      };
+    }).catch(() => null));
+  }
+  return forwardCache.get(url);
 }
 async function sstFetchBitmap(url) {
   try {
@@ -668,9 +693,15 @@ async function sstMeanField(cfg, dates, x, y, level, lut, ctx) {
   return { sum, cnt };
 }
 
-/* Colorized mean SST over the rolling window (used for single-layer display and
- * for each side of a windowed side-by-side comparison). */
-class SSTAggregateProvider {
+/* Colorized per-pixel mean of ANY continuous colormapped layer over the rolling
+ * window (used for single-layer display and for each side of a windowed
+ * side-by-side comparison). Averaging is per pixel: samples where the pixel is
+ * missing (transparent — clouds, night, no retrieval) are simply excluded, and
+ * the mean divides by the count of samples that HAD data at that pixel. So a
+ * pixel observed on 3 of 12 sampled days shows the mean of those 3; only a
+ * pixel observed on none stays empty. For clear-sky products like MODIS land
+ * surface temperature this is what fills the daily cloud gaps. */
+class AggregateProvider {
   constructor(cfg, endDate, windowDays) {
     this._cfg = cfg;
     this._dates = windowSampleDates(endDate, windowDays);
@@ -682,19 +713,23 @@ class SSTAggregateProvider {
     this.maximumLevel = windowMaxLevel(cfg, windowDays);
     this.minimumLevel = 0;
     this.errorEvent = new Cesium.Event();
-    this.credit = new Cesium.Credit(`SST mean over ${windowLabel(windowDays)}, from NASA GIBS`);
+    this.credit = new Cesium.Credit(
+      `${cfg.title} mean over ${windowLabel(windowDays)}, from NASA GIBS`);
     this.hasAlphaChannel = true;
     this.ready = true;
   }
   get window() { return this._window; }
+  get layerId() { return this._cfg.id; }
   getTileCredits() { return undefined; }
   pickFeatures() { return undefined; }
   async requestImage(x, y, level) {
-    const [lut, forward] = await Promise.all([getSstLUT(), getSstForward()]);
+    const [vlut, forward] = await Promise.all([
+      getValueLut(this._cfg.colormap), getForward(this._cfg.colormap)]);
     const canvas = document.createElement("canvas");
     canvas.width = 512; canvas.height = 512;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    const f = await sstMeanField(this._cfg, this._dates, x, y, level, lut, ctx);
+    if (!vlut || !forward) return canvas;
+    const f = await sstMeanField(this._cfg, this._dates, x, y, level, vlut.lut, ctx);
     const out = ctx.createImageData(512, 512);
     const o = out.data;
     for (let p = 0, i = 0; p < 512 * 512; p++, i += 4) {
@@ -707,6 +742,7 @@ class SSTAggregateProvider {
     return canvas;
   }
 }
+const SSTAggregateProvider = AggregateProvider;   // back-compat alias
 
 /* Per-pixel difference of two rolling-window means for ANY continuous
  * colormapped layer (SST, SST anomalies, sea ice, …): value(now) − value(past),
@@ -863,10 +899,12 @@ function addLayer(cfg) {
     alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
   const cmp = compareDate();
   const comparing = cmp && cfg.timed;
-  const isSST = cfg.id === DELTA_LAYER_ID;               // SST also supports windowed aggregation
   const deltaable = cfg.deltaRange != null;              // continuous field with an invertible colormap
   const win = state.windowDays;
-  const windowed = win > 1 && isSST;                     // rolling-window mean render is SST-only
+  // Rolling-window mean render applies to every continuous colormapped layer
+  // (SST, SST anomalies, sea ice, land surface temperature) — essential for
+  // clear-sky products where any single day is mostly gaps.
+  const windowed = win > 1 && deltaable && !!cfg.colormap && cfg.timed;
 
   const add = (provider) => viewer.imageryLayers.addImageryProvider(provider);
 
@@ -2368,6 +2406,7 @@ window.__earth = {
   addDays,
   windowLabel,
   SSTAggregateProvider,
+  AggregateProvider,
   DeltaProvider,
   getValueLut,
   SSTEnsembleProvider,

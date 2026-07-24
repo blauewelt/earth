@@ -170,7 +170,13 @@ rectangle) · OISST v2.1 SST 1991–2020 (1°) · MeteoSwiss Swiss precip normal
 **Analysis features:**
 - *Comparison*: side-by-side split (draggable divider) or computed per-pixel
   difference vs 1/2/5/10/20 years ago, for continuous layers.
-- *Aggregation*: rolling window 1–730 days (SST), orthogonal to comparison.
+- *Aggregation*: rolling window 1–730 days for every continuous colormapped
+  layer (SST, SST anomalies, sea ice, LST), orthogonal to comparison. The mean
+  is per pixel with missing samples excluded: each pixel divides by the number
+  of sampled days on which it was actually observed (`sum[p]/cnt[p]`), so
+  clear-sky products fill their cloud gaps; only never-observed pixels stay
+  empty. Performance bounds: at most 12 sample dates per window
+  (`windowSampleDates`) and zoom capped at level 4 while windowed.
 - *SST ensemble*: MUR/OISST/GAMSSA client-side mean & spread.
 - *Value probe*: dwell 650 ms or click; delta-aware (reports Δ, not absolute,
   when a difference layer is active); grid-aware (exact cell values).

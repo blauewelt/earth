@@ -384,8 +384,8 @@ test("aggregation window is orthogonal to the display mode", async ({ page }) =>
              cmp: e.cmpLayer.imageryProvider.constructor.name };
   });
   expect(r.isAgg).toBe(true);
-  expect(r.main).toBe("SSTAggregateProvider");
-  expect(r.cmp).toBe("SSTAggregateProvider");
+  expect(r.main).toBe("AggregateProvider");
+  expect(r.cmp).toBe("AggregateProvider");
   await expect(page.locator("#split-handle")).toBeVisible();
 
   // window applies even without comparison (single aggregated layer)
@@ -395,7 +395,7 @@ test("aggregation window is orthogonal to the display mode", async ({ page }) =>
     return { isAgg: e.isAggregate, name: e.layer.imageryProvider.constructor.name, hasCmp: !!e.cmpLayer };
   });
   expect(r.isAgg).toBe(true);
-  expect(r.name).toBe("SSTAggregateProvider");
+  expect(r.name).toBe("AggregateProvider");
   expect(r.hasCmp).toBe(false);
 
   // back to a single day → plain GIBS provider
@@ -405,7 +405,7 @@ test("aggregation window is orthogonal to the display mode", async ({ page }) =>
     return { isAgg: e.isAggregate, name: e.layer.imageryProvider.constructor.name };
   });
   expect(r.isAgg).toBe(false);
-  expect(r.name).not.toBe("SSTAggregateProvider");
+  expect(r.name).not.toBe("AggregateProvider");
 });
 
 test("comparison hint explains non-differenceable & point layers in both modes", async ({ page }) => {
@@ -832,4 +832,41 @@ test("every layer hover card carries a gist paragraph in clear language", async 
   // climatologies say "not one date"
   const ms = page.locator('#layer-list .layer-item', { hasText: "Precipitation normal (MeteoSwiss" });
   await expect(ms.locator(".layer-tip")).toContainText("not one date");
+});
+
+test("aggregation generalises to LST and fills clear-sky gaps", async ({ page }) => {
+  // LST on any single day is mostly holes (clouds). Averaging a window must
+  // (a) use the AggregateProvider, (b) exclude missing samples per pixel and
+  // divide by the per-pixel observation count, (c) paint strictly more pixels
+  // than one day alone.
+  const r = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "lst");
+    const paint = async (prov) => {
+      const c = await prov.requestImage(2, 1, 2);       // Africa/Europe tile (lots of land)
+      const d = c.getContext("2d").getImageData(0, 0, 512, 512).data;
+      let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+      return n;
+    };
+    const single = await paint(new E.AggregateProvider(cfg, E.state.date, 1));
+    const agg = await paint(new E.AggregateProvider(cfg, E.state.date, 60));
+    return { single, agg, dates: E.windowSampleDates(E.state.date, 60).length };
+  });
+  expect(r.dates).toBeGreaterThan(4);                    // several samples across the window
+  expect(r.agg).toBeGreaterThan(r.single);               // gaps filled by the mean
+  expect(r.agg).toBeGreaterThan(10000);                  // substantial land coverage
+
+  // the UI path: enable LST, set a window → entry becomes an aggregate
+  await page.check('#layer-list input[data-id="lst"]');
+  await page.evaluate(() => {
+    const s = document.getElementById("window-days");
+    s.value = "60";
+    s.dispatchEvent(new Event("change"));
+  });
+  const ui = await page.evaluate(() => {
+    const e = window.__earth.state.layers["lst"];
+    return { isAgg: e.isAggregate, name: e.layer.imageryProvider.constructor.name };
+  });
+  expect(ui.isAgg).toBe(true);
+  expect(ui.name).toBe("AggregateProvider");
 });
