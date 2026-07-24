@@ -1390,6 +1390,70 @@ function deltaLegendEl(cfg) {
   return div;
 }
 
+/* ------------------------------------------------------------------- toasts */
+
+/* A prominent, animated notification. Used when a user enables a layer that has
+ * no date-specific data, so the date selector's lack of effect is never a
+ * mystery. Auto-dismisses; identical messages are de-duped while on screen. */
+const activeToastKeys = new Set();
+function showToast(html, { key = html, timeout = 8000 } = {}) {
+  const host = document.getElementById("toast-host");
+  if (!host || activeToastKeys.has(key)) return;
+  activeToastKeys.add(key);
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.setAttribute("role", "alert");
+  el.innerHTML = `<span class="toast-ico">📅</span><div class="toast-body">${html}</div>` +
+    `<button class="toast-close" title="Dismiss" aria-label="Dismiss">×</button>`;
+  const dismiss = () => {
+    if (!el.isConnected) return;
+    el.classList.add("toast-out");
+    el.addEventListener("animationend", () => el.remove(), { once: true });
+    activeToastKeys.delete(key);
+  };
+  el.querySelector(".toast-close").addEventListener("click", dismiss);
+  host.appendChild(el);
+  setTimeout(dismiss, timeout);
+  return el;
+}
+
+/* If a layer has no per-date data, return the toast HTML explaining why the
+ * date selector won't affect it; otherwise null. Covers GIBS-panel layers
+ * (grids = climatologies, night lights = fixed composite) and the data/point
+ * layers (each a snapshot or all-time record). */
+function datelessToast(id) {
+  const cfg = GIBS_LAYERS.find((l) => l.id === id);
+  if (cfg) {
+    if (cfg.timed) return null;                              // genuinely date-driven
+    if (cfg.grid) {
+      return `<strong>${cfg.title}</strong> is a long-term climatology (a multi-decade ` +
+        `average), so it has no per-date data — the <strong>date selector doesn't change it</strong>.`;
+    }
+    return `<strong>${cfg.title}</strong> is a fixed composite, so the ` +
+      `<strong>date selector doesn't change it</strong>.`;
+  }
+  const DATA_MSG = {
+    gbif: "<strong>Biodiversity occurrences (GBIF)</strong> are all-time, so the " +
+      "<strong>date selector doesn't change this layer</strong>. Rare taxa (e.g. humans) may " +
+      "be too sparse to see when zoomed out — that's expected, not a date problem.",
+    climatetrace: "<strong>Climate TRACE emissions</strong> is an annual inventory, so the " +
+      "<strong>date selector doesn't change it</strong>.",
+    argo: "<strong>Argo floats</strong> shows the fleet's latest positions (last ~10 days), so the " +
+      "<strong>date selector doesn't change it</strong>.",
+    stations: "<strong>Monitoring stations</strong> are fixed sites, so the " +
+      "<strong>date selector doesn't change this layer</strong>.",
+    glaciers: "<strong>Glaciers (RGI v7)</strong> is a single inventory (~year 2000), so the " +
+      "<strong>date selector doesn't change it</strong>. Its melt-rate colouring is a 2000–2020 average.",
+    "sst-ensemble": null,   // the ensemble IS date-driven
+  };
+  return DATA_MSG[id] || null;
+}
+
+function maybeDatelessToast(id) {
+  const html = datelessToast(id);
+  if (html) showToast(html, { key: id });
+}
+
 /* ----------------------------------------------------------- GIBS layer panel */
 
 /* Recording period, time interval and spatial granularity for every layer,
@@ -1518,6 +1582,7 @@ function buildLayerPanel() {
     if (e.target.checked) {
       addLayer(cfg);
       slider.style.display = "";
+      maybeDatelessToast(id);
     } else {
       removeLayer(id);
       slider.style.display = "none";
@@ -1658,7 +1723,7 @@ document.getElementById("ensemble-mode").addEventListener("change", () => {
 
 for (const kind of ["climatetrace", "argo"]) {
   document.getElementById(`toggle-${kind}`).addEventListener("change", (e) => {
-    if (e.target.checked) loadPointLayer(kind).then(updateDeltaHint);
+    if (e.target.checked) { loadPointLayer(kind).then(updateDeltaHint); maybeDatelessToast(kind); }
     else if (pointLayers[kind]) pointLayers[kind].collection.show = false;
     updateDeltaHint();
   });
@@ -1714,7 +1779,7 @@ async function loadGlaciers() {
   if (meta) meta.textContent = `${j.count.toLocaleString()} glaciers · ${j.total_area_km2.toLocaleString()} km² · RGI v7 · ${j.dhdt_matched.toLocaleString()} with 2000–2020 melt rate`;
 }
 document.getElementById("toggle-glaciers").addEventListener("change", (e) => {
-  if (e.target.checked) loadGlaciers().then(updateDeltaHint);
+  if (e.target.checked) { loadGlaciers().then(updateDeltaHint); maybeDatelessToast("glaciers"); }
   else if (glacierCollection) glacierCollection.show = false;
   updateDeltaHint();
 });
@@ -1778,7 +1843,10 @@ async function initSpeciesUI() {
   const defaultNote = gbifData.note || noteEl.textContent;
   noteEl.textContent = defaultNote;
 
-  document.getElementById("toggle-gbif").addEventListener("change", updateGbifLayer);
+  document.getElementById("toggle-gbif").addEventListener("change", (e) => {
+    updateGbifLayer();
+    if (e.target.checked) maybeDatelessToast("gbif");
+  });
   sel.addEventListener("change", () => {
     document.getElementById("toggle-gbif").checked = true;
     updateGbifLayer();
@@ -2049,6 +2117,7 @@ async function loadStations() {
 
   document.getElementById("toggle-stations").addEventListener("change", (e) => {
     stationsDs.show = e.target.checked;
+    if (e.target.checked) maybeDatelessToast("stations");
   });
 }
 
@@ -2537,6 +2606,8 @@ window.__earth = {
   get gbifData() { return gbifData; },
   get catalog() { return CATALOG; },
   GridProvider,
+  showToast,
+  datelessToast,
   loadGrid,
   sampleGrid,
   rampColor,

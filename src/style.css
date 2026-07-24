@@ -69,6 +69,50 @@ nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
   position: relative;
 }
 
+/* Attention toast — fired when a date-independent layer is enabled, so the
+ * user doesn't wonder why the date selector has no effect. Slides down from
+ * the top of the globe and gives a quick shake so it can't be missed. */
+#toast-host {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 60; display: flex; flex-direction: column; gap: 8px;
+  align-items: center; pointer-events: none; width: max-content; max-width: 90%;
+}
+.toast {
+  pointer-events: auto; display: flex; gap: 10px; align-items: flex-start;
+  max-width: 460px; background: #1b2333; color: var(--fg);
+  border: 1px solid var(--accent); border-left: 4px solid var(--accent);
+  border-radius: 10px; padding: 11px 12px 11px 13px; font-size: 12.5px; line-height: 1.5;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  animation: toast-in 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.3),
+             toast-shake 0.5s ease 0.36s;
+}
+.toast.toast-out { animation: toast-out 0.3s ease forwards; }
+.toast .toast-ico { font-size: 15px; line-height: 1.35; }
+.toast .toast-body { flex: 1; }
+.toast .toast-body strong { color: var(--accent); }
+.toast .toast-close {
+  pointer-events: auto; background: none; border: none; color: var(--fg-dim);
+  font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; margin: -1px -2px 0 0;
+}
+.toast .toast-close:hover { color: var(--fg); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-16px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: translateY(-12px) scale(0.97); }
+}
+@keyframes toast-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: toast-in 0.2s ease; }
+}
+
 /* Hover card: recording period · time interval · spatial granularity */
 .layer-tip {
   position: absolute; left: 8px; right: 8px; top: calc(100% - 4px); z-index: 40;

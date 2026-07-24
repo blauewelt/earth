@@ -982,3 +982,31 @@ test("non-aggregatable layers are hidden + warned under an active window", async
   expect(r.has).toBe(true);
   expect(r.suppressed).toBe(false);
 });
+
+test("enabling a date-independent layer fires an animated warning toast", async ({ page }) => {
+  // a climatology grid has no per-date data → toast on enable
+  await page.check('#layer-list input[data-id="gpcp"]');
+  const toast = page.locator("#toast-host .toast").first();
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText("climatology");
+  await expect(toast).toContainText("date selector doesn't change it");
+  // it is actually animated (CSS keyframe applied)
+  const anim = await toast.evaluate((el) => getComputedStyle(el).animationName);
+  expect(anim).toContain("toast-in");
+  // dismissible
+  await toast.locator(".toast-close").click();
+  await expect(page.locator("#toast-host .toast")).toHaveCount(0);
+
+  // date-DRIVEN layers must NOT toast
+  await page.check('#layer-list input[data-id="precip"]');
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => window.__earth.datelessToast("precip"))).toBeNull();
+  expect(await page.evaluate(() => window.__earth.datelessToast("sst"))).toBeNull();
+  await expect(page.locator("#toast-host .toast")).toHaveCount(0);
+
+  // data/point + all-time layers toast with a tailored message
+  expect(await page.evaluate(() => window.__earth.datelessToast("gbif"))).toContain("all-time");
+  expect(await page.evaluate(() => window.__earth.datelessToast("glaciers"))).toContain("single inventory");
+  await page.check("#toggle-glaciers");
+  await expect(page.locator("#toast-host .toast")).toContainText("single inventory");
+});
