@@ -419,8 +419,10 @@ test("comparison hint explains non-differenceable & point layers in both modes",
   await page.uncheck('#layer-list input[data-id="precip"]');
   await expect(page.locator("#delta-hint")).toBeHidden();
   // glaciers: single-snapshot note appears in delta AND side-by-side modes
+  // (generous timeout: the 7.4 MB glacier snapshot loads while delta tiles
+  // saturate the connection pool)
   await page.check("#toggle-glaciers");
-  await expect(page.locator("#delta-hint")).toBeVisible();
+  await expect(page.locator("#delta-hint")).toBeVisible({ timeout: 30000 });
   await expect(page.locator("#delta-hint")).toContainText("single inventory");
   await page.selectOption("#compare-mode", "split");
   await expect(page.locator("#delta-hint")).toBeVisible(); // still shown in side-by-side
