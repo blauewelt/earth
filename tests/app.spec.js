@@ -830,6 +830,6 @@ test("every layer hover card carries a gist paragraph in clear language", async 
   await expect(lst.locator(".layer-tip")).toContainText("aren't served as map tiles");
   await expect(lst.locator(".layer-tip")).toContainText("clouds, not missing data");
   // climatologies say "not one date"
-  const ms = page.locator('#layer-list .layer-item', { hasText: "MeteoSwiss" });
+  const ms = page.locator('#layer-list .layer-item', { hasText: "Precipitation normal (MeteoSwiss" });
   await expect(ms.locator(".layer-tip")).toContainText("not one date");
 });
