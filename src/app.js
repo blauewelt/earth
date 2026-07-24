@@ -1314,6 +1314,38 @@ function deltaLegendEl(cfg) {
 
 /* ----------------------------------------------------------- GIBS layer panel */
 
+/* Recording period, time interval and spatial granularity for every layer,
+ * shown as a hover card on the layer entry. "Recorded" is the span of the
+ * underlying measurement record (≠ the date currently displayed). */
+const LAYER_FACTS = {
+  "viirs-truecolor": { rec: "2015-11 → present", int: "daily (mosaic of ~14 orbits)", sp: "250 m/pixel" },
+  "sst":             { rec: "2002-06 → present", int: "daily (gap-free L4 analysis)", sp: "1 km grid" },
+  "sst-anom":        { rec: "2002-09 → present", int: "daily", sp: "25 km grid" },
+  "precip":          { rec: "2000-06 → present", int: "daily (sum of 30-min scans)", sp: "~10 km (0.1°)" },
+  "precip-30min":    { rec: "2000-06 → present", int: "every 30 minutes", sp: "~10 km (0.1°)" },
+  "seaice":          { rec: "2012-07 → present, with gaps", int: "daily", sp: "12 km grid" },
+  "snow":            { rec: "2000-02 → present", int: "daily", sp: "500 m grid" },
+  "aod":             { rec: "2017-04 → present (this layer; MODIS record from 2000)", int: "daily", sp: "10 km grid" },
+  "lst":             { rec: "2022-10 → present (this layer; MODIS record from 2000)", int: "daily (daytime pass)", sp: "1 km grid" },
+  "chlor":           { rec: "2024-02 → present (PACE; ocean-colour record from 1997)", int: "daily", sp: "~1.2 km" },
+  "salinity":        { rec: "2015-04 → present (2024 data gap)", int: "monthly composite", sp: "~60 km" },
+  "gpcp":            { rec: "1979 → present (record); shown: whole-record mean", int: "monthly source · mean-annual shown", sp: "2.5° (~275 km)" },
+  "oisst":           { rec: "1991–2020 (closed climatology)", int: "monthly normals · annual mean shown", sp: "0.25° source → 1° shown" },
+  "eobs":            { rec: "1950 → 2024 (v31); shown: whole-record mean", int: "daily source · mean-annual shown", sp: "0.25° (~28 km), Europe land" },
+  "meteoswiss":      { rec: "1991–2020 (closed normal period)", int: "single 30-year normal", sp: "~2 km, Switzerland" },
+  "nightlights":     { rec: "2016 (annual composite)", int: "one composite of a full year", sp: "500 m grid" },
+};
+
+function layerTipHtml(id) {
+  const f = LAYER_FACTS[id];
+  if (!f) return "";
+  return `<div class="layer-tip">
+      <div><span>Recorded</span>${f.rec}</div>
+      <div><span>Interval</span>${f.int}</div>
+      <div><span>Spatial</span>${f.sp}</div>
+    </div>`;
+}
+
 function buildLayerPanel() {
   const list = document.getElementById("layer-list");
   for (const cfg of GIBS_LAYERS) {
@@ -1327,9 +1359,10 @@ function buildLayerPanel() {
         <input type="checkbox" data-id="${cfg.id}" ${cfg.on ? "checked" : ""} title="Show / hide layer"/>
         ${title}
       </div>
-      <div class="meta">${cfg.meta}${cfg.timed ? ` · from ${cfg.start}` : ""}</div>
+      <div class="meta">${cfg.meta}</div>
       <input type="range" min="0" max="100" value="100" data-alpha="${cfg.id}"
-             ${cfg.on ? "" : "style='display:none'"} title="opacity"/>`;
+             ${cfg.on ? "" : "style='display:none'"} title="opacity"/>
+      ${layerTipHtml(cfg.id)}`;
     list.appendChild(div);
     if (cfg.on) addLayer(cfg);
   }

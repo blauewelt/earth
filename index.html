@@ -88,6 +88,11 @@
           </select>
         </div>
         <div class="meta">Combines independent GHRSST L4 analyses (MUR · OISST · GAMSSA) client-side. Spread reveals where the ocean is poorly observed.</div>
+        <div class="layer-tip">
+          <div><span>Recorded</span>2002 → present (member analyses)</div>
+          <div><span>Interval</span>daily</div>
+          <div><span>Spatial</span>1–25 km per member</div>
+        </div>
       </div>
 
       <h2>Data layers</h2>
@@ -95,16 +100,31 @@
         <div class="layer-head"><input type="checkbox" id="toggle-climatetrace" title="Show / hide layer"/>
           <a class="title-link" href="https://climatetrace.org/data" target="_blank" rel="noopener" title="Open dataset documentation">Facility emissions (Climate TRACE)</a></div>
         <div class="meta"><span id="meta-climatetrace">Top 1,000 emitting facilities worldwide · CC BY 4.0</span></div>
+        <div class="layer-tip">
+          <div><span>Recorded</span>2024 inventory year (record from 2015)</div>
+          <div><span>Interval</span>annual inventory</div>
+          <div><span>Spatial</span>one point per facility</div>
+        </div>
       </div>
       <div class="layer-item">
         <div class="layer-head"><input type="checkbox" id="toggle-argo" title="Show / hide layer"/>
           <a class="title-link" href="https://argo.ucsd.edu/data/" target="_blank" rel="noopener" title="Open dataset documentation">Argo floats (active fleet)</a></div>
         <div class="meta"><span id="meta-argo">Latest reported position of every float · Argo GDAC</span></div>
+        <div class="layer-tip">
+          <div><span>Recorded</span>fleet since 2000 · shown: last 10 days</div>
+          <div><span>Interval</span>each float profiles every ~10 days</div>
+          <div><span>Spatial</span>one point per float (~3,800 active)</div>
+        </div>
       </div>
       <div class="layer-item">
         <div class="layer-head"><input type="checkbox" id="toggle-stations" checked title="Show / hide layer"/>
           <a class="title-link" href="https://github.com/AMOCcommunity/amocatlas" target="_blank" rel="noopener" title="Open dataset documentation">AMOC &amp; GHG monitoring stations</a></div>
         <div class="meta">RAPID, OSNAP, MOVE, SAMBA arrays · Mauna Loa, Jungfraujoch … (click a marker for its own data link)</div>
+        <div class="layer-tip">
+          <div><span>Recorded</span>Mauna Loa 1958– · RAPID 2004– · OSNAP 2014–</div>
+          <div><span>Interval</span>continuous (hourly–daily reporting)</div>
+          <div><span>Spatial</span>fixed moorings &amp; observatories</div>
+        </div>
       </div>
       <div class="layer-item">
         <div class="layer-head"><input type="checkbox" id="toggle-glaciers" title="Show / hide layer"/>
@@ -121,6 +141,11 @@
           <div class="glacier-scale-labels"><span>melting fast</span><span>stable</span><span>growing</span></div>
         </div>
         <div class="meta" id="meta-glaciers">Every glacier on Earth (~274k) as a point sized by area · RGI v7 · CC BY 4.0</div>
+        <div class="layer-tip">
+          <div><span>Recorded</span>outlines ~2000 · melt rates 2000–2020</div>
+          <div><span>Interval</span>single inventory + 20-year mean rate</div>
+          <div><span>Spatial</span>one point per glacier (274,531)</div>
+        </div>
       </div>
       <div class="layer-item">
         <div class="layer-head"><input type="checkbox" id="toggle-gbif" title="Show / hide layer"/>
@@ -130,6 +155,11 @@
           <select id="species-select"><option value="" selected>All recorded life (3.9 B)</option></select>
         </div>
         <div class="meta" id="species-note">Where species have been recorded (presence, not abundance). Pick a climate-indicator species to see its range.</div>
+        <div class="layer-tip">
+          <div><span>Recorded</span>observations 1600s → present</div>
+          <div><span>Interval</span>individually dated occurrence records</div>
+          <div><span>Spatial</span>point occurrences, aggregated to view</div>
+        </div>
       </div>
       <button id="fly-atlantic" class="wide">Fly to the North Atlantic (AMOC)</button>
     </section>

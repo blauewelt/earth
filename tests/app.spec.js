@@ -778,3 +778,34 @@ test("date stepper: calendar-correct steps, clamped to available range", async (
   expect(await page.inputValue("#layer-date")).toBe(today);
   expect(page.__errors).toEqual([]);
 });
+
+test("every layer entry has a hover card with record, interval, spatial facts", async ({ page }) => {
+  // dynamically-built GIBS/grid layers: one tip per entry
+  const gibs = await page.evaluate(() => {
+    const items = [...document.querySelectorAll("#layer-list .layer-item")];
+    return {
+      items: items.length,
+      tips: items.filter((i) => i.querySelector(".layer-tip")).length,
+    };
+  });
+  expect(gibs.tips).toBe(gibs.items);                     // no layer without facts
+  // static analysis/data layers each carry a hand-written tip too
+  const staticTips = await page.locator("#panel-layers > .layer-item .layer-tip, #panel-layers h2 ~ .layer-item .layer-tip").count();
+  expect(staticTips - gibs.tips).toBeGreaterThanOrEqual(6);
+  // each card states the three facts
+  const rows = await page.evaluate(() => {
+    const tip = document.querySelector('#layer-list .layer-item .layer-tip');
+    return [...tip.querySelectorAll("span")].map((s) => s.textContent);
+  });
+  expect(rows).toEqual(["Recorded", "Interval", "Spatial"]);
+  // hovering reveals the card (CSS-driven)
+  const sstItem = page.locator('#layer-list .layer-item', { hasText: "Sea surface temperature (MUR" });
+  await sstItem.hover();
+  await expect(sstItem.locator(".layer-tip")).toBeVisible();
+  await expect(sstItem.locator(".layer-tip")).toContainText("2002-06 → present");
+  await expect(sstItem.locator(".layer-tip")).toContainText("daily");
+  await expect(sstItem.locator(".layer-tip")).toContainText("1 km");
+  // the old ambiguous "· from <date>" meta suffix is gone
+  const metas = await page.locator("#layer-list .meta").allTextContents();
+  for (const m of metas) expect(m).not.toMatch(/· from \d{4}/);
+});

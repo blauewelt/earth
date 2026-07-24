@@ -66,6 +66,23 @@ nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
 .layer-item {
   border: 1px solid var(--border); border-radius: 8px;
   padding: 8px 10px; margin-bottom: 8px; background: var(--bg);
+  position: relative;
+}
+
+/* Hover card: recording period · time interval · spatial granularity */
+.layer-tip {
+  position: absolute; left: 8px; right: 8px; top: calc(100% - 4px); z-index: 40;
+  background: #0d1420; border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; font-size: 11px; line-height: 1.5;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  opacity: 0; visibility: hidden; transition: opacity 0.15s ease, visibility 0s;
+  pointer-events: none;
+}
+.layer-item:hover .layer-tip { opacity: 1; visibility: visible; transition-delay: 0.35s; }
+.layer-tip div { display: flex; gap: 8px; }
+.layer-tip span {
+  flex: 0 0 62px; color: var(--fg-dim); text-transform: uppercase;
+  font-size: 9.5px; letter-spacing: 0.4px; padding-top: 1px;
 }
 .layer-item label { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .layer-item .meta { font-size: 11px; color: var(--fg-dim); margin: 3px 0 0 24px; }
