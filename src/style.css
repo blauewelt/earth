@@ -33,10 +33,13 @@ html, body {
 #sidebar h1 { margin: 0; font-size: 22px; letter-spacing: 1px; }
 #sidebar .tagline { margin: 2px 0 12px; color: var(--fg-dim); font-size: 12px; }
 
-nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+nav { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+/* Tabs size to their labels rather than sharing the width equally: with six of
+   them in a 320 px sidebar, an equal split wrapped "Sea level" onto two lines. */
 .tab {
-  flex: 1; padding: 8px 0; background: none; border: none; color: var(--fg-dim);
-  border-bottom: 2px solid transparent; cursor: pointer; font-size: 13px;
+  flex: 0 1 auto; padding: 8px 5px; background: none; border: none; color: var(--fg-dim);
+  border-bottom: 2px solid transparent; cursor: pointer; font-size: 12.5px;
+  white-space: nowrap; min-width: 0;
 }
 .tab.active { color: var(--fg); border-bottom-color: var(--accent); }
 
