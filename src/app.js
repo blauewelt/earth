@@ -1148,7 +1148,114 @@ function updateLegends() {
   panel.classList.toggle("hidden", !any);
   updateDeltaHint();
   updateBaseAppearance();
+  updateActiveChips();
 }
+
+/* ------------------------------------------- active-layer chips (on globe)
+ * A chip per layer that is currently on, top-left of the globe. Solves two
+ * things: turning a layer off without hunting for it in a long list, and
+ * turning one off while a different sidebar tab is open (where the layer list
+ * isn't rendered at all).
+ *
+ * Every layer — raster, grid, point, GBIF — is owned by exactly one checkbox,
+ * so the chips drive those checkboxes instead of duplicating teardown logic:
+ * unchecking and dispatching "change" runs the identical path as clicking the
+ * box by hand, which keeps opacity sliders, toasts and legends in sync for
+ * free. Adding a raster to GIBS_LAYERS wires up its chip automatically; a new
+ * hand-written layer must be added to STATIC_LAYER_CHIPS. */
+const STATIC_LAYER_CHIPS = [
+  ["toggle-sst-ensemble", "SST ensemble"],
+  ["toggle-climatetrace", "Facility emissions"],
+  ["toggle-argo", "Argo floats"],
+  ["toggle-stations", "Monitoring stations"],
+  ["toggle-glaciers", "Glaciers"],
+  ["toggle-gbif", "Biodiversity"],
+];
+
+function activeLayerChips() {
+  const out = [];
+  for (const cfg of GIBS_LAYERS) {
+    const box = document.querySelector(`#layer-list input[data-id="${cfg.id}"]`);
+    if (box && box.checked) {
+      out.push({ box, title: cfg.title, warn: !!state.layers[cfg.id]?.suppressed });
+    }
+  }
+  for (const [id, title] of STATIC_LAYER_CHIPS) {
+    const box = document.getElementById(id);
+    if (box && box.checked) out.push({ box, title, warn: false });
+  }
+  return out;
+}
+
+// Jumps the sidebar to the layer's row and outlines it briefly — the inverse
+// of the chip's main job, for when you want the opacity slider or the notes.
+function revealLayer(box) {
+  document.getElementById("tab-layers").click();
+  const item = box.closest(".layer-item");
+  if (!item) return;
+  item.scrollIntoView({ block: "center", behavior: "smooth" });
+  item.classList.add("flash");
+  setTimeout(() => item.classList.remove("flash"), 1400);
+}
+
+function turnOffLayer(box) {
+  box.checked = false;
+  box.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function updateActiveChips() {
+  const host = document.getElementById("active-layers");
+  if (!host) return;
+  const chips = activeLayerChips();
+  host.innerHTML = "";
+  host.classList.toggle("hidden", chips.length === 0);
+
+  for (const c of chips) {
+    const el = document.createElement("div");
+    el.className = "chip" + (c.warn ? " chip-warn" : "");
+    const label = document.createElement("button");
+    label.className = "chip-label";
+    label.textContent = (c.warn ? "⚠ " : "") + c.title;
+    label.title = c.warn
+      ? "Not shown: this layer can't be averaged over a window. Click to find it in the sidebar."
+      : "Find this layer in the sidebar";
+    label.addEventListener("click", () => revealLayer(c.box));
+    const x = document.createElement("button");
+    x.className = "chip-x";
+    x.textContent = "×";
+    x.title = `Turn off ${c.title}`;
+    x.setAttribute("aria-label", `Turn off ${c.title}`);
+    x.addEventListener("click", () => turnOffLayer(c.box));
+    el.append(label, x);
+    host.appendChild(el);
+  }
+
+  if (chips.length > 1) {
+    const el = document.createElement("div");
+    el.className = "chip chip-clear";
+    const label = document.createElement("button");
+    label.className = "chip-label";
+    label.textContent = `Clear all ${chips.length}`;
+    label.title = "Turn off every active layer";
+    label.addEventListener("click", () => chips.forEach((c) => turnOffLayer(c.box)));
+    el.appendChild(label);
+    host.appendChild(el);
+  }
+
+  // Let the comparison date labels sit below the chips instead of under them.
+  const container = document.getElementById("cesiumContainer");
+  if (container) {
+    container.style.setProperty(
+      "--chips-h", chips.length ? `${host.offsetHeight + 8}px` : "0px");
+  }
+}
+
+// Not every toggle routes through updateLegends(), and some controls switch a
+// layer on indirectly (picking a species or a glacier mode ticks its box
+// without firing that box's own event). Rather than enumerate those paths,
+// refresh on any change event in the document — they're user-paced and rare,
+// and the rebuild is a handful of DOM nodes. Dispatched events bubble here too.
+document.addEventListener("change", updateActiveChips);
 
 /* Interactive legends: rendered from the layer's GIBS colormap so hovering
  * reveals the exact value (with units) of the color under the cursor. */
@@ -2609,6 +2716,9 @@ window.__earth = {
   get gbifData() { return gbifData; },
   get catalog() { return CATALOG; },
   GridProvider,
+  activeLayerChips,
+  updateActiveChips,
+  STATIC_LAYER_CHIPS,
   showToast,
   datelessToast,
   loadGrid,

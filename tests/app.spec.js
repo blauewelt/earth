@@ -1031,3 +1031,74 @@ test("enabling a date-independent layer fires an animated warning toast", async 
   await page.check("#toggle-glaciers");
   await expect(page.locator("#toast-host .toast")).toContainText("single inventory");
 });
+
+test("active-layer chips list what's on and switch it off from anywhere", async ({ page }) => {
+  const chips = page.locator("#active-layers .chip:not(.chip-clear)");
+  const labels = () =>
+    page.locator("#active-layers .chip-label").allTextContents();
+
+  // Stations are on by default → exactly one chip, no "clear all" yet.
+  await expect(chips).toHaveCount(1);
+  expect(await labels()).toEqual(["Monitoring stations"]);
+  await expect(page.locator("#active-layers .chip-clear")).toHaveCount(0);
+
+  // A raster and a point layer both earn a chip, whatever their machinery.
+  await page.check('#layer-list input[data-id="sst"]');
+  await page.check("#toggle-glaciers");
+  await expect(chips).toHaveCount(3);
+  const has = async (frag) => (await labels()).some((s) => s.includes(frag));
+  expect(await has("Sea surface temperature")).toBe(true);
+  expect(await has("Glaciers")).toBe(true);
+
+  // The × turns the layer off for real — not just visually.
+  await page
+    .locator("#active-layers .chip", { hasText: "Sea surface temperature" })
+    .locator(".chip-x")
+    .click();
+  await expect(chips).toHaveCount(2);
+  expect(await has("Sea surface temperature")).toBe(false);
+  expect(await page.evaluate(() => !!window.__earth.state.layers["sst"]?.layer)).toBe(false);
+  // and the sidebar checkbox followed along
+  await expect(page.locator('#layer-list input[data-id="sst"]')).not.toBeChecked();
+
+  // The whole point: reachable from a tab where the layer list isn't rendered.
+  await page.click("#tab-catalog");
+  await expect(page.locator("#panel-layers")).toBeHidden();
+  await expect(chips).toBeVisible();
+  await page
+    .locator("#active-layers .chip", { hasText: "Glaciers" })
+    .locator(".chip-x")
+    .click();
+  await expect(chips).toHaveCount(1);
+  expect(await page.evaluate(() => window.__earth.glacierCollection?.show ?? false)).toBe(false);
+
+  // Clicking the label jumps back to the layer's row and highlights it.
+  await page.click("#tab-catalog");
+  await page.locator("#active-layers .chip-label").first().click();
+  await expect(page.locator("#panel-layers")).toBeVisible();
+  await expect(page.locator("#toggle-stations").locator("xpath=ancestor::div[contains(@class,'layer-item')][1]"))
+    .toHaveClass(/flash/);
+
+  // "Clear all" appears past one layer and empties the globe.
+  await page.check('#layer-list input[data-id="sst"]');
+  await page.check('#layer-list input[data-id="precip"]');
+  await expect(page.locator("#active-layers .chip-clear")).toContainText("Clear all 3");
+  await page.locator("#active-layers .chip-clear .chip-label").click();
+  await expect(page.locator("#active-layers")).toHaveClass(/hidden/);
+  await expect(chips).toHaveCount(0);
+  expect(await page.evaluate(() => Object.values(window.__earth.state.layers).some((e) => !!e.layer)))
+    .toBe(false);
+});
+
+test("a suppressed layer is flagged on its chip rather than silently listed", async ({ page }) => {
+  await page.check('#layer-list input[data-id="precip"]');
+  const chip = page.locator("#active-layers .chip", { hasText: "Precipitation rate" });
+  await expect(chip).not.toHaveClass(/chip-warn/);
+  // a window it can't honour → still checked, but marked as not being drawn
+  await page.evaluate(() => {
+    const s = document.getElementById("window-days"); s.value = "90";
+    s.dispatchEvent(new Event("change"));
+  });
+  await expect(chip).toHaveClass(/chip-warn/);
+  await expect(chip.locator(".chip-label")).toContainText("⚠");
+});

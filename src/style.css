@@ -200,7 +200,50 @@ footer a { color: var(--fg-dim); }
   background: var(--bg2); color: var(--fg); border: 1px solid var(--border);
   display: flex; align-items: center; justify-content: center; font-size: 13px;
 }
-#split-labels { position: absolute; top: 12px; left: 0; right: 0; z-index: 18; pointer-events: none; }
+/* ---- active-layer chips (top-left of the globe) ----
+   One chip per layer that is currently on, so a layer can be switched off
+   from anywhere — including from the Temp / AMOC / Catalog tabs, where the
+   layer list isn't on screen at all. Doubles as a "what am I looking at"
+   readout. --chips-h is published by updateActiveChips() so the comparison
+   labels below can step out of the way. */
+#active-layers {
+  position: absolute; top: 12px; left: 12px; z-index: 20;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  max-width: min(560px, 55%); max-height: 34%; overflow-y: auto;
+}
+#active-layers.hidden { display: none; }
+.chip {
+  display: flex; align-items: stretch; overflow: hidden;
+  background: rgba(22, 27, 34, 0.92); border: 1px solid var(--border);
+  border-radius: 13px; font-size: 12px; line-height: 1;
+}
+.chip:hover { border-color: var(--accent); }
+.chip-warn { border-color: #d29922; }
+.chip button {
+  background: none; border: none; color: var(--fg);
+  font-size: 12px; font-family: inherit; cursor: pointer; padding: 0;
+}
+.chip-label { padding: 5px 4px 5px 11px; white-space: nowrap; }
+.chip-label:hover { color: var(--accent); }
+.chip-x {
+  padding: 5px 9px 5px 5px; color: var(--fg-dim) !important;
+  font-size: 14px !important;
+}
+.chip-x:hover { color: #f85149 !important; }
+.chip-clear {
+  border-style: dashed; color: var(--fg-dim);
+}
+.chip-clear .chip-label { padding: 5px 11px; color: var(--fg-dim); }
+.chip-clear:hover .chip-label { color: #f85149; }
+/* Briefly highlights the layer's row after "find in sidebar". */
+.layer-item.flash {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .layer-item.flash { transition: outline-color 0.2s; }
+}
+
+#split-labels { position: absolute; top: calc(12px + var(--chips-h, 0px)); left: 0; right: 0; z-index: 18; pointer-events: none; }
 #split-labels span {
   position: absolute; top: 0; padding: 3px 10px; border-radius: 12px;
   background: rgba(22, 27, 34, 0.88); border: 1px solid var(--border);
