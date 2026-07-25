@@ -134,12 +134,20 @@ test("zoom buttons and wheel zoom move the camera briskly", async ({ page }) => 
   await page.click("#zoom-out");
   await expect.poll(height).toBeGreaterThan(hIn); // zooms back out
 
-  // wheel: one notch covers a big fraction of the height (fast zoom)
+  // wheel: one notch covers a big fraction of the height (fast zoom).
+  // Positive deltaY (scroll down / pinch fingers together) zooms OUT.
   const before = await height();
   await page.evaluate(() =>
     window.__wheelZoom({ deltaY: 120, deltaMode: 0, ctrlKey: false, preventDefault() {} }));
   const afterWheel = await height();
-  expect(afterWheel).toBeLessThan(before * 0.35); // ~0.85 of height per notch → big jump
+  expect(afterWheel).toBeGreaterThan(before); // scroll down → zooms out
+
+  // Negative deltaY (scroll up / pinch fingers apart) zooms IN.
+  const beforeIn = await height();
+  await page.evaluate(() =>
+    window.__wheelZoom({ deltaY: -120, deltaMode: 0, ctrlKey: false, preventDefault() {} }));
+  const afterIn = await height();
+  expect(afterIn).toBeLessThan(beforeIn * 0.35); // ~0.85 of height per notch → big jump
 
   // touch pinch stays native
   const hasPinch = await page.evaluate(() =>
@@ -147,10 +155,11 @@ test("zoom buttons and wheel zoom move the camera briskly", async ({ page }) => 
       .includes(Cesium.CameraEventType.PINCH));
   expect(hasPinch).toBe(true);
 
-  // trackpad pinch (ctrlKey) with a small delta still zooms meaningfully
+  // trackpad pinch (ctrlKey) with a small delta still zooms meaningfully.
+  // Fingers apart (negative deltaY) zooms in.
   const b2 = await height();
   await page.evaluate(() =>
-    window.__wheelZoom({ deltaY: 20, deltaMode: 0, ctrlKey: true, preventDefault() {} }));
+    window.__wheelZoom({ deltaY: -20, deltaMode: 0, ctrlKey: true, preventDefault() {} }));
   expect(await height()).toBeLessThan(b2 * 0.7);
 });
 

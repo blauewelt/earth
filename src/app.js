@@ -354,6 +354,9 @@ sscc.zoomEventTypes = [Cesium.CameraEventType.PINCH];
 // trackpad pinch (ctrlKey) gets extra gain since its deltas are tiny. The amount
 // is a fraction of the current camera height, capped so it can't shoot through
 // the globe — so it's fast far out and still controllable up close.
+// Sign convention matches standard map/trackpad behaviour: scrolling up, or
+// spreading two fingers apart on a trackpad (negative deltaY), zooms IN;
+// scrolling down, or pinching fingers together (positive deltaY), zooms OUT.
 function wheelZoom(e) {
   e.preventDefault();
   let dy = e.deltaY;
@@ -362,8 +365,8 @@ function wheelZoom(e) {
   const gain = e.ctrlKey ? 0.025 : 0.008;     // trackpad pinch vs mouse wheel
   const frac = Cesium.Math.clamp(dy * gain, -0.85, 0.85);
   const amount = cameraHeight() * frac;
-  if (amount > 0) viewer.camera.zoomIn(amount);
-  else if (amount < 0) viewer.camera.zoomOut(-amount);
+  if (amount > 0) viewer.camera.zoomOut(amount);
+  else if (amount < 0) viewer.camera.zoomIn(-amount);
 }
 viewer.scene.canvas.addEventListener("wheel", wheelZoom, { passive: false });
 window.__wheelZoom = wheelZoom; // exposed for tests
