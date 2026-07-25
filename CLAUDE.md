@@ -75,7 +75,12 @@ A new layer is not done until it has **all** of:
    | Grid climatologies | ✗ | ✗ | already multi-decade averages, not timed |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set
    `globe: true` and append "Live globe layer in this app." to its notes.
-7. **Tests** — at least one behavioural test in `tests/app.spec.js` and, if it
+7. **An active-layer chip.** Layers defined in `GIBS_LAYERS` get one for free.
+   A hand-written layer (its own `#toggle-…` checkbox rather than a
+   `GIBS_LAYERS` entry) must be added to `STATIC_LAYER_CHIPS` in `src/app.js`
+   as `["toggle-<id>", "<short title>"]`, or it will be the one layer that
+   can't be switched off from the globe.
+8. **Tests** — at least one behavioural test in `tests/app.spec.js` and, if it
    has a data snapshot, a schema/sanity test in `tests/data.spec.js`.
 
 ### 3. Data pipeline: static snapshots, never live third-party calls
@@ -104,6 +109,20 @@ The dev sandbox's *browser* cannot reach external hosts (curl can). Therefore:
 - CI (GitHub Actions) uses the real network; MIRROR is sandbox-only.
 - The vendored Cesium build mangles class names — assert on our own classes
   (e.g. `GIBSGeographicTilingScheme`) rather than Cesium constructor names.
+- **Never call `expect()` per data point.** Reduce to min/max (or a count) and
+  assert twice instead: OISST alone is 64,800 cells, and per-cell matchers make
+  the test take minutes because each assertion is recorded as a reporter step.
+  Fixing this took the four grid tests from 27 s–8 min each to 23–39 ms.
+- **Toggle heavy layers in-page, not via `check`/`uncheck`.** With 274k glacier
+  billboards on a software GL stack the render loop starves Playwright's
+  actionability checks, so a normal `uncheck()` can sit waiting for "stable"
+  forever. Use `page.evaluate(() => { el.checked = false;
+  el.dispatchEvent(new Event("change", { bubbles: true })); })` — the same
+  pattern already used for dismissing toasts. Prefer a light layer
+  (`#toggle-climatetrace`, 1,000 points) when the test doesn't care which one.
+- Reading a self-clearing UI state (e.g. the `.flash` outline, 1.4 s) must
+  happen inside the *same* `page.evaluate` as the click that sets it; a
+  click→assert round-trip can outlast it on the slow sandbox.
 
 ### 4b. Date-independence must be announced
 
@@ -124,6 +143,22 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
 - The date selector has quick-step buttons (±1d/±1m/±1y/Today) with real
   calendar arithmetic, clamped to [2000-01-01, most recent].
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
+- **Active-layer chips** (`#active-layers`, top-left of the globe) list every
+  layer currently on, whatever machinery draws it. Each chip's `×` turns the
+  layer off; the label jumps to that layer's sidebar row and outlines it
+  briefly; past one layer a dashed "Clear all N" chip appears. Two reasons this
+  lives on the globe rather than at the top of the layer list: a layer can be
+  switched off without hunting a long list, and it works from the Temp / AMOC /
+  Catalog tabs, where the layer list isn't rendered at all. A layer that is
+  checked but not drawn (aggregation-suppressed) shows as a ⚠ `chip-warn`
+  rather than being listed as if it were visible.
+  - Chips **drive the layer's own checkbox** (`checked = false` + a bubbling
+    `change` event) instead of duplicating teardown, so opacity sliders, toasts
+    and legends stay in sync for free. `updateActiveChips()` is wired to any
+    `change` in the document, since some controls (species picker, glacier
+    mode) tick a box without firing that box's own handler.
+  - The chip bar publishes its height as `--chips-h` on `#cesiumContainer` so
+    `#split-labels` steps below it instead of underneath.
 
 ### 6. Commits & deployment
 
@@ -232,6 +267,8 @@ rectangle) · OISST v2.1 SST 1991–2020 (1°) · MeteoSwiss Swiss precip normal
 - *Interactive legends* built from GIBS colormaps (hover → value).
 - *Date stepper* ±1d/±1m/±1y/Today, calendar-correct, clamped.
 - *Hover cards* on every layer: gist paragraph + Recorded / Interval / Spatial.
+- *Active-layer chips* top-left of the globe: what's on right now, one click to
+  switch any of it off (or "Clear all N"), from any tab. See §5.
 
 **Point/data layers:** Climate TRACE top-1000 emitters · Argo active floats ·
 AMOC & GHG stations (RAPID, OSNAP, MOVE, SAMBA, Mauna Loa, Jungfraujoch…) ·

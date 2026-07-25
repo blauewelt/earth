@@ -142,8 +142,19 @@ test.describe("species.json", () => {
       expect(sp.note.length).toBeGreaterThan(10);
       expect(sp.records).toBeGreaterThan(0);
     }
-    // presence-vs-abundance caveat is documented in the payload
-    expect(s.note.toLowerCase()).toContain("presence");
+    // The payload's note explains how the 3.9 B total decomposes — the three
+    // things a reader gets wrong otherwise: what the unplaced remainder is,
+    // that the mix reflects observer effort rather than actual abundance, and
+    // why humans are almost absent. (The presence-vs-abundance caveat itself
+    // is UI copy, asserted in app.spec.js.)
+    const note = s.note.toLowerCase();
+    expect(note).toContain("kingdom");
+    expect(note).toContain("birds");
+    expect(note).toContain("privacy");
+    // the composition figures the note quotes must match the data
+    expect(s.total).toBeGreaterThan(3.5e9);
+    expect(s.unplaced).toBeGreaterThan(0);
+    expect(s.unplaced).toBeLessThan(s.total);
   });
 });
 
@@ -213,13 +224,15 @@ test.describe("gridded climatology snapshots", () => {
       // dlon/dlat match bounds & dims
       expect(g.dlon).toBeCloseTo((g.east - g.west) / g.nx, 3);
       expect(g.dlat).toBeCloseTo((g.north - g.south) / g.ny, 3);
-      // some cells filled, values within a physical range
+      // Some cells filled, values within a physical range. Reduce to min/max
+      // and assert twice rather than calling expect() per cell: OISST alone is
+      // 64,800 cells, and per-cell matchers make this test take minutes.
       const finite = g.values.filter((v) => v != null);
       expect(finite.length).toBeGreaterThan(1000);
-      for (const v of finite) {
-        expect(v).toBeGreaterThanOrEqual(s.ramp === "sst" ? -5 : 0);
-        expect(v).toBeLessThan(s.vmaxData);
-      }
+      let lo = Infinity, hi = -Infinity;
+      for (const v of finite) { if (v < lo) lo = v; if (v > hi) hi = v; }
+      expect(lo, `${file} minimum value`).toBeGreaterThanOrEqual(s.ramp === "sst" ? -5 : 0);
+      expect(hi, `${file} maximum value`).toBeLessThan(s.vmaxData);
     });
   }
 });

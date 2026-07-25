@@ -435,7 +435,14 @@ test("comparison hint explains non-differenceable & point layers in both modes",
   await expect(page.locator("#delta-hint")).toContainText("single inventory");
   await page.selectOption("#compare-mode", "split");
   await expect(page.locator("#delta-hint")).toBeVisible(); // still shown in side-by-side
-  await page.uncheck("#toggle-glaciers");
+  // Toggle off from inside the page: with 274k glacier billboards on a
+  // software GL stack the render loop starves Playwright's actionability
+  // checks, so a normal uncheck() can sit waiting for "stable" forever.
+  await page.evaluate(() => {
+    const el = document.getElementById("toggle-glaciers");
+    el.checked = false;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   await expect(page.locator("#delta-hint")).toBeHidden();
 });
 
