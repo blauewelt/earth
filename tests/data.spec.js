@@ -11,9 +11,11 @@ const read = (f) => JSON.parse(fs.readFileSync(path.join(DATA, f), "utf8"));
 test.describe("catalog.json", () => {
   const cat = read("catalog.json");
 
-  test("has 241 records with required fields", () => {
-    expect(cat.record_count).toBeGreaterThanOrEqual(241);
-    expect(cat.records.length).toBeGreaterThanOrEqual(241);
+  // Lower bound, not equality: the catalog only grows. The title tracks the
+  // current size so it doesn't quietly drift the way the README's did.
+  test("has 244+ records with required fields", () => {
+    expect(cat.record_count).toBeGreaterThanOrEqual(244);
+    expect(cat.records.length).toBeGreaterThanOrEqual(244);
     for (const r of cat.records) {
       for (const field of ["id", "name", "domain", "provider", "url", "access", "license"]) {
         expect(r[field], `${r.id || r.name} missing ${field}`).toBeTruthy();
