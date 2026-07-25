@@ -191,6 +191,12 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   SMAP (salinity) respectively. Wiring them as grids is an open follow-up.
 - **Cesium's `_zoomFactor` is minified away** in production builds — wheel zoom
   is reimplemented as a custom handler (`__wheelZoom`).
+- **Zoom direction convention**: scrolling up, or spreading two fingers apart
+  on a trackpad (negative `deltaY`), zooms IN; scrolling down, or pinching
+  fingers together (positive `deltaY`), zooms OUT — matching standard
+  map/trackpad expectations. Touch-screen pinch stays native Cesium
+  (`CameraEventType.PINCH`) and already followed this convention; only the
+  wheel/trackpad-pinch handler needed inverting (it had shipped backwards).
 
 ## Part 3 · What has been built (holistic record)
 
