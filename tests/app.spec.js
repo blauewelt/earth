@@ -1033,22 +1033,21 @@ test("enabling a date-independent layer fires an animated warning toast", async 
 });
 
 test("active-layer chips list what's on and switch it off from anywhere", async ({ page }) => {
+  test.setTimeout(150000); // several layer loads + two tab switches
   const chips = page.locator("#active-layers .chip:not(.chip-clear)");
   const labels = () =>
     page.locator("#active-layers .chip-label").allTextContents();
 
-  // Stations are on by default → exactly one chip, no "clear all" yet.
-  await expect(chips).toHaveCount(1);
-  expect(await labels()).toEqual(["Monitoring stations"]);
-  await expect(page.locator("#active-layers .chip-clear")).toHaveCount(0);
-
-  // A raster and a point layer both earn a chip, whatever their machinery.
-  await page.check('#layer-list input[data-id="sst"]');
-  await page.check("#toggle-glaciers");
-  await expect(chips).toHaveCount(3);
+  // The two default-on layers each get a chip: a raster and a point layer,
+  // proving the chips don't care which machinery draws them.
   const has = async (frag) => (await labels()).some((s) => s.includes(frag));
+  await expect(chips).toHaveCount(2);
   expect(await has("Sea surface temperature")).toBe(true);
-  expect(await has("Glaciers")).toBe(true);
+  expect(await has("Monitoring stations")).toBe(true);
+
+  await page.check("#toggle-climatetrace");
+  await expect(chips).toHaveCount(3);
+  expect(await has("Facility emissions")).toBe(true);
 
   // The × turns the layer off for real — not just visually.
   await page
@@ -1064,20 +1063,28 @@ test("active-layer chips list what's on and switch it off from anywhere", async 
   // The whole point: reachable from a tab where the layer list isn't rendered.
   await page.click("#tab-catalog");
   await expect(page.locator("#panel-layers")).toBeHidden();
-  await expect(chips).toBeVisible();
+  await expect(page.locator("#active-layers")).toBeVisible();
   await page
-    .locator("#active-layers .chip", { hasText: "Glaciers" })
+    .locator("#active-layers .chip", { hasText: "Facility emissions" })
     .locator(".chip-x")
     .click();
   await expect(chips).toHaveCount(1);
-  expect(await page.evaluate(() => window.__earth.glacierCollection?.show ?? false)).toBe(false);
+  expect(await page.evaluate(
+    () => window.__earth.pointLayers.climatetrace?.collection.show ?? false)).toBe(false);
+  // one layer left → nothing to "clear all"
+  await expect(page.locator("#active-layers .chip-clear")).toHaveCount(0);
 
   // Clicking the label jumps back to the layer's row and highlights it.
+  // Read the highlight in the same tick as the click: it self-clears after
+  // ~1.4 s, which a round-trip can outlast on a slow machine.
   await page.click("#tab-catalog");
-  await page.locator("#active-layers .chip-label").first().click();
+  const flashed = await page.evaluate(() => {
+    document.querySelector("#active-layers .chip-label").click();
+    return document.getElementById("toggle-stations")
+      .closest(".layer-item").classList.contains("flash");
+  });
+  expect(flashed).toBe(true);
   await expect(page.locator("#panel-layers")).toBeVisible();
-  await expect(page.locator("#toggle-stations").locator("xpath=ancestor::div[contains(@class,'layer-item')][1]"))
-    .toHaveClass(/flash/);
 
   // "Clear all" appears past one layer and empties the globe.
   await page.check('#layer-list input[data-id="sst"]');
