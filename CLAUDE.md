@@ -270,7 +270,8 @@ rectangle) · OISST v2.1 SST 1991–2020 (1°) · MeteoSwiss Swiss precip normal
 - *Comparison*: side-by-side split (draggable divider) or computed per-pixel
   difference vs 1/2/5/10/20 years ago, for continuous layers.
 - *Aggregation*: rolling window 1–730 days for every layer in the aggregation
-  matrix (SST & anomalies, sea ice, snow, LST, salinity, chlorophyll, aerosol),
+  matrix (SST & anomalies, sea ice, snow, LST, salinity, chlorophyll, aerosol,
+  daily precipitation — dry pixels counting as zero),
   orthogonal to comparison. The mean
   is per pixel with missing samples excluded: each pixel divides by the number
   of sampled days on which it was actually observed (`sum[p]/cnt[p]`), so
@@ -281,7 +282,8 @@ rectangle) · OISST v2.1 SST 1991–2020 (1°) · MeteoSwiss Swiss precip normal
 - *Value probe*: dwell 650 ms or click; delta-aware (reports Δ, not absolute,
   when a difference layer is active); grid-aware (exact cell values).
 - *Interactive legends* built from GIBS colormaps (hover → value).
-- *Date stepper* ±1d/±1m/±1y/Today, calendar-correct, clamped.
+- *Date stepper* ±1d/±1m/±1y/Today, calendar-correct, clamped; plus a ±30m
+  time-of-day stepper while a sub-daily layer (IMERG 30-min) is on.
 - *Hover cards* on every layer: gist paragraph + Recorded / Interval / Spatial.
 - *Active-layer chips* top-left of the globe: what's on right now, one click to
   switch any of it off (or "Clear all N"), from any tab. See §5.
