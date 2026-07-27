@@ -70,7 +70,8 @@ A new layer is not done until it has **all** of:
    | Salinity (SMAP monthly) | ✓ | ✓ | continuous PSU; sample dates snap & dedupe to months |
    | Chlorophyll-a (PACE) | ✓ | ✗ | log-scaled; differencing bin-centres of a log palette is unsound |
    | Aerosol optical depth | ✓ | ✗ | windowed mean is standard; day-vs-day is noise |
-   | Precipitation (IMERG daily & 30-min) | ✗ | ✗ | instantaneous, log, mostly transparent — use the climatology grids |
+   | Precipitation (IMERG daily) | ✓ | ✗ | daily-MEAN rates average soundly (`transparentZero`: dry pixels count as 0); day-vs-day rain deltas are weather noise |
+   | Precipitation (IMERG 30-min) | ✗ | ✗ | one half-hour snapshot; a window sampling ~12 arbitrary instants averages nothing physical — its role is intra-day (±30m stepper) |
    | True colour, night lights | ✗ | ✗ | photographs, no colormap to invert |
    | Grid climatologies | ✗ | ✗ | already multi-decade averages, not timed |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set
@@ -141,7 +142,10 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   cards and hints, not in control labels.
 - Layer metadata is uniform: title link, one-line `meta`, hover card.
 - The date selector has quick-step buttons (±1d/±1m/±1y/Today) with real
-  calendar arithmetic, clamped to [2000-01-01, most recent].
+  calendar arithmetic, clamped to [2000-01-01, most recent]. A ±30m time-of-day
+  stepper (`#time-steps`) appears only while a sub-daily layer is on; crossing
+  midnight rolls the date, and stepping refreshes only the sub-daily layers
+  (no churn of the daily/monthly rasters).
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
 - **Active-layer chips** (`#active-layers`, top-left of the globe) list every
   layer currently on, whatever machinery draws it. Each chip's `×` turns the
@@ -224,6 +228,18 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
 - **OC-CCI and SMOS** have no clean unauthenticated endpoints; they are
   catalogued, and represented on-globe by NASA Ocean Color (chlorophyll) and
   SMAP (salinity) respectively. Wiring them as grids is an open follow-up.
+- **What a transparent pixel MEANS differs per layer**, and window means must
+  honour it. Clear-sky products (MODIS LST/snow/AOD): transparent = unobserved
+  → exclude the sample. Precipitation: transparent = below the palette floor
+  (0.1 mm/hr) ≈ no rain → must count as 0 (`transparentZero` flag), or the
+  "mean" is really "rate on rainy days", biased high wherever it rained once.
+  Symmetrically on output: a mean below the palette floor renders transparent,
+  else `forward()` clamps drizzle-of-drizzles up to the first colour and the
+  whole ocean tints "light rain".
+- **GIBS serves sub-daily TIME**: `TIME=YYYY-MM-DDTHH:MM:SSZ` returns distinct
+  tiles per half-hour for IMERG 30-min (verified: 13:00 ≠ 13:30 ≠ bare date;
+  bare date resolves to 00:00). `gibsTime()` appends the timestamp for
+  `subDaily` layers from `state.timeMin`.
 - **Cesium's `_zoomFactor` is minified away** in production builds — wheel zoom
   is reimplemented as a custom handler (`__wheelZoom`).
 - **Zoom direction convention**: scrolling up, or spreading two fingers apart

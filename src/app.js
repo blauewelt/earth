@@ -121,6 +121,15 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/GPM_Precipitation_Rate_H.svg",
     doc: "https://gpm.nasa.gov/data/imerg",
     layer: "IMERG_Precipitation_Rate",
+    // The daily product is a daily-MEAN rate (not an instant), so averaging N
+    // of them gives the mean rate over the window — the same operation GPCP
+    // performs at monthly scale. transparentZero: in IMERG tiles transparent
+    // means "below 0.1 mm/hr", i.e. essentially no rain — NOT "unobserved" as
+    // in clear-sky products — so the window mean must count those pixels as 0.
+    // Excluding them would compute "mean rate on rainy days" (biased high
+    // everywhere it rained once). Differencing stays off: day-vs-day rain
+    // deltas are weather, not signal.
+    aggregable: true, transparentZero: true,
     title: "Precipitation rate (GPM IMERG V07)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2000-06-01", timed: true, on: false,
@@ -132,10 +141,15 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/GPM_Precipitation_Rate_H.svg",
     doc: "https://gpm.nasa.gov/data/imerg",
     layer: "IMERG_Precipitation_Rate_30min",
+    // Neither aggregable nor differenceable: each frame is one half-hour
+    // snapshot, and a multi-day window sampling ~12 arbitrary instants is not
+    // an average of anything physical. Its role is intra-day: step through a
+    // single day's storms with the ±30m time stepper (state.timeMin). For
+    // multi-day rain, the daily layer above aggregates soundly.
     title: "Precipitation rate (IMERG V07, 30-min)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2000-06-01", timed: true, subDaily: true, on: false,
-    meta: "GPM IMERG V07 half-hourly rate — sub-daily storm structure",
+    meta: "GPM IMERG V07 half-hourly rate — step through the day with ±30m",
   },
   {
     id: "seaice",
@@ -272,6 +286,14 @@ function gibsTime(cfg, dateStr) {
       d = m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, "0")}-01`;
     }
     return d;
+  }
+  // Sub-daily layers get a full timestamp. GIBS serves distinct tiles per
+  // half-hour (verified: TIME=...T13:00:00Z and ...T13:30:00Z differ); a bare
+  // date resolves to 00:00. state.timeMin is the UI's time-of-day in minutes.
+  if (cfg.subDaily && state.timeMin) {
+    const h = String(Math.floor(state.timeMin / 60)).padStart(2, "0");
+    const m = String(state.timeMin % 60).padStart(2, "0");
+    return `${dateStr}T${h}:${m}:00Z`;
   }
   return dateStr;
 }
@@ -549,6 +571,7 @@ const state = {
   compareYears: 0,       // comparison offset (0 = not comparing)
   compareMode: "split",  // "split" | "delta" — display mode, orthogonal to the window
   windowDays: 1,         // rolling aggregation window ending at `date` (1 = single day)
+  timeMin: 0,            // time of day (UTC minutes) for sub-daily layers, stepped ±30m
   layers: {},
 };
 
@@ -684,13 +707,24 @@ async function sstMeanField(cfg, dates, x, y, level, lut, ctx) {
   const sum = new Float32Array(N);
   const cnt = new Uint8Array(N);
   const imgs = await Promise.all(dates.map((d) => sstFetchBitmap(sstFetchUrl(cfg, d, x, y, level))));
+  // What a transparent pixel MEANS differs by layer, and the mean must honour
+  // it. Default (clear-sky products): transparent = unobserved → exclude the
+  // sample, divide by the count of days that had data. transparentZero
+  // (precipitation): transparent = below the palette floor ≈ no rain → count
+  // it as 0, else the mean is "rate on rainy days only", biased high wherever
+  // it rained once. (Only pixels from tiles that loaded are counted either
+  // way, so a missing tile never masquerades as a dry day.)
+  const zero = !!cfg.transparentZero;
   for (const img of imgs) {
     if (!img) continue;
     ctx.clearRect(0, 0, 512, 512);
     ctx.drawImage(img, 0, 0);
     const d = ctx.getImageData(0, 0, 512, 512).data;
     for (let p = 0, i = 0; p < N; p++, i += 4) {
-      if (d[i + 3] === 0) continue;
+      if (d[i + 3] === 0) {
+        if (zero) cnt[p]++;                       // sum += 0
+        continue;
+      }
       const v = lut.get((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
       if (v === undefined) continue;
       sum[p] += v;
@@ -733,18 +767,28 @@ class AggregateProvider {
   getTileCredits() { return undefined; }
   pickFeatures() { return undefined; }
   async requestImage(x, y, level) {
-    const [vlut, forward] = await Promise.all([
-      getValueLut(this._cfg.colormap), getForward(this._cfg.colormap)]);
+    const [vlut, forward, cm] = await Promise.all([
+      getValueLut(this._cfg.colormap), getForward(this._cfg.colormap),
+      getColormapEntries(this._cfg.colormap)]);
     const canvas = document.createElement("canvas");
     canvas.width = 512; canvas.height = 512;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!vlut || !forward) return canvas;
     const f = await sstMeanField(this._cfg, this._dates, x, y, level, vlut.lut, ctx);
+    // transparentZero layers keep the source convention on the way OUT too: a
+    // mean below the palette floor (e.g. drizzle-of-drizzles < 0.1 mm/hr)
+    // renders transparent, exactly as GIBS renders such values — without this,
+    // forward() clamps tiny means up to the palette's first colour and the
+    // whole ocean tints "light rain".
+    const floor = this._cfg.transparentZero && cm?.entries?.length
+      ? cm.entries[0].lo : -Infinity;
     const out = ctx.createImageData(512, 512);
     const o = out.data;
     for (let p = 0, i = 0; p < 512 * 512; p++, i += 4) {
       if (f.cnt[p] === 0) continue;
-      const c = forward(f.sum[p] / f.cnt[p]);
+      const v = f.sum[p] / f.cnt[p];
+      if (v < floor) continue;
+      const c = forward(v);
       o[i] = c[0]; o[i + 1] = c[1]; o[i + 2] = c[2]; o[i + 3] = 235;
     }
     ctx.clearRect(0, 0, 512, 512);
@@ -1083,15 +1127,19 @@ function updateDeltaHint() {
 
   // Aggregation warning — independent of comparison mode. A checked layer
   // that can't be time-averaged is hidden while a window is active; say so.
-  const suppressed = Object.values(state.layers)
-    .filter((e) => e.suppressed).map((e) => e.cfg.title);
+  const suppressedEntries = Object.values(state.layers).filter((e) => e.suppressed);
+  const suppressed = suppressedEntries.map((e) => e.cfg.title);
   if (suppressed.length) {
     msgs.push(`⚠ <strong>${suppressed.join(", ")}</strong>: hidden while ` +
       `“${windowLabel(state.windowDays)}” aggregation is on — ` +
       (suppressed.length > 1 ? "these layers show" : "this layer shows") +
       " an instant, not an average, so a single day's picture under an averaged " +
       "label would mislead. Set Aggregate back to <em>single day</em> to show " +
-      (suppressed.length > 1 ? "them" : "it") + " again.");
+      (suppressed.length > 1 ? "them" : "it") + " again." +
+      // The 30-min case has a real alternative — say so instead of dead-ending.
+      (suppressedEntries.some((e) => e.cfg.subDaily)
+        ? " For rain over several days, the <em>daily</em> precipitation layer does average."
+        : ""));
   }
 
   if (state.compareYears) {
@@ -1110,9 +1158,10 @@ function updateDeltaHint() {
         .some((e) => e.layer && e.cfg.timed && e.cfg.deltaRange == null);
       if (rasterNoDelta) {
         msgs.push("⚠ Computed difference works on continuous rasters (SST &amp; anomalies, " +
-          "sea ice, snow, land temperature, salinity). Precipitation is instantaneous and noisy, and " +
-          "aerosol &amp; chlorophyll too erratic day-to-day, so those are shown as-is " +
-          "(aerosol &amp; chlorophyll can still be time-averaged with the Aggregate slider).");
+          "sea ice, snow, land temperature, salinity). Day-vs-day precipitation is weather " +
+          "noise, and aerosol &amp; chlorophyll too erratic day-to-day, so those are shown " +
+          "as-is (daily precipitation, aerosol &amp; chlorophyll can still be time-averaged " +
+          "with the Aggregate slider).");
       }
     }
   }
@@ -1149,6 +1198,21 @@ function updateLegends() {
   updateDeltaHint();
   updateBaseAppearance();
   updateActiveChips();
+  updateTimeRow();
+}
+
+/* The ±30m time stepper only appears while a sub-daily layer is on (also while
+ * one is merely suppressed by a window, so the control doesn't vanish and
+ * reappear as the Aggregate slider moves). */
+function updateTimeRow() {
+  const row = document.getElementById("time-steps");
+  if (!row) return;
+  const active = Object.values(state.layers)
+    .some((e) => e.cfg.subDaily && (e.layer || e.suppressed));
+  row.classList.toggle("hidden", !active);
+  const h = String(Math.floor(state.timeMin / 60)).padStart(2, "0");
+  const m = String(state.timeMin % 60).padStart(2, "0");
+  document.getElementById("time-value").textContent = `${h}:${m} UTC`;
 }
 
 /* ------------------------------------------- active-layer chips (on globe)
@@ -1585,15 +1649,18 @@ const LAYER_FACTS = {
          "own climatology, so persistent warm/cold departures stand out regardless of " +
          "season. Marine heatwaves and the cold blob read directly in °C above or " +
          "below normal." },
-  "precip": { rec: "2000-06 → present", int: "daily (sum of 30-min scans)", sp: "~10 km (0.1°)",
-    sum: "Where it is raining or snowing right now: IMERG merges the GPM core " +
-         "satellite with a constellation of microwave sensors into a global " +
-         "precipitation map. An instantaneous weather field — for 'how much rain is " +
-         "normal here', see the GPCP/E-OBS/MeteoSwiss climatologies." },
-  "precip-30min": { rec: "2000-06 → present", int: "every 30 minutes", sp: "~10 km (0.1°)",
+  "precip": { rec: "2000-06 → present", int: "daily (mean of the day's 30-min scans)", sp: "~10 km (0.1°)",
+    sum: "Where it rained today: IMERG merges the GPM core satellite with a " +
+         "constellation of microwave sensors into a global map of the day's mean " +
+         "rain rate. The Aggregate slider averages it over longer windows (dry " +
+         "pixels count as zero, so it's a true mean, not 'rate when raining') — " +
+         "for 'how much rain is normal here', see the GPCP/E-OBS/MeteoSwiss " +
+         "climatologies." },
+  "precip-30min": { rec: "2000-06 → present", int: "every 30 minutes — step with the ±30m buttons", sp: "~10 km (0.1°)",
     sum: "The same IMERG merged precipitation at its native half-hourly cadence — " +
          "sharp enough to watch individual storm systems and tropical cyclones " +
-         "develop within a single day rather than as a daily average." },
+         "develop over the course of a single day, using the ±30m time stepper " +
+         "under the date." },
   "seaice": { rec: "2012-07 → present, with gaps", int: "daily", sp: "12 km grid",
     sum: "The fraction of ocean covered by sea ice at both poles, sensed by passive " +
          "microwave (AMSR2), which sees through clouds and polar night. The " +
@@ -1754,6 +1821,33 @@ function buildLayerPanel() {
     dateInput.value = next;
     refreshTimedLayers();
     if (sstEnsembleLayer) updateEnsembleLayer();
+  });
+
+  // ±30m time-of-day stepping for sub-daily layers. Crossing midnight rolls
+  // the date (clamped to the layer-availability range like the day stepper).
+  document.getElementById("time-steps").addEventListener("click", (e) => {
+    const step = Number(e.target.getAttribute?.("data-tstep"));
+    if (!step) return;
+    let t = state.timeMin + step;
+    let date = state.date;
+    if (t < 0) { t = 1440 + t; date = addDays(date, -1); }
+    else if (t >= 1440) { t = t - 1440; date = addDays(date, 1); }
+    if (date > defaultDate() || date < "2000-01-01") return; // nothing to step to
+    state.timeMin = t;
+    if (date !== state.date) {
+      state.date = date;
+      dateInput.value = date;
+      refreshTimedLayers();          // date change affects every timed layer
+    } else {
+      // Same date, new half-hour: only sub-daily layers see a different TIME,
+      // so don't churn (refetch) the daily/monthly layers on every step.
+      for (const [id, entry] of Object.entries(state.layers)) {
+        if (entry.cfg.subDaily && (entry.layer || entry.suppressed)) {
+          removeLayer(id);
+          addLayer(entry.cfg);
+        }
+      }
+    }
   });
 }
 

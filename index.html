@@ -39,6 +39,15 @@
         <button data-step="+1y" title="forward one year">+1y</button>
         <button data-step="today" title="jump to the most recent date">Today</button>
       </div>
+      <!-- Time of day: only meaningful for sub-daily layers (IMERG 30-min),
+           so the row only appears while one is on. Crossing midnight rolls
+           the date. -->
+      <div class="control-row date-steps hidden" id="time-steps">
+        <label>Time</label>
+        <button data-tstep="-30" title="back 30 minutes">−30m</button>
+        <button data-tstep="+30" title="forward 30 minutes">+30m</button>
+        <span id="time-value" class="window-value">00:00 UTC</span>
+      </div>
       <div class="control-row">
         <label for="compare-select">Compare</label>
         <select id="compare-select">

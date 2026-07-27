@@ -421,10 +421,10 @@ test("comparison hint explains non-differenceable & point layers in both modes",
   await page.selectOption("#compare-select", "10");
   await page.selectOption("#compare-mode", "delta");
   await expect(page.locator("#delta-hint")).toBeHidden(); // SST alone is differenceable
-  // precipitation has no deltaRange (instantaneous/log) → hint appears in delta mode
+  // precipitation has no deltaRange (day-vs-day rain is noise) → hint appears in delta mode
   await page.check('#layer-list input[data-id="precip"]');
   await expect(page.locator("#delta-hint")).toBeVisible();
-  await expect(page.locator("#delta-hint")).toContainText("instantaneous");
+  await expect(page.locator("#delta-hint")).toContainText("weather");
   await page.uncheck('#layer-list input[data-id="precip"]');
   await expect(page.locator("#delta-hint")).toBeHidden();
   // glaciers: single-snapshot note appears in delta AND side-by-side modes
@@ -929,12 +929,13 @@ test("aggregation/difference matrix: every timed raster has an explicit posture"
     expect(m[id].delta, `${id} differenceable`).toBe(true);
   }
   // average-only: sound to time-average, unsound to difference day-vs-day
-  for (const id of ["chlor", "aod"]) {
+  // (precip: daily-mean rates average like GPCP does; day-vs-day is weather)
+  for (const id of ["chlor", "aod", "precip"]) {
     expect(m[id].agg, `${id} aggregable`).toBe(true);
     expect(m[id].delta, `${id} not differenceable`).toBe(false);
   }
-  // neither: photographs and instantaneous sparse fields
-  for (const id of ["viirs-truecolor", "nightlights", "precip", "precip-30min"]) {
+  // neither: photographs and instantaneous snapshots
+  for (const id of ["viirs-truecolor", "nightlights", "precip-30min"]) {
     expect(m[id].delta, `${id} no delta`).toBe(false);
     expect(m[id].agg, `${id} no aggregate`).toBe(false);
   }
@@ -968,14 +969,14 @@ test("non-aggregatable layers are hidden + warned under an active window", async
     const s = document.getElementById("window-days"); s.value = String(val);
     s.dispatchEvent(new Event("change"));
   }, v);
-  // precipitation cannot be time-averaged; single day → it renders
-  await page.check('#layer-list input[data-id="precip"]');
-  let r = await page.evaluate(() => window.__earth.state.layers["precip"]);
+  // a half-hourly snapshot cannot be time-averaged; single day → it renders
+  await page.check('#layer-list input[data-id="precip-30min"]');
+  let r = await page.evaluate(() => window.__earth.state.layers["precip-30min"]);
   expect(!!r.layer).toBe(true);
   // a window suppresses it entirely rather than showing a misleading single day
   await setWin(90);
   r = await page.evaluate(() => {
-    const e = window.__earth.state.layers["precip"];
+    const e = window.__earth.state.layers["precip-30min"];
     return { has: !!e.layer, suppressed: !!e.suppressed };
   });
   expect(r.has).toBe(false);
@@ -983,6 +984,8 @@ test("non-aggregatable layers are hidden + warned under an active window", async
   await expect(page.locator("#delta-hint")).toBeVisible();
   await expect(page.locator("#delta-hint")).toContainText("Precipitation rate");
   await expect(page.locator("#delta-hint")).toContainText("hidden while");
+  // …and the hint points at the alternative that DOES average
+  await expect(page.locator("#delta-hint")).toContainText("daily");
   // an aggregatable layer under the same window still shows (as an average)
   const sst = await page.evaluate(() => {
     const e = window.__earth.state.layers["sst"];
@@ -992,11 +995,66 @@ test("non-aggregatable layers are hidden + warned under an active window", async
   // returning to a single day restores the suppressed layer and clears the note
   await setWin(1);
   r = await page.evaluate(() => {
-    const e = window.__earth.state.layers["precip"];
+    const e = window.__earth.state.layers["precip-30min"];
     return { has: !!e.layer, suppressed: !!e.suppressed };
   });
   expect(r.has).toBe(true);
   expect(r.suppressed).toBe(false);
+});
+
+test("daily precip aggregates (dry = zero); 30-min layer steps through the day", async ({ page }) => {
+  // -- daily: a window turns it into a real windowed mean, not a suppression
+  await page.check('#layer-list input[data-id="precip"]');
+  await page.evaluate(() => {
+    const s = document.getElementById("window-days"); s.value = "5";
+    s.dispatchEvent(new Event("change"));
+  });
+  const daily = await page.evaluate(() => {
+    const e = window.__earth.state.layers["precip"];
+    return { agg: e.isAggregate, sup: !!e.suppressed,
+             name: e.layer.imageryProvider.constructor.name,
+             zero: !!e.cfg.transparentZero };
+  });
+  expect(daily.sup).toBe(false);
+  expect(daily.agg).toBe(true);
+  expect(daily.name).toBe("AggregateProvider");
+  expect(daily.zero).toBe(true);  // transparent = "no rain", counted as 0 in the mean
+  // no ⚠ on its chip — it is genuinely being drawn as an average
+  const chip = page.locator("#active-layers .chip", { hasText: "GPM IMERG V07)" });
+  await expect(chip).not.toHaveClass(/chip-warn/);
+  await page.evaluate(() => {
+    const s = document.getElementById("window-days"); s.value = "1";
+    s.dispatchEvent(new Event("change"));
+  });
+
+  // -- 30-min: the time row appears with the layer and steps in half-hours
+  const row = page.locator("#time-steps");
+  await expect(row).toHaveClass(/hidden/);
+  await page.check('#layer-list input[data-id="precip-30min"]');
+  await expect(row).not.toHaveClass(/hidden/);
+  await expect(page.locator("#time-value")).toHaveText("00:00 UTC");
+  await page.click('#time-steps button[data-tstep="+30"]');
+  await expect(page.locator("#time-value")).toHaveText("00:30 UTC");
+  // the GIBS TIME the layer actually requests carries the half-hour
+  const t = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "precip-30min");
+    return { sub: E.gibsTime(cfg, E.state.date),
+             daily: E.gibsTime(E.GIBS_LAYERS.find((l) => l.id === "precip"), E.state.date) };
+  });
+  expect(t.sub).toMatch(/T00:30:00Z$/);
+  expect(t.daily).not.toContain("T");  // daily layers are untouched by the stepper
+  // stepping back across midnight rolls the date
+  const dateBefore = await page.inputValue("#layer-date");
+  await page.click('#time-steps button[data-tstep="-30"]');
+  await page.click('#time-steps button[data-tstep="-30"]');
+  await expect(page.locator("#time-value")).toHaveText("23:30 UTC");
+  const after = await page.evaluate(() => window.__earth.state.date);
+  expect(after < dateBefore).toBe(true);
+  expect(await page.inputValue("#layer-date")).toBe(after);
+  // switching the layer off hides the row again
+  await page.uncheck('#layer-list input[data-id="precip-30min"]');
+  await expect(row).toHaveClass(/hidden/);
 });
 
 test("enabling a date-independent layer fires an animated warning toast", async ({ page }) => {
@@ -1105,7 +1163,9 @@ test("active-layer chips list what's on and switch it off from anywhere", async 
 });
 
 test("a suppressed layer is flagged on its chip rather than silently listed", async ({ page }) => {
-  await page.check('#layer-list input[data-id="precip"]');
+  // The 30-min layer: a half-hourly snapshot can't be averaged, so a window
+  // suppresses it (daily precip, by contrast, aggregates and must NOT warn).
+  await page.check('#layer-list input[data-id="precip-30min"]');
   const chip = page.locator("#active-layers .chip", { hasText: "Precipitation rate" });
   await expect(chip).not.toHaveClass(/chip-warn/);
   // a window it can't honour → still checked, but marked as not being drawn
