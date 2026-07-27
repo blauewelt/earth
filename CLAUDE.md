@@ -193,6 +193,7 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
 | `docs/PRIMER.pdf` | Background knowledge (GIBS, tiles, colormaps, product levels, climatologies). Rebuild: `python3 scripts/build_primer.py` |
 | `docs/CATALOG.md` + `data/catalog.json` | The 244-record open-data catalog (human + machine readable) |
 | `docs/COMBINING_DATASETS.md` | Which datasets measure the same quantity; sound combinations |
+| `docs/PIXEL_STATE.md` | Which catalog sources compose into a per-pixel state vector (state/memory/forcing/flow/future); the 0.25°-daily common grid argument; the ~25-source minimal composition |
 | `docs/SPECIES_AND_CLIMATE.md` | Why biodiversity data belongs in a climate app |
 
 ---

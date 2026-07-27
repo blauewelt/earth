@@ -99,6 +99,7 @@ Conventions and the full record of what has been built live in
 |---|---|
 | [docs/PRIMER.pdf](docs/PRIMER.pdf) | Background knowledge: GIBS and WMTS, tiling schemes, colormaps, satellite product levels, what a climatology is |
 | [docs/COMBINING_DATASETS.md](docs/COMBINING_DATASETS.md) | Which catalog datasets measure the same quantity, which combinations are scientifically sound (SST ensembles, the sea-level budget, the AMOC state vector, land+ocean blends), and why per-pixel differencing works for SST but not precipitation |
+| [docs/PIXEL_STATE.md](docs/PIXEL_STATE.md) | Which of the 244 sources compose into a holistic per-pixel state vector — state, memory, forcing, flow, future — and the ~25-source minimal composition on a common 0.25° daily grid |
 | [docs/SPECIES_AND_CLIMATE.md](docs/SPECIES_AND_CLIMATE.md) | Why biodiversity occurrence data belongs in a climate app |
 | [docs/CATALOG.md](docs/CATALOG.md) | The full catalog as a readable reference |
 
