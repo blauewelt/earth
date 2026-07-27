@@ -127,9 +127,11 @@ const GIBS_LAYERS = [
     // means "below 0.1 mm/hr", i.e. essentially no rain — NOT "unobserved" as
     // in clear-sky products — so the window mean must count those pixels as 0.
     // Excluding them would compute "mean rate on rainy days" (biased high
-    // everywhere it rained once). Differencing stays off: day-vs-day rain
-    // deltas are weather, not signal.
-    aggregable: true, transparentZero: true,
+    // everywhere it rained once). ratioRange: log-distributed field, so
+    // computed comparison renders log(mean_now/mean_past) — a ×-fold ratio,
+    // saturating at ×8 — rather than an absolute difference, which would be
+    // dominated by the log palette's value-proportional quantization.
+    aggregable: true, transparentZero: true, ratioRange: 8,
     title: "Precipitation rate (GPM IMERG V07)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2000-06-01", timed: true, on: false,
@@ -182,6 +184,7 @@ const GIBS_LAYERS = [
     doc: "https://atmosphere-imager.gsfc.nasa.gov/products/aerosol",
     layer: "MODIS_Combined_Value_Added_AOD",
     aggregable: true,  // mean AOD over a window is standard; day-vs-day differencing is noise
+    ratioRange: 4,     // log-ish field → computed comparison is a ×-fold ratio of window means
     title: "Aerosol optical depth (MODIS)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2017-04-19", timed: true, on: false,
@@ -205,7 +208,8 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_Chlorophyll_H.svg",
     doc: "https://oceancolor.gsfc.nasa.gov/",
     layer: "OCI_PACE_Chlorophyll_a",
-    aggregable: true,  // time-averaging fills swath/cloud gaps; differencing a log-scaled field is unsound
+    aggregable: true,  // time-averaging fills swath/cloud gaps
+    ratioRange: 4,     // log-normal-ish field → compare as ×-fold ratio of window means, not absolute Δ
     title: "Chlorophyll-a (NASA Ocean Color, PACE)",
     ext: "png", tms: "1km", maxLevel: 6,
     start: "2024-02-25", timed: true, on: false,
@@ -851,6 +855,73 @@ class DeltaProvider {
   }
 }
 
+/* Per-pixel ×-fold RATIO of two rolling-window means, for log-distributed
+ * fields (precipitation, chlorophyll, aerosol) where an absolute difference is
+ * the wrong object twice over: (a) the only access to values is the palette,
+ * and a log palette's bins grow in proportion to the value, so the difference
+ * of two large near-equal values is mostly quantization error; (b) for
+ * log-normal-ish fields the meaningful "change" is multiplicative anyway.
+ * log(mean_now / mean_past) is quantization-robust (bin error is a few % OF
+ * the value, hence a small constant in log space) and reads naturally as
+ * "×2 wetter", "half the plankton". Rendered through the same diverging
+ * blue-less / red-more scale as DeltaProvider, saturating at ×ratioRange. */
+class RatioProvider {
+  constructor(cfg, dateNow, datePast, windowDays = 1) {
+    this._cfg = cfg;
+    this._range = cfg.ratioRange || 4;
+    this._window = windowDays;
+    this._datesNow = windowSampleDates(dateNow, windowDays);
+    this._datesPast = windowSampleDates(datePast, windowDays);
+    this.tilingScheme = new GIBSGeographicTilingScheme();
+    this.rectangle = this.tilingScheme.rectangle;
+    this.tileWidth = 512;
+    this.tileHeight = 512;
+    this.maximumLevel = windowMaxLevel(cfg, windowDays);
+    this.minimumLevel = 0;
+    this.errorEvent = new Cesium.Event();
+    this.credit = new Cesium.Credit(
+      `${cfg.title} ratio (${windowLabel(windowDays)} means) computed client-side from NASA GIBS`
+    );
+    this.hasAlphaChannel = true;
+    this.ready = true;
+  }
+  get window() { return this._window; }
+  get layerId() { return this._cfg.id; }
+  getTileCredits() { return undefined; }
+  pickFeatures() { return undefined; }
+  async requestImage(x, y, level) {
+    const [vlut, cm] = await Promise.all([
+      getValueLut(this._cfg.colormap), getColormapEntries(this._cfg.colormap)]);
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!vlut) return canvas;
+    // transparentZero fields have genuine zeros (dry pixels), so the ratio
+    // needs a floor: eps = half the palette floor keeps rain-appearing /
+    // rain-vanishing finite (dry→drizzle reads as a strong but bounded fold)
+    // and makes dry÷dry exactly 1 → the dead zone → transparent.
+    const eps = this._cfg.transparentZero && cm?.entries?.length
+      ? cm.entries[0].lo / 2 : 0;
+    const logRange = Math.log(this._range);
+    const [now, past] = await Promise.all([
+      sstMeanField(this._cfg, this._datesNow, x, y, level, vlut.lut, ctx),
+      sstMeanField(this._cfg, this._datesPast, x, y, level, vlut.lut, ctx),
+    ]);
+    const out = ctx.createImageData(512, 512);
+    const o = out.data;
+    for (let p = 0, i = 0; p < 512 * 512; p++, i += 4) {
+      if (now.cnt[p] === 0 || past.cnt[p] === 0) continue;
+      const d = Math.log((now.sum[p] / now.cnt[p] + eps) / (past.sum[p] / past.cnt[p] + eps));
+      const [r, g, b, a] = deltaColor(d, logRange);
+      o[i] = r; o[i + 1] = g; o[i + 2] = b; o[i + 3] = a;
+    }
+    ctx.clearRect(0, 0, 512, 512);
+    ctx.putImageData(out, 0, 0);
+    return canvas;
+  }
+}
+
 /* ----------------------------------------------------------- grid overlays */
 /* GPCP, E-OBS, OISST and MeteoSwiss have no global tile service, so they ship
  * as a static regular lon/lat grid (data/<id>.json) that GridProvider paints on
@@ -949,8 +1020,8 @@ class GridProvider {
 }
 
 function addLayer(cfg) {
-  const entry = { cfg, layer: null, cmpLayer: null, isDelta: false, isAggregate: false,
-    alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
+  const entry = { cfg, layer: null, cmpLayer: null, isDelta: false, isRatio: false,
+    isAggregate: false, alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
   const cmp = compareDate();
   const comparing = cmp && cfg.timed;
   const deltaable = cfg.deltaRange != null;              // continuous field with an invertible colormap
@@ -992,6 +1063,11 @@ function addLayer(cfg) {
     entry.layer = add(new DeltaProvider(cfg, state.date, cmp, win));
     entry.layer.alpha = entry.alpha;
     entry.isDelta = true;
+  } else if (comparing && state.compareMode === "delta" && cfg.ratioRange) {
+    // Log-distributed field: computed comparison is a ×-fold ratio of means
+    entry.layer = add(new RatioProvider(cfg, state.date, cmp, win));
+    entry.layer.alpha = entry.alpha;
+    entry.isRatio = true;
   } else if (comparing && state.compareMode === "split") {
     // Side-by-side: right = current, left = past. Windowed means for SST, raw tiles otherwise.
     entry.layer = add(windowed ? new SSTAggregateProvider(cfg, state.date, win) : gibsProvider(cfg, state.date));
@@ -1019,6 +1095,7 @@ function removeLayer(id) {
   entry.layer = null;
   entry.cmpLayer = null;
   entry.isDelta = false;
+  entry.isRatio = false;
   entry.isAggregate = false;
   entry.suppressed = false;
   updateLegends();
@@ -1101,10 +1178,28 @@ windowSlider.addEventListener("input", syncWindowLabel);
 windowSlider.addEventListener("change", () => {
   state.windowDays = Number(windowSlider.value);
   syncWindowLabel();
+  markWindowPreset();
   refreshTimedLayers();
   if (sstEnsembleLayer) updateEnsembleLayer();
 });
+
+// One-click window presets (1d/7d/30d/365d): drive the slider and fire its own
+// change event so every consumer (label, presets, layers, ensemble) follows
+// the exact same path as dragging it by hand.
+document.getElementById("window-presets").addEventListener("click", (e) => {
+  const win = e.target.getAttribute?.("data-win");
+  if (!win) return;
+  windowSlider.value = win;
+  windowSlider.dispatchEvent(new Event("change", { bubbles: true }));
+});
+// highlight the preset matching the current window (if any)
+function markWindowPreset() {
+  for (const b of document.querySelectorAll("#window-presets button")) {
+    b.classList.toggle("active", Number(b.dataset.win) === Number(windowSlider.value));
+  }
+}
 syncWindowLabel();
+markWindowPreset();
 
 document.getElementById("toggle-grayscale").addEventListener("change", updateBaseAppearance);
 
@@ -1153,15 +1248,26 @@ function updateDeltaHint() {
         : "⚠ Point &amp; snapshot layers (emissions, floats, biodiversity) show a single state, " +
           "so they don't split or difference by date.");
     } else if (state.compareMode === "delta") {
-      // In computed-difference mode, instantaneous/log rasters aren't differenceable.
+      // Log-distributed fields render a ×-fold RATIO instead of a difference —
+      // explain the different reading, and that single-day ratios are weather.
+      if (Object.values(state.layers).some((e) => e.isRatio)) {
+        msgs.push("ℹ Log-distributed fields (precipitation, chlorophyll, aerosol) compare " +
+          "as a <strong>×-fold ratio</strong> of window means — red = more than then, " +
+          "blue = less — because an absolute difference would mostly be palette " +
+          "quantization error. A single-day ratio is weather (it rained <em>here</em> " +
+          "today, <em>there</em> that day); widen <em>Aggregate</em> (e.g. 30+ days) " +
+          "for a climate signal.");
+      }
+      // Rasters with NEITHER posture (true colour: a photograph, no colormap
+      // to invert) really are shown as-is.
       const rasterNoDelta = Object.values(state.layers)
-        .some((e) => e.layer && e.cfg.timed && e.cfg.deltaRange == null);
+        .some((e) => e.layer && e.cfg.timed && !e.isDelta && !e.isRatio &&
+                     e.cfg.deltaRange == null && !e.cfg.ratioRange);
       if (rasterNoDelta) {
         msgs.push("⚠ Computed difference works on continuous rasters (SST &amp; anomalies, " +
-          "sea ice, snow, land temperature, salinity). Day-vs-day precipitation is weather " +
-          "noise, and aerosol &amp; chlorophyll too erratic day-to-day, so those are shown " +
-          "as-is (daily precipitation, aerosol &amp; chlorophyll can still be time-averaged " +
-          "with the Aggregate slider).");
+          "sea ice, snow, land temperature, salinity) and, as a ratio, on precipitation, " +
+          "chlorophyll &amp; aerosol. Photographic and snapshot layers (true colour, " +
+          "30-min precipitation) have nothing to invert, so they are shown as-is.");
       }
     }
   }
@@ -1185,6 +1291,9 @@ function updateLegends() {
     if (!e.layer) continue;
     if (e.isDelta) {
       panel.appendChild(deltaLegendEl(e.cfg));
+      any = true;
+    } else if (e.isRatio) {
+      panel.appendChild(ratioLegendEl(e.cfg));
       any = true;
     } else if (e.cfg.grid) {
       panel.appendChild(gridLegendEl(e.cfg));
@@ -1561,6 +1670,45 @@ function deltaLegendEl(cfg) {
   });
   div.appendChild(rangeEl);
   div.insertAdjacentHTML("beforeend", `<div class="legend-note">blue = decrease · red = increase vs then · globe shown grey so the change stands out</div>`);
+  return div;
+}
+
+/* Legend for a RatioProvider layer: the same diverging bar, but the axis is
+ * multiplicative — ×N less | same | ×N more — matching the log rendering. */
+function ratioLegendEl(cfg) {
+  const range = cfg.ratioRange || 4;
+  const div = document.createElement("div");
+  div.className = "legend-item";
+  const cmp = compareDate();
+  const win = windowLabel(state.windowDays);
+  div.innerHTML = `<div class="legend-title">${cfg.title}: ${state.date} ÷ ${cmp} (ratio of ${win} means)</div>`;
+  const wrap = document.createElement("div");
+  wrap.className = "legend-bar-wrap";
+  const bar = document.createElement("div");
+  bar.className = "delta-bar";
+  const tip = document.createElement("div");
+  tip.className = "legend-tip hidden";
+  bar.addEventListener("mousemove", (e) => {
+    const rect = bar.getBoundingClientRect();
+    const frac = Cesium.Math.clamp((e.clientX - rect.left) / rect.width, 0, 1);
+    const fold = Math.pow(range, 2 * frac - 1);      // log axis: range^-1 … range
+    tip.textContent = Math.abs(Math.log(fold)) < Math.log(range) * 0.05
+      ? "≈ same as then"
+      : fold > 1 ? `×${fmtVal(fold)} more than then` : `×${fmtVal(1 / fold)} less than then`;
+    tip.style.left = `${Math.min(Math.max(frac * rect.width - 40, 0), rect.width - 130)}px`;
+    tip.classList.remove("hidden");
+  });
+  bar.addEventListener("mouseleave", () => tip.classList.add("hidden"));
+  wrap.appendChild(tip);
+  wrap.appendChild(bar);
+  div.appendChild(wrap);
+  const rangeEl = document.createElement("div");
+  rangeEl.className = "legend-range";
+  rangeEl.innerHTML = `<span>×${range} less</span><span>same</span><span>×${range} more</span>`;
+  div.appendChild(rangeEl);
+  div.insertAdjacentHTML("beforeend",
+    `<div class="legend-note">×-fold ratio of window means (log scale) — the sound comparison ` +
+    `for a log-distributed field. Widen <em>Aggregate</em> for a stabler signal.</div>`);
   return div;
 }
 
@@ -2178,11 +2326,31 @@ async function probePixel(cfg, date, z, x, y, px, py, valueLut) {
   const v = valueLut.get((d[0] << 16) | (d[1] << 8) | d[2]);
   return v === undefined ? null : v;
 }
-// mean pixel value across a set of sample dates (rolling-window mean)
+// Mean pixel value across a set of sample dates (rolling-window mean), with
+// the same transparent-pixel semantics as the rendered mean (sstMeanField):
+// for transparentZero layers a transparent pixel in a LOADED tile is a real 0
+// and counts; only a missing tile is a missing sample. Without this the probe
+// of an aggregated precip layer would read "mean rate on rainy days" — higher
+// than the map it is probing.
 async function probePixelMean(cfg, dates, z, x, y, px, py, valueLut) {
-  const vals = await Promise.all(dates.map((dt) => probePixel(cfg, dt, z, x, y, px, py, valueLut)));
-  const ok = vals.filter((v) => v != null);
-  return ok.length ? ok.reduce((s, v) => s + v, 0) / ok.length : null;
+  if (!cfg.transparentZero) {
+    const vals = await Promise.all(dates.map((dt) => probePixel(cfg, dt, z, x, y, px, py, valueLut)));
+    const ok = vals.filter((v) => v != null);
+    return ok.length ? ok.reduce((s, v) => s + v, 0) / ok.length : null;
+  }
+  const imgs = await Promise.all(dates.map((dt) => fetchProbeTile(cfg, dt, z, x, y)));
+  let sum = 0, cnt = 0;
+  for (const img of imgs) {
+    if (!img) continue;
+    probeCtx.clearRect(0, 0, 512, 512);
+    probeCtx.drawImage(img, 0, 0);
+    const d = probeCtx.getImageData(px, py, 1, 1).data;
+    if (d[3] === 0) { cnt++; continue; }               // dry: counts as 0
+    const v = valueLut.get((d[0] << 16) | (d[1] << 8) | d[2]);
+    if (v === undefined) continue;
+    sum += v; cnt++;
+  }
+  return cnt ? sum / cnt : null;
 }
 
 async function probeValueAt(carto) {
@@ -2199,9 +2367,10 @@ async function probeValueAt(carto) {
     const v = sampleGrid(g, lon, lat);
     return v == null ? { ...base, noData: true } : { ...base, value: v };
   }
-  const win = entry.isDelta || entry.isAggregate ? state.windowDays : 1;
-  // match the rendered resolution (delta/aggregate cap the level)
-  const z = (entry.isDelta || entry.isAggregate) ? windowMaxLevel(cfg, win) : cfg.maxLevel;
+  const computed = entry.isDelta || entry.isRatio || entry.isAggregate;
+  const win = computed ? state.windowDays : 1;
+  // match the rendered resolution (delta/ratio/aggregate cap the level)
+  const z = computed ? windowMaxLevel(cfg, win) : cfg.maxLevel;
   const span = (0.5625 / 2 ** z) * 512;               // degrees per tile at level z
   const x = Math.floor((lon + 180) / span);
   const y = Math.floor((90 - lat) / span);
@@ -2221,6 +2390,18 @@ async function probeValueAt(carto) {
     ]);
     if (now == null || past == null) return { ...base, delta: true, noData: true };
     return { ...base, delta: true, value: now - past };
+  }
+  if (entry.isRatio) {
+    // fold = mean(now)/mean(past), with the same eps floor as the rendering
+    const cmp = compareDate();
+    const [now, past, cm] = await Promise.all([
+      probePixelMean(cfg, windowSampleDates(state.date, win), z, x, y, px, py, vlut.lut),
+      probePixelMean(cfg, windowSampleDates(cmp, win), z, x, y, px, py, vlut.lut),
+      getColormapEntries(cfg.colormap),
+    ]);
+    if (now == null || past == null) return { ...base, ratio: true, noData: true };
+    const eps = cfg.transparentZero && cm?.entries?.length ? cm.entries[0].lo / 2 : 0;
+    return { ...base, ratio: true, value: (now + eps) / (past + eps) };
   }
   if (entry.isAggregate) {
     const v = await probePixelMean(cfg, windowSampleDates(state.date, win), z, x, y, px, py, vlut.lut);
@@ -2244,10 +2425,19 @@ function renderProbe(res, sx, sy) {
   } else if (res.delta) {
     const v = `${res.value >= 0 ? "+" : "−"}${fmtVal(Math.abs(res.value))}`;
     head = `<span class="vp-val">Δ ${v}</span> <span class="vp-unit">${res.units}</span>`;
+  } else if (res.ratio) {
+    // multiplicative reading: ×1.8 more / ×2.3 less / ≈ same
+    const fold = res.value;
+    const near = Math.abs(Math.log(fold)) < 0.05;
+    head = near
+      ? `<span class="vp-val">≈ same</span>`
+      : `<span class="vp-val">×${fmtVal(fold >= 1 ? fold : 1 / fold)}</span> ` +
+        `<span class="vp-unit">${fold >= 1 ? "more" : "less"}</span>`;
   } else {
     head = `<span class="vp-val">${fmtVal(res.value)}</span> <span class="vp-unit">${res.units}</span>`;
   }
   const suffix = res.delta ? ` · Δ vs ${compareDate()}${state.windowDays > 1 ? ", " + windowLabel(state.windowDays) + " mean" : ""}`
+    : res.ratio ? ` · vs ${compareDate()}, ratio of ${windowLabel(state.windowDays)} means`
     : res.aggregated ? ` · ${windowLabel(state.windowDays)} mean` : "";
   probeEl.innerHTML = `${head}<div class="vp-meta">${res.title}${suffix}<br/>${coord}</div>`;
   probeEl.style.left = `${Math.min(sx + 14, viewer.scene.canvas.clientWidth - 150)}px`;
@@ -2782,6 +2972,7 @@ window.__earth = {
   SSTAggregateProvider,
   AggregateProvider,
   DeltaProvider,
+  RatioProvider,
   getValueLut,
   SSTEnsembleProvider,
   spreadColor,

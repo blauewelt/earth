@@ -1176,3 +1176,83 @@ test("a suppressed layer is flagged on its chip rather than silently listed", as
   await expect(chip).toHaveClass(/chip-warn/);
   await expect(chip.locator(".chip-label")).toContainText("⚠");
 });
+
+test("log fields compare as ×-fold ratios of window means", async ({ page }) => {
+  test.setTimeout(150000); // a computed-comparison render + a 2-tile probe
+  await page.check('#layer-list input[data-id="precip"]');
+  await page.selectOption("#compare-select", "10");
+  await page.selectOption("#compare-mode", "delta");
+  const r = await page.evaluate(() => {
+    const e = window.__earth.state.layers["precip"];
+    const sst = window.__earth.state.layers["sst"];
+    return { isRatio: e.isRatio, isDelta: e.isDelta,
+             name: e.layer.imageryProvider.constructor.name,
+             sstDelta: sst.isDelta };  // SST keeps a true difference beside it
+  });
+  expect(r.isRatio).toBe(true);
+  expect(r.isDelta).toBe(false);
+  expect(r.name).toBe("RatioProvider");
+  expect(r.sstDelta).toBe(true);
+  // the hint explains the multiplicative reading, the legend shows the × axis
+  await expect(page.locator("#delta-hint")).toContainText("ratio");
+  await expect(page.locator("#legend-panel")).toContainText("ratio of");
+  await expect(page.locator("#legend-panel")).toContainText("×8 more");
+  // a rendered tile paints real change: rain moves in 10 years, so both red
+  // (wetter) and blue (drier) pixels must appear
+  const painted = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "precip");
+    const p = new E.RatioProvider(cfg, E.state.date, E.compareDate(), 1);
+    const canvas = await p.requestImage(1, 0, 1);
+    const d = canvas.getContext("2d").getImageData(0, 0, 512, 512).data;
+    let red = 0, blue = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      if (d[i] > d[i + 2]) red++; else blue++;
+    }
+    return { red, blue };
+  });
+  expect(painted.red).toBeGreaterThan(500);
+  expect(painted.blue).toBeGreaterThan(500);
+  // the probe reports a fold change (or honestly no data if the pixel is dry)
+  const probe = await page.evaluate(() =>
+    window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-60, -5))); // Amazon
+  expect(probe.ratio).toBe(true);
+  if (!probe.noData) expect(probe.value).toBeGreaterThan(0);
+});
+
+test("window presets jump the slider; the explainer folds away", async ({ page }) => {
+  // presets drive the same path as dragging the slider
+  await page.click('#window-presets button[data-win="30"]');
+  await expect(page.locator("#window-value")).toHaveText("past 30 days");
+  await expect(page.locator('#window-presets button[data-win="30"]')).toHaveClass(/active/);
+  let s = await page.evaluate(() => ({
+    days: window.__earth.state.windowDays,
+    sstAgg: window.__earth.state.layers["sst"].isAggregate,
+  }));
+  expect(s.days).toBe(30);
+  expect(s.sstAgg).toBe(true);
+  // 1d returns to a plain single-day layer
+  await page.click('#window-presets button[data-win="1"]');
+  await expect(page.locator("#window-value")).toHaveText("single day");
+  await expect(page.locator('#window-presets button[data-win="1"]')).toHaveClass(/active/);
+  s = await page.evaluate(() => ({
+    days: window.__earth.state.windowDays,
+    sstAgg: window.__earth.state.layers["sst"].isAggregate,
+  }));
+  expect(s.days).toBe(1);
+  expect(s.sstAgg).toBe(false);
+  // a hand-dragged odd value un-highlights every preset
+  await page.evaluate(() => {
+    const sl = document.getElementById("window-days"); sl.value = "42";
+    sl.dispatchEvent(new Event("change"));
+  });
+  await expect(page.locator("#window-presets button.active")).toHaveCount(0);
+
+  // the Compare/Aggregate explainer is collapsed by default and opens on click
+  const details = page.locator(".hint-details");
+  expect(await details.evaluate((el) => el.open)).toBe(false);
+  await page.click(".hint-details summary");
+  expect(await details.evaluate((el) => el.open)).toBe(true);
+  await expect(details).toContainText("ratio");
+});

@@ -71,24 +71,35 @@
         <input type="range" id="window-days" min="1" max="730" step="1" value="1" />
         <span id="window-value" class="window-value">single day</span>
       </div>
+      <!-- Common windows as one-click presets: pinpointing 7/30/365 on a
+           730-stop slider by hand is fiddly. -->
+      <div class="control-row date-steps" id="window-presets">
+        <button data-win="1" title="no averaging — the single chosen day">1d</button>
+        <button data-win="7" title="average the past week">7d</button>
+        <button data-win="30" title="average the past month">30d</button>
+        <button data-win="365" title="average the past year">365d</button>
+      </div>
       <div class="control-row">
         <label class="check-inline"><input type="checkbox" id="toggle-grayscale" /> Grayscale globe</label>
       </div>
-      <p class="hint">Daily NASA GIBS imagery. <strong>Aggregate</strong> averages any continuous layer
-        (SST &amp; anomalies, sea ice, snow, land temperature, salinity, chlorophyll, aerosol) per pixel
-        over the past N days ending on the chosen date (1–730) — missing pixels (clouds, night) are
-        excluded and each pixel divides by the days it was actually observed, so cloudy-day gaps fill in.
-        Independent of the comparison mode. Side-by-side: drag the divider (left = past, right =
-        current). Computed difference: per-pixel "now − then" for the continuous layers except
-        chlorophyll &amp; aerosol (too erratic day-to-day; precipitation is excluded from both).
-        While a window is active, layers that can't be averaged (true colour, precipitation) are
-        hidden rather than shown as a misleading single day — a note appears below when that
-        happens. Averaged views cap zoom to stay responsive and sample up to 12 days from the
-        window.</p>
-      <p class="hint hidden" id="delta-hint">⚠ Computed difference works on continuous raster layers
-        (SST, SST anomalies, sea ice). Precipitation/aerosol are instantaneous &amp; noisy, and point or
-        snapshot layers — glaciers, emissions, floats, biodiversity — have no per-pixel time series to
-        difference, so they are unaffected.</p>
+      <details class="hint-details">
+        <summary class="hint">How Compare &amp; Aggregate work</summary>
+        <p class="hint">Daily NASA GIBS imagery. <strong>Aggregate</strong> averages any continuous
+          layer per pixel over the past N days ending on the chosen date (1–730). Missing pixels
+          (clouds, night) are excluded — each pixel divides by the days it was actually observed, so
+          cloudy-day gaps fill in; for precipitation, dry pixels count as <em>zero</em>, so the result
+          is a true mean rate. Independent of the comparison mode.</p>
+        <p class="hint"><strong>Side-by-side</strong>: drag the divider (left = past, right = current).
+          <strong>Computed change</strong>: per-pixel "now − then" for continuous layers (SST &amp;
+          anomalies, sea ice, snow, land temperature, salinity), and a ×-fold <em>ratio</em> of window
+          means for log-distributed ones (precipitation, chlorophyll, aerosol).</p>
+        <p class="hint">While a window is active, layers that can't be averaged (true colour, 30-min
+          precipitation) are hidden rather than shown as a misleading single day — a note appears
+          below when that happens. Averaged views cap zoom to stay responsive and sample up to 12
+          days from the window.</p>
+      </details>
+      <!-- populated by updateDeltaHint(); static text is never shown -->
+      <p class="hint hidden" id="delta-hint"></p>
       <div id="layer-list"></div>
 
       <h2>Analysis layers</h2>

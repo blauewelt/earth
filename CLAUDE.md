@@ -50,14 +50,20 @@ A new layer is not done until it has **all** of:
    layers) with hover value read-out.
 4. **Value probe support** — click/dwell on the globe reads the actual value.
 5. **An explicit aggregation/difference decision.** Every timed raster layer
-   must declare one of three postures, and the choice must be justified in a
+   must declare one of these postures, and the choice must be justified in a
    code comment next to the flag:
-   - `deltaRange: <n>` — continuous field: both time-averaging (Aggregate
-     slider) and per-pixel differencing are sound.
-   - `aggregable: true` — averaging over a window is sound (fills swath/cloud
-     gaps) but day-vs-day differencing is not (log-scaled or too erratic).
+   - `deltaRange: <n>` — continuous linear field: both time-averaging
+     (Aggregate slider) and per-pixel differencing are sound.
+   - `aggregable: true` + `ratioRange: <n>` — log-distributed field: averaging
+     is sound, and computed comparison renders a ×-fold RATIO of window means
+     (`RatioProvider`, log(mean_now/mean_past), saturating at ×n) instead of an
+     absolute difference — which would be dominated by the log palette's
+     value-proportional quantization. The ratio is quantization-robust: bin
+     error is a few % OF the value, a small constant in log space.
+   - `aggregable: true` alone — averaging is sound, no comparison of either
+     kind (currently unused; every aggregable layer so far is also ratio-able).
    - neither — the layer is shown as-is (photographic composites,
-     instantaneous sparse fields like precipitation).
+     half-hourly snapshots).
 
    Current matrix (keep in sync when adding layers):
 
@@ -68,9 +74,9 @@ A new layer is not done until it has **all** of:
    | Snow cover (NDSI) | ✓ | ✓ | continuous %, clear-sky gaps fill by averaging |
    | Land surface temp (MODIS) | ✓ | ✓ | continuous K, clear-sky gaps fill by averaging |
    | Salinity (SMAP monthly) | ✓ | ✓ | continuous PSU; sample dates snap & dedupe to months |
-   | Chlorophyll-a (PACE) | ✓ | ✗ | log-scaled; differencing bin-centres of a log palette is unsound |
-   | Aerosol optical depth | ✓ | ✗ | windowed mean is standard; day-vs-day is noise |
-   | Precipitation (IMERG daily) | ✓ | ✗ | daily-MEAN rates average soundly (`transparentZero`: dry pixels count as 0); day-vs-day rain deltas are weather noise |
+   | Chlorophyll-a (PACE) | ✓ | ratio ×4 | log-normal-ish; absolute Δ of bin-centres is quantization noise, log-ratio of means is sound |
+   | Aerosol optical depth | ✓ | ratio ×4 | windowed mean is standard; multiplicative change is the meaningful signal |
+   | Precipitation (IMERG daily) | ✓ | ratio ×8 | daily-MEAN rates average soundly (`transparentZero`: dry pixels count as 0, eps = palette floor/2 keeps dry→rain finite); absolute day deltas are weather noise |
    | Precipitation (IMERG 30-min) | ✗ | ✗ | one half-hour snapshot; a window sampling ~12 arbitrary instants averages nothing physical — its role is intra-day (±30m stepper) |
    | True colour, night lights | ✗ | ✗ | photographs, no colormap to invert |
    | Grid climatologies | ✗ | ✗ | already multi-decade averages, not timed |
@@ -147,6 +153,11 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   midnight rolls the date, and stepping refreshes only the sub-daily layers
   (no churn of the daily/monthly rasters).
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
+- The Aggregate slider has one-click presets (1d/7d/30d/365d, `#window-presets`)
+  that drive the slider and fire its `change` event, so they follow the exact
+  same path as dragging it. The long Compare/Aggregate explainer folds into a
+  `<details class="hint-details">` — collapsed by default; keep its text in
+  sync with the posture matrix when comparison/aggregation semantics change.
 - **Active-layer chips** (`#active-layers`, top-left of the globe) list every
   layer currently on, whatever machinery draws it. Each chip's `×` turns the
   layer off; the label jumps to that layer's sidebar row and outlines it
@@ -268,7 +279,10 @@ rectangle) · OISST v2.1 SST 1991–2020 (1°) · MeteoSwiss Swiss precip normal
 
 **Analysis features:**
 - *Comparison*: side-by-side split (draggable divider) or computed per-pixel
-  difference vs 1/2/5/10/20 years ago, for continuous layers.
+  change vs 1/2/5/10/20 years ago — an absolute difference (`DeltaProvider`)
+  for continuous linear layers, a ×-fold ratio of window means
+  (`RatioProvider`) for log-distributed ones (precip, chlorophyll, aerosol),
+  each with its own diverging legend and probe read-out (±units vs ×fold).
 - *Aggregation*: rolling window 1–730 days for every layer in the aggregation
   matrix (SST & anomalies, sea ice, snow, LST, salinity, chlorophyll, aerosol,
   daily precipitation — dry pixels counting as zero),
