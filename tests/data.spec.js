@@ -292,3 +292,40 @@ test.describe("argo_t300.json (subsurface anomaly grid)", () => {
     expect(fin.length / g.values.length).toBeLessThan(0.75);
   });
 });
+
+test.describe("GLORYS surface snapshots", () => {
+  const c = read("currents.json");
+  const m = read("mld.json");
+  const s = read("ocean_surface.json");
+  const cell = (g, lon, lat) =>
+    (Math.floor((lat - g.south) / g.dlat)) * g.nx + Math.floor((lon - g.west) / g.dlon);
+
+  test("currents: the Gulf Stream is faster than the gyre interior; land null", () => {
+    expect(c.units).toBe("m/s");
+    const gulf = c.values[cell(c, -74, 36)];
+    const gyre = c.values[cell(c, -40, 30)];
+    expect(gulf).toBeGreaterThan(0.5);
+    expect(gyre).toBeLessThan(0.3);
+    expect(gulf).toBeGreaterThan(gyre * 3);
+    expect(c.values[cell(c, 10, 21)]).toBeNull();       // Sahara
+    const fin = c.values.filter((v) => v != null);
+    expect(Math.max(...fin)).toBeLessThan(4);           // fill-value bug guard
+    expect(fin.length / c.values.length).toBeGreaterThan(0.6);
+    expect(fin.length / c.values.length).toBeLessThan(0.85);
+  });
+
+  test("mixed-layer depth is physical and land-masked", () => {
+    const fin = m.values.filter((v) => v != null);
+    expect(Math.min(...fin)).toBeGreaterThanOrEqual(0); // a depth, never negative
+    expect(Math.max(...fin)).toBeLessThan(2500);
+    expect(m.values[cell(m, 90, 47)]).toBeNull();       // central Asia
+  });
+
+  test("packed surface fields align and carry a month stamp", () => {
+    expect(s.month).toMatch(/^\d{4}-\d{2}$/);
+    for (const f of ["u", "v", "zos", "mld"]) expect(s[f].length).toBe(s.nx * s.ny);
+    // Gulf Stream flows broadly northeastward off Hatteras: u > 0
+    const i = cell(s, -74, 36);
+    expect(s.u[i] / 100).toBeGreaterThan(0.2);
+  });
+});

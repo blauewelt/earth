@@ -1426,3 +1426,23 @@ test("argo 300 m anomaly layer + the card's ocean column", async ({ page }) => {
   await expect(card).toContainText("Elevation", { timeout: 60000 });
   await expect(card).not.toContainText("Ocean column");
 });
+
+test("GLORYS layers toggle; the card gets ocean circulation", async ({ page }) => {
+  test.setTimeout(120000);
+  await page.check('#layer-list input[data-id="currents"]');
+  await page.check('#layer-list input[data-id="mld"]');
+  await expect(page.locator("#legend-panel")).toContainText("Surface current speed");
+  await expect(page.locator("#legend-panel")).toContainText("Mixed-layer depth");
+  // probe reads the Gulf Stream in physical units
+  const probe = await page.evaluate(() =>
+    window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-55, 58)));
+  expect(probe.units).toBe("m");                      // topmost = MLD
+  // card: an open-ocean click shows circulation with a compass direction
+  await page.evaluate(() =>
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(-74, 36)));
+  const card = page.locator("#pixel-card");
+  await expect(card).toContainText("Ocean circulation", { timeout: 60000 });
+  await expect(card).toContainText("Surface current");
+  await expect(card).toContainText("toward");
+  await expect(card).toContainText("Mixed-layer depth");
+});

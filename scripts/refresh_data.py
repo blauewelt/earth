@@ -711,15 +711,18 @@ def glorys():
         print(f"  got {got[0]} @ {got[1]}")
     import netCDF4 as ncdf
     d = ncdf.Dataset(out)
+    # month stamp from the file itself, so a cached re-run stays labelled
+    tvar = d.variables["time"]
+    stamp = str(ncdf.num2date(tvar[0], tvar.units))[:7]
     lat = np.array(d.variables["latitude"][:])
     lon = np.array(d.variables["longitude"][:])
     LON, LAT = np.meshgrid(lon, lat)
     def v2(name):
         a = d.variables[name]
-        a = np.array(a[0, 0] if a.ndim == 4 else a[0])
-        return np.where(np.abs(a) > 1e10, np.nan, a)
+        # np.ma.filled, never np.array: netCDF int16 fills otherwise bake in
+        # as ±32767×scale and hypot() turns them into 46,340 m/s "currents"
+        return np.ma.filled((a[0, 0] if a.ndim == 4 else a[0]).astype(float), np.nan)
     u, v, zos, mld = v2("uo"), v2("vo"), v2("zos"), v2("mlotst")
-    stamp = got[1][:7] if got else "latest"
     speed = np.hypot(u, v)
     _write_grid("currents", "currents.json", LON, LAT, speed,
                 (-180, -80, 180, 90), 360, 170,

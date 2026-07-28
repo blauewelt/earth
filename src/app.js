@@ -344,6 +344,24 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    id: "currents",
+    grid: true, gridFile: "data/currents.json", snapshotGrid: true,
+    ramp: "precip", vmin: 0, vmax: 1.5, units: "m/s", maxLevel: 6,
+    doc: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_001_030/description",
+    title: "Surface current speed (GLORYS)",
+    meta: "Monthly-mean ocean current speed — the Gulf Stream drawn by physics",
+    on: false,
+  },
+  {
+    id: "mld",
+    grid: true, gridFile: "data/mld.json", snapshotGrid: true,
+    ramp: "precip", vmin: 0, vmax: 500, units: "m", maxLevel: 6,
+    doc: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_001_030/description",
+    title: "Mixed-layer depth (GLORYS)",
+    meta: "How deep the surface ocean is stirred — deep winter mixing is where AMOC water forms",
+    on: false,
+  },
+  {
     id: "argo-t300",
     grid: true, gridFile: "data/argo_t300.json", snapshotGrid: true,
     ramp: "anom", vmin: -2, vmax: 2, units: "°C", maxLevel: 6,
@@ -1950,6 +1968,18 @@ const LAYER_FACTS = {
          "radiated back to space (CERES). Positive means this place is banking " +
          "energy. The global imbalance of ~+1 W/m² IS global warming, measured " +
          "at the top of the atmosphere." },
+  "currents": { rec: "one recent month (see legend) — not one date; GLORYS reanalysis covers 1993 → near-present", int: "monthly-mean snapshot, refreshed by the data pipeline", sp: "1/12° model, shipped at 1°",
+    sum: "How fast the surface ocean moves: the monthly-mean current speed from " +
+         "the GLORYS ocean reanalysis (which assimilates Argo, altimetry and " +
+         "SST). The Gulf Stream, Kuroshio and Antarctic Circumpolar Current " +
+         "leap out — the plumbing that carries the heat the AMOC story is " +
+         "about. Click any ocean point for speed AND direction." },
+  "mld": { rec: "one recent month (see legend) — not one date; deepest in late winter", int: "monthly-mean snapshot, refreshed by the data pipeline", sp: "1/12° model, shipped at 1°",
+    sum: "How deep wind and cooling stir the surface ocean. Watch the subpolar " +
+         "North Atlantic: in late winter the mixed layer there can reach " +
+         "hundreds of metres to a kilometre — that deep convection is where " +
+         "AMOC deep water is actually made, so its shrinking is an early " +
+         "warning signal. In summer it shoals to tens of metres everywhere." },
   "argo-t300": { rec: "one recent month (see legend) vs the 2004–2018 mean for that same calendar month — not one date", int: "monthly snapshot, refreshed by the data pipeline", sp: "1° (Argo objective mapping)",
     sum: "Where the ocean is unusually warm or cool 300 m DOWN — measured by the " +
          "Argo float fleet, invisible to every satellite surface map. Subsurface " +
@@ -2811,7 +2841,7 @@ async function showPixelState(carto) {
   // Everything in parallel; the card renders once, complete.
   const rasterCfgs = PIXEL_RASTERS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
   const gridCfgs = PIXEL_GRIDS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
-  const [rasters, grids, meteo, air, river, marine, climNow, climFut, oceanCol, stations, trace, argo] = await Promise.all([
+  const [rasters, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo] = await Promise.all([
     Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null))),
     Promise.all(gridCfgs.map((cfg) => loadGrid(cfg).then((g) => g && sampleGrid(g, lon, lat)).catch(() => null))),
     fetchOpenMeteo(lon, lat),
@@ -2821,6 +2851,7 @@ async function showPixelState(carto) {
     fetchClimateWindow(lon, lat, "1991-01-01", "1995-12-31"),
     fetchClimateWindow(lon, lat, "2045-01-01", "2049-12-31"),
     pixelJson("data/ocean_column.json"),
+    pixelJson("data/ocean_surface.json"),
     pixelJson("data/stations.geojson"),
     pixelJson("data/climatetrace.json"),
     pixelJson("data/argo.json"),
@@ -2897,6 +2928,27 @@ async function showPixelState(carto) {
     v == null ? "" : pixelRow(gtitles[i], `${fmtVal(v)} ${gunits[i]}`)).join("");
   if (grows) {
     sec.push(`<div class="px-sec"><div class="px-sec-title">Climate normals</div>${grows}</div>`);
+  }
+
+  /* -- ocean circulation at the point (GLORYS monthly mean) ---------------- */
+  if (oceanSurf) {
+    const ix = Math.floor((lon - oceanSurf.west) / oceanSurf.dlon);
+    const iy = Math.floor((lat - oceanSurf.south) / oceanSurf.dlat);
+    const i = iy * oceanSurf.nx + ix;
+    const u = oceanSurf.u?.[i], v = oceanSurf.v?.[i];
+    if (u != null && v != null) {
+      const spd = Math.hypot(u, v) / 100;                       // cm/s → m/s
+      const brg = (Math.atan2(u, v) * 180 / Math.PI + 360) % 360; // "toward"
+      const rose = "N NE E SE S SW W NW".split(" ")[Math.round(brg / 45) % 8];
+      let rows = pixelRow("Surface current",
+        `${fmtVal(spd)} m/s toward ${rose} (${Math.round(brg)}°)`);
+      if (oceanSurf.mld?.[i] != null) rows += pixelRow("Mixed-layer depth", `${oceanSurf.mld[i]} m`);
+      if (oceanSurf.zos?.[i] != null) {
+        const z = oceanSurf.zos[i];
+        rows += pixelRow("Sea surface height", `${z >= 0 ? "+" : "−"}${Math.abs(z)} cm`);
+      }
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Ocean circulation <span class="px-src">GLORYS · ${oceanSurf.month}</span></div>${rows}</div>`);
+    }
   }
 
   /* -- the ocean beneath: Argo T/S column, now vs the same-month normal ---- */

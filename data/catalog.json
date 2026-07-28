@@ -1199,7 +1199,7 @@
    "license": "Copernicus Marine (free acct)",
    "globe": true,
    "amoc": true,
-   "notes": "Eddy-resolving; compute AMOC at any latitude"
+   "notes": "Eddy-resolving; compute AMOC at any latitude Surface current speed and mixed-layer depth are live globe layers in this app; circulation on the pixel card."
   },
   {
    "id": "oras5",
