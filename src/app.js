@@ -2605,10 +2605,13 @@ async function showPixelState(carto) {
     if (!r) return "";
     const cfg = rasterCfgs[i];
     let extra = "";
-    // memory channel: current SST against its own 1991–2020 normal
+    // Memory channel: current SST against the baked OISST normal. That normal
+    // is the ANNUAL mean, so this difference contains the seasonal cycle
+    // (~±4 °C at midlatitudes) — label it as such. The seasonally-correct
+    // departure is the "SST anomalies" row (MUR25 vs its own monthly clim).
     if (cfg.id === "sst" && grids[0] != null) {
       const d = r.v - grids[0];
-      extra = ` <span class="${d >= 0 ? "px-warm" : "px-cool"}">(${d >= 0 ? "+" : "−"}${fmtVal(Math.abs(d))} vs 1991–2020)</span>`;
+      extra = ` <span class="${d >= 0 ? "px-warm" : "px-cool"}">(${d >= 0 ? "+" : "−"}${fmtVal(Math.abs(d))} vs 1991–2020 annual mean)</span>`;
     }
     return pixelRow(cfg.title.replace(/\s*\(.*\)$/, ""), `${fmtVal(r.v)} ${r.units}${extra}`);
   }).join("");
@@ -2617,7 +2620,7 @@ async function showPixelState(carto) {
   }
 
   /* -- long-term normals (the memory channels) ----------------------------- */
-  const gtitles = ["SST normal 1991–2020", "Precip normal (GPCP)", "Precip normal (E-OBS)", "Precip normal (MeteoSwiss)"];
+  const gtitles = ["SST 1991–2020 annual mean", "Precip normal (GPCP)", "Precip normal (E-OBS)", "Precip normal (MeteoSwiss)"];
   const gunits = ["°C", "mm/yr", "mm/yr", "mm/yr"];
   const grows = grids.map((v, i) =>
     v == null ? "" : pixelRow(gtitles[i], `${fmtVal(v)} ${gunits[i]}`)).join("");

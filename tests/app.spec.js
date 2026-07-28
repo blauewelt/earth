@@ -1286,7 +1286,7 @@ test("pixel inspector composes a point's full state on click", async ({ page }) 
   // satellite state at the app date, with the memory channel (SST vs normal)
   await expect(card).toContainText("Sea surface temperature");
   await expect(card).toContainText("vs 1991–2020");
-  await expect(card).toContainText("SST normal 1991–2020");
+  await expect(card).toContainText("SST 1991–2020 annual mean");
   // context: floats and monitoring sites exist in the North Atlantic
   await expect(card).toContainText("Argo floats");
   await expect(card).toContainText("Nearest monitoring site");
