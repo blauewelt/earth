@@ -1268,9 +1268,24 @@ test("window presets jump the slider; the explainer folds away", async ({ page }
 
 test("pixel inspector composes a point's full state on click", async ({ page }) => {
   test.setTimeout(150000); // ~9 raster tiles + 4 grids + live weather, twice
-  // enabled by default; drive it directly (canvas click coords are unreliable
-  // on the software-GL sandbox, and the click wiring is a thin guard)
-  await expect(page.locator("#toggle-pixel")).toBeChecked();
+  // "Everything we know" is a layer-list entry, off by default: with SST on,
+  // a plain click reads the SST value, not the card. The card takes over when
+  // the entry is checked (explicit) or when NO colormapped layer is active
+  // (nothing else for a click to read). Canvas click coords are unreliable on
+  // the software-GL sandbox, so assert the predicate and drive the card
+  // directly.
+  await expect(page.locator("#toggle-pixel")).not.toBeChecked();
+  expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(false);
+  await page.check("#toggle-pixel");
+  expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(true);
+  // …and it lists as an active chip like any other layer
+  await expect(page.locator("#active-layers .chip", { hasText: "Everything we know" })).toBeVisible();
+  await page.uncheck("#toggle-pixel");
+  // no colormapped layer active → automatic fallback engages
+  await page.uncheck('#layer-list input[data-id="sst"]');
+  expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(true);
+  await page.check('#layer-list input[data-id="sst"]');
+  expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(false);
 
   // -- an ocean point in the North Atlantic
   await page.evaluate(() =>
@@ -1283,10 +1298,11 @@ test("pixel inspector composes a point's full state on click", async ({ page }) 
   await expect(card).toContainText("Open-Meteo", { timeout: 60000 });
   await expect(card).toContainText("Air temperature");
   await expect(card.locator(".px-day")).toHaveCount(7);
-  // satellite state at the app date, with the memory channel (SST vs normal)
+  // satellite state at the app date; the annual mean is its own line (a
+  // derived "vs annual mean" delta would mostly be the seasonal cycle)
   await expect(card).toContainText("Sea surface temperature");
-  await expect(card).toContainText("vs 1991–2020");
   await expect(card).toContainText("SST 1991–2020 annual mean");
+  expect(await card.textContent()).not.toContain("vs 1991–2020");
   // context: floats and monitoring sites exist in the North Atlantic
   await expect(card).toContainText("Argo floats");
   await expect(card).toContainText("Nearest monitoring site");

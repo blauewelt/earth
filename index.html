@@ -82,10 +82,6 @@
       <div class="control-row">
         <label class="check-inline"><input type="checkbox" id="toggle-grayscale" /> Grayscale globe</label>
       </div>
-      <div class="control-row">
-        <label class="check-inline"><input type="checkbox" id="toggle-pixel" checked /> Pixel inspector</label>
-        <span class="window-value">click the globe</span>
-      </div>
       <details class="hint-details">
         <summary class="hint">How Compare &amp; Aggregate work</summary>
         <p class="hint">Daily NASA GIBS imagery. <strong>Aggregate</strong> averages any continuous
@@ -104,6 +100,27 @@
       </details>
       <!-- populated by updateDeltaHint(); static text is never shown -->
       <p class="hint hidden" id="delta-hint"></p>
+
+      <!-- Not a raster: a click mode. Checked → clicking the globe composes
+           the full pixel-state card. Unchecked → a click reads the top active
+           layer's value; with no colormapped layer active the card opens
+           anyway, because there is no layer value to read instead. -->
+      <div class="layer-item">
+        <div class="layer-head"><input type="checkbox" id="toggle-pixel" title="Show / hide layer"/>
+          <a class="title-link" href="docs/PIXEL_STATE.md" target="_blank" rel="noopener" title="Which sources compose per pixel, and why">Everything we know (pixel state)</a></div>
+        <div class="meta">Click anywhere on the globe → one card with all values at that point</div>
+        <div class="layer-tip">
+          <p class="tip-sum">Composes everything the app can know about a clicked point: live
+            weather and a 7-day forecast, all nine satellite fields at the chosen date, climate
+            normals with the SST anomaly, and nearby observing/emitting context. When this is off,
+            a click reads the value of the layer you're looking at instead — unless no layer is
+            active, in which case the full card is the only sensible answer.</p>
+          <div><span>Recorded</span>live weather · satellite fields follow the date selector</div>
+          <div><span>Interval</span>on demand (per click)</div>
+          <div><span>Spatial</span>one point — the pixel under your cursor</div>
+        </div>
+      </div>
+
       <div id="layer-list"></div>
 
       <h2>Analysis layers</h2>

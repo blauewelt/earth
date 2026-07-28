@@ -165,15 +165,22 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   same path as dragging it. The long Compare/Aggregate explainer folds into a
   `<details class="hint-details">` — collapsed by default; keep its text in
   sync with the posture matrix when comparison/aggregation semantics change.
-- **Pixel inspector** (`#toggle-pixel`, on by default): clicking bare globe
-  (no entity under the cursor) opens `#pixel-card` — docs/PIXEL_STATE.md made
-  clickable. Composes: live weather + 7-day forecast (Open-Meteo), all nine
-  colormapped GIBS rasters probed at the current date (z capped at 4), the
-  four climatology grids with an SST-vs-normal anomaly, and nearby context
-  (stations, Argo, emitters; glaciers only if already loaded — never pay the
-  7 MB on a click). `showPixelState(carto)` is exported for tests. While the
-  inspector is on, the click-probe tooltip is suppressed (the card includes
-  the same value); hover probe unaffected. Esc or × closes.
+- **Pixel inspector** — "Everything we know (pixel state)", a layer-list
+  entry (`#toggle-pixel`, off by default, chip-registered): clicking bare
+  globe (no entity under the cursor) opens `#pixel-card` —
+  docs/PIXEL_STATE.md made clickable. Click semantics
+  (`pixelInspectorEngaged()`): entry checked → card, explicit intent;
+  unchecked + a colormapped layer active → the click reads that layer's value
+  (probe tooltip, the specific question being asked); unchecked + NO
+  colormapped layer active → card again, since there is no layer value to
+  read instead. The card composes: live weather + 7-day forecast
+  (Open-Meteo), all nine colormapped GIBS rasters probed at the current date
+  (z capped at 4), the four climatology grids, and nearby context (stations,
+  Argo, emitters; glaciers only if already loaded — never pay the 7 MB on a
+  click). Deliberately NO derived "SST vs normal" delta: the baked OISST
+  normal is the annual mean, so the difference would mostly be the seasonal
+  cycle — the MUR25 anomalies row is the seasonally-correct departure.
+  `showPixelState(carto)` is exported for tests. Esc or × closes.
 - **Active-layer chips** (`#active-layers`, top-left of the globe) list every
   layer currently on, whatever machinery draws it. Each chip's `×` turns the
   layer off; the label jumps to that layer's sidebar row and outlines it

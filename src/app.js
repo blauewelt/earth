@@ -1337,6 +1337,7 @@ function updateTimeRow() {
  * free. Adding a raster to GIBS_LAYERS wires up its chip automatically; a new
  * hand-written layer must be added to STATIC_LAYER_CHIPS. */
 const STATIC_LAYER_CHIPS = [
+  ["toggle-pixel", "Everything we know"],
   ["toggle-sst-ensemble", "SST ensemble"],
   ["toggle-climatetrace", "Facility emissions"],
   ["toggle-argo", "Argo floats"],
@@ -2263,9 +2264,9 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((click) =
     return;
   }
   if (!picked) pickCard.classList.add("hidden");
-  // Nothing pickable under the cursor: if the inspector is on and the click
-  // actually hit the globe (not sky), compose that point's state card.
-  if (!picked && document.getElementById("toggle-pixel")?.checked) {
+  // Nothing pickable under the cursor: if the inspector is engaged and the
+  // click actually hit the globe (not sky), compose that point's state card.
+  if (!picked && pixelInspectorEngaged()) {
     const cart = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
     if (cart) showPixelState(Cesium.Cartographic.fromCartesian(cart));
   }
@@ -2469,12 +2470,12 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
   const x = m.endPosition.x, y = m.endPosition.y;
   probeDwellTimer = setTimeout(() => runProbe(x, y), PROBE_DWELL);
 }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-// Clicking reads the value immediately (no dwell wait) — unless the pixel
-// inspector is on, in which case its card (which includes the same value)
-// handles the click and a duplicate tooltip would just be noise.
+// Clicking reads the top layer's value immediately (no dwell wait) — unless
+// the click is opening the pixel-state card, which includes the same value;
+// two overlapping read-outs of one click would be noise.
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((c) => {
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
-  if (document.getElementById("toggle-pixel")?.checked) return;
+  if (pixelInspectorEngaged()) return;
   if (topColormapLayer() && !viewer.scene.pick(c.position)?.id?.kind) {
     runProbe(c.position.x, c.position.y);
   }
@@ -2546,6 +2547,15 @@ async function fetchOpenMeteo(lon, lat) {
   }
 }
 
+/* When does a globe click open the full card vs read one layer's value?
+ * "Everything we know" checked → always the card (explicit intent). Otherwise
+ * a click reads the top active layer's value — the specific question you're
+ * visibly asking — and only falls back to the card when NO colormapped layer
+ * is active, because then there is no layer value to read instead. */
+function pixelInspectorEngaged() {
+  return !!document.getElementById("toggle-pixel")?.checked || !topColormapLayer();
+}
+
 const pixelCardEl = document.getElementById("pixel-card");
 function pixelRow(label, value, cls = "") {
   return `<div class="px-row ${cls}"><span class="px-label">${label}</span><span class="px-val">${value}</span></div>`;
@@ -2601,19 +2611,15 @@ async function showPixelState(carto) {
   }
 
   /* -- satellite fields at the app's current date -------------------------- */
+  // No derived SST-vs-normal line: the baked OISST normal is the ANNUAL mean,
+  // so the difference would mostly be the seasonal cycle (~±4 °C at
+  // midlatitudes), not a climate signal. The seasonally-correct departure is
+  // the "SST anomalies" row (MUR25 vs its own monthly climatology), and the
+  // annual mean itself prints as its own line under Climate normals.
   const rrows = rasters.map((r, i) => {
     if (!r) return "";
     const cfg = rasterCfgs[i];
-    let extra = "";
-    // Memory channel: current SST against the baked OISST normal. That normal
-    // is the ANNUAL mean, so this difference contains the seasonal cycle
-    // (~±4 °C at midlatitudes) — label it as such. The seasonally-correct
-    // departure is the "SST anomalies" row (MUR25 vs its own monthly clim).
-    if (cfg.id === "sst" && grids[0] != null) {
-      const d = r.v - grids[0];
-      extra = ` <span class="${d >= 0 ? "px-warm" : "px-cool"}">(${d >= 0 ? "+" : "−"}${fmtVal(Math.abs(d))} vs 1991–2020 annual mean)</span>`;
-    }
-    return pixelRow(cfg.title.replace(/\s*\(.*\)$/, ""), `${fmtVal(r.v)} ${r.units}${extra}`);
+    return pixelRow(cfg.title.replace(/\s*\(.*\)$/, ""), `${fmtVal(r.v)} ${r.units}`);
   }).join("");
   if (rrows) {
     sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">${state.date} · NASA GIBS</span></div>${rrows}</div>`);
@@ -3203,6 +3209,7 @@ window.__earth = {
   linTrend,
   probeValueAt,
   showPixelState,
+  pixelInspectorEngaged,
   loadGlaciers,
   get glacierCollection() { return glacierCollection; },
   get glacierData() { return glacierData; },
