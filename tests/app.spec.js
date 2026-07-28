@@ -1331,8 +1331,11 @@ test("pixel inspector composes a point's full state on click", async ({ page }) 
   await expect(card).toContainText("MeteoSwiss");
   await expect(card).toContainText("E-OBS");
   await expect(card).toContainText("Soil (top cm)");
-  await expect(card).toContainText("Vegetation index");
+  // (no NDVI assertion: at ~3000 m this pixel is masked rock/snow, and the
+  // row honestly omits itself — the layer itself is covered in the
+  // state-vector test below)
   await expect(card).toContainText("PM2.5");
+  await expect(card).toContainText("River discharge");
   // the decadal future axis: this pixel's own 2050 trajectory with model range
   await expect(card).toContainText("2045–49 vs 1991–95");
   await expect(card).toContainText("models");
