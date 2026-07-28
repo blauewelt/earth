@@ -2470,16 +2470,24 @@ function getInvLut(url) {
 const probeTileCache = new Map();   // "layer|date|z|x|y" → Promise<ImageBitmap|null>
 function fetchProbeTile(cfg, date, z, x, y) {
   const key = `${cfg.layer}|${date}|${z}|${x}|${y}`;
+  const time = gibsTime(cfg, date);
+  const url = GIBS_URL
+    .replace("{layer}", cfg.layer).replace("{time}", time)
+    .replace("{tms}", cfg.tms).replace("{ext}", cfg.ext)
+    .replace("{TileMatrix}", z).replace("{TileRow}", y).replace("{TileCol}", x);
   if (!probeTileCache.has(key)) {
-    const time = gibsTime(cfg, date);
-    const url = GIBS_URL
-      .replace("{layer}", cfg.layer).replace("{time}", time)
-      .replace("{tms}", cfg.tms).replace("{ext}", cfg.ext)
-      .replace("{TileMatrix}", z).replace("{TileRow}", y).replace("{TileCol}", x);
     probeTileCache.set(key, sstFetchBitmap(url));
     if (probeTileCache.size > 48) probeTileCache.delete(probeTileCache.keys().next().value);
   }
-  return probeTileCache.get(key);
+  // A transient fetch failure must not be cached as "no tile" forever — with
+  // the pixel card probing 14 layers at once, one dropped connection would
+  // permanently blank that layer's row. On access, a null result retries once.
+  return probeTileCache.get(key).then((img) => {
+    if (img) return img;
+    const again = sstFetchBitmap(url);
+    probeTileCache.set(key, again);
+    return again;
+  });
 }
 
 const probeCanvas = document.createElement("canvas");
