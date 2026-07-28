@@ -1446,3 +1446,28 @@ test("GLORYS layers toggle; the card gets ocean circulation", async ({ page }) =
   await expect(card).toContainText("toward");
   await expect(card).toContainText("Mixed-layer depth");
 });
+
+test("archive-end comparisons explain their emptiness instead of hiding it", async ({ page }) => {
+  // CERES tiles end 2018-10; with today's date, "now" and "2 years ago" both
+  // clamp there → a zero-by-construction comparison. The hint must say so.
+  await page.check('#layer-list input[data-id="ceres"]');
+  await page.selectOption("#compare-select", "2");
+  const hint = page.locator("#delta-hint");
+  await expect(hint).toBeVisible();
+  await expect(hint).toContainText("archive ends 2018-10");
+  await expect(hint).toContainText("empty by construction");
+  // moving the date inside the archive clears the warning and compares for real
+  await page.evaluate(() => {
+    const d = document.getElementById("layer-date");
+    d.value = "2018-09-15";
+    d.dispatchEvent(new Event("change"));
+  });
+  await expect(hint).not.toContainText("empty by construction");
+  const t = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "ceres");
+    return { now: E.gibsTime(cfg, E.state.date), past: E.gibsTime(cfg, E.compareDate()) };
+  });
+  expect(t.now).toBe("2018-09-01");
+  expect(t.past).toBe("2016-09-01");   // genuinely different months → real delta
+});

@@ -1362,6 +1362,26 @@ function updateDeltaHint() {
         : ""));
   }
 
+  // Archive-end trap: for layers whose GIBS tiles stop before today (CERES
+  // 2018-10, GRACE 2022-07, SSH 2019-01, soil moisture 2025-09), BOTH sides
+  // of a comparison can clamp to the same last-served month — the difference
+  // is then zero by construction and renders as nothing. Say so, and say how
+  // to fix it, instead of leaving a silently empty comparison.
+  if (state.compareYears) {
+    const cmp = compareDate();
+    const stuck = Object.values(state.layers).filter((e) =>
+      (e.layer || e.suppressed) && e.cfg.timed && e.cfg.endTime &&
+      gibsTime(e.cfg, state.date) === gibsTime(e.cfg, cmp));
+    for (const e of stuck) {
+      const end = e.cfg.endTime.slice(0, 7);
+      msgs.push(`⚠ <strong>${e.cfg.title}</strong>: its tile archive ends ${end}, and both ` +
+        `“${state.date}” and “${cmp}” fall after that — so both sides clamp to the same ` +
+        `last month and the comparison is empty by construction. Set the date to ` +
+        `<em>${end}</em> or earlier to compare within the archive (e.g. ${end} vs ` +
+        `${Number(end.slice(0, 4)) - state.compareYears}-${end.slice(5)}).`);
+    }
+  }
+
   if (state.compareYears) {
     // Point/snapshot layers can't be compared over time (they have one state) —
     // relevant in BOTH side-by-side and computed-difference modes.
