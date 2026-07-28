@@ -2779,6 +2779,13 @@ function oceanColumnAt(oc, lon, lat) {
   const iy0 = Math.floor((lat - oc.south) / oc.dlat);
   const tryCell = (ix, iy) => {
     if (ix < 0 || ix >= oc.nx || iy < 0 || iy >= oc.ny) return null;
+    // A neighbour cell only counts if it is genuinely NEAR the click (a
+    // coastal cell whose own centre is half-land). Without this, an inland
+    // click quietly serves the nearest sea 300+ km away — Bern got a
+    // Mediterranean profile, 38 PSU and all.
+    const latc = oc.south + (iy + 0.5) * oc.dlat;
+    const lonc = oc.west + (ix + 0.5) * oc.dlon;
+    if (haversineKm(lon, lat, lonc, latc) > 220) return null;
     const i = iy * oc.nx + ix;
     if (oc.t_now[0][i] == null) return null;
     const grab = (f) => oc.levels.map((_, k) => {
