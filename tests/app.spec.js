@@ -1308,7 +1308,7 @@ test("pixel inspector composes a point's full state on click", async ({ page }) 
   // live weather + the future axis
   await expect(card).toContainText("Open-Meteo", { timeout: 60000 });
   await expect(card).toContainText("Air temperature");
-  await expect(card.locator(".px-day")).toHaveCount(7);
+  await expect(card.locator(".px-forecast .px-day")).toHaveCount(7);
   // satellite state at the app date; the annual mean is its own line (a
   // derived "vs annual mean" delta would mostly be the seasonal cycle)
   await expect(card).toContainText("Sea surface temperature");
