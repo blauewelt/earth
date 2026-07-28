@@ -7,6 +7,7 @@ set -e
 cd "$(dirname "$0")/.."
 python3 scripts/test_proxy.py 8081 https://gibs.earthdata.nasa.gov >/tmp/gibs_proxy.log 2>&1 &
 python3 scripts/test_proxy.py 8082 https://api.gbif.org         >/tmp/gbif_proxy.log 2>&1 &
+python3 scripts/test_proxy.py 8083 https://api.open-meteo.com   >/tmp/meteo_proxy.log 2>&1 &
 python3 -m http.server 8080 >/tmp/http.log 2>&1 &
 sleep 2
 export MIRROR=1 CHROMIUM_PATH="${CHROMIUM_PATH:-/opt/pw-browsers/chromium}"

@@ -252,6 +252,49 @@ footer a { color: var(--fg-dim); }
 }
 .chip-clear .chip-label { padding: 5px 11px; color: var(--fg-dim); }
 .chip-clear:hover .chip-label { color: #f85149; }
+/* ---- pixel inspector card (right side of the globe) ----
+   One card composing everything the app knows about a clicked point:
+   live weather + 7-day forecast, every GIBS raster at the current date,
+   climatology normals with anomalies, and nearby context. */
+#pixel-card {
+  position: absolute; top: 56px; right: 56px; z-index: 22;
+  width: 300px; max-height: calc(100% - 90px); overflow-y: auto;
+  background: rgba(22, 27, 34, 0.96); border: 1px solid var(--border);
+  border-radius: 10px; font-size: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+}
+#pixel-card.hidden { display: none; }
+.px-head {
+  position: sticky; top: 0; display: flex; align-items: center; gap: 6px;
+  padding: 9px 12px; background: rgba(22, 27, 34, 0.98);
+  border-bottom: 1px solid var(--border); font-size: 12.5px;
+}
+.px-close {
+  margin-left: auto; background: none; border: none; color: var(--fg-dim);
+  font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1;
+}
+.px-close:hover { color: #f85149; }
+.px-body { padding: 6px 12px 10px; }
+.px-loading { color: var(--fg-dim); padding: 10px 0; }
+.px-sec { margin: 8px 0; }
+.px-sec-title {
+  font-weight: 600; margin-bottom: 4px; color: var(--fg);
+  display: flex; align-items: baseline; gap: 6px;
+}
+.px-src { font-weight: 400; font-size: 10.5px; color: var(--fg-dim); margin-left: auto; }
+.px-row { display: flex; gap: 8px; padding: 2px 0; }
+.px-label { color: var(--fg-dim); flex: 0 0 46%; }
+.px-val { color: var(--fg); }
+.px-warm { color: #f0883e; }
+.px-cool { color: #58a6ff; }
+.px-forecast { display: flex; flex-direction: column; margin-top: 5px; }
+.px-day {
+  display: flex; gap: 8px; padding: 1px 0; color: var(--fg-dim); font-size: 11.5px;
+}
+.px-day span:first-child { flex: 0 0 44px; }
+.px-day span:nth-child(2) { flex: 0 0 60px; color: var(--fg); }
+.px-note { margin-top: 8px; font-size: 10.5px; color: var(--fg-dim); }
+.px-note a { color: var(--accent); text-decoration: none; }
+
 /* Briefly highlights the layer's row after "find in sidebar". */
 .layer-item.flash {
   outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px;

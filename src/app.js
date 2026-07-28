@@ -2254,14 +2254,20 @@ function updateGbifLayer() {
   updateDeltaHint();
 }
 
-// Click-picking for point primitives → info card
+// Click-picking: point primitives → info card; bare globe → pixel inspector
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((click) => {
   const picked = viewer.scene.pick(click.position);
   if (picked?.id?.kind) {
     pickCard.innerHTML = picked.id.html;
     pickCard.classList.remove("hidden");
-  } else if (!picked) {
-    pickCard.classList.add("hidden");
+    return;
+  }
+  if (!picked) pickCard.classList.add("hidden");
+  // Nothing pickable under the cursor: if the inspector is on and the click
+  // actually hit the globe (not sky), compose that point's state card.
+  if (!picked && document.getElementById("toggle-pixel")?.checked) {
+    const cart = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
+    if (cart) showPixelState(Cesium.Cartographic.fromCartesian(cart));
   }
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
@@ -2463,14 +2469,216 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
   const x = m.endPosition.x, y = m.endPosition.y;
   probeDwellTimer = setTimeout(() => runProbe(x, y), PROBE_DWELL);
 }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-// Clicking reads the value immediately (no dwell wait).
+// Clicking reads the value immediately (no dwell wait) — unless the pixel
+// inspector is on, in which case its card (which includes the same value)
+// handles the click and a duplicate tooltip would just be noise.
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((c) => {
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
+  if (document.getElementById("toggle-pixel")?.checked) return;
   if (topColormapLayer() && !viewer.scene.pick(c.position)?.id?.kind) {
     runProbe(c.position.x, c.position.y);
   }
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 window.__runProbe = runProbe; // for tests
+
+/* --------------------------------------------------------- pixel inspector */
+/* Click anywhere on the globe → one card composing everything the app can
+ * know about that point: every GIBS raster probed at the current date, the
+ * climatology grids (with anomalies where a now-field has a matching normal),
+ * live weather + a 7-day forecast, and what's nearby in the point datasets.
+ * This is docs/PIXEL_STATE.md made clickable — state, memory, future, context.
+ *
+ * Open-Meteo is the ONE deliberate exception to the "browser talks only to
+ * GIBS + GBIF" rule (see CLAUDE.md §3): key-free, CORS-open, and hit only by
+ * an explicit click for a single point — never tile streaming. */
+
+const PIXEL_RASTERS = ["sst", "sst-anom", "precip", "seaice", "snow", "aod", "lst", "chlor", "salinity"];
+const PIXEL_GRIDS = ["oisst", "gpcp", "eobs", "meteoswiss"];
+
+function haversineKm(lon1, lat1, lon2, lat2) {
+  const r = Math.PI / 180, R = 6371;
+  const a = Math.sin((lat2 - lat1) * r / 2) ** 2 +
+    Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin((lon2 - lon1) * r / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Tile + pixel coordinates of a lon/lat at GIBS level z (512px tiles).
+function tileCoordsAt(lon, lat, z) {
+  const span = (0.5625 / 2 ** z) * 512;
+  const x = Math.floor((lon + 180) / span);
+  const y = Math.floor((90 - lat) / span);
+  const px = Math.min(511, Math.max(0, Math.floor((lon - (-180 + x * span)) / span * 512)));
+  const py = Math.min(511, Math.max(0, Math.floor(((90 - y * span) - lat) / span * 512)));
+  return { x, y, px, py };
+}
+
+// One raster channel: value at the pixel on the app's current date (z capped
+// at 4 — inspector reads don't need street-level tiles, and 9 layers fetch).
+async function pixelRasterValue(cfg, lon, lat) {
+  const vlut = await getValueLut(cfg.colormap);
+  if (!vlut) return null;
+  const z = Math.min(cfg.maxLevel, 4);
+  const t = tileCoordsAt(lon, lat, z);
+  const v = await probePixel(cfg, state.date, z, t.x, t.y, t.px, t.py, vlut.lut);
+  return v == null ? null : { v, units: vlut.units };
+}
+
+const pixelJsonCache = new Map();   // small point datasets, fetched once
+function pixelJson(file) {
+  if (!pixelJsonCache.has(file)) {
+    pixelJsonCache.set(file, fetch(file).then((r) => r.json()).catch(() => null));
+  }
+  return pixelJsonCache.get(file);
+}
+
+async function fetchOpenMeteo(lon, lat) {
+  const url = "https://api.open-meteo.com/v1/forecast" +
+    `?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}` +
+    "&current=temperature_2m,relative_humidity_2m,precipitation,pressure_msl," +
+    "wind_speed_10m,wind_direction_10m" +
+    "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max" +
+    "&timezone=UTC&forecast_days=7";
+  try {
+    const r = await fetch(url);
+    return r.ok ? await r.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+const pixelCardEl = document.getElementById("pixel-card");
+function pixelRow(label, value, cls = "") {
+  return `<div class="px-row ${cls}"><span class="px-label">${label}</span><span class="px-val">${value}</span></div>`;
+}
+
+async function showPixelState(carto) {
+  const lon = Cesium.Math.toDegrees(carto.longitude);
+  const lat = Cesium.Math.toDegrees(carto.latitude);
+  const coord = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"} ` +
+                `${Math.abs(lon).toFixed(2)}°${lon >= 0 ? "E" : "W"}`;
+  pixelCardEl.innerHTML =
+    `<div class="px-head"><strong>Pixel state</strong> · ${coord}` +
+    `<button class="px-close" aria-label="Close">×</button></div>` +
+    `<div class="px-body"><div class="px-loading">Reading this point…</div></div>`;
+  pixelCardEl.classList.remove("hidden");
+  pixelCardEl.querySelector(".px-close").addEventListener("click", () =>
+    pixelCardEl.classList.add("hidden"));
+
+  // Everything in parallel; the card renders once, complete.
+  const rasterCfgs = PIXEL_RASTERS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
+  const gridCfgs = PIXEL_GRIDS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
+  const [rasters, grids, meteo, stations, trace, argo] = await Promise.all([
+    Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null))),
+    Promise.all(gridCfgs.map((cfg) => loadGrid(cfg).then((g) => g && sampleGrid(g, lon, lat)).catch(() => null))),
+    fetchOpenMeteo(lon, lat),
+    pixelJson("data/stations.geojson"),
+    pixelJson("data/climatetrace.json"),
+    pixelJson("data/argo.json"),
+  ]);
+  if (pixelCardEl.classList.contains("hidden")) return;   // closed while loading
+
+  const sec = [];
+
+  /* -- live weather now + the near future (the prediction axis) ------------ */
+  if (meteo?.current) {
+    const c = meteo.current;
+    let rows = pixelRow("Air temperature", `${fmtVal(c.temperature_2m)} °C`) +
+      pixelRow("Wind", `${fmtVal(c.wind_speed_10m)} km/h from ${Math.round(c.wind_direction_10m)}°`) +
+      pixelRow("Humidity · pressure", `${Math.round(c.relative_humidity_2m)} % · ${Math.round(c.pressure_msl)} hPa`) +
+      (c.precipitation > 0 ? pixelRow("Precipitation now", `${fmtVal(c.precipitation)} mm/h`) : "");
+    if (Number.isFinite(meteo.elevation) && Math.abs(meteo.elevation) > 1) {
+      rows = pixelRow("Elevation", `${Math.round(meteo.elevation)} m`) + rows;
+    }
+    const d = meteo.daily;
+    if (d?.time?.length) {
+      const days = d.time.map((t, i) =>
+        `<div class="px-day"><span>${t.slice(5)}</span>` +
+        `<span>${Math.round(d.temperature_2m_min[i])}–${Math.round(d.temperature_2m_max[i])}°</span>` +
+        `<span>${d.precipitation_sum[i] > 0.4 ? fmtVal(d.precipitation_sum[i]) + " mm" : "·"}</span></div>`).join("");
+      rows += `<div class="px-forecast">${days}</div>`;
+    }
+    sec.push(`<div class="px-sec"><div class="px-sec-title">Now &amp; next 7 days <span class="px-src">live · Open-Meteo</span></div>${rows}</div>`);
+  }
+
+  /* -- satellite fields at the app's current date -------------------------- */
+  const rrows = rasters.map((r, i) => {
+    if (!r) return "";
+    const cfg = rasterCfgs[i];
+    let extra = "";
+    // memory channel: current SST against its own 1991–2020 normal
+    if (cfg.id === "sst" && grids[0] != null) {
+      const d = r.v - grids[0];
+      extra = ` <span class="${d >= 0 ? "px-warm" : "px-cool"}">(${d >= 0 ? "+" : "−"}${fmtVal(Math.abs(d))} vs 1991–2020)</span>`;
+    }
+    return pixelRow(cfg.title.replace(/\s*\(.*\)$/, ""), `${fmtVal(r.v)} ${r.units}${extra}`);
+  }).join("");
+  if (rrows) {
+    sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">${state.date} · NASA GIBS</span></div>${rrows}</div>`);
+  }
+
+  /* -- long-term normals (the memory channels) ----------------------------- */
+  const gtitles = ["SST normal 1991–2020", "Precip normal (GPCP)", "Precip normal (E-OBS)", "Precip normal (MeteoSwiss)"];
+  const gunits = ["°C", "mm/yr", "mm/yr", "mm/yr"];
+  const grows = grids.map((v, i) =>
+    v == null ? "" : pixelRow(gtitles[i], `${fmtVal(v)} ${gunits[i]}`)).join("");
+  if (grows) {
+    sec.push(`<div class="px-sec"><div class="px-sec-title">Climate normals</div>${grows}</div>`);
+  }
+
+  /* -- context: what observes / affects this point ------------------------- */
+  const nrows = [];
+  if (stations?.features) {
+    let best = null, bd = Infinity;
+    for (const f of stations.features) {
+      const [slon, slat] = f.geometry.coordinates;
+      const d = haversineKm(lon, lat, slon, slat);
+      if (d < bd) { bd = d; best = f; }
+    }
+    if (best) nrows.push(pixelRow("Nearest monitoring site", `${best.properties.name} · ${Math.round(bd)} km`));
+  }
+  if (argo?.floats) {
+    let n300 = 0, bd = Infinity;
+    for (const [flon, flat] of argo.floats) {
+      const d = haversineKm(lon, lat, flon, flat);
+      if (d < bd) bd = d;
+      if (d < 300) n300++;
+    }
+    if (bd < 3000) nrows.push(pixelRow("Argo floats", `${n300} within 300 km · nearest ${Math.round(bd)} km`));
+  }
+  if (trace?.assets) {
+    let best = null, bd = Infinity, n100 = 0;
+    for (const a of trace.assets) {
+      const d = haversineKm(lon, lat, a[0], a[1]);
+      if (d < bd) { bd = d; best = a; }
+      if (d < 100) n100++;
+    }
+    if (bd < 500 && best) {
+      nrows.push(pixelRow("Top-1000 emitters", `${n100} within 100 km · nearest: ${best[3]} (${fmtVal(best[2])} Mt/yr, ${Math.round(bd)} km)`));
+    }
+  }
+  // glaciers only if the (7 MB) inventory is already loaded — no click-cost
+  if (glacierData) {
+    let n = 0, dh = 0, ndh = 0;
+    for (let i = 0; i < glacierData.count; i++) {
+      if (haversineKm(lon, lat, glacierData.lon[i], glacierData.lat[i]) < 100) {
+        n++;
+        const v = glacierData.dhdt[i];
+        if (v != null) { dh += v; ndh++; }
+      }
+    }
+    if (n) nrows.push(pixelRow("Glaciers within 100 km", `${n}${ndh ? ` · mean ${fmtVal(dh / ndh)} m/yr thickness change` : ""}`));
+  }
+  if (nrows.length) {
+    sec.push(`<div class="px-sec"><div class="px-sec-title">Context nearby</div>${nrows.join("")}</div>`);
+  }
+
+  sec.push(`<div class="px-note">Channels &amp; roles: <a href="docs/PIXEL_STATE.md" target="_blank" rel="noopener">PIXEL_STATE.md</a> · weather &amp; forecast by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></div>`);
+  pixelCardEl.querySelector(".px-body").innerHTML = sec.join("");
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") pixelCardEl.classList.add("hidden");
+});
 
 /* ----------------------------------------------------------------- stations */
 
@@ -2991,6 +3199,7 @@ window.__earth = {
   get gistemp() { return gistempData; },
   linTrend,
   probeValueAt,
+  showPixelState,
   loadGlaciers,
   get glacierCollection() { return glacierCollection; },
   get glacierData() { return glacierData; },

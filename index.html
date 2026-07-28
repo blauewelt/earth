@@ -82,6 +82,10 @@
       <div class="control-row">
         <label class="check-inline"><input type="checkbox" id="toggle-grayscale" /> Grayscale globe</label>
       </div>
+      <div class="control-row">
+        <label class="check-inline"><input type="checkbox" id="toggle-pixel" checked /> Pixel inspector</label>
+        <span class="window-value">click the globe</span>
+      </div>
       <details class="hint-details">
         <summary class="hint">How Compare &amp; Aggregate work</summary>
         <p class="hint">Daily NASA GIBS imagery. <strong>Aggregate</strong> averages any continuous
@@ -337,6 +341,9 @@
 
   <div id="cesiumContainer">
     <div id="active-layers" class="hidden" aria-label="Active layers"></div>
+    <!-- Pixel inspector: the docs/PIXEL_STATE.md idea made clickable — one
+         card composing every value the app can know about a point. -->
+    <div id="pixel-card" class="hidden" aria-label="Pixel state"></div>
     <div id="zoom-controls">
       <button id="zoom-in" title="Zoom in">+</button>
       <button id="zoom-out" title="Zoom out">−</button>

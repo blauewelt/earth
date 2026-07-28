@@ -40,6 +40,15 @@ test.beforeEach(async ({ page, baseURL }) => {
         await route.abort().catch(() => {});
       }
     });
+    await page.route(/https:\/\/api\.open-meteo\.com\/.*/, async (route) => {
+      try {
+        const url = route.request().url().replace("https://api.open-meteo.com", "http://localhost:8083");
+        const resp = await page.request.get(url);
+        await route.fulfill({ response: resp });
+      } catch {
+        await route.abort().catch(() => {});
+      }
+    });
   }
   page.__errors = [];
   page.on("pageerror", (e) => page.__errors.push(String(e)));
@@ -1255,4 +1264,43 @@ test("window presets jump the slider; the explainer folds away", async ({ page }
   await page.click(".hint-details summary");
   expect(await details.evaluate((el) => el.open)).toBe(true);
   await expect(details).toContainText("ratio");
+});
+
+test("pixel inspector composes a point's full state on click", async ({ page }) => {
+  test.setTimeout(150000); // ~9 raster tiles + 4 grids + live weather, twice
+  // enabled by default; drive it directly (canvas click coords are unreliable
+  // on the software-GL sandbox, and the click wiring is a thin guard)
+  await expect(page.locator("#toggle-pixel")).toBeChecked();
+
+  // -- an ocean point in the North Atlantic
+  await page.evaluate(() =>
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(-30, 40)));
+  const card = page.locator("#pixel-card");
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("Pixel state");
+  await expect(card).toContainText("40.00°N 30.00°W");
+  // live weather + the future axis
+  await expect(card).toContainText("Open-Meteo", { timeout: 60000 });
+  await expect(card).toContainText("Air temperature");
+  await expect(card.locator(".px-day")).toHaveCount(7);
+  // satellite state at the app date, with the memory channel (SST vs normal)
+  await expect(card).toContainText("Sea surface temperature");
+  await expect(card).toContainText("vs 1991–2020");
+  await expect(card).toContainText("SST normal 1991–2020");
+  // context: floats and monitoring sites exist in the North Atlantic
+  await expect(card).toContainText("Argo floats");
+  await expect(card).toContainText("Nearest monitoring site");
+  // the role map is one click away
+  await expect(card.locator('a[href="docs/PIXEL_STATE.md"]')).toHaveCount(1);
+
+  // -- a Swiss alpine point: regional normals + elevation appear
+  await page.evaluate(() =>
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(8.0, 46.5)));
+  await expect(card).toContainText("Elevation", { timeout: 60000 });
+  await expect(card).toContainText("MeteoSwiss");
+  await expect(card).toContainText("E-OBS");
+
+  // × closes it
+  await page.click("#pixel-card .px-close");
+  await expect(card).toBeHidden();
 });

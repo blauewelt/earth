@@ -93,7 +93,13 @@ A new layer is not done until it has **all** of:
 ### 3. Data pipeline: static snapshots, never live third-party calls
 
 The browser must depend only on NASA GIBS (tiles) and GBIF (occurrence tiles).
-Everything else is baked offline by `scripts/refresh_data.py` into small static
+**One deliberate exception**: the pixel inspector calls Open-Meteo
+(`api.open-meteo.com`) — key-free, CORS-open, and only ever a single-point
+query triggered by an explicit click, never tile streaming. Any further live
+endpoint must clear the same bar (no key, no quota pain, click-triggered,
+degrades to an omitted card section on failure) and be added to the MIRROR
+proxy set (`:8083` is Open-Meteo). Everything else is baked offline by
+`scripts/refresh_data.py` into small static
 JSON files under `data/` (one function per dataset, runnable individually:
 `python3 scripts/refresh_data.py gpcp eobs`). Grids use the common format
 written by `_write_grid()` (regular lon/lat, row-major from the south, `null`
@@ -104,7 +110,8 @@ for empty cells) and render client-side via `GridProvider`.
 The dev sandbox's *browser* cannot reach external hosts (curl can). Therefore:
 
 - `MIRROR=1` reroutes cdnjs → `_vendor/cesium`, GIBS → `localhost:8081`,
-  GBIF → `localhost:8082` (see `tests/app.spec.js` beforeEach).
+  GBIF → `localhost:8082`, Open-Meteo → `localhost:8083` (see
+  `tests/app.spec.js` beforeEach).
 - The proxies are **in the repo**: `scripts/test_proxy.py` (forwarding proxy)
   and `scripts/run_tests.sh` (starts servers + runs the suite). Do not recreate
   them ad hoc.
@@ -158,6 +165,15 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   same path as dragging it. The long Compare/Aggregate explainer folds into a
   `<details class="hint-details">` — collapsed by default; keep its text in
   sync with the posture matrix when comparison/aggregation semantics change.
+- **Pixel inspector** (`#toggle-pixel`, on by default): clicking bare globe
+  (no entity under the cursor) opens `#pixel-card` — docs/PIXEL_STATE.md made
+  clickable. Composes: live weather + 7-day forecast (Open-Meteo), all nine
+  colormapped GIBS rasters probed at the current date (z capped at 4), the
+  four climatology grids with an SST-vs-normal anomaly, and nearby context
+  (stations, Argo, emitters; glaciers only if already loaded — never pay the
+  7 MB on a click). `showPixelState(carto)` is exported for tests. While the
+  inspector is on, the click-probe tooltip is suppressed (the card includes
+  the same value); hover probe unaffected. Esc or × closes.
 - **Active-layer chips** (`#active-layers`, top-left of the globe) list every
   layer currently on, whatever machinery draws it. Each chip's `×` turns the
   layer off; the label jumps to that layer's sidebar row and outlines it
@@ -302,6 +318,9 @@ rectangle) · OISST v2.1 SST 1991–2020 (1°) · MeteoSwiss Swiss precip normal
 - *Hover cards* on every layer: gist paragraph + Recorded / Interval / Spatial.
 - *Active-layer chips* top-left of the globe: what's on right now, one click to
   switch any of it off (or "Clear all N"), from any tab. See §5.
+- *Pixel inspector*: click any point on the globe → one card composing live
+  weather + 7-day forecast, all satellite fields at the current date, climate
+  normals with anomaly, and nearby observing/emitting context. See §5.
 
 **Point/data layers:** Climate TRACE top-1000 emitters · Argo active floats ·
 AMOC & GHG stations (RAPID, OSNAP, MOVE, SAMBA, Mauna Loa, Jungfraujoch…) ·
