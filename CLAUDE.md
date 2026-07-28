@@ -74,6 +74,11 @@ A new layer is not done until it has **all** of:
    | Snow cover (NDSI) | ✓ | ✓ | continuous %, clear-sky gaps fill by averaging |
    | Land surface temp (MODIS) | ✓ | ✓ | continuous K, clear-sky gaps fill by averaging |
    | Salinity (SMAP monthly) | ✓ | ✓ | continuous PSU; sample dates snap & dedupe to months |
+   | Vegetation (MODIS NDVI monthly) | ✓ | ✓ | continuous 0–1 index; same-month-across-years differencing is THE standard use |
+   | Water storage (GRACE monthly) | ✓ | ✓ | already an anomaly in cm; differencing months = storage change · tiles end 2022-07, 2017-18 mission gap |
+   | SSH anomalies (5-day) | ✓ | ✓ | continuous m; differencing = local sea-level change · `snap5d` epochs, tiles end 2019-01 |
+   | Energy balance (CERES monthly) | ✓ | ✓ | continuous W/m² · tiles end 2018-10 |
+   | Soil moisture (AMSR2) | ✓ | ✗ | swathy like AOD — averaging fills orbits; day deltas compare coverage, not soil · tiles end 2025-09 |
    | Chlorophyll-a (PACE) | ✓ | ratio ×4 | log-normal-ish; absolute Δ of bin-centres is quantization noise, log-ratio of means is sound |
    | Aerosol optical depth | ✓ | ratio ×4 | windowed mean is standard; multiplicative change is the meaningful signal |
    | Precipitation (IMERG daily) | ✓ | ratio ×8 | daily-MEAN rates average soundly (`transparentZero`: dry pixels count as 0, eps = palette floor/2 keeps dry→rain finite); absolute day deltas are weather noise |
@@ -93,12 +98,14 @@ A new layer is not done until it has **all** of:
 ### 3. Data pipeline: static snapshots, never live third-party calls
 
 The browser must depend only on NASA GIBS (tiles) and GBIF (occurrence tiles).
-**One deliberate exception**: the pixel inspector calls Open-Meteo
-(`api.open-meteo.com`) — key-free, CORS-open, and only ever a single-point
-query triggered by an explicit click, never tile streaming. Any further live
-endpoint must clear the same bar (no key, no quota pain, click-triggered,
-degrades to an omitted card section on failure) and be added to the MIRROR
-proxy set (`:8083` is Open-Meteo). Everything else is baked offline by
+**One deliberate exception**: the pixel inspector calls the Open-Meteo
+family (`api`, `air-quality-api`, `flood-api`, `marine-api`,
+`climate-api`.open-meteo.com) — key-free, CORS-open, and only ever a
+single-point query triggered by an explicit click, never tile streaming. Any
+further live endpoint must clear the same bar (no key, no quota pain,
+click-triggered, degrades to an omitted card section on failure) and be added
+to the MIRROR proxy set (`:8083`–`:8087` are the Open-Meteo hosts, in the
+order above). Everything else is baked offline by
 `scripts/refresh_data.py` into small static
 JSON files under `data/` (one function per dataset, runnable individually:
 `python3 scripts/refresh_data.py gpcp eobs`). Grids use the common format
@@ -110,7 +117,7 @@ for empty cells) and render client-side via `GridProvider`.
 The dev sandbox's *browser* cannot reach external hosts (curl can). Therefore:
 
 - `MIRROR=1` reroutes cdnjs → `_vendor/cesium`, GIBS → `localhost:8081`,
-  GBIF → `localhost:8082`, Open-Meteo → `localhost:8083` (see
+  GBIF → `localhost:8082`, the Open-Meteo hosts → `localhost:8083-8087` (see
   `tests/app.spec.js` beforeEach).
 - The proxies are **in the repo**: `scripts/test_proxy.py` (forwarding proxy)
   and `scripts/run_tests.sh` (starts servers + runs the suite). Do not recreate
@@ -173,11 +180,12 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   unchecked + a colormapped layer active → the click reads that layer's value
   (probe tooltip, the specific question being asked); unchecked + NO
   colormapped layer active → card again, since there is no layer value to
-  read instead. The card composes: live weather + 7-day forecast
-  (Open-Meteo), all nine colormapped GIBS rasters probed at the current date
-  (z capped at 4), the four climatology grids, and nearby context (stations,
-  Argo, emitters; glaciers only if already loaded — never pay the 7 MB on a
-  click). Deliberately NO derived "SST vs normal" delta: the baked OISST
+  read instead. The card composes: live weather + 7-day forecast, CAMS air
+  quality, GloFAS river discharge, waves, and a 2045–49-vs-1991–95 CMIP6
+  outlook (all Open-Meteo family); all fourteen colormapped GIBS rasters
+  probed at the current date (z capped at 4); the four climatology grids; and
+  nearby context (stations, Argo, emitters; glaciers only if already loaded —
+  never pay the 7 MB on a click). Deliberately NO derived "SST vs normal" delta: the baked OISST
   normal is the annual mean, so the difference would mostly be the seasonal
   cycle — the MUR25 anomalies row is the seasonally-correct departure.
   `showPixelState(carto)` is exported for tests. Esc or × closes.
@@ -271,6 +279,14 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   Symmetrically on output: a mean below the palette floor renders transparent,
   else `forward()` clamps drizzle-of-drizzles up to the first colour and the
   whole ocean tints "light rain".
+- **Some GIBS archives end before today**: GRACE mascons stop at 2022-07,
+  CERES EBAF at 2018-10, MEaSUREs SSH anomalies at 2019-01, AMSR2 soil
+  moisture at 2025-09 — the instruments/records continue, only the *tiles*
+  stop. `endTime` in the layer cfg clamps requests to the last served date
+  (so the layer shows its final state instead of blanking), and the hover
+  card must say "this map: … → <end> (last date GIBS serves)". 5-day products
+  (`snap5d: [epoch1, epoch2]`) serve only exact epoch dates — floor to the
+  nearest valid epoch; MEaSUREs SSH was re-anchored in 2017, hence two epochs.
 - **GIBS serves sub-daily TIME**: `TIME=YYYY-MM-DDTHH:MM:SSZ` returns distinct
   tiles per half-hour for IMERG 30-min (verified: 13:00 ≠ 13:30 ≠ bare date;
   bare date resolves to 00:00). `gibsTime()` appends the timestamp for
@@ -291,9 +307,12 @@ imagery Blue Marble; optional manual grayscale toggle (desaturates the base so
 coloured overlays and blue-negative deltas stay readable).
 
 **Raster layers (NASA GIBS WMTS, custom tiling scheme):** VIIRS true colour ·
-MUR SST 1 km (default) · MUR25 SST anomalies · GPM IMERG V07 precipitation
-(daily + 30-min) · AMSR2 sea ice · MODIS snow cover · MODIS aerosol optical
-depth · MODIS land surface temperature · PACE chlorophyll-a · SMAP sea surface
+MUR SST 1 km (default) · MUR25 SST anomalies · JPL MEaSUREs SSH anomalies
+(5-day, tiles→2019) · GPM IMERG V07 precipitation (daily + 30-min) · AMSR2 sea
+ice · MODIS snow cover · MODIS aerosol optical depth · MODIS land surface
+temperature · AMSR2 soil moisture (tiles→2025-09) · MODIS NDVI vegetation
+(monthly) · GRACE water-storage anomaly (monthly, tiles→2022-07) · CERES EBAF
+TOA net flux (monthly, tiles→2018-10) · PACE chlorophyll-a · SMAP sea surface
 salinity (monthly) · VIIRS Black Marble night lights.
 
 **Climatology grid layers (client-rendered from baked JSON, `GridProvider`):**

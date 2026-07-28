@@ -40,15 +40,24 @@ test.beforeEach(async ({ page, baseURL }) => {
         await route.abort().catch(() => {});
       }
     });
-    await page.route(/https:\/\/api\.open-meteo\.com\/.*/, async (route) => {
-      try {
-        const url = route.request().url().replace("https://api.open-meteo.com", "http://localhost:8083");
-        const resp = await page.request.get(url);
-        await route.fulfill({ response: resp });
-      } catch {
-        await route.abort().catch(() => {});
-      }
-    });
+    const omHosts = [
+      ["https://api.open-meteo.com", "http://localhost:8083"],
+      ["https://air-quality-api.open-meteo.com", "http://localhost:8084"],
+      ["https://flood-api.open-meteo.com", "http://localhost:8085"],
+      ["https://marine-api.open-meteo.com", "http://localhost:8086"],
+      ["https://climate-api.open-meteo.com", "http://localhost:8087"],
+    ];
+    for (const [host, local] of omHosts) {
+      await page.route(new RegExp(host.replace(/[.\/]/g, "\\$&") + "/.*"), async (route) => {
+        try {
+          const url = route.request().url().replace(host, local);
+          const resp = await page.request.get(url);
+          await route.fulfill({ response: resp });
+        } catch {
+          await route.abort().catch(() => {});
+        }
+      });
+    }
   }
   page.__errors = [];
   page.on("pageerror", (e) => page.__errors.push(String(e)));
@@ -934,12 +943,14 @@ test("aggregation/difference matrix: every timed raster has an explicit posture"
     return out;
   });
   // both average & difference: fully continuous fields
-  for (const id of ["sst", "sst-anom", "seaice", "snow", "lst", "salinity"]) {
+  for (const id of ["sst", "sst-anom", "seaice", "snow", "lst", "salinity",
+                    "ndvi", "grace", "ssh-anom", "ceres"]) {
     expect(m[id].delta, `${id} differenceable`).toBe(true);
   }
   // average-only: sound to time-average, unsound to difference day-vs-day
-  // (precip: daily-mean rates average like GPCP does; day-vs-day is weather)
-  for (const id of ["chlor", "aod", "precip"]) {
+  // (precip: daily-mean rates average like GPCP does; day-vs-day is weather;
+  // soil moisture: day deltas compare swath coverage, not soil)
+  for (const id of ["chlor", "aod", "precip", "soilmoisture"]) {
     expect(m[id].agg, `${id} aggregable`).toBe(true);
     expect(m[id].delta, `${id} not differenceable`).toBe(false);
   }
@@ -1309,14 +1320,62 @@ test("pixel inspector composes a point's full state on click", async ({ page }) 
   // the role map is one click away
   await expect(card.locator('a[href="docs/PIXEL_STATE.md"]')).toHaveCount(1);
 
-  // -- a Swiss alpine point: regional normals + elevation appear
+  // ocean bonus channels: waves (marine API) and CAMS air quality (global)
+  await expect(card).toContainText("Waves");
+  await expect(card).toContainText("Air quality");
+
+  // -- a Swiss alpine point: regional normals + elevation + land channels
   await page.evaluate(() =>
     window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(8.0, 46.5)));
   await expect(card).toContainText("Elevation", { timeout: 60000 });
   await expect(card).toContainText("MeteoSwiss");
   await expect(card).toContainText("E-OBS");
+  await expect(card).toContainText("Soil (top cm)");
+  await expect(card).toContainText("Vegetation index");
+  await expect(card).toContainText("PM2.5");
+  // the decadal future axis: this pixel's own 2050 trajectory with model range
+  await expect(card).toContainText("2045–49 vs 1991–95");
+  await expect(card).toContainText("models");
 
   // × closes it
   await page.click("#pixel-card .px-close");
   await expect(card).toBeHidden();
+});
+
+test("state-vector layers: end-clamping, 5-day snap, and a live toggle", async ({ page }) => {
+  const t = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = (id) => E.GIBS_LAYERS.find((l) => l.id === id);
+    return {
+      // archives that stop being served clamp to their last date...
+      graceToday: E.gibsTime(cfg("grace"), E.state.date),
+      ceresToday: E.gibsTime(cfg("ceres"), E.state.date),
+      smToday: E.gibsTime(cfg("soilmoisture"), E.state.date),
+      // ...but dates inside the archive pass through (with monthly snap)
+      graceMid: E.gibsTime(cfg("grace"), "2010-06-15"),
+      // 5-day product: floor to a valid epoch of the right anchor
+      sshOld: E.gibsTime(cfg("ssh-anom"), "2000-01-04"),   // epoch1 1992-09-30
+      sshNew: E.gibsTime(cfg("ssh-anom"), "2018-06-15"),   // epoch2 2017-10-29
+      sshToday: E.gibsTime(cfg("ssh-anom"), E.state.date), // clamps then snaps
+      // NDVI is current: today snaps to a recent month, not an endTime
+      ndviToday: E.gibsTime(cfg("ndvi"), E.state.date),
+    };
+  });
+  expect(t.graceToday).toBe("2022-07-01");
+  expect(t.ceresToday).toBe("2018-10-01");
+  expect(t.smToday).toBe("2025-09-01");
+  expect(t.graceMid).toBe("2010-06-01");
+  // 1992-09-30 + k*5d lands on 2000-01-02 for the 2000-01-04 request
+  expect(t.sshOld).toBe("2000-01-02");
+  // 2017-10-29 + k*5d: 2018-06-11 is the floor of 2018-06-15
+  expect(t.sshNew).toBe("2018-06-11");
+  expect(t.sshToday).toBe("2019-01-17");                   // the last served epoch
+  expect(t.ndviToday >= "2026-01-01").toBe(true);
+  // one of the five actually toggles on with our GIBS tiling scheme
+  await page.check('#layer-list input[data-id="ndvi"]');
+  const scheme = await page.evaluate(() =>
+    window.__earth.state.layers["ndvi"].layer.imageryProvider.tilingScheme.constructor.name);
+  expect(scheme).toBe("GIBSGeographicTilingScheme");
+  // and carries a legend with its colormap
+  await expect(page.locator("#legend-panel")).toContainText("Vegetation index");
 });

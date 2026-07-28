@@ -203,6 +203,51 @@ const GIBS_LAYERS = [
     meta: "Daytime land skin temperature (K) — the actual temperature of the ground",
   },
   {
+    id: "soilmoisture",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/AMSR_Soil_Moisture.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/AMSR_Soil_Moisture_H.svg",
+    doc: "https://nsidc.org/data/au_land",
+    layer: "AMSRU2_Soil_Moisture_NPD_Day",
+    // Swathy like AOD/LST → averaging fills gaps; day-vs-day differencing
+    // would mostly compare swath coverage, not soil. GIBS stops serving
+    // tiles at 2025-09 (endTime clamp) — the hover card says so.
+    aggregable: true,
+    endTime: "2025-09-01",
+    title: "Soil moisture (AMSR2)",
+    ext: "png", tms: "2km", maxLevel: 5,
+    start: "2012-07-24", timed: true, on: false,
+    meta: "Top-centimetre soil water from passive microwave · tiles end 2025-09",
+  },
+  {
+    id: "ndvi",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/MODIS_L3_NDVI.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_L3_NDVI_H.svg",
+    doc: "https://lpdaac.usgs.gov/products/mod13a3v061/",
+    layer: "MODIS_Terra_L3_NDVI_Monthly",
+    deltaRange: 0.3,  // greening/browning between months or years is THE standard NDVI use
+    title: "Vegetation index (MODIS NDVI, monthly)",
+    ext: "png", tms: "1km", maxLevel: 6,
+    start: "2000-03-01", timed: true, monthly: true, on: false,
+    meta: "Monthly vegetation greenness (0–1)",
+  },
+  {
+    id: "grace",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/GRACE_Tellus_Liquid_Water_Equivalent_Thickness_Mascon_CRI.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/GRACE_Tellus_Liquid_Water_Equivalent_Thickness_Mascon_CRI_H.svg",
+    doc: "https://grace.jpl.nasa.gov/data/get-data/monthly-mass-grids-land/",
+    layer: "GRACE_Tellus_Liquid_Water_Equivalent_Thickness_Mascon_CRI",
+    // Already an anomaly field (cm of water vs the 2004-09 baseline);
+    // differencing two months = storage CHANGE, the quantity groundwater
+    // studies actually use. GIBS tiles end 2022-07; 2017-18 has the
+    // GRACE→GRACE-FO mission gap (blank months).
+    deltaRange: 15,
+    endTime: "2022-07-01",
+    title: "Water storage anomaly (GRACE)",
+    ext: "png", tms: "2km", maxLevel: 5,
+    start: "2002-08-01", timed: true, monthly: true, on: false,
+    meta: "Total water mass vs 2004–09 baseline, ~300 km blur · tiles end 2022-07",
+  },
+  {
     id: "chlor",
     colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/MODIS_Chlorophyll.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_Chlorophyll_H.svg",
@@ -226,6 +271,41 @@ const GIBS_LAYERS = [
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2015-04-01", timed: true, monthly: true, on: false,
     meta: "SMAP L-band salinity (PSU) — same quantity as SMOS/CATDS · monthly composite; 2024 has a mission data gap",
+  },
+  {
+    id: "ssh-anom",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/MEaSUREs_Sea_Surface_Height_Anomalies.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/MEaSUREs_Sea_Surface_Height_Anomalies_H.svg",
+    doc: "https://podaac.jpl.nasa.gov/dataset/SEA_SURFACE_HEIGHT_ALT_GRIDS_L4_2SATS_5DAY_6THDEG_V_JPL2205",
+    layer: "JPL_MEaSUREs_L4_Sea_Surface_Height_Anomalies",
+    // The ocean's pressure gauge: differencing two epochs = local sea-level
+    // change. 5-day cadence with two epoch anchors (the product was
+    // re-anchored in 2017) — snap5d floors any date to a valid epoch.
+    // GIBS tiles end 2019-01; the altimetry record itself continues
+    // (see the Sea level tab for the global mean).
+    deltaRange: 0.15,
+    endTime: "2019-01-17",
+    snap5d: ["1992-09-30", "2017-10-29"],
+    title: "Sea surface height anomaly (altimetry)",
+    ext: "png", tms: "2km", maxLevel: 5,
+    start: "1992-09-30", timed: true, on: false,
+    meta: "Sea level vs the mean sea surface, 5-day · tiles end 2019-01",
+  },
+  {
+    id: "ceres",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/CERES_EBAF_TOA_Net_Flux_All_Sky_Monthly.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/CERES_EBAF_TOA_Net_Flux_All_Sky_Monthly_H.svg",
+    doc: "https://ceres.larc.nasa.gov/data/",
+    layer: "CERES_EBAF_TOA_Net_Flux_All_Sky_Monthly",
+    // Net absorbed energy at the top of the atmosphere — the pixel's energy
+    // budget, the forcing behind everything else. Continuous W/m² field:
+    // year-over-year differencing is sound. GIBS tiles end 2018-10.
+    deltaRange: 50,
+    endTime: "2018-10-01",
+    title: "Energy balance (CERES net flux, monthly)",
+    ext: "png", tms: "2km", maxLevel: 5,
+    start: "2000-03-01", timed: true, monthly: true, on: false,
+    meta: "Net radiation in minus out at top of atmosphere · tiles end 2018-10",
   },
   {
     id: "gpcp",
@@ -282,14 +362,27 @@ const GIBS_LAYERS = [
 // complete month.
 function gibsTime(cfg, dateStr) {
   if (!cfg.timed) return cfg.fixedTime || "default";
+  // Some archives stop being served as tiles before today (GRACE 2022-07,
+  // CERES 2018-10, SSH anomalies 2019-01, AMSR2 soil moisture 2025-09): any
+  // later date clamps to the last served one, so the layer shows its final
+  // state instead of silently blanking. The hover card states the end date.
+  if (cfg.endTime && dateStr > cfg.endTime) dateStr = cfg.endTime;
   if (cfg.monthly) {
     let d = dateStr.slice(0, 8) + "01";
     const currentMonth = defaultDate().slice(0, 8) + "01";
-    if (d >= currentMonth) {
+    if (!cfg.endTime && d >= currentMonth) {
       const [y, m] = d.split("-").map(Number);
       d = m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, "0")}-01`;
     }
     return d;
+  }
+  // 5-day products serve only exact epoch dates; floor to the nearest one.
+  // Two anchors because the MEaSUREs product was re-anchored mid-record.
+  if (cfg.snap5d) {
+    const epoch = cfg.snap5d.reduce((best, e) => (dateStr >= e ? e : best), cfg.snap5d[0]);
+    const steps = Math.floor((Date.parse(dateStr) - Date.parse(epoch)) / (5 * 864e5));
+    return new Date(Date.parse(epoch) + Math.max(0, steps) * 5 * 864e5)
+      .toISOString().slice(0, 10);
   }
   // Sub-daily layers get a full timestamp. GIBS serves distinct tiles per
   // half-hour (verified: TIME=...T13:00:00Z and ...T13:30:00Z differ); a bare
@@ -1264,10 +1357,11 @@ function updateDeltaHint() {
         .some((e) => e.layer && e.cfg.timed && !e.isDelta && !e.isRatio &&
                      e.cfg.deltaRange == null && !e.cfg.ratioRange);
       if (rasterNoDelta) {
-        msgs.push("⚠ Computed difference works on continuous rasters (SST &amp; anomalies, " +
-          "sea ice, snow, land temperature, salinity) and, as a ratio, on precipitation, " +
-          "chlorophyll &amp; aerosol. Photographic and snapshot layers (true colour, " +
-          "30-min precipitation) have nothing to invert, so they are shown as-is.");
+        msgs.push("⚠ Computed change works on continuous rasters (temperatures, ice, snow, " +
+          "salinity, sea-surface height, vegetation, water storage, energy balance) and, " +
+          "as a ratio, on precipitation, chlorophyll &amp; aerosol. Photographic and " +
+          "snapshot layers (true colour, 30-min precipitation) have nothing to invert, " +
+          "so they are shown as-is.");
       }
     }
   }
@@ -1810,6 +1904,33 @@ const LAYER_FACTS = {
          "sharp enough to watch individual storm systems and tropical cyclones " +
          "develop over the course of a single day, using the ±30m time stepper " +
          "under the date." },
+  "soilmoisture": { rec: "this map: 2012-07 → 2025-09 (last date GIBS serves; the instrument continues)", int: "daily (swath — gaps are orbit coverage, not missing data)", sp: "~25 km",
+    sum: "How wet the top centimetre of soil is, sensed by passive microwave " +
+         "(AMSR2). The land half of drought: it dries in days, unlike the deep " +
+         "storage GRACE sees. Daily maps are striped by orbit swaths — average a " +
+         "window with the Aggregate slider for full coverage." },
+  "ndvi": { rec: "2000-02 → present", int: "monthly composite (of 16-day maxima)", sp: "1 km",
+    sum: "How green and dense vegetation is (NDVI, 0–1): the pulse of the " +
+         "biosphere. Season swings it; climate shifts it — comparing the same " +
+         "month across years (Compare → computed change) reveals greening, " +
+         "browning, deforestation and drought stress directly." },
+  "grace": { rec: "this map: 2002-08 → 2022-07 (last month GIBS serves; GRACE-FO continues) · 2017–18 has a between-missions gap", int: "monthly", sp: "~300 km (3° mascons)",
+    sum: "Where Earth gained or lost water mass — all of it: groundwater, soil, " +
+         "snow, ice — measured by how the mass below tugs at a pair of " +
+         "satellites. The only direct observation of deep water storage; " +
+         "aquifer depletion in India or California and ice-sheet loss appear " +
+         "in the same map, in centimetres of equivalent water." },
+  "ssh-anom": { rec: "this map: 1992-10 → 2019-01 (last epoch GIBS serves; altimetry continues — see the Sea level tab)", int: "5-day", sp: "~17 km grid",
+    sum: "How high the sea surface stands versus its long-term mean — the " +
+         "ocean's pressure gauge. Warm, expanded water and slow ocean eddies " +
+         "read directly; the Gulf Stream's meanders are the string of bumps and " +
+         "dips along the US east coast. Differencing two dates shows local " +
+         "sea-level change." },
+  "ceres": { rec: "this map: 2000-03 → 2018-10 (last month GIBS serves; the EBAF record continues)", int: "monthly", sp: "1° grid",
+    sum: "Earth's energy budget per pixel: sunlight absorbed minus heat " +
+         "radiated back to space (CERES). Positive means this place is banking " +
+         "energy. The global imbalance of ~+1 W/m² IS global warming, measured " +
+         "at the top of the atmosphere." },
   "seaice": { rec: "2012-07 → present, with gaps", int: "daily", sp: "12 km grid",
     sum: "The fraction of ocean covered by sea ice at both poles, sensed by passive " +
          "microwave (AMSR2), which sees through clouds and polar night. The " +
@@ -2493,7 +2614,8 @@ window.__runProbe = runProbe; // for tests
  * GIBS + GBIF" rule (see CLAUDE.md §3): key-free, CORS-open, and hit only by
  * an explicit click for a single point — never tile streaming. */
 
-const PIXEL_RASTERS = ["sst", "sst-anom", "precip", "seaice", "snow", "aod", "lst", "chlor", "salinity"];
+const PIXEL_RASTERS = ["sst", "sst-anom", "ssh-anom", "precip", "seaice", "snow", "aod", "lst",
+  "soilmoisture", "ndvi", "grace", "ceres", "chlor", "salinity"];
 const PIXEL_GRIDS = ["oisst", "gpcp", "eobs", "meteoswiss"];
 
 function haversineKm(lon1, lat1, lon2, lat2) {
@@ -2532,19 +2654,57 @@ function pixelJson(file) {
   return pixelJsonCache.get(file);
 }
 
-async function fetchOpenMeteo(lon, lat) {
-  const url = "https://api.open-meteo.com/v1/forecast" +
-    `?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}` +
+/* All Open-Meteo family endpoints share the exception documented in
+ * CLAUDE.md §3: key-free, CORS-open, single-point, click-triggered, and a
+ * failed call just omits its card section. */
+function omGet(url) {
+  return fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+}
+function omLL(lon, lat) {
+  return `latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}`;
+}
+function fetchOpenMeteo(lon, lat) {
+  return omGet("https://api.open-meteo.com/v1/forecast?" + omLL(lon, lat) +
     "&current=temperature_2m,relative_humidity_2m,precipitation,pressure_msl," +
-    "wind_speed_10m,wind_direction_10m" +
+    "wind_speed_10m,wind_direction_10m,soil_moisture_0_to_1cm,soil_temperature_0cm," +
+    "shortwave_radiation" +
     "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max" +
-    "&timezone=UTC&forecast_days=7";
-  try {
-    const r = await fetch(url);
-    return r.ok ? await r.json() : null;
-  } catch {
-    return null;
+    "&timezone=UTC&forecast_days=7");
+}
+function fetchAirQuality(lon, lat) {
+  return omGet("https://air-quality-api.open-meteo.com/v1/air-quality?" + omLL(lon, lat) +
+    "&current=pm2_5,pm10,ozone,nitrogen_dioxide,european_aqi");
+}
+function fetchRiver(lon, lat) {   // GloFAS discharge for the 0.05° river cell
+  return omGet("https://flood-api.open-meteo.com/v1/flood?" + omLL(lon, lat) +
+    "&daily=river_discharge&forecast_days=1");
+}
+function fetchMarine(lon, lat) {  // ocean points only; land → null and the row is omitted
+  return omGet("https://marine-api.open-meteo.com/v1/marine?" + omLL(lon, lat) +
+    "&current=wave_height,wave_period");
+}
+/* The decadal future axis: CMIP6-HighResMIP downscaled, daily, per model.
+ * Two 5-year windows (2045-49 vs 1991-95), three models → the pixel's own
+ * projected warming and precipitation change, with cross-model range. */
+const OM_CLIMATE_MODELS = ["EC_Earth3P_HR", "MPI_ESM1_2_XR", "MRI_AGCM3_2_S"];
+function fetchClimateWindow(lon, lat, a, b) {
+  return omGet("https://climate-api.open-meteo.com/v1/climate?" + omLL(lon, lat) +
+    `&start_date=${a}&end_date=${b}&models=${OM_CLIMATE_MODELS.join(",")}` +
+    "&daily=temperature_2m_mean,precipitation_sum");
+}
+function climateWindowStats(js) {
+  if (!js?.daily) return null;
+  const out = {};
+  for (const m of OM_CLIMATE_MODELS) {
+    const t = js.daily[`temperature_2m_mean_${m}`]?.filter((v) => v != null);
+    const p = js.daily[`precipitation_sum_${m}`]?.filter((v) => v != null);
+    if (!t?.length || !p?.length) continue;
+    out[m] = {
+      t: t.reduce((s, v) => s + v, 0) / t.length,
+      p: (p.reduce((s, v) => s + v, 0) / p.length) * 365.25,   // mm/yr
+    };
   }
+  return Object.keys(out).length ? out : null;
 }
 
 /* When does a globe click open the full card vs read one layer's value?
@@ -2577,10 +2737,15 @@ async function showPixelState(carto) {
   // Everything in parallel; the card renders once, complete.
   const rasterCfgs = PIXEL_RASTERS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
   const gridCfgs = PIXEL_GRIDS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
-  const [rasters, grids, meteo, stations, trace, argo] = await Promise.all([
+  const [rasters, grids, meteo, air, river, marine, climNow, climFut, stations, trace, argo] = await Promise.all([
     Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null))),
     Promise.all(gridCfgs.map((cfg) => loadGrid(cfg).then((g) => g && sampleGrid(g, lon, lat)).catch(() => null))),
     fetchOpenMeteo(lon, lat),
+    fetchAirQuality(lon, lat),
+    fetchRiver(lon, lat),
+    fetchMarine(lon, lat),
+    fetchClimateWindow(lon, lat, "1991-01-01", "1995-12-31"),
+    fetchClimateWindow(lon, lat, "2045-01-01", "2049-12-31"),
     pixelJson("data/stations.geojson"),
     pixelJson("data/climatetrace.json"),
     pixelJson("data/argo.json"),
@@ -2596,6 +2761,21 @@ async function showPixelState(carto) {
       pixelRow("Wind", `${fmtVal(c.wind_speed_10m)} km/h from ${Math.round(c.wind_direction_10m)}°`) +
       pixelRow("Humidity · pressure", `${Math.round(c.relative_humidity_2m)} % · ${Math.round(c.pressure_msl)} hPa`) +
       (c.precipitation > 0 ? pixelRow("Precipitation now", `${fmtVal(c.precipitation)} mm/h`) : "");
+    if (c.soil_moisture_0_to_1cm != null) {
+      rows += pixelRow("Soil (top cm)", `${fmtVal(c.soil_moisture_0_to_1cm)} m³/m³ · ${fmtVal(c.soil_temperature_0cm)} °C`);
+    }
+    if (c.shortwave_radiation != null && c.shortwave_radiation > 0) {
+      rows += pixelRow("Solar radiation", `${Math.round(c.shortwave_radiation)} W/m²`);
+    }
+    const mc = marine?.current;
+    if (mc?.wave_height != null) {
+      rows += pixelRow("Waves", `${fmtVal(mc.wave_height)} m` +
+        (mc.wave_period != null ? ` every ${fmtVal(mc.wave_period)} s` : ""));
+    }
+    const rd = river?.daily?.river_discharge?.[0];
+    if (rd != null && rd > 0) {
+      rows += pixelRow("River discharge", `${fmtVal(rd)} m³/s in this GloFAS cell`);
+    }
     if (Number.isFinite(meteo.elevation) && Math.abs(meteo.elevation) > 1) {
       rows = pixelRow("Elevation", `${Math.round(meteo.elevation)} m`) + rows;
     }
@@ -2608,6 +2788,16 @@ async function showPixelState(carto) {
       rows += `<div class="px-forecast">${days}</div>`;
     }
     sec.push(`<div class="px-sec"><div class="px-sec-title">Now &amp; next 7 days <span class="px-src">live · Open-Meteo</span></div>${rows}</div>`);
+  }
+
+  /* -- air quality (CAMS via Open-Meteo) ----------------------------------- */
+  if (air?.current && air.current.pm2_5 != null) {
+    const a = air.current;
+    const rows =
+      pixelRow("PM2.5 · PM10", `${fmtVal(a.pm2_5)} · ${fmtVal(a.pm10)} µg/m³`) +
+      pixelRow("Ozone · NO₂", `${fmtVal(a.ozone)} · ${fmtVal(a.nitrogen_dioxide)} µg/m³`) +
+      (a.european_aqi != null ? pixelRow("Air-quality index", `${Math.round(a.european_aqi)} (EU scale, lower is better)`) : "");
+    sec.push(`<div class="px-sec"><div class="px-sec-title">Air quality <span class="px-src">live · CAMS</span></div>${rows}</div>`);
   }
 
   /* -- satellite fields at the app's current date -------------------------- */
@@ -2632,6 +2822,27 @@ async function showPixelState(carto) {
     v == null ? "" : pixelRow(gtitles[i], `${fmtVal(v)} ${gunits[i]}`)).join("");
   if (grows) {
     sec.push(`<div class="px-sec"><div class="px-sec-title">Climate normals</div>${grows}</div>`);
+  }
+
+  /* -- the decadal future axis: this pixel's own 2050 trajectory ----------- */
+  const base = climateWindowStats(climNow);
+  const fut = climateWindowStats(climFut);
+  if (base && fut) {
+    const models = OM_CLIMATE_MODELS.filter((m) => base[m] && fut[m]);
+    if (models.length >= 2) {
+      const dt = models.map((m) => fut[m].t - base[m].t);
+      const dp = models.map((m) => (fut[m].p - base[m].p) / Math.max(base[m].p, 1) * 100);
+      const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+      const rng = (a) => [Math.min(...a), Math.max(...a)];
+      const [tlo, thi] = rng(dt), [plo, phi] = rng(dp);
+      const mt = mean(dt), mp = mean(dp);
+      const rows =
+        pixelRow("Temperature", `<span class="${mt >= 0 ? "px-warm" : "px-cool"}">${mt >= 0 ? "+" : "−"}${fmtVal(Math.abs(mt))} °C</span>` +
+          ` <span class="px-src">(models ${tlo >= 0 ? "+" : "−"}${fmtVal(Math.abs(tlo))}…${thi >= 0 ? "+" : "−"}${fmtVal(Math.abs(thi))})</span>`) +
+        pixelRow("Precipitation", `${mp >= 0 ? "+" : "−"}${Math.round(Math.abs(mp))} %` +
+          ` <span class="px-src">(${plo >= 0 ? "+" : "−"}${Math.round(Math.abs(plo))}…${phi >= 0 ? "+" : "−"}${Math.round(Math.abs(phi))} %)</span>`);
+      sec.push(`<div class="px-sec"><div class="px-sec-title">2045–49 vs 1991–95 <span class="px-src">CMIP6-HighResMIP · ${models.length} models</span></div>${rows}</div>`);
+    }
   }
 
   /* -- context: what observes / affects this point ------------------------- */
