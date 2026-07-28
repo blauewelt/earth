@@ -375,6 +375,9 @@ that birds dominate (~60%, a birdwatching bias), and that Homo sapiens is
 present but privacy-restricted to ~tens of thousands of records.
 
 **Dashboards (tabs):** *Temp* — GISTEMP v4 land vs land+ocean warming with
+trends, plus the Earth's-energy-imbalance panel (NOAA NCEI OHC 0–700 m from
+1955 / 0–2000 m from 2005; centred 5-yr OLS slopes × 0.6213 → W/m² of the
+whole Earth; last-decade rate ÷ 0.9 ≈ total EEI; `refresh_data.py eei`);
 trends; *AMOC* — RAPID 26.5°N overturning transport series + stats;
 *Sea level* — Frederikse 2020 budget components + NOAA altimetry; *Catalog* —
 searchable 244-dataset catalog with domain/AMOC/globe filters.
