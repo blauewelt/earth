@@ -1382,3 +1382,47 @@ test("state-vector layers: end-clamping, 5-day snap, and a live toggle", async (
   // and carries a legend with its colormap
   await expect(page.locator("#legend-panel")).toContainText("Vegetation index");
 });
+
+test("argo 300 m anomaly layer + the card's ocean column", async ({ page }) => {
+  test.setTimeout(150000);
+  // the snapshot grid toggles on with a diverging legend and an honest toast
+  await page.check('#layer-list input[data-id="argo-t300"]');
+  await expect(page.locator("#legend-panel")).toContainText("Subsurface temp anomaly");
+  const toast = page.locator("#toast-host .toast").first();
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText("recent-month snapshot");
+  // grid probe reads a physical value somewhere in the subtropical gyre
+  const probe = await page.evaluate(() =>
+    window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-40, 35)));
+  expect(probe.units).toBe("°C");
+  if (!probe.noData) expect(Math.abs(probe.value)).toBeLessThan(8);
+
+  // column sampling: ocean cell has a full stratified profile, land has none
+  const col = await page.evaluate(async () => {
+    const oc = await (await fetch("data/ocean_column.json")).json();
+    const E = window.__earth;
+    return {
+      pac: E.oceanColumnAt(oc, -170, 0),
+      sahara: E.oceanColumnAt(oc, 10, 21),
+      month: oc.month,
+    };
+  });
+  expect(col.sahara).toBeNull();
+  expect(col.pac.tNow[0]).toBeGreaterThan(20);            // warm tropical surface
+  expect(col.pac.tNow[col.pac.tNow.length - 1]).toBeLessThan(6);  // cold abyss
+  expect(col.month).toMatch(/^\d{4}-\d{2}$/);
+
+  // the pixel card renders the profile for an ocean click...
+  await page.evaluate(() =>
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(-30, 40)));
+  const card = page.locator("#pixel-card");
+  await expect(card).toContainText("Ocean column 0–2000 m", { timeout: 60000 });
+  await expect(card.locator("svg.px-profile")).toHaveCount(1);
+  await expect(card).toContainText("Upper 700 m vs normal");
+  await expect(card).toContainText("Surface salinity");
+  // ...and not for a landlocked click (Bern)
+  await page.evaluate(() =>
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(7.45, 46.95)));
+  await expect(card).toContainText("Elevation", { timeout: 60000 });
+  await expect(card).not.toContainText("Ocean column");
+});

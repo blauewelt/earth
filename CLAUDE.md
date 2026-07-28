@@ -318,7 +318,22 @@ salinity (monthly) · VIIRS Black Marble night lights.
 **Climatology grid layers (client-rendered from baked JSON, `GridProvider`):**
 GPCP v2.3 global precip (2.5°) · E-OBS v31 European precip (0.25°, bounded
 rectangle) · OISST v2.1 SST 1991–2020 (1°) · MeteoSwiss Swiss precip normal
-1991–2020 (~2 km). Ramp legends with hover read-out; probe reads exact cells.
+1991–2020 (~2 km) · **Subsurface temperature anomaly at 300 m** (Argo RG, 1°,
+`snapshotGrid` — a single recent month vs the 2004–18 same-month mean,
+diverging `anom` ramp). Ramp legends with hover read-out; probe reads exact
+cells.
+
+**Ocean column (Argo RG, `data/ocean_column.json`):** the latest month's
+absolute T/S profile AND the same-calendar-month 2004–18 normal on a 2° grid
+at 17 depth levels (0–2000 dbar), both from the Roemmich-Gilson product so
+the anomaly shares one baseline. Bake: `refresh_data.py argo_column`
+(downloads ~1.2 GB of RG NetCDF; mask handling is critical — `np.ma.filled`,
+never `np.array`, else land renders as zero-anomaly ocean). The pixel card
+draws the profile (sqrt-depth axis, now vs normal) with upper-700 m stored
+heat, warm-layer depth and surface-salinity-freshening lines.
+`refresh_data.py glorys` (needs a free Copernicus login, via env vars or
+`copernicusmarine login`) additionally bakes surface currents, MLD and SSH —
+credentials never in the repo.
 
 **Analysis features:**
 - *Comparison*: side-by-side split (draggable divider) or computed per-pixel

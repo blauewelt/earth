@@ -911,7 +911,7 @@
    "license": "Free (cite SEANOE DOI)",
    "globe": true,
    "amoc": true,
-   "notes": "Backbone subsurface T/S for OHC/steric/AMOC density"
+   "notes": "Backbone subsurface T/S for OHC/steric/AMOC density Gridded Roemmich-Gilson T/S column (0-2000 m) and 300 m anomaly are live in this app."
   },
   {
    "id": "argopy",

@@ -238,3 +238,57 @@ test.describe("gridded climatology snapshots", () => {
     });
   }
 });
+
+test.describe("ocean_column.json (Argo RG)", () => {
+  const c = read("ocean_column.json");
+
+  test("column grid: shape, physical plausibility, land masked", () => {
+    expect(c.levels.length).toBeGreaterThanOrEqual(15);
+    expect(c.levels[0]).toBeLessThan(5);              // near-surface
+    expect(c.levels[c.levels.length - 1]).toBeGreaterThan(1900);
+    expect(c.month).toMatch(/^\d{4}-\d{2}$/);
+    for (const f of ["t_now", "t_norm", "s_now", "s_norm"]) {
+      expect(c[f].length).toBe(c.levels.length);
+      for (const lev of c[f]) expect(lev.length).toBe(c.nx * c.ny);
+    }
+    const cell = (lon, lat) =>
+      (Math.floor((lat - c.south) / c.dlat)) * c.nx + Math.floor((lon - c.west) / c.dlon);
+    // tropical Pacific: warm surface, cold abyss, monotonically stratified-ish
+    const i = cell(-170, 0);
+    const surf = c.t_now[0][i] / 100, deep = c.t_now[c.levels.length - 1][i] / 100;
+    expect(surf).toBeGreaterThan(20);
+    expect(surf).toBeLessThan(35);
+    expect(deep).toBeGreaterThan(0);
+    expect(deep).toBeLessThan(6);
+    // salinity is ocean-like
+    expect(c.s_now[0][i] / 100).toBeGreaterThan(30);
+    expect(c.s_now[0][i] / 100).toBeLessThan(40);
+    // land is null, not zero: central Sahara and central Asia
+    expect(c.t_now[0][cell(10, 21)]).toBeNull();
+    expect(c.t_now[0][cell(90, 47)]).toBeNull();
+    // ocean coverage is roughly the ocean fraction of the domain
+    const filled = c.t_now[0].filter((v) => v != null).length;
+    expect(filled / (c.nx * c.ny)).toBeGreaterThan(0.5);
+    expect(filled / (c.nx * c.ny)).toBeLessThan(0.8);
+  });
+});
+
+test.describe("argo_t300.json (subsurface anomaly grid)", () => {
+  const g = read("argo_t300.json");
+
+  test("valid 1-degree grid of modest anomalies, land masked", () => {
+    expect(g.ramp).toBe("anom");
+    expect(g.units).toBe("°C");
+    expect(g.values.length).toBe(g.nx * g.ny);
+    const fin = g.values.filter((v) => v != null);
+    // subsurface anomalies are modest — a symmetric-ish diverging field
+    expect(Math.min(...fin)).toBeGreaterThan(-8);
+    expect(Math.max(...fin)).toBeLessThan(8);
+    const warm = fin.filter((v) => v > 0).length / fin.length;
+    expect(warm).toBeGreaterThan(0.3);                 // both signs well represented
+    expect(warm).toBeLessThan(0.9);                    // (warming ocean → skewed warm is fine)
+    // fill fraction ≈ ocean fraction; a land-as-zero bug would push this to ~1
+    expect(fin.length / g.values.length).toBeGreaterThan(0.5);
+    expect(fin.length / g.values.length).toBeLessThan(0.75);
+  });
+});

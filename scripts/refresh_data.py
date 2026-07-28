@@ -546,6 +546,209 @@ def species():
           f"{len(indicators)} species; unplaced {total - kingdom_sum:,}")
 
 
+RG_BASE = "https://sio-argo.ucsd.edu/pub/www-argo/RG"
+
+# Depth levels the app's ocean column keeps (dbar). Chosen to resolve the
+# mixed layer and thermocline tightly and thin out toward the abyss — the
+# ocean's action is top-heavy.
+COLUMN_LEVELS = [2.5, 10, 20, 30, 50, 75, 100, 150, 200, 300,
+                 400, 500, 700, 900, 1200, 1500, 1975]
+
+
+def _rg_latest_month():
+    """Find the newest RG monthly-extension file by scraping the index page."""
+    import re
+    req = urllib.request.Request("https://sio-argo.ucsd.edu/RG_Climatology.html", headers=UA)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        html = r.read().decode("utf-8", "replace")
+    months = sorted(set(re.findall(r"RG_ArgoClim_(\d{6})_2019\.nc\.gz", html)))
+    return months[-1]
+
+
+def _gunzip(path):
+    import gzip
+    import shutil
+    out = path[:-3]
+    if not os.path.exists(out):
+        with gzip.open(path, "rb") as fin, open(out, "wb") as fout:
+            shutil.copyfileobj(fin, fout)
+    return out
+
+
+def argo_column():
+    """Ocean column state from the Roemmich-Gilson Argo climatology (Scripps,
+    open, no account): the latest month's ABSOLUTE T/S profile plus the same
+    calendar month's 2004-2018 normal, on a 2 deg grid at COLUMN_LEVELS. Both
+    lines come from ONE product, so their difference is a clean seasonally-
+    correct anomaly (no cross-baseline mixing). Also bakes a 1 deg map of the
+    temperature anomaly at ~300 dbar (data/argo_t300.json) - the subsurface
+    marine-heatwave layer that no surface product can show."""
+    import numpy as np
+    import netCDF4 as ncdf
+
+    ym = _rg_latest_month()                        # e.g. "202606"
+    month_label = f"{ym[:4]}-{ym[4:]}"
+    print(f"argo_column: latest RG month {month_label}")
+    tf = _gunzip(_download(f"{RG_BASE}/RG_ArgoClim_Temperature_2019.nc.gz",
+                           "/tmp/nc/RG_T.nc.gz", " (RG temperature mean+anomalies)"))
+    sf = _gunzip(_download(f"{RG_BASE}/RG_ArgoClim_Salinity_2019.nc.gz",
+                           "/tmp/nc/RG_S.nc.gz", " (RG salinity mean+anomalies)"))
+    ef = _gunzip(_download(f"{RG_BASE}/RG_ArgoClim_{ym}_2019.nc.gz",
+                           f"/tmp/nc/RG_{ym}.nc.gz", " (latest monthly anomaly)"))
+
+    dT, dS, dE = ncdf.Dataset(tf), ncdf.Dataset(sf), ncdf.Dataset(ef)
+    press = np.array(dT.variables["PRESSURE"][:])
+    lats = np.array(dT.variables["LATITUDE"][:])
+    lons = np.array(dT.variables["LONGITUDE"][:])            # 20.5..379.5
+    lidx = [int(np.argmin(np.abs(press - p))) for p in COLUMN_LEVELS]
+    moy = int(ym[4:]) - 1                                     # 0-based month-of-year
+
+    def field(dsMean, meanVar, dsExt, extVar):
+        # Keep netCDF4's land/ice masks intact: np.array() on a masked array
+        # silently bakes the fill values in — and since fill − fill = 0, land
+        # would render as plausible-looking "zero anomaly" ocean. np.ma.filled
+        # with NaN is the only safe conversion here.
+        mean = np.ma.filled(dsMean.variables[meanVar][lidx], np.nan)      # (L,145,360)
+        anom_var = dsMean.variables[meanVar.replace("MEAN", "ANOMALY")]
+        # month-of-year normal anomaly over the 15 years of 2004-2018
+        sel = [t for t in range(anom_var.shape[0]) if t % 12 == moy]
+        norm_anom = np.ma.filled(np.ma.mean(anom_var[sel][:, lidx], axis=0), np.nan)
+        ext = np.ma.filled(dsExt.variables[extVar][0, lidx], np.nan)
+        return mean + ext, mean + norm_anom                   # (now, norm)
+
+    t_now, t_norm = field(dT, "ARGO_TEMPERATURE_MEAN", dE, "ARGO_TEMPERATURE_ANOMALY")
+    s_now, s_norm = field(dS, "ARGO_SALINITY_MEAN", dE, "ARGO_SALINITY_ANOMALY")
+
+    # -- 2 deg column file: bin each level onto a regular grid
+    LON, LAT = np.meshgrid(lons, lats)                        # (145,360)
+    bounds, nx, ny = (-180, -65, 180, 79), 180, 72
+    def pack(cube):
+        out = []
+        for k in range(len(lidx)):
+            g, _, dlon, dlat = _bin_to_grid(LON, LAT, cube[k], *bounds, nx, ny)
+            out.append([None if not np.isfinite(v) else int(round(v * 100)) for v in g])
+        return out, dlon, dlat
+    (tn, dlon, dlat), (tm, _, _) = pack(t_now), pack(t_norm)
+    (sn, _, _), (sm, _, _) = pack(s_now), pack(s_norm)
+    payload = {
+        "month": month_label,
+        "baseline": f"2004–2018 mean for the same calendar month (Argo era)",
+        "source": "Roemmich-Gilson Argo Climatology (Scripps): monthly extension + 2004-2018 fields",
+        "doc": "https://sio-argo.ucsd.edu/RG_Climatology.html",
+        "citation": "Roemmich & Gilson 2009 (Prog. Oceanogr.), updated; scale: values x100 (T degC, S PSS)",
+        "levels": COLUMN_LEVELS,
+        "west": bounds[0], "south": bounds[1], "east": bounds[2], "north": bounds[3],
+        "dlon": dlon, "dlat": dlat, "nx": nx, "ny": ny,
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "t_now": tn, "t_norm": tm, "s_now": sn, "s_norm": sm,
+    }
+    with open(os.path.join(DATA, "ocean_column.json"), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    filled = sum(1 for v in tn[0] if v is not None)
+    print(f"  wrote ocean_column.json: {nx}x{ny}x{len(lidx)} levels, "
+          f"{filled} surface cells, month {month_label}")
+
+    # -- 1 deg subsurface anomaly map at ~300 dbar
+    k300 = COLUMN_LEVELS.index(300)
+    _write_grid(
+        "argo-t300", "argo_t300.json", LON, LAT,
+        t_now[k300] - t_norm[k300],
+        (-180, -65, 180, 80), 360, 145,
+        units="°C", ramp="anom", vmin=-2, vmax=2, decimals=2,
+        title=f"Subsurface temperature anomaly (300 m, {month_label})",
+        source="Roemmich-Gilson Argo Climatology (Scripps)",
+        citation=f"T at ~300 dbar, {month_label} minus 2004-2018 same-month mean",
+        doc="https://sio-argo.ucsd.edu/RG_Climatology.html")
+
+
+def glorys():
+    """GLORYS/CMEMS ocean bake - REQUIRES a free Copernicus Marine account
+    (data.marine.copernicus.eu/register). Credentials come from a prior
+    `copernicusmarine login` or the COPERNICUSMARINE_SERVICE_USERNAME /
+    COPERNICUSMARINE_SERVICE_PASSWORD environment variables; they are never
+    stored in this repo. Downloads ~1-2 GB to /tmp/nc, writes small JSONs:
+      data/currents.json   - surface current speed, 1 deg   (globe layer)
+      data/mld.json        - mixed-layer depth, 1 deg       (globe layer)
+      data/ocean_surface.json - u,v,zos,mld packed for the pixel card
+    Dataset ids are tried in order (interim first for recency)."""
+    import numpy as np
+    try:
+        import copernicusmarine as cm
+    except ImportError:
+        sys.exit("glorys: pip install copernicusmarine")
+
+    candidates = ["cmems_mod_glo_phy_myint_0.083deg_P1M-m",
+                  "cmems_mod_glo_phy_my_0.083deg_P1M-m"]
+    now = datetime.now(timezone.utc)
+    out = "/tmp/nc/glorys_2d.nc"
+    got = None
+    if not os.path.exists(out):
+        for ds in candidates:
+            for back in range(2, 9):                       # try recent months
+                y = now.year
+                m = now.month - back
+                while m < 1:
+                    m += 12
+                    y -= 1
+                stamp = f"{y}-{m:02d}-01"
+                try:
+                    print(f"  trying {ds} @ {stamp} ...")
+                    if os.path.exists(out):
+                        os.remove(out)
+                    cm.subset(dataset_id=ds,
+                              variables=["uo", "vo", "zos", "mlotst"],
+                              start_datetime=stamp, end_datetime=stamp,
+                              minimum_depth=0, maximum_depth=1,
+                              output_filename=out)
+                    got = (ds, stamp)
+                    break
+                except Exception as e:
+                    print(f"    no: {type(e).__name__}: {str(e)[:100]}")
+            if got:
+                break
+        if not got:
+            sys.exit("glorys: no dataset/month combination worked - check login and ids")
+        print(f"  got {got[0]} @ {got[1]}")
+    import netCDF4 as ncdf
+    d = ncdf.Dataset(out)
+    lat = np.array(d.variables["latitude"][:])
+    lon = np.array(d.variables["longitude"][:])
+    LON, LAT = np.meshgrid(lon, lat)
+    def v2(name):
+        a = d.variables[name]
+        a = np.array(a[0, 0] if a.ndim == 4 else a[0])
+        return np.where(np.abs(a) > 1e10, np.nan, a)
+    u, v, zos, mld = v2("uo"), v2("vo"), v2("zos"), v2("mlotst")
+    stamp = got[1][:7] if got else "latest"
+    speed = np.hypot(u, v)
+    _write_grid("currents", "currents.json", LON, LAT, speed,
+                (-180, -80, 180, 90), 360, 170,
+                units="m/s", ramp="precip", vmin=0, vmax=1.5, decimals=2,
+                title=f"Surface current speed (GLORYS, {stamp})",
+                source="Copernicus Marine GLORYS12 / interim", citation="monthly mean |u,v| at surface",
+                doc="https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_001_030/description")
+    _write_grid("mld", "mld.json", LON, LAT, mld,
+                (-180, -80, 180, 90), 360, 170,
+                units="m", ramp="precip", vmin=0, vmax=500, decimals=0,
+                title=f"Mixed-layer depth (GLORYS, {stamp})",
+                source="Copernicus Marine GLORYS12 / interim", citation="monthly mean mlotst",
+                doc="https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_001_030/description")
+    # packed u/v (cm/s ints) for the pixel card's current arrow
+    gu, _, dlon, dlat = _bin_to_grid(LON, LAT, u, -180, -80, 180, 90, 360, 170)
+    gv, _, _, _ = _bin_to_grid(LON, LAT, v, -180, -80, 180, 90, 360, 170)
+    gz, _, _, _ = _bin_to_grid(LON, LAT, zos, -180, -80, 180, 90, 360, 170)
+    gm, _, _, _ = _bin_to_grid(LON, LAT, mld, -180, -80, 180, 90, 360, 170)
+    ints = lambda g, s: [None if not np.isfinite(x) else int(round(x * s)) for x in g]
+    payload = {"month": stamp, "west": -180, "south": -80, "east": 180, "north": 90,
+               "dlon": dlon, "dlat": dlat, "nx": 360, "ny": 170,
+               "source": "Copernicus Marine GLORYS12/interim monthly mean",
+               "scale": "u,v cm/s; zos cm; mld m",
+               "u": ints(gu, 100), "v": ints(gv, 100), "zos": ints(gz, 100), "mld": ints(gm, 1)}
+    with open(os.path.join(DATA, "ocean_surface.json"), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    print(f"  wrote ocean_surface.json ({stamp})")
+
+
 if __name__ == "__main__":
     os.makedirs("/tmp/nc", exist_ok=True)
     default = ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
@@ -553,7 +756,7 @@ if __name__ == "__main__":
     fns = {"climatetrace": climatetrace, "argo": argo, "rapid": rapid,
            "sealevel": sealevel, "glaciers": glaciers, "gistemp": gistemp,
            "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss,
-           "species": species}
+           "species": species, "argo_column": argo_column, "glorys": glorys}
     for w in which:
         fns[w]()
     print("done")

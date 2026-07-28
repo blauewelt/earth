@@ -292,6 +292,7 @@ footer a { color: var(--fg-dim); }
 }
 .px-day span:first-child { flex: 0 0 44px; }
 .px-day span:nth-child(2) { flex: 0 0 60px; color: var(--fg); }
+.px-profile { display: block; margin: 2px 0 4px; }
 .px-note { margin-top: 8px; font-size: 10.5px; color: var(--fg-dim); }
 .px-note a { color: var(--accent); text-decoration: none; }
 

@@ -344,6 +344,15 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    id: "argo-t300",
+    grid: true, gridFile: "data/argo_t300.json", snapshotGrid: true,
+    ramp: "anom", vmin: -2, vmax: 2, units: "°C", maxLevel: 6,
+    doc: "https://sio-argo.ucsd.edu/RG_Climatology.html",
+    title: "Subsurface temp anomaly (300 m, Argo)",
+    meta: "Latest month vs 2004–18 same-month mean — subsurface marine heatwaves",
+    on: false,
+  },
+  {
     id: "nightlights",
     doc: "https://blackmarble.gsfc.nasa.gov/",
     layer: "VIIRS_Black_Marble",
@@ -1026,6 +1035,11 @@ const RAMPS = {
   // low → high: white → teal → blue → indigo → violet (wetter = deeper)
   precip: [[0, 247, 252, 253], [0.15, 204, 236, 230], [0.35, 123, 204, 196],
            [0.55, 67, 162, 202], [0.75, 37, 78, 155], [1, 84, 39, 143]],
+  // diverging anomaly: blue → near-invisible dark slate → red, matching the
+  // app's blue=cooler/less, red=warmer/more convention; the dark middle lets
+  // near-zero cells fade into the globe instead of painting it white
+  anom: [[0, 37, 99, 235], [0.42, 84, 110, 160], [0.5, 45, 51, 63],
+         [0.58, 160, 95, 84], [1, 230, 59, 46]],
   // cold → warm thermal ramp for SST
   sst: [[0, 49, 54, 149], [0.25, 116, 173, 209], [0.5, 255, 255, 191],
         [0.75, 244, 109, 67], [1, 165, 0, 38]],
@@ -1843,8 +1857,13 @@ function datelessToast(id) {
   if (cfg) {
     if (cfg.timed) return null;                              // genuinely date-driven
     if (cfg.grid) {
-      return `<strong>${cfg.title}</strong> is a long-term climatology (a multi-decade ` +
-        `average), so it has no per-date data — the <strong>date selector doesn't change it</strong>.`;
+      // most grids are multi-decade climatologies; a snapshot grid (a single
+      // recent month, like the Argo 300 m anomaly) says what it actually is
+      return cfg.snapshotGrid
+        ? `<strong>${cfg.title}</strong> is a single recent-month snapshot, so the ` +
+          `<strong>date selector doesn't change it</strong> (refreshed with the data pipeline).`
+        : `<strong>${cfg.title}</strong> is a long-term climatology (a multi-decade ` +
+          `average), so it has no per-date data — the <strong>date selector doesn't change it</strong>.`;
     }
     return `<strong>${cfg.title}</strong> is a fixed composite, so the ` +
       `<strong>date selector doesn't change it</strong>.`;
@@ -1931,6 +1950,12 @@ const LAYER_FACTS = {
          "radiated back to space (CERES). Positive means this place is banking " +
          "energy. The global imbalance of ~+1 W/m² IS global warming, measured " +
          "at the top of the atmosphere." },
+  "argo-t300": { rec: "one recent month (see legend) vs the 2004–2018 mean for that same calendar month — not one date", int: "monthly snapshot, refreshed by the data pipeline", sp: "1° (Argo objective mapping)",
+    sum: "Where the ocean is unusually warm or cool 300 m DOWN — measured by the " +
+         "Argo float fleet, invisible to every satellite surface map. Subsurface " +
+         "marine heatwaves matter because that heat is stored, not radiated away; " +
+         "comparing against the same calendar month removes the seasonal cycle, so " +
+         "red really means anomalous." },
   "seaice": { rec: "2012-07 → present, with gaps", int: "daily", sp: "12 km grid",
     sum: "The fraction of ocean covered by sea ice at both poles, sensed by passive " +
          "microwave (AMSR2), which sees through clouds and polar night. The " +
@@ -2716,6 +2741,55 @@ function pixelInspectorEngaged() {
   return !!document.getElementById("toggle-pixel")?.checked || !topColormapLayer();
 }
 
+/* Sample the baked Argo column at a lon/lat: the clicked 2° cell, or the
+ * nearest of its 8 neighbours (coastal cells are often half-land). Returns
+ * {levels, tNow, tNorm, sNow, sNorm} in real units, or null over land. */
+function oceanColumnAt(oc, lon, lat) {
+  const ix0 = Math.floor((lon - oc.west) / oc.dlon);
+  const iy0 = Math.floor((lat - oc.south) / oc.dlat);
+  const tryCell = (ix, iy) => {
+    if (ix < 0 || ix >= oc.nx || iy < 0 || iy >= oc.ny) return null;
+    const i = iy * oc.nx + ix;
+    if (oc.t_now[0][i] == null) return null;
+    const grab = (f) => oc.levels.map((_, k) => {
+      const v = oc[f][k][i];
+      return v == null ? null : v / 100;
+    });
+    return { levels: oc.levels, tNow: grab("t_now"), tNorm: grab("t_norm"),
+             sNow: grab("s_now"), sNorm: grab("s_norm") };
+  };
+  for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+    const c = tryCell(ix0 + dx, iy0 + dy);
+    if (c) return c;
+  }
+  return null;
+}
+
+/* Inline SVG: temperature vs depth, now (warm tone) against the same-month
+ * normal (cool tone). Depth increases downward, like the water does. */
+function columnProfileSvg(col) {
+  const W = 250, H = 130, L = 30, B = 14;
+  const pts = col.levels.map((p, k) => ({ p, tN: col.tNow[k], tM: col.tNorm[k] }))
+    .filter((d) => d.tN != null && d.tM != null);
+  if (pts.length < 4) return "";
+  const tAll = pts.flatMap((d) => [d.tN, d.tM]);
+  const tLo = Math.floor(Math.min(...tAll) - 0.5), tHi = Math.ceil(Math.max(...tAll) + 0.5);
+  const pMax = pts[pts.length - 1].p;
+  const x = (t) => L + (t - tLo) / (tHi - tLo) * (W - L - 6);
+  const y = (p) => 4 + Math.sqrt(p / pMax) * (H - B - 8);   // sqrt: expand the upper ocean
+  const line = (f) => pts.map((d) => `${x(f(d)).toFixed(1)},${y(d.p).toFixed(1)}`).join(" ");
+  const depthTicks = [0, 200, 700, 1975].filter((p) => p <= pMax);
+  return `<svg class="px-profile" viewBox="0 0 ${W} ${H}" width="100%">` +
+    depthTicks.map((p) =>
+      `<line x1="${L}" y1="${y(p)}" x2="${W - 6}" y2="${y(p)}" stroke="#30363d" stroke-width="0.6"/>` +
+      `<text x="2" y="${y(p) + 3}" fill="#8b949e" font-size="8">${p >= 1000 ? "2 km" : p + " m"}</text>`).join("") +
+    `<text x="${L}" y="${H - 2}" fill="#8b949e" font-size="8">${tLo}°C</text>` +
+    `<text x="${W - 6}" y="${H - 2}" fill="#8b949e" font-size="8" text-anchor="end">${tHi}°C</text>` +
+    `<polyline points="${line((d) => d.tM)}" fill="none" stroke="#58a6ff" stroke-width="1.4"/>` +
+    `<polyline points="${line((d) => d.tN)}" fill="none" stroke="#f0883e" stroke-width="1.6"/>` +
+    `</svg>`;
+}
+
 const pixelCardEl = document.getElementById("pixel-card");
 function pixelRow(label, value, cls = "") {
   return `<div class="px-row ${cls}"><span class="px-label">${label}</span><span class="px-val">${value}</span></div>`;
@@ -2737,7 +2811,7 @@ async function showPixelState(carto) {
   // Everything in parallel; the card renders once, complete.
   const rasterCfgs = PIXEL_RASTERS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
   const gridCfgs = PIXEL_GRIDS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
-  const [rasters, grids, meteo, air, river, marine, climNow, climFut, stations, trace, argo] = await Promise.all([
+  const [rasters, grids, meteo, air, river, marine, climNow, climFut, oceanCol, stations, trace, argo] = await Promise.all([
     Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null))),
     Promise.all(gridCfgs.map((cfg) => loadGrid(cfg).then((g) => g && sampleGrid(g, lon, lat)).catch(() => null))),
     fetchOpenMeteo(lon, lat),
@@ -2746,6 +2820,7 @@ async function showPixelState(carto) {
     fetchMarine(lon, lat),
     fetchClimateWindow(lon, lat, "1991-01-01", "1995-12-31"),
     fetchClimateWindow(lon, lat, "2045-01-01", "2049-12-31"),
+    pixelJson("data/ocean_column.json"),
     pixelJson("data/stations.geojson"),
     pixelJson("data/climatetrace.json"),
     pixelJson("data/argo.json"),
@@ -2822,6 +2897,47 @@ async function showPixelState(carto) {
     v == null ? "" : pixelRow(gtitles[i], `${fmtVal(v)} ${gunits[i]}`)).join("");
   if (grows) {
     sec.push(`<div class="px-sec"><div class="px-sec-title">Climate normals</div>${grows}</div>`);
+  }
+
+  /* -- the ocean beneath: Argo T/S column, now vs the same-month normal ---- */
+  const col = oceanCol ? oceanColumnAt(oceanCol, lon, lat) : null;
+  if (col) {
+    const dT = col.levels.map((_, k) =>
+      col.tNow[k] != null && col.tNorm[k] != null ? col.tNow[k] - col.tNorm[k] : null);
+    // thickness-weighted mean warming of the upper 700 m — where the heat goes
+    let wsum = 0, w = 0;
+    for (let k = 0; k < col.levels.length && col.levels[k] <= 700; k++) {
+      if (dT[k] == null) continue;
+      const thick = (col.levels[k + 1] ?? 700) - (k ? col.levels[k - 1] : 0);
+      wsum += dT[k] * thick; w += thick;
+    }
+    const heat = w ? wsum / w : null;
+    // warm-layer depth: where T first drops 0.5 °C below the 10 dbar value
+    let wl = null;
+    const t10 = col.tNow[1];
+    if (t10 != null) {
+      for (let k = 2; k < col.levels.length; k++) {
+        if (col.tNow[k] != null && col.tNow[k] < t10 - 0.5) { wl = col.levels[k]; break; }
+      }
+    }
+    let rows = columnProfileSvg(col) +
+      `<div class="px-day"><span style="color:#f0883e">━ ${oceanCol.month}</span>` +
+      `<span style="color:#58a6ff">━ normal</span><span>(same month, 2004–18)</span></div>`;
+    if (dT[0] != null) {
+      rows += pixelRow("Surface vs normal",
+        `<span class="${dT[0] >= 0 ? "px-warm" : "px-cool"}">${dT[0] >= 0 ? "+" : "−"}${fmtVal(Math.abs(dT[0]))} °C</span>`);
+    }
+    if (heat != null) {
+      rows += pixelRow("Upper 700 m vs normal",
+        `<span class="${heat >= 0 ? "px-warm" : "px-cool"}">${heat >= 0 ? "+" : "−"}${fmtVal(Math.abs(heat))} °C</span> stored heat`);
+    }
+    if (wl != null) rows += pixelRow("Warm-layer depth", `~${wl} m`);
+    if (col.sNow[0] != null && col.sNorm[0] != null) {
+      const ds = col.sNow[0] - col.sNorm[0];
+      rows += pixelRow("Surface salinity", `${fmtVal(col.sNow[0])} PSU ` +
+        `<span class="px-src">(${ds >= 0 ? "+" : "−"}${Math.abs(ds).toFixed(2)} vs normal${ds < -0.05 ? " — fresher" : ds > 0.05 ? " — saltier" : ""})</span>`);
+    }
+    sec.push(`<div class="px-sec"><div class="px-sec-title">Ocean column 0–2000 m <span class="px-src">Argo floats · ${oceanCol.month}</span></div>${rows}</div>`);
   }
 
   /* -- the decadal future axis: this pixel's own 2050 trajectory ----------- */
@@ -3421,6 +3537,7 @@ window.__earth = {
   probeValueAt,
   showPixelState,
   pixelInspectorEngaged,
+  oceanColumnAt,
   loadGlaciers,
   get glacierCollection() { return glacierCollection; },
   get glacierData() { return glacierData; },
