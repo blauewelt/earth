@@ -1055,7 +1055,7 @@
    "license": "Public domain",
    "globe": false,
    "amoc": true,
-   "notes": "Standard OHC benchmark"
+   "notes": "Standard OHC benchmark Powers the Earth-energy-imbalance panel on the Temp tab in this app."
   },
   {
    "id": "iap-ohc",

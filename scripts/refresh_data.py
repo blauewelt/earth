@@ -546,6 +546,70 @@ def species():
           f"{len(indicators)} species; unplaced {total - kingdom_sum:,}")
 
 
+def eei():
+    """Earth's Energy Imbalance panel data, from the NOAA/NCEI global ocean
+    heat content series (open, no account): yearly OHC anomalies for 0-700 m
+    (1955-) and 0-2000 m (2005-), plus derived heating RATES as centred 5-yr
+    OLS slopes converted to W per m^2 of the WHOLE Earth surface. The ocean
+    takes ~90% of the planetary imbalance, so rate/0.9 approximates total EEI
+    (von Schuckmann et al.); both numbers ship, labelled as what they are.
+    Unit chain: 1e22 J/yr / (5.101e14 m^2 * 3.1557e7 s) = 0.6213 W/m^2."""
+    base = ("https://www.ncei.noaa.gov/data/oceans/woa/DATA_ANALYSIS/"
+            "3M_HEAT_CONTENT/DATA/basin/yearly")
+    W_PER = 1e22 / (5.101e14 * 3.1557e7)
+
+    def series(fname):
+        req = urllib.request.Request(f"{base}/{fname}", headers=UA)
+        with urllib.request.urlopen(req, timeout=120) as r:
+            txt = r.read().decode()
+        years, vals, errs = [], [], []
+        for ln in txt.splitlines()[1:]:
+            p = ln.split()
+            if len(p) >= 3:
+                years.append(int(float(p[0])))
+                vals.append(float(p[1]))
+                errs.append(float(p[2]))
+        return years, vals, errs
+
+    def slope(xs, ys):                       # OLS, units of ys per year
+        n = len(xs)
+        mx, my = sum(xs) / n, sum(ys) / n
+        den = sum((x - mx) ** 2 for x in xs)
+        return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den
+
+    def rolling_rate(years, vals, w=5):      # centred w-yr slope -> W/m^2 Earth
+        out = []
+        h = w // 2
+        for i in range(len(years)):
+            a, b = max(0, i - h), min(len(years), i + h + 1)
+            out.append(round(slope(years[a:b], vals[a:b]) * W_PER, 3)
+                       if b - a >= 3 else None)
+        return out
+
+    y7, v7, e7 = series("h22-w0-700m.dat")
+    y2, v2, e2 = series("h22-w0-2000m.dat")
+    r10 = slope(y2[-10:], v2[-10:]) * W_PER               # headline: last decade
+    payload = {
+        "source": "NOAA NCEI Global Ocean Heat Content (Levitus et al.), yearly, world",
+        "doc": "https://www.ncei.noaa.gov/products/ocean-heat-salt-sea-level",
+        "units": "1e22 J anomaly; rates in W/m^2 of total Earth surface",
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "y700": y7, "ohc700": v7, "err700": e7,
+        "y2000": y2, "ohc2000": v2, "err2000": e2,
+        "rate700": rolling_rate(y7, v7),
+        "rate2000": rolling_rate(y2, v2),
+        "rate10": round(r10, 3),                          # ocean 0-2000, last 10 yr
+        "eei10": round(r10 / 0.9, 3),                     # implied total (ocean ~90%)
+        "zj_since": y2[0],
+        "zj_gained": round((v2[-1] - v2[0]) * 10, 1),     # 1e22 J -> ZJ
+    }
+    with open(os.path.join(DATA, "eei.json"), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    print(f"  wrote eei.json: 0-700m {y7[0]}-{y7[-1]}, 0-2000m {y2[0]}-{y2[-1]}, "
+          f"last-10yr ocean rate {r10:.2f} W/m^2 -> EEI ~{r10/0.9:.2f} W/m^2, "
+          f"+{payload['zj_gained']} ZJ since {y2[0]}")
+
+
 RG_BASE = "https://sio-argo.ucsd.edu/pub/www-argo/RG"
 
 # Depth levels the app's ocean column keeps (dbar). Chosen to resolve the
@@ -759,7 +823,7 @@ if __name__ == "__main__":
     fns = {"climatetrace": climatetrace, "argo": argo, "rapid": rapid,
            "sealevel": sealevel, "glaciers": glaciers, "gistemp": gistemp,
            "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss,
-           "species": species, "argo_column": argo_column, "glorys": glorys}
+           "species": species, "argo_column": argo_column, "glorys": glorys, "eei": eei}
     for w in which:
         fns[w]()
     print("done")

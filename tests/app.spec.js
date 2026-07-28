@@ -1471,3 +1471,27 @@ test("archive-end comparisons explain their emptiness instead of hiding it", asy
   expect(t.now).toBe("2018-09-01");
   expect(t.past).toBe("2016-09-01");   // genuinely different months → real delta
 });
+
+test("Temp tab shows Earth's energy imbalance with plausible numbers", async ({ page }) => {
+  await page.click("#tab-temp");
+  await expect(page.locator("#eei-rate .stat-value")).not.toHaveText("–");
+  const stats = await page.evaluate(() => ({
+    rate: parseFloat(document.querySelector("#eei-rate .stat-value").textContent),
+    total: parseFloat(document.querySelector("#eei-total .stat-value").textContent),
+    zj: parseFloat(document.querySelector("#eei-zj .stat-value").textContent),
+  }));
+  expect(stats.rate).toBeGreaterThan(0.4);
+  expect(stats.rate).toBeLessThan(1.3);
+  expect(stats.total).toBeGreaterThan(stats.rate);     // /0.9 → always larger
+  expect(stats.zj).toBeGreaterThan(150);
+  // the chart drew both OHC curves
+  const px = await page.evaluate(() => {
+    const c = document.getElementById("eei-chart");
+    const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+    return n;
+  });
+  expect(px).toBeGreaterThan(1000);
+  await expect(page.locator("#panel-temp")).toContainText("90 %");
+});

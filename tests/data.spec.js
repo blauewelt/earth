@@ -329,3 +329,29 @@ test.describe("GLORYS surface snapshots", () => {
     expect(s.u[i] / 100).toBeGreaterThan(0.2);
   });
 });
+
+test.describe("eei.json (ocean heat / energy imbalance)", () => {
+  const e = read("eei.json");
+
+  test("OHC series span, rise, and a plausible planetary imbalance", () => {
+    expect(e.y700[0]).toBe(1955);
+    expect(e.y700[e.y700.length - 1]).toBeGreaterThanOrEqual(2024);
+    expect(e.y2000[0]).toBe(2005);
+    expect(e.ohc700.length).toBe(e.y700.length);
+    expect(e.ohc2000.length).toBe(e.y2000.length);
+    // the ocean has gained heat, a lot of it, and faster over 0-2000 m
+    const rise2000 = e.ohc2000[e.ohc2000.length - 1] - e.ohc2000[0];
+    expect(rise2000).toBeGreaterThan(15);              // ×10^22 J over ~20 yr
+    expect(e.zj_gained).toBeGreaterThan(150);
+    expect(e.zj_gained).toBeLessThan(400);
+    // the headline rate: CERES-era EEI is ~0.5-1.5 W/m² — outside that,
+    // something broke in units (the 0.6213 J/yr→W/m² chain) or parsing
+    expect(e.rate10).toBeGreaterThan(0.4);
+    expect(e.rate10).toBeLessThan(1.3);
+    expect(e.eei10).toBeCloseTo(e.rate10 / 0.9, 2);
+    // rolling rates align with their series and are mostly positive recently
+    expect(e.rate2000.length).toBe(e.y2000.length);
+    const recent = e.rate2000.slice(-8).filter((v) => v != null);
+    expect(recent.every((v) => v > 0)).toBe(true);
+  });
+});

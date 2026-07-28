@@ -3497,9 +3497,89 @@ async function loadTemp() {
   document.getElementById("temp-legend").innerHTML =
     `<span style="color:#d95926">━ Land only</span><span style="color:#3987e5">━ Land + ocean</span>`;
   drawTempChart();
+  loadEei();
   window.addEventListener("resize", () => {
-    if (!document.getElementById("panel-temp").classList.contains("hidden")) drawTempChart();
+    if (document.getElementById("panel-temp").classList.contains("hidden")) return;
+    drawTempChart();
+    if (eeiData) drawEeiChart();
   });
+}
+
+/* ---- Earth's energy imbalance (NOAA OHC → W/m²) ---- */
+let eeiData = null;
+async function loadEei() {
+  if (eeiData) return;
+  eeiData = await (await fetch("data/eei.json")).json();
+  document.querySelector("#eei-rate .stat-value").textContent = `+${eeiData.rate10.toFixed(2)}`;
+  document.querySelector("#eei-total .stat-value").textContent = `+${eeiData.eei10.toFixed(2)}`;
+  document.querySelector("#eei-zj .stat-value").textContent = `+${Math.round(eeiData.zj_gained)}`;
+  document.querySelector("#eei-zj .stat-sub").textContent = `ZJ gained 0–2000 m since ${eeiData.zj_since}`;
+  document.getElementById("eei-legend").innerHTML =
+    `<span style="color:#3987e5">━ 0–700 m (since 1955)</span>` +
+    `<span style="color:#d95926">━ 0–2000 m (since 2005)</span>`;
+  drawEeiChart();
+}
+
+function drawEeiChart() {
+  const d = eeiData;
+  const canvas = document.getElementById("eei-chart");
+  const wrap = canvas.parentElement;
+  const cssW = wrap.clientWidth, cssH = 190;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  canvas.style.width = cssW + "px"; canvas.style.height = cssH + "px";
+  const ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr);
+  const M = { l: 32, r: 8, t: 8, b: 18 };
+  const W = cssW - M.l - M.r, H = cssH - M.t - M.b;
+  const yr0 = d.y700[0], yr1 = d.y700[d.y700.length - 1];
+  const all = [...d.ohc700, ...d.ohc2000];
+  const v0 = Math.floor(Math.min(...all) / 5) * 5, v1 = Math.ceil(Math.max(...all) / 5) * 5;
+  const X = (yr) => M.l + ((yr - yr0) / (yr1 - yr0)) * W;
+  const Y = (v) => M.t + (1 - (v - v0) / (v1 - v0)) * H;
+  const line = (years, vals) => {
+    ctx.beginPath();
+    years.forEach((yr, i) => (i ? ctx.lineTo(X(yr), Y(vals[i])) : ctx.moveTo(X(yr), Y(vals[i]))));
+    ctx.stroke();
+  };
+  const draw = (hoverYr) => {
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.font = "10px system-ui, sans-serif";
+    for (let v = v0; v <= v1; v += 10) {
+      ctx.strokeStyle = v === 0 ? "#4a4a47" : "#2c2c2a"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(M.l, Y(v)); ctx.lineTo(cssW - M.r, Y(v)); ctx.stroke();
+      ctx.fillStyle = "#898781"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.fillText(String(v), M.l - 4, Y(v));
+    }
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let yr = 1960; yr <= yr1; yr += 20) {
+      ctx.fillStyle = "#898781"; ctx.fillText(String(yr), X(yr), M.t + H + 5);
+    }
+    ctx.lineWidth = 1.8; ctx.lineJoin = "round";
+    ctx.strokeStyle = "#3987e5"; line(d.y700, d.ohc700);
+    ctx.strokeStyle = "#d95926"; line(d.y2000, d.ohc2000);
+    if (hoverYr != null) {
+      ctx.strokeStyle = "#52514e"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(X(hoverYr), M.t); ctx.lineTo(X(hoverYr), M.t + H); ctx.stroke();
+    }
+  };
+  draw(null);
+  const tip = document.getElementById("eei-tooltip");
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const yr = Math.round(yr0 + ((e.clientX - rect.left - M.l) / W) * (yr1 - yr0));
+    const i7 = d.y700.indexOf(yr), i2 = d.y2000.indexOf(yr);
+    if (i7 < 0) { tip.classList.add("hidden"); return; }
+    draw(yr);
+    const bits = [`<strong>${yr}</strong>`, `0–700 m: ${d.ohc700[i7].toFixed(1)}×10²² J`];
+    if (i2 >= 0) bits.push(`0–2000 m: ${d.ohc2000[i2].toFixed(1)}×10²² J`);
+    const rate = i2 >= 0 ? d.rate2000[i2] : d.rate700[i7];
+    if (rate != null) bits.push(`heating ≈ ${rate >= 0 ? "+" : ""}${rate.toFixed(2)} W/m²`);
+    tip.innerHTML = bits.join("<br/>");
+    tip.style.left = `${Math.min(e.clientX - rect.left + 12, cssW - 150)}px`;
+    tip.style.top = "8px";
+    tip.classList.remove("hidden");
+  };
+  canvas.onmouseleave = () => { tip.classList.add("hidden"); draw(null); };
 }
 
 function drawTempChart() {

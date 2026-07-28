@@ -257,6 +257,30 @@
         is why a "global" number understates what continents actually experience. For land temperature
         <em>in space</em>, turn on the <em>Land surface temperature (MODIS)</em> layer on the globe.</p>
       <p>Source: <a href="https://data.giss.nasa.gov/gistemp/" target="_blank" rel="noopener">NASA GISS GISTEMP v4</a>.</p>
+
+      <h2>Earth's energy imbalance</h2>
+      <div class="stat-row">
+        <div class="stat" id="eei-rate"><div class="stat-value">–</div><div class="stat-sub">W/m² · ocean heating, last 10 yr</div></div>
+        <div class="stat" id="eei-total"><div class="stat-value">–</div><div class="stat-sub">W/m² · implied total imbalance</div></div>
+        <div class="stat" id="eei-zj"><div class="stat-value">–</div><div class="stat-sub">ZJ gained 0–2000 m</div></div>
+      </div>
+      <div id="eei-chart-wrap">
+        <canvas id="eei-chart"></canvas>
+        <div id="eei-tooltip" class="hidden"></div>
+      </div>
+      <div id="eei-legend" class="sl-legend"></div>
+      <p class="hint">The single most important number in climate: averaged over the sphere, Earth
+        absorbs ~1 W/m² more sunlight than it radiates back — ~0.3 % of the ~340 W/m² flowing
+        through, invisible on any map (the <em>Energy balance (CERES)</em> layer shows the ±100 W/m²
+        geography that nearly cancels; this residual is what's left). About 90 % of the excess goes
+        into the ocean, so the ocean-heat-content record <em>is</em> the imbalance's ledger: the
+        heating rate above is the 0–2000 m trend converted to watts per m² of the whole Earth, and
+        dividing by 0.9 approximates the total. Hover for values; the curve's steepening is the
+        imbalance growing. One W/m² ≈ 5×10²¹ J per year planet-wide.</p>
+      <p>Source: <a href="https://www.ncei.noaa.gov/products/ocean-heat-salt-sea-level" target="_blank"
+        rel="noopener">NOAA NCEI Global Ocean Heat Content</a> (Levitus et al.); framing per Loeb et
+        al. 2021 &amp; von Schuckmann et al. The steric piece of the <em>Sea level</em> tab is this
+        same heat, expanding.</p>
     </section>
 
     <section id="panel-amoc" class="panel hidden">
