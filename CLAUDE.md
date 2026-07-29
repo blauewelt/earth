@@ -383,8 +383,12 @@ baking. Credentials were deleted after each use, per the user.
 10-day GFS forecast: newest COMPLETE cycle (probes for f240), 2 m temperature
 one frame per day, precipitation as 24-h sums of the 6-h APCP buckets grouped
 by UTC day (full days only; <1 mm/day nulls to transparent — beware Python's
-banker's rounding when thresholding). Forecasts age daily — re-run `gfs`
-whenever refreshing data. WeatherNext 2 (DeepMind) was evaluated 2026-07-29:
+banker's rounding when thresholding). Forecasts age daily — automated:
+`.github/workflows/refresh-forecast.yml` bakes, validates (GFS data tests)
+and self-deploys Pages every day at 05:30 UTC (a GITHUB_TOKEN push can't
+retrigger pages.yml, hence the inline deploy steps). GitHub disables cron
+workflows after ~60 days without repo activity; the daily bot commits keep it
+alive, but re-check if the repo goes quiet. WeatherNext 2 (DeepMind) was evaluated 2026-07-29:
 every access path needs a Google account (Earth Engine / BigQuery Analytics
 Hub / GCS request form; anonymous reads 401/403), so GFS is the key-free
 baseline; the day-keyed machinery is ready if the user brings GCP credentials.

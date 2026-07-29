@@ -1,0 +1,64 @@
+name: Daily forecast refresh
+
+# Bakes the latest complete GFS cycle into data/gfs_temp.json /
+# data/gfs_precip.json every morning, validates the bake, commits, and
+# redeploys Pages. Self-contained deploy: a push made with GITHUB_TOKEN does
+# not retrigger the pages workflow (GitHub's recursion guard), so this
+# workflow ships the site itself with the same three deploy steps.
+
+on:
+  schedule:
+    - cron: "30 5 * * *" # 05:30 UTC - the 00z GFS cycle is fully published by ~04:00
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: forecast-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy pygrib
+      - name: Bake the latest GFS forecast
+        run: python3 scripts/refresh_data.py gfs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Validate the bake (GFS data tests, no browser needed)
+        run: npx playwright test tests/data.spec.js -g "GFS"
+      - name: Commit refreshed forecast
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/gfs_temp.json data/gfs_precip.json
+          if git diff --cached --quiet; then
+            echo "forecast unchanged (same cycle) - nothing to deploy"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Daily GFS forecast refresh (automated)"
+            git push origin main
+            git branch -f gh-pages main
+            git push origin gh-pages -f
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/configure-pages@v5
+        if: steps.commit.outputs.changed == 'true'
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.commit.outputs.changed == 'true'
+        with:
+          path: .
+      - uses: actions/deploy-pages@v4
+        if: steps.commit.outputs.changed == 'true'
