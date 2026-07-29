@@ -167,6 +167,11 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   midnight rolls the date, and stepping refreshes only the sub-daily layers
   (no churn of the daily/monthly rasters).
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
+- The header tagline's words are one-click SCENES (`.tag-link`,
+  `SCENES` map in app.js): each swaps the active layers for a curated set
+  ("ice" → sea ice + glaciers; "forecasts to 2050" arms the pixel inspector
+  with a toast). Scenes REPLACE the current layers — the chips show the swap
+  and undo it. Keep SCENES in sync when showcase-worthy layers land.
 - The Layers tab opens with a first-visit intro guide (`#intro-guide`,
   <details> open by default, dismissal persisted in localStorage) that
   documents the whole view: date/time stepping, Compare's two modes,

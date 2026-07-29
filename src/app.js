@@ -2196,6 +2196,51 @@ function buildLayerPanel() {
   });
 }
 
+/* -------------------------------------------------- tagline scene shortcuts
+ * The header tagline's words are one-click scenes: each swaps the active
+ * layers for a curated set that shows its theme (the chips make the swap
+ * visible and reversible). Ids prefixed "toggle-" are static checkboxes;
+ * bare ids are GIBS_LAYERS entries in #layer-list. "forecasts" is different:
+ * nothing to draw — it arms the pixel inspector and says what to do next. */
+const SCENES = {
+  satellites: ["viirs-truecolor"],
+  ocean: ["currents", "argo-t300"],
+  ice: ["seaice", "toggle-glaciers"],
+  life: ["ndvi", "toggle-gbif"],
+  emissions: ["toggle-climatetrace", "aod"],
+};
+function sceneBox(id) {
+  return id.startsWith("toggle-")
+    ? document.getElementById(id)
+    : document.querySelector(`#layer-list input[data-id="${id}"]`);
+}
+function enableScene(key) {
+  if (key === "forecasts") {
+    const box = document.getElementById("toggle-pixel");
+    if (box && !box.checked) {
+      box.checked = true;
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    showToast(`<strong>Everything we know</strong> is armed — click anywhere on the globe ` +
+      `for that point's full state, including its <strong>2045–49 climate outlook</strong>.`);
+    return;
+  }
+  const ids = SCENES[key];
+  if (!ids) return;
+  // swap, don't pile up: a scene is a curated view, and the chips both show
+  // what changed and undo it in one click
+  for (const c of activeLayerChips()) turnOffLayer(c.box);
+  for (const id of ids) {
+    const box = sceneBox(id);
+    if (box && !box.checked) {
+      box.checked = true;
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+}
+document.querySelectorAll(".tag-link").forEach((b) =>
+  b.addEventListener("click", () => enableScene(b.dataset.scene)));
+
 /* First-visit intro guide: open by default; once dismissed, stays dismissed
  * (localStorage) so returning users get their controls back on top. */
 (() => {

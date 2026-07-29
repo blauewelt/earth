@@ -15,7 +15,15 @@
   <div id="sidebar">
     <header>
       <h1>earth <span class="h1-sub">— the open climate record, live</span></h1>
-      <p class="tagline">satellites · the ocean interior · ice · life · emissions · forecasts to 2050 — composed on one globe, from public data only</p>
+      <!-- Each word is a scene shortcut: one click swaps the globe to a
+           curated layer set for that theme (chips show what changed). -->
+      <p class="tagline"><button class="tag-link" data-scene="satellites" title="Show today's true-colour satellite mosaic">satellites</button> ·
+        <button class="tag-link" data-scene="ocean" title="Show ocean currents + subsurface heat anomalies">the ocean interior</button> ·
+        <button class="tag-link" data-scene="ice" title="Show sea ice + all 274k glaciers">ice</button> ·
+        <button class="tag-link" data-scene="life" title="Show vegetation + biodiversity occurrences">life</button> ·
+        <button class="tag-link" data-scene="emissions" title="Show the top-1000 emitters + aerosol haze">emissions</button> ·
+        <button class="tag-link" data-scene="forecasts" title="Arm the pixel inspector: click any point for its 2050 outlook">forecasts to 2050</button>
+        — composed on one globe, from public data only</p>
       <nav>
         <button id="tab-layers" class="tab active">Layers</button>
         <button id="tab-temp" class="tab">Temp</button>
@@ -37,6 +45,10 @@
           reanalysis, glaciers, biodiversity, facility-level emissions — plus dashboards for
           global temperature, Earth's energy imbalance, the AMOC and sea level, and a searchable
           catalog of 244 open datasets. Public data only; no keys, no accounts, no server.</p>
+        <p class="hint">In a hurry? The words in the tagline above are <strong>one-click
+          scenes</strong> — "ice" puts sea ice and all 274k glaciers on the globe, "life"
+          vegetation and biodiversity, and so on. The chips that appear on the globe undo any of
+          it.</p>
         <p class="hint"><strong>This Layers view</strong> is the globe's control room:</p>
         <ul class="hint">
           <li><strong>Date</strong> — every timed layer follows it (±1d/1m/1y steps; a ±30m

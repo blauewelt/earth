@@ -1618,3 +1618,25 @@ test("sidebar is resizable by dragging, persists, and resets on double-click", a
     document.getElementById("cesiumContainer").getBoundingClientRect().left);
   expect(Math.round(left)).toBe(380);
 });
+
+test("tagline words are one-click scenes that swap the globe's layers", async ({ page }) => {
+  test.setTimeout(150000);  // the glacier scene loads the 7.4 MB inventory
+  const labels = () => page.locator("#active-layers .chip-label").allTextContents();
+  const has = async (frag) => (await labels()).some((s) => s.includes(frag));
+  // "ice": swaps the default SST scene for sea ice + glaciers
+  await page.click('.tag-link[data-scene="ice"]');
+  await expect(page.locator("#active-layers .chip", { hasText: "Sea ice" })).toBeVisible();
+  await expect(page.locator("#active-layers .chip", { hasText: "Glaciers" }))
+    .toBeVisible({ timeout: 60000 });
+  expect(await has("Sea surface temperature")).toBe(false);   // swapped, not piled up
+  // "life": replaces ice with vegetation + biodiversity
+  await page.click('.tag-link[data-scene="life"]');
+  await expect(page.locator("#active-layers .chip", { hasText: "Vegetation" })).toBeVisible();
+  await expect(page.locator("#active-layers .chip", { hasText: "Biodiversity" })).toBeVisible();
+  expect(await has("Sea ice")).toBe(false);
+  // "forecasts": arms the inspector and says what to do next
+  await page.click('.tag-link[data-scene="forecasts"]');
+  await expect(page.locator("#toggle-pixel")).toBeChecked();
+  expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(true);
+  await expect(page.locator("#toast-host .toast").last()).toContainText("2045–49");
+});
