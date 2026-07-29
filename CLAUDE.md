@@ -167,6 +167,11 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   midnight rolls the date, and stepping refreshes only the sub-daily layers
   (no churn of the daily/monthly rasters).
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
+- The sidebar is resizable: width lives in the `--sidebar-w` CSS variable
+  (default 380 px, clamp 300–min(680, 60 vw)), dragged via `#sidebar-resize`,
+  persisted in localStorage, double-click resets. Anything sized off the
+  panel (dashboard charts) must redraw on drag; the split divider reposition
+  runs on drag end. Hidden in the stacked ≤720 px layout.
 - The Aggregate slider has one-click presets (1d/7d/30d/365d, `#window-presets`)
   that drive the slider and fire its `change` event, so they follow the exact
   same path as dragging it. The long Compare/Aggregate explainer folds into a

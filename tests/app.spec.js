@@ -1495,3 +1495,36 @@ test("Temp tab shows Earth's energy imbalance with plausible numbers", async ({ 
   expect(px).toBeGreaterThan(1000);
   await expect(page.locator("#panel-temp")).toContainText("90 %");
 });
+
+test("sidebar is resizable by dragging, persists, and resets on double-click", async ({ page }) => {
+  const width = () => page.evaluate(() => document.getElementById("sidebar").clientWidth);
+  expect(await width()).toBe(380);                     // new, wider default
+  // drag the handle 120px to the right
+  const h = await page.locator("#sidebar-resize").boundingBox();
+  await page.mouse.move(h.x + 3, h.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(500, h.y + 300, { steps: 5 });
+  await page.mouse.up();
+  expect(await width()).toBe(500);
+  // persisted: a reload keeps it
+  expect(await page.evaluate(() => localStorage.getItem("sidebarW"))).toBe("500");
+  await page.reload();
+  await page.waitForFunction(() => window.__earth?.viewer, null, { timeout: 30000 });
+  expect(await width()).toBe(500);
+  // clamped: absurd drags stop at the max (60% of the window)
+  const h2 = await page.locator("#sidebar-resize").boundingBox();
+  await page.mouse.move(h2.x + 3, h2.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(1200, h2.y + 300, { steps: 5 });
+  await page.mouse.up();
+  const w = await width();
+  expect(w).toBeLessThanOrEqual(Math.min(680, 1280 * 0.6));
+  // double-click resets to the default and clears the preference
+  await page.dblclick("#sidebar-resize");
+  expect(await width()).toBe(380);
+  expect(await page.evaluate(() => localStorage.getItem("sidebarW"))).toBeNull();
+  // the globe container follows the variable
+  const left = await page.evaluate(() =>
+    document.getElementById("cesiumContainer").getBoundingClientRect().left);
+  expect(Math.round(left)).toBe(380);
+});

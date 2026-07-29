@@ -2196,6 +2196,61 @@ function buildLayerPanel() {
   });
 }
 
+/* ------------------------------------------------- resizable sidebar */
+/* The panel/globe boundary is draggable (#sidebar-resize). Width lives in the
+ * --sidebar-w CSS variable so one drag moves the sidebar, the globe container
+ * and the resize strip together; Cesium picks the container change up in its
+ * render loop. Charts size themselves from clientWidth, so redraw while
+ * dragging. Persisted in localStorage; double-click resets. */
+(() => {
+  const handle = document.getElementById("sidebar-resize");
+  if (!handle) return;
+  const DEFAULT_W = 380, MIN_W = 300;
+  const maxW = () => Math.min(680, window.innerWidth * 0.6);
+  const setW = (px) => {
+    const w = Math.round(Cesium.Math.clamp(px, MIN_W, maxW()));
+    document.documentElement.style.setProperty("--sidebar-w", `${w}px`);
+    return w;
+  };
+  const redraw = () => {
+    if (document.getElementById("panel-temp").classList.contains("hidden")) return;
+    drawTempChart();
+    if (eeiData) drawEeiChart();
+  };
+  try {
+    const saved = Number(localStorage.getItem("sidebarW"));
+    if (saved) setW(saved);
+  } catch { /* private mode etc. — default width is fine */ }
+
+  let raf = null;
+  handle.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    handle.classList.add("dragging");
+    const move = (ev) => {
+      setW(ev.clientX);
+      if (!raf) raf = requestAnimationFrame(() => { raf = null; redraw(); });
+    };
+    const up = (ev) => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.classList.remove("dragging");
+      const w = setW(ev.clientX);
+      try { localStorage.setItem("sidebarW", String(w)); } catch { /* ok */ }
+      redraw();
+      updateSplitUI();          // the swipe divider is positioned in globe px
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+  });
+  handle.addEventListener("dblclick", () => {
+    setW(DEFAULT_W);
+    try { localStorage.removeItem("sidebarW"); } catch { /* ok */ }
+    redraw();
+    updateSplitUI();
+  });
+})();
+
 /* ----------------------------------------------------- point data layers */
 
 const pickCard = document.getElementById("pick-card");
