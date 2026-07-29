@@ -1104,7 +1104,9 @@ function rampColor(name, t) {
  * date selector picks which month renders/samples. Out-of-range dates clamp to
  * the nearest baked month; in-range dates floor to the newest month <= date. */
 function gridMonths(g) {
-  return g && g.months ? Object.keys(g.months).sort() : null;
+  if (!g) return null;
+  if (g.monthsAvailable) return g.monthsAvailable;   // index file: full archive list
+  return g.months ? Object.keys(g.months).sort() : null;
 }
 function resolveGridMonth(g) {
   const ms = gridMonths(g);
@@ -1121,12 +1123,35 @@ function gridValues(g) {
   return g.months ? g.months[resolveGridMonth(g)] : g.values;
 }
 
+/* The GLORYS index files inline only the latest year; older months live in
+ * per-year files (data/currents_y/1993.json, ...) fetched on first use and
+ * merged into g.months. Callers that sample must go through loadGridMonth. */
+function ensureGridMonth(cfg, g, month) {
+  if (!g || !month || g.months[month] || !g.yearDir) return Promise.resolve(g);
+  g.__yearLoads = g.__yearLoads || {};
+  const yr = month.slice(0, 4);
+  if (!g.__yearLoads[yr]) {
+    g.__yearLoads[yr] = fetch(`${g.yearDir}/${yr}.json`)
+      .then((r) => r.json())
+      .then((y) => { Object.assign(g.months, y.months); })
+      .catch(() => { delete g.__yearLoads[yr]; });   // retry on next access
+  }
+  return Promise.resolve(g.__yearLoads[yr]).then(() => g);
+}
+async function loadGridMonth(cfg) {
+  const g = await loadGrid(cfg);
+  if (g && cfg.monthlyGrid) await ensureGridMonth(cfg, g, resolveGridMonth(g));
+  return g;
+}
+
 function sampleGrid(g, lonDeg, latDeg) {
   if (lonDeg < g.west || lonDeg >= g.east || latDeg < g.south || latDeg >= g.north) return null;
   const ix = Math.floor((lonDeg - g.west) / g.dlon);
   const iy = Math.floor((latDeg - g.south) / g.dlat);
   if (ix < 0 || ix >= g.nx || iy < 0 || iy >= g.ny) return null;
-  const v = gridValues(g)[iy * g.nx + ix];
+  const vals = gridValues(g);
+  if (!vals) return null;                 // month not loaded yet (year file in flight)
+  const v = vals[iy * g.nx + ix];
   return v == null ? null : v;
 }
 
@@ -1158,7 +1183,7 @@ class GridProvider {
   getTileCredits() { return undefined; }
   pickFeatures() { return undefined; }
   async requestImage(x, y, level) {
-    const g = await loadGrid(this._cfg);
+    const g = await loadGridMonth(this._cfg);
     const W = this.tileWidth, H = this.tileHeight;
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
@@ -2192,8 +2217,14 @@ function buildLayerPanel() {
         ${title}
       </div>
       <div class="meta">${cfg.meta}</div>
-      <input type="range" min="0" max="100" value="100" data-alpha="${cfg.id}"
-             ${cfg.on ? "" : "style='display:none'"} title="opacity"/>
+      <div class="alpha-row" data-alpharow="${cfg.id}" ${cfg.on ? "" : "style='display:none'"}>
+        <span class="alpha-label">opacity</span>
+        <input type="range" min="0" max="100" value="100" data-alpha="${cfg.id}"
+               title="Layer opacity — lower it to see the layers underneath"/>
+        <button class="alpha-half" data-alphahalf="${cfg.id}"
+                title="Toggle 50% — overlay this layer half-transparent on the one below (e.g. SST over ocean currents)">½</button>
+        <span class="alpha-val" data-alphaval="${cfg.id}">100%</span>
+      </div>
       ${layerTipHtml(cfg.id)}`;
     list.appendChild(div);
     if (cfg.on) addLayer(cfg);
@@ -2204,29 +2235,46 @@ function buildLayerPanel() {
     const id = e.target.getAttribute("data-id");
     if (!id) return;
     const cfg = GIBS_LAYERS.find((l) => l.id === id);
-    const slider = list.querySelector(`input[data-alpha="${id}"]`);
+    const row = list.querySelector(`[data-alpharow="${id}"]`);
     if (e.target.checked) {
       addLayer(cfg);
-      slider.style.display = "";
+      row.style.display = "";
       maybeDatelessToast(id);
       maybeMonthlyGridToast(cfg);
       maybeClampToast(cfg);
     } else {
       removeLayer(id);
-      slider.style.display = "none";
+      row.style.display = "none";
     }
     updateSplitUI();
   });
 
-  list.addEventListener("input", (e) => {
-    const id = e.target.getAttribute("data-alpha");
-    if (!id) return;
+  const setAlpha = (id, pct) => {
     const entry = state.layers[id];
     if (entry) {
-      entry.alpha = e.target.value / 100;
+      entry.alpha = pct / 100;
       if (entry.layer) entry.layer.alpha = entry.alpha;
       if (entry.cmpLayer) entry.cmpLayer.alpha = entry.alpha;
     }
+    const val = list.querySelector(`[data-alphaval="${id}"]`);
+    if (val) val.textContent = `${pct}%`;
+  };
+
+  list.addEventListener("input", (e) => {
+    const id = e.target.getAttribute("data-alpha");
+    if (!id) return;
+    setAlpha(id, Number(e.target.value));
+  });
+
+  // ½ toggles 50% ↔ 100%: the quick way to overlay two fields (e.g. SST at
+  // half opacity over ocean currents to eyeball their correlation)
+  list.addEventListener("click", (e) => {
+    const id = e.target.getAttribute?.("data-alphahalf");
+    if (!id) return;
+    const slider = list.querySelector(`input[data-alpha="${id}"]`);
+    const pct = Number(slider.value) === 50 ? 100 : 50;
+    slider.value = pct;
+    setAlpha(id, pct);
   });
 
   const dateInput = document.getElementById("layer-date");
@@ -2872,7 +2920,7 @@ async function probeValueAt(carto) {
   const lat = Cesium.Math.toDegrees(carto.latitude);
   if (cfg.grid) {
     // Grid overlays: read the exact cell value straight from the loaded grid.
-    const g = await loadGrid(cfg);
+    const g = await loadGridMonth(cfg);
     const base = { title: cfg.title, units: cfg.units, lon, lat };
     if (!g) return { ...base, noData: true };
     const v = sampleGrid(g, lon, lat);
@@ -3178,7 +3226,7 @@ async function showPixelState(carto) {
   const gridCfgs = PIXEL_GRIDS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
   const [rasters, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo] = await Promise.all([
     Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null))),
-    Promise.all(gridCfgs.map((cfg) => loadGrid(cfg).then((g) => g && sampleGrid(g, lon, lat)).catch(() => null))),
+    Promise.all(gridCfgs.map((cfg) => loadGridMonth(cfg).then((g) => g && sampleGrid(g, lon, lat)).catch(() => null))),
     fetchOpenMeteo(lon, lat),
     fetchAirQuality(lon, lat),
     fetchRiver(lon, lat),
@@ -4268,6 +4316,8 @@ window.__earth = {
   gridMonths,
   resolveGridMonth,
   refreshMonthlyGrids,
+  ensureGridMonth,
+  loadGridMonth,
   rampColor,
   gibsTime,
 };

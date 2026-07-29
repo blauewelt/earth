@@ -332,19 +332,46 @@ test.describe("GLORYS surface snapshots", () => {
     expect(m.values[cell(m, 90, 47)]).toBeNull();       // central Asia
   });
 
-  test("currents/mld are month-keyed and self-consistent", () => {
-    for (const g of [c, m]) {
+  test("currents/mld are month-keyed indexes over the full 1993→ archive", () => {
+    for (const [g, dir] of [[c, "currents_y"], [m, "mld_y"]]) {
       expect(g.latest).toMatch(/^\d{4}-\d{2}$/);
-      const months = Object.keys(g.months);
-      expect(months.length).toBeGreaterThanOrEqual(1);
-      for (const k of months) {
-        expect(k).toMatch(/^\d{4}-\d{2}$/);
+      const avail = g.monthsAvailable;
+      expect(avail[0]).toBe("1993-01");                    // GREP era starts here
+      expect(avail.length).toBeGreaterThanOrEqual(300);    // ~full monthly archive
+      expect([...avail].sort()).toEqual(avail);            // sorted stamps
+      expect(g.latest).toBe(avail[avail.length - 1]);
+      expect(g.yearDir).toBe(`data/${dir}`);
+      // the index inlines only the latest year; values mirrors the latest
+      // month (the backward-compatible view the tests above use)
+      for (const k of Object.keys(g.months)) {
+        expect(k.slice(0, 4)).toBe(g.latest.slice(0, 4));
         expect(g.months[k].length).toBe(g.nx * g.ny);
       }
-      // "latest" is really the newest key, and "values" mirrors it (the
-      // backward-compatible view older readers and the tests above use)
-      expect(g.latest).toBe(months.sort()[months.length - 1]);
       expect(g.values).toEqual(g.months[g.latest]);
+      // year files: complete years carry 12 full-size month arrays
+      for (const yr of ["1993", "2010"]) {
+        const y = read(`${dir}/${yr}.json`);
+        expect(Object.keys(y.months).length).toBe(12);
+        for (const arr of Object.values(y.months)) expect(arr.length).toBe(g.nx * g.ny);
+      }
+      // seam sanity: the 1/4° GREP era and the 1/12° GLORYS12 era should
+      // agree on what is ocean (a mask bug would jump the fill fraction)
+      const y93 = read(`${dir}/1993.json`);
+      const fin93 = y93.months["1993-07"].filter((v) => v != null).length;
+      const finNow = g.values.filter((v) => v != null).length;
+      expect(Math.abs(fin93 - finNow) / finNow).toBeLessThan(0.1);
+    }
+  });
+
+  test("historic months carry real circulation (Gulf Stream, 1993 and 2010)", () => {
+    const y93 = read("currents_y/1993.json");
+    const y10 = read("currents_y/2010.json");
+    for (const [months, k] of [[y93.months, "1993-07"], [y10.months, "2010-01"]]) {
+      const gulf = months[k][cell(c, -74, 36)];
+      const gyre = months[k][cell(c, -40, 30)];
+      expect(gulf).toBeGreaterThan(0.25);                 // 1/4° binned: a bit smoother
+      expect(gulf).toBeGreaterThan(gyre * 2);
+      expect(months[k][cell(c, 10, 21)]).toBeNull();      // Sahara stays land
     }
   });
 

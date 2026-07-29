@@ -1509,13 +1509,46 @@ test("GLORYS grids are month-keyed: the date's month picks the map", async ({ pa
     return { months: E.gridMonths(g), shown: E.resolveGridMonth(g),
              dateless: E.datelessToast("currents") };
   });
-  expect(info.months.length).toBeGreaterThanOrEqual(1);
+  expect(info.months.length).toBeGreaterThanOrEqual(300); // full 1993→ archive
   expect(info.dateless).toBeNull();                       // no false "snapshot" claim
   await expect(toast).toContainText(info.shown);          // the toast names the month
   // probe sampling agrees with the resolved month's field (Gulf Stream is fast)
   const probe = await page.evaluate(() =>
     window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-74, 36)));
   expect(probe.value).toBeGreaterThan(0.5);
+  // history lazy-loads: an old month lives in a per-year file that is fetched
+  // on demand and sampled through the same path
+  const old = await page.evaluate(async () => {
+    const E = window.__earth;
+    E.state.date = "2005-06-15";
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "currents");
+    const g = await E.loadGridMonth(cfg);
+    const out = { m: E.resolveGridMonth(g), v: E.sampleGrid(g, -74, 36) };
+    E.state.date = new Date().toISOString().slice(0, 10);
+    return out;
+  });
+  expect(old.m).toBe("2005-06");
+  expect(old.v).toBeGreaterThan(0.25);                    // the Stream was there in 2005 too
+});
+
+test("layer opacity: labeled slider with a ½ toggle for overlaying fields", async ({ page }) => {
+  // the motivating use: currents below, SST at 50% on top — do they line up?
+  await page.check('#layer-list input[data-id="currents"]');
+  await page.check('#layer-list input[data-id="sst"]');
+  const row = page.locator('[data-alpharow="sst"]');
+  await expect(row).toBeVisible();
+  await expect(row.locator(".alpha-val")).toHaveText("100%");
+  await row.locator(".alpha-half").click();
+  await expect(row.locator(".alpha-val")).toHaveText("50%");
+  expect(await page.evaluate(() => window.__earth.state.layers.sst.layer.alpha)).toBeCloseTo(0.5, 5);
+  // the currents layer underneath keeps its own opacity
+  expect(await page.evaluate(() => window.__earth.state.layers.currents.layer.alpha)).toBe(1);
+  await row.locator(".alpha-half").click();               // toggles back
+  await expect(row.locator(".alpha-val")).toHaveText("100%");
+  // the slider drives the same path, any value
+  await row.locator('input[data-alpha="sst"]').fill("30");
+  await expect(row.locator(".alpha-val")).toHaveText("30%");
+  expect(await page.evaluate(() => window.__earth.state.layers.sst.layer.alpha)).toBeCloseTo(0.3, 5);
 });
 
 test("archive-end comparisons explain their emptiness instead of hiding it", async ({ page }) => {

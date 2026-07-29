@@ -178,6 +178,15 @@ nav { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
 .layer-item label { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .layer-item .meta { font-size: 11px; color: var(--fg-dim); margin: 3px 0 0 24px; }
 .layer-item input[type="range"] { width: 100%; margin-top: 6px; accent-color: var(--accent); }
+.alpha-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 0 24px; }
+.alpha-row input[type="range"] { flex: 1; width: auto; margin-top: 0; }
+.alpha-label { font-size: 10px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.alpha-val { font-size: 10.5px; color: var(--fg-dim); min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+.alpha-half {
+  background: none; border: 1px solid var(--border); color: var(--fg-dim);
+  border-radius: 4px; font-size: 11px; line-height: 1; padding: 2px 5px; cursor: pointer;
+}
+.alpha-half:hover { color: var(--accent); border-color: var(--accent); }
 
 button.wide {
   width: 100%; padding: 8px; margin-top: 8px;

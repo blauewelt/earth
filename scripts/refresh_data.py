@@ -765,20 +765,29 @@ def argo_column():
         doc="https://sio-argo.ucsd.edu/RG_Climatology.html")
 
 
-def glorys(months_back=12):
-    """GLORYS/CMEMS ocean bake - REQUIRES a free Copernicus Marine account
-    (data.marine.copernicus.eu/register). Credentials come from a prior
-    `copernicusmarine login` or the COPERNICUSMARINE_SERVICE_USERNAME /
+def glorys(start_year=1993):
+    """Full-archive GLORYS ocean bake - REQUIRES a free Copernicus Marine
+    account (data.marine.copernicus.eu/register). Credentials come from a
+    prior `copernicusmarine login` or the COPERNICUSMARINE_SERVICE_USERNAME /
     COPERNICUSMARINE_SERVICE_PASSWORD environment variables; they are never
-    stored in this repo. Downloads per-month subsets to /tmp/nc (cached), writes:
-      data/currents.json   - surface current speed, 1 deg, MONTH-KEYED
-      data/mld.json        - mixed-layer depth, 1 deg, MONTH-KEYED
-      data/ocean_surface.json - u,v,zos,mld packed for the pixel card (latest month)
-    Month-keyed format: {"months": {"YYYY-MM": [vals...]}, "latest": "YYYY-MM",
-    "values": [latest month's vals]} - the app's date selector picks the month
-    (clamped to what's baked); "values" keeps older clients/tests working.
-    Bakes the most recent `months_back` months the archive serves.
-    Dataset ids are tried in order (interim first for recency)."""
+    stored in this repo.
+
+    Two phases, both the SAME model (GLORYS12), chosen to keep downloads sane:
+      1. 1993 -> GREP end (2024-12 as of writing): the GLORYS member
+         (uo_glor/vo_glor/mlotst_glor) of the 1/4-deg ensemble reanalysis
+         GLOBAL_MULTIYEAR_PHY_ENS_001_031, fetched one YEAR per request -
+         16x less data than 1/12-deg, and we bin to 1-deg anyway.
+      2. after GREP: 1/12-deg GLORYS12 my/myint monthly means, one month per
+         request (also feeds ocean_surface.json for the pixel card).
+
+    Output is an INDEX + per-year files, so the app lazy-loads history:
+      data/currents.json / data/mld.json - metadata, monthsAvailable (all
+        baked YYYY-MM stamps), months (latest year inline), latest,
+        values (= latest month, back-compat)
+      data/currents_y/YYYY.json / data/mld_y/YYYY.json - {"year", "months"}
+      data/ocean_surface.json - u,v,zos,mld packed, latest month only
+    Resume-friendly: years already complete in data/*_y/ are not re-fetched;
+    per-request NetCDFs are deleted right after baking (disk stays flat)."""
     import numpy as np
     try:
         import copernicusmarine as cm
@@ -786,118 +795,184 @@ def glorys(months_back=12):
         sys.exit("glorys: pip install copernicusmarine")
     import netCDF4 as ncdf
 
-    candidates = ["cmems_mod_glo_phy_myint_0.083deg_P1M-m",
-                  "cmems_mod_glo_phy_my_0.083deg_P1M-m"]
-    now = datetime.now(timezone.utc)
-
-    def fetch_month(y, m):
-        """Download one month's surface fields; returns nc path or None."""
-        out = f"/tmp/nc/glorys_{y}-{m:02d}.nc"
-        if os.path.exists(out):
-            return out
-        stamp = f"{y}-{m:02d}-01"
-        for ds in candidates:
-            try:
-                print(f"  trying {ds} @ {stamp} ...")
-                cm.subset(dataset_id=ds,
-                          variables=["uo", "vo", "zos", "mlotst"],
-                          start_datetime=stamp, end_datetime=stamp,
-                          minimum_depth=0, maximum_depth=1,
-                          output_filename=out)
-                return out
-            except Exception as e:
-                if os.path.exists(out):
-                    os.remove(out)
-                print(f"    no: {type(e).__name__}: {str(e)[:100]}")
-        return None
-
-    # walk back from ~2 months ago until we have months_back months (the
-    # archive lags a couple of months; a few extra tries absorb the lag)
-    files = []                                        # [(YYYY-MM, path)] newest first
-    back = 2
-    while len(files) < months_back and back < months_back + 8:
-        y, m = now.year, now.month - back
-        while m < 1:
-            m += 12
-            y -= 1
-        p = fetch_month(y, m)
-        if p:
-            files.append((f"{y}-{m:02d}", p))
-        back += 1
-    if not files:
-        sys.exit("glorys: no dataset/month combination worked - check login and ids")
-
     bounds = (-180, -80, 180, 90)
     nx, ny = 360, 170
+    now = datetime.now(timezone.utc)
+    for sub in ("currents_y", "mld_y"):
+        os.makedirs(os.path.join(DATA, sub), exist_ok=True)
+
+    # ---- resume: collect months already baked into per-year files
     months_speed, months_mld = {}, {}
-    latest = None
-    for want_stamp, path in files:
+    for sub, target in (("currents_y", months_speed), ("mld_y", months_mld)):
+        d = os.path.join(DATA, sub)
+        for fn in sorted(os.listdir(d)):
+            if fn.endswith(".json"):
+                with open(os.path.join(d, fn)) as f:
+                    target.update(json.load(f)["months"])
+
+    def bake_slices(path, uvar, vvar, mldvar, want_zos=False):
+        """Bin every time slice in a NetCDF into the month dicts.
+        Returns (stamps, latest_full_fields_or_None)."""
         d = ncdf.Dataset(path)
-        # month stamp from the file itself, so a cached re-run stays labelled
         tvar = d.variables["time"]
-        stamp = str(ncdf.num2date(tvar[0], tvar.units))[:7]
         lat = np.array(d.variables["latitude"][:])
         lon = np.array(d.variables["longitude"][:])
         LON, LAT = np.meshgrid(lon, lat)
-        def v2(name):
-            a = d.variables[name]
-            # np.ma.filled, never np.array: netCDF int16 fills otherwise bake in
-            # as ±32767×scale and hypot() turns them into 46,340 m/s "currents"
-            return np.ma.filled((a[0, 0] if a.ndim == 4 else a[0]).astype(float), np.nan)
-        u, v, zos, mld = v2("uo"), v2("vo"), v2("zos"), v2("mlotst")
-        speed = np.hypot(u, v)
-        gs, _, dlon, dlat = _bin_to_grid(LON, LAT, speed, *bounds, nx, ny)
-        gm2, _, _, _ = _bin_to_grid(LON, LAT, mld, *bounds, nx, ny)
-        months_speed[stamp] = [None if not np.isfinite(x) else round(float(x), 2) for x in gs]
-        months_mld[stamp] = [None if not np.isfinite(x) else int(round(x)) for x in gm2]
-        if latest is None or stamp > latest:
-            latest = stamp
-            latest_fields = (LON, LAT, u, v, zos, mld)
+        stamps, keep = [], None
+        for i in range(len(tvar)):
+            stamp = str(ncdf.num2date(tvar[i], tvar.units))[:7]
+            def v2(name):
+                a = d.variables[name]
+                # np.ma.filled, never np.array: netCDF int16 fills otherwise bake
+                # in as ±32767×scale and hypot() makes 46,340 m/s "currents"
+                return np.ma.filled((a[i, 0] if a.ndim == 4 else a[i]).astype(float), np.nan)
+            u, v, mld = v2(uvar), v2(vvar), v2(mldvar)
+            speed = np.hypot(u, v)
+            gs, _, _, _ = _bin_to_grid(LON, LAT, speed, *bounds, nx, ny)
+            gm2, _, _, _ = _bin_to_grid(LON, LAT, mld, *bounds, nx, ny)
+            months_speed[stamp] = [None if not np.isfinite(x) else round(float(x), 2) for x in gs]
+            months_mld[stamp] = [None if not np.isfinite(x) else int(round(x)) for x in gm2]
+            stamps.append(stamp)
+            if want_zos:
+                keep = (LON, LAT, u, v, v2("zos"), mld)
+            print(f"  baked {stamp} ({sum(1 for x in months_speed[stamp] if x is not None)} ocean cells)")
         d.close()
-        print(f"  baked {stamp} ({len([x for x in months_speed[stamp] if x is not None])} ocean cells)")
+        return stamps, keep
 
-    def write_monthly(id, path, months, *, units, ramp, vmin, vmax, title, citation):
+    # ---- phase 1: GREP 1/4-deg GLORYS member, one year per request
+    grep_ds = "cmems_mod_glo_phy-all_my_0.25deg_P1M-m"
+    grep_last = None
+    for y in range(start_year, now.year + 1):
+        have = [f"{y}-{m:02d}" for m in range(1, 13) if f"{y}-{m:02d}" in months_speed]
+        if len(have) == 12:
+            grep_last = max(grep_last or "", have[-1])
+            continue                                   # year already baked
+        out = f"/tmp/nc/grep_{y}.nc"
+        try:
+            if not os.path.exists(out):
+                print(f"  GREP {y} ...")
+                cm.subset(dataset_id=grep_ds,
+                          variables=["uo_glor", "vo_glor", "mlotst_glor"],
+                          start_datetime=f"{y}-01-01", end_datetime=f"{y}-12-31",
+                          minimum_depth=0, maximum_depth=1,
+                          output_filename=out)
+            stamps, _ = bake_slices(out, "uo_glor", "vo_glor", "mlotst_glor")
+            grep_last = max(grep_last or "", max(stamps))
+            os.remove(out)
+        except Exception as e:
+            if os.path.exists(out):
+                os.remove(out)
+            print(f"    GREP ends before {y}: {type(e).__name__}: {str(e)[:100]}")
+            break
+    if not grep_last and not months_speed:
+        sys.exit("glorys: GREP fetch failed and nothing is baked - check login")
+
+    # ---- phase 2: 1/12-deg GLORYS12 my/myint for months after GREP
+    candidates = ["cmems_mod_glo_phy_myint_0.083deg_P1M-m",
+                  "cmems_mod_glo_phy_my_0.083deg_P1M-m"]
+    latest_fields = None
+    y, m = (int(grep_last[:4]), int(grep_last[5:7])) if grep_last else (start_year, 0)
+    while True:
+        m += 1
+        if m > 12:
+            m, y = 1, y + 1
+        # the archive lags ~2 months behind real time; don't ask past now-1
+        # (a failed fetch at the live edge also ends the loop below)
+        if y * 12 + m > now.year * 12 + now.month - 1:
+            break
+        stamp = f"{y}-{m:02d}"
+        out = f"/tmp/nc/glorys_{stamp}.nc"
+        if stamp in months_speed and not os.path.exists(out):
+            continue                                   # already baked (resume)
+        got = os.path.exists(out)
+        if not got:
+            for ds in candidates:
+                try:
+                    print(f"  trying {ds} @ {stamp}-01 ...")
+                    cm.subset(dataset_id=ds,
+                              variables=["uo", "vo", "zos", "mlotst"],
+                              start_datetime=f"{stamp}-01", end_datetime=f"{stamp}-01",
+                              minimum_depth=0, maximum_depth=1,
+                              output_filename=out)
+                    got = True
+                    break
+                except Exception as e:
+                    if os.path.exists(out):
+                        os.remove(out)
+                    print(f"    no: {type(e).__name__}: {str(e)[:100]}")
+        if not got:
+            break                                      # reached the archive's live edge
+        _, keep = bake_slices(out, "uo", "vo", "mlotst", want_zos=True)
+        if keep:
+            latest_fields = keep
+        os.remove(out)
+
+    if not months_speed:
+        sys.exit("glorys: nothing baked")
+    latest = max(months_speed)
+
+    # ---- write per-year files + index
+    def write_all(id, index_path, year_dir, months, *, units, ramp, vmin, vmax, title, citation):
         west, south, east, north = bounds
+        stamps = sorted(months)
+        years = sorted({s[:4] for s in stamps})
+        for yr in years:
+            with open(os.path.join(DATA, year_dir, f"{yr}.json"), "w") as f:
+                json.dump({"year": int(yr),
+                           "months": {s: months[s] for s in stamps if s[:4] == yr}},
+                          f, separators=(",", ":"))
+        latest_year = latest[:4]
         payload = {
             "id": id, "title": title, "units": units,
-            "source": "Copernicus Marine GLORYS12 / interim", "citation": citation,
+            "source": "Copernicus Marine GLORYS12 (1/12-deg + 1/4-deg GREP member)",
+            "citation": citation,
             "doc": "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_001_030/description",
             "ramp": ramp, "vmin": vmin, "vmax": vmax,
             "west": west, "south": south, "east": east, "north": north,
             "dlon": 1.0, "dlat": 1.0, "nx": nx, "ny": ny,
-            "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "snapshot": now.strftime("%Y-%m-%d"),
             "latest": latest,
-            "months": {k: months[k] for k in sorted(months)},
+            "monthsAvailable": stamps,
+            "yearDir": f"data/{year_dir}",
+            "months": {s: months[s] for s in stamps if s[:4] == latest_year},
             "values": months[latest],
         }
-        with open(os.path.join(DATA, path), "w") as f:
+        with open(os.path.join(DATA, index_path), "w") as f:
             json.dump(payload, f, separators=(",", ":"))
-        print(f"  wrote {path}: months {sorted(months)[0]} -> {latest}")
+        print(f"  wrote {index_path}: {len(stamps)} months, {stamps[0]} -> {latest}, "
+              f"{len(years)} year files in data/{year_dir}/")
 
-    write_monthly("currents", "currents.json", months_speed,
-                  units="m/s", ramp="precip", vmin=0, vmax=1.5,
-                  title="Surface current speed (GLORYS monthly)",
-                  citation="monthly mean |u,v| at surface")
-    write_monthly("mld", "mld.json", months_mld,
-                  units="m", ramp="precip", vmin=0, vmax=500,
-                  title="Mixed-layer depth (GLORYS monthly)",
-                  citation="monthly mean mlotst")
+    write_all("currents", "currents.json", "currents_y", months_speed,
+              units="m/s", ramp="precip", vmin=0, vmax=1.5,
+              title="Surface current speed (GLORYS monthly)",
+              citation="monthly mean |u,v| at surface; 1993->2024 from the GLORYS "
+                       "member of the 1/4-deg ensemble reanalysis, then 1/12-deg GLORYS12")
+    write_all("mld", "mld.json", "mld_y", months_mld,
+              units="m", ramp="precip", vmin=0, vmax=500,
+              title="Mixed-layer depth (GLORYS monthly)",
+              citation="monthly mean mlotst; 1993->2024 from the GLORYS member of "
+                       "the 1/4-deg ensemble reanalysis, then 1/12-deg GLORYS12")
 
-    # packed u/v (cm/s ints) for the pixel card's current arrow - latest month
-    LON, LAT, u, v, zos, mld = latest_fields
-    gu, _, dlon, dlat = _bin_to_grid(LON, LAT, u, *bounds, nx, ny)
-    gv, _, _, _ = _bin_to_grid(LON, LAT, v, *bounds, nx, ny)
-    gz, _, _, _ = _bin_to_grid(LON, LAT, zos, *bounds, nx, ny)
-    gm, _, _, _ = _bin_to_grid(LON, LAT, mld, *bounds, nx, ny)
-    ints = lambda g, s: [None if not np.isfinite(x) else int(round(x * s)) for x in g]
-    payload = {"month": latest, "west": -180, "south": -80, "east": 180, "north": 90,
-               "dlon": dlon, "dlat": dlat, "nx": nx, "ny": ny,
-               "source": "Copernicus Marine GLORYS12/interim monthly mean",
-               "scale": "u,v cm/s; zos cm; mld m",
-               "u": ints(gu, 100), "v": ints(gv, 100), "zos": ints(gz, 100), "mld": ints(gm, 1)}
-    with open(os.path.join(DATA, "ocean_surface.json"), "w") as f:
-        json.dump(payload, f, separators=(",", ":"))
-    print(f"  wrote ocean_surface.json ({latest})")
+    # packed u/v (cm/s ints) for the pixel card's current arrow - latest month.
+    # On a resume run where the latest month was already baked (no fresh 1/12-deg
+    # NetCDF processed), the existing ocean_surface.json is already current: keep it.
+    if latest_fields:
+        LON, LAT, u, v, zos, mld = latest_fields
+        gu, _, dlon, dlat = _bin_to_grid(LON, LAT, u, *bounds, nx, ny)
+        gv, _, _, _ = _bin_to_grid(LON, LAT, v, *bounds, nx, ny)
+        gz, _, _, _ = _bin_to_grid(LON, LAT, zos, *bounds, nx, ny)
+        gm, _, _, _ = _bin_to_grid(LON, LAT, mld, *bounds, nx, ny)
+        ints = lambda g, s: [None if not np.isfinite(x) else int(round(x * s)) for x in g]
+        payload = {"month": latest, "west": -180, "south": -80, "east": 180, "north": 90,
+                   "dlon": dlon, "dlat": dlat, "nx": nx, "ny": ny,
+                   "source": "Copernicus Marine GLORYS12/interim monthly mean",
+                   "scale": "u,v cm/s; zos cm; mld m",
+                   "u": ints(gu, 100), "v": ints(gv, 100), "zos": ints(gz, 100), "mld": ints(gm, 1)}
+        with open(os.path.join(DATA, "ocean_surface.json"), "w") as f:
+            json.dump(payload, f, separators=(",", ":"))
+        print(f"  wrote ocean_surface.json ({latest})")
+    else:
+        print("  ocean_surface.json unchanged (latest month already baked)")
 
 
 if __name__ == "__main__":
