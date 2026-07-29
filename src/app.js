@@ -2196,6 +2196,19 @@ function buildLayerPanel() {
   });
 }
 
+/* First-visit intro guide: open by default; once dismissed, stays dismissed
+ * (localStorage) so returning users get their controls back on top. */
+(() => {
+  const intro = document.getElementById("intro-guide");
+  if (!intro) return;
+  try {
+    if (localStorage.getItem("introClosed") === "1") intro.open = false;
+  } catch { /* private mode — stays open, harmless */ }
+  intro.addEventListener("toggle", () => {
+    try { localStorage.setItem("introClosed", intro.open ? "0" : "1"); } catch { /* ok */ }
+  });
+})();
+
 /* ------------------------------------------------- resizable sidebar */
 /* The panel/globe boundary is draggable (#sidebar-resize). Width lives in the
  * --sidebar-w CSS variable so one drag moves the sidebar, the globe container

@@ -14,8 +14,8 @@
   <div id="sidebar-resize" title="Drag to resize the panel · double-click to reset"></div>
   <div id="sidebar">
     <header>
-      <h1>earth</h1>
-      <p class="tagline">open climate data on a globe</p>
+      <h1>earth <span class="h1-sub">— the open climate record, live</span></h1>
+      <p class="tagline">satellites · the ocean interior · ice · life · emissions · forecasts to 2050 — composed on one globe, from public data only</p>
       <nav>
         <button id="tab-layers" class="tab active">Layers</button>
         <button id="tab-temp" class="tab">Temp</button>
@@ -28,6 +28,44 @@
     </header>
 
     <section id="panel-layers" class="panel">
+      <!-- First-visit guide: open by default, its collapsed state persists
+           (localStorage) so returning users get their controls back on top. -->
+      <details class="hint-details" id="intro-guide" open>
+        <summary class="hint"><strong>What is this?</strong> — a one-minute guide</summary>
+        <p class="hint"><strong>earth</strong> composes the world's open climate data on one globe:
+          sixteen satellite layers, the ocean's interior from Argo floats and the GLORYS
+          reanalysis, glaciers, biodiversity, facility-level emissions — plus dashboards for
+          global temperature, Earth's energy imbalance, the AMOC and sea level, and a searchable
+          catalog of 244 open datasets. Public data only; no keys, no accounts, no server.</p>
+        <p class="hint"><strong>This Layers view</strong> is the globe's control room:</p>
+        <ul class="hint">
+          <li><strong>Date</strong> — every timed layer follows it (±1d/1m/1y steps; a ±30m
+            stepper appears for the half-hourly rain layer, so you can watch storms cross a
+            day). Layers that ignore the date say so when switched on.</li>
+          <li><strong>Compare</strong> — any dated layer vs 1–20 years ago: side-by-side swipe
+            with a draggable divider, or a <em>computed per-pixel change</em> — an absolute
+            difference for continuous fields (SST, ice, vegetation …), a ×-fold ratio for
+            log-distributed ones (rain, chlorophyll), because that's the sound comparison for
+            each.</li>
+          <li><strong>Aggregate</strong> — average the past 1–730 days per pixel (7d/30d/365d
+            presets). Fills cloud gaps, turns daily weather into climate signal; combined with
+            Compare it answers e.g. "the past year vs ten years ago".</li>
+          <li><strong>The layer list</strong> — hover any layer for what it measures and why it
+            matters; every title links to the dataset's own documentation; colormapped layers
+            carry legends, and resting the cursor on the globe reads the actual value beneath
+            it.</li>
+          <li><strong>On the globe</strong> — active layers appear as chips (× switches any of
+            them off from any tab), and the <em>"Everything we know"</em> layer turns each click
+            into a full report for that point: live weather and a 7-day forecast, all satellite
+            fields, the 0–2000 m ocean column, climate normals, nearby context and a 2050
+            outlook.</li>
+        </ul>
+        <p class="hint"><strong>The other tabs</strong>: <em>Temp</em> — warming since 1880 ·
+          <em>Energy</em> — the planet's energy imbalance · <em>AMOC</em> — the overturning
+          circulation this app is ultimately about · <em>Sea level</em> — the rise and its
+          causes · <em>Catalog</em> — all 244 datasets · <em>About</em> — background &amp;
+          further reading.</p>
+      </details>
       <div class="control-row">
         <label for="layer-date">Date</label>
         <input type="date" id="layer-date" />
@@ -84,8 +122,8 @@
       <div class="control-row">
         <label class="check-inline"><input type="checkbox" id="toggle-grayscale" /> Grayscale globe</label>
       </div>
-      <details class="hint-details">
-        <summary class="hint">How Compare &amp; Aggregate work</summary>
+      <details class="hint-details" id="how-compare">
+        <summary class="hint">How Compare &amp; Aggregate work (the fine print)</summary>
         <p class="hint">Daily NASA GIBS imagery. <strong>Aggregate</strong> averages any continuous
           layer per pixel over the past N days ending on the chosen date (1–730). Missing pixels
           (clouds, night) are excluded — each pixel divides by the days it was actually observed, so
@@ -435,15 +473,27 @@
 
     <section id="panel-about" class="panel hidden">
       <h2>What is this?</h2>
-      <p><strong>earth</strong> is a prototype for exploring the world's open climate data on a 3D globe — and, eventually, for generating predictions from it (e.g., <em>will the AMOC collapse, and when?</em>).</p>
-      <p>It renders time-dynamic NASA GIBS imagery with zero API keys, shows facility-level emissions (Climate TRACE) and the live Argo float fleet, marks the AMOC monitoring arrays, and ships a machine-readable catalog of 241 open climate datasets.</p>
+      <p><strong>earth</strong> is a prototype for exploring the world's open climate data on a 3D
+        globe — and, eventually, for generating predictions from it (e.g., <em>will the AMOC
+        collapse, and when?</em>). Everything runs from public data with zero API keys and no
+        server of its own.</p>
+      <p>On the globe: sixteen NASA GIBS satellite layers (temperature, ice, rain, vegetation,
+        water storage, energy balance …), the ocean interior from Argo floats and the GLORYS
+        reanalysis (currents, mixed-layer depth, subsurface heat), the Randolph glacier inventory
+        with melt rates, GBIF biodiversity, Climate TRACE emitters, and the AMOC monitoring
+        network. Behind it: a machine-readable catalog of 244 open climate datasets and dashboards
+        for temperature, the planet's energy imbalance, the AMOC and sea level. The full guide
+        lives at the top of the <em>Layers</em> tab.</p>
       <h2>Tips</h2>
       <ul>
-        <li>Zoom: scroll, pinch (touch or trackpad), or the +/− buttons</li>
-        <li>Compare: pick "vs N years ago" and drag the divider across the globe</li>
-        <li>Click any point for details; click a station marker for its data link</li>
+        <li>Zoom: scroll, pinch (touch or trackpad), or the +/− buttons; drag the panel edge to
+          resize it (double-click resets)</li>
+        <li>Compare: pick "vs N years ago" and drag the divider — or switch to the computed
+          per-pixel change</li>
+        <li>Check <em>Everything we know</em>, then click anywhere: the full state of that point,
+          from live weather to its 2050 outlook</li>
         <li>Biodiversity: pick a climate-indicator species to see its shifting range</li>
-        <li>Hover-and-rest (or click) the globe to read a raster layer's value at that point</li>
+        <li>Active layers appear as chips on the globe — the × works from any tab</li>
       </ul>
       <h2>Roadmap</h2>
       <ul>
@@ -452,8 +502,10 @@
         <li>Prediction pipeline: statistical tipping-time estimation</li>
       </ul>
       <p>Analysis notes: <a href="docs/COMBINING_DATASETS.md">combining datasets</a> ·
+        <a href="docs/PIXEL_STATE.md">the per-pixel state vector</a> ·
         <a href="docs/SPECIES_AND_CLIMATE.md">species &amp; climate</a></p>
-      <p><a href="docs/CATALOG.md">Data catalog (readable)</a> · <a href="data/catalog.json">catalog.json</a></p>
+      <p><a href="docs/CATALOG.md">Data catalog (readable)</a> · <a href="data/catalog.json">catalog.json</a> ·
+        <a href="https://github.com/blauewelt/earth">source on GitHub</a></p>
     </section>
 
     <footer>

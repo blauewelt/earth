@@ -167,6 +167,13 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   midnight rolls the date, and stepping refreshes only the sub-daily layers
   (no churn of the daily/monthly rasters).
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
+- The Layers tab opens with a first-visit intro guide (`#intro-guide`,
+  <details> open by default, dismissal persisted in localStorage) that
+  documents the whole view: date/time stepping, Compare's two modes,
+  Aggregate, hover cards/legends/probe, chips, and the pixel inspector, plus
+  a one-liner per tab. Keep it in sync when controls change — it is the
+  entry-point documentation. The Compare/Aggregate fine-print explainer is
+  `#how-compare`. Header: h1 "earth" + `.h1-sub` + a substantive tagline.
 - The sidebar is resizable: width lives in the `--sidebar-w` CSS variable
   (default 380 px, clamp 300–(window−240 px) — max is structural, only enough
   globe to click, per user request), dragged via `#sidebar-resize`,

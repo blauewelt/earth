@@ -1270,11 +1270,28 @@ test("window presets jump the slider; the explainer folds away", async ({ page }
   await expect(page.locator("#window-presets button.active")).toHaveCount(0);
 
   // the Compare/Aggregate explainer is collapsed by default and opens on click
-  const details = page.locator(".hint-details");
+  const details = page.locator("#how-compare");
   expect(await details.evaluate((el) => el.open)).toBe(false);
-  await page.click(".hint-details summary");
+  await page.click("#how-compare summary");
   expect(await details.evaluate((el) => el.open)).toBe(true);
   await expect(details).toContainText("ratio");
+});
+
+test("the intro guide greets first visits, then remembers being dismissed", async ({ page }) => {
+  // open by default for a new visitor, and it actually documents the view
+  const intro = page.locator("#intro-guide");
+  expect(await intro.evaluate((el) => el.open)).toBe(true);
+  await expect(intro).toContainText("control room");
+  await expect(intro).toContainText("Compare");
+  await expect(intro).toContainText("Aggregate");
+  await expect(intro).toContainText("Everything we know");
+  await expect(intro).toContainText("The other tabs");
+  // dismissing it persists across reloads — returning users get controls on top
+  await page.click("#intro-guide summary");
+  expect(await intro.evaluate((el) => el.open)).toBe(false);
+  await page.reload();
+  await page.waitForFunction(() => window.__earth?.viewer, null, { timeout: 30000 });
+  expect(await page.locator("#intro-guide").evaluate((el) => el.open)).toBe(false);
 });
 
 test("pixel inspector composes a point's full state on click", async ({ page }) => {
