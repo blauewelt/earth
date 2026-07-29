@@ -1505,7 +1505,8 @@ test("Energy tab shows Earth's energy imbalance with plausible numbers", async (
   await expect(page.locator("#panel-energy")).toContainText("90 %");
   await expect(page.locator("#panel-energy")).toContainText("Y axis: accumulated heat");
   await expect(page.locator("#panel-energy")).toContainText("watts per m²");
-  // ENSO/volcano annotations: legend names them, bands paint red AND blue
+  // ENSO/volcano annotations: legend names them, bands paint both hues
+  // (amber = warm-channel-dominant, teal = blue-channel-dominant)
   await expect(page.locator("#eei-rate-legend")).toContainText("El Niño");
   await expect(page.locator("#eei-rate-legend")).toContainText("Pinatubo");
   const tint = await page.evaluate(() => {

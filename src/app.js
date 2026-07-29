@@ -3584,8 +3584,8 @@ async function loadEei() {
   document.getElementById("eei-rate-legend").innerHTML =
     `<span style="color:#3987e5">━ from 0–700 m OHC</span>` +
     `<span style="color:#d95926">━ from 0–2000 m OHC</span>` +
-    `<span style="color:#e6635a">▮ El Niño yr</span>` +
-    `<span style="color:#6a9bef">▮ La Niña yr</span>` +
+    `<span style="color:#e3b341">▮ El Niño yr</span>` +
+    `<span style="color:#2fbfb4">▮ La Niña yr</span>` +
     `<span style="color:#8b949e">▲ eruption (Agung '63 · El Chichón '82 · Pinatubo '91 · Hunga Tonga '22)</span>`;
   drawEeiChart();
   drawEeiRateChart();
@@ -3608,12 +3608,15 @@ function drawEnsoBands(ctx, X, M, H, yr0, yr1) {
     const v = ensoOf(yr);
     if (v == null || Math.abs(v) < 0.5) continue;
     const w = X(yr + 0.5) - X(yr - 0.5);
-    // full-height tint, strong enough to survive a dark theme...
-    const a = Math.min(0.34, 0.12 + 0.08 * Math.abs(v));
-    ctx.fillStyle = v > 0 ? `rgba(230,59,46,${a})` : `rgba(64,130,240,${a})`;
+    // Full-height tint, strong enough to survive a dark theme. Hues chosen
+    // to collide with NEITHER data line: El Nino is amber-gold (warm, but
+    // nothing like the orange-red 0-2000 m line), La Nina is teal (cool, but
+    // nothing like the blue 0-700 m line).
+    const a = Math.min(0.30, 0.10 + 0.07 * Math.abs(v));
+    ctx.fillStyle = v > 0 ? `rgba(224,177,61,${a})` : `rgba(45,190,180,${a})`;
     ctx.fillRect(X(yr - 0.5), M.t, w, H);
     // ...plus an unmissable solid event strip along the bottom of the plot
-    ctx.fillStyle = v > 0 ? "#e6635a" : "#5b93ee";
+    ctx.fillStyle = v > 0 ? "#e3b341" : "#2fbfb4";
     ctx.fillRect(X(yr - 0.5), M.t + H - 3, w, 3);
   }
 }
