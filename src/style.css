@@ -43,13 +43,13 @@ html, body {
 #sidebar header { padding: 14px 16px 0; }
 #sidebar h1 { margin: 0; font-size: 22px; letter-spacing: 1px; }
 #sidebar h1 .h1-sub { font-size: 12.5px; font-weight: 500; letter-spacing: 0; color: var(--fg-dim); }
-#sidebar .tagline { margin: 2px 0 12px; color: var(--fg-dim); font-size: 11px; line-height: 1.45; }
+#sidebar .tagline { margin: 3px 0 12px; color: var(--fg-dim); font-size: 12.5px; line-height: 1.5; }
 .tag-link {
   background: none; border: none; padding: 0; font: inherit; cursor: pointer;
-  color: var(--fg-dim); text-decoration: underline dotted rgba(139,148,158,0.55);
+  color: var(--accent); text-decoration: underline dotted rgba(68,147,248,0.6);
   text-underline-offset: 2px;
 }
-.tag-link:hover { color: var(--accent); text-decoration-color: var(--accent); }
+.tag-link:hover { text-decoration-style: solid; }
 
 nav { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
 /* Tabs size to their labels rather than sharing the width equally: with six of

@@ -1910,8 +1910,7 @@ function datelessToast(id) {
     gbif: "<strong>Biodiversity occurrences (GBIF)</strong> are all-time, so the " +
       "<strong>date selector doesn't change this layer</strong>. Rare taxa (e.g. humans) may " +
       "be too sparse to see when zoomed out — that's expected, not a date problem.",
-    climatetrace: "<strong>Climate TRACE emissions</strong> is an annual inventory, so the " +
-      "<strong>date selector doesn't change it</strong>.",
+    climatetrace: null,   // yearly, not dateless — its own toast (climateTraceToast)
     argo: "<strong>Argo floats</strong> shows the fleet's latest positions (last ~10 days), so the " +
       "<strong>date selector doesn't change it</strong>.",
     stations: "<strong>Monitoring stations</strong> are fixed sites, so the " +
@@ -2130,6 +2129,7 @@ function buildLayerPanel() {
     if (!dateInput.value) return;
     state.date = dateInput.value;
     refreshTimedLayers();
+    refreshYearlyLayers();
     if (sstEnsembleLayer) updateEnsembleLayer();
   });
 
@@ -2165,6 +2165,7 @@ function buildLayerPanel() {
     state.date = next;
     dateInput.value = next;
     refreshTimedLayers();
+    refreshYearlyLayers();
     if (sstEnsembleLayer) updateEnsembleLayer();
   });
 
@@ -2205,7 +2206,9 @@ function buildLayerPanel() {
 const SCENES = {
   satellites: ["viirs-truecolor"],
   ocean: ["currents", "argo-t300"],
-  ice: ["seaice", "toggle-glaciers"],
+  // sea ice + snow are both timed (daily) and spatially separate (polar
+  // ocean vs land), so they layer cleanly; glaciers add the inventory points.
+  ice: ["seaice", "snow", "toggle-glaciers"],
   life: ["ndvi", "toggle-gbif"],
   emissions: ["toggle-climatetrace", "aod"],
 };
@@ -2317,6 +2320,33 @@ document.querySelectorAll(".tag-link").forEach((b) =>
 const pickCard = document.getElementById("pick-card");
 const pointLayers = {}; // kind -> {collection, meta}
 
+// Climate TRACE is annual (2021–2025): the layer shows whichever year the
+// date selector points at, clamped to the available range. Month and day are
+// ignored — it is a yearly inventory, not a daily field.
+let climateTraceLoadedYear = null;
+function climateTraceYear(json) {
+  const yrs = json.years;
+  const want = Number(state.date.slice(0, 4));
+  return Cesium.Math.clamp(want, yrs[0], yrs[yrs.length - 1]);
+}
+
+// Drop the cached climatetrace collection if it no longer matches the year the
+// date selector points at, so the next load() rebuilds it. Covers both a live
+// year change and re-enabling after the year moved while it was hidden.
+function ensureClimateTraceYear() {
+  const json = pointLayers.climatetrace?.__json;
+  if (json && climateTraceYear(json) !== climateTraceLoadedYear) {
+    viewer.scene.primitives.remove(pointLayers.climatetrace.collection);
+    delete pointLayers.climatetrace;
+  }
+}
+async function refreshYearlyLayers() {
+  const box = document.getElementById("toggle-climatetrace");
+  if (!box || !box.checked) return;
+  ensureClimateTraceYear();
+  await loadPointLayer("climatetrace");   // no-op if the year was unchanged
+}
+
 async function loadPointLayer(kind) {
   if (pointLayers[kind]) {
     pointLayers[kind].collection.show = true;
@@ -2326,7 +2356,9 @@ async function loadPointLayer(kind) {
     climatetrace: {
       file: "data/climatetrace.json",
       build(json, col) {
-        for (const [lon, lat, mt, name, country, sector] of json.assets) {
+        const yr = climateTraceYear(json);
+        const assets = json.assets_by_year[String(yr)] || [];
+        for (const [lon, lat, mt, name, country, sector] of assets) {
           col.add({
             position: Cesium.Cartesian3.fromDegrees(lon, lat),
             pixelSize: Math.max(4, Math.min(15, 4 + 11 * Math.sqrt(mt / 270))),
@@ -2336,12 +2368,12 @@ async function loadPointLayer(kind) {
             id: {
               kind: "climatetrace",
               html: `<strong>${esc(name)}</strong><br/>${esc(country)} · ${esc(sector)}<br/>` +
-                `<b>${mt.toFixed(1)} Mt CO₂e/yr</b> (${json.year})<br/>` +
+                `<b>${mt.toFixed(1)} Mt CO₂e/yr</b> (${yr})<br/>` +
                 `<a href="https://climatetrace.org" target="_blank" rel="noopener">Climate TRACE ↗</a>`,
             },
           });
         }
-        return `${json.assets.length} facilities · ${json.year} · snapshot ${json.snapshot}`;
+        return `top ${assets.length} emitters · ${yr} inventory · snapshot ${json.snapshot}`;
       },
     },
     argo: {
@@ -2369,7 +2401,8 @@ async function loadPointLayer(kind) {
   const json = await (await fetch(cfg.file)).json();
   const col = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
   const meta = cfg.build(json, col);
-  pointLayers[kind] = { collection: col, meta };
+  pointLayers[kind] = { collection: col, meta, __json: json };
+  if (kind === "climatetrace") climateTraceLoadedYear = climateTraceYear(json);
   const metaEl = document.getElementById(`meta-${kind}`);
   if (metaEl) metaEl.textContent = meta;
 }
@@ -2386,13 +2419,35 @@ document.getElementById("ensemble-mode").addEventListener("change", () => {
   updateEnsembleLayer();
 });
 
-for (const kind of ["climatetrace", "argo"]) {
-  document.getElementById(`toggle-${kind}`).addEventListener("change", (e) => {
-    if (e.target.checked) { loadPointLayer(kind).then(updateDeltaHint); maybeDatelessToast(kind); }
-    else if (pointLayers[kind]) pointLayers[kind].collection.show = false;
-    updateDeltaHint();
-  });
+// Emissions is year-aware: it explains the yearly semantics on enable, with
+// the actual displayed year, instead of a generic "date doesn't apply" toast.
+function climateTraceToast() {
+  const json = pointLayers.climatetrace?.__json;
+  if (!json) return;
+  const yr = climateTraceYear(json);
+  const lo = json.years[0], hi = json.years[json.years.length - 1];
+  const want = Number(state.date.slice(0, 4));
+  const note = want !== yr
+    ? ` (nearest available to your ${want}; data covers ${lo}–${hi})`
+    : ` — set the date's <em>year</em> anywhere in ${lo}–${hi} to switch inventories`;
+  showToast(`<strong>Climate TRACE emissions</strong> is a <strong>yearly</strong> inventory: ` +
+    `the day and month don't matter, but the <strong>year does</strong>. Showing <strong>${yr}</strong>${note}.`,
+    { key: "climatetrace" });
 }
+document.getElementById("toggle-climatetrace").addEventListener("change", (e) => {
+  if (e.target.checked) {
+    ensureClimateTraceYear();   // re-enabling after the year moved → rebuild
+    loadPointLayer("climatetrace").then(() => { updateDeltaHint(); climateTraceToast(); });
+  } else if (pointLayers.climatetrace) {
+    pointLayers.climatetrace.collection.show = false;
+  }
+  updateDeltaHint();
+});
+document.getElementById("toggle-argo").addEventListener("change", (e) => {
+  if (e.target.checked) { loadPointLayer("argo").then(updateDeltaHint); maybeDatelessToast("argo"); }
+  else if (pointLayers.argo) pointLayers.argo.collection.show = false;
+  updateDeltaHint();
+});
 
 /* Randolph Glacier Inventory v7 — ~274k glaciers as centroid points sized by area.
  * Two colourings: by extent (area), or by 2000-2020 thinning rate (Hugonnet 2021),

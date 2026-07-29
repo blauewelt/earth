@@ -1640,3 +1640,36 @@ test("tagline words are one-click scenes that swap the globe's layers", async ({
   expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(true);
   await expect(page.locator("#toast-host .toast").last()).toContainText("2045–49");
 });
+
+test("Climate TRACE is year-aware: the date's year picks the inventory", async ({ page }) => {
+  // start on a known in-range year
+  await page.evaluate(() => {
+    const d = document.getElementById("layer-date");
+    d.value = "2024-07-15"; d.dispatchEvent(new Event("change"));
+  });
+  await page.check("#toggle-climatetrace");
+  await expect
+    .poll(() => page.evaluate(() => window.__earth.pointLayers.climatetrace?.collection.length ?? 0))
+    .toBe(1000);
+  // the enable toast explains the yearly semantics, not "date doesn't apply"
+  const toast = page.locator("#toast-host .toast").last();
+  await expect(toast).toContainText("yearly");
+  await expect(toast).toContainText("2024");
+  await expect(page.locator("#meta-climatetrace")).toContainText("2024 inventory");
+
+  // a top-emitter marker's popup carries the shown year
+  const before = await page.evaluate(() => window.__earth.pointLayers.climatetrace.__json.assets_by_year["2024"][0][3]);
+  // step the year back two: the layer rebuilds for 2022
+  await page.click('#date-steps button[data-step="-1y"]');
+  await page.click('#date-steps button[data-step="-1y"]');
+  await expect(page.locator("#meta-climatetrace")).toContainText("2022 inventory");
+  const loadedYear = await page.evaluate(() => window.__earth.state.date.slice(0, 4));
+  expect(loadedYear).toBe("2022");
+
+  // stepping to a year outside the baked range clamps to the nearest edge
+  await page.evaluate(() => {
+    const d = document.getElementById("layer-date");
+    d.value = "2010-03-01"; d.dispatchEvent(new Event("change"));
+  });
+  await expect(page.locator("#meta-climatetrace")).toContainText("2021 inventory"); // clamped up
+});

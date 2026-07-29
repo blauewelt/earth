@@ -3467,7 +3467,7 @@
    "license": "CC BY 4.0",
    "globe": true,
    "amoc": false,
-   "notes": "Only global facility-level monthly all-sector dataset; star globe layer"
+   "notes": "Only global facility-level monthly all-sector dataset; star globe layer Live year-aware globe layer in this app (top-1000 emitters per year, 2021-2025, selectable via the date)."
   },
   {
    "id": "iea-methane",

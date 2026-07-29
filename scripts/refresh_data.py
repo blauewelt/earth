@@ -28,43 +28,58 @@ def fetch_json(url):
         return json.load(r)
 
 
-def climatetrace(n=1000, year=2024):
-    """Top-N facility-level emitters, all sectors, sorted by CO2e (API default)."""
-    print(f"Climate TRACE: fetching top {n} assets for {year} ...")
-    assets, offset = [], 0
-    while len(assets) < n:
-        limit = min(250, n - len(assets))
-        url = f"https://api.climatetrace.org/v6/assets?limit={limit}&offset={offset}&year={year}"
-        batch = fetch_json(url).get("assets", [])
-        if not batch:
-            break
-        assets.extend(batch)
-        offset += limit
-        time.sleep(0.5)
-    out = []
-    for a in assets:
-        c = (a.get("Centroid") or {}).get("Geometry")
-        em = [e for e in a.get("EmissionsSummary", []) if e.get("Gas") == "co2e_100yr"]
-        q = em[0].get("EmissionsQuantity") if em else None
-        if not c or q is None:
-            continue
-        out.append([
-            round(c[0], 4), round(c[1], 4),
-            round(q / 1e6, 3),                      # Mt CO2e / yr
-            a.get("Name", "")[:80],
-            a.get("Country", ""),
-            a.get("Sector", ""),
-        ])
+def climatetrace(n=1000, years=range(2021, 2026)):
+    """Top-N facility-level emitters per YEAR (all sectors, sorted by CO2e).
+    Climate TRACE is an annual inventory — the app reads whichever year the
+    date selector points at, so we bake every available year (2021-2025 as of
+    v6). Each year is an independent top-N, so a facility can appear in some
+    years and not others."""
+    def one_year(year):
+        print(f"Climate TRACE {year}: fetching top {n} ...")
+        assets, offset = [], 0
+        while len(assets) < n:
+            limit = min(250, n - len(assets))
+            url = f"https://api.climatetrace.org/v6/assets?limit={limit}&offset={offset}&year={year}"
+            batch = fetch_json(url).get("assets", [])
+            if not batch:
+                break
+            assets.extend(batch)
+            offset += limit
+            time.sleep(0.5)
+        out = []
+        for a in assets:
+            c = (a.get("Centroid") or {}).get("Geometry")
+            em = [e for e in a.get("EmissionsSummary", []) if e.get("Gas") == "co2e_100yr"]
+            q = em[0].get("EmissionsQuantity") if em else None
+            if not c or q is None:
+                continue
+            out.append([
+                round(c[0], 4), round(c[1], 4),
+                round(q / 1e6, 3),                  # Mt CO2e / yr
+                a.get("Name", "")[:80],
+                a.get("Country", ""),
+                a.get("Sector", ""),
+            ])
+        return out
+
+    years = [y for y in years]
+    by_year = {}
+    for y in years:
+        rows = one_year(y)
+        if rows:
+            by_year[str(y)] = rows
+    avail = sorted(int(y) for y in by_year)
     payload = {
         "source": "Climate TRACE (climatetrace.org), CC BY 4.0",
-        "year": year,
         "fields": ["lon", "lat", "mt_co2e", "name", "country", "sector"],
         "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "assets": out,
+        "years": avail,                             # e.g. [2021,2022,2023,2024,2025]
+        "assets_by_year": by_year,
     }
     with open(os.path.join(DATA, "climatetrace.json"), "w") as f:
         json.dump(payload, f, separators=(",", ":"))
-    print(f"  wrote {len(out)} assets")
+    print(f"  wrote {sum(len(v) for v in by_year.values())} assets across "
+          f"years {avail[0]}-{avail[-1]}")
 
 
 def argo(days=10):

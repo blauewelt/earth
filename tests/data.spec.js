@@ -80,14 +80,25 @@ test.describe("argo.json", () => {
 test.describe("climatetrace.json", () => {
   const c = read("climatetrace.json");
 
-  test("has 1000 assets sorted by emissions with valid coordinates", () => {
-    expect(c.assets).toHaveLength(1000);
-    expect(c.assets[0][2]).toBeGreaterThan(c.assets[c.assets.length - 1][2]);
-    for (const [lon, lat, mt] of c.assets) {
-      expect(Math.abs(lon)).toBeLessThanOrEqual(180);
-      expect(Math.abs(lat)).toBeLessThanOrEqual(90);
-      expect(mt).toBeGreaterThan(0);
+  test("multiple years, each a valid top-N sorted by emissions", () => {
+    expect(c.years.length).toBeGreaterThanOrEqual(4);       // ~2021-2025
+    expect(c.years).toEqual([...c.years].sort((a, b) => a - b));
+    for (const yr of c.years) {
+      const assets = c.assets_by_year[String(yr)];
+      expect(assets, `year ${yr} present`).toBeTruthy();
+      expect(assets.length).toBeGreaterThan(500);
+      // sorted by emissions, valid coords, positive magnitudes
+      expect(assets[0][2]).toBeGreaterThan(assets[assets.length - 1][2]);
+      for (const [lon, lat, mt] of assets) {
+        expect(Math.abs(lon)).toBeLessThanOrEqual(180);
+        expect(Math.abs(lat)).toBeLessThanOrEqual(90);
+        expect(mt).toBeGreaterThan(0);
+      }
     }
+    // the years genuinely differ (not the same payload cloned)
+    const [a, b] = [c.years[0], c.years[c.years.length - 1]].map(
+      (y) => c.assets_by_year[String(y)][0][2]);
+    expect(a).not.toBe(b);
   });
 });
 

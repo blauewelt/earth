@@ -153,7 +153,7 @@ never a silent mystery. This applies to grid climatologies, night lights
 (fixed composite), and the data/point layers (GBIF all-time, Climate TRACE
 annual inventory, Argo latest positions, stations, glaciers single inventory).
 Any NEW layer that ignores the date selector must be added to `datelessToast`;
-date-driven rasters must return `null` there. Keep the toast copy consistent:
+date-driven rasters must return `null` there. **Yearly layers are NOT dateless**: Climate TRACE is an annual inventory baked for every available year (2021-2025, `assets_by_year` in climatetrace.json); the layer shows whichever year the date points at (`climateTraceYear`, clamped), rebuilds on a year change (`refreshYearlyLayers` / `ensureClimateTraceYear`), and its toast (`climateTraceToast`) says 'the day and month don't matter, but the year does' — never declare a layer fully dateless if any date component drives it. Keep the toast copy consistent:
 name the layer in `<strong>` and state "the date selector doesn't change it".
 
 ### 5. UI conventions
@@ -169,7 +169,7 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
 - The header tagline's words are one-click SCENES (`.tag-link`,
   `SCENES` map in app.js): each swaps the active layers for a curated set
-  ("ice" → sea ice + glaciers; "forecasts to 2050" arms the pixel inspector
+  ("ice" → sea ice + snow + glaciers; "forecasts to 2050" arms the pixel inspector
   with a toast). Scenes REPLACE the current layers — the chips show the swap
   and undo it. Keep SCENES in sync when showcase-worthy layers land.
 - The Layers tab opens with a first-visit intro guide (`#intro-guide`,
