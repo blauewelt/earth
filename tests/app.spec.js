@@ -1475,6 +1475,49 @@ test("GLORYS layers toggle; the card gets ocean circulation", async ({ page }) =
   await expect(card).toContainText("Mixed-layer depth");
 });
 
+test("GLORYS grids are month-keyed: the date's month picks the map", async ({ page }) => {
+  // Month resolution semantics on a synthetic grid: floor within range,
+  // clamp outside it — pure logic, no network.
+  const picks = await page.evaluate(() => {
+    const E = window.__earth;
+    const g = { west: 0, south: 0, east: 2, north: 1, dlon: 1, dlat: 1, nx: 2, ny: 1,
+                months: { "2025-11": [11, 11], "2026-01": [1, 1], "2026-05": [5, 5] } };
+    const at = (d) => { E.state.date = d; return [E.resolveGridMonth(g), E.sampleGrid(g, 0.5, 0.5)]; };
+    const out = {
+      exact: at("2026-01-15"),      // inside a baked month → that month
+      floor: at("2026-03-10"),      // between baked months → newest earlier one
+      before: at("2024-06-01"),     // before the range → clamps to earliest
+      after: at("2027-01-01"),      // after the range → clamps to latest
+    };
+    E.state.date = new Date().toISOString().slice(0, 10);
+    return out;
+  });
+  expect(picks.exact).toEqual(["2026-01", 1]);
+  expect(picks.floor).toEqual(["2026-01", 1]);
+  expect(picks.before).toEqual(["2025-11", 11]);
+  expect(picks.after).toEqual(["2026-05", 5]);
+
+  // The real baked file declares months, and enabling the layer says which
+  // month is showing (monthly-toast, not the generic dateless one).
+  await page.check('#layer-list input[data-id="currents"]');
+  const toast = page.locator(".toast", { hasText: "monthly-mean" });
+  await expect(toast).toContainText("month does");
+  const info = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "currents");
+    const g = await E.loadGrid(cfg);
+    return { months: E.gridMonths(g), shown: E.resolveGridMonth(g),
+             dateless: E.datelessToast("currents") };
+  });
+  expect(info.months.length).toBeGreaterThanOrEqual(1);
+  expect(info.dateless).toBeNull();                       // no false "snapshot" claim
+  await expect(toast).toContainText(info.shown);          // the toast names the month
+  // probe sampling agrees with the resolved month's field (Gulf Stream is fast)
+  const probe = await page.evaluate(() =>
+    window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-74, 36)));
+  expect(probe.value).toBeGreaterThan(0.5);
+});
+
 test("archive-end comparisons explain their emptiness instead of hiding it", async ({ page }) => {
   // CERES tiles end 2018-10; with today's date, "now" and "2 years ago" both
   // clamp there → a zero-by-construction comparison. The hint must say so.

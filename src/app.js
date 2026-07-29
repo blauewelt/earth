@@ -349,16 +349,16 @@ const GIBS_LAYERS = [
   },
   {
     id: "currents",
-    grid: true, gridFile: "data/currents.json", snapshotGrid: true,
+    grid: true, gridFile: "data/currents.json", monthlyGrid: true,
     ramp: "speed", vmin: 0, vmax: 1.5, units: "m/s", maxLevel: 6,
     doc: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_001_030/description",
     title: "Surface current speed (GLORYS)",
-    meta: "Monthly-mean ocean current speed — the Gulf Stream drawn by physics",
+    meta: "Monthly-mean ocean current speed — the date's month picks the map",
     on: false,
   },
   {
     id: "mld",
-    grid: true, gridFile: "data/mld.json", snapshotGrid: true,
+    grid: true, gridFile: "data/mld.json", monthlyGrid: true,
     ramp: "precip", vmin: 0, vmax: 500, units: "m", maxLevel: 6,
     doc: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_001_030/description",
     title: "Mixed-layer depth (GLORYS)",
@@ -1100,12 +1100,33 @@ function rampColor(name, t) {
   return [l[1], l[2], l[3]];
 }
 
+/* Month-keyed grids (GLORYS): the file carries months:{YYYY-MM: [...]} and the
+ * date selector picks which month renders/samples. Out-of-range dates clamp to
+ * the nearest baked month; in-range dates floor to the newest month <= date. */
+function gridMonths(g) {
+  return g && g.months ? Object.keys(g.months).sort() : null;
+}
+function resolveGridMonth(g) {
+  const ms = gridMonths(g);
+  if (!ms) return null;
+  const want = state.date.slice(0, 7);
+  let best = ms[0];                       // dates before the range clamp up
+  for (const m of ms) {
+    if (m <= want) best = m;              // floor; dates after the range clamp down
+    else break;
+  }
+  return best;
+}
+function gridValues(g) {
+  return g.months ? g.months[resolveGridMonth(g)] : g.values;
+}
+
 function sampleGrid(g, lonDeg, latDeg) {
   if (lonDeg < g.west || lonDeg >= g.east || latDeg < g.south || latDeg >= g.north) return null;
   const ix = Math.floor((lonDeg - g.west) / g.dlon);
   const iy = Math.floor((latDeg - g.south) / g.dlat);
   if (ix < 0 || ix >= g.nx || iy < 0 || iy >= g.ny) return null;
-  const v = g.values[iy * g.nx + ix];
+  const v = gridValues(g)[iy * g.nx + ix];
   return v == null ? null : v;
 }
 
@@ -1196,10 +1217,14 @@ function addLayer(cfg) {
   const add = (provider) => viewer.imageryLayers.addImageryProvider(provider);
 
   if (cfg.grid) {
-    // Static climatology grid painted client-side from data/<id>.json
+    // Climatology or month-keyed grid painted client-side from data/<id>.json
     entry.layer = add(new GridProvider(cfg));
     entry.layer.alpha = entry.alpha;
     state.layers[cfg.id] = entry;
+    if (cfg.monthlyGrid) {
+      // remember which month rendered, so a date change knows when to repaint
+      loadGrid(cfg).then((g) => { if (g) entry.gridMonth = resolveGridMonth(g); });
+    }
     updateLegends();
     return;
   }
@@ -1257,6 +1282,22 @@ function refreshTimedLayers() {
     }
   }
   updateSplitUI();
+}
+
+/* Month-keyed grids don't listen to refreshTimedLayers (they're not `timed`),
+ * so when the date's MONTH moves to a different baked month, rebuild them —
+ * Cesium caches rendered tiles, so a repaint needs a fresh provider. */
+async function refreshMonthlyGrids() {
+  for (const [id, entry] of Object.entries(state.layers)) {
+    if (!entry.layer || !entry.cfg.monthlyGrid) continue;
+    const g = await loadGrid(entry.cfg);
+    const m = g && resolveGridMonth(g);
+    if (m && entry.gridMonth !== m) {
+      removeLayer(id);
+      addLayer(entry.cfg);
+      maybeMonthlyGridToast(entry.cfg);   // say which month is now showing
+    }
+  }
 }
 
 function anyTimedActive() {
@@ -1924,6 +1965,7 @@ function datelessToast(id) {
   const cfg = GIBS_LAYERS.find((l) => l.id === id);
   if (cfg) {
     if (cfg.timed) return null;                              // genuinely date-driven
+    if (cfg.monthlyGrid) return null;      // month-aware — its own toast (maybeMonthlyGridToast)
     if (cfg.grid) {
       // most grids are multi-decade climatologies; a snapshot grid (a single
       // recent month, like the Argo 300 m anomaly) says what it actually is
@@ -1955,6 +1997,27 @@ function datelessToast(id) {
 function maybeDatelessToast(id) {
   const html = datelessToast(id);
   if (html) showToast(html, { key: id });
+}
+
+/* Month-keyed grids (GLORYS) explain their month semantics on enable, with the
+ * actual month rendered — mirroring the year-aware Climate TRACE toast. */
+function maybeMonthlyGridToast(cfg) {
+  if (!cfg?.monthlyGrid) return;
+  loadGrid(cfg).then((g) => {
+    const ms = gridMonths(g);
+    if (!ms) return;
+    const showM = resolveGridMonth(g);
+    const lo = ms[0], hi = ms[ms.length - 1];
+    const want = state.date.slice(0, 7);
+    const note = ms.length === 1
+      ? ` — only this month is baked so far (the data pipeline's <code>glorys</code> step backfills more)`
+      : want !== showM
+        ? ` (nearest baked month to your ${want}; available ${lo} → ${hi})`
+        : ` — set the date's <em>month</em> anywhere in ${lo} → ${hi} to browse`;
+    showToast(`<strong>${cfg.title}</strong> is a <strong>monthly-mean</strong> reanalysis: ` +
+      `the day doesn't matter, but the <strong>month does</strong>. Showing ` +
+      `<strong>${showM}</strong>${note}.`, { key: cfg.id });
+  });
 }
 
 /* When a layer's tile archive ends before the selected date, the request
@@ -2029,13 +2092,13 @@ const LAYER_FACTS = {
          "radiated back to space (CERES). Positive means this place is banking " +
          "energy. The global imbalance of ~+1 W/m² IS global warming, measured " +
          "at the top of the atmosphere." },
-  "currents": { rec: "one recent month (see legend) — not one date; GLORYS reanalysis covers 1993 → near-present", int: "monthly-mean snapshot, refreshed by the data pipeline", sp: "1/12° model, shipped at 1°",
+  "currents": { rec: "recent months, baked by the data pipeline — the date's MONTH picks the map; GLORYS reanalysis covers 1993 → near-present", int: "monthly means (day of month doesn't matter)", sp: "1/12° model, shipped at 1°",
     sum: "How fast the surface ocean moves: the monthly-mean current speed from " +
          "the GLORYS ocean reanalysis (which assimilates Argo, altimetry and " +
          "SST). The Gulf Stream, Kuroshio and Antarctic Circumpolar Current " +
          "leap out — the plumbing that carries the heat the AMOC story is " +
          "about. Click any ocean point for speed AND direction." },
-  "mld": { rec: "one recent month (see legend) — not one date; deepest in late winter", int: "monthly-mean snapshot, refreshed by the data pipeline", sp: "1/12° model, shipped at 1°",
+  "mld": { rec: "recent months, baked by the data pipeline — the date's MONTH picks the map; deepest in late winter", int: "monthly means (day of month doesn't matter)", sp: "1/12° model, shipped at 1°",
     sum: "How deep wind and cooling stir the surface ocean. Watch the subpolar " +
          "North Atlantic: in late winter the mixed layer there can reach " +
          "hundreds of metres to a kilometre — that deep convection is where " +
@@ -2146,6 +2209,7 @@ function buildLayerPanel() {
       addLayer(cfg);
       slider.style.display = "";
       maybeDatelessToast(id);
+      maybeMonthlyGridToast(cfg);
       maybeClampToast(cfg);
     } else {
       removeLayer(id);
@@ -2173,6 +2237,7 @@ function buildLayerPanel() {
     state.date = dateInput.value;
     refreshTimedLayers();
     refreshYearlyLayers();
+    refreshMonthlyGrids();
     if (sstEnsembleLayer) updateEnsembleLayer();
   });
 
@@ -2209,6 +2274,7 @@ function buildLayerPanel() {
     dateInput.value = next;
     refreshTimedLayers();
     refreshYearlyLayers();
+    refreshMonthlyGrids();
     if (sstEnsembleLayer) updateEnsembleLayer();
   });
 
@@ -2227,6 +2293,7 @@ function buildLayerPanel() {
       state.date = date;
       dateInput.value = date;
       refreshTimedLayers();          // date change affects every timed layer
+      refreshMonthlyGrids();         // crossing midnight can cross a month
     } else {
       // Same date, new half-hour: only sub-daily layers see a different TIME,
       // so don't churn (refetch) the daily/monthly layers on every step.
@@ -4198,6 +4265,9 @@ window.__earth = {
   datelessToast,
   loadGrid,
   sampleGrid,
+  gridMonths,
+  resolveGridMonth,
+  refreshMonthlyGrids,
   rampColor,
   gibsTime,
 };

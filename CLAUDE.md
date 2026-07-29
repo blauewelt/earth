@@ -153,7 +153,7 @@ never a silent mystery. This applies to grid climatologies, night lights
 (fixed composite), and the data/point layers (GBIF all-time, Climate TRACE
 annual inventory, Argo latest positions, stations, glaciers single inventory).
 Any NEW layer that ignores the date selector must be added to `datelessToast`;
-date-driven rasters must return `null` there. **Yearly layers are NOT dateless**: Climate TRACE is an annual inventory baked for every available year (2021-2025, `assets_by_year` in climatetrace.json); the layer shows whichever year the date points at (`climateTraceYear`, clamped), rebuilds on a year change (`refreshYearlyLayers` / `ensureClimateTraceYear`), and its toast (`climateTraceToast`) says 'the day and month don't matter, but the year does' — never declare a layer fully dateless if any date component drives it. Keep the toast copy consistent:
+date-driven rasters must return `null` there. **Yearly layers are NOT dateless**: Climate TRACE is an annual inventory baked for every available year (2021-2025, `assets_by_year` in climatetrace.json); the layer shows whichever year the date points at (`climateTraceYear`, clamped), rebuilds on a year change (`refreshYearlyLayers` / `ensureClimateTraceYear`), and its toast (`climateTraceToast`) says 'the day and month don't matter, but the year does' — never declare a layer fully dateless if any date component drives it. **Monthly grids follow the same pattern one level down**: GLORYS currents/MLD are `monthlyGrid` layers whose baked JSON carries `months:{YYYY-MM:[...]}` + `latest` + `values` (= latest month, the backward-compatible view); `resolveGridMonth` floors the date's month to the newest baked month ≤ it (clamped at both ends), `gridValues`/`sampleGrid` read through it, `refreshMonthlyGrids()` rebuilds the provider when a date change lands on a different baked month (Cesium caches tiles — a repaint needs a fresh provider; called from both date handlers AND the ±30m midnight-cross branch), and `maybeMonthlyGridToast` names the month showing on enable. `refresh_data.py glorys` bakes the last ~12 served months (needs Copernicus credentials). Keep the toast copy consistent:
 name the layer in `<strong>` and state "the date selector doesn't change it".
 
 ### 5. UI conventions
@@ -366,7 +366,11 @@ draws the profile (sqrt-depth axis, now vs normal) with upper-700 m stored
 heat, warm-layer depth and surface-salinity-freshening lines.
 `refresh_data.py glorys` (needs a free Copernicus login, via env vars or
 `copernicusmarine login`) additionally bakes surface currents, MLD and SSH —
-credentials never in the repo.
+credentials never in the repo. It bakes the last ~12 served monthly means
+month-keyed (see §4b `monthlyGrid`); per-month subsets cache in /tmp/nc so
+re-runs only fetch missing months. As of 2026-07-29 only 2026-05 is baked
+(credentials were deleted after use, per the user) — the first credentialed
+re-run backfills the rest automatically.
 
 **Analysis features:**
 - *Comparison*: side-by-side split (draggable divider) or computed per-pixel

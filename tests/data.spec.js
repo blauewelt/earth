@@ -332,6 +332,22 @@ test.describe("GLORYS surface snapshots", () => {
     expect(m.values[cell(m, 90, 47)]).toBeNull();       // central Asia
   });
 
+  test("currents/mld are month-keyed and self-consistent", () => {
+    for (const g of [c, m]) {
+      expect(g.latest).toMatch(/^\d{4}-\d{2}$/);
+      const months = Object.keys(g.months);
+      expect(months.length).toBeGreaterThanOrEqual(1);
+      for (const k of months) {
+        expect(k).toMatch(/^\d{4}-\d{2}$/);
+        expect(g.months[k].length).toBe(g.nx * g.ny);
+      }
+      // "latest" is really the newest key, and "values" mirrors it (the
+      // backward-compatible view older readers and the tests above use)
+      expect(g.latest).toBe(months.sort()[months.length - 1]);
+      expect(g.values).toEqual(g.months[g.latest]);
+    }
+  });
+
   test("packed surface fields align and carry a month stamp", () => {
     expect(s.month).toMatch(/^\d{4}-\d{2}$/);
     for (const f of ["u", "v", "zos", "mld"]) expect(s[f].length).toBe(s.nx * s.ny);
