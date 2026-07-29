@@ -19,6 +19,7 @@
       <nav>
         <button id="tab-layers" class="tab active">Layers</button>
         <button id="tab-temp" class="tab">Temp</button>
+        <button id="tab-energy" class="tab">Energy</button>
         <button id="tab-amoc" class="tab">AMOC</button>
         <button id="tab-sealevel" class="tab">Sea level</button>
         <button id="tab-catalog" class="tab">Catalog</button>
@@ -259,29 +260,63 @@
         <em>in space</em>, turn on the <em>Land surface temperature (MODIS)</em> layer on the globe.</p>
       <p>Source: <a href="https://data.giss.nasa.gov/gistemp/" target="_blank" rel="noopener">NASA GISS GISTEMP v4</a>.</p>
 
+      <p>The planet-scale cause of this warming — the energy imbalance driving it — has its own
+        <em>Energy</em> tab.</p>
+    </section>
+
+    <section id="panel-energy" class="panel hidden">
       <h2>Earth's energy imbalance</h2>
+      <p>Averaged over the whole sphere, Earth currently absorbs about <strong>1 W/m² more
+        sunlight than it radiates back to space</strong>. That residual — about 0.3 % of the
+        ~340 W/m² flowing through the system — is the direct physical cause of global warming:
+        everything else on these tabs (rising temperature, melting ice, rising seas) is this
+        imbalance, distributed.</p>
       <div class="stat-row">
         <div class="stat" id="eei-rate"><div class="stat-value">–</div><div class="stat-sub">W/m² · ocean heating, last 10 yr</div></div>
         <div class="stat" id="eei-total"><div class="stat-value">–</div><div class="stat-sub">W/m² · implied total imbalance</div></div>
         <div class="stat" id="eei-zj"><div class="stat-value">–</div><div class="stat-sub">ZJ gained 0–2000 m</div></div>
       </div>
+
+      <h2>The ledger: heat accumulating in the ocean</h2>
       <div id="eei-chart-wrap">
         <canvas id="eei-chart"></canvas>
         <div id="eei-tooltip" class="hidden"></div>
       </div>
       <div id="eei-legend" class="sl-legend"></div>
-      <p class="hint">The single most important number in climate: averaged over the sphere, Earth
-        absorbs ~1 W/m² more sunlight than it radiates back — ~0.3 % of the ~340 W/m² flowing
-        through, invisible on any map (the <em>Energy balance (CERES)</em> layer shows the ±100 W/m²
-        geography that nearly cancels; this residual is what's left). About 90 % of the excess goes
-        into the ocean, so the ocean-heat-content record <em>is</em> the imbalance's ledger: the
-        heating rate above is the 0–2000 m trend converted to watts per m² of the whole Earth, and
-        dividing by 0.9 approximates the total. Hover for values; the curve's steepening is the
-        imbalance growing. One W/m² ≈ 5×10²¹ J per year planet-wide.</p>
+      <p class="hint"><strong>Y axis: accumulated heat</strong>, in 10²² joules (= 10 ZJ), relative
+        to a mid-record baseline — not a rate. About 90 % of the planet's excess energy ends up in
+        the ocean, so this curve is the imbalance's bank statement: its <em>slope</em> is the
+        imbalance itself. A steady imbalance would be a straight line; the visible steepening means
+        the imbalance has been growing. Hover for yearly values.</p>
+
+      <h2>The imbalance itself, over time</h2>
+      <div id="eei-rate-chart-wrap">
+        <canvas id="eei-rate-chart"></canvas>
+        <div id="eei-rate-tooltip" class="hidden"></div>
+      </div>
+      <div id="eei-rate-legend" class="sl-legend"></div>
+      <p class="hint"><strong>Y axis: watts per m² of the whole Earth's surface</strong> — the slope
+        of the curve above, computed as a centred 5-year trend of ocean heat gain, so yes: the
+        imbalance varies over time. The wiggles are real climate variability (El Niño years shed
+        extra heat to the atmosphere and space; La Niña and volcanic years bank more); the climb
+        from ~0.2–0.4 W/m² in the late 20th century toward ~1 W/m² now is the acceleration.
+        Divide by ~0.9 for the total imbalance (the other ~10 % melts ice and warms land and air).
+        CERES satellite radiometry, measured completely independently at the top of the atmosphere,
+        shows the same magnitude and the same rise — one of the strongest closure tests in climate
+        science (Loeb et al. 2021).</p>
+
+      <h2>Orders of magnitude</h2>
+      <p>1 W/m² planet-wide ≈ 16 ZJ per year — roughly 250 times humanity's annual energy
+        consumption, absorbed as heat, every year. The +224 ZJ the upper ocean has banked since
+        2005 resurfaces elsewhere in this app: as the <em>steric</em> (thermal-expansion) share of
+        the Sea level tab's budget, as the "upper 700 m stored heat" line when you click the ocean
+        with the pixel inspector, and as the subsurface marine heatwaves in the 300 m anomaly
+        layer. The <em>Energy balance (CERES)</em> globe layer shows the ±100 W/m² geography whose
+        near-cancellation hides this number: the tropics bank energy, the poles shed it, and the
+        currents and winds between them are the delivery system.</p>
       <p>Source: <a href="https://www.ncei.noaa.gov/products/ocean-heat-salt-sea-level" target="_blank"
         rel="noopener">NOAA NCEI Global Ocean Heat Content</a> (Levitus et al.); framing per Loeb et
-        al. 2021 &amp; von Schuckmann et al. The steric piece of the <em>Sea level</em> tab is this
-        same heat, expanding.</p>
+        al. 2021 &amp; von Schuckmann et al.</p>
     </section>
 
     <section id="panel-amoc" class="panel hidden">

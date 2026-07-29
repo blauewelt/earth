@@ -168,7 +168,8 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   (no churn of the daily/monthly rasters).
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
 - The sidebar is resizable: width lives in the `--sidebar-w` CSS variable
-  (default 380 px, clamp 300–min(680, 60 vw)), dragged via `#sidebar-resize`,
+  (default 380 px, clamp 300–(window−240 px) — max is structural, only enough
+  globe to click, per user request), dragged via `#sidebar-resize`,
   persisted in localStorage, double-click resets. Anything sized off the
   panel (dashboard charts) must redraw on drag; the split divider reposition
   runs on drag end. Hidden in the stacked ≤720 px layout.
@@ -380,9 +381,12 @@ that birds dominate (~60%, a birdwatching bias), and that Homo sapiens is
 present but privacy-restricted to ~tens of thousands of records.
 
 **Dashboards (tabs):** *Temp* — GISTEMP v4 land vs land+ocean warming with
-trends, plus the Earth's-energy-imbalance panel (NOAA NCEI OHC 0–700 m from
+trends; *Energy* — Earth's energy imbalance (NOAA NCEI OHC 0–700 m from
 1955 / 0–2000 m from 2005; centred 5-yr OLS slopes × 0.6213 → W/m² of the
-whole Earth; last-decade rate ÷ 0.9 ≈ total EEI; `refresh_data.py eei`);
+whole Earth; last-decade rate ÷ 0.9 ≈ total EEI; `refresh_data.py eei`) with
+TWO charts: accumulated heat (the ledger, ×10²² J) and its slope (the
+imbalance itself, W/m² over time) — axis semantics spelled out on-panel
+after they confused a reader;
 trends; *AMOC* — RAPID 26.5°N overturning transport series + stats;
 *Sea level* — Frederikse 2020 budget components + NOAA altimetry; *Catalog* —
 searchable 244-dataset catalog with domain/AMOC/globe filters.

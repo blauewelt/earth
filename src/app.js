@@ -2206,16 +2206,19 @@ function buildLayerPanel() {
   const handle = document.getElementById("sidebar-resize");
   if (!handle) return;
   const DEFAULT_W = 380, MIN_W = 300;
-  const maxW = () => Math.min(680, window.innerWidth * 0.6);
+  // Max is structural, not aesthetic: leave just enough globe to click on.
+  const maxW = () => Math.max(MIN_W, window.innerWidth - 240);
   const setW = (px) => {
     const w = Math.round(Cesium.Math.clamp(px, MIN_W, maxW()));
     document.documentElement.style.setProperty("--sidebar-w", `${w}px`);
     return w;
   };
   const redraw = () => {
-    if (document.getElementById("panel-temp").classList.contains("hidden")) return;
-    drawTempChart();
-    if (eeiData) drawEeiChart();
+    if (!document.getElementById("panel-temp").classList.contains("hidden")) drawTempChart();
+    if (eeiData && !document.getElementById("panel-energy").classList.contains("hidden")) {
+      drawEeiChart();
+      drawEeiRateChart();
+    }
   };
   try {
     const saved = Number(localStorage.getItem("sidebarW"));
@@ -3552,11 +3555,9 @@ async function loadTemp() {
   document.getElementById("temp-legend").innerHTML =
     `<span style="color:#d95926">━ Land only</span><span style="color:#3987e5">━ Land + ocean</span>`;
   drawTempChart();
-  loadEei();
   window.addEventListener("resize", () => {
     if (document.getElementById("panel-temp").classList.contains("hidden")) return;
     drawTempChart();
-    if (eeiData) drawEeiChart();
   });
 }
 
@@ -3572,7 +3573,86 @@ async function loadEei() {
   document.getElementById("eei-legend").innerHTML =
     `<span style="color:#3987e5">━ 0–700 m (since 1955)</span>` +
     `<span style="color:#d95926">━ 0–2000 m (since 2005)</span>`;
+  document.getElementById("eei-rate-legend").innerHTML =
+    `<span style="color:#3987e5">━ from 0–700 m OHC</span>` +
+    `<span style="color:#d95926">━ from 0–2000 m OHC</span>`;
   drawEeiChart();
+  drawEeiRateChart();
+  window.addEventListener("resize", () => {
+    if (document.getElementById("panel-energy").classList.contains("hidden")) return;
+    drawEeiChart();
+    drawEeiRateChart();
+  });
+}
+
+/* The imbalance itself over time: the rolling 5-yr heating rate in W/m² of
+ * the whole Earth — i.e. the SLOPE of the OHC chart, drawn explicitly so the
+ * "does it vary?" question answers itself. */
+function drawEeiRateChart() {
+  const d = eeiData;
+  const canvas = document.getElementById("eei-rate-chart");
+  const wrap = canvas.parentElement;
+  const cssW = wrap.clientWidth, cssH = 160;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  canvas.style.width = cssW + "px"; canvas.style.height = cssH + "px";
+  const ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr);
+  const M = { l: 32, r: 8, t: 14, b: 18 };
+  const W = cssW - M.l - M.r, H = cssH - M.t - M.b;
+  const yr0 = d.y700[0], yr1 = d.y700[d.y700.length - 1];
+  const all = [...d.rate700, ...d.rate2000].filter((v) => v != null);
+  const v0 = Math.min(-0.25, Math.floor(Math.min(...all) * 4) / 4);
+  const v1 = Math.ceil(Math.max(...all) * 4) / 4;
+  const X = (yr) => M.l + ((yr - yr0) / (yr1 - yr0)) * W;
+  const Y = (v) => M.t + (1 - (v - v0) / (v1 - v0)) * H;
+  const line = (years, vals) => {
+    ctx.beginPath(); let started = false;
+    for (let i = 0; i < years.length; i++) {
+      if (vals[i] == null) { started = false; continue; }
+      if (!started) { ctx.moveTo(X(years[i]), Y(vals[i])); started = true; }
+      else ctx.lineTo(X(years[i]), Y(vals[i]));
+    }
+    ctx.stroke();
+  };
+  const draw = (hoverYr) => {
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.font = "10px system-ui, sans-serif";
+    for (let v = v0; v <= v1 + 1e-9; v += 0.25) {
+      ctx.strokeStyle = Math.abs(v) < 1e-9 ? "#4a4a47" : "#2c2c2a"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(M.l, Y(v)); ctx.lineTo(cssW - M.r, Y(v)); ctx.stroke();
+      ctx.fillStyle = "#898781"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.fillText(v.toFixed(2), M.l - 4, Y(v));
+    }
+    ctx.fillStyle = "#898781"; ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillText("W/m² (whole Earth)", M.l + 2, 2);
+    ctx.textAlign = "center";
+    for (let yr = 1960; yr <= yr1; yr += 20) {
+      ctx.fillText(String(yr), X(yr), M.t + H + 5);
+    }
+    ctx.lineWidth = 1.8; ctx.lineJoin = "round";
+    ctx.strokeStyle = "#3987e5"; line(d.y700, d.rate700);
+    ctx.strokeStyle = "#d95926"; line(d.y2000, d.rate2000);
+    if (hoverYr != null) {
+      ctx.strokeStyle = "#52514e"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(X(hoverYr), M.t); ctx.lineTo(X(hoverYr), M.t + H); ctx.stroke();
+    }
+  };
+  draw(null);
+  const tip = document.getElementById("eei-rate-tooltip");
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const yr = Math.round(yr0 + ((e.clientX - rect.left - M.l) / W) * (yr1 - yr0));
+    const i7 = d.y700.indexOf(yr), i2 = d.y2000.indexOf(yr);
+    if (i7 < 0 || d.rate700[i7] == null) { tip.classList.add("hidden"); return; }
+    draw(yr);
+    const bits = [`<strong>${yr}</strong>`, `0–700 m: ${d.rate700[i7].toFixed(2)} W/m²`];
+    if (i2 >= 0 && d.rate2000[i2] != null) bits.push(`0–2000 m: ${d.rate2000[i2].toFixed(2)} W/m²`);
+    tip.innerHTML = bits.join("<br/>");
+    tip.style.left = `${Math.min(e.clientX - rect.left + 12, cssW - 150)}px`;
+    tip.style.top = "8px";
+    tip.classList.remove("hidden");
+  };
+  canvas.onmouseleave = () => { tip.classList.add("hidden"); draw(null); };
 }
 
 function drawEeiChart() {
@@ -3584,7 +3664,7 @@ function drawEeiChart() {
   canvas.width = cssW * dpr; canvas.height = cssH * dpr;
   canvas.style.width = cssW + "px"; canvas.style.height = cssH + "px";
   const ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr);
-  const M = { l: 32, r: 8, t: 8, b: 18 };
+  const M = { l: 32, r: 8, t: 14, b: 18 };
   const W = cssW - M.l - M.r, H = cssH - M.t - M.b;
   const yr0 = d.y700[0], yr1 = d.y700[d.y700.length - 1];
   const all = [...d.ohc700, ...d.ohc2000];
@@ -3605,7 +3685,10 @@ function drawEeiChart() {
       ctx.fillStyle = "#898781"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
       ctx.fillText(String(v), M.l - 4, Y(v));
     }
-    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillStyle = "#898781";
+    ctx.fillText("accumulated heat, ×10²² J vs baseline", M.l + 2, 2);
+    ctx.textAlign = "center";
     for (let yr = 1960; yr <= yr1; yr += 20) {
       ctx.fillStyle = "#898781"; ctx.fillText(String(yr), X(yr), M.t + H + 5);
     }
@@ -3704,7 +3787,8 @@ function drawTempChart() {
 
 /* --------------------------------------------------------------------- tabs */
 
-const tabs = { layers: "panel-layers", temp: "panel-temp", amoc: "panel-amoc", sealevel: "panel-sealevel",
+const tabs = { layers: "panel-layers", temp: "panel-temp", energy: "panel-energy",
+  amoc: "panel-amoc", sealevel: "panel-sealevel",
   catalog: "panel-catalog", about: "panel-about" };
 for (const t of Object.keys(tabs)) {
   document.getElementById(`tab-${t}`).addEventListener("click", () => {
@@ -3715,6 +3799,7 @@ for (const t of Object.keys(tabs)) {
     if (t === "amoc") loadAmoc();
     if (t === "sealevel") loadSeaLevel();
     if (t === "temp") loadTemp();
+    if (t === "energy") loadEei();
   });
 }
 

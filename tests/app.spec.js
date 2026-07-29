@@ -1472,8 +1472,8 @@ test("archive-end comparisons explain their emptiness instead of hiding it", asy
   expect(t.past).toBe("2016-09-01");   // genuinely different months → real delta
 });
 
-test("Temp tab shows Earth's energy imbalance with plausible numbers", async ({ page }) => {
-  await page.click("#tab-temp");
+test("Energy tab shows Earth's energy imbalance with plausible numbers", async ({ page }) => {
+  await page.click("#tab-energy");
   await expect(page.locator("#eei-rate .stat-value")).not.toHaveText("–");
   const stats = await page.evaluate(() => ({
     rate: parseFloat(document.querySelector("#eei-rate .stat-value").textContent),
@@ -1493,7 +1493,18 @@ test("Temp tab shows Earth's energy imbalance with plausible numbers", async ({ 
     return n;
   });
   expect(px).toBeGreaterThan(1000);
-  await expect(page.locator("#panel-temp")).toContainText("90 %");
+  // the second chart draws the imbalance ITSELF over time (the slope)
+  const rpx = await page.evaluate(() => {
+    const c = document.getElementById("eei-rate-chart");
+    const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+    return n;
+  });
+  expect(rpx).toBeGreaterThan(1000);
+  await expect(page.locator("#panel-energy")).toContainText("90 %");
+  await expect(page.locator("#panel-energy")).toContainText("Y axis: accumulated heat");
+  await expect(page.locator("#panel-energy")).toContainText("watts per m²");
 });
 
 test("sidebar is resizable by dragging, persists, and resets on double-click", async ({ page }) => {
@@ -1518,7 +1529,8 @@ test("sidebar is resizable by dragging, persists, and resets on double-click", a
   await page.mouse.move(1200, h2.y + 300, { steps: 5 });
   await page.mouse.up();
   const w = await width();
-  expect(w).toBeLessThanOrEqual(Math.min(680, 1280 * 0.6));
+  expect(w).toBeLessThanOrEqual(1280 - 240);   // structural max: keep some globe
+  expect(w).toBeGreaterThan(680);              // the old aesthetic cap is gone
   // double-click resets to the default and clears the preference
   await page.dblclick("#sidebar-resize");
   expect(await width()).toBe(380);
