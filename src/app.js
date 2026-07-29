@@ -3565,9 +3565,17 @@ async function loadTemp() {
 let eeiData = null;
 async function loadEei() {
   if (eeiData) return;
-  eeiData = await (await fetch("data/eei.json")).json();
+  // ?v: cache-buster — GitHub Pages caches JSON for 10 min, and this file's
+  // schema has grown (oni/volcanoes); a stale copy silently drops annotations
+  eeiData = await (await fetch("data/eei.json?v=2")).json();
   document.querySelector("#eei-rate .stat-value").textContent = `+${eeiData.rate10.toFixed(2)}`;
   document.querySelector("#eei-total .stat-value").textContent = `+${eeiData.eei10.toFixed(2)}`;
+  // the intro quotes the same numbers the tiles show, with their real window —
+  // never a hardcoded "about 1 W/m²" detached from the data's date
+  const w0 = eeiData.y2000[eeiData.y2000.length - 10], w1 = eeiData.y2000[eeiData.y2000.length - 1];
+  document.getElementById("eei-intro-window").textContent = `${w0}–${w1}`;
+  document.getElementById("eei-intro-total").textContent = `+${eeiData.eei10.toFixed(2)}`;
+  document.getElementById("eei-intro-rate").textContent = `+${eeiData.rate10.toFixed(2)}`;
   document.querySelector("#eei-zj .stat-value").textContent = `+${Math.round(eeiData.zj_gained)}`;
   document.querySelector("#eei-zj .stat-sub").textContent = `ZJ gained 0–2000 m since ${eeiData.zj_since}`;
   document.getElementById("eei-legend").innerHTML =
@@ -3599,19 +3607,37 @@ function drawEnsoBands(ctx, X, M, H, yr0, yr1) {
   for (let yr = yr0; yr <= yr1; yr++) {
     const v = ensoOf(yr);
     if (v == null || Math.abs(v) < 0.5) continue;
-    const a = Math.min(0.20, 0.05 + 0.05 * Math.abs(v));
-    ctx.fillStyle = v > 0 ? `rgba(230,59,46,${a})` : `rgba(55,120,235,${a})`;
-    ctx.fillRect(X(yr - 0.5), M.t, X(yr + 0.5) - X(yr - 0.5), H);
+    const w = X(yr + 0.5) - X(yr - 0.5);
+    // full-height tint, strong enough to survive a dark theme...
+    const a = Math.min(0.34, 0.12 + 0.08 * Math.abs(v));
+    ctx.fillStyle = v > 0 ? `rgba(230,59,46,${a})` : `rgba(64,130,240,${a})`;
+    ctx.fillRect(X(yr - 0.5), M.t, w, H);
+    // ...plus an unmissable solid event strip along the bottom of the plot
+    ctx.fillStyle = v > 0 ? "#e6635a" : "#5b93ee";
+    ctx.fillRect(X(yr - 0.5), M.t + H - 3, w, 3);
   }
 }
-function drawVolcanoes(ctx, X, M, yr0, yr1) {
-  ctx.fillStyle = "#8b949e";
+function drawVolcanoes(ctx, X, M, H, yr0, yr1, cssW) {
+  let i = 0;
   for (const v of eeiData?.volcanoes || []) {
     if (v.y < yr0 || v.y > yr1) continue;
     const x = X(v.y);
+    // dashed marker line through the plot, triangle + NAME at the top
+    ctx.strokeStyle = "rgba(139,148,158,0.7)"; ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(x, M.t + 10); ctx.lineTo(x, M.t + H); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#c9d1d9";
     ctx.beginPath();
-    ctx.moveTo(x, M.t + 2); ctx.lineTo(x - 4, M.t + 9); ctx.lineTo(x + 4, M.t + 9);
+    ctx.moveTo(x, M.t + 1); ctx.lineTo(x - 4, M.t + 8); ctx.lineTo(x + 4, M.t + 8);
     ctx.closePath(); ctx.fill();
+    ctx.font = "9px system-ui, sans-serif";
+    ctx.textBaseline = "top"; ctx.textAlign = "center";
+    const tw = ctx.measureText(v.n).width;
+    const tx = Math.max(M.l + tw / 2, Math.min(cssW - 6 - tw / 2, x));
+    ctx.fillText(v.n, tx, M.t + 10 + (i % 2) * 10);   // staggered rows: no overlap
+    ctx.font = "10px system-ui, sans-serif";
+    i++;
   }
 }
 function annotationLines(yr) {
@@ -3670,7 +3696,7 @@ function drawEeiRateChart() {
     for (let yr = 1960; yr <= yr1; yr += 20) {
       ctx.fillText(String(yr), X(yr), M.t + H + 5);
     }
-    drawVolcanoes(ctx, X, M, yr0, yr1);
+    drawVolcanoes(ctx, X, M, H, yr0, yr1, cssW);
     ctx.lineWidth = 1.8; ctx.lineJoin = "round";
     ctx.strokeStyle = "#3987e5"; line(d.y700, d.rate700);
     ctx.strokeStyle = "#d95926"; line(d.y2000, d.rate2000);
@@ -3736,7 +3762,7 @@ function drawEeiChart() {
     for (let yr = 1960; yr <= yr1; yr += 20) {
       ctx.fillStyle = "#898781"; ctx.fillText(String(yr), X(yr), M.t + H + 5);
     }
-    drawVolcanoes(ctx, X, M, yr0, yr1);
+    drawVolcanoes(ctx, X, M, H, yr0, yr1, cssW);
     ctx.lineWidth = 1.8; ctx.lineJoin = "round";
     ctx.strokeStyle = "#3987e5"; line(d.y700, d.ohc700);
     ctx.strokeStyle = "#d95926"; line(d.y2000, d.ohc2000);

@@ -1521,6 +1521,12 @@ test("Energy tab shows Earth's energy imbalance with plausible numbers", async (
   });
   expect(tint.red).toBeGreaterThan(500);
   expect(tint.blue).toBeGreaterThan(500);
+  // the intro quotes the SAME numbers as the tiles, with the data's window
+  const introTotal = await page.textContent("#eei-intro-total");
+  const tileTotal = await page.textContent("#eei-total .stat-value");
+  expect(introTotal).toBe(tileTotal);
+  expect(await page.textContent("#eei-intro-window")).toMatch(/^\d{4}–\d{4}$/);
+  await expect(page.locator("#panel-energy")).toContainText("needs its date attached");
 });
 
 test("sidebar is resizable by dragging, persists, and resets on double-click", async ({ page }) => {
