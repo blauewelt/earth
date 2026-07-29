@@ -4,7 +4,7 @@
 
 **Open climate data on a 3D globe — and, eventually, predictions from it.**
 
-`earth` is a prototype for exploring the world's open climate data on an interactive CesiumJS globe, backed by a curated, machine-readable catalog of **244 open climate datasets** across atmosphere, ocean & AMOC, cryosphere, satellite platforms, model projections, greenhouse gases, and impacts.
+`earth` is a prototype for exploring the world's open climate data on an interactive CesiumJS globe, backed by a curated, machine-readable catalog of **245 open climate datasets** across atmosphere, ocean & AMOC, cryosphere, satellite platforms, model projections, greenhouse gases, and impacts.
 
 The long-term goal: layer enough observational and model data onto the globe to drive real prediction pipelines — starting with the question *will the AMOC collapse, and when?*
 
@@ -25,7 +25,7 @@ The long-term goal: layer enough observational and model data onto the globe to 
 - **Point and inventory layers** — Climate TRACE's top 1,000 facility emitters · the ~3,800-float active Argo fleet · the AMOC monitoring network (RAPID, OSNAP, MOVE, SAMBA, the Florida Current cable, the subpolar "cold blob" region) and reference GHG stations (Mauna Loa, Jungfraujoch, …) as clickable markers with data links · all 274,531 glaciers of the Randolph Glacier Inventory v7, colourable by extent or by their 2000–2020 melt rate from Hugonnet et al. 2021 (240,542 matched; ~78% thinning, and the Karakoram anomaly is visible).
 - **Biodiversity layer** — GBIF occurrence-density tiles (3.9 B records, key-free) with a grouped picker: broad taxonomic categories (kingdoms, major animal and plant classes, humans) plus curated climate-indicator species (Atlantic mackerel, emperor penguin, staghorn coral …) whose shifting ranges are a visible fingerprint of warming. See [docs/SPECIES_AND_CLIMATE.md](docs/SPECIES_AND_CLIMATE.md).
 - **Dashboards** — *Temp*: GISTEMP v4 land vs land+ocean warming, 1880–2025, with trends. *Energy*: **Earth's energy imbalance** — the NOAA ocean-heat-content record as both the accumulating-heat ledger and its slope, the imbalance itself over time in W/m² (currently ~+0.7 ocean / ~+0.8 total, +224 ZJ stored since 2005). *AMOC*: the RAPID 26.5°N overturning transport record (2004–2024) with stat tiles and a hoverable chart. *Sea level*: observed global mean sea level 1900–2018 decomposed into its causes (thermal expansion, glaciers, Greenland, Antarctica, land water), with the summed budget tracking the observed line to show *closure*, plus modern satellite altimetry (Frederikse et al. 2020 + NOAA).
-- **Dataset catalog browser** — search and filter all 244 cataloged datasets by domain, AMOC relevance, and globe-readiness, straight from [`data/catalog.json`](data/catalog.json).
+- **Dataset catalog browser** — search and filter all 245 cataloged datasets by domain, AMOC relevance, and globe-readiness, straight from [`data/catalog.json`](data/catalog.json).
 - **Honest about time.** Layers that ignore the date selector (climatologies, night lights, the point and inventory layers) announce it with a warning toast when switched on, rather than leaving the date picker silently inert.
 - **Navigation** — scroll wheel, touch pinch, trackpad pinch (ctrl+wheel) and on-globe buttons; zoom is distance-proportional, and follows the standard convention where spreading fingers apart or scrolling up zooms in. The base globe auto-greys whenever a colormapped data layer is on (so data colours never fight the map's own blues and greens) and returns to colour otherwise — with always-colour/always-grey overrides.
 
@@ -74,7 +74,7 @@ CLAUDE.md               standing instructions + holistic project documentation
 index.html              the app shell
 src/app.js              CesiumJS globe, GIBS layers, grids, points, dashboards, catalog UI
 src/style.css           dark UI theme
-data/catalog.json       244-dataset open climate data catalog (machine-readable)
+data/catalog.json       245-dataset open climate data catalog (machine-readable)
 data/stations.geojson   AMOC arrays + GHG reference stations
 data/rapid_moc.json     RAPID 26.5N AMOC transport series
 data/sealevel.json      sea-level budget (Frederikse 2020) + NOAA altimetry
@@ -101,7 +101,7 @@ Conventions and the full record of what has been built live in
 |---|---|
 | [docs/PRIMER.pdf](docs/PRIMER.pdf) | Background knowledge: GIBS and WMTS, tiling schemes, colormaps, satellite product levels, what a climatology is |
 | [docs/COMBINING_DATASETS.md](docs/COMBINING_DATASETS.md) | Which catalog datasets measure the same quantity, which combinations are scientifically sound (SST ensembles, the sea-level budget, the AMOC state vector, land+ocean blends), and why per-pixel differencing works for SST but not precipitation |
-| [docs/PIXEL_STATE.md](docs/PIXEL_STATE.md) | Which of the 244 sources compose into a holistic per-pixel state vector — state, memory, forcing, flow, future — and the ~25-source minimal composition on a common 0.25° daily grid |
+| [docs/PIXEL_STATE.md](docs/PIXEL_STATE.md) | Which of the 245 sources compose into a holistic per-pixel state vector — state, memory, forcing, flow, future — and the ~25-source minimal composition on a common 0.25° daily grid |
 | [docs/SPECIES_AND_CLIMATE.md](docs/SPECIES_AND_CLIMATE.md) | Why biodiversity occurrence data belongs in a climate app |
 | [docs/CATALOG.md](docs/CATALOG.md) | The full catalog as a readable reference |
 

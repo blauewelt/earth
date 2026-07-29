@@ -375,6 +375,24 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    id: "gfs-temp",
+    grid: true, gridFile: "data/gfs_temp.json", monthlyGrid: true, forecastGrid: true,
+    ramp: "t2m", vmin: -30, vmax: 40, units: "°C", maxLevel: 6,
+    doc: "https://www.emc.ncep.noaa.gov/emc/pages/numerical_forecast_systems/gfs.php",
+    title: "Temperature forecast (GFS, 2 m)",
+    meta: "The next 10 days — with this on, the date selector runs into the future",
+    on: false,
+  },
+  {
+    id: "gfs-precip",
+    grid: true, gridFile: "data/gfs_precip.json", monthlyGrid: true, forecastGrid: true,
+    ramp: "rain", vmin: 0, vmax: 50, units: "mm/day", maxLevel: 6,
+    doc: "https://www.emc.ncep.noaa.gov/emc/pages/numerical_forecast_systems/gfs.php",
+    title: "Precipitation forecast (GFS, daily)",
+    meta: "Forecast 24-h rain totals per day; dry (<0.5 mm) is transparent",
+    on: false,
+  },
+  {
     id: "nightlights",
     doc: "https://blackmarble.gsfc.nasa.gov/",
     layer: "VIIRS_Black_Marble",
@@ -393,6 +411,9 @@ const GIBS_LAYERS = [
 // complete month.
 function gibsTime(cfg, dateStr) {
   if (!cfg.timed) return cfg.fixedTime || "default";
+  // Forecast layers let the date run into the future; observation archives
+  // can't follow. Clamp so GIBS never gets asked for tomorrow's tiles.
+  if (dateStr > defaultDate()) dateStr = defaultDate();
   // Some archives stop being served as tiles before today (GRACE 2022-07,
   // CERES 2018-10, SSH anomalies 2019-01, AMSR2 soil moisture 2025-09): any
   // later date clamps to the last served one, so the layer shows its final
@@ -1082,6 +1103,18 @@ const RAMPS = {
   // cold → warm thermal ramp for SST
   sst: [[0, 49, 54, 149], [0.25, 116, 173, 209], [0.5, 255, 255, 191],
         [0.75, 244, 109, 67], [1, 165, 0, 38]],
+  // 2 m air temperature (-30..40 °C): saturated through the mid-range where
+  // most of the inhabited world lives — the sst ramp's pale middle washed
+  // the whole forecast globe out
+  t2m: [[0, 40, 45, 150], [0.28, 62, 140, 214], [0.43, 92, 200, 190],
+        [0.57, 245, 215, 90], [0.72, 240, 130, 48], [0.86, 205, 55, 35],
+        [1, 130, 10, 25]],
+  // forecast rain: dry is already transparent, so light rain starts as a soft
+  // teal and heavy rain deepens to violet — the white-starting precip ramp
+  // painted every drizzle cell white and blanketed the globe (same lesson as
+  // the currents "speed" ramp)
+  rain: [[0, 130, 200, 205], [0.25, 72, 150, 214], [0.55, 42, 84, 190],
+         [0.8, 90, 45, 170], [1, 150, 30, 140]],
 };
 
 function rampColor(name, t) {
@@ -1111,7 +1144,8 @@ function gridMonths(g) {
 function resolveGridMonth(g) {
   const ms = gridMonths(g);
   if (!ms) return null;
-  const want = state.date.slice(0, 7);
+  // keyLen 7 = month-keyed (GLORYS); keyLen 10 = day-keyed (GFS forecast)
+  const want = state.date.slice(0, g.keyLen || 7);
   let best = ms[0];                       // dates before the range clamp up
   for (const m of ms) {
     if (m <= want) best = m;              // floor; dates after the range clamp down
@@ -1248,7 +1282,15 @@ function addLayer(cfg) {
     state.layers[cfg.id] = entry;
     if (cfg.monthlyGrid) {
       // remember which month rendered, so a date change knows when to repaint
-      loadGrid(cfg).then((g) => { if (g) entry.gridMonth = resolveGridMonth(g); });
+      loadGrid(cfg).then((g) => {
+        if (!g) return;
+        entry.gridMonth = resolveGridMonth(g);
+        if (cfg.forecastGrid && g.latest) {
+          forecastMaxDate = forecastMaxDate && forecastMaxDate > g.latest
+            ? forecastMaxDate : g.latest;
+          syncDateMax();                   // open the date selector to the future
+        }
+      });
     }
     updateLegends();
     return;
@@ -1307,6 +1349,30 @@ function refreshTimedLayers() {
     }
   }
   updateSplitUI();
+}
+
+/* Forecast layers extend the date selector past today: while one is active,
+ * the max selectable date is the last baked forecast day instead of the last
+ * observed one. Everything else (GIBS requests, "today" button) stays pinned
+ * to real time — gibsTime clamps future dates for observation layers. */
+let forecastMaxDate = null;                // last forecast day, set on grid load
+function uiMaxDate() {
+  const anyForecast = Object.values(state.layers)
+    .some((e) => e.layer && e.cfg.forecastGrid);
+  return anyForecast && forecastMaxDate ? forecastMaxDate : defaultDate();
+}
+function syncDateMax() {
+  const input = document.getElementById("layer-date");
+  if (!input) return;
+  const max = uiMaxDate();
+  input.max = max;
+  if (state.date > max) {                  // forecast switched off while in the future
+    state.date = max;
+    input.value = max;
+    refreshTimedLayers();
+    refreshYearlyLayers();
+    refreshMonthlyGrids();
+  }
 }
 
 /* Month-keyed grids don't listen to refreshTimedLayers (they're not `timed`),
@@ -2033,6 +2099,14 @@ function maybeMonthlyGridToast(cfg) {
     if (!ms) return;
     const showM = resolveGridMonth(g);
     const lo = ms[0], hi = ms[ms.length - 1];
+    if (cfg.forecastGrid) {
+      const initS = g.init ? ` from the GFS run <strong>${g.init}</strong>` : "";
+      showToast(`<strong>${cfg.title}</strong> is a <strong>forecast</strong>${initS}: ` +
+        `the date selector now runs into the <strong>future</strong> — step forward day by day ` +
+        `up to <strong>${hi}</strong>. Showing <strong>${showM}</strong>. Observation layers ` +
+        `can't follow; they hold at their latest real date.`, { key: cfg.id });
+      return;
+    }
     const want = state.date.slice(0, 7);
     const note = ms.length === 1
       ? ` — only this month is baked so far (the data pipeline's <code>glorys</code> step backfills more)`
@@ -2129,6 +2203,17 @@ const LAYER_FACTS = {
          "hundreds of metres to a kilometre — that deep convection is where " +
          "AMOC deep water is actually made, so its shrinking is an early " +
          "warning signal. In summer it shoals to tens of metres everywhere." },
+  "gfs-temp": { rec: "the NEXT 10 days from the latest complete GFS run (see the toast for the init time) — the only layer that looks forward", int: "one frame per day, same hour each day; refreshed by the data pipeline", sp: "0.25° model, shipped at 1°",
+    sum: "Where the atmosphere is heading: 2 m air temperature from NOAA's GFS " +
+         "model, one frame per forecast day. Switch it on and the date selector " +
+         "unlocks the future — step forward to watch heat domes build and cold " +
+         "fronts sweep through. A physics baseline for the AI forecasts " +
+         "(WeatherNext & co.) that may join it later." },
+  "gfs-precip": { rec: "the NEXT ~9 full days from the latest complete GFS run — forecast, not observation", int: "24-h totals per forecast day (sum of the model's 6-h buckets); dry days transparent", sp: "0.25° model, shipped at 1°",
+    sum: "Where it is FORECAST to rain: daily precipitation totals from NOAA's " +
+         "GFS. Step the date forward to watch atmospheric rivers, monsoon " +
+         "bursts and cyclones arrive days ahead — then flip to the IMERG " +
+         "layer on past dates to see how the forecast did." },
   "argo-t300": { rec: "one recent month (see legend) vs the 2004–2018 mean for that same calendar month — not one date", int: "monthly snapshot, refreshed by the data pipeline", sp: "1° (Argo objective mapping)",
     sum: "Where the ocean is unusually warm or cool 300 m DOWN — measured by the " +
          "Argo float fleet, invisible to every satellite surface map. Subsurface " +
@@ -2245,6 +2330,7 @@ function buildLayerPanel() {
     } else {
       removeLayer(id);
       row.style.display = "none";
+      if (cfg?.forecastGrid) syncDateMax();   // may pull the date back to today
     }
     updateSplitUI();
   });
@@ -2279,7 +2365,7 @@ function buildLayerPanel() {
 
   const dateInput = document.getElementById("layer-date");
   dateInput.value = state.date;
-  dateInput.max = defaultDate();
+  dateInput.max = uiMaxDate();
   dateInput.addEventListener("change", () => {
     if (!dateInput.value) return;
     state.date = dateInput.value;
@@ -2315,7 +2401,7 @@ function buildLayerPanel() {
       }
       next = d.toISOString().slice(0, 10);
     }
-    if (next > defaultDate()) next = defaultDate();
+    if (next > uiMaxDate()) next = uiMaxDate();
     if (next < "2000-01-01") next = "2000-01-01";
     if (next === state.date) return;
     state.date = next;
@@ -2335,7 +2421,7 @@ function buildLayerPanel() {
     let date = state.date;
     if (t < 0) { t = 1440 + t; date = addDays(date, -1); }
     else if (t >= 1440) { t = t - 1440; date = addDays(date, 1); }
-    if (date > defaultDate() || date < "2000-01-01") return; // nothing to step to
+    if (date > uiMaxDate() || date < "2000-01-01") return; // nothing to step to
     state.timeMin = t;
     if (date !== state.date) {
       state.date = date;

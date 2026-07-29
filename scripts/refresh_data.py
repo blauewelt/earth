@@ -975,6 +975,163 @@ def glorys(start_year=1993):
         print("  ocean_surface.json unchanged (latest month already baked)")
 
 
+def gfs(days=10):
+    """GFS 10-day forecast bake from the NOMADS grib filter - NO account, NO
+    key (NOAA public service; be polite, ~50 small subset requests).
+    Finds the newest COMPLETE cycle (f240 published), then bakes:
+      data/gfs_temp.json   - 2 m temperature, one frame per day (f000..f240),
+                             day-keyed like the GLORYS grids but keyLen 10
+      data/gfs_precip.json - 24-h precipitation totals summed from the 6-h
+                             APCP buckets grouped by UTC day (only full days;
+                             <0.5 mm/day bakes as null = transparent)
+    The date selector picks the forecast day in the app; "init" records the
+    model run so the layer is honest about its age."""
+    import numpy as np
+    try:
+        import pygrib
+    except ImportError:
+        sys.exit("gfs: pip install pygrib")
+    import urllib.request
+    import urllib.parse
+    import tempfile
+    import time as _time
+
+    base = "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl"
+    now = datetime.now(timezone.utc)
+
+    def fetch(d, cyc, f, var, lev):
+        q = {"dir": f"/gfs.{d}/{cyc}/atmos", "file": f"gfs.t{cyc}z.pgrb2.0p25.{f}",
+             f"var_{var}": "on", f"lev_{lev}": "on"}
+        url = base + "?" + urllib.parse.urlencode(q)
+        for attempt in range(3):
+            try:
+                data = urllib.request.urlopen(url, timeout=180).read()
+                return data if data[:4] == b"GRIB" else None
+            except Exception as e:
+                if "404" in str(e):
+                    return None
+                _time.sleep(5)
+        return None
+
+    def msgs(data):
+        with tempfile.NamedTemporaryFile(suffix=".grib2", delete=False) as t:
+            t.write(data)
+            p = t.name
+        try:
+            return list(pygrib.open(p)), p
+        finally:
+            pass
+
+    # newest cycle whose final lead exists = a complete forecast
+    last_f = f"f{days * 24:03d}"
+    cycle, probe = None, None
+    for back_h in range(4, 54, 6):                     # ~4 h publication lag
+        t0 = now - timedelta(hours=back_h)
+        d, cyc = t0.strftime("%Y%m%d"), f"{(t0.hour // 6) * 6:02d}"
+        data = fetch(d, cyc, last_f, "TMP", "2_m_above_ground")
+        if data:
+            cycle, probe = (d, cyc), data
+            break
+    if not cycle:
+        sys.exit("gfs: no complete cycle found on NOMADS")
+    d, cyc = cycle
+    init = f"{d[:4]}-{d[4:6]}-{d[6:]}T{cyc}Z"
+    print(f"  cycle {init} (complete to {last_f})")
+
+    bounds = (-180, -90, 180, 90)
+    nx, ny = 360, 180
+    grids = {}                                         # cache the 1-deg binning coords
+
+    def bin1(m):
+        vals = np.ma.filled(m.values.astype(float), np.nan)
+        if "LL" not in grids:
+            lats, lons = m.latlons()
+            grids["LL"] = (((lons + 180.0) % 360.0) - 180.0, lats)
+        LON, LAT = grids["LL"]
+        out, _, _, _ = _bin_to_grid(LON, LAT, vals, *bounds, nx, ny)
+        return out
+
+    # ---- 2 m temperature: one frame per day, same hour each day
+    temp_frames = {}
+    for k in range(0, days + 1):
+        f = f"f{24 * k:03d}"
+        data = probe if f == last_f else fetch(d, cyc, f, "TMP", "2_m_above_ground")
+        if not data:
+            print(f"  {f}: missing, skipped")
+            continue
+        ms, p = msgs(data)
+        m = ms[0]
+        stamp = m.validDate.strftime("%Y-%m-%d")
+        g = bin1(m) - 273.15                           # K -> deg C
+        temp_frames[stamp] = [None if not np.isfinite(x) else int(round(x)) for x in g]
+        os.remove(p)
+        print(f"  temp {f} -> {stamp}")
+        _time.sleep(1)
+
+    # ---- precipitation: 6-h buckets summed per UTC day (full days only)
+    day_sum, day_cnt = {}, {}
+    for lead in range(6, days * 24 + 1, 6):
+        data = fetch(d, cyc, f"f{lead:03d}", "APCP", "surface")
+        if not data:
+            print(f"  f{lead:03d}: missing, skipped")
+            continue
+        ms, p = msgs(data)
+        for m in ms:
+            if m.endStep - m.startStep != 6:
+                continue                               # skip 0-N running totals
+            start = m.validDate - timedelta(hours=6)   # validDate = window end
+            key = start.strftime("%Y-%m-%d")
+            g = bin1(m)
+            if key not in day_sum:
+                day_sum[key] = np.zeros(nx * ny)
+                day_cnt[key] = 0
+            day_sum[key] += np.where(np.isfinite(g), g, 0.0)
+            day_cnt[key] += 1
+        os.remove(p)
+        _time.sleep(1)
+    precip_frames = {}
+    for key in sorted(day_sum):
+        if day_cnt[key] != 4:
+            print(f"  precip {key}: partial ({day_cnt[key]}/4 buckets), dropped")
+            continue
+        # round first, THEN threshold: Python rounds 0.5 to 0 (banker's
+        # rounding), which would bake visible-but-zero cells
+        precip_frames[key] = [x if x >= 1 else None
+                              for x in (int(round(v)) for v in day_sum[key])]
+        print(f"  precip {key}: ok")
+
+    def write(path, id, frames, *, units, ramp, vmin, vmax, title, citation):
+        stamps = sorted(frames)
+        payload = {
+            "id": id, "title": title, "units": units,
+            "source": "NOAA GFS 0.25-deg via NOMADS grib filter", "citation": citation,
+            "doc": "https://www.emc.ncep.noaa.gov/emc/pages/numerical_forecast_systems/gfs.php",
+            "ramp": ramp, "vmin": vmin, "vmax": vmax,
+            "west": -180, "south": -90, "east": 180, "north": 90,
+            "dlon": 1.0, "dlat": 1.0, "nx": nx, "ny": ny,
+            "snapshot": now.strftime("%Y-%m-%d"),
+            "init": init, "keyLen": 10,
+            "latest": stamps[-1],
+            "monthsAvailable": stamps,
+            "months": {s: frames[s] for s in stamps},
+            "values": frames[stamps[0]],
+        }
+        with open(os.path.join(DATA, path), "w") as f:
+            json.dump(payload, f, separators=(",", ":"))
+        print(f"  wrote {path}: {len(stamps)} days, {stamps[0]} -> {stamps[-1]}")
+
+    if not temp_frames or not precip_frames:
+        sys.exit("gfs: incomplete bake")
+    write("gfs_temp.json", "gfs-temp", temp_frames,
+          units="degC", ramp="sst", vmin=-30, vmax=40,
+          title="Temperature forecast (GFS, 2 m)",
+          citation=f"2 m temperature, GFS run {init}, daily frames to +{days} days")
+    write("gfs_precip.json", "gfs-precip", precip_frames,
+          units="mm/day", ramp="precip", vmin=0, vmax=50,
+          title="Precipitation forecast (GFS, daily)",
+          citation=f"24-h precipitation totals, GFS run {init}; <0.5 mm/day transparent")
+
+
 if __name__ == "__main__":
     os.makedirs("/tmp/nc", exist_ok=True)
     default = ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
@@ -982,7 +1139,8 @@ if __name__ == "__main__":
     fns = {"climatetrace": climatetrace, "argo": argo, "rapid": rapid,
            "sealevel": sealevel, "glaciers": glaciers, "gistemp": gistemp,
            "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss,
-           "species": species, "argo_column": argo_column, "glorys": glorys, "eei": eei}
+           "species": species, "argo_column": argo_column, "glorys": glorys, "eei": eei,
+           "gfs": gfs}
     for w in which:
         fns[w]()
     print("done")

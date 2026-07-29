@@ -384,6 +384,57 @@ test.describe("GLORYS surface snapshots", () => {
   });
 });
 
+test.describe("GFS forecast bakes", () => {
+  const t = read("gfs_temp.json");
+  const p = read("gfs_precip.json");
+  const cell = (g, lon, lat) =>
+    (Math.floor((lat - g.south) / g.dlat)) * g.nx + Math.floor((lon - g.west) / g.dlon);
+
+  test("temperature: day-keyed, contiguous, full coverage, physical", () => {
+    expect(t.keyLen).toBe(10);
+    expect(t.init).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}Z$/);
+    expect(t.monthsAvailable.length).toBeGreaterThanOrEqual(10);   // ~11 daily frames
+    for (let i = 1; i < t.monthsAvailable.length; i++) {
+      const gap = new Date(t.monthsAvailable[i]) - new Date(t.monthsAvailable[i - 1]);
+      expect(gap).toBe(864e5);                                     // strictly daily
+    }
+    expect(t.latest).toBe(t.monthsAvailable[t.monthsAvailable.length - 1]);
+    for (const s of t.monthsAvailable) {
+      const v = t.months[s];
+      expect(v.length).toBe(t.nx * t.ny);
+      const fin = v.filter((x) => x != null);
+      expect(fin.length / v.length).toBeGreaterThan(0.99);         // temp covers the globe
+      expect(Math.min(...fin)).toBeGreaterThan(-95);
+      expect(Math.max(...fin)).toBeLessThan(60);
+    }
+    // season-agnostic physics: the tropical Pacific is warm year-round, and
+    // whichever pole is in winter is far colder than the tropics
+    const v = t.months[t.monthsAvailable[0]];
+    const tropics = v[cell(t, -140, 0)];
+    expect(tropics).toBeGreaterThan(15);
+    const poles = Math.min(v[cell(t, 0, -80)], v[cell(t, 0, 85)]);
+    expect(tropics - poles).toBeGreaterThan(20);
+  });
+
+  test("precipitation: full days only, non-negative, rain exists, dry transparent", () => {
+    expect(p.keyLen).toBe(10);
+    expect(p.init).toBe(t.init);                                   // same model run
+    expect(p.monthsAvailable.length).toBeGreaterThanOrEqual(8);
+    for (const s of p.monthsAvailable) {
+      const v = p.months[s];
+      expect(v.length).toBe(p.nx * p.ny);
+      const fin = v.filter((x) => x != null);
+      expect(Math.min(...fin)).toBeGreaterThanOrEqual(1);          // <0.5 mm baked as null
+      expect(Math.max(...fin)).toBeGreaterThan(20);                // the ITCZ always rains
+      expect(Math.max(...fin)).toBeLessThan(1000);
+      const wet = fin.length / v.length;
+      expect(wet).toBeGreaterThan(0.2);                            // neither empty
+      expect(wet).toBeLessThan(0.85);                              // nor raining everywhere
+    }
+    expect(p.values).toEqual(p.months[p.monthsAvailable[0]]);
+  });
+});
+
 test.describe("eei.json (ocean heat / energy imbalance)", () => {
   const e = read("eei.json");
 

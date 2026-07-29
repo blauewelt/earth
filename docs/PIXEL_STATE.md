@@ -1,6 +1,6 @@
 # The state of one pixel
 
-*Which of the catalog's 244 sources compose into a holistic assessment of a
+*Which of the catalog's 245 sources compose into a holistic assessment of a
 single place on Earth — and into a prediction of where that place, and its
 neighbours, are heading.*
 

@@ -2,9 +2,9 @@
  "catalog": "Global Climate Open Data Catalog",
  "compiled": "2026-07",
  "purpose": "Reference of open climate data worldwide for a 3D-globe visualization and prediction pipelines (incl. AMOC collapse timing).",
- "record_count": 244,
+ "record_count": 245,
  "records_by_domain": {
-  "Atmosphere/Reanalysis/Surface": 40,
+  "Atmosphere/Reanalysis/Surface": 41,
   "Ocean & AMOC": 43,
   "Cryosphere": 30,
   "Satellite EO & Cloud Platforms": 24,
@@ -4422,6 +4422,24 @@
    "globe": true,
    "amoc": false,
    "notes": "Actual ground/skin temperature over land; key-free GIBS tiles (used in the globe's land-surface-temperature layer)"
+  },
+  {
+   "id": "gfs",
+   "name": "NOAA GFS (Global Forecast System)",
+   "domain": "Atmosphere/Reanalysis/Surface",
+   "subdomain": "NWP forecast",
+   "provider": "NOAA NCEP",
+   "url": "https://www.emc.ncep.noaa.gov/emc/pages/numerical_forecast_systems/gfs.php",
+   "access": "NOMADS grib filter (no key); AWS/GCS open data mirrors",
+   "formats": "GRIB2",
+   "variables": "T2m, precip, wind, pressure, humidity, full atmosphere",
+   "spatial": "Global 0.25 deg",
+   "temporal": "4 cycles/day, leads to 384 h",
+   "cadence": "6-hourly",
+   "license": "US Gov public domain",
+   "globe": true,
+   "amoc": false,
+   "notes": "Two live globe layers in this app: 2 m temperature and daily precipitation forecasts (day-keyed to +10 days; the date selector runs into the future while one is on). refresh_data.py gfs re-bakes from the latest complete cycle."
   }
  ]
 }

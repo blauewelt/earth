@@ -153,7 +153,7 @@ never a silent mystery. This applies to grid climatologies, night lights
 (fixed composite), and the data/point layers (GBIF all-time, Climate TRACE
 annual inventory, Argo latest positions, stations, glaciers single inventory).
 Any NEW layer that ignores the date selector must be added to `datelessToast`;
-date-driven rasters must return `null` there. **Yearly layers are NOT dateless**: Climate TRACE is an annual inventory baked for every available year (2021-2025, `assets_by_year` in climatetrace.json); the layer shows whichever year the date points at (`climateTraceYear`, clamped), rebuilds on a year change (`refreshYearlyLayers` / `ensureClimateTraceYear`), and its toast (`climateTraceToast`) says 'the day and month don't matter, but the year does' — never declare a layer fully dateless if any date component drives it. **Monthly grids follow the same pattern one level down**: GLORYS currents/MLD are `monthlyGrid` layers covering the FULL archive (1993-01 → ~now−2mo). The baked index (data/currents.json, data/mld.json) carries `monthsAvailable` (every stamp), `yearDir`, `months` (latest year inlined), `latest`, `values` (= latest month, back-compat); older months live in per-year files (data/currents_y/YYYY.json) lazy-fetched by `ensureGridMonth`/`loadGridMonth` and merged into `g.months` — every sampler (GridProvider.requestImage, probeValueAt, the pixel card) MUST go through `loadGridMonth`, never bare `loadGrid`+`sampleGrid`, or old months read as null. `resolveGridMonth` floors the date's month to the newest baked month ≤ it (clamped at both ends), `refreshMonthlyGrids()` rebuilds the provider when a date change lands on a different baked month (Cesium caches tiles — a repaint needs a fresh provider; called from both date handlers AND the ±30m midnight-cross branch), and `maybeMonthlyGridToast` names the month showing on enable. Note the date steppers clamp at 2000-01-01 (GIBS floor) — 1993–1999 currents are reachable by typing a date. Keep the toast copy consistent:
+date-driven rasters must return `null` there. **Yearly layers are NOT dateless**: Climate TRACE is an annual inventory baked for every available year (2021-2025, `assets_by_year` in climatetrace.json); the layer shows whichever year the date points at (`climateTraceYear`, clamped), rebuilds on a year change (`refreshYearlyLayers` / `ensureClimateTraceYear`), and its toast (`climateTraceToast`) says 'the day and month don't matter, but the year does' — never declare a layer fully dateless if any date component drives it. **Monthly grids follow the same pattern one level down**: GLORYS currents/MLD are `monthlyGrid` layers covering the FULL archive (1993-01 → ~now−2mo). The baked index (data/currents.json, data/mld.json) carries `monthsAvailable` (every stamp), `yearDir`, `months` (latest year inlined), `latest`, `values` (= latest month, back-compat); older months live in per-year files (data/currents_y/YYYY.json) lazy-fetched by `ensureGridMonth`/`loadGridMonth` and merged into `g.months` — every sampler (GridProvider.requestImage, probeValueAt, the pixel card) MUST go through `loadGridMonth`, never bare `loadGrid`+`sampleGrid`, or old months read as null. `resolveGridMonth` floors the date's month to the newest baked month ≤ it (clamped at both ends), `refreshMonthlyGrids()` rebuilds the provider when a date change lands on a different baked month (Cesium caches tiles — a repaint needs a fresh provider; called from both date handlers AND the ±30m midnight-cross branch), and `maybeMonthlyGridToast` names the month showing on enable. Note the date steppers clamp at 2000-01-01 (GIBS floor) — 1993–1999 currents are reachable by typing a date. **Day-keyed forecast grids reuse the whole mechanism**: GFS temp/precip are `monthlyGrid` + `forecastGrid` layers whose JSON carries `keyLen: 10` (day stamps in `months`/`monthsAvailable`, all frames inline, no year files) plus `init` (the model run, quoted in the toast). While a forecast layer is active, `uiMaxDate()` returns the last forecast day instead of `defaultDate()` — the date input's `max` and every stepper clamp go through it (`syncDateMax()` restores reality and pulls the date back when the last forecast layer is switched off), and `gibsTime` clamps any future date to `defaultDate()` so observation layers are never asked for tomorrow's tiles. Keep the toast copy consistent:
 name the layer in `<strong>` and state "the date selector doesn't change it".
 
 ### 5. UI conventions
@@ -252,7 +252,7 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
 | `CLAUDE.md` | Standing instructions + holistic record (this file — keep current) |
 | `README.md` | Quick start, repo layout, testing. Opens with a link to the live demo. Keep its counts (catalog size, `globe`/`amoc` flags, spec count) and feature list current — they drift silently. Hero image: `node scripts/screenshot.js` (see the header comment for the sandbox invocation); re-shoot it when the UI changes visibly |
 | `docs/PRIMER.pdf` | Background knowledge (GIBS, tiles, colormaps, product levels, climatologies). Rebuild: `python3 scripts/build_primer.py` |
-| `docs/CATALOG.md` + `data/catalog.json` | The 244-record open-data catalog (human + machine readable) |
+| `docs/CATALOG.md` + `data/catalog.json` | The 245-record open-data catalog (human + machine readable) |
 | `docs/COMBINING_DATASETS.md` | Which datasets measure the same quantity; sound combinations |
 | `docs/PIXEL_STATE.md` | Which catalog sources compose into a per-pixel state vector (state/memory/forcing/flow/future); the 0.25°-daily common grid argument; the ~25-source minimal composition |
 | `docs/SPECIES_AND_CLIMATE.md` | Why biodiversity data belongs in a climate app |
@@ -379,6 +379,15 @@ per request (16× less download than 1/12°, and we bin to 1° anyway), then
 ocean_surface.json). Resume-friendly: years already complete in
 data/currents_y// data/mld_y/ are skipped, per-request NetCDFs deleted after
 baking. Credentials were deleted after each use, per the user.
+`refresh_data.py gfs` (NO account — NOMADS grib filter + pygrib) bakes the
+10-day GFS forecast: newest COMPLETE cycle (probes for f240), 2 m temperature
+one frame per day, precipitation as 24-h sums of the 6-h APCP buckets grouped
+by UTC day (full days only; <1 mm/day nulls to transparent — beware Python's
+banker's rounding when thresholding). Forecasts age daily — re-run `gfs`
+whenever refreshing data. WeatherNext 2 (DeepMind) was evaluated 2026-07-29:
+every access path needs a Google account (Earth Engine / BigQuery Analytics
+Hub / GCS request form; anonymous reads 401/403), so GFS is the key-free
+baseline; the day-keyed machinery is ready if the user brings GCP credentials.
 
 **Analysis features:**
 - *Comparison*: side-by-side split (draggable divider) or computed per-pixel
@@ -428,7 +437,7 @@ imbalance itself, W/m² over time) — axis semantics spelled out on-panel
 after they confused a reader;
 trends; *AMOC* — RAPID 26.5°N overturning transport series + stats;
 *Sea level* — Frederikse 2020 budget components + NOAA altimetry; *Catalog* —
-searchable 244-dataset catalog with domain/AMOC/globe filters.
+searchable 245-dataset catalog with domain/AMOC/globe filters.
 
 **Data pipeline** (`scripts/refresh_data.py`): one function per snapshot —
 climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet

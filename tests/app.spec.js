@@ -1531,6 +1531,48 @@ test("GLORYS grids are month-keyed: the date's month picks the map", async ({ pa
   expect(old.v).toBeGreaterThan(0.25);                    // the Stream was there in 2005 too
 });
 
+test("GFS forecast layers open the date selector to the future", async ({ page }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  await page.check('#layer-list input[data-id="gfs-temp"]');
+  const toast = page.locator(".toast", { hasText: "forecast" });
+  await expect(toast).toContainText("future");
+  await expect(toast).toContainText("GFS run");
+  // once the grid loads, the max selectable date is the last forecast day
+  await page.waitForFunction((d) =>
+    document.getElementById("layer-date").max > d, today);
+  const info = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "gfs-temp");
+    const g = await E.loadGridMonth(cfg);
+    return { latest: g.latest, keyLen: g.keyLen,
+             max: document.getElementById("layer-date").max };
+  });
+  expect(info.keyLen).toBe(10);
+  expect(info.max).toBe(info.latest);
+  expect(info.latest > today).toBe(true);
+  // jump to the last forecast day: the frame resolves to that exact day and
+  // carries physical values; observation layers clamp back to real time
+  await page.fill("#layer-date", info.latest);
+  await page.dispatchEvent("#layer-date", "change");
+  const res = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "gfs-temp");
+    const g = await E.loadGridMonth(cfg);
+    const viirs = E.GIBS_LAYERS.find((l) => l.id === "viirs-truecolor");
+    return { m: E.resolveGridMonth(g), tropics: E.sampleGrid(g, -140, 0),
+             viirsDate: E.gibsTime(viirs, E.state.date) };
+  });
+  expect(res.m).toBe(info.latest);
+  expect(res.tropics).toBeGreaterThan(15);                // warm Pacific, any season
+  expect(res.viirsDate <= today).toBe(true);              // GIBS never asked for tomorrow
+  // switching the forecast off pulls the date back into the observed record
+  await page.uncheck('#layer-list input[data-id="gfs-temp"]');
+  await page.waitForFunction((d) => {
+    const el = document.getElementById("layer-date");
+    return el.max <= d && el.value <= d;
+  }, today);
+});
+
 test("layer opacity: labeled slider with a ½ toggle for overlaying fields", async ({ page }) => {
   // the motivating use: currents below, SST at 50% on top — do they line up?
   await page.check('#layer-list input[data-id="currents"]');
