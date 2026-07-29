@@ -160,10 +160,14 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/AMSR_Sea_Ice_Concentration_H.svg",
     doc: "https://nsidc.org/data/au_si12",
     layer: "AMSRU2_Sea_Ice_Concentration_12km",
+    // AMSR2 is aging: GIBS stops serving sea-ice tiles at 2025-09 (same
+    // instrument family as the soil-moisture layer). endTime clamps later
+    // dates to the last served one; clampToast explains on enable.
+    endTime: "2025-09-01",
     title: "Sea ice concentration (AMSR2)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2012-07-02", timed: true, on: false,
-    meta: "Passive-microwave, both poles (lags mission availability)",
+    meta: "Passive-microwave, both poles · tiles end 2025-09",
   },
   {
     id: "snow",
@@ -1953,6 +1957,18 @@ function maybeDatelessToast(id) {
   if (html) showToast(html, { key: id });
 }
 
+/* When a layer's tile archive ends before the selected date, the request
+ * clamps to the last served date (gibsTime). Say so on enable — a silently
+ * older map is better than a blank one, but only if the user knows. */
+function maybeClampToast(cfg) {
+  if (!cfg?.endTime || !cfg.timed || state.date <= cfg.endTime) return;
+  showToast(`<strong>${cfg.title}</strong>: its tile archive ends ` +
+    `<strong>${cfg.endTime.slice(0, 7)}</strong>, so you're seeing ` +
+    `<strong>${gibsTime(cfg, state.date)}</strong> — the last served date — ` +
+    `not ${state.date}. Set the date on or before ${cfg.endTime.slice(0, 7)} ` +
+    `to browse the archive.`, { key: `clamp-${cfg.id}` });
+}
+
 /* ----------------------------------------------------------- GIBS layer panel */
 
 /* Recording period, time interval and spatial granularity for every layer,
@@ -2031,7 +2047,7 @@ const LAYER_FACTS = {
          "marine heatwaves matter because that heat is stored, not radiated away; " +
          "comparing against the same calendar month removes the seasonal cycle, so " +
          "red really means anomalous." },
-  "seaice": { rec: "2012-07 → present, with gaps", int: "daily", sp: "12 km grid",
+  "seaice": { rec: "this map: 2012-07 → 2025-09 (last date GIBS serves; the AMSR2 instrument is aging)", int: "daily", sp: "12 km grid",
     sum: "The fraction of ocean covered by sea ice at both poles, sensed by passive " +
          "microwave (AMSR2), which sees through clouds and polar night. The " +
          "September Arctic minimum and its long-term decline are the field's " +
@@ -2130,6 +2146,7 @@ function buildLayerPanel() {
       addLayer(cfg);
       slider.style.display = "";
       maybeDatelessToast(id);
+      maybeClampToast(cfg);
     } else {
       removeLayer(id);
       slider.style.display = "none";
@@ -2234,11 +2251,21 @@ function buildLayerPanel() {
  * the globe over-promises. The link text matches exactly what appears. */
 const SCENES = {
   satellites: ["viirs-truecolor"],   // daily, follows the date
-  seaice: ["seaice"],                // daily, follows the date
+  // The one sanctioned TWO-layer scene: SST covers ocean, LST covers land —
+  // spatially disjoint, so they compose one seamless temperature field
+  // rather than hiding each other (the exception that proves the
+  // one-visual-field rule).
+  temperature: ["sst", "lst"],
+  seaice: ["seaice"],                // daily; tiles end 2025-09 (clamped + toast)
   currents: ["currents"],            // monthly GLORYS snapshot
   floats: ["toggle-argo"],           // the live Argo fleet
   vegetation: ["ndvi"],              // monthly, follows the date
   emissions: ["toggle-climatetrace"],// yearly, the date's year picks it
+};
+// A scene whose data lives somewhere specific flies the camera there — sea
+// ice is invisible from the default equatorial view.
+const SCENE_VIEWS = {
+  seaice: { lon: -35, lat: 78, height: 1.15e7 },   // the Arctic fills the view
 };
 function sceneBox(id) {
   return id.startsWith("toggle-")
@@ -2267,6 +2294,13 @@ function enableScene(key) {
       box.checked = true;
       box.dispatchEvent(new Event("change", { bubbles: true }));
     }
+  }
+  const v = SCENE_VIEWS[key];
+  if (v) {
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(v.lon, v.lat, v.height),
+      duration: 2.0,
+    });
   }
 }
 document.querySelectorAll(".tag-link").forEach((b) =>

@@ -70,7 +70,7 @@ A new layer is not done until it has **all** of:
    | Layer | Aggregate | Difference | Why |
    |---|---|---|---|
    | SST (MUR), SST anomalies | ✓ | ✓ | continuous, gap-free L4 |
-   | Sea ice (AMSR2) | ✓ | ✓ | continuous fraction |
+   | Sea ice (AMSR2) | ✓ | ✓ | continuous fraction · tiles end 2025-09 (endTime clamp) |
    | Snow cover (NDSI) | ✓ | ✓ | continuous %, clear-sky gaps fill by averaging |
    | Land surface temp (MODIS) | ✓ | ✓ | continuous K, clear-sky gaps fill by averaging |
    | Salinity (SMAP monthly) | ✓ | ✓ | continuous PSU; sample dates snap & dedupe to months |
@@ -169,13 +169,16 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
 - The header tagline's words are one-click SCENES (`.tag-link`,
   `SCENES` map in app.js) with two hard rules learned from feedback: ONE
-  layer per scene (stacked layers mostly hide each other — a test enforces
-  max length 1), and the link text names exactly what appears ("sea ice",
+  visual field per scene — single layers, except pairs with spatially
+  DISJOINT coverage that compose one field (temperature = SST ocean + LST
+  land; a test pins the exact exception) — and the link text names exactly
+  what appears ("sea ice",
   not "ice" that also drops a one-off glacier inventory; the inspector link
   is "inspect any point", not "forecasts to 2050"). Scenes REPLACE the
   current layers — the chips show the swap and undo it. Current set:
-  satellites · sea ice · ocean currents · floats · vegetation · emissions ·
-  inspect any point.
+  satellites · surface temperature · sea ice (Arctic flyTo — polar data is
+  invisible from the default view; SCENE_VIEWS) · ocean currents · floats ·
+  vegetation · emissions · inspect any point.
 - The Layers tab opens with a first-visit intro guide (`#intro-guide`,
   <details> open by default, dismissal persisted in localStorage) that
   documents the whole view: date/time stepping, Compare's two modes,
@@ -303,10 +306,15 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   whole ocean tints "light rain".
 - **Some GIBS archives end before today**: GRACE mascons stop at 2022-07,
   CERES EBAF at 2018-10, MEaSUREs SSH anomalies at 2019-01, AMSR2 soil
-  moisture at 2025-09 — the instruments/records continue, only the *tiles*
+  moisture AND sea ice at 2025-09 — the instruments/records continue, only the *tiles*
   stop. `endTime` in the layer cfg clamps requests to the last served date
   (so the layer shows its final state instead of blanking), and the hover
-  card must say "this map: … → <end> (last date GIBS serves)". 5-day products
+  card must say "this map: … → <end> (last date GIBS serves)", and
+  `maybeClampToast` fires on enable when the date sits past the end. When a
+  new layer lands, CHECK ITS EXTENT in the GetCapabilities — and scene tests
+  must assert rendered DATA (tile pixels for the effective date), not just
+  that a chip appeared: "sea ice" shipped blank because the test stopped at
+  the chip. 5-day products
   (`snap5d: [epoch1, epoch2]`) serve only exact epoch dates — floor to the
   nearest valid epoch; MEaSUREs SSH was re-anchored in 2017, hence two epochs.
 - **GIBS serves sub-daily TIME**: `TIME=YYYY-MM-DDTHH:MM:SSZ` returns distinct

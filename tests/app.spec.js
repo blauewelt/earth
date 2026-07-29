@@ -1642,6 +1642,36 @@ test("tagline scenes: one honest layer each, always replacing the last", async (
   expect(await has("Sea ice")).toBe(true);
   expect(await has("Sea surface temperature")).toBe(false);   // default swapped out
   expect(await has("Glaciers")).toBe(false);
+  // the clamp toast fires on enable (assert before it auto-dismisses)
+  await expect(page.locator("#toast-host .toast").last()).toContainText("archive ends 2025-09");
+  // the lesson of the blank-globe bug: a chip is not data. Assert that the
+  // EFFECTIVE date (endTime-clamped) actually serves a tile with ice pixels,
+  // that the clamp toast explains the older date, and that the camera flew
+  // to the Arctic where the data is visible.
+  const iceInfo = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "seaice");
+    const eff = E.gibsTime(cfg, E.state.date);
+    // north-polar tile at level 2 (rows start at the north): x=2,y=0 covers the Arctic
+    const url = `https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/${cfg.layer}` +
+      `/default/${eff}/${cfg.tms}/2/0/2.png`;
+    const img = await createImageBitmap(await (await fetch(url)).blob());
+    const c = document.createElement("canvas");
+    c.width = c.height = 512;
+    const x = c.getContext("2d");
+    x.drawImage(img, 0, 0);
+    const d = x.getImageData(0, 0, 512, 512).data;
+    let px = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 0) px++;
+    const cam = Cesium.Cartographic.fromCartesian(E.viewer.camera.position);
+    return { eff, px, camLat: Cesium.Math.toDegrees(cam.latitude) };
+  });
+  expect(iceInfo.eff).toBe("2025-09-01");            // clamped to the last served date
+  expect(iceInfo.px).toBeGreaterThan(5000);          // and that date has real ice pixels
+  await expect.poll(() => page.evaluate(() => {
+    const c = Cesium.Cartographic.fromCartesian(window.__earth.viewer.camera.position);
+    return Cesium.Math.toDegrees(c.latitude);
+  }), { timeout: 15000 }).toBeGreaterThan(55);       // flew to the Arctic
 
   // "floats": the Argo fleet alone
   await page.click('.tag-link[data-scene="floats"]');
@@ -1663,10 +1693,20 @@ test("tagline scenes: one honest layer each, always replacing the last", async (
   await expect(chips).toHaveCount(1);
   expect(await has("Facility emissions")).toBe(true);
 
-  // every SCENES entry is a single layer — the no-stacking rule, enforced
-  const sizes = await page.evaluate(() =>
-    Object.values(window.__earth.SCENES ?? {}).map((ids) => ids.length));
-  if (sizes.length) expect(Math.max(...sizes)).toBe(1);
+  // "surface temperature": the ONE sanctioned two-layer scene — SST (ocean)
+  // and LST (land) are spatially disjoint, composing one temperature field
+  await page.click('.tag-link[data-scene="temperature"]');
+  await expect(chips).toHaveCount(2);
+  expect(await has("Sea surface temperature")).toBe(true);
+  expect(await has("Land surface temperature")).toBe(true);
+  expect(await has("Facility emissions")).toBe(false);
+
+  // the no-stacking rule, enforced: single layers except the disjoint pair
+  const scenes = await page.evaluate(() => window.__earth.SCENES ?? {});
+  for (const [k, ids] of Object.entries(scenes)) {
+    if (k === "temperature") expect(ids).toEqual(["sst", "lst"]);
+    else expect(ids.length, `${k} single-layer`).toBe(1);
+  }
 
   // "inspect any point": arms the inspector and says what it will show
   await page.click('.tag-link[data-scene="inspect"]');
