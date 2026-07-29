@@ -478,11 +478,22 @@ const viewer = new Cesium.Viewer("cesiumContainer", {
 viewer.scene.globe.enableLighting = false;
 viewer.scene.skyAtmosphere.show = true;
 
-// The base Blue-Marble layer. A manual "Grayscale globe" toggle desaturates it so
-// coloured overlays (e.g. a blue/red difference) stand out instead of blue-on-blue.
+// The base Blue-Marble layer. Default mode is AUTO: the base desaturates
+// whenever a colormapped data layer (raster, grid, ensemble, delta/ratio) is
+// on — that's exactly when the map's own blues and greens fight the data
+// colours (blue-on-blue SST, green-on-green NDVI) — and returns to full
+// colour when the globe is bare or showing photographs (true colour, night
+// lights) or plain point markers. "Always colour"/"Always grayscale"
+// override; the choice persists.
 const baseImageryLayer = viewer.imageryLayers.get(0);
+function colormappedLayerActive() {
+  if (sstEnsembleLayer) return true;
+  return Object.values(state.layers).some((e) =>
+    e.layer && (e.cfg.colormap || e.cfg.grid));
+}
 function updateBaseAppearance() {
-  const gray = document.getElementById("toggle-grayscale")?.checked;
+  const mode = document.getElementById("base-mode")?.value || "auto";
+  const gray = mode === "gray" || (mode === "auto" && colormappedLayerActive());
   baseImageryLayer.saturation = gray ? 0.0 : 1.0;
   baseImageryLayer.brightness = gray ? 0.6 : 1.0;
 }
@@ -1332,7 +1343,16 @@ function markWindowPreset() {
 syncWindowLabel();
 markWindowPreset();
 
-document.getElementById("toggle-grayscale").addEventListener("change", updateBaseAppearance);
+// Base-globe mode: persisted; "auto" is the default and needs no storage
+const baseModeSel = document.getElementById("base-mode");
+try {
+  const savedBase = localStorage.getItem("baseMode");
+  if (savedBase) baseModeSel.value = savedBase;
+} catch { /* private mode */ }
+baseModeSel.addEventListener("change", () => {
+  try { localStorage.setItem("baseMode", baseModeSel.value); } catch { /* ok */ }
+  updateBaseAppearance();
+});
 
 // Note shown in computed-difference mode when a layer that can't be differenced
 // is active — either a non-continuous raster (precip/aerosol) or a point/snapshot

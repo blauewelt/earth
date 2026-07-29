@@ -135,7 +135,12 @@
         <button data-win="365" title="average the past year">365d</button>
       </div>
       <div class="control-row">
-        <label class="check-inline"><input type="checkbox" id="toggle-grayscale" /> Grayscale globe</label>
+        <label for="base-mode">Base globe</label>
+        <select id="base-mode" title="Auto greys the base whenever a colormapped data layer is on, so data colours never fight the map's own">
+          <option value="auto" selected>Auto — grey under data</option>
+          <option value="color">Always colour</option>
+          <option value="gray">Always grayscale</option>
+        </select>
       </div>
       <details class="hint-details" id="how-compare">
         <summary class="hint">How Compare &amp; Aggregate work (the fine print)</summary>

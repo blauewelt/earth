@@ -706,14 +706,25 @@ test("hover value probe waits for dwell; click reads immediately", async ({ page
   expect(typeof cls).toBe("string");
 });
 
-test("grayscale globe toggle desaturates the base map", async ({ page }) => {
+test("base globe auto-greys under colormapped data; overrides persist", async ({ page }) => {
   const sat = () => page.evaluate(() =>
     window.__earth.viewer.imageryLayers.get(0).saturation);
-  expect(await sat()).toBe(1.0);                 // full colour by default
-  await page.check("#toggle-grayscale");
-  expect(await sat()).toBe(0.0);                 // grayscale on
-  await page.uncheck("#toggle-grayscale");
-  expect(await sat()).toBe(1.0);                 // colour restored
+  // SST is on by default and colormapped → auto mode greys the base at open
+  expect(await sat()).toBe(0.0);
+  // remove the colormapped layer (stations are plain points) → colour returns
+  await page.uncheck('#layer-list input[data-id="sst"]');
+  expect(await sat()).toBe(1.0);
+  // a photographic layer (no colormap to fight) keeps the colour base
+  await page.check('#layer-list input[data-id="viirs-truecolor"]');
+  expect(await sat()).toBe(1.0);
+  // forced modes override auto in both directions
+  await page.selectOption("#base-mode", "gray");
+  expect(await sat()).toBe(0.0);
+  await page.selectOption("#base-mode", "color");
+  await page.check('#layer-list input[data-id="sst"]');
+  expect(await sat()).toBe(1.0);                 // colour forced despite SST
+  // the override persists for the next visit
+  expect(await page.evaluate(() => localStorage.getItem("baseMode"))).toBe("color");
 });
 
 test("glacier layer can colour by 2000-2020 melt rate", async ({ page }) => {

@@ -158,7 +158,7 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
 
 ### 5. UI conventions
 
-- Labels terse ("Grayscale globe", not a sentence). Explanations live in hover
+- Labels terse ("Base globe", not a sentence). Explanations live in hover
   cards and hints, not in control labels.
 - Layer metadata is uniform: title link, one-line `meta`, hover card.
 - The date selector has quick-step buttons (±1d/±1m/±1y/Today) with real
@@ -325,8 +325,11 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
 ## Part 3 · What has been built (holistic record)
 
 **The globe.** CesiumJS 1.133 app (no build step) on GitHub Pages. Base
-imagery Blue Marble; optional manual grayscale toggle (desaturates the base so
-coloured overlays and blue-negative deltas stay readable).
+imagery Blue Marble; the base AUTO-desaturates whenever a colormapped layer
+is active (blue-on-blue SST and green-on-green NDVI both fail otherwise) and
+returns to colour for bare/photographic views — `#base-mode` select with
+always-colour/always-grey overrides, persisted (`updateBaseAppearance`,
+`colormappedLayerActive`).
 
 **Raster layers (NASA GIBS WMTS, custom tiling scheme):** VIIRS true colour ·
 MUR SST 1 km (default) · MUR25 SST anomalies · JPL MEaSUREs SSH anomalies
