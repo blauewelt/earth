@@ -3594,6 +3594,54 @@ async function loadEei() {
     drawEeiChart();
     drawEeiRateChart();
   });
+  document.getElementById("eei-smooth").addEventListener("click", (e) => {
+    const n = Number(e.target.getAttribute?.("data-n"));
+    if (!n) return;
+    eeiSmooth = n;
+    for (const b of document.querySelectorAll("#eei-smooth button")) {
+      b.classList.toggle("active", Number(b.dataset.n) === n);
+    }
+    drawEeiChart();
+    drawEeiRateChart();
+  });
+}
+
+/* Smoothing for both Energy charts, chosen by the 1y/3y/5y/10y presets.
+ * Ledger: centred moving average over N years (1 = raw). Rate: the heating
+ * rate computed over the same window — a centred OLS slope for N ≥ 3, the
+ * plain year-over-year gain for N = 1 — in W/m² of the whole Earth
+ * (1e22 J/yr = 0.6213 W/m²). Computed client-side from the raw OHC series so
+ * the control is instant. */
+let eeiSmooth = 1;
+const EEI_W_PER = 0.6213;
+function movAvg(vals, n) {
+  if (n <= 1) return vals;
+  const h = Math.floor(n / 2);
+  return vals.map((_, i) => {
+    const a = Math.max(0, i - h), b = Math.min(vals.length, i + (n - h));
+    const win = vals.slice(a, b).filter((v) => v != null);
+    return win.length ? win.reduce((s, v) => s + v, 0) / win.length : null;
+  });
+}
+function rateSeries(years, vals, n) {
+  if (n <= 1) {
+    return vals.map((v, i) =>
+      i && v != null && vals[i - 1] != null ? (v - vals[i - 1]) * EEI_W_PER : null);
+  }
+  const h = Math.floor(n / 2);
+  return vals.map((_, i) => {
+    const a = Math.max(0, i - h), b = Math.min(vals.length, i + (n - h));
+    const xs = years.slice(a, b), ys = vals.slice(a, b);
+    if (xs.length < 3) return null;
+    const mx = xs.reduce((s, v) => s + v, 0) / xs.length;
+    const my = ys.reduce((s, v) => s + v, 0) / ys.length;
+    let num = 0, den = 0;
+    for (let k = 0; k < xs.length; k++) {
+      num += (xs[k] - mx) * (ys[k] - my);
+      den += (xs[k] - mx) ** 2;
+    }
+    return den ? (num / den) * EEI_W_PER : null;
+  });
 }
 
 /* ENSO + volcano annotations shared by both Energy charts. Year bands are
@@ -3659,6 +3707,8 @@ function annotationLines(yr) {
  * "does it vary?" question answers itself. */
 function drawEeiRateChart() {
   const d = eeiData;
+  const r700 = rateSeries(d.y700, d.ohc700, eeiSmooth);
+  const r2000 = rateSeries(d.y2000, d.ohc2000, eeiSmooth);
   const canvas = document.getElementById("eei-rate-chart");
   const wrap = canvas.parentElement;
   const cssW = wrap.clientWidth, cssH = 160;
@@ -3669,7 +3719,7 @@ function drawEeiRateChart() {
   const M = { l: 32, r: 8, t: 14, b: 18 };
   const W = cssW - M.l - M.r, H = cssH - M.t - M.b;
   const yr0 = d.y700[0], yr1 = d.y700[d.y700.length - 1];
-  const all = [...d.rate700, ...d.rate2000].filter((v) => v != null);
+  const all = [...r700, ...r2000].filter((v) => v != null);
   const v0 = Math.min(-0.25, Math.floor(Math.min(...all) * 4) / 4);
   const v1 = Math.ceil(Math.max(...all) * 4) / 4;
   const X = (yr) => M.l + ((yr - yr0) / (yr1 - yr0)) * W;
@@ -3701,8 +3751,8 @@ function drawEeiRateChart() {
     }
     drawVolcanoes(ctx, X, M, H, yr0, yr1, cssW);
     ctx.lineWidth = 1.8; ctx.lineJoin = "round";
-    ctx.strokeStyle = "#3987e5"; line(d.y700, d.rate700);
-    ctx.strokeStyle = "#d95926"; line(d.y2000, d.rate2000);
+    ctx.strokeStyle = "#3987e5"; line(d.y700, r700);
+    ctx.strokeStyle = "#d95926"; line(d.y2000, r2000);
     if (hoverYr != null) {
       ctx.strokeStyle = "#52514e"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(X(hoverYr), M.t); ctx.lineTo(X(hoverYr), M.t + H); ctx.stroke();
@@ -3714,10 +3764,10 @@ function drawEeiRateChart() {
     const rect = canvas.getBoundingClientRect();
     const yr = Math.round(yr0 + ((e.clientX - rect.left - M.l) / W) * (yr1 - yr0));
     const i7 = d.y700.indexOf(yr), i2 = d.y2000.indexOf(yr);
-    if (i7 < 0 || d.rate700[i7] == null) { tip.classList.add("hidden"); return; }
+    if (i7 < 0 || r700[i7] == null) { tip.classList.add("hidden"); return; }
     draw(yr);
-    const bits = [`<strong>${yr}</strong>`, `0–700 m: ${d.rate700[i7].toFixed(2)} W/m²`];
-    if (i2 >= 0 && d.rate2000[i2] != null) bits.push(`0–2000 m: ${d.rate2000[i2].toFixed(2)} W/m²`);
+    const bits = [`<strong>${yr}</strong>`, `0–700 m: ${r700[i7].toFixed(2)} W/m²`];
+    if (i2 >= 0 && r2000[i2] != null) bits.push(`0–2000 m: ${r2000[i2].toFixed(2)} W/m²`);
     bits.push(...annotationLines(yr));
     tip.innerHTML = bits.join("<br/>");
     tip.style.left = `${Math.min(e.clientX - rect.left + 12, cssW - 150)}px`;
@@ -3729,6 +3779,9 @@ function drawEeiRateChart() {
 
 function drawEeiChart() {
   const d = eeiData;
+  const s700 = movAvg(d.ohc700, eeiSmooth), s2000 = movAvg(d.ohc2000, eeiSmooth);
+  const r700 = rateSeries(d.y700, d.ohc700, Math.max(eeiSmooth, 1));
+  const r2000 = rateSeries(d.y2000, d.ohc2000, Math.max(eeiSmooth, 1));
   const canvas = document.getElementById("eei-chart");
   const wrap = canvas.parentElement;
   const cssW = wrap.clientWidth, cssH = 190;
@@ -3739,7 +3792,7 @@ function drawEeiChart() {
   const M = { l: 32, r: 8, t: 14, b: 18 };
   const W = cssW - M.l - M.r, H = cssH - M.t - M.b;
   const yr0 = d.y700[0], yr1 = d.y700[d.y700.length - 1];
-  const all = [...d.ohc700, ...d.ohc2000];
+  const all = [...s700, ...s2000].filter((v) => v != null);
   const v0 = Math.floor(Math.min(...all) / 5) * 5, v1 = Math.ceil(Math.max(...all) / 5) * 5;
   const X = (yr) => M.l + ((yr - yr0) / (yr1 - yr0)) * W;
   const Y = (v) => M.t + (1 - (v - v0) / (v1 - v0)) * H;
@@ -3767,8 +3820,8 @@ function drawEeiChart() {
     }
     drawVolcanoes(ctx, X, M, H, yr0, yr1, cssW);
     ctx.lineWidth = 1.8; ctx.lineJoin = "round";
-    ctx.strokeStyle = "#3987e5"; line(d.y700, d.ohc700);
-    ctx.strokeStyle = "#d95926"; line(d.y2000, d.ohc2000);
+    ctx.strokeStyle = "#3987e5"; line(d.y700, s700);
+    ctx.strokeStyle = "#d95926"; line(d.y2000, s2000);
     if (hoverYr != null) {
       ctx.strokeStyle = "#52514e"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(X(hoverYr), M.t); ctx.lineTo(X(hoverYr), M.t + H); ctx.stroke();
@@ -3782,9 +3835,9 @@ function drawEeiChart() {
     const i7 = d.y700.indexOf(yr), i2 = d.y2000.indexOf(yr);
     if (i7 < 0) { tip.classList.add("hidden"); return; }
     draw(yr);
-    const bits = [`<strong>${yr}</strong>`, `0–700 m: ${d.ohc700[i7].toFixed(1)}×10²² J`];
-    if (i2 >= 0) bits.push(`0–2000 m: ${d.ohc2000[i2].toFixed(1)}×10²² J`);
-    const rate = i2 >= 0 ? d.rate2000[i2] : d.rate700[i7];
+    const bits = [`<strong>${yr}</strong>`, `0–700 m: ${s700[i7].toFixed(1)}×10²² J`];
+    if (i2 >= 0 && s2000[i2] != null) bits.push(`0–2000 m: ${s2000[i2].toFixed(1)}×10²² J`);
+    const rate = i2 >= 0 && r2000[i2] != null ? r2000[i2] : r700[i7];
     if (rate != null) bits.push(`heating ≈ ${rate >= 0 ? "+" : ""}${rate.toFixed(2)} W/m²`);
     bits.push(...annotationLines(yr));
     tip.innerHTML = bits.join("<br/>");

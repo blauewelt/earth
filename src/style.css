@@ -85,7 +85,7 @@ nav { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
 }
 .date-steps button:hover { border-color: var(--accent, #3987e5); color: var(--accent, #3987e5); }
 #window-presets { margin-top: -4px; }
-#window-presets button.active {
+#window-presets button.active, #eei-smooth button.active {
   border-color: var(--accent, #3987e5); color: var(--accent, #3987e5);
 }
 

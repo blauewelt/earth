@@ -290,6 +290,15 @@
         <div class="stat" id="eei-zj"><div class="stat-value">–</div><div class="stat-sub">ZJ gained 0–2000 m</div></div>
       </div>
 
+      <div class="control-row date-steps" id="eei-smooth">
+        <label>Smooth</label>
+        <button data-n="1" class="active" title="raw yearly values; rate = each year's heat gain">1y</button>
+        <button data-n="3" title="3-year centred window">3y</button>
+        <button data-n="5" title="5-year centred window">5y</button>
+        <button data-n="10" title="10-year window">10y</button>
+        <span class="window-value">both charts</span>
+      </div>
+
       <h2>The ledger: heat accumulating in the ocean</h2>
       <div id="eei-chart-wrap">
         <canvas id="eei-chart"></canvas>
@@ -308,8 +317,9 @@
         <div id="eei-rate-tooltip" class="hidden"></div>
       </div>
       <div id="eei-rate-legend" class="sl-legend"></div>
-      <p class="hint"><strong>Y axis: watts per m² of the whole Earth's surface</strong> — the slope
-        of the curve above, computed as a centred 5-year trend of ocean heat gain, so yes: the
+      <p class="hint"><strong>Y axis: watts per m² of the whole Earth's surface</strong> — the slope of the
+        curve above, computed over the <em>Smooth</em> window you set at the top (at 1y it is
+        simply each year's heat gain; wider windows show the underlying trend), so yes: the
         imbalance varies over time. The wiggles are real climate variability, and the shading now
         names it: <span style="color:#e3b341">amber bands are El Niño years</span> (the ocean sheds
         heat to the atmosphere — the rate dips), <span style="color:#2fbfb4">teal bands are La

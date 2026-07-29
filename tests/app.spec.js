@@ -1528,6 +1528,19 @@ test("Energy tab shows Earth's energy imbalance with plausible numbers", async (
   expect(introTotal).toBe(tileTotal);
   expect(await page.textContent("#eei-intro-window")).toMatch(/^\d{4}–\d{4}$/);
   await expect(page.locator("#panel-energy")).toContainText("needs its date attached");
+  // smoothing presets: 1y default, switching to 10y visibly changes the rate line
+  await expect(page.locator('#eei-smooth button[data-n="1"]')).toHaveClass(/active/);
+  const hash = () => page.evaluate(() => {
+    const d = document.getElementById("eei-rate-chart").getContext("2d")
+      .getImageData(0, 0, 200, 200).data;
+    let h = 0;
+    for (let i = 0; i < d.length; i += 97) h = (h * 31 + d[i]) >>> 0;
+    return h;
+  });
+  const before = await hash();
+  await page.click('#eei-smooth button[data-n="10"]');
+  await expect(page.locator('#eei-smooth button[data-n="10"]')).toHaveClass(/active/);
+  expect(await hash()).not.toBe(before);
 });
 
 test("sidebar is resizable by dragging, persists, and resets on double-click", async ({ page }) => {
