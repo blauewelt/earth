@@ -1528,8 +1528,23 @@ test("Energy tab shows Earth's energy imbalance with plausible numbers", async (
   expect(introTotal).toBe(tileTotal);
   expect(await page.textContent("#eei-intro-window")).toMatch(/^\d{4}–\d{4}$/);
   await expect(page.locator("#panel-energy")).toContainText("needs its date attached");
-  // smoothing presets: 1y default, switching to 10y visibly changes the rate line
+  // slab decomposition: 0-700 nests inside 0-2000, difference = 700-2000 m
+  await expect(page.locator("#eei-legend")).toContainText("700–2000 m slab");
+  const slab = await page.evaluate(() => {
+    const E = window.__earth; // eeiData isn't exported; recompute from the file
+    return fetch("data/eei.json?v=2").then((r) => r.json()).then((d) => {
+      const i = d.y2000.length - 1;
+      const deep = d.ohc2000[i] - d.ohc700[d.y2000[i] - d.y700[0]];
+      return { deep, total: d.ohc2000[i], upper: d.ohc700[d.y2000[i] - d.y700[0]] };
+    });
+  });
+  expect(slab.deep).toBeGreaterThan(0);              // the deep layer HAS gained heat
+  expect(slab.deep).toBeLessThan(slab.total);        // …and is a proper subset of it
+  // smoothing: slider is source of truth, presets snap it; 1y default
   await expect(page.locator('#eei-smooth button[data-n="1"]')).toHaveClass(/active/);
+  await page.locator("#eei-smooth-slider").fill("7");
+  await expect(page.locator("#eei-smooth-value")).toHaveText("7 yr");
+  await expect(page.locator("#eei-smooth button.active")).toHaveCount(0);  // off-preset value
   const hash = () => page.evaluate(() => {
     const d = document.getElementById("eei-rate-chart").getContext("2d")
       .getImageData(0, 0, 200, 200).data;
@@ -1548,6 +1563,7 @@ test("Energy tab shows Earth's energy imbalance with plausible numbers", async (
   const ledgerBefore = await ledgerHash();
   await page.click('#eei-smooth button[data-n="10"]');
   await expect(page.locator('#eei-smooth button[data-n="10"]')).toHaveClass(/active/);
+  expect(await page.inputValue("#eei-smooth-slider")).toBe("10");  // button snapped the slider
   expect(await hash()).not.toBe(before);        // the rate chart follows the window...
   expect(await ledgerHash()).toBe(ledgerBefore); // ...the raw ledger does not
 });

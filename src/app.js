@@ -3568,6 +3568,12 @@ async function loadEei() {
   // ?v: cache-buster — GitHub Pages caches JSON for 10 min, and this file's
   // schema has grown (oni/volcanoes); a stale copy silently drops annotations
   eeiData = await (await fetch("data/eei.json?v=2")).json();
+  // 0-700 m is strictly contained in 0-2000 m, so their difference is the
+  // heat arriving in the 700-2000 m slab — the deep-penetration signal.
+  // (Below 2000 m there is no yearly series: the abyss is surveyed by ship
+  // once a decade; Purkey & Johnson put it near +0.06 W/m².)
+  eeiData.ohcDeep = eeiData.y2000.map((yr, i) =>
+    eeiData.ohc2000[i] - eeiData.ohc700[yr - eeiData.y700[0]]);
   document.querySelector("#eei-rate .stat-value").textContent = `+${eeiData.rate10.toFixed(2)}`;
   document.querySelector("#eei-total .stat-value").textContent = `+${eeiData.eei10.toFixed(2)}`;
   // the intro quotes the same numbers the tiles show, with their real window —
@@ -3580,10 +3586,12 @@ async function loadEei() {
   document.querySelector("#eei-zj .stat-sub").textContent = `ZJ gained 0–2000 m since ${eeiData.zj_since}`;
   document.getElementById("eei-legend").innerHTML =
     `<span style="color:#3987e5">━ 0–700 m (since 1955)</span>` +
-    `<span style="color:#d95926">━ 0–2000 m (since 2005)</span>`;
+    `<span style="color:#d95926">━ 0–2000 m (since 2005)</span>` +
+    `<span style="color:#a371f7">━ 700–2000 m slab (= difference)</span>`;
   document.getElementById("eei-rate-legend").innerHTML =
     `<span style="color:#3987e5">━ from 0–700 m OHC</span>` +
     `<span style="color:#d95926">━ from 0–2000 m OHC</span>` +
+    `<span style="color:#a371f7">━ 700–2000 m slab</span>` +
     `<span style="color:#e3b341">▮ El Niño (moderate+)</span>` +
     `<span style="color:#2fbfb4">▮ La Niña (moderate+)</span>` +
     `<span style="color:#8b949e">▲ eruption (Agung '63 · El Chichón '82 · Pinatubo '91 · Hunga Tonga '22)</span>`;
@@ -3594,15 +3602,24 @@ async function loadEei() {
     drawEeiChart();
     drawEeiRateChart();
   });
-  document.getElementById("eei-smooth").addEventListener("click", (e) => {
-    const n = Number(e.target.getAttribute?.("data-n"));
-    if (!n) return;
-    eeiSmooth = n;
+  // Slider is the source of truth (1–20 yr); the preset buttons just snap it,
+  // mirroring the main page's Aggregate slider + presets.
+  const slider = document.getElementById("eei-smooth-slider");
+  const applySmooth = () => {
+    eeiSmooth = Number(slider.value);
+    document.getElementById("eei-smooth-value").textContent = `${eeiSmooth} yr`;
     for (const b of document.querySelectorAll("#eei-smooth button")) {
-      b.classList.toggle("active", Number(b.dataset.n) === n);
+      b.classList.toggle("active", Number(b.dataset.n) === eeiSmooth);
     }
     drawEeiChart();
     drawEeiRateChart();
+  };
+  slider.addEventListener("input", applySmooth);
+  document.getElementById("eei-smooth").addEventListener("click", (e) => {
+    const n = Number(e.target.getAttribute?.("data-n"));
+    if (!n) return;
+    slider.value = String(n);
+    applySmooth();
   });
 }
 
@@ -3716,6 +3733,7 @@ function drawEeiRateChart() {
   const d = eeiData;
   const r700 = rateSeries(d.y700, d.ohc700, eeiSmooth);
   const r2000 = rateSeries(d.y2000, d.ohc2000, eeiSmooth);
+  const rDeep = rateSeries(d.y2000, d.ohcDeep, eeiSmooth);
   const canvas = document.getElementById("eei-rate-chart");
   const wrap = canvas.parentElement;
   const cssW = wrap.clientWidth, cssH = 160;
@@ -3726,7 +3744,7 @@ function drawEeiRateChart() {
   const M = { l: 32, r: 8, t: 14, b: 18 };
   const W = cssW - M.l - M.r, H = cssH - M.t - M.b;
   const yr0 = d.y700[0], yr1 = d.y700[d.y700.length - 1];
-  const all = [...r700, ...r2000].filter((v) => v != null);
+  const all = [...r700, ...r2000, ...rDeep].filter((v) => v != null);
   const v0 = Math.min(-0.25, Math.floor(Math.min(...all) * 4) / 4);
   const v1 = Math.ceil(Math.max(...all) * 4) / 4;
   const X = (yr) => M.l + ((yr - yr0) / (yr1 - yr0)) * W;
@@ -3760,6 +3778,7 @@ function drawEeiRateChart() {
     ctx.lineWidth = 1.8; ctx.lineJoin = "round";
     ctx.strokeStyle = "#3987e5"; line(d.y700, r700);
     ctx.strokeStyle = "#d95926"; line(d.y2000, r2000);
+    ctx.strokeStyle = "#a371f7"; line(d.y2000, rDeep);
     if (hoverYr != null) {
       ctx.strokeStyle = "#52514e"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(X(hoverYr), M.t); ctx.lineTo(X(hoverYr), M.t + H); ctx.stroke();
@@ -3775,6 +3794,7 @@ function drawEeiRateChart() {
     draw(yr);
     const bits = [`<strong>${yr}</strong>`, `0–700 m: ${r700[i7].toFixed(2)} W/m²`];
     if (i2 >= 0 && r2000[i2] != null) bits.push(`0–2000 m: ${r2000[i2].toFixed(2)} W/m²`);
+    if (i2 >= 0 && rDeep[i2] != null) bits.push(`700–2000 m slab: ${rDeep[i2].toFixed(2)} W/m²`);
     bits.push(...annotationLines(yr));
     tip.innerHTML = bits.join("<br/>");
     tip.style.left = `${Math.min(e.clientX - rect.left + 12, cssW - 150)}px`;
@@ -3788,9 +3808,10 @@ function drawEeiChart() {
   const d = eeiData;
   // The ledger always draws RAW yearly values: a cumulative total is already
   // an integral — smoothing applies to its derivative (the rate chart below).
-  const s700 = d.ohc700, s2000 = d.ohc2000;
+  const s700 = d.ohc700, s2000 = d.ohc2000, sDeep = d.ohcDeep;
   const r700 = rateSeries(d.y700, d.ohc700, Math.max(eeiSmooth, 1));
   const r2000 = rateSeries(d.y2000, d.ohc2000, Math.max(eeiSmooth, 1));
+  const rDeep = rateSeries(d.y2000, d.ohcDeep, Math.max(eeiSmooth, 1));
   const canvas = document.getElementById("eei-chart");
   const wrap = canvas.parentElement;
   const cssW = wrap.clientWidth, cssH = 190;
@@ -3801,7 +3822,7 @@ function drawEeiChart() {
   const M = { l: 32, r: 8, t: 14, b: 18 };
   const W = cssW - M.l - M.r, H = cssH - M.t - M.b;
   const yr0 = d.y700[0], yr1 = d.y700[d.y700.length - 1];
-  const all = [...s700, ...s2000].filter((v) => v != null);
+  const all = [...s700, ...s2000, ...sDeep].filter((v) => v != null);
   const v0 = Math.floor(Math.min(...all) / 5) * 5, v1 = Math.ceil(Math.max(...all) / 5) * 5;
   const X = (yr) => M.l + ((yr - yr0) / (yr1 - yr0)) * W;
   const Y = (v) => M.t + (1 - (v - v0) / (v1 - v0)) * H;
@@ -3831,6 +3852,7 @@ function drawEeiChart() {
     ctx.lineWidth = 1.8; ctx.lineJoin = "round";
     ctx.strokeStyle = "#3987e5"; line(d.y700, s700);
     ctx.strokeStyle = "#d95926"; line(d.y2000, s2000);
+    ctx.strokeStyle = "#a371f7"; line(d.y2000, sDeep);
     if (hoverYr != null) {
       ctx.strokeStyle = "#52514e"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(X(hoverYr), M.t); ctx.lineTo(X(hoverYr), M.t + H); ctx.stroke();
@@ -3846,6 +3868,7 @@ function drawEeiChart() {
     draw(yr);
     const bits = [`<strong>${yr}</strong>`, `0–700 m: ${s700[i7].toFixed(1)}×10²² J`];
     if (i2 >= 0 && s2000[i2] != null) bits.push(`0–2000 m: ${s2000[i2].toFixed(1)}×10²² J`);
+    if (i2 >= 0 && sDeep[i2] != null) bits.push(`700–2000 m slab: ${sDeep[i2].toFixed(1)}×10²² J`);
     const rate = i2 >= 0 && r2000[i2] != null ? r2000[i2] : r700[i7];
     if (rate != null) bits.push(`heating ≈ ${rate >= 0 ? "+" : ""}${rate.toFixed(2)} W/m²`);
     bits.push(...annotationLines(yr));

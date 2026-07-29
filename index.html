@@ -301,16 +301,28 @@
         the ocean, so this curve is the imbalance's bank statement: its <em>slope</em> is the
         imbalance itself. A steady imbalance would be a straight line; the visible steepening means
         the imbalance has been growing. Always shown raw — a running total needs no smoothing; the
-        <em>Smooth</em> control below applies to its slope. Hover for yearly values.</p>
+        <em>Smooth</em> control below applies to its slope. The depth layers nest:
+        <span style="color:#3987e5">0–700 m</span> is contained in
+        <span style="color:#d95926">0–2000 m</span>, so their difference — the
+        <span style="color:#a371f7">700–2000 m slab</span> — shows heat arriving in the deep
+        layer, a growing share of the total: warming is reaching ever deeper. Below 2000 m no
+        yearly series exists (ships survey the abyss roughly once a decade); those repeat
+        surveys add another ~5–10 % (≈0.06 W/m², Purkey &amp; Johnson), which is part of why the
+        total imbalance exceeds the 0–2000 m number. Hover for yearly values.</p>
 
       <h2>The imbalance itself, over time</h2>
+      <div class="control-row">
+        <label for="eei-smooth-slider">Smooth</label>
+        <input type="range" id="eei-smooth-slider" min="1" max="20" step="1" value="1" />
+        <span id="eei-smooth-value" class="window-value">1 yr</span>
+      </div>
+      <!-- presets snap the slider, same pattern as the Aggregate control -->
       <div class="control-row date-steps" id="eei-smooth">
-        <label>Smooth</label>
         <button data-n="1" class="active" title="each year's raw heat gain">1y</button>
         <button data-n="3" title="3-year centred trend">3y</button>
         <button data-n="5" title="5-year centred trend">5y</button>
         <button data-n="10" title="10-year trend">10y</button>
-        <span class="window-value">trend window</span>
+        <button data-n="20" title="20-year trend — the long-term signal alone">20y</button>
       </div>
       <div id="eei-rate-chart-wrap">
         <canvas id="eei-rate-chart"></canvas>
