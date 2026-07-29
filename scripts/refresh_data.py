@@ -589,6 +589,29 @@ def eei():
     y7, v7, e7 = series("h22-w0-700m.dat")
     y2, v2, e2 = series("h22-w0-2000m.dat")
     r10 = slope(y2[-10:], v2[-10:]) * W_PER               # headline: last decade
+
+    # ENSO state per year from NOAA CPC's ONI. Convention: a calendar year is
+    # labelled by its DJF value (the season ENSO peaks in — DJF 1998 = the
+    # 97/98 El Nino, marking 1998, the year the world felt it). >=+0.5 El
+    # Nino, <=-0.5 La Nina. During El Nino the ocean SHEDS heat to the
+    # atmosphere, so OHC growth dips; La Nina banks heat — the rate chart's
+    # wiggles line up with these bands.
+    req = urllib.request.Request(
+        "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt", headers=UA)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        oni_txt = r.read().decode()
+    oni = {}
+    for ln in oni_txt.splitlines():
+        p = ln.split()
+        if len(p) == 4 and p[0] == "DJF":
+            yr = int(p[1])
+            if yr >= y7[0]:
+                oni[yr] = float(p[3])
+    # Major stratospheric eruptions with a global climate signal. Aerosols
+    # dim sunlight and cool for ~2 years; Hunga Tonga 2022 is the oddball —
+    # mostly water vapour, a slight WARMING agent.
+    volcanoes = [{"y": 1963, "n": "Agung"}, {"y": 1982, "n": "El Chichón"},
+                 {"y": 1991, "n": "Pinatubo"}, {"y": 2022, "n": "Hunga Tonga"}]
     payload = {
         "source": "NOAA NCEI Global Ocean Heat Content (Levitus et al.), yearly, world",
         "doc": "https://www.ncei.noaa.gov/products/ocean-heat-salt-sea-level",
@@ -602,6 +625,8 @@ def eei():
         "eei10": round(r10 / 0.9, 3),                     # implied total (ocean ~90%)
         "zj_since": y2[0],
         "zj_gained": round((v2[-1] - v2[0]) * 10, 1),     # 1e22 J -> ZJ
+        "oni": oni,                                       # year -> DJF ONI (degC)
+        "volcanoes": volcanoes,
     }
     with open(os.path.join(DATA, "eei.json"), "w") as f:
         json.dump(payload, f, separators=(",", ":"))

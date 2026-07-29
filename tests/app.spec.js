@@ -1505,6 +1505,22 @@ test("Energy tab shows Earth's energy imbalance with plausible numbers", async (
   await expect(page.locator("#panel-energy")).toContainText("90 %");
   await expect(page.locator("#panel-energy")).toContainText("Y axis: accumulated heat");
   await expect(page.locator("#panel-energy")).toContainText("watts per m²");
+  // ENSO/volcano annotations: legend names them, bands paint red AND blue
+  await expect(page.locator("#eei-rate-legend")).toContainText("El Niño");
+  await expect(page.locator("#eei-rate-legend")).toContainText("Pinatubo");
+  const tint = await page.evaluate(() => {
+    const c = document.getElementById("eei-rate-chart");
+    const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    let red = 0, blue = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      if (d[i] > d[i + 2] + 8) red++;
+      else if (d[i + 2] > d[i] + 8) blue++;
+    }
+    return { red, blue };
+  });
+  expect(tint.red).toBeGreaterThan(500);
+  expect(tint.blue).toBeGreaterThan(500);
 });
 
 test("sidebar is resizable by dragging, persists, and resets on double-click", async ({ page }) => {

@@ -3575,7 +3575,10 @@ async function loadEei() {
     `<span style="color:#d95926">━ 0–2000 m (since 2005)</span>`;
   document.getElementById("eei-rate-legend").innerHTML =
     `<span style="color:#3987e5">━ from 0–700 m OHC</span>` +
-    `<span style="color:#d95926">━ from 0–2000 m OHC</span>`;
+    `<span style="color:#d95926">━ from 0–2000 m OHC</span>` +
+    `<span style="color:#e6635a">▮ El Niño yr</span>` +
+    `<span style="color:#6a9bef">▮ La Niña yr</span>` +
+    `<span style="color:#8b949e">▲ eruption (Agung '63 · El Chichón '82 · Pinatubo '91 · Hunga Tonga '22)</span>`;
   drawEeiChart();
   drawEeiRateChart();
   window.addEventListener("resize", () => {
@@ -3583,6 +3586,43 @@ async function loadEei() {
     drawEeiChart();
     drawEeiRateChart();
   });
+}
+
+/* ENSO + volcano annotations shared by both Energy charts. Year bands are
+ * tinted by DJF ONI (deeper colour = stronger event); eruptions get a small
+ * triangle at the top of the plot (names live in the legend and tooltip). */
+function ensoOf(yr) {
+  const v = eeiData?.oni?.[String(yr)];
+  return v == null ? null : v;
+}
+function drawEnsoBands(ctx, X, M, H, yr0, yr1) {
+  for (let yr = yr0; yr <= yr1; yr++) {
+    const v = ensoOf(yr);
+    if (v == null || Math.abs(v) < 0.5) continue;
+    const a = Math.min(0.20, 0.05 + 0.05 * Math.abs(v));
+    ctx.fillStyle = v > 0 ? `rgba(230,59,46,${a})` : `rgba(55,120,235,${a})`;
+    ctx.fillRect(X(yr - 0.5), M.t, X(yr + 0.5) - X(yr - 0.5), H);
+  }
+}
+function drawVolcanoes(ctx, X, M, yr0, yr1) {
+  ctx.fillStyle = "#8b949e";
+  for (const v of eeiData?.volcanoes || []) {
+    if (v.y < yr0 || v.y > yr1) continue;
+    const x = X(v.y);
+    ctx.beginPath();
+    ctx.moveTo(x, M.t + 2); ctx.lineTo(x - 4, M.t + 9); ctx.lineTo(x + 4, M.t + 9);
+    ctx.closePath(); ctx.fill();
+  }
+}
+function annotationLines(yr) {
+  const out = [];
+  const v = ensoOf(yr);
+  if (v != null && Math.abs(v) >= 0.5) {
+    out.push(`${v > 0 ? "El Niño" : "La Niña"} (ONI ${v > 0 ? "+" : ""}${v.toFixed(1)})`);
+  }
+  const volc = (eeiData?.volcanoes || []).find((x) => x.y === yr);
+  if (volc) out.push(`▲ ${volc.n} eruption`);
+  return out;
 }
 
 /* The imbalance itself over time: the rolling 5-yr heating rate in W/m² of
@@ -3617,6 +3657,7 @@ function drawEeiRateChart() {
   const draw = (hoverYr) => {
     ctx.clearRect(0, 0, cssW, cssH);
     ctx.font = "10px system-ui, sans-serif";
+    drawEnsoBands(ctx, X, M, H, yr0, yr1);
     for (let v = v0; v <= v1 + 1e-9; v += 0.25) {
       ctx.strokeStyle = Math.abs(v) < 1e-9 ? "#4a4a47" : "#2c2c2a"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(M.l, Y(v)); ctx.lineTo(cssW - M.r, Y(v)); ctx.stroke();
@@ -3629,6 +3670,7 @@ function drawEeiRateChart() {
     for (let yr = 1960; yr <= yr1; yr += 20) {
       ctx.fillText(String(yr), X(yr), M.t + H + 5);
     }
+    drawVolcanoes(ctx, X, M, yr0, yr1);
     ctx.lineWidth = 1.8; ctx.lineJoin = "round";
     ctx.strokeStyle = "#3987e5"; line(d.y700, d.rate700);
     ctx.strokeStyle = "#d95926"; line(d.y2000, d.rate2000);
@@ -3647,6 +3689,7 @@ function drawEeiRateChart() {
     draw(yr);
     const bits = [`<strong>${yr}</strong>`, `0–700 m: ${d.rate700[i7].toFixed(2)} W/m²`];
     if (i2 >= 0 && d.rate2000[i2] != null) bits.push(`0–2000 m: ${d.rate2000[i2].toFixed(2)} W/m²`);
+    bits.push(...annotationLines(yr));
     tip.innerHTML = bits.join("<br/>");
     tip.style.left = `${Math.min(e.clientX - rect.left + 12, cssW - 150)}px`;
     tip.style.top = "8px";
@@ -3679,6 +3722,7 @@ function drawEeiChart() {
   const draw = (hoverYr) => {
     ctx.clearRect(0, 0, cssW, cssH);
     ctx.font = "10px system-ui, sans-serif";
+    drawEnsoBands(ctx, X, M, H, yr0, yr1);
     for (let v = v0; v <= v1; v += 10) {
       ctx.strokeStyle = v === 0 ? "#4a4a47" : "#2c2c2a"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(M.l, Y(v)); ctx.lineTo(cssW - M.r, Y(v)); ctx.stroke();
@@ -3692,6 +3736,7 @@ function drawEeiChart() {
     for (let yr = 1960; yr <= yr1; yr += 20) {
       ctx.fillStyle = "#898781"; ctx.fillText(String(yr), X(yr), M.t + H + 5);
     }
+    drawVolcanoes(ctx, X, M, yr0, yr1);
     ctx.lineWidth = 1.8; ctx.lineJoin = "round";
     ctx.strokeStyle = "#3987e5"; line(d.y700, d.ohc700);
     ctx.strokeStyle = "#d95926"; line(d.y2000, d.ohc2000);
@@ -3712,6 +3757,7 @@ function drawEeiChart() {
     if (i2 >= 0) bits.push(`0–2000 m: ${d.ohc2000[i2].toFixed(1)}×10²² J`);
     const rate = i2 >= 0 ? d.rate2000[i2] : d.rate700[i7];
     if (rate != null) bits.push(`heating ≈ ${rate >= 0 ? "+" : ""}${rate.toFixed(2)} W/m²`);
+    bits.push(...annotationLines(yr));
     tip.innerHTML = bits.join("<br/>");
     tip.style.left = `${Math.min(e.clientX - rect.left + 12, cssW - 150)}px`;
     tip.style.top = "8px";

@@ -354,4 +354,20 @@ test.describe("eei.json (ocean heat / energy imbalance)", () => {
     const recent = e.rate2000.slice(-8).filter((v) => v != null);
     expect(recent.every((v) => v > 0)).toBe(true);
   });
+
+  test("ENSO and volcano annotations are present and sane", () => {
+    // the canonical events classify correctly from NOAA's ONI (DJF convention)
+    expect(e.oni["1998"]).toBeGreaterThan(1.5);        // 97/98 El Niño
+    expect(e.oni["2016"]).toBeGreaterThan(1.5);        // 15/16 El Niño
+    expect(e.oni["2011"]).toBeLessThan(-0.5);          // 10/11 La Niña
+    // a balanced mix of events over the record, not a parser artefact
+    const vals = Object.values(e.oni);
+    const nino = vals.filter((v) => v >= 0.5).length;
+    const nina = vals.filter((v) => v <= -0.5).length;
+    expect(nino).toBeGreaterThan(15);
+    expect(nina).toBeGreaterThan(15);
+    expect(nino + nina).toBeLessThan(vals.length);     // neutral years exist
+    expect(e.volcanoes.map((v) => v.n)).toContain("Pinatubo");
+    expect(e.volcanoes.find((v) => v.n === "Pinatubo").y).toBe(1991);
+  });
 });
