@@ -1497,7 +1497,7 @@ test("Temp tab shows Earth's energy imbalance with plausible numbers", async ({ 
 });
 
 test("sidebar is resizable by dragging, persists, and resets on double-click", async ({ page }) => {
-  const width = () => page.evaluate(() => document.getElementById("sidebar").clientWidth);
+  const width = () => page.evaluate(() => document.getElementById("sidebar").offsetWidth);
   expect(await width()).toBe(380);                     // new, wider default
   // drag the handle 120px to the right
   const h = await page.locator("#sidebar-resize").boundingBox();
