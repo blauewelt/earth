@@ -346,7 +346,7 @@ const GIBS_LAYERS = [
   {
     id: "currents",
     grid: true, gridFile: "data/currents.json", snapshotGrid: true,
-    ramp: "precip", vmin: 0, vmax: 1.5, units: "m/s", maxLevel: 6,
+    ramp: "speed", vmin: 0, vmax: 1.5, units: "m/s", maxLevel: 6,
     doc: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_001_030/description",
     title: "Surface current speed (GLORYS)",
     meta: "Monthly-mean ocean current speed — the Gulf Stream drawn by physics",
@@ -1053,6 +1053,12 @@ const RAMPS = {
   // low → high: white → teal → blue → indigo → violet (wetter = deeper)
   precip: [[0, 247, 252, 253], [0.15, 204, 236, 230], [0.35, 123, 204, 196],
            [0.55, 67, 162, 202], [0.75, 37, 78, 155], [1, 84, 39, 143]],
+  // current speed on a dark globe: still water is deep navy (reads as ocean),
+  // fast water glows cyan → white-hot — the Gulf Stream draws itself. The old
+  // precip ramp started at white, which painted the whole slow ocean
+  // near-white and washed the globe out.
+  speed: [[0, 12, 24, 48], [0.18, 20, 62, 118], [0.42, 28, 132, 186],
+          [0.68, 90, 220, 210], [1, 250, 255, 220]],
   // diverging anomaly: blue → near-invisible dark slate → red, matching the
   // app's blue=cooler/less, red=warmer/more convention; the dark middle lets
   // near-zero cells fade into the globe instead of painting it white
@@ -2203,14 +2209,16 @@ function buildLayerPanel() {
  * visible and reversible). Ids prefixed "toggle-" are static checkboxes;
  * bare ids are GIBS_LAYERS entries in #layer-list. "forecasts" is different:
  * nothing to draw — it arms the pixel inspector and says what to do next. */
+/* ONE layer per scene, deliberately: stacked layers mostly hide each other,
+ * and a scene named "sea ice" that also drops a one-off glacier inventory on
+ * the globe over-promises. The link text matches exactly what appears. */
 const SCENES = {
-  satellites: ["viirs-truecolor"],
-  ocean: ["currents", "argo-t300"],
-  // sea ice + snow are both timed (daily) and spatially separate (polar
-  // ocean vs land), so they layer cleanly; glaciers add the inventory points.
-  ice: ["seaice", "snow", "toggle-glaciers"],
-  life: ["ndvi", "toggle-gbif"],
-  emissions: ["toggle-climatetrace", "aod"],
+  satellites: ["viirs-truecolor"],   // daily, follows the date
+  seaice: ["seaice"],                // daily, follows the date
+  currents: ["currents"],            // monthly GLORYS snapshot
+  floats: ["toggle-argo"],           // the live Argo fleet
+  vegetation: ["ndvi"],              // monthly, follows the date
+  emissions: ["toggle-climatetrace"],// yearly, the date's year picks it
 };
 function sceneBox(id) {
   return id.startsWith("toggle-")
@@ -2218,7 +2226,7 @@ function sceneBox(id) {
     : document.querySelector(`#layer-list input[data-id="${id}"]`);
 }
 function enableScene(key) {
-  if (key === "forecasts") {
+  if (key === "inspect") {
     const box = document.getElementById("toggle-pixel");
     if (box && !box.checked) {
       box.checked = true;
@@ -4118,6 +4126,7 @@ window.__earth = {
   showPixelState,
   pixelInspectorEngaged,
   oceanColumnAt,
+  SCENES,
   loadGlaciers,
   get glacierCollection() { return glacierCollection; },
   get glacierData() { return glacierData; },

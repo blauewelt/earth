@@ -1619,28 +1619,50 @@ test("sidebar is resizable by dragging, persists, and resets on double-click", a
   expect(Math.round(left)).toBe(380);
 });
 
-test("tagline words are one-click scenes that swap the globe's layers", async ({ page }) => {
-  test.setTimeout(150000);  // the glacier scene loads the 7.4 MB inventory
+test("tagline scenes: one honest layer each, always replacing the last", async ({ page }) => {
+  test.setTimeout(180000);
+  const chips = page.locator("#active-layers .chip:not(.chip-clear)");
   const labels = () => page.locator("#active-layers .chip-label").allTextContents();
   const has = async (frag) => (await labels()).some((s) => s.includes(frag));
-  // "ice": swaps the default SST scene for sea ice + glaciers
-  await page.click('.tag-link[data-scene="ice"]');
-  await expect(page.locator("#active-layers .chip", { hasText: "Sea ice" })).toBeVisible();
-  await expect(page.locator("#active-layers .chip", { hasText: "Glaciers" }))
-    .toBeVisible({ timeout: 60000 });
-  expect(await has("Sea surface temperature")).toBe(false);   // swapped, not piled up
-  // "life": replaces ice with vegetation + biodiversity
-  await page.click('.tag-link[data-scene="life"]');
-  await expect(page.locator("#active-layers .chip", { hasText: "Vegetation" })).toBeVisible();
-  await expect(page.locator("#active-layers .chip", { hasText: "Biodiversity" })).toBeVisible();
+
+  // "sea ice": exactly ONE chip — no glacier inventory smuggled in
+  await page.click('.tag-link[data-scene="seaice"]');
+  await expect(chips).toHaveCount(1);
+  expect(await has("Sea ice")).toBe(true);
+  expect(await has("Sea surface temperature")).toBe(false);   // default swapped out
+  expect(await has("Glaciers")).toBe(false);
+
+  // "floats": the Argo fleet alone
+  await page.click('.tag-link[data-scene="floats"]');
+  await expect(chips).toHaveCount(1);
+  expect(await has("Argo floats")).toBe(true);
   expect(await has("Sea ice")).toBe(false);
-  // "forecasts": arms the inspector and says what to do next
-  await page.click('.tag-link[data-scene="forecasts"]');
+  await expect
+    .poll(() => page.evaluate(() => window.__earth.pointLayers.argo?.collection.length ?? 0))
+    .toBeGreaterThan(2000);
+
+  // "vegetation": NDVI alone (no GBIF stacked underneath)
+  await page.click('.tag-link[data-scene="vegetation"]');
+  await expect(chips).toHaveCount(1);
+  expect(await has("Vegetation")).toBe(true);
+  expect(await has("Biodiversity")).toBe(false);
+
+  // "emissions": the facilities alone (no AOD underneath)
+  await page.click('.tag-link[data-scene="emissions"]');
+  await expect(chips).toHaveCount(1);
+  expect(await has("Facility emissions")).toBe(true);
+
+  // every SCENES entry is a single layer — the no-stacking rule, enforced
+  const sizes = await page.evaluate(() =>
+    Object.values(window.__earth.SCENES ?? {}).map((ids) => ids.length));
+  if (sizes.length) expect(Math.max(...sizes)).toBe(1);
+
+  // "inspect any point": arms the inspector and says what it will show
+  await page.click('.tag-link[data-scene="inspect"]');
   await expect(page.locator("#toggle-pixel")).toBeChecked();
   expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(true);
   await expect(page.locator("#toast-host .toast").last()).toContainText("2045–49");
 });
-
 test("Climate TRACE is year-aware: the date's year picks the inventory", async ({ page }) => {
   // start on a known in-range year
   await page.evaluate(() => {

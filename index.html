@@ -15,14 +15,17 @@
   <div id="sidebar">
     <header>
       <h1>earth <span class="h1-sub">— the open climate record, live</span></h1>
-      <!-- Each word is a scene shortcut: one click swaps the globe to a
-           curated layer set for that theme (chips show what changed). -->
-      <p class="tagline"><button class="tag-link" data-scene="satellites" title="Show today's true-colour satellite mosaic">satellites</button> ·
-        <button class="tag-link" data-scene="ocean" title="Show ocean currents + subsurface heat anomalies">the ocean interior</button> ·
-        <button class="tag-link" data-scene="ice" title="Show sea ice + snow cover (both follow the date) + all 274k glaciers">ice</button> ·
-        <button class="tag-link" data-scene="life" title="Show vegetation + biodiversity occurrences">life</button> ·
-        <button class="tag-link" data-scene="emissions" title="Show the top-1000 emitters + aerosol haze">emissions</button> ·
-        <button class="tag-link" data-scene="forecasts" title="Arm the pixel inspector: click any point for its 2050 outlook">forecasts to 2050</button>
+      <!-- Each word is a scene shortcut: ONE meaningful layer per link (layers
+           stacked on top of each other mostly hide each other), named for
+           exactly what it shows — no over-promising. Clicking replaces the
+           current layers; the chips on the globe undo it. -->
+      <p class="tagline"><button class="tag-link" data-scene="satellites" title="Today's true-colour satellite mosaic — follows the date">satellites</button> ·
+        <button class="tag-link" data-scene="seaice" title="Daily sea-ice concentration at both poles — follows the date">sea ice</button> ·
+        <button class="tag-link" data-scene="currents" title="Monthly-mean surface current speed (GLORYS) — the Gulf Stream drawn by physics">ocean currents</button> ·
+        <button class="tag-link" data-scene="floats" title="The ~3,800 Argo floats profiling the ocean right now">floats</button> ·
+        <button class="tag-link" data-scene="vegetation" title="Monthly vegetation greenness (NDVI) — follows the date">vegetation</button> ·
+        <button class="tag-link" data-scene="emissions" title="The top-1,000 emitting facilities — the date's year picks the inventory (2021–2025)">emissions</button> ·
+        <button class="tag-link" data-scene="inspect" title="Then click anywhere: live weather, all fields, ocean column, 2050 outlook for that point">inspect any point</button>
         — composed on one globe, from public data only</p>
       <nav>
         <button id="tab-layers" class="tab active">Layers</button>
@@ -46,9 +49,9 @@
           global temperature, Earth's energy imbalance, the AMOC and sea level, and a searchable
           catalog of 244 open datasets. Public data only; no keys, no accounts, no server.</p>
         <p class="hint">In a hurry? The words in the tagline above are <strong>one-click
-          scenes</strong> — "ice" puts sea ice and all 274k glaciers on the globe, "life"
-          vegetation and biodiversity, and so on. The chips that appear on the globe undo any of
-          it.</p>
+          scenes</strong> — "sea ice" puts the daily sea-ice field on the globe, "floats" the
+          live Argo fleet, and so on. Each shows exactly one layer (and replaces whatever was
+          on); the chips that appear on the globe undo it.</p>
         <p class="hint"><strong>This Layers view</strong> is the globe's control room:</p>
         <ul class="hint">
           <li><strong>Date</strong> — every timed layer follows it (±1d/1m/1y steps; a ±30m
