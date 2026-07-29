@@ -290,15 +290,6 @@
         <div class="stat" id="eei-zj"><div class="stat-value">–</div><div class="stat-sub">ZJ gained 0–2000 m</div></div>
       </div>
 
-      <div class="control-row date-steps" id="eei-smooth">
-        <label>Smooth</label>
-        <button data-n="1" class="active" title="raw yearly values; rate = each year's heat gain">1y</button>
-        <button data-n="3" title="3-year centred window">3y</button>
-        <button data-n="5" title="5-year centred window">5y</button>
-        <button data-n="10" title="10-year window">10y</button>
-        <span class="window-value">both charts</span>
-      </div>
-
       <h2>The ledger: heat accumulating in the ocean</h2>
       <div id="eei-chart-wrap">
         <canvas id="eei-chart"></canvas>
@@ -309,26 +300,42 @@
         to a mid-record baseline — not a rate. About 90 % of the planet's excess energy ends up in
         the ocean, so this curve is the imbalance's bank statement: its <em>slope</em> is the
         imbalance itself. A steady imbalance would be a straight line; the visible steepening means
-        the imbalance has been growing. Hover for yearly values.</p>
+        the imbalance has been growing. Always shown raw — a running total needs no smoothing; the
+        <em>Smooth</em> control below applies to its slope. Hover for yearly values.</p>
 
       <h2>The imbalance itself, over time</h2>
+      <div class="control-row date-steps" id="eei-smooth">
+        <label>Smooth</label>
+        <button data-n="1" class="active" title="each year's raw heat gain">1y</button>
+        <button data-n="3" title="3-year centred trend">3y</button>
+        <button data-n="5" title="5-year centred trend">5y</button>
+        <button data-n="10" title="10-year trend">10y</button>
+        <span class="window-value">trend window</span>
+      </div>
       <div id="eei-rate-chart-wrap">
         <canvas id="eei-rate-chart"></canvas>
         <div id="eei-rate-tooltip" class="hidden"></div>
       </div>
       <div id="eei-rate-legend" class="sl-legend"></div>
       <p class="hint"><strong>Y axis: watts per m² of the whole Earth's surface</strong> — the slope of the
-        curve above, computed over the <em>Smooth</em> window you set at the top (at 1y it is
-        simply each year's heat gain; wider windows show the underlying trend), so yes: the
-        imbalance varies over time. The wiggles are real climate variability, and the shading now
-        names it: <span style="color:#e3b341">amber bands are El Niño years</span> (the ocean sheds
-        heat to the atmosphere — the rate dips), <span style="color:#2fbfb4">teal bands are La
-        Niña</span> (the ocean banks extra heat), deeper tint = stronger event (NOAA's ONI index) —
-        hues deliberately unlike either data line, which plot heat content, not ENSO.
-        The ▲ triangles mark major eruptions, whose aerosols dim sunlight for ~2 years — watch the
-        rate sag after Pinatubo 1991 (Hunga Tonga 2022 is the oddball: mostly water vapour, a
-        slight warming agent). The climb from ~0.2–0.4 W/m² in the late 20th century toward
-        ~1 W/m² now is the acceleration.
+        curve above, computed over the <em>Smooth</em> window (at 1y it is simply each year's heat
+        gain; wider windows show the underlying trend), so yes: the imbalance varies over time.
+        The wiggles are real climate variability, and the shading names it:
+        <span style="color:#e3b341">amber bands are moderate-or-stronger El Niño winters</span>
+        (the ocean sheds heat to the atmosphere — the rate dips),
+        <span style="color:#2fbfb4">teal bands La Niña</span> (the ocean banks extra heat), deeper
+        tint = stronger event — hues deliberately unlike either data line, which plot heat
+        content, not ENSO. Only moderate+ events (|ONI| ≥ 1.0, ~30 % of winters) are shaded: at
+        the official "weak" threshold of ±0.5 °C, seventy percent of winters qualify — ENSO's
+        neutral state is genuinely the minority — and the chart read as if every year were an
+        event. Weak years still show on hover. The ▲ triangles mark eruptions that loaded the
+        <em>stratosphere</em> with sulfur, dimming sunlight for ~2 years — watch the rate sag
+        after Pinatubo 1991 (Hunga Tonga 2022 is the oddball: mostly water vapour, a slight
+        warming agent). Famous ash crises like Eyjafjallajökull 2010 don't appear because they
+        don't belong: grounding flights takes ash in the troposphere; changing Earth's energy
+        budget takes megatons of stratospheric sulfur, which that eruption never delivered. The
+        climb from ~0.2–0.4 W/m² in the late 20th century toward ~1 W/m² now is the
+        acceleration.
         Divide by ~0.9 for the total imbalance (the other ~10 % melts ice and warms land and air).
         CERES satellite radiometry, measured completely independently at the top of the atmosphere,
         shows the same magnitude and the same rise — one of the strongest closure tests in climate

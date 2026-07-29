@@ -3584,8 +3584,8 @@ async function loadEei() {
   document.getElementById("eei-rate-legend").innerHTML =
     `<span style="color:#3987e5">━ from 0–700 m OHC</span>` +
     `<span style="color:#d95926">━ from 0–2000 m OHC</span>` +
-    `<span style="color:#e3b341">▮ El Niño yr</span>` +
-    `<span style="color:#2fbfb4">▮ La Niña yr</span>` +
+    `<span style="color:#e3b341">▮ El Niño (moderate+)</span>` +
+    `<span style="color:#2fbfb4">▮ La Niña (moderate+)</span>` +
     `<span style="color:#8b949e">▲ eruption (Agung '63 · El Chichón '82 · Pinatubo '91 · Hunga Tonga '22)</span>`;
   drawEeiChart();
   drawEeiRateChart();
@@ -3654,13 +3654,19 @@ function ensoOf(yr) {
 function drawEnsoBands(ctx, X, M, H, yr0, yr1) {
   for (let yr = yr0; yr <= yr1; yr++) {
     const v = ensoOf(yr);
-    if (v == null || Math.abs(v) < 0.5) continue;
+    // Shade only MODERATE-or-stronger events (|ONI| >= 1.0). At the official
+    // "weak event" threshold of 0.5, 70% of winters qualify — DJF is ENSO's
+    // peak season and neutral is actually the minority state — which painted
+    // the chart as if every year were an event. Weak years still show up in
+    // the hover tooltip; the bands are reserved for the ~30% that match the
+    // public sense of "an El Niño year".
+    if (v == null || Math.abs(v) < 1.0) continue;
     const w = X(yr + 0.5) - X(yr - 0.5);
     // Full-height tint, strong enough to survive a dark theme. Hues chosen
     // to collide with NEITHER data line: El Nino is amber-gold (warm, but
     // nothing like the orange-red 0-2000 m line), La Nina is teal (cool, but
     // nothing like the blue 0-700 m line).
-    const a = Math.min(0.30, 0.10 + 0.07 * Math.abs(v));
+    const a = Math.min(0.30, 0.04 + 0.09 * Math.abs(v));
     ctx.fillStyle = v > 0 ? `rgba(224,177,61,${a})` : `rgba(45,190,180,${a})`;
     ctx.fillRect(X(yr - 0.5), M.t, w, H);
     // ...plus an unmissable solid event strip along the bottom of the plot
@@ -3695,7 +3701,8 @@ function annotationLines(yr) {
   const out = [];
   const v = ensoOf(yr);
   if (v != null && Math.abs(v) >= 0.5) {
-    out.push(`${v > 0 ? "El Niño" : "La Niña"} (ONI ${v > 0 ? "+" : ""}${v.toFixed(1)})`);
+    const str = Math.abs(v) >= 1.5 ? "strong" : Math.abs(v) >= 1.0 ? "moderate" : "weak";
+    out.push(`${str} ${v > 0 ? "El Niño" : "La Niña"} (ONI ${v > 0 ? "+" : ""}${v.toFixed(1)})`);
   }
   const volc = (eeiData?.volcanoes || []).find((x) => x.y === yr);
   if (volc) out.push(`▲ ${volc.n} eruption`);
@@ -3779,7 +3786,9 @@ function drawEeiRateChart() {
 
 function drawEeiChart() {
   const d = eeiData;
-  const s700 = movAvg(d.ohc700, eeiSmooth), s2000 = movAvg(d.ohc2000, eeiSmooth);
+  // The ledger always draws RAW yearly values: a cumulative total is already
+  // an integral — smoothing applies to its derivative (the rate chart below).
+  const s700 = d.ohc700, s2000 = d.ohc2000;
   const r700 = rateSeries(d.y700, d.ohc700, Math.max(eeiSmooth, 1));
   const r2000 = rateSeries(d.y2000, d.ohc2000, Math.max(eeiSmooth, 1));
   const canvas = document.getElementById("eei-chart");

@@ -1537,10 +1537,19 @@ test("Energy tab shows Earth's energy imbalance with plausible numbers", async (
     for (let i = 0; i < d.length; i += 97) h = (h * 31 + d[i]) >>> 0;
     return h;
   });
+  const ledgerHash = () => page.evaluate(() => {
+    const d = document.getElementById("eei-chart").getContext("2d")
+      .getImageData(0, 0, 200, 200).data;
+    let h = 0;
+    for (let i = 0; i < d.length; i += 97) h = (h * 31 + d[i]) >>> 0;
+    return h;
+  });
   const before = await hash();
+  const ledgerBefore = await ledgerHash();
   await page.click('#eei-smooth button[data-n="10"]');
   await expect(page.locator('#eei-smooth button[data-n="10"]')).toHaveClass(/active/);
-  expect(await hash()).not.toBe(before);
+  expect(await hash()).not.toBe(before);        // the rate chart follows the window...
+  expect(await ledgerHash()).toBe(ledgerBefore); // ...the raw ledger does not
 });
 
 test("sidebar is resizable by dragging, persists, and resets on double-click", async ({ page }) => {
