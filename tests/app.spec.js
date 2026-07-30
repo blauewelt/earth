@@ -1531,6 +1531,39 @@ test("GLORYS grids are month-keyed: the date's month picks the map", async ({ pa
   expect(old.v).toBeGreaterThan(0.25);                    // the Stream was there in 2005 too
 });
 
+test("temperature scene probe: SST under LST, and kelvin reads as °C", async ({ page }) => {
+  test.setTimeout(150000);
+  // the temperature scene stacks LST (land) over SST (ocean)
+  await page.evaluate(() => window.__earth.SCENES && document.querySelector('[data-scene="temperature"]').click());
+  await page.waitForFunction(() =>
+    window.__earth.state.layers.sst?.layer && window.__earth.state.layers.lst?.layer);
+  // ocean point: LST (top) is transparent there — the probe must fall
+  // through to SST instead of reporting nothing (user-reported bug)
+  const ocean = await page.evaluate(() =>
+    window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-40, 30)));
+  expect(ocean.noData).toBeFalsy();
+  expect(ocean.title).toContain("Sea surface temperature");
+  expect(ocean.value).toBeGreaterThan(-2);
+  expect(ocean.value).toBeLessThan(35);
+  // land point: LST answers, converted from the colormap's kelvin to °C
+  const land = await page.evaluate(() =>
+    window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(10, 21)));   // Sahara
+  if (!land.noData) {                       // clear-sky product: gaps possible
+    expect(land.title).toContain("Land surface temperature");
+    expect(land.units).toBe("°C");
+    expect(land.value).toBeGreaterThan(-40);
+    expect(land.value).toBeLessThan(75);    // a kelvin leak would read ~300+
+  }
+  // pure unit check, gap-proof: kelvinToC converts absolutes, spares deltas
+  const conv = await page.evaluate(() => [
+    window.__earth.kelvinToC({ value: 300, units: "K" }),
+    window.__earth.kelvinToC({ value: 3, units: "K", delta: true }),
+  ]);
+  expect(conv[0].value).toBeCloseTo(26.85, 2);
+  expect(conv[0].units).toBe("°C");
+  expect(conv[1].value).toBe(3);            // Δ kelvin == Δ °C, no offset
+});
+
 test("GFS forecast layers open the date selector to the future", async ({ page }) => {
   const today = new Date().toISOString().slice(0, 10);
   await page.check('#layer-list input[data-id="gfs-temp"]');

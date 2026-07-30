@@ -204,7 +204,7 @@ const GIBS_LAYERS = [
     title: "Land surface temperature (MODIS)",
     ext: "png", tms: "1km", maxLevel: 6,
     start: "2022-10-23", timed: true, on: false,
-    meta: "Daytime land skin temperature (K) — the actual temperature of the ground",
+    meta: "Daytime land skin temperature — probe reads °C (GIBS legend image is in K)",
   },
   {
     id: "soilmoisture",
@@ -2998,9 +2998,42 @@ async function probePixelMean(cfg, dates, z, x, y, px, py, valueLut) {
   return cnt ? sum / cnt : null;
 }
 
+/* MODIS LST's colormap is calibrated in kelvin; a probe reading "303 K"
+ * answers a question nobody asked. Absolute values convert to Celsius for
+ * display; deltas are scale-free in K==degC and ratios are unitless. */
+function kelvinToC(res) {
+  if (res && !res.noData && !res.delta && !res.ratio && res.units === "K") {
+    return { ...res, value: res.value - 273.15, units: "°C" };
+  }
+  return res;
+}
+
+function colormapLayersTopDown() {
+  return Object.values(state.layers)
+    .filter((e) => e.layer && (e.cfg.colormap || e.cfg.grid))
+    .map((e) => [viewer.imageryLayers.indexOf(e.layer), e])
+    .sort((a, b) => b[0] - a[0])
+    .map(([, e]) => e);
+}
+
 async function probeValueAt(carto) {
-  const entry = topColormapLayer();
-  if (!entry) return null;
+  /* Try every colormapped/grid layer top-down: where the top layer is
+   * transparent at this point (LST over ocean, SST over land, a dry forecast
+   * cell), the probe falls through to the next layer instead of reading
+   * "no data" off a pixel the user can plainly see is coloured by the layer
+   * beneath. The temperature scene (SST+LST) depends on this. */
+  const entries = colormapLayersTopDown();
+  if (!entries.length) return null;
+  let first = null;
+  for (const entry of entries) {
+    const res = await probeEntryValue(entry, carto);
+    if (!first) first = res;
+    if (res && !res.noData) return kelvinToC(res);
+  }
+  return kelvinToC(first);
+}
+
+async function probeEntryValue(entry, carto) {
   const cfg = entry.cfg;
   const lon = Cesium.Math.toDegrees(carto.longitude);
   const lat = Cesium.Math.toDegrees(carto.latitude);
@@ -3160,7 +3193,9 @@ async function pixelRasterValue(cfg, lon, lat) {
   const z = Math.min(cfg.maxLevel, 4);
   const t = tileCoordsAt(lon, lat, z);
   const v = await probePixel(cfg, state.date, z, t.x, t.y, t.px, t.py, vlut.lut);
-  return v == null ? null : { v, units: vlut.units };
+  if (v == null) return null;
+  // same kelvin→Celsius courtesy as the probe (MODIS LST)
+  return vlut.units === "K" ? { v: v - 273.15, units: "°C" } : { v, units: vlut.units };
 }
 
 const pixelJsonCache = new Map();   // small point datasets, fetched once
@@ -4378,6 +4413,9 @@ window.__earth = {
   get gistemp() { return gistempData; },
   linTrend,
   probeValueAt,
+  probeEntryValue,
+  kelvinToC,
+  colormapLayersTopDown,
   showPixelState,
   pixelInspectorEngaged,
   oceanColumnAt,

@@ -49,6 +49,12 @@ A new layer is not done until it has **all** of:
 3. **A legend** if colormapped (GIBS colormap-driven or ramp-driven for grid
    layers) with hover value read-out.
 4. **Value probe support** — click/dwell on the globe reads the actual value.
+   The probe walks colormapped/grid layers TOP-DOWN and falls through
+   transparent pixels (`probeValueAt`/`probeEntryValue`) — essential for
+   spatially-disjoint stacks like the temperature scene (LST over SST): the
+   top layer being blank at a point must never mask the visible layer below.
+   Colormaps calibrated in kelvin display as °C (`kelvinToC`; absolutes
+   convert, Δ and ratios don't — probe AND pixel card).
 5. **An explicit aggregation/difference decision.** Every timed raster layer
    must declare one of these postures, and the choice must be justified in a
    code comment next to the flag:
