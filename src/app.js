@@ -3978,7 +3978,7 @@ async function loadEei() {
   if (eeiData) return;
   // ?v: cache-buster — GitHub Pages caches JSON for 10 min, and this file's
   // schema has grown (oni/volcanoes); a stale copy silently drops annotations
-  eeiData = await (await fetch("data/eei.json?v=2")).json();
+  eeiData = await (await fetch("data/eei.json?v=3")).json();
   // 0-700 m is strictly contained in 0-2000 m, so their difference is the
   // heat arriving in the 700-2000 m slab — the deep-penetration signal.
   // (Below 2000 m there is no yearly series: the abyss is surveyed by ship
@@ -4003,6 +4003,8 @@ async function loadEei() {
     `<span style="color:#3987e5">━ from 0–700 m OHC</span>` +
     `<span style="color:#d95926">━ from 0–2000 m OHC</span>` +
     `<span style="color:#a371f7">━ 700–2000 m slab</span>` +
+    `<span style="color:#c9c4b4">┄ human push (total ERF)</span>` +
+    `<span style="color:#69a765">━ natural push (solar+volcanic)</span>` +
     `<span style="color:#e3b341">▮ El Niño (moderate+)</span>` +
     `<span style="color:#2fbfb4">▮ La Niña (moderate+)</span>` +
     `<span style="color:#8b949e">▲ eruption (Agung '63 · El Chichón '82 · Pinatubo '91 · Hunga Tonga '22)</span>`;
@@ -4147,7 +4149,11 @@ function drawEeiRateChart() {
   const rDeep = rateSeries(d.y2000, d.ohcDeep, eeiSmooth);
   const canvas = document.getElementById("eei-rate-chart");
   const wrap = canvas.parentElement;
-  const cssW = wrap.clientWidth, cssH = 160;
+  // ERF context curves (the "push"): anthropogenic total and natural
+  // (solar+volcanic), AR6/IGCC annual series baked into eei.json. The chart
+  // grows taller when they're present — the push tops out near 3 W/m².
+  const hasErf = Array.isArray(d.erf_years) && d.erf_years.length > 0;
+  const cssW = wrap.clientWidth, cssH = hasErf ? 210 : 160;
   const dpr = window.devicePixelRatio || 1;
   canvas.width = cssW * dpr; canvas.height = cssH * dpr;
   canvas.style.width = cssW + "px"; canvas.style.height = cssH + "px";
@@ -4155,7 +4161,9 @@ function drawEeiRateChart() {
   const M = { l: 32, r: 8, t: 14, b: 18 };
   const W = cssW - M.l - M.r, H = cssH - M.t - M.b;
   const yr0 = d.y700[0], yr1 = d.y700[d.y700.length - 1];
-  const all = [...r700, ...r2000, ...rDeep].filter((v) => v != null);
+  const all = [...r700, ...r2000, ...rDeep,
+               ...(hasErf ? d.erf_anthro : []), ...(hasErf ? d.erf_natural : [])]
+    .filter((v) => v != null);
   const v0 = Math.min(-0.25, Math.floor(Math.min(...all) * 4) / 4);
   const v1 = Math.ceil(Math.max(...all) * 4) / 4;
   const X = (yr) => M.l + ((yr - yr0) / (yr1 - yr0)) * W;
@@ -4186,6 +4194,18 @@ function drawEeiRateChart() {
       ctx.fillText(String(yr), X(yr), M.t + H + 5);
     }
     drawVolcanoes(ctx, X, M, H, yr0, yr1, cssW);
+    if (hasErf) {
+      // the push, drawn beneath the measured lines: human forcing climbs to
+      // ~3 W/m²; natural (solar+volcanic) hugs zero except eruption dips —
+      // which land exactly on the ▲ markers. The gap between the push and
+      // the measured EEI below it is the planet's radiative answer to the
+      // warming already realized — NOT a natural cooling term.
+      ctx.lineWidth = 1.3; ctx.lineJoin = "round";
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = "#c9c4b4"; line(d.erf_years, d.erf_anthro);
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "#69a765"; line(d.erf_years, d.erf_natural);
+    }
     ctx.lineWidth = 1.8; ctx.lineJoin = "round";
     ctx.strokeStyle = "#3987e5"; line(d.y700, r700);
     ctx.strokeStyle = "#d95926"; line(d.y2000, r2000);
@@ -4206,6 +4226,13 @@ function drawEeiRateChart() {
     const bits = [`<strong>${yr}</strong>`, `0–700 m: ${r700[i7].toFixed(2)} W/m²`];
     if (i2 >= 0 && r2000[i2] != null) bits.push(`0–2000 m: ${r2000[i2].toFixed(2)} W/m²`);
     if (i2 >= 0 && rDeep[i2] != null) bits.push(`700–2000 m slab: ${rDeep[i2].toFixed(2)} W/m²`);
+    if (hasErf) {
+      const ie = d.erf_years.indexOf(yr);
+      if (ie >= 0) {
+        bits.push(`human push (ERF): ${d.erf_anthro[ie].toFixed(2)} W/m²`);
+        bits.push(`natural push: ${d.erf_natural[ie].toFixed(2)} W/m²`);
+      }
+    }
     bits.push(...annotationLines(yr));
     tip.innerHTML = bits.join("<br/>");
     tip.style.left = `${Math.min(e.clientX - rect.left + 12, cssW - 150)}px`;

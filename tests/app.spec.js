@@ -1712,11 +1712,25 @@ test("Energy tab shows Earth's energy imbalance with plausible numbers", async (
   await expect(page.locator("#panel-energy")).toContainText("radiative forcing");
   await expect(page.locator("#panel-energy")).toContainText("2.8");
   await expect(page.locator("#panel-energy")).toContainText("not yet answered");
+  // the push curves are drawn and named, and the counterfactuals documented
+  await expect(page.locator("#eei-rate-legend")).toContainText("human push (total ERF)");
+  await expect(page.locator("#eei-rate-legend")).toContainText("natural push");
+  await expect(page.locator("#panel-energy")).toContainText("vanished tomorrow");
+  await expect(page.locator("#panel-energy")).toContainText("never industrialized");
+  await expect(page.locator("#panel-energy")).toContainText("not");
+  const erfDrawn = await page.evaluate(async () => {
+    const d = await fetch("data/eei.json?v=3").then((r) => r.json());
+    // taller canvas is the visible signature that the ERF curves rendered
+    const h = document.getElementById("eei-rate-chart").style.height;
+    return { has: Array.isArray(d.erf_years) && d.erf_years.length > 50, h };
+  });
+  expect(erfDrawn.has).toBe(true);
+  expect(parseInt(erfDrawn.h)).toBeGreaterThan(180);
   // slab decomposition: 0-700 nests inside 0-2000, difference = 700-2000 m
   await expect(page.locator("#eei-legend")).toContainText("700–2000 m slab");
   const slab = await page.evaluate(() => {
     const E = window.__earth; // eeiData isn't exported; recompute from the file
-    return fetch("data/eei.json?v=2").then((r) => r.json()).then((d) => {
+    return fetch("data/eei.json?v=3").then((r) => r.json()).then((d) => {
       const i = d.y2000.length - 1;
       const deep = d.ohc2000[i] - d.ohc700[d.y2000[i] - d.y700[0]];
       return { deep, total: d.ohc2000[i], upper: d.ohc700[d.y2000[i] - d.y700[0]] };

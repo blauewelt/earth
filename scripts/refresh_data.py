@@ -627,6 +627,30 @@ def eei():
     # mostly water vapour, a slight WARMING agent.
     volcanoes = [{"y": 1963, "n": "Agung"}, {"y": 1982, "n": "El Chichón"},
                  {"y": 1991, "n": "Pinatubo"}, {"y": 2022, "n": "Hunga Tonga"}]
+
+    # Effective radiative forcing, annual, AR6 methodology extended yearly by
+    # the Indicators of Global Climate Change project (Forster et al.) - the
+    # "push" to plot against the measured imbalance. natural = solar +
+    # volcanic; the volcanic convention is relative to the long-term mean
+    # stratospheric load, so quiet years read slightly positive and big
+    # eruptions dive to -2..-3 W/m^2.
+    erf_url = ("https://raw.githubusercontent.com/ClimateIndicator/"
+               "forcing-timeseries/main/output/ERF_best_aggregates_1750-2024.csv")
+    req = urllib.request.Request(erf_url, headers=UA)
+    with urllib.request.urlopen(req, timeout=120) as r:
+        lines = r.read().decode().splitlines()
+    hdr = lines[0].split(",")
+    ia, iso, ivo = hdr.index("anthro"), hdr.index("solar"), hdr.index("volcanic")
+    erf_years, erf_anthro, erf_natural = [], [], []
+    for ln in lines[1:]:
+        p = ln.split(",")
+        yr = int(float(p[0]))
+        if yr < y7[0]:
+            continue                                     # chart starts with the OHC record
+        erf_years.append(yr)
+        erf_anthro.append(round(float(p[ia]), 2))
+        erf_natural.append(round(float(p[iso]) + float(p[ivo]), 2))
+
     payload = {
         "source": "NOAA NCEI Global Ocean Heat Content (Levitus et al.), yearly, world",
         "doc": "https://www.ncei.noaa.gov/products/ocean-heat-salt-sea-level",
@@ -642,6 +666,10 @@ def eei():
         "zj_gained": round((v2[-1] - v2[0]) * 10, 1),     # 1e22 J -> ZJ
         "oni": oni,                                       # year -> DJF ONI (degC)
         "volcanoes": volcanoes,
+        "erf_years": erf_years,                           # annual ERF (AR6/IGCC)
+        "erf_anthro": erf_anthro,                         # total human forcing, W/m^2
+        "erf_natural": erf_natural,                       # solar + volcanic, W/m^2
+        "erf_src": "Forster et al. / ClimateIndicator ERF_best_aggregates (AR6 method)",
     }
     with open(os.path.join(DATA, "eei.json"), "w") as f:
         json.dump(payload, f, separators=(",", ":"))

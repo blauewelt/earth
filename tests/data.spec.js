@@ -460,6 +460,24 @@ test.describe("eei.json (ocean heat / energy imbalance)", () => {
     expect(recent.every((v) => v > 0)).toBe(true);
   });
 
+  test("ERF forcing curves: human push climbs, natural hugs zero except eruptions", () => {
+    expect(e.erf_years[0]).toBe(e.y700[0]);              // aligned to the OHC record
+    expect(e.erf_years.length).toBe(e.erf_anthro.length);
+    expect(e.erf_years.length).toBe(e.erf_natural.length);
+    const last = e.erf_anthro[e.erf_anthro.length - 1];
+    expect(last).toBeGreaterThan(2.3);                   // AR6-consistent present-day push
+    expect(last).toBeLessThan(3.5);
+    expect(e.erf_anthro[0]).toBeLessThan(0.8);           // and it was small in the 1950s
+    // natural = solar + volcanic: small except eruption dips
+    const nat = e.erf_natural;
+    const mean = nat.reduce((s, v) => s + v, 0) / nat.length;
+    expect(Math.abs(mean)).toBeLessThan(0.25);
+    const pin = nat[e.erf_years.indexOf(1992)];          // year after Pinatubo
+    expect(pin).toBeLessThan(-1);                        // the dip is real and large
+    const quiet = nat.filter((v) => v > -0.5);
+    expect(quiet.length / nat.length).toBeGreaterThan(0.85);  // ...and rare
+  });
+
   test("ENSO and volcano annotations are present and sane", () => {
     // the canonical events classify correctly from NOAA's ONI (DJF convention)
     expect(e.oni["1998"]).toBeGreaterThan(1.5);        // 97/98 El Niño
