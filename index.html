@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>earth — open climate data on a globe</title>
-  <meta name="description" content="A 3D globe for the world's open climate data: NASA GIBS layers, AMOC monitoring network, live data layers, and a 247-dataset open-data catalog." />
+  <meta name="description" content="A 3D globe for the world's open climate data: NASA GIBS layers, AMOC monitoring network, live data layers, and a 248-dataset open-data catalog." />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
   <link rel="stylesheet" href="src/style.css" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
@@ -26,6 +26,7 @@
         <button class="tag-link" data-scene="floats" title="The ~3,800 Argo floats profiling the ocean right now">floats</button> ·
         <button class="tag-link" data-scene="vegetation" title="Monthly vegetation greenness (NDVI) — follows the date">vegetation</button> ·
         <button class="tag-link" data-scene="forest loss" title="30 m OPERA vegetation-disturbance alerts — flies to the Amazon arc of deforestation, where a 30 m clearing is actually visible">forest loss</button> ·
+        <button class="tag-link" data-scene="why forests fall" title="The dominant driver of tree-cover loss per cell, 2001–2025 (WRI/Google DeepMind) — agriculture, logging, wildfire, mining, settlements">why forests fall</button> ·
         <button class="tag-link" data-scene="emissions" title="The top-1,000 emitting facilities — the date's year picks the inventory (2021–2025)">emissions</button> ·
         <button class="tag-link" data-scene="inspect" title="Then click anywhere: live weather, all fields, ocean column, 2050 outlook for that point">inspect any point</button>
         — composed on one globe, from public data only</p>
@@ -49,7 +50,7 @@
           eighteen satellite layers, the ocean's interior from Argo floats and the GLORYS
           reanalysis, glaciers, biodiversity, facility-level emissions — plus dashboards for
           global temperature, Earth's energy imbalance, the AMOC and sea level, and a searchable
-          catalog of 247 open datasets. Public data only; no keys, no accounts, no server.</p>
+          catalog of 248 open datasets. Public data only; no keys, no accounts, no server.</p>
         <p class="hint">In a hurry? The words in the tagline above are <strong>one-click
           scenes</strong> — "sea ice" puts the daily sea-ice field on the globe, "floats" the
           live Argo fleet, and so on. Each shows exactly one layer (and replaces whatever was
@@ -88,7 +89,7 @@
         <p class="hint"><strong>The other tabs</strong>: <em>Temp</em> — warming since 1880 ·
           <em>Energy</em> — the planet's energy imbalance · <em>AMOC</em> — the overturning
           circulation this app is ultimately about · <em>Sea level</em> — the rise and its
-          causes · <em>Catalog</em> — all 247 datasets · <em>About</em> — background &amp;
+          causes · <em>Catalog</em> — all 248 datasets · <em>About</em> — background &amp;
           further reading.</p>
       </details>
       <div class="control-row">
@@ -552,7 +553,7 @@
     </section>
 
     <section id="panel-catalog" class="panel hidden">
-      <input type="search" id="catalog-search" placeholder="Search 247 datasets…" />
+      <input type="search" id="catalog-search" placeholder="Search 248 datasets…" />
       <div class="control-row filters">
         <select id="catalog-domain"><option value="">All domains</option></select>
       </div>
@@ -574,7 +575,7 @@
         forest loss, water storage, energy balance …), the ocean interior from Argo floats and the GLORYS
         reanalysis (currents, mixed-layer depth, subsurface heat), the Randolph glacier inventory
         with melt rates, GBIF biodiversity, Climate TRACE emitters, and the AMOC monitoring
-        network. Behind it: a machine-readable catalog of 247 open climate datasets and dashboards
+        network. Behind it: a machine-readable catalog of 248 open climate datasets and dashboards
         for temperature, the planet's energy imbalance, the AMOC and sea level. The full guide
         lives at the top of the <em>Layers</em> tab.</p>
       <h2>Tips</h2>

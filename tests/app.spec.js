@@ -2020,3 +2020,58 @@ test("DIST-ANN is annual: the date's year picks the map, day and month don't", a
   await expect(toast).toContainText("2024");
   await expect(toast).toContainText("year");
 });
+
+test("drivers is a categorical grid: swatch legend, named driver, dateless", async ({ page }) => {
+  // The palette lives in the baked FILE, not the layer config — so the legend,
+  // the paint and the probe all have to agree with what the producer shipped.
+  const g = await page.evaluate(async () => {
+    const cfg = window.__earth.GIBS_LAYERS.find((l) => l.id === "drivers");
+    const g = await window.__earth.loadGrid(cfg);
+    return { classes: g.classes, nx: g.nx, ny: g.ny, len: g.values.length,
+             sampleNulls: g.values.slice(0, 200).every((v) => v == null) };
+  });
+  expect(g.classes.length).toBe(7);
+  expect(g.len).toBe(g.nx * g.ny);      // `packed` was expanded by unpackGrid…
+  expect(g.sampleNulls).toBe(true);     // …and "." really became null, not 0
+
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="drivers"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
+  // Same swatch legend as the classification RASTERS — one shape for "the value
+  // is a category" — and emphatically not a gradient bar.
+  const item = page.locator("#legend-panel .legend-item", { hasText: "Drivers of forest loss" });
+  await expect(item.locator(".legend-class")).toHaveCount(7);
+  await expect(item.locator(".legend-class .legend-swatch").first()).toBeVisible();
+  await expect(item.locator("canvas.legend-bar")).toHaveCount(0);
+  await expect(item.locator(".legend-class")).toContainText([/agricult/i], { useInnerText: true });
+
+  // Untimed and not a climatology: one attribution over the whole record, so
+  // the toast has to say the date selector is inert here.
+  const toast = page.locator("#toast-host .toast").last();
+  await expect(toast).toContainText("2001");
+  await expect(toast).toContainText("doesn't change it");
+
+  // The probe answers with the driver's NAME. A bare "1" would tell a reader
+  // nothing, and there is no number here to format.
+  const probe = await page.evaluate(async () => {
+    const e = window.__earth.colormapLayersTopDown().find((l) => l.cfg.id === "drivers");
+    const at = (lon, lat) =>
+      window.__earth.probeEntryValue(e, Cesium.Cartographic.fromDegrees(lon, lat));
+    return { arc: await at(-55, -8), ocean: await at(-30, 5) };   // Amazon arc / open Atlantic
+  });
+  expect(typeof probe.arc.label).toBe("string");
+  expect(probe.arc.value).toBeUndefined();
+  expect(probe.ocean.noData).toBe(true);
+
+  // posture matrix: categorical grids average and subtract no better than
+  // categorical rasters do
+  const cfg = await page.evaluate(() => {
+    const c = window.__earth.GIBS_LAYERS.find((l) => l.id === "drivers");
+    return { agg: c.aggregable ?? null, dr: c.deltaRange ?? null, cg: c.classGrid };
+  });
+  expect(cfg.cg).toBe(true);
+  expect(cfg.agg).toBeNull();
+  expect(cfg.dr).toBeNull();
+});

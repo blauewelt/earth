@@ -494,3 +494,70 @@ test.describe("eei.json (ocean heat / energy imbalance)", () => {
     expect(e.volcanoes.find((v) => v.n === "Pinatubo").y).toBe(1991);
   });
 });
+
+test.describe("drivers.json (categorical grid)", () => {
+  const g = read("drivers.json");
+
+  test("is a packed categorical grid, self-describing its own palette", () => {
+    for (const f of ["id", "title", "units", "source", "citation", "classes",
+                     "west", "south", "east", "north", "dlon", "dlat", "nx", "ny",
+                     "period", "packed"]) {
+      expect(g[f], `drivers.json missing ${f}`).not.toBeUndefined();
+    }
+    // No `values` array and no ramp on purpose: the cell is a CLASS, so it
+    // indexes the palette shipped in this very file rather than running
+    // through a colour ramp. A ramp here would invent an ordering between
+    // "logging" and "wildfire" that does not exist.
+    expect(g.values).toBeUndefined();
+    expect(g.ramp).toBeUndefined();
+    expect(g.vmin).toBeUndefined();
+
+    // WRI's seven drivers, each with a label and an rgb triple the globe paints
+    // from. The palette travelling WITH the values is the point — it cannot
+    // drift out of sync with them the way a copy in the layer config would.
+    expect(g.classes.length).toBe(7);
+    const codes = g.classes.map((c) => c.code);
+    expect(codes).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    for (const c of g.classes) {
+      expect(typeof c.label).toBe("string");
+      expect(c.label.length).toBeGreaterThan(3);
+      expect(c.rgb.length).toBe(3);
+      for (const ch of c.rgb) { expect(ch).toBeGreaterThanOrEqual(0); expect(ch).toBeLessThan(256); }
+    }
+
+    // geometry: 0.25° global-in-lon, truncated in lat where the source stops
+    expect(g.packed.length).toBe(g.nx * g.ny);
+    expect(g.dlon).toBeCloseTo((g.east - g.west) / g.nx, 6);
+    expect(g.dlat).toBeCloseTo((g.north - g.south) / g.ny, 6);
+    expect(g.west).toBe(-180); expect(g.east).toBe(180);
+    expect(g.north).toBeLessThanOrEqual(90);   // the product stops at 84N/56S:
+    expect(g.south).toBeGreaterThan(-90);      // no forest to lose beyond
+  });
+
+  test("every packed character is a mapped driver or empty, and the shares are plausible", () => {
+    // One pass with a counter rather than expect() per cell — 806k cells, and
+    // per-cell matchers turn this into a multi-minute test.
+    const counts = new Map();
+    for (let i = 0; i < g.packed.length; i++) {
+      const c = g.packed[i];
+      counts.set(c, (counts.get(c) ?? 0) + 1);
+    }
+    const legal = new Set([".", "1", "2", "3", "4", "5", "6", "7"]);
+    for (const c of counts.keys()) expect(legal.has(c), `illegal packed char ${JSON.stringify(c)}`).toBe(true);
+
+    // Most of the planet has no mapped forest loss (ocean, desert, ice, intact
+    // forest) — a grid that came out mostly filled would mean the nodata value
+    // leaked into a class.
+    const filled = g.packed.length - (counts.get(".") ?? 0);
+    expect(filled).toBeGreaterThan(50000);
+    expect(filled / g.packed.length).toBeLessThan(0.5);
+
+    // Agriculture dominates globally and mining is a sliver — the published
+    // result. If a re-bake ever inverted the class order this would catch it.
+    const share = (code) => (counts.get(String(code)) ?? 0) / filled;
+    expect(share(1)).toBeGreaterThan(0.2);    // permanent agriculture
+    expect(share(2)).toBeLessThan(0.1);       // hard commodities
+    expect(share(5)).toBeGreaterThan(0.05);   // wildfire — boreal Canada, Siberia
+    for (let c = 1; c <= 7; c++) expect(share(c), `class ${c} is empty`).toBeGreaterThan(0);
+  });
+});

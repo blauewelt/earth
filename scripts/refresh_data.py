@@ -1160,6 +1160,103 @@ def gfs(days=10):
           citation=f"24-h precipitation totals, GFS run {init}; <0.5 mm/day transparent")
 
 
+DRIVER_CLASSES = [
+    # code, label, hex — WRI/Google DeepMind's own palette, so the globe matches
+    # every figure published about this dataset.
+    (1, "Permanent agriculture", "#E39D29"),
+    (2, "Hard commodities", "#E58074"),
+    (3, "Shifting cultivation", "#E9D700"),
+    (4, "Logging", "#51A44E"),
+    (5, "Wildfire", "#895128"),
+    (6, "Settlements & infrastructure", "#A354A0"),
+    (7, "Other natural disturbances", "#3A209A"),
+]
+
+
+def drivers(deg=0.25):
+    """WRI/Google DeepMind Global Drivers of Forest Loss, 1 km -> a categorical
+    0.25-deg grid (data/drivers.json).
+
+    The satellite alert layers (OPERA DIST) answer WHERE forest was lost; this
+    answers WHY. It is a CLASSIFICATION, so the bake is a per-block MODE, never
+    a mean: averaging "wildfire" and "logging" would produce "shifting
+    cultivation", which is nonsense. Cells with no loss at all bake as null and
+    render transparent, so the layer paints only the deforestation frontiers.
+
+    0.25 deg (25x25 native cells per block) is a deliberate stop. The source is
+    already a 1 km modal attribution, its published use is regional, and the
+    driver story IS regional -- the arc of deforestation is agriculture, boreal
+    Canada and Siberia are fire, the US southeast is logging. Per-clearing
+    detail is the OPERA layer's job, at 30 m.
+
+    CC BY 4.0. ~300 MB download, ~30 s of binning; needs rasterio."""
+    import numpy as np
+    try:
+        import rasterio
+    except ImportError:
+        sys.exit("drivers: pip install rasterio")
+
+    url = ("https://lcl.wridata.org/drivers_of_loss/1_km/raw/"
+           "drivers_forest_loss_1km_2001_2025_v1_3.tif")
+    tif = "/tmp/nc/drivers_forest_loss_1km_v1_3.tif"
+    _download(url, tif, "drivers of forest loss (v1.3, 2001-2025)")
+
+    src = rasterio.open(tif)
+    # The product is a plate-carree uint8 raster, 0.01 deg, 255 = no loss/nodata,
+    # band 1 = the class; bands 2-8 are per-class probabilities we don't need.
+    # It stops at 84N/56S (beyond the treeline / open ocean), and the grid format
+    # carries its own bounds, so keep them rather than padding to the poles.
+    west, south = src.bounds.left, src.bounds.bottom
+    east, north = src.bounds.right, src.bounds.top
+    f = int(round(deg / abs(src.transform.a)))
+    if src.width % f or src.height % f:
+        sys.exit(f"drivers: {deg} deg does not divide the {src.width}x{src.height} raster")
+    a = src.read(1)                                  # north-up, ~500 M cells
+    ny, nx = src.height // f, src.width // f
+    blocks = a.reshape(ny, f, nx, f).transpose(0, 2, 1, 3).reshape(ny, nx, f * f)
+    # Count each class per block and take the winner. argmax breaks ties toward
+    # the lower code; ties are rare and the alternative (null) would punch holes
+    # in otherwise solid frontiers.
+    counts = np.stack([(blocks == c).sum(axis=2) for c, _, _ in DRIVER_CLASSES], axis=2)
+    tot = counts.sum(axis=2)
+    best = np.where(tot > 0, counts.argmax(axis=2) + 1, 0).astype(np.uint8)
+    best = best[::-1]                                # grid format is row 0 = south
+
+    # Share of the mapped loss each driver dominates - quoted in the layer's
+    # hover card, and a sanity check on the bake.
+    share = {lab: int((best == c).sum()) for c, lab, _ in DRIVER_CLASSES}
+    filled = sum(share.values())
+
+    payload = {
+        "id": "drivers", "title": "Drivers of forest loss (WRI/DeepMind, 1 km -> 0.25 deg)",
+        "units": "driver", "source": "WRI / Google DeepMind, Global Drivers of Forest Loss v1.3",
+        "citation": ("Sims, M.J. et al. 2025. Global drivers of forest loss at 1 km "
+                     "resolution. Environmental Research Letters 20(7): 074027. "
+                     "doi:10.1088/1748-9326/add606 (CC BY 4.0). Dominant driver of "
+                     "2001-2025 tree-cover loss; 1 km classes binned to 0.25 deg by mode."),
+        "doc": "https://datasets.wri.org/datasets/dominant-drivers-of-tree-cover-loss-at-1km",
+        "classes": [{"code": c, "label": lab, "rgb": [int(h[1:3], 16), int(h[3:5], 16), int(h[5:7], 16)]}
+                    for c, lab, h in DRIVER_CLASSES],
+        "west": west, "south": south, "east": east, "north": north,
+        "dlon": deg, "dlat": deg, "nx": nx, "ny": ny,
+        "period": "2001-2025",
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "shares": share,
+        # Packed rather than a `values` array: one char per cell, "." for empty.
+        # A JSON array of 800k single digits and nulls is mostly punctuation
+        # (3.5 MB vs 0.8 MB), and the pixel inspector fetches this on a click.
+        # The client expands it once on arrival (`unpackGrid`).
+        "packed": "".join("." if v == 0 else str(v) for v in best.ravel()),
+    }
+    with open(os.path.join(DATA, "drivers.json"), "w") as fh:
+        json.dump(payload, fh, separators=(",", ":"))
+    os.remove(tif)
+    print(f"  wrote drivers.json: {nx}x{ny}, {filled} filled cells "
+          f"({100 * filled / (nx * ny):.1f}%)")
+    for c, lab, _ in DRIVER_CLASSES:
+        print(f"    {lab:<30} {share[lab]:>7} cells  {100 * share[lab] / filled:5.1f}%")
+
+
 if __name__ == "__main__":
     os.makedirs("/tmp/nc", exist_ok=True)
     default = ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
@@ -1168,7 +1265,7 @@ if __name__ == "__main__":
            "sealevel": sealevel, "glaciers": glaciers, "gistemp": gistemp,
            "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss,
            "species": species, "argo_column": argo_column, "glorys": glorys, "eei": eei,
-           "gfs": gfs}
+           "gfs": gfs, "drivers": drivers}
     for w in which:
         fns[w]()
     print("done")

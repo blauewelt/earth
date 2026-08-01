@@ -77,6 +77,20 @@ A new layer is not done until it has **all** of:
    classification rasters read at their NATIVE level, not the usual z4 cap —
    a 30 m alert averaged down to level 4 vanishes, and the inspector's job is
    "what is true AT this point".
+   **Categorical GRIDS are the same idea one layer in** — a baked grid whose
+   cell holds a class code rather than a number declares `classGrid: true`
+   (currently `drivers`). It paints from a palette lookup instead of
+   `rampColor` (`gridClassPalette`; a ramp would invent an ordering —
+   "logging" is not between "wildfire" and "settlements", it is a different
+   thing), reuses `buildClassLegend` for the swatch legend so categorical
+   rasters and categorical grids look identical, and answers the probe and
+   pixel card with `gridClassLabel`, never a formatted float. The crucial
+   difference from `classmap:` rasters: the palette lives in the BAKED FILE
+   (`classes: [{code,label,rgb}]`), not the layer config — it is the data
+   producer's own palette, and shipping it beside the values is what stops
+   the two from drifting when the set is re-baked with a class added or
+   renamed. Such a grid takes neither `aggregable` nor `deltaRange`, for the
+   same reason the classification rasters don't.
 4. **Value probe support** — click/dwell on the globe reads the actual value.
    The probe walks colormapped/grid layers TOP-DOWN and falls through
    transparent pixels (`probeValueAt`/`probeEntryValue`) — essential for
@@ -122,6 +136,7 @@ A new layer is not done until it has **all** of:
    | Vegetation loss annual (OPERA DIST-ANN) | ✗ | ✗ | classification, and `annual` besides — one tile date per year |
    | True colour, night lights | ✗ | ✗ | photographs, no colormap to invert |
    | Grid climatologies | ✗ | ✗ | already multi-decade averages, not timed |
+   | Drivers of forest loss (grid) | ✗ | ✗ | categorical AND untimed — one 2001–2025 attribution, and "logging" plus "wildfire" is not a quantity |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set
    `globe: true` and append "Live globe layer in this app." to its notes.
 7. **An active-layer chip.** Layers defined in `GIBS_LAYERS` get one for free.
@@ -147,7 +162,12 @@ order above). Everything else is baked offline by
 JSON files under `data/` (one function per dataset, runnable individually:
 `python3 scripts/refresh_data.py gpcp eobs`). Grids use the common format
 written by `_write_grid()` (regular lon/lat, row-major from the south, `null`
-for empty cells) and render client-side via `GridProvider`.
+for empty cells) and render client-side via `GridProvider`. A grid whose
+values are small integers may instead ship `packed:` — one character per
+cell, `"."` for empty — which `unpackGrid` expands to `values` once on
+arrival, leaving every sampler downstream unchanged. It is worth it where the
+file is fetched on a click: a JSON array of 800k single digits and nulls is
+mostly punctuation, and the driver grid goes 3.5 MB → 0.8 MB.
 
 ### 4. Testing in the sandbox
 
@@ -222,7 +242,9 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   invisible from the default view; SCENE_VIEWS) · ocean currents · floats ·
   vegetation · forest loss (Amazon-arc flyTo — a 30 m OPERA alert is smaller
   than a screen pixel from orbit, so without the flyTo the scene reads as
-  broken) · emissions · inspect any point.
+  broken) · why forests fall (the other half of that question — no flyTo,
+  because at 0.25° the driver map IS a global pattern and the default view is
+  where you read it) · emissions · inspect any point.
 - The Layers tab opens with a first-visit intro guide (`#intro-guide`,
   <details> open by default, dismissal persisted in localStorage) that
   documents the whole view: date/time stepping, Compare's two modes,
@@ -292,7 +314,7 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
 | `CLAUDE.md` | Standing instructions + holistic record (this file — keep current) |
 | `README.md` | Quick start, repo layout, testing. Opens with a link to the live demo. Keep its counts (catalog size, `globe`/`amoc` flags, spec count) and feature list current — they drift silently. Hero image: `node scripts/screenshot.js` (see the header comment for the sandbox invocation); re-shoot it when the UI changes visibly |
 | `docs/PRIMER.pdf` | Background knowledge (GIBS, tiles, colormaps, product levels, climatologies). Rebuild: `python3 scripts/build_primer.py` |
-| `docs/CATALOG.md` + `data/catalog.json` | The 247-record open-data catalog (human + machine readable) |
+| `docs/CATALOG.md` + `data/catalog.json` | The 248-record open-data catalog (human + machine readable) |
 | `docs/COMBINING_DATASETS.md` | Which datasets measure the same quantity; sound combinations |
 | `docs/PIXEL_STATE.md` | Which catalog sources compose into a per-pixel state vector (state/memory/forcing/flow/future); the 0.25°-daily common grid argument; the ~25-source minimal composition |
 | `docs/SPECIES_AND_CLIMATE.md` | Why biodiversity data belongs in a climate app |
@@ -405,6 +427,17 @@ rectangle) · OISST v2.1 SST 1991–2020 (1°) · MeteoSwiss Swiss precip normal
 diverging `anom` ramp). Ramp legends with hover read-out; probe reads exact
 cells.
 
+**Drivers of forest loss (`data/drivers.json`, `classGrid`):** not a
+climatology and not a snapshot — WRI and Google DeepMind's 1 km attribution
+of WHY tree cover was lost, one dominant class per cell over the whole
+2001–2025 record (Sims et al. 2025, ERL 20(7):074027, CC BY 4.0), binned here
+to 0.25° by per-block MODE, never a mean: averaging "wildfire" and "logging"
+would produce "shifting cultivation". Cells with no mapped loss bake as null
+and render transparent, so the layer paints only the deforestation frontiers.
+Bake: `refresh_data.py drivers` (~300 MB COG, needs `rasterio`). It is the
+companion to the OPERA rasters above, which see the loss at 30 m and say
+nothing about its cause.
+
 **Ocean column (Argo RG, `data/ocean_column.json`):** the latest month's
 absolute T/S profile AND the same-calendar-month 2004–18 normal on a 2° grid
 at 17 depth levels (0–2000 dbar), both from the Roemmich-Gilson product so
@@ -485,7 +518,7 @@ imbalance itself, W/m² over time) — axis semantics spelled out on-panel
 after they confused a reader;
 trends; *AMOC* — RAPID 26.5°N overturning transport series + stats;
 *Sea level* — Frederikse 2020 budget components + NOAA altimetry; *Catalog* —
-searchable 247-dataset catalog with domain/AMOC/globe filters.
+searchable 248-dataset catalog with domain/AMOC/globe filters.
 
 **Data pipeline** (`scripts/refresh_data.py`): one function per snapshot —
 climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet

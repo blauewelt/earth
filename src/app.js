@@ -412,6 +412,22 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    id: "drivers",
+    // CATEGORICAL grid: the cell carries a driver CLASS, not a number, so it
+    // paints from the file's own `classes` palette (WRI's, so the globe matches
+    // every published figure) rather than a ramp — and it takes no aggregation
+    // or difference posture, for the same reason the OPERA rasters don't.
+    // Untimed on purpose: one 2001–2025 attribution, not a per-date field.
+    grid: true, classGrid: true, gridFile: "data/drivers.json",
+    classNote: "the driver that dominates each cell's loss over 2001&ndash;2025 &mdash; " +
+      "blank means no mapped forest loss, not no forest",
+    maxLevel: 7,
+    doc: "https://datasets.wri.org/datasets/dominant-drivers-of-tree-cover-loss-at-1km",
+    title: "Drivers of forest loss (WRI/DeepMind)",
+    meta: "WHY forest was lost, 2001–2025 — the companion to the 30 m alerts, which only see THAT it was",
+    on: false,
+  },
+  {
     id: "gfs-temp",
     grid: true, gridFile: "data/gfs_temp.json", monthlyGrid: true, forecastGrid: true,
     ramp: "t2m", vmin: -30, vmax: 40, units: "°C", maxLevel: 6,
@@ -1236,9 +1252,40 @@ function sampleGrid(g, lonDeg, latDeg) {
 const gridCache = new Map();
 function loadGrid(cfg) {
   if (!gridCache.has(cfg.id)) {
-    gridCache.set(cfg.id, fetch(cfg.gridFile).then((r) => r.json()).catch(() => null));
+    gridCache.set(cfg.id, fetch(cfg.gridFile).then((r) => r.json())
+      .then(unpackGrid).catch(() => null));
   }
   return gridCache.get(cfg.id);
+}
+
+/* Categorical grids ship `packed` — one character per cell, "." for empty —
+ * instead of a `values` array. Same numbers, a quarter of the bytes, because a
+ * JSON array of 800k single digits and nulls is mostly punctuation; the driver
+ * grid goes 3.5 MB → 0.8 MB, which matters because the pixel inspector reads it
+ * on a click. Expanded once here so every sampler downstream is unchanged. */
+function unpackGrid(g) {
+  if (g && g.packed && !g.values) {
+    const p = g.packed, out = new Array(p.length);
+    for (let i = 0; i < p.length; i++) {
+      const c = p.charCodeAt(i);
+      out[i] = c === 46 ? null : c - 48;         // "." → null, "0".."9" → digit
+    }
+    g.values = out;
+  }
+  return g;
+}
+
+/* Categorical grids carry their classes in the baked file itself (code, label,
+ * rgb) rather than in the layer config: the palette is the DATA PRODUCER's, and
+ * shipping it alongside the values keeps the two from drifting apart when the
+ * dataset is re-baked with a class added or renamed. */
+function gridClassPalette(g) {
+  if (!g?.classes) return null;
+  if (!g.__pal) g.__pal = new Map(g.classes.map((c) => [c.code, c.rgb]));
+  return g.__pal;
+}
+function gridClassLabel(g, v) {
+  return g?.classes?.find((c) => c.code === v)?.label ?? null;
 }
 
 class GridProvider {
@@ -1271,6 +1318,11 @@ class GridProvider {
     const west = Cesium.Math.toDegrees(rect.west), east = Cesium.Math.toDegrees(rect.east);
     const north = Cesium.Math.toDegrees(rect.north), south = Cesium.Math.toDegrees(rect.south);
     const { vmin, vmax, ramp } = this._cfg;
+    // Categorical grid (drivers of forest loss): the cell value is a class
+    // code, so it indexes a palette instead of running through a ramp. A ramp
+    // would invent an ordering — "logging" is not between "wildfire" and
+    // "settlements", it is simply a different thing.
+    const pal = this._cfg.classGrid ? gridClassPalette(g) : null;
     const out = ctx.createImageData(W, H);
     const o = out.data;
     for (let j = 0; j < H; j++) {
@@ -1279,7 +1331,8 @@ class GridProvider {
         const lon = west + ((i + 0.5) / W) * (east - west);
         const v = sampleGrid(g, lon, lat);
         if (v == null) continue;
-        const c = rampColor(ramp, (v - vmin) / (vmax - vmin));
+        const c = pal ? pal.get(v) : rampColor(ramp, (v - vmin) / (vmax - vmin));
+        if (!c) continue;
         const k = (j * W + i) * 4;
         o[k] = c[0]; o[k + 1] = c[1]; o[k + 2] = c[2]; o[k + 3] = 225;
       }
@@ -1994,6 +2047,15 @@ function gridLegendEl(cfg) {
   const div = document.createElement("div");
   div.className = "legend-item";
   div.innerHTML = `<div class="legend-title">${cfg.title}</div>`;
+  if (cfg.classGrid) {
+    // Same swatch legend as the classification rasters, fed from the grid file
+    // instead of a GIBS colormap — one shape for "the value is a category".
+    loadGrid(cfg).then((g) => {
+      if (!g?.classes) return;
+      buildClassLegend(div, { classes: g.classes }, cfg);
+    });
+    return div;
+  }
   const wrap = document.createElement("div");
   wrap.className = "legend-bar-wrap";
   const canvas = document.createElement("canvas");
@@ -2183,6 +2245,14 @@ function datelessToast(id) {
     if (cfg.timed) return null;                              // genuinely date-driven
     if (cfg.monthlyGrid) return null;      // month-aware — its own toast (maybeMonthlyGridToast)
     if (cfg.grid) {
+      if (cfg.classGrid) {
+        // Not a climatology and not a snapshot: one attribution computed over
+        // the whole 2001–2025 record, so no single date owns it.
+        return `<strong>${cfg.title}</strong> attributes the <strong>whole ` +
+          `2001–2025 record</strong> in one map — the dominant driver per cell — so the ` +
+          `<strong>date selector doesn't change it</strong>. For what is being lost ` +
+          `right now, use the 30 m disturbance alerts.`;
+      }
       // most grids are multi-decade climatologies; a snapshot grid (a single
       // recent month, like the Argo 300 m anomaly) says what it actually is
       return cfg.snapshotGrid
@@ -2331,6 +2401,18 @@ const LAYER_FACTS = {
          "resolved. Use this to compare whole years — how much of the Amazon " +
          "arc, the Congo basin or Southeast Asia changed in 2023 versus 2024 — " +
          "and the alert layer to watch the current year as it happens." },
+  drivers: { rec: "2001–2025, attributed in one map (v1.3)", int: "not dated — re-baked when WRI publishes a new version", sp: "1 km source, binned here to 0.25° by dominant class",
+    sum: "Why the forest went. WRI and Google DeepMind trained a classifier on " +
+         "tens of thousands of hand-labelled sites to name the dominant cause " +
+         "of tree-cover loss at every kilometre on Earth: permanent " +
+         "agriculture, hard commodities (mining and energy), shifting " +
+         "cultivation, logging, wildfire, settlements and infrastructure, or " +
+         "other natural disturbance. The pattern is the point — the Amazon arc " +
+         "and West Africa are agriculture, boreal Canada and Siberia are fire, " +
+         "the US southeast and Scandinavia are logging, and the difference " +
+         "between them is the difference between forest that is gone and " +
+         "forest that will grow back. This is the companion to the OPERA alert " +
+         "layers, which see the loss at 30 m but say nothing about its cause." },
   "grace": { rec: "this map: 2002-08 → 2022-07 (last month GIBS serves; GRACE-FO continues) · 2017–18 has a between-missions gap", int: "monthly", sp: "~300 km (3° mascons)",
     sum: "Where Earth gained or lost water mass — all of it: groundwater, soil, " +
          "snow, ice — measured by how the mass below tugs at a pair of " +
@@ -2620,6 +2702,9 @@ const SCENES = {
   floats: ["toggle-argo"],           // the live Argo fleet
   vegetation: ["ndvi"],              // monthly, follows the date
   "forest loss": ["dist-alert"],     // 30 m alerts — needs the flyTo below to be visible at all
+  // The other half of the same question. No flyTo: at 0.25° the driver map is
+  // a global pattern, and the default view is exactly where you want to read it.
+  "why forests fall": ["drivers"],
   emissions: ["toggle-climatetrace"],// yearly, the date's year picks it
 };
 // A scene whose data lives somewhere specific flies the camera there — sea
@@ -3206,7 +3291,14 @@ async function probeEntryValue(entry, carto) {
     const base = { title: cfg.title, units: cfg.units, lon, lat };
     if (!g) return { ...base, noData: true };
     const v = sampleGrid(g, lon, lat);
-    return v == null ? { ...base, noData: true } : { ...base, value: v };
+    if (v == null) return { ...base, noData: true };
+    // Categorical grid: answer with the class NAME. Same rule as the
+    // classification rasters — a code rendered as "4" tells the reader nothing.
+    if (cfg.classGrid) {
+      const label = gridClassLabel(g, v);
+      return label == null ? { ...base, noData: true } : { ...base, label };
+    }
+    return { ...base, value: v };
   }
   if (cfg.classmap) {
     // Classification raster: read the class NAME under the cursor. No
@@ -3532,7 +3624,7 @@ async function showPixelState(carto) {
   // Everything in parallel; the card renders once, complete.
   const rasterCfgs = PIXEL_RASTERS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
   const gridCfgs = PIXEL_GRIDS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
-  const [rasters, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo] = await Promise.all([
+  const [rasters, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid] = await Promise.all([
     Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null))),
     Promise.all(gridCfgs.map((cfg) => loadGridMonth(cfg).then((g) => g && sampleGrid(g, lon, lat)).catch(() => null))),
     fetchOpenMeteo(lon, lat),
@@ -3546,6 +3638,9 @@ async function showPixelState(carto) {
     pixelJson("data/stations.geojson"),
     pixelJson("data/climatetrace.json"),
     pixelJson("data/argo.json"),
+    // In the batch, not after it: the card renders once, complete, and must
+    // never serialise a round-trip. Packed, so ~0.8 MB and cached thereafter.
+    loadGrid(GIBS_LAYERS.find((l) => l.id === "drivers")).catch(() => null),
   ]);
   if (pixelCardEl.classList.contains("hidden")) return;   // closed while loading
 
@@ -3612,6 +3707,18 @@ async function showPixelState(carto) {
   }).join("");
   if (rrows) {
     sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">${state.date} · NASA GIBS</span></div>${rrows}</div>`);
+  }
+
+  /* -- why forest was lost here (categorical, so its own row) --------------- */
+  {
+    const g = driversGrid;
+    const v = g && sampleGrid(g, lon, lat);
+    const label = v == null ? null : gridClassLabel(g, v);
+    if (label) {
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Forest loss ` +
+        `<span class="px-src">2001–2025 · WRI/DeepMind</span></div>` +
+        pixelRow("Dominant driver", label) + `</div>`);
+    }
   }
 
   /* -- long-term normals (the memory channels) ----------------------------- */

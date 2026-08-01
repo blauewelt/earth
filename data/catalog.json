@@ -2,7 +2,7 @@
   "catalog": "Global Climate Open Data Catalog",
   "compiled": "2026-07",
   "purpose": "Reference of open climate data worldwide for a 3D-globe visualization and prediction pipelines (incl. AMOC collapse timing).",
-  "record_count": 247,
+  "record_count": 248,
   "records_by_domain": {
     "Atmosphere/Reanalysis/Surface": 41,
     "Ocean & AMOC": 43,
@@ -10,7 +10,7 @@
     "Satellite EO & Cloud Platforms": 24,
     "Model Projections & Tipping Points": 29,
     "GHG, Emissions & Composition": 41,
-    "Paleo, Hydrology, Extremes & Impacts": 39
+    "Paleo, Hydrology, Extremes & Impacts": 40
   },
   "field_definitions": {
     "id": "short slug",
@@ -4476,6 +4476,24 @@
       "amoc": false,
       "globe": true,
       "notes": "The settled version of the alert product: one map per year of confirmed loss, with provisional detections resolved. Year-on-year comparison of forest loss. Live globe layer in this app."
+    },
+    {
+      "id": "wri-gdm-drivers",
+      "name": "Global Drivers of Forest Loss at 1 km (WRI / Google DeepMind, v1.3)",
+      "provider": "World Resources Institute & Google DeepMind (Sims et al. 2025)",
+      "domain": "Paleo, Hydrology, Extremes & Impacts",
+      "subdomain": "Land cover change",
+      "variables": "Dominant driver of tree-cover loss (permanent agriculture, hard commodities, shifting cultivation, logging, wildfire, settlements & infrastructure, other natural disturbances) plus per-class probabilities",
+      "spatial": "1 km (0.01 deg) global, 84N-56S",
+      "temporal": "2001-2025 attributed in a single map (v1.3)",
+      "cadence": "reissued when a new version is published (v1.0 2022, v1.2 2024, v1.3 2025)",
+      "formats": "Cloud-optimized GeoTIFF; Earth Engine image",
+      "access": "Direct COG download from WRI Data Explorer (no key); also projects/landandcarbon/assets/wri_gdm_drivers_forest_loss_1km/v1_3_2001_2025 in Earth Engine",
+      "license": "CC BY 4.0",
+      "url": "https://datasets.wri.org/datasets/dominant-drivers-of-tree-cover-loss-at-1km",
+      "amoc": false,
+      "globe": true,
+      "notes": "The 'why' behind forest loss: a classifier trained on tens of thousands of hand-labelled sites names the dominant cause of loss at every kilometre. The companion to the OPERA alert products, which resolve loss at 30 m but say nothing about its cause; the agriculture/logging/fire split is also the permanent-vs-regrowth split. Sims et al. 2025, Environ. Res. Lett. 20(7): 074027. Live globe layer in this app."
     }
   ]
 }
