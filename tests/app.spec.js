@@ -1707,6 +1707,11 @@ test("Energy tab shows Earth's energy imbalance with plausible numbers", async (
   expect(introTotal).toBe(tileTotal);
   expect(await page.textContent("#eei-intro-window")).toMatch(/^\d{4}–\d{4}$/);
   await expect(page.locator("#panel-energy")).toContainText("needs its date attached");
+  // forcing vs imbalance: the IPCC's ~2.8 W/m² (radiative forcing) is
+  // reconciled in the text, not left to look like a contradiction
+  await expect(page.locator("#panel-energy")).toContainText("radiative forcing");
+  await expect(page.locator("#panel-energy")).toContainText("2.8");
+  await expect(page.locator("#panel-energy")).toContainText("not yet answered");
   // slab decomposition: 0-700 nests inside 0-2000, difference = 700-2000 m
   await expect(page.locator("#eei-legend")).toContainText("700–2000 m slab");
   const slab = await page.evaluate(() => {
