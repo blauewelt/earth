@@ -4004,7 +4004,7 @@ async function loadEei() {
     `<span style="color:#d95926">━ from 0–2000 m OHC</span>` +
     `<span style="color:#a371f7">━ 700–2000 m slab</span>` +
     `<span style="color:#c9c4b4">┄ human push (total ERF)</span>` +
-    `<span style="color:#69a765">━ natural push (solar+volcanic)</span>` +
+    `<span style="color:#69a765">┄ natural push (solar+volcanic)</span>` +
     `<span style="color:#e3b341">▮ El Niño (moderate+)</span>` +
     `<span style="color:#2fbfb4">▮ La Niña (moderate+)</span>` +
     `<span style="color:#8b949e">▲ eruption (Agung '63 · El Chichón '82 · Pinatubo '91 · Hunga Tonga '22)</span>`;
@@ -4201,10 +4201,10 @@ function drawEeiRateChart() {
       // the measured EEI below it is the planet's radiative answer to the
       // warming already realized — NOT a natural cooling term.
       ctx.lineWidth = 1.3; ctx.lineJoin = "round";
-      ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = "#c9c4b4"; line(d.erf_years, d.erf_anthro);
+      ctx.setLineDash([5, 4]);                 // both push curves dashed: they
+      ctx.strokeStyle = "#c9c4b4"; line(d.erf_years, d.erf_anthro);   // are context,
+      ctx.strokeStyle = "#69a765"; line(d.erf_years, d.erf_natural);  // not measurements
       ctx.setLineDash([]);
-      ctx.strokeStyle = "#69a765"; line(d.erf_years, d.erf_natural);
     }
     ctx.lineWidth = 1.8; ctx.lineJoin = "round";
     ctx.strokeStyle = "#3987e5"; line(d.y700, r700);
