@@ -13,10 +13,19 @@ Live app: https://blauewelt.github.io/earth/ · Repo: github.com/blauewelt/earth
 
 ### 1. Deploy first
 
-Deploy **before** running the full test suite: commit, `git branch -f gh-pages
-main`, `git push origin main gh-pages -f`, then run the affected tests, then
-(optionally) broader regression. The user wants to try features immediately;
-tests catch regressions after the fact. Never gate a deploy on a long test run.
+Deploy **before** running the full test suite: commit, deploy (below), then
+run the affected tests, then (optionally) broader regression. The user wants
+to try features immediately; tests catch regressions after the fact. Never
+gate a deploy on a long test run.
+
+**NEVER force-push main.** The daily forecast workflow commits to main on its
+own schedule, so main has other writers now — a forced push threw away one of
+its refreshes on 2026-07-30 (2026-08-01 container time). The deploy sequence is:
+
+    git pull --rebase origin main     # pick up any bot commits first
+    git push origin main              # fast-forward only
+    git branch -f gh-pages main
+    git push origin gh-pages -f       # gh-pages is ours alone; force is fine
 
 ### 2. Every dataset/layer ships complete
 
