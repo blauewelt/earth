@@ -3993,6 +3993,13 @@ async function loadEei() {
   document.getElementById("eei-intro-window").textContent = `${w0}–${w1}`;
   document.getElementById("eei-intro-total").textContent = `+${eeiData.eei10.toFixed(2)}`;
   document.getElementById("eei-intro-rate").textContent = `+${eeiData.rate10.toFixed(2)}`;
+  // the famous Hiroshima equivalence, computed from the live number rather
+  // than folklore: EEI [W/m²] × Earth surface [m²] ÷ 15 kt TNT [J].
+  // Pure energy arithmetic (Hansen 2012 used ~4/s at the then-lower EEI).
+  const bombsEl = document.getElementById("eei-bombs");
+  if (bombsEl) {
+    bombsEl.textContent = (eeiData.eei10 * 5.101e14 / 6.276e13).toFixed(1);
+  }
   document.querySelector("#eei-zj .stat-value").textContent = `+${Math.round(eeiData.zj_gained)}`;
   document.querySelector("#eei-zj .stat-sub").textContent = `ZJ gained 0–2000 m since ${eeiData.zj_since}`;
   document.getElementById("eei-legend").innerHTML =

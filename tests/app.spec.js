@@ -1726,6 +1726,11 @@ test("Energy tab shows Earth's energy imbalance with plausible numbers", async (
   });
   expect(erfDrawn.has).toBe(true);
   expect(parseInt(erfDrawn.h)).toBeGreaterThan(180);
+  // Hiroshima equivalence: computed from the live EEI, in a plausible band
+  const bombs = parseFloat(await page.textContent("#eei-bombs"));
+  expect(bombs).toBeGreaterThan(3);
+  expect(bombs).toBeLessThan(15);
+  await expect(page.locator("#panel-energy")).toContainText("nothing explodes");
   // slab decomposition: 0-700 nests inside 0-2000, difference = 700-2000 m
   await expect(page.locator("#eei-legend")).toContainText("700–2000 m slab");
   const slab = await page.evaluate(() => {
