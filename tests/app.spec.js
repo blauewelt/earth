@@ -1921,3 +1921,102 @@ test("Climate TRACE is year-aware: the date's year picks the inventory", async (
   });
   await expect(page.locator("#meta-climatetrace")).toContainText("2021 inventory"); // clamped up
 });
+
+test("OPERA disturbance layers are classifications: swatch legend, class-label probe", async ({ page }) => {
+  // The classification parser on the real GIBS colormap. Continuous colormaps
+  // carry value="[lo,hi)"; these carry sourceValue + a <Legend
+  // type="classification">, so the continuous parser matches nothing and a
+  // separate one is required — that's the whole reason `classmap` exists.
+  const cm = await page.evaluate(async () => {
+    const url = "https://gibs.earthdata.nasa.gov/colormaps/v1.3/OPERA_Vegetation_Disturbance_Status.xml";
+    const xml = await (await fetch(url)).text();
+    const cls = window.__earth.parseClassEntries(xml);
+    const cont = window.__earth.parseColormapEntries(xml);
+    return {
+      n: cls?.classes.length ?? 0,
+      labels: (cls?.classes ?? []).map((c) => c.label),
+      rgbOk: (cls?.classes ?? []).every((c) => c.rgb.length === 3 && c.rgb.every((v) => v >= 0 && v <= 255)),
+      contEntries: cont?.entries?.length ?? 0,
+    };
+  });
+  expect(cm.n).toBeGreaterThan(2);
+  expect(cm.rgbOk).toBe(true);
+  expect(cm.labels.join(" | ")).toMatch(/confirmed/i);
+  expect(cm.labels.some((l) => /^no data$/i.test(l))).toBe(false);  // transparent fill is not a class
+  expect(cm.contEntries).toBe(0);                                    // continuous parser is blind here
+
+  // rgb → label lookup, keyed on the exact packed colour
+  const lut = await page.evaluate(async () => {
+    const m = await window.__earth.getClassLut(
+      "https://gibs.earthdata.nasa.gov/colormaps/v1.3/OPERA_Vegetation_Disturbance_Status.xml");
+    return { size: m?.size ?? 0, values: [...(m?.values() ?? [])] };
+  });
+  expect(lut.size).toBe(cm.n);
+  expect(lut.values.sort()).toEqual([...cm.labels].sort());
+
+  // enable the layer → labelled swatches, NOT a gradient bar (the classes have
+  // no ordering a bar could imply), plus the plain-language class note
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="dist-alert"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const item = page.locator("#legend-panel .legend-item", { hasText: "disturbance" });
+  await expect(item.locator(".legend-class")).toHaveCount(cm.n);
+  await expect(item.locator(".legend-class .legend-swatch").first()).toBeVisible();
+  await expect(item.locator("canvas.legend-bar")).toHaveCount(0);
+  await expect(item.locator(".legend-note")).toContainText("confirmed");
+
+  // the probe answers with a class NAME or no-data — never a number, and never
+  // a delta/aggregate variant (class codes don't average or subtract)
+  const probe = await page.evaluate(async () => {
+    const e = window.__earth.colormapLayersTopDown().find((l) => l.cfg.id === "dist-alert");
+    const at = (lon, lat) =>
+      window.__earth.probeEntryValue(e, Cesium.Cartographic.fromDegrees(lon, lat));
+    return { amazon: await at(-60, -9), ocean: await at(-30, 5) };
+  });
+  for (const r of [probe.amazon, probe.ocean]) {
+    expect(r === null || r.noData === true || typeof r.label === "string").toBe(true);
+    expect(r?.value).toBeUndefined();
+    expect(r?.delta).toBeUndefined();
+  }
+  expect(probe.ocean.noData).toBe(true);   // open ocean has no vegetation to lose
+
+  // posture matrix: classification rasters take neither flag
+  const flags = await page.evaluate(() =>
+    window.__earth.GIBS_LAYERS.filter((l) => l.classmap)
+      .map((l) => [l.id, l.aggregable ?? null, l.deltaRange ?? null]));
+  expect(flags.length).toBe(2);
+  for (const [, agg, dr] of flags) { expect(agg).toBeNull(); expect(dr).toBeNull(); }
+});
+
+test("DIST-ANN is annual: the date's year picks the map, day and month don't", async ({ page }) => {
+  const snap = await page.evaluate(() => {
+    const cfg = window.__earth.GIBS_LAYERS.find((l) => l.id === "dist-ann");
+    const t = (d) => window.__earth.gibsTime(cfg, d);
+    return {
+      mid: t("2024-07-15"), other: t("2024-11-02"),   // same year, different day/month
+      next: t("2023-06-01"),
+      early: t("2019-03-01"),                          // before the archive → floored
+      late: t("2030-01-01"),                           // after → clamped to endTime's year
+      start: cfg.start, endTime: cfg.endTime,
+    };
+  });
+  expect(snap.mid).toBe("2024-01-01");
+  expect(snap.other).toBe(snap.mid);                  // day and month are ignored
+  expect(snap.next).toBe("2023-01-01");
+  expect(snap.early).toBe("2023-01-01");
+  expect(snap.late).toBe("2025-01-01");
+
+  // enabling it says so: the year matters, the day and month don't. This is the
+  // Climate TRACE trap one rung coarser — without the toast the steppers look broken.
+  await page.evaluate(() => {
+    const d = document.getElementById("layer-date");
+    d.value = "2024-07-15"; d.dispatchEvent(new Event("change"));
+    const el = document.querySelector('#layer-list input[data-id="dist-ann"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const toast = page.locator("#toast-host .toast").last();
+  await expect(toast).toContainText("annual");
+  await expect(toast).toContainText("2024");
+  await expect(toast).toContainText("year");
+});

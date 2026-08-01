@@ -56,7 +56,27 @@ A new layer is not done until it has **all** of:
    - **Spatial**: pixel/grid size, or point semantics ("one point per
      facility").
 3. **A legend** if colormapped (GIBS colormap-driven or ramp-driven for grid
-   layers) with hover value read-out.
+   layers) with hover value read-out. **Two colormap kinds, two code paths.**
+   Most GIBS colormaps are CONTINUOUS — `<ColorMapEntry rgb="…"
+   value="[lo,hi)">` — and a pixel inverts to a NUMBER; those layers declare
+   `colormap:` and get a gradient bar. A few are CLASSIFICATIONS: the entries
+   carry `sourceValue="N"` plus a `<Legend type="classification">` whose
+   `<LegendEntry rgb tooltip id>` names each class ("Confirmed &ge; 50%").
+   The continuous parsers match ZERO entries on those, so they declare
+   `classmap:` instead and run a parallel path — `getClassEntries` /
+   `parseClassEntries` (skipping the transparent "No Data" entry),
+   `buildClassLegend` (labelled swatches, deliberately NOT a gradient bar: a
+   bar would imply an ordering between "provisional" and "finished" that does
+   not exist), `getClassLut` / `probeClassPixel` (exact packed-RGB lookup —
+   classification tiles are nearest-neighbour resampled, so colours arrive
+   unblended), and a probe/pixel-card read-out that is a LABEL, not a
+   formatted float. Optional `classNote:` adds a one-line gloss under the
+   legend. Every predicate that asks "is a colormapped layer active" must
+   accept both (`colormappedLayerActive`, `topColormapLayer`,
+   `colormapLayersTopDown`, the legend-panel branch). In the pixel inspector,
+   classification rasters read at their NATIVE level, not the usual z4 cap —
+   a 30 m alert averaged down to level 4 vanishes, and the inspector's job is
+   "what is true AT this point".
 4. **Value probe support** — click/dwell on the globe reads the actual value.
    The probe walks colormapped/grid layers TOP-DOWN and falls through
    transparent pixels (`probeValueAt`/`probeEntryValue`) — essential for
@@ -98,6 +118,8 @@ A new layer is not done until it has **all** of:
    | Aerosol optical depth | ✓ | ratio ×4 | windowed mean is standard; multiplicative change is the meaningful signal |
    | Precipitation (IMERG daily) | ✓ | ratio ×8 | daily-MEAN rates average soundly (`transparentZero`: dry pixels count as 0, eps = palette floor/2 keeps dry→rain finite); absolute day deltas are weather noise |
    | Precipitation (IMERG 30-min) | ✗ | ✗ | one half-hour snapshot; a window sampling ~12 arbitrary instants averages nothing physical — its role is intra-day (±30m stepper) |
+   | Vegetation disturbance (OPERA DIST-ALERT) | ✗ | ✗ | classification — the pixel is a class code, and class codes neither average nor subtract; the change signal is already IN the product |
+   | Vegetation loss annual (OPERA DIST-ANN) | ✗ | ✗ | classification, and `annual` besides — one tile date per year |
    | True colour, night lights | ✗ | ✗ | photographs, no colormap to invert |
    | Grid climatologies | ✗ | ✗ | already multi-decade averages, not timed |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set
@@ -168,7 +190,7 @@ never a silent mystery. This applies to grid climatologies, night lights
 (fixed composite), and the data/point layers (GBIF all-time, Climate TRACE
 annual inventory, Argo latest positions, stations, glaciers single inventory).
 Any NEW layer that ignores the date selector must be added to `datelessToast`;
-date-driven rasters must return `null` there. **Yearly layers are NOT dateless**: Climate TRACE is an annual inventory baked for every available year (2021-2025, `assets_by_year` in climatetrace.json); the layer shows whichever year the date points at (`climateTraceYear`, clamped), rebuilds on a year change (`refreshYearlyLayers` / `ensureClimateTraceYear`), and its toast (`climateTraceToast`) says 'the day and month don't matter, but the year does' — never declare a layer fully dateless if any date component drives it. **Monthly grids follow the same pattern one level down**: GLORYS currents/MLD are `monthlyGrid` layers covering the FULL archive (1993-01 → ~now−2mo). The baked index (data/currents.json, data/mld.json) carries `monthsAvailable` (every stamp), `yearDir`, `months` (latest year inlined), `latest`, `values` (= latest month, back-compat); older months live in per-year files (data/currents_y/YYYY.json) lazy-fetched by `ensureGridMonth`/`loadGridMonth` and merged into `g.months` — every sampler (GridProvider.requestImage, probeValueAt, the pixel card) MUST go through `loadGridMonth`, never bare `loadGrid`+`sampleGrid`, or old months read as null. `resolveGridMonth` floors the date's month to the newest baked month ≤ it (clamped at both ends), `refreshMonthlyGrids()` rebuilds the provider when a date change lands on a different baked month (Cesium caches tiles — a repaint needs a fresh provider; called from both date handlers AND the ±30m midnight-cross branch), and `maybeMonthlyGridToast` names the month showing on enable. Note the date steppers clamp at 2000-01-01 (GIBS floor) — 1993–1999 currents are reachable by typing a date. **Day-keyed forecast grids reuse the whole mechanism**: GFS temp/precip are `monthlyGrid` + `forecastGrid` layers whose JSON carries `keyLen: 10` (day stamps in `months`/`monthsAvailable`, all frames inline, no year files) plus `init` (the model run, quoted in the toast). While a forecast layer is active, `uiMaxDate()` returns the last forecast day instead of `defaultDate()` — the date input's `max` and every stepper clamp go through it (`syncDateMax()` restores reality and pulls the date back when the last forecast layer is switched off), and `gibsTime` clamps any future date to `defaultDate()` so observation layers are never asked for tomorrow's tiles. Keep the toast copy consistent:
+date-driven rasters must return `null` there. **Yearly layers are NOT dateless**: Climate TRACE is an annual inventory baked for every available year (2021-2025, `assets_by_year` in climatetrace.json); the layer shows whichever year the date points at (`climateTraceYear`, clamped), rebuilds on a year change (`refreshYearlyLayers` / `ensureClimateTraceYear`), and its toast (`climateTraceToast`) says 'the day and month don't matter, but the year does' — never declare a layer fully dateless if any date component drives it. **Monthly grids follow the same pattern one level down**: GLORYS currents/MLD are `monthlyGrid` layers covering the FULL archive (1993-01 → ~now−2mo). The baked index (data/currents.json, data/mld.json) carries `monthsAvailable` (every stamp), `yearDir`, `months` (latest year inlined), `latest`, `values` (= latest month, back-compat); older months live in per-year files (data/currents_y/YYYY.json) lazy-fetched by `ensureGridMonth`/`loadGridMonth` and merged into `g.months` — every sampler (GridProvider.requestImage, probeValueAt, the pixel card) MUST go through `loadGridMonth`, never bare `loadGrid`+`sampleGrid`, or old months read as null. `resolveGridMonth` floors the date's month to the newest baked month ≤ it (clamped at both ends), `refreshMonthlyGrids()` rebuilds the provider when a date change lands on a different baked month (Cesium caches tiles — a repaint needs a fresh provider; called from both date handlers AND the ±30m midnight-cross branch), and `maybeMonthlyGridToast` names the month showing on enable. Note the date steppers clamp at 2000-01-01 (GIBS floor) — 1993–1999 currents are reachable by typing a date. **Day-keyed forecast grids reuse the whole mechanism**: GFS temp/precip are `monthlyGrid` + `forecastGrid` layers whose JSON carries `keyLen: 10` (day stamps in `months`/`monthsAvailable`, all frames inline, no year files) plus `init` (the model run, quoted in the toast). While a forecast layer is active, `uiMaxDate()` returns the last forecast day instead of `defaultDate()` — the date input's `max` and every stepper clamp go through it (`syncDateMax()` restores reality and pulls the date back when the last forecast layer is switched off), and `gibsTime` clamps any future date to `defaultDate()` so observation layers are never asked for tomorrow's tiles. **Annual rasters are Climate TRACE's trap one rung coarser, on the GIBS side**: OPERA DIST-ANN is served at exactly one tile date per year (`YYYY-01-01`), so its config carries `annual: true` and `gibsTime` snaps the date to Jan 1 of its year (floored at `start`'s year, after the `endTime` clamp). It fires `maybeAnnualToast` rather than `maybeClampToast` — `maybeClampToast` returns early for annual layers, because "showing the last available date" is the wrong story when the day and month never mattered; the annual toast says which YEAR is showing and names the span of years the product covers. Keep the toast copy consistent:
 name the layer in `<strong>` and state "the date selector doesn't change it".
 
 ### 5. UI conventions
@@ -198,7 +220,9 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   current layers — the chips show the swap and undo it. Current set:
   satellites · surface temperature · sea ice (Arctic flyTo — polar data is
   invisible from the default view; SCENE_VIEWS) · ocean currents · floats ·
-  vegetation · emissions · inspect any point.
+  vegetation · forest loss (Amazon-arc flyTo — a 30 m OPERA alert is smaller
+  than a screen pixel from orbit, so without the flyTo the scene reads as
+  broken) · emissions · inspect any point.
 - The Layers tab opens with a first-visit intro guide (`#intro-guide`,
   <details> open by default, dismissal persisted in localStorage) that
   documents the whole view: date/time stepping, Compare's two modes,
@@ -227,8 +251,9 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   colormapped layer active → card again, since there is no layer value to
   read instead. The card composes: live weather + 7-day forecast, CAMS air
   quality, GloFAS river discharge, waves, and a 2045–49-vs-1991–95 CMIP6
-  outlook (all Open-Meteo family); all fourteen colormapped GIBS rasters
-  probed at the current date (z capped at 4); the four climatology grids; and
+  outlook (all Open-Meteo family); all fifteen colormapped GIBS rasters
+  probed at the current date (z capped at 4 — except classification rasters,
+  read at native z, see §2.3); the four climatology grids; and
   nearby context (stations, Argo, emitters; glaciers only if already loaded —
   never pay the 7 MB on a click). Deliberately NO derived "SST vs normal" delta: the baked OISST
   normal is the annual mean, so the difference would mostly be the seasonal
@@ -267,7 +292,7 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
 | `CLAUDE.md` | Standing instructions + holistic record (this file — keep current) |
 | `README.md` | Quick start, repo layout, testing. Opens with a link to the live demo. Keep its counts (catalog size, `globe`/`amoc` flags, spec count) and feature list current — they drift silently. Hero image: `node scripts/screenshot.js` (see the header comment for the sandbox invocation); re-shoot it when the UI changes visibly |
 | `docs/PRIMER.pdf` | Background knowledge (GIBS, tiles, colormaps, product levels, climatologies). Rebuild: `python3 scripts/build_primer.py` |
-| `docs/CATALOG.md` + `data/catalog.json` | The 245-record open-data catalog (human + machine readable) |
+| `docs/CATALOG.md` + `data/catalog.json` | The 247-record open-data catalog (human + machine readable) |
 | `docs/COMBINING_DATASETS.md` | Which datasets measure the same quantity; sound combinations |
 | `docs/PIXEL_STATE.md` | Which catalog sources compose into a per-pixel state vector (state/memory/forcing/flow/future); the 0.25°-daily common grid argument; the ~25-source minimal composition |
 | `docs/SPECIES_AND_CLIMATE.md` | Why biodiversity data belongs in a climate app |
@@ -366,7 +391,11 @@ ice · MODIS snow cover · MODIS aerosol optical depth · MODIS land surface
 temperature · AMSR2 soil moisture (tiles→2025-09) · MODIS NDVI vegetation
 (monthly) · GRACE water-storage anomaly (monthly, tiles→2022-07) · CERES EBAF
 TOA net flux (monthly, tiles→2018-10) · PACE chlorophyll-a · SMAP sea surface
-salinity (monthly) · VIIRS Black Marble night lights.
+salinity (monthly) · VIIRS Black Marble night lights · **OPERA DIST-ALERT**
+and **DIST-ANN** vegetation disturbance (30 m from Harmonized
+Landsat-Sentinel, the finest layers in the app; classification rasters — see
+§2.3 — the alert layer running every few days through the current year, the
+annual one settling it per year 2023–2025).
 
 **Climatology grid layers (client-rendered from baked JSON, `GridProvider`):**
 GPCP v2.3 global precip (2.5°) · E-OBS v31 European precip (0.25°, bounded
@@ -456,7 +485,7 @@ imbalance itself, W/m² over time) — axis semantics spelled out on-panel
 after they confused a reader;
 trends; *AMOC* — RAPID 26.5°N overturning transport series + stats;
 *Sea level* — Frederikse 2020 budget components + NOAA altimetry; *Catalog* —
-searchable 245-dataset catalog with domain/AMOC/globe filters.
+searchable 247-dataset catalog with domain/AMOC/globe filters.
 
 **Data pipeline** (`scripts/refresh_data.py`): one function per snapshot —
 climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet

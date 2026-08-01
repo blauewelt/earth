@@ -235,6 +235,43 @@ const GIBS_LAYERS = [
     meta: "Monthly vegetation greenness (0–1)",
   },
   {
+    id: "dist-alert",
+    // CLASSIFICATION raster: the pixel carries a class (first detection /
+    // provisional / confirmed, under or over 50% cover loss, and "finished"),
+    // not a number — hence `classmap` rather than `colormap`. Averaging or
+    // subtracting class codes is meaningless, so this layer takes neither
+    // `aggregable` nor `deltaRange` (posture matrix, CLAUDE.md §2.5). The
+    // change signal is already IN the product: it only paints where
+    // vegetation was lost since the year began.
+    classmap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/OPERA_Vegetation_Disturbance_Status.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/OPERA_Vegetation_Disturbance_Status_H.svg",
+    doc: "https://www.jpl.nasa.gov/go/opera/products/dist-product-suite/",
+    layer: "OPERA_L3_DIST-ALERT-HLS_Color_Index",
+    classNote: "&lt;50% / &ge;50% is how much of the vegetation cover went · " +
+      "confirmed = a second clear image agreed · finished = the loss stopped progressing",
+    title: "Vegetation disturbance alerts (OPERA DIST-ALERT)",
+    ext: "png", tms: "31.25m", maxLevel: 11,
+    start: "2023-01-01", timed: true, on: false,
+    meta: "30 m near-real-time vegetation loss — zoom in to see individual clearings",
+  },
+  {
+    id: "dist-ann",
+    classmap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/OPERA_Vegetation_Disturbance_Annual.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/OPERA_Vegetation_Disturbance_Annual_H.svg",
+    doc: "https://www.jpl.nasa.gov/go/opera/products/dist-product-suite/",
+    layer: "OPERA_L3_DIST-ANN-HLS_Color_Index",
+    // GIBS serves one tile date per YEAR (2023/2024/2025-01-01): the annual
+    // summary of confirmed disturbance. `annual` snaps the date to Jan 1 of
+    // its year the way `monthly` snaps to the 1st of its month.
+    annual: true,
+    endTime: "2025-01-01",
+    classNote: "the year's settled tally — everything provisional has been resolved",
+    title: "Vegetation loss, annual summary (OPERA DIST-ANN)",
+    ext: "png", tms: "31.25m", maxLevel: 11,
+    start: "2023-01-01", timed: true, on: false,
+    meta: "Confirmed vegetation loss for a whole year — the date's YEAR picks it (2023–2025)",
+  },
+  {
     id: "grace",
     colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/GRACE_Tellus_Liquid_Water_Equivalent_Thickness_Mascon_CRI.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/GRACE_Tellus_Liquid_Water_Equivalent_Thickness_Mascon_CRI_H.svg",
@@ -419,6 +456,13 @@ function gibsTime(cfg, dateStr) {
   // later date clamps to the last served one, so the layer shows its final
   // state instead of silently blanking. The hover card states the end date.
   if (cfg.endTime && dateStr > cfg.endTime) dateStr = cfg.endTime;
+  // Annual products (OPERA DIST-ANN) are served at one date per year: snap to
+  // Jan 1 of the date's year, floored at the first year served.
+  if (cfg.annual) {
+    let y = dateStr.slice(0, 4);
+    if (cfg.start && y < cfg.start.slice(0, 4)) y = cfg.start.slice(0, 4);
+    return `${y}-01-01`;
+  }
   if (cfg.monthly) {
     let d = dateStr.slice(0, 8) + "01";
     const currentMonth = defaultDate().slice(0, 8) + "01";
@@ -514,7 +558,7 @@ const baseImageryLayer = viewer.imageryLayers.get(0);
 function colormappedLayerActive() {
   if (sstEnsembleLayer) return true;
   return Object.values(state.layers).some((e) =>
-    e.layer && (e.cfg.colormap || e.cfg.grid));
+    e.layer && (e.cfg.colormap || e.cfg.classmap || e.cfg.grid));
 }
 function updateBaseAppearance() {
   const mode = document.getElementById("base-mode")?.value || "auto";
@@ -1606,7 +1650,7 @@ function updateLegends() {
     } else if (e.cfg.grid) {
       panel.appendChild(gridLegendEl(e.cfg));
       any = true;
-    } else if (e.cfg.colormap || e.cfg.legend) {
+    } else if (e.cfg.classmap || e.cfg.colormap || e.cfg.legend) {
       panel.appendChild(layerLegendEl(e.cfg, e.isAggregate ? `${e.cfg.title} · ${windowLabel(state.windowDays)} mean` : null));
       any = true;
     }
@@ -1779,6 +1823,63 @@ function parseColormapEntries(xml) {
   return { units, entries };
 }
 
+/* ------------------------------------------------- classification colormaps
+ *
+ * Most GIBS colormaps are continuous: `value="[lo,hi)"` per colour, and a
+ * pixel inverts to a NUMBER. A handful are classifications instead — OPERA's
+ * vegetation-disturbance products carry `sourceValue="N"` plus a
+ * `<Legend type="classification">` whose entries name each class ("Confirmed
+ * >= 50%"). Those need their own parser (the continuous one matches nothing
+ * here), their own legend (labelled swatches, not a gradient bar), and their
+ * own probe read-out (a label, not a formatted float). Layers declare them as
+ * `classmap:` instead of `colormap:`. */
+const classCache = new Map();
+function getClassEntries(url) {
+  if (!classCache.has(url)) {
+    classCache.set(url, fetch(url).then((r) => r.text()).then(parseClassEntries).catch(() => null));
+  }
+  return classCache.get(url);
+}
+
+function parseClassEntries(xml) {
+  const classes = [];
+  const re = /<LegendEntry\s+rgb="(\d+),(\d+),(\d+)"\s+tooltip="([^"]*)"\s+id="([^"]+)"/g;
+  let m;
+  while ((m = re.exec(xml))) {
+    const label = m[4].replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    // "No Data" is the transparent fill, not a class the user can click on.
+    if (/^no data$/i.test(label)) continue;
+    classes.push({ rgb: [+m[1], +m[2], +m[3]], label, code: m[5] });
+  }
+  return classes.length ? { classes } : null;
+}
+
+/* rgb → class label, for the probe and the pixel inspector. Keyed on the exact
+ * packed colour: classification tiles are nearest-neighbour resampled, so the
+ * colours arrive unblended. */
+const classLutCache = new Map();
+function getClassLut(url) {
+  if (!classLutCache.has(url)) {
+    classLutCache.set(url, getClassEntries(url).then((cm) => {
+      if (!cm) return null;
+      const lut = new Map();
+      for (const c of cm.classes) lut.set((c.rgb[0] << 16) | (c.rgb[1] << 8) | c.rgb[2], c.label);
+      return lut;
+    }).catch(() => null));
+  }
+  return classLutCache.get(url);
+}
+
+async function probeClassPixel(cfg, date, z, x, y, px, py, lut) {
+  const img = await fetchProbeTile(cfg, date, z, x, y);
+  if (!img) return null;
+  probeCtx.clearRect(0, 0, 512, 512);
+  probeCtx.drawImage(img, 0, 0);
+  const d = probeCtx.getImageData(px, py, 1, 1).data;
+  if (d[3] === 0) return null;
+  return lut.get((d[0] << 16) | (d[1] << 8) | d[2]) ?? null;
+}
+
 /* rgb → representative value map (+ units), from any GIBS colormap. Generalises
  * the SST LUT so the delta tool works for any continuous colormapped layer. */
 const valueLutCache = new Map();
@@ -1811,7 +1912,12 @@ function layerLegendEl(cfg, titleOverride) {
       );
     }
   };
-  if (cfg.colormap) {
+  if (cfg.classmap) {
+    getClassEntries(cfg.classmap).then((cm) => {
+      if (cm) buildClassLegend(div, cm, cfg);
+      else fallback();
+    });
+  } else if (cfg.colormap) {
     getColormapEntries(cfg.colormap).then((cm) => {
       if (cm && cm.entries.length >= 2) buildLegendBar(div, cm);
       else fallback();
@@ -1820,6 +1926,25 @@ function layerLegendEl(cfg, titleOverride) {
     fallback();
   }
   return div;
+}
+
+/* Classification legend: one labelled swatch per class. A gradient bar would
+ * imply an ordering between "provisional" and "finished" that doesn't exist. */
+function buildClassLegend(container, cm, cfg) {
+  const list = document.createElement("div");
+  list.className = "legend-classes";
+  for (const c of cm.classes) {
+    const row = document.createElement("div");
+    row.className = "legend-class";
+    row.innerHTML =
+      `<span class="legend-swatch" style="background:rgb(${c.rgb.join(",")})"></span>` +
+      `<span class="legend-class-label">${c.label}</span>`;
+    list.appendChild(row);
+  }
+  container.appendChild(list);
+  if (cfg?.classNote) {
+    container.insertAdjacentHTML("beforeend", `<div class="legend-note">${cfg.classNote}</div>`);
+  }
 }
 
 function buildLegendBar(container, cm) {
@@ -2122,7 +2247,24 @@ function maybeMonthlyGridToast(cfg) {
 /* When a layer's tile archive ends before the selected date, the request
  * clamps to the last served date (gibsTime). Say so on enable — a silently
  * older map is better than a blank one, but only if the user knows. */
+/* Annual products are not dateless and not monthly: the year drives them and
+ * nothing else does — the same trap Climate TRACE has, one rung coarser. Say
+ * so on enable, or the day/month buttons look broken. */
+function maybeAnnualToast(cfg) {
+  if (!cfg?.annual) return;
+  const shown = gibsTime(cfg, state.date).slice(0, 4);
+  const lo = cfg.start.slice(0, 4), hi = cfg.endTime.slice(0, 4);
+  const want = state.date.slice(0, 4);
+  const note = want !== shown
+    ? ` (nearest available to your ${want}; the product covers ${lo}–${hi})`
+    : ` — set the date's <em>year</em> anywhere in ${lo}–${hi} to switch years`;
+  showToast(`<strong>${cfg.title}</strong> is an <strong>annual</strong> summary: ` +
+    `the day and month don't matter, but the <strong>year does</strong>. ` +
+    `Showing <strong>${shown}</strong>${note}.`, { key: `annual-${cfg.id}` });
+}
+
 function maybeClampToast(cfg) {
+  if (cfg?.annual) return;                // its own, clearer toast above
   if (!cfg?.endTime || !cfg.timed || state.date <= cfg.endTime) return;
   showToast(`<strong>${cfg.title}</strong>: its tile archive ends ` +
     `<strong>${cfg.endTime.slice(0, 7)}</strong>, so you're seeing ` +
@@ -2174,6 +2316,21 @@ const LAYER_FACTS = {
          "biosphere. Season swings it; climate shifts it — comparing the same " +
          "month across years (Compare → computed change) reveals greening, " +
          "browning, deforestation and drought stress directly." },
+  "dist-alert": { rec: "this map: 2023-01 → present (2024 has a few gap dates near the start of the year — blank means no tile, not no disturbance)", int: "updated every few days as Landsat/Sentinel-2 pass over; each map is the running status of the CURRENT year", sp: "30 m — the finest layer in this app",
+    sum: "Where vegetation has been lost, at the scale of a single clearing. " +
+         "OPERA compares every new Landsat/Sentinel-2 image against that " +
+         "pixel's own recent history, and flags the drop: first detection, " +
+         "provisional, then confirmed once a second clear image agrees — and " +
+         "separately whether under or over half the cover went. Deforestation, " +
+         "fire scars, logging roads and storm damage all appear; the product " +
+         "sees the loss, not the cause. Zoom right in: at global view a 30 m " +
+         "alert is far smaller than a screen pixel." },
+  "dist-ann": { rec: "2023, 2024 and 2025 (one map per year, the annual summary)", int: "yearly — the date's YEAR picks the map; day and month are ignored", sp: "30 m",
+    sum: "The year's confirmed vegetation loss in one map, the settled version " +
+         "of the alert layer: everything that was still provisional has been " +
+         "resolved. Use this to compare whole years — how much of the Amazon " +
+         "arc, the Congo basin or Southeast Asia changed in 2023 versus 2024 — " +
+         "and the alert layer to watch the current year as it happens." },
   "grace": { rec: "this map: 2002-08 → 2022-07 (last month GIBS serves; GRACE-FO continues) · 2017–18 has a between-missions gap", int: "monthly", sp: "~300 km (3° mascons)",
     sum: "Where Earth gained or lost water mass — all of it: groundwater, soil, " +
          "snow, ice — measured by how the mass below tugs at a pair of " +
@@ -2327,6 +2484,7 @@ function buildLayerPanel() {
       maybeDatelessToast(id);
       maybeMonthlyGridToast(cfg);
       maybeClampToast(cfg);
+      maybeAnnualToast(cfg);
     } else {
       removeLayer(id);
       row.style.display = "none";
@@ -2461,12 +2619,17 @@ const SCENES = {
   currents: ["currents"],            // monthly GLORYS snapshot
   floats: ["toggle-argo"],           // the live Argo fleet
   vegetation: ["ndvi"],              // monthly, follows the date
+  "forest loss": ["dist-alert"],     // 30 m alerts — needs the flyTo below to be visible at all
   emissions: ["toggle-climatetrace"],// yearly, the date's year picks it
 };
 // A scene whose data lives somewhere specific flies the camera there — sea
 // ice is invisible from the default equatorial view.
 const SCENE_VIEWS = {
   seaice: { lon: -35, lat: 78, height: 1.15e7 },   // the Arctic fills the view
+  // A 30 m alert is invisible from orbit — without a flyTo this scene looks
+  // broken. Land on the Amazon "arc of deforestation" (Rondônia/Mato Grosso),
+  // the densest, most legible cluster of clearings on the planet.
+  "forest loss": { lon: -60, lat: -9, height: 2.2e6 },
 };
 function sceneBox(id) {
   return id.startsWith("toggle-")
@@ -2952,7 +3115,7 @@ const probeCtx = probeCanvas.getContext("2d", { willReadFrequently: true });
 function topColormapLayer() {
   let best = null, bestIdx = -1;
   for (const e of Object.values(state.layers)) {
-    if (e.layer && (e.cfg.colormap || e.cfg.grid)) {
+    if (e.layer && (e.cfg.colormap || e.cfg.classmap || e.cfg.grid)) {
       const idx = viewer.imageryLayers.indexOf(e.layer);
       if (idx > bestIdx) { bestIdx = idx; best = e; }
     }
@@ -3010,7 +3173,7 @@ function kelvinToC(res) {
 
 function colormapLayersTopDown() {
   return Object.values(state.layers)
-    .filter((e) => e.layer && (e.cfg.colormap || e.cfg.grid))
+    .filter((e) => e.layer && (e.cfg.colormap || e.cfg.classmap || e.cfg.grid))
     .map((e) => [viewer.imageryLayers.indexOf(e.layer), e])
     .sort((a, b) => b[0] - a[0])
     .map(([, e]) => e);
@@ -3044,6 +3207,17 @@ async function probeEntryValue(entry, carto) {
     if (!g) return { ...base, noData: true };
     const v = sampleGrid(g, lon, lat);
     return v == null ? { ...base, noData: true } : { ...base, value: v };
+  }
+  if (cfg.classmap) {
+    // Classification raster: read the class NAME under the cursor. No
+    // delta/aggregate variants exist — class codes don't average or subtract.
+    const lut = await getClassLut(cfg.classmap);
+    if (!lut) return null;
+    const z = cfg.maxLevel;
+    const t = tileCoordsAt(lon, lat, z);
+    const base = { title: cfg.title, lon, lat };
+    const label = await probeClassPixel(cfg, state.date, z, t.x, t.y, t.px, t.py, lut);
+    return label == null ? { ...base, noData: true } : { ...base, label };
   }
   const computed = entry.isDelta || entry.isRatio || entry.isAggregate;
   const win = computed ? state.windowDays : 1;
@@ -3100,6 +3274,9 @@ function renderProbe(res, sx, sy) {
   let head;
   if (res.noData) {
     head = `<span class="vp-val vp-nd">no data</span>`;
+  } else if (res.label) {
+    // classification layer: the answer is a category, not a number
+    head = `<span class="vp-val vp-class">${res.label}</span>`;
   } else if (res.delta) {
     const v = `${res.value >= 0 ? "+" : "−"}${fmtVal(Math.abs(res.value))}`;
     head = `<span class="vp-val">Δ ${v}</span> <span class="vp-unit">${res.units}</span>`;
@@ -3165,7 +3342,7 @@ window.__runProbe = runProbe; // for tests
  * an explicit click for a single point — never tile streaming. */
 
 const PIXEL_RASTERS = ["sst", "sst-anom", "ssh-anom", "precip", "seaice", "snow", "aod", "lst",
-  "soilmoisture", "ndvi", "grace", "ceres", "chlor", "salinity"];
+  "soilmoisture", "ndvi", "grace", "ceres", "chlor", "salinity", "dist-alert"];
 const PIXEL_GRIDS = ["oisst", "gpcp", "eobs", "meteoswiss"];
 
 function haversineKm(lon1, lat1, lon2, lat2) {
@@ -3188,6 +3365,16 @@ function tileCoordsAt(lon, lat, z) {
 // One raster channel: value at the pixel on the app's current date (z capped
 // at 4 — inspector reads don't need street-level tiles, and 9 layers fetch).
 async function pixelRasterValue(cfg, lon, lat) {
+  if (cfg.classmap) {
+    // Classification channel: read at native resolution — a 30 m disturbance
+    // alert averaged down to level 4 would vanish, and the inspector's whole
+    // job is "what is true AT this point".
+    const lut = await getClassLut(cfg.classmap);
+    if (!lut) return null;
+    const t = tileCoordsAt(lon, lat, cfg.maxLevel);
+    const label = await probeClassPixel(cfg, state.date, cfg.maxLevel, t.x, t.y, t.px, t.py, lut);
+    return label == null ? null : { label };
+  }
   const vlut = await getValueLut(cfg.colormap);
   if (!vlut) return null;
   const z = Math.min(cfg.maxLevel, 4);
@@ -3419,7 +3606,9 @@ async function showPixelState(carto) {
   const rrows = rasters.map((r, i) => {
     if (!r) return "";
     const cfg = rasterCfgs[i];
-    return pixelRow(cfg.title.replace(/\s*\(.*\)$/, ""), `${fmtVal(r.v)} ${r.units}`);
+    const label = cfg.title.replace(/\s*\(.*\)$/, "");
+    return r.label ? pixelRow(label, r.label)
+      : pixelRow(label, `${fmtVal(r.v)} ${r.units}`);
   }).join("");
   if (rrows) {
     sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">${state.date} · NASA GIBS</span></div>${rrows}</div>`);
@@ -4422,6 +4611,9 @@ window.__earth = {
   get baseImageryLayer() { return baseImageryLayer; },
   parseColormap,
   parseColormapEntries,
+  parseClassEntries,
+  getClassEntries,
+  getClassLut,
   windowSampleDates,
   addDays,
   windowLabel,
