@@ -1082,9 +1082,18 @@ test("daily precip aggregates (dry = zero); 30-min layer steps through the day",
   });
 
   // -- 30-min: the time row appears with the layer and steps in half-hours
+  // Toggle in-page rather than via check/uncheck: with two IMERG rasters
+  // streaming tiles the software-GL render loop starves Playwright's
+  // actionability checks, and even a plain locator read can outlast the
+  // timeout (§4 in CLAUDE.md — the same reason the glacier layer is toggled
+  // this way).
+  const toggle = (id, on) => page.evaluate(([i, v]) => {
+    const el = document.querySelector(`#layer-list input[data-id="${i}"]`);
+    if (el.checked !== v) { el.checked = v; el.dispatchEvent(new Event("change", { bubbles: true })); }
+  }, [id, on]);
   const row = page.locator("#time-steps");
   await expect(row).toHaveClass(/hidden/);
-  await page.check('#layer-list input[data-id="precip-30min"]');
+  await toggle("precip-30min", true);
   await expect(row).not.toHaveClass(/hidden/);
   await expect(page.locator("#time-value")).toHaveText("00:00 UTC");
   await page.click('#time-steps button[data-tstep="+30"]');
@@ -1099,15 +1108,17 @@ test("daily precip aggregates (dry = zero); 30-min layer steps through the day",
   expect(t.sub).toMatch(/T00:30:00Z$/);
   expect(t.daily).not.toContain("T");  // daily layers are untouched by the stepper
   // stepping back across midnight rolls the date
-  const dateBefore = await page.inputValue("#layer-date");
+  const dateBefore = await page.evaluate(() => document.getElementById("layer-date").value);
   await page.click('#time-steps button[data-tstep="-30"]');
   await page.click('#time-steps button[data-tstep="-30"]');
   await expect(page.locator("#time-value")).toHaveText("23:30 UTC");
   const after = await page.evaluate(() => window.__earth.state.date);
   expect(after < dateBefore).toBe(true);
-  expect(await page.inputValue("#layer-date")).toBe(after);
+  // The input must follow the state, or the date the user reads and the date
+  // the tiles are fetched for have silently diverged.
+  expect(await page.evaluate(() => document.getElementById("layer-date").value)).toBe(after);
   // switching the layer off hides the row again
-  await page.uncheck('#layer-list input[data-id="precip-30min"]');
+  await toggle("precip-30min", false);
   await expect(row).toHaveClass(/hidden/);
 });
 
