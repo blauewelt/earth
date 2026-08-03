@@ -1482,6 +1482,289 @@ def gazetteer(tier="cities5000"):
           f"{growth:.2f}x/rung, {raw / 1e6:.1f} MB raw / {gz / 1e6:.2f} MB gzipped")
 
 
+def islands(continent_km2=3e6):
+    """Island names -> data/islands.json: the third place tier, and the first
+    one that is not a settlement.
+
+    The user zoomed to the German Bight and reported Sylt missing. It is
+    missing from both existing tiers for the same structural reason: Natural
+    Earth's populated-places file and GeoNames cities5000 are gazetteers of
+    PEOPLE, and an island is a piece of GROUND. Westerland (population 9,000)
+    is in the gazetteer; the 43 km island it sits on is not, because no file
+    we ship knows that islands exist. So this is a different kind of row --
+    a physical feature, drawn without a dot and in italics, because the
+    map furniture should not imply that Sylt is a town.
+
+    WHERE THE GEOMETRY COMES FROM. Names alone are not enough: a label needs
+    to know how big the thing under it is (see the rung section below), and no
+    name file carries that. So the unit of this file is a COASTLINE POLYGON --
+    Natural Earth's ne_10m_land plus ne_10m_minor_islands, flattened to ~9.6 k
+    individual rings -- and the names are joined onto it by point-in-polygon.
+    Size is then measured, not looked up: geodesic area from pyproj (for the
+    continent cut) and the geodesic diagonal of the bounding box as the
+    island's EXTENT in km (for the ladder).
+
+    THE CONTINENT CUT. A coastline file does not distinguish an island from a
+    continent -- Eurasia-Africa is just the biggest ring. Anything at or above
+    3e6 km2 is dropped, which removes Afro-Eurasia, the Americas, Antarctica
+    and Australia (7.67e6) while keeping Greenland (2.11e6). That is not a
+    threshold invented here: "Australia is a continent, Greenland is the
+    largest island" is the standard convention, and this is the only number
+    that expresses it -- the gap between the two is a factor of 3.6, so
+    nothing else lands near the line.
+
+    NAMES, TWO TIERS, EXACTLY LIKE THE TOWNS. Natural Earth's
+    ne_10m_geography_regions_polys carries 295 curated `Island` features with
+    English exonyms (NAME_EN: "Great Britain", "Java", "Ireland"), which are
+    both the right names and the ones a search box is asked for. They are
+    matched to a coastline ring by containment, with the ring required to hold
+    at least 30% of the curated region's area so that the Isle of Wight cannot
+    inherit "Great Britain" from the region polygon it sits inside. Everything
+    smaller -- the other ~4.6 k -- is named from GeoNames' feature class T,
+    codes ISL/ISLET/ATOL/ISLM/ISLF (ISLS and ARCH are excluded: an archipelago
+    has no single ring to label). Ireland is the reason the curated tier
+    exists at all: GeoNames has no T-class entry for Ireland-the-island, only
+    an ISLF "Ireland" in the UAE, so a GeoNames-only join labelled the whole
+    country "Coney Island".
+
+    PICKING ONE NAME OUT OF MANY. A big ring contains dozens of T-class
+    points -- Iceland's contains 44, nearly all of them skerries in its own
+    lakes and fjords. Three signals separate the island from its own
+    furniture, and they are ordered by an experiment rather than by taste: of
+    the top-60 rings by extent, three orderings disagreed on three islands,
+    and only this one got all three right (Iceland, Spitsbergen, Pulau
+    Halmahera; the alternatives returned Geirsholmi, Grusholmen, Pulau Wai):
+
+        1. population > 0            -- GeoNames records people ON the island
+        2. alternate-name count + 4x (admin1 == "00")
+                                     -- fame, plus GeoNames' own code for a
+                                        feature that is NOT confined to one
+                                        first-order division, i.e. one that
+                                        spans the region rather than sitting
+                                        in it. Worth about four exonyms.
+        3. distance to the coastline -- the whole-island entry is the one
+                                        placed in the middle.
+
+    THE RUNG IS NOT IN THIS FILE, AND THAT IS THE POINT. Every other place
+    tier bakes a `z` and the client turns it into a camera distance. Islands
+    can do better, because unlike a town an island has a SIZE, and the honest
+    rule for a physical feature is geometric: an island earns its name when it
+    is at least as wide on screen as the name is. That is a relation between
+    three things the baker cannot know -- the canvas width, the camera's field
+    of view, and how wide "Sylt" actually renders in the app's label font --
+    so the file ships the one thing the baker CAN know, the extent in km, and
+    the client solves
+
+        extent_m >= (text_px / canvas_px) * 2 * h * tan(fov/2)
+
+    for h. The result adapts to the window size and to the length of the name,
+    and it is self-limiting: the count on screen cannot run away, because
+    filling the view with islands would require them to be bigger than the
+    view. It also happens to match Natural Earth's own behaviour, which is the
+    check that this is a real ladder and not a preference: bucketing all 9,632
+    rings by the min_zoom Natural Earth assigns their feature gives median
+    extents of 170 km at rung 1 falling to 2.3 km at rung 7 -- a ratio of
+    2.06x per rung, i.e. extent is proportional to 2^-z to within 3%. Halving
+    the camera height doubles the number of islands wide enough to name,
+    exactly as the formula says.
+
+    Two calibrations were tried first and REJECTED, recorded so they are not
+    retried: regressing Natural Earth's curated island label points on size
+    gives min_zoom = 6.697 - 0.107*log2(sqrt(area_km2)) with R2 = 0.141 --
+    that list is a flat set of notable remote islands (min_zoom 5.1-7), not a
+    ladder; and ne_10m_minor_islands' own min_zoom is a two-valued 6.5/7 flag,
+    which is a yes/no, not a rung.
+
+    Sources: Natural Earth (public domain) for all geometry and the curated
+    names; GeoNames (CC BY 4.0) for the tail. Both are already credited in the
+    app footer for the town tiers; the CC BY attribution is required."""
+    import collections
+    import gzip
+    import zipfile
+
+    from pyproj import Geod
+    from shapely.geometry import Point, shape
+    from shapely.prepared import prep
+    from shapely.strtree import STRtree
+
+    geod = Geod(ellps="WGS84")
+    ne = ("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/"
+          "master/geojson/")
+
+    def ne_features(name):
+        path = f"/tmp/nc/{name}.geojson"
+        _download(ne + name + ".geojson", path, f" Natural Earth {name}")
+        with open(path) as fh:
+            return json.load(fh)["features"]
+
+    def parts(geom):
+        g = shape(geom)
+        return list(g.geoms) if g.geom_type == "MultiPolygon" else [g]
+
+    # --- 1. every coastline ring, measured ---------------------------------
+    rings = []
+    for f in ne_features("ne_10m_land") + ne_features("ne_10m_minor_islands"):
+        for p in parts(f["geometry"]):
+            w, s, e, n = p.bounds
+            # Rings are split at the antimeridian in this file; a bbox wider
+            # than half the world would be a wrap artefact, not an island.
+            if e - w > 180:
+                continue
+            area = abs(geod.geometry_area_perimeter(p)[0]) / 1e6
+            if area >= continent_km2:
+                continue
+            rings.append({"g": p, "area": area,
+                          "e": geod.inv(w, s, e, n)[2] / 1000.0})
+    print(f"  {len(rings)} island rings below {continent_km2:.0e} km2")
+
+    # --- 2. curated Natural Earth names for the large islands --------------
+    # Each curated feature names exactly ONE ring: the largest it contains.
+    # Both halves of that matter. Without "contains" a name is nothing; without
+    # "largest, and at least 30% of the region's area" the Isle of Wight
+    # inherits "Great Britain" and every skerry in a Greenland fjord becomes a
+    # second Greenland -- a curated region is a rough label area, drawn around
+    # an island rather than onto it, and it swallows the island's neighbours.
+    rtree_all = STRtree([r["g"] for r in rings])
+    named_by_ne = 0
+    for f in ne_features("ne_10m_geography_regions_polys"):
+        p = f["properties"]
+        if p.get("FEATURECLA") != "Island":       # "Island group" has no ring
+            continue
+        name = p.get("NAME_EN") or (p.get("NAME") or "").title()
+        # One FEATURE names one ring, not one per part: Natural Earth draws
+        # GREENLAND as sixteen label patches, and taking the largest ring
+        # under each of them produced sixteen Greenlands.
+        ps = parts(f["geometry"])
+        reg_area = sum(abs(geod.geometry_area_perimeter(g)[0]) for g in ps) / 1e6
+        best = None
+        for g in ps:
+            reg = prep(g)
+            for i in rtree_all.query(g):
+                r = rings[i]
+                if "n" in r or r["area"] < 0.3 * reg_area:
+                    continue
+                if reg.contains(r["g"].representative_point()):
+                    if best is None or r["area"] > rings[best]["area"]:
+                        best = i
+        if best is not None:
+            rings[best]["n"], rings[best]["src"] = name, "ne"
+            named_by_ne += 1
+    print(f"  {named_by_ne} named from Natural Earth's curated island regions")
+
+    # --- 3. GeoNames feature class T for everything else -------------------
+    # allCountries is the only dump with physical features (cities5000 and the
+    # per-country files are populated places); 420 MB zipped, parsed streaming.
+    zpath = "/tmp/nc/allCountries.zip"
+    _download("https://download.geonames.org/export/dump/allCountries.zip",
+              zpath, " GeoNames allCountries (all feature classes)")
+    codes = {"ISL", "ISLET", "ATOL", "ISLM", "ISLF"}
+    cands = []
+    with zipfile.ZipFile(zpath) as zf, zf.open("allCountries.txt") as fh:
+        for raw in fh:
+            row = raw.decode("utf-8").rstrip("\n").split("\t")
+            # 1 name, 3 alternatenames, 4 lat, 5 lon, 6 class, 7 code,
+            # 8 country, 10 admin1, 14 population
+            if len(row) < 15 or row[6] != "T" or row[7] not in codes:
+                continue
+            cands.append((row[1], float(row[4]), float(row[5]), row[8],
+                          row[3].count(",") + 1 if row[3] else 0,
+                          int(row[14] or 0), row[10]))
+    print(f"  {len(cands)} GeoNames island features (class T, {'/'.join(sorted(codes))})")
+
+    # The join runs over ALL rings, not just the unnamed ones: a curated ring
+    # still needs a country, and the curated file has no ISO column, so
+    # Greenland's "GL" can only come from the GeoNames points inside it.
+    prepped = [None] * len(rings)
+    hits = {}
+    for c in cands:
+        pt = Point(c[2], c[1])
+        for i in rtree_all.query(pt):
+            if prepped[i] is None:
+                prepped[i] = prep(rings[i]["g"])
+            if prepped[i].contains(pt):
+                hits.setdefault(i, []).append(c)
+                break
+
+    named_by_gn = 0
+    for i, cs in hits.items():
+        r = rings[i]
+        edge = r["g"].exterior
+        best = min(cs, key=lambda c: (
+            -(c[5] > 0),                       # people live on it
+            -(c[4] + 4 * (c[6] == "00")),      # fame + "not inside one region"
+            -edge.distance(Point(c[2], c[1]))))  # placed in the middle
+        # The country is the one MOST of the ring's features are in, not the
+        # winning name's own: Ireland's best-ranked entry happens to sit in
+        # Northern Ireland, and "Ireland, United Kingdom" is a worse answer
+        # than the island's arithmetic majority.
+        r["c"] = collections.Counter(c[3] for c in cs).most_common(1)[0][0]
+        if "n" not in r:
+            r["n"], r["src"], named_by_gn = best[0], "geonames", named_by_gn + 1
+    print(f"  {named_by_gn} named from GeoNames")
+
+    out = []
+    for r in rings:
+        if "n" not in r:
+            continue
+        # The label anchor must be ON the island: a crescent atoll or a fjord
+        # coast puts its own centroid in the water, and the name would sit off
+        # the thing it names.
+        pt = r["g"].centroid
+        if not r["g"].contains(pt):
+            pt = r["g"].representative_point()
+        out.append({"n": r["n"], "o": round(pt.x, 4), "a": round(pt.y, 4),
+                    "e": round(r["e"], 2), "c": r.get("c", ""),
+                    "s": 1 if r["src"] == "ne" else 0})
+    # Biggest first: the extent IS the ladder (see the rung section), so a
+    # client that walks a prefix walks it in visibility order.
+    out.sort(key=lambda r: (-r["e"], r["n"]))
+
+    cinfo = "/tmp/nc/countryInfo.txt"
+    _download("https://download.geonames.org/export/dump/countryInfo.txt",
+              cinfo, " GeoNames country names")
+    names = {}
+    with open(cinfo) as fh:
+        for ln in fh:
+            if not ln.startswith("#"):
+                f = ln.split("\t")
+                if len(f) > 4:
+                    names[f[0]] = f[4]
+    used = {r["c"] for r in out}
+
+    payload = {
+        "id": "islands",
+        "title": "Islands (Natural Earth coastlines, named)",
+        "source": ("Natural Earth ne_10m_land + ne_10m_minor_islands rings, "
+                   "named from ne_10m_geography_regions_polys and GeoNames "
+                   "feature class T"),
+        "citation": ("Natural Earth (naturalearthdata.com), public domain, for "
+                     "coastline geometry and curated island names; GeoNames "
+                     "(geonames.org), CC BY 4.0, for the remaining names. `e` "
+                     "is the island's extent in km (geodesic diagonal of its "
+                     "bounding box); the client draws the name only while the "
+                     "island is at least as wide on screen as the name is."),
+        "doc": "https://www.naturalearthdata.com/downloads/10m-physical-vectors/",
+        "license": "CC BY 4.0 (GeoNames names); Natural Earth public domain",
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "continentCutKm2": continent_km2,
+        "count": len(out),
+        "countries": {k: v for k, v in names.items() if k in used},
+        "islands": out,
+    }
+    path = os.path.join(DATA, "islands.json")
+    with open(path, "w") as fh:
+        json.dump(payload, fh, separators=(",", ":"), ensure_ascii=False)
+    raw = os.path.getsize(path)
+    with open(path, "rb") as fh:
+        gz = len(gzip.compress(fh.read()))
+    big = sum(1 for r in out if r["e"] >= 100)
+    print(f"  wrote islands.json: {len(out)} islands "
+          f"({named_by_ne} Natural Earth, {named_by_gn} GeoNames), "
+          f"{big} at least 100 km across, extents "
+          f"{out[0]['e']:.0f} -> {out[-1]['e']:.2f} km, "
+          f"{raw / 1e6:.2f} MB raw / {gz / 1e6:.2f} MB gzipped")
+
+
 if __name__ == "__main__":
     os.makedirs("/tmp/nc", exist_ok=True)
     default = ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
@@ -1491,7 +1774,7 @@ if __name__ == "__main__":
            "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss,
            "species": species, "argo_column": argo_column, "glorys": glorys, "eei": eei,
            "gfs": gfs, "drivers": drivers, "cities": cities,
-           "gazetteer": gazetteer}
+           "gazetteer": gazetteer, "islands": islands}
     for w in which:
         fns[w]()
     print("done")

@@ -378,6 +378,67 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
     of a later word ▸ buried) then by the place's own rung, so "york" leads with
     York and "san" doesn't lead with a village. **No online geocoder** — §3
     forbids a new browser-facing host, which is why the gazetteer is baked.
+  - **Islands are the third tier, and the first that is not a settlement.**
+    Both gazetteers carry populated places only, so Sylt — 43 km of German
+    North Sea dune — was an unnamed shape while Westerland, the town standing
+    on it, was labelled. `data/islands.json` (4,950 islands, 0.10 MB gzipped,
+    baked by `refresh_data.py islands`) names the GROUND. Styled italic and
+    with **no dot**: a dot asserts a point, and an island is an area.
+  - **The island ladder is GEOMETRY, not a rung — an island earns its name
+    once it is at least as wide on screen as the name is.** `extent_m ≥
+    (text_px / canvas_px) · 2 · h · tan(fov_x/2)`, solved for h, becomes the
+    label's `DistanceDisplayCondition` far distance (`islandFar`); `text_px` is
+    a real canvas `measureText` in the label font, memoized. Two traps: Cesium's
+    `frustum.fov` is HORIZONTAL when aspect > 1 and vertical otherwise (portrait
+    converts via `2·atan(tan(fov/2)·aspect)`), and the threshold depends on the
+    canvas WIDTH, so a `ResizeObserver` retunes every condition (`retuneIslands`
+    — label i ↔ island i holds because the build is a prefix). The rule is
+    self-limiting by construction: filling the view with island names would
+    require islands wider than the view. It also needs no `min_zoom` column,
+    which matters because none of the sources ship a usable one.
+  - **That rule is VALIDATED against Natural Earth, not asserted.** Bucketing
+    all 9,632 coastline rings by their feature's `min_zoom` gives median extents
+    of 170 km at rung 1 down to 2.3 km at rung 7 — **2.06× per rung**, i.e.
+    `extent ∝ 2^-z` to within 3%. The cartographers' own selection is scale-
+    invariant in exactly the way the geometry rule assumes. Two calibrations
+    were tried first and **rejected — do not retry**: OLS `min_zoom = 6.697 −
+    0.107·log2(√area)` scores R² = 0.141, and `ne_10m_minor_islands`' own
+    `min_zoom` is a two-valued 6.5/7 flag, not a ladder.
+  - **The continent cut is one measured threshold, not a list of exceptions.**
+    Reject any ring of geodesic area ≥ 3e6 km²: that drops Afro-Eurasia, the
+    Americas, Antarctica and Australia (7.67e6) and keeps Greenland (2.11e6) —
+    the standard "Australia is a continent, Greenland is the largest island"
+    line, with a factor-3.6 gap either side so nothing sits near the cut.
+  - **Naming is two passes, curated first.** GeoNames has no T-class entry for
+    Ireland-the-island (its only "Ireland" is an ISLF in the UAE), so a
+    GeoNames-only join labelled it "Coney Island". `ne_10m_geography_regions_polys`
+    `FEATURECLA == "Island"` (295 curated features, UPPERCASE props, `NAME_EN`)
+    names the big ones; GeoNames classes ISL/ISLET/ATOL/ISLM/ISLF fill in the
+    rest. ISLS/ARCH are excluded — an archipelago has no single ring.
+    (`ne_10m_geography_regions_points` was a dead end: 116 remote islands, no
+    Ireland, no Iceland, no Sylt.) Among competing GeoNames names, ordering C
+    wins — `(-(pop > 0), -(nalt + 4·(admin1 == "00")), -distance_to_boundary)`:
+    inhabited ▸ famous-and-not-inside-one-region ▸ placed in the middle. It was
+    chosen by EXPERIMENT over the top-60 rings, where three orderings disagreed
+    on three islands and only this one got all three right (Iceland, Spitsbergen,
+    Pulau Halmahera; the others gave Geirshólmi, Grusholmen, Pulau Wai).
+  - **One FEATURE names one ring, and the country is the ring's majority.**
+    Natural Earth draws GREENLAND as sixteen label patches; thresholding on each
+    PART's area produced sixteen Greenlands, so the 30% test sums across parts
+    and picks a single best ring per feature. The GeoNames point-in-polygon join
+    runs over ALL rings, not just unnamed ones, so curated islands still get a
+    country — and the country is the modal `cc` of the ring's features, not the
+    winning name's own: Ireland's best-ranked entry sits in Northern Ireland,
+    and "Ireland, United Kingdom" is a worse answer than the arithmetic majority.
+    Label anchors use the centroid only when it is inside the ring — a crescent
+    atoll or a fjord coast puts its own centroid in the water.
+  - **The file is sorted by descending extent, because the extent IS the
+    ladder.** That makes "everything that could be visible now" a contiguous
+    prefix, so the island tier reuses the city tier's chunked prefix walk
+    (`buildIslandsTo`, 300 labels per animation frame) rather than the
+    gazetteer's view-bounded machinery. In search, an island has no `z`, so
+    `placeRung()` derives one from `islandFar` — otherwise flying to an island
+    arrives at an altitude where it is not drawn.
   Scene primitives always draw over imagery, so the names need no re-raising —
   but the borders imagery does: every data layer is appended to the TOP of the
   stack, so `imageryLayers.layerAdded` re-raises it from the one place that
@@ -581,6 +642,17 @@ the towns Natural Earth never had room for, and the search box finds any of the
 61,000 places across both files and flies you in at an altitude where the place
 is actually labelled. Bake: `refresh_data.py gazetteer`.
 
+**Island names (`data/islands.json`) — the first tier that is not a
+settlement:** the same user again — "can you add island names as well? i think
+sylt is currently missing". Sylt was missing for a structural reason: both
+existing tiers are gazetteers of POPULATED PLACES, so Westerland (pop. 9,000)
+was labelled and the 43-km island it stands on was not, because no settlement
+file contains physical features at all. 4,950 islands (0.10 MB gzipped, 264
+named by Natural Earth's curated `ne_10m_geography_regions_polys`, 4,686 by
+GeoNames feature class T), drawn as a third `LabelCollection` — italic, no dot,
+because an island is an area and a dot would claim a point. See §5 for the
+decisions; bake: `refresh_data.py islands` (needs `shapely` + `pyproj`).
+
 **Ocean column (Argo RG, `data/ocean_column.json`):** the latest month's
 absolute T/S profile AND the same-calendar-month 2004–18 normal on a 2° grid
 at 17 depth levels (0–2000 dbar), both from the Roemmich-Gilson product so
@@ -668,7 +740,7 @@ climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet
 join), gistemp, gpcp, eobs, oisst, meteoswiss. Grid snapshots share
 `_bin_to_grid`/`_write_grid` (nearest scatter-binning onto regular grids).
 
-**Testing** (~45 Playwright specs): app behaviour (`tests/app.spec.js`) + data
+**Testing** (106 Playwright specs): app behaviour (`tests/app.spec.js`) + data
 integrity (`tests/data.spec.js`), sandbox MIRROR mode, in-repo proxies, CI on
 real network.
 

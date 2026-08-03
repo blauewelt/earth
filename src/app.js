@@ -732,7 +732,9 @@ function ensureCities() {
  * there instead of watching them pop in. */
 viewer.camera.percentageChanged = 0.5;
 const descend = () => {
-  if (cityData) buildCitiesTo(cityRungAt(viewer.camera.positionCartographic.height) + 1);
+  const h = viewer.camera.positionCartographic.height;
+  if (cityData) buildCitiesTo(cityRungAt(h) + 1);
+  if (islData) buildIslandsTo(islandExtentAt(h));
   refreshGazetteerLabels();
 };
 viewer.camera.changed.addEventListener(descend);
@@ -746,6 +748,7 @@ function applyPlacesMode() {
   const mode = placesMode();
   if (cityLabels) { cityLabels.show = mode !== "off"; cityPoints.show = mode !== "off"; }
   if (gazLabels) { gazLabels.show = mode !== "off"; gazPoints.show = mode !== "off"; }
+  if (islLabels) islLabels.show = mode !== "off";
 }
 function updatePlaces() {
   const mode = placesMode();
@@ -759,7 +762,7 @@ function updatePlaces() {
      * coastline. The restraint is in the artwork, not in the alpha. */
     bordersLayer.alpha = 0.9;
   }
-  if (mode !== "off") ensureCities();
+  if (mode !== "off") { ensureCities(); ensureIslands(); }
   applyPlacesMode();
   refreshGazetteerLabels();
   // A searched place keeps its marker whatever this control says — you asked
@@ -911,9 +914,173 @@ function refreshGazetteerLabels() {
   return gazBuild;
 }
 
+/* --------------------------------------------------------------- the islands
+ *
+ * The third tier, and the first one that is not a settlement. A user zoomed to
+ * the German Bight and reported Sylt missing; it was missing from both the
+ * tiers above for the same structural reason. Natural Earth's populated places
+ * and GeoNames cities5000 are gazetteers of PEOPLE. Westerland (9,000 people)
+ * is in the second one; the 43 km island it stands on is in neither, because
+ * nothing we shipped knew that islands exist. Coastlines are drawn by the
+ * borders overlay, so the island was *visible* the whole time and simply had
+ * no name — the worst of both, a shape you can see and can't identify.
+ *
+ * data/islands.json is 4,950 named coastline rings (bake: refresh_data.py
+ * islands), each carrying its EXTENT in km rather than a ladder rung — and
+ * that difference is the whole design. A town has no size, so its rung has to
+ * be assigned by a proxy for importance. An island IS a size, so the rule for
+ * when to draw its name can be geometric and exact:
+ *
+ *     an island earns its name when it is at least as wide on screen
+ *     as the name is.
+ *
+ * Which is a relation between three things the baker cannot know — the canvas
+ * width, the camera's field of view, and how wide "Sylt" actually renders in
+ * this font — and all three are known HERE. So the client solves
+ *
+ *     extent_m ≥ (text_px / canvas_px) · 2 · h · tan(fov/2)
+ *
+ * for h and uses that as the label's far distance. It adapts to the window
+ * size and to the length of the name (a wide island with a long name has to be
+ * closer than a wide island with a short one, which is exactly right), and it
+ * cannot flood the screen: filling the view with island names would require
+ * the islands to be wider than the view.
+ *
+ * It is also, reassuringly, the same ladder the cartographers use. Bucketing
+ * all 9,632 Natural Earth rings by the min_zoom of their feature gives median
+ * extents falling 170 km → 2.3 km from rung 1 to rung 7: a factor of 2.06 per
+ * rung, i.e. extent ∝ 2^-z to within 3%. Halving the camera height doubles the
+ * number of islands wide enough to name — which is what the formula says, and
+ * is the check that this is a real ladder rather than a preference. */
+const ISL_FONT = "italic 11px system-ui, sans-serif";
+// The shortest island name still worth building for. Used only to decide how
+// much of the (extent-sorted) file to materialise — the per-label condition
+// below is what actually decides what is drawn, name by name.
+const ISL_MIN_PX = 14;
+let islData = null, islLoad = null, islLabels = null;
+let islBuilt = 0, islBuild = null, islWide = 0, islFold = null;
+let islCtx = null;
+const islTextW = new Map();
+
+/* How wide this name renders, measured in the very font it will be drawn in —
+ * not estimated from a character count, which would be wrong by a factor of
+ * two between "Iō-jima" and "Wrangel Island". */
+function islTextWidth(name) {
+  let w = islTextW.get(name);
+  if (w === undefined) {
+    if (!islCtx) {
+      islCtx = document.createElement("canvas").getContext("2d");
+      if (islCtx) islCtx.font = ISL_FONT;
+    }
+    w = (islCtx && islCtx.measureText(name).width) || name.length * 6;
+    islTextW.set(name, w);
+  }
+  return w;
+}
+
+/* Metres of ground per screen pixel is the only thing the criterion needs from
+ * the camera, and it is one number: the view is 2·h·tan(fov/2) wide. Cesium's
+ * `fov` is the HORIZONTAL angle whenever the canvas is landscape and the
+ * vertical one when it is not, so a portrait window has to convert. */
+function islMetresPerPixel(height) {
+  const canvas = viewer.scene.canvas;
+  const w = canvas.clientWidth || canvas.width || 1200;
+  const h = canvas.clientHeight || canvas.height || w;
+  const fr = viewer.camera.frustum;
+  const fov = fr.fov || Cesium.Math.toRadians(60);
+  const aspect = fr.aspectRatio || w / Math.max(h, 1);
+  const fovx = aspect > 1 ? fov : 2 * Math.atan(Math.tan(fov / 2) * aspect);
+  return { mpp: 2 * height * Math.tan(fovx / 2) / w, px: w };
+}
+
+/* The far distance for one island: the height at which its name stops fitting
+ * inside it. */
+function islandFar(isl) {
+  const { mpp } = islMetresPerPixel(1);      // per unit height — linear in h
+  return (isl.e * 1000) / (islTextWidth(isl.n) * mpp);
+}
+
+function addIsland(isl) {
+  // No dot. A town is a point and deserves one; an island is the ground you
+  // are already looking at, and a marker in the middle of it would claim a
+  // precision — and a kind of thing — that isn't there. Italic is the
+  // cartographic convention for a physical feature, and it does the same work
+  // the dot does for towns: it says which sort of name this is.
+  islLabels.add({
+    id: CITY_PICK,
+    position: Cesium.Cartesian3.fromDegrees(isl.o, isl.a),
+    text: isl.n,
+    font: ISL_FONT,
+    fillColor: Cesium.Color.WHITE.withAlpha(0.92),
+    outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+    style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+    distanceDisplayCondition:
+      new Cesium.DistanceDisplayCondition(0, islandFar(isl)),
+  });
+}
+
+/* Same prefix walk as the Natural Earth towns, keyed on extent instead of
+ * rung: the file is sorted biggest-first, so "every island that could possibly
+ * be labelled at this altitude" is a slice from the front. The cutoff uses the
+ * shortest name worth drawing, so the prefix is generous and the per-label
+ * condition does the real work. */
+function buildIslandsTo(minExtentKm) {
+  if (!islData || !islLabels) return islBuild || Promise.resolve(islBuilt);
+  const list = islData.islands;
+  const wanted = () => islBuilt < list.length && list[islBuilt].e >= minExtentKm;
+  if (!wanted()) return islBuild || Promise.resolve(islBuilt);
+  islBuild = (islBuild || Promise.resolve()).then(() => new Promise((done) => {
+    const step = () => {
+      const stop = islBuilt + 300;
+      while (islBuilt < stop && wanted()) addIsland(list[islBuilt++]);
+      if (wanted()) requestAnimationFrame(step);
+      else { islBuild = null; done(islBuilt); }
+    };
+    step();
+  }));
+  return islBuild;
+}
+
+function islandExtentAt(height) {
+  // ÷2 is one rung of look-ahead, the same courtesy the town tier extends.
+  return islMetresPerPixel(height).mpp * ISL_MIN_PX / 2000;
+}
+
+/* Every far distance is a function of the canvas width, so a window resize or
+ * a sidebar drag invalidates all of them at once. The collection is built in
+ * file order, so label i is island i and the retune is a walk. */
+function retuneIslands() {
+  if (!islLabels || !islData) return;
+  const w = islMetresPerPixel(1).px;
+  if (w === islWide) return;
+  islWide = w;
+  for (let i = 0; i < islLabels.length; i++) {
+    islLabels.get(i).distanceDisplayCondition =
+      new Cesium.DistanceDisplayCondition(0, islandFar(islData.islands[i]));
+  }
+  viewer.scene.requestRender();
+}
+
+function ensureIslands() {
+  if (islLoad) return islLoad;
+  islLoad = fetch("data/islands.json").then((r) => r.json()).then(async (d) => {
+    islData = d;
+    islLabels = viewer.scene.primitives.add(new Cesium.LabelCollection());
+    islWide = islMetresPerPixel(1).px;
+    applyPlacesMode();
+    await buildIslandsTo(islandExtentAt(viewer.camera.positionCartographic.height));
+    return d;
+  }).catch(() => null);
+  return islLoad;
+}
+
+if (typeof ResizeObserver === "function") {
+  new ResizeObserver(retuneIslands).observe(viewer.scene.canvas);
+}
+
 /* ------------------------------------------------------------- place search
  *
- * Two lists, one box. Natural Earth answers first and answers in English
+ * Three lists, one box. Natural Earth answers first and answers in English
  * exonyms ("Lisbon", "Cologne"); GeoNames answers in the local name and knows
  * the other 54,204 places. Searching both is not redundancy — it is the only
  * way "Lisbon" and "Peniche" both work.
@@ -921,16 +1088,26 @@ function refreshGazetteerLabels() {
  * A linear scan over 61 k pre-folded strings is ~3 ms, so there is no index and
  * no debounce beyond one frame: the ranking, not the lookup, is the hard part. */
 function placeCountry(p) {
-  // cities.json stores the country's name; gazetteer.json stores ISO-3166
-  // alpha-2 and ships the lookup, because "Portugal" × 500 is the single most
-  // compressible thing in a 3.9 MB file.
-  return (gazData?.countries?.[p.c]) || p.c || "";
+  // cities.json stores the country's name; gazetteer.json and islands.json
+  // store ISO-3166 alpha-2 and ship the lookup, because "Portugal" × 500 is
+  // the single most compressible thing in a 3.9 MB file.
+  return (gazData?.countries?.[p.c]) || (islData?.countries?.[p.c]) || p.c || "";
+}
+
+/* One ladder, two ways of earning a place on it. A town carries its rung in
+ * the file; an island derives one from the altitude at which its name fits
+ * inside it (see islandFar). Expressing the island's geometry AS a rung is
+ * what lets search ranking, the fly-to altitude and the found-marker's
+ * complement stay one piece of code across all three tiers. */
+function placeRung(p) {
+  return p.z !== undefined ? p.z : cityRungAt(islandFar(p));
 }
 
 function searchPlaces(q, limit = 8) {
   const f = foldName(String(q || "").trim());
   if (f.length < 2) return [];
   if (cityData && !cityFold) cityFold = cityData.places.map((p) => foldName(p.n));
+  if (islData && !islFold) islFold = islData.islands.map((p) => foldName(p.n));
   const hits = [];
   const scan = (places, folds) => {
     if (!places || !folds) return;
@@ -948,7 +1125,9 @@ function searchPlaces(q, limit = 8) {
   };
   scan(cityData?.places, cityFold);
   scan(gazData?.places, gazFold);
-  hits.sort((a, b) => a.rank - b.rank || a.place.z - b.place.z || b.place.p - a.place.p);
+  scan(islData?.islands, islFold);
+  hits.sort((a, b) => a.rank - b.rank || placeRung(a.place) - placeRung(b.place)
+    || (b.place.p || 0) - (a.place.p || 0));
   return hits.slice(0, limit).map((h) => h.place);
 }
 
@@ -957,7 +1136,7 @@ function searchPlaces(q, limit = 8) {
  * appears, and the label is guaranteed to be on screen when you arrive —
  * a hamlet gets a hamlet's altitude, a capital gets a continent's. */
 function placeViewHeight(p) {
-  return Math.min(4e6, Math.max(26e3, PLACE_FAR0 / Math.pow(2, p.z + 1)));
+  return Math.min(4e6, Math.max(26e3, PLACE_FAR0 / Math.pow(2, placeRung(p) + 1)));
 }
 
 let foundLabels = null, foundPoints = null, foundPlace = null;
@@ -982,7 +1161,7 @@ function markFoundPlace(p) {
      * it is what tells you which of the fifteen names on screen you asked for.
      * (With place names off there is no other label to defer to, so the
      * complement collapses to "always".) */
-    const own = placesMode() === "off" ? 0 : PLACE_FAR0 / Math.pow(2, p.z);
+    const own = placesMode() === "off" ? 0 : PLACE_FAR0 / Math.pow(2, placeRung(p));
     foundLabels.get(0).distanceDisplayCondition =
       new Cesium.DistanceDisplayCondition(own, Number.MAX_VALUE);
   }
@@ -1026,8 +1205,12 @@ function flyToPlace(p) {
       const country = placeCountry(p);
       li.innerHTML = `<span class="ps-name"></span><span class="ps-where"></span>`;
       li.querySelector(".ps-name").textContent = p.n;
-      li.querySelector(".ps-where").textContent =
-        country + (p.p > 0 ? ` · ${p.p.toLocaleString()}` : "");
+      // An island has no population to report; it has a size, which is the
+      // fact that distinguishes the two Melville Islands in the list.
+      const extra = p.e !== undefined
+        ? ` · island, ${p.e < 10 ? p.e.toFixed(1) : Math.round(p.e)} km across`
+        : (p.p > 0 ? ` · ${p.p.toLocaleString()}` : "");
+      li.querySelector(".ps-where").textContent = country + extra;
       li.addEventListener("click", () => choose(i));
       list.append(li);
     });
@@ -1049,7 +1232,7 @@ function flyToPlace(p) {
   // The gazetteer arrives on the first keystroke (and on focus, so it is
   // usually already there by the time two letters are in); the Natural Earth
   // list is already in memory whenever place names are on.
-  const load = () => { ensureCities(); ensureGazetteer().then(() => { if (!list.classList.contains("hidden")) run(); }); };
+  const load = () => { ensureCities(); ensureIslands(); ensureGazetteer().then(() => { if (!list.classList.contains("hidden")) run(); }); };
   input.addEventListener("focus", load, { once: true });
   input.addEventListener("input", () => { load(); run(); });
   input.addEventListener("keydown", (e) => {
@@ -5297,7 +5480,14 @@ window.__earth = {
   markFoundPlace,
   placeViewHeight,
   placeCountry,
+  placeRung,
   foldName,
+  ensureIslands,
+  buildIslandsTo,
+  islandFar,
+  islandExtentAt,
+  get islData() { return islData; },
+  get islLabels() { return islLabels; },
   get gazData() { return gazData; },
   get gazLabels() { return gazLabels; },
   get foundPlace() { return foundPlace; },

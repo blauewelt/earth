@@ -2330,3 +2330,93 @@ test("a place can be searched for, flown to, and read off the map once you get t
   expect(await page.evaluate(() => window.__earth.foundPlace)).toBeNull();
   await expect(page.locator("#ps-results")).toBeHidden();
 });
+
+test("islands are named by how wide they are on screen, not by how many people live on them", async ({ page }) => {
+  // The report: "can you add island names as well? i think sylt is currently
+  // missing". It was missing because both existing tiers are gazetteers of
+  // POPULATED PLACES — Westerland (pop. 9,000) was labelled, the 43-km island
+  // it stands on was not, because no settlement file contains physical
+  // features at all.
+  const isl = await page.evaluate(async () => {
+    const E = window.__earth;
+    E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(0, 20, 2.4e7) });
+    await E.ensureIslands();
+    return {
+      count: E.islData.count,
+      first: E.islData.islands.slice(0, 3).map((p) => p.n),
+      built: E.islLabels.length,
+      show: E.islLabels.show,
+    };
+  });
+  expect(isl.count).toBeGreaterThan(2000);
+  expect(isl.first[0]).toBe("Greenland");         // the file is an extent ladder
+  expect(isl.show).toBe(true);
+  // Same prefix-walk economy as the city tier: a glyph atlas is rasterised on
+  // first draw, so only the rungs the camera can see are built. From orbit
+  // that is the big ones, not five thousand islets.
+  expect(isl.built).toBeGreaterThan(10);
+  expect(isl.built).toBeLessThan(1000);
+
+  // The rule, which is the whole design: an island earns its name once it is
+  // at least as wide on screen as the name is. That makes the threshold a
+  // property of the ground and the text, not a hand-picked rung — and it is
+  // self-limiting, because filling the view with island names would require
+  // islands wider than the view. Assert the monotonicity rather than metres.
+  const far = await page.evaluate(() => {
+    const E = window.__earth, byName = {};
+    for (const p of E.islData.islands) if (!byName[p.n]) byName[p.n] = p;
+    const f = (n) => E.islandFar(byName[n]);
+    return {
+      greenland: f("Greenland"), ireland: f("Ireland"), sylt: f("Sylt"),
+      // …and the inverse: the smallest extent worth drawing at a given height
+      // must shrink as you descend, or the ladder runs backwards.
+      orbit: E.islandExtentAt(2.4e7), valley: E.islandExtentAt(2e5),
+    };
+  });
+  expect(far.greenland).toBeGreaterThan(far.ireland);
+  expect(far.ireland).toBeGreaterThan(far.sylt);
+  expect(far.greenland).toBeGreaterThan(2e7);   // visible from the full-globe view
+  expect(far.sylt).toBeLessThan(1e7);           // …and Sylt is not
+  expect(far.valley).toBeLessThan(far.orbit);
+
+  // Descending to the German Bight must actually put the name on the island.
+  const bight = await page.evaluate(async () => {
+    const E = window.__earth;
+    E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(8.37, 54.91, 9e5) });
+    await E.buildIslandsTo(E.islandExtentAt(9e5));
+    const L = E.islLabels, out = [];
+    for (let i = 0; i < L.length; i++) {
+      const l = L.get(i), c = l.distanceDisplayCondition;
+      if (9e5 <= c.far) out.push(l.text);
+    }
+    return { built: L.length, has: out.includes("Sylt") };
+  });
+  expect(bight.has, "Sylt is still missing from the globe").toBe(true);
+  expect(bight.built).toBeGreaterThan(isl.built);
+
+  // Islands are searchable through the same one box as both settlement tiers —
+  // an island is an answer to "where is this", and Sylt is the case that
+  // started this.
+  const search = await page.evaluate(async () => {
+    const E = window.__earth;
+    await E.ensureCities();
+    await E.ensureGazetteer();
+    const s = E.searchPlaces("sylt").find((p) => p.e !== undefined);
+    return s && { n: s.n, e: s.e, c: E.placeCountry(s), h: E.placeViewHeight(s) };
+  });
+  expect(search, "searching for Sylt found no island").toBeTruthy();
+  expect(search.n).toBe("Sylt");
+  expect(search.c).toMatch(/Germany/);
+  // An island has no rung of its own in the file, so the search machinery has
+  // to derive one from the same geometry rule — otherwise flying to an island
+  // arrives at an altitude where it is not drawn.
+  expect(search.h).toBeGreaterThan(1e4);
+  expect(search.h).toBeLessThan(search.e * 1000 * 100);
+
+  // Islands follow the places switch like everything else on that control:
+  // "off" means a data-only globe, with no furniture of any kind left on it.
+  await page.locator("#places-mode").selectOption("off");
+  expect(await page.evaluate(() => window.__earth.islLabels.show)).toBe(false);
+  await page.locator("#places-mode").selectOption("labels");
+  expect(await page.evaluate(() => window.__earth.islLabels.show)).toBe(true);
+});

@@ -746,3 +746,102 @@ test.describe("gazetteer.json (the deep tier under Natural Earth)", () => {
     expect(pt).toBeGreaterThan(100);
   });
 });
+
+test.describe("islands.json (the tier that is not a settlement)", () => {
+  const d = read("islands.json");
+
+  // The first place tier in the app that names a piece of GROUND rather than a
+  // population. Both gazetteers carry only populated places, which is why Sylt
+  // — 43 km of German North Sea coast — was on the globe and unnamed while the
+  // town of Westerland standing on it was labelled.
+  test("is self-describing and attributed to both of its sources", () => {
+    expect(d.id).toBe("islands");
+    expect(d.source).toMatch(/Natural Earth/i);
+    expect(d.source).toMatch(/GeoNames/i);
+    // Natural Earth is public domain, GeoNames is CC BY 4.0 — the obligation
+    // is the union, so both must be stated here and in the UI footer.
+    expect(d.citation).toMatch(/Natural Earth/);
+    expect(d.citation).toMatch(/GeoNames/);
+    expect(d.license).toMatch(/CC BY 4\.0/);
+    expect(d.doc).toMatch(/^https:\/\//);
+    expect(d.snapshot).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(d.count).toBe(d.islands.length);
+    expect(d.islands.length).toBeGreaterThan(2000);
+  });
+
+  test("every island is nameable, locatable, measured, and sorted biggest first", () => {
+    let bad = null;
+    for (let i = 0; i < d.islands.length; i++) {
+      const p = d.islands[i];
+      const why =
+        typeof p.n !== "string" || !p.n.length ? "name" :
+        !(p.o >= -180 && p.o <= 180) ? "lon" :
+        !(p.a >= -90 && p.a <= 90) ? "lat" :
+        !(p.e > 0 && p.e < 5000) ? "extent" :
+        !(p.s === 0 || p.s === 1) ? "source flag" :
+        typeof p.c !== "string" ? "country code" :
+        // The extent IS the ladder here — there is no min_zoom to borrow, so
+        // the file's sort order is what makes "everything that could be
+        // visible now" a contiguous prefix the client can walk.
+        p.e > (i ? d.islands[i - 1].e : Infinity) ? "sort order" : null;
+      if (why && !bad) bad = `${p.n}: bad ${why} (${JSON.stringify(p)})`;
+    }
+    expect(bad).toBeNull();
+
+    const missing = [...new Set(d.islands.map((p) => p.c))]
+      .filter((c) => c && !d.countries[c]);
+    expect(missing).toEqual([]);
+    expect(d.countries.DE).toMatch(/Germany/);
+  });
+
+  test("the continent cut keeps Greenland and drops Australia", () => {
+    // The standard line — Australia is a continent, Greenland is the largest
+    // island — falls out of one measured threshold rather than a list of
+    // exceptions. The gap either side of it is a factor of ~3.6 in area, so
+    // nothing is near the cut and no ring is a judgement call.
+    expect(d.continentCutKm2).toBeGreaterThan(2.2e6);
+    expect(d.continentCutKm2).toBeLessThan(7e6);
+    expect(d.islands[0].n).toBe("Greenland");
+    // …and exactly one of it: Natural Earth draws GREENLAND as sixteen label
+    // patches, and naming the largest ring under each produced sixteen.
+    expect(d.islands.filter((p) => p.n === "Greenland").length).toBe(1);
+    for (const n of ["Australia", "Antarctica", "Africa", "Eurasia"]) {
+      expect(d.islands.some((p) => p.n === n)).toBe(false);
+    }
+  });
+
+  test("Sylt is in it — the literal report — and so are the ones GeoNames cannot name", () => {
+    const s = d.islands.find((p) => p.n === "Sylt");
+    expect(s, "Sylt is missing from islands.json").toBeTruthy();
+    expect(s.a).toBeCloseTo(54.9, 1);
+    expect(s.o).toBeCloseTo(8.35, 1);
+    expect(s.e).toBeGreaterThan(30);       // ~43 km of dune, north to south
+    expect(s.e).toBeLessThan(60);
+    expect(s.c).toBe("DE");
+
+    // The curated Natural Earth tier exists for the islands GeoNames has no
+    // T-class entry for: its only "Ireland" is an ISLF in the UAE, so a
+    // GeoNames-only join labelled the whole island "Coney Island".
+    const ie = d.islands.find((p) => p.n === "Ireland");
+    expect(ie, "Ireland is missing").toBeTruthy();
+    expect(ie.s).toBe(1);                  // named by Natural Earth, not GeoNames
+    expect(ie.c).toBe("IE");               // the ring's majority country, not one entry's
+    expect(ie.e).toBeGreaterThan(400);
+
+    // Both naming passes carry real weight; neither is a rounding error.
+    const ne = d.islands.filter((p) => p.s === 1).length;
+    expect(ne).toBeGreaterThan(100);
+    expect(d.islands.length - ne).toBeGreaterThan(1000);
+  });
+
+  test("the label anchor is a point on the island, not in the sea beside it", () => {
+    // A crescent atoll or a fjord coast puts its own centroid in the water, so
+    // the baker falls back to a representative point. Spot-check the shape of
+    // the fix on a ring notorious for it rather than re-implementing
+    // point-in-polygon here: the anchor must at least sit inside the island's
+    // own bounding circle.
+    const a = d.islands.find((p) => p.n === "Ireland");
+    expect(Math.abs(a.a - 53.2)).toBeLessThan(1.5);
+    expect(Math.abs(a.o + 8.0)).toBeLessThan(1.5);
+  });
+});
