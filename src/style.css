@@ -217,6 +217,12 @@ footer {
 }
 footer a { color: var(--fg-dim); }
 
+/* The build marker in About: present so a user can answer "did my reload
+   actually get the new code?" without opening dev tools, but quiet enough
+   that nobody reads it who isn't looking for it. */
+.build-line { font-size: 11px; color: var(--fg-dim); }
+.build-line code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
 /* Cesium widget tweaks */
 .cesium-viewer-bottom { left: 8px !important; }
 .cesium-widget-credits { font-size: 10px !important; }

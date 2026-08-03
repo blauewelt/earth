@@ -914,3 +914,87 @@ test.describe("observation times travel with the data", () => {
     }
   });
 });
+
+/* A deploy that a browser refuses to pick up is indistinguishable, from the
+ * user's side, from a deploy that never happened — and that is exactly how
+ * this was reported: "I reloaded the tab twice and see no change." index.html
+ * asked for `src/app.js`, the browser had `src/app.js`, and the CDN had said
+ * it was fresh. Every local asset now carries the first 8 hex of its own
+ * sha256, so its URL changes whenever its bytes do. These tests re-derive the
+ * hashes from the files themselves, which means a forgotten
+ * `scripts/stamp_assets.py` fails here rather than on someone's phone. */
+test.describe("cache-busting stamps and the web app manifest", () => {
+  const ROOT = path.join(__dirname, "..");
+  const crypto = require("crypto");
+  const slurp = (f) => fs.readFileSync(path.join(ROOT, f));
+  const digest = (f) => crypto.createHash("sha256").update(slurp(f)).digest("hex").slice(0, 8);
+  const html = slurp("index.html").toString("utf8");
+  const manifest = JSON.parse(slurp("manifest.json").toString("utf8"));
+
+  const ICONS = ["icon-192.png", "icon-512.png", "icon-512-maskable.png"];
+
+  test("index.html versions every local asset with that file's own hash", () => {
+    for (const asset of ["src/app.js", "src/style.css", "manifest.json", "icon-192.png"]) {
+      const m = html.match(
+        new RegExp(`(?<![\\w./-])${asset.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\?v=([0-9a-f]{8})`));
+      expect(m, `${asset} is not version-stamped in index.html`).not.toBeNull();
+      expect(m[1], `${asset} stamp is stale — run scripts/stamp_assets.py`).toBe(digest(asset));
+    }
+    // and nothing local is left unstamped
+    expect(html).not.toMatch(/(?:href|src)="(?:src\/[\w.-]+|icon-[\w.-]+\.png|manifest\.json)"/);
+  });
+
+  test("the visible build marker matches the script it labels", () => {
+    // The About tab prints this so a user can tell a stale cache from a
+    // missing feature without opening dev tools.
+    const m = html.match(/<code id="build-id">([0-9a-f]{8})<\/code>/);
+    expect(m).not.toBeNull();
+    expect(m[1]).toBe(digest("src/app.js"));
+  });
+
+  test("the manifest is installable: icons exist, are square, and are stamped", () => {
+    expect(manifest.name).toBeTruthy();
+    expect(manifest.short_name.length).toBeLessThanOrEqual(12); // home-screen label
+    expect(manifest.display).toBe("standalone");
+    // Relative, so the same file works at / under the test server and at
+    // /earth/ on GitHub Pages. A leading slash would break one of the two.
+    expect(manifest.start_url.startsWith("/")).toBe(false);
+    expect(manifest.scope.startsWith("/")).toBe(false);
+    expect(manifest.background_color).toMatch(/^#[0-9a-f]{6}$/i);
+
+    const sizes = manifest.icons.map((i) => i.sizes);
+    expect(sizes).toContain("192x192");           // Android's minimum pair
+    expect(sizes).toContain("512x512");
+    expect(manifest.icons.some((i) => i.purpose === "maskable")).toBe(true);
+
+    for (const icon of manifest.icons) {
+      const [file, v] = icon.src.split("?v=");
+      expect(ICONS).toContain(file);
+      expect(v, `${file} stamp is stale — run scripts/stamp_assets.py`).toBe(digest(file));
+      const buf = slurp(file);
+      // PNG signature + IHDR width/height, read straight from the bytes: an
+      // icon whose declared size is a lie fails installability silently.
+      expect(buf.slice(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+      const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20);
+      expect(`${w}x${h}`).toBe(icon.sizes);
+      expect(buf.length).toBeGreaterThan(1000);   // not a placeholder
+    }
+  });
+
+  test("the icon is drawn from the data it claims to show", () => {
+    // scripts/make_icons.py renders data/oisst.json through the app's own sst
+    // ramp. If the icon were hand-drawn art this test would be meaningless;
+    // it is here so the icon stays a fact about the dataset, like everything
+    // else the app puts on screen.
+    const src = fs.readFileSync(path.join(ROOT, "scripts", "make_icons.py"), "utf8");
+    expect(src).toContain("oisst.json");
+    const g = read("oisst.json");
+    expect(g.values.length).toBe(g.nx * g.ny);
+    // the ramp endpoints in the generator must still be the ones in app.js
+    const app = fs.readFileSync(path.join(ROOT, "src", "app.js"), "utf8");
+    for (const stop of ["49, 54, 149", "165, 0, 38"]) {
+      expect(src.replace(/[()]/g, ""), `sst ramp drifted: ${stop}`).toContain(stop);
+      expect(app, `sst ramp drifted: ${stop}`).toContain(stop);
+    }
+  });
+});

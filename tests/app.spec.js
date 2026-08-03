@@ -2553,3 +2553,48 @@ test("every read-out says when its value was observed", async ({ page }) => {
   await expect(vp).toContainText(probe.when.t);
   await expect(vp).toContainText(/old|today/);
 });
+
+/* The page must still boot with versioned asset URLs, and the manifest and
+ * icons it advertises must actually be there. A manifest that 404s is worse
+ * than no manifest: the install prompt simply never appears and nothing
+ * says why. */
+test("the page is installable and serves versioned assets", async ({ page }) => {
+  const script = await page.getAttribute('script[src*="app.js"]', "src");
+  expect(script).toMatch(/^src\/app\.js\?v=[0-9a-f]{8}$/);
+  const css = await page.getAttribute('link[rel="stylesheet"][href*="style.css"]', "href");
+  expect(css).toMatch(/^src\/style\.css\?v=[0-9a-f]{8}$/);
+
+  // the stamp on the script tag is the one the About tab shows the user
+  const marker = await page.textContent("#build-id");
+  expect(script).toContain(marker);
+
+  const href = await page.getAttribute('link[rel="manifest"]', "href");
+  expect(href).toMatch(/^manifest\.json\?v=[0-9a-f]{8}$/);
+
+  // fetch it the way the browser would, from the page's own origin
+  const manifest = await page.evaluate(async (h) => {
+    const r = await fetch(h);
+    return r.ok ? await r.json() : { status: r.status };
+  }, href);
+  expect(manifest.short_name).toBe("earth");
+  expect(manifest.icons.length).toBeGreaterThanOrEqual(3);
+
+  // every icon resolves and decodes to the size the manifest promises
+  const icons = await page.evaluate(async (m) => {
+    const out = [];
+    for (const i of m.icons) {
+      const r = await fetch(i.src);
+      if (!r.ok) { out.push({ src: i.src, status: r.status }); continue; }
+      const bmp = await createImageBitmap(await r.blob());
+      out.push({ src: i.src, size: `${bmp.width}x${bmp.height}`, want: i.sizes });
+    }
+    return out;
+  }, manifest);
+  for (const i of icons) expect(i.size, `${i.src} did not load`).toBe(i.want);
+
+  // the CSS actually arrived under its versioned URL — a 404 here would leave
+  // the app unstyled but still "working", which is easy to miss
+  const styled = await page.evaluate(() =>
+    getComputedStyle(document.getElementById("sidebar")).position);
+  expect(styled).toBe("absolute");
+});

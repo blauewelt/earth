@@ -22,10 +22,27 @@ gate a deploy on a long test run.
 own schedule, so main has other writers now — a forced push threw away one of
 its refreshes on 2026-07-30 (2026-08-01 container time). The deploy sequence is:
 
+    python3 scripts/stamp_assets.py   # FIRST: version the assets you changed
     git pull --rebase origin main     # pick up any bot commits first
     git push origin main              # fast-forward only
     git branch -f gh-pages main
     git push origin gh-pages -f       # gh-pages is ours alone; force is fine
+
+**Stamp before you commit.** `index.html` asks for `src/app.js?v=<sha8>` and
+`src/style.css?v=<sha8>`; `scripts/stamp_assets.py` recomputes those from the
+files themselves (never a hand-bumped counter) and also writes the visible
+`#build-id` in the About tab. Skip it and the deploy is invisible: on
+2026-08-03 a feature shipped, the user reloaded a phone tab twice, and got the
+cached script back — the code was fine, the URL hadn't changed. GitHub Pages
+also caches `index.html` itself for a few minutes, so "nothing changed" right
+after a push can still be true for a short while; the build marker is how a
+user tells the two apart. `tests/data.spec.js` re-derives every hash, so a
+forgotten stamp fails the suite instead of a user.
+
+**No service worker**, deliberately. The app is installable (manifest + icons,
+§5) without one; adding one would put a cache we control *in front of* the
+CDN cache that already caused this, for an app whose entire content is remote
+tiles and therefore useless offline anyway.
 
 ### 2. Every dataset/layer ships complete
 
@@ -500,10 +517,33 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   - The chip bar publishes its height as `--chips-h` on `#cesiumContainer` so
     `#split-labels` steps below it instead of underneath.
 
+- **Installable on a phone** — `manifest.json` (standalone display, `#0d1117`
+  background, relative `start_url`/`scope` so the same file works at `/` under
+  the test server and at `/earth/` on Pages) plus three PNG icons and the
+  `theme-color` / `apple-touch-icon` head wiring. `tests/data.spec.js` reads
+  the PNG IHDR bytes to confirm each icon really is the size it claims, and a
+  browser test fetches the manifest and decodes every icon, because a 404ing
+  manifest fails silently — the install prompt simply never appears.
+  - **The icon is generated, not drawn**: `scripts/make_icons.py` renders
+    `data/oisst.json` — the same 1991–2020 SST climatology the pixel inspector
+    reads — through the `sst` ramp copied from `RAMPS` in `src/app.js`, in an
+    orthographic view centred on the North Atlantic at 30°W/20°N, because the
+    AMOC is what this project is ultimately built to watch. Land is wherever
+    that grid has no value, so the coastline is OISST's own land mask. The
+    mask is read bilinearly (a nearest-neighbour lookup gives a 1° staircase)
+    and the field's land holes are flood-filled first, so interpolating near a
+    shore never mixes a real temperature with a hole and paints a cold fringe
+    around every continent. Deterministic: same data in, identical PNGs out.
+    The maskable variant keeps the globe inside Android's inner-80% safe zone.
+
 ### 6. Commits & deployment
 
-- GitHub Pages serves the `gh-pages` branch; it always mirrors `main`
-  (`git branch -f gh-pages main && git push origin main gh-pages -f`).
+- GitHub Pages serves the `gh-pages` branch; it always mirrors `main`. Use the
+  four-line sequence in §1 — `main` is fast-forwarded, only `gh-pages` is
+  forced. (An earlier version of this line read `git push origin main gh-pages
+  -f`, which force-pushes main and once discarded a bot commit. It is gone.)
+- Run `python3 scripts/stamp_assets.py` before committing anything under
+  `src/`, or the deploy will not reach browsers that already have the old file.
 - Commit messages explain the *why* (data quirks, bug mechanics), not just the
   what. Multi-line bodies encouraged.
 - Never commit credentials. The push token lives only in the local git
@@ -781,7 +821,7 @@ climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet
 join), gistemp, gpcp, eobs, oisst, meteoswiss. Grid snapshots share
 `_bin_to_grid`/`_write_grid` (nearest scatter-binning onto regular grids).
 
-**Testing** (115 Playwright specs): app behaviour (`tests/app.spec.js`) + data
+**Testing** (120 Playwright specs): app behaviour (`tests/app.spec.js`) + data
 integrity (`tests/data.spec.js`), sandbox MIRROR mode, in-repo proxies, CI on
 real network.
 
