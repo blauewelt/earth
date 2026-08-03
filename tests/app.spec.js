@@ -65,6 +65,40 @@ test.beforeEach(async ({ page, baseURL }) => {
   await page.waitForFunction(() => window.__earth?.viewer, null, { timeout: 30000 });
 });
 
+/* Toasts auto-dismiss after 8 s and then remove themselves, so asserting on a
+ * live `.toast` element only works if the assertion is the very next thing the
+ * test does. Any test that checks a few other things first is timing the
+ * animation, not the behaviour — and it fails exactly when the page is busiest,
+ * which is precisely when a real regression would also hide.
+ *
+ * (2026-08-03: `tagline scenes` failed reproducibly this way. The sea-ice clamp
+ * toast fired correctly every time; four intervening chip assertions on a page
+ * still loading Arctic tiles took longer than the toast's life, so the element
+ * was already gone — "element(s) not found", which reads like the feature is
+ * missing.)
+ *
+ * Install this BEFORE the action, then assert on the log: it records every
+ * toast the page has ever shown, so the assertion asks "did this message fire?"
+ * instead of "is it still on screen right now?". */
+async function recordToasts(page) {
+  await page.evaluate(() => {
+    if (window.__toastLog) return;
+    const host = document.getElementById("toast-host");
+    if (!host) return;
+    window.__toastLog = [...host.querySelectorAll(".toast")].map((t) => t.textContent);
+    new MutationObserver((recs) => {
+      for (const r of recs) {
+        for (const n of r.addedNodes) {
+          if (n.nodeType === 1 && n.classList?.contains("toast")) {
+            window.__toastLog.push(n.textContent);
+          }
+        }
+      }
+    }).observe(host, { childList: true });
+  });
+  return () => page.evaluate(() => (window.__toastLog ?? []).join(" ⏐ "));
+}
+
 test("loads without page errors and renders a WebGL canvas", async ({ page }) => {
   await expect(page.locator("#cesiumContainer canvas").first()).toBeVisible();
   await page.waitForTimeout(1500);
@@ -1148,6 +1182,22 @@ test("enabling a date-independent layer fires an animated warning toast", async 
   await page.evaluate(() => document.querySelector("#toast-host .toast .toast-close").click());
   await expect(page.locator("#toast-host .toast")).toHaveCount(0);
 
+  // Dismissing releases the de-dupe key rather than stranding it: switch the
+  // same layer off and on and the message says itself again. The key exists to
+  // stop two copies sharing the screen, not to remember what has been said —
+  // a stranded key makes a message silently unsayable for the whole session.
+  const flip = (id, v) => page.evaluate(([i, on]) => {
+    const el = document.querySelector(`#layer-list input[data-id="${i}"]`);
+    el.checked = on;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, [id, v]);
+  await flip("gpcp", false);
+  await flip("gpcp", true);
+  await expect(page.locator("#toast-host .toast")).toContainText("climatology");
+  await page.evaluate(() => document.querySelector("#toast-host .toast .toast-close").click());
+  await expect(page.locator("#toast-host .toast")).toHaveCount(0);
+  await flip("gpcp", false);
+
   // date-DRIVEN layers must NOT toast (pure logic, no timing)
   expect(await page.evaluate(() => window.__earth.datelessToast("precip"))).toBeNull();
   expect(await page.evaluate(() => window.__earth.datelessToast("sst"))).toBeNull();
@@ -1863,6 +1913,7 @@ test("tagline scenes: one honest layer each, always replacing the last", async (
   const chips = page.locator("#active-layers .chip:not(.chip-clear)");
   const labels = () => page.locator("#active-layers .chip-label").allTextContents();
   const has = async (frag) => (await labels()).some((s) => s.includes(frag));
+  const toasts = await recordToasts(page);   // see recordToasts: toasts expire
 
   // "sea ice": exactly ONE chip — no glacier inventory smuggled in
   await page.click('.tag-link[data-scene="seaice"]');
@@ -1870,8 +1921,9 @@ test("tagline scenes: one honest layer each, always replacing the last", async (
   expect(await has("Sea ice")).toBe(true);
   expect(await has("Sea surface temperature")).toBe(false);   // default swapped out
   expect(await has("Glaciers")).toBe(false);
-  // the clamp toast fires on enable (assert before it auto-dismisses)
-  await expect(page.locator("#toast-host .toast").last()).toContainText("archive ends 2025-09");
+  // the clamp toast fires on enable — asserted from the recorded log, because
+  // the chip checks above can outlast the toast on a busy page
+  await expect.poll(toasts).toContain("archive ends 2025-09");
   // the lesson of the blank-globe bug: a chip is not data. Assert that the
   // EFFECTIVE date (endTime-clamped) actually serves a tile with ice pixels,
   // that the clamp toast explains the older date, and that the camera flew
@@ -1940,7 +1992,7 @@ test("tagline scenes: one honest layer each, always replacing the last", async (
   await page.click('.tag-link[data-scene="inspect"]');
   await expect(page.locator("#toggle-pixel")).toBeChecked();
   expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(true);
-  await expect(page.locator("#toast-host .toast").last()).toContainText("2045–49");
+  await expect.poll(toasts).toContain("2045–49");
 });
 test("Climate TRACE is year-aware: the date's year picks the inventory", async ({ page }) => {
   // start on a known in-range year

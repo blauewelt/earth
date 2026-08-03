@@ -228,6 +228,18 @@ The dev sandbox's *browser* cannot reach external hosts (curl can). Therefore:
 - Reading a self-clearing UI state (e.g. the `.flash` outline, 1.4 s) must
   happen inside the *same* `page.evaluate` as the click that sets it; a
   click→assert round-trip can outlast it on the slow sandbox.
+- **Never assert on a live `.toast` element unless it is the very next thing
+  the test does.** Toasts auto-dismiss after 8 s and then remove themselves, so
+  a test that checks a few other things first is timing an animation, not the
+  behaviour — and it fails exactly when the page is busiest, which is when a
+  real regression would hide too. `recordToasts(page)` (tests/app.spec.js)
+  installs a `MutationObserver` on `#toast-host` before the action and returns
+  a getter over every toast the page has *ever* shown; assert with
+  `await expect.poll(toasts).toContain("…")`. This is what fixed `tagline
+  scenes` on 2026-08-03: the sea-ice clamp toast fired correctly every single
+  time, but four intervening chip assertions on a page still pulling Arctic
+  tiles outlived it, and Playwright reported "element(s) not found" — which
+  reads exactly like the feature being missing.
 
 ### 4b. Date-independence must be announced
 
@@ -239,6 +251,12 @@ annual inventory, Argo latest positions, stations, glaciers single inventory).
 Any NEW layer that ignores the date selector must be added to `datelessToast`;
 date-driven rasters must return `null` there. **Yearly layers are NOT dateless**: Climate TRACE is an annual inventory baked for every available year (2021-2025, `assets_by_year` in climatetrace.json); the layer shows whichever year the date points at (`climateTraceYear`, clamped), rebuilds on a year change (`refreshYearlyLayers` / `ensureClimateTraceYear`), and its toast (`climateTraceToast`) says 'the day and month don't matter, but the year does' — never declare a layer fully dateless if any date component drives it. **Monthly grids follow the same pattern one level down**: GLORYS currents/MLD are `monthlyGrid` layers covering the FULL archive (1993-01 → ~now−2mo). The baked index (data/currents.json, data/mld.json) carries `monthsAvailable` (every stamp), `yearDir`, `months` (latest year inlined), `latest`, `values` (= latest month, back-compat); older months live in per-year files (data/currents_y/YYYY.json) lazy-fetched by `ensureGridMonth`/`loadGridMonth` and merged into `g.months` — every sampler (GridProvider.requestImage, probeValueAt, the pixel card) MUST go through `loadGridMonth`, never bare `loadGrid`+`sampleGrid`, or old months read as null. `resolveGridMonth` floors the date's month to the newest baked month ≤ it (clamped at both ends), `refreshMonthlyGrids()` rebuilds the provider when a date change lands on a different baked month (Cesium caches tiles — a repaint needs a fresh provider; called from both date handlers AND the ±30m midnight-cross branch), and `maybeMonthlyGridToast` names the month showing on enable. Note the date steppers clamp at 2000-01-01 (GIBS floor) — 1993–1999 currents are reachable by typing a date. **Day-keyed forecast grids reuse the whole mechanism**: GFS temp/precip are `monthlyGrid` + `forecastGrid` layers whose JSON carries `keyLen: 10` (day stamps in `months`/`monthsAvailable`, all frames inline, no year files) plus `init` (the model run, quoted in the toast). While a forecast layer is active, `uiMaxDate()` returns the last forecast day instead of `defaultDate()` — the date input's `max` and every stepper clamp go through it (`syncDateMax()` restores reality and pulls the date back when the last forecast layer is switched off), and `gibsTime` clamps any future date to `defaultDate()` so observation layers are never asked for tomorrow's tiles. **Annual rasters are Climate TRACE's trap one rung coarser, on the GIBS side**: OPERA DIST-ANN is served at exactly one tile date per year (`YYYY-01-01`), so its config carries `annual: true` and `gibsTime` snaps the date to Jan 1 of its year (floored at `start`'s year, after the `endTime` clamp). It fires `maybeAnnualToast` rather than `maybeClampToast` — `maybeClampToast` returns early for annual layers, because "showing the last available date" is the wrong story when the day and month never mattered; the annual toast says which YEAR is showing and names the span of years the product covers. Keep the toast copy consistent:
 name the layer in `<strong>` and state "the date selector doesn't change it".
+`showToast` de-dupes on a `key` while the message is on screen, and `dismiss()`
+releases that key **unconditionally, before** it touches the element. That order
+matters: the release used to sit after an `if (!el.isConnected) return` guard, so
+a toast whose node left the DOM by any other route stranded its key in the set
+and that message became silently unsayable for the rest of the session. The key
+stops two copies sharing the screen; it is not a memory of what has been said.
 
 ### 5. UI conventions
 

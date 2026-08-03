@@ -3031,10 +3031,16 @@ function showToast(html, { key = html, timeout = 8000 } = {}) {
   el.innerHTML = `<span class="toast-ico">📅</span><div class="toast-body">${html}</div>` +
     `<button class="toast-close" title="Dismiss" aria-label="Dismiss">×</button>`;
   const dismiss = () => {
+    // Release the de-dupe key FIRST, unconditionally. It used to be released
+    // only on the path that reaches the end of this function, so a toast whose
+    // element left the DOM by any other route (a re-render of the host, a
+    // second dismiss racing the first) stranded its key in the set forever —
+    // and a stranded key silently suppresses that message for the rest of the
+    // session. The key exists to stop duplicates on screen, not to remember.
+    activeToastKeys.delete(key);
     if (!el.isConnected) return;
     el.classList.add("toast-out");
     el.addEventListener("animationend", () => el.remove(), { once: true });
-    activeToastKeys.delete(key);
   };
   el.querySelector(".toast-close").addEventListener("click", dismiss);
   host.appendChild(el);
