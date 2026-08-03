@@ -242,13 +242,19 @@ test("catalog browser filters the dataset list", async ({ page }) => {
 test("every layer title is a clickable documentation link", async ({ page }) => {
   // GIBS layers: title itself links to the dataset docs, checkbox toggles separately
   const links = page.locator("#layer-list .layer-head a.title-link");
-  await expect(links).toHaveCount(16);
   for (const href of await links.evaluateAll((as) => as.map((a) => a.href))) {
     expect(href).toMatch(/^https:\/\//);
   }
   await expect(links.first()).toHaveAttribute("target", "_blank");
-  // data + analysis layers (SST ensemble, Climate TRACE, Argo, stations, GBIF) too
-  await expect(page.locator("#panel-layers .layer-head a.title-link")).toHaveCount(22);
+  // The point is EVERY title, not a count: pinning the number here only means the
+  // test fails the next time a layer is added, which is not a defect. Assert the
+  // invariant instead — no layer in the panel may claim a source it can't cite —
+  // with a floor so that "every" can't be satisfied by an empty panel.
+  const unlinked = await page.locator("#panel-layers .layer-head").evaluateAll((hs) =>
+    hs.filter((h) => !h.querySelector("a.title-link")).map((h) => h.textContent.trim()));
+  expect(unlinked).toEqual([]);
+  expect(await page.locator("#panel-layers .layer-head a.title-link").count())
+    .toBeGreaterThan(25);
   // clicking the title must NOT toggle the layer
   const before = await page.evaluate(() => window.__earth.viewer.imageryLayers.length);
   const [popup] = await Promise.all([
@@ -633,16 +639,33 @@ test("computed difference generalises to sea ice, not to point/instantaneous lay
   expect(r.lut).toBeGreaterThan(50);                     // single-value colormap now parses
   expect(r.painted).toBeGreaterThan(1000);               // real sea-ice change over the Arctic
 
-  // precipitation has no deltaRange → stays a normal layer, and the hint appears
+  // Precipitation is log-distributed: it never becomes a DeltaProvider, because
+  // subtracting two rain fields is mostly palette quantization error. It takes the
+  // other posture — a ×-fold RATIO — and the hint has to say which of the two
+  // readings is on screen, since "red" means opposite arithmetic in each.
   await page.check('#layer-list input[data-id="precip"]');
   const p = await page.evaluate(() => {
     const e = window.__earth.state.layers["precip"];
-    return { isDelta: e.isDelta, name: e.layer.imageryProvider.constructor.name };
+    return { isDelta: e.isDelta, isRatio: e.isRatio,
+             name: e.layer.imageryProvider.constructor.name };
   });
   expect(p.isDelta).toBe(false);
+  expect(p.isRatio).toBe(true);
   expect(p.name).not.toBe("DeltaProvider");
   await expect(page.locator("#delta-hint")).toBeVisible();
-  await expect(page.locator("#delta-hint")).toContainText("instantaneous");
+  await expect(page.locator("#delta-hint")).toContainText("ratio");
+
+  // True colour is a photograph — no colormap, so there is nothing to invert into
+  // a difference at all. That is the third posture, and it must be stated rather
+  // than left as an unexplained absence of change.
+  await page.check('#layer-list input[data-id="viirs-truecolor"]');
+  const t = await page.evaluate(() => {
+    const e = window.__earth.state.layers["viirs-truecolor"];
+    return { isDelta: e.isDelta, isRatio: e.isRatio };
+  });
+  expect(t.isDelta).toBe(false);
+  expect(t.isRatio).toBe(false);
+  await expect(page.locator("#delta-hint")).toContainText("shown as-is");
 });
 
 test("hover probe reports the delta (not absolute) when a difference layer is active", async ({ page }) => {
