@@ -637,29 +637,40 @@ let cityData = null, cityBuilt = 0, cityBuild = null;
 
 /* One place. A dot as well as a name, because a word floating over nothing is
  * ambiguous by a few kilometres at these altitudes — kept small and neutral so
- * it never reads as one of the app's own data markers. */
-function addCity(c) {
+ * it never reads as one of the app's own data markers.
+ *
+ * Takes its collections as arguments because there are three sets of these now
+ * and they must be visually identical: the Natural Earth labels, the deeper
+ * GeoNames ones that fill in below them, and the single highlighted result of
+ * a search. A place is a place; only the ladder rung and the colour differ. */
+function addPlace(labels, points, c, far, tint) {
   const pos = Cesium.Cartesian3.fromDegrees(c.o, c.a);
-  const ddc = new Cesium.DistanceDisplayCondition(0, PLACE_FAR0 / Math.pow(2, c.z));
-  cityPoints.add({
+  const ddc = far === Infinity
+    ? undefined : new Cesium.DistanceDisplayCondition(0, far);
+  points.add({
     id: CITY_PICK,
-    position: pos, pixelSize: c.cap ? 4 : 3,
-    color: Cesium.Color.WHITE.withAlpha(0.85),
-    outlineColor: Cesium.Color.BLACK.withAlpha(0.6), outlineWidth: 1,
+    position: pos, pixelSize: tint ? 7 : (c.cap ? 4 : 3),
+    color: tint || Cesium.Color.WHITE.withAlpha(0.85),
+    outlineColor: Cesium.Color.BLACK.withAlpha(tint ? 0.9 : 0.6),
+    outlineWidth: tint ? 2 : 1,
     distanceDisplayCondition: ddc,
   });
-  cityLabels.add({
+  labels.add({
     id: CITY_PICK,
     position: pos, text: c.n,
-    font: `${c.cap ? "600 " : ""}11px system-ui, sans-serif`,
-    fillColor: Cesium.Color.WHITE,
+    font: `${tint || c.cap ? "600 " : ""}${tint ? 13 : 11}px system-ui, sans-serif`,
+    fillColor: tint || Cesium.Color.WHITE,
     outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
     style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-    pixelOffset: new Cesium.Cartesian2(0, -11),
+    pixelOffset: new Cesium.Cartesian2(0, tint ? -14 : -11),
     // The outline is what makes a name readable over both a black ocean and a
     // yellow SST field without a background box eating the data.
     distanceDisplayCondition: ddc,
   });
+}
+
+function addCity(c) {
+  addPlace(cityLabels, cityPoints, c, PLACE_FAR0 / Math.pow(2, c.z));
 }
 
 /* The rung the camera is currently standing on: invert the display condition
@@ -722,6 +733,7 @@ function ensureCities() {
 viewer.camera.percentageChanged = 0.5;
 const descend = () => {
   if (cityData) buildCitiesTo(cityRungAt(viewer.camera.positionCartographic.height) + 1);
+  refreshGazetteerLabels();
 };
 viewer.camera.changed.addEventListener(descend);
 viewer.camera.moveEnd.addEventListener(descend);
@@ -733,6 +745,7 @@ function placesMode() {
 function applyPlacesMode() {
   const mode = placesMode();
   if (cityLabels) { cityLabels.show = mode !== "off"; cityPoints.show = mode !== "off"; }
+  if (gazLabels) { gazLabels.show = mode !== "off"; gazPoints.show = mode !== "off"; }
 }
 function updatePlaces() {
   const mode = placesMode();
@@ -748,6 +761,11 @@ function updatePlaces() {
   }
   if (mode !== "off") ensureCities();
   applyPlacesMode();
+  refreshGazetteerLabels();
+  // A searched place keeps its marker whatever this control says — you asked
+  // for it — but the altitude band its name occupies depends on whether there
+  // is an ordinary label underneath to defer to.
+  if (foundPlace) markFoundPlace(foundPlace);
 }
 /* Every data layer is appended to the TOP of the imagery stack, which would
  * bury the coastlines the moment anything is switched on. Rather than
@@ -760,6 +778,299 @@ viewer.imageryLayers.layerAdded.addEventListener((layer) => {
   if (!bordersLayer || layer === bordersLayer) return;
   viewer.imageryLayers.raiseToTop(bordersLayer);
 });
+
+/* ------------------------------------------------------- the gazetteer
+ *
+ * Natural Earth is a cartographic SELECTION, not a gazetteer. It carries 7,342
+ * places worldwide and twenty-four in all of Portugal, which is exactly the
+ * right list to keep a map legible and exactly the wrong list to answer a
+ * question with. A user looking at the sea off Peniche got a globe that could
+ * neither name the town nor be asked about it — the report that produced all
+ * of this.
+ *
+ * So there is a second file with the other job. data/gazetteer.json is GeoNames
+ * cities5000 minus everything Natural Earth already has: 54,204 places, each
+ * carrying a rung that CONTINUES Natural Earth's ladder rather than starting a
+ * new one (the arithmetic is in refresh_data.py gazetteer — one rung down
+ * quarters the visible area, so it can carry ~3.3× the places at the same
+ * on-screen density, and that factor is measured from Natural Earth's own
+ * counts). Peniche lands at rung 10.19, i.e. from about 70 km up.
+ *
+ * It is lazy, and the trigger is the ladder itself: it loads when you either
+ * open the search box or descend past the rung where Natural Earth stops
+ * having anything left to say. 1.15 MB gzipped is nothing to someone who wants
+ * it and everything to someone who never leaves orbit. */
+const GAZ_CAP = 900;   // most labels the deep tier may hold at once — see below
+let gazData = null, gazLoad = null, gazFold = null, cityFold = null;
+let gazLabels = null, gazPoints = null, gazRect = null;
+let gazBuilt = new Set(), gazBuild = null, gazGen = 0;
+
+/* Diacritic-insensitive, the same fold the baker uses. Someone typing "Zurich"
+ * on an English keyboard means Zürich, and someone typing "Peniche" should not
+ * have to guess whether the file spells it with an accent. */
+// The class is written as escapes, not as literal combining marks: a bare
+// U+0300 in source is a mark with nothing to sit on, and any tool that
+// re-normalises the file would silently eat the range.
+const foldName = (s) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+function ensureGazetteer() {
+  if (gazLoad) return gazLoad;
+  gazLoad = fetch("data/gazetteer.json").then((r) => r.json()).then((d) => {
+    gazData = d;
+    // Fold once, not once per keystroke: 54 k normalize() calls is ~40 ms, which
+    // is fine on arrival and is not fine between two letters of a place name.
+    gazFold = d.places.map((p) => foldName(p.n));
+    gazLabels = viewer.scene.primitives.add(new Cesium.LabelCollection());
+    gazPoints = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
+    applyPlacesMode();
+    refreshGazetteerLabels();
+    return d;
+  }).catch(() => null);
+  return gazLoad;
+}
+
+/* The rung at which Natural Earth runs out — read from the file rather than
+ * written down, so re-baking either file can't leave a gap or an overlap. */
+function gazFromRung() {
+  return gazData?.zFrom ?? (cityData ? cityData.places[cityData.places.length - 1].z : 9);
+}
+
+/* Clearing must also CANCEL: the build is chunked across animation frames, so
+ * without bumping the generation an in-flight walk keeps adding labels into the
+ * collection we just emptied — names from the town you left, hanging over the
+ * globe you flew back to. */
+function clearGazetteerLabels() {
+  if (!gazLabels) return;
+  gazGen++;
+  gazBuild = null;
+  gazLabels.removeAll(); gazPoints.removeAll();
+  gazBuilt = new Set(); gazRect = null;
+}
+
+/* Deep-tier labels are SPATIAL, where the Natural Earth tier is a prefix.
+ *
+ * The prefix walk works up there because the whole file is 7,342 places: by the
+ * time every rung is materialised you have paid for all of them and that is
+ * survivable. Down here the file is 54,204, and rung 10.8 means "all of them" —
+ * so the deep tier is bounded by the VIEW instead. Places stream in as you pan
+ * (adding is cheap; removing and re-adding the ones you can still see is not),
+ * and only when the accumulated set passes GAZ_CAP does it reset to whatever is
+ * in front of you now. That makes the worst case a bounded rebuild rather than
+ * an unbounded creep, without making every pan pay a teardown.
+ *
+ * The array is sorted by rung, i.e. by population, so "the first GAZ_CAP places
+ * in this rectangle" is also "the most significant ones" — the cap degrades by
+ * dropping villages, not by dropping whatever happened to be scanned last. */
+function refreshGazetteerLabels() {
+  if (!gazLabels) return;
+  const rung = cityRungAt(viewer.camera.positionCartographic.height);
+  /* "Nothing should be here" is checked BEFORE the in-flight-build guard, and
+   * deliberately: leaving orbit-bound is exactly when a build is most likely to
+   * still be running, and that is the one case where returning early would
+   * leave the wrong labels on screen rather than merely late. */
+  if (placesMode() === "off" || rung < gazFromRung()) { clearGazetteerLabels(); return; }
+  if (gazBuild) return;
+
+  const r = viewer.camera.computeViewRectangle(viewer.scene.globe.ellipsoid);
+  if (!r || Number.isNaN(r.west) || r.west > r.east) return;   // limb, or antimeridian
+  const D = Cesium.Math.DEGREES_PER_RADIAN;
+  const view = { w: r.west * D, e: r.east * D, s: r.south * D, n: r.north * D };
+  const inside = gazRect && view.w >= gazRect.w && view.e <= gazRect.e
+    && view.s >= gazRect.s && view.n <= gazRect.n;
+  if (inside && gazBuilt.size <= GAZ_CAP) return;
+
+  if (gazBuilt.size > GAZ_CAP) clearGazetteerLabels();
+  // Build for twice the visible box, so a slow pan finds the names already
+  // there instead of watching them arrive at the edge of the screen.
+  const mx = (view.e - view.w) / 2, my = (view.n - view.s) / 2;
+  gazRect = { w: view.w - mx, e: view.e + mx, s: view.s - my, n: view.n + my };
+
+  const box = gazRect, zMax = rung + 1, places = gazData.places;
+  let i = 0;
+  const gen = ++gazGen;
+  gazBuild = new Promise((done) => {
+    const step = () => {
+      if (gen !== gazGen) { done(0); return; }   // superseded — drop this walk
+      const stop = Date.now() + 8;   // one animation frame's worth of budget
+      while (i < places.length && gazBuilt.size < GAZ_CAP) {
+        const p = places[i];
+        if (p.z > zMax) { i = places.length; break; }   // sorted: nothing deeper qualifies
+        if (!gazBuilt.has(i) && p.o >= box.w && p.o <= box.e && p.a >= box.s && p.a <= box.n) {
+          gazBuilt.add(i);
+          addPlace(gazLabels, gazPoints, p, PLACE_FAR0 / Math.pow(2, p.z));
+        }
+        i++;
+        if ((i & 1023) === 0 && Date.now() > stop) break;
+      }
+      if (i < places.length && gazBuilt.size < GAZ_CAP) requestAnimationFrame(step);
+      else { if (gen === gazGen) gazBuild = null; done(gazBuilt.size); }
+    };
+    step();
+  });
+  return gazBuild;
+}
+
+/* ------------------------------------------------------------- place search
+ *
+ * Two lists, one box. Natural Earth answers first and answers in English
+ * exonyms ("Lisbon", "Cologne"); GeoNames answers in the local name and knows
+ * the other 54,204 places. Searching both is not redundancy — it is the only
+ * way "Lisbon" and "Peniche" both work.
+ *
+ * A linear scan over 61 k pre-folded strings is ~3 ms, so there is no index and
+ * no debounce beyond one frame: the ranking, not the lookup, is the hard part. */
+function placeCountry(p) {
+  // cities.json stores the country's name; gazetteer.json stores ISO-3166
+  // alpha-2 and ships the lookup, because "Portugal" × 500 is the single most
+  // compressible thing in a 3.9 MB file.
+  return (gazData?.countries?.[p.c]) || p.c || "";
+}
+
+function searchPlaces(q, limit = 8) {
+  const f = foldName(String(q || "").trim());
+  if (f.length < 2) return [];
+  if (cityData && !cityFold) cityFold = cityData.places.map((p) => foldName(p.n));
+  const hits = [];
+  const scan = (places, folds) => {
+    if (!places || !folds) return;
+    for (let i = 0; i < places.length; i++) {
+      const at = folds[i].indexOf(f);
+      if (at < 0) continue;
+      /* Rank by WHERE the match sits, then by the place's own rung. Both matter:
+       * "york" must not put York behind New York on position alone, and
+       * "san" must not lead with a village. Exact name beats prefix beats
+       * start-of-a-later-word beats buried-in-the-middle. */
+      const rank = at === 0 ? (folds[i].length === f.length ? 0 : 1)
+        : (/[\s\-'’]/.test(folds[i][at - 1]) ? 2 : 3);
+      hits.push({ place: places[i], rank });
+    }
+  };
+  scan(cityData?.places, cityFold);
+  scan(gazData?.places, gazFold);
+  hits.sort((a, b) => a.rank - b.rank || a.place.z - b.place.z || b.place.p - a.place.p);
+  return hits.slice(0, limit).map((h) => h.place);
+}
+
+/* Where to stand to look at a place. Derived from the place's own rung, not
+ * picked: fly to one rung closer than the altitude at which its label first
+ * appears, and the label is guaranteed to be on screen when you arrive —
+ * a hamlet gets a hamlet's altitude, a capital gets a continent's. */
+function placeViewHeight(p) {
+  return Math.min(4e6, Math.max(26e3, PLACE_FAR0 / Math.pow(2, p.z + 1)));
+}
+
+let foundLabels = null, foundPoints = null, foundPlace = null;
+/* The searched place gets its own marker, in the accent colour and with no
+ * distance condition at all. Without it, finding Peniche from orbit would fly
+ * you to a stretch of coast and then leave you to guess which dot you asked
+ * for — and at rungs above its own, the place you searched for is precisely the
+ * one the declutter ladder has decided not to draw. */
+function markFoundPlace(p) {
+  if (!foundLabels) {
+    foundLabels = viewer.scene.primitives.add(new Cesium.LabelCollection());
+    foundPoints = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
+  }
+  foundLabels.removeAll(); foundPoints.removeAll();
+  foundPlace = p || null;
+  if (p) {
+    addPlace(foundLabels, foundPoints, p, Infinity, Cesium.Color.fromCssColorString("#79c0ff"));
+    /* The NAME, though, is the exact COMPLEMENT of the place's own rung: shown
+     * only farther away than the altitude at which the ordinary label appears.
+     * Otherwise arriving somewhere draws the name twice, a pixel apart, which
+     * reads as a rendering fault. The dot stays visible at every altitude —
+     * it is what tells you which of the fifteen names on screen you asked for.
+     * (With place names off there is no other label to defer to, so the
+     * complement collapses to "always".) */
+    const own = placesMode() === "off" ? 0 : PLACE_FAR0 / Math.pow(2, p.z);
+    foundLabels.get(0).distanceDisplayCondition =
+      new Cesium.DistanceDisplayCondition(own, Number.MAX_VALUE);
+  }
+  viewer.scene.requestRender();
+}
+
+function flyToPlace(p) {
+  markFoundPlace(p);
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(p.o, p.a, placeViewHeight(p)),
+    duration: 2,
+    complete: () => { descend(); },
+  });
+}
+
+(function wireSearch() {
+  const box = document.getElementById("place-search");
+  if (!box) return;
+  const input = document.getElementById("ps-input");
+  const list = document.getElementById("ps-results");
+  const clear = document.getElementById("ps-clear");
+  let results = [], cursor = -1;
+
+  const close = () => { list.classList.add("hidden"); list.innerHTML = ""; cursor = -1; };
+  const render = () => {
+    list.innerHTML = "";
+    if (!results.length) {
+      // A "no match" that says WHICH list was searched, because the honest
+      // answer to "why isn't my village here?" is "it is under 5,000 people".
+      const li = document.createElement("li");
+      li.className = "ps-empty";
+      li.textContent = gazData
+        ? "No place of that name over 5,000 people."
+        : "Loading the gazetteer…";
+      list.append(li);
+    }
+    results.forEach((p, i) => {
+      const li = document.createElement("li");
+      li.className = "ps-hit" + (i === cursor ? " ps-cursor" : "");
+      li.setAttribute("role", "option");
+      const country = placeCountry(p);
+      li.innerHTML = `<span class="ps-name"></span><span class="ps-where"></span>`;
+      li.querySelector(".ps-name").textContent = p.n;
+      li.querySelector(".ps-where").textContent =
+        country + (p.p > 0 ? ` · ${p.p.toLocaleString()}` : "");
+      li.addEventListener("click", () => choose(i));
+      list.append(li);
+    });
+    list.classList.remove("hidden");
+  };
+  const choose = (i) => {
+    const p = results[i];
+    if (!p) return;
+    input.value = p.n;
+    close();
+    input.blur();
+    flyToPlace(p);
+  };
+  const run = () => {
+    results = searchPlaces(input.value);
+    if (input.value.trim().length >= 2) render(); else close();
+  };
+
+  // The gazetteer arrives on the first keystroke (and on focus, so it is
+  // usually already there by the time two letters are in); the Natural Earth
+  // list is already in memory whenever place names are on.
+  const load = () => { ensureCities(); ensureGazetteer().then(() => { if (!list.classList.contains("hidden")) run(); }); };
+  input.addEventListener("focus", load, { once: true });
+  input.addEventListener("input", () => { load(); run(); });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!results.length) return;
+      cursor = (cursor + (e.key === "ArrowDown" ? 1 : results.length - 1) + results.length + 1) % (results.length + 1) - 1;
+      if (cursor < 0) cursor = e.key === "ArrowDown" ? 0 : results.length - 1;
+      render();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      choose(cursor >= 0 ? cursor : 0);
+    } else if (e.key === "Escape") {
+      close(); input.blur();
+    }
+  });
+  clear.addEventListener("click", () => {
+    input.value = ""; close(); markFoundPlace(null); input.focus();
+  });
+  document.addEventListener("click", (e) => { if (!box.contains(e.target)) close(); });
+})();
 
 /* Zoom gestures: mouse wheel, touch pinch, AND trackpad pinch.
  * Browsers report a MacBook-style trackpad pinch as a wheel event with
@@ -4978,4 +5289,18 @@ window.__earth = {
   get cityLabels() { return cityLabels; },
   get cityPoints() { return cityPoints; },
   get bordersLayer() { return bordersLayer; },
+  // the deep tier and the search over both tiers
+  ensureGazetteer,
+  refreshGazetteerLabels,
+  searchPlaces,
+  flyToPlace,
+  markFoundPlace,
+  placeViewHeight,
+  placeCountry,
+  foldName,
+  get gazData() { return gazData; },
+  get gazLabels() { return gazLabels; },
+  get foundPlace() { return foundPlace; },
+  get foundLabels() { return foundLabels; },
+  get foundPoints() { return foundPoints; },
 };

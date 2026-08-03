@@ -81,6 +81,11 @@
             world cities from orbit, every town in the valley up close. Coastlines and borders
             can be switched on alongside, or the whole thing off for a data-only view. Clicking
             a name still reads the globe underneath it.</li>
+          <li><strong>Search</strong> — the box at the top of the globe finds any of 61,000
+            populated places (everything over 5,000 people, plus every place Natural Earth
+            names) and flies you there at an altitude where the town is actually labelled. It
+            is how you get to a coastline you can name but couldn't find; the names themselves
+            keep filling in as you descend.</li>
           <li><strong>Forecast</strong> — the two GFS layers (2 m temperature, daily rain) look
             <em>forward</em>: with one switched on, the date selector runs up to 10 days into
             the future. Observation layers can't follow and hold at their latest real
@@ -160,7 +165,7 @@
       </div>
       <div class="control-row">
         <label for="places-mode">Place names</label>
-        <select id="places-mode" title="City names over the data, so you can tell where you are looking — from Natural Earth, thinning out with altitude the way a paper map does. The optional borders and coastlines come from NASA GIBS.">
+        <select id="places-mode" title="City names over the data, so you can tell where you are looking — Natural Earth down to about 70 km up, then GeoNames for everything over 5,000 people, thinning out with altitude the way a paper map does. The optional borders and coastlines come from NASA GIBS.">
           <option value="labels" selected>Cities &amp; place names</option>
           <option value="full">&hellip; and borders &amp; coasts</option>
           <option value="off">Off &mdash; data only</option>
@@ -619,11 +624,23 @@
       Imagery: <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api">NASA GIBS</a> ·
       <a href="https://climatetrace.org">Climate TRACE</a> ·
       <a href="https://argo.ucsd.edu">Argo</a> ·
-      <a href="https://rapid.ac.uk">RAPID</a>
+      <a href="https://rapid.ac.uk">RAPID</a> ·
+      <a href="https://www.geonames.org/export/">GeoNames</a> (CC&nbsp;BY&nbsp;4.0)
     </footer>
   </div>
 
   <div id="cesiumContainer">
+    <!-- Place search. Sits above the chips because it is how you get TO a
+         view, where the chips describe the view you are already in. -->
+    <div id="place-search">
+      <div class="ps-bar">
+        <input id="ps-input" type="search" placeholder="Search for a place…"
+               autocomplete="off" spellcheck="false" aria-label="Place name"
+               role="combobox" aria-expanded="false" aria-controls="ps-results" />
+        <button id="ps-clear" title="Clear" aria-label="Clear">×</button>
+      </div>
+      <ul id="ps-results" class="hidden" role="listbox" aria-label="Search results"></ul>
+    </div>
     <div id="active-layers" class="hidden" aria-label="Active layers"></div>
     <!-- Pixel inspector: the docs/PIXEL_STATE.md idea made clickable — one
          card composing every value the app can know about a point. -->

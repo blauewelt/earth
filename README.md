@@ -17,6 +17,7 @@ The long-term goal: layer enough observational and model data onto the globe to 
 - **Forest loss at 30 m** — NASA JPL's [OPERA](https://www.jpl.nasa.gov/go/opera/products/dist-product-suite/) land-surface disturbance products, built from Harmonized Landsat-Sentinel imagery and the finest layers in the app. Every new clear image is compared against that pixel's own recent history, and a drop in vegetation cover is flagged: first detection, provisional, then *confirmed* once a second image agrees — and separately whether under or over half the cover went. `DIST-ALERT` refreshes every few days through the current year; `DIST-ANN` settles it into one map per year (2023–2025). Deforestation, fire scars, logging roads and storm damage all appear — the product sees the loss, not the cause. These are **classification** rasters rather than continuous fields, so they get a swatch legend instead of a gradient bar, the probe answers with a class name instead of a number, and neither averaging nor differencing is offered (class codes do neither). The *forest loss* tagline scene flies to the Amazon arc of deforestation, because from orbit a 30 m clearing is far smaller than a screen pixel.
 - **Why forests fall** — the companion question, answered by [WRI and Google DeepMind's global driver map](https://datasets.wri.org/datasets/dominant-drivers-of-tree-cover-loss-at-1km): a classifier trained on tens of thousands of hand-labelled sites names the dominant cause of tree-cover loss at every kilometre on Earth over 2001–2025 — permanent agriculture, hard commodities, shifting cultivation, logging, wildfire, settlements and infrastructure, or other natural disturbance. The pattern is the point: the Amazon arc and West Africa are agriculture, boreal Canada and Siberia are fire, the US southeast and Scandinavia are logging — and the difference between them is the difference between forest that is gone and forest that will grow back. Binned to 0.25° by *dominant class*, never an average, and painted in WRI's own palette so the globe matches every published figure.
 - **Reference points, so you can tell where you are looking** — a globe of pure data is beautiful and unnavigable: a warm anomaly off a coastline you can't name says nothing about *where* the ocean is warm. City and town names ride over every layer, thinning out with altitude the way a paper map does — a dozen world cities from orbit, capitals across a continent, every town in the valley up close. The ladder is Natural Earth's own cartography (its `min_zoom` becomes each label's visibility range), not a threshold invented here. National capitals are weighted, coastlines and borders can be switched on alongside ([NASA GIBS](https://worldview.earthdata.nasa.gov/) reference features), and the whole thing turns off for a data-only view. Clicking a name still reads the globe underneath it.
+- **Search for a place, and be flown to it** — Natural Earth is a cartographic *selection*, not a gazetteer: it names twenty-four places in all of Portugal, which is the right list for a legible map and the wrong list for answering "where is Peniche". A second, lazily-loaded file ([GeoNames `cities5000`](https://www.geonames.org/export/), CC BY 4.0, 54,204 places after deduplication against Natural Earth) does the other job. The search box finds any of the 61,000 places across both files — diacritic-insensitive, so an English keyboard finds Zürich — and flies you in at an altitude where the town is actually labelled. The same file densifies the labels themselves once you descend past the rung where Natural Earth runs out, on rungs whose spacing is *measured* from Natural Earth's own cumulative counts rather than picked by hand.
 - **Climatology grid layers** rendered client-side from baked JSON: GPCP v2.3 global precipitation (2.5°), OISST v2.1 SST 1991–2020 (1°), E-OBS v31 European precipitation (0.25°), and the MeteoSwiss 1991–2020 Swiss precipitation normal (~2 km).
 - **The ocean beneath the surface** — from the Argo float fleet (Roemmich–Gilson climatology): a **subsurface temperature anomaly layer at 300 m depth** (latest month vs the 2004–18 mean for that same month — subsurface marine heatwaves that no satellite surface map can see), and, on the pixel inspector, the full **0–2000 m temperature/salinity profile** at any clicked ocean point, drawn against its seasonal normal with upper-700 m stored-heat and freshening read-outs.
 - **Comparison** — any dated layer vs 1/2/5/10/20 years ago: side-by-side swipe with a draggable divider, or a **computed per-pixel change** (the GIBS colormap is inverted client-side back to physical units, then re-ramped diverging). Continuous linear fields (SST, sea ice, snow, land temperature, salinity) render an absolute difference; log-distributed fields (precipitation, chlorophyll, aerosol) render a **×-fold ratio of window means** — the statistically sound comparison for such fields, and robust to the log palette's value-proportional quantization. Layers where neither is possible say so instead of pretending.
@@ -47,13 +48,14 @@ Or just use the [live deployment](https://blauewelt.github.io/earth/), which Git
 
 ## Testing
 
-The repo ships a Playwright regression suite (59 specs): data-snapshot integrity
+The repo ships a Playwright regression suite (103 specs): data-snapshot integrity
 (`tests/data.spec.js` — catalog, RAPID series, Argo fleet, Climate TRACE, stations,
-sea-level budget, GISTEMP, glaciers, species, the four climatology grids) and full
-browser tests (`tests/app.spec.js` — GIBS tiling-scheme math including the Pacific
-partial-tile regression, layer and date handling, comparison split and computed-delta
-mode, aggregation, hover cards, legends, the value probe, active-layer chips, zoom and
-pinch gestures, point layers, dashboards, catalog browser).
+sea-level budget, GISTEMP, glaciers, species, the four climatology grids, the place
+gazetteer) and full browser tests (`tests/app.spec.js` — GIBS tiling-scheme math
+including the Pacific partial-tile regression, layer and date handling, comparison
+split and computed-delta mode, aggregation, hover cards, legends, the value probe,
+active-layer chips, zoom and pinch gestures, point layers, place names and search,
+dashboards, catalog browser).
 
 ```bash
 npm ci
@@ -86,6 +88,8 @@ data/glaciers.json      RGI v7 glaciers + Hugonnet 2000-2020 melt rates
 data/species.json       GBIF taxon keys and record counts for the biodiversity picker
 data/climatetrace.json  top-1000 facility emitters · data/argo.json  active float fleet
 data/{gpcp,oisst,eobs,meteoswiss}.json   gridded climatologies (shared grid format)
+data/cities.json        Natural Earth place names (the map's reference points)
+data/gazetteer.json     GeoNames cities5000 below them — search + deep-zoom labels
 scripts/refresh_data.py regenerates every snapshot above (one function per dataset)
 scripts/build_primer.py rebuilds docs/PRIMER.pdf (background-knowledge primer)
 scripts/run_tests.sh    sandbox test runner · scripts/test_proxy.py  GIBS/GBIF proxies

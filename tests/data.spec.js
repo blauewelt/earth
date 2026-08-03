@@ -641,3 +641,108 @@ test.describe("cities.json (place-name reference points)", () => {
     expect(at("Sydney").a).toBeCloseTo(-33.92, 1);
   });
 });
+
+test.describe("gazetteer.json (the deep tier under Natural Earth)", () => {
+  const d = read("gazetteer.json");
+  const ne = read("cities.json");
+
+  // cities.json is a cartographic SELECTION — the right list to keep a map
+  // legible, the wrong list to answer "where is Peniche". This file is the
+  // other job, and its whole contract is that it CONTINUES the same ladder
+  // rather than starting a second one.
+  test("is self-describing, attributed, and picks up exactly where Natural Earth stops", () => {
+    expect(d.id).toBe("gazetteer");
+    expect(d.source).toMatch(/GeoNames/i);
+    // CC BY 4.0 obliges us to say so — in the file as well as in the UI.
+    expect(d.citation).toMatch(/GeoNames/);
+    expect(d.citation).toMatch(/CC BY 4\.0/);
+    expect(d.license).toMatch(/CC BY 4\.0/);
+    expect(d.doc).toMatch(/^https:\/\//);
+    expect(d.snapshot).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(d.count).toBe(d.places.length);
+    expect(d.places.length).toBeGreaterThan(20000);   // a gazetteer, not a selection
+
+    // The seam. zFrom must equal the rung Natural Earth ends on, or the two
+    // tiers either overlap (double labels) or leave an altitude band empty.
+    expect(d.zFrom).toBeCloseTo(ne.places[ne.places.length - 1].z, 5);
+    expect(d.places[0].z).toBeCloseTo(d.zFrom, 5);
+
+    // The rung spacing is MEASURED from Natural Earth's own cumulative counts,
+    // not chosen: one rung down quarters the visible area, so it can carry a
+    // few times the places at the same on-screen density. Anything near 1 would
+    // mean the ladder had stopped decluttering; anything huge would mean the
+    // whole file lands on one rung.
+    expect(d.growth).toBeGreaterThan(2);
+    expect(d.growth).toBeLessThan(6);
+  });
+
+  test("every place is nameable, locatable, and carries a rung below the seam", () => {
+    let bad = null;
+    for (let i = 0; i < d.places.length; i++) {
+      const p = d.places[i];
+      const why =
+        typeof p.n !== "string" || !p.n.length ? "name" :
+        !(p.o >= -180 && p.o <= 180) ? "lon" :
+        !(p.a >= -90 && p.a <= 90) ? "lat" :
+        !(p.z >= d.zFrom && p.z <= 16) ? "rung" :
+        !(Number.isInteger(p.p) && p.p >= 0) ? "pop" :
+        !(typeof p.c === "string" && p.c.length === 2) ? "country code" :
+        p.z < (i ? d.places[i - 1].z : -1) ? "sort order" : null;
+      if (why && !bad) bad = `${p.n}: bad ${why} (${JSON.stringify(p)})`;
+    }
+    expect(bad).toBeNull();
+
+    // Country codes are ISO-3166 alpha-2 and the file ships its own lookup —
+    // "Portugal" × 500 is the single most compressible thing in it, and a code
+    // with no expansion would render as "PT" in the search results.
+    const missing = [...new Set(d.places.map((p) => p.c))].filter((c) => !d.countries[c]);
+    expect(missing).toEqual([]);
+    expect(d.countries.PT).toMatch(/Portugal/);
+  });
+
+  test("Peniche is in it, in the right place, at a town's altitude", () => {
+    // The literal bug report. A user looking at the sea off Peniche got a globe
+    // that could neither name the town nor be asked about it.
+    const p = d.places.find((x) => x.n === "Peniche" && x.c === "PT");
+    expect(p, "Peniche is missing from the gazetteer").toBeTruthy();
+    expect(p.a).toBeCloseTo(39.36, 1);
+    expect(p.o).toBeCloseTo(-9.38, 1);
+    expect(p.p).toBeGreaterThan(5000);
+    // Below the seam: a town of 15k has no business labelling the globe view.
+    expect(p.z).toBeGreaterThan(d.zFrom);
+
+    // Accents survive the bake here too — the client folds diacritics when
+    // searching, but the LABEL must still read "Guimarães".
+    expect(d.places.some((x) => x.n === "Guimarães")).toBe(true);
+  });
+
+  test("adds to Natural Earth instead of repeating it", () => {
+    // Deduplication is what keeps the two tiers from drawing "Lisboa" next to
+    // "Lisbon" a kilometre apart. Same name within ~half a degree is the case
+    // that actually bites, because the two projects place big cities from
+    // different sources and can differ by several kilometres.
+    const fold = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const near = new Map();
+    for (const c of ne.places) {
+      const k = fold(c.n);
+      if (!near.has(k)) near.set(k, []);
+      near.get(k).push(c);
+    }
+    let dupes = 0, first = null;
+    for (const p of d.places) {
+      const k = fold(p.n);
+      for (const c of near.get(k) || []) {
+        if (Math.abs(c.a - p.a) < 0.5 && Math.abs(c.o - p.o) < 0.6) {
+          dupes++; if (!first) first = `${p.n} (${p.a}, ${p.o})`;
+          break;
+        }
+      }
+    }
+    expect(dupes, `duplicated across tiers, e.g. ${first}`).toBe(0);
+
+    // And the two together must actually cover more of the world than one:
+    // Portugal is 24 places in Natural Earth, which is why the report happened.
+    const pt = d.places.filter((p) => p.c === "PT").length;
+    expect(pt).toBeGreaterThan(100);
+  });
+});

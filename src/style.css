@@ -259,8 +259,51 @@ footer a { color: var(--fg-dim); }
    layer list isn't on screen at all. Doubles as a "what am I looking at"
    readout. --chips-h is published by updateActiveChips() so the comparison
    labels below can step out of the way. */
+/* ---- place search (top-left, above the chips) ----
+   The globe answers "what is happening here"; this is the only control that
+   answers "take me to here". It shares the top-left corner with the chips
+   rather than the top-right, which Cesium's scene-mode picker owns. */
+#place-search {
+  position: absolute; top: 12px; left: 12px; z-index: 21;
+  width: min(280px, 46vw);
+}
+.ps-bar {
+  display: flex; align-items: center;
+  background: rgba(22, 27, 34, 0.92); border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden;
+}
+.ps-bar:focus-within { border-color: var(--accent); }
+#ps-input {
+  flex: 1; min-width: 0; padding: 7px 9px;
+  background: none; border: none; color: var(--fg);
+  font-size: 13px; font-family: inherit;
+}
+#ps-input:focus { outline: none; }
+#ps-input::-webkit-search-cancel-button { display: none; }
+#ps-clear {
+  background: none; border: none; color: var(--fg-dim);
+  font-size: 17px; line-height: 1; padding: 4px 9px; cursor: pointer;
+}
+#ps-clear:hover { color: var(--fg); }
+#ps-results {
+  margin: 5px 0 0; padding: 4px; list-style: none;
+  background: rgba(22, 27, 34, 0.96); border: 1px solid var(--border);
+  border-radius: 8px; max-height: 46vh; overflow-y: auto;
+}
+#ps-results.hidden { display: none; }
+.ps-hit {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 5px 8px; border-radius: 6px; cursor: pointer;
+}
+.ps-hit:hover, .ps-cursor { background: rgba(121, 192, 255, 0.14); }
+.ps-name { font-size: 13px; }
+/* Country and population, because a search for "Springfield" is a
+   disambiguation problem before it is a navigation problem. */
+.ps-where { font-size: 11px; color: var(--fg-dim); }
+.ps-empty { padding: 6px 8px; font-size: 12px; color: var(--fg-dim); }
+
 #active-layers {
-  position: absolute; top: 12px; left: 12px; z-index: 20;
+  position: absolute; top: 56px; left: 12px; z-index: 20;
   display: flex; flex-wrap: wrap; gap: 6px;
   max-width: min(560px, 55%); max-height: 34%; overflow-y: auto;
 }
@@ -340,7 +383,7 @@ footer a { color: var(--fg-dim); }
   .layer-item.flash { transition: outline-color 0.2s; }
 }
 
-#split-labels { position: absolute; top: calc(12px + var(--chips-h, 0px)); left: 0; right: 0; z-index: 18; pointer-events: none; }
+#split-labels { position: absolute; top: calc(56px + var(--chips-h, 0px)); left: 0; right: 0; z-index: 18; pointer-events: none; }
 #split-labels span {
   position: absolute; top: 0; padding: 3px 10px; border-radius: 12px;
   background: rgba(22, 27, 34, 0.88); border: 1px solid var(--border);

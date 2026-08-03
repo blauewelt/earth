@@ -2189,3 +2189,121 @@ test("place names orient the map: a zoom ladder, optional borders, and a click t
   expect(off.borders).toBe(false);
   expect(off.saved).toBe("off");
 });
+
+test("a place can be searched for, flown to, and read off the map once you get there", async ({ page }) => {
+  // The report this feature comes from: a user looking at the sea off Peniche
+  // could neither read the town's name nor ask the map where it was. Natural
+  // Earth carries twenty-four places in all of Portugal, so BOTH halves needed
+  // fixing — the search box, and a deeper tier for it to fly you into.
+  await expect(page.locator("#ps-input")).toBeVisible();
+
+  const search = await page.evaluate(async () => {
+    const E = window.__earth;
+    await E.ensureCities();
+    await E.ensureGazetteer();
+    const names = (q) => E.searchPlaces(q).map((p) => p.n);
+    const peniche = E.searchPlaces("peniche")[0];
+    return {
+      // the literal complaint
+      peniche: peniche && { n: peniche.n, a: peniche.a, o: peniche.o, c: E.placeCountry(peniche) },
+      // diacritic-insensitive: an English keyboard must find Zürich
+      zurich: names("zurich")[0],
+      // both tiers answer through one box — Lisbon is Natural Earth's English
+      // exonym, Peniche exists only in the deep file
+      lisbon: names("lisbon")[0],
+      // an exact name outranks the longer names it is a prefix of
+      york: names("york")[0],
+      // one letter is not a query; it would return four thousand places
+      tooShort: E.searchPlaces("p").length,
+      capped: E.searchPlaces("san").length,
+    };
+  });
+  expect(search.peniche).toBeTruthy();
+  expect(search.peniche.n).toBe("Peniche");
+  expect(search.peniche.a).toBeCloseTo(39.36, 1);
+  expect(search.peniche.o).toBeCloseTo(-9.38, 1);
+  expect(search.peniche.c).toMatch(/Portugal/);
+  expect(search.zurich).toMatch(/^Z(ü|u)rich$/);
+  expect(search.lisbon).toMatch(/Lisbo/);
+  expect(search.york).toBe("York");
+  expect(search.tooShort).toBe(0);
+  expect(search.capped).toBeLessThanOrEqual(8);
+
+  // Flying to a place puts you at an altitude derived from the place's own
+  // rung, not a fixed number: a hamlet gets a hamlet's altitude and a capital
+  // gets a continent's. Assert the ordering, not the metres.
+  const heights = await page.evaluate(() => {
+    const E = window.__earth;
+    const h = (q) => E.placeViewHeight(E.searchPlaces(q)[0]);
+    return { peniche: h("peniche"), paris: h("paris") };
+  });
+  expect(heights.peniche).toBeLessThan(heights.paris);
+  expect(heights.peniche).toBeGreaterThan(1e4);
+
+  // The found place gets its own marker, because at any altitude above its own
+  // rung the declutter ladder has decided not to draw precisely the place you
+  // asked for. Its DOT is unconditional; its NAME is the exact complement of
+  // the place's own rung, so arriving somewhere doesn't draw the name twice a
+  // pixel apart — which reads as a rendering fault, not as emphasis.
+  const marked = await page.evaluate(() => {
+    const E = window.__earth;
+    const p = E.searchPlaces("peniche")[0];
+    E.markFoundPlace(p);
+    const l = E.foundLabels.get(0), d = E.foundPoints.get(0);
+    return {
+      n: E.foundPlace.n, labels: E.foundLabels.length, text: l.text,
+      near: l.distanceDisplayCondition.near, far: l.distanceDisplayCondition.far,
+      dot: !d.distanceDisplayCondition,
+      arrive: E.placeViewHeight(p),
+    };
+  });
+  expect(marked.n).toBe("Peniche");
+  expect(marked.labels).toBe(1);
+  expect(marked.text).toBe("Peniche");
+  expect(marked.dot).toBe(true);                      // the dot never culls
+  expect(marked.far).toBeGreaterThan(1e8);            // …and the name reaches orbit
+  // The handover: the marker's name stops exactly where the ordinary label
+  // starts, and flying there lands you inside the ordinary label's band.
+  expect(marked.arrive).toBeLessThan(marked.near);
+
+  // …and arriving there, the deep tier labels the town itself. The camera is
+  // driven directly rather than flown: software GL makes real flights
+  // unreliable in the sandbox, and this assertion is about the label build.
+  const near = await page.evaluate(async () => {
+    const E = window.__earth;
+    E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(-9.38, 39.36, 4e4) });
+    // The build is chunked across animation frames and the camera hook may
+    // already have started one, so settle rather than assuming one call does it.
+    for (let k = 0; k < 20; k++) {
+      await E.refreshGazetteerLabels();
+      await new Promise(requestAnimationFrame);
+      if (E.gazLabels.length) break;
+    }
+    const L = E.gazLabels, out = [];
+    for (let i = 0; i < L.length; i++) out.push(L.get(i).text);
+    return { n: L.length, has: out.includes("Peniche"), rung: E.gazData.zFrom };
+  });
+  expect(near.has, "the deep tier did not label Peniche on arrival").toBe(true);
+  expect(near.n).toBeGreaterThan(1);
+  expect(near.n).toBeLessThan(1200);   // bounded by the view and the cap, not the file
+
+  // Back at orbit the deep tier must go away entirely — it exists below the
+  // rung where Natural Earth runs out, and 54k names on a globe is a smear.
+  const orbit = await page.evaluate(async () => {
+    const E = window.__earth;
+    E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(0, 20, 2.4e7) });
+    await E.refreshGazetteerLabels();
+    await new Promise(requestAnimationFrame);
+    return { n: E.gazLabels.length, rungThere: E.gazData.zFrom };
+  });
+  expect(orbit.n).toBe(0);
+
+  // The box itself: typing renders hits with a disambiguating country, and
+  // clearing removes the marker.
+  await page.fill("#ps-input", "peniche");
+  await expect(page.locator("#ps-results .ps-hit").first()).toContainText("Peniche");
+  await expect(page.locator("#ps-results .ps-hit").first()).toContainText("Portugal");
+  await page.click("#ps-clear");
+  expect(await page.evaluate(() => window.__earth.foundPlace)).toBeNull();
+  await expect(page.locator("#ps-results")).toBeHidden();
+});

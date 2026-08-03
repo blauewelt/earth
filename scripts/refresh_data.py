@@ -1328,6 +1328,160 @@ def cities():
           f"{globe} visible at globe zoom")
 
 
+def gazetteer(tier="cities5000"):
+    """GeoNames populated places -> data/gazetteer.json: the searchable tail.
+
+    Natural Earth (see cities() above) is a CARTOGRAPHIC SELECTION, not a
+    gazetteer. It carries 7,342 places worldwide and 24 in all of Portugal --
+    Covilha (24,828) is in, Peniche (15,662) is not -- because its job is to
+    produce a legible map at every zoom, not to know every town. That is
+    exactly right for labels and exactly wrong for a search box: a user looking
+    at the water off Peniche and typing "Peniche" must not be told it does not
+    exist.
+
+    So this is a second, deeper file with a different job. GeoNames cities5000
+    (every populated place over 5,000 people, CC BY 4.0) minus everything
+    Natural Earth already has, ~54 k places. It is lazy-loaded -- nobody pays
+    for it until they either open the search box or zoom past where Natural
+    Earth runs out.
+
+    THE RUNG PROBLEM. Every place on the globe needs a `z`: the rung of the
+    declutter ladder at which it starts being drawn (the client turns it into a
+    camera distance, PLACE_FAR0 / 2^z). Natural Earth ships its own `min_zoom`
+    and we use it verbatim -- but GeoNames has no such field, and CLAUDE.md
+    forbids hand-picking one, for good reason.
+
+    The way out is that a zoom ladder has an arithmetic. One rung down halves
+    the camera height, so it quarters the visible area, so it can carry ~4x as
+    many places at the SAME on-screen density. Natural Earth's own ladder obeys
+    this: its cumulative counts at z<=3,4,5,6,7 are 58, 238, 570, 2502, 6924 --
+    a geometric mean of ~3.3x per rung. So we measure that factor from Natural
+    Earth's file rather than assuming 4, and continue ITS curve: sort the tail
+    by population, and give the place at rank i the rung at which a ladder
+    growing by G per rung would have reached 7342 + i places:
+
+        z(i) = z_NE_max + log_G((N_NE + i + 1) / N_NE)
+
+    which puts the tail at z 9.00 -> 10.78 and Peniche at 10.19, i.e. visible
+    from about 70 km up. Nothing here is a number I chose: the anchor is where
+    Natural Earth stops, the slope is Natural Earth's own measured density
+    growth, and the ordering is population.
+
+    Deduplication is against cities.json and is deliberately two-sided: within
+    0.08 deg (~9 km) regardless of name, because the same town is placed
+    slightly differently by the two projects, AND same name within 0.5 deg,
+    because for big cities the two point locations can be 20 km apart (Dubai)
+    and a doubled label is worse than a missing one."""
+    import gzip
+    import unicodedata
+    import zipfile
+
+    def fold(s):
+        """Diacritic-insensitive key. The client folds the same way, so typing
+        'Zurich' finds 'Zurich' and 'Peniche' finds 'Peniche' whatever the
+        keyboard did."""
+        s = unicodedata.normalize("NFD", s)
+        return "".join(c for c in s if unicodedata.category(c) != "Mn").lower()
+
+    zpath = f"/tmp/nc/{tier}.zip"
+    _download(f"https://download.geonames.org/export/dump/{tier}.zip", zpath,
+              f" GeoNames {tier}")
+    with zipfile.ZipFile(zpath) as zf:
+        rows = [ln.split("\t") for ln in
+                zf.read(f"{tier}.txt").decode("utf-8").splitlines() if ln]
+
+    with open(os.path.join(DATA, "cities.json")) as fh:
+        ne = json.load(fh)["places"]
+
+    # Two indexes over Natural Earth, one per dedupe rule (see docstring).
+    cell, byname = {}, {}
+    for c in ne:
+        cell.setdefault((round(c["a"] * 10), round(c["o"] * 10)), []).append(c)
+        byname.setdefault(fold(c["n"]), []).append(c)
+
+    def already_mapped(name, lat, lon):
+        ky, kx = round(lat * 10), round(lon * 10)
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                for c in cell.get((ky + dy, kx + dx), ()):
+                    if abs(c["a"] - lat) < 0.08 and abs(c["o"] - lon) < 0.08:
+                        return True
+        for c in byname.get(fold(name), ()):
+            if abs(c["a"] - lat) < 0.5 and abs(c["o"] - lon) < 0.6:
+                return True
+        return False
+
+    tail = []
+    for r in rows:
+        # GeoNames columns: 1 name, 4 lat, 5 lon, 8 country code, 14 population
+        lat, lon = float(r[4]), float(r[5])
+        if already_mapped(r[1], lat, lon):
+            continue
+        tail.append((int(r[14] or 0), r[1], round(lon, 4), round(lat, 4), r[8]))
+    # Rank is the whole ladder: population descending, name as a stable
+    # tiebreak so a re-bake of the same dump produces byte-identical rungs.
+    tail.sort(key=lambda t: (-t[0], t[1]))
+
+    cum = [sum(1 for p in ne if p["z"] <= k) for k in range(3, 8)]
+    import math
+    growth = math.exp(sum(math.log(cum[i + 1] / cum[i])
+                          for i in range(len(cum) - 1)) / (len(cum) - 1))
+    n_ne = len(ne)
+    z_ne = max(p["z"] for p in ne)
+    places = [{
+        "n": name,
+        "o": lon, "a": lat,
+        "z": round(z_ne + math.log((n_ne + i + 1) / n_ne) / math.log(growth), 2),
+        "p": pop,
+        "c": cc,           # ISO-3166 alpha-2; names in `countries` below
+    } for i, (pop, name, lon, lat, cc) in enumerate(tail)]
+
+    # Country NAMES are a lookup rather than a field: "Portugal" repeated
+    # 500 times is the single largest compressible thing in the file, and the
+    # search list needs it spelled out ("Peniche, Portugal", not ", PT").
+    cinfo = "/tmp/nc/countryInfo.txt"
+    _download("https://download.geonames.org/export/dump/countryInfo.txt",
+              cinfo, " GeoNames country names")
+    names = {}
+    with open(cinfo) as fh:
+        for ln in fh:
+            if ln.startswith("#"):
+                continue
+            f = ln.split("\t")
+            if len(f) > 4:
+                names[f[0]] = f[4]
+    used = {p["c"] for p in places}
+
+    payload = {
+        "id": "gazetteer",
+        "title": f"Populated places over 5,000 ({tier}, GeoNames)",
+        "source": f"GeoNames {tier}, minus everything already in cities.json",
+        "citation": ("GeoNames geographical database (geonames.org), "
+                     "CC BY 4.0. Deduplicated against Natural Earth. `z` "
+                     "continues Natural Earth's declutter ladder: the rung at "
+                     "which a ladder growing by `growth` places per rung would "
+                     "have reached this place's global population rank."),
+        "doc": "https://www.geonames.org/export/",
+        "license": "CC BY 4.0",
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "growth": round(growth, 3),
+        "zFrom": z_ne,
+        "count": len(places),
+        "countries": {k: v for k, v in names.items() if k in used},
+        "places": places,
+    }
+    out = os.path.join(DATA, "gazetteer.json")
+    with open(out, "w") as fh:
+        json.dump(payload, fh, separators=(",", ":"), ensure_ascii=False)
+    raw = os.path.getsize(out)
+    with open(out, "rb") as fh:
+        gz = len(gzip.compress(fh.read()))
+    print(f"  wrote gazetteer.json: {len(places)} places "
+          f"(from {len(rows)}, {len(rows) - len(places)} already in cities.json), "
+          f"rungs {places[0]['z']}-{places[-1]['z']} continuing Natural Earth's "
+          f"{growth:.2f}x/rung, {raw / 1e6:.1f} MB raw / {gz / 1e6:.2f} MB gzipped")
+
+
 if __name__ == "__main__":
     os.makedirs("/tmp/nc", exist_ok=True)
     default = ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
@@ -1336,7 +1490,8 @@ if __name__ == "__main__":
            "sealevel": sealevel, "glaciers": glaciers, "gistemp": gistemp,
            "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss,
            "species": species, "argo_column": argo_column, "glorys": glorys, "eei": eei,
-           "gfs": gfs, "drivers": drivers, "cities": cities}
+           "gfs": gfs, "drivers": drivers, "cities": cities,
+           "gazetteer": gazetteer}
     for w in which:
         fns[w]()
     print("done")

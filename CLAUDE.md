@@ -323,6 +323,61 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
     `seeThrough()` filter at both pick sites, the pixel inspector would go
     silent wherever a name sits, i.e. in exactly the places the map is most
     legible. A label glyph is a much bigger pick target than it looks.
+  - **Natural Earth is a SELECTION; the gazetteer is the other job.** The user
+    looked at the sea off Peniche and reported that the town had no name and
+    could not be searched for — Natural Earth carries twenty-four places in all
+    of Portugal. `data/gazetteer.json` (GeoNames `cities5000`, CC BY 4.0,
+    69,562 rows → 54,204 after deduplication against `cities.json`, 1.15 MB
+    gzipped, baked by `refresh_data.py gazetteer`) fills in underneath. It is
+    **lazy**, and the trigger is the ladder itself: it loads when you open the
+    search box or descend past the rung where Natural Earth stops. Attribution
+    is required by CC BY — the footer and the `places-mode` tooltip carry it.
+  - **The deep rungs are MEASURED, not chosen.** One rung down halves camera
+    height, quarters the visible area, and can therefore carry ~4× the labels at
+    constant on-screen density. Natural Earth's own cumulative counts at
+    z ≤ 3…7 (58, 238, 570, 2502, 6924) grow by a geometric mean of **3.305×**
+    per rung, so a GeoNames place ranked i-th by population gets
+    `z = z_NE_max + log_G((N_NE + i + 1) / N_NE)` — anchored where NE stops,
+    sloped by NE's own behaviour, ordered by population. (An OLS fit of NE's
+    `min_zoom` on `log10(pop)` was tried first and **rejected**: R² = 0.12,
+    slope −0.33/decade. Population barely predicts NE's selection, because NE
+    is picking one place per region regardless of size. Do not retry it.)
+    `zFrom` in the file is the seam, and a test pins it to `cities.json`'s last
+    rung, so re-baking either file cannot open a gap or an overlap.
+  - **The deep tier is SPATIAL where the Natural Earth tier is a prefix.** The
+    prefix walk is only affordable because that file is 7,342 places total;
+    54,204 is not, and "rung 10.8" means all of them. So the deep tier is
+    bounded by the view rectangle with a `GAZ_CAP` of 900: places stream in as
+    you pan (adding is cheap, tearing down what you can still see is not), the
+    build box is 2× the view so a slow pan doesn't watch names arrive at the
+    edge, and only when the set passes the cap does it reset to what is in
+    front of you. Because the array is sorted by rung, "the first 900 in this
+    rectangle" is also "the most significant 900" — the cap drops villages, not
+    whatever happened to be scanned last.
+  - **Clearing must also CANCEL.** The build is chunked across animation frames
+    on an 8 ms budget, so `clearGazetteerLabels()` bumps a generation counter
+    that in-flight walks check, and `refreshGazetteerLabels()` tests "nothing
+    should be here" BEFORE its in-flight-build guard. Without both, flying back
+    to orbit mid-build leaves the town you left hanging over the globe. This was
+    caught by the test asserting zero labels at orbit — the failure mode is
+    invisible unless you look for it.
+  - **The found marker's NAME is the complement of the place's own rung.** A
+    searched place gets an accent-coloured dot with no distance condition (at
+    any altitude above its rung the declutter ladder has decided not to draw
+    precisely the place you asked for) — but its label shows only *farther*
+    than `PLACE_FAR0 / 2^z`, exactly where the ordinary label is culled.
+    Otherwise arriving draws the name twice a pixel apart, which reads as a
+    rendering fault rather than as emphasis. `placeViewHeight()` flies to one
+    rung closer than the label's own threshold, so the handover is guaranteed.
+  - **Search reads both files through one box.** Natural Earth answers in
+    English exonyms ("Lisbon"), GeoNames in local names and everything else;
+    searching both is not redundancy, it is the only way "Lisbon" and "Peniche"
+    both work. Names are folded (NFD, strip combining marks, lowercase) once on
+    arrival — 54 k `normalize()` calls are fine on load and are not fine between
+    two keystrokes. Ranking is by *where* the match sits (exact ▸ prefix ▸ start
+    of a later word ▸ buried) then by the place's own rung, so "york" leads with
+    York and "san" doesn't lead with a village. **No online geocoder** — §3
+    forbids a new browser-facing host, which is why the gazetteer is baked.
   Scene primitives always draw over imagery, so the names need no re-raising —
   but the borders imagery does: every data layer is appended to the TOP of the
   stack, so `imageryLayers.layerAdded` re-raises it from the one place that
@@ -508,8 +563,23 @@ optional GIBS `Reference_Features_15m` coastline/border overlay. Requested
 directly by the user — "make sure that some reference points are also displayed
 on the map, like cities … it is better to navigate in that way". This is the
 one thing on the globe that is not a measurement: it exists so every other
-layer can be read as being somewhere. See §5 for the four decisions behind it
-and Part 2 for why the names could not come from GIBS.
+layer can be read as being somewhere. See §5 for the decisions behind it and
+Part 2 for why the names could not come from GIBS.
+
+**The gazetteer and place search (`data/gazetteer.json`):** the same user, two
+requests later — "is this near Peniche … do you know there is no place name?
+can you add functionality to search for a place name?" Both halves needed
+answering, because search alone would have flown you to a town the map still
+refused to name. 54,204 GeoNames `cities5000` places (CC BY 4.0, 1.15 MB
+gzipped, deduplicated against Natural Earth by proximity *and* by folded name
+within ~0.5° — the two projects place a big city several kilometres apart, which
+left Dubai and 66 others doubled on the first pass) carry rungs that continue
+Natural Earth's ladder at its own measured growth of 3.305 places per rung. The
+file is lazy: it arrives when you open the search box or descend past rung 9.
+Above that seam nothing changes; below it the deep tier fills the valley with
+the towns Natural Earth never had room for, and the search box finds any of the
+61,000 places across both files and flies you in at an altitude where the place
+is actually labelled. Bake: `refresh_data.py gazetteer`.
 
 **Ocean column (Argo RG, `data/ocean_column.json`):** the latest month's
 absolute T/S profile AND the same-calendar-month 2004–18 normal on a 2° grid
