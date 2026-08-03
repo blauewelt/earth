@@ -225,6 +225,12 @@ The dev sandbox's *browser* cannot reach external hosts (curl can). Therefore:
   el.dispatchEvent(new Event("change", { bubbles: true })); })` — the same
   pattern already used for dismissing toasts. Prefer a light layer
   (`#toggle-climatetrace`, 1,000 points) when the test doesn't care which one.
+  This applies to switching a heavy layer **on** as well as off: `check()`
+  waits for actionability the starved render loop cannot grant while the 7.4 MB
+  snapshot is still decoding. And give such a test an explicit
+  `test.setTimeout()` — when the 90 s default runs out, Playwright reports it
+  against whichever assertion happened to be in flight (`Received: undefined`),
+  which reads like a broken selector rather than a test that ran out of time.
 - Reading a self-clearing UI state (e.g. the `.flash` outline, 1.4 s) must
   happen inside the *same* `page.evaluate` as the click that sets it; a
   click→assert round-trip can outlast it on the slow sandbox.

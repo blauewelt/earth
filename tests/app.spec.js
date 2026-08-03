@@ -476,6 +476,11 @@ test("aggregation window is orthogonal to the display mode", async ({ page }) =>
 });
 
 test("comparison hint explains non-differenceable & point layers in both modes", async ({ page }) => {
+  // 274k glacier billboards plus a full delta tile set: this one genuinely
+  // needs more than the 90 s default, and hitting that wall reported itself as
+  // a mystery "Received: undefined" on whichever assertion happened to be
+  // in flight rather than as "the test ran out of time".
+  test.setTimeout(180000);
   await page.selectOption("#compare-select", "10");
   await page.selectOption("#compare-mode", "delta");
   await expect(page.locator("#delta-hint")).toBeHidden(); // SST alone is differenceable
@@ -488,7 +493,14 @@ test("comparison hint explains non-differenceable & point layers in both modes",
   // glaciers: single-snapshot note appears in delta AND side-by-side modes
   // (generous timeout: the 7.4 MB glacier snapshot loads while delta tiles
   // saturate the connection pool)
-  await page.check("#toggle-glaciers");
+  // On from inside the page too, for the same reason it is switched off that
+  // way below: `check()` waits for actionability the starved render loop
+  // cannot grant while the snapshot is decoding.
+  await page.evaluate(() => {
+    const el = document.getElementById("toggle-glaciers");
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   await expect(page.locator("#delta-hint")).toBeVisible({ timeout: 30000 });
   await expect(page.locator("#delta-hint")).toContainText("single inventory");
   await page.selectOption("#compare-mode", "split");
