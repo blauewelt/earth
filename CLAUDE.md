@@ -281,6 +281,53 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   normal is the annual mean, so the difference would mostly be the seasonal
   cycle — the MUR25 anomalies row is the seasonally-correct departure.
   `showPixelState(carto)` is exported for tests. Esc or × closes.
+- **Place names** (`#places-mode`, a three-way select next to "Base globe":
+  names / … and borders & coasts / off; default names-ON, persisted). A globe
+  of pure data is beautiful and unnavigable — an SST anomaly off a coastline
+  you can't name says nothing about WHERE the ocean is warm, and the whole app
+  is built on asking "what is happening HERE". Four decisions worth keeping:
+  - It is **not** a layer-list entry. That list is a catalogue of
+    *measurements*: legend, date, hover card, `catalog.json` record. Map
+    furniture has none of those and would have to fake all four, so it belongs
+    with the controls for how the map LOOKS. For the same reason cities gets
+    **no catalog record** — the base Blue Marble imagery doesn't have one
+    either, and §2.6 is about datasets, not basemap annotation.
+  - **Names are baked, borders are streamed.** `data/cities.json` (Natural
+    Earth 10m populated places, public domain, ~7.3 k places / 166 KB gzipped,
+    baked by `refresh_data.py cities`) — because the GIBS labels raster is a
+    stub (Part 2). The linework is the GIBS `Reference_Features_15m` overlay.
+    Neither adds a browser-facing host, so both stay inside §3.
+  - **The declutter ladder is Natural Earth's, not mine.** Every place carries
+    `z` = the cartographers' `min_zoom`, which becomes a per-label
+    `DistanceDisplayCondition(0, PLACE_FAR0 / 2^z)`. Cesium then culls on the
+    GPU with zero per-frame JS, and the density stays honest at every altitude:
+    a dozen world cities from orbit, the whole valley up close. Never
+    hand-pick a threshold here, and never pin exact visible counts in a test —
+    assert the ladder is monotonic, so a Natural Earth re-release doesn't
+    break the suite. (The baker clamps NE's `-99` "unknown population"
+    sentinel to 0; passed through it sorts a town below everything.)
+  - **Build the rungs you can see, not the file.** Creating all 7,342 labels
+    at once costs a **1.5-second frame** — Cesium rasterises every glyph into a
+    texture atlas the first time it draws, so the price is paid whether or not
+    anything is on screen, and it lands on first paint. `cities.json` is sorted
+    by rung precisely so "everything that could be visible now" is a contiguous
+    PREFIX: `buildCitiesTo(z)` walks a cursor, 300 per animation frame, driven
+    by `camera.changed` (needs `percentageChanged`, else it only fires at move
+    end) + `moveEnd` with a +1 rung look-ahead. Globe view materialises ~26.
+    This was caught by the *chips* test timing out on `page.click`, not by
+    anything about places — a long frame starves Playwright's actionability
+    check, so unrelated tests are where this class of bug surfaces.
+  - **`CITY_PICK` / `seeThrough`.** Labels and dots are scene primitives, so
+    `viewer.scene.pick` finds them — and both click handlers treat *any* pick
+    as "not bare globe". Without the shared frozen sentinel id and the
+    `seeThrough()` filter at both pick sites, the pixel inspector would go
+    silent wherever a name sits, i.e. in exactly the places the map is most
+    legible. A label glyph is a much bigger pick target than it looks.
+  Scene primitives always draw over imagery, so the names need no re-raising —
+  but the borders imagery does: every data layer is appended to the TOP of the
+  stack, so `imageryLayers.layerAdded` re-raises it from the one place that
+  can't be forgotten (`raiseToTop` fires `layerMoved`, not `layerAdded`, so it
+  doesn't re-enter).
 - **Active-layer chips** (`#active-layers`, top-left of the globe) list every
   layer currently on, whatever machinery draws it. Each chip's `×` turns the
   layer off; the label jumps to that layer's sidebar row and outlines it
@@ -328,6 +375,20 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   declare their **full nominal span**, not the clamped visible part — clamping
   blanked the Pacific once. `GIBSGeographicTilingScheme` implements this; a
   test pins it to the published matrix definitions.
+- **GIBS's reference LABELS layer is a stub — the borders layer is real.**
+  `Reference_Features_15m` works and is what draws the coastlines and national
+  borders (~100 KB tiles, ~20 k opaque px at level 4). `Reference_Labels_15m`
+  returns an identical fully-transparent 1108-byte PNG at *every* level 2–10,
+  and `.mvt`/`.pbf` return HTTP 400: Worldview draws those names from a vector
+  source Cesium would need an MVT decoder to read. Do not try again — place
+  names are baked from Natural Earth into `data/cities.json` instead. Two
+  traps when probing this by hand: the tile grid is **not** powers of two (see
+  the tiling quirk above — `span = 288 / 2^L` degrees from top-left −180, 90,
+  matrix widths 2, 3, 5, 10, 20, 40 …), and in the software-GL sandbox imagery
+  refines to level 4 only after ~20 s of `requestRender` — a screenshot taken
+  too early shows a blank overlay and looks exactly like a broken layer.
+  The linework is also *inherently* pale one-pixel hairlines, so it wants
+  ~0.9 alpha; fading it "politely" to 0.55 makes it invisible over SST.
 - **GIBS serves pictures, not numbers.** Values are recovered by inverting the
   layer's XML colormap (rgb → value LUT). Inversion recovers bin centres
   (quantised), works only for continuous one-to-one colormaps. Colormap
@@ -437,6 +498,18 @@ and render transparent, so the layer paints only the deforestation frontiers.
 Bake: `refresh_data.py drivers` (~300 MB COG, needs `rasterio`). It is the
 companion to the OPERA rasters above, which see the loss at 30 m and say
 nothing about its cause.
+
+**Place names (`data/cities.json`) — the map's reference points:** 7,342
+Natural Earth 10m populated places (public domain, 166 KB gzipped, 200 national
+capitals, 58 of them surviving the full-globe view), drawn as a Cesium
+`LabelCollection` + `PointPrimitiveCollection` with a per-label
+`DistanceDisplayCondition` derived from Natural Earth's own `min_zoom`, plus an
+optional GIBS `Reference_Features_15m` coastline/border overlay. Requested
+directly by the user — "make sure that some reference points are also displayed
+on the map, like cities … it is better to navigate in that way". This is the
+one thing on the globe that is not a measurement: it exists so every other
+layer can be read as being somewhere. See §5 for the four decisions behind it
+and Part 2 for why the names could not come from GIBS.
 
 **Ocean column (Argo RG, `data/ocean_column.json`):** the latest month's
 absolute T/S profile AND the same-calendar-month 2004–18 normal on a 2° grid

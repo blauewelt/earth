@@ -583,6 +583,184 @@ function updateBaseAppearance() {
   baseImageryLayer.brightness = gray ? 0.6 : 1.0;
 }
 
+/* ------------------------------------------------------- place-name overlay
+ *
+ * A globe of pure data is beautiful and unnavigable: an SST anomaly off a
+ * coastline you can't name tells you nothing about WHERE the ocean is warm.
+ * Two things fix that, and they come from different places: city NAMES are
+ * baked into data/cities.json (see below for why they can't come from GIBS),
+ * and political/coastal LINEWORK is a GIBS raster overlay. Neither adds a
+ * browser-facing host, so both stay inside the network rule in CLAUDE.md §3.
+ *
+ * These are NOT layers in the layer list. That list is a catalogue of
+ * measurements: every entry has a legend, a date, a hover card and a record in
+ * data/catalog.json. A basemap annotation has none of those and would have to
+ * fake them all. It belongs with "Base globe" — the controls for how the map
+ * LOOKS — and so it lives here, next to the desaturation logic, for the same
+ * reason.
+ */
+/* Borders and coastlines come from GIBS as a raster overlay. The NAMES do not:
+ * GIBS's Reference_Labels layer returns blank PNGs over this whole tile matrix
+ * (Worldview draws those from a vector source, which Cesium would need an MVT
+ * decoder to read), so city names are baked into data/cities.json instead —
+ * the app's normal posture anyway, and it buys per-label control the raster
+ * could never give. */
+function bordersProvider() {
+  return new Cesium.WebMapTileServiceImageryProvider({
+    url: GIBS_URL.replace("{layer}", "Reference_Features_15m").replace("{time}", "default")
+      .replace("{tms}", "15.625m").replace("{ext}", "png"),
+    layer: "Reference_Features_15m", style: "default", format: "image/png",
+    tileMatrixSetID: "15.625m", maximumLevel: 12,
+    tileWidth: 512, tileHeight: 512,
+    tilingScheme: new GIBSGeographicTilingScheme(),
+    credit: new Cesium.Credit("NASA GIBS / Worldview"),
+  });
+}
+
+/* Which places are on screen is Natural Earth's judgement, not mine: every
+ * place carries `z`, the web-map zoom at which cartographers decided it earns a
+ * label, and that becomes the far end of a per-label DistanceDisplayCondition.
+ * Cesium then culls on the GPU with no per-frame JS, and the density stays
+ * honest at every altitude — eleven world cities from orbit, every town in the
+ * valley up close. FAR0 is set so Natural Earth's most important tier (z 1.7)
+ * survives the full-globe view. */
+const PLACE_FAR0 = 8.1e7;
+/* Place names are SCENERY, not data. A click that lands on the word "Paris"
+ * must still reach the globe underneath, or the pixel inspector would go quiet
+ * in exactly the places the map is most legible — and a label glyph is a far
+ * bigger pick target than it looks. Every city primitive carries this sentinel
+ * id, and `seeThrough` makes the pick handlers look past it. */
+const CITY_PICK = Object.freeze({ scenery: true });
+const seeThrough = (p) => (p && p.id === CITY_PICK ? undefined : p);
+let cityLabels = null, cityPoints = null, cityLoad = null;
+let cityData = null, cityBuilt = 0, cityBuild = null;
+
+/* One place. A dot as well as a name, because a word floating over nothing is
+ * ambiguous by a few kilometres at these altitudes — kept small and neutral so
+ * it never reads as one of the app's own data markers. */
+function addCity(c) {
+  const pos = Cesium.Cartesian3.fromDegrees(c.o, c.a);
+  const ddc = new Cesium.DistanceDisplayCondition(0, PLACE_FAR0 / Math.pow(2, c.z));
+  cityPoints.add({
+    id: CITY_PICK,
+    position: pos, pixelSize: c.cap ? 4 : 3,
+    color: Cesium.Color.WHITE.withAlpha(0.85),
+    outlineColor: Cesium.Color.BLACK.withAlpha(0.6), outlineWidth: 1,
+    distanceDisplayCondition: ddc,
+  });
+  cityLabels.add({
+    id: CITY_PICK,
+    position: pos, text: c.n,
+    font: `${c.cap ? "600 " : ""}11px system-ui, sans-serif`,
+    fillColor: Cesium.Color.WHITE,
+    outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+    style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+    pixelOffset: new Cesium.Cartesian2(0, -11),
+    // The outline is what makes a name readable over both a black ocean and a
+    // yellow SST field without a background box eating the data.
+    distanceDisplayCondition: ddc,
+  });
+}
+
+/* The rung the camera is currently standing on: invert the display condition
+ * (a place with rung z shows while distance ≤ FAR0 / 2^z) to get the deepest
+ * rung that could possibly be on screen. */
+function cityRungAt(height) {
+  return Math.log2(PLACE_FAR0 / Math.max(height, 1));
+}
+
+/* Materialise places down to a rung — and no further.
+ *
+ * Creating all 7,342 at once costs a 1.5-SECOND frame: Cesium rasterises every
+ * glyph of every label into a texture atlas the first time it draws, so the
+ * price is paid whether or not a single one of them is on screen. That stall
+ * lands squarely on first paint, and it buys nothing — from orbit you can read
+ * about sixty names.
+ *
+ * So build a PREFIX. data/cities.json is sorted by rung, which makes "every
+ * place that could be visible right now" a contiguous slice from the front, and
+ * makes this a `while` over a cursor rather than a spatial index. Chunked
+ * across animation frames so even a deep tier can't produce one long frame.
+ * Resolves when the prefix is complete, so tests (and anything else that needs
+ * to know) can wait for it. */
+function buildCitiesTo(zMax) {
+  if (!cityData) return Promise.resolve(0);
+  const wanted = () => cityBuilt < cityData.places.length && cityData.places[cityBuilt].z <= zMax;
+  if (!wanted()) return cityBuild || Promise.resolve(cityBuilt);
+  // A build already in flight is for a shallower rung; chain onto it rather
+  // than interleaving two cursors over the same array.
+  cityBuild = (cityBuild || Promise.resolve()).then(() => new Promise((done) => {
+    const step = () => {
+      const stop = cityBuilt + 300;
+      while (cityBuilt < stop && wanted()) addCity(cityData.places[cityBuilt++]);
+      if (wanted()) requestAnimationFrame(step);
+      else { cityBuild = null; done(cityBuilt); }
+    };
+    step();   // first chunk synchronously: the top rung appears on this frame
+  }));
+  return cityBuild;
+}
+
+function ensureCities() {
+  if (cityLoad) return cityLoad;
+  cityLoad = fetch("data/cities.json").then((r) => r.json()).then(async (d) => {
+    cityData = d;
+    cityLabels = viewer.scene.primitives.add(new Cesium.LabelCollection());
+    cityPoints = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
+    applyPlacesMode();
+    await buildCitiesTo(cityRungAt(viewer.camera.positionCartographic.height));
+    return d;
+  }).catch(() => null);
+  return cityLoad;
+}
+
+/* Descending the ladder. `camera.changed` needs `percentageChanged` set to fire
+ * during a move rather than only at its end, and half a screen is about the
+ * coarsest step that still fills in ahead of the eye. The +1 look-ahead builds
+ * one rung deeper than strictly visible, so a fast zoom finds the names already
+ * there instead of watching them pop in. */
+viewer.camera.percentageChanged = 0.5;
+const descend = () => {
+  if (cityData) buildCitiesTo(cityRungAt(viewer.camera.positionCartographic.height) + 1);
+};
+viewer.camera.changed.addEventListener(descend);
+viewer.camera.moveEnd.addEventListener(descend);
+
+let bordersLayer = null;
+function placesMode() {
+  return document.getElementById("places-mode")?.value || "labels";
+}
+function applyPlacesMode() {
+  const mode = placesMode();
+  if (cityLabels) { cityLabels.show = mode !== "off"; cityPoints.show = mode !== "off"; }
+}
+function updatePlaces() {
+  const mode = placesMode();
+  if (bordersLayer) { viewer.imageryLayers.remove(bordersLayer, true); bordersLayer = null; }
+  if (mode === "full") {
+    bordersLayer = viewer.imageryLayers.addImageryProvider(bordersProvider());
+    /* Near-full opacity, which sounds wrong for an annotation and isn't: GIBS
+     * draws these as pale one-pixel hairlines, already about as quiet as a line
+     * can be. Fading them further doesn't make them tactful, it makes them
+     * invisible over a busy SST field — which is the only place you'd want a
+     * coastline. The restraint is in the artwork, not in the alpha. */
+    bordersLayer.alpha = 0.9;
+  }
+  if (mode !== "off") ensureCities();
+  applyPlacesMode();
+}
+/* Every data layer is appended to the TOP of the imagery stack, which would
+ * bury the coastlines the moment anything is switched on. Rather than
+ * remembering to re-raise at each of the ~six call sites that add imagery (data
+ * layers, comparison pairs, the SST ensemble, GBIF), hook the collection's own
+ * event — the one place that cannot be forgotten. raiseToTop fires layerMoved,
+ * not layerAdded, so this doesn't re-enter. (The city names need none of this:
+ * they are scene primitives, which always draw over imagery.) */
+viewer.imageryLayers.layerAdded.addEventListener((layer) => {
+  if (!bordersLayer || layer === bordersLayer) return;
+  viewer.imageryLayers.raiseToTop(bordersLayer);
+});
+
 /* Zoom gestures: mouse wheel, touch pinch, AND trackpad pinch.
  * Browsers report a MacBook-style trackpad pinch as a wheel event with
  * ctrlKey set, which Cesium ignores unless registered explicitly. */
@@ -1586,6 +1764,19 @@ baseModeSel.addEventListener("change", () => {
   try { localStorage.setItem("baseMode", baseModeSel.value); } catch { /* ok */ }
   updateBaseAppearance();
 });
+
+// Place names: persisted the same way. Default is ON — without them the globe
+// is a pretty abstraction, and "where is that warm water" has no answer.
+const placesSel = document.getElementById("places-mode");
+try {
+  const saved = localStorage.getItem("placesMode");
+  if (saved) placesSel.value = saved;
+} catch { /* private mode */ }
+placesSel.addEventListener("change", () => {
+  try { localStorage.setItem("placesMode", placesSel.value); } catch { /* ok */ }
+  updatePlaces();
+});
+updatePlaces();
 
 // Note shown in computed-difference mode when a layer that can't be differenced
 // is active — either a non-continuous raster (precip/aerosol) or a point/snapshot
@@ -3135,7 +3326,7 @@ function updateGbifLayer() {
 
 // Click-picking: point primitives → info card; bare globe → pixel inspector
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((click) => {
-  const picked = viewer.scene.pick(click.position);
+  const picked = seeThrough(viewer.scene.pick(click.position));
   if (picked?.id?.kind) {
     pickCard.innerHTML = picked.id.html;
     pickCard.classList.remove("hidden");
@@ -3416,7 +3607,7 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((c) => {
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
   if (pixelInspectorEngaged()) return;
-  if (topColormapLayer() && !viewer.scene.pick(c.position)?.id?.kind) {
+  if (topColormapLayer() && !seeThrough(viewer.scene.pick(c.position))?.id?.kind) {
     runProbe(c.position.x, c.position.y);
   }
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
@@ -4777,4 +4968,14 @@ window.__earth = {
   loadGridMonth,
   rampColor,
   gibsTime,
+  // place names: the collections themselves, plus the pick-through helper, so a
+  // test can prove a click on "Paris" still reaches the globe
+  ensureCities,
+  buildCitiesTo,
+  cityRungAt,
+  seeThrough,
+  CITY_PICK,
+  get cityLabels() { return cityLabels; },
+  get cityPoints() { return cityPoints; },
+  get bordersLayer() { return bordersLayer; },
 };

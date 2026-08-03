@@ -76,6 +76,11 @@
             <em>½</em> one-click toggle: stack two layers and make the top one half-transparent
             to eyeball how the fields line up (e.g. sea surface temperature at 50% over ocean
             currents — does the warm tongue follow the Gulf Stream?).</li>
+          <li><strong>Place names</strong> — city names ride over every layer so you can tell
+            where you are looking, thinning out with altitude the way a paper map does: a dozen
+            world cities from orbit, every town in the valley up close. Coastlines and borders
+            can be switched on alongside, or the whole thing off for a data-only view. Clicking
+            a name still reads the globe underneath it.</li>
           <li><strong>Forecast</strong> — the two GFS layers (2 m temperature, daily rain) look
             <em>forward</em>: with one switched on, the date selector runs up to 10 days into
             the future. Observation layers can't follow and hold at their latest real
@@ -151,6 +156,14 @@
           <option value="auto" selected>Auto — grey under data</option>
           <option value="color">Always colour</option>
           <option value="gray">Always grayscale</option>
+        </select>
+      </div>
+      <div class="control-row">
+        <label for="places-mode">Place names</label>
+        <select id="places-mode" title="City names over the data, so you can tell where you are looking — from Natural Earth, thinning out with altitude the way a paper map does. The optional borders and coastlines come from NASA GIBS.">
+          <option value="labels" selected>Cities &amp; place names</option>
+          <option value="full">&hellip; and borders &amp; coasts</option>
+          <option value="off">Off &mdash; data only</option>
         </select>
       </div>
       <details class="hint-details" id="how-compare">

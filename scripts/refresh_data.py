@@ -1257,6 +1257,77 @@ def drivers(deg=0.25):
         print(f"    {lab:<30} {share[lab]:>7} cells  {100 * share[lab] / filled:5.1f}%")
 
 
+def cities():
+    """Natural Earth populated places -> data/cities.json: the map's reference
+    points.
+
+    A globe of pure data is beautiful and unnavigable. An SST anomaly off a
+    coastline you cannot name tells you nothing about WHERE the ocean is warm,
+    and the whole app is built on being able to ask "what is happening HERE".
+
+    NASA GIBS serves reference overlays and we use its Reference_Features_15m
+    for borders and coastlines -- but its Reference_LABELS layer returns blank
+    PNGs (Worldview draws those names from a vector source Cesium would need an
+    MVT decoder to read), so the names are baked here instead. That is the
+    app's normal posture anyway: no new browser-facing host, one static file.
+
+    Natural Earth is PUBLIC DOMAIN and, more usefully, already decluttered by
+    cartographers: `min_zoom` is the web-map zoom at which each place should
+    first appear, so the ladder from "eleven world cities on the whole globe"
+    to "every town in the valley" is theirs, not a threshold I invented. The
+    client turns it into a per-label camera distance."""
+    url = ("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/"
+           "master/geojson/ne_10m_populated_places_simple.geojson")
+    src = "/tmp/nc/ne_10m_populated_places_simple.geojson"
+    _download(url, src, "Natural Earth populated places (10m)")
+
+    with open(src) as fh:
+        feats = json.load(fh)["features"]
+
+    out = []
+    for f in feats:
+        p = f["properties"]
+        lon, lat = f["geometry"]["coordinates"][:2]
+        out.append({
+            "n": p["name"],
+            # ~11 m precision: this is a label anchor, not a survey mark, and
+            # the digits past it cost more than the whole `cap` flag.
+            "o": round(float(lon), 4),
+            "a": round(float(lat), 4),
+            "z": float(p["min_zoom"]),          # cartographers' declutter ladder
+            # Natural Earth writes -99 for "not known", its nodata sentinel
+            # across the whole vector suite. Passed through it would sort a town
+            # below every other place and read as a negative population in any
+            # client that shows it; unknown is 0 here.
+            "p": max(0, int(p["pop_max"] or 0)),
+            "c": p["adm0name"] or "",
+            "cap": 1 if p["adm0cap"] == 1 else 0,
+        })
+    # Most-important first, so a client that ever wants to cut the tail can
+    # simply truncate, and so the biggest cities win any tie in draw order.
+    out.sort(key=lambda c: (c["z"], -c["p"]))
+
+    payload = {
+        "id": "cities",
+        "title": "Populated places (Natural Earth 10m)",
+        "source": "Natural Earth, ne_10m_populated_places_simple",
+        "citation": ("Natural Earth (naturalearthdata.com), 1:10m populated places. "
+                     "Public domain. `z` is Natural Earth's min_zoom: the web-map "
+                     "zoom level at which the place should first be labelled."),
+        "doc": "https://www.naturalearthdata.com/downloads/10m-cultural-vectors/10m-populated-places/",
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "count": len(out),
+        "places": out,
+    }
+    with open(os.path.join(DATA, "cities.json"), "w") as fh:
+        json.dump(payload, fh, separators=(",", ":"), ensure_ascii=False)
+    os.remove(src)
+    caps = sum(c["cap"] for c in out)
+    globe = sum(1 for c in out if c["z"] <= 3)
+    print(f"  wrote cities.json: {len(out)} places, {caps} national capitals, "
+          f"{globe} visible at globe zoom")
+
+
 if __name__ == "__main__":
     os.makedirs("/tmp/nc", exist_ok=True)
     default = ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
@@ -1265,7 +1336,7 @@ if __name__ == "__main__":
            "sealevel": sealevel, "glaciers": glaciers, "gistemp": gistemp,
            "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss,
            "species": species, "argo_column": argo_column, "glorys": glorys, "eei": eei,
-           "gfs": gfs, "drivers": drivers}
+           "gfs": gfs, "drivers": drivers, "cities": cities}
     for w in which:
         fns[w]()
     print("done")

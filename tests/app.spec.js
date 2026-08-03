@@ -2075,3 +2075,117 @@ test("drivers is a categorical grid: swatch legend, named driver, dateless", asy
   expect(cfg.agg).toBeNull();
   expect(cfg.dr).toBeNull();
 });
+
+test("place names orient the map: a zoom ladder, optional borders, and a click that goes through", async ({ page }) => {
+  // The feature exists for one reason: an SST anomaly off a coastline you can't
+  // name tells you nothing about WHERE the ocean is warm. So the test is about
+  // legibility — the right number of names at each altitude — and about the
+  // thing legibility must not cost: a click still has to reach the globe.
+  const sel = page.locator("#places-mode");
+  await expect(sel).toHaveValue("labels");   // on by default; a nameless globe is the broken state
+
+  // Only the rungs the camera can actually see get built. Cesium rasterises
+  // every glyph into a texture atlas on first draw, so materialising all 7.3k
+  // up front costs a ~1.5-second frame on first paint and buys nothing — from
+  // orbit you can read about sixty names.
+  const loaded = await page.evaluate(async () => {
+    const E = window.__earth;
+    E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(0, 20, 2.4e7) });
+    await E.ensureCities();
+    return { labels: E.cityLabels.length, points: E.cityPoints.length,
+             show: E.cityLabels.show && E.cityPoints.show };
+  });
+  expect(loaded.labels).toBeGreaterThan(5);
+  expect(loaded.labels).toBeLessThan(400);       // a globe view is a handful, not a smear
+  expect(loaded.points).toBe(loaded.labels);     // a name with no dot is ambiguous by kilometres
+  expect(loaded.show).toBe(true);
+
+  // …and descending the ladder fills in the rest. Building the full set is
+  // what the camera hook does on zoom; drive it directly, because the sandbox's
+  // software GL makes real camera flights unreliable.
+  const all = await page.evaluate(() => window.__earth.buildCitiesTo(99));
+  expect(all).toBeGreaterThan(5000);
+
+  // The declutter ladder itself. Natural Earth's `min_zoom` becomes the far end
+  // of a per-label DistanceDisplayCondition, so what's on screen is the
+  // cartographers' judgement: a handful of world cities from orbit, the whole
+  // valley up close. Assert the ladder is MONOTONIC rather than pinning counts,
+  // which would break on any Natural Earth re-release.
+  const visible = await page.evaluate(() => {
+    const L = window.__earth.cityLabels;
+    const at = (d) => {
+      let n = 0;
+      for (let i = 0; i < L.length; i++) {
+        const c = L.get(i).distanceDisplayCondition;
+        if (d >= c.near && d <= c.far) n++;
+      }
+      return n;
+    };
+    return { orbit: at(2.4e7), continent: at(4e6), valley: at(2e5) };
+  });
+  expect(visible.orbit).toBeGreaterThan(5);
+  expect(visible.orbit).toBeLessThan(200);            // more than this is a smear, not a map
+  expect(visible.continent).toBeGreaterThan(visible.orbit);
+  expect(visible.valley).toBeGreaterThan(visible.continent);
+  expect(visible.valley).toBeGreaterThan(5000);       // essentially everything, up close
+
+  // The rung inversion is the one bit of arithmetic here, and it has to agree
+  // with the display conditions in both directions or the build lags the view.
+  const rung = await page.evaluate(() => {
+    const f = window.__earth.cityRungAt;
+    return { orbit: f(2.4e7), valley: f(2e5) };
+  });
+  expect(rung.orbit).toBeLessThan(2);      // from orbit, only Natural Earth's top tier
+  expect(rung.valley).toBeGreaterThan(8);  // in the valley, everything it ships
+
+  // A click on a place name must still open the pixel-state card. Label glyphs
+  // are far bigger pick targets than they look, and the click handler treats
+  // ANY pick as "not bare globe" — so without the CITY_PICK sentinel the app's
+  // flagship feature would go quiet in exactly the places the map is most
+  // legible. Assert the helper, because canvas click coordinates are unreliable
+  // on the software-GL sandbox.
+  const through = await page.evaluate(() => {
+    const K = window.__earth.CITY_PICK, s = window.__earth.seeThrough;
+    return {
+      city: s({ id: K }),                                   // a label → invisible to the handler
+      real: s({ id: { kind: "station" } })?.id?.kind,        // a real feature → still picked
+      none: s(undefined),
+    };
+  });
+  expect(through.city).toBeUndefined();
+  expect(through.real).toBe("station");
+  expect(through.none).toBeUndefined();
+
+  // "full" adds the GIBS linework as an imagery layer, kept at the top of the
+  // stack so switching a data layer on doesn't bury it.
+  await sel.selectOption("full");
+  const full = await page.evaluate(() => {
+    const ils = window.__earth.viewer.imageryLayers, L = window.__earth.bordersLayer;
+    return { has: !!L, top: ils.indexOf(L) === ils.length - 1, alpha: L && L.alpha };
+  });
+  expect(full.has).toBe(true);
+  expect(full.top).toBe(true);
+  expect(full.alpha).toBeGreaterThan(0.8);   // pale hairlines already; fading them hides them
+
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="sst"]');
+    if (!el.checked) { el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true })); }
+  });
+  expect(await page.evaluate(() => {
+    const ils = window.__earth.viewer.imageryLayers;
+    return ils.indexOf(window.__earth.bordersLayer) === ils.length - 1;
+  })).toBe(true);   // still on top after a data layer was added
+
+  // "off" is data-only: no names, no dots, no linework — and the choice sticks.
+  await sel.selectOption("off");
+  const off = await page.evaluate(() => ({
+    labels: window.__earth.cityLabels.show,
+    points: window.__earth.cityPoints.show,
+    borders: !!window.__earth.bordersLayer,
+    saved: localStorage.getItem("placesMode"),
+  }));
+  expect(off.labels).toBe(false);
+  expect(off.points).toBe(false);
+  expect(off.borders).toBe(false);
+  expect(off.saved).toBe("off");
+});

@@ -561,3 +561,83 @@ test.describe("drivers.json (categorical grid)", () => {
     for (let c = 1; c <= 7; c++) expect(share(c), `class ${c} is empty`).toBeGreaterThan(0);
   });
 });
+
+test.describe("cities.json (place-name reference points)", () => {
+  const d = read("cities.json");
+
+  // These are the map's *reference points*, not a dataset — nothing here gets a
+  // legend or a date. What they must be is trustworthy anchors: a name at the
+  // wrong coordinate is worse than no name, because the reader believes it.
+  test("is a self-describing, public-domain gazetteer with the required fields", () => {
+    expect(d.id).toBe("cities");
+    expect(d.source).toMatch(/Natural Earth/i);
+    expect(d.citation).toMatch(/[Pp]ublic domain/);
+    expect(d.doc).toMatch(/^https:\/\//);
+    expect(d.snapshot).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(d.count).toBe(d.places.length);
+    // Enough to name the world at every altitude, few enough that the whole
+    // file is one modest fetch. Natural Earth 10m ships ~7.3k.
+    expect(d.places.length).toBeGreaterThan(5000);
+    expect(d.places.length).toBeLessThan(20000);
+  });
+
+  test("every place is nameable, locatable and carries its declutter rung", () => {
+    // Single pass with plain conditionals; 7k places × six matchers each would
+    // dominate the suite's runtime for no extra signal.
+    let bad = null;
+    const seen = new Set();
+    for (const c of d.places) {
+      const why =
+        typeof c.n !== "string" || !c.n.length ? "name" :
+        !(c.o >= -180 && c.o <= 180) ? "lon" :
+        !(c.a >= -90 && c.a <= 90) ? "lat" :
+        !(c.z >= 1 && c.z <= 12) ? "min_zoom" :
+        !(Number.isInteger(c.p) && c.p >= 0) ? "pop" :
+        typeof c.c !== "string" ? "country" :
+        (c.cap !== 0 && c.cap !== 1) ? "capital flag" : null;
+      if (why && !bad) bad = `${c.n}: bad ${why} (${JSON.stringify(c)})`;
+      seen.add(`${c.n}|${c.c}`);
+    }
+    expect(bad).toBeNull();
+    // Names repeat across countries (Springfield, San José); wholesale
+    // duplication inside one country would mean the source was concatenated.
+    expect(seen.size).toBeGreaterThan(d.places.length * 0.95);
+  });
+
+  test("is sorted most-important-first, so a client can truncate the tail", () => {
+    // The client turns `z` into a per-label DistanceDisplayCondition, but the
+    // sort is what lets anything downstream cut the file short without losing
+    // the world's capitals — and it settles draw order for overlapping labels.
+    for (let i = 1; i < d.places.length; i++) {
+      expect(d.places[i].z, `unsorted at ${i}`).toBeGreaterThanOrEqual(d.places[i - 1].z);
+    }
+    expect(d.places[0].z).toBeLessThan(2);          // Natural Earth's top tier
+    expect(d.places[0].p).toBeGreaterThan(1e7);     // …and it's a megacity
+  });
+
+  test("the globe-zoom tier is a readable handful, and the capitals are all there", () => {
+    // What survives the full-globe view is the whole point of the feature: a
+    // dozen-ish names orient you, a hundred is a smear of white text.
+    const globe = d.places.filter((c) => c.z <= 3);
+    expect(globe.length).toBeGreaterThan(10);
+    expect(globe.length).toBeLessThan(120);
+
+    const caps = d.places.filter((c) => c.cap === 1);
+    expect(caps.length).toBeGreaterThan(150);       // ~200 sovereign capitals
+    expect(caps.length).toBeLessThan(300);
+    const capNames = new Set(caps.map((c) => c.n));
+    // Accents intact: the names are baked with ensure_ascii off, and "Brasilia"
+    // for "Brasília" would mean the encoding got flattened somewhere.
+    for (const n of ["Paris", "Tokyo", "Nairobi", "Brasília", "Canberra"]) {
+      expect(capNames.has(n), `${n} is not flagged a capital`).toBe(true);
+    }
+
+    // Spot-check two anchors against known coordinates: this is the test that
+    // would catch a lon/lat swap, which every other assertion here would pass.
+    const at = (n) => d.places.find((c) => c.n === n);
+    expect(at("Paris").o).toBeCloseTo(2.33, 1);
+    expect(at("Paris").a).toBeCloseTo(48.87, 1);
+    expect(at("Sydney").o).toBeCloseTo(151.18, 1);
+    expect(at("Sydney").a).toBeCloseTo(-33.92, 1);
+  });
+});
