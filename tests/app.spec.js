@@ -1340,7 +1340,9 @@ test("the intro guide greets first visits, then remembers being dismissed", asyn
 });
 
 test("pixel inspector composes a point's full state on click", async ({ page }) => {
-  test.setTimeout(150000); // ~9 raster tiles + 4 grids + live weather, twice
+  // ~9 raster tiles + 4 grids + live weather, twice — and every row now also
+  // resolves its own observation time, so the budget is no longer marginal.
+  test.setTimeout(240000);
   // "Everything we know" is a layer-list entry, off by default: with SST on,
   // a plain click reads the SST value, not the card. The card takes over when
   // the entry is checked (explicit) or when NO colormapped layer is active
@@ -1374,8 +1376,23 @@ test("pixel inspector composes a point's full state on click", async ({ page }) 
   // satellite state at the app date; the annual mean is its own line (a
   // derived "vs annual mean" delta would mostly be the seasonal cycle)
   await expect(card).toContainText("Sea surface temperature");
-  await expect(card).toContainText("SST 1991–2020 annual mean");
+  // The years moved out of the label and into the row's own stamp, read from
+  // the baked file rather than typed into the UI (see the provenance test).
+  await expect(card).toContainText("SST annual mean");
+  await expect(card).toContainText("1991–2020");
   expect(await card.textContent()).not.toContain("vs 1991–2020");
+  // Every value says WHEN it was observed, and the satellite heading no longer
+  // claims one date for the whole block — because it never was one date. CERES
+  // tiles stop at 2018-10, so that row must say 2018-10 while it sits beside
+  // rows read today; under the old shared heading it read as current.
+  const satHead = card.locator(".px-sec-title", { hasText: "Satellite fields" });
+  await expect(satHead).toContainText("NASA GIBS");
+  expect(await satHead.textContent()).not.toContain(
+    await page.evaluate(() => window.__earth.state.date));
+  const ceres = card.locator(".px-row", { hasText: "Energy balance" });
+  await expect(ceres.locator(".px-when")).toContainText("2018-10");
+  expect(await card.locator(".px-when").count()).toBeGreaterThan(8);
+
   // context: floats and monitoring sites exist in the North Atlantic
   await expect(card).toContainText("Argo floats");
   await expect(card).toContainText("Nearest monitoring site");
@@ -1399,7 +1416,9 @@ test("pixel inspector composes a point's full state on click", async ({ page }) 
   await expect(card).toContainText("PM2.5");
   await expect(card).toContainText("River discharge");
   // the decadal future axis: this pixel's own 2050 trajectory with model range
-  await expect(card).toContainText("2045–49 vs 1991–95");
+  await expect(card).toContainText("Projected change");
+  await expect(card).toContainText("vs 1991–1995");
+  await expect(card).toContainText("2045–2049");
   await expect(card).toContainText("models");
 
   // × closes it
@@ -2430,4 +2449,107 @@ test("islands are named by how wide they are on screen, not by how many people l
   expect(await page.evaluate(() => window.__earth.islLabels.show)).toBe(false);
   await page.locator("#places-mode").selectOption("labels");
   expect(await page.evaluate(() => window.__earth.islLabels.show)).toBe(true);
+});
+
+test("every read-out says when its value was observed", async ({ page }) => {
+  test.setTimeout(120000);
+  // The bug this closes: the app printed a value read from tiles that stop in
+  // 2018 or 2022 under a heading saying today's date. gibsTime() has always
+  // known the real answer per layer — it just never reached the reader.
+
+  // -- the shared helper resolves each layer at its own granularity ---------
+  const w = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = (id) => E.GIBS_LAYERS.find((l) => l.id === id);
+    const of = (id) => E.whenOfGibs(cfg(id));
+    return {
+      today: E.state.date,
+      sst: of("sst"),           // daily raster: a day
+      grace: of("grace"),       // tiles end 2022-07: a clamped month
+      ceres: of("ceres"),       // tiles end 2018-10: a clamped month
+      seaice: of("seaice"),     // tiles end 2025-09
+      distAnn: of("dist-ann"),  // annual: a year
+      nightlights: of("nightlights"),
+    };
+  });
+  // A layer whose tiles have stopped reports the date it really served, and it
+  // is emphatically not the date in the selector.
+  expect(w.grace).toMatchObject({ kind: "month", t: "2022-07" });
+  expect(w.ceres).toMatchObject({ kind: "month", t: "2018-10" });
+  // sea ice is a DAILY layer that has stopped, so the clamp shows as a day —
+  // the granularity follows the dataset, not the reason the date is old
+  expect(w.seaice).toMatchObject({ kind: "day", t: "2025-09-01" });
+  expect(w.grace.t).not.toBe(w.today.slice(0, 7));
+  // and a live one reports a day, two days back — GIBS's own publication lag
+  expect(w.sst.kind).toBe("day");
+  expect(Date.parse(w.today) - Date.parse(w.sst.t)).toBeLessThanOrEqual(4 * 864e5);
+  expect(w.distAnn.kind).toBe("year");
+  expect(w.distAnn.t).toHaveLength(4);
+
+  // -- age: coarsest unit that reads at least 2, never finer than the stamp --
+  const ages = await page.evaluate(() => {
+    const E = window.__earth, now = Date.parse("2026-08-03T18:55:00Z");
+    const a = (kind, t) => E.whenAge({ kind, t }, now);
+    return {
+      twoDays: a("day", "2026-08-01"),
+      sameDay: a("day", "2026-08-03"),
+      manyDays: a("day", "2026-06-19"),
+      rollUp: a("day", "2026-06-03"),
+      oldMonth: a("month", "2022-07"),
+      lastYear: a("year", "2025"),
+      ahead: a("day", "2026-08-09"),
+      fixed: a("period", "1991-2020"),
+      label: E.whenLabel({ kind: "period", t: "1991-2020" }),
+    };
+  });
+  expect(ages.twoDays).toBe("2 days old");     // the reading that started this
+  expect(ages.sameDay).toBe("today");
+  expect(ages.manyDays).toBe("45 days old");   // still days: 1.5 months rounds to nothing useful
+  expect(ages.rollUp).toBe("2 months old");    // 61 days does roll up
+  expect(ages.oldMonth).toBe("4 years old");
+  expect(ages.lastYear).toBe("1 year old");
+  expect(ages.ahead).toBe("in 6 days");        // forecast frames read forward
+  // A fixed span is not "N years old" — it is simply the years it averages.
+  expect(ages.fixed).toBeNull();
+  expect(ages.label).toBe("1991–2020");
+
+  // -- baked grids carry their own observation time, read from the file -----
+  const grids = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = (id) => E.GIBS_LAYERS.find((l) => l.id === id);
+    const out = {};
+    for (const id of ["oisst", "gpcp", "drivers"]) {
+      const c = cfg(id);
+      out[id] = E.whenOfGrid(c, await E.loadGrid(c));
+    }
+    const f = cfg("gfs-temp");
+    out.forecast = E.whenOfGrid(f, await E.loadGridMonth(f));
+    return out;
+  });
+  expect(grids.oisst).toMatchObject({ kind: "period", t: "1991-2020" });
+  expect(grids.gpcp.kind).toBe("period");
+  expect(grids.drivers).toMatchObject({ kind: "period", t: "2001-2025" });
+  // the forecast grid is day-keyed, so it stamps a day rather than a month
+  expect(grids.forecast.kind).toBe("day");
+  expect(grids.forecast.t).toHaveLength(10);
+
+  // -- the probe (what a default-state tap actually hits) says it too -------
+  // SST is on and the inspector is off, so clicking water runs the probe, not
+  // the card. Both must name the same instant; they share one helper so they
+  // cannot drift apart.
+  const probe = await page.evaluate(async () => {
+    const E = window.__earth;
+    const res = await E.probeValueAt(Cesium.Cartographic.fromDegrees(8.4, 55.0)); // off Sylt
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "sst");
+    return { when: res && res.when, helper: E.whenOfGibs(cfg), title: res && res.title };
+  });
+  expect(probe.when).toEqual(probe.helper);
+  expect(probe.when.kind).toBe("day");
+
+  // and it renders into the tooltip, not just the object
+  await page.evaluate(() => window.__earth.probeValueAt(
+    Cesium.Cartographic.fromDegrees(8.4, 55.0)).then((r) => window.__earth.renderProbe(r, 40, 40)));
+  const vp = page.locator("#value-probe .vp-meta");
+  await expect(vp).toContainText(probe.when.t);
+  await expect(vp).toContainText(/old|today/);
 });

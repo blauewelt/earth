@@ -235,8 +235,13 @@ def glaciers():
     hug = pd.read_parquet(io.BytesIO(urllib.request.urlopen(urllib.request.Request(
         "https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/"
         "hugonnet_2021_ds_rgi70_pergla_rates_10_20.parquet", headers=UA), timeout=300).read()))
-    hug = hug[hug["period"] == "2000-01-01_2020-01-01"]
+    hug_period = "2000-01-01_2020-01-01"
+    hug = hug[hug["period"] == hug_period]
     dhdt_by_id = hug["dhdt"].to_dict()   # rgiid -> m/yr
+    # The app stamps the thickness-change row with the window the rate was
+    # measured over, so it travels in the file next to the numbers instead of
+    # only in the prose note (which no code can read).
+    dhdt_period = "-".join(p[:4] for p in hug_period.split("_"))
 
     lon, lat, area, dhdt = [], [], [], []
     for r in RGI_REGIONS:
@@ -264,6 +269,7 @@ def glaciers():
         "count": len(lon),
         "total_area_km2": round(sum(area)),
         "dhdt_matched": matched,
+        "dhdt_period": dhdt_period,
         "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "lon": lon, "lat": lat, "area": area, "dhdt": dhdt,
     }
@@ -352,8 +358,23 @@ def _bin_to_grid(lon, lat, val, west, south, east, north, nx, ny):
     return out, scnt, dlon, dlat
 
 
+def _nc_period(times, units, calendar="standard"):
+    """First..last year of a NetCDF time axis, as the app's "YYYY-YYYY" period
+    string. Read from the axis rather than typed in, so a re-bake that pulls a
+    longer record states the longer record — the whole point of the field."""
+    import netCDF4
+    a, b = netCDF4.num2date(list(times), units, calendar=calendar,
+                            only_use_cftime_datetimes=False)
+    return f"{a.year}-{b.year}"
+
+
 def _write_grid(id, path, lon, lat, val, bounds, nx, ny, *, units, title,
-                source, citation, ramp, vmin, vmax, decimals=0, doc=""):
+                source, citation, ramp, vmin, vmax, decimals=0, doc="",
+                period=None, month=None):
+    """`period` / `month` are WHEN the values were observed, and the app prints
+    one of them on every row that samples this grid. A grid that carries
+    neither can only be stamped with its bake date, which is not an
+    observation time at all — so every grid should set one of them."""
     import numpy as np
     west, south, east, north = bounds
     out, scnt, dlon, dlat = _bin_to_grid(lon, lat, val, west, south, east, north, nx, ny)
@@ -367,6 +388,8 @@ def _write_grid(id, path, lon, lat, val, bounds, nx, ny, *, units, title,
         "vmin": vmin, "vmax": vmax,
         "west": west, "south": south, "east": east, "north": north,
         "dlon": round(dlon, 6), "dlat": round(dlat, 6), "nx": nx, "ny": ny,
+        **({"period": period} if period else {}),
+        **({"month": month} if month else {}),
         "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "values": vals,
     }
@@ -390,9 +413,14 @@ def gpcp():
     lon = d.variables["lon"][:]
     p = d.variables["precip"]
     clim = np.ma.filled(p[:].mean(axis=0), np.nan) * 365.25   # mm/day -> mm/year
+    # This climatology is the mean of the WHOLE record, not a fixed 30-year
+    # normal, so its period grows every time we re-bake. Read the span off the
+    # time axis (t[0]..t[-1]) so the app states the record it actually averaged.
+    t = d.variables["time"]
+    period = _nc_period([t[0], t[-1]], t.units)
     lon2, lat2 = np.meshgrid(lon, lat)
     _write_grid("gpcp", "gpcp.json", lon2, lat2, clim,
-                (-180, -90, 180, 90), 144, 72,
+                (-180, -90, 180, 90), 144, 72, period=period,
                 units="mm/yr", title="Precipitation climatology (GPCP v2.3)",
                 source="NOAA GPCP v2.3 monthly (PSL)",
                 citation="Adler et al. 2018, doi:10.3390/atmos9040138",
@@ -425,12 +453,16 @@ def eobs():
         scnt += np.sum(np.isfinite(arr), axis=0)
     mean_daily = np.where(scnt > 0, ssum / np.maximum(scnt, 1), np.nan)
     clim = mean_daily * 365.25                          # mm/day -> mm/year
+    # Same as GPCP: the whole record, so the period is read off the time axis
+    # rather than typed in — a v32 release with four more years must say so.
+    tv = d.variables["time"]
+    period = _nc_period([tv[0], tv[-1]], tv.units, getattr(tv, "calendar", "standard"))
     lon2, lat2 = np.meshgrid(lon, lat)
     west, east = float(lon.min()), float(lon.max())
     south, north = float(lat.min()), float(lat.max())
     nx, ny = len(lon), len(lat)
     _write_grid("eobs", "eobs.json", lon2, lat2, clim,
-                (west, south, east, north), nx, ny,
+                (west, south, east, north), nx, ny, period=period,
                 units="mm/yr", title="Precipitation climatology (E-OBS v31, Europe)",
                 source="E-OBS v31 0.25 deg ensemble mean (ECA&D / Copernicus)",
                 citation="Cornes et al. 2018, doi:10.1029/2017JD028200",
@@ -452,9 +484,14 @@ def oisst():
     lon = d.variables["lon"][:]
     sst = d.variables["sst"]
     clim = np.ma.filled(sst[:].mean(axis=0), np.nan)   # annual mean of 12 monthly LTMs, deg C
+    # A long-term MEAN file has no usable time axis (its 12 steps are month-of-
+    # year, dated to year 1), but PSL records the baseline in time.climo_period
+    # -- "1991/01/01 - 2020/12/31". Take the two years from there.
+    cp = d.variables["time"].climo_period.split("-")
+    period = f"{cp[0].strip()[:4]}-{cp[1].strip()[:4]}"
     lon2, lat2 = np.meshgrid(lon, lat)
     _write_grid("oisst", "oisst.json", lon2, lat2, clim,
-                (-180, -90, 180, 90), 360, 180,
+                (-180, -90, 180, 90), 360, 180, period=period,
                 units="°C", title="Sea surface temperature climatology (OISST v2.1)",
                 source="NOAA OISST v2.1 1991-2020 LTM (PSL)",
                 citation="Huang et al. 2021, doi:10.1175/JCLI-D-20-0166.1",
@@ -476,12 +513,20 @@ def meteoswiss():
     lon = d.variables["lon"][:]
     lat = d.variables["lat"][:]
     rr = np.ma.filled(d.variables["RnormY9120"][0].astype(float), np.nan)   # mm/year
+    # CF climatology bounds: [0, 29] "years since 1991-01-01" -> the first and
+    # last year averaged, 1991 and 2020. The variable NAME encodes the same
+    # thing (RnormY9120), but the bounds are the machine-readable statement and
+    # they survive a rename to the next normal period.
+    tv = d.variables["time"]
+    cb = d.variables[tv.climatology][0]
+    y0 = int(tv.units.split("since")[1].strip()[:4])
+    period = f"{y0 + int(cb[0])}-{y0 + int(cb[1])}"
     west, east = float(np.nanmin(lon)), float(np.nanmax(lon))
     south, north = float(np.nanmin(lat)), float(np.nanmax(lat))
     nx = int(round((east - west) / 0.02))
     ny = int(round((north - south) / 0.02))
     _write_grid("meteoswiss", "meteoswiss.json", lon, lat, rr,
-                (west, south, east, north), nx, ny,
+                (west, south, east, north), nx, ny, period=period,
                 units="mm/yr", title="Precipitation normal (MeteoSwiss, 1991-2020)",
                 source="MeteoSwiss OGD climate normals grid (ch01r, CC BY 4.0)",
                 citation="MeteoSwiss OGD; RnormY9120 1991-2020",
@@ -785,7 +830,7 @@ def argo_column():
     _write_grid(
         "argo-t300", "argo_t300.json", LON, LAT,
         t_now[k300] - t_norm[k300],
-        (-180, -65, 180, 80), 360, 145,
+        (-180, -65, 180, 80), 360, 145, month=month_label,
         units="°C", ramp="anom", vmin=-2, vmax=2, decimals=2,
         title=f"Subsurface temperature anomaly (300 m, {month_label})",
         source="Roemmich-Gilson Argo Climatology (Scripps)",

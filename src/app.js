@@ -507,6 +507,128 @@ function gibsTime(cfg, dateStr) {
   return dateStr;
 }
 
+/* ------------------------------------------------------ when a value is from */
+/* Every number this app prints was observed at some time, and the honest
+ * GRANULARITY of that time differs per dataset: MUR SST is a day, IMERG's
+ * 30-min layer a half hour, NDVI a month, DIST-ANN a whole year, GLORYS a
+ * monthly mean, and the 1991-2020 normals a fixed period that has no single
+ * "when" at all. Both read-outs — the pixel card and the hover probe — build
+ * their stamps here, so they can never disagree about what a click just read.
+ *
+ * This exists to close a real lie. The card used to head its entire satellite
+ * section with state.date, but gibsTime() clamps and snaps PER LAYER: under a
+ * "2026-08-03" heading, the GRACE row was really 2022-07 (tiles end there),
+ * CERES 2018-10, sea ice 2025-09 — four to eight years stale, labelled fresh.
+ * A stamp per row is the only arrangement in which that cannot happen.
+ *
+ * `kind` names the granularity, never the dataset:
+ *   instant · halfhour · day · month · year · period (a fixed span: 1991-2020)
+ */
+function whenAt(kind, t) { return t ? { kind, t } : null; }
+
+// The time a GIBS layer's tiles were actually REQUESTED for. gibsTime is the
+// single source of truth, so every clamp (GRACE, CERES, SSH, soil moisture,
+// sea ice) and every snap (monthly, annual, 5-day, sub-daily) lands in the
+// stamp for free — and stays right if the layer's config later changes.
+function whenOfGibs(cfg, dateStr = state.date) {
+  const t = gibsTime(cfg, dateStr);
+  if (!t || t === "default") return null;      // untimed and undated: say nothing
+  if (cfg.annual) return whenAt("year", t.slice(0, 4));
+  if (cfg.monthly) return whenAt("month", t.slice(0, 7));
+  if (t.includes("T")) return whenAt("halfhour", t.slice(0, 16));
+  return whenAt("day", t);
+}
+
+/* Baked grids state their own time IN THE FILE: `period` for a climatology
+ * (1991-2020 normals, the 2001-2025 driver map), `month` for a single-month
+ * snapshot (the Argo 300 m anomaly), the resolved key for a month- or
+ * day-keyed archive (GLORYS, the GFS forecast). A grid with none of those gets
+ * NO stamp on purpose: `snapshot` is the date we fetched the numbers, not a
+ * date the world was in that state, and printing it would be the same class of
+ * lie this whole helper exists to remove. */
+function whenOfGrid(cfg, g) {
+  if (!g) return null;
+  if (g.period) return whenAt("period", g.period);
+  if (cfg.monthlyGrid) return whenAt(g.keyLen === 10 ? "day" : "month", resolveGridMonth(g));
+  if (g.month) return whenAt("month", g.month);
+  return null;
+}
+
+function whenOfLayer(cfg, g) {
+  return cfg?.grid ? whenOfGrid(cfg, g) : cfg ? whenOfGibs(cfg) : null;
+}
+
+/* Age units: hours, days, months, years. Pick the coarsest that reads at least
+ * 2 — so 47 h stays "47 hours old" and 61 days becomes "2 months old" — but
+ * never finer than the stamp's own granularity, because a value dated to a
+ * month cannot honestly be "36 days old" and a daily composite is not "5 hours
+ * old". Forecast frames run the other way and read "in 3 days". */
+const AGE_UNITS = [
+  { one: "hour", many: "hours", ms: 36e5, zero: "just now" },
+  { one: "day", many: "days", ms: 864e5, zero: "today" },
+  { one: "month", many: "months", ms: 30.44 * 864e5, zero: "this month" },
+  { one: "year", many: "years", ms: 365.25 * 864e5, zero: "this year" },
+];
+const AGE_FLOOR = { instant: 0, halfhour: 0, day: 1, month: 2, year: 3 };
+
+// The instant a stamp NAMES: the start of the span it covers, so a monthly
+// mean ages from the 1st and an annual summary from January.
+function whenMs(w) {
+  if (!w) return NaN;
+  const t = w.t;
+  if (w.kind === "year") return Date.parse(`${t}-01-01T00:00:00Z`);
+  if (w.kind === "month") return Date.parse(`${t}-01T00:00:00Z`);
+  if (w.kind === "day") return Date.parse(`${t}T00:00:00Z`);
+  return Date.parse(/[Zz]$|[+-]\d\d:?\d\d$/.test(t) ? t : `${t}Z`);
+}
+
+function whenAge(w, now = Date.now()) {
+  // A fixed period has no age. "The 1991-2020 normal is 6 years old" is not a
+  // fact about the normal; it stays what it is until a new normal is published.
+  if (!w || w.kind === "period") return null;
+  const ms = now - whenMs(w);
+  if (!Number.isFinite(ms)) return null;
+  let i = AGE_FLOOR[w.kind] ?? 0;
+  while (i < AGE_UNITS.length - 1 && Math.abs(ms) / AGE_UNITS[i + 1].ms >= 2) i++;
+  const u = AGE_UNITS[i];
+  // A stamp names a period's START, so count the whole unit boundaries between
+  // it and now: FLOOR into the past, CEIL into the future. Rounding instead
+  // calls a 2026-08-01 reading "3 days old" on the evening of 08-03 and calls
+  // last year's 2025 map "2 years old"; flooring a FORECAST frame is worse
+  // still — tomorrow's frame, five hours out, would read "today".
+  const n = ms < 0
+    ? Math.ceil(-ms / u.ms)
+    : Math.floor(ms / u.ms);
+  if (!n) return u.zero;
+  const unit = n === 1 ? u.one : u.many;
+  return ms < 0 ? `in ${n} ${unit}` : `${n} ${unit} old`;
+}
+
+function whenText(w) {
+  if (!w) return "";
+  if (w.kind === "period") return w.t.replace("-", "–");     // 1991-2020 → en dash
+  if (w.kind === "instant" || w.kind === "halfhour") {
+    return `${w.t.replace("T", " ").replace(/[Zz]$/, "")} UTC`;
+  }
+  return w.t;
+}
+
+// The dim right-hand stamp every read-out row carries. No `when` → no stamp:
+// an elevation or a station's distance is not an observation with a date, and
+// inventing one would be worse than leaving the column empty.
+/* The one string both read-outs print. The card wraps it in its own element;
+ * the probe drops it into a line of dim meta text — but neither builds it, so a
+ * click and a hover on the same pixel can never disagree about the date. */
+function whenLabel(w) {
+  if (!w) return "";
+  const age = whenAge(w);
+  return `${whenText(w)}${age ? ` · ${age}` : ""}`;
+}
+
+function whenStamp(w) {
+  return w ? `<span class="px-when">${whenLabel(w)}</span>` : "";
+}
+
 function gibsProvider(cfg, dateStr) {
   const time = gibsTime(cfg, dateStr);
   const url = GIBS_URL
@@ -3973,7 +4095,8 @@ async function probeEntryValue(entry, carto) {
   if (cfg.grid) {
     // Grid overlays: read the exact cell value straight from the loaded grid.
     const g = await loadGridMonth(cfg);
-    const base = { title: cfg.title, units: cfg.units, lon, lat };
+    // `when` on every result, so the tooltip can say what the card says.
+    const base = { title: cfg.title, units: cfg.units, lon, lat, when: whenOfGrid(cfg, g) };
     if (!g) return { ...base, noData: true };
     const v = sampleGrid(g, lon, lat);
     if (v == null) return { ...base, noData: true };
@@ -3992,7 +4115,7 @@ async function probeEntryValue(entry, carto) {
     if (!lut) return null;
     const z = cfg.maxLevel;
     const t = tileCoordsAt(lon, lat, z);
-    const base = { title: cfg.title, lon, lat };
+    const base = { title: cfg.title, lon, lat, when: whenOfGibs(cfg) };
     const label = await probeClassPixel(cfg, state.date, z, t.x, t.y, t.px, t.py, lut);
     return label == null ? { ...base, noData: true } : { ...base, label };
   }
@@ -4008,11 +4131,19 @@ async function probeEntryValue(entry, carto) {
   const py = Math.min(511, Math.max(0, Math.floor((tileNorth - lat) / span * 512)));
   const vlut = await getValueLut(cfg.colormap);
   if (!vlut) return null;
-  const base = { title: cfg.title, units: vlut.units, lon, lat };
+  // For a window mean or a delta the stamp is the window's END: the sample list
+  // walks BACKWARD from state.date, and the "past N days mean" suffix already
+  // carries the aggregation. `whenPast` is the OTHER end of a comparison, and it
+  // is resolved through gibsTime like everything else — which matters, because
+  // for a layer whose tiles stop at an endTime both ends clamp to the same date
+  // and the difference is identically zero. Printing the requested date there
+  // would present that zero as a real "no change".
+  const base = { title: cfg.title, units: vlut.units, lon, lat, when: whenOfGibs(cfg) };
 
   if (entry.isDelta) {
     // Δ = window-mean(now) − window-mean(past), matching the rendered delta
     const cmp = compareDate();
+    base.whenPast = whenOfGibs(cfg, cmp);
     const [now, past] = await Promise.all([
       probePixelMean(cfg, windowSampleDates(state.date, win), z, x, y, px, py, vlut.lut),
       probePixelMean(cfg, windowSampleDates(cmp, win), z, x, y, px, py, vlut.lut),
@@ -4023,6 +4154,7 @@ async function probeEntryValue(entry, carto) {
   if (entry.isRatio) {
     // fold = mean(now)/mean(past), with the same eps floor as the rendering
     const cmp = compareDate();
+    base.whenPast = whenOfGibs(cfg, cmp);
     const [now, past, cm] = await Promise.all([
       probePixelMean(cfg, windowSampleDates(state.date, win), z, x, y, px, py, vlut.lut),
       probePixelMean(cfg, windowSampleDates(cmp, win), z, x, y, px, py, vlut.lut),
@@ -4068,10 +4200,18 @@ function renderProbe(res, sx, sy) {
   } else {
     head = `<span class="vp-val">${fmtVal(res.value)}</span> <span class="vp-unit">${res.units}</span>`;
   }
-  const suffix = res.delta ? ` · Δ vs ${compareDate()}${state.windowDays > 1 ? ", " + windowLabel(state.windowDays) + " mean" : ""}`
-    : res.ratio ? ` · vs ${compareDate()}, ratio of ${windowLabel(state.windowDays)} means`
+  // The comparison end says the date the tiles were ACTUALLY read at, not the
+  // one the selector asked for — see probeEntryValue. Falls back to the request
+  // only when the layer resolves to no date at all (untimed rasters).
+  const past = whenLabel(res.whenPast) || compareDate();
+  const suffix = res.delta ? ` · Δ vs ${past}${state.windowDays > 1 ? ", " + windowLabel(state.windowDays) + " mean" : ""}`
+    : res.ratio ? ` · vs ${past}, ratio of ${windowLabel(state.windowDays)} means`
     : res.aggregated ? ` · ${windowLabel(state.windowDays)} mean` : "";
-  probeEl.innerHTML = `${head}<div class="vp-meta">${res.title}${suffix}<br/>${coord}</div>`;
+  // The date line the user asked for: every hovered or tapped value now says
+  // when it was observed, at that dataset's own honest granularity.
+  const stamp = whenLabel(res.when);
+  probeEl.innerHTML = `${head}<div class="vp-meta">${res.title}${suffix}` +
+    `${stamp ? `<br/>${stamp}` : ""}<br/>${coord}</div>`;
   probeEl.style.left = `${Math.min(sx + 14, viewer.scene.canvas.clientWidth - 150)}px`;
   probeEl.style.top = `${Math.max(sy - 10, 4)}px`;
   probeEl.classList.remove("hidden");
@@ -4121,6 +4261,11 @@ window.__runProbe = runProbe; // for tests
 const PIXEL_RASTERS = ["sst", "sst-anom", "ssh-anom", "precip", "seaice", "snow", "aod", "lst",
   "soilmoisture", "ndvi", "grace", "ceres", "chlor", "salinity", "dist-alert"];
 const PIXEL_GRIDS = ["oisst", "gpcp", "eobs", "meteoswiss"];
+// The two CMIP6 windows, declared once: the rows are stamped with the same
+// spans that were requested, so the label can never drift from the query.
+const CLIM_BASE_WIN = ["1991-01-01", "1995-12-31"];
+const CLIM_FUT_WIN = ["2045-01-01", "2049-12-31"];
+const winPeriod = (w) => whenAt("period", `${w[0].slice(0, 4)}-${w[1].slice(0, 4)}`);
 
 function haversineKm(lon1, lat1, lon2, lat2) {
   const r = Math.PI / 180, R = 6371;
@@ -4289,8 +4434,15 @@ function columnProfileSvg(col) {
 }
 
 const pixelCardEl = document.getElementById("pixel-card");
-function pixelRow(label, value, cls = "") {
-  return `<div class="px-row ${cls}"><span class="px-label">${label}</span><span class="px-val">${value}</span></div>`;
+/* Third argument is the row's own observation time (a whenAt() object), because
+ * a section-wide heading cannot tell the truth here: gibsTime() clamps and snaps
+ * PER LAYER, so rows sitting side by side under one heading are routinely years
+ * apart. A row with no honest observation time — elevation, a station's name,
+ * a glacier count — passes nothing and prints no stamp, which is the only other
+ * truthful option. */
+function pixelRow(label, value, when = null) {
+  return `<div class="px-row"><span class="px-label">${label}</span>` +
+    `<span class="px-val">${value}</span>${whenStamp(when)}</div>`;
 }
 
 async function showPixelState(carto) {
@@ -4311,13 +4463,16 @@ async function showPixelState(carto) {
   const gridCfgs = PIXEL_GRIDS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
   const [rasters, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid] = await Promise.all([
     Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null))),
-    Promise.all(gridCfgs.map((cfg) => loadGridMonth(cfg).then((g) => g && sampleGrid(g, lon, lat)).catch(() => null))),
+    // {g, v}, not just v: the grid carries its own observation period/month, and
+    // the row prints that — so the value and its date come from the same object.
+    Promise.all(gridCfgs.map((cfg) => loadGridMonth(cfg)
+      .then((g) => (g ? { g, v: sampleGrid(g, lon, lat) } : null)).catch(() => null))),
     fetchOpenMeteo(lon, lat),
     fetchAirQuality(lon, lat),
     fetchRiver(lon, lat),
     fetchMarine(lon, lat),
-    fetchClimateWindow(lon, lat, "1991-01-01", "1995-12-31"),
-    fetchClimateWindow(lon, lat, "2045-01-01", "2049-12-31"),
+    fetchClimateWindow(lon, lat, ...CLIM_BASE_WIN),
+    fetchClimateWindow(lon, lat, ...CLIM_FUT_WIN),
     pixelJson("data/ocean_column.json"),
     pixelJson("data/ocean_surface.json"),
     pixelJson("data/stations.geojson"),
@@ -4334,26 +4489,35 @@ async function showPixelState(carto) {
   /* -- live weather now + the near future (the prediction axis) ------------ */
   if (meteo?.current) {
     const c = meteo.current;
-    let rows = pixelRow("Air temperature", `${fmtVal(c.temperature_2m)} °C`) +
-      pixelRow("Wind", `${fmtVal(c.wind_speed_10m)} km/h from ${Math.round(c.wind_direction_10m)}°`) +
-      pixelRow("Humidity · pressure", `${Math.round(c.relative_humidity_2m)} % · ${Math.round(c.pressure_msl)} hPa`) +
-      (c.precipitation > 0 ? pixelRow("Precipitation now", `${fmtVal(c.precipitation)} mm/h`) : "");
+    // Open-Meteo stamps its own current block; "live" in the heading was never
+    // quite true — the model step behind it can be up to an hour old.
+    const wNow = whenAt("instant", c.time);
+    let rows = pixelRow("Air temperature", `${fmtVal(c.temperature_2m)} °C`, wNow) +
+      pixelRow("Wind", `${fmtVal(c.wind_speed_10m)} km/h from ${Math.round(c.wind_direction_10m)}°`, wNow) +
+      pixelRow("Humidity · pressure", `${Math.round(c.relative_humidity_2m)} % · ${Math.round(c.pressure_msl)} hPa`, wNow) +
+      (c.precipitation > 0 ? pixelRow("Precipitation now", `${fmtVal(c.precipitation)} mm/h`, wNow) : "");
     if (c.soil_moisture_0_to_1cm != null) {
-      rows += pixelRow("Soil (top cm)", `${fmtVal(c.soil_moisture_0_to_1cm)} m³/m³ · ${fmtVal(c.soil_temperature_0cm)} °C`);
+      rows += pixelRow("Soil (top cm)", `${fmtVal(c.soil_moisture_0_to_1cm)} m³/m³ · ${fmtVal(c.soil_temperature_0cm)} °C`, wNow);
     }
     if (c.shortwave_radiation != null && c.shortwave_radiation > 0) {
-      rows += pixelRow("Solar radiation", `${Math.round(c.shortwave_radiation)} W/m²`);
+      rows += pixelRow("Solar radiation", `${Math.round(c.shortwave_radiation)} W/m²`, wNow);
     }
     const mc = marine?.current;
     if (mc?.wave_height != null) {
+      // separate API call, separate clock — its own stamp, not the weather one
       rows += pixelRow("Waves", `${fmtVal(mc.wave_height)} m` +
-        (mc.wave_period != null ? ` every ${fmtVal(mc.wave_period)} s` : ""));
+        (mc.wave_period != null ? ` every ${fmtVal(mc.wave_period)} s` : ""),
+        whenAt("instant", mc.time));
     }
     const rd = river?.daily?.river_discharge?.[0];
     if (rd != null && rd > 0) {
-      rows += pixelRow("River discharge", `${fmtVal(rd)} m³/s in this GloFAS cell`);
+      // GloFAS is a DAILY product: stamping it with the current hour would
+      // claim a precision the number does not have.
+      rows += pixelRow("River discharge", `${fmtVal(rd)} m³/s in this GloFAS cell`,
+        whenAt("day", river.daily.time?.[0]));
     }
     if (Number.isFinite(meteo.elevation) && Math.abs(meteo.elevation) > 1) {
+      // no stamp: terrain height is not an observation with a time
       rows = pixelRow("Elevation", `${Math.round(meteo.elevation)} m`) + rows;
     }
     const d = meteo.daily;
@@ -4364,17 +4528,19 @@ async function showPixelState(carto) {
         `<span>${d.precipitation_sum[i] > 0.4 ? fmtVal(d.precipitation_sum[i]) + " mm" : "·"}</span></div>`).join("");
       rows += `<div class="px-forecast">${days}</div>`;
     }
-    sec.push(`<div class="px-sec"><div class="px-sec-title">Now &amp; next 7 days <span class="px-src">live · Open-Meteo</span></div>${rows}</div>`);
+    // The forecast strip already prints a date per column, so it needs no stamp.
+    sec.push(`<div class="px-sec"><div class="px-sec-title">Now &amp; next 7 days <span class="px-src">Open-Meteo</span></div>${rows}</div>`);
   }
 
   /* -- air quality (CAMS via Open-Meteo) ----------------------------------- */
   if (air?.current && air.current.pm2_5 != null) {
     const a = air.current;
+    const wAir = whenAt("instant", a.time);
     const rows =
-      pixelRow("PM2.5 · PM10", `${fmtVal(a.pm2_5)} · ${fmtVal(a.pm10)} µg/m³`) +
-      pixelRow("Ozone · NO₂", `${fmtVal(a.ozone)} · ${fmtVal(a.nitrogen_dioxide)} µg/m³`) +
-      (a.european_aqi != null ? pixelRow("Air-quality index", `${Math.round(a.european_aqi)} (EU scale, lower is better)`) : "");
-    sec.push(`<div class="px-sec"><div class="px-sec-title">Air quality <span class="px-src">live · CAMS</span></div>${rows}</div>`);
+      pixelRow("PM2.5 · PM10", `${fmtVal(a.pm2_5)} · ${fmtVal(a.pm10)} µg/m³`, wAir) +
+      pixelRow("Ozone · NO₂", `${fmtVal(a.ozone)} · ${fmtVal(a.nitrogen_dioxide)} µg/m³`, wAir) +
+      (a.european_aqi != null ? pixelRow("Air-quality index", `${Math.round(a.european_aqi)} (EU scale, lower is better)`, wAir) : "");
+    sec.push(`<div class="px-sec"><div class="px-sec-title">Air quality <span class="px-src">CAMS</span></div>${rows}</div>`);
   }
 
   /* -- satellite fields at the app's current date -------------------------- */
@@ -4387,11 +4553,16 @@ async function showPixelState(carto) {
     if (!r) return "";
     const cfg = rasterCfgs[i];
     const label = cfg.title.replace(/\s*\(.*\)$/, "");
-    return r.label ? pixelRow(label, r.label)
-      : pixelRow(label, `${fmtVal(r.v)} ${r.units}`);
+    const w = whenOfGibs(cfg);
+    return r.label ? pixelRow(label, r.label, w)
+      : pixelRow(label, `${fmtVal(r.v)} ${r.units}`, w);
   }).join("");
   if (rrows) {
-    sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">${state.date} · NASA GIBS</span></div>${rrows}</div>`);
+    // The heading no longer claims a date. It used to say state.date for the
+    // whole block, which was wrong for most of it: GRACE ends 2022-07, CERES
+    // 2018-10, sea ice 2025-09, and the monthly layers snap to a first-of-month
+    // — all of them were printed under today's date. Each row now says its own.
+    sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">NASA GIBS</span></div>${rrows}</div>`);
   }
 
   /* -- why forest was lost here (categorical, so its own row) --------------- */
@@ -4401,16 +4572,24 @@ async function showPixelState(carto) {
     const label = v == null ? null : gridClassLabel(g, v);
     if (label) {
       sec.push(`<div class="px-sec"><div class="px-sec-title">Forest loss ` +
-        `<span class="px-src">2001–2025 · WRI/DeepMind</span></div>` +
-        pixelRow("Dominant driver", label) + `</div>`);
+        `<span class="px-src">WRI/DeepMind</span></div>` +
+        pixelRow("Dominant driver", label, whenOfGrid(GIBS_LAYERS.find((l) => l.id === "drivers"), g)) +
+        `</div>`);
     }
   }
 
   /* -- long-term normals (the memory channels) ----------------------------- */
-  const gtitles = ["SST 1991–2020 annual mean", "Precip normal (GPCP)", "Precip normal (E-OBS)", "Precip normal (MeteoSwiss)"];
+  // No years in the labels any more — the stamp says them, read from the file
+  // rather than typed here, so a re-bake over a longer record cannot leave a
+  // stale span behind in the UI. (GPCP averages its whole record, not 1991–2020.)
+  const gtitles = ["SST annual mean", "Precip normal (GPCP)", "Precip normal (E-OBS)", "Precip normal (MeteoSwiss)"];
   const gunits = ["°C", "mm/yr", "mm/yr", "mm/yr"];
-  const grows = grids.map((v, i) =>
-    v == null ? "" : pixelRow(gtitles[i], `${fmtVal(v)} ${gunits[i]}`)).join("");
+  // Each normal states the years it averages, read from the baked `period` —
+  // these are the one kind of row with no age at all, because a fixed span is
+  // not "N years old", it simply is what it is.
+  const grows = grids.map((r, i) =>
+    r?.v == null ? "" : pixelRow(gtitles[i], `${fmtVal(r.v)} ${gunits[i]}`,
+      whenOfGrid(gridCfgs[i], r.g))).join("");
   if (grows) {
     sec.push(`<div class="px-sec"><div class="px-sec-title">Climate normals</div>${grows}</div>`);
   }
@@ -4425,14 +4604,16 @@ async function showPixelState(carto) {
       const spd = Math.hypot(u, v) / 100;                       // cm/s → m/s
       const brg = (Math.atan2(u, v) * 180 / Math.PI + 360) % 360; // "toward"
       const rose = "N NE E SE S SW W NW".split(" ")[Math.round(brg / 45) % 8];
+      // GLORYS lands months behind real time; the stamp's age is the point.
+      const wSurf = whenAt("month", oceanSurf.month);
       let rows = pixelRow("Surface current",
-        `${fmtVal(spd)} m/s toward ${rose} (${Math.round(brg)}°)`);
-      if (oceanSurf.mld?.[i] != null) rows += pixelRow("Mixed-layer depth", `${oceanSurf.mld[i]} m`);
+        `${fmtVal(spd)} m/s toward ${rose} (${Math.round(brg)}°)`, wSurf);
+      if (oceanSurf.mld?.[i] != null) rows += pixelRow("Mixed-layer depth", `${oceanSurf.mld[i]} m`, wSurf);
       if (oceanSurf.zos?.[i] != null) {
         const z = oceanSurf.zos[i];
-        rows += pixelRow("Sea surface height", `${z >= 0 ? "+" : "−"}${Math.abs(z)} cm`);
+        rows += pixelRow("Sea surface height", `${z >= 0 ? "+" : "−"}${Math.abs(z)} cm`, wSurf);
       }
-      sec.push(`<div class="px-sec"><div class="px-sec-title">Ocean circulation <span class="px-src">GLORYS · ${oceanSurf.month}</span></div>${rows}</div>`);
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Ocean circulation <span class="px-src">GLORYS</span></div>${rows}</div>`);
     }
   }
 
@@ -4460,21 +4641,25 @@ async function showPixelState(carto) {
     let rows = columnProfileSvg(col) +
       `<div class="px-day"><span style="color:#f0883e">━ ${oceanCol.month}</span>` +
       `<span style="color:#58a6ff">━ normal</span><span>(same month, 2004–18)</span></div>`;
+    // Each of these is an anomaly: the OBSERVED month minus a fixed 2004–18
+    // baseline. The stamp is the observed month — the moving half, and the only
+    // half that can go stale. The baseline is named in the legend row above.
+    const wCol = whenAt("month", oceanCol.month);
     if (dT[0] != null) {
       rows += pixelRow("Surface vs normal",
-        `<span class="${dT[0] >= 0 ? "px-warm" : "px-cool"}">${dT[0] >= 0 ? "+" : "−"}${fmtVal(Math.abs(dT[0]))} °C</span>`);
+        `<span class="${dT[0] >= 0 ? "px-warm" : "px-cool"}">${dT[0] >= 0 ? "+" : "−"}${fmtVal(Math.abs(dT[0]))} °C</span>`, wCol);
     }
     if (heat != null) {
       rows += pixelRow("Upper 700 m vs normal",
-        `<span class="${heat >= 0 ? "px-warm" : "px-cool"}">${heat >= 0 ? "+" : "−"}${fmtVal(Math.abs(heat))} °C</span> stored heat`);
+        `<span class="${heat >= 0 ? "px-warm" : "px-cool"}">${heat >= 0 ? "+" : "−"}${fmtVal(Math.abs(heat))} °C</span> stored heat`, wCol);
     }
-    if (wl != null) rows += pixelRow("Warm-layer depth", `~${wl} m`);
+    if (wl != null) rows += pixelRow("Warm-layer depth", `~${wl} m`, wCol);
     if (col.sNow[0] != null && col.sNorm[0] != null) {
       const ds = col.sNow[0] - col.sNorm[0];
       rows += pixelRow("Surface salinity", `${fmtVal(col.sNow[0])} PSU ` +
-        `<span class="px-src">(${ds >= 0 ? "+" : "−"}${Math.abs(ds).toFixed(2)} vs normal${ds < -0.05 ? " — fresher" : ds > 0.05 ? " — saltier" : ""})</span>`);
+        `<span class="px-src">(${ds >= 0 ? "+" : "−"}${Math.abs(ds).toFixed(2)} vs normal${ds < -0.05 ? " — fresher" : ds > 0.05 ? " — saltier" : ""})</span>`, wCol);
     }
-    sec.push(`<div class="px-sec"><div class="px-sec-title">Ocean column 0–2000 m <span class="px-src">Argo floats · ${oceanCol.month}</span></div>${rows}</div>`);
+    sec.push(`<div class="px-sec"><div class="px-sec-title">Ocean column 0–2000 m <span class="px-src">Argo floats</span></div>${rows}</div>`);
   }
 
   /* -- the decadal future axis: this pixel's own 2050 trajectory ----------- */
@@ -4489,12 +4674,17 @@ async function showPixelState(carto) {
       const rng = (a) => [Math.min(...a), Math.max(...a)];
       const [tlo, thi] = rng(dt), [plo, phi] = rng(dp);
       const mt = mean(dt), mp = mean(dp);
+      // Both windows are fixed spans, so these rows carry a period and NO age:
+      // "2045–2049" is not "19 years away", it is simply the window projected.
+      const wFut = winPeriod(CLIM_FUT_WIN);
       const rows =
         pixelRow("Temperature", `<span class="${mt >= 0 ? "px-warm" : "px-cool"}">${mt >= 0 ? "+" : "−"}${fmtVal(Math.abs(mt))} °C</span>` +
-          ` <span class="px-src">(models ${tlo >= 0 ? "+" : "−"}${fmtVal(Math.abs(tlo))}…${thi >= 0 ? "+" : "−"}${fmtVal(Math.abs(thi))})</span>`) +
+          ` <span class="px-src">(models ${tlo >= 0 ? "+" : "−"}${fmtVal(Math.abs(tlo))}…${thi >= 0 ? "+" : "−"}${fmtVal(Math.abs(thi))})</span>`, wFut) +
         pixelRow("Precipitation", `${mp >= 0 ? "+" : "−"}${Math.round(Math.abs(mp))} %` +
-          ` <span class="px-src">(${plo >= 0 ? "+" : "−"}${Math.round(Math.abs(plo))}…${phi >= 0 ? "+" : "−"}${Math.round(Math.abs(phi))} %)</span>`);
-      sec.push(`<div class="px-sec"><div class="px-sec-title">2045–49 vs 1991–95 <span class="px-src">CMIP6-HighResMIP · ${models.length} models</span></div>${rows}</div>`);
+          ` <span class="px-src">(${plo >= 0 ? "+" : "−"}${Math.round(Math.abs(plo))}…${phi >= 0 ? "+" : "−"}${Math.round(Math.abs(phi))} %)</span>`, wFut);
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Projected change ` +
+        `<span class="px-src">vs ${whenText(winPeriod(CLIM_BASE_WIN))} · CMIP6-HighResMIP · ${models.length} models</span>` +
+        `</div>${rows}</div>`);
     }
   }
 
@@ -4507,26 +4697,41 @@ async function showPixelState(carto) {
       const d = haversineKm(lon, lat, slon, slat);
       if (d < bd) { bd = d; best = f; }
     }
+    // A station's position and name are not an observation — no stamp.
     if (best) nrows.push(pixelRow("Nearest monitoring site", `${best.properties.name} · ${Math.round(bd)} km`));
   }
   if (argo?.floats) {
-    let n300 = 0, bd = Infinity;
-    for (const [flon, flat] of argo.floats) {
-      const d = haversineKm(lon, lat, flon, flat);
-      if (d < bd) bd = d;
+    let n300 = 0, bd = Infinity, nearest = null;
+    for (const f of argo.floats) {
+      const d = haversineKm(lon, lat, f[0], f[1]);
+      if (d < bd) { bd = d; nearest = f; }
       if (d < 300) n300++;
     }
-    if (bd < 3000) nrows.push(pixelRow("Argo floats", `${n300} within 300 km · nearest ${Math.round(bd)} km`));
+    // Stamped with the NEAREST float's own last report, which is the freshness
+    // that matters when you ask "is anything watching this water right now?".
+    if (bd < 3000) nrows.push(pixelRow("Argo floats",
+      `${n300} within 300 km · nearest ${Math.round(bd)} km`,
+      whenAt("day", nearest?.[3])));
   }
-  if (trace?.assets) {
-    let best = null, bd = Infinity, n100 = 0;
-    for (const a of trace.assets) {
-      const d = haversineKm(lon, lat, a[0], a[1]);
-      if (d < bd) { bd = d; best = a; }
-      if (d < 100) n100++;
-    }
-    if (bd < 500 && best) {
-      nrows.push(pixelRow("Top-1000 emitters", `${n100} within 100 km · nearest: ${best[3]} (${fmtVal(best[2])} Mt/yr, ${Math.round(bd)} km)`));
+  {
+    // Climate TRACE ships one asset list PER YEAR and the app picks the year
+    // from the date selector. This row read `trace.assets`, a key the baked file
+    // has never had, so it silently never rendered; it reads the year now, and
+    // that same year is what the row is stamped with.
+    const tyear = trace?.years?.length ? climateTraceYear(trace) : null;
+    const assets = tyear == null ? null : trace.assets_by_year?.[String(tyear)];
+    if (assets?.length) {
+      let best = null, bd = Infinity, n100 = 0;
+      for (const a of assets) {
+        const d = haversineKm(lon, lat, a[0], a[1]);
+        if (d < bd) { bd = d; best = a; }
+        if (d < 100) n100++;
+      }
+      if (bd < 500 && best) {
+        nrows.push(pixelRow("Top-1000 emitters",
+          `${n100} within 100 km · nearest: ${best[3]} (${fmtVal(best[2])} Mt/yr, ${Math.round(bd)} km)`,
+          whenAt("year", String(tyear))));
+      }
     }
   }
   // glaciers only if the (7 MB) inventory is already loaded — no click-cost
@@ -4539,7 +4744,17 @@ async function showPixelState(carto) {
         if (v != null) { dh += v; ndh++; }
       }
     }
-    if (n) nrows.push(pixelRow("Glaciers within 100 km", `${n}${ndh ? ` · mean ${fmtVal(dh / ndh)} m/yr thickness change` : ""}`));
+    // Two rows, because they have two different times: the RGI inventory is
+    // compiled from imagery spanning decades and has no single honest date, so
+    // the count carries no stamp — while the thinning RATE is measured over one
+    // definite window, which travels in the file as `dhdt_period`.
+    if (n) {
+      nrows.push(pixelRow("Glaciers within 100 km", `${n}`));
+      if (ndh) {
+        nrows.push(pixelRow("Mean thickness change", `${fmtVal(dh / ndh)} m/yr`,
+          whenAt("period", glacierData.dhdt_period)));
+      }
+    }
   }
   if (nrows.length) {
     sec.push(`<div class="px-sec"><div class="px-sec-title">Context nearby</div>${nrows.join("")}</div>`);
@@ -5432,6 +5647,15 @@ window.__earth = {
   linTrend,
   probeValueAt,
   probeEntryValue,
+  renderProbe,
+  // provenance: what time a value was actually observed at (gibsTime is
+  // already exported below — it is the input to all of these)
+  whenOfGibs,
+  whenOfGrid,
+  whenOfLayer,
+  whenAge,
+  whenText,
+  whenLabel,
   kelvinToC,
   colormapLayersTopDown,
   showPixelState,

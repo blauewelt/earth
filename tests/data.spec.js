@@ -845,3 +845,72 @@ test.describe("islands.json (the tier that is not a settlement)", () => {
     expect(Math.abs(a.o + 8.0)).toBeLessThan(1.5);
   });
 });
+
+test.describe("observation times travel with the data", () => {
+  // Every number the app prints is stamped with WHEN it was observed. That date
+  // has to live in the file — a value whose only date is `snapshot` can be
+  // stamped with the day it was DOWNLOADED, which is not an observation time at
+  // all. These fields are the app's only honest source for those rows.
+
+  test("gridded climatologies name the years they average", () => {
+    const spans = {
+      "gpcp.json": [1975, 2030],        // whole GPCP record, extended by re-bakes
+      "oisst.json": [1991, 2020],       // WOA-style 30-year normal
+      "eobs.json": [1945, 2030],
+      "meteoswiss.json": [1991, 2020],  // RnormY9120
+    };
+    for (const [file, [lo, hi]] of Object.entries(spans)) {
+      const g = read(file);
+      expect(g.period, `${file} has no period`).toMatch(/^\d{4}-\d{4}$/);
+      const [a, b] = g.period.split("-").map(Number);
+      expect(b, `${file} period runs backwards`).toBeGreaterThan(a);
+      expect(a).toBeGreaterThanOrEqual(lo);
+      expect(b).toBeLessThanOrEqual(hi);
+      // A period is not a bake date. If they were ever the same field the app
+      // would print "downloaded today" as if it meant "observed today".
+      expect(g.period).not.toBe(g.snapshot);
+    }
+  });
+
+  test("moving grids name the month they observed", () => {
+    for (const file of ["argo_t300.json", "ocean_column.json", "ocean_surface.json"]) {
+      const g = read(file);
+      expect(g.month, `${file} has no month`).toMatch(/^\d{4}-(0[1-9]|1[0-2])$/);
+      // the observed month precedes the bake — Argo/GLORYS both lag real time
+      if (g.snapshot) expect(g.month <= g.snapshot.slice(0, 7)).toBe(true);
+      expect(g.month <= new Date().toISOString().slice(0, 7)).toBe(true);
+    }
+  });
+
+  test("glacier thinning names the window it was measured over", () => {
+    // The RATE has a definite window (Hugonnet et al.); the inventory COUNT
+    // does not, which is why only one of the two rows carries a stamp.
+    const g = read("glaciers.json");
+    expect(g.dhdt_period).toMatch(/^\d{4}-\d{4}$/);
+    const [a, b] = g.dhdt_period.split("-").map(Number);
+    expect(b - a).toBeGreaterThanOrEqual(10);
+    expect(b).toBeLessThanOrEqual(new Date().getUTCFullYear());
+  });
+
+  test("the driver map and the emitter inventory are year-addressed", () => {
+    expect(read("drivers.json").period).toMatch(/^\d{4}-\d{4}$/);
+    const t = read("climatetrace.json");
+    // The card reads assets_by_year[year], not a bare `assets` key — a row that
+    // reached for `assets` rendered nothing at all for as long as it existed.
+    expect(Array.isArray(t.years)).toBe(true);
+    expect(t.assets).toBeUndefined();
+    for (const y of t.years) {
+      expect(Array.isArray(t.assets_by_year[String(y)]), `no assets for ${y}`).toBe(true);
+    }
+  });
+
+  test("every Argo float reports the date it last surfaced", () => {
+    const a = read("argo.json");
+    // The card stamps the "nearest float" row with that float's own last
+    // report, so the date has to be per-float, not one date for the file.
+    for (let i = 0; i < a.floats.length; i += 97) {
+      expect(a.floats[i][3], `float ${i}`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(a.floats[i][3] <= a.snapshot).toBe(true);
+    }
+  });
+});

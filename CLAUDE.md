@@ -146,6 +146,16 @@ A new layer is not done until it has **all** of:
    can't be switched off from the globe.
 8. **Tests** — at least one behavioural test in `tests/app.spec.js` and, if it
    has a data snapshot, a schema/sanity test in `tests/data.spec.js`.
+9. **An observation time the read-outs can print.** Every value the app shows
+   is stamped with WHEN it was observed (§5, "Provenance"), so a new dataset
+   must be able to answer that. For a GIBS raster it comes free from
+   `gibsTime()`. For a baked file it does NOT: the bake must write `period`
+   ("1991-2020" — a fixed span) or `month`/a per-record date, **derived from
+   the source's own metadata, never typed in**. `snapshot` does not count and
+   must never be used for this — it is when the data was DOWNLOADED, not when
+   the world was in that state. If a value genuinely has no observation time
+   (terrain elevation, a station's name, the RGI glacier count), it carries no
+   stamp at all; that is the honest answer, not a reason to invent one.
 
 ### 3. Data pipeline: static snapshots, never live third-party calls
 
@@ -281,6 +291,35 @@ name the layer in `<strong>` and state "the date selector doesn't change it".
   normal is the annual mean, so the difference would mostly be the seasonal
   cycle — the MUR25 anomalies row is the seasonally-correct departure.
   `showPixelState(carto)` is exported for tests. Esc or × closes.
+- **Provenance: every value says when it was observed.** Both read-outs — the
+  card and the hover/click probe — stamp each row with its own date, dim and
+  right-aligned (`.px-when`; the probe puts the same string on its own line in
+  `.vp-meta`). Both build it from ONE helper (`whenOfLayer` → `whenOfGibs` /
+  `whenOfGrid` → `whenLabel`, all exported), so a click and a hover on the same
+  pixel can never disagree.
+  - *Why per row, not per section.* The card used to head its whole satellite
+    block with `state.date`. `gibsTime()` clamps and snaps PER LAYER, so under
+    a "2026-08-03" heading the GRACE row was really 2022-07, CERES 2018-10,
+    sea ice 2025-09 — four to eight years stale, presented as current. A stamp
+    per row is the only arrangement in which that cannot happen. Section
+    headings now name the SOURCE only, never a date.
+  - *Granularity follows the dataset*, never the dataset's name: `instant` ·
+    `halfhour` · `day` · `month` · `year` · `period` (a fixed span). Sea ice is
+    a daily layer that stopped, so its clamp shows as a day; GRACE is monthly,
+    so its clamp shows as a month.
+  - *Age* is shown for anything that moves ("2026-08-01 · 2 days old") and
+    never for a fixed span — "1991–2020" is not N years old, it is the years it
+    averages. Unit rule: the coarsest unit that reads at least 2, but never
+    finer than the stamp's own granularity. FLOOR into the past (a 2026-08-01
+    reading is "2 days old" on the evening of 08-03, not 3), CEIL into the
+    future, so a forecast frame five hours out reads "in 1 day", not "today".
+  - *Comparisons state the date actually read.* `whenPast` resolves the compare
+    date through `gibsTime` too — for a layer whose tiles stop at an `endTime`
+    both ends clamp to the same date and the delta is identically zero, which
+    the old "Δ vs \<requested date\>" suffix presented as real "no change".
+  - Rows with no honest observation time print nothing: elevation, a station's
+    name, the RGI glacier count (compiled from imagery spanning decades — so
+    the count and the 2000–2020 thinning rate are two rows, not one).
 - **Place names** (`#places-mode`, a three-way select next to "Base globe":
   names / … and borders & coasts / off; default names-ON, persisted). A globe
   of pure data is beautiful and unnavigable — an SST anomaly off a coastline
@@ -711,7 +750,9 @@ baseline; the day-keyed machinery is ready if the user brings GCP credentials.
   switch any of it off (or "Clear all N"), from any tab. See §5.
 - *Pixel inspector*: click any point on the globe → one card composing live
   weather + 7-day forecast, all satellite fields at the current date, climate
-  normals with anomaly, and nearby observing/emitting context. See §5.
+  normals with anomaly, and nearby observing/emitting context. Every row
+  carries its own observation time and age (§5, "Provenance") — never the
+  section's, because `gibsTime()` clamps per layer. See §5.
 
 **Point/data layers:** Climate TRACE top-1000 emitters · Argo active floats ·
 AMOC & GHG stations (RAPID, OSNAP, MOVE, SAMBA, Mauna Loa, Jungfraujoch…) ·
@@ -740,7 +781,7 @@ climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet
 join), gistemp, gpcp, eobs, oisst, meteoswiss. Grid snapshots share
 `_bin_to_grid`/`_write_grid` (nearest scatter-binning onto regular grids).
 
-**Testing** (106 Playwright specs): app behaviour (`tests/app.spec.js`) + data
+**Testing** (115 Playwright specs): app behaviour (`tests/app.spec.js`) + data
 integrity (`tests/data.spec.js`), sandbox MIRROR mode, in-repo proxies, CI on
 real network.
 
