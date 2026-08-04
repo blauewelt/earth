@@ -870,31 +870,48 @@ test("new native GIBS layers toggle; salinity snaps to first-of-month", async ({
   for (const id of ["precip-30min", "chlor", "salinity"]) {
     await page.check(`#layer-list input[data-id="${id}"]`);
   }
-  const info = await page.evaluate(() => {
+  const info = await page.evaluate(async () => {
     const E = window.__earth;
     // WMTS provider ctor name is mangled in the vendored build; assert our own
     // GIBS tiling scheme instead — a reliable marker of a real GIBS tile layer.
     const scheme = (id) => E.state.layers[id].layer.imageryProvider.tilingScheme.constructor.name;
     const salCfg = E.GIBS_LAYERS.find((l) => l.id === "salinity");
+    // Wait for the published time domain instead of racing the fetch addLayer()
+    // just kicked off — the snapped answers below only mean anything once the
+    // app knows what the archive actually serves.
+    const dom = await E.loadGibsDomain(salCfg);
     return {
       count: E.viewer.imageryLayers.length,
       p30: scheme("precip-30min"),
       chl: scheme("chlor"),
       sal: scheme("salinity"),
+      monthlyRequest: E.gibsTimeStatic(salCfg, "2024-03-15"),
       monthlySnap: E.gibsTime(salCfg, "2024-03-15"),
       dailyNoSnap: E.gibsTime(E.GIBS_LAYERS.find((l) => l.id === "precip"), "2024-03-15"),
       currentMonthFallback: E.gibsTime(salCfg, E.state.date),
-      january: E.gibsTime(salCfg, new Date().toISOString().slice(0, 4) + "-01-15"),
+      served: (dom || []).map((iv) => [iv.s, iv.e]),
       today: E.state.date,
     };
   });
   expect(info.count).toBe(before + 3);
   for (const s of [info.p30, info.chl, info.sal]) expect(s).toBe("GIBSGeographicTilingScheme");
-  expect(info.monthlySnap).toBe("2024-03-01");   // monthly layers request first-of-month
-  expect(info.dailyNoSnap).toBe("2024-03-15");   // daily layers use the raw date
-  // the current month's composite is unpublished → fall back to previous month
+  expect(info.monthlyRequest).toBe("2024-03-01");   // monthly layers request first-of-month
+  expect(info.dailyNoSnap).toBe("2024-03-15");      // daily layers use the raw date
+  // ...and the request is then snapped onto what SMAP really serves. That
+  // archive has holes — as measured, 2022-09 and the whole of 2024 are missing —
+  // so first-of-March-2024 resolves to an earlier month. Derive the expectation
+  // from the domain the app just measured rather than pinning a month here: a
+  // pinned month is a guess about someone else's archive, and it rots the moment
+  // NASA backfills.
+  expect(info.served.length).toBeGreaterThan(0);
+  const covers = (d) => info.served.some(([s, e]) => s <= d && d <= e);
+  expect(covers(info.monthlySnap)).toBe(true);
+  expect(info.monthlySnap <= info.monthlyRequest).toBe(true);
+  expect(info.monthlySnap).toMatch(/-01$/);
+  // the current month's composite is unpublished → fall back to an earlier month
   expect(info.currentMonthFallback < info.today.slice(0, 8) + "01").toBe(true);
   expect(info.currentMonthFallback).toMatch(/-01$/);
+  expect(covers(info.currentMonthFallback)).toBe(true);
   expect(page.__errors).toEqual([]);
 });
 

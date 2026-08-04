@@ -681,6 +681,12 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   `2020-01-20/2020-01-10/P1M`, whose end precedes its start — collapse those to a
   single instant rather than discarding the layer's domain). Any rule that only
   models a trailing edge will blank the globe mid-scrub.
+  Tests must not pin a date inside someone else's archive either: the salinity
+  test asserted `gibsTime(sal, "2024-03-15") === "2024-03-01"` and broke the day
+  snapping arrived, because 2024-03 is inside SMAP's hole. Assert the *rule*
+  (first-of-month) against `gibsTimeStatic`, then assert the snapped answer is
+  covered by the domain the app just measured. A pinned month is a hand-picked
+  threshold wearing a test's clothes, and it rots when NASA backfills.
 - **Some GIBS archives end before today**: GRACE mascons stop at 2022-07,
   CERES EBAF at 2018-10, MEaSUREs SSH anomalies at 2019-01, AMSR2 soil
   moisture AND sea ice at 2025-09 — the instruments/records continue, only the *tiles*
