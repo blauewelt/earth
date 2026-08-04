@@ -48,7 +48,10 @@ as additional held-out probes.
 ## Run
 
 ```bash
-python3 ml/build_dataset.py          # → ml/cache/na_pixels.npz  (~13 MB)
+python3 ml/build_dataset.py          # → ml/cache/na_pixels.npz  (repo channels)
+python3 ml/fetch_rg_channels.py      # + RG-Argo T/S at 10/200/700/1500 dbar
+                                     #   (~2 GB of downloads; run on Colab or
+                                     #    any machine — needs netCDF4)
 python3 ml/train.py --smoke          # CPU sanity, ~10 min
 python3 ml/train.py                  # full run
 ```
@@ -76,10 +79,20 @@ headless. The Colab runtime is also where the full archives get pulled
 (copernicusmarine for GLORYS/DUACS, ERDDAP for RG-Argo, CDS for ERA5) —
 they're too big to bake into this repo.
 
+## Pilot results so far (CPU, in-sandbox)
+
+4-channel smoke (1,500 steps): masked-channel reconstruction beats the
+channel-mean baseline on every channel (skill 0.45–0.99), and a ridge probe
+from the 26.5°N section's 32-D embeddings correlates r≈0.47 with RAPID
+transport on *held-out years* — from current speed + MLD alone, the transport
+never seen in training. t+1 prediction does not beat persistence yet at this
+scale. The 12-channel run (with the RG depth structure) is the current
+experiment; results land in `runs/pilot12/eval.json`.
+
 ## Next (mirrors the proposal roadmap)
 
-1. Channels: add RG-Argo T/S at 17 levels, ERA5 τ, OISST monthly SST, DUACS
-   SLA → C ≈ 45.
+1. Channels: ERA5 τ (Ekman), OISST monthly SST, DUACS SLA, more RG levels
+   → C ≈ 45.
 2. Rate sweep: replace the linear bottleneck with RVQ, sweep codebooks, plot
    held-out skill vs bits (the dimensionality curve, proposal §6).
 3. Probes: OSNAP/MOVE/SAMBA as additional never-seen transports.
