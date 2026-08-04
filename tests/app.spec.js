@@ -1576,11 +1576,12 @@ test("pixel inspector composes a point's full state on click", async ({ page }) 
   // resolves its own observation time, so the budget is no longer marginal.
   test.setTimeout(240000);
   // "Everything we know" is a layer-list entry, off by default: with SST on,
-  // a plain click reads the SST value, not the card. The card takes over when
-  // the entry is checked (explicit) or when NO colormapped layer is active
-  // (nothing else for a click to read). Canvas click coords are unreliable on
-  // the software-GL sandbox, so assert the predicate and drive the card
-  // directly.
+  // a plain click reads the SST value, not the card. The card appears ONLY
+  // when the entry is checked. There is no automatic fallback: with every box
+  // unchecked a tap opens nothing (an unchecked control that behaves checked
+  // reads as a bug — it was reported as one from a phone). Canvas click
+  // coords are unreliable on the software-GL sandbox, so assert the predicate
+  // and drive the card directly.
   await expect(page.locator("#toggle-pixel")).not.toBeChecked();
   expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(false);
   await page.check("#toggle-pixel");
@@ -1588,9 +1589,9 @@ test("pixel inspector composes a point's full state on click", async ({ page }) 
   // …and it lists as an active chip like any other layer
   await expect(page.locator("#active-layers .chip", { hasText: "Everything we know" })).toBeVisible();
   await page.uncheck("#toggle-pixel");
-  // no colormapped layer active → automatic fallback engages
+  // no colormapped layer active → STILL not engaged; the checkbox is the intent
   await page.uncheck('#layer-list input[data-id="sst"]');
-  expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(true);
+  expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(false);
   await page.check('#layer-list input[data-id="sst"]');
   expect(await page.evaluate(() => window.__earth.pixelInspectorEngaged())).toBe(false);
 

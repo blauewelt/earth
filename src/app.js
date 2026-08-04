@@ -4298,6 +4298,17 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((click) =
   if (!picked && pixelInspectorEngaged()) {
     const cart = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
     if (cart) showPixelState(Cesium.Cartographic.fromCartesian(cart));
+  } else if (!picked && !topColormapLayer()) {
+    // Nothing armed and nothing colormapped: the tap deliberately does
+    // NOTHING — but silence looks broken, so say why, once per sitting.
+    const cart = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
+    if (cart) {
+      showToast(
+        `Nothing is switched on to read here. Enable a data layer to tap values ` +
+        `off the map, or check <strong>Everything we know (pixel state)</strong> ` +
+        `for the full report on any point.`,
+        { key: "tap-nothing-armed" });
+    }
   }
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
@@ -4905,7 +4916,13 @@ function climateWindowStats(js) {
  * visibly asking — and only falls back to the card when NO colormapped layer
  * is active, because then there is no layer value to read instead. */
 function pixelInspectorEngaged() {
-  return !!document.getElementById("toggle-pixel")?.checked || !topColormapLayer();
+  // The checkbox IS the intent — nothing else. There used to be a fallback
+  // (no colormapped layer active → a bare-globe click opened the card anyway,
+  // "since there was nothing else to read"), and it read as a bug from a
+  // phone: every box unchecked, yet a tap poured out the full card. An
+  // unchecked control that behaves checked is worse than a tap that does
+  // nothing — the click handler explains the nothing with a toast instead.
+  return !!document.getElementById("toggle-pixel")?.checked;
 }
 
 /* Sample the baked Argo column at a lon/lat: the clicked 2° cell, or the

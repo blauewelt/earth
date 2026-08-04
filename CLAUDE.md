@@ -343,8 +343,11 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   (`pixelInspectorEngaged()`): entry checked → card, explicit intent;
   unchecked + a colormapped layer active → the click reads that layer's value
   (probe tooltip, the specific question being asked); unchecked + NO
-  colormapped layer active → card again, since there is no layer value to
-  read instead. The card composes: live weather + 7-day forecast, CAMS air
+  colormapped layer active → NOTHING opens; a keyed toast explains once and
+  points at the entry. There USED to be a fallback here (card anyway, "since
+  there was nothing else to read") — it was reported as a bug from a phone,
+  because an unchecked control that behaves checked looks broken no matter
+  how sensible the reasoning. Don't reintroduce it. The card composes: live weather + 7-day forecast, CAMS air
   quality, GloFAS river discharge, waves, and a 2045–49-vs-1991–95 CMIP6
   outlook (all Open-Meteo family); all fifteen colormapped GIBS rasters
   probed at the current date (z capped at 4 — except classification rasters,
