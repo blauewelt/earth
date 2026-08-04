@@ -4606,13 +4606,86 @@ function showProbeMark(res) {
   }
 }
 
-function hideProbe() {
+/* keepMarks: while the pixel card is open its marks belong to the CARD's
+ * point — pointer movement may hide the floating read-out, but must not
+ * un-mark the pixel the open card is describing. */
+function hideProbe(keepMarks = false) {
   probeEl.classList.add("hidden");
-  if (probeMarkEnts) {
+  if (probeMarkEnts && !keepMarks) {
     probeMarkEnts.fill.show = false;
     probeMarkEnts.edge.show = false;
     probeMarkEnts.dot.show = false;
   }
+}
+
+/* If the marked pixel sits under a read-out panel (the pixel card covers most
+ * of a phone's globe view), rotate the globe so the mark is actually visible:
+ * scan a coarse grid of canvas points for the spot farthest from every panel
+ * and edge that still lies ON the globe, then fly the camera by the lon/lat
+ * offset that puts the mark there. Same height, same heading/pitch — a
+ * rotation, not a zoom. Returns true if it moved the camera. */
+function ensureMarkVisible() {
+  const m = probeMarkEnts;
+  if (!m || !m.dot.show) return false;
+  const scene = viewer.scene;
+  const st = Cesium.SceneTransforms;
+  const toWin = (st.worldToWindowCoordinates || st.wgs84ToWindowCoordinates).bind(st);
+  const pos = m.dot.position.getValue(viewer.clock.currentTime);
+  const crect = scene.canvas.getBoundingClientRect();
+  const rects = [probeEl, pixelCardEl]
+    .filter((el) => el && !el.classList.contains("hidden"))
+    .map((el) => el.getBoundingClientRect())
+    .filter((r) => r.width > 0 && r.height > 0);
+  const coveredBy = (x, y) => rects.some((r) =>
+    x + crect.left >= r.left && x + crect.left <= r.right &&
+    y + crect.top >= r.top && y + crect.top <= r.bottom);
+  // worldToWindowCoordinates happily projects points on the FAR side of the
+  // globe; the occluder says whether the mark is on the face the user sees.
+  const occ = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, viewer.camera.position);
+  const w = occ.isPointVisible(pos) ? toWin(scene, pos) : null;
+  if (w && w.x >= 0 && w.y >= 0 && w.x <= crect.width && w.y <= crect.height &&
+      !coveredBy(w.x, w.y)) return false;                    // already in view
+
+  let best = null, bestScore = -Infinity;
+  for (let i = 1; i < 8; i++) {
+    for (let j = 1; j < 8; j++) {
+      const x = (crect.width * i) / 8, y = (crect.height * j) / 8;
+      if (coveredBy(x, y)) continue;
+      const cart = viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x, y), scene.globe.ellipsoid);
+      if (!cart) continue;                                   // off the limb
+      let score = Math.min(x, crect.width - x, y, crect.height - y);
+      for (const r of rects) {
+        const dx = Math.max(r.left - (x + crect.left), 0, (x + crect.left) - r.right);
+        const dy = Math.max(r.top - (y + crect.top), 0, (y + crect.top) - r.bottom);
+        score = Math.min(score, Math.hypot(dx, dy));
+      }
+      if (score > bestScore) { bestScore = score; best = { x, y, cart }; }
+    }
+  }
+  if (!best) return false;
+  // Move the camera by the same lon/lat offset that separates the mark from
+  // the geography currently under the chosen spot — with height, heading and
+  // pitch unchanged, the whole view translates and the mark lands there.
+  const target = Cesium.Cartographic.fromCartesian(pos);
+  const at = Cesium.Cartographic.fromCartesian(best.cart);
+  const cam = viewer.camera.positionCartographic;
+  const lon = Cesium.Math.negativePiToPi(cam.longitude + (target.longitude - at.longitude));
+  const lat = Cesium.Math.clamp(cam.latitude + (target.latitude - at.latitude),
+    -Cesium.Math.PI_OVER_TWO * 0.99, Cesium.Math.PI_OVER_TWO * 0.99);
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromRadians(lon, lat, cam.height),
+    orientation: { heading: viewer.camera.heading, pitch: viewer.camera.pitch, roll: 0 },
+    duration: 0.6,
+    complete: () => {
+      // the floating read-out follows its mark to the new screen position
+      if (probeEl.classList.contains("hidden")) return;
+      const w2 = toWin(scene, m.dot.position.getValue(viewer.clock.currentTime));
+      if (!w2) return;
+      probeEl.style.left = `${Math.min(w2.x + 14, scene.canvas.clientWidth - 150)}px`;
+      probeEl.style.top = `${Math.max(w2.y - 10, 4)}px`;
+    },
+  });
+  return true;
 }
 
 function renderProbe(res, sx, sy) {
@@ -4660,8 +4733,10 @@ function renderProbe(res, sx, sy) {
   probeEl.style.top = `${Math.max(sy - 10, 4)}px`;
   probeEl.classList.remove("hidden");
   // even a "no data" read marks its cell — seeing WHERE the empty cell sits is
-  // what tells a salinity mask edge apart from a broken layer
-  showProbeMark(res);
+  // what tells a salinity mask edge apart from a broken layer. With the pixel
+  // card open the marks belong to the card's point; a hover read-out has the
+  // cursor itself as its pointer and must not steal them.
+  if (!pixelInspectorEngaged()) showProbeMark(res);
 }
 
 /* The probe only fires after the cursor *rests* (dwell), so rotating/panning the
@@ -4669,14 +4744,20 @@ function renderProbe(res, sx, sy) {
  * the dwell timer; it computes once the mouse has been still for PROBE_DWELL ms. */
 const PROBE_DWELL = 650;
 let probeDwellTimer = null;
-async function runProbe(x, y) {
+async function runProbe(x, y, ensure = false) {
   const cart = viewer.camera.pickEllipsoid({ x, y }, viewer.scene.globe.ellipsoid);
   if (!cart) { hideProbe(); return; }
-  try { renderProbe(await probeValueAt(Cesium.Cartographic.fromCartesian(cart)), x, y); }
+  try {
+    renderProbe(await probeValueAt(Cesium.Cartographic.fromCartesian(cart)), x, y);
+    // Only a deliberate TAP earns a camera move (a phone tap can sit right
+    // under the read-out); rotating the globe under a hovering cursor would
+    // change what the cursor points at.
+    if (ensure) ensureMarkVisible();
+  }
   catch { hideProbe(); }
 }
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
-  hideProbe();                               // hide immediately while moving
+  hideProbe(pixelInspectorEngaged());        // hide immediately while moving
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
   if (!topColormapLayer()) return;
   const x = m.endPosition.x, y = m.endPosition.y;
@@ -4689,7 +4770,7 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((c) => {
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
   if (pixelInspectorEngaged()) return;
   if (topColormapLayer() && !seeThrough(viewer.scene.pick(c.position))?.id?.kind) {
-    runProbe(c.position.x, c.position.y);
+    runProbe(c.position.x, c.position.y, true);
   }
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 window.__runProbe = runProbe; // for tests
@@ -4905,8 +4986,39 @@ async function showPixelState(carto) {
     `<button class="px-close" aria-label="Close">×</button></div>` +
     `<div class="px-body"><div class="px-loading">Reading this point…</div></div>`;
   pixelCardEl.classList.remove("hidden");
-  pixelCardEl.querySelector(".px-close").addEventListener("click", () =>
-    pixelCardEl.classList.add("hidden"));
+  pixelCardEl.querySelector(".px-close").addEventListener("click", () => {
+    pixelCardEl.classList.add("hidden");
+    hideProbe();
+  });
+
+  // Mark the tapped pixel on the globe — the card itself covers most of a
+  // phone's globe view, so without this (and the rotate-into-view that
+  // follows) the card could describe a point the user cannot see.
+  {
+    const top = topColormapLayer();
+    let cell = null;
+    if (top && !top.cfg.grid && (top.cfg.colormap || top.cfg.classmap)) {
+      // the cell the CARD reads: classification rasters at native resolution,
+      // continuous ones capped at level 4 (see pixelRasterValue)
+      const z = top.cfg.classmap ? top.cfg.maxLevel : Math.min(top.cfg.maxLevel, 4);
+      const t = tileCoordsAt(lon, lat, z);
+      cell = probeCellBounds(z, t.x, t.y, t.px, t.py);
+    }
+    showProbeMark({ lon, lat, cell });
+    if (top?.cfg.grid) {
+      // grid cell bounds need the loaded grid; upgrade the mark when it lands
+      loadGridMonth(top.cfg).then((g) => {
+        if (!g || pixelCardEl.classList.contains("hidden")) return;
+        const ix = Math.floor((lon - g.west) / g.dlon), iy = Math.floor((lat - g.south) / g.dlat);
+        if (ix < 0 || ix >= g.nx || iy < 0 || iy >= g.ny) return;
+        showProbeMark({ lon, lat, cell: {
+          west: g.west + ix * g.dlon, south: g.south + iy * g.dlat,
+          east: g.west + (ix + 1) * g.dlon, north: g.south + (iy + 1) * g.dlat,
+        } });
+      });
+    }
+    ensureMarkVisible();
+  }
 
   // Everything in parallel; the card renders once, complete.
   const rasterCfgs = PIXEL_RASTERS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
@@ -6082,6 +6194,7 @@ window.__earth = {
   getValueLut,
   probeCellBounds,
   get probeMark() { return probeMarkEnts; },
+  ensureMarkVisible,
   SSTEnsembleProvider,
   spreadColor,
   get ensembleLayer() { return sstEnsembleLayer; },

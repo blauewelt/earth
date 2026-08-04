@@ -1007,6 +1007,67 @@ test("the probe draws the source cell it read on the globe", async ({ page }) =>
   expect(page.__errors).toEqual([]);
 });
 
+test("a mark hidden under the pixel card rotates back into view", async ({ page }) => {
+  // The pixel card covers a big slab of the globe (most of it, on a phone).
+  // Opening it for a point that sits underneath it must rotate the globe so
+  // the marked pixel is actually visible next to the card describing it.
+  const r = await page.evaluate(async () => {
+    const E = window.__earth;
+    const scene = E.viewer.scene;
+    const canvas = scene.canvas;
+    const pick = (x, y) =>
+      E.viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x, y), scene.globe.ellipsoid);
+    // zoom to where the globe fills the frame — at the far home view the
+    // card's screen region can hang off the limb and there is nothing to mark
+    E.viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(-30, 40, 2.5e6),
+    });
+    // a globe point in the card's screen region (card: top-right, 300px wide)
+    const cart = pick(canvas.clientWidth - 120, 140);
+    if (!cart) return { skip: true };
+    const carto = Cesium.Cartographic.fromCartesian(cart);
+    const camBefore = E.viewer.camera.positionCartographic.clone();
+    const cardP = E.showPixelState(carto);          // marks + rotates immediately
+    await new Promise((res) => setTimeout(res, 1500));   // let the 0.6s flight land
+    const st = Cesium.SceneTransforms;
+    const toWin = (st.worldToWindowCoordinates || st.wgs84ToWindowCoordinates).bind(st);
+    const m = E.probeMark;
+    const pos = m.dot.position.getValue(E.viewer.clock.currentTime);
+    const w = toWin(scene, pos);
+    const cr = canvas.getBoundingClientRect();
+    const card = document.getElementById("pixel-card").getBoundingClientRect();
+    const camAfter = E.viewer.camera.positionCartographic;
+    cardP.catch(() => {});                          // don't leak the card's own promise
+    return {
+      dot: m.dot.show,
+      cardShown: !document.getElementById("pixel-card").classList.contains("hidden"),
+      moved: Math.abs(camAfter.longitude - camBefore.longitude) +
+             Math.abs(camAfter.latitude - camBefore.latitude) > 1e-4,
+      onCanvas: !!w && w.x >= 0 && w.y >= 0 && w.x <= cr.width && w.y <= cr.height,
+      underCard: !!w &&
+        w.x + cr.left >= card.left && w.x + cr.left <= card.right &&
+        w.y + cr.top >= card.top && w.y + cr.top <= card.bottom,
+      // a second call must be a no-op: the mark is already visible
+      movesAgain: E.ensureMarkVisible(),
+    };
+  });
+  if (r.skip) test.skip();
+  expect(r.cardShown).toBe(true);
+  expect(r.dot).toBe(true);
+  expect(r.moved).toBe(true);        // the camera rotated...
+  expect(r.onCanvas).toBe(true);     // ...and the mark is on screen...
+  expect(r.underCard).toBe(false);   // ...not under the card any more
+  expect(r.movesAgain).toBe(false);
+  // closing the card clears the marks it owned
+  await page.click("#pixel-card .px-close");
+  const after = await page.evaluate(() => {
+    const m = window.__earth.probeMark;
+    return { dot: m.dot.show, fill: m.fill.show, edge: m.edge.show };
+  });
+  expect(after).toEqual({ dot: false, fill: false, edge: false });
+  expect(page.__errors).toEqual([]);
+});
+
 test("date stepper: calendar-correct steps, clamped to available range", async ({ page }) => {
   const start = await page.inputValue("#layer-date");
   await page.click('#date-steps button[data-step="-1y"]');

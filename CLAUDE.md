@@ -124,6 +124,19 @@ A new layer is not done until it has **all** of:
    answered). "No data" reads mark their cell too — seeing where an empty
    cell sits is what tells a mask edge from a broken layer. All hide paths go
    through `hideProbe()` so the read-out and the marks never desync.
+   **A covered mark rotates back into view** (`ensureMarkVisible`): if the
+   marked pixel sits under the probe read-out or the pixel card (which covers
+   most of a phone's globe view), the camera flies by the lon/lat offset that
+   puts the mark at the freest uncovered canvas spot — same height, heading
+   and pitch, so it reads as a rotation, not a zoom. Only a deliberate TAP
+   (and the pixel card opening) triggers this; a hovering cursor never does,
+   because rotating the globe under the cursor changes what it points at.
+   Mind two traps: `worldToWindowCoordinates` happily projects far-side
+   points, so visibility is gated on `EllipsoidalOccluder`; and the pixel
+   card OWNS the marks while open — pointer moves hide only the tooltip
+   (`hideProbe(keepMarks)`), the card's × clears everything. The card also
+   marks its tapped pixel now (`showPixelState`), cell at the level the card
+   actually reads (classification native, continuous capped at 4).
 5. **An explicit aggregation/difference decision.** Every timed raster layer
    must declare one of these postures, and the choice must be justified in a
    code comment next to the flag:
