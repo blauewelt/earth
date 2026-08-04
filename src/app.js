@@ -325,7 +325,12 @@ const GIBS_LAYERS = [
     // GIBS tiles end 2019-01; the altimetry record itself continues
     // (see the Sea level tab for the global mean).
     deltaRange: 0.15,
-    endTime: "2019-01-17",
+    // Measured from the layer's own GIBS time domain, not read off the product
+    // page: the last served epoch is 2019-01-22. It was typed here as
+    // 2019-01-17 — one 5-day step early, and a date that quietly hid the final
+    // frame of the archive. loadGibsDomain() re-measures this at runtime, so if
+    // GIBS ever extends or trims the record the app follows without an edit.
+    endTime: "2019-01-22",
     snap5d: ["1992-09-30", "2017-10-29"],
     title: "Sea surface height anomaly (altimetry)",
     ext: "png", tms: "2km", maxLevel: 5,
@@ -456,13 +461,211 @@ const GIBS_LAYERS = [
   },
 ];
 
+/* ------------------------------------------------ what GIBS actually serves */
+/* Every timed layer used to be asked for "two days ago" (or the first of the
+ * current month), on the assumption that an archive runs continuously up to
+ * about now. Neither half of that assumption holds.
+ *
+ *  - Products lag by their own amounts. On 2026-08-03 the MODIS monthly NDVI
+ *    composite's newest tile date was 2026-06-01 — 62 days behind the request.
+ *  - Every archive has interior HOLES, not just a trailing edge: NDVI is
+ *    missing 2025-04, SMAP salinity all of 2024, VIIRS 11–15 July 2026, and
+ *    GRACE is irregular throughout.
+ *
+ * Ask for a date that isn't served and GIBS 404s, Cesium draws nothing, the
+ * hover probe says "no data", and NOTHING on screen explains why. That is
+ * exactly what a user saw: the vegetation layer on, the legend showing, the
+ * globe grey, no green anywhere over Africa.
+ *
+ * So stop guessing. GIBS publishes each layer's exact time domain at
+ *   /wmts/epsg4326/best/1.0.0/{layer}/default/{tms}/all/all.xml
+ * as a comma-separated list of ISO-8601 start/end/period intervals. We fetch it
+ * the first time a layer is switched on (small; cached for the session), and
+ * snap every requested date DOWN to the newest instant actually served. Because
+ * the answer is MEASURED it also replaces the hand-typed endTime constants,
+ * which had already drifted: sea-surface-height's said 2019-01-17, the archive
+ * says 2019-01-22.
+ */
+
+const GIBS_DOMAIN_URL =
+  "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/1.0.0/" +
+  "{layer}/default/{tms}/all/all.xml";
+
+function gibsDomainUrl(cfg) {
+  return GIBS_DOMAIN_URL.replace("{layer}", cfg.layer).replace("{tms}", cfg.tms);
+}
+
+// Domain instants come in two granularities — bare dates ("2026-06-01") for
+// daily/monthly products, full timestamps for the sub-daily ones. Parse both,
+// and treat a bare date as UTC midnight (Date.parse would too, but only by
+// spec accident; being explicit stops a local-time reading from creeping in).
+function domainMs(v) {
+  return Date.parse(String(v).length === 10 ? `${v}T00:00:00Z` : v);
+}
+
+// Print an instant back in the SAME granularity the archive used, so the TIME
+// value we send matches the one GIBS advertises character for character.
+function domainFormat(sample, ms) {
+  const iso = new Date(ms).toISOString();
+  return String(sample).length === 10 ? iso.slice(0, 10) : iso.replace(/\.\d{3}Z$/, "Z");
+}
+
+/* ISO-8601 durations as GIBS uses them: P1D, P5D, P1M, P1Y, PT30M — plus, on
+ * GRACE, a different irregular period for nearly every interval (P28D, P17D,
+ * P13D, P33D…). Note M means months before the T and minutes after it; getting
+ * that backwards would silently mis-step a whole archive. */
+function parsePeriod(p) {
+  const m = /^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/
+    .exec(String(p || "").trim());
+  if (!m) return { months: 0, ms: 864e5 };
+  const n = (i) => (m[i] == null ? 0 : Number(m[i]));
+  const months = n(1) * 12 + n(2);
+  const ms = ((n(3) * 24 + n(4)) * 60 + n(5)) * 60000 + n(6) * 1000;
+  if (!months && !ms) return { months: 0, ms: 864e5 };   // "P0D" and friends
+  return { months, ms };
+}
+
+function parseGibsDomain(xml) {
+  const m = /<Domain>([^<]*)<\/Domain>/.exec(String(xml || ""));
+  if (!m) return null;
+  const out = [];
+  for (const chunk of m[1].split(",")) {
+    const parts = chunk.trim().split("/");
+    const s = parts[0];
+    if (!s || !Number.isFinite(domainMs(s))) continue;
+    let e = parts.length > 1 && parts[1] ? parts[1] : s;
+    // Some upstream intervals are malformed — GRACE serves
+    // "2020-01-20/2020-01-10/P1M", whose end precedes its start. Collapse those
+    // (and genuine single instants) to one served instant rather than throwing
+    // away a whole layer's domain over one bad row.
+    if (!Number.isFinite(domainMs(e)) || domainMs(e) < domainMs(s)) e = s;
+    out.push({ s, e, ...parsePeriod(parts[2]) });
+  }
+  if (!out.length) return null;
+  out.sort((a, b) => domainMs(a.s) - domainMs(b.s));
+  return out;
+}
+
+// Calendar-correct month arithmetic in UTC, clamping the day so a start on the
+// 31st can't spill into the following month.
+function addMonthsUTC(ms, n) {
+  const d = new Date(ms);
+  const day = d.getUTCDate();
+  const out = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1,
+    d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()));
+  const inMonth = new Date(Date.UTC(out.getUTCFullYear(), out.getUTCMonth() + 1, 0)).getUTCDate();
+  out.setUTCDate(Math.min(day, inMonth));
+  return out.getTime();
+}
+
+// Newest instant this one interval serves at or before reqMs, or null if the
+// interval starts after it.
+function domainFloor(iv, reqMs) {
+  const S = domainMs(iv.s), E = domainMs(iv.e);
+  if (reqMs < S) return null;
+  if (reqMs >= E) return iv.e;
+  if (iv.months) {
+    const s = new Date(S), r = new Date(reqMs);
+    let steps = Math.floor(
+      ((r.getUTCFullYear() - s.getUTCFullYear()) * 12 +
+        (r.getUTCMonth() - s.getUTCMonth())) / iv.months);
+    // The month difference above ignores the day, so a start of 2015-04-12 and
+    // a request of 2015-05-01 reads as a whole step when it isn't one. Walk
+    // back until the answer is genuinely at or before the request.
+    let out = addMonthsUTC(S, steps * iv.months);
+    while (steps > 0 && out > reqMs) out = addMonthsUTC(S, --steps * iv.months);
+    return domainFormat(iv.s, Math.min(out, E));
+  }
+  const steps = Math.floor((reqMs - S) / iv.ms);
+  return domainFormat(iv.s, Math.min(S + steps * iv.ms, E));
+}
+
+/* The newest instant the whole domain serves at or before `want`. Intervals can
+ * overlap and are not guaranteed disjoint, so take the max over all of them
+ * rather than trusting the first hit. */
+function snapToDomain(intervals, want) {
+  if (!intervals?.length) return null;
+  const reqMs = domainMs(want);
+  if (!Number.isFinite(reqMs)) return null;
+  let best = null, bestMs = -Infinity;
+  for (const iv of intervals) {
+    const c = domainFloor(iv, reqMs);
+    if (c == null) continue;
+    const ms = domainMs(c);
+    if (ms > bestMs) { bestMs = ms; best = c; }
+  }
+  // Before the archive begins there is nothing at or below the request. Show
+  // the earliest instant served instead of a blank globe.
+  return best ?? intervals[0].s;
+}
+
+const gibsDomains = new Map();          // layer id → intervals, or null = asked and got nothing
+const gibsDomainPending = new Map();    // layer id → in-flight promise
+
+function loadGibsDomain(cfg) {
+  if (!cfg?.timed || !cfg.layer) return Promise.resolve(null);
+  if (gibsDomains.has(cfg.id)) return Promise.resolve(gibsDomains.get(cfg.id));
+  if (gibsDomainPending.has(cfg.id)) return gibsDomainPending.get(cfg.id);
+  const p = fetch(gibsDomainUrl(cfg))
+    .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`))))
+    .then(parseGibsDomain)
+    .catch(() => null)
+    .then((v) => {
+      // Cache failures too. If GIBS won't tell us, re-asking on every toggle
+      // just spends the user's connection to hear the same silence; the layer
+      // falls back to the typed endTime and behaves exactly as it did before.
+      gibsDomains.set(cfg.id, v);
+      gibsDomainPending.delete(cfg.id);
+      if (v) {
+        cfg.lastServed = v[v.length - 1].e;
+        // A typed endTime means "this archive is closed". Keep that meaning,
+        // but take the DATE from the measurement — the hand-typed ones drift.
+        if (cfg.endTime) cfg.endTime = cfg.lastServed.slice(0, 10);
+      }
+      return v;
+    });
+  gibsDomainPending.set(cfg.id, p);
+  return p;
+}
+
+/* Called when a timed layer is added. The globe must not wait on a metadata
+ * fetch to paint, so the first tiles may go out at the un-snapped date and 404;
+ * when the domain lands we rebuild the layer at a date that exists. That costs
+ * one wasted round of tiles on the very first enable of a lagging layer, and
+ * buys a globe that never sits blank with no explanation. */
+function ensureGibsDomain(cfg) {
+  if (!cfg?.timed || !cfg.layer || gibsDomains.has(cfg.id)) return;
+  const before = gibsTime(cfg, state.date);
+  loadGibsDomain(cfg).then((dom) => {
+    if (!dom) return;
+    const e = state.layers[cfg.id];
+    if (!e || !(e.layer || e.suppressed)) return;      // switched off while we asked
+    if (gibsTime(cfg, state.date) !== before) {
+      removeLayer(cfg.id);
+      addLayer(cfg);
+    }
+    maybeArchiveToast(cfg, { replace: true });
+    maybeAnnualToast(cfg, { replace: true });
+  });
+}
+
 // GIBS TIME value for a layer: monthly products must be requested at the first
 // of the month (a mid-month date returns a blank tile), sub-daily/daily use the
 // raw date, and untimed layers use their fixed snapshot. The current month's
 // composite is still accumulating and not yet published (GIBS 404s → an
 // invisible layer), so a date in the current month falls back to the previous
 // complete month.
-function gibsTime(cfg, dateStr) {
+//
+// This is the shape of the request BEFORE the archive gets a say. It is what we
+// would ask for if every product were continuous and current; gibsTime() below
+// then snaps it onto a date GIBS actually serves. Keep them separate: the toasts
+// need to name both — what you asked for, and what you are looking at.
+//
+// `clampEnd: false` skips the archive-end clamp, which is how the toasts get at
+// the date the user genuinely asked for. With it left on (the default, and what
+// every tile URL uses) "asked" would already have been quietly moved, and a
+// clamped layer would look like it had got exactly what it wanted.
+function gibsTimeStatic(cfg, dateStr, { clampEnd = true } = {}) {
   if (!cfg.timed) return cfg.fixedTime || "default";
   // Forecast layers let the date run into the future; observation archives
   // can't follow. Clamp so GIBS never gets asked for tomorrow's tiles.
@@ -471,7 +674,7 @@ function gibsTime(cfg, dateStr) {
   // CERES 2018-10, SSH anomalies 2019-01, AMSR2 soil moisture 2025-09): any
   // later date clamps to the last served one, so the layer shows its final
   // state instead of silently blanking. The hover card states the end date.
-  if (cfg.endTime && dateStr > cfg.endTime) dateStr = cfg.endTime;
+  if (clampEnd && cfg.endTime && dateStr > cfg.endTime) dateStr = cfg.endTime;
   // Annual products (OPERA DIST-ANN) are served at one date per year: snap to
   // Jan 1 of the date's year, floored at the first year served.
   if (cfg.annual) {
@@ -505,6 +708,21 @@ function gibsTime(cfg, dateStr) {
     return `${dateStr}T${h}:${m}:00Z`;
   }
   return dateStr;
+}
+
+/* The single source of truth for the TIME value in every tile URL and every
+ * provenance stamp. Stays SYNCHRONOUS on purpose: it is called from inside
+ * Cesium's tile requests and from the hover probe, and it must never return a
+ * promise. Until the layer's domain has arrived (one small fetch, once per
+ * session) this behaves exactly as it always did; afterwards every call site —
+ * tiles, the pixel card, the hover stamp, the comparison hints — is corrected
+ * at once, and they can never disagree about what a click just read. */
+function gibsTime(cfg, dateStr) {
+  const want = gibsTimeStatic(cfg, dateStr);
+  if (!cfg.timed) return want;
+  const dom = gibsDomains.get(cfg.id);
+  if (!dom) return want;
+  return snapToDomain(dom, want) ?? want;
 }
 
 /* ------------------------------------------------------ when a value is from */
@@ -2161,6 +2379,7 @@ function addLayer(cfg) {
     entry.suppressed = true;
     state.layers[cfg.id] = entry;
     updateLegends();
+    ensureGibsDomain(cfg);
     return;
   }
 
@@ -2214,6 +2433,9 @@ function addLayer(cfg) {
   }
   state.layers[cfg.id] = entry;
   updateLegends();
+  // Ask GIBS what this layer actually serves. No-op after the first enable
+  // (cached for the session), and it never blocks the paint above.
+  ensureGibsDomain(cfg);
 }
 
 function removeLayer(id) {
@@ -2235,8 +2457,14 @@ function refreshTimedLayers() {
   // must also refresh, so they reappear when the window returns to 1 day.
   for (const [id, entry] of Object.entries(state.layers)) {
     if ((entry.layer || entry.suppressed) && entry.cfg.timed) {
+      const cfg = entry.cfg;
       removeLayer(id);
-      addLayer(entry.cfg);
+      addLayer(cfg);
+      // A date change can land in a hole as easily as an enable can — browsing
+      // NDVI back through 2025 walks straight into a month GIBS never
+      // published. Say so here too, or the globe just goes quiet mid-scrub.
+      maybeArchiveToast(cfg, { replace: true });
+      maybeAnnualToast(cfg, { replace: true });
     }
   }
   updateSplitUI();
@@ -3021,12 +3249,29 @@ function ratioLegendEl(cfg) {
  * no date-specific data, so the date selector's lack of effect is never a
  * mystery. Auto-dismisses; identical messages are de-duped while on screen. */
 const activeToastKeys = new Set();
-function showToast(html, { key = html, timeout = 8000 } = {}) {
+/* `replace: true` supersedes a toast already on screen under the same key
+ * instead of being suppressed by it. The de-dupe key stops the SAME message
+ * appearing twice; it must not stop a CORRECTION. (Used by maybeArchiveToast,
+ * which speaks immediately from the typed archive end and then again, with a
+ * different story, once GIBS has told it what is really served.) */
+function showToast(html, { key = html, timeout = 8000, replace = false } = {}) {
   const host = document.getElementById("toast-host");
-  if (!host || activeToastKeys.has(key)) return;
+  if (!host) return;
+  if (activeToastKeys.has(key)) {
+    if (!replace) return;
+    const olds = [...host.querySelectorAll(".toast")]
+      .filter((t) => t.dataset.toastKey === key);
+    // Replacing a message with the same message would restart the entry
+    // animation on every date-selector keystroke. Only a CHANGED story earns a
+    // new toast; an unchanged one is left alone, still counting down.
+    if (olds.some((t) => t.querySelector(".toast-body")?.innerHTML === html)) return;
+    for (const old of olds) old.remove();
+    activeToastKeys.delete(key);
+  }
   activeToastKeys.add(key);
   const el = document.createElement("div");
   el.className = "toast";
+  el.dataset.toastKey = key;
   el.setAttribute("role", "alert");
   el.innerHTML = `<span class="toast-ico">📅</span><div class="toast-body">${html}</div>` +
     `<button class="toast-close" title="Dismiss" aria-label="Dismiss">×</button>`;
@@ -3127,33 +3372,97 @@ function maybeMonthlyGridToast(cfg) {
   });
 }
 
-/* When a layer's tile archive ends before the selected date, the request
- * clamps to the last served date (gibsTime). Say so on enable — a silently
- * older map is better than a blank one, but only if the user knows. */
 /* Annual products are not dateless and not monthly: the year drives them and
  * nothing else does — the same trap Climate TRACE has, one rung coarser. Say
- * so on enable, or the day/month buttons look broken. */
-function maybeAnnualToast(cfg) {
+ * so on enable, or the day/month buttons look broken. Fires straight away from
+ * what is known, and again with `replace` once the measured domain lands, so
+ * the span of years it quotes ends up being the archive's rather than a guess. */
+function maybeAnnualToast(cfg, { replace = false } = {}) {
   if (!cfg?.annual) return;
   const shown = gibsTime(cfg, state.date).slice(0, 4);
-  const lo = cfg.start.slice(0, 4), hi = cfg.endTime.slice(0, 4);
+  const lo = cfg.start.slice(0, 4);
+  const hi = (cfg.lastServed || cfg.endTime || defaultDate()).slice(0, 4);
   const want = state.date.slice(0, 4);
   const note = want !== shown
     ? ` (nearest available to your ${want}; the product covers ${lo}–${hi})`
     : ` — set the date's <em>year</em> anywhere in ${lo}–${hi} to switch years`;
   showToast(`<strong>${cfg.title}</strong> is an <strong>annual</strong> summary: ` +
     `the day and month don't matter, but the <strong>year does</strong>. ` +
-    `Showing <strong>${shown}</strong>${note}.`, { key: `annual-${cfg.id}` });
+    `Showing <strong>${shown}</strong>${note}.`, { key: `annual-${cfg.id}`, replace });
 }
 
-function maybeClampToast(cfg) {
-  if (cfg?.annual) return;                // its own, clearer toast above
-  if (!cfg?.endTime || !cfg.timed || state.date <= cfg.endTime) return;
-  showToast(`<strong>${cfg.title}</strong>: its tile archive ends ` +
-    `<strong>${cfg.endTime.slice(0, 7)}</strong>, so you're seeing ` +
-    `<strong>${gibsTime(cfg, state.date)}</strong> — the last served date — ` +
-    `not ${state.date}. Set the date on or before ${cfg.endTime.slice(0, 7)} ` +
-    `to browse the archive.`, { key: `clamp-${cfg.id}` });
+/* The date you asked for and the date GIBS can give you come apart for three
+ * quite different reasons, and the user needs them told apart:
+ *
+ *   1. CLOSED — the archive stopped and nothing newer will ever exist (CERES
+ *      2018-10, GRACE 2022-07, sea-surface height 2019-01, sea ice 2025-09).
+ *   2. LAGGING — the archive is live but behind. NDVI's newest monthly
+ *      composite was 62 days old on 2026-08-03; tomorrow it catches up a step.
+ *   3. A HOLE — the archive skips the requested date specifically. NDVI has no
+ *      2025-04 at all; SMAP salinity has no 2024; VIIRS lost 11–15 July 2026.
+ *
+ * From the outside all three looked identical: a blank globe, a legend, and a
+ * probe saying "no data". This says which one happened, and always names the
+ * date actually on screen.
+ *
+ * It speaks TWICE by design: immediately on enable from what is already known
+ * (the typed archive end), so a clamped layer is never silently old while a
+ * metadata fetch is in flight — and again, with `replace`, once the measured
+ * domain lands and the story may have changed from "the archive ended" to "this
+ * date has a hole in it". If GIBS never answers, the first message stands. */
+function maybeArchiveToast(cfg, { replace = false } = {}) {
+  if (!cfg?.timed || cfg.annual) return;      // annual has its own, clearer toast
+  {
+    const e = state.layers[cfg.id];
+    if (!e || !(e.layer || e.suppressed)) return;   // switched off while we asked
+    const shown = gibsTime(cfg, state.date);
+    // What you asked for, WITHOUT the archive-end clamp — otherwise a layer
+    // whose tiles stopped in 2018 looks like it got exactly the date it wanted.
+    const asked = gibsTimeStatic(cfg, state.date, { clampEnd: false });
+    if (domainMs(shown) === domainMs(asked)) return;    // you got what you asked for
+
+    // Print at the product's own granularity: a month for a monthly composite,
+    // a timestamp only where the half-hour actually distinguishes two frames.
+    const fmt = (v) => (cfg.monthly ? String(v).slice(0, 7)
+      : String(v).length > 10 ? String(v).replace("T", " ").replace(/:\d\dZ$/, " UTC")
+        : String(v).slice(0, 10));
+    // Read the newest served instant off the DOMAIN, not off cfg — the domain
+    // is the measurement, cfg.lastServed only a copy of it, and a copy is one
+    // more thing that can go stale.
+    const dom = gibsDomains.get(cfg.id);
+    const newest = (dom && dom[dom.length - 1].e) || cfg.lastServed || cfg.endTime;
+    const atEdge = newest && domainMs(shown) >= domainMs(newest);
+    const behind = cfg.monthly
+      ? (() => {
+        const n = (Number(asked.slice(0, 4)) - Number(shown.slice(0, 4))) * 12 +
+          (Number(asked.slice(5, 7)) - Number(shown.slice(5, 7)));
+        return `${n} month${n === 1 ? "" : "s"}`;
+      })()
+      : (() => {
+        const n = Math.round((domainMs(asked) - domainMs(shown)) / 864e5);
+        return n >= 1 ? `${n} day${n === 1 ? "" : "s"}` : "under a day";
+      })();
+
+    let html;
+    if (cfg.endTime && atEdge) {
+      html = `<strong>${cfg.title}</strong>: its tile archive ends ` +
+        `<strong>${fmt(newest)}</strong> and nothing newer will be published, so ` +
+        `you're seeing <strong>${fmt(shown)}</strong> — the last served date — ` +
+        `not ${fmt(asked)}. Set the date on or before ${fmt(newest)} to browse ` +
+        `the archive.`;
+    } else if (atEdge) {
+      html = `<strong>${cfg.title}</strong>: NASA hasn't published ` +
+        `<strong>${fmt(asked)}</strong> yet — this product currently runs about ` +
+        `${behind} behind. You're seeing <strong>${fmt(shown)}</strong>, the ` +
+        `newest one served.`;
+    } else {
+      html = `<strong>${cfg.title}</strong>: GIBS has no tiles for ` +
+        `<strong>${fmt(asked)}</strong> — a gap in the archive, not an error. ` +
+        `You're seeing <strong>${fmt(shown)}</strong>, the newest date before it ` +
+        `(${behind} earlier).`;
+    }
+    showToast(html, { key: `clamp-${cfg.id}`, replace });
+  }
 }
 
 /* ----------------------------------------------------------- GIBS layer panel */
@@ -3378,7 +3687,7 @@ function buildLayerPanel() {
       row.style.display = "";
       maybeDatelessToast(id);
       maybeMonthlyGridToast(cfg);
-      maybeClampToast(cfg);
+      maybeArchiveToast(cfg);
       maybeAnnualToast(cfg);
     } else {
       removeLayer(id);
@@ -5692,6 +6001,13 @@ window.__earth = {
   loadGridMonth,
   rampColor,
   gibsTime,
+  gibsTimeStatic,
+  gibsDomainUrl,
+  parseGibsDomain,
+  parsePeriod,
+  snapToDomain,
+  loadGibsDomain,
+  gibsDomains,
   // place names: the collections themselves, plus the pick-through helper, so a
   // test can prove a click on "Paris" still reaches the globe
   ensureCities,

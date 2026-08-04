@@ -1515,7 +1515,10 @@ test("state-vector layers: end-clamping, 5-day snap, and a live toggle", async (
   expect(t.sshOld).toBe("2000-01-02");
   // 2017-10-29 + k*5d: 2018-06-11 is the floor of 2018-06-15
   expect(t.sshNew).toBe("2018-06-11");
-  expect(t.sshToday).toBe("2019-01-17");                   // the last served epoch
+  // The last served epoch — MEASURED from the layer's GIBS time domain. It was
+  // typed as 2019-01-17 for months, one 5-day step early, quietly hiding the
+  // final frame of the archive. See "GIBS time domains" below.
+  expect(t.sshToday).toBe("2019-01-22");
   expect(t.ndviToday >= "2026-01-01").toBe(true);
   // one of the five actually toggles on with our GIBS tiling scheme
   await page.check('#layer-list input[data-id="ndvi"]');
@@ -1588,6 +1591,138 @@ test("GLORYS layers toggle; the card gets ocean circulation", async ({ page }) =
   await expect(card).toContainText("Surface current");
   await expect(card).toContainText("toward");
   await expect(card).toContainText("Mixed-layer depth");
+});
+
+test("GIBS time domains: parse the archive, snap into it, name the gap", async ({ page }) => {
+  // Pure logic first, on hand-written domains that reproduce every shape GIBS
+  // actually publishes — no network. The bug this closes: the app asked every
+  // timed layer for "two days ago" and got a 404 whenever the archive lagged
+  // (NDVI's newest monthly composite was 62 days old) or had an interior hole
+  // (NDVI has no 2025-04). A blank globe with a legend and a probe reading
+  // "no data" is the worst possible way to say "that date isn't published".
+  const logic = await page.evaluate(() => {
+    const E = window.__earth;
+    const dom = (s) => E.parseGibsDomain(`<Domain>${s}</Domain>`);
+    // NDVI's real shape: a long run, a hole, then a second run that lags today
+    const ndvi = dom("2000-03-01/2025-03-01/P1M,2025-05-01/2026-06-01/P1M");
+    // GRACE ships a malformed interval whose end precedes its start
+    const grace = dom("2020-01-20/2020-01-10/P1M,2015-04-12/2015-06-12/P28D");
+    const halfHour = dom("2026-08-01T00:00:00Z/2026-08-01T23:30:00Z/PT30M");
+    const annual = dom("2023-01-01/2025-01-01/P1Y");
+    return {
+      periods: ["P1M", "P1Y", "P5D", "PT30M", "nonsense"].map((p) => E.parsePeriod(p)),
+      ndviLen: ndvi.length,
+      lag: E.snapToDomain(ndvi, "2026-08-01"),      // past the newest → the newest
+      hole: E.snapToDomain(ndvi, "2025-04-15"),     // in the gap → newest before it
+      exact: E.snapToDomain(ndvi, "2025-03-01"),    // served → unchanged
+      early: E.snapToDomain(ndvi, "1999-01-01"),    // before the record → its start
+      // one bad row must not cost the layer its whole domain
+      graceOrdered: grace.map((i) => i.s),
+      graceBad: E.snapToDomain(grace, "2020-01-25"),
+      graceStep: E.snapToDomain(grace, "2015-05-01"),   // 28-day step, not a month
+      subDaily: E.snapToDomain(halfHour, "2026-08-01T13:45:00Z"),
+      annual: E.snapToDomain(annual, "2026-01-01"),
+      garbage: E.parseGibsDomain("<html>nope</html>"),
+    };
+  });
+  expect(logic.periods).toEqual([
+    { months: 1, ms: 0 }, { months: 12, ms: 0 },
+    { months: 0, ms: 5 * 864e5 }, { months: 0, ms: 30 * 60000 },
+    { months: 0, ms: 864e5 },                       // unparseable → assume daily
+  ]);
+  expect(logic.ndviLen).toBe(2);
+  expect(logic.lag).toBe("2026-06-01");
+  expect(logic.hole).toBe("2025-03-01");
+  expect(logic.exact).toBe("2025-03-01");
+  expect(logic.early).toBe("2000-03-01");
+  expect(logic.graceOrdered).toEqual(["2015-04-12", "2020-01-20"]);
+  expect(logic.graceBad).toBe("2020-01-20");
+  expect(logic.graceStep).toBe("2015-04-12");       // 2015-05-10 is the next step
+  expect(logic.subDaily).toBe("2026-08-01T13:30:00Z");
+  expect(logic.annual).toBe("2025-01-01");
+  expect(logic.garbage).toBeNull();
+
+  // Then the real thing: switch NDVI on, let its domain arrive, and check the
+  // date we ask GIBS for is one the archive says it serves.
+  const toasts = await recordToasts(page);         // see recordToasts: toasts expire
+  await page.check('#layer-list input[data-id="ndvi"]');
+  await expect
+    .poll(() => page.evaluate(() => !!window.__earth.gibsDomains.get("ndvi")), { timeout: 30000 })
+    .toBe(true);
+  const real = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "ndvi");
+    const dom = E.gibsDomains.get("ndvi");
+    return {
+      shown: E.gibsTime(cfg, E.state.date),
+      asked: E.gibsTimeStatic(cfg, E.state.date),
+      last: dom[dom.length - 1].e,
+      served: dom.some((iv) => iv.s <= E.gibsTime(cfg, E.state.date) &&
+                               E.gibsTime(cfg, E.state.date) <= iv.e),
+      url: E.gibsDomainUrl(cfg),
+    };
+  });
+  expect(real.url).toContain("/MODIS_Terra_L3_NDVI_Monthly/default/1km/all/all.xml");
+  expect(real.served).toBe(true);                  // inside a published interval
+  expect(real.shown <= real.asked).toBe(true);     // never asks for the future
+  expect(real.shown).toBe(real.last);              // NDVI lags; it lands on the edge
+  // and the layer paints at that month rather than sitting silently blank
+  await expect(page.locator("#legend-panel")).toContainText("Vegetation index");
+  // If the served month is behind the date we asked for, the user is told which
+  // month is on screen — never pinned to an exact string, only to the fact that
+  // the toast names the real month.
+  if (real.shown !== real.asked) {
+    await expect.poll(toasts).toContain(real.shown.slice(0, 7));
+  }
+
+  // A lagging archive and a hole in one are different facts and must read
+  // differently — "not published yet" vs "there is a gap here". Both are driven
+  // off a synthetic domain so the assertions don't depend on what NASA happens
+  // to have published today; the months are computed from the app's own request.
+  const months = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "ndvi");
+    const asked = E.gibsTimeStatic(cfg, E.state.date, { clampEnd: false });
+    const shift = (iso, n) => {
+      const d = new Date(`${iso}T00:00:00Z`);
+      d.setUTCMonth(d.getUTCMonth() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    return { asked, before: shift(asked, -2), after: shift(asked, 1), later: shift(asked, 5) };
+  });
+  const flip = (v) => page.evaluate((on) => {
+    const el = document.querySelector('#layer-list input[data-id="ndvi"]');
+    el.checked = on;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, v);
+  const setDomain = (xml) => page.evaluate((s) => {
+    const E = window.__earth;
+    E.gibsDomains.set("ndvi", E.parseGibsDomain(`<Domain>${s}</Domain>`));
+  }, xml);
+  const clearToasts = async () => {
+    await page.evaluate(() => {
+      for (const b of document.querySelectorAll("#toast-host .toast .toast-close")) b.click();
+    });
+    await expect(page.locator("#toast-host .toast")).toHaveCount(0);
+  };
+
+  await flip(false);
+  await clearToasts();
+  await setDomain(`2000-03-01/${months.before}/P1M,${months.after}/${months.later}/P1M`);
+  await flip(true);
+  const hole = page.locator("#toast-host .toast").last();
+  await expect(hole).toContainText("a gap in the archive");
+  await expect(hole).toContainText(months.before.slice(0, 7));   // what you get instead
+  await expect(hole).toContainText(months.asked.slice(0, 7));    // what you asked for
+
+  await flip(false);
+  await clearToasts();
+  await setDomain(`2000-03-01/${months.before}/P1M`);            // lagging, no hole
+  await flip(true);
+  const lag = page.locator("#toast-host .toast").last();
+  await expect(lag).toContainText("hasn't published");
+  await expect(lag).toContainText("2 months behind");
+  await expect(lag).toContainText(months.before.slice(0, 7));
 });
 
 test("GLORYS grids are month-keyed: the date's month picks the map", async ({ page }) => {

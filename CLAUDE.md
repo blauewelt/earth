@@ -255,7 +255,7 @@ never a silent mystery. This applies to grid climatologies, night lights
 (fixed composite), and the data/point layers (GBIF all-time, Climate TRACE
 annual inventory, Argo latest positions, stations, glaciers single inventory).
 Any NEW layer that ignores the date selector must be added to `datelessToast`;
-date-driven rasters must return `null` there. **Yearly layers are NOT dateless**: Climate TRACE is an annual inventory baked for every available year (2021-2025, `assets_by_year` in climatetrace.json); the layer shows whichever year the date points at (`climateTraceYear`, clamped), rebuilds on a year change (`refreshYearlyLayers` / `ensureClimateTraceYear`), and its toast (`climateTraceToast`) says 'the day and month don't matter, but the year does' — never declare a layer fully dateless if any date component drives it. **Monthly grids follow the same pattern one level down**: GLORYS currents/MLD are `monthlyGrid` layers covering the FULL archive (1993-01 → ~now−2mo). The baked index (data/currents.json, data/mld.json) carries `monthsAvailable` (every stamp), `yearDir`, `months` (latest year inlined), `latest`, `values` (= latest month, back-compat); older months live in per-year files (data/currents_y/YYYY.json) lazy-fetched by `ensureGridMonth`/`loadGridMonth` and merged into `g.months` — every sampler (GridProvider.requestImage, probeValueAt, the pixel card) MUST go through `loadGridMonth`, never bare `loadGrid`+`sampleGrid`, or old months read as null. `resolveGridMonth` floors the date's month to the newest baked month ≤ it (clamped at both ends), `refreshMonthlyGrids()` rebuilds the provider when a date change lands on a different baked month (Cesium caches tiles — a repaint needs a fresh provider; called from both date handlers AND the ±30m midnight-cross branch), and `maybeMonthlyGridToast` names the month showing on enable. Note the date steppers clamp at 2000-01-01 (GIBS floor) — 1993–1999 currents are reachable by typing a date. **Day-keyed forecast grids reuse the whole mechanism**: GFS temp/precip are `monthlyGrid` + `forecastGrid` layers whose JSON carries `keyLen: 10` (day stamps in `months`/`monthsAvailable`, all frames inline, no year files) plus `init` (the model run, quoted in the toast). While a forecast layer is active, `uiMaxDate()` returns the last forecast day instead of `defaultDate()` — the date input's `max` and every stepper clamp go through it (`syncDateMax()` restores reality and pulls the date back when the last forecast layer is switched off), and `gibsTime` clamps any future date to `defaultDate()` so observation layers are never asked for tomorrow's tiles. **Annual rasters are Climate TRACE's trap one rung coarser, on the GIBS side**: OPERA DIST-ANN is served at exactly one tile date per year (`YYYY-01-01`), so its config carries `annual: true` and `gibsTime` snaps the date to Jan 1 of its year (floored at `start`'s year, after the `endTime` clamp). It fires `maybeAnnualToast` rather than `maybeClampToast` — `maybeClampToast` returns early for annual layers, because "showing the last available date" is the wrong story when the day and month never mattered; the annual toast says which YEAR is showing and names the span of years the product covers. Keep the toast copy consistent:
+date-driven rasters must return `null` there. **Yearly layers are NOT dateless**: Climate TRACE is an annual inventory baked for every available year (2021-2025, `assets_by_year` in climatetrace.json); the layer shows whichever year the date points at (`climateTraceYear`, clamped), rebuilds on a year change (`refreshYearlyLayers` / `ensureClimateTraceYear`), and its toast (`climateTraceToast`) says 'the day and month don't matter, but the year does' — never declare a layer fully dateless if any date component drives it. **Monthly grids follow the same pattern one level down**: GLORYS currents/MLD are `monthlyGrid` layers covering the FULL archive (1993-01 → ~now−2mo). The baked index (data/currents.json, data/mld.json) carries `monthsAvailable` (every stamp), `yearDir`, `months` (latest year inlined), `latest`, `values` (= latest month, back-compat); older months live in per-year files (data/currents_y/YYYY.json) lazy-fetched by `ensureGridMonth`/`loadGridMonth` and merged into `g.months` — every sampler (GridProvider.requestImage, probeValueAt, the pixel card) MUST go through `loadGridMonth`, never bare `loadGrid`+`sampleGrid`, or old months read as null. `resolveGridMonth` floors the date's month to the newest baked month ≤ it (clamped at both ends), `refreshMonthlyGrids()` rebuilds the provider when a date change lands on a different baked month (Cesium caches tiles — a repaint needs a fresh provider; called from both date handlers AND the ±30m midnight-cross branch), and `maybeMonthlyGridToast` names the month showing on enable. Note the date steppers clamp at 2000-01-01 (GIBS floor) — 1993–1999 currents are reachable by typing a date. **Day-keyed forecast grids reuse the whole mechanism**: GFS temp/precip are `monthlyGrid` + `forecastGrid` layers whose JSON carries `keyLen: 10` (day stamps in `months`/`monthsAvailable`, all frames inline, no year files) plus `init` (the model run, quoted in the toast). While a forecast layer is active, `uiMaxDate()` returns the last forecast day instead of `defaultDate()` — the date input's `max` and every stepper clamp go through it (`syncDateMax()` restores reality and pulls the date back when the last forecast layer is switched off), and `gibsTime` clamps any future date to `defaultDate()` so observation layers are never asked for tomorrow's tiles. **Annual rasters are Climate TRACE's trap one rung coarser, on the GIBS side**: OPERA DIST-ANN is served at exactly one tile date per year (`YYYY-01-01`), so its config carries `annual: true` and `gibsTime` snaps the date to Jan 1 of its year (floored at `start`'s year, after the `endTime` clamp). It fires `maybeAnnualToast` rather than `maybeArchiveToast` — `maybeArchiveToast` returns early for annual layers, because "showing the last available date" is the wrong story when the day and month never mattered; the annual toast says which YEAR is showing and names the span of years the product covers. Keep the toast copy consistent:
 name the layer in `<strong>` and state "the date selector doesn't change it".
 `showToast` de-dupes on a `key` while the message is on screen, and `dismiss()`
 releases that key **unconditionally, before** it touches the element. That order
@@ -651,19 +651,67 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   Symmetrically on output: a mean below the palette floor renders transparent,
   else `forward()` clamps drizzle-of-drizzles up to the first colour and the
   whole ocean tints "light rain".
+- **NEVER GUESS WHAT AN ARCHIVE SERVES — ASK IT.** GIBS publishes each layer's
+  exact time domain at
+  `/wmts/epsg4326/best/1.0.0/{layer}/default/{tms}/all/all.xml`: a
+  comma-separated list of ISO-8601 `start/end/period` intervals. `loadGibsDomain(cfg)`
+  fetches it the first time a layer is enabled (one small XML, cached for the
+  session, one in-flight promise per layer, failures cached too so we ask once),
+  `parseGibsDomain` turns it into ordered intervals, and `snapToDomain` resolves
+  any requested date to the newest instant actually served at or before it. The
+  split matters: **`gibsTimeStatic(cfg, date)` is the request we'd make if every
+  archive were continuous; `gibsTime(cfg, date)` is that snapped onto reality**,
+  and `gibsTime` stays SYNCHRONOUS (Cesium tile requests and the hover probe both
+  call it) — until the domain lands it behaves exactly as it did before, and
+  afterwards every call site is corrected at once. `ensureGibsDomain(cfg)` runs
+  from `addLayer` and rebuilds the layer if the snapped date moved.
+  `gibsTimeStatic(cfg, date, { clampEnd: false })` gives the date the user
+  genuinely asked for — the toasts need it, or a clamped layer looks like it got
+  what it wanted.
+  This exists because guessing failed twice in the same way. c9afa39 (2026-07-24)
+  fixed an invisible salinity layer by stepping back ONE month when the date
+  lands in the current month. NDVI lags TWO months, so the same rule worked all
+  July (asking for June, which is served) and broke on 1 August (asking for July,
+  which is not) — a blank globe, a legend, and a probe saying "no data", with
+  nothing on screen to explain it. A hand-picked lag is a hand-picked threshold;
+  CLAUDE.md forbids those for exactly this reason.
+- **Archives have HOLES, not just ends.** Measured 2026-08-03: NDVI is missing
+  2025-04, SMAP salinity all of 2024, VIIRS true colour 11–15 July 2026, GRACE
+  is irregular throughout (P28D, P17D, P13D, P33D… plus one malformed interval,
+  `2020-01-20/2020-01-10/P1M`, whose end precedes its start — collapse those to a
+  single instant rather than discarding the layer's domain). Any rule that only
+  models a trailing edge will blank the globe mid-scrub.
 - **Some GIBS archives end before today**: GRACE mascons stop at 2022-07,
   CERES EBAF at 2018-10, MEaSUREs SSH anomalies at 2019-01, AMSR2 soil
   moisture AND sea ice at 2025-09 — the instruments/records continue, only the *tiles*
-  stop. `endTime` in the layer cfg clamps requests to the last served date
-  (so the layer shows its final state instead of blanking), and the hover
-  card must say "this map: … → <end> (last date GIBS serves)", and
-  `maybeClampToast` fires on enable when the date sits past the end. When a
-  new layer lands, CHECK ITS EXTENT in the GetCapabilities — and scene tests
+  stop. `endTime` in the layer cfg means "this archive is CLOSED"; it clamps
+  requests to the last served date (so the layer shows its final state instead
+  of blanking) and is now a SEED — `loadGibsDomain` overwrites it with the
+  measured end, and `cfg.lastServed` records what the archive really ends at.
+  The typed values do drift: SSH's said 2019-01-17 for months when the archive
+  ends 2019-01-22, one 5-day step later, quietly hiding the final frame. The hover
+  card must say "this map: … → <end> (last date GIBS serves)". When a
+  new layer lands, CHECK ITS EXTENT in the time domain — and scene tests
   must assert rendered DATA (tile pixels for the effective date), not just
   that a chip appeared: "sea ice" shipped blank because the test stopped at
   the chip. 5-day products
   (`snap5d: [epoch1, epoch2]`) serve only exact epoch dates — floor to the
   nearest valid epoch; MEaSUREs SSH was re-anchored in 2017, hence two epochs.
+- **Three reasons a date isn't shown, three different sentences.** From the
+  outside a closed archive, a lagging one, and a hole all look identical: a blank
+  globe. `maybeArchiveToast` (which replaced `maybeClampToast`) tells them apart —
+  "its tile archive ends X and nothing newer will be published" / "NASA hasn't
+  published X yet — this product currently runs about N months behind" / "GIBS
+  has no tiles for X — a gap in the archive, not an error" — and every branch
+  names the date actually on screen. It fires TWICE by design: immediately on
+  enable from what's already known, then again with `{ replace: true }` once the
+  measured domain lands and the story may have changed. It also fires from
+  `refreshTimedLayers`, because a date change can walk into a hole just as easily
+  as an enable can. `showToast(html, { replace })` supersedes a toast under the
+  same key instead of being suppressed by it — the de-dupe key must stop a
+  repeated message, never a CORRECTION — and skips the swap when the new HTML is
+  identical, so scrubbing the date selector doesn't restart the animation on
+  every keystroke.
 - **GIBS serves sub-daily TIME**: `TIME=YYYY-MM-DDTHH:MM:SSZ` returns distinct
   tiles per half-hour for IMERG 30-min (verified: 13:00 ≠ 13:30 ≠ bare date;
   bare date resolves to 00:00). `gibsTime()` appends the timestamp for
