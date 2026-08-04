@@ -115,6 +115,15 @@ A new layer is not done until it has **all** of:
    top layer being blank at a point must never mask the visible layer below.
    Colormaps calibrated in kelvin display as °C (`kelvinToC`; absolutes
    convert, Δ and ratios don't — probe AND pixel card).
+   **The probe MARKS the cell it read on the globe**: every result carries
+   `cell` — the source pixel's geographic footprint (`probeCellBounds` for
+   tile reads at whatever z was actually probed, the grid cell for grid
+   layers) — and `showProbeMark` draws it as a translucent rectangle +
+   outline plus an always-visible ring at the tap point (the tooltip floats
+   OFFSET from the finger, so without the mark nothing said which pixel
+   answered). "No data" reads mark their cell too — seeing where an empty
+   cell sits is what tells a mask edge from a broken layer. All hide paths go
+   through `hideProbe()` so the read-out and the marks never desync.
 5. **An explicit aggregation/difference decision.** Every timed raster layer
    must declare one of these postures, and the choice must be justified in a
    code comment next to the flag:

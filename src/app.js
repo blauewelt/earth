@@ -4359,6 +4359,19 @@ function topColormapLayer() {
   return best;
 }
 
+/* The geographic footprint of one source-tile pixel — the answer to "WHICH
+ * pixel did that number come from". Every probe result carries its cell so
+ * the globe can outline it: a read-out floating next to a tap says what the
+ * value is, but only the drawn cell says where the instrument's sample sits,
+ * and on a phone (fat finger, offset tooltip) the two are easily 50 km apart. */
+function probeCellBounds(z, x, y, px, py) {
+  const span = (0.5625 / 2 ** z) * 512;      // degrees per tile at level z
+  const cs = span / 512;                     // degrees per source pixel
+  const west = -180 + x * span + px * cs;
+  const north = 90 - y * span - py * cs;
+  return { west, south: north - cs, east: west + cs, north };
+}
+
 // value of one pixel from a single source tile, colormap-inverted (or null)
 async function probePixel(cfg, date, z, x, y, px, py, valueLut) {
   const img = await fetchProbeTile(cfg, date, z, x, y);
@@ -4445,6 +4458,12 @@ async function probeEntryValue(entry, carto) {
     // `when` on every result, so the tooltip can say what the card says.
     const base = { title: cfg.title, units: cfg.units, lon, lat, when: whenOfGrid(cfg, g) };
     if (!g) return { ...base, noData: true };
+    // the source cell of THIS grid — a 1° climatology cell, drawn as such
+    const ix = Math.floor((lon - g.west) / g.dlon), iy = Math.floor((lat - g.south) / g.dlat);
+    if (ix >= 0 && ix < g.nx && iy >= 0 && iy < g.ny) {
+      base.cell = { west: g.west + ix * g.dlon, south: g.south + iy * g.dlat,
+                    east: g.west + (ix + 1) * g.dlon, north: g.south + (iy + 1) * g.dlat };
+    }
     const v = sampleGrid(g, lon, lat);
     if (v == null) return { ...base, noData: true };
     // Categorical grid: answer with the class NAME. Same rule as the
@@ -4462,7 +4481,8 @@ async function probeEntryValue(entry, carto) {
     if (!lut) return null;
     const z = cfg.maxLevel;
     const t = tileCoordsAt(lon, lat, z);
-    const base = { title: cfg.title, lon, lat, when: whenOfGibs(cfg) };
+    const base = { title: cfg.title, lon, lat, when: whenOfGibs(cfg),
+                   cell: probeCellBounds(z, t.x, t.y, t.px, t.py) };
     const label = await probeClassPixel(cfg, state.date, z, t.x, t.y, t.px, t.py, lut);
     return label == null ? { ...base, noData: true } : { ...base, label };
   }
@@ -4485,7 +4505,8 @@ async function probeEntryValue(entry, carto) {
   // for a layer whose tiles stop at an endTime both ends clamp to the same date
   // and the difference is identically zero. Printing the requested date there
   // would present that zero as a real "no change".
-  const base = { title: cfg.title, units: vlut.units, lon, lat, when: whenOfGibs(cfg) };
+  const base = { title: cfg.title, units: vlut.units, lon, lat, when: whenOfGibs(cfg),
+                 cell: probeCellBounds(z, x, y, px, py) };
 
   if (entry.isDelta) {
     // Δ = window-mean(now) − window-mean(past), matching the rendered delta
@@ -4524,8 +4545,78 @@ async function probeEntryValue(entry, carto) {
 
 const probeEl = document.getElementById("value-probe");
 
+/* The probed cell, drawn on the globe. The tooltip floats NEXT TO the tap
+ * (offset so a finger doesn't cover it), which on a phone left no way to tell
+ * which pixel had been read — a tap near a salinity mask edge could land on
+ * data or on blank and the read-out looked identical. Three entities, reused:
+ * a translucent fill + outline on the exact source-cell footprint (visible
+ * once you're zoomed near the data's own resolution), and a small ring at the
+ * tap point that is visible at every zoom. */
+let probeMarkEnts = null;
+function probeMarkEntities() {
+  if (probeMarkEnts) return probeMarkEnts;
+  const accent = Cesium.Color.fromCssColorString("#4493f8");
+  const fill = viewer.entities.add({
+    show: false,
+    rectangle: {
+      coordinates: Cesium.Rectangle.fromDegrees(0, 0, 1, 1),
+      material: accent.withAlpha(0.16),
+      height: 0,     // plain primitive on the ellipsoid, not a ground primitive
+    },
+  });
+  const edge = viewer.entities.add({
+    show: false,
+    polyline: {
+      positions: [],
+      width: 2,
+      material: accent.withAlpha(0.9),
+      // RHUMB: a lat/lon cell's edges follow parallels/meridians, not geodesics
+      arcType: Cesium.ArcType.RHUMB,
+    },
+  });
+  const dot = viewer.entities.add({
+    show: false,
+    point: {
+      pixelSize: 5,
+      color: Cesium.Color.TRANSPARENT,
+      outlineColor: accent,
+      outlineWidth: 2,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  });
+  probeMarkEnts = { fill, edge, dot };
+  return probeMarkEnts;
+}
+
+function showProbeMark(res) {
+  const m = probeMarkEntities();
+  m.dot.position = Cesium.Cartesian3.fromDegrees(res.lon, res.lat);
+  m.dot.show = true;
+  const c = res.cell;
+  if (c) {
+    m.fill.rectangle.coordinates = Cesium.Rectangle.fromDegrees(c.west, c.south, c.east, c.north);
+    m.edge.polyline.positions = Cesium.Cartesian3.fromDegreesArray([
+      c.west, c.south, c.east, c.south, c.east, c.north, c.west, c.north, c.west, c.south,
+    ]);
+    m.fill.show = true;
+    m.edge.show = true;
+  } else {
+    m.fill.show = false;
+    m.edge.show = false;
+  }
+}
+
+function hideProbe() {
+  probeEl.classList.add("hidden");
+  if (probeMarkEnts) {
+    probeMarkEnts.fill.show = false;
+    probeMarkEnts.edge.show = false;
+    probeMarkEnts.dot.show = false;
+  }
+}
+
 function renderProbe(res, sx, sy) {
-  if (!res) { probeEl.classList.add("hidden"); return; }
+  if (!res) { hideProbe(); return; }
   const coord = `${Math.abs(res.lat).toFixed(2)}°${res.lat >= 0 ? "N" : "S"}, ` +
                 `${Math.abs(res.lon).toFixed(2)}°${res.lon >= 0 ? "E" : "W"}`;
   let head;
@@ -4568,6 +4659,9 @@ function renderProbe(res, sx, sy) {
   probeEl.style.left = `${Math.min(sx + 14, viewer.scene.canvas.clientWidth - 150)}px`;
   probeEl.style.top = `${Math.max(sy - 10, 4)}px`;
   probeEl.classList.remove("hidden");
+  // even a "no data" read marks its cell — seeing WHERE the empty cell sits is
+  // what tells a salinity mask edge apart from a broken layer
+  showProbeMark(res);
 }
 
 /* The probe only fires after the cursor *rests* (dwell), so rotating/panning the
@@ -4577,12 +4671,12 @@ const PROBE_DWELL = 650;
 let probeDwellTimer = null;
 async function runProbe(x, y) {
   const cart = viewer.camera.pickEllipsoid({ x, y }, viewer.scene.globe.ellipsoid);
-  if (!cart) { probeEl.classList.add("hidden"); return; }
+  if (!cart) { hideProbe(); return; }
   try { renderProbe(await probeValueAt(Cesium.Cartographic.fromCartesian(cart)), x, y); }
-  catch { probeEl.classList.add("hidden"); }
+  catch { hideProbe(); }
 }
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
-  probeEl.classList.add("hidden");           // hide immediately while moving
+  hideProbe();                               // hide immediately while moving
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
   if (!topColormapLayer()) return;
   const x = m.endPosition.x, y = m.endPosition.y;
@@ -5986,6 +6080,8 @@ window.__earth = {
   DeltaProvider,
   RatioProvider,
   getValueLut,
+  probeCellBounds,
+  get probeMark() { return probeMarkEnts; },
   SSTEnsembleProvider,
   spreadColor,
   get ensembleLayer() { return sstEnsembleLayer; },

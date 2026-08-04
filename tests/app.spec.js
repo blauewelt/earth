@@ -949,6 +949,64 @@ test("catch-all colormap bins probe as bounds, not invented midpoints", async ({
   expect(page.__errors).toEqual([]);
 });
 
+test("the probe draws the source cell it read on the globe", async ({ page }) => {
+  // A tap's read-out floats OFFSET from the finger, so nothing said which
+  // pixel the number came from. Every probe now returns the source cell's
+  // geographic footprint and the globe outlines it, plus a ring at the tap.
+  const r = await page.evaluate(async () => {
+    const E = window.__earth;
+    // pure geometry: the cell is exactly one 512th of its tile
+    const span = (0.5625 / 2 ** 5) * 512, cs = span / 512;
+    const g = E.probeCellBounds(5, 22, 3, 100, 200);
+    const geom = {
+      ok: Math.abs(g.west - (-180 + 22 * span + 100 * cs)) < 1e-9 &&
+          Math.abs(g.north - (90 - 3 * span - 200 * cs)) < 1e-9 &&
+          Math.abs(g.east - g.west - cs) < 1e-9 &&
+          Math.abs(g.north - g.south - cs) < 1e-9,
+    };
+    // behavioural: probe the canvas centre (always on the globe at the home view)
+    const canvas = E.viewer.scene.canvas;
+    await window.__runProbe(canvas.clientWidth / 2, canvas.clientHeight / 2);
+    const m = E.probeMark;
+    const rect = m?.fill.rectangle.coordinates.getValue(E.viewer.clock.currentTime);
+    const dotPos = m?.dot.position.getValue(E.viewer.clock.currentTime);
+    const dotCarto = dotPos && Cesium.Cartographic.fromCartesian(dotPos);
+    return {
+      geom,
+      dot: m?.dot.show, fill: m?.fill.show, edge: m?.edge.show,
+      rect: rect && {
+        w: Cesium.Math.toDegrees(rect.west), s: Cesium.Math.toDegrees(rect.south),
+        e: Cesium.Math.toDegrees(rect.east), n: Cesium.Math.toDegrees(rect.north),
+      },
+      dotLon: dotCarto && Cesium.Math.toDegrees(dotCarto.longitude),
+      dotLat: dotCarto && Cesium.Math.toDegrees(dotCarto.latitude),
+      probeShown: !document.getElementById("value-probe").classList.contains("hidden"),
+    };
+  });
+  expect(r.geom.ok).toBe(true);
+  expect(r.probeShown).toBe(true);
+  expect(r.dot).toBe(true);
+  expect(r.fill).toBe(true);
+  expect(r.edge).toBe(true);
+  // the outlined cell is a real source pixel: tiny, and it contains the tap
+  expect(r.rect.e - r.rect.w).toBeGreaterThan(0);
+  expect(r.rect.e - r.rect.w).toBeLessThan(1);
+  expect(r.dotLon).toBeGreaterThanOrEqual(r.rect.w - 1e-6);
+  expect(r.dotLon).toBeLessThanOrEqual(r.rect.e + 1e-6);
+  expect(r.dotLat).toBeGreaterThanOrEqual(r.rect.s - 1e-6);
+  expect(r.dotLat).toBeLessThanOrEqual(r.rect.n + 1e-6);
+  // moving the pointer hides the read-out AND the marks together
+  await page.mouse.move(400, 300);
+  await page.mouse.move(420, 310);
+  await expect(page.locator("#value-probe")).toBeHidden();
+  const after = await page.evaluate(() => {
+    const m = window.__earth.probeMark;
+    return { dot: m.dot.show, fill: m.fill.show, edge: m.edge.show };
+  });
+  expect(after).toEqual({ dot: false, fill: false, edge: false });
+  expect(page.__errors).toEqual([]);
+});
+
 test("date stepper: calendar-correct steps, clamped to available range", async ({ page }) => {
   const start = await page.inputValue("#layer-date");
   await page.click('#date-steps button[data-step="-1y"]');
