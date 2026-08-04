@@ -548,17 +548,29 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   the PNG IHDR bytes to confirm each icon really is the size it claims, and a
   browser test fetches the manifest and decodes every icon, because a 404ing
   manifest fails silently — the install prompt simply never appears.
-  - **The icon is generated, not drawn**: `scripts/make_icons.py` renders
-    `data/oisst.json` — the same 1991–2020 SST climatology the pixel inspector
-    reads — through the `sst` ramp copied from `RAMPS` in `src/app.js`, in an
-    orthographic view centred on the North Atlantic at 30°W/20°N, because the
-    AMOC is what this project is ultimately built to watch. Land is wherever
-    that grid has no value, so the coastline is OISST's own land mask. The
-    mask is read bilinearly (a nearest-neighbour lookup gives a 1° staircase)
-    and the field's land holes are flood-filled first, so interpolating near a
-    shore never mixes a real temperature with a hole and paints a cold fringe
-    around every continent. Deterministic: same data in, identical PNGs out.
-    The maskable variant keeps the globe inside Android's inner-80% safe zone.
+  - **The icon is generated, not drawn**: `scripts/make_icons.py` renders the
+    composite the app itself puts on screen when the vegetation layer is on —
+    MODIS Terra monthly NDVI over a desaturated Blue Marble base — in an
+    orthographic view centred on 14°E/34°N, so Europe and Africa face the
+    viewer with the eastern Atlantic on the western limb. Both rasters are
+    snapshots in `data/icon/`, written by `refresh_data.py icon_sources`
+    straight from the GIBS WMS. Deterministic: same snapshots in, identical
+    PNGs out, so re-running it in CI produces no diff. The maskable variant
+    keeps the globe inside Android's inner-80% safe zone.
+    - The NDVI month is **pinned** (`NDVI_MONTH` in `refresh_data.py`), not
+      "latest": June is the northern growing season at its peak, and a floating
+      latest would let the icon change under the user with nobody deciding it
+      should — the same reason `endTime` is a seed and not a guess.
+    - `BASE_GAIN = 0.95` is a **deliberate departure** from the app, which sets
+      `baseImageryLayer.brightness = 0.6` under a colormapped layer. On a lit
+      page behind a full-screen layer 0.6 is right; at 48 px on a dark home
+      screen it sinks the ocean into `--bg` and the disc loses its edge. If you
+      ever sync the two, check the 48 px render, not the 512.
+    - The globe was an SST climatology through the `sst` ramp until Aug 2026.
+      It was replaced because the red end of that ramp reads as a heat map
+      rather than a planet; the alternatives rendered at the time (plain Blue
+      Marble, VIIRS true colour, GBIF density, cool/teal SST ramps) are in the
+      commit that made the change, if the question comes up again.
 
 ### 6. Commits & deployment
 
