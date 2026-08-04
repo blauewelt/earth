@@ -311,7 +311,13 @@ const GIBS_LAYERS = [
     title: "Sea surface salinity (SMAP, monthly)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2015-04-01", timed: true, monthly: true, on: false,
-    meta: "SMAP L-band salinity (PSU) — same quantity as SMOS/CATDS · monthly composite; 2024 has a mission data gap",
+    // The blank areas are the PRODUCT's own mask, not a bug: an L-band
+    // radiometer can't retrieve salinity near coasts (land in the sidelobes),
+    // under sea ice, or in heavy radio-frequency interference — which blanks
+    // much of the North Sea, Baltic approaches and Mediterranean shores. And
+    // the scale's catch-all bottom bin [0,30) is why brackish seas used to
+    // probe as a flat "15": see the caps note on getValueLut.
+    meta: "SMAP L-band salinity (PSU) — same quantity as SMOS/CATDS · monthly composite; 2024 has a mission data gap · masked near coasts, sea ice and radio interference; scale caps at <30 / ≥40",
   },
   {
     id: "ssh-anom",
@@ -2903,9 +2909,13 @@ function parseColormapEntries(xml) {
       lo = hi = parseFloat(single[1]);
     }
     if (!Number.isFinite(lo) && !Number.isFinite(hi)) continue;
-    if (!Number.isFinite(lo)) lo = hi;
-    if (!Number.isFinite(hi)) hi = lo;
-    entries.push({ rgb, lo, hi });
+    // An unbounded edge ("[40.00,+INF)") is collapsed to its finite bound so
+    // every consumer can do arithmetic — but REMEMBERED, because a bin with no
+    // far edge has no honest midpoint (see the caps in getValueLut).
+    const openLo = !Number.isFinite(lo), openHi = !Number.isFinite(hi);
+    if (openLo) lo = hi;
+    if (openHi) hi = lo;
+    entries.push({ rgb, lo, hi, openLo, openHi });
   }
   entries.sort((a, b) => a.lo - b.lo);
   return { units, entries };
@@ -2969,7 +2979,17 @@ async function probeClassPixel(cfg, date, z, x, y, px, py, lut) {
 }
 
 /* rgb → representative value map (+ units), from any GIBS colormap. Generalises
- * the SST LUT so the delta tool works for any continuous colormapped layer. */
+ * the SST LUT so the delta tool works for any continuous colormapped layer.
+ *
+ * `caps` marks the CATCH-ALL bins, keyed by the numeric value the lut hands
+ * out for them. Many GIBS palettes pad their ends with one huge bucket — SMAP
+ * salinity's scale is 30–40 PSU in 0.04-wide steps, but its first entry is
+ * [0,30) and its last [40,+INF). The midpoint of a catch-all is an invented
+ * number: printing "15.0 PSU" for a Baltic pixel (true value ~7) puts a wrong
+ * measurement on screen next to right ones, which is how it was actually
+ * noticed. A bin is a cap if its edge is unbounded or if it is an end bin an
+ * order of magnitude wider than the palette's typical step; the probe then
+ * says "< 30" / "≥ 40" instead of a midpoint. */
 const valueLutCache = new Map();
 function getValueLut(url) {
   if (!valueLutCache.has(url)) {
@@ -2977,7 +2997,16 @@ function getValueLut(url) {
       if (!cm) return null;
       const lut = new Map();
       for (const e of cm.entries) lut.set((e.rgb[0] << 16) | (e.rgb[1] << 8) | e.rgb[2], (e.lo + e.hi) / 2);
-      return { units: cm.units, lut };
+      const caps = new Map();
+      if (cm.entries.length > 2) {
+        const widths = cm.entries.map((e) => e.hi - e.lo).filter((w) => w > 0).sort((a, b) => a - b);
+        const med = widths[Math.floor(widths.length / 2)] || 0;
+        const wide = (e) => med > 0 && e.hi - e.lo > 10 * med;
+        const first = cm.entries[0], last = cm.entries[cm.entries.length - 1];
+        if (first.openLo || wide(first)) caps.set((first.lo + first.hi) / 2, { sign: "<", bound: first.hi });
+        if (last.openHi || wide(last)) caps.set((last.lo + last.hi) / 2, { sign: "≥", bound: last.lo });
+      }
+      return { units: cm.units, lut, caps };
     }).catch(() => null));
   }
   return valueLutCache.get(url);
@@ -4373,7 +4402,10 @@ async function probePixelMean(cfg, dates, z, x, y, px, py, valueLut) {
  * display; deltas are scale-free in K==degC and ratios are unitless. */
 function kelvinToC(res) {
   if (res && !res.noData && !res.delta && !res.ratio && res.units === "K") {
-    return { ...res, value: res.value - 273.15, units: "°C" };
+    return {
+      ...res, value: res.value - 273.15, units: "°C",
+      cap: res.cap && { sign: res.cap.sign, bound: res.cap.bound - 273.15 },
+    };
   }
   return res;
 }
@@ -4486,7 +4518,8 @@ async function probeEntryValue(entry, carto) {
   }
   const v = await probePixel(cfg, state.date, z, x, y, px, py, vlut.lut);
   if (v == null) return { ...base, noData: true };
-  return { ...base, value: v };
+  // A catch-all bin answers with its bound ("< 30"), not an invented midpoint.
+  return { ...base, value: v, cap: vlut.caps?.get(v) };
 }
 
 const probeEl = document.getElementById("value-probe");
@@ -4512,6 +4545,11 @@ function renderProbe(res, sx, sy) {
       ? `<span class="vp-val">≈ same</span>`
       : `<span class="vp-val">×${fmtVal(fold >= 1 ? fold : 1 / fold)}</span> ` +
         `<span class="vp-unit">${fold >= 1 ? "more" : "less"}</span>`;
+  } else if (res.cap) {
+    // catch-all colormap bin: the tile only says "off this scale", so the
+    // read-out says the bound rather than inventing a number inside the bin
+    head = `<span class="vp-val">${res.cap.sign} ${fmtVal(res.cap.bound)}</span> ` +
+           `<span class="vp-unit">${res.units}</span>`;
   } else {
     head = `<span class="vp-val">${fmtVal(res.value)}</span> <span class="vp-unit">${res.units}</span>`;
   }
@@ -4618,8 +4656,11 @@ async function pixelRasterValue(cfg, lon, lat) {
   const t = tileCoordsAt(lon, lat, z);
   const v = await probePixel(cfg, state.date, z, t.x, t.y, t.px, t.py, vlut.lut);
   if (v == null) return null;
+  const cap = vlut.caps?.get(v);
   // same kelvin→Celsius courtesy as the probe (MODIS LST)
-  return vlut.units === "K" ? { v: v - 273.15, units: "°C" } : { v, units: vlut.units };
+  return vlut.units === "K"
+    ? { v: v - 273.15, units: "°C", cap: cap && { sign: cap.sign, bound: cap.bound - 273.15 } }
+    : { v, units: vlut.units, cap };
 }
 
 const pixelJsonCache = new Map();   // small point datasets, fetched once
@@ -4870,7 +4911,8 @@ async function showPixelState(carto) {
     const label = cfg.title.replace(/\s*\(.*\)$/, "");
     const w = whenOfGibs(cfg);
     return r.label ? pixelRow(label, r.label, w)
-      : pixelRow(label, `${fmtVal(r.v)} ${r.units}`, w);
+      : r.cap ? pixelRow(label, `${r.cap.sign} ${fmtVal(r.cap.bound)} ${r.units}`, w)
+        : pixelRow(label, `${fmtVal(r.v)} ${r.units}`, w);
   }).join("");
   if (rrows) {
     // The heading no longer claims a date. It used to say state.date for the

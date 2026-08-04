@@ -915,6 +915,40 @@ test("new native GIBS layers toggle; salinity snaps to first-of-month", async ({
   expect(page.__errors).toEqual([]);
 });
 
+test("catch-all colormap bins probe as bounds, not invented midpoints", async ({ page }) => {
+  // SMAP salinity's palette runs 30–40 PSU in 0.04-wide bins, but its first
+  // entry is one catch-all [0,30) and its last [40,+INF). The probe used to
+  // print the catch-all's midpoint — a flat "15.0 PSU" across the whole
+  // Baltic (true value ~7) right next to honest 31s — an invented number the
+  // reader can't tell from a measured one. Now a capped bin answers with its
+  // bound: "< 30".
+  await page.check('#layer-list input[data-id="salinity"]');
+  const r = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "salinity");
+    await E.loadGibsDomain(cfg);          // so the probe date snaps to a served month
+    const vlut = await E.getValueLut(cfg.colormap);
+    // salinity sits above SST, so an opaque salinity pixel wins the probe
+    const baltic = await E.probeValueAt(Cesium.Cartographic.fromDegrees(20, 57.3));
+    const atlantic = await E.probeValueAt(Cesium.Cartographic.fromDegrees(-30, 40));
+    return { caps: [...vlut.caps.values()], units: vlut.units, baltic, atlantic };
+  });
+  // both ends of the palette are recognised as caps, from the real colormap
+  expect(r.caps).toContainEqual({ sign: "<", bound: 30 });
+  expect(r.caps).toContainEqual({ sign: "≥", bound: 40 });
+  // Baltic proper is brackish → the catch-all bin → reads as a bound...
+  expect(r.baltic.title).toContain("salinity");
+  expect(r.baltic.cap).toEqual({ sign: "<", bound: 30 });
+  // ...while the numeric value stays the midpoint for delta/mean arithmetic
+  expect(r.baltic.value).toBe(15);
+  // mid-Atlantic is squarely on the scale: a real number, no cap
+  expect(r.atlantic.value).toBeGreaterThan(30);
+  expect(r.atlantic.value).toBeLessThan(40);
+  expect(r.atlantic.cap).toBeFalsy();
+  expect(r.units).toBe("PSU");
+  expect(page.__errors).toEqual([]);
+});
+
 test("date stepper: calendar-correct steps, clamped to available range", async ({ page }) => {
   const start = await page.inputValue("#layer-date");
   await page.click('#date-steps button[data-step="-1y"]');

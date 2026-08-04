@@ -730,6 +730,22 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   repeated message, never a CORRECTION — and skips the swap when the new HTML is
   identical, so scrubbing the date selector doesn't restart the animation on
   every keystroke.
+- **Colormap catch-all bins are NOT measurements.** Many GIBS palettes pad
+  their ends with one huge bucket: SMAP salinity runs 30–40 PSU in 0.04-wide
+  bins but its first entry is `[0,30)` and its last `[40,+INF)`; GHRSST SST has
+  `(-INF,0]` / `[32,+INF)`. The probe used to print the bucket's midpoint,
+  which put a flat "15.0 PSU" across the whole Baltic (true value ~7) next to
+  honest 31s — a user caught it from the phone. `getValueLut` now returns
+  `caps` (value → `{sign, bound}`) for end bins that are unbounded or >10× the
+  palette's median bin width, and the probe/pixel-card print "< 30" or "≥ 40"
+  instead. The numeric midpoint is retained in the lut for mean/delta
+  arithmetic, and `kelvinToC` converts cap bounds along with values. Test:
+  "catch-all colormap bins probe as bounds" (Gotland deep = capped, 30W/40N =
+  numeric — anchors verified against the real July-2026 tile).
+- **SMAP salinity's blank areas are the product's own mask**, not a bug: an
+  L-band radiometer can't retrieve near coasts (land in the sidelobes), under
+  sea ice, or in RFI — measured on the real tiles, only ~35% of the UK/Biscay
+  tile has data at all. The layer's `meta` says so; don't "fix" it.
 - **GIBS serves sub-daily TIME**: `TIME=YYYY-MM-DDTHH:MM:SSZ` returns distinct
   tiles per half-hour for IMERG 30-min (verified: 13:00 ≠ 13:30 ≠ bare date;
   bare date resolves to 00:00). `gibsTime()` appends the timestamp for
