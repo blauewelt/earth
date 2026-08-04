@@ -11,6 +11,18 @@ Live app: https://blauewelt.github.io/earth/ · Repo: github.com/blauewelt/earth
 
 ## Part 1 · Standing instructions
 
+### 0. Never present choice dialogs
+
+Do NOT use the interactive choice-dialog UI (AskUserQuestion /
+multiple-choice widgets) with this user — the widgets don't work on mobile,
+the whole chat gets stuck, and at least once the recorded outcome was WRONG
+(the icon-colour dialog registered a different option than the user picked;
+the blue-accent correction cost a round trip). Choices themselves are fine
+and often necessary — good engineering is made of them — they just belong in
+ordinary prose: lay out the options briefly in the reply text, name the one
+you'd pick and why, proceed with it, and make it easy to reverse. The user
+answers or corrects course in a normal message.
+
 ### 1. Deploy first
 
 Deploy **before** running the full test suite: commit, deploy (below), then
@@ -582,18 +594,20 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   manifest fails silently — the install prompt simply never appears.
   - **The icon is generated, not drawn**: `scripts/make_icons.py` renders
     NASA's Blue Marble (shaded relief + bathymetry — the app's own base
-    globe) with the ocean deepened toward the brand blue (`SEA_MIX = 0.55`;
-    land untouched), in an orthographic view centred on 14°E/34°N, so Europe
-    and Africa face the viewer with the eastern Atlantic on the western limb.
-    The source raster is a snapshot in `data/icon/base.png`, written by
-    `refresh_data.py icon_sources` from the GIBS WMS. Deterministic: same
-    snapshot in, identical PNGs out, so re-running it in CI produces no diff.
-    The maskable variant keeps the globe inside Android's inner-80% safe zone.
+    globe) as LUMINANCE on a single near-black-navy → accent-blue ramp
+    (`RAMP_LO`/`RAMP_HI`, the "blue-accent" treatment the user picked), in an
+    orthographic view centred on 14°E/34°N, so Europe and Africa face the
+    viewer with the eastern Atlantic on the western limb. The source raster
+    is a snapshot in `data/icon/base.png`, written by `refresh_data.py
+    icon_sources` from the GIBS WMS. Deterministic: same snapshot in,
+    identical PNGs out, so re-running it in CI produces no diff. The maskable
+    variant keeps the globe inside Android's inner-80% safe zone.
     - **The icon is BLUE by decree, not by data.** The brand is "blauewelt" —
       blue world — and the user reversed an NDVI-green icon for exactly that
-      reason (Aug 2026), after earlier rejecting an SST-ramp icon as too red.
-      Blue Marble + brand-blue ocean is the settled answer; the green and red
-      versions live in this file's git history. Don't propose them again.
+      reason (Aug 2026), after earlier rejecting an SST-ramp icon as too red,
+      and then chose the monochrome accent-blue treatment over the
+      natural-colour-land variant. The green, red and natural-land versions
+      live in this file's git history. Don't propose them again.
 
 ### 6. Commits & deployment
 

@@ -1885,10 +1885,18 @@ test("GIBS time domains: parse the archive, snap into it, name the gap", async (
     E.gibsDomains.set("ndvi", E.parseGibsDomain(`<Domain>${s}</Domain>`));
   }, xml);
   const clearToasts = async () => {
-    await page.evaluate(() => {
-      for (const b of document.querySelectorAll("#toast-host .toast .toast-close")) b.click();
-    });
-    await expect(page.locator("#toast-host .toast")).toHaveCount(0);
+    // Keep clicking closes until the host is empty: the domain-load callback
+    // fires maybeArchiveToast asynchronously, so under a slow proxy a NEW
+    // toast can land AFTER a single sweep of close-clicks and sit through the
+    // assertion (seen once under CPU contention — resolved only at the 8s
+    // auto-dismiss, after the 5s expect gave up).
+    await expect
+      .poll(() => page.evaluate(() => {
+        const t = document.querySelectorAll("#toast-host .toast");
+        for (const b of document.querySelectorAll("#toast-host .toast .toast-close")) b.click();
+        return t.length;
+      }), { timeout: 15000 })
+      .toBe(0);
   };
 
   await flip(false);

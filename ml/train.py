@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Train PixelMAE on the North-Atlantic pixel tensor.
+
+Splits are BLOCKED, not random (proposal §7): whole held-out YEARS and a
+held-out lon/lat block, so spatial/temporal autocorrelation cannot fake skill.
+
+Eval after training:
+  · masked-channel reconstruction error on held-out years   (vs channel-mean)
+  · temporal neighbour prediction (t+1) error               (vs persistence)
+  · RAPID probe: ridge regression from the mean embedding of the 26.5N
+    section to the RAPID overturning transport, fit on train years, scored
+    (Pearson r) on held-out years. The transport was NEVER a channel.
+
+Smoke (CPU, ~2 min):   python3 ml/train.py --smoke
+Real  (Colab TPU/GPU): colab run --gpu v6e1 ml/train.py   (see ml/README.md)
+"""
+import argparse
+import json
+import os
+import time
+
+import numpy as np
+import torch
+
+from model import PixelMAE
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def parse():
+    p = argparse.ArgumentParser()
+    p.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"))
+    p.add_argument("--out", default=os.path.join(HERE, "runs", "pilot"))
+    p.add_argument("--steps", type=int, default=20000)
+    p.add_argument("--batch", type=int, default=512)
+    p.add_argument("--lr", type=float, default=3e-4)
+    p.add_argument("--d-z", type=int, default=32)
+    p.add_argument("--mask-ratio", type=float, default=0.5)
+    p.add_argument("--holdout-years", default="2009,2017,2023")
+    p.add_argument("--holdout-lon", default="-45,-25")   # a mid-Atlantic block
+    p.add_argument("--smoke", action="store_true")
+    return p.parse_args()
+
+
+def main():
+    a = parse()
+    if a.smoke:
+        a.steps, a.batch = 1500, 256
+    os.makedirs(a.out, exist_ok=True)
+    dev = ("cuda" if torch.cuda.is_available() else "cpu")
+    d = np.load(a.data, allow_pickle=False)
+    X, months = d["X"], [str(m) for m in d["months"]]
+    lats, lons, chan = d["lats"], d["lons"], [str(c) for c in d["chan"]]
+    T, H, W, C = X.shape
+    print(f"X [T={T} H={H} W={W} C={C}] on {dev} · channels {chan}")
+
+    # ---- blocked splits ----------------------------------------------------
+    hold_years = set(a.holdout_years.split(","))
+    lo, hi = (float(v) for v in a.holdout_lon.split(","))
+    t_hold = np.array([m[:4] in hold_years for m in months])
+    x_hold = (lons >= lo) & (lons < hi)
+    ocean = np.isfinite(X[..., 0]).any(axis=0)
+    print(f"held-out months {int(t_hold.sum())}/{T} · held-out lon block "
+          f"{int(x_hold.sum())}/{W} cols · ocean {int(ocean.sum())}")
+
+    # train pool: any (t, y, x) with ≥2 observed channels, outside holdouts
+    obs_any = np.isfinite(X).sum(-1) >= 2
+    tt, yy, xx = np.where(obs_any & ~t_hold[:, None, None] & ~x_hold[None, None, :])
+    vt, vy, vx = np.where(obs_any & (t_hold[:, None, None] | x_hold[None, None, :]))
+    print(f"train pixels {len(tt):,} · held-out pixels {len(vt):,}")
+
+    Xt = torch.from_numpy(np.nan_to_num(X, nan=0.0))
+    OBS = torch.from_numpy(np.isfinite(X))
+    mvec = np.array([int(m[5:7]) - 1 for m in months])
+    ctx_all = np.stack([np.sin(2 * np.pi * mvec / 12), np.cos(2 * np.pi * mvec / 12)], 1)
+
+    def batch(idx_t, idx_y, idx_x, n):
+        k = np.random.randint(0, len(idx_t), n)
+        t, y, x = idx_t[k], idx_y[k], idx_x[k]
+        ctx = np.concatenate([ctx_all[t], (lats[y] / 90)[:, None], (lons[x] / 180)[:, None]], 1)
+        return (torch.as_tensor(t), torch.as_tensor(y), torch.as_tensor(x),
+                torch.as_tensor(ctx, dtype=torch.float32))
+
+    model = PixelMAE(n_chan=C, d_z=a.d_z).to(dev)
+    opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.steps)
+    huber = torch.nn.HuberLoss(reduction="none")
+
+    # neighbour offsets (Δx, Δy, Δt): 4 spatial + 2 temporal
+    NEI = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+
+    def gather(t, y, x):
+        v = Xt[t, y, x].to(dev)
+        o = OBS[t, y, x].to(dev)
+        return v, o
+
+    def step_loss(t, y, x, ctx):
+        B = len(t)
+        v, o = gather(t, y, x)
+        mask = (torch.rand(B, C, device=dev) < a.mask_ratio) & o
+        z = model.encode(v * (~mask), o, mask, ctx.to(dev))
+
+        # self-reconstruction: all channels queried at offset 0
+        qc = torch.arange(C, device=dev)[None, :].expand(B, -1)
+        off0 = torch.zeros(B, C, 3, dtype=torch.long, device=dev)
+        pred = model.query(z, qc, off0)
+        l_rec = huber(pred, v)
+        w = mask.float() + 0.1 * (o & ~mask).float()          # masked channels dominate
+        l_rec = (l_rec * w).sum() / w.sum().clamp(min=1)
+
+        # neighbours: one random offset per sample
+        pick = np.random.randint(0, len(NEI), B)
+        dxyz = torch.as_tensor(np.array([NEI[i] for i in pick]), device=dev)
+        tn = (t.to(dev) + dxyz[:, 2]).clamp(0, T - 1)
+        yn = (y.to(dev) + dxyz[:, 1]).clamp(0, H - 1)
+        xn = (x.to(dev) + dxyz[:, 0]).clamp(0, W - 1)
+        vn, on = gather(tn.cpu(), yn.cpu(), xn.cpu())
+        offn = dxyz[:, None, :].expand(-1, C, -1).long()
+        predn = model.query(z, qc, offn)
+        l_nei = (huber(predn, vn) * on.float()).sum() / on.float().sum().clamp(min=1)
+        return l_rec, l_nei
+
+    print("training …")
+    t0 = time.time()
+    for s in range(1, a.steps + 1):
+        t, y, x, ctx = batch(tt, yy, xx, a.batch)
+        l_rec, l_nei = step_loss(t, y, x, ctx)
+        loss = l_rec + 0.5 * l_nei
+        opt.zero_grad(); loss.backward(); opt.step(); sched.step()
+        if s % max(1, a.steps // 10) == 0:
+            print(f"  step {s:>6}/{a.steps}  rec {l_rec.item():.4f}  nei {l_nei.item():.4f}"
+                  f"  ({time.time() - t0:.0f}s)")
+
+    # ---- evaluation on the BLOCKED holdout --------------------------------
+    model.eval()
+    results = {}
+    with torch.no_grad():
+        n_eval = min(20000, len(vt))
+        t, y, x, ctx = batch(vt, vy, vx, n_eval)
+        v, o = gather(t, y, x)
+        mask = (torch.rand(n_eval, C, device=dev) < a.mask_ratio) & o
+        z = model.encode(v * (~mask), o, mask, ctx.to(dev))
+        qc = torch.arange(C, device=dev)[None, :].expand(n_eval, -1)
+        pred = model.query(z, qc, torch.zeros(n_eval, C, 3, dtype=torch.long, device=dev))
+        for c, name in enumerate(chan):
+            m = mask[:, c]
+            if m.sum() < 50:
+                continue
+            err = (pred[m, c] - v[m, c]).pow(2).mean().item()
+            base = v[m, c].pow(2).mean().item()               # channel mean = 0 after z-score
+            results[f"recon/{name}"] = {"mse": err, "mse_channel_mean": base,
+                                        "skill": 1 - err / max(base, 1e-9)}
+
+        # temporal neighbour t+1 vs persistence
+        t1 = np.clip(t.numpy() + 1, 0, T - 1)
+        v1, o1 = gather(torch.as_tensor(t1), y, x)
+        off = torch.zeros(n_eval, C, 3, dtype=torch.long, device=dev); off[:, :, 2] = 1
+        p1 = model.query(z, qc, off)
+        both = (o & o1)
+        mse_m = ((p1 - v1).pow(2) * both).sum().item() / both.sum().item()
+        mse_p = ((v - v1).pow(2) * both).sum().item() / both.sum().item()
+        results["t+1"] = {"mse_model": mse_m, "mse_persistence": mse_p,
+                          "beats_persistence": bool(mse_m < mse_p)}
+
+        # ---- RAPID probe ---------------------------------------------------
+        rapid = d["rapid"]
+        if len(rapid):
+            sec_y = int(np.argmin(np.abs(lats - 26.5)))
+            sec_x = np.where(np.isfinite(X[0, sec_y, :, 0]))[0]
+            emb = np.zeros((T, a.d_z), dtype=np.float32)
+            for tix in range(T):
+                n = len(sec_x)
+                ctx = np.concatenate([np.tile(ctx_all[tix], (n, 1)),
+                                      (np.full(n, lats[sec_y]) / 90)[:, None],
+                                      (lons[sec_x] / 180)[:, None]], 1)
+                v, o = gather(torch.full((n,), tix, dtype=torch.long),
+                              torch.full((n,), sec_y, dtype=torch.long),
+                              torch.as_tensor(sec_x))
+                zz = model.encode(v, o, torch.zeros_like(o),
+                                  torch.as_tensor(ctx, dtype=torch.float32).to(dev))
+                emb[tix] = zz.mean(0).cpu().numpy()
+            ridx = rapid[:, 0].astype(int); rv = rapid[:, 1]
+            tr = ~t_hold[ridx]; te = t_hold[ridx]
+            if te.sum() >= 12:
+                A = np.c_[emb[ridx], np.ones(len(ridx))]
+                lam = 1e-2 * np.eye(A.shape[1]); lam[-1, -1] = 0
+                wgt = np.linalg.solve(A[tr].T @ A[tr] + lam, A[tr].T @ rv[tr])
+                pr = A @ wgt
+                r_te = float(np.corrcoef(pr[te], rv[te])[0, 1])
+                r_tr = float(np.corrcoef(pr[tr], rv[tr])[0, 1])
+                results["rapid_probe"] = {"pearson_train": r_tr, "pearson_heldout_years": r_te,
+                                          "n_train": int(tr.sum()), "n_test": int(te.sum())}
+
+    print(json.dumps(results, indent=2))
+    torch.save({"model": model.state_dict(), "chan": chan, "d_z": a.d_z,
+                "norm": d["norm"], "args": vars(a)}, os.path.join(a.out, "pixelmae.pt"))
+    json.dump(results, open(os.path.join(a.out, "eval.json"), "w"), indent=2)
+    print(f"saved {a.out}/pixelmae.pt")
+
+
+if __name__ == "__main__":
+    main()

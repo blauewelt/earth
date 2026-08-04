@@ -982,19 +982,25 @@ test.describe("cache-busting stamps and the web app manifest", () => {
   });
 
   test("the icon is drawn from the data it claims to show", () => {
-    // scripts/make_icons.py renders data/oisst.json through the app's own sst
-    // ramp. If the icon were hand-drawn art this test would be meaningless;
-    // it is here so the icon stays a fact about the dataset, like everything
-    // else the app puts on screen.
+    // scripts/make_icons.py renders the Blue Marble snapshot in data/icon/
+    // through the blauewelt accent-blue ramp. If the icon were hand-drawn art
+    // this test would be meaningless; it is here so the icon stays a render
+    // of a real NASA raster, reproducible from the committed snapshot.
     const src = fs.readFileSync(path.join(ROOT, "scripts", "make_icons.py"), "utf8");
-    expect(src).toContain("oisst.json");
-    const g = read("oisst.json");
-    expect(g.values.length).toBe(g.nx * g.ny);
-    // the ramp endpoints in the generator must still be the ones in app.js
-    const app = fs.readFileSync(path.join(ROOT, "src", "app.js"), "utf8");
-    for (const stop of ["49, 54, 149", "165, 0, 38"]) {
-      expect(src.replace(/[()]/g, ""), `sst ramp drifted: ${stop}`).toContain(stop);
-      expect(app, `sst ramp drifted: ${stop}`).toContain(stop);
-    }
+    expect(src).toContain("base.png");
+    // the snapshot exists, is a PNG, and is equirectangular (2:1) — the
+    // orthographic un-projection in the generator depends on that
+    const png = fs.readFileSync(path.join(ROOT, "data", "icon", "base.png"));
+    expect(png.subarray(1, 4).toString()).toBe("PNG");
+    const w = png.readUInt32BE(16), h = png.readUInt32BE(20);
+    expect(w).toBe(2 * h);
+    // the ramp's bright end is the app's accent (#4493f8 = 68,147,248) — the
+    // icon must stay in the UI's own blue, not a near-miss of it
+    const css = fs.readFileSync(path.join(ROOT, "src", "style.css"), "utf8");
+    expect(css).toContain("#4493f8");
+    expect(src.replace(/[()]/g, "")).toContain("68, 147, 248");
+    // and the snapshot has a maintained writer in the data pipeline
+    const refresh = fs.readFileSync(path.join(ROOT, "scripts", "refresh_data.py"), "utf8");
+    expect(refresh).toContain("def icon_sources");
   });
 });

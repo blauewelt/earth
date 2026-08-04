@@ -18,10 +18,12 @@ NDVI over a greyscale base (August 2026, and good at 48 px — but green, and
 the brand is blue). The green alternatives live in the git history of this
 file if the question comes up again.
 
-SEA_MIX below is the one aesthetic dial: 0 = Blue Marble untouched,
-1 = flat brand blue. 0.55 keeps the bathymetry ridges readable through the
-tint. The land is untouched — real land against brand-blue ocean is what
-keeps the icon a photograph of a planet rather than a logo of one.
+Treatment ("blue-accent", the user's pick from the August 2026 contact
+sheet): the WHOLE globe is Blue Marble luminance mapped onto a single ramp
+from near-black navy to the app's accent blue (#4493f8 family) — a
+monochrome blue planet, logo-like on purpose, where land reads as brighter
+relief inside the same blue. RAMP_LO/RAMP_HI are the two ends; the deepened
+"real-colour land" variant this replaced is in git history.
 
 Run:  python3 scripts/make_icons.py
 Writes icon-192.png, icon-512.png, icon-512-maskable.png in the repo root.
@@ -40,25 +42,26 @@ SRC = os.path.join(ROOT, "data", "icon")
 
 BG = (13, 17, 23)        # --bg   #0d1117, the app's page background
 RIM = (68, 147, 248)     # --accent #4493f8, a one-pixel limb so the sphere has an edge
-SEA_BLUE = (15, 56, 140)  # the brand ocean the tint pulls toward
-SEA_MIX = 0.55            # how far it pulls (see module docstring)
-LAND_LUM = 0.22           # Blue Marble luminance above this = land
+RAMP_LO = (5, 13, 41)    # darkest ocean: a near-black navy, not pure black
+RAMP_HI = (68, 147, 248)  # brightest relief: the app accent itself
 
 VIEW_LON, VIEW_LAT = 14.0, 34.0
 SS = 4                   # supersampling factor, downsampled with Lanczos
 
 
 def _load():
-    """The source raster as float RGB in [0,1] with the ocean deepened."""
+    """The source raster as float RGB in [0,1]: luminance on the accent ramp."""
     rgb = np.asarray(Image.open(os.path.join(SRC, "base.png")).convert("RGB"),
                      dtype=np.float64) / 255.0
     lum = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
-    # Land/ocean from luminance, not a coastline file: Blue Marble's dark
-    # ocean IS the mask, and using it keeps the icon a one-input render.
-    sea = (lum <= LAND_LUM)[..., None].astype(np.float64)
-    tint = np.array(SEA_BLUE) / 255.0
-    out = rgb * (1 - sea) + ((1 - SEA_MIX) * rgb + SEA_MIX * tint) * sea
-    return out
+    # Normalise so the ramp's full span is used regardless of the snapshot's
+    # own black/white points, then map monochrome: dark sea → RAMP_LO,
+    # bright relief/ice → RAMP_HI. One ramp, no mask — the coastline emerges
+    # from Blue Marble's own contrast.
+    t = np.clip((lum - lum.min()) / max(lum.max() - lum.min(), 1e-9), 0.0, 1.0)[..., None]
+    lo = np.array(RAMP_LO) / 255.0
+    hi = np.array(RAMP_HI) / 255.0
+    return lo + (hi - lo) * t
 
 
 def _sample(src, lon, lat):
