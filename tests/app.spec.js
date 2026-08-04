@@ -988,6 +988,20 @@ test("the probe draws the source cell it read on the globe", async ({ page }) =>
   expect(r.dot).toBe(true);
   expect(r.fill).toBe(true);
   expect(r.edge).toBe(true);
+  // the read-out anchors CLEAR of the tap: a finger-sized gap, never on top
+  // of the mark it describes (that is how it shipped for mice, and on a phone
+  // the box sat on the very pixel it was reporting)
+  const clear = await page.evaluate(() => {
+    const canvas = window.__earth.viewer.scene.canvas;
+    const cx = canvas.clientWidth / 2, cy = canvas.clientHeight / 2;
+    const c = canvas.getBoundingClientRect();
+    const b = document.getElementById("value-probe").getBoundingClientRect();
+    const inside = cx + c.left >= b.left - 8 && cx + c.left <= b.right + 8 &&
+                   cy + c.top >= b.top - 8 && cy + c.top <= b.bottom + 8;
+    return { inside, w: b.width, h: b.height };
+  });
+  expect(clear.w).toBeGreaterThan(0);
+  expect(clear.inside).toBe(false);
   // the outlined cell is a real source pixel: tiny, and it contains the tap
   expect(r.rect.e - r.rect.w).toBeGreaterThan(0);
   expect(r.rect.e - r.rect.w).toBeLessThan(1);
@@ -2946,7 +2960,7 @@ test("the page is installable and serves versioned assets", async ({ page }) => 
     const r = await fetch(h);
     return r.ok ? await r.json() : { status: r.status };
   }, href);
-  expect(manifest.short_name).toBe("earth");
+  expect(manifest.short_name).toBe("Earth");   // capitalised: it is a NAME on a home screen
   expect(manifest.icons.length).toBeGreaterThanOrEqual(3);
 
   // every icon resolves and decodes to the size the manifest promises

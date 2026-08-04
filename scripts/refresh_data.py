@@ -336,30 +336,22 @@ def _download(url, path, note=""):
 
 
 def icon_sources(w=1440):
-    """The two global rasters scripts/make_icons.py composes into the app icon.
+    """The global raster scripts/make_icons.py renders into the app icon.
 
-    They are snapshotted rather than fetched at icon-build time so the icon is
-    reproducible offline and in CI: same files in, byte-identical PNGs out. Both
-    come from GIBS WMS as plate carree, which is the projection make_icons.py
-    un-projects from.
+    Snapshotted rather than fetched at icon-build time so the icon is
+    reproducible offline and in CI: same file in, byte-identical PNGs out.
 
-      data/icon/base_grey.png - BlueMarble_ShadedRelief_Bathymetry, reduced to
-        luminance. The icon only ever uses this as a grey backdrop (the app
-        desaturates its own base globe the same way under a colormapped layer),
-        so colour would be dead weight in the repo.
-      data/icon/ndvi.png - MODIS_Terra_L3_NDVI_Monthly for NDVI_MONTH, RGBA:
-        transparent over ocean and over land it could not see, which is what
-        lets it sit on the grey base without a mask.
+      data/icon/base.png - BlueMarble_ShadedRelief_Bathymetry from the GIBS
+        WMS, plate carree (the projection make_icons.py un-projects from),
+        full colour. The icon is the BLUE planet — brand "blauewelt" — so the
+        colour survives; make_icons.py deepens the ocean toward the brand blue
+        at render time rather than baking any tint into the snapshot.
 
-    NDVI_MONTH is pinned deliberately. June is the northern growing season at
-    its peak, so the icon shows the biosphere at full extent rather than
-    whatever month the build happens to fall in; and a floating "latest" would
-    make the icon change under the user without anyone deciding it should.
+    (An earlier icon composed MODIS NDVI over a greyscale copy of this base;
+    that green icon was reversed for brand reasons — see make_icons.py.)
     """
     from PIL import Image                      # noqa: local import, build-only dep
-    import numpy as np
 
-    NDVI_MONTH = "2026-06-01"
     WMS = ("https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi"
            "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&CRS=EPSG:4326"
            "&BBOX=-90,-180,90,180&WIDTH=2048&HEIGHT=1024&FORMAT=image/png&LAYERS=")
@@ -369,21 +361,12 @@ def icon_sources(w=1440):
     print("icon sources: Blue Marble shaded relief + bathymetry ...")
     base = Image.open(_download(WMS + "BlueMarble_ShadedRelief_Bathymetry",
                                 "/tmp/nc/icon_bm.png")).convert("RGB")
-    a = np.asarray(base.resize((w, w // 2), Image.LANCZOS), dtype=np.float64) / 255.0
-    lum = 0.2126 * a[..., 0] + 0.7152 * a[..., 1] + 0.0722 * a[..., 2]
-    p = os.path.join(out, "base_grey.png")
-    Image.fromarray((lum * 255).round().clip(0, 255).astype(np.uint8), "L").save(p, optimize=True)
-    print(f"  wrote data/icon/base_grey.png ({os.path.getsize(p) / 1e3:.0f} kB)")
-
-    print(f"icon sources: MODIS NDVI {NDVI_MONTH[:7]} ...")
-    nd = Image.open(_download(f"{WMS}MODIS_Terra_L3_NDVI_Monthly&TIME={NDVI_MONTH}",
-                              "/tmp/nc/icon_ndvi.png")).convert("RGBA")
-    # NDVI arrives as a small palette of ramp steps, so an octree quantise back
-    # to 255 colours is visually lossless here and cuts the file by ~4x.
-    p = os.path.join(out, "ndvi.png")
-    (nd.resize((w, w // 2), Image.LANCZOS)
-       .quantize(colors=255, method=Image.FASTOCTREE).save(p, optimize=True))
-    print(f"  wrote data/icon/ndvi.png ({os.path.getsize(p) / 1e3:.0f} kB, {NDVI_MONTH})")
+    p = os.path.join(out, "base.png")
+    # An adaptive 256-colour palette is visually lossless on Blue Marble's
+    # soft gradients at icon scale and roughly halves the committed bytes.
+    (base.resize((w, w // 2), Image.LANCZOS)
+         .quantize(colors=256, method=Image.MEDIANCUT).save(p, optimize=True))
+    print(f"  wrote data/icon/base.png ({os.path.getsize(p) / 1e3:.0f} kB)")
 
 
 def _bin_to_grid(lon, lat, val, west, south, east, north, nx, ny):

@@ -137,6 +137,13 @@ A new layer is not done until it has **all** of:
    (`hideProbe(keepMarks)`), the card's × clears everything. The card also
    marks its tapped pixel now (`showPixelState`), cell at the level the card
    actually reads (classification native, continuous capped at 4).
+   **The read-out anchors CLEAR of the tap** (`placeProbe`): right of it if
+   there's room, else left, else above/below — never on top, with a
+   finger-sized gap. The old "+14px, clamp at the edge" rule slid the box
+   back OVER the tap near the screen edge (reported from a Pixel phone as
+   "the box appears on top of the tap"), and the coverage test in
+   `ensureMarkVisible` inflates panel rects by 16px for the same reason: a
+   mark hugging a panel edge is as unreadable under a thumb as one under it.
 5. **An explicit aggregation/difference decision.** Every timed raster layer
    must declare one of these postures, and the choice must be justified in a
    code comment next to the flag:
@@ -573,29 +580,20 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   the PNG IHDR bytes to confirm each icon really is the size it claims, and a
   browser test fetches the manifest and decodes every icon, because a 404ing
   manifest fails silently — the install prompt simply never appears.
-  - **The icon is generated, not drawn**: `scripts/make_icons.py` renders the
-    composite the app itself puts on screen when the vegetation layer is on —
-    MODIS Terra monthly NDVI over a desaturated Blue Marble base — in an
-    orthographic view centred on 14°E/34°N, so Europe and Africa face the
-    viewer with the eastern Atlantic on the western limb. Both rasters are
-    snapshots in `data/icon/`, written by `refresh_data.py icon_sources`
-    straight from the GIBS WMS. Deterministic: same snapshots in, identical
-    PNGs out, so re-running it in CI produces no diff. The maskable variant
-    keeps the globe inside Android's inner-80% safe zone.
-    - The NDVI month is **pinned** (`NDVI_MONTH` in `refresh_data.py`), not
-      "latest": June is the northern growing season at its peak, and a floating
-      latest would let the icon change under the user with nobody deciding it
-      should — the same reason `endTime` is a seed and not a guess.
-    - `BASE_GAIN = 0.95` is a **deliberate departure** from the app, which sets
-      `baseImageryLayer.brightness = 0.6` under a colormapped layer. On a lit
-      page behind a full-screen layer 0.6 is right; at 48 px on a dark home
-      screen it sinks the ocean into `--bg` and the disc loses its edge. If you
-      ever sync the two, check the 48 px render, not the 512.
-    - The globe was an SST climatology through the `sst` ramp until Aug 2026.
-      It was replaced because the red end of that ramp reads as a heat map
-      rather than a planet; the alternatives rendered at the time (plain Blue
-      Marble, VIIRS true colour, GBIF density, cool/teal SST ramps) are in the
-      commit that made the change, if the question comes up again.
+  - **The icon is generated, not drawn**: `scripts/make_icons.py` renders
+    NASA's Blue Marble (shaded relief + bathymetry — the app's own base
+    globe) with the ocean deepened toward the brand blue (`SEA_MIX = 0.55`;
+    land untouched), in an orthographic view centred on 14°E/34°N, so Europe
+    and Africa face the viewer with the eastern Atlantic on the western limb.
+    The source raster is a snapshot in `data/icon/base.png`, written by
+    `refresh_data.py icon_sources` from the GIBS WMS. Deterministic: same
+    snapshot in, identical PNGs out, so re-running it in CI produces no diff.
+    The maskable variant keeps the globe inside Android's inner-80% safe zone.
+    - **The icon is BLUE by decree, not by data.** The brand is "blauewelt" —
+      blue world — and the user reversed an NDVI-green icon for exactly that
+      reason (Aug 2026), after earlier rejecting an SST-ramp icon as too red.
+      Blue Marble + brand-blue ocean is the settled answer; the green and red
+      versions live in this file's git history. Don't propose them again.
 
 ### 6. Commits & deployment
 

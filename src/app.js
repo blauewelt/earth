@@ -4643,10 +4643,15 @@ function ensureMarkVisible() {
   const toWin = (st.worldToWindowCoordinates || st.wgs84ToWindowCoordinates).bind(st);
   const pos = m.dot.position.getValue(viewer.clock.currentTime);
   const crect = scene.canvas.getBoundingClientRect();
+  // Inflated by a finger-width margin: a mark hugging the panel's edge is
+  // as unreadable under a thumb as one strictly beneath it.
+  const PAD = 16;
   const rects = [probeEl, pixelCardEl]
     .filter((el) => el && !el.classList.contains("hidden"))
     .map((el) => el.getBoundingClientRect())
-    .filter((r) => r.width > 0 && r.height > 0);
+    .filter((r) => r.width > 0 && r.height > 0)
+    .map((r) => ({ left: r.left - PAD, right: r.right + PAD,
+                   top: r.top - PAD, bottom: r.bottom + PAD }));
   const coveredBy = (x, y) => rects.some((r) =>
     x + crect.left >= r.left && x + crect.left <= r.right &&
     y + crect.top >= r.top && y + crect.top <= r.bottom);
@@ -4691,12 +4696,36 @@ function ensureMarkVisible() {
       // the floating read-out follows its mark to the new screen position
       if (probeEl.classList.contains("hidden")) return;
       const w2 = toWin(scene, m.dot.position.getValue(viewer.clock.currentTime));
-      if (!w2) return;
-      probeEl.style.left = `${Math.min(w2.x + 14, scene.canvas.clientWidth - 150)}px`;
-      probeEl.style.top = `${Math.max(w2.y - 10, 4)}px`;
+      if (w2) placeProbe(w2.x, w2.y);
     },
   });
   return true;
+}
+
+/* Anchor the read-out clear of the tap. The old rule was "+14px right of the
+ * cursor, clamp at the screen edge" — built for a mouse. On a phone the tap
+ * IS the point of interest, a finger is ~40 CSS px wide, and the edge-clamp
+ * slid the box straight back OVER the tap: the user watched their own mark
+ * disappear under the panel describing it. Sides are tried in order (right,
+ * left, above, below) with finger-sized clearance; the box never sits on the
+ * tapped point. Must run with the element VISIBLE (it is measured). */
+function placeProbe(sx, sy) {
+  const cw = viewer.scene.canvas.clientWidth, ch = viewer.scene.canvas.clientHeight;
+  const w = probeEl.offsetWidth, h = probeEl.offsetHeight;
+  const GAP = 32;
+  let left, top;
+  if (sx + GAP + w <= cw - 4) {          // room to the right
+    left = sx + GAP;
+    top = Math.max(4, Math.min(sy - 10, ch - h - 4));
+  } else if (sx - GAP - w >= 4) {        // room to the left
+    left = sx - GAP - w;
+    top = Math.max(4, Math.min(sy - 10, ch - h - 4));
+  } else {                                // narrow screen: go above, else below
+    left = Math.max(4, Math.min(sx - w / 2, cw - w - 4));
+    top = sy - GAP - h >= 4 ? sy - GAP - h : Math.min(sy + GAP, ch - h - 4);
+  }
+  probeEl.style.left = `${left}px`;
+  probeEl.style.top = `${top}px`;
 }
 
 function renderProbe(res, sx, sy) {
@@ -4740,9 +4769,8 @@ function renderProbe(res, sx, sy) {
   const stamp = whenLabel(res.when);
   probeEl.innerHTML = `${head}<div class="vp-meta">${res.title}${suffix}` +
     `${stamp ? `<br/>${stamp}` : ""}<br/>${coord}</div>`;
-  probeEl.style.left = `${Math.min(sx + 14, viewer.scene.canvas.clientWidth - 150)}px`;
-  probeEl.style.top = `${Math.max(sy - 10, 4)}px`;
   probeEl.classList.remove("hidden");
+  placeProbe(sx, sy);
   // even a "no data" read marks its cell — seeing WHERE the empty cell sits is
   // what tells a salinity mask edge apart from a broken layer. With the pixel
   // card open the marks belong to the card's point; a hover read-out has the

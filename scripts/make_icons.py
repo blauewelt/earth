@@ -1,36 +1,31 @@
 #!/usr/bin/env python3
-"""Draw the app icon as a globe the app could actually draw.
+"""Draw the app icon: the BLUE planet, for blauewelt.
 
-The icon is not artwork. It is the same composite the app puts on screen when
-you switch the vegetation layer on: MODIS Terra's monthly NDVI over a
-desaturated Blue Marble base. Both rasters are snapshots in data/icon/, written
-by `python3 scripts/refresh_data.py icon_sources` straight from NASA GIBS --
-the same GIBS the running app tiles from. Nothing here is traced, painted or
-invented, which is the rule the rest of the project follows: what the icon
-shows is a fact about the data.
+The icon is not artwork. It is NASA's Blue Marble (shaded relief +
+bathymetry) — the app's own base globe — with the ocean deepened toward the
+brand blue, in an orthographic view centred on 14 deg E, 34 deg N so Europe
+and Africa face the viewer with the eastern Atlantic on the western limb (the
+Atlantic overturning is what this project is ultimately built to watch). The
+source raster is a snapshot in data/icon/, written by
+`python3 scripts/refresh_data.py icon_sources` straight from the GIBS WMS.
+Nothing is traced, painted or invented beyond the ocean tint, which is the
+brand: an earth visualiser named "blauewelt" (blue world) is represented by a
+blue earth.
 
-Why NDVI. The green is the biosphere at the northern growing season's peak
-(June -- the month is pinned in refresh_data.py, not "latest", so the icon
-cannot drift under the user). Land the sensor found bare reads pale: the Sahara
-is a bright band across the middle of the disc, and that band is most of what
-makes the icon legible at 48 px.
+History, so the choice isn't relitigated blind: the icon was an SST
+climatology through the sst ramp (read as a heat map — too red), then MODIS
+NDVI over a greyscale base (August 2026, and good at 48 px — but green, and
+the brand is blue). The green alternatives live in the git history of this
+file if the question comes up again.
 
-Why greyscale underneath. src/app.js sets `baseImageryLayer.saturation = 0` the
-moment a colormapped layer goes on, so a grey base IS what the app looks like
-here -- see setBaseGrey(). The one deliberate departure is brightness: the app
-dims to 0.6 behind a full-screen layer on a lit page, and at icon size on a
-dark home screen that sinks the ocean into the background and costs the disc
-its edge. BASE_GAIN below is the value that keeps the coastline readable when
-the whole globe is 48 px across.
-
-The view is centred on 14 deg E, 34 deg N: Europe and Africa face the viewer,
-with the eastern Atlantic on the western limb. The Atlantic overturning is what
-this project is ultimately built to watch, so it stays in frame rather than in
-the middle.
+SEA_MIX below is the one aesthetic dial: 0 = Blue Marble untouched,
+1 = flat brand blue. 0.55 keeps the bathymetry ridges readable through the
+tint. The land is untouched — real land against brand-blue ocean is what
+keeps the icon a photograph of a planet rather than a logo of one.
 
 Run:  python3 scripts/make_icons.py
 Writes icon-192.png, icon-512.png, icon-512-maskable.png in the repo root.
-Deterministic: same snapshots in -> byte-identical PNGs out, so re-running it
+Deterministic: same snapshot in -> byte-identical PNGs out, so re-running it
 in CI produces no diff.
 """
 
@@ -45,31 +40,29 @@ SRC = os.path.join(ROOT, "data", "icon")
 
 BG = (13, 17, 23)        # --bg   #0d1117, the app's page background
 RIM = (68, 147, 248)     # --accent #4493f8, a one-pixel limb so the sphere has an edge
-BASE_GAIN = 0.95         # see the note on brightness in the module docstring
+SEA_BLUE = (15, 56, 140)  # the brand ocean the tint pulls toward
+SEA_MIX = 0.55            # how far it pulls (see module docstring)
+LAND_LUM = 0.22           # Blue Marble luminance above this = land
 
 VIEW_LON, VIEW_LAT = 14.0, 34.0
 SS = 4                   # supersampling factor, downsampled with Lanczos
 
 
 def _load():
-    """The two source rasters as float RGBA in [0,1], plate carree, north-up."""
-    grey = np.asarray(Image.open(os.path.join(SRC, "base_grey.png")).convert("L"),
-                      dtype=np.float64) / 255.0
-    base = np.zeros(grey.shape + (4,), dtype=np.float64)
-    base[..., :3] = (grey * BASE_GAIN)[..., None]
-    base[..., 3] = 1.0
-    ndvi = np.asarray(Image.open(os.path.join(SRC, "ndvi.png")).convert("RGBA"),
-                      dtype=np.float64) / 255.0
-    return base, ndvi
+    """The source raster as float RGB in [0,1] with the ocean deepened."""
+    rgb = np.asarray(Image.open(os.path.join(SRC, "base.png")).convert("RGB"),
+                     dtype=np.float64) / 255.0
+    lum = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
+    # Land/ocean from luminance, not a coastline file: Blue Marble's dark
+    # ocean IS the mask, and using it keeps the icon a one-input render.
+    sea = (lum <= LAND_LUM)[..., None].astype(np.float64)
+    tint = np.array(SEA_BLUE) / 255.0
+    out = rgb * (1 - sea) + ((1 - SEA_MIX) * rgb + SEA_MIX * tint) * sea
+    return out
 
 
 def _sample(src, lon, lat):
-    """Bilinear read of an equirectangular raster at lon/lat in degrees.
-
-    Bilinear rather than nearest because the disc is sampled at 4x and then
-    Lanczos-reduced; a nearest lookup would carry a source-pixel staircase all
-    the way down into the 48 px icon, and it shows most along the coastline.
-    """
+    """Bilinear read of an equirectangular raster at lon/lat in degrees."""
     H, W = src.shape[:2]
     fx = (lon + 180.0) / 360.0 * W - 0.5
     fy = (90.0 - lat) / 180.0 * H - 0.5
@@ -107,15 +100,10 @@ def globe(size, disc_frac):
 
     img = np.zeros((n, n, 3), dtype=np.float64)
     img[...] = np.array(BG) / 255.0
-    face = np.zeros((n, n, 3), dtype=np.float64)
-    for src in _load():                              # base first, NDVI over it
-        s = _sample(src, lon, lat)
-        a = s[..., 3:4]                              # NDVI is transparent over water
-        face = face * (1 - a) + s[..., :3] * a
-    img[inside] = face[inside]
+    img[inside] = _sample(_load(), lon, lat)[inside]
 
-    # The limb: a thin ring so the disc still reads as a sphere on a dark home
-    # screen, where a grey-blue ocean against page-dark is a soft edge.
+    # The limb: a thin accent ring so the disc still reads as a sphere on a
+    # dark home screen.
     ring = inside & (rr >= (1.0 - 2.4 * SS / r))
     img[ring] = 0.45 * img[ring] + 0.55 * np.array(RIM) / 255.0
 

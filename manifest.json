@@ -1,6 +1,6 @@
 {
-  "name": "earth — the open climate record",
-  "short_name": "earth",
+  "name": "Earth — the open climate record",
+  "short_name": "Earth",
   "description": "The world's open climate data composed on one globe: NASA GIBS layers, the ocean's interior from Argo, glaciers, biodiversity, facility-level emissions, and a per-pixel inspector. Public data only.",
   "start_url": "./index.html",
   "scope": "./",
@@ -8,22 +8,26 @@
   "background_color": "#0d1117",
   "theme_color": "#0d1117",
   "lang": "en",
-  "categories": ["education", "science", "utilities"],
+  "categories": [
+    "education",
+    "science",
+    "utilities"
+  ],
   "icons": [
     {
-      "src": "icon-192.png?v=76a1d626",
+      "src": "icon-192.png?v=f75f6a03",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512.png?v=242f8e2e",
+      "src": "icon-512.png?v=0eb83fb5",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512-maskable.png?v=73d212fb",
+      "src": "icon-512-maskable.png?v=5aef97f5",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
