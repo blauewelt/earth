@@ -251,10 +251,35 @@ test("AMOC dashboard loads RAPID data and populates stats + chart", async ({ pag
   expect(r.latest).toBeGreaterThan(0);
   expect(r.early).toBeGreaterThan(10); // 2004-08 mean ~18.5 Sv
   expect(r.chartW).toBeGreaterThan(0);
-  // hover produces a tooltip
+  // The 12-month smoothing that makes the trend readable: variance of the
+  // smoothed series must be well below the raw 10-day series (which swings
+  // ±5 Sv around a ~1 Sv/decade signal), null gaps must stay gaps (no
+  // bridges invented across array service breaks), and the mean must be
+  // preserved — smoothing that shifts the level would be editorialising.
+  const s = await page.evaluate(() => {
+    const { t, moc, resolution_days } = window.__earth.rapid;
+    const sm = window.__earth.movingMean(t, moc, resolution_days || 10, 365);
+    const varOf = (a) => {
+      const v = a.filter((x) => x != null);
+      const m = v.reduce((x, y) => x + y, 0) / v.length;
+      return { var: v.reduce((x, y) => x + (y - m) ** 2, 0) / v.length, mean: m };
+    };
+    const raw = varOf(moc), smo = varOf(sm);
+    // contract on gaps, on a synthetic series: a null run longer than the
+    // window must stay null in the output — no line across a dead array
+    const synth = [...Array(30).fill(1), ...Array(60).fill(null), ...Array(30).fill(1)];
+    const smSynth = window.__earth.movingMean(null, synth, 10, 365);
+    const gapStaysGap = smSynth[60] === null && smSynth[45] === null && smSynth[0] !== null;
+    return { rawVar: raw.var, smoVar: smo.var, rawMean: raw.mean, smoMean: smo.mean, gapStaysGap };
+  });
+  expect(s.smoVar).toBeLessThan(s.rawVar / 3);
+  expect(Math.abs(s.smoMean - s.rawMean)).toBeLessThan(0.5);
+  expect(s.gapStaysGap).toBe(true);
+  // hover produces a tooltip carrying BOTH readings
   await page.hover("#amoc-chart", { position: { x: 150, y: 80 } });
   await expect(page.locator("#amoc-tooltip")).toBeVisible();
   await expect(page.locator("#amoc-tooltip")).toContainText("Sv");
+  await expect(page.locator("#amoc-tooltip")).toContainText("12-mo mean");
 });
 
 test("catalog browser filters the dataset list", async ({ page }) => {

@@ -5450,6 +5450,24 @@ async function loadAmoc() {
   drawAmocChart(t, moc, Math.min(...vals), Math.max(...vals));
 }
 
+/* Centered moving average over ~`days` of samples, null-tolerant: a value is
+ * emitted when at least half the window is present, so array service gaps
+ * thin the line rather than inventing bridges across them. The window is
+ * derived from the data's own cadence (resolution_days), not a hard-coded
+ * sample count — if the bake ever changes cadence, the smoothing follows. */
+function movingMean(t, v, resolutionDays, days = 365) {
+  const half = Math.max(1, Math.round(days / resolutionDays / 2));
+  const out = new Array(v.length).fill(null);
+  for (let i = 0; i < v.length; i++) {
+    let s = 0, n = 0;
+    for (let j = Math.max(0, i - half); j <= Math.min(v.length - 1, i + half); j++) {
+      if (v[j] != null) { s += v[j]; n++; }
+    }
+    if (n >= half) out[i] = s / n;
+  }
+  return out;
+}
+
 function sliceByYears(t, v, y0, y1) {
   return v.filter((x, i) => x != null && +t[i].slice(0, 4) >= y0 && +t[i].slice(0, 4) < y1);
 }
@@ -5475,61 +5493,30 @@ function drawAmocChart(t, moc, vmin, vmax) {
   const X = (i) => M.l + (i / (t.length - 1)) * W;
   const Y = (v) => M.t + (1 - (v - y0) / (y1 - y0)) * H;
 
-  ctx.clearRect(0, 0, cssW, cssH);
   ctx.font = "10px system-ui, sans-serif";
 
-  // gridlines + y labels (muted ink, hairline grid)
-  for (let v = y0; v <= y1; v += 5) {
-    ctx.strokeStyle = "#2c2c2a";
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(M.l, Y(v)); ctx.lineTo(cssW - M.r, Y(v)); ctx.stroke();
-    ctx.fillStyle = "#898781";
-    ctx.textAlign = "right"; ctx.textBaseline = "middle";
-    ctx.fillText(String(v), M.l - 5, Y(v));
-  }
-  // x labels: every 5 years
-  ctx.textAlign = "center"; ctx.textBaseline = "top";
-  for (let i = 0; i < t.length; i++) {
-    const yr = t[i].slice(0, 4);
-    if (+yr % 5 === 0 && (i === 0 || t[i - 1].slice(0, 4) !== yr)) {
-      ctx.fillStyle = "#898781";
-      ctx.fillText(yr, X(i), M.t + H + 5);
+  // The trend is what the tab exists to show, and the 10-day series buries it
+  // in eddy noise (±5 Sv swings around an ~1 Sv/decade signal). So: raw data
+  // faint and thin — still there, still hoverable, honest about the noise —
+  // with a 12-month centred mean drawn bold on top. Annual smoothing is the
+  // standard RAPID presentation because it also removes the seasonal cycle.
+  const smooth = movingMean(t, moc, rapidData.resolution_days || 10, 365);
+
+  function line(v, style, width, alpha = 1) {
+    ctx.strokeStyle = style; ctx.lineWidth = width;
+    ctx.globalAlpha = alpha; ctx.lineJoin = "round";
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < v.length; i++) {
+      if (v[i] == null) { started = false; continue; }
+      if (!started) { ctx.moveTo(X(i), Y(v[i])); started = true; }
+      else ctx.lineTo(X(i), Y(v[i]));
     }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
   }
-  // series line (validated dark-mode blue, 2px)
-  ctx.strokeStyle = "#3987e5";
-  ctx.lineWidth = 2;
-  ctx.lineJoin = "round";
-  ctx.beginPath();
-  let started = false;
-  for (let i = 0; i < moc.length; i++) {
-    if (moc[i] == null) { started = false; continue; }
-    if (!started) { ctx.moveTo(X(i), Y(moc[i])); started = true; }
-    else ctx.lineTo(X(i), Y(moc[i]));
-  }
-  ctx.stroke();
 
-  // hover: crosshair + tooltip
-  const tip = document.getElementById("amoc-tooltip");
-  canvas.onmousemove = (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const i = Cesium.Math.clamp(Math.round(((px - M.l) / W) * (t.length - 1)), 0, t.length - 1);
-    if (moc[i] == null) { tip.classList.add("hidden"); return; }
-    // redraw base then crosshair
-    drawAmocChartStatic();
-    ctx.strokeStyle = "#52514e";
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(X(i), M.t); ctx.lineTo(X(i), M.t + H); ctx.stroke();
-    ctx.fillStyle = "#3987e5";
-    ctx.beginPath(); ctx.arc(X(i), Y(moc[i]), 3.5, 0, Math.PI * 2); ctx.fill();
-    tip.textContent = `${t[i]} · ${moc[i].toFixed(1)} Sv`;
-    tip.style.left = `${Math.min(Math.max(px - 40, 4), cssW - 110)}px`;
-    tip.classList.remove("hidden");
-  };
-  canvas.onmouseleave = () => { tip.classList.add("hidden"); drawAmocChartStatic(); };
-
-  function drawAmocChartStatic() {
+  function paint() {
     ctx.clearRect(0, 0, cssW, cssH);
     for (let v = y0; v <= y1; v += 5) {
       ctx.strokeStyle = "#2c2c2a"; ctx.lineWidth = 1;
@@ -5545,16 +5532,34 @@ function drawAmocChart(t, moc, vmin, vmax) {
         ctx.fillText(yr, X(i), M.t + H + 5);
       }
     }
-    ctx.strokeStyle = "#3987e5"; ctx.lineWidth = 2; ctx.lineJoin = "round";
-    ctx.beginPath();
-    let s2 = false;
-    for (let i = 0; i < moc.length; i++) {
-      if (moc[i] == null) { s2 = false; continue; }
-      if (!s2) { ctx.moveTo(X(i), Y(moc[i])); s2 = true; }
-      else ctx.lineTo(X(i), Y(moc[i]));
-    }
-    ctx.stroke();
+    line(moc, "#3987e5", 1, 0.32);        // the 10-day data, quiet
+    line(smooth, "#3987e5", 2.5);          // the 12-month mean, the story
+    // tiny in-chart legend so the two weights read at a glance
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillStyle = "#898781";
+    ctx.fillText("— 12-month mean · thin: 10-day data", M.l + 4, M.t + 1);
   }
+  paint();
+
+  // hover: crosshair + tooltip (raw value plus the smoothed one beside it)
+  const tip = document.getElementById("amoc-tooltip");
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const i = Cesium.Math.clamp(Math.round(((px - M.l) / W) * (t.length - 1)), 0, t.length - 1);
+    if (moc[i] == null) { tip.classList.add("hidden"); return; }
+    paint();
+    ctx.strokeStyle = "#52514e";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(X(i), M.t); ctx.lineTo(X(i), M.t + H); ctx.stroke();
+    ctx.fillStyle = "#3987e5";
+    ctx.beginPath(); ctx.arc(X(i), Y(moc[i]), 3.5, 0, Math.PI * 2); ctx.fill();
+    tip.textContent = `${t[i]} · ${moc[i].toFixed(1)} Sv` +
+      (smooth[i] != null ? ` · 12-mo mean ${smooth[i].toFixed(1)}` : "");
+    tip.style.left = `${Math.min(Math.max(px - 40, 4), cssW - 110)}px`;
+    tip.classList.remove("hidden");
+  };
+  canvas.onmouseleave = () => { tip.classList.add("hidden"); paint(); };
 }
 
 /* ------------------------------------------------------------------ catalog */
@@ -6253,6 +6258,7 @@ window.__earth = {
   get rapid() { return rapidData; },
   get sealevel() { return seaLevelData; },
   loadSeaLevel,
+  movingMean,
   loadTemp,
   get gistemp() { return gistempData; },
   linTrend,
