@@ -1,0 +1,72 @@
+# Credential-free training: runs PixelMAE on GitHub's own runners, using only
+# the workflow's automatic GITHUB_TOKEN — no user credentials anywhere.
+#
+# Public-repo Actions minutes are free; one job may run up to 6 hours, and a
+# 4-core runner does ~45-55k training steps in that window (the in-sandbox
+# pilot did 1.8k). GPU larger runners exist but are a paid team/enterprise
+# feature, and TPUs aren't offered at all — for those, the Colab CLI path in
+# ml/README.md remains the route (it needs a one-time browser auth).
+#
+# The RG-Argo download (~2 GB) and the built tensor are cached between runs,
+# so only the first run pays the fetch.
+name: ml-train
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: "training steps"
+        default: "40000"
+      batch:
+        description: "batch size"
+        default: "512"
+      d_z:
+        description: "bottleneck dimensions"
+        default: "32"
+
+permissions:
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps (CPU torch)
+        run: |
+          pip install --quiet numpy netCDF4
+          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Restore data cache
+        uses: actions/cache@v4
+        with:
+          path: ml/cache
+          key: ml-cache-v1-${{ hashFiles('ml/build_dataset.py', 'ml/fetch_rg_channels.py') }}
+          restore-keys: ml-cache-v1-
+
+      - name: Build dataset (repo channels + RG-Argo depth channels)
+        run: |
+          python ml/build_dataset.py
+          python ml/fetch_rg_channels.py
+
+      - name: Train
+        run: |
+          python -u ml/train.py \
+            --steps "${{ inputs.steps }}" \
+            --batch "${{ inputs.batch }}" \
+            --d-z "${{ inputs.d_z }}" \
+            --out ml/runs/actions
+
+      - name: Upload checkpoint + eval
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixelmae-${{ github.run_number }}
+          path: |
+            ml/runs/actions/pixelmae.pt
+            ml/runs/actions/eval.json
+          retention-days: 30
