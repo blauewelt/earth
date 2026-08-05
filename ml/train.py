@@ -38,6 +38,9 @@ def parse():
     p.add_argument("--mask-ratio", type=float, default=0.5)
     p.add_argument("--holdout-years", default="2009,2017,2023")
     p.add_argument("--holdout-lon", default="-45,-25")   # a mid-Atlantic block
+    p.add_argument("--anomaly", action="store_true",
+                   help="train dynamic channels as departures from their own "
+                        "per-pixel monthly climatology (train years only)")
     p.add_argument("--smoke", action="store_true")
     return p.parse_args()
 
@@ -62,6 +65,33 @@ def main():
     ocean = np.isfinite(X[..., 0]).any(axis=0)
     print(f"held-out months {int(t_hold.sum())}/{T} · held-out lon block "
           f"{int(x_hold.sum())}/{W} cols · ocean {int(ocean.sum())}")
+
+    # ---- anomaly space (proposal §5) ---------------------------------------
+    # A reconstruction loss on raw state is dominated by the seasonal cycle —
+    # the easiest, least interesting signal, and the sequence-probe experiment
+    # showed the resulting embeddings are nearly redundant month to month.
+    # Subtract each pixel's own monthly climatology (TRAIN years only, so the
+    # holdout stays clean) from every DYNAMIC channel; what remains is the
+    # anomaly — the part that carries trends, events, and the AMOC story.
+    # Channels with no temporal variance (baked climatologies) are context,
+    # not targets in disguise: they pass through unchanged.
+    if a.anomaly:
+        moy = np.array([int(m[5:7]) - 1 for m in months])
+        dynamic = [c for c in range(C) if np.nanstd(np.nanmean(X[..., c], axis=(1, 2))) > 1e-6]
+        clim = np.full((12, H, W, C), np.nan, dtype=np.float32)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")           # all-NaN cells are fine
+            for m in range(12):
+                sel = (moy == m) & ~t_hold
+                clim[m] = np.nanmean(X[sel], axis=0)
+        for c in dynamic:
+            X[..., c] = X[..., c] - clim[moy][..., c]
+            v = X[..., c][np.isfinite(X[..., c]) & ~t_hold[:, None, None]
+                          & ~x_hold[None, None, :]]
+            X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)
+        print(f"anomaly space: {len(dynamic)}/{C} dynamic channels "
+              f"({[chan[c] for c in dynamic]})")
 
     # train pool: any (t, y, x) with ≥2 observed channels, outside holdouts
     obs_any = np.isfinite(X).sum(-1) >= 2
