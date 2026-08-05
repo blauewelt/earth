@@ -22,6 +22,12 @@ on:
       d_z:
         description: "bottleneck dimensions"
         default: "32"
+      anomaly:
+        description: "train in anomaly space (protocol v2; state space is disqualified from ranking)"
+        default: "true"
+      temporal_steps:
+        description: "stage-2 temporal transformer steps (0 = skip)"
+        default: "6000"
 
 permissions:
   contents: read
@@ -60,6 +66,7 @@ jobs:
             --steps "${{ inputs.steps }}" \
             --batch "${{ inputs.batch }}" \
             --d-z "${{ inputs.d_z }}" \
+            $([ "${{ inputs.anomaly }}" = "true" ] && echo --anomaly) \
             --out ml/runs/actions
 
       - name: Upload checkpoint + eval
@@ -70,3 +77,28 @@ jobs:
             ml/runs/actions/pixelmae.pt
             ml/runs/actions/eval.json
           retention-days: 30
+
+      # Protocol v2 verdicts ride along: the seasonality-proof K-sweep and the
+      # stage-2 temporal transformer over the frozen codec. Both only make
+      # sense on an anomaly-space codec (temporal.py refuses otherwise).
+      - name: Probes (K-sweep + stage 2)
+        if: inputs.anomaly == 'true'
+        continue-on-error: true
+        run: |
+          python -u ml/probe_sequence.py --run actions --anomaly
+          if [ "${{ inputs.temporal_steps }}" != "0" ]; then
+            python -u ml/temporal.py --run actions --K 24 \
+              --steps "${{ inputs.temporal_steps }}"
+          fi
+
+      - name: Upload probe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probes-${{ github.run_number }}
+          path: |
+            ml/runs/actions/probe_sequence.json
+            ml/runs/actions/temporal.json
+            ml/runs/actions/temporal.pt
+          retention-days: 30
+          if-no-files-found: ignore
