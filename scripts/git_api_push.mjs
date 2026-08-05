@@ -26,8 +26,9 @@ const tokenFile = arg("--token-file", null);
 if (!tokenFile) { console.error("--token-file is required"); process.exit(2); }
 const TOKEN = readFileSync(tokenFile.replace(/^~/, process.env.HOME), "utf8").trim();
 
-const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
-const gitB = (...args) => execFileSync("git", args);
+const OPTS = { maxBuffer: 256 * 1024 * 1024 };   // default 1 MB chokes on baked data files
+const git = (...args) => execFileSync("git", args, { encoding: "utf8", ...OPTS }).trim();
+const gitB = (...args) => execFileSync("git", args, OPTS);
 
 async function api(method, path, body) {
   const res = await fetch(`https://api.github.com/repos/${REPO}${path}`, {

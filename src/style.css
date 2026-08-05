@@ -507,6 +507,15 @@ footer a { color: var(--fg-dim); }
 /* ---- sea-level dashboard ---- */
 #sl-chart-wrap { position: relative; margin: 8px 0 4px; }
 #sl-chart { display: block; width: 100%; }
+
+/* Tides tab: the animated map fills the panel width; buttons echo .tab */
+#td-map-wrap { margin: 8px 0 2px; background: #0a0f16; border-radius: 6px; overflow: hidden; }
+#td-map { display: block; width: 100%; cursor: crosshair; }
+.td-btn { background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
+  border-radius: 6px; padding: 3px 12px; cursor: pointer; font-size: 14px; }
+.td-btn:hover { background: #30363d; }
+#td-curve { display: block; width: 100%; background: #0a0f16; border-radius: 6px; margin-top: 4px; }
+#tides-controls select { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 4px; }
 #sl-tooltip {
   position: absolute; top: -4px; padding: 4px 8px; border-radius: 6px;
   background: var(--bg); border: 1px solid var(--border);

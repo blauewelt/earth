@@ -1844,6 +1844,127 @@ def islands(continent_km2=3e6):
           f"{raw / 1e6:.2f} MB raw / {gz / 1e6:.2f} MB gzipped")
 
 
+def tides():
+    """EOT20 (DGFI-TUM) global ocean tide model — harmonic constants from
+    multi-mission satellite altimetry (Hart-Davis et al. 2021,
+    doi:10.5194/essd-13-3869-2021; data doi:10.17882/79489, CC-BY). Two bakes
+    from one source:
+
+      data/tides.json            — a standard grid layer: the aligned range
+                                   2·(M2+S2+K1+O1) in metres, i.e. the range
+                                   when the four main constituents peak
+                                   together (~spring maximum).
+      data/tide_constituents.json — amplitude+phase of the 5 main
+                                   constituents per 1° cell, plus each
+                                   constituent's angular speed and its
+                                   astronomical phase V0 at a baked epoch, so
+                                   the Tides tab can reconstruct the actual
+                                   water height h(t) = Σ A·cos(speed·t+V0−G)
+                                   at any instant, client-side.
+
+    Binning 0.125°→1° is done on the COMPLEX field (real/imag averaged, then
+    back to A, G): phases are circular and must never be averaged linearly —
+    a cell straddling an amphidrome would otherwise invent water. Nodal
+    corrections (f, u — the 18.6-yr lunar node) are omitted: ±10–15% on the
+    lunar constituents' amplitude, irrelevant for visualisation and stated in
+    the tab's fine print. The ~2.3 GB source zip is cached in /tmp/eot20."""
+    import numpy as np
+    import netCDF4
+    import zipfile
+    print("EOT20 ocean tide constituents ...")
+    src = "/tmp/eot20"
+    inner = os.path.join(src, "ocean_tides.zip")
+    if not os.path.exists(inner):
+        z = _download("https://www.seanoe.org/data/00683/79489/data/85762.zip",
+                      os.path.join(src, "eot20.zip"), note="~2.3 GB")
+        zipfile.ZipFile(z).extract("ocean_tides.zip", src)
+    zc = zipfile.ZipFile(inner)
+
+    CONSTS = ["M2", "S2", "N2", "K1", "O1"]
+    SPEED = {"M2": 28.9841042, "S2": 30.0, "N2": 28.4397295,
+             "K1": 15.0410686, "O1": 13.9430356}      # deg per mean solar hour
+    # Astronomical argument V0 at the epoch (equilibrium phase at Greenwich,
+    # Schureman): from the mean longitudes of moon (s), sun (h), perigee (p).
+    epoch = "2026-01-01T00:00:00Z"
+    T = (2461041.5 - 2451545.0) / 36525.0             # JD(epoch) in centuries
+    s = (218.3164477 + 481267.88123421 * T) % 360
+    h = (280.4662556 + 36000.7697489 * T) % 360
+    p = (83.3532465 + 4069.0137287 * T) % 360
+    V0 = {"M2": (2 * h - 2 * s) % 360, "S2": 0.0,
+          "N2": (2 * h - 3 * s + p) % 360,
+          "K1": (h + 90) % 360, "O1": (h - 2 * s - 90) % 360}
+
+    W, S_, E, N, NX, NY = -180, -90, 180, 90, 360, 180
+    out = {}
+    for c in CONSTS:
+        name = f"ocean_tides/{c}_ocean_eot20.nc"
+        path = os.path.join(src, name)
+        if not os.path.exists(path):
+            zc.extract(name, src)
+        d = netCDF4.Dataset(path)
+        lon = d.variables["lon"][:]
+        lat = d.variables["lat"][:]
+        re = np.ma.filled(d.variables["real"][:], np.nan)
+        im = np.ma.filled(d.variables["imag"][:], np.nan)
+        # Source artifacts: EOT20 blows up in a handful of estuary cells where
+        # the altimetry fit is unconstrained — measured 2026-08-05: 21 cells of
+        # S2 up to 31 m (!) in the St. Lawrence (71°W 47°N) and off the Amazon
+        # mouth, against a 99.9th percentile of 0.97 m. No real constituent
+        # exceeds ~6 m anywhere (M2, Fundy/Severn), so cap at 8 m and null the
+        # offenders BEFORE binning — one 31 m cell would otherwise pollute its
+        # whole 1° mean.
+        bad = np.hypot(re, im) > 800
+        if bad.any():
+            print(f"  {c}: nulled {int(bad.sum())} source cells > 8 m (estuary artifacts)")
+            re[bad] = np.nan
+            im[bad] = np.nan
+        lon2, lat2 = np.meshgrid(lon, lat)
+        bre, cnt, _, _ = _bin_to_grid(lon2, lat2, re, W, S_, E, N, NX, NY)
+        bim, _, _, _ = _bin_to_grid(lon2, lat2, im, W, S_, E, N, NX, NY)
+        amp = np.hypot(bre, bim)                      # cm
+        pha = np.degrees(np.arctan2(bim, bre)) % 360  # Greenwich lag G
+        out[c] = (amp, pha)
+        d.close()
+        print(f"  {c}: amp max {np.nanmax(amp):.0f} cm, "
+              f"{int(np.isfinite(amp).sum())} ocean cells")
+
+    # --- globe layer: aligned range of the 4 main constituents, metres ------
+    rng = 2 * (out["M2"][0] + out["S2"][0] + out["K1"][0] + out["O1"][0]) / 100
+    xs = np.tile(np.arange(W + 0.5, E, 1.0), NY)
+    ys = np.repeat(np.arange(S_ + 0.5, N, 1.0), NX)
+    _write_grid("tides", "tides.json", xs, ys, rng.ravel(),
+                (W, S_, E, N), NX, NY, decimals=1,
+                units="m", title="Tidal range (EOT20)",
+                source="DGFI-TUM EOT20 ocean tide model (satellite altimetry)",
+                citation="Hart-Davis et al. 2021, doi:10.5194/essd-13-3869-2021",
+                doc="https://www.seanoe.org/data/00683/79489/",
+                period="1992-2019", ramp="speed", vmin=0, vmax=8)
+
+    # --- constituents for the Tides tab -------------------------------------
+    def enc(a, deci=0):
+        return [None if not np.isfinite(v) else round(float(v), deci) if deci
+                else int(round(float(v))) for v in a.ravel()]
+    payload = {
+        "id": "tide_constituents",
+        "title": "EOT20 tidal harmonic constants (5 main constituents)",
+        "source": "DGFI-TUM EOT20", "units_amp": "cm", "units_phase": "deg",
+        "citation": "Hart-Davis et al. 2021, doi:10.5194/essd-13-3869-2021",
+        "doc": "https://www.seanoe.org/data/00683/79489/",
+        "note": "h(t) [cm] = sum over constituents of amp * cos(speed*t_hours_since_epoch + V0 - phase), all in degrees; nodal f/u omitted",
+        "epoch": epoch, "period": "1992-2019",
+        "west": W, "south": S_, "east": E, "north": N, "nx": NX, "ny": NY,
+        "constituents": [
+            {"id": c, "speed": SPEED[c], "V0": round(V0[c], 3),
+             "amp": enc(out[c][0]), "phase": enc(out[c][1])}
+            for c in CONSTS],
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+    }
+    with open(os.path.join(DATA, "tide_constituents.json"), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    sz = os.path.getsize(os.path.join(DATA, "tide_constituents.json")) / 1e6
+    print(f"  wrote tide_constituents.json ({sz:.1f} MB, 5 constituents)")
+
+
 if __name__ == "__main__":
     os.makedirs("/tmp/nc", exist_ok=True)
     default = ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
@@ -1852,7 +1973,7 @@ if __name__ == "__main__":
            "sealevel": sealevel, "glaciers": glaciers, "gistemp": gistemp,
            "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss,
            "species": species, "argo_column": argo_column, "glorys": glorys, "eei": eei,
-           "gfs": gfs, "drivers": drivers, "cities": cities,
+           "gfs": gfs, "drivers": drivers, "cities": cities, "tides": tides,
            "gazetteer": gazetteer, "islands": islands, "icon_sources": icon_sources}
     for w in which:
         fns[w]()

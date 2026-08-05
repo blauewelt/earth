@@ -1004,3 +1004,63 @@ test.describe("cache-busting stamps and the web app manifest", () => {
     expect(refresh).toContain("def icon_sources");
   });
 });
+
+test.describe("tides.json + tide_constituents.json (EOT20)", () => {
+  test("tidal-range grid: schema, physical range, shelf vs open ocean", () => {
+    const g = read("tides.json");
+    for (const f of ["id", "title", "units", "ramp", "vmin", "vmax", "west",
+                     "south", "east", "north", "nx", "ny", "values", "period"]) {
+      expect(g[f], `tides.json missing ${f}`).not.toBeUndefined();
+    }
+    expect(g.units).toBe("m");
+    expect(g.ramp).toBe("speed");
+    expect(g.nx).toBe(360); expect(g.ny).toBe(180);
+    expect(g.period).toBe("1992-2019");
+    expect(g.values.length).toBe(g.nx * g.ny);
+    // reduce, then assert — never expect() per data point (house rule)
+    const finite = g.values.filter((v) => v != null);
+    const max = Math.max(...finite), min = Math.min(...finite);
+    expect(finite.length).toBeGreaterThan(40000);     // ocean coverage
+    expect(min).toBeGreaterThanOrEqual(0);
+    expect(max).toBeGreaterThan(8);                   // Fundy/Severn/Ungava exist
+    expect(max).toBeLessThan(16);                     // and estuary artifacts don't
+    const cell = (lon, lat) => g.values[(Math.floor(lat) + 90) * 360 + (Math.floor(lon) + 180)];
+    // macrotidal Bay of Fundy vs a quiet subtropical gyre cell
+    expect(cell(-65.5, 45.5)).toBeGreaterThan(5);
+    expect(cell(-140.5, 30.5)).toBeLessThan(2);
+  });
+
+  test("constituents: the five main harmonics reconstruct a real tide", () => {
+    const c = read("tide_constituents.json");
+    const SPEED = { M2: 28.9841042, S2: 30.0, N2: 28.4397295, K1: 15.0410686, O1: 13.9430356 };
+    expect(c.constituents.map((k) => k.id).sort()).toEqual(["K1", "M2", "N2", "O1", "S2"]);
+    for (const k of c.constituents) {
+      expect(Math.abs(k.speed - SPEED[k.id])).toBeLessThan(1e-4);
+      expect(k.V0).toBeGreaterThanOrEqual(0);
+      expect(k.V0).toBeLessThan(360);
+      expect(k.amp.length).toBe(c.nx * c.ny);
+      expect(k.phase.length).toBe(c.nx * c.ny);
+      const amps = k.amp.filter((v) => v != null);
+      expect(amps.length).toBeGreaterThan(45000);
+      expect(Math.max(...amps)).toBeLessThan(800);    // the estuary-artifact cap held
+    }
+    expect(Number.isFinite(Date.parse(c.epoch))).toBe(true);
+    // Reconstruct h(t) per the file's own note and check the physics: a
+    // macrotidal cell swings metres over a month, a gyre cell barely moves.
+    const h = (i, hours) => c.constituents.reduce((sum, k) => {
+      const a = k.amp[i], g = k.phase[i];
+      if (a == null) return NaN;
+      return sum + a * Math.cos((k.speed * hours + k.V0 - g) * Math.PI / 180);
+    }, 0);
+    const idx = (lon, lat) => (Math.floor(lat) + 90) * 360 + (Math.floor(lon) + 180);
+    const swing = (i) => {
+      let lo = Infinity, hi = -Infinity;
+      for (let t = 0; t <= 720; t++) {                // hourly, 30 days
+        const v = h(i, t); lo = Math.min(lo, v); hi = Math.max(hi, v);
+      }
+      return hi - lo;
+    };
+    expect(swing(idx(-65.5, 45.5))).toBeGreaterThan(500);   // Fundy: > 5 m
+    expect(swing(idx(-140.5, 30.5))).toBeLessThan(150);     // gyre: < 1.5 m
+  });
+});

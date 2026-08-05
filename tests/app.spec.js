@@ -3015,3 +3015,55 @@ test("the page is installable and serves versioned assets", async ({ page }) => 
     getComputedStyle(document.getElementById("sidebar")).position);
   expect(styled).toBe("absolute");
 });
+
+test("tides tab: harmonic animation paints the ocean, moon marker, click curve", async ({ page }) => {
+  await page.click("#tab-tides");
+  await expect(page.locator("#td-clock .stat-value")).not.toHaveText("–", { timeout: 15000 });
+  const r = await page.evaluate(() => {
+    const map = document.getElementById("td-map");
+    const px = map.getContext("2d").getImageData(0, 0, map.width, map.height).data;
+    let painted = 0;
+    for (let i = 3; i < px.length; i += 4 * 997) if (px[i] > 0) painted++;  // sparse alpha sample
+    const fundy = (45 + 90) * 360 + (-66 + 180);
+    return {
+      painted,
+      consts: window.__earth.tides.constituents.length,
+      playing: window.__earth.tideSim.playing,
+      hFundy: window.__earth.tideHeightAt(fundy, Date.now()),
+      volume: Number(document.querySelector("#td-volume .stat-value").textContent.replace(/,/g, "")),
+      moonLat: window.__earth.tideAstro(Date.now()).moon.lat,
+    };
+  });
+  expect(r.painted).toBeGreaterThan(30);            // ocean cells are actually drawn
+  expect(r.consts).toBe(5);
+  expect(r.playing).toBe(true);
+  expect(Number.isFinite(r.hFundy)).toBe(true);
+  expect(r.volume).toBeGreaterThan(3000);           // displaced water is planetary-scale km³
+  expect(Math.abs(r.moonLat)).toBeLessThanOrEqual(29);   // moon stays within lunar standstill band
+  // click mid-Atlantic (30°N 30°W) → the point's 3-day curve appears
+  const box = await page.locator("#td-map").boundingBox();
+  await page.mouse.click(box.x + box.width * ((-30 + 180) / 360),
+                         box.y + box.height * ((90 - 30) / 180));
+  await expect(page.locator("#td-point")).toBeVisible();
+  await expect(page.locator("#td-point-title")).toContainText("30°N");
+});
+
+test("tidal-range layer: chip, dateless toast, probe-able grid", async ({ page }) => {
+  const toasts = await recordToasts(page);          // BEFORE the action (see helper)
+  await page.evaluate(() => {
+    const el = document.getElementById("toggle-tides");
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.locator("#active-layers")).toContainText("Tidal range");
+  await expect.poll(toasts).toContain("fixed harmonic analysis");
+  const g = await page.evaluate(async () => {
+    const cfg = window.__earth.GIBS_LAYERS.find((l) => l.id === "tides");
+    const grid = await (await fetch(cfg.gridFile)).json();
+    const cell = (lon, lat) => grid.values[(Math.floor(lat) + 90) * 360 + (Math.floor(lon) + 180)];
+    return { units: grid.units, fundy: cell(-65.5, 45.5), land: cell(15.5, 47.5) };
+  });
+  expect(g.units).toBe("m");
+  expect(g.fundy).toBeGreaterThan(5);
+  expect(g.land).toBeNull();                        // Austria has no tide
+});

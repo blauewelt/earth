@@ -414,6 +414,20 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    id: "tides",
+    grid: true, gridFile: "data/tides.json",
+    // Not a climatology and not a snapshot: a harmonic ANALYSIS (fixed
+    // constants fit to 1992–2019 altimetry). Neither aggregable nor
+    // delta-able — the range is already the cycle's summary, and there is no
+    // time axis to average or difference. The moving physics lives in the
+    // Tides tab, which reconstructs h(t) from the same constituents.
+    ramp: "speed", vmin: 0, vmax: 8, units: "m", maxLevel: 6,
+    doc: "https://www.seanoe.org/data/00683/79489/",
+    title: "Tidal range (EOT20)",
+    meta: "How far the sea rises and falls when the main constituents align — the moving tide is animated in the Tides tab",
+    on: false,
+  },
+  {
     id: "argo-t300",
     grid: true, gridFile: "data/argo_t300.json", snapshotGrid: true,
     ramp: "anom", vmin: -2, vmax: 2, units: "°C", maxLevel: 6,
@@ -3340,6 +3354,12 @@ function datelessToast(id) {
           `<strong>date selector doesn't change it</strong>. For what is being lost ` +
           `right now, use the 30 m disturbance alerts.`;
       }
+      if (cfg.id === "tides") {
+        // neither a climatology nor a snapshot: a fixed harmonic analysis
+        return `<strong>${cfg.title}</strong> is a fixed harmonic analysis (constants ` +
+          `fit to 1992–2019 altimetry), so the <strong>date selector doesn't change ` +
+          `it</strong>. The moving tide is animated in the <strong>Tides tab</strong>.`;
+      }
       // most grids are multi-decade climatologies; a snapshot grid (a single
       // recent month, like the Argo 300 m anomaly) says what it actually is
       return cfg.snapshotGrid
@@ -3640,6 +3660,13 @@ const LAYER_FACTS = {
          "Salinity traces the water cycle (river plumes, evaporation, rainfall) and " +
          "sets seawater density — a key control on the deep overturning circulation " +
          "watched in the AMOC tab. Same quantity as ESA's SMOS mission." },
+  "tides": { rec: "harmonic constants fit to 1992–2019 satellite altimetry (a fixed analysis, not one date)", int: "one analysis · the Tides tab animates the actual cycle from the same constants", sp: "0.125° source → 1° shown",
+    sum: "How far the sea surface rises and falls: twice the summed amplitude of the " +
+         "four main tidal constituents (M2, S2, K1, O1) — the range when they peak " +
+         "together, roughly a large spring tide. Centimetres in the open ocean, " +
+         "metres on wide shelves (Fundy, the Severn, Ungava), and near zero at the " +
+         "amphidromic hubs the tide rotates around. From DGFI-TUM's EOT20 model, " +
+         "fit to 27 years of satellite altimetry." },
   "gpcp": { rec: "measurements 1979 → present · the map shows the average over the whole record (not one date)", int: "source: monthly · shown: mean annual total", sp: "2.5° (~275 km)",
     sum: "The long-term average of global rainfall: gauge and satellite records " +
          "blended since 1979, shown here as mean annual precipitation. The tropical " +
@@ -4827,7 +4854,7 @@ window.__runProbe = runProbe; // for tests
 
 const PIXEL_RASTERS = ["sst", "sst-anom", "ssh-anom", "precip", "seaice", "snow", "aod", "lst",
   "soilmoisture", "ndvi", "grace", "ceres", "chlor", "salinity", "dist-alert"];
-const PIXEL_GRIDS = ["oisst", "gpcp", "eobs", "meteoswiss"];
+const PIXEL_GRIDS = ["oisst", "gpcp", "eobs", "meteoswiss", "tides"];
 // The two CMIP6 windows, declared once: the rows are stamped with the same
 // spans that were requested, so the label can never drift from the query.
 const CLIM_BASE_WIN = ["1991-01-01", "1995-12-31"];
@@ -6199,10 +6226,244 @@ function drawTempChart() {
   canvas.onmouseleave = () => { tip.classList.add("hidden"); draw(null); };
 }
 
+/* -------------------------------------------------------------------- tides
+ * The Tides tab reconstructs the ACTUAL global tide each frame from EOT20's
+ * harmonic constants: h(cell, t) = Σ_c A·cos(speed·t + V0 − G). The per-frame
+ * cost is tiny by construction — speed·t + V0 is one angle PER CONSTITUENT
+ * (not per cell), so a frame is 5 cos/sin calls plus a fused multiply-add
+ * over the precomputed per-cell fields P = A·cosG, Q = A·sinG:
+ * h = Σ cosφ·P + sinφ·Q. 64,800 cells × 5 constituents ≈ 0.6 MFLOP/frame.
+ * The clock starts at real "now", so the pattern is genuinely in phase with
+ * today's ocean (sans nodal f/u, ±10–15% on lunar amplitudes — stated in the
+ * panel's fine print). */
+
+let tideData = null;          // baked constituents (lazy-fetched)
+let tideFields = null;        // per-constituent {P, Q} Float32Arrays + mask
+let tideSim = { t: 0, playing: true, speed: 3600, raf: 0, wall: 0 };
+const TD_RANGE_CM = 250;      // colour scale: ±2.5 m, clamped
+
+function tideAstro(ms) {
+  // Low-precision ephemeris (~1°): sub-lunar/sub-solar points + lunar phase.
+  const d = (ms - Date.UTC(2000, 0, 1, 12)) / 86400000;   // days since J2000
+  const T = d / 36525;
+  const rad = Math.PI / 180;
+  const wrap = (x) => ((x % 360) + 360) % 360;
+  // moon (truncated ELP): ecliptic λ, β
+  const Lp = wrap(218.316 + 13.176396 * d);
+  const Mp = wrap(134.963 + 13.064993 * d);
+  const F = wrap(93.272 + 13.229350 * d);
+  const lam = Lp + 6.289 * Math.sin(Mp * rad);
+  const bet = 5.128 * Math.sin(F * rad);
+  const eps = 23.439 - 0.0000004 * d;
+  const sinDec = Math.sin(bet * rad) * Math.cos(eps * rad) +
+    Math.cos(bet * rad) * Math.sin(eps * rad) * Math.sin(lam * rad);
+  const decM = Math.asin(sinDec) / rad;
+  const raM = Math.atan2(
+    Math.sin(lam * rad) * Math.cos(eps * rad) - Math.tan(bet * rad) * Math.sin(eps * rad),
+    Math.cos(lam * rad)) / rad;
+  // sun
+  const g = wrap(357.529 + 0.98560028 * d);
+  const q = wrap(280.459 + 0.98564736 * d);
+  const lamS = q + 1.915 * Math.sin(g * rad) + 0.020 * Math.sin(2 * g * rad);
+  const decS = Math.asin(Math.sin(eps * rad) * Math.sin(lamS * rad)) / rad;
+  const raS = Math.atan2(Math.cos(eps * rad) * Math.sin(lamS * rad),
+    Math.cos(lamS * rad)) / rad;
+  const gmst = wrap(280.46062 + 360.98564737 * d);
+  const lonOf = (ra) => wrap(ra - gmst + 540) - 180;    // → [-180, 180)
+  // elongation moon−sun → phase (0 new, 180 full); springiness = |cos|
+  const elong = wrap(lam - lamS);
+  return { moon: { lon: lonOf(raM), lat: decM }, sun: { lon: lonOf(raS), lat: decS },
+           elong, spring: Math.abs(Math.cos(elong * rad)) };
+}
+
+function tidePrepare(data) {
+  const n = data.nx * data.ny;
+  const rad = Math.PI / 180;
+  const fields = { consts: [], mask: new Uint8Array(n), n };
+  for (const c of data.constituents) {
+    const P = new Float32Array(n), Q = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = c.amp[i], g = c.phase[i];
+      if (a == null || g == null) continue;
+      P[i] = a * Math.cos(g * rad);
+      Q[i] = a * Math.sin(g * rad);
+      fields.mask[i] = 1;
+    }
+    fields.consts.push({ speed: c.speed, V0: c.V0, P, Q });
+  }
+  // cell areas for the displaced-volume stat (km³): dlon·dlat cell at lat φ
+  fields.area = new Float32Array(n);
+  for (let iy = 0; iy < data.ny; iy++) {
+    const lat = data.south + (iy + 0.5) * (data.north - data.south) / data.ny;
+    const a = 111.32 * Math.cos(lat * rad) * 110.57;    // km² per 1°×1°
+    for (let ix = 0; ix < data.nx; ix++) fields.area[iy * data.nx + ix] = a;
+  }
+  return fields;
+}
+
+function tideHeightAt(i, ms) {
+  // h in cm at flat cell index i (NaN over land)
+  if (!tideFields || !tideFields.mask[i]) return NaN;
+  const th = (ms - Date.parse(tideData.epoch)) / 3600000;
+  const rad = Math.PI / 180;
+  let h = 0;
+  for (const c of tideFields.consts) {
+    const phi = (c.speed * th + c.V0) * rad;
+    h += Math.cos(phi) * c.P[i] + Math.sin(phi) * c.Q[i];
+  }
+  return h;
+}
+
+function tideDraw() {
+  const data = tideData, f = tideFields;
+  const canvas = document.getElementById("td-map");
+  const ctx = canvas.getContext("2d");
+  const { nx, ny } = data;
+  const img = tideSim.img || (tideSim.img = new ImageData(nx, ny));
+  const px = img.data;
+  const th = (tideSim.t - Date.parse(data.epoch)) / 3600000;
+  const rad = Math.PI / 180;
+  const cosns = [], sinns = [];
+  for (const c of f.consts) {
+    const phi = (c.speed * th + c.V0) * rad;
+    cosns.push(Math.cos(phi)); sinns.push(Math.sin(phi));
+  }
+  let volUp = 0;
+  for (let i = 0; i < f.n; i++) {
+    const o = i * 4;
+    if (!f.mask[i]) { px[o + 3] = 0; continue; }
+    let h = 0;
+    for (let k = 0; k < f.consts.length; k++) {
+      h += cosns[k] * f.consts[k].P[i] + sinns[k] * f.consts[k].Q[i];
+    }
+    if (h > 0) volUp += h * f.area[i];                 // cm·km² → later /1e5
+    const t = Math.max(0, Math.min(1, 0.5 + h / (2 * TD_RANGE_CM)));
+    const [r, g, b] = rampColor("anom", t);
+    px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255;
+  }
+  // ImageData rows run top→down; our grid runs south→north — draw flipped.
+  const off = tideSim.off || (tideSim.off = new OffscreenCanvas(nx, ny));
+  off.getContext("2d").putImageData(img, 0, 0);
+  ctx.save();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.scale(1, -1);
+  ctx.drawImage(off, 0, -canvas.height, canvas.width, canvas.height);
+  ctx.restore();
+
+  // moon + sun markers
+  const ast = tideAstro(tideSim.t);
+  const sx = (lon) => (lon + 180) / 360 * canvas.width;
+  const sy = (lat) => (90 - lat) / 180 * canvas.height;
+  for (const [b, glyph, col] of [[ast.moon, "☾", "#ffffff"], [ast.sun, "☀", "#eda100"]]) {
+    ctx.font = "22px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = col; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 3;
+    ctx.strokeText(glyph, sx(b.lon), sy(b.lat));
+    ctx.fillText(glyph, sx(b.lon), sy(b.lat));
+  }
+  if (tideSim.markCell != null) {
+    const ix = tideSim.markCell % nx, iy = Math.floor(tideSim.markCell / nx);
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5;
+    ctx.strokeRect(ix / nx * canvas.width, (ny - 1 - iy) / ny * canvas.height,
+                   canvas.width / nx, canvas.height / ny);
+  }
+
+  // stats
+  const dt = new Date(tideSim.t);
+  document.querySelector("#td-clock .stat-value").textContent =
+    dt.toISOString().slice(0, 16).replace("T", " ");
+  document.querySelector("#td-volume .stat-value").textContent =
+    Math.round(volUp / 1e5).toLocaleString("en-US");   // cm·km² → km³
+  const phase = ast.elong < 22 || ast.elong > 338 ? "new" :
+    Math.abs(ast.elong - 180) < 22 ? "full" :
+    Math.abs(ast.elong - 90) < 22 || Math.abs(ast.elong - 270) < 22 ? "quarter" :
+    ast.elong < 180 ? "waxing" : "waning";
+  document.querySelector("#td-phase .stat-value").textContent =
+    `${phase} · ${ast.spring > 0.7 ? "→ spring" : ast.spring < 0.3 ? "→ neap" : "between"}`;
+  if (tideSim.markCell != null) tideCurve();
+}
+
+function tideCurve() {
+  const c = document.getElementById("td-curve");
+  const ctx = c.getContext("2d");
+  const i = tideSim.markCell;
+  ctx.clearRect(0, 0, c.width, c.height);
+  const T0 = tideSim.t, SPAN = 3 * 86400000;
+  let lo = Infinity, hi = -Infinity;
+  const pts = [];
+  for (let s = 0; s <= 240; s++) {
+    const h = tideHeightAt(i, T0 + s / 240 * SPAN);
+    pts.push(h); lo = Math.min(lo, h); hi = Math.max(hi, h);
+  }
+  const pad = Math.max(10, (hi - lo) * 0.1);
+  lo -= pad; hi += pad;
+  const y = (h) => c.height - (h - lo) / (hi - lo) * c.height;
+  ctx.strokeStyle = "#30363d"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, y(0)); ctx.lineTo(c.width, y(0)); ctx.stroke();
+  ctx.strokeStyle = "#3987e5"; ctx.lineWidth = 2; ctx.beginPath();
+  pts.forEach((h, s) => { const x = s / 240 * c.width; s ? ctx.lineTo(x, y(h)) : ctx.moveTo(x, y(h)); });
+  ctx.stroke();
+  ctx.fillStyle = "#c3c2b7"; ctx.font = "11px sans-serif"; ctx.textAlign = "left";
+  ctx.fillText(`${(Math.max(...pts) / 100).toFixed(1)} m`, 4, 12);
+  ctx.fillText(`${(Math.min(...pts) / 100).toFixed(1)} m`, 4, c.height - 4);
+  for (let day = 1; day < 3; day++) {
+    const x = day / 3 * c.width;
+    ctx.strokeStyle = "#30363d"; ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, c.height); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+async function loadTides() {
+  if (!tideData) {
+    tideData = await (await fetch("data/tide_constituents.json")).json();
+    tideFields = tidePrepare(tideData);
+    tideSim.t = Date.now();
+    document.getElementById("td-scale").innerHTML =
+      `colour: <span style="color:#3b82f6">−${TD_RANGE_CM / 100} m below</span> … ` +
+      `<span style="color:#e34948">+${TD_RANGE_CM / 100} m above</span> mean sea level ` +
+      `(clamped; ranges on shelves exceed it)`;
+    const map = document.getElementById("td-map");
+    map.addEventListener("click", (e) => {
+      const r = map.getBoundingClientRect();
+      const lon = (e.clientX - r.left) / r.width * 360 - 180;
+      const lat = 90 - (e.clientY - r.top) / r.height * 180;
+      const ix = Math.floor((lon - tideData.west) / 1), iy = Math.floor((lat - tideData.south) / 1);
+      const i = iy * tideData.nx + ix;
+      if (!tideFields.mask[i]) return;
+      tideSim.markCell = i;
+      document.getElementById("td-point").classList.remove("hidden");
+      document.getElementById("td-point-title").textContent =
+        `${Math.abs(lat).toFixed(0)}°${lat >= 0 ? "N" : "S"} ` +
+        `${Math.abs(lon).toFixed(0)}°${lon >= 0 ? "E" : "W"} — next 3 days ` +
+        `(dashed lines = day boundaries)`;
+      tideCurve();
+    });
+    document.getElementById("td-play").addEventListener("click", (e) => {
+      tideSim.playing = !tideSim.playing;
+      e.target.textContent = tideSim.playing ? "⏸" : "▶";
+    });
+    document.getElementById("td-now").addEventListener("click", () => { tideSim.t = Date.now(); });
+    document.getElementById("td-speed").addEventListener("change", (e) => {
+      tideSim.speed = +e.target.value;
+    });
+  }
+  cancelAnimationFrame(tideSim.raf);
+  tideSim.wall = performance.now();
+  const step = (now) => {
+    if (document.getElementById("panel-tides").classList.contains("hidden")) return;
+    if (tideSim.playing) tideSim.t += (now - tideSim.wall) * tideSim.speed;
+    tideSim.wall = now;
+    tideDraw();
+    tideSim.raf = requestAnimationFrame(step);
+  };
+  tideSim.raf = requestAnimationFrame(step);
+}
+
 /* --------------------------------------------------------------------- tabs */
 
 const tabs = { layers: "panel-layers", temp: "panel-temp", energy: "panel-energy",
-  amoc: "panel-amoc", sealevel: "panel-sealevel",
+  amoc: "panel-amoc", sealevel: "panel-sealevel", tides: "panel-tides",
   catalog: "panel-catalog", about: "panel-about" };
 for (const t of Object.keys(tabs)) {
   document.getElementById(`tab-${t}`).addEventListener("click", () => {
@@ -6214,6 +6475,7 @@ for (const t of Object.keys(tabs)) {
     if (t === "sealevel") loadSeaLevel();
     if (t === "temp") loadTemp();
     if (t === "energy") loadEei();
+    if (t === "tides") loadTides();
   });
 }
 
@@ -6258,6 +6520,11 @@ window.__earth = {
   get rapid() { return rapidData; },
   get sealevel() { return seaLevelData; },
   loadSeaLevel,
+  loadTides,
+  get tides() { return tideData; },
+  get tideSim() { return tideSim; },
+  tideHeightAt,
+  tideAstro,
   movingMean,
   loadTemp,
   get gistemp() { return gistempData; },
