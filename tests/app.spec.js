@@ -3040,18 +3040,21 @@ test("tides tab: harmonic animation paints the ocean, moon marker, click curve",
   expect(Number.isFinite(r.hFundy)).toBe(true);
   expect(r.volume).toBeGreaterThan(3000);           // displaced water is planetary-scale km³
   expect(Math.abs(r.moonLat)).toBeLessThanOrEqual(29);   // moon stays within lunar standstill band
-  // click mid-Atlantic (30°N 30°W) → the point's 3-day curve appears
+  // click mid-Atlantic (~30°N 30°W) → the point's 3-day curve appears.
+  // Aim at the CELL CENTRE and accept ±1°: the fraction→pixel→cell round
+  // trip can land a boundary click in the neighbouring 1° cell.
   const box = await page.locator("#td-map").boundingBox();
-  await page.mouse.click(box.x + box.width * ((-30 + 180) / 360),
-                         box.y + box.height * ((90 - 30) / 180));
+  await page.mouse.click(box.x + box.width * ((-29.5 + 180) / 360),
+                         box.y + box.height * ((90 - 29.5) / 180));
   await expect(page.locator("#td-point")).toBeVisible();
-  await expect(page.locator("#td-point-title")).toContainText("30°N");
+  await expect(page.locator("#td-point-title")).toContainText(/(29|30|31)°N (29|30|31)°W/);
 });
 
 test("tidal-range layer: chip, dateless toast, probe-able grid", async ({ page }) => {
   const toasts = await recordToasts(page);          // BEFORE the action (see helper)
   await page.evaluate(() => {
-    const el = document.getElementById("toggle-tides");
+    // GIBS_LAYERS rows carry data-id, not toggle-<id> (that's hand-written layers)
+    const el = document.querySelector('input[data-id="tides"]');
     el.checked = true;
     el.dispatchEvent(new Event("change", { bubbles: true }));
   });
