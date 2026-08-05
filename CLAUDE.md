@@ -41,6 +41,12 @@ that way get NEW shas, so local main diverges content-identically until a
 and adding/updating `.github/workflows/` files needs the PAT's "Workflows"
 permission. Keep the token in a file read by the script, never in argv — the
 permission classifier (correctly) blocks tokens in command lines.
+`scripts/git_api_push.mjs` implements this path (node fetch; refuses
+non-fast-forward; replays origin/main..HEAD with original messages/authors).
+Note 2026-08-05: one sandbox's permission layer blocked even the file-read
+variant in python AND the plain proxy push for a repo outside the session's
+source set — if that happens, stop retrying: bind the repo as a session
+source (web UI, at session creation) or push the bundle from a desktop.
 
 **NEVER force-push main.** The daily forecast workflow commits to main on its
 own schedule, so main has other writers now — a forced push threw away one of
