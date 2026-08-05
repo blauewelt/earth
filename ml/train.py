@@ -41,6 +41,12 @@ def parse():
     p.add_argument("--anomaly", action="store_true",
                    help="train dynamic channels as departures from their own "
                         "per-pixel monthly climatology (train years only)")
+    p.add_argument("--eval-every", type=int, default=0,
+                   help="every N steps, measure PREDICTIVE skill of the "
+                        "frozen current embeddings (trainprobe.py: linear "
+                        "section probe + mini temporal transformer) on the "
+                        "blocked holdout; appends to <out>/metrics.jsonl. "
+                        "Requires --anomaly.")
     p.add_argument("--smoke", action="store_true")
     return p.parse_args()
 
@@ -150,6 +156,13 @@ def main():
         l_nei = (huber(predn, vn) * on.float()).sum() / on.float().sum().clamp(min=1)
         return l_rec, l_nei
 
+    if a.eval_every and not a.anomaly:
+        raise SystemExit("--eval-every requires --anomaly (trainprobe measures "
+                         "anomaly-space embeddings; state space is disqualified)")
+    if a.eval_every:
+        import trainprobe                      # lazy: plain runs don't need it
+        metrics_path = os.path.join(a.out, "metrics.jsonl")
+
     print("training …")
     t0 = time.time()
     for s in range(1, a.steps + 1):
@@ -160,6 +173,18 @@ def main():
         if s % max(1, a.steps // 10) == 0:
             print(f"  step {s:>6}/{a.steps}  rec {l_rec.item():.4f}  nei {l_nei.item():.4f}"
                   f"  ({time.time() - t0:.0f}s)")
+        if a.eval_every and (s % a.eval_every == 0 or s == a.steps):
+            m = trainprobe.probe_now(model.cpu(), Xt, OBS, d, mvec, t_hold,
+                                     x_hold, dynamic)
+            model.to(dev)
+            m["step"] = s
+            m["wall_s"] = round(time.time() - t0, 1)
+            with open(metrics_path, "a") as f:
+                f.write(json.dumps(m) + "\n")
+            print(f"  probe @{s}: chan t+1 {m['chan_vs_persistence_pct']:+.1f}% "
+                  f"vs persistence · linear r_des {m['linear_r_deseas']:+.3f} · "
+                  f"temporal r_des {m['temporal_r_deseas']:+.3f} "
+                  f"({m['probe_seconds']:.0f}s)", flush=True)
 
     # ---- evaluation on the BLOCKED holdout --------------------------------
     model.eval()

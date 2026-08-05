@@ -28,6 +28,9 @@ on:
       temporal_steps:
         description: "stage-2 temporal transformer steps (0 = skip)"
         default: "6000"
+      eval_every:
+        description: "trainprobe cadence in steps (0 = off; requires anomaly)"
+        default: "7500"
 
 permissions:
   contents: read
@@ -67,6 +70,8 @@ jobs:
             --batch "${{ inputs.batch }}" \
             --d-z "${{ inputs.d_z }}" \
             $([ "${{ inputs.anomaly }}" = "true" ] && echo --anomaly) \
+            $([ "${{ inputs.anomaly }}" = "true" ] && [ "${{ inputs.eval_every }}" != "0" ] \
+              && echo --eval-every "${{ inputs.eval_every }}") \
             --out ml/runs/actions
 
       - name: Upload checkpoint + eval
@@ -76,7 +81,9 @@ jobs:
           path: |
             ml/runs/actions/pixelmae.pt
             ml/runs/actions/eval.json
+            ml/runs/actions/metrics.jsonl
           retention-days: 30
+          if-no-files-found: warn
 
       # Protocol v2 verdicts ride along: the seasonality-proof K-sweep and the
       # stage-2 temporal transformer over the frozen codec. Both only make

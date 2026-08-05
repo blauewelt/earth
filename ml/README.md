@@ -40,6 +40,11 @@ as additional held-out probes.
   *missing* tokens; absence is information) → bottleneck `z` (default 32-D) →
   a neural-field-style decoder `f(z, channel, Δlon, Δlat, Δmonth)` queried at
   offset 0 (reconstruction), ±1 space and ±1 month (neighbour prediction).
+- `trainprobe.py` — predictive metrics on FROZEN embeddings, cheap enough
+  to run every N training steps (`train.py --eval-every`): linear section
+  probe + a fixed-seed mini temporal transformer, protocol v2. Rankings
+  live in `LEADERBOARD.md`; backfill any finished run with
+  `python3 ml/trainprobe.py --run <name>`.
 - `train.py` — training with **blocked splits** (whole held-out years + a
   held-out mid-Atlantic longitude block; never random splits — proposal §7),
   then eval: masked-channel skill vs channel-mean, t+1 prediction vs
