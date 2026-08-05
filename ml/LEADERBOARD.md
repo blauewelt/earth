@@ -18,9 +18,22 @@ RAPID months — r differences under ~0.1 are noise at this n.
 
 | run | chans | codec steps | chan% | z% | r_tmp | r_lin | curve | provenance |
 |---|---|---|---|---|---|---|---|---|
-| pilot4_anom | 4 | 8000 | **+29.3** | +31.4 | 0.291 | 0.307 | [png](curves/pilot4_anom.png) | in-sandbox 2026-08-05; `runs/pilot4_anom/trainprobe.json` (backfilled) |
+| actions #1 | 12 | 30000 | **+30.5** | +27.8 | **0.361** | **0.428** | [png](curves/actions.png) | Actions run 31028748779 (2026-08-05); checkpoint from `pixelmae-1` artifact, backfilled in-sandbox on the rebuilt 12-ch tensor |
+| pilot4_anom | 4 | 8000 | +29.3 | +31.4 | 0.291 | 0.307 | [png](curves/pilot4_anom.png) | in-sandbox 2026-08-05; `runs/pilot4_anom/trainprobe.json` (backfilled) |
 | pilot4_anom_smoke | 4 | 1500 | +25.0 | +31.5 | 0.360 | 0.300 | [png](curves/pilot4_anom_smoke.png) | in-sandbox 2026-08-05; backfilled |
-| actions #1 | 12 | 30000 | *pending* | | | | artifact | run 31028748779; backfill from `pixelmae-1` artifact via `trainprobe.py` when it lands |
+
+Reading the top row against the 4-channel rows: adding the RG depth
+structure (T/S at 10/200/700/1500 dbar) moved BOTH probe reads up — linear
+0.31→0.43, temporal 0.29→0.36 — while channel-space dynamical skill held at
+~+30%. Direction is consistent across two independent read-outs, but the
+margins are ~1σ at 36 held-out months, so this is *evidence for* the
+density-structure hypothesis, not proof; the probe is now target-limited
+(more RAPID months don't exist — OSNAP/MOVE/SAMBA as extra probes is the
+next lever). Caveat for the record: run #1's own FULL stage-2
+(`temporal.json`: K=24, d=96×3, 6000 steps) scored r_deseas only 0.13 on
+the same codec where the standardized mini probe scores 0.36 — one more
+instance of single-seed probe variance at this n, and the reason the
+leaderboard ranks the fixed-seed mini probe, not bespoke stage-2 runs.
 
 Every run renders `runs/<run>/curve.png` automatically at the end of
 training (`plot_run.py`: steps vs loss, steps vs held-out t+1 skill, steps
