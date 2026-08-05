@@ -16,11 +16,19 @@ RAPID months — r differences under ~0.1 are noise at this n.
 
 ## Ranked (anomaly-space codecs only)
 
-| run | chans | codec steps | chan% | z% | r_tmp | r_lin | provenance |
-|---|---|---|---|---|---|---|---|
-| pilot4_anom | 4 | 8000 | **+29.3** | +31.4 | 0.291 | 0.307 | in-sandbox 2026-08-05; `runs/pilot4_anom/trainprobe.json` (backfilled) |
-| pilot4_anom_smoke | 4 | 1500 | +25.0 | +31.5 | 0.360 | 0.300 | in-sandbox 2026-08-05; backfilled |
-| actions #1 | 12 | 30000 | *pending* | | | | run 31028748779; backfill from `pixelmae-1` artifact via `trainprobe.py` when it lands |
+| run | chans | codec steps | chan% | z% | r_tmp | r_lin | curve | provenance |
+|---|---|---|---|---|---|---|---|---|
+| pilot4_anom | 4 | 8000 | **+29.3** | +31.4 | 0.291 | 0.307 | [png](curves/pilot4_anom.png) | in-sandbox 2026-08-05; `runs/pilot4_anom/trainprobe.json` (backfilled) |
+| pilot4_anom_smoke | 4 | 1500 | +25.0 | +31.5 | 0.360 | 0.300 | [png](curves/pilot4_anom_smoke.png) | in-sandbox 2026-08-05; backfilled |
+| actions #1 | 12 | 30000 | *pending* | | | | artifact | run 31028748779; backfill from `pixelmae-1` artifact via `trainprobe.py` when it lands |
+
+Every run renders `runs/<run>/curve.png` automatically at the end of
+training (`plot_run.py`: steps vs loss, steps vs held-out t+1 skill, steps
+vs probe r; dense when the run logged `--eval-every` curves, sparse —
+log-reconstructed loss + one backfilled probe point — for runs that predate
+the hook). Sandbox runs publish theirs to `ml/curves/` (committed, since
+sandbox containers are ephemeral); Actions runs ship theirs in the
+checkpoint artifact.
 
 The full (non-mini) stage 2 on pilot4_anom — K=24, d=96×3, 2000 steps
 (`temporal.py`) — scores chan +32.4%, r_deseas 0.333: the mini probe tracks

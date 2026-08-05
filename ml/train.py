@@ -161,7 +161,8 @@ def main():
                          "anomaly-space embeddings; state space is disqualified)")
     if a.eval_every:
         import trainprobe                      # lazy: plain runs don't need it
-        metrics_path = os.path.join(a.out, "metrics.jsonl")
+    metrics_path = os.path.join(a.out, "metrics.jsonl")
+    loss_every = max(1, a.steps // 200)        # the loss curve, cheap to keep
 
     print("training …")
     t0 = time.time()
@@ -170,6 +171,10 @@ def main():
         l_rec, l_nei = step_loss(t, y, x, ctx)
         loss = l_rec + 0.5 * l_nei
         opt.zero_grad(); loss.backward(); opt.step(); sched.step()
+        if s % loss_every == 0 or s == a.steps:
+            with open(metrics_path, "a") as f:
+                f.write(json.dumps({"step": s, "loss_rec": round(l_rec.item(), 5),
+                                    "loss_nei": round(l_nei.item(), 5)}) + "\n")
         if s % max(1, a.steps // 10) == 0:
             print(f"  step {s:>6}/{a.steps}  rec {l_rec.item():.4f}  nei {l_nei.item():.4f}"
                   f"  ({time.time() - t0:.0f}s)")
@@ -251,6 +256,13 @@ def main():
                 "norm": d["norm"], "args": vars(a)}, os.path.join(a.out, "pixelmae.pt"))
     json.dump(results, open(os.path.join(a.out, "eval.json"), "w"), indent=2)
     print(f"saved {a.out}/pixelmae.pt")
+
+    try:                                       # every run gets its curve
+        import plot_run
+        plot_run.render(os.path.basename(a.out.rstrip("/")))
+    except Exception as e:                     # a missing matplotlib never
+        print(f"(curve not rendered: {e})")    # kills a finished run
+
 
 
 if __name__ == "__main__":

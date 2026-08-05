@@ -48,7 +48,7 @@ jobs:
 
       - name: Install deps (CPU torch)
         run: |
-          pip install --quiet numpy netCDF4
+          pip install --quiet numpy netCDF4 matplotlib
           pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Restore data cache
@@ -82,6 +82,7 @@ jobs:
             ml/runs/actions/pixelmae.pt
             ml/runs/actions/eval.json
             ml/runs/actions/metrics.jsonl
+            ml/runs/actions/curve.png
           retention-days: 30
           if-no-files-found: warn
 
