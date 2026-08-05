@@ -89,6 +89,19 @@ never seen in training. t+1 prediction does not beat persistence yet at this
 scale. The 12-channel run (with the RG depth structure) is the current
 experiment; results land in `runs/pilot12/eval.json`.
 
+**Stage 2 (`temporal.py`, 2026-08-05, 4-channel in-sandbox pilot):** a small
+causal transformer (d=96, 3 layers, K=24 months) over the frozen anomaly
+codec's embedding sequences. Held-out months, protocol v2 throughout:
+z-space t+1 MSE 1.53 vs 2.31 persistence (−34%); decoded channel-space t+1
+0.90 vs 1.33 persistence (−32%, dynamic channels only) — the temporal stage
+roughly doubles the codec's own single-step margin (which is diluted by
+static channels; not directly comparable). RAPID probe from the
+section-pooled hidden state: r_deseas 0.33 from 96 features, where the
+linear K-concatenation probe swings −0.04…+0.48 across K on the same codec
+(36 test months; up to 768 features) — compact and stable-by-construction,
+not yet a probe win. The probe verdict needs the 12-channel tensor and more
+than one seed; the dynamics verdict is already clear.
+
 ## Next (mirrors the proposal roadmap)
 
 1. Channels: ERA5 τ (Ekman), OISST monthly SST, DUACS SLA, more RG levels
