@@ -46,30 +46,37 @@ parameter count (894k → 916k from d_z=8 to 64) — the sweep measures how
 much *information the bottleneck transmits*, not model capacity. That is
 the right question at fixed data.
 
-**Stage-2 temporal transformer.** 2.31 M transitions; token-anchored
-optimum ≈ 0.1 M params. The mid config (0.35 M) is already at/above it;
-large (1.81 M) is ~15× over. The sweep-so-far confirms the prediction the
-arithmetic makes:
+**Stage-2 temporal transformer — corrected 2026-08-06 evening.** The
+first draft of this section predicted, from a transitions-as-tokens
+anchor (2.31 M transitions -> ~0.1 M params optimal), that the large
+config would not beat mid. **The experiment said otherwise**, and a
+steps-matched control separated the confound:
 
-| config | params | chan% (seeds) | r_tmp (seeds) |
+| config | params | steps | chan% (seeds) |
 |---|---|---|---|
-| small d64×2 K12 | 0.11 M | 30.1 (30.7/29.6) | 0.29 (0.27/0.31) |
-| mid d96×3 K24 | 0.35 M | 30.9 (31.4/30.4) | 0.32 (0.31/0.33) |
-| mid K36 | 0.35 M | 31.0 (31.5/30.4) | 0.21 (0.33/0.09) |
-| mid K6 | 0.35 M | 30.2 (30.7/29.7) | 0.26 (0.33/0.19) |
-| large d192×4 K24 | 1.81 M | *(running)* | |
+| small d64×2 | 0.11 M | 2000 | 30.1 (30.7/29.6) |
+| mid d96×3 | 0.35 M | 2000 | 30.9 (31.4/30.4) |
+| mid d96×3 | 0.35 M | 4000 | 31.9 (32.4/31.4) |
+| large d192×4 | 1.81 M | 4000 | **35.9** (35.5/36.2) |
 
-Capacity and context length move chan% by ≤1 pt across a 16× parameter
-range; the probe column wobbles exactly as its ±0.57 CI (METRICS.md)
-says it must. **The downstream transformer is not the bottleneck.** The
-honest "more realistic" upgrade is not a bigger transformer but a bigger
-*task*: multi-horizon prediction (t+3, t+6) and cross-pixel attention
-(spatial context), both of which add supervision per parameter rather
-than parameters per supervision.
+Doubling steps bought mid +1.0 pt; at matched 4000 steps, capacity buys
+**+4.0 pts** (seeds two points apart — decision-grade by METRICS.md).
+The K variants (6/36) at mid size stayed flat, so context length is not
+the axis; width×depth is. Where the arithmetic went wrong: a stage-2
+"token" is not a transition-count, it is a 32-dimensional continuous
+vector — counted in VALUES, D ≈ 74 M -> anchor ≈ 3.7 M params, and large
+(1.81 M) is still under it. Lesson recorded: for continuous multivariate
+sequences, anchor on value-count, not token-count — and run the control
+before believing either. Scaling stage 2 further (d256+, more layers, on
+runners) is now a live lever with headroom to ~3–4 M params; probe r
+stayed inside its noise band throughout (large: 0.27/0.39), as METRICS.md
+demands it must.
 
-**Mini training-time probe.** 0.11 M params, deliberately under the
-optimum — it is a measurement instrument, and the sweep shows it tracks
-the larger configs' chan% within ~1 pt. Faithful enough; keep it small.
+**Mini training-time probe.** 0.11 M params, deliberately small — a
+measurement instrument. It ranks codecs faithfully (that is its job),
+but note it UNDERESTIMATES achievable dynamics: the large stage-2 gets
++5 pts over what the mini reads on the same embeddings. Use it for
+curves and rankings, never as the ceiling.
 
 **The probe task (the hard wall).** Ridge with 33 params on 204 train
 months is fine; the K-concat probe at 769 params exceeds its 190 train
@@ -86,8 +93,10 @@ year-blocked k-fold protocol (METRICS.md) raises it.
    question the project exists to answer.
 2. **More channels with long records** — ERA5 τ, DUACS SLA, OISST
    monthly: real new tokens for the codec, more months of usable signal.
-3. **Richer supervision per parameter** — multi-horizon and spatial
-   stage-2 objectives.
-4. ~~Bigger models~~ — the arithmetic and the sweep both say no.
-5. ~~Longer training~~ — past the ~4-epoch useful-repetition zone
-   already.
+3. **Scale stage 2** — the steps-matched control shows capacity buys
+   real dynamics (+4 pts to d192×4); headroom to ~3–4 M params by the
+   value-count anchor. Runner-sized job, controls mandatory.
+4. **Richer supervision per parameter** — multi-horizon and spatial
+   stage-2 objectives; compose with (3).
+5. ~~Bigger codec~~ — at/past its data anchor until new channels land.
+6. ~~Longer codec training~~ — past the useful-repetition zone.
