@@ -41,10 +41,12 @@ channel with a long record adds real tokens: ERA5 wind stress (monthly
 (1982→). Adding channels also lengthens the RG-poor early period's
 usable signal.
 
-**d_z (the sweep in flight).** Note from the table: d_z barely changes
-parameter count (894k → 916k from d_z=8 to 64) — the sweep measures how
-much *information the bottleneck transmits*, not model capacity. That is
-the right question at fixed data.
+**d_z — answered 2026-08-06 evening.** Four codecs at matched 30k steps:
+chan% 28.6 / 30.3 / 30.5 / 30.6 for d_z 8/16/32/64. The bottleneck
+saturates between 16 and 32; only 8 pays (−2 pts). d_z was never a
+capacity axis (params barely move, 894k→916k) — it measures transmitted
+information, and 32 dims already carry everything the current 12
+channels supply. Keep 32; revisit only after the channel count grows.
 
 **Stage-2 temporal transformer — corrected 2026-08-06 evening.** The
 first draft of this section predicted, from a transitions-as-tokens

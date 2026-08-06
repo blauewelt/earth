@@ -16,11 +16,25 @@ RAPID months — r differences under ~0.1 are noise at this n.
 
 ## Ranked (anomaly-space codecs only)
 
-| run | chans | codec steps | chan% | z% | r_tmp | r_lin | curve | provenance |
-|---|---|---|---|---|---|---|---|---|
-| actions #1 | 12 | 30000 | **+30.5** | +27.8 | **0.361** | **0.428** | [png](curves/actions.png) | Actions run 31028748779 (2026-08-05); checkpoint from `pixelmae-1` artifact, backfilled in-sandbox on the rebuilt 12-ch tensor |
-| pilot4_anom | 4 | 8000 | +29.3 | +31.4 | 0.291 | 0.307 | [png](curves/pilot4_anom.png) | in-sandbox 2026-08-05; `runs/pilot4_anom/trainprobe.json` (backfilled) |
-| pilot4_anom_smoke | 4 | 1500 | +25.0 | +31.5 | 0.360 | 0.300 | [png](curves/pilot4_anom_smoke.png) | in-sandbox 2026-08-05; backfilled |
+| run | chans | d_z | codec steps | chan% | z% | r_tmp | r_lin | curve | provenance |
+|---|---|---|---|---|---|---|---|---|---|
+| dz64 (#4) | 12 | 64 | 30000 | **+30.6** | +28.3 | 0.391 | 0.457 | [png](curves/dz64.png) | Actions run 31096118740 (2026-08-06), backfilled |
+| actions #1 | 12 | 32 | 30000 | +30.5 | +27.8 | 0.361 | 0.428 | [png](curves/actions.png) | Actions run 31028748779 (2026-08-05); backfilled |
+| dz16 (#3) | 12 | 16 | 30000 | +30.3 | +27.7 | 0.346 | 0.390 | [png](curves/dz16.png) | Actions run 31096115165 (2026-08-06), backfilled |
+| pilot4_anom | 4 | 32 | 8000 | +29.3 | +31.4 | 0.291 | 0.307 | [png](curves/pilot4_anom.png) | in-sandbox 2026-08-05; backfilled |
+| dz8 (#2) | 12 | 8 | 30000 | +28.6 | +28.3 | 0.223 | 0.416 | [png](curves/dz8.png) | Actions run 31096111610 (2026-08-06), backfilled |
+| pilot4_anom_smoke | 4 | 32 | 1500 | +25.0 | +31.5 | 0.360 | 0.300 | [png](curves/pilot4_anom_smoke.png) | in-sandbox 2026-08-05; backfilled |
+
+**The d_z verdict (2026-08-06 sweep, 4 codecs at matched 30k steps):** the
+bottleneck saturates between 16 and 32 — chan% is flat from d_z=16 to 64
+(30.3/30.5/30.6, inside seed noise) and only d_z=8 pays a real price
+(−2 pts; squeezing 12 channels into 8 dims loses skill — a 12-channel
+d_z=8 codec ranks BELOW the 4-channel d_z=32 pilot). Probe columns drift
+upward with d_z but stay inside the ±0.57 CI (METRICS.md). Keep d_z=32;
+the codec's constraint is channels-and-months, not bottleneck width —
+consistent with SCALING.md end to end. These three runs are also the
+first born fully instrumented: dense loss curves + 4-point probe curves
+rendered on the runners themselves.
 
 Reading the top row against the 4-channel rows: adding the RG depth
 structure (T/S at 10/200/700/1500 dbar) moved BOTH probe reads up — linear
