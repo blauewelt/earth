@@ -55,13 +55,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ml/cache
-          key: ml-cache-v1-${{ hashFiles('ml/build_dataset.py', 'ml/fetch_rg_channels.py') }}
+          key: ml-cache-v1-${{ hashFiles('ml/build_dataset.py', 'ml/fetch_rg_channels.py', 'ml/fetch_wind_channels.py') }}
           restore-keys: ml-cache-v1-
 
-      - name: Build dataset (repo channels + RG-Argo depth channels)
+      - name: Build dataset (repo channels + RG-Argo depth + NCEP wind stress)
         run: |
           python ml/build_dataset.py
           python ml/fetch_rg_channels.py
+          python ml/fetch_wind_channels.py
 
       - name: Train
         run: |
