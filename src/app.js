@@ -6579,6 +6579,47 @@ document.getElementById("tidelive-alpha").addEventListener("input", (e) => {
   viewer.scene.requestRender();
 });
 
+/* ---------------------------------------------------- installed-app updates
+ * The app is installable and deliberately has NO service worker: a fresh
+ * page load always gets the newest build (hash-stamped URLs). The missing
+ * piece on a phone is the TRIGGER — a standalone instance has no reload
+ * button and Android keeps it alive for days. So: compare the served
+ * index.html's app.js stamp against our own whenever the app returns to
+ * the foreground (and every 15 min while visible), and offer a one-tap
+ * reload when they differ. A toast with a 10-minute timeout, keyed and
+ * replace-safe, so it neither nags nor vanishes before it is seen. */
+const OUR_BUILD = (document.querySelector('script[src*="src/app.js?v="]')
+  ?.getAttribute("src") || "").split("v=")[1] || "";
+let lastBuildCheck = 0;
+async function checkForNewBuild() {
+  if (!OUR_BUILD) return null;
+  lastBuildCheck = Date.now();
+  try {
+    const html = await (await fetch(`index.html?fresh=${Date.now()}`,
+                                    { cache: "no-store" })).text();
+    const served = (html.match(/src\/app\.js\?v=([0-9a-f]{8})/) || [])[1];
+    if (served && served !== OUR_BUILD) {
+      showToast(
+        `A <strong>newer build of earth</strong> is live. ` +
+        `<button id="reload-now" class="td-btn" style="margin-left:6px">reload</button>`,
+        { key: "new-build", replace: true, timeout: 600000 });
+      document.getElementById("reload-now")
+        ?.addEventListener("click", () => location.reload());
+      return served;
+    }
+    return served || null;
+  } catch { return null; }        // offline — silent, retry next trigger
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && Date.now() - lastBuildCheck > 30000) {
+    checkForNewBuild();
+  }
+});
+setInterval(() => {
+  if (document.visibilityState === "visible") checkForNewBuild();
+}, 900000);
+setTimeout(checkForNewBuild, 10000);
+
 /* --------------------------------------------------------------------- tabs */
 
 const tabs = { layers: "panel-layers", temp: "panel-temp", energy: "panel-energy",
@@ -6647,6 +6688,7 @@ window.__earth = {
   tideLive,
   tideSelectPoint,
   ensureTideLive,
+  checkForNewBuild,
   movingMean,
   loadTemp,
   get gistemp() { return gistempData; },

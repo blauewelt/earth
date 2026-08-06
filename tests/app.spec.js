@@ -3094,3 +3094,22 @@ test("tidal-range layer: chip, dateless toast, probe-able grid", async ({ page }
   expect(g.fundy).toBeGreaterThan(5);
   expect(g.land).toBeNull();                        // Austria has no tide
 });
+
+test("installed-app update check: a newer served build offers a one-tap reload", async ({ page }) => {
+  const toasts = await recordToasts(page);
+  await page.route(/index\.html\?fresh=/, (route) => route.fulfill({
+    contentType: "text/html",
+    body: '<script src="src/app.js?v=ffffffff"></script>',
+  }));
+  const served = await page.evaluate(() => window.__earth.checkForNewBuild());
+  expect(served).toBe("ffffffff");
+  await expect.poll(toasts).toContain("newer build of earth");
+  await expect(page.locator("#reload-now")).toBeVisible();
+  // same-build response: no new toast, returns the matching stamp
+  await page.unroute(/index\.html\?fresh=/);
+  const same = await page.evaluate(async () => {
+    const ours = document.querySelector('script[src*="src/app.js?v="]').getAttribute("src").split("v=")[1];
+    return (await window.__earth.checkForNewBuild()) === ours;
+  });
+  expect(same).toBe(true);
+});

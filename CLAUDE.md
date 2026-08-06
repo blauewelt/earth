@@ -76,7 +76,13 @@ forgotten stamp fails the suite instead of a user.
 **No service worker**, deliberately. The app is installable (manifest + icons,
 §5) without one; adding one would put a cache we control *in front of* the
 CDN cache that already caused this, for an app whose entire content is remote
-tiles and therefore useless offline anyway.
+tiles and therefore useless offline anyway. The reload TRIGGER an installed
+standalone instance lacks (no browser chrome, and Android keeps PWAs alive
+for days — reported from the Pixel 2026-08-06 as "I don't know how to make
+this site reload") is `checkForNewBuild()`: on foregrounding and every
+15 min, fetch index.html no-store, compare its app.js stamp to our own, and
+offer a one-tap reload toast (10-min timeout, keyed "new-build"). No
+worker, no cache — just the missing button.
 
 ### 2. Every dataset/layer ships complete
 
