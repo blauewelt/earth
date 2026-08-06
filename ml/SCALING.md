@@ -59,7 +59,8 @@ steps-matched control separated the confound:
 | small d64×2 | 0.11 M | 2000 | 30.1 (30.7/29.6) |
 | mid d96×3 | 0.35 M | 2000 | 30.9 (31.4/30.4) |
 | mid d96×3 | 0.35 M | 4000 | 31.9 (32.4/31.4) |
-| large d192×4 | 1.81 M | 4000 | **35.9** (35.5/36.2) |
+| large d192×4 | 1.81 M | 4000 | 35.9 (35.5/36.2) |
+| xlarge d256×5 | 3.98 M | 4000 | **37.7** (37.6/37.7) |
 
 Doubling steps bought mid +1.0 pt; at matched 4000 steps, capacity buys
 **+4.0 pts** (seeds two points apart — decision-grade by METRICS.md).
@@ -69,10 +70,14 @@ the axis; width×depth is. Where the arithmetic went wrong: a stage-2
 vector — counted in VALUES, D ≈ 74 M -> anchor ≈ 3.7 M params, and large
 (1.81 M) is still under it. Lesson recorded: for continuous multivariate
 sequences, anchor on value-count, not token-count — and run the control
-before believing either. Scaling stage 2 further (d256+, more layers, on
-runners) is now a live lever with headroom to ~3–4 M params; probe r
-stayed inside its noise band throughout (large: 0.27/0.39), as METRICS.md
-demands it must.
+before believing either. xlarge (d256×5, 3.98 M — at the
+value-count anchor) confirmed the curve with the tightest seeds of the
+whole sweep: 37.6/37.7. The gain per parameter-doubling is decelerating
+(+4.0 for mid→large at ×5, +1.8 for large→xlarge at ×2.2) — roughly
+log-linear and approaching the anchor as theory would like. Next rung:
+d320×6 (7.44 M) on runners, past the anchor, to find the turn. Probe r
+stayed inside its noise band throughout (large 0.27/0.39; xlarge
+0.25/0.46), as METRICS.md demands it must.
 
 **Mini training-time probe.** 0.11 M params, deliberately small — a
 measurement instrument. It ranks codecs faithfully (that is its job),
