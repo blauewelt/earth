@@ -62,7 +62,8 @@ def anomaly_transform(X, moy, t_hold, x_hold):
 
 
 def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
-              n_pixels=600, K=12, tsteps=400, tbatch=128, seed=0, obs_in=None):
+              n_pixels=600, K=12, tsteps=400, tbatch=128, seed=0, obs_in=None,
+              mask_chan=None):
     """All metrics for the codec AS IT IS NOW. X must already be in the
     space the codec was trained in (anomaly). Returns a flat dict.
 
@@ -99,7 +100,8 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
     # ---- 1 · linear section probe (K=1) ----------------------------------
     sec_sel = np.where(ys == sec_y)[0]
     Zsec, _ = embed_everything(codec, X, obs_in, ctx_all, lats, lons,
-                               ys[sec_sel], xs[sec_sel], codec.d_z)
+                               ys[sec_sel], xs[sec_sel], codec.d_z,
+                               mask_chan=mask_chan)
     Fsec = Zsec.mean(1)                                   # [T, d_z]
     out["linear_r_deseas"], _ = ridge_r(Fsec[ridx], rv_des, tr_all, te_all)
     out["linear_r_raw"], _ = ridge_r(Fsec[ridx], rv_raw, tr_all, te_all)
@@ -109,7 +111,7 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
     keep = np.union1d(keep, sec_sel)
     kys, kxs = ys[keep], xs[keep]
     Z, coords = embed_everything(codec, X, obs_in, ctx_all, lats, lons,
-                                 kys, kxs, codec.d_z)
+                                 kys, kxs, codec.d_z, mask_chan=mask_chan)
     P = len(kys)
     Zt = torch.from_numpy(Z)
     Mt = torch.as_tensor(ctx_all, dtype=torch.float32)

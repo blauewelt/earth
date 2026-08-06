@@ -78,7 +78,7 @@ class TemporalTransformer(nn.Module):
 
 
 def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
-                     cache_path=None, batch=8192):
+                     cache_path=None, batch=8192, mask_chan=None):
     """Frozen codec embeddings for every (t, pixel in ys/xs): [T, P, d_z].
     Cached on disk — the embedding pass is the expensive part of stage 2
     (T×P encoder forwards), and every probe variant reuses it."""
@@ -97,8 +97,11 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                 sl = slice(i, min(i + batch, P))
                 n = sl.stop - sl.start
                 ctx = np.concatenate([np.tile(ctx_all[t], (n, 1)), coords[sl]], 1)
-                z = model.encode(X[t, ys[sl], xs[sl]], OBS[t, ys[sl], xs[sl]],
-                                 torch.zeros(n, C, dtype=torch.bool),
+                mk = torch.zeros(n, C, dtype=torch.bool)
+                if mask_chan is not None:
+                    mk[:, mask_chan] = True
+                v = X[t, ys[sl], xs[sl]] * (~mk)
+                z = model.encode(v, OBS[t, ys[sl], xs[sl]], mk,
                                  torch.as_tensor(ctx, dtype=torch.float32))
                 out[t, sl] = z.numpy()
     if cache_path:

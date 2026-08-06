@@ -72,29 +72,29 @@ def main():
     Xt = torch.from_numpy(np.nan_to_num(X, nan=0.0))
     OBS = torch.from_numpy(np.isfinite(X))
 
-    def cond_mask(drop=None, keep=None):
-        m = OBS.clone()
-        if drop:
-            for c in drop:
-                m[..., chan.index(c)] = False
-        if keep is not None:
-            for i, c in enumerate(chan):
-                if c not in keep:
-                    m[..., i] = False
-        return m
+    # Hide channels via the MASK token, not the missing token: training
+    # masked random channel subsets constantly (mask_ratio 0.5), so every
+    # hide pattern is in-distribution. The miss token is only in-distribution
+    # for channels that are genuinely absent in the data (RG pre-2004) —
+    # measured 2026-08-06: hiding the always-present statics via miss
+    # collapsed the linear probe to -0.05, via mask it stayed at 0.429.
+    def cond(drop=None, keep=None):
+        if drop is not None:
+            return [chan.index(c) for c in drop]
+        return [i for i, c in enumerate(chan) if c not in keep]
 
-    conds = {"full": OBS}
+    conds = {"full": None}
     for g, cols in GROUPS.items():
-        conds[f"drop-{g}"] = cond_mask(drop=cols)
-        conds[f"only-{g}"] = cond_mask(keep=cols)
+        conds[f"drop-{g}"] = cond(drop=cols)
+        conds[f"only-{g}"] = cond(keep=cols)
 
     results = {"run": a.run, "seeds": a.seeds, "groups": GROUPS, "conditions": {}}
-    for name, obs_in in conds.items():
+    for name, mask_chan in conds.items():
         rows = []
         for seed in range(a.seeds):
             t0 = time.time()
             m = probe_now(codec, Xt, OBS, d, moy, t_hold, x_hold, dynamic,
-                          seed=seed, obs_in=obs_in)
+                          seed=seed, mask_chan=mask_chan)
             rows.append(m)
             print(f"  {name:<18} seed {seed}: chan {m['chan_vs_persistence_pct']:+5.1f}% · "
                   f"r_lin {m['linear_r_deseas']:+.3f} · r_tmp {m['temporal_r_deseas']:+.3f} "
@@ -105,6 +105,7 @@ def main():
         agg["seeds"] = [{k: r[k] for k in agg if k != "seeds"} for r in rows]
         results["conditions"][name] = agg
 
+    results["mode"] = "mask_token"
     path = os.path.join(run_dir, "ablation.json")
     json.dump(results, open(path, "w"), indent=2)
     print("wrote", path)
