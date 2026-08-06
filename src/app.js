@@ -3105,7 +3105,19 @@ function buildLegendBar(container, cm) {
   tip.className = "legend-tip hidden";
   const range = document.createElement("div");
   range.className = "legend-range";
-  range.innerHTML = `<span>${fmtVal(cm.entries[0].lo)}</span><span>${cm.units}</span><span>${fmtVal(cm.entries[n - 1].hi)}</span>`;
+  // Cap-aware end labels (same convention as the probe, CLAUDE.md Part 2):
+  // a palette whose end bin is unbounded or >10x the median bin width
+  // SATURATES there — 33-degree water renders as 32, and printing a bare
+  // "32.0" presents the palette's ceiling as the ocean's ("hotter seas
+  // these days", reported 2026-08-06). Say ">= 32" like we mean it.
+  const widths = cm.entries.map((e) => e.hi - e.lo).filter((w) => isFinite(w)).sort((a, b) => a - b);
+  const medW = widths[Math.floor(widths.length / 2)] || 1;
+  const first = cm.entries[0], last = cm.entries[n - 1];
+  const loLbl = (!isFinite(first.lo) || first.hi - first.lo > 10 * medW)
+    ? `\u2264 ${fmtVal(first.hi)}` : fmtVal(first.lo);
+  const hiLbl = (!isFinite(last.hi) || last.hi - last.lo > 10 * medW)
+    ? `\u2265 ${fmtVal(last.lo)}` : fmtVal(last.hi);
+  range.innerHTML = `<span>${loLbl}</span><span>${cm.units}</span><span>${hiLbl}</span>`;
   canvas.addEventListener("mousemove", (e) => {
     const rect = canvas.getBoundingClientRect();
     const frac = Cesium.Math.clamp((e.clientX - rect.left) / rect.width, 0, 0.9999);
