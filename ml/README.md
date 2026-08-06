@@ -40,6 +40,11 @@ as additional held-out probes.
   *missing* tokens; absence is information) → bottleneck `z` (default 32-D) →
   a neural-field-style decoder `f(z, channel, Δlon, Δlat, Δmonth)` queried at
   offset 0 (reconstruction), ±1 space and ±1 month (neighbour prediction).
+- `METRICS.md` / `SCALING.md` — the metrics glossary (with measured
+  statistical power: probe r carries a ±0.57 CI at the current holdout)
+  and the Chinchilla-style data-sufficiency audit (`scaling_audit.py`
+  measures the numbers both quote). Read these before trusting or
+  designing a number.
 - `trainprobe.py` — predictive metrics on FROZEN embeddings, cheap enough
   to run every N training steps (`train.py --eval-every`): linear section
   probe + a fixed-seed mini temporal transformer, protocol v2. Rankings
