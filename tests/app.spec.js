@@ -3072,6 +3072,22 @@ test("tide-live layer: paints the globe, moon rides along, tab is the control ro
   await expect(page.locator("#active-layers .chip:not(.chip-clear)")).toHaveCount(1);
   await expect(page.locator("#active-layers")).toContainText("Tide (live)");
   await expect.poll(() => page.evaluate(() => window.__earth.tideLive.prim.show)).toBe(true);
+  // truthful legend on the globe + the sun lights the planet on the sim clock
+  await expect(page.locator("#legend-panel")).toContainText("mean sea level");
+  const lit = await page.evaluate(() => ({
+    lighting: window.__earth.viewer.scene.globe.enableLighting,
+    clockSynced: Math.abs(window.Cesium.JulianDate.toDate(
+      window.__earth.viewer.clock.currentTime).getTime() - window.__earth.tideSim.t) < 3600e3,
+  }));
+  expect(lit.lighting).toBe(true);
+  expect(lit.clockSynced).toBe(true);
+  // off again: lighting returns to the default look
+  await page.evaluate(() => {
+    const el = document.getElementById("toggle-tidelive");
+    el.checked = false;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.viewer.scene.globe.enableLighting)).toBe(false);
 });
 
 test("tidal-range layer: chip, dateless toast, probe-able grid", async ({ page }) => {

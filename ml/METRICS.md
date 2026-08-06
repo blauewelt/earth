@@ -82,11 +82,29 @@ point value.
 
 ## Protocol upgrades that buy real power (ranked)
 
-1. **Year-blocked k-fold probing** (all 240 RAPID months become test in
-   turn; codec fixed): SE(r) 0.29 → 0.10, i.e. ~8× more effective truth,
-   for pure compute. Caveat to document when built: the codec saw the
-   non-holdout years during self-supervised training — mild optimism
-   possible; probe *comparisons* remain fair.
+1. **Year-blocked k-fold probing — BUILT (`probe_kfold.py`,
+   2026-08-06):** all 240 RAPID months become test exactly once (folds
+   blocked by calendar year; λ on an inner tail; block-bootstrap CI over
+   whole years). First run, linear section probe, deseasonalised:
+
+   | codec | k-fold r | 95% CI |
+   |---|---|---|
+   | dz8 | 0.111 | [0.01, 0.20] |
+   | dz16 | 0.151 | [0.01, 0.28] |
+   | d_z=32 (actions #1) | 0.182 | [0.05, 0.31] |
+   | dz64 | **0.308** | [0.13, 0.46] |
+
+   Three lessons the coarse instrument could not deliver: every CI
+   excludes zero (the embeddings carry REAL deseasonalised AMOC signal —
+   the first statistically defensible version of that claim); the true
+   effect size is ~0.1–0.3, i.e. the 36-month draws of 0.4+ were
+   flattering; and r rises monotonically with d_z even though chan%
+   saturates at 32 — the transport read-out wants a wider bottleneck
+   than field prediction does. Caveat (in the script header): the codec
+   saw non-holdout months' FIELDS during self-supervised training, so
+   absolute values are mildly optimistic; comparisons are fair. On
+   "hold out twice as much" instead: 6 years would buy only √2
+   (SE 0.29→0.20) and starve training — k-fold dominates it.
 2. **More truth series**: Florida Current cable (daily, 1982→ — several
    times RAPID's span), OSNAP, MOVE, SAMBA as additional never-seen
    transports. This is the only lever that adds *independent* months.

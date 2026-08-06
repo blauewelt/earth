@@ -2747,6 +2747,10 @@ function updateLegends() {
     panel.appendChild(ensembleLegendEl(sstEnsembleLayer.__ensembleMode));
     any = true;
   }
+  if (typeof tideLive !== "undefined" && tideLive.on) {
+    panel.appendChild(tideLegendEl());
+    any = true;
+  }
   for (const e of Object.values(state.layers)) {
     if (!e.layer) continue;
     if (e.isDelta) {
@@ -6406,6 +6410,7 @@ function tideEnsurePrimitive() {
     }),
     appearance: new Cesium.EllipsoidSurfaceAppearance({
       material: tideLive.mat, translucent: true, aboveGround: false,
+      flat: true,   // DATA colours: never sun-shaded (the base globe is)
     }),
     asynchronous: false,
   }));
@@ -6430,6 +6435,41 @@ function tideMarkers() {
   tideLive.labels.get(1).position =
     Cesium.Cartesian3.fromDegrees(ast.sun.lon, ast.sun.lat, 50000);
   return ast;
+}
+
+function tideLegendEl() {
+  const div = document.createElement("div");
+  div.className = "legend-item";
+  div.innerHTML = `<div class="legend-title">Tide height (live) — vs mean sea level</div>`;
+  const wrap = document.createElement("div");
+  wrap.className = "legend-bar-wrap";
+  const canvas = document.createElement("canvas");
+  const W = 268, H = 14, dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.height = H + "px";
+  canvas.className = "legend-bar";
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  for (let x = 0; x < W; x++) {
+    const [r, g, b] = rampColor("anom", x / (W - 1));
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(x, 0, 1, H);
+  }
+  const read = document.createElement("div");
+  read.className = "legend-read hidden";
+  canvas.addEventListener("pointermove", (e) => {
+    const t = Math.max(0, Math.min(1, e.offsetX / canvas.clientWidth));
+    const cm = Math.round((t - 0.5) * 2 * TD_RANGE_CM);
+    read.textContent = `${cm > 0 ? "+" : ""}${cm} cm ${cm >= 0 ? "above" : "below"} mean sea level`;
+    read.classList.remove("hidden");
+  });
+  canvas.addEventListener("pointerleave", () => read.classList.add("hidden"));
+  wrap.appendChild(canvas);
+  const labels = document.createElement("div");
+  labels.className = "legend-labels";
+  labels.innerHTML = `<span>−${TD_RANGE_CM} cm</span><span>0 · mean</span><span>+${TD_RANGE_CM} cm</span>`;
+  div.appendChild(wrap); div.appendChild(labels); div.appendChild(read);
+  return div;
 }
 
 function tideTabVisible() {
@@ -6466,6 +6506,9 @@ function tideLoop() {
     if (now - tideLive.lastPaint > 100) {              // <=10 fps texture swap
       tideLive.lastPaint = now;
       const volUp = tideLive.on ? tidePaint() : null;
+      if (tideLive.on) {
+        viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(tideSim.t));
+      }
       const ast = tideMarkers();
       tideStats(volUp, ast);
       if (tideSim.markCell != null && tideTabVisible()) tideCurve();
@@ -6478,6 +6521,11 @@ function tideLoop() {
 
 async function ensureTideLive(on) {
   tideLive.on = on;
+  // The sun lights the planet while the tide runs: Cesium's own solar
+  // terminator, driven by the SIM clock (below), so daylight, the \u2600
+  // marker and the S2 bulge all agree. The tide material itself is flat
+  // (unlit) - data colours stay honest on the night side.
+  viewer.scene.globe.enableLighting = on;
   if (on) {
     await loadTideData();
     tideEnsurePrimitive();
@@ -6485,8 +6533,10 @@ async function ensureTideLive(on) {
   } else if (tideLive.prim) {
     tideLive.prim.show = false;
     tideLive.labels.show = false;
+    viewer.clock.currentTime = Cesium.JulianDate.now();
     viewer.scene.requestRender();
   }
+  updateLegends();
 }
 
 function tideCurve() {
@@ -6529,14 +6579,16 @@ function tideSelectPoint(carto) {
   const i = iy * tideData.nx + ix;
   if (ix < 0 || ix >= tideData.nx || iy < 0 || iy >= tideData.ny || !tideFields.mask[i]) return false;
   tideSim.markCell = i;
+  const cm = Math.round(tideHeightAt(i, tideSim.t));
+  const cmTxt = `${cm > 0 ? "+" : ""}${cm} cm ${cm >= 0 ? "above" : "below"} mean`;
   document.getElementById("td-point").classList.remove("hidden");
   document.getElementById("td-point-title").textContent =
     `${Math.abs(lat).toFixed(0)}\u00b0${lat >= 0 ? "N" : "S"} ` +
-    `${Math.abs(lon).toFixed(0)}\u00b0${lon >= 0 ? "E" : "W"} \u2014 next 3 days ` +
-    `(dashed lines = day boundaries)`;
+    `${Math.abs(lon).toFixed(0)}\u00b0${lon >= 0 ? "E" : "W"} \u2014 tide now ${cmTxt} ` +
+    `\u00b7 next 3 days (dashed lines = day boundaries)`;
   if (tideTabVisible()) tideCurve();
-  else showToast(`Point selected \u2014 its 3-day tide curve is in the <strong>Tides tab</strong>.`,
-                 { key: "tide-point" });
+  else showToast(`Tide here now: <strong>${cmTxt}</strong> \u2014 the point's 3-day curve ` +
+                 `is in the <strong>Tides tab</strong>.`, { key: "tide-point", replace: true });
   return true;
 }
 

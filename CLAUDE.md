@@ -23,6 +23,14 @@ ordinary prose: lay out the options briefly in the reply text, name the one
 you'd pick and why, proceed with it, and make it easy to reverse. The user
 answers or corrects course in a normal message.
 
+### 0b. Post full GitHub links for every doc you write
+
+Whenever a session creates or substantially updates a Markdown document,
+its reply in chat must include the full clickable GitHub URL
+(https://github.com/blauewelt/earth/blob/main/<path>) — the user reads on
+a phone and cannot guess repo paths ("I often run into issues where you
+talk about documentation that I don't know how to access", 2026-08-06).
+
 ### 1. Deploy first
 
 Deploy **before** running the full test suite: commit, deploy (below), then

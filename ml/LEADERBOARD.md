@@ -30,9 +30,13 @@ bottleneck saturates between 16 and 32 — chan% is flat from d_z=16 to 64
 (30.3/30.5/30.6, inside seed noise) and only d_z=8 pays a real price
 (−2 pts; squeezing 12 channels into 8 dims loses skill — a 12-channel
 d_z=8 codec ranks BELOW the 4-channel d_z=32 pilot). Probe columns drift
-upward with d_z but stay inside the ±0.57 CI (METRICS.md). Keep d_z=32;
-the codec's constraint is channels-and-months, not bottleneck width —
-consistent with SCALING.md end to end. These three runs are also the
+upward with d_z but stay inside the ±0.57 CI (METRICS.md) — and the
+year-blocked k-fold probe (3× sharper; METRICS.md) then resolved that
+drift into a real monotone gain: k-fold r 0.11/0.15/0.18/0.31 for d_z
+8/16/32/64, every CI excluding zero. AMENDED VERDICT: d_z=32 suffices
+for field prediction, but the TRANSPORT read-out keeps gaining to
+d_z=64 — the probe wants a wider bottleneck than the reconstruction
+loss rewards. A d_z=128 run is the natural next dispatch. These three runs are also the
 first born fully instrumented: dense loss curves + 4-point probe curves
 rendered on the runners themselves.
 
