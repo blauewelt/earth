@@ -3067,6 +3067,11 @@ test("tide-live layer: paints the globe, moon rides along, tab is the control ro
     el.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await expect.poll(() => page.evaluate(() => window.__earth.tideLive.prim.show)).toBe(false);
+  // the tagline scene brings it back as the ONLY layer (scenes swap, not pile)
+  await page.click('.tag-link[data-scene="tides"]');
+  await expect(page.locator("#active-layers .chip:not(.chip-clear)")).toHaveCount(1);
+  await expect(page.locator("#active-layers")).toContainText("Tide (live)");
+  await expect.poll(() => page.evaluate(() => window.__earth.tideLive.prim.show)).toBe(true);
 });
 
 test("tidal-range layer: chip, dateless toast, probe-able grid", async ({ page }) => {

@@ -354,7 +354,9 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   is "inspect any point", not "forecasts to 2050"). Scenes REPLACE the
   current layers — the chips show the swap and undo it. Current set:
   satellites · surface temperature · sea ice (Arctic flyTo — polar data is
-  invisible from the default view; SCENE_VIEWS) · ocean currents · floats ·
+  invisible from the default view; SCENE_VIEWS) · ocean currents · tides
+  (the live harmonic layer — chip-registered, so scene swaps include it) ·
+  floats ·
   vegetation · forest loss (Amazon-arc flyTo — a 30 m OPERA alert is smaller
   than a screen pixel from orbit, so without the flyTo the scene reads as
   broken) · why forests fall (the other half of that question — no flyTo,

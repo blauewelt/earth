@@ -3881,6 +3881,7 @@ const SCENES = {
   temperature: ["sst", "lst"],
   seaice: ["seaice"],                // daily; tiles end 2025-09 (clamped + toast)
   currents: ["currents"],            // monthly GLORYS snapshot
+  tides: ["toggle-tidelive"],        // the live harmonic tide, own clock
   floats: ["toggle-argo"],           // the live Argo fleet
   vegetation: ["ndvi"],              // monthly, follows the date
   "forest loss": ["dist-alert"],     // 30 m alerts — needs the flyTo below to be visible at all
