@@ -369,7 +369,10 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   current layers — the chips show the swap and undo it. Current set:
   satellites · surface temperature · sea ice (Arctic flyTo — polar data is
   invisible from the default view; SCENE_VIEWS) · ocean currents · tides
-  (the live harmonic layer — chip-registered, so scene swaps include it) ·
+  (the live harmonic layer — chip-registered, so scene swaps include it;
+  ALSO the one scene that switches tabs, opening its Tides control room,
+  because the layer's clock/speed/curve live there and the reverse
+  direction — tab opens ⇒ layer on — already held) ·
   floats ·
   vegetation · forest loss (Amazon-arc flyTo — a 30 m OPERA alert is smaller
   than a screen pixel from orbit, so without the flyTo the scene reads as

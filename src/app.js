@@ -3970,6 +3970,12 @@ function enableScene(key) {
       duration: 2.0,
     });
   }
+  // The tides scene is the one scene that also switches tabs: its clock,
+  // speed control, spring/neap read-out and tapped-point curve live in the
+  // Tides tab, and arriving at the water without its controls strands you
+  // (the reverse direction — opening the tab enables the layer — already
+  // holds, so the two entrances now meet in the same place).
+  if (key === "tides") document.getElementById("tab-tides").click();
 }
 document.querySelectorAll(".tag-link").forEach((b) =>
   b.addEventListener("click", () => enableScene(b.dataset.scene)));

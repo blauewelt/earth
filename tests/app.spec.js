@@ -3071,6 +3071,9 @@ test("tide-live layer: paints the globe, moon rides along, tab is the control ro
   await page.click('.tag-link[data-scene="tides"]');
   await expect(page.locator("#active-layers .chip:not(.chip-clear)")).toHaveCount(1);
   await expect(page.locator("#active-layers")).toContainText("Tide (live)");
+  // the scene also lands you in the control room (the one tab-switching scene)
+  await expect(page.locator("#panel-tides")).toBeVisible();
+  await expect(page.locator("#tab-tides")).toHaveClass(/active/);
   await expect.poll(() => page.evaluate(() => window.__earth.tideLive.prim.show)).toBe(true);
   // truthful legend on the globe + the sun lights the planet on the sim clock
   await expect(page.locator("#legend-panel")).toContainText("mean sea level");
