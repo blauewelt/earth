@@ -68,10 +68,15 @@ for (const c of commits) {
     const mode = git("ls-tree", c, "--", path).split(/\s+/)[0];
     const blob = gitB("show", `${c}:${path}`);
     let entry;
-    try {
-      const text = blob.toString("utf8");
-      if (Buffer.from(text, "utf8").equals(blob)) entry = { path, mode, type: "blob", content: text };
-    } catch { /* binary */ }
+    // Inline small text; big files (baked data years, >1 MB) go through the
+    // blob API first — one 160 MB tree request would be rejected, 46 blob
+    // posts are not.
+    if (blob.length <= 1024 * 1024) {
+      try {
+        const text = blob.toString("utf8");
+        if (Buffer.from(text, "utf8").equals(blob)) entry = { path, mode, type: "blob", content: text };
+      } catch { /* binary */ }
+    }
     if (!entry) {
       const { sha } = await api("POST", "/git/blobs",
         { content: blob.toString("base64"), encoding: "base64" });

@@ -984,7 +984,7 @@
    "license": "Public domain",
    "globe": true,
    "amoc": true,
-   "notes": "High-res daily SST; NRT cold-blob index input · Live globe layer in this app."
+   "notes": "High-res daily SST; NRT cold-blob index input · Live globe layer in this app · Two live globe layers in this app: 1991–2020 climatology and full monthly record (scale to 36 °C)."
   },
   {
    "id": "hadisst",

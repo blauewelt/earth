@@ -428,6 +428,20 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    id: "oisst-monthly",
+    grid: true, gridFile: "data/oisst_monthly.json", monthlyGrid: true,
+    // Exists because MUR's GIBS palette saturates at 32 degC (tiles arrive
+    // painted). This is SST from the NUMBERS, scale to 36: the Persian Gulf
+    // separates from the merely-warm tropics, and the probe reads exact
+    // values with no caps. Monthly-grid posture like GLORYS: neither
+    // aggregable nor delta-able through the raster machinery.
+    ramp: "sst", vmin: -2, vmax: 36, units: "°C", maxLevel: 6,
+    doc: "https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html",
+    title: "Sea surface temperature (OISST monthly, to 36°)",
+    meta: "Monthly-mean SST from the numbers, 1981-09 → now — the scale reaches 36 °C, so the hottest seas actually show",
+    on: false,
+  },
+  {
     id: "argo-t300",
     grid: true, gridFile: "data/argo_t300.json", snapshotGrid: true,
     ramp: "anom", vmin: -2, vmax: 2, units: "°C", maxLevel: 6,
@@ -3687,6 +3701,12 @@ const LAYER_FACTS = {
          "metres on wide shelves (Fundy, the Severn, Ungava), and near zero at the " +
          "amphidromic hubs the tide rotates around. From DGFI-TUM's EOT20 model, " +
          "fit to 27 years of satellite altimetry." },
+  "oisst-monthly": { rec: "measurements 1981-09 → present · the date's month picks the map", int: "monthly means", sp: "0.25° source → 1° shown",
+    sum: "Sea surface temperature as numbers, not paint: NOAA's OISST monthly " +
+         "means on a scale that reaches 36 °C. The MUR satellite layer's palette " +
+         "saturates at 32° — on it, the 35° Persian Gulf and 32° open tropics look " +
+         "identical. Here they separate, and clicking reads the exact value. The " +
+         "full record back to 1981 makes Compare-across-decades honest too." },
   "gpcp": { rec: "measurements 1979 → present · the map shows the average over the whole record (not one date)", int: "source: monthly · shown: mean annual total", sp: "2.5° (~275 km)",
     sum: "The long-term average of global rainfall: gauge and satellite records " +
          "blended since 1979, shown here as mean annual precipitation. The tropical " +

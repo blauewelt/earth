@@ -1844,6 +1844,66 @@ def islands(continent_km2=3e6):
           f"{raw / 1e6:.2f} MB raw / {gz / 1e6:.2f} MB gzipped")
 
 
+def oisst_monthly():
+    """NOAA OISST v2.1 monthly means, full record 1981-09 -> now, as a
+    month-keyed globe layer (same index + per-year-file contract as the
+    GLORYS grids). Exists because the MUR GIBS palette saturates at 32 degC -
+    the tiles arrive painted, so 34-degree Persian Gulf water is
+    indistinguishable from 32-degree water no matter what the client does
+    ("I cannot tell the hottest sea on earth", 2026-08-06). This layer is
+    baked from the NUMBERS, scaled to 36, and the probe reads exact cell
+    values with no caps. Source: downloads.psl.noaa.gov, ~2.2 GB NetCDF,
+    cached in /tmp/oisst. 0.25-deg block-meaned to 1-deg."""
+    import numpy as np
+    import netCDF4
+    print("OISST v2.1 monthly means, full record ...")
+    src = "/tmp/oisst/sst.mon.mean.nc"
+    if not os.path.exists(src):
+        _download("https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2.highres/sst.mon.mean.nc",
+                  src, note="~2.2 GB")
+    d = netCDF4.Dataset(src)
+    t = d.variables["time"]
+    dates = netCDF4.num2date(t[:], t.units, only_use_cftime_datetimes=False)
+    sst = d.variables["sst"]                    # (time, lat 720 asc, lon 1440 0..360)
+    nx, ny = 360, 180
+    os.makedirs(os.path.join(DATA, "oisst_y"), exist_ok=True)
+    months = {}
+    for i, dt in enumerate(dates):
+        block = np.ma.filled(sst[i], np.nan)                     # (720, 1440)
+        g = np.nanmean(block.reshape(ny, 4, nx, 4), axis=(1, 3))  # 1-deg block mean
+        g = np.roll(g, nx // 2, axis=1)                           # lon 0..360 -> -180..180
+        months[f"{dt.year:04d}-{dt.month:02d}"] = [
+            None if not np.isfinite(v) else round(float(v), 1) for v in g.ravel()]
+    stamps = sorted(months)
+    latest = stamps[-1]
+    for yr in sorted({s[:4] for s in stamps}):
+        with open(os.path.join(DATA, "oisst_y", f"{yr}.json"), "w") as f:
+            json.dump({"year": int(yr),
+                       "months": {s: months[s] for s in stamps if s[:4] == yr}},
+                      f, separators=(",", ":"))
+    payload = {
+        "id": "oisst-monthly", "title": "Sea surface temperature (OISST monthly)",
+        "units": "°C",
+        "source": "NOAA OISST v2.1 monthly means (PSL)",
+        "citation": "Huang et al. 2021, doi:10.1175/JCLI-D-20-0166.1",
+        "doc": "https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html",
+        "ramp": "sst", "vmin": -2, "vmax": 36,
+        "west": -180, "south": -90, "east": 180, "north": 90,
+        "dlon": 1.0, "dlat": 1.0, "nx": nx, "ny": ny,
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "latest": latest,
+        "monthsAvailable": stamps,
+        "yearDir": "data/oisst_y",
+        "months": {s: months[s] for s in stamps if s[:4] == latest[:4]},
+        "values": months[latest],
+    }
+    with open(os.path.join(DATA, "oisst_monthly.json"), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    hot = max(v for v in months[max(s for s in stamps if s.endswith("-08"))] if v is not None)
+    print(f"  wrote oisst_monthly.json: {len(stamps)} months {stamps[0]} -> {latest}; "
+          f"hottest August cell {hot:.1f} °C (the reason this layer exists)")
+
+
 def tides():
     """EOT20 (DGFI-TUM) global ocean tide model — harmonic constants from
     multi-mission satellite altimetry (Hart-Davis et al. 2021,
@@ -1974,6 +2034,7 @@ if __name__ == "__main__":
            "gpcp": gpcp, "eobs": eobs, "oisst": oisst, "meteoswiss": meteoswiss,
            "species": species, "argo_column": argo_column, "glorys": glorys, "eei": eei,
            "gfs": gfs, "drivers": drivers, "cities": cities, "tides": tides,
+           "oisst_monthly": oisst_monthly,
            "gazetteer": gazetteer, "islands": islands, "icon_sources": icon_sources}
     for w in which:
         fns[w]()

@@ -1064,3 +1064,27 @@ test.describe("tides.json + tide_constituents.json (EOT20)", () => {
     expect(swing(idx(-140.5, 30.5))).toBeLessThan(150);     // gyre: < 1.5 m
   });
 });
+
+test.describe("oisst_monthly.json (SST from the numbers, to 36°)", () => {
+  test("month-keyed contract; the hottest seas actually show above 32", () => {
+    const g = read("oisst_monthly.json");
+    for (const f of ["latest", "monthsAvailable", "yearDir", "months", "values",
+                     "vmin", "vmax", "nx", "ny"]) {
+      expect(g[f], `missing ${f}`).not.toBeUndefined();
+    }
+    expect(g.vmax).toBe(36);
+    expect(g.monthsAvailable[0]).toBe("1981-09");
+    expect(g.monthsAvailable.length).toBeGreaterThan(500);
+    expect(g.values.length).toBe(360 * 180);
+    // the reason the layer exists: an August Persian Gulf cell reads >32.5
+    const aug = g.monthsAvailable.filter((s) => s.endsWith("-08")).pop();
+    const yr = read(`oisst_y/${aug.slice(0, 4)}.json`).months[aug];
+    const cell = (lon, lat) => yr[(Math.floor(lat) + 90) * 360 + (Math.floor(lon) + 180)];
+    expect(cell(52.5, 26.5)).toBeGreaterThan(32.5);   // Persian Gulf, August
+    // reduce-then-assert (house rule): global August max in a sane band
+    const finite = yr.filter((v) => v != null);
+    expect(Math.max(...finite)).toBeGreaterThan(33);
+    expect(Math.max(...finite)).toBeLessThan(38);
+    expect(Math.min(...finite)).toBeGreaterThan(-3);
+  });
+});
