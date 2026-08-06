@@ -115,11 +115,17 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--d-model", type=int, default=96)
     ap.add_argument("--layers", type=int, default=3)
+    ap.add_argument("--seed", type=int, default=0,
+                    help="torch/numpy seed (sweeps need more than one)")
+    ap.add_argument("--tag", default="",
+                    help="suffix for output files: temporal_<tag>.json/.pt")
     ap.add_argument("--max-pixels", type=int, default=0,
                     help="subsample ocean pixels (code-path smoke only; "
                          "the 26.5N section is always kept)")
     a = ap.parse_args()
 
+    torch.manual_seed(a.seed)
+    np.random.seed(a.seed)
     run_dir = os.path.join(HERE, "runs", a.run)
     ck = torch.load(os.path.join(run_dir, "pixelmae.pt"),
                     map_location="cpu", weights_only=False)
@@ -242,7 +248,7 @@ def main():
         ev_t = np.array([t + 1 < T and t_hold[t + 1] and t + 1 >= K
                          for t in range(T)])
         et, ep = np.where(ev_t[:, None] & np.ones(P, bool)[None, :])
-        sel = np.random.default_rng(0).choice(len(et), min(20000, len(et)), replace=False)
+        sel = np.random.default_rng(a.seed).choice(len(et), min(20000, len(et)), replace=False)
         et = torch.as_tensor(et[sel], dtype=torch.long)
         ep = torch.as_tensor(ep[sel], dtype=torch.long)
         base = et - K + 1
@@ -307,10 +313,12 @@ def main():
                               "n_test": int(te.sum()), "features": "hidden(-1) mean over section"}
 
     print(json.dumps(results, indent=2))
+    suffix = f"_{a.tag}" if a.tag else ""
+    results["seed"] = a.seed
     torch.save({"model": model.state_dict(), "args": vars(a)},
-               os.path.join(run_dir, "temporal.pt"))
-    json.dump(results, open(os.path.join(run_dir, "temporal.json"), "w"), indent=2)
-    print(f"saved {run_dir}/temporal.pt")
+               os.path.join(run_dir, f"temporal{suffix}.pt"))
+    json.dump(results, open(os.path.join(run_dir, f"temporal{suffix}.json"), "w"), indent=2)
+    print(f"saved {run_dir}/temporal{suffix}.pt")
 
 
 if __name__ == "__main__":

@@ -62,13 +62,20 @@ def anomaly_transform(X, moy, t_hold, x_hold):
 
 
 def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
-              n_pixels=600, K=12, tsteps=400, tbatch=128, seed=0):
+              n_pixels=600, K=12, tsteps=400, tbatch=128, seed=0, obs_in=None):
     """All metrics for the codec AS IT IS NOW. X must already be in the
-    space the codec was trained in (anomaly). Returns a flat dict."""
+    space the codec was trained in (anomaly). Returns a flat dict.
+
+    obs_in: optional observation mask for the ENCODER ONLY (ablations —
+    channels marked unobserved enter as the codec's native missing tokens).
+    Scoring targets always use the true OBS, so 'predict the field from
+    less input' is measured against the same reality."""
     was_training = codec.training
     codec.eval()
     t0 = time.time()
     rng = np.random.default_rng(seed)
+    if obs_in is None:
+        obs_in = OBS
     lats, lons = d["lats"], d["lons"]
     T, H, W, C = X.shape
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12),
@@ -91,7 +98,7 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
 
     # ---- 1 · linear section probe (K=1) ----------------------------------
     sec_sel = np.where(ys == sec_y)[0]
-    Zsec, _ = embed_everything(codec, X, OBS, ctx_all, lats, lons,
+    Zsec, _ = embed_everything(codec, X, obs_in, ctx_all, lats, lons,
                                ys[sec_sel], xs[sec_sel], codec.d_z)
     Fsec = Zsec.mean(1)                                   # [T, d_z]
     out["linear_r_deseas"], _ = ridge_r(Fsec[ridx], rv_des, tr_all, te_all)
@@ -101,7 +108,7 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
     keep = rng.choice(len(ys), min(n_pixels, len(ys)), replace=False)
     keep = np.union1d(keep, sec_sel)
     kys, kxs = ys[keep], xs[keep]
-    Z, coords = embed_everything(codec, X, OBS, ctx_all, lats, lons,
+    Z, coords = embed_everything(codec, X, obs_in, ctx_all, lats, lons,
                                  kys, kxs, codec.d_z)
     P = len(kys)
     Zt = torch.from_numpy(Z)
