@@ -215,6 +215,7 @@ A new layer is not done until it has **all** of:
    | Vegetation disturbance (OPERA DIST-ALERT) | ✗ | ✗ | classification — the pixel is a class code, and class codes neither average nor subtract; the change signal is already IN the product |
    | Vegetation loss annual (OPERA DIST-ANN) | ✗ | ✗ | classification, and `annual` besides — one tile date per year |
    | True colour, night lights | ✗ | ✗ | photographs, no colormap to invert |
+   | Tide height (live) | ✗ | ✗ | animated harmonic reconstruction on its own clock — there is no date axis to average or difference; the Tides tab is its control room |
    | Grid climatologies | ✗ | ✗ | already multi-decade averages, not timed |
    | Drivers of forest loss (grid) | ✗ | ✗ | categorical AND untimed — one 2001–2025 attribution, and "logging" plus "wildfire" is not a quantity |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set

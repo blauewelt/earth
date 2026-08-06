@@ -4512,7 +4512,7 @@
    "license": "CC-BY 4.0",
    "globe": true,
    "amoc": false,
-   "notes": "Empirical ocean tide model from multi-mission altimetry (Hart-Davis et al. 2021) · Live globe layer in this app · Animated in the Tides tab."
+   "notes": "Empirical ocean tide model from multi-mission altimetry (Hart-Davis et al. 2021) · Live globe layer in this app (Tide height, animated) · Controls in the Tides tab."
   }
  ]
 }

@@ -3016,17 +3016,22 @@ test("the page is installable and serves versioned assets", async ({ page }) => 
   expect(styled).toBe("absolute");
 });
 
-test("tides tab: harmonic animation paints the ocean, moon marker, click curve", async ({ page }) => {
-  await page.click("#tab-tides");
-  await expect(page.locator("#td-clock .stat-value")).not.toHaveText("–", { timeout: 15000 });
+test("tide-live layer: paints the globe, moon rides along, tab is the control room", async ({ page }) => {
+  const toasts = await recordToasts(page);          // BEFORE the action (see helper)
+  await page.click("#tab-tides");                   // opening the tab enables the layer
+  await expect(page.locator("#td-clock .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  await expect(page.locator("#active-layers")).toContainText("Tide (live)");
+  await expect.poll(toasts).toContain("own clock");
   const r = await page.evaluate(() => {
-    const map = document.getElementById("td-map");
-    const px = map.getContext("2d").getImageData(0, 0, map.width, map.height).data;
+    const tl = window.__earth.tideLive;
+    const px = tl.front.getContext("2d").getImageData(0, 0, tl.front.width, tl.front.height).data;
     let painted = 0;
-    for (let i = 3; i < px.length; i += 4 * 997) if (px[i] > 0) painted++;  // sparse alpha sample
+    for (let i = 3; i < px.length; i += 4 * 997) if (px[i] > 0) painted++;
     const fundy = (45 + 90) * 360 + (-66 + 180);
     return {
       painted,
+      primShown: tl.prim.show,
+      labelCount: tl.labels.length,
       consts: window.__earth.tides.constituents.length,
       playing: window.__earth.tideSim.playing,
       hFundy: window.__earth.tideHeightAt(fundy, Date.now()),
@@ -3035,19 +3040,33 @@ test("tides tab: harmonic animation paints the ocean, moon marker, click curve",
     };
   });
   expect(r.painted).toBeGreaterThan(30);            // ocean cells are actually drawn
+  expect(r.primShown).toBe(true);
+  expect(r.labelCount).toBe(2);                     // moon + sun
   expect(r.consts).toBe(5);
   expect(r.playing).toBe(true);
   expect(Number.isFinite(r.hFundy)).toBe(true);
-  expect(r.volume).toBeGreaterThan(3000);           // displaced water is planetary-scale km³
-  expect(Math.abs(r.moonLat)).toBeLessThanOrEqual(29);   // moon stays within lunar standstill band
-  // click mid-Atlantic (~30°N 30°W) → the point's 3-day curve appears.
-  // Aim at the CELL CENTRE and accept ±1°: the fraction→pixel→cell round
-  // trip can land a boundary click in the neighbouring 1° cell.
-  const box = await page.locator("#td-map").boundingBox();
-  await page.mouse.click(box.x + box.width * ((-29.5 + 180) / 360),
-                         box.y + box.height * ((90 - 29.5) / 180));
-  await expect(page.locator("#td-point")).toBeVisible();
-  await expect(page.locator("#td-point-title")).toContainText(/(29|30|31)°N (29|30|31)°W/);
+  expect(r.volume).toBeGreaterThan(3000);           // planetary-scale km^3
+  expect(Math.abs(r.moonLat)).toBeLessThanOrEqual(29);   // lunar standstill band
+  // selecting a point (as a globe tap would) draws the 3-day curve in the tab
+  const sel = await page.evaluate(() => {
+    const ok = window.__earth.tideSelectPoint(
+      window.Cesium.Cartographic.fromDegrees(-29.5, 29.5));
+    const c = document.getElementById("td-curve");
+    const px = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    let drawn = 0;
+    for (let i = 3; i < px.length; i += 4 * 97) if (px[i] > 0) drawn++;
+    return { ok, drawn, title: document.getElementById("td-point-title").textContent };
+  });
+  expect(sel.ok).toBe(true);
+  expect(sel.drawn).toBeGreaterThan(5);
+  expect(sel.title).toContain("30\u00b0N");
+  // switching the layer off from its checkbox hides the primitive
+  await page.evaluate(() => {
+    const el = document.getElementById("toggle-tidelive");
+    el.checked = false;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.tideLive.prim.show)).toBe(false);
 });
 
 test("tidal-range layer: chip, dateless toast, probe-able grid", async ({ page }) => {

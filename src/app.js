@@ -2803,6 +2803,7 @@ const STATIC_LAYER_CHIPS = [
   ["toggle-argo", "Argo floats"],
   ["toggle-stations", "Monitoring stations"],
   ["toggle-glaciers", "Glaciers"],
+  ["toggle-tidelive", "Tide (live)"],
   ["toggle-gbif", "Biodiversity"],
 ];
 
@@ -3382,6 +3383,9 @@ function datelessToast(id) {
       "<strong>date selector doesn't change this layer</strong>.",
     glaciers: "<strong>Glaciers (RGI v7)</strong> is a single inventory (~year 2000), so the " +
       "<strong>date selector doesn't change it</strong>. Its melt-rate colouring is a 2000–2020 average.",
+    tidelive: "<strong>Tide height (live)</strong> runs on its <strong>own clock</strong> " +
+      "(real time by default \u2014 speed and pause in the Tides tab), so the date selector " +
+      "doesn't change it. \u263e and \u2600 mark where moon and sun are overhead.",
     "sst-ensemble": null,   // the ensemble IS date-driven
   };
   return DATA_MSG[id] || null;
@@ -4322,10 +4326,16 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((click) =
   if (!picked) pickCard.classList.add("hidden");
   // Nothing pickable under the cursor: if the inspector is engaged and the
   // click actually hit the globe (not sky), compose that point's state card.
+  let tideTook = false;
+  if (!picked && tideLive.on) {
+    const cart = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
+    if (cart) tideTook = tideSelectPoint(Cesium.Cartographic.fromCartesian(cart));
+    // fall through: the inspector still composes its card on the same tap
+  }
   if (!picked && pixelInspectorEngaged()) {
     const cart = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
     if (cart) showPixelState(Cesium.Cartographic.fromCartesian(cart));
-  } else if (!picked && !topColormapLayer()) {
+  } else if (!picked && !topColormapLayer() && !tideTook) {
     // Nothing armed and nothing colormapped: the tap deliberately does
     // NOTHING — but silence looks broken, so say why, once per sitting.
     const cart = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
@@ -6227,28 +6237,32 @@ function drawTempChart() {
 }
 
 /* -------------------------------------------------------------------- tides
- * The Tides tab reconstructs the ACTUAL global tide each frame from EOT20's
- * harmonic constants: h(cell, t) = Σ_c A·cos(speed·t + V0 − G). The per-frame
- * cost is tiny by construction — speed·t + V0 is one angle PER CONSTITUENT
- * (not per cell), so a frame is 5 cos/sin calls plus a fused multiply-add
- * over the precomputed per-cell fields P = A·cosG, Q = A·sinG:
- * h = Σ cosφ·P + sinφ·Q. 64,800 cells × 5 constituents ≈ 0.6 MFLOP/frame.
- * The clock starts at real "now", so the pattern is genuinely in phase with
- * today's ocean (sans nodal f/u, ±10–15% on lunar amplitudes — stated in the
- * panel's fine print). */
+ * The tide renders ON THE GLOBE: a full-globe rectangle primitive whose
+ * texture is a 360x180 canvas repainted from EOT20's harmonic constants —
+ * h(cell, t) = sum_c A*cos(speed*t + V0 - G). Per frame that is 5 cos/sin
+ * calls plus a fused multiply-add over precomputed P = A*cosG, Q = A*sinG
+ * fields (~0.6 MFLOP), double-buffered so Cesium re-uploads the texture
+ * only when a new frame was actually painted (assigning the OTHER canvas
+ * to the material uniform is what signals the change). The primitive
+ * carries the CITY_PICK sentinel, so every click handler sees through it —
+ * the pixel inspector and the value probe keep working over the ocean.
+ * The Tides tab is the control room (clock, speed, spring/neap, a tapped
+ * point's 3-day curve); the picture itself lives with every other dataset:
+ * on the globe. Clock starts at real now — in phase with today's ocean
+ * (sans nodal f/u, +-10-15% on lunar amplitudes, stated in the tab). */
 
 let tideData = null;          // baked constituents (lazy-fetched)
-let tideFields = null;        // per-constituent {P, Q} Float32Arrays + mask
-let tideSim = { t: 0, playing: true, speed: 3600, raf: 0, wall: 0 };
-const TD_RANGE_CM = 250;      // colour scale: ±2.5 m, clamped
+let tideFields = null;        // per-constituent {P, Q} + mask + cell areas
+let tideSim = { t: 0, playing: true, speed: 3600, raf: 0, wall: 0, markCell: null };
+const tideLive = { on: false, prim: null, mat: null, labels: null,
+                   front: null, back: null, img: null, lastPaint: 0, opacity: 0.85 };
+const TD_RANGE_CM = 250;      // colour scale: +-2.5 m, clamped
 
 function tideAstro(ms) {
-  // Low-precision ephemeris (~1°): sub-lunar/sub-solar points + lunar phase.
+  // Low-precision ephemeris (~1 deg): sub-lunar/sub-solar points + phase.
   const d = (ms - Date.UTC(2000, 0, 1, 12)) / 86400000;   // days since J2000
-  const T = d / 36525;
   const rad = Math.PI / 180;
   const wrap = (x) => ((x % 360) + 360) % 360;
-  // moon (truncated ELP): ecliptic λ, β
   const Lp = wrap(218.316 + 13.176396 * d);
   const Mp = wrap(134.963 + 13.064993 * d);
   const F = wrap(93.272 + 13.229350 * d);
@@ -6261,7 +6275,6 @@ function tideAstro(ms) {
   const raM = Math.atan2(
     Math.sin(lam * rad) * Math.cos(eps * rad) - Math.tan(bet * rad) * Math.sin(eps * rad),
     Math.cos(lam * rad)) / rad;
-  // sun
   const g = wrap(357.529 + 0.98560028 * d);
   const q = wrap(280.459 + 0.98564736 * d);
   const lamS = q + 1.915 * Math.sin(g * rad) + 0.020 * Math.sin(2 * g * rad);
@@ -6269,8 +6282,7 @@ function tideAstro(ms) {
   const raS = Math.atan2(Math.cos(eps * rad) * Math.sin(lamS * rad),
     Math.cos(lamS * rad)) / rad;
   const gmst = wrap(280.46062 + 360.98564737 * d);
-  const lonOf = (ra) => wrap(ra - gmst + 540) - 180;    // → [-180, 180)
-  // elongation moon−sun → phase (0 new, 180 full); springiness = |cos|
+  const lonOf = (ra) => wrap(ra - gmst + 540) - 180;
   const elong = wrap(lam - lamS);
   return { moon: { lon: lonOf(raM), lat: decM }, sun: { lon: lonOf(raS), lat: decS },
            elong, spring: Math.abs(Math.cos(elong * rad)) };
@@ -6291,18 +6303,16 @@ function tidePrepare(data) {
     }
     fields.consts.push({ speed: c.speed, V0: c.V0, P, Q });
   }
-  // cell areas for the displaced-volume stat (km³): dlon·dlat cell at lat φ
   fields.area = new Float32Array(n);
   for (let iy = 0; iy < data.ny; iy++) {
     const lat = data.south + (iy + 0.5) * (data.north - data.south) / data.ny;
-    const a = 111.32 * Math.cos(lat * rad) * 110.57;    // km² per 1°×1°
+    const a = 111.32 * Math.cos(lat * rad) * 110.57;    // km^2 per cell
     for (let ix = 0; ix < data.nx; ix++) fields.area[iy * data.nx + ix] = a;
   }
   return fields;
 }
 
 function tideHeightAt(i, ms) {
-  // h in cm at flat cell index i (NaN over land)
   if (!tideFields || !tideFields.mask[i]) return NaN;
   const th = (ms - Date.parse(tideData.epoch)) / 3600000;
   const rad = Math.PI / 180;
@@ -6314,14 +6324,37 @@ function tideHeightAt(i, ms) {
   return h;
 }
 
-function tideDraw() {
-  const data = tideData, f = tideFields;
-  const canvas = document.getElementById("td-map");
-  const ctx = canvas.getContext("2d");
-  const { nx, ny } = data;
-  const img = tideSim.img || (tideSim.img = new ImageData(nx, ny));
-  const px = img.data;
-  const th = (tideSim.t - Date.parse(data.epoch)) / 3600000;
+let tideDataPromise = null;
+function loadTideData() {
+  if (!tideDataPromise) {
+    tideDataPromise = fetch("data/tide_constituents.json")
+      .then((r) => r.json())
+      .then((j) => {
+        tideData = j;
+        tideFields = tidePrepare(j);
+        tideSim.t = Date.now();
+        return j;
+      });
+  }
+  return tideDataPromise;
+}
+
+/* Paint one frame into the BACK canvas (rows flipped: image row 0 = north),
+ * swap buffers, hand the fresh canvas to the material. Returns the volume
+ * of water currently standing above mean sea level, in km^3. */
+function tidePaint() {
+  const { nx, ny } = tideData;
+  const f = tideFields;
+  if (!tideLive.front) {
+    for (const side of ["front", "back"]) {
+      const c = document.createElement("canvas");
+      c.width = nx; c.height = ny;
+      tideLive[side] = c;
+    }
+    tideLive.img = new ImageData(nx, ny);
+  }
+  const px = tideLive.img.data;
+  const th = (tideSim.t - Date.parse(tideData.epoch)) / 3600000;
   const rad = Math.PI / 180;
   const cosns = [], sinns = [];
   for (const c of f.consts) {
@@ -6330,57 +6363,129 @@ function tideDraw() {
   }
   let volUp = 0;
   for (let i = 0; i < f.n; i++) {
-    const o = i * 4;
+    const iy = (i / nx) | 0, ix = i - iy * nx;
+    const o = ((ny - 1 - iy) * nx + ix) * 4;
     if (!f.mask[i]) { px[o + 3] = 0; continue; }
     let h = 0;
     for (let k = 0; k < f.consts.length; k++) {
       h += cosns[k] * f.consts[k].P[i] + sinns[k] * f.consts[k].Q[i];
     }
-    if (h > 0) volUp += h * f.area[i];                 // cm·km² → later /1e5
+    if (h > 0) volUp += h * f.area[i];
     const t = Math.max(0, Math.min(1, 0.5 + h / (2 * TD_RANGE_CM)));
     const [r, g, b] = rampColor("anom", t);
     px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255;
   }
-  // ImageData rows run top→down; our grid runs south→north — draw flipped.
-  const off = tideSim.off || (tideSim.off = new OffscreenCanvas(nx, ny));
-  off.getContext("2d").putImageData(img, 0, 0);
-  ctx.save();
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.imageSmoothingEnabled = true;
-  ctx.scale(1, -1);
-  ctx.drawImage(off, 0, -canvas.height, canvas.width, canvas.height);
-  ctx.restore();
+  const c = tideLive.back;
+  c.getContext("2d").putImageData(tideLive.img, 0, 0);
+  tideLive.back = tideLive.front;
+  tideLive.front = c;
+  if (tideLive.mat) tideLive.mat.uniforms.image = c;   // new object => re-upload
+  return volUp / 1e5;                                  // cm*km^2 -> km^3
+}
 
-  // moon + sun markers
+function tideEnsurePrimitive() {
+  if (tideLive.prim) { tideLive.prim.show = true; tideLive.labels.show = true; return; }
+  tidePaint();
+  tideLive.mat = new Cesium.Material({
+    fabric: {
+      uniforms: { image: tideLive.front, opacity: tideLive.opacity },
+      components: {
+        diffuse: "texture(image, materialInput.st).rgb",
+        alpha: "texture(image, materialInput.st).a * opacity",
+      },
+    },
+  });
+  tideLive.prim = viewer.scene.primitives.add(new Cesium.Primitive({
+    geometryInstances: new Cesium.GeometryInstance({
+      geometry: new Cesium.RectangleGeometry({
+        rectangle: Cesium.Rectangle.fromDegrees(-180, -90, 180, 90),
+        vertexFormat: Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT,
+      }),
+      id: CITY_PICK,                       // clicks see through, like labels
+    }),
+    appearance: new Cesium.EllipsoidSurfaceAppearance({
+      material: tideLive.mat, translucent: true, aboveGround: false,
+    }),
+    asynchronous: false,
+  }));
+  tideLive.labels = viewer.scene.primitives.add(new Cesium.LabelCollection());
+  for (const [glyph, color] of [["\u263e", Cesium.Color.WHITE],
+                                ["\u2600", Cesium.Color.fromCssColorString("#eda100")]]) {
+    tideLive.labels.add({
+      id: CITY_PICK, text: glyph, font: "24px sans-serif",
+      fillColor: color, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      position: Cesium.Cartesian3.fromDegrees(0, 0, 50000),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    });
+  }
+}
+
+function tideMarkers() {
+  if (!tideLive.labels || !tideLive.labels.show) return;
   const ast = tideAstro(tideSim.t);
-  const sx = (lon) => (lon + 180) / 360 * canvas.width;
-  const sy = (lat) => (90 - lat) / 180 * canvas.height;
-  for (const [b, glyph, col] of [[ast.moon, "☾", "#ffffff"], [ast.sun, "☀", "#eda100"]]) {
-    ctx.font = "22px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillStyle = col; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 3;
-    ctx.strokeText(glyph, sx(b.lon), sy(b.lat));
-    ctx.fillText(glyph, sx(b.lon), sy(b.lat));
-  }
-  if (tideSim.markCell != null) {
-    const ix = tideSim.markCell % nx, iy = Math.floor(tideSim.markCell / nx);
-    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5;
-    ctx.strokeRect(ix / nx * canvas.width, (ny - 1 - iy) / ny * canvas.height,
-                   canvas.width / nx, canvas.height / ny);
-  }
+  tideLive.labels.get(0).position =
+    Cesium.Cartesian3.fromDegrees(ast.moon.lon, ast.moon.lat, 50000);
+  tideLive.labels.get(1).position =
+    Cesium.Cartesian3.fromDegrees(ast.sun.lon, ast.sun.lat, 50000);
+  return ast;
+}
 
-  // stats
+function tideTabVisible() {
+  return !document.getElementById("panel-tides").classList.contains("hidden");
+}
+
+function tideStats(volUp, ast) {
+  if (!tideTabVisible()) return;
   const dt = new Date(tideSim.t);
   document.querySelector("#td-clock .stat-value").textContent =
     dt.toISOString().slice(0, 16).replace("T", " ");
-  document.querySelector("#td-volume .stat-value").textContent =
-    Math.round(volUp / 1e5).toLocaleString("en-US");   // cm·km² → km³
+  if (volUp != null) {
+    document.querySelector("#td-volume .stat-value").textContent =
+      Math.round(volUp).toLocaleString("en-US");
+  }
+  ast = ast || tideAstro(tideSim.t);
   const phase = ast.elong < 22 || ast.elong > 338 ? "new" :
     Math.abs(ast.elong - 180) < 22 ? "full" :
     Math.abs(ast.elong - 90) < 22 || Math.abs(ast.elong - 270) < 22 ? "quarter" :
     ast.elong < 180 ? "waxing" : "waning";
   document.querySelector("#td-phase .stat-value").textContent =
-    `${phase} · ${ast.spring > 0.7 ? "→ spring" : ast.spring < 0.3 ? "→ neap" : "between"}`;
-  if (tideSim.markCell != null) tideCurve();
+    `${phase} \u00b7 ${ast.spring > 0.7 ? "\u2192 spring" : ast.spring < 0.3 ? "\u2192 neap" : "between"}`;
+}
+
+/* One loop serves both consumers (globe layer, tab stats); it stops itself
+ * when neither needs it and is (re)started by either entry point. */
+function tideLoop() {
+  cancelAnimationFrame(tideSim.raf);
+  tideSim.wall = performance.now();
+  const step = (now) => {
+    if (!tideLive.on && !tideTabVisible()) return;     // stop: nobody watching
+    if (tideSim.playing) tideSim.t += (now - tideSim.wall) * tideSim.speed;
+    tideSim.wall = now;
+    if (now - tideLive.lastPaint > 100) {              // <=10 fps texture swap
+      tideLive.lastPaint = now;
+      const volUp = tideLive.on ? tidePaint() : null;
+      const ast = tideMarkers();
+      tideStats(volUp, ast);
+      if (tideSim.markCell != null && tideTabVisible()) tideCurve();
+      viewer.scene.requestRender();
+    }
+    tideSim.raf = requestAnimationFrame(step);
+  };
+  tideSim.raf = requestAnimationFrame(step);
+}
+
+async function ensureTideLive(on) {
+  tideLive.on = on;
+  if (on) {
+    await loadTideData();
+    tideEnsurePrimitive();
+    tideLoop();
+  } else if (tideLive.prim) {
+    tideLive.prim.show = false;
+    tideLive.labels.show = false;
+    viewer.scene.requestRender();
+  }
 }
 
 function tideCurve() {
@@ -6414,51 +6519,64 @@ function tideCurve() {
   }
 }
 
+/* A globe tap selects the tide point for the tab's 3-day curve. */
+function tideSelectPoint(carto) {
+  if (!tideData) return false;
+  const lon = Cesium.Math.toDegrees(carto.longitude);
+  const lat = Cesium.Math.toDegrees(carto.latitude);
+  const ix = Math.floor(lon - tideData.west), iy = Math.floor(lat - tideData.south);
+  const i = iy * tideData.nx + ix;
+  if (ix < 0 || ix >= tideData.nx || iy < 0 || iy >= tideData.ny || !tideFields.mask[i]) return false;
+  tideSim.markCell = i;
+  document.getElementById("td-point").classList.remove("hidden");
+  document.getElementById("td-point-title").textContent =
+    `${Math.abs(lat).toFixed(0)}\u00b0${lat >= 0 ? "N" : "S"} ` +
+    `${Math.abs(lon).toFixed(0)}\u00b0${lon >= 0 ? "E" : "W"} \u2014 next 3 days ` +
+    `(dashed lines = day boundaries)`;
+  if (tideTabVisible()) tideCurve();
+  else showToast(`Point selected \u2014 its 3-day tide curve is in the <strong>Tides tab</strong>.`,
+                 { key: "tide-point" });
+  return true;
+}
+
+let tideUiWired = false;
 async function loadTides() {
-  if (!tideData) {
-    tideData = await (await fetch("data/tide_constituents.json")).json();
-    tideFields = tidePrepare(tideData);
-    tideSim.t = Date.now();
+  await loadTideData();
+  if (!tideUiWired) {
+    tideUiWired = true;
     document.getElementById("td-scale").innerHTML =
-      `colour: <span style="color:#3b82f6">−${TD_RANGE_CM / 100} m below</span> … ` +
+      `colour: <span style="color:#3b82f6">\u2212${TD_RANGE_CM / 100} m below</span> \u2026 ` +
       `<span style="color:#e34948">+${TD_RANGE_CM / 100} m above</span> mean sea level ` +
       `(clamped; ranges on shelves exceed it)`;
-    const map = document.getElementById("td-map");
-    map.addEventListener("click", (e) => {
-      const r = map.getBoundingClientRect();
-      const lon = (e.clientX - r.left) / r.width * 360 - 180;
-      const lat = 90 - (e.clientY - r.top) / r.height * 180;
-      const ix = Math.floor((lon - tideData.west) / 1), iy = Math.floor((lat - tideData.south) / 1);
-      const i = iy * tideData.nx + ix;
-      if (!tideFields.mask[i]) return;
-      tideSim.markCell = i;
-      document.getElementById("td-point").classList.remove("hidden");
-      document.getElementById("td-point-title").textContent =
-        `${Math.abs(lat).toFixed(0)}°${lat >= 0 ? "N" : "S"} ` +
-        `${Math.abs(lon).toFixed(0)}°${lon >= 0 ? "E" : "W"} — next 3 days ` +
-        `(dashed lines = day boundaries)`;
-      tideCurve();
-    });
     document.getElementById("td-play").addEventListener("click", (e) => {
       tideSim.playing = !tideSim.playing;
-      e.target.textContent = tideSim.playing ? "⏸" : "▶";
+      e.target.textContent = tideSim.playing ? "\u23f8" : "\u25b6";
     });
     document.getElementById("td-now").addEventListener("click", () => { tideSim.t = Date.now(); });
     document.getElementById("td-speed").addEventListener("change", (e) => {
       tideSim.speed = +e.target.value;
     });
   }
-  cancelAnimationFrame(tideSim.raf);
-  tideSim.wall = performance.now();
-  const step = (now) => {
-    if (document.getElementById("panel-tides").classList.contains("hidden")) return;
-    if (tideSim.playing) tideSim.t += (now - tideSim.wall) * tideSim.speed;
-    tideSim.wall = now;
-    tideDraw();
-    tideSim.raf = requestAnimationFrame(step);
-  };
-  tideSim.raf = requestAnimationFrame(step);
+  // Opening the control room switches the picture on: the tab without the
+  // layer is a dashboard about nothing.
+  const box = document.getElementById("toggle-tidelive");
+  if (!box.checked) {
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  tideLoop();
 }
+
+document.getElementById("toggle-tidelive").addEventListener("change", (e) => {
+  ensureTideLive(e.target.checked);
+  if (e.target.checked) maybeDatelessToast("tidelive");
+});
+document.getElementById("tidelive-alpha").addEventListener("input", (e) => {
+  tideLive.opacity = e.target.value / 100;
+  if (tideLive.mat) tideLive.mat.uniforms.opacity = tideLive.opacity;
+  document.getElementById("tidelive-alpha-val").textContent = `${e.target.value}%`;
+  viewer.scene.requestRender();
+});
 
 /* --------------------------------------------------------------------- tabs */
 
@@ -6525,6 +6643,9 @@ window.__earth = {
   get tideSim() { return tideSim; },
   tideHeightAt,
   tideAstro,
+  tideLive,
+  tideSelectPoint,
+  ensureTideLive,
   movingMean,
   loadTemp,
   get gistemp() { return gistempData; },

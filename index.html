@@ -324,6 +324,29 @@
         </div>
       </div>
       <div class="layer-item">
+        <div class="layer-head"><input type="checkbox" id="toggle-tidelive" title="Show / hide layer"/>
+          <a class="title-link" href="https://www.seanoe.org/data/00683/79489/" target="_blank" rel="noopener" title="Open dataset documentation">Tide height (live)</a></div>
+        <div class="meta">The actual global tide, animated — reconstructed each frame from EOT20's
+          harmonic constants, in phase with the real moon (☾/☀ ride along). Controls, clock and
+          any tapped point's 3-day curve live in the <em>Tides</em> tab.</div>
+        <div class="alpha-row" style="display:flex">
+          <span class="alpha-label">opacity</span>
+          <input type="range" id="tidelive-alpha" min="0" max="100" value="85"
+                 title="Layer opacity — lower it to see the base globe through the water"/>
+          <span class="alpha-val" id="tidelive-alpha-val">85%</span>
+        </div>
+        <div class="glacier-scale-labels"><span>−2.5 m below mean</span><span>0</span><span>+2.5 m above</span></div>
+        <div class="layer-tip">
+          <p class="tip-sum">Red water stands above mean sea level, blue below — the two tidal
+            bulges sweeping the ocean, rotating around amphidromic points, spring and neap
+            breathing over a fortnight. Five harmonic constituents (M2 S2 N2 K1 O1) per 1° cell,
+            ~90% of the tidal signal.</p>
+          <div><span>Recorded</span>harmonic constants fit to 1992–2019 satellite altimetry — the animation runs on its own clock (real time by default), not the date selector</div>
+          <div><span>Interval</span>continuous — speed control in the Tides tab</div>
+          <div><span>Spatial</span>0.125° source → 1° shown</div>
+        </div>
+      </div>
+      <div class="layer-item">
         <div class="layer-head"><input type="checkbox" id="toggle-gbif" title="Show / hide layer"/>
           <a class="title-link" href="https://www.gbif.org" target="_blank" rel="noopener" title="Open dataset documentation">Biodiversity occurrences (GBIF)</a></div>
         <div class="control-row" style="margin:6px 0 2px">
@@ -610,17 +633,15 @@
           </select>
         </label>
       </div>
-      <div id="td-map-wrap">
-        <canvas id="td-map" width="1080" height="540"></canvas>
-      </div>
+      <p class="hint"><strong>The picture is on the globe</strong> — opening this tab switches the
+        <em>Tide height (live)</em> layer on (also in the Layers list); this tab is its control
+        room. ☾ marks the sub-lunar point (the moon directly overhead), ☀ the sub-solar point.</p>
       <div id="td-scale" class="hint"></div>
       <div id="td-point" class="hidden">
         <div id="td-point-title" class="hint"></div>
         <canvas id="td-curve" width="640" height="140"></canvas>
       </div>
-      <p class="hint">Tap the ocean for that point's next three days of tide.
-        <span id="td-moon-hint">☾ marks the sub-lunar point (the moon directly overhead), ☀ the
-        sub-solar point.</span></p>
+      <p class="hint">Tap the ocean on the globe for that point's next three days of tide.</p>
       <h2>What you are watching</h2>
       <p>This is the actual shape of the global tide, reconstructed each frame from the five main
         harmonic constituents of the <a href="https://www.seanoe.org/data/00683/79489/"
@@ -695,7 +716,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">570aa9a3</code></p>
+      <p class="build-line">Build <code id="build-id">9c8a3a73</code></p>
     </section>
 
     <footer>
@@ -740,6 +761,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=570aa9a3"></script>
+  <script src="src/app.js?v=9c8a3a73"></script>
 </body>
 </html>
