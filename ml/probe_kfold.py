@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Year-blocked k-fold RAPID probe — the power upgrade METRICS.md promised.
+"""Year-blocked k-fold transport probe — RAPID plus every truth series.
+
+Since 2026-08-07 this is MULTI-TARGET (lever 1): each series in TARGETS
+(RAPID 26.5N, Florida Current cable 27N, MOVE 16N, OSNAP subpolar, SAMBA
+34.5S — the latter fetched by fetch_truth.py) is probed from its own zonal
+section's embeddings, deseasonalised, year-blocked, block-bootstrapped.
+Sections outside the tensor window are skipped with a note.
+
 
 Doubling the held-out years would only buy sqrt(2): SE(r) 0.29 -> 0.20,
 still coarse, and it starves codec training. This instead makes EVERY
@@ -30,9 +37,22 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model import PixelMAE
 from trainprobe import anomaly_transform
-from temporal import embed_everything, rapid_section
+from temporal import embed_everything, section_of
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# Every basin transport array gets its own zonal section (lat, lon range) —
+# the embeddings pooled along it are what the ridge reads. RAPID/FC share
+# the 26.5N Atlantic section (the cable is at 27N inside it; the two arrays
+# measure sibling quantities across the same boundary). Sections outside
+# the tensor window (e.g. SAMBA on the NA pilot) are skipped with a note.
+TARGETS = {
+    "rapid": {"lat": 26.5, "lon": (-80.0, -13.0), "key": "rapid"},
+    "fc":    {"lat": 26.5, "lon": (-80.0, -13.0), "key": "truth_fc"},
+    "move":  {"lat": 16.5, "lon": (-61.0, -49.0), "key": "truth_move"},
+    "osnap": {"lat": 58.0, "lon": (-45.0, -5.0),  "key": "truth_osnap"},
+    "samba": {"lat": -34.5, "lon": (-52.0, 18.0), "key": "truth_samba"},
+}
 
 
 def kfold_r(F, y, years, lams=(1e-2, 1e-1, 1, 10, 100, 1000), boot=2000, seed=0):
@@ -86,20 +106,33 @@ def main():
     moy = np.array([int(m[5:7]) - 1 for m in months])
     yr = np.array([int(m[:4]) for m in months])
     lats, lons = d["lats"], d["lons"]
-    rapid = d["rapid"]
-    ridx = rapid[:, 0].astype(int)
-    rv = rapid[:, 1].copy()
-    ryr = yr[ridx]
-    rmoy = moy[ridx]
-    # deseasonalise with the OVERALL monthly climatology (every month is test
-    # in some fold; per-fold climatologies differ by <0.1 Sv and would leak
-    # nothing either way — chosen for simplicity and stated here).
-    rclim = np.array([rv[rmoy == m].mean() for m in range(12)])
-    rv_des = rv - rclim[rmoy]
+    month_of_ym = {int(m[:4]) * 100 + int(m[5:7]): i for i, m in enumerate(months)}
+
+    def target_series(spec):
+        """-> (tidx month-indices, deseasonalised values) or None."""
+        if spec["key"] == "rapid":
+            arr = d["rapid"]
+            tidx = arr[:, 0].astype(int)
+            vals = arr[:, 1].copy()
+        else:
+            if spec["key"] not in d:
+                return None
+            arr = d[spec["key"]]
+            keep = [(month_of_ym[int(ym)], v) for ym, v in arr if int(ym) in month_of_ym]
+            if len(keep) < 48:
+                return None
+            tidx = np.array([k[0] for k in keep], dtype=int)
+            vals = np.array([k[1] for k in keep], dtype=float)
+        tmoy = moy[tidx]
+        # deseasonalise with the OVERALL monthly climatology (every month is
+        # test in some fold; per-fold climatologies differ by <0.1 Sv and
+        # would leak nothing either way — chosen for simplicity, stated here).
+        clim = np.array([vals[tmoy == m].mean() for m in range(12)])
+        return tidx, vals - clim[tmoy]
+
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
     ocean = np.isfinite(d["X"][..., 0]).any(axis=0)
     ys, xs = np.where(ocean)
-    sec_y, sec_sel = rapid_section(lats, lons, ys, xs)   # protocol v3 clip
 
     out = {}
     for run in a.runs:
@@ -116,14 +149,27 @@ def main():
         codec.eval()
         Xt = torch.from_numpy(np.nan_to_num(Xa, nan=0.0))
         OBS = torch.from_numpy(np.isfinite(Xa))
-        Z, _ = embed_everything(codec, Xt, OBS, ctx_all, lats, lons,
-                                ys[sec_sel], xs[sec_sel], codec.d_z)
-        F = Z.mean(1)[ridx]
-        r, lo95, hi95, n = kfold_r(F, rv_des, ryr)
-        out[run] = {"r_kfold_deseas": round(r, 3),
-                    "ci95": [round(lo95, 3), round(hi95, 3)], "n": n}
-        print(f"{run:<10} d_z={ck['d_z']:<3} k-fold r_deseas {r:+.3f} "
-              f"[{lo95:+.3f}, {hi95:+.3f}]  (n={n} months, year-blocked)")
+        out[run] = {}
+        for tname, spec in TARGETS.items():
+            ser = target_series(spec)
+            if ser is None:
+                continue
+            sec_y, sec_sel = section_of(lats, lons, ys, xs,
+                                        spec["lat"], *spec["lon"])
+            # argmin() clamps to the window edge — a SAMBA request on the NA
+            # window would silently probe the equator without this check.
+            if abs(float(lats[sec_y]) - spec["lat"]) > 1.0 or len(sec_sel) < 5:
+                print(f"{run:<10} {tname}: section outside window, skipped")
+                continue
+            tidx, v_des = ser
+            Z, _ = embed_everything(codec, Xt, OBS, ctx_all, lats, lons,
+                                    ys[sec_sel], xs[sec_sel], codec.d_z)
+            F = Z.mean(1)[tidx]
+            r, lo95, hi95, n = kfold_r(F, v_des, yr[tidx])
+            out[run][tname] = {"r_kfold_deseas": round(r, 3),
+                               "ci95": [round(lo95, 3), round(hi95, 3)], "n": n}
+            print(f"{run:<10} d_z={ck['d_z']:<3} {tname:<6} k-fold r {r:+.3f} "
+                  f"[{lo95:+.3f}, {hi95:+.3f}]  (n={n} months, year-blocked)")
 
     path = os.path.join(HERE, "runs", "probe_kfold.json")
     json.dump(out, open(path, "w"), indent=2)

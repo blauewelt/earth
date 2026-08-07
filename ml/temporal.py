@@ -86,12 +86,19 @@ class TemporalTransformer(nn.Module):
 RAPID_LON = (-80.0, -13.0)
 
 
+def section_of(lats, lons, ys, xs, lat, lon_lo, lon_hi):
+    """(sec_y, indices into ys/xs) of a zonal probe section: the grid row
+    nearest `lat`, clipped to [lon_lo, lon_hi]. Every transport array gets
+    its own section this way (probe_kfold.TARGETS)."""
+    sec_y = int(np.argmin(np.abs(lats - lat)))
+    sel = np.where((ys == sec_y) & (lons[xs] >= lon_lo)
+                   & (lons[xs] <= lon_hi))[0]
+    return sec_y, sel
+
+
 def rapid_section(lats, lons, ys, xs):
     """(sec_y, indices into ys/xs) of the protocol-v3 RAPID section."""
-    sec_y = int(np.argmin(np.abs(lats - 26.5)))
-    sel = np.where((ys == sec_y) & (lons[xs] >= RAPID_LON[0])
-                   & (lons[xs] <= RAPID_LON[1]))[0]
-    return sec_y, sel
+    return section_of(lats, lons, ys, xs, 26.5, RAPID_LON[0], RAPID_LON[1])
 
 
 def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,

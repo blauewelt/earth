@@ -34,6 +34,9 @@ on:
       window:
         description: "spatial window (global | na)"
         default: "global"
+      sst_channel:
+        description: "append monthly OISST as channel 15 (true | false)"
+        default: "false"
 
 permissions:
   contents: read
@@ -58,7 +61,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ml/cache
-          key: ml-cache-v2-${{ inputs.window }}-${{ hashFiles('ml/build_dataset.py', 'ml/fetch_rg_channels.py', 'ml/fetch_wind_channels.py') }}
+          key: ml-cache-v2-${{ inputs.window }}-${{ inputs.sst_channel }}-${{ hashFiles('ml/build_dataset.py', 'ml/fetch_rg_channels.py', 'ml/fetch_wind_channels.py', 'ml/fetch_sst_channel.py', 'ml/fetch_truth.py') }}
           # Fall back across generations and windows: the expensive part of
           # the cache is the raw RG/NCEP downloads, which are window- and
           # version-independent (the tensor itself is rebuilt every run).
@@ -72,6 +75,8 @@ jobs:
           python ml/build_dataset.py --window "${{ inputs.window }}"
           python ml/fetch_rg_channels.py
           python ml/fetch_wind_channels.py
+          if [ "${{ inputs.sst_channel }}" = "true" ]; then python ml/fetch_sst_channel.py; fi
+          python ml/fetch_truth.py
 
       - name: Train
         run: |

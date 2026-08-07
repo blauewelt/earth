@@ -221,11 +221,20 @@ out-of-fold.
 
 ## 7 · Open questions, ranked
 
-1. **More truth**: Florida Current cable (1982→), OSNAP, MOVE, SAMBA as
-   additional never-input transports — the only lever against the probe's
-   ceiling.
-2. **ERA5 wind upgrade** (needs CDS credentials; NCEP R1 is the
-   no-credential pilot) and DUACS SLA as the next dynamic channels.
+1. **More truth — LANDED 2026-08-07 afternoon** (`fetch_truth.py`): four
+   arrays now ride in the tensor as never-input truth: Florida Current
+   cable (daily 1982→, 359 months inside the axis), MOVE 16°N (271),
+   OSNAP subpolar (96), SAMBA 34.5°S (66) — 792 truth months beside
+   RAPID's 240, each probed from its own zonal section
+   (`probe_kfold.py --runs X`, TARGETS table). First preview (NA-trained
+   wind14 read over the global tensor — distribution-shifted, treat as a
+   stress test): RAPID 0.607 holds; FC/MOVE/OSNAP null; SAMBA reads
+   −0.27 on a never-trained section. The first in-distribution
+   multi-target verdict comes from the first global codec.
+2. **More channels — monthly SST staged** (`fetch_sst_channel.py`, from
+   the repo's own baked OISST, 1981→, zero download): appended as channel
+   15 for the next codec dispatch (`sst_channel: true` workflow input).
+   ERA5 wind (needs CDS credentials) and DUACS SLA remain the follow-ups.
 3. **Stage-2 past 4 M params** on runners (workflow needs stage-2 size
    inputs); multi-horizon (t+3, t+6) and spatial-attention objectives.
 4. **End-to-end fine-tuning** with a data-space grounding loss —
