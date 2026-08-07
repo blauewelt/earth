@@ -225,8 +225,10 @@ def main():
         # ---- RAPID probe ---------------------------------------------------
         rapid = d["rapid"]
         if len(rapid):
+            from temporal import RAPID_LON
             sec_y = int(np.argmin(np.abs(lats - 26.5)))
-            sec_x = np.where(np.isfinite(X[0, sec_y, :, 0]))[0]
+            sec_x = np.where(np.isfinite(X[0, sec_y, :, 0])
+                             & (lons >= RAPID_LON[0]) & (lons <= RAPID_LON[1]))[0]
             emb = np.zeros((T, a.d_z), dtype=np.float32)
             for tix in range(T):
                 n = len(sec_x)

@@ -34,6 +34,18 @@ Physics note: RAPID transport contains an Ekman component computed from
 wind, so this is the embedding acquiring a real ingredient of the
 target — the right channels, not a modelling trick (FINDINGS.md §4.6).
 
+## Protocol v3 (2026-08-07): the Atlantic-clipped section
+
+Going global made the old section definition wrong: the grid row nearest
+26.5°N would circle the planet through the Pacific. Protocol v3 clips
+the probe section to RAPID's Atlantic span (80°W–13°W) in all probe
+scripts. Bridge measurement on the champion (same NA tensor, same
+codec): wind14 k-fold v2 **0.586** [0.451, 0.720] → v3 **0.604**
+[0.474, 0.720] — the clip is benign (if anything it sharpens: the
+dropped Gulf-of-Mexico and NW-African shelf cells were never part of
+the physical array). NA-window numbers below are v2; global-window runs
+are scored under v3 and comparisons across that line carry this note.
+
 ## The defensible probe ranking (year-blocked k-fold, all 240 months)
 
 | codec | chans | d_z | k-fold r | 95% CI |

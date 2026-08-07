@@ -31,6 +31,9 @@ on:
       eval_every:
         description: "trainprobe cadence in steps (0 = off; requires anomaly)"
         default: "7500"
+      window:
+        description: "spatial window (global | na)"
+        default: "global"
 
 permissions:
   contents: read
@@ -55,12 +58,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ml/cache
-          key: ml-cache-v1-${{ hashFiles('ml/build_dataset.py', 'ml/fetch_rg_channels.py', 'ml/fetch_wind_channels.py') }}
-          restore-keys: ml-cache-v1-
+          key: ml-cache-v2-${{ inputs.window }}-${{ hashFiles('ml/build_dataset.py', 'ml/fetch_rg_channels.py', 'ml/fetch_wind_channels.py') }}
+          restore-keys: ml-cache-v2-${{ inputs.window }}-
 
       - name: Build dataset (repo channels + RG-Argo depth + NCEP wind stress)
         run: |
-          python ml/build_dataset.py
+          python ml/build_dataset.py --window "${{ inputs.window }}"
           python ml/fetch_rg_channels.py
           python ml/fetch_wind_channels.py
 

@@ -21,8 +21,12 @@ transport (wind) + boundary terms.
 ## 2 · The system
 
 **Data tensor** (`build_dataset.py` + `fetch_*_channels.py`): monthly,
-1°, North-Atlantic window (100°W–20°E, 0–70°N), 1993-01→present, 5,787
-ocean cells. Channels have grown 4 → 12 → 14: GLORYS surface-current
+1°, 1993-01→present. Every experiment below ran on the pilot
+North-Atlantic window (100°W–20°E, 0–70°N, 5,787 ocean cells); as of
+2026-08-07 the default window is **global** (the full baked GLORYS grid,
+−80°S–90°N, ~7× the cells — `--window na` reproduces the pilot), with
+the RAPID probe section clipped to the array's Atlantic span (protocol
+v3; the clip is bridge-measured as benign, LEADERBOARD.md). Channels have grown 4 → 12 → 14: GLORYS surface-current
 speed + mixed-layer depth (1993→), OISST/GPCP static climatologies,
 RG-Argo T & S at 10/200/700/1500 dbar (2004→), NCEP wind stress τx/τy
 (1948→, added 2026-08-06). RAPID monthly transports ride along as the
@@ -226,8 +230,11 @@ out-of-fold.
    inputs); multi-horizon (t+3, t+6) and spatial-attention objectives.
 4. **End-to-end fine-tuning** with a data-space grounding loss —
    unranked experiment until designed properly.
-5. **Wider windows**: the pilot is North Atlantic; the proposal's global
-   grid awaits the channel set stabilising.
+5. **Wider windows — IN PROGRESS (2026-08-07)**: the channel set having
+   stabilised at 14, the pipeline now defaults to the global grid
+   (~42k ocean cells, ~7× the pilot's data — which moves the codec's
+   Chinchilla anchor from ~1.1 M to ~8 M params, reopening codec growth
+   for the first time). First global codec dispatched on runners.
 
 ## 8 · Reproduction
 

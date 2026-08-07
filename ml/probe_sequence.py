@@ -93,8 +93,10 @@ def main():
     model.eval()
 
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
+    from temporal import RAPID_LON
     sec_y = int(np.argmin(np.abs(lats - 26.5)))
-    sec_x = np.where(np.isfinite(d["X"][0, sec_y, :, 0]))[0]
+    sec_x = np.where(np.isfinite(d["X"][0, sec_y, :, 0])
+                     & (lons >= RAPID_LON[0]) & (lons <= RAPID_LON[1]))[0]
     Xt = torch.from_numpy(np.nan_to_num(X, nan=0.0))
     OBS = torch.from_numpy(np.isfinite(X))
 

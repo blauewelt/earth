@@ -36,7 +36,7 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model import PixelMAE
 from probe_sequence import ridge_r
-from temporal import TemporalTransformer, embed_everything
+from temporal import TemporalTransformer, embed_everything, rapid_section
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -83,7 +83,7 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
                         np.cos(2 * np.pi * moy / 12)], 1)
     ocean = np.isfinite(d["X"][..., 0]).any(axis=0)
     ys, xs = np.where(ocean)
-    sec_y = int(np.argmin(np.abs(lats - 26.5)))
+    sec_y, sec_sel = rapid_section(lats, lons, ys, xs)   # protocol v3 clip
 
     # ---- RAPID target, deseasonalised once -------------------------------
     rapid = d["rapid"]
@@ -98,7 +98,6 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
     out = {}
 
     # ---- 1 · linear section probe (K=1) ----------------------------------
-    sec_sel = np.where(ys == sec_y)[0]
     Zsec, _ = embed_everything(codec, X, obs_in, ctx_all, lats, lons,
                                ys[sec_sel], xs[sec_sel], codec.d_z,
                                mask_chan=mask_chan)

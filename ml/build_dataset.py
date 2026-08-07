@@ -21,6 +21,7 @@ Output: ml/cache/na_pixels.npz
 
 Run:  python3 ml/build_dataset.py
 """
+import argparse
 import json
 import os
 import sys
@@ -31,9 +32,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
 OUT = os.path.join(ROOT, "ml", "cache")
 
-# The pilot window (proposal §9): the subpolar/subtropical North Atlantic,
-# where coverage is richest and the AMOC story is decisive. 1° cells.
-WEST, EAST, SOUTH, NORTH = -100.0, 20.0, 0.0, 70.0
+# Windows. "na" is the pilot (proposal §9): the subpolar/subtropical North
+# Atlantic, where coverage is richest and the AMOC story is decisive.
+# "global" (the default since 2026-08-07) is the entire baked GLORYS grid —
+# every ocean the archives cover, ~7× the pilot's cells. The fetchers
+# (fetch_rg_channels, fetch_wind_channels) inherit whatever grid this file
+# writes, so the window is chosen HERE and only here. 1° cells either way.
+WINDOWS = {
+    "na": (-100.0, 20.0, 0.0, 70.0),
+    "global": (-180.0, 180.0, -80.0, 90.0),
+}
+WEST, EAST, SOUTH, NORTH = WINDOWS["global"]
 
 
 def load_monthly(fname, ydir):
@@ -79,6 +88,13 @@ def resample_to(g_src, arr, lats, lons):
 
 
 def main():
+    global WEST, EAST, SOUTH, NORTH
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--window", choices=sorted(WINDOWS), default="global",
+                    help="spatial window (default: global; 'na' reproduces the pilot)")
+    a = ap.parse_args()
+    WEST, EAST, SOUTH, NORTH = WINDOWS[a.window]
+    print(f"window '{a.window}': lon {WEST}..{EAST}, lat {SOUTH}..{NORTH}")
     os.makedirs(OUT, exist_ok=True)
 
     print("loading GLORYS surface-current speed …")
@@ -144,6 +160,7 @@ def main():
         X=X, months=np.array(months), lats=lats.astype(np.float32),
         lons=lons.astype(np.float32), chan=np.array(chans), norm=norm,
         rapid=np.array(rapid, dtype=np.float32).reshape(-1, 2),
+        window=np.array(a.window),
     )
     mb = os.path.getsize(os.path.join(OUT, "na_pixels.npz")) / 1e6
     print(f"wrote ml/cache/na_pixels.npz  [T={T} H={H} W={W} C={len(chans)}]  {mb:.1f} MB")

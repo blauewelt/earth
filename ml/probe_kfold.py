@@ -30,7 +30,7 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model import PixelMAE
 from trainprobe import anomaly_transform
-from temporal import embed_everything
+from temporal import embed_everything, rapid_section
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -97,10 +97,9 @@ def main():
     rclim = np.array([rv[rmoy == m].mean() for m in range(12)])
     rv_des = rv - rclim[rmoy]
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
-    sec_y = int(np.argmin(np.abs(lats - 26.5)))
     ocean = np.isfinite(d["X"][..., 0]).any(axis=0)
     ys, xs = np.where(ocean)
-    sec_sel = np.where(ys == sec_y)[0]
+    sec_y, sec_sel = rapid_section(lats, lons, ys, xs)   # protocol v3 clip
 
     out = {}
     for run in a.runs:

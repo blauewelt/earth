@@ -77,6 +77,23 @@ class TemporalTransformer(nn.Module):
         return self.head(h), h
 
 
+# Protocol v3 (2026-08-07, the global window): the RAPID probe section is
+# the grid row nearest 26.5°N clipped to the array's Atlantic span (Abaco
+# to the African shelf). On the NA pilot window protocol v2 used the whole
+# row; the clip drops its Gulf-of-Mexico and NW-African cells and is
+# REQUIRED on the global window, where the unclipped row would circle the
+# planet through the Pacific and drown the section pool.
+RAPID_LON = (-80.0, -13.0)
+
+
+def rapid_section(lats, lons, ys, xs):
+    """(sec_y, indices into ys/xs) of the protocol-v3 RAPID section."""
+    sec_y = int(np.argmin(np.abs(lats - 26.5)))
+    sel = np.where((ys == sec_y) & (lons[xs] >= RAPID_LON[0])
+                   & (lons[xs] <= RAPID_LON[1]))[0]
+    return sec_y, sel
+
+
 def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                      cache_path=None, batch=8192, mask_chan=None):
     """Frozen codec embeddings for every (t, pixel in ys/xs): [T, P, d_z].
@@ -170,11 +187,11 @@ def main():
     OBS = torch.from_numpy(np.isfinite(X))
 
     ys, xs = np.where(ocean)
-    sec_y = int(np.argmin(np.abs(lats - 26.5)))
+    sec_y, sec_sel0 = rapid_section(lats, lons, ys, xs)
     if a.max_pixels and a.max_pixels < len(ys):
         rng = np.random.default_rng(0)
         keep = rng.choice(len(ys), a.max_pixels, replace=False)
-        keep = np.union1d(keep, np.where(ys == sec_y)[0])   # probe needs the section
+        keep = np.union1d(keep, sec_sel0)                   # probe needs the section
         ys, xs = ys[keep], xs[keep]
 
     print("embedding every (month, ocean pixel) through the frozen codec …")
@@ -291,7 +308,8 @@ def main():
     # protocol v2: deseasonalised target (train-years clim), seasonal floor,
     # lambda on a train tail — identical scoring path to probe_sequence.py.
     rapid = d["rapid"]
-    sec_pix = torch.as_tensor(np.where(ys == sec_y)[0], dtype=torch.long)
+    _, sec_after = rapid_section(lats, lons, ys, xs)   # ys/xs possibly subsampled
+    sec_pix = torch.as_tensor(sec_after, dtype=torch.long)
     with torch.no_grad():
         F = np.zeros((T, a.d_model), dtype=np.float32)
         for t in range(K - 1, T):
