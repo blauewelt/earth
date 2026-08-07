@@ -10,7 +10,7 @@ field, and density is T/S AT DEPTH — the one thing no surface raster carries.
 The Roemmich–Gilson Argo climatology (Scripps, open, no account) provides
 monthly T and S on a 1° grid, 2004→now: the 2004–2018 base files carry the
 whole 180-month anomaly cube inline, and each month since arrives as one
-extension file. This script samples T and S at four AMOC-critical pressures —
+extension file. This script samples T and S at eight AMOC-critical pressures —
 10 dbar (surface), 200 (thermocline), 700 (upper-mid), 1500 (deep limb) —
 onto the pilot's grid/months and appends 8 channels to na_pixels.npz.
 
@@ -35,7 +35,11 @@ CACHE = os.path.join(HERE, "cache")
 NPZ = os.path.join(CACHE, "na_pixels.npz")
 RG_BASE = "https://sio-argo.ucsd.edu/pub/www-argo/RG"
 UA = {"User-Agent": "earth-globe-ml/1.0 (github.com/blauewelt/earth)"}
-LEVELS = [10.0, 200.0, 700.0, 1500.0]          # dbar
+# 8 AMOC-critical pressures (doubled 2026-08-07, the "more input per
+# embedding" program): surface, upper thermocline, thermocline, upper-mid,
+# mid, intermediate, deep limb, abyssal-boundary. Zero new downloads -- the
+# RG cube carries 58 levels; we simply sample more of them.
+LEVELS = [10.0, 50.0, 200.0, 400.0, 700.0, 1000.0, 1500.0, 1900.0]  # dbar
 
 
 def fetch(url, path, attempts=4):
