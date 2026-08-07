@@ -15,6 +15,7 @@ checkpoint's channel count.
 Usage: python3 ml/dip_check.py --run wind14
 """
 import argparse
+import json
 import os
 import sys
 
@@ -33,8 +34,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", required=True)
     ap.add_argument("--window", nargs=2, default=["2009-09", "2010-06"])
+    ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"))
     a = ap.parse_args()
-    d = np.load(os.path.join(HERE, "cache", "na_pixels.npz"))
+    d = np.load(a.data)
     months = [str(m) for m in d["months"]]
     moy = np.array([int(m[5:7]) - 1 for m in months])
     yr = np.array([int(m[:4]) for m in months])
@@ -105,8 +107,22 @@ def main():
         print(f"\ndip window (2009-11..2010-03): observed {om:+.2f}, predicted {pm:+.2f} "
               f"({100 * pm / om:.0f}% of the event captured)")
     ok = np.isfinite(pred)
-    print(f"full-record out-of-fold r: {np.corrcoef(pred[ok], rvd[ok])[0, 1]:+.3f} · "
-          f"sign agreement {np.mean(np.sign(pred[ok]) == np.sign(rvd[ok])) * 100:.0f}%")
+    r_all = float(np.corrcoef(pred[ok], rvd[ok])[0, 1])
+    sign = float(np.mean(np.sign(pred[ok]) == np.sign(rvd[ok])) * 100)
+    print(f"full-record out-of-fold r: {r_all:+.3f} · "
+          f"sign agreement {sign:.0f}%")
+    # Written, not just printed: the dip share is a headline number in the
+    # report, and a number that lives only in a CI log is a number that gets
+    # re-derived by hand (and mistyped) every time the table is rebuilt.
+    out = {"run": a.run, "window": list(a.window), "r_out_of_fold": round(r_all, 3),
+           "sign_agreement_pct": round(sign, 1)}
+    if dip:
+        out["dip_observed_sv"] = round(float(om), 2)
+        out["dip_predicted_sv"] = round(float(pm), 2)
+        out["dip_captured_pct"] = round(float(100 * pm / om), 1)
+    path = os.path.join(HERE, "runs", a.run, "dip_check.json")
+    json.dump(out, open(path, "w"), indent=2)
+    print("wrote", path)
 
 
 if __name__ == "__main__":
