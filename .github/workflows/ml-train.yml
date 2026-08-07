@@ -49,6 +49,12 @@ on:
       max_minutes:
         description: "wall-clock budget for the training loop (0 = off); the cosine schedule re-fits to the steps that fit. The job dies at 350 min with NO checkpoint otherwise."
         default: "0"
+      runner:
+        description: "ubuntu-latest (free 4-core CPU) | self-hosted (the GPU box, when registered)"
+        default: "ubuntu-latest"
+      job_timeout:
+        description: "job timeout-minutes; hosted runners die at 360 regardless, self-hosted can run for days"
+        default: "350"
 
 # contents: write ONLY for the live-metrics side channel — the training
 # step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every
@@ -59,8 +65,8 @@ permissions:
 
 jobs:
   train:
-    runs-on: ubuntu-latest
-    timeout-minutes: 350
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    timeout-minutes: ${{ fromJSON(inputs.job_timeout || '350') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,10 +74,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install deps (CPU torch)
+      - name: Install deps (torch matches the hardware)
         run: |
           pip install --quiet numpy netCDF4 matplotlib
-          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+          # CUDA wheel when the runner has a GPU, CPU wheel otherwise —
+          # train.py auto-selects the device, so the same dispatch works on both.
+          if command -v nvidia-smi >/dev/null 2>&1; then
+            pip install --quiet torch
+            python -c "import torch; print('torch', torch.__version__, 'cuda:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else '')"
+          else
+            pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
+          fi
 
       - name: Restore data cache
         uses: actions/cache@v4
