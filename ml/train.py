@@ -49,6 +49,15 @@ def parse():
                         "section probe + mini temporal transformer) on the "
                         "blocked holdout; appends to <out>/metrics.jsonl. "
                         "Requires --anomaly.")
+    p.add_argument("--max-minutes", type=int, default=0,
+                   help="wall-clock budget for the TRAINING LOOP (0 = off). "
+                        "After a short calibration the cosine schedule is "
+                        "re-fitted to the step count that fits, so the LR "
+                        "still anneals to zero inside the budget instead of "
+                        "the job dying mid-schedule. Exists because Actions "
+                        "kills at timeout-minutes with NO checkpoint: run "
+                        "#12 (25 channels) measured ~1.3 steps/s against a "
+                        "40k-step dispatch — 6 runner-hours, nothing saved.")
     p.add_argument("--smoke", action="store_true")
     return p.parse_args()
 
@@ -121,7 +130,15 @@ def main():
 
     model = PixelMAE(n_chan=C, d_z=a.d_z, patch=a.patch).to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.steps)
+    # Cosine annealing whose TOTAL can be re-fitted mid-run (--max-minutes):
+    # a LambdaLR closure over a mutable total is the same curve as
+    # CosineAnnealingLR (eta_min=0) but survives having its denominator
+    # changed, which the built-in scheduler's recursive formula does not.
+    import math
+    sched_total = [a.steps]
+    sched = torch.optim.lr_scheduler.LambdaLR(
+        opt, lambda e: 0.5 * (1 + math.cos(
+            math.pi * min(e, sched_total[0]) / sched_total[0])))
     huber = torch.nn.HuberLoss(reduction="none")
 
     # neighbour offsets (Δx, Δy, Δt): 4 spatial + 2 temporal
@@ -170,13 +187,35 @@ def main():
     metrics_path = os.path.join(a.out, "metrics.jsonl")
     loss_every = max(1, a.steps // 200)        # the loss curve, cheap to keep
 
+    def save_ckpt():
+        torch.save({"model": model.state_dict(), "chan": chan, "d_z": a.d_z,
+                    "norm": d["norm"], "args": vars(a)},
+                   os.path.join(a.out, "pixelmae.pt"))
+
     print("training …")
     t0 = time.time()
-    for s in range(1, a.steps + 1):
+    CAL = 200                                  # steps before the rate is trusted
+    s = 0
+    while s < a.steps:
+        s += 1
         t, y, x, ctx = batch(tt, yy, xx, a.batch)
         l_rec, l_nei = step_loss(t, y, x, ctx)
         loss = l_rec + 0.5 * l_nei
         opt.zero_grad(); loss.backward(); opt.step(); sched.step()
+        if a.max_minutes and CAL and (s >= CAL or time.time() - t0 > 60):
+            CAL = 0                            # calibrate once: 200 steps or 60 s
+            rate = (time.time() - t0) / s      # s/step, measured not guessed
+            budget = a.max_minutes * 60 - (time.time() - t0)
+            fit = s + int(0.85 * budget / rate)     # 15% held back for probes
+            if fit < a.steps:
+                print(f"  time budget: {rate:.2f} s/step → re-fitting the "
+                      f"cosine schedule from {a.steps} to {fit} steps so the "
+                      f"LR anneals to zero inside {a.max_minutes} min")
+                a.steps = fit
+                sched_total[0] = fit
+        if a.max_minutes and (time.time() - t0) > a.max_minutes * 60:
+            print(f"  wall-clock budget reached at step {s} — stopping to save")
+            break
         if s % loss_every == 0 or s == a.steps:
             with open(metrics_path, "a") as f:
                 f.write(json.dumps({"step": s, "loss_rec": round(l_rec.item(), 5),
@@ -196,6 +235,7 @@ def main():
                   f"vs persistence · linear r_des {m['linear_r_deseas']:+.3f} · "
                   f"temporal r_des {m['temporal_r_deseas']:+.3f} "
                   f"({m['probe_seconds']:.0f}s)", flush=True)
+            save_ckpt()                        # crash insurance, ~4 MB
 
     # ---- evaluation on the BLOCKED holdout --------------------------------
     model.eval()
@@ -269,8 +309,7 @@ def main():
                                           "n_train": int(tr.sum()), "n_test": int(te.sum())}
 
     print(json.dumps(results, indent=2))
-    torch.save({"model": model.state_dict(), "chan": chan, "d_z": a.d_z,
-                "norm": d["norm"], "args": vars(a)}, os.path.join(a.out, "pixelmae.pt"))
+    save_ckpt()
     json.dump(results, open(os.path.join(a.out, "eval.json"), "w"), indent=2)
     print(f"saved {a.out}/pixelmae.pt")
 
