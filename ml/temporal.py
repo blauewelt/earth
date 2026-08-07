@@ -188,19 +188,33 @@ def main():
         for m in range(12):
             clim[m] = np.nanmean(X[(moy == m) & ~t_hold], axis=0)
     for c in dynamic:
-        X[..., c] = X[..., c] - clim[moy][..., c]
+        # clim[moy, :, :, c] is [T,H,W] (98 MB); the equivalent-looking
+        # clim[moy][..., c] materialises the whole [T,H,W,C] fancy index
+        # (1.4 GB) and throws all but one channel away — once per dynamic
+        # channel. That transient is most of why this OOM-killed the
+        # xlarge stage-2 on a 7 GB box (2026-08-07).
+        X[..., c] = X[..., c] - clim[moy, :, :, c]
         v = X[..., c][np.isfinite(X[..., c]) & ~t_hold[:, None, None]
                       & ~x_hold[None, None, :]]
         X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)
+    del clim
 
     codec = PixelMAE(n_chan=C, d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
     codec.load_state_dict(ck["model"])
     codec.eval()
 
-    ocean = np.isfinite(d["X"][..., 0]).any(axis=0)
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
     Xt = torch.from_numpy(np.nan_to_num(X, nan=0.0))
     OBS = torch.from_numpy(np.isfinite(X))
+    # X is dead from here (everything downstream reads Xt/OBS), and the
+    # embedding array alone is T*P*d_z*4 ~ 4.6 GB at global scale — so the
+    # 1.4 GB anomaly copy has to go before it is allocated. Likewise `ocean`
+    # comes from OBS rather than d["X"][..., 0], which would load the whole
+    # 1.4 GB npz member again just to slice one channel off it.
+    ocean = OBS[..., 0].any(axis=0).numpy()
+    del X
+    import gc
+    gc.collect()
 
     ys, xs = np.where(ocean)
     sec_y, sec_sel0 = rapid_section(lats, lons, ys, xs)
