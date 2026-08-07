@@ -99,7 +99,8 @@ def main():
         NPZ, X=np.concatenate([X, add], axis=-1).astype(np.float32),
         months=d["months"], lats=lats, lons=lons,
         chan=np.array([old_chan[i] for i in keep] + chans),
-        norm=np.concatenate([norm, add_norm], axis=0), rapid=d["rapid"])
+        norm=np.concatenate([norm, add_norm], axis=0), rapid=d["rapid"],
+        window=d["window"] if "window" in d else np.array("na"))
     print(f"rewrote {NPZ}: C={len(keep) + 2} channels "
           f"({os.path.getsize(NPZ) / 1e6:.0f} MB)")
 

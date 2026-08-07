@@ -55,7 +55,18 @@ months, not representation width. **d_z=64 is the working setting.**
 **Tensor growth — 2026-08-07.** The 14-channel tensor (NCEP τx/τy
 added, 68.4% coverage over all 401 months) raises the observed-value
 inventory to 22.7 M (wind: 4.61 M) → codec anchor ≈ 1.13 M params; the
-~0.92 M codec sits just under it. The wind channels were worth more than any
+~0.92 M codec sits just under it.
+
+**The global window — 2026-08-07, afternoon.** `--window global`
+extends the tensor to the full baked grid: 44,964 ocean cells (7.8×),
+**186.7 M observed values → codec anchor ≈ 9.3 M params**. This flips
+the codec verdict for the first time: growth is no longer data-starved —
+a ~5–9 M-param codec is now the anchor-sanctioned experiment (with the
+usual steps-matched control, and noting effective-sample corrections
+for spatial correlation shave the ceiling). The 30k-step budget also
+drops from 6.6 epochs to ~0.8 — fully inside the fresh-data regime.
+Same-count training on 7.8× the data is the cleanest capacity test the
+project has had. The wind channels were worth more than any
 architecture decision to date (k-fold 0.308 → 0.586) — the "feed it,
 don't grow it" verdict holding in the strongest possible form.
 
