@@ -3164,6 +3164,7 @@ test("Tides tab answers for wherever you already flew — no blank panel", async
     return {
       lon: d.west + ix + 0.5, lat: d.south + iy + 0.5,
       range: Math.max(...ex.map((e) => e.cm)) - Math.min(...ex.map((e) => e.cm)),
+      spring: E.tideSpringRange(i),
       title: document.getElementById("td-point-title").textContent,
     };
   });
@@ -3176,7 +3177,12 @@ test("Tides tab answers for wherever you already flew — no blank panel", async
   expect(r.title).toMatch(/tide now [-+]?\d+ cm (above|below) mean/);
   // the curve's own vertical range is stated, because the globe's colour
   // scale is fixed at ±2.5 m and the two numbers disagree by design
-  expect(r.title).toMatch(/range here \d/);
+  expect(r.title).toMatch(/range \d/);
+  // and the SPRING range beside it, so a neap window reads as the moon's
+  // doing rather than as a broken layer (Peniche: ~2.5 m now, 3.4 m springs)
+  expect(r.title).toMatch(/up to \d.* at spring tide/);
+  expect(r.spring).toBeGreaterThan(2.5);
+  expect(r.spring).toBeLessThan(4.5);
   // times carry a zone, never a bare "16:42": the browser's zone shows
   // instantly, the point's own zone (Open-Meteo timezone=auto) replaces it
   await expect(next).not.toContainText(/\d\d:\d\d\s*<\/span>/);
@@ -3292,3 +3298,4 @@ test("installed-app update check: a newer served build offers a one-tap reload",
   });
   expect(same).toBe(true);
 });
+

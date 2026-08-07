@@ -6333,7 +6333,18 @@ let tideSim = { t: 0, playing: true, speed: 3600, raf: 0, wall: 0,
                 markCell: null, markPlace: null, markLon: 0, markLat: 0 };
 const tideLive = { on: false, prim: null, mat: null, labels: null,
                    front: null, back: null, img: null, lastPaint: 0, opacity: 0.85 };
-const TD_RANGE_CM = 250;      // colour scale: +-2.5 m, clamped
+/* Colour scale, MEASURED not chosen (CLAUDE.md: no hand-picked thresholds).
+ * Sampling every ocean cell every 3 h over a fortnight, |tide height| has
+ * median 16 cm, 90th pct 55 cm, 95th 75 cm, 99th 136 cm; the largest value
+ * anywhere at any time is 6.2 m. At the old ±2.5 m, 99.85% of the ocean sat
+ * in the middle of the ramp and the open ocean — where the amphidromic
+ * rotation actually lives — rendered nearly flat (±0.5 m spanned just 20% of
+ * the colours). At ±1 m it spans 46%, and the 2.3% beyond still separates,
+ * because the ramp is tanh-compressed rather than clipped: shelf seas keep
+ * their structure, they only saturate. Reported 2026-08-08 as "how can the
+ * global ocean swing by 0.3 m and Peniche by 3 m?" — the answer was true, but
+ * the scale made the ocean look motionless. */
+const TD_RANGE_CM = 100;
 
 function tideAstro(ms) {
   // Low-precision ephemeris (~1 deg): sub-lunar/sub-solar points + phase.
@@ -6393,6 +6404,17 @@ function tidePrepare(data) {
     for (let ix = 0; ix < data.nx; ix++) fields.area[iy * data.nx + ix] = a;
   }
   return fields;
+}
+
+/* The largest range this point can ever produce: every constituent's crest
+ * landing together (2 × the sum of the amplitudes). Printed beside the 3-day
+ * range so a NEAP window — when S2 and N2 oppose M2 and the swing roughly
+ * halves — reads as the moon's doing rather than as a broken layer. */
+function tideSpringRange(i) {
+  if (!tideFields || !tideFields.mask[i]) return 0;
+  let s = 0;
+  for (const c of tideFields.consts) s += Math.hypot(c.P[i], c.Q[i]);
+  return 2 * s / 100;
 }
 
 function tideHeightAt(i, ms) {
@@ -6921,11 +6943,13 @@ function tideSelectPoint(carto, rings = 1, place = null) {
   const ex3 = tideExtrema(hit.i, tideSim.t, 72);
   const swing = ex3.length
     ? (Math.max(...ex3.map((e) => e.cm)) - Math.min(...ex3.map((e) => e.cm))) / 100 : 0;
+  const spring = tideSpringRange(hit.i);
   const el = document.getElementById("td-point-title");
   el.innerHTML =
     (place ? `<strong class="td-place">${place}</strong> \u00b7 ` : "") +
     `${coord} \u2014 tide now <strong>${cmTxt}</strong>` +
-    (swing ? ` \u00b7 range here <strong>${swing.toFixed(1)} m</strong> over these 3 days` : "");
+    (swing ? ` \u00b7 range <strong>${swing.toFixed(1)} m</strong> over these 3 days` +
+             (spring ? `, up to <strong>${spring.toFixed(1)} m</strong> at spring tide` : "") : "");
   tideRenderHiLo(true);
   if (tideTabVisible()) tideCurve();
   else {
@@ -7120,6 +7144,7 @@ window.__earth = {
   tideSelectPoint,
   tideRateAt,
   tideExtrema,
+  tideSpringRange,
   ensureTideLive,
   checkForNewBuild,
   movingMean,
