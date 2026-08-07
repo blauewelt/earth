@@ -41,12 +41,23 @@ channel with a long record adds real tokens: ERA5 wind stress (monthly
 (1982→). Adding channels also lengthens the RG-poor early period's
 usable signal.
 
-**d_z — answered 2026-08-06 evening.** Four codecs at matched 30k steps:
-chan% 28.6 / 30.3 / 30.5 / 30.6 for d_z 8/16/32/64. The bottleneck
-saturates between 16 and 32; only 8 pays (−2 pts). d_z was never a
-capacity axis (params barely move, 894k→916k) — it measures transmitted
-information, and 32 dims already carry everything the current 12
-channels supply. Keep 32; revisit only after the channel count grows.
+**d_z — answered 2026-08-06, completed 2026-08-07.** Five codecs at
+matched 30k steps: chan% 28.6 / 30.3 / 30.5 / 30.6 / 30.2 for d_z
+8/16/32/64/128. The bottleneck saturates between 16 and 32 for the
+FIELD; only 8 pays (−2 pts). d_z was never a capacity axis (params
+barely move, 894k→~950k) — it measures transmitted information. But the
+TRANSPORT read-out (k-fold probe) peaks at 64 and turns over at 128
+(0.308 → 0.166; LEADERBOARD.md), a data-sufficiency effect on the probe
+side: 128 ridge features against ~220 truth months per fold overfits —
+direct confirmation that the probe's binding constraint is truth
+months, not representation width. **d_z=64 is the working setting.**
+
+**Tensor growth — 2026-08-07.** The 14-channel tensor (NCEP τx/τy
+added, 68.4% coverage over all 401 months) raises the observed-value
+inventory to 22.7 M (wind: 4.61 M) → codec anchor ≈ 1.13 M params; the
+~0.92 M codec sits just under it. The wind channels were worth more than any
+architecture decision to date (k-fold 0.308 → 0.586) — the "feed it,
+don't grow it" verdict holding in the strongest possible form.
 
 **Stage-2 temporal transformer — corrected 2026-08-06 evening.** The
 first draft of this section predicted, from a transitions-as-tokens
@@ -74,10 +85,15 @@ before believing either. xlarge (d256×5, 3.98 M — at the
 value-count anchor) confirmed the curve with the tightest seeds of the
 whole sweep: 37.6/37.7. The gain per parameter-doubling is decelerating
 (+4.0 for mid→large at ×5, +1.8 for large→xlarge at ×2.2) — roughly
-log-linear and approaching the anchor as theory would like. Next rung:
-d320×6 (7.44 M) on runners, past the anchor, to find the turn. Probe r
+log-linear and approaching the anchor as theory would like. Probe r
 stayed inside its noise band throughout (large 0.27/0.39; xlarge
-0.25/0.46), as METRICS.md demands it must.
+0.25/0.46), as METRICS.md demands it must. The next rung — xxlarge
+d320×6 (7.44 M), past the anchor, to find the turn — was attempted
+in-sandbox 2026-08-06 and **stalled: zero optimizer steps in 8 h on 2
+CPU cores**; killed. The capacity curve past 4 M params is therefore
+still unmeasured, with the last point still rising. It needs
+`ml-train.yml` to accept stage-2 size inputs so the job can run on
+Actions runners (open item, FINDINGS.md §7).
 
 **Mini training-time probe.** 0.11 M params, deliberately small — a
 measurement instrument. It ranks codecs faithfully (that is its job),
