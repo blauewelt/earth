@@ -82,7 +82,7 @@ def main():
     lo, hi = (float(v) for v in ck["args"]["holdout_lon"].split(","))
     x_hold = (lons >= lo) & (lons < hi)
     Xa, dynamic = anomaly_transform(X, moy, t_hold, x_hold)
-    codec = PixelMAE(n_chan=X.shape[-1], d_z=ck["d_z"])
+    codec = PixelMAE(n_chan=X.shape[-1], d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
     codec.load_state_dict(ck["model"])
     codec.eval()
     model = TemporalTransformer(d_z=ck["d_z"], d_model=tk["args"]["d_model"],

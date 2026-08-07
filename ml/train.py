@@ -22,7 +22,7 @@ import time
 import numpy as np
 import torch
 
-from model import PixelMAE
+from model import PixelMAE, gather_px
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -35,6 +35,8 @@ def parse():
     p.add_argument("--batch", type=int, default=512)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--d-z", type=int, default=32)
+    p.add_argument("--patch", type=int, default=1, choices=[1, 3],
+                   help="encoder receptive field per channel token (3 = 3x3)")
     p.add_argument("--mask-ratio", type=float, default=0.5)
     p.add_argument("--holdout-years", default="2009,2017,2023")
     p.add_argument("--holdout-lon", default="-45,-25")   # a mid-Atlantic block
@@ -117,7 +119,7 @@ def main():
         return (torch.as_tensor(t), torch.as_tensor(y), torch.as_tensor(x),
                 torch.as_tensor(ctx, dtype=torch.float32))
 
-    model = PixelMAE(n_chan=C, d_z=a.d_z).to(dev)
+    model = PixelMAE(n_chan=C, d_z=a.d_z, patch=a.patch).to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.steps)
     huber = torch.nn.HuberLoss(reduction="none")
@@ -134,7 +136,11 @@ def main():
         B = len(t)
         v, o = gather(t, y, x)
         mask = (torch.rand(B, C, device=dev) < a.mask_ratio) & o
-        z = model.encode(v * (~mask), o, mask, ctx.to(dev))
+        if a.patch > 1:
+            vp, op = gather_px(Xt, OBS, t, y, x, a.patch)
+            z = model.encode(vp.to(dev), op.to(dev), mask, ctx.to(dev))
+        else:
+            z = model.encode(v * (~mask), o, mask, ctx.to(dev))
 
         # self-reconstruction: all channels queried at offset 0
         qc = torch.arange(C, device=dev)[None, :].expand(B, -1)
@@ -199,7 +205,11 @@ def main():
         t, y, x, ctx = batch(vt, vy, vx, n_eval)
         v, o = gather(t, y, x)
         mask = (torch.rand(n_eval, C, device=dev) < a.mask_ratio) & o
-        z = model.encode(v * (~mask), o, mask, ctx.to(dev))
+        if a.patch > 1:
+            vp, op = gather_px(Xt, OBS, t, y, x, a.patch)
+            z = model.encode(vp.to(dev), op.to(dev), mask, ctx.to(dev))
+        else:
+            z = model.encode(v * (~mask), o, mask, ctx.to(dev))
         qc = torch.arange(C, device=dev)[None, :].expand(n_eval, -1)
         pred = model.query(z, qc, torch.zeros(n_eval, C, 3, dtype=torch.long, device=dev))
         for c, name in enumerate(chan):
@@ -238,7 +248,12 @@ def main():
                 v, o = gather(torch.full((n,), tix, dtype=torch.long),
                               torch.full((n,), sec_y, dtype=torch.long),
                               torch.as_tensor(sec_x))
-                zz = model.encode(v, o, torch.zeros_like(o),
+                if a.patch > 1:
+                    v, o = gather_px(Xt, OBS, torch.full((n,), tix, dtype=torch.long),
+                                     torch.full((n,), sec_y, dtype=torch.long),
+                                     torch.as_tensor(sec_x), a.patch)
+                    v, o = v.to(dev), o.to(dev)
+                zz = model.encode(v, o, torch.zeros(n, C, dtype=torch.bool, device=dev),
                                   torch.as_tensor(ctx, dtype=torch.float32).to(dev))
                 emb[tix] = zz.mean(0).cpu().numpy()
             ridx = rapid[:, 0].astype(int); rv = rapid[:, 1]

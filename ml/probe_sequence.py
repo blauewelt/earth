@@ -88,7 +88,7 @@ def main():
                           & ~x_hold[None, None, :]]
             X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)
 
-    model = PixelMAE(n_chan=C, d_z=ck["d_z"])
+    model = PixelMAE(n_chan=C, d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
     model.load_state_dict(ck["model"])
     model.eval()
 
@@ -108,9 +108,18 @@ def main():
             ctx = np.concatenate([np.tile(ctx_all[t], (n, 1)),
                                   (np.full(n, lats[sec_y]) / 90)[:, None],
                                   (lons[sec_x] / 180)[:, None]], 1)
-            z = model.encode(Xt[t, sec_y, sec_x], OBS[t, sec_y, sec_x],
-                             torch.zeros(n, C, dtype=torch.bool),
-                             torch.as_tensor(ctx, dtype=torch.float32))
+            if getattr(model, "patch", 1) > 1:
+                from model import gather_px
+                tt = torch.full((n,), t, dtype=torch.long)
+                v, o = gather_px(Xt, OBS, tt,
+                                 torch.full((n,), sec_y, dtype=torch.long),
+                                 torch.as_tensor(sec_x), model.patch)
+                z = model.encode(v, o, torch.zeros(n, C, dtype=torch.bool),
+                                 torch.as_tensor(ctx, dtype=torch.float32))
+            else:
+                z = model.encode(Xt[t, sec_y, sec_x], OBS[t, sec_y, sec_x],
+                                 torch.zeros(n, C, dtype=torch.bool),
+                                 torch.as_tensor(ctx, dtype=torch.float32))
             emb[t] = z.mean(0).numpy()
 
     rapid = d["rapid"]
