@@ -126,8 +126,14 @@ def lowpass_r(tidx, pred, truth, k=18, min_valid=12):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", nargs="+", default=["actions"])
+    # The tensor was hardcoded to cache/na_pixels.npz, so probing a codec
+    # trained on a different channel set meant COPYING an 866 MB file over
+    # the active one and remembering to put it back — a dance that has
+    # already produced one silent mismatch. Name the tensor instead; the
+    # channel count is checked against the checkpoint below.
+    ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"))
     a = ap.parse_args()
-    d = np.load(os.path.join(HERE, "cache", "na_pixels.npz"))
+    d = np.load(a.data)
     months = [str(m) for m in d["months"]]
     moy = np.array([int(m[5:7]) - 1 for m in months])
     yr = np.array([int(m[:4]) for m in months])
@@ -164,6 +170,10 @@ def main():
     for run in a.runs:
         ck = torch.load(os.path.join(HERE, "runs", run, "pixelmae.pt"),
                         map_location="cpu", weights_only=False)
+        if len(ck["chan"]) != d["X"].shape[-1]:
+            sys.exit(f"{run}: codec has {len(ck['chan'])} channels but "
+                     f"{os.path.basename(a.data)} has {d['X'].shape[-1]} — "
+                     f"pass --data with the matching tensor.")
         X = d["X"].copy()
         t_hold = np.array([m[:4] in set(ck["args"]["holdout_years"].split(","))
                            for m in months])

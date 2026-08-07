@@ -165,6 +165,15 @@ jobs:
               --d-model "${{ inputs.temporal_d_model }}" \
               --layers "${{ inputs.temporal_layers }}"
           fi
+          # The decisive numbers, computed HERE rather than locally. The
+          # k-fold is the only probe figure we argue from, and running it
+          # afterwards on a laptop-sized box means holding a second global
+          # tensor next to whatever else is running — which OOM-killed it
+          # on 2026-08-07. The runner already has the matching tensor built
+          # and the memory to probe it, so the run ships its own verdict.
+          # Section-only embeddings, so this is minutes, not hours.
+          python -u ml/probe_kfold.py --runs actions
+          python -u ml/dip_check.py --run actions
 
       - name: Upload probe results
         if: always()
@@ -174,6 +183,8 @@ jobs:
           path: |
             ml/runs/actions/probe_sequence.json
             ml/runs/actions/temporal.json
+            ml/runs/probe_kfold.json
+            ml/runs/actions/dip_check.json
             ml/runs/actions/temporal.pt
           retention-days: 30
           if-no-files-found: ignore
