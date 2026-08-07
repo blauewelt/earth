@@ -105,16 +105,36 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                      cache_path=None, batch=8192, mask_chan=None):
     """Frozen codec embeddings for every (t, pixel in ys/xs): [T, P, d_z].
     Cached on disk — the embedding pass is the expensive part of stage 2
-    (T×P encoder forwards), and every probe variant reuses it."""
+    (T×P encoder forwards), and every probe variant reuses it.
+
+    Runs on whatever device the MODEL is on: 401 months x ~45k ocean pixels
+    is 18M encoder forwards, which is hours of CPU and minutes of GPU. The
+    big tensors (X, OBS, and the output) stay in host memory — only the
+    per-batch slice crosses — because Z alone is ~4.6 GB at global scale and
+    the point is to spend VRAM on arithmetic, not storage."""
+    dev = next(model.parameters()).device
     T, H, W, C = X.shape
     P = len(ys)
     coords = np.stack([lats[ys] / 90, lons[xs] / 180], 1).astype(np.float32)
+    # Z is T*P*d_z*4 bytes — 4.6 GB on the global grid at d_z=64, next to a
+    # 1.4 GB tensor and a 0.3 GB mask. Built in RAM it OOM-kills a 7 GB box
+    # (twice on 2026-08-07), and it is written to disk immediately afterwards
+    # anyway. So it is BUILT in the cache file through a memmap: pages are
+    # written as they are filled and the kernel may evict them, which turns a
+    # hard 4.6 GB allocation into page-cache pressure. Reads go the same way.
+    # Without a cache path (the --max-pixels smoke) it stays an ordinary array.
     if cache_path and os.path.exists(cache_path):
-        out = np.load(cache_path)
+        out = np.load(cache_path, mmap_mode="r+")
         if out.shape == (T, P, d_z):
             print(f"  (cached: {cache_path})")
             return out, coords
-    out = np.zeros((T, P, d_z), dtype=np.float32)
+    if cache_path:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        tmp = cache_path + ".partial"
+        out = np.lib.format.open_memmap(tmp, mode="w+", dtype=np.float32,
+                                        shape=(T, P, d_z))
+    else:
+        out = np.zeros((T, P, d_z), dtype=np.float32)
     with torch.no_grad():
         for t in range(T):
             for i in range(0, P, batch):
@@ -125,20 +145,27 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                 if mask_chan is not None:
                     mk[:, mask_chan] = True
                 patch = getattr(model, "patch", 1)
+                ctx_t = torch.as_tensor(ctx, dtype=torch.float32).to(dev)
                 if patch > 1:
                     from model import gather_px
                     tt = torch.full((n,), t, dtype=torch.long)
                     v, o = gather_px(X, OBS, tt, torch.as_tensor(ys[sl]),
                                      torch.as_tensor(xs[sl]), patch)
-                    z = model.encode(v * (~mk).unsqueeze(-1), o, mk,
-                                     torch.as_tensor(ctx, dtype=torch.float32))
+                    z = model.encode((v * (~mk).unsqueeze(-1)).to(dev),
+                                     o.to(dev), mk.to(dev), ctx_t)
                 else:
                     v = X[t, ys[sl], xs[sl]] * (~mk)
-                    z = model.encode(v, OBS[t, ys[sl], xs[sl]], mk,
-                                     torch.as_tensor(ctx, dtype=torch.float32))
-                out[t, sl] = z.numpy()
+                    z = model.encode(v.to(dev), OBS[t, ys[sl], xs[sl]].to(dev),
+                                     mk.to(dev), ctx_t)
+                out[t, sl] = z.cpu().numpy()
     if cache_path:
-        np.save(cache_path, out)
+        # Already on disk in .npy form — flush the pages, then publish
+        # atomically so an interrupted run never leaves a half-filled cache
+        # that the shape check would happily accept next time.
+        out.flush()
+        del out
+        os.replace(tmp, cache_path)
+        out = np.load(cache_path, mmap_mode="r+")
     return out, coords
 
 
@@ -224,7 +251,16 @@ def main():
         keep = np.union1d(keep, sec_sel0)                   # probe needs the section
         ys, xs = ys[keep], xs[keep]
 
-    print("embedding every (month, ocean pixel) through the frozen codec …")
+    # The embedding pass is the only part worth a GPU here (18M encoder
+    # forwards); stage-2 training is a small transformer for a few thousand
+    # steps, and every eval below is numpy-bound. So the codec visits the
+    # accelerator for the embedding and the static-identity pass, and comes
+    # straight back to the CPU — leaving all downstream code untouched
+    # rather than device-threaded, which is where the bugs would be.
+    EDEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    codec.to(EDEV)
+    print(f"embedding every (month, ocean pixel) through the frozen codec "
+          f"on {EDEV.type} …")
     t0 = time.time()
     # The embed cache must be CODEC-AWARE: a bare Z_<run>.npy poisoned runs
     # #10/#11 (2026-08-07) — the Actions cache carried run #8's embeddings,
@@ -262,14 +298,16 @@ def main():
                 vv, oo = gather_px(Xt, stat_obs[None], t0i,
                                    torch.as_tensor(ys[sl]),
                                    torch.as_tensor(xs[sl]), codec.patch)
-                zs.append(codec.encode(vv, oo,
-                                       torch.zeros(n, C, dtype=torch.bool),
-                                       torch.as_tensor(ctx)).numpy())
+                zs.append(codec.encode(vv.to(EDEV), oo.to(EDEV),
+                                       torch.zeros(n, C, dtype=torch.bool, device=EDEV),
+                                       torch.as_tensor(ctx).to(EDEV)).cpu().numpy())
             else:
-                zs.append(codec.encode(Xt[0, ys[sl], xs[sl]], stat_obs[ys[sl], xs[sl]],
-                                       torch.zeros(n, C, dtype=torch.bool),
-                                       torch.as_tensor(ctx)).numpy())
+                zs.append(codec.encode(Xt[0, ys[sl], xs[sl]].to(EDEV),
+                                       stat_obs[ys[sl], xs[sl]].to(EDEV),
+                                       torch.zeros(n, C, dtype=torch.bool, device=EDEV),
+                                       torch.as_tensor(ctx).to(EDEV)).cpu().numpy())
         Zstat = np.concatenate(zs, 0)
+    codec.to("cpu")          # everything below is CPU/numpy, unchanged
     static_ctx = torch.as_tensor(np.concatenate([Zstat, coords], 1))
 
     # ---- train pool: windows [t-K+1 .. t] whose TARGET month t+1 is a train
