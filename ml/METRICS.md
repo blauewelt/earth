@@ -71,6 +71,33 @@ CONSISTENCY of direction across independent read-outs (linear + temporal
 both rising with the 12-channel tensor) carries more information than any
 point value.
 
+## Horizon metrics (`rollout.py`, 2026-08-07)
+
+Everything above scores ONE step. The rollout harness answers "how far":
+predict a month, feed the prediction back, predict the next — staggered
+starts into each holdout year, true-context initialisation, scored in
+anomaly space against BOTH baselines (persistence = the anomaly stays
+frozen; climatology = zero anomaly, the no-skill floor). Definitions:
+
+- **skill@h vs clim** = 1 − MSE_model(h)/MSE_clim(h). Positive = the
+  model still knows something at h months out. "How far can we predict"
+  = the h where this reaches 0.
+- **horizon AUC** = mean skill-vs-clim over h=1..12 — the model-selection
+  scalar (rewards staying useful deep into the rollout, not just t+1).
+- **AMOC@band** = probe r on ROLLED section embeddings in bands 1-3 /
+  4-6 / 7-12 (single-h n is 36→3; bands are the honest resolution).
+  Fixed-holdout-grade power — compass, not verdict.
+
+First measurement (wind14 codec + mid stage-2, NA distribution): field
+skill vs clim +0.35 at h=1, plateau ~0.21-0.27 through h=2-6, **still
++0.08 at h=12** — the crossover to no-skill lies beyond a year, not yet
+measured (targets are capped inside the holdout year; extending needs a
+caveated protocol). vs persistence GROWS with h (persistence dies
+faster). The AMOC read decays much faster than the field: r 0.18 at
+h=1-3, ~0.08 beyond — the wind-driven month-scale transport variance is
+unpredictable past a season; the field's long memory is thermal/density
+structure. Horizon AUC 0.197.
+
 ## Reliability tiers
 
 1. **chan%** (and z% within one codec) — decision-grade at ±1 pt.
