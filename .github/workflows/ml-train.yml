@@ -123,10 +123,19 @@ jobs:
               && echo --eval-every "${{ inputs.eval_every }}") \
             --out ml/runs/actions &
           TRAIN_PID=$!
-          # live-metrics side channel: publish curves every 5 min while training
+          # Live-metrics side channel: publish curves every ~5 min while
+          # training. Poll at 30s and publish every 10th tick rather than
+          # sleeping 300s outright — a bare `sleep 300` also delays NOTICING
+          # that training finished, which added a five-minute tail to every
+          # job. That was invisible against a 6-hour CPU run and is 25% of a
+          # 20-minute GPU one.
+          TICK=0
           while kill -0 $TRAIN_PID 2>/dev/null; do
-            sleep 300
-            bash scripts/publish_live_metrics.sh "ml-live-${{ github.run_number }}" || true
+            sleep 30
+            TICK=$((TICK + 1))
+            if [ $((TICK % 10)) -eq 0 ]; then
+              bash scripts/publish_live_metrics.sh "ml-live-${{ github.run_number }}" || true
+            fi
           done
           wait $TRAIN_PID
 
