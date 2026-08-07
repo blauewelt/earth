@@ -8,3 +8,6 @@ playwright-report/
 # stray bytecode from running the bake/icon scripts locally
 __pycache__/
 *.pyc
+
+# draft paper lives in the claude.ai project, not the public repo (submission privacy)
+ml/paper/
