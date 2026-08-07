@@ -12,6 +12,13 @@
 // author and dates; NEW shas — run `git pull --rebase` afterwards, identical
 // patches dedupe). Adding/updating .github/workflows/ files requires the
 // token to carry the "Workflows" permission. Refuses non-fast-forward.
+//
+// It ALSO refuses to push a checkout of one branch onto another. --branch
+// defaults to main, so a bare invocation from a feature branch silently
+// replays that whole branch onto main — which is exactly how the unvalidated
+// patch-codec architecture landed on main on 2026-08-07. The default is only
+// safe when you are standing on the branch you are naming; --allow-cross-branch
+// is the deliberate opt-out for the rare intentional case.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
@@ -28,6 +35,17 @@ const TOKEN = readFileSync(tokenFile.replace(/^~/, process.env.HOME), "utf8").tr
 
 const OPTS = { maxBuffer: 256 * 1024 * 1024 };   // default 1 MB chokes on baked data files
 const git = (...args) => execFileSync("git", args, { encoding: "utf8", ...OPTS }).trim();
+
+// Guard: pushing HEAD to a branch you are not on is almost always a slip.
+const HERE_BRANCH = git("rev-parse", "--abbrev-ref", "HEAD");
+if (HERE_BRANCH !== BRANCH && !process.argv.includes("--allow-cross-branch")) {
+  console.error(
+    `refusing: you are on '${HERE_BRANCH}' but --branch is '${BRANCH}'.\n` +
+    `  This would replay '${HERE_BRANCH}' onto '${BRANCH}'.\n` +
+    `  Intended? add --allow-cross-branch. Meant the current branch? ` +
+    `add --branch ${HERE_BRANCH}.`);
+  process.exit(3);
+}
 const gitB = (...args) => execFileSync("git", args, OPTS);
 
 async function api(method, path, body) {
