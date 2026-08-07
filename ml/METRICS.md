@@ -71,6 +71,35 @@ CONSISTENCY of direction across independent read-outs (linear + temporal
 both rising with the 12-channel tensor) carries more information than any
 point value.
 
+## Comparability metrics (2026-08-07 evening — speaking the field's language)
+
+Per LITERATURE.md §4, the probe and rollout now report the conventions
+the literature compares on. `probe_kfold.py` adds, per target: **RMSE in
+Sv** with the target's σ (global14 RAPID: 2.23 Sv against σ 2.79 → R² ≈
+0.36), **18-month low-passed r** from the same out-of-fold predictions
+(RAPID: 0.639 — the number to place beside Sanchez-Franks' in-sample
+0.83 and FW2015's ~0.95, both of which use RAPID-derived components we
+deny ourselves; for targets with <15 years the low-passed r has ~5
+effective DOF and is noise — OSNAP/SAMBA values are printed but not
+interpretable), and the **wind-stress-only ridge baseline** the field
+implicitly demands. That baseline is the headline honesty result:
+**τ alone scores 0.531 on RAPID monthly** — most of the monthly probe is
+wind/Ekman, and the embedding's edge over wind alone is +0.07 (compare
+the 12-channel no-wind codec's 0.31: density structure ~0.3, wind ~0.53,
+combined 0.60 — roughly the physics' own decomposition). New-target
+subtlety: FC and MOVE, null at monthly scale, show low-passed r of 0.35
+and 0.32 — the embedding tracks their slow components; wind-only is
+NEGATIVE on both, so that slow signal is not Ekman.
+
+`rollout.py` now reports **MSSS** (its skill scores, named per Goddard
+et al. 2013), **ACC per horizon** (the field's lingua franca — global14:
+0.620 at h=1, crossing the classic 0.5 useful-skill line at h≈4, 0.362
+at h=12), **damped persistence** (AR1) as the fair third baseline —
+beaten at every horizon (+0.22 → +0.11) — and the **amplitude ratio**
+σf/σo (≈0.52-0.65 throughout: the model under-predicts variance, and
+since amp holds steady while ACC declines, the horizon decay is
+decorrelation, not progressive damping).
+
 ## Horizon metrics (`rollout.py`, 2026-08-07)
 
 Everything above scores ONE step. The rollout harness answers "how far":

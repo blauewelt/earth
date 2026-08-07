@@ -27,7 +27,12 @@ persistence baseline (not comparable to any NA row).
 
 The transfer verdict: going global cost the Atlantic read-out NOTHING —
 k-fold 0.602 vs the NA champion's 0.604 (v3 bridge), dip capture 50%
-with the best sign agreement yet (70%). The generic-embedding hypothesis
+with the best sign agreement yet (70%). Comparability grades (METRICS.md
+/ LITERATURE.md): RMSE 2.23 Sv (σ 2.79), 18-mo low-passed r 0.639,
+wind-only ridge baseline 0.531 — the honest decomposition is density
+structure ~0.3 + wind ~0.53 → combined 0.60. Rollout ACC 0.62 at 1
+month, crossing the 0.5 useful-skill line near 4 months, 0.36 at 12;
+damped persistence beaten at every horizon. The generic-embedding hypothesis
 holds at fixed capacity. Its own stage-2 (d96×3) scores chan +35.1% on
 this tensor. First in-distribution multi-target probe: FC +0.102, MOVE
 +0.071, OSNAP +0.126, SAMBA −0.070 — all CIs include zero. The embedding

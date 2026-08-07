@@ -84,6 +84,8 @@ def kfold_r(F, y, years, lams=(1e-2, 1e-1, 1, 10, 100, 1000), boot=2000, seed=0)
         pred[te] = np.c_[Fz[te], np.ones(int(te.sum()))] @ w
     ok = np.isfinite(pred)
     r = float(np.corrcoef(pred[ok], y[ok])[0, 1])
+    rmse = float(np.sqrt(np.mean((pred[ok] - y[ok]) ** 2)))
+    sigma = float(np.std(y[ok]))
     # block bootstrap over whole years
     rng = np.random.default_rng(seed)
     yrs = np.unique(years)
@@ -94,7 +96,31 @@ def kfold_r(F, y, years, lams=(1e-2, 1e-1, 1, 10, 100, 1000), boot=2000, seed=0)
         if np.isfinite(pred[sel]).sum() > 24 and np.std(y[sel]) > 0:
             rs.append(np.corrcoef(pred[sel], y[sel])[0, 1])
     lo, hi = np.percentile(rs, [2.5, 97.5])
-    return r, float(lo), float(hi), int(ok.sum())
+    return r, float(lo), float(hi), int(ok.sum()), rmse, sigma, pred
+
+
+def lowpass_r(tidx, pred, truth, k=18, min_valid=12):
+    """Centered k-month running mean of both series on the month axis, then
+    Pearson r — the filtering the classical AMOC-reconstruction literature
+    reports (Frajka-Williams 2015, Sanchez-Franks 2021 use 18 months).
+    Windows with < min_valid finite months are dropped."""
+    lo, hi = int(tidx.min()), int(tidx.max())
+    n = hi - lo + 1
+    p = np.full(n, np.nan)
+    t = np.full(n, np.nan)
+    p[tidx - lo] = pred
+    t[tidx - lo] = truth
+    half = k // 2
+    ps, ts = [], []
+    for i in range(half, n - half):
+        wp, wt = p[i - half: i + half], t[i - half: i + half]
+        okw = np.isfinite(wp) & np.isfinite(wt)
+        if okw.sum() >= min_valid:
+            ps.append(wp[okw].mean())
+            ts.append(wt[okw].mean())
+    if len(ps) < 24:
+        return None
+    return float(np.corrcoef(ps, ts)[0, 1])
 
 
 def main():
@@ -165,11 +191,34 @@ def main():
             Z, _ = embed_everything(codec, Xt, OBS, ctx_all, lats, lons,
                                     ys[sec_sel], xs[sec_sel], codec.d_z)
             F = Z.mean(1)[tidx]
-            r, lo95, hi95, n = kfold_r(F, v_des, yr[tidx])
+            r, lo95, hi95, n, rmse, sigma, pred = kfold_r(F, v_des, yr[tidx])
+            okp = np.isfinite(pred)
+            r_lp = lowpass_r(tidx[okp], pred[okp], v_des[okp])
+            # the baseline this literature demands: wind stress alone (Ekman
+            # carries much of the subtropical monthly signal — Solodoch 2023).
+            # Same protocol, same section, raw tau channels instead of the
+            # embedding; if the embedding does not beat this, it has learned
+            # only the wind.
+            chan_names = [str(c) for c in d["chan"]]
+            wsel = [i for i, c in enumerate(chan_names) if c in ("tau_x", "tau_y")]
+            wind_block = None
+            if wsel:
+                W = np.nanmean(d["X"][:, ys[sec_sel], xs[sec_sel]][..., wsel], axis=1)
+                W = np.nan_to_num(W, nan=0.0)[tidx]
+                rw, low, hiw, _, rmw, _, _ = kfold_r(W, v_des, yr[tidx])
+                wind_block = {"r": round(rw, 3), "ci95": [round(low, 3), round(hiw, 3)],
+                              "rmse_sv": round(rmw, 2)}
             out[run][tname] = {"r_kfold_deseas": round(r, 3),
-                               "ci95": [round(lo95, 3), round(hi95, 3)], "n": n}
+                               "ci95": [round(lo95, 3), round(hi95, 3)], "n": n,
+                               "rmse_sv": round(rmse, 2),
+                               "sigma_sv": round(sigma, 2),
+                               "r_lowpass18": None if r_lp is None else round(r_lp, 3),
+                               "wind_only_baseline": wind_block}
+            lp_s = "n/a" if r_lp is None else f"{r_lp:+.3f}"
+            w_s = "n/a" if wind_block is None else f"{wind_block['r']:+.3f}"
             print(f"{run:<10} d_z={ck['d_z']:<3} {tname:<6} k-fold r {r:+.3f} "
-                  f"[{lo95:+.3f}, {hi95:+.3f}]  (n={n} months, year-blocked)")
+                  f"[{lo95:+.3f}, {hi95:+.3f}]  (n={n}) · RMSE {rmse:.2f} Sv "
+                  f"(sigma {sigma:.2f}) · 18mo-lowpass r {lp_s} · wind-only {w_s}")
 
     path = os.path.join(HERE, "runs", "probe_kfold.json")
     json.dump(out, open(path, "w"), indent=2)

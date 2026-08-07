@@ -158,8 +158,32 @@ def main():
     qc = torch.arange(X.shape[-1])[None, :].expand(P, -1)
     off0 = torch.zeros(P, X.shape[-1], 3, dtype=torch.long)
     H = a.horizon
-    sums = {k: np.zeros(H + 1) for k in ("mse_m", "mse_p", "mse_c", "n")}
+    sums = {k: np.zeros(H + 1) for k in
+            ("mse_m", "mse_p", "mse_c", "mse_d", "n",
+             "sxy", "sxx", "syy", "sx", "sy")}
     probe_pts = {h: [] for h in range(1, H + 1)}
+
+    # damped persistence (AR1): the literature's fair cheap baseline — raw
+    # persistence over-commits at long leads. Lag-1 autocorrelation per
+    # (pixel, channel) from TRAIN months only; forecast = r1^h * anomaly(s).
+    with torch.no_grad():
+        Xk = Xa[:, kys, kxs]                                   # [T, P, C]
+        okk = np.isfinite(Xk)
+        r1 = np.zeros((P, Xk.shape[-1]), dtype=np.float32)
+        tr_m = ~t_hold
+        for c in range(Xk.shape[-1]):
+            x0 = Xk[:-1, :, c]; x1 = Xk[1:, :, c]
+            m01 = okk[:-1, :, c] & okk[1:, :, c] & tr_m[:-1, None]
+            n01 = m01.sum(0).astype(float)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                mx = np.where(n01 > 0, np.nansum(np.where(m01, x0, 0), 0) / n01, 0)
+                my = np.where(n01 > 0, np.nansum(np.where(m01, x1, 0), 0) / n01, 0)
+                cov = np.nansum(np.where(m01, (x0 - mx) * (x1 - my), 0), 0)
+                v0 = np.nansum(np.where(m01, (x0 - mx) ** 2, 0), 0)
+                v1 = np.nansum(np.where(m01, (x1 - my) ** 2, 0), 0)
+                rr = cov / (np.sqrt(v0 * v1) + 1e-9)
+            r1[:, c] = np.where(n01 >= 24, np.clip(rr, 0, 0.999), 0)
+        r1_t = torch.from_numpy(r1)
 
     with torch.no_grad():
         for Y in hold_years:
@@ -189,10 +213,19 @@ def main():
                     v_pers = Xt[s, kys, kxs]
                     op = o & OBS[s, kys, kxs]
                     if op.sum() > 0:
+                        v_damp = v_pers * r1_t.pow(h)
                         sums["mse_m"][h] += float(((xhat - v_true).pow(2) * op).sum())
                         sums["mse_p"][h] += float(((v_pers - v_true).pow(2) * op).sum())
+                        sums["mse_d"][h] += float(((v_damp - v_true).pow(2) * op).sum())
                         sums["mse_c"][h] += float((v_true.pow(2) * op).sum())
                         sums["n"][h] += float(op.sum())
+                        # ACC accumulators (centered Pearson per horizon)
+                        xm = xhat * op; ym = v_true * op
+                        sums["sxy"][h] += float((xm * ym).sum())
+                        sums["sxx"][h] += float((xm * xm).sum())
+                        sums["syy"][h] += float((ym * ym).sum())
+                        sums["sx"][h] += float(xm.sum())
+                        sums["sy"][h] += float(ym.sum())
                     # AMOC probe on the rolled section embedding
                     ym = int(months[t_tgt][:4]) * 100 + int(months[t_tgt][5:7])
                     if ym in ym_to_r:
@@ -202,26 +235,40 @@ def main():
 
     out = {"run": a.run, "K": K, "horizon": H,
            "protocol": "staggered starts into holdout years, true-context init",
+           "metric_names": "MSSS per Goddard et al. 2013; ACC = centered "
+                           "anomaly correlation; amp = sigma_f/sigma_o",
            "chan_skill": []}
     print(f"{a.run}: autoregressive rollout, {len(hold_years)} holdout years")
-    print("  h   n_cells   skill vs clim   skill vs persistence")
+    print("  h   n_cells   MSSS_clim   MSSS_pers   MSSS_damped     ACC    amp")
     for h in range(1, H + 1):
         if sums["n"][h] == 0:
             continue
-        mm = sums["mse_m"][h] / sums["n"][h]
-        mp = sums["mse_p"][h] / sums["n"][h]
-        mc = sums["mse_c"][h] / sums["n"][h]
-        s_c, s_p = 1 - mm / mc, 1 - mm / mp
-        out["chan_skill"].append({"h": h, "n": int(sums["n"][h]),
-                                  "vs_clim": round(s_c, 3),
-                                  "vs_persistence": round(s_p, 3)})
-        print(f"  {h:2d}  {int(sums['n'][h]):8d}   {s_c:+13.3f}   {s_p:+13.3f}")
+        n_ = sums["n"][h]
+        mm = sums["mse_m"][h] / n_
+        mp = sums["mse_p"][h] / n_
+        md = sums["mse_d"][h] / n_
+        mc = sums["mse_c"][h] / n_
+        s_c, s_p, s_d = 1 - mm / mc, 1 - mm / mp, 1 - mm / md
+        # centered ACC + amplitude ratio from the accumulators
+        vx = sums["sxx"][h] / n_ - (sums["sx"][h] / n_) ** 2
+        vy = sums["syy"][h] / n_ - (sums["sy"][h] / n_) ** 2
+        cov = sums["sxy"][h] / n_ - sums["sx"][h] * sums["sy"][h] / n_ ** 2
+        acc = cov / (np.sqrt(vx * vy) + 1e-12)
+        amp = float(np.sqrt(vx / (vy + 1e-12)))
+        out["chan_skill"].append({"h": h, "n": int(n_),
+                                  "msss_clim": round(s_c, 3),
+                                  "msss_pers": round(s_p, 3),
+                                  "msss_damped": round(s_d, 3),
+                                  "acc": round(float(acc), 3),
+                                  "amp_ratio": round(amp, 3)})
+        print(f"  {h:2d}  {int(n_):8d}   {s_c:+9.3f}   {s_p:+9.3f}   "
+              f"{s_d:+11.3f}   {acc:+.3f}  {amp:5.2f}")
     # one scalar for model selection: mean skill-vs-climatology over the
     # horizon sweep ("horizon AUC") — rewards models that stay useful deep
     # into the rollout, not just at t+1.
     if out["chan_skill"]:
         out["horizon_auc"] = round(
-            float(np.mean([c["vs_clim"] for c in out["chan_skill"]])), 3)
+            float(np.mean([c["msss_clim"] for c in out["chan_skill"]])), 3)
         print(f"  horizon AUC (mean vs-clim, h=1..{H}): {out['horizon_auc']:+.3f}")
     out["amoc_bands"] = {}
     for name, hs in (("h1-3", (1, 2, 3)), ("h4-6", (4, 5, 6)),
