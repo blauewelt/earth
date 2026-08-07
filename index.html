@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=a17cc13c" />
+  <link rel="stylesheet" href="src/style.css?v=1e9ff479" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -641,10 +641,16 @@
         room. ☾ marks the sub-lunar point (the moon directly overhead), ☀ the sub-solar point.</p>
       <div id="td-scale" class="hint"></div>
       <div id="td-point" class="hidden">
+        <div id="td-next"></div>
         <div id="td-point-title" class="hint"></div>
         <canvas id="td-curve" width="640" height="140"></canvas>
+        <p class="hint">Times are UTC on the sim clock above; the countdown follows it as the
+          simulation runs. Tap another ocean point to move this readout.</p>
       </div>
-      <p class="hint">Tap the ocean on the globe for that point's next three days of tide.</p>
+      <div id="td-empty">
+        <strong>Tap any ocean point on the globe</strong>
+        its next high and low water, and the following three days of tide, appear here.
+      </div>
       <h2>What you are watching</h2>
       <p>This is the actual shape of the global tide, reconstructed each frame from the five main
         harmonic constituents of the <a href="https://www.seanoe.org/data/00683/79489/"
@@ -719,7 +725,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">3fd5b625</code></p>
+      <p class="build-line">Build <code id="build-id">30a42a02</code></p>
     </section>
 
     <footer>
@@ -764,6 +770,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=3fd5b625"></script>
+  <script src="src/app.js?v=30a42a02"></script>
 </body>
 </html>

@@ -317,7 +317,7 @@ footer a { color: var(--fg-dim); }
 .chip {
   display: flex; align-items: stretch; overflow: hidden;
   background: rgba(22, 27, 34, 0.92); border: 1px solid var(--border);
-  border-radius: 13px; font-size: 12px; line-height: 1;
+  border-radius: 14px; font-size: 12px; line-height: 1;
 }
 .chip:hover { border-color: var(--accent); }
 .chip-warn { border-color: #d29922; }
@@ -325,17 +325,19 @@ footer a { color: var(--fg-dim); }
   background: none; border: none; color: var(--fg);
   font-size: 12px; font-family: inherit; cursor: pointer; padding: 0;
 }
-.chip-label { padding: 5px 4px 5px 11px; white-space: nowrap; }
+/* Pill padding is deliberately generous: at border-radius 14 the curve eats
+ * into the text's optical margin, so 11px of inset LOOKED like 6. */
+.chip-label { padding: 7px 5px 7px 14px; white-space: nowrap; }
 .chip-label:hover { color: var(--accent); }
 .chip-x {
-  padding: 5px 9px 5px 5px; color: var(--fg-dim) !important;
+  padding: 7px 12px 7px 6px; color: var(--fg-dim) !important;
   font-size: 14px !important;
 }
 .chip-x:hover { color: #f85149 !important; }
 .chip-clear {
   border-style: dashed; color: var(--fg-dim);
 }
-.chip-clear .chip-label { padding: 5px 11px; color: var(--fg-dim); }
+.chip-clear .chip-label { padding: 7px 14px; color: var(--fg-dim); }
 .chip-clear:hover .chip-label { color: #f85149; }
 /* ---- pixel inspector card (right side of the globe) ----
    One card composing everything the app knows about a clicked point:
@@ -515,6 +517,37 @@ footer a { color: var(--fg-dim); }
   border-radius: 6px; padding: 3px 12px; cursor: pointer; font-size: 14px; }
 .td-btn:hover { background: #30363d; }
 #td-curve { display: block; width: 100%; background: #0a0f16; border-radius: 6px; margin-top: 4px; }
+/* Next high / low water — the tab's headline answer, so it sits ABOVE the
+ * curve and reads as two facts, not as chart furniture. The left rule takes
+ * the globe's own colours: red is water above mean, blue below. */
+.td-hl {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 8px 12px; margin-top: 6px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-left-width: 3px; border-radius: 7px;
+}
+.td-high { border-left-color: #e34948; }
+.td-low { border-left-color: #3b82f6; }
+.td-hl-k {
+  flex: 0 0 96px; font-size: 10.5px; color: var(--fg-dim);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.td-hl-t { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.td-hl-v { font-size: 13px; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.td-hl-in {
+  margin-left: auto; font-size: 12px; color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+/* The invitation stands where the chart will be, at chart size — a hint line
+ * under the fold was invisible (reported 2026-08-07: "I don't know where to
+ * find the next high tide and the curve"). */
+#td-empty {
+  margin: 10px 0 2px; padding: 20px 16px; text-align: center;
+  border: 1px dashed var(--border); border-radius: 8px;
+  color: var(--fg-dim); font-size: 12.5px; line-height: 1.55;
+}
+#td-empty.hidden { display: none; }
+#td-empty strong { display: block; color: var(--fg); font-size: 13.5px; margin-bottom: 3px; }
 #tides-controls select { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 4px; }
 #sl-tooltip {
   position: absolute; top: -4px; padding: 4px 8px; border-radius: 6px;

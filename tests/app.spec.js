@@ -3059,7 +3059,52 @@ test("tide-live layer: paints the globe, moon rides along, tab is the control ro
   });
   expect(sel.ok).toBe(true);
   expect(sel.drawn).toBeGreaterThan(5);
-  expect(sel.title).toContain("30\u00b0N");
+  // the CELL's centre, not the tap: a tap near a coast is answered by the
+  // nearest water cell, so the label must name the point actually reported
+  expect(sel.title).toContain("29.5\u00b0N 29.5\u00b0W");
+  // NEXT HIGH / LOW WATER \u2014 the tab's headline answer. The times come from
+  // roots of the analytic rate, so they are checked as physics: highs and
+  // lows alternate, every high stands above every low, and consecutive
+  // turning points are 4\u201326 h apart (semidiurnal ~6.2 h, diurnal ~12.4 h;
+  // nothing in between is physical for five constituents).
+  const hl = await page.evaluate(() => {
+    const E = window.__earth;
+    const i = E.tideSim.markCell;
+    const t0 = E.tideSim.t;
+    const ex = E.tideExtrema(i, t0, 72);
+    // the rate really is the height's derivative (finite-difference check)
+    const dt = 60000;
+    const fd = (E.tideHeightAt(i, t0 + dt) - E.tideHeightAt(i, t0 - dt)) / (2 * dt / 3600000);
+    return {
+      n: ex.length,
+      alternating: ex.every((e, k) => k === 0 || e.high !== ex[k - 1].high),
+      gapsOk: ex.every((e, k) => {
+        if (!k) return true;
+        const h = (e.ms - ex[k - 1].ms) / 3600000;
+        return h > 4 && h < 26;
+      }),
+      minHigh: Math.min(...ex.filter((e) => e.high).map((e) => e.cm)),
+      maxLow: Math.max(...ex.filter((e) => !e.high).map((e) => e.cm)),
+      // at a turning point the rate must vanish
+      rateAtExtremum: Math.abs(E.tideRateAt(i, ex[0].ms)),
+      rateErr: Math.abs(E.tideRateAt(i, t0) - fd),
+      next: document.getElementById("td-next").textContent,
+      emptyHidden: document.getElementById("td-empty").classList.contains("hidden"),
+      pointShown: !document.getElementById("td-point").classList.contains("hidden"),
+    };
+  });
+  expect(hl.n).toBeGreaterThanOrEqual(5);          // \u22655 turning points in 3 days
+  expect(hl.alternating).toBe(true);
+  expect(hl.gapsOk).toBe(true);
+  expect(hl.minHigh).toBeGreaterThan(hl.maxLow);   // every high above every low
+  expect(hl.rateAtExtremum).toBeLessThan(0.01);    // cm/h \u2014 a true root
+  expect(hl.rateErr).toBeLessThan(0.05);           // analytic == finite difference
+  expect(hl.next).toContain("next high water");
+  expect(hl.next).toContain("next low water");
+  expect(hl.next).toMatch(/\d\d:\d\d UTC/);
+  expect(hl.next).toMatch(/in \d/);
+  expect(hl.emptyHidden).toBe(true);               // invitation gives way to data
+  expect(hl.pointShown).toBe(true);
   // switching the layer off from its checkbox hides the primitive
   await page.evaluate(() => {
     const el = document.getElementById("toggle-tidelive");
@@ -3091,6 +3136,44 @@ test("tide-live layer: paints the globe, moon rides along, tab is the control ro
     el.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await expect.poll(() => page.evaluate(() => window.__earth.viewer.scene.globe.enableLighting)).toBe(false);
+});
+
+test("Tides tab answers for wherever you already flew — no blank panel", async ({ page }) => {
+  // Reported 2026-08-07: searched Peniche, opened Tides, and found neither
+  // the next high/low nor a curve — because the readout only appears after a
+  // globe TAP, and the prompt saying so was a grey hint below the fold. Now
+  // the tab adopts the camera's point on open, and the coast's land cell
+  // resolves to the water next door (the model grid is 1°).
+  await page.evaluate(() => window.__earth.viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(-9.38, 39.36, 300000),   // Peniche
+  }));
+  await page.click("#tab-tides");
+  await expect(page.locator("#td-clock .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  await expect(page.locator("#td-point")).toBeVisible();
+  await expect(page.locator("#td-empty")).toBeHidden();
+  const next = page.locator("#td-next");
+  await expect(next).toContainText("next high water");
+  await expect(next).toContainText("next low water");
+  await expect(next).toContainText("UTC");
+  const r = await page.evaluate(() => {
+    const E = window.__earth;
+    const d = E.tides;
+    const i = E.tideSim.markCell;
+    const ix = i % d.nx, iy = Math.floor(i / d.nx);
+    const ex = E.tideExtrema(i, E.tideSim.t, 30);
+    return {
+      lon: d.west + ix + 0.5, lat: d.south + iy + 0.5,
+      range: Math.max(...ex.map((e) => e.cm)) - Math.min(...ex.map((e) => e.cm)),
+      title: document.getElementById("td-point-title").textContent,
+    };
+  });
+  // the adopted cell is the Atlantic just off Peniche, not somewhere else
+  expect(Math.abs(r.lon - -9.38)).toBeLessThan(2.5);
+  expect(Math.abs(r.lat - 39.36)).toBeLessThan(2.5);
+  // and it is a real Portuguese-shelf tide: metres, not centimetres
+  expect(r.range).toBeGreaterThan(100);
+  expect(r.range).toBeLessThan(800);
+  expect(r.title).toMatch(/tide now [-+]?\d+ cm (above|below) mean/);
 });
 
 test("tidal-range layer: chip, dateless toast, probe-able grid", async ({ page }) => {

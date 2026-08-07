@@ -6334,7 +6334,7 @@ function tideAstro(ms) {
 function tidePrepare(data) {
   const n = data.nx * data.ny;
   const rad = Math.PI / 180;
-  const fields = { consts: [], mask: new Uint8Array(n), n };
+  const fields = { consts: [], mask: new Uint8Array(n), n, epochMs: Date.parse(data.epoch) };
   // Ocean fraction of each 1° cell (from the 0.125° source; baked 2026-08-07).
   // Used as per-cell alpha so coastal cells feather instead of stamping a
   // fully opaque 1° square over the land they mostly are (the British-Isles
@@ -6363,7 +6363,7 @@ function tidePrepare(data) {
 
 function tideHeightAt(i, ms) {
   if (!tideFields || !tideFields.mask[i]) return NaN;
-  const th = (ms - Date.parse(tideData.epoch)) / 3600000;
+  const th = (ms - tideFields.epochMs) / 3600000;
   const rad = Math.PI / 180;
   let h = 0;
   for (const c of tideFields.consts) {
@@ -6371,6 +6371,65 @@ function tideHeightAt(i, ms) {
     h += Math.cos(phi) * c.P[i] + Math.sin(phi) * c.Q[i];
   }
   return h;
+}
+
+/* d(height)/d(time) in cm per hour, ANALYTIC — the same sum differentiated,
+ * not a finite difference. High and low water are exactly where this crosses
+ * zero, so the turning points below are found by root-finding on an exact
+ * function rather than by hunting for the largest sample. */
+function tideRateAt(i, ms) {
+  if (!tideFields || !tideFields.mask[i]) return NaN;
+  const th = (ms - tideFields.epochMs) / 3600000;
+  const rad = Math.PI / 180;
+  let d = 0;
+  for (const c of tideFields.consts) {
+    const phi = (c.speed * th + c.V0) * rad;
+    d += (Math.cos(phi) * c.Q[i] - Math.sin(phi) * c.P[i]) * c.speed * rad;
+  }
+  return d;
+}
+
+/* The turning points ahead of `fromMs`: high water where the rate goes + → −,
+ * low water where it goes − → +. Scanned at 15-minute steps — the fastest
+ * constituent here is S2 (30°/h, a 12-hour period), so no extremum can hide
+ * between samples — then bisected to about a second. Returns
+ * [{ms, cm, high}] in time order. */
+function tideExtrema(i, fromMs, hours = 72, limit = 40) {
+  const out = [];
+  if (!tideFields || !tideFields.mask[i]) return out;
+  const STEP = 15 * 60000;
+  const end = fromMs + hours * 3600000;
+  let t0 = fromMs, r0 = tideRateAt(i, t0);
+  for (let t = fromMs + STEP; t <= end && out.length < limit; t += STEP) {
+    const r1 = tideRateAt(i, t);
+    if ((r0 > 0) !== (r1 > 0)) {
+      let a = t0, b = t, ra = r0;
+      for (let k = 0; k < 24; k++) {
+        const m = (a + b) / 2, rm = tideRateAt(i, m);
+        if ((ra > 0) !== (rm > 0)) b = m; else { a = m; ra = rm; }
+      }
+      const ms = (a + b) / 2;
+      out.push({ ms, cm: tideHeightAt(i, ms), high: r0 > 0 });
+    }
+    t0 = t; r0 = r1;
+  }
+  return out;
+}
+
+function tideHHMM(ms) {
+  const d = new Date(ms);
+  return `${String(d.getUTCHours()).padStart(2, "0")}:` +
+         `${String(d.getUTCMinutes()).padStart(2, "0")}`;
+}
+
+/* "in 2 h 46 min" — relative to the SIM clock, so it counts down as the
+ * simulation runs. Times themselves are UTC: the point's civil timezone is
+ * not something this app knows, and guessing it from longitude would be a
+ * quiet lie on half the coastlines. */
+function tideCountdown(ms) {
+  const m = Math.max(0, Math.round(ms / 60000));
+  return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`
+                 : `${m} min`;
 }
 
 let tideDataPromise = null;
@@ -6565,7 +6624,7 @@ function tideLoop() {
       }
       const ast = tideMarkers();
       tideStats(volUp, ast);
-      if (tideSim.markCell != null && tideTabVisible()) tideCurve();
+      if (tideSim.markCell != null && tideTabVisible()) { tideCurve(); tideRenderHiLo(); }
       viewer.scene.requestRender();
     }
     tideSim.raf = requestAnimationFrame(step);
@@ -6591,6 +6650,43 @@ async function ensureTideLive(on) {
     viewer.scene.requestRender();
   }
   updateLegends();
+}
+
+/* The headline answer: when is the next high water, and the next low. Both
+ * are read off tideExtrema, so the time is the true zero of the rate, not the
+ * nearest plotted sample. Re-rendered only when the minute or the cell
+ * changes — the animation loop calls this ten times a second. */
+let tideHiLoKey = "";
+function tideRenderHiLo(force = false) {
+  const el = document.getElementById("td-next");
+  const i = tideSim.markCell;
+  if (!el || i == null) return;
+  const key = `${i}|${Math.floor(tideSim.t / 60000)}`;
+  if (key === tideHiLoKey && !force) return;
+  tideHiLoKey = key;
+  const ex = tideExtrema(i, tideSim.t, 30);
+  const row = (e, name, cls) => {
+    if (!e) return "";
+    const m = (e.cm / 100).toFixed(2).replace("-", "−");
+    return `<div class="td-hl ${cls}"><span class="td-hl-k">next ${name}</span>` +
+      `<span class="td-hl-t">${tideHHMM(e.ms)} UTC</span>` +
+      `<span class="td-hl-v">${e.cm >= 0 ? "+" : ""}${m} m</span>` +
+      `<span class="td-hl-in">in ${tideCountdown(e.ms - tideSim.t)}</span></div>`;
+  };
+  el.innerHTML = row(ex.find((e) => e.high), "high water", "td-high") +
+                 row(ex.find((e) => !e.high), "low water", "td-low");
+}
+
+/* The tab shows either a point's tide or an invitation to pick one — never a
+ * blank space where a chart should be (which is how it read before: the
+ * curve lives in a hidden block and the only prompt was a grey line of hint
+ * text below the fold). */
+function tideSyncPointUi() {
+  const has = tideSim.markCell != null;
+  const pt = document.getElementById("td-point");
+  const empty = document.getElementById("td-empty");
+  if (pt) pt.classList.toggle("hidden", !has);
+  if (empty) empty.classList.toggle("hidden", has);
 }
 
 function tideCurve() {
@@ -6622,27 +6718,80 @@ function tideCurve() {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, c.height); ctx.stroke();
     ctx.setLineDash([]);
   }
+  // Every high and low in the window gets a dot — the same red/blue the globe
+  // uses for above/below mean — and the NEXT one of each kind is named, so
+  // the chart answers "when" without reading it off the axis.
+  let namedHigh = false, namedLow = false;
+  for (const e of tideExtrema(i, T0, 72)) {
+    const x = (e.ms - T0) / SPAN * c.width, yy = y(e.cm);
+    const first = e.high ? !namedHigh : !namedLow;
+    if (e.high) namedHigh = true; else namedLow = true;
+    ctx.fillStyle = e.high ? "#e34948" : "#3b82f6";
+    ctx.beginPath(); ctx.arc(x, yy, first ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
+    if (!first) continue;
+    ctx.font = "10px sans-serif";
+    const right = x > c.width - 46;
+    ctx.textAlign = right ? "right" : "left";
+    ctx.fillText(tideHHMM(e.ms), x + (right ? -6 : 6), yy + (e.high ? -6 : 13));
+  }
+  ctx.textAlign = "left";
 }
 
-/* A globe tap selects the tide point for the tab's 3-day curve. */
-function tideSelectPoint(carto) {
+/* The model grid is 1\u00b0, so a coastal town is often IN a land cell \u2014 tapping
+ * the beach at Peniche would answer "no tide here" with the Atlantic in
+ * frame. Search outward for the nearest cell the tide model actually solves;
+ * `rings` bounds how far that search may reach (1 cell \u2248 110 km, i.e. still
+ * "the coast here"; a tap in the middle of a continent still finds nothing). */
+function tideNearestWater(lon, lat, rings = 1) {
+  const ix0 = Math.floor(lon - tideData.west), iy0 = Math.floor(lat - tideData.south);
+  for (let r = 0; r <= rings; r++) {
+    let best = null, bestD = Infinity;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;    // ring edge only
+        const ix = ix0 + dx, iy = iy0 + dy;
+        if (ix < 0 || ix >= tideData.nx || iy < 0 || iy >= tideData.ny) continue;
+        const i = iy * tideData.nx + ix;
+        if (!tideFields.mask[i]) continue;
+        const d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = { i, ix, iy }; }
+      }
+    }
+    if (best) return best;
+  }
+  return null;
+}
+
+/* A globe tap selects the tide point for the tab's readout and 3-day curve. */
+function tideSelectPoint(carto, rings = 1) {
   if (!tideData) return false;
   const lon = Cesium.Math.toDegrees(carto.longitude);
   const lat = Cesium.Math.toDegrees(carto.latitude);
-  const ix = Math.floor(lon - tideData.west), iy = Math.floor(lat - tideData.south);
-  const i = iy * tideData.nx + ix;
-  if (ix < 0 || ix >= tideData.nx || iy < 0 || iy >= tideData.ny || !tideFields.mask[i]) return false;
-  tideSim.markCell = i;
-  const cm = Math.round(tideHeightAt(i, tideSim.t));
+  const hit = tideNearestWater(lon, lat, rings);
+  if (!hit) return false;
+  tideSim.markCell = hit.i;
+  tideSyncPointUi();
+  // The coordinates named are the CELL's centre, not the tap: when the tap
+  // was on a land cell the answer comes from the water cell next door, and
+  // the label must say which point it is actually reporting.
+  const clat = tideData.south + hit.iy + 0.5, clon = tideData.west + hit.ix + 0.5;
+  const cm = Math.round(tideHeightAt(hit.i, tideSim.t));
   const cmTxt = `${cm > 0 ? "+" : ""}${cm} cm ${cm >= 0 ? "above" : "below"} mean`;
-  document.getElementById("td-point").classList.remove("hidden");
   document.getElementById("td-point-title").textContent =
-    `${Math.abs(lat).toFixed(0)}\u00b0${lat >= 0 ? "N" : "S"} ` +
-    `${Math.abs(lon).toFixed(0)}\u00b0${lon >= 0 ? "E" : "W"} \u2014 tide now ${cmTxt} ` +
+    `${Math.abs(clat).toFixed(1)}\u00b0${clat >= 0 ? "N" : "S"} ` +
+    `${Math.abs(clon).toFixed(1)}\u00b0${clon >= 0 ? "E" : "W"} \u2014 tide now ${cmTxt} ` +
     `\u00b7 next 3 days (dashed lines = day boundaries)`;
+  tideRenderHiLo(true);
   if (tideTabVisible()) tideCurve();
-  else showToast(`Tide here now: <strong>${cmTxt}</strong> \u2014 the point's 3-day curve ` +
-                 `is in the <strong>Tides tab</strong>.`, { key: "tide-point", replace: true });
+  else {
+    const ex = tideExtrema(hit.i, tideSim.t, 30);
+    const nx = ex[0];
+    showToast(`Tide here now: <strong>${cmTxt}</strong>` +
+      (nx ? ` \u00b7 next ${nx.high ? "high" : "low"} water <strong>${tideHHMM(nx.ms)} UTC</strong>` +
+            ` (in ${tideCountdown(nx.ms - tideSim.t)})` : "") +
+      ` \u2014 the full 3-day curve is in the <strong>Tides tab</strong>.`,
+      { key: "tide-point", replace: true });
+  }
   return true;
 }
 
@@ -6672,6 +6821,20 @@ async function loadTides() {
     box.checked = true;
     box.dispatchEvent(new Event("change", { bubbles: true }));
   }
+  // …and if nothing is selected yet, answer for whatever the camera is
+  // looking at. Searching "Peniche" and opening this tab should show
+  // Peniche's tide, not an empty panel with a tap-somewhere hint: the user
+  // has already said where they mean. Two rings (~220 km) so a coastal view
+  // finds its water; if the camera is over a continent or off the limb, the
+  // empty state stands.
+  if (tideSim.markCell == null) {
+    const canvas = viewer.scene.canvas;
+    const cart = viewer.camera.pickEllipsoid(
+      new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+      viewer.scene.globe.ellipsoid);
+    if (cart) tideSelectPoint(Cesium.Cartographic.fromCartesian(cart), 2);
+  }
+  tideSyncPointUi();
   tideLoop();
 }
 
@@ -6794,6 +6957,8 @@ window.__earth = {
   tideAstro,
   tideLive,
   tideSelectPoint,
+  tideRateAt,
+  tideExtrema,
   ensureTideLive,
   checkForNewBuild,
   movingMean,
