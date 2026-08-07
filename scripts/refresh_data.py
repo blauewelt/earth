@@ -1984,6 +1984,11 @@ def tides():
         amp = np.hypot(bre, bim)                      # cm
         pha = np.degrees(np.arctan2(bim, bre)) % 360  # Greenwich lag G
         out[c] = (amp, pha)
+        # ocean fraction of the 1-degree cell (0.125-degree source: 64 subcells)
+        if c == CONSTS[0]:
+            frac = cnt.astype(float)
+        else:
+            frac = np.maximum(frac, cnt.astype(float))
         d.close()
         print(f"  {c}: amp max {np.nanmax(amp):.0f} cm, "
               f"{int(np.isfinite(amp).sum())} ocean cells")
@@ -2017,6 +2022,7 @@ def tides():
             {"id": c, "speed": SPEED[c], "V0": round(V0[c], 3),
              "amp": enc(out[c][0]), "phase": enc(out[c][1])}
             for c in CONSTS],
+        "frac": [round(min(1.0, float(v) / 64.0), 2) for v in frac.ravel()],
         "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
     }
     with open(os.path.join(DATA, "tide_constituents.json"), "w") as f:

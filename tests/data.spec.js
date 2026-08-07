@@ -1045,6 +1045,15 @@ test.describe("tides.json + tide_constituents.json (EOT20)", () => {
       expect(Math.max(...amps)).toBeLessThan(800);    // the estuary-artifact cap held
     }
     expect(Number.isFinite(Date.parse(c.epoch))).toBe(true);
+    // Ocean fraction (2026-08-07): per-cell share of 0.125° source subcells,
+    // used by the renderer as alpha so coastal cells feather instead of
+    // stamping opaque 1° squares over land (the British-Isles artifact).
+    expect(c.frac.length).toBe(c.nx * c.ny);
+    expect(Math.min(...c.frac)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...c.frac)).toBeLessThanOrEqual(1);
+    const cellOf = (lon, lat) => (Math.floor(lat) + 90) * 360 + (Math.floor(lon) + 180);
+    expect(c.frac[cellOf(-1.5, 52.5)]).toBe(0);     // Birmingham: inland
+    expect(c.frac[cellOf(-20.5, 45.5)]).toBe(1);    // open Atlantic
     // Reconstruct h(t) per the file's own note and check the physics: a
     // macrotidal cell swings metres over a month, a gyre cell barely moves.
     const h = (i, hours) => c.constituents.reduce((sum, k) => {

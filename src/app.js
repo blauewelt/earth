@@ -6335,6 +6335,12 @@ function tidePrepare(data) {
   const n = data.nx * data.ny;
   const rad = Math.PI / 180;
   const fields = { consts: [], mask: new Uint8Array(n), n };
+  // Ocean fraction of each 1° cell (from the 0.125° source; baked 2026-08-07).
+  // Used as per-cell alpha so coastal cells feather instead of stamping a
+  // fully opaque 1° square over the land they mostly are (the British-Isles
+  // "red over Birmingham" artifact). Older bakes lack it → alpha 1 everywhere.
+  fields.frac = new Float32Array(n).fill(1);
+  if (data.frac) for (let i = 0; i < n; i++) fields.frac[i] = data.frac[i] || 0;
   for (const c of data.constituents) {
     const P = new Float32Array(n), Q = new Float32Array(n);
     for (let i = 0; i < n; i++) {
@@ -6413,10 +6419,15 @@ function tidePaint() {
     for (let k = 0; k < f.consts.length; k++) {
       h += cosns[k] * f.consts[k].P[i] + sinns[k] * f.consts[k].Q[i];
     }
-    if (h > 0) volUp += h * f.area[i];
-    const t = Math.max(0, Math.min(1, 0.5 + h / (2 * TD_RANGE_CM)));
+    if (h > 0) volUp += h * f.area[i] * f.frac[i];
+    // Smooth compression instead of a hard clamp: tanh keeps gradient
+    // structure alive above ±2.5 m (the whole southern North Sea used to
+    // saturate into one flat red slab at high water). ±2.5 m sits at
+    // 12%/88% of the ramp; the legend's ticks are placed to match.
+    const t = 0.5 + 0.5 * Math.tanh(h / TD_RANGE_CM);
     const [r, g, b] = rampColor("anom", t);
-    px[o] = r; px[o + 1] = g; px[o + 2] = b; px[o + 3] = 255;
+    px[o] = r; px[o + 1] = g; px[o + 2] = b;
+    px[o + 3] = Math.round(255 * f.frac[i]);
   }
   const c = tideLive.back;
   c.getContext("2d").putImageData(tideLive.img, 0, 0);
@@ -6493,11 +6504,16 @@ function tideLegendEl() {
     ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.fillRect(x, 0, 1, H);
   }
+  // The colour scale is tanh-compressed (see tidePaint): ±2.5 m sit at
+  // 12% / 88% of the ramp. Mark them so the bar reads honestly.
+  ctx.fillStyle = "rgba(255,255,255,.85)";
+  for (const tt of [0.119, 0.881]) ctx.fillRect(Math.round(tt * W), 0, 1, H);
   const read = document.createElement("div");
   read.className = "legend-read hidden";
   canvas.addEventListener("pointermove", (e) => {
-    const t = Math.max(0, Math.min(1, e.offsetX / canvas.clientWidth));
-    const cm = Math.round((t - 0.5) * 2 * TD_RANGE_CM);
+    const t = Math.max(0.004, Math.min(0.996, e.offsetX / canvas.clientWidth));
+    const u = 2 * t - 1;                       // invert the tanh compression
+    const cm = Math.round(TD_RANGE_CM * 0.5 * Math.log((1 + u) / (1 - u)));
     read.textContent = `${cm > 0 ? "+" : ""}${cm} cm ${cm >= 0 ? "above" : "below"} mean sea level`;
     read.classList.remove("hidden");
   });
@@ -6505,7 +6521,7 @@ function tideLegendEl() {
   wrap.appendChild(canvas);
   const labels = document.createElement("div");
   labels.className = "legend-labels";
-  labels.innerHTML = `<span>−${TD_RANGE_CM} cm</span><span>0 · mean</span><span>+${TD_RANGE_CM} cm</span>`;
+  labels.innerHTML = `<span>−${TD_RANGE_CM / 100} m at tick</span><span>0 · mean</span><span>+${TD_RANGE_CM / 100} m at tick</span>`;
   div.appendChild(wrap); div.appendChild(labels); div.appendChild(read);
   return div;
 }
@@ -6638,7 +6654,8 @@ async function loadTides() {
     document.getElementById("td-scale").innerHTML =
       `colour: <span style="color:#3b82f6">\u2212${TD_RANGE_CM / 100} m below</span> \u2026 ` +
       `<span style="color:#e34948">+${TD_RANGE_CM / 100} m above</span> mean sea level ` +
-      `(clamped; ranges on shelves exceed it)`;
+      `(smoothly compressed beyond, so shelf seas keep their structure; ` +
+      `coastal cells fade with their land share)`;
     document.getElementById("td-play").addEventListener("click", (e) => {
       tideSim.playing = !tideSim.playing;
       e.target.textContent = tideSim.playing ? "\u23f8" : "\u25b6";
