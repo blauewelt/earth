@@ -203,7 +203,16 @@ def main():
 
     print("embedding every (month, ocean pixel) through the frozen codec …")
     t0 = time.time()
-    cache = (os.path.join(HERE, "cache", f"Z_{a.run}.npy")
+    # The embed cache must be CODEC-AWARE: a bare Z_<run>.npy poisoned runs
+    # #10/#11 (2026-08-07) — the Actions cache carried run #8's embeddings,
+    # the (T, P, d_z) shape check matched, and both stage-2s trained on the
+    # WRONG codec's z (healthy z-space skill, catastrophic decoded skill:
+    # the z they predicted was not the z their decoder speaks). The weight
+    # hash in the filename makes a stale cache a miss, never a lie.
+    import hashlib
+    whash = hashlib.md5(b"".join(
+        v.numpy().tobytes() for v in list(ck["model"].values())[:4])).hexdigest()[:10]
+    cache = (os.path.join(HERE, "cache", f"Z_{a.run}_{whash}.npy")
              if not a.max_pixels else None)
     Z, coords = embed_everything(codec, Xt, OBS, ctx_all, lats, lons, ys, xs,
                                  ck["d_z"], cache_path=cache)
