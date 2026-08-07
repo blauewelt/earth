@@ -24,6 +24,16 @@ persistence baseline (not comparable to any NA row).
 | run | chans | d_z | chan% | z% | r_tmp | r_lin | k-fold RAPID [CI] | curve | provenance |
 |---|---|---|---|---|---|---|---|---|---|
 | global14 (#8) | 14 | 64 | +30.6 | +32.2 | 0.54 | 0.495 | **0.602 [0.461, 0.728]** | [png](curves/global14.png) | Actions ml-train #8 (2026-08-07) |
+| global14b (#11 codec) | 14 | 64 | +30.9 | — | — | — | 0.556 [0.434, 0.676] | — | replication: identical config, different runner |
+
+The #11-codec replication measures codec-training seed noise on the
+defensible metric for the first time: k-fold spread ≈ ±0.05, chan%
+within the known ±0.5 band, every multi-target null replicated
+(FC 0.081/0.102, MOVE 0.049/0.071, OSNAP 0.100/0.126, SAMBA
+−0.028/−0.070), and the wind-only baseline bit-identical (0.531 — it
+bypasses the codec, as it must). Caution recorded: the 18-month
+low-passed r swung 0.64→0.41 between seeds — few effective DOF; never
+argue from it alone.
 
 The transfer verdict: going global cost the Atlantic read-out NOTHING —
 k-fold 0.602 vs the NA champion's 0.604 (v3 bridge), dip capture 50%
