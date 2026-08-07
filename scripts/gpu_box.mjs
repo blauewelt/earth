@@ -49,6 +49,15 @@ async function registrationToken() {
   return (await r.json()).token;
 }
 
+// DISK is the setting that quietly dominates the bill. Vast charges storage
+// per GB per MONTH at a rate the host chooses — and charges it whether the
+// instance is running or STOPPED, which is precisely the state we plan to
+// park it in between runs. Measured 2026-08-07: a first attempt took a host
+// at $1/GB/month and asked for 120 GB, so storage was $0.167/h against a
+// $0.251/h GPU — 40% of the bill, and 100% of it while idle. What we
+// actually need is ~10 GB of data cache, ~5 GB of torch, plus checkouts.
+const DISK = 50;
+
 // Our jobs are CPU-heavy at the edges (tensor build, embedding passes) and
 // GPU-bound in the middle, so the filter asks for real RAM and disk as well
 // as the card — a 24GB 4090 next to 8GB of system RAM would OOM in
@@ -57,7 +66,7 @@ const WANT = {
   gpu_name: { eq: "RTX 4090" },
   num_gpus: { eq: 1 },
   cpu_ram: { gte: 32000 },       // MB
-  disk_space: { gte: 120 },      // GB
+  disk_space: { gte: DISK },     // GB the host can allocate us
   reliability2: { gte: 0.98 },
   rentable: { eq: true },
   rented: { eq: false },
@@ -65,8 +74,8 @@ const WANT = {
   order: [["dph_total", "asc"]], // costs more in wasted hours than it saves
 };
 
-async function vast(method, path, body) {
-  const res = await fetch(`${BASE}${path}`, {
+async function vast(method, path, body, base = BASE) {
+  const res = await fetch(`${base}${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${KEY}`,
@@ -93,7 +102,7 @@ async function vast(method, path, body) {
 //     re-register with a dead token and abort. Hence the .runner check:
 //     configure once, thereafter just run. That is also what makes
 //     stop/start (rather than destroy/create) the cheap everyday loop.
-function onstart(token) {
+function onstart(token, name) {
   return `#!/bin/bash
 set -eux
 export RUNNER_ALLOW_RUNASROOT=1
@@ -107,7 +116,7 @@ if [ ! -f /opt/runner/.runner ]; then
   ./config.sh --unattended --replace \\
     --url https://github.com/blauewelt/earth \\
     --token ${token} \\
-    --name gpu-box --labels self-hosted,linux,x64,gpu,cuda \\
+    --name ${name} --labels self-hosted,linux,x64,gpu,cuda \\
     --work /opt/runner/_work
 fi
 cd /opt/runner
@@ -120,10 +129,20 @@ const [cmd, target] = process.argv.slice(2);   // `arg` is the flag reader above
 
 if (cmd === "offers") {
   const r = await vast("POST", "/bundles/", WANT);
-  for (const o of (r.offers || []).slice(0, 10))
-    console.log(`${String(o.id).padEnd(10)} $${o.dph_total.toFixed(3)}/h  ` +
-      `${o.gpu_name}  ${Math.round(o.cpu_ram / 1000)}GB ram  ` +
-      `${Math.round(o.disk_space)}GB disk  rel ${(o.reliability2 * 100).toFixed(1)}%  ${o.geolocation ?? ""}`);
+  // Rank by what we will ACTUALLY pay — GPU plus this host's storage rate at
+  // our disk size — not by the listing's dph_total, which prices storage at
+  // whatever default disk the offer happens to quote. `idle` is the storage
+  // alone: what a STOPPED box costs, which is the number that decides
+  // whether parking it between runs is worth anything.
+  const priced = (r.offers || []).map((o) => {
+    const store = (o.storage_cost ?? 0) * DISK / 730;      // $/GB/month -> $/h
+    return { o, store, total: (o.dph_base ?? o.dph_total) + store };
+  }).sort((a, b) => a.total - b.total);
+  console.log(`(priced at DISK=${DISK}GB; idle = storage only, charged while stopped)`);
+  for (const { o, store, total } of priced.slice(0, 10))
+    console.log(`${String(o.id).padEnd(10)} $${total.toFixed(3)}/h  ` +
+      `(gpu $${(o.dph_base ?? o.dph_total).toFixed(3)} + idle $${store.toFixed(3)})  ` +
+      `${Math.round(o.cpu_ram / 1000)}GB ram  rel ${(o.reliability2 * 100).toFixed(1)}%  ${o.geolocation ?? ""}`);
 } else if (cmd === "create") {
   const token = await registrationToken();
   const r = await vast("PUT", `/asks/${target}/`, {
@@ -131,8 +150,8 @@ if (cmd === "offers") {
     // CUDA + torch already in the image: the workflow's pip step then only
     // has to confirm it rather than pull 2.5GB of wheels on every run.
     image: "pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime",
-    disk: 120,
-    onstart: onstart(token),
+    disk: DISK,
+    onstart: onstart(token, `gpu-box-${target}`),
     runtype: "ssh",
     label: "earth-runner",
   });
@@ -140,7 +159,10 @@ if (cmd === "offers") {
   console.log("\nrunner should appear within ~3 min at " +
     "https://github.com/blauewelt/earth/settings/actions/runners");
 } else if (cmd === "list") {
-  const r = await vast("GET", "/instances/");
+  // LISTING moved to v1 (v0 answers 410 deprecated_endpoint) while creating,
+  // stopping and destroying are still v0 — so the base URL is per-call, not
+  // global. Measured 2026-08-07; re-check if a call starts 410-ing.
+  const r = await vast("GET", "/instances/", null, "https://console.vast.ai/api/v1");
   for (const i of r.instances || [])
     console.log(`${String(i.id).padEnd(10)} ${String(i.actual_status).padEnd(10)} ` +
       `$${(i.dph_total ?? 0).toFixed(3)}/h  ${i.gpu_name}  up ${Math.round((i.duration ?? 0) / 3600)}h  ${i.label ?? ""}`);
