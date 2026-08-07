@@ -87,20 +87,25 @@ point value.
    blocked by calendar year; λ on an inner tail; block-bootstrap CI over
    whole years). First run, linear section probe, deseasonalised:
 
-   | codec | k-fold r | 95% CI |
-   |---|---|---|
-   | dz8 | 0.111 | [0.01, 0.20] |
-   | dz16 | 0.151 | [0.01, 0.28] |
-   | d_z=32 (actions #1) | 0.182 | [0.05, 0.31] |
-   | dz64 | **0.308** | [0.13, 0.46] |
+   | codec | chans | k-fold r | 95% CI |
+   |---|---|---|---|
+   | dz8 | 12 | 0.111 | [0.01, 0.20] |
+   | dz16 | 12 | 0.151 | [0.01, 0.28] |
+   | d_z=32 (actions #1) | 12 | 0.182 | [0.05, 0.31] |
+   | dz64 | 12 | 0.308 | [0.13, 0.46] |
+   | dz128 (2026-08-07) | 12 | 0.166 | [0.072, 0.295] |
+   | **wind14** (2026-08-07) | 14 | **0.586** | [0.451, 0.720] |
 
-   Three lessons the coarse instrument could not deliver: every CI
-   excludes zero (the embeddings carry REAL deseasonalised AMOC signal —
-   the first statistically defensible version of that claim); the true
-   effect size is ~0.1–0.3, i.e. the 36-month draws of 0.4+ were
-   flattering; and r rises monotonically with d_z even though chan%
-   saturates at 32 — the transport read-out wants a wider bottleneck
-   than field prediction does. Caveat (in the script header): the codec
+   Lessons the coarse instrument could not deliver: every CI excludes
+   zero (the embeddings carry REAL deseasonalised AMOC signal — the
+   first statistically defensible version of that claim); the 36-month
+   draws of 0.4+ were flattering; r rises with d_z even though chan%
+   saturates at 32 — but the rise TURNS OVER at d_z=128 (ridge features
+   vs ~220 truth months per fold), so 64 is the working bottleneck; and
+   the wind channels moved the probe more than every width step combined
+   (0.308 → 0.586, new CI excluding the old point estimate). dz128 is
+   also the definitive rubber-ruler exhibit: all-time record
+   fixed-holdout r_lin (0.528) against a k-fold of 0.166. Caveat (in the script header): the codec
    saw non-holdout months' FIELDS during self-supervised training, so
    absolute values are mildly optimistic; comparisons are fair. On
    "hold out twice as much" instead: 6 years would buy only √2

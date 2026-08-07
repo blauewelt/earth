@@ -14,11 +14,49 @@ channel / embedding space (higher is better); **r_tmp** = RAPID probe
 **r_lin** = linear single-month section probe, deseasonalised. 36 held-out
 RAPID months — r differences under ~0.1 are noise at this n.
 
-## Ranked (anomaly-space codecs only)
+## The frontier — 14-channel tensor (wind stress added 2026-08-06)
+
+chan%/z% below are NOT comparable with the 12-channel table (different
+channel set → different persistence baseline; house rule 5). Cross-tensor
+judging goes through the k-fold probe and the 2009-10 case study.
+
+| run | chans | d_z | codec steps | chan% | z% | r_tmp | r_lin | k-fold r [CI] | curve | provenance |
+|---|---|---|---|---|---|---|---|---|---|---|
+| wind14 (#6) | 14 | 64 | 30000 | +35.6 | +33.9 | 0.537 | 0.47 | **0.586 [0.451, 0.720]** | [png](curves/wind14.png) | Actions ml-train #6 (2026-08-07) |
+
+Adding NCEP wind stress (τx, τy) nearly doubled the defensible probe
+(12-ch d_z=64: 0.308 [0.13, 0.46]) — the new CI excludes the old point
+estimate — and tripled the captured amplitude of the winter 2009-10
+collapse (16% → 50% of the observed dip, out-of-fold at matched d_z=64;
+`dip_check.py`, FINDINGS.md §4.6).
+Its own full stage-2 (d256×5) scores chan +41.6% on this tensor.
+Physics note: RAPID transport contains an Ekman component computed from
+wind, so this is the embedding acquiring a real ingredient of the
+target — the right channels, not a modelling trick (FINDINGS.md §4.6).
+
+## The defensible probe ranking (year-blocked k-fold, all 240 months)
+
+| codec | chans | d_z | k-fold r | 95% CI |
+|---|---|---|---|---|
+| **wind14** | 14 | 64 | **0.586** | [0.451, 0.720] |
+| dz64 | 12 | 64 | 0.308 | [0.13, 0.46] |
+| actions #1 | 12 | 32 | 0.182 | [0.05, 0.31] |
+| dz128 | 12 | 128 | 0.166 | [0.072, 0.295] |
+| dz16 | 12 | 16 | 0.151 | [0.01, 0.28] |
+| dz8 | 12 | 8 | 0.111 | [0.01, 0.20] |
+
+Every CI excludes zero. This table is the project's headline, and it
+now has shape: r rises with d_z to a **peak at 64, then turns over at
+128** (ridge features vs ~220 truth months per fold — FINDINGS.md
+§4.3), and one channel family (wind) is worth more than every width
+step combined.
+
+## Ranked — 12-channel tensor (anomaly-space codecs only)
 
 | run | chans | d_z | codec steps | chan% | z% | r_tmp | r_lin | curve | provenance |
 |---|---|---|---|---|---|---|---|---|---|
 | dz64 (#4) | 12 | 64 | 30000 | **+30.6** | +28.3 | 0.391 | 0.457 | [png](curves/dz64.png) | Actions run 31096118740 (2026-08-06), backfilled |
+| dz128 (#5) | 12 | 128 | 30000 | +30.2 | +26.3 | 0.338 | 0.528 | [png](curves/dz128.png) | Actions ml-train #5 (2026-08-07), backfilled |
 | actions #1 | 12 | 32 | 30000 | +30.5 | +27.8 | 0.361 | 0.428 | [png](curves/actions.png) | Actions run 31028748779 (2026-08-05); backfilled |
 | dz16 (#3) | 12 | 16 | 30000 | +30.3 | +27.7 | 0.346 | 0.390 | [png](curves/dz16.png) | Actions run 31096115165 (2026-08-06), backfilled |
 | pilot4_anom | 4 | 32 | 8000 | +29.3 | +31.4 | 0.291 | 0.307 | [png](curves/pilot4_anom.png) | in-sandbox 2026-08-05; backfilled |
@@ -32,13 +70,17 @@ bottleneck saturates between 16 and 32 — chan% is flat from d_z=16 to 64
 d_z=8 codec ranks BELOW the 4-channel d_z=32 pilot). Probe columns drift
 upward with d_z but stay inside the ±0.57 CI (METRICS.md) — and the
 year-blocked k-fold probe (3× sharper; METRICS.md) then resolved that
-drift into a real monotone gain: k-fold r 0.11/0.15/0.18/0.31 for d_z
-8/16/32/64, every CI excluding zero. AMENDED VERDICT: d_z=32 suffices
-for field prediction, but the TRANSPORT read-out keeps gaining to
-d_z=64 — the probe wants a wider bottleneck than the reconstruction
-loss rewards. A d_z=128 run is the natural next dispatch. These three runs are also the
-first born fully instrumented: dense loss curves + 4-point probe curves
-rendered on the runners themselves.
+drift into a real gain: k-fold r 0.11/0.15/0.18/0.31 for d_z 8/16/32/64,
+every CI excluding zero. AMENDED VERDICT (completed 2026-08-07): d_z=32
+suffices for field prediction, the TRANSPORT read-out keeps gaining to
+d_z=64 — and the d_z=128 dispatch answered the open question by TURNING
+OVER (k-fold 0.166 [0.072, 0.295], chan% flat at 30.2). The curve peaks
+at 64; that is the working bottleneck until the truth series grows.
+dz128 also set the all-time fixed-holdout r_lin record (0.528) while
+k-fold read 0.166 — the definitive exhibit for why single-holdout probe
+draws are never trusted here. These runs are also the first born fully
+instrumented: dense loss curves + 4-point probe curves rendered on the
+runners themselves.
 
 Reading the top row against the 4-channel rows: adding the RG depth
 structure (T/S at 10/200/700/1500 dbar) moved BOTH probe reads up — linear
@@ -73,6 +115,12 @@ that.
 
 ## Provenance only (not rankable)
 
+- **xxlarge stage-2 attempt** (2026-08-06, in-sandbox): d320×6 (7.4 M
+  params), the rung above xlarge on the width×depth curve — zero steps
+  in 8 h on the sandbox's 2 CPU cores; killed. Needs the training
+  workflow to accept stage-2 size inputs so it can run on Actions
+  runners. The scaling curve past 4 M params is therefore still
+  unmeasured, with the last measured point (xlarge, 37.7%) still rising.
 - **pilot12_anom** (2026-08-05, previous container — checkpoint lost, no
   trainprobe backfill possible): linear K-concat sweep r_deseas 0.38 (K=1)
   → 0.43 (K=3), holding to K=24; codec t+1 0.669 vs 0.753 persistence.
