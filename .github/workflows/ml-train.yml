@@ -28,6 +28,12 @@ on:
       temporal_steps:
         description: "stage-2 temporal transformer steps (0 = skip)"
         default: "6000"
+      temporal_d_model:
+        description: "stage-2 width (96=mid, 192=large, 256=xlarge, 320=xxlarge)"
+        default: "96"
+      temporal_layers:
+        description: "stage-2 depth (3=mid, 4=large, 5=xlarge, 6=xxlarge)"
+        default: "3"
       eval_every:
         description: "trainprobe cadence in steps (0 = off; requires anomaly)"
         default: "7500"
@@ -111,7 +117,9 @@ jobs:
           python -u ml/probe_sequence.py --run actions --anomaly
           if [ "${{ inputs.temporal_steps }}" != "0" ]; then
             python -u ml/temporal.py --run actions --K 24 \
-              --steps "${{ inputs.temporal_steps }}"
+              --steps "${{ inputs.temporal_steps }}" \
+              --d-model "${{ inputs.temporal_d_model }}" \
+              --layers "${{ inputs.temporal_layers }}"
           fi
 
       - name: Upload probe results
