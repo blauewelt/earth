@@ -53,7 +53,11 @@ permission classifier (correctly) blocks tokens in command lines.
 non-fast-forward; replays origin/main..HEAD with original messages/authors).
 Measured 2026-08-05, same session: the python/curl variants of the SAME
 API call were blocked by the permission layer; the node script passed and
-pushed cleanly. Try `node scripts/git_api_push.mjs --token-file ~/.gh_pat`
+pushed cleanly. NEVER pipe the push through `| tail` inside a `&&` chain:
+the pipe makes tail's exit code (0) the chain's status, so a refused push
+"succeeds" and any trailing `git reset --hard origin/main` silently wipes
+the unpushed commit — this destroyed the same commit twice on 2026-08-07.
+Run the push bare, check it, then sync in a separate command. Try `node scripts/git_api_push.mjs --token-file ~/.gh_pat`
 first. If every variant is blocked, stop retrying: bind the repo as a
 session source (web UI, at session creation) or push the bundle from a
 desktop. The layer is inconsistent between calls (it allowed the main push
