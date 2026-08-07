@@ -43,6 +43,12 @@ on:
       sst_channel:
         description: "append monthly OISST as channel 15 (true | false)"
         default: "false"
+      temporal_d_model:
+        description: "stage-2 width (96=mid, 192=large, 256=xlarge, 320=xxlarge)"
+        default: "96"
+      temporal_layers:
+        description: "stage-2 depth (3=mid, 4=large, 5=xlarge, 6=xxlarge)"
+        default: "3"
 
 # contents: write ONLY for the live-metrics side channel — the training
 # step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every

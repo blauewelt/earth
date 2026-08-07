@@ -14,7 +14,29 @@ channel / embedding space (higher is better); **r_tmp** = RAPID probe
 **r_lin** = linear single-month section probe, deseasonalised. 36 held-out
 RAPID months — r differences under ~0.1 are noise at this n.
 
-## The frontier — 14-channel tensor (wind stress added 2026-08-06)
+## The frontier — GLOBAL window (2026-08-07, run #8)
+
+The first codec trained on the whole ocean: 44,964 cells (7.8× the
+pilot), 186.7 M observed values, same 14 channels, d_z=64, 30k steps
+(0.8 epochs — fully fresh data). chan%/z% are on the global tensor's own
+persistence baseline (not comparable to any NA row).
+
+| run | chans | d_z | chan% | z% | r_tmp | r_lin | k-fold RAPID [CI] | curve | provenance |
+|---|---|---|---|---|---|---|---|---|---|
+| global14 (#8) | 14 | 64 | +30.6 | +32.2 | 0.54 | 0.495 | **0.602 [0.461, 0.728]** | [png](curves/global14.png) | Actions ml-train #8 (2026-08-07) |
+
+The transfer verdict: going global cost the Atlantic read-out NOTHING —
+k-fold 0.602 vs the NA champion's 0.604 (v3 bridge), dip capture 50%
+with the best sign agreement yet (70%). The generic-embedding hypothesis
+holds at fixed capacity. Its own stage-2 (d96×3) scores chan +35.1% on
+this tensor. First in-distribution multi-target probe: FC +0.102, MOVE
++0.071, OSNAP +0.126, SAMBA −0.070 — all CIs include zero. The embedding
+carries the 26.5°N overturning specifically; the other arrays await more
+capacity, deeper read-outs, or longer records (OSNAP's lean is the one
+to watch). The preview's SAMBA −0.27 (NA-trained codec on global cells)
+is confirmed as a distribution-shift artifact.
+
+## The NA-window frontier — 14-channel tensor (wind stress added 2026-08-06)
 
 chan%/z% below are NOT comparable with the 12-channel table (different
 channel set → different persistence baseline; house rule 5). Cross-tensor
@@ -48,14 +70,15 @@ are scored under v3 and comparisons across that line carry this note.
 
 ## The defensible probe ranking (year-blocked k-fold, all 240 months)
 
-| codec | chans | d_z | k-fold r | 95% CI |
-|---|---|---|---|---|
-| **wind14** | 14 | 64 | **0.586** | [0.451, 0.720] |
-| dz64 | 12 | 64 | 0.308 | [0.13, 0.46] |
-| actions #1 | 12 | 32 | 0.182 | [0.05, 0.31] |
-| dz128 | 12 | 128 | 0.166 | [0.072, 0.295] |
-| dz16 | 12 | 16 | 0.151 | [0.01, 0.28] |
-| dz8 | 12 | 8 | 0.111 | [0.01, 0.20] |
+| codec | window | chans | d_z | k-fold r | 95% CI |
+|---|---|---|---|---|---|
+| **wind14** (v3: 0.604) | NA | 14 | 64 | **0.586** | [0.451, 0.720] |
+| **global14** (v3) | global | 14 | 64 | **0.602** | [0.461, 0.728] |
+| dz64 | NA | 12 | 64 | 0.308 | [0.13, 0.46] |
+| actions #1 | NA | 12 | 32 | 0.182 | [0.05, 0.31] |
+| dz128 | NA | 12 | 128 | 0.166 | [0.072, 0.295] |
+| dz16 | NA | 12 | 16 | 0.151 | [0.01, 0.28] |
+| dz8 | NA | 12 | 8 | 0.111 | [0.01, 0.20] |
 
 Every CI excludes zero. This table is the project's headline, and it
 now has shape: r rises with d_z to a **peak at 64, then turns over at

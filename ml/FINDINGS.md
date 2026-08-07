@@ -175,7 +175,26 @@ of 14 channels, and the geostrophic majority of the signal still needs
 the density structure) — but the gain belongs to the channels, not to
 any modelling change.
 
-### 4.7 Scaling reads (details: SCALING.md)
+### 4.7 Going global (run #8, 2026-08-07) — the transfer verdict
+
+The first whole-ocean codec (44,964 cells, 7.8× the pilot, 186.7 M
+values, same 14 channels and d_z=64): **RAPID k-fold 0.602 [0.461,
+0.728] — statistically identical to the NA champion's 0.604** (v3
+bridge), with 50% dip capture and the best sign agreement yet (70%).
+Training on oceans the probe never reads cost the Atlantic read-out
+nothing: the generic-embedding hypothesis holds at fixed capacity. The
+first in-distribution multi-target probe (fetch_truth.py series): FC
++0.102, MOVE +0.071, OSNAP +0.126, SAMBA −0.070 — every CI includes
+zero. The embedding carries the 26.5°N overturning specifically; the
+other arrays await capacity, deeper read-outs, or longer records. (The
+NA-codec-on-global-cells preview had read SAMBA at −0.27 — confirmed as
+a distribution-shift artifact; it vanished in-distribution.) The global
+rollout is the strongest field curve yet: skill vs climatology +0.384 at
+h=1, +0.107 at h=12, horizon AUC 0.208 (wind14/NA: 0.196) — though the
+rolled AMOC read degraded to noise (bands +0.01/−0.22/−0.37), so
+long-horizon transport forecasting remains unsolved.
+
+### 4.8 Scaling reads (details: SCALING.md)
 
 The codec sits at its data anchor (18.1 M observed values ≈ 20×0.9 M
 params) and past the useful-repetition zone at 30k steps — feed it
