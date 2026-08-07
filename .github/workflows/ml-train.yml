@@ -44,8 +44,12 @@ on:
         description: "append monthly OISST as channel 15 (true | false)"
         default: "false"
 
+# contents: write ONLY for the live-metrics side channel — the training
+# step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every
+# 5 minutes so curves are plottable mid-run (ml/live_curve.py). The branch
+# is deleted in the cleanup step; nothing ever touches main.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   train:
@@ -85,6 +89,8 @@ jobs:
           python ml/fetch_truth.py
 
       - name: Train
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python -u ml/train.py \
             --steps "${{ inputs.steps }}" \
@@ -93,7 +99,14 @@ jobs:
             $([ "${{ inputs.anomaly }}" = "true" ] && echo --anomaly) \
             $([ "${{ inputs.anomaly }}" = "true" ] && [ "${{ inputs.eval_every }}" != "0" ] \
               && echo --eval-every "${{ inputs.eval_every }}") \
-            --out ml/runs/actions
+            --out ml/runs/actions &
+          TRAIN_PID=$!
+          # live-metrics side channel: publish curves every 5 min while training
+          while kill -0 $TRAIN_PID 2>/dev/null; do
+            sleep 300
+            bash scripts/publish_live_metrics.sh "ml-live-${{ github.run_number }}" || true
+          done
+          wait $TRAIN_PID
 
       - name: Upload checkpoint + eval
         uses: actions/upload-artifact@v4
@@ -133,3 +146,11 @@ jobs:
             ml/runs/actions/temporal.pt
           retention-days: 30
           if-no-files-found: ignore
+
+      - name: Clean up live-metrics branch
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git push -q "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            ":refs/heads/ml-live-${{ github.run_number }}" 2>/dev/null || true
