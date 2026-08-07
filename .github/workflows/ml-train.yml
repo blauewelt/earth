@@ -43,6 +43,9 @@ on:
       sst_channel:
         description: "append monthly OISST as channel 15 (true | false)"
         default: "false"
+      max_minutes:
+        description: "wall-clock budget for the training loop (0 = off); the cosine schedule re-fits to the steps that fit. The job dies at 350 min with NO checkpoint otherwise."
+        default: "0"
 
 # contents: write ONLY for the live-metrics side channel — the training
 # step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every
@@ -97,6 +100,7 @@ jobs:
             --steps "${{ inputs.steps }}" \
             --batch "${{ inputs.batch }}" \
             --d-z "${{ inputs.d_z }}" \
+            --max-minutes "${{ inputs.max_minutes || '0' }}" \
             $([ "${{ inputs.anomaly }}" = "true" ] && echo --anomaly) \
             $([ "${{ inputs.anomaly }}" = "true" ] && [ "${{ inputs.eval_every }}" != "0" ] \
               && echo --eval-every "${{ inputs.eval_every }}") \
