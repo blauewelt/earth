@@ -155,7 +155,7 @@ def main():
         cov = np.isfinite(add[..., c]).mean()
         print(f"  {new[c]:<10} coverage {cov:5.1%}  mu {mu:8.4f}  sd {sd:7.4f}  N/m2")
     import gc
-    d["X"] = np.concatenate([X, add], axis=-1).astype(np.float32)
+    d["X"] = np.concatenate([X, add], axis=-1).astype(np.float32, copy=False)
     del X, add
     gc.collect()
     d["chan"] = np.array(chans + new)

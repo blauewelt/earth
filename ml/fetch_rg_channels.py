@@ -164,7 +164,7 @@ def main():
         print(f"  {chans[c]:<10} coverage {cov:5.1%}  mu {mu:8.3f}  sd {sd:6.3f}")
 
     import gc
-    newX = np.concatenate([X, add], axis=-1).astype(np.float32)
+    newX = np.concatenate([X, add], axis=-1).astype(np.float32, copy=False)
     del X, add
     gc.collect()
     np.savez_compressed(
