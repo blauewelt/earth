@@ -163,8 +163,12 @@ def main():
         cov = np.isfinite(add[..., c]).mean()
         print(f"  {chans[c]:<10} coverage {cov:5.1%}  mu {mu:8.3f}  sd {sd:6.3f}")
 
+    import gc
+    newX = np.concatenate([X, add], axis=-1).astype(np.float32)
+    del X, add
+    gc.collect()
     np.savez_compressed(
-        NPZ, X=np.concatenate([X, add], axis=-1).astype(np.float32),
+        NPZ, X=newX,
         months=d["months"], lats=lats, lons=lons,
         chan=np.array([old_chan[i] for i in keep] + chans),
         norm=np.concatenate([norm, add_norm], axis=0), rapid=d["rapid"],

@@ -74,7 +74,10 @@ def main():
     cov = np.isfinite(add).mean()
     print(f"  sst_monthly coverage {cov:5.1%}  mu {mu:6.2f}°C  sd {sd:5.2f}")
 
+    import gc
     d["X"] = np.concatenate([X, add], axis=-1).astype(np.float32)
+    del X, add
+    gc.collect()
     d["chan"] = np.array(chans + ["sst_monthly"])
     d["norm"] = np.concatenate([d["norm"], np.array([[mu, sd]], np.float32)], 0)
     np.savez_compressed(a.npz, **d)
