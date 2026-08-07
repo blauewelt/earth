@@ -59,7 +59,13 @@ jobs:
         with:
           path: ml/cache
           key: ml-cache-v2-${{ inputs.window }}-${{ hashFiles('ml/build_dataset.py', 'ml/fetch_rg_channels.py', 'ml/fetch_wind_channels.py') }}
-          restore-keys: ml-cache-v2-${{ inputs.window }}-
+          # Fall back across generations and windows: the expensive part of
+          # the cache is the raw RG/NCEP downloads, which are window- and
+          # version-independent (the tensor itself is rebuilt every run).
+          restore-keys: |
+            ml-cache-v2-${{ inputs.window }}-
+            ml-cache-v2-
+            ml-cache-v1-
 
       - name: Build dataset (repo channels + RG-Argo depth + NCEP wind stress)
         run: |

@@ -22,6 +22,7 @@ re-runnably, following fetch_rg_channels.py's contract.
 """
 import os
 import sys
+import time
 import urllib.request
 
 import numpy as np
@@ -38,10 +39,20 @@ def fetch(name):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if os.path.exists(path):
         return path
-    print(f"  downloading {BASE}/{name}")
-    req = urllib.request.Request(f"{BASE}/{name}", headers=UA)
-    with urllib.request.urlopen(req, timeout=600) as r, open(path + ".part", "wb") as f:
-        f.write(r.read())
+    for i in range(4):
+        try:
+            print(f"  downloading {BASE}/{name}" + (f" (attempt {i + 1})" if i else ""))
+            req = urllib.request.Request(f"{BASE}/{name}", headers=UA)
+            with urllib.request.urlopen(req, timeout=600) as r, \
+                    open(path + ".part", "wb") as f:
+                f.write(r.read())
+            break
+        except Exception as e:
+            if i == 3:
+                raise
+            wait = 30 * (2 ** i)
+            print(f"  fetch failed ({e}); retrying in {wait}s")
+            time.sleep(wait)
     os.rename(path + ".part", path)
     return path
 

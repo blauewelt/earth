@@ -25,6 +25,7 @@ import os
 import re
 import shutil
 import sys
+import time
 import urllib.request
 
 import numpy as np
@@ -37,15 +38,24 @@ UA = {"User-Agent": "earth-globe-ml/1.0 (github.com/blauewelt/earth)"}
 LEVELS = [10.0, 200.0, 700.0, 1500.0]          # dbar
 
 
-def fetch(url, path):
+def fetch(url, path, attempts=4):
     if os.path.exists(path):
         return path
-    print(f"  downloading {url}")
-    req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=600) as r, open(path + ".part", "wb") as f:
-        shutil.copyfileobj(r, f, 1 << 20)
-    os.rename(path + ".part", path)
-    return path
+    for i in range(attempts):
+        try:
+            print(f"  downloading {url}" + (f" (attempt {i + 1})" if i else ""))
+            req = urllib.request.Request(url, headers=UA)
+            with urllib.request.urlopen(req, timeout=600) as r, \
+                    open(path + ".part", "wb") as f:
+                shutil.copyfileobj(r, f, 1 << 20)
+            os.rename(path + ".part", path)
+            return path
+        except Exception as e:
+            if i == attempts - 1:
+                raise
+            wait = 30 * (2 ** i)
+            print(f"  fetch failed ({e}); retrying in {wait}s")
+            time.sleep(wait)
 
 
 def gunzip(path):
