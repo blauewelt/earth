@@ -14,6 +14,32 @@ channel / embedding space (higher is better); **r_tmp** = RAPID probe
 **r_lin** = linear single-month section probe, deseasonalised. 36 held-out
 RAPID months — r differences under ~0.1 are noise at this n.
 
+## Master table — every codec run, one table
+
+chan% is comparable only WITHIN one channel set (its persistence baseline
+moves when channels change — house rule 5); the cross-run columns are the
+year-blocked k-fold RAPID r and RMSE in Sv. Dip = share of the 2009-10
+collapse amplitude captured out-of-fold. Wind-stress-only ridge baseline
+(no embedding): r 0.531, the line every codec must beat.
+
+| run | window | C | d_z | steps | chan%† | k-fold RAPID r [95% CI] | RMSE Sv | dip | status |
+|---|---|---|---|---|---|---|---|---|---|
+| pilot4_anom | NA | 4 | 32 | 8k | +29.3 | — | — | — | done |
+| dz8 (#2) | NA | 12 | 8 | 30k | +28.6 | 0.111 [0.01, 0.20] | — | — | done |
+| dz16 (#3) | NA | 12 | 16 | 30k | +30.3 | 0.151 [0.01, 0.28] | — | — | done |
+| actions (#1) | NA | 12 | 32 | 30k | +30.5 | 0.182 [0.05, 0.31] | — | — | done |
+| dz64 (#4) | NA | 12 | 64 | 30k | +30.6 | 0.308 [0.13, 0.46] | — | 16% | done |
+| dz128 (#5) | NA | 12 | 128 | 30k | +30.2 | 0.166 [0.072, 0.295] | — | — | done |
+| wind14 (#6) | NA | 14 | 64 | 30k | +35.6 | 0.604 [0.474, 0.720] | — | 50% | done |
+| global14 (#8) | global | 14 | 64 | 30k | +30.6 | 0.602 [0.461, 0.728] | 2.23 | 50% | done |
+| global14b (#11 codec) | global | 14 | 64 | 30k | +30.9 | 0.556 [0.434, 0.676] | 2.34 | — | replication |
+| global15sst (#10) | global | 15 | 64 | 30k | … | … | … | … | training |
+| global14 + xlarge stage-2 (#11) | global | 14 | 64 | 30k | … | (codec = #11 above) | … | … | probes running |
+| global25 (#12) | global | 25 | 64 | 30k | … | … | … | … | training |
+
+† within-tensor only. NA k-fold values are protocol v2 except wind14
+(v3 bridge); global rows are v3. RMSE backfill for NA runs pending.
+
 ## The frontier — GLOBAL window (2026-08-07, run #8)
 
 The first codec trained on the whole ocean: 44,964 cells (7.8× the
