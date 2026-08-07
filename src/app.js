@@ -1544,6 +1544,7 @@ function markFoundPlace(p) {
 
 function flyToPlace(p) {
   markFoundPlace(p);
+  tideNotePlace(p);          // the tide dashboard follows the search
   viewer.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(p.o, p.a, placeViewHeight(p)),
     duration: 2,
@@ -4378,7 +4379,7 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((click) =
   if (!picked && pixelInspectorEngaged()) {
     const cart = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
     if (cart) showPixelState(Cesium.Cartographic.fromCartesian(cart));
-  } else if (!picked && !topColormapLayer() && !tideTook) {
+  } else if (!picked && !topColormapLayer() && !tideLive.on && !tideTook) {
     // Nothing armed and nothing colormapped: the tap deliberately does
     // NOTHING — but silence looks broken, so say why, once per sitting.
     const cart = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
@@ -4522,12 +4523,42 @@ function colormapLayersTopDown() {
     .map(([, e]) => e);
 }
 
+/* The tide as the value probe sees it, so it behaves like every other layer:
+ * the same floating read-out, the same outlined source cell, the same date
+ * stamp. The tide is a primitive drawn OVER the imagery layers, so it answers
+ * first where it has water — and returns null on land, falling through to
+ * whatever is underneath, exactly the rule probeValueAt already uses between
+ * imagery layers. Exact cell only (rings 0): the probe reports the pixel
+ * under the cursor and must not quietly borrow a neighbour's value. */
+function tideProbeValue(carto) {
+  if (!tideLive.on || !tideData || !tideFields) return null;
+  const lon = Cesium.Math.toDegrees(carto.longitude);
+  const lat = Cesium.Math.toDegrees(carto.latitude);
+  const hit = tideNearestWater(lon, lat, 0);
+  if (!hit) return null;
+  const cm = tideHeightAt(hit.i, tideSim.t);
+  if (!Number.isFinite(cm)) return null;
+  const nx = tideExtrema(hit.i, tideSim.t, 30)[0];
+  const clat = tideData.south + hit.iy, clon = tideData.west + hit.ix;
+  const c = nx ? tideClock(nx.ms, tideTzFor(clon + 0.5, clat + 0.5), tideSim.t) : null;
+  return {
+    title: "Tide height (live)",
+    units: "m", value: cm / 100, lon, lat,
+    when: whenAt("instant", new Date(tideSim.t).toISOString().slice(0, 16)),
+    cell: { west: clon, south: clat, east: clon + 1, north: clat + 1 },
+    extra: nx ? `next ${nx.high ? "high" : "low"} water ${c.hhmm} ${c.abbr}${c.day} ` +
+                `· in ${tideCountdown(nx.ms - tideSim.t)}` : "",
+  };
+}
+
 async function probeValueAt(carto) {
   /* Try every colormapped/grid layer top-down: where the top layer is
    * transparent at this point (LST over ocean, SST over land, a dry forecast
    * cell), the probe falls through to the next layer instead of reading
    * "no data" off a pixel the user can plainly see is coloured by the layer
    * beneath. The temperature scene (SST+LST) depends on this. */
+  const tide = tideProbeValue(carto);              // drawn on top → asked first
+  if (tide) return tide;
   const entries = colormapLayersTopDown();
   if (!entries.length) return null;
   let first = null;
@@ -4848,6 +4879,7 @@ function renderProbe(res, sx, sy) {
   // when it was observed, at that dataset's own honest granularity.
   const stamp = whenLabel(res.when);
   probeEl.innerHTML = `${head}<div class="vp-meta">${res.title}${suffix}` +
+    `${res.extra ? `<br/>${res.extra}` : ""}` +
     `${stamp ? `<br/>${stamp}` : ""}<br/>${coord}</div>`;
   probeEl.classList.remove("hidden");
   placeProbe(sx, sy);
@@ -4878,7 +4910,7 @@ async function runProbe(x, y, ensure = false) {
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
   hideProbe(pixelInspectorEngaged());        // hide immediately while moving
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
-  if (!topColormapLayer()) return;
+  if (!topColormapLayer() && !tideLive.on) return;
   const x = m.endPosition.x, y = m.endPosition.y;
   probeDwellTimer = setTimeout(() => runProbe(x, y), PROBE_DWELL);
 }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
@@ -4888,7 +4920,8 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((c) => {
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
   if (pixelInspectorEngaged()) return;
-  if (topColormapLayer() && !seeThrough(viewer.scene.pick(c.position))?.id?.kind) {
+  if ((topColormapLayer() || tideLive.on) &&
+      !seeThrough(viewer.scene.pick(c.position))?.id?.kind) {
     runProbe(c.position.x, c.position.y, true);
   }
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
@@ -6296,7 +6329,8 @@ function drawTempChart() {
 
 let tideData = null;          // baked constituents (lazy-fetched)
 let tideFields = null;        // per-constituent {P, Q} + mask + cell areas
-let tideSim = { t: 0, playing: true, speed: 3600, raf: 0, wall: 0, markCell: null };
+let tideSim = { t: 0, playing: true, speed: 3600, raf: 0, wall: 0,
+                markCell: null, markPlace: null, markLon: 0, markLat: 0 };
 const tideLive = { on: false, prim: null, mat: null, labels: null,
                    front: null, back: null, img: null, lastPaint: 0, opacity: 0.85 };
 const TD_RANGE_CM = 250;      // colour scale: +-2.5 m, clamped
@@ -6416,16 +6450,90 @@ function tideExtrema(i, fromMs, hours = 72, limit = 40) {
   return out;
 }
 
-function tideHHMM(ms) {
+/* ---- clock: the tide is told in the LOCAL time of the point ---------------
+ *
+ * "Next high water 16:42" is only useful in the time the person standing on
+ * that beach reads off their phone. Three sources, best first:
+ *
+ *   1. the POINT's zone, from Open-Meteo's `timezone=auto` (§3's Open-Meteo
+ *      exception: key-free, single-point, click-triggered). It answers with
+ *      the IANA zone AND `utc_offset_seconds` already resolved for the date,
+ *      so summer time is handled by the same database the coastline uses —
+ *      Europe/Lisbon is UTC+1 today, WEST, and this says so.
+ *   2. the BROWSER's zone, shown instantly while (1) is in flight, so the
+ *      panel never waits on a network call to display a time.
+ *   3. UTC, if a point somehow has neither.
+ *
+ * Longitude/15 was the tempting offline answer and is rejected: it is wrong
+ * by an hour or more across most of Europe, all of China, and every place
+ * that keeps summer time — a quiet lie in exactly the digits that matter. */
+const tideTzCache = new Map();          // "lat,lon" (1° cell) → {offsetSec, abbr, zone}
+
+function tideBrowserTz(ms) {
+  const off = -new Date(ms).getTimezoneOffset() * 60;
+  let abbr = "";
+  try {
+    abbr = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" })
+      .formatToParts(new Date(ms)).find((p) => p.type === "timeZoneName")?.value || "";
+  } catch { abbr = ""; }
+  let zone = "";
+  try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { zone = ""; }
+  return { offsetSec: off, abbr: abbr || "local", zone, browser: true };
+}
+
+function tideTzFor(lon, lat) {
+  const key = `${Math.floor(lat)},${Math.floor(lon)}`;
+  return tideTzCache.get(key) || null;
+}
+
+function tideEnsureTz(lon, lat, onReady) {
+  const key = `${Math.floor(lat)},${Math.floor(lon)}`;
+  if (tideTzCache.has(key)) return;
+  tideTzCache.set(key, null);                       // in flight: ask once per cell
+  omGet(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}` +
+        `&longitude=${lon.toFixed(3)}&timezone=auto&forecast_days=1&current=temperature_2m`)
+    .then((j) => {
+      if (!j || j.utc_offset_seconds == null) { tideTzCache.delete(key); return; }
+      tideTzCache.set(key, {
+        offsetSec: j.utc_offset_seconds,
+        abbr: j.timezone_abbreviation || "",
+        zone: j.timezone || "",
+      });
+      onReady?.();
+    })
+    .catch(() => tideTzCache.delete(key));
+}
+
+/* Wall-clock time at the point, plus a day marker when the answer falls on a
+ * different local date than the sim clock — "00:57" alone would read as
+ * fourteen hours ago instead of two hours away. */
+function tideClock(ms, tz, refMs) {
+  const z = tz || tideBrowserTz(ms);
+  const shift = (t) => new Date(t + z.offsetSec * 1000);
+  const d = shift(ms);
+  const hhmm = `${String(d.getUTCHours()).padStart(2, "0")}:` +
+               `${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  let day = "";
+  if (refMs != null) {
+    const dd = Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) -
+      (() => { const r = shift(refMs);
+               return Date.UTC(r.getUTCFullYear(), r.getUTCMonth(), r.getUTCDate()); })())
+      / 86400000);
+    if (dd === 1) day = " tomorrow";
+    else if (dd > 1) day = ` +${dd} d`;
+  }
+  return { hhmm, abbr: z.abbr, day, zone: z.zone, browser: !!z.browser };
+}
+
+function tideUTC(ms) {
   const d = new Date(ms);
   return `${String(d.getUTCHours()).padStart(2, "0")}:` +
          `${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
 /* "in 2 h 46 min" — relative to the SIM clock, so it counts down as the
- * simulation runs. Times themselves are UTC: the point's civil timezone is
- * not something this app knows, and guessing it from longitude would be a
- * quiet lie on half the coastlines. */
+ * simulation runs. Timezone-free by construction, which is why it stays even
+ * when the local zone is still loading. */
 function tideCountdown(ms) {
   const m = Math.max(0, Math.round(ms / 60000));
   return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`
@@ -6578,9 +6686,17 @@ function tideLegendEl() {
   });
   canvas.addEventListener("pointerleave", () => read.classList.add("hidden"));
   wrap.appendChild(canvas);
+  // The numbers sit UNDER their own tick marks, not at the bar's ends: the
+  // ramp is tanh-compressed, so its ends are not ±2.5 m — they run on to the
+  // deepest and highest water anywhere. (This row used to carry the class
+  // `legend-labels`, which no CSS ever defined, so the three labels rendered
+  // as one run-on string: "−2.5 m at tick0 · mean+2.5 m at tick".)
   const labels = document.createElement("div");
-  labels.className = "legend-labels";
-  labels.innerHTML = `<span>−${TD_RANGE_CM / 100} m at tick</span><span>0 · mean</span><span>+${TD_RANGE_CM / 100} m at tick</span>`;
+  labels.className = "legend-ticks";
+  labels.innerHTML =
+    `<span style="left:11.9%">−${TD_RANGE_CM / 100} m</span>` +
+    `<span style="left:50%">0 · mean sea level</span>` +
+    `<span style="left:88.1%">+${TD_RANGE_CM / 100} m</span>`;
   div.appendChild(wrap); div.appendChild(labels); div.appendChild(read);
   return div;
 }
@@ -6661,20 +6777,32 @@ function tideRenderHiLo(force = false) {
   const el = document.getElementById("td-next");
   const i = tideSim.markCell;
   if (!el || i == null) return;
-  const key = `${i}|${Math.floor(tideSim.t / 60000)}`;
+  const tz = tideTzFor(tideSim.markLon, tideSim.markLat);
+  const key = `${i}|${Math.floor(tideSim.t / 60000)}|${tz ? tz.offsetSec : "b"}`;
   if (key === tideHiLoKey && !force) return;
   tideHiLoKey = key;
   const ex = tideExtrema(i, tideSim.t, 30);
   const row = (e, name, cls) => {
     if (!e) return "";
     const m = (e.cm / 100).toFixed(2).replace("-", "−");
+    const c = tideClock(e.ms, tz, tideSim.t);
     return `<div class="td-hl ${cls}"><span class="td-hl-k">next ${name}</span>` +
-      `<span class="td-hl-t">${tideHHMM(e.ms)} UTC</span>` +
+      `<span class="td-hl-t">${c.hhmm}<span class="td-hl-z"> ${c.abbr}${c.day}</span></span>` +
       `<span class="td-hl-v">${e.cm >= 0 ? "+" : ""}${m} m</span>` +
       `<span class="td-hl-in">in ${tideCountdown(e.ms - tideSim.t)}</span></div>`;
   };
   el.innerHTML = row(ex.find((e) => e.high), "high water", "td-high") +
                  row(ex.find((e) => !e.high), "low water", "td-low");
+  const foot = document.getElementById("td-tz");
+  if (foot) {
+    const c = tideClock(tideSim.t, tz, null);
+    foot.innerHTML = tz
+      ? `Times are local at this point — <strong>${tz.zone || c.abbr}</strong> ` +
+        `(${c.abbr}, UTC${tz.offsetSec >= 0 ? "+" : "−"}${Math.abs(tz.offsetSec / 3600)}), ` +
+        `summer time included. Sim clock now ${tideUTC(tideSim.t)} UTC.`
+      : `Times are in <strong>your device's</strong> timezone (${c.abbr}) while this ` +
+        `point's own zone loads. Sim clock now ${tideUTC(tideSim.t)} UTC.`;
+  }
 }
 
 /* The tab shows either a point's tide or an invitation to pick one — never a
@@ -6732,7 +6860,9 @@ function tideCurve() {
     ctx.font = "10px sans-serif";
     const right = x > c.width - 46;
     ctx.textAlign = right ? "right" : "left";
-    ctx.fillText(tideHHMM(e.ms), x + (right ? -6 : 6), yy + (e.high ? -6 : 13));
+    // local time at the point, same clock as the rows above the chart
+    const lab = tideClock(e.ms, tideTzFor(tideSim.markLon, tideSim.markLat), T0);
+    ctx.fillText(lab.hhmm, x + (right ? -6 : 6), yy + (e.high ? -6 : 13));
   }
   ctx.textAlign = "left";
 }
@@ -6762,37 +6892,63 @@ function tideNearestWater(lon, lat, rings = 1) {
   return null;
 }
 
-/* A globe tap selects the tide point for the tab's readout and 3-day curve. */
-function tideSelectPoint(carto, rings = 1) {
+/* Select the tide point for the tab's readout and 3-day curve \u2014 from a globe
+ * tap, from a place search, or from the camera when the tab opens.
+ * `place` names it when we know the name, because a panel that says
+ * "Peniche" is answering the question the user actually asked. */
+function tideSelectPoint(carto, rings = 1, place = null) {
   if (!tideData) return false;
   const lon = Cesium.Math.toDegrees(carto.longitude);
   const lat = Cesium.Math.toDegrees(carto.latitude);
   const hit = tideNearestWater(lon, lat, rings);
   if (!hit) return false;
   tideSim.markCell = hit.i;
+  tideSim.markPlace = place;
   tideSyncPointUi();
   // The coordinates named are the CELL's centre, not the tap: when the tap
   // was on a land cell the answer comes from the water cell next door, and
   // the label must say which point it is actually reporting.
   const clat = tideData.south + hit.iy + 0.5, clon = tideData.west + hit.ix + 0.5;
+  tideSim.markLat = clat; tideSim.markLon = clon;
+  tideEnsureTz(clon, clat, () => tideRenderHiLo(true));
   const cm = Math.round(tideHeightAt(hit.i, tideSim.t));
   const cmTxt = `${cm > 0 ? "+" : ""}${cm} cm ${cm >= 0 ? "above" : "below"} mean`;
-  document.getElementById("td-point-title").textContent =
-    `${Math.abs(clat).toFixed(1)}\u00b0${clat >= 0 ? "N" : "S"} ` +
-    `${Math.abs(clon).toFixed(1)}\u00b0${clon >= 0 ? "E" : "W"} \u2014 tide now ${cmTxt} ` +
-    `\u00b7 next 3 days (dashed lines = day boundaries)`;
+  const coord = `${Math.abs(clat).toFixed(1)}\u00b0${clat >= 0 ? "N" : "S"} ` +
+                `${Math.abs(clon).toFixed(1)}\u00b0${clon >= 0 ? "E" : "W"}`;
+  // The 3-day swing at THIS point \u2014 the answer to "the legend says \u00b12.5 m but
+  // this curve says \u00b10.3 m": the legend is one fixed scale for the whole
+  // globe, the curve auto-scales to the point.
+  const ex3 = tideExtrema(hit.i, tideSim.t, 72);
+  const swing = ex3.length
+    ? (Math.max(...ex3.map((e) => e.cm)) - Math.min(...ex3.map((e) => e.cm))) / 100 : 0;
+  const el = document.getElementById("td-point-title");
+  el.innerHTML =
+    (place ? `<strong class="td-place">${place}</strong> \u00b7 ` : "") +
+    `${coord} \u2014 tide now <strong>${cmTxt}</strong>` +
+    (swing ? ` \u00b7 range here <strong>${swing.toFixed(1)} m</strong> over these 3 days` : "");
   tideRenderHiLo(true);
   if (tideTabVisible()) tideCurve();
   else {
-    const ex = tideExtrema(hit.i, tideSim.t, 30);
-    const nx = ex[0];
-    showToast(`Tide here now: <strong>${cmTxt}</strong>` +
-      (nx ? ` \u00b7 next ${nx.high ? "high" : "low"} water <strong>${tideHHMM(nx.ms)} UTC</strong>` +
+    const nx = ex3[0];
+    const c = nx ? tideClock(nx.ms, tideTzFor(clon, clat), tideSim.t) : null;
+    showToast(`Tide ${place ? `at <strong>${place}</strong>` : "here"} now: ` +
+      `<strong>${cmTxt}</strong>` +
+      (nx ? ` \u00b7 next ${nx.high ? "high" : "low"} water <strong>${c.hhmm} ${c.abbr}${c.day}</strong>` +
             ` (in ${tideCountdown(nx.ms - tideSim.t)})` : "") +
       ` \u2014 the full 3-day curve is in the <strong>Tides tab</strong>.`,
       { key: "tide-point", replace: true });
   }
   return true;
+}
+
+/* A place search IS the user saying "I mean here". Remember it, and if the
+ * tide dashboard is already open, move it there \u2014 no globe tap required. */
+let tidePlace = null;
+function tideNotePlace(p) {
+  tidePlace = { name: p.n, lon: p.o, lat: p.a };
+  if (tideData && tideTabVisible()) {
+    tideSelectPoint(Cesium.Cartographic.fromDegrees(p.o, p.a), 2, p.n);
+  }
 }
 
 let tideUiWired = false;
@@ -6828,11 +6984,16 @@ async function loadTides() {
   // finds its water; if the camera is over a continent or off the limb, the
   // empty state stands.
   if (tideSim.markCell == null) {
-    const canvas = viewer.scene.canvas;
-    const cart = viewer.camera.pickEllipsoid(
-      new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
-      viewer.scene.globe.ellipsoid);
-    if (cart) tideSelectPoint(Cesium.Cartographic.fromCartesian(cart), 2);
+    if (tidePlace) {
+      tideSelectPoint(Cesium.Cartographic.fromDegrees(tidePlace.lon, tidePlace.lat),
+                      2, tidePlace.name);
+    } else {
+      const canvas = viewer.scene.canvas;
+      const cart = viewer.camera.pickEllipsoid(
+        new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+        viewer.scene.globe.ellipsoid);
+      if (cart) tideSelectPoint(Cesium.Cartographic.fromCartesian(cart), 2);
+    }
   }
   tideSyncPointUi();
   tideLoop();

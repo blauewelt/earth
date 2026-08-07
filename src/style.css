@@ -317,7 +317,7 @@ footer a { color: var(--fg-dim); }
 .chip {
   display: flex; align-items: stretch; overflow: hidden;
   background: rgba(22, 27, 34, 0.92); border: 1px solid var(--border);
-  border-radius: 14px; font-size: 12px; line-height: 1;
+  border-radius: 15px; font-size: 12px; line-height: 1;
 }
 .chip:hover { border-color: var(--accent); }
 .chip-warn { border-color: #d29922; }
@@ -325,19 +325,21 @@ footer a { color: var(--fg-dim); }
   background: none; border: none; color: var(--fg);
   font-size: 12px; font-family: inherit; cursor: pointer; padding: 0;
 }
-/* Pill padding is deliberately generous: at border-radius 14 the curve eats
- * into the text's optical margin, so 11px of inset LOOKED like 6. */
-.chip-label { padding: 7px 5px 7px 14px; white-space: nowrap; }
+/* Pill padding is deliberately generous, and was raised TWICE: on a full
+ * pill the corner sweeps through the text's own line, so an inset that
+ * measures fine still reads as cramped. 18px left against a 15px radius is
+ * the value that finally looked right at 12px type. */
+.chip-label { padding: 8px 6px 8px 18px; white-space: nowrap; }
 .chip-label:hover { color: var(--accent); }
 .chip-x {
-  padding: 7px 12px 7px 6px; color: var(--fg-dim) !important;
+  padding: 8px 15px 8px 7px; color: var(--fg-dim) !important;
   font-size: 14px !important;
 }
 .chip-x:hover { color: #f85149 !important; }
 .chip-clear {
   border-style: dashed; color: var(--fg-dim);
 }
-.chip-clear .chip-label { padding: 7px 14px; color: var(--fg-dim); }
+.chip-clear .chip-label { padding: 8px 18px; color: var(--fg-dim); }
 .chip-clear:hover .chip-label { color: #f85149; }
 /* ---- pixel inspector card (right side of the globe) ----
    One card composing everything the app knows about a clicked point:
@@ -548,6 +550,22 @@ footer a { color: var(--fg-dim); }
 }
 #td-empty.hidden { display: none; }
 #td-empty strong { display: block; color: var(--fg); font-size: 13.5px; margin-bottom: 3px; }
+.td-hl-z { font-size: 11px; font-weight: 400; color: var(--fg-dim); }
+.td-place { color: var(--accent); font-size: 13px; }
+#td-tz { font-size: 10.5px; color: var(--fg-dim); margin-top: 5px; line-height: 1.45; }
+
+/* Tick labels under a COMPRESSED colour bar: absolutely placed at the tick
+ * they name, because the bar's ends are not the numbers (the ramp runs on
+ * past ±2.5 m). The tide legend previously used two class names — legend-labels
+ * and legend-read — that no stylesheet defined, so its three labels rendered
+ * as one run-on line. */
+.legend-ticks { position: relative; height: 12px; margin-top: 3px; }
+.legend-ticks span {
+  position: absolute; transform: translateX(-50%);
+  font-size: 9.5px; color: var(--fg-dim); white-space: nowrap;
+}
+.legend-read { font-size: 10px; color: var(--fg); margin-top: 2px; }
+.legend-read.hidden { display: none; }
 #tides-controls select { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 4px; }
 #sl-tooltip {
   position: absolute; top: -4px; padding: 4px 8px; border-radius: 6px;

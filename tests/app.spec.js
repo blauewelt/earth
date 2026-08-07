@@ -3174,6 +3174,83 @@ test("Tides tab answers for wherever you already flew — no blank panel", async
   expect(r.range).toBeGreaterThan(100);
   expect(r.range).toBeLessThan(800);
   expect(r.title).toMatch(/tide now [-+]?\d+ cm (above|below) mean/);
+  // the curve's own vertical range is stated, because the globe's colour
+  // scale is fixed at ±2.5 m and the two numbers disagree by design
+  expect(r.title).toMatch(/range here \d/);
+  // times carry a zone, never a bare "16:42": the browser's zone shows
+  // instantly, the point's own zone (Open-Meteo timezone=auto) replaces it
+  await expect(next).not.toContainText(/\d\d:\d\d\s*<\/span>/);
+  const tz = await page.evaluate(() => document.getElementById("td-next").innerText);
+  expect(tz).toMatch(/\d\d:\d\d\s+\S/);
+  await expect(page.locator("#td-tz")).toContainText("Times are");
+});
+
+test("searching a place points the tide dashboard at it, by name", async ({ page }) => {
+  // Reported 2026-08-07: "if I search for a place, the left panel should show
+  // data for that place (without clicking on the globe)" — and should say
+  // which place it is showing.
+  await page.evaluate(async () => {
+    const E = window.__earth;
+    await E.ensureCities();
+    await E.ensureGazetteer();
+  });
+  await page.click("#tab-tides");
+  await expect(page.locator("#td-clock .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  // search the way a user does: type, then take the first result
+  await page.fill("#ps-input", "peniche");
+  await page.click("#ps-results li >> nth=0");
+  const title = page.locator("#td-point-title");
+  await expect(title).toContainText("Peniche");
+  await expect(title).toContainText("tide now");
+  await expect(page.locator("#td-empty")).toBeHidden();
+  await expect(page.locator("#td-next")).toContainText("next high water");
+  // and the point really is Peniche's water, not the last cell selected
+  const near = await page.evaluate(() => {
+    const E = window.__earth, d = E.tides, i = E.tideSim.markCell;
+    return { lon: d.west + (i % d.nx) + 0.5, lat: d.south + Math.floor(i / d.nx) + 0.5,
+             place: E.tideSim.markPlace };
+  });
+  expect(near.place).toBe("Peniche");
+  expect(Math.abs(near.lon - -9.38)).toBeLessThan(2.5);
+  expect(Math.abs(near.lat - 39.36)).toBeLessThan(2.5);
+});
+
+test("with the tide on, a globe tap reads its height like any other layer", async ({ page }) => {
+  // Reported 2026-08-07: the tide answered only in its own tab — the standard
+  // read-out and the source-cell marker every other layer shows did not fire.
+  await page.check("#toggle-tidelive");
+  await expect.poll(() => page.evaluate(() => !!window.__earth.tides), { timeout: 20000 }).toBe(true);
+  const r = await page.evaluate(async () => {
+    const E = window.__earth;
+    const res = await E.probeValueAt(Cesium.Cartographic.fromDegrees(-29.5, 29.5));
+    const land = await E.probeValueAt(Cesium.Cartographic.fromDegrees(0, 20));   // Sahara
+    return { res, land };
+  });
+  expect(r.res.title).toContain("Tide height");
+  expect(r.res.units).toBe("m");
+  expect(Math.abs(r.res.value)).toBeLessThan(2.5);        // metres, not centimetres
+  expect(r.res.extra).toMatch(/next (high|low) water/);   // the probe names it too
+  expect(r.res.cell.east - r.res.cell.west).toBeCloseTo(1, 5);   // the 1° model cell
+  // inland the tide has nothing to say, so the probe falls THROUGH to the
+  // layer underneath (SST, which answers "no data" there) rather than
+  // claiming a tide in the Sahara
+  expect(r.land === null || !String(r.land.title).includes("Tide")).toBe(true);
+  // the full click path: read-out visible, source cell outlined on the globe
+  await page.evaluate(() => {
+    const c = window.__earth.viewer.scene.canvas;
+    return window.__runProbe(c.clientWidth / 2, c.clientHeight / 2, true);
+  });
+  const shown = await page.evaluate(() => ({
+    probe: !document.getElementById("value-probe").classList.contains("hidden"),
+    text: document.getElementById("value-probe").innerText,
+    mark: window.__earth.probeMark?.dot.show,
+    cellOutlined: window.__earth.probeMark?.edge.show,
+  }));
+  if (shown.probe) {                       // centre of view may be off the globe
+    expect(shown.text).toMatch(/Tide height|°/);
+    expect(shown.mark).toBe(true);
+    expect(shown.cellOutlined).toBe(true);
+  }
 });
 
 test("tidal-range layer: chip, dateless toast, probe-able grid", async ({ page }) => {
