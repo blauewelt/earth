@@ -675,6 +675,21 @@ stops two copies sharing the screen; it is not a memory of what has been said.
 - Never commit credentials. The push token lives only in the local git
   credential helper.
 
+### 6b. The draft paper lives in the claude.ai PROJECT, not the repo
+
+`ml/paper/` (paper.tex, make_figs.py, figs/) is deliberately gitignored —
+the user wants to submit it, so the draft must not be public before then
+("we shouldn't let our draft paper be live online too early", 2026-08-07).
+The consequence is easy to forget and was discovered the hard way that same
+night: gitignored files are NOT in the repo, so a container restart deletes
+them outright. The canonical copies are the project docs `paper/paper.tex`
+and `paper/make_figs.py`; restore with `project_read` and write them back to
+`ml/paper/` before touching the paper, then regenerate `figs/` with
+`python3 ml/paper/make_figs.py` (the PDFs are outputs and are never worth
+storing). Write any substantive edit back to the project in the same turn —
+that copy is the only one that survives. `latexmk`/`pdflatex` are
+system-installed and do survive; microtype and lmodern are not available.
+
 ### 7. Documentation set
 
 | File | Role |
