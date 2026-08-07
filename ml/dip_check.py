@@ -56,7 +56,7 @@ def main():
     lo_, hi_ = (float(v) for v in ck["args"]["holdout_lon"].split(","))
     x_hold = (lons >= lo_) & (lons < hi_)
     Xa, _ = anomaly_transform(X, moy, t_hold, x_hold)
-    codec = PixelMAE(n_chan=X.shape[-1], d_z=ck["d_z"])
+    codec = PixelMAE(n_chan=X.shape[-1], d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
     codec.load_state_dict(ck["model"])
     codec.eval()
     ocean = np.isfinite(d["X"][..., 0]).any(axis=0)

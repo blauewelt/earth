@@ -22,7 +22,7 @@ import time
 import numpy as np
 import torch
 
-from model import PixelMAE
+from model import PixelMAE, gather_px
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -35,6 +35,8 @@ def parse():
     p.add_argument("--batch", type=int, default=512)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--d-z", type=int, default=32)
+    p.add_argument("--patch", type=int, default=1, choices=[1, 3],
+                   help="encoder receptive field per channel token (3 = 3x3)")
     p.add_argument("--mask-ratio", type=float, default=0.5)
     p.add_argument("--holdout-years", default="2009,2017,2023")
     p.add_argument("--holdout-lon", default="-45,-25")   # a mid-Atlantic block
@@ -47,15 +49,6 @@ def parse():
                         "section probe + mini temporal transformer) on the "
                         "blocked holdout; appends to <out>/metrics.jsonl. "
                         "Requires --anomaly.")
-    p.add_argument("--max-minutes", type=int, default=0,
-                   help="wall-clock budget for the TRAINING LOOP (0 = off). "
-                        "After a short calibration the cosine schedule is "
-                        "re-fitted to the step count that fits, so the LR "
-                        "still anneals to zero inside the budget instead of "
-                        "the job dying mid-schedule. Exists because Actions "
-                        "kills at timeout-minutes with NO checkpoint: run "
-                        "#12 (25 channels) measured ~1.3 steps/s against a "
-                        "40k-step dispatch — 6 runner-hours, nothing saved.")
     p.add_argument("--smoke", action="store_true")
     return p.parse_args()
 
@@ -126,17 +119,9 @@ def main():
         return (torch.as_tensor(t), torch.as_tensor(y), torch.as_tensor(x),
                 torch.as_tensor(ctx, dtype=torch.float32))
 
-    model = PixelMAE(n_chan=C, d_z=a.d_z).to(dev)
+    model = PixelMAE(n_chan=C, d_z=a.d_z, patch=a.patch).to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
-    # Cosine annealing whose TOTAL can be re-fitted mid-run (--max-minutes):
-    # a LambdaLR closure over a mutable total is the same curve as
-    # CosineAnnealingLR (eta_min=0) but survives having its denominator
-    # changed, which the built-in scheduler's recursive formula does not.
-    import math
-    sched_total = [a.steps]
-    sched = torch.optim.lr_scheduler.LambdaLR(
-        opt, lambda e: 0.5 * (1 + math.cos(
-            math.pi * min(e, sched_total[0]) / sched_total[0])))
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.steps)
     huber = torch.nn.HuberLoss(reduction="none")
 
     # neighbour offsets (Δx, Δy, Δt): 4 spatial + 2 temporal
@@ -151,7 +136,11 @@ def main():
         B = len(t)
         v, o = gather(t, y, x)
         mask = (torch.rand(B, C, device=dev) < a.mask_ratio) & o
-        z = model.encode(v * (~mask), o, mask, ctx.to(dev))
+        if a.patch > 1:
+            vp, op = gather_px(Xt, OBS, t, y, x, a.patch)
+            z = model.encode(vp.to(dev), op.to(dev), mask, ctx.to(dev))
+        else:
+            z = model.encode(v * (~mask), o, mask, ctx.to(dev))
 
         # self-reconstruction: all channels queried at offset 0
         qc = torch.arange(C, device=dev)[None, :].expand(B, -1)
@@ -181,35 +170,13 @@ def main():
     metrics_path = os.path.join(a.out, "metrics.jsonl")
     loss_every = max(1, a.steps // 200)        # the loss curve, cheap to keep
 
-    def save_ckpt():
-        torch.save({"model": model.state_dict(), "chan": chan, "d_z": a.d_z,
-                    "norm": d["norm"], "args": vars(a)},
-                   os.path.join(a.out, "pixelmae.pt"))
-
     print("training …")
     t0 = time.time()
-    CAL = 200                                  # steps before the rate is trusted
-    s = 0
-    while s < a.steps:
-        s += 1
+    for s in range(1, a.steps + 1):
         t, y, x, ctx = batch(tt, yy, xx, a.batch)
         l_rec, l_nei = step_loss(t, y, x, ctx)
         loss = l_rec + 0.5 * l_nei
         opt.zero_grad(); loss.backward(); opt.step(); sched.step()
-        if a.max_minutes and CAL and (s >= CAL or time.time() - t0 > 60):
-            CAL = 0                            # calibrate once: 200 steps or 60 s
-            rate = (time.time() - t0) / s      # s/step, measured not guessed
-            budget = a.max_minutes * 60 - (time.time() - t0)
-            fit = s + int(0.85 * budget / rate)     # 15% held back for probes
-            if fit < a.steps:
-                print(f"  time budget: {rate:.2f} s/step → re-fitting the "
-                      f"cosine schedule from {a.steps} to {fit} steps so the "
-                      f"LR anneals to zero inside {a.max_minutes} min")
-                a.steps = fit
-                sched_total[0] = fit
-        if a.max_minutes and (time.time() - t0) > a.max_minutes * 60:
-            print(f"  wall-clock budget reached at step {s} — stopping to save")
-            break
         if s % loss_every == 0 or s == a.steps:
             with open(metrics_path, "a") as f:
                 f.write(json.dumps({"step": s, "loss_rec": round(l_rec.item(), 5),
@@ -229,7 +196,6 @@ def main():
                   f"vs persistence · linear r_des {m['linear_r_deseas']:+.3f} · "
                   f"temporal r_des {m['temporal_r_deseas']:+.3f} "
                   f"({m['probe_seconds']:.0f}s)", flush=True)
-            save_ckpt()                        # crash insurance, ~4 MB
 
     # ---- evaluation on the BLOCKED holdout --------------------------------
     model.eval()
@@ -239,7 +205,11 @@ def main():
         t, y, x, ctx = batch(vt, vy, vx, n_eval)
         v, o = gather(t, y, x)
         mask = (torch.rand(n_eval, C, device=dev) < a.mask_ratio) & o
-        z = model.encode(v * (~mask), o, mask, ctx.to(dev))
+        if a.patch > 1:
+            vp, op = gather_px(Xt, OBS, t, y, x, a.patch)
+            z = model.encode(vp.to(dev), op.to(dev), mask, ctx.to(dev))
+        else:
+            z = model.encode(v * (~mask), o, mask, ctx.to(dev))
         qc = torch.arange(C, device=dev)[None, :].expand(n_eval, -1)
         pred = model.query(z, qc, torch.zeros(n_eval, C, 3, dtype=torch.long, device=dev))
         for c, name in enumerate(chan):
@@ -278,7 +248,12 @@ def main():
                 v, o = gather(torch.full((n,), tix, dtype=torch.long),
                               torch.full((n,), sec_y, dtype=torch.long),
                               torch.as_tensor(sec_x))
-                zz = model.encode(v, o, torch.zeros_like(o),
+                if a.patch > 1:
+                    v, o = gather_px(Xt, OBS, torch.full((n,), tix, dtype=torch.long),
+                                     torch.full((n,), sec_y, dtype=torch.long),
+                                     torch.as_tensor(sec_x), a.patch)
+                    v, o = v.to(dev), o.to(dev)
+                zz = model.encode(v, o, torch.zeros(n, C, dtype=torch.bool, device=dev),
                                   torch.as_tensor(ctx, dtype=torch.float32).to(dev))
                 emb[tix] = zz.mean(0).cpu().numpy()
             ridx = rapid[:, 0].astype(int); rv = rapid[:, 1]
@@ -294,7 +269,8 @@ def main():
                                           "n_train": int(tr.sum()), "n_test": int(te.sum())}
 
     print(json.dumps(results, indent=2))
-    save_ckpt()
+    torch.save({"model": model.state_dict(), "chan": chan, "d_z": a.d_z,
+                "norm": d["norm"], "args": vars(a)}, os.path.join(a.out, "pixelmae.pt"))
     json.dump(results, open(os.path.join(a.out, "eval.json"), "w"), indent=2)
     print(f"saved {a.out}/pixelmae.pt")
 

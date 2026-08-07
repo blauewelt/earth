@@ -43,15 +43,9 @@ on:
       sst_channel:
         description: "append monthly OISST as channel 15 (true | false)"
         default: "false"
-      max_minutes:
-        description: "wall-clock budget for the training loop (0 = off); the cosine schedule re-fits to the steps that fit. The job dies at 350 min with NO checkpoint otherwise."
-        default: "0"
-      runner:
-        description: "ubuntu-latest (free 4-core CPU) | self-hosted (the GPU box, when registered)"
-        default: "ubuntu-latest"
-      job_timeout:
-        description: "job timeout-minutes; hosted runners die at 360 regardless, self-hosted can run for days"
-        default: "350"
+      patch:
+        description: "codec receptive field per channel token (1 | 3); 3 = 3x3 neighbourhood, true compression"
+        default: "1"
 
 # contents: write ONLY for the live-metrics side channel — the training
 # step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every
@@ -62,8 +56,8 @@ permissions:
 
 jobs:
   train:
-    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
-    timeout-minutes: ${{ fromJSON(inputs.job_timeout || '350') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
 
@@ -71,17 +65,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install deps (torch matches the hardware)
+      - name: Install deps (CPU torch)
         run: |
           pip install --quiet numpy netCDF4 matplotlib
-          # CUDA wheel when the runner has a GPU, CPU wheel otherwise —
-          # train.py auto-selects the device, so the same dispatch works on both.
-          if command -v nvidia-smi >/dev/null 2>&1; then
-            pip install --quiet torch
-            python -c "import torch; print('torch', torch.__version__, 'cuda:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else '')"
-          else
-            pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
-          fi
+          pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Restore data cache
         uses: actions/cache@v4
@@ -113,7 +100,7 @@ jobs:
             --steps "${{ inputs.steps }}" \
             --batch "${{ inputs.batch }}" \
             --d-z "${{ inputs.d_z }}" \
-            --max-minutes "${{ inputs.max_minutes || '0' }}" \
+            --patch "${{ inputs.patch || '1' }}" \
             $([ "${{ inputs.anomaly }}" = "true" ] && echo --anomaly) \
             $([ "${{ inputs.anomaly }}" = "true" ] && [ "${{ inputs.eval_every }}" != "0" ] \
               && echo --eval-every "${{ inputs.eval_every }}") \

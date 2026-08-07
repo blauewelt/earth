@@ -124,9 +124,18 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                 mk = torch.zeros(n, C, dtype=torch.bool)
                 if mask_chan is not None:
                     mk[:, mask_chan] = True
-                v = X[t, ys[sl], xs[sl]] * (~mk)
-                z = model.encode(v, OBS[t, ys[sl], xs[sl]], mk,
-                                 torch.as_tensor(ctx, dtype=torch.float32))
+                patch = getattr(model, "patch", 1)
+                if patch > 1:
+                    from model import gather_px
+                    tt = torch.full((n,), t, dtype=torch.long)
+                    v, o = gather_px(X, OBS, tt, torch.as_tensor(ys[sl]),
+                                     torch.as_tensor(xs[sl]), patch)
+                    z = model.encode(v * (~mk).unsqueeze(-1), o, mk,
+                                     torch.as_tensor(ctx, dtype=torch.float32))
+                else:
+                    v = X[t, ys[sl], xs[sl]] * (~mk)
+                    z = model.encode(v, OBS[t, ys[sl], xs[sl]], mk,
+                                     torch.as_tensor(ctx, dtype=torch.float32))
                 out[t, sl] = z.numpy()
     if cache_path:
         np.save(cache_path, out)
@@ -184,7 +193,7 @@ def main():
                       & ~x_hold[None, None, :]]
         X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)
 
-    codec = PixelMAE(n_chan=C, d_z=ck["d_z"])
+    codec = PixelMAE(n_chan=C, d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
     codec.load_state_dict(ck["model"])
     codec.eval()
 
@@ -229,9 +238,23 @@ def main():
             sl = slice(i, min(i + 8192, P))
             n = sl.stop - sl.start
             ctx = np.concatenate([np.zeros((n, 2), np.float32), coords[sl]], 1)
-            zs.append(codec.encode(Xt[0, ys[sl], xs[sl]], stat_obs[ys[sl], xs[sl]],
-                                   torch.zeros(n, C, dtype=torch.bool),
-                                   torch.as_tensor(ctx)).numpy())
+            if getattr(codec, "patch", 1) > 1:
+                from model import gather_px
+                # One gather: values from month 0 (statics are constant in t;
+                # dynamics are zeroed inside encode because their obs is
+                # False), obs from stat_obs with gather_px's own out-of-range
+                # latitude masking — exactly what training-time encode saw.
+                t0i = torch.zeros(n, dtype=torch.long)
+                vv, oo = gather_px(Xt, stat_obs[None], t0i,
+                                   torch.as_tensor(ys[sl]),
+                                   torch.as_tensor(xs[sl]), codec.patch)
+                zs.append(codec.encode(vv, oo,
+                                       torch.zeros(n, C, dtype=torch.bool),
+                                       torch.as_tensor(ctx)).numpy())
+            else:
+                zs.append(codec.encode(Xt[0, ys[sl], xs[sl]], stat_obs[ys[sl], xs[sl]],
+                                       torch.zeros(n, C, dtype=torch.bool),
+                                       torch.as_tensor(ctx)).numpy())
         Zstat = np.concatenate(zs, 0)
     static_ctx = torch.as_tensor(np.concatenate([Zstat, coords], 1))
 
