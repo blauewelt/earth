@@ -27,6 +27,7 @@ mildly optimistic; codec-to-codec COMPARISONS are fair. A block bootstrap
 Usage: python3 ml/probe_kfold.py --runs dz8 dz16 actions dz64
 """
 import argparse
+import gc
 import json
 import os
 import sys
@@ -163,8 +164,25 @@ def main():
         return tidx, vals - clim[tmoy]
 
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
-    ocean = np.isfinite(d["X"][..., 0]).any(axis=0)
+    # HOIST the raw tensor's two uses out of the loops and free it. Indexing
+    # d["X"] decompresses the WHOLE array every time (2.4 GB at C=24), and it
+    # was being indexed once for `ocean` plus once per target per run for the
+    # wind baseline — five re-materialisations per run, next to the anomaly
+    # copy and the torch tensors. That is what OOM-killed the probes.
+    Xraw = d["X"]
+    ocean = np.isfinite(Xraw[..., 0]).any(axis=0)
     ys, xs = np.where(ocean)
+    chan_names = [str(c) for c in d["chan"]]
+    wsel = [i for i, c in enumerate(chan_names) if c in ("tau_x", "tau_y")]
+    wind_sec = {}
+    for tname, spec in TARGETS.items():
+        sec_y_, sec_sel_ = section_of(lats, lons, ys, xs, spec["lat"], *spec["lon"])
+        if wsel and len(sec_sel_) >= 5 and abs(float(lats[sec_y_]) - spec["lat"]) <= 1.0:
+            wind_sec[tname] = np.nan_to_num(
+                np.nanmean(Xraw[:, ys[sec_sel_], xs[sec_sel_]][..., wsel], axis=1),
+                nan=0.0)
+    del Xraw
+    gc.collect()
 
     out = {}
     for run in a.runs:
@@ -180,11 +198,13 @@ def main():
         lo_, hi_ = (float(v) for v in ck["args"]["holdout_lon"].split(","))
         x_hold = (lons >= lo_) & (lons < hi_)
         Xa, _ = anomaly_transform(X, moy, t_hold, x_hold)
-        codec = PixelMAE(n_chan=X.shape[-1], d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
+        codec = PixelMAE(n_chan=Xa.shape[-1], d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
         codec.load_state_dict(ck["model"])
         codec.eval()
         Xt = torch.from_numpy(np.nan_to_num(Xa, nan=0.0))
         OBS = torch.from_numpy(np.isfinite(Xa))
+        del X, Xa           # the anomaly copy is dead once the tensors exist
+        gc.collect()
         out[run] = {}
         for tname, spec in TARGETS.items():
             ser = target_series(spec)
@@ -209,12 +229,9 @@ def main():
             # Same protocol, same section, raw tau channels instead of the
             # embedding; if the embedding does not beat this, it has learned
             # only the wind.
-            chan_names = [str(c) for c in d["chan"]]
-            wsel = [i for i, c in enumerate(chan_names) if c in ("tau_x", "tau_y")]
             wind_block = None
-            if wsel:
-                W = np.nanmean(d["X"][:, ys[sec_sel], xs[sec_sel]][..., wsel], axis=1)
-                W = np.nan_to_num(W, nan=0.0)[tidx]
+            if tname in wind_sec:
+                W = wind_sec[tname][tidx]
                 rw, low, hiw, _, rmw, _, _ = kfold_r(W, v_des, yr[tidx])
                 wind_block = {"r": round(rw, 3), "ci95": [round(low, 3), round(hiw, 3)],
                               "rmse_sv": round(rmw, 2)}

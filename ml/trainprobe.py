@@ -54,7 +54,11 @@ def anomaly_transform(X, moy, t_hold, x_hold):
         for m in range(12):
             clim[m] = np.nanmean(X[(moy == m) & ~t_hold], axis=0)
     for c in dynamic:
-        X[..., c] = X[..., c] - clim[moy][..., c]
+        # clim[moy, :, :, c] is [T,H,W]; the equivalent-looking
+        # clim[moy][..., c] materialises the whole [T,H,W,C] fancy index and
+        # throws all but one channel away — 2.4 GB per dynamic channel at
+        # C=24, which OOM-killed every probe on a 7 GB box (2026-08-08).
+        X[..., c] = X[..., c] - clim[moy, :, :, c]
         v = X[..., c][np.isfinite(X[..., c]) & ~t_hold[:, None, None]
                       & ~x_hold[None, None, :]]
         X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)
