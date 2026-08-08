@@ -95,6 +95,13 @@ from the runs' own JSON — never transcribe numbers by hand.
   probe — ~67 pixels, no transformer, ~30 s — and emits the same
   `linear_r_deseas` key, so the status page's probe chart just gets denser
   with no special case. Rule of thumb: light every 2k, full every 7.5-10k.
+- **The metrics file carries the run's PLAN, not just its measurements**:
+  train.py writes a `{"config": {...}}` first line (steps, batch, codec
+  size, params_M, C, T, probe cadences). The GitHub API does NOT return a
+  workflow_dispatch run's inputs, so without this a reader cannot tell
+  "step 30,000" from "step 30,000 of 60,000" — status.html shows
+  step/total, a progress bar and an ETA from it, and frames the loss chart
+  to the PLANNED end so a third-finished run looks a third finished.
 - **Dispatch**: `node scripts/fleet_dispatch_wf.mjs '<inputs-json>' main`.
   MANDATORY `doc` input (the script refuses without it): one line, what
   the run is and why — it becomes the run name and the description on

@@ -226,6 +226,23 @@ def main():
     metrics_path = os.path.join(a.out, "metrics.jsonl")
     loss_every = max(1, a.steps // 200)        # the loss curve, cheap to keep
 
+    # A CONFIG RECORD, first line of the metrics file. The GitHub API does
+    # not return a workflow_dispatch run's inputs, so a reader of the live
+    # curves had no way to know how long the run is MEANT to be — "step
+    # 30,000" alone cannot be told from "step 30,000 of 60,000". Writing the
+    # plan next to the measurements is the cheapest fix and it travels with
+    # the data (live branch, archive, and the harvested artifact alike).
+    with open(metrics_path, "a") as f:
+        f.write(json.dumps({"config": {
+            "steps": a.steps, "batch": a.batch, "d_z": a.d_z, "patch": a.patch,
+            "d_model": a.d_model, "n_layers": a.n_layers, "n_heads": a.n_heads,
+            "d_dec": a.d_dec, "anomaly": bool(a.anomaly),
+            "eval_every": a.eval_every, "light_probe_every": a.light_probe_every,
+            "lr_floor": a.lr_floor, "lr_decay_steps": a.lr_decay_steps,
+            "params_M": round(sum(p_.numel() for p_ in model.parameters()) / 1e6, 3),
+            "data": os.path.basename(a.data), "C": int(C), "T": int(T),
+        }}) + "\n")
+
     def save_ckpt():
         torch.save({"model": model.state_dict(), "chan": chan, "d_z": a.d_z,
                     "norm": d["norm"], "args": vars(a)},

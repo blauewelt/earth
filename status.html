@@ -65,6 +65,8 @@
   .legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-dim); margin: 6px 0 0; }
   .legend .sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px;
                 margin-right: 5px; vertical-align: 3px; }
+  .bar { height: 4px; background: #21262d; border-radius: 2px; overflow: hidden; margin: 2px 0 4px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
   .probe { font-size: 13px; color: var(--text-dim); margin-top: 10px;
            border-top: 1px solid var(--border); padding-top: 8px; }
   .probe b { color: var(--text); font-weight: 600; }
@@ -232,19 +234,20 @@
 
   // ---- live metrics charts --------------------------------------------------
   function parseJsonl(text) {
-    var loss = [], probes = [];
+    var loss = [], probes = [], cfg = null;
     text.split("\n").forEach(function (line) {
       line = line.trim();
       if (!line) return;
       var o;
       try { o = JSON.parse(line); } catch (e) { return; }
+      if (o && o.config) { cfg = o.config; return; }   // the run's PLAN
       if (o && typeof o.step === "number" && typeof o.loss_rec === "number" && typeof o.loss_nei === "number") {
         loss.push(o);
       } else if (o && typeof o.step === "number") {
         probes.push(o);
       }
     });
-    return { loss: loss, probes: probes };
+    return { loss: loss, probes: probes, cfg: cfg };
   }
 
   function polyline(pts, xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB) {
@@ -256,12 +259,15 @@
     }).join(" ");
   }
 
-  function lossChart(loss) {
+  function lossChart(loss, plannedSteps) {
     var W = 600, H = 160, padL = 46, padR = 10, padT = 10, padB = 22;
     var xs = loss.map(function (p) { return p.step; });
     var ys = [];
     loss.forEach(function (p) { ys.push(p.loss_rec, p.loss_nei); });
     var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
+    // Frame the PLANNED end, so a curve that stops a third of the way
+    // across is visibly a third of the way through the run.
+    if (plannedSteps && plannedSteps > xmax) xmax = plannedSteps;
     var ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
     var xspan = xmax - xmin, yspan = ymax - ymin;
     var rec = polyline(loss.map(function (p) { return [p.step, p.loss_rec]; }), xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB);
@@ -430,16 +436,40 @@
           : head + '<div class="empty">metrics file present but no loss points yet</div></div>';
       }
       var last = m.loss[m.loss.length - 1];
+      var total = m.cfg && m.cfg.steps ? m.cfg.steps : null;
+      var pct = total ? Math.min(100, 100 * last.step / total) : null;
+      // ETA from the run's own wall clock, not ours: the last probe record
+      // carries wall_s, which is seconds of TRAINING, so it excludes queue
+      // and build time and does not lie after a restart.
+      var wall = null;
+      for (var wi = m.probes.length - 1; wi >= 0; wi--) {
+        if (typeof m.probes[wi].wall_s === "number" && m.probes[wi].step > 0) {
+          wall = m.probes[wi]; break;
+        }
+      }
+      var eta = "";
+      if (total && wall && run.status !== "completed" && last.step > 0 && last.step < total) {
+        var secLeft = (wall.wall_s / wall.step) * (total - last.step);
+        eta = secLeft > 5400 ? " · ~" + (secLeft / 3600).toFixed(1) + " h left"
+                             : " · ~" + Math.max(1, Math.round(secLeft / 60)) + " min left";
+      }
       var html = head +
-        '<div class="stepbig">step ' + fmtInt(last.step) + " " +
-        '<span class="lbl">rec ' + last.loss_rec.toFixed(4) + " · nei " + last.loss_nei.toFixed(4) + "</span></div>" +
-        lossChart(m.loss) +
+        '<div class="stepbig">step ' + fmtInt(last.step) +
+        (total ? '<span class="lbl"> / ' + fmtInt(total) + "</span>" : "") + " " +
+        '<span class="lbl">rec ' + last.loss_rec.toFixed(4) + " · nei " + last.loss_nei.toFixed(4) +
+        (m.cfg && m.cfg.params_M ? " · " + m.cfg.params_M + "M params" : "") + "</span></div>" +
+        (pct !== null
+          ? '<div class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>' +
+            '<div class="meta" style="margin:-2px 0 8px">' + pct.toFixed(0) + "% of planned steps" +
+            esc(eta) + "</div>"
+          : "") +
+        lossChart(m.loss, total) +
         '<div class="legend">' +
         '<span><span class="sw" style="background:#3987e5"></span>loss_rec</span>' +
         '<span><span class="sw" style="background:#d95926"></span>loss_nei</span></div>';
       if (m.probes.length) {
         html += probeChart(m.probes, run, m.loss[0].step,
-                           m.loss[m.loss.length - 1].step);
+                           total || m.loss[m.loss.length - 1].step);
         html += '<div class="probe">' + probeText(m.probes[m.probes.length - 1]) + "</div>";
       } else {
         html += '<div class="probe">no downstream probe yet — the RAPID probe ' +
