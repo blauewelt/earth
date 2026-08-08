@@ -202,6 +202,14 @@ jobs:
             [ -f /opt/earth-cache/rg/RG_T.nc.gz ]; } || seed rg
           [ "$(ls /opt/earth-cache/wind_daily/*.nc 2>/dev/null | wc -l)" -ge 60 ] \
             || seed wind_daily
+          # The 1982-92 daily wind (family-3's extended axis) is a separate
+          # asset group: the main wind_daily tar predates it, and PSL 504'd
+          # run #47's build when a cold box tried the origin for vflx 1982.
+          # The tar's members live under wind_daily/, so it extracts into
+          # the same dir; seed's rm -rf of the (nonexistent) group dir is a
+          # no-op and the already-seeded 1993+ files are untouched.
+          [ "$(ls /opt/earth-cache/wind_daily/uflx.sfc.gauss.198*.nc 2>/dev/null | wc -l)" -ge 8 ] \
+            || seed wind_daily82
           # Truth series (1.2 MB): OSNAP's repository server timed out from
           # two boxes on 2026-08-08 and killed the whole build step. With the
           # files present, fetch_truth.py never opens a connection.
