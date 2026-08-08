@@ -248,9 +248,26 @@ def main():
                   f"[{lo95:+.3f}, {hi95:+.3f}]  (n={n}) · RMSE {rmse:.2f} Sv "
                   f"(sigma {sigma:.2f}) · 18mo-lowpass r {lp_s} · wind-only {w_s}")
 
+    # MERGE, never overwrite. This file is keyed by run and shared by every
+    # invocation, so `json.dump(out)` silently deleted every previously
+    # measured run: patch24_40k's k-fold survived about ten minutes before
+    # the next run erased it, and global15sst's published +0.582 went the
+    # same way. A per-run copy is written too, so the shared file is a
+    # convenience rather than the only home for a number.
     path = os.path.join(HERE, "runs", "probe_kfold.json")
-    json.dump(out, open(path, "w"), indent=2)
-    print("wrote", path)
+    merged = {}
+    if os.path.exists(path):
+        try:
+            merged = json.load(open(path))
+        except json.JSONDecodeError:
+            pass
+    merged.update(out)
+    json.dump(merged, open(path, "w"), indent=2)
+    for run, block in out.items():
+        rp = os.path.join(HERE, "runs", run, "probe_kfold.json")
+        if os.path.isdir(os.path.dirname(rp)):
+            json.dump({run: block}, open(rp, "w"), indent=2)
+    print("wrote", path, f"({len(merged)} runs)")
 
 
 if __name__ == "__main__":
