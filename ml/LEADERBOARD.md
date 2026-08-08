@@ -100,7 +100,7 @@ files). 822.6 M observed values → Chinchilla anchor 41.1 M params
 | run | C | patch | d_z | params | steps | k-fold RAPID r [95% CI] | status |
 |---|---|---|---|---|---|---|---|
 | f3_pilot_40k (#44) | 39 | 3 | 64 | 0.92M | 40k | … | running |
-| f3_anchor41M (#47) | 39 | 3 | 64 | 40.7M | 60k (~1 epoch) | … | queued |
+| f3_anchor41M (#48, re-run of failed #47) | 39 | 3 | 64 | 40.7M | 60k (~1 epoch) | … | running |
 
 The pair reruns the family-2 capacity question on 4.4× the data: the
 pilot control isolates what 0.25° data buys at fixed capacity, the

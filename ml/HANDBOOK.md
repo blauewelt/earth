@@ -131,23 +131,46 @@ from the runs' own JSON — never transcribe numbers by hand.
   api.github.com calls per 2-min refresh + raw.githubusercontent.com,
   which is uncounted), so it holds no credentials.
 
-## 4 · In flight right now (updated 2026-08-08 ~13:45 UTC)
+## 4 · In flight right now (updated 2026-08-08 ~15:10 UTC)
 
+- #44 FAMILY-3 pilot control (0.92M, 40k): training DONE ~14:50 (40k
+  steps in ~55 min — the ~5 steps/s early estimate was pessimistic;
+  it converged to ~12), now in the Probes step. #46 10M 30k
+  (Brazil box): survived a ~90-min seed and is in Build dataset since
+  ~15:00. #48 family-3 anchored 41M (576/10/8/768, 60k,
+  temporal_steps=0, job_timeout 1440): the RE-dispatch of failed #47,
+  running on box 47094145 against the fixed seed code (below). When
+  done: harvest (f3_pilot_40k / f3_anchor41M / patch24_10M_30k — read
+  C and patch from the checkpoint before naming), mirror checkpoints,
+  probe_head on the 10M codecs with TWO seeds before any margin claim
+  (house rule above).
+- #47 FAILED 14:14 in Build dataset: downloads.psl.noaa.gov 504'd all
+  four attempts at vflx.sfc.gauss.1982.nc (box 47094145 was cold for
+  the 1982-92 dailies, which the wind_daily release tar predates —
+  the §5 open item). The same host had served #44's box the same
+  files 40 min earlier; PSL was then unreachable from the sandbox
+  too, but **PSL's thredds mirror kept serving**
+  (psl.noaa.gov/thredds/fileServer/... — same paths as downloads.*).
+  Fixes on main (217f94b): (1) release asset `wind_daily_8292.tar.aa`
+  (1.3 GB, all 22 uflx/vflx 1982-92 files, pulled via thredds,
+  verified full year axes) seeded additively into wind_daily/ for
+  family3 dispatches; (2) build_family3.py fetch() takes mirrors= and
+  cycles downloads-host <-> thredds between attempts. NOTE: the
+  interactive session pushed a same-minute sibling fix (b18ba64,
+  asset name `wind_daily82.tar.*`, via seed()) — the rebase kept the
+  _8292 variant because only that asset exists on the release; if a
+  `wind_daily82.tar.*` asset appears later it is an orphan, delete it.
 - #40 DONE 14:10: harvested as **patch24_10M_60k** (10.26M params) +
   mirrored. Ridge 0.578 [0.451, 0.695] — first 24-channel codec back
   above the wind-only line; MOVE 0.238 (CI excludes zero, lowpass
-  0.677). LEADERBOARD has the writeup. #44: FAMILY-3 pilot control
-  (0.92M, 40k) — build_family3.py COMPLETED on-box, training since
-  ~13:55 at ~5 steps/s (gather-bound at 0.25°: patch-3 gathers from a
-  10.9 GB CPU tensor; ~2.2 h for 40k. Optimization if it matters:
-  move Xt/OBS to the 4090's 24 GB and gather on-device). #46: 10M 30k
-  re-re-dispatch (Brazil box, fixed seed code, in seed ~40 min — its
-  link is slow; the per-chunk cap is 30 min so it either lands or dies
-  loudly). #47: family-3 anchored 41M (576/10/8/768, 60k) — running on
-  the box #40 freed. When done: harvest (f3_pilot_40k / f3_anchor41M /
-  patch24_10M_30k — read C and patch from the checkpoint before
-  naming), mirror checkpoints, probe_head on the 10M codecs with TWO
-  seeds before any margin claim (house rule above).
+  0.677). LEADERBOARD has the writeup.
+- **ml/runs/ is SANDBOX STATE and containers get reclaimed**: this
+  session's fresh container had no repo checkout and no ml/runs, so
+  make_table has nothing to read until runs are re-harvested
+  (harvest_run.mjs pulls from Actions artifacts, which expire in
+  30 days). The LEADERBOARD master table is the committed, durable
+  copy of the numbers. If make_table matters long-term, either commit
+  ml/runs' JSONs (small) or mirror them to the checkpoints release.
 - #42 (the first 10M 30k re-dispatch) HUNG 90 min in the seed step: the
   streamed `curl | tar` had no --max-time and a stalled connection on
   the Brazil box hung the pipe forever (release download counts showed
@@ -169,13 +192,16 @@ from the runs' own JSON — never transcribe numbers by hand.
   it already. The handbook is the coordination medium; update it first.
 - pixel24_40k_seed2 checkpoint (from failed #39; patch=1 control) —
   probe suite run by the noon session (head 0.564; LEADERBOARD).
-- Boxes: 3 runners online (45318655, 47094145, 35586926-Brazil). All
-  busy or about to be; nothing to park. Spend: Vast key lost (header),
-  so unbilled-API estimate only: ~$4 at 12:15 + ~1.5 h × ~$0.75/h ≈
-  **$5–6 of the $50 cap**. The Brazil box's GitHub link is slow/flaky —
-  it is the one that hung #42 and it cold-starts every seed; if it
-  misbehaves again, destroy and re-provision US-side (gpu_box.mjs offers
-  ranks true cost — needs the Vast key back first).
+- Boxes: 3 runners online (45318655=NL instance 47160357,
+  47094145=BR instance 47171781, 35586926=BR instance 47160352 — the
+  runner names embed RETIRED instance ids; map them via
+  fleet_box_detail geolocation + fleet_run_state runner_name). All
+  busy (#44 probes / #48 / #46); nothing to park. Spend MEASURED via
+  the restored Vast key (invoices API, 15:00 UTC): **$7.61 charged of
+  the $50 cap** — $3.62 on retired 47119061, $1.59 NL, $1.53+$0.79 BR
+  boxes, $0.09 retired 47118755. Burn while all three run:
+  ~$0.82/h. The Brazil boxes' GitHub links stay slow (seed of #46
+  took ~90 min but survived under the 30-min-per-chunk caps).
 
 ## 5 · Data ladder (user-approved: data first, then training)
 
@@ -215,9 +241,10 @@ plumbed through train.py and every probe. As-built facts:
   Recorded in SCALING.md (with the 1°-smoothness caveat: 41M is a
   ceiling, not a target).
 - Wind mean AND std both come from the NCEP DAILY files now (one
-  source); 1982-92 daily files are fetched from PSL on first build and
-  cached — they are NOT in the wind_daily release tar (1993+ only).
-  Open: extend the release with them so cold boxes stay offline.
+  source). 1982-92 dailies are in the release since 2026-08-08
+  (`wind_daily_8292.tar.aa`, seeded for family3 dispatches) after PSL
+  504s killed #47; build_family3.py also has a thredds-mirror
+  fallback. Cold boxes stay offline end to end now.
 - RG extension months enumerate from the LOCAL cache, never the SIO
   index scrape. base025_na.npz seeds from the release in the workflow
   (and build_family3.py self-fetches it if absent — no CMEMS needed).
