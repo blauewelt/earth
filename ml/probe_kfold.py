@@ -192,7 +192,7 @@ def main():
             sys.exit(f"{run}: codec has {len(ck['chan'])} channels but "
                      f"{os.path.basename(a.data)} has {d['X'].shape[-1]} — "
                      f"pass --data with the matching tensor.")
-        X = d["X"].copy()
+        X = d["X"]          # NpzFile decompresses fresh; .copy() doubled it
         t_hold = np.array([m[:4] in set(ck["args"]["holdout_years"].split(","))
                            for m in months])
         lo_, hi_ = (float(v) for v in ck["args"]["holdout_lon"].split(","))
@@ -201,9 +201,10 @@ def main():
         codec = PixelMAE(n_chan=Xa.shape[-1], d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
         codec.load_state_dict(ck["model"])
         codec.eval()
-        Xt = torch.from_numpy(np.nan_to_num(Xa, nan=0.0))
-        OBS = torch.from_numpy(np.isfinite(Xa))
-        del X, Xa           # the anomaly copy is dead once the tensors exist
+        OBS = torch.from_numpy(np.isfinite(Xa))      # mask BEFORE filling
+        np.nan_to_num(Xa, nan=0.0, copy=False)       # in place: no second copy
+        Xt = torch.from_numpy(Xa)
+        del X               # Xa IS Xt's buffer now — never free it here
         gc.collect()
         out[run] = {}
         for tname, spec in TARGETS.items():

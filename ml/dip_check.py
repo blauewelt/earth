@@ -51,7 +51,7 @@ def main():
 
     ck = torch.load(os.path.join(HERE, "runs", a.run, "pixelmae.pt"),
                     map_location="cpu", weights_only=False)
-    X = d["X"].copy()
+    X = d["X"]          # NpzFile decompresses fresh; .copy() doubled it
     if X.shape[-1] != len(ck["chan"]):
         sys.exit(f"tensor C={X.shape[-1]} != checkpoint C={len(ck['chan'])} — rebuild the tensor")
     t_hold = np.array([m[:4] in set(ck["args"]["holdout_years"].split(",")) for m in months])
