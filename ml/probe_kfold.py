@@ -56,8 +56,57 @@ TARGETS = {
 }
 
 
-def kfold_r(F, y, years, lams=(1e-2, 1e-1, 1, 10, 100, 1000), boot=2000, seed=0):
-    """Grouped-by-year k-fold ridge; returns (r, lo95, hi95, n)."""
+
+def _mlp_fold(Ftr, ytr, Fte, seed, hidden=32, wd=1e-3, steps=3000):
+    """One fold's nonlinear probe: 64->hidden->1 MLP, weight decay, early
+    stopping on a train-tail — the SAME inner split discipline as the ridge.
+    Deliberately tiny: with ~220 train months the question is whether ANY
+    nonlinearity helps, not how much capacity fits."""
+    import torch
+    import torch.nn as nn
+    torch.manual_seed(seed)
+    g = torch.Generator().manual_seed(seed)
+    n = len(Ftr)
+    fit = slice(0, int(0.8 * n))
+    val = slice(int(0.8 * n), n)
+    net = nn.Sequential(nn.Linear(Ftr.shape[1], hidden), nn.GELU(),
+                        nn.Linear(hidden, 1))
+    opt = torch.optim.AdamW(net.parameters(), lr=1e-3, weight_decay=wd)
+    Xf = torch.as_tensor(Ftr[fit], dtype=torch.float32)
+    yf = torch.as_tensor(ytr[fit], dtype=torch.float32)[:, None]
+    Xv = torch.as_tensor(Ftr[val], dtype=torch.float32)
+    yv = torch.as_tensor(ytr[val], dtype=torch.float32)[:, None]
+    best, best_state, patience = np.inf, None, 0
+    for step in range(steps):
+        k = torch.randint(0, len(Xf), (min(64, len(Xf)),), generator=g)
+        loss = (net(Xf[k]) - yf[k]).pow(2).mean()
+        opt.zero_grad(); loss.backward(); opt.step()
+        if step % 50 == 0:
+            with torch.no_grad():
+                v = (net(Xv) - yv).pow(2).mean().item()
+            if v < best - 1e-6:
+                best, patience = v, 0
+                best_state = {k2: v2.clone() for k2, v2 in net.state_dict().items()}
+            else:
+                patience += 1
+                if patience >= 12:            # 600 steps with no val improvement
+                    break
+    if best_state:
+        net.load_state_dict(best_state)
+    with torch.no_grad():
+        return net(torch.as_tensor(Fte, dtype=torch.float32)).numpy().ravel()
+
+
+def kfold_r(F, y, years, lams=(1e-2, 1e-1, 1, 10, 100, 1000), boot=2000, seed=0,
+            probe="ridge"):
+    """Grouped-by-year k-fold; probe='ridge' (default, the defensible
+    instrument) or 'mlp' (tiny nonlinear read-out, 3 seeds averaged per
+    fold). The MLP exists to test ONE hypothesis: that skill present in the
+    embedding is not LINEARLY accessible — e.g. the 25-channel codec's
+    RAPID drop. If mlp ~= ridge, the information is genuinely absent or
+    entangled beyond small-sample reach; if mlp >> ridge, the probe was the
+    limit, not the representation. Same year-blocked folds, same inner-tail
+    discipline, so the two numbers differ only in the read-out family."""
     F = np.asarray(F, float)
     y = np.asarray(y, float)
     pred = np.full(len(y), np.nan)
@@ -81,8 +130,12 @@ def kfold_r(F, y, years, lams=(1e-2, 1e-1, 1, 10, 100, 1000), boot=2000, seed=0)
             r = np.corrcoef(p, y[val])[0, 1]
             if np.isfinite(r) and r > best_r:
                 best_r, best = r, lam
-        w = solve(idx, best)
-        pred[te] = np.c_[Fz[te], np.ones(int(te.sum()))] @ w
+        if probe == "mlp":
+            pred[te] = np.mean([_mlp_fold(Fz[idx], y[idx], Fz[te], sd)
+                                for sd in (0, 1, 2)], axis=0)
+        else:
+            w = solve(idx, best)
+            pred[te] = np.c_[Fz[te], np.ones(int(te.sum()))] @ w
     ok = np.isfinite(pred)
     r = float(np.corrcoef(pred[ok], y[ok])[0, 1])
     rmse = float(np.sqrt(np.mean((pred[ok] - y[ok]) ** 2)))
@@ -133,6 +186,8 @@ def main():
     # already produced one silent mismatch. Name the tensor instead; the
     # channel count is checked against the checkpoint below.
     ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"))
+    ap.add_argument("--probe", choices=["ridge", "mlp"], default="ridge",
+                    help="read-out family; see kfold_r docstring")
     a = ap.parse_args()
     d = np.load(a.data)
     months = [str(m) for m in d["months"]]
@@ -222,7 +277,7 @@ def main():
             Z, _ = embed_everything(codec, Xt, OBS, ctx_all, lats, lons,
                                     ys[sec_sel], xs[sec_sel], codec.d_z)
             F = Z.mean(1)[tidx]
-            r, lo95, hi95, n, rmse, sigma, pred = kfold_r(F, v_des, yr[tidx])
+            r, lo95, hi95, n, rmse, sigma, pred = kfold_r(F, v_des, yr[tidx], probe=a.probe)
             okp = np.isfinite(pred)
             r_lp = lowpass_r(tidx[okp], pred[okp], v_des[okp])
             # the baseline this literature demands: wind stress alone (Ekman
@@ -254,7 +309,8 @@ def main():
     # the next run erased it, and global15sst's published +0.582 went the
     # same way. A per-run copy is written too, so the shared file is a
     # convenience rather than the only home for a number.
-    path = os.path.join(HERE, "runs", "probe_kfold.json")
+    suffix = "" if a.probe == "ridge" else f"_{a.probe}"
+    path = os.path.join(HERE, "runs", f"probe_kfold{suffix}.json")
     merged = {}
     if os.path.exists(path):
         try:
@@ -264,7 +320,7 @@ def main():
     merged.update(out)
     json.dump(merged, open(path, "w"), indent=2)
     for run, block in out.items():
-        rp = os.path.join(HERE, "runs", run, "probe_kfold.json")
+        rp = os.path.join(HERE, "runs", run, f"probe_kfold{suffix}.json")
         if os.path.isdir(os.path.dirname(rp)):
             json.dump({run: block}, open(rp, "w"), indent=2)
     print("wrote", path, f"({len(merged)} runs)")
