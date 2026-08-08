@@ -34,7 +34,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model import PixelMAE
+from model import PixelMAE, codec_from_ckpt
 from probe_sequence import ridge_r
 from temporal import TemporalTransformer, embed_everything, rapid_section
 
@@ -228,7 +228,7 @@ def main():
                  "(state space is disqualified from ranking).")
     X, dynamic = anomaly_transform(X, moy, t_hold, x_hold)
 
-    codec = PixelMAE(n_chan=X.shape[-1], d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
+    codec = codec_from_ckpt(ck, X.shape[-1])
     codec.load_state_dict(ck["model"])
 
     out = probe_now(codec, torch.from_numpy(np.nan_to_num(X, nan=0.0)),

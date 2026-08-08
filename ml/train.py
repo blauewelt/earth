@@ -37,6 +37,14 @@ def parse():
     p.add_argument("--d-z", type=int, default=32)
     p.add_argument("--patch", type=int, default=1, choices=[1, 3],
                    help="encoder receptive field per channel token (3 = 3x3)")
+    p.add_argument("--d-model", type=int, default=128,
+                   help="encoder width (128x4 = the 0.92M pilot; 320x8 = ~10M "
+                        "-- the Chinchilla-anchored size for the C=24 global "
+                        "tensor: ~270M observed values / 20 ~ 13M params)")
+    p.add_argument("--n-layers", type=int, default=4)
+    p.add_argument("--n-heads", type=int, default=4)
+    p.add_argument("--d-dec", type=int, default=256,
+                   help="decoder width (scale with d_model; 512 at 320x8)")
     p.add_argument("--mask-ratio", type=float, default=0.5)
     p.add_argument("--holdout-years", default="2009,2017,2023")
     p.add_argument("--holdout-lon", default="-45,-25")   # a mid-Atlantic block
@@ -139,7 +147,9 @@ def main():
         return (torch.as_tensor(t), torch.as_tensor(y), torch.as_tensor(x),
                 torch.as_tensor(ctx, dtype=torch.float32))
 
-    model = PixelMAE(n_chan=C, d_z=a.d_z, patch=a.patch).to(dev)
+    model = PixelMAE(n_chan=C, d_z=a.d_z, patch=a.patch, d_model=a.d_model,
+                     n_layers=a.n_layers, n_heads=a.n_heads, d_dec=a.d_dec).to(dev)
+    print(f"codec parameters: {sum(p_.numel() for p_ in model.parameters())/1e6:.2f}M")
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     # Cosine annealing whose TOTAL can be re-fitted mid-run (--max-minutes):
     # a LambdaLR closure over a mutable total is the same curve as

@@ -36,7 +36,7 @@ import torch
 import torch.nn as nn
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model import PixelMAE
+from model import PixelMAE, codec_from_ckpt
 from trainprobe import anomaly_transform
 from temporal import embed_everything, rapid_section
 
@@ -127,8 +127,7 @@ def main():
     Xa, _ = anomaly_transform(X, moy, t_hold, x_hold)
     del X
 
-    codec = PixelMAE(n_chan=Xa.shape[-1], d_z=ck["d_z"],
-                     patch=ck["args"].get("patch", 1))
+    codec = codec_from_ckpt(ck, Xa.shape[-1])
     codec.load_state_dict(ck["model"])
     codec.eval()
     OBS = torch.from_numpy(np.isfinite(Xa))

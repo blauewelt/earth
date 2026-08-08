@@ -135,3 +135,20 @@ def gather_px(Xt, OBS, t, y, x, patch):
             vs.append(Xt[t, yy, xx])
             os_.append(OBS[t, yy, xx] & vy.unsqueeze(-1))
     return torch.stack(vs, -1), torch.stack(os_, -1)
+
+
+def codec_from_ckpt(ck, n_chan):
+    """Rebuild the EXACT architecture a checkpoint was trained with.
+
+    Every loader used to hand-construct PixelMAE(n_chan, d_z, patch) — fine
+    while all codecs shared one size, silently wrong the day they didn't.
+    The checkpoint's args carry the full architecture (train.py saves
+    vars(a)); this is the one place that reads them. Old checkpoints predate
+    the size knobs, so every .get() default is the pilot architecture."""
+    a = ck.get("args", {})
+    return PixelMAE(n_chan=n_chan, d_z=ck["d_z"],
+                    patch=a.get("patch", 1),
+                    d_model=a.get("d_model", 128),
+                    n_layers=a.get("n_layers", 4),
+                    n_heads=a.get("n_heads", 4),
+                    d_dec=a.get("d_dec", 256))

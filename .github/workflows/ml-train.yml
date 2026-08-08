@@ -61,6 +61,18 @@ on:
       lr_decay_steps:
         description: "initial decay length when lr_floor > 0"
         default: "0"
+      codec_d_model:
+        description: "encoder width (128 = 0.92M pilot; 320 with 8 layers = 10.3M Chinchilla anchor)"
+        default: "128"
+      codec_layers:
+        description: "encoder depth (4 pilot; 8 at the 10M size)"
+        default: "4"
+      codec_heads:
+        description: "attention heads (4 pilot; 8 at the 10M size)"
+        default: "4"
+      codec_d_dec:
+        description: "decoder width (256 pilot; 512 at the 10M size)"
+        default: "256"
 
 # contents: write ONLY for the live-metrics side channel — the training
 # step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every
@@ -144,6 +156,10 @@ jobs:
             --max-minutes "${{ inputs.max_minutes || '0' }}" \
             --lr-floor "${{ inputs.lr_floor || '0' }}" \
             --lr-decay-steps "${{ inputs.lr_decay_steps || '0' }}" \
+            --d-model "${{ inputs.codec_d_model || '128' }}" \
+            --n-layers "${{ inputs.codec_layers || '4' }}" \
+            --n-heads "${{ inputs.codec_heads || '4' }}" \
+            --d-dec "${{ inputs.codec_d_dec || '256' }}" \
             $([ "${{ inputs.anomaly }}" = "true" ] && echo --anomaly) \
             $([ "${{ inputs.anomaly }}" = "true" ] && [ "${{ inputs.eval_every }}" != "0" ] \
               && echo --eval-every "${{ inputs.eval_every }}") \

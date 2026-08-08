@@ -36,7 +36,7 @@ import torch
 import torch.nn as nn
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model import PixelMAE
+from model import PixelMAE, codec_from_ckpt
 from probe_sequence import ridge_r
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -226,7 +226,7 @@ def main():
         X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)
     del clim
 
-    codec = PixelMAE(n_chan=C, d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
+    codec = codec_from_ckpt(ck, C)
     codec.load_state_dict(ck["model"])
     codec.eval()
 

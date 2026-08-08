@@ -25,7 +25,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model import PixelMAE
+from model import PixelMAE, codec_from_ckpt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -88,7 +88,7 @@ def main():
                           & ~x_hold[None, None, :]]
             X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)
 
-    model = PixelMAE(n_chan=C, d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
+    model = codec_from_ckpt(ck, C)
     model.load_state_dict(ck["model"])
     model.eval()
 
