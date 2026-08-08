@@ -202,14 +202,28 @@ jobs:
             [ -f /opt/earth-cache/rg/RG_T.nc.gz ]; } || seed rg
           [ "$(ls /opt/earth-cache/wind_daily/*.nc 2>/dev/null | wc -l)" -ge 60 ] \
             || seed wind_daily
-          # The 1982-92 daily wind (family-3's extended axis) is a separate
-          # asset group: the main wind_daily tar predates it, and PSL 504'd
-          # run #47's build when a cold box tried the origin for vflx 1982.
-          # The tar's members live under wind_daily/, so it extracts into
-          # the same dir; seed's rm -rf of the (nonexistent) group dir is a
-          # no-op and the already-seeded 1993+ files are untouched.
-          [ "$(ls /opt/earth-cache/wind_daily/uflx.sfc.gauss.198*.nc 2>/dev/null | wc -l)" -ge 8 ] \
-            || seed wind_daily82
+          # Family-3 needs the 1982-92 NCEP dailies too. They are NOT in the
+          # wind_daily tar (1993+ only): build_family3.py used to fetch them
+          # from downloads.psl.noaa.gov on first build, and that host 504'd
+          # run #47 to death on 2026-08-08. They live in their own asset
+          # (wind_daily_8292.tar.aa, one chunk) that extracts ADDITIVELY into
+          # wind_daily/ — so no rm -rf and no seed(): the shared dir must
+          # survive a failed extension seed.
+          if [ "${{ inputs.tensor }}" = "family3_na025" ]; then
+            n8292=$(ls /opt/earth-cache/wind_daily/*.sfc.gauss.198[2-9].nc \
+                       /opt/earth-cache/wind_daily/*.sfc.gauss.199[0-2].nc \
+                       2>/dev/null | wc -l)
+            if [ "$n8292" -lt 22 ]; then
+              echo "seeding wind_daily 1982-92 extension ($n8292/22 present) …"
+              if curl -sL --max-time 1800 \
+                   "https://github.com/${GITHUB_REPOSITORY}/releases/download/data-cache-v1/wind_daily_8292.tar.aa" \
+                   | tar x -C /opt/earth-cache; then
+                echo "  seeded: $(ls /opt/earth-cache/wind_daily/*.nc | wc -l) files total"
+              else
+                echo "::warning::8292 seed failed — build_family3.py will try the PSL origin + thredds mirror"
+              fi
+            fi
+          fi
           # Truth series (1.2 MB): OSNAP's repository server timed out from
           # two boxes on 2026-08-08 and killed the whole build step. With the
           # files present, fetch_truth.py never opens a connection.

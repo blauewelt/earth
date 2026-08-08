@@ -121,16 +121,21 @@ def interp2_nan(f, wy, wx):
     return out.astype(np.float32)
 
 
-def fetch(url, path, attempts=4):
+def fetch(url, path, attempts=4, mirrors=()):
+    """Download url -> path. `mirrors` are alternate URLs for the same file;
+    attempts cycle through [url, *mirrors] so a dead host is skipped rather
+    than hammered — downloads.psl.noaa.gov 504'd every retry of run #47 on
+    2026-08-08 while the thredds mirror on psl.noaa.gov served fine."""
     if os.path.exists(path):
         return path
-    import time
     os.makedirs(os.path.dirname(path), exist_ok=True)
     ua = {"User-Agent": "earth-science-pipeline/1.0 (research; github blauewelt/earth)"}
+    urls = [url, *mirrors]
     for i in range(attempts):
+        u = urls[i % len(urls)]
         try:
-            print(f"  downloading {url}" + (f" (attempt {i + 1})" if i else ""), flush=True)
-            req = urllib.request.Request(url, headers=ua)
+            print(f"  downloading {u}" + (f" (attempt {i + 1})" if i else ""), flush=True)
+            req = urllib.request.Request(u, headers=ua)
             with urllib.request.urlopen(req, timeout=600) as r, \
                     open(path + ".part", "wb") as f:
                 shutil.copyfileobj(r, f, 1 << 20)
@@ -254,7 +259,10 @@ def fill_wind(X, months, lats, lons):
         for var in ("uflx", "vflx"):
             path = os.path.join(daily, f"{var}.sfc.gauss.{y}.nc")
             if not os.path.exists(path):
-                fetch(f"{psl}/{var}.sfc.gauss.{y}.nc", path)
+                thredds = ("https://psl.noaa.gov/thredds/fileServer/Datasets"
+                           "/ncep.reanalysis/surface_gauss")
+                fetch(f"{psl}/{var}.sfc.gauss.{y}.nc", path,
+                      mirrors=(f"{thredds}/{var}.sfc.gauss.{y}.nc",))
             nc = ncdf.Dataset(path)
             if wy is None:
                 g_lat = np.array(nc.variables["lat"][:])   # descending
