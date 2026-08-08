@@ -277,6 +277,71 @@
       "</svg>";
   }
 
+  // ---- the downstream metric, plotted --------------------------------------
+  // linear_r_deseas is the in-training RAPID probe: a ridge from the codec's
+  // CURRENT embeddings to the transport series, computed at every eval_every
+  // interval. It is the earliest honest signal of whether a run will be worth
+  // harvesting — the loss curve says the autoencoder is learning, this says
+  // whether what it learned carries the AMOC. The dashed line is the
+  // wind-stress-only ridge baseline, the bar every codec must clear; it moves
+  // with the tensor (0.531 on the 1-degree tensors, 0.568 on the
+  // quarter-degree one), so the label always states which one is drawn.
+  function baselineFor(run) {
+    var d = (docOf(run) || "") + " " + (run.display_title || "");
+    return /0\.25|quarter|f3[_-]|family[ -]?3/i.test(d)
+      ? { v: 0.568, what: "0.25° tensor" }
+      : { v: 0.531, what: "1° tensor" };
+  }
+
+  function probeChart(probes, run) {
+    var pts = probes.filter(function (p) {
+      return typeof p.linear_r_deseas === "number" && typeof p.step === "number";
+    });
+    if (!pts.length) return "";
+    var base = baselineFor(run);
+    var W = 600, H = 150, padL = 46, padR = 10, padT = 12, padB = 22;
+    var xs = pts.map(function (p) { return p.step; });
+    var ys = pts.map(function (p) { return p.linear_r_deseas; });
+    var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
+    // Always frame the baseline and zero so "above/below the bar" is visible
+    // even when every probe so far sits on one side of it.
+    var ymin = Math.min(0, Math.min.apply(null, ys) - 0.05);
+    var ymax = Math.max(base.v + 0.08, Math.max.apply(null, ys) + 0.05);
+    var xspan = (xmax - xmin) || 1, yspan = (ymax - ymin) || 1;
+    var line = polyline(pts.map(function (p) { return [p.step, p.linear_r_deseas]; }),
+                        xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB);
+    var yOf = function (v) {
+      return padT + (H - padT - padB) * (1 - (v - ymin) / yspan);
+    };
+    var last = pts[pts.length - 1];
+    var dots = pts.map(function (p) {
+      var cx = padL + (W - padL - padR) * ((p.step - xmin) / xspan);
+      return '<circle cx="' + cx.toFixed(1) + '" cy="' + yOf(p.linear_r_deseas).toFixed(1) +
+             '" r="2.5" fill="#2da44e"/>';
+    }).join("");
+    return '<svg class="chart" viewBox="0 0 ' + W + " " + H +
+      '" role="img" aria-label="downstream RAPID probe over training">' +
+      '<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+      '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+      '<line x1="' + padL + '" y1="' + yOf(base.v).toFixed(1) + '" x2="' + (W - padR) +
+        '" y2="' + yOf(base.v).toFixed(1) + '" stroke="#8b949e" stroke-width="1" stroke-dasharray="4 3"/>' +
+      '<text x="' + (W - padR) + '" y="' + (yOf(base.v) - 4).toFixed(1) +
+        '" text-anchor="end" font-size="10" fill="#8b949e">wind-only ' +
+        base.v.toFixed(3) + " (" + base.what + ")</text>" +
+      '<text x="' + (padL - 6) + '" y="' + (padT + 5) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymax.toFixed(2) + "</text>" +
+      '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymin.toFixed(2) + "</text>" +
+      '<polyline points="' + line + '" fill="none" stroke="#2da44e" stroke-width="2" stroke-linejoin="round"/>' +
+      dots +
+      "</svg>" +
+      '<div class="legend"><span><span class="sw" style="background:#2da44e"></span>' +
+      "RAPID probe r (in-training, deseasonalised) — latest <b>" +
+      last.linear_r_deseas.toFixed(3) + "</b> at step " + fmtInt(last.step) +
+      (last.linear_r_deseas >= base.v
+        ? ' <span style="color:#2da44e">above the wind bar</span>'
+        : ' <span style="color:#8b949e">below the wind bar</span>') +
+      "</span></div>";
+  }
+
   function probeText(p) {
     var keys = ["linear_r_raw", "linear_r_deseas", "temporal_r_raw", "temporal_r_deseas",
                 "z_vs_persistence_pct", "chan_vs_persistence_pct"];
@@ -321,7 +386,12 @@
         '<span><span class="sw" style="background:#3987e5"></span>loss_rec</span>' +
         '<span><span class="sw" style="background:#d95926"></span>loss_nei</span></div>';
       if (m.probes.length) {
+        html += probeChart(m.probes, run);
         html += '<div class="probe">' + probeText(m.probes[m.probes.length - 1]) + "</div>";
+      } else {
+        html += '<div class="probe">no downstream probe yet — the RAPID probe ' +
+                "runs at each eval interval, so the first one lands a few " +
+                "thousand steps in.</div>";
       }
       return html + "</div>";
     }).catch(function (e) {
