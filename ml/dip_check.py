@@ -61,12 +61,16 @@ def main():
     codec = PixelMAE(n_chan=X.shape[-1], d_z=ck["d_z"], patch=ck["args"].get("patch", 1))
     codec.load_state_dict(ck["model"])
     codec.eval()
-    ocean = np.isfinite(d["X"][..., 0]).any(axis=0)
+    # ocean comes from the anomaly array, not a fresh d["X"] read: the
+    # transform preserves NaN, and re-indexing the npz decompresses the whole
+    # 2.4 GB tensor again while this one is still alive.
+    ocean = np.isfinite(Xa[..., 0]).any(axis=0)
     ys, xs = np.where(ocean)
     sec_y, sec_sel = rapid_section(lats, lons, ys, xs)   # protocol v3 clip
     ctx = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
-    Z, _ = embed_everything(codec, torch.from_numpy(np.nan_to_num(Xa, nan=0.0)),
-                            torch.from_numpy(np.isfinite(Xa)), ctx, lats, lons,
+    OBS = torch.from_numpy(np.isfinite(Xa))          # mask BEFORE filling
+    np.nan_to_num(Xa, nan=0.0, copy=False)           # in place: no second copy
+    Z, _ = embed_everything(codec, torch.from_numpy(Xa), OBS, ctx, lats, lons,
                             ys[sec_sel], xs[sec_sel], ck["d_z"])
     F = Z.mean(1)[ridx]
 
