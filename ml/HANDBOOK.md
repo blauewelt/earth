@@ -10,13 +10,13 @@ Secrets are NOT in this repo. Locations: GitHub PAT `/home/claude/.gh_pat`
 `claude/github-access.md` on a fresh container), CMEMS credentials in the
 claude.ai project doc `claude/copernicus-marine-access.md` (env vars only,
 never on disk, never in argv — the permission classifier blocks credentials
-on command lines, correctly). The Vast.ai key lived ONLY at
-`/home/claude/.vast_key` and DIED with the container on 2026-08-08 —
-`fleet_box_detail.mjs`/`gpu_box.mjs` (box costs, stop/start/destroy) are
-blind until Chris re-pastes it; the GitHub half of the fleet tooling
-(dispatch, run state, harvest, runner list) is unaffected. Ask Chris for
-the key when box management is needed; consider a project doc for it
-(same trade-off he accepted for the PAT and CMEMS).
+on command lines, correctly). The Vast.ai key: recreate
+`/home/claude/.vast_key` from the claude.ai project doc
+`claude/vast-access.md` on a fresh container (mirrored there 2026-08-08
+after a parallel session's container lost it — the original chat session
+still held it and wrote the doc). Auto-top-up is ON for the Vast account
+(Chris, 2026-08-08): the $50 approved budget is the binding constraint,
+not the credit balance.
 
 ## 1 · What this program is
 
