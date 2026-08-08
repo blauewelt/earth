@@ -1,0 +1,10 @@
+{"config": {"steps": 120000, "batch": 512, "d_z": 64, "patch": 3, "d_model": 576, "n_layers": 10, "n_heads": 8, "d_dec": 768, "anomaly": true, "eval_every": 15000, "light_probe_every": 2500, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 40.693, "data": "family3_na025.npz", "C": 39, "T": 516, "resume": null}}
+{"linear_r_deseas": 0.338, "linear_r_raw": 0.417, "light": true, "probe_seconds": 61.5, "step": 0, "wall_s": 61.5}
+{"step": 600, "loss_rec": 0.22151, "loss_nei": 0.23078}
+{"step": 1200, "loss_rec": 0.18485, "loss_nei": 0.16708}
+{"step": 1800, "loss_rec": 0.19776, "loss_nei": 0.17742}
+{"step": 2400, "loss_rec": 0.17388, "loss_nei": 0.15558}
+{"linear_r_deseas": 0.565, "linear_r_raw": 0.579, "light": true, "probe_seconds": 61.2, "step": 2500, "wall_s": 658.9}
+{"step": 3000, "loss_rec": 0.18354, "loss_nei": 0.17791}
+{"step": 3600, "loss_rec": 0.16116, "loss_nei": 0.1617}
+{"step": 4200, "loss_rec": 0.16214, "loss_nei": 0.15403}
