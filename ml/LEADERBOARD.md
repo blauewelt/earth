@@ -103,6 +103,35 @@ suite; the ridge remains the comparable-across-time instrument, the head
 the capability bound.
 
 
+## The attribution matrix (2026-08-08, late): what the 0.690 is made of
+
+The end-to-end baseline Chris asked for — the SAME attention head fed raw
+section anomalies instead of embeddings — with the receptive field
+controlled (probe_head --raw / --raw --raw-patch):
+
+| tokens carry | raw data | codec embedding |
+|---|---|---|
+| single pixel | 0.613 [0.48, 0.73] | 0.617 [0.49, 0.73] |
+| 3x3 neighbourhood | 0.659 [0.55, 0.75] | **0.690** [0.57, 0.78] |
+
+Decomposition of the headline number, in descending order: UNPOOLING the
+section (ridge 0.54 -> head 0.61+) is the largest term; the 3x3 RECEPTIVE
+FIELD adds ~+0.045 and does so on raw data alone; PRETRAINING adds +0.031
+at matched receptive field — positive in direction, not significant (CIs
+overlap heavily), and ~+0.004 at single pixel, i.e. nothing.
+
+Stated plainly: for the RAPID monthly probe, a supervised attention head
+over raw section data recovers nearly everything, and the codec's measured
+contribution is small. The pretraining case now rests on the scoreboards
+where raw supervision has no answer: field prediction (stage-2 beats
+persistence everywhere; an end-to-end field-forecaster baseline is the
+open follow-up), the MOVE transfer (raw-baseline pending there), and the
+open question of whether the pretraining margin GROWS with codec capacity
+— the 10M runs' head probes will say. Two lessons for the paper: report
+the matrix, not the corner of it; and the demand for a simpler baseline
+reframed the headline twice in one day.
+
+
 ## Stage-2 results withdrawn (poisoned embedding cache, 2026-08-07)
 
 The stage-2 numbers for **global14b** and **global15sst** are WITHDRAWN, not
