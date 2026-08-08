@@ -513,6 +513,15 @@ $r=0.602$ [0.46, 0.73] \\
 $r=0.672$ \\
 \emph{same, under their filter} & --- & +18-mo low-pass &
 \emph{as above} & $r=0.33$--$0.75$ \\
+\midrule
+\multicolumn{5}{l}{\emph{classical inputs re-scored in OUR protocol
+(\S\ref{sec:classical}) --- same 227 months, same folds}}\\
+\quad wind only & section $\tau_x,\tau_y$ & real RAPID, monthly &
+year-blocked $k$-fold & $r=0.401$ [0.27, 0.56] \\
+\quad cable only & \textbf{Florida Current transport} & real RAPID, monthly &
+year-blocked $k$-fold & $r=0.254$ [0.15, 0.36] \\
+\quad cable + wind & \textbf{two of RAPID's three terms} & real RAPID, monthly &
+year-blocked $k$-fold & $r=0.566$ [0.45, 0.68] \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Joint results table.} Every row is a defensible number
@@ -598,14 +607,45 @@ irregular sampling on top of eddies. We read the eddying-model range,
 not the laminar one, as the relevant difficulty scale --- and our
 $0.60$--$0.67$ on real observations sits inside it.
 
-\paragraph{What would be comparable.} A like-for-like comparison with
-this work requires: real RAPID data, monthly resolution without
-low-pass filtering, no transport measurement among the inputs, and an
-out-of-sample protocol. We are not aware of a published result meeting
-all four, which is why Table~\ref{tab:related} is an orientation
-device rather than a leaderboard, and why we quote our unfiltered
-monthly number as the headline even though our own filtered number
-looks better.
+\subsection{Making them comparable: the classical inputs under our
+protocol}\label{sec:classical}
+
+A like-for-like comparison requires real RAPID data, monthly resolution
+without low-pass filtering, no transport measurement among the inputs,
+and an out-of-sample protocol; no published result meets all four. But
+the comparison can be rescued from the other end. Rather than dress our
+number up in the literature's conventions, we put the literature's
+\emph{inputs} through our protocol --- same target, same
+deseasonalization, same year-blocked folds, same block bootstrap ---
+so that the rows differ only in what the model is allowed to see. The
+Florida Current cable, normally one of our never-input truth series, is
+used as an input for these rows and these rows only
+(\texttt{ml/classical\_baseline.py}).
+
+The bottom block of Table~\ref{tab:related} reports it, on the 227
+months where RAPID and the cable overlap. Wind stress alone gives
+$r=0.401$; the cable alone $r=0.254$; \textbf{the two together ---
+i.e.\ two of RAPID's three constituent terms, handed to the model as
+direct measurements --- give $r=0.566$} [0.45, 0.68]. Our embedding,
+which is shown no transport measurement of any kind, reaches
+$0.578$--$0.620$ under the same pooled ridge and $0.672$ with the
+unpooled head.
+
+We read that carefully. It does \emph{not} say we beat
+Frajka-Williams: that reconstruction also uses altimetry for the third
+term, which this ladder omits, and it targets a filtered series. What
+it does say is sharper and is the number we could not get any other
+way: at monthly resolution, out of sample, being handed the Florida
+Current and the Ekman transport outright is worth about $r=0.57$ ---
+and a task-blind embedding of the ocean state matches it without being
+handed anything. The gap between that $0.57$ and a published $0.95$ is
+therefore not model quality; it is the 18-month filter and the
+in-sample fit, quantified. A supporting observation in the same
+direction: when we apply the 18-month filter to these classical rows'
+\emph{out-of-fold} predictions their correlations collapse
+($-0.07$, $-0.23$, $+0.24$), which is what a filtered statistic with
+nine effective points does once it is no longer allowed to see its own
+test years.
 
 \paragraph{Ocean and climate forecasting.} Our field-prediction
 metrics are the standard decadal-verification quantities under other

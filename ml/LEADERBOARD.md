@@ -132,6 +132,39 @@ anyway) tests capacity AT the data anchor. A steps-matched anchored 40k
 control follows if the 60k result warrants it.
 
 
+## The classical inputs, re-scored in our protocol (2026-08-08)
+
+`ml/classical_baseline.py` — the answer to "can we produce numbers that
+ARE comparable?". Instead of dressing our number in their conventions,
+put THEIR inputs through OUR protocol. Same 227 months (RAPID ∩ cable),
+same year-blocked folds, same deseasonalisation, same bootstrap:
+
+| inputs | k-fold r | CI95 | RMSE Sv | 18-mo lowpass |
+|---|---|---|---|---|
+| wind only (tau_x, tau_y section) | 0.401 | [0.27, 0.56] | 2.62 | -0.07 |
+| **cable only** (Florida Current transport) | 0.254 | [0.15, 0.36] | 2.70 | -0.23 |
+| **cable + wind** (2 of RAPID's 3 terms, MEASURED) | **0.566** | [0.45, 0.68] | 2.32 | +0.24 |
+| our embedding, ridge, NO transport input | 0.578-0.620 | — | 2.3 | — |
+| our embedding, head, NO transport input | 0.672 | — | 2.1 | — |
+
+Being handed the Florida Current AND the Ekman transport outright is
+worth r≈0.57 monthly out-of-sample. A task-blind embedding that is
+handed nothing matches it. So the distance from 0.57 to a published
+0.95 is the filter plus the in-sample fit, not model quality.
+
+NOT a claim that we beat FW2015: they also use altimetry for the third
+term (absent from this ladder) and target a filtered series. The claim
+is narrower and stronger — the classical INPUT SET is worth 0.57 in an
+honest frame.
+
+Note the cable is normally a never-input truth series; classical_baseline.py
+is the ONLY place in this repo that uses it as an input, deliberately.
+
+Caveat: the wind row here (0.401) is not the standing 0.531 baseline —
+different sample (227 vs 240 months) and the C=25 tensor. Compare rows
+WITHIN this table only.
+
+
 ## Why published AMOC numbers are not our numbers (2026-08-08)
 
 Measured, not asserted — the arithmetic behind paper §6.1:
