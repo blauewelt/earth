@@ -50,7 +50,7 @@ Or just use the [live deployment](https://blauewelt.github.io/earth/), which Git
 
 ## Testing
 
-The repo ships a Playwright regression suite (120 specs): data-snapshot integrity
+The repo ships a Playwright regression suite (137 specs): data-snapshot integrity
 (`tests/data.spec.js` — catalog, RAPID series, Argo fleet, Climate TRACE, stations,
 sea-level budget, GISTEMP, glaciers, species, the four climatology grids, the place
 gazetteer, the island file) and full browser tests (`tests/app.spec.js` — GIBS tiling-scheme math

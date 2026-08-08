@@ -1043,9 +1043,10 @@ climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet
 join), gistemp, gpcp, eobs, oisst, meteoswiss. Grid snapshots share
 `_bin_to_grid`/`_write_grid` (nearest scatter-binning onto regular grids).
 
-**Testing** (120 Playwright specs): app behaviour (`tests/app.spec.js`) + data
-integrity (`tests/data.spec.js`), sandbox MIRROR mode, in-repo proxies, CI on
-real network.
+**Testing** (137 Playwright specs): app behaviour (`tests/app.spec.js`) + data
+integrity (`tests/data.spec.js`), the ML status page (`tests/status.spec.js` —
+every GitHub endpoint stubbed by `page.route`, so it needs no network and no
+MIRROR), sandbox MIRROR mode, in-repo proxies, CI on real network.
 
 **Notable bugs fixed along the way** (details in git history): Pacific blanked
 by clamped edge tiles; Pages 404 (gh-pages + enablement); probe showing

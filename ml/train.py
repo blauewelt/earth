@@ -252,6 +252,7 @@ def main():
             "lr_floor": a.lr_floor, "lr_decay_steps": a.lr_decay_steps,
             "params_M": round(sum(p_.numel() for p_ in model.parameters()) / 1e6, 3),
             "data": os.path.basename(a.data), "C": int(C), "T": int(T),
+            "resume": a.resume or None,
         }}) + "\n")
 
     # Where a checkpoint can outlive its job. /opt/earth-cache is the box's
@@ -275,6 +276,12 @@ def main():
         blob = {"model": model.state_dict(), "chan": chan, "d_z": a.d_z,
                 "norm": d["norm"], "args": vars(a),
                 "step": int(step if step is not None else 0),
+                # WHOSE checkpoint this is. Without it a resumed run knows the
+                # file it loaded but not the RUN that wrote it, so the status
+                # page cannot find the parent's curves to stitch on — and an
+                # orphan-latest.pt rescued off a box carries no run number in
+                # its name at all. One string closes that gap.
+                "tag": ckpt_tag,
                 "opt": opt.state_dict(), "sched": sched.state_dict()}
         torch.save(blob, os.path.join(a.out, "pixelmae.pt"))
         # Mirror to the box-persistent directory when there is one, so a
@@ -391,6 +398,21 @@ def main():
                 print(f"  RESUMED from {rpath} at step {s} "
                       f"(optimizer + schedule restored); training on to "
                       f"{a.steps}", flush=True)
+                # A CONTINUATION RECORD, so the curves can be made whole
+                # again. A resumed run's metrics file starts at the step it
+                # was handed, which draws a chart that begins in mid-air and
+                # silently loses everything the parent measured — including
+                # the step-0 untrained-codec line, which is the reference the
+                # whole probe chart is read against. Naming the parent and
+                # the join step lets the status page fetch the parent's
+                # archived metrics and prepend them, and MARK the seam rather
+                # than hide it: two jobs, one training trajectory.
+                with open(metrics_path, "a") as f:
+                    f.write(json.dumps({"resumed": {
+                        "from": os.path.basename(rpath),
+                        "parent_tag": ck.get("tag") or "",
+                        "at_step": s,
+                    }}) + "\n")
             else:
                 print(f"  WARM-STARTED from {rpath}: weights only, no "
                       f"optimizer or step — the LR schedule restarts from 0. "

@@ -125,6 +125,24 @@ from the runs' own JSON — never transcribe numbers by hand.
   is not a continuation and must never be reported as one.
   Box-local: a resume dispatch that lands on a different box finds nothing
   and starts fresh, loudly.
+- **A continuation is ONE trajectory in two jobs, and the charts say so.**
+  Every checkpoint carries the `CKPT_TAG` of the run that wrote it, and a
+  resumed run writes a `{"resumed": {parent_tag, at_step, from}}` line into
+  its metrics file. status.html follows that back to the parent's archived
+  `ml-metrics/run-<n>.jsonl`, keeps the points up to and including the join
+  step, and prepends them — so a run resumed at step 22,500 charts from step
+  0, not from mid-air, and gets its step-0 untrained-codec reference line
+  back (the child never measured one; §"no step-0 probe on a resume"). It
+  recurses, so #48 → #55 → #56 shows all three and the label names the
+  ORIGIN run, and it drops the parent's points PAST the join — those belong
+  to a branch that was thrown away. The seam is drawn as a dashed purple
+  line on both charts, never hidden: two jobs is a real fact about the run
+  and a discontinuity at the join is exactly what a reader should be able to
+  see. Two things that must stay right: the ETA divides this job's `wall_s`
+  by the steps THIS job did (crediting the inherited steps as free reports
+  an ETA a third of the truth), and continuations that predate the
+  `{"resumed": ...}` record get a hand entry in `ml/run_docs.json`'s
+  `_parents` map. Covered by `tests/status.spec.js`.
 - **Dispatch**: `node scripts/fleet_dispatch_wf.mjs '<inputs-json>' main`.
   MANDATORY `doc` input (the script refuses without it): one line, what
   the run is and why — it becomes the run name and the description on

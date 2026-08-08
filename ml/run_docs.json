@@ -36,5 +36,13 @@
  "46": "10M 30k steps-matched control (completes the 10M pair with #40): ridge 0.556 [0.44, 0.67], MOVE 0.212 \u2014 the pair is 0.556/0.578 at 30k/60k, i.e. no step effect at 10M either.",
  "47": "f3_anchor41M \u2014 failed; re-run as #48.",
  "48": "f3_anchor41M: 40.7M params, 60,000 steps (~1 epoch) on the 0.25-degree tensor \u2014 the first codec trained AT its Chinchilla data anchor.",
- "49": "f3_anchor41M_seed2: second seed of #48's 40.7M / 60,000-step config (the duplicate dispatch was accidental; kept, since the two-seed house rule wanted the replicate anyway)."
+ "49": "f3_anchor41M_seed2: second seed of #48's 40.7M / 60,000-step config (the duplicate dispatch was accidental; kept, since the two-seed house rule wanted the replicate anyway).",
+ "50": "Smoke run for the GPU-probe change — failed at the step-0 probe on `dev.type` (dev is a string, not a torch.device). Exactly what a smoke run is for.",
+ "51": "Smoke run, second try (SUCCESS): the step-0 probe ran on the GPU in 11 s and scored 0.516 on an UNTRAINED codec — the reference line every probe chart is now read against.",
+ "52": "Resume smoke test (SUCCESS): proved --resume restores optimizer + schedule, and exposed that the step-0 probe fired BEFORE the weights were restored (fixed: no step-0 probe on a resumed run).",
+ "53": "f3_anchor41M resume — cancelled: dispatched with 640x10 geometry (50.05M params), which is not #48's model.",
+ "54": "f3_anchor41M resume — failed: landed on a box with no orphaned checkpoint from #48/#49, so there was nothing to continue.",
+ "55": "f3_anchor41M resume — failed: geometry mismatch on load. The error line (torch.Size([1728, 576])) is what finally pinned the true anchored codec at d_model=576, not the 640 inferred from its parameter count.",
+ "_parents_comment": "Continuations that predate the {\"resumed\": ...} record train.py now writes. Maps a run number to the run it continues; status.html uses it to prepend the parent's curve so a resumed run charts its WHOLE trajectory. New runs do not need an entry here — the checkpoint carries its own CKPT_TAG.",
+ "_parents": {}
 }

@@ -234,20 +234,111 @@
 
   // ---- live metrics charts --------------------------------------------------
   function parseJsonl(text) {
-    var loss = [], probes = [], cfg = null;
+    var loss = [], probes = [], cfg = null, resumed = null;
     text.split("\n").forEach(function (line) {
       line = line.trim();
       if (!line) return;
       var o;
       try { o = JSON.parse(line); } catch (e) { return; }
       if (o && o.config) { cfg = o.config; return; }   // the run's PLAN
+      if (o && o.resumed) { resumed = o.resumed; return; }  // its PARENT
       if (o && typeof o.step === "number" && typeof o.loss_rec === "number" && typeof o.loss_nei === "number") {
         loss.push(o);
       } else if (o && typeof o.step === "number") {
         probes.push(o);
       }
     });
-    return { loss: loss, probes: probes, cfg: cfg };
+    return { loss: loss, probes: probes, cfg: cfg, resumed: resumed };
+  }
+
+  // ---- continuations: one trajectory, two jobs ------------------------------
+  // A resumed run's metrics file begins at the step it was handed, so its
+  // charts started in mid-air and threw away everything the parent job
+  // measured — including the step-0 untrained-codec line the probe chart is
+  // read against. Chris asked for the full run. So: find the parent, fetch
+  // its archived metrics, keep the points BEFORE the join, and prepend them.
+  // The seam is drawn, never hidden — these are two jobs, and a reader who
+  // cannot see where one ended cannot judge a discontinuity at the join.
+  //
+  // Three ways to learn the parent, most trustworthy first: the run's own
+  // continuation record (train.py writes {"resumed": {...}} with the parent's
+  // CKPT_TAG), the resume tag in its config record, and a hand-written
+  // `_parents` map in ml/run_docs.json for continuations that predate the
+  // record. A tag is "run-<n>"; an orphan rescue has no run number and
+  // resolves to null, which simply means no stitch.
+  function parentRunOf(run, m) {
+    var tag = (m.resumed && m.resumed.parent_tag) ||
+              (m.cfg && m.cfg.resume) || "";
+    var hit = /^run-(\d+)$/.exec(String(tag).trim());
+    if (hit) return parseInt(hit[1], 10);
+    var manual = (runDocs._parents || {})[String(run.run_number)];
+    if (typeof manual === "number") return manual;
+    if (typeof manual === "string" && /^\d+$/.test(manual)) return parseInt(manual, 10);
+    return null;
+  }
+
+  // Returns a promise of { loss, probes, cfg, join } where join is the step
+  // the continuation started at (absent when nothing was stitched).
+  // RECURSIVE, because a run can be resumed twice: #48 → #55 → #56 is one
+  // trajectory in three jobs, and stopping at one level would show the last
+  // hop's parent and drop the original. `seen` breaks a cycle a bad _parents
+  // entry could otherwise create; the depth cap bounds the fetch fan-out.
+  function withParent(m, run, seen) {
+    seen = seen || [run.run_number];
+    var parent = parentRunOf(run, m);
+    if (parent === null || seen.indexOf(parent) >= 0 || seen.length > 4) {
+      return Promise.resolve(m);
+    }
+    return fetchMetrics(parent).then(function (ptext) {
+      if (!ptext) return m;
+      return withParent(parseJsonl(ptext), { run_number: parent },
+                        seen.concat([parent]));
+    }).then(function (p) {
+      if (p === m) return m;
+      // The join is the step train.py actually resumed at when it said so;
+      // otherwise the child's own first point, which is the same thing to
+      // within one logging interval. `<=` keeps the parent's reading AT the
+      // checkpoint step — that is the state this job was handed, so dropping
+      // it would open a gap exactly at the seam.
+      var join = (m.resumed && typeof m.resumed.at_step === "number")
+        ? m.resumed.at_step
+        : (m.loss.length ? m.loss[0].step : 0);
+      var before = function (x) { return x.step <= join; };
+      return {
+        loss: p.loss.filter(before).concat(m.loss),
+        probes: p.probes.filter(before).concat(m.probes),
+        // The CHILD's config governs — it is the plan being executed now
+        // (its --steps is where the trajectory is headed). Fall back to the
+        // parent's only when the child has none.
+        cfg: m.cfg || p.cfg,
+        resumed: m.resumed,
+        join: join,
+        // The FIRST job of the chain, not the immediate parent: after two
+        // resumes "continues #55" would be true and useless, because #55 is
+        // itself a fragment. The chart is showing the whole trajectory, so
+        // the label names where it began.
+        parentRun: (typeof p.parentRun === "number") ? p.parentRun : parent,
+        joins: (p.joins || []).concat([join]),
+      };
+    }).catch(function () { return m; });   // a missing parent is not an error
+  }
+
+  // The seams, drawn identically on both charts — one per hop, because a
+  // twice-resumed run has two of them and a reader judging a discontinuity
+  // needs to know which one it sits on.
+  function joinMark(joins, xmin, xspan, W, padL, padR, padT, padB, H, label) {
+    if (!joins || !joins.length || !xspan) return "";
+    return joins.map(function (join) {
+      if (typeof join !== "number" || join <= xmin) return "";
+      var x = padL + (W - padL - padR) * ((join - xmin) / xspan);
+      if (x <= padL || x >= W - padR) return "";
+      return '<line x1="' + x.toFixed(1) + '" y1="' + padT + '" x2="' + x.toFixed(1) +
+        '" y2="' + (H - padB) + '" stroke="#d2a8ff" stroke-width="1" stroke-dasharray="3 3"/>' +
+        (label
+          ? '<text x="' + (x + 3).toFixed(1) + '" y="' + (padT + 9) +
+            '" font-size="9" fill="#d2a8ff">' + esc(label) + "</text>"
+          : "");
+    }).join("");
   }
 
   function polyline(pts, xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB) {
@@ -259,7 +350,7 @@
     }).join(" ");
   }
 
-  function lossChart(loss, plannedSteps) {
+  function lossChart(loss, plannedSteps, joins, joinLabel) {
     var W = 600, H = 160, padL = 46, padR = 10, padT = 10, padB = 22;
     var xs = loss.map(function (p) { return p.step; });
     var ys = [];
@@ -279,6 +370,7 @@
       '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymin.toFixed(3) + "</text>" +
       '<text x="' + padL + '" y="' + (H - 6) + '" font-size="11" fill="#8b949e">' + fmtInt(xmin) + "</text>" +
       '<text x="' + (W - padR) + '" y="' + (H - 6) + '" text-anchor="end" font-size="11" fill="#8b949e">' + fmtInt(xmax) + "</text>" +
+      joinMark(joins, xmin, xspan, W, padL, padR, padT, padB, H, joinLabel) +
       '<polyline points="' + rec + '" fill="none" stroke="#3987e5" stroke-width="2" stroke-linejoin="round"/>' +
       '<polyline points="' + nei + '" fill="none" stroke="#d95926" stroke-width="2" stroke-linejoin="round"/>' +
       "</svg>";
@@ -300,7 +392,7 @@
       : { v: 0.531, what: "1° tensor" };
   }
 
-  function probeChart(probes, run, lossXmin, lossXmax) {
+  function probeChart(probes, run, lossXmin, lossXmax, joins, joinLabel) {
     var pts = probes.filter(function (p) {
       return typeof p.linear_r_deseas === "number" && typeof p.step === "number";
     });
@@ -359,6 +451,7 @@
           '" font-size="10" fill="#8b5cf6">untrained codec ' +
           zero.linear_r_deseas.toFixed(3) + "</text>"
         : "") +
+      joinMark(joins, xmin, xspan, W, padL, padR, padT, padB, H, joinLabel) +
       '<polyline points="' + line + '" fill="none" stroke="#2da44e" stroke-width="2" stroke-linejoin="round"/>' +
       dots +
       "</svg>" +
@@ -430,12 +523,24 @@
         return run.status === "completed" ? ""
           : head + '<div class="empty">building dataset / seeding cache (no training metrics yet)</div></div>';
       }
-      var m = parseJsonl(text);
-      if (!m.loss.length) {
+      var m0 = parseJsonl(text);
+      if (!m0.loss.length) {
         return run.status === "completed" ? ""
           : head + '<div class="empty">metrics file present but no loss points yet</div></div>';
       }
+      return withParent(m0, run).then(function (m) {
+        return renderRunBody(run, head, m);
+      });
+    }).catch(function (e) {
+      return '<div class="card"><h3><a href="' + esc(run.html_url) + '">run #' + esc(run.run_number) +
+             '</a></h3><div class="empty">could not load live metrics (' + esc(e.message) + ")</div></div>";
+    });
+  }
+
+  function renderRunBody(run, head, m) {
       var last = m.loss[m.loss.length - 1];
+      var joins = m.joins || (typeof m.join === "number" ? [m.join] : null);
+      var joinLabel = joins && joins.length ? "job restart" : null;
       // Runs older than the config record still betray their plan: train.py
       // logs the loss every steps//200, so the spacing between the first two
       // points times 200 recovers the planned total to within 200 steps.
@@ -457,8 +562,14 @@
         }
       }
       var eta = "";
-      if (total && wall && run.status !== "completed" && last.step > 0 && last.step < total) {
-        var secLeft = (wall.wall_s / wall.step) * (total - last.step);
+      // wall_s counts THIS JOB's training seconds. After a stitch the step
+      // axis is the whole trajectory's, so the rate must be measured against
+      // the steps this job did — otherwise the parent's steps are credited
+      // as free and the ETA reads far too optimistic.
+      var stepBase = joins && joins.length ? joins[joins.length - 1] : 0;
+      if (total && wall && run.status !== "completed" && last.step > 0 && last.step < total
+          && wall.step > stepBase) {
+        var secLeft = (wall.wall_s / (wall.step - stepBase)) * (total - last.step);
         eta = secLeft > 5400 ? " · ~" + (secLeft / 3600).toFixed(1) + " h left"
                              : " · ~" + Math.max(1, Math.round(secLeft / 60)) + " min left";
       }
@@ -473,13 +584,23 @@
             (inferred ? "the planned steps (inferred from the loss cadence)" : "planned steps") +
             esc(eta) + "</div>"
           : "") +
-        lossChart(m.loss, total) +
+        (joinLabel
+          ? '<div class="meta" style="margin:-4px 0 8px">continues run #' +
+            esc(m.parentRun) + " from step " + fmtInt(joins[0]) +
+            (joins.length > 1 ? " (" + joins.length + " restarts)" : "") +
+            " — the curves below include the earlier job" +
+            (joins.length > 1 ? "s'" : "'s") + " points up to the dashed " +
+            "purple seam, so this is the whole training trajectory, not just " +
+            "this job's share of it.</div>"
+          : "") +
+        lossChart(m.loss, total, joins, joinLabel) +
         '<div class="legend">' +
         '<span><span class="sw" style="background:#3987e5"></span>loss_rec</span>' +
         '<span><span class="sw" style="background:#d95926"></span>loss_nei</span></div>';
       if (m.probes.length) {
         html += probeChart(m.probes, run, m.loss[0].step,
-                           total || m.loss[m.loss.length - 1].step);
+                           total || m.loss[m.loss.length - 1].step,
+                           joins, joinLabel);
         html += '<div class="probe">' + probeText(m.probes[m.probes.length - 1]) + "</div>";
       } else {
         html += '<div class="probe">no downstream probe yet — the RAPID probe ' +
@@ -487,10 +608,6 @@
                 "thousand steps in.</div>";
       }
       return html + "</div>";
-    }).catch(function (e) {
-      return '<div class="card"><h3><a href="' + esc(run.html_url) + '">run #' + esc(run.run_number) +
-             '</a></h3><div class="empty">could not load live metrics (' + esc(e.message) + ")</div></div>";
-    });
   }
 
   function renderLive(runs) {
