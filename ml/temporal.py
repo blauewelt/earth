@@ -185,6 +185,8 @@ def main():
     ap.add_argument("--max-pixels", type=int, default=0,
                     help="subsample ocean pixels (code-path smoke only; "
                          "the 26.5N section is always kept)")
+    ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"),
+                    help="tensor npz (family-3 runs pass family3_na025.npz)")
     a = ap.parse_args()
 
     torch.manual_seed(a.seed)
@@ -195,7 +197,7 @@ def main():
     if not ck["args"].get("anomaly"):
         sys.exit("stage 2 requires an anomaly-space codec (train.py --anomaly): "
                  "state-space embeddings failed the K-sweep precondition.")
-    d = np.load(os.path.join(HERE, "cache", "na_pixels.npz"))
+    d = np.load(a.data)
     X = d["X"].copy()
     months = [str(m) for m in d["months"]]
     lats, lons, chan = d["lats"], d["lons"], [str(c) for c in d["chan"]]

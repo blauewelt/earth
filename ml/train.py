@@ -122,7 +122,11 @@ def main():
                 sel = (moy == m) & ~t_hold
                 clim[m] = np.nanmean(X[sel], axis=0)
         for c in dynamic:
-            X[..., c] = X[..., c] - clim[moy][..., c]
+            # clim[moy, :, :, c] is [T,H,W]; clim[moy][..., c] would
+            # materialise the whole [T,H,W,C] fancy index per channel —
+            # ~11 GB per channel on the family-3 tensor (trainprobe.py
+            # documents the same trap).
+            X[..., c] = X[..., c] - clim[moy, :, :, c]
             v = X[..., c][np.isfinite(X[..., c]) & ~t_hold[:, None, None]
                           & ~x_hold[None, None, :]]
             X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)

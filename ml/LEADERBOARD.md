@@ -72,6 +72,30 @@ density-dominated one at once. pixel25_40k also captures 59% of the
 monthly correlation fell.
 
 
+## Family 3 — the 0.25° North Atlantic (opened 2026-08-08)
+
+Third channel family: `ml/build_family3.py` → `family3_na025.npz`,
+0.25° NA window (84,405 ocean cells, 14.6× the 1° NA), axis 1982-01..
+2024-12 (pre-1993 base months are missing tokens; wind covers all 516
+months; the Florida cable's 1982-92 decade is truth), C=39 (cur_speed /
+log_mld / **ssh** + RG T/S at 16 levels, bilinear from 1° and therefore
+1°-smooth + NCEP τ mean and within-month std, both from the daily
+files). 822.6 M observed values → Chinchilla anchor 41.1 M params
+(SCALING.md). **No number in this block is comparable to families 1/2.**
+
+| run | C | patch | d_z | params | steps | k-fold RAPID r [95% CI] | status |
+|---|---|---|---|---|---|---|---|
+| f3_pilot_40k | 39 | 3 | 64 | 0.92M | 40k | … | dispatched |
+| f3_anchor41M | 39 | 3 | 64 | 40.7M | 60k (~1 epoch) | … | dispatched |
+
+The pair reruns the family-2 capacity question on 4.4× the data: the
+pilot control isolates what 0.25° data buys at fixed capacity, the
+anchored run is the first codec this project has trained AT its data
+anchor. A steps-matched anchored 40k control follows if the 60k result
+warrants it. Wind-only ridge baseline for THIS tensor: to be measured
+(the family-2 0.531 does not carry over).
+
+
 ## The probe ladder (2026-08-08): pooling was hiding the signal
 
 Three read-outs of the SAME frozen embeddings, same year-blocked folds,

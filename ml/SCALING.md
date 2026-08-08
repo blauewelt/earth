@@ -70,6 +70,31 @@ project has had. The wind channels were worth more than any
 architecture decision to date (k-fold 0.308 → 0.586) — the "feed it,
 don't grow it" verdict holding in the strongest possible form.
 
+**Family 3: the 0.25° North Atlantic — measured 2026-08-08 (build,
+not estimate).** `ml/build_family3.py` (base025 cur_speed/log_mld/ssh +
+RG T/S at 16 levels bilinear-upsampled + NCEP τ mean/std from the daily
+files, axis extended to 1982-01) counts, at build time:
+
+| group | observed values |
+|---|---|
+| base (3 ch, 0.25° native, 1993–2024) | 97,234,560 |
+| RG (32 ch, 1°-smooth, 2004–2024) | 551,202,624 |
+| wind (4 ch, 1982–2024, all-ocean) | 174,211,920 |
+| **TOTAL** | **822,649,104** |
+
+**→ codec anchor ≈ 41.1 M params** (values/20) — above the 600–800 M
+hand-estimate because RG at 0.25° covers 41.4% of the ocean×month grid
+rather than the guessed ~30%. Grid: 84,405 ocean cells (14.6× the 1° NA
+window), T=516, C=39. Train pool 30.38 M pixel-months (holdouts
+removed) → **1 epoch at batch 512 ≈ 59.3k steps**. Caveats that shave
+the effective anchor: the RG majority of the count is intrinsically
+1°-smooth (upsampling aligns the grid, it does not add information), and
+0.25° cells are even more spatially correlated than 1° ones — treat 41 M
+as the ceiling, not the target. First runs dispatched 2026-08-08:
+pilot-size control (0.92 M, 40k steps, the family-2 champion protocol)
+and anchored 576/10/8/768 = 40.7 M at 60k (~1 epoch). Family 3 is NOT
+comparable to families 1/2 (new grid, channels, baselines — house rule).
+
 **Stage-2 temporal transformer — corrected 2026-08-06 evening.** The
 first draft of this section predicted, from a transitions-as-tokens
 anchor (2.31 M transitions -> ~0.1 M params optimal), that the large

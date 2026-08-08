@@ -38,8 +38,11 @@ on:
         description: "trainprobe cadence in steps (0 = off; requires anomaly)"
         default: "7500"
       window:
-        description: "spatial window (global | na)"
+        description: "spatial window (global | na); family2 recipe only"
         default: "global"
+      tensor:
+        description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA builder)"
+        default: "family2"
       sst_channel:
         description: "append monthly OISST as channel 15 (true | false)"
         default: "false"
@@ -153,6 +156,8 @@ jobs:
             rm -rf /opt/runner/_diag/*.log /opt/runner/_work/_temp/* || true
             pip cache purge || true
             find /opt/earth-cache -maxdepth 1 -name 'Z_*.npy*' -delete || true
+            # a crashed family-3 build leaves its 11 GB memmap behind
+            rm -f /opt/earth-cache/family3_na025_build.npy || true
             echo "after prune: $(free_gb) GB"
           fi
           mkdir -p /opt/earth-cache
@@ -191,6 +196,14 @@ jobs:
             [ -f /opt/earth-cache/truth/samba.asc ] && \
             [ "$(ls /opt/earth-cache/truth/fc_* 2>/dev/null | wc -l)" -ge 40 ]; } \
             || seed truth
+          # The family-3 base tensor is a single (non-tar) release asset;
+          # build_family3.py can fetch it itself, but seeding it here keeps
+          # the build step offline like everything else.
+          if [ "${{ inputs.tensor }}" = "family3_na025" ]; then
+            [ -f /opt/earth-cache/base025_na.npz ] || curl -sL \
+              -o /opt/earth-cache/base025_na.npz \
+              "https://github.com/${GITHUB_REPOSITORY}/releases/download/data-cache-v1/base025_na.npz"
+          fi
           echo "persistent cache: $(du -sh /opt/earth-cache | cut -f1)"
 
       - name: Restore data cache (GitHub-hosted only)
@@ -198,7 +211,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ml/cache
-          key: ml-cache-v2-${{ inputs.window }}-${{ inputs.sst_channel }}-${{ hashFiles('ml/build_dataset.py', 'ml/fetch_rg_channels.py', 'ml/fetch_wind_channels.py', 'ml/fetch_sst_channel.py', 'ml/fetch_truth.py', 'ml/fetch_wind_stats.py') }}
+          key: ml-cache-v2-${{ inputs.window }}-${{ inputs.sst_channel }}-${{ hashFiles('ml/build_dataset.py', 'ml/fetch_rg_channels.py', 'ml/fetch_wind_channels.py', 'ml/fetch_sst_channel.py', 'ml/fetch_truth.py', 'ml/fetch_wind_stats.py', 'ml/build_family3.py') }}
           # Fall back across generations and windows: the expensive part of
           # the cache is the raw RG/NCEP downloads, which are window- and
           # version-independent (the tensor itself is rebuilt every run).
@@ -209,18 +222,24 @@ jobs:
 
       - name: Build dataset (repo channels + RG-Argo depth + NCEP wind stress)
         run: |
-          python ml/build_dataset.py --window "${{ inputs.window }}"
-          python ml/fetch_rg_channels.py
-          python ml/fetch_wind_channels.py
-          if [ "${{ inputs.sst_channel }}" = "true" ]; then python ml/fetch_sst_channel.py; fi
-          python ml/fetch_wind_stats.py
-          python ml/fetch_truth.py
+          if [ "${{ inputs.tensor || 'family2' }}" = "family3_na025" ]; then
+            python -u ml/build_family3.py
+          else
+            python ml/build_dataset.py --window "${{ inputs.window }}"
+            python ml/fetch_rg_channels.py
+            python ml/fetch_wind_channels.py
+            if [ "${{ inputs.sst_channel }}" = "true" ]; then python ml/fetch_sst_channel.py; fi
+            python ml/fetch_wind_stats.py
+            python ml/fetch_truth.py
+          fi
 
       - name: Train
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
         run: |
           python -u ml/train.py \
+            --data "$TENSOR" \
             --steps "${{ inputs.steps }}" \
             --batch "${{ inputs.batch }}" \
             --d-z "${{ inputs.d_z }}" \
@@ -271,10 +290,13 @@ jobs:
       - name: Probes (K-sweep + stage 2)
         if: inputs.anomaly == 'true'
         continue-on-error: true
+        env:
+          TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
         run: |
-          python -u ml/probe_sequence.py --run actions --anomaly
+          python -u ml/probe_sequence.py --run actions --anomaly --data "$TENSOR"
           if [ "${{ inputs.temporal_steps }}" != "0" ]; then
             python -u ml/temporal.py --run actions --K 24 \
+              --data "$TENSOR" \
               --steps "${{ inputs.temporal_steps }}" \
               --d-model "${{ inputs.temporal_d_model }}" \
               --layers "${{ inputs.temporal_layers }}"
@@ -286,8 +308,8 @@ jobs:
           # on 2026-08-07. The runner already has the matching tensor built
           # and the memory to probe it, so the run ships its own verdict.
           # Section-only embeddings, so this is minutes, not hours.
-          python -u ml/probe_kfold.py --runs actions
-          python -u ml/dip_check.py --run actions
+          python -u ml/probe_kfold.py --runs actions --data "$TENSOR"
+          python -u ml/dip_check.py --run actions --data "$TENSOR"
 
       - name: Upload probe results
         if: always()

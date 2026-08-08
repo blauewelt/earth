@@ -59,11 +59,13 @@ def main():
     ap.add_argument("--run", default="pilot12_anom")
     ap.add_argument("--anomaly", action="store_true",
                     help="apply the same anomaly transform the run trained with")
+    ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"),
+                    help="tensor npz (family-3 runs pass family3_na025.npz)")
     a = ap.parse_args()
 
     ck = torch.load(os.path.join(HERE, "runs", a.run, "pixelmae.pt"),
                     map_location="cpu", weights_only=False)
-    d = np.load(os.path.join(HERE, "cache", "na_pixels.npz"))
+    d = np.load(a.data)
     X = d["X"].copy()
     months = [str(m) for m in d["months"]]
     lats, lons = d["lats"], d["lons"]
