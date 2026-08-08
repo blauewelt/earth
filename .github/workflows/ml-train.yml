@@ -115,10 +115,34 @@ jobs:
       # so the box pays the download once, ever.
       - name: Persistent data cache (self-hosted box)
         if: inputs.runner != 'ubuntu-latest'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p /opt/earth-cache
           rm -rf ml/cache
           ln -s /opt/earth-cache ml/cache
+          # COLD-START SEED from the data-cache release (a free CDN for this
+          # public repo) instead of the origin archives: SIO's Argo server
+          # 504s under load — four 10M runs died that way on 2026-08-08, and
+          # two cold boxes fetching in parallel plausibly CAUSED the 504s.
+          # The fetchers then find every raw file present and skip all
+          # origin downloads. Published by scripts/data_release.mjs.
+          for d in rg wind_daily; do
+            if [ ! -d "/opt/earth-cache/$d" ]; then
+              echo "seeding $d from release data-cache-v1 …"
+              assets=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/data-cache-v1" \
+                | python3 -c "import json,sys;[print(a['browser_download_url']) for a in json.load(sys.stdin).get('assets',[]) if a['name'].startswith('$d.tar.')]")
+              if [ -n "$assets" ]; then
+                echo "$assets" | sort | while read u; do
+                  curl -sL "$u"
+                done | tar x -C /opt/earth-cache
+                echo "  seeded: $(du -sh /opt/earth-cache/$d | cut -f1)"
+              else
+                echo "  (no release assets yet — fetchers will hit the origin)"
+              fi
+            fi
+          done
           echo "persistent cache: $(du -sh /opt/earth-cache | cut -f1)"
 
       - name: Restore data cache (GitHub-hosted only)
