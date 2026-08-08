@@ -86,9 +86,11 @@ density-dominated one at once. pixel25_40k also captures 59% of the
 monthly correlation fell.
 
 
-## Family 3 — the 0.25° North Atlantic (opened 2026-08-08)
+## The quarter-degree tensor — 0.25° North Atlantic (opened 2026-08-08)
 
-Third channel family: `ml/build_family3.py` → `family3_na025.npz`,
+Third TENSOR GENERATION (the paper's term; "family 3" in older notes —
+the three are the **coarse tensor** 1°/4 Argo levels, the **deep tensor**
+1°/8 levels, and this one). Built by `ml/build_family3.py` → `family3_na025.npz`,
 0.25° NA window (84,405 ocean cells, 14.6× the 1° NA), axis 1982-01..
 2024-12 (pre-1993 base months are missing tokens; wind covers all 516
 months; the Florida cable's 1982-92 decade is truth), C=39 (cur_speed /

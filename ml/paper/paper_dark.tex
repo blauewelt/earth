@@ -17,8 +17,8 @@
 \title{Earth-State Embeddings:\\
 \large self-supervised representations of the observed ocean,\\
 probed against the Atlantic overturning circulation}
-\author{blauewelt/earth --- technical report, v4}
-\date{8 August 2026 (evening revision)}
+\author{blauewelt/earth --- technical report, v5}
+\date{8 August 2026 (second evening revision)}
 
 \begin{document}
 \maketitle
@@ -113,9 +113,21 @@ Terms are used throughout in the following precise senses.
   MSSS/ACC) against persistence and climatology.
 \item[Channel] one physical input field: e.g.\ surface current speed,
   mixed-layer depth, temperature at 700\,dbar, zonal wind stress. The
-  data tensor has 14 channels in the first generation and 24--25 in the
-  second (Table~\ref{tab:channels}, \S\ref{sec:families}).
-\item[Pixel] one $1^\circ\times1^\circ$ ocean grid cell. A
+  data tensor has 12--15 channels in the first generation, 24--25 in the
+  second, and 39 in the third (Table~\ref{tab:channels},
+  \S\ref{sec:families}).
+\item[Tensor generation] one build of the input tensor whose channel
+  set, grid, or time axis differs from the others enough that results
+  are not comparable across it (\S\ref{sec:families}). Three exist, and
+  we name them by what defines them: the \textbf{coarse tensor}
+  ($1^\circ$, 4 Argo pressure levels; ``family 1'' in earlier notes),
+  the \textbf{deep tensor} ($1^\circ$, 8 Argo levels; ``family 2''),
+  and the \textbf{quarter-degree tensor} ($0.25^\circ$ North Atlantic,
+  16 Argo levels, sea-surface height added, time axis extended to 1982;
+  ``family 3''). Run names keep the short prefixes (\texttt{f3\_} etc.);
+  prose uses the descriptive names.
+\item[Pixel] one ocean grid cell --- $1^\circ\times1^\circ$ in the first
+  two tensor generations, $0.25^\circ\times0.25^\circ$ in the third. A
   \emph{pixel-month} is one pixel at one month --- the atomic sample.
 \item[Channel space] the space of the physical fields themselves. An
   error ``in channel space'' is an error in predicted physical values
@@ -199,21 +211,24 @@ Terms are used throughout in the following precise senses.
 channel(s) & source & record & role \\
 \midrule
 surface current speed, MLD & GLORYS reanalysis & 1993-- & dynamics \\
-T at 4 or 8 pressure levels & Roemmich--Gilson Argo & 2004-- & density structure \\
-S at 4 or 8 pressure levels & Roemmich--Gilson Argo & 2004-- & density structure \\
+sea-surface height (¼° only) & GLORYS reanalysis & 1993-- & geostrophy \\
+T at 4 / 8 / 16 pressure levels & Roemmich--Gilson Argo & 2004-- & density structure \\
+S at 4 / 8 / 16 pressure levels & Roemmich--Gilson Argo & 2004-- & density structure \\
 wind stress $\tau_x,\tau_y$ & NCEP R1 & 1948-- & Ekman forcing \\
 within-month $\tau$ std.\ dev. & NCEP R1 daily & 1948-- & storminess \\
-monthly SST (optional) & OISST v2.1 & 1981-- & thermal memory \\
-SST, precip climatologies & OISST, GPCP & fixed & (measured inert; \S\ref{sec:static}) \\
+monthly SST (optional, 1° only) & OISST v2.1 & 1981-- & thermal memory \\
+SST, precip climatologies (1° only) & OISST, GPCP & fixed & (measured inert; \S\ref{sec:static}) \\
 \bottomrule
 \end{tabular}
-\caption{Channels of the data tensor: monthly, $1^\circ$,
-1993--present. The pilot window was the North Atlantic
-($100^\circ$W--$20^\circ$E, $0$--$70^\circ$N; 5{,}787 ocean pixels); the
-default window is now global (44{,}964 pixels). Missing data (Argo before
-2004, polar gaps) is represented explicitly, not imputed. The Argo level
-count changed from 4 to 8 pressures partway through the programme, which
-is what separates the two channel families of \S\ref{sec:families}.}
+\caption{Channels of the data tensor across its three generations
+(\S\ref{sec:families}). Coarse and deep tensors: monthly, $1^\circ$,
+1993--present; NA pilot window
+($100^\circ$W--$20^\circ$E, $0$--$70^\circ$N; 5{,}787 ocean pixels) or
+global (44{,}964 pixels). Quarter-degree tensor: monthly,
+$0.25^\circ$, NA window, 84{,}405 ocean pixels, axis extended to
+1982-01 (channels absent before their records enter as missing
+tokens), $C{=}39$. Missing data (Argo before 2004, polar gaps,
+pre-1993 months) is represented explicitly, never imputed.}
 \label{tab:channels}
 \end{table}
 
@@ -231,7 +246,73 @@ The five truth series (RAPID, FC, MOVE, OSNAP, SAMBA) ride along as
 never-input targets: 240 RAPID months plus 792 additional truth months
 across four other latitudes.
 
-\subsection{Two channel families, and why they may not be
+\subsection{The sources, one by one}\label{sec:sources}
+
+Every input is a credential-free public archive; this subsection says
+what each one is, what channels it contributes, and why it is in the
+tensor. (The companion visualization at
+\texttt{blauewelt.github.io/earth} renders most of these sources as
+interactive globe layers with per-dataset documentation; the
+descriptions here follow its catalog.)
+
+\begin{description}\itemsep2pt
+\item[GLORYS ocean reanalysis (CMEMS).] An eddy-permitting model of the
+  global ocean constrained by satellite altimetry, SST, sea ice, and in
+  situ profiles --- the closest thing oceanography has to a
+  best-estimate movie of the ocean since 1993. Contributes monthly
+  \emph{surface current speed} ($\sqrt{u^2+v^2}$; the western boundary
+  currents that carry the AMOC's upper limb are current-speed
+  structures) and \emph{mixed-layer depth} (log-transformed; deep
+  winter mixing in the subpolar gyre is where surface waters acquire
+  the density to sink --- the ``engine room'' of the overturning). At
+  $1^\circ$ these come from the quarter-degree ensemble member binned
+  down; the quarter-degree tensor reads the native grid and adds
+  \emph{sea-surface height}, whose meridional gradient is the
+  geostrophic surface flow and whose boundary difference is the
+  classical altimetry AMOC proxy \cite{fw2015}.
+\item[Roemmich--Gilson Argo climatology.] The gridded monthly
+  temperature and salinity fields ($1^\circ$, 0--2000\,dbar) built from
+  the Argo float array \cite{rg2009} --- the backbone subsurface
+  observing system: $\sim$4{,}000 autonomous floats, each profiling
+  every $\sim$10 days. Contributes T and S at 4, 8, or 16 pressure
+  levels (10--1900\,dbar) depending on tensor generation. These are the
+  density channels: thermal wind makes the transport an east-minus-west
+  density difference, and the deep levels see the cold limb the surface
+  channels cannot. Intrinsically $1^\circ$-smooth (in the
+  quarter-degree tensor they are bilinearly upsampled and carry no
+  sub-degree information --- stated, not hidden). The record begins in
+  2004; earlier months are missing tokens.
+\item[NCEP/NCAR Reanalysis 1 surface wind stress.] The longest-running
+  atmospheric reanalysis \cite{kalnay}, daily since 1948, on a Gaussian
+  grid regridded to the tensor. Contributes monthly-mean $\tau_x,
+  \tau_y$ (Ekman transport, the wind-driven part of the AMOC's monthly
+  variability --- and hence also the source of the wind-only baseline
+  every codec must beat) and the \emph{within-month standard deviation}
+  of the daily stress (storminess: buoyancy loss in storms drives
+  convection in a way monthly means erase). Its length is what lets the
+  quarter-degree tensor's axis start in 1982.
+\item[NOAA OISST v2.1.] Daily $0.25^\circ$ SST from AVHRR plus in situ
+  data since late 1981 \cite{huang}, monthly-meaned; optional channel
+  15 of the deep tensor, and (as a fixed 1991--2020 climatology) one of
+  the two deliberately inert channels of \S\ref{sec:static}.
+\item[GPCP v2.3 precipitation climatology.] The satellite--gauge merged
+  precipitation record \cite{adler}; enters only as the second inert
+  climatology channel of \S\ref{sec:static}.
+\item[Truth arrays (never inputs).] Five basin-scale transport series,
+  each a moored or cable observing system: \emph{RAPID--MOCHA}
+  26.5$^\circ$N \cite{mccarthy}, the flagship full-depth AMOC record
+  (2004--, our 240 labelled months); the \emph{Florida Current
+  submarine-cable transport} \cite{meinen2010}, the lowest-latency AMOC
+  component, daily since 1982 --- the decade 1982--92 is usable truth
+  only for the quarter-degree tensor's extended axis; \emph{MOVE}
+  16$^\circ$N \cite{send}, the longest deep-limb record (southward
+  NADW flow, 2000--); \emph{OSNAP} \cite{osnap}, the subpolar array
+  where overturning variability originates (2014--); and \emph{SAMBA}
+  34.5$^\circ$S \cite{kersale}, the only sustained South Atlantic
+  array (2009--, anomalies only).
+\end{description}
+
+\subsection{Tensor generations, and why they may not be
 compared}\label{sec:families}
 
 The tensor is rebuilt from the fetcher scripts at the start of every
@@ -239,12 +320,20 @@ training job, so a change to a fetcher silently changes the input of
 every subsequent run. Sampling 8 Argo pressure levels instead of 4 took
 the tensor from 14 channels to 24 (25 with monthly SST) without any
 dispatch asking for it. Every result below therefore belongs to one of
-two families, and cross-family comparison is not licensed: the
-persistence baseline that chan\% is measured against moves with the
-channel set, and, as \S\ref{sec:tradeoff} shows, so does the meaning of
-the transport probe. Channel counts in this report are read from each
+three \emph{tensor generations} --- the \textbf{coarse tensor}
+($1^\circ$, 4 Argo levels), the \textbf{deep tensor} ($1^\circ$, 8
+levels), and the \textbf{quarter-degree tensor} ($0.25^\circ$ NA, 16
+levels, SSH, axis from 1982) --- and cross-generation comparison is not
+licensed: the persistence baseline that chan\% is measured against
+moves with the channel set, the wind-only ridge baseline moves with the
+grid (0.531 on the $1^\circ$ tensors, 0.568 on the quarter-degree), and,
+as \S\ref{sec:tradeoff} shows, so does the meaning of
+the transport probe. (Earlier project notes call these ``channel
+families'' 1--3; run names keep the shorter prefixes.) Channel counts
+in this report are read from each
 checkpoint, never from a run's name --- a run directory carried a
-misleading name for an hour before this was enforced.
+misleading name for an hour before this was enforced, and every run now
+ships a provenance manifest recording the tensor it actually saw.
 
 \section{Methods}\label{sec:methods}
 
@@ -365,26 +454,76 @@ easiest.
 
 \section{Related work}\label{sec:related}
 
-Three literatures border this project (full survey: repository file
-\texttt{ml/LITERATURE.md}). \emph{AMOC reconstruction from
-observables}: regression methods reach $r\approx0.95$ against RAPID
-only after 18-month low-pass filtering and in-sample calibration
-\cite{fw2015,sf2021}; the machine-learning line trains on simulations
-and reports up to $r\approx0.98$ inside a laminar state estimate
-\cite{solodoch} but drops to explained variance of 0.44--0.74 in
-eddy-resolving models \cite{meng,woelker} and is essentially never
-applied to real RAPID data. Our $r=0.60$ --- monthly, deseasonalized,
-real data, blocked cross-validation, no RAPID-derived inputs ---
-appears to be the first of its exact kind, and sits where the eddying
-simulations predict it should (the attention-head read-out reaches
-$0.69$, with the attribution caveats of \S\ref{sec:ladder}). \emph{Forecast verification}: we adopt
-the decadal-prediction conventions \cite{goddard} (MSSS, ACC, damped
-persistence). \emph{Foundation models}: masked pretraining in anomaly
-space with frozen-backbone evaluation echoes Prithvi WxC and the
-frozen-decoder evaluation philosophy of \cite{lehmann}; ridge probes
-from frozen embeddings to integrated circulation indices, and
-missingness-as-information over the historical observing system,
-appear to be unoccupied territory.
+Three literatures border this project; we take them in turn. (The
+repository file \texttt{ml/LITERATURE.md} carries the full survey and
+is updated more often than this section.)
+
+\paragraph{AMOC reconstruction from observables.} The classical line
+regresses the RAPID transport on physically chosen observables.
+Frajka-Williams \cite{fw2015} reconstructs the MOC from satellite
+sea-level anomaly plus the cable and Ekman terms and explains
+$>$90\% of variance ($r\approx0.95$) --- but after 18-month low-pass
+filtering, with in-sample calibration; Sanchez-Franks et al.\
+\cite{sf2021} reach $r=0.83$ from altimetry via a thermal-wind
+argument under the same filtering; Worthington et al.\ \cite{worthington}
+fit boundary densities to the upper-mid-ocean transport ($R^2=0.78$
+monthly, held-out $r\approx0.75$ on a single 2017--18 test year).
+Fingerprint methods \cite{caesar} recover multi-decadal AMOC trends
+from SST patterns but no monthly signal. The machine-learning line
+trains almost exclusively on simulations: Solodoch et al.\
+\cite{solodoch} report $r\approx0.98$ for a CNN reading OBP/SSH/SST/wind
+strips --- inside the laminar $1^\circ$ ECCO state estimate; in
+eddy-resolving models the same task drops to explained variance
+0.44--0.74 \cite{meng,woelker}, which we read as the honest difficulty
+scale. Application to real RAPID data at monthly cadence with blocked
+cross-validation is, as far as we can determine, absent from the
+literature. Our pooled-ridge $r=0.60$ --- monthly, deseasonalized, real
+data, year-blocked k-fold, no RAPID-derived inputs --- sits where the
+eddying simulations predict it should (the attention-head read-out
+reaches $0.65$--$0.69$ across two seeds, with the attribution caveats
+of \S\ref{sec:ladder}), and no published surface-to-OSNAP
+reconstruction exists for our OSNAP null to contradict.
+
+\paragraph{Ocean and climate forecasting.} Our field-prediction
+metrics are the standard decadal-verification quantities under other
+names: skill vs.\ climatology is MSSS with a climatological reference,
+and we adopt ACC per lead and damped persistence from the same
+framework \cite{goddard}. Reference points at our monthly cadence:
+Ham et al.'s ENSO CNN \cite{ham} holds Ni\~no3.4 correlation $>0.5$ to
+$\sim$17 months (the ocean's most predictable index); Taylor \& Feng
+\cite{taylorfeng} forecast global monthly SST anomaly fields with a
+Unet--LSTM (RMSE 0.48$^\circ$C at 1 month rising to 0.63 at 18) ---
+the closest published analogue to our stage-2 rollouts. The daily
+$1/4^\circ$--$1/12^\circ$ neural ocean forecasters (XiHe, WenHai,
+GLONET) and the global weather models they descend from
+\cite{pangu,graphcast} operate in a different regime (days, full
+fields, reanalysis-supervised) and are cited for orientation, not
+comparison.
+
+\paragraph{Self-supervised and foundation models for Earth
+observation.} Architecturally we are a masked autoencoder \cite{mae}
+over channel tokens rather than image patches. The flagship
+Earth-system foundation models --- ClimaX \cite{climax}, Aurora
+\cite{aurora}, and the land-surface line of Prithvi \cite{prithvi} and
+SatMAE \cite{satmae} --- evaluate mainly by full fine-tuning;
+frozen-representation evaluation, our entire protocol, is the
+exception: Prithvi WxC's anomaly-space masked pretraining with frozen
+backbone and small heads is our closest architectural relative
+(atmosphere-only), and Lehmann et al.\ \cite{lehmann} argue explicitly
+that frozen-backbone extension should be a standard foundation-model
+quality metric. AlphaEarth Foundations \cite{alphaearth} embeds every
+terrestrial 10\,m pixel into 64 dimensions --- the same width we use
+--- from ten data modalities, and is the clearest statement of the
+``embedding field'' idea this project transplants to the ocean; it is
+terrestrial-only, and its modality list (translated to ocean:
+altimetry, gravimetry, scatterometry, ocean colour, sea ice) is our
+data-ladder shopping list. Model sizing follows the
+compute-optimal-scaling heuristic of Hoffmann et al.\ \cite{chinchilla}
+adapted to observed-value counts (\S\ref{sec:methods}, Compute). To our
+knowledge no self-supervised foundation model exists for the gridded
+ocean interior; frozen-embedding probes to integrated circulation
+indices, and missingness-as-information over the historical observing
+system, remain unoccupied territory.
 
 \section{Results}\label{sec:results}
 
@@ -394,7 +533,7 @@ appear to be unoccupied territory.
 \toprule
 run & window & $C$ & patch & $d_z$ & steps & chan\%$^\dagger$ & k-fold $r$ [95\% CI] & dip \\
 \midrule
-\multicolumn{9}{l}{\emph{first family --- 4 Argo levels}}\\
+\multicolumn{9}{l}{\emph{coarse tensor ($1^\circ$, 4 Argo levels)}}\\
 pilot4          & NA     & 4  & 1 & 32  & 8k  & $+29.3$ & ---                  & --- \\
 dz8             & NA     & 12 & 1 & 8   & 30k & $+28.6$ & 0.111 [0.01, 0.20]   & --- \\
 dz16            & NA     & 12 & 1 & 16  & 30k & $+30.3$ & 0.151 [0.01, 0.28]   & --- \\
@@ -406,7 +545,7 @@ global14        & global & 14 & 1 & 64  & 30k & $+30.6$ & \textbf{0.602} [0.46, 
 global14b$^\ast$& global & 14 & 1 & 64  & 30k & $+30.9$ & 0.556 [0.43, 0.68]   & --- \\
 global15sst     & global & 15 & 1 & 64  & 30k & $+30.8$ & 0.582 [0.43, 0.71]   & 47\% \\
 \midrule
-\multicolumn{9}{l}{\emph{second family --- 8 Argo levels (\S\ref{sec:families})}}\\
+\multicolumn{9}{l}{\emph{deep tensor ($1^\circ$, 8 Argo levels; \S\ref{sec:families})}}\\
 patch24         & global & 24 & \textbf{3} & 64 & 40k & $+32.0^\ddagger$ & 0.543 [0.43, 0.66] & 27\% \\
 pixel25         & global & 25 & 1 & 64 & 40k & $+30.9^\ddagger$ & 0.536 [0.38, 0.68] & \textbf{59\%} \\
 pixel24         & global & 24 & 1 & 64 & 40k & --- & 0.515 [0.41, 0.63] & --- \\
@@ -416,7 +555,11 @@ patch24-30k     & global & 24 & 3 & 64 & 30k & --- & 0.551 [0.42, 0.68] & --- \\
 patch24-1M      & global & 24 & 3 & 64 & \textbf{1M} & $+32.1^\ddagger$ & 0.571 [0.42, 0.70] & --- \\
 patch24-seed2   & global & 24 & 3 & 64 & 40k & --- & 0.531 [0.40, 0.65] & 27\% \\
 pixel24-seed2   & global & 24 & 1 & 64 & 40k & --- & 0.564 [0.44, 0.69] & --- \\
-big10M (2 runs) & global & 24 & 3 & 64 & 30k/60k & \multicolumn{3}{l}{\emph{training at time of writing}} \\
+\textbf{big10M} (10.26M) & global & 24 & 3 & 64 & 60k & --- & \textbf{0.578} [0.45, 0.70] & 26\% \\
+\midrule
+\multicolumn{9}{l}{\emph{quarter-degree tensor ($0.25^\circ$ NA, 16 Argo levels, SSH; \S\ref{sec:qd})}}\\
+f3-pilot        & NA $0.25^\circ$ & 39 & 3 & 64 & 40k & --- & \textbf{0.620} [0.48, 0.74]$^\S$ & 46\% \\
+f3-anchor41M    & NA $0.25^\circ$ & 39 & 3 & 64 & 60k & \multicolumn{3}{l}{\emph{2 seeds training at time of writing}} \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Master table: every codec run.} Generated from each
@@ -426,7 +569,10 @@ persistence baseline moves with the channels); cross-run comparison goes
 through the year-blocked k-fold RAPID correlation. Dip = share of the
 winter 2009--10 collapse amplitude captured out-of-fold. The
 wind-stress-only ridge baseline (no embedding) scores $r=0.531$ --- the
-line every codec must beat. k-fold $r$ here is the POOLED RIDGE rung of
+line every codec must beat \emph{on the $1^\circ$ tensors}; the same
+baseline re-measured on the quarter-degree tensor is $0.568$, which is
+what the $^\S$ row must be read against --- never against $0.531$.
+k-fold $r$ here is the POOLED RIDGE rung of
 the probe ladder (the comparable-across-time instrument); the unpooled
 attention-head values (\S\ref{sec:ladder}) are higher for every codec
 measured: global14 $0.635$, pixel25 $0.617$, patch24 $\mathbf{0.690}$
@@ -439,7 +585,7 @@ saturation question directly --- every probe metric is flat from the
 first 50k-step probe to the millionth step
 (\S\ref{sec:limits}), so the pilot size is capacity-limited, not
 compute-limited. $^\ddagger$in-training probe at the
-final step, not the post-hoc trainprobe used for first-family rows. Stage-2 figures for global14b and
+final step, not the post-hoc trainprobe used for coarse-tensor rows. Stage-2 figures for global14b and
 global15sst are \emph{withdrawn}, not stale: both were trained on a
 poisoned embedding cache (\S\ref{sec:limits}).}
 \label{tab:master}
@@ -472,7 +618,7 @@ sweep was run at $C{=}12$ becomes important in
 \caption{Year-blocked k-fold correlation with monthly deseasonalized
 RAPID transport, all codec generations, 95\% CIs. Adding wind stress
 (orange) nearly doubled the defensible probe; training globally cost the
-Atlantic read-out nothing. The second-family codecs (green) fall back
+Atlantic read-out nothing. The deep-tensor codecs (green) fall back
 onto the dashed wind-only baseline --- a ridge on section-mean wind
 stress with no embedding at all.}
 \label{fig:kfold}
@@ -484,7 +630,7 @@ architecture decision combined ($0.31\to0.60$); the global codec
 matches the regional one exactly ($0.602$ vs $0.604$ --- the
 generic-embedding hypothesis holds at fixed capacity); and the
 wind-only baseline at $0.53$ says most monthly skill is Ekman physics.
-The first family's embedding increment over pure wind is $+0.07$; its
+The coarse tensor's embedding increment over pure wind is $+0.07$; its
 distinctive contributions are the low-frequency component (18-month
 low-passed $r=0.64$) and event anatomy (Fig.~\ref{fig:dip}). In
 Sverdrups: RMSE 2.23\,Sv against a target standard deviation of
@@ -509,7 +655,7 @@ both a number and a story. The number: the patch codec read by the
 attention head reaches $r=0.690$ [$0.570$, $0.781$], RMSE 2.02\,Sv
 (and $0.654$ on a second codec seed, below) ---
 against $0.60$ for the best pooled-linear configuration, and against a
-wind-only baseline of $0.531$ that the pooled second-family probes had
+wind-only baseline of $0.531$ that the pooled deep-tensor probes had
 barely cleared. The story: the ladder's two rungs dissociate cleanly.
 Pointwise nonlinearity (MLP rung) recovers nothing on any target for any
 codec --- so the ridge was never the limit as a \emph{function class}.
@@ -582,6 +728,27 @@ training months per fold support a head of tens of thousands of
 parameters, not hundreds), and the embedding margin persists at both
 sizes. The $2.0$M cells are running as a formality.
 
+\subsection{First light from the quarter-degree tensor}\label{sec:qd}
+
+The first codec trained on the quarter-degree tensor --- a pilot-size
+(0.92M) control, $C{=}39$, 84{,}405 pixels, single seed --- posts the
+highest pooled-ridge k-fold of the programme: RAPID $r=0.620$ [$0.484$,
+$0.741$], RMSE 2.25\,Sv, 18-month low-passed $0.747$, 46\% of the
+2009--10 dip. Three readings, in decreasing confidence. First, the
+baseline discipline holds: the wind-only ridge measured \emph{on this
+tensor} is $0.568$, so the codec clears its own baseline by $+0.052$
+where the deep-tensor pilots sat exactly on theirs --- though the CIs
+overlap and this is one seed. Second, MOVE transfers again ($0.235$
+[$0.112$, $0.340$], low-passed $0.726$) while wind-only at MOVE is
+\emph{negative} ($-0.376$): at $16^\circ$N the embedding carries signal
+the wind actively gets wrong. Third, and to be read with care: $0.620$
+beats every $1^\circ$ codec on the same truth and protocol, but across
+tensor generations that sentence means ``this data recipe is better'',
+not ``this codec is better'' (\S\ref{sec:families}). The
+41M-parameter codecs trained \emph{at} this tensor's compute-optimal
+anchor --- two seeds, per the house rule --- were running at the time
+of writing.
+
 \subsection{Where more data moved the skill}\label{sec:tradeoff}
 
 \begin{figure}[t]
@@ -597,8 +764,8 @@ $16^\circ$N --- precisely the quantity the added levels describe.}
 \end{figure}
 
 Under \emph{pooled} probes, expanding the input appeared to cost
-RAPID skill: both second-family codecs landed on the wind-only line
-($0.543$ and $0.536$ against $0.531$) where the first family held
+RAPID skill: both deep-tensor codecs landed on the wind-only line
+($0.543$ and $0.536$ against $0.531$) where the coarse tensor held
 $+0.07$. Section~\ref{sec:ladder} resolves this: the skill had moved
 into cross-pixel structure, not out of the representation, and the
 unpooled read-out recovers it in full ($0.617$--$0.690$). The RAPID half
@@ -721,7 +888,7 @@ healthy embedding-space skill beside catastrophic decoded skill. The
 cache key now carries a hash of the codec's weights, so a stale cache is
 a miss rather than a lie. We report the affected numbers as withdrawn
 rather than regenerating them, because both codecs belong to the
-superseded first family.
+superseded coarse tensor.
 
 The training-time ceiling has now been located directly: a
 1,000,000-step run at pilot size (LR decayed to a constant 10\% floor by
@@ -766,6 +933,62 @@ Dynamics} 40.
 \bibitem{lehmann} F. Lehmann et al.\ (2026). Frozen foundation-model
 backbones with shallow decoders as an evaluation standard.
 \emph{JGR-MLC}.
+\bibitem{worthington} E. Worthington et al.\ (2021). A 30-year
+reconstruction of the Atlantic meridional overturning circulation shows
+no decline. \emph{Ocean Science} 17.
+\bibitem{caesar} L. Caesar et al.\ (2018). Observed fingerprint of a
+weakening Atlantic Ocean overturning circulation. \emph{Nature} 556.
+\bibitem{ham} Y.-G. Ham, J.-H. Kim, J.-J. Luo (2019). Deep learning
+for multi-year ENSO forecasts. \emph{Nature} 573.
+\bibitem{taylorfeng} J. Taylor, M. Feng (2022). A deep learning model
+for forecasting global monthly mean sea surface temperature anomalies.
+\emph{Frontiers in Climate} 4.
+\bibitem{pangu} K. Bi et al.\ (2023). Accurate medium-range global
+weather forecasting with 3D neural networks. \emph{Nature} 619.
+\bibitem{graphcast} R. Lam et al.\ (2023). Learning skillful
+medium-range global weather forecasting. \emph{Science} 382.
+\bibitem{mae} K. He et al.\ (2022). Masked autoencoders are scalable
+vision learners. \emph{CVPR}.
+\bibitem{climax} T. Nguyen et al.\ (2023). ClimaX: a foundation model
+for weather and climate. \emph{ICML}.
+\bibitem{aurora} C. Bodnar et al.\ (2024). Aurora: a foundation model
+of the atmosphere. arXiv:2405.13063.
+\bibitem{prithvi} J. Jakubik et al.\ (2023). Foundation models for
+generalist geospatial artificial intelligence (Prithvi).
+arXiv:2310.18660.
+\bibitem{satmae} Y. Cong et al.\ (2022). SatMAE: pre-training
+transformers for temporal and multi-spectral satellite imagery.
+\emph{NeurIPS}.
+\bibitem{alphaearth} C. Brown, M. Kazmierski, V. Pasquarella et al.\
+(2025). AlphaEarth Foundations: an embedding field model for accurate
+and efficient global mapping from sparse label data. arXiv:2507.22291.
+\bibitem{chinchilla} J. Hoffmann et al.\ (2022). Training
+compute-optimal large language models. arXiv:2203.15556.
+\bibitem{rg2009} D. Roemmich, J. Gilson (2009). The 2004--2008 mean and
+annual cycle of temperature, salinity, and steric height in the global
+ocean from the Argo Program. \emph{Progress in Oceanography} 82.
+\bibitem{kalnay} E. Kalnay et al.\ (1996). The NCEP/NCAR 40-year
+reanalysis project. \emph{BAMS} 77.
+\bibitem{huang} B. Huang et al.\ (2021). Improvements of the daily
+optimum interpolation sea surface temperature (DOISST) version 2.1.
+\emph{Journal of Climate} 34.
+\bibitem{adler} R. Adler et al.\ (2018). The Global Precipitation
+Climatology Project (GPCP) monthly analysis: new release 2.3.
+\emph{Atmosphere} 9.
+\bibitem{mccarthy} G. McCarthy et al.\ (2015). Measuring the Atlantic
+meridional overturning circulation at 26$^\circ$N. \emph{Progress in
+Oceanography} 130.
+\bibitem{meinen2010} C. Meinen, M. Baringer, R. Garcia (2010). Florida
+Current transport variability: an analysis of annual and longer-period
+signals. \emph{Deep-Sea Research I} 57.
+\bibitem{send} U. Send, M. Lankhorst, T. Kanzow (2011). Observation of
+decadal change in the Atlantic meridional overturning circulation using
+10 years of continuous transport data. \emph{GRL} 38.
+\bibitem{osnap} M. S. Lozier et al.\ (2019). A sea change in our view
+of overturning in the subpolar North Atlantic. \emph{Science} 363.
+\bibitem{kersale} M. Kersal\'e et al.\ (2020). Highly variable upper
+and abyssal overturning cells in the South Atlantic. \emph{Science
+Advances} 6.
 \end{thebibliography}
 
 \vspace{4pt}
