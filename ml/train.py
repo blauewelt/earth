@@ -49,6 +49,17 @@ def parse():
                         "section probe + mini temporal transformer) on the "
                         "blocked holdout; appends to <out>/metrics.jsonl. "
                         "Requires --anomaly.")
+    p.add_argument("--lr-floor", type=float, default=0.0,
+                   help="decay-then-constant schedule: cosine-decay the LR "
+                        "over --lr-decay-steps to floor*peak, then hold it "
+                        "there for the rest of the run. 0 (default) keeps "
+                        "the pure cosine-to-zero schedule. The constant tail "
+                        "exists to answer one question cheaply: is there "
+                        "headroom left in simply not stopping? — watch the "
+                        "probe curves and abort when they flatten.")
+    p.add_argument("--lr-decay-steps", type=int, default=0,
+                   help="steps of initial decay when --lr-floor > 0 "
+                        "(default 0 = the full run, i.e. plain cosine)")
     p.add_argument("--max-minutes", type=int, default=0,
                    help="wall-clock budget for the TRAINING LOOP (0 = off). "
                         "After a short calibration the cosine schedule is "
@@ -135,9 +146,11 @@ def main():
     # CosineAnnealingLR (eta_min=0) but survives having its denominator
     # changed, which the built-in scheduler's recursive formula does not.
     import math
-    sched_total = [a.steps]
+    sched_total = [a.lr_decay_steps if (a.lr_floor > 0 and a.lr_decay_steps)
+                   else a.steps]
+    FLOOR = a.lr_floor
     sched = torch.optim.lr_scheduler.LambdaLR(
-        opt, lambda e: 0.5 * (1 + math.cos(
+        opt, lambda e: FLOOR + (1 - FLOOR) * 0.5 * (1 + math.cos(
             math.pi * min(e, sched_total[0]) / sched_total[0])))
     huber = torch.nn.HuberLoss(reduction="none")
 
@@ -207,7 +220,7 @@ def main():
             rate = (time.time() - t0) / s      # s/step, measured not guessed
             budget = a.max_minutes * 60 - (time.time() - t0)
             fit = s + int(0.85 * budget / rate)     # 15% held back for probes
-            if fit < a.steps:
+            if fit < a.steps and FLOOR == 0:        # constant-tail runs just hard-stop
                 print(f"  time budget: {rate:.2f} s/step → re-fitting the "
                       f"cosine schedule from {a.steps} to {fit} steps so the "
                       f"LR anneals to zero inside {a.max_minutes} min")

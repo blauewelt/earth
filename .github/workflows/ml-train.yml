@@ -55,6 +55,12 @@ on:
       job_timeout:
         description: "job timeout-minutes; hosted runners die at 360 regardless, self-hosted can run for days"
         default: "350"
+      lr_floor:
+        description: "decay-then-constant LR: hold at floor*peak after lr_decay_steps (0 = plain cosine)"
+        default: "0"
+      lr_decay_steps:
+        description: "initial decay length when lr_floor > 0"
+        default: "0"
 
 # contents: write ONLY for the live-metrics side channel — the training
 # step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every
@@ -136,6 +142,8 @@ jobs:
             --d-z "${{ inputs.d_z }}" \
             --patch "${{ inputs.patch || '1' }}" \
             --max-minutes "${{ inputs.max_minutes || '0' }}" \
+            --lr-floor "${{ inputs.lr_floor || '0' }}" \
+            --lr-decay-steps "${{ inputs.lr_decay_steps || '0' }}" \
             $([ "${{ inputs.anomaly }}" = "true" ] && echo --anomaly) \
             $([ "${{ inputs.anomaly }}" = "true" ] && [ "${{ inputs.eval_every }}" != "0" ] \
               && echo --eval-every "${{ inputs.eval_every }}") \
