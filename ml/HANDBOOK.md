@@ -48,8 +48,15 @@ from the runs' own JSON — never transcribe numbers by hand.
   (0.206 [0.04, 0.35], CI excludes zero), and capacity scaling (open).
 - Channel families: 1st = 4 Argo levels (C=12–15), 2nd = 8 levels
   (C=24/25). NEVER cross-compare. Read C from the checkpoint, not run names.
-- Steps: 30k–60k show no k-fold trend at pilot size (0.515–0.585, seed
-  noise ±0.05). 31,248 steps = 1 epoch at batch 512 on the global tensor.
+- Steps: SETTLED by the 1M-step headroom run (#30, harvested as
+  patch24_1M): every probe metric flat from the 50k probe to step 1M
+  (linear r 0.43–0.48, chan% pinned at 32); final k-fold 0.571 — within
+  seed noise of 40k. Pilot size is CAPACITY-limited, never train it
+  longer. 31,248 steps = 1 epoch at batch 512 on the global tensor.
+- Head capacity sweep: BOTH columns degrade at 325k params (raw
+  0.659→0.590, emb 0.690→0.611); the ~47k head is already past the
+  optimum for 220 labels/fold, margin persists at both sizes. 2.0M
+  cells running locally as a formality.
 - Chinchilla policy (user-mandated): after every data change, recompute
   observed-values/epoch ÷ 20 → codec size anchor, record it here and in
   SCALING.md. Current C=24 global: ~270M values → ~13M params → the 10M
@@ -94,23 +101,29 @@ from the runs' own JSON — never transcribe numbers by hand.
   --token-file /home/claude/.gh_pat --branch main`. Never pipe through
   tail in && chains. After push, local shows "ahead" but `git diff HEAD
   origin/main` is empty (API mints new SHAs) — verify then reset --hard.
-- **Paper**: rebuild BOTH pdfs (~15 s) on every substantive edit, commit,
-  push FIRST, deliver via SendUserFile WITH permalinks. Dark build is
-  generated from paper.tex by string replace + `make_figs.py --dark`.
+- **Paper**: rebuild BOTH pdfs on every substantive edit — `cd ml/paper
+  && bash build.sh` (add `--figs` after data changes) — commit, push
+  FIRST, deliver via SendUserFile WITH permalinks. build.sh generates
+  paper_dark.tex (never hand-edit it).
   Project docs `paper/paper.tex`/`paper/make_figs.py` are the backup.
 
-## 4 · In flight right now
+## 4 · In flight right now (updated 2026-08-08 ~12:15 UTC)
 
-- #30: 1M-step headroom run (pilot patch24, lr decay→constant 10% after
-  50k, probes every 50k). Chris's protocol: watch `live_curve.py --run 30`;
-  abort via cancel when probe metrics are flat 200k+ steps (checkpoints
-  saved at every probe).
-- #36/#37: 10M codecs (320x8, patch=3, 30k/60k) — pre-seed-fix checkouts
-  fetching from origin; may fail → re-dispatch (fixed code seeds from the
-  release). #38/#39: pilot-size seed replicates (patch24_40k / pixel24_40k)
-  — the 0.690 second-seed test.
-- Local: head capacity sweep (`/tmp/head_sweep.log`): raw-3x3@325k = 0.590
-  (< 0.659@47k — raw not parameter-limited); embedding-M/L cells pending.
+- #36: 10M codec 30k (NL box, in Train). #40: 10M codec 60k re-dispatch.
+  #41: patch24_40k seed2 re-dispatch (queued). When done: harvest, run
+  probe_head on the 10M codecs (capacity-vs-margin, THE open question),
+  and patch24 seed2's head vs 0.690.
+- pixel24_40k_seed2 checkpoint HARVESTED from failed #39 (train+upload
+  succeeded before the disk death) — probe suite still to run locally.
+- patch24_1M harvested + rekeyed (per-run probe JSONs said run="actions";
+  make_table needs the key = dir name) + in LEADERBOARD/paper/table.
+- Local: head capacity sweep 2.0M cells (raw-L then emb-L) running.
+- Box churn 2026-08-08: gpu-box-46045353 (Virginia) hit 50/50 GB disk,
+  runner died mid-#39 → destroyed, replaced by instance 47171781
+  (gpu-box-35586926, 129GB RAM Brazil, $0.267/h) — its cold start is the
+  first real test of release seeding (watch download counts rise).
+  Workflow now prunes disk below 8 GB free and seeds truth/ from the
+  release (OSNAP server timeouts killed #37/#38 at build).
 - A scheduled fleet-check fires 12:43 UTC (harvest, retries, box parking).
 
 ## 5 · Data ladder (user-approved: data first, then training)
@@ -122,6 +135,8 @@ from the runs' own JSON — never transcribe numbers by hand.
   `ml/cache/base025_na.npz` — 0.25°, NA window, 1993-01..2024-12, T=384,
   84,405 ocean px (14.6x the 1° window), channels cur_speed/log_mld/**ssh**
   (zos served!). Sanity-checked (Gulf Stream 0.70 m/s vs gyre 0.08).
+  MIRRORED as release asset `base025_na.npz` on data-cache-v1 — the
+  family-3 builder session does NOT need CMEMS credentials to get it.
   2025–26 need the interim 1/12° product binned to 0.25 (same pattern as
   refresh_data.py glorys tail).
 - (d) queued: GRACE ocean bottom pressure, ERA5 (SLP/fluxes/10m wind),

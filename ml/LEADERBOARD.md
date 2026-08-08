@@ -131,6 +131,43 @@ open question of whether the pretraining margin GROWS with codec capacity
 the matrix, not the corner of it; and the demand for a simpler baseline
 reframed the headline twice in one day.
 
+### Head capacity sweep (2026-08-08): the margin is not a parameter artifact
+
+Chris asked whether the raw baseline was parameter-bottlenecked. It is the
+opposite — BOTH columns of the matrix degrade when the head grows
+(--head-dim 128 --head-blocks 1, ~325k params vs the standard ~47k):
+
+| head size | raw 3x3 | embedding 3x3 |
+|---|---|---|
+| ~47k params | 0.659 [0.55, 0.75] | **0.690** [0.57, 0.78] |
+| ~325k params | 0.590 [0.44, 0.72] | 0.611 [0.48, 0.72] |
+
+220 labels per fold cannot feed 325k parameters; the standard head is
+already past the optimum, and the raw baseline loses MORE than the
+embedding column when oversized. Chinchilla logic applied to the head
+(labels/20 -> ~10-50k params at 220-fold labels) lands exactly where the
+standard head sits. The +0.02-0.03 embedding margin persists at both
+sizes; it is small at every capacity, not an artifact of any one.
+
+
+## The 1M-step headroom run (2026-08-08, run #30): flat from 50k on
+
+Chris's protocol — decay LR to a 10% floor by 50k, then run at constant
+LR to 1M steps with probes every 50k, abort when flat. It completed in
+2h39m on one 4090 (104 steps/s) and the answer is unambiguous:
+
+    step      50k   200k   400k   600k   800k    1M
+    linear r  0.44   0.44   0.47   0.46   0.47   0.46
+    chan%     32.1   32.3   32.3   32.3   32.2   32.1
+
+Every probe metric (linear r raw/deseas, temporal r, chan-vs-persistence,
+z-vs-persistence) oscillates within seed noise from the FIRST probe to the
+last: 20x the compute of the pilot regime buys nothing at 0.92M params.
+k-fold on the final checkpoint: RAPID 0.571 [0.42, 0.70] — within noise of
+patch24_40k's 0.543. The pilot is CAPACITY-limited, not compute-limited,
+which is precisely what the Chinchilla arithmetic said (~13M params for
+this tensor) and why the 10M runs exist. Checkpoint: ml/runs/patch24_1M.
+
 
 ## Stage-2 results withdrawn (poisoned embedding cache, 2026-08-07)
 

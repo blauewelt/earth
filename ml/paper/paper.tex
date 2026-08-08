@@ -408,6 +408,7 @@ pixel24         & global & 24 & 1 & 64 & 40k & --- & 0.515 [0.41, 0.63] & --- \\
 pixel24-30k     & global & 24 & 1 & 64 & 30k & --- & 0.585 [0.45, 0.71] & --- \\
 pixel24-60k     & global & 24 & 1 & 64 & 60k & --- & 0.549 [0.42, 0.67] & --- \\
 patch24-30k     & global & 24 & 3 & 64 & 30k & --- & 0.551 [0.42, 0.68] & --- \\
+patch24-1M      & global & 24 & 3 & 64 & \textbf{1M} & $+32.1^\ddagger$ & 0.571 [0.42, 0.70] & --- \\
 big10M (2 runs) & global & 24 & 3 & 64 & 30k/60k & \multicolumn{3}{l}{\emph{training at time of writing}} \\
 \bottomrule
 \end{tabular}
@@ -425,8 +426,11 @@ measured: global14 $0.635$, pixel25 $0.617$, patch24 $\mathbf{0.690}$. $^\ast$gl
 replication on a different runner: it measures codec-training seed noise
 on the k-fold at $\approx\pm0.05$ --- the four pixel24/patch24 rows,
 spanning 0.515--0.585 across 30k--60k steps, are consistent with that
-noise and show no step-count trend (the saturation question moves to the
-1M-step run of \S\ref{sec:limits}). $^\ddagger$in-training probe at the
+noise and show no step-count trend; the patch24-1M row settles the
+saturation question directly --- every probe metric is flat from the
+first 50k-step probe to the millionth step
+(\S\ref{sec:limits}), so the pilot size is capacity-limited, not
+compute-limited. $^\ddagger$in-training probe at the
 final step, not the post-hoc trainprobe used for first-family rows. Stage-2 figures for global14b and
 global15sst are \emph{withdrawn}, not stale: both were trained on a
 poisoned embedding cache (\S\ref{sec:limits}).}
@@ -547,10 +551,12 @@ seed-averaged behind the same blocked folds as every other number, the
 head-vs-ridge gaps have not yet been given a paired significance test,
 and the $0.690$ awaits replication on a second codec seed; both are
 queued. A capacity sweep of the head itself ($23$k$\to$$325$k$\to$$2.0$M
-parameters, both raw and embedding sides) is in flight; its first cell
-already shows the raw baseline is not parameter-limited --- at $325$k the
-raw-$3\times3$ read-out \emph{drops} from $0.659$ to $0.590$, as the
-label-count arithmetic predicts.
+parameters) shows \emph{neither} side is parameter-limited: at $325$k
+both columns drop (raw-$3\times3$ $0.659\to0.590$, embedding-$3\times3$
+$0.690\to0.611$), as the label-count arithmetic predicts ($\sim$220
+training months per fold support a head of tens of thousands of
+parameters, not hundreds), and the embedding margin persists at both
+sizes. The $2.0$M cells are running as a formality.
 
 \subsection{Where more data moved the skill}\label{sec:tradeoff}
 
@@ -689,12 +695,17 @@ a miss rather than a lie. We report the affected numbers as withdrawn
 rather than regenerating them, because both codecs belong to the
 superseded first family.
 
-In flight at time of writing: two 10M-parameter codecs (the capacity
-half of the Chinchilla anchor); a 1,000,000-step run under a
-decay-then-constant learning rate, probed every 50k steps, to locate the
-training-time ceiling directly (the saturation sweep's completed points
-show no step effect between 30k and 60k under pooled probes); and the
-head capacity sweep. Next levers beyond those, in expected-value order:
+The training-time ceiling has now been located directly: a
+1,000,000-step run at pilot size (LR decayed to a constant 10\% floor by
+50k steps, probes every 50k) completed in 2.6\,h on one RTX~4090 and is
+\emph{flat from the first probe to the last} --- linear $r$ oscillates
+in $[0.43, 0.48]$, channel-space skill vs.\ persistence is pinned at
+$32\%$, and the final checkpoint's k-fold ($0.571$) sits within seed
+noise of the 40k-step run. Twenty-five times the compute of the pilot
+regime buys nothing at 0.92M parameters: the pilot is capacity-limited,
+which is what the Chinchilla arithmetic predicted ($\sim$13M parameters
+for this tensor) and what the 10M-parameter codecs now training are for.
+Next levers, in expected-value order:
 paired significance and seed replication for the head results; the head
 probe at MOVE and at low frequency; re-running the $d_z$ sweep at
 $C{=}24$; then the approved data ladder --- (a) extending the time axis
