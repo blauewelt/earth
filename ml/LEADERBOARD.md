@@ -72,6 +72,37 @@ density-dominated one at once. pixel25_40k also captures 59% of the
 monthly correlation fell.
 
 
+## The probe ladder (2026-08-08): pooling was hiding the signal
+
+Three read-outs of the SAME frozen embeddings, same year-blocked folds,
+increasing only in what they are allowed to see (probe_kfold --probe,
+probe_head.py):
+
+| codec | ridge (pooled) | MLP (pooled) | attention head (unpooled section) |
+|---|---|---|---|
+| global14 (C=14) | 0.602 | 0.582 | **0.635** [0.53, 0.74] |
+| pixel25 (C=25) | 0.536 | 0.514 | **0.617** [0.49, 0.73] |
+
+Two findings, cleanly dissociated. **Pointwise nonlinearity adds
+nothing**: the MLP trails the ridge everywhere, so the ridge numbers
+measure the representation, not the read-out. **Spatial structure adds a
+lot**: one attention query over the ~67 unpooled section pixels (with a
+longitude encoding) beats every pooled probe — and the 25-channel codec
+recovers from 0.536 to 0.617, statistically indistinguishable from the
+14-channel codec. Mechanistically this is the thermal-wind story:
+geostrophic transport is the east-minus-west density difference across
+the section, and mean-pooling averages exactly that difference away. The
+deeper channel set pushed more of the transport signal into cross-pixel
+structure, which the pooled probes then billed as a "cost".
+
+Consequences: the "channel expansion cost monthly RAPID skill" reading
+above is RETRACTED as a representation claim — it was a property of the
+pooled probes. The MOVE gain stands (measured pooled; the unpooled
+version can only raise it). The probe ladder is now part of the standard
+suite; the ridge remains the comparable-across-time instrument, the head
+the capability bound.
+
+
 ## Stage-2 results withdrawn (poisoned embedding cache, 2026-08-07)
 
 The stage-2 numbers for **global14b** and **global15sst** are WITHDRAWN, not
