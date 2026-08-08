@@ -44,6 +44,9 @@ on:
       eval_every:
         description: "FULL trainprobe cadence in steps (~300 s each on the 10M codec; 0 = off; requires anomaly)"
         default: "7500"
+      resume:
+        description: "continue from a checkpoint: a tag under /opt/earth-cache/ckpt (e.g. orphan-latest) or a path. Empty = fresh run"
+        default: ""
       light_probe_every:
         description: "CHEAP probe cadence in steps (linear section probe only, ~30 s; the headline r at high cadence so a bad run shows early). 0 = off"
         default: "2000"
@@ -99,6 +102,37 @@ jobs:
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     timeout-minutes: ${{ fromJSON(inputs.job_timeout || '350') }}
     steps:
+      # BEFORE checkout, because actions/checkout cleans the workspace and
+      # would delete the very thing we are rescuing. A cancelled or crashed
+      # job leaves its last checkpoint in ml/runs/actions/pixelmae.pt; that
+      # file is an hour of GPU time, and until now the next job silently
+      # erased it. Moving it into the box-persistent cache makes a cancel
+      # survivable and is what `--resume` reads.
+      - name: Rescue an orphaned checkpoint from the previous job
+        if: inputs.runner != 'ubuntu-latest'
+        run: |
+          # BEFORE checkout, because actions/checkout cleans the workspace and
+          # would delete the very thing being rescued. A cancelled or crashed
+          # job leaves its last checkpoint in ml/runs/actions/pixelmae.pt —
+          # an hour of GPU time that the next job used to erase silently.
+          # Moving it into the box-persistent cache is what makes a cancel
+          # survivable, and it is what `--resume orphan-latest` reads.
+          # No introspection here on purpose: this step runs before the repo
+          # exists and torch may not be installed yet. --resume prints the
+          # checkpoint's step and architecture when it loads it, which is the
+          # place that decision is actually made.
+          orphan=ml/runs/actions/pixelmae.pt
+          if [ -f "$orphan" ]; then
+            mkdir -p /opt/earth-cache/ckpt
+            stamp=$(date -u +%Y%m%dT%H%M%SZ)
+            cp "$orphan" "/opt/earth-cache/ckpt/orphan-$stamp.pt" || true
+            cp "$orphan" /opt/earth-cache/ckpt/orphan-latest.pt || true
+            echo "rescued $(du -h "$orphan" | cut -f1) -> orphan-$stamp.pt (also orphan-latest.pt)"
+          else
+            echo "no orphaned checkpoint on this box"
+          fi
+          ls -la /opt/earth-cache/ckpt 2>/dev/null || true
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -337,6 +371,9 @@ jobs:
       - name: Train
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # Every N-step checkpoint is mirrored to /opt/earth-cache/ckpt
+          # under this tag, so a cancel leaves something to resume FROM.
+          CKPT_TAG: run-${{ github.run_number }}
           TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
         run: |
           python -u ml/train.py \
@@ -349,6 +386,7 @@ jobs:
             --lr-floor "${{ inputs.lr_floor || '0' }}" \
             --lr-decay-steps "${{ inputs.lr_decay_steps || '0' }}" \
             --light-probe-every "${{ inputs.light_probe_every || '2000' }}" \
+            --resume "${{ inputs.resume }}" \
             --d-model "${{ inputs.codec_d_model || '128' }}" \
             --n-layers "${{ inputs.codec_layers || '4' }}" \
             --n-heads "${{ inputs.codec_heads || '4' }}" \

@@ -111,6 +111,20 @@ from the runs' own JSON — never transcribe numbers by hand.
   "step 30,000" from "step 30,000 of 60,000" — status.html shows
   step/total, a progress bar and an ETA from it, and frames the loss chart
   to the PLANNED end so a third-finished run looks a third finished.
+- **Resume** (`--resume`, workflow input `resume`): a cancelled run is no
+  longer a total loss. Checkpoints now carry optimizer + LR-schedule state
+  and the step reached, and are mirrored to `/opt/earth-cache/ckpt/run-<n>.pt`
+  (outside the workspace, so checkout's clean cannot touch them). A
+  pre-checkout workflow step also rescues any orphan left in
+  `ml/runs/actions/pixelmae.pt` to `orphan-latest.pt`. Resume with a tag
+  (`resume: run-51`) or a path. TWO GUARDS, both learned the hard way:
+  a checkpoint trained on a different tensor is REFUSED (cross-tensor
+  resume would make a codec whose provenance is a lie), and a weights-only
+  checkpoint (anything from before 2026-08-08) WARM-STARTS with the
+  schedule restarting — which the log says explicitly, because a warm start
+  is not a continuation and must never be reported as one.
+  Box-local: a resume dispatch that lands on a different box finds nothing
+  and starts fresh, loudly.
 - **Dispatch**: `node scripts/fleet_dispatch_wf.mjs '<inputs-json>' main`.
   MANDATORY `doc` input (the script refuses without it): one line, what
   the run is and why — it becomes the run name and the description on

@@ -57,6 +57,17 @@ def parse():
                         "section probe + mini temporal transformer) on the "
                         "blocked holdout; appends to <out>/metrics.jsonl. "
                         "Requires --anomaly.")
+    p.add_argument("--resume", default="",
+                   help="continue a run from a checkpoint written by an "
+                        "earlier job: path to a pixelmae.pt, or a bare tag "
+                        "resolved under /opt/earth-cache/ckpt/<tag>.pt. "
+                        "Restores weights, optimizer, LR schedule and the "
+                        "step reached, then trains on to --steps. A "
+                        "weights-only checkpoint (anything saved before "
+                        "2026-08-08) still WARM-STARTS: it loads the weights "
+                        "and restarts the schedule, which is stated in the "
+                        "log so the run's provenance is never ambiguous. "
+                        "Missing file = start fresh, loudly.")
     p.add_argument("--light-probe-every", type=int, default=0,
                    help="every N steps, run the CHEAP half of the probe (the "
                         "linear 26.5N section probe only — no mini temporal "
@@ -243,10 +254,37 @@ def main():
             "data": os.path.basename(a.data), "C": int(C), "T": int(T),
         }}) + "\n")
 
-    def save_ckpt():
-        torch.save({"model": model.state_dict(), "chan": chan, "d_z": a.d_z,
-                    "norm": d["norm"], "args": vars(a)},
-                   os.path.join(a.out, "pixelmae.pt"))
+    # Where a checkpoint can outlive its job. /opt/earth-cache is the box's
+    # persistent cache directory: it sits OUTSIDE the Actions workspace, so
+    # actions/checkout's clean does not touch it, and a later job on the same
+    # box can resume from it with no upload and no download.
+    CKPT_DIR = "/opt/earth-cache/ckpt"
+    ckpt_tag = os.environ.get("CKPT_TAG", "")
+
+    def save_ckpt(step=None):
+        """Write the checkpoint, and everything needed to CONTINUE from it.
+
+        Until 2026-08-08 this saved weights only, which made every cancelled
+        run a total loss: the weights alone cannot resume a schedule, and a
+        job that is stopped at step 15,000 of 60,000 threw away an hour of
+        real training. It now carries the optimizer and scheduler state and
+        the step reached, so --resume picks the run up exactly where it
+        stopped. Optimizer state roughly triples the file; that is the price
+        of not repeating work, and these files are transient.
+        """
+        blob = {"model": model.state_dict(), "chan": chan, "d_z": a.d_z,
+                "norm": d["norm"], "args": vars(a),
+                "step": int(step if step is not None else 0),
+                "opt": opt.state_dict(), "sched": sched.state_dict()}
+        torch.save(blob, os.path.join(a.out, "pixelmae.pt"))
+        # Mirror to the box-persistent directory when there is one, so a
+        # cancel does not destroy the progress.
+        if ckpt_tag and os.path.isdir(os.path.dirname(CKPT_DIR) or "/"):
+            try:
+                os.makedirs(CKPT_DIR, exist_ok=True)
+                torch.save(blob, os.path.join(CKPT_DIR, ckpt_tag + ".pt"))
+            except OSError as e:                      # full disk, read-only …
+                print(f"  (checkpoint mirror skipped: {e})", flush=True)
 
     def probe_on_device(**kw):
         """Run the in-training probe WITHOUT surrendering the GPU.
@@ -307,6 +345,50 @@ def main():
               f"read as a change from this", flush=True)
     CAL = 200                                  # steps before the rate is trusted
     s = 0
+    if a.resume:
+        rpath = a.resume if os.path.sep in a.resume else os.path.join(
+            CKPT_DIR, a.resume + ".pt")
+        if not os.path.exists(rpath):
+            print(f"  --resume {a.resume}: NOT FOUND at {rpath} — starting "
+                  f"from scratch (this is not an error, but the run is now a "
+                  f"fresh one; say so in its doc string)", flush=True)
+        else:
+            ck = torch.load(rpath, map_location=dev, weights_only=False)
+            # SAY WHAT WE LOADED. /opt/earth-cache/ckpt/orphan-latest.pt is
+            # whatever the last job on THIS box left behind, which is not
+            # necessarily this experiment. load_state_dict fails loudly on an
+            # architecture mismatch, but a same-architecture checkpoint from a
+            # different run would load silently — so print its identity and
+            # let it land in the log and the provenance record.
+            ca = ck.get("args", {})
+            print(f"  resume source: {rpath}\n"
+                  f"    C={len(ck.get('chan', []))} d_z={ck.get('d_z')} "
+                  f"d_model={ca.get('d_model')} layers={ca.get('n_layers')} "
+                  f"patch={ca.get('patch')} data={os.path.basename(str(ca.get('data','?')))}\n"
+                  f"    it was trained toward {ca.get('steps')} steps",
+                  flush=True)
+            if ca.get("data") and os.path.basename(str(ca["data"])) != os.path.basename(a.data):
+                raise SystemExit(
+                    f"REFUSING to resume: checkpoint was trained on "
+                    f"{os.path.basename(str(ca['data']))} but this run uses "
+                    f"{os.path.basename(a.data)}. Cross-tensor resume would "
+                    f"produce a codec whose provenance is a lie.")
+            model.load_state_dict(ck["model"])
+            if "opt" in ck and "step" in ck:
+                opt.load_state_dict(ck["opt"])
+                if "sched" in ck:
+                    sched.load_state_dict(ck["sched"])
+                s = int(ck["step"])
+                print(f"  RESUMED from {rpath} at step {s} "
+                      f"(optimizer + schedule restored); training on to "
+                      f"{a.steps}", flush=True)
+            else:
+                print(f"  WARM-STARTED from {rpath}: weights only, no "
+                      f"optimizer or step — the LR schedule restarts from 0. "
+                      f"Report this run as a warm start, not a continuation.",
+                      flush=True)
+            if s >= a.steps:
+                print(f"  checkpoint is already at/past --steps; nothing to do")
     while s < a.steps:
         s += 1
         t, y, x, ctx = batch(tt, yy, xx, a.batch)
@@ -351,7 +433,7 @@ def main():
                   f"vs persistence · linear r_des {m['linear_r_deseas']:+.3f} · "
                   f"temporal r_des {m['temporal_r_deseas']:+.3f} "
                   f"({m['probe_seconds']:.0f}s)", flush=True)
-            save_ckpt()                        # crash insurance, ~4 MB
+            save_ckpt(s)                       # crash insurance
 
     # ---- evaluation on the BLOCKED holdout --------------------------------
     model.eval()
@@ -425,7 +507,7 @@ def main():
                                           "n_train": int(tr.sum()), "n_test": int(te.sum())}
 
     print(json.dumps(results, indent=2))
-    save_ckpt()
+    save_ckpt(a.steps)
     json.dump(results, open(os.path.join(a.out, "eval.json"), "w"), indent=2)
     print(f"saved {a.out}/pixelmae.pt")
 
