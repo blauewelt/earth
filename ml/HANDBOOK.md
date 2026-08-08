@@ -88,13 +88,9 @@ from the runs' own JSON — never transcribe numbers by hand.
   approved by Chris, ~$5–6 spent (estimate as of 13:45 UTC 2026-08-08;
   exact figure needs the Vast key back — see the header).
 - **Dispatch**: `node scripts/fleet_dispatch_wf.mjs '<inputs-json>' main`.
-  MANDATORY `doc` input (the script refuses without it): one line, what
-  the run is and why — it becomes the run name and the description on
-  status.html. Historical runs are backfilled in `ml/run_docs.json`;
-  correct or extend that file when a run's story changes (e.g. it fails
-  for an interesting reason). Watch: `fleet_list_runs.mjs`,
-  `fleet_run_state.mjs <id>`, `fleet_step_log.mjs <id> <regex>` (logs
-  only after job end), `fleet_box_detail.mjs` (boxes + runners + costs).
+  Watch: `fleet_list_runs.mjs`, `fleet_run_state.mjs <id>`,
+  `fleet_step_log.mjs <id> <regex>` (logs only after job end),
+  `fleet_box_detail.mjs` (boxes + runners + costs).
 - **Workflow** (`.github/workflows/ml-train.yml`): inputs cover steps,
   batch, d_z, patch, codec size (codec_d_model/layers/heads/d_dec),
   lr_floor/lr_decay_steps (decay-then-constant headroom protocol),
@@ -135,30 +131,32 @@ from the runs' own JSON — never transcribe numbers by hand.
   api.github.com calls per 2-min refresh + raw.githubusercontent.com,
   which is uncounted), so it holds no credentials.
 
-## 4 · In flight right now (updated 2026-08-08 ~15:25 UTC)
+## 4 · In flight right now (updated 2026-08-08 ~15:10 UTC)
 
-- #44 FAMILY-3 pilot: DONE + harvested as **f3_pilot_40k** + mirrored.
-  Ridge **0.620** [0.484, 0.741] vs THIS tensor's wind-only 0.568 —
-  the pilot clears its own baseline by +0.052 where family-2 pilots
-  sat on theirs; MOVE 0.235 (CI excl. zero), dip 46%, fc null.
-  Full read in LEADERBOARD's family-3 block. Highest pooled-ridge
-  k-fold to date (cross-family caveat applies: better DATA, not
-  provably better codec).
-- #46 10M 30k (Brazil box): survived a ~90-min seed on the fixed code
-  and is in Train since ~15:0x. #48 family-3 anchored 41M
-  (576/10/8/768, 60k, temporal_steps=0): re-dispatch of failed #47 by
-  the interactive session, running since 14:44. #49: the SAME anchored
-  config dispatched at 15:08 by the scheduled session before it saw
-  #48 — kept deliberately as **f3_anchor41M_seed2** (the two-seed rule
-  would have demanded the replicate anyway; both boxes were otherwise
-  idle). Harvest names: patch24_10M_30k / f3_anchor41M /
-  f3_anchor41M_seed2 — read C and patch from the checkpoint first.
-  probe_head on the 10M codecs needs TWO seeds before any margin claim.
-- Release-asset dedup 15:20: the two sessions independently published
-  the 1982-92 daily wind (wind_daily82.tar.aa via GitHub-release pull;
-  wind_daily_8292.tar.aa via the thredds mirror). The _8292 variant is
-  what main's workflow seeds; the orphan wind_daily82.tar.aa was
-  DELETED from the release per the note below.
+- #44 FAMILY-3 pilot control: SUCCESS 15:05, harvested as
+  **f3_pilot_40k** (C=39/patch=3/d_z=64 read from the checkpoint) +
+  checkpoint mirrored. RAPID k-fold **0.620 [0.484, 0.741]** vs the
+  tensor's own wind-only line 0.568 [0.428, 0.696] (measured by the
+  same probe — family-2's 0.531 indeed did not carry over); dip 46.1%
+  (best pilot-size dip anywhere); MOVE 0.235 (CI excludes zero) with
+  a NEGATIVE wind-only baseline (-0.376); FC r≈0 (wind-only -0.276);
+  OSNAP nothing. Single seed, margin inside overlapping CIs —
+  LEADERBOARD has the full writeup. ANOMALY: trainprobe
+  (probe_sequence.json) returned NaN r at every K on family-3 — the
+  k-fold is unaffected; debug before quoting chan%/z% for family 3.
+  Training took ~55 min for 40k (~12 steps/s, not the feared ~5).
+- #48 family-3 anchored 41M (576/10/8/768, 60k, temporal_steps=0,
+  job_timeout 1440, dispatched 14:44 by this session): re-run of
+  failed #47, reached Train at ~15:25 on box 47094145 — the 8292
+  seed + mirror fix is PROVEN (build completed with zero origin
+  contact). #46 10M 30k (Brazil box): survived a ~90-min seed, in
+  Train since ~15:00. #49 (dispatched 15:08 by the interactive
+  session, on the box #44 freed, in Train by 15:15 = warm family-3
+  cache): inputs unknown here — read C/patch from its checkpoint at
+  harvest. When runs finish: harvest (f3_anchor41M /
+  patch24_10M_30k / #49's name after inspection), mirror checkpoints,
+  probe_head on the 10M codecs with TWO seeds before any margin claim
+  (house rule above).
 - #47 FAILED 14:14 in Build dataset: downloads.psl.noaa.gov 504'd all
   four attempts at vflx.sfc.gauss.1982.nc (box 47094145 was cold for
   the 1982-92 dailies, which the wind_daily release tar predates —
@@ -211,8 +209,9 @@ from the runs' own JSON — never transcribe numbers by hand.
   47094145=BR instance 47171781, 35586926=BR instance 47160352 — the
   runner names embed RETIRED instance ids; map them via
   fleet_box_detail geolocation + fleet_run_state runner_name). All
-  busy (#44 probes / #48 / #46); nothing to park. Spend MEASURED via
-  the restored Vast key (invoices API, 15:00 UTC): **$7.61 charged of
+  busy (#49 / #48 / #46); nothing to park — the NL box freed by #44
+  was re-occupied by #49 within minutes. Spend MEASURED via the
+  restored Vast key (invoices API, 15:00 UTC): **$7.61 charged of
   the $50 cap** — $3.62 on retired 47119061, $1.59 NL, $1.53+$0.79 BR
   boxes, $0.09 retired 47118755. Burn while all three run:
   ~$0.82/h. The Brazil boxes' GitHub links stay slow (seed of #46
