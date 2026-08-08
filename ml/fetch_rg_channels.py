@@ -39,7 +39,14 @@ UA = {"User-Agent": "earth-globe-ml/1.0 (github.com/blauewelt/earth)"}
 # embedding" program): surface, upper thermocline, thermocline, upper-mid,
 # mid, intermediate, deep limb, abyssal-boundary. Zero new downloads -- the
 # RG cube carries 58 levels; we simply sample more of them.
-LEVELS = [10.0, 50.0, 200.0, 400.0, 700.0, 1000.0, 1500.0, 1900.0]  # dbar
+# Rung (c) of the data ladder: EARTH_RG_LEVELS=16 doubles the pressure
+# sampling (RG publishes 58 levels). Default 8, unchanged — the level set
+# defines the channel family, so it must only change deliberately.
+import os as _os
+_N = int(_os.environ.get("EARTH_RG_LEVELS", "8"))
+LEVELS = ([10.0, 50.0, 200.0, 400.0, 700.0, 1000.0, 1500.0, 1900.0] if _N == 8
+          else [10.0, 30.0, 50.0, 100.0, 150.0, 200.0, 300.0, 400.0,
+                500.0, 700.0, 900.0, 1100.0, 1300.0, 1500.0, 1700.0, 1900.0])  # dbar
 
 
 def fetch(url, path, attempts=4):

@@ -90,6 +90,12 @@ def resample_to(g_src, arr, lats, lons):
 def main():
     global WEST, EAST, SOUTH, NORTH
     ap = argparse.ArgumentParser()
+    ap.add_argument("--start-year", type=int, default=1993,
+                    help="first year of the time axis. 1993 = the GLORYS floor "
+                         "(the default, unchanged); 1982 = data-ladder rung (a): "
+                         "wind (1948-) and monthly SST (1981-09-) exist, GLORYS/RG "
+                         "enter as missing tokens, and the Florida cable 1982-92 "
+                         "decade becomes usable truth")
     ap.add_argument("--window", choices=sorted(WINDOWS), default="global",
                     help="spatial window (default: global; 'na' reproduces the pilot)")
     a = ap.parse_args()
@@ -102,6 +108,19 @@ def main():
     print("loading GLORYS mixed-layer depth …")
     gm, mld = load_monthly("mld.json", "mld_y")
     months = sorted(set(cur) & set(mld))
+    # Rung (a) of the data ladder: a start year BEFORE the GLORYS floor
+    # extends the axis with months where the base channels are simply
+    # absent — NaN throughout, which downstream becomes the codec's
+    # native `missing` token. Wind (1948-) and monthly SST (1981-09-)
+    # then fill those years in their own fetchers, and the Florida
+    # cable's 1982-92 decade becomes usable truth.
+    if a.start_year < int(months[0][:4]):
+        pre = [f"{y:04d}-{m:02d}" for y in range(a.start_year,
+                                                 int(months[0][:4]))
+               for m in range(1, 13)]
+        months = pre + months
+        print(f"  extended axis: {len(pre)} pre-GLORYS months from "
+              f"{months[0]} (base channels missing there by design)")
     print(f"  {len(months)} common months {months[0]} .. {months[-1]}")
 
     x0, x1, y0, y1 = window_indices(gc)
@@ -121,6 +140,8 @@ def main():
     chans = ["cur_speed", "log_mld", "sst_clim", "precip_clim"]
     X = np.full((T, H, W, len(chans)), np.nan, dtype=np.float32)
     for t, mth in enumerate(months):
+        if mth not in cur:            # pre-GLORYS month: stays NaN -> missing token
+            continue
         X[t, :, :, 0] = cur[mth][y0:y1, x0:x1]
         X[t, :, :, 1] = np.log10(np.clip(mld[mth][y0:y1, x0:x1], 1.0, None))
     X[:, :, :, 2] = sst_clim[None, :, :]
