@@ -35,5 +35,6 @@
   "45": "f3_anchor41M first dispatch — cancelled and re-dispatched.",
   "46": "10M 30k steps-matched control (completes the 10M pair with #40).",
   "47": "f3_anchor41M — failed; re-run as #48.",
-  "48": "f3_anchor41M: 40.7M params, ~1 epoch on the 0.25-degree tensor — the first codec trained AT its Chinchilla data anchor."
+  "48": "f3_anchor41M: 40.7M params, ~1 epoch on the 0.25-degree tensor — the first codec trained AT its Chinchilla data anchor.",
+  "49": "f3_anchor41M_seed2: accidental duplicate of #48's 40.7M config (two sessions, one fleet), kept deliberately — the two-seed house rule wanted the replicate anyway."
 }
