@@ -1,0 +1,1 @@
+{"config": {"steps": 400, "batch": 256, "d_z": 64, "patch": 3, "d_model": 128, "n_layers": 4, "n_heads": 4, "d_dec": 256, "anomaly": true, "eval_every": 0, "light_probe_every": 200, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 0.921, "data": "na_pixels.npz", "C": 24, "T": 401}}
