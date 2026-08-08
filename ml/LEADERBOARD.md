@@ -22,23 +22,75 @@ year-blocked k-fold RAPID r and RMSE in Sv. Dip = share of the 2009-10
 collapse amplitude captured out-of-fold. Wind-stress-only ridge baseline
 (no embedding): r 0.531, the line every codec must beat.
 
-| run | window | C | d_z | steps | chan%† | k-fold RAPID r [95% CI] | RMSE Sv | dip | status |
-|---|---|---|---|---|---|---|---|---|---|
-| pilot4_anom | NA | 4 | 32 | 8k | +29.3 | — | — | — | done |
-| dz8 (#2) | NA | 12 | 8 | 30k | +28.6 | 0.111 [0.01, 0.20] | — | — | done |
-| dz16 (#3) | NA | 12 | 16 | 30k | +30.3 | 0.151 [0.01, 0.28] | — | — | done |
-| actions (#1) | NA | 12 | 32 | 30k | +30.5 | 0.182 [0.05, 0.31] | — | — | done |
-| dz64 (#4) | NA | 12 | 64 | 30k | +30.6 | 0.308 [0.13, 0.46] | — | 16% | done |
-| dz128 (#5) | NA | 12 | 128 | 30k | +30.2 | 0.166 [0.072, 0.295] | — | — | done |
-| wind14 (#6) | NA | 14 | 64 | 30k | +35.6 | 0.604 [0.474, 0.720] | — | 50% | done |
-| global14 (#8) | global | 14 | 64 | 30k | +30.6 | 0.602 [0.461, 0.728] | 2.23 | 50% | done |
-| global14b (#11 codec) | global | 14 | 64 | 30k | +30.9 | 0.556 [0.434, 0.676] | 2.34 | — | replication |
-| global15sst (#10) | global | 15 | 64 | 30k | … | … | … | … | training |
-| global14 + xlarge stage-2 (#11) | global | 14 | 64 | 30k | … | (codec = #11 above) | … | … | probes running |
-| global25 (#12) | global | 25 | 64 | 30k | … | … | … | … | training |
+| run | window | C | patch | d_z | steps | chan%† | k-fold RAPID r [95% CI] | RMSE Sv | dip | status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| pilot4_anom | NA | 4 | 1 | 32 | 8k | +29.3 | — | — | — | done |
+| dz8 (#2) | NA | 12 | 1 | 8 | 30k | +28.6 | 0.111 [0.01, 0.20] | — | — | done |
+| dz16 (#3) | NA | 12 | 1 | 16 | 30k | +30.3 | 0.151 [0.01, 0.28] | — | — | done |
+| actions (#1) | NA | 12 | 1 | 32 | 30k | +30.5 | 0.182 [0.05, 0.31] | — | — | done |
+| dz64 (#4) | NA | 12 | 1 | 64 | 30k | +30.6 | 0.308 [0.13, 0.46] | — | 16% | done |
+| dz128 (#5) | NA | 12 | 1 | 128 | 30k | +30.2 | 0.166 [0.072, 0.295] | — | — | done |
+| wind14 (#6) | NA | 14 | 1 | 64 | 30k | +35.6 | 0.604 [0.474, 0.720] | — | 50% | done |
+| global14 (#8) | global | 14 | 1 | 64 | 30k | +30.6 | **0.602** [0.461, 0.728] | 2.23 | 50% | done |
+| global14b (#11 codec) | global | 14 | 1 | 64 | 30k | +30.9 | 0.556 [0.434, 0.676] | 2.34 | — | replication |
+| global15sst (#10) | global | 15 | 1 | 64 | 30k | +30.8 | 0.582 [0.43, 0.71] | 2.27 | 47% | done |
+| patch24_40k (#18) | global | 24 | **3** | 64 | 40k | — | 0.543 [0.428, 0.659] | 2.36 | 27% | done |
+| pixel25_40k (#17) | global | 25 | 1 | 64 | 40k | — | 0.536 [0.378, 0.683] | 2.35 | **59%** | done |
+| pixel24 (#21/#22) | global | 24 | 1 | 64 | 40k/30k | — | … | … | … | queued (controls) |
+| patch24_30k (#19r) | global | 24 | 3 | 64 | 30k | — | … | … | … | queued |
+| patch25_30k (#20) | global | 25 | 3 | 64 | 30k | — | … | … | … | running |
 
 † within-tensor only. NA k-fold values are protocol v2 except wind14
 (v3 bridge); global rows are v3. RMSE backfill for NA runs pending.
+
+**Two channel families, and they are not comparable.** Everything up to
+global15sst was built when `fetch_rg_channels.py` sampled 4 Argo pressure
+levels; it now samples 8, so every run from #17 onward carries 24 channels
+(25 with monthly SST) whether or not anyone asked for it. Compare within a
+family, never across — and read C from the checkpoint, never from a run's
+name, which is how `patch14_40k` spent an hour mislabelled before being
+renamed `patch24_40k`.
+
+**The channel expansion COST monthly RAPID skill (2026-08-08).** Both
+24/25-channel codecs land essentially on the wind-only baseline: 0.543 and
+0.536 against 0.531, i.e. margins of +0.012 and +0.005, where the
+14-channel codecs held +0.07. Two independent runs agreeing makes it a
+pattern rather than seed noise, though the CIs do overlap the 14-channel
+values. The working explanation: d_z=64 was tuned at C=12-14, and sixteen
+temperature and salinity levels now compete for the same bottleneck that a
+*linear* probe must then read a single projection of.
+
+**But the same channels HELPED at MOVE, exactly where the physics says they
+should.** pixel25_40k scores 0.206 [0.044, 0.346] at 16°N — the first
+multi-target result whose CI excludes zero — with an 18-month low-passed r
+of 0.623, against 0.111 and 0.379 for global15sst. MOVE measures the deep
+western-boundary flow, and what the expansion added was T/S down to 1900
+dbar. So this is not "more data hurt": it is one shared 64-dimensional
+bottleneck being asked to serve a wind-dominated target and a
+density-dominated one at once. pixel25_40k also captures 59% of the
+2009-10 dip, the best of any run, so event anatomy improved while the
+monthly correlation fell.
+
+
+## Stage-2 results withdrawn (poisoned embedding cache, 2026-08-07)
+
+The stage-2 numbers for **global14b** and **global15sst** are WITHDRAWN, not
+merely stale. Both were trained on an Actions runner whose `ml/cache`
+carried run #8's `Z_actions.npy`; the shape check `(T, P, d_z)` matched, so
+stage 2 trained happily on a *different codec's* embeddings. The signature
+is unmistakable in hindsight — healthy z-space skill next to catastrophic
+decoded skill (chan% -33.1 and -60.3), because the z they learned to
+predict is not the z their decoder speaks. `temporal.py` now names its
+cache `Z_<run>_<weight-hash>.npy`, so a stale cache is a miss and never a
+lie, and run #17 confirms the fix at chan% +35.5.
+
+Their `temporal.json` files are renamed `temporal.WITHDRAWN.json` so the
+generated table prints "—" rather than a wrong number. They were not
+regenerated: both codecs belong to the superseded 14/15-channel family, and
+several hours of embedding to restore a number nobody should cite is worse
+value than not claiming it. The codec-level rows for both runs are
+unaffected — the bug lived entirely in stage 2.
+
 
 ## The frontier — GLOBAL window (2026-08-07, run #8)
 
