@@ -6839,53 +6839,116 @@ function tideSyncPointUi() {
   if (empty) empty.classList.toggle("hidden", has);
 }
 
+/* The 3-day curve, with the recent PAST included so "now" lands ON the line
+ * rather than at its left edge. Reported 2026-08-08: starting the chart at
+ * the present moment makes the single most useful fact invisible — whether
+ * the water is rising or falling right now — because the trend you read a
+ * curve by only exists once you can see where it came from. Six hours is
+ * about half a semidiurnal cycle: enough to always contain the last turning
+ * point, short enough that the future still owns most of the width. */
+const TD_PAST_MS = 6 * 3600000;
+const TD_FUTURE_MS = 72 * 3600000;
+
 function tideCurve() {
   const c = document.getElementById("td-curve");
   const ctx = c.getContext("2d");
   const i = tideSim.markCell;
-  ctx.clearRect(0, 0, c.width, c.height);
-  const T0 = tideSim.t, SPAN = 3 * 86400000;
+  const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  const NOW = tideSim.t;
+  const T0 = NOW - TD_PAST_MS, SPAN = TD_PAST_MS + TD_FUTURE_MS;
+  const X = (ms) => (ms - T0) / SPAN * W;
+
+  const N = 312;                                    // ~15-minute resolution
   let lo = Infinity, hi = -Infinity;
   const pts = [];
-  for (let s = 0; s <= 240; s++) {
-    const h = tideHeightAt(i, T0 + s / 240 * SPAN);
+  for (let s = 0; s <= N; s++) {
+    const h = tideHeightAt(i, T0 + s / N * SPAN);
     pts.push(h); lo = Math.min(lo, h); hi = Math.max(hi, h);
   }
-  const pad = Math.max(10, (hi - lo) * 0.1);
+  const pad = Math.max(10, (hi - lo) * 0.12);
   lo -= pad; hi += pad;
-  const y = (h) => c.height - (h - lo) / (hi - lo) * c.height;
+  const y = (h) => H - (h - lo) / (hi - lo) * H;
+  const xNow = X(NOW);
+
+  // the past, behind everything: a dim panel, so "already happened" reads
+  // without needing a legend
+  ctx.fillStyle = "rgba(255,255,255,0.035)";
+  ctx.fillRect(0, 0, xNow, H);
+
+  // mean sea level
   ctx.strokeStyle = "#30363d"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, y(0)); ctx.lineTo(c.width, y(0)); ctx.stroke();
-  ctx.strokeStyle = "#3987e5"; ctx.lineWidth = 2; ctx.beginPath();
-  pts.forEach((h, s) => { const x = s / 240 * c.width; s ? ctx.lineTo(x, y(h)) : ctx.moveTo(x, y(h)); });
-  ctx.stroke();
-  ctx.fillStyle = "#c3c2b7"; ctx.font = "11px sans-serif"; ctx.textAlign = "left";
-  ctx.fillText(`${(Math.max(...pts) / 100).toFixed(1)} m`, 4, 12);
-  ctx.fillText(`${(Math.min(...pts) / 100).toFixed(1)} m`, 4, c.height - 4);
-  for (let day = 1; day < 3; day++) {
-    const x = day / 3 * c.width;
+  ctx.beginPath(); ctx.moveTo(0, y(0)); ctx.lineTo(W, y(0)); ctx.stroke();
+
+  // LOCAL midnights. The label promised "day boundaries" while the code drew
+  // marks every 24 h from now — a different thing entirely. With the point's
+  // own zone known, these are real calendar days at the beach in question.
+  const z = tideTzFor(tideSim.markLon, tideSim.markLat) || tideBrowserTz(NOW);
+  const off = z.offsetSec * 1000;
+  const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  ctx.font = "9.5px sans-serif"; ctx.textAlign = "left";
+  for (let m = Math.ceil((T0 + off) / 86400000) * 86400000 - off;
+       m < T0 + SPAN; m += 86400000) {
+    const x = X(m);
     ctx.strokeStyle = "#30363d"; ctx.setLineDash([3, 4]);
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, c.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
     ctx.setLineDash([]);
+    const d = new Date(m + off);
+    ctx.fillStyle = "#6e7681";
+    ctx.fillText(`${DAY[d.getUTCDay()]} ${d.getUTCDate()}`, x + 3, H - 3);
   }
-  // Every high and low in the window gets a dot — the same red/blue the globe
-  // uses for above/below mean — and the NEXT one of each kind is named, so
-  // the chart answers "when" without reading it off the axis.
+
+  // one line, two states: the past thin and dim, the future at full weight
+  const seg = (from, to, width, alpha) => {
+    ctx.globalAlpha = alpha; ctx.strokeStyle = "#3987e5";
+    ctx.lineWidth = width; ctx.lineJoin = "round";
+    ctx.beginPath();
+    let started = false;
+    for (let s = 0; s <= N; s++) {
+      const ms = T0 + s / N * SPAN;
+      if (ms < from || ms > to) { started = false; continue; }
+      const x = X(ms), yy = y(pts[s]);
+      if (!started) { ctx.moveTo(x, yy); started = true; } else ctx.lineTo(x, yy);
+    }
+    ctx.stroke(); ctx.globalAlpha = 1;
+  };
+  seg(T0, NOW, 1.5, 0.45);
+  seg(NOW - SPAN / N, T0 + SPAN, 2.2, 1);       // one step of overlap: no seam
+
+  // every turning point dotted; the next of each kind named. Past ones stay
+  // (dimmed) — "the last high water was at 04:12" is half of what a tide
+  // table is for.
   let namedHigh = false, namedLow = false;
-  for (const e of tideExtrema(i, T0, 72)) {
-    const x = (e.ms - T0) / SPAN * c.width, yy = y(e.cm);
-    const first = e.high ? !namedHigh : !namedLow;
-    if (e.high) namedHigh = true; else namedLow = true;
+  for (const e of tideExtrema(i, T0, SPAN / 3600000)) {
+    const x = X(e.ms), yy = y(e.cm), future = e.ms >= NOW;
+    const first = future && (e.high ? !namedHigh : !namedLow);
+    if (future) { if (e.high) namedHigh = true; else namedLow = true; }
+    ctx.globalAlpha = future ? 1 : 0.45;
     ctx.fillStyle = e.high ? "#e34948" : "#3b82f6";
     ctx.beginPath(); ctx.arc(x, yy, first ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
     if (!first) continue;
     ctx.font = "10px sans-serif";
-    const right = x > c.width - 46;
+    const right = x > W - 46;
     ctx.textAlign = right ? "right" : "left";
-    // local time at the point, same clock as the rows above the chart
-    const lab = tideClock(e.ms, tideTzFor(tideSim.markLon, tideSim.markLat), T0);
-    ctx.fillText(lab.hhmm, x + (right ? -6 : 6), yy + (e.high ? -6 : 13));
+    ctx.fillText(tideClock(e.ms, z, NOW).hhmm, x + (right ? -6 : 6),
+                 yy + (e.high ? -6 : 13));
   }
+
+  // NOW: an accent rule, a ring where it meets the water, and the word
+  const hNow = tideHeightAt(i, NOW);
+  ctx.strokeStyle = "#4493f8"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(xNow, 0); ctx.lineTo(xNow, H); ctx.stroke();
+  ctx.fillStyle = "#0a0f16"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(xNow, y(hNow), 4.5, 0, Math.PI * 2);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#4493f8"; ctx.font = "600 10px sans-serif"; ctx.textAlign = "left";
+  ctx.fillText("now", xNow + 6, 11);
+
+  // the window's extremes, kept clear of the "now" label
+  ctx.fillStyle = "#c3c2b7"; ctx.font = "11px sans-serif"; ctx.textAlign = "right";
+  ctx.fillText(`${(Math.max(...pts) / 100).toFixed(1)} m`, W - 4, 12);
+  ctx.fillText(`${(Math.min(...pts) / 100).toFixed(1)} m`, W - 4, H - 16);
   ctx.textAlign = "left";
 }
 

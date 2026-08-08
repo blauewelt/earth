@@ -3105,6 +3105,35 @@ test("tide-live layer: paints the globe, moon rides along, tab is the control ro
   expect(hl.next).toMatch(/in \d/);
   expect(hl.emptyHidden).toBe(true);               // invitation gives way to data
   expect(hl.pointShown).toBe(true);
+  // "NOW" IS A POINT ON THE CURVE, NOT ITS LEFT EDGE (reported 2026-08-08:
+  // you cannot see whether the tide is rising or falling if the line starts
+  // at the present moment). The window opens 6 h in the past, so the chart
+  // carries at least one turning point that has already happened, and the
+  // now-marker sits well inside the canvas.
+  const past = await page.evaluate(() => {
+    const E = window.__earth;
+    const i = E.tideSim.markCell, NOW = E.tideSim.t;
+    const c = document.getElementById("td-curve");
+    const px = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    // ink in the leftmost tenth = the past really is drawn, not empty
+    let leftInk = 0;
+    for (let x = 0; x < c.width / 10; x++) {
+      for (let yy = 0; yy < c.height; yy++) if (px[(yy * c.width + x) * 4 + 3] > 0) leftInk++;
+    }
+    const ex = E.tideExtrema(i, NOW - 6 * 3600000, 78);
+    return {
+      leftInk,
+      pastExtrema: ex.filter((e) => e.ms < NOW).length,
+      futureExtrema: ex.filter((e) => e.ms >= NOW).length,
+      // where the now-line falls, as a fraction of the width
+      nowFrac: 6 / 78,
+    };
+  });
+  expect(past.leftInk).toBeGreaterThan(20);        // the past is painted
+  expect(past.pastExtrema).toBeGreaterThanOrEqual(1);   // a turning point behind us
+  expect(past.futureExtrema).toBeGreaterThanOrEqual(5);
+  expect(past.nowFrac).toBeGreaterThan(0.03);      // interior, not at the edge
+  expect(past.nowFrac).toBeLessThan(0.2);          // and the future still owns the chart
   // switching the layer off from its checkbox hides the primitive
   await page.evaluate(() => {
     const el = document.getElementById("toggle-tidelive");
@@ -3154,7 +3183,11 @@ test("Tides tab answers for wherever you already flew — no blank panel", async
   const next = page.locator("#td-next");
   await expect(next).toContainText("next high water");
   await expect(next).toContainText("next low water");
-  await expect(next).toContainText("UTC");
+  // a zone label always follows the time — but NOT necessarily "UTC": the
+  // point's own zone wins when Open-Meteo answers (Peniche → WEST/GMT+1),
+  // the device's zone shows while that is in flight. Assert the shape.
+  await expect(next).toHaveText(/\d\d:\d\d\s+\S+/);
+  await expect(page.locator("#td-tz")).toContainText("UTC");   // the footer still anchors to UTC
   const r = await page.evaluate(() => {
     const E = window.__earth;
     const d = E.tides;
