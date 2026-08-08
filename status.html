@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>earth · ML status</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --border:    #30363d;
+    --text:      #e6edf3;
+    --text-dim:  #8b949e;
+    --accent:    #3987e5;   /* series 1 (blue, dark step) */
+    --series-2:  #d95926;   /* series 2 (orange, dark step) */
+    --ok:        #3fb950;
+    --bad:       #f85149;
+    --warn:      #d29922;
+    --muted:     #6e7681;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 16px 12px 48px; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  h2 { font-size: 15px; margin: 28px 0 8px; color: var(--text-dim);
+       text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  a { color: var(--accent); text-decoration: none; }
+  a:active { opacity: .7; }
+  .meta { color: var(--text-dim); font-size: 13px; }
+  .topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  button#refresh {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 16px; font-size: 14px; cursor: pointer;
+    min-height: 44px;
+  }
+  button#refresh:active { background: var(--border); }
+  .banner {
+    display: none; margin: 12px 0; padding: 10px 14px; border-radius: 8px;
+    background: rgba(210,153,34,.12); border: 1px solid rgba(210,153,34,.5);
+    color: var(--warn); font-size: 14px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: var(--text-dim); font-weight: 500;
+       padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 8px; border-bottom: 1px solid #21262d; }
+  tr a { display: block; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+         margin-right: 7px; vertical-align: 1px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; margin: 12px 0;
+  }
+  .card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .stepbig { font-size: 22px; font-weight: 700; margin: 4px 0 8px; }
+  .stepbig .lbl { font-size: 13px; font-weight: 400; color: var(--text-dim); }
+  svg.chart { width: 100%; height: auto; display: block; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-dim); margin: 6px 0 0; }
+  .legend .sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px;
+                margin-right: 5px; vertical-align: 3px; }
+  .probe { font-size: 13px; color: var(--text-dim); margin-top: 10px;
+           border-top: 1px solid var(--border); padding-top: 8px; }
+  .probe b { color: var(--text); font-weight: 600; }
+  ul.links { list-style: none; padding: 0; margin: 0; }
+  ul.links li { margin: 0; border-bottom: 1px solid #21262d; }
+  ul.links a { display: block; padding: 12px 4px; }
+  .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+  footer { margin-top: 36px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div style="flex:1 1 auto">
+      <h1>earth · ML status</h1>
+      <div class="meta" id="updated">loading…</div>
+    </div>
+    <button id="refresh" type="button">Refresh</button>
+  </div>
+
+  <div class="banner" id="banner"></div>
+
+  <h2>Live training</h2>
+  <div id="live"><div class="empty">loading…</div></div>
+
+  <h2>Workflow runs · ml-train</h2>
+  <div id="runs"><div class="empty">loading…</div></div>
+
+  <h2>Releases</h2>
+  <div id="releases"><div class="empty">loading…</div></div>
+
+  <h2>Links</h2>
+  <ul class="links">
+    <li><a href="https://github.com/blauewelt/earth/blob/main/ml/paper/paper.pdf">Paper (PDF)</a></li>
+    <li><a href="https://github.com/blauewelt/earth/blob/main/ml/paper/paper_dark.pdf">Paper — dark build (PDF)</a></li>
+    <li><a href="https://github.com/blauewelt/earth/blob/main/ml/LEADERBOARD.md">Leaderboard</a></li>
+    <li><a href="https://github.com/blauewelt/earth/blob/main/ml/HANDBOOK.md">Handbook</a></li>
+    <li><a href="https://github.com/blauewelt/earth/actions">GitHub Actions</a></li>
+    <li><a href="https://blauewelt.github.io/earth/">Live app</a></li>
+  </ul>
+
+  <footer>Reads only public unauthenticated GitHub endpoints · no credentials in this page.</footer>
+</div>
+
+<script>
+"use strict";
+(function () {
+  var REPO = "blauewelt/earth";
+  var REFRESH_MS = 120000;
+  var timer = null;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function fmtInt(n) {
+    return Number(n).toLocaleString("en-US");
+  }
+  function ago(iso) {
+    var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return Math.floor(s) + " s ago";
+    if (s < 3600) return Math.floor(s / 60) + " min ago";
+    if (s < 86400) {
+      var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+      return h + " h " + m + " min ago";
+    }
+    return Math.floor(s / 86400) + " d ago";
+  }
+  function fmtBytes(b) {
+    if (b >= 1e9) return (b / 1e9).toFixed(1) + " GB";
+    if (b >= 1e6) return (b / 1e6).toFixed(1) + " MB";
+    if (b >= 1e3) return (b / 1e3).toFixed(1) + " kB";
+    return b + " B";
+  }
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function hms(d) { return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds()); }
+
+  function statusColor(run) {
+    if (run.status !== "completed") return "var(--warn)";
+    if (run.conclusion === "success") return "var(--ok)";
+    if (run.conclusion === "failure") return "var(--bad)";
+    return "var(--muted)"; // cancelled / skipped / etc.
+  }
+  function statusLabel(run) {
+    if (run.status !== "completed") return run.status.replace(/_/g, " ");
+    return run.conclusion || "completed";
+  }
+
+  function showBanner(msg) {
+    var b = $("banner");
+    b.textContent = msg;
+    b.style.display = "block";
+  }
+  function hideBanner() { $("banner").style.display = "none"; }
+
+  function apiGet(url) {
+    return fetch(url, { headers: { Accept: "application/vnd.github+json" } }).then(function (r) {
+      if (r.status === 403 || r.status === 429) {
+        var err = new Error("ratelimit");
+        err.rateLimited = true;
+        return r.json().catch(function () { return {}; }).then(function () { throw err; });
+      }
+      if (!r.ok) throw new Error("HTTP " + r.status + " for " + url);
+      return r.json();
+    });
+  }
+
+  // ---- workflow runs table --------------------------------------------------
+  function renderRuns(data) {
+    var runs = (data && data.workflow_runs) || [];
+    if (!runs.length) { $("runs").innerHTML = '<div class="empty">no runs found</div>'; return runs; }
+    var html = "<table><tr><th>#</th><th>status</th><th>started</th></tr>";
+    runs.forEach(function (r) {
+      html += "<tr>" +
+        '<td><a href="' + esc(r.html_url) + '">#' + esc(r.run_number) + "</a></td>" +
+        '<td><span class="dot" style="background:' + statusColor(r) + '"></span>' +
+        esc(statusLabel(r)) + "</td>" +
+        "<td>" + esc(ago(r.created_at)) + "</td></tr>";
+    });
+    html += "</table>";
+    $("runs").innerHTML = html;
+    return runs;
+  }
+
+  // ---- live metrics charts --------------------------------------------------
+  function parseJsonl(text) {
+    var loss = [], probes = [];
+    text.split("\n").forEach(function (line) {
+      line = line.trim();
+      if (!line) return;
+      var o;
+      try { o = JSON.parse(line); } catch (e) { return; }
+      if (o && typeof o.step === "number" && typeof o.loss_rec === "number" && typeof o.loss_nei === "number") {
+        loss.push(o);
+      } else if (o && typeof o.step === "number") {
+        probes.push(o);
+      }
+    });
+    return { loss: loss, probes: probes };
+  }
+
+  function polyline(pts, xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB) {
+    var iw = W - padL - padR, ih = H - padT - padB;
+    return pts.map(function (p) {
+      var x = padL + (xspan ? (p[0] - xmin) / xspan : 0.5) * iw;
+      var y = padT + ih - (yspan ? (p[1] - ymin) / yspan : 0.5) * ih;
+      return x.toFixed(1) + "," + y.toFixed(1);
+    }).join(" ");
+  }
+
+  function lossChart(loss) {
+    var W = 600, H = 160, padL = 46, padR = 10, padT = 10, padB = 22;
+    var xs = loss.map(function (p) { return p.step; });
+    var ys = [];
+    loss.forEach(function (p) { ys.push(p.loss_rec, p.loss_nei); });
+    var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
+    var ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
+    var xspan = xmax - xmin, yspan = ymax - ymin;
+    var rec = polyline(loss.map(function (p) { return [p.step, p.loss_rec]; }), xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB);
+    var nei = polyline(loss.map(function (p) { return [p.step, p.loss_nei]; }), xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB);
+    return '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="training loss">' +
+      '<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+      '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+      '<text x="' + (padL - 6) + '" y="' + (padT + 5) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymax.toFixed(3) + "</text>" +
+      '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymin.toFixed(3) + "</text>" +
+      '<text x="' + padL + '" y="' + (H - 6) + '" font-size="11" fill="#8b949e">' + fmtInt(xmin) + "</text>" +
+      '<text x="' + (W - padR) + '" y="' + (H - 6) + '" text-anchor="end" font-size="11" fill="#8b949e">' + fmtInt(xmax) + "</text>" +
+      '<polyline points="' + rec + '" fill="none" stroke="#3987e5" stroke-width="2" stroke-linejoin="round"/>' +
+      '<polyline points="' + nei + '" fill="none" stroke="#d95926" stroke-width="2" stroke-linejoin="round"/>' +
+      "</svg>";
+  }
+
+  function probeText(p) {
+    var keys = ["linear_r_raw", "linear_r_deseas", "temporal_r_raw", "temporal_r_deseas",
+                "z_vs_persistence_pct", "chan_vs_persistence_pct"];
+    var parts = [];
+    keys.forEach(function (k) {
+      if (typeof p[k] === "number") parts.push(esc(k) + " <b>" + esc(p[k]) + "</b>");
+    });
+    Object.keys(p).forEach(function (k) {
+      if (keys.indexOf(k) < 0 && k !== "step" && typeof p[k] === "number" && parts.length < 10) {
+        parts.push(esc(k) + " <b>" + esc(Number(p[k].toFixed ? p[k].toFixed(3) : p[k])) + "</b>");
+      }
+    });
+    return "latest probe @ step " + fmtInt(p.step) + " — " + parts.join(" · ");
+  }
+
+  function renderLiveRun(run) {
+    var url = "https://raw.githubusercontent.com/" + REPO + "/ml-live-" + run.run_number +
+              "/metrics.jsonl?cb=" + Date.now();
+    return fetch(url).then(function (r) {
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    }).then(function (text) {
+      var head = '<div class="card"><h3><a href="' + esc(run.html_url) + '">run #' +
+                 esc(run.run_number) + "</a> <span class=\"meta\">· started " +
+                 esc(ago(run.created_at)) + "</span></h3>";
+      if (text === null) {
+        return head + '<div class="empty">building dataset / seeding cache (no training metrics yet)</div></div>';
+      }
+      var m = parseJsonl(text);
+      if (!m.loss.length) {
+        return head + '<div class="empty">metrics file present but no loss points yet</div></div>';
+      }
+      var last = m.loss[m.loss.length - 1];
+      var html = head +
+        '<div class="stepbig">step ' + fmtInt(last.step) + " " +
+        '<span class="lbl">rec ' + last.loss_rec.toFixed(4) + " · nei " + last.loss_nei.toFixed(4) + "</span></div>" +
+        lossChart(m.loss) +
+        '<div class="legend">' +
+        '<span><span class="sw" style="background:#3987e5"></span>loss_rec</span>' +
+        '<span><span class="sw" style="background:#d95926"></span>loss_nei</span></div>';
+      if (m.probes.length) {
+        html += '<div class="probe">' + probeText(m.probes[m.probes.length - 1]) + "</div>";
+      }
+      return html + "</div>";
+    }).catch(function (e) {
+      return '<div class="card"><h3><a href="' + esc(run.html_url) + '">run #' + esc(run.run_number) +
+             '</a></h3><div class="empty">could not load live metrics (' + esc(e.message) + ")</div></div>";
+    });
+  }
+
+  function renderLive(runs) {
+    var live = runs.filter(function (r) { return r.status === "in_progress" || r.status === "queued"; });
+    if (!live.length) {
+      $("live").innerHTML = '<div class="empty">no runs in progress</div>';
+      return Promise.resolve();
+    }
+    return Promise.all(live.map(renderLiveRun)).then(function (cards) {
+      $("live").innerHTML = cards.join("");
+    });
+  }
+
+  // ---- releases -------------------------------------------------------------
+  function renderReleases(rels) {
+    var want = ["data-cache-v1", "model-checkpoints-v1"];
+    var html = "<table><tr><th>release</th><th>assets</th><th>size</th><th>downloads</th></tr>";
+    var found = 0;
+    want.forEach(function (tag) {
+      var rel = null;
+      (rels || []).forEach(function (r) { if (r.tag_name === tag) rel = r; });
+      if (!rel) return;
+      found++;
+      var size = 0, dl = 0;
+      rel.assets.forEach(function (a) { size += a.size; dl += a.download_count; });
+      html += '<tr><td><a href="' + esc(rel.html_url) + '">' + esc(tag) + "</a></td>" +
+              "<td>" + rel.assets.length + "</td><td>" + fmtBytes(size) + "</td><td>" + dl + "</td></tr>";
+    });
+    html += "</table>";
+    $("releases").innerHTML = found ? html : '<div class="empty">no releases found</div>';
+  }
+
+  // ---- main cycle -----------------------------------------------------------
+  function refresh() {
+    // 2 api.github.com calls per cycle; raw.githubusercontent.com is uncounted.
+    Promise.all([
+      apiGet("https://api.github.com/repos/" + REPO + "/actions/workflows/ml-train.yml/runs?per_page=12"),
+      apiGet("https://api.github.com/repos/" + REPO + "/releases")
+    ]).then(function (res) {
+      hideBanner();
+      var runs = renderRuns(res[0]);
+      renderReleases(res[1]);
+      return renderLive(runs);
+    }).catch(function (e) {
+      if (e && e.rateLimited) {
+        var next = new Date(Date.now() + REFRESH_MS);
+        showBanner("GitHub rate limit hit — retrying at :" + pad2(next.getMinutes()));
+      } else {
+        showBanner("Could not reach GitHub (" + (e && e.message ? e.message : "error") + ") — will retry.");
+      }
+    }).then(function () {
+      $("updated").textContent = "last updated " + hms(new Date()) + " · refreshes every 2 min";
+    });
+  }
+
+  function schedule() {
+    if (timer) clearInterval(timer);
+    timer = setInterval(refresh, REFRESH_MS);
+  }
+
+  $("refresh").addEventListener("click", function () { refresh(); schedule(); });
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) { refresh(); schedule(); }
+  });
+
+  refresh();
+  schedule();
+})();
+</script>
+</body>
+</html>

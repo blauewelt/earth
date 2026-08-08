@@ -124,6 +124,12 @@ from the runs' own JSON — never transcribe numbers by hand.
   FIRST, deliver via SendUserFile WITH permalinks. build.sh generates
   paper_dark.tex (never hand-edit it).
   Project docs `paper/paper.tex`/`paper/make_figs.py` are the backup.
+- **Status page**: https://blauewelt.github.io/earth/status.html —
+  single-file phone dashboard (`status.html` at repo root) showing
+  ml-train runs, live loss curves from `ml-live-<run>` branches, and
+  release stats; reads ONLY public unauthenticated endpoints (2
+  api.github.com calls per 2-min refresh + raw.githubusercontent.com,
+  which is uncounted), so it holds no credentials.
 
 ## 4 · In flight right now (updated 2026-08-08 ~13:45 UTC)
 
