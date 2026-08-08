@@ -42,8 +42,11 @@ on:
         description: "stage-2 depth (3=mid, 4=large, 5=xlarge, 6=xxlarge)"
         default: "3"
       eval_every:
-        description: "trainprobe cadence in steps (0 = off; requires anomaly)"
+        description: "FULL trainprobe cadence in steps (~300 s each on the 10M codec; 0 = off; requires anomaly)"
         default: "7500"
+      light_probe_every:
+        description: "CHEAP probe cadence in steps (linear section probe only, ~30 s; the headline r at high cadence so a bad run shows early). 0 = off"
+        default: "2000"
       window:
         description: "spatial window (global | na); family2 recipe only"
         default: "global"
@@ -345,6 +348,7 @@ jobs:
             --max-minutes "${{ inputs.max_minutes || '0' }}" \
             --lr-floor "${{ inputs.lr_floor || '0' }}" \
             --lr-decay-steps "${{ inputs.lr_decay_steps || '0' }}" \
+            --light-probe-every "${{ inputs.light_probe_every || '2000' }}" \
             --d-model "${{ inputs.codec_d_model || '128' }}" \
             --n-layers "${{ inputs.codec_layers || '4' }}" \
             --n-heads "${{ inputs.codec_heads || '4' }}" \

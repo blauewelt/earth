@@ -67,14 +67,24 @@ def anomaly_transform(X, moy, t_hold, x_hold):
 
 def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
               n_pixels=600, K=12, tsteps=400, tbatch=128, seed=0, obs_in=None,
-              mask_chan=None):
+              mask_chan=None, light=False):
     """All metrics for the codec AS IT IS NOW. X must already be in the
     space the codec was trained in (anomaly). Returns a flat dict.
 
     obs_in: optional observation mask for the ENCODER ONLY (ablations —
     channels marked unobserved enter as the codec's native missing tokens).
     Scoring targets always use the true OBS, so 'predict the field from
-    less input' is measured against the same reality."""
+    less input' is measured against the same reality.
+
+    light=True computes ONLY the linear section probe and returns. That is
+    the cheap part by an order of magnitude: it embeds ~67 section pixels,
+    where the full probe embeds 600 more and then trains a mini temporal
+    transformer for 400 steps (measured on the 10M codec: 300 s full,
+    ~30 s light). Its purpose is cadence — a headline number every couple
+    of thousand steps instead of every ten thousand, so a run that is not
+    going to clear the wind baseline can be seen failing early rather than
+    at the end. Both modes emit `linear_r_deseas`, so downstream readers
+    (metrics.jsonl, the status page) need no special case."""
     was_training = codec.training
     codec.eval()
     t0 = time.time()
@@ -108,6 +118,13 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
     Fsec = Zsec.mean(1)                                   # [T, d_z]
     out["linear_r_deseas"], _ = ridge_r(Fsec[ridx], rv_des, tr_all, te_all)
     out["linear_r_raw"], _ = ridge_r(Fsec[ridx], rv_raw, tr_all, te_all)
+
+    if light:
+        out["light"] = True
+        out["probe_seconds"] = round(time.time() - t0, 1)
+        if was_training:
+            codec.train()
+        return out
 
     # ---- 2 · mini temporal transformer on frozen embeddings ---------------
     keep = rng.choice(len(ys), min(n_pixels, len(ys)), replace=False)

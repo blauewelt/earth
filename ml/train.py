@@ -57,6 +57,17 @@ def parse():
                         "section probe + mini temporal transformer) on the "
                         "blocked holdout; appends to <out>/metrics.jsonl. "
                         "Requires --anomaly.")
+    p.add_argument("--light-probe-every", type=int, default=0,
+                   help="every N steps, run the CHEAP half of the probe (the "
+                        "linear 26.5N section probe only — no mini temporal "
+                        "transformer). Measured on the 10M codec the full "
+                        "probe costs ~300 s and the light one ~30 s, so this "
+                        "is what makes an intermediate metric affordable at "
+                        "high cadence: a headline r every couple of thousand "
+                        "steps, so a run that will not clear the wind "
+                        "baseline is visible early. Emits the same "
+                        "linear_r_deseas key as the full probe. Requires "
+                        "--anomaly; 0 disables.")
     p.add_argument("--lr-floor", type=float, default=0.0,
                    help="decay-then-constant schedule: cosine-decay the LR "
                         "over --lr-decay-steps to floor*peak, then hold it "
@@ -206,10 +217,11 @@ def main():
         l_nei = (huber(predn, vn) * on.float()).sum() / on.float().sum().clamp(min=1)
         return l_rec, l_nei
 
-    if a.eval_every and not a.anomaly:
-        raise SystemExit("--eval-every requires --anomaly (trainprobe measures "
-                         "anomaly-space embeddings; state space is disqualified)")
-    if a.eval_every:
+    if (a.eval_every or a.light_probe_every) and not a.anomaly:
+        raise SystemExit("--eval-every/--light-probe-every require --anomaly "
+                         "(trainprobe measures anomaly-space embeddings; state "
+                         "space is disqualified)")
+    if a.eval_every or a.light_probe_every:
         import trainprobe                      # lazy: plain runs don't need it
     metrics_path = os.path.join(a.out, "metrics.jsonl")
     loss_every = max(1, a.steps // 200)        # the loss curve, cheap to keep
@@ -250,7 +262,20 @@ def main():
         if s % max(1, a.steps // 10) == 0:
             print(f"  step {s:>6}/{a.steps}  rec {l_rec.item():.4f}  nei {l_nei.item():.4f}"
                   f"  ({time.time() - t0:.0f}s)")
-        if a.eval_every and (s % a.eval_every == 0 or s == a.steps):
+        # Cheap probe first, and skipped on steps where the full probe runs
+        # (the full one supersedes it and writes the same key).
+        full_here = a.eval_every and (s % a.eval_every == 0 or s == a.steps)
+        if a.light_probe_every and not full_here and s % a.light_probe_every == 0:
+            m = trainprobe.probe_now(model.cpu(), Xt, OBS, d, mvec, t_hold,
+                                     x_hold, dynamic, light=True)
+            model.to(dev)
+            m["step"] = s
+            m["wall_s"] = round(time.time() - t0, 1)
+            with open(metrics_path, "a") as f:
+                f.write(json.dumps(m) + "\n")
+            print(f"  light probe @{s}: linear r_des {m['linear_r_deseas']:+.3f} "
+                  f"({m['probe_seconds']:.0f}s)", flush=True)
+        if full_here:
             m = trainprobe.probe_now(model.cpu(), Xt, OBS, d, mvec, t_hold,
                                      x_hold, dynamic)
             model.to(dev)

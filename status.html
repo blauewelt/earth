@@ -293,7 +293,7 @@
       : { v: 0.531, what: "1° tensor" };
   }
 
-  function probeChart(probes, run) {
+  function probeChart(probes, run, lossXmin, lossXmax) {
     var pts = probes.filter(function (p) {
       return typeof p.linear_r_deseas === "number" && typeof p.step === "number";
     });
@@ -302,7 +302,15 @@
     var W = 600, H = 150, padL = 46, padR = 10, padT = 12, padB = 22;
     var xs = pts.map(function (p) { return p.step; });
     var ys = pts.map(function (p) { return p.linear_r_deseas; });
+    // SHARE THE LOSS CHART'S X-AXIS. Chris caught this: the loss curve read
+    // step 30,000 while the probe line, stretched across the same width,
+    // ended at its own last probe (20,000) — two stacked charts on different
+    // x-scales look like a contradiction. They are not: the loss is logged
+    // every ~150 steps and the probe every few thousand, so the probe simply
+    // lags. Sharing the axis makes the lag visible instead of misleading.
     var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
+    if (typeof lossXmin === "number") xmin = Math.min(xmin, lossXmin);
+    if (typeof lossXmax === "number") xmax = Math.max(xmax, lossXmax);
     // Always frame the baseline and zero so "above/below the bar" is visible
     // even when every probe so far sits on one side of it.
     var ymin = Math.min(0, Math.min.apply(null, ys) - 0.05);
@@ -339,7 +347,13 @@
       (last.linear_r_deseas >= base.v
         ? ' <span style="color:#2da44e">above the wind bar</span>'
         : ' <span style="color:#8b949e">below the wind bar</span>') +
-      "</span></div>";
+      "</span></div>" +
+      (typeof lossXmax === "number" && lossXmax > last.step
+        ? '<div class="probe">probe lags training: the loss curve is at step ' +
+          fmtInt(lossXmax) + ", the last probe ran at " + fmtInt(last.step) +
+          " (probes are periodic, the loss is logged every few hundred steps)." +
+          "</div>"
+        : "");
   }
 
   function probeText(p) {
@@ -386,7 +400,8 @@
         '<span><span class="sw" style="background:#3987e5"></span>loss_rec</span>' +
         '<span><span class="sw" style="background:#d95926"></span>loss_nei</span></div>';
       if (m.probes.length) {
-        html += probeChart(m.probes, run);
+        html += probeChart(m.probes, run, m.loss[0].step,
+                           m.loss[m.loss.length - 1].step);
         html += '<div class="probe">' + probeText(m.probes[m.probes.length - 1]) + "</div>";
       } else {
         html += '<div class="probe">no downstream probe yet — the RAPID probe ' +

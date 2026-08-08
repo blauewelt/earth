@@ -87,6 +87,14 @@ from the runs' own JSON — never transcribe numbers by hand.
   mints registration tokens itself (Administration:write). Budget: $50
   approved by Chris, ~$5–6 spent (estimate as of 13:45 UTC 2026-08-08;
   exact figure needs the Vast key back — see the header).
+- **Probe cadence** (Chris, 2026-08-08 — "compute intermediate metrics
+  more often"): the FULL probe costs ~300 s on the 10M codec (embeds 600
+  pixels x T plus a 400-step mini transformer), which is why `eval_every`
+  is measured in thousands of steps. `--light-probe-every` (workflow input
+  `light_probe_every`, default 2000) runs ONLY the linear 26.5N section
+  probe — ~67 pixels, no transformer, ~30 s — and emits the same
+  `linear_r_deseas` key, so the status page's probe chart just gets denser
+  with no special case. Rule of thumb: light every 2k, full every 7.5-10k.
 - **Dispatch**: `node scripts/fleet_dispatch_wf.mjs '<inputs-json>' main`.
   MANDATORY `doc` input (the script refuses without it): one line, what
   the run is and why — it becomes the run name and the description on
