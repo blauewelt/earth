@@ -690,7 +690,13 @@ once already when a restart deleted the then-gitignored directory. `latexmk`/`pd
 system-installed and do survive; microtype and lmodern are not available.
 Rebuilding costs ~15 s, so REBUILD AND DELIVER (SendUserFile) both the
 light and dark builds with every substantive edit — the user asked for
-this explicitly (2026-08-08: "just relaunch it with every update"). The
+this explicitly (2026-08-08: "just relaunch it with every update"), and
+EVERY delivery must be accompanied by the permalink block in the same
+message ("can you always post the link to the paper not just the
+paper?", 2026-08-08):
+  https://github.com/blauewelt/earth/blob/main/ml/paper/paper.pdf
+  https://github.com/blauewelt/earth/blob/main/ml/paper/paper_dark.pdf
+The links point at whatever is pushed, so push BEFORE posting them. The
 dark build is generated from paper.tex by the string-replace block in the
 session history / make_figs --dark for figures; never hand-edit
 paper_dark.tex.
