@@ -90,6 +90,12 @@ from the runs' own JSON — never transcribe numbers by hand.
   Origin archives are flaky (SIO 504s killed five runs in one day); no
   cold box should ever contact them again. Publisher:
   `scripts/data_release.mjs` (streams tar|split, 1 chunk on disk).
+- **Checkpoint mirror**: release `model-checkpoints-v1` holds every
+  harvested codec as `<run>__pixelmae.pt` (~4 MB each at pilot size).
+  This is the DURABLE copy — Actions artifacts expire in ~90 days and
+  the sandbox is ephemeral (it has already eaten the paper once).
+  STANDING RULE: after every `harvest_run.mjs`, upload the new
+  checkpoint to this release. Restore = download + `codec_from_ckpt()`.
 - **Sandbox limits**: ~7 GB RAM. The recurring OOM class: expressions that
   read like cheap slices but materialize the whole tensor —
   `clim[moy][..., c]` (use `clim[moy, :, :, c]`), re-indexing `d["X"]`
