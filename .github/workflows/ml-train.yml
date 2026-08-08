@@ -118,6 +118,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # DISK HYGIENE FIRST. gpu-box-46045353 hit 50/50 GB on 2026-08-08:
+          # the runner worker could not write its own _diag log, run #39 died
+          # AFTER a successful train+upload, and the runner process went
+          # offline — a full disk turns a healthy box into a poison pill that
+          # eats jobs. Below 8 GB free, drop the reclaimable tiers: runner
+          # diagnostic logs, pip's wheel cache (~3 GB of torch), actions'
+          # _temp staging, and stage-2 embedding caches in the persistent
+          # cache (Z_*.npy are ~4 GB each and re-derive from checkpoints).
+          free_gb() { df -BG --output=avail / | tail -1 | tr -dc 0-9; }
+          echo "disk free: $(free_gb) GB"
+          if [ "$(free_gb)" -lt 8 ]; then
+            echo "low disk — pruning …"
+            rm -rf /opt/runner/_diag/*.log /opt/runner/_work/_temp/* || true
+            pip cache purge || true
+            find /opt/earth-cache -maxdepth 1 -name 'Z_*.npy*' -delete || true
+            echo "after prune: $(free_gb) GB"
+          fi
           mkdir -p /opt/earth-cache
           rm -rf ml/cache
           ln -s /opt/earth-cache ml/cache
@@ -146,6 +163,14 @@ jobs:
             [ -f /opt/earth-cache/rg/RG_T.nc.gz ]; } || seed rg
           [ "$(ls /opt/earth-cache/wind_daily/*.nc 2>/dev/null | wc -l)" -ge 60 ] \
             || seed wind_daily
+          # Truth series (1.2 MB): OSNAP's repository server timed out from
+          # two boxes on 2026-08-08 and killed the whole build step. With the
+          # files present, fetch_truth.py never opens a connection.
+          { [ -f /opt/earth-cache/truth/osnap_moc.nc ] && \
+            [ -f /opt/earth-cache/truth/move.nc ] && \
+            [ -f /opt/earth-cache/truth/samba.asc ] && \
+            [ "$(ls /opt/earth-cache/truth/fc_* 2>/dev/null | wc -l)" -ge 40 ]; } \
+            || seed truth
           echo "persistent cache: $(du -sh /opt/earth-cache | cut -f1)"
 
       - name: Restore data cache (GitHub-hosted only)

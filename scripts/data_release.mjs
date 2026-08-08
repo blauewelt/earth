@@ -57,8 +57,14 @@ if (cmd === "publish") {
   // the uploader and deletes it before cutting the next. Peak disk: one
   // chunk. Serial by construction — which is also what the origin servers
   // needed from us all along.
-  for (const d of ["rg", "wind_daily"]) {
-    const probe = `${d}.tar.xaa`;
+  // "truth" (1.2 MB) rides along: OSNAP's Georgia Tech bitstream server
+  // timed out from two boxes on 2026-08-08 and killed runs #37/#38 at the
+  // build step — the truth series are the smallest and least replaceable
+  // files in the cache, so they belong in the release most of all.
+  for (const d of ["rg", "wind_daily", "truth"]) {
+    const probe = `${d}.tar.aa`;  // split runs with an EMPTY prefix, so the
+    // first chunk is "aa", not the default "xaa" — the wrong probe name here
+    // made publish re-attempt rg (422 already_exists) instead of skipping it.
     if (have.has(probe)) { console.log(`skip ${d} (already uploaded)`); continue; }
     execFileSync("bash", ["-c",
       `cd ml/cache && tar cf - ${d} | split -b 1900m ` +
