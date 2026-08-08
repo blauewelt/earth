@@ -86,7 +86,25 @@ jobs:
             pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
           fi
 
-      - name: Restore data cache
+      # On OUR box the data cache is a directory on the box, not a GitHub
+      # cache. The sources total ~13 GB (8.9 GB Argo RG + 4.1 GB NCEP daily
+      # wind), GitHub evicts caches once a repo passes 10 GB, and the eviction
+      # is silent: the restore "succeeds" from a restore-key that predates the
+      # wind files and the build then re-downloads all 13 GB. That is what
+      # stalled runs #19 and #20 for 80 and 92 minutes — the log at cancel
+      # showed uflx/vflx.sfc.gauss.YYYY.nc being fetched one year at a time.
+      # A directory outside the workspace survives actions/checkout's clean,
+      # so the box pays the download once, ever.
+      - name: Persistent data cache (self-hosted box)
+        if: inputs.runner != 'ubuntu-latest'
+        run: |
+          mkdir -p /opt/earth-cache
+          rm -rf ml/cache
+          ln -s /opt/earth-cache ml/cache
+          echo "persistent cache: $(du -sh /opt/earth-cache | cut -f1)"
+
+      - name: Restore data cache (GitHub-hosted only)
+        if: inputs.runner == 'ubuntu-latest'
         uses: actions/cache@v4
         with:
           path: ml/cache
