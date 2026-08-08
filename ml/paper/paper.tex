@@ -15,8 +15,8 @@
 \title{Earth-State Embeddings:\\
 \large self-supervised representations of the observed ocean,\\
 probed against the Atlantic overturning circulation}
-\author{blauewelt/earth --- technical report, v3}
-\date{8 August 2026 (morning revision)}
+\author{blauewelt/earth --- technical report, v4}
+\date{8 August 2026 (evening revision)}
 
 \begin{document}
 \maketitle
@@ -143,10 +143,10 @@ Terms are used throughout in the following precise senses.
   sequence of frozen embeddings that predicts next month's embedding.
   ``Frozen'' means the codec's weights are not updated by stage-2
   training, so improvements are attributable.
-\item[Probe] a ridge (linear, $L_2$-regularized) regression from
-  embeddings to a target series. A probe measures what a representation
-  \emph{contains}; it is deliberately too weak to add modelling power
-  of its own.
+\item[Probe] a read-out fitted from frozen embeddings to a target
+  series; the codec and stage 2 are never updated by it. Historically a
+  ridge regression, deliberately weak; now the bottom rung of the probe
+  ladder below. A probe measures what a representation \emph{contains}.
 \item[Probe ladder] three read-outs of the same frozen embeddings,
   increasing only in what they may see: \emph{ridge} (linear, on the
   section-mean embedding), \emph{MLP} (adds pointwise nonlinearity, same
@@ -244,12 +244,16 @@ misleading name for an hour before this was enforced.
 \section{Methods}\label{sec:methods}
 
 \paragraph{Stage 1 --- the codec.} A per-pixel masked autoencoder
-($\sim$0.92M parameters) producing $z\in\mathbb{R}^{64}$ per
-pixel-month, trained on all pixel-months outside the holdout blocks.
+producing $z\in\mathbb{R}^{64}$ per pixel-month, trained on all
+pixel-months outside the holdout blocks. The pilot is 0.92M parameters;
+a 10.25M variant ($320\times8$, the size the Chinchilla-style
+arithmetic of the Compute paragraph anchors for the current tensor) is
+training at time of writing. Checkpoints carry their architecture, and
+every loader reconstructs from it.
 
 \paragraph{What exactly enters the encoder.} The encoder is a small
-transformer ($d_{\mathrm{model}}{=}128$, 4 layers, 4 heads) over
-$C{+}2$ tokens for one pixel-month:
+transformer ($128\times4$ in the pilot, $320\times8$ in the 10M
+variant) over $C{+}2$ tokens for one pixel-month:
 \begin{itemize}\itemsep1pt
 \item \textbf{One token per channel}. If the channel is observed and not
   masked, the token is a linear projection of its scalar value (in
@@ -312,7 +316,11 @@ them, and a two-layer read-out maps the pooled vector to transport
 ($\sim$25k parameters, weight decay $10^{-2}$, token dropout, three
 seeds per fold). The codec stays frozen throughout --- these are probes,
 not fine-tuning. The design principle: each rung adds one capability, so
-a gap between rungs is attributable to that capability alone.
+a gap between rungs is attributable to that capability alone. Beneath
+the ladder sit two end-to-end \emph{controls}: the identical head fed
+raw section values and observed-flags instead of embeddings, at
+single-pixel and at $3\times3$ receptive fields --- pretraining is then
+the only manipulated variable (\S\ref{sec:ladder}).
 
 \paragraph{Rollout.} For horizons $h=1\ldots12$: initialize with true
 embeddings, predict one month, feed the prediction back, repeat ---
@@ -320,12 +328,20 @@ scored in channel space against climatology, persistence, and damped
 persistence, and probed for the AMOC at each horizon.
 
 \paragraph{Compute.} Runs through 2026-08-07 were trained on
-GitHub-hosted 4-core CPU runners at $\sim$1.3 steps/s. Since then a
-rented consumer GPU (RTX 4090, \$0.24/h) is attached as a self-hosted
-runner and reaches $\sim$124 steps/s --- a factor of 95, which turns a
-30k-step schedule from six hours into four minutes and is what made the
-controlled comparisons of \S\ref{sec:results} affordable. Nothing about
-the model or protocol changed with the hardware.
+GitHub-hosted 4-core CPU runners at $\sim$1.3 steps/s. Since then
+three rented consumer GPUs (RTX 4090, $\sim$\$0.24/h each) are
+attached as self-hosted runners at $\sim$124 steps/s each --- a factor
+of 95 per box, which turns a 30k-step schedule from six hours into four
+minutes and made the controlled comparisons of \S\ref{sec:results}
+affordable. The raw source data ($\sim$13\,GB) is mirrored as a GitHub
+release so a fresh box seeds its cache from a CDN rather than the
+origin archives, one of which (the Argo host) times out under load.
+Nothing about the model or protocol changed with the hardware.
+Chinchilla-style anchor for sizing: the current tensor carries
+$\sim$270M observed values per epoch; at the $\sim$20:1 data-to-params
+ratio that suggests a $\sim$13M-parameter codec --- 14$\times$ the
+pilot, and the reason the 10M variant exists. The arithmetic is redone
+whenever the data changes.
 
 \section{Metrics and their statistical power}\label{sec:metrics}
 
@@ -355,7 +371,8 @@ eddy-resolving models \cite{meng,woelker} and is essentially never
 applied to real RAPID data. Our $r=0.60$ --- monthly, deseasonalized,
 real data, blocked cross-validation, no RAPID-derived inputs ---
 appears to be the first of its exact kind, and sits where the eddying
-simulations predict it should. \emph{Forecast verification}: we adopt
+simulations predict it should (the attention-head read-out reaches
+$0.69$, with the attribution caveats of \S\ref{sec:ladder}). \emph{Forecast verification}: we adopt
 the decadal-prediction conventions \cite{goddard} (MSSS, ACC, damped
 persistence). \emph{Foundation models}: masked pretraining in anomaly
 space with frozen-backbone evaluation echoes Prithvi WxC and the
@@ -385,8 +402,13 @@ global14b$^\ast$& global & 14 & 1 & 64  & 30k & $+30.9$ & 0.556 [0.43, 0.68]   &
 global15sst     & global & 15 & 1 & 64  & 30k & $+30.8$ & 0.582 [0.43, 0.71]   & 47\% \\
 \midrule
 \multicolumn{9}{l}{\emph{second family --- 8 Argo levels (\S\ref{sec:families})}}\\
-patch24         & global & 24 & \textbf{3} & 64 & 40k & --- & 0.543 [0.43, 0.66] & 27\% \\
-pixel25         & global & 25 & 1 & 64 & 40k & --- & 0.536 [0.38, 0.68] & \textbf{59\%} \\
+patch24         & global & 24 & \textbf{3} & 64 & 40k & $+32.0^\ddagger$ & 0.543 [0.43, 0.66] & 27\% \\
+pixel25         & global & 25 & 1 & 64 & 40k & $+30.9^\ddagger$ & 0.536 [0.38, 0.68] & \textbf{59\%} \\
+pixel24         & global & 24 & 1 & 64 & 40k & --- & 0.515 [0.41, 0.63] & --- \\
+pixel24-30k     & global & 24 & 1 & 64 & 30k & --- & 0.585 [0.45, 0.71] & --- \\
+pixel24-60k     & global & 24 & 1 & 64 & 60k & --- & 0.549 [0.42, 0.67] & --- \\
+patch24-30k     & global & 24 & 3 & 64 & 30k & --- & 0.551 [0.42, 0.68] & --- \\
+big10M (2 runs) & global & 24 & 3 & 64 & 30k/60k & \multicolumn{3}{l}{\emph{training at time of writing}} \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Master table: every codec run.} Generated from each
@@ -401,7 +423,11 @@ the probe ladder (the comparable-across-time instrument); the unpooled
 attention-head values (\S\ref{sec:ladder}) are higher for every codec
 measured: global14 $0.635$, pixel25 $0.617$, patch24 $\mathbf{0.690}$. $^\ast$global14b is an exact-configuration
 replication on a different runner: it measures codec-training seed noise
-on the k-fold at $\approx\pm0.05$. Stage-2 figures for global14b and
+on the k-fold at $\approx\pm0.05$ --- the four pixel24/patch24 rows,
+spanning 0.515--0.585 across 30k--60k steps, are consistent with that
+noise and show no step-count trend (the saturation question moves to the
+1M-step run of \S\ref{sec:limits}). $^\ddagger$in-training probe at the
+final step, not the post-hoc trainprobe used for first-family rows. Stage-2 figures for global14b and
 global15sst are \emph{withdrawn}, not stale: both were trained on a
 poisoned embedding cache (\S\ref{sec:limits}).}
 \label{tab:master}
@@ -519,19 +545,24 @@ Honesty box: the head is the most expressive probe we run
 although it is regularized hard, early-stopped on a train tail, and
 seed-averaged behind the same blocked folds as every other number, the
 head-vs-ridge gaps have not yet been given a paired significance test,
-and the $0.690$ awaits replication on a second codec seed. Both are
-queued.
+and the $0.690$ awaits replication on a second codec seed; both are
+queued. A capacity sweep of the head itself ($23$k$\to$$325$k$\to$$2.0$M
+parameters, both raw and embedding sides) is in flight; its first cell
+already shows the raw baseline is not parameter-limited --- at $325$k the
+raw-$3\times3$ read-out \emph{drops} from $0.659$ to $0.590$, as the
+label-count arithmetic predicts.
 
 \subsection{Where more data moved the skill}\label{sec:tradeoff}
 
 \begin{figure}[t]
 \centering\includegraphics[width=.92\linewidth]{fig_tradeoff.pdf}
-\caption{The second family's central result. Sixteen Argo temperature
-and salinity levels to 1900\,dbar cost monthly RAPID skill (left, first
-pair) while roughly doubling it at MOVE (left, second pair) and
-transforming the low-frequency read-out there (right). MOVE measures the
-\emph{deep} western-boundary flow at $16^\circ$N --- precisely the
-quantity the added levels describe.}
+\caption{Sixteen Argo temperature and salinity levels to 1900\,dbar
+\emph{appeared} to cost monthly RAPID skill under pooled probes (left,
+first pair) --- resolved by \S\ref{sec:ladder} as a read-out artifact,
+not a representation change --- while genuinely roughly doubling skill
+at MOVE (left, second pair) and transforming the low-frequency read-out
+there (right). MOVE measures the \emph{deep} western-boundary flow at
+$16^\circ$N --- precisely the quantity the added levels describe.}
 \label{fig:tradeoff}
 \end{figure}
 
@@ -637,9 +668,9 @@ bottleneck.
 substantially Ekman, though the unpooled head now clears the baseline by
 $+0.10$--$0.16$ where the pooled probes had shrunk the margin to noise.
 (2) The head result is new and strong, and strength is when scrutiny
-matters most: no paired significance test yet, no second codec seed yet,
-and the head has been run only on RAPID --- the MOVE and low-frequency
-versions may move too. (3) $d_z{=}64$ was chosen on a 12-channel tensor
+matters most: no paired significance test yet, no second codec seed yet
+(a replicate is queued on the fleet), and the head has been run only on
+RAPID --- the MOVE and low-frequency versions may move too. (3) $d_z{=}64$ was chosen on a 12-channel tensor
 and carried unchanged into 24--25 channels; the sweep has not been
 repeated at the new width. (4) Absolute k-fold values
 are mildly optimistic --- the codec saw non-holdout months' \emph{fields}
@@ -658,15 +689,21 @@ a miss rather than a lie. We report the affected numbers as withdrawn
 rather than regenerating them, because both codecs belong to the
 superseded first family.
 
-Next levers, in expected-value order: paired significance and seed
-replication for the head results; the head probe at MOVE and at low
-frequency; a long-schedule run under a decay-then-constant learning rate
-to locate the training-time ceiling (the saturation sweep's first points
-show no step effect between 30k and 60k under pooled probes); re-running
-the $d_z$ sweep at $C{=}24$; extending the time axis to 1982, where
-monthly SST and wind exist pre-GLORYS and the Florida cable's 1982--92
-decade becomes truth; and label-efficiency curves over the 792 non-RAPID
-truth months.
+In flight at time of writing: two 10M-parameter codecs (the capacity
+half of the Chinchilla anchor); a 1,000,000-step run under a
+decay-then-constant learning rate, probed every 50k steps, to locate the
+training-time ceiling directly (the saturation sweep's completed points
+show no step effect between 30k and 60k under pooled probes); and the
+head capacity sweep. Next levers beyond those, in expected-value order:
+paired significance and seed replication for the head results; the head
+probe at MOVE and at low frequency; re-running the $d_z$ sweep at
+$C{=}24$; then the approved data ladder --- (a) extending the time axis
+to 1982, where monthly SST and wind exist pre-GLORYS and the Florida
+cable's 1982--92 decade becomes truth, (b) $0.25^\circ$ resolution for
+the GLORYS-derived channels ($16\times$ the pixels), (c) doubling the
+Argo pressure levels --- with the Chinchilla arithmetic redone and the
+codec re-sized at each rung; and label-efficiency curves over the 792
+non-RAPID truth months.
 
 \begin{thebibliography}{9}\small
 \bibitem{fw2015} E. Frajka-Williams (2015). Estimating the Atlantic
@@ -697,6 +734,10 @@ backbones with shallow decoders as an evaluation standard.
 generated by scripts in \texttt{ml/} of
 \href{https://github.com/blauewelt/earth}{github.com/blauewelt/earth}
 (see \texttt{ml/FINDINGS.md} \S8); the master table by
-\texttt{ml/make\_table.py}; figures by \texttt{ml/paper/make\_figs.py}.}
+\texttt{ml/make\_table.py}; figures by \texttt{ml/paper/make\_figs.py}.
+Raw source data is mirrored in the repository's \texttt{data-cache-v1}
+release (RG Argo, cite Roemmich \& Gilson 2009; NCEP R1, public
+domain); a DOI-carrying archive (Zenodo) is planned once the in-flight
+results settle.}
 
 \end{document}
