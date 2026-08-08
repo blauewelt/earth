@@ -248,12 +248,40 @@ def main():
                     "norm": d["norm"], "args": vars(a)},
                    os.path.join(a.out, "pixelmae.pt"))
 
+    def probe_on_device(**kw):
+        """Run the in-training probe WITHOUT surrendering the GPU.
+
+        train.py used to hand `model.cpu()` to every probe. embed_everything
+        runs on whatever device the model is on and its own docstring says
+        the difference is "hours of CPU and minutes of GPU" — so that one
+        `.cpu()` was donating the accelerator back. Measured on the 41M
+        anchored runs (#48/#49, 0.25-degree tensor): a single full probe cost
+        3,697 s and 4,802 s, i.e. 70-74% of all wall-clock time, projecting
+        to ~12 h of probing against ~3.5 h of training.
+
+        Falls back to CPU on a CUDA OOM rather than killing the run: the
+        probe is instrumentation, and instrumentation must never be the
+        thing that loses a training job. empty_cache() first because the
+        optimiser state and activations are still resident.
+        """
+        try:
+            if dev.type == "cuda":
+                torch.cuda.empty_cache()
+            return trainprobe.probe_now(model, Xt, OBS, d, mvec, t_hold,
+                                        x_hold, dynamic, **kw)
+        except torch.cuda.OutOfMemoryError:
+            print("  probe OOM on GPU — falling back to CPU for this one",
+                  flush=True)
+            torch.cuda.empty_cache()
+            m_ = trainprobe.probe_now(model.cpu(), Xt, OBS, d, mvec, t_hold,
+                                      x_hold, dynamic, **kw)
+            model.to(dev)
+            return m_
+
     def run_light_probe(step):
         """The cheap probe, written to metrics.jsonl. Called at step 0 too —
         see below for why that one matters most."""
-        m = trainprobe.probe_now(model.cpu(), Xt, OBS, d, mvec, t_hold,
-                                 x_hold, dynamic, light=True)
-        model.to(dev)
+        m = probe_on_device(light=True)
         m["step"] = step
         m["wall_s"] = round(time.time() - t0, 1)
         with open(metrics_path, "a") as f:
@@ -314,9 +342,7 @@ def main():
             print(f"  light probe @{s}: linear r_des {m['linear_r_deseas']:+.3f} "
                   f"({m['probe_seconds']:.0f}s)", flush=True)
         if full_here:
-            m = trainprobe.probe_now(model.cpu(), Xt, OBS, d, mvec, t_hold,
-                                     x_hold, dynamic)
-            model.to(dev)
+            m = probe_on_device()
             m["step"] = s
             m["wall_s"] = round(time.time() - t0, 1)
             with open(metrics_path, "a") as f:

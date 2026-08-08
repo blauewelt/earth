@@ -87,10 +87,19 @@ from the runs' own JSON — never transcribe numbers by hand.
   mints registration tokens itself (Administration:write). Budget: $50
   approved by Chris, ~$5–6 spent (estimate as of 13:45 UTC 2026-08-08;
   exact figure needs the Vast key back — see the header).
+- **Probes must keep the GPU** (found 2026-08-08 from #48/#49): train.py
+  used to pass `model.cpu()` to every probe, but `embed_everything` runs on
+  whatever device the model is on and its docstring already said the
+  difference is "hours of CPU and minutes of GPU". Measured on the 41M
+  anchored runs: ONE full probe cost 3,697 s / 4,802 s — 70-74% of all
+  wall-clock — projecting to ~12 h of probing against ~3.5 h of training.
+  Fixed with a CPU fallback on CUDA OOM (instrumentation must never be what
+  loses a training job). Probe cost scales with params x pixels x months,
+  so re-measure it whenever the tensor or the codec grows.
 - **Probe cadence** (Chris, 2026-08-08 — "compute intermediate metrics
-  more often"): the FULL probe costs ~300 s on the 10M codec (embeds 600
-  pixels x T plus a 400-step mini transformer), which is why `eval_every`
-  is measured in thousands of steps. `--light-probe-every` (workflow input
+  more often"): the FULL probe costs ~300 s on the 10M codec ON CPU (embeds
+  600 pixels x T plus a 400-step mini transformer), which is why
+  `eval_every` is measured in thousands of steps. `--light-probe-every` (workflow input
   `light_probe_every`, default 2000) runs ONLY the linear 26.5N section
   probe — ~67 pixels, no transformer, ~30 s — and emits the same
   `linear_r_deseas` key, so the status page's probe chart just gets denser
