@@ -278,6 +278,59 @@ jobs:
             python ml/fetch_truth.py
           fi
 
+      # PROVENANCE MANIFEST — the answer to "we thought this run tested X
+      # but a bug made the param something else". Three claims, three
+      # independent recorders, written AFTER the build so they describe what
+      # the training loop will actually see, not what the dispatch intended:
+      #   code    -> the exact commit SHA (immutable; tree browsable at
+      #              github.com/<repo>/tree/<sha> — better than a branch,
+      #              which is a mutable pointer someone can push to)
+      #   intent  -> the verbatim dispatch inputs
+      #   reality -> the BUILT tensor's own shape, channel list, and axis,
+      #              read back from the npz. The C=24 mislabelling incident
+      #              (a run named patch14 that silently carried 24 channels
+      #              because a fetcher default had moved) is exactly the gap
+      #              between intent and reality this file closes.
+      # It ships inside the checkpoint artifact, so harvest_run.mjs lands it
+      # in ml/runs/<name>/provenance.json next to the numbers it certifies.
+      - name: Record provenance
+        env:
+          INPUTS_JSON: ${{ toJSON(inputs) }}
+          TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
+        run: |
+          mkdir -p ml/runs/actions
+          python - <<'EOF'
+          import json, os, subprocess
+          import numpy as np
+          d = np.load(os.environ["TENSOR"], allow_pickle=False)
+          months = [str(m) for m in d["months"]]
+          try:
+              import torch
+              tv, cuda = torch.__version__, (torch.cuda.get_device_name(0)
+                  if torch.cuda.is_available() else "cpu")
+          except Exception:
+              tv, cuda = "?", "?"
+          json.dump({
+              "run_number": int(os.environ.get("GITHUB_RUN_NUMBER", 0)),
+              "sha": os.environ.get("GITHUB_SHA", ""),
+              "code": "https://github.com/%s/tree/%s" % (
+                  os.environ.get("GITHUB_REPOSITORY", ""),
+                  os.environ.get("GITHUB_SHA", "")),
+              "inputs": json.loads(os.environ["INPUTS_JSON"]),
+              "tensor": {
+                  "file": os.environ["TENSOR"],
+                  "X_shape": list(d["X"].shape),
+                  "C": int(d["X"].shape[-1]),
+                  "chan": [str(c) for c in d["chan"]],
+                  "months": [months[0], months[-1]],
+                  "T": len(months),
+              },
+              "torch": tv, "device": cuda,
+              "runner": os.environ.get("RUNNER_NAME", ""),
+          }, open("ml/runs/actions/provenance.json", "w"), indent=1)
+          print(open("ml/runs/actions/provenance.json").read())
+          EOF
+
       - name: Train
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -326,6 +379,7 @@ jobs:
             ml/runs/actions/eval.json
             ml/runs/actions/metrics.jsonl
             ml/runs/actions/curve.png
+            ml/runs/actions/provenance.json
           retention-days: 30
           if-no-files-found: warn
 

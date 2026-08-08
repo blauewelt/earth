@@ -106,6 +106,22 @@ from the runs' own JSON — never transcribe numbers by hand.
   Origin archives are flaky (SIO 504s killed five runs in one day); no
   cold box should ever contact them again. Publisher:
   `scripts/data_release.mjs` (streams tar|split, 1 chunk on disk).
+- **Provenance doctrine** (Chris, 2026-08-08: "avoid the mistake of
+  thinking this experiment tests this thing but in the end we had a bug
+  somewhere"): every run's exact code is pinned by its commit SHA — the
+  Actions run records `head_sha`, the status page links it, and the tree
+  is browsable forever at github.com/blauewelt/earth/tree/<sha>. We
+  deliberately do NOT use per-experiment branches: a branch is a mutable
+  pointer that someone can push to; the SHA is the frozen branch. The
+  workflow's "Record provenance" step additionally writes
+  `provenance.json` into the checkpoint artifact AFTER the build:
+  sha + verbatim dispatch inputs (intent) + the BUILT tensor's shape,
+  channel list, C, and time axis read back from the npz (reality) +
+  torch/device/runner. Intent vs reality is the C=24 mislabelling gap.
+  Three ground truths, in order of authority: provenance.json's tensor
+  block > the checkpoint's own `args`/`chan` > anything in a run name
+  or a chat message. When a claim matters, re-derive it from the first
+  two; never from the third.
 - **Checkpoint mirror**: release `model-checkpoints-v1` holds every
   harvested codec as `<run>__pixelmae.pt` (~4 MB each at pilot size).
   This is the DURABLE copy — Actions artifacts expire in ~90 days and
