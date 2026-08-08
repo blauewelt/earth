@@ -436,7 +436,16 @@
           : head + '<div class="empty">metrics file present but no loss points yet</div></div>';
       }
       var last = m.loss[m.loss.length - 1];
+      // Runs older than the config record still betray their plan: train.py
+      // logs the loss every steps//200, so the spacing between the first two
+      // points times 200 recovers the planned total to within 200 steps.
+      // Marked "approx" in the UI, because it is an inference, not a record.
       var total = m.cfg && m.cfg.steps ? m.cfg.steps : null;
+      var inferred = false;
+      if (!total && m.loss.length > 2) {
+        var gap = m.loss[1].step - m.loss[0].step;
+        if (gap > 0) { total = gap * 200; inferred = true; }
+      }
       var pct = total ? Math.min(100, 100 * last.step / total) : null;
       // ETA from the run's own wall clock, not ours: the last probe record
       // carries wall_s, which is seconds of TRAINING, so it excludes queue
@@ -455,12 +464,13 @@
       }
       var html = head +
         '<div class="stepbig">step ' + fmtInt(last.step) +
-        (total ? '<span class="lbl"> / ' + fmtInt(total) + "</span>" : "") + " " +
+        (total ? '<span class="lbl"> / ' + (inferred ? "~" : "") + fmtInt(total) + "</span>" : "") + " " +
         '<span class="lbl">rec ' + last.loss_rec.toFixed(4) + " · nei " + last.loss_nei.toFixed(4) +
         (m.cfg && m.cfg.params_M ? " · " + m.cfg.params_M + "M params" : "") + "</span></div>" +
         (pct !== null
           ? '<div class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>' +
-            '<div class="meta" style="margin:-2px 0 8px">' + pct.toFixed(0) + "% of planned steps" +
+            '<div class="meta" style="margin:-2px 0 8px">' + pct.toFixed(0) + "% of " +
+            (inferred ? "the planned steps (inferred from the loss cadence)" : "planned steps") +
             esc(eta) + "</div>"
           : "") +
         lossChart(m.loss, total) +

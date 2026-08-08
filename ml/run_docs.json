@@ -35,6 +35,6 @@
  "45": "f3_anchor41M first dispatch \u2014 cancelled and re-dispatched.",
  "46": "10M 30k steps-matched control (completes the 10M pair with #40): ridge 0.556 [0.44, 0.67], MOVE 0.212 \u2014 the pair is 0.556/0.578 at 30k/60k, i.e. no step effect at 10M either.",
  "47": "f3_anchor41M \u2014 failed; re-run as #48.",
- "48": "f3_anchor41M: 40.7M params, ~1 epoch on the 0.25-degree tensor \u2014 the first codec trained AT its Chinchilla data anchor.",
- "49": "f3_anchor41M_seed2: accidental duplicate of #48's 40.7M config (two sessions, one fleet), kept deliberately \u2014 the two-seed house rule wanted the replicate anyway."
+ "48": "f3_anchor41M: 40.7M params, 60,000 steps (~1 epoch) on the 0.25-degree tensor \u2014 the first codec trained AT its Chinchilla data anchor.",
+ "49": "f3_anchor41M_seed2: second seed of #48's 40.7M / 60,000-step config (the duplicate dispatch was accidental; kept, since the two-seed house rule wanted the replicate anyway)."
 }
