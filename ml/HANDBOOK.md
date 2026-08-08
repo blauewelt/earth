@@ -6,10 +6,17 @@ conflict on ML matters, this file wins. Keep it current the way CLAUDE.md
 is kept current: every hard-won fact lands here, not in a chat transcript.
 
 Secrets are NOT in this repo. Locations: GitHub PAT `/home/claude/.gh_pat`
-(sandbox), Vast.ai key `/home/claude/.vast_key` (sandbox), CMEMS
-credentials in the claude.ai project doc `claude/copernicus-marine-access.md`
-(env vars only, never on disk, never in argv — the permission classifier
-blocks credentials on command lines, correctly).
+(sandbox; recreate the file from the claude.ai project doc
+`claude/github-access.md` on a fresh container), CMEMS credentials in the
+claude.ai project doc `claude/copernicus-marine-access.md` (env vars only,
+never on disk, never in argv — the permission classifier blocks credentials
+on command lines, correctly). The Vast.ai key lived ONLY at
+`/home/claude/.vast_key` and DIED with the container on 2026-08-08 —
+`fleet_box_detail.mjs`/`gpu_box.mjs` (box costs, stop/start/destroy) are
+blind until Chris re-pastes it; the GitHub half of the fleet tooling
+(dispatch, run state, harvest, runner list) is unaffected. Ask Chris for
+the key when box management is needed; consider a project doc for it
+(same trade-off he accepted for the PAT and CMEMS).
 
 ## 1 · What this program is
 
@@ -42,10 +49,14 @@ from the runs' own JSON — never transcribe numbers by hand.
 
 - Probe-ladder finding: MLP ≈ ridge everywhere (nonlinearity adds nothing);
   attention head over unpooled section adds a lot. patch24 codec + head =
-  **0.690** [0.57, 0.78]. Attribution matrix: raw-1px 0.613 / emb-1px 0.617 /
-  raw-3x3 0.659 / emb-3x3 0.690 → pretraining margin **+0.031, n.s.**
-  Pretraining's case rests on field prediction, MOVE transfer
-  (0.206 [0.04, 0.35], CI excludes zero), and capacity scaling (open).
+  0.690 [0.57, 0.78] (seed 1) / 0.654 [0.54, 0.75] (seed 2, run #43).
+  SECOND SEED RETRACTS THE MARGIN (LEADERBOARD "The second seed"): the
+  two-seed mean 0.672 vs raw-3x3 0.659 → +0.013 ≈ nothing; the earlier
+  "+0.031, n.s." was one seed's noise read as a direction. The unpooling
+  capability claim SURVIVES (both seeds far above every pooled probe).
+  House rule since: no head claim on one seed. Pretraining's case rests
+  on field prediction, MOVE transfer (0.206 [0.04, 0.35], CI excludes
+  zero), and capacity scaling (10M + family-3 anchored runs, open).
 - Channel families: 1st = 4 Argo levels (C=12–15), 2nd = 8 levels
   (C=24/25). NEVER cross-compare. Read C from the checkpoint, not run names.
 - Steps: SETTLED by the 1M-step headroom run (#30, harvested as
@@ -60,8 +71,8 @@ from the runs' own JSON — never transcribe numbers by hand.
 - Chinchilla policy (user-mandated): after every data change, recompute
   observed-values/epoch ÷ 20 → codec size anchor, record it here and in
   SCALING.md. Current C=24 global: ~270M values → ~13M params → the 10M
-  codecs. Family-3 NA-window: ~600–800M → 30–40M. Global 0.25°: ~5B+ →
-  ~250M.
+  codecs. Family-3 NA 0.25°: **822.6M MEASURED → 41.1M anchor** (§5;
+  built 2026-08-08). Global 0.25°: ~5B+ → ~250M (estimate).
 - Withdrawn: global14b + global15sst stage-2 numbers (poisoned cache).
   SAMBA is unprobeable (anti-generalizes even for raw wind). OSNAP shows a
   possible MLP-only positive — unreplicated hypothesis.
@@ -74,7 +85,8 @@ from the runs' own JSON — never transcribe numbers by hand.
   storage; DISK=50 — storage is billed while STOPPED and one host charged
   $0.167/h for it). Stopped box keeps its runner registration. The PAT
   mints registration tokens itself (Administration:write). Budget: $50
-  approved by Chris, ~$4 spent.
+  approved by Chris, ~$5–6 spent (estimate as of 13:45 UTC 2026-08-08;
+  exact figure needs the Vast key back — see the header).
 - **Dispatch**: `node scripts/fleet_dispatch_wf.mjs '<inputs-json>' main`.
   Watch: `fleet_list_runs.mjs`, `fleet_run_state.mjs <id>`,
   `fleet_step_log.mjs <id> <regex>` (logs only after job end),
@@ -113,24 +125,45 @@ from the runs' own JSON — never transcribe numbers by hand.
   paper_dark.tex (never hand-edit it).
   Project docs `paper/paper.tex`/`paper/make_figs.py` are the backup.
 
-## 4 · In flight right now (updated 2026-08-08 ~12:15 UTC)
+## 4 · In flight right now (updated 2026-08-08 ~13:45 UTC)
 
-- #36: 10M codec 30k (NL box, in Train). #40: 10M codec 60k re-dispatch.
-  #41: patch24_40k seed2 re-dispatch (queued). When done: harvest, run
-  probe_head on the 10M codecs (capacity-vs-margin, THE open question),
-  and patch24 seed2's head vs 0.690.
-- pixel24_40k_seed2 checkpoint HARVESTED from failed #39 (train+upload
-  succeeded before the disk death) — probe suite still to run locally.
-- patch24_1M harvested + rekeyed (per-run probe JSONs said run="actions";
-  make_table needs the key = dir name) + in LEADERBOARD/paper/table.
-- Local: head capacity sweep 2.0M cells (raw-L then emb-L) running.
-- Box churn 2026-08-08: gpu-box-46045353 (Virginia) hit 50/50 GB disk,
-  runner died mid-#39 → destroyed, replaced by instance 47171781
-  (gpu-box-35586926, 129GB RAM Brazil, $0.267/h) — its cold start is the
-  first real test of release seeding (watch download counts rise).
-  Workflow now prunes disk below 8 GB free and seeds truth/ from the
-  release (OSNAP server timeouts killed #37/#38 at build).
-- A scheduled fleet-check fires 12:43 UTC (harvest, retries, box parking).
+- #40: 10M codec 60k (in Train, ~50k steps at 13:30). #44: FAMILY-3
+  pilot control (0.92M, 40k) — first on-box run of build_family3.py, in
+  Build. #46: 10M codec 30k re-re-dispatch (Brazil box, on the FIXED
+  seed code). #47: family-3 anchored 41M codec (576/10/8/768, 60k ≈ 1
+  epoch) — queued, takes whichever box frees first. When done: harvest
+  (f3_pilot_40k / f3_anchor41M / pixel10M_60k / pixel10M_30k — read C
+  and patch from the checkpoint before naming), upload checkpoints to
+  model-checkpoints-v1, probe_head on the 10M codecs with TWO seeds
+  before any margin claim (house rule above).
+- #42 (the first 10M 30k re-dispatch) HUNG 90 min in the seed step: the
+  streamed `curl | tar` had no --max-time and a stalled connection on
+  the Brazil box hung the pipe forever (release download counts showed
+  chunks ac/ad/ae never requested — that is how you diagnose it from
+  outside; logs are unreadable until a job ends). Cancelled; every seed
+  curl now carries --max-time, deliberately NO --retry inside the tar
+  stream (a mid-body retry restarts at byte 0 and corrupts the tar).
+- #43 patch24_40k seed2: SUCCESS, harvested to ml/runs/patch24_40k_seed2
+  + rekeyed (per-run JSONs say run="actions"; make_table needs the key =
+  dir name) + checkpoint mirrored. Ridge 0.531 = exactly the wind-only
+  line; head 0.654 → the margin retraction in §2 / LEADERBOARD / paper.
+- TWO CLAUDE SESSIONS worked this program in parallel on 2026-08-08
+  (~12:00–13:45): the interactive noon session (harvested #43's head
+  probes, pushed the retraction + paper v4) and the scheduled family-3
+  builder session (this handbook update). It worked — git rebase merged
+  cleanly, the checkpoint upload collided harmlessly ("already_exists")
+  — but check `git log origin/main` and the release assets BEFORE
+  redoing any harvest/upload/doc edit: the other session may have done
+  it already. The handbook is the coordination medium; update it first.
+- pixel24_40k_seed2 checkpoint (from failed #39; patch=1 control) —
+  probe suite run by the noon session (head 0.564; LEADERBOARD).
+- Boxes: 3 runners online (45318655, 47094145, 35586926-Brazil). All
+  busy or about to be; nothing to park. Spend: Vast key lost (header),
+  so unbilled-API estimate only: ~$4 at 12:15 + ~1.5 h × ~$0.75/h ≈
+  **$5–6 of the $50 cap**. The Brazil box's GitHub link is slow/flaky —
+  it is the one that hung #42 and it cold-starts every seed; if it
+  misbehaves again, destroy and re-provision US-side (gpu_box.mjs offers
+  ranks true cost — needs the Vast key back first).
 
 ## 5 · Data ladder (user-approved: data first, then training)
 
@@ -150,30 +183,40 @@ from the runs' own JSON — never transcribe numbers by hand.
   (their modality list translated to ocean; they are terrestrial-only).
   SSH already arrived via (b). OBP/ERA5 need Earthdata/CDS accounts.
 
-### THE NEXT TASK — the family-3 builder (spec)
+### Family-3 builder — DONE 2026-08-08 (was "the next task")
 
-Goal: `ml/build_family3.py` producing `ml/cache/family3_na025.npz`:
-1. Base: `base025_na.npz` (cur_speed, log_mld, ssh at 0.25°).
-2. Extend axis to 1982-01 (missing tokens pre-1993), reusing the
-   --start-year pattern from build_dataset.py.
-3. RG at `EARTH_RG_LEVELS=16` (fetch_rg_channels logic, refactored to
-   write onto the 0.25° grid by bilinear upsample from 1°; keep a note
-   that RG is intrinsically 1°-smooth).
-4. NCEP wind stress + within-month std onto 0.25° (bilinear from the
-   gaussian grid; fetch_wind_channels/fetch_wind_stats logic).
-5. Truth series unchanged (fetch_truth.py attaches to the axis).
-6. Anomaly/holdout machinery must NOT assume grid: check
-   anomaly_transform and probes for 1°-hardcoded windows — the holdout
-   lon block (-45,-25) and RAPID section clip work in degrees, fine, but
-   memory at 0.25° NA ≈ 384x281x481x~24ch x4B ≈ 5 GB dense → the SANDBOX
-   CANNOT hold anomaly copies; build and train on the BOXES (64 GB), or
-   build here with memmaps. Expected total ~600–800M observed values →
-   Chinchilla anchor 30–40M params (record the real number in SCALING.md).
-7. Then dispatch family-3 codecs (pilot-size control + anchored-size) via
-   the workflow; a `tensor` input for the workflow build step (which
-   tensor recipe to run) will need adding — currently it always builds the
-   family-2 recipe.
-8. New family block in LEADERBOARD + paper §families; never cross-compare.
+`ml/build_family3.py` → `ml/cache/family3_na025.npz`, built and
+validated in-sandbox (memmapped X + per-month slab passes; the dense
+tensor is 10.9 GB against 7 GB RAM), then wired into the workflow as
+the `tensor` input (`family2` default | `family3_na025`) with `--data`
+plumbed through train.py and every probe. As-built facts:
+
+- [T=516 (1982-01..2024-12), H=281, W=481, C=39] · 84,405 ocean cells ·
+  chan = cur_speed/log_mld/ssh + rg_t/rg_s at 16 levels + tau_x/tau_y/
+  tau_x_std/tau_y_std. truth_fc 490 in-axis months (the 1982-92 cable
+  decade is in). npz is 3.0 GB compressed; `recipe` key = skip guard on
+  boxes (bump RECIPE_REV on any recipe change).
+- **Chinchilla, measured at build: 822,649,104 observed values (base
+  97.2M / rg 551.2M / wind 174.2M) → anchor 41.1M params.** Above the
+  600–800M estimate (RG covers 41.4% of ocean×months at 0.25°). Train
+  pool 30.38M pixel-months → 1 epoch at batch 512 = 59.3k steps.
+  Recorded in SCALING.md (with the 1°-smoothness caveat: 41M is a
+  ceiling, not a target).
+- Wind mean AND std both come from the NCEP DAILY files now (one
+  source); 1982-92 daily files are fetched from PSL on first build and
+  cached — they are NOT in the wind_daily release tar (1993+ only).
+  Open: extend the release with them so cold boxes stay offline.
+- RG extension months enumerate from the LOCAL cache, never the SIO
+  index scrape. base025_na.npz seeds from the release in the workflow
+  (and build_family3.py self-fetches it if absent — no CMEMS needed).
+- Dispatched: #44 pilot control (0.92M, 40k, family-2 champion
+  protocol), #47 anchored 41M (576/10/8/768 = 40.7M, 60k ≈ 1 epoch,
+  temporal_steps=0 to spare box disk). LEADERBOARD has the family-3
+  block; paper §families waits for the first results (no numbers yet).
+- Still open for family 3: 2025–26 base tail (interim 1/12° binned to
+  0.25, needs CMEMS), wind-only ridge baseline ON THIS TENSOR (family-2
+  0.531 does not carry over), steps-matched anchored 40k control if the
+  60k result warrants it.
 
 ## 6 · Standing user directives (verbatim intent)
 
