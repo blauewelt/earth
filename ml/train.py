@@ -303,11 +303,11 @@ def main():
         optimiser state and activations are still resident.
         """
         try:
-            if dev.type == "cuda":
+            if str(dev).startswith("cuda"):
                 torch.cuda.empty_cache()
             return trainprobe.probe_now(model, Xt, OBS, d, mvec, t_hold,
                                         x_hold, dynamic, **kw)
-        except torch.cuda.OutOfMemoryError:
+        except torch.cuda.OutOfMemoryError:            # cuda-only path
             print("  probe OOM on GPU — falling back to CPU for this one",
                   flush=True)
             torch.cuda.empty_cache()
