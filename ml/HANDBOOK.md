@@ -127,15 +127,21 @@ from the runs' own JSON — never transcribe numbers by hand.
 
 ## 4 · In flight right now (updated 2026-08-08 ~13:45 UTC)
 
-- #40: 10M codec 60k (in Train, ~50k steps at 13:30). #44: FAMILY-3
-  pilot control (0.92M, 40k) — first on-box run of build_family3.py, in
-  Build. #46: 10M codec 30k re-re-dispatch (Brazil box, on the FIXED
-  seed code). #47: family-3 anchored 41M codec (576/10/8/768, 60k ≈ 1
-  epoch) — queued, takes whichever box frees first. When done: harvest
-  (f3_pilot_40k / f3_anchor41M / pixel10M_60k / pixel10M_30k — read C
-  and patch from the checkpoint before naming), upload checkpoints to
-  model-checkpoints-v1, probe_head on the 10M codecs with TWO seeds
-  before any margin claim (house rule above).
+- #40 DONE 14:10: harvested as **patch24_10M_60k** (10.26M params) +
+  mirrored. Ridge 0.578 [0.451, 0.695] — first 24-channel codec back
+  above the wind-only line; MOVE 0.238 (CI excludes zero, lowpass
+  0.677). LEADERBOARD has the writeup. #44: FAMILY-3 pilot control
+  (0.92M, 40k) — build_family3.py COMPLETED on-box, training since
+  ~13:55 at ~5 steps/s (gather-bound at 0.25°: patch-3 gathers from a
+  10.9 GB CPU tensor; ~2.2 h for 40k. Optimization if it matters:
+  move Xt/OBS to the 4090's 24 GB and gather on-device). #46: 10M 30k
+  re-re-dispatch (Brazil box, fixed seed code, in seed ~40 min — its
+  link is slow; the per-chunk cap is 30 min so it either lands or dies
+  loudly). #47: family-3 anchored 41M (576/10/8/768, 60k) — running on
+  the box #40 freed. When done: harvest (f3_pilot_40k / f3_anchor41M /
+  patch24_10M_30k — read C and patch from the checkpoint before
+  naming), mirror checkpoints, probe_head on the 10M codecs with TWO
+  seeds before any margin claim (house rule above).
 - #42 (the first 10M 30k re-dispatch) HUNG 90 min in the seed step: the
   streamed `curl | tar` had no --max-time and a stalled connection on
   the Brazil box hung the pipe forever (release download counts showed

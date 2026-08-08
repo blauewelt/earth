@@ -39,6 +39,20 @@ collapse amplitude captured out-of-fold. Wind-stress-only ridge baseline
 | pixel24 (#21/#22) | global | 24 | 1 | 64 | 40k/30k | — | … | … | … | queued (controls) |
 | patch24_30k (#19r) | global | 24 | 3 | 64 | 30k | — | … | … | … | queued |
 | patch25_30k (#20) | global | 25 | 3 | 64 | 30k | — | … | … | … | running |
+| patch24_40k_seed2 (#43) | global | 24 | 3 | 64 | 40k | — | 0.531 [0.404, 0.654] | 2.39 | 27% | done |
+| **patch24_10M_60k** (#40) | global | 24 | 3 | 64 | 60k | — | **0.578** [0.451, 0.695] | 2.34 | 26% | done (10.26M params) |
+
+**The 10M codec is the first 24-channel run back above the wind-only
+line (2026-08-08, #40).** Ridge 0.578 vs baseline 0.531 and vs 0.543 /
+0.531 for the two pilot-size seeds — the direction the Chinchilla
+argument predicted (the global tensor anchors ~13M params; the pilots
+are 0.92M), though the CIs overlap the pilot values. MOVE moved the
+same way: 0.238 [0.099, 0.358] (CI excludes zero, 18-mo low-passed
+0.677) against 0.206 for pixel25_40k — capacity helped BOTH the
+wind-dominated and the density-dominated target at once, which the
+shared-bottleneck story requires. Still open before any strong claim:
+the steps-matched 10M 30k (#46), a second 10M seed, and the head probe
+(two seeds, per the house rule below).
 
 † within-tensor only. NA k-fold values are protocol v2 except wind14
 (v3 bridge); global rows are v3. RMSE backfill for NA runs pending.
