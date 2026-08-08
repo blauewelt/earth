@@ -107,6 +107,9 @@ def main():
     ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"))
     ap.add_argument("--K", type=int, default=1,
                     help="months of context per sample (1 = instantaneous)")
+    ap.add_argument("--raw-patch", action="store_true",
+                    help="with --raw: raw tokens carry the 3x3 neighbourhood "
+                         "(matches the patch codec's receptive field)")
     ap.add_argument("--raw", action="store_true",
                     help="the END-TO-END BASELINE: feed the head the raw "
                          "anomaly channel values (+observed flags) of each "
@@ -155,10 +158,26 @@ def main():
     if a.raw:
         # raw features per (pixel, month): C anomaly values (0 where
         # unobserved) + C observed flags — exactly what the encoder itself
-        # receives for that pixel, minus the pretraining.
+        # receives for that pixel, minus the pretraining. With --raw-patch,
+        # each token instead carries its 3x3 neighbourhood (2*C*9 features):
+        # the same receptive field the patch codec had. This is the control
+        # that decides whether the patch codec's 0.690 is PRETRAINING value
+        # or merely RECEPTIVE-FIELD value.
         sy, sx = ys[sec_sel], xs[sec_sel]
-        Z = np.concatenate([Xt[:, sy, sx].numpy(),
-                            OBS[:, sy, sx].numpy().astype(np.float32)], -1)
+        if a.raw_patch:
+            from model import gather_px
+            T_all = Xt.shape[0]
+            feats = []
+            for t in range(T_all):
+                tt = torch.full((len(sy),), t, dtype=torch.long)
+                v, o = gather_px(Xt, OBS, tt, torch.as_tensor(sy),
+                                 torch.as_tensor(sx), 3)
+                feats.append(torch.cat([v.reshape(len(sy), -1),
+                                        o.reshape(len(sy), -1).float()], -1))
+            Z = torch.stack(feats).numpy()
+        else:
+            Z = np.concatenate([Xt[:, sy, sx].numpy(),
+                                OBS[:, sy, sx].numpy().astype(np.float32)], -1)
         feat_dim = Z.shape[-1]
     else:
         Z, _ = embed_everything(codec, Xt, OBS, ctx_all, lats, lons,
@@ -214,8 +233,10 @@ def main():
             rs.append(np.corrcoef(pred[sel], v_des[sel])[0, 1])
     lo95, hi95 = np.percentile(rs, [2.5, 97.5])
 
-    out = {"run": a.run, "probe": "attention-head-raw" if a.raw
-           else "attention-head", "K": a.K,
+    out = {"run": a.run,
+           "probe": ("attention-head-raw3x3" if (a.raw and a.raw_patch)
+                     else "attention-head-raw" if a.raw
+                     else "attention-head"), "K": a.K,
            "r_kfold_deseas": round(r, 3),
            "ci95": [round(float(lo95), 3), round(float(hi95), 3)],
            "rmse_sv": round(rmse, 2), "n": int(okp.sum()),
@@ -223,8 +244,9 @@ def main():
                    f"{P} pixels x {a.K} months"}
     print(f"{a.run} head-probe (K={a.K}): rapid k-fold r {r:+.3f} "
           f"[{lo95:+.3f}, {hi95:+.3f}] · RMSE {rmse:.2f} Sv")
-    path = os.path.join(HERE, "runs", a.run,
-                        "probe_head_raw.json" if a.raw else "probe_head.json")
+    fn = ("probe_head_raw3x3.json" if (a.raw and a.raw_patch)
+          else "probe_head_raw.json" if a.raw else "probe_head.json")
+    path = os.path.join(HERE, "runs", a.run, fn)
     json.dump(out, open(path, "w"), indent=2)
     print("wrote", path)
 
