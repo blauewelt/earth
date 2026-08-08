@@ -169,17 +169,31 @@ jobs:
           # partial directories that must not suppress seeding — that exact
           # bug sent runs #36/#37 back to the dead origin while the release
           # sat unused at zero downloads.
+          # Every curl carries a hard --max-time. The first version streamed
+          # `curl -sL | tar x` with no time limit — one stalled connection
+          # hangs the pipe FOREVER, which is what parked run #42 in this step
+          # for 90+ minutes on the Brazil box (release download counts showed
+          # chunks ac/ad/ae were never even requested). Still streamed (a
+          # chunks-to-disk variant would double peak disk on 50 GB boxes),
+          # and deliberately NO --retry inside the stream: a mid-body retry
+          # restarts the chunk from byte 0 and corrupts the tar. A stall now
+          # kills the seed loudly; the completeness check re-seeds next run.
           seed() {
             d="$1"
             echo "seeding $d from release data-cache-v1 …"
             rm -rf "/opt/earth-cache/$d"
-            assets=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
+            assets=$(curl -s --max-time 120 -H "Authorization: Bearer $GH_TOKEN" \
               "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/data-cache-v1" \
               | python3 -c "import json,sys;[print(a['browser_download_url']) for a in json.load(sys.stdin).get('assets',[]) if a['name'].startswith('$d.tar.')]")
             if [ -n "$assets" ]; then
-              echo "$assets" | sort | while read u; do curl -sL "$u"; done \
-                | tar x -C /opt/earth-cache
-              echo "  seeded: $(du -sh /opt/earth-cache/$d | cut -f1)"
+              if echo "$assets" | sort | while read u; do
+                   echo "  chunk $(basename "$u") …" >&2
+                   curl -sL --max-time 1800 "$u" || exit 1
+                 done | tar x -C /opt/earth-cache; then
+                echo "  seeded: $(du -sh /opt/earth-cache/$d | cut -f1)"
+              else
+                echo "::warning::seed $d failed (stall/timeout) — partial dir stays, completeness check re-seeds next run"
+              fi
             else
               echo "  (no release assets — fetchers will hit the origin)"
             fi
@@ -201,8 +215,10 @@ jobs:
           # the build step offline like everything else.
           if [ "${{ inputs.tensor }}" = "family3_na025" ]; then
             [ -f /opt/earth-cache/base025_na.npz ] || curl -sL \
+              --max-time 900 --retry 3 --retry-delay 10 \
               -o /opt/earth-cache/base025_na.npz \
-              "https://github.com/${GITHUB_REPOSITORY}/releases/download/data-cache-v1/base025_na.npz"
+              "https://github.com/${GITHUB_REPOSITORY}/releases/download/data-cache-v1/base025_na.npz" \
+              || rm -f /opt/earth-cache/base025_na.npz
           fi
           echo "persistent cache: $(du -sh /opt/earth-cache | cut -f1)"
 
