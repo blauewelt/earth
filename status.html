@@ -72,6 +72,11 @@
   ul.links li { margin: 0; border-bottom: 1px solid #21262d; }
   ul.links a { display: block; padding: 12px 4px; }
   .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+  /* per-run documentation: a muted full-width line under each run row */
+  tr.docrow td { color: var(--text-dim); font-size: 13px; padding: 0 6px 10px;
+                 border-bottom: 1px solid var(--line, #21262d); line-height: 1.45; }
+  tr.docrow .nodoc { color: var(--muted); font-style: italic; }
+  .rundoc { color: var(--text-dim); font-size: 13px; margin: 2px 0 8px; line-height: 1.45; }
   footer { margin-top: 36px; color: var(--muted); font-size: 12px; }
 </style>
 </head>
@@ -174,6 +179,29 @@
     });
   }
 
+  // ---- run documentation ----------------------------------------------------
+  // What each run IS, not just its state. Two sources, curated first:
+  // ml/run_docs.json on main (backfills history, can correct a bad name), then
+  // the run's own display_title — dispatches since 2026-08-08 pass a `doc`
+  // input that the workflow's run-name surfaces, so new runs document
+  // themselves. raw.githubusercontent is CORS-open and not API-rate-counted.
+  var runDocs = {};
+  function loadRunDocs() {
+    return fetch("https://raw.githubusercontent.com/" + REPO + "/main/ml/run_docs.json?cb=" + Date.now())
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (j) { runDocs = j || {}; })
+      .catch(function () { /* keep the last copy we had */ });
+  }
+  function docOf(r) {
+    var curated = runDocs[String(r.run_number)];
+    if (curated) return curated;
+    if (r.display_title && r.display_title !== "ml-train" && r.name !== r.display_title) {
+      return r.display_title;
+    }
+    if (r.display_title && r.display_title !== "ml-train") return r.display_title;
+    return null;
+  }
+
   // ---- workflow runs table --------------------------------------------------
   function renderRuns(data) {
     var runs = (data && data.workflow_runs) || [];
@@ -185,6 +213,10 @@
         '<td><span class="dot" style="background:' + statusColor(r) + '"></span>' +
         esc(statusLabel(r)) + "</td>" +
         "<td>" + esc(ago(r.created_at)) + "</td></tr>";
+      var doc = docOf(r);
+      html += '<tr class="docrow"><td colspan="3">' +
+        (doc ? esc(doc) : '<span class="nodoc">no doc recorded — predates the doc field</span>') +
+        "</td></tr>";
     });
     html += "</table>";
     $("runs").innerHTML = html;
@@ -262,9 +294,11 @@
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.text();
     }).then(function (text) {
+      var doc = docOf(run);
       var head = '<div class="card"><h3><a href="' + esc(run.html_url) + '">run #' +
                  esc(run.run_number) + "</a> <span class=\"meta\">· started " +
-                 esc(ago(run.created_at)) + "</span></h3>";
+                 esc(ago(run.created_at)) + "</span></h3>" +
+                 (doc ? '<div class="rundoc">' + esc(doc) + "</div>" : "");
       if (text === null) {
         return head + '<div class="empty">building dataset / seeding cache (no training metrics yet)</div></div>';
       }
@@ -325,7 +359,8 @@
     // 2 api.github.com calls per cycle; raw.githubusercontent.com is uncounted.
     Promise.all([
       apiGet("https://api.github.com/repos/" + REPO + "/actions/workflows/ml-train.yml/runs?per_page=12"),
-      apiGet("https://api.github.com/repos/" + REPO + "/releases")
+      apiGet("https://api.github.com/repos/" + REPO + "/releases"),
+      loadRunDocs()
     ]).then(function (res) {
       hideBanner();
       var runs = renderRuns(res[0]);

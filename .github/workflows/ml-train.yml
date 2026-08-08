@@ -10,9 +10,16 @@
 # The RG-Argo download (~2 GB) and the built tensor are cached between runs,
 # so only the first run pays the fetch.
 name: ml-train
+# The run NAME is the run's documentation: dispatches pass a one-line `doc`
+# and it becomes display_title, which the status page and the Actions list
+# show. Historical runs (pre-doc) are backfilled in ml/run_docs.json.
+run-name: ${{ inputs.doc || 'ml-train' }}
 on:
   workflow_dispatch:
     inputs:
+      doc:
+        description: "one line: what this run is and why (shows as the run name and on status.html)"
+        default: ""
       steps:
         description: "training steps"
         default: "40000"

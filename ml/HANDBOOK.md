@@ -88,9 +88,13 @@ from the runs' own JSON — never transcribe numbers by hand.
   approved by Chris, ~$5–6 spent (estimate as of 13:45 UTC 2026-08-08;
   exact figure needs the Vast key back — see the header).
 - **Dispatch**: `node scripts/fleet_dispatch_wf.mjs '<inputs-json>' main`.
-  Watch: `fleet_list_runs.mjs`, `fleet_run_state.mjs <id>`,
-  `fleet_step_log.mjs <id> <regex>` (logs only after job end),
-  `fleet_box_detail.mjs` (boxes + runners + costs).
+  MANDATORY `doc` input (the script refuses without it): one line, what
+  the run is and why — it becomes the run name and the description on
+  status.html. Historical runs are backfilled in `ml/run_docs.json`;
+  correct or extend that file when a run's story changes (e.g. it fails
+  for an interesting reason). Watch: `fleet_list_runs.mjs`,
+  `fleet_run_state.mjs <id>`, `fleet_step_log.mjs <id> <regex>` (logs
+  only after job end), `fleet_box_detail.mjs` (boxes + runners + costs).
 - **Workflow** (`.github/workflows/ml-train.yml`): inputs cover steps,
   batch, d_z, patch, codec size (codec_d_model/layers/heads/d_dec),
   lr_floor/lr_decay_steps (decay-then-constant headroom protocol),
