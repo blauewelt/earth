@@ -52,9 +52,9 @@ class SectionHead(nn.Module):
     one single-head cross-attention pools them, a two-layer MLP reads the
     pooled vector out. ~25k parameters at d=64."""
 
-    def __init__(self, d_z, d=64, K=1):
+    def __init__(self, in_dim, d=64, K=1):
         super().__init__()
-        self.lift = nn.Linear(d_z + 2, d)      # z + (lon_frac, month_idx/K)
+        self.lift = nn.Linear(in_dim, d)       # features + (lon_frac, month_idx/K)
         self.q = nn.Parameter(torch.randn(1, 1, d) / d ** 0.5)
         self.att = nn.MultiheadAttention(d, num_heads=1, batch_first=True)
         self.out = nn.Sequential(nn.LayerNorm(d), nn.Linear(d, 32),
@@ -67,10 +67,10 @@ class SectionHead(nn.Module):
         return self.out(pooled[:, 0]).squeeze(-1)
 
 
-def fold_fit(Xtr, ytr, Xte, d_z, seed, steps=4000):
+def fold_fit(Xtr, ytr, Xte, in_dim, seed, steps=4000):
     torch.manual_seed(seed)
     g = torch.Generator().manual_seed(seed)
-    net = SectionHead(d_z)
+    net = SectionHead(in_dim)
     opt = torch.optim.AdamW(net.parameters(), lr=1e-3, weight_decay=1e-2)
     n = len(Xtr)
     fit = slice(0, int(0.8 * n))
@@ -107,6 +107,19 @@ def main():
     ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"))
     ap.add_argument("--K", type=int, default=1,
                     help="months of context per sample (1 = instantaneous)")
+    ap.add_argument("--raw", action="store_true",
+                    help="the END-TO-END BASELINE: feed the head the raw "
+                         "anomaly channel values (+observed flags) of each "
+                         "section pixel instead of the codec embedding. Same "
+                         "head, same folds, same regularization — the ONLY "
+                         "difference is whether self-supervised pretraining "
+                         "sits between the data and the read-out. If the "
+                         "embedding does not beat this, the codec added "
+                         "nothing a supervised head could not learn from "
+                         "240 months alone. NOTE: raw tokens see one pixel; "
+                         "a patch=3 codec's embedding saw its 3x3 "
+                         "neighbourhood — pair raw against a PIXEL codec for "
+                         "the strictly matched comparison.")
     a = ap.parse_args()
 
     ck = torch.load(os.path.join(HERE, "runs", a.run, "pixelmae.pt"),
@@ -139,8 +152,18 @@ def main():
     ocean = OBS[..., 0].any(axis=0).numpy()
     ys, xs = np.where(ocean)
     sec_y, sec_sel = rapid_section(lats, lons, ys, xs)
-    Z, _ = embed_everything(codec, Xt, OBS, ctx_all, lats, lons,
-                            ys[sec_sel], xs[sec_sel], codec.d_z)
+    if a.raw:
+        # raw features per (pixel, month): C anomaly values (0 where
+        # unobserved) + C observed flags — exactly what the encoder itself
+        # receives for that pixel, minus the pretraining.
+        sy, sx = ys[sec_sel], xs[sec_sel]
+        Z = np.concatenate([Xt[:, sy, sx].numpy(),
+                            OBS[:, sy, sx].numpy().astype(np.float32)], -1)
+        feat_dim = Z.shape[-1]
+    else:
+        Z, _ = embed_everything(codec, Xt, OBS, ctx_all, lats, lons,
+                                ys[sec_sel], xs[sec_sel], codec.d_z)
+        feat_dim = codec.d_z
     P = Z.shape[1]
     lon_frac = ((lons[xs[sec_sel]] - lons[xs[sec_sel]].min())
                 / max(1e-6, np.ptp(lons[xs[sec_sel]]))).astype(np.float32)
@@ -155,14 +178,14 @@ def main():
     ridx, v_des = ridx[ok], v_des[ok]
 
     # tokens [n, P*K, d_z+2]: embedding + (lon position, month offset)
-    toks = np.zeros((len(ridx), P * a.K, codec.d_z + 2), dtype=np.float32)
+    toks = np.zeros((len(ridx), P * a.K, feat_dim + 2), dtype=np.float32)
     for i, t in enumerate(ridx):
         for j in range(a.K):
             z = Z[t - j]                              # [P, d_z]
             block = slice(j * P, (j + 1) * P)
-            toks[i, block, :codec.d_z] = z
-            toks[i, block, codec.d_z] = lon_frac
-            toks[i, block, codec.d_z + 1] = j / max(1, a.K - 1) if a.K > 1 else 0.0
+            toks[i, block, :feat_dim] = z
+            toks[i, block, feat_dim] = lon_frac
+            toks[i, block, feat_dim + 1] = j / max(1, a.K - 1) if a.K > 1 else 0.0
     T_ = torch.as_tensor(toks)
 
     pred = np.full(len(v_des), np.nan)
@@ -173,7 +196,7 @@ def main():
         # standardize target on train only
         mu, sd = v_des[tr].mean(), v_des[tr].std() + 1e-9
         p = np.mean([fold_fit(T_[tr], (v_des[tr] - mu) / sd, T_[te],
-                              codec.d_z, sd_)
+                              feat_dim + 2, sd_)
                      for sd_ in (0, 1, 2)], axis=0)
         pred[te] = p * sd + mu
     okp = np.isfinite(pred)
@@ -191,7 +214,8 @@ def main():
             rs.append(np.corrcoef(pred[sel], v_des[sel])[0, 1])
     lo95, hi95 = np.percentile(rs, [2.5, 97.5])
 
-    out = {"run": a.run, "probe": "attention-head", "K": a.K,
+    out = {"run": a.run, "probe": "attention-head-raw" if a.raw
+           else "attention-head", "K": a.K,
            "r_kfold_deseas": round(r, 3),
            "ci95": [round(float(lo95), 3), round(float(hi95), 3)],
            "rmse_sv": round(rmse, 2), "n": int(okp.sum()),
@@ -199,7 +223,8 @@ def main():
                    f"{P} pixels x {a.K} months"}
     print(f"{a.run} head-probe (K={a.K}): rapid k-fold r {r:+.3f} "
           f"[{lo95:+.3f}, {hi95:+.3f}] · RMSE {rmse:.2f} Sv")
-    path = os.path.join(HERE, "runs", a.run, "probe_head.json")
+    path = os.path.join(HERE, "runs", a.run,
+                        "probe_head_raw.json" if a.raw else "probe_head.json")
     json.dump(out, open(path, "w"), indent=2)
     print("wrote", path)
 
