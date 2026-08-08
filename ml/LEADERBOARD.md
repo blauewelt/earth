@@ -99,15 +99,28 @@ files). 822.6 M observed values → Chinchilla anchor 41.1 M params
 
 | run | C | patch | d_z | params | steps | k-fold RAPID r [95% CI] | status |
 |---|---|---|---|---|---|---|---|
-| f3_pilot_40k (#44) | 39 | 3 | 64 | 0.92M | 40k | … | running |
+| **f3_pilot_40k** (#44) | 39 | 3 | 64 | 0.92M | 40k | **0.620** [0.484, 0.741] | done |
 | f3_anchor41M (#48, re-run of failed #47) | 39 | 3 | 64 | 40.7M | 60k (~1 epoch) | … | running |
+| f3_anchor41M_seed2 (#49) | 39 | 3 | 64 | 40.7M | 60k | … | running |
 
-The pair reruns the family-2 capacity question on 4.4× the data: the
-pilot control isolates what 0.25° data buys at fixed capacity, the
-anchored run is the first codec this project has trained AT its data
-anchor. A steps-matched anchored 40k control follows if the 60k result
-warrants it. Wind-only ridge baseline for THIS tensor: to be measured
-(the family-2 0.531 does not carry over).
+**The pilot's first read (2026-08-08 15:00): the 0.25° tensor pays.**
+f3_pilot_40k ridge 0.620 [0.484, 0.741], RMSE 2.25 Sv, 18-mo low-passed
+0.747, dip capture 46% — and the wind-only baseline measured ON THIS
+TENSOR is 0.568, so the pilot-size codec clears its own baseline by
++0.052 where the family-2 pilots sat exactly on theirs. MOVE 0.235
+[0.112, 0.340] (CI excludes zero, low-passed 0.726). The Florida cable
+is a null so far (-0.005, n=490 — but wind-only is -0.276 there, so
+nothing anti-generalizes; the 1982-92 decade may need channels that
+exist pre-1993, which today means wind only). Numerically 0.620 is the
+highest pooled-ridge k-fold of any codec to date — read that with care:
+same truth and protocol, different tensor, so it says "this data recipe
+is better", not "this codec is better than global14".
+
+The anchored pair (#48/#49 — two seeds of the same 40.7M config,
+running in parallel; the duplicate dispatch was accidental and KEPT
+deliberately, since the two-seed rule would have demanded the replicate
+anyway) tests capacity AT the data anchor. A steps-matched anchored 40k
+control follows if the 60k result warrants it.
 
 
 ## The probe ladder (2026-08-08): pooling was hiding the signal

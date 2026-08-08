@@ -135,19 +135,30 @@ from the runs' own JSON — never transcribe numbers by hand.
   api.github.com calls per 2-min refresh + raw.githubusercontent.com,
   which is uncounted), so it holds no credentials.
 
-## 4 · In flight right now (updated 2026-08-08 ~15:10 UTC)
+## 4 · In flight right now (updated 2026-08-08 ~15:25 UTC)
 
-- #44 FAMILY-3 pilot control (0.92M, 40k): training DONE ~14:50 (40k
-  steps in ~55 min — the ~5 steps/s early estimate was pessimistic;
-  it converged to ~12), now in the Probes step. #46 10M 30k
-  (Brazil box): survived a ~90-min seed and is in Build dataset since
-  ~15:00. #48 family-3 anchored 41M (576/10/8/768, 60k,
-  temporal_steps=0, job_timeout 1440): the RE-dispatch of failed #47,
-  running on box 47094145 against the fixed seed code (below). When
-  done: harvest (f3_pilot_40k / f3_anchor41M / patch24_10M_30k — read
-  C and patch from the checkpoint before naming), mirror checkpoints,
-  probe_head on the 10M codecs with TWO seeds before any margin claim
-  (house rule above).
+- #44 FAMILY-3 pilot: DONE + harvested as **f3_pilot_40k** + mirrored.
+  Ridge **0.620** [0.484, 0.741] vs THIS tensor's wind-only 0.568 —
+  the pilot clears its own baseline by +0.052 where family-2 pilots
+  sat on theirs; MOVE 0.235 (CI excl. zero), dip 46%, fc null.
+  Full read in LEADERBOARD's family-3 block. Highest pooled-ridge
+  k-fold to date (cross-family caveat applies: better DATA, not
+  provably better codec).
+- #46 10M 30k (Brazil box): survived a ~90-min seed on the fixed code
+  and is in Train since ~15:0x. #48 family-3 anchored 41M
+  (576/10/8/768, 60k, temporal_steps=0): re-dispatch of failed #47 by
+  the interactive session, running since 14:44. #49: the SAME anchored
+  config dispatched at 15:08 by the scheduled session before it saw
+  #48 — kept deliberately as **f3_anchor41M_seed2** (the two-seed rule
+  would have demanded the replicate anyway; both boxes were otherwise
+  idle). Harvest names: patch24_10M_30k / f3_anchor41M /
+  f3_anchor41M_seed2 — read C and patch from the checkpoint first.
+  probe_head on the 10M codecs needs TWO seeds before any margin claim.
+- Release-asset dedup 15:20: the two sessions independently published
+  the 1982-92 daily wind (wind_daily82.tar.aa via GitHub-release pull;
+  wind_daily_8292.tar.aa via the thredds mirror). The _8292 variant is
+  what main's workflow seeds; the orphan wind_daily82.tar.aa was
+  DELETED from the release per the note below.
 - #47 FAILED 14:14 in Build dataset: downloads.psl.noaa.gov 504'd all
   four attempts at vflx.sfc.gauss.1982.nc (box 47094145 was cold for
   the 1982-92 dailies, which the wind_daily release tar predates —
