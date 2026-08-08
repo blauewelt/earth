@@ -675,19 +675,18 @@ stops two copies sharing the screen; it is not a memory of what has been said.
 - Never commit credentials. The push token lives only in the local git
   credential helper.
 
-### 6b. The draft paper lives in the claude.ai PROJECT, not the repo
+### 6b. The paper is PUBLIC in the repo (reversed 2026-08-08)
 
-`ml/paper/` (paper.tex, make_figs.py, figs/) is deliberately gitignored —
-the user wants to submit it, so the draft must not be public before then
-("we shouldn't let our draft paper be live online too early", 2026-08-07).
-The consequence is easy to forget and was discovered the hard way that same
-night: gitignored files are NOT in the repo, so a container restart deletes
-them outright. The canonical copies are the project docs `paper/paper.tex`
-and `paper/make_figs.py`; restore with `project_read` and write them back to
-`ml/paper/` before touching the paper, then regenerate `figs/` with
-`python3 ml/paper/make_figs.py` (the PDFs are outputs and are never worth
-storing). Write any substantive edit back to the project in the same turn —
-that copy is the only one that survives. `latexmk`/`pdflatex` are
+`ml/paper/` (paper.tex, make_figs.py, paper.pdf, paper_dark.pdf) is
+tracked and pushed: the user reversed the earlier privacy decision — "it
+will be dated so academics can cite it if it predates their work"
+(2026-08-08). Git history is the timestamp; commit every substantive
+revision and POST THE DIRECT GITHUB LINKS to both PDFs in chat (§0b).
+Build intermediates (*.aux etc.) stay ignored; figs/ are regenerable but
+cheap — commit them so the PDFs' sources are complete. The claude.ai
+project copies (`paper/paper.tex`, `paper/make_figs.py`) continue as
+backup — keep project_write on substantive edits; they saved the paper
+once already when a restart deleted the then-gitignored directory. `latexmk`/`pdflatex` are
 system-installed and do survive; microtype and lmodern are not available.
 Rebuilding costs ~15 s, so REBUILD AND DELIVER (SendUserFile) both the
 light and dark builds with every substantive edit — the user asked for

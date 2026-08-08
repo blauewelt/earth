@@ -10,4 +10,10 @@ __pycache__/
 *.pyc
 
 # draft paper lives in the claude.ai project, not the public repo (submission privacy)
-ml/paper/
+# paper build intermediates only — the sources and PDFs are tracked
+ml/paper/*.aux
+ml/paper/*.log
+ml/paper/*.out
+ml/paper/*.fls
+ml/paper/*.fdb_latexmk
+ml/paper/*.synctex.gz

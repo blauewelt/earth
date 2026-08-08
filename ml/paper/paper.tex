@@ -1,0 +1,702 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=2.6cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\definecolor{ink2}{HTML}{6F6E66}
+\newcommand{\term}[1]{\textbf{#1}}
+\graphicspath{{figs/}}
+\setlength{\parskip}{2pt}
+
+\title{Earth-State Embeddings:\\
+\large self-supervised representations of the observed ocean,\\
+probed against the Atlantic overturning circulation}
+\author{blauewelt/earth --- technical report, v3}
+\date{8 August 2026 (morning revision)}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We train a small self-supervised model to compress everything the
+observing system knows about each point of the ocean, each month, into a
+single vector --- an \emph{embedding} --- and then ask whether those
+vectors, which never see any transport measurement, carry the Atlantic
+Meridional Overturning Circulation (AMOC). They do: a linear read-out
+from the embeddings along $26.5^\circ$N attains a year-blocked
+cross-validated correlation of $r=0.60$ with the monthly, deseasonalized
+RAPID transport series --- to our knowledge the first cross-validated
+monthly-scale figure against real RAPID data from inputs that never
+include RAPID. A temporal model over the frozen embeddings predicts the
+ocean's anomaly field beyond a year ahead (anomaly correlation $0.62$ at
+one month, crossing the conventional $0.5$ useful-skill line near four
+months), while the transport read-out loses skill after about one
+season, consistent with its wind-driven monthly variance. This revision adds a
+\emph{probe ladder} --- ridge, small MLP, and a supervised attention head
+over the \emph{unpooled} section --- and it rewrites the story of the
+week. Pointwise nonlinearity recovers nothing anywhere: the MLP trails
+the ridge on every target, for every codec. But the attention head, which
+sees the $\sim$67 section pixels individually instead of their mean,
+raises every codec --- and the codec whose channel tokens carry $3\times3$
+spatial patches reaches $\mathbf{r=0.690}$ [$0.570$, $0.781$], RMSE
+2.02\,Sv against a 2.79\,Sv target, the best transport figure of the
+programme. The mechanism is thermal wind: geostrophic transport is the
+east-minus-west density difference across the section, and mean-pooling
+computes exactly the statistic in which that difference cancels. An
+end-to-end control then decomposes the headline: the same head over
+\emph{raw} section data reaches $0.659$ at matched receptive field, so
+pretraining's own margin on this task is $+0.031$ and not significant
+--- the codec's demonstrated value lies in field prediction and
+transfer, not in the monthly RAPID probe. An
+apparent finding that expanding the input from 14 to 24--25 channels had
+\emph{cost} monthly RAPID skill is retracted as a representation claim
+--- the pooled probes were billing relocated information as lost --- while
+the genuine gain those channels brought at the deep MOVE array at
+$16^\circ$N ($r=0.206$ [$0.044$, $0.346$], our first multi-target
+confidence interval excluding zero) stands.
+\end{abstract}
+
+\section{Introduction}
+
+The AMOC moves on the order of $17$\,Sv of water northward through the
+Atlantic's upper kilometre ($1\,\mathrm{Sv}=10^6\,\mathrm{m^3\,s^{-1}}$),
+carries roughly a petawatt of heat, and is directly measured at only a
+handful of latitudes, for only about two decades. It is the canonical
+example of a climate-critical quantity that is \emph{composite}: part
+wind-driven (Ekman transport), part density-driven (geostrophic shear),
+part boundary currents. No single satellite or float sees it; it must be
+inferred from the state of the ocean around it.
+
+This project asks a representation-learning question of that inference
+problem: \emph{if we compress the whole observable ocean state into
+generic, task-blind embeddings, do climate-critical integrals like the
+AMOC come along for free?} The design is deliberately strict: the
+embedding model never sees any transport data; every read-out is a
+linear (ridge) regression, so any skill must already be present,
+linearly accessible, in the representation; and every claim is
+cross-validated in blocks that respect the autocorrelation of the
+climate system. The project also serves as a live test of a
+foundation-model hypothesis (\S\ref{sec:related}): that a single
+representation trained on \emph{all} the data --- every ocean, every
+channel --- serves specific regional tasks at least as well as one
+trained only on the task's own region.
+
+\section{Terminology}\label{sec:gloss}
+
+Terms are used throughout in the following precise senses.
+
+\begin{description}\itemsep2pt
+\item[Transport] the physical quantity all ``truth'' targets measure: the
+  volume of water a current system moves, in Sverdrups
+  ($1\,\mathrm{Sv}=10^6\,\mathrm{m^3\,s^{-1}}$). The AMOC's strength is
+  a transport ($\sim$17\,Sv northward across $26.5^\circ$N). A
+  \emph{transport series} is one array's monthly record of it; none is
+  ever a model input.
+\item[Fold] one round of the year-blocked cross-validation: a calendar
+  year serves as the test set while the probe is re-fitted from scratch
+  on all other years. ``Per fold'' means exactly that re-fitting — no
+  test month ever influences the weights that predict it.
+\item[Transport claims / field-prediction claims] the project's two
+  scoreboards, kept apart because their baselines differ. Transport
+  claims: predicting the mooring series (k-fold $r$, RMSE in Sv, event
+  capture) against the wind-only ridge. Field-prediction claims:
+  predicting the ocean's own input fields ahead in time (chan\%, rollout
+  MSSS/ACC) against persistence and climatology.
+\item[Channel] one physical input field: e.g.\ surface current speed,
+  mixed-layer depth, temperature at 700\,dbar, zonal wind stress. The
+  data tensor has 14 channels in the first generation and 24--25 in the
+  second (Table~\ref{tab:channels}, \S\ref{sec:families}).
+\item[Pixel] one $1^\circ\times1^\circ$ ocean grid cell. A
+  \emph{pixel-month} is one pixel at one month --- the atomic sample.
+\item[Channel space] the space of the physical fields themselves. An
+  error ``in channel space'' is an error in predicted physical values
+  (normalized units), directly comparable with a persistence forecast
+  of the same fields.
+\item[Embedding / embedding space] the 64-dimensional vector $z$ the
+  encoder produces for a pixel-month, and the space of such vectors. An
+  error ``in embedding space'' compares predicted to actual $z$; it is
+  an internal diagnostic, since $z$ has no physical units.
+\item[Codec] the stage-1 encoder--decoder (\S\ref{sec:methods}); it
+  encodes a pixel-month's channels to $z$ and can decode $z$ back to
+  channels. ``Codec'' emphasizes that it is a learned compression.
+\item[Anomaly space] all dynamic channels are expressed as departures
+  from that pixel's own monthly climatology (computed over training
+  years only), then normalized. This removes everything predictable
+  from location and calendar alone.
+\item[Climatology] the long-term mean for a given pixel and calendar
+  month. As a forecast, ``climatology'' predicts zero anomaly ---
+  the no-skill floor every real forecast must beat.
+\item[Persistence] the forecast that the anomaly stays exactly as it is
+  now. Hard to beat at short range; decays into a poor forecast at long
+  range. \emph{Damped persistence} multiplies the anomaly by its own
+  lag-$h$ autocorrelation --- the fair statistical baseline.
+\item[Patch codec] a codec variant whose channel token carries the
+  $3\times3$ neighbourhood of the pixel (nine values and nine
+  observed-flags) rather than a single scalar, giving the encoder
+  gradient vision and turning the representation from an expander into a
+  genuine compressor (\S\ref{sec:methods}).
+\item[Stage 2 / temporal model] a causal transformer over a pixel's
+  sequence of frozen embeddings that predicts next month's embedding.
+  ``Frozen'' means the codec's weights are not updated by stage-2
+  training, so improvements are attributable.
+\item[Probe] a ridge (linear, $L_2$-regularized) regression from
+  embeddings to a target series. A probe measures what a representation
+  \emph{contains}; it is deliberately too weak to add modelling power
+  of its own.
+\item[Probe ladder] three read-outs of the same frozen embeddings,
+  increasing only in what they may see: \emph{ridge} (linear, on the
+  section-mean embedding), \emph{MLP} (adds pointwise nonlinearity, same
+  pooled input), \emph{attention head} (adds spatial structure: one
+  learned query attends over the unpooled per-pixel embeddings of the
+  section). Each rung localizes where a capability comes from.
+\item[Section] the row of grid cells nearest a mooring array's
+  latitude, clipped to the array's longitude span (e.g.\ RAPID:
+  $26.5^\circ$N, $80^\circ$W--$13^\circ$W). Probes read the mean
+  embedding along the target's section.
+\item[Holdout years] entire calendar years (2009, 2017, 2023) excluded
+  from all training; with a held-out mid-Atlantic longitude band they
+  form the blocked validation splits. Random splits are never used ---
+  adjacent months are too correlated to count as independent.
+\item[k-fold (year-blocked)] every calendar year takes one turn as the
+  test set while the probe is fit on the others; the assembled
+  out-of-fold predictions are scored once. Confidence intervals come
+  from a bootstrap that resamples whole years (a \emph{block
+  bootstrap}).
+\item[chan\%] held-out next-month prediction error reduction versus
+  persistence, in channel space, in anomaly space:
+  $100\,(1-\mathrm{MSE}_{\mathrm{model}}/\mathrm{MSE}_{\mathrm{pers}})$.
+  Comparable only within one channel set, since the persistence
+  baseline moves when channels change.
+\item[MSSS] mean squared skill score, $1-\mathrm{MSE}/\mathrm{MSE}_{\mathrm{ref}}$
+  \cite{goddard}; our rollout reports it against climatology,
+  persistence, and damped persistence.
+\item[ACC] anomaly correlation coefficient: the Pearson correlation
+  between predicted and observed anomalies at a given forecast horizon.
+  ACC $=0.5$ is the conventional ``useful skill'' line.
+\item[RAPID / FC / MOVE / OSNAP / SAMBA] the five transport truth
+  series: the RAPID array at $26.5^\circ$N (2004--, monthly), the
+  Florida Current cable at $27^\circ$N (1982--, daily), MOVE at
+  $16^\circ$N (2000--2022, the \emph{deep} western-boundary flow),
+  OSNAP in the subpolar gyre (2014--2022), SAMBA at $34.5^\circ$S
+  (2009--2017). None is ever an input.
+\end{description}
+
+\section{Data}\label{sec:data}
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{llll}
+\toprule
+channel(s) & source & record & role \\
+\midrule
+surface current speed, MLD & GLORYS reanalysis & 1993-- & dynamics \\
+T at 4 or 8 pressure levels & Roemmich--Gilson Argo & 2004-- & density structure \\
+S at 4 or 8 pressure levels & Roemmich--Gilson Argo & 2004-- & density structure \\
+wind stress $\tau_x,\tau_y$ & NCEP R1 & 1948-- & Ekman forcing \\
+within-month $\tau$ std.\ dev. & NCEP R1 daily & 1948-- & storminess \\
+monthly SST (optional) & OISST v2.1 & 1981-- & thermal memory \\
+SST, precip climatologies & OISST, GPCP & fixed & (measured inert; \S\ref{sec:static}) \\
+\bottomrule
+\end{tabular}
+\caption{Channels of the data tensor: monthly, $1^\circ$,
+1993--present. The pilot window was the North Atlantic
+($100^\circ$W--$20^\circ$E, $0$--$70^\circ$N; 5{,}787 ocean pixels); the
+default window is now global (44{,}964 pixels). Missing data (Argo before
+2004, polar gaps) is represented explicitly, not imputed. The Argo level
+count changed from 4 to 8 pressures partway through the programme, which
+is what separates the two channel families of \S\ref{sec:families}.}
+\label{tab:channels}
+\end{table}
+
+The tensor (Table~\ref{tab:channels}) is built entirely from
+credential-free public archives. Two properties matter most. First,
+\emph{missingness is information}: a pixel-month's unobserved channels
+enter the encoder as learned ``missing'' tokens rather than imputed
+values, so the representation knows what the observing system knew.
+Second, everything is in anomaly space (\S\ref{sec:gloss}) --- the
+founding negative result of the project was that a model trained on raw
+fields wins reconstruction by memorizing the seasonal cycle while
+learning nothing about change.
+
+The five truth series (RAPID, FC, MOVE, OSNAP, SAMBA) ride along as
+never-input targets: 240 RAPID months plus 792 additional truth months
+across four other latitudes.
+
+\subsection{Two channel families, and why they may not be
+compared}\label{sec:families}
+
+The tensor is rebuilt from the fetcher scripts at the start of every
+training job, so a change to a fetcher silently changes the input of
+every subsequent run. Sampling 8 Argo pressure levels instead of 4 took
+the tensor from 14 channels to 24 (25 with monthly SST) without any
+dispatch asking for it. Every result below therefore belongs to one of
+two families, and cross-family comparison is not licensed: the
+persistence baseline that chan\% is measured against moves with the
+channel set, and, as \S\ref{sec:tradeoff} shows, so does the meaning of
+the transport probe. Channel counts in this report are read from each
+checkpoint, never from a run's name --- a run directory carried a
+misleading name for an hour before this was enforced.
+
+\section{Methods}\label{sec:methods}
+
+\paragraph{Stage 1 --- the codec.} A per-pixel masked autoencoder
+($\sim$0.92M parameters) producing $z\in\mathbb{R}^{64}$ per
+pixel-month, trained on all pixel-months outside the holdout blocks.
+
+\paragraph{What exactly enters the encoder.} The encoder is a small
+transformer ($d_{\mathrm{model}}{=}128$, 4 layers, 4 heads) over
+$C{+}2$ tokens for one pixel-month:
+\begin{itemize}\itemsep1pt
+\item \textbf{One token per channel}. If the channel is observed and not
+  masked, the token is a linear projection of its scalar value (in
+  anomaly space: the departure from that pixel's own monthly
+  climatology, standardized) plus a learned per-channel identity
+  embedding. If the channel is \emph{masked for training}, the value is
+  replaced by a learned \texttt{mask} token; if it is \emph{genuinely
+  unobserved} --- Argo before 2004, polar gaps --- by a distinct learned
+  \texttt{missing} token. ``I am hiding this from you'' and ``the
+  observing system never measured this'' are different facts, and the
+  distinction measurably matters.
+\item \textbf{One context token}: a linear projection of
+  $[\sin(2\pi m/12),\ \cos(2\pi m/12),\ \mathrm{lat}/90,\
+  \mathrm{lon}/180]$ --- season and position. Never masked. This token
+  is why static climatology input channels carry zero information
+  (\S\ref{sec:static}).
+\item \textbf{One CLS token}, whose final hidden state is projected to
+  $z\in\mathbb{R}^{64}$.
+\end{itemize}
+The decoder never sees the inputs --- it answers \emph{queries}
+$(\text{channel},\ \Delta\mathrm{lon},\ \Delta\mathrm{lat},\
+\Delta\mathrm{month})$ from $z$ alone, with offsets up to $\pm3$ cells
+and months, so the training signal is reconstruction of masked
+channels \emph{plus} prediction of spatial and temporal neighbours.
+
+\paragraph{The patch codec.} At 14 channels a pixel-month carries on
+average 10.4 observed values, so a 64-dimensional $z$ is an
+\emph{expander} ($\sim6\times$), as in masked language models; the
+information bottleneck is the masking objective, not the dimensionality.
+The patch variant gives each channel token its $3\times3$ neighbourhood
+--- nine values and nine observed-flags, projected by
+$\mathrm{Linear}(2p^2, d_{\mathrm{model}})$ --- so that at 24 channels
+roughly 160 observed values enter one 64-dimensional vector, a genuine
+$2.5{:}1$ compression. Longitude wraps (the globe is periodic in $x$)
+and latitude clamps with out-of-range rows marked unobserved; the
+centre cell defines whether a channel counts as observed, and
+reconstruction targets remain centre values, so the loss is unchanged
+and $p{=}1$ checkpoints load identically. The motivation is physical as
+well as informational: thermal wind \emph{is} a density gradient, and a
+gradient does not exist within a single pixel.
+
+\paragraph{Stage 2 --- the temporal model.} A causal transformer
+(default $d_{\mathrm{model}}{=}96\times3$ layers, 0.35M parameters;
+capacity sweep in Fig.~\ref{fig:stage2}) over each pixel's 24-month
+embedding sequence, predicting $z_{t+1}$; scored after decoding to
+channel space. The codec stays frozen.
+
+\paragraph{Probes --- the ladder.} The base instrument is a ridge
+regression from section-mean embeddings to each truth series,
+deseasonalized, regularization chosen on a training tail --- never on
+test data; verification is year-blocked k-fold with block-bootstrap
+confidence intervals. Two stronger read-outs sit above it, behind the
+same folds and the same inner-tail discipline. A small MLP
+($64\to32\to1$, weight decay, early stopping, three seeds per fold)
+tests whether skill is present but not \emph{linearly} accessible. An
+attention head tests whether skill is present but not accessible from
+the \emph{pooled} section: every (pixel, month) embedding enters as a
+token with a longitude encoding, one learned query cross-attends over
+them, and a two-layer read-out maps the pooled vector to transport
+($\sim$25k parameters, weight decay $10^{-2}$, token dropout, three
+seeds per fold). The codec stays frozen throughout --- these are probes,
+not fine-tuning. The design principle: each rung adds one capability, so
+a gap between rungs is attributable to that capability alone.
+
+\paragraph{Rollout.} For horizons $h=1\ldots12$: initialize with true
+embeddings, predict one month, feed the prediction back, repeat ---
+scored in channel space against climatology, persistence, and damped
+persistence, and probed for the AMOC at each horizon.
+
+\paragraph{Compute.} Runs through 2026-08-07 were trained on
+GitHub-hosted 4-core CPU runners at $\sim$1.3 steps/s. Since then a
+rented consumer GPU (RTX 4090, \$0.24/h) is attached as a self-hosted
+runner and reaches $\sim$124 steps/s --- a factor of 95, which turns a
+30k-step schedule from six hours into four minutes and is what made the
+controlled comparisons of \S\ref{sec:results} affordable. Nothing about
+the model or protocol changed with the hardware.
+
+\section{Metrics and their statistical power}\label{sec:metrics}
+
+Full definitions are in the glossary; the reliability ordering is the
+substance. \textbf{chan\%} is decision-grade within a channel set: seed
+spread $\pm0.5$\,points, so differences $\ge2$ points are real. The
+\textbf{fixed-holdout probe} $r$ (36 held-out months, effective sample
+$\approx15$ after autocorrelation) has a 95\% CI of $\pm0.57$ --- a
+compass, never a verdict; the same configuration has drawn 0.09 and
+0.33 on two seeds. The \textbf{year-blocked k-fold} tests all 240 RAPID
+months once each (SE $\approx0.10$) and is the only probe number we
+argue from. The most instructive failure: a $d_z{=}128$ codec set the
+all-time fixed-holdout record (0.528) while the k-fold read 0.166 ---
+the coarse instrument flatters widest exactly where overfitting is
+easiest.
+
+\section{Related work}\label{sec:related}
+
+Three literatures border this project (full survey: repository file
+\texttt{ml/LITERATURE.md}). \emph{AMOC reconstruction from
+observables}: regression methods reach $r\approx0.95$ against RAPID
+only after 18-month low-pass filtering and in-sample calibration
+\cite{fw2015,sf2021}; the machine-learning line trains on simulations
+and reports up to $r\approx0.98$ inside a laminar state estimate
+\cite{solodoch} but drops to explained variance of 0.44--0.74 in
+eddy-resolving models \cite{meng,woelker} and is essentially never
+applied to real RAPID data. Our $r=0.60$ --- monthly, deseasonalized,
+real data, blocked cross-validation, no RAPID-derived inputs ---
+appears to be the first of its exact kind, and sits where the eddying
+simulations predict it should. \emph{Forecast verification}: we adopt
+the decadal-prediction conventions \cite{goddard} (MSSS, ACC, damped
+persistence). \emph{Foundation models}: masked pretraining in anomaly
+space with frozen-backbone evaluation echoes Prithvi WxC and the
+frozen-decoder evaluation philosophy of \cite{lehmann}; ridge probes
+from frozen embeddings to integrated circulation indices, and
+missingness-as-information over the historical observing system,
+appear to be unoccupied territory.
+
+\section{Results}\label{sec:results}
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{llrrrrrlr}
+\toprule
+run & window & $C$ & patch & $d_z$ & steps & chan\%$^\dagger$ & k-fold $r$ [95\% CI] & dip \\
+\midrule
+\multicolumn{9}{l}{\emph{first family --- 4 Argo levels}}\\
+pilot4          & NA     & 4  & 1 & 32  & 8k  & $+29.3$ & ---                  & --- \\
+dz8             & NA     & 12 & 1 & 8   & 30k & $+28.6$ & 0.111 [0.01, 0.20]   & --- \\
+dz16            & NA     & 12 & 1 & 16  & 30k & $+30.3$ & 0.151 [0.01, 0.28]   & --- \\
+dz32            & NA     & 12 & 1 & 32  & 30k & $+30.5$ & 0.182 [0.05, 0.31]   & --- \\
+dz64            & NA     & 12 & 1 & 64  & 30k & $+30.6$ & 0.308 [0.13, 0.46]   & 16\% \\
+dz128           & NA     & 12 & 1 & 128 & 30k & $+30.2$ & 0.166 [0.07, 0.30]   & --- \\
+wind14          & NA     & 14 & 1 & 64  & 30k & $+35.6$ & \textbf{0.604} [0.47, 0.72] & 50\% \\
+global14        & global & 14 & 1 & 64  & 30k & $+30.6$ & \textbf{0.602} [0.46, 0.73] & 50\% \\
+global14b$^\ast$& global & 14 & 1 & 64  & 30k & $+30.9$ & 0.556 [0.43, 0.68]   & --- \\
+global15sst     & global & 15 & 1 & 64  & 30k & $+30.8$ & 0.582 [0.43, 0.71]   & 47\% \\
+\midrule
+\multicolumn{9}{l}{\emph{second family --- 8 Argo levels (\S\ref{sec:families})}}\\
+patch24         & global & 24 & \textbf{3} & 64 & 40k & --- & 0.543 [0.43, 0.66] & 27\% \\
+pixel25         & global & 25 & 1 & 64 & 40k & --- & 0.536 [0.38, 0.68] & \textbf{59\%} \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Master table: every codec run.} Generated from each
+run's own JSON by \texttt{ml/make\_table.py}, not transcribed.
+$^\dagger$chan\% is comparable only within one channel set (its
+persistence baseline moves with the channels); cross-run comparison goes
+through the year-blocked k-fold RAPID correlation. Dip = share of the
+winter 2009--10 collapse amplitude captured out-of-fold. The
+wind-stress-only ridge baseline (no embedding) scores $r=0.531$ --- the
+line every codec must beat. k-fold $r$ here is the POOLED RIDGE rung of
+the probe ladder (the comparable-across-time instrument); the unpooled
+attention-head values (\S\ref{sec:ladder}) are higher for every codec
+measured: global14 $0.635$, pixel25 $0.617$, patch24 $\mathbf{0.690}$. $^\ast$global14b is an exact-configuration
+replication on a different runner: it measures codec-training seed noise
+on the k-fold at $\approx\pm0.05$. Stage-2 figures for global14b and
+global15sst are \emph{withdrawn}, not stale: both were trained on a
+poisoned embedding cache (\S\ref{sec:limits}).}
+\label{tab:master}
+\end{table}
+
+\subsection{The bottleneck: what width buys}
+
+\begin{figure}[t]
+\centering\includegraphics[width=.58\linewidth]{fig_dz.pdf}
+\caption{Bottleneck width $d_z$ versus its two customers, on the
+12-channel North-Atlantic tensor at matched training steps. Field
+prediction (top) saturates by $d_z{=}16$--$32$; the AMOC probe
+(bottom, with 95\% block-bootstrap CIs) rises to a peak at $d_z{=}64$
+and turns over at 128 --- 128 ridge features against $\sim$220 truth
+months per fold overfits. $d_z{=}64$ became the working setting, a
+choice made when the tensor had 12 channels.}
+\label{fig:dz}
+\end{figure}
+
+Fig.~\ref{fig:dz}: the transport read-out wants more width than field
+reconstruction rewards, but not unboundedly --- the turnover at
+$d_z{=}128$ is a truth-data limit, not a representation limit. That this
+sweep was run at $C{=}12$ becomes important in
+\S\ref{sec:tradeoff}.
+
+\subsection{The probe ranking, and what the wind already knows}
+
+\begin{figure}[t]
+\centering\includegraphics[width=.74\linewidth]{fig_kfold.pdf}
+\caption{Year-blocked k-fold correlation with monthly deseasonalized
+RAPID transport, all codec generations, 95\% CIs. Adding wind stress
+(orange) nearly doubled the defensible probe; training globally cost the
+Atlantic read-out nothing. The second-family codecs (green) fall back
+onto the dashed wind-only baseline --- a ridge on section-mean wind
+stress with no embedding at all.}
+\label{fig:kfold}
+\end{figure}
+
+Fig.~\ref{fig:kfold} is the project's headline and its conscience in
+one picture. The wind channels moved the probe more than every
+architecture decision combined ($0.31\to0.60$); the global codec
+matches the regional one exactly ($0.602$ vs $0.604$ --- the
+generic-embedding hypothesis holds at fixed capacity); and the
+wind-only baseline at $0.53$ says most monthly skill is Ekman physics.
+The first family's embedding increment over pure wind is $+0.07$; its
+distinctive contributions are the low-frequency component (18-month
+low-passed $r=0.64$) and event anatomy (Fig.~\ref{fig:dip}). In
+Sverdrups: RMSE 2.23\,Sv against a target standard deviation of
+2.79\,Sv.
+
+\subsection{The probe ladder: pooling was hiding the signal}\label{sec:ladder}
+
+\begin{figure}[t]
+\centering\includegraphics[width=.8\linewidth]{fig_ladder.pdf}
+\caption{Same frozen embeddings, three read-outs, same year-blocked
+folds. The MLP (orange) trails the ridge (blue) everywhere --- pointwise
+nonlinearity recovers nothing. The attention head over the unpooled
+section (green, with 95\% CIs) beats every pooled probe, restores the
+25-channel codec to parity with the 14-channel one, and reveals the patch
+codec --- invisible to pooled probes --- as the strongest representation
+in the programme at $r=0.690$.}
+\label{fig:ladder}
+\end{figure}
+
+Fig.~\ref{fig:ladder} is this revision's central result, and it changes
+both a number and a story. The number: the patch codec read by the
+attention head reaches $r=0.690$ [$0.570$, $0.781$], RMSE 2.02\,Sv ---
+against $0.60$ for the best pooled-linear configuration, and against a
+wind-only baseline of $0.531$ that the pooled second-family probes had
+barely cleared. The story: the ladder's two rungs dissociate cleanly.
+Pointwise nonlinearity (MLP rung) recovers nothing on any target for any
+codec --- so the ridge was never the limit as a \emph{function class}.
+Spatial structure (head rung) recovers a great deal --- so the limit was
+the \emph{pooling}. Mean-pooling the section computes the one statistic
+in which an east-west difference cancels, and thermal wind says the
+transport \emph{is} an east-west difference. The two architectural
+changes of this cycle turn out to be halves of one physical idea: the
+$3\times3$ patch puts local gradients into each embedding, the attention
+head reads gradients across the section, and each looked worthless
+without the other --- the patch codec's pooled numbers were
+indistinguishable from its pixel control.
+
+\paragraph{The attribution matrix.} An end-to-end baseline completes
+the picture: the \emph{same} attention head, same folds, same
+regularization, fed raw section anomalies (values + observed-flags)
+instead of embeddings, at both receptive fields:
+
+\begin{center}\small
+\begin{tabular}{lcc}
+\toprule
+tokens carry & raw data & codec embedding \\
+\midrule
+single pixel & 0.613 [0.48, 0.73] & 0.617 [0.49, 0.73] \\
+$3\times3$ neighbourhood & 0.659 [0.55, 0.75] & \textbf{0.690} [0.57, 0.78] \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The headline decomposes, in descending order: \emph{unpooling} the
+section is the largest term (pooled ridge $0.54\to$ head $0.61$+); the
+$3\times3$ \emph{receptive field} adds $\sim$$+0.045$ and does so on raw
+data alone; \emph{pretraining} adds $+0.031$ at matched receptive field
+--- positive in direction, not statistically significant --- and nothing
+at a single pixel. For the monthly RAPID probe, a supervised head over
+raw data recovers nearly everything. The pretraining case therefore
+rests on the scoreboards where 240 labelled months have no answer: field
+prediction (stage 2 beats persistence everywhere; the matching
+end-to-end field-forecaster baseline is the open follow-up), transfer to
+sparsely-labelled targets like MOVE, and the open question of whether
+the pretraining margin grows with codec capacity --- the 10M-parameter
+codecs now training will say.
+
+Honesty box: the head is the most expressive probe we run
+($\sim$25k parameters against $\sim$220 training months per fold), and
+although it is regularized hard, early-stopped on a train tail, and
+seed-averaged behind the same blocked folds as every other number, the
+head-vs-ridge gaps have not yet been given a paired significance test,
+and the $0.690$ awaits replication on a second codec seed. Both are
+queued.
+
+\subsection{Where more data moved the skill}\label{sec:tradeoff}
+
+\begin{figure}[t]
+\centering\includegraphics[width=.92\linewidth]{fig_tradeoff.pdf}
+\caption{The second family's central result. Sixteen Argo temperature
+and salinity levels to 1900\,dbar cost monthly RAPID skill (left, first
+pair) while roughly doubling it at MOVE (left, second pair) and
+transforming the low-frequency read-out there (right). MOVE measures the
+\emph{deep} western-boundary flow at $16^\circ$N --- precisely the
+quantity the added levels describe.}
+\label{fig:tradeoff}
+\end{figure}
+
+Under \emph{pooled} probes, expanding the input appeared to cost
+RAPID skill: both second-family codecs landed on the wind-only line
+($0.543$ and $0.536$ against $0.531$) where the first family held
+$+0.07$. Section~\ref{sec:ladder} resolves this: the skill had moved
+into cross-pixel structure, not out of the representation, and the
+unpooled read-out recovers it in full ($0.617$--$0.690$). The RAPID half
+of this subsection's original claim is therefore retracted; what follows
+--- the MOVE result --- is the part that survives, and it was measured
+pooled, so unpooling can only strengthen it.
+
+At MOVE the same channels do the opposite. The 25-channel codec scores
+$r=0.206$ [$0.044$, $0.346$] --- the first multi-target result in this
+programme whose confidence interval excludes zero --- with an 18-month
+low-passed correlation of $0.623$, against $0.111$ and $0.379$ for the
+15-channel codec. MOVE is a deep, density-driven transport; RAPID's
+monthly variance is largely Ekman. The added channels are Argo $T$ and
+$S$ to 1900\,dbar. The skill went where the physics says the information
+is.
+
+The corrected reading is about read-outs, not bottlenecks: the
+embedding kept everything, and the probe determined what could be seen.
+For the generic-embedding hypothesis of \S\ref{sec:related} this is a
+\emph{stronger} confirmation than the regional-versus-global comparison
+--- one task-blind representation now serves the wind-dominated and the
+density-dominated target simultaneously, provided the read-out respects
+the structure of the question being asked of it.
+
+One more asymmetry is worth recording: the 25-channel codec captures
+\textbf{59\%} of the winter 2009--10 collapse out-of-fold, the best of
+any run in the programme, while its monthly correlation is the second
+worst. Event anatomy and average correlation are not the same
+capability, and a table that reports only the latter will hide the
+former.
+
+\subsection{How far ahead the ocean can be predicted}
+
+\begin{figure}[t]
+\centering\includegraphics[width=.92\linewidth]{fig_rollout.pdf}
+\caption{Autoregressive rollout skill versus forecast horizon for the
+global codec (blue, global domain) and the regional codec (orange,
+North-Atlantic domain; domains differ, so compare shapes more than
+levels). Left: MSSS against climatology --- still positive at 12
+months. Right: anomaly correlation, crossing the conventional 0.5
+useful-skill line near four months.}
+\label{fig:rollout}
+\end{figure}
+
+Fig.~\ref{fig:rollout}: feeding predictions back month after month, the
+anomaly field stays predictable beyond a year (MSSS $+0.11$ at
+$h{=}12$; ACC $0.36$). The decay is decorrelation, not amplitude
+damping (the forecast-to-observed amplitude ratio holds near $0.5$
+throughout). The AMOC read-out on rolled embeddings, by contrast, dies
+after about a season --- transport forecasting at range remains open,
+consistent with its wind-driven monthly variance.
+
+\subsection{Stage-2 capacity and the training curves}
+
+\begin{figure}[t]
+\centering
+\begin{minipage}{.44\linewidth}
+\includegraphics[width=\linewidth]{fig_stage2.pdf}
+\end{minipage}\hfill
+\begin{minipage}{.52\linewidth}
+\includegraphics[width=\linewidth]{fig_train.pdf}
+\end{minipage}
+\caption{Left: stage-2 capacity sweep (both seeds shown per size) ---
+width$\times$depth buys real dynamics, still rising at 4M parameters;
+the steps-matched control (orange square) separates capacity from
+training length. Right: codec training curves across generations.}
+\label{fig:stage2}
+\end{figure}
+
+\subsection{Case study: the winter 2009--10 collapse}
+
+\begin{figure}[t]
+\centering\includegraphics[width=.78\linewidth]{fig_dip.pdf}
+\caption{The sharpest event in the RAPID record, predicted
+out-of-fold. Without wind channels (blue) the model captures 16\% of
+the dip amplitude; with them (orange), 50\%. The 25-channel codec
+reaches 59\% (not plotted; see Table~\ref{tab:master}). The November
+onset --- triggered inside a month --- stays invisible to monthly data.}
+\label{fig:dip}
+\end{figure}
+
+\section{The static-channel lesson}\label{sec:static}
+
+An ablation found the two climatology input channels contribute
+\emph{exactly nothing} to any metric: a static map is a function of
+position, the encoder receives position, and so the channel carries no
+information the model does not already have. The general rule --- a
+channel is worth what position and season cannot explain of it ---
+now gates every data-acquisition decision. Climatological knowledge is
+still essential, but it enters as preprocessing arithmetic (the anomaly
+transform), never as a feature the network must carry through its
+bottleneck.
+
+\section{Limitations and open questions}\label{sec:limits}
+
+(1) The wind-only baseline bounds honest claims: monthly AMOC skill is
+substantially Ekman, though the unpooled head now clears the baseline by
+$+0.10$--$0.16$ where the pooled probes had shrunk the margin to noise.
+(2) The head result is new and strong, and strength is when scrutiny
+matters most: no paired significance test yet, no second codec seed yet,
+and the head has been run only on RAPID --- the MOVE and low-frequency
+versions may move too. (3) $d_z{=}64$ was chosen on a 12-channel tensor
+and carried unchanged into 24--25 channels; the sweep has not been
+repeated at the new width. (4) Absolute k-fold values
+are mildly optimistic --- the codec saw non-holdout months' \emph{fields}
+during self-supervised pretraining (transports were never seen by
+anything); codec-to-codec comparisons are unaffected. (5) The rollout's
+horizon is measured only to the holdout-year boundary; the crossover to
+no skill lies beyond 12 months and is not yet located. (6) Transport
+forecasting at range is unsolved. (7) \emph{A methodological
+casualty worth recording}: the stage-2 results for two runs were
+withdrawn after we found their embedding cache had been populated by a
+different codec --- the shape check $(T, P, d_z)$ matched, so training
+proceeded happily on the wrong representation, and the signature was
+healthy embedding-space skill beside catastrophic decoded skill. The
+cache key now carries a hash of the codec's weights, so a stale cache is
+a miss rather than a lie. We report the affected numbers as withdrawn
+rather than regenerating them, because both codecs belong to the
+superseded first family.
+
+Next levers, in expected-value order: paired significance and seed
+replication for the head results; the head probe at MOVE and at low
+frequency; a long-schedule run under a decay-then-constant learning rate
+to locate the training-time ceiling (the saturation sweep's first points
+show no step effect between 30k and 60k under pooled probes); re-running
+the $d_z$ sweep at $C{=}24$; extending the time axis to 1982, where
+monthly SST and wind exist pre-GLORYS and the Florida cable's 1982--92
+decade becomes truth; and label-efficiency curves over the 792 non-RAPID
+truth months.
+
+\begin{thebibliography}{9}\small
+\bibitem{fw2015} E. Frajka-Williams (2015). Estimating the Atlantic
+overturning at 26$^\circ$N using satellite altimetry and cable
+measurements. \emph{GRL} 42.
+\bibitem{sf2021} A. Sanchez-Franks et al.\ (2021). A dynamically based
+method for estimating the AMOC at 26$^\circ$N from satellite
+altimetry. \emph{Ocean Science} 17.
+\bibitem{solodoch} A. Solodoch et al.\ (2023). Machine
+learning-derived inference of the meridional overturning circulation
+from satellite-observable variables. \emph{JAMES} 15.
+\bibitem{meng} Y. Meng et al.\ (2024). Circumpolar transport and
+overturning strength inferred from satellite observables using deep
+learning. \emph{JAMES} 16.
+\bibitem{woelker} E. W\"olker et al.\ (2025). Estimating the AMOC from
+Argo profiles with machine learning trained on ocean simulations.
+\emph{Ocean Science} 21.
+\bibitem{goddard} L. Goddard et al.\ (2013). A verification framework
+for interannual-to-decadal predictions experiments. \emph{Climate
+Dynamics} 40.
+\bibitem{lehmann} F. Lehmann et al.\ (2026). Frozen foundation-model
+backbones with shallow decoders as an evaluation standard.
+\emph{JGR-MLC}.
+\end{thebibliography}
+
+\vspace{4pt}
+{\color{ink2}\small Reproduction: every number in this report is
+generated by scripts in \texttt{ml/} of
+\href{https://github.com/blauewelt/earth}{github.com/blauewelt/earth}
+(see \texttt{ml/FINDINGS.md} \S8); the master table by
+\texttt{ml/make\_table.py}; figures by \texttt{ml/paper/make\_figs.py}.}
+
+\end{document}
