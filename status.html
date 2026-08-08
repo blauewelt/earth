@@ -94,7 +94,7 @@
 
   <div class="banner" id="banner"></div>
 
-  <h2>Live training</h2>
+  <h2>Training curves</h2>
   <div id="live"><div class="empty">loading…</div></div>
 
   <h2>Workflow runs · ml-train</h2>
@@ -121,6 +121,7 @@
 (function () {
   var REPO = "blauewelt/earth";
   var REFRESH_MS = 120000;
+  var CHART_HISTORY = 6;   // finished runs to keep charted below the live ones
   var timer = null;
 
   function $(id) { return document.getElementById(id); }
@@ -371,25 +372,43 @@
     return "latest probe @ step " + fmtInt(p.step) + " — " + parts.join(" · ");
   }
 
+  // Metrics live in two places by design: the per-run ml-live-<n> branch
+  // WHILE a job runs (deleted when it ends), and the long-lived ml-metrics
+  // branch as run-<n>.jsonl afterwards. Try live first, fall back to the
+  // archive — so a run keeps its charts after it succeeds, which is when
+  // they are most worth looking at.
+  function fetchMetrics(runNumber) {
+    var cb = "?cb=" + Date.now();
+    var live = "https://raw.githubusercontent.com/" + REPO + "/ml-live-" + runNumber + "/metrics.jsonl" + cb;
+    var arch = "https://raw.githubusercontent.com/" + REPO + "/ml-metrics/run-" + runNumber + ".jsonl" + cb;
+    return fetch(live).then(function (r) {
+      if (r.ok) return r.text();
+      return fetch(arch).then(function (r2) {
+        if (r2.status === 404) return null;
+        if (!r2.ok) throw new Error("HTTP " + r2.status);
+        return r2.text();
+      });
+    });
+  }
+
   function renderLiveRun(run) {
-    var url = "https://raw.githubusercontent.com/" + REPO + "/ml-live-" + run.run_number +
-              "/metrics.jsonl?cb=" + Date.now();
-    return fetch(url).then(function (r) {
-      if (r.status === 404) return null;
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    }).then(function (text) {
+    return fetchMetrics(run.run_number).then(function (text) {
       var doc = docOf(run);
+      var state = run.status === "completed"
+        ? (run.conclusion === "success" ? "finished" : esc(run.conclusion || "ended"))
+        : esc(run.status.replace(/_/g, " "));
       var head = '<div class="card"><h3><a href="' + esc(run.html_url) + '">run #' +
-                 esc(run.run_number) + "</a> <span class=\"meta\">· started " +
+                 esc(run.run_number) + '</a> <span class="meta">· ' + state + ", started " +
                  esc(ago(run.created_at)) + "</span></h3>" +
                  (doc ? '<div class="rundoc">' + esc(doc) + "</div>" : "");
       if (text === null) {
-        return head + '<div class="empty">building dataset / seeding cache (no training metrics yet)</div></div>';
+        return run.status === "completed" ? ""
+          : head + '<div class="empty">building dataset / seeding cache (no training metrics yet)</div></div>';
       }
       var m = parseJsonl(text);
       if (!m.loss.length) {
-        return head + '<div class="empty">metrics file present but no loss points yet</div></div>';
+        return run.status === "completed" ? ""
+          : head + '<div class="empty">metrics file present but no loss points yet</div></div>';
       }
       var last = m.loss[m.loss.length - 1];
       var html = head +
@@ -416,13 +435,23 @@
   }
 
   function renderLive(runs) {
-    var live = runs.filter(function (r) { return r.status === "in_progress" || r.status === "queued"; });
-    if (!live.length) {
-      $("live").innerHTML = '<div class="empty">no runs in progress</div>';
+    // In-progress runs first (they change), then finished ones that still
+    // have curves. Cards with no metrics at all are dropped by renderLiveRun
+    // returning "" — a cancelled run that never trained has nothing to plot,
+    // but a successful one must keep its charts.
+    var inprog = runs.filter(function (r) {
+      return r.status === "in_progress" || r.status === "queued";
+    });
+    var done = runs.filter(function (r) { return r.status === "completed"; })
+                   .slice(0, CHART_HISTORY);
+    var wanted = inprog.concat(done);
+    if (!wanted.length) {
+      $("live").innerHTML = '<div class="empty">no runs found</div>';
       return Promise.resolve();
     }
-    return Promise.all(live.map(renderLiveRun)).then(function (cards) {
-      $("live").innerHTML = cards.join("");
+    return Promise.all(wanted.map(renderLiveRun)).then(function (cards) {
+      var html = cards.filter(function (c) { return c; }).join("");
+      $("live").innerHTML = html || '<div class="empty">no runs with curves yet</div>';
     });
   }
 

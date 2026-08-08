@@ -428,10 +428,16 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
-      - name: Clean up live-metrics branch
+      # Archive BEFORE deleting: the per-run ml-live branch is scratch, but
+      # the curves it carried are the record of the experiment. They move to
+      # the long-lived ml-metrics branch as run-<n>.jsonl so a finished run
+      # keeps its charts on status.html.
+      - name: Archive metrics, then clean up the live branch
         if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          bash scripts/archive_run_metrics.sh "${{ github.run_number }}" || \
+            echo "::warning::metrics archive failed — live branch kept for recovery"
           git push -q "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             ":refs/heads/ml-live-${{ github.run_number }}" 2>/dev/null || true
