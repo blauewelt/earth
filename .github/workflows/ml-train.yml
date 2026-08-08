@@ -97,9 +97,29 @@ jobs:
           pip install --quiet numpy netCDF4 matplotlib
           # CUDA wheel when the runner has a GPU, CPU wheel otherwise —
           # train.py auto-selects the device, so the same dispatch works on both.
+          #
+          # The wheel must MATCH THE HOST DRIVER, and a mismatch is silent:
+          # default torch (cu130) on gpu-box-45318655's 12.6 driver printed a
+          # UserWarning, reported cuda:False, and run #36 trained a 10M codec
+          # on CPU at 0.5 steps/s — a 17-minute GPU job restated as 17 hours,
+          # discovered only because the live loss curve crawled. So: try the
+          # default wheel, fall back to cu126 for older drivers, and REFUSE
+          # to proceed if a GPU is present that torch cannot reach — failing
+          # in 3 minutes beats silently burning a box for a day.
           if command -v nvidia-smi >/dev/null 2>&1; then
             pip install --quiet torch
-            python -c "import torch; print('torch', torch.__version__, 'cuda:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else '')"
+            ok=$(python -c "import torch; print(int(torch.cuda.is_available()))" 2>/dev/null || echo 0)
+            if [ "$ok" != "1" ]; then
+              echo "default torch wheel cannot use this driver — falling back to cu126"
+              pip install --quiet --force-reinstall torch --index-url https://download.pytorch.org/whl/cu126
+              ok=$(python -c "import torch; print(int(torch.cuda.is_available()))" 2>/dev/null || echo 0)
+            fi
+            if [ "$ok" != "1" ]; then
+              echo "::error::GPU present but no torch wheel can reach it — refusing to train on CPU"
+              nvidia-smi | head -4
+              exit 1
+            fi
+            python -c "import torch; print('torch', torch.__version__, 'cuda: True', torch.cuda.get_device_name(0))"
           else
             pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
           fi
