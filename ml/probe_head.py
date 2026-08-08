@@ -52,9 +52,18 @@ class SectionHead(nn.Module):
     one single-head cross-attention pools them, a two-layer MLP reads the
     pooled vector out. ~25k parameters at d=64."""
 
-    def __init__(self, in_dim, d=64, K=1):
+    def __init__(self, in_dim, d=64, K=1, n_blocks=0):
         super().__init__()
         self.lift = nn.Linear(in_dim, d)       # features + (lon_frac, month_idx/K)
+        # Optional pre-pooling self-attention blocks over the tokens — the
+        # capacity axis for the parameter-scaling test. n_blocks=0 is the
+        # original ~23k head; each block at d=128 adds ~200k parameters.
+        self.blocks = None
+        if n_blocks:
+            layer = nn.TransformerEncoderLayer(
+                d, max(1, d // 64), dim_feedforward=4 * d,
+                batch_first=True, norm_first=True, dropout=0.1)
+            self.blocks = nn.TransformerEncoder(layer, n_blocks)
         self.q = nn.Parameter(torch.randn(1, 1, d) / d ** 0.5)
         self.att = nn.MultiheadAttention(d, num_heads=1, batch_first=True)
         self.out = nn.Sequential(nn.LayerNorm(d), nn.Linear(d, 32),
@@ -63,14 +72,16 @@ class SectionHead(nn.Module):
 
     def forward(self, tok):                     # tok [B, P*K, d_z+2]
         h = self.drop(self.lift(tok))
+        if self.blocks is not None:
+            h = self.blocks(h)
         pooled, _ = self.att(self.q.expand(len(tok), -1, -1), h, h)
         return self.out(pooled[:, 0]).squeeze(-1)
 
 
-def fold_fit(Xtr, ytr, Xte, in_dim, seed, steps=4000):
+def fold_fit(Xtr, ytr, Xte, in_dim, seed, steps=4000, d=64, n_blocks=0):
     torch.manual_seed(seed)
     g = torch.Generator().manual_seed(seed)
-    net = SectionHead(in_dim)
+    net = SectionHead(in_dim, d=d, n_blocks=n_blocks)
     opt = torch.optim.AdamW(net.parameters(), lr=1e-3, weight_decay=1e-2)
     n = len(Xtr)
     fit = slice(0, int(0.8 * n))
@@ -107,6 +118,10 @@ def main():
     ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"))
     ap.add_argument("--K", type=int, default=1,
                     help="months of context per sample (1 = instantaneous)")
+    ap.add_argument("--head-dim", type=int, default=64,
+                    help="head width (64 = the ~23k original)")
+    ap.add_argument("--head-blocks", type=int, default=0,
+                    help="pre-pooling self-attention blocks (0 = original)")
     ap.add_argument("--raw-patch", action="store_true",
                     help="with --raw: raw tokens carry the 3x3 neighbourhood "
                          "(matches the patch codec's receptive field)")
@@ -215,7 +230,8 @@ def main():
         # standardize target on train only
         mu, sd = v_des[tr].mean(), v_des[tr].std() + 1e-9
         p = np.mean([fold_fit(T_[tr], (v_des[tr] - mu) / sd, T_[te],
-                              feat_dim + 2, sd_)
+                              feat_dim + 2, sd_, d=a.head_dim,
+                              n_blocks=a.head_blocks)
                      for sd_ in (0, 1, 2)], axis=0)
         pred[te] = p * sd + mu
     okp = np.isfinite(pred)
@@ -234,6 +250,7 @@ def main():
     lo95, hi95 = np.percentile(rs, [2.5, 97.5])
 
     out = {"run": a.run,
+           "head_dim": a.head_dim, "head_blocks": a.head_blocks,
            "probe": ("attention-head-raw3x3" if (a.raw and a.raw_patch)
                      else "attention-head-raw" if a.raw
                      else "attention-head"), "K": a.K,
@@ -244,8 +261,11 @@ def main():
                    f"{P} pixels x {a.K} months"}
     print(f"{a.run} head-probe (K={a.K}): rapid k-fold r {r:+.3f} "
           f"[{lo95:+.3f}, {hi95:+.3f}] · RMSE {rmse:.2f} Sv")
-    fn = ("probe_head_raw3x3.json" if (a.raw and a.raw_patch)
-          else "probe_head_raw.json" if a.raw else "probe_head.json")
+    size = ("" if (a.head_dim == 64 and a.head_blocks == 0)
+            else f"_d{a.head_dim}b{a.head_blocks}")
+    fn = (f"probe_head_raw3x3{size}.json" if (a.raw and a.raw_patch)
+          else f"probe_head_raw{size}.json" if a.raw
+          else f"probe_head{size}.json")
     path = os.path.join(HERE, "runs", a.run, fn)
     json.dump(out, open(path, "w"), indent=2)
     print("wrote", path)
