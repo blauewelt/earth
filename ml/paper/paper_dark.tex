@@ -484,6 +484,129 @@ reaches $0.65$--$0.69$ across two seeds, with the attribution caveats
 of \S\ref{sec:ladder}), and no published surface-to-OSNAP
 reconstruction exists for our OSNAP null to contradict.
 
+\begin{table}[t]
+\centering\small
+\begin{tabular}{p{2.6cm}p{3.0cm}p{2.5cm}p{2.4cm}l}
+\toprule
+study & inputs & target \& filtering & protocol & skill \\
+\midrule
+Frajka-Williams \cite{fw2015} & altimetry + \textbf{cable} + Ekman &
+RAPID MOC, 18-mo low-pass & in-sample & $r\approx0.95$ \\
+Sanchez-Franks \cite{sf2021} & altimetry (thermal wind) &
+RAPID, deseas.\ + 18-mo & in-sample & $r=0.83$ \\
+Worthington \cite{worthington} & boundary densities &
+RAPID \emph{UMO}, monthly & 1 test year & $R^2=0.78$; $r\approx0.75$ \\
+Caesar \cite{caesar} & subpolar SST fingerprint &
+AMOC index, 20-yr LOWESS & model-calibrated & trend only \\
+Solodoch \cite{solodoch} & OBP+SSH+SST+$\tau$ &
+\textbf{ECCO} MOC, monthly & chrono.\ 70/30, \emph{simulation} & $r\approx0.98$ \\
+Meng \cite{meng} & SSH+OBP maps &
+eddying-model MOC & \emph{simulation} & skill $\approx0.44$ \\
+W\"olker \cite{woelker} & virtual Argo + $\tau$ + cable &
+VIKING20X $26.5^\circ$N & \emph{simulation} & $R^2\approx0.74$ \\
+\midrule
+\textbf{this work} (ridge) & 14-ch embedding, \textbf{no transport} &
+\textbf{real} RAPID, monthly deseas. & year-blocked $k$-fold &
+$r=0.602$ [0.46, 0.73] \\
+\textbf{this work} (head) & 24-ch embedding, \textbf{no transport} &
+\textbf{real} RAPID, monthly deseas. & year-blocked $k$-fold, 2 seeds &
+$r=0.672$ \\
+\emph{same, under their filter} & --- & +18-mo low-pass &
+\emph{as above} & $r=0.33$--$0.75$ \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Joint results table.} Every row is a defensible number
+in its own frame; the frames differ so much that the rightmost column
+should not be read as a ranking. \S\ref{sec:notcomparable} explains each
+difference and quantifies the largest. Bold marks the two design
+choices that most change the task: whether a \emph{transport
+measurement} is among the inputs, and whether the target is the
+\emph{real} ocean or a simulation.}
+\label{tab:related}
+\end{table}
+
+\subsection{Why these numbers are not comparable}\label{sec:notcomparable}
+
+Table~\ref{tab:related} spans $r=0.44$ to $r=0.98$, and almost none of
+that spread is model quality. Four mechanisms, in descending order of
+how much they matter.
+
+\paragraph{1. Some inputs already contain the answer.} RAPID does not
+measure one thing; it sums three: the Florida Current transport, the
+wind-driven Ekman transport, and the upper-mid-ocean geostrophic
+transport. Frajka-Williams \cite{fw2015} takes the \emph{cable} record
+(which \emph{is} the Florida Current term, measured) and Ekman (from
+wind) as inputs, and reconstructs only the third. Two of the three
+addends are handed to the model; the reported correlation is
+substantially the correlation of a partial sum with its own total.
+W\"olker \cite{woelker} likewise includes cable transport. Our inputs
+contain no transport measurement of any kind --- not the cable, not
+Ekman as a transport --- so we are inferring all three terms from the
+ocean state. These are different problems, and the harder one should
+be expected to score lower.
+
+\paragraph{2. The 18-month filter removes 83\% of the variance and 87\%
+of the degrees of freedom.} This is the difference most often glossed
+as a methodological detail, so we measured it on the RAPID series
+itself. Monthly deseasonalized RAPID has $\sigma=2.79$\,Sv, a lag-1
+autocorrelation of $0.32$, and an integral timescale of $3.5$ months
+--- so its 240 months carry $\approx$68 effective degrees of freedom.
+After an 18-month low-pass, the integral timescale becomes 25 months
+and the effective sample size falls to $\approx$\textbf{9}, while the
+retained variance is \textbf{17\%} of the original. Two consequences.
+First, the filtered task is easier: what survives is the slow,
+heat-content-like component that altimetry and density observables
+track well, while the wind-driven month-to-month variance --- the part
+we are scored on --- has been removed. Second, the filtered statistic
+is barely constrained: $r=0.95$ on 9 effective points carries a
+95\% confidence interval of roughly $[0.77, 0.99]$, and $r=0.83$ one of
+$[0.37, 0.96]$ --- intervals wide enough to overlap our unfiltered
+number. (As a check on the arithmetic: the same calculation gives
+$[0.42, 0.73]$ for our $r=0.60$ at 68 effective points, against the
+$[0.46, 0.73]$ our block bootstrap reports independently.)
+
+We can also show the instability empirically rather than asserting it.
+Two codecs of \emph{identical} configuration differing only in training
+seed score $0.543$ and $0.531$ monthly --- a gap of $0.012$ --- but
+$0.449$ and $0.327$ once 18-month filtered, a gap of $0.122$, ten times
+larger. Across our runs the filtered correlation ranges from $0.33$ to
+$0.75$ while the monthly one stays within $0.53$--$0.62$. We report the
+filtered number for every run (it is in the repository's leaderboard),
+but we decline to headline a statistic whose seed noise is an order of
+magnitude larger than the effect anyone wants to measure.
+
+\paragraph{3. In-sample calibration is a fit, not a prediction.} The
+classical reconstructions \cite{fw2015,sf2021} tune their coefficients
+on the same period over which skill is then reported; Caesar
+\cite{caesar} calibrates against models. No held-out set exists, so the
+number answers ``how well can this functional form describe these
+years'' rather than ``what would it say about a year it has not seen''.
+Worthington \cite{worthington} is the honourable exception in the
+classical line, holding out 2017--18 --- one test year, where our
+protocol re-fits from scratch for every year in turn. Our year-blocked
+$k$-fold is the strictest arrangement here and costs us skill relative
+to every in-sample row, by construction.
+
+\paragraph{4. A simulated ocean is a different ocean.} Solodoch's
+$r\approx0.98$ \cite{solodoch} is obtained inside ECCO, a $1^\circ$
+state estimate whose dynamics are laminar and whose surface fields and
+MOC are generated by the same model --- the mapping to be learned is
+close to deterministic and free of observational noise. The moment the
+same task is posed in eddy-resolving simulations it falls to
+$0.44$--$0.74$ \cite{meng,woelker}, and the real ocean adds sparse,
+irregular sampling on top of eddies. We read the eddying-model range,
+not the laminar one, as the relevant difficulty scale --- and our
+$0.60$--$0.67$ on real observations sits inside it.
+
+\paragraph{What would be comparable.} A like-for-like comparison with
+this work requires: real RAPID data, monthly resolution without
+low-pass filtering, no transport measurement among the inputs, and an
+out-of-sample protocol. We are not aware of a published result meeting
+all four, which is why Table~\ref{tab:related} is an orientation
+device rather than a leaderboard, and why we quote our unfiltered
+monthly number as the headline even though our own filtered number
+looks better.
+
 \paragraph{Ocean and climate forecasting.} Our field-prediction
 metrics are the standard decadal-verification quantities under other
 names: skill vs.\ climatology is MSSS with a climatological reference,

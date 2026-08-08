@@ -132,6 +132,33 @@ anyway) tests capacity AT the data anchor. A steps-matched anchored 40k
 control follows if the 60k result warrants it.
 
 
+## Why published AMOC numbers are not our numbers (2026-08-08)
+
+Measured, not asserted — the arithmetic behind paper §6.1:
+
+- Monthly deseasonalised RAPID: n=240, sigma 2.79 Sv, lag-1 autocorr
+  0.32, integral timescale 3.5 months -> **~68 effective DOF**.
+- After an 18-month low-pass (what FW2015/S-F2021 report on):
+  integral timescale 25 months -> **~9 effective DOF**, and the filter
+  keeps only **17% of the variance**.
+- So r=0.95 on the filtered series has a 95% CI of about [0.77, 0.99];
+  r=0.83 has [0.37, 0.96]. Our r=0.60 at 68 DOF gives [0.42, 0.73] by
+  the same Fisher arithmetic — which matches the block bootstrap's
+  [0.46, 0.73] independently, a useful check that our CIs are sane.
+- EMPIRICAL instability: patch24_40k and its seed replicate differ by
+  **0.012** monthly and **0.122** after filtering. Across all runs the
+  filtered r spans 0.33-0.75 while monthly stays 0.53-0.62. Never
+  headline the filtered number; report it, and say why.
+- The bigger non-comparability is INPUTS: RAPID = Florida Current +
+  Ekman + upper-mid-ocean geostrophic. FW2015 inputs the cable (= the
+  FC term, measured) and Ekman, and reconstructs only the third term.
+  We input no transport of any kind. Different problems.
+
+Reproduce: the DOF arithmetic is a ~15-line numpy snippet over
+`rapid` in the tensor npz (deseasonalise by calendar month, integral
+timescale from the autocorrelation, convolve for the 18-month filter).
+
+
 ## The probe ladder (2026-08-08): pooling was hiding the signal
 
 Three read-outs of the SAME frozen embeddings, same year-blocked folds,
