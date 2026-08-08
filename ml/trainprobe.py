@@ -181,7 +181,18 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
 
         Xt, OBSt = X, OBS          # already tensors (zeros at missing + mask)
         qc = torch.arange(C)[None, :].expand(len(et), -1)
-        xhat = codec.query(zhat, qc, torch.zeros(len(et), C, 3, dtype=torch.long))
+        # codec.query runs the decoder, which lives on the CODEC's device —
+        # cuda during an in-training probe since the GPU-probe change, while
+        # zhat and the index tensors here are all CPU (Zt comes back from
+        # embed_everything as numpy, the mini transformer is CPU). Bridge the
+        # one call: inputs to the codec's device, result back to CPU where the
+        # raw-field tensors Xt/OBSt live. This seam is what killed #56-#59 at
+        # their first full probe (step 10k): a cuda channel-embedding weight
+        # indexed by a cpu chan_idx is the index_select device mismatch.
+        qdev = next(codec.parameters()).device
+        xhat = codec.query(
+            zhat.to(qdev), qc.to(qdev),
+            torch.zeros(len(et), C, 3, dtype=torch.long, device=qdev)).cpu()
         kys_t = torch.as_tensor(kys, dtype=torch.long)
         kxs_t = torch.as_tensor(kxs, dtype=torch.long)
         v1 = Xt[et + 1, kys_t[ep], kxs_t[ep]]

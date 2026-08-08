@@ -43,6 +43,12 @@
  "53": "f3_anchor41M resume — cancelled: dispatched with 640x10 geometry (50.05M params), which is not #48's model.",
  "54": "f3_anchor41M resume — failed: landed on a box with no orphaned checkpoint from #48/#49, so there was nothing to continue.",
  "55": "f3_anchor41M resume — failed: geometry mismatch on load. The error line (torch.Size([1728, 576])) is what finally pinned the true anchored codec at d_model=576, not the 640 inferred from its parameter count.",
+ "56": "f3_anchor41M seedA (fresh) — FAILED at the first full probe (step 10k): codec.query ran the cuda decoder on a cpu channel index (index_select device mismatch). The light probe climbed 0.402→0.582 first, so the codec was training fine; the probe killed it. Fixed and relaunched.",
+ "57": "f3_anchor41M seedB — same first-full-probe crash as #56.",
+ "58": "f3_mid10M seedA — same first-full-probe crash as #56.",
+ "59": "f3_mid10M seedB — same first-full-probe crash as #56.",
+ "60": "f3_pilot0.9M seedB — cancelled: it would have hit the same probe crash at step 10k; relaunched on the fixed code.",
+ "61": "f3_anchor41M_120k seedC — cancelled: same reason as #60 (its first full probe at 15k).",
  "_parents_comment": "Continuations that predate the {\"resumed\": ...} record train.py now writes. Maps a run number to the run it continues; status.html uses it to prepend the parent's curve so a resumed run charts its WHOLE trajectory. New runs do not need an entry here — the checkpoint carries its own CKPT_TAG.",
  "_parents": {}
 }

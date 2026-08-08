@@ -323,15 +323,40 @@ def main():
             model.to(dev)
             return m_
 
-    def run_light_probe(step):
-        """The cheap probe, written to metrics.jsonl. Called at step 0 too —
-        see below for why that one matters most."""
-        m = probe_on_device(light=True)
+    def run_probe(step, light):
+        """Write one probe record to metrics.jsonl and return it (or None).
+
+        A probe is INSTRUMENTATION, and instrumentation must never be the
+        thing that loses a training job. #56-#59 all died at their FIRST full
+        probe (step 10k) on a codec.query device mismatch — hours of training
+        and every checkpoint, gone, because a probe raised. The device bug is
+        fixed in trainprobe.py; THIS is the guard that keeps the next probe
+        bug from being fatal. Any exception is caught, logged to the metrics
+        file as a {"probe_error"} record (so it shows on the status page
+        rather than vanishing), and training carries on.
+        """
+        try:
+            m = probe_on_device(light=light)
+        except Exception as e:                       # never fatal
+            import traceback
+            traceback.print_exc()
+            print(f"  probe @{step} FAILED ({type(e).__name__}: {e}) — "
+                  f"training continues, no probe point this interval",
+                  flush=True)
+            with open(metrics_path, "a") as f:
+                f.write(json.dumps({
+                    "step": step, "wall_s": round(time.time() - t0, 1),
+                    "probe_error": f"{type(e).__name__}: {e}"[:200]}) + "\n")
+            return None
         m["step"] = step
         m["wall_s"] = round(time.time() - t0, 1)
         with open(metrics_path, "a") as f:
             f.write(json.dumps(m) + "\n")
         return m
+
+    def run_light_probe(step):
+        """The cheap probe, written to metrics.jsonl."""
+        return run_probe(step, light=True)
 
     print("training …")
     t0 = time.time()
@@ -350,11 +375,23 @@ def main():
     # random init and wrote it to metrics.jsonl as "step 0" — where the
     # status page draws it as the untrained-codec reference line. On a
     # continuation that line would be a lie about a different model.
+    # Run the SAME probe at step 0 that runs at every eval interval, so every
+    # metric the run reports has an untrained baseline to be read against —
+    # not just the light linear one (Chris, 2026-08-08: "schedule the same
+    # metric at step 0?"). If eval_every is set the step-0 probe is the FULL
+    # one (k-fold RAPID, temporal r, chan%/z% on a random-init codec); if only
+    # the light cadence is on, it stays light. The status page reads
+    # linear_r_deseas for its untrained-codec line, which the full probe emits
+    # too, so that reference is unaffected.
     if (a.light_probe_every or a.eval_every) and not a.resume:
-        m0 = run_light_probe(0)
-        print(f"  step-0 probe (UNTRAINED codec): linear r_des "
-              f"{m0['linear_r_deseas']:+.3f} — every later probe should be "
-              f"read as a change from this", flush=True)
+        m0 = run_probe(0, light=not a.eval_every)
+        if m0:
+            extra = ("" if m0.get("light") else
+                     f" · temporal r_des {m0.get('temporal_r_deseas', float('nan')):+.3f}"
+                     f" · chan t+1 {m0.get('chan_vs_persistence_pct', float('nan')):+.1f}%")
+            print(f"  step-0 probe (UNTRAINED codec): linear r_des "
+                  f"{m0['linear_r_deseas']:+.3f}{extra} — every later probe "
+                  f"should be read as a change from this", flush=True)
     elif a.resume:
         print("  (no step-0 probe: this run resumes, so there is no untrained "
               "baseline to measure — the original run's step-0 point is the "
@@ -451,20 +488,21 @@ def main():
         # (the full one supersedes it and writes the same key).
         full_here = a.eval_every and (s % a.eval_every == 0 or s == a.steps)
         if a.light_probe_every and not full_here and s % a.light_probe_every == 0:
-            m = run_light_probe(s)
-            print(f"  light probe @{s}: linear r_des {m['linear_r_deseas']:+.3f} "
-                  f"({m['probe_seconds']:.0f}s)", flush=True)
+            m = run_probe(s, light=True)
+            if m:
+                print(f"  light probe @{s}: linear r_des "
+                      f"{m['linear_r_deseas']:+.3f} "
+                      f"({m['probe_seconds']:.0f}s)", flush=True)
         if full_here:
-            m = probe_on_device()
-            m["step"] = s
-            m["wall_s"] = round(time.time() - t0, 1)
-            with open(metrics_path, "a") as f:
-                f.write(json.dumps(m) + "\n")
-            print(f"  probe @{s}: chan t+1 {m['chan_vs_persistence_pct']:+.1f}% "
-                  f"vs persistence · linear r_des {m['linear_r_deseas']:+.3f} · "
-                  f"temporal r_des {m['temporal_r_deseas']:+.3f} "
-                  f"({m['probe_seconds']:.0f}s)", flush=True)
-            save_ckpt(s)                       # crash insurance
+            m = run_probe(s, light=False)
+            if m:
+                print(f"  probe @{s}: chan t+1 {m['chan_vs_persistence_pct']:+.1f}% "
+                      f"vs persistence · linear r_des {m['linear_r_deseas']:+.3f} · "
+                      f"temporal r_des {m['temporal_r_deseas']:+.3f} "
+                      f"({m['probe_seconds']:.0f}s)", flush=True)
+            # Crash insurance is INDEPENDENT of the probe: save even when the
+            # probe failed, so a probe bug never also costs the checkpoint.
+            save_ckpt(s)
 
     # ---- evaluation on the BLOCKED holdout --------------------------------
     model.eval()
