@@ -338,11 +338,20 @@ def main():
     # never moved the metric at all. With it, the answer is one subtraction.
     # It costs one light probe (~30 s) and it is the cheapest control in the
     # programme.
-    if a.light_probe_every or a.eval_every:
+    # ...but NOT on a resumed run. Verified on #52: the step-0 probe fired
+    # before the resume restored the weights, so it measured a throwaway
+    # random init and wrote it to metrics.jsonl as "step 0" — where the
+    # status page draws it as the untrained-codec reference line. On a
+    # continuation that line would be a lie about a different model.
+    if (a.light_probe_every or a.eval_every) and not a.resume:
         m0 = run_light_probe(0)
         print(f"  step-0 probe (UNTRAINED codec): linear r_des "
               f"{m0['linear_r_deseas']:+.3f} — every later probe should be "
               f"read as a change from this", flush=True)
+    elif a.resume:
+        print("  (no step-0 probe: this run resumes, so there is no untrained "
+              "baseline to measure — the original run's step-0 point is the "
+              "one that applies)", flush=True)
     CAL = 200                                  # steps before the rate is trusted
     s = 0
     if a.resume:
