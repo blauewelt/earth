@@ -155,6 +155,37 @@ open question of whether the pretraining margin GROWS with codec capacity
 the matrix, not the corner of it; and the demand for a simpler baseline
 reframed the headline twice in one day.
 
+### The second seed (2026-08-08, afternoon): 0.690 does NOT hold up as a margin
+
+Chris asked for the 0.690 to be replicated on a second codec seed. It was
+(run #43, identical config, different runner), and the result reframes the
+attribution matrix:
+
+| probe | patch24 seed 1 | patch24 seed 2 | spread |
+|---|---|---|---|
+| pooled ridge | 0.543 [0.43, 0.66] | 0.531 [0.40, 0.65] | 0.012 |
+| attention head | **0.690** [0.57, 0.78] | **0.654** [0.54, 0.75] | 0.036 |
+
+Two things follow, one reassuring and one not:
+
+1. The HEADLINE SURVIVES as a capability claim. Both seeds beat every
+   pooled probe and the wind-only baseline by a wide margin; the unpooling
+   result is not a fluke. But the honest headline is the two-seed mean
+   **0.672**, and 0.690 was the luckier draw.
+2. The PRETRAINING MARGIN DOES NOT SURVIVE. Raw-3x3 (codec-independent)
+   scores 0.659. Seed 2's embedding head scores 0.654 — BELOW the raw
+   baseline. Across both seeds the embedding advantage is
+   0.672 - 0.659 = **+0.013**, i.e. nothing. The earlier "+0.031, n.s."
+   was one seed's noise read as a direction.
+
+Note also that the head is a NOISIER instrument than the ridge (seed
+spread 0.036 vs 0.012) — expected for the more expressive probe, and a
+reason every future head claim needs two seeds before it is stated.
+
+For the pixel control the same replication gives 0.515 -> 0.564
+(spread 0.049), consistent with the +/-0.05 seed-noise estimate that has
+held all programme long.
+
 ### Head capacity sweep (2026-08-08): the margin is not a parameter artifact
 
 Chris asked whether the raw baseline was parameter-bottlenecked. It is the

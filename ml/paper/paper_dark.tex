@@ -44,14 +44,17 @@ week. Pointwise nonlinearity recovers nothing anywhere: the MLP trails
 the ridge on every target, for every codec. But the attention head, which
 sees the $\sim$67 section pixels individually instead of their mean,
 raises every codec --- and the codec whose channel tokens carry $3\times3$
-spatial patches reaches $\mathbf{r=0.690}$ [$0.570$, $0.781$], RMSE
-2.02\,Sv against a 2.79\,Sv target, the best transport figure of the
+spatial patches reaches $\mathbf{r=0.672}$ across two independently
+trained seeds ($0.690$ and $0.654$), RMSE $\approx$2.1\,Sv against a
+2.79\,Sv target, the best transport figure of the
 programme. The mechanism is thermal wind: geostrophic transport is the
 east-minus-west density difference across the section, and mean-pooling
 computes exactly the statistic in which that difference cancels. An
 end-to-end control then decomposes the headline: the same head over
 \emph{raw} section data reaches $0.659$ at matched receptive field, so
-pretraining's own margin on this task is $+0.031$ and not significant
+pretraining's own margin on this task is $+0.013$ --- indistinguishable
+from zero, and a directional $+0.031$ reported from the first seed alone
+is withdrawn here
 --- the codec's demonstrated value lies in field prediction and
 transfer, not in the monthly RAPID probe. An
 apparent finding that expanding the input from 14 to 24--25 channels had
@@ -411,6 +414,8 @@ pixel24-30k     & global & 24 & 1 & 64 & 30k & --- & 0.585 [0.45, 0.71] & --- \\
 pixel24-60k     & global & 24 & 1 & 64 & 60k & --- & 0.549 [0.42, 0.67] & --- \\
 patch24-30k     & global & 24 & 3 & 64 & 30k & --- & 0.551 [0.42, 0.68] & --- \\
 patch24-1M      & global & 24 & 3 & 64 & \textbf{1M} & $+32.1^\ddagger$ & 0.571 [0.42, 0.70] & --- \\
+patch24-seed2   & global & 24 & 3 & 64 & 40k & --- & 0.531 [0.40, 0.65] & 27\% \\
+pixel24-seed2   & global & 24 & 1 & 64 & 40k & --- & 0.564 [0.44, 0.69] & --- \\
 big10M (2 runs) & global & 24 & 3 & 64 & 30k/60k & \multicolumn{3}{l}{\emph{training at time of writing}} \\
 \bottomrule
 \end{tabular}
@@ -424,7 +429,8 @@ wind-stress-only ridge baseline (no embedding) scores $r=0.531$ --- the
 line every codec must beat. k-fold $r$ here is the POOLED RIDGE rung of
 the probe ladder (the comparable-across-time instrument); the unpooled
 attention-head values (\S\ref{sec:ladder}) are higher for every codec
-measured: global14 $0.635$, pixel25 $0.617$, patch24 $\mathbf{0.690}$. $^\ast$global14b is an exact-configuration
+measured: global14 $0.635$, pixel25 $0.617$, patch24 $\mathbf{0.690}$
+and $0.654$ on its second seed. $^\ast$global14b is an exact-configuration
 replication on a different runner: it measures codec-training seed noise
 on the k-fold at $\approx\pm0.05$ --- the four pixel24/patch24 rows,
 spanning 0.515--0.585 across 30k--60k steps, are consistent with that
@@ -500,7 +506,8 @@ in the programme at $r=0.690$.}
 
 Fig.~\ref{fig:ladder} is this revision's central result, and it changes
 both a number and a story. The number: the patch codec read by the
-attention head reaches $r=0.690$ [$0.570$, $0.781$], RMSE 2.02\,Sv ---
+attention head reaches $r=0.690$ [$0.570$, $0.781$], RMSE 2.02\,Sv
+(and $0.654$ on a second codec seed, below) ---
 against $0.60$ for the best pooled-linear configuration, and against a
 wind-only baseline of $0.531$ that the pooled second-family probes had
 barely cleared. The story: the ladder's two rungs dissociate cleanly.
@@ -527,32 +534,47 @@ instead of embeddings, at both receptive fields:
 tokens carry & raw data & codec embedding \\
 \midrule
 single pixel & 0.613 [0.48, 0.73] & 0.617 [0.49, 0.73] \\
-$3\times3$ neighbourhood & 0.659 [0.55, 0.75] & \textbf{0.690} [0.57, 0.78] \\
+$3\times3$ neighbourhood & 0.659 [0.55, 0.75] & 0.690 / 0.654 (2 seeds) \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-The headline decomposes, in descending order: \emph{unpooling} the
-section is the largest term (pooled ridge $0.54\to$ head $0.61$+); the
+\paragraph{A second seed, and a retraction.} The $0.690$ cell was
+replicated on an independently trained codec of identical
+configuration. It came back at $0.654$ [$0.543$, $0.748$]. The
+capability claim survives --- both seeds beat every pooled probe and the
+wind-only baseline decisively, so unpooling is real --- but the
+\emph{pretraining margin does not}. The raw-$3\times3$ baseline is
+codec-independent at $0.659$; the two-seed embedding mean is $0.672$;
+the advantage is therefore $+0.013$, which is nothing. We previously
+reported $+0.031$ ``positive in direction, not significant'' and we
+withdraw even that directional reading: it was one seed's noise. Note
+that the pooled ridge replicated far more tightly across the same two
+codecs ($0.543$ vs $0.531$) than the head did ($0.690$ vs $0.654$) ---
+the more expressive probe is also the noisier instrument, and no future
+head number in this programme should be quoted from a single seed.
+
+What remains, then, decomposes as: \emph{unpooling} the section is the
+whole of the improvement (pooled ridge $0.54\to$ head $0.65$+); the
 $3\times3$ \emph{receptive field} adds $\sim$$+0.045$ and does so on raw
-data alone; \emph{pretraining} adds $+0.031$ at matched receptive field
---- positive in direction, not statistically significant --- and nothing
-at a single pixel. For the monthly RAPID probe, a supervised head over
-raw data recovers nearly everything. The pretraining case therefore
-rests on the scoreboards where 240 labelled months have no answer: field
-prediction (stage 2 beats persistence everywhere; the matching
-end-to-end field-forecaster baseline is the open follow-up), transfer to
-sparsely-labelled targets like MOVE, and the open question of whether
-the pretraining margin grows with codec capacity --- the 10M-parameter
-codecs now training will say.
+data alone; \emph{pretraining} adds nothing measurable at either
+receptive field. For the monthly RAPID probe, a supervised head over raw
+section data recovers everything the codec offers. The pretraining case
+now rests entirely on the scoreboards where 240 labelled months have no
+answer: field prediction (stage 2 beats persistence everywhere; the
+matching end-to-end field-forecaster baseline is the open follow-up),
+transfer to sparsely-labelled targets like MOVE, and whether a margin
+appears at all once the codec is sized to its Chinchilla anchor --- the
+10M-parameter codecs now training are the test, and on present evidence
+we should expect them to show nothing rather than assume they will.
 
 Honesty box: the head is the most expressive probe we run
 ($\sim$25k parameters against $\sim$220 training months per fold), and
 although it is regularized hard, early-stopped on a train tail, and
 seed-averaged behind the same blocked folds as every other number, the
-head-vs-ridge gaps have not yet been given a paired significance test,
-and the $0.690$ awaits replication on a second codec seed; both are
-queued. A capacity sweep of the head itself ($23$k$\to$$325$k$\to$$2.0$M
+head-vs-ridge gaps have not yet been given a paired significance test.
+The second-seed replication is no longer outstanding --- it is reported
+above, and it cost us the pretraining margin. A capacity sweep of the head itself ($23$k$\to$$325$k$\to$$2.0$M
 parameters) shows \emph{neither} side is parameter-limited: at $325$k
 both columns drop (raw-$3\times3$ $0.659\to0.590$, embedding-$3\times3$
 $0.690\to0.611$), as the label-count arithmetic predicts ($\sim$220
@@ -676,9 +698,13 @@ bottleneck.
 substantially Ekman, though the unpooled head now clears the baseline by
 $+0.10$--$0.16$ where the pooled probes had shrunk the margin to noise.
 (2) The head result is new and strong, and strength is when scrutiny
-matters most: no paired significance test yet, no second codec seed yet
-(a replicate is queued on the fleet), and the head has been run only on
-RAPID --- the MOVE and low-frequency versions may move too. (3) $d_z{=}64$ was chosen on a 12-channel tensor
+matters most. The second codec seed has now been run and it removed the
+pretraining margin (\S\ref{sec:ladder}); what remains outstanding is a
+paired significance test, and the fact that the head has been run only on
+RAPID --- the MOVE and low-frequency versions may move too. The head is
+also demonstrably the noisiest probe we own (seed spread $0.036$ against
+the ridge's $0.012$), so single-seed head numbers should not be quoted
+anywhere, including by us. (3) $d_z{=}64$ was chosen on a 12-channel tensor
 and carried unchanged into 24--25 channels; the sweep has not been
 repeated at the new width. (4) Absolute k-fold values
 are mildly optimistic --- the codec saw non-holdout months' \emph{fields}
@@ -708,7 +734,7 @@ regime buys nothing at 0.92M parameters: the pilot is capacity-limited,
 which is what the Chinchilla arithmetic predicted ($\sim$13M parameters
 for this tensor) and what the 10M-parameter codecs now training are for.
 Next levers, in expected-value order:
-paired significance and seed replication for the head results; the head
+paired significance for the head results; the head
 probe at MOVE and at low frequency; re-running the $d_z$ sweep at
 $C{=}24$; then the approved data ladder --- (a) extending the time axis
 to 1982, where monthly SST and wind exist pre-GLORYS and the Florida
