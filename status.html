@@ -323,6 +323,12 @@
       return padT + (H - padT - padB) * (1 - (v - ymin) / yspan);
     };
     var last = pts[pts.length - 1];
+    // The step-0 point is the UNTRAINED codec: a ridge on random features.
+    // Drawn as its own reference line because the question "is training
+    // doing anything" is answered by the gap between the curve and THIS
+    // line, not by the curve's shape.
+    var zero = null;
+    for (var zi = 0; zi < pts.length; zi++) if (pts[zi].step === 0) zero = pts[zi];
     var dots = pts.map(function (p) {
       var cx = padL + (W - padL - padR) * ((p.step - xmin) / xspan);
       return '<circle cx="' + cx.toFixed(1) + '" cy="' + yOf(p.linear_r_deseas).toFixed(1) +
@@ -339,6 +345,14 @@
         base.v.toFixed(3) + " (" + base.what + ")</text>" +
       '<text x="' + (padL - 6) + '" y="' + (padT + 5) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymax.toFixed(2) + "</text>" +
       '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymin.toFixed(2) + "</text>" +
+      (zero
+        ? '<line x1="' + padL + '" y1="' + yOf(zero.linear_r_deseas).toFixed(1) +
+          '" x2="' + (W - padR) + '" y2="' + yOf(zero.linear_r_deseas).toFixed(1) +
+          '" stroke="#8b5cf6" stroke-width="1" stroke-dasharray="2 3"/>' +
+          '<text x="' + (padL + 4) + '" y="' + (yOf(zero.linear_r_deseas) - 4).toFixed(1) +
+          '" font-size="10" fill="#8b5cf6">untrained codec ' +
+          zero.linear_r_deseas.toFixed(3) + "</text>"
+        : "") +
       '<polyline points="' + line + '" fill="none" stroke="#2da44e" stroke-width="2" stroke-linejoin="round"/>' +
       dots +
       "</svg>" +
@@ -348,6 +362,11 @@
       (last.linear_r_deseas >= base.v
         ? ' <span style="color:#2da44e">above the wind bar</span>'
         : ' <span style="color:#8b949e">below the wind bar</span>') +
+      (zero
+        ? " · <b>" + (last.linear_r_deseas - zero.linear_r_deseas >= 0 ? "+" : "") +
+          (last.linear_r_deseas - zero.linear_r_deseas).toFixed(3) +
+          "</b> vs the untrained codec"
+        : "") +
       "</span></div>" +
       (typeof lossXmax === "number" && lossXmax > last.step
         ? '<div class="probe">probe lags training: the loss curve is at step ' +

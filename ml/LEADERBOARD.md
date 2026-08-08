@@ -132,6 +132,38 @@ anyway) tests capacity AT the data anchor. A steps-matched anchored 40k
 control follows if the 60k result warrants it.
 
 
+## The untrained-codec control (2026-08-08): what does step 0 read?
+
+Chris asked whether the in-training probe should also be computed BEFORE
+any training — "to identify whether training is going in the right
+direction or whether it does nothing". It should, and it now is (step-0
+light probe, every run). The retrospective measurement, pilot
+architecture (patch=3, C=24), same in-training linear section probe:
+
+| codec | linear r (deseas) |
+|---|---|
+| UNTRAINED, random init, seed 0 | 0.271 |
+| UNTRAINED, random init, seed 1 | 0.355 |
+| UNTRAINED, random init, seed 2 | 0.343 |
+| **untrained mean** | **~0.32** |
+| trained patch24_40k (40k steps) | **0.503** |
+
+So codec training is worth about **+0.18** on this probe — training is
+NOT doing nothing, which was the live worry. But note what the untrained
+number is: a ridge on RANDOM features already reaches 0.32, so a third
+of the way to the wind bar is free. Any future claim about the codec
+must be quoted against 0.32, not against 0.
+
+Caveat: this is the in-training probe (fixed holdout), not the k-fold —
+0.503 here vs 0.543 k-fold for the same checkpoint. Compare within an
+instrument, never across.
+
+Open: the same control at 10M size. #46's curve (0.458 @10k, 0.412 @20k)
+plateaus early and BELOW the wind bar; whether it plateaus above its own
+random-init baseline is exactly what the step-0 probe will now answer for
+free on every future run.
+
+
 ## The classical inputs, re-scored in our protocol (2026-08-08)
 
 `ml/classical_baseline.py` — the answer to "can we produce numbers that

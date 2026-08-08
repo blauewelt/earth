@@ -231,8 +231,35 @@ def main():
                     "norm": d["norm"], "args": vars(a)},
                    os.path.join(a.out, "pixelmae.pt"))
 
+    def run_light_probe(step):
+        """The cheap probe, written to metrics.jsonl. Called at step 0 too —
+        see below for why that one matters most."""
+        m = trainprobe.probe_now(model.cpu(), Xt, OBS, d, mvec, t_hold,
+                                 x_hold, dynamic, light=True)
+        model.to(dev)
+        m["step"] = step
+        m["wall_s"] = round(time.time() - t0, 1)
+        with open(metrics_path, "a") as f:
+            f.write(json.dumps(m) + "\n")
+        return m
+
     print("training …")
     t0 = time.time()
+    # STEP-0 PROBE — the untrained control (Chris, 2026-08-08: "would it be
+    # useful to compute the green (r) metric before any training has
+    # happened … it may be useful to identify whether training is going in
+    # the right direction or whether it does nothing"). A randomly
+    # initialised encoder still emits embeddings, and a ridge on random
+    # features is a real baseline. Without this point, a flat probe curve is
+    # ambiguous: it could mean training converged early, or that training
+    # never moved the metric at all. With it, the answer is one subtraction.
+    # It costs one light probe (~30 s) and it is the cheapest control in the
+    # programme.
+    if a.light_probe_every or a.eval_every:
+        m0 = run_light_probe(0)
+        print(f"  step-0 probe (UNTRAINED codec): linear r_des "
+              f"{m0['linear_r_deseas']:+.3f} — every later probe should be "
+              f"read as a change from this", flush=True)
     CAL = 200                                  # steps before the rate is trusted
     s = 0
     while s < a.steps:
@@ -266,13 +293,7 @@ def main():
         # (the full one supersedes it and writes the same key).
         full_here = a.eval_every and (s % a.eval_every == 0 or s == a.steps)
         if a.light_probe_every and not full_here and s % a.light_probe_every == 0:
-            m = trainprobe.probe_now(model.cpu(), Xt, OBS, d, mvec, t_hold,
-                                     x_hold, dynamic, light=True)
-            model.to(dev)
-            m["step"] = s
-            m["wall_s"] = round(time.time() - t0, 1)
-            with open(metrics_path, "a") as f:
-                f.write(json.dumps(m) + "\n")
+            m = run_light_probe(s)
             print(f"  light probe @{s}: linear r_des {m['linear_r_deseas']:+.3f} "
                   f"({m['probe_seconds']:.0f}s)", flush=True)
         if full_here:
