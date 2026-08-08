@@ -689,6 +689,12 @@ and `paper/make_figs.py`; restore with `project_read` and write them back to
 storing). Write any substantive edit back to the project in the same turn —
 that copy is the only one that survives. `latexmk`/`pdflatex` are
 system-installed and do survive; microtype and lmodern are not available.
+Rebuilding costs ~15 s, so REBUILD AND DELIVER (SendUserFile) both the
+light and dark builds with every substantive edit — the user asked for
+this explicitly (2026-08-08: "just relaunch it with every update"). The
+dark build is generated from paper.tex by the string-replace block in the
+session history / make_figs --dark for figures; never hand-edit
+paper_dark.tex.
 
 ### 7. Documentation set
 
