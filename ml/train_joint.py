@@ -417,7 +417,17 @@ def main():
         # the embedding shrinking. Dividing by the batch's OWN persistence
         # closes the degenerate direction by construction: shrink z and
         # numerator and denominator shrink together, for nothing.
-        r_fore = l_fore / l_pers.detach().clamp_min(1e-9)
+        # NOT .detach(). Detaching the denominator was the whole bug in the
+        # first attempt at this (#103/#104): it makes l_pers a constant
+        # w.r.t. the parameters INSIDE the step, which is precisely the
+        # condition that pays for shrinking z. Both losses are quadratic in
+        # z, so under a rescale z -> a·z the ratio goes a²·l_fore / (a²·l_pers)
+        # — flat, gradient exactly zero — whereas a detached denominator
+        # gives a²·l_fore / const, whose gradient points straight down in a.
+        # #103 reached 1099x contraction by step 600, worse and faster than
+        # the run that first exposed the problem, because the fix had made
+        # the forecast term matter without removing the incentive.
+        r_fore = l_fore / l_pers.clamp_min(1e-9)
         if ref_fore_mult > 0:
             # ...then put it on r_rec's footing: 1.0 must mean "as good as
             # the frozen-codec pipeline" for BOTH terms, or the smooth max

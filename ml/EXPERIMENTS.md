@@ -86,9 +86,34 @@ denominator is an invitation to rescale that space. Normalise against a
 quantity computed in the same space at the same moment, or the ratio measures
 the units rather than the skill.
 
-**Re-runs.** #103 (`lse@0.58`) and #104 (`sum@0.58`) on the fixed objective.
-#101 continues — a frozen codec cannot contract, so the control was never
-affected and its number is the one #103/#104 divide by.
+**The first fix was wrong, in an instructive way.** #103/#104 shipped
+`l_fore / l_pers.detach()`. Detaching the denominator makes it a constant
+*with respect to the parameters inside the step*, which is exactly the
+condition that pays for shrinking z — the ratio only looks scale-free, its
+gradient is not. Both losses are quadratic in z, so under a rescale z → a·z:
+
+| denominator | r_fore(a) | dr/da at a=1 |
+|---|---|---|
+| detached | a²·l_fore / const | **+2·l_fore/l_pers** — shrinking lowers the loss |
+| live | a²·l_fore / (a²·l_pers) | **0** — rescaling buys exactly nothing |
+
+Verified numerically on a toy tensor before relaunching: +1.81 detached,
++2.5e-7 live. #103 reached **1099× contraction by step 600** — worse and far
+faster than #102, which is what the algebra predicts: making the forecast term
+matter without removing the incentive means the smooth max now points the
+codec down the free direction with real weight. `r_rec_probe` climbed to 1.94
+alongside, so the codec was visibly being destroyed; the `z_shrink` series
+added in the same commit is what made it a five-minute diagnosis instead of a
+retracted result three hours later.
+
+**Re-runs.** #105 (`lse@0.58`) and #106 (`sum@0.58`) with the live denominator.
+#101 continues untouched throughout — a frozen codec cannot contract, so the
+control was never affected and its number is the one the treatments divide by.
+
+**Lesson, sharpened.** "Normalise by a quantity in the same space" is not
+enough; the normaliser has to stay *differentiable*, or it is a constant
+wearing a ratio's clothes. Reach for `.detach()` on a denominator only when
+you have written down what the gradient does without it.
 
 ---
 
