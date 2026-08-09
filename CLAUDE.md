@@ -671,7 +671,13 @@ stops two copies sharing the screen; it is not a memory of what has been said.
 - Run `python3 scripts/stamp_assets.py` before committing anything under
   `src/`, or the deploy will not reach browsers that already have the old file.
 - Commit messages explain the *why* (data quirks, bug mechanics), not just the
-  what. Multi-line bodies encouraged.
+  what. Multi-line bodies encouraged. **Write them with a QUOTED heredoc**
+  (`git commit -F - <<'EOF'`) — never an unquoted one and never `-m` with
+  backticks in the text. An unquoted heredoc runs anything in backticks as a
+  command substitution and splices its output into the message: on 2026-08-09
+  a body mentioning the `window` input committed as "the joint trainer, and
+  (family2-only...)" with the word simply gone. Third occurrence; the quoted
+  form costs nothing.
 - Never commit credentials. The push token lives only in the local git
   credential helper.
 
