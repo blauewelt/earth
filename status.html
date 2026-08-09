@@ -582,6 +582,16 @@
   // branch as run-<n>.jsonl afterwards. Try live first, fall back to the
   // archive — so a run keeps its charts after it succeeds, which is when
   // they are most worth looking at.
+  // The run's CURRENT PHASE, written by the workflow to the live branch.
+  // Only exists while a job is running; absent for queued and finished runs,
+  // which is the correct answer for both.
+  function fetchPhase(runNumber) {
+    return fetch("https://raw.githubusercontent.com/" + REPO + "/ml-live-" +
+                 runNumber + "/phase.json?cb=" + Date.now())
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+
   function fetchMetrics(runNumber) {
     var cb = "?cb=" + Date.now();
     var live = "https://raw.githubusercontent.com/" + REPO + "/ml-live-" + runNumber + "/metrics.jsonl" + cb;
@@ -596,24 +606,72 @@
     });
   }
 
+  // What to show for a run that has no curves YET. There used to be one
+  // sentence here — "building dataset / seeding cache" — shown for every such
+  // run, which made a job waiting in the queue, a job running the probe
+  // ladder, and a job actually building a tensor all look identical. Chris
+  // read four queued jobs as four builds, which is exactly what the page said.
+  //
+  // The distinctions, cheapest first: `queued` comes free from the runs API
+  // we already fetch; the live phase comes from the branch the job pushes to;
+  // and "this kind of job never trains" is legible from its own config.
+  function waitingCard(run, headOrM) {
+    var head = typeof headOrM === "string" ? headOrM : cardHead(run);
+    var m = typeof headOrM === "string" ? null : headOrM;
+    if (run.status === "queued") {
+      return head + '<div class="empty">queued — waiting for a free runner. ' +
+        "Nothing is building yet; the box picks this up when one frees." +
+        "</div></div>";
+    }
+    var ph = run.__phase;
+    if (ph && ph.phase) {
+      return head + '<div class="empty"><b style="color:#e6edf3">' + esc(ph.phase) +
+        "</b>" + (ph.detail ? ' — ' + esc(ph.detail) : "") +
+        (ph.at ? ' <span class="meta">(since ' + esc(ago(ph.at)) + ")</span>" : "") +
+        "</div></div>";
+    }
+    // No phase file: either the job predates phase reporting, or it is
+    // between pushes. Say what we can without pretending to know the step.
+    var noTrain = m && m.cfg && !m.cfg.steps;
+    return head + '<div class="empty">running — no training curve yet' +
+      (noTrain ? " (this job runs probes over an existing codec, so it has no loss curve)"
+               : ". Seeding the cache, building the tensor, or still starting up") +
+      ".</div></div>";
+  }
+
+  function cardHead(run) {
+    var doc = docOf(run);
+    var state = run.status === "completed"
+      ? (run.conclusion === "success" ? "finished" : esc(run.conclusion || "ended"))
+      : esc(run.status.replace(/_/g, " "));
+    return '<div class="card"><h3><a href="' + esc(run.html_url) + '">run #' +
+           esc(run.run_number) + '</a> <span class="meta">· ' + state + ", started " +
+           esc(ago(run.created_at)) + "</span></h3>" +
+           (doc ? '<div class="rundoc">' + esc(doc) + "</div>" : "");
+  }
+
   function renderLiveRun(run) {
-    return fetchMetrics(run.run_number).then(function (text) {
-      var doc = docOf(run);
-      var state = run.status === "completed"
-        ? (run.conclusion === "success" ? "finished" : esc(run.conclusion || "ended"))
-        : esc(run.status.replace(/_/g, " "));
-      var head = '<div class="card"><h3><a href="' + esc(run.html_url) + '">run #' +
-                 esc(run.run_number) + '</a> <span class="meta">· ' + state + ", started " +
-                 esc(ago(run.created_at)) + "</span></h3>" +
-                 (doc ? '<div class="rundoc">' + esc(doc) + "</div>" : "");
+    // A running job's phase is worth one extra raw fetch; a queued one has no
+    // branch yet and a finished one has no phase, so neither is asked for.
+    var pre = (run.status === "in_progress")
+      ? fetchPhase(run.run_number).then(function (p) { run.__phase = p; })
+      : Promise.resolve();
+    return pre.then(function () { return fetchMetrics(run.run_number); })
+      .then(function (text) {
+      var head = cardHead(run);
       if (text === null) {
-        return run.status === "completed" ? ""
-          : head + '<div class="empty">building dataset / seeding cache (no training metrics yet)</div></div>';
+        if (run.status === "completed") return "";
+        return waitingCard(run, head);
       }
       var m0 = parseJsonl(text);
       if (!m0.loss.length) {
-        return run.status === "completed" ? ""
-          : head + '<div class="empty">metrics file present but no loss points yet</div></div>';
+        if (run.status === "completed") return "";
+        // Stage-2 and head-probe jobs never train a codec, so they have no
+        // loss curve by design — but they DO have a stage-2 panel worth
+        // showing. Only fall back to the waiting card when there is nothing.
+        var s2only = stage2Chart(m0);
+        if (s2only) return head + s2only + "</div>";
+        return waitingCard(run, m0);
       }
       return withParent(m0, run).then(function (m) {
         return renderRunBody(run, head, m);

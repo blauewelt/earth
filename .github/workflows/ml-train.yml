@@ -183,6 +183,12 @@ jobs:
       # showed uflx/vflx.sfc.gauss.YYYY.nc being fetched one year at a time.
       # A directory outside the workspace survives actions/checkout's clean,
       # so the box pays the download once, ever.
+      - name: Phase · seeding
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/publish_phase.sh "ml-live-${{ github.run_number }}" "seeding the data cache" "downloading RG-Argo + wind from the data-cache release (first run on a box only)"
+
       - name: Persistent data cache (self-hosted box)
         if: inputs.runner != 'ubuntu-latest'
         env:
@@ -305,6 +311,12 @@ jobs:
             ml-cache-v2-
             ml-cache-v1-
 
+      - name: Phase · building
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/publish_phase.sh "ml-live-${{ github.run_number }}" "building the tensor" "assembling channels into the pixel tensor"
+
       - name: Build dataset (repo channels + RG-Argo depth + NCEP wind stress)
         run: |
           if [ "${{ inputs.tensor || 'family2' }}" = "family3_na025" ]; then
@@ -370,6 +382,12 @@ jobs:
           }, open("ml/runs/actions/provenance.json", "w"), indent=1)
           print(open("ml/runs/actions/provenance.json").read())
           EOF
+
+      - name: Phase · training
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/publish_phase.sh "ml-live-${{ github.run_number }}" "training" "stage-1 codec; curves appear within a few minutes"
 
       - name: Train
         env:
@@ -439,6 +457,12 @@ jobs:
       # sense on an anomaly-space codec (temporal.py refuses otherwise).
       # Same reasoning: the probes read the checkpoint, so a late Train
       # failure must not skip them.
+      - name: Phase · probes
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/publish_phase.sh "ml-live-${{ github.run_number }}" "probes and stage 2" "k-fold ladder, stage-2 temporal transformer, head probe"
+
       - name: Probes (K-sweep + stage 2)
         if: always() && inputs.anomaly == 'true'
         continue-on-error: true

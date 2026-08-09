@@ -71,6 +71,18 @@ const RUNS = {
       head_sha: "c".repeat(40),
     },
     {
+      id: 5, run_number: 105, status: "queued", conclusion: null,
+      created_at: iso(4), html_url: "https://example.invalid/105",
+      display_title: "queued stage-2 job", name: "ml-train",
+      head_sha: "e".repeat(40),
+    },
+    {
+      id: 4, run_number: 104, status: "in_progress", conclusion: null,
+      created_at: iso(12), html_url: "https://example.invalid/104",
+      display_title: "f3 build", name: "ml-train",
+      head_sha: "d".repeat(40),
+    },
+    {
       id: 2, run_number: 102, status: "in_progress", conclusion: null,
       created_at: iso(90), html_url: "https://example.invalid/102",
       display_title: "f3_anchor41M (continued)", name: "ml-train",
@@ -110,6 +122,14 @@ test.beforeEach(async ({ page }) => {
     if (/ml-live-102\/metrics\.jsonl/.test(url)) return fulfill(RUN_B);
     if (/ml-metrics\/run-103\.jsonl/.test(url)) return fulfill(RUN_S2);
     if (/ml-metrics\/run-101\.jsonl/.test(url)) return fulfill(RUN_A);
+    // #104 is mid-build: it has a phase file and no metrics yet.
+    if (/ml-live-104\/phase\.json/.test(url)) {
+      return fulfill(JSON.stringify({
+        phase: "building the tensor",
+        detail: "assembling channels into the pixel tensor",
+        at: new Date(NOW - 6 * 60000).toISOString(),
+      }));
+    }
     return route.fulfill({ status: 404, body: "" });
   });
 });
@@ -120,14 +140,19 @@ test("status page renders training curves without a script error", async ({ page
   await page.goto("/status.html");
   await expect(page.locator("#live .card").first()).toBeVisible();
   expect(errors).toEqual([]);
-  // Two charts per card: loss and probe.
-  await expect(page.locator("#live .card").first().locator("svg.chart")).toHaveCount(2);
+  // Two charts on a TRAINING run's card: loss and probe. Selected by heading,
+  // not .first() — the list is ordered in-progress-then-finished and gains
+  // cards as runs are added, so position is not identity.
+  const trained = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #102" }) });
+  await expect(trained.locator("svg.chart")).toHaveCount(2);
 });
 
 test("a resumed run charts the WHOLE trajectory, parent included", async ({ page }) => {
   await page.goto("/status.html");
-  const card = page.locator("#live .card").first();
-  await expect(card).toContainText("run #102");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #102" }) });
+  await expect(card).toHaveCount(1);
 
   // The card says where the trajectory began and where the seam is.
   await expect(card).toContainText("continues run #101 from step 22,500");
@@ -154,7 +179,8 @@ test("a resumed run charts the WHOLE trajectory, parent included", async ({ page
 
 test("ETA is measured against this job's own steps, not the inherited ones", async ({ page }) => {
   await page.goto("/status.html");
-  const card = page.locator("#live .card").first();
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #102" }) });
   // wall_s 3,200 over the 12,500 steps THIS job did = 0.256 s/step; 25,000
   // steps remain → ~1.8 h. Charging the parent's 22,500 steps to this job's
   // clock would report ~0.6 h — a number the box would blow straight past.
@@ -206,4 +232,26 @@ test("runs without stage 2 show no stage-2 panel", async ({ page }) => {
     .filter({ has: page.locator("h3", { hasText: "run #101" }) });
   await expect(card).not.toContainText("temporal transformer over the frozen");
   expect(await card.locator('svg.chart polyline[stroke="#a371f7"]').count()).toBe(0);
+});
+
+
+test("a queued run says it is queued, not building", async ({ page }) => {
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #105" }) });
+  await expect(card).toHaveCount(1);
+  await expect(card).toContainText("queued — waiting for a free runner");
+  await expect(card).toContainText("Nothing is building yet");
+  // The old page said this about every run without curves. It must not.
+  await expect(card).not.toContainText("building dataset / seeding cache");
+});
+
+test("a running run names the phase it is actually in", async ({ page }) => {
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #104" }) });
+  await expect(card).toHaveCount(1);
+  await expect(card).toContainText("building the tensor");
+  await expect(card).toContainText("assembling channels into the pixel tensor");
+  await expect(card).toContainText("since 6 min ago");
 });
