@@ -175,7 +175,15 @@ crashed. And the target after u self-fed steps is `Z[t+1+u]`, not the
 teacher-forced target reused; verified by direct index arithmetic on a toy
 tensor before any GPU time was spent.
 
-**Control.** `--unroll 1` is bit-identical to the previous objective.
+**Control.** `--unroll 1` is bit-identical to the previous objective, and the
+two statements above only look like they disagree. The extra-term loop runs
+`for u in range(1, U)`, so at U=1 it never executes and the loss is exactly the
+old `(pred − ztgt)²`; the `Z[t+1+u]` formula indexes *self-fed* steps, with
+u = 0 being the teacher-forced term whose target is `Z[t+1]` — the original.
+The pool guard collapses the same way: `t + U < T` becomes `t + 1 < T` and
+`t_hold[t+1:t+U+1].any()` becomes `t_hold[t+1]`, which is what it always was.
+So U=1 changes neither the loss, the weighting, nor which windows are eligible,
+and the #88/#93 pairing below is a clean one-variable comparison.
 
 **Result.** #88 (U=1, control, `head_sha` in the run record) and #93 (U=4).
 Both resumed run-63 at step 60,000 with `--steps 60000`, so the stage-1 loop

@@ -358,7 +358,15 @@ def main():
         mseq = torch.stack([Mt[base + j] for j in range(K)], 1)
         ztgt = torch.stack([Zt[base + j + 1, p] for j in range(K)], 1)
         # True embeddings BEYOND the window, for the autoregressive unroll:
-        # zfut[:, u] is the truth the model must hit after u+1 self-fed steps.
+        # zfut[:, u] = Z[t+1+u] is the truth the model must hit after u
+        # SELF-FED steps — u, not u+1. Column 0 is therefore the ordinary
+        # teacher-forced target and is deliberately never read: the base term
+        # takes it from ztgt, which scores the whole window rather than only
+        # its last step. The loop below starts at u=1 for that reason, which
+        # is also why U=1 leaves the objective bit-identical to the
+        # pre-unroll one. (The comment here previously said "u+1 self-fed
+        # steps", which contradicted both the code and ml/EXPERIMENTS.md;
+        # the code was right.)
         zfut = torch.stack([Zt[t + 1 + u, p] for u in range(U)], 1)
         mfut = torch.stack([Mt[t + 1 + u] for u in range(U)], 1)
         return zseq, mseq, static_ctx[p], ztgt, zfut, mfut
