@@ -106,9 +106,39 @@ alongside, so the codec was visibly being destroyed; the `z_shrink` series
 added in the same commit is what made it a five-minute diagnosis instead of a
 retracted result three hours later.
 
-**Re-runs.** #105 (`lse@0.58`) and #106 (`sum@0.58`) with the live denominator.
-#101 continues untouched throughout — a frozen codec cannot contract, so the
-control was never affected and its number is the one the treatments divide by.
+**The reference, finally measured.** #101 ran 12,000 steps with the codec at
+learning rate 1e-12. Two pins say it did what it claimed: `r_rec_probe` read
+**exactly 1.0 at every logged step**, and `l_pers` stayed between 3.78 and 4.77
+against a step-0 value of 4.175 — mean contraction 0.98×, i.e. none, which is
+the only way a frozen codec can behave. Its scale-free forecast skill:
+
+| steps | l_fore/l_pers |
+|---|---|
+| 120 | 0.727 |
+| 600 | 0.634 |
+| 1,680 | 0.595 |
+| 5,000+ (n=50) | 0.479 ± 0.034 |
+| last five points (~11k) | 0.436 · 0.447 · 0.436 · 0.432 · 0.430 |
+
+**`--ref-fore` is therefore 0.44**, not the 0.58 read off step 1,680 while the
+curve was still falling. The difference is not cosmetic. At 0.58 a treatment
+that merely *matched* the control would log r_fore = 0.44/0.58 = **0.76** —
+permanently below r_rec ≈ 1.0, so the smooth max would pick reconstruction at
+every step and the run could not test its own hypothesis. At 0.44 it logs ≈
+1.0 and the max is a genuine contest. #105/#106 were void for this reason
+before they ever ran.
+
+**Read that number carefully.** It is an in-sample MSE ratio in the codec's own
+64-d z-space: `train_joint.py` samples only training windows (holdout years
+2009/2017/2023 and the −45°/−25° longitude band are excluded from the pool),
+so it is the objective's own value, not a generalisation estimate. In
+typical-error terms it is √0.44 ≈ 0.66, a **34% smaller error** than
+persistence, not 56%. And the model is fed month-of-year, so an unknown share
+of it is seasonality — the same inflation that took RAPID r from 0.584 raw to
+0.173 deseasonalised.
+
+**Re-runs.** #107 (`lse@0.44`) and #108 (`sum@0.44`) with the live denominator
+and the measured reference.
 
 **Lesson, sharpened.** "Normalise by a quantity in the same space" is not
 enough; the normaliser has to stay *differentiable*, or it is a constant

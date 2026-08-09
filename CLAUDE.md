@@ -812,6 +812,19 @@ paper_dark.tex.
     livelock it was written to cure was still live and killed #96/#97/#98.
   - `2>/dev/null` on a command whose failure you are branching on hides the
     one line that explains the branch. Keep stderr unless you have read it.
+- **A queued Actions job can wedge, and a fresh dispatch is the fix.** On
+  2026-08-09 runs #105/#106 sat `queued` for 22 minutes while the runners API
+  reported two of the three boxes `online` and `busy: false`, and the jobs'
+  `labels` matched (`gpu`). Nothing was holding them: the runs they replaced
+  had been cancelled, and the third box was busy with an unrelated job that
+  had started while all three were occupied. Cancelling both and dispatching
+  the identical inputs again had both picked up **within 90 seconds**. So
+  when a job is queued against a runner that GitHub itself says is idle,
+  do not keep waiting and do not restart the Vast boxes (which costs the
+  warm caches for nothing) — cancel and re-dispatch. Check
+  `runner_name`/`status` on the jobs endpoint, not the run-level status,
+  which lags: a job can read `queued` at the run level for minutes after it
+  has actually started.
 - **`runner` defaults to `gpu`, and omitting it used to mean CPU.** `runs-on:
   ${{ inputs.runner || 'ubuntu-latest' }}` with a dispatch JSON that left the
   field out sent run #99 to a free GitHub-hosted 4-core box, where the install
