@@ -660,6 +660,8 @@
                  xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB) : "";
     var last = fore[fore.length - 1];
     var lastRec = prob.length ? prob[prob.length - 1].r_rec_probe : null;
+    var zsPts = fore.filter(function (p) { return typeof p.z_shrink === "number"; });
+    var zShrink = zsPts.length ? zsPts[zsPts.length - 1].z_shrink : null;
     var cfgTxt = m.jcfg ? (m.jcfg.loss_mode + " · K=" + m.jcfg.K +
       " · codec lr " + m.jcfg.lr) : "";
     return '<div class="probe" style="margin-top:12px"><b>joint stage-1+2 fine-tune</b>' +
@@ -667,13 +669,15 @@
       '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="joint fine-tune">' +
       '<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
       '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
-      // 1.0 is BOTH references at once: persistence for the forecast curve and
-      // the frozen codec for the reconstruction curve. That coincidence is the
-      // reason the normalisation was chosen.
+      // 1.0 is BOTH references at once — the frozen-codec pipeline, for the
+      // forecast curve as well as the reconstruction one. Getting the forecast
+      // side onto that footing took two corrections: dividing by a control
+      // rather than by persistence, and then dividing by the batch's own
+      // persistence so the ratio is scale-free.
       '<line x1="' + padL + '" y1="' + yOf(1).toFixed(1) + '" x2="' + (W - padR) +
         '" y2="' + yOf(1).toFixed(1) + '" stroke="#8b949e" stroke-width="1" stroke-dasharray="4 3"/>' +
       '<text x="' + (W - padR) + '" y="' + (yOf(1) - 4).toFixed(1) +
-        '" text-anchor="end" font-size="10" fill="#8b949e">1.0 = persistence / frozen codec</text>' +
+        '" text-anchor="end" font-size="10" fill="#8b949e">1.0 = frozen-codec pipeline</text>' +
       '<text x="' + (padL - 6) + '" y="' + (padT + 5) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymax.toFixed(2) + "</text>" +
       '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymin.toFixed(2) + "</text>" +
       '<text x="' + (W - padR) + '" y="' + (H - 6) + '" text-anchor="end" font-size="11" fill="#8b949e">' + fmtInt(xmax) + "</text>" +
@@ -681,15 +685,27 @@
       '<polyline points="' + lf + '" fill="none" stroke="#2da44e" stroke-width="2" stroke-linejoin="round"/>' +
       "</svg>" +
       '<div class="legend">' +
-      '<span><span class="sw" style="background:#2da44e"></span>forecast vs persistence <b>' +
+      '<span><span class="sw" style="background:#2da44e"></span>forecast vs control <b>' +
       last.r_fore.toFixed(3) + "</b></span>" +
       (lastRec !== null ? '<span><span class="sw" style="background:#d29922"></span>' +
         "reconstruction vs frozen codec <b>" + lastRec.toFixed(3) + "</b></span>" : "") +
+      // EMBEDDING SCALE. Not a curve — a guard rail, and it belongs on this
+      // panel because without it a joint run that improves by CONTRACTING z
+      // looks exactly like one that learns to forecast. #102 reached 40x in
+      // 1200 steps while its forecast number fell 0.353 -> 0.054, and none
+      // of that was skill. The loss no longer rewards it (train_joint.py
+      // divides by the batch's own persistence), so anything far from 1.0
+      // here now means something unexpected is happening to the codec.
+      (zShrink !== null
+        ? '<span><span class="sw" style="background:' + (zShrink > 1.2 ? "#f85149" : "#8b949e") +
+          '"></span>embedding scale <b>' + zShrink.toFixed(2) + "x</b></span>"
+        : "") +
       "</div>" +
       '<div class="probe"><span class="meta">Forecast falling is only meaningful ' +
       "against a frozen-codec control: the temporal head starts random, so it " +
       "improves whatever the codec does. Reconstruction near 1.0 is what says " +
-      "the codec did not pay for it.</span></div>";
+      "the codec did not pay for it, and embedding scale near 1.0x is what says " +
+      "the forecast gain is skill rather than a shrinking z.</span></div>";
   }
 
   function probeText(p) {
