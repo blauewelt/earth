@@ -70,6 +70,22 @@ rather than by weight, the references must be of the same KIND, and the
 realised gradient split should be logged — a two-line check that would have
 caught this before it cost two runs.
 
+**The re-run cost three more dispatches before it ran a single step**, and none
+of the three failures were about the science. Recording them here because the
+log is supposed to explain why the calendar looks the way it does:
+
+| run | what happened |
+|---|---|
+| #96 | `--require-resume` exits before the eval that writes `pixelmae.pt`, so the joint step had no codec to load. |
+| #97 | Correct code, **wrong normalisation** (dispatched before `--ref-fore` existed) — cancelled deliberately at 45 min as the most expensive job that could not answer its own question. Its "still training, no curves" appearance was a separate defect: a joint run published its phase once, at the start of the *stage-1* step, and its metrics once, at the *end* of the fine-tune. |
+| #98 | Landed on the box holding run-64/65/67 and was asked for run-62/63. The release-checkpoint seed added to cure exactly this **had never worked**: `"$TAG__pixelmae.pt"` expands `$TAG__pixelmae` (unset) so the pattern was `".pt"`, and it called `gh`, which is not installed on the Vast boxes — 127, stderr eaten by `2>/dev/null`, step green. |
+| #99 | My dispatch JSON omitted `runner`, which defaulted to `ubuntu-latest`: a free 4-core CPU box, CPU torch wheel, no complaint from anything. Cancelled at 8 min. |
+| #100 | Seeds `run-62.pt` from the release onto the wrong box in ~40 s and resumes. First resume-only Train step ever to succeed on a box that did not write the checkpoint. |
+
+`runner` now defaults to `gpu`, so a down fleet queues visibly instead of
+silently training on the wrong hardware; the joint step announces its own
+phase and publishes curves every five minutes like the stage-1 step does.
+
 ---
 
 ## E-005 · Autoregressive unroll in the stage-2 loss (exposure bias) — READY

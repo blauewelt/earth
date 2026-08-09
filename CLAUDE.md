@@ -795,6 +795,31 @@ paper_dark.tex.
   When a new knob is needed, ENCODE IT IN AN EXISTING INPUT rather than
   adding one: `--resume !run-62` means "require this checkpoint", parsed in
   train.py. Count the inputs before pushing a workflow edit.
+- **A step that reports success is not evidence it did anything.** Three
+  variants bit the ML fleet in two days, all in steps written to be
+  best-effort:
+  - `"$TAG__pixelmae.pt"` expands the variable `$TAG__pixelmae` (underscores
+    are legal in a bash identifier), which is unset, so the release-asset
+    pattern was a bare `".pt"`. **Always brace a variable followed by
+    `_`, a letter or a digit**: `"${TAG}__pixelmae.pt"`.
+  - The same step called `gh release download`, and **the Vast boxes have no
+    `gh` CLI** — every call returned 127 in under a millisecond with stderr
+    thrown away by `2>/dev/null`, and the step exited 0 having downloaded
+    nothing. Fetch release assets with `curl -fsSL
+    https://github.com/$REPO/releases/download/$TAG/$ASSET` (public repo, no
+    auth), the way the data-cache seed has since #47. Between them these two
+    meant the checkpoint seed had NEVER worked, so the box-local resume
+    livelock it was written to cure was still live and killed #96/#97/#98.
+  - `2>/dev/null` on a command whose failure you are branching on hides the
+    one line that explains the branch. Keep stderr unless you have read it.
+- **`runner` defaults to `gpu`, and omitting it used to mean CPU.** `runs-on:
+  ${{ inputs.runner || 'ubuntu-latest' }}` with a dispatch JSON that left the
+  field out sent run #99 to a free GitHub-hosted 4-core box, where the install
+  step happily picks the CPU torch wheel and a 40M codec "trains". Nothing in
+  the run's output says wrong-hardware; the only tell is the runner name in
+  the jobs API. The default is now `gpu`, so a down fleet leaves the job
+  visibly queued instead. **Check `runner_name` on every dispatch you care
+  about** — `node /tmp/steps.mjs <runId>` style, or the jobs endpoint.
 - **NEVER GUESS WHAT AN ARCHIVE SERVES — ASK IT.** GIBS publishes each layer's
   exact time domain at
   `/wmts/epsg4326/best/1.0.0/{layer}/default/{tms}/all/all.xml`: a

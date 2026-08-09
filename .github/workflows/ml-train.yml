@@ -69,8 +69,17 @@ on:
         description: "wall-clock budget for the training loop (0 = off); the cosine schedule re-fits to the steps that fit. The job dies at 350 min with NO checkpoint otherwise."
         default: "0"
       runner:
-        description: "ubuntu-latest (free 4-core CPU) | self-hosted (the GPU box, when registered)"
-        default: "ubuntu-latest"
+        # DEFAULTS TO gpu, not ubuntu-latest. Omitting this input used to
+        # send the job to a free GitHub-hosted 4-core CPU box, where the
+        # torch install picks the CPU wheel and a 40M codec trains at a
+        # speed that is not a speed — and nothing in the run's own output
+        # says "wrong hardware" until you read the runner name. Run #99 went
+        # that way purely because the dispatch JSON left the field out.
+        # With the GPU default, a fleet that is down leaves the job queued
+        # and visibly pending, which is the honest failure. Pass
+        # "ubuntu-latest" explicitly for the small CPU-sized jobs.
+        description: "gpu (the Vast boxes) | ubuntu-latest (free 4-core CPU, small jobs only)"
+        default: "gpu"
       job_timeout:
         description: "job timeout-minutes; hosted runners die at 360 regardless, self-hosted can run for days"
         default: "350"
