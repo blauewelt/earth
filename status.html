@@ -300,6 +300,7 @@
   function parseJsonl(text) {
     var loss = [], probes = [], cfg = null, resumed = null;
     var s2 = [], s2cfg = null, s2res = null;
+    var jt = [], jcfg = null;
     text.split("\n").forEach(function (line) {
       line = line.trim();
       if (!line) return;
@@ -307,6 +308,8 @@
       try { o = JSON.parse(line); } catch (e) { return; }
       if (o && o.config) { cfg = o.config; return; }   // the run's PLAN
       if (o && o.resumed) { resumed = o.resumed; return; }  // its PARENT
+      if (o && o.joint_config) { jcfg = o.joint_config; return; }
+      if (o && typeof o.joint_step === "number") { jt.push(o); return; }
       if (o && o.stage2_config) { s2cfg = o.stage2_config; return; }
       if (o && o.stage2_result) { s2res = o.stage2_result; return; }
       if (o && typeof o.stage2_step === "number") { s2.push(o); return; }
@@ -317,7 +320,8 @@
       }
     });
     return { loss: loss, probes: probes, cfg: cfg, resumed: resumed,
-             s2: s2, s2cfg: s2cfg, s2res: s2res };
+             s2: s2, s2cfg: s2cfg, s2res: s2res,
+             jt: jt, jcfg: jcfg };
   }
 
   // ---- continuations: one trajectory, two jobs ------------------------------
@@ -626,6 +630,68 @@
       "landed 0.265 and 0.385.</span></div>";
   }
 
+  // ---- joint stage-1+2 fine-tune ------------------------------------------
+  // Two curves that must be read TOGETHER, which is why they share an axis:
+  // the forecast loss (falling = better, normalised so 1.0 is persistence) and
+  // reconstruction on a fixed probe batch (normalised so 1.0 is the frozen
+  // codec we started from). The whole design question is whether forecast can
+  // be bought without reconstruction being sold, so a chart showing only one
+  // of them would be worse than no chart.
+  function jointChart(m) {
+    if (!m.jt || !m.jt.length) return "";
+    var fore = m.jt.filter(function (p) { return typeof p.r_fore === "number"; });
+    var prob = m.jt.filter(function (p) { return typeof p.r_rec_probe === "number"
+                                                 && typeof p.r_fore !== "number"; });
+    if (fore.length < 2) return "";
+    var W = 600, H = 150, padL = 46, padR = 10, padT = 12, padB = 22;
+    var xs = fore.map(function (p) { return p.joint_step; });
+    var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
+    if (m.jcfg && m.jcfg.steps > xmax) xmax = m.jcfg.steps;
+    var vals = fore.map(function (p) { return p.r_fore; })
+      .concat(prob.map(function (p) { return p.r_rec_probe; })).concat([1]);
+    var ymin = Math.min.apply(null, vals) - 0.05;
+    var ymax = Math.max.apply(null, vals) + 0.05;
+    var xspan = (xmax - xmin) || 1, yspan = (ymax - ymin) || 1;
+    var yOf = function (v) { return padT + (H - padT - padB) * (1 - (v - ymin) / yspan); };
+    var lf = polyline(fore.map(function (p) { return [p.joint_step, p.r_fore]; }),
+                      xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB);
+    var lr = prob.length > 1
+      ? polyline(prob.map(function (p) { return [p.joint_step, p.r_rec_probe]; }),
+                 xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB) : "";
+    var last = fore[fore.length - 1];
+    var lastRec = prob.length ? prob[prob.length - 1].r_rec_probe : null;
+    var cfgTxt = m.jcfg ? (m.jcfg.loss_mode + " · K=" + m.jcfg.K +
+      " · codec lr " + m.jcfg.lr) : "";
+    return '<div class="probe" style="margin-top:12px"><b>joint stage-1+2 fine-tune</b>' +
+      (cfgTxt ? ' <span class="meta">(' + esc(cfgTxt) + ")</span>" : "") + "</div>" +
+      '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="joint fine-tune">' +
+      '<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+      '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+      // 1.0 is BOTH references at once: persistence for the forecast curve and
+      // the frozen codec for the reconstruction curve. That coincidence is the
+      // reason the normalisation was chosen.
+      '<line x1="' + padL + '" y1="' + yOf(1).toFixed(1) + '" x2="' + (W - padR) +
+        '" y2="' + yOf(1).toFixed(1) + '" stroke="#8b949e" stroke-width="1" stroke-dasharray="4 3"/>' +
+      '<text x="' + (W - padR) + '" y="' + (yOf(1) - 4).toFixed(1) +
+        '" text-anchor="end" font-size="10" fill="#8b949e">1.0 = persistence / frozen codec</text>' +
+      '<text x="' + (padL - 6) + '" y="' + (padT + 5) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymax.toFixed(2) + "</text>" +
+      '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymin.toFixed(2) + "</text>" +
+      '<text x="' + (W - padR) + '" y="' + (H - 6) + '" text-anchor="end" font-size="11" fill="#8b949e">' + fmtInt(xmax) + "</text>" +
+      (lr ? '<polyline points="' + lr + '" fill="none" stroke="#d29922" stroke-width="2" stroke-linejoin="round"/>' : "") +
+      '<polyline points="' + lf + '" fill="none" stroke="#2da44e" stroke-width="2" stroke-linejoin="round"/>' +
+      "</svg>" +
+      '<div class="legend">' +
+      '<span><span class="sw" style="background:#2da44e"></span>forecast vs persistence <b>' +
+      last.r_fore.toFixed(3) + "</b></span>" +
+      (lastRec !== null ? '<span><span class="sw" style="background:#d29922"></span>' +
+        "reconstruction vs frozen codec <b>" + lastRec.toFixed(3) + "</b></span>" : "") +
+      "</div>" +
+      '<div class="probe"><span class="meta">Forecast falling is only meaningful ' +
+      "against a frozen-codec control: the temporal head starts random, so it " +
+      "improves whatever the codec does. Reconstruction near 1.0 is what says " +
+      "the codec did not pay for it.</span></div>";
+  }
+
   function probeText(p) {
     var keys = ["linear_r_raw", "linear_r_deseas", "temporal_r_raw", "temporal_r_deseas",
                 "z_vs_persistence_pct", "chan_vs_persistence_pct"];
@@ -747,7 +813,7 @@
         // Stage-2 and head-probe jobs never train a codec, so they have no
         // loss curve by design — but they DO have a stage-2 panel worth
         // showing. Only fall back to the waiting card when there is nothing.
-        var s2only = stage2Chart(m0);
+        var s2only = stage2Chart(m0) + jointChart(m0);
         if (s2only) return head + s2only + "</div>";
         return waitingCard(run, m0);
       }
@@ -831,6 +897,7 @@
                 "thousand steps in.</div>";
       }
       html += stage2Chart(m);
+      html += jointChart(m);
       return html + "</div>";
   }
 

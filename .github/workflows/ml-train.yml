@@ -75,7 +75,7 @@ on:
         description: "job timeout-minutes; hosted runners die at 360 regardless, self-hosted can run for days"
         default: "350"
       lr_floor:
-        description: "decay-then-constant LR: hold at floor*peak after lr_decay_steps (0 = plain cosine)"
+        description: "decay-then-constant LR: hold at floor*peak after lr_decay_steps (0 = plain cosine). On a joint: run this is instead the CODEC learning rate — set 1e-12 for the frozen-codec control that isolates how much of the forecast gain is just the fresh temporal head learning"
         default: "0"
       lr_decay_steps:
         description: "initial decay length when lr_floor > 0"
@@ -501,6 +501,7 @@ jobs:
             --resume "${{ inputs.resume }}" \
             --steps "$JS" \
             --loss-mode "${{ inputs.window }}" \
+            --lr "${{ inputs.lr_floor != '0' && inputs.lr_floor || '3e-5' }}" \
             --temporal-d-model "${{ inputs.temporal_d_model }}" \
             --temporal-layers "${{ inputs.temporal_layers }}" \
             --out ml/runs/actions
