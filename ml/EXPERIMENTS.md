@@ -88,7 +88,7 @@ phase and publishes curves every five minutes like the stage-1 step does.
 
 ---
 
-## E-005 · Autoregressive unroll in the stage-2 loss (exposure bias) — READY
+## E-005 · Autoregressive unroll in the stage-2 loss (exposure bias) — SUGGESTIVE, ONE SPLIT
 
 **Hypothesis.** Stage 2 trains on t+1 with TRUE context but is *evaluated*
 autoregressively (`rollout.py`). A model that never sees its own errors during
@@ -112,7 +112,41 @@ tensor before any GPU time was spent.
 
 **Control.** `--unroll 1` is bit-identical to the previous objective.
 
-**Result.** _pending_
+**Result.** #88 (U=1, control, `head_sha` in the run record) and #93 (U=4).
+Both resumed run-63 at step 60,000 with `--steps 60000`, so the stage-1 loop
+ran zero steps and **the codec is byte-identical between them** — the embeddings,
+the section, the holdout years and the 36 test months are all the same object.
+Only the stage-2 objective differs. It is the cleanest paired comparison in
+this log.
+
+| | U=1 (control) | U=4 | |
+|---|---|---|---|
+| z MSE, model ÷ persistence | 0.494 | 0.641 | **worse** |
+| channel MSE, model ÷ persistence | 0.576 | 0.682 | **worse** |
+| RAPID r, deseasonalised | 0.173 | **0.449** | better |
+| RAPID r, raw | 0.584 | 0.472 | worse |
+
+**Reading.** Unrolling makes the model a *worse one-step predictor* and a
+better *carrier of AMOC signal*. That is not a contradiction — it is what the
+objective asks for. Optimising a four-step chain penalises error compounding,
+which rewards capturing slow modes over fitting month-to-month variance, and
+AMOC transport anomaly is a slow mode. The raw-r fall alongside the
+deseasonalised rise says the same thing from the other side: raw r is inflated
+by the seasonal cycle, which is exactly the fast, easy component an unrolled
+model spends less capacity on.
+
+**What this is not.** `rapid_r_deseas` comes from `temporal.py`'s **single
+blocked split — n_test = 36 months**, not the year-blocked k-fold this log
+argues from. At n = 36 the standard error on r is ≈ 0.13–0.16, so a single
+0.449 is worth very little on its own. The pairing is what carries the result:
+same codec, same features, same 36 months, one changed flag. Treat +0.28 as a
+direction worth spending a k-fold on, **not** as a measured effect — and note
+that the metric that moved is not the one the paper's headline uses.
+
+**Next.** Re-score both stage-2 models through `probe_kfold.py` rather than the
+single split, and add U=2 and U=8 — if the mechanism above is right, the
+deseasonalised gain should be monotonic in U up to the point where the
+1/(u+1) weighting starves the anchor term.
 
 ---
 
