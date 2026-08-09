@@ -904,6 +904,30 @@ extracted from it; they are ordered by how much they would have saved.
     livelock it was written to cure was still live and killed #96/#97/#98.
   - `2>/dev/null` on a command whose failure you are branching on hides the
     one line that explains the branch. Keep stderr unless you have read it.
+- **A Vast instance's runner NAME is inside its `onstart` script, nowhere
+  else.** The runner names (`gpu-box-45318655`) are stale instance IDs from
+  whenever the box was created, so they do NOT match the current instance IDs
+  and the API has no field joining them — every box carries the same
+  `label: earth-runner`. Before stopping a box, recover the mapping with
+  `(i.onstart||"").match(/--name[= ]"?([^"\s\\]+)/)` over
+  `/api/v1/instances/`, or you will stop the one that is mid-run. Measured
+  2026-08-09: instance 47160352 -> gpu-box-47094145, 47160357 ->
+  gpu-box-45318655, 47171781 -> gpu-box-35586926.
+- **Stopping is the cheap idle state.** `node scripts/gpu_box.mjs stop <id>`
+  keeps the disk (and therefore the ~11 GB data cache and the box-local
+  checkpoint mirror) and the runner registration, which reconnects on
+  `start`. It drops a box from ~$0.27/h to storage only. Do it whenever
+  nothing is queued — an idle GPU is pure waste, and CLAUDE.md 6c already
+  says an idle GPU is cheaper than a wrong experiment, not that it is free.
+- **Size a stage-2 run against the job timeout before dispatching it.**
+  Measured on #88: 0.419 s/step for a 192x4 head at K=24. So 24,000 steps is
+  ~2.8 h of temporal plus ~0.9 h for the rest of the probe ladder, inside the
+  350-minute cap; 60,000 steps needs ~7.9 h and dies with nothing. #111 was
+  cancelled for exactly this. Note `temporal.py` anneals
+  `CosineAnnealingLR(a.steps)`, so each budget converges on its own schedule
+  and two budgets are two converged points, not a snapshot and a later
+  snapshot. `train_joint.py` has NO scheduler, which is why #101's curve never
+  flattened.
 - **A queued Actions job can wedge, and a fresh dispatch is the fix.** On
   2026-08-09 runs #105/#106 sat `queued` for 22 minutes while the runners API
   reported two of the three boxes `online` and `busy: false`, and the jobs'
