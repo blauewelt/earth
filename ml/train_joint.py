@@ -120,6 +120,22 @@ def parse():
                         "data draw, so the logged series is readable.")
     p.add_argument("--holdout-years", default="2009,2017,2023")
     p.add_argument("--holdout-lon", default="-45,-25")
+    p.add_argument("--ref-fore", type=float, default=0.0,
+                   help="reference for the FORECAST term, in persistence "
+                        "units, from a frozen-codec control run. 0 = use "
+                        "persistence itself.\n\n"
+                        "This matters more than it looks. Normalising "
+                        "reconstruction by the frozen codec puts it at ~1.0, "
+                        "while normalising forecast by PERSISTENCE puts it at "
+                        "~0.3 — so the two are never comparable, the smooth "
+                        "max is always reconstruction, and ~95%% of every "
+                        "gradient step goes to reconstruction (measured on "
+                        "#94: weights 0.957/0.043). The forecast objective "
+                        "then cannot move the codec at all, and the "
+                        "experiment answers nothing. Passing the frozen-codec "
+                        "control's own forecast loss here puts BOTH terms on "
+                        "'1.0 = as good as the pipeline we started with', "
+                        "which is what makes 'whichever is worse' meaningful.")
     p.add_argument("--ref-batches", type=int, default=20,
                    help="batches used to measure the FROZEN references before "
                         "training starts")
@@ -321,7 +337,13 @@ def main():
                 dtype=torch.float32).to(dev)], 1)
             _, lp = forecast_terms(zseq, month_seq(t0), sctx)
             perss.append(float(lp))
-    ref_fore = float(np.mean(perss))
+    ref_fore = float(np.mean(perss))          # persistence, in loss units
+    if a.ref_fore > 0:
+        # A frozen-codec control's forecast loss, given in PERSISTENCE units
+        # (i.e. its own r_fore), converted back to loss units here.
+        ref_fore = ref_fore * a.ref_fore
+        print(f"  forecast reference from the frozen-codec control: "
+              f"{a.ref_fore:.4f} x persistence", flush=True)
     codec.train()
     ref_rec = recon_probe()
     print(f"frozen references: recon {ref_rec:.5f} · persistence {ref_fore:.5f}",
@@ -337,7 +359,8 @@ def main():
             "temporal_layers": a.temporal_layers,
             "codec_params_M": round(n_codec / 1e6, 3),
             "temporal_params_M": round(n_tmp / 1e6, 3),
-            "ref_recon": ref_rec, "ref_persistence": ref_fore,
+            "ref_recon": ref_rec, "ref_forecast": ref_fore,
+            "ref_fore_mult": a.ref_fore,
             "warm_start": os.path.basename(ck_path), "d_z": d_z, "patch": patch,
         }}) + "\n")
 

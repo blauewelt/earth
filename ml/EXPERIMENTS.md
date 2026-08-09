@@ -27,6 +27,51 @@ low-pass).
 
 ---
 
+## E-004 · The normalisation was wrong — forecast never moved the codec
+
+Chris asked a one-line question about the chart — *"how can reconstruction be
+above 1?"* — and the answer turned out to invalidate the setup.
+
+**The literal answer.** `r_rec` is current reconstruction ÷ the frozen codec's,
+so above 1 means the codec now reconstructs *worse* than the one we started
+from. Below 1 happens too (#94 hit 0.969) because the starting codec's LR had
+annealed to ~0, so a fresh optimiser still finds headroom. The fixed-batch
+probe is near-deterministic (1.000/0.999 in a smoke run), so the 0.97→1.11
+swing is the codec genuinely moving, not measurement noise. #94 ended 3% worse.
+
+**The real problem.** Reconstruction was normalised by the FROZEN CODEC (a
+strong reference → sits at ~1.0); forecast was normalised by PERSISTENCE (a
+weak reference → sits at ~0.3). The two were never on comparable footing, so
+the smooth max was *always* reconstruction. Measured gradient weights on #94:
+
+| r_rec | r_fore | weight on recon | weight on forecast |
+|---|---|---|---|
+| 1.033 | 0.257 | **0.957** | 0.043 |
+| 0.969 | 0.414 | 0.902 | 0.098 |
+
+**~95% of every step went to reconstruction.** E-004a was a reconstruction
+fine-tune with a forecast garnish; it could not have tested the hypothesis even
+in principle, whatever its probe number turns out to be.
+
+**The fix.** Normalise BOTH against the same reference class — the frozen-codec
+pipeline. Reconstruction ÷ frozen-codec reconstruction (already right), and
+forecast ÷ *the same head's forecast on the frozen codec* (`--ref-fore`), not
+persistence. Then 1.0 means "as good as the pipeline we started with" for both,
+and "whichever is worse" finally means something.
+
+That reference is not known in advance — it is exactly what the frozen-codec
+control (#96) measures. **The control produces the number the treatment needs**,
+so the sequencing is: control first, then the treatment normalised by it.
+
+**Lesson, now a rule.** Chris's rule was "if one is high, the overall loss is
+high". Applying it to two numbers that do not mean the same thing quietly turns
+it into a single-objective run. Whenever losses are combined by comparison
+rather than by weight, the references must be of the same KIND, and the
+realised gradient split should be logged — a two-line check that would have
+caught this before it cost two runs.
+
+---
+
 ## E-005 · Autoregressive unroll in the stage-2 loss (exposure bias) — READY
 
 **Hypothesis.** Stage 2 trains on t+1 with TRUE context but is *evaluated*
