@@ -496,11 +496,23 @@ jobs:
           TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
         run: |
           JS="${{ inputs.temporal_steps }}"; JS="${JS#joint:}"
+          # window carries "mode" or "mode@ref_fore" — e.g. lse@0.29. The
+          # second field is the FROZEN-CODEC control's forecast loss in
+          # persistence units, and it is what puts both terms of the loss on
+          # the same footing. Without it reconstruction sits at ~1.0 and
+          # forecast at ~0.3, the smooth max is always reconstruction, and 95%
+          # of every gradient step goes to the wrong objective (measured on
+          # #94). Packed into an existing input because workflow_dispatch caps
+          # at 25 and this file is at the ceiling.
+          W="${{ inputs.window }}"
+          MODE="${W%%@*}"
+          case "$W" in *@*) REF="${W#*@}";; *) REF=0;; esac
           python -u ml/train_joint.py \
             --data "$TENSOR" \
             --resume "${{ inputs.resume }}" \
             --steps "$JS" \
-            --loss-mode "${{ inputs.window }}" \
+            --loss-mode "$MODE" \
+            --ref-fore "$REF" \
             --lr "${{ inputs.lr_floor != '0' && inputs.lr_floor || '3e-5' }}" \
             --temporal-d-model "${{ inputs.temporal_d_model }}" \
             --temporal-layers "${{ inputs.temporal_layers }}" \
