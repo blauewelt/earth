@@ -121,9 +121,15 @@ def parse():
     p.add_argument("--holdout-years", default="2009,2017,2023")
     p.add_argument("--holdout-lon", default="-45,-25")
     p.add_argument("--ref-fore", type=float, default=0.0,
-                   help="reference for the FORECAST term, in persistence "
-                        "units, from a frozen-codec control run. 0 = use "
-                        "persistence itself.\n\n"
+                   help="the frozen-codec control's converged l_fore/l_pers. "
+                        "0 = report raw l_fore/l_pers, i.e. BE the control.\n\n"
+                        "Note this divides a RATIO, not a loss. The forecast "
+                        "term is normalised by the batch's own persistence "
+                        "before this multiplier is applied, because l_fore is "
+                        "an MSE in z-space and a fixed denominator pays the "
+                        "encoder to shrink z instead of to forecast — 40x in "
+                        "1200 steps on #102, at almost no reconstruction "
+                        "cost, since the decoder just rescales.\n\n"
                         "This matters more than it looks. Normalising "
                         "reconstruction by the frozen codec puts it at ~1.0, "
                         "while normalising forecast by PERSISTENCE puts it at "
@@ -337,16 +343,23 @@ def main():
                 dtype=torch.float32).to(dev)], 1)
             _, lp = forecast_terms(zseq, month_seq(t0), sctx)
             perss.append(float(lp))
-    ref_fore = float(np.mean(perss))          # persistence, in loss units
-    if a.ref_fore > 0:
-        # A frozen-codec control's forecast loss, given in PERSISTENCE units
-        # (i.e. its own r_fore), converted back to loss units here.
-        ref_fore = ref_fore * a.ref_fore
+    # KEPT FOR THE RECORD ONLY. This step-0 persistence used to be the
+    # forecast denominator; it no longer is (see the r_fore line in the
+    # loop), because a constant denominator on a z-space MSE pays the
+    # encoder to shrink z. It is still logged, because watching it against
+    # the running l_pers is exactly how the shrinkage was caught.
+    ref_fore = float(np.mean(perss))          # persistence at step 0
+    ref_fore_mult = a.ref_fore                # frozen-codec control's l_fore/l_pers
+    if ref_fore_mult > 0:
         print(f"  forecast reference from the frozen-codec control: "
-              f"{a.ref_fore:.4f} x persistence", flush=True)
+              f"{ref_fore_mult:.4f} (its converged l_fore/l_pers)", flush=True)
+    else:
+        print("  no --ref-fore: r_fore is raw l_fore/l_pers, so THIS RUN "
+              "measures the reference other runs divide by", flush=True)
     codec.train()
     ref_rec = recon_probe()
-    print(f"frozen references: recon {ref_rec:.5f} · persistence {ref_fore:.5f}",
+    print(f"frozen references: recon {ref_rec:.5f} · "
+          f"persistence-at-step-0 {ref_fore:.5f} (logged, not a denominator)",
           flush=True)
 
     metrics = os.path.join(a.out, "metrics.jsonl")
@@ -392,7 +405,25 @@ def main():
         l_fore, l_pers = forecast_terms(zseq, month_seq(t0), sctx)
 
         r_rec = l_rec / max(ref_rec, 1e-9)
-        r_fore = l_fore / max(ref_fore, 1e-9)
+        # SCALE-FREE. l_fore is an MSE in z-space, so dividing it by a
+        # constant measured at step 0 rewards the encoder for making z
+        # SMALLER — a direction that costs reconstruction almost nothing,
+        # because the decoder simply rescales. Measured on #102: the
+        # persistence baseline l_pers, which depends only on the codec,
+        # fell 40x in 1200 steps (4.175 -> 0.103) and r_fore fell with it,
+        # 0.353 -> 0.054, while the scale-free ratio l_fore/l_pers barely
+        # moved (0.80 -> 0.64) and stayed BEHIND the frozen codec's 0.60.
+        # The entire apparent forecast gain of every joint run so far was
+        # the embedding shrinking. Dividing by the batch's OWN persistence
+        # closes the degenerate direction by construction: shrink z and
+        # numerator and denominator shrink together, for nothing.
+        r_fore = l_fore / l_pers.detach().clamp_min(1e-9)
+        if ref_fore_mult > 0:
+            # ...then put it on r_rec's footing: 1.0 must mean "as good as
+            # the frozen-codec pipeline" for BOTH terms, or the smooth max
+            # is not comparing like with like. ref_fore_mult is the
+            # frozen-codec control's own converged l_fore/l_pers.
+            r_fore = r_fore / ref_fore_mult
         loss = combine(r_rec, r_fore)
         opt.zero_grad(); loss.backward()
         torch.nn.utils.clip_grad_norm_(
@@ -415,6 +446,12 @@ def main():
                    "l_rec": round(float(l_rec), 5),
                    "l_fore": round(float(l_fore), 5),
                    "l_pers": round(float(l_pers), 5),
+                   # How far the embedding has contracted since step 0. 1.0 =
+                   # unchanged; #102 reached 40x in 1200 steps. This is a
+                   # first-class series because a joint run that "improves"
+                   # by shrinking z is indistinguishable from one that learns
+                   # unless you plot it.
+                   "z_shrink": round(ref_fore / max(float(l_pers), 1e-9), 3),
                    "wall_s": round(time.time() - t_start, 1)}
             with open(metrics, "a") as f:
                 f.write(json.dumps(rec) + "\n")
