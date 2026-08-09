@@ -1,0 +1,14 @@
+{"config": {"steps": 60000, "batch": 512, "d_z": 64, "patch": 3, "d_model": 576, "n_layers": 10, "n_heads": 8, "d_dec": 768, "anomaly": true, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 40.693, "data": "family3_na025.npz", "C": 39, "T": 516, "resume": "run-62,run-63"}}
+{"resumed": {"from": "run-62.pt", "parent_tag": "run-62", "at_step": 60000}}
+{"joint_config": {"steps": 4000, "batch": 64, "K": 12, "lr": 3e-05, "lr_temporal": 0.0003, "loss_mode": "lse", "lse_sharpness": 4.0, "lam": 1.0, "temporal_d_model": 192, "temporal_layers": 4, "codec_params_M": 40.693, "temporal_params_M": 1.824, "ref_recon": 0.255700646340847, "ref_persistence": 4.150554823875427, "warm_start": "run-62.pt", "d_z": 64, "patch": 3}}
+{"joint_step": 40, "r_rec": 1.0823, "r_rec_ema": 0.9696, "r_fore": 0.4585, "loss": 1.1021, "l_rec": 0.27674, "l_fore": 1.90287, "l_pers": 1.73505, "wall_s": 18.5}
+{"joint_step": 80, "r_rec": 0.682, "r_rec_ema": 1.0128, "r_fore": 0.4117, "loss": 0.755, "l_rec": 0.17439, "l_fore": 1.70859, "l_pers": 1.73225, "wall_s": 36.6}
+{"joint_step": 120, "r_rec": 0.859, "r_rec_ema": 1.0521, "r_fore": 0.4239, "loss": 0.8994, "l_rec": 0.21964, "l_fore": 1.75954, "l_pers": 1.8928, "wall_s": 54.7}
+{"joint_step": 160, "r_rec": 0.9257, "r_rec_ema": 1.0202, "r_fore": 0.3665, "loss": 0.9511, "l_rec": 0.2367, "l_fore": 1.52107, "l_pers": 1.72411, "wall_s": 72.8}
+{"joint_step": 200, "r_rec": 0.7597, "r_rec_ema": 1.0412, "r_fore": 0.3719, "loss": 0.8078, "l_rec": 0.19426, "l_fore": 1.54372, "l_pers": 1.86276, "wall_s": 90.7}
+{"joint_step": 240, "r_rec": 0.9698, "r_rec_ema": 1.0421, "r_fore": 0.3719, "loss": 0.9917, "l_rec": 0.24798, "l_fore": 1.5436, "l_pers": 2.08547, "wall_s": 108.6}
+{"joint_step": 280, "r_rec": 0.8386, "r_rec_ema": 1.0133, "r_fore": 0.3797, "loss": 0.8756, "l_rec": 0.21443, "l_fore": 1.57586, "l_pers": 2.13722, "wall_s": 126.4}
+{"joint_step": 320, "r_rec": 0.854, "r_rec_ema": 1.048, "r_fore": 0.3417, "loss": 0.8843, "l_rec": 0.21837, "l_fore": 1.41825, "l_pers": 1.94292, "wall_s": 143.9}
+{"joint_step": 360, "r_rec": 1.0134, "r_rec_ema": 1.0449, "r_fore": 0.3294, "loss": 1.0291, "l_rec": 0.25912, "l_fore": 1.36712, "l_pers": 1.81658, "wall_s": 161.4}
+{"joint_step": 400, "r_rec": 0.835, "r_rec_ema": 1.0709, "r_fore": 0.3662, "loss": 0.8707, "l_rec": 0.21352, "l_fore": 1.52011, "l_pers": 2.11778, "wall_s": 178.8}
+{"joint_collapsed": {"step": 419, "r_rec_ema": 1.1036922685927029, "r_fore": 0.3317635953426361}}
