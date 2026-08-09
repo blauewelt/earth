@@ -27,6 +27,34 @@ low-pass).
 
 ---
 
+## E-005 · Autoregressive unroll in the stage-2 loss (exposure bias) — READY
+
+**Hypothesis.** Stage 2 trains on t+1 with TRUE context but is *evaluated*
+autoregressively (`rollout.py`). A model that never sees its own errors during
+training is not trained on the error distribution it faces at rollout, so
+errors compound — the textbook exposure-bias failure. Rollout horizon is a
+headline claim of this programme, currently measured on a model never trained
+for it.
+
+**Design.** `temporal.py --unroll U`. After the teacher-forced t+1 term, slide
+the context forward on the model's OWN last prediction and add the next true
+month's error, U−1 times, each weighted 1/(u+1) so a deep unroll cannot
+outvote the anchor term. Gradient flows through the whole chain.
+
+**Two things that had to be right, and were not at first.**
+The window pool must guarantee the U extra months *exist* and are *train*
+months — without that the unrolled steps would either index past the end of
+the array or be scored on the holdout, and only the first of those would have
+crashed. And the target after u self-fed steps is `Z[t+1+u]`, not the
+teacher-forced target reused; verified by direct index arithmetic on a toy
+tensor before any GPU time was spent.
+
+**Control.** `--unroll 1` is bit-identical to the previous objective.
+
+**Result.** _pending_
+
+---
+
 ## E-004 · Joint stage-1+2 training (adaptive loss) — DISPATCHED
 
 **Hypothesis.** Stage 1 optimises *reconstruct this pixel-month*; nothing in

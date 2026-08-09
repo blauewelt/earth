@@ -182,6 +182,18 @@ def main():
                     help="torch/numpy seed (sweeps need more than one)")
     ap.add_argument("--tag", default="",
                     help="suffix for output files: temporal_<tag>.json/.pt")
+    ap.add_argument("--unroll", type=int, default=1,
+                    help="AUTOREGRESSIVE UNROLL DEPTH in the loss. 1 (default) "
+                         "is the original teacher-forced t+1 objective. >1 "
+                         "feeds the model's OWN prediction back in for this "
+                         "many extra steps and backpropagates through the "
+                         "chain, which is the standard fix for EXPOSURE BIAS: "
+                         "a model trained only on true context never sees its "
+                         "own errors, so they compound at rollout — and "
+                         "rollout horizon is a headline claim of this "
+                         "programme (rollout.py), measured on a model that "
+                         "was never trained for it. Costs one extra forward "
+                         "and backward per extra step.")
     ap.add_argument("--max-pixels", type=int, default=0,
                     help="subsample ocean pixels (code-path smoke only; "
                          "the 26.5N section is always kept)")
@@ -319,7 +331,13 @@ def main():
     Zt = torch.from_numpy(Z)
     Mt = torch.as_tensor(ctx_all, dtype=torch.float32)
     K = a.K
-    ok_t = np.array([t + 1 < T and not t_hold[t + 1] and t + 1 >= K
+    # With --unroll U the loss reaches U months past the window, so the pool
+    # must guarantee those months EXIST and are TRAIN months. Without this the
+    # unrolled steps would either index off the end of the array or be scored
+    # on the holdout — the second is the one that would not have crashed.
+    U = max(1, a.unroll)
+    ok_t = np.array([t + U < T and t + 1 >= K
+                     and not t_hold[t + 1:t + U + 1].any()
                      for t in range(T)])
     ok_p = ~x_hold[xs]
     pool_t, pool_p = np.where(ok_t[:, None] & ok_p[None, :])
@@ -339,7 +357,11 @@ def main():
         zseq = torch.stack([Zt[base + j, p] for j in range(K)], 1)
         mseq = torch.stack([Mt[base + j] for j in range(K)], 1)
         ztgt = torch.stack([Zt[base + j + 1, p] for j in range(K)], 1)
-        return zseq, mseq, static_ctx[p], ztgt
+        # True embeddings BEYOND the window, for the autoregressive unroll:
+        # zfut[:, u] is the truth the model must hit after u+1 self-fed steps.
+        zfut = torch.stack([Zt[t + 1 + u, p] for u in range(U)], 1)
+        mfut = torch.stack([Mt[t + 1 + u] for u in range(U)], 1)
+        return zseq, mseq, static_ctx[p], ztgt, zfut, mfut
 
     # Stage 2 goes into the RUN'S OWN metrics.jsonl, not just temporal.json.
     # temporal.json is uploaded as a build artifact, and artifacts need an
@@ -363,15 +385,29 @@ def main():
     m2({"stage2_config": {"d_model": a.d_model, "layers": a.layers, "K": K,
                           "steps": a.steps, "params_M": round(n_par2 / 1e6, 3),
                           "d_z": int(ck["d_z"]), "seed": a.seed,
-                          "tag": a.tag or ""}})
+                          "unroll": a.unroll, "tag": a.tag or ""}})
 
     print(f"training the temporal stage … ({n_par2:,} parameters)")
     t0 = time.time()
     log_every = max(1, a.steps // 100)     # ~100 curve points, as stage 1 does
     for s in range(1, a.steps + 1):
-        zseq, mseq, sctx, ztgt = batch_windows(pool_t, pool_p, a.batch)
+        zseq, mseq, sctx, ztgt, zfut, mfut = batch_windows(pool_t, pool_p, a.batch)
         pred, _ = model(zseq, mseq, sctx)
         loss = (pred - ztgt).pow(2).mean()
+        # AUTOREGRESSIVE UNROLL — the fix for EXPOSURE BIAS. rollout.py scores
+        # this model by feeding its own predictions back in, but the objective
+        # above only ever shows it TRUE context, so it is never trained on the
+        # error distribution it will actually face and errors compound at
+        # rollout. Here the context slides forward on the model's own last
+        # prediction and the next true month is the target. Each extra step is
+        # down-weighted 1/(u+1) so a deep unroll cannot outvote the t+1 term
+        # that anchors the whole objective.
+        zin, min_ = zseq, mseq
+        for u in range(1, U):
+            zin = torch.cat([zin[:, 1:], pred[:, -1:]], 1)      # graph intact
+            min_ = torch.cat([min_[:, 1:], mfut[:, u - 1:u]], 1)
+            pred, _ = model(zin, min_, sctx)
+            loss = loss + (pred[:, -1] - zfut[:, u]).pow(2).mean() / (u + 1)
         opt.zero_grad(); loss.backward(); opt.step(); sched.step()
         if s % log_every == 0 or s == a.steps:
             m2({"stage2_step": s, "stage2_zmse": round(float(loss.item()), 5),
