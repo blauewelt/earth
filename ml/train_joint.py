@@ -100,10 +100,16 @@ def parse():
                    help="only used by --loss-mode sum")
     p.add_argument("--mask-ratio", type=float, default=0.5)
     p.add_argument("--collapse-at", type=float, default=1.10,
-                   help="abort if the SMOOTHED r_rec (recon / frozen-codec "
+                   help="abort if FIXED-batch recon (vs the frozen codec) "
                         "recon) exceeds this. 1.10 = 'reconstruction may not "
                         "get more than 10%% worse than the codec we started "
                         "from'.")
+    p.add_argument("--check-every", type=int, default=100,
+                   help="steps between FIXED-batch reconstruction checks. This "
+                        "is the collapse guard's only input; it is cheap "
+                        "(one eval-mode forward on a held batch) and, unlike "
+                        "the training loss, its variance does not come from "
+                        "the data draw.")
     p.add_argument("--collapse-warmup", type=int, default=50,
                    help="steps before the tripwire arms. r_rec is measured on "
                         "one batch and is noisy; a fresh temporal head also "
@@ -225,7 +231,7 @@ def main():
             zs.append(z)
         return torch.stack(zs, 1), ctx
 
-    def recon_loss(py, px_, t0):
+    def recon_loss(py, px_, t0, seed=None):
         """Stage 1's own objective on the SAME pixels, so the two terms are
         measured on one batch rather than on two different samples of the
         ocean."""
@@ -233,7 +239,12 @@ def main():
         yy = torch.as_tensor(py, dtype=torch.long)
         xx = torch.as_tensor(px_, dtype=torch.long)
         v, o = Xt[tt, yy, xx].to(dev), OBS[tt, yy, xx].to(dev)
-        mask = (torch.rand(len(py), C, device=dev) < a.mask_ratio) & o
+        if seed is None:
+            mask = (torch.rand(len(py), C, device=dev) < a.mask_ratio) & o
+        else:
+            # Deterministic mask, so the probe measures the CODEC, not the draw.
+            gm = torch.Generator().manual_seed(seed)
+            mask = (torch.rand(len(py), C, generator=gm) < a.mask_ratio).to(dev) & o
         m = moy[t0]
         cc = torch.stack([
             torch.as_tensor(np.sin(2 * np.pi * m / 12), dtype=torch.float32),
@@ -275,21 +286,42 @@ def main():
     # ---- FROZEN REFERENCES ------------------------------------------------
     # Both losses are scored against what they must not lose to. Measured
     # BEFORE any update, on the codec exactly as it arrived.
+    #
+    # The reconstruction reference uses a FIXED probe batch with a FIXED mask,
+    # re-measured on that same batch throughout training. The first version
+    # compared a single TRAINING batch against a 20-batch mean, which is not a
+    # comparison at all: per-batch reconstruction is heavy tailed (random
+    # mask, 64 pixels), so a running mean is dominated by rare spikes. On #91
+    # every logged r_rec sat below 1.0 (mean 0.88) while the EMA of all steps
+    # sat at 1.05 and tripped the guard at step 419. The guard was measuring
+    # outliers and it killed a healthy run. Same batch, same mask, eval mode:
+    # now the only thing that can move this number is the codec itself.
+    probe_py, probe_px, probe_t0 = sample()
+    PROBE_MASK_SEED = 4321
+
+    def recon_probe():
+        was = codec.training
+        codec.eval()
+        with torch.no_grad():
+            v = recon_loss(probe_py, probe_px, probe_t0, seed=PROBE_MASK_SEED)
+        if was:
+            codec.train()
+        return float(v)
+
     codec.eval()
     with torch.no_grad():
-        recs, perss = [], []
+        perss = []
         for _ in range(a.ref_batches):
             py, px_, t0 = sample()
-            recs.append(float(recon_loss(py, px_, t0)))
             zseq, _ = embed_window(py, px_, t0)
             sctx = torch.cat([zseq[:, 0], torch.as_tensor(
                 np.stack([lats[py] / 90, lons[px_] / 180], 1),
                 dtype=torch.float32).to(dev)], 1)
             _, lp = forecast_terms(zseq, month_seq(t0), sctx)
             perss.append(float(lp))
-    ref_rec = float(np.mean(recs))
     ref_fore = float(np.mean(perss))
     codec.train()
+    ref_rec = recon_probe()
     print(f"frozen references: recon {ref_rec:.5f} · persistence {ref_fore:.5f}",
           flush=True)
 
@@ -326,8 +358,11 @@ def main():
     # value aborts healthy runs on noise — the smoke run tripped at step 2 on
     # exactly that. An EMA plus a warmup makes the guard fire for a trend,
     # which is what collapse actually is.
-    ema_rec = None
-    EMA = 0.98
+    # The guard now reads the FIXED probe every --check-every steps and needs
+    # TWO consecutive bad readings. One noisy statistic killed two runs today;
+    # a low-variance statistic that has to be bad twice will not.
+    rec_checks = []
+    bad_streak = 0
     for s in range(1, a.steps + 1):
         py, px_, t0 = sample()
         l_rec = recon_loss(py, px_, t0)
@@ -346,10 +381,18 @@ def main():
         opt.step()
 
         rr = float(r_rec.detach())
-        ema_rec = rr if ema_rec is None else EMA * ema_rec + (1 - EMA) * rr
+        if s % a.check_every == 0:
+            chk = recon_probe() / max(ref_rec, 1e-9)
+            rec_checks.append((s, round(chk, 4)))
+            bad_streak = bad_streak + 1 if chk > a.collapse_at else 0
+            with open(metrics, "a") as f:
+                f.write(json.dumps({"joint_step": s, "r_rec_probe": round(chk, 4),
+                                    "bad_streak": bad_streak}) + "\n")
+            print(f"  probe @{s}: r_rec(fixed batch) {chk:.3f}"
+                  f"{'  BAD' if chk > a.collapse_at else ''}", flush=True)
         if s % log_every == 0 or s == a.steps:
             rec = {"joint_step": s, "r_rec": round(float(r_rec), 4),
-                   "r_rec_ema": round(ema_rec, 4),
+                   "r_rec_probe": (rec_checks[-1][1] if rec_checks else None),
                    "r_fore": round(float(r_fore), 4),
                    "loss": round(float(loss), 4),
                    "l_rec": round(float(l_rec), 5),
@@ -364,14 +407,15 @@ def main():
                   flush=True)
         # THE TRIPWIRE. A forecast loss that improves while reconstruction
         # rots is the degenerate solution, not a discovery.
-        if s > a.collapse_warmup and ema_rec > a.collapse_at:
-            print(f"  COLLAPSE: smoothed r_rec {ema_rec:.3f} > "
-                  f"{a.collapse_at} at step {s} — the codec is trading away "
-                  f"reconstruction. Stopping; this run's weights are NOT a "
-                  f"valid codec.", flush=True)
+        if s > a.collapse_warmup and bad_streak >= 2:
+            print(f"  COLLAPSE: reconstruction on the FIXED probe batch has "
+                  f"been worse than {a.collapse_at}x the frozen codec for two "
+                  f"consecutive checks (latest {rec_checks[-1][1]:.3f} at step "
+                  f"{s}). Stopping; these weights are NOT a valid codec.",
+                  flush=True)
             with open(metrics, "a") as f:
                 f.write(json.dumps({"joint_collapsed": {
-                    "step": s, "r_rec_ema": ema_rec,
+                    "step": s, "r_rec_probe": rec_checks[-1][1],
                     "r_fore": float(r_fore.detach())}}) + "\n")
             collapsed = True
             break

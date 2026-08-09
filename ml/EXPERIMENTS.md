@@ -55,7 +55,40 @@ tensor before any GPU time was spent.
 
 ---
 
-## E-004b · Joint training with the CONVENTIONAL sum loss — COLLAPSED
+## E-004 · BOTH joint runs RETRACTED — the collapse guard was measuring noise
+
+**#86 (sum) and #91 (lse) are void.** Neither tells us anything about joint
+training, and the confident conclusion previously written here for #86 — "the
+predicted degenerate solution, observed" — is **withdrawn**.
+
+**What went wrong.** The guard compared a *single training batch's*
+reconstruction against a 20-batch mean, smoothed with an EMA. Per-batch
+reconstruction is heavy tailed (random mask, 64 pixels), so the EMA tracks the
+*mean* of that distribution, which rare spikes dominate. #91's own log is the
+proof: every logged `r_rec` sat **below 1.0** (mean 0.88) while the EMA of all
+steps sat at 1.02–1.07 and tripped at step 419. The guard was reading outliers
+and it killed a healthy run 10% of the way in.
+
+**Why the #86 conclusion is unsafe too.** Its `r_fore` falling to 0.036 is
+*suggestive* of genuine degeneracy — that is a much larger move than #91's
+0.33 — but it was stopped by the same broken instrument, so "collapsed" is
+not a finding, it is an artifact of the stopping rule. Any real degeneracy
+has to be re-measured.
+
+**The fix.** The guard now re-measures reconstruction on a **fixed probe batch
+with a fixed mask, in eval mode**, every `--check-every` steps, and requires
+**two consecutive** bad readings. Same batch, same mask: the only thing that
+can move the number is the codec. Verified in a smoke run where the fixed
+probe read 1.000 and 0.999 while the per-batch training loss swung 0.717–1.245.
+
+**Lesson for the log's rules.** A stopping rule is an instrument, and an
+instrument gets validated before it is trusted — I validated the *loss* and the
+*index arithmetic* of these experiments carefully, and shipped the thing that
+decides whether a run lives or dies without checking its variance.
+
+---
+
+## E-004b · Joint training with the CONVENTIONAL sum loss — VOID (see above)
 
 **Run** #86 (`joint`, sum, λ=1, warm-started from run-62's 40.7M codec, K=12).
 
@@ -92,7 +125,7 @@ control that shows the conventional alternative needs forbidding.
 
 ---
 
-## E-004a · Joint stage-1+2 training (adaptive loss) — RE-QUEUED
+## E-004a · Joint stage-1+2 training (adaptive loss) — VOID, TO RE-RUN (see above)
 
 **Hypothesis.** Stage 1 optimises *reconstruct this pixel-month*; nothing in
 that objective asks the embedding to be **predictable forward in time**. If
