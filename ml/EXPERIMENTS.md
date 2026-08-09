@@ -55,7 +55,44 @@ tensor before any GPU time was spent.
 
 ---
 
-## E-004 · Joint stage-1+2 training (adaptive loss) — DISPATCHED
+## E-004b · Joint training with the CONVENTIONAL sum loss — COLLAPSED
+
+**Run** #86 (`joint`, sum, λ=1, warm-started from run-62's 40.7M codec, K=12).
+
+Frozen references measured before any update: recon **0.2704**, persistence
+forecast **4.1506**.
+
+| step | r_rec (recon / frozen) | r_fore (forecast / persistence) |
+|---|---|---|
+| 400 | 1.639 | 0.108 |
+| 800 | 1.139 | 0.074 |
+| 1200 | 0.631 | 0.052 |
+| 1600 | 0.932 | 0.042 |
+| 2000 | 0.828 | 0.036 |
+| **2153** | **EMA 1.112 → collapse, run stopped** | — |
+
+**Conclusion — the predicted degenerate solution, observed.** The forecast term
+falls to **3.6% of persistence**, which is not a forecasting triumph: it is the
+codec making its own embeddings trivially predictable. Reconstruction pays for
+it, drifting above the frozen value until the smoothed tripwire fired at step
+2153. The weights are explicitly **not** a valid codec and were not probed.
+
+**Why the sum loss does this.** Both terms are normalised, but they are not
+equally *reducible*: r_fore can be driven toward zero by degrading the
+representation, while r_rec cannot be improved much below 1.0 by any cheap
+trick. A sum rewards whichever term moves most per unit of gradient, so it
+walks straight into the cheap one.
+
+**This is the case for the adaptive loss (E-004a), stated precisely.** With
+r_rec ≈ 1 and r_fore ≈ 0.1, `max` and its smooth form select **r_rec** — the
+objective that is *not* being satisfied — so the run cannot buy forecast skill
+with reconstruction. Chris's formulation ("if one is high, the overall loss is
+high") is exactly the property that forbids this collapse, and #86 is the
+control that shows the conventional alternative needs forbidding.
+
+---
+
+## E-004a · Joint stage-1+2 training (adaptive loss) — RE-QUEUED
 
 **Hypothesis.** Stage 1 optimises *reconstruct this pixel-month*; nothing in
 that objective asks the embedding to be **predictable forward in time**. If

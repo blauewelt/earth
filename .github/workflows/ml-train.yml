@@ -383,6 +383,35 @@ jobs:
           print(open("ml/runs/actions/provenance.json").read())
           EOF
 
+      # SEED A MISSING CHECKPOINT FROM THE RELEASE. Checkpoint mirrors are
+      # box-local, and with three boxes a resume job lands on the right one by
+      # luck. Worse, the box that CANNOT serve the job fails fast and is
+      # therefore first back in the queue to grab the next attempt — a
+      # livelock that ate runs #87, #89 and #90, all on gpu-box-35586926.
+      # Publishing the codec as a release asset makes it fetchable anywhere;
+      # the box-local mirror stays as the fast path.
+      - name: Seed resume checkpoint from the release
+        if: always() && inputs.resume != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAGS="${{ inputs.resume }}"; TAGS="${TAGS#!}"
+          mkdir -p /opt/earth-cache/ckpt
+          for TAG in ${TAGS//,/ }; do
+            case "$TAG" in */*) continue;; esac        # a path, not a tag
+            [ -f "/opt/earth-cache/ckpt/$TAG.pt" ] && { echo "$TAG already on this box"; continue; }
+            for ASSET in "$TAG__pixelmae.pt" "f3_anchor41M__pixelmae.pt"; do
+              echo "trying release asset $ASSET for $TAG …"
+              if gh release download model-checkpoints-v1 --repo "$GITHUB_REPOSITORY" \
+                   --pattern "$ASSET" --output "/opt/earth-cache/ckpt/$TAG.pt" --clobber 2>/dev/null; then
+                echo "  seeded /opt/earth-cache/ckpt/$TAG.pt from $ASSET"
+                break
+              fi
+            done
+          done
+          ls -la /opt/earth-cache/ckpt/ 2>/dev/null || true
+
       - name: Phase · training
         continue-on-error: true
         env:
