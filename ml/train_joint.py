@@ -209,6 +209,45 @@ def main():
         [{"params": codec.parameters(), "lr": a.lr},
          {"params": tmp.parameters(), "lr": a.lr_temporal}], weight_decay=1e-4)
 
+    # ---- TWIN REFERENCE ---------------------------------------------------
+    # A second head, trained on the FROZEN codec's embeddings, in this same
+    # job, on the same batches, from the same init, with the same optimiser
+    # and learning rate. It exists to delete a constant.
+    #
+    # The problem it solves: r_rec's reference is a genuine property of the
+    # frozen codec — hand it a fixed batch, read the error, one line at step
+    # 0. r_fore's is not. "How well does the frozen codec forecast" is a
+    # property of the codec PLUS a head that has been trained, and at step 0
+    # that head is random, so there is nothing to measure. Until now the
+    # number came from a separate control run (#101) and was pasted in by
+    # hand as --ref-fore. Then #101's curve turned out not to converge — its
+    # block means fell monotonically to the last block, ~0.018 per 1200
+    # steps and not flattening — which means the constant was never a
+    # property of anything. It was a function of how long the control ran.
+    #
+    # Two heads at the same point in their own training, on identical
+    # batches, is the comparison that was actually wanted. The arbitrary
+    # stopping point cancels because both sides have it.
+    ref_twin = a.ref_fore < 0                      # --ref-fore -1 selects it
+    codec_ref = tmp_ref = opt_ref = None
+    if ref_twin:
+        import copy
+        codec_ref = copy.deepcopy(codec).to(dev).eval()
+        for p_ in codec_ref.parameters():
+            p_.requires_grad_(False)
+        tmp_ref = TemporalTransformer(d_z=d_z, d_model=a.temporal_d_model,
+                                      n_heads=4, n_layers=a.temporal_layers,
+                                      k_max=max(a.K, 36)).to(dev)
+        # EXACTLY the same init as `tmp`, copied rather than re-seeded: the
+        # only difference between the two branches must be which embeddings
+        # the head consumes, or the comparison is confounded with init luck.
+        tmp_ref.load_state_dict(tmp.state_dict())
+        opt_ref = torch.optim.AdamW(tmp_ref.parameters(), lr=a.lr_temporal,
+                                    weight_decay=1e-4)
+        print(f"twin reference: a second {n_tmp/1e6:.2f}M head on the FROZEN "
+              f"codec, same batches and same init — --ref-fore is not used",
+              flush=True)
+
     ocean = np.isfinite(d["X"][..., 0]).any(axis=0)
     ys, xs = np.where(ocean)
     train_px = np.where(~x_hold[xs])[0]
@@ -227,13 +266,17 @@ def main():
         t0 = rng.choice(starts, a.batch)
         return ys[pi], xs[pi], t0
 
-    def embed_window(py, px_, t0, grad=True):
+    def embed_window(py, px_, t0, grad=True, net=None):
         """Embed B pixels over K+1 months. [B, K+1, d_z]
 
         This is the expensive part and the reason joint training cannot use
         the stage-2 embedding cache: every one of these forwards carries a
-        gradient into the codec.
+        gradient into the codec. `net` overrides which codec does the
+        embedding — the twin reference passes the frozen copy, under
+        no_grad, which is the one case where the cache WOULD apply if the
+        memory were free (516 x 84,405 x 64 fp32 is ~11 GB).
         """
+        enc = net if net is not None else codec
         zs = []
         ctx = torch.zeros(len(py), 4, device=dev)
         for k in range(a.K + 1):
@@ -251,7 +294,7 @@ def main():
                 torch.as_tensor(lats[py] / 90, dtype=torch.float32),
                 torch.as_tensor(lons[px_] / 180, dtype=torch.float32)], 1).to(dev)
             nomask = torch.zeros(len(py), C, dtype=torch.bool, device=dev)
-            z = codec.encode(v.to(dev), o.to(dev), nomask, cc)
+            z = enc.encode(v.to(dev), o.to(dev), nomask, cc)
             zs.append(z)
         return torch.stack(zs, 1), ctx
 
@@ -288,9 +331,15 @@ def main():
             return torch.zeros((), device=dev)
         return ((pred - v).pow(2) * sel).sum() / sel.sum()
 
-    def forecast_terms(zseq, mseq, sctx):
-        """Model forecast loss and the PERSISTENCE loss on the same window."""
-        pred, _ = tmp(zseq[:, :a.K], mseq, sctx)
+    def forecast_terms(zseq, mseq, sctx, head=None):
+        """Model forecast loss and the PERSISTENCE loss on the same window.
+
+        `head` selects which temporal model forecasts; the twin reference
+        passes its own. Persistence is computed from zseq, so each branch is
+        scored against the baseline IN ITS OWN embedding space — which is
+        what makes the live/frozen ratio scale-free.
+        """
+        pred, _ = (head or tmp)(zseq[:, :a.K], mseq, sctx)
         tgt = zseq[:, 1:a.K + 1]
         l_model = (pred - tgt).pow(2).mean()
         l_pers = (zseq[:, :a.K] - tgt).pow(2).mean()   # z_t as the forecast
@@ -353,6 +402,9 @@ def main():
     if ref_fore_mult > 0:
         print(f"  forecast reference from the frozen-codec control: "
               f"{ref_fore_mult:.4f} (its converged l_fore/l_pers)", flush=True)
+    elif ref_twin:
+        print("  --ref-fore twin: the reference is trained alongside, so no "
+              "constant is read from any previous run", flush=True)
     else:
         print("  no --ref-fore: r_fore is raw l_fore/l_pers, so THIS RUN "
               "measures the reference other runs divide by", flush=True)
@@ -373,7 +425,7 @@ def main():
             "codec_params_M": round(n_codec / 1e6, 3),
             "temporal_params_M": round(n_tmp / 1e6, 3),
             "ref_recon": ref_rec, "ref_forecast": ref_fore,
-            "ref_fore_mult": a.ref_fore,
+            "ref_fore_mult": a.ref_fore, "ref_twin": bool(a.ref_fore < 0),
             "warm_start": os.path.basename(ck_path), "d_z": d_z, "patch": patch,
         }}) + "\n")
 
@@ -428,12 +480,51 @@ def main():
         # the run that first exposed the problem, because the fix had made
         # the forecast term matter without removing the incentive.
         r_fore = l_fore / l_pers.clamp_min(1e-9)
-        if ref_fore_mult > 0:
+        skill_ref = None
+        if ref_twin:
+            # The twin: same batch, frozen codec, its own head and optimiser.
+            # Its skill is l_fore/l_pers in ITS OWN space, so the two ratios
+            # are directly comparable and the live one stays scale-free.
+            with torch.no_grad():
+                zr, _ = embed_window(py, px_, t0, net=codec_ref)
+            sctx_r = torch.cat([zr[:, 0], torch.as_tensor(
+                np.stack([lats[py] / 90, lons[px_] / 180], 1),
+                dtype=torch.float32).to(dev)], 1)
+            lf_r, lp_r = forecast_terms(zr, month_seq(t0), sctx_r, head=tmp_ref)
+            opt_ref.zero_grad(); lf_r.backward()
+            torch.nn.utils.clip_grad_norm_(tmp_ref.parameters(), 1.0)
+            opt_ref.step()
+            skill_ref = float(lf_r.detach() / lp_r.detach().clamp_min(1e-9))
+            # Detaching HERE is correct and is not the #103 mistake. That one
+            # detached l_pers, which depends on the LIVE codec, so the ratio
+            # stopped being scale-free. This denominator depends only on the
+            # frozen codec and the twin's own parameters — nothing the live
+            # optimiser touches — so it is constant w.r.t. the live gradient
+            # whether detached or not. Checked symbolically: dr/da under a
+            # rescale z -> a·z is still exactly 0.
+            r_fore = r_fore / max(skill_ref, 1e-9)
+        elif ref_fore_mult > 0:
             # ...then put it on r_rec's footing: 1.0 must mean "as good as
             # the frozen-codec pipeline" for BOTH terms, or the smooth max
             # is not comparing like with like. ref_fore_mult is the
-            # frozen-codec control's own converged l_fore/l_pers.
+            # frozen-codec control's own l_fore/l_pers — a hand-copied
+            # constant, and the thing --ref-fore -1 exists to abolish.
             r_fore = r_fore / ref_fore_mult
+        if ref_twin and s == 1:
+            # SELF-TEST, free and decisive. At step 1 nothing has been updated
+            # yet: codec_ref is a copy of codec, tmp_ref is a copy of tmp, and
+            # both branches see the same batch — so the two skills are the same
+            # number and their ratio must be exactly 1. Anything else means the
+            # twin is not a twin (wrong init copy, wrong batch, a stale
+            # codec_ref) and every r_fore after it is meaningless.
+            dev1 = abs(float(r_fore.detach()) - 1.0)
+            print(f"  twin self-test at step 1: r_fore = "
+                  f"{float(r_fore.detach()):.6f} (must be 1.000000)", flush=True)
+            if dev1 > 1e-4:
+                raise SystemExit(
+                    f"twin reference is not a twin: r_fore = {float(r_fore.detach()):.6f} "
+                    f"at step 1, off by {dev1:.2e}. Refusing to train — the "
+                    f"forecast term would be normalised by the wrong thing.")
         loss = combine(r_rec, r_fore)
         opt.zero_grad(); loss.backward()
         torch.nn.utils.clip_grad_norm_(
@@ -462,6 +553,13 @@ def main():
                    # by shrinking z is indistinguishable from one that learns
                    # unless you plot it.
                    "z_shrink": round(ref_fore / max(float(l_pers), 1e-9), 3),
+                   # The twin's own scale-free skill, logged beside the live
+                   # one. Both heads have had exactly the same amount of
+                   # training at this step, which is the whole point: r_fore
+                   # is their ratio, so the arbitrary stopping point that made
+                   # #101's 0.44 meaningless cancels out of it.
+                   "skill_live": round(float((l_fore / l_pers.clamp_min(1e-9)).detach()), 4),
+                   "skill_ref": (round(skill_ref, 4) if skill_ref else None),
                    "wall_s": round(time.time() - t_start, 1)}
             with open(metrics, "a") as f:
                 f.write(json.dumps(rec) + "\n")

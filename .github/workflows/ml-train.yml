@@ -561,12 +561,20 @@ jobs:
           W="${{ inputs.window }}"
           MODE="${W%%@*}"
           case "$W" in *@*) REF="${W#*@}";; *) REF=0;; esac
+          # "twin" -> -1, which selects the SELF-NORMALISING reference: a
+          # second temporal head trained in this same job on the FROZEN
+          # codec's embeddings, same batches, same init. It abolishes the
+          # hand-copied constant entirely. That constant turned out not to
+          # be a property of anything: #101's control curve was still
+          # falling ~0.018 per 1200 steps at step 12,000, so its "converged"
+          # 0.44 was really a function of how long the control ran.
+          case "$REF" in twin) REF=-1;; esac
           python -u ml/train_joint.py \
             --data "$TENSOR" \
             --resume "${{ inputs.resume }}" \
             --steps "$JS" \
             --loss-mode "$MODE" \
-            --ref-fore "$REF" \
+            --ref-fore="$REF" \
             --lr "${{ inputs.lr_floor != '0' && inputs.lr_floor || '3e-5' }}" \
             --temporal-d-model "${{ inputs.temporal_d_model }}" \
             --temporal-layers "${{ inputs.temporal_layers }}" \
