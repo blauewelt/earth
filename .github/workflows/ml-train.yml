@@ -519,7 +519,14 @@ jobs:
           TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
         run: |
           python -u ml/probe_sequence.py --run actions --anomaly --data "$TENSOR"
-          if [ "${{ inputs.temporal_steps }}" != "0" ]; then
+          # A joint: run has ALREADY trained a temporal model inside
+          # train_joint.py, and "joint:4000" is not an integer — passing it to
+          # temporal.py --steps aborts the step, and with it every probe after
+          # it. That is why #94 finished a clean joint run and produced no
+          # k-fold number at all. Skip stage 2 here on joint runs; the ladder
+          # below still scores the resulting codec, which is the whole point.
+          case "${{ inputs.temporal_steps }}" in joint:*) SKIP_S2=1;; *) SKIP_S2=0;; esac
+          if [ "${{ inputs.temporal_steps }}" != "0" ] && [ "$SKIP_S2" = "0" ]; then
             # `window` doubles as a stage-2 modifier here, same reuse as on a
             # joint: run — "unroll:4" turns on the autoregressive unroll that
             # matches training to how rollout.py actually scores the model.
