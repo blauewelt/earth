@@ -68,7 +68,19 @@ def render(run, publish=False):
     loss, probe = load_points(run)
     panels = (1 if loss else 0) + (2 if probe else 0)
     if not panels:
-        raise SystemExit(f"no curve data for {run}")
+        # RETURN, do not raise. This is a library function as well as a CLI
+        # one, and SystemExit is not a subclass of Exception — so train.py's
+        # `except Exception` guard around this call, written precisely to stop
+        # a plotting problem from killing a finished run, did not catch it.
+        # A resume-only job (stage 2, head probe) does zero training steps and
+        # therefore has no curve to draw, so every one of them exited 1 after
+        # a completely successful run: #68, #69, #80, #81, #82 all reported
+        # "Train failed" while the log showed the resume, the eval and the
+        # checkpoint save all succeeding. Cosmetic, but it masks real failures
+        # by making failure the normal state.
+        print(f"no curve data for {run} — nothing to plot (this is normal for "
+              f"a run that did no training steps)")
+        return None
     n = (1 if loss else 0) + (1 if probe else 0) * 2
     fig, axes = plt.subplots(n, 1, figsize=(7.2, 2.1 * n + 0.7), sharex=True,
                              constrained_layout=True)
@@ -150,4 +162,5 @@ if __name__ == "__main__":
     ap.add_argument("--run", required=True)
     ap.add_argument("--publish", action="store_true")
     a = ap.parse_args()
-    render(a.run, publish=a.publish)
+    if render(a.run, publish=a.publish) is None:
+        raise SystemExit(1)          # CLI keeps its non-zero exit

@@ -41,6 +41,8 @@ collapse amplitude captured out-of-fold. Wind-stress-only ridge baseline
 | patch25_30k (#20) | global | 25 | 3 | 64 | 30k | — | … | … | … | running |
 | patch24_40k_seed2 (#43) | global | 24 | 3 | 64 | 40k | — | 0.531 [0.404, 0.654] | 2.39 | 27% | done |
 | **patch24_10M_60k** (#40) | global | 24 | 3 | 64 | 60k | — | **0.578** [0.451, 0.695] | 2.34 | 26% | done (10.26M params) |
+| f3_pilot_40k (#44) | NA 0.25° | 39 | 3 | 64 | 40k | — | 0.620 [0.484, 0.741] | 2.25 | 46% | done (0.92M) |
+| **f3_anchor41M** (#62) | NA 0.25° | 39 | 3 | 64 | 60k | +31.5 | **0.631** [0.513, 0.732] | 2.16 | **51%** | done (40.7M) |
 
 **The 10M codec is the first 24-channel run back above the wind-only
 line (2026-08-08, #40).** Ridge 0.578 vs baseline 0.531 and vs 0.543 /
@@ -548,3 +550,37 @@ that.
   representation quality. End-to-end fine-tuning (backprop into the
   encoder) is a separate, unranked experiment until it exists with a
   data-space grounding loss; see the discussion in `temporal.py`'s header.
+
+
+## The quarter-degree anchor closed both easy scaling axes (2026-08-09)
+
+`f3_anchor41M` (#62, 40.7M params, 60k steps, 0.25° tensor) finished and was
+probed on the GPU-fixed ladder:
+
+| probe | r (year-blocked k-fold) | 95% CI | RMSE |
+|---|---|---|---|
+| pooled ridge | 0.631 | [0.513, 0.732] | 2.16 Sv |
+| **unpooled attention head** | **0.662** | [0.557, 0.745] | 2.10 Sv |
+| head on raw 3×3 (matched control) | 0.628 | [0.514, 0.729] | 2.17 Sv |
+| wind-only bar (this tensor) | 0.568 | [0.428, 0.696] | 2.29 Sv |
+
+Other targets: MOVE 0.162 [-0.029, 0.340] (18-mo low-pass 0.516, wind-only
+**−0.376**); Florida Current 0.012; OSNAP −0.060. Dip capture **51.2%** of the
+2009–10 event; RAPID 18-mo low-pass 0.820; sign agreement 69.6%.
+
+**Read this as three findings, in descending confidence.**
+
+1. **Capacity is not the bottleneck.** 0.92M → 40.7M on the same tensor moved
+   the pooled ridge 0.620 → 0.631: forty-four times the parameters for +0.011,
+   inside seed noise. With the earlier 50k→1M step sweep already flat, both
+   cheap scaling axes are now closed. Whatever limits this programme, it is
+   neither parameters nor steps.
+2. **Pretraining's margin is +0.034 and single-seed** (head 0.662 vs raw-3×3
+   0.628), against +0.013 on the 1° tensor. Same sign, twice the size, still a
+   small fraction of its CI. The house rule forbids quoting a head number from
+   one seed; that rule does not get suspended because this one points the
+   preferred way.
+3. **MOVE remains the most interesting transfer.** Wind-only is *negative*
+   (−0.376) where the embedding is +0.162 — at 16°N the codec carries
+   something the wind actively gets wrong — but the CI includes zero and this
+   is weaker than the pilot's 0.235.

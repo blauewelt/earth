@@ -720,7 +720,7 @@ pixel24-seed2   & global & 24 & 1 & 64 & 40k & --- & 0.564 [0.44, 0.69] & --- \\
 \midrule
 \multicolumn{9}{l}{\emph{quarter-degree tensor ($0.25^\circ$ NA, 16 Argo levels, SSH; \S\ref{sec:qd})}}\\
 f3-pilot        & NA $0.25^\circ$ & 39 & 3 & 64 & 40k & --- & \textbf{0.620} [0.48, 0.74]$^\S$ & 46\% \\
-f3-anchor41M    & NA $0.25^\circ$ & 39 & 3 & 64 & 60k & \multicolumn{3}{l}{\emph{2 seeds training at time of writing}} \\
+\textbf{f3-anchor41M} (40.7M) & NA $0.25^\circ$ & 39 & 3 & 64 & 60k & $+31.5$ & 0.631 [0.51, 0.73]$^\S$ & \textbf{51\%} \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Master table: every codec run.} Generated from each
@@ -737,7 +737,11 @@ k-fold $r$ here is the POOLED RIDGE rung of
 the probe ladder (the comparable-across-time instrument); the unpooled
 attention-head values (\S\ref{sec:ladder}) are higher for every codec
 measured: global14 $0.635$, pixel25 $0.617$, patch24 $\mathbf{0.690}$
-and $0.654$ on its second seed. $^\ast$global14b is an exact-configuration
+and $0.654$ on its second seed, and f3-anchor41M $\mathbf{0.662}$
+[0.56, 0.75] against $0.628$ [0.51, 0.73] for the matched raw-$3\times3$
+head on the same section --- a pretraining margin of $+0.034$ from one
+seed, reported here only because the pooled row above it would otherwise
+be read as the codec's ceiling. $^\ast$global14b is an exact-configuration
 replication on a different runner: it measures codec-training seed noise
 on the k-fold at $\approx\pm0.05$ --- the four pixel24/patch24 rows,
 spanning 0.515--0.585 across 30k--60k steps, are consistent with that
@@ -871,9 +875,18 @@ now rests entirely on the scoreboards where 240 labelled months have no
 answer: field prediction (stage 2 beats persistence everywhere; the
 matching end-to-end field-forecaster baseline is the open follow-up),
 transfer to sparsely-labelled targets like MOVE, and whether a margin
-appears at all once the codec is sized to its Chinchilla anchor --- the
-10M-parameter codecs now training are the test, and on present evidence
-we should expect them to show nothing rather than assume they will.
+appears at all once the codec is sized to its Chinchilla anchor.
+
+That last test has now run, on the quarter-degree tensor at 40.7M
+parameters (\S\ref{sec:qd}), and it neither rescues the pretraining
+case nor closes it: the head reads $0.662$ [$0.557$, $0.745$] from the
+codec against $0.628$ [$0.514$, $0.729$] from raw $3\times3$ tokens on
+the same section, a margin of $+0.034$ where the $1^\circ$ pair gave
+$+0.013$. Same sign, roughly twice the size, still a small fraction of
+its own confidence interval, and --- the part that governs how it
+should be quoted --- \emph{one seed}. We wrote above that no head number
+in this programme should be quoted from a single seed, and we decline to
+exempt this one because it happens to point the way we would prefer.
 
 Honesty box: the head is the most expressive probe we run
 ($\sim$25k parameters against $\sim$220 training months per fold), and
@@ -905,10 +918,25 @@ overlap and this is one seed. Second, MOVE transfers again ($0.235$
 the wind actively gets wrong. Third, and to be read with care: $0.620$
 beats every $1^\circ$ codec on the same truth and protocol, but across
 tensor generations that sentence means ``this data recipe is better'',
-not ``this codec is better'' (\S\ref{sec:families}). The
-41M-parameter codecs trained \emph{at} this tensor's compute-optimal
-anchor --- two seeds, per the house rule --- were running at the time
-of writing.
+not ``this codec is better'' (\S\ref{sec:families}).
+
+The 41M-parameter codec trained \emph{at} this tensor's compute-optimal
+anchor has since finished, and its answer is a flat one: pooled
+k-fold RAPID $r=0.631$ [$0.513$, $0.732$], RMSE 2.16\,Sv, against the
+pilot's $0.620$ on the same tensor and protocol. Forty-four times the
+parameters bought $+0.011$, comfortably inside seed noise. Both clear
+the quarter-degree wind bar ($0.568$) and neither does so
+significantly. The honest reading is that skill on this tensor is
+\emph{not} capacity-limited at the pooled read-out --- which, combined
+with the flat 50k$\to$1M step sweep of \S\ref{sec:limits}, closes both
+easy scaling axes at once: neither more parameters nor more steps is
+what stands between this programme and a better transport number.
+What did move: the unpooled head reads $0.662$ [$0.557$, $0.745$] from
+the same frozen codec, the 2009--10 dip capture rose to $\mathbf{51\%}$
+from the pilot's 46\%, and the 18-month low-passed correlation reached
+$0.820$ --- the last of which should be read against the $\sim$9
+effective degrees of freedom of \S\ref{sec:metrics}, not as a
+$0.82$-with-240-months would be.
 
 \subsection{Where more data moved the skill}\label{sec:tradeoff}
 

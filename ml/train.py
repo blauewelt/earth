@@ -654,6 +654,9 @@ def main():
         plot_run.render(os.path.basename(a.out.rstrip("/")))
     except Exception as e:                     # a missing matplotlib never
         print(f"(curve not rendered: {e})")    # kills a finished run
+    except SystemExit as e:                    # ...and neither does a
+        print(f"(curve not rendered: SystemExit {e})")   # SystemExit, which
+        # is a BaseException and slipped straight through the clause above.
 
 
 
