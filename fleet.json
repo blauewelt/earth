@@ -1,6 +1,6 @@
 {
- "at": "2026-08-09T14:05:29.786Z",
- "credit_usd": 99.8,
+ "at": "2026-08-09T20:14:29.168Z",
+ "credit_usd": 94.77,
  "balance_usd": 0,
  "boxes_total": 3,
  "boxes_running": 3,
@@ -10,14 +10,14 @@
    "id": 47160352,
    "status": "running",
    "dph": 0.2739,
-   "disk_used_gb": 28,
+   "disk_used_gb": 30,
    "disk_gb": 50
   },
   {
    "id": 47160357,
    "status": "running",
    "dph": 0.2806,
-   "disk_used_gb": 41,
+   "disk_used_gb": 43,
    "disk_gb": 50
   },
   {
