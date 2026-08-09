@@ -96,6 +96,9 @@
 
   <div class="banner" id="banner"></div>
 
+  <h2>Fleet &amp; budget</h2>
+  <div id="fleet"><div class="empty">loading…</div></div>
+
   <h2>Training curves</h2>
   <div id="live"><div class="empty">loading…</div></div>
 
@@ -205,6 +208,65 @@
     }
     if (r.display_title && r.display_title !== "ml-train") return r.display_title;
     return null;
+  }
+
+  // ---- fleet & budget -------------------------------------------------------
+  // The GPU boxes are rented by the hour and the account ran dry once already
+  // (2026-08-09): the balance crossed Vast's threshold, all three instances
+  // were stopped mid-run, and four experiments died with a step frozen at
+  // "in_progress" and no failed step — which reads like a code bug and is not
+  // one. This section exists so that failure mode is visible BEFORE it
+  // happens rather than diagnosed after.
+  //
+  // The balance itself needs the Vast API key, which cannot live in a page
+  // that promises to carry no credentials, so a session publishes a snapshot
+  // to ml-metrics/fleet.json and the page PROJECTS it forward from the burn
+  // rate. The projection is what matters and it stays right without a
+  // refresh; the snapshot's age is always shown, so stale reads as stale.
+  function renderFleet(f) {
+    var el = $("fleet");
+    if (!f) {
+      el.innerHTML = '<div class="empty">no fleet snapshot published yet ' +
+        '(run scripts/publish_fleet_status.mjs)</div>';
+      return;
+    }
+    var ageH = Math.max(0, (Date.now() - new Date(f.at).getTime()) / 3600000);
+    var burn = f.burn_usd_per_h || 0;
+    // Spend since the snapshot, assuming the running boxes stayed up. If they
+    // were idle some of that time this OVERSTATES the spend, which is the
+    // safe direction for a number whose job is to warn.
+    var spent = burn * ageH;
+    var left = Math.max(0, (f.credit_usd || 0) - spent);
+    var runwayH = burn > 0 ? left / burn : Infinity;
+    var runway = !isFinite(runwayH) ? "—"
+      : runwayH >= 48 ? (runwayH / 24).toFixed(1) + " days"
+      : runwayH.toFixed(1) + " h";
+    var warn = burn > 0 && runwayH < 12;
+    return void (el.innerHTML =
+      '<div class="card">' +
+      '<div class="stepbig">$' + left.toFixed(2) +
+      '<span class="lbl"> credit left (projected)</span></div>' +
+      (warn ? '<div class="meta" style="color:var(--bad)">under 12 h of runway — ' +
+              'top up, or the boxes stop mid-run and the jobs die with no failed step.</div>' : "") +
+      '<div class="meta">burn <b>$' + burn.toFixed(3) + '/h</b> · ' +
+      esc(f.boxes_running) + " of " + esc(f.boxes_total) + " boxes running · " +
+      "runway <b>" + runway + "</b></div>" +
+      '<div class="probe">snapshot $' + (f.credit_usd || 0).toFixed(2) +
+      " taken " + esc(ago(f.at)) + "; the figure above subtracts " +
+      "$" + spent.toFixed(2) + " of burn since, assuming the running boxes " +
+      "stayed up. Disk: " +
+      (f.boxes || []).map(function (b) {
+        return esc(b.disk_used_gb) + "/" + esc(b.disk_gb) + " GB";
+      }).join(" · ") +
+      " — a full disk takes a runner offline." +
+      "</div></div>");
+  }
+
+  function fetchFleet() {
+    return fetch("https://raw.githubusercontent.com/" + REPO +
+                 "/ml-metrics/fleet.json?cb=" + Date.now())
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
   }
 
   // ---- workflow runs table --------------------------------------------------
@@ -818,11 +880,13 @@
     Promise.all([
       apiGet("https://api.github.com/repos/" + REPO + "/actions/workflows/ml-train.yml/runs?per_page=12"),
       apiGet("https://api.github.com/repos/" + REPO + "/releases"),
-      loadRunDocs()
+      loadRunDocs(),
+      fetchFleet()          // raw.githubusercontent — costs nothing against the cap
     ]).then(function (res) {
       hideBanner();
       var runs = renderRuns(res[0]);
       renderReleases(res[1]);
+      renderFleet(res[3]);
       return renderLive(runs);
     }).catch(function (e) {
       if (e && e.rateLimited) {

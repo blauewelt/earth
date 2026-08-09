@@ -117,6 +117,16 @@ test.beforeEach(async ({ page }) => {
     const url = route.request().url();
     const fulfill = (b) => route.fulfill({ status: 200, contentType: "text/plain", body: b });
     if (/run_docs\.json/.test(url)) return fulfill(JSON.stringify(DOCS));
+    if (/ml-metrics\/fleet\.json/.test(url)) {
+      // $20 credit, $1/h burn, snapshot 2 h old -> $18 left, 18 h runway.
+      return fulfill(JSON.stringify({
+        at: new Date(NOW - 2 * 3600000).toISOString(),
+        credit_usd: 20, balance_usd: 0,
+        boxes_total: 3, boxes_running: 2, burn_usd_per_h: 1.0,
+        boxes: [{ id: 1, status: "running", dph: 0.5, disk_used_gb: 28, disk_gb: 50 },
+                { id: 2, status: "running", dph: 0.5, disk_used_gb: 41, disk_gb: 50 }],
+      }));
+    }
     // The live branch exists only for the running job; the finished one is
     // served from the ml-metrics archive. Model both, since the stitch has
     // to reach the ARCHIVE to find the parent.
@@ -276,4 +286,32 @@ test("a running run times from when a runner picked it up", async ({ page }) => 
   // Dispatched 40 min ago, started 12 — the elapsed time that matters is 12.
   await expect(card.locator("h3")).toContainText("started 12 min ago");
   await expect(card.locator("h3")).not.toContainText("40 min ago");
+});
+
+
+test("the fleet panel projects credit forward from the burn rate", async ({ page }) => {
+  await page.goto("/status.html");
+  const fleet = page.locator("#fleet");
+  // $20 snapshot, $1/h, taken 2 h ago -> $18 left and 18 h of runway. The
+  // projection is the point: a snapshot alone goes stale and quietly misleads.
+  await expect(fleet).toContainText("$18.00");
+  await expect(fleet).toContainText("credit left (projected)");
+  await expect(fleet).toContainText("burn $1.000/h");
+  await expect(fleet).toContainText("2 of 3 boxes running");
+  await expect(fleet).toContainText("runway");
+  // and it says how old the snapshot is, so stale reads as stale
+  await expect(fleet).toContainText("2 h 0 min ago");
+  // disk is shown because a full disk takes a runner offline
+  await expect(fleet).toContainText("28/50 GB");
+});
+
+test("the fleet panel warns when runway is short", async ({ page }) => {
+  await page.route(/ml-metrics\/fleet\.json/, (route) =>
+    route.fulfill({ status: 200, contentType: "text/plain", body: JSON.stringify({
+      at: new Date(NOW).toISOString(), credit_usd: 3, balance_usd: 0,
+      boxes_total: 3, boxes_running: 3, burn_usd_per_h: 0.9, boxes: [],
+    }) }));
+  await page.goto("/status.html");
+  // 3 / 0.9 = 3.3 h — well under the 12 h threshold.
+  await expect(page.locator("#fleet")).toContainText("under 12 h of runway");
 });
