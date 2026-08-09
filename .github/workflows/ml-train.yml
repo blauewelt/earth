@@ -45,11 +45,8 @@ on:
         description: "FULL trainprobe cadence in steps (~300 s each on the 10M codec; 0 = off; requires anomaly)"
         default: "7500"
       resume:
-        description: "continue from a checkpoint: a tag under /opt/earth-cache/ckpt (e.g. orphan-latest) or a path. Empty = fresh run"
+        description: "continue from a checkpoint: a tag under /opt/earth-cache/ckpt (e.g. orphan-latest) or a path. Empty = fresh run. Prefix ! (e.g. !run-62) to REQUIRE it: the job exits in seconds if this box does not hold that checkpoint, instead of silently retraining from scratch"
         default: ""
-      require_resume:
-        description: "fail fast if the resume checkpoint is not on this box (mirrors are box-local). Use for stage-2-only jobs whose whole point is the existing weights"
-        default: "false"
       head_probe:
         description: "run the UNPOOLED attention-head probe (top rung of the ladder) plus its matched raw-3x3 end-to-end control. The decisive test of whether a pooled-probe decline is a read-out artifact or real information loss"
         default: "false"
@@ -393,7 +390,6 @@ jobs:
             --lr-decay-steps "${{ inputs.lr_decay_steps || '0' }}" \
             --light-probe-every "${{ inputs.light_probe_every || '2000' }}" \
             --resume "${{ inputs.resume }}" \
-            $([ "${{ inputs.require_resume }}" = "true" ] && echo --require-resume) \
             --d-model "${{ inputs.codec_d_model || '128' }}" \
             --n-layers "${{ inputs.codec_layers || '4' }}" \
             --n-heads "${{ inputs.codec_heads || '4' }}" \

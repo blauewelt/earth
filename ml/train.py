@@ -114,6 +114,13 @@ def parse():
 
 def main():
     a = parse()
+    # `--resume !tag` is the same thing as `--resume tag --require-resume`.
+    # It exists because workflow_dispatch allows at most 25 inputs and this
+    # workflow is at the ceiling: adding a 26th made the FILE invalid, which
+    # takes the whole workflow down — every dispatch 422s, not just the new
+    # one. Encoding the flag in a string we already pass costs no input slot.
+    if a.resume.startswith("!"):
+        a.require_resume, a.resume = True, a.resume[1:]
     if a.smoke:
         a.steps, a.batch = 1500, 256
     os.makedirs(a.out, exist_ok=True)

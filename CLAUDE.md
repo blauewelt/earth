@@ -779,6 +779,16 @@ paper_dark.tex.
   Symmetrically on output: a mean below the palette floor renders transparent,
   else `forward()` clamps drizzle-of-drizzles up to the first colour and the
   whole ocean tints "light rain".
+- **`workflow_dispatch` allows at most 25 inputs, and a 26th breaks the WHOLE
+  workflow.** ml-train.yml sits exactly at the ceiling. Exceeding it does not
+  fail the new input gracefully — GitHub refuses to parse the file, so every
+  dispatch 422s ("you may only define up to 25 `inputs`") and the push shows
+  up in the Actions list as a failed run named after the file path with no
+  jobs, which reads like a broken runner rather than a broken file. Measured
+  2026-08-09 by adding a 26th (`head_probe`) and taking the workflow down.
+  When a new knob is needed, ENCODE IT IN AN EXISTING INPUT rather than
+  adding one: `--resume !run-62` means "require this checkpoint", parsed in
+  train.py. Count the inputs before pushing a workflow edit.
 - **NEVER GUESS WHAT AN ARCHIVE SERVES — ASK IT.** GIBS publishes each layer's
   exact time domain at
   `/wmts/epsg4326/best/1.0.0/{layer}/default/{tms}/all/all.xml`: a
