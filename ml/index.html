@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>earth · ML status</title>
+<!-- /earth/ml → the ML status page.
+     Chris asked for the status dashboard to be reachable by "just adding ml to
+     the back" of the site URL, which is a much better thing to type on a phone
+     than /status.html. This directory already exists on gh-pages (it holds the
+     training code and the paper), so an index here costs nothing and GitHub
+     Pages serves /earth/ml and /earth/ml/ alike.
+     Both a meta refresh and a script: the meta tag works with JS disabled, the
+     replace() keeps this hop out of the back-button history so "back" returns
+     to wherever you came from rather than bouncing you forward again. -->
+<meta http-equiv="refresh" content="0; url=../status.html">
+<link rel="canonical" href="../status.html">
+<style>
+  body { margin:0; background:#0d1117; color:#e6edf3;
+         font:15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width:680px; margin:0 auto; padding:48px 16px; }
+  a { color:#3987e5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p>Taking you to the <a href="../status.html">ML status page</a>…</p>
+</div>
+<script>location.replace("../status.html");</script>
+</body>
+</html>
