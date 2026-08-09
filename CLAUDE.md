@@ -1200,6 +1200,19 @@ absolute values under a delta; colormap parser skipping single-value entries;
 salinity invisible (current-month composite unpublished); mangled Cesium class
 names breaking test assertions; `_zoomFactor` no-op.
 
+**Deferred / open follow-ups (ML):** build E-006 (the data-space loss) with a
+synthetic smoke test before any dispatch; **a trained stage-2 head is currently
+unrecoverable** — `train_joint.py` writes `temporal_joint.pt` into the runner
+workspace, which is in neither artifact path and is not mirrored to
+`/opt/earth-cache`, so the next checkout on that box erases it, and there is no
+`--resume-temporal` nor any saved optimiser state (this is why #101's 12k-step
+head could not be continued); `probe_sequence.json` returned all-NaN across the
+K sweep on #101 while the k-fold was fine, so the sequence probe has a bug of
+its own; head-probe seed B (0.662 is one seed); re-score #88/#93 through
+`probe_kfold` rather than the 36-month split; unroll U=2 and U=8. Watch disk on
+the Vast boxes — two sat at 44–45 of 50 GB on 2026-08-09, and a full disk takes
+a runner offline.
+
 **Deferred / open follow-ups:** OC-CCI & SMOS as first-class grid layers;
 multi-channel AMOC state vector; catalog `family` field for machine-readable
 dataset relationships; honest precipitation aggregation (accumulated totals
