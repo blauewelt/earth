@@ -54,7 +54,7 @@ on:
         description: "CHEAP probe cadence in steps (linear section probe only, ~30 s; the headline r at high cadence so a bad run shows early). 0 = off"
         default: "2000"
       window:
-        description: "spatial window (global | na) for the family2 recipe. On a joint: run this doubles as the loss mode (lse | max | sum) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
+        description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum), on a stage-2 run unroll:N for the autoregressive unroll — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
         default: "global"
       tensor:
         description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA builder)"
@@ -491,9 +491,17 @@ jobs:
         run: |
           python -u ml/probe_sequence.py --run actions --anomaly --data "$TENSOR"
           if [ "${{ inputs.temporal_steps }}" != "0" ]; then
+            # `window` doubles as a stage-2 modifier here, same reuse as on a
+            # joint: run — "unroll:4" turns on the autoregressive unroll that
+            # matches training to how rollout.py actually scores the model.
+            # Another input is not available: workflow_dispatch caps at 25 and
+            # this file is exactly at the ceiling.
+            UNROLL=1
+            case "${{ inputs.window }}" in unroll:*) UNROLL="${{ inputs.window }}"; UNROLL="${UNROLL#unroll:}";; esac
             python -u ml/temporal.py --run actions --K 24 \
               --data "$TENSOR" \
               --steps "${{ inputs.temporal_steps }}" \
+              --unroll "$UNROLL" \
               --d-model "${{ inputs.temporal_d_model }}" \
               --layers "${{ inputs.temporal_layers }}"
           fi
