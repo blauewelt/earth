@@ -33,7 +33,7 @@ on:
         description: "train in anomaly space (protocol v2; state space is disqualified from ranking)"
         default: "true"
       temporal_steps:
-        description: "stage-2 temporal transformer steps (0 = skip)"
+        description: "stage-2 steps (0 = skip). Prefix joint: (e.g. joint:4000) to run the JOINT stage-1+2 fine-tune instead, backpropagating the forecast loss into the codec — no new input, because workflow_dispatch caps at 25 and a 26th breaks every dispatch"
         default: "6000"
       temporal_d_model:
         description: "stage-2 width (96=mid, 192=large, 256=xlarge, 320=xxlarge)"
@@ -54,7 +54,7 @@ on:
         description: "CHEAP probe cadence in steps (linear section probe only, ~30 s; the headline r at high cadence so a bad run shows early). 0 = off"
         default: "2000"
       window:
-        description: "spatial window (global | na); family2 recipe only"
+        description: "spatial window (global | na) for the family2 recipe. On a joint: run this doubles as the loss mode (lse | max | sum) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
         default: "global"
       tensor:
         description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA builder)"
@@ -457,6 +457,26 @@ jobs:
       # sense on an anomaly-space codec (temporal.py refuses otherwise).
       # Same reasoning: the probes read the checkpoint, so a late Train
       # failure must not skip them.
+      # JOINT stage-1+2 fine-tune. Writes to ml/runs/actions/pixelmae.pt on
+      # purpose: the probe ladder below then scores the JOINT codec with no
+      # extra wiring, and the pre-joint weights stay safe in /opt/earth-cache.
+      - name: Joint stage-1+2 fine-tune
+        if: always() && startsWith(inputs.temporal_steps, 'joint:')
+        env:
+          CKPT_TAG: run-${{ github.run_number }}
+          TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
+        run: |
+          JS="${{ inputs.temporal_steps }}"; JS="${JS#joint:}"
+          python -u ml/train_joint.py \
+            --data "$TENSOR" \
+            --resume "${{ inputs.resume }}" \
+            --steps "$JS" \
+            --loss-mode "${{ inputs.window }}" \
+            --temporal-d-model "${{ inputs.temporal_d_model }}" \
+            --temporal-layers "${{ inputs.temporal_layers }}" \
+            --out ml/runs/actions
+          bash scripts/publish_live_metrics.sh "ml-live-${{ github.run_number }}" || true
+
       - name: Phase · probes
         continue-on-error: true
         env:
