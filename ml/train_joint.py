@@ -44,13 +44,26 @@ Two things make it work in practice:
 --loss-mode sum keeps the conventional L_rec + lambda*L_fore for comparison,
 because a new objective that is never compared to the old one is a belief.
 
-THE FAILURE MODE THIS MUST NOT HIDE
------------------------------------
+THE DEGENERATE SOLUTION, AND WHY THE LOSS ALREADY FORBIDS IT
+------------------------------------------------------------
 Joint training can cheat: the degenerate optimum of a pure forecast loss is a
-CONSTANT embedding, which has zero forecast error and zero information. The
-reconstruction term forbids it, but only if someone is watching — so r_rec is
-logged every step and the run is declared collapsed if it degrades past
---collapse-at, no matter how good the forecast loss looks.
+CONSTANT embedding, which has zero forecast error and zero information.
+
+This script used to carry a tripwire that ABORTED a run when reconstruction
+degraded. Chris removed it, and he was right twice over. First, it was never
+part of the design he asked for — the whole point of combining the losses so
+that "if one is high, the overall loss is high" is that the objective handles
+this itself: the moment r_rec rises above r_fore, the smooth max IS r_rec, and
+every subsequent gradient step pushes reconstruction back down. A run that
+drifts is self-correcting; a guard on top is redundant. Second, the guard was
+wrong in practice — it read a heavy-tailed per-batch ratio and killed two
+healthy runs (#86, #91) on outliers.
+
+So nothing here fails a job on a metric. Reconstruction on a fixed probe batch
+is still MEASURED and logged every --check-every steps, because reading what
+the codec did is the point; it just never stops anything. If a run does
+degenerate, that is a RESULT — the probe ladder scores the resulting codec and
+the number says so, which is far better evidence than an abort ever was.
 """
 import argparse
 import json
@@ -99,23 +112,12 @@ def parse():
     p.add_argument("--lam", type=float, default=1.0,
                    help="only used by --loss-mode sum")
     p.add_argument("--mask-ratio", type=float, default=0.5)
-    p.add_argument("--collapse-at", type=float, default=1.10,
-                   help="abort if FIXED-batch recon (vs the frozen codec) "
-                        "recon) exceeds this. 1.10 = 'reconstruction may not "
-                        "get more than 10%% worse than the codec we started "
-                        "from'.")
     p.add_argument("--check-every", type=int, default=100,
-                   help="steps between FIXED-batch reconstruction checks. This "
-                        "is the collapse guard's only input; it is cheap "
-                        "(one eval-mode forward on a held batch) and, unlike "
-                        "the training loss, its variance does not come from "
-                        "the data draw.")
-    p.add_argument("--collapse-warmup", type=int, default=50,
-                   help="steps before the tripwire arms. r_rec is measured on "
-                        "one batch and is noisy; a fresh temporal head also "
-                        "perturbs the codec hardest in the first few steps, "
-                        "so an unarmed warmup stops the guard from killing "
-                        "runs for transients rather than for collapse.")
+                   help="steps between FIXED-batch reconstruction checks. "
+                        "Pure instrumentation — it stops nothing. Cheap (one "
+                        "eval-mode forward on a held batch) and, unlike the "
+                        "training loss, its variance does not come from the "
+                        "data draw, so the logged series is readable.")
     p.add_argument("--holdout-years", default="2009,2017,2023")
     p.add_argument("--holdout-lon", default="-45,-25")
     p.add_argument("--ref-batches", type=int, default=20,
@@ -352,17 +354,11 @@ def main():
     print(f"joint training ({a.loss_mode}) …", flush=True)
     t_start = time.time()
     log_every = max(1, a.steps // 100)
-    collapsed = False
-    # The tripwire watches a SMOOTHED r_rec. Per-batch reconstruction on 64
-    # pixels swings several percent from sampling alone, so testing the raw
-    # value aborts healthy runs on noise — the smoke run tripped at step 2 on
-    # exactly that. An EMA plus a warmup makes the guard fire for a trend,
-    # which is what collapse actually is.
-    # The guard now reads the FIXED probe every --check-every steps and needs
-    # TWO consecutive bad readings. One noisy statistic killed two runs today;
-    # a low-variance statistic that has to be bad twice will not.
+    # Reconstruction on the fixed probe batch, recorded so the run can be READ
+    # afterwards. It aborts nothing: the loss is what keeps reconstruction
+    # honest, and if it fails to, the probe ladder's number on the resulting
+    # codec is the evidence — not a threshold someone picked.
     rec_checks = []
-    bad_streak = 0
     for s in range(1, a.steps + 1):
         py, px_, t0 = sample()
         l_rec = recon_loss(py, px_, t0)
@@ -384,12 +380,10 @@ def main():
         if s % a.check_every == 0:
             chk = recon_probe() / max(ref_rec, 1e-9)
             rec_checks.append((s, round(chk, 4)))
-            bad_streak = bad_streak + 1 if chk > a.collapse_at else 0
             with open(metrics, "a") as f:
-                f.write(json.dumps({"joint_step": s, "r_rec_probe": round(chk, 4),
-                                    "bad_streak": bad_streak}) + "\n")
-            print(f"  probe @{s}: r_rec(fixed batch) {chk:.3f}"
-                  f"{'  BAD' if chk > a.collapse_at else ''}", flush=True)
+                f.write(json.dumps({"joint_step": s,
+                                    "r_rec_probe": round(chk, 4)}) + "\n")
+            print(f"  probe @{s}: r_rec(fixed batch) {chk:.3f}", flush=True)
         if s % log_every == 0 or s == a.steps:
             rec = {"joint_step": s, "r_rec": round(float(r_rec), 4),
                    "r_rec_probe": (rec_checks[-1][1] if rec_checks else None),
@@ -405,20 +399,6 @@ def main():
             print(f"  step {s:>6}/{a.steps}  r_rec {float(r_rec):.3f}  "
                   f"r_fore {float(r_fore):.3f}  ({time.time()-t_start:.0f}s)",
                   flush=True)
-        # THE TRIPWIRE. A forecast loss that improves while reconstruction
-        # rots is the degenerate solution, not a discovery.
-        if s > a.collapse_warmup and bad_streak >= 2:
-            print(f"  COLLAPSE: reconstruction on the FIXED probe batch has "
-                  f"been worse than {a.collapse_at}x the frozen codec for two "
-                  f"consecutive checks (latest {rec_checks[-1][1]:.3f} at step "
-                  f"{s}). Stopping; these weights are NOT a valid codec.",
-                  flush=True)
-            with open(metrics, "a") as f:
-                f.write(json.dumps({"joint_collapsed": {
-                    "step": s, "r_rec_probe": rec_checks[-1][1],
-                    "r_fore": float(r_fore.detach())}}) + "\n")
-            collapsed = True
-            break
 
     # Save in the SAME format train.py writes, so every downstream probe
     # (probe_kfold, probe_head, temporal) reads it with no special case.
@@ -426,11 +406,13 @@ def main():
             "norm": ck.get("norm"), "args": {**ck.get("args", {}),
                                              "joint": vars(a)},
             "step": int(ck.get("step", 0)), "tag": os.environ.get("CKPT_TAG", ""),
-            "joint_collapsed": collapsed}
+            "r_rec_probe_series": rec_checks}
     torch.save(blob, os.path.join(a.out, "pixelmae.pt"))
     torch.save({"model": tmp.state_dict(), "args": vars(a)},
                os.path.join(a.out, "temporal_joint.pt"))
-    print(f"saved {a.out}/pixelmae.pt (collapsed={collapsed})", flush=True)
+    last = rec_checks[-1][1] if rec_checks else float("nan")
+    print(f"saved {a.out}/pixelmae.pt · final fixed-probe r_rec {last:.3f} "
+          f"(reported, not enforced)", flush=True)
 
 
 if __name__ == "__main__":

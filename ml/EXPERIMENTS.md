@@ -75,16 +75,34 @@ and it killed a healthy run 10% of the way in.
 not a finding, it is an artifact of the stopping rule. Any real degeneracy
 has to be re-measured.
 
-**The fix.** The guard now re-measures reconstruction on a **fixed probe batch
+**The fix — and then the removal.** Chris's response was the right one: *"i
+never agreed to a trip wire… the loss should do the right thing."* Both parts
+land. The tripwire was never in the design he asked for, and it is redundant
+under it: the whole point of combining the terms so that "if one is high, the
+overall loss is high" is that the objective self-corrects — the moment r_rec
+rises above r_fore the smooth max **is** r_rec, and every following step pushes
+reconstruction back down. A guard on top of that can only ever be a second,
+worse opinion, and this one was demonstrably worse.
+
+**No run in this programme is now failed by a metric threshold.** Reconstruction
+on a fixed probe batch (fixed mask, eval mode) is still measured and logged
+every `--check-every` steps, because reading what the codec did is the point —
+it just stops nothing. If a run genuinely degenerates, that is a **result**: the
+probe ladder scores the resulting codec and the number says so, which is far
+better evidence than an abort ever was.
+
+The measurement itself is now sound: the fixed probe
 with a fixed mask, in eval mode**, every `--check-every` steps, and requires
 **two consecutive** bad readings. Same batch, same mask: the only thing that
 can move the number is the codec. Verified in a smoke run where the fixed
 probe read 1.000 and 0.999 while the per-batch training loss swung 0.717–1.245.
 
-**Lesson for the log's rules.** A stopping rule is an instrument, and an
-instrument gets validated before it is trusted — I validated the *loss* and the
-*index arithmetic* of these experiments carefully, and shipped the thing that
-decides whether a run lives or dies without checking its variance.
+**Two lessons, now rules.** (a) A stopping rule is an instrument and gets
+validated like one — I validated the *loss* and the *index arithmetic* of these
+experiments carefully, then shipped the statistic deciding whether a run lives
+or dies without ever checking its variance. (b) Prefer *no* stopping rule.
+Guards that kill runs on a threshold add a failure mode and remove evidence; a
+run that finishes always tells you more than a run that was stopped.
 
 ---
 
