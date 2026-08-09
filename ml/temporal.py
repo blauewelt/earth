@@ -341,13 +341,41 @@ def main():
         ztgt = torch.stack([Zt[base + j + 1, p] for j in range(K)], 1)
         return zseq, mseq, static_ctx[p], ztgt
 
-    print("training the temporal stage …")
+    # Stage 2 goes into the RUN'S OWN metrics.jsonl, not just temporal.json.
+    # temporal.json is uploaded as a build artifact, and artifacts need an
+    # authenticated API call — the status page is deliberately credential-free
+    # and reads only public raw branch content, so until now stage 2 was
+    # invisible there: the page charted the codec's loss and its little
+    # in-training probe, and said nothing about the model the whole second
+    # stage exists to train. metrics.jsonl is already published to the live
+    # branch and archived to ml-metrics AFTER this step runs, so writing here
+    # needs no new transport.
+    m2_path = os.path.join(run_dir, "metrics.jsonl")
+    n_par2 = sum(p_.numel() for p_ in model.parameters())
+
+    def m2(rec):
+        try:
+            with open(m2_path, "a") as f:
+                f.write(json.dumps(rec) + "\n")
+        except OSError:
+            pass                      # instrumentation never breaks the run
+
+    m2({"stage2_config": {"d_model": a.d_model, "layers": a.layers, "K": K,
+                          "steps": a.steps, "params_M": round(n_par2 / 1e6, 3),
+                          "d_z": int(ck["d_z"]), "seed": a.seed,
+                          "tag": a.tag or ""}})
+
+    print(f"training the temporal stage … ({n_par2:,} parameters)")
     t0 = time.time()
+    log_every = max(1, a.steps // 100)     # ~100 curve points, as stage 1 does
     for s in range(1, a.steps + 1):
         zseq, mseq, sctx, ztgt = batch_windows(pool_t, pool_p, a.batch)
         pred, _ = model(zseq, mseq, sctx)
         loss = (pred - ztgt).pow(2).mean()
         opt.zero_grad(); loss.backward(); opt.step(); sched.step()
+        if s % log_every == 0 or s == a.steps:
+            m2({"stage2_step": s, "stage2_zmse": round(float(loss.item()), 5),
+                "stage2_wall_s": round(time.time() - t0, 1)})
         if s % max(1, a.steps // 10) == 0:
             print(f"  step {s:>6}/{a.steps}  z-mse {loss.item():.4f}"
                   f"  ({time.time() - t0:.0f}s)", flush=True)
@@ -427,6 +455,17 @@ def main():
                               "n_test": int(te.sum()), "features": "hidden(-1) mean over section"}
 
     print(json.dumps(results, indent=2))
+    # The verdict, next to the curve, for the same reason.
+    m2({"stage2_result": {
+        "d_model": a.d_model, "layers": a.layers, "K": K, "steps": a.steps,
+        "params_M": round(n_par2 / 1e6, 3), "seed": a.seed, "tag": a.tag or "",
+        "z_mse_model": results.get("z_t+1", {}).get("mse_model"),
+        "z_mse_persistence": results.get("z_t+1", {}).get("mse_persistence"),
+        "chan_mse_model": results.get("chan_t+1", {}).get("mse_model"),
+        "chan_mse_persistence": results.get("chan_t+1", {}).get("mse_persistence"),
+        "rapid_r_deseas": results.get("rapid_probe", {}).get("r_deseasonalised"),
+        "rapid_r_raw": results.get("rapid_probe", {}).get("r_raw"),
+    }})
     suffix = f"_{a.tag}" if a.tag else ""
     results["seed"] = a.seed
     torch.save({"model": model.state_dict(), "args": vars(a)},

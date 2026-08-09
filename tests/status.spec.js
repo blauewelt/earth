@@ -36,6 +36,24 @@ const RUN_A = jsonl([
 ]);
 
 // The continuation: same config, resumed at 22,500, still running.
+// A stage-2 run: the temporal transformer's own curve and verdict, written
+// into the SAME metrics.jsonl by temporal.py.
+const RUN_S2 = jsonl([
+  { config: { steps: 60000, params_M: 40.7, data: "f3_na025.npz", C: 39 } },
+  { step: 300, loss_rec: 0.09, loss_nei: 0.10 },
+  { step: 60000, loss_rec: 0.09, loss_nei: 0.10 },
+  { stage2_config: { d_model: 320, layers: 6, K: 24, steps: 6000, params_M: 7.469, d_z: 64, seed: 0, tag: "" } },
+  { stage2_step: 1500, stage2_zmse: 0.910, stage2_wall_s: 40 },
+  { stage2_step: 3000, stage2_zmse: 0.845, stage2_wall_s: 80 },
+  { stage2_step: 4500, stage2_zmse: 0.802, stage2_wall_s: 120 },
+  { stage2_step: 6000, stage2_zmse: 0.781, stage2_wall_s: 160 },
+  { stage2_result: { d_model: 320, layers: 6, K: 24, steps: 6000, params_M: 7.469,
+                     seed: 0, tag: "",
+                     z_mse_model: 0.731, z_mse_persistence: 1.173,
+                     chan_mse_model: 0.728, chan_mse_persistence: 1.141,
+                     rapid_r_deseas: 0.385, rapid_r_raw: 0.341 } },
+]);
+
 const RUN_B = jsonl([
   { config: { steps: 60000, batch: 256, d_z: 64, params_M: 40.7, data: "f3_na025.npz", C: 39, T: 528, resume: "run-101" } },
   { resumed: { from: "run-101.pt", parent_tag: "run-101", at_step: 22500 } },
@@ -46,6 +64,12 @@ const RUN_B = jsonl([
 
 const RUNS = {
   workflow_runs: [
+    {
+      id: 3, run_number: 103, status: "completed", conclusion: "success",
+      created_at: iso(30), html_url: "https://example.invalid/103",
+      display_title: "STAGE 2 xxlarge (320x6)", name: "ml-train",
+      head_sha: "c".repeat(40),
+    },
     {
       id: 2, run_number: 102, status: "in_progress", conclusion: null,
       created_at: iso(90), html_url: "https://example.invalid/102",
@@ -84,6 +108,7 @@ test.beforeEach(async ({ page }) => {
     // served from the ml-metrics archive. Model both, since the stitch has
     // to reach the ARCHIVE to find the parent.
     if (/ml-live-102\/metrics\.jsonl/.test(url)) return fulfill(RUN_B);
+    if (/ml-metrics\/run-103\.jsonl/.test(url)) return fulfill(RUN_S2);
     if (/ml-metrics\/run-101\.jsonl/.test(url)) return fulfill(RUN_A);
     return route.fulfill({ status: 404, body: "" });
   });
@@ -149,4 +174,36 @@ test("a run with no parent is charted exactly as it always was", async ({ page }
   expect(await card.locator('svg.chart line[stroke="#d2a8ff"]').count()).toBe(0);
   // It keeps its own step-0 point, which is where the reference came from.
   await expect(card).toContainText("untrained codec 0.516");
+});
+
+
+test("a stage-2 run gets its own chart and verdict", async ({ page }) => {
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #103" }) });
+  await expect(card).toHaveCount(1);
+
+  // Its own curve, in its own colour, with the config stated.
+  await expect(card).toContainText("temporal transformer over the frozen embeddings");
+  await expect(card).toContainText("320\u00d76");
+  await expect(card).toContainText("7.469M params");
+  expect(await card.locator('svg.chart polyline[stroke="#a371f7"]').count()).toBe(1);
+
+  // The z-space curve is charted against the persistence bar it must beat.
+  await expect(card).toContainText("persistence 1.173");
+  await expect(card).toContainText("latest 0.7810");
+
+  // The verdict is expressed as % better than persistence — what stage 2
+  // actually optimises — with the noisy RAPID read-out clearly secondary.
+  await expect(card).toContainText("z-space 37.7% better than persistence");
+  await expect(card).toContainText("channel-space 36.2%");
+  await expect(card).toContainText("RAPID r +0.385");
+});
+
+test("runs without stage 2 show no stage-2 panel", async ({ page }) => {
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #101" }) });
+  await expect(card).not.toContainText("temporal transformer over the frozen");
+  expect(await card.locator('svg.chart polyline[stroke="#a371f7"]').count()).toBe(0);
 });

@@ -235,6 +235,7 @@
   // ---- live metrics charts --------------------------------------------------
   function parseJsonl(text) {
     var loss = [], probes = [], cfg = null, resumed = null;
+    var s2 = [], s2cfg = null, s2res = null;
     text.split("\n").forEach(function (line) {
       line = line.trim();
       if (!line) return;
@@ -242,13 +243,17 @@
       try { o = JSON.parse(line); } catch (e) { return; }
       if (o && o.config) { cfg = o.config; return; }   // the run's PLAN
       if (o && o.resumed) { resumed = o.resumed; return; }  // its PARENT
+      if (o && o.stage2_config) { s2cfg = o.stage2_config; return; }
+      if (o && o.stage2_result) { s2res = o.stage2_result; return; }
+      if (o && typeof o.stage2_step === "number") { s2.push(o); return; }
       if (o && typeof o.step === "number" && typeof o.loss_rec === "number" && typeof o.loss_nei === "number") {
         loss.push(o);
       } else if (o && typeof o.step === "number") {
         probes.push(o);
       }
     });
-    return { loss: loss, probes: probes, cfg: cfg, resumed: resumed };
+    return { loss: loss, probes: probes, cfg: cfg, resumed: resumed,
+             s2: s2, s2cfg: s2cfg, s2res: s2res };
   }
 
   // ---- continuations: one trajectory, two jobs ------------------------------
@@ -311,6 +316,11 @@
         // (its --steps is where the trajectory is headed). Fall back to the
         // parent's only when the child has none.
         cfg: m.cfg || p.cfg,
+        // Stage 2 runs at the END of a job, so a continuation's own record is
+        // the live one; fall back to the parent's only if this leg has none.
+        s2: (m.s2 && m.s2.length) ? m.s2 : p.s2,
+        s2cfg: m.s2cfg || p.s2cfg,
+        s2res: m.s2res || p.s2res,
         resumed: m.resumed,
         join: join,
         // The FIRST job of the chain, not the immediate parent: after two
@@ -475,6 +485,83 @@
         : "");
   }
 
+  // ---- stage 2, the model the second stage exists to train -----------------
+  // Stage 2 predicts NEXT MONTH'S EMBEDDING FIELD from a window of frozen
+  // ones, so its scoreboard is a z-space MSE against persistence — not the
+  // RAPID r the charts above track. Those two have been moving in OPPOSITE
+  // directions all week (field prediction improves while the pooled RAPID
+  // read-out drifts down), which is exactly why stage 2 needed its own panel
+  // instead of being folded into the probe chart.
+  function stage2Chart(m) {
+    if (!m.s2 || !m.s2.length) return "";
+    var pts = m.s2.filter(function (p) { return typeof p.stage2_zmse === "number"; });
+    if (pts.length < 2) return "";
+    var W = 600, H = 130, padL = 46, padR = 10, padT = 10, padB = 22;
+    var xs = pts.map(function (p) { return p.stage2_step; });
+    var ys = pts.map(function (p) { return p.stage2_zmse; });
+    var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
+    if (m.s2cfg && m.s2cfg.steps > xmax) xmax = m.s2cfg.steps;
+    var ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
+    // Persistence is the bar stage 2 must beat; frame it when we know it.
+    var pers = m.s2res && typeof m.s2res.z_mse_persistence === "number"
+      ? m.s2res.z_mse_persistence : null;
+    if (pers !== null) ymax = Math.max(ymax, pers);
+    var xspan = (xmax - xmin) || 1, yspan = (ymax - ymin) || 1;
+    var yOf = function (v) { return padT + (H - padT - padB) * (1 - (v - ymin) / yspan); };
+    var line = polyline(pts.map(function (p) { return [p.stage2_step, p.stage2_zmse]; }),
+                        xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB);
+    var last = pts[pts.length - 1];
+    var cfgTxt = m.s2cfg
+      ? m.s2cfg.d_model + "&times;" + m.s2cfg.layers + " · K=" + m.s2cfg.K +
+        (m.s2cfg.params_M ? " · " + m.s2cfg.params_M + "M params" : "")
+      : "";
+    return '<div class="probe" style="margin-top:12px"><b>stage 2</b> — temporal transformer over the frozen embeddings' +
+      (cfgTxt ? ' <span class="meta">(' + cfgTxt + ")</span>" : "") + "</div>" +
+      '<svg class="chart" viewBox="0 0 ' + W + " " + H +
+      '" role="img" aria-label="stage 2 z-space training loss">' +
+      '<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+      '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+      '<text x="' + (padL - 6) + '" y="' + (padT + 5) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymax.toFixed(3) + "</text>" +
+      '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymin.toFixed(3) + "</text>" +
+      '<text x="' + (W - padR) + '" y="' + (H - 6) + '" text-anchor="end" font-size="11" fill="#8b949e">' + fmtInt(xmax) + "</text>" +
+      (pers !== null
+        ? '<line x1="' + padL + '" y1="' + yOf(pers).toFixed(1) + '" x2="' + (W - padR) +
+          '" y2="' + yOf(pers).toFixed(1) + '" stroke="#8b949e" stroke-width="1" stroke-dasharray="4 3"/>' +
+          '<text x="' + (W - padR) + '" y="' + (yOf(pers) - 4).toFixed(1) +
+          '" text-anchor="end" font-size="10" fill="#8b949e">persistence ' + pers.toFixed(3) + "</text>"
+        : "") +
+      '<polyline points="' + line + '" fill="none" stroke="#a371f7" stroke-width="2" stroke-linejoin="round"/>' +
+      "</svg>" +
+      '<div class="legend"><span><span class="sw" style="background:#a371f7"></span>' +
+      "z-space MSE (next-month embedding) — latest <b>" + last.stage2_zmse.toFixed(4) +
+      "</b> at step " + fmtInt(last.stage2_step) + "</span></div>" +
+      stage2Verdict(m);
+  }
+
+  function stage2Verdict(m) {
+    var r = m.s2res;
+    if (!r) return "";
+    var pct = function (mod, per) {
+      return (typeof mod === "number" && typeof per === "number" && per > 0)
+        ? (100 * (1 - mod / per)) : null;
+    };
+    var zp = pct(r.z_mse_model, r.z_mse_persistence);
+    var cp = pct(r.chan_mse_model, r.chan_mse_persistence);
+    var bits = [];
+    if (zp !== null) bits.push("z-space <b>" + zp.toFixed(1) + "%</b> better than persistence");
+    if (cp !== null) bits.push("channel-space <b>" + cp.toFixed(1) + "%</b>");
+    if (typeof r.rapid_r_deseas === "number") {
+      bits.push("RAPID r " + (r.rapid_r_deseas >= 0 ? "+" : "") +
+                r.rapid_r_deseas.toFixed(3));
+    }
+    if (!bits.length) return "";
+    return '<div class="probe">stage-2 result: ' + bits.join(" · ") +
+      '<br><span class="meta">the first two are what stage 2 optimises ' +
+      "(next-month field); the RAPID number is a pooled read-out of its " +
+      "hidden state and is far noisier — two seeds of the same size have " +
+      "landed 0.265 and 0.385.</span></div>";
+  }
+
   function probeText(p) {
     var keys = ["linear_r_raw", "linear_r_deseas", "temporal_r_raw", "temporal_r_deseas",
                 "z_vs_persistence_pct", "chan_vs_persistence_pct"];
@@ -607,6 +694,7 @@
                 "runs at each eval interval, so the first one lands a few " +
                 "thousand steps in.</div>";
       }
+      html += stage2Chart(m);
       return html + "</div>";
   }
 
