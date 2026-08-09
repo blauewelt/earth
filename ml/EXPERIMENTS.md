@@ -27,6 +27,71 @@ low-pass).
 
 ---
 
+## E-004 · The forecast term was rewarding the encoder for SHRINKING z — every joint result so far retracted
+
+Caught live on 2026-08-09 at 21:47 UTC, on the two control runs launched to
+calibrate the fix from the previous entry. It is the largest error in this log
+and it invalidates the forecast side of every joint run: #91, #92, #94, #95,
+#100, #102.
+
+**The mechanism.** `l_fore` is a mean squared error *in z-space*. It was
+divided by `ref_fore`, a constant measured once at step 0. Nothing in that
+arrangement asks the encoder to forecast better — it asks for a smaller
+numerator, and the cheapest way to get one is to make ‖z‖ smaller. The decoder
+simply rescales, so reconstruction barely notices: a free direction, straight
+down.
+
+**The evidence.** `l_pers` — the persistence loss ‖z_{t+1} − z_t‖², which
+depends on the codec alone and not at all on the forecaster — is the ruler.
+Frozen codec, it should not move. Training codec, it measures the contraction.
+
+| step | #101 frozen: l_pers | #102 training: l_pers | #102 contraction | #102 `r_fore` (as logged) | #102 `l_fore/l_pers` (scale-free) |
+|---|---|---|---|---|---|
+| 120 | 4.221 | 0.533 | 7.8× | 0.353 | 0.802 |
+| 480 | — | 0.227 | 18.4× | 0.138 | 0.736 |
+| 960 | — | 0.112 | 37.2× | 0.068 | 0.738 |
+| 1200 | — | 0.103 | **40.5×** | **0.054** | **0.636** |
+| 1680 | 4.103 (1.0×) | — | — | — | (#101: **0.595**) |
+
+Read the last two columns together. The logged forecast number fell by 6.5×
+and looked like a triumph. The scale-free ratio moved 0.80 → 0.64, and the
+**frozen** codec — no stage-1 training whatsoever — was already at 0.595. Once
+the contraction is divided out, joint training was not ahead of the frozen
+codec. It was behind.
+
+`r_rec_probe` stayed between 1.04 and 1.18 throughout, which is exactly why
+nothing caught it: the guard that was supposed to notice the codec paying for
+the forecast was watching a quantity the cheat does not touch.
+
+**This also retracts the `--ref-fore 0.29` of the previous entry.** That number
+came from #95's tail `r_fore`, so it was mostly contraction — and #95 was a
+*treatment* run, not a control. A circular reference calibrated on an artefact.
+The honest reference is a frozen-codec control's converged `l_fore/l_pers`,
+which #101 puts near **0.58**.
+
+**The fix, and why it is not a tripwire.** Divide the forecast loss by *the
+batch's own* persistence. Shrink z and numerator and denominator shrink
+together, so the direction pays nothing — the degeneracy is closed by
+construction rather than policed. `--ref-fore` then scales that ratio onto
+`r_rec`'s footing so 1.0 means "as good as the frozen-codec pipeline" for both
+terms and the smooth max compares like with like. Chris's rule is untouched:
+no threshold, no penalty, no job killed. The loss simply cannot be cheated this
+way. `z_shrink` is now logged every step and shown on the status panel, because
+a run that improves by contracting is indistinguishable from one that learns
+unless you plot it.
+
+**Standing lesson.** A normalised loss is only as honest as its denominator.
+When the numerator is a norm in a space the model itself defines, a *constant*
+denominator is an invitation to rescale that space. Normalise against a
+quantity computed in the same space at the same moment, or the ratio measures
+the units rather than the skill.
+
+**Re-runs.** #103 (`lse@0.58`) and #104 (`sum@0.58`) on the fixed objective.
+#101 continues — a frozen codec cannot contract, so the control was never
+affected and its number is the one #103/#104 divide by.
+
+---
+
 ## E-004 · The normalisation was wrong — forecast never moved the codec
 
 Chris asked a one-line question about the chart — *"how can reconstruction be
