@@ -50,6 +50,9 @@ on:
       require_resume:
         description: "fail fast if the resume checkpoint is not on this box (mirrors are box-local). Use for stage-2-only jobs whose whole point is the existing weights"
         default: "false"
+      head_probe:
+        description: "run the UNPOOLED attention-head probe (top rung of the ladder) plus its matched raw-3x3 end-to-end control. The decisive test of whether a pooled-probe decline is a read-out artifact or real information loss"
+        default: "false"
       light_probe_every:
         description: "CHEAP probe cadence in steps (linear section probe only, ~30 s; the headline r at high cadence so a bad run shows early). 0 = off"
         default: "2000"
@@ -463,6 +466,18 @@ jobs:
           # Section-only embeddings, so this is minutes, not hours.
           python -u ml/probe_kfold.py --runs actions --data "$TENSOR"
           python -u ml/dip_check.py --run actions --data "$TENSOR"
+          # The TOP RUNG. Every other probe mean-pools the section before
+          # reading it, and geostrophic transport is the east-minus-west
+          # density difference ACROSS the section — the one statistic a mean
+          # destroys. Runs the head on the embeddings and, immediately after,
+          # the SAME head on raw 3x3 tokens: the pair is what separates "the
+          # codec knows this" from "any read-out with spatial structure knows
+          # this". Matched to a patch codec via --raw-patch.
+          if [ "${{ inputs.head_probe }}" = "true" ]; then
+            python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1
+            python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1 \
+              --raw --raw-patch
+          fi
 
       - name: Upload probe results
         if: always()
@@ -474,6 +489,8 @@ jobs:
             ml/runs/actions/temporal.json
             ml/runs/probe_kfold.json
             ml/runs/actions/dip_check.json
+            ml/runs/actions/probe_head.json
+            ml/runs/actions/probe_head_raw3x3.json
             ml/runs/actions/temporal.pt
           retention-days: 30
           if-no-files-found: ignore
