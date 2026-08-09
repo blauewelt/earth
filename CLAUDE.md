@@ -761,12 +761,23 @@ extracted from it; they are ordered by how much they would have saved.
    branches are identical until the first update" is worth more than any
    amount of careful reading. Prefer exact identities to threshold checks —
    thresholds are the tripwires that killed healthy runs (#86, #91).
+9b. **A degeneracy you can NAME is one you must close or measure — never one
+    you may rank as improbable.** While designing the scale-free denominator I
+    wrote down the second cheat (inflate the persistence baseline instead of
+    shrinking z) and judged it "a real possible cheat but far less trivial
+    than pure scaling. Worth noting, not worth blocking." It was the dominant
+    direction and arrived faster than the one being fixed. If you can describe
+    the exploit in a sentence, the model can find it in a thousand steps.
 10. **Instrument the quantity that DISTINGUISHES the stories, not the one
-    that is easy to plot.** Reconstruction-on-a-fixed-batch looked healthy
+    that is easy to plot — and guard BOTH directions.** Reconstruction-on-a-fixed-batch looked healthy
     through a 40× embedding collapse because it was structurally blind to it.
     Ask: *what would look identical whether this works or fails?* — and
     measure that. `z_shrink` turned the next occurrence into a ten-minute
-    diagnosis instead of a retracted result.
+    diagnosis instead of a retracted result — and then failed on its own
+    terms: it was written for CONTRACTION and coloured red only above 1.2, so
+    the 250x EXPANSION that followed rendered in grey and looked ordinary. A
+    one-sided guard on a two-sided quantity is not a guard. Flag on
+    |log(ratio)|.
 
 **On deciding and reporting.**
 

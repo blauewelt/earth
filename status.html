@@ -696,9 +696,17 @@
       // of that was skill. The loss no longer rewards it (train_joint.py
       // divides by the batch's own persistence), so anything far from 1.0
       // here now means something unexpected is happening to the codec.
+      // TWO-SIDED. The first version turned red only ABOVE 1.2, because the
+      // failure it was written for was contraction. #107/#108 then failed by
+      // EXPANSION — 77x and 250x — and rendered in grey as "0.00x", looking
+      // ordinary. A guard that only watches one direction of a two-sided
+      // quantity is not a guard. Flag on |log2(scale)| instead.
       (zShrink !== null
-        ? '<span><span class="sw" style="background:' + (zShrink > 1.2 ? "#f85149" : "#8b949e") +
-          '"></span>embedding scale <b>' + zShrink.toFixed(2) + "x</b></span>"
+        ? '<span><span class="sw" style="background:' +
+          (Math.abs(Math.log2(zShrink || 1e-9)) > 0.5 ? "#f85149" : "#8b949e") +
+          '"></span>embedding scale <b>' +
+          (zShrink < 0.01 ? (1 / zShrink).toFixed(0) + "x bigger"
+                          : zShrink.toFixed(2) + "x smaller") + "</b></span>"
         : "") +
       "</div>" +
       '<div class="probe"><span class="meta">Forecast falling is only meaningful ' +

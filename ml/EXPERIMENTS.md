@@ -27,6 +27,67 @@ low-pass).
 
 ---
 
+## E-004 v5 · The scale-free ratio has a SECOND degeneracy: inflate the baseline — #107/#108 void
+
+The live-persistence denominator did close the shrinkage direction. The
+encoder went the other way instead.
+
+`l_pers = ‖z_t − z_{t+1}‖²` is the persistence baseline **in z-space**, so it
+is not only a scale — it is *how hard the forecasting problem is*, and the
+encoder writes it. `r_fore = (l_fore/l_pers)/ref` falls just as happily by
+making the denominator BIG as by making the numerator small. Add a large,
+temporally structured component to z that persistence cannot track but the
+head can — the head is handed sin/cos of month-of-year, so a strong seasonal
+oscillation is the cheapest such component — and the ratio collapses without
+any forecasting having improved.
+
+| | step 120 | step ~4000 | z-scale vs step 0 | l_fore/l_pers |
+|---|---|---|---|---|
+| #107 `lse@0.44` | l_pers 22.8 | l_pers 311 | **77× larger** | 0.545 → **0.025** |
+| #108 `sum@0.44` | l_pers 10.7 | l_pers 1043 | **250× larger** | 0.584 → **0.002** |
+| #101 frozen (control) | l_pers 4.22 | l_pers 4.10 | 1.0× | 0.727 → 0.426 |
+
+In amplitude terms the month-to-month change in z grew **8.6×** (#107) and
+**15.8×** (#108). The resulting forecast numbers read "explains 97.5% / 99.8%
+of what persistence leaves", against the frozen codec's 56% — which is the
+tell. A jump like that is not a geophysical forecasting result, it is a
+bookkeeping one. `r_rec_probe` stayed at 0.73–0.82 and 0.99–1.11 respectively,
+so reconstruction never objected: the decoder can simply subtract a component
+it knows about.
+
+As before, `sum` drove it harder than `lse` (250× vs 77×) for the same reason
+as last time — the sum always weights the forecast term, the smooth max only
+when it is the worse one.
+
+**I had named this failure and ranked it unlikely.** While designing the
+live-denominator fix I wrote, in my own notes, that the model "could make
+z_{t+1} − z_t bigger while keeping the prediction error the same — a real
+possible cheat but far less trivial than pure scaling. Worth noting, not worth
+blocking." It was not less trivial. It was the dominant direction, and it
+arrived faster than the shrinkage it replaced. **A degeneracy you can name is
+one you must close or measure — never one you may rank as improbable.**
+
+**And the detector I built for the first degeneracy was one-sided.**
+`z_shrink` logged the failure correctly (0.003) but `status.html` only turned
+it red above 1.2, so a 250× *expansion* rendered in grey as "0.00x" and looked
+ordinary. That is the exact principle written into CLAUDE.md §6c twenty
+minutes earlier — *what would look identical whether this works or fails?* —
+violated inside the instrument written to enforce it. The guard is now
+two-sided on |log₂(scale)|.
+
+**Verdict.** #107 and #108 are void; both cancelled mid-run. No forecast
+number from either is reportable, and the `lse` vs `sum` comparison they were
+meant to settle is not settled — both were optimising the same artefact, so
+their difference measures only which loss shape exploits it faster.
+
+**This is the fourth failure of the same slot** — step-0 constant, detached
+ratio, hand-copied constant, and now baseline inflation — and every one of
+them comes from scoring the forecast in a space the model authors. E-006
+below is the fix, and this entry is the argument for building it rather than a
+fifth normalisation.
+
+---
+
 ## E-006 · The loss, rewritten in the data's units — DESIGNED, not yet run
 
 Chris, after four failed normalisations: *"the loss term should just be (1) how
