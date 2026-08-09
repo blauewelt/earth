@@ -539,6 +539,13 @@ jobs:
       - name: Joint stage-1+2 fine-tune
         if: always() && startsWith(inputs.temporal_steps, 'joint:')
         env:
+          # WITHOUT THIS the live-metrics publisher below pushes to
+          # https://x-access-token:@github.com/... — an empty credential —
+          # fails, and is swallowed by its own `|| true`. Run #100 ticked its
+          # publisher loop ninety-odd times over 48 minutes and put not one
+          # curve point on the branch. Every other step that publishes has
+          # this line; the joint step was added later and never got it.
+          GITHUB_TOKEN: ${{ github.token }}
           CKPT_TAG: run-${{ github.run_number }}
           TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
         run: |
