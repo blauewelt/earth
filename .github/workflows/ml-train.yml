@@ -401,13 +401,28 @@ jobs:
           for TAG in ${TAGS//,/ }; do
             case "$TAG" in */*) continue;; esac        # a path, not a tag
             [ -f "/opt/earth-cache/ckpt/$TAG.pt" ] && { echo "$TAG already on this box"; continue; }
-            for ASSET in "$TAG__pixelmae.pt" "f3_anchor41M__pixelmae.pt"; do
+            # ${TAG}__… with BRACES. Underscores are legal in a bash
+            # identifier, so "$TAG__pixelmae.pt" expands the variable
+            # $TAG__pixelmae — unset, therefore empty — and the pattern
+            # became a bare ".pt". Run #98's log says it plainly:
+            # "trying release asset .pt for run-62". Second occurrence of
+            # this family of quoting bug in two days.
+            for ASSET in "${TAG}__pixelmae.pt" "f3_anchor41M__pixelmae.pt"; do
               echo "trying release asset $ASSET for $TAG …"
-              if gh release download model-checkpoints-v1 --repo "$GITHUB_REPOSITORY" \
-                   --pattern "$ASSET" --output "/opt/earth-cache/ckpt/$TAG.pt" --clobber 2>/dev/null; then
-                echo "  seeded /opt/earth-cache/ckpt/$TAG.pt from $ASSET"
+              # curl, not `gh`: the Vast boxes have no gh CLI, so every
+              # `gh release download` returned 127 in under a millisecond
+              # with its stderr swallowed by 2>/dev/null, and the step
+              # reported success having downloaded nothing. The data-cache
+              # seed above already fetches release assets this way and has
+              # worked on these boxes since #47.
+              if curl -fsSL --max-time 1800 --retry 3 --retry-delay 10 \
+                   -o "/opt/earth-cache/ckpt/$TAG.pt.part" \
+                   "https://github.com/${GITHUB_REPOSITORY}/releases/download/model-checkpoints-v1/${ASSET}"; then
+                mv "/opt/earth-cache/ckpt/$TAG.pt.part" "/opt/earth-cache/ckpt/$TAG.pt"
+                echo "  seeded /opt/earth-cache/ckpt/$TAG.pt from $ASSET ($(du -h /opt/earth-cache/ckpt/$TAG.pt | cut -f1))"
                 break
               fi
+              rm -f "/opt/earth-cache/ckpt/$TAG.pt.part"
             done
           done
           ls -la /opt/earth-cache/ckpt/ 2>/dev/null || true
@@ -416,7 +431,19 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: bash scripts/publish_phase.sh "ml-live-${{ github.run_number }}" "training" "stage-1 codec; curves appear within a few minutes"
+        # A joint: run passes through Train only to reload the parent codec
+        # and write it out — the real work is the fine-tune step below. Saying
+        # "stage-1 codec; curves appear within a few minutes" there was simply
+        # false, and it is what made #97 look stuck for 45 minutes when it was
+        # doing exactly what it was told.
+        run: |
+          case "${{ inputs.temporal_steps }}" in
+            joint:*) bash scripts/publish_phase.sh "ml-live-${{ github.run_number }}" \
+                       "reloading the parent codec" \
+                       "a joint run trains in the fine-tune step; no stage-1 curve for this one" ;;
+            *)       bash scripts/publish_phase.sh "ml-live-${{ github.run_number }}" \
+                       "training" "stage-1 codec; curves appear within a few minutes" ;;
+          esac
 
       - name: Train
         env:
@@ -489,6 +516,17 @@ jobs:
       # JOINT stage-1+2 fine-tune. Writes to ml/runs/actions/pixelmae.pt on
       # purpose: the probe ladder below then scores the JOINT codec with no
       # extra wiring, and the pre-joint weights stay safe in /opt/earth-cache.
+      # The joint step is the longest thing a joint run does and it published
+      # NOTHING until it finished, so the status page kept showing whatever
+      # phase the Train step had left behind. Announce it up front, and let
+      # train_joint.py push its own curves as it goes (--publish-branch).
+      - name: Phase · joint fine-tune
+        if: always() && startsWith(inputs.temporal_steps, 'joint:')
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/publish_phase.sh "ml-live-${{ github.run_number }}" "joint stage-1+2 fine-tune" "codec and forecaster trained together; both curves appear within a few minutes"
+
       - name: Joint stage-1+2 fine-tune
         if: always() && startsWith(inputs.temporal_steps, 'joint:')
         env:
@@ -516,7 +554,21 @@ jobs:
             --lr "${{ inputs.lr_floor != '0' && inputs.lr_floor || '3e-5' }}" \
             --temporal-d-model "${{ inputs.temporal_d_model }}" \
             --temporal-layers "${{ inputs.temporal_layers }}" \
-            --out ml/runs/actions
+            --out ml/runs/actions &
+          JOINT_PID=$!
+          # Same side channel as the Train step. Without it a 12,000-step
+          # joint run published exactly once — at the end — so the status
+          # page showed an empty chart under a stale phase for its whole
+          # life, which is indistinguishable from a hung job.
+          TICK=0
+          while kill -0 $JOINT_PID 2>/dev/null; do
+            sleep 30
+            TICK=$((TICK + 1))
+            if [ $((TICK % 10)) -eq 0 ]; then
+              bash scripts/publish_live_metrics.sh "ml-live-${{ github.run_number }}" || true
+            fi
+          done
+          wait $JOINT_PID
           bash scripts/publish_live_metrics.sh "ml-live-${{ github.run_number }}" || true
 
       - name: Phase · probes
