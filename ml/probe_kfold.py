@@ -256,6 +256,9 @@ def main():
         codec = codec_from_ckpt(ck, Xa.shape[-1])
         codec.load_state_dict(ck["model"])
         codec.eval()
+        # See the note in probe_head.py: embed_everything follows the model's
+        # device, so moving the codec is the entire GPU fix here.
+        codec.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
         OBS = torch.from_numpy(np.isfinite(Xa))      # mask BEFORE filling
         np.nan_to_num(Xa, nan=0.0, copy=False)       # in place: no second copy
         Xt = torch.from_numpy(Xa)

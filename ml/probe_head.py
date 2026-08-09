@@ -161,6 +161,17 @@ def main():
     codec = codec_from_ckpt(ck, Xa.shape[-1])
     codec.load_state_dict(ck["model"])
     codec.eval()
+    # Run the frozen codec on the GPU when there is one. embed_everything
+    # moves each batch to the MODEL's device, so this one line is the whole
+    # fix — and it is worth hours: the quarter-degree tensor has 84,405
+    # ocean pixels over 516 months, i.e. ~43M encoder forwards of a 40.7M
+    # model. train.py's in-training probe was moved to the GPU on
+    # 2026-08-08; these standalone scripts were never given the same
+    # treatment and quietly stayed on CPU, which is why a job with NO codec
+    # training sat for two hours in the probe step.
+    _dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    codec.to(_dev)
+    print(f"codec on {_dev.type}")
     OBS = torch.from_numpy(np.isfinite(Xa))
     np.nan_to_num(Xa, nan=0.0, copy=False)
     Xt = torch.from_numpy(Xa)

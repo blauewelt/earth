@@ -93,6 +93,10 @@ def main():
     model = codec_from_ckpt(ck, C)
     model.load_state_dict(ck["model"])
     model.eval()
+    # This one builds its own encoder inputs rather than going through
+    # embed_everything, so the inputs move with the model and z comes back.
+    _dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(_dev)
 
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
     from temporal import RAPID_LON
@@ -116,13 +120,15 @@ def main():
                 v, o = gather_px(Xt, OBS, tt,
                                  torch.full((n,), sec_y, dtype=torch.long),
                                  torch.as_tensor(sec_x), model.patch)
-                z = model.encode(v, o, torch.zeros(n, C, dtype=torch.bool),
-                                 torch.as_tensor(ctx, dtype=torch.float32))
+                z = model.encode(v.to(_dev), o.to(_dev),
+                                 torch.zeros(n, C, dtype=torch.bool, device=_dev),
+                                 torch.as_tensor(ctx, dtype=torch.float32).to(_dev))
             else:
-                z = model.encode(Xt[t, sec_y, sec_x], OBS[t, sec_y, sec_x],
-                                 torch.zeros(n, C, dtype=torch.bool),
-                                 torch.as_tensor(ctx, dtype=torch.float32))
-            emb[t] = z.mean(0).numpy()
+                z = model.encode(Xt[t, sec_y, sec_x].to(_dev),
+                                 OBS[t, sec_y, sec_x].to(_dev),
+                                 torch.zeros(n, C, dtype=torch.bool, device=_dev),
+                                 torch.as_tensor(ctx, dtype=torch.float32).to(_dev))
+            emb[t] = z.mean(0).cpu().numpy()
 
     rapid = d["rapid"]
     ridx = rapid[:, 0].astype(int)
