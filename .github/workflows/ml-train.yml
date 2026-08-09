@@ -47,6 +47,9 @@ on:
       resume:
         description: "continue from a checkpoint: a tag under /opt/earth-cache/ckpt (e.g. orphan-latest) or a path. Empty = fresh run"
         default: ""
+      require_resume:
+        description: "fail fast if the resume checkpoint is not on this box (mirrors are box-local). Use for stage-2-only jobs whose whole point is the existing weights"
+        default: "false"
       light_probe_every:
         description: "CHEAP probe cadence in steps (linear section probe only, ~30 s; the headline r at high cadence so a bad run shows early). 0 = off"
         default: "2000"
@@ -387,6 +390,7 @@ jobs:
             --lr-decay-steps "${{ inputs.lr_decay_steps || '0' }}" \
             --light-probe-every "${{ inputs.light_probe_every || '2000' }}" \
             --resume "${{ inputs.resume }}" \
+            $([ "${{ inputs.require_resume }}" = "true" ] && echo --require-resume) \
             --d-model "${{ inputs.codec_d_model || '128' }}" \
             --n-layers "${{ inputs.codec_layers || '4' }}" \
             --n-heads "${{ inputs.codec_heads || '4' }}" \
@@ -412,7 +416,13 @@ jobs:
           done
           wait $TRAIN_PID
 
+      # ALWAYS upload. #62/#63 trained all 60,000 steps, passed every
+      # probe, and then died in the final evaluation — and because this step
+      # was conditional on the Train step succeeding, six hours of GPU and a
+      # finished 40M codec were thrown away with it. The checkpoint on disk is
+      # real whether or not the last line of the job raised.
       - name: Upload checkpoint + eval
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pixelmae-${{ github.run_number }}
@@ -428,8 +438,10 @@ jobs:
       # Protocol v2 verdicts ride along: the seasonality-proof K-sweep and the
       # stage-2 temporal transformer over the frozen codec. Both only make
       # sense on an anomaly-space codec (temporal.py refuses otherwise).
+      # Same reasoning: the probes read the checkpoint, so a late Train
+      # failure must not skip them.
       - name: Probes (K-sweep + stage 2)
-        if: inputs.anomaly == 'true'
+        if: always() && inputs.anomaly == 'true'
         continue-on-error: true
         env:
           TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz

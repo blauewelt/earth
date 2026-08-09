@@ -68,6 +68,15 @@ def parse():
                         "and restarts the schedule, which is stated in the "
                         "log so the run's provenance is never ambiguous. "
                         "Missing file = start fresh, loudly.")
+    p.add_argument("--require-resume", action="store_true",
+                   help="EXIT immediately if --resume finds no checkpoint, "
+                        "instead of starting fresh. Checkpoint mirrors are "
+                        "box-local, so a resume dispatch lands on the right "
+                        "runner only by luck; without this a mislanded job "
+                        "silently retrains from scratch for hours and calls "
+                        "itself a continuation. Use it whenever the point of "
+                        "the job is the EXISTING weights — e.g. a stage-2 "
+                        "run over a frozen codec.")
     p.add_argument("--light-probe-every", type=int, default=0,
                    help="every N steps, run the CHEAP half of the probe (the "
                         "linear 26.5N section probe only — no mini temporal "
@@ -402,6 +411,13 @@ def main():
         rpath = a.resume if os.path.sep in a.resume else os.path.join(
             CKPT_DIR, a.resume + ".pt")
         if not os.path.exists(rpath):
+            if a.require_resume:
+                raise SystemExit(
+                    f"--require-resume: no checkpoint at {rpath}. This box is "
+                    f"not the one that wrote it (checkpoint mirrors are "
+                    f"box-local). Exiting in seconds rather than retraining "
+                    f"from scratch for hours under a doc string that claims "
+                    f"to be a continuation.")
             print(f"  --resume {a.resume}: NOT FOUND at {rpath} — starting "
                   f"from scratch (this is not an error, but the run is now a "
                   f"fresh one; say so in its doc string)", flush=True)
@@ -512,13 +528,36 @@ def main():
         t, y, x, ctx = batch(vt, vy, vx, n_eval)
         v, o = gather(t, y, x)
         mask = (torch.rand(n_eval, C, device=dev) < a.mask_ratio) & o
-        if a.patch > 1:
-            vp, op = gather_px(Xt, OBS, t, y, x, a.patch)
-            z = model.encode(vp.to(dev), op.to(dev), mask, ctx.to(dev))
-        else:
-            z = model.encode(v * (~mask), o, mask, ctx.to(dev))
+        # CHUNK the final evaluation. Encoding all 20,000 held-out pixels in
+        # one forward makes the encoder's feed-forward intermediate
+        # n_eval x C x 4*d_model x 4 B — at C=39, d_model=576 that is 7.04 GiB,
+        # exactly the allocation that OOM-killed #62 and #63 AFTER they had
+        # trained all 60,000 steps and passed every probe. The evaluation is
+        # the last thing a run does, so the cost of that crash was the whole
+        # run's verdict. Chunking changes no reported number: z, pred and p1
+        # are concatenated in the same order and every metric below is
+        # computed from the complete arrays.
+        EV_CH = 2048
+        zs = []
+        for i in range(0, n_eval, EV_CH):
+            sl = slice(i, min(i + EV_CH, n_eval))
+            if a.patch > 1:
+                vp, op = gather_px(Xt, OBS, t[sl], y[sl], x[sl], a.patch)
+                zs.append(model.encode(vp.to(dev), op.to(dev), mask[sl],
+                                       ctx[sl].to(dev)))
+            else:
+                zs.append(model.encode(v[sl] * (~mask[sl]), o[sl], mask[sl],
+                                       ctx[sl].to(dev)))
+        z = torch.cat(zs)
         qc = torch.arange(C, device=dev)[None, :].expand(n_eval, -1)
-        pred = model.query(z, qc, torch.zeros(n_eval, C, 3, dtype=torch.long, device=dev))
+        preds = []
+        for i in range(0, n_eval, EV_CH):
+            sl = slice(i, min(i + EV_CH, n_eval))
+            nb = sl.stop - sl.start
+            preds.append(model.query(
+                z[sl], qc[sl],
+                torch.zeros(nb, C, 3, dtype=torch.long, device=dev)))
+        pred = torch.cat(preds)
         for c, name in enumerate(chan):
             m = mask[:, c]
             if m.sum() < 50:
@@ -531,8 +570,14 @@ def main():
         # temporal neighbour t+1 vs persistence
         t1 = np.clip(t.numpy() + 1, 0, T - 1)
         v1, o1 = gather(torch.as_tensor(t1), y, x)
-        off = torch.zeros(n_eval, C, 3, dtype=torch.long, device=dev); off[:, :, 2] = 1
-        p1 = model.query(z, qc, off)
+        p1s = []
+        for i in range(0, n_eval, EV_CH):                 # chunked, as above
+            sl = slice(i, min(i + EV_CH, n_eval))
+            nb = sl.stop - sl.start
+            offb = torch.zeros(nb, C, 3, dtype=torch.long, device=dev)
+            offb[:, :, 2] = 1
+            p1s.append(model.query(z[sl], qc[sl], offb))
+        p1 = torch.cat(p1s)
         both = (o & o1)
         mse_m = ((p1 - v1).pow(2) * both).sum().item() / both.sum().item()
         mse_p = ((v - v1).pow(2) * both).sum().item() / both.sum().item()
