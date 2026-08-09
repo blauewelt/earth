@@ -72,13 +72,14 @@ const RUNS = {
     },
     {
       id: 5, run_number: 105, status: "queued", conclusion: null,
-      created_at: iso(4), html_url: "https://example.invalid/105",
+      created_at: iso(94), html_url: "https://example.invalid/105",
       display_title: "queued stage-2 job", name: "ml-train",
       head_sha: "e".repeat(40),
     },
     {
       id: 4, run_number: 104, status: "in_progress", conclusion: null,
-      created_at: iso(12), html_url: "https://example.invalid/104",
+      created_at: iso(40), run_started_at: iso(12),
+      html_url: "https://example.invalid/104",
       display_title: "f3 build", name: "ml-train",
       head_sha: "d".repeat(40),
     },
@@ -254,4 +255,25 @@ test("a running run names the phase it is actually in", async ({ page }) => {
   await expect(card).toContainText("building the tensor");
   await expect(card).toContainText("assembling channels into the pixel tensor");
   await expect(card).toContainText("since 6 min ago");
+});
+
+
+test("a queued run reports waiting, never 'started'", async ({ page }) => {
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #105" }) });
+  // Dispatched 94 min ago and never picked up. "queued, started 1 h 34 min
+  // ago" is a contradiction: nothing has started.
+  await expect(card.locator("h3")).toContainText("queued 1 h 34 min ago");
+  await expect(card.locator("h3")).toContainText("not started yet");
+  await expect(card.locator("h3")).not.toContainText("started 1 h 34 min ago");
+});
+
+test("a running run times from when a runner picked it up", async ({ page }) => {
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #104" }) });
+  // Dispatched 40 min ago, started 12 — the elapsed time that matters is 12.
+  await expect(card.locator("h3")).toContainText("started 12 min ago");
+  await expect(card.locator("h3")).not.toContainText("40 min ago");
 });

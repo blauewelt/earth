@@ -217,7 +217,9 @@
         '<td><a href="' + esc(r.html_url) + '">#' + esc(r.run_number) + "</a></td>" +
         '<td><span class="dot" style="background:' + statusColor(r) + '"></span>' +
         esc(statusLabel(r)) + "</td>" +
-        "<td>" + esc(ago(r.created_at)) + "</td></tr>";
+        "<td>" + esc(r.status === "queued" ? "queued " + ago(r.created_at)
+                                          : ago(r.run_started_at || r.created_at)) +
+        "</td></tr>";
       var doc = docOf(r);
       // head_sha is the EXACT code the run executed — an immutable
       // provenance link the API already returns (no extra call).
@@ -639,14 +641,28 @@
       ".</div></div>";
   }
 
-  function cardHead(run) {
-    var doc = docOf(run);
+  // "queued, started 1 h 30 min ago" is a contradiction — Chris caught it. The
+  // runs API gives created_at (when the run was DISPATCHED) and run_started_at
+  // (when a runner actually picked it up); the page was printing the first and
+  // calling it "started" for every run, so a job that had never run claimed to
+  // have been running for 90 minutes. A queued run reports how long it has been
+  // WAITING, and nothing else, because nothing else has happened to it.
+  function whenText(run) {
+    if (run.status === "queued") {
+      return "queued " + esc(ago(run.created_at)) + " · not started yet";
+    }
+    var startedAt = run.run_started_at || run.created_at;
     var state = run.status === "completed"
       ? (run.conclusion === "success" ? "finished" : esc(run.conclusion || "ended"))
       : esc(run.status.replace(/_/g, " "));
+    return state + ", started " + esc(ago(startedAt));
+  }
+
+  function cardHead(run) {
+    var doc = docOf(run);
     return '<div class="card"><h3><a href="' + esc(run.html_url) + '">run #' +
-           esc(run.run_number) + '</a> <span class="meta">· ' + state + ", started " +
-           esc(ago(run.created_at)) + "</span></h3>" +
+           esc(run.run_number) + '</a> <span class="meta">· ' + whenText(run) +
+           "</span></h3>" +
            (doc ? '<div class="rundoc">' + esc(doc) + "</div>" : "");
   }
 
