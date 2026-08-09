@@ -1,0 +1,26 @@
+{"config": {"steps": 60000, "batch": 512, "d_z": 64, "patch": 3, "d_model": 576, "n_layers": 10, "n_heads": 8, "d_dec": 768, "anomaly": true, "eval_every": 0, "light_probe_every": 0, "lr_floor": 3e-05, "lr_decay_steps": 0, "params_M": 40.693, "data": "family3_na025.npz", "C": 39, "T": 516, "resume": "run-62,run-63"}}
+{"resumed": {"from": "run-62.pt", "parent_tag": "run-62", "at_step": 60000}}
+{"joint_config": {"steps": 12000, "batch": 64, "K": 12, "lr": 3e-05, "lr_temporal": 0.0003, "loss_mode": "lse", "lse_sharpness": 4.0, "lam": 1.0, "temporal_d_model": 192, "temporal_layers": 4, "codec_params_M": 40.693, "temporal_params_M": 1.824, "ref_recon": 0.21747717261314392, "ref_forecast": 4.1745960235595705, "ref_fore_mult": 0.58, "warm_start": "run-62.pt", "d_z": 64, "patch": 3}}
+{"joint_step": 100, "r_rec_probe": 1.9363}
+{"joint_step": 120, "r_rec": 2.4078, "r_rec_probe": 1.9363, "r_fore": 1.6786, "loss": 2.421, "l_rec": 0.52364, "l_fore": 0.08393, "l_pers": 0.08621, "z_shrink": 48.422, "wall_s": 52.4}
+{"joint_step": 200, "r_rec_probe": 1.821}
+{"joint_step": 240, "r_rec": 2.8881, "r_rec_probe": 1.821, "r_fore": 1.6557, "loss": 2.8899, "l_rec": 0.62809, "l_fore": 0.02634, "l_pers": 0.02743, "z_shrink": 152.202, "wall_s": 104.4}
+{"joint_step": 300, "r_rec_probe": 1.77}
+{"joint_step": 360, "r_rec": 1.7802, "r_rec_probe": 1.77, "r_fore": 1.7412, "loss": 1.9348, "l_rec": 0.38715, "l_fore": 0.01652, "l_pers": 0.01636, "z_shrink": 255.193, "wall_s": 156.4}
+{"joint_step": 400, "r_rec_probe": 1.7099}
+{"joint_step": 480, "r_rec": 1.8032, "r_rec_probe": 1.7099, "r_fore": 1.9976, "loss": 2.0921, "l_rec": 0.39215, "l_fore": 0.00656, "l_pers": 0.00566, "z_shrink": 737.056, "wall_s": 208.4}
+{"joint_step": 500, "r_rec_probe": 1.709}
+{"joint_step": 600, "r_rec_probe": 1.7071}
+{"joint_step": 600, "r_rec": 1.6778, "r_rec_probe": 1.7071, "r_fore": 2.0427, "loss": 2.0949, "l_rec": 0.36488, "l_fore": 0.0045, "l_pers": 0.0038, "z_shrink": 1099.928, "wall_s": 260.3}
+{"joint_step": 700, "r_rec_probe": 1.6571}
+{"joint_step": 720, "r_rec": 1.4888, "r_rec_probe": 1.6571, "r_fore": 1.8384, "loss": 1.8936, "l_rec": 0.32379, "l_fore": 0.00238, "l_pers": 0.00223, "z_shrink": 1868.369, "wall_s": 312.0}
+{"joint_step": 800, "r_rec_probe": 1.6016}
+{"joint_step": 840, "r_rec": 1.6579, "r_rec_probe": 1.6016, "r_fore": 1.5542, "loss": 1.7847, "l_rec": 0.36056, "l_fore": 0.00171, "l_pers": 0.0019, "z_shrink": 2198.584, "wall_s": 363.8}
+{"joint_step": 900, "r_rec_probe": 1.5282}
+{"joint_step": 960, "r_rec": 1.5219, "r_rec_probe": 1.5282, "r_fore": 1.6704, "loss": 1.7803, "l_rec": 0.33098, "l_fore": 0.00106, "l_pers": 0.00109, "z_shrink": 3829.959, "wall_s": 417.0}
+{"joint_step": 1000, "r_rec_probe": 1.6466}
+{"joint_step": 1080, "r_rec": 1.8405, "r_rec_probe": 1.6466, "r_fore": 1.6241, "loss": 1.9283, "l_rec": 0.40026, "l_fore": 0.00116, "l_pers": 0.00124, "z_shrink": 3378.666, "wall_s": 468.7}
+{"joint_step": 1100, "r_rec_probe": 1.6704}
+{"joint_step": 1200, "r_rec_probe": 1.6438}
+{"joint_step": 1200, "r_rec": 2.2948, "r_rec_probe": 1.6438, "r_fore": 1.85, "loss": 2.3338, "l_rec": 0.49907, "l_fore": 0.00075, "l_pers": 0.0007, "z_shrink": 5957.363, "wall_s": 520.7}
+{"joint_step": 1300, "r_rec_probe": 1.5877}
