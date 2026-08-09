@@ -415,8 +415,25 @@ def main():
     CAL = 200                                  # steps before the rate is trusted
     s = 0
     if a.resume:
-        rpath = a.resume if os.path.sep in a.resume else os.path.join(
-            CKPT_DIR, a.resume + ".pt")
+        # --resume takes a COMMA-SEPARATED CANDIDATE LIST and uses the first
+        # one present on this box. Checkpoint mirrors are box-local and the
+        # scheduler picks the runner, so naming a single tag means a job that
+        # wants "a finished 40M codec" succeeds only by luck — even when two
+        # of three boxes hold one. Listing them turns 1-in-3 into 2-in-3, and
+        # the log still says exactly which checkpoint was used, so provenance
+        # is unchanged.
+        cands = [c.strip() for c in a.resume.split(",") if c.strip()]
+        rpath = None
+        for c in cands:
+            pth = c if os.path.sep in c else os.path.join(CKPT_DIR, c + ".pt")
+            if os.path.exists(pth):
+                rpath = pth
+                break
+        if rpath is None:
+            rpath = (cands[0] if os.path.sep in cands[0]
+                     else os.path.join(CKPT_DIR, cands[0] + ".pt"))
+            if len(cands) > 1:
+                print(f"  --resume: none of {cands} is on this box", flush=True)
         if not os.path.exists(rpath):
             if a.require_resume:
                 raise SystemExit(
