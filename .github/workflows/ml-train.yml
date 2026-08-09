@@ -504,6 +504,12 @@ jobs:
               --unroll "$UNROLL" \
               --d-model "${{ inputs.temporal_d_model }}" \
               --layers "${{ inputs.temporal_layers }}"
+            # Publish so the stage-2 curve appears on the status page WHILE
+            # the ladder finishes, not only after the archive step at the very
+            # end. temporal.py writes into the same metrics.jsonl, but nothing
+            # in this step pushed it — so the panel existed and stayed empty
+            # for the whole probe stage.
+            bash scripts/publish_live_metrics.sh "ml-live-${{ github.run_number }}" || true
           fi
           # The decisive numbers, computed HERE rather than locally. The
           # k-fold is the only probe figure we argue from, and running it
