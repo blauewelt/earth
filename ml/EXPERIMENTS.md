@@ -27,6 +27,76 @@ low-pass).
 
 ---
 
+## E-006 · The loss, rewritten in the data's units — DESIGNED, not yet run
+
+Chris, after four failed normalisations: *"the loss term should just be (1) how
+much have we failed to predict X + (2) how much have we failed to predict Y.
+that's it. and alignment of the 'failure' on roughly the same scale can't be
+too hard."*
+
+He is right, and the reason the alignment kept being hard is the thing worth
+writing down: **we were measuring one of the two failures in a space the model
+invents.** Reconstruction failure is measured against observed channels —
+fixed, external, ungameable. Forecast failure was measured against `z`, which
+the encoder is free to rescale, so its "scale" was never a scale at all. Every
+denominator we tried was an attempt to referee a quantity that had no fixed
+units. Four attempts, four failures, all downstream of that one choice.
+
+**The design.** Decode the forecast back into the data before scoring it. The
+temporal head predicts `ẑ_{t+1}`; push it through the SAME decoder
+reconstruction already uses and score it against the observed channels at
+t+1. Then both terms are "failed to predict real, standardised observations",
+and the sum needs no referee:
+
+    L = MSE(x̂_t^masked, x_t) / var(x)  +  MSE(x̂_{t+1}, x_{t+1}) / var(x)
+
+Both denominators are variances of the OBSERVED field, computed once from the
+tensor. They are constants — but constants *of the data*, which is exactly the
+distinction that matters: a constant denominator is fine when the model cannot
+move it, and poison when it can. 1.0 means "no better than climatology" for
+both terms, in the same units, with no control run anywhere.
+
+**What this buys, beyond simplicity.**
+
+- **The shrinkage degeneracy cannot exist.** It is not closed, or policed, or
+  penalised — there is no free direction to close. Shrinking z shrinks the
+  decoded field too, and the target is a real observation that does not move.
+- **No frozen-codec reference, so no sequencing, no hand-copied constant, and
+  no dependence on how long a control happened to run.** The twin head of
+  E-004d becomes unnecessary; it was an elegant answer to a question that
+  should not have been asked.
+- **`sum` versus smooth-max stops being load-bearing.** The max existed only
+  because the two terms were incommensurable and a sum would have been
+  dominated by whichever was bigger. Once both are fractions of the same
+  variance, a plain sum does what Chris asked for originally — if either
+  failure is high, the total is high — and it is the version you can explain
+  in one line. Keep `lse` behind a flag for comparison; do not lead with it.
+- **The objective becomes one sentence**: reconstruct the present you were
+  shown, and the future you were not.
+
+**The honest costs.**
+
+- One decoder pass per step, which is cheap next to the K gradient-carrying
+  encoder passes already being paid.
+- The forecast term is harder than the masked-reconstruction term, so it will
+  sit higher (order 0.7 vs 0.2). That is a real difference in difficulty, not
+  an artefact, and a sum weights them by their gradients rather than by a
+  number we chose.
+- We lose the read-out that said "as good as the codec we started with"
+  directly in the loss. That was a DIAGNOSTIC living in the objective, which
+  is what caused the trouble; it moves to the logs, where `r_rec_probe` and
+  `z_shrink` already are.
+- Per-channel variances, not one global one, or the loss is dominated by
+  whichever channel has the largest anomaly variance.
+
+**Status.** Designed, and deliberately not yet built. #109 (the twin) was
+cancelled before it started rather than spend an hour on a superseded
+formulation. Nothing else is dispatched against this until the algebra and a
+synthetic smoke test are both done — which is the corrective for the actual
+failure of 2026-08-09, namely building four times before thinking once.
+
+---
+
 ## E-004 · The forecast term was rewarding the encoder for SHRINKING z — every joint result so far retracted
 
 Caught live on 2026-08-09 at 21:47 UTC, on the two control runs launched to

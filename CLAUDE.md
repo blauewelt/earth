@@ -707,6 +707,87 @@ dark build is generated from paper.tex by the string-replace block in the
 session history / make_figs --dark for figures; never hand-edit
 paper_dark.tex.
 
+### 6c. Working principles (written after the night of 2026-08-09)
+
+That session burned about six hours and a dozen dispatches and produced one
+scientific result. Everything else was self-inflicted. These are the rules
+extracted from it; they are ordered by how much they would have saved.
+
+**On building.**
+
+1. **Prefer the formulation that removes a failure mode over the one that
+   guards against it.** The joint loss got three revisions of increasing
+   cleverness — a step-0 constant, a scale-free ratio, a twin reference
+   trained alongside — each *policing* a degeneracy that a different choice of
+   measurement space *abolishes*. When you are adding a correction to a
+   correction, the earlier choice is wrong, not under-specified. Stop and
+   change it.
+2. **Normalise by properties of the DATA, never by properties of the MODEL.**
+   A denominator the model can influence is a term in the objective, and it
+   will be optimised. Variance of an observed field is fixed and ungameable;
+   a frozen checkpoint's loss is not, once what was frozen is what you are
+   training. This one sentence covers the shrinkage degeneracy, the detached
+   denominator, and both circular reference constants.
+3. **Keep diagnostics out of the objective.** "Am I still as good as the model
+   I started from?" is a question to LOG, not to optimise. Smuggling it into
+   the loss is what made one experiment depend on a constant hand-copied from
+   another, and then on that other experiment's arbitrary stopping point.
+4. **Sequenced experiments are a smell.** If B needs a number from A, ask
+   whether B can measure it itself. Interdependence costs A's wall-clock plus
+   a constant that silently goes stale.
+5. **For a change to an objective, write the algebra before the code.** The
+   detached-denominator bug was a two-line sympy check away, and that check
+   is what finally settled it. For a loss, the gradient IS the specification;
+   the code is a transcription.
+
+**On verifying.**
+
+6. **A step that can fail silently will.** Every `|| true`, `2>/dev/null` and
+   `continue-on-error` must say why it gave up. Best-effort is a promise about
+   *delivery*, not about *reporting*. Four separate steps in one night
+   reported success while doing nothing: a release seed with a mis-braced
+   variable, the same seed calling a CLI the boxes do not have, a live-metrics
+   publisher with no token, and a dispatch that silently chose a CPU box.
+7. **Assert the EFFECT, not the invocation.** The seed step printed "trying
+   release asset …" and downloaded nothing for three runs. A log line proves a
+   line of code ran; it proves nothing about the world.
+8. **Exercise the code path on a toy before spending the expensive
+   resource.** A synthetic 8×9×5 tensor and a 1-layer codec took five minutes
+   and exercised three loss modes end to end. Any hour of GPU on a path that
+   has never executed is a coin flip. `ml/train_joint.py --smoke` against a
+   generated npz is the pattern.
+9. **Build an invariant with an EXACT expected value and make the job refuse
+   if it fails.** "r_fore must read exactly 1.000000 at step 1, because both
+   branches are identical until the first update" is worth more than any
+   amount of careful reading. Prefer exact identities to threshold checks —
+   thresholds are the tripwires that killed healthy runs (#86, #91).
+10. **Instrument the quantity that DISTINGUISHES the stories, not the one
+    that is easy to plot.** Reconstruction-on-a-fixed-batch looked healthy
+    through a 40× embedding collapse because it was structurally blind to it.
+    Ask: *what would look identical whether this works or fails?* — and
+    measure that. `z_shrink` turned the next occurrence into a ten-minute
+    diagnosis instead of a retracted result.
+
+**On deciding and reporting.**
+
+11. **Distinguish "it is running" from "it can answer the question."** Several
+    runs were technically healthy and could not, by construction, test their
+    own hypothesis: a 95/5 gradient split, a reference that put the forecast
+    term permanently below the reconstruction term. Before dispatch, state
+    what result would falsify the hypothesis and check the configuration can
+    produce it.
+12. **Report measurements, not intentions.** "Curves will appear shortly" was
+    said twice without reading the branch. An unchecked status claim is a
+    guess wearing a fact's clothes.
+13. **Prefer one clean run to five relaunches.** Each relaunch was locally
+    justified; collectively they meant nothing finished. When the same
+    artefact is relaunched twice, stop spending and fix the whole class of
+    problem first. An idle GPU at $0.27/h is far cheaper than a confident
+    wrong experiment.
+14. **A queued job against an idle runner is stuck, not slow.** Cancel and
+    re-dispatch (see the queue-stall note in Part 2); do not restart the boxes
+    and lose their warm caches.
+
 ### 7. Documentation set
 
 | File | Role |
