@@ -110,6 +110,14 @@ for (const a of ARMS) {
     zratio: z && z.mse_persistence ? z.mse_model / z.mse_persistence : null,
     steps: tj?.steps ?? null,
     codec: t.r_kfold_deseas,                 // the control column
+    // THE STRONGER CONTROL, and the one that survives. The persistence
+    // baseline is data-only — x_t against x_{t+1} on held-out months — so it
+    // cannot depend on the model and MUST be bit-identical across runs that
+    // share a codec and a tensor. Sixteen digits beats the k-fold's three,
+    // and it rides in temporal.json, which is archived, where
+    // probe_kfold.json for these arms is not: the embed-cache push exited 1
+    // under `bash -e` and took the ladder with it (#131).
+    fingerprint: z?.mse_persistence ?? null,
     bar: t.wind_only_baseline?.r,
     dip: bundle.files?.["dip_check.json"]?.capture_pct ?? null,
   });
@@ -138,14 +146,28 @@ if (!have.length) {
 // THE CONTROL, CHECKED RATHER THAN ASSUMED. Every arm freezing the same codec
 // must report the same codec k-fold; if they do not, the arms differ in
 // something other than the variable and nothing below is a comparison.
-const codecs = [...new Set(have.map((r) => f(r.codec)))];
-if (codecs.length > 1) {
+const fps = [...new Set(have.map((r) => String(r.fingerprint)).filter((x) => x !== "null"))];
+const codecs = [...new Set(have.map((r) => f(r.codec)).filter((x) => x.trim() !== "—"))];
+if (fps.length > 1) {
+  console.log(`\nCONTROL FAILED: the persistence baseline differs across arms ` +
+              `(${fps.join(" vs ")}). It is data-only and cannot depend on the ` +
+              `model, so these runs did not share a codec or a tensor and the ` +
+              `ordering below is confounded.`);
+} else if (fps.length === 1) {
+  console.log(`\ncontrol: persistence baseline ${fps[0]} on every arm — ` +
+              `bit-identical, so the codec and the data path really were held ` +
+              `fixed.` + (codecs.length === 1
+                ? ` Codec k-fold ${codecs[0]} agrees.`
+                : ` (The codec k-fold is absent from these bundles.)`));
+} else if (codecs.length > 1) {
   console.log(`\nCONTROL FAILED: the codec k-fold differs across arms ` +
-              `(${codecs.join(", ")}). These runs did not hold the codec ` +
-              `fixed, so the ordering below is confounded.`);
-} else {
+              `(${codecs.join(", ")}).`);
+} else if (codecs.length === 1) {
   console.log(`\ncontrol: codec k-fold ${codecs[0]} on every arm, as it must ` +
               `be — that probe never sees the head.`);
+} else {
+  console.log("\nNO CONTROL AVAILABLE in these bundles — nothing verifies " +
+              "that the arms held the codec fixed.");
 }
 
 const scored = have.filter((r) => r.r !== null);
