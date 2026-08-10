@@ -27,6 +27,77 @@ low-pass).
 
 ---
 
+<a id="e-009"></a>
+## E-009 · The unroll sweep: is U the axis that moves the AMOC probe? — DISPATCHED 2026-08-10, U=1 queued as #127
+
+**Hypothesis.** At a fixed stage-2 budget, the number of autoregressive
+unroll steps `U` in the temporal loss changes the RAPID k-fold correlation
+more than the training budget does, and it does so *in the opposite
+direction to forecast skill* — a head trained to survive its own errors for
+several months learns a slower, more AMOC-like state than one trained to hit
+the next month exactly.
+
+**Why now.** The archive says so, from a pair that controls almost
+everything. #88 (U=1) and #93 (U=4) share a codec — `z_mse_persistence` is
+bit-identical at **3.76004**, which is the strongest evidence available that
+the frozen weights are the same file — plus tensor, architecture, seed 0 and
+a 6,000-step budget. They differ:
+
+| run | U | z ratio (forecast) | RAPID (36-mo split) |
+|---|---|---|---|
+| #88 | 1 | **0.494** (better) | 0.173 |
+| #93 | 4 | 0.641 (worse) | **0.449** |
+
+Against that, E-007 moved the budget 6,000 → 60,000 and RAPID went
+0.319 → 0.321. So on the evidence we have, one axis is worth ~0.28 and the
+other ~0.002 — but the two U numbers come from **different dispatches months
+apart, scored on the noisy 36-month single split**, and `rapid_r_raw` moves
+the other way across the same pair (0.584 → 0.472). That is exactly the
+shape of a result that is either the most important thing in the programme
+or an artefact of the instrument, and there is no way to tell without
+re-measuring all of it at once.
+
+**Design.** U ∈ {1, 2, 4, 8}, everything else pinned: the same frozen codec
+(`resume: !run-62,run-63`, 40.693M, verified identical `config` record to
+#116/#121/#125), `family3_na025`, K=24, 192×4 head, 6,000 steps, cosine to
+the same peak 1e-3, one code version, scored through **`probe_kfold.py`** —
+not the light probe, which is the instrument that produced the original
+pair. U=1 is simultaneously the sweep's low arm and a re-score of #88 under
+the modern protocol.
+
+**What would falsify it.** A flat or non-monotonic k-fold across U, with the
+four values inside each other's confidence intervals — that would say the
+#88/#93 gap was the 36-month split's noise, and that the +0.28 was never
+real. Concretely: if U=1 comes back near 0.45 rather than near 0.17, the
+original pair was measuring the split, not the unroll.
+
+**Controls and caveats stated at dispatch.** *n* = 1 per arm, so the sweep
+can establish a monotone trend or kill one, and cannot quote a margin: any
+gap that survives needs `scripts/paired_probe.py` and a second seed before
+it is quotable. The wind-only bar on this tensor is **0.568** and three of
+the four archive numbers above sit below it — a sweep that lands entirely
+under the bar is a null result about the head, however it orders U.
+
+**Cost.** ~25 min of a 4090 per arm — 6,000 steps is ~3 min at the measured
+25.8 ms/step; the rest is the probe ladder. The 95-minute embedding is
+**not** in that figure: `Z` for this codec is already on both running boxes'
+disks (#125 shows no `embedding` progress records at all, #121 built it with
+`"where": "disk"`), so the arms re-use it.
+
+**Sequencing.** U=1 (#127, `508e717`) is dispatched alone, behind #126. The
+other three are held until #127 has published `Z` to `embed-cache-v1` —
+Chris, 2026-08-10: *"hold off the second job until the first job's embedding
+precomputation is complete."* The release currently has **zero assets**:
+every earlier run carried the `embed_cache_sync.py` whose exit code was 0
+whether or not the upload happened, so the marker fired and the retry never
+did. #127 is the first run to carry the fix, which makes it the first that
+can leave the embedding somewhere a box that has never seen this codec can
+find it.
+
+**Result.** *pending.*
+
+---
+
 <a id="e-008"></a>
 ## E-008 · Is stage 2 COMPUTE-bottlenecked? 60k → 200k as a warm restart — DISPATCHED 2026-08-10, running
 
