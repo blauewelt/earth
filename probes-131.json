@@ -1,0 +1,121 @@
+{
+ "run_number": 131,
+ "files": {
+  "temporal.json": {
+   "run": "actions",
+   "K": 24,
+   "d_model": 192,
+   "layers": 4,
+   "steps": 6000,
+   "z_t+1": {
+    "mse_model": 1.6171376705169678,
+    "mse_persistence": 3.34340500831604,
+    "beats_persistence": true
+   },
+   "chan_t+1": {
+    "mse_model": 0.6928605437278748,
+    "mse_persistence": 1.2046650648117065,
+    "beats_persistence": true,
+    "channels": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ]
+   },
+   "rapid_probe": {
+    "r_raw": 0.487,
+    "r_deseasonalised": 0.413,
+    "n_test": 36,
+    "features": "hidden(-1) mean over section"
+   },
+   "rapid_probe_kfold": {
+    "r_kfold_deseas": 0.555,
+    "ci95": [
+     0.408,
+     0.685
+    ],
+    "n": 240,
+    "rmse_sv": 2.46,
+    "sigma_sv": 2.79,
+    "features": "hidden(-1) mean over section",
+    "note": "year-blocked k-fold over the TEMPORAL HEAD's features. probe_kfold.json in this same run scores the CODEC and is identical for every run that freezes the same codec; this is the number that moves with stage-2 choices. Its comparable wind-only bar is the one printed beside the codec figure in probe_kfold.json."
+   },
+   "seed": 0
+  },
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.43,
+     "r_deseasonalised": 0.42,
+     "n_test": 36
+    },
+    {
+     "K": 3,
+     "r_raw": 0.424,
+     "r_deseasonalised": 0.408,
+     "n_test": 36
+    },
+    {
+     "K": 6,
+     "r_raw": 0.519,
+     "r_deseasonalised": 0.457,
+     "n_test": 36
+    },
+    {
+     "K": 12,
+     "r_raw": 0.648,
+     "r_deseasonalised": 0.632,
+     "n_test": 36
+    },
+    {
+     "K": 24,
+     "r_raw": 0.604,
+     "r_deseasonalised": 0.583,
+     "n_test": 36
+    }
+   ],
+   "seasonal_floor_raw": 0.272,
+   "seasonal_floor_deseas": -0.168
+  }
+ },
+ "rescued_at": "2026-08-10T22:13:00.426Z"
+}
