@@ -999,6 +999,18 @@ archive.
   `/api/v1/instances/`, or you will stop the one that is mid-run. Measured
   2026-08-09: instance 47160352 -> gpu-box-47094145, 47160357 ->
   gpu-box-45318655, 47171781 -> gpu-box-35586926.
+- **A Vast instance's disk CANNOT be resized — and the API lies about it.**
+  Measured 2026-08-10 on two stopped instances: `PUT /instances/<id>/` with
+  `{"disk": 80}` and with `{"disk_space": 80}` each return HTTP 200
+  `{"success": true}` and change nothing; `disk_space` still reads 50
+  afterwards, on both v0 and v1. `scripts/gpu_box.mjs resize` therefore
+  refuses with that measurement rather than issuing a call that would appear
+  to work. To get more disk, CREATE a box with a larger `DISK` and destroy the
+  old one — the data cache re-seeds from the `data-cache-v1` release, so a
+  fresh box costs a download, not a rebuild. Note the box size is a real
+  design constraint: 50 GB holds a ~15 GB torch image, ~11 GB of tensors and a
+  10.4 GiB embedding cache with nothing to spare, which is what produced the
+  delete-rebuild-delete treadmill described above.
 - **Stopping is the cheap idle state.** `node scripts/gpu_box.mjs stop <id>`
   keeps the disk (and therefore the ~11 GB data cache and the box-local
   checkpoint mirror) and the runner registration, which reconnects on

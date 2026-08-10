@@ -168,8 +168,27 @@ if (cmd === "offers") {
       `$${(i.dph_total ?? 0).toFixed(3)}/h  ${i.gpu_name}  up ${Math.round((i.duration ?? 0) / 3600)}h  ${i.label ?? ""}`);
 } else if (cmd === "stop" || cmd === "start") {
   console.log(JSON.stringify(await vast("PUT", `/instances/${target}/`, { state: cmd === "stop" ? "stopped" : "running" })));
+} else if (cmd === "resize") {
+  // THERE IS NO RESIZE. Measured 2026-08-10 against a STOPPED instance:
+  // PUT /instances/<id>/ with {"disk": 80} and with {"disk_space": 80} both
+  // return HTTP 200 {"success": true} and change nothing — disk_space still
+  // reads 50 afterwards, on v0 and v1 alike, on two different instances.
+  // A textbook silent success (CLAUDE.md 6c rule 6), from the API rather than
+  // from us for once, and worth a full stop here so nobody spends the
+  // afternoon believing the fleet grew.
+  //
+  // To get more disk: CREATE a new box with a larger DISK and destroy the old
+  // one. The data cache re-seeds from the data-cache-v1 release automatically,
+  // so a fresh box costs a download, not a rebuild.
+  console.error(
+    "vast does not support resizing an existing instance's disk: the API " +
+    "accepts {disk} and {disk_space} with success:true and ignores both " +
+    "(measured 2026-08-10, stopped instances, v0 and v1). Create a new box " +
+    "with a bigger DISK and destroy the old one instead.");
+  process.exit(1);
 } else if (cmd === "destroy") {
   console.log(JSON.stringify(await vast("DELETE", `/instances/${target}/`)));
 } else {
-  console.log("commands: offers | create <offerId> | list | stop <id> | start <id> | destroy <id>");
+  console.log("commands: offers | create <offerId> | list | stop <id> | start <id> | " +
+    "resize <id> <gb> | destroy <id>");
 }
