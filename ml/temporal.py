@@ -41,7 +41,11 @@ from probe_sequence import ridge_r
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Box-persistent mirror, same directory train.py uses for codecs.
-CKPT_DIR = "/opt/earth-cache/ckpt"
+# Box-persistent mirror, same directory train.py uses for codecs. The
+# override exists so tests/test_resume_temporal.py and the toy end-to-end run
+# can exercise the real save/resume path without a Vast box and without
+# writing anywhere real.
+CKPT_DIR = os.environ.get("CKPT_DIR_OVERRIDE", "/opt/earth-cache/ckpt")
 
 
 class TemporalTransformer(nn.Module):
@@ -180,6 +184,21 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--d-model", type=int, default=96)
     ap.add_argument("--layers", type=int, default=3)
+    ap.add_argument("--resume-temporal", default="",
+                    help="continue a stage-2 head: a path, or a tag under "
+                         "/opt/earth-cache/ckpt (e.g. run-112-temporal). The "
+                         "checkpoint carries model, optimiser, scheduler, step "
+                         "and RNG state, so the continuation is the SAME "
+                         "trajectory rather than a fresh run that happens to "
+                         "start from these weights.\n\n"
+                         "NOTE the schedule semantics: --steps is the TOTAL, "
+                         "not the extra. Resuming a 60,000-step head with "
+                         "--steps 200000 fast-forwards a 200,000-step cosine "
+                         "to step 60,000 and carries on. The original head "
+                         "annealed to ~0 over its own 60,000, so its LR steps "
+                         "back UP — a warm restart, which is a different "
+                         "object from a single 200,000-step run and must be "
+                         "labelled as such when the numbers are compared.")
     ap.add_argument("--seed", type=int, default=0,
                     help="torch/numpy seed (sweeps need more than one)")
     ap.add_argument("--tag", default="",
@@ -352,6 +371,38 @@ def main():
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.steps)
 
+    start_step = 0
+    if a.resume_temporal:
+        rp = (a.resume_temporal if os.path.sep in a.resume_temporal
+              else os.path.join(CKPT_DIR, a.resume_temporal + ".pt"))
+        if not os.path.exists(rp):
+            raise SystemExit(
+                f"--resume-temporal: no checkpoint at {rp}. Refusing to start "
+                f"a fresh head under a doc string that says 'continue' — that "
+                f"is the mistake --require-resume exists to prevent on the "
+                f"codec side.")
+        tk = torch.load(rp, map_location="cpu", weights_only=False)
+        model.load_state_dict(tk["model"])
+        missing = [k for k in ("opt", "sched", "step") if k not in tk]
+        if missing:
+            raise SystemExit(
+                f"--resume-temporal: {rp} predates optimiser-state saving "
+                f"(missing {missing}). Loading the weights alone would reset "
+                f"Adam's moments and the LR schedule, which is a warm restart "
+                f"wearing a continuation's name. Refusing.")
+        opt.load_state_dict(tk["opt"])
+        sched.load_state_dict(tk["sched"])
+        start_step = int(tk["step"])
+        if tk.get("torch_rng") is not None:
+            torch.set_rng_state(torch.as_tensor(tk["torch_rng"], dtype=torch.uint8))
+        if start_step >= a.steps:
+            raise SystemExit(
+                f"--resume-temporal: checkpoint is at step {start_step:,} and "
+                f"--steps is {a.steps:,}. --steps is the TOTAL, not the extra.")
+        print(f"resumed stage-2 head from {rp} at step {start_step:,} "
+              f"-> training to {a.steps:,} (lr now {sched.get_last_lr()[0]:.3e})",
+              flush=True)
+
     def batch_windows(idx_t, idx_p, n):
         k = torch.randint(0, len(idx_t), (n,))
         t, p = idx_t[k], idx_p[k]
@@ -392,6 +443,9 @@ def main():
         except OSError:
             pass                      # instrumentation never breaks the run
 
+    if start_step:
+        m2({"stage2_resumed": {"from": os.path.basename(a.resume_temporal),
+                               "at_step": start_step, "to_step": a.steps}})
     m2({"stage2_config": {"d_model": a.d_model, "layers": a.layers, "K": K,
                           "steps": a.steps, "params_M": round(n_par2 / 1e6, 3),
                           "d_z": int(ck["d_z"]), "seed": a.seed,
@@ -400,7 +454,7 @@ def main():
     print(f"training the temporal stage … ({n_par2:,} parameters)")
     t0 = time.time()
     log_every = max(1, a.steps // 100)     # ~100 curve points, as stage 1 does
-    for s in range(1, a.steps + 1):
+    for s in range(start_step + 1, a.steps + 1):
         zseq, mseq, sctx, ztgt, zfut, mfut = batch_windows(pool_t, pool_p, a.batch)
         pred, _ = model(zseq, mseq, sctx)
         loss = (pred - ztgt).pow(2).mean()
@@ -435,7 +489,17 @@ def main():
                 tmp_path = os.path.join(
                     CKPT_DIR, (tag + "-" if tag else "") + "temporal.pt")
                 torch.save({"model": model.state_dict(), "args": vars(a),
-                            "step": s}, tmp_path + ".part")
+                            "step": s,
+                            # OPTIMISER AND SCHEDULE TOO. Weights alone are not
+                            # a resumable state: reloading them and building a
+                            # fresh AdamW resets the moments and restarts the
+                            # cosine, which is a warm restart wearing a
+                            # continuation's name. RNG state as well, so the
+                            # window draw continues rather than repeating.
+                            "opt": opt.state_dict(),
+                            "sched": sched.state_dict(),
+                            "torch_rng": torch.get_rng_state().numpy().tolist()},
+                           tmp_path + ".part")
                 os.replace(tmp_path + ".part", tmp_path)
             except Exception as e:                       # never fatal
                 print(f"  (head mirror failed: {e})", flush=True)
@@ -531,7 +595,10 @@ def main():
     }})
     suffix = f"_{a.tag}" if a.tag else ""
     results["seed"] = a.seed
-    torch.save({"model": model.state_dict(), "args": vars(a)},
+    torch.save({"model": model.state_dict(), "args": vars(a),
+                "step": a.steps, "opt": opt.state_dict(),
+                "sched": sched.state_dict(),
+                "torch_rng": torch.get_rng_state().numpy().tolist()},
                os.path.join(run_dir, f"temporal{suffix}.pt"))
     json.dump(results, open(os.path.join(run_dir, f"temporal{suffix}.json"), "w"), indent=2)
     print(f"saved {run_dir}/temporal{suffix}.pt")
