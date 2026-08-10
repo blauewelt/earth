@@ -838,7 +838,24 @@ jobs:
             # at all. Runs immediately after temporal.py rather than at the
             # end of the step, so a probe-ladder failure below cannot take the
             # 95 minutes with it.
-            python -u ml/embed_cache_sync.py push --run actions
+            # `|| echo`, and the omission cost #131 its whole probe ladder.
+            # On 2026-08-10 embed_cache_sync was fixed so a failed push exits
+            # 1 instead of 0 — correct, and the commit message for it said in
+            # so many words that "best-effort is the CALLER's decision
+            # (|| true), never a lie told by the callee". The caller half was
+            # never written. Under `bash -e` the honest exit code aborted the
+            # step, and probe_kfold.py and dip_check.py below it never ran:
+            # #131 finished "successfully" with no codec control and no dip
+            # capture, because a 5.2 GiB upload could not find room on a box
+            # with ~3 GB free.
+            #
+            # This is ml/CLAUDE.md §5.17 exactly — only a DEFINITE answer may
+            # be fatal — and the definite answer here is "the cache did not
+            # get published", which costs the NEXT run some GPU and costs this
+            # one's results nothing. It must not be able to take the numbers
+            # with it.
+            python -u ml/embed_cache_sync.py push --run actions \
+              || echo "::warning::embed cache push failed — the probe ladder continues"
             # Publish so the stage-2 curve appears on the status page WHILE
             # the ladder finishes, not only after the archive step at the very
             # end. temporal.py writes into the same metrics.jsonl, but nothing
