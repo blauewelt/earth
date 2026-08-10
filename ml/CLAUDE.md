@@ -390,7 +390,13 @@ archive.
 - **Run `scripts/paired_probe.py`** over the head and its raw-3×3 control once
   a run has written the per-month arrays, and only then decide whether the
   +0.034 gap is quotable. Draw a genuine second seed with `--seed-base 3`.
-- **Re-score #88/#93 through `probe_kfold`** rather than the 36-month split.
+- ~~**Re-score #88/#93 through `probe_kfold`**~~ — **impossible, struck
+  2026-08-10.** `probe_kfold` scores the frozen codec, which #88 and #93
+  share, so it returns the same number for both by construction. Asking for
+  it is what sent E-009 out with an instrument that could not move with its
+  own variable. The replacement is `rapid_probe_kfold` (`temporal.json`), and
+  E-009's #131–#134 re-measure the whole U axis on it. See
+  `docs/ML_BASICS.md` §5b.
 - **Unroll U=2 and U=8.**
 - **The parameter-bottleneck question** — needs a from-scratch run at larger
   width; deliberately deferred.

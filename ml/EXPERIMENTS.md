@@ -16,9 +16,16 @@ experiments and their results."*
 4. Record **negative and null results with the same care as positive ones**.
    Most of the entries below are null, and they are the reason the programme
    knows where its bottleneck is.
-5. Numbers here are the **year-blocked k-fold** figures (`probe_kfold.py`) —
-   the one instrument we argue from. In-training light-probe values are
-   single-split and are noted as such wherever quoted.
+5. Numbers here are the **year-blocked k-fold** figures — but *which* k-fold
+   depends on what you varied, and conflating the two cost a four-arm
+   experiment on 2026-08-10. `probe_kfold.py` scores the **CODEC**: it pools
+   the frozen embeddings and never sees the temporal head, so every run
+   freezing the same codec returns the same number (#116 and #125, a 60k and
+   a 200k head, both read 0.631 [0.513, 0.732]). Stage-2 questions —
+   schedule, budget, unroll — are answered by `rapid_probe_kfold` in
+   `temporal.json`, the same protocol over the head's own features.
+   In-training light-probe values, and `rapid_probe`'s 36-month single split,
+   are noted as such wherever quoted. See `docs/ML_BASICS.md` §5b.
 
 Baselines, for reference. Wind-stress-only ridge in our own protocol:
 **0.531** on the 1° tensors, **0.568** on the quarter-degree tensor. RAPID
@@ -49,6 +56,18 @@ low-pass).
 > time this programme has caught a run that was healthy and could not test its
 > hypothesis, and the first time the catch came from *two runs agreeing too
 > exactly*.
+>
+> **And it was not new knowledge — it was already in this file.** E-007, on
+> #110: *"It must be unchanged, because the codec is byte-identical …
+> training the forecaster longer improves forecasting; it does not improve
+> what the embedding knows about the AMOC, and those are different columns of
+> the master table. Any claim of a 'new best' has to say which."* Exactly
+> right, written weeks ago, and then E-005's closing line asked for #88/#93 to
+> be *"re-scored through `probe_kfold.py`"* — an impossible instruction that
+> propagated into `ml/CLAUDE.md`'s follow-up list and out again into E-009's
+> design. Both are struck now. The durable fix is `docs/ML_BASICS.md` §5b:
+> the distinction belongs in the document that says what the numbers MEAN, not
+> only in the entry of the one experiment that happened to notice it.
 
 **Hypothesis.** At a fixed stage-2 budget, the number of autoregressive
 unroll steps `U` in the temporal loss changes the RAPID k-fold correlation
@@ -892,10 +911,16 @@ same codec, same features, same 36 months, one changed flag. Treat +0.28 as a
 direction worth spending a k-fold on, **not** as a measured effect — and note
 that the metric that moved is not the one the paper's headline uses.
 
-**Next.** Re-score both stage-2 models through `probe_kfold.py` rather than the
-single split, and add U=2 and U=8 — if the mechanism above is right, the
-deseasonalised gain should be monotonic in U up to the point where the
-1/(u+1) weighting starves the anchor term.
+**Next.** ~~Re-score both stage-2 models through `probe_kfold.py` rather than
+the single split~~ — **struck 2026-08-10: that is not possible and asking for
+it is what sent E-009 out with the wrong instrument.** `probe_kfold` scores
+the frozen CODEC; #88 and #93 share one, so it returns the same number for
+both by construction. The replacement is `rapid_probe_kfold` in
+`temporal.json` — probe_kfold's year-blocked protocol applied to the HEAD's
+own pooled hidden state, ~240 out-of-fold months with a block-bootstrap CI.
+E-009 (#131–#134) re-measures U ∈ {1,2,4,8} on it; if the mechanism above is
+right, the deseasonalised gain should be monotonic in U up to the point where
+the 1/(u+1) weighting starves the anchor term.
 
 ---
 

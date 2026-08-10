@@ -144,6 +144,47 @@ resampled years; that interval, not the overlap of two others, is what decides
 whether a gap is real. This is why `probe_head.py` dumps its out-of-fold
 predictions.
 
+### 5b · EVERY RUNG ABOVE SCORES THE CODEC. Stage 2 has its own instrument.
+
+This is the single most confusable fact in the project, and it cost a
+four-arm experiment on 2026-08-10.
+
+Every probe in the table takes the **frozen embeddings** and fits a read-out
+from them to a transport series. The temporal transformer is not in any of
+them. So **two runs that freeze the same codec return the same number from
+`probe_kfold.py`, whatever stage 2 did** — #116 (a 60,000-step head) and #125
+(a 200,000-step head on a different schedule) both read RAPID
+`0.631 [0.513, 0.732]`, rmse 2.16, to the last digit.
+
+That is not a bug. `probe_kfold` answers "what does this REPRESENTATION
+contain", and for that question the head is correctly absent — which is why
+it is the right instrument for E-002 (codec steps) and E-003 (codec width),
+and why "codec-to-codec comparisons are fair" is the caveat written in its
+own docstring.
+
+It is the wrong instrument for every stage-2 question. Those are answered by
+`temporal.py`'s own evals, which run on the head:
+
+| key in `temporal.json` | what it measures | sample |
+|---|---|---|
+| `z_t+1.mse_model / mse_persistence` | forecast skill in embedding space | all train months |
+| `chan_t+1` | the same, decoded into channels | all train months |
+| `rapid_probe` | RAPID from the head's pooled hidden state, **single split** | 36 months |
+| `rapid_probe_kfold` | the same features, year-blocked k-fold + block-bootstrap CI | ~240 months |
+
+`rapid_probe_kfold` was added 2026-08-10 for exactly this reason: until then
+every stage-2 comparison in the log rested on 36 test months, an SE of order
+0.15, and no interval. #88 (U=1) and #93 (U=4) differ by 0.28 on that
+instrument, which is either the most important result in the programme or
+noise, and there was no way to tell.
+
+**The rule.** Before quoting a number, ask which of the two things you varied.
+Codec → the ladder above. Head, schedule, unroll, budget → `temporal.json`,
+and prefer `rapid_probe_kfold` to `rapid_probe`. A stage-2 sweep should still
+print the codec k-fold as a **control**: it must be identical across arms, and
+if it is not, the arms were not holding the codec fixed and nothing else in
+the table is a comparison. `scripts/sweep_table.mjs` checks this.
+
 ---
 
 ## 6 · Baselines, and what a number means
