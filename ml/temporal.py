@@ -1171,6 +1171,64 @@ def main():
     results["rapid_probe"] = {"r_raw": r_raw, "r_deseasonalised": r_des,
                               "n_test": int(te.sum()), "features": "hidden(-1) mean over section"}
 
+    # ---- eval 3b: THE SAME FEATURES, YEAR-BLOCKED K-FOLD ------------------
+    # Added 2026-08-10, on discovering that E-009 as dispatched could not
+    # answer its own question.
+    #
+    # probe_kfold.py — the one instrument this programme argues from — scores
+    # the CODEC: it pools the frozen embeddings along the section and fits a
+    # ridge. The temporal head is not in it anywhere. Proof rather than
+    # reading: #116 (frozen codec, 60k head) and #125 (same codec, 200k head,
+    # a completely different schedule) return RAPID 0.631 [0.513, 0.732] with
+    # the same rmse 2.16 — bit-identical, because the only thing that differs
+    # between them is invisible to that probe.
+    #
+    # So every stage-2 question — unroll, schedule, budget — had exactly one
+    # instrument: `rapid_probe` above, a SINGLE split on 36 held-out months.
+    # That is the noisy number #88 and #93 disagreed on by 0.28, and the
+    # reason a four-arm sweep was about to be scored on a metric that cannot
+    # move with what it varies.
+    #
+    # This scores the head's own features through probe_kfold's protocol:
+    # fold by calendar year, lambda on an inner tail, one r over ~240
+    # out-of-fold months, block bootstrap over whole years for the CI. Six
+    # times the test months and a stated interval, on the same footing as the
+    # codec number it sits beside in the results file.
+    #
+    # The import is deliberately LOCAL. probe_kfold imports this module at
+    # load time (embed_everything, section_of), so a module-level import here
+    # would be a cycle; done at the point of use, temporal.py is already
+    # fully initialised when probe_kfold asks for it. The alternative — moving
+    # kfold_r into a third module — would edit the instrument every published
+    # number came from, and it is not worth that during a live queue.
+    try:
+        from probe_kfold import kfold_r
+        yr_of = np.array([int(months[i][:4]) for i in ri])
+        r_kf, lo_kf, hi_kf, n_kf, rmse_kf, sig_kf, _ = kfold_r(
+            F[ri], rv_des[ok], yr_of, seed=a.seed)
+        results["rapid_probe_kfold"] = {
+            "r_kfold_deseas": round(r_kf, 3), "ci95": [round(lo_kf, 3), round(hi_kf, 3)],
+            "n": n_kf, "rmse_sv": round(rmse_kf, 2), "sigma_sv": round(sig_kf, 2),
+            "features": "hidden(-1) mean over section",
+            "note": ("year-blocked k-fold over the TEMPORAL HEAD's features. "
+                     "probe_kfold.json in this same run scores the CODEC and "
+                     "is identical for every run that freezes the same codec; "
+                     "this is the number that moves with stage-2 choices. Its "
+                     "comparable wind-only bar is the one printed beside the "
+                     "codec figure in probe_kfold.json."),
+        }
+        print(f"  head k-fold RAPID: {r_kf:.3f} [{lo_kf:.3f}, {hi_kf:.3f}] "
+              f"over {n_kf} months (single-split was {r_des:.3f} over "
+              f"{int(te.sum())})", flush=True)
+    except Exception as e:                                    # noqa: BLE001
+        # NOT fatal, and it says why. This runs at the very end of a job that
+        # may have spent a day; a probe that cannot compute must not take the
+        # results file with it (ml/CLAUDE.md §5.17). But it must never write
+        # a NaN either (§5.22) — the key is simply absent, which a reader
+        # cannot mistake for a measurement.
+        print(f"::warning::head-level k-fold failed: {type(e).__name__}: {e}",
+              flush=True)
+
     print(json.dumps(results, indent=2))
     # The verdict, next to the curve, for the same reason.
     m2({"stage2_result": {
@@ -1182,6 +1240,12 @@ def main():
         "chan_mse_persistence": results.get("chan_t+1", {}).get("mse_persistence"),
         "rapid_r_deseas": results.get("rapid_probe", {}).get("r_deseasonalised"),
         "rapid_r_raw": results.get("rapid_probe", {}).get("r_raw"),
+        # The head-level k-fold rides in the same record, so the status page
+        # and every downstream reader get the six-times-larger sample without
+        # a second fetch — and so a run's headline number is the one that can
+        # actually move with what stage 2 varies.
+        "rapid_r_kfold": results.get("rapid_probe_kfold", {}).get("r_kfold_deseas"),
+        "rapid_r_kfold_ci": results.get("rapid_probe_kfold", {}).get("ci95"),
     }})
     suffix = f"_{a.tag}" if a.tag else ""
     results["seed"] = a.seed
