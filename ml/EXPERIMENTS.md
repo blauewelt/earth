@@ -84,15 +84,31 @@ under the bar is a null result about the head, however it orders U.
 disks (#125 shows no `embedding` progress records at all, #121 built it with
 `"where": "disk"`), so the arms re-use it.
 
-**Sequencing.** U=1 (#127, `508e717`) is dispatched alone, behind #126. The
-other three are held until #127 has published `Z` to `embed-cache-v1` —
-Chris, 2026-08-10: *"hold off the second job until the first job's embedding
-precomputation is complete."* The release currently has **zero assets**:
-every earlier run carried the `embed_cache_sync.py` whose exit code was 0
-whether or not the upload happened, so the marker fired and the retry never
-did. #127 is the first run to carry the fix, which makes it the first that
-can leave the embedding somewhere a box that has never seen this codec can
-find it.
+**Sequencing.** All four are queued behind #126, U=1 first: **#127** (U=1),
+**#128** (U=2), **#129** (U=4), **#130** (U=8), all on `508e717`.
+
+The staging rule — Chris, 2026-08-10: *"hold off the second job until the
+first job's embedding precomputation is complete"* — exists to stop two jobs
+paying the same 95 minutes. Its precondition was checked rather than assumed,
+and it is already satisfied: **both online runners hold `Z` for this codec on
+disk.** #125's metrics contain no `embedding` progress records at all (it
+found the cache), #121's first record reads `"where": "disk"` (it built one),
+and the hygiene step is forbidden from pruning embeddings. A queued job can
+only be scheduled to an online runner, and the third box is `exited` — so
+there is no arrangement of these four runs in which the embedding is computed
+twice. Holding them would have bought nothing and cost the fleet an idle GPU
+between arms.
+
+Queue order is FIFO, so U=1 still lands first and the remaining three can be
+cancelled at zero cost if it turns out to rebuild `Z` after all. That is the
+check the monitor is watching for.
+
+Separately, #127 is the first run that can *publish* the cache:
+`embed-cache-v1` has **zero assets** because every earlier run carried the
+`embed_cache_sync.py` whose exit code was 0 whether or not the upload
+happened — so the caller's marker fired and the retry never did. Once it
+lands, a box that has never seen this codec pulls 5.2 GiB instead of spending
+an hour and a half.
 
 **Result.** *pending.*
 
