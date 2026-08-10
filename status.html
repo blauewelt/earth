@@ -948,14 +948,27 @@
   // the hours are already spent.
   function planChart(plan) {
     if (!plan || !(plan.steps > 0) || !(plan.lr > 0)) return "";
-    var m = { s2cfg: { steps: plan.steps, lr: plan.lr },
-              s2from: plan.at_step ? { at_step: plan.at_step, lr: plan.lr,
-                                       parent_steps: plan.parent_steps,
-                                       parent_lr: plan.parent_lr } : null };
+    // A WARM RESTART's plan is drawn on the axis of TOTAL compute, because
+    // that is the axis its sibling run is drawn on and the pair only means
+    // something compared. `steps` in the plan is the EXTRA, matching what the
+    // dispatch passes, so the axis has to be parent + extra — drawing it on
+    // 0..extra would put a 200,000-step experiment on a 140,000-step axis and
+    // silently misplace every point on it.
+    var isWarm = !!plan.warm && plan.parent_steps > 0;
+    var m = isWarm
+      ? { s2cfg: { steps: plan.steps, lr: plan.lr },
+          s2warm: { parent_steps: plan.parent_steps,
+                    parent_lr: plan.parent_lr,
+                    extra_steps: plan.steps, lr: plan.lr } }
+      : { s2cfg: { steps: plan.steps, lr: plan.lr },
+          s2from: plan.at_step ? { at_step: plan.at_step, lr: plan.lr,
+                                   parent_steps: plan.parent_steps,
+                                   parent_lr: plan.parent_lr } : null };
     var lrs = lrSegments(m);
     if (!lrs) return "";
     var W = 600, H = 90, padL = 46, padR = 10, padT = 10, padB = 18;
-    var xspan = plan.steps || 1;
+    var xspan = (isWarm ? plan.parent_steps + plan.steps : plan.steps) || 1;
+    var seamAt = isWarm ? plan.parent_steps : plan.at_step;
     var body = lrs.segs.map(function (sg) {
       var pl = sg.pts.map(function (q) {
         return (padL + (W - padL - padR) * q[0] / xspan).toFixed(1) + "," +
@@ -965,9 +978,9 @@
              'stroke-width="1.5" opacity="' + (sg.dashed ? "0.55" : "0.9") + '"' +
              (sg.dashed ? ' stroke-dasharray="5 4"' : "") + "/>";
     }).join("");
-    var seam = plan.at_step
-      ? '<line x1="' + (padL + (W - padL - padR) * plan.at_step / xspan).toFixed(1) +
-        '" y1="' + padT + '" x2="' + (padL + (W - padL - padR) * plan.at_step / xspan).toFixed(1) +
+    var seam = seamAt
+      ? '<line x1="' + (padL + (W - padL - padR) * seamAt / xspan).toFixed(1) +
+        '" y1="' + padT + '" x2="' + (padL + (W - padL - padR) * seamAt / xspan).toFixed(1) +
         '" y2="' + (H - padB) + '" stroke="#6e7681" stroke-width="1" stroke-dasharray="3 3"/>'
       : "";
     return '<div class="probe" style="margin-top:10px"><b>planned schedule</b> ' +
@@ -977,11 +990,13 @@
       '<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) +
       '" y2="' + (H - padB) + '" stroke="#30363d"/>' + seam + body +
       '<text x="' + (W - padR) + '" y="' + (H - 4) +
-      '" text-anchor="end" font-size="11" fill="#8b949e">' + fmtInt(plan.steps) + "</text>" +
+      '" text-anchor="end" font-size="11" fill="#8b949e">' + fmtInt(xspan) + "</text>" +
       "</svg>" +
       '<div class="legend"><span><span class="sw" style="background:#f0883e"></span>' +
       "learning rate, peak <b>" + Number(plan.lr).toExponential(1) + "</b>" +
-      (plan.at_step ? " from step " + fmtInt(plan.at_step) +
+      (isWarm ? " — <b>warm restart</b>, fresh cosine of " + fmtInt(plan.steps) +
+                " steps from step " + fmtInt(plan.parent_steps) : "") +
+      (seamAt ? (isWarm ? "" : " from step " + fmtInt(seamAt)) +
         ' · <span class="sw" style="background:#f0883e;opacity:.55"></span>previous run (peak ' +
         Number(plan.parent_lr).toExponential(1) + ")" : "") +
       "</span></div>";

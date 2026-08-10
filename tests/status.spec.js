@@ -158,6 +158,13 @@ test.beforeEach(async ({ page }) => {
       steps: 200000, lr: 1e-4, at_step: 60000,
       parent_run: 112, parent_steps: 60000, parent_lr: 1e-3,
     }));
+    // #106's plan is a WARM RESTART, the shape actually dispatched for E-008:
+    // `steps` is the EXTRA, so the axis must be parent + extra or a
+    // 200,000-step experiment gets drawn on a 140,000-step axis.
+    if (/ml-metrics\/plan-106\.json/.test(url)) return fulfill(JSON.stringify({
+      steps: 140000, lr: 1e-4, warm: true,
+      parent_run: 112, parent_steps: 60000, parent_lr: 1e-3,
+    }));
     if (/ml-metrics\/fleet\.json/.test(url)) {
       // $20 credit, $1/h burn, snapshot 2 h old -> $18 left, 18 h runway.
       return fulfill(JSON.stringify({
@@ -566,4 +573,27 @@ test("a warm restart is charted as a restart, not as a continuation", async ({ p
   // Two schedule segments: the parent dashed, this run solid.
   expect(await card.locator('svg polyline[stroke="#f0883e"]').count())
     .toBeGreaterThanOrEqual(2);
+});
+
+test("a warm restart's PLAN is drawn on the axis of total compute", async ({ page }) => {
+  // The plan preview exists to be checked before a run spends anything, so
+  // getting its axis wrong defeats the point. For a warm restart `steps` is
+  // the EXTRA (140,000), and the run occupies 60,000..200,000 of total
+  // compute. Drawing it on a 0..140,000 axis would misplace every point and
+  // make it incomparable with the from-scratch sibling it exists to be
+  // compared against.
+  await page.route(/ml-live-106\/metrics\.jsonl/, (route) =>
+    route.fulfill({ status: 200, contentType: "text/plain",
+                    body: JSON.stringify({ config: { steps: 60000 } }) + "\n" }));
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #106" }) });
+  await expect(card).toContainText("planned schedule");
+  await expect(card).toContainText("warm restart");
+  // The axis label is TOTAL compute, not the extra steps.
+  await expect(card).toContainText("200,000");
+  await expect(card).not.toContainText("learning rate, peak 1.0e-4 from step");
+  // Parent dashed + this run solid, and a seam between them.
+  expect(await card.locator('svg polyline[stroke="#f0883e"]').count()).toBe(2);
+  expect(await card.locator('svg line[stroke="#6e7681"][stroke-dasharray]').count()).toBe(1);
 });
