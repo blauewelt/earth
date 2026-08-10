@@ -404,6 +404,28 @@ both terms, in the same units, with no control run anywhere.
 - **The objective becomes one sentence**: reconstruct the present you were
   shown, and the future you were not.
 
+**The algebra, checked before the code** (`tests/test_e006_algebra.py`,
+2026-08-10). CLAUDE.md 6c rule 5 asks for this and the four retracted
+normalisations are why. Let `s` be the encoder's free output scale — the knob
+the model actually found, twice: `z_shrink` reached 1/40 in one run and ×250
+in another.
+
+| loss | `L(s)` | `dL/ds` | meaning |
+|---|---|---|---|
+| z-space (E-004 family) | `s²‖a−b‖²/c` | `2s‖a−b‖²/c` | strictly increasing, so descent shrinks z — **the cheat** |
+| data space (E-006) | `‖aw−b‖²/var(x)` | **exactly 0** | a gauge: nothing to police |
+
+The second row is the design in one line. Under the reparametrisation
+`z → s·z`, `decoder → decoder/s` the decoded field is unchanged, so the loss
+cannot see `s` at all. The shrinkage degeneracy is not closed, penalised or
+guarded — **there is no free direction for it to live in**. Also checked: the
+persistence baseline has `dL/d(pers) = 0` because it is not in the objective
+at all (it stays a logged diagnostic, rule 3), and `∂var(x)/∂θ = 0` for every
+model parameter θ, which is what makes a constant denominator legitimate here
+and poison in E-004. Finally `∂L/∂rec = ∂L/∂fore = 1/var(x)`, which is why a
+plain sum replaces the smooth max: neither term is privileged by a weight
+anyone chose.
+
 **The honest costs.**
 
 - One decoder pass per step, which is cheap next to the K gradient-carrying
