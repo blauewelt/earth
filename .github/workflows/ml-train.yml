@@ -54,7 +54,7 @@ on:
         description: "CHEAP probe cadence in steps (linear section probe only, ~30 s; the headline r at high cadence so a bad run shows early). 0 = off"
         default: "2000"
       window:
-        description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum, optionally mode@ref or mode@twin), on a stage-2 run unroll:N for the autoregressive unroll, or resume2:<tag> to CONTINUE an existing stage-2 head (seeded from the model-checkpoints release if the box lacks it) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
+        description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum, optionally mode@ref or mode@twin), on a stage-2 run unroll:N for the autoregressive unroll, or resume2:<tag>[@lr] to CONTINUE an existing stage-2 head at an optional new peak learning rate (seeded from the model-checkpoints release if the box lacks it) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
         default: "global"
       tensor:
         description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA builder)"
@@ -706,9 +706,14 @@ jobs:
             # because workflow_dispatch caps at 25 and this file is at the
             # ceiling. temporal.py refuses if the tag is absent or already
             # past --steps, so a typo cannot silently become a fresh run.
-            R2=""
+            R2=""; LR2=""
             case "${{ inputs.window }}" in
               resume2:*) T2="${{ inputs.window }}"; T2="${T2#resume2:}"
+                         # resume2:<tag>@<lr> — the continuation's PEAK learning
+                         # rate. Kept here with the other stage-2 modifiers
+                         # rather than smuggled into lr_decay_steps, which
+                         # would have made an input named "steps" carry a rate.
+                         case "$T2" in *@*) LR2="${T2#*@}"; T2="${T2%@*}";; esac
                          # Pull it from the release if this box does not hold it.
                          if [ ! -f "/opt/earth-cache/ckpt/${T2}.pt" ]; then
                            curl -fsSL --max-time 900 -o "/opt/earth-cache/ckpt/${T2}.pt.part" \
@@ -717,7 +722,9 @@ jobs:
                              && echo "seeded stage-2 head ${T2}.pt from the release" \
                              || echo "::warning::could not seed ${T2}.pt — temporal.py will refuse, loudly"
                          fi
-                         R2="--resume-temporal ${T2}";; esac
+                         R2="--resume-temporal ${T2}"
+                         [ -n "$LR2" ] && R2="$R2 --lr $LR2"
+                         echo "stage-2 continuation: $R2";; esac
             # BACKGROUNDED, with the same 5-minute publisher the Train and
             # joint steps use. Called inline, the publish below only ran
             # AFTER temporal.py returned — 7 hours on a 60,000-step run, so
