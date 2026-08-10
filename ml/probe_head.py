@@ -79,15 +79,22 @@ class SectionHead(nn.Module):
 
 
 def fold_fit(Xtr, ytr, Xte, in_dim, seed, steps=4000, d=64, n_blocks=0):
+    # THE READ-OUT TRAINS WHERE ITS DATA IS. codec.to(_dev) below moved the
+    # EMBEDDING pass to the GPU, but this function built its SectionHead on
+    # CPU and ran 4,000 optimiser steps per fold there — for the head probe
+    # and again for its matched raw-3x3 control. That is the 96%-CPU /
+    # 0%-GPU tail seen on #116. Following Xtr's device keeps this correct
+    # whichever way the caller supplies the tokens.
+    dev = Xtr.device
     torch.manual_seed(seed)
     g = torch.Generator().manual_seed(seed)
-    net = SectionHead(in_dim, d=d, n_blocks=n_blocks)
+    net = SectionHead(in_dim, d=d, n_blocks=n_blocks).to(dev)
     opt = torch.optim.AdamW(net.parameters(), lr=1e-3, weight_decay=1e-2)
     n = len(Xtr)
     fit = slice(0, int(0.8 * n))
     val = slice(int(0.8 * n), n)
-    Xf, yf = Xtr[fit], torch.as_tensor(ytr[fit], dtype=torch.float32)
-    Xv, yv = Xtr[val], torch.as_tensor(ytr[val], dtype=torch.float32)
+    Xf = Xtr[fit]; yf = torch.as_tensor(ytr[fit], dtype=torch.float32).to(dev)
+    Xv = Xtr[val]; yv = torch.as_tensor(ytr[val], dtype=torch.float32).to(dev)
     best, best_state, patience = np.inf, None, 0
     for s in range(steps):
         k = torch.randint(0, len(Xf), (min(32, len(Xf)),), generator=g)
@@ -231,7 +238,8 @@ def main():
             toks[i, block, :feat_dim] = z
             toks[i, block, feat_dim] = lon_frac
             toks[i, block, feat_dim + 1] = j / max(1, a.K - 1) if a.K > 1 else 0.0
-    T_ = torch.as_tensor(toks)
+    # ...and the tokens go with it, so fold_fit trains on the GPU.
+    T_ = torch.as_tensor(toks).to(_dev)
 
     pred = np.full(len(v_des), np.nan)
     years = yr[ridx]
