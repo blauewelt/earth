@@ -1,0 +1,26 @@
+{"config": {"steps": 60000, "batch": 512, "d_z": 64, "patch": 3, "d_model": 576, "n_layers": 10, "n_heads": 8, "d_dec": 768, "anomaly": true, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 40.693, "data": "family3_na025.npz", "C": 39, "T": 516, "resume": "run-62,run-63"}}
+{"resumed": {"from": "run-62.pt", "parent_tag": "run-80", "at_step": 60000}}
+{"embedding": {"pct": 0.2, "month": 1, "months": 516, "elapsed_s": 0, "eta_s": 0, "where": "disk"}}
+{"embedding": {"pct": 5.2, "month": 27, "months": 516, "elapsed_s": 295, "eta_s": 5341, "where": "disk"}}
+{"embedding": {"pct": 10.3, "month": 53, "months": 516, "elapsed_s": 600, "eta_s": 5243, "where": "disk"}}
+{"embedding": {"pct": 15.3, "month": 79, "months": 516, "elapsed_s": 906, "eta_s": 5010, "where": "disk"}}
+{"embedding": {"pct": 20.3, "month": 105, "months": 516, "elapsed_s": 1210, "eta_s": 4738, "where": "disk"}}
+{"embedding": {"pct": 25.4, "month": 131, "months": 516, "elapsed_s": 1514, "eta_s": 4450, "where": "disk"}}
+{"embedding": {"pct": 30.4, "month": 157, "months": 516, "elapsed_s": 1812, "eta_s": 4144, "where": "disk"}}
+{"embedding": {"pct": 35.5, "month": 183, "months": 516, "elapsed_s": 2114, "eta_s": 3847, "where": "disk"}}
+{"embedding": {"pct": 40.5, "month": 209, "months": 516, "elapsed_s": 2416, "eta_s": 3549, "where": "disk"}}
+{"embedding": {"pct": 45.5, "month": 235, "months": 516, "elapsed_s": 2719, "eta_s": 3251, "where": "disk"}}
+{"embedding": {"pct": 50.6, "month": 261, "months": 516, "elapsed_s": 3021, "eta_s": 2952, "where": "disk"}}
+{"embedding": {"pct": 55.6, "month": 287, "months": 516, "elapsed_s": 3323, "eta_s": 2651, "where": "disk"}}
+{"embedding": {"pct": 60.7, "month": 313, "months": 516, "elapsed_s": 3624, "eta_s": 2351, "where": "disk"}}
+{"embedding": {"pct": 65.7, "month": 339, "months": 516, "elapsed_s": 3920, "eta_s": 2047, "where": "disk"}}
+{"embedding": {"pct": 70.7, "month": 365, "months": 516, "elapsed_s": 4224, "eta_s": 1747, "where": "disk"}}
+{"embedding": {"pct": 75.8, "month": 391, "months": 516, "elapsed_s": 4527, "eta_s": 1447, "where": "disk"}}
+{"embedding": {"pct": 80.8, "month": 417, "months": 516, "elapsed_s": 4831, "eta_s": 1147, "where": "disk"}}
+{"embedding": {"pct": 85.9, "month": 443, "months": 516, "elapsed_s": 5134, "eta_s": 846, "where": "disk"}}
+{"embedding": {"pct": 90.9, "month": 469, "months": 516, "elapsed_s": 5437, "eta_s": 545, "where": "disk"}}
+{"embedding": {"pct": 95.9, "month": 495, "months": 516, "elapsed_s": 5739, "eta_s": 243, "where": "disk"}}
+{"stage2_warm_restart": {"from": "f3_s2_60k__temporal.pt", "parent_steps": 60000, "parent_lr": 0.001, "extra_steps": 140000, "lr": 0.0001, "inherited": ["model"], "reset": ["optimiser moments", "schedule position", "rng stream"], "kind": "warm restart (cosine restart), NOT a continuation"}}
+{"stage2_config": {"d_model": 192, "layers": 4, "K": 24, "steps": 140000, "params_M": 1.822, "d_z": 64, "seed": 0, "unroll": 1, "tag": ""}}
+{"stage2_step": 1400, "stage2_zmse": 0.81721, "stage2_lr": 9.997532801828673e-05, "stage2_wall_s": 528.1}
+{"stage2_step": 2800, "stage2_zmse": 0.86654, "stage2_lr": 9.990133642141403e-05, "stage2_wall_s": 1059.9}
