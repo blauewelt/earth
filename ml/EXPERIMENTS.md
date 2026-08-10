@@ -30,9 +30,26 @@ low-pass).
 <a id="e-008"></a>
 ## E-008 · Is stage 2 COMPUTE-bottlenecked? 60k → 200k as a warm restart — DISPATCHED 2026-08-10, running
 
-**Run** #117 · `head_sha` 5f98f6b43603f98db52ec833017d8aceb06f71e2 · dispatched
-11:19 UTC · `window: resume2:f3_s2_60k__temporal@1e-4`, `temporal_steps: 200000`,
+**Run** #119 · `head_sha` 85cab60ab73e23ecf0b3029cb2225f27bedd0d67 · started
+12:48 UTC · `window: resume2:f3_s2_60k__temporal@1e-4`, `temporal_steps: 200000`,
 `job_timeout: 1400`, `resume: !run-62,run-63`.
+
+**Two dead dispatches before it, both infrastructure.** #117 (11:19) cleared
+the disk guard with ~11 GB free and then spent an hour memmapping a **10.4 GiB**
+embedding cache onto a disk with 5 GiB left; it was cancelled at 45/50 GB
+rather than allowed to fill the disk, which would also have taken the runner
+offline. #118 (12:40) sat queued against an idle runner — the documented queue
+stall — and its re-dispatch as #119 needed a box stop/start before it was
+picked up. Neither says anything about the hypothesis; both are recorded
+because the log is also how the cost of an experiment is known, and E-008 has
+so far cost about three hours of wall clock and roughly forty minutes of GPU
+that produced nothing.
+
+**Note on the measurement chain.** #119 embeds in **float32, in RAM** (the
+disk could not hold the cache, so `_cache_plan` chose memory and wrote no
+cache). Runs after `9b5fc23` cache the embedding in **float16**, which shifts
+the model/persistence ratio by ~2e-7 — seven orders below the effect — but is
+a change to the chain and so is stated here rather than discovered later.
 
 **The question.** Chris asked it precisely: stage 2 is either (a) compute
 bottlenecked — 140k more steps help — or (b) parameter bottlenecked, which a
