@@ -176,7 +176,18 @@ test.beforeEach(async ({ page }) => {
     if (/ml-live-107\/metrics\.jsonl/.test(url)) return fulfill(RUN_S2_CONT);
     if (/ml-metrics\/run-103\.jsonl/.test(url)) return fulfill(RUN_S2);
     if (/ml-metrics\/run-101\.jsonl/.test(url)) return fulfill(RUN_A);
-    // #104 is mid-build: it has a phase file and no metrics yet.
+    // #104 is mid-build and it is the case that actually bit: a live branch
+    // that ALREADY has a metrics.jsonl (the `config` line is published within
+    // seconds of the job starting) but no loss points yet. The plan preview
+    // used to render only when the metrics file was entirely absent, i.e. for
+    // the first few seconds of a run and never when anyone looked.
+    if (/ml-metrics\/plan-104\.json/.test(url)) return fulfill(JSON.stringify({
+      steps: 200000, lr: 1e-4, at_step: 60000,
+      parent_run: 112, parent_steps: 60000, parent_lr: 1e-3,
+    }));
+    if (/ml-live-104\/metrics\.jsonl/.test(url)) return fulfill(
+      JSON.stringify({ config: { steps: 60000, batch: 512, d_z: 64 } }) + "\n" +
+      JSON.stringify({ resumed: { from: "run-62.pt", at_step: 60000 } }) + "\n");
     if (/ml-live-104\/phase\.json/.test(url)) {
       return fulfill(JSON.stringify({
         phase: "building the tensor",
@@ -464,4 +475,25 @@ test("a run that has not started yet shows its PLANNED schedule", async ({ page 
   expect(await card.locator('svg line[stroke="#6e7681"][stroke-dasharray]').count()).toBe(1);
   // And it still says it is queued — the plan does not pretend to be progress.
   await expect(card).toContainText("queued");
+});
+
+test("a run that has STARTED but not trained yet still shows its plan", async ({ page }) => {
+  // The regression this pins is the one Chris hit: "the dashboard has
+  // nothing", with plan-117.json published and publicly readable the whole
+  // time. planChart was reachable only from the `text === null` branch, and a
+  // live branch stops being null the moment the job publishes its config
+  // line — seconds in. So the preview existed, was correct, and was
+  // unobservable. #104 here is in_progress, has a metrics file with no loss
+  // points, and has a plan; all three of those are true of a resumed stage-2
+  // job for the first half hour of its life.
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #104" }) });
+  await expect(card).toContainText("planned schedule");
+  await expect(card).toContainText("learning rate, peak 1.0e-4 from step 60,000");
+  // The phase is still reported — the plan is added to the waiting card, not
+  // substituted for it. A chart that replaced "building the tensor" would
+  // trade one missing fact for another.
+  await expect(card).toContainText("building the tensor");
+  expect(await card.locator('svg polyline[stroke="#f0883e"]').count()).toBe(2);
 });

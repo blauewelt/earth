@@ -949,21 +949,26 @@
       "</span></div>";
   }
 
-  function waitingBody(run) {
-    return waitingCard(run, "").replace(/^<\/div>/, "").replace(/<\/div>$/, "");
-  }
-
+  // EVERY waiting state shows the plan, not just the one where the live
+  // branch has no metrics file at all. That distinction is what made the
+  // preview invisible in practice: the branch gets its `config` line within
+  // seconds of the job starting, so `text === null` — the only path that used
+  // to call planChart — was true for a few seconds at most and never when
+  // anyone looked. Chris asked for the chart to be on screen BEFORE the
+  // experiment starts and then reported, correctly, that the dashboard had
+  // nothing on it. The plan belongs to the run, not to the absence of a file.
   function waitingCard(run, headOrM) {
     var head = typeof headOrM === "string" ? headOrM : cardHead(run);
     var m = typeof headOrM === "string" ? null : headOrM;
+    var plan = planChart(run.__plan);
     if (run.status === "queued") {
-      return head + '<div class="empty">queued — waiting for a free runner. ' +
+      return head + plan + '<div class="empty">queued — waiting for a free runner. ' +
         "Nothing is building yet; the box picks this up when one frees." +
         "</div></div>";
     }
     var ph = run.__phase;
     if (ph && ph.phase) {
-      return head + '<div class="empty"><b style="color:#e6edf3">' + esc(ph.phase) +
+      return head + plan + '<div class="empty"><b style="color:#e6edf3">' + esc(ph.phase) +
         "</b>" + (ph.detail ? ' — ' + esc(ph.detail) : "") +
         (ph.at ? ' <span class="meta">(since ' + esc(ago(ph.at)) + ")</span>" : "") +
         "</div></div>";
@@ -971,7 +976,7 @@
     // No phase file: either the job predates phase reporting, or it is
     // between pushes. Say what we can without pretending to know the step.
     var noTrain = m && m.cfg && !m.cfg.steps;
-    return head + '<div class="empty">running — no training curve yet' +
+    return head + plan + '<div class="empty">running — no training curve yet' +
       (noTrain ? " (this job runs probes over an existing codec, so it has no loss curve)"
                : ". Seeding the cache, building the tensor, or still starting up") +
       ".</div></div>";
@@ -1024,7 +1029,7 @@
       var head = cardHead(run);
       if (text === null) {
         if (run.status === "completed") return "";
-        return head + planChart(run.__plan) + waitingBody(run) + "</div>";
+        return waitingCard(run);
       }
       var m0 = parseJsonl(text);
       if (!m0.loss.length) {
