@@ -10,9 +10,10 @@ worth designing against — **almost none of it announced itself**. Steps
 reported success while doing nothing. This document describes what exists, the
 failure taxonomy it has actually produced, and the invariants that follow.
 
-It is a companion to CLAUDE.md §6c (working principles) and §6d (security
-posture), not a replacement: this file is the topology and the failure
-catalogue, those are the rules.
+It is a companion to `ml/CLAUDE.md` (the rules for ML work — working
+principles, dispatch discipline, security posture) and `docs/ML_BASICS.md`
+(what the system is and what its numbers mean). This file is the topology and
+the failure catalogue; those are the rules and the science.
 
 ---
 
@@ -35,7 +36,7 @@ input's comment.
 | job workspace | one job | everything the job makes, until `actions/checkout` wipes it | that job only |
 | `/opt/earth-cache` on a box | the box | data cache (~11 GB), codec + head mirrors | jobs on that box |
 | Actions artifacts | 30 days | `pixelmae-<n>`, `probes-<n>` | anyone with repo access |
-| GitHub releases | forever | `data-cache-v1`, `model-checkpoints-v1` | anyone, no auth |
+| GitHub releases | forever | `data-cache-v1`, `model-checkpoints-v1`, `embed-cache-v1` | anyone, no auth |
 
 **Telemetry.** Three channels, all file-based, all read by a credential-free
 status page:
@@ -266,6 +267,52 @@ model, ask where that one runs. And watch the one signal that shows this —
 `gpu_util` — because nothing else does: the run reads "in progress", the runner
 "online", the box "running", and the job is eight hours of CPU.
 
+### 2g · Expensive derived work with no home
+
+Three storage layers existed for things the fleet makes — tensors, codec
+checkpoints, stage-2 heads — and the single most expensive derived artefact had
+none of them. `Z`, the frozen-codec embedding, is ~95 minutes of an RTX 4090
+and is IDENTICAL for every run that freezes the same codec. It lived on one
+rented box's disk, where the hygiene step deleted it under pressure. #112,
+#117, #119, #120 and #121 each rebuilt the same array.
+
+Worse, deleting it was rational at the time: it was the biggest reclaimable
+file on a 50 GB disk, so a blanket prune always reached for it first — and the
+rebuild is another 10.4 GiB, which puts the box straight back under the
+threshold. A treadmill, not a one-off.
+
+**Design response.** Three changes, each closing a different part of it:
+
+- `embed-cache-v1`, keyed by the **codec's weight hash** so a cache can never
+  be applied to a codec that did not produce it, chunked at 1.5 GiB under
+  GitHub's asset cap, and **verified on pull** by length and dtype (a file that
+  is too LONG — a chunk uploaded twice or reassembled out of order — maps
+  cleanly and returns real numbers for the wrong months).
+- **float16**, halving it to 5.2 GiB so it fits on the hardware we can actually
+  rent, at a measured cost of ~1e-7 of the quantity being reported.
+- The prune **keeps the newest** cache instead of deleting all of them, and
+  `temporal.py` prunes only stale hashes, which it can identify and a shell
+  step cannot.
+
+### 2h · Long work with no resume, and no way to see how far it got
+
+The embedding is the longest single phase of a stage-2 run and, until
+2026-08-10, it (a) reported nothing between "starting" and "done", and (b)
+could not be resumed. Actions will not serve logs for a running job, so the
+only way to tell "working" from "wedged" for ninety-five minutes was to watch
+the box's resident memory climb — a thermometer taped to the outside of the
+oven. And a crash at 80% cost the whole ninety-five minutes.
+
+**Design response.** It reports every 5% (month, elapsed, ETA, and whether Z is
+going to disk or RAM) into the run's own `metrics.jsonl`, which the publisher
+pushes to `ml-live-<n>` — the side channel is the only one readable while it
+matters — and the status page renders it as a progress bar. It resumes from a
+marker written **after** each flush, so the marker can only under-claim; an
+over-claiming marker would skip months holding zeros, which is a wrong answer
+with no symptom.
+
+---
+
 ## 3 · The monitor
 
 `node scripts/fleet_health.mjs` — one command, one verdict, exit non-zero when
@@ -314,6 +361,15 @@ violation cost something.
     result file is never written containing NaN — the job stops instead, so a
     fault is attributed to its cause rather than to the last thing that
     touched it.
+13. Any artefact costing more than ~10 minutes to produce leaves the box that
+    made it, keyed by something that identifies WHAT it is (a content or
+    weight hash), and is verified before it is trusted.
+14. Long work reports its own progress, and resumes where it stopped. The
+    progress marker is written after the data it describes, never before.
+15. A shared artefact is published when it EXISTS, not when the job that made
+    it ends — otherwise dependents cannot be scheduled against it.
+16. A precondition that depends only on the inputs is checked at dispatch, and
+    only a definite negative may be fatal.
 
 ---
 

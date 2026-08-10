@@ -707,141 +707,30 @@ dark build is generated from paper.tex by the string-replace block in the
 session history / make_figs --dark for figures; never hand-edit
 paper_dark.tex.
 
-### 6c. Working principles (written after the night of 2026-08-09)
+### 6c. ML work is governed by `ml/CLAUDE.md`, not by this file
 
-That session burned about six hours and a dozen dispatches and produced one
-scientific result. Everything else was self-inflicted. These are the rules
-extracted from it; they are ordered by how much they would have saved.
+The training and research half of the project moved to its own instruction
+file on 2026-08-10, at Chris's request: *"there should be two different
+CLAUDE.md — one for the frontend (the current reads like that) and one for the
+ML training/research part."*
 
-**On building.**
+The rules in THIS file are written for a static site where a bad deploy is
+reversible in ninety seconds — "deploy first, test after", the layer
+checklist, stamp-before-commit. They are wrong for work where a bad dispatch
+costs hours of rented GPU and can produce a number that looks like a result.
 
-1. **Prefer the formulation that removes a failure mode over the one that
-   guards against it.** The joint loss got three revisions of increasing
-   cleverness — a step-0 constant, a scale-free ratio, a twin reference
-   trained alongside — each *policing* a degeneracy that a different choice of
-   measurement space *abolishes*. When you are adding a correction to a
-   correction, the earlier choice is wrong, not under-specified. Stop and
-   change it.
-2. **Normalise by properties of the DATA, never by properties of the MODEL.**
-   A denominator the model can influence is a term in the objective, and it
-   will be optimised. Variance of an observed field is fixed and ungameable;
-   a frozen checkpoint's loss is not, once what was frozen is what you are
-   training. This one sentence covers the shrinkage degeneracy, the detached
-   denominator, and both circular reference constants.
-3. **Keep diagnostics out of the objective.** "Am I still as good as the model
-   I started from?" is a question to LOG, not to optimise. Smuggling it into
-   the loss is what made one experiment depend on a constant hand-copied from
-   another, and then on that other experiment's arbitrary stopping point.
-4. **Sequenced experiments are a smell.** If B needs a number from A, ask
-   whether B can measure it itself. Interdependence costs A's wall-clock plus
-   a constant that silently goes stale.
-5. **For a change to an objective, write the algebra before the code.** The
-   detached-denominator bug was a two-line sympy check away, and that check
-   is what finally settled it. For a loss, the gradient IS the specification;
-   the code is a transcription.
+| file | governs |
+|---|---|
+| `ml/CLAUDE.md` | dispatch discipline, working principles, fleet lore, security posture |
+| `docs/ML_BASICS.md` | what the ML system IS and what its numbers mean |
+| `docs/INFRASTRUCTURE.md` | the fleet's topology, failure taxonomy and invariants |
+| `ml/EXPERIMENTS.md` | what was run and what it returned |
 
-**On verifying.**
+Two things from the old §6c and §6d that apply to ALL work in this repo and are
+worth keeping in front of a frontend reader:
 
-6. **A step that can fail silently will.** Every `|| true`, `2>/dev/null` and
-   `continue-on-error` must say why it gave up. Best-effort is a promise about
-   *delivery*, not about *reporting*. Four separate steps in one night
-   reported success while doing nothing: a release seed with a mis-braced
-   variable, the same seed calling a CLI the boxes do not have, a live-metrics
-   publisher with no token, and a dispatch that silently chose a CPU box.
-7. **Assert the EFFECT, not the invocation.** The seed step printed "trying
-   release asset …" and downloaded nothing for three runs. A log line proves a
-   line of code ran; it proves nothing about the world.
-8. **Exercise the code path on a toy before spending the expensive
-   resource.** A synthetic 8×9×5 tensor and a 1-layer codec took five minutes
-   and exercised three loss modes end to end. Any hour of GPU on a path that
-   has never executed is a coin flip. `ml/train_joint.py --smoke` against a
-   generated npz is the pattern.
-9. **Build an invariant with an EXACT expected value and make the job refuse
-   if it fails.** "r_fore must read exactly 1.000000 at step 1, because both
-   branches are identical until the first update" is worth more than any
-   amount of careful reading. Prefer exact identities to threshold checks —
-   thresholds are the tripwires that killed healthy runs (#86, #91).
-9b. **A degeneracy you can NAME is one you must close or measure — never one
-    you may rank as improbable.** While designing the scale-free denominator I
-    wrote down the second cheat (inflate the persistence baseline instead of
-    shrinking z) and judged it "a real possible cheat but far less trivial
-    than pure scaling. Worth noting, not worth blocking." It was the dominant
-    direction and arrived faster than the one being fixed. If you can describe
-    the exploit in a sentence, the model can find it in a thousand steps.
-10. **Instrument the quantity that DISTINGUISHES the stories, not the one
-    that is easy to plot — and guard BOTH directions.** Reconstruction-on-a-fixed-batch looked healthy
-    through a 40× embedding collapse because it was structurally blind to it.
-    Ask: *what would look identical whether this works or fails?* — and
-    measure that. `z_shrink` turned the next occurrence into a ten-minute
-    diagnosis instead of a retracted result — and then failed on its own
-    terms: it was written for CONTRACTION and coloured red only above 1.2, so
-    the 250x EXPANSION that followed rendered in grey and looked ordinary. A
-    one-sided guard on a two-sided quantity is not a guard. Flag on
-    |log(ratio)|.
-
-**On deciding and reporting.**
-
-11. **Distinguish "it is running" from "it can answer the question."** Several
-    runs were technically healthy and could not, by construction, test their
-    own hypothesis: a 95/5 gradient split, a reference that put the forecast
-    term permanently below the reconstruction term. Before dispatch, state
-    what result would falsify the hypothesis and check the configuration can
-    produce it.
-12. **Report measurements, not intentions.** "Curves will appear shortly" was
-    said twice without reading the branch. An unchecked status claim is a
-    guess wearing a fact's clothes.
-13. **Prefer one clean run to five relaunches.** Each relaunch was locally
-    justified; collectively they meant nothing finished. When the same
-    artefact is relaunched twice, stop spending and fix the whole class of
-    problem first. An idle GPU at $0.27/h is far cheaper than a confident
-    wrong experiment.
-14. **A queued job against an idle runner is stuck, not slow.** Cancel and
-    re-dispatch (see the queue-stall note in Part 2); do not restart the boxes
-    and lose their warm caches.
-
-### 6d. Security posture of the rented GPU boxes
-
-The Vast boxes are strangers' machines. The host has root on the physical
-machine, so **treat everything on a box as readable by whoever owns it**.
-That single assumption decides everything below.
-
-**What is on a box.** The workflow's automatic `GITHUB_TOKEN` (an env var for
-the job's lifetime, repo-scoped, `contents: write` per the `permissions:`
-block, revoked by GitHub when the job ends); the Actions runner's registration
-credential under `/opt/runner`; and public data plus model checkpoints, none
-of it confidential. The runner runs as root inside its container
-(`RUNNER_ALLOW_RUNASROOT=1`).
-
-**What is NOT, and must never be.** The user's PAT (`/home/claude/.gh_pat`
-lives in the session sandbox), the Vast API key, and the CMEMS credentials.
-Nothing that outlives a job and nothing that reaches another repo or account.
-
-**The registration is a bigger exposure than the token.** The job token dies
-with the job. The registration persists on disk, survives stop/start, and is
-NOT `--ephemeral` — so anyone who lifts it can act as a runner for this repo
-indefinitely, receiving jobs and minting a fresh `GITHUB_TOKEN` each time.
-Mitigations, cheapest first: pass `--ephemeral` when creating a box (one
-registration per job); remove the runners from the repo
-(`scripts/fleet_rm_runner.mjs`) when the fleet will be idle for a long stretch
-— note this breaks the cheap stop/start loop, since a started box reconnects
-with a credential GitHub no longer honours and the onstart script skips
-re-registration when `/opt/runner/.runner` exists.
-
-**The one line of defence that must never move.** Self-hosted runners on a
-PUBLIC repo are the classic dangerous configuration: a fork's pull request can
-execute arbitrary code on your hardware. We are safe only because
-`ml-train.yml` is `workflow_dispatch`-only and dispatch requires repo write
-access. `pages.yml` does carry `pull_request`, but runs on `ubuntu-latest`.
-**Never add `pull_request`, `issue_comment`, `workflow_run` or `schedule` to
-ml-train.yml, and never point another triggered workflow at `runs-on: gpu`.**
-That change would look harmless in review and would hand code execution on the
-boxes, plus the job token, to anyone who opens a PR.
-
-**Blast radius if a job token does leak.** Repo-scoped `contents: write`: push
-to any branch including main, delete branches, cut releases. Not other repos,
-not the account. Keep `permissions:` at `contents: write` and add nothing;
-`contents` is needed only for the `ml-live-*` side channel and the `ml-metrics`
-archive.
+- **Assert the EFFECT, not the invocation.** A log line proves a line of code
+  ran; it proves nothing about the world.
 
 ### 7. Documentation set
 
@@ -849,7 +738,10 @@ archive.
 |---|---|
 | `CLAUDE.md` | Standing instructions + holistic record (this file — keep current) |
 | `README.md` | Quick start, repo layout, testing. Opens with a link to the live demo. Keep its counts (catalog size, `globe`/`amoc` flags, spec count) and feature list current — they drift silently. Hero image: `node scripts/screenshot.js` (see the header comment for the sandbox invocation); re-shoot it when the UI changes visibly |
-| `docs/INFRASTRUCTURE.md` | The ML fleet: topology, the failure taxonomy it has actually produced, the invariants that follow, and how to re-run an eval from the release with no GPU. Written 2026-08-10 after a session in which infrastructure cost ~6 h and produced 1 result |
+| `ml/CLAUDE.md` | **Standing instructions for all ML work** — dispatch discipline, working principles, fleet lore, security posture. This file does not govern `ml/` |
+| `docs/ML_BASICS.md` | What the ML system is and what its numbers mean: architecture, protocol, the probe ladder, baselines, loss-design principles, settled negatives |
+| `docs/INFRASTRUCTURE.md` | The ML fleet: topology, the failure taxonomy it has actually produced, the invariants that follow, and how to re-run an eval from the release with no GPU |
+| `ml/EXPERIMENTS.md` | Every experiment, its hypothesis at dispatch, its result and its cost |
 | `docs/PRIMER.pdf` | Background knowledge (GIBS, tiles, colormaps, product levels, climatologies). Rebuild: `python3 scripts/build_primer.py` |
 | `docs/CATALOG.md` + `data/catalog.json` | The 248-record open-data catalog (human + machine readable) |
 | `docs/COMBINING_DATASETS.md` | Which datasets measure the same quantity; sound combinations |
@@ -859,6 +751,11 @@ archive.
 ---
 
 ## Part 2 · Domain lore (hard-won facts — do not relearn)
+
+- **ML fleet lore has moved.** Everything about the Vast boxes, the Actions
+  workflow, checkpoints, embeddings and stage-2 resume semantics now lives in
+  `ml/CLAUDE.md` §7, next to the rules that govern that work. What remains
+  below is globe-app lore.
 
 - **GIBS tiling quirk.** The EPSG:4326 pyramid starts at 2×1 tiles (level 0),
   3×2 (level 1); resolution is 0.5625/2^L °/px, 512 px tiles. Edge tiles must
@@ -922,16 +819,6 @@ archive.
   Symmetrically on output: a mean below the palette floor renders transparent,
   else `forward()` clamps drizzle-of-drizzles up to the first colour and the
   whole ocean tints "light rain".
-- **`workflow_dispatch` allows at most 25 inputs, and a 26th breaks the WHOLE
-  workflow.** ml-train.yml sits exactly at the ceiling. Exceeding it does not
-  fail the new input gracefully — GitHub refuses to parse the file, so every
-  dispatch 422s ("you may only define up to 25 `inputs`") and the push shows
-  up in the Actions list as a failed run named after the file path with no
-  jobs, which reads like a broken runner rather than a broken file. Measured
-  2026-08-09 by adding a 26th (`head_probe`) and taking the workflow down.
-  When a new knob is needed, ENCODE IT IN AN EXISTING INPUT rather than
-  adding one: `--resume !run-62` means "require this checkpoint", parsed in
-  train.py. Count the inputs before pushing a workflow edit.
 - **A step that reports success is not evidence it did anything.** Three
   variants bit the ML fleet in two days, all in steps written to be
   best-effort:
@@ -949,119 +836,6 @@ archive.
     livelock it was written to cure was still live and killed #96/#97/#98.
   - `2>/dev/null` on a command whose failure you are branching on hides the
     one line that explains the branch. Keep stderr unless you have read it.
-- **Size a guard from the allocation it guards, and let it CHOOSE a resource.**
-  The stage-2 embedding cache is one allocation of **10.4 GiB** (516 months ×
-  84,405 ocean pixels × 64 dims × 4 bytes — every factor known before the
-  write). `ml-train.yml` pruned below **8 GB** free, a threshold under the
-  size of the thing it protects, so it passed and the write failed. Worse,
-  `np.lib.format.open_memmap(mode="w+")` creates a **sparse** file: the space
-  is claimed instantly and allocated page by page over the ~50 minutes the
-  embedding takes, so there is no early failure — the box dies with the cache
-  nearly built, and on a 50 GB box a full disk takes the *runner* offline too.
-  #117 cleared the check with ~11 GB free and spent an hour walking into the
-  wall. Underneath sat the real error: the memmap exists because a 10.4 GiB Z
-  beside a 10.1 GiB tensor OOM-killed a **7 GB** box (2026-08-07), and the
-  boxes rented since have **126 GB of RAM** against a 50 GB disk — it was
-  writing to the scarce resource because the abundant one used to be scarce.
-  `temporal.py::_cache_plan` now takes the disk if the cache fits (worth ~50
-  min to the next run on that box), RAM if it does not, and refuses with both
-  numbers if neither works; headroom scales with the write, capped, because a
-  flat 3 GiB reserve refuses a 5 MB cache on a small box and that is the
-  constant refusing, not the risk. `tests/test_embed_cache_room.py`.
-- **A tensor's channels do not all start on the same date, so a mask taken
-  from month 0 is not the ocean.** family-3's channel 0 is `cur_speed`
-  (GLORYS, from 1993-01) against a tensor that starts 1982-01, so
-  `isfinite(X[0, sec_y, :, 0])` selected **zero** pixels, `z.mean(0)` over an
-  empty section returned NaN, and `probe_sequence.json` came back all-NaN
-  across the whole K sweep — twice (#101, #116), logged both times as "the
-  sequence probe has a bug of its own". It was a masking bug, and the
-  seasonal-only floor stayed finite precisely because it never touches the
-  embedding, which is what made it look like a probe fault. Select from
-  `OBS[..., 0].any(axis=0)`, the mask `temporal.py` and `probe_head.py`
-  already use. **Never write NaN into a results file** — stop, so the fault is
-  attributed to its cause. `tests/test_section_mask.py`.
-- **A rerun is not a resample.** `probe_head.py`'s per-fold seeds were the
-  literal tuple `(0,1,2)` with no argument to change them and no seed in the
-  filename, so #116 — dispatched as "head probe, seed B, so 0.662 stops being
-  single seed" — recomputed a deterministic estimator, returned 0.662 /
-  [0.557, 0.745] / 2.10 Sv bit-identically, and would have overwritten seed A
-  with itself. Before dispatching a repeat, check the code has a knob for the
-  thing you intend to vary. And note a second seed was the wrong instrument
-  anyway: two probes scored on the same months and folds differ by a PAIRED
-  quantity, so `scripts/paired_probe.py` resamples years and rescores both,
-  which resolves a gap their overlapping marginal CIs cannot.
-- **A Vast instance's runner NAME is inside its `onstart` script, nowhere
-  else.** The runner names (`gpu-box-45318655`) are stale instance IDs from
-  whenever the box was created, so they do NOT match the current instance IDs
-  and the API has no field joining them — every box carries the same
-  `label: earth-runner`. Before stopping a box, recover the mapping with
-  `(i.onstart||"").match(/--name[= ]"?([^"\s\\]+)/)` over
-  `/api/v1/instances/`, or you will stop the one that is mid-run. Measured
-  2026-08-09: instance 47160352 -> gpu-box-47094145, 47160357 ->
-  gpu-box-45318655, 47171781 -> gpu-box-35586926.
-- **No stage-2 head published before 2026-08-10 can be CONTINUED**, and the
-  two modes are now separate dispatches. `f3_s2_60k__temporal.pt`,
-  `f3_s2_24k__temporal.pt` and every `rescued-orphan-temporal-*` are
-  `{args, model}` — measured, all of them. `--resume-temporal` therefore
-  refuses them (correctly: weights alone reset Adam's moments and the LR
-  schedule, which is a warm restart wearing a continuation's name), and #119
-  discovered this **after 93 minutes of embedding**, then reported the job as
-  a success. For an explicit warm restart dispatch `window: warm2:<tag>[@lr]`
-  with `temporal_steps` as the **EXTRA** steps, not the total; it logs
-  `stage2_warm_restart` naming what was reset. `resume2:` stays strict and
-  becomes usable once a run produces a head carrying `opt/sched/step`.
-  `scripts/precheck_stage2_head.py` now answers the question in under a second
-  before the tensor loads — and only its two DEFINITE verdicts are fatal,
-  because `run:` blocks execute under `bash -e` and a non-zero exit would take
-  the whole probe ladder with it.
-- **A Vast instance's disk CANNOT be resized — and the API lies about it.**
-  Measured 2026-08-10 on two stopped instances: `PUT /instances/<id>/` with
-  `{"disk": 80}` and with `{"disk_space": 80}` each return HTTP 200
-  `{"success": true}` and change nothing; `disk_space` still reads 50
-  afterwards, on both v0 and v1. `scripts/gpu_box.mjs resize` therefore
-  refuses with that measurement rather than issuing a call that would appear
-  to work. To get more disk, CREATE a box with a larger `DISK` and destroy the
-  old one — the data cache re-seeds from the `data-cache-v1` release, so a
-  fresh box costs a download, not a rebuild. Note the box size is a real
-  design constraint: 50 GB holds a ~15 GB torch image, ~11 GB of tensors and a
-  10.4 GiB embedding cache with nothing to spare, which is what produced the
-  delete-rebuild-delete treadmill described above.
-- **Stopping is the cheap idle state.** `node scripts/gpu_box.mjs stop <id>`
-  keeps the disk (and therefore the ~11 GB data cache and the box-local
-  checkpoint mirror) and the runner registration, which reconnects on
-  `start`. It drops a box from ~$0.27/h to storage only. Do it whenever
-  nothing is queued — an idle GPU is pure waste, and CLAUDE.md 6c already
-  says an idle GPU is cheaper than a wrong experiment, not that it is free.
-- **Size a stage-2 run against the job timeout before dispatching it.**
-  Measured on #88: 0.419 s/step for a 192x4 head at K=24. So 24,000 steps is
-  ~2.8 h of temporal plus ~0.9 h for the rest of the probe ladder, inside the
-  350-minute cap; 60,000 steps needs ~7.9 h and dies with nothing. #111 was
-  cancelled for exactly this. Note `temporal.py` anneals
-  `CosineAnnealingLR(a.steps)`, so each budget converges on its own schedule
-  and two budgets are two converged points, not a snapshot and a later
-  snapshot. `train_joint.py` has NO scheduler, which is why #101's curve never
-  flattened.
-- **A queued Actions job can wedge, and a fresh dispatch is the fix.** On
-  2026-08-09 runs #105/#106 sat `queued` for 22 minutes while the runners API
-  reported two of the three boxes `online` and `busy: false`, and the jobs'
-  `labels` matched (`gpu`). Nothing was holding them: the runs they replaced
-  had been cancelled, and the third box was busy with an unrelated job that
-  had started while all three were occupied. Cancelling both and dispatching
-  the identical inputs again had both picked up **within 90 seconds**. So
-  when a job is queued against a runner that GitHub itself says is idle,
-  do not keep waiting and do not restart the Vast boxes (which costs the
-  warm caches for nothing) — cancel and re-dispatch. Check
-  `runner_name`/`status` on the jobs endpoint, not the run-level status,
-  which lags: a job can read `queued` at the run level for minutes after it
-  has actually started.
-- **`runner` defaults to `gpu`, and omitting it used to mean CPU.** `runs-on:
-  ${{ inputs.runner || 'ubuntu-latest' }}` with a dispatch JSON that left the
-  field out sent run #99 to a free GitHub-hosted 4-core box, where the install
-  step happily picks the CPU torch wheel and a 40M codec "trains". Nothing in
-  the run's output says wrong-hardware; the only tell is the runner name in
-  the jobs API. The default is now `gpu`, so a down fleet leaves the job
-  visibly queued instead. **Check `runner_name` on every dispatch you care
-  about** — `node /tmp/steps.mjs <runId>` style, or the jobs endpoint.
 - **NEVER GUESS WHAT AN ARCHIVE SERVES — ASK IT.** GIBS publishes each layer's
   exact time domain at
   `/wmts/epsg4326/best/1.0.0/{layer}/default/{tms}/all/all.xml`: a
@@ -1337,20 +1111,7 @@ absolute values under a delta; colormap parser skipping single-value entries;
 salinity invisible (current-month composite unpublished); mangled Cesium class
 names breaking test assertions; `_zoomFactor` no-op.
 
-**Deferred / open follow-ups (ML):** build E-006 (the data-space loss) with a
-synthetic smoke test before any dispatch; **a trained stage-2 head is currently
-unrecoverable** — `train_joint.py` writes `temporal_joint.pt` into the runner
-workspace, which is in neither artifact path and is not mirrored to
-`/opt/earth-cache`, so the next checkout on that box erases it, and there is no
-`--resume-temporal` nor any saved optimiser state (this is why #101's 12k-step
-head could not be continued); run `scripts/paired_probe.py` over the head and
-its raw-3×3 control once a run has written the per-month arrays, and only then
-decide whether the +0.034 gap is quotable; draw a genuine second seed with
-`probe_head.py --seed-base 3`; re-score #88/#93 through `probe_kfold` rather
-than the 36-month split; unroll U=2 and U=8. Watch disk on the Vast boxes — 50
-GB against a 10.4 GiB embedding cache, and a full disk takes a runner offline.
-(`probe_sequence`'s all-NaN K sweep is FIXED — it was an empty section, not a
-probe bug; see Part 2.)
+**Deferred / open follow-ups (ML):** moved to `ml/CLAUDE.md` §8, alongside the rules that govern that work.
 
 **Deferred / open follow-ups:** OC-CCI & SMOS as first-class grid layers;
 multi-channel AMOC state vector; catalog `family` field for machine-readable

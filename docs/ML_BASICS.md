@@ -1,0 +1,300 @@
+# ML basics — what this programme is, and what its numbers mean
+
+Chris, 2026-08-10: *"note all meanwhile learnings and design decisions into an
+ML_BASICS.md."*
+
+This is the conceptual layer. It answers "what are we building, what does a
+result mean, and which decisions are already settled" — so that a new session
+does not re-derive them, and does not re-run experiments the log already
+answered.
+
+Its siblings:
+
+| file | answers |
+|---|---|
+| `ml/CLAUDE.md` | how to WORK here — the rules, the traps, the dispatch discipline |
+| `ml/EXPERIMENTS.md` | what was RUN and what it returned, newest first |
+| `docs/INFRASTRUCTURE.md` | the fleet, its failure taxonomy, its invariants |
+| this file | what the system IS, and how to read its numbers |
+
+---
+
+## 1 · The question
+
+Can a self-supervised model of the ocean's state carry enough information to
+predict large-scale circulation — specifically AMOC transport at 26.5°N
+(RAPID), and its relatives (Florida Current, MOVE, OSNAP, SAMBA)?
+
+The programme is deliberately structured so that "the embedding knows this" and
+"a read-out with enough capacity can learn this from anything" are separable
+claims. Almost every design decision below exists to keep that separation
+honest.
+
+---
+
+## 2 · The architecture, and why it is two stages
+
+**Stage 1 — PixelMAE, a codec over pixel-months.** Each ocean pixel at each
+month is encoded from its channels (optionally its 3×3 neighbourhood) plus a
+context vector (sin/cos month, lat, lon) into `z ∈ R^64`. Training is masked
+reconstruction: hide a fraction of channels, predict them back. The codec never
+sees the AMOC target.
+
+**Stage 2 — a causal transformer over each pixel's embedding sequence.** Given
+`z_{t-K+1..t}` it predicts `z_{t+1}`. The codec is **frozen**; only the
+temporal head trains.
+
+**Why frozen, and why two stages.** If the codec trained against the forecast
+objective, "the representation improved" and "the dynamics model improved"
+would be one number, and neither could be attributed. Freezing makes stage 2's
+gain purely a dynamics result, and makes every stage-2 run over the same codec
+directly comparable. It also makes the embedding a reusable artefact — which is
+what lets `Z` be cached and shared (§8).
+
+The joint variant (`ml/train_joint.py`) deliberately breaks the freeze and is a
+separate line of work, currently blocked on E-006 (§7).
+
+**The 40M anchor** is the reference geometry: patch 3, `d_model` 576, 10
+layers, 8 heads, `d_dec` 768, `d_z` 64 → **40.69M** parameters at C=39.
+
+---
+
+## 3 · The data, and a trap that has cost two misdiagnoses
+
+`family3_na025.npz` — the quarter-degree North Atlantic tensor.
+
+| | |
+|---|---|
+| shape | `X[T=516, H=281, W=481, C=39]`, months 1982-01 → 2024-12 |
+| ocean cells | **84,405** (channel 0, any month) |
+| channels | `cur_speed`, `log_mld`, `ssh`, `rg_t*` (17 depths), `rg_s*` (17), `tau_x`, `tau_y`, `tau_x_std`, `tau_y_std` |
+
+**The channels do not all start when the tensor does.** Channel 0 is
+`cur_speed` (GLORYS, from 1993-01) against a tensor beginning 1982-01. Any mask
+taken from month 0 is therefore empty, and code that selects a section that way
+gets **zero pixels** — after which `mean(axis=0)` over nothing is NaN, silently,
+everywhere downstream. That produced an all-NaN `probe_sequence.json` twice
+(#101, #116) and was logged both times as "the sequence probe has a bug of its
+own". It was a masking bug.
+
+Select from `OBS[..., 0].any(axis=0)` — observed at *any* time — which is the
+mask `temporal.py` and `probe_head.py` already use, so every rung of the ladder
+scores the same 265-pixel section.
+
+**Anomaly space.** All work is in anomalies: the per-month climatology is
+removed using TRAIN YEARS ONLY and each dynamic channel is standardised. State
+space was disqualified early — embeddings there were seasonally redundant and
+the K-sweep lost skill as history was added.
+
+---
+
+## 4 · The protocol
+
+Everything below exists because a plausible number is easy and a defensible one
+is not.
+
+- **Blocked holdouts, never random.** Held-out YEARS plus a held-out
+  mid-Atlantic LONGITUDE block, both inherited from the codec checkpoint so
+  stage 1 and stage 2 cannot disagree about what was held out.
+- **The target is deseasonalised** with a climatology computed from train years
+  only. The embedding receives month-of-year as an input, so any seasonal
+  signal left in the target is free points.
+- **A seasonal-only floor is always reported** — a ridge from `(sin, cos)`
+  month alone. On the raw target it shows how much of a correlation was
+  calendar; on the deseasonalised target it should sit near zero by
+  construction, and if it does not, something is wrong with the split.
+- **Lambda is chosen on a train-internal validation tail.** Held-out years are
+  touched exactly once per configuration.
+- **The one instrument we argue from is `probe_kfold.py`** — year-blocked
+  k-fold with a block bootstrap over years. In-training "light probe" values
+  are single-split and must be labelled as such wherever quoted.
+
+**Why year blocks and not months.** AMOC transport is autocorrelated over
+months (`r_lowpass18 = 0.82`). An i.i.d. month bootstrap would treat ~240
+months as ~240 independent observations and report an interval several times
+too tight. n = 240 months is roughly **68 effective DOF**, and about **9** after
+an 18-month low-pass.
+
+---
+
+## 5 · The probe ladder — each rung isolates one capability
+
+| rung | what it adds | file |
+|---|---|---|
+| pooled ridge | what is LINEARLY accessible in the mean-pooled embedding | `probe_kfold.py` |
+| MLP | + pointwise nonlinearity | `probe_kfold.py --probe mlp` |
+| attention head | + spatial structure ACROSS the section (no pooling) | `probe_head.py` |
+| raw / raw-3×3 | the same head on RAW channels — the end-to-end control | `probe_head.py --raw [--raw-patch]` |
+
+The head rung exists because geostrophic transport is an east-minus-west
+density difference across the section, and mean-pooling destroys exactly that.
+If head ≈ MLP, pooling loses nothing and the representation is the limit; if
+head ≫ MLP, the embedding carries section structure the pooled probes cannot
+reach.
+
+The raw control is what separates "the codec knows this" from "any read-out
+with spatial structure knows this". Match it to the codec's receptive field:
+pair a patch-3 codec against `--raw-patch`, not bare `--raw`.
+
+**Comparing two rungs needs a PAIRED test, not two intervals.** Two probes
+scored on the same months and the same year blocks share most of their error,
+so their marginal CIs overlap far more than their difference varies.
+`scripts/paired_probe.py` resamples YEARS and rescores BOTH probes on the same
+resampled years; that interval, not the overlap of two others, is what decides
+whether a gap is real. This is why `probe_head.py` dumps its out-of-fold
+predictions.
+
+---
+
+## 6 · Baselines, and what a number means
+
+| quantity | value |
+|---|---|
+| wind-stress-only ridge, 1° tensors | **0.531** |
+| wind-stress-only ridge, quarter-degree | **0.568** |
+| RAPID monthly σ | 2.79 Sv |
+| n | 240 months (~68 effective DOF) |
+
+A correlation without its baseline is not a result. The wind-only ridge is the
+one that matters most: much of AMOC variability at monthly scale IS wind, so a
+probe that fails to beat it has demonstrated nothing about ocean state.
+
+For stage 2 the reported figure is a **ratio to persistence** —
+`z_mse_model / z_mse_persistence` and its data-space twin — because a raw MSE
+in `z` has no interpretable scale. 1.0 means "no better than assuming next
+month equals this month".
+
+---
+
+## 7 · Loss design — four retractions and what settled it
+
+Between 2026-08-09 and 2026-08-10 four normalisations of the joint objective
+were built and retracted. They are worth understanding as one mistake, not
+four.
+
+**The mistake:** the forecast term was scored in `z` — a space the encoder
+authors. Reconstruction error is measured against observed channels, which are
+fixed and external. Forecast error measured against `z` has no fixed units,
+because the encoder can rescale `z` freely. Every denominator tried was an
+attempt to referee a quantity with no scale, and the model found the free
+direction each time: `z_shrink` reached 1/40 in one run and ×250 in another.
+
+**E-006, the resolution:** decode the forecast back into the data before
+scoring it.
+
+    L = MSE(x̂_t^masked, x_t) / var(x)  +  MSE(x̂_{t+1}, x_{t+1}) / var(x)
+
+**The algebra, checked before the code** (`tests/test_e006_algebra.py`), with
+`s` the encoder's free output scale:
+
+| loss | `L(s)` | `dL/ds` |
+|---|---|---|
+| z-space | `s²‖a−b‖²/c` | `2s‖a−b‖²/c` — descent shrinks `z` |
+| data space | `‖aw−b‖²/var(x)` | **exactly 0** |
+
+Under `z → s·z`, `decoder → decoder/s` the decoded field is unchanged, so the
+loss cannot see `s`. The degeneracy is not closed or policed — **there is no
+free direction for it to live in.** Also pinned: `dL/d(persistence) = 0`
+(the baseline is not in the objective at all), `∂var(x)/∂θ = 0` for every model
+parameter, and `∂L/∂rec = ∂L/∂fore`, which is why a plain sum replaces the
+smooth max.
+
+**The principles that generalise** (also in `ml/CLAUDE.md`):
+
+1. Normalise by properties of the DATA, never of the MODEL. A denominator the
+   model can move is a term in the objective and will be optimised.
+2. Keep diagnostics out of the objective. "Am I still as good as the model I
+   started from?" is a thing to LOG.
+3. Prefer the formulation that removes a failure mode to the one that guards
+   against it. Adding a correction to a correction means the earlier choice was
+   wrong.
+4. A degeneracy you can NAME must be closed or measured, never ranked as
+   improbable. The second cheat (inflating the persistence baseline) was
+   written down as "worth noting, not worth blocking" and then arrived faster
+   than the one being fixed.
+
+---
+
+## 8 · The embedding cache
+
+`Z[T, P, d_z]` — every ocean pixel at every month through the frozen codec.
+**10.4 GiB at float32, 5.2 GiB at float16**, and ~95 minutes of an RTX 4090
+(43.5M encoder forwards).
+
+- **It is shared.** Every stage-2 run over the same frozen codec needs the
+  identical array. #112, #117, #119, #120 and #121 each rebuilt it.
+- **It is keyed by the CODEC'S WEIGHT HASH**, not the run name. A run-keyed
+  cache poisoned runs #10/#11: the shape check passed, the embeddings belonged
+  to a different codec, and two stage-2 models trained on `z` their own decoder
+  did not speak — healthy z-space skill, catastrophic decoded skill.
+- **It is float16**, and the precision cost is measured, not assumed: 4.3e-8
+  MSE on unit-scale embeddings, ~1e-7 of the z-MSE reported (0.39–0.82), and
+  1.8e-7 on the model/persistence ratio because the error is common-mode.
+- **It is resumable.** A marker beside the `.partial` records `months_done`,
+  written AFTER the data is flushed so it can only under-claim. An
+  over-claiming marker would skip months holding zeros — real numbers, wrong
+  months, no symptom.
+- **It is published** to the `embed-cache-v1` release the moment it exists, in
+  1.5 GiB chunks, and verified on pull by length and dtype.
+
+---
+
+## 9 · Learning-rate schedules, and why the horizon matters
+
+`CosineAnnealingLR(T_max=steps)` bakes the total step count into the rate. That
+one choice produced two distinct problems:
+
+- **A silent bug.** Reload a schedule while asking for a larger total and it
+  believes it has finished: `lr = 0.0`, hours of updating nothing, every status
+  reading success.
+- **A comparability tax.** A 6,000-step run and a 200,000-step run sit at
+  different rates at every shared step, so they are two experiments sharing an
+  architecture rather than a prefix and its extension. This is why E-007's
+  points must each be described as "its own converged cosine", and why a 200k
+  point cannot be a continuation of a 60k one.
+
+`--lr-schedule invsqrt` (Noam) makes `lr(s)` a pure function of `s`: resume
+stops being a case, and two budgets become a prefix and its extension.
+
+**The trade, stated because it is one.** Cosine anneals to zero and therefore
+CONVERGES at a known point, which is what makes "the 60k result" a settled
+number. invsqrt never reaches zero, so results are "at step N". For a question
+of the form "does more compute help?" that is the better shape, but switching
+deserves its own experiment (one budget, both schedules).
+
+---
+
+## 10 · Resume semantics: three different things
+
+| | what carries over | what it answers |
+|---|---|---|
+| **continuation** (`--resume-temporal`) | weights, Adam moments, schedule position, RNG | the same trajectory, uninterrupted |
+| **warm restart** (`--init-temporal`) | weights only, fresh cosine | does more compute on these weights help? |
+| **from scratch** | nothing | a comparable point on a curve of from-scratch runs |
+
+Loading weights alone and calling it a continuation is the error the guard
+exists to prevent — Adam's moments take hundreds of steps to rebuild and the
+schedule position is lost, so the trajectory differs. `tests/test_resume_temporal.py`
+proves each dropped piece matters, and that a warm restart lands somewhere
+other than a continuation.
+
+**Every head published before 2026-08-10 is `{args, model}` only** — measured
+on `f3_s2_60k`, `f3_s2_24k` and every rescue mirror. None can be continued. The
+snapshots written from 2026-08-10 onward carry `opt`/`sched`/`step` and are the
+first that can.
+
+---
+
+## 11 · Settled — do not re-run without a reason
+
+- **State-space embeddings**: seasonally redundant; anomaly space only.
+- **Capacity on the quarter-degree tensor (E-003)**: null.
+- **Training the codec longer (E-002)**: null.
+- **Every joint-loss variant before E-006**: retracted, see §7.
+- **A "second seed" for `probe_head`**: the seeds were hardwired `(0,1,2)` and
+  averaged, so a rerun reproduces the estimator bit-for-bit rather than
+  resampling it. Use `--seed-base`, and prefer the paired test (§5) — it is the
+  right instrument, and a second seed never was.
+- **E-007's shape**: forecast skill still improving at 60k and decelerating,
+  while the RAPID probe plateaued at 24k (0.319 → 0.321). E-008 tests whether
+  that plateau is a compute artefact.
