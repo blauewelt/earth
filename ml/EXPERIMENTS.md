@@ -69,13 +69,39 @@ architecture will help.
 
 **This is a WARM RESTART, not a fourth point on E-007's curve.** Every E-007
 point ran its own cosine from peak to zero over its own budget, so the three
-are three converged models. #117 instead reloads the 60k model, optimiser
-moments and RNG stream, then **rebuilds** the cosine over 200,000 steps at
-one tenth the original peak (1e-3 → 1e-4) positioned at step 60,000. It is
-therefore comparable to E-007 as an endpoint and **not** comparable as a
-trajectory — the LR it sees from 60k onward is nothing like what a
-straight-through 200k run would have seen. The chart on the status page draws
-both schedules for exactly this reason.
+are three converged models. This run instead takes the 60k head's **weights**
+and trains 140,000 more steps on a fresh cosine at one tenth the original peak
+(1e-3 → 1e-4). It is comparable to E-007 as an endpoint and **not** comparable
+as a trajectory.
+
+**Correction (2026-08-10, after #119).** The first version of this entry said
+the run "reloads the 60k model, optimiser moments and RNG stream". That was
+false, and #119 is how it was found out: `--resume-temporal` refused after
+93 minutes of embedding, with
+
+> `f3_s2_60k__temporal.pt` predates optimiser-state saving (missing
+> `['opt', 'sched', 'step']`) … a warm restart wearing a continuation's name.
+> Refusing.
+
+Checked against the release afterwards: `f3_s2_60k__temporal.pt`,
+`f3_s2_24k__temporal.pt` and every rescue mirror are `{args, model}` — **no
+published head can be continued at all.** The optimiser-state mirror landed on
+2026-08-10 and no stage-2 run has succeeded since, so the first continuable
+head will be the one this experiment produces.
+
+The guard did its job: it refused rather than silently reset Adam's moments and
+report the result as a continuation. But note what it cost — the refusal fires
+*after* the embedding, at the point of use, when it could have fired at the
+point of dispatch. The checkpoint's contents are knowable in the first ten
+seconds of the job.
+
+So E-008 runs as an explicit warm restart: `--init-temporal
+f3_s2_60k__temporal --steps 140000 --lr 1e-4`, where `--steps` is the EXTRA,
+not the total. It logs `stage2_warm_restart` rather than `stage2_resumed`, and
+names what was reset (moments, schedule, RNG), so no later reader has to take
+this paragraph's word for it. `tests/test_resume_temporal.py` pins that a warm
+restart both trains and lands somewhere other than a straight-through run —
+which is the whole reason the two get different flags.
 
 Planned LR, for checking against the live series: 60,000 → **7.939e-05**;
 80,000 → 6.545e-05; 120,000 → 3.455e-05; 160,000 → 9.549e-06; 200,000 → 0.

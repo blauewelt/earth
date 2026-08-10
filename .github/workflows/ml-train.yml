@@ -54,7 +54,7 @@ on:
         description: "CHEAP probe cadence in steps (linear section probe only, ~30 s; the headline r at high cadence so a bad run shows early). 0 = off"
         default: "2000"
       window:
-        description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum, optionally mode@ref or mode@twin), on a stage-2 run unroll:N for the autoregressive unroll, or resume2:<tag>[@lr] to CONTINUE an existing stage-2 head at an optional new peak learning rate (seeded from the model-checkpoints release if the box lacks it) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
+        description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum, optionally mode@ref or mode@twin), on a stage-2 run unroll:N for the autoregressive unroll, resume2:<tag>[@lr] to CONTINUE an existing stage-2 head (needs optimiser state: only heads written after 2026-08-10 have it), or warm2:<tag>[@lr] for a WARM RESTART from its weights alone with a fresh cosine, where temporal_steps is the EXTRA steps rather than the total (both seeded from the model-checkpoints release if the box lacks the file) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
         default: "global"
       tensor:
         description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA builder)"
@@ -730,7 +730,7 @@ jobs:
             # because workflow_dispatch caps at 25 and this file is at the
             # ceiling. temporal.py refuses if the tag is absent or already
             # past --steps, so a typo cannot silently become a fresh run.
-            R2=""; LR2=""
+            R2=""; LR2=""; MODE2=""
             case "${{ inputs.window }}" in
               resume2:*) T2="${{ inputs.window }}"; T2="${T2#resume2:}"
                          # resume2:<tag>@<lr> — the continuation's PEAK learning
@@ -746,9 +746,36 @@ jobs:
                              && echo "seeded stage-2 head ${T2}.pt from the release" \
                              || echo "::warning::could not seed ${T2}.pt — temporal.py will refuse, loudly"
                          fi
-                         R2="--resume-temporal ${T2}"
+                         R2="--resume-temporal ${T2}"; MODE2=resume
                          [ -n "$LR2" ] && R2="$R2 --lr $LR2"
-                         echo "stage-2 continuation: $R2";; esac
+                         echo "stage-2 continuation: $R2";;
+              # warm2:<tag>[@lr] — WARM RESTART: the WEIGHTS only, then a
+              # fresh cosine for temporal_steps MORE steps. A separate mode
+              # from resume2 because they are separate experiments, and
+              # because no head published before 2026-08-10 carries optimiser
+              # state at all: every one is {args, model}, so a continuation
+              # from them is impossible and asking for one earns a refusal.
+              warm2:*)   T2="${{ inputs.window }}"; T2="${T2#warm2:}"
+                         case "$T2" in *@*) LR2="${T2#*@}"; T2="${T2%@*}";; esac
+                         if [ ! -f "/opt/earth-cache/ckpt/${T2}.pt" ]; then
+                           curl -fsSL --max-time 900 -o "/opt/earth-cache/ckpt/${T2}.pt.part" \
+                             "https://github.com/${GITHUB_REPOSITORY}/releases/download/model-checkpoints-v1/${T2}.pt" \
+                             && mv "/opt/earth-cache/ckpt/${T2}.pt.part" "/opt/earth-cache/ckpt/${T2}.pt" \
+                             && echo "seeded stage-2 head ${T2}.pt from the release" \
+                             || echo "::warning::could not seed ${T2}.pt — temporal.py will refuse, loudly"
+                         fi
+                         R2="--init-temporal ${T2}"; MODE2=warm
+                         [ -n "$LR2" ] && R2="$R2 --lr $LR2"
+                         echo "stage-2 WARM RESTART: $R2 (temporal_steps is the EXTRA)";; esac
+            # CHECK THE CHECKPOINT NOW, NOT AFTER THE EMBEDDING. #119 spent 93
+            # minutes rebuilding Z and then exited one second later because
+            # this file has no optimiser state — a fact readable the moment it
+            # is on disk. The guard was right; its position cost an hour and a
+            # half of a rented 4090. A precondition that depends only on the
+            # inputs belongs where the inputs are all it has cost you.
+            if [ -n "$R2" ]; then
+              python -u scripts/precheck_stage2_head.py "$T2" --mode "$MODE2"
+            fi
             # PULL THE EMBEDDING BEFORE BUILDING IT. Z is ~95 minutes of a
             # 4090 and is identical for every run that freezes the same codec
             # — #112, #117 and #119 each rebuilt the same tensor. It is now

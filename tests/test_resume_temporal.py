@@ -163,7 +163,58 @@ def main():
                 f"actually testing that {piece} is carried")
     print()
     test_extend()
+    print()
+    test_warm_restart_is_not_the_same_trajectory()
     print("\nOK — resume is a continuation, and every saved piece is load-bearing.")
+
+
+
+
+# ---------------------------------------------------------------------------
+# WARM RESTART is a THIRD case, and the one that actually applies today.
+# Every stage-2 head published before 2026-08-10 is {args, model}: measured on
+# f3_s2_60k, f3_s2_24k and the rescue mirrors. So --resume-temporal must
+# refuse them (it does), and the only thing available from those weights is a
+# fresh cosine — which is a legitimate way to spend more compute and an
+# illegitimate fourth point on a curve of from-scratch runs.
+
+def test_warm_restart_is_not_the_same_trajectory():
+    """The claim that justifies giving it a different flag and a different
+    metrics record: starting from converged weights with fresh moments and a
+    fresh schedule does NOT land where a longer straight-through run lands."""
+    net, opt, sched = _mk()
+    torch.manual_seed(1234)
+    for _ in range(HALF):
+        _step(net, opt, sched)
+    w_mid = flat(net).clone()
+
+    # (a) straight through: one schedule over TOTAL, uninterrupted.
+    net_s, opt_s, sched_s = _mk()
+    torch.manual_seed(1234)
+    for _ in range(TOTAL):
+        _step(net_s, opt_s, sched_s)
+
+    # (b) warm restart: same weights at HALF, everything else discarded.
+    net_w, opt_w, _ = _mk()
+    net_w.load_state_dict(net.state_dict())
+    for g in opt_w.param_groups:
+        g["lr"] = 1e-3                       # a lower peak, as E-008 asks for
+        g["initial_lr"] = 1e-3
+    sched_w = torch.optim.lr_scheduler.CosineAnnealingLR(opt_w, TOTAL - HALF)
+    for _ in range(TOTAL - HALF):
+        _step(net_w, opt_w, sched_w)
+
+    d = float((flat(net_s) - flat(net_w)).abs().max())
+    moved = float((flat(net_w) - w_mid).abs().max())
+    print(f"warm restart : max|Δw| vs straight-through = {d:.3e}")
+    print(f"               max|Δw| vs its own start    = {moved:.3e}")
+    assert d > 1e-6, (
+        "if a warm restart landed in the same place as a continuation there "
+        "would be no reason to distinguish them — and this test would be the "
+        "thing wrongly reassuring us")
+    assert moved > 1e-6, "a warm restart must still TRAIN, not sit still"
+    print("OK — a warm restart trains, and goes somewhere else. Two flags, "
+          "two records, two claims.")
 
 
 if __name__ == "__main__":

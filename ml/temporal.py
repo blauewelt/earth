@@ -375,6 +375,18 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--d-model", type=int, default=96)
     ap.add_argument("--layers", type=int, default=3)
+    ap.add_argument("--init-temporal", default="",
+                    help="WARM RESTART: take the WEIGHTS of a stage-2 head and "
+                         "train --steps more with a fresh cosine at --lr. "
+                         "Adam's moments, the schedule position and the RNG "
+                         "stream are NOT inherited, because the published "
+                         "heads do not carry them — every checkpoint written "
+                         "before 2026-08-10 is {args, model} only. This is a "
+                         "separate flag from --resume-temporal on purpose: "
+                         "the two produce different trajectories, and the one "
+                         "mistake worth engineering against is reporting a "
+                         "warm restart as though it were a continuation. Here "
+                         "--steps is the EXTRA, not the total.")
     ap.add_argument("--resume-temporal", default="",
                     help="continue a stage-2 head: a path, or a tag under "
                          "/opt/earth-cache/ckpt (e.g. run-112-temporal). The "
@@ -574,6 +586,53 @@ def main():
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.steps)
 
     start_step = 0
+    init_from = None
+    if a.init_temporal:
+        # WARM RESTART, named as one. Every stage-2 head published before
+        # 2026-08-10 is {args, model}: no optimiser moments, no schedule
+        # position, no RNG stream — measured on f3_s2_60k, f3_s2_24k and the
+        # rescue mirrors, all three. So a "continuation" from any of them is
+        # impossible, and --resume-temporal correctly refuses.
+        #
+        # What IS available is a cosine restart: take the converged weights,
+        # train a fresh schedule at a lower peak. That is a real and standard
+        # way to spend more compute on a trained model, and it answers "do
+        # 140,000 more steps help?" — it simply is not the same trajectory a
+        # straight-through 200,000-step run would have taken, so it must never
+        # be plotted as a fourth point on a curve whose other points were each
+        # their own converged cosine from scratch.
+        #
+        # --steps is the EXTRA here, not the total, precisely because there is
+        # no step count in the checkpoint to be the total OF.
+        ip = (a.init_temporal if os.path.sep in a.init_temporal
+              else os.path.join(CKPT_DIR, a.init_temporal + ".pt"))
+        if not os.path.exists(ip):
+            raise SystemExit(
+                f"--init-temporal: no checkpoint at {ip}. Refusing to start a "
+                f"fresh head under a doc string that says the weights came "
+                f"from somewhere.")
+        tk = torch.load(ip, map_location="cpu", weights_only=False)
+        model.load_state_dict(tk["model"])
+        parent_steps = int(tk.get("args", {}).get("steps", 0))
+        parent_lr = tk.get("args", {}).get("lr")
+        init_from = {"from": os.path.basename(ip),
+                     "parent_steps": parent_steps, "parent_lr": parent_lr,
+                     "extra_steps": a.steps, "lr": a.lr,
+                     "inherited": ["model"],
+                     "reset": ["optimiser moments", "schedule position",
+                               "rng stream"],
+                     "kind": "warm restart (cosine restart), NOT a continuation"}
+        carried = [k for k in ("opt", "sched", "step") if k in tk]
+        if carried:
+            print(f"  note: {ip} DOES carry {carried} — --resume-temporal "
+                  f"would give a true continuation and is the better choice",
+                  flush=True)
+        print(f"WARM RESTART from {ip}: weights of a {parent_steps:,}-step head "
+              f"(peak lr {parent_lr}), now {a.steps:,} MORE steps on a fresh "
+              f"cosine at peak {a.lr:.2e}. Adam's moments and the schedule "
+              f"start from nothing — this is not the same trajectory as a "
+              f"{parent_steps + a.steps:,}-step run and must not be reported "
+              f"as one.", flush=True)
     _parent = {}
     if a.resume_temporal:
         rp = (a.resume_temporal if os.path.sep in a.resume_temporal
@@ -592,7 +651,15 @@ def main():
                 f"--resume-temporal: {rp} predates optimiser-state saving "
                 f"(missing {missing}). Loading the weights alone would reset "
                 f"Adam's moments and the LR schedule, which is a warm restart "
-                f"wearing a continuation's name. Refusing.")
+                f"wearing a continuation's name. Refusing.\n\n"
+                f"Every head published before 2026-08-10 is {{args, model}} "
+                f"only — measured on f3_s2_60k, f3_s2_24k and the rescue "
+                f"mirrors — so no existing checkpoint can be CONTINUED. If a "
+                f"warm restart is what you want, ask for it by name: "
+                f"--init-temporal {a.resume_temporal} --steps <EXTRA> --lr "
+                f"<peak>, which trains a fresh cosine from these weights and "
+                f"records that the moments were reset. Heads written from now "
+                f"on carry opt/sched/step and are continuable.")
         opt.load_state_dict(tk["opt"])
         start_step = int(tk["step"])
         # THE SCHEDULE NEEDS A DECISION, and getting it wrong is silent.
@@ -690,6 +757,13 @@ def main():
             "parent_steps": _parent.get("steps"),
             "parent_lr": _parent.get("lr"),
             "lr": a.lr}})
+    if init_from:
+        # A DIFFERENT record name from stage2_resumed, deliberately. The
+        # status page and every later reader must be able to tell a warm
+        # restart from a continuation without parsing prose, because the two
+        # answer different questions and only one of them belongs on E-007's
+        # curve.
+        m2({"stage2_warm_restart": init_from})
     m2({"stage2_config": {"d_model": a.d_model, "layers": a.layers, "K": K,
                           "steps": a.steps, "params_M": round(n_par2 / 1e6, 3),
                           "d_z": int(ck["d_z"]), "seed": a.seed,
