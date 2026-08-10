@@ -110,6 +110,28 @@ def rapid_section(lats, lons, ys, xs):
 RESERVE_BYTES = 3 << 30      # runner logs, checkpoints, pip, room to breathe
 RAM_HEADROOM_BYTES = 8 << 30  # the tensor and mask are already resident
 
+# THE CACHE IS float16; THE ARITHMETIC IS NOT. At float32 the quarter-degree
+# embedding is 10.4 GiB (516 x 84,405 x 64 x 4), which does not fit beside a
+# ~15 GB torch image and ~11 GB of tensors on a 50 GB box — so the hygiene
+# step deleted it, the next run spent 95 minutes rebuilding it, and the
+# rebuild put the box back under the threshold. At float16 it is 5.2 GiB and
+# fits with room to spare, which ends that treadmill on the hardware we
+# actually rent. Vast will not resize a disk (see CLAUDE.md Part 2), so making
+# the artefact smaller was the available lever.
+#
+# The precision cost is measured, not assumed: on unit-scale embeddings the
+# round trip through float16 introduces an MSE of 4.3e-8, which is ~1e-7 of
+# the z-MSE the experiments report (0.39-0.82). The figure we actually argue
+# from is the model/persistence RATIO, where the error is common-mode across
+# numerator and denominator and shifts the ratio by 1.8e-7. Seven orders of
+# magnitude below the effect being measured.
+#
+# Everything downstream casts to float32 at the point of use, so gradients,
+# optimiser state and the loss are unchanged. An existing float32 cache still
+# loads and still works — `.float()` on it is a no-op — so this is not a
+# flag day.
+CACHE_DTYPE = np.float16
+
 
 def _free_ram_bytes():
     """MemAvailable, i.e. what can be allocated without swapping — not MemFree,
@@ -253,13 +275,14 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
         if out.shape == (T, P, d_z):
             print(f"  (cached: {cache_path})")
             return out, coords
-    if cache_path and _cache_plan(cache_path, T * P * d_z * 4):
+    if cache_path and _cache_plan(cache_path,
+                              T * P * d_z * CACHE_DTYPE(0).itemsize):
         tmp = cache_path + ".partial"
-        out = np.lib.format.open_memmap(tmp, mode="w+", dtype=np.float32,
+        out = np.lib.format.open_memmap(tmp, mode="w+", dtype=CACHE_DTYPE,
                                         shape=(T, P, d_z))
     else:
         cache_path = None                       # RAM path: nothing to publish
-        out = np.zeros((T, P, d_z), dtype=np.float32)
+        out = np.zeros((T, P, d_z), dtype=CACHE_DTYPE)
     # THE EMBEDDING REPORTS ITS OWN PROGRESS. It is the longest single phase of
     # a stage-2 run — ~95 minutes for 43.5M encoder forwards on the
     # quarter-degree tensor — and until 2026-08-10 it printed one line when it
@@ -599,9 +622,9 @@ def main():
         k = torch.randint(0, len(idx_t), (n,))
         t, p = idx_t[k], idx_p[k]
         base = t - K + 1
-        zseq = torch.stack([Zt[base + j, p] for j in range(K)], 1)
+        zseq = torch.stack([Zt[base + j, p] for j in range(K)], 1).float()
         mseq = torch.stack([Mt[base + j] for j in range(K)], 1)
-        ztgt = torch.stack([Zt[base + j + 1, p] for j in range(K)], 1)
+        ztgt = torch.stack([Zt[base + j + 1, p] for j in range(K)], 1).float()
         # True embeddings BEYOND the window, for the autoregressive unroll:
         # zfut[:, u] = Z[t+1+u] is the truth the model must hit after u
         # SELF-FED steps — u, not u+1. Column 0 is therefore the ordinary
@@ -612,7 +635,7 @@ def main():
         # pre-unroll one. (The comment here previously said "u+1 self-fed
         # steps", which contradicted both the code and ml/EXPERIMENTS.md;
         # the code was right.)
-        zfut = torch.stack([Zt[t + 1 + u, p] for u in range(U)], 1)
+        zfut = torch.stack([Zt[t + 1 + u, p] for u in range(U)], 1).float()
         mfut = torch.stack([Mt[t + 1 + u] for u in range(U)], 1)
         return zseq, mseq, static_ctx[p], ztgt, zfut, mfut
 
@@ -726,12 +749,12 @@ def main():
         et = torch.as_tensor(et[sel], dtype=torch.long)
         ep = torch.as_tensor(ep[sel], dtype=torch.long)
         base = et - K + 1
-        zseq = torch.stack([Zt[base + j, ep] for j in range(K)], 1)
+        zseq = torch.stack([Zt[base + j, ep] for j in range(K)], 1).float()
         mseq = torch.stack([Mt[base + j] for j in range(K)], 1)
         pred, hid = model(zseq, mseq, static_ctx[ep])
         zhat = pred[:, -1]                       # ẑ_{t+1}
-        ztrue = Zt[et + 1, ep]
-        zlast = Zt[et, ep]                        # persistence in z
+        ztrue = Zt[et + 1, ep].float()
+        zlast = Zt[et, ep].float()                        # persistence in z
         results["z_t+1"] = {
             "mse_model": float((zhat - ztrue).pow(2).mean()),
             "mse_persistence": float((zlast - ztrue).pow(2).mean()),
@@ -768,7 +791,7 @@ def main():
         F = np.zeros((T, a.d_model), dtype=np.float32)
         for t in range(K - 1, T):
             base = t - K + 1
-            zseq = torch.stack([Zt[base + j, sec_pix] for j in range(K)], 1)
+            zseq = torch.stack([Zt[base + j, sec_pix] for j in range(K)], 1).float()
             mseq = torch.stack([Mt[base + j].expand(len(sec_pix), -1)
                                 for j in range(K)], 1)
             _, hid = model(zseq, mseq, static_ctx[sec_pix])

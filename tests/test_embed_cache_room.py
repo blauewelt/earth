@@ -144,6 +144,38 @@ def test_the_reserve_is_bigger_than_a_runner_needs():
     print(f"reserve        : {RESERVE_BYTES / GiB:.0f} GiB                  ✓")
 
 
+def test_the_cache_is_half_precision_and_the_size_math_holds():
+    """10.4 GiB does not fit on a 50 GB box beside a torch image and the
+    tensors; 5.2 GiB does. That is the entire reason for the dtype."""
+    import numpy as np
+    T, P, DZ = 516, 84405, 64
+    fp32 = T * P * DZ * 4 / GiB
+    cached = T * P * DZ * np.dtype(temporal.CACHE_DTYPE).itemsize / GiB
+    assert temporal.CACHE_DTYPE is np.float16
+    assert 10.3 < fp32 < 10.5 and 5.1 < cached < 5.3, (fp32, cached)
+    print(f"cache size     : {fp32:.1f} GiB -> {cached:.1f} GiB      ✓")
+
+
+def test_half_precision_costs_orders_less_than_the_effect_measured():
+    """The claim in temporal.py's comment, checked rather than asserted. If a
+    future d_z or normalisation puts embeddings on a wildly different scale,
+    this is where that shows up before it reaches a result."""
+    import numpy as np
+    rng = np.random.default_rng(0)
+    z = rng.normal(size=(50_000, 64)).astype(np.float32)
+    q = float(np.mean((z - z.astype(np.float16).astype(np.float32)) ** 2))
+    SMALLEST_Z_MSE = 0.391          # the best stage-2 figure so far (E-007 #112)
+    assert q / SMALLEST_Z_MSE < 1e-5, (
+        f"float16 introduces {q:.2e} against a measured z-MSE of "
+        f"{SMALLEST_Z_MSE}; that is no longer negligible")
+    # The ratio is what we argue from, and the error is common-mode in it.
+    z16 = z.astype(np.float16).astype(np.float32)
+    p32 = float(np.mean((z[1:] - z[:-1]) ** 2))
+    p16 = float(np.mean((z16[1:] - z16[:-1]) ** 2))
+    assert abs(p32 - p16) / p32 < 1e-5
+    print(f"fp16 error     : {q:.1e} = {q/SMALLEST_Z_MSE:.0e} of z-mse  ✓")
+
+
 if __name__ == "__main__":
     test_plenty_of_room_touches_nothing()
     test_stale_caches_are_pruned_until_it_fits()
@@ -151,5 +183,7 @@ if __name__ == "__main__":
     test_it_refuses_when_NEITHER_can_hold_it()
     test_the_run_s_own_cache_is_never_pruned()
     test_the_reserve_is_bigger_than_a_runner_needs()
+    test_the_cache_is_half_precision_and_the_size_math_holds()
+    test_half_precision_costs_orders_less_than_the_effect_measured()
     print("\nOK — the embedding goes where there is room, and stops when "
           "there is none.")
