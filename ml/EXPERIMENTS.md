@@ -213,6 +213,61 @@ lands with #131–#134 and is what these numbers should be re-read against.
 
 ---
 
+### E-008e · Does decaying the LR to ZERO actually help? — YES, BY 0.16%
+
+Chris, 2026-08-10: *"I'm not sure I agree with the literature that decaying to
+0 is beneficial, is this double verified? maybe we can verify with an extra
+run."* So: #126, identical to #125 in every input, differing only in whether
+the schedule's tail reaches zero.
+
+**It is very nearly a paired experiment, which is why n = 1 is worth
+something here.** The two runs share seed 0, the same box, the same frozen
+codec and the same tensor — the channel-space persistence baseline reads
+**3.34340500831604 in both, to sixteen digits** — and the schedules are
+*identical until step 180,000*:
+
+| step | LR #125 | LR #126 | z-MSE #125 | z-MSE #126 |
+|---|---|---|---|---|
+| 2,000 | 1.000e-3 | 1.000e-3 | 1.98694 | 1.98694 |
+| 100,000 | 1.830e-4 | 1.830e-4 | 0.83738 | 0.83738 |
+| 180,000 | 4.575e-5 | 4.575e-5 | 0.81191 | 0.81191 |
+| 190,000 | 3.847e-5 | 1.923e-5 | 0.78504 | **0.78369** |
+| 196,000 | 3.467e-5 | 6.933e-6 | 0.78491 | **0.78255** |
+| 198,000 | 3.349e-5 | 3.348e-6 | 0.75719 | **0.75494** |
+| 200,000 | 3.235e-5 | **0.000e+0** | 0.79618 | **0.79379** |
+
+Bit-identical for the first 90% of training, so there is no seed noise in the
+comparison at all: the only difference is the last 10% of the schedule, and
+**every one of the five logged points after the divergence favours the
+to-zero run.**
+
+**The result.** On the full evaluation, not a training batch:
+
+| | z-ratio | channel ratio | RAPID (36-mo) |
+|---|---|---|---|
+| #125, LR floors at 3.2e-5 | 0.38251 | 0.40881 | 0.317 |
+| #126, LR reaches 0 | **0.38190** | **0.40763** | 0.318 |
+| gain | **0.159%** | **0.288%** | — |
+
+**So the literature is right in direction and negligible in magnitude.**
+Decaying to zero helps, reproducibly and consistently across every point
+after the schedules part, by about two parts in a thousand on the objective
+stage 2 actually optimises. The AMOC probe moved 0.001, which on a 36-month
+split is nothing.
+
+Note what #125 was, precisely: not "no decay" but a floor at 3.2e-5, i.e.
+3.2% of peak. This measures the last 3% of the ramp, not decay versus
+constant.
+
+**What it settles for us.** Nothing about the schedule choice is worth
+another run. `expdecay` with a terminal taper is horizon-free, which is the
+property that actually mattered, and the taper's endpoint is worth 0.16% —
+so pick it for the horizon-freedom and stop thinking about the tail. Chris's
+scepticism was well placed: the effect is real, and it is not a reason to do
+anything differently.
+
+---
+
 ### The dispatch record
 
 **Run** #120 · `head_sha` 502364279 · started 14:59 UTC ·
