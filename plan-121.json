@@ -1,0 +1,6 @@
+{
+ "steps": 200000,
+ "lr": 0.001,
+ "note": "E-008b FROM SCRATCH: a fresh 200,000-step cosine at peak 1e-3, the same protocol as E-007 6k/24k/60k",
+ "published_at": "2026-08-10T16:04:33.681Z"
+}
