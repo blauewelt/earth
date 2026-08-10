@@ -375,9 +375,13 @@ archive.
 
 ## 8 · Deferred / open follow-ups
 
-- **Build E-006** (the data-space loss). Its algebra is settled
-  (`tests/test_e006_algebra.py`); the code is a transcription. Smoke-test it on
-  a synthetic tensor before any GPU time.
+- ~~**Build E-006**~~ — done 2026-08-10: `--loss-mode data` in
+  `ml/train_joint.py`, with the gauge invariance checked on the real model
+  (`tests/test_e006_gauge.py`: data-space loss ratio 1.000000, z-space
+  16.000000 under a ×4 rescale) and an end-to-end CPU smoke
+  (`tests/test_e006_smoke.py`). What remains is a DISPATCH decision — budget,
+  and the control, which should be the frozen codec rather than another joint
+  mode, since the question is whether joint training beats not doing it.
 - **Split the pipeline into three jobs** (embed / train A / train B) — designed
   in `docs/INFRASTRUCTURE.md` §6b, now possible because the cache publishes on
   existence.

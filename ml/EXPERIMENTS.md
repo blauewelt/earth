@@ -453,7 +453,7 @@ fifth normalisation.
 ---
 
 <a id="e-006"></a>
-## E-006 · The loss, rewritten in the data's units — DESIGNED, not yet run
+## E-006 · The loss, rewritten in the data's units — BUILT 2026-08-10, not yet run
 
 Chris, after four failed normalisations: *"the loss term should just be (1) how
 much have we failed to predict X + (2) how much have we failed to predict Y.
@@ -537,11 +537,41 @@ anyone chose.
 - Per-channel variances, not one global one, or the loss is dominated by
   whichever channel has the largest anomaly variance.
 
-**Status.** Designed, and deliberately not yet built. #109 (the twin) was
-cancelled before it started rather than spend an hour on a superseded
-formulation. Nothing else is dispatched against this until the algebra and a
-synthetic smoke test are both done — which is the corrective for the actual
-failure of 2026-08-09, namely building four times before thinking once.
+**Status — BUILT 2026-08-10, not yet dispatched.** `--loss-mode data` in
+`ml/train_joint.py`. The condition set here ("nothing is dispatched against
+this until the algebra and a synthetic smoke test are both done") is now met:
+
+| check | file | what it establishes |
+|---|---|---|
+| algebra, symbolic | `tests/test_e006_algebra.py` | `dL/ds = 0` under the gauge; the baseline is absent from the objective; `∂var(x)/∂θ = 0` |
+| gauge, **on the real model** | `tests/test_e006_gauge.py` | scaling `to_z` by 4 and the decoder's z-columns by ¼ leaves the decoded field identical to 2e-5, so the data-space loss is unchanged (ratio 1.000000) while the z-space loss moves by exactly s² = 16.000000 |
+| end to end | `tests/test_e006_smoke.py` | 30 months × 8×10 × 5 channels, 2-layer codec, CPU, ~1 min; the run completes, logs no NaN, and the two terms land **1.2–1.3× apart** |
+
+That last number is the formulation's whole claim, and it is worth stating
+beside the thing it replaces: under the reference normalisation the two terms
+sat at ~1.0 and ~0.3 through *different* denominators, so the smooth max was
+always reconstruction and 95.7% of every gradient went to it (measured on
+#94). Here they are fractions of the same observed variance and a plain sum
+sees both.
+
+Three implementation details that are decisions, not transcription:
+
+- **The reconstruction term is divided by `var_c` too.** It has to be, or the
+  sum adds a per-channel-normalised forecast to an unnormalised
+  reconstruction. This does change stage 1's objective slightly relative to
+  `train.py` — the codec's own pretraining is not per-channel normalised —
+  and that is deliberate: within this loss the two terms must share a unit.
+- **`var_c` is computed before the NaNs are zeroed**, from finite entries of
+  the training years and training longitudes only. Zeroing first would mix
+  land into the variance of every coastal channel.
+- **`--ref-fore` and `--lam` are refused** rather than ignored. Both ask for
+  a referee between the two terms, and accepting either would produce a
+  healthy-looking run that cannot test its own hypothesis.
+
+Still to decide before dispatch: the budget, and whether the control is the
+frozen codec (`#116`'s 0.631) or a `--loss-mode lse` run of the same length.
+It should be the frozen codec — the point is whether joint training beats not
+doing it at all.
 
 ---
 

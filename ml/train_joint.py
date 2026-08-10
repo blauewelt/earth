@@ -64,6 +64,45 @@ is still MEASURED and logged every --check-every steps, because reading what
 the codec did is the point; it just never stops anything. If a run does
 degenerate, that is a RESULT — the probe ladder scores the resulting codec and
 the number says so, which is far better evidence than an abort ever was.
+
+--loss-mode data · THE ABOVE IS SUPERSEDED (E-006, built 2026-08-10)
+--------------------------------------------------------------------
+Everything from "NORMALISE EACH LOSS BY ITS OWN REFERENCE" down is an attempt
+to referee two quantities that were never commensurable, and it failed four
+times: a constant denominator (#102, encoder shrank z 40x), a detached one
+(#103/#104, 1099x), a scale-free ratio with a second exploit (#107/#108,
+inflate the baseline, 250x the other way), and a twin trained alongside
+(#109, cancelled). Chris, after the fourth: *"the loss term should just be
+(1) how much have we failed to predict X + (2) how much have we failed to
+predict Y. that's it."*
+
+The reason alignment kept being hard is that ONE OF THE TWO FAILURES WAS
+MEASURED IN A SPACE THE MODEL INVENTS. Reconstruction error is scored against
+observed channels — external and ungameable. Forecast error was scored
+against `z`, which the encoder may rescale freely, so it had no units at all
+and every denominator was refereeing a quantity with no fixed scale.
+
+`--loss-mode data` decodes the forecast back into the data before scoring it:
+
+    L = mean_masked (x̂_t − x_t)² / var_c(x)  +  mean_obs (x̂_{t+1..t+K} − x)² / var_c(x)
+
+Both terms are "failed to predict real, standardised observations", so a plain
+sum is the whole combination rule. The shrinkage degeneracy is not closed,
+penalised or guarded — under z → s·z with decoder → decoder/s the decoded
+field is unchanged, so dL/ds is EXACTLY zero and there is no free direction
+for the cheat to live in (`tests/test_e006_algebra.py`, symbolically; and
+`tests/test_e006_gauge.py` numerically on the real code path, which is the
+version that would catch a z-space term leaking back into the objective).
+
+`var_c` is per CHANNEL, computed once from the training data. Per channel and
+not one global number, or the loss is simply whichever channel has the largest
+anomaly variance; from the data and not from the model, which is the one
+distinction all four failures turned on.
+
+Persistence still appears in the logs — decoded into the same units, so
+`l_pers_data` reads as "how well does last month's field predict this one" —
+and nowhere in the objective. A diagnostic in the loss is what made the
+earlier versions depend on another run's arbitrary stopping point.
 """
 import argparse
 import json
@@ -107,7 +146,16 @@ def parse():
                    help="the temporal head is fresh, so it gets a normal LR")
     p.add_argument("--temporal-d-model", type=int, default=192)
     p.add_argument("--temporal-layers", type=int, default=4)
-    p.add_argument("--loss-mode", default="lse", choices=["lse", "max", "sum"])
+    p.add_argument("--loss-mode", default="lse",
+                   choices=["lse", "max", "sum", "data", "data-lse"],
+                   help="'data' is E-006: BOTH terms measured in the data's "
+                        "own units, as fractions of each channel's observed "
+                        "variance, and added. It takes no reference, no "
+                        "--ref-fore, no twin and no lambda, because there is "
+                        "nothing left to referee — see the long note in the "
+                        "module docstring. 'data-lse' is the same two terms "
+                        "under the smooth max, kept only so the sum can be "
+                        "compared to it.")
     p.add_argument("--lse-sharpness", type=float, default=4.0)
     p.add_argument("--lam", type=float, default=1.0,
                    help="only used by --loss-mode sum")
@@ -185,8 +233,58 @@ def main():
     # different space would be fine-tuning on a distribution shift.
     Xa, dynamic = anomaly_transform(X, moy, t_hold, x_hold)
     OBS = torch.from_numpy(np.isfinite(Xa))
+
+    # ---- PER-CHANNEL VARIANCE OF THE OBSERVED FIELD (E-006) ---------------
+    # Computed BEFORE the NaNs are zeroed, from finite training entries only,
+    # so it is a property of the data and of nothing else. That is the whole
+    # distinction the four retracted normalisations turned on: a denominator
+    # the model can move is a term in the objective and will be optimised;
+    # var(x) has dvar/dtheta = 0 for every parameter theta, which is what
+    # makes a constant denominator legitimate here and poison in E-004.
+    #
+    # PER CHANNEL, not one global number. anomaly_transform z-scores the
+    # DYNAMIC channels, so those come out at ~1.0 — but the static ones
+    # (bathymetry, coordinates, land masks) keep their native scale, and a
+    # single global variance would hand the loss to whichever of those is
+    # largest. Channel by channel, and one channel at a time: the fancy-index
+    # form materialises the whole [T,H,W,C] array per channel and OOM-killed
+    # every probe on a 7 GB box in August.
+    varc_np = np.ones(C, dtype=np.float32)
+    keep_t = ~t_hold
+    keep_x = ~x_hold
+    for c in range(C):
+        col = Xa[keep_t][:, :, keep_x, c]
+        col = col[np.isfinite(col)]
+        # A channel with no finite training entries, or a constant one, gets
+        # 1.0 rather than an epsilon: dividing by ~0 would make that channel
+        # the entire loss, which is the failure mode this line exists inside.
+        v = float(col.var()) if col.size else 0.0
+        varc_np[c] = v if v > 1e-8 else 1.0
+    print(f"per-channel variance for the data-space loss: "
+          f"median {np.median(varc_np):.3f}, "
+          f"range [{varc_np.min():.3g}, {varc_np.max():.3g}]", flush=True)
+
     np.nan_to_num(Xa, nan=0.0, copy=False)
     Xt = torch.from_numpy(Xa)
+    varc = torch.from_numpy(varc_np).to(dev)          # [C]
+    DATA_SPACE = a.loss_mode in ("data", "data-lse")
+    # REFUSE THE CONTRADICTION AT THE INPUTS, where it has cost nothing. Both
+    # of these ask for a referee between the two terms, and the data-space
+    # loss exists precisely because there is nothing left to referee — running
+    # anyway would produce a healthy-looking run that cannot test its own
+    # hypothesis, which is the failure ml/CLAUDE.md §4.11 is about.
+    if DATA_SPACE and a.ref_fore != 0.0:
+        raise SystemExit(
+            f"--loss-mode {a.loss_mode} takes no --ref-fore (got {a.ref_fore}). "
+            "The forecast term is scored against observed channels, not "
+            "against z, so there is no scale to referee and no constant to "
+            "copy from another run. Drop --ref-fore.")
+    if DATA_SPACE and a.lam != 1.0:
+        raise SystemExit(
+            f"--loss-mode {a.loss_mode} takes no --lam (got {a.lam}). Both "
+            "terms are fractions of the same observed variance; a weight "
+            "would be re-introducing by hand the arbitrary constant this "
+            "formulation removes.")
 
     ck_path = resolve_ckpt(a.resume, require)
     ck = torch.load(ck_path, map_location=dev, weights_only=False)
@@ -329,7 +427,61 @@ def main():
         sel = mask
         if sel.sum() < 1:
             return torch.zeros((), device=dev)
-        return ((pred - v).pow(2) * sel).sum() / sel.sum()
+        err = (pred - v).pow(2)
+        if DATA_SPACE:
+            # The SAME per-channel denominator the forecast term uses, so the
+            # two are in one unit and a plain sum needs no weight. In the
+            # reference modes this division is deliberately absent: there the
+            # term is divided by the frozen codec's own reconstruction loss
+            # instead, and doing both would normalise twice.
+            err = err / varc
+        return (err * sel).sum() / sel.sum()
+
+    def decode_z(z):
+        """z -> the field it stands for, through the codec's OWN decoder.
+
+        This is the single line E-006 turns on. Scoring the forecast here
+        rather than in z-space is what removes the shrinkage degeneracy: the
+        target is an observation that does not move, and z enters the loss
+        only through this call, so rescaling the encoder buys nothing.
+        """
+        n = z.shape[0]
+        qc = torch.arange(C, device=dev)[None, :].expand(n, -1)
+        return codec.query(z, qc, torch.zeros(n, C, 3, dtype=torch.long,
+                                              device=dev))
+
+    def forecast_data_terms(zseq, mseq, sctx, py, px_, t0, head=None):
+        """Forecast error IN THE DATA'S UNITS, and persistence beside it.
+
+        The head predicts z for months t+1..t+K; every one of them is decoded
+        and scored against the observed channels at that month, over observed
+        entries only. One `query` call over the flattened [B*K] batch rather
+        than K calls — same arithmetic, one kernel launch.
+
+        Returns (model, persistence). Persistence decodes z_t itself, i.e.
+        "last month's field is my forecast", in the same units, and is
+        LOGGED ONLY — it is a diagnostic, and a diagnostic in the objective is
+        what made every earlier version depend on another run's stopping
+        point.
+        """
+        pred_z, _ = (head or tmp)(zseq[:, :a.K], mseq, sctx)      # [B,K,d_z]
+        B = pred_z.shape[0]
+        yy = torch.as_tensor(py, dtype=torch.long)
+        xx = torch.as_tensor(px_, dtype=torch.long)
+        tgt, obs = [], []
+        for k in range(a.K):
+            tt = torch.as_tensor(t0 + k + 1, dtype=torch.long)
+            tgt.append(Xt[tt, yy, xx])
+            obs.append(OBS[tt, yy, xx])
+        tgt = torch.stack(tgt, 1).to(dev)                          # [B,K,C]
+        obs = torch.stack(obs, 1).to(dev)
+        xh = decode_z(pred_z.reshape(B * a.K, -1)).reshape(B, a.K, C)
+        n = obs.sum().clamp_min(1)
+        l_model = (((xh - tgt).pow(2) / varc) * obs).sum() / n
+        with torch.no_grad():
+            xp = decode_z(zseq[:, :a.K].reshape(B * a.K, -1)).reshape(B, a.K, C)
+            l_pers = (((xp - tgt).pow(2) / varc) * obs).sum() / n
+        return l_model, l_pers
 
     def forecast_terms(zseq, mseq, sctx, head=None):
         """Model forecast loss and the PERSISTENCE loss on the same window.
@@ -390,7 +542,16 @@ def main():
             sctx = torch.cat([zseq[:, 0], torch.as_tensor(
                 np.stack([lats[py] / 90, lons[px_] / 180], 1),
                 dtype=torch.float32).to(dev)], 1)
-            _, lp = forecast_terms(zseq, month_seq(t0), sctx)
+            if DATA_SPACE:
+                # Persistence measured in the same units the loss uses, so
+                # the logged z_shrink series stays meaningful (it is now a
+                # ratio of DATA-space persistence, which the encoder cannot
+                # move by rescaling — a flat line there is the expected
+                # result, and a moving one would be news).
+                _, lp = forecast_data_terms(zseq, month_seq(t0), sctx,
+                                            py, px_, t0)
+            else:
+                _, lp = forecast_terms(zseq, month_seq(t0), sctx)
             perss.append(float(lp))
     # KEPT FOR THE RECORD ONLY. This step-0 persistence used to be the
     # forecast denominator; it no longer is (see the r_fore line in the
@@ -399,7 +560,12 @@ def main():
     # the running l_pers is exactly how the shrinkage was caught.
     ref_fore = float(np.mean(perss))          # persistence at step 0
     ref_fore_mult = a.ref_fore                # frozen-codec control's l_fore/l_pers
-    if ref_fore_mult > 0:
+    if DATA_SPACE:
+        print("  data-space loss: no forecast reference of any kind. Both "
+              "terms are fractions of the observed per-channel variance, so "
+              "1.0 means 'no better than climatology' for BOTH, in the same "
+              "units, with no control run anywhere.", flush=True)
+    elif ref_fore_mult > 0:
         print(f"  forecast reference from the frozen-codec control: "
               f"{ref_fore_mult:.4f} (its converged l_fore/l_pers)", flush=True)
     elif ref_twin:
@@ -447,6 +613,58 @@ def main():
     # honest, and if it fails to, the probe ladder's number on the resulting
     # codec is the evidence — not a threshold someone picked.
     rec_checks = []
+
+    def _log_step(s, l_rec, l_fore, l_pers, r_rec, r_fore, loss, skill_ref):
+        """ONE logger for both objectives. The data-space branch was written
+        with its own copy first, which is how a metrics schema quietly forks:
+        two writers, one reader, and a field that exists on some runs. The
+        series below are the ones the status page and every plot read, so
+        every mode must write all of them or say null."""
+        if s % a.check_every == 0:
+            chk = recon_probe() / max(ref_rec, 1e-9)
+            rec_checks.append((s, round(chk, 4)))
+            with open(metrics, "a") as f:
+                f.write(json.dumps({"joint_step": s,
+                                    "r_rec_probe": round(chk, 4)}) + "\n")
+            print(f"  probe @{s}: r_rec(fixed batch) {chk:.3f}", flush=True)
+        if s % log_every == 0 or s == a.steps:
+            rec = {"joint_step": s, "r_rec": round(float(r_rec), 4),
+                   "r_rec_probe": (rec_checks[-1][1] if rec_checks else None),
+                   "r_fore": round(float(r_fore), 4),
+                   "loss": round(float(loss), 4),
+                   "l_rec": round(float(l_rec), 5),
+                   "l_fore": round(float(l_fore), 5),
+                   "l_pers": round(float(l_pers), 5),
+                   # How far the embedding has contracted since step 0. 1.0 =
+                   # unchanged; #102 reached 40x in 1200 steps. This is a
+                   # first-class series because a joint run that "improves"
+                   # by shrinking z is indistinguishable from one that learns
+                   # unless you plot it.
+                   #
+                   # In the data-space mode this is a ratio of DATA-space
+                   # persistences, which the encoder cannot move by rescaling
+                   # — so a flat line is the PREDICTION, not merely the hope,
+                   # and a moving one means something real changed about how
+                   # predictable the field is under this codec. Keeping the
+                   # field rather than nulling it is what makes that
+                   # observable at all.
+                   "z_shrink": round(ref_fore / max(float(l_pers), 1e-9), 3),
+                   # The twin's own scale-free skill, logged beside the live
+                   # one. Both heads have had exactly the same amount of
+                   # training at this step, which is the whole point: r_fore
+                   # is their ratio, so the arbitrary stopping point that made
+                   # #101's 0.44 meaningless cancels out of it.
+                   "skill_live": round(float((l_fore / l_pers.clamp_min(1e-9)).detach()), 4),
+                   "skill_ref": (round(skill_ref, 4) if skill_ref else None),
+                   "space": "data" if DATA_SPACE else "z",
+                   "wall_s": round(time.time() - t_start, 1)}
+            with open(metrics, "a") as f:
+                f.write(json.dumps(rec) + "\n")
+        if s % max(1, a.steps // 10) == 0:
+            print(f"  step {s:>6}/{a.steps}  r_rec {float(r_rec):.3f}  "
+                  f"r_fore {float(r_fore):.3f}  ({time.time()-t_start:.0f}s)",
+                  flush=True)
+
     for s in range(1, a.steps + 1):
         py, px_, t0 = sample()
         l_rec = recon_loss(py, px_, t0)
@@ -454,6 +672,26 @@ def main():
         sctx = torch.cat([zseq[:, 0], torch.as_tensor(
             np.stack([lats[py] / 90, lons[px_] / 180], 1),
             dtype=torch.float32).to(dev)], 1)
+        if DATA_SPACE:
+            # E-006. Both terms already in the data's units; the "r_" names
+            # are kept so every downstream reader (the status page, the
+            # metrics schema, the plots) needs no special case — but here
+            # they are the losses themselves, not ratios to a reference.
+            l_fore, l_pers = forecast_data_terms(zseq, month_seq(t0), sctx,
+                                                 py, px_, t0)
+            r_rec, r_fore = l_rec, l_fore
+            skill_ref = None
+            loss = (r_rec + r_fore if a.loss_mode == "data" else
+                    torch.logsumexp(torch.stack([r_rec * a.lse_sharpness,
+                                                 r_fore * a.lse_sharpness]), 0)
+                    / a.lse_sharpness)
+            opt.zero_grad(); loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                list(codec.parameters()) + list(tmp.parameters()), 1.0)
+            opt.step()
+            _log_step(s, l_rec, l_fore, l_pers, r_rec, r_fore, loss, None)
+            continue
+
         l_fore, l_pers = forecast_terms(zseq, month_seq(t0), sctx)
 
         r_rec = l_rec / max(ref_rec, 1e-9)
@@ -531,42 +769,7 @@ def main():
             list(codec.parameters()) + list(tmp.parameters()), 1.0)
         opt.step()
 
-        rr = float(r_rec.detach())
-        if s % a.check_every == 0:
-            chk = recon_probe() / max(ref_rec, 1e-9)
-            rec_checks.append((s, round(chk, 4)))
-            with open(metrics, "a") as f:
-                f.write(json.dumps({"joint_step": s,
-                                    "r_rec_probe": round(chk, 4)}) + "\n")
-            print(f"  probe @{s}: r_rec(fixed batch) {chk:.3f}", flush=True)
-        if s % log_every == 0 or s == a.steps:
-            rec = {"joint_step": s, "r_rec": round(float(r_rec), 4),
-                   "r_rec_probe": (rec_checks[-1][1] if rec_checks else None),
-                   "r_fore": round(float(r_fore), 4),
-                   "loss": round(float(loss), 4),
-                   "l_rec": round(float(l_rec), 5),
-                   "l_fore": round(float(l_fore), 5),
-                   "l_pers": round(float(l_pers), 5),
-                   # How far the embedding has contracted since step 0. 1.0 =
-                   # unchanged; #102 reached 40x in 1200 steps. This is a
-                   # first-class series because a joint run that "improves"
-                   # by shrinking z is indistinguishable from one that learns
-                   # unless you plot it.
-                   "z_shrink": round(ref_fore / max(float(l_pers), 1e-9), 3),
-                   # The twin's own scale-free skill, logged beside the live
-                   # one. Both heads have had exactly the same amount of
-                   # training at this step, which is the whole point: r_fore
-                   # is their ratio, so the arbitrary stopping point that made
-                   # #101's 0.44 meaningless cancels out of it.
-                   "skill_live": round(float((l_fore / l_pers.clamp_min(1e-9)).detach()), 4),
-                   "skill_ref": (round(skill_ref, 4) if skill_ref else None),
-                   "wall_s": round(time.time() - t_start, 1)}
-            with open(metrics, "a") as f:
-                f.write(json.dumps(rec) + "\n")
-        if s % max(1, a.steps // 10) == 0:
-            print(f"  step {s:>6}/{a.steps}  r_rec {float(r_rec):.3f}  "
-                  f"r_fore {float(r_fore):.3f}  ({time.time()-t_start:.0f}s)",
-                  flush=True)
+        _log_step(s, l_rec, l_fore, l_pers, r_rec, r_fore, loss, skill_ref)
 
     # Save in the SAME format train.py writes, so every downstream probe
     # (probe_kfold, probe_head, temporal) reads it with no special case.
