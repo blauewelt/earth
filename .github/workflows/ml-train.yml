@@ -813,6 +813,19 @@ jobs:
               if [ $((TICK % 60)) -eq 0 ]; then
                 bash scripts/snapshot_head.sh "${{ github.run_number }}" || true
               fi
+              # PUBLISH THE EMBEDDING THE MOMENT IT EXISTS, not when training
+              # ends. The push used to sit after `wait $S2_PID`, i.e. sixteen
+              # to twenty-three hours after the cache was finished — so a
+              # second job started in the meantime could not pull it and had
+              # to spend the same 95 minutes over again. That is exactly what
+              # happened to #120/#121, and it is why "wait for the first run,
+              # then start the second" would not have helped: there was
+              # nothing to wait FOR until the first run ended.
+              if [ ! -f /tmp/embed-cache-pushed ] && \
+                 ls /opt/earth-cache/Z_*.npy >/dev/null 2>&1; then
+                python -u ml/embed_cache_sync.py push --run actions \
+                  && touch /tmp/embed-cache-pushed
+              fi
             done
             wait $S2_PID
             # PUBLISH IT while the box still has it. The cache outlives this

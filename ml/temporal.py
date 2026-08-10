@@ -158,6 +158,59 @@ def embed_cache_path(run, whash):
     return os.path.join(HERE, "cache", f"Z_{run}_{whash}.npy")
 
 
+
+def _progress_path(tmp):
+    return tmp + ".progress"
+
+
+def _resume_partial(tmp, T, P, d_z):
+    """(memmap, months_already_done) for a half-built cache, or (None, 0).
+
+    The marker is written AFTER the data is flushed, never before, so it can
+    only ever under-claim. An over-claiming marker would be the worst possible
+    outcome here: the run would skip months that were never written and the
+    embedding would carry zeros for them — real numbers, wrong months, no
+    symptom. Losing a few minutes of recomputation is the cheap side of that
+    trade and it is the side this takes.
+    """
+    prog = _progress_path(tmp)
+    if not (os.path.exists(tmp) and os.path.exists(prog)):
+        return None, 0
+    try:
+        with open(prog) as f:
+            mark = json.load(f)
+        if (tuple(mark.get("shape", ())) != (T, P, d_z)
+                or mark.get("dtype") != str(np.dtype(CACHE_DTYPE))):
+            print(f"  ignoring a partial cache for a different shape/dtype "
+                  f"({mark.get('shape')}, {mark.get('dtype')})")
+            return None, 0
+        done = int(mark.get("months_done", 0))
+        out = np.load(tmp, mmap_mode="r+")
+        if out.shape != (T, P, d_z) or not (0 < done < T):
+            return None, 0
+        print(f"  RESUMING the embedding at month {done}/{T} "
+              f"({done / T * 100:.1f}% already on disk) — "
+              f"{(T - done) / T * 100:.0f}% left to compute", flush=True)
+        return out, done
+    except Exception as e:                                    # noqa: BLE001
+        print(f"  partial cache unusable ({type(e).__name__}: {e}) — "
+              f"starting the embedding from scratch")
+        return None, 0
+
+
+def _mark_progress(tmp, out, months_done, T, P, d_z):
+    """Flush the DATA, then record how far it got. Order is the whole point."""
+    try:
+        out.flush()
+        p = _progress_path(tmp)
+        with open(p + ".part", "w") as f:
+            json.dump({"months_done": int(months_done), "shape": [T, P, d_z],
+                       "dtype": str(np.dtype(CACHE_DTYPE))}, f)
+        os.replace(p + ".part", p)
+    except OSError as e:
+        print(f"  (progress marker failed: {e})", flush=True)
+
+
 def _free_ram_bytes():
     """MemAvailable, i.e. what can be allocated without swapping — not MemFree,
     which excludes reclaimable page cache and reads absurdly low on a box that
@@ -300,13 +353,28 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
         if out.shape == (T, P, d_z):
             print(f"  (cached: {cache_path})")
             return out, coords
+    start_t = 0
     if cache_path and _cache_plan(cache_path,
                               T * P * d_z * CACHE_DTYPE(0).itemsize):
         tmp = cache_path + ".partial"
-        out = np.lib.format.open_memmap(tmp, mode="w+", dtype=CACHE_DTYPE,
-                                        shape=(T, P, d_z))
+        # RESUMABLE. The embedding is ~95 minutes; dying at 80% and starting
+        # again from zero is the difference between losing twenty minutes and
+        # losing eighty. The half-written memmap already holds every completed
+        # month — what was missing was a record of how many, so a restart
+        # could trust it. Chris asked for exactly this on 2026-08-10.
+        out, start_t = _resume_partial(tmp, T, P, d_z)
+        if out is None:
+            out = np.lib.format.open_memmap(tmp, mode="w+", dtype=CACHE_DTYPE,
+                                            shape=(T, P, d_z))
     else:
+        # NOT resumable, and say so rather than let it be discovered at 80%:
+        # an in-memory array dies with the process. Since the cache went to
+        # float16 this branch should be rare — 5.2 GiB fits where 10.4 did
+        # not — and it is now a fallback rather than the normal path.
         cache_path = None                       # RAM path: nothing to publish
+        print("  building Z in RAM: NOT resumable — if this process dies the "
+              "whole embedding is lost. (Free disk so the cache fits and it "
+              "becomes restartable.)", flush=True)
         out = np.zeros((T, P, d_z), dtype=CACHE_DTYPE)
     # THE EMBEDDING REPORTS ITS OWN PROGRESS. It is the longest single phase of
     # a stage-2 run — ~95 minutes for 43.5M encoder forwards on the
@@ -320,7 +388,7 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
     t_emb = time.time()
     next_mark = 0.0
     with torch.no_grad():
-        for t in range(T):
+        for t in range(start_t, T):
             frac = (t + 1) / T
             if frac >= next_mark:
                 el = time.time() - t_emb
@@ -355,6 +423,11 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                     z = model.encode(v.to(dev), OBS[t, ys[sl], xs[sl]].to(dev),
                                      mk.to(dev), ctx_t)
                 out[t, sl] = z.cpu().numpy()
+            # Every 8 months (~1.5 minutes of work) flush the pages and record
+            # the count. Cheap enough to be unnoticeable, fine-grained enough
+            # that a crash costs a couple of minutes rather than an hour.
+            if cache_path and (t + 1) % 8 == 0:
+                _mark_progress(tmp, out, t + 1, T, P, d_z)
     if cache_path:
         # Already on disk in .npy form — flush the pages, then publish
         # atomically so an interrupted run never leaves a half-filled cache
@@ -362,6 +435,12 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
         out.flush()
         del out
         os.replace(tmp, cache_path)
+        # The marker describes a .partial that no longer exists; leaving it
+        # would make the next run try to resume a file it cannot find.
+        try:
+            os.remove(_progress_path(tmp))
+        except OSError:
+            pass
         out = np.load(cache_path, mmap_mode="r+")
     return out, coords
 
