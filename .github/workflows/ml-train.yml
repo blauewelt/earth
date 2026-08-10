@@ -280,7 +280,22 @@ jobs:
             echo "low disk — pruning …"
             rm -rf /opt/runner/_diag/*.log /opt/runner/_work/_temp/* || true
             pip cache purge || true
-            find /opt/earth-cache -maxdepth 1 -name 'Z_*.npy*' -delete || true
+            # A half-written cache is dead by definition here: nothing is
+            # running yet, so any .partial is the corpse of a killed job.
+            find /opt/earth-cache -maxdepth 1 -name 'Z_*.npy.partial' -delete || true
+            # KEEP THE NEWEST Z_*.npy. The embedding cache is the biggest
+            # reclaimable thing on the disk, so a blanket delete always chose
+            # it first — and it is the one file that makes the NEXT run cheap.
+            # The cost is 50 minutes of GPU per rebuild, and the rebuild is
+            # 10.4 GiB, which puts the box straight back under the threshold
+            # and lines up the next deletion. That treadmill is what left #117
+            # rebuilding a cache #112 had already computed from the same frozen
+            # codec on the same data. Stale entries (other weight hashes) are
+            # still fair game, and temporal.py prunes the rest itself, knowing
+            # which hash it actually needs.
+            ls -t /opt/earth-cache/Z_*.npy 2>/dev/null | tail -n +2 \
+              | xargs -r rm -f || true
+            echo "kept: $(ls -t /opt/earth-cache/Z_*.npy 2>/dev/null | head -1 || echo none)"
             # a crashed family-3 build leaves its 11 GB memmap behind
             rm -f /opt/earth-cache/family3_na025_build.npy || true
             echo "after prune: $(free_gb) GB"
