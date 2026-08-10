@@ -145,6 +145,16 @@ def main():
                          "a patch=3 codec's embedding saw its 3x3 "
                          "neighbourhood — pair raw against a PIXEL codec for "
                          "the strictly matched comparison.")
+    ap.add_argument("--seed-base", type=int, default=0,
+                    help="the three per-fold seeds are (base, base+1, base+2). "
+                         "This exists because run #116 was dispatched as 'head "
+                         "probe, seed B' and returned 0.662 / [0.557, 0.745] / "
+                         "2.10 Sv — bit-identical to seed A, because there was "
+                         "no seed knob at all and the seeds were hardwired to "
+                         "(0,1,2). It reproduced the estimator instead of "
+                         "resampling it. --seed-base 3 gives a genuinely "
+                         "independent draw; the file name carries it so two "
+                         "draws cannot overwrite each other.")
     a = ap.parse_args()
 
     ck = torch.load(os.path.join(HERE, "runs", a.run, "pixelmae.pt"),
@@ -251,7 +261,8 @@ def main():
         p = np.mean([fold_fit(T_[tr], (v_des[tr] - mu) / sd, T_[te],
                               feat_dim + 2, sd_, d=a.head_dim,
                               n_blocks=a.head_blocks)
-                     for sd_ in (0, 1, 2)], axis=0)
+                     for sd_ in (a.seed_base, a.seed_base + 1,
+                                 a.seed_base + 2)], axis=0)
         pred[te] = p * sd + mu
     okp = np.isfinite(pred)
     r = float(np.corrcoef(pred[okp], v_des[okp])[0, 1])
@@ -276,12 +287,29 @@ def main():
            "r_kfold_deseas": round(r, 3),
            "ci95": [round(float(lo95), 3), round(float(hi95), 3)],
            "rmse_sv": round(rmse, 2), "n": int(okp.sum()),
+           "seed_base": a.seed_base,
+           # The out-of-fold PREDICTIONS, not just their summary. Two probes
+           # scored on the same months and the same year-blocks differ by a
+           # PAIRED quantity, and a paired difference has a far tighter
+           # interval than the gap between two independent CIs suggests:
+           # head [0.557, 0.745] and raw-3x3 [0.514, 0.729] overlap almost
+           # entirely, yet they are the same 240 months and share nearly all
+           # of their error. Without the per-month values that comparison
+           # cannot be made at all, and +0.034 stays unquotable forever.
+           # scripts/paired_probe.py consumes exactly these three arrays.
+           "pred": [round(float(v), 4) for v in pred],
+           "target_sv": [round(float(v), 4) for v in v_des],
+           "years": [int(v) for v in years],
            "note": "unpooled section: one query attends over "
                    f"{P} pixels x {a.K} months"}
     print(f"{a.run} head-probe (K={a.K}): rapid k-fold r {r:+.3f} "
           f"[{lo95:+.3f}, {hi95:+.3f}] · RMSE {rmse:.2f} Sv")
     size = ("" if (a.head_dim == 64 and a.head_blocks == 0)
             else f"_d{a.head_dim}b{a.head_blocks}")
+    # A second seed draw must not overwrite the first — that is how #116 came
+    # to look like a confirmation of a number it had merely recomputed.
+    if a.seed_base:
+        size += f"_s{a.seed_base}"
     fn = (f"probe_head_raw3x3{size}.json" if (a.raw and a.raw_patch)
           else f"probe_head_raw{size}.json" if a.raw
           else f"probe_head{size}.json")

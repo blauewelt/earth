@@ -27,6 +27,131 @@ low-pass).
 
 ---
 
+<a id="e-008"></a>
+## E-008 · Is stage 2 COMPUTE-bottlenecked? 60k → 200k as a warm restart — DISPATCHED 2026-08-10, running
+
+**Run** #117 · `head_sha` 5f98f6b43603f98db52ec833017d8aceb06f71e2 · dispatched
+11:19 UTC · `window: resume2:f3_s2_60k__temporal@1e-4`, `temporal_steps: 200000`,
+`job_timeout: 1400`, `resume: !run-62,run-63`.
+
+**The question.** Chris asked it precisely: stage 2 is either (a) compute
+bottlenecked — 140k more steps help — or (b) parameter bottlenecked, which a
+checkpoint cannot answer and which needs a from-scratch run at larger width.
+This tests (a) only. (b) is deliberately deferred.
+
+**Hypothesis, written before the result.** E-007's three converged points
+(6k → 0.494, 24k → 0.406, 60k → 0.391 z-ratio) are still improving and
+decelerating: −0.103 then −0.052 per stage. Extrapolating that deceleration,
+200k should land near 0.36–0.37 in z-ratio, and — this is the part that
+matters — the **RAPID probe should not move**, because it already plateaued
+between 24k and 60k (0.319 → 0.321) while the forecast loss kept falling.
+The falsifier is symmetric and worth stating: if RAPID rises past ~0.35, the
+plateau was a compute artefact and E-007's conclusion is wrong; if z-ratio
+also stops falling, stage 2 is converged and neither more compute nor this
+architecture will help.
+
+**This is a WARM RESTART, not a fourth point on E-007's curve.** Every E-007
+point ran its own cosine from peak to zero over its own budget, so the three
+are three converged models. #117 instead reloads the 60k model, optimiser
+moments and RNG stream, then **rebuilds** the cosine over 200,000 steps at
+one tenth the original peak (1e-3 → 1e-4) positioned at step 60,000. It is
+therefore comparable to E-007 as an endpoint and **not** comparable as a
+trajectory — the LR it sees from 60k onward is nothing like what a
+straight-through 200k run would have seen. The chart on the status page draws
+both schedules for exactly this reason.
+
+Planned LR, for checking against the live series: 60,000 → **7.939e-05**;
+80,000 → 6.545e-05; 120,000 → 3.455e-05; 160,000 → 9.549e-06; 200,000 → 0.
+
+**Why the LR was rebuilt rather than reloaded.** `CosineAnnealingLR.load_state_dict`
+restores `T_max` and `base_lrs` from the parent, so a reloaded schedule asked
+for 200k steps believes it finished at 60k and returns **lr = 0.0**: hours of
+"continuation" that changes nothing while every status reads success. This was
+live in `temporal.py` and was caught only because Chris asked for a lower LR.
+`tests/test_resume_temporal.py::test_extend` now pins it, and the trainer
+refuses to start when the resumed LR is not positive.
+
+**Confound to carry forward.** The parent (#112) trained on run-62's tensor.
+`resume: !run-62,run-63` requires the same one, and provenance now records a
+sha256 of the tensor file, so a repeat of the #88-vs-#110 box divergence would
+be visible rather than inferred.
+
+**Status:** training. Nothing to conclude yet.
+
+---
+
+<a id="e-003b"></a>
+## E-003b · The "second seed" that was not one — #116 reproduced the head probe bit-for-bit
+
+**Run** #116 · `head_sha` 23b99002d91268e02c0ad601b74bb1218137e005 · frozen 40M
+anchor, no training, every eval on the GPU.
+
+**What it was for.** Two things: move `dip_check.py`, `rollout.py` and the
+standalone `trainprobe.py` onto the GPU (they had all been embedding a 40.7M
+codec on CPU, which is what made #112's tail burn hours at `gpu_util = 0`),
+and draw a **second seed** for the unpooled attention head so that 0.662 would
+stop being a single-seed number.
+
+**The first half worked. The second half was impossible, and the run reported
+success anyway.**
+
+| probe | this run | previously reported |
+|---|---|---|
+| unpooled attention head | 0.662 · [0.557, 0.745] · 2.10 Sv | 0.662 · [0.557, 0.745] · 2.10 Sv |
+| raw-3×3 control | 0.628 · [0.514, 0.729] · 2.17 Sv | 0.628 · [0.514, 0.729] · 2.17 Sv |
+| pooled ridge (k-fold) | 0.631 · [0.513, 0.732] | 0.631 · [0.513, 0.732] |
+
+Bit-identical, to every digit printed. The cause is that `probe_head.py` had
+**no seed argument at all** — its three per-fold seeds were the literal tuple
+`(0, 1, 2)`, averaged, and the file name carried no seed either. So the
+dispatch labelled "seed B" recomputed a deterministic estimator and would have
+overwritten seed A with itself. This is CLAUDE.md §6c rule 7 in its purest
+form: the run asserted the invocation, and nothing asserted the effect.
+
+**What it does establish**, and it is not nothing: the whole ladder reproduces
+exactly across runs and boxes, which — after the #88-vs-#110 tensor divergence
+— is worth having measured. The ridge reproducing 0.631 confirms #117's parent
+tensor is the one we think it is.
+
+**What it does not establish:** that 0.662 is robust to resampling. It remains
+one estimator, and `head − raw3×3 = +0.034` remains unquotable.
+
+**Fixes landed with this entry.** `probe_head.py --seed-base N` makes the
+seeds `(N, N+1, N+2)` and puts `N` in the filename, so two draws cannot
+overwrite each other. More usefully, the probe now dumps its **out-of-fold
+predictions, target and year blocks**, and `scripts/paired_probe.py` scores
+the two probes' difference by resampling YEARS and rescoring both on the same
+resampled years. That is the right instrument and a second seed never was:
+the head's CI [0.557, 0.745] and the control's [0.514, 0.729] overlap almost
+entirely, but they share their folds, their months and most of their error,
+and shared variation cancels in a paired difference. Whether +0.034 survives
+that is now a question we can answer for the price of one CPU-minute instead
+of a GPU-hour, and `tests/test_paired_probe.py` pins that the script refuses
+an imaginary gap as readily as it resolves a real one.
+
+**Second bug, found in the same artefacts and fixed.** `probe_sequence.json`
+came back all-NaN across the whole K sweep — again, as it had on #101, where
+it was logged as "the sequence probe has a bug of its own". It was not a probe
+bug. `probe_sequence.py` selected the 26.5°N section with
+`isfinite(d["X"][0, sec_y, :, 0])` — **month 0, channel 0**. Family-3's
+channel 0 is `cur_speed` (GLORYS, from 1993-01) and the tensor starts 1982-01,
+so channel 0 is NaN everywhere in month 0, the section came out **empty**, and
+`z.mean(0)` over zero rows is NaN — for every month, for every K. The
+seasonal-only floor stayed finite (−0.168 / 0.272) precisely because it never
+touches the embedding, which is what made the failure read as a broken probe
+rather than a broken mask. It now uses the same any-month mask `temporal.py`
+and `probe_head.py` use, so the sequence probe scores the same 265 pixels as
+the rest of the ladder, and it **exits** rather than writing NaN to a results
+file. `tests/test_section_mask.py` pins all of it, including that the old rule
+and the new one agree whenever no channel starts late — the old rule was not
+wrong in general, it was wrong for this tensor.
+
+**Cost of the misdiagnosis:** one dispatch, and #101's K-sweep, which has been
+uninterpretable since 2026-08-09 for a reason that was in the channel list the
+whole time.
+
+---
+
 <a id="e-007"></a>
 ## E-007 · How far past persistence can a FROZEN-codec forecaster go? — still improving at 60k, but the AMOC probe plateaus at 24k
 

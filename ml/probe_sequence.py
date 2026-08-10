@@ -99,12 +99,32 @@ def main():
     model.to(_dev)
 
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
-    from temporal import RAPID_LON
-    sec_y = int(np.argmin(np.abs(lats - 26.5)))
-    sec_x = np.where(np.isfinite(d["X"][0, sec_y, :, 0])
-                     & (lons >= RAPID_LON[0]) & (lons <= RAPID_LON[1]))[0]
     Xt = torch.from_numpy(np.nan_to_num(X, nan=0.0))
     OBS = torch.from_numpy(np.isfinite(X))
+
+    # The section is the pixels observed at ANY time, not the ones observed in
+    # the FIRST month. Those are different sets the moment a channel starts
+    # later than the tensor does, and family-3's channel 0 is cur_speed
+    # (GLORYS, 1993-01) against a tensor that starts 1982-01 — so the old test
+    # `isfinite(d["X"][0, sec_y, :, 0])` selected ZERO pixels, `z.mean(0)` over
+    # an empty section returned NaN for every month, and every correlation in
+    # this file came out NaN. The seasonal floor stayed finite because it never
+    # touches the embedding, which is exactly why the failure read as a probe
+    # bug rather than a masking bug. This is the all-NaN probe_sequence.json
+    # reported by #101 and again by #116.
+    #
+    # Use the mask temporal.py and probe_head.py use, so the sequence probe
+    # scores the SAME section the rest of the ladder does and the rungs stay
+    # comparable.
+    from temporal import RAPID_LON
+    sec_y = int(np.argmin(np.abs(lats - 26.5)))
+    ocean_row = OBS[:, sec_y, :, 0].any(axis=0).numpy()
+    sec_x = np.where(ocean_row
+                     & (lons >= RAPID_LON[0]) & (lons <= RAPID_LON[1]))[0]
+    if len(sec_x) == 0:
+        sys.exit(f"empty 26.5N section at lat {lats[sec_y]:.2f} — refusing to "
+                 f"embed nothing (this is what produced all-NaN output before)")
+    print(f"section: {len(sec_x)} pixels at {lats[sec_y]:.2f}N")
 
     print(f"embedding the 26.5N section ({a.run}, anomaly={a.anomaly}) …")
     emb = np.zeros((T, ck["d_z"]), dtype=np.float32)
@@ -129,6 +149,13 @@ def main():
                                  torch.zeros(n, C, dtype=torch.bool, device=_dev),
                                  torch.as_tensor(ctx, dtype=torch.float32).to(_dev))
             emb[t] = z.mean(0).cpu().numpy()
+
+    # Refuse rather than write NaN into a results file. A probe that reports
+    # NaN looks like a broken probe; a probe that stops names the real fault.
+    if not np.isfinite(emb).all():
+        sys.exit(f"{int((~np.isfinite(emb)).sum())} non-finite values in the "
+                 f"section embedding — every downstream correlation would be "
+                 f"NaN, so nothing is written")
 
     rapid = d["rapid"]
     ridx = rapid[:, 0].astype(int)
