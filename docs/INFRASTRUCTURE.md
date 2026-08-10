@@ -267,6 +267,26 @@ model, ask where that one runs. And watch the one signal that shows this —
 `gpu_util` — because nothing else does: the run reads "in progress", the runner
 "online", the box "running", and the job is eight hours of CPU.
 
+**The fifth and largest instance was not an oversight — it was a decision whose
+premise expired.** `temporal.py` sent the codec to the accelerator for the
+embedding and brought everything back, with a comment saying so deliberately:
+*"stage-2 training is a small transformer for a few thousand steps"*. That was
+true when stage 2 was 4,000 steps. It is now 140,000 and 200,000, and the
+comment was still there, still reasonable-sounding, protecting a choice that
+had stopped being right.
+
+Measured before changing it: at batch 256, K=24 and a 1.824M head, the data
+gather off the memmap is **12.4 ms of a 725 ms step** — the model is 98% of
+the cost. So a 200,000-step run was a full day of a rented 4090's CPU while its
+GPU sat at zero.
+
+This is the same shape as §2c-bis, where the embedding memmapped to a 50 GB
+disk because the box used to have 7 GB of RAM. **A documented decision is
+harder to re-examine than an undocumented one**: the comment answers "why is
+this on the CPU?" so convincingly that nobody asks whether its premise still
+holds. When a scale changes by 50x — steps, RAM, disk, dataset — go and reread
+the comments that mention the old scale. They will still sound right.
+
 ### 2g · Expensive derived work with no home
 
 Three storage layers existed for things the fleet makes — tensors, codec

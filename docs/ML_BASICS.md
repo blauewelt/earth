@@ -262,6 +262,44 @@ number. invsqrt never reaches zero, so results are "at step N". For a question
 of the form "does more compute help?" that is the better shape, but switching
 deserves its own experiment (one budget, both schedules).
 
+### What the literature says, and what we have NOT verified
+
+Read 2026-08-10. Summarised honestly, including its distance from our setting.
+
+- **Horizon-free schedules work, with a caveat.** [Anytime
+  Pretraining](https://arxiv.org/html/2602.03702v1) evaluates constant, 1/√t
+  and WSD against a "cosine envelope" (cosine separately tuned per duration)
+  and finds they track it — but **weight averaging (EMA) is load-bearing**;
+  without it polynomial decay typically misses the optimal rate. 1/√t also
+  needs its α tuned, which reintroduces a weak horizon dependence.
+- **WSD is the current default answer.** Warmup → stable → short cooldown:
+  horizon-free while stable, but the cooldown restores a genuine converged
+  endpoint. [River-valley
+  intuition](https://arxiv.org/abs/2410.05192). For this programme the
+  consequence is concrete: E-007's four budgets could be ONE run with four
+  cooldowns branched off the stable phase.
+- **Re-warming from a minimum is actively harmful.** [Beyond Cosine
+  Decay](https://arxiv.org/html/2503.02844), on continual pre-training,
+  reports that re-warming from the minimum causes instability and worsens
+  forgetting — which is the exact shape of a warm restart that annealed to
+  zero first. This is a third candidate explanation for any underperformance
+  of E-008's warm restart, alongside "more compute doesn't help" and "the rate
+  was too low".
+- **Decaying to zero — SUPPORTED, NOT SETTLED.** [Straight to
+  Zero](https://arxiv.org/html/2502.15938v2) finds linear decay-to-zero beats
+  cosine, dramatically at over-trained budgets, and [convex
+  theory](https://arxiv.org/pdf/2501.18965) agrees the optimal cooldown
+  fraction is 1. **Chris pushed back on this and was right to.** It rests on
+  a thin sample of one literature, all of it LLM pretraining at 124M–610M
+  parameters and Chinchilla-scale token budgets; our stage-2 head is 1.8M
+  parameters against 240 months of target. No contradicting work was sought.
+
+  **The planned test**, because deferring to literature is the weaker move
+  when the experiment is cheap: same budget, same peak, one variable in the
+  tail — WSD cooling to **zero** vs WSD cooling to a **floor** (~10% of peak),
+  with #121's cosine-to-zero as a third point. Until that runs, treat
+  decay-to-zero as a borrowed prior, not a result of ours.
+
 ---
 
 ## 10 · Resume semantics: three different things
