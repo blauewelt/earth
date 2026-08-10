@@ -155,7 +155,46 @@ happened — so the caller's marker fired and the retry never did. Once it
 lands, a box that has never seen this codec pulls 5.2 GiB instead of spending
 an hour and a half.
 
-**Result.** *pending.* Read it with
+### PARTIAL RESULT — two arms of four, 2026-08-10 22:40 UTC
+
+**Do not quote this as the experiment.** U=4 and U=8 have not run: #133 and
+#134 died in `Set up job` when the box filled (see the cost note below), and
+a two-point "trend" through overlapping intervals is not one.
+
+| arm | head k-fold, 240 mo | 36-mo split | z-ratio |
+|---|---|---|---|
+| U=1 (#131) | **0.555** [0.408, 0.685] | 0.413 | 0.484 |
+| U=2 (#132) | **0.377** [0.204, 0.528] | 0.465 | 0.569 |
+
+Both completed their full 6,000 steps; #132's failure was in archiving, after
+`temporal.json` was written. The control holds: `z_mse_persistence` reads
+3.34340500831604 in both, so the codec and the data path were identical.
+
+**The finding that does not need the other two arms: THE TWO INSTRUMENTS
+ORDER THESE ARMS OPPOSITELY.** On the year-blocked k-fold U=1 beats U=2 by
+0.178. On the 36-month single split — *the instrument #88 and #93 were
+compared with* — U=2 beats U=1 by 0.052. Same two runs, same pooled hidden
+state, same months; only the resampling differs.
+
+That is the strongest evidence available that the archive's 0.173-vs-0.449
+gap was the split rather than the unroll. It does **not** establish the
+k-fold's ordering either — n = 1 per arm and the intervals overlap heavily —
+but whichever way U=4 and U=8 land, **the original result cannot stand as
+measured**, and the E-005 entry that reported it has been amended.
+
+The one thing consistent with the archive: higher U forecasts **worse**
+(z-ratio 0.484 → 0.569), as #88 vs #93 also showed.
+
+**Cost, recorded per the house rule.** Three of four arms lost to one
+unchecked write: #131's embed-cache push began chunking a 1.5 GiB temp file
+onto a box with less free than that, hit ENOSPC, left the part behind, and
+took the disk to 50/50. #132 then failed in its archive step and #133/#134 in
+`Set up job` — before any step, so the hygiene step that would have cleaned
+it could never run. Both halves are fixed (`embed_cache_sync` refuses a chunk
+it cannot fit and cleans up in `finally`; `disk_hygiene` clears `Z_*.up`),
+and the box needs a stop/start before the sweep can finish.
+
+**Result.** *pending the other two arms.* Read it with
 
 ```
 node scripts/sweep_table.mjs --runs 131:U=1,132:U=2,133:U=4,134:U=8
@@ -965,6 +1004,16 @@ argues from. At n = 36 the standard error on r is ≈ 0.13–0.16, so a single
 same codec, same features, same 36 months, one changed flag. Treat +0.28 as a
 direction worth spending a k-fold on, **not** as a measured effect — and note
 that the metric that moved is not the one the paper's headline uses.
+
+> **Amended 2026-08-10, and the caution above was not cautious enough.**
+> E-009 re-measured U=1 and U=2 under one code version on the year-blocked
+> k-fold (~240 out-of-fold months), and **the two instruments order the arms
+> oppositely**: k-fold U=1 0.555 vs U=2 0.377, single split U=1 0.413 vs U=2
+> 0.465. Same runs, same features, same months. So the +0.28 reported here is
+> not merely imprecise — the sign of the comparison is not stable under the
+> resampling, and this entry's result should be treated as **withdrawn**
+> pending E-009's remaining arms. What survives is the z-ratio direction:
+> higher U forecasts worse, which E-009 reproduces.
 
 **Next.** ~~Re-score both stage-2 models through `probe_kfold.py` rather than
 the single split~~ — **struck 2026-08-10: that is not possible and asking for
