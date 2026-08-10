@@ -109,7 +109,18 @@ async function tick() {
       } else if (emb) {
         note = `embedding ${emb.embedding.pct}% (${emb.embedding.where})`;
       } else {
-        note = "started, before stage 2";
+        // NOT "before stage 2" — that phrasing said nothing about whether the
+        // run was working or wedged, and there is a long stretch where it is
+        // working. The probes step runs probe_sequence.py's whole K-sweep
+        // BEFORE stage 2, which on the quarter-degree tensor is fifteen-odd
+        // minutes that write no metrics record at all. #131 sat in it looking
+        // idle, and I went to the job log to find out why. The workflow
+        // already publishes a phase to the same branch every stage; the
+        // watcher simply was not reading it.
+        const ph = await branchFile(`ml-live-${n}`, "phase.json");
+        let phase = null;
+        try { phase = JSON.parse(ph).phase; } catch { /* none published yet */ }
+        note = phase ? `${phase} (no curve yet)` : "started, no metrics yet";
       }
     }
     parts.push(`#${n} ${note}`);
