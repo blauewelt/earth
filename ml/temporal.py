@@ -171,12 +171,39 @@ def make_sched(opt, a, last_epoch=-1):
     be a deliberate experiment (one budget, both schedules) rather than a
     default flipped in passing.
     """
-    if a.lr_schedule == "invsqrt":
+    if a.lr_schedule in ("invsqrt", "wsd"):
         warm = max(1, int(a.lr_warmup))
 
-        def factor(step):
-            s = step + 1
-            return min(s / warm, (warm / s) ** 0.5)
+        if a.lr_schedule == "wsd":
+            # WARMUP - STABLE - DECAY. The literature's current answer, and a
+            # better fit for this programme than either cosine or pure
+            # inverse-sqrt: the stable phase is horizon-free, so a run can be
+            # extended and its checkpoints are interchangeable, while the
+            # cooldown recovers a genuine CONVERGED endpoint — which is what
+            # invsqrt gives up and what makes "the 60k result" a settled
+            # number rather than a reading at step 60,000.
+            #
+            # The consequence for this programme is concrete: E-007's four
+            # budgets could be ONE run with four short cooldowns branched off
+            # the stable phase, instead of four experiments that cannot be
+            # compared as a trajectory.
+            cool = max(1, int(round(a.steps * a.lr_cooldown_frac)))
+            stable_end = max(warm, a.steps - cool)
+
+            def factor(step):
+                s = step + 1
+                if s <= warm:
+                    return s / warm
+                if s <= stable_end:
+                    return 1.0
+                # Linear to zero: convex theory puts the optimal cooldown
+                # shape at linear, and D2Z finds decaying fully to zero beats
+                # stopping at a floor, increasingly so the longer you train.
+                return max(0.0, (a.steps - s) / max(1, a.steps - stable_end))
+        else:
+            def factor(step):
+                s = step + 1
+                return min(s / warm, (warm / s) ** 0.5)
 
         for g in opt.param_groups:
             g.setdefault("initial_lr", g["lr"])
@@ -508,7 +535,7 @@ def main():
     ap.add_argument("--d-model", type=int, default=96)
     ap.add_argument("--layers", type=int, default=3)
     ap.add_argument("--lr-schedule", default="cosine",
-                    choices=["cosine", "invsqrt"],
+                    choices=["cosine", "invsqrt", "wsd"],
                     help="cosine bakes the TOTAL step count into the rate, so "
                          "a checkpoint's schedule only means anything next to "
                          "the budget it was trained under (this is what makes "
@@ -518,6 +545,12 @@ def main():
                          "stopped at 60k and continued to 200k sees exactly "
                          "what an uninterrupted 200k run would have. Default "
                          "stays cosine because every existing result used it.")
+    ap.add_argument("--lr-cooldown-frac", type=float, default=0.1,
+                    help="wsd only: fraction of --steps spent decaying "
+                         "linearly to zero at the end. The stable phase before "
+                         "it is horizon-free, so a run can be extended; the "
+                         "cooldown is what makes the result CONVERGED rather "
+                         "than a reading at step N.")
     ap.add_argument("--lr-warmup", type=int, default=2000,
                     help="invsqrt only: steps to reach the peak, after which "
                          "lr = peak * sqrt(warmup / step)")
@@ -728,6 +761,27 @@ def main():
 
     model = TemporalTransformer(d_z=ck["d_z"], d_model=a.d_model,
                                 n_layers=a.layers, k_max=K)
+    # STAGE-2 TRAINING RUNS ON THE ACCELERATOR TOO.
+    # The comment above this block used to say stage-2 training is "a small
+    # transformer for a few thousand steps" and therefore not worth a GPU.
+    # That was true when stage 2 was 4,000 steps. It is now 140,000 and
+    # 200,000, and the premise expired without the code noticing — the same
+    # shape of error as memmapping to disk because the box used to have 7 GB
+    # of RAM.
+    #
+    # Measured before changing it, rather than assumed: at batch 256, K=24 and
+    # a 1.824M head, the data gather off the memmap is 12.4 ms of a 725 ms
+    # step. The model is 98% of the cost, so the accelerator is worth between
+    # 5x and 20x on a run that otherwise takes a full day.
+    #
+    # The batch gather stays on the CPU — Z is a 5.2 GiB memmap and random
+    # rows out of it belong where the pages are — and only the assembled
+    # batch crosses, which is 256 x 25 x 64 fp32, about 1.6 MB.
+    TDEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(TDEV)
+    print(f"stage-2 head on {TDEV.type} "
+          f"({sum(p_.numel() for p_ in model.parameters()) / 1e6:.3f}M params)",
+          flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     sched = make_sched(opt, a)
 
@@ -820,7 +874,7 @@ def main():
         prev_total = int(tk.get("args", {}).get("steps", start_step))
         extending = (a.steps != prev_total) or (abs(a.lr - float(
             tk.get("args", {}).get("lr", a.lr))) > 1e-12)
-        if a.lr_schedule == "invsqrt":
+        if a.lr_schedule in ("invsqrt", "wsd"):
             # NOTHING TO DECIDE. A horizon-free schedule is a pure function of
             # the step, so extending is not a case: rebuild it at the same
             # position and it produces exactly what an uninterrupted run of
@@ -885,7 +939,8 @@ def main():
         # the code was right.)
         zfut = torch.stack([Zt[t + 1 + u, p] for u in range(U)], 1).float()
         mfut = torch.stack([Mt[t + 1 + u] for u in range(U)], 1)
-        return zseq, mseq, static_ctx[p], ztgt, zfut, mfut
+        return (zseq.to(TDEV), mseq.to(TDEV), static_ctx[p].to(TDEV),
+                ztgt.to(TDEV), zfut.to(TDEV), mfut.to(TDEV))
 
     # Stage 2 goes into the RUN'S OWN metrics.jsonl, not just temporal.json.
     # temporal.json is uploaded as a build artifact, and artifacts need an
@@ -1006,8 +1061,9 @@ def main():
         base = et - K + 1
         zseq = torch.stack([Zt[base + j, ep] for j in range(K)], 1).float()
         mseq = torch.stack([Mt[base + j] for j in range(K)], 1)
-        pred, hid = model(zseq, mseq, static_ctx[ep])
-        zhat = pred[:, -1]                       # ẑ_{t+1}
+        pred, hid = model(zseq.to(TDEV), mseq.to(TDEV), static_ctx[ep].to(TDEV))
+        pred, hid = pred.cpu(), hid.cpu()        # back to CPU: everything
+        zhat = pred[:, -1]                       # below here is numpy-bound
         ztrue = Zt[et + 1, ep].float()
         zlast = Zt[et, ep].float()                        # persistence in z
         results["z_t+1"] = {
@@ -1049,8 +1105,9 @@ def main():
             zseq = torch.stack([Zt[base + j, sec_pix] for j in range(K)], 1).float()
             mseq = torch.stack([Mt[base + j].expand(len(sec_pix), -1)
                                 for j in range(K)], 1)
-            _, hid = model(zseq, mseq, static_ctx[sec_pix])
-            F[t] = hid[:, -1].mean(0).numpy()    # pool along the section
+            _, hid = model(zseq.to(TDEV), mseq.to(TDEV),
+                           static_ctx[sec_pix].to(TDEV))
+            F[t] = hid[:, -1].mean(0).cpu().numpy()   # pool along the section
     ridx = rapid[:, 0].astype(int)
     rv_raw = rapid[:, 1].copy()
     rmoy = moy[ridx]
