@@ -1,0 +1,44 @@
+{
+ "run_number": 119,
+ "files": {
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.43,
+     "r_deseasonalised": 0.42,
+     "n_test": 36
+    },
+    {
+     "K": 3,
+     "r_raw": 0.424,
+     "r_deseasonalised": 0.408,
+     "n_test": 36
+    },
+    {
+     "K": 6,
+     "r_raw": 0.519,
+     "r_deseasonalised": 0.457,
+     "n_test": 36
+    },
+    {
+     "K": 12,
+     "r_raw": 0.648,
+     "r_deseasonalised": 0.632,
+     "n_test": 36
+    },
+    {
+     "K": 24,
+     "r_raw": 0.604,
+     "r_deseasonalised": 0.583,
+     "n_test": 36
+    }
+   ],
+   "seasonal_floor_raw": 0.272,
+   "seasonal_floor_deseas": -0.168
+  }
+ },
+ "rescued_at": "2026-08-10T21:26:23.388Z"
+}
