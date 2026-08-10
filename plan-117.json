@@ -1,0 +1,10 @@
+{
+ "steps": 200000,
+ "lr": 0.0001,
+ "at_step": 60000,
+ "parent_run": 112,
+ "parent_steps": 60000,
+ "parent_lr": 0.001,
+ "note": "E-008 continuation of the 60k stage-2 head at 1/10th peak LR",
+ "published_at": "2026-08-10T11:13:53.412Z"
+}
