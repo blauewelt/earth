@@ -429,6 +429,23 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   normal is the annual mean, so the difference would mostly be the seasonal
   cycle — the MUR25 anomalies row is the seasonally-correct departure.
   `showPixelState(carto)` is exported for tests. Esc or × closes.
+  - **Heat load** is its own section (added 2026-08-10 from a Zürich
+    Klimaanalysekarte the user sent): felt temperature now with its gap
+    against air, today's felt peak, tonight's low flagged as a **tropical
+    night** at ≥ 20 °C, and a 7-day felt peak + tropical-night count. Two
+    things it must keep doing. It reads TOMORROW's daily minimum for
+    "tonight" — minima fall near dawn, so tonight's low is on the next
+    calendar day. And its note NAMES the index and disclaims PET/UTCI's
+    35/41 °C class limits: those model a body's radiation balance and read
+    far warmer in direct sun, so lending their thresholds to an apparent
+    temperature would print "extreme" on an ordinary afternoon. The 20 °C
+    tropical-night line is the standard definition, not a picked number.
+    The variables ride the SINGLE `fetchOpenMeteo` call — a seventh parallel
+    request made the burst drop sections at random (Open-Meteo rate-limits
+    per IP across its whole family), so the call is `timezone=auto` (a
+    tropical night is defined on the local night) and `omUTC()` restates the
+    instant stamps in UTC. `omGet` retries once on 429/5xx and network
+    errors, never on a 400 — that's our own bad URL.
 - **Provenance: every value says when it was observed.** Both read-outs — the
   card and the hover/click probe — stamp each row with its own date, dim and
   right-aligned (`.px-when`; the probe puts the same string on its own line in
@@ -915,6 +932,16 @@ worth keeping in front of a frontend reader:
   arithmetic, and `kelvinToC` converts cap bounds along with values. Test:
   "catch-all colormap bins probe as bounds" (Gotland deep = capped, 30W/40N =
   numeric — anchors verified against the real July-2026 tile).
+- **There is no PET or UTCI on either allowed path — checked 2026-08-10, do
+  not re-check.** GIBS's WMTSCapabilities has AIRS surface *air* and *skin*
+  temperature and nothing that models a body, and the Open-Meteo family
+  serves `apparent_temperature` but no UTCI. So a thermal-comfort layer of
+  the kind a city Klimaanalysekarte shows cannot be built inside §3 as it
+  stands. The two ways it COULD be: bake a global gridded **ERA5-HEAT UTCI**
+  (Copernicus CDS, needs a free CDS account — the same shape as the GLORYS
+  bake), or ingest a canton/city PET map as a bounded grid (the MeteoSwiss
+  precip normal is the precedent for a national-extent grid). Both are real
+  work; neither is blocked by anything but a decision.
 - **SMAP salinity's blank areas are the product's own mask**, not a bug: an
   L-band radiometer can't retrieve near coasts (land in the sidelobes), under
   sea ice, or in RFI — measured on the real tiles, only ~35% of the UK/Biscay
