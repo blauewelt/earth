@@ -415,3 +415,31 @@ test("a continued stage-2 run charts BOTH learning-rate schedules and the seam",
   // And the axis runs from 0, not from the seam: the whole trajectory.
   await expect(card).toContainText("200,000");
 });
+
+test("empty recent runs do not evict the runs that DO have curves", async ({ page }) => {
+  // The exact shape of 2026-08-10: a burst of cancels and rescue-only jobs
+  // sitting above the last run that actually plotted anything. Selecting "the
+  // six most recent completed runs" showed six empties and hid the curve.
+  const empties = [201, 202, 203, 204, 205, 206].map((n, i) => ({
+    id: 900 + i, run_number: n, status: "completed",
+    conclusion: n % 2 ? "cancelled" : "success",
+    created_at: iso(60 + i), html_url: "https://example.invalid/" + n,
+    display_title: "rescue-only / cancelled", name: "ml-train",
+    head_sha: String(n).repeat(8).slice(0, 40),
+  }));
+  await page.route(/\/actions\/workflows\/[^/]+\/runs/, (route) =>
+    route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({ workflow_runs: empties.concat([{
+        id: 999, run_number: 103, status: "completed", conclusion: "success",
+        created_at: iso(300), html_url: "https://example.invalid/103",
+        display_title: "the run that actually has a stage-2 curve",
+        name: "ml-train", head_sha: "c".repeat(40),
+      }]) }),
+    }));
+  await page.goto("/status.html");
+  const live = page.locator("#live");
+  // #103's archive is stubbed in beforeEach and carries a full stage-2 run.
+  await expect(live).toContainText("temporal transformer over the frozen embeddings");
+  await expect(live).toContainText("6 more recent runs had nothing to plot");
+});

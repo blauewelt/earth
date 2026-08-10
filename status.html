@@ -129,7 +129,8 @@
 (function () {
   var REPO = "blauewelt/earth";
   var REFRESH_MS = 120000;
-  var CHART_HISTORY = 6;   // finished runs to keep charted below the live ones
+  var CHART_HISTORY = 6;      // finished runs WITH CURVES to keep charted
+  var CHART_CANDIDATES = 24;  // how deep to look for them; see renderLive
   var timer = null;
 
   function $(id) { return document.getElementById(id); }
@@ -1063,16 +1064,45 @@
     var inprog = runs.filter(function (r) {
       return r.status === "in_progress" || r.status === "queued";
     });
+    // NOT "the six most recent completed runs" — "the six most recent that
+    // actually PLOT something". Those are different, and the difference is
+    // why Chris opened the dashboard perhaps ten times and saw nothing.
+    //
+    // Cancels, rescue-only dispatches and probe-only evals produce no curves
+    // by construction: a run resumed at its final step runs zero stage-1
+    // steps, temporal_steps: 0 runs no stage 2, and a cancelled run never
+    // reaches the archive step at all. On 2026-08-10 the six most recent
+    // completed runs were #116 (probe-only), #115 (rescue), #114/#113/#111
+    // (cancelled, never archived) and #112 (cancelled) — six empties, while
+    // #110's full stage-2 curve sat one place below the cut and was never
+    // drawn. The page was correct and useless.
+    //
+    // So: consider a deeper pool, render them, and keep the first
+    // CHART_HISTORY that returned anything. The extra fetches are small files
+    // on raw.githubusercontent, which is not part of the API rate budget.
     var done = runs.filter(function (r) { return r.status === "completed"; })
-                   .slice(0, CHART_HISTORY);
+                   .slice(0, CHART_CANDIDATES);
     var wanted = inprog.concat(done);
     if (!wanted.length) {
       $("live").innerHTML = '<div class="empty">no runs found</div>';
       return Promise.resolve();
     }
     return Promise.all(wanted.map(renderLiveRun)).then(function (cards) {
-      var html = cards.filter(function (c) { return c; }).join("");
-      $("live").innerHTML = html || '<div class="empty">no runs with curves yet</div>';
+      var live = cards.slice(0, inprog.length).filter(function (c) { return c; });
+      var hist = cards.slice(inprog.length).filter(function (c) { return c; })
+                      .slice(0, CHART_HISTORY);
+      var html = live.concat(hist).join("");
+      var skipped = done.length - hist.length;
+      $("live").innerHTML = html
+        ? html + (skipped > 0
+            ? '<div class="meta" style="margin-top:8px">' + skipped +
+              " more recent run" + (skipped === 1 ? "" : "s") +
+              " had nothing to plot — cancelled, rescue-only, or resumed at " +
+              "their final step with stage 2 skipped.</div>"
+            : "")
+        : '<div class="empty">None of the last ' + done.length +
+          " runs produced curves — they were cancelled, rescue-only, or " +
+          "probe-only evals, which have nothing to plot by construction.</div>";
     });
   }
 
