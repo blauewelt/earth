@@ -999,6 +999,21 @@ archive.
   `/api/v1/instances/`, or you will stop the one that is mid-run. Measured
   2026-08-09: instance 47160352 -> gpu-box-47094145, 47160357 ->
   gpu-box-45318655, 47171781 -> gpu-box-35586926.
+- **No stage-2 head published before 2026-08-10 can be CONTINUED**, and the
+  two modes are now separate dispatches. `f3_s2_60k__temporal.pt`,
+  `f3_s2_24k__temporal.pt` and every `rescued-orphan-temporal-*` are
+  `{args, model}` — measured, all of them. `--resume-temporal` therefore
+  refuses them (correctly: weights alone reset Adam's moments and the LR
+  schedule, which is a warm restart wearing a continuation's name), and #119
+  discovered this **after 93 minutes of embedding**, then reported the job as
+  a success. For an explicit warm restart dispatch `window: warm2:<tag>[@lr]`
+  with `temporal_steps` as the **EXTRA** steps, not the total; it logs
+  `stage2_warm_restart` naming what was reset. `resume2:` stays strict and
+  becomes usable once a run produces a head carrying `opt/sched/step`.
+  `scripts/precheck_stage2_head.py` now answers the question in under a second
+  before the tensor loads — and only its two DEFINITE verdicts are fatal,
+  because `run:` blocks execute under `bash -e` and a non-zero exit would take
+  the whole probe ladder with it.
 - **A Vast instance's disk CANNOT be resized — and the API lies about it.**
   Measured 2026-08-10 on two stopped instances: `PUT /instances/<id>/` with
   `{"disk": 80}` and with `{"disk_space": 80}` each return HTTP 200

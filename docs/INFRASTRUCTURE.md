@@ -163,6 +163,46 @@ branch — it exercised the one arm that already worked. A test fixture must
 model the state the user will be in, which here means: in progress, a metrics
 file carrying config and nothing else, and a published plan.
 
+### 2c-quater · Guards that are right, and in the wrong place
+
+Run #119 embedded for **93 minutes** and then exited one second later:
+
+> `f3_s2_60k__temporal.pt` predates optimiser-state saving (missing
+> `['opt', 'sched', 'step']`) … a warm restart wearing a continuation's name.
+> Refusing.
+
+Nothing about that refusal is wrong. Loading weights alone resets Adam's
+moments and the LR schedule, and reporting the result as a continuation would
+have been a false claim about a published number. The guard is one of the good
+ones.
+
+Its POSITION cost an hour and a half of a rented 4090. The checkpoint's keys
+are readable the moment the file is on disk — before the tensor is loaded,
+before a single encoder forward. The precondition depended only on the inputs,
+and it was checked at the point of *use* instead of the point of *dispatch*.
+
+There is a second, quieter cost. Because the job "completed successfully"
+(the step was `continue-on-error`), nothing in the run's status said the
+experiment had not run. It took reading the log to discover that sixteen hours
+of training had become two hours of nothing.
+
+**Design response.** A precondition that depends only on the inputs must be
+checked while the inputs are all it has cost you.
+`scripts/precheck_stage2_head.py` answers it in under a second and names the
+flag that would have worked. Two refinements learned immediately afterwards,
+both worth keeping:
+
+- **Only a DEFINITE answer may be fatal.** GitHub runs `run:` blocks under
+  `bash -e`, so a non-zero exit from the precheck aborts the whole step and
+  takes the k-fold ladder, `dip_check` and both head probes with it. That is
+  correct for "this mode cannot work"; it is wrong for a torch quirk, where
+  the behaviour before the guard existed was strictly better. A check that can
+  cost more than the thing it protects is the same error one level up.
+- **Verify the artefact, not the intention.** The reason this was not caught
+  when E-008 was designed is that the entry was written from what the
+  checkpoint was *assumed* to contain. Opening the file would have taken ten
+  seconds. Every published head turned out to be `{args, model}`.
+
 ### 2d · Instruments blind to the failure they exist to catch
 
 - `r_rec_probe` (reconstruction on a fixed batch) looked healthy through a 40×
