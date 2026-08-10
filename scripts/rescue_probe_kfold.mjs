@@ -58,12 +58,26 @@ for (const n of RUNS) {
   const cur = await fetch(
     `https://api.github.com/repos/${REPO}/contents/probes-${n}.json?ref=ml-metrics`,
     { headers: H });
-  if (!cur.ok) { console.log(`#${n}: no bundle on ml-metrics yet`); skipped++; continue; }
-  const meta = await cur.json();
-  const bundle = JSON.parse(Buffer.from(meta.content, "base64").toString("utf8"));
-  if (bundle.files?.["probe_kfold.json"]) {
-    console.log(`#${n}: already has the codec control — nothing to do`);
-    skipped++; continue;
+  // TWO CASES, not one. A run dispatched before 508e717 (2026-08-10 19:23)
+  // never called archive_probes at all, so there is no bundle to repair —
+  // #116, #125 and #126 are all in that window, and the first two were
+  // rebuilt by hand tonight before this tool existed. A run dispatched after
+  // it but before a70f3a41 has a bundle missing only the codec control.
+  // Both end with the same artifact and the same upload, so both live here.
+  let meta = null, bundle = null;
+  if (cur.ok) {
+    meta = await cur.json();
+    bundle = JSON.parse(Buffer.from(meta.content, "base64").toString("utf8"));
+    if (bundle.files?.["probe_kfold.json"]) {
+      console.log(`#${n}: already has the codec control — nothing to do`);
+      skipped++; continue;
+    }
+    console.log(`#${n}: bundle exists, missing the codec control`);
+  } else if (cur.status === 404) {
+    console.log(`#${n}: no bundle at all — building one from the artifact`);
+    bundle = { run_number: n, files: {} };
+  } else {
+    console.log(`#${n}: cannot read the bundle (${cur.status})`); skipped++; continue;
   }
 
   const arts = await (await fetch(
@@ -80,26 +94,47 @@ for (const n of RUNS) {
   if (!r.ok) { console.log(`#${n}: artifact download ${r.status}`); skipped++; continue; }
   writeFileSync(zip, Buffer.from(await r.arrayBuffer()));
   execFileSync("unzip", ["-o", "-q", zip, "-d", dir]);
-  const p = join(dir, "probe_kfold.json");
-  if (!existsSync(p)) { console.log(`#${n}: artifact has no probe_kfold.json`); skipped++; continue; }
-
-  bundle.files["probe_kfold.json"] = JSON.parse(readFileSync(p, "utf8"));
-  bundle.rescued_probe_kfold_at = new Date().toISOString();
+  // The artifact keeps the on-box layout: probe_kfold.json at the top,
+  // everything else under actions/. Take every result file from wherever it
+  // sits — for a bundle being built from scratch the head numbers matter more
+  // than the control, and for one being repaired the files it already has are
+  // left alone.
+  const WANT = ["probe_kfold.json", "temporal.json", "probe_sequence.json",
+                "dip_check.json", "probe_head.json", "probe_head_raw3x3.json",
+                "probe_head_raw.json", "rollout.json", "provenance.json"];
+  let added = 0;
+  for (const f of WANT) {
+    const q = [join(dir, f), join(dir, "actions", f)].find((x) => existsSync(x));
+    if (!q || bundle.files[f]) continue;
+    try { bundle.files[f] = JSON.parse(readFileSync(q, "utf8")); added++; }
+    catch (e) { console.log(`  #${n}: skipping ${f} (${e.message})`); }
+  }
+  if (!added) { console.log(`#${n}: artifact had nothing new`); skipped++; continue; }
+  console.log(`  #${n}: adding ${added} file(s); bundle will hold ` +
+              WANT.filter((f) => bundle.files[f]).join(", "));
+  if (!bundle.files["probe_kfold.json"]) {
+    console.log(`  ::warning:: #${n} still has no codec control — the artifact ` +
+                `did not carry probe_kfold.json`);
+  }
+  bundle.rescued_at = new Date().toISOString();
   const put = await fetch(
     `https://api.github.com/repos/${REPO}/contents/probes-${n}.json`,
     { method: "PUT", headers: HW, body: JSON.stringify({
-        message: `merge the codec control into run #${n}'s probe bundle`,
+        message: meta ? `merge the codec control into run #${n}'s probe bundle`
+                      : `archive run #${n}'s probe results from its artifact`,
         content: Buffer.from(JSON.stringify(bundle, null, 1)).toString("base64"),
-        branch: "ml-metrics", sha: meta.sha }) });
+        branch: "ml-metrics", ...(meta ? { sha: meta.sha } : {}) }) });
   if (!put.ok) { console.log(`#${n}: write failed ${put.status}`); skipped++; continue; }
 
   // Assert the effect, through the API for the same staleness reason.
   const back = await fetch(
     `https://api.github.com/repos/${REPO}/contents/probes-${n}.json?ref=ml-metrics`,
     { headers: H });
-  const ok = back.ok && JSON.parse(Buffer.from((await back.json()).content, "base64")
-                                     .toString("utf8")).files["probe_kfold.json"];
-  console.log(`#${n}: ${ok ? "codec control merged" : "WROTE IT BUT IT IS NOT THERE"}`);
+  const got = back.ok && JSON.parse(Buffer.from((await back.json()).content, "base64")
+                                      .toString("utf8")).files;
+  const ok = got && Object.keys(got).length > 0;
+  console.log(`#${n}: ${ok ? "archived — " + Object.keys(got).join(", ")
+                           : "WROTE IT BUT IT IS NOT THERE"}`);
   if (ok) fixed++; else skipped++;
 }
 console.log(`\n${fixed} bundle(s) repaired, ${skipped} skipped.`);
