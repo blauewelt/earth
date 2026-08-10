@@ -918,7 +918,14 @@ jobs:
           # GitHub deletes after 30 days. The training curves outlived the
           # results. #116's had to be rescued by hand on 2026-08-10 with three
           # weeks to spare.
-          node scripts/archive_probes.mjs --run-number "${{ github.run_number }}" \
+          # PYTHON, NOT NODE. The .mjs version of this ran on every job from
+          # 19:23 on 2026-08-10 and died each time with `node: command not
+          # found` — the Vast boxes have no node, exactly as they have no `gh`
+          # (ml/CLAUDE.md §7). It was a best-effort step, so it warned and the
+          # job went green, and not one probe result was ever archived by it.
+          # The sandbox has the opposite constraint (node writes fine, python
+          # is blocked by the egress proxy), which is why both versions exist.
+          python3 scripts/archive_probes.py --run-number "${{ github.run_number }}" \
             --dir ml/runs/actions || \
             echo "::warning::probe archive failed — results are only in the artifact, which expires"
           git push -q "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
