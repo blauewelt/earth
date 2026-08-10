@@ -56,6 +56,27 @@ const n = (v) => (v === undefined || v === null || v === "" ? NaN : Number(v));
 
 if (!(n(plan.steps) > 0)) problems.push("plan.steps must be a positive number");
 if (!(n(plan.lr) > 0)) problems.push("plan.lr must be a positive number");
+// THE CURVE MUST COME FROM THE TRAINER. A plan without `points` would be
+// re-derived by the status page, which is a second implementation of the
+// schedule and would happily draw a cosine for a wsd run — certifying a
+// schedule the run does not use. Generate it with ml/plan_schedule.py.
+if (!Array.isArray(plan.points) || plan.points.length < 2) {
+  problems.push(
+    "plan.points is missing: the curve must be computed from the trainer's " +
+    "own scheduler, not re-derived by the page. Generate the plan with\n" +
+    "      python3 ml/plan_schedule.py --steps <n> --lr <x> --schedule <s>");
+}
+if (plan.schedule && String(inputs.window ?? "").startsWith("sched:")) {
+  const wsched = String(inputs.window).slice("sched:".length);
+  if (wsched !== plan.schedule) {
+    problems.push(`window says sched:${wsched} but plan.schedule is ` +
+                  `${plan.schedule} — the drawn curve is not the one that runs.`);
+  }
+}
+if (plan.warm && (!Array.isArray(plan.parent_points) || plan.parent_points.length < 2)) {
+  problems.push("a warm restart's plan needs parent_points so the chart has a " +
+                "parent segment to show the seam against.");
+}
 
 const ts = String(inputs.temporal_steps ?? "");
 const isJoint = ts.startsWith("joint:");

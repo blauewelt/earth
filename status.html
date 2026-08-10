@@ -946,6 +946,56 @@
   // indicative — which is the point, since the failure it guards against (a
   // resumed cosine sitting at lr 0.0) is visible here and nowhere else until
   // the hours are already spent.
+  // Draws exactly what the trainer's scheduler produced. No schedule maths
+  // lives here on purpose: the only way this can misdescribe a run is if the
+  // points themselves are wrong, and those come from make_sched.
+  function planChartFromPoints(plan) {
+    var segs = [];
+    if (plan.parent_points && plan.parent_points.length > 1)
+      segs.push({ pts: plan.parent_points, dashed: true });
+    segs.push({ pts: plan.points, dashed: false });
+    var all = segs.reduce(function (a, sg) { return a.concat(sg.pts); }, []);
+    var xmax = Math.max.apply(null, all.map(function (q) { return q[0]; })) || 1;
+    var ymax = Math.max.apply(null, all.map(function (q) { return q[1]; })) || 1;
+    var W = 600, H = 90, padL = 46, padR = 10, padT = 10, padB = 18;
+    var X = function (v) { return padL + (W - padL - padR) * v / xmax; };
+    var Y = function (v) { return padT + (H - padT - padB) * (1 - v / ymax); };
+    var body = segs.map(function (sg) {
+      return '<polyline points="' + sg.pts.map(function (q) {
+        return X(q[0]).toFixed(1) + "," + Y(q[1]).toFixed(1);
+      }).join(" ") + '" fill="none" stroke="#f0883e" stroke-width="1.5" ' +
+      'opacity="' + (sg.dashed ? "0.55" : "0.9") + '"' +
+      (sg.dashed ? ' stroke-dasharray="5 4"' : "") + "/>";
+    }).join("");
+    var seamAt = plan.warm ? plan.parent_steps : plan.at_step;
+    var seam = seamAt ? '<line x1="' + X(seamAt).toFixed(1) + '" y1="' + padT +
+      '" x2="' + X(seamAt).toFixed(1) + '" y2="' + (H - padB) +
+      '" stroke="#6e7681" stroke-width="1" stroke-dasharray="3 3"/>' : "";
+    var kind = plan.schedule || "cosine";
+    return '<div class="probe" style="margin-top:10px"><b>planned schedule</b> ' +
+      '<span class="meta">(not yet run · computed from the trainer\'s own ' +
+      'scheduler)</span></div>' +
+      '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" role="img" ' +
+      'aria-label="planned learning-rate schedule">' +
+      '<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) +
+      '" y2="' + (H - padB) + '" stroke="#30363d"/>' + seam + body +
+      '<text x="' + (W - padR) + '" y="' + (H - 4) +
+      // Label the run's TOTAL, not the last sampled index: the curve is
+      // sampled at 240 points ending at steps-1, and an axis reading 199,999
+      // invites the reader to wonder which of the two numbers is wrong.
+      '" text-anchor="end" font-size="11" fill="#8b949e">' +
+      fmtInt(plan.steps ? (plan.warm ? plan.parent_steps + plan.steps : plan.steps)
+                        : xmax) + "</text>" +
+      "</svg>" +
+      '<div class="legend"><span><span class="sw" style="background:#f0883e"></span>' +
+      esc(kind) + ", peak <b>" + Number(plan.lr).toExponential(1) + "</b>" +
+      (plan.warm ? " — <b>warm restart</b>, fresh schedule of " +
+        fmtInt(plan.steps) + " steps from step " + fmtInt(plan.parent_steps) +
+        ' · <span class="sw" style="background:#f0883e;opacity:.55"></span>' +
+        "previous run (peak " + Number(plan.parent_lr).toExponential(1) + ")" : "") +
+      "</span></div>";
+  }
+
   function planChart(plan) {
     if (!plan || !(plan.steps > 0) || !(plan.lr > 0)) return "";
     // A WARM RESTART's plan is drawn on the axis of TOTAL compute, because
@@ -954,6 +1004,13 @@
     // dispatch passes, so the axis has to be parent + extra — drawing it on
     // 0..extra would put a 200,000-step experiment on a 140,000-step axis and
     // silently misplace every point on it.
+    // PREFER THE POINTS THE TRAINER PRODUCED. ml/plan_schedule.py samples the
+    // real make_sched, so a plan carrying `points` needs no formula here at
+    // all — and cannot disagree with the run. The analytic path below stays
+    // for plans published before 2026-08-10, but nothing new should use it:
+    // re-deriving the curve is a second implementation of the schedule, and
+    // it would have gone on drawing a cosine for a wsd run without a word.
+    if (plan.points && plan.points.length > 1) return planChartFromPoints(plan);
     var isWarm = !!plan.warm && plan.parent_steps > 0;
     var m = isWarm
       ? { s2cfg: { steps: plan.steps, lr: plan.lr },

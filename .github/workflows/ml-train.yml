@@ -730,7 +730,18 @@ jobs:
             # because workflow_dispatch caps at 25 and this file is at the
             # ceiling. temporal.py refuses if the tag is absent or already
             # past --steps, so a typo cannot silently become a fresh run.
-            R2=""; LR2=""; MODE2=""
+            R2=""; LR2=""; MODE2=""; SCHED=""
+            # sched:<name> — the LR schedule, in the same overloaded input as
+            # everything else, because workflow_dispatch caps at 25 and this
+            # file is at the ceiling. cosine bakes the total step count into
+            # the rate (which is what makes a resumed run read lr=0.0 and what
+            # forces every budget to be its own experiment); wsd holds a
+            # horizon-free stable phase and then cools down, so a run can be
+            # extended AND still converge.
+            case "${{ inputs.window }}" in
+              sched:*) SCHED="--lr-schedule ${{ inputs.window }}"
+                       SCHED="${SCHED/--lr-schedule sched:/--lr-schedule }"
+                       echo "stage-2 schedule: $SCHED";; esac
             case "${{ inputs.window }}" in
               resume2:*) T2="${{ inputs.window }}"; T2="${T2#resume2:}"
                          # resume2:<tag>@<lr> — the continuation's PEAK learning
@@ -793,7 +804,7 @@ jobs:
             python -u ml/temporal.py --run actions --K 24 \
               --data "$TENSOR" \
               --steps "${{ inputs.temporal_steps }}" \
-              --unroll "$UNROLL" $R2 \
+              --unroll "$UNROLL" $R2 $SCHED \
               --d-model "${{ inputs.temporal_d_model }}" \
               --layers "${{ inputs.temporal_layers }}" &
             S2_PID=$!

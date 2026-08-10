@@ -597,3 +597,41 @@ test("a warm restart's PLAN is drawn on the axis of total compute", async ({ pag
   expect(await card.locator('svg polyline[stroke="#f0883e"]').count()).toBe(2);
   expect(await card.locator('svg line[stroke="#6e7681"][stroke-dasharray]').count()).toBe(1);
 });
+
+test("a plan carrying POINTS is drawn from them, not re-derived", async ({ page }) => {
+  // Chris: "the queueing graph needs to be computed from the actual
+  // implementation." Re-deriving the curve here is a second implementation of
+  // the schedule — it would have gone on drawing a cosine for a wsd run
+  // without a word, certifying a schedule the run does not use. The points
+  // come from ml/plan_schedule.py sampling the trainer's own make_sched.
+  const pts = [];
+  for (let i = 0; i <= 200; i++) {
+    const s = Math.round(i * 199999 / 200);
+    const lr = s <= 2000 ? 1e-3 * (s + 1) / 2000
+             : s <= 180000 ? 1e-3
+             : 1e-3 * Math.max(0, (200000 - s) / 20000);
+    pts.push([s, lr]);
+  }
+  await page.route(/ml-metrics\/plan-106\.json/, (r) => r.fulfill({
+    status: 200, contentType: "text/plain",
+    body: JSON.stringify({ steps: 200000, lr: 1e-3, schedule: "wsd",
+                           cooldown_frac: 0.1, points: pts }) }));
+  await page.route(/ml-live-106\/metrics\.jsonl/, (r) => r.fulfill({
+    status: 200, contentType: "text/plain",
+    body: JSON.stringify({ config: { steps: 60000 } }) + "\n" }));
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #106" }) });
+  await expect(card).toContainText("computed from the trainer's own scheduler");
+  await expect(card).toContainText("wsd, peak 1.0e-3");
+  await expect(card).toContainText("200,000");
+  // One segment (no parent), and it must be the points — a re-derived cosine
+  // would not hold a flat top, so sample the drawn polyline for the plateau.
+  const line = card.locator('svg polyline[stroke="#f0883e"]');
+  await expect(line).toHaveCount(1);
+  const d = await line.getAttribute("points");
+  const ys = d.split(" ").map((q) => parseFloat(q.split(",")[1]));
+  const mid = ys.slice(30, 150);
+  expect(Math.max(...mid) - Math.min(...mid)).toBeLessThan(0.5);  // flat stable phase
+  expect(ys[ys.length - 1]).toBeGreaterThan(ys[80] + 20);          // then it cools down
+});
