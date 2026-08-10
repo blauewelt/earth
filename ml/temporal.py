@@ -108,9 +108,78 @@ def rapid_section(lats, lons, ys, xs):
 
 
 RESERVE_BYTES = 3 << 30      # runner logs, checkpoints, pip, room to breathe
+RAM_HEADROOM_BYTES = 8 << 30  # the tensor and mask are already resident
 
 
-def _make_room(cache_path, need_bytes):
+def _free_ram_bytes():
+    """MemAvailable, i.e. what can be allocated without swapping — not MemFree,
+    which excludes reclaimable page cache and reads absurdly low on a box that
+    has just streamed a 10 GB tensor through it."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) * 1024
+    except OSError:
+        pass
+    return 0
+
+
+def _cache_plan(cache_path, need_bytes):
+    """Decide WHERE the embedding lives: the disk cache, or RAM.
+
+    The memmap was introduced because Z is ~10.4 GiB next to a 10.1 GiB
+    tensor and that combination OOM-killed a 7 GB box twice on 2026-08-07.
+    The boxes we rent now carry 126 GB of RAM and a 50 GB disk, so the
+    constraint has moved and the code had not: #117 spent an hour writing a
+    10.4 GiB cache toward 6 GiB of free disk, on a machine using 15 of its
+    126 GB of memory. Memmapping to the scarce resource because the abundant
+    one used to be scarce is the whole bug.
+
+    Order of preference, and the reasons:
+      1. DISK, if it fits after pruning — the cache is worth real money. A
+         repeat stage-2 run on the same box skips ~50 minutes of embedding.
+      2. RAM, if the disk cannot hold it but memory can. The run proceeds and
+         only the cache is lost, which costs the NEXT run, not this one.
+      3. Refuse. Both exhausted means the box is the wrong size for the job,
+         and that is worth saying before an hour rather than after.
+    """
+    import shutil
+    gb = lambda b: b / (1 << 30)
+    d = os.path.dirname(cache_path)
+    os.makedirs(d, exist_ok=True)
+    # The headroom SCALES WITH THE ALLOCATION, capped. A flat 3 GiB reserve
+    # reads as prudence until a smoke test with a 5 MB cache is refused on a
+    # sandbox with 0.9 GiB free — the constant, not the risk, was doing the
+    # refusing. What actually matters is that a big write leaves the box
+    # usable afterwards, so the demand is proportional to the write and
+    # bounded above by what a runner needs to keep working.
+    want = need_bytes + min(RESERVE_BYTES, max(need_bytes, 256 << 20))
+    _prune_stale(cache_path, want)
+    free = shutil.disk_usage(d).free
+    print(f"  embed cache needs {gb(need_bytes):.2f} GiB "
+          f"(+{gb(want - need_bytes):.2f} headroom); "
+          f"{gb(free):.2f} GiB disk free")
+    if free >= want:
+        return True
+    ram = _free_ram_bytes()
+    if ram >= need_bytes + min(RAM_HEADROOM_BYTES,
+                               max(need_bytes, 512 << 20)):
+        print(f"  disk cannot hold it — building Z in RAM instead "
+              f"({gb(ram):.0f} GiB available). The cache is skipped, so the "
+              f"NEXT stage-2 run on this box re-embeds; this one proceeds.")
+        return False
+    raise SystemExit(
+        f"nowhere to put the embedding: needs {gb(need_bytes):.1f} GiB, "
+        f"disk has {gb(free):.1f} GiB free after pruning every stale Z_*.npy "
+        f"and RAM has {gb(ram):.1f} GiB available. Refusing to start — "
+        f"open_memmap allocates lazily, so starting anyway would fail "
+        f"mid-write an hour from now with the disk full and the runner "
+        f"offline. Free space on the box, rent a larger one, or "
+        f"use --max-pixels.")
+
+
+def _prune_stale(cache_path, want):
     """Free space for the embedding cache BEFORE opening the memmap.
 
     `open_memmap` creates a SPARSE file: the 10.4 GiB is claimed lazily, page
@@ -133,11 +202,8 @@ def _make_room(cache_path, need_bytes):
     import glob
     import shutil
     d = os.path.dirname(cache_path)
-    want = need_bytes + RESERVE_BYTES
     free = shutil.disk_usage(d).free
     gb = lambda b: b / (1 << 30)
-    print(f"  embed cache needs {gb(need_bytes):.1f} GiB "
-          f"(+{gb(RESERVE_BYTES):.0f} reserve); {gb(free):.1f} GiB free")
     if free >= want:
         return
     stale = sorted((p for p in glob.glob(os.path.join(d, "Z_*.npy")) +
@@ -155,15 +221,8 @@ def _make_room(cache_path, need_bytes):
             print(f"  could not prune {p}: {e}")
         if free >= want:
             return
-    # Refusing costs the job. Starting costs the job AND the runner, forty
-    # minutes later, with nothing to show — so refuse, and say the number.
-    raise SystemExit(
-        f"not enough disk for the embedding cache: need {gb(need_bytes):.1f} "
-        f"GiB + {gb(RESERVE_BYTES):.0f} GiB reserve, have {gb(free):.1f} GiB "
-        f"free in {d} after pruning every stale Z_*.npy. Free space on the "
-        f"box or build with --max-pixels; do NOT start, because open_memmap "
-        f"allocates lazily and would fail mid-write with the disk full and "
-        f"the runner offline.")
+    # Not an error here — _cache_plan decides what to do when the disk still
+    # cannot hold it, and RAM is usually the answer on these boxes.
 
 
 def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
@@ -193,13 +252,12 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
         if out.shape == (T, P, d_z):
             print(f"  (cached: {cache_path})")
             return out, coords
-    if cache_path:
-        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    if cache_path and _cache_plan(cache_path, T * P * d_z * 4):
         tmp = cache_path + ".partial"
-        _make_room(cache_path, T * P * d_z * 4)
         out = np.lib.format.open_memmap(tmp, mode="w+", dtype=np.float32,
                                         shape=(T, P, d_z))
     else:
+        cache_path = None                       # RAM path: nothing to publish
         out = np.zeros((T, P, d_z), dtype=np.float32)
     with torch.no_grad():
         for t in range(T):

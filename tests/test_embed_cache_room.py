@@ -24,7 +24,13 @@ from collections import namedtuple
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "ml"))
-from temporal import RESERVE_BYTES, _make_room          # noqa: E402
+import temporal                                          # noqa: E402
+from temporal import RESERVE_BYTES, _cache_plan          # noqa: E402
+
+
+def with_ram(gib):
+    """Pretend MemAvailable is `gib`. The real boxes report ~110 GiB."""
+    temporal._free_ram_bytes = lambda: int(gib * GiB)
 
 GiB = 1 << 30
 Usage = namedtuple("Usage", "total used free")
@@ -58,9 +64,11 @@ def test_plenty_of_room_touches_nothing():
     with tempfile.TemporaryDirectory() as d:
         keep = stale(d, "Z_other_aaaaaaaaaa.npy", 10.4)
         with FakeDisk(40 * GiB):
-            _make_room(os.path.join(d, "Z_actions_bbbbbbbbbb.npy"), int(10.4 * GiB))
+            with_ram(110)
+            assert _cache_plan(os.path.join(d, "Z_actions_bbbbbbbbbb.npy"),
+                               int(10.4 * GiB)) is True, "disk fits: use it"
         assert os.path.exists(keep), "must not prune when there is room"
-    print("room available : nothing pruned        ✓")
+    print("room available : disk cache, no prune  ✓")
 
 
 def test_stale_caches_are_pruned_until_it_fits():
@@ -77,9 +85,10 @@ def test_stale_caches_are_pruned_until_it_fits():
                 shutil.disk_usage = lambda _: Usage(50 * GiB, 0, disk.free)
                 real_remove(p)
             os.remove = remove
+            with_ram(110)
             try:
-                _make_room(os.path.join(d, "Z_actions_cccccccccc.npy"),
-                           int(10.4 * GiB))
+                assert _cache_plan(os.path.join(d, "Z_actions_cccccccccc.npy"),
+                                   int(10.4 * GiB)) is True
             finally:
                 os.remove = real_remove
         assert not os.path.exists(old) and not os.path.exists(part), \
@@ -87,31 +96,43 @@ def test_stale_caches_are_pruned_until_it_fits():
     print("stale caches   : pruned to fit         ✓")
 
 
-def test_it_refuses_rather_than_starting_a_doomed_write():
-    """The whole point. Starting costs the job AND the runner, 40 minutes
-    later; refusing costs the job now, with a number in the message."""
+def test_a_full_disk_falls_back_to_ram_instead_of_dying():
+    """#117's exact situation: 6.5 GiB of disk against a 10.4 GiB cache, on a
+    box using 15 of its 126 GB of RAM. The old code memmapped to the scarce
+    resource because the abundant one used to be scarce on a 7 GB box."""
     with tempfile.TemporaryDirectory() as d:
-        with FakeDisk(int(6.5 * GiB)):          # exactly #117's situation
+        with FakeDisk(int(6.5 * GiB)):
+            with_ram(110)
+            assert _cache_plan(os.path.join(d, "Z_actions_dddddddddd.npy"),
+                               int(10.4 * GiB)) is False, \
+                "no disk but plenty of RAM: build in RAM, skip the cache"
+    print("disk full, RAM : builds in RAM         ✓")
+
+
+def test_it_refuses_when_NEITHER_can_hold_it():
+    """Refusing costs the job now, with numbers. Starting costs the job AND
+    the runner, forty minutes later, with nothing to show."""
+    with tempfile.TemporaryDirectory() as d:
+        with FakeDisk(int(6.5 * GiB)):
+            with_ram(4)
             try:
-                _make_room(os.path.join(d, "Z_actions_dddddddddd.npy"),
-                           int(10.4 * GiB))
+                _cache_plan(os.path.join(d, "Z_actions_eeeeeeeeee.npy"),
+                            int(10.4 * GiB))
             except SystemExit as e:
-                assert "not enough disk" in str(e) and "10.4" in str(e), str(e)
-                print("no room        : refuses, with numbers  ✓")
+                assert "nowhere to put" in str(e) and "10.4" in str(e), str(e)
+                print("neither fits   : refuses, with numbers  ✓")
                 return
-    raise AssertionError("must refuse when the cache cannot fit")
+    raise AssertionError("must refuse when neither disk nor RAM can hold it")
 
 
 def test_the_run_s_own_cache_is_never_pruned():
     """Pruning the file we are about to write would be a very silly way to
     make room for it, and the glob matches it."""
     with tempfile.TemporaryDirectory() as d:
-        mine = stale(d, "Z_actions_eeeeeeeeee.npy", 10.4)
+        mine = stale(d, "Z_actions_ffffffffff.npy", 10.4)
         with FakeDisk(int(0.5 * GiB)):
-            try:
-                _make_room(mine, int(10.4 * GiB))
-            except SystemExit:
-                pass
+            with_ram(110)
+            _cache_plan(mine, int(10.4 * GiB))
         assert os.path.exists(mine), "must never prune its own target"
     print("own cache      : never pruned          ✓")
 
@@ -126,7 +147,9 @@ def test_the_reserve_is_bigger_than_a_runner_needs():
 if __name__ == "__main__":
     test_plenty_of_room_touches_nothing()
     test_stale_caches_are_pruned_until_it_fits()
-    test_it_refuses_rather_than_starting_a_doomed_write()
+    test_a_full_disk_falls_back_to_ram_instead_of_dying()
+    test_it_refuses_when_NEITHER_can_hold_it()
     test_the_run_s_own_cache_is_never_pruned()
     test_the_reserve_is_bigger_than_a_runner_needs()
-    print("\nOK — the cache makes room, or it stops before it can strand a box.")
+    print("\nOK — the embedding goes where there is room, and stops when "
+          "there is none.")
