@@ -901,6 +901,58 @@
   // The distinctions, cheapest first: `queued` comes free from the runs API
   // we already fetch; the live phase comes from the branch the job pushes to;
   // and "this kind of job never trains" is legible from its own config.
+  // The PLANNED schedule, drawn before a single step has run. Same colours and
+  // idiom as the live stage-2 chart so the preview and the real thing read as
+  // one picture: orange for the rate, dashed for the parent, a grey seam at
+  // the join. Cosine annealing is analytic, so a plan is exact rather than
+  // indicative — which is the point, since the failure it guards against (a
+  // resumed cosine sitting at lr 0.0) is visible here and nowhere else until
+  // the hours are already spent.
+  function planChart(plan) {
+    if (!plan || !(plan.steps > 0) || !(plan.lr > 0)) return "";
+    var m = { s2cfg: { steps: plan.steps, lr: plan.lr },
+              s2from: plan.at_step ? { at_step: plan.at_step, lr: plan.lr,
+                                       parent_steps: plan.parent_steps,
+                                       parent_lr: plan.parent_lr } : null };
+    var lrs = lrSegments(m);
+    if (!lrs) return "";
+    var W = 600, H = 90, padL = 46, padR = 10, padT = 10, padB = 18;
+    var xspan = plan.steps || 1;
+    var body = lrs.segs.map(function (sg) {
+      var pl = sg.pts.map(function (q) {
+        return (padL + (W - padL - padR) * q[0] / xspan).toFixed(1) + "," +
+               (padT + (H - padT - padB) * (1 - q[1] / lrs.scale)).toFixed(1);
+      }).join(" ");
+      return '<polyline points="' + pl + '" fill="none" stroke="#f0883e" ' +
+             'stroke-width="1.5" opacity="' + (sg.dashed ? "0.55" : "0.9") + '"' +
+             (sg.dashed ? ' stroke-dasharray="5 4"' : "") + "/>";
+    }).join("");
+    var seam = plan.at_step
+      ? '<line x1="' + (padL + (W - padL - padR) * plan.at_step / xspan).toFixed(1) +
+        '" y1="' + padT + '" x2="' + (padL + (W - padL - padR) * plan.at_step / xspan).toFixed(1) +
+        '" y2="' + (H - padB) + '" stroke="#6e7681" stroke-width="1" stroke-dasharray="3 3"/>'
+      : "";
+    return '<div class="probe" style="margin-top:10px"><b>planned schedule</b> ' +
+      '<span class="meta">(not yet run)</span></div>' +
+      '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" role="img" ' +
+      'aria-label="planned learning-rate schedule">' +
+      '<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) +
+      '" y2="' + (H - padB) + '" stroke="#30363d"/>' + seam + body +
+      '<text x="' + (W - padR) + '" y="' + (H - 4) +
+      '" text-anchor="end" font-size="11" fill="#8b949e">' + fmtInt(plan.steps) + "</text>" +
+      "</svg>" +
+      '<div class="legend"><span><span class="sw" style="background:#f0883e"></span>' +
+      "learning rate, peak <b>" + Number(plan.lr).toExponential(1) + "</b>" +
+      (plan.at_step ? " from step " + fmtInt(plan.at_step) +
+        ' · <span class="sw" style="background:#f0883e;opacity:.55"></span>previous run (peak ' +
+        Number(plan.parent_lr).toExponential(1) + ")" : "") +
+      "</span></div>";
+  }
+
+  function waitingBody(run) {
+    return waitingCard(run, "").replace(/^<\/div>/, "").replace(/<\/div>$/, "");
+  }
+
   function waitingCard(run, headOrM) {
     var head = typeof headOrM === "string" ? headOrM : cardHead(run);
     var m = typeof headOrM === "string" ? null : headOrM;
@@ -956,12 +1008,23 @@
     var pre = (run.status === "in_progress")
       ? fetchPhase(run.run_number).then(function (p) { run.__phase = p; })
       : Promise.resolve();
+    // A run's PLANNED schedule, published at dispatch. It exists so a
+    // continuation can be checked BEFORE it spends sixteen hours — a resumed
+    // cosine that reads 0.0 is cheap to catch here and expensive to catch
+    // afterwards. Absent for most runs, which is fine: no plan, no panel.
+    pre = pre.then(function () {
+      return fetch("https://raw.githubusercontent.com/" + REPO +
+                   "/ml-metrics/plan-" + run.run_number + ".json?cb=" + Date.now())
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (p) { run.__plan = p; })
+        .catch(function () { run.__plan = null; });
+    });
     return pre.then(function () { return fetchMetrics(run.run_number); })
       .then(function (text) {
       var head = cardHead(run);
       if (text === null) {
         if (run.status === "completed") return "";
-        return waitingCard(run, head);
+        return head + planChart(run.__plan) + waitingBody(run) + "</div>";
       }
       var m0 = parseJsonl(text);
       if (!m0.loss.length) {

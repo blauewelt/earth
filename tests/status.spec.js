@@ -154,6 +154,10 @@ test.beforeEach(async ({ page }) => {
     const url = route.request().url();
     const fulfill = (b) => route.fulfill({ status: 200, contentType: "text/plain", body: b });
     if (/run_docs\.json/.test(url)) return fulfill(JSON.stringify(DOCS));
+    if (/ml-metrics\/plan-105\.json/.test(url)) return fulfill(JSON.stringify({
+      steps: 200000, lr: 1e-4, at_step: 60000,
+      parent_run: 112, parent_steps: 60000, parent_lr: 1e-3,
+    }));
     if (/ml-metrics\/fleet\.json/.test(url)) {
       // $20 credit, $1/h burn, snapshot 2 h old -> $18 left, 18 h runway.
       return fulfill(JSON.stringify({
@@ -442,4 +446,22 @@ test("empty recent runs do not evict the runs that DO have curves", async ({ pag
   // #103's archive is stubbed in beforeEach and carries a full stage-2 run.
   await expect(live).toContainText("temporal transformer over the frozen embeddings");
   await expect(live).toContainText("6 more recent runs had nothing to plot");
+});
+
+test("a run that has not started yet shows its PLANNED schedule", async ({ page }) => {
+  // Chris: "plot the curve of the continuation run before it starts (incl LR)
+  // ... then we know the exact schedule." A resumed cosine that reads 0.0 is
+  // cheap to catch here and expensive to catch after sixteen hours.
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #105" }) });
+  await expect(card).toContainText("planned schedule");
+  await expect(card).toContainText("not yet run");
+  await expect(card).toContainText("learning rate, peak 1.0e-4 from step 60,000");
+  await expect(card).toContainText("previous run (peak 1.0e-3)");
+  // Both segments and the seam, exactly as the live chart draws them.
+  expect(await card.locator('svg polyline[stroke="#f0883e"]').count()).toBe(2);
+  expect(await card.locator('svg line[stroke="#6e7681"][stroke-dasharray]').count()).toBe(1);
+  // And it still says it is queued — the plan does not pretend to be progress.
+  await expect(card).toContainText("queued");
 });
