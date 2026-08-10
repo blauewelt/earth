@@ -108,16 +108,22 @@ this paragraph's word for it. `tests/test_resume_temporal.py` pins that a warm
 restart both trains and lands somewhere other than a straight-through run —
 which is the whole reason the two get different flags.
 
-Planned LR, for checking against the live series: 60,000 → **7.939e-05**;
-80,000 → 6.545e-05; 120,000 → 3.455e-05; 160,000 → 9.549e-06; 200,000 → 0.
+Planned LR, for checking against the live series — a FRESH cosine over
+140,000 at peak 1e-4, so it starts at the peak rather than partway down one:
+0 (total 60,000) → **1.000e-04**; 20,000 → 9.505e-05; 35,000 → 8.536e-05; 70,000 → 5.000e-05; 105,000 → 1.464e-05; 140,000 → 0.000e+00. (An earlier version of this paragraph listed 7.939e-05 at step 60,000,
+which was the continuation schedule this run turned out not to be able to use.
+It is replaced rather than annotated, because a stale reference table is worse
+than none: it is checked, it matches nothing, and the reader blames the run.)
 
-**Why the LR was rebuilt rather than reloaded.** `CosineAnnealingLR.load_state_dict`
-restores `T_max` and `base_lrs` from the parent, so a reloaded schedule asked
-for 200k steps believes it finished at 60k and returns **lr = 0.0**: hours of
-"continuation" that changes nothing while every status reads success. This was
+**The LR bug this design was originally built around, kept because it is
+still live on the resume path.** `CosineAnnealingLR.load_state_dict` restores
+`T_max` and `base_lrs` from the parent, so a reloaded schedule asked for a
+larger total believes it already finished and returns **lr = 0.0**: hours of
+"continuation" that change nothing while every status reads success. That was
 live in `temporal.py` and was caught only because Chris asked for a lower LR.
-`tests/test_resume_temporal.py::test_extend` now pins it, and the trainer
-refuses to start when the resumed LR is not positive.
+`tests/test_resume_temporal.py::test_extend` pins it and the trainer refuses
+to start at a non-positive LR — which will matter the moment there is a
+checkpoint that CAN be continued, i.e. the one this run produces.
 
 **Confound to carry forward.** The parent (#112) trained on run-62's tensor.
 `resume: !run-62,run-63` requires the same one, and provenance now records a
