@@ -1,0 +1,9 @@
+{
+ "steps": 140000,
+ "lr": 0.0001,
+ "parent_run": 112,
+ "parent_steps": 60000,
+ "parent_lr": 0.001,
+ "note": "E-008 WARM RESTART: 140,000 extra steps on a fresh cosine from the 60k head weights",
+ "published_at": "2026-08-10T15:00:01.765Z"
+}
