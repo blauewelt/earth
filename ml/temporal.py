@@ -40,6 +40,8 @@ from model import PixelMAE, codec_from_ckpt
 from probe_sequence import ridge_r
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Box-persistent mirror, same directory train.py uses for codecs.
+CKPT_DIR = "/opt/earth-cache/ckpt"
 
 
 class TemporalTransformer(nn.Module):
@@ -420,6 +422,23 @@ def main():
         if s % log_every == 0 or s == a.steps:
             m2({"stage2_step": s, "stage2_zmse": round(float(loss.item()), 5),
                 "stage2_wall_s": round(time.time() - t0, 1)})
+            # MIRROR THE HEAD AS IT TRAINS, exactly as train.py mirrors the
+            # codec. Until now the head existed only in the run's workspace
+            # and was uploaded by a step that runs AFTER the whole probe
+            # ladder — so a job that hit its timeout lost every step of it.
+            # A 60,000-step head is seven hours of GPU; losing it to a
+            # bookkeeping deadline is not an acceptable failure mode.
+            # Cheap: 7 MB, ~100 writes over a run.
+            try:
+                os.makedirs(CKPT_DIR, exist_ok=True)
+                tag = os.environ.get("CKPT_TAG", "")
+                tmp_path = os.path.join(
+                    CKPT_DIR, (tag + "-" if tag else "") + "temporal.pt")
+                torch.save({"model": model.state_dict(), "args": vars(a),
+                            "step": s}, tmp_path + ".part")
+                os.replace(tmp_path + ".part", tmp_path)
+            except Exception as e:                       # never fatal
+                print(f"  (head mirror failed: {e})", flush=True)
         if s % max(1, a.steps // 10) == 0:
             print(f"  step {s:>6}/{a.steps}  z-mse {loss.item():.4f}"
                   f"  ({time.time() - t0:.0f}s)", flush=True)

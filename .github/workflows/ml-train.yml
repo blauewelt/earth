@@ -139,10 +139,24 @@ jobs:
             stamp=$(date -u +%Y%m%dT%H%M%SZ)
             cp "$orphan" "/opt/earth-cache/ckpt/orphan-$stamp.pt" || true
             cp "$orphan" /opt/earth-cache/ckpt/orphan-latest.pt || true
-            echo "rescued $(du -h "$orphan" | cut -f1) -> orphan-$stamp.pt (also orphan-latest.pt)"
-          else
-            echo "no orphaned checkpoint on this box"
           fi
+          # THE STAGE-2 HEAD TOO. temporal.pt / temporal_joint.pt are uploaded
+          # only by a step that runs AFTER the probe ladder finishes, so a job
+          # that hits its timeout loses the head entirely — and a 60,000-step
+          # head is seven hours of GPU. It was not rescued here because this
+          # step was written when only the codec mattered. Same reasoning as
+          # the codec: the file on disk is real whether or not the job that
+          # made it survived to upload it.
+          for t in temporal temporal_joint; do
+            f="ml/runs/actions/$t.pt"
+            if [ -f "$f" ]; then
+              mkdir -p /opt/earth-cache/ckpt
+              stamp=$(date -u +%Y%m%dT%H%M%SZ)
+              cp "$f" "/opt/earth-cache/ckpt/orphan-$t-$stamp.pt" || true
+              cp "$f" "/opt/earth-cache/ckpt/orphan-$t-latest.pt" || true
+              echo "rescued $f -> /opt/earth-cache/ckpt/orphan-$t-latest.pt"
+            fi
+          done
           ls -la /opt/earth-cache/ckpt 2>/dev/null || true
 
       - uses: actions/checkout@v4
