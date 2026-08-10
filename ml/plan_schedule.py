@@ -37,11 +37,12 @@ from temporal import make_sched                             # noqa: E402
 N_POINTS = 240          # enough that a 200k cosine is smooth on a phone
 
 
-def curve(steps, lr, schedule, warmup, cooldown_frac, offset=0):
+def curve(steps, lr, schedule, warmup, cooldown_frac, halflife=40000, offset=0):
     """[[step, lr], ...] by RUNNING the real scheduler, not modelling it."""
     a = types.SimpleNamespace(steps=int(steps), lr=float(lr),
                               lr_schedule=schedule, lr_warmup=int(warmup),
-                              lr_cooldown_frac=float(cooldown_frac))
+                              lr_cooldown_frac=float(cooldown_frac),
+                              lr_halflife=float(halflife))
     net = torch.nn.Linear(1, 1)
     opt = torch.optim.AdamW(net.parameters(), lr=float(lr))
     sch = make_sched(opt, a)
@@ -72,7 +73,9 @@ def main():
                         "what temporal_steps passes to the trainer")
     p.add_argument("--lr", type=float, required=True)
     p.add_argument("--schedule", default="cosine",
-                   choices=["cosine", "invsqrt", "wsd"])
+                   choices=["cosine", "invsqrt", "wsd", "expdecay"])
+    p.add_argument("--halflife", type=float, default=40000,
+                   help="expdecay: steps for the rate to halve (absolute)")
     p.add_argument("--warmup", type=int, default=2000)
     p.add_argument("--cooldown-frac", type=float, default=0.1)
     p.add_argument("--warm", action="store_true",
@@ -81,7 +84,7 @@ def main():
     p.add_argument("--parent-steps", type=int, default=0)
     p.add_argument("--parent-lr", type=float, default=0.0)
     p.add_argument("--parent-schedule", default="cosine",
-                   choices=["cosine", "invsqrt", "wsd"])
+                   choices=["cosine", "invsqrt", "wsd", "expdecay"])
     p.add_argument("--parent-run", type=int, default=0)
     p.add_argument("--note", default="")
     a = p.parse_args()
@@ -95,16 +98,18 @@ def main():
     plan = {"steps": a.steps, "lr": a.lr, "schedule": a.schedule,
             "warmup": a.warmup,
             "points": curve(a.steps, a.lr, a.schedule, a.warmup,
-                            a.cooldown_frac,
+                            a.cooldown_frac, a.halflife,
                             offset=a.parent_steps if a.warm else 0)}
     if a.schedule == "wsd":
         plan["cooldown_frac"] = a.cooldown_frac
+    if a.schedule == "expdecay":
+        plan["halflife"] = a.halflife
     if a.warm:
         plan.update({"warm": True, "parent_steps": a.parent_steps,
                      "parent_lr": a.parent_lr,
                      "parent_points": curve(a.parent_steps, a.parent_lr,
                                             a.parent_schedule, a.warmup,
-                                            a.cooldown_frac)})
+                                            a.cooldown_frac, a.halflife)})
     if a.parent_run:
         plan["parent_run"] = a.parent_run
     if a.note:

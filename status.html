@@ -411,7 +411,19 @@
       if (!line) return;
       var o;
       try { o = JSON.parse(line); } catch (e) { return; }
-      if (o && o.config) { cfg = o.config; return; }   // the run's PLAN
+      // A `config` record is a RUN'S FIRST LINE, so anything before it belongs
+      // to a previous run whose metrics file was left in the workspace. That
+      // happened on 2026-08-10: #123's branch opened with a stage-2 step from
+      // #120, and it fooled this page, the live monitor and a verification
+      // script at once. Reset on config — the reader should not be able to
+      // attribute one run's numbers to another even if the file is dirty.
+      if (o && o.config) {
+        cfg = o.config;
+        loss = []; probes = []; resumed = null; emb = null;
+        s2 = []; s2cfg = null; s2res = null; s2res_from = null; s2warm = null;
+        jt = []; jcfg = null;
+        return;
+      }
       if (o && o.resumed) { resumed = o.resumed; return; }  // its PARENT
       // The embedding pass is ~95 min of a stage-2 run and used to be
       // indistinguishable from a wedged job: no curve, no phase change, no
@@ -1098,8 +1110,12 @@
     }
     // No phase file: either the job predates phase reporting, or it is
     // between pushes. Say what we can without pretending to know the step.
+    // embLine belongs on THIS branch too. It was added only to the
+    // phase-reported one, so a run publishing embedding progress without a
+    // phase file showed nothing — the same "renders on a branch nobody is on"
+    // mistake as the plan preview, one function later.
     var noTrain = m && m.cfg && !m.cfg.steps;
-    return head + plan + '<div class="empty">running — no training curve yet' +
+    return head + plan + embLine + '<div class="empty">running — no training curve yet' +
       (noTrain ? " (this job runs probes over an existing codec, so it has no loss curve)"
                : ". Seeding the cache, building the tensor, or still starting up") +
       ".</div></div>";

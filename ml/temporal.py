@@ -171,8 +171,14 @@ def make_sched(opt, a, last_epoch=-1):
     be a deliberate experiment (one budget, both schedules) rather than a
     default flipped in passing.
     """
-    if a.lr_schedule in ("invsqrt", "wsd"):
+    if a.lr_schedule in ("invsqrt", "wsd", "expdecay"):
         warm = max(1, int(a.lr_warmup))
+
+        def _warm_cos(s):
+            """Cosine-shaped ramp to the peak — smooth at BOTH ends, unlike a
+            linear ramp which arrives at the peak with a corner."""
+            import math as _m
+            return 0.5 * (1 - _m.cos(_m.pi * min(1.0, s / warm)))
 
         if a.lr_schedule == "wsd":
             # WARMUP - STABLE - DECAY. The literature's current answer, and a
@@ -200,6 +206,37 @@ def make_sched(opt, a, last_epoch=-1):
                 # shape at linear, and D2Z finds decaying fully to zero beats
                 # stopping at a floor, increasingly so the longer you train.
                 return max(0.0, (a.steps - s) / max(1, a.steps - stable_end))
+        elif a.lr_schedule == "expdecay":
+            # COSINE WARMUP, THEN EXPONENTIAL DECAY. Chris, looking at the WSD
+            # trapezoid on the status page: "123's learning schedule doesn't
+            # look great (too constant, then too steep). if nothing better use
+            # cosine warmup and then exp decay."
+            #
+            # He is right on both counts and the second one is not only
+            # aesthetic. WSD's cooldown is sized as a FRACTION of the total, so
+            # the schedule is horizon-free right up until the part that is not
+            # — extend the run and the cooldown moves, which is the same
+            # coupling cosine has, merely postponed. Exponential decay with an
+            # ABSOLUTE half-life has no such term: lr(s) = peak * 2^(-s/H)
+            # depends on s and H alone. Stop anywhere, extend anywhere, and the
+            # prefix is unchanged.
+            #
+            # It is also smooth everywhere — no plateau, no corner into the
+            # decay — and it decays fastest early, when the model is furthest
+            # from any optimum, rather than holding a constant rate for 90% of
+            # the run.
+            #
+            # It does not reach zero, which is deliberate: decay-to-zero is a
+            # borrowed prior we have not tested (docs/ML_BASICS.md §9), and a
+            # schedule that never arrives is the honest default until the
+            # floor-vs-zero control has actually run.
+            half = max(1.0, float(a.lr_halflife))
+
+            def factor(step):
+                s = step + 1
+                if s <= warm:
+                    return _warm_cos(s)
+                return 0.5 ** ((s - warm) / half)
         else:
             def factor(step):
                 s = step + 1
@@ -535,7 +572,7 @@ def main():
     ap.add_argument("--d-model", type=int, default=96)
     ap.add_argument("--layers", type=int, default=3)
     ap.add_argument("--lr-schedule", default="cosine",
-                    choices=["cosine", "invsqrt", "wsd"],
+                    choices=["cosine", "invsqrt", "wsd", "expdecay"],
                     help="cosine bakes the TOTAL step count into the rate, so "
                          "a checkpoint's schedule only means anything next to "
                          "the budget it was trained under (this is what makes "
@@ -545,6 +582,11 @@ def main():
                          "stopped at 60k and continued to 200k sees exactly "
                          "what an uninterrupted 200k run would have. Default "
                          "stays cosine because every existing result used it.")
+    ap.add_argument("--lr-halflife", type=float, default=40000,
+                    help="expdecay only: steps for the rate to halve. ABSOLUTE, "
+                         "not a fraction of --steps, which is what makes the "
+                         "schedule horizon-free: extend the run and the curve "
+                         "it already walked is unchanged.")
     ap.add_argument("--lr-cooldown-frac", type=float, default=0.1,
                     help="wsd only: fraction of --steps spent decaying "
                          "linearly to zero at the end. The stable phase before "

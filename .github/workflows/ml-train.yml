@@ -183,6 +183,18 @@ jobs:
           # outlives the box, the container and any job timeout, and is
           # fetchable by `node scripts/fetch_ckpt.mjs`. Best effort and loud:
           # a failed upload prints its status rather than vanishing.
+          # AND THEN REMOVE IT. `cp` alone leaves the previous job's
+          # metrics.jsonl and checkpoints in the workspace, where the NEXT
+          # run's temporal.py appends to them — so a run's metrics file can
+          # begin with a previous run's records. That is not a display
+          # nuisance: it fooled the status page, the live monitor and a
+          # verification script simultaneously on 2026-08-10, when #123's
+          # branch reported a stage-2 step that belonged to #120 (caught only
+          # because its stage2_wall_s exceeded #123's entire lifetime).
+          # Everything of value has just been copied to /opt/earth-cache;
+          # leaving the originals behind buys nothing and costs correctness.
+          rm -rf ml/runs/actions
+          echo "cleared ml/runs/actions (rescued copies are in /opt/earth-cache/ckpt)"
           for f in /opt/earth-cache/ckpt/orphan-temporal-latest.pt \
                    /opt/earth-cache/ckpt/orphan-temporal_joint-latest.pt \
                    /opt/earth-cache/ckpt/orphan-metrics-latest.jsonl; do

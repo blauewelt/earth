@@ -635,3 +635,38 @@ test("a plan carrying POINTS is drawn from them, not re-derived", async ({ page 
   expect(Math.max(...mid) - Math.min(...mid)).toBeLessThan(0.5);  // flat stable phase
   expect(ys[ys.length - 1]).toBeGreaterThan(ys[80] + 20);          // then it cools down
 });
+
+test("records from a PREVIOUS run are discarded, not charted", async ({ page }) => {
+  // On 2026-08-10 the rescue step copied the previous job's metrics.jsonl
+  // without removing it, so #123's temporal.py appended to #120's file and
+  // its live branch opened with a stage-2 step belonging to another run. It
+  // fooled this page, the monitor and a verification script at once — caught
+  // only because the stale record's stage2_wall_s exceeded #123's whole
+  // lifetime. A `config` line is a run's first line; anything before it is
+  // somebody else's.
+  await page.route(/ml-live-106\/metrics\.jsonl/, (r) => r.fulfill({
+    status: 200, contentType: "text/plain",
+    body: [
+      // ---- the previous run's leftovers ----
+      JSON.stringify({ stage2_step: 7000, stage2_zmse: 0.82014, stage2_lr: 9.9384e-5, stage2_wall_s: 2657.7 }),
+      JSON.stringify({ stage2_config: { d_model: 192, layers: 4, K: 24, steps: 140000 } }),
+      JSON.stringify({ stage2_warm_restart: { from: "old.pt", parent_steps: 60000, parent_lr: 1e-3, extra_steps: 140000, lr: 1e-4 } }),
+      // ---- THIS run starts here ----
+      JSON.stringify({ config: { steps: 60000, batch: 512, d_z: 64 } }),
+      JSON.stringify({ embedding: { pct: 42.0, month: 217, months: 516, elapsed_s: 2400, eta_s: 3300, where: "disk" } }),
+    ].join("\n") }));
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #106" }) });
+  // It must show THIS run's state — still embedding …
+  await expect(card).toContainText("rebuilding the frozen-codec embedding");
+  await expect(card).toContainText("42%");
+  // … and must NOT have charted the other run's stage 2. Assert on things
+  // only the stale RECORDS could produce: the loss value, and the stage-2
+  // panel itself. ("warm restart" would be the wrong assertion — this
+  // fixture's PLAN is legitimately a warm restart, and the point is to catch
+  // contamination from metrics, not to forbid a word.)
+  await expect(card).not.toContainText("0.8201");
+  await expect(card).not.toContainText("z-space MSE");
+  await expect(card).not.toContainText("temporal transformer over the frozen");
+});
