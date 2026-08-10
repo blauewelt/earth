@@ -38,6 +38,21 @@ def describe(path):
     return keys, missing, args, ck.get("step")
 
 
+def bail(msg):
+    """Exit non-zero — but only for a DEFINITE answer.
+
+    GitHub runs a `run:` block under `bash -e`, so any non-zero exit here
+    aborts the whole Probes step and takes the k-fold ladder, dip_check and
+    the head probes with it. That is the correct trade when the answer is
+    "this mode cannot work, and the next 16 hours would be wasted". It is the
+    wrong trade for an incidental failure — a torch quirk, an unreadable
+    file — where the old behaviour (run the ladder, let temporal.py decide)
+    is strictly better than losing everything. So the only non-zero exits in
+    this file are the two unambiguous ones, and main() catches the rest.
+    """
+    sys.exit(msg)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("tag")
@@ -46,18 +61,27 @@ def main():
 
     path = a.tag if os.path.sep in a.tag else os.path.join(CKPT_DIR, a.tag + ".pt")
     if not os.path.exists(path):
-        sys.exit(f"stage-2 head {path} is absent, so temporal.py would refuse "
-                 f"after the embedding. Stopping now instead. Check the tag, "
-                 f"and that the model-checkpoints-v1 release still has it.")
+        bail(f"stage-2 head {path} is absent, so temporal.py would refuse "
+             f"after the embedding. Stopping now instead. Check the tag, and "
+             f"that the model-checkpoints-v1 release still has it.")
 
-    keys, missing, args, step = describe(path)
+    try:
+        keys, missing, args, step = describe(path)
+    except Exception as e:                                    # noqa: BLE001
+        # Incidental, not definite. Say so and let the step continue: losing
+        # the probe ladder to a torch hiccup is a worse outcome than checking
+        # nothing, and temporal.py still refuses on its own.
+        print(f"::warning::could not inspect {path} "
+              f"({type(e).__name__}: {e}) — skipping the precheck; "
+              f"temporal.py will still refuse if the mode is unsupported")
+        return
     print(f"stage-2 head {os.path.basename(path)}: keys {keys}")
     print(f"  parent: {args.get('steps')} steps at peak lr {args.get('lr')}"
           f"{f', saved at step {step}' if step is not None else ''}")
     print(f"  continuable: {'yes' if not missing else 'NO (missing ' + ', '.join(missing) + ')'}")
 
     if a.mode == "resume" and missing:
-        sys.exit(
+        bail(
             f"\n--resume-temporal needs {', '.join(missing)} and this "
             f"checkpoint has none of it. Loading the weights alone resets "
             f"Adam's moments and the LR schedule, which is a warm restart "
