@@ -345,9 +345,22 @@ archive.
 - **`"$TAG__pixelmae.pt"`** expands the variable `$TAG__pixelmae` — underscores
   are legal in a bash identifier. **Always brace a variable followed by `_`, a
   letter or a digit**: `"${TAG}__pixelmae.pt"`.
-- **The boxes have no `gh` CLI.** Fetch release assets with
-  `curl -fsSL https://github.com/$REPO/releases/download/$TAG/$ASSET` (public
-  repo, no auth).
+- **The boxes have no `gh` CLI, and no `node` either.** Fetch release assets
+  with `curl -fsSL https://github.com/$REPO/releases/download/$TAG/$ASSET`
+  (public repo, no auth). Anything a workflow step runs on a box must be
+  bash or **Python** — `scripts/archive_probes.mjs` was wired in on
+  2026-08-10 and died with `node: command not found` on every job for four
+  hours, warning quietly while the jobs went green, so not one probe result
+  was archived by it. `scripts/archive_probes.py` is the version that runs.
+  The SANDBOX has the opposite constraint — node writes to api.github.com
+  fine, python is blocked by the egress proxy — which is why both exist.
+- **A failing best-effort step can still kill the ones after it.** `bash -e`
+  means a non-zero exit aborts the whole `run:` block, so "best effort" has
+  to be written at the CALLER (`|| echo "::warning::…"`), never faked by the
+  callee returning 0. On 2026-08-10 `embed_cache_sync.py push` was correctly
+  changed to exit 1 on failure and the bare call site was not updated: #131's
+  5.2 GiB upload found no room, exited 1, and took `probe_kfold.py` and
+  `dip_check.py` down with it. The run reported success.
 - **`2>/dev/null` on a command whose failure you are branching on** hides the
   one line that explains the branch.
 - **A channel that starts later than the tensor** makes a month-0 mask empty,
