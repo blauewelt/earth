@@ -1014,6 +1014,26 @@
       .catch(function () { return null; });
   }
 
+  // THIS PAGE MUST USE raw, AND ITS LAG IS THE PRICE — do not "fix" it.
+  //
+  // raw.githubusercontent serves a CDN copy that ignores the cache-buster
+  // below and can sit ~5 minutes behind a push (measured 2026-08-10: a
+  // watcher reading raw said step 110,000 while the contents API said
+  // 122,000). Three tools were corrected that day to read the authenticated
+  // contents API instead, and the obvious next move is to do the same here.
+  // It would break the page.
+  //
+  // A browser has no token. Unauthenticated api.github.com allows 60 requests
+  // per hour per IP, and this page already spends 2 per 2-minute cycle — 60
+  // an hour, exactly the cap. Adding one content fetch per charted run would
+  // multiply that by seven or eight and rate-limit the dashboard within
+  // minutes. raw is CORS-open and NOT counted against that budget, which is
+  // why every non-API fetch on this page goes through it.
+  //
+  // So the dashboard is a few minutes stale by construction. That is fine for
+  // what it is — a status page refreshed every two minutes, read by a human —
+  // and it is NOT fine for anything that must tell a stalled job from a slow
+  // one. That job belongs to scripts/watch_fleet.mjs, which has a token.
   function fetchMetrics(runNumber) {
     var cb = "?cb=" + Date.now();
     var live = "https://raw.githubusercontent.com/" + REPO + "/ml-live-" + runNumber + "/metrics.jsonl" + cb;
