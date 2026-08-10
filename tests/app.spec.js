@@ -3224,6 +3224,39 @@ test("Tides tab answers for wherever you already flew — no blank panel", async
   await expect(page.locator("#td-tz")).toContainText("Times are");
 });
 
+test("the pixel card reports heat load on a body, not just air temperature", async ({ page }) => {
+  // From a Zürich climate-analysis map (PET at 14:00, air temperature at
+  // 04:00): what harms people is felt heat by day and the absence of night
+  // recovery, neither of which an air-temperature reading shows.
+  // The card resolves six live queries before it renders, and the mirror
+  // proxy retries transport failures on top of that (scripts/test_proxy.py),
+  // so the default 90 s can expire on a slow sandbox and be reported against
+  // whichever line was in flight — see CLAUDE.md §4.
+  test.setTimeout(180000);
+  await page.evaluate(() =>
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(8.54, 47.37)));  // Zürich
+  const card = page.locator("#pixel-card");
+  await expect(card).toContainText("Heat load", { timeout: 60000 });
+  await expect(card).toContainText("Feels like now");
+  await expect(card).toContainText("vs air");
+  await expect(card).toContainText("Felt peak today");
+  await expect(card).toContainText("Tonight's low");
+  await expect(card).toContainText(/\d tropical night/);
+  // the index is NAMED and PET's thresholds are explicitly disclaimed —
+  // "feels like" is not PET and must not borrow its 35/41 °C classes
+  await expect(card).toContainText("apparent temperature");
+  await expect(card).toContainText("PET");
+  const t = await page.evaluate(() => document.getElementById("pixel-card").innerText);
+  // physically sane for a mid-latitude summer city: felt heat within 15 °C of
+  // air, and the tropical-night count is 0..7 of the seven nights fetched
+  const felt = /Feels like now\s*([-\d.]+) °C · ([+−][\d.]+) vs air/.exec(t);
+  expect(felt).not.toBeNull();
+  expect(Math.abs(Number(felt[2].replace("−", "-")))).toBeLessThan(15);
+  const trop = /(\d+) tropical night/.exec(t);
+  expect(Number(trop[1])).toBeGreaterThanOrEqual(0);
+  expect(Number(trop[1])).toBeLessThanOrEqual(7);
+});
+
 test("searching a place points the tide dashboard at it, by name", async ({ page }) => {
   // Reported 2026-08-07: "if I search for a place, the left panel should show
   // data for that place (without clicking on the globe)" — and should say

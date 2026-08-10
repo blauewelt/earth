@@ -5001,19 +5001,52 @@ function pixelJson(file) {
 /* All Open-Meteo family endpoints share the exception documented in
  * CLAUDE.md §3: key-free, CORS-open, single-point, click-triggered, and a
  * failed call just omits its card section. */
-function omGet(url) {
-  return fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+/* One retry, then give up. The card fires six of these at once and each one
+ * owns a whole section; a single dropped response used to delete "Now & next
+ * 7 days" outright, which reads as a broken app rather than as a hiccup. Two
+ * attempts is the honest bound: retrying harder would turn a rate-limit
+ * (Open-Meteo counts per IP across its whole family) into a self-inflicted
+ * one. 429/5xx and network errors retry; a 400 is our own bad URL and never
+ * will succeed, so it doesn't. */
+function omGet(url, tries = 2) {
+  return fetch(url).then((r) => {
+    if (r.ok) return r.json();
+    if (tries > 1 && (r.status === 429 || r.status >= 500)) throw new Error(r.status);
+    return null;
+  }).catch((e) => {
+    if (tries <= 1) return null;
+    return new Promise((res) => setTimeout(res, 700)).then(() => omGet(url, tries - 1));
+  });
 }
 function omLL(lon, lat) {
   return `latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}`;
 }
+/* ONE forecast call carries both the weather rows and the heat-load rows.
+ * It was briefly two — the heat block needs LOCAL calendar days (a "tropical
+ * night" is defined on the local night) while the weather rows were pinned to
+ * timezone=UTC — but Open-Meteo rate-limits per IP across its whole API
+ * family, and the card already fires six requests at once; a seventh made the
+ * burst drop sections at random. So: ask once, in local time, and convert the
+ * instant stamps back to UTC with the offset the response carries (omUTC).
+ * The daily strip is better on local days anyway — "the 11th" now means the
+ * 11th where the pixel is. */
 function fetchOpenMeteo(lon, lat) {
   return omGet("https://api.open-meteo.com/v1/forecast?" + omLL(lon, lat) +
     "&current=temperature_2m,relative_humidity_2m,precipitation,pressure_msl," +
     "wind_speed_10m,wind_direction_10m,soil_moisture_0_to_1cm,soil_temperature_0cm," +
-    "shortwave_radiation" +
-    "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max" +
-    "&timezone=UTC&forecast_days=7");
+    "shortwave_radiation,apparent_temperature" +
+    "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max," +
+    "apparent_temperature_max" +
+    "&timezone=auto&forecast_days=7");
+}
+
+/* A local timestamp from a timezone=auto response, restated in UTC — so every
+ * stamp on the card keeps meaning exactly what it says. */
+function omUTC(t, offsetSec) {
+  if (!t) return t;
+  const ms = Date.parse(`${t}${/[Zz]|[+-]\d\d:?\d\d$/.test(t) ? "" : "Z"}`);
+  if (!Number.isFinite(ms)) return t;
+  return new Date(ms - (offsetSec || 0) * 1000).toISOString().slice(0, 16);
 }
 function fetchAirQuality(lon, lat) {
   return omGet("https://air-quality-api.open-meteo.com/v1/air-quality?" + omLL(lon, lat) +
@@ -5211,7 +5244,8 @@ async function showPixelState(carto) {
     const c = meteo.current;
     // Open-Meteo stamps its own current block; "live" in the heading was never
     // quite true — the model step behind it can be up to an hour old.
-    const wNow = whenAt("instant", c.time);
+    const OFF = meteo.utc_offset_seconds || 0;
+    const wNow = whenAt("instant", omUTC(c.time, OFF));
     let rows = pixelRow("Air temperature", `${fmtVal(c.temperature_2m)} °C`, wNow) +
       pixelRow("Wind", `${fmtVal(c.wind_speed_10m)} km/h from ${Math.round(c.wind_direction_10m)}°`, wNow) +
       pixelRow("Humidity · pressure", `${Math.round(c.relative_humidity_2m)} % · ${Math.round(c.pressure_msl)} hPa`, wNow) +
@@ -5227,7 +5261,7 @@ async function showPixelState(carto) {
       // separate API call, separate clock — its own stamp, not the weather one
       rows += pixelRow("Waves", `${fmtVal(mc.wave_height)} m` +
         (mc.wave_period != null ? ` every ${fmtVal(mc.wave_period)} s` : ""),
-        whenAt("instant", mc.time));
+        whenAt("instant", omUTC(mc.time, marine.utc_offset_seconds || 0)));
     }
     const rd = river?.daily?.river_discharge?.[0];
     if (rd != null && rd > 0) {
@@ -5250,6 +5284,50 @@ async function showPixelState(carto) {
     }
     // The forecast strip already prints a date per column, so it needs no stamp.
     sec.push(`<div class="px-sec"><div class="px-sec-title">Now &amp; next 7 days <span class="px-src">Open-Meteo</span></div>${rows}</div>`);
+  }
+
+  /* -- heat load on a body ------------------------------------------------- */
+  // Air temperature is not what harms people: humidity, wind and sun decide
+  // how much heat a body can shed, and the NIGHT decides whether it recovers.
+  // Two numbers carry that — the day's felt peak, and whether the night stays
+  // above 20 °C ("tropical night", the standard health threshold).
+  if (meteo?.daily?.apparent_temperature_max) {
+    const d = meteo.daily;
+    const c = meteo.current;
+    const OFF2 = meteo.utc_offset_seconds || 0;
+    const fmtC = (v) => `${fmtVal(v)} °C`;
+    let rows = "";
+    if (c?.apparent_temperature != null) {
+      const gap = c.apparent_temperature - c.temperature_2m;
+      rows += pixelRow("Feels like now", `${fmtC(c.apparent_temperature)} · ` +
+        `${gap >= 0 ? "+" : "−"}${fmtVal(Math.abs(gap))} vs air`,
+        whenAt("instant", omUTC(c.time, OFF2)));
+    }
+    rows += pixelRow("Felt peak today", fmtC(d.apparent_temperature_max[0]),
+                     whenAt("day", d.time[0]));
+    // Tomorrow's daily minimum IS tonight's low: minima fall near dawn.
+    const lowTonight = d.temperature_2m_min[1];
+    if (lowTonight != null) {
+      rows += pixelRow("Tonight's low", `${fmtC(lowTonight)}` +
+        (lowTonight >= 20 ? ` · <strong>tropical night</strong>` : ""),
+        whenAt("day", d.time[1]));
+    }
+    const tropical = d.temperature_2m_min.filter((v) => v != null && v >= 20).length;
+    const peak = Math.max(...d.apparent_temperature_max.filter((v) => v != null));
+    rows += pixelRow("Next 7 days", `felt peak ${fmtC(peak)} · ` +
+      `${tropical} tropical night${tropical === 1 ? "" : "s"}`);
+    // Name the index. A city climate-analysis map (PET) and UTCI model the
+    // body's radiation balance explicitly and run warmer in sun, so their
+    // 35 °C / 41 °C class limits do NOT transfer to this number.
+    rows += `<div class="px-note">"Feels like" is Open-Meteo's apparent temperature —
+      air temperature corrected for humidity, wind and sun. City heat maps use
+      <em>PET</em> and heat warnings often use <em>UTCI</em>; both model a body's
+      radiation balance explicitly and read warmer in direct sun, so their
+      35/41 °C thresholds are not comparable with this figure. A night at or
+      above 20 °C is the standard "tropical night", when the body gets no
+      recovery.</div>`;
+    sec.push(`<div class="px-sec"><div class="px-sec-title">Heat load ` +
+      `<span class="px-src">Open-Meteo</span></div>${rows}</div>`);
   }
 
   /* -- air quality (CAMS via Open-Meteo) ----------------------------------- */
@@ -5303,14 +5381,27 @@ async function showPixelState(carto) {
   // No years in the labels any more — the stamp says them, read from the file
   // rather than typed here, so a re-bake over a longer record cannot leave a
   // stale span behind in the UI. (GPCP averages its whole record, not 1991–2020.)
-  const gtitles = ["SST annual mean", "Precip normal (GPCP)", "Precip normal (E-OBS)", "Precip normal (MeteoSwiss)"];
-  const gunits = ["°C", "mm/yr", "mm/yr", "mm/yr"];
+  // Keyed by layer id, NOT a parallel array: PIXEL_GRIDS grew a fifth entry
+  // (tides) while these stayed four long, and the card printed a literal
+  // "undefined 1.20 undefined" for months. A map cannot drift out of step —
+  // an id with no entry falls back to the layer's own title and units.
+  const GRID_ROW = {
+    oisst: ["SST annual mean", "°C"],
+    gpcp: ["Precip normal (GPCP)", "mm/yr"],
+    eobs: ["Precip normal (E-OBS)", "mm/yr"],
+    meteoswiss: ["Precip normal (MeteoSwiss)", "mm/yr"],
+    tides: ["Tidal range (EOT20)", "m"],
+  };
   // Each normal states the years it averages, read from the baked `period` —
   // these are the one kind of row with no age at all, because a fixed span is
   // not "N years old", it simply is what it is.
-  const grows = grids.map((r, i) =>
-    r?.v == null ? "" : pixelRow(gtitles[i], `${fmtVal(r.v)} ${gunits[i]}`,
-      whenOfGrid(gridCfgs[i], r.g))).join("");
+  const grows = grids.map((r, i) => {
+    if (r?.v == null) return "";
+    const cfg = gridCfgs[i];
+    const [title, unit] = GRID_ROW[cfg?.id] ||
+      [String(cfg?.title || cfg?.id || "").replace(/\s*\(.*\)$/, ""), cfg?.units || ""];
+    return pixelRow(title, `${fmtVal(r.v)} ${unit}`.trim(), whenOfGrid(cfg, r.g));
+  }).join("");
   if (grows) {
     sec.push(`<div class="px-sec"><div class="px-sec-title">Climate normals</div>${grows}</div>`);
   }
