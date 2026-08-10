@@ -1,0 +1,136 @@
+{
+ "run_number": 125,
+ "archived_at": "2026-08-10T20:09:37.425Z",
+ "files": {
+  "probe_kfold.json": {
+   "actions": {
+    "rapid": {
+     "r_kfold_deseas": 0.631,
+     "ci95": [
+      0.513,
+      0.732
+     ],
+     "n": 240,
+     "rmse_sv": 2.16,
+     "sigma_sv": 2.79,
+     "r_lowpass18": 0.82,
+     "wind_only_baseline": {
+      "r": 0.568,
+      "ci95": [
+       0.428,
+       0.696
+      ],
+      "rmse_sv": 2.29
+     }
+    },
+    "fc": {
+     "r_kfold_deseas": 0.012,
+     "ci95": [
+      -0.111,
+      0.137
+     ],
+     "n": 490,
+     "rmse_sv": 2.17,
+     "sigma_sv": 2.15,
+     "r_lowpass18": 0.111,
+     "wind_only_baseline": {
+      "r": -0.276,
+      "ci95": [
+       -0.36,
+       -0.168
+      ],
+      "rmse_sv": 2.16
+     }
+    },
+    "move": {
+     "r_kfold_deseas": 0.162,
+     "ci95": [
+      -0.029,
+      0.34
+     ],
+     "n": 271,
+     "rmse_sv": 3.84,
+     "sigma_sv": 3.73,
+     "r_lowpass18": 0.516,
+     "wind_only_baseline": {
+      "r": -0.376,
+      "ci95": [
+       -0.45,
+       -0.284
+      ],
+      "rmse_sv": 3.79
+     }
+    },
+    "osnap": {
+     "r_kfold_deseas": -0.061,
+     "ci95": [
+      -0.133,
+      0.047
+     ],
+     "n": 96,
+     "rmse_sv": 3.77,
+     "sigma_sv": 2.63,
+     "r_lowpass18": 0.34,
+     "wind_only_baseline": {
+      "r": 0.031,
+      "ci95": [
+       -0.217,
+       0.231
+      ],
+      "rmse_sv": 2.64
+     }
+    }
+   }
+  },
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.43,
+     "r_deseasonalised": 0.42,
+     "n_test": 36
+    },
+    {
+     "K": 3,
+     "r_raw": 0.424,
+     "r_deseasonalised": 0.408,
+     "n_test": 36
+    },
+    {
+     "K": 6,
+     "r_raw": 0.519,
+     "r_deseasonalised": 0.457,
+     "n_test": 36
+    },
+    {
+     "K": 12,
+     "r_raw": 0.648,
+     "r_deseasonalised": 0.632,
+     "n_test": 36
+    },
+    {
+     "K": 24,
+     "r_raw": 0.604,
+     "r_deseasonalised": 0.583,
+     "n_test": 36
+    }
+   ],
+   "seasonal_floor_raw": 0.272,
+   "seasonal_floor_deseas": -0.168
+  },
+  "dip_check.json": {
+   "run": "actions",
+   "window": [
+    "2009-09",
+    "2010-06"
+   ],
+   "r_out_of_fold": 0.631,
+   "sign_agreement_pct": 69.2,
+   "dip_observed_sv": -6.87,
+   "dip_predicted_sv": -3.51,
+   "dip_captured_pct": 51.2
+  }
+ }
+}
