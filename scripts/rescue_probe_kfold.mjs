@@ -126,15 +126,27 @@ for (const n of RUNS) {
         branch: "ml-metrics", ...(meta ? { sha: meta.sha } : {}) }) });
   if (!put.ok) { console.log(`#${n}: write failed ${put.status}`); skipped++; continue; }
 
-  // Assert the effect, through the API for the same staleness reason.
-  const back = await fetch(
-    `https://api.github.com/repos/${REPO}/contents/probes-${n}.json?ref=ml-metrics`,
-    { headers: H });
-  const got = back.ok && JSON.parse(Buffer.from((await back.json()).content, "base64")
-                                      .toString("utf8")).files;
-  const ok = got && Object.keys(got).length > 0;
-  console.log(`#${n}: ${ok ? "archived — " + Object.keys(got).join(", ")
-                           : "WROTE IT BUT IT IS NOT THERE"}`);
-  if (ok) fixed++; else skipped++;
+  // Assert the effect, through the API for the same staleness reason — but
+  // RETRY. A file CREATED a moment ago can still read 404 on the contents
+  // endpoint for a second or two, and the first version checked exactly once:
+  // #126's bundle landed complete with all four files and the tool printed
+  // "WROTE IT BUT IT IS NOT THERE". A verification that cries wolf is worse
+  // than none, because the next false alarm gets ignored along with the true
+  // one. archive_probes.mjs already retries for this reason; this did not.
+  let got = null;
+  for (let i = 0; i < 6 && !got; i++) {
+    if (i) await new Promise((r) => setTimeout(r, 1200));
+    const back = await fetch(
+      `https://api.github.com/repos/${REPO}/contents/probes-${n}.json?ref=ml-metrics`,
+      { headers: H });
+    if (!back.ok) continue;
+    const body = await back.json();
+    if (!body.content) continue;
+    const files = JSON.parse(Buffer.from(body.content, "base64").toString("utf8")).files;
+    if (files && Object.keys(files).length) got = files;
+  }
+  console.log(`#${n}: ${got ? "archived — " + Object.keys(got).join(", ")
+                            : "WROTE IT BUT IT IS STILL NOT READABLE after 6 tries"}`);
+  if (got) fixed++; else skipped++;
 }
 console.log(`\n${fixed} bundle(s) repaired, ${skipped} skipped.`);
