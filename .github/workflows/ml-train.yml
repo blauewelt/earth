@@ -152,6 +152,20 @@ jobs:
           REL_ID=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/model-checkpoints-v1" \
             | sed -n 's/.*"id": *\([0-9]*\).*/\1/p' | head -1)
+          # metrics.jsonl TOO — and it may matter more than the weights.
+          # temporal.py writes its stage2_result (the held-out data-space
+          # skill, the number the experiment exists to produce) at the END of
+          # its own run, which is long before the probe ladder finishes and
+          # the archive step publishes anything. A job killed in that window
+          # loses the RESULT while the weights are still on disk. Rescuing the
+          # weights and not the numbers would have been a very silly way to
+          # learn this.
+          if [ -f ml/runs/actions/metrics.jsonl ]; then
+            mkdir -p /opt/earth-cache/ckpt
+            cp ml/runs/actions/metrics.jsonl \
+               /opt/earth-cache/ckpt/orphan-metrics-latest.jsonl || true
+            echo "rescued metrics.jsonl ($(wc -l < ml/runs/actions/metrics.jsonl) lines)"
+          fi
           for t in temporal temporal_joint; do
             f="ml/runs/actions/$t.pt"
             if [ -f "$f" ]; then
@@ -170,9 +184,11 @@ jobs:
           # fetchable by `node scripts/fetch_ckpt.mjs`. Best effort and loud:
           # a failed upload prints its status rather than vanishing.
           for f in /opt/earth-cache/ckpt/orphan-temporal-latest.pt \
-                   /opt/earth-cache/ckpt/orphan-temporal_joint-latest.pt; do
+                   /opt/earth-cache/ckpt/orphan-temporal_joint-latest.pt \
+                   /opt/earth-cache/ckpt/orphan-metrics-latest.jsonl; do
             [ -f "$f" ] || continue
-            asset="rescued-$(basename "$f" .pt)-${{ github.run_number }}.pt"
+            base=$(basename "$f"); ext="${base##*.}"
+            asset="rescued-${base%.*}-${{ github.run_number }}.${ext}"
             up=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "Content-Type: application/octet-stream" \
