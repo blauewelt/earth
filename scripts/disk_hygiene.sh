@@ -45,6 +45,18 @@ pip cache purge >/dev/null 2>&1
 # A .partial with no .progress marker beside it cannot be resumed, so it is
 # scratch. One WITH a marker is a half-built embedding somebody can continue —
 # that is tier 2, and deleting it would throw away up to 95 minutes of GPU.
+# UPLOAD PARTS ARE PURE SCRATCH — a byte-for-byte copy of a range already in
+# the .npy beside them. On 2026-08-10 an ENOSPC while chunking left one behind
+# and the box went to 50/50: every later job died in "Set up job", before any
+# step, so THIS script could never run to clean it. That is the shape of the
+# trap — the cleanup lives inside the thing the mess prevents from starting —
+# and it is why embed_cache_sync now refuses to start a chunk it cannot fit.
+for f in "$CACHE"/Z_*.up; do
+  [ -e "$f" ] || continue
+  sz=$(du -h "$f" | cut -f1)
+  rm -f "$f" && echo "    freed $(basename "$f") ($sz) — an abandoned upload chunk"
+done
+
 for f in "$CACHE"/Z_*.npy.partial; do
   [ -e "$f" ] || continue
   if [ -e "$f.progress" ]; then

@@ -33,6 +33,7 @@ Usage:
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -179,29 +180,56 @@ def push(run):
 
     total = os.path.getsize(path)
     n = (total + CHUNK - 1) // CHUNK
+
+    # DO NOT START A WRITE THE DISK CANNOT HOLD. Chunking to a temporary file
+    # needs CHUNK bytes free, and on 2026-08-10 this ran on a box with under
+    # 1.5 GiB left: the write failed with ENOSPC, the exception left the part
+    # file behind, and the disk went to 50/50. Every subsequent job on that
+    # box failed in "Set up job" — before any step, so the hygiene step that
+    # would have cleaned up could never run. One unchecked write cost three
+    # queued runs and took the box out of the fleet.
+    #
+    # ml/CLAUDE.md §5.18: size a guard from the allocation it guards. The
+    # allocation is CHUNK, and it is knowable here.
+    free = shutil.disk_usage(os.path.dirname(path)).free
+    need = CHUNK + (256 << 20)
+    if free < need:
+        print(f"::warning::refusing to publish: chunking needs "
+              f"{need / (1<<30):.2f} GiB free and the disk has "
+              f"{free / (1<<30):.2f} GiB. Publishing would fill it and take "
+              f"the box out of the fleet, which is worse than not publishing.")
+        return 1
+
     print(f"publishing {asset} as {n} chunk(s), {total / (1<<30):.2f} GiB total")
     with open(path, "rb") as f:
         for i in range(n):
             suffix = f"{chr(97 + i // 26)}{chr(97 + i % 26)}"
             name = f"{asset}.{suffix}"
             part = f"{path}.{suffix}.up"
-            with open(part, "wb") as o:
-                left = min(CHUNK, total - i * CHUNK)
-                while left:
-                    b = f.read(min(1 << 24, left))
-                    if not b:
-                        break
-                    o.write(b)
-                    left -= len(b)
-            if name in existing:              # replace, never duplicate
-                sh(f'curl -fsSL -X DELETE {hdr} '
-                   f'"{api}/repos/{REPO}/releases/assets/{existing[name]}"')
-            up = sh(f'curl -fsSL -X POST {hdr} '
-                    f'-H "Content-Type: application/octet-stream" '
-                    f'--data-binary "@{part}" '
-                    f'"https://uploads.github.com/repos/{REPO}/releases/{rid}/'
-                    f'assets?name={name}"')
-            os.remove(part)
+            # try/finally, so a part file NEVER outlives the attempt that made
+            # it. Previously an ENOSPC while writing raised straight past the
+            # os.remove below and left up to 1.5 GiB of garbage on a disk that
+            # had just proved it had no room.
+            try:
+                with open(part, "wb") as o:
+                    left = min(CHUNK, total - i * CHUNK)
+                    while left:
+                        b = f.read(min(1 << 24, left))
+                        if not b:
+                            break
+                        o.write(b)
+                        left -= len(b)
+                if name in existing:          # replace, never duplicate
+                    sh(f'curl -fsSL -X DELETE {hdr} '
+                       f'"{api}/repos/{REPO}/releases/assets/{existing[name]}"')
+                up = sh(f'curl -fsSL -X POST {hdr} '
+                        f'-H "Content-Type: application/octet-stream" '
+                        f'--data-binary "@{part}" '
+                        f'"https://uploads.github.com/repos/{REPO}/releases/{rid}/'
+                        f'assets?name={name}"')
+            finally:
+                if os.path.exists(part):
+                    os.remove(part)
             if up.returncode != 0:
                 print(f"::warning::chunk {name} failed: {up.stderr[:200]}")
                 return 1
