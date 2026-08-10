@@ -28,7 +28,7 @@ low-pass).
 ---
 
 <a id="e-007"></a>
-## E-007 · How far past persistence can a FROZEN-codec forecaster go? — still improving at 24k
+## E-007 · How far past persistence can a FROZEN-codec forecaster go? — still improving at 60k, but the AMOC probe plateaus at 24k
 
 **Question, from Chris:** before redesigning the loss, how much better than
 persistence can the existing pipeline get simply by training the stage-2 head
@@ -44,17 +44,30 @@ converged runs, not an early and a late snapshot of one.
 | run | steps | z-space ratio | **data-space ratio** | **vs persistence** | RAPID r (deseas.)* |
 |---|---|---|---|---|---|
 | #88 | 6,000 | 0.494 | 0.576 | +42.4% | 0.173 |
-| **#110** | **24,000** | **0.406** | **0.473** | **+52.7%** | **0.319** |
-| #112 | 60,000 | _running_ | | | |
+| #110 | 24,000 | 0.406 | 0.473 | +52.7% | 0.319 |
+| **#112** | **60,000** | **0.391** | **0.420** | **+58.0%** | **0.321** |
 
 \* single 36-month blocked split from the temporal hidden state, n_test = 36 —
 noisy, and NOT the k-fold the programme argues from.
 
-**Answer so far: no flattening.** Four times the steps bought **ten points** of
-skill against persistence in real data units on held-out months, and the
-deseasonalised RAPID correlation from the stage-2 hidden state nearly doubled.
+**Answer: still improving, but decelerating — and the two metrics part ways.**
+6k → 24k bought −0.103 in the data-space ratio; 24k → 60k bought −0.052 for 2.5×
+the steps. Forecast skill has not plateaued. The RAPID correlation HAS: 0.319 →
+0.321 is nothing. So past 24,000 steps the model keeps becoming a better field
+forecaster without becoming a better AMOC probe, which is the more interesting
+half of the result — the two objectives stop moving together.
+
 6,000 steps — the budget every previous stage-2 run in this programme used —
-was leaving a lot on the table.
+was leaving a great deal on the table, so some of what has been attributed to
+codec quality may have been an undertrained forecaster.
+
+**#112 was cancelled at 09:00 with its result already computed.** Its GPU had
+been idle for 25+ minutes at 60% CPU — the 60,000 training steps finished
+around 07:00 and only the CPU probe tail was left, against a 09:51 timeout.
+`temporal.py` writes `stage2_result` at the END of its own run, so the number
+existed on disk hours before anything would have published it. Weights and
+metrics were both recovered by a rescue-only dispatch and are on the release as
+`f3_s2_60k__temporal.pt`. See docs/INFRASTRUCTURE.md §2b.
 
 **What did NOT change: the headline.** #110's pooled year-blocked k-fold RAPID
 is **0.627 [0.503, 0.735]** against the anchor's 0.631 [0.513, 0.732]. It must
@@ -95,10 +108,10 @@ across boxes too (0.627 vs 0.631), so the tensors are close, not unrelated.
 actually used, so divergence is visible instead of inferred from an anomaly in
 a baseline nobody was looking at.
 
-**Consequence for E-006.** The bar the data-space loss has to clear is 0.473,
-not 0.576 — and possibly lower once #112 lands. A redesign that merely matched
-the old 6,000-step number would have looked like a win against the wrong
-baseline.
+**Consequence for E-006.** The bar the data-space loss has to clear is **0.420**,
+not the 0.576 that a programme-wide habit of 6,000-step stage-2 runs made feel
+normal. A redesign that merely matched the old number would have looked like a
+win against a baseline that was simply undertrained.
 
 ---
 
