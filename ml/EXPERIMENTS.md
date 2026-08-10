@@ -27,6 +27,57 @@ low-pass).
 
 ---
 
+<a id="e-007"></a>
+## E-007 · How far past persistence can a FROZEN-codec forecaster go? — still improving at 24k
+
+**Question, from Chris:** before redesigning the loss, how much better than
+persistence can the existing pipeline get simply by training the stage-2 head
+longer? If it saturates early, the forecaster was never the bottleneck and the
+whole joint-training premise is misdirected.
+
+**Design.** Stage 2 only — the codec is frozen at the 40M anchor, so no
+degeneracy is available and nothing about the embedding can move. U=1, K=24,
+head 192x4. Each budget is its own *converged* endpoint, because
+`temporal.py` anneals `CosineAnnealingLR` over `a.steps`; two budgets are two
+converged runs, not an early and a late snapshot of one.
+
+| run | steps | z-space ratio | **data-space ratio** | **vs persistence** | RAPID r (deseas.)* |
+|---|---|---|---|---|---|
+| #88 | 6,000 | 0.494 | 0.576 | +42.4% | 0.173 |
+| **#110** | **24,000** | **0.406** | **0.473** | **+52.7%** | **0.319** |
+| #112 | 60,000 | _running_ | | | |
+
+\* single 36-month blocked split from the temporal hidden state, n_test = 36 —
+noisy, and NOT the k-fold the programme argues from.
+
+**Answer so far: no flattening.** Four times the steps bought **ten points** of
+skill against persistence in real data units on held-out months, and the
+deseasonalised RAPID correlation from the stage-2 hidden state nearly doubled.
+6,000 steps — the budget every previous stage-2 run in this programme used —
+was leaving a lot on the table.
+
+**What did NOT change: the headline.** #110's pooled year-blocked k-fold RAPID
+is **0.627 [0.503, 0.735]** against the anchor's 0.631 [0.513, 0.732]. It must
+be unchanged, because the codec is byte-identical — and it is. Training the
+forecaster longer improves *forecasting*; it does not improve what the
+*embedding* knows about the AMOC, and those are different columns of the
+master table. Any claim of a "new best" has to say which.
+
+**Confound to note.** `--resume "!run-62,run-63"` takes whichever checkpoint
+the box happens to hold: #88 got run-63, #110 and #112 got run-62. Different
+codecs, hence different persistence baselines (channel-space 1.205 vs 1.154).
+Each run divides by its own persistence so the ratio is within-codec and the
+comparison is largely fair, but **#110 vs #112 is the clean pair**; #88 is
+indicative.
+
+**Consequence for E-006.** The bar the data-space loss has to clear is 0.473,
+not 0.576 — and possibly lower once #112 lands. A redesign that merely matched
+the old 6,000-step number would have looked like a win against the wrong
+baseline.
+
+---
+
+<a id="e-004"></a>
 ## E-004 v5 · The scale-free ratio has a SECOND degeneracy: inflate the baseline — #107/#108 void
 
 The live-persistence denominator did close the shrinkage direction. The
@@ -88,6 +139,7 @@ fifth normalisation.
 
 ---
 
+<a id="e-006"></a>
 ## E-006 · The loss, rewritten in the data's units — DESIGNED, not yet run
 
 Chris, after four failed normalisations: *"the loss term should just be (1) how
@@ -158,6 +210,7 @@ failure of 2026-08-09, namely building four times before thinking once.
 
 ---
 
+<a id="e-004-2"></a>
 ## E-004 · The forecast term was rewarding the encoder for SHRINKING z — every joint result so far retracted
 
 Caught live on 2026-08-09 at 21:47 UTC, on the two control runs launched to
@@ -278,6 +331,7 @@ you have written down what the gradient does without it.
 
 ---
 
+<a id="e-004-3"></a>
 ## E-004 · The normalisation was wrong — forecast never moved the codec
 
 Chris asked a one-line question about the chart — *"how can reconstruction be
@@ -339,6 +393,7 @@ phase and publishes curves every five minutes like the stage-1 step does.
 
 ---
 
+<a id="e-005"></a>
 ## E-005 · Autoregressive unroll in the stage-2 loss (exposure bias) — SUGGESTIVE, ONE SPLIT
 
 **Hypothesis.** Stage 2 trains on t+1 with TRUE context but is *evaluated*
@@ -409,6 +464,7 @@ deseasonalised gain should be monotonic in U up to the point where the
 
 ---
 
+<a id="e-004-4"></a>
 ## E-004 · BOTH joint runs RETRACTED — the collapse guard was measuring noise
 
 **#86 (sum) and #91 (lse) are void.** Neither tells us anything about joint
@@ -460,6 +516,7 @@ run that finishes always tells you more than a run that was stopped.
 
 ---
 
+<a id="e-004b"></a>
 ## E-004b · Joint training with the CONVENTIONAL sum loss — VOID (see above)
 
 **Run** #86 (`joint`, sum, λ=1, warm-started from run-62's 40.7M codec, K=12).
@@ -497,6 +554,7 @@ control that shows the conventional alternative needs forbidding.
 
 ---
 
+<a id="e-004a"></a>
 ## E-004a · Joint stage-1+2 training (adaptive loss) — VOID, TO RE-RUN (see above)
 
 **Hypothesis.** Stage 1 optimises *reconstruct this pixel-month*; nothing in
@@ -537,6 +595,7 @@ probe were allowed to fine-tune, the evaluation would no longer be a probe.
 
 ---
 
+<a id="e-003"></a>
 ## E-003 · Does capacity help on the quarter-degree tensor? — NULL
 
 **Run** #62 (`f3_anchor41M`, 40.7M params, 60k steps, 0.25° NA tensor, C=39).
@@ -562,6 +621,7 @@ house rule forbids quoting a head number from a single seed.
 
 ---
 
+<a id="e-002"></a>
 ## E-002 · Does training longer help? — NULL
 
 **Run** #30 (`patch24_1M`, 1M steps) against the 40k/60k runs of the same
@@ -570,6 +630,7 @@ either. Together with E-003 this closes both cheap scaling axes.
 
 ---
 
+<a id="e-001"></a>
 ## E-001 · Does pretraining beat a supervised read-out on raw data? — NOT ESTABLISHED
 
 Two seeds of `patch24` (1° tensor) probed with the unpooled attention head:

@@ -315,3 +315,30 @@ test("the fleet panel warns when runway is short", async ({ page }) => {
   // 3 / 0.9 = 3.3 h — well under the 12 h threshold.
   await expect(page.locator("#fleet")).toContainText("under 12 h of runway");
 });
+
+test("a run's doc links to its experiment definition", async ({ page }) => {
+  // The doc strings open with an experiment ID, and the badge must point at
+  // the EXPLICIT anchor in EXPERIMENTS.md — not GitHub's auto-generated
+  // heading anchor, which is derived from the whole heading text and rots the
+  // first time a heading changes from "READY" to a verdict.
+  await page.route(/\/actions\/workflows\/[^/]+\/runs/, (route) =>
+    route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({ workflow_runs: [
+        { id: 12, run_number: 112, status: "in_progress", conclusion: null,
+          created_at: iso(20), run_started_at: iso(18),
+          html_url: "https://example.invalid/112", name: "ml-train",
+          display_title: "E-007 third point: stage-2 only, 60,000 steps",
+          head_sha: "f".repeat(40) },
+        { id: 11, run_number: 42, status: "completed", conclusion: "success",
+          created_at: iso(400), html_url: "https://example.invalid/42",
+          display_title: "an older run with no experiment id", name: "ml-train",
+          head_sha: "9".repeat(40) },
+      ] }),
+    }));
+  await page.goto("/status.html");
+  const badge = page.locator("#runs a.exp");
+  await expect(badge).toHaveCount(1);           // only the E-007 run gets one
+  await expect(badge).toHaveText("E-007");
+  await expect(badge).toHaveAttribute("href", /ml\/EXPERIMENTS\.md#e-007$/);
+});
