@@ -112,6 +112,57 @@ Before dispatching a long job, size it against its own timeout — at the
 measured 0.419 s/step, 24,000 stage-2 steps fits in 350 minutes and 60,000
 does not.
 
+### 2c-bis · Guards sized smaller than the thing they guard
+
+The stage-2 embedding cache is **one allocation of 10.4 GiB** — 516 months ×
+84,405 ocean pixels × 64 dims × 4 bytes, and every factor is known before the
+write begins. The hygiene step in `ml-train.yml` pruned when free disk fell
+below **8 GB**. A threshold under the size of the single allocation it exists
+to protect cannot ever fire in time: it passes, and then the write fails.
+
+What made it expensive rather than merely wrong is that `open_memmap(mode="w+")`
+creates a **sparse** file. The 10.4 GiB is claimed immediately and allocated
+page by page across the fifty minutes the embedding takes, so there is no early
+failure to notice — the box dies on a write with the cache nearly complete. On
+a 50 GB box a full disk also takes the *runner* offline, so one bad run becomes
+a machine that eats every job dispatched to it afterwards. #117 cleared the
+check with ~11 GB free and spent an hour walking into a wall; it was cancelled
+at 45/50 GB, five gigabytes from the end of an embedding needing six.
+
+Underneath the badly-sized guard was a worse assumption. The memmap exists
+because a 10.4 GiB Z beside a 10.1 GiB tensor OOM-killed a **7 GB** box twice
+on 2026-08-07. The boxes rented since have **126 GB of RAM** and a 50 GB disk.
+The constraint moved and the code did not, so the run was writing to the scarce
+resource because the abundant one used to be scarce.
+
+**Design response.** A guard's threshold must be derived from the allocation it
+guards, not chosen. Where the size is computable — and here every factor was —
+compute it, and put the check where those numbers are in scope rather than in a
+shell step that can only guess. Then let the check *choose a resource* instead
+of only permitting or refusing one: `temporal.py` now takes the disk if the
+cache fits (worth ~50 minutes to the next run on that box), RAM if it does not,
+and refuses with both numbers when neither works. Scale the headroom to the
+write, too — a flat 3 GiB reserve reads as prudence until it refuses a 5 MB
+cache on a small sandbox, at which point it is clear the constant was doing the
+refusing rather than the risk.
+
+### 2c-ter · Displays that render on an unreachable branch
+
+The planned-schedule preview was written so a resumed cosine could be checked
+*before* it spent sixteen hours. It was correct, it was published, it was
+publicly readable — and the dashboard showed nothing, repeatedly, because it
+was drawn only on the code path where the live branch has **no metrics file at
+all**. `temporal.py` publishes its `config` line within seconds of starting, so
+that path is live for a few seconds of a sixteen-hour run and false every time
+a human looks.
+
+**Design response.** When a feature exists for a window of time, check that the
+condition it renders under actually holds *during that window*, not merely at
+some instant. The test that accompanied the feature used a queued run with no
+branch — it exercised the one arm that already worked. A test fixture must
+model the state the user will be in, which here means: in progress, a metrics
+file carrying config and nothing else, and a published plan.
+
 ### 2d · Instruments blind to the failure they exist to catch
 
 - `r_rec_probe` (reconstruction on a fixed batch) looked healthy through a 40×
@@ -216,6 +267,13 @@ violation cost something.
 10. Any state a run needs to be CONTINUED (optimiser moments, schedule
     position, RNG) is saved with the weights, and a test asserts the
     continuation matches an uninterrupted run.
+11. Every resource guard is sized from the allocation it guards, computed
+    where the numbers are in scope, and chooses between resources rather than
+    only permitting or refusing one.
+12. A run reports the SPACE it will need before it starts consuming it, and a
+    result file is never written containing NaN — the job stops instead, so a
+    fault is attributed to its cause rather than to the last thing that
+    touched it.
 
 ---
 

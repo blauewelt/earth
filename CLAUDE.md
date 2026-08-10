@@ -949,6 +949,47 @@ archive.
     livelock it was written to cure was still live and killed #96/#97/#98.
   - `2>/dev/null` on a command whose failure you are branching on hides the
     one line that explains the branch. Keep stderr unless you have read it.
+- **Size a guard from the allocation it guards, and let it CHOOSE a resource.**
+  The stage-2 embedding cache is one allocation of **10.4 GiB** (516 months ×
+  84,405 ocean pixels × 64 dims × 4 bytes — every factor known before the
+  write). `ml-train.yml` pruned below **8 GB** free, a threshold under the
+  size of the thing it protects, so it passed and the write failed. Worse,
+  `np.lib.format.open_memmap(mode="w+")` creates a **sparse** file: the space
+  is claimed instantly and allocated page by page over the ~50 minutes the
+  embedding takes, so there is no early failure — the box dies with the cache
+  nearly built, and on a 50 GB box a full disk takes the *runner* offline too.
+  #117 cleared the check with ~11 GB free and spent an hour walking into the
+  wall. Underneath sat the real error: the memmap exists because a 10.4 GiB Z
+  beside a 10.1 GiB tensor OOM-killed a **7 GB** box (2026-08-07), and the
+  boxes rented since have **126 GB of RAM** against a 50 GB disk — it was
+  writing to the scarce resource because the abundant one used to be scarce.
+  `temporal.py::_cache_plan` now takes the disk if the cache fits (worth ~50
+  min to the next run on that box), RAM if it does not, and refuses with both
+  numbers if neither works; headroom scales with the write, capped, because a
+  flat 3 GiB reserve refuses a 5 MB cache on a small box and that is the
+  constant refusing, not the risk. `tests/test_embed_cache_room.py`.
+- **A tensor's channels do not all start on the same date, so a mask taken
+  from month 0 is not the ocean.** family-3's channel 0 is `cur_speed`
+  (GLORYS, from 1993-01) against a tensor that starts 1982-01, so
+  `isfinite(X[0, sec_y, :, 0])` selected **zero** pixels, `z.mean(0)` over an
+  empty section returned NaN, and `probe_sequence.json` came back all-NaN
+  across the whole K sweep — twice (#101, #116), logged both times as "the
+  sequence probe has a bug of its own". It was a masking bug, and the
+  seasonal-only floor stayed finite precisely because it never touches the
+  embedding, which is what made it look like a probe fault. Select from
+  `OBS[..., 0].any(axis=0)`, the mask `temporal.py` and `probe_head.py`
+  already use. **Never write NaN into a results file** — stop, so the fault is
+  attributed to its cause. `tests/test_section_mask.py`.
+- **A rerun is not a resample.** `probe_head.py`'s per-fold seeds were the
+  literal tuple `(0,1,2)` with no argument to change them and no seed in the
+  filename, so #116 — dispatched as "head probe, seed B, so 0.662 stops being
+  single seed" — recomputed a deterministic estimator, returned 0.662 /
+  [0.557, 0.745] / 2.10 Sv bit-identically, and would have overwritten seed A
+  with itself. Before dispatching a repeat, check the code has a knob for the
+  thing you intend to vary. And note a second seed was the wrong instrument
+  anyway: two probes scored on the same months and folds differ by a PAIRED
+  quantity, so `scripts/paired_probe.py` resamples years and rescores both,
+  which resolves a gap their overlapping marginal CIs cannot.
 - **A Vast instance's runner NAME is inside its `onstart` script, nowhere
   else.** The runner names (`gpu-box-45318655`) are stale instance IDs from
   whenever the box was created, so they do NOT match the current instance IDs
@@ -1275,12 +1316,14 @@ unrecoverable** — `train_joint.py` writes `temporal_joint.pt` into the runner
 workspace, which is in neither artifact path and is not mirrored to
 `/opt/earth-cache`, so the next checkout on that box erases it, and there is no
 `--resume-temporal` nor any saved optimiser state (this is why #101's 12k-step
-head could not be continued); `probe_sequence.json` returned all-NaN across the
-K sweep on #101 while the k-fold was fine, so the sequence probe has a bug of
-its own; head-probe seed B (0.662 is one seed); re-score #88/#93 through
-`probe_kfold` rather than the 36-month split; unroll U=2 and U=8. Watch disk on
-the Vast boxes — two sat at 44–45 of 50 GB on 2026-08-09, and a full disk takes
-a runner offline.
+head could not be continued); run `scripts/paired_probe.py` over the head and
+its raw-3×3 control once a run has written the per-month arrays, and only then
+decide whether the +0.034 gap is quotable; draw a genuine second seed with
+`probe_head.py --seed-base 3`; re-score #88/#93 through `probe_kfold` rather
+than the 36-month split; unroll U=2 and U=8. Watch disk on the Vast boxes — 50
+GB against a 10.4 GiB embedding cache, and a full disk takes a runner offline.
+(`probe_sequence`'s all-NaN K sweep is FIXED — it was an empty section, not a
+probe bug; see Part 2.)
 
 **Deferred / open follow-ups:** OC-CCI & SMOS as first-class grid layers;
 multi-channel AMOC state vector; catalog `family` field for machine-readable
