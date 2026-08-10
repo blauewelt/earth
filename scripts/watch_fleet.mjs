@@ -28,6 +28,40 @@ const TOKEN = (() => {
 const H = TOKEN ? { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" } : {};
 const j = async (u) => { try { const r = await fetch(u, { headers: H }); return r.ok ? await r.json() : null; } catch { return null; } };
 const txt = async (u) => { try { const r = await fetch(u); return r.ok ? await r.text() : null; } catch { return null; } };
+
+// READ THE LIVE BRANCH THROUGH THE API, NOT raw.githubusercontent.
+//
+// raw serves a CDN copy that ignores cache-busting query strings and can sit
+// minutes behind a push. Measured 2026-08-10 21:07Z: two consecutive ticks
+// four minutes apart both reported #126 at step 98,000 and #121 at 74,000 —
+// identical numbers, identical ETAs — while the contents API already showed
+// 110,000 and 76,000. At 25.4 ms/step that is a four-minute lag.
+//
+// For a progress line a few stale minutes would be survivable. Two IDENTICAL
+// consecutive ticks are not: that is exactly what a wedged job looks like,
+// and this watcher exists partly to tell a stall from a queue. An instrument
+// whose failure mode mimics the fault it watches for is worse than none.
+//
+// Costs one API call per live run per tick — about 24 an hour against a
+// 5,000/hour budget. Falls back to raw when the API declines or when the file
+// is large enough that GitHub returns a download_url instead of inline
+// content (over 1 MB), which a long run's metrics.jsonl could eventually be.
+async function branchFile(branch, path) {
+  if (TOKEN) {
+    try {
+      const r = await fetch(
+        `https://api.github.com/repos/${REPO}/contents/${path}?ref=${branch}`,
+        { headers: H });
+      if (r.ok) {
+        const b = await r.json();
+        if (b.content) return Buffer.from(b.content, "base64").toString("utf8");
+      } else if (r.status === 404) {
+        return null;
+      }
+    } catch { /* fall through */ }
+  }
+  return txt(`https://raw.githubusercontent.com/${REPO}/${branch}/${path}?cb=${Date.now()}`);
+}
 const hhmm = (s) => `${Math.floor(s / 3600)}h${String(Math.round((s % 3600) / 60)).padStart(2, "0")}`;
 
 const seen = new Map();          // run -> last reported state string
@@ -50,7 +84,7 @@ async function tick() {
     const n = r.run_number;
     let note = r.status === "completed" ? r.conclusion : r.status;
     if (r.status === "in_progress") {
-      const t = await txt(`https://raw.githubusercontent.com/${REPO}/ml-live-${n}/metrics.jsonl?cb=${Date.now()}`);
+      const t = await branchFile(`ml-live-${n}`, "metrics.jsonl");
       const recs = (t || "").trim().split("\n").map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
       const emb = recs.filter((x) => x.embedding).pop();
       const s2 = recs.filter((x) => x.stage2_step ?? x.step).pop();
@@ -63,7 +97,7 @@ async function tick() {
         // plan, which is also the thing the curve is checked against. Reading
         // it from there rather than from the dispatch inputs means the ETA
         // and the graph can never disagree about how long the run is.
-        const plan = await txt(`https://raw.githubusercontent.com/${REPO}/ml-metrics/plan-${n}.json?cb=${Date.now()}`);
+        const plan = await branchFile("ml-metrics", `plan-${n}.json`);
         let tot = null;
         try { tot = Number(JSON.parse(plan).steps) || null; } catch { /* no plan yet */ }
         // ms/step from wall-clock over steps done, not a field: the trainer
