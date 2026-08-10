@@ -799,6 +799,50 @@ extracted from it; they are ordered by how much they would have saved.
     re-dispatch (see the queue-stall note in Part 2); do not restart the boxes
     and lose their warm caches.
 
+### 6d. Security posture of the rented GPU boxes
+
+The Vast boxes are strangers' machines. The host has root on the physical
+machine, so **treat everything on a box as readable by whoever owns it**.
+That single assumption decides everything below.
+
+**What is on a box.** The workflow's automatic `GITHUB_TOKEN` (an env var for
+the job's lifetime, repo-scoped, `contents: write` per the `permissions:`
+block, revoked by GitHub when the job ends); the Actions runner's registration
+credential under `/opt/runner`; and public data plus model checkpoints, none
+of it confidential. The runner runs as root inside its container
+(`RUNNER_ALLOW_RUNASROOT=1`).
+
+**What is NOT, and must never be.** The user's PAT (`/home/claude/.gh_pat`
+lives in the session sandbox), the Vast API key, and the CMEMS credentials.
+Nothing that outlives a job and nothing that reaches another repo or account.
+
+**The registration is a bigger exposure than the token.** The job token dies
+with the job. The registration persists on disk, survives stop/start, and is
+NOT `--ephemeral` — so anyone who lifts it can act as a runner for this repo
+indefinitely, receiving jobs and minting a fresh `GITHUB_TOKEN` each time.
+Mitigations, cheapest first: pass `--ephemeral` when creating a box (one
+registration per job); remove the runners from the repo
+(`scripts/fleet_rm_runner.mjs`) when the fleet will be idle for a long stretch
+— note this breaks the cheap stop/start loop, since a started box reconnects
+with a credential GitHub no longer honours and the onstart script skips
+re-registration when `/opt/runner/.runner` exists.
+
+**The one line of defence that must never move.** Self-hosted runners on a
+PUBLIC repo are the classic dangerous configuration: a fork's pull request can
+execute arbitrary code on your hardware. We are safe only because
+`ml-train.yml` is `workflow_dispatch`-only and dispatch requires repo write
+access. `pages.yml` does carry `pull_request`, but runs on `ubuntu-latest`.
+**Never add `pull_request`, `issue_comment`, `workflow_run` or `schedule` to
+ml-train.yml, and never point another triggered workflow at `runs-on: gpu`.**
+That change would look harmless in review and would hand code execution on the
+boxes, plus the job token, to anyone who opens a PR.
+
+**Blast radius if a job token does leak.** Repo-scoped `contents: write`: push
+to any branch including main, delete branches, cut releases. Not other repos,
+not the account. Keep `permissions:` at `contents: write` and add nothing;
+`contents` is needed only for the `ml-live-*` side channel and the `ml-metrics`
+archive.
+
 ### 7. Documentation set
 
 | File | Role |
