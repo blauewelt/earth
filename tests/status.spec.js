@@ -62,8 +62,25 @@ const RUN_B = jsonl([
   { step: 35000, linear_r_deseas: 0.601, wall_s: 3200 },
 ]);
 
+// A stage-2 job still in flight: 6,000 of 24,000 steps in 2,400 s, so 0.4 s
+// per step and 7,200 s left. No stage2_result yet, which is what makes it an
+// ETA case rather than a verdict case.
+const RUN_S2_LIVE = jsonl([
+  { config: { steps: 60000, params_M: 40.7, data: "f3_na025.npz", C: 39 } },
+  { stage2_config: { d_model: 192, layers: 4, K: 24, steps: 24000, params_M: 1.822, d_z: 64, seed: 0, tag: "" } },
+  { stage2_step: 3000, stage2_zmse: 0.900, stage2_wall_s: 1200 },
+  { stage2_step: 6000, stage2_zmse: 0.800, stage2_wall_s: 2400 },
+]);
+
 const RUNS = {
   workflow_runs: [
+    {
+      id: 6, run_number: 106, status: "in_progress", conclusion: null,
+      created_at: iso(45), run_started_at: iso(41),
+      html_url: "https://example.invalid/106",
+      display_title: "E-007 stage-2 budget sweep, 24,000 steps", name: "ml-train",
+      head_sha: "6".repeat(40),
+    },
     {
       id: 3, run_number: 103, status: "completed", conclusion: "success",
       created_at: iso(30), html_url: "https://example.invalid/103",
@@ -131,6 +148,7 @@ test.beforeEach(async ({ page }) => {
     // served from the ml-metrics archive. Model both, since the stitch has
     // to reach the ARCHIVE to find the parent.
     if (/ml-live-102\/metrics\.jsonl/.test(url)) return fulfill(RUN_B);
+    if (/ml-live-106\/metrics\.jsonl/.test(url)) return fulfill(RUN_S2_LIVE);
     if (/ml-metrics\/run-103\.jsonl/.test(url)) return fulfill(RUN_S2);
     if (/ml-metrics\/run-101\.jsonl/.test(url)) return fulfill(RUN_A);
     // #104 is mid-build: it has a phase file and no metrics yet.
@@ -341,4 +359,20 @@ test("a run's doc links to its experiment definition", async ({ page }) => {
   await expect(badge).toHaveCount(1);           // only the E-007 run gets one
   await expect(badge).toHaveText("E-007");
   await expect(badge).toHaveAttribute("href", /ml\/EXPERIMENTS\.md#e-007$/);
+});
+
+test("a long stage-2 job says when it will finish, not just how far along", async ({ page }) => {
+  // 6,000 of 24,000 steps in 2,400 s -> 0.4 s/step -> 7,200 s left. The panel
+  // must name a clock time: "25% done" on a seven-hour job is not something
+  // you can plan around, and this is read on a phone.
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #106" }) });
+  await expect(card).toContainText("6,000 of 24,000 steps");
+  await expect(card).toContainText("~2.0 h left");
+  await expect(card).toContainText("ends \u2248");
+  // A FINISHED stage 2 states its verdict instead — no ETA once it is done.
+  const done = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #103" }) });
+  await expect(done).not.toContainText("ends \u2248");
 });

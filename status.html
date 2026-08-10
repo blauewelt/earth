@@ -213,6 +213,27 @@
     return null;
   }
 
+  // ---- estimated finish -----------------------------------------------------
+  // "~2.3 h left" is a duration; "≈ 07:50" is a time you can plan around, and
+  // Chris reads this on a phone where the second is the useful one. Both are
+  // shown. The rate always comes from the job's OWN wall clock (wall_s /
+  // stage2_wall_s are seconds of training), never from our clock, so queue
+  // time, build time and a restart cannot skew it.
+  function etaText(secLeft) {
+    if (!(secLeft > 0) || !isFinite(secLeft)) return "";
+    var end = new Date(Date.now() + secLeft * 1000);
+    var dur = secLeft > 5400 ? "~" + (secLeft / 3600).toFixed(1) + " h left"
+                             : "~" + Math.max(1, Math.round(secLeft / 60)) + " min left";
+    var day = end.toDateString() !== new Date().toDateString() ? "tomorrow " : "";
+    return dur + " · ends ≈ " + day + pad2(end.getHours()) + ":" + pad2(end.getMinutes());
+  }
+  // Steps done, seconds spent on them, steps planned -> seconds remaining.
+  function secLeftFrom(stepNow, wallS, stepsTotal, stepBase) {
+    var done = stepNow - (stepBase || 0);
+    if (!(done > 0) || !(wallS > 0) || !(stepsTotal > stepNow)) return 0;
+    return (wallS / done) * (stepsTotal - stepNow);
+  }
+
   // ---- experiment tag -------------------------------------------------------
   // Every dispatch since 2026-08-09 opens its doc with an experiment ID
   // ("E-007 ..."), so the run number can be linked to the DEFINITION rather
@@ -623,6 +644,14 @@
       '<div class="legend"><span><span class="sw" style="background:#a371f7"></span>' +
       "z-space MSE (next-month embedding) — latest <b>" + last.stage2_zmse.toFixed(4) +
       "</b> at step " + fmtInt(last.stage2_step) + "</span></div>" +
+      // A 60,000-step stage 2 is a seven-hour job; without this the panel
+      // says how far along it is and nothing about when to come back.
+      (function () {
+        var e = (m.s2cfg && !m.s2res)
+          ? etaText(secLeftFrom(last.stage2_step, last.stage2_wall_s, m.s2cfg.steps, 0)) : "";
+        return e ? '<div class="meta">' + fmtInt(last.stage2_step) + " of " +
+                   fmtInt(m.s2cfg.steps) + " steps · " + esc(e) + "</div>" : "";
+      })() +
       stage2Verdict(m);
   }
 
@@ -729,6 +758,12 @@
                           : zShrink.toFixed(2) + "x smaller") + "</b></span>"
         : "") +
       "</div>" +
+      (function () {
+        var e = (m.jcfg && m.jcfg.steps)
+          ? etaText(secLeftFrom(last.joint_step, last.wall_s, m.jcfg.steps, 0)) : "";
+        return e ? '<div class="meta">' + fmtInt(last.joint_step) + " of " +
+                   fmtInt(m.jcfg.steps) + " steps · " + esc(e) + "</div>" : "";
+      })() +
       '<div class="probe"><span class="meta">Forecast falling is only meaningful ' +
       "against a frozen-codec control: the temporal head starts random, so it " +
       "improves whatever the codec does. Reconstruction near 1.0 is what says " +
@@ -903,8 +938,7 @@
       if (total && wall && run.status !== "completed" && last.step > 0 && last.step < total
           && wall.step > stepBase) {
         var secLeft = (wall.wall_s / (wall.step - stepBase)) * (total - last.step);
-        eta = secLeft > 5400 ? " · ~" + (secLeft / 3600).toFixed(1) + " h left"
-                             : " · ~" + Math.max(1, Math.round(secLeft / 60)) + " min left";
+        eta = " · " + etaText(secLeft);
       }
       var html = head +
         '<div class="stepbig">step ' + fmtInt(last.step) +
