@@ -895,5 +895,14 @@ jobs:
         run: |
           bash scripts/archive_run_metrics.sh "${{ github.run_number }}" || \
             echo "::warning::metrics archive failed — live branch kept for recovery"
+          # THE RESULTS, not just the curves. probe_kfold, probe_head, its
+          # raw-3x3 control and dip_check are the numbers this programme argues
+          # from, and until now they existed ONLY in an Actions artifact, which
+          # GitHub deletes after 30 days. The training curves outlived the
+          # results. #116's had to be rescued by hand on 2026-08-10 with three
+          # weeks to spare.
+          node scripts/archive_probes.mjs --run-number "${{ github.run_number }}" \
+            --dir ml/runs/actions || \
+            echo "::warning::probe archive failed — results are only in the artifact, which expires"
           git push -q "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             ":refs/heads/ml-live-${{ github.run_number }}" 2>/dev/null || true
