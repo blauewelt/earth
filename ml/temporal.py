@@ -231,12 +231,19 @@ def make_sched(opt, a, last_epoch=-1):
             # schedule that never arrives is the honest default until the
             # floor-vs-zero control has actually run.
             half = max(1.0, float(a.lr_halflife))
+            # An OPTIONAL terminal taper to zero. Off by default, because
+            # decay-to-zero is a borrowed prior; on, it makes the ONE-VARIABLE
+            # control for it — same curve, same half-life, differing only in
+            # whether the tail reaches zero.
+            cool = max(0, int(round(a.steps * a.lr_cooldown_frac)))
+            taper_from = a.steps - cool
 
             def factor(step):
                 s = step + 1
-                if s <= warm:
-                    return _warm_cos(s)
-                return 0.5 ** ((s - warm) / half)
+                base = _warm_cos(s) if s <= warm else 0.5 ** ((s - warm) / half)
+                if cool and s > taper_from:
+                    base *= max(0.0, (a.steps - s) / cool)
+                return base
         else:
             def factor(step):
                 s = step + 1

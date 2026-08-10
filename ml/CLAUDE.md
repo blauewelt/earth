@@ -71,6 +71,17 @@ Everything below elaborates these.
   wrong device" — four eval scripts silently embedded a 40.7M codec on CPU.
 - **Report measurements, not intentions.** "Curves will appear shortly" said
   twice without reading the branch is a guess wearing a fact's clothes.
+- **SCREENSHOT THE STATUS PAGE at every monitoring wake-up**, and look at it:
+  `node scripts/status_shot.mjs --out /tmp/status.png`. It captures the live
+  branches and plans and renders the deployed page at a phone viewport, so
+  what you check is what Chris sees. Standing rule, requested 2026-08-10 after
+  I twice described a dashboard state that was not real — once because the
+  plan preview rendered on a branch nobody is ever on, once because a stale
+  record from a previous run was being charted as the current one. Both times
+  I reported what the code should produce instead of what the page produces. A
+  screenshot is the one check that cannot be fooled by my model of the code.
+  It also prints PAGE ERRORS, which is how a blanked section gets noticed
+  before a human finds it.
 
 ## 3 · Reporting a result
 

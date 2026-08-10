@@ -434,7 +434,11 @@ test("a continued stage-2 run charts BOTH learning-rate schedules and the seam",
   await page.goto("/status.html");
   const card = page.locator("#live .card")
     .filter({ has: page.locator("h3", { hasText: "run #107" }) });
-  await expect(card).toContainText("learning rate, peak 1.0e-4");
+  // "as LOGGED" because the curve is now the rate the run REPORTED rather
+  // than one re-derived from an assumed cosine — the peak is still this run's
+  // configured 1.0e-4, not the parent's 1.0e-3 and not the highest value
+  // logged so far.
+  await expect(card).toContainText("learning rate as LOGGED, peak 1.0e-4");
   await expect(card).toContainText("previous run's schedule (peak 1.0e-3, 60,000 steps)");
   // Two LR polylines — the parent's dashed, this run's solid — plus the seam.
   expect(await card.locator('svg.chart polyline[stroke="#f0883e"]').count()).toBe(2);
@@ -669,4 +673,38 @@ test("records from a PREVIOUS run are discarded, not charted", async ({ page }) 
   await expect(card).not.toContainText("0.8201");
   await expect(card).not.toContainText("z-space MSE");
   await expect(card).not.toContainText("temporal transformer over the frozen");
+});
+
+test("the live LR overlay plots the LOGGED rate, not a re-derived cosine", async ({ page }) => {
+  // #125 runs an exponential decay. cosLr would have drawn a cosine over it,
+  // on a chart whose legend named the schedule correctly — the same "second
+  // implementation" defect the plan preview had. temporal.py logs stage2_lr
+  // every point, so there is nothing to derive.
+  const body = [
+    JSON.stringify({ config: { steps: 60000, params_M: 40.7 } }),
+    JSON.stringify({ stage2_config: { d_model: 192, layers: 4, K: 24, steps: 200000, params_M: 1.822 } }),
+    // An exponential tail: a cosine over 200k would still be near its peak here.
+    JSON.stringify({ stage2_step: 2000, stage2_zmse: 1.98, stage2_lr: 1.0e-3, stage2_wall_s: 51 }),
+    JSON.stringify({ stage2_step: 40000, stage2_zmse: 0.71, stage2_lr: 5.0e-4, stage2_wall_s: 1030 }),
+    JSON.stringify({ stage2_step: 80000, stage2_zmse: 0.55, stage2_lr: 2.5e-4, stage2_wall_s: 2060 }),
+  ].join("\n");
+  await page.route(/ml-live-106\/metrics\.jsonl/, (r) =>
+    r.fulfill({ status: 200, contentType: "text/plain", body }));
+  await page.route(/ml-metrics\/plan-106\.json/, (r) => r.fulfill({
+    status: 200, contentType: "text/plain",
+    body: JSON.stringify({ steps: 200000, lr: 1e-3, schedule: "expdecay",
+                           points: [[0, 1e-3], [100000, 1.7e-4], [199999, 3.2e-5]] }) }));
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #106" }) });
+  await expect(card).toContainText("expdecay");
+  await expect(card).toContainText("as LOGGED");
+  // The observed segment must reproduce the halving, which a cosine cannot:
+  // at step 80,000 of 200,000 a cosine at peak 1e-3 is 6.5e-4, not 2.5e-4.
+  const lines = card.locator('svg polyline[stroke="#f0883e"]');
+  expect(await lines.count()).toBeGreaterThanOrEqual(1);
+  const pts = await lines.first().getAttribute("points");
+  const ys = pts.split(" ").map((q) => parseFloat(q.split(",")[1]));
+  // y is inverted: 1e-3 at the top, 2.5e-4 near the bottom of the box.
+  expect(ys[ys.length - 1]).toBeGreaterThan(ys[0] + 10);
 });

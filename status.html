@@ -230,6 +230,60 @@
     return peak * (1 + Math.cos(Math.PI * Math.min(step, total) / total)) / 2;
   }
   function lrSegments(m) {
+    // PLOT WHAT THE RUN REPORTED. temporal.py logs stage2_lr with every
+    // metrics point, so the observed rate needs no derivation at all — and
+    // deriving it was wrong the moment a second schedule existed: cosLr would
+    // have drawn a cosine over #125's exponential decay, on the same chart
+    // whose legend named the schedule correctly. Same "second implementation"
+    // defect the plan preview had, one function along.
+    //
+    // Observed is solid; the remainder of the PLAN, if we have it, continues
+    // dashed. That is the honest picture: what happened, then what is meant to.
+    var obs = (m.s2 || []).filter(function (p) {
+      return typeof p.stage2_lr === "number" && p.stage2_lr > 0;
+    }).map(function (p) { return [p.stage2_step, p.stage2_lr]; });
+    var plan = m.__plan;
+    if (obs.length >= 2) {
+      var segs = [], peak = 0, last = obs[obs.length - 1][0];
+      // The parent still has to be drawn. It comes from the plan when the
+      // plan carries it, and otherwise from the resume record analytically —
+      // every parent so far is a completed cosine whose peak and total the
+      // record states, so this is reconstruction of a known past, not a
+      // guess about the schedule now running.
+      var par = m.s2warm || m.s2from;
+      if (plan && plan.parent_points && plan.parent_points.length > 1) {
+        segs.push({ pts: plan.parent_points, dashed: true });
+      } else if (par && par.parent_steps > 0 && par.parent_lr > 0) {
+        var pp = [];
+        for (var pi = 0; pi <= 120; pi++) {
+          var pst = par.parent_steps * pi / 120;
+          pp.push([pst, cosLr(par.parent_lr, par.parent_steps, pst)]);
+        }
+        segs.push({ pts: pp, dashed: true });
+      }
+      segs.push({ pts: obs, dashed: false });
+      if (plan && plan.points) {
+        var future = plan.points.filter(function (q) { return q[0] > last; });
+        if (future.length > 1) segs.push({ pts: future, dashed: true });
+      }
+      // PEAK is this run's own; SCALE spans every segment so both fit the box.
+      // Conflating them printed the parent's peak as if it were this run's
+      // once before (the comment below records it) and the observed path
+      // walked straight back into it.
+      // PEAK is what this run is CONFIGURED to train at, not the highest rate
+      // logged so far — mid-run those differ, and "peak 9.7e-5" on a run whose
+      // peak is 1.0e-4 reads as a discrepancy rather than as progress. The
+      // curve is the measurement; the legend states the intent.
+      var scale = 0;
+      peak = (m.s2warm && m.s2warm.lr) || (m.s2from && m.s2from.lr) ||
+             (m.s2cfg && m.s2cfg.lr) || 0;
+      if (!(peak > 0)) obs.forEach(function (q) { if (q[1] > peak) peak = q[1]; });
+      segs.forEach(function (sg) {
+        sg.pts.forEach(function (q) { if (q[1] > scale) scale = q[1]; });
+      });
+      return { segs: segs, peak: peak, scale: scale,
+               kind: (plan && plan.schedule) || null, observed: true };
+    }
     var cfg = m.s2cfg, from = m.s2from, warm = m.s2warm;
     if (!cfg || !(cfg.steps > 0)) return null;
     // A warm restart is drawn on the SAME axis as a continuation — the parent
@@ -753,7 +807,9 @@
         : "") +
       "</svg>" +
       (lrs ? '<div class="legend"><span><span class="sw" style="background:#f0883e"></span>' +
-        "learning rate, peak <b>" + lrs.peak.toExponential(1) + "</b>" +
+        (lrs.kind ? esc(lrs.kind) + " " : "") +
+        (lrs.observed ? "learning rate as LOGGED, peak <b>" : "learning rate, peak <b>") +
+        lrs.peak.toExponential(1) + "</b>" +
         // The legend must name what this run IS. A warm restart charted and
         // captioned like a continuation would be a false claim in the one
         // place a reader looks to check the claim.
@@ -1171,6 +1227,7 @@
         return waitingCard(run);
       }
       var m0 = parseJsonl(text);
+      m0.__plan = run.__plan;      // so the LR overlay can draw the remainder
       if (!m0.loss.length) {
         if (run.status === "completed") return "";
         // Stage-2 and head-probe jobs never train a codec, so they have no
