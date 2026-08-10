@@ -34,7 +34,13 @@ const seen = new Map();          // run -> last reported state string
 let lastAssets = -1;
 
 async function tick() {
-  const runs = await j(`https://api.github.com/repos/${REPO}/actions/workflows/ml-train.yml/runs?per_page=12`);
+  // 30, not 12. The page has to be deep enough that a LONG-RUNNING job stays
+  // in it as newer runs pile up: #121 (a 200,000-step CPU run, ~8 hours)
+  // dropped out of a 12-run window the moment four arms were cancelled and
+  // four re-dispatched, and simply stopped being reported — the watcher went
+  // quiet about the one job that most needed watching, and quiet reads as
+  // fine. A --runs entry cannot rescue what the fetch never returned.
+  const runs = await j(`https://api.github.com/repos/${REPO}/actions/workflows/ml-train.yml/runs?per_page=30`);
   if (!runs) { console.log("· API unreachable this tick"); return; }
   const live = runs.workflow_runs.filter(
     (r) => WATCH.includes(r.run_number) || r.status !== "completed");

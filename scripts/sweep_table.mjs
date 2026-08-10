@@ -39,14 +39,44 @@ const ARMS = SPEC.split(",").map((s) => {
   return { run: Number(n), label: label.join(":") || `#${n}` };
 });
 
+// READ THROUGH THE API WHEN WE CAN. raw.githubusercontent serves a CDN copy
+// that ignores cache-busting query strings and can lag minutes behind a
+// write: a bundle re-archived with an extra file kept reading as the old
+// three-file version here while the contents API already showed four. A
+// table that is one edit stale is worse than one that fails, because it
+// looks fine. The API is authoritative; raw is the unauthenticated fallback.
+const TOKEN = (() => {
+  for (const p of [arg("--token-file"), "/home/claude/.gh_pat", `${process.env.HOME}/.gh_pat`]) {
+    if (!p) continue;
+    try { const t = readFileSync(p, "utf8").trim(); if (t) return t; } catch { /* next */ }
+  }
+  return (process.env.GITHUB_TOKEN || "").trim();
+})();
+
+async function fetchBundle(run) {
+  if (TOKEN) {
+    try {
+      const r = await fetch(
+        `https://api.github.com/repos/${REPO}/contents/probes-${run}.json?ref=ml-metrics`,
+        { headers: { Authorization: `Bearer ${TOKEN}`, Accept: "application/vnd.github+json" } });
+      if (r.ok) {
+        const j = await r.json();
+        return JSON.parse(Buffer.from(j.content, "base64").toString("utf8"));
+      }
+      if (r.status === 404) return null;
+    } catch { /* fall through to raw */ }
+  }
+  try {
+    const r = await fetch(
+      `https://raw.githubusercontent.com/${REPO}/ml-metrics/probes-${run}.json?cb=${Date.now()}`);
+    if (r.ok) return JSON.parse(await r.text());
+  } catch { /* reported below */ }
+  return null;
+}
+
 const rows = [];
 for (const a of ARMS) {
-  const url = `https://raw.githubusercontent.com/${REPO}/ml-metrics/probes-${a.run}.json`;
-  let bundle = null;
-  try {
-    const r = await fetch(url + "?cb=" + Date.now());
-    if (r.ok) bundle = JSON.parse(await r.text());
-  } catch { /* reported below */ }
+  const bundle = await fetchBundle(a.run);
   if (!bundle) { rows.push({ ...a, missing: "no probes-*.json on ml-metrics yet" }); continue; }
   const kf = bundle.files?.["probe_kfold.json"];
   // The bundle is keyed by the RUN DIRECTORY name ("actions"), not by target,
@@ -55,32 +85,40 @@ for (const a of ARMS) {
   const byRun = kf && kf[Object.keys(kf)[0]];
   const t = byRun?.[TARGET];
   if (!t) { rows.push({ ...a, missing: `bundle has no ${TARGET} k-fold` }); continue; }
-  const head = bundle.files?.["probe_head.json"];
-  const raw = bundle.files?.["probe_head_raw3x3.json"];
-  const dip = bundle.files?.["dip_check.json"];
+  // THE STAGE-2 NUMBER LIVES IN temporal.json, NOT HERE. probe_kfold pools
+  // the FROZEN embeddings and never sees the temporal head, so for a sweep
+  // over stage-2 choices its column is a CONTROL — it must be constant, and a
+  // divergence would mean the codec was not actually held fixed. #116 (60k
+  // head) and #125 (200k head) both read 0.631 [0.513, 0.732], which is how
+  // this was noticed.
+  const tj = bundle.files?.["temporal.json"];
+  const hk = tj?.rapid_probe_kfold;
+  const z = tj?.["z_t+1"];
   rows.push({
     ...a,
-    r: t.r_kfold_deseas, ci: t.ci95, n: t.n, rmse: t.rmse_sv,
-    lp18: t.r_lowpass18,
+    // headline: the head's own k-fold, when the run is new enough to have it
+    r: hk?.r_kfold_deseas ?? null, ci: hk?.ci95 ?? null, n: hk?.n ?? null,
+    split: tj?.rapid_probe?.r_deseasonalised ?? null,
+    zratio: z && z.mse_persistence ? z.mse_model / z.mse_persistence : null,
+    steps: tj?.steps ?? null,
+    codec: t.r_kfold_deseas,                 // the control column
     bar: t.wind_only_baseline?.r,
-    head: head && (head.r ?? head.r_kfold ?? null),
-    raw3: raw && (raw.r ?? raw.r_kfold ?? null),
-    dip: dip && (dip.capture_pct ?? dip.capture ?? null),
-    sha: bundle.files?.["provenance.json"]?.head_sha?.slice(0, 7),
+    dip: bundle.files?.["dip_check.json"]?.capture_pct ?? null,
   });
 }
 
 const f = (v, d = 3) => (v === null || v === undefined || Number.isNaN(v) ? "  —  " : Number(v).toFixed(d));
 const pad = (s, w) => String(s).padEnd(w);
-console.log(`\n${TARGET.toUpperCase()} · year-blocked k-fold (probe_kfold.py)\n`);
-console.log(pad("arm", 10) + pad("run", 6) + pad("r", 8) + pad("95% CI", 18) +
-            pad("rmse", 8) + pad("18-mo", 8) + "wind bar");
-console.log("-".repeat(70));
+console.log(`\n${TARGET.toUpperCase()} · the HEAD's year-blocked k-fold ` +
+            `(temporal.json → rapid_probe_kfold)\n`);
+console.log(pad("arm", 12) + pad("run", 6) + pad("r", 8) + pad("95% CI", 18) +
+            pad("36-mo", 8) + pad("z-ratio", 9) + "codec kfold");
+console.log("-".repeat(76));
 for (const r of rows) {
-  if (r.missing) { console.log(pad(r.label, 10) + pad("#" + r.run, 6) + r.missing); continue; }
-  console.log(pad(r.label, 10) + pad("#" + r.run, 6) + pad(f(r.r), 8) +
-              pad(`[${f(r.ci?.[0])}, ${f(r.ci?.[1])}]`, 18) +
-              pad(f(r.rmse, 2), 8) + pad(f(r.lp18), 8) + f(r.bar));
+  if (r.missing) { console.log(pad(r.label, 12) + pad("#" + r.run, 6) + r.missing); continue; }
+  console.log(pad(r.label, 12) + pad("#" + r.run, 6) + pad(f(r.r), 8) +
+              pad(r.ci ? `[${f(r.ci[0])}, ${f(r.ci[1])}]` : "     —     ", 18) +
+              pad(f(r.split), 8) + pad(f(r.zratio), 9) + f(r.codec));
 }
 
 const have = rows.filter((r) => !r.missing);
@@ -88,18 +126,39 @@ if (!have.length) {
   console.log("\nnothing to compare yet — the arms have not archived their probes.");
   process.exit(0);
 }
-const bar = have.find((r) => r.bar !== undefined && r.bar !== null)?.bar;
-const under = have.filter((r) => bar != null && r.r <= bar);
-const best = have.reduce((a, b) => (b.r > a.r ? b : a));
-const worst = have.reduce((a, b) => (b.r < a.r ? b : a));
 
-console.log(`\nspread ${f(worst.r)} (${worst.label}) → ${f(best.r)} (${best.label}) ` +
+// THE CONTROL, CHECKED RATHER THAN ASSUMED. Every arm freezing the same codec
+// must report the same codec k-fold; if they do not, the arms differ in
+// something other than the variable and nothing below is a comparison.
+const codecs = [...new Set(have.map((r) => f(r.codec)))];
+if (codecs.length > 1) {
+  console.log(`\nCONTROL FAILED: the codec k-fold differs across arms ` +
+              `(${codecs.join(", ")}). These runs did not hold the codec ` +
+              `fixed, so the ordering below is confounded.`);
+} else {
+  console.log(`\ncontrol: codec k-fold ${codecs[0]} on every arm, as it must ` +
+              `be — that probe never sees the head.`);
+}
+
+const scored = have.filter((r) => r.r !== null);
+if (!scored.length) {
+  console.log("\nno arm carries rapid_probe_kfold — these ran before it existed " +
+              "(added 2026-08-10). Their only stage-2 number is the 36-mo column.");
+  process.exit(0);
+}
+const bar = have.find((r) => r.bar != null)?.bar;
+const best = scored.reduce((a, b) => (b.r > a.r ? b : a));
+const worst = scored.reduce((a, b) => (b.r < a.r ? b : a));
+console.log(`spread ${f(worst.r)} (${worst.label}) → ${f(best.r)} (${best.label}) ` +
             `= ${f(best.r - worst.r)}`);
 if (bar != null) {
-  console.log(`wind-only bar on this tensor: ${f(bar)}`);
+  console.log(`wind-only bar on this tensor: ${f(bar)}  ` +
+              `(measured on CODEC features; the head's own bar is not the ` +
+              `same quantity, so treat it as an orientation, not a threshold)`);
+  const under = scored.filter((r) => r.r <= bar);
   if (under.length) {
-    console.log(`BELOW THE BAR: ${under.map((r) => r.label).join(", ")} — an ordering of ` +
-                `these arms is not a result about the head.`);
+    console.log(`BELOW IT: ${under.map((r) => r.label).join(", ")} — an ordering of ` +
+                `these arms is not by itself a result about the head.`);
   }
 }
 console.log(

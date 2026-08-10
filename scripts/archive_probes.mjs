@@ -54,9 +54,17 @@ if (!TOKEN) { console.error("no token: cannot archive"); process.exit(1); }
 // Everything a result is argued from, plus the provenance that says which
 // tensor and code produced it. eval.json and metrics.jsonl are deliberately
 // out — the curves are already on this branch.
+// temporal.json is on this list as of 2026-08-10 and its absence was the same
+// mistake one level in. probe_kfold scores the CODEC — every run freezing the
+// same codec returns the same number — so the file that carries a STAGE-2
+// result is temporal.json: rapid_probe (the 36-month split), the new
+// rapid_probe_kfold over ~240 out-of-fold months, and the z-space and
+// data-space forecast MSEs against persistence. Archiving everything except
+// the stage-2 answer is how a sweep over stage-2 choices ends up with nothing
+// permanent to compare.
 const WANT = ["probe_kfold.json", "probe_head.json", "probe_head_raw3x3.json",
               "probe_head_raw.json", "probe_sequence.json", "dip_check.json",
-              "rollout.json", "provenance.json"];
+              "rollout.json", "temporal.json", "provenance.json"];
 const bundle = { run_number: Number(RUN), archived_at: new Date().toISOString(), files: {} };
 let n = 0;
 for (const f of WANT) {

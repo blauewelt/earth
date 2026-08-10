@@ -28,7 +28,27 @@ low-pass).
 ---
 
 <a id="e-009"></a>
-## E-009 · The unroll sweep: is U the axis that moves the AMOC probe? — DISPATCHED 2026-08-10, U=1 queued as #127
+## E-009 · The unroll sweep: is U the axis that moves the AMOC probe? — RE-DISPATCHED 2026-08-10 as #131–#134
+
+> **Correction, 2026-08-10 20:1x UTC.** The first version of this entry said
+> the sweep was "scored through `probe_kfold.py` … which is the instrument we
+> argue from". **That was false, and it made the experiment unable to answer
+> its own question.** `probe_kfold` pools the FROZEN EMBEDDINGS along the
+> section and fits a ridge; the temporal head is not in it. All four arms
+> freeze the same codec, so all four would have returned the same number.
+>
+> It is not an inference. #116 (frozen codec, 60k head) and #125 (same codec,
+> 200k head, different schedule, different optimiser trajectory) return RAPID
+> **0.631 [0.513, 0.732], rmse 2.16** — bit-identical, because the only thing
+> that differs between them is invisible to that probe.
+>
+> The original four (#127–#130) were **cancelled while queued**, at no cost,
+> and re-dispatched as **#131–#134** on `2b7c3fe`, which adds a year-blocked
+> k-fold over the HEAD's own pooled hidden state: same features the 36-month
+> split uses, ~240 out-of-fold months, block-bootstrap CI. This is the third
+> time this programme has caught a run that was healthy and could not test its
+> hypothesis, and the first time the catch came from *two runs agreeing too
+> exactly*.
 
 **Hypothesis.** At a fixed stage-2 budget, the number of autoregressive
 unroll steps `U` in the temporal loss changes the RAPID k-fold correlation
@@ -60,10 +80,16 @@ re-measuring all of it at once.
 **Design.** U ∈ {1, 2, 4, 8}, everything else pinned: the same frozen codec
 (`resume: !run-62,run-63`, 40.693M, verified identical `config` record to
 #116/#121/#125), `family3_na025`, K=24, 192×4 head, 6,000 steps, cosine to
-the same peak 1e-3, one code version, scored through **`probe_kfold.py`** —
-not the light probe, which is the instrument that produced the original
-pair. U=1 is simultaneously the sweep's low arm and a re-score of #88 under
-the modern protocol.
+the same peak 1e-3, one code version, scored on **`rapid_probe_kfold`** —
+the head's pooled hidden state through probe_kfold's year-blocked protocol,
+~240 out-of-fold months with a block-bootstrap CI, rather than the 36-month
+single split that produced the original pair. U=1 is simultaneously the
+sweep's low arm and a re-score of #88 under the modern protocol.
+
+Every arm still writes `probe_kfold.json` too, and every arm's copy will read
+0.631. That is not redundancy — it is the control that says the codec was
+genuinely held fixed across the sweep, and a divergence there would mean the
+arms were not comparable at all.
 
 **What would falsify it.** A flat or non-monotonic k-fold across U, with the
 four values inside each other's confidence intervals — that would say the
@@ -84,8 +110,8 @@ under the bar is a null result about the head, however it orders U.
 disks (#125 shows no `embedding` progress records at all, #121 built it with
 `"where": "disk"`), so the arms re-use it.
 
-**Sequencing.** All four are queued behind #126, U=1 first: **#127** (U=1),
-**#128** (U=2), **#129** (U=4), **#130** (U=8), all on `508e717`.
+**Sequencing.** All four are queued behind #126, U=1 first: **#131** (U=1),
+**#132** (U=2), **#133** (U=4), **#134** (U=8), all on `2b7c3fe`.
 
 The staging rule — Chris, 2026-08-10: *"hold off the second job until the
 first job's embedding precomputation is complete"* — exists to stop two jobs
@@ -113,7 +139,7 @@ an hour and a half.
 **Result.** *pending.* Read it with
 
 ```
-node scripts/sweep_table.mjs --runs 127:U=1,128:U=2,129:U=4,130:U=8
+node scripts/sweep_table.mjs --runs 131:U=1,132:U=2,133:U=4,134:U=8
 ```
 
 which tabulates the four arms out of their archived probe bundles beside the
@@ -124,7 +150,51 @@ this design can produce.
 ---
 
 <a id="e-008"></a>
-## E-008 · Is stage 2 COMPUTE-bottlenecked? 60k → 200k as a warm restart — DISPATCHED 2026-08-10, running
+## E-008 · Is stage 2 COMPUTE-bottlenecked? 60k → 200k — **NO. The forecast keeps improving and the AMOC probe does not move.**
+
+### Result, first arm landed (#125, 2026-08-10 20:02 UTC)
+
+200,000 steps from scratch on the expdecay schedule, GPU, 26.1 ms/step,
+1.45 h of training. Archived at
+[`ml-metrics/probes-125.json`](https://raw.githubusercontent.com/blauewelt/earth/ml-metrics/probes-125.json).
+
+| stage-2 budget | z-ratio (model/persistence) | RAPID, 36-mo split |
+|---|---|---|
+| 6,000 | 0.494 | 0.319 |
+| 24,000 | 0.406 | — |
+| 60,000 | 0.391 | 0.321 |
+| **200,000** | **0.383** | **0.317** |
+
+**The pre-registered prediction, checked against what arrived.** The
+hypothesis below was written before the run and said two things. RAPID
+"should not move": 0.321 → **0.317**, confirmed. And z-ratio "should land
+near 0.36–0.37": it landed at **0.383**, *outside* the stated band. The
+extrapolation was too optimistic — the curve is decelerating faster than its
+own first two differences implied. Recording the miss rather than widening
+the band retrospectively is the point of writing it down first.
+
+**What this closes.** From 6,000 to 200,000 steps — 33× the compute — the
+forecast objective improves steadily (0.494 → 0.383, and it has not stopped)
+while the AMOC probe sits inside ±0.004 of where it started. The head gets
+monotonically better at predicting **z** and no better at all at predicting
+**transport**. Stage 2 is not compute-bottlenecked; more precisely, the thing
+more compute buys is not the thing we want.
+
+That leaves the parameter-bottleneck arm (b), which needs a from-scratch run
+at larger width, and the objective — which is why E-006 exists.
+
+**A caveat that is not small.** All four RAPID figures above are the
+**36-month single split**, because until today that was the only instrument
+that could see stage 2 at all (see the note in E-009: `probe_kfold` scores the
+codec, and returns 0.631 for every one of these runs). Its standard error is
+of order 0.15, so "flat to ±0.004" across three points is a good deal tidier
+than the instrument can honestly resolve, and the agreement is partly luck.
+The k-fold over head features — 240 out-of-fold months, block-bootstrap CI —
+lands with #131–#134 and is what these numbers should be re-read against.
+
+---
+
+### The dispatch record
 
 **Run** #120 · `head_sha` 502364279 · started 14:59 UTC ·
 `window: warm2:f3_s2_60k__temporal@1e-4`, `temporal_steps: 140000` (the EXTRA,
