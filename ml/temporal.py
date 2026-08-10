@@ -226,7 +226,8 @@ def _prune_stale(cache_path, want):
 
 
 def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
-                     cache_path=None, batch=8192, mask_chan=None):
+                     cache_path=None, batch=8192, mask_chan=None,
+                     progress=None):
     """Frozen codec embeddings for every (t, pixel in ys/xs): [T, P, d_z].
     Cached on disk — the embedding pass is the expensive part of stage 2
     (T×P encoder forwards), and every probe variant reuses it.
@@ -259,8 +260,32 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
     else:
         cache_path = None                       # RAM path: nothing to publish
         out = np.zeros((T, P, d_z), dtype=np.float32)
+    # THE EMBEDDING REPORTS ITS OWN PROGRESS. It is the longest single phase of
+    # a stage-2 run — ~95 minutes for 43.5M encoder forwards on the
+    # quarter-degree tensor — and until 2026-08-10 it printed one line when it
+    # started and one when it finished. Actions will not serve logs for a
+    # running job, so during that hour the only way to tell "working" from
+    # "wedged" was to watch the box's resident memory climb as the array paged
+    # in: a thermometer taped to the outside of the oven. Chris asked how far
+    # along it was and the honest answer was an inference, which is not an
+    # answer. Every 5% now costs one line and answers it directly.
+    t_emb = time.time()
+    next_mark = 0.0
     with torch.no_grad():
         for t in range(T):
+            frac = (t + 1) / T
+            if frac >= next_mark:
+                el = time.time() - t_emb
+                eta = el / frac - el if frac > 0 else 0
+                print(f"  embedding {frac * 100:5.1f}%  month {t + 1}/{T}  "
+                      f"{el / 60:.0f} min elapsed, ~{eta / 60:.0f} min left",
+                      flush=True)
+                if progress:
+                    progress({"pct": round(frac * 100, 1), "month": t + 1,
+                              "months": T, "elapsed_s": round(el),
+                              "eta_s": round(eta),
+                              "where": "disk" if cache_path else "ram"})
+                next_mark = frac + 0.05
             for i in range(0, P, batch):
                 sl = slice(i, min(i + batch, P))
                 n = sl.stop - sl.start
@@ -426,8 +451,22 @@ def main():
         v.numpy().tobytes() for v in list(ck["model"].values())[:4])).hexdigest()[:10]
     cache = (os.path.join(HERE, "cache", f"Z_{a.run}_{whash}.npy")
              if not a.max_pixels else None)
+    # Progress goes into the run's OWN metrics.jsonl, which the publisher loop
+    # in ml-train.yml pushes to ml-live-<n> every five minutes. A print reaches
+    # the log, and Actions will not serve the log of a running job — so during
+    # the hour this takes, stdout is write-only. The side channel is the only
+    # one anybody can read while it matters.
+    def _emb_note(rec):
+        try:
+            os.makedirs(os.path.join(HERE, "runs", a.run), exist_ok=True)
+            with open(os.path.join(HERE, "runs", a.run, "metrics.jsonl"), "a") as f:
+                f.write(json.dumps({"embedding": rec}) + "\n")
+        except OSError:
+            pass                      # instrumentation never breaks the run
+
     Z, coords = embed_everything(codec, Xt, OBS, ctx_all, lats, lons, ys, xs,
-                                 ck["d_z"], cache_path=cache)
+                                 ck["d_z"], cache_path=cache,
+                                 progress=_emb_note)
     P = len(ys)
     print(f"  Z [T={T} P={P} d_z={ck['d_z']}]  ({time.time() - t0:.0f}s)")
 

@@ -384,7 +384,7 @@
 
   // ---- live metrics charts --------------------------------------------------
   function parseJsonl(text) {
-    var loss = [], probes = [], cfg = null, resumed = null;
+    var loss = [], probes = [], cfg = null, resumed = null, emb = null;
     var s2 = [], s2cfg = null, s2res = null, s2res_from = null;
     var jt = [], jcfg = null;
     text.split("\n").forEach(function (line) {
@@ -394,6 +394,11 @@
       try { o = JSON.parse(line); } catch (e) { return; }
       if (o && o.config) { cfg = o.config; return; }   // the run's PLAN
       if (o && o.resumed) { resumed = o.resumed; return; }  // its PARENT
+      // The embedding pass is ~95 min of a stage-2 run and used to be
+      // indistinguishable from a wedged job: no curve, no phase change, no
+      // log (Actions will not serve one for a running job). Keep the LATEST
+      // record only — it is a progress bar, not a series.
+      if (o && o.embedding) { emb = o.embedding; return; }
       if (o && o.joint_config) { jcfg = o.joint_config; return; }
       if (o && typeof o.joint_step === "number") { jt.push(o); return; }
       if (o && o.stage2_config) { s2cfg = o.stage2_config; return; }
@@ -408,7 +413,7 @@
     });
     return { loss: loss, probes: probes, cfg: cfg, resumed: resumed,
              s2: s2, s2cfg: s2cfg, s2res: s2res, s2from: s2res_from,
-             jt: jt, jcfg: jcfg };
+             jt: jt, jcfg: jcfg, emb: emb };
   }
 
   // ---- continuations: one trajectory, two jobs ------------------------------
@@ -966,12 +971,25 @@
         "Nothing is building yet; the box picks this up when one frees." +
         "</div></div>";
     }
+    // "probes and stage 2" is true for the whole of a ~95-minute embedding
+    // pass, during which the page said the same eleven words and nothing
+    // moved. If the run is reporting embedding progress, say the number.
+    var e = m && m.emb;
+    var embLine = e
+      ? '<div class="probe" style="margin-top:8px">rebuilding the frozen-codec ' +
+        "embedding — <b>" + esc(String(e.pct)) + "%</b> " +
+        '<span class="meta">(month ' + fmtInt(e.month) + " of " + fmtInt(e.months) +
+        (e.eta_s ? ", ~" + Math.round(e.eta_s / 60) + " min left" : "") +
+        (e.where === "ram" ? ", in RAM — not cached" : "") + ")</span>" +
+        '<div class="bar"><i style="width:' +
+        Math.max(0, Math.min(100, Number(e.pct) || 0)) + '%"></i></div></div>'
+      : "";
     var ph = run.__phase;
     if (ph && ph.phase) {
       return head + plan + '<div class="empty"><b style="color:#e6edf3">' + esc(ph.phase) +
         "</b>" + (ph.detail ? ' — ' + esc(ph.detail) : "") +
         (ph.at ? ' <span class="meta">(since ' + esc(ago(ph.at)) + ")</span>" : "") +
-        "</div></div>";
+        "</div>" + embLine + "</div>";
     }
     // No phase file: either the job predates phase reporting, or it is
     // between pushes. Say what we can without pretending to know the step.

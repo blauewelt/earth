@@ -185,9 +185,15 @@ test.beforeEach(async ({ page }) => {
       steps: 200000, lr: 1e-4, at_step: 60000,
       parent_run: 112, parent_steps: 60000, parent_lr: 1e-3,
     }));
+    // ...plus embedding progress. The frozen-codec embedding is ~95 minutes of
+    // a stage-2 run and reported nothing at all until 2026-08-10, so the page
+    // showed one unchanging phase line for an hour and a half and a wedged job
+    // looked exactly like a working one. Only the LAST record matters.
     if (/ml-live-104\/metrics\.jsonl/.test(url)) return fulfill(
       JSON.stringify({ config: { steps: 60000, batch: 512, d_z: 64 } }) + "\n" +
-      JSON.stringify({ resumed: { from: "run-62.pt", at_step: 60000 } }) + "\n");
+      JSON.stringify({ resumed: { from: "run-62.pt", at_step: 60000 } }) + "\n" +
+      JSON.stringify({ embedding: { pct: 25.0, month: 129, months: 516, elapsed_s: 1400, eta_s: 4200, where: "ram" } }) + "\n" +
+      JSON.stringify({ embedding: { pct: 73.1, month: 377, months: 516, elapsed_s: 4100, eta_s: 1500, where: "ram" } }) + "\n");
     if (/ml-live-104\/phase\.json/.test(url)) {
       return fulfill(JSON.stringify({
         phase: "building the tensor",
@@ -496,4 +502,27 @@ test("a run that has STARTED but not trained yet still shows its plan", async ({
   // trade one missing fact for another.
   await expect(card).toContainText("building the tensor");
   expect(await card.locator('svg polyline[stroke="#f0883e"]').count()).toBe(2);
+});
+
+test("a run rebuilding its embedding says how far along it is", async ({ page }) => {
+  // Chris, watching #119: "didn't you say we're 70% done before?" The honest
+  // answer was that the number came from watching the box's resident memory
+  // climb, because embed_everything printed nothing for ninety-five minutes
+  // and Actions will not serve the log of a running job. The phase line said
+  // "probes and stage 2" the entire time, so a wedged job and a working one
+  // rendered identically. Now the run reports its own progress.
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #104" }) });
+  await expect(card).toContainText("rebuilding the frozen-codec embedding");
+  // The LATEST record, not the first — this is a progress bar, not a series.
+  await expect(card).toContainText("73.1%");
+  await expect(card).not.toContainText("25%");
+  await expect(card).toContainText("month 377 of 516");
+  await expect(card).toContainText("~25 min left");
+  // And it says the cache is not being written, which is why the NEXT run
+  // will pay this cost again.
+  await expect(card).toContainText("in RAM — not cached");
+  const w = await card.locator(".bar i").first().evaluate((el) => el.style.width);
+  expect(w).toBe("73.1%");
 });
