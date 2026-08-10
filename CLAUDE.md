@@ -849,6 +849,7 @@ archive.
 |---|---|
 | `CLAUDE.md` | Standing instructions + holistic record (this file — keep current) |
 | `README.md` | Quick start, repo layout, testing. Opens with a link to the live demo. Keep its counts (catalog size, `globe`/`amoc` flags, spec count) and feature list current — they drift silently. Hero image: `node scripts/screenshot.js` (see the header comment for the sandbox invocation); re-shoot it when the UI changes visibly |
+| `docs/INFRASTRUCTURE.md` | The ML fleet: topology, the failure taxonomy it has actually produced, the invariants that follow, and how to re-run an eval from the release with no GPU. Written 2026-08-10 after a session in which infrastructure cost ~6 h and produced 1 result |
 | `docs/PRIMER.pdf` | Background knowledge (GIBS, tiles, colormaps, product levels, climatologies). Rebuild: `python3 scripts/build_primer.py` |
 | `docs/CATALOG.md` + `data/catalog.json` | The 248-record open-data catalog (human + machine readable) |
 | `docs/COMBINING_DATASETS.md` | Which datasets measure the same quantity; sound combinations |
