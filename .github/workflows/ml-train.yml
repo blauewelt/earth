@@ -605,6 +605,11 @@ jobs:
         if: always() && inputs.anomaly == 'true'
         continue-on-error: true
         env:
+          # Third step found without a token, after the joint step and the
+          # release seed. Every publish_live_metrics call in this step has
+          # therefore been a no-op since it was written — which is why a
+          # stage-2-only run shows an empty chart for its whole life.
+          GITHUB_TOKEN: ${{ github.token }}
           TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
         run: |
           python -u ml/probe_sequence.py --run actions --anomaly --data "$TENSOR"
@@ -623,12 +628,27 @@ jobs:
             # this file is exactly at the ceiling.
             UNROLL=1
             case "${{ inputs.window }}" in unroll:*) UNROLL="${{ inputs.window }}"; UNROLL="${UNROLL#unroll:}";; esac
+            # BACKGROUNDED, with the same 5-minute publisher the Train and
+            # joint steps use. Called inline, the publish below only ran
+            # AFTER temporal.py returned — 7 hours on a 60,000-step run, so
+            # the status page showed nothing for the entire experiment. Same
+            # defect as the joint step had, one step further down.
             python -u ml/temporal.py --run actions --K 24 \
               --data "$TENSOR" \
               --steps "${{ inputs.temporal_steps }}" \
               --unroll "$UNROLL" \
               --d-model "${{ inputs.temporal_d_model }}" \
-              --layers "${{ inputs.temporal_layers }}"
+              --layers "${{ inputs.temporal_layers }}" &
+            S2_PID=$!
+            TICK=0
+            while kill -0 $S2_PID 2>/dev/null; do
+              sleep 30
+              TICK=$((TICK + 1))
+              if [ $((TICK % 10)) -eq 0 ]; then
+                bash scripts/publish_live_metrics.sh "ml-live-${{ github.run_number }}" || true
+              fi
+            done
+            wait $S2_PID
             # Publish so the stage-2 curve appears on the status page WHILE
             # the ladder finishes, not only after the archive step at the very
             # end. temporal.py writes into the same metrics.jsonl, but nothing
