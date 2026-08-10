@@ -265,9 +265,18 @@ jobs:
           # diagnostic logs, pip's wheel cache (~3 GB of torch), actions'
           # _temp staging, and stage-2 embedding caches in the persistent
           # cache (Z_*.npy are ~4 GB each and re-derive from checkpoints).
+          # THRESHOLD 16, not 8. The stage-2 embedding cache for the
+          # quarter-degree tensor is ONE allocation of 10.4 GiB (516 months x
+          # 84,405 ocean pixels x 64 dims x 4 bytes), so a guard at 8 GB is
+          # smaller than the thing it guards against: it passes, and the write
+          # fails forty minutes later with the disk full and the runner
+          # offline. #117 started this step with ~11 GB free, cleared the
+          # check, and spent the next hour walking into the wall. temporal.py
+          # now computes the requirement exactly and prunes or refuses before
+          # opening the memmap; this is the coarse first line.
           free_gb() { df -BG --output=avail / | tail -1 | tr -dc 0-9; }
           echo "disk free: $(free_gb) GB"
-          if [ "$(free_gb)" -lt 8 ]; then
+          if [ "$(free_gb)" -lt 16 ]; then
             echo "low disk — pruning …"
             rm -rf /opt/runner/_diag/*.log /opt/runner/_work/_temp/* || true
             pip cache purge || true

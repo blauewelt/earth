@@ -107,6 +107,65 @@ def rapid_section(lats, lons, ys, xs):
     return section_of(lats, lons, ys, xs, 26.5, RAPID_LON[0], RAPID_LON[1])
 
 
+RESERVE_BYTES = 3 << 30      # runner logs, checkpoints, pip, room to breathe
+
+
+def _make_room(cache_path, need_bytes):
+    """Free space for the embedding cache BEFORE opening the memmap.
+
+    `open_memmap` creates a SPARSE file: the 10.4 GiB is claimed lazily, page
+    by page, over the ~50 minutes the embedding takes. So a box with 7 GiB
+    free starts happily, runs for forty minutes, and dies on a write with the
+    cache 90% built — and on these 50 GB boxes a full disk does not just fail
+    the job, it takes the runner offline (CLAUDE.md Part 2). The failure is
+    maximally expensive and maximally late.
+
+    ml-train.yml has a hygiene step that prunes below 8 GB free. That number
+    is SMALLER THAN THE SINGLE ALLOCATION IT GUARDS: a guard sized under the
+    thing it is guarding against will pass and then the write will fail. The
+    check belongs here, where T, P and d_z are known and the requirement is a
+    computed number rather than a guess.
+
+    Stale Z_*.npy from other codecs are the reclaimable tier — they are pure
+    cache, keyed by a weight hash, and re-derive from a checkpoint. Anything
+    else on that disk (tensors, checkpoints) is not ours to delete.
+    """
+    import glob
+    import shutil
+    d = os.path.dirname(cache_path)
+    want = need_bytes + RESERVE_BYTES
+    free = shutil.disk_usage(d).free
+    gb = lambda b: b / (1 << 30)
+    print(f"  embed cache needs {gb(need_bytes):.1f} GiB "
+          f"(+{gb(RESERVE_BYTES):.0f} reserve); {gb(free):.1f} GiB free")
+    if free >= want:
+        return
+    stale = sorted((p for p in glob.glob(os.path.join(d, "Z_*.npy")) +
+                    glob.glob(os.path.join(d, "Z_*.npy.partial"))
+                    if os.path.abspath(p) != os.path.abspath(cache_path)),
+                   key=lambda p: os.path.getmtime(p))
+    for p in stale:
+        try:
+            n = os.path.getsize(p)
+            os.remove(p)
+            free = shutil.disk_usage(d).free
+            print(f"  pruned stale embed cache {os.path.basename(p)} "
+                  f"({gb(n):.1f} GiB) — {gb(free):.1f} GiB free")
+        except OSError as e:
+            print(f"  could not prune {p}: {e}")
+        if free >= want:
+            return
+    # Refusing costs the job. Starting costs the job AND the runner, forty
+    # minutes later, with nothing to show — so refuse, and say the number.
+    raise SystemExit(
+        f"not enough disk for the embedding cache: need {gb(need_bytes):.1f} "
+        f"GiB + {gb(RESERVE_BYTES):.0f} GiB reserve, have {gb(free):.1f} GiB "
+        f"free in {d} after pruning every stale Z_*.npy. Free space on the "
+        f"box or build with --max-pixels; do NOT start, because open_memmap "
+        f"allocates lazily and would fail mid-write with the disk full and "
+        f"the runner offline.")
+
+
 def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                      cache_path=None, batch=8192, mask_chan=None):
     """Frozen codec embeddings for every (t, pixel in ys/xs): [T, P, d_z].
@@ -137,6 +196,7 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
     if cache_path:
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         tmp = cache_path + ".partial"
+        _make_room(cache_path, T * P * d_z * 4)
         out = np.lib.format.open_memmap(tmp, mode="w+", dtype=np.float32,
                                         shape=(T, P, d_z))
     else:
