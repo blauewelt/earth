@@ -361,6 +361,66 @@ CLAUDE.md §6d.
 
 ---
 
+## 6b · Two design changes agreed 2026-08-10, not yet built
+
+Both came from Chris after watching E-008 cost three dispatches. Neither is
+urgent; both remove a whole class of problem rather than an instance.
+
+### Split the pipeline into three jobs
+
+Today one job builds the tensor, embeds, trains stage 2 and runs the probe
+ladder. The embedding is the odd one out: it is **shared, deterministic and
+expensive** — ~95 minutes for any run that freezes the same codec — while
+everything around it is per-experiment. Bundling it means every experiment
+pays for it, and two experiments started together pay twice for the same
+bytes, which is exactly what #120 and #121 did.
+
+    job 1  EMBED    build (or pull) Z for a codec hash, publish it, exit
+    job 2  TRAIN A  pull Z, train the 140k warm restart, probe
+    job 3  TRAIN B  pull Z, train the 200k from scratch, probe
+
+Job 1 runs once per codec, ever. Jobs 2 and 3 start when it finishes and take
+minutes to reach their first training step instead of ninety-five. The
+dependency is real work, not scheduling politeness: they cannot start earlier
+in any useful sense, because there is nothing to pull until job 1 publishes.
+
+Note what had to be fixed before this decomposition could pay off at all: the
+cache push used to sit after `wait $S2_PID`, i.e. *after training*, so
+"publish then dependents pull" described nothing that happened. It now pushes
+the moment the file exists. A dependency graph over jobs that do not publish
+until they finish is just a slower sequence.
+
+### Stop baking the step budget into the learning rate
+
+`CosineAnnealingLR(T_max=steps)` makes the rate a function of the total, and
+that single choice produced two separate problems:
+
+- **The bug.** A checkpoint's schedule is only meaningful beside the budget it
+  was trained under. Reload it while asking for a larger total and it believes
+  it is finished: `lr = 0.0`, sixteen hours of updating nothing, every status
+  reading success. Containing it took a rebuild-the-schedule special case, a
+  refusal guard and a test.
+- **The comparability tax.** A 6,000-step run and a 200,000-step run are at
+  different rates at every shared step, so they are two experiments that share
+  an architecture rather than a prefix and its extension. E-007's three points
+  each had to be described as "its own converged cosine", and the 200k point
+  could not be a continuation of the 60k one — which is the entire reason
+  E-008 became a warm restart.
+
+`--lr-schedule invsqrt` (implemented, not yet default) makes `lr(s)` a pure
+function of `s`. Resume stops being a case at all; two budgets become a prefix
+and its extension; checkpoints are interchangeable.
+
+The honest cost, because it is a trade and not a free win: cosine anneals to
+zero and therefore *converges* at a known point, which is what makes "the 60k
+result" a settled number. invsqrt never reaches zero, so results are "at step
+N" rather than "converged". For a programme whose question is "does more
+compute help?" that is the better shape — the question presumes an open-ended
+curve — but the switch should be its own experiment (one budget, both
+schedules), not a default flipped in passing.
+
+---
+
 ## 7 · Known gaps
 
 - ~~No `--resume-temporal`~~ — **closed 2026-08-10.** The head checkpoint now

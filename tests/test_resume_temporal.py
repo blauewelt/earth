@@ -165,6 +165,9 @@ def main():
     test_extend()
     print()
     test_warm_restart_is_not_the_same_trajectory()
+    print()
+    test_the_cosine_rate_depends_on_the_TOTAL_and_invsqrt_does_not()
+    test_invsqrt_warms_up_then_decays_and_never_reaches_zero()
     print("\nOK — resume is a continuation, and every saved piece is load-bearing.")
 
 
@@ -215,6 +218,65 @@ def test_warm_restart_is_not_the_same_trajectory():
     assert moved > 1e-6, "a warm restart must still TRAIN, not sit still"
     print("OK — a warm restart trains, and goes somewhere else. Two flags, "
           "two records, two claims.")
+
+
+
+
+# ---------------------------------------------------------------------------
+# HORIZON-FREE SCHEDULES. Chris, 2026-08-10: "let's not 'bake' num steps into
+# the LR." The cosine's T_max is the reason a resumed run can read lr = 0.0,
+# and the reason two budgets are two experiments rather than a prefix and its
+# extension. These pin the property that removes both.
+
+class _A:
+    def __init__(self, **kw):
+        self.lr_schedule = "invsqrt"; self.lr_warmup = 100; self.steps = 1000
+        self.lr = 1e-3
+        self.__dict__.update(kw)
+
+
+def _lr_curve(total, schedule, upto):
+    import temporal
+    net = nn.Linear(2, 2)
+    opt = torch.optim.AdamW(net.parameters(), lr=1e-3)
+    sched = temporal.make_sched(opt, _A(lr_schedule=schedule, steps=total))
+    out = []
+    for _ in range(upto):
+        out.append(sched.get_last_lr()[0])
+        opt.step(); sched.step()
+    return out
+
+
+def test_the_cosine_rate_depends_on_the_TOTAL_and_invsqrt_does_not():
+    """The claim, stated as a difference between two budgets at the SAME step.
+    Under cosine they disagree; that disagreement is why a 60k head cannot be
+    continued to 200k without rebuilding the schedule, and why E-007's points
+    each had to be called 'its own converged cosine'."""
+    c_short = _lr_curve(1000, "cosine", 300)
+    c_long = _lr_curve(5000, "cosine", 300)
+    assert abs(c_short[299] - c_long[299]) > 1e-6, (
+        "if these agreed there would be no horizon problem to fix")
+
+    i_short = _lr_curve(1000, "invsqrt", 300)
+    i_long = _lr_curve(5000, "invsqrt", 300)
+    assert max(abs(a - b) for a, b in zip(i_short, i_long)) < 1e-12, (
+        "invsqrt must be a pure function of the step")
+    print(f"cosine  : lr@300 differs by {abs(c_short[299]-c_long[299]):.3e} "
+          f"between a 1k and a 5k budget")
+    print(f"invsqrt : identical to {max(abs(a-b) for a,b in zip(i_short,i_long)):.1e}"
+          f"  <- resume needs no special case")
+
+
+def test_invsqrt_warms_up_then_decays_and_never_reaches_zero():
+    """The honest cost of the trade: no natural end, so results are 'at step
+    N' rather than 'converged'. Worth pinning so nobody expects otherwise."""
+    lrs = _lr_curve(10_000, "invsqrt", 3000)
+    peak_at = max(range(len(lrs)), key=lambda i: lrs[i])
+    assert 90 <= peak_at <= 110, f"peak should sit at the warmup, got {peak_at}"
+    assert lrs[-1] < lrs[peak_at], "must decay after the warmup"
+    assert lrs[-1] > 0, "invsqrt never reaches zero — that IS the trade"
+    print(f"invsqrt : peak at step {peak_at}, still {lrs[-1]/lrs[peak_at]:.2f}x "
+          f"of peak at 3000 and never 0")
 
 
 if __name__ == "__main__":

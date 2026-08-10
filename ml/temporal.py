@@ -133,6 +133,59 @@ RAM_HEADROOM_BYTES = 8 << 30  # the tensor and mask are already resident
 CACHE_DTYPE = np.float16
 
 
+def make_sched(opt, a, last_epoch=-1):
+    """The LR schedule, with a HORIZON-FREE option.
+
+    Chris, 2026-08-10: *"let's not 'bake' num steps into the LR. Maybe we can
+    use some LR decay (in the future) that does not depend on the number of
+    total steps."*
+
+    He is pointing at the root of two separate problems, not one.
+
+    The BUG: `CosineAnnealingLR(T_max=steps)` makes the rate a function of the
+    total, so a checkpoint's schedule is only meaningful alongside the budget
+    it was trained under. Reload it while asking for a larger total and it
+    believes it has finished — lr = 0.0, sixteen hours of updating nothing,
+    every status reading success. That cost a run on 2026-08-10 and needed a
+    rebuild-the-schedule special case, a refusal guard and a test to contain.
+
+    The deeper COMPARABILITY problem: with a horizon-baked schedule, a
+    6,000-step run and a 200,000-step run are at different learning rates at
+    every shared step, so they are two different experiments that happen to
+    share an architecture. E-007's three points each had to be described as
+    "its own converged cosine", and the 200k point could not be a continuation
+    of the 60k one — which is the whole reason E-008 became a warm restart.
+
+    `invsqrt` (the Noam schedule) removes both at once: lr(s) depends only on
+    s, so a run stopped at 60,000 and continued to 200,000 sees exactly the
+    rate an uninterrupted 200,000-step run would have seen at those steps.
+    Resume needs no special case, checkpoints are interchangeable, and two
+    budgets become a prefix and its extension rather than two experiments.
+
+    The price, stated honestly: cosine anneals to zero and therefore CONVERGES
+    at a known point, which is what makes "the 60k result" a settled number.
+    invsqrt never reaches zero, so a run has no natural end and results are
+    "at step N" rather than "converged". For a programme asking "does more
+    compute help?" that is the better trade — the question presumes an
+    open-ended curve — but it is a trade, not a free win, and switching should
+    be a deliberate experiment (one budget, both schedules) rather than a
+    default flipped in passing.
+    """
+    if a.lr_schedule == "invsqrt":
+        warm = max(1, int(a.lr_warmup))
+
+        def factor(step):
+            s = step + 1
+            return min(s / warm, (warm / s) ** 0.5)
+
+        for g in opt.param_groups:
+            g.setdefault("initial_lr", g["lr"])
+        return torch.optim.lr_scheduler.LambdaLR(opt, factor,
+                                                 last_epoch=last_epoch)
+    return torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.steps,
+                                                      last_epoch=last_epoch)
+
+
 def codec_weight_hash(ck):
     """Identity of the codec that produced an embedding, in ten hex digits.
 
@@ -454,6 +507,20 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--d-model", type=int, default=96)
     ap.add_argument("--layers", type=int, default=3)
+    ap.add_argument("--lr-schedule", default="cosine",
+                    choices=["cosine", "invsqrt"],
+                    help="cosine bakes the TOTAL step count into the rate, so "
+                         "a checkpoint's schedule only means anything next to "
+                         "the budget it was trained under (this is what makes "
+                         "a resumed run read lr=0.0 and what forces every "
+                         "budget to be its own experiment). invsqrt is "
+                         "horizon-free: lr(s) depends only on s, so a run "
+                         "stopped at 60k and continued to 200k sees exactly "
+                         "what an uninterrupted 200k run would have. Default "
+                         "stays cosine because every existing result used it.")
+    ap.add_argument("--lr-warmup", type=int, default=2000,
+                    help="invsqrt only: steps to reach the peak, after which "
+                         "lr = peak * sqrt(warmup / step)")
     ap.add_argument("--init-temporal", default="",
                     help="WARM RESTART: take the WEIGHTS of a stage-2 head and "
                          "train --steps more with a fresh cosine at --lr. "
@@ -662,7 +729,7 @@ def main():
     model = TemporalTransformer(d_z=ck["d_z"], d_model=a.d_model,
                                 n_layers=a.layers, k_max=K)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.steps)
+    sched = make_sched(opt, a)
 
     start_step = 0
     init_from = None
@@ -753,7 +820,20 @@ def main():
         prev_total = int(tk.get("args", {}).get("steps", start_step))
         extending = (a.steps != prev_total) or (abs(a.lr - float(
             tk.get("args", {}).get("lr", a.lr))) > 1e-12)
-        if extending:
+        if a.lr_schedule == "invsqrt":
+            # NOTHING TO DECIDE. A horizon-free schedule is a pure function of
+            # the step, so extending is not a case: rebuild it at the same
+            # position and it produces exactly what an uninterrupted run of
+            # any length would produce there. This branch existing at all is
+            # the cost of baking the total into the rate.
+            for g in opt.param_groups:
+                g["lr"] = a.lr
+                g["initial_lr"] = a.lr
+            sched = make_sched(opt, a, last_epoch=start_step - 1)
+            print(f"  invsqrt: horizon-free, so the continuation simply "
+                  f"resumes at step {start_step:,} — no extension case",
+                  flush=True)
+        elif extending:
             for g in opt.param_groups:
                 g["lr"] = a.lr
                 g["initial_lr"] = a.lr
