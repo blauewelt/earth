@@ -54,7 +54,7 @@ on:
         description: "CHEAP probe cadence in steps (linear section probe only, ~30 s; the headline r at high cadence so a bad run shows early). 0 = off"
         default: "2000"
       window:
-        description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum), on a stage-2 run unroll:N for the autoregressive unroll — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
+        description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum, optionally mode@ref or mode@twin), on a stage-2 run unroll:N for the autoregressive unroll, or resume2:<tag> to CONTINUE an existing stage-2 head (seeded from the model-checkpoints release if the box lacks it) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
         default: "global"
       tensor:
         description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA builder)"
@@ -701,6 +701,23 @@ jobs:
             # this file is exactly at the ceiling.
             UNROLL=1
             case "${{ inputs.window }}" in unroll:*) UNROLL="${{ inputs.window }}"; UNROLL="${UNROLL#unroll:}";; esac
+            # `window` also carries resume2:<tag> — CONTINUE a stage-2 head
+            # rather than train a fresh one. Packed into an existing input
+            # because workflow_dispatch caps at 25 and this file is at the
+            # ceiling. temporal.py refuses if the tag is absent or already
+            # past --steps, so a typo cannot silently become a fresh run.
+            R2=""
+            case "${{ inputs.window }}" in
+              resume2:*) T2="${{ inputs.window }}"; T2="${T2#resume2:}"
+                         # Pull it from the release if this box does not hold it.
+                         if [ ! -f "/opt/earth-cache/ckpt/${T2}.pt" ]; then
+                           curl -fsSL --max-time 900 -o "/opt/earth-cache/ckpt/${T2}.pt.part" \
+                             "https://github.com/${GITHUB_REPOSITORY}/releases/download/model-checkpoints-v1/${T2}.pt" \
+                             && mv "/opt/earth-cache/ckpt/${T2}.pt.part" "/opt/earth-cache/ckpt/${T2}.pt" \
+                             && echo "seeded stage-2 head ${T2}.pt from the release" \
+                             || echo "::warning::could not seed ${T2}.pt — temporal.py will refuse, loudly"
+                         fi
+                         R2="--resume-temporal ${T2}";; esac
             # BACKGROUNDED, with the same 5-minute publisher the Train and
             # joint steps use. Called inline, the publish below only ran
             # AFTER temporal.py returned — 7 hours on a 60,000-step run, so
@@ -709,7 +726,7 @@ jobs:
             python -u ml/temporal.py --run actions --K 24 \
               --data "$TENSOR" \
               --steps "${{ inputs.temporal_steps }}" \
-              --unroll "$UNROLL" \
+              --unroll "$UNROLL" $R2 \
               --d-model "${{ inputs.temporal_d_model }}" \
               --layers "${{ inputs.temporal_layers }}" &
             S2_PID=$!
