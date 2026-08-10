@@ -850,16 +850,36 @@
     var bits = [];
     if (zp !== null) bits.push("z-space <b>" + zp.toFixed(1) + "%</b> better than persistence");
     if (cp !== null) bits.push("channel-space <b>" + cp.toFixed(1) + "%</b>");
+    // LEAD WITH THE K-FOLD WHEN THE RUN HAS ONE. rapid_r_deseas is a single
+    // split on 36 held-out months, SE ~0.15; rapid_r_kfold is the same
+    // features over ~240 out-of-fold months with a block-bootstrap interval
+    // (added 2026-08-10). Showing the noisy one first, for runs that carry
+    // both, is how the noisy one keeps getting quoted.
+    var kf = typeof r.rapid_r_kfold === "number";
+    if (kf) {
+      var ci = Array.isArray(r.rapid_r_kfold_ci)
+        ? " [" + r.rapid_r_kfold_ci[0].toFixed(2) + ", " +
+          r.rapid_r_kfold_ci[1].toFixed(2) + "]" : "";
+      bits.push("RAPID <b>r " + (r.rapid_r_kfold >= 0 ? "+" : "") +
+                r.rapid_r_kfold.toFixed(3) + "</b>" + ci + " (k-fold)");
+    }
     if (typeof r.rapid_r_deseas === "number") {
       bits.push("RAPID r " + (r.rapid_r_deseas >= 0 ? "+" : "") +
-                r.rapid_r_deseas.toFixed(3));
+                r.rapid_r_deseas.toFixed(3) + (kf ? " (36-mo split)" : ""));
     }
     if (!bits.length) return "";
     return '<div class="probe">stage-2 result: ' + bits.join(" · ") +
       '<br><span class="meta">the first two are what stage 2 optimises ' +
-      "(next-month field); the RAPID number is a pooled read-out of its " +
-      "hidden state and is far noisier — two seeds of the same size have " +
-      "landed 0.265 and 0.385.</span></div>";
+      "(next-month field); the RAPID number is a read-out of its hidden " +
+      "state. " + (kf
+        ? "The k-fold spans ~240 out-of-fold months with a bootstrap " +
+          "interval; the 36-month split beside it is the older, far noisier " +
+          "instrument, kept so older runs stay comparable."
+        : "This run predates the head k-fold, so its only RAPID number is a " +
+          "single 36-month split — far noisier: two seeds of the same size " +
+          "have landed 0.265 and 0.385.") +
+      " Note the pooled-ridge k-fold elsewhere on this page scores the " +
+      "CODEC and does not move with stage-2 choices at all.</span></div>";
   }
 
   // ---- joint stage-1+2 fine-tune ------------------------------------------

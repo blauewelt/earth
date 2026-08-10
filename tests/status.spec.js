@@ -640,6 +640,73 @@ test("a plan carrying POINTS is drawn from them, not re-derived", async ({ page 
   expect(ys[ys.length - 1]).toBeGreaterThan(ys[80] + 20);          // then it cools down
 });
 
+test("the head k-fold leads, and the 36-month split is labelled as such", async ({ page }) => {
+  // Added 2026-08-10, the day probe_kfold turned out to score the CODEC:
+  // #116 (60k head) and #125 (200k head) returned bit-identical RAPID
+  // 0.631, because that probe never sees the temporal transformer. Until
+  // rapid_probe_kfold existed, every stage-2 comparison rested on a single
+  // split of 36 held-out months with an SE of order 0.15 — and this panel
+  // printed that number bare, with nothing saying how thin it was.
+  //
+  // A run carrying BOTH must lead with the k-fold and mark the split, or the
+  // noisy figure is what gets read off a phone and quoted.
+  await page.route(/ml-live-106\/metrics\.jsonl/, (r) => r.fulfill({
+    status: 200, contentType: "text/plain",
+    body: [
+      JSON.stringify({ config: { steps: 60000, params_M: 40.7, C: 39 } }),
+      JSON.stringify({ stage2_config: { d_model: 192, layers: 4, K: 24, steps: 6000 } }),
+      JSON.stringify({ stage2_step: 1500, stage2_zmse: 0.910, stage2_wall_s: 40 }),
+      JSON.stringify({ stage2_step: 3000, stage2_zmse: 0.845, stage2_wall_s: 80 }),
+      JSON.stringify({ stage2_step: 6000, stage2_zmse: 0.781, stage2_wall_s: 160 }),
+      JSON.stringify({ stage2_result: {
+        d_model: 192, layers: 4, K: 24, steps: 6000, params_M: 1.8, seed: 0,
+        z_mse_model: 0.731, z_mse_persistence: 1.173,
+        rapid_r_deseas: 0.317, rapid_r_raw: 0.392,
+        rapid_r_kfold: 0.462, rapid_r_kfold_ci: [0.331, 0.577] } }),
+    ].join("\n") + "\n" }));
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #106" }) });
+  await expect(card).toContainText("RAPID r +0.462 [0.33, 0.58] (k-fold)");
+  await expect(card).toContainText("RAPID r +0.317 (36-mo split)");
+  // The k-fold must come FIRST in the sentence, not merely be present.
+  // Pick the .probe that IS the stage-2 verdict — the card carries more than
+  // one, and `.first()` silently grabbed the stage-1 panel, where both
+  // indexOf calls returned -1 and the comparison was meaningless in a way
+  // that still reads like a real assertion.
+  const txt = await card.locator(".probe")
+    .filter({ hasText: "stage-2 result" }).innerText();
+  expect(txt.indexOf("(k-fold)")).toBeGreaterThan(-1);
+  expect(txt.indexOf("(k-fold)")).toBeLessThan(txt.indexOf("(36-mo split)"));
+  // And the panel must say why the OTHER k-fold on this page cannot move.
+  await expect(card).toContainText("scores the");
+  await expect(card).toContainText("CODEC");
+});
+
+test("a run predating the head k-fold says its RAPID number is a single split",
+  async ({ page }) => {
+  await page.route(/ml-live-106\/metrics\.jsonl/, (r) => r.fulfill({
+    status: 200, contentType: "text/plain",
+    body: [
+      JSON.stringify({ config: { steps: 60000, params_M: 40.7, C: 39 } }),
+      JSON.stringify({ stage2_config: { d_model: 192, layers: 4, K: 24, steps: 6000 } }),
+      JSON.stringify({ stage2_step: 1500, stage2_zmse: 0.910, stage2_wall_s: 40 }),
+      JSON.stringify({ stage2_step: 3000, stage2_zmse: 0.845, stage2_wall_s: 80 }),
+      JSON.stringify({ stage2_step: 6000, stage2_zmse: 0.781, stage2_wall_s: 160 }),
+      JSON.stringify({ stage2_result: { steps: 6000, z_mse_model: 0.731,
+                                        z_mse_persistence: 1.173,
+                                        rapid_r_deseas: 0.317 } }),
+    ].join("\n") + "\n" }));
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #106" }) });
+  // No "(36-mo split)" suffix when there is nothing to distinguish it from —
+  // the label would be noise. The prose carries the caveat instead.
+  await expect(card).toContainText("RAPID r +0.317");
+  await expect(card).toContainText("predates the head k-fold");
+  await expect(card).not.toContainText("(k-fold)");
+});
+
 test("records from a PREVIOUS run are discarded, not charted", async ({ page }) => {
   // On 2026-08-10 the rescue step copied the previous job's metrics.jsonl
   // without removing it, so #123's temporal.py appended to #120's file and
