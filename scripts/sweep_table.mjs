@@ -83,8 +83,16 @@ for (const a of ARMS) {
   // so take the first (and only) run key rather than hard-coding it — a local
   // re-score writes a different directory name and would otherwise read empty.
   const byRun = kf && kf[Object.keys(kf)[0]];
-  const t = byRun?.[TARGET];
-  if (!t) { rows.push({ ...a, missing: `bundle has no ${TARGET} k-fold` }); continue; }
+  // The codec probe is the CONTROL, so its absence must not blank the arm.
+  // This bailed out here, which meant a bundle carrying the head k-fold but
+  // no probe_kfold.json — the exact shape the archiver produced while it was
+  // looking in the wrong directory — reported as "no results" with the
+  // headline number sitting inside it.
+  const t = byRun?.[TARGET] || {};
+  if (!bundle.files?.["temporal.json"] && !byRun) {
+    rows.push({ ...a, missing: "bundle has neither temporal.json nor probe_kfold.json" });
+    continue;
+  }
   // THE STAGE-2 NUMBER LIVES IN temporal.json, NOT HERE. probe_kfold pools
   // the FROZEN embeddings and never sees the temporal head, so for a sweep
   // over stage-2 choices its column is a CONTROL — it must be constant, and a

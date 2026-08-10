@@ -34,6 +34,21 @@ if (!RUN || !DIR) {
   console.error("usage: archive_probes.mjs --run-number <n> --dir <run dir>");
   process.exit(2);
 }
+// THE PROBES ARE NOT ALL IN ONE DIRECTORY, and assuming they were meant the
+// most important file was silently skipped. probe_kfold.py writes
+// `ml/runs/probe_kfold.json` — one level ABOVE the per-run directory,
+// because it sweeps several runs at once — while temporal.py, dip_check.py
+// and probe_head.py all write into `ml/runs/actions/`. The workflow's
+// upload-artifact step lists both paths and is correct; this archiver was
+// called with `--dir ml/runs/actions` alone, so every automatic bundle would
+// have carried the head numbers and the dip check without the CODEC CONTROL
+// they are read against. Caught before the first automatic archive ran, by
+// reading the artifact of a run that had been archived by hand.
+//
+// Searching the parent as a FALLBACK rather than requiring a second flag
+// keeps the workflow's existing call correct: a file found in --dir wins, and
+// the parent is consulted only for what is missing there.
+const DIRS = [DIR, join(DIR, "..")];
 // ORDER MATTERS. An explicit --token-file wins, then the known PAT locations,
 // and GITHUB_TOKEN only as the last resort. On a Vast box GITHUB_TOKEN is the
 // job token and the files do not exist, so it is still reached. In this
@@ -67,15 +82,27 @@ const WANT = ["probe_kfold.json", "probe_head.json", "probe_head_raw3x3.json",
               "rollout.json", "temporal.json", "provenance.json"];
 const bundle = { run_number: Number(RUN), archived_at: new Date().toISOString(), files: {} };
 let n = 0;
+const missing = [];
 for (const f of WANT) {
-  const p = join(DIR, f);
-  if (!existsSync(p)) continue;
+  const p = DIRS.map((d) => join(d, f)).find((q) => existsSync(q));
+  if (!p) { missing.push(f); continue; }
   try { bundle.files[f] = JSON.parse(readFileSync(p, "utf8")); n++; }
   catch (e) { console.error(`  skipping ${f}: ${e.message}`); }
 }
 if (!n) {
-  console.error(`no probe results in ${DIR} (looked for ${WANT.join(", ")})`);
+  console.error(`no probe results in ${DIRS.join(" or ")} ` +
+                `(looked for ${WANT.join(", ")})`);
   process.exit(1);
+}
+// SAY WHAT IS ABSENT, by name. Several of these are legitimately optional —
+// probe_head only runs when head_probe=true — but "probe_kfold.json missing"
+// is a broken run, and the two are indistinguishable in a bundle that lists
+// only what it found.
+if (missing.length) console.log(`  not present: ${missing.join(", ")}`);
+if (missing.includes("probe_kfold.json")) {
+  console.log("::warning::no probe_kfold.json — this bundle has no CODEC " +
+              "control, so its head numbers cannot be checked against the " +
+              "codec being held fixed");
 }
 console.log(`bundling ${n} file(s) from ${DIR}: ${Object.keys(bundle.files).join(", ")}`);
 
