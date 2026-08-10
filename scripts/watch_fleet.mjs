@@ -80,6 +80,25 @@ async function tick() {
     seen.set(n, key);
   }
 
+  // A QUEUED JOB AGAINST AN IDLE RUNNER IS STUCK, NOT SLOW. This has
+  // happened four times: runs sitting for up to 22 minutes while the API
+  // reported the runners online and idle, cured within 90 seconds by a
+  // cancel and re-dispatch. It is invisible in a progress line — "queued"
+  // looks the same either way — so it needs its own signal, and the signal
+  // has to be the RUNNERS endpoint rather than the run's own status, which
+  // lags.
+  const queued = live.filter((r) => r.status === "queued").length;
+  if (queued) {
+    const rs = await j(`https://api.github.com/repos/${REPO}/actions/runners`);
+    const idle = (rs?.runners || []).filter((r) => r.status === "online" && !r.busy);
+    if (idle.length) {
+      console.log(`STALL: ${queued} run(s) queued while ${idle.length} runner(s) ` +
+                  `are online and idle (${idle.map((r) => r.name).join(", ")}). ` +
+                  `Cancel and re-dispatch — that has cleared it every time. Do ` +
+                  `NOT restart the boxes; they would lose their warm caches.`);
+    }
+  }
+
   // The embedding cache is the thing the E-009 staging waits on, so its
   // arrival is an event, not a field in a status line nobody re-reads.
   const rel = await j(`https://api.github.com/repos/${REPO}/releases/tags/embed-cache-v1`);
