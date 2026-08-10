@@ -258,6 +258,10 @@ def main():
 
     codec = codec_from_ckpt(ck, X.shape[-1])
     codec.load_state_dict(ck["model"])
+    # Standalone path only. Called from train.py the codec is already on the
+    # GPU, which is why this was never noticed here; run as a script it would
+    # embed on CPU, the same omission dip_check.py and rollout.py had.
+    codec.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
 
     out = probe_now(codec, torch.from_numpy(np.nan_to_num(X, nan=0.0)),
                     torch.from_numpy(np.isfinite(X)), d, moy, t_hold, x_hold,

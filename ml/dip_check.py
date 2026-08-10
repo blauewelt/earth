@@ -61,6 +61,14 @@ def main():
     codec = codec_from_ckpt(ck, X.shape[-1])
     codec.load_state_dict(ck["model"])
     codec.eval()
+    # THE ONE LINE THAT WAS MISSING. embed_everything runs on whatever device
+    # the MODEL is on (its own docstring says so), and this file never moved
+    # it — so the dip check embedded the whole section on CPU while a 4090 sat
+    # idle beside it. probe_kfold.py, probe_head.py and probe_sequence.py were
+    # all given this line earlier; dip_check.py was missed, and it is the last
+    # thing in the probe ladder, which is why runs kept ending with hours of
+    # gpu_util=0 and cpu_util=60% that nobody could account for.
+    codec.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
     # ocean comes from the anomaly array, not a fresh d["X"] read: the
     # transform preserves NaN, and re-indexing the npz decompresses the whole
     # 2.4 GB tensor again while this one is still alive.

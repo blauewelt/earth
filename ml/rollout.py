@@ -85,6 +85,12 @@ def main():
     codec = codec_from_ckpt(ck, X.shape[-1])
     codec.load_state_dict(ck["model"])
     codec.eval()
+    # Same one-line omission dip_check.py had: embed_everything follows the
+    # MODEL's device, so without this the rollout embeds the whole tensor on
+    # CPU next to an idle GPU. Found by auditing every embed_everything caller
+    # at once rather than fixing the one that happened to be slow.
+    _dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    codec.to(_dev)
     model = TemporalTransformer(d_z=ck["d_z"], d_model=tk["args"]["d_model"],
                                 n_heads=4, n_layers=tk["args"]["layers"], k_max=K)
     model.load_state_dict(tk["model"])
