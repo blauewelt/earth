@@ -415,8 +415,16 @@ jobs:
         run: |
           mkdir -p ml/runs/actions
           python - <<'EOF'
-          import json, os, subprocess
+          import hashlib, json, os, subprocess
           import numpy as np
+
+          def _tensor_hash(path, chunk=1 << 24):
+              h = hashlib.sha256()
+              with open(path, "rb") as f:
+                  for b in iter(lambda: f.read(chunk), b""):
+                      h.update(b)
+              return h.hexdigest()
+
           d = np.load(os.environ["TENSOR"], allow_pickle=False)
           months = [str(m) for m in d["months"]]
           try:
@@ -434,6 +442,17 @@ jobs:
               "inputs": json.loads(os.environ["INPUTS_JSON"]),
               "tensor": {
                   "file": os.environ["TENSOR"],
+                  # FINGERPRINT. Each box builds and caches its own tensor, and
+                  # on 2026-08-10 two of them had DIVERGED: the channel-space
+                  # persistence baseline — a data-only quantity that cannot
+                  # depend on the model — read 1.2046650648 on gpu-box-45318655
+                  # (runs #88 and #112, identical to 16 digits) and 1.1540812254
+                  # on gpu-box-35586926 (#110). 4.2% apart, 350,000x float32
+                  # epsilon. It tracked the BOX, not the run. Without a
+                  # fingerprint, cross-box comparisons silently compare two
+                  # different datasets, and nothing anywhere says so.
+                  "sha256": _tensor_hash(os.environ["TENSOR"]),
+                  "bytes": os.path.getsize(os.environ["TENSOR"]),
                   "X_shape": list(d["X"].shape),
                   "C": int(d["X"].shape[-1]),
                   "chan": [str(c) for c in d["chan"]],

@@ -126,6 +126,22 @@ invariants with an exact expected value (the twin head's "r_fore must read
 1.000000 at step 1, or exit") over thresholds — thresholds are the tripwires
 that killed two healthy runs.
 
+### 2d-bis · Silent divergence between boxes
+
+Each box builds and caches its own tensor. On 2026-08-10 two of them had
+drifted: the channel-space persistence baseline — a **data-only** quantity
+that cannot depend on the model — read `1.2046650648117065` on
+gpu-box-45318655 (runs #88 and #112, bit-identical) and `1.1540812253952026`
+on gpu-box-35586926 (#110). It tracked the box, not the run. 4.2% apart,
+~350,000× float32 epsilon.
+
+Nothing in any run's output said which tensor it used, so cross-box results
+were being compared as though they shared a dataset. Now every run's
+`provenance.json` carries a sha256 of the tensor file. **Design response:**
+if a computation is supposed to be reproducible across machines, fingerprint
+its inputs and publish the fingerprint — an invariant that is never checked is
+a hope.
+
 ### 2e · Scheduling and state
 
 - A queued Actions job can wedge against runners GitHub itself reports online

@@ -70,6 +70,31 @@ Each run divides by its own persistence so the ratio is within-codec and the
 comparison is largely fair, but **#110 vs #112 is the clean pair**; #88 is
 indicative.
 
+**A confound that is NOT float noise.** The channel-space persistence baseline
+is data-only — x_t against x_{t+1} on held-out months — so it cannot depend on
+the model and must be identical for every run on the same tensor. It is not:
+
+| run | box | chan persistence baseline |
+|---|---|---|
+| #88 (6k) | gpu-box-45318655 | 1.2046650648117065 |
+| #110 (24k) | gpu-box-35586926 | **1.1540812253952026** |
+| #112 (60k) | gpu-box-45318655 | 1.2046650648117065 |
+
+It tracks the **box**, not the run: same box gives bit-identical values to 16
+digits, a different box is **4.2% away** — about 350,000× float32 epsilon, so
+this is not precision. Each box builds and caches its own
+`ml/cache/family3_na025.npz`, and two of them have diverged. Every cross-box
+comparison in this programme is therefore uncontrolled to some degree, and
+nothing in any run's output said so.
+
+Bounded impact here: rescoring #110 on the other box's baseline moves it from
+0.473 (+52.7%) to 0.453 (+54.7%), which if anything strengthens the trend and
+leaves the 6k → 24k → 60k ordering untouched. The k-fold RAPID numbers agree
+across boxes too (0.627 vs 0.631), so the tensors are close, not unrelated.
+**Fix:** every run's `provenance.json` now records a sha256 of the tensor it
+actually used, so divergence is visible instead of inferred from an anomaly in
+a baseline nobody was looking at.
+
 **Consequence for E-006.** The bar the data-space loss has to clear is 0.473,
 not 0.576 — and possibly lower once #112 lands. A redesign that merely matched
 the old 6,000-step number would have looked like a win against the wrong
