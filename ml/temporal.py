@@ -133,6 +133,31 @@ RAM_HEADROOM_BYTES = 8 << 30  # the tensor and mask are already resident
 CACHE_DTYPE = np.float16
 
 
+def codec_weight_hash(ck):
+    """Identity of the codec that produced an embedding, in ten hex digits.
+
+    The embed cache MUST be codec-aware. A bare Z_<run>.npy poisoned runs
+    #10/#11 (2026-08-07): the Actions cache carried run #8's embeddings, the
+    (T, P, d_z) shape check matched, and two stage-2 models trained on the
+    WRONG codec's z — healthy z-space skill, catastrophic decoded skill,
+    because the z they predicted was not the z their decoder speaks. The hash
+    in the filename makes a stale cache a miss rather than a lie.
+
+    It lives in a function because embed_cache_sync.py has to derive exactly
+    the same name to pull or push the cache, and two copies of a hash rule are
+    two chances to disagree — which would silently reintroduce the #10/#11
+    failure through the release instead of through the local disk.
+    """
+    import hashlib
+    return hashlib.md5(b"".join(
+        v.numpy().tobytes()
+        for v in list(ck["model"].values())[:4])).hexdigest()[:10]
+
+
+def embed_cache_path(run, whash):
+    return os.path.join(HERE, "cache", f"Z_{run}_{whash}.npy")
+
+
 def _free_ram_bytes():
     """MemAvailable, i.e. what can be allocated without swapping — not MemFree,
     which excludes reclaimable page cache and reads absurdly low on a box that
@@ -469,11 +494,8 @@ def main():
     # WRONG codec's z (healthy z-space skill, catastrophic decoded skill:
     # the z they predicted was not the z their decoder speaks). The weight
     # hash in the filename makes a stale cache a miss, never a lie.
-    import hashlib
-    whash = hashlib.md5(b"".join(
-        v.numpy().tobytes() for v in list(ck["model"].values())[:4])).hexdigest()[:10]
-    cache = (os.path.join(HERE, "cache", f"Z_{a.run}_{whash}.npy")
-             if not a.max_pixels else None)
+    whash = codec_weight_hash(ck)
+    cache = (embed_cache_path(a.run, whash) if not a.max_pixels else None)
     # Progress goes into the run's OWN metrics.jsonl, which the publisher loop
     # in ml-train.yml pushes to ml-live-<n> every five minutes. A print reaches
     # the log, and Actions will not serve the log of a running job — so during

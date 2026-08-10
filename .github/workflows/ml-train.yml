@@ -749,6 +749,15 @@ jobs:
                          R2="--resume-temporal ${T2}"
                          [ -n "$LR2" ] && R2="$R2 --lr $LR2"
                          echo "stage-2 continuation: $R2";; esac
+            # PULL THE EMBEDDING BEFORE BUILDING IT. Z is ~95 minutes of a
+            # 4090 and is identical for every run that freezes the same codec
+            # — #112, #117 and #119 each rebuilt the same tensor. It is now
+            # published to the embed-cache-v1 release under the codec's weight
+            # hash, so a box that has never seen this codec downloads 5.2 GiB
+            # instead of spending an hour and a half. Best-effort: a miss
+            # costs GPU time, never correctness, and the script says which
+            # branch it took.
+            python -u ml/embed_cache_sync.py pull --run actions
             # BACKGROUNDED, with the same 5-minute publisher the Train and
             # joint steps use. Called inline, the publish below only ran
             # AFTER temporal.py returned — 7 hours on a 60,000-step run, so
@@ -770,6 +779,13 @@ jobs:
               fi
             done
             wait $S2_PID
+            # PUBLISH IT while the box still has it. The cache outlives this
+            # job only if it leaves the box: the hygiene step prunes it under
+            # disk pressure, and a destroyed instance takes it with no notice
+            # at all. Runs immediately after temporal.py rather than at the
+            # end of the step, so a probe-ladder failure below cannot take the
+            # 95 minutes with it.
+            python -u ml/embed_cache_sync.py push --run actions
             # Publish so the stage-2 curve appears on the status page WHILE
             # the ladder finishes, not only after the archive step at the very
             # end. temporal.py writes into the same metrics.jsonl, but nothing
