@@ -160,7 +160,44 @@ a hope.
 
 ---
 
-## 3 · Invariants
+### 2f · Work that runs on the wrong hardware
+
+Four scripts in the probe ladder embedded on the CPU beside an idle 4090:
+`dip_check.py`, `rollout.py`, standalone `trainprobe.py`, and `probe_head.py`'s
+`fold_fit` — the last of which trained its read-out for 4,000 steps per fold on
+CPU while the *codec* sat correctly on the GPU. The pattern is identical every
+time: someone moves the codec and stops there, because the codec is the big
+model and it feels like the whole job.
+
+`embed_everything` follows **the model's** device, by design and by docstring.
+So does every torch module. **Design response:** when a script gains a second
+model, ask where that one runs. And watch the one signal that shows this —
+`gpu_util` — because nothing else does: the run reads "in progress", the runner
+"online", the box "running", and the job is eight hours of CPU.
+
+## 3 · The monitor
+
+`node scripts/fleet_health.mjs` — one command, one verdict, exit non-zero when
+unhealthy. Chris asked for this after the eight-hour CPU tail: *"having a
+monitor check every 30 mins on whether the gpu is idle would be very helpful."*
+Four checks, ordered by what each has cost:
+
+| check | condition | why it exists |
+|---|---|---|
+| **CPU-BOUND** | a job running with `gpu_util` < 5% and `cpu_util` > 20% | §2f — eight hours, four scripts |
+| **IDLE BURN** | a box `running` with no job on it | paying for nothing; happened repeatedly |
+| **QUEUE STALL** | a job `queued` while a runner is online and idle | §2e — 22 minutes, twice |
+| **DISK** | over 90% | a full disk takes a runner offline |
+
+It runs hourly as a scheduled task (the platform's floor is hourly, not the 30
+minutes asked for; two offset hourly tasks would give 30-minute coverage if
+that turns out to matter). It reports only when something is wrong.
+
+One legitimate CPU-bound case to know: the k-fold ridge solves are numpy and
+genuinely CPU work. They are minutes. Sustained CPU-only for half an hour or
+more means a missing device move.
+
+## 4 · Invariants
 
 These are the properties the system should hold. Each one is here because its
 violation cost something.
@@ -174,10 +211,15 @@ violation cost something.
 6. `ml-train.yml` is `workflow_dispatch`-only, forever (§5).
 7. A job's result must be recoverable from the release without a GPU.
 8. Automation that destroys or stops resources checks for running work first.
+9. Every model in a script runs on the same device as the data it consumes —
+   and `gpu_util` is watched, because it is the only signal that says otherwise.
+10. Any state a run needs to be CONTINUED (optimiser moments, schedule
+    position, RNG) is saved with the weights, and a test asserts the
+    continuation matches an uninterrupted run.
 
 ---
 
-## 4 · Re-running an evaluation without a training run
+## 5 · Re-running an evaluation without a training run
 
 This is invariant 7 made concrete, and it is what makes a timed-out job an
 inconvenience rather than a loss.
@@ -205,7 +247,7 @@ release-seeding step in the workflow.
 
 ---
 
-## 5 · The security line that must not move
+## 6 · The security line that must not move
 
 Self-hosted runners on a **public** repository are the classic dangerous
 configuration: a fork's pull request can execute arbitrary code on your
@@ -221,11 +263,14 @@ CLAUDE.md §6d.
 
 ---
 
-## 6 · Known gaps
+## 7 · Known gaps
 
-- No `--resume-temporal`: a stage-2 head can now be *preserved* but not
-  *continued* — no optimiser state is saved, so a continuation restarts Adam
-  and the LR schedule.
+- ~~No `--resume-temporal`~~ — **closed 2026-08-10.** The head checkpoint now
+  carries optimiser, scheduler, step and RNG state, `--resume-temporal` loads
+  all of it, and `tests/test_resume_temporal.py` asserts that N + resume + N
+  lands exactly where 2N does (max|Δw| = 0) *and* that dropping any one saved
+  piece makes it diverge, so the test cannot rot into a tautology. The workflow
+  reaches it through `window: resume2:<tag>`.
 - Runners are not `--ephemeral`, so the registration on each box is long-lived.
 - `probe_sequence.json` returns all-NaN across the K sweep on recent runs while
   `probe_kfold` is clean; the sequence probe has a bug of its own.
