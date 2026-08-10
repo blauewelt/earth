@@ -277,41 +277,15 @@ jobs:
           # diagnostic logs, pip's wheel cache (~3 GB of torch), actions'
           # _temp staging, and stage-2 embedding caches in the persistent
           # cache (Z_*.npy are ~4 GB each and re-derive from checkpoints).
-          # THRESHOLD 16, not 8. The stage-2 embedding cache for the
-          # quarter-degree tensor is ONE allocation of 10.4 GiB (516 months x
-          # 84,405 ocean pixels x 64 dims x 4 bytes), so a guard at 8 GB is
-          # smaller than the thing it guards against: it passes, and the write
-          # fails forty minutes later with the disk full and the runner
-          # offline. #117 started this step with ~11 GB free, cleared the
-          # check, and spent the next hour walking into the wall. temporal.py
-          # now computes the requirement exactly and prunes or refuses before
-          # opening the memmap; this is the coarse first line.
-          free_gb() { df -BG --output=avail / | tail -1 | tr -dc 0-9; }
-          echo "disk free: $(free_gb) GB"
-          if [ "$(free_gb)" -lt 16 ]; then
-            echo "low disk — pruning …"
-            rm -rf /opt/runner/_diag/*.log /opt/runner/_work/_temp/* || true
-            pip cache purge || true
-            # A half-written cache is dead by definition here: nothing is
-            # running yet, so any .partial is the corpse of a killed job.
-            find /opt/earth-cache -maxdepth 1 -name 'Z_*.npy.partial' -delete || true
-            # KEEP THE NEWEST Z_*.npy. The embedding cache is the biggest
-            # reclaimable thing on the disk, so a blanket delete always chose
-            # it first — and it is the one file that makes the NEXT run cheap.
-            # The cost is 50 minutes of GPU per rebuild, and the rebuild is
-            # 10.4 GiB, which puts the box straight back under the threshold
-            # and lines up the next deletion. That treadmill is what left #117
-            # rebuilding a cache #112 had already computed from the same frozen
-            # codec on the same data. Stale entries (other weight hashes) are
-            # still fair game, and temporal.py prunes the rest itself, knowing
-            # which hash it actually needs.
-            ls -t /opt/earth-cache/Z_*.npy 2>/dev/null | tail -n +2 \
-              | xargs -r rm -f || true
-            echo "kept: $(ls -t /opt/earth-cache/Z_*.npy 2>/dev/null | head -1 || echo none)"
-            # a crashed family-3 build leaves its 11 GB memmap behind
-            rm -f /opt/earth-cache/family3_na025_build.npy || true
-            echo "after prune: $(free_gb) GB"
-          fi
+          # BACKED UP OR UNTOUCHED. The rule used to delete by SIZE, which
+          # meant it always reached for the embedding cache first — the most
+          # expensive artefact on the box and, until today, the only one with
+          # nowhere else to live. Chris: "do _never_ cleanup the embeddings
+          # unless these are backed up (similar to checkpoints)."
+          # scripts/disk_hygiene.sh frees scratch, then frees only what a
+          # release CONFIRMS it can re-fetch, and keeps everything else while
+          # saying why.
+          bash scripts/disk_hygiene.sh 16 || true
           mkdir -p /opt/earth-cache
           rm -rf ml/cache
           ln -s /opt/earth-cache ml/cache
