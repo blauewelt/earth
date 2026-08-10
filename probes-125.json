@@ -1,6 +1,6 @@
 {
  "run_number": 125,
- "archived_at": "2026-08-10T20:09:37.425Z",
+ "archived_at": "2026-08-10T20:09:57.555Z",
  "files": {
   "probe_kfold.json": {
    "actions": {
@@ -131,6 +131,71 @@
    "dip_observed_sv": -6.87,
    "dip_predicted_sv": -3.51,
    "dip_captured_pct": 51.2
+  },
+  "temporal.json": {
+   "run": "actions",
+   "K": 24,
+   "d_model": 192,
+   "layers": 4,
+   "steps": 200000,
+   "z_t+1": {
+    "mse_model": 1.2788783311843872,
+    "mse_persistence": 3.34340500831604,
+    "beats_persistence": true
+   },
+   "chan_t+1": {
+    "mse_model": 0.4924796521663666,
+    "mse_persistence": 1.2046650648117065,
+    "beats_persistence": true,
+    "channels": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ]
+   },
+   "rapid_probe": {
+    "r_raw": 0.392,
+    "r_deseasonalised": 0.317,
+    "n_test": 36,
+    "features": "hidden(-1) mean over section"
+   },
+   "seed": 0
   }
  }
 }
