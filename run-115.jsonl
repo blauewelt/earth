@@ -1,0 +1,2 @@
+{"config": {"steps": 1, "batch": 512, "d_z": 64, "patch": 3, "d_model": 576, "n_layers": 10, "n_heads": 8, "d_dec": 768, "anomaly": false, "eval_every": 0, "light_probe_every": 0, "lr_floor": 3e-05, "lr_decay_steps": 0, "params_M": 40.693, "data": "family3_na025.npz", "C": 39, "T": 516, "resume": "__rescue_only__"}}
+{"resumed": {"from": "__rescue_only__.pt", "parent_tag": "run-80", "at_step": 60000}}
