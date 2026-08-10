@@ -391,17 +391,49 @@ def main():
                 f"Adam's moments and the LR schedule, which is a warm restart "
                 f"wearing a continuation's name. Refusing.")
         opt.load_state_dict(tk["opt"])
-        sched.load_state_dict(tk["sched"])
         start_step = int(tk["step"])
+        # THE SCHEDULE NEEDS A DECISION, and getting it wrong is silent.
+        # CosineAnnealingLR.load_state_dict restores T_max and base_lrs from
+        # the OLD run, so loading it while asking for a LARGER --steps leaves
+        # T_max at the old total with last_epoch already there: the learning
+        # rate is exactly 0.0 and the continuation trains 140,000 steps at
+        # nothing. Measured, not feared — and the toy end-to-end run printed
+        # "lr now 0.000e+00" while I read past it.
+        prev_total = int(tk.get("args", {}).get("steps", start_step))
+        extending = (a.steps != prev_total) or (abs(a.lr - float(
+            tk.get("args", {}).get("lr", a.lr))) > 1e-12)
+        if extending:
+            for g in opt.param_groups:
+                g["lr"] = a.lr
+                g["initial_lr"] = a.lr
+            sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+                opt, a.steps, last_epoch=start_step - 1)
+            print(f"  EXTENDING: new cosine over {a.steps:,} steps at peak lr "
+                  f"{a.lr:.2e} (was {prev_total:,} steps at "
+                  f"{tk.get('args', {}).get('lr')}), positioned at step "
+                  f"{start_step:,}", flush=True)
+        else:
+            sched.load_state_dict(tk["sched"])
+            print("  exact continuation: same total and same lr, schedule "
+                  "state restored verbatim", flush=True)
         if tk.get("torch_rng") is not None:
             torch.set_rng_state(torch.as_tensor(tk["torch_rng"], dtype=torch.uint8))
         if start_step >= a.steps:
             raise SystemExit(
                 f"--resume-temporal: checkpoint is at step {start_step:,} and "
                 f"--steps is {a.steps:,}. --steps is the TOTAL, not the extra.")
+        lr_now = sched.get_last_lr()[0]
         print(f"resumed stage-2 head from {rp} at step {start_step:,} "
-              f"-> training to {a.steps:,} (lr now {sched.get_last_lr()[0]:.3e})",
-              flush=True)
+              f"-> training to {a.steps:,} (lr now {lr_now:.3e})", flush=True)
+        # An invariant with an exact expectation, which is worth more than any
+        # amount of careful reading: you cannot train at zero. Refuse rather
+        # than spend sixteen hours updating nothing.
+        if not (lr_now > 1e-12):
+            raise SystemExit(
+                f"--resume-temporal: the resumed learning rate is {lr_now:.3e}. "
+                f"Training {a.steps - start_step:,} steps at that rate would "
+                f"change nothing and report success. Check --steps (total, not "
+                f"extra) and --lr.")
 
     def batch_windows(idx_t, idx_p, n):
         k = torch.randint(0, len(idx_t), (n,))

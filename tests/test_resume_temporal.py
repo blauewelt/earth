@@ -101,6 +101,47 @@ def run_resumed(tmp, *, drop=None):
     return flat(net2), sched2.get_last_lr()[0]
 
 
+
+# ---------------------------------------------------------------------------
+# EXTENDING is a different case from continuing, and it is the one that bites.
+# CosineAnnealingLR.load_state_dict restores T_max and base_lrs from the OLD
+# run. Load it while asking for a larger total and the schedule believes it is
+# already finished: lr = 0.0, and the "continuation" trains for hours changing
+# nothing while every status says success. This is exactly what temporal.py did
+# until 2026-08-10, and the toy run printed "lr now 0.000e+00" unread.
+
+def test_extend():
+    net, opt, sched = _mk()
+    torch.manual_seed(1234)
+    for _ in range(TOTAL):
+        _step(net, opt, sched)
+
+    NEW_TOTAL, NEW_LR = 4 * TOTAL, 1e-3          # 1/10th of the original 1e-2
+
+    # The wrong way: restore the old schedule state and hope --steps is honoured.
+    net_b, opt_b, _ = _mk()
+    sched_b = torch.optim.lr_scheduler.CosineAnnealingLR(opt_b, NEW_TOTAL)
+    sched_b.load_state_dict(sched.state_dict())
+    lr_bad = sched_b.get_last_lr()[0]
+
+    # The right way: rebuild the cosine for the new total and peak, positioned
+    # where the checkpoint stopped.
+    net_g, opt_g, _ = _mk()
+    for g in opt_g.param_groups:
+        g["lr"] = NEW_LR
+        g["initial_lr"] = NEW_LR
+    sched_g = torch.optim.lr_scheduler.CosineAnnealingLR(
+        opt_g, NEW_TOTAL, last_epoch=TOTAL - 1)
+    lr_good = sched_g.get_last_lr()[0]
+
+    print(f"extend: reloaded schedule -> lr {lr_bad:.3e}   "
+          f"rebuilt schedule -> lr {lr_good:.3e}")
+    assert lr_bad < 1e-12, "the failure this guards against did not reproduce"
+    assert lr_good > 1e-6, "rebuilt schedule must give a usable learning rate"
+    assert lr_good <= NEW_LR + 1e-12, "must not exceed the requested peak"
+    print("OK — extending rebuilds the schedule instead of inheriting a finished one.")
+
+
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         w_ref, lr_ref = run_straight()
@@ -120,6 +161,8 @@ def main():
             assert db > 1e-6, (
                 f"dropping {piece!r} changed nothing, so this test is not "
                 f"actually testing that {piece} is carried")
+    print()
+    test_extend()
     print("\nOK — resume is a continuation, and every saved piece is load-bearing.")
 
 
