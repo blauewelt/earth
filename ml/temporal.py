@@ -372,6 +372,7 @@ def main():
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.steps)
 
     start_step = 0
+    _parent = {}
     if a.resume_temporal:
         rp = (a.resume_temporal if os.path.sep in a.resume_temporal
               else os.path.join(CKPT_DIR, a.resume_temporal + ".pt"))
@@ -399,6 +400,8 @@ def main():
         # rate is exactly 0.0 and the continuation trains 140,000 steps at
         # nothing. Measured, not feared — and the toy end-to-end run printed
         # "lr now 0.000e+00" while I read past it.
+        _parent = dict(tk.get("args", {}))
+        _parent["run_number"] = tk.get("run_number")
         prev_total = int(tk.get("args", {}).get("steps", start_step))
         extending = (a.steps != prev_total) or (abs(a.lr - float(
             tk.get("args", {}).get("lr", a.lr))) > 1e-12)
@@ -476,8 +479,15 @@ def main():
             pass                      # instrumentation never breaks the run
 
     if start_step:
-        m2({"stage2_resumed": {"from": os.path.basename(a.resume_temporal),
-                               "at_step": start_step, "to_step": a.steps}})
+        m2({"stage2_resumed": {
+            "from": os.path.basename(a.resume_temporal),
+            "at_step": start_step, "to_step": a.steps,
+            # Enough to redraw the parent's cosine EXACTLY without fetching
+            # anything: annealing is analytic given peak and total.
+            "parent_run": _parent.get("run_number"),
+            "parent_steps": _parent.get("steps"),
+            "parent_lr": _parent.get("lr"),
+            "lr": a.lr}})
     m2({"stage2_config": {"d_model": a.d_model, "layers": a.layers, "K": K,
                           "steps": a.steps, "params_M": round(n_par2 / 1e6, 3),
                           "d_z": int(ck["d_z"]), "seed": a.seed,
@@ -507,6 +517,12 @@ def main():
         opt.zero_grad(); loss.backward(); opt.step(); sched.step()
         if s % log_every == 0 or s == a.steps:
             m2({"stage2_step": s, "stage2_zmse": round(float(loss.item()), 5),
+                # The RATE, logged rather than inferred. A resumed run's
+                # schedule is the thing most likely to be wrong (it was: a
+                # reloaded cosine gave lr 0.0), and a chart that shows the
+                # loss without the rate cannot distinguish "converged" from
+                # "not learning because the LR is zero".
+                "stage2_lr": float(sched.get_last_lr()[0]),
                 "stage2_wall_s": round(time.time() - t0, 1)})
             # MIRROR THE HEAD AS IT TRAINS, exactly as train.py mirrors the
             # codec. Until now the head existed only in the run's workspace
@@ -530,6 +546,7 @@ def main():
                             # window draw continues rather than repeating.
                             "opt": opt.state_dict(),
                             "sched": sched.state_dict(),
+                            "run_number": os.environ.get("GITHUB_RUN_NUMBER"),
                             "torch_rng": torch.get_rng_state().numpy().tolist()},
                            tmp_path + ".part")
                 os.replace(tmp_path + ".part", tmp_path)
@@ -630,6 +647,7 @@ def main():
     torch.save({"model": model.state_dict(), "args": vars(a),
                 "step": a.steps, "opt": opt.state_dict(),
                 "sched": sched.state_dict(),
+                "run_number": os.environ.get("GITHUB_RUN_NUMBER"),
                 "torch_rng": torch.get_rng_state().numpy().tolist()},
                os.path.join(run_dir, f"temporal{suffix}.pt"))
     json.dump(results, open(os.path.join(run_dir, f"temporal{suffix}.json"), "w"), indent=2)

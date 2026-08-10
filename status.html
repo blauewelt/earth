@@ -213,6 +213,50 @@
     return null;
   }
 
+  // ---- learning-rate overlay -----------------------------------------------
+  // Chris asked for the schedule ON the chart, including the PREVIOUS run's
+  // schedule over its own steps, so a continuation can be read at a glance.
+  // The reason is concrete: a resumed cosine loaded from a finished run gives
+  // lr = 0.0, and a loss curve alone cannot tell "converged" from "not
+  // learning at all". Drawn, that is one look.
+  //
+  // Both segments are computed ANALYTICALLY from (peak, total) rather than
+  // read from logs. Cosine annealing is exact — lr(s) = peak·(1+cos(π·s/T))/2
+  // — so this also works for parents whose runs predate lr logging, which is
+  // every run before 2026-08-10.
+  function cosLr(peak, total, step) {
+    if (!(peak > 0) || !(total > 0)) return null;
+    return peak * (1 + Math.cos(Math.PI * Math.min(step, total) / total)) / 2;
+  }
+  function lrSegments(m) {
+    var cfg = m.s2cfg, from = m.s2from;
+    if (!cfg || !(cfg.steps > 0)) return null;
+    var peak = (from && from.lr) || cfg.lr || null;
+    if (!peak) return null;
+    var segs = [], N = 120;
+    if (from && from.parent_steps > 0 && from.parent_lr > 0) {
+      // The parent, over ITS OWN total — which is why its curve reaches zero
+      // at the seam and the continuation starts again from a lower peak.
+      var pts = [];
+      for (var i = 0; i <= N; i++) {
+        var st = from.parent_steps * i / N;
+        pts.push([st, cosLr(from.parent_lr, from.parent_steps, st)]);
+      }
+      segs.push({ pts: pts, dashed: true, label: "previous run" });
+    }
+    var start = (from && from.at_step) || 0, cur = [];
+    for (var j = 0; j <= N; j++) {
+      var s2 = start + (cfg.steps - start) * j / N;
+      cur.push([s2, cosLr(peak, cfg.steps, s2)]);
+    }
+    segs.push({ pts: cur, dashed: false, label: "this run" });
+    // TWO different numbers, and conflating them printed the parent's peak as
+    // if it were this run's. `scale` maps both curves into one box; `peak` is
+    // what this run actually trains at and is what the legend must say.
+    return { segs: segs, peak: peak,
+             scale: Math.max(peak, (from && from.parent_lr) || 0) };
+  }
+
   // ---- estimated finish -----------------------------------------------------
   // "~2.3 h left" is a duration; "≈ 07:50" is a time you can plan around, and
   // Chris reads this on a phone where the second is the useful one. Both are
@@ -340,7 +384,7 @@
   // ---- live metrics charts --------------------------------------------------
   function parseJsonl(text) {
     var loss = [], probes = [], cfg = null, resumed = null;
-    var s2 = [], s2cfg = null, s2res = null;
+    var s2 = [], s2cfg = null, s2res = null, s2res_from = null;
     var jt = [], jcfg = null;
     text.split("\n").forEach(function (line) {
       line = line.trim();
@@ -352,6 +396,7 @@
       if (o && o.joint_config) { jcfg = o.joint_config; return; }
       if (o && typeof o.joint_step === "number") { jt.push(o); return; }
       if (o && o.stage2_config) { s2cfg = o.stage2_config; return; }
+      if (o && o.stage2_resumed) { s2res_from = o.stage2_resumed; return; }
       if (o && o.stage2_result) { s2res = o.stage2_result; return; }
       if (o && typeof o.stage2_step === "number") { s2.push(o); return; }
       if (o && typeof o.step === "number" && typeof o.loss_rec === "number" && typeof o.loss_nei === "number") {
@@ -361,7 +406,7 @@
       }
     });
     return { loss: loss, probes: probes, cfg: cfg, resumed: resumed,
-             s2: s2, s2cfg: s2cfg, s2res: s2res,
+             s2: s2, s2cfg: s2cfg, s2res: s2res, s2from: s2res_from,
              jt: jt, jcfg: jcfg };
   }
 
@@ -429,6 +474,7 @@
         // the live one; fall back to the parent's only if this leg has none.
         s2: (m.s2 && m.s2.length) ? m.s2 : p.s2,
         s2cfg: m.s2cfg || p.s2cfg,
+        s2from: m.s2from || p.s2from,
         s2res: m.s2res || p.s2res,
         resumed: m.resumed,
         join: join,
@@ -610,6 +656,10 @@
     var ys = pts.map(function (p) { return p.stage2_zmse; });
     var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
     if (m.s2cfg && m.s2cfg.steps > xmax) xmax = m.s2cfg.steps;
+    // A continuation's axis starts at 0, not at the seam: the point of the
+    // chart is to show the WHOLE trajectory, parent included.
+    var lrs = lrSegments(m);
+    if (m.s2from && m.s2from.at_step > 0) xmin = 0;
     var ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
     // Persistence is the bar stage 2 must beat; frame it when we know it.
     var pers = m.s2res && typeof m.s2res.z_mse_persistence === "number"
@@ -640,7 +690,33 @@
           '" text-anchor="end" font-size="10" fill="#8b949e">persistence ' + pers.toFixed(3) + "</text>"
         : "") +
       '<polyline points="' + line + '" fill="none" stroke="#a371f7" stroke-width="2" stroke-linejoin="round"/>' +
+      // LEARNING RATE on its own scale, mapped into the same box. A second
+      // numeric axis would crowd a phone; the peak is named in the legend
+      // instead, which is the only number needed to read the shape.
+      (lrs ? lrs.segs.map(function (sg) {
+        var pl = sg.pts.map(function (q) {
+          var x = padL + (W - padL - padR) * (q[0] - xmin) / xspan;
+          var y = padT + (H - padT - padB) * (1 - (q[1] / lrs.scale));
+          return x.toFixed(1) + "," + y.toFixed(1);
+        }).join(" ");
+        return '<polyline points="' + pl + '" fill="none" stroke="#f0883e" ' +
+               'stroke-width="1.5" opacity="' + (sg.dashed ? "0.55" : "0.9") + '"' +
+               (sg.dashed ? ' stroke-dasharray="5 4"' : "") + "/>";
+      }).join("") : "") +
+      // The seam: where the previous run stopped and this one picked up.
+      (m.s2from && m.s2from.at_step > 0
+        ? '<line x1="' + (padL + (W - padL - padR) * (m.s2from.at_step - xmin) / xspan).toFixed(1) +
+          '" y1="' + padT + '" x2="' + (padL + (W - padL - padR) * (m.s2from.at_step - xmin) / xspan).toFixed(1) +
+          '" y2="' + (H - padB) + '" stroke="#6e7681" stroke-width="1" stroke-dasharray="3 3"/>'
+        : "") +
       "</svg>" +
+      (lrs ? '<div class="legend"><span><span class="sw" style="background:#f0883e"></span>' +
+        "learning rate, peak <b>" + lrs.peak.toExponential(1) + "</b>" +
+        (m.s2from ? ' · <span class="sw" style="background:#f0883e;opacity:.55"></span>' +
+                    "previous run's schedule (peak " +
+                    Number(m.s2from.parent_lr).toExponential(1) + ", " +
+                    fmtInt(m.s2from.parent_steps) + " steps)" : "") +
+        "</span></div>" : "") +
       '<div class="legend"><span><span class="sw" style="background:#a371f7"></span>' +
       "z-space MSE (next-month embedding) — latest <b>" + last.stage2_zmse.toFixed(4) +
       "</b> at step " + fmtInt(last.stage2_step) + "</span></div>" +

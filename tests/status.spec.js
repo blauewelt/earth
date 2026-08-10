@@ -72,8 +72,28 @@ const RUN_S2_LIVE = jsonl([
   { stage2_step: 6000, stage2_zmse: 0.800, stage2_wall_s: 2400 },
 ]);
 
+// A CONTINUATION: 60,000 steps done by a previous run at peak 1e-3, now
+// extended to 200,000 at 1e-4. The chart must show both schedules and the
+// seam, because a resumed cosine that silently reads 0.0 is the failure this
+// display exists to make visible.
+const RUN_S2_CONT = jsonl([
+  { config: { steps: 60000, params_M: 40.7, data: "f3_na025.npz", C: 39 } },
+  { stage2_resumed: { from: "f3_s2_60k__temporal", at_step: 60000, to_step: 200000,
+                      parent_run: "112", parent_steps: 60000, parent_lr: 0.001, lr: 0.0001 } },
+  { stage2_config: { d_model: 192, layers: 4, K: 24, steps: 200000, params_M: 1.822, d_z: 64, lr: 0.0001 } },
+  { stage2_step: 72000, stage2_zmse: 0.700, stage2_lr: 9.7e-5, stage2_wall_s: 5000 },
+  { stage2_step: 84000, stage2_zmse: 0.680, stage2_lr: 9.4e-5, stage2_wall_s: 10000 },
+]);
+
 const RUNS = {
   workflow_runs: [
+    {
+      id: 7, run_number: 107, status: "in_progress", conclusion: null,
+      created_at: iso(200), run_started_at: iso(195),
+      html_url: "https://example.invalid/107",
+      display_title: "E-008 continuation to 200k at 1/10th lr", name: "ml-train",
+      head_sha: "7".repeat(40),
+    },
     {
       id: 6, run_number: 106, status: "in_progress", conclusion: null,
       created_at: iso(45), run_started_at: iso(41),
@@ -149,6 +169,7 @@ test.beforeEach(async ({ page }) => {
     // to reach the ARCHIVE to find the parent.
     if (/ml-live-102\/metrics\.jsonl/.test(url)) return fulfill(RUN_B);
     if (/ml-live-106\/metrics\.jsonl/.test(url)) return fulfill(RUN_S2_LIVE);
+    if (/ml-live-107\/metrics\.jsonl/.test(url)) return fulfill(RUN_S2_CONT);
     if (/ml-metrics\/run-103\.jsonl/.test(url)) return fulfill(RUN_S2);
     if (/ml-metrics\/run-101\.jsonl/.test(url)) return fulfill(RUN_A);
     // #104 is mid-build: it has a phase file and no metrics yet.
@@ -375,4 +396,22 @@ test("a long stage-2 job says when it will finish, not just how far along", asyn
   const done = page.locator("#live .card")
     .filter({ has: page.locator("h3", { hasText: "run #103" }) });
   await expect(done).not.toContainText("ends \u2248");
+});
+
+test("a continued stage-2 run charts BOTH learning-rate schedules and the seam", async ({ page }) => {
+
+  // Chris: render the LR into the graph from the beginning, and the previous
+  // run's schedule over steps 0-60k in the same picture, so the exact schedule
+  // is readable rather than inferred.
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #107" }) });
+  await expect(card).toContainText("learning rate, peak 1.0e-4");
+  await expect(card).toContainText("previous run's schedule (peak 1.0e-3, 60,000 steps)");
+  // Two LR polylines — the parent's dashed, this run's solid — plus the seam.
+  expect(await card.locator('svg.chart polyline[stroke="#f0883e"]').count()).toBe(2);
+  expect(await card.locator('svg.chart polyline[stroke="#f0883e"][stroke-dasharray]').count()).toBe(1);
+  expect(await card.locator('svg.chart line[stroke="#6e7681"][stroke-dasharray]').count()).toBe(1);
+  // And the axis runs from 0, not from the seam: the whole trajectory.
+  await expect(card).toContainText("200,000");
 });
