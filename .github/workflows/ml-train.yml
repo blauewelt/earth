@@ -122,6 +122,8 @@ jobs:
       # survivable and is what `--resume` reads.
       - name: Rescue an orphaned checkpoint from the previous job
         if: inputs.runner != 'ubuntu-latest'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           # BEFORE checkout, because actions/checkout cleans the workspace and
           # would delete the very thing being rescued. A cancelled or crashed
@@ -147,6 +149,9 @@ jobs:
           # step was written when only the codec mattered. Same reasoning as
           # the codec: the file on disk is real whether or not the job that
           # made it survived to upload it.
+          REL_ID=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/model-checkpoints-v1" \
+            | sed -n 's/.*"id": *\([0-9]*\).*/\1/p' | head -1)
           for t in temporal temporal_joint; do
             f="ml/runs/actions/$t.pt"
             if [ -f "$f" ]; then
@@ -156,6 +161,25 @@ jobs:
               cp "$f" "/opt/earth-cache/ckpt/orphan-$t-latest.pt" || true
               echo "rescued $f -> /opt/earth-cache/ckpt/orphan-$t-latest.pt"
             fi
+          done
+          # AND GET IT OFF THE BOX. Rescuing into /opt/earth-cache keeps a
+          # file alive on the machine that made it, which is not durability —
+          # it is the same single point of failure one directory over. Anything
+          # rescued here is pushed to the model-checkpoints release, which
+          # outlives the box, the container and any job timeout, and is
+          # fetchable by `node scripts/fetch_ckpt.mjs`. Best effort and loud:
+          # a failed upload prints its status rather than vanishing.
+          for f in /opt/earth-cache/ckpt/orphan-temporal-latest.pt \
+                   /opt/earth-cache/ckpt/orphan-temporal_joint-latest.pt; do
+            [ -f "$f" ] || continue
+            asset="rescued-$(basename "$f" .pt)-${{ github.run_number }}.pt"
+            up=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@$f" \
+              "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/$REL_ID/assets?name=$asset" \
+              2>/dev/null || echo 000)
+            echo "rescue upload $asset -> HTTP $up"
           done
           ls -la /opt/earth-cache/ckpt 2>/dev/null || true
 
