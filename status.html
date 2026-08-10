@@ -230,8 +230,18 @@
     return peak * (1 + Math.cos(Math.PI * Math.min(step, total) / total)) / 2;
   }
   function lrSegments(m) {
-    var cfg = m.s2cfg, from = m.s2from;
+    var cfg = m.s2cfg, from = m.s2from, warm = m.s2warm;
     if (!cfg || !(cfg.steps > 0)) return null;
+    // A warm restart is drawn on the SAME axis as a continuation — the parent
+    // dashed, this run solid, a seam between them — because that is the
+    // picture worth comparing. What differs is where this run's curve starts:
+    // a continuation resumes partway down the parent's cosine, a warm restart
+    // begins again at its own peak. Drawing them identically would hide the
+    // one distinction the experiment turns on.
+    if (warm && !from) {
+      from = { parent_steps: warm.parent_steps, parent_lr: warm.parent_lr,
+               at_step: warm.parent_steps, lr: warm.lr, __warm: true };
+    }
     var peak = (from && from.lr) || cfg.lr || null;
     if (!peak) return null;
     var segs = [], N = 120;
@@ -246,11 +256,20 @@
       segs.push({ pts: pts, dashed: true, label: "previous run" });
     }
     var start = (from && from.at_step) || 0, cur = [];
+    var isWarm = !!(from && from.__warm);
     for (var j = 0; j <= N; j++) {
-      var s2 = start + (cfg.steps - start) * j / N;
-      cur.push([s2, cosLr(peak, cfg.steps, s2)]);
+      // Continuation: absolute step within ONE cosine of cfg.steps.
+      // Warm restart: cfg.steps is the EXTRA, on a fresh cosine, so the LR is
+      // a function of the offset from the seam while the x position is the
+      // cumulative step — which is what makes the two runs comparable on one
+      // axis of total compute.
+      var off = cfg.steps * j / N;
+      var s2 = isWarm ? start + off : start + (cfg.steps - start) * j / N;
+      cur.push([s2, isWarm ? cosLr(peak, cfg.steps, off)
+                           : cosLr(peak, cfg.steps, s2)]);
     }
-    segs.push({ pts: cur, dashed: false, label: "this run" });
+    segs.push({ pts: cur, dashed: false,
+                label: isWarm ? "this run (warm restart)" : "this run" });
     // TWO different numbers, and conflating them printed the parent's peak as
     // if it were this run's. `scale` maps both curves into one box; `peak` is
     // what this run actually trains at and is what the legend must say.
@@ -385,7 +404,7 @@
   // ---- live metrics charts --------------------------------------------------
   function parseJsonl(text) {
     var loss = [], probes = [], cfg = null, resumed = null, emb = null;
-    var s2 = [], s2cfg = null, s2res = null, s2res_from = null;
+    var s2 = [], s2cfg = null, s2res = null, s2res_from = null, s2warm = null;
     var jt = [], jcfg = null;
     text.split("\n").forEach(function (line) {
       line = line.trim();
@@ -403,6 +422,10 @@
       if (o && typeof o.joint_step === "number") { jt.push(o); return; }
       if (o && o.stage2_config) { s2cfg = o.stage2_config; return; }
       if (o && o.stage2_resumed) { s2res_from = o.stage2_resumed; return; }
+      // A WARM RESTART is not a continuation and must not be drawn as one:
+      // the schedule starts again at its own peak instead of entering the
+      // parent's cosine partway down. Different record, different shape.
+      if (o && o.stage2_warm_restart) { s2warm = o.stage2_warm_restart; return; }
       if (o && o.stage2_result) { s2res = o.stage2_result; return; }
       if (o && typeof o.stage2_step === "number") { s2.push(o); return; }
       if (o && typeof o.step === "number" && typeof o.loss_rec === "number" && typeof o.loss_nei === "number") {
@@ -413,6 +436,7 @@
     });
     return { loss: loss, probes: probes, cfg: cfg, resumed: resumed,
              s2: s2, s2cfg: s2cfg, s2res: s2res, s2from: s2res_from,
+             s2warm: s2warm,
              jt: jt, jcfg: jcfg, emb: emb };
   }
 
@@ -718,7 +742,16 @@
       "</svg>" +
       (lrs ? '<div class="legend"><span><span class="sw" style="background:#f0883e"></span>' +
         "learning rate, peak <b>" + lrs.peak.toExponential(1) + "</b>" +
-        (m.s2from ? ' · <span class="sw" style="background:#f0883e;opacity:.55"></span>' +
+        // The legend must name what this run IS. A warm restart charted and
+        // captioned like a continuation would be a false claim in the one
+        // place a reader looks to check the claim.
+        (m.s2warm ? " — <b>warm restart</b> from the " +
+                    fmtInt(m.s2warm.parent_steps) + "-step head, fresh cosine" +
+                    ' · <span class="sw" style="background:#f0883e;opacity:.55"></span>' +
+                    "previous run's schedule (peak " +
+                    Number(m.s2warm.parent_lr).toExponential(1) + ", " +
+                    fmtInt(m.s2warm.parent_steps) + " steps)"
+         : m.s2from ? ' · <span class="sw" style="background:#f0883e;opacity:.55"></span>' +
                     "previous run's schedule (peak " +
                     Number(m.s2from.parent_lr).toExponential(1) + ", " +
                     fmtInt(m.s2from.parent_steps) + " steps)" : "") +

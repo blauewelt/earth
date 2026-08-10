@@ -526,3 +526,44 @@ test("a run rebuilding its embedding says how far along it is", async ({ page })
   const w = await card.locator(".bar i").first().evaluate((el) => el.style.width);
   expect(w).toBe("73.1%");
 });
+
+test("a warm restart is charted as a restart, not as a continuation", async ({ page }) => {
+  // #120 takes the 60k head's WEIGHTS and trains 140,000 more on a FRESH
+  // cosine; #121 trains 200,000 from scratch. Comparing their curves is the
+  // point of running both, so the page has to draw the warm restart honestly:
+  // same axis of total compute, but its own peak at the seam rather than
+  // entering the parent's cosine partway down. Drawing them identically would
+  // hide the one distinction the experiment turns on.
+  await page.route(/ml-live-107\/metrics\.jsonl/, (route) => route.fulfill({
+    status: 200, contentType: "text/plain",
+    body: [
+      JSON.stringify({ config: { steps: 60000, params_M: 40.7, C: 39 } }),
+      JSON.stringify({ stage2_warm_restart: {
+        from: "f3_s2_60k__temporal.pt", parent_steps: 60000, parent_lr: 0.001,
+        extra_steps: 140000, lr: 0.0001,
+        reset: ["optimiser moments", "schedule position", "rng stream"],
+        kind: "warm restart (cosine restart), NOT a continuation" } }),
+      JSON.stringify({ stage2_config: { d_model: 192, layers: 4, K: 24,
+                                        steps: 140000, params_M: 1.822, lr: 0.0001 } }),
+      JSON.stringify({ stage2_step: 3000, stage2_zmse: 0.70, stage2_lr: 9.9e-5, stage2_wall_s: 1300 }),
+      JSON.stringify({ stage2_step: 6000, stage2_zmse: 0.69, stage2_lr: 9.8e-5, stage2_wall_s: 2600 }),
+    ].join("\n"),
+  }));
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #107" }) });
+  // TEXT ASSERTIONS FIRST, because they auto-wait and `locator.count()` does
+  // not: counting before the card has rendered returns 0 and reads exactly
+  // like a missing chart. This test failed that way once before the order was
+  // fixed, which is the kind of flake that gets a real regression dismissed.
+  //
+  // The legend must name this run's OWN peak and the parent's, and must say
+  // what this is — captioning a warm restart as a continuation would be a
+  // false claim in the one place a reader looks to check the claim.
+  await expect(card).toContainText("warm restart");
+  await expect(card).toContainText("1.0e-4");
+  await expect(card).toContainText("1.0e-3");
+  // Two schedule segments: the parent dashed, this run solid.
+  expect(await card.locator('svg polyline[stroke="#f0883e"]').count())
+    .toBeGreaterThanOrEqual(2);
+});
