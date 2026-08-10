@@ -110,7 +110,16 @@ happened — so the caller's marker fired and the retry never did. Once it
 lands, a box that has never seen this codec pulls 5.2 GiB instead of spending
 an hour and a half.
 
-**Result.** *pending.*
+**Result.** *pending.* Read it with
+
+```
+node scripts/sweep_table.mjs --runs 127:U=1,128:U=2,129:U=4,130:U=8
+```
+
+which tabulates the four arms out of their archived probe bundles beside the
+wind bar carried in each bundle, and declines to call any gap significant —
+the arms share folds, months and most of their error, so an ordering is all
+this design can produce.
 
 ---
 
