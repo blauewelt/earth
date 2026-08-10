@@ -216,14 +216,20 @@ def main():
     ap.add_argument("mode", choices=("pull", "push"))
     ap.add_argument("--run", required=True)
     a = ap.parse_args()
-    # Best-effort by design: a missing cache costs GPU time, never
-    # correctness, so neither direction may take a job down with it. But it
-    # SAYS why (CLAUDE.md 6c rule 6) — every branch above prints its reason.
+    # THE EXIT CODE MUST MEAN SOMETHING. This read
+    #     sys.exit(0 if push(...) == 0 else 0)
+    # which is zero either way — so a failed push looked like a successful one,
+    # the caller's `&& touch /tmp/embed-cache-pushed` fired, and the cache was
+    # never uploaded and never retried. Written, on 2026-08-10, into the very
+    # file whose docstring is about steps that report success while doing
+    # nothing. Best-effort is the CALLER's decision (`|| true`), never a lie
+    # told by the callee.
     try:
-        sys.exit(0 if (pull if a.mode == "pull" else push)(a.run) == 0 else 0)
+        rc = (pull if a.mode == "pull" else push)(a.run)
     except Exception as e:                    # noqa: BLE001
         print(f"::warning::embed cache {a.mode} failed: {type(e).__name__}: {e}")
-        sys.exit(0)
+        rc = 1
+    sys.exit(0 if rc == 0 else 1)
 
 
 if __name__ == "__main__":

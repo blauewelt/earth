@@ -25,7 +25,11 @@ import { spawn } from "node:child_process";
 const args = process.argv.slice(2);
 const arg = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const OUT = arg("--out", "/tmp/status.png");
-const N = Number(arg("--runs", "6"));
+// MATCH THE PAGE. status.html asks the API for per_page=12; capturing fewer
+// makes the screenshot show LESS than the user sees, which defeats its
+// purpose — the first run of this tool used 5 and silently hid #121, a live
+// experiment, from a check whose whole job is to see what is really there.
+const N = Number(arg("--runs", "12"));
 const REPO = process.env.GITHUB_REPOSITORY || "blauewelt/earth";
 const TOKEN = (() => {
   // Default to the session's token location, not $HOME — this runs as root in

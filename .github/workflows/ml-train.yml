@@ -818,10 +818,17 @@ jobs:
               # happened to #120/#121, and it is why "wait for the first run,
               # then start the second" would not have helped: there was
               # nothing to wait FOR until the first run ended.
+              # Retry every ~10 min until it actually lands. The marker is
+              # written only on a REAL success — the previous version marked it
+              # done whatever happened, because the script exited 0 on failure.
               if [ ! -f /tmp/embed-cache-pushed ] && \
+                 [ $((TICK % 20)) -eq 0 ] && \
                  ls /opt/earth-cache/Z_*.npy >/dev/null 2>&1; then
-                python -u ml/embed_cache_sync.py push --run actions \
-                  && touch /tmp/embed-cache-pushed
+                if python -u ml/embed_cache_sync.py push --run actions; then
+                  touch /tmp/embed-cache-pushed
+                else
+                  echo "::warning::embed cache push failed — retrying in ~10 min"
+                fi
               fi
             done
             wait $S2_PID
