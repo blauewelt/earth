@@ -476,6 +476,50 @@ test("empty recent runs do not evict the runs that DO have curves", async ({ pag
   await expect(live).toContainText("6 more recent runs had nothing to plot");
 });
 
+test("a live run deep in the list still gets a card, and the table stays short",
+  async ({ page }) => {
+  // 2026-08-10: eight cancels and re-dispatches inside twenty minutes pushed
+  // #121 — a 200,000-step CPU run with six hours left — past the twelfth
+  // position, and the page fetched exactly twelve. It disappeared from the
+  // dashboard while still burning a GPU, and a missing card reads exactly
+  // like a finished job. My own watcher had the identical defect and went
+  // quiet about the same run in the same minute, which is what made it
+  // visible at all.
+  //
+  // The fetch window is 30 now while the table still lists 12, so this pins
+  // both halves: the deep live run is CHARTED, and the table did not grow a
+  // screenful on a phone.
+  const filler = Array.from({ length: 18 }, (_, i) => ({
+    id: 8000 + i, run_number: 200 + i, status: "completed", conclusion: "cancelled",
+    created_at: iso(30 + i), html_url: "https://example.invalid/f" + i,
+    display_title: "cancelled before it did anything", name: "ml-train",
+    head_sha: String(i % 10).repeat(40).slice(0, 40),
+  }));
+  await page.route(/\/actions\/workflows\/[^/]+\/runs/, (route) =>
+    route.fulfill({
+      status: 200, contentType: "application/json",
+      // The live run sits BELOW eighteen newer ones — outside the old window.
+      body: JSON.stringify({ workflow_runs: filler.concat([{
+        id: 106, run_number: 106, status: "in_progress", conclusion: null,
+        created_at: iso(400), run_started_at: iso(400),
+        html_url: "https://example.invalid/106",
+        display_title: "the long CPU run everyone forgot about",
+        name: "ml-train", head_sha: "e".repeat(40),
+      }]) }),
+    }));
+  await page.goto("/status.html");
+  // #106's live branch is stubbed in beforeEach with a stage-2 run.
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #106" }) });
+  await expect(card).toContainText("in progress");
+  // …and the table did not become nineteen entries on a phone. Count the doc
+  // rows: the table emits TWO <tr> per run (the row and its `.docrow`), so a
+  // raw <tr> count is 2n+1 and asserting on it tests arithmetic rather than
+  // behaviour — the first version of this line did exactly that and failed
+  // against correct code.
+  expect(await page.locator("#runs table tr.docrow").count()).toBe(12);
+});
+
 test("a run that has not started yet shows its PLANNED schedule", async ({ page }) => {
   // Chris: "plot the curve of the continuation run before it starts (incl LR)
   // ... then we know the exact schedule." A resumed cosine that reads 0.0 is

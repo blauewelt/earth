@@ -25,11 +25,14 @@ import { spawn } from "node:child_process";
 const args = process.argv.slice(2);
 const arg = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const OUT = arg("--out", "/tmp/status.png");
-// MATCH THE PAGE. status.html asks the API for per_page=12; capturing fewer
+// MATCH THE PAGE — status.html's RUN_WINDOW, which is 30. Capturing fewer
 // makes the screenshot show LESS than the user sees, which defeats its
-// purpose — the first run of this tool used 5 and silently hid #121, a live
-// experiment, from a check whose whole job is to see what is really there.
-const N = Number(arg("--runs", "12"));
+// purpose. This has now hidden the SAME live experiment twice: first at 5,
+// where #121 was simply outside the capture, and then at 12, which matched
+// the page but only because the page had the identical defect — eight
+// dispatches in twenty minutes pushed a six-hour run out of both windows at
+// once, and the screenshot faithfully reproduced its absence.
+const N = Number(arg("--runs", "30"));
 const REPO = process.env.GITHUB_REPOSITORY || "blauewelt/earth";
 const TOKEN = (() => {
   // Default to the session's token location, not $HOME — this runs as root in

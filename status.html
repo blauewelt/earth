@@ -131,6 +131,8 @@
   var REFRESH_MS = 120000;
   var CHART_HISTORY = 6;      // finished runs WITH CURVES to keep charted
   var CHART_CANDIDATES = 24;  // how deep to look for them; see renderLive
+  var RUN_WINDOW = 30;        // runs FETCHED — must outrun a burst of dispatches
+  var TABLE_ROWS = 12;        // runs LISTED in the table; see renderRuns
   var timer = null;
 
   function $(id) { return document.getElementById(id); }
@@ -432,8 +434,16 @@
   function renderRuns(data) {
     var runs = (data && data.workflow_runs) || [];
     if (!runs.length) { $("runs").innerHTML = '<div class="empty">no runs found</div>'; return runs; }
+    // The TABLE stays short; the RETURNED list is deep. renderLive draws a
+    // card for every in-progress run, so the fetch window decides whether a
+    // long job is on this page at all — and on 2026-08-10 eight cancels and
+    // re-dispatches in twenty minutes pushed #121, a live 200,000-step run
+    // with six hours left, out of a 12-run window. It vanished from the
+    // dashboard while still burning a GPU, and a missing card reads exactly
+    // like a finished job. The fetch is 30 now; this table shows the newest
+    // TABLE_ROWS so a phone still gets a readable list.
     var html = "<table><tr><th>#</th><th>status</th><th>started</th></tr>";
-    runs.forEach(function (r) {
+    runs.slice(0, TABLE_ROWS).forEach(function (r) {
       html += "<tr>" +
         '<td><a href="' + esc(r.html_url) + '">#' + esc(r.run_number) + "</a></td>" +
         '<td><span class="dot" style="background:' + statusColor(r) + '"></span>' +
@@ -1413,7 +1423,7 @@
   function refresh() {
     // 2 api.github.com calls per cycle; raw.githubusercontent.com is uncounted.
     Promise.all([
-      apiGet("https://api.github.com/repos/" + REPO + "/actions/workflows/ml-train.yml/runs?per_page=12"),
+      apiGet("https://api.github.com/repos/" + REPO + "/actions/workflows/ml-train.yml/runs?per_page=" + RUN_WINDOW),
       apiGet("https://api.github.com/repos/" + REPO + "/releases"),
       loadRunDocs(),
       fetchFleet()          // raw.githubusercontent — costs nothing against the cap
