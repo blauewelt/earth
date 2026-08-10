@@ -804,6 +804,15 @@ jobs:
               if [ $((TICK % 10)) -eq 0 ]; then
                 bash scripts/publish_live_metrics.sh "ml-live-${{ github.run_number }}" || true
               fi
+              # Every ~30 min, push the head OFF THE BOX. temporal.py mirrors
+              # it locally every metrics point with optimiser moments, schedule
+              # position and RNG — everything a true continuation needs — but
+              # that mirror dies with the instance, and a 200,000-step run is a
+              # full day of GPU. 7.3 MB an upload turns "the box died, start
+              # again" into "resume from the last half hour".
+              if [ $((TICK % 60)) -eq 0 ]; then
+                bash scripts/snapshot_head.sh "${{ github.run_number }}" || true
+              fi
             done
             wait $S2_PID
             # PUBLISH IT while the box still has it. The cache outlives this
