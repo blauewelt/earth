@@ -243,6 +243,29 @@ heads, dispatched 20:55Z on the idle third box) asks whether the
 deep-band rollout advantage (E-013: 0.278/0.335 from one arm) holds
 3-vs-3.
 
+### E-013b CLOSED (#200, 21:15Z) — the nowcast advantage is real; the deep-band flip was seed-0 luck
+
+The 3-vs-3 rollout (truefit probe on rolled states, per head):
+
+| head | AUC | h1–3 | h4–6 | h7–12 |
+|---|---|---|---|---|
+| u1 s0/s1/s2 | .282/.291/.266 | .414/.365/.437 | .182/.082/.201 | .177/.183/.300 |
+| u4 s0/s1/s2 | .236/.232/.254 | .394/.310/.277 | .278/.202/.083 | .335/.139/**−.029** |
+
+3-seed ensembles: u1 0.414/0.156/0.227 vs u4 0.347/0.202/0.162. **The
+E-013 deep-band flip does not replicate** — u4_s0's 0.335 at h7–12 sits
+next to +0.139 and −0.029 from its sibling seeds; seed means put U=1
+ahead at h1–3 and h7–12 and the field AUC stays U=1's at every seed.
+E-013's "direction, not result" caveat did exactly its job.
+
+**Final unroll verdict, in full, at convergence:** U=4 is (a) a better
+NOWCAST-probe carrier at every seed (0.524 vs 0.434, sd 0.025 vs 0.066 —
+the one finding that survived), (b) a worse forecaster at every horizon
+and every seed, (c) not better at AMOC-at-horizon. The probe-at-horizon
+instrument itself is the noisiest read in the suite (u4's h7–12 spans
+0.364 across seeds on identical rollout points — the field metrics span
+0.022) — treat single-seed band results as direction only, always.
+
 **#196/#197 died on a lemon box (18:50Z).** #196's trainer hit
 `torch.AcceleratorError: CUDA error: unspecified launch failure` six
 minutes into stage 2 — a host/GPU fault, not code (#185, same commit,
