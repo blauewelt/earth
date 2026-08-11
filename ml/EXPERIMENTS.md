@@ -110,6 +110,32 @@ Probe stays at U=1 levels = the gain needs the full-depth gradient every
 step, and the axis closes with fixed U=4 as a transport-nowcast
 specialist.
 
+### RESULT (#202/#203/#204, closed 23:30Z) — half the cost, none of the stability; the compression mechanism needs full depth
+
+| seed | k-fold | z-ratio |
+|---|---|---|
+| 0 | 0.250 [0.085, 0.394] | 0.4396 |
+| 1 | 0.527 [0.402, 0.628] | 0.4409 |
+| 2 | 0.488 [0.366, 0.615] | 0.4333 |
+
+**Q2 first, because it answered cleanly: the one-step cost is halved and
+dose-proportional** — z-ratio 0.433–0.441 (E[U] = 1.875 lands almost
+exactly midway between U=1's 0.39 and U=4's 0.50), seed-stable to 0.008.
+**Q1: the probe gain does NOT survive as a reliable effect.** Mean 0.422
+(below even U=1's 0.434), but the real finding is the SPREAD: sd 0.150
+(range 0.277) against fixed U=4's 0.025 — sampling destroys precisely
+the seed-stability that made fixed U=4's probe result credible. The
+variance-compression mechanism evidently needs the full-depth gradient
+at every step; applied stochastically it becomes a coin flip. Q3 (field
+AUC) left unmeasured — with Q1 answered this way, a rolleval of these
+heads buys nothing; skipped, recorded as such.
+
+**E-016 CLOSED: half-measures pay half the cost deterministically for an
+unreliable benefit.** The unroll menu is now fully mapped: U=1 = best
+forecaster; fixed U=4 = nowcast-probe specialist (+0.09, tight seeds,
++28% forecast cost); sampled = neither. If the nowcast probe ever
+matters enough to pay for, pay full price.
+
 **First arm (#202, seed 0, 22:2xZ).** k-fold **0.250** [0.085, 0.394] —
 NOT in U=4's 0.50–0.55 band; at/below the U=1 band. z-ratio **0.4396** —
 roughly the dose-proportional midpoint (E[U]=1.875) between U=1's 0.39
