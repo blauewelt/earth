@@ -102,7 +102,10 @@ def main():
     for hp in head_paths:
         tk = torch.load(hp, map_location="cpu", weights_only=False)
         ta = tk.get("args", {})
-        label = f"u{ta.get('unroll', 1)}_s{ta.get('seed', 0)}"
+        d_ = str(ta.get("direct") or "").strip()
+        label = (f"u{ta.get('unroll', 1)}"
+                 + (f"_d{d_.replace(',', '-')}" if d_ else "")
+                 + f"_s{ta.get('seed', 0)}")
         if any(l == label for l, _ in head_specs):
             label += "_" + os.path.basename(hp).replace(".pt", "")
         head_specs.append((label, tk))
@@ -445,9 +448,12 @@ def main():
         # real stage-2 heads (pos.weight [24, 192]). The table's own first
         # dimension is the one answer that cannot disagree with the file.
         k_tbl = tk_["model"]["pos.weight"].shape[0]
+        dir_ = tuple(int(x) for x in
+                     str(tk_["args"].get("direct") or "").split(",")
+                     if x.strip())
         model = TemporalTransformer(d_z=ck["d_z"], d_model=tk_["args"]["d_model"],
                                     n_heads=4, n_layers=tk_["args"]["layers"],
-                                    k_max=k_tbl)
+                                    k_max=k_tbl, direct=dir_)
         model.load_state_dict(tk_["model"])
         model.eval()
         results["heads"][label], ens_by_head[label] = eval_one(model, label)
@@ -459,7 +465,10 @@ def main():
     # curiosity, but both are cheap and the toy only exercises mixed U.
     groups = {}
     for label in ens_by_head:
-        groups.setdefault(label.split("_")[0], []).append(label)
+        # everything up to the seed token: "u1_s0" -> "u1",
+        # "u1_d3-6-12_s2" -> "u1_d3-6-12" — direct arms ensemble with their
+        # own recipe's seeds, never with the plain arms'
+        groups.setdefault(label.rsplit("_s", 1)[0], []).append(label)
     if len(ens_by_head) >= 2:
         groups["all"] = list(ens_by_head)
     results["ensembles"] = {}

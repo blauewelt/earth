@@ -59,7 +59,8 @@ class TemporalTransformer(nn.Module):
     anomaly. Output head predicts z_{t+1} from the hidden state at t.
     """
 
-    def __init__(self, d_z=32, d_model=96, n_heads=4, n_layers=3, k_max=36):
+    def __init__(self, d_z=32, d_model=96, n_heads=4, n_layers=3, k_max=36,
+                 direct=()):
         super().__init__()
         self.inp = nn.Linear(d_z + 2, d_model)     # z_t + (sin m, cos m)
         self.static = nn.Linear(d_z + 2, d_model)  # static-z + (lat, lon)
@@ -69,6 +70,15 @@ class TemporalTransformer(nn.Module):
             batch_first=True, norm_first=True, dropout=0.0)
         self.encoder = nn.TransformerEncoder(layer, n_layers)
         self.head = nn.Linear(d_model, d_z)
+        # DIRECT multi-horizon heads (E-014): one linear readout per horizon,
+        # predicting z_{t+h} from the hidden state at t in a single forward —
+        # no iteration, so the compounding/smoothing that an autoregressive
+        # rollout accumulates (and that unroll training made WORSE, E-011)
+        # never enters. The trunk is shared; each head is d_model x d_z.
+        self.direct = tuple(int(h) for h in direct)
+        if self.direct:
+            self.heads_direct = nn.ModuleDict(
+                {str(h): nn.Linear(d_model, d_z) for h in self.direct})
         self.d_model = d_model
 
     def forward(self, z_seq, month_seq, static_ctx):
@@ -680,6 +690,17 @@ def main():
                          "programme (rollout.py), measured on a model that "
                          "was never trained for it. Costs one extra forward "
                          "and backward per extra step.")
+    ap.add_argument("--direct", default="",
+                    help="comma list of DIRECT horizons, e.g. '3,6,12': one "
+                         "extra linear head per horizon predicts z_{t+h} from "
+                         "the hidden state at t in a single forward pass — "
+                         "the standard direct-vs-iterated alternative to "
+                         "rolling t+1 predictions forward. E-011 measured "
+                         "iterated rollouts smoothing away exactly the "
+                         "amplitude the AMOC probe needs; a direct head "
+                         "cannot compound because it never iterates. Loss "
+                         "adds mean-over-horizons MSE at the last window "
+                         "position; empty = off, objective unchanged.")
     ap.add_argument("--max-pixels", type=int, default=0,
                     help="subsample ocean pixels (code-path smoke only; "
                          "the 26.5N section is always kept)")
@@ -838,9 +859,15 @@ def main():
     # must guarantee those months EXIST and are TRAIN months. Without this the
     # unrolled steps would either index off the end of the array or be scored
     # on the holdout — the second is the one that would not have crashed.
+    # --direct extends the reach the same way: every scored offset (the
+    # contiguous unroll fan AND each direct horizon) must exist and be a
+    # train month. With --direct empty the set reduces to the old guard
+    # exactly, so default arms keep the identical window pool.
     U = max(1, a.unroll)
-    ok_t = np.array([t + U < T and t + 1 >= K
-                     and not t_hold[t + 1:t + U + 1].any()
+    D = tuple(sorted({int(x) for x in a.direct.split(",") if x.strip()}))
+    reach = sorted(set(range(1, U + 1)) | set(D))
+    ok_t = np.array([t + reach[-1] < T and t + 1 >= K
+                     and not any(t_hold[t + r] for r in reach)
                      for t in range(T)])
     ok_p = ~x_hold[xs]
     pool_t, pool_p = np.where(ok_t[:, None] & ok_p[None, :])
@@ -849,7 +876,7 @@ def main():
     print(f"train windows: {len(pool_t):,}")
 
     model = TemporalTransformer(d_z=ck["d_z"], d_model=a.d_model,
-                                n_layers=a.layers, k_max=K)
+                                n_layers=a.layers, k_max=K, direct=D)
     # STAGE-2 TRAINING RUNS ON THE ACCELERATOR TOO.
     # The comment above this block used to say stage-2 training is "a small
     # transformer for a few thousand steps" and therefore not worth a GPU.
@@ -1028,8 +1055,12 @@ def main():
         # the code was right.)
         zfut = torch.stack([Zt[t + 1 + u, p] for u in range(U)], 1).float()
         mfut = torch.stack([Mt[t + 1 + u] for u in range(U)], 1)
+        # direct-horizon targets: zdir[:, i] = Z[t + D[i]] — the truth each
+        # direct head must hit from the hidden state at t. Pool-guarded above.
+        zdir = (torch.stack([Zt[t + h_, p] for h_ in D], 1).float().to(TDEV)
+                if D else None)
         return (zseq.to(TDEV), mseq.to(TDEV), static_ctx[p].to(TDEV),
-                ztgt.to(TDEV), zfut.to(TDEV), mfut.to(TDEV))
+                ztgt.to(TDEV), zfut.to(TDEV), mfut.to(TDEV), zdir)
 
     # Stage 2 goes into the RUN'S OWN metrics.jsonl, not just temporal.json.
     # temporal.json is uploaded as a build artifact, and artifacts need an
@@ -1070,15 +1101,28 @@ def main():
     m2({"stage2_config": {"d_model": a.d_model, "layers": a.layers, "K": K,
                           "steps": a.steps, "params_M": round(n_par2 / 1e6, 3),
                           "d_z": int(ck["d_z"]), "seed": a.seed,
-                          "unroll": a.unroll, "tag": a.tag or ""}})
+                          "unroll": a.unroll, "direct": a.direct,
+                          "tag": a.tag or ""}})
 
     print(f"training the temporal stage … ({n_par2:,} parameters)")
     t0 = time.time()
     log_every = max(1, a.steps // 100)     # ~100 curve points, as stage 1 does
     for s in range(start_step + 1, a.steps + 1):
-        zseq, mseq, sctx, ztgt, zfut, mfut = batch_windows(pool_t, pool_p, a.batch)
-        pred, _ = model(zseq, mseq, sctx)
+        zseq, mseq, sctx, ztgt, zfut, mfut, zdir = batch_windows(
+            pool_t, pool_p, a.batch)
+        pred, hid1 = model(zseq, mseq, sctx)
         loss = (pred - ztgt).pow(2).mean()
+        if D:
+            # DIRECT horizons: each head reads the hidden state at the LAST
+            # window position and predicts z at t+h in one shot. Scored at
+            # the last position only — that is exactly how the head will be
+            # used (predict from the newest true context), and the trunk is
+            # already trained at every position by the base term. Weighted
+            # mean over horizons, so adding horizons never outvotes t+1.
+            ld = sum((model.heads_direct[str(h_)](hid1[:, -1])
+                      - zdir[:, i_]).pow(2).mean()
+                     for i_, h_ in enumerate(D))
+            loss = loss + ld / len(D)
         # AUTOREGRESSIVE UNROLL — the fix for EXPOSURE BIAS. rollout.py scores
         # this model by feeding its own predictions back in, but the objective
         # above only ever shows it TRUE context, so it is never trained on the
@@ -1180,6 +1224,41 @@ def main():
         results["chan_t+1"] = {"mse_model": mse_m, "mse_persistence": mse_p,
                                "beats_persistence": mse_m < mse_p,
                                "channels": [chan[c] for c in dynamic]}
+
+    # ---- eval 2b: DIRECT horizons, z-space, held-out targets --------------
+    # One forward from true context, the horizon head reads hidden(-1) — the
+    # anti-compounding number. Persistence at horizon h is z_t frozen, the
+    # same baseline family the rollout uses; the rollout comparison (direct
+    # vs iterated at the SAME (start, h) points) is rollout.py's job.
+    if D:
+        results["z_direct"] = {}
+        with torch.no_grad():
+            for h_ in D:
+                evh = np.array([t + h_ < T and t_hold[t + h_] and t + 1 >= K
+                                for t in range(T)])
+                eth, eph = np.where(evh[:, None] & np.ones(P, bool)[None, :])
+                if not len(eth):
+                    continue
+                sel = np.random.default_rng(a.seed + h_).choice(
+                    len(eth), min(20000, len(eth)), replace=False)
+                et_ = torch.as_tensor(eth[sel], dtype=torch.long)
+                ep_ = torch.as_tensor(eph[sel], dtype=torch.long)
+                base = et_ - K + 1
+                zsq = torch.stack([Zt[base + j, ep_] for j in range(K)],
+                                  1).float()
+                msq = torch.stack([Mt[base + j] for j in range(K)], 1)
+                _, hd = model(zsq.to(TDEV), msq.to(TDEV),
+                              static_ctx[ep_].to(TDEV))
+                zh = model.heads_direct[str(h_)](hd[:, -1]).cpu()
+                zt_ = Zt[et_ + h_, ep_].float()
+                zp_ = Zt[et_, ep_].float()
+                mm = float((zh - zt_).pow(2).mean())
+                mp = float((zp_ - zt_).pow(2).mean())
+                results["z_direct"][str(h_)] = {
+                    "mse_model": mm, "mse_persistence": mp,
+                    "beats_persistence": mm < mp}
+                print(f"  direct h={h_}: z-mse {mm:.4f} vs persistence "
+                      f"{mp:.4f} ({'beats' if mm < mp else 'LOSES TO'} it)")
 
     # ---- eval 3: RAPID probe from temporal hidden state -------------------
     # protocol v2: deseasonalised target (train-years clim), seasonal floor,

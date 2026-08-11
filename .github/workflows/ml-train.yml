@@ -781,7 +781,22 @@ jobs:
             # "unroll:4,seed:2" yields UNROLL=4 rather than "4,seed:2" — which
             # argparse would reject and take the whole probe ladder with it.
             UNROLL="${UNROLL%%,*}"
-            echo "stage 2: unroll=$UNROLL seed=$SEED"
+            # direct:3-6-12 — DIRECT multi-horizon heads (E-014): extra linear
+            # readouts predicting z at t+h in ONE forward, the direct-vs-
+            # iterated alternative to rolling predictions forward. DASHES in
+            # the horizon list because commas separate window fields; turned
+            # back into the comma list temporal.py expects. Same anywhere-
+            # match + first-comma strip as seed:. Composes with everything:
+            # "unroll:1,seed:0,direct:3-6-12,sched:expdecay ..." — and the
+            # sched:-goes-LAST convention still holds, since sched: swallows
+            # the rest of the string verbatim.
+            DIRECT=""
+            case "${{ inputs.window }}" in
+              *direct:*) DIRECT="${{ inputs.window }}"
+                         DIRECT="${DIRECT##*direct:}"; DIRECT="${DIRECT%%,*}"
+                         DIRECT="--direct ${DIRECT//-/,}";;
+            esac
+            echo "stage 2: unroll=$UNROLL seed=$SEED ${DIRECT:-'(no direct heads)'}"
             # `window` also carries resume2:<tag> — CONTINUE a stage-2 head
             # rather than train a fresh one. Packed into an existing input
             # because workflow_dispatch caps at 25 and this file is at the
@@ -882,7 +897,7 @@ jobs:
             python -u ml/temporal.py --run actions --K 24 \
               --data "$TENSOR" \
               --steps "${{ inputs.temporal_steps }}" \
-              --unroll "$UNROLL" --seed "$SEED" $R2 $SCHED \
+              --unroll "$UNROLL" --seed "$SEED" $R2 $SCHED $DIRECT \
               --d-model "${{ inputs.temporal_d_model }}" \
               --layers "${{ inputs.temporal_layers }}" &
             S2_PID=$!
