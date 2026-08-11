@@ -42,6 +42,41 @@ low-pass).
 
 ---
 
+<a id="e-016"></a>
+## E-016 · SAMPLED unroll depth: P(U=1..4) = 0.5/0.25/0.125/0.125 — DISPATCHED 2026-08-11 ~21:30Z
+
+**Why, from Chris.** *"Assuming U_max=4, probabilistically set U to 1 (50%
+of the time), to 2 (25%), to 3 + 4 (12.5% of the time). Can you try
+this?"* The measured trade it targets: fixed U=4 pays **+28% one-step
+z-MSE at every seed** while buying the nowcast probe **+0.09 at every
+seed** (E-013b). Sampling the depth per training step spends half the
+steps on the pure one-step map and reaches full depth only 12.5% of the
+time — E[extra forwards] = 0.875 vs 3.
+
+**Design.** `unroll:4, uprobs:0.5-0.25-0.125-0.125`, otherwise pinned to
+the E-012 arms (60k, expdecay no-taper, tensor `adcbe700`, frozen run-62
+codec), seeds {0, 1, 2}. One depth draw per STEP (whole batch shares it);
+empty probs reduce bit-identically to fixed depth (toy-asserted). Labels
+`u4p_s<N>` — never ensembled with fixed-U arms. **Scale: 1,822,144
+params · batch 512 · 60,000 steps · ≈26.0 M windows.**
+
+**Pre-registered questions.** (1) Does the nowcast-probe gain survive
+(k-fold near U=4's 0.502–0.551 band rather than U=1's 0.363–0.493)?
+(2) Does the one-step cost shrink (z-ratio near 0.39 rather than 0.50)?
+(3) Rollout field skill: does it keep U=1's AUC instead of U=4's deficit?
+
+**The interesting outcome space:** all three yes = strictly dominates
+both parents and becomes the default objective. Probe follows the
+EXPECTED unroll (landing mid-band) = the compression is dose-dependent.
+Probe stays at U=1 levels = the gain needs the full-depth gradient every
+step, and the axis closes with fixed U=4 as a transport-nowcast
+specialist.
+
+**Result.** *pending — #202–#204, pinned to `gpu-box-42005419`, queued
+behind #201.*
+
+---
+
 <a id="e-015"></a>
 ## E-015 · Stage-2 WIDTH: the parameter-bottleneck arm — PREPARED 2026-08-11, dispatch after E-013
 
