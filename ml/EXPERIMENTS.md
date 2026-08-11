@@ -343,6 +343,49 @@ reads; it now rides with the probe results.
 **Consequence for E-009:** the remaining arms must run on the SAME box as
 #131 and #132, or the sweep is cross-tensor as well as cross-unroll.
 
+### The box effect, finally MEASURED — 0.041 on the head k-fold
+
+Two things landed on 2026-08-11 that turn this from a warning into a number.
+
+**The tensors differ, by hash.** `provenance.json` now ships with the probe
+bundle, so:
+
+| box | tensor sha256 | z-persistence |
+|---|---|---|
+| `gpu-box-47094145` | `b40f5b0b253005cb…` | — |
+| `gpu-box-35586926` | `adcbe700fb6e160b…` | 3.139432907104492 |
+| `gpu-box-45318655` (retired) | — | 3.34340500831604 |
+
+No more inferring divergence from an anomaly in a baseline: the hashes simply
+disagree.
+
+**And #140 is a controlled replicate of #131.** Same U=1, same seed 0, same
+codec (weight hash `6c52f0687b`, verified on both boxes), same everything —
+differing only in which box, and therefore which tensor:
+
+| | head k-fold | 36-mo split |
+|---|---|---|
+| #131, tensor 3.343 | 0.555 | 0.413 |
+| #140, tensor `adcbe700` | **0.514** | **0.524** |
+
+**The tensor alone moves the head k-fold by 0.041 and the single split by
+0.111.** For scale, E-009's U=1-vs-U=2 gap was 0.178. So the box effect is
+about a quarter of the effect that experiment was trying to measure — small
+enough to have hidden, large enough to matter, and exactly the reason
+cross-box arms cannot be pooled.
+
+It also says something about the two instruments: the split moved 2.7× more
+than the k-fold under the same perturbation, which is consistent with it
+being the noisier read-out and is a second, independent reason to prefer the
+k-fold.
+
+**The root cause is fixable and now fixed.** Boxes built their own tensors
+because there was no shared artefact to pull — the embed cache had never
+published, and the reason was `curl --data-binary`, which buffers the whole
+body and died on the first 1.5 GiB chunk every time. With `-T` streaming, a
+published Z means every box trains stage 2 on identical embeddings and this
+whole class of confound goes away.
+
 ---
 
 ### E-008e · Does decaying the LR to ZERO actually help? — YES, BY 0.16%
