@@ -97,6 +97,47 @@ replication.
   beat calibrated climatology by RPSS +0.046 — at hard leads, small
   positive skill is the norm and is publishable.
 
+### 2b · Forecasting the TRANSPORT itself — the actual competition (2026-08-11)
+
+Chris reframed the objective as "the world's best predictor model, for
+AMOC specifically", so the bar is: who has published forward-looking
+skill on the RAPID transport series, at what leads, against what
+baseline. The field is thin, and its one famous entry is a cautionary
+tale:
+
+- **Matei et al. 2012 (Science)** — MPI-ESM initialized decadal system,
+  claimed multiyear predictability of the MONTHLY-MEAN 26.5°N
+  transport. The published **Comment** dismantled it: most of the
+  claimed skill is the SEASONAL CYCLE plus the wind-driven Ekman term,
+  and deseasonalised skill beyond persistence was not demonstrated.
+  Fourteen years later this remains the reflexive referee objection to
+  any AMOC-prediction claim, and our protocol was already built to
+  survive it: deseasonalised target, a wind-only ridge bar, damped
+  persistence as the operative baseline.
+- **Foukal (state-space analogue, ~2015, unpublished beyond an OSNAP
+  research post)** — 18-month lead from 10-dimensional delay embedding
+  + 14 nearest neighbours: RMSE 2.46 Sv vs 2.98 for seasonal
+  climatology alone, 48.5% variance 2004–2014, without modern
+  out-of-sample discipline.
+- **Initialized decadal systems since** (DCPP-class) publish ANNUAL-mean
+  AMOC skill at years 1–5+ — a different cadence; cite, don't compare.
+- The deep-learning AMOC literature is nowcast/reconstruction (§1:
+  Michel 2025 from SST; Solodoch 2023 et al. in simulation) or
+  tipping-point anticipation in idealized models — none of it forecasts
+  the observed monthly transport.
+
+**The niche is open**: monthly-resolution, deseasonalised, strictly
+out-of-sample (year-blocked holdout) forecast skill on real RAPID
+transport at leads 1–12 months, against damped persistence and a
+wind-only bar, has as far as this survey can find NEVER been published.
+Our E-011 rollout numbers (probe on rolled states, bands r 0.31/0.11/
+0.21; field ACC 0.40 at h=12) are weak in absolute terms but are, to
+current knowledge, the only numbers of their kind — and E-013/E-014
+(rolled-fit probes, direct heads) attack exactly their weakest link,
+the readout at horizon. A "world's best" claim should be phrased as:
+best *documented* out-of-sample monthly AMOC forecast, with the
+benchmark table above published alongside so the claim is checkable.
+
 ## 3 · Foundation models — where we sit
 
 Flagship Earth FMs (ClimaX, Aurora, ORBIT, the 1/12° ocean forecasters)
