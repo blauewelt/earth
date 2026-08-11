@@ -158,6 +158,37 @@ direct predictions beat the PLAIN heads' iterated rollout in channel
 space and on AMOC — the question that matters — is the rolleval after
 all three seeds land.
 
+### RESULT (#201, ~21:45Z) — FALSIFIED, by its own pre-registered falsifier
+
+The paired rollout eval (three direct heads beside the three plain U=1
+trunks), and the direct heads lose on every count that matters:
+
+- **Direct beats its own iterated path by nothing**: paired
+  `delta_msss_clim_vs_iterated` spans −0.014 to +0.028, mean ≈ +0.003 —
+  zero, on identical cells.
+- **The direct predictions are MORE smoothed, not less**: amp_ratio
+  0.54–0.56 at every trained horizon and every seed. The near-flat
+  z-MSE across horizons was the tell — the heads learned the
+  conditional mean, which beats FROZEN persistence easily (the z_direct
+  ratios 0.50–0.66 were real) and predicts no better than iterating.
+- **The three-horizon term damaged the trunk**: the direct arms'
+  iterated rollout collapses to AUC 0.094–0.109 against the plain
+  trunks' 0.266–0.291 — the t+1 cost (z-ratio 0.65–0.67 vs 0.39)
+  compounds exactly as E-011 taught.
+- Direct-AMOC reads: tiny n, noise, nothing.
+
+The falsifier written at dispatch — "paired deltas ≤ 0 with amp_ratio no
+better → the horizon loss is not an artifact of iteration; it is in the
+embeddings or the predictability itself, and no readout change will buy
+it back" — fired almost verbatim. **The iterated rollout of a well-trained
+one-step model remains the best forecaster at every horizon**, and the
+h=3/6/12 skill it shows (E-011's positive finding) is not improved by
+predicting those horizons directly. E-014 closed; `--direct` stays in the
+tree as a documented dead end. The one caveat: this tested direct heads
+SHARING a trunk with the t+1 objective at equal weight — a
+separate-trunk or down-weighted variant is untested, and nothing above
+motivates spending GPU on it.
+
 **Dispatched 16:00Z as #177–#179** (seeds 0/1/2), plans published,
 queued behind E-013 (#176). **Re-dispatched 17:45Z**: the box disk hit
 50/50 GB mid-#177 (hygiene freed the published Z, the re-pull refused

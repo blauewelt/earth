@@ -131,7 +131,15 @@
   var REFRESH_MS = 120000;
   var CHART_HISTORY = 6;      // finished runs WITH CURVES to keep charted
   var CHART_CANDIDATES = 24;  // how deep to look for them; see renderLive
-  var RUN_WINDOW = 30;        // runs FETCHED — must outrun a burst of dispatches
+  var RUN_WINDOW = 75;        // runs FETCHED — must outrun a burst of dispatches.
+                              // 30 stopped sufficing on 2026-08-11, when one
+                              // day produced 41 ml-train runs (a sweep, two
+                              // disk casualties, a lemon box, and re-pins) and
+                              // the morning's COMPLETED runs scrolled out —
+                              // which read as "results of done jobs
+                              // disappear". Their archives were always intact
+                              // (ml-metrics/run-N.jsonl + probes-N.json); the
+                              // page was windowing them away. API max is 100.
   var TABLE_ROWS = 12;        // runs LISTED in the table; see renderRuns
   var timer = null;
 
@@ -887,6 +895,18 @@
     if (typeof r.rapid_r_deseas === "number") {
       bits.push("RAPID r " + (r.rapid_r_deseas >= 0 ? "+" : "") +
                 r.rapid_r_deseas.toFixed(3) + (kf ? " (36-mo split)" : ""));
+    }
+    // DIRECT multi-horizon heads (E-014): per-horizon z-MSE as a fraction of
+    // frozen-z persistence — below 1.0 beats it. Rides in stage2_result since
+    // 2026-08-11 so downstream results are on the card, not only in the
+    // probe archive.
+    if (r.z_direct_ratio && typeof r.z_direct_ratio === "object") {
+      var dh = Object.keys(r.z_direct_ratio).sort(function (a, b) { return a - b; });
+      if (dh.length) {
+        bits.push("direct t+h vs persistence: " + dh.map(function (h) {
+          return "h" + h + " <b>" + Number(r.z_direct_ratio[h]).toFixed(2) + "</b>";
+        }).join(" · "));
+      }
     }
     if (!bits.length) return "";
     return '<div class="probe">stage-2 result: ' + bits.join(" · ") +

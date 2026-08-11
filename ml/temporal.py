@@ -1411,6 +1411,13 @@ def main():
         # actually move with what stage 2 varies.
         "rapid_r_kfold": results.get("rapid_probe_kfold", {}).get("r_kfold_deseas"),
         "rapid_r_kfold_ci": results.get("rapid_probe_kfold", {}).get("ci95"),
+        # Direct-horizon downstream numbers ride along (2026-08-11) so the
+        # status page can show them without a second fetch: per-horizon
+        # model/persistence z-MSE ratios, lower is better.
+        "z_direct_ratio": ({h: round(v["mse_model"] / v["mse_persistence"], 4)
+                            for h, v in results.get("z_direct", {}).items()}
+                           or None),
+        "scale": results.get("scale"),
     }})
     suffix = f"_{a.tag}" if a.tag else ""
     results["seed"] = a.seed
