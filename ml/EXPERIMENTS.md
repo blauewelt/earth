@@ -98,6 +98,19 @@ accordingly.
 loss is not an artifact of iteration; it is in the embeddings or the
 predictability itself, and no readout change will buy it back.
 
+**First arm landed (#185, seed 0, 19:0xZ) — the direct heads WORK in
+z-space, and the trunk pays at t+1.** `z_direct` beats frozen-z
+persistence at every trained horizon: ratios **0.556 (h=3), 0.501 (h=6),
+0.651 (h=12)** — and the direct MSE barely grows with horizon (2.47 →
+2.61 → 2.66), the signature of a model relaxing toward the conditional
+mean rather than compounding. The cost: the shared trunk's teacher-forced
+z-ratio is **0.6705** against the plain trio's ~0.389 — the three-horizon
+term pulls hard. Head k-fold 0.418 [0.328, 0.517] sits inside the U=1
+band (nowcast unharmed), split 0.614, tensor `adcbe700` ✓. Whether the
+direct predictions beat the PLAIN heads' iterated rollout in channel
+space and on AMOC — the question that matters — is the rolleval after
+all three seeds land.
+
 **Dispatched 16:00Z as #177–#179** (seeds 0/1/2), plans published,
 queued behind E-013 (#176). **Re-dispatched 17:45Z**: the box disk hit
 50/50 GB mid-#177 (hygiene freed the published Z, the re-pull refused
