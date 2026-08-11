@@ -222,9 +222,21 @@ def push(run):
                 if name in existing:          # replace, never duplicate
                     sh(f'curl -fsSL -X DELETE {hdr} '
                        f'"{api}/repos/{REPO}/releases/assets/{existing[name]}"')
+                # `-T`, NEVER `--data-binary @file`. THIS is why the embed
+                # cache had never once published, through every other fix
+                # tonight: --data-binary reads the entire body into memory
+                # before sending, and a 1.5 GiB chunk made curl die with
+                # "option --data-binary: out of memory" on the first chunk,
+                # every time, since the day the feature was written.
+                #
+                # Measured rather than assumed, on a 300 MiB file:
+                #   --data-binary @file   peak RSS 226 MiB
+                #   -T file               peak RSS  10 MiB
+                # -T streams from the file and sets Content-Length from its
+                # size, which is what the release upload endpoint wants.
                 up = sh(f'curl -fsSL -X POST {hdr} '
                         f'-H "Content-Type: application/octet-stream" '
-                        f'--data-binary "@{part}" '
+                        f'-T "{part}" '
                         f'"https://uploads.github.com/repos/{REPO}/releases/{rid}/'
                         f'assets?name={name}"')
             finally:
