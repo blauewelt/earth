@@ -476,7 +476,7 @@
   // ---- live metrics charts --------------------------------------------------
   function parseJsonl(text) {
     var loss = [], probes = [], cfg = null, resumed = null, emb = null;
-    var s2 = [], s2cfg = null, s2res = null, s2res_from = null, s2warm = null;
+    var s2 = [], s2probe = [], s2cfg = null, s2res = null, s2res_from = null, s2warm = null;
     var jt = [], jcfg = null;
     text.split("\n").forEach(function (line) {
       line = line.trim();
@@ -492,7 +492,7 @@
       if (o && o.config) {
         cfg = o.config;
         loss = []; probes = []; resumed = null; emb = null;
-        s2 = []; s2cfg = null; s2res = null; s2res_from = null; s2warm = null;
+        s2 = []; s2probe = []; s2cfg = null; s2res = null; s2res_from = null; s2warm = null;
         jt = []; jcfg = null;
         return;
       }
@@ -511,6 +511,9 @@
       // parent's cosine partway down. Different record, different shape.
       if (o && o.stage2_warm_restart) { s2warm = o.stage2_warm_restart; return; }
       if (o && o.stage2_result) { s2res = o.stage2_result; return; }
+      // in-training transport probe points (2026-08-11): their own array —
+      // they carry no stage2_step key, so the s2 series never sees them
+      if (o && o.stage2_probe) { s2probe.push(o.stage2_probe); return; }
       if (o && typeof o.stage2_step === "number") { s2.push(o); return; }
       if (o && typeof o.step === "number" && typeof o.loss_rec === "number" && typeof o.loss_nei === "number") {
         loss.push(o);
@@ -519,7 +522,7 @@
       }
     });
     return { loss: loss, probes: probes, cfg: cfg, resumed: resumed,
-             s2: s2, s2cfg: s2cfg, s2res: s2res, s2from: s2res_from,
+             s2: s2, s2probe: s2probe, s2cfg: s2cfg, s2res: s2res, s2from: s2res_from,
              s2warm: s2warm,
              jt: jt, jcfg: jcfg, emb: emb };
   }
@@ -587,6 +590,7 @@
         // Stage 2 runs at the END of a job, so a continuation's own record is
         // the live one; fall back to the parent's only if this leg has none.
         s2: (m.s2 && m.s2.length) ? m.s2 : p.s2,
+        s2probe: (m.s2probe && m.s2probe.length) ? m.s2probe : p.s2probe,
         s2cfg: m.s2cfg || p.s2cfg,
         s2from: m.s2from || p.s2from,
         s2res: m.s2res || p.s2res,
@@ -783,7 +787,19 @@
     var yOf = function (v) { return padT + (H - padT - padB) * (1 - (v - ymin) / yspan); };
     var line = polyline(pts.map(function (p) { return [p.stage2_step, p.stage2_zmse]; }),
                         xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB);
+    // HELD-OUT curve beside the train curve (runs since 2026-08-11 log
+    // stage2_val_zmse on a fixed holdout batch ~100 times per run — Chris:
+    // "track more metrics during training"). Same axes, its own colour.
+    var vpts = m.s2.filter(function (p) { return typeof p.stage2_val_zmse === "number"; });
+    var vline = vpts.length >= 2
+      ? polyline(vpts.map(function (p) { return [p.stage2_step, p.stage2_val_zmse]; }),
+                 xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB)
+      : null;
     var last = pts[pts.length - 1];
+    var vlast = vpts.length ? vpts[vpts.length - 1] : null;
+    // in-training transport probe trend (10 points/run, the noisy 36-mo
+    // split — quoted for its TREND, the E-008 curve that never existed)
+    var ppts = m.s2probe || [];
     // THE FOUR SCALE NUMBERS on every card (Chris, 2026-08-11: each entry
     // carries parameters, batch size, steps, data points). Older runs lack
     // batch/train_windows in their stage2_config; show what the run itself
@@ -815,6 +831,7 @@
           '" text-anchor="end" font-size="10" fill="#8b949e">persistence ' + pers.toFixed(3) + "</text>"
         : "") +
       '<polyline points="' + line + '" fill="none" stroke="#a371f7" stroke-width="2" stroke-linejoin="round"/>' +
+      (vline ? '<polyline points="' + vline + '" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="5 3"/>' : "") +
       // LEARNING RATE on its own scale, mapped into the same box. A second
       // numeric axis would crowd a phone; the peak is named in the legend
       // instead, which is the only number needed to read the shape.
@@ -856,6 +873,24 @@
       '<div class="legend"><span><span class="sw" style="background:#a371f7"></span>' +
       "z-space MSE (next-month embedding) — latest <b>" + last.stage2_zmse.toFixed(4) +
       "</b> at step " + fmtInt(last.stage2_step) + "</span></div>" +
+      (vlast
+        ? '<div class="legend"><span><span class="sw" style="background:#58a6ff"></span>' +
+          "HELD-OUT z-MSE — latest <b>" + vlast.stage2_val_zmse.toFixed(4) + "</b>" +
+          (typeof vlast.stage2_amp === "number"
+            ? " · amplitude ratio <b>" + vlast.stage2_amp.toFixed(2) +
+              "</b> (1.0 = full variance; low = smoothing)"
+            : "") +
+          (typeof vlast.stage2_grad_norm === "number"
+            ? " · grad norm " + vlast.stage2_grad_norm.toFixed(2) : "") +
+          "</span></div>"
+        : "") +
+      (ppts.length
+        ? '<div class="meta">in-training RAPID (36-mo split, trend only): ' +
+          ppts.map(function (p) {
+            return "<b>" + Number(p.rapid_r_deseas).toFixed(2) + "</b>@" +
+                   Math.round(p.step / 1000) + "k";
+          }).join(" → ") + "</div>"
+        : "") +
       // A 60,000-step stage 2 is a seven-hour job; without this the panel
       // says how far along it is and nothing about when to come back.
       (function () {

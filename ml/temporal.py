@@ -1132,14 +1132,56 @@ def main():
                           "direct": a.direct,
                           "tag": a.tag or ""}})
 
+    # ---- in-training monitoring (Chris, 2026-08-11: "it would be nice to
+    # track more metrics during training") -----------------------------------
+    # A FIXED held-out batch, built once: windows whose t+1 target is a
+    # holdout month — the same population eval 1 scores after training,
+    # sampled ~100 times during it instead. Monitoring only; nothing is
+    # selected on it. And the light transport probe every 10% of the run:
+    # E-008's question ("z improves — does transport?") deserved a curve,
+    # not two endpoints.
+    ev_m = np.array([t + 1 < T and t_hold[t + 1] and t + 1 >= K
+                     for t in range(T)])
+    emt, emp = np.where(ev_m[:, None] & np.ones(P, bool)[None, :])
+    _mr = np.random.default_rng(12345)
+    msel = _mr.choice(len(emt), min(4096, len(emt)), replace=False)
+    emt = torch.as_tensor(emt[msel], dtype=torch.long)
+    emp = torch.as_tensor(emp[msel], dtype=torch.long)
+    _mb = emt - K + 1
+    mon_zseq = torch.stack([Zt[_mb + j, emp] for j in range(K)], 1).float().to(TDEV)
+    mon_mseq = torch.stack([Mt[_mb + j] for j in range(K)], 1).to(TDEV)
+    mon_sctx = static_ctx[emp].to(TDEV)
+    mon_ztrue = Zt[emt + 1, emp].float().to(TDEV)
+    mon_pers = float((Zt[emt, emp].float().to(TDEV) - mon_ztrue).pow(2).mean())
+    m2({"stage2_monitor": {"n_windows": int(len(msel)),
+                           "val_persistence": round(mon_pers, 5)}})
+    try:
+        _pr = d["rapid"]
+        _pridx = _pr[:, 0].astype(int)
+        _prv = _pr[:, 1].copy()
+        _prmoy = moy[_pridx]
+        _ptr = ~t_hold[_pridx]
+        _pclim = np.array([_prv[_ptr & (_prmoy == m)].mean() for m in range(12)])
+        _prv_des = _prv - _pclim[_prmoy]
+        _, _psec = rapid_section(lats, lons, ys, xs)
+        _psec_t = torch.as_tensor(np.asarray(_psec), dtype=torch.long)
+        _pok = _pridx >= K - 1
+        _psec_ctx = static_ctx[_psec_t].to(TDEV)
+    except Exception as _e:                     # monitoring never breaks a run
+        print(f"  (in-training probe disabled: {_e})")
+        _psec = None
+
     print(f"training the temporal stage … ({n_par2:,} parameters)")
     t0 = time.time()
     log_every = max(1, a.steps // 100)     # ~100 curve points, as stage 1 does
+    probe_every = max(1, a.steps // 10)    # the transport curve, 10 points
     for s in range(start_step + 1, a.steps + 1):
         zseq, mseq, sctx, ztgt, zfut, mfut, zdir = batch_windows(
             pool_t, pool_p, a.batch)
         pred, hid1 = model(zseq, mseq, sctx)
-        loss = (pred - ztgt).pow(2).mean()
+        l_base = (pred - ztgt).pow(2).mean()
+        loss = l_base
+        l_dir = None
         if D:
             # DIRECT horizons: each head reads the hidden state at the LAST
             # window position and predicts z at t+h in one shot. Scored at
@@ -1150,7 +1192,8 @@ def main():
             ld = sum((model.heads_direct[str(h_)](hid1[:, -1])
                       - zdir[:, i_]).pow(2).mean()
                      for i_, h_ in enumerate(D))
-            loss = loss + ld / len(D)
+            l_dir = ld / len(D)
+            loss = loss + l_dir
         # AUTOREGRESSIVE UNROLL — the fix for EXPOSURE BIAS. rollout.py scores
         # this model by feeding its own predictions back in, but the objective
         # above only ever shows it TRUE context, so it is never trained on the
@@ -1164,21 +1207,73 @@ def main():
         # fixed depth U every step — bit-identical to the old objective.
         U_t = (1 + int(np.random.choice(U, p=UP))) if UP is not None else U
         zin, min_ = zseq, mseq
+        l_unr = None
         for u in range(1, U_t):
             zin = torch.cat([zin[:, 1:], pred[:, -1:]], 1)      # graph intact
             min_ = torch.cat([min_[:, 1:], mfut[:, u - 1:u]], 1)
             pred, _ = model(zin, min_, sctx)
-            loss = loss + (pred[:, -1] - zfut[:, u]).pow(2).mean() / (u + 1)
-        opt.zero_grad(); loss.backward(); opt.step(); sched.step()
+            term = (pred[:, -1] - zfut[:, u]).pow(2).mean() / (u + 1)
+            l_unr = term if l_unr is None else l_unr + term
+            loss = loss + term
+        opt.zero_grad(); loss.backward()
         if s % log_every == 0 or s == a.steps:
-            m2({"stage2_step": s, "stage2_zmse": round(float(loss.item()), 5),
-                # The RATE, logged rather than inferred. A resumed run's
-                # schedule is the thing most likely to be wrong (it was: a
-                # reloaded cosine gave lr 0.0), and a chart that shows the
-                # loss without the rate cannot distinguish "converged" from
-                # "not learning because the LR is zero".
-                "stage2_lr": float(sched.get_last_lr()[0]),
-                "stage2_wall_s": round(time.time() - t0, 1)})
+            # gradient norm BEFORE the step, only on log steps (a .item()
+            # per step would sync the GPU 60k times)
+            gn = float(torch.sqrt(sum((p_.grad.detach() ** 2).sum()
+                                      for p_ in model.parameters()
+                                      if p_.grad is not None)))
+        opt.step(); sched.step()
+        if s % log_every == 0 or s == a.steps:
+            # held-out z-MSE + amplitude on the fixed monitoring batch: the
+            # val curve beside the train curve, and the SMOOTHING diagnostic
+            # (std(pred)/std(true) — E-014's conditional-mean collapse was
+            # invisible during training precisely because nothing logged it)
+            with torch.no_grad():
+                mp_, _ = model(mon_zseq, mon_mseq, mon_sctx)
+                mlast = mp_[:, -1]
+                val_mse = float((mlast - mon_ztrue).pow(2).mean())
+                amp = float(mlast.std() / (mon_ztrue.std() + 1e-9))
+            rec = {"stage2_step": s, "stage2_zmse": round(float(loss.item()), 5),
+                   "stage2_loss_base": round(float(l_base.item()), 5),
+                   "stage2_val_zmse": round(val_mse, 5),
+                   "stage2_amp": round(amp, 4),
+                   "stage2_grad_norm": round(gn, 4),
+                   # The RATE, logged rather than inferred. A resumed run's
+                   # schedule is the thing most likely to be wrong (it was: a
+                   # reloaded cosine gave lr 0.0), and a chart that shows the
+                   # loss without the rate cannot distinguish "converged" from
+                   # "not learning because the LR is zero".
+                   "stage2_lr": float(sched.get_last_lr()[0]),
+                   "stage2_wall_s": round(time.time() - t0, 1)}
+            if l_dir is not None:
+                rec["stage2_loss_direct"] = round(float(l_dir.item()), 5)
+            if l_unr is not None:
+                rec["stage2_loss_unroll"] = round(float(l_unr.item()), 5)
+            m2(rec)
+            # the light transport probe, ten times per run: hidden(-1)
+            # pooled over the section, 36-month-split ridge — the NOISY
+            # instrument, quoted for its TREND only
+            if _psec is not None and (s % probe_every == 0 or s == a.steps):
+                try:
+                    with torch.no_grad():
+                        F_ = np.zeros((T, a.d_model), np.float32)
+                        for t_ in range(K - 1, T):
+                            b_ = t_ - K + 1
+                            zs_ = torch.stack([Zt[b_ + j, _psec_t]
+                                               for j in range(K)], 1).float()
+                            ms_ = torch.stack(
+                                [Mt[b_ + j].expand(len(_psec), -1)
+                                 for j in range(K)], 1)
+                            _, hd_ = model(zs_.to(TDEV), ms_.to(TDEV),
+                                           _psec_ctx)
+                            F_[t_] = hd_[:, -1].mean(0).cpu().numpy()
+                    ri_ = _pridx[_pok]
+                    r_, _ = ridge_r(F_[ri_], _prv_des[_pok],
+                                    ~t_hold[ri_], t_hold[ri_])
+                    m2({"stage2_probe": {"step": s,
+                                         "rapid_r_deseas": round(float(r_), 4)}})
+                except Exception as _e:
+                    print(f"  (in-training probe failed at {s}: {_e})")
             # MIRROR THE HEAD AS IT TRAINS, exactly as train.py mirrors the
             # codec. Until now the head existed only in the run's workspace
             # and was uploaded by a step that runs AFTER the whole probe

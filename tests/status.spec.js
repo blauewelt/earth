@@ -47,7 +47,10 @@ const RUN_S2 = jsonl([
   { stage2_step: 1500, stage2_zmse: 0.910, stage2_wall_s: 40 },
   { stage2_step: 3000, stage2_zmse: 0.845, stage2_wall_s: 80 },
   { stage2_step: 4500, stage2_zmse: 0.802, stage2_wall_s: 120 },
-  { stage2_step: 6000, stage2_zmse: 0.781, stage2_wall_s: 160 },
+  { stage2_step: 6000, stage2_zmse: 0.781, stage2_wall_s: 160,
+    stage2_val_zmse: 0.856, stage2_amp: 0.72, stage2_grad_norm: 1.31 },
+  { stage2_probe: { step: 3000, rapid_r_deseas: 0.21 } },
+  { stage2_probe: { step: 6000, rapid_r_deseas: 0.34 } },
   { stage2_result: { d_model: 320, layers: 6, K: 24, steps: 6000, params_M: 7.469,
                      seed: 0, tag: "",
                      z_mse_model: 0.731, z_mse_persistence: 1.173,
@@ -303,6 +306,14 @@ test("a stage-2 run gets its own chart and verdict", async ({ page }) => {
   // The z-space curve is charted against the persistence bar it must beat.
   await expect(card).toContainText("persistence 1.173");
   await expect(card).toContainText("latest 0.7810");
+  // In-training monitoring (2026-08-11): held-out z-MSE with the amplitude
+  // ratio (the smoothing diagnostic E-014 lacked), and the transport-probe
+  // trend — older runs without these records simply show neither line.
+  await expect(card).toContainText("HELD-OUT z-MSE");
+  await expect(card).toContainText("0.8560");
+  await expect(card).toContainText("amplitude ratio");
+  await expect(card).toContainText("in-training RAPID");
+  await expect(card).toContainText("0.21");
 
   // The verdict is expressed as % better than persistence — what stage 2
   // actually optimises — with the noisy RAPID read-out clearly secondary.
