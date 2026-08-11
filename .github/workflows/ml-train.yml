@@ -711,6 +711,26 @@ jobs:
             # this file is exactly at the ceiling.
             UNROLL=1
             case "${{ inputs.window }}" in unroll:*) UNROLL="${{ inputs.window }}"; UNROLL="${UNROLL#unroll:}";; esac
+            # SEED, in the same overloaded input, and separated with a comma so
+            # it composes: "unroll:4,seed:2". There is no room for a 26th
+            # workflow_dispatch input and a 26th breaks every dispatch.
+            #
+            # It is here because E-009's first design could not have worked:
+            # four unroll values at one seed each, with 95% intervals of about
+            # ±0.14, can detect the 0.28 effect the archive claimed and nothing
+            # smaller — and that 0.28 turned out to come from an instrument
+            # whose ORDERING is not stable. Replicating a seed is what measures
+            # the noise floor, and without the noise floor no arm ordering
+            # means anything.
+            SEED=0
+            case "${{ inputs.window }}" in
+              *seed:*) SEED="${{ inputs.window }}"; SEED="${SEED##*seed:}"; SEED="${SEED%%,*}";;
+            esac
+            # Strip any trailing ,seed:N from the unroll value, so
+            # "unroll:4,seed:2" yields UNROLL=4 rather than "4,seed:2" — which
+            # argparse would reject and take the whole probe ladder with it.
+            UNROLL="${UNROLL%%,*}"
+            echo "stage 2: unroll=$UNROLL seed=$SEED"
             # `window` also carries resume2:<tag> — CONTINUE a stage-2 head
             # rather than train a fresh one. Packed into an existing input
             # because workflow_dispatch caps at 25 and this file is at the
@@ -790,7 +810,7 @@ jobs:
             python -u ml/temporal.py --run actions --K 24 \
               --data "$TENSOR" \
               --steps "${{ inputs.temporal_steps }}" \
-              --unroll "$UNROLL" $R2 $SCHED \
+              --unroll "$UNROLL" --seed "$SEED" $R2 $SCHED \
               --d-model "${{ inputs.temporal_d_model }}" \
               --layers "${{ inputs.temporal_layers }}" &
             S2_PID=$!
