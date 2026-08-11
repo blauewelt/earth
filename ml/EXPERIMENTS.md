@@ -44,6 +44,39 @@ low-pass).
 
 ---
 
+<a id="e-017"></a>
+## E-017 · The second capacity rung: 768/8 — DISPATCHED 2026-08-11 ~22:45Z
+
+**Why.** E-015's first seed cut the forecast error ratio 0.39 → **0.25**
+and read k-fold 0.504 — the largest single-change improvement in the
+programme's stage-2 history, on the axis E-008 predicted (parameters, not
+compute). Chris: *"should we increase capacity further?"* The jump
+mirrors the one that just worked: 10.7 M → **56.9 M** (5.3×, d_model 768,
+8 layers), U=1, same schedule, same tensor, seeds {0, 1, 2}.
+
+**Risk, and why now is the right time to take it:** 26 M train windows
+are far fewer effective samples (spatial correlation), so a 57 M-param
+head can memorise — and tonight's runs are the FIRST to log the held-out
+z-MSE curve, the amplitude ratio and the in-training probe trend every
+~600 steps. Divergence between train and val curves will be visible live
+on the status page, not discovered at eval.
+
+**Pre-registered questions.** (1) Does the z-ratio keep falling (0.39 →
+0.25 → ?), and does the val curve confirm it generalises? (2) Does the
+probe follow (E-015 s0's 0.504 vs the 1.8 M band)? (3) Where does the
+scaling bend — if 5.3× more parameters buys much less than the last
+5.9× did, the data or the embeddings are the binding constraint and
+E-006 (the objective) is the next lever, not another rung.
+
+**Scale: 56,873,536 parameters · batch 256 · 60,000 steps · ≈26.1 M
+windows.** Dispatch note: E-015's remaining seeds (#194/#195) had not
+landed when this was queued — accepted risk (~$2 of GPU) to use the
+overnight boxes; if they contradict seed 0, this entry records it.
+
+**Result.** *pending — #205–#207, pinned to `gpu-box-42005419`.*
+
+---
+
 <a id="e-016"></a>
 ## E-016 · SAMPLED unroll depth: P(U=1..4) = 0.5/0.25/0.125/0.125 — DISPATCHED 2026-08-11 ~21:30Z
 
