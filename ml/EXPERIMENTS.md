@@ -66,8 +66,13 @@ budget, and `--unroll` becomes a documented dead end rather than a default.
 
 **REVISED before any arm started (Chris): expdecay, no terminal taper.**
 *"Maybe it would make sense to do the sweep with an LR regime that doesn't go
-to zero."* The six arms are #164–#169, `sched:expdecay --lr-cooldown-frac 0`:
-cosine warmup then `2^(−s/40000)`, ending at **3.66e-4 = 36.6% of peak**.
+to zero."* The six arms are **#164 and #171–#175**,
+`sched:expdecay --lr-cooldown-frac 0`: cosine warmup then `2^(−s/40000)`,
+ending at **3.66e-4 = 36.6% of peak**. (Originally dispatched as #164–#169;
+after #164 completed, the five still-queued arms were cancelled unstarted at
+10:13Z so #170 — the E-011 retry — could jump the FIFO queue and answer
+first, then re-dispatched with identical inputs as #171–#175. Any rescue or
+sweep-table read must use the new numbers; #165–#169 contain nothing.)
 
 What this buys: the schedule is horizon-free AND the endpoint is live, so
 every head is a true continuation candidate — snapshots carry optimiser and
@@ -83,12 +88,18 @@ points — which were on another tensor anyway. All comparisons that matter
 plans for the first dispatch (#151–#156, then #158–#163) were cancelled
 before any arm started; nothing trained on them.
 
-**Sequencing.** Behind #157 (E-011 retry) on `gpu-box-35586926`; the other
-two runners are deregistered, so FIFO onto one box — and one tensor — is
-guaranteed by construction. Tensor `adcbe700` is durable on `data-cache-v1`
-as of #150.
+**Sequencing.** Behind #170 (E-011, which answered — see below) on
+`gpu-box-35586926`; the other two runners are deregistered, so FIFO onto one
+box — and one tensor — is guaranteed by construction. Tensor `adcbe700` is
+durable on `data-cache-v1` as of #150.
 
-**Result.** *pending.*
+**First arm landed (#164, U=1 seed 0, 11:0xZ).** Head k-fold **0.363**
+[0.208, 0.543], 36-mo split 0.416, z-ratio **0.3908** — which matches
+E-007's 60k *cosine* figure of 0.391 across both a schedule change and a
+tensor change, a reassuring stability check on the forecast objective.
+Persistence 3.139…, provenance `adcbe700` ✓.
+
+**Result.** *pending — five arms to land.*
 
 ---
 
