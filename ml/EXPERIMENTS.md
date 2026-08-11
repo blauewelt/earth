@@ -35,7 +35,7 @@ low-pass).
 ---
 
 <a id="e-010"></a>
-## E-010 · The unroll question, redesigned around REPLICATES — DISPATCHED 2026-08-11, #139 first
+## E-010 · The unroll question, redesigned around REPLICATES — **COMPLETE: the unroll axis is CLOSED**
 
 **Why this replaces E-009's remaining arms.** Chris, after seeing the
 two-arm result: *"reshape toward seeds."*
@@ -137,8 +137,55 @@ arms. A single run's RAPID k-fold carries ±0.12 of seed noise before anything
 else is varied, so two configurations differing by less than ~0.25 are
 indistinguishable at n=1 — which is every comparison this log has made.
 
-U=4's three seeds (#146–#148) are running; they can still show a shift of the
-whole distribution, which is the only form the unroll effect could now take.
+### FINAL RESULT, all six arms (2026-08-11 07:30)
+
+| arm | seed 0 | seed 1 | seed 2 | mean | sd |
+|---|---|---|---|---|---|
+| **U=1** k-fold | 0.514 | 0.618 | 0.373 | 0.502 | 0.123 |
+| **U=4** k-fold | 0.503 | 0.571 | 0.501 | 0.525 | 0.040 |
+| **U=1** z-ratio | 0.472 | 0.472 | 0.469 | **0.4710** | 0.0017 |
+| **U=4** z-ratio | 0.610 | 0.613 | 0.610 | **0.6110** | 0.0017 |
+
+One box, one tensor (`adcbe700…`), one codec, 6,000 steps, nothing varied but
+`U` and the seed.
+
+**1 · Unroll does NOTHING to the AMOC probe.** Difference in means
+**+0.023**, SE 0.075, **t = 0.31**. That is one tenth of the U=1 seed range.
+Whatever E-005 measured at +0.28, and E-009 at +0.178, it was not this.
+**The unroll axis is closed.**
+
+**2 · Unroll makes the FORECAST 29.7% worse, and that is beyond argument.**
+z-ratio 0.4710 → 0.6110, SE 0.0014, **t = 99**. Both configurations
+reproduce to sd 0.0017 across seeds. This is the one thing about unroll that
+has replicated everywhere — #88 vs #93 showed it, E-009's #131/#132 showed
+it, and here it is at n=3 with a hundred-sigma separation.
+
+So training a head to survive its own errors costs a third of its next-month
+skill and buys nothing measurable on transport. **`--unroll` should default
+to 1** and the flag is now a documented negative.
+
+**3 · The probe, not the model, is what is unstable.** Both z-ratio groups
+have sd 0.0017 while the k-fold's U=1 group has sd 0.123 — 70× larger, from
+the same runs. Optimisation is reproducible; the projection onto 240 months
+of RAPID with ~9 effective DOF is not.
+
+**4 · Four of the six arms sit BELOW the 0.568 wind-only bar** (mean 0.51).
+A 6,000-step head does not beat wind stress on this tensor, and the ordering
+of arms below a bar is not a result about the head. The bar is measured on
+codec features so it is an orientation rather than a threshold — but it is
+not an encouraging one.
+
+**What this costs the programme.** E-005 is now **dead**, not withdrawn: its
++0.28 was one draw against another from a distribution 0.245 wide. E-009's
+two-arm indication goes with it. The honest summary of the unroll line of
+work is that it produced one real and reproducible finding — unroll degrades
+forecasting — and one artefact that survived four months because nobody had
+measured a noise floor.
+
+**The rule that follows.** Stage-2 comparisons need **replicates, not arms**.
+A single RAPID k-fold carries ±0.12 of seed noise before anything is varied,
+so two configurations differing by less than ~0.25 are indistinguishable at
+n=1 — which is every stage-2 comparison in this log before E-010.
 ## E-009 · The unroll sweep: is U the axis that moves the AMOC probe? — RE-DISPATCHED 2026-08-10 as #131–#134
 
 > **Correction, 2026-08-10 20:1x UTC.** The first version of this entry said
@@ -1184,6 +1231,14 @@ same codec, same features, same 36 months, one changed flag. Treat +0.28 as a
 direction worth spending a k-fold on, **not** as a measured effect — and note
 that the metric that moved is not the one the paper's headline uses.
 
+> **DEAD, 2026-08-11 — E-010 measured the noise floor and this result is
+> inside it.** Three seeds at U=1, everything else pinned, span 0.373–0.618:
+> a range of **0.245**, against the +0.28 claimed here. Three seeds at U=4
+> differ from U=1 by **+0.023 (t = 0.31)**. There is no unroll effect on the
+> AMOC probe. What does replicate — here, in E-009 and in E-010 at t = 99 —
+> is that unroll makes the FORECAST 29.7% worse. Retain that; discard the
+> rest of this entry's conclusion.
+>
 > **Amended 2026-08-10, and the caution above was not cautious enough.**
 > E-009 re-measured U=1 and U=2 under one code version on the year-blocked
 > k-fold (~240 out-of-fold months), and **the two instruments order the arms
