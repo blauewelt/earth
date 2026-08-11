@@ -821,7 +821,7 @@ jobs:
             # about failure, with the caller left intolerant. The push below
             # was the second. Both call sites are guarded now, and the rule is
             # in ml/CLAUDE.md — best-effort is the CALLER's decision.
-            python -u ml/embed_cache_sync.py pull --run actions \
+            python -u ml/embed_cache_sync.py pull --run actions --data "$TENSOR" \
               || echo "::warning::no embed cache to pull — stage 2 will build it"
             # BACKGROUNDED, with the same 5-minute publisher the Train and
             # joint steps use. Called inline, the publish below only ran
@@ -865,7 +865,7 @@ jobs:
               if [ ! -f /tmp/embed-cache-pushed ] && \
                  [ $((TICK % 20)) -eq 0 ] && \
                  ls /opt/earth-cache/Z_*.npy >/dev/null 2>&1; then
-                if python -u ml/embed_cache_sync.py push --run actions; then
+                if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR"; then
                   touch /tmp/embed-cache-pushed
                 else
                   echo "::warning::embed cache push failed — retrying in ~10 min"
@@ -895,7 +895,7 @@ jobs:
             # get published", which costs the NEXT run some GPU and costs this
             # one's results nothing. It must not be able to take the numbers
             # with it.
-            python -u ml/embed_cache_sync.py push --run actions \
+            python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
               || echo "::warning::embed cache push failed — the probe ladder continues"
             # Publish so the stage-2 curve appears on the status page WHILE
             # the ladder finishes, not only after the archive step at the very

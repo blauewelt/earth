@@ -41,7 +41,8 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from temporal import CACHE_DTYPE, codec_weight_hash, embed_cache_path
+from temporal import (CACHE_DTYPE, codec_weight_hash, data_fingerprint,
+                      embed_cache_path)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.environ.get("GITHUB_REPOSITORY", "blauewelt/earth")
@@ -56,12 +57,21 @@ def sh(cmd, **kw):
     return subprocess.run(cmd, shell=True, text=True, capture_output=True, **kw)
 
 
-def cache_name(run):
-    """(local path, asset base name) for this run's codec."""
+def cache_name(run, data):
+    """(local path, asset base name, label) for this run's codec AND tensor.
+
+    Both hashes are in the name. A codec-only key was enough while every box
+    built the same tensor; they do not — b40f5b0b against adcbe700, measured
+    2026-08-11 — and with a codec-only key a box pulls embeddings of the wrong
+    dataset while the shape check, the dtype check and the length check all
+    pass. Same failure as #10/#11, with "codec" replaced by "data".
+    """
     ck = torch.load(os.path.join(HERE, "runs", run, "pixelmae.pt"),
                     map_location="cpu", weights_only=False)
     whash = codec_weight_hash(ck)
-    return embed_cache_path(run, whash), f"Z_{whash}.npy", whash
+    dhash = data_fingerprint(data)
+    return (embed_cache_path(run, whash, dhash),
+            f"Z_{whash}_{dhash}.npy", f"{whash}/{dhash}")
 
 
 def npy_expected_bytes(path):
@@ -101,8 +111,8 @@ def verify(path):
     return True, f"{shape} {dtype}, {have / (1 << 30):.2f} GiB"
 
 
-def pull(run):
-    path, asset, whash = cache_name(run)
+def pull(run, a_data):
+    path, asset, whash = cache_name(run, a_data)
     if os.path.exists(path):
         ok, why = verify(path)
         if ok:
@@ -148,8 +158,8 @@ def pull(run):
     return 0
 
 
-def push(run):
-    path, asset, whash = cache_name(run)
+def push(run, a_data):
+    path, asset, whash = cache_name(run, a_data)
     if not os.path.exists(path):
         # The RAM path writes no cache. That is a legitimate outcome, not a
         # failure, and saying so is the difference between "nothing to do" and
@@ -282,6 +292,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("mode", choices=("pull", "push"))
     ap.add_argument("--run", required=True)
+    # The tensor is part of the cache's identity, so it is a required
+    # input rather than a default nobody passes.
+    ap.add_argument("--data", required=True,
+                    help="the tensor .npz these embeddings belong to")
     a = ap.parse_args()
     # THE EXIT CODE MUST MEAN SOMETHING. This read
     #     sys.exit(0 if push(...) == 0 else 0)
@@ -292,7 +306,7 @@ def main():
     # nothing. Best-effort is the CALLER's decision (`|| true`), never a lie
     # told by the callee.
     try:
-        rc = (pull if a.mode == "pull" else push)(a.run)
+        rc = (pull if a.mode == "pull" else push)(a.run, a.data)
     except Exception as e:                    # noqa: BLE001
         print(f"::warning::embed cache {a.mode} failed: {type(e).__name__}: {e}")
         rc = 1

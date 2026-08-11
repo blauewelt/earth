@@ -278,8 +278,42 @@ def codec_weight_hash(ck):
         for v in list(ck["model"].values())[:4])).hexdigest()[:10]
 
 
-def embed_cache_path(run, whash):
-    return os.path.join(HERE, "cache", f"Z_{run}_{whash}.npy")
+def data_fingerprint(path, chunk=1 << 24):
+    """Ten hex digits identifying the TENSOR an embedding was computed from.
+
+    The codec hash alone is not enough, and the gap is the #10/#11 failure one
+    level up. Measured 2026-08-11: `gpu-box-47094145` holds a
+    family3_na025.npz hashing b40f5b0b… and `gpu-box-35586926` holds one
+    hashing adcbe700… — same recipe, same filename, different bytes, because
+    each box builds its own and the recipe gained a channel between builds.
+
+    With a key of `Z_<codec>.npy`, a box holding tensor B pulls embeddings
+    computed from tensor A and cannot tell: the shape check passes (both are
+    [516, 84405, 64]), verify() passes (length and dtype are right), and
+    stage 2 trains on embeddings of a DIFFERENT dataset from the one its
+    persistence baseline and probes use. That is precisely the failure
+    codec_weight_hash was written to stop, with "codec" replaced by "data".
+
+    Cheap enough to do every run: sha256 of a 2.8 GiB file is seconds, and it
+    is the same digest provenance.json already publishes, so the cache name
+    and the provenance record can be checked against each other by eye.
+    """
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for b in iter(lambda: f.read(chunk), b""):
+            h.update(b)
+    return h.hexdigest()[:10]
+
+
+def embed_cache_path(run, whash, dhash=None):
+    """`Z_<run>_<codec>[_<tensor>].npy`.
+
+    dhash is optional ONLY so old callers keep working; every path that
+    publishes or pulls must pass it, or the name means less than it claims.
+    """
+    tail = f"{whash}_{dhash}" if dhash else whash
+    return os.path.join(HERE, "cache", f"Z_{run}_{tail}.npy")
 
 
 
@@ -735,7 +769,13 @@ def main():
     # the z they predicted was not the z their decoder speaks). The weight
     # hash in the filename makes a stale cache a miss, never a lie.
     whash = codec_weight_hash(ck)
-    cache = (embed_cache_path(a.run, whash) if not a.max_pixels else None)
+    # …AND DATA-AWARE, for the same reason one level up. Two boxes hold
+    # family3_na025.npz files with different sha256s (b40f5b0b vs adcbe700,
+    # measured 2026-08-11), so a codec-only key lets a box pull embeddings of
+    # somebody else's tensor and pass every check it has.
+    dhash = data_fingerprint(a.data)
+    print(f"  codec {whash} · tensor {dhash} ({os.path.basename(a.data)})", flush=True)
+    cache = (embed_cache_path(a.run, whash, dhash) if not a.max_pixels else None)
     # Progress goes into the run's OWN metrics.jsonl, which the publisher loop
     # in ml-train.yml pushes to ml-live-<n> every five minutes. A print reaches
     # the log, and Actions will not serve the log of a running job — so during

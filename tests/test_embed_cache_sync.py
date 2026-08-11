@@ -110,11 +110,15 @@ def test_push_with_no_cache_says_so_instead_of_succeeding_quietly():
     import io
     import contextlib
     with tempfile.TemporaryDirectory() as d:
-        sync.cache_name = lambda run: (os.path.join(d, "absent.npy"),
-                                       "Z_absent.npy", "absent")
+        # cache_name takes the TENSOR as well as the run now: the cache is
+        # keyed by codec AND data, because two boxes hold family3_na025.npz
+        # files with different sha256s and a codec-only key let one pull the
+        # other's embeddings while every check passed.
+        sync.cache_name = lambda run, data: (os.path.join(d, "absent.npy"),
+                                             "Z_absent.npy", "absent")
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            rc = sync.push("actions")
+            rc = sync.push("actions", "irrelevant.npz")
         out = buf.getvalue()
         assert rc == 0 and "nothing to publish" in out, out
         assert "built Z in RAM" in out
