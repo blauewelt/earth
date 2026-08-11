@@ -195,7 +195,15 @@ jobs:
           # leaving the originals behind buys nothing and costs correctness.
           rm -rf ml/runs/actions
           echo "cleared ml/runs/actions (rescued copies are in /opt/earth-cache/ckpt)"
-          for f in /opt/earth-cache/ckpt/orphan-temporal-latest.pt \
+          # orphan-latest.pt (the CODEC, 466 MB) is in this list since
+          # 2026-08-11: it was the one rescued file the loop never uploaded,
+          # so every rescue left a single-copy 466 MB file hygiene correctly
+          # refused to delete — the pile the fleet-notes 12:30 entry
+          # diagnosed. And `-T` streams the body; `--data-binary "@f"`
+          # buffers the whole file (the OOM that kept the embed cache
+          # unpublished for a day — ml/CLAUDE.md).
+          for f in /opt/earth-cache/ckpt/orphan-latest.pt \
+                   /opt/earth-cache/ckpt/orphan-temporal-latest.pt \
                    /opt/earth-cache/ckpt/orphan-temporal_joint-latest.pt \
                    /opt/earth-cache/ckpt/orphan-metrics-latest.jsonl; do
             [ -f "$f" ] || continue
@@ -204,11 +212,18 @@ jobs:
             up=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "Content-Type: application/octet-stream" \
-              --data-binary "@$f" \
+              -T "$f" \
               "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/$REL_ID/assets?name=$asset" \
               2>/dev/null || echo 000)
             echo "rescue upload $asset -> HTTP $up"
           done
+          # The timestamped copies duplicate bytes that now exist twice over
+          # (as *-latest.pt on this disk, and on the release once the upload
+          # lands) — they were unbounded history on a bounded disk, ~0.5 GB
+          # per rescue cycle. The *-latest working copies stay.
+          rm -f /opt/earth-cache/ckpt/orphan-2*T*Z.pt \
+                /opt/earth-cache/ckpt/orphan-temporal-2*T*Z.pt \
+                /opt/earth-cache/ckpt/orphan-temporal_joint-2*T*Z.pt 2>/dev/null || true
           ls -la /opt/earth-cache/ckpt 2>/dev/null || true
 
       - uses: actions/checkout@v4
