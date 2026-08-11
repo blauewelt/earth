@@ -796,8 +796,16 @@ jobs:
             # horizon-free stable phase and then cools down, so a run can be
             # extended AND still converge.
             case "${{ inputs.window }}" in
-              sched:*) SCHED="--lr-schedule ${{ inputs.window }}"
-                       SCHED="${SCHED/--lr-schedule sched:/--lr-schedule }"
+              *sched:*)
+                       # ANYWHERE-match, so the schedule composes with the
+                       # other window fields: "unroll:4,seed:2,sched:expdecay
+                       # --lr-cooldown-frac 0" carries all three. The prefix
+                       # match made sched: mutually exclusive with unroll: and
+                       # seed:, which E-012 was the first to need. CONVENTION:
+                       # sched: goes LAST — everything after it (spaces and
+                       # flags included) is handed to temporal.py verbatim.
+                       SCHED="${{ inputs.window }}"
+                       SCHED="--lr-schedule ${SCHED##*sched:}"
                        echo "stage-2 schedule: $SCHED";; esac
             case "${{ inputs.window }}" in
               resume2:*) T2="${{ inputs.window }}"; T2="${T2#resume2:}"
