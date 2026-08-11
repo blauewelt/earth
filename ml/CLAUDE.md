@@ -417,8 +417,10 @@ archive.
 - **Split the pipeline into three jobs** (embed / train A / train B) — designed
   in `docs/INFRASTRUCTURE.md` §6b, now possible because the cache publishes on
   existence.
-- **Decide on `--lr-schedule invsqrt`** as the default, via its own experiment
-  (one budget, both schedules).
+- ~~**Decide on `--lr-schedule invsqrt`** as the default~~ — settled by
+  E-008d/e (2026-08-11): `expdecay` for horizon-freedom, and the terminal
+  taper to zero is worth 0.16% — real, negligible, keep it. The schedule
+  question is closed by being uninteresting.
 - **Run `scripts/paired_probe.py`** over the head and its raw-3×3 control once
   a run has written the per-month arrays, and only then decide whether the
   +0.034 gap is quotable. Draw a genuine second seed with `--seed-base 3`.

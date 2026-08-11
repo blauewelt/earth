@@ -706,6 +706,15 @@ jobs:
           # the regime an unroll objective de-emphasises by design. Trains
           # nothing; `exit 0` skips the training-run ladder below.
           case "${{ inputs.window }}" in
+            publishtensor)
+              # One-off: push this box's BUILT tensor to the data-cache
+              # release, keyed by its sha256 prefix. The sources are durable;
+              # the built tensor was not, and every E-010 result is on a
+              # build (`adcbe700`) that exists on exactly one rented disk.
+              python -u scripts/publish_tensor.py --data "$TENSOR" \
+                || echo "::warning::tensor publish failed — it remains single-copy"
+              exit 0
+              ;;
             rolleval:*)
               SPEC="${{ inputs.window }}"; SPEC="${SPEC#rolleval:}"
               mkdir -p ml/runs/heads
