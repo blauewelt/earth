@@ -113,6 +113,22 @@ def main():
         m.load_state_dict(tk["model"])
         print("direct checkpoint loads through the rollout recipe.")
 
+        # ---- run 1b: SAMPLED unroll (E-016) ---------------------------
+        # --unroll 4 with per-step depth sampling; must train, record the
+        # probs in the checkpoint, and load through the rollout recipe.
+        run_trainer(npz, run, tmp,
+                    ["--unroll", "4",
+                     "--unroll-probs", "0.5,0.25,0.125,0.125"])
+        tks = torch.load(os.path.join(run_dir, "temporal.pt"),
+                         map_location="cpu", weights_only=False)
+        assert tks["args"]["unroll"] == 4
+        assert tks["args"]["unroll_probs"] == "0.5,0.25,0.125,0.125"
+        ms_ = TemporalTransformer(d_z=DZ, d_model=8, n_heads=4, n_layers=1,
+                                  k_max=tks["model"]["pos.weight"].shape[0],
+                                  direct=())
+        ms_.load_state_dict(tks["model"])
+        print("sampled-unroll run trains and its checkpoint loads.")
+
         # ---- run 2: plain — the refactor must be invisible ------------
         run_trainer(npz, run, tmp, [])
         tj2 = json.load(open(os.path.join(run_dir, "temporal.json")))

@@ -690,6 +690,20 @@ def main():
                          "programme (rollout.py), measured on a model that "
                          "was never trained for it. Costs one extra forward "
                          "and backward per extra step.")
+    ap.add_argument("--unroll-probs", default="",
+                    help="comma probabilities for sampling the unroll depth "
+                         "PER STEP, e.g. '0.5,0.25,0.125,0.125' with "
+                         "--unroll 4: each training step draws U_t in "
+                         "1..unroll from this distribution and unrolls that "
+                         "far (Chris, 2026-08-11: 'probabilistically set U "
+                         "to 1 (50%), 2 (25%), 3+4 (12.5%)'). Rationale, "
+                         "measured: fixed U=4 pays +28% one-step z-MSE at "
+                         "every seed while buying the nowcast probe +0.09; "
+                         "sampling spends half the steps on the pure "
+                         "one-step map and reaches full depth only "
+                         "occasionally — the question is whether that keeps "
+                         "the probe gain without the forecast cost. Length "
+                         "must equal --unroll; empty = fixed depth.")
     ap.add_argument("--direct", default="",
                     help="comma list of DIRECT horizons, e.g. '3,6,12': one "
                          "extra linear head per horizon predicts z_{t+h} from "
@@ -864,6 +878,16 @@ def main():
     # train month. With --direct empty the set reduces to the old guard
     # exactly, so default arms keep the identical window pool.
     U = max(1, a.unroll)
+    UP = None
+    if a.unroll_probs.strip():
+        UP = np.array([float(x) for x in a.unroll_probs.split(",")])
+        if len(UP) != U:
+            raise SystemExit(f"--unroll-probs has {len(UP)} entries for "
+                             f"--unroll {U}: one probability per depth 1..U")
+        if (UP < 0).any() or not np.isclose(UP.sum(), 1.0, atol=1e-6):
+            raise SystemExit(f"--unroll-probs must be non-negative and sum "
+                             f"to 1 (got sum {UP.sum():.6f})")
+        print(f"sampled unroll: P(U=1..{U}) = {list(UP)}")
     D = tuple(sorted({int(x) for x in a.direct.split(",") if x.strip()}))
     reach = sorted(set(range(1, U + 1)) | set(D))
     ok_t = np.array([t + reach[-1] < T and t + 1 >= K
@@ -1103,7 +1127,9 @@ def main():
                           "batch": a.batch,
                           "train_windows": int(len(pool_t)),
                           "d_z": int(ck["d_z"]), "seed": a.seed,
-                          "unroll": a.unroll, "direct": a.direct,
+                          "unroll": a.unroll,
+                          "unroll_probs": a.unroll_probs,
+                          "direct": a.direct,
                           "tag": a.tag or ""}})
 
     print(f"training the temporal stage … ({n_par2:,} parameters)")
@@ -1133,8 +1159,12 @@ def main():
         # prediction and the next true month is the target. Each extra step is
         # down-weighted 1/(u+1) so a deep unroll cannot outvote the t+1 term
         # that anchors the whole objective.
+        # Sampled unroll depth: one draw per STEP (whole batch shares it, so
+        # tensor shapes never vary within a batch). With UP=None this is the
+        # fixed depth U every step — bit-identical to the old objective.
+        U_t = (1 + int(np.random.choice(U, p=UP))) if UP is not None else U
         zin, min_ = zseq, mseq
-        for u in range(1, U):
+        for u in range(1, U_t):
             zin = torch.cat([zin[:, 1:], pred[:, -1:]], 1)      # graph intact
             min_ = torch.cat([min_[:, 1:], mfut[:, u - 1:u]], 1)
             pred, _ = model(zin, min_, sctx)

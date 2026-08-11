@@ -103,7 +103,10 @@ def main():
         tk = torch.load(hp, map_location="cpu", weights_only=False)
         ta = tk.get("args", {})
         d_ = str(ta.get("direct") or "").strip()
-        label = (f"u{ta.get('unroll', 1)}"
+        up_ = str(ta.get("unroll_probs") or "").strip()
+        # "p" marks a SAMPLED unroll (E-016): u4p_s0 is a different recipe
+        # from u4_s0 and must never share its ensemble group
+        label = (f"u{ta.get('unroll', 1)}" + ("p" if up_ else "")
                  + (f"_d{d_.replace(',', '-')}" if d_ else "")
                  + f"_s{ta.get('seed', 0)}")
         if any(l == label for l, _ in head_specs):

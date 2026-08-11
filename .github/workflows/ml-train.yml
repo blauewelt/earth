@@ -884,7 +884,17 @@ jobs:
                          DIRECT="${DIRECT##*direct:}"; DIRECT="${DIRECT%%,*}"
                          DIRECT="--direct ${DIRECT//-/,}";;
             esac
-            echo "stage 2: unroll=$UNROLL seed=$SEED ${DIRECT:-'(no direct heads)'}"
+            # uprobs:0.5-0.25-0.125-0.125 — SAMPLED unroll depth (E-016):
+            # per-step draw of U_t in 1..unroll from these probabilities.
+            # Dashes because commas separate window fields; same anywhere-
+            # match + first-comma strip as seed:/direct:; sched: stays LAST.
+            UPROBS=""
+            case "${{ inputs.window }}" in
+              *uprobs:*) UPROBS="${{ inputs.window }}"
+                         UPROBS="${UPROBS##*uprobs:}"; UPROBS="${UPROBS%%,*}"
+                         UPROBS="--unroll-probs ${UPROBS//-/,}";;
+            esac
+            echo "stage 2: unroll=$UNROLL seed=$SEED ${DIRECT:-} ${UPROBS:-}"
             # `window` also carries resume2:<tag> — CONTINUE a stage-2 head
             # rather than train a fresh one. Packed into an existing input
             # because workflow_dispatch caps at 25 and this file is at the
@@ -985,7 +995,7 @@ jobs:
             python -u ml/temporal.py --run actions --K 24 \
               --data "$TENSOR" \
               --steps "${{ inputs.temporal_steps }}" \
-              --unroll "$UNROLL" --seed "$SEED" $R2 $SCHED $DIRECT \
+              --unroll "$UNROLL" --seed "$SEED" $R2 $SCHED $DIRECT $UPROBS \
               --d-model "${{ inputs.temporal_d_model }}" \
               --layers "${{ inputs.temporal_layers }}" &
             S2_PID=$!
