@@ -154,15 +154,27 @@ One box, one tensor (`adcbe700…`), one codec, 6,000 steps, nothing varied but
 Whatever E-005 measured at +0.28, and E-009 at +0.178, it was not this.
 **The unroll axis is closed.**
 
-**2 · Unroll makes the FORECAST 29.7% worse, and that is beyond argument.**
-z-ratio 0.4710 → 0.6110, SE 0.0014, **t = 99**. Both configurations
-reproduce to sd 0.0017 across seeds. This is the one thing about unroll that
-has replicated everywhere — #88 vs #93 showed it, E-009's #131/#132 showed
-it, and here it is at n=3 with a hundred-sigma separation.
+**2 · Unroll makes ONE-STEP forecasting 29.7% worse — and that is the only
+horizon we measured.** z-ratio 0.4710 → 0.6110, SE 0.0014, **t = 99**, both
+configurations reproducing to sd 0.0017 across seeds. Replicated everywhere
+this comparison has ever run: #88 vs #93, E-009's #131/#132, and here at n=3.
 
-So training a head to survive its own errors costs a third of its next-month
-skill and buys nothing measurable on transport. **`--unroll` should default
-to 1** and the flag is now a documented negative.
+**Narrowed 2026-08-11, after Chris asked what the evaluation actually does.**
+`z_t+1` is *teacher-forced, horizon 1*: the true 24-month window in, month
+t+1 out, for every arm regardless of its training U. That is exactly the
+regime a U=4 objective de-emphasises — its loss diverts weight from the t+1
+term to self-fed steps — so the direction of this result is close to
+expected, and it is NOT a measurement of what unroll exists to buy.
+**Multi-step rollout skill, where the model feeds on its own predictions, was
+not evaluated in any arm** (`rollout.py` exists for it; no bundle carries a
+`rollout.json`). The archive's #88/#93 z-ratios are the same one-step eval,
+so this caveat applies to the whole history of the claim.
+
+The honest summary of the axis: unroll costs 29.7% at horizon 1, does nothing
+for the transport probe, and its intended benefit is untested. Closing it
+fully needs one rollout evaluation over the six E-010 heads — no retraining,
+they are all in the artifacts (`temporal.pt`). Until then `--unroll` stays
+default-1 on the measured evidence, not on a completed case.
 
 **3 · The probe, not the model, is what is unstable.** Both z-ratio groups
 have sd 0.0017 while the k-fold's U=1 group has sd 0.123 — 70× larger, from
