@@ -1,0 +1,305 @@
+{
+ "run_number": 193,
+ "files": {
+  "probe_kfold.json": {
+   "actions": {
+    "rapid": {
+     "r_kfold_deseas": 0.627,
+     "ci95": [
+      0.503,
+      0.735
+     ],
+     "n": 240,
+     "rmse_sv": 2.17,
+     "sigma_sv": 2.79,
+     "r_lowpass18": 0.811,
+     "wind_only_baseline": {
+      "r": 0.568,
+      "ci95": [
+       0.428,
+       0.696
+      ],
+      "rmse_sv": 2.29
+     }
+    },
+    "fc": {
+     "r_kfold_deseas": -0.014,
+     "ci95": [
+      -0.151,
+      0.12
+     ],
+     "n": 490,
+     "rmse_sv": 2.17,
+     "sigma_sv": 2.15,
+     "r_lowpass18": 0.069,
+     "wind_only_baseline": {
+      "r": -0.276,
+      "ci95": [
+       -0.36,
+       -0.168
+      ],
+      "rmse_sv": 2.16
+     }
+    },
+    "move": {
+     "r_kfold_deseas": 0.177,
+     "ci95": [
+      0.023,
+      0.317
+     ],
+     "n": 271,
+     "rmse_sv": 4.2,
+     "sigma_sv": 3.73,
+     "r_lowpass18": 0.691,
+     "wind_only_baseline": {
+      "r": -0.376,
+      "ci95": [
+       -0.45,
+       -0.284
+      ],
+      "rmse_sv": 3.79
+     }
+    },
+    "osnap": {
+     "r_kfold_deseas": -0.037,
+     "ci95": [
+      -0.205,
+      0.144
+     ],
+     "n": 96,
+     "rmse_sv": 3.96,
+     "sigma_sv": 2.63,
+     "r_lowpass18": 0.157,
+     "wind_only_baseline": {
+      "r": 0.031,
+      "ci95": [
+       -0.217,
+       0.231
+      ],
+      "rmse_sv": 2.64
+     }
+    }
+   }
+  },
+  "temporal.json": {
+   "run": "actions",
+   "K": 24,
+   "d_model": 384,
+   "layers": 6,
+   "steps": 60000,
+   "z_t+1": {
+    "mse_model": 0.7843743562698364,
+    "mse_persistence": 3.139432907104492,
+    "beats_persistence": true
+   },
+   "chan_t+1": {
+    "mse_model": 0.3400781750679016,
+    "mse_persistence": 1.1540813446044922,
+    "beats_persistence": true,
+    "channels": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ]
+   },
+   "rapid_probe": {
+    "r_raw": 0.503,
+    "r_deseasonalised": 0.486,
+    "n_test": 36,
+    "features": "hidden(-1) mean over section"
+   },
+   "rapid_probe_kfold": {
+    "r_kfold_deseas": 0.504,
+    "ci95": [
+     0.389,
+     0.611
+    ],
+    "n": 240,
+    "rmse_sv": 2.45,
+    "sigma_sv": 2.79,
+    "features": "hidden(-1) mean over section",
+    "note": "year-blocked k-fold over the TEMPORAL HEAD's features. probe_kfold.json in this same run scores the CODEC and is identical for every run that freezes the same codec; this is the number that moves with stage-2 choices. Its comparable wind-only bar is the one printed beside the codec figure in probe_kfold.json."
+   },
+   "seed": 0
+  },
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.426,
+     "r_deseasonalised": 0.476,
+     "n_test": 36
+    },
+    {
+     "K": 3,
+     "r_raw": 0.448,
+     "r_deseasonalised": 0.337,
+     "n_test": 36
+    },
+    {
+     "K": 6,
+     "r_raw": 0.522,
+     "r_deseasonalised": 0.454,
+     "n_test": 36
+    },
+    {
+     "K": 12,
+     "r_raw": 0.599,
+     "r_deseasonalised": 0.548,
+     "n_test": 36
+    },
+    {
+     "K": 24,
+     "r_raw": 0.625,
+     "r_deseasonalised": 0.572,
+     "n_test": 36
+    }
+   ],
+   "seasonal_floor_raw": 0.272,
+   "seasonal_floor_deseas": -0.168
+  },
+  "dip_check.json": {
+   "run": "actions",
+   "window": [
+    "2009-09",
+    "2010-06"
+   ],
+   "r_out_of_fold": 0.627,
+   "sign_agreement_pct": 68.8,
+   "dip_observed_sv": -6.87,
+   "dip_predicted_sv": -3.27,
+   "dip_captured_pct": 47.5
+  },
+  "provenance.json": {
+   "run_number": 193,
+   "sha": "c9aa35b6e65e4a20f37ab32d35429aefe7634e5f",
+   "code": "https://github.com/blauewelt/earth/tree/c9aa35b6e65e4a20f37ab32d35429aefe7634e5f",
+   "inputs": {
+    "doc": "E-015 (width, seed 0): the PARAMETER-bottleneck arm E-008 left open - stage 2 at d_model 384 / 6 layers (~5.9x the 192/4 parameters), from scratch, U=1, 60k expdecay no-taper, same tensor same codec. E-008 showed 33x compute moves the forecast and not the probe; this asks whether CAPACITY was the binding constraint instead. Chris 2026-08-11: 'please consider trying out a larger stage 2 model (u=1) as well'. Three seeds per the replicates rule.",
+    "steps": "60000",
+    "batch": "512",
+    "d_z": "64",
+    "anomaly": "true",
+    "temporal_steps": "60000",
+    "temporal_d_model": "384",
+    "temporal_layers": "6",
+    "eval_every": "0",
+    "resume": "!run-62,run-63",
+    "head_probe": "false",
+    "light_probe_every": "0",
+    "window": "seed:0,sched:expdecay --lr-cooldown-frac 0",
+    "tensor": "family3_na025",
+    "sst_channel": "false",
+    "patch": "3",
+    "max_minutes": "0",
+    "runner": "gpu-box-40623952",
+    "job_timeout": "400",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "576",
+    "codec_layers": "10",
+    "codec_heads": "8",
+    "codec_d_dec": "768"
+   },
+   "tensor": {
+    "file": "ml/cache/family3_na025.npz",
+    "sha256": "adcbe700fb6e160b1c84d7acd8dc0333b34d07829db9abd62c721aab278b4848",
+    "bytes": 2984746794,
+    "X_shape": [
+     516,
+     281,
+     481,
+     39
+    ],
+    "C": 39,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 516
+   },
+   "torch": "2.13.0+cu130",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-40623952"
+  }
+ }
+}
