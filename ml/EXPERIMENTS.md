@@ -61,7 +61,10 @@ schedule and tensor?
 this data size either, and the bottleneck moves definitively to the
 OBJECTIVE (E-006) and the embeddings themselves.
 
-**Result.** *pending — not yet dispatched (behind #173 and E-013/E-014).*
+**Dispatched 16:00Z as #180–#182** (seeds 0/1/2), plans published,
+queued behind E-013 (#176) and E-014 (#177–#179).
+
+**Result.** *pending.*
 
 ---
 
@@ -94,7 +97,40 @@ accordingly.
 loss is not an artifact of iteration; it is in the embeddings or the
 predictability itself, and no readout change will buy it back.
 
-**Result.** *pending — not yet dispatched (behind #173 and E-013).*
+**Dispatched 16:00Z as #177–#179** (seeds 0/1/2), plans published,
+queued behind E-013 (#176).
+
+**Result.** *pending.*
+
+---
+
+<a id="e-013"></a>
+## E-013 · The rollout protocol over the CONVERGED heads, with the upgraded instrument — DISPATCHED 2026-08-11 16:00Z as #176
+
+**What runs.** `rolleval:e012_u1_s0,e012_u1_s1,e012_u1_s2,e012_u4_s0` —
+all four 60k heads (extracted from their run artifacts by
+`scripts/publish_heads.mjs`, which verifies each checkpoint's own args
+against the claim before naming the asset), through `rollout.py` as
+upgraded today:
+
+- **rolledfit probes**: AMOC ridge fit per horizon band on ROLLED
+  train-year section states, read on holdout rolled states — removing the
+  truefit probe's train/apply distribution shift (rolled states are
+  smoother; E-011's amp_ratio < 1);
+- **3-seed ensembles** of per-point probe predictions for the U=1 group,
+  joined on (horizon, start) keys.
+
+**Pre-registered questions.** (1) Does convergence change E-011's
+every-horizon falsification of unroll? (single U=4 arm; the rollout
+metrics' ±0.003 seed stability is what makes one arm readable.) (2) How
+much of the nowcast-to-horizon drop (0.63 → 0.31 at h1–3) does the
+rolledfit probe recover? (3) Does the 3-seed ensemble beat the best single
+seed?
+
+**Deviation, recorded**: an eval run trains nothing and has no LR schedule,
+so no plan file — the E-011 precedent.
+
+**Result.** *pending.*
 
 ---
 
@@ -193,7 +229,18 @@ plateau. All three on `adcbe700` ✓ (and seed-0's persistence baseline
 reproduces #121's to sixteen digits — the (tensor, seed) fingerprint is
 exact).
 
-**Result.** *pending — #173 to land, then E-013 closes the entry.*
+**#173 landed (U=4 seed 0, 15:5xZ) — question 3 answered: the one-step
+cost of unroll persists at convergence.** z-ratio **0.4953** against the
+U=1 trio's 0.3877–0.3908: +27% worse at 10× the training, matching the
+−29.7% measured at 6k. The objective does not grow out of it, which is
+what the code audit predicted (the smoothing incentive is structural).
+Probe k-fold 0.519 [0.375, 0.636], split 0.585, `adcbe700` ✓ — a single
+arm, quoted with the caveat that it sits within reach of the U=1 seed
+band (sd 0.066) and that E-010 observed U=4 compressing probe variance
+(F = 9.5, never established). The probe-level 3-vs-3 U comparison was
+forfeited with #174/#175; the rollout answer comes from E-013 (#176).
+
+**Result.** *pending — E-013 closes the entry.*
 
 ---
 
