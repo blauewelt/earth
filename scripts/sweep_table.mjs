@@ -167,14 +167,33 @@ const fps = sameSeed
   ? [...new Set(have.map((r) => String(r.fingerprint)).filter((x) => x !== "null"))]
   : [];
 const codecs = [...new Set(have.map((r) => f(r.codec)).filter((x) => x.trim() !== "—"))];
+const noHash = have.filter((r) => !r.tensor).map((r) => "#" + r.run);
 if (tensors.length > 1) {
   console.log(`\nCONTROL FAILED: the arms used DIFFERENT TENSORS ` +
               `(${tensors.map((t) => t.slice(0, 12)).join(" vs ")}). Boxes build ` +
               `their own copy and they have diverged; measured cost is 0.041 on ` +
               `the head k-fold. The ordering below is confounded.`);
-} else if (tensors.length === 1) {
+} else if (tensors.length === 1 && !noHash.length) {
   console.log(`\ncontrol: every arm on tensor ${tensors[0].slice(0, 12)}… — one ` +
               `codec, one tensor, so the arms differ only in what was varied.`);
+} else if (tensors.length === 1 && noHash.length) {
+  // A HASH ON SOME ARMS IS NOT A CONTROL. The first version stopped at
+  // "tensors.length === 1" and printed a clean pass for #131 vs #140 — which
+  // are on demonstrably DIFFERENT tensors, because #131 predates provenance
+  // and contributed no hash at all. A false pass is worse than the false
+  // alarm it replaced: it certifies a confounded comparison.
+  const fpAll = [...new Set(have.map((r) => String(r.fingerprint)))];
+  if (sameSeed && fpAll.length > 1) {
+    console.log(`\nCONTROL FAILED: ${noHash.join(", ")} carry no tensor hash ` +
+                `(they predate provenance), and the persistence baselines ` +
+                `disagree across arms at a single seed (${fpAll.join(" vs ")}). ` +
+                `That means different tensors. The ordering below is confounded.`);
+  } else {
+    console.log(`\nCONTROL INCOMPLETE: ${noHash.join(", ")} carry no tensor hash, ` +
+                `and the seeds differ, so persistence cannot substitute — it ` +
+                `fingerprints (tensor, seed) jointly. The remaining arms are all ` +
+                `on ${tensors[0].slice(0, 12)}…, but these cannot be confirmed.`);
+  }
 } else if (fps.length > 1) {
   console.log(`\nCONTROL FAILED: the persistence baseline differs across arms ` +
               `(${fps.join(" vs ")}). It is data-only and cannot depend on the ` +
