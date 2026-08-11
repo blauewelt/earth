@@ -238,6 +238,16 @@ def main():
                  "sxy", "sxx", "syy", "sx", "sy")}
         probe_pts = {h: [] for h in range(1, H + 1)}   # (start, truefit pred, y)
         hold_raw = {h: [] for h in range(1, H + 1)}    # (start, raw fvec, y)
+        # DIRECT heads (E-014): scored PAIRED with the iterated path — same
+        # starts, same target months, same observed cells — so the direct-vs-
+        # iterated difference can never be a sampling difference. All direct
+        # predictions come from ONE forward over the true initial window (the
+        # h=1 forward, reused), which is exactly how a direct head is used.
+        DIR = tuple(h for h in getattr(model, "direct", ()) if 1 <= h <= H)
+        sums_dir = {k: np.zeros(H + 1) for k in
+                    ("mse_m", "n", "sxy", "sxx", "syy", "sx", "sy")}
+        dir_pts = {h: [] for h in DIR}                 # (start, truefit pred, y)
+        dir_hold_raw = {h: [] for h in DIR}            # (start, raw fvec, y)
 
         # damped persistence (AR1): the literature's fair cheap baseline — raw
         # persistence over-commits at long leads. Lag-1 autocorrelation per
@@ -272,6 +282,7 @@ def main():
                     if s - K + 1 < 0 or s + 1 >= T:
                         continue
                     seq = Zt[s - K + 1: s + 1].transpose(0, 1).clone()   # [P,K,dz]
+                    zdir_hat = {}
                     for h in range(1, H + 1):
                         t_tgt = s + h
                         if t_tgt >= T or months[t_tgt][:4] != Y:
@@ -279,7 +290,13 @@ def main():
                         mseq = torch.stack(
                             [Mt[s - K + h + j] for j in range(K)], 0
                         )[None].expand(P, -1, -1)
-                        pred, _ = model(seq, mseq, static_ctx)
+                        pred, hid_full = model(seq, mseq, static_ctx)
+                        if h == 1 and DIR:
+                            # the h=1 forward IS the true-context forward:
+                            # every direct horizon predicts from its hidden
+                            hid0 = hid_full[:, -1]
+                            zdir_hat = {hd: model.heads_direct[str(hd)](hid0)
+                                        for hd in DIR}
                         zhat = pred[:, -1]                               # [P,dz]
                         seq = torch.cat([seq[:, 1:], zhat[:, None]], 1)
                         # channel-space scoring at the target month
@@ -288,6 +305,29 @@ def main():
                         o = OBS[t_tgt, kys, kxs]
                         v_pers = Xt[s, kys, kxs]
                         op = o & OBS[s, kys, kxs]
+                        if h in zdir_hat and op.sum() > 0:
+                            zdh = zdir_hat[h]
+                            xdh = codec.query(zdh, qc, off0)
+                            sums_dir["mse_m"][h] += float(
+                                ((xdh - v_true).pow(2) * op).sum())
+                            sums_dir["n"][h] += float(op.sum())
+                            xm_ = xdh * op; ym_ = v_true * op
+                            sums_dir["sxy"][h] += float((xm_ * ym_).sum())
+                            sums_dir["sxx"][h] += float((xm_ * xm_).sum())
+                            sums_dir["syy"][h] += float((ym_ * ym_).sum())
+                            sums_dir["sx"][h] += float(xm_.sum())
+                            sums_dir["sy"][h] += float(ym_.sum())
+                        if h in zdir_hat:
+                            ymk_ = (int(months[t_tgt][:4]) * 100
+                                    + int(months[t_tgt][5:7]))
+                            if ymk_ in ym_to_r:
+                                fr_ = zdir_hat[h][sec_pos].mean(0).numpy()
+                                pd_ = float(np.dot(
+                                    np.r_[(fr_ - mu_p) / sd_p, 1.0], w_probe))
+                                dir_pts[h].append((s, pd_,
+                                                   rv_des[ym_to_r[ymk_]]))
+                                dir_hold_raw[h].append((s, fr_,
+                                                        rv_des[ym_to_r[ymk_]]))
                         if op.sum() > 0:
                             v_damp = v_pers * r1_t.pow(h)
                             sums["mse_m"][h] += float(((xhat - v_true).pow(2) * op).sum())
@@ -321,6 +361,7 @@ def main():
         # observed initial condition); targets are train months by
         # construction because whole holdout YEARS are skipped.
         train_raw = {h: [] for h in range(1, H + 1)}   # (t_tgt, fvec, y)
+        dir_train_raw = {h: [] for h in DIR}           # (t_tgt, fvec, y)
         sec_t = torch.as_tensor(np.asarray(sec_pos))
         stat_sec = static_ctx[sec_t]
         with torch.no_grad():
@@ -351,7 +392,25 @@ def main():
                         mseq = torch.stack(
                             [Mt[s - K + h + j] for j in range(K)], 0
                         )[None].expand(len(sec_pos), -1, -1)
-                        pred, _ = model(seq, mseq, stat_sec)
+                        pred, hid_tr = model(seq, mseq, stat_sec)
+                        if h == 1 and DIR:
+                            # direct-fit points: the direct heads' own
+                            # predictions on train-year starts, so the
+                            # directfit probe is fit on the distribution it
+                            # will read (mirrors rolledfit for the iterated
+                            # path)
+                            dh0 = hid_tr[:, -1]
+                            for hd in DIR:
+                                t_d = s + hd
+                                if t_d >= T or months[t_d][:4] != Y:
+                                    continue
+                                ymd = (int(months[t_d][:4]) * 100
+                                       + int(months[t_d][5:7]))
+                                if ymd in ym_to_r:
+                                    zd_ = model.heads_direct[str(hd)](dh0)
+                                    dir_train_raw[hd].append(
+                                        (t_d, zd_.mean(0).numpy(),
+                                         rv_des[ym_to_r[ymd]]))
                         zhat = pred[:, -1]
                         seq = torch.cat([seq[:, 1:], zhat[:, None]], 1)
                         ym = (int(months[t_tgt][:4]) * 100
@@ -433,6 +492,65 @@ def main():
                 ens["rolledfit"][name] = preds
                 print(f"  AMOC {name} rolledfit: r {r:+.3f} "
                       f"(n={len(hp)}, fit on {len(fit_pts)} train points)")
+
+        # ---- DIRECT heads: paired with the iterated path -------------------
+        if DIR:
+            out["direct"] = {"chan_skill": [], "amoc": {}}
+            for h in DIR:
+                nd = sums_dir["n"][h]
+                if nd == 0 or sums["n"][h] == 0:
+                    continue
+                # baselines over the SAME cells (both paths accumulate in the
+                # same loop iterations, so the cell sets are identical)
+                mm = sums_dir["mse_m"][h] / nd
+                mp = sums["mse_p"][h] / sums["n"][h]
+                md = sums["mse_d"][h] / sums["n"][h]
+                mc = sums["mse_c"][h] / sums["n"][h]
+                mi = sums["mse_m"][h] / sums["n"][h]      # iterated model
+                vx = sums_dir["sxx"][h] / nd - (sums_dir["sx"][h] / nd) ** 2
+                vy = sums_dir["syy"][h] / nd - (sums_dir["sy"][h] / nd) ** 2
+                cov = (sums_dir["sxy"][h] / nd
+                       - sums_dir["sx"][h] * sums_dir["sy"][h] / nd ** 2)
+                acc = cov / (np.sqrt(vx * vy) + 1e-12)
+                row = {"h": h, "n": int(nd),
+                       "msss_clim": round(1 - mm / mc, 3),
+                       "msss_pers": round(1 - mm / mp, 3),
+                       "msss_damped": round(1 - mm / md, 3),
+                       "acc": round(float(acc), 3),
+                       "amp_ratio": round(float(np.sqrt(vx / (vy + 1e-12))), 3),
+                       # the paired verdict: positive = direct beats iterated
+                       # on the identical cells
+                       "delta_msss_clim_vs_iterated":
+                           round((1 - mm / mc) - (1 - mi / mc), 3)}
+                out["direct"]["chan_skill"].append(row)
+                print(f"  DIRECT h={h}: MSSS_clim {row['msss_clim']:+.3f} "
+                      f"(iterated {1 - mi / mc:+.3f}, "
+                      f"delta {row['delta_msss_clim_vs_iterated']:+.3f}), "
+                      f"ACC {row['acc']:+.3f}, amp {row['amp_ratio']:.2f}")
+                pts = dir_pts.get(h, [])
+                if len(pts) >= 8:
+                    pr = np.array([p[1] for p in pts])
+                    tv = np.array([p[2] for p in pts])
+                    r = float(np.corrcoef(pr, tv)[0, 1])
+                    out["direct"]["amoc"][f"h{h}_truefit"] = {
+                        "r": round(r, 3), "n": len(pts)}
+                    print(f"  DIRECT h={h} AMOC truefit:   r {r:+.3f} "
+                          f"(n={len(pts)})")
+                fit_pts = sorted(dir_train_raw.get(h, []), key=lambda p: p[0])
+                hp = dir_hold_raw.get(h, [])
+                if len(fit_pts) >= 24 and len(hp) >= 8:
+                    Ff = np.stack([f for _, f, _ in fit_pts])
+                    yf = np.array([y for _, _, y in fit_pts])
+                    mu_d, sd_d, w_d = fit_ridge(Ff, yf)
+                    pr = np.array([float(np.dot(
+                        np.r_[(f_ - mu_d) / sd_d, 1.0], w_d))
+                        for _, f_, _ in hp])
+                    tv = np.array([y for _, _, y in hp])
+                    r = float(np.corrcoef(pr, tv)[0, 1])
+                    out["direct"]["amoc"][f"h{h}_directfit"] = {
+                        "r": round(r, 3), "n": len(hp), "n_fit": len(fit_pts)}
+                    print(f"  DIRECT h={h} AMOC directfit: r {r:+.3f} "
+                          f"(n={len(hp)}, fit on {len(fit_pts)})")
 
         return out, ens
 

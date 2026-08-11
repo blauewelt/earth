@@ -62,15 +62,21 @@ def main():
         # DELIBERATELY one head per convention: temporal.py builds its
         # position table at k_max=K, train_joint.py at max(K, 36), and
         # rollout.py guessed wrong in both directions on consecutive runs.
-        # It must load BOTH, by reading the table's own shape.
-        for (unroll, seed), kmax in (((1, 0), K), ((4, 1), max(K, 36))):
+        # It must load BOTH, by reading the table's own shape. The third
+        # head carries a DIRECT horizon (E-014) — rollout must label it
+        # u1_d2_s2, load its extra weights, and score direct-vs-iterated.
+        for (unroll, seed, direct), kmax in (((1, 0, ""), K),
+                                             ((4, 1, ""), max(K, 36)),
+                                             ((1, 2, "2"), K)):
             torch.manual_seed(seed)
+            dir_t = tuple(int(x) for x in direct.split(",") if x)
             hm = TemporalTransformer(d_z=DZ, d_model=8, n_heads=4,
-                                     n_layers=1, k_max=kmax)
+                                     n_layers=1, k_max=kmax, direct=dir_t)
             hp = os.path.join(tmp, f"head_u{unroll}_s{seed}.pt")
             torch.save({"model": hm.state_dict(),
                         "args": {"K": K, "d_model": 8, "layers": 1,
-                                 "unroll": unroll, "seed": seed}}, hp)
+                                 "unroll": unroll, "seed": seed,
+                                 "direct": direct}}, hp)
             heads.append(hp)
 
         r = subprocess.run(
@@ -83,7 +89,8 @@ def main():
             raise SystemExit("rollout.py failed on the toy")
 
         out = json.load(open(os.path.join(run_dir, "rollout_eval.json")))
-        assert set(out["heads"]) == {"u1_s0", "u4_s1"}, out["heads"].keys()
+        assert set(out["heads"]) == {"u1_s0", "u4_s1", "u1_d2_s2"}, \
+            out["heads"].keys()
         for label, res in out["heads"].items():
             assert res["chan_skill"], f"{label}: no horizons scored"
             for row in res["chan_skill"]:
@@ -116,8 +123,20 @@ def main():
         for mode in ("truefit", "rolledfit"):
             assert "h1-3" in ens["all"].get(mode, {}), \
                 f"ensemble missing {mode} h1-3: {ens['all']}"
-            assert ens["all"][mode]["h1-3"]["members"] == 2
-        print("rolledfit bands + 2-head ensemble present and finite.")
+            assert ens["all"][mode]["h1-3"]["members"] == 3
+        print("rolledfit bands + 3-head ensemble present and finite.")
+
+        # the direct head must be scored PAIRED with its own iterated path:
+        # an h=2 chan_skill row with finite numbers and the paired delta
+        dres = out["heads"]["u1_d2_s2"].get("direct", {})
+        rows = {r["h"]: r for r in dres.get("chan_skill", [])}
+        assert 2 in rows, f"no direct h=2 row: {dres}"
+        for k in ("msss_clim", "msss_pers", "msss_damped", "acc",
+                  "amp_ratio", "delta_msss_clim_vs_iterated"):
+            assert np.isfinite(rows[2][k]), f"direct h=2 {k}={rows[2][k]}"
+        # heads without direct horizons must not grow the key
+        assert "direct" not in out["heads"]["u1_s0"]
+        print("direct head scored paired with iterated; plain heads clean.")
 
         # ---- AND with a patch=3 codec --------------------------------------
         # #149 died four minutes in because the static-identity pass fed the
