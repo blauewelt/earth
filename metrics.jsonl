@@ -1,0 +1,8 @@
+{"config": {"steps": 60000, "batch": 512, "d_z": 64, "patch": 3, "d_model": 576, "n_layers": 10, "n_heads": 8, "d_dec": 768, "anomaly": true, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 40.693, "data": "family3_na025.npz", "C": 39, "T": 516, "resume": "run-62,run-63"}}
+{"resumed": {"from": "run-62.pt", "parent_tag": "run-80", "at_step": 60000}}
+{"embedding": {"pct": 0.2, "month": 1, "months": 516, "elapsed_s": 0, "eta_s": 0, "where": "ram"}}
+{"embedding": {"pct": 5.2, "month": 27, "months": 516, "elapsed_s": 271, "eta_s": 4910, "where": "ram"}}
+{"embedding": {"pct": 10.3, "month": 53, "months": 516, "elapsed_s": 541, "eta_s": 4730, "where": "ram"}}
+{"embedding": {"pct": 15.3, "month": 79, "months": 516, "elapsed_s": 812, "eta_s": 4491, "where": "ram"}}
+{"embedding": {"pct": 20.3, "month": 105, "months": 516, "elapsed_s": 1082, "eta_s": 4236, "where": "ram"}}
+{"embedding": {"pct": 25.4, "month": 131, "months": 516, "elapsed_s": 1353, "eta_s": 3975, "where": "ram"}}
