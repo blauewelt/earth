@@ -193,6 +193,11 @@ narrower and new: does unroll's variance compression happen to help the
 TRANSPORT probe at depth? Answerable by two more U=4 seeds (~70 min GPU)
 if the direct heads (E-014) don't render the question moot first.
 
+**E-013b — the two U=4 seeds, dispatched 18:40Z as #196/#197** (seeds
+1/2, same recipe as #173, pinned to the new third box
+`gpu-box-46045353`; plans published). When they land: rolleval all three
+U=4 heads beside the U=1 trio for the 3-vs-3 deep-band answer.
+
 ---
 
 <a id="e-012"></a>
