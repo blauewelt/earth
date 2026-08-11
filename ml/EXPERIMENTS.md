@@ -252,6 +252,38 @@ lands with #131–#134 and is what these numbers should be re-read against.
 
 ---
 
+### #121 is NOT a third schedule arm — it is on a different tensor
+
+Landed 02:24 on 2026-08-11: cosine, 200,000 steps, CPU, on
+`gpu-box-35586926`. It was dispatched as the cosine comparison against #125's
+expdecay, and it cannot serve as one.
+
+Its persistence baseline reads **3.139432907104492** where #125, #126, #131
+and #132 all read **3.34340500831604** — 6.1% apart in a quantity that is
+data-only (`x_t` against `x_{t+1}` on held-out months) and therefore cannot
+depend on the model. Its codec k-fold reads 0.627 against their 0.631.
+
+Both numbers reproduce the confound recorded in E-007: **the baseline tracks
+the BOX, not the run.** #121 ran on `gpu-box-35586926`, the others on
+`gpu-box-45318655`, and the two boxes build and cache their own
+`family3_na025.npz`, which have diverged. So #121's 36-month RAPID of 0.498
+against #125/#126's 0.317/0.318 is a cross-tensor difference with a schedule
+change inside it, and nothing can be attributed to the schedule.
+
+What is unaffected: **#125 vs #126** share a box and agree to sixteen digits,
+so the decay-to-zero result below stands.
+
+This was caught by `scripts/sweep_table.mjs`'s control check on its first real
+use — which is the argument for building the control before you need it. The
+sha256 that exists to answer this question directly (E-007's provenance fix)
+was shipping only in the checkpoint artifact, which the probe bundle never
+reads; it now rides with the probe results.
+
+**Consequence for E-009:** the remaining arms must run on the SAME box as
+#131 and #132, or the sweep is cross-tensor as well as cross-unroll.
+
+---
+
 ### E-008e · Does decaying the LR to ZERO actually help? — YES, BY 0.16%
 
 Chris, 2026-08-10: *"I'm not sure I agree with the literature that decaying to
