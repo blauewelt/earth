@@ -34,6 +34,45 @@ low-pass).
 
 ---
 
+<a id="e-012"></a>
+## E-012 · The unroll sweep at 60,000 steps — DISPATCHED 2026-08-11, queued behind E-011
+
+**Why, from Chris.** E-010's arms ran 6,000 steps — where E-007 puts the
+z-ratio at 0.494 against 0.391 at 60k, i.e. visibly undertrained — and four
+of its six arms sat below the wind bar. *"Rerunning the U sweep with more
+steps (60k) would make sense."* So: the same design at near-convergence.
+U ∈ {1, 4} × seeds {0, 1, 2}, 60,000 steps, cosine to 1e-3, one box, one
+tensor, scored on `rapid_probe_kfold`. Six runs, ~5 h of GPU.
+
+**Pre-registered questions, in order of value.**
+
+1. **Is the probe's seed noise training-dependent?** E-010 measured sd 0.123
+   at 6k. If it stays ~0.12 at 60k, the instability is probe-intrinsic
+   (240 months, ~9 effective DOF) and no amount of training buys resolution —
+   which caps what ANY stage-2 sweep can ever show on this target. If it
+   shrinks substantially, converged heads are comparable in a way 6k heads
+   are not, and E-010's null gets a caveat.
+2. **Does U matter at convergence?** E-010: +0.023 (t = 0.31) at 6k. Same
+   test at 60k, three seeds a side.
+3. **Does the one-step cost of unroll persist?** −29.7% at 6k; at 60k the
+   U=1 z-ratio should land near E-007's 0.391, and the U=4 gap is measured
+   against that.
+
+**Falsifier for the unroll axis, final form:** U=4 within seed spread of U=1
+on the probe AND still paying a large one-step cost at convergence — after
+which E-013 (rollout eval of these heads, the E-011 protocol) either finds
+the multi-step payoff or the axis is closed at every horizon *and* every
+budget, and `--unroll` becomes a documented dead end rather than a default.
+
+**Sequencing.** Queued behind #149 (E-011) and the `publishtensor` run that
+makes tensor `adcbe700` durable before anything else can happen to the one
+disk holding it. All on `gpu-box-35586926`; the fleet's other two runners are
+deregistered, so FIFO onto one box is guaranteed by construction.
+
+**Result.** *pending.*
+
+---
+
 <a id="e-011"></a>
 ## E-011 · Unroll DURING evaluation: rollout skill and AMOC at horizon — DISPATCHED 2026-08-11
 
