@@ -100,6 +100,7 @@ for (const a of ARMS) {
   // head) and #125 (200k head) both read 0.631 [0.513, 0.732], which is how
   // this was noticed.
   const tj = bundle.files?.["temporal.json"];
+  const prov = bundle.files?.["provenance.json"];
   const hk = tj?.rapid_probe_kfold;
   const z = tj?.["z_t+1"];
   rows.push({
@@ -110,13 +111,25 @@ for (const a of ARMS) {
     zratio: z && z.mse_persistence ? z.mse_model / z.mse_persistence : null,
     steps: tj?.steps ?? null,
     codec: t.r_kfold_deseas,                 // the control column
-    // THE STRONGER CONTROL, and the one that survives. The persistence
-    // baseline is data-only — x_t against x_{t+1} on held-out months — so it
-    // cannot depend on the model and MUST be bit-identical across runs that
-    // share a codec and a tensor. Sixteen digits beats the k-fold's three,
-    // and it rides in temporal.json, which is archived, where
-    // probe_kfold.json for these arms is not: the embed-cache push exited 1
-    // under `bash -e` and took the ladder with it (#131).
+    // THE CONTROL IS THE TENSOR HASH, not the persistence baseline.
+    //
+    // The first version used z_mse_persistence, on the reasoning that it is
+    // data-only and so must be bit-identical across runs sharing a codec and
+    // a tensor. That is half right and it produced a FALSE ALARM on the first
+    // clean experiment it saw: #140 (seed 0) and #141 (seed 1) are the same
+    // box, the same tensor `adcbe700…` and the same codec, and their
+    // baselines differ in the fourth digit — because the evaluation SAMPLE is
+    // drawn with the run's seed. Data-only does not mean sample-independent.
+    //
+    // Measured: #121 and #140 — same box, same seed — agree to all sixteen
+    // digits; #141 differs only in seed and moves. So persistence fingerprints
+    // (tensor, seed) jointly, which is useless for a seed sweep.
+    //
+    // provenance.json now ships the tensor's sha256, which is exactly this
+    // control and nothing else. Persistence stays as a fallback for runs
+    // predating it, compared only WITHIN a seed.
+    tensor: prov?.tensor?.sha256 ?? null,
+    seed: tj?.seed ?? null,
     fingerprint: z?.mse_persistence ?? null,
     bar: t.wind_only_baseline?.r,
     dip: bundle.files?.["dip_check.json"]?.capture_pct ?? null,
@@ -146,9 +159,23 @@ if (!have.length) {
 // THE CONTROL, CHECKED RATHER THAN ASSUMED. Every arm freezing the same codec
 // must report the same codec k-fold; if they do not, the arms differ in
 // something other than the variable and nothing below is a comparison.
-const fps = [...new Set(have.map((r) => String(r.fingerprint)).filter((x) => x !== "null"))];
+// Prefer the hash; fall back to persistence only among arms sharing a seed.
+const tensors = [...new Set(have.map((r) => r.tensor).filter(Boolean))];
+const seeds = [...new Set(have.map((r) => r.seed).filter((x) => x !== null))];
+const sameSeed = seeds.length <= 1;
+const fps = sameSeed
+  ? [...new Set(have.map((r) => String(r.fingerprint)).filter((x) => x !== "null"))]
+  : [];
 const codecs = [...new Set(have.map((r) => f(r.codec)).filter((x) => x.trim() !== "—"))];
-if (fps.length > 1) {
+if (tensors.length > 1) {
+  console.log(`\nCONTROL FAILED: the arms used DIFFERENT TENSORS ` +
+              `(${tensors.map((t) => t.slice(0, 12)).join(" vs ")}). Boxes build ` +
+              `their own copy and they have diverged; measured cost is 0.041 on ` +
+              `the head k-fold. The ordering below is confounded.`);
+} else if (tensors.length === 1) {
+  console.log(`\ncontrol: every arm on tensor ${tensors[0].slice(0, 12)}… — one ` +
+              `codec, one tensor, so the arms differ only in what was varied.`);
+} else if (fps.length > 1) {
   console.log(`\nCONTROL FAILED: the persistence baseline differs across arms ` +
               `(${fps.join(" vs ")}). It is data-only and cannot depend on the ` +
               `model, so these runs did not share a codec or a tensor and the ` +
