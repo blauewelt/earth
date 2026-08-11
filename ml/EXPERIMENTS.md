@@ -142,7 +142,55 @@ to load any K=24 head since it was written (`k_max=K` vs training's
 nothing — there is no LR schedule to draw, so no plan file is published. The
 rule certifies training schedules; an eval run has none.
 
-**Result.** *pending.*
+### RESULT (#170, 2026-08-11 11:55) — **falsified at every horizon. Unroll training makes rollout WORSE, including the thing it exists for.**
+
+Two dead dispatches first, recorded per the cost rule: #149 (the static pass
+fed a patch=1 shape to a patch=3 codec) and #157 (k_max guessed from the
+wrong convention — there are two, and the fix is to read the checkpoint's own
+table). ~20 min of GPU across both; the run that worked cost ~10.
+
+**MSSS vs damped persistence** (the fair baseline; positive = beats it):
+
+| head | h1 | h2 | h3 | h4 | h6 | h9 | h12 | AUC |
+|---|---|---|---|---|---|---|---|---|
+| U=1 (3 seeds) | .171–.173 | .190–.194 | .200–.210 | .202–.212 | .205–.218 | .173–.185 | .094–.117 | .229–.240 |
+| U=4 (3 seeds) | .031–.038 | .083–.092 | .115–.122 | .135–.138 | .152–.156 | .121–.123 | .018–.020 | .165–.168 |
+
+**U=1 beats U=4 at every horizon, in every seed, on MSSS and on ACC** (h1:
+0.652 vs 0.577; h12: ~0.40 vs ~0.32). The gap narrows mid-horizon and never
+closes, never inverts. There is no crossover for exposure-bias training to
+claim. The hypothesis said U=4 should win somewhere past h≈2–6; it loses
+everywhere, including at the deep horizons that are its entire purpose.
+
+**AMOC from rolled states**, noisier as pre-registered, agrees in direction:
+U=1 seed-means beat U=4 in all three bands (h1–3: 0.31 vs 0.20; h4–6: 0.11
+vs 0.09; h7–12: 0.21 vs 0.02).
+
+**The unroll axis is now closed in full.** E-010: no probe effect at 6k
+(t = 0.31) and −29.7% at horizon 1. E-011: worse at horizons 1 through 12,
+worse on AMOC-at-horizon. The mechanism the flag was built on — train on
+your own error distribution and compound more gracefully — does not
+materialise: the U=4 model's degraded one-step predictor is what compounds,
+and it never catches the U=1 model whose "unanticipated" errors turn out to
+compound just fine. `--unroll` stays default 1 as a documented dead end. The
+one hypothesis left standing is the weak variance observation (U=4 probe sd
+0.040 vs 0.123, F = 9.5, not established), and it is not worth a run.
+
+**Two findings beyond the hypothesis, both worth keeping:**
+
+1. **The rollout metrics are essentially seed-free.** Across three seeds,
+   MSSS and ACC agree to ±0.003 at every horizon — while the SAME heads'
+   RAPID k-fold spans 0.245. The instability of the transport probe is not
+   in the models and not in the field-prediction skill; it is in the
+   projection onto 240 months of RAPID. Field-space evaluation supports
+   3-vs-3 comparisons the probe never could.
+2. **The model sees months ahead.** Every head beats DAMPED persistence out
+   to h=12, and U=1's ACC is still ≈0.40 at a full year. That is the
+   programme's first multi-horizon skill statement against the fair
+   baseline, and it belongs in the paper regardless of what U it came from.
+
+E-013 (this protocol over the 60k E-012 heads) answers whether convergence
+changes any of it.
 
 ---
 
