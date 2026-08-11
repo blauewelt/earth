@@ -38,7 +38,8 @@ BRANCH = "ml-metrics"
 # and the forecast MSEs against persistence. probe_kfold.json scores the
 # CODEC and is identical for every run freezing the same codec, so for a
 # stage-2 sweep it is the control rather than the result. Both belong here.
-WANT = ["probe_kfold.json", "temporal.json", "probe_sequence.json",
+WANT = ["probe_kfold.json", "temporal.json", "rollout_eval.json",
+        "probe_sequence.json",
         "dip_check.json", "probe_head.json", "probe_head_raw3x3.json",
         "probe_head_raw.json", "rollout.json", "provenance.json"]
 

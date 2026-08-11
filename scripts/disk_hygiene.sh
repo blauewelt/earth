@@ -77,7 +77,11 @@ echo "  tier 1 — artefacts confirmed present in a release"
 for f in "$CACHE"/Z_*.npy; do
   [ -e "$f" ] || continue
   b=$(basename "$f")
-  hash=$(printf '%s' "$b" | sed -n 's/.*_\([0-9a-f]\{10\}\)\.npy$/\1/p')
+  # The tail after Z_<run>_ is the asset identity: <codec-hash> alone
+  # (legacy) or <codec-hash>_<tensor-hash> (since 2026-08-11). Capturing only
+  # the LAST 10-hex group made a two-hash cache query the release for
+  # Z_<tensor-hash>.npy.aa — never published, so the file was never freed.
+  hash=$(printf '%s' "$b" | sed -n 's/^Z_[^_]*_\([0-9a-f_]\{10,21\}\)\.npy$/\1/p')
   sz=$(du -h "$f" | cut -f1)
   if [ -z "$hash" ]; then
     echo "    KEEP $b ($sz) — cannot parse a codec hash, so cannot confirm a backup"

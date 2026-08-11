@@ -49,6 +49,14 @@ def main():
     ap.add_argument("--run", required=True)
     ap.add_argument("--horizon", type=int, default=12)
     ap.add_argument("--pixels", type=int, default=600)
+    ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"),
+                    help="tensor npz — was hardcoded to the 1-degree pilot, "
+                         "which silently mismatches a quarter-degree codec")
+    ap.add_argument("--temporal", nargs="+", default=None,
+                    help="one or more temporal-head checkpoints. Several heads "
+                         "share ONE embedding pass, which is what makes a "
+                         "six-head E-010 eval a single job. Default: the "
+                         "run's own runs/<run>/temporal.pt")
     ap.add_argument("--crop-window", choices=["na"], default=None,
                     help="crop the tensor to the pilot window first — for "
                          "evaluating an NA-trained model on a global tensor "
@@ -56,7 +64,8 @@ def main():
                          "invariant to the build-time z-score, so the crop "
                          "reproduces the pilot tensor exactly)")
     a = ap.parse_args()
-    d = dict(np.load(os.path.join(HERE, "cache", "na_pixels.npz")))
+    d = dict(np.load(a.data))
+    print(f"tensor: {a.data}")
     if a.crop_window == "na":
         la, lo_ = d["lats"], d["lons"]
         ysel = (la >= 0.0) & (la <= 70.0)
@@ -71,9 +80,23 @@ def main():
 
     ck = torch.load(os.path.join(HERE, "runs", a.run, "pixelmae.pt"),
                     map_location="cpu", weights_only=False)
-    tk = torch.load(os.path.join(HERE, "runs", a.run, "temporal.pt"),
-                    map_location="cpu", weights_only=False)
-    K = tk["args"]["K"]
+    head_paths = a.temporal or [os.path.join(HERE, "runs", a.run, "temporal.pt")]
+    head_specs = []
+    for hp in head_paths:
+        tk = torch.load(hp, map_location="cpu", weights_only=False)
+        ta = tk.get("args", {})
+        label = f"u{ta.get('unroll', 1)}_s{ta.get('seed', 0)}"
+        if any(l == label for l, _ in head_specs):
+            label += "_" + os.path.basename(hp).replace(".pt", "")
+        head_specs.append((label, tk))
+        print(f"head {label}: {hp} (d_model={ta.get('d_model')}, "
+              f"layers={ta.get('layers')}, K={ta.get('K')}, "
+              f"unroll={ta.get('unroll', 1)}, seed={ta.get('seed', 0)})")
+    K = head_specs[0][1]["args"]["K"]
+    for l, tk_ in head_specs:
+        if tk_["args"]["K"] != K:
+            sys.exit(f"head {l} has K={tk_['args']['K']} != {K} — "
+                     f"windows are not comparable")
     X = d["X"].copy()
     if X.shape[-1] != len(ck["chan"]):
         sys.exit(f"tensor C={X.shape[-1]} != checkpoint C={len(ck['chan'])}")
@@ -91,10 +114,6 @@ def main():
     # at once rather than fixing the one that happened to be slow.
     _dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     codec.to(_dev)
-    model = TemporalTransformer(d_z=ck["d_z"], d_model=tk["args"]["d_model"],
-                                n_heads=4, n_layers=tk["args"]["layers"], k_max=K)
-    model.load_state_dict(tk["model"])
-    model.eval()
 
     ocean = np.isfinite(d["X"][..., 0]).any(axis=0)
     ys, xs = np.where(ocean)
@@ -159,135 +178,160 @@ def main():
     ym_to_r = {int(months[mi][:4]) * 100 + int(months[mi][5:7]): i
                for i, mi in enumerate(ridx)}
 
-    # ---- the rollouts ------------------------------------------------------
-    month_index = {m: i for i, m in enumerate(months)}
-    qc = torch.arange(X.shape[-1])[None, :].expand(P, -1)
-    off0 = torch.zeros(P, X.shape[-1], 3, dtype=torch.long)
-    H = a.horizon
-    sums = {k: np.zeros(H + 1) for k in
-            ("mse_m", "mse_p", "mse_c", "mse_d", "n",
-             "sxy", "sxx", "syy", "sx", "sy")}
-    probe_pts = {h: [] for h in range(1, H + 1)}
+    def eval_one(model, label):
+        # ---- the rollouts ------------------------------------------------------
+        month_index = {m: i for i, m in enumerate(months)}
+        qc = torch.arange(X.shape[-1])[None, :].expand(P, -1)
+        off0 = torch.zeros(P, X.shape[-1], 3, dtype=torch.long)
+        H = a.horizon
+        sums = {k: np.zeros(H + 1) for k in
+                ("mse_m", "mse_p", "mse_c", "mse_d", "n",
+                 "sxy", "sxx", "syy", "sx", "sy")}
+        probe_pts = {h: [] for h in range(1, H + 1)}
 
-    # damped persistence (AR1): the literature's fair cheap baseline — raw
-    # persistence over-commits at long leads. Lag-1 autocorrelation per
-    # (pixel, channel) from TRAIN months only; forecast = r1^h * anomaly(s).
-    with torch.no_grad():
-        Xk = Xa[:, kys, kxs]                                   # [T, P, C]
-        okk = np.isfinite(Xk)
-        r1 = np.zeros((P, Xk.shape[-1]), dtype=np.float32)
-        tr_m = ~t_hold
-        for c in range(Xk.shape[-1]):
-            x0 = Xk[:-1, :, c]; x1 = Xk[1:, :, c]
-            m01 = okk[:-1, :, c] & okk[1:, :, c] & tr_m[:-1, None]
-            n01 = m01.sum(0).astype(float)
-            with np.errstate(invalid="ignore", divide="ignore"):
-                mx = np.where(n01 > 0, np.nansum(np.where(m01, x0, 0), 0) / n01, 0)
-                my = np.where(n01 > 0, np.nansum(np.where(m01, x1, 0), 0) / n01, 0)
-                cov = np.nansum(np.where(m01, (x0 - mx) * (x1 - my), 0), 0)
-                v0 = np.nansum(np.where(m01, (x0 - mx) ** 2, 0), 0)
-                v1 = np.nansum(np.where(m01, (x1 - my) ** 2, 0), 0)
-                rr = cov / (np.sqrt(v0 * v1) + 1e-9)
-            r1[:, c] = np.where(n01 >= 24, np.clip(rr, 0, 0.999), 0)
-        r1_t = torch.from_numpy(r1)
+        # damped persistence (AR1): the literature's fair cheap baseline — raw
+        # persistence over-commits at long leads. Lag-1 autocorrelation per
+        # (pixel, channel) from TRAIN months only; forecast = r1^h * anomaly(s).
+        with torch.no_grad():
+            Xk = Xa[:, kys, kxs]                                   # [T, P, C]
+            okk = np.isfinite(Xk)
+            r1 = np.zeros((P, Xk.shape[-1]), dtype=np.float32)
+            tr_m = ~t_hold
+            for c in range(Xk.shape[-1]):
+                x0 = Xk[:-1, :, c]; x1 = Xk[1:, :, c]
+                m01 = okk[:-1, :, c] & okk[1:, :, c] & tr_m[:-1, None]
+                n01 = m01.sum(0).astype(float)
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    mx = np.where(n01 > 0, np.nansum(np.where(m01, x0, 0), 0) / n01, 0)
+                    my = np.where(n01 > 0, np.nansum(np.where(m01, x1, 0), 0) / n01, 0)
+                    cov = np.nansum(np.where(m01, (x0 - mx) * (x1 - my), 0), 0)
+                    v0 = np.nansum(np.where(m01, (x0 - mx) ** 2, 0), 0)
+                    v1 = np.nansum(np.where(m01, (x1 - my) ** 2, 0), 0)
+                    rr = cov / (np.sqrt(v0 * v1) + 1e-9)
+                r1[:, c] = np.where(n01 >= 24, np.clip(rr, 0, 0.999), 0)
+            r1_t = torch.from_numpy(r1)
 
-    with torch.no_grad():
-        for Y in hold_years:
-            for s_off in range(12):
-                start_m = (f"{int(Y) - 1}-12" if s_off == 0
-                           else f"{Y}-{s_off:02d}")
-                if start_m not in month_index:
-                    continue
-                s = month_index[start_m]
-                if s - K + 1 < 0 or s + 1 >= T:
-                    continue
-                seq = Zt[s - K + 1: s + 1].transpose(0, 1).clone()   # [P,K,dz]
-                for h in range(1, H + 1):
-                    t_tgt = s + h
-                    if t_tgt >= T or months[t_tgt][:4] != Y:
-                        break
-                    mseq = torch.stack(
-                        [Mt[s - K + h + j] for j in range(K)], 0
-                    )[None].expand(P, -1, -1)
-                    pred, _ = model(seq, mseq, static_ctx)
-                    zhat = pred[:, -1]                               # [P,dz]
-                    seq = torch.cat([seq[:, 1:], zhat[:, None]], 1)
-                    # channel-space scoring at the target month
-                    xhat = codec.query(zhat, qc, off0)
-                    v_true = Xt[t_tgt, kys, kxs]
-                    o = OBS[t_tgt, kys, kxs]
-                    v_pers = Xt[s, kys, kxs]
-                    op = o & OBS[s, kys, kxs]
-                    if op.sum() > 0:
-                        v_damp = v_pers * r1_t.pow(h)
-                        sums["mse_m"][h] += float(((xhat - v_true).pow(2) * op).sum())
-                        sums["mse_p"][h] += float(((v_pers - v_true).pow(2) * op).sum())
-                        sums["mse_d"][h] += float(((v_damp - v_true).pow(2) * op).sum())
-                        sums["mse_c"][h] += float((v_true.pow(2) * op).sum())
-                        sums["n"][h] += float(op.sum())
-                        # ACC accumulators (centered Pearson per horizon)
-                        xm = xhat * op; ym = v_true * op
-                        sums["sxy"][h] += float((xm * ym).sum())
-                        sums["sxx"][h] += float((xm * xm).sum())
-                        sums["syy"][h] += float((ym * ym).sum())
-                        sums["sx"][h] += float(xm.sum())
-                        sums["sy"][h] += float(ym.sum())
-                    # AMOC probe on the rolled section embedding
-                    ym = int(months[t_tgt][:4]) * 100 + int(months[t_tgt][5:7])
-                    if ym in ym_to_r:
-                        f = (zhat[sec_pos].mean(0).numpy() - mu_p) / sd_p
-                        pr = float(np.dot(np.r_[f, 1.0], w_probe))
-                        probe_pts[h].append((pr, rv_des[ym_to_r[ym]]))
+        with torch.no_grad():
+            for Y in hold_years:
+                for s_off in range(12):
+                    start_m = (f"{int(Y) - 1}-12" if s_off == 0
+                               else f"{Y}-{s_off:02d}")
+                    if start_m not in month_index:
+                        continue
+                    s = month_index[start_m]
+                    if s - K + 1 < 0 or s + 1 >= T:
+                        continue
+                    seq = Zt[s - K + 1: s + 1].transpose(0, 1).clone()   # [P,K,dz]
+                    for h in range(1, H + 1):
+                        t_tgt = s + h
+                        if t_tgt >= T or months[t_tgt][:4] != Y:
+                            break
+                        mseq = torch.stack(
+                            [Mt[s - K + h + j] for j in range(K)], 0
+                        )[None].expand(P, -1, -1)
+                        pred, _ = model(seq, mseq, static_ctx)
+                        zhat = pred[:, -1]                               # [P,dz]
+                        seq = torch.cat([seq[:, 1:], zhat[:, None]], 1)
+                        # channel-space scoring at the target month
+                        xhat = codec.query(zhat, qc, off0)
+                        v_true = Xt[t_tgt, kys, kxs]
+                        o = OBS[t_tgt, kys, kxs]
+                        v_pers = Xt[s, kys, kxs]
+                        op = o & OBS[s, kys, kxs]
+                        if op.sum() > 0:
+                            v_damp = v_pers * r1_t.pow(h)
+                            sums["mse_m"][h] += float(((xhat - v_true).pow(2) * op).sum())
+                            sums["mse_p"][h] += float(((v_pers - v_true).pow(2) * op).sum())
+                            sums["mse_d"][h] += float(((v_damp - v_true).pow(2) * op).sum())
+                            sums["mse_c"][h] += float((v_true.pow(2) * op).sum())
+                            sums["n"][h] += float(op.sum())
+                            # ACC accumulators (centered Pearson per horizon)
+                            xm = xhat * op; ym = v_true * op
+                            sums["sxy"][h] += float((xm * ym).sum())
+                            sums["sxx"][h] += float((xm * xm).sum())
+                            sums["syy"][h] += float((ym * ym).sum())
+                            sums["sx"][h] += float(xm.sum())
+                            sums["sy"][h] += float(ym.sum())
+                        # AMOC probe on the rolled section embedding
+                        ym = int(months[t_tgt][:4]) * 100 + int(months[t_tgt][5:7])
+                        if ym in ym_to_r:
+                            f = (zhat[sec_pos].mean(0).numpy() - mu_p) / sd_p
+                            pr = float(np.dot(np.r_[f, 1.0], w_probe))
+                            probe_pts[h].append((pr, rv_des[ym_to_r[ym]]))
 
-    out = {"run": a.run, "K": K, "horizon": H,
-           "protocol": "staggered starts into holdout years, true-context init",
-           "metric_names": "MSSS per Goddard et al. 2013; ACC = centered "
-                           "anomaly correlation; amp = sigma_f/sigma_o",
-           "chan_skill": []}
-    print(f"{a.run}: autoregressive rollout, {len(hold_years)} holdout years")
-    print("  h   n_cells   MSSS_clim   MSSS_pers   MSSS_damped     ACC    amp")
-    for h in range(1, H + 1):
-        if sums["n"][h] == 0:
-            continue
-        n_ = sums["n"][h]
-        mm = sums["mse_m"][h] / n_
-        mp = sums["mse_p"][h] / n_
-        md = sums["mse_d"][h] / n_
-        mc = sums["mse_c"][h] / n_
-        s_c, s_p, s_d = 1 - mm / mc, 1 - mm / mp, 1 - mm / md
-        # centered ACC + amplitude ratio from the accumulators
-        vx = sums["sxx"][h] / n_ - (sums["sx"][h] / n_) ** 2
-        vy = sums["syy"][h] / n_ - (sums["sy"][h] / n_) ** 2
-        cov = sums["sxy"][h] / n_ - sums["sx"][h] * sums["sy"][h] / n_ ** 2
-        acc = cov / (np.sqrt(vx * vy) + 1e-12)
-        amp = float(np.sqrt(vx / (vy + 1e-12)))
-        out["chan_skill"].append({"h": h, "n": int(n_),
-                                  "msss_clim": round(s_c, 3),
-                                  "msss_pers": round(s_p, 3),
-                                  "msss_damped": round(s_d, 3),
-                                  "acc": round(float(acc), 3),
-                                  "amp_ratio": round(amp, 3)})
-        print(f"  {h:2d}  {int(n_):8d}   {s_c:+9.3f}   {s_p:+9.3f}   "
-              f"{s_d:+11.3f}   {acc:+.3f}  {amp:5.2f}")
-    # one scalar for model selection: mean skill-vs-climatology over the
-    # horizon sweep ("horizon AUC") — rewards models that stay useful deep
-    # into the rollout, not just at t+1.
-    if out["chan_skill"]:
-        out["horizon_auc"] = round(
-            float(np.mean([c["msss_clim"] for c in out["chan_skill"]])), 3)
-        print(f"  horizon AUC (mean vs-clim, h=1..{H}): {out['horizon_auc']:+.3f}")
-    out["amoc_bands"] = {}
-    for name, hs in (("h1-3", (1, 2, 3)), ("h4-6", (4, 5, 6)),
-                     ("h7-12", tuple(range(7, H + 1)))):
-        pts = [p for h in hs for p in probe_pts.get(h, [])]
-        if len(pts) >= 8:
-            pr, tv = np.array(pts).T
-            r = float(np.corrcoef(pr, tv)[0, 1])
-            out["amoc_bands"][name] = {"r": round(r, 3), "n": len(pts)}
-            print(f"  AMOC {name}: r {r:+.3f} (n={len(pts)})")
-    path = os.path.join(HERE, "runs", a.run, "rollout.json")
-    json.dump(out, open(path, "w"), indent=1)
+        out = {"head": label, "K": K, "horizon": H,
+               "protocol": "staggered starts into holdout years, true-context init",
+               "metric_names": "MSSS per Goddard et al. 2013; ACC = centered "
+                               "anomaly correlation; amp = sigma_f/sigma_o",
+               "chan_skill": []}
+        print(f"{label}: autoregressive rollout, {len(hold_years)} holdout years")
+        print("  h   n_cells   MSSS_clim   MSSS_pers   MSSS_damped     ACC    amp")
+        for h in range(1, H + 1):
+            if sums["n"][h] == 0:
+                continue
+            n_ = sums["n"][h]
+            mm = sums["mse_m"][h] / n_
+            mp = sums["mse_p"][h] / n_
+            md = sums["mse_d"][h] / n_
+            mc = sums["mse_c"][h] / n_
+            s_c, s_p, s_d = 1 - mm / mc, 1 - mm / mp, 1 - mm / md
+            # centered ACC + amplitude ratio from the accumulators
+            vx = sums["sxx"][h] / n_ - (sums["sx"][h] / n_) ** 2
+            vy = sums["syy"][h] / n_ - (sums["sy"][h] / n_) ** 2
+            cov = sums["sxy"][h] / n_ - sums["sx"][h] * sums["sy"][h] / n_ ** 2
+            acc = cov / (np.sqrt(vx * vy) + 1e-12)
+            amp = float(np.sqrt(vx / (vy + 1e-12)))
+            out["chan_skill"].append({"h": h, "n": int(n_),
+                                      "msss_clim": round(s_c, 3),
+                                      "msss_pers": round(s_p, 3),
+                                      "msss_damped": round(s_d, 3),
+                                      "acc": round(float(acc), 3),
+                                      "amp_ratio": round(amp, 3)})
+            print(f"  {h:2d}  {int(n_):8d}   {s_c:+9.3f}   {s_p:+9.3f}   "
+                  f"{s_d:+11.3f}   {acc:+.3f}  {amp:5.2f}")
+        # one scalar for model selection: mean skill-vs-climatology over the
+        # horizon sweep ("horizon AUC") — rewards models that stay useful deep
+        # into the rollout, not just at t+1.
+        if out["chan_skill"]:
+            out["horizon_auc"] = round(
+                float(np.mean([c["msss_clim"] for c in out["chan_skill"]])), 3)
+            print(f"  horizon AUC (mean vs-clim, h=1..{H}): {out['horizon_auc']:+.3f}")
+        out["amoc_bands"] = {}
+        for name, hs in (("h1-3", (1, 2, 3)), ("h4-6", (4, 5, 6)),
+                         ("h7-12", tuple(range(7, H + 1)))):
+            pts = [p for h in hs for p in probe_pts.get(h, [])]
+            if len(pts) >= 8:
+                pr, tv = np.array(pts).T
+                r = float(np.corrcoef(pr, tv)[0, 1])
+                out["amoc_bands"][name] = {"r": round(r, 3), "n": len(pts)}
+                print(f"  AMOC {name}: r {r:+.3f} (n={len(pts)})")
+
+        return out
+
+    results = {"run": a.run, "data": os.path.basename(a.data),
+               "K": K, "horizon": a.horizon, "heads": {}}
+    for label, tk_ in head_specs:
+        # k_max mirrors TRAINING, not the window: temporal.py builds the
+        # position table at max(K, 36), so k_max=K fails to load any head
+        # trained with K < 36 — which is every production head (K=24). The
+        # toy test caught this; the GPU would have.
+        model = TemporalTransformer(d_z=ck["d_z"], d_model=tk_["args"]["d_model"],
+                                    n_heads=4, n_layers=tk_["args"]["layers"],
+                                    k_max=max(K, 36))
+        model.load_state_dict(tk_["model"])
+        model.eval()
+        results["heads"][label] = eval_one(model, label)
+
+    os.makedirs(os.path.join(HERE, "runs", a.run), exist_ok=True)
+    path = os.path.join(HERE, "runs", a.run, "rollout_eval.json")
+    json.dump(results, open(path, "w"), indent=1)
     print("wrote", path)
+    if len(head_specs) == 1:
+        # legacy shape, so older readers of rollout.json keep working
+        legacy = dict(results["heads"][head_specs[0][0]])
+        legacy["run"] = a.run
+        json.dump(legacy, open(os.path.join(HERE, "runs", a.run,
+                                            "rollout.json"), "w"), indent=1)
 
 
 if __name__ == "__main__":

@@ -695,6 +695,40 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
         run: |
+          # ROLLOUT EVALUATION MODE — window carries `rolleval:<tag>,<tag>,…`
+          # (the 25-input cap again). Fetches published temporal heads from
+          # the model-checkpoints release (public, curl, no gh/node — the
+          # boxes have neither) and scores them with ml/rollout.py: the model
+          # fed its OWN predictions month after month, channel-space skill at
+          # each horizon against persistence/damped/climatology, and the AMOC
+          # probe read from ROLLED section embeddings. This is the evaluation
+          # E-010 lacked: its z-ratio was teacher-forced horizon-1, which is
+          # the regime an unroll objective de-emphasises by design. Trains
+          # nothing; `exit 0` skips the training-run ladder below.
+          case "${{ inputs.window }}" in
+            rolleval:*)
+              SPEC="${{ inputs.window }}"; SPEC="${SPEC#rolleval:}"
+              mkdir -p ml/runs/heads
+              HPATHS=""
+              for tag in ${SPEC//,/ }; do
+                if curl -fsSL -o "ml/runs/heads/${tag}.pt" \
+                    "https://github.com/${GITHUB_REPOSITORY}/releases/download/model-checkpoints-v1/${tag}__temporal.pt"; then
+                  HPATHS="$HPATHS ml/runs/heads/${tag}.pt"
+                else
+                  echo "::warning::head ${tag} not on the release — skipped"
+                fi
+              done
+              if [ -z "$HPATHS" ]; then
+                echo "::error::no heads could be fetched — nothing to evaluate"
+                exit 1
+              fi
+              python -u ml/rollout.py --run actions --data "$TENSOR" \
+                --horizon 12 --pixels 600 --temporal $HPATHS \
+                || echo "::warning::rollout eval failed"
+              bash scripts/publish_live_metrics.sh "ml-live-${{ github.run_number }}" || true
+              exit 0
+              ;;
+          esac
           # GUARDED, like every probe below it. These are independent
           # measurements: one failing is a missing number, not a reason to
           # delete the others. Under `bash -e` a bare call does exactly that,
@@ -942,6 +976,8 @@ jobs:
             ml/runs/actions/dip_check.json
             ml/runs/actions/probe_head.json
             ml/runs/actions/probe_head_raw3x3.json
+            ml/runs/actions/rollout.json
+            ml/runs/actions/rollout_eval.json
             ml/runs/actions/temporal.pt
             # PROVENANCE RIDES WITH THE RESULTS. It carries the sha256 of the
             # tensor the run actually used, added after E-007 found that two
