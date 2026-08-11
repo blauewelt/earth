@@ -20,10 +20,27 @@ Protocol (stated precisely, because horizon claims rot fastest):
     "How far can we predict" = the horizon where model MSE reaches the
     climatology floor. skill = 1 - MSE_model/MSE_baseline (positive =
     better than the baseline).
-  · AMOC by horizon: a ridge probe fit on TRUE train-month section
-    embeddings, applied to ROLLED section embeddings — deseasonalised r
-    in horizon bands 1-3 / 4-6 / 7-12 (single-horizon n is tiny: 36/21/3
-    points per horizon at the tail — bands are the honest resolution).
+  · AMOC by horizon, TWO fit modes reported side by side:
+      - truefit (the original): a ridge probe fit on TRUE train-month
+        section embeddings, applied to ROLLED section embeddings.
+      - rolledfit: the probe is fit on ROLLED train-year section states
+        at the SAME horizon band it will read. The truefit probe reads
+        rolled states through weights that have only ever seen true
+        ones — a train/apply distribution shift we impose on ourselves
+        (rolled states are smoother than true states, measurably: E-011's
+        amp_ratio < 1). Rolling the section pixels through the train
+        years costs almost nothing (the transformer is per-pixel, so the
+        train roll batches ~40 section pixels, not 600), and the fit
+        stays out-of-sample: fit points are train-year targets, read
+        points are holdout-year targets, exactly the codec's split.
+    Both in deseasonalised r over horizon bands 1-3 / 4-6 / 7-12
+    (single-horizon n is tiny: 36/21/3 points per horizon at the tail —
+    bands are the honest resolution).
+  · Seed ENSEMBLES: when several heads share an unroll value, their
+    per-point probe predictions are averaged (aligned by (year, start,
+    horizon)) and each band's r is recomputed — the cheapest ensemble
+    there is, and the rollout metrics are seed-stable enough (±0.003)
+    that a 3-seed mean is meaningful.
 
 Usage:  python3 ml/rollout.py --run wind14 [--horizon 12] [--pixels 600]
 Writes runs/<run>/rollout.json and prints the curve.
@@ -173,27 +190,37 @@ def main():
     rclim = np.array([rv[tr_all & (rmoy == m)].mean() for m in range(12)])
     rv_des = rv - rclim[rmoy]
     Fsec_true = Z[:, sec_pos].mean(1)
+
     # same protocol as ridge_r (standardise on train, lambda on a train
     # tail), but we need the WEIGHTS to apply to rolled embeddings later.
-    mu_p = Fsec_true[ridx][tr_all].mean(0)
-    sd_p = Fsec_true[ridx][tr_all].std(0) + 1e-9
-    Fz = (Fsec_true[ridx] - mu_p) / sd_p
+    # Factored out because the rolledfit bands below run the identical
+    # protocol on rolled-state features — one fit function, two feature
+    # sources, so the comparison can never be a protocol difference.
+    def fit_ridge(F, y):
+        """F [n, d] raw features in TIME ORDER, y [n]. Returns (mu, sd, w)."""
+        mu = F.mean(0)
+        sd = F.std(0) + 1e-9
+        Fz_ = (F - mu) / sd
+        n = len(y)
+        fit_i = np.arange(int(0.8 * n))
+        val_i = np.arange(int(0.8 * n), n)
+
+        def _solve(idx, lam):
+            A = np.c_[Fz_[idx], np.ones(len(idx))]
+            reg = lam * np.eye(A.shape[1]); reg[-1, -1] = 0
+            return np.linalg.solve(A.T @ A + reg, A.T @ y[idx])
+
+        best_lam, best_r = 1.0, -np.inf
+        for lam in (1e-2, 1e-1, 1, 10, 100, 1000):
+            w = _solve(fit_i, lam)
+            p = np.c_[Fz_[val_i], np.ones(len(val_i))] @ w
+            r = np.corrcoef(p, y[val_i])[0, 1]
+            if np.isfinite(r) and r > best_r:
+                best_r, best_lam = r, lam
+        return mu, sd, _solve(np.arange(n), best_lam)
+
     tr_idx = np.where(tr_all)[0]
-    fit_i, val_i = tr_idx[: int(0.8 * len(tr_idx))], tr_idx[int(0.8 * len(tr_idx)):]
-
-    def _solve(idx, lam):
-        A = np.c_[Fz[idx], np.ones(len(idx))]
-        reg = lam * np.eye(A.shape[1]); reg[-1, -1] = 0
-        return np.linalg.solve(A.T @ A + reg, A.T @ rv_des[idx])
-
-    best_lam, best_r = 1.0, -np.inf
-    for lam in (1e-2, 1e-1, 1, 10, 100, 1000):
-        w = _solve(fit_i, lam)
-        p = np.c_[Fz[val_i], np.ones(len(val_i))] @ w
-        r = np.corrcoef(p, rv_des[val_i])[0, 1]
-        if np.isfinite(r) and r > best_r:
-            best_r, best_lam = r, lam
-    w_probe = _solve(tr_idx, best_lam)
+    mu_p, sd_p, w_probe = fit_ridge(Fsec_true[ridx][tr_all], rv_des[tr_idx])
     ym_to_r = {int(months[mi][:4]) * 100 + int(months[mi][5:7]): i
                for i, mi in enumerate(ridx)}
 
@@ -206,7 +233,8 @@ def main():
         sums = {k: np.zeros(H + 1) for k in
                 ("mse_m", "mse_p", "mse_c", "mse_d", "n",
                  "sxy", "sxx", "syy", "sx", "sy")}
-        probe_pts = {h: [] for h in range(1, H + 1)}
+        probe_pts = {h: [] for h in range(1, H + 1)}   # (start, truefit pred, y)
+        hold_raw = {h: [] for h in range(1, H + 1)}    # (start, raw fvec, y)
 
         # damped persistence (AR1): the literature's fair cheap baseline — raw
         # persistence over-commits at long leads. Lag-1 autocorrelation per
@@ -274,9 +302,60 @@ def main():
                         # AMOC probe on the rolled section embedding
                         ym = int(months[t_tgt][:4]) * 100 + int(months[t_tgt][5:7])
                         if ym in ym_to_r:
-                            f = (zhat[sec_pos].mean(0).numpy() - mu_p) / sd_p
+                            fraw = zhat[sec_pos].mean(0).numpy()
+                            f = (fraw - mu_p) / sd_p
                             pr = float(np.dot(np.r_[f, 1.0], w_probe))
-                            probe_pts[h].append((pr, rv_des[ym_to_r[ym]]))
+                            probe_pts[h].append((s, pr, rv_des[ym_to_r[ym]]))
+                            hold_raw[h].append((s, fraw, rv_des[ym_to_r[ym]]))
+
+        # ---- rolledfit: roll the SECTION PIXELS through the TRAIN years ----
+        # The transformer is per-pixel (P is a batch dimension), so rolling
+        # only the ~40 section pixels through ~17 train years costs less than
+        # rolling 600 pixels through 3 holdout years did. Fit points are
+        # train-year targets, read points are the holdout points collected
+        # above — the same year-blocked split every other instrument uses.
+        # Context windows may LOOK at holdout months (true-context init is an
+        # observed initial condition); targets are train months by
+        # construction because whole holdout YEARS are skipped.
+        train_raw = {h: [] for h in range(1, H + 1)}   # (t_tgt, fvec, y)
+        sec_t = torch.as_tensor(np.asarray(sec_pos))
+        stat_sec = static_ctx[sec_t]
+        with torch.no_grad():
+            for Y in sorted({m[:4] for m in months}):
+                if Y in hold_years:
+                    continue
+                for s_off in range(12):
+                    start_m = (f"{int(Y) - 1}-12" if s_off == 0
+                               else f"{Y}-{s_off:02d}")
+                    if start_m not in month_index:
+                        continue
+                    s = month_index[start_m]
+                    if s - K + 1 < 0 or s + 1 >= T:
+                        continue
+                    # the tensor starts two decades before RAPID does — skip
+                    # any start whose whole horizon fan lands before the
+                    # truth series, instead of rolling 1980s months for
+                    # points that cannot be scored
+                    if not any((int(months[s + h][:4]) * 100
+                                + int(months[s + h][5:7])) in ym_to_r
+                               for h in range(1, min(H, T - 1 - s) + 1)):
+                        continue
+                    seq = Zt[s - K + 1: s + 1, sec_t].transpose(0, 1).clone()
+                    for h in range(1, H + 1):
+                        t_tgt = s + h
+                        if t_tgt >= T or months[t_tgt][:4] != Y:
+                            break
+                        mseq = torch.stack(
+                            [Mt[s - K + h + j] for j in range(K)], 0
+                        )[None].expand(len(sec_pos), -1, -1)
+                        pred, _ = model(seq, mseq, stat_sec)
+                        zhat = pred[:, -1]
+                        seq = torch.cat([seq[:, 1:], zhat[:, None]], 1)
+                        ym = (int(months[t_tgt][:4]) * 100
+                              + int(months[t_tgt][5:7]))
+                        if ym in ym_to_r:
+                            train_raw[h].append((t_tgt, zhat.mean(0).numpy(),
+                                                 rv_des[ym_to_r[ym]]))
 
         out = {"head": label, "K": K, "horizon": H,
                "protocol": "staggered starts into holdout years, true-context init",
@@ -315,20 +394,48 @@ def main():
             out["horizon_auc"] = round(
                 float(np.mean([c["msss_clim"] for c in out["chan_skill"]])), 3)
             print(f"  horizon AUC (mean vs-clim, h=1..{H}): {out['horizon_auc']:+.3f}")
+        bands = (("h1-3", (1, 2, 3)), ("h4-6", (4, 5, 6)),
+                 ("h7-12", tuple(range(7, H + 1))))
         out["amoc_bands"] = {}
-        for name, hs in (("h1-3", (1, 2, 3)), ("h4-6", (4, 5, 6)),
-                         ("h7-12", tuple(range(7, H + 1)))):
-            pts = [p for h in hs for p in probe_pts.get(h, [])]
+        out["amoc_bands_rolledfit"] = {}
+        ens = {"truefit": {}, "rolledfit": {}}   # band -> [(key, pred, y)]
+        for name, hs in bands:
+            pts = [(h, s, pr, y) for h in hs
+                   for (s, pr, y) in probe_pts.get(h, [])]
             if len(pts) >= 8:
-                pr, tv = np.array(pts).T
+                pr = np.array([p[2] for p in pts])
+                tv = np.array([p[3] for p in pts])
                 r = float(np.corrcoef(pr, tv)[0, 1])
                 out["amoc_bands"][name] = {"r": round(r, 3), "n": len(pts)}
-                print(f"  AMOC {name}: r {r:+.3f} (n={len(pts)})")
+                ens["truefit"][name] = [((h_, s_), p_, y_)
+                                        for h_, s_, p_, y_ in pts]
+                print(f"  AMOC {name} truefit:   r {r:+.3f} (n={len(pts)})")
+            # rolledfit: fit THIS band's probe on rolled train-year states
+            fit_pts = sorted((p for h in hs for p in train_raw.get(h, [])),
+                             key=lambda p: p[0])          # time order, for
+            hp = [(h, s, f, y) for h in hs                # the lambda tail
+                  for (s, f, y) in hold_raw.get(h, [])]
+            if len(fit_pts) >= 24 and len(hp) >= 8:
+                Ff = np.stack([f for _, f, _ in fit_pts])
+                yf = np.array([y for _, _, y in fit_pts])
+                mu_b, sd_b, w_b = fit_ridge(Ff, yf)
+                preds = [((h_, s_),
+                          float(np.dot(np.r_[(f_ - mu_b) / sd_b, 1.0], w_b)),
+                          y_) for h_, s_, f_, y_ in hp]
+                pr = np.array([p[1] for p in preds])
+                tv = np.array([p[2] for p in preds])
+                r = float(np.corrcoef(pr, tv)[0, 1])
+                out["amoc_bands_rolledfit"][name] = {
+                    "r": round(r, 3), "n": len(hp), "n_fit": len(fit_pts)}
+                ens["rolledfit"][name] = preds
+                print(f"  AMOC {name} rolledfit: r {r:+.3f} "
+                      f"(n={len(hp)}, fit on {len(fit_pts)} train points)")
 
-        return out
+        return out, ens
 
     results = {"run": a.run, "data": os.path.basename(a.data),
                "K": K, "horizon": a.horizon, "heads": {}}
+    ens_by_head = {}
     for label, tk_ in head_specs:
         # k_max comes FROM THE CHECKPOINT, not from a convention. There are
         # two conventions in this repo — temporal.py builds its position
@@ -343,7 +450,49 @@ def main():
                                     k_max=k_tbl)
         model.load_state_dict(tk_["model"])
         model.eval()
-        results["heads"][label] = eval_one(model, label)
+        results["heads"][label], ens_by_head[label] = eval_one(model, label)
+
+    # ---- seed ensembles: average per-point probe predictions ---------------
+    # Grouped by the label's unroll prefix (u1_s0/u1_s1/u1_s2 -> "u1"), plus
+    # an "all" group when heads of mixed U are passed — scientifically the
+    # per-U groups are the read ("3 seeds, same recipe"), the all-group is a
+    # curiosity, but both are cheap and the toy only exercises mixed U.
+    groups = {}
+    for label in ens_by_head:
+        groups.setdefault(label.split("_")[0], []).append(label)
+    if len(ens_by_head) >= 2:
+        groups["all"] = list(ens_by_head)
+    results["ensembles"] = {}
+    for g, labs in sorted(groups.items()):
+        if len(labs) < 2:
+            continue
+        entry = {}
+        for mode in ("truefit", "rolledfit"):
+            bands_out = {}
+            names = set.intersection(
+                *(set(ens_by_head[l][mode]) for l in labs))
+            for bn in sorted(names):
+                maps = [{k: (p, y) for k, p, y in ens_by_head[l][mode][bn]}
+                        for l in labs]
+                common = set(maps[0])
+                for m_ in maps[1:]:
+                    common &= set(m_)
+                if len(common) < 8:
+                    continue
+                ks = sorted(common)
+                pr = np.mean([[m_[k][0] for k in ks] for m_ in maps], 0)
+                tv = np.array([maps[0][k][1] for k in ks])
+                r = float(np.corrcoef(pr, tv)[0, 1])
+                bands_out[bn] = {"r": round(r, 3), "n": len(ks),
+                                 "members": len(labs)}
+            if bands_out:
+                entry[mode] = bands_out
+        if entry:
+            results["ensembles"][g] = entry
+            for mode, bo in entry.items():
+                for bn, v in bo.items():
+                    print(f"  ENSEMBLE {g} ({len(labs)} heads) {bn} {mode}: "
+                          f"r {v['r']:+.3f} (n={v['n']})")
 
     os.makedirs(os.path.join(HERE, "runs", a.run), exist_ok=True)
     path = os.path.join(HERE, "runs", a.run, "rollout_eval.json")

@@ -101,6 +101,24 @@ def main():
         assert a0 != b0, "two different heads produced identical skill"
         print("multi-head rollout eval runs end to end; heads are distinct.")
 
+        # rolledfit bands: probes fit on rolled TRAIN-year states must have
+        # been produced for the h1-3 band (the toy has ~48 train fit points
+        # and 15 holdout read points), with finite r and an n_fit recorded
+        for label, res in out["heads"].items():
+            rb = res.get("amoc_bands_rolledfit", {})
+            assert "h1-3" in rb, f"{label}: no rolledfit h1-3 band: {rb}"
+            assert np.isfinite(rb["h1-3"]["r"]), f"{label}: rolledfit r NaN"
+            assert rb["h1-3"]["n_fit"] >= 24, f"{label}: {rb['h1-3']}"
+        # ensembles: two heads -> an "all" group with both fit modes joined
+        # on identical (horizon, start) keys
+        ens = out.get("ensembles", {})
+        assert "all" in ens, f"no 'all' ensemble group: {list(ens)}"
+        for mode in ("truefit", "rolledfit"):
+            assert "h1-3" in ens["all"].get(mode, {}), \
+                f"ensemble missing {mode} h1-3: {ens['all']}"
+            assert ens["all"][mode]["h1-3"]["members"] == 2
+        print("rolledfit bands + 2-head ensemble present and finite.")
+
         # ---- AND with a patch=3 codec --------------------------------------
         # #149 died four minutes in because the static-identity pass fed the
         # patch=1 shape to a patch=3 encode — a fork this test did not reach
