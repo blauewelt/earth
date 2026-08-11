@@ -50,9 +50,12 @@ low-pass).
 **Why.** E-015's first seed cut the forecast error ratio 0.39 → **0.25**
 and read k-fold 0.504 — the largest single-change improvement in the
 programme's stage-2 history, on the axis E-008 predicted (parameters, not
-compute). Chris: *"should we increase capacity further?"* The jump
-mirrors the one that just worked: 10.7 M → **56.9 M** (5.3×, d_model 768,
-8 layers), U=1, same schedule, same tensor, seeds {0, 1, 2}.
+compute). Chris: *"should we increase capacity further?"* First dispatch
+was 768/8 = 56.9 M (5.3×, #205–#207, cancelled unstarted); **revised per
+Chris to a 3× rung** — *"I would try params 3x instead of 5x, also to
+avoid running out of memory"* — **d_model 576 / 8 layers = 32,038,336
+parameters (2.99×)**, U=1, same schedule, same tensor, seeds {0, 1, 2}.
+Tighter rungs also draw a better scaling curve.
 
 **Risk, and why now is the right time to take it:** 26 M train windows
 are far fewer effective samples (spatial correlation), so a 57 M-param
@@ -68,12 +71,12 @@ scaling bend — if 5.3× more parameters buys much less than the last
 5.9× did, the data or the embeddings are the binding constraint and
 E-006 (the objective) is the next lever, not another rung.
 
-**Scale: 56,873,536 parameters · batch 256 · 60,000 steps · ≈26.1 M
+**Scale: 32,038,336 parameters · batch 256 · 60,000 steps · ≈26.1 M
 windows.** Dispatch note: E-015's remaining seeds (#194/#195) had not
 landed when this was queued — accepted risk (~$2 of GPU) to use the
 overnight boxes; if they contradict seed 0, this entry records it.
 
-**Result.** *pending — #205–#207, pinned to `gpu-box-42005419`.*
+**Result.** *pending — #208–#210, pinned to `gpu-box-42005419`.*
 
 ---
 
