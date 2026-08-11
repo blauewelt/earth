@@ -34,6 +34,70 @@ low-pass).
 
 ---
 
+<a id="e-015"></a>
+## E-015 · Stage-2 WIDTH: the parameter-bottleneck arm — PREPARED 2026-08-11, dispatch after E-013
+
+**Why, from Chris.** *"In your next experiments, please consider trying out a
+larger stage 2 model (u=1) as well."* This is the arm E-008 explicitly left
+open: 33× compute moved the forecast objective steadily and the AMOC probe
+not at all, which closed the compute bottleneck and said nothing about
+CAPACITY. Nobody has ever trained stage 2 at more than d_model 192 / 4
+layers.
+
+**Design.** d_model 384 / 6 layers (~5.9× the parameters), from scratch,
+U=1, 60,000 steps, `sched:expdecay --lr-cooldown-frac 0` (horizon-free, hot
+endpoint — extendable without a warm restart), same codec, same tensor
+`adcbe700`, seeds {0, 1, 2}. Everything else pinned to E-012's U=1 arms,
+which are the direct comparison set.
+
+**Pre-registered questions.** (1) Does width move `rapid_probe_kfold` above
+the U=1 seed band at the same budget (E-012: 0.363/0.446/0.493, sd 0.066)?
+(2) Does it move the rollout/AMOC-at-horizon metrics (seed-stable ±0.003,
+so 3-vs-3 resolves small effects) once E-013's protocol reads it? (3) Does
+the z-ratio drop below the ~0.39 plateau that has now reproduced across
+schedule and tensor?
+
+**Falsifier.** All three flat → capacity was not the binding constraint at
+this data size either, and the bottleneck moves definitively to the
+OBJECTIVE (E-006) and the embeddings themselves.
+
+**Result.** *pending — not yet dispatched (behind #173 and E-013/E-014).*
+
+---
+
+<a id="e-014"></a>
+## E-014 · DIRECT multi-horizon heads: predict t+h without iterating — PREPARED 2026-08-11, dispatch after E-013
+
+**Why.** E-011 closed the unroll axis and measured WHERE the rollout loses:
+amp_ratio < 1 at every horizon — the iterated path feeds its own smoothing
+back in, and the AMOC probe reads exactly the amplitude that is lost. The
+2026-08-11 code audit (E-011 scope note) identified the un-detached BPTT
+gradient as the leading mechanism. The direct alternative never iterates:
+one linear head per horizon predicts z_{t+h} from the hidden state at t in
+a single forward. Nothing compounds because nothing is fed back.
+
+**Design.** `--direct 3,6,12` on the E-012 U=1 trunk (d_model 192, 4
+layers, 60k, expdecay no-taper, same codec, same tensor), seeds {0, 1, 2}.
+Loss adds mean-over-horizons last-position MSE; `--direct` empty is
+bit-identical to the old objective (tests/test_direct_heads.py asserts it).
+The instrument is `rollout.py`'s PAIRED comparison, built and toy-tested
+before dispatch: direct and iterated scored in the same loop iterations on
+the same starts, target months and observed cells
+(`delta_msss_clim_vs_iterated`), plus AMOC through the truefit probe and a
+directfit probe fit on the direct heads' own train-year predictions.
+
+**Hypothesis.** Direct wins at its trained horizons — most at h=12, least
+at h=3 — with amp_ratio nearer 1, and the AMOC read at horizon improves
+accordingly.
+
+**Falsifier.** Paired deltas ≤ 0 with amp_ratio no better → the horizon
+loss is not an artifact of iteration; it is in the embeddings or the
+predictability itself, and no readout change will buy it back.
+
+**Result.** *pending — not yet dispatched (behind #173 and E-013).*
+
+---
+
 <a id="e-012"></a>
 ## E-012 · The unroll sweep at 60,000 steps — DISPATCHED 2026-08-11, queued behind E-011
 
@@ -99,7 +163,37 @@ E-007's 60k *cosine* figure of 0.391 across both a schedule change and a
 tensor change, a reassuring stability check on the forecast objective.
 Persistence 3.139…, provenance `adcbe700` ✓.
 
-**Result.** *pending — five arms to land.*
+**DEVIATION (14:40Z, Chris): #174 and #175 cancelled unstarted.** *"If the
+U=4 models have no hope of succeeding, you can also abort them, up to
+you."* They have no hope of answering anything the programme still asks:
+E-011 falsified the unroll at every horizon, the code audit identified the
+mechanism as structural to the objective (the un-detached BPTT gradient
+rewards smoothing — more steps train the same wrong incentive), and E-014's
+direct heads supersede the idea. #173 (U=4 seed 0) was already training and
+runs to completion as the single convergence check — read primarily through
+E-013's rollout metrics, which are seed-stable to ±0.003, so even one arm
+answers "does convergence rescue unroll?" with useful confidence. The
+probe-level U question (3-vs-3) is forfeited, knowingly; the ~100 minutes
+reclaimed go to E-014/E-015.
+
+**The U=1 trio (question 1 answered).** #164/#171/#172, seeds 0/1/2:
+
+| seed | head k-fold | CI95 | 36-mo split | z-ratio |
+|---|---|---|---|---|
+| 0 | 0.363 | [0.208, 0.543] | 0.416 | 0.3908 |
+| 1 | 0.446 | [0.363, 0.552] | 0.438 | 0.3894 |
+| 2 | 0.493 | [0.365, 0.608] | 0.407 | 0.3877 |
+
+Seed sd **0.066** (range 0.130) against 0.123 (range 0.245) at 6k: training
+to convergence roughly HALVES the probe's seed noise but leaves it ~20× the
+field-metric's ±0.003 — the instability is mostly probe-intrinsic, as
+E-010 concluded, with a training-dependent component convergence buys back.
+The z-ratio is seed-stable to 0.003 across the trio and sits on the ~0.39
+plateau. All three on `adcbe700` ✓ (and seed-0's persistence baseline
+reproduces #121's to sixteen digits — the (tensor, seed) fingerprint is
+exact).
+
+**Result.** *pending — #173 to land, then E-013 closes the entry.*
 
 ---
 
