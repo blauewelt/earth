@@ -376,6 +376,17 @@ archive.
 
 ### Failure signatures worth recognising instantly
 
+- **A GREEN run with no `temporal.json` in its probe archive = the trainer
+  died and nothing noticed.** temporal.py runs BACKGROUNDED behind
+  best-effort guards, so a `CUDA error: unspecified launch failure` (or any
+  trainer death) does not colour the run. Measured on #196 (2026-08-11): a
+  lemon box's GPU killed stage 2 six minutes in, every guard said
+  "continuing", the run concluded success. The archive's file list is the
+  truth; the run's colour is not. An anomalously FAST ms/step is the same
+  sick-GPU story from the other side (19.7 ms/st for a U=4 arm, vs 62 on a
+  healthy box). Fresh Vast hosts can simply be broken — destroy and re-rent
+  on a different machine; do not debug a lemon.
+
 - **`"$TAG__pixelmae.pt"`** expands the variable `$TAG__pixelmae` — underscores
   are legal in a bash identifier. **Always brace a variable followed by `_`, a
   letter or a digit**: `"${TAG}__pixelmae.pt"`.

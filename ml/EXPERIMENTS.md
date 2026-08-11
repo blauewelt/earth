@@ -198,6 +198,18 @@ if the direct heads (E-014) don't render the question moot first.
 `gpu-box-46045353`; plans published). When they land: rolleval all three
 U=4 heads beside the U=1 trio for the 3-vs-3 deep-band answer.
 
+**#196/#197 died on a lemon box (18:50Z).** #196's trainer hit
+`torch.AcceleratorError: CUDA error: unspecified launch failure` six
+minutes into stage 2 — a host/GPU fault, not code (#185, same commit,
+trained happily on box 2 at that moment; its anomalously fast 19.7 ms/st
+was likely the same sick GPU) — and #197's deps install then failed on
+the same host. **A rigor tell worth keeping: #196 CONCLUDED "success"
+with a dead trainer**, because temporal.py runs backgrounded behind
+best-effort guards; the missing `temporal.json` in the probe archive is
+the reliable signal, never the run's colour. Box 47486012 destroyed;
+replacement 47487801 (`gpu-box-42005419`, Ukraine, 100 GB) rented,
+labelled, and the seeds re-dispatched as **#198/#199** (final).
+
 ---
 
 <a id="e-012"></a>
