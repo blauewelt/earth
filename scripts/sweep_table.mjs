@@ -228,13 +228,19 @@ const worst = scored.reduce((a, b) => (b.r < a.r ? b : a));
 console.log(`spread ${f(worst.r)} (${worst.label}) → ${f(best.r)} (${best.label}) ` +
             `= ${f(best.r - worst.r)}`);
 if (bar != null) {
-  console.log(`wind-only bar on this tensor: ${f(bar)}  ` +
-              `(measured on CODEC features; the head's own bar is not the ` +
-              `same quantity, so treat it as an orientation, not a threshold)`);
+  // THE BAR IS DIRECTLY COMPARABLE, and an earlier version of this line
+  // hedged that it was not. Checked in the source: probe_kfold scores the
+  // wind baseline with the SAME kfold_r, on the same deseasonalised RAPID
+  // months, with the same year blocks and the same n=240 — only the features
+  // differ (raw tau channels against the head's pooled hidden state). That is
+  // exactly the comparison "does the model beat wind stress" means, so it is
+  // a threshold and should be read as one.
+  console.log(`wind-only bar, same protocol and same 240 months: ${f(bar)}`);
   const under = scored.filter((r) => r.r <= bar);
   if (under.length) {
-    console.log(`BELOW IT: ${under.map((r) => r.label).join(", ")} — an ordering of ` +
-                `these arms is not by itself a result about the head.`);
+    console.log(`BELOW THE BAR: ${under.map((r) => r.label).join(", ")} — these ` +
+                `arms do not beat wind stress alone, so an ordering among them ` +
+                `is not a result about the head.`);
   }
 }
 console.log(

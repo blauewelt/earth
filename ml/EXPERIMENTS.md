@@ -169,11 +169,29 @@ have sd 0.0017 while the k-fold's U=1 group has sd 0.123 — 70× larger, from
 the same runs. Optimisation is reproducible; the projection onto 240 months
 of RAPID with ~9 effective DOF is not.
 
-**4 · Four of the six arms sit BELOW the 0.568 wind-only bar** (mean 0.51).
-A 6,000-step head does not beat wind stress on this tensor, and the ordering
-of arms below a bar is not a result about the head. The bar is measured on
-codec features so it is an orientation rather than a threshold — but it is
-not an encouraging one.
+**4 · Unroll may STABILISE the probe, and that is the one live hypothesis
+left on this axis.** U=1 sd 0.123, U=4 sd 0.040 — a 3.1× reduction. But
+F = 9.5 on (2,2) dof, and the 95% critical value is 19.0, so this sits just
+past the 90% line and is **not established**. Three seeds give almost no
+power to compare variances. It is worth testing properly (5+ seeds per arm)
+precisely because it is a different claim from the one that just died: not
+"unroll improves the probe" but "unroll makes the probe reproducible". If it
+held, it would still have to be weighed against a 29.7% forecast cost.
+
+**5 · Four of the six arms sit BELOW the 0.568 wind-only bar, and both means
+do.** U=1 mean 0.502, U=4 mean 0.525, all six 0.513. Only #141 (0.618) clears
+it decisively and #147 (0.571) marginally.
+
+This comparison is **direct, not an orientation** — an earlier version of this
+entry hedged that it was not, and the hedge was wrong. `probe_kfold` scores
+the wind baseline with the same `kfold_r`, on the same deseasonalised RAPID
+months, the same year blocks and the same n = 240; only the features differ
+(raw τ channels against the head's pooled hidden state). That is exactly what
+"does the model beat wind stress" means.
+
+So: **a 6,000-step head does not beat wind stress on this tensor.** Given
+E-008 showed 33× more compute does not move this probe either, that is the
+uncomfortable pair of facts this programme now has to sit with.
 
 **What this costs the programme.** E-005 is now **dead**, not withdrawn: its
 +0.28 was one draw against another from a distribution 0.245 wide. E-009's
