@@ -87,6 +87,16 @@ Everything below elaborates these.
 
 - **Numbers come from `probe_kfold.py`** — the year-blocked k-fold. Anything
   else (in-training light probe, a 36-month split) must be labelled as such.
+- **REPLICATES, NOT ARMS. A stage-2 number at n = 1 means nothing.** Measured
+  2026-08-11 (E-010): three seeds at one fixed configuration span **0.245** on
+  the RAPID head k-fold — sd 0.123 — while the forecast objective those same
+  runs optimise reproduces to sd 0.0017. The optimisation is stable; the
+  240-month probe with ~9 effective DOF is not. So two configurations
+  differing by less than ~0.25 are indistinguishable at one seed each, which
+  describes every stage-2 comparison in EXPERIMENTS.md before E-010 — and it
+  is how a +0.28 artefact (E-005) survived four months. Before dispatching a
+  sweep, ask what its noise floor is; if nobody has measured it, that is the
+  experiment.
 - **A number without its baseline is not a result.** Wind-only ridge: 0.531 at
   1°, 0.568 at quarter degree.
 - **Comparing two probes needs a PAIRED test** (`scripts/paired_probe.py`), not
@@ -419,6 +429,11 @@ archive.
   own variable. The replacement is `rapid_probe_kfold` (`temporal.json`), and
   E-009's #131–#134 re-measure the whole U axis on it. See
   `docs/ML_BASICS.md` §5b.
-- **Unroll U=2 and U=8.**
+- ~~**Unroll U=2 and U=8.**~~ — **closed 2026-08-11 by E-010.** Three seeds at
+  each of U=1 and U=4: the AMOC probe differs by +0.023 (t = 0.31, one tenth
+  of the seed range), and the forecast is 29.7% WORSE at U=4 (t = 99). Unroll
+  costs skill and buys nothing on transport. `--unroll` should default to 1.
+  Filling in U=2 and U=8 would be measuring a difference already shown to be
+  absent.
 - **The parameter-bottleneck question** — needs a from-scratch run at larger
   width; deliberately deferred.
