@@ -695,7 +695,15 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
         run: |
-          python -u ml/probe_sequence.py --run actions --anomaly --data "$TENSOR"
+          # GUARDED, like every probe below it. These are independent
+          # measurements: one failing is a missing number, not a reason to
+          # delete the others. Under `bash -e` a bare call does exactly that,
+          # and it is how #131 lost probe_kfold AND dip_check to an unrelated
+          # upload that ran out of disk. Only the precheck below stays fatal,
+          # because "this checkpoint cannot do what you asked" is a definite
+          # answer (ml/CLAUDE.md §5.17).
+          python -u ml/probe_sequence.py --run actions --anomaly --data "$TENSOR" \
+            || echo "::warning::probe_sequence failed — continuing to stage 2"
           # A joint: run has ALREADY trained a temporal model inside
           # train_joint.py, and "joint:4000" is not an integer — passing it to
           # temporal.py --steps aborts the step, and with it every probe after
@@ -801,7 +809,20 @@ jobs:
             # instead of spending an hour and a half. Best-effort: a miss
             # costs GPU time, never correctness, and the script says which
             # branch it took.
-            python -u ml/embed_cache_sync.py pull --run actions
+            # `|| true`, and A MISS IS THE NORMAL PATH. pull exits 1 when the
+            # release has no cache for this codec — which is not a failure, it
+            # is the message "build it yourself", printed one line above. Under
+            # `bash -e` that honest exit code aborted the entire step: #139
+            # spent twenty minutes reaching this line on a box that simply had
+            # no local Z, printed "no embed cache published … it will be
+            # built", and then died instead of building it.
+            #
+            # THIRD instance of one pattern in a night: a callee made honest
+            # about failure, with the caller left intolerant. The push below
+            # was the second. Both call sites are guarded now, and the rule is
+            # in ml/CLAUDE.md — best-effort is the CALLER's decision.
+            python -u ml/embed_cache_sync.py pull --run actions \
+              || echo "::warning::no embed cache to pull — stage 2 will build it"
             # BACKGROUNDED, with the same 5-minute publisher the Train and
             # joint steps use. Called inline, the publish below only ran
             # AFTER temporal.py returned — 7 hours on a 60,000-step run, so
@@ -890,8 +911,10 @@ jobs:
           # on 2026-08-07. The runner already has the matching tensor built
           # and the memory to probe it, so the run ships its own verdict.
           # Section-only embeddings, so this is minutes, not hours.
-          python -u ml/probe_kfold.py --runs actions --data "$TENSOR"
-          python -u ml/dip_check.py --run actions --data "$TENSOR"
+          python -u ml/probe_kfold.py --runs actions --data "$TENSOR" \
+            || echo "::warning::probe_kfold failed — no codec control this run"
+          python -u ml/dip_check.py --run actions --data "$TENSOR" \
+            || echo "::warning::dip_check failed — no dip capture this run"
           # The TOP RUNG. Every other probe mean-pools the section before
           # reading it, and geostrophic transport is the east-minus-west
           # density difference ACROSS the section — the one statistic a mean
@@ -900,9 +923,11 @@ jobs:
           # codec knows this" from "any read-out with spatial structure knows
           # this". Matched to a patch codec via --raw-patch.
           if [ "${{ inputs.head_probe }}" = "true" ]; then
-            python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1
             python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1 \
-              --raw --raw-patch
+              || echo "::warning::head probe failed — its raw control still runs"
+            python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1 \
+              --raw --raw-patch \
+              || echo "::warning::raw-3x3 control failed — the head number has no control"
           fi
 
       - name: Upload probe results
