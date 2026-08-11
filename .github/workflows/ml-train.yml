@@ -898,6 +898,14 @@ jobs:
             ml/runs/actions/probe_head.json
             ml/runs/actions/probe_head_raw3x3.json
             ml/runs/actions/temporal.pt
+            # PROVENANCE RIDES WITH THE RESULTS. It carries the sha256 of the
+            # tensor the run actually used, added after E-007 found that two
+            # boxes had silently diverged caches — and it was only in the
+            # CHECKPOINT artifact, which the probe bundle does not read. So on
+            # 2026-08-11 a three-way schedule comparison had to be caught by
+            # its persistence baseline (3.139 on one box, 3.343 on the other)
+            # instead of by the hash that exists precisely to say so.
+            ml/runs/actions/provenance.json
           retention-days: 30
           if-no-files-found: ignore
 
