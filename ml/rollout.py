@@ -134,15 +134,34 @@ def main():
     Zt = torch.from_numpy(Z)
     Mt = torch.as_tensor(ctx_all)
 
-    # static identity — EXACTLY as stage-2 training builds it
+    # static identity — EXACTLY as stage-2 training builds it, INCLUDING the
+    # patch branch. The bare [P, C] form below is the patch=1 pilot's shape;
+    # a patch=3 codec's encode unpacks [B, C, patch²] and #149 died on that
+    # line four minutes into the eval ("expected 3, got 2"). The toy test
+    # missed it because the toy codec is patch=1 — mirrored from temporal.py,
+    # which met this exact fork at line ~808.
     with torch.no_grad():
         stat_obs = OBS[0].clone()
         for c in dynamic:
             stat_obs[..., c] = False
         ctx0 = np.concatenate([np.zeros((P, 2), np.float32), coords], 1)
-        Zstat = codec.encode(Xt[0, kys, kxs], stat_obs[kys, kxs],
-                             torch.zeros(P, X.shape[-1], dtype=torch.bool),
-                             torch.as_tensor(ctx0)).numpy()
+        if getattr(codec, "patch", 1) > 1:
+            from model import gather_px
+            t0i = torch.zeros(P, dtype=torch.long)
+            vv, oo = gather_px(Xt, stat_obs[None], t0i,
+                               torch.as_tensor(kys), torch.as_tensor(kxs),
+                               codec.patch)
+            Zstat = codec.encode(vv.to(_dev), oo.to(_dev),
+                                 torch.zeros(P, X.shape[-1], dtype=torch.bool,
+                                             device=_dev),
+                                 torch.as_tensor(ctx0).to(_dev)).cpu().numpy()
+        else:
+            Zstat = codec.encode(Xt[0, kys, kxs].to(_dev),
+                                 stat_obs[kys, kxs].to(_dev),
+                                 torch.zeros(P, X.shape[-1], dtype=torch.bool,
+                                             device=_dev),
+                                 torch.as_tensor(ctx0).to(_dev)).cpu().numpy()
+    codec.to("cpu")               # the rollout loop below is CPU-bound
     static_ctx = torch.as_tensor(np.concatenate([Zstat, coords], 1))
 
     # ---- RAPID probe fit on TRUE train-month section embeddings -----------

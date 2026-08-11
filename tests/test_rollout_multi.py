@@ -95,7 +95,32 @@ def main():
         a0 = out["heads"]["u1_s0"]["chan_skill"][0]["msss_clim"]
         b0 = out["heads"]["u4_s1"]["chan_skill"][0]["msss_clim"]
         assert a0 != b0, "two different heads produced identical skill"
-        print("\nmulti-head rollout eval runs end to end; heads are distinct.")
+        print("multi-head rollout eval runs end to end; heads are distinct.")
+
+        # ---- AND with a patch=3 codec --------------------------------------
+        # #149 died four minutes in because the static-identity pass fed the
+        # patch=1 shape to a patch=3 encode — a fork this test did not reach
+        # because its codec was patch=1. Every production codec is patch=3.
+        codec3 = PixelMAE(n_chan=C, d_model=16, n_heads=2, n_layers=2,
+                          d_z=DZ, d_dec=16, patch=3)
+        torch.save({"model": codec3.state_dict(),
+                    "chan": [f"c{i}" for i in range(C)],
+                    "d_z": DZ, "norm": None, "step": 0,
+                    "args": {"patch": 3, "d_model": 16, "n_layers": 2,
+                             "n_heads": 2, "d_dec": 16,
+                             "holdout_years": "1992", "holdout_lon": "-45,-44"}},
+                   os.path.join(run_dir, "pixelmae.pt"))
+        r = subprocess.run(
+            [sys.executable, "-u", os.path.join(ML, "rollout.py"),
+             "--run", "toyroll", "--data", npz, "--horizon", "2",
+             "--pixels", "20", "--temporal", heads[0]],
+            capture_output=True, text=True, timeout=600)
+        if r.returncode != 0:
+            print(r.stdout[-2000:]); print(r.stderr[-2000:])
+            raise SystemExit("rollout.py failed with a PATCH=3 codec")
+        out3 = json.load(open(os.path.join(run_dir, "rollout_eval.json")))
+        assert out3["heads"]["u1_s0"]["chan_skill"], "patch=3: no horizons"
+        print("patch=3 codec: rollout eval runs — the #149 crash is covered.")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         shutil.rmtree(run_dir, ignore_errors=True)
