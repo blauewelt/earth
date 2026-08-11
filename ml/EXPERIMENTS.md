@@ -200,8 +200,38 @@ one hypothesis left standing is the weak variance observation (U=4 probe sd
    programme's first multi-horizon skill statement against the fair
    baseline, and it belongs in the paper regardless of what U it came from.
 
+**Scope note from a code audit (2026-08-11, prompted by Chris: "the U=4
+line looks like a bug in training").** What `--unroll U` precisely is
+(`temporal.py`, the training loop): after the teacher-forced pass over the
+K-window, the window SLIDES — drop the oldest month, append `pred[:, -1:]`,
+the model's own prediction of the next month, **with the autograd graph
+intact** (no `.detach()`) — the appended token gets the TRUE observation
+mask for its month, the next true month is the target, and the extra term
+is weighted 1/(u+1). One `backward()` then runs through up to U chained
+applications of the shared-weight model: full backpropagation through time.
+The audit found **no mechanical bug**: targets align (`zfut[:,u] = Z[t+1+u]`
+against a window whose last token represents month t+u), the fed-back-token
+masks match what `rollout.py` feeds at eval exactly, the train pool excludes
+any window whose unrolled targets would touch holdout months or run off the
+array, and U=1 is bit-identical to the plain objective (the loop body never
+executes). Two design facts the closure should be read against. First, the
+gradient through the un-detached feedback contains an INPUT-SHAPING path —
+"make ẑ(t+1) a thing the model maps closer to Z(t+2)" — which under MSE
+rewards smoothed, conditional-mean-like predictions; this is the leading
+mechanistic explanation for the entire U=4 signature (−29.7% one-step,
+probe-SD collapse F = 9.5, lower amplitude ratio, uniformly worse rollout),
+and it is exactly the path the PDE-surrogate literature's "pushforward
+trick" (Brandstetter et al. 2022) severs by detaching the fed-back state.
+Second, the 1/(u+1) weights de-emphasise teacher forcing more than the code
+comment implies: at U=4 the self-fed terms sum to 1.083 against the whole
+teacher-forced window's 1.0, i.e. ~52% of the objective. **So what E-010 +
+E-011 close is the full-BPTT-from-scratch variant.** The detached
+(pushforward) variant, and the literature's successful recipe — one-step
+pretraining, then a short low-LR unroll FINE-TUNE (GraphCast-style
+curriculum) — are untested and would be new experiments, not reruns.
+
 E-013 (this protocol over the 60k E-012 heads) answers whether convergence
-changes any of it.
+changes any of it — for this variant.
 
 ---
 
