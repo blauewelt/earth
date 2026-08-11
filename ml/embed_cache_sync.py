@@ -176,10 +176,37 @@ def push(run):
             print(f"::warning::could not create release {TAG}: {r.stderr[:200]}")
             return 1
     rel = json.loads(r.stdout)
-    rid, existing = rel["id"], {a["name"]: a["id"] for a in rel.get("assets", [])}
+    rid = rel["id"]
+    assets = {a["name"]: a for a in rel.get("assets", [])}
+    existing = {k: v["id"] for k, v in assets.items()}
 
     total = os.path.getsize(path)
     n = (total + CHUNK - 1) // CHUNK
+
+    # ALREADY PUBLISHED AND COMPLETE? Then do nothing.
+    #
+    # The upload replaces each chunk by DELETING it and re-POSTing, so a
+    # re-publish of an identical cache is not merely 5.2 GiB of wasted
+    # bandwidth per run — it opens a window in which the release holds a
+    # PARTIAL cache. Watched live on 2026-08-11: the asset count went 4 → 3
+    # while #142 replaced a cache byte-identical to the one already there, and
+    # every queued arm would have done it again. A puller in that window gets
+    # a short file; `verify()` catches it and discards, which turns a wasted
+    # upload into someone else's wasted 95 minutes.
+    #
+    # The check is on the exact chunk names and their total size, because the
+    # asset name already carries the codec's weight hash — so matching names
+    # plus matching bytes means the same cache for the same codec.
+    want = [f"{asset}.{chr(97 + i // 26)}{chr(97 + i % 26)}" for i in range(n)]
+    have_all = all(w in assets for w in want)
+    have_bytes = sum(assets[w]["size"] for w in want) if have_all else -1
+    if have_all and have_bytes == total:
+        print(f"embed cache for codec {whash} is already published and complete "
+              f"({n} chunk(s), {total / (1<<30):.2f} GiB) — nothing to do")
+        return 0
+    if have_all:
+        print(f"republishing: {n} chunk(s) present but {have_bytes:,} bytes "
+              f"against {total:,} on disk")
 
     # DO NOT START A WRITE THE DISK CANNOT HOLD. Chunking to a temporary file
     # needs CHUNK bytes free, and on 2026-08-10 this ran on a box with under
