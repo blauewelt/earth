@@ -130,7 +130,53 @@ seed?
 **Deviation, recorded**: an eval run trains nothing and has no LR schedule,
 so no plan file — the E-011 precedent.
 
-**Result.** *pending.*
+### RESULT (#176, 16:20Z) — field falsification holds; the deep-horizon AMOC read flips; rolledfit BACKFIRES
+
+**Q1 — convergence does not rescue unroll on field skill, but the picture
+is no longer uniform.** Horizon AUC: U=1 0.266/0.291/0.282 vs U=4
+**0.236** — still last, though the gap has narrowed from 6k (0.165–0.168
+vs 0.229–0.240). E-011's every-horizon field falsification stands at
+convergence. The AMOC bands, however, no longer agree with it at depth
+(truefit probe):
+
+| head | h1–3 | h4–6 | h7–12 |
+|---|---|---|---|
+| u1_s0 | 0.414 | 0.182 | 0.177 |
+| u1_s1 | 0.365 | 0.082 | 0.183 |
+| u1_s2 | 0.437 | 0.201 | 0.300 |
+| **u4_s0** | 0.394 | **0.278** | **0.335** |
+
+The single U=4 arm reads best-in-set on both deep bands. One seed, a
+probe whose seed noise is 0.066–0.123, and E-010's (unestablished)
+observation that U=4 compresses probe variance — so this is a DIRECTION,
+not a result. But it is the first time anything has moved the deep-horizon
+transport read in unroll's favour, and it happened only at convergence.
+Also: convergence helps everyone — U=1 seed-means improved from E-011's
+0.31/0.11/0.21 to ~0.40/0.16/0.22.
+
+**Q2 — the rolledfit probe does not recover the drop; it makes it worse.**
+h1–3: 0.234–0.368 vs truefit's 0.365–0.437; h4–6 goes NEGATIVE for two of
+three U=1 seeds (−0.286, −0.371). Post-hoc reading: the band fit pools
+staggered starts whose contexts overlap heavily, so its 561 "points" are
+far fewer effective samples than the lambda-selection tail assumes — an
+under-regularised ridge on model-generated features that do not
+generalise across the year-blocked split. The distribution-shift argument
+was plausible and is now measured wrong: **the truefit probe remains the
+instrument.** (Follow-up if ever needed: year-blocked lambda selection
+inside the band fit. E-014's directfit probe shares this machinery — read
+it with the same caution.)
+
+**Q3 — ensembles track the seed mean, no magic.** u1 truefit ensemble
+0.414/0.156/0.227 — above the seed mean, below the best seed everywhere.
+
+**E-012 is hereby CLOSED**: seed noise at 60k = 0.066 (halved from 6k,
+still probe-dominated); U effect on the probe unmeasurable as designed
+(two arms cancelled, deviation recorded), directionally interesting at
+depth via E-013; one-step cost persists in full (+27%). The unroll axis
+stays closed for training the FORECAST — the open question it leaves is
+narrower and new: does unroll's variance compression happen to help the
+TRANSPORT probe at depth? Answerable by two more U=4 seeds (~70 min GPU)
+if the direct heads (E-014) don't render the question moot first.
 
 ---
 
@@ -240,7 +286,9 @@ band (sd 0.066) and that E-010 observed U=4 compressing probe variance
 (F = 9.5, never established). The probe-level 3-vs-3 U comparison was
 forfeited with #174/#175; the rollout answer comes from E-013 (#176).
 
-**Result.** *pending — E-013 closes the entry.*
+**Result.** CLOSED by E-013 (#176) — see that entry: seed sd 0.066 at
+60k, one-step cost +27% persists, field falsification of unroll holds,
+deep-horizon AMOC direction flips toward U=4 (one arm, unestablished).
 
 ---
 
