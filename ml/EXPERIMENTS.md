@@ -64,10 +64,29 @@ which E-013 (rollout eval of these heads, the E-011 protocol) either finds
 the multi-step payoff or the axis is closed at every horizon *and* every
 budget, and `--unroll` becomes a documented dead end rather than a default.
 
-**Sequencing.** Queued behind #149 (E-011) and the `publishtensor` run that
-makes tensor `adcbe700` durable before anything else can happen to the one
-disk holding it. All on `gpu-box-35586926`; the fleet's other two runners are
-deregistered, so FIFO onto one box is guaranteed by construction.
+**REVISED before any arm started (Chris): expdecay, no terminal taper.**
+*"Maybe it would make sense to do the sweep with an LR regime that doesn't go
+to zero."* The six arms are #164–#169, `sched:expdecay --lr-cooldown-frac 0`:
+cosine warmup then `2^(−s/40000)`, ending at **3.66e-4 = 36.6% of peak**.
+
+What this buys: the schedule is horizon-free AND the endpoint is live, so
+every head is a true continuation candidate — snapshots carry optimiser and
+schedule state, and the expdecay prefix is invariant to extension. Extending
+any arm to 200k later is a genuine continuation, not an E-008-style warm
+restart with a fresh schedule.
+
+What it costs, stated now: the endpoint is hot (36.6% of peak, where cosine
+would be near zero), so final z-MSE will read noisier than a cosine-60k
+head's, and E-012's z-ratios are not directly comparable to E-007's cosine
+points — which were on another tensor anyway. All comparisons that matter
+(U=1 vs U=4, seed spread) are internal and share the schedule. The cosine
+plans for the first dispatch (#151–#156, then #158–#163) were cancelled
+before any arm started; nothing trained on them.
+
+**Sequencing.** Behind #157 (E-011 retry) on `gpu-box-35586926`; the other
+two runners are deregistered, so FIFO onto one box — and one tensor — is
+guaranteed by construction. Tensor `adcbe700` is durable on `data-cache-v1`
+as of #150.
 
 **Result.** *pending.*
 
