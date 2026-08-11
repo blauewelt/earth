@@ -32,8 +32,10 @@ experiments and their results."*
    2026-08-11 the trainer writes them itself as `temporal.json:scale` —
    quote that block, never a hand-carried number. Reference values:
    stage-2 192/4 = 1,822,144 params (+37,056 with three direct heads);
-   384/6 = 10,732,096; the quarter-degree U=1 pool ≈ 26.1 M windows at
-   batch 512.
+   384/6 = 10,732,096; the quarter-degree U=1 pool ≈ 26.1–28.1 M windows at
+   batch 256 (temporal.py's default — the workflow's --batch 512 goes to
+   the CODEC trainer; measured by the source-written scale block on #202,
+   which caught this very file hand-carrying 512).
 
 Baselines, for reference. Wind-stress-only ridge in our own protocol:
 **0.531** on the 1° tensors, **0.568** on the quarter-degree tensor. RAPID
@@ -58,7 +60,7 @@ the E-012 arms (60k, expdecay no-taper, tensor `adcbe700`, frozen run-62
 codec), seeds {0, 1, 2}. One depth draw per STEP (whole batch shares it);
 empty probs reduce bit-identically to fixed depth (toy-asserted). Labels
 `u4p_s<N>` — never ensembled with fixed-U arms. **Scale: 1,822,144
-params · batch 512 · 60,000 steps · ≈26.0 M windows.**
+params · batch 256 · 60,000 steps · ≈26.0 M windows.**
 
 **Pre-registered questions.** (1) Does the nowcast-probe gain survive
 (k-fold near U=4's 0.502–0.551 band rather than U=1's 0.363–0.493)?
@@ -72,8 +74,18 @@ Probe stays at U=1 levels = the gain needs the full-depth gradient every
 step, and the axis closes with fixed U=4 as a transport-nowcast
 specialist.
 
-**Result.** *pending — #202–#204, pinned to `gpu-box-42005419`, queued
-behind #201.*
+**First arm (#202, seed 0, 22:2xZ).** k-fold **0.250** [0.085, 0.394] —
+NOT in U=4's 0.50–0.55 band; at/below the U=1 band. z-ratio **0.4396** —
+roughly the dose-proportional midpoint (E[U]=1.875) between U=1's 0.39
+and U=4's 0.50. One seed; if it holds, the probe gain needs the
+full-depth gradient every step and half-measures pay half the cost for
+none of the benefit. Its `scale` block also just earned its keep: it
+reads **batch 256** — temporal.py's default; the workflow's `--batch
+512` goes to the CODEC trainer — catching this very log's backfilled
+"512" as the hand-carried error rule 6 exists to prevent. Corrected
+throughout.
+
+**Result.** *pending — seeds 1/2 (#203/#204).*
 
 ---
 
@@ -92,7 +104,7 @@ layers.
 extendable without a warm restart), same codec, same tensor `adcbe700`,
 seeds {0, 1, 2}. Everything else pinned to E-012's U=1 arms, which are
 the direct comparison set. **Scale: 10,732,096 parameters (5.89× the
-trunk's 1,822,144) · batch 512 · 60,000 steps · ~26.1 M train windows.**
+trunk's 1,822,144) · batch 256 · 60,000 steps · ~26.1 M train windows.**
 
 **Pre-registered questions.** (1) Does width move `rapid_probe_kfold` above
 the U=1 seed band at the same budget (E-012: 0.363/0.446/0.493, sd 0.066)?
@@ -127,7 +139,7 @@ a single forward. Nothing compounds because nothing is fed back.
 **Design.** `--direct 3,6,12` on the E-012 U=1 trunk (d_model 192, 4
 layers, 60k, expdecay no-taper, same codec, same tensor), seeds {0, 1, 2}.
 **Scale: 1,859,200 parameters (trunk 1,822,144 + three 12,352-param
-heads) · batch 512 · 60,000 steps · 26,073,420 train windows (measured,
+heads) · batch 256 · 60,000 steps · 26,073,420 train windows (measured,
 #191 — the h=12 reach guard trims the plain pool slightly).**
 Loss adds mean-over-horizons last-position MSE; `--direct` empty is
 bit-identical to the old objective (tests/test_direct_heads.py asserts it).
@@ -377,7 +389,7 @@ the multi-step payoff or the axis is closed at every horizon *and* every
 budget, and `--unroll` becomes a documented dead end rather than a default.
 
 **REVISED before any arm started (Chris): expdecay, no terminal taper.**
-**Scale (rule 6, backfilled): 1,822,144 parameters · batch 512 · 60,000
+**Scale (rule 6, backfilled): 1,822,144 parameters · batch 256 · 60,000
 steps · ≈26.1 M train windows.**
 
 *"Maybe it would make sense to do the sweep with an LR regime that doesn't go
