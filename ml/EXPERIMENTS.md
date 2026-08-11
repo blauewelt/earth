@@ -91,11 +91,54 @@ poolable with these six.
 runner `gpu-box-45318655` was dropped from the pool at Chris's instruction to
 unblock the queue.
 
-**Result.** *pending.*
+### RESULT, U=1 arm complete (2026-08-11 05:25) — the seed noise is 0.245, and it swallows every unroll effect ever claimed
 
----
+Three seeds at U=1, one box, one tensor (`adcbe700…`), one codec, 6,000
+steps each:
 
-<a id="e-009"></a>
+| seed | head k-fold | 95% CI | 36-mo split | z-ratio |
+|---|---|---|---|---|
+| 0 (#140) | 0.514 | [0.409, 0.636] | 0.524 | 0.472 |
+| 1 (#141) | **0.618** | [0.515, 0.709] | 0.476 | 0.472 |
+| 2 (#142) | **0.373** | [0.277, 0.557] | 0.505 | 0.469 |
+| | mean 0.502, **sd 0.123, range 0.245** | | sd 0.024 | sd 0.002 |
+
+**Set that against the effects this programme has been chasing:**
+
+| claim | size |
+|---|---|
+| #88 vs #93, the result that started it (36-mo split) | 0.276 |
+| E-009's U=1 vs U=2 (head k-fold) | 0.178 |
+| **seed range at FIXED U=1 (head k-fold)** | **0.245** |
+
+The noise floor is larger than E-009's unroll gap and the same size as the
+original claim. **Nothing about the unroll axis has ever been measured above
+it.** E-005's +0.28 was one draw from this distribution against another.
+
+**The instability is in the PROBE, not the model.** The z-ratio — what stage
+2 actually optimises — is reproducible to **sd 0.002** across the same three
+seeds. So training is stable and the RAPID read-out is not: the same head,
+trained to the same forecast skill, projects onto the transport series
+anywhere in a 0.245-wide band depending on initialisation. That is a fact
+about a 240-month probe with ~9 effective DOF after autocorrelation, not
+about the codec or the objective.
+
+**An inversion worth recording, because it complicates the instrument
+story.** Under a *tensor* change the split moved 2.7× more than the k-fold
+(0.111 vs 0.041); under a *seed* change the k-fold moves 5× more than the
+split (0.245 vs 0.048). Both read the same pooled hidden state. Neither is
+simply "the noisier one" — they are sensitive to different perturbations, and
+the k-fold's advantage is its sample size and its stated interval, not
+lower variance under every change. The three k-fold CIs do all overlap, which
+is the honest summary: three draws consistent with one distribution.
+
+**What this settles.** Any future stage-2 comparison needs **replicates**, not
+arms. A single run's RAPID k-fold carries ±0.12 of seed noise before anything
+else is varied, so two configurations differing by less than ~0.25 are
+indistinguishable at n=1 — which is every comparison this log has made.
+
+U=4's three seeds (#146–#148) are running; they can still show a shift of the
+whole distribution, which is the only form the unroll effect could now take.
 ## E-009 · The unroll sweep: is U the axis that moves the AMOC probe? — RE-DISPATCHED 2026-08-10 as #131–#134
 
 > **Correction, 2026-08-10 20:1x UTC.** The first version of this entry said
