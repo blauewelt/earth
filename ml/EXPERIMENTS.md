@@ -62,8 +62,8 @@ this data size either, and the bottleneck moves definitively to the
 OBJECTIVE (E-006) and the embeddings themselves.
 
 **Dispatched 16:00Z as #180–#182** (seeds 0/1/2) — cancelled unstarted in
-the disk incident (see E-014's re-dispatch note) and re-queued 17:45Z as
-**#188–#190** on the two-box fleet with the sha-pinned tensor seed.
+the disk incident (see E-014's re-dispatch note), re-queued as #188–#190,
+then re-pinned to the new box per Chris as **#193–#195** (final).
 
 **Result.** *pending.*
 
@@ -109,6 +109,11 @@ tensor `adcbe700…` from data-cache-v1 with sha verification (so
 cross-box arms are identical by construction), and seeds 0/1/2 re-queued
 as **#185–#187**. #177 itself runs to completion — if its API-side
 uploads survive the full disk it is a valid (duplicate) seed-0 arm.
+**Final run numbers (17:55Z, Chris: "all relevant experiments on the new
+box; box 1 is for investigation")**: #186/#187 cancelled and re-dispatched
+PINNED to `gpu-box-40623952` as **#191/#192** (seeds 1/2); #185 (seed 0)
+was already running there. The old box runs only #177 and the #184
+triage until its disk is understood.
 
 **Result.** *pending.*
 

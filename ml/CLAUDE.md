@@ -344,6 +344,30 @@ archive.
 - **50 GB is a real design constraint**: a ~15 GB torch image, ~11 GB of
   tensors and a 5.2 GiB embedding cache leave little room. At float32 the
   cache did not fit at all, which produced a delete-rebuild-delete treadmill.
+  It bit again on 2026-08-11 in a nastier shape: the disk crept to 50/50
+  mid-queue, hygiene freed the published Z (correctly — it is re-pullable),
+  the disk STAYED full from something else, the re-pull refused for lack of
+  headroom, and every run fell back to an ~80-minute in-RAM rebuild it could
+  not persist — while going metrics-blind, because every disk write
+  (metrics.jsonl appends, live-branch pushes, checkpoint mirrors) fails
+  silently behind its own best-effort guard. **A full-disk box computes
+  fine and reports nothing**; check Vast's `disk_usage` before trusting a
+  silence. Default `DISK` is now 100 GB (`gpu_box.mjs`).
+- **Fleet policy since 2026-08-11 (Chris): experiments run PINNED to the
+  healthy box; a box with a sick disk is for investigation only** — "a box
+  without disk is almost impossible to debug; usually it crashes for some
+  unknown reason." Pin with the `runner` input: the runner's NAME is an
+  implicit label (`runner: gpu-box-40623952`). Current roles: experiments
+  on `gpu-box-40623952` (Vast 47483091, 100 GB); `gpu-box-35586926`
+  (47171781, 50 GB, disk full) is the debug box pending the `disktriage`
+  verdict. The `disktriage` window mode exists because the sandbox cannot
+  SSH a running Vast box (port blocked; the execute API refuses on running
+  instances) — a job's own eyes are the only eyes.
+- **Cross-box comparability is a PULL, not a hope**: since 2026-08-11 the
+  workflow seeds the sha-pinned tensor (`adcbe700…`) from `data-cache-v1`
+  and verifies it before `build_family3.py` (whose recipe guard then skips
+  the build). A box only builds its own tensor when the pull fails, loudly,
+  and provenance records what it really used.
 - **Stopping is the cheap idle state.** It keeps the disk (data cache,
   checkpoint mirrors) and the runner registration, dropping a box from ~$0.27/h
   to storage only. `start` can return `resources_unavailable` and queue the
