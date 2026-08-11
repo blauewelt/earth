@@ -223,6 +223,26 @@ if the direct heads (E-014) don't render the question moot first.
 `gpu-box-46045353`; plans published). When they land: rolleval all three
 U=4 heads beside the U=1 trio for the 3-vs-3 deep-band answer.
 
+**E-013b RESULT, probe level (#198/#199 landed 20:5xZ) — U=4 beats U=1
+at EVERY seed on the transport probe at convergence:**
+
+| seed | U=4 k-fold | U=1 k-fold | U=4 z-ratio |
+|---|---|---|---|
+| 0 | 0.519 [0.375, 0.636] | 0.363 | 0.4953 |
+| 1 | 0.502 [0.387, 0.593] | 0.446 | 0.5095 |
+| 2 | 0.551 [0.406, 0.677] | 0.493 | 0.5003 |
+
+Means 0.524 vs 0.434; U=4's seed sd **0.025** against U=1's 0.066 —
+E-010's variance-compression observation (F = 9.5, then "not
+established") is replicating at convergence, and the one-step cost
+(+28%) is invariant as ever. At 6k this comparison was a null; at 60k it
+is a clean 3-vs-3 ordering. The unroll axis, closed for FORECASTING,
+reopens as a candidate TRANSPORT-READING objective: the compressed
+representations carry the probe better. #200 (rolleval over all six 60k
+heads, dispatched 20:55Z on the idle third box) asks whether the
+deep-band rollout advantage (E-013: 0.278/0.335 from one arm) holds
+3-vs-3.
+
 **#196/#197 died on a lemon box (18:50Z).** #196's trainer hit
 `torch.AcceleratorError: CUDA error: unspecified launch failure` six
 minutes into stage 2 — a host/GPU fault, not code (#185, same commit,
