@@ -776,9 +776,20 @@
     var line = polyline(pts.map(function (p) { return [p.stage2_step, p.stage2_zmse]; }),
                         xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB);
     var last = pts[pts.length - 1];
+    // THE FOUR SCALE NUMBERS on every card (Chris, 2026-08-11: each entry
+    // carries parameters, batch size, steps, data points). Older runs lack
+    // batch/train_windows in their stage2_config; show what the run itself
+    // recorded, never a guess.
     var cfgTxt = m.s2cfg
       ? m.s2cfg.d_model + "&times;" + m.s2cfg.layers + " · K=" + m.s2cfg.K +
-        (m.s2cfg.params_M ? " · " + m.s2cfg.params_M + "M params" : "")
+        (m.s2cfg.params_M ? " · " + m.s2cfg.params_M + "M params" : "") +
+        (m.s2cfg.batch ? " · batch " + m.s2cfg.batch : "") +
+        (m.s2cfg.steps ? " · " + fmtInt(m.s2cfg.steps) + " steps" : "") +
+        (m.s2cfg.train_windows
+          ? " · " + (m.s2cfg.train_windows / 1e6).toFixed(1) + "M windows"
+          : "") +
+        (m.s2cfg.unroll && m.s2cfg.unroll > 1 ? " · U=" + m.s2cfg.unroll : "") +
+        (m.s2cfg.direct ? " · direct " + esc(String(m.s2cfg.direct)) : "")
       : "";
     return '<div class="probe" style="margin-top:12px"><b>stage 2</b> — temporal transformer over the frozen embeddings' +
       (cfgTxt ? ' <span class="meta">(' + cfgTxt + ")</span>" : "") + "</div>" +

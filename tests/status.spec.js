@@ -42,7 +42,8 @@ const RUN_S2 = jsonl([
   { config: { steps: 60000, params_M: 40.7, data: "f3_na025.npz", C: 39 } },
   { step: 300, loss_rec: 0.09, loss_nei: 0.10 },
   { step: 60000, loss_rec: 0.09, loss_nei: 0.10 },
-  { stage2_config: { d_model: 320, layers: 6, K: 24, steps: 6000, params_M: 7.469, d_z: 64, seed: 0, tag: "" } },
+  { stage2_config: { d_model: 320, layers: 6, K: 24, steps: 6000, params_M: 7.469,
+                     batch: 512, train_windows: 26073420, d_z: 64, seed: 0, tag: "" } },
   { stage2_step: 1500, stage2_zmse: 0.910, stage2_wall_s: 40 },
   { stage2_step: 3000, stage2_zmse: 0.845, stage2_wall_s: 80 },
   { stage2_step: 4500, stage2_zmse: 0.802, stage2_wall_s: 120 },
@@ -291,6 +292,12 @@ test("a stage-2 run gets its own chart and verdict", async ({ page }) => {
   await expect(card).toContainText("temporal transformer over the frozen embeddings");
   await expect(card).toContainText("320\u00d76");
   await expect(card).toContainText("7.469M params");
+  // The four scale numbers (2026-08-11): parameters above, plus batch,
+  // steps and data points, straight from the run's own stage2_config \u2014
+  // an older run without batch/train_windows simply shows fewer fields.
+  await expect(card).toContainText("batch 512");
+  await expect(card).toContainText("6,000 steps");
+  await expect(card).toContainText("26.1M windows");
   expect(await card.locator('svg.chart polyline[stroke="#a371f7"]').count()).toBe(1);
 
   // The z-space curve is charted against the persistence bar it must beat.
