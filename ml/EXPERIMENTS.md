@@ -34,6 +34,60 @@ low-pass).
 
 ---
 
+<a id="e-011"></a>
+## E-011 · Unroll DURING evaluation: rollout skill and AMOC at horizon — DISPATCHED 2026-08-11
+
+**The question, from Chris.** E-010's z-ratio was teacher-forced horizon-1 —
+the regime an unroll objective de-emphasises by design. The unroll's stated
+purpose is surviving its own errors, and no evaluation ever fed it its own
+errors. This one does: all six E-010 heads, autoregressive rollout into the
+three holdout years, 12 horizons.
+
+**What is measured, per head.**
+
+- Channel-space skill at each horizon h (decoded predictions, observed cells,
+  anomaly space) against three baselines: persistence, damped persistence
+  (AR1, the literature's fair cheap baseline), climatology. Plus centred ACC
+  and an amplitude ratio, and "horizon AUC" — mean skill-vs-climatology over
+  h=1..12.
+- **AMOC at horizon**: a ridge fit on TRUE train-month section embeddings,
+  applied to ROLLED section embeddings — "given data to t, predict transport
+  at t+h". Reported in bands h1–3 / h4–6 / h7–12, because single-horizon n is
+  tiny.
+
+**Hypothesis, written before the result.** If exposure-bias training does
+what it claims, the U=4 heads should lose less skill per horizon step than
+the U=1 heads — worse at h=1 (E-010 measured exactly that, −29.7%), crossing
+over somewhere in h∈[2..6], and better in the AMOC h4–6/h7–12 bands. The
+replicate rule applies: the comparison is three seeds against three seeds,
+not one arm against another.
+
+**What would falsify it (and close the unroll axis at every horizon):** U=4
+at or below U=1 at every h, with the seed spreads overlapping. Given E-010,
+this is the likely outcome — a 29.7% deficit at h=1 is a deep hole for
+compounding stability to climb out of.
+
+**Instrument caveats, stated at dispatch.** The AMOC bands are a single
+train/apply split (not the k-fold), with the probe fit once on true
+embeddings — treat band differences as direction, not measurement. E-010
+measured the probe's seed noise at 0.245; the bands will be at least that
+noisy.
+
+**Mechanics.** `window: rolleval:e010_u1_s0,…` — the six heads were pulled
+from their run artifacts, **verified against their claimed (unroll, seed, K,
+steps)**, and published to `model-checkpoints-v1`. One embedding pass serves
+all six. The toy test of this path caught that `rollout.py` has been unable
+to load any K=24 head since it was written (`k_max=K` vs training's
+`max(K, 36)`) — tonight would have been its first run and its first failure.
+
+**Deviation from the graph-before-queue rule, recorded.** This run trains
+nothing — there is no LR schedule to draw, so no plan file is published. The
+rule certifies training schedules; an eval run has none.
+
+**Result.** *pending.*
+
+---
+
 <a id="e-010"></a>
 ## E-010 · The unroll question, redesigned around REPLICATES — **COMPLETE: the unroll axis is CLOSED**
 
