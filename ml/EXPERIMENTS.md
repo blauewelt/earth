@@ -26,6 +26,14 @@ experiments and their results."*
    `temporal.json`, the same protocol over the head's own features.
    In-training light-probe values, and `rapid_probe`'s 36-month single split,
    are noted as such wherever quoted. See `docs/ML_BASICS.md` §5b.
+6. **Every entry states the four scale numbers** (Chris, 2026-08-11):
+   **parameters · batch size · steps · data points** (for stage 2: train
+   windows in the pool; for a codec: pixels × months sampled). Since
+   2026-08-11 the trainer writes them itself as `temporal.json:scale` —
+   quote that block, never a hand-carried number. Reference values:
+   stage-2 192/4 = 1,822,144 params (+37,056 with three direct heads);
+   384/6 = 10,732,096; the quarter-degree U=1 pool ≈ 26.1 M windows at
+   batch 512.
 
 Baselines, for reference. Wind-stress-only ridge in our own protocol:
 **0.531** on the 1° tensors, **0.568** on the quarter-degree tensor. RAPID
@@ -44,11 +52,12 @@ not at all, which closed the compute bottleneck and said nothing about
 CAPACITY. Nobody has ever trained stage 2 at more than d_model 192 / 4
 layers.
 
-**Design.** d_model 384 / 6 layers (~5.9× the parameters), from scratch,
-U=1, 60,000 steps, `sched:expdecay --lr-cooldown-frac 0` (horizon-free, hot
-endpoint — extendable without a warm restart), same codec, same tensor
-`adcbe700`, seeds {0, 1, 2}. Everything else pinned to E-012's U=1 arms,
-which are the direct comparison set.
+**Design.** d_model 384 / 6 layers, from scratch, U=1, 60,000 steps,
+`sched:expdecay --lr-cooldown-frac 0` (horizon-free, hot endpoint —
+extendable without a warm restart), same codec, same tensor `adcbe700`,
+seeds {0, 1, 2}. Everything else pinned to E-012's U=1 arms, which are
+the direct comparison set. **Scale: 10,732,096 parameters (5.89× the
+trunk's 1,822,144) · batch 512 · 60,000 steps · ~26.1 M train windows.**
 
 **Pre-registered questions.** (1) Does width move `rapid_probe_kfold` above
 the U=1 seed band at the same budget (E-012: 0.363/0.446/0.493, sd 0.066)?
@@ -82,6 +91,9 @@ a single forward. Nothing compounds because nothing is fed back.
 
 **Design.** `--direct 3,6,12` on the E-012 U=1 trunk (d_model 192, 4
 layers, 60k, expdecay no-taper, same codec, same tensor), seeds {0, 1, 2}.
+**Scale: 1,859,200 parameters (trunk 1,822,144 + three 12,352-param
+heads) · batch 512 · 60,000 steps · 26,073,420 train windows (measured,
+#191 — the h=12 reach guard trims the plain pool slightly).**
 Loss adds mean-over-horizons last-position MSE; `--direct` empty is
 bit-identical to the old objective (tests/test_direct_heads.py asserts it).
 The instrument is `rollout.py`'s PAIRED comparison, built and toy-tested
@@ -256,6 +268,9 @@ the multi-step payoff or the axis is closed at every horizon *and* every
 budget, and `--unroll` becomes a documented dead end rather than a default.
 
 **REVISED before any arm started (Chris): expdecay, no terminal taper.**
+**Scale (rule 6, backfilled): 1,822,144 parameters · batch 512 · 60,000
+steps · ≈26.1 M train windows.**
+
 *"Maybe it would make sense to do the sweep with an LR regime that doesn't go
 to zero."* The six arms are **#164 and #171–#175**,
 `sched:expdecay --lr-cooldown-frac 0`: cosine warmup then `2^(−s/40000)`,

@@ -1100,6 +1100,8 @@ def main():
         m2({"stage2_warm_restart": init_from})
     m2({"stage2_config": {"d_model": a.d_model, "layers": a.layers, "K": K,
                           "steps": a.steps, "params_M": round(n_par2 / 1e6, 3),
+                          "batch": a.batch,
+                          "train_windows": int(len(pool_t)),
                           "d_z": int(ck["d_z"]), "seed": a.seed,
                           "unroll": a.unroll, "direct": a.direct,
                           "tag": a.tag or ""}})
@@ -1182,6 +1184,20 @@ def main():
     model.eval()
     results = {"run": a.run, "K": K, "d_model": a.d_model, "layers": a.layers,
                "steps": a.steps}
+    # THE FOUR SCALE NUMBERS, structured, from the run itself (Chris,
+    # 2026-08-11: "each entry … contains: the number of parameters, the
+    # batch size, the number of steps, the number of data points").
+    # Written by the trainer rather than the log entry, so they can be
+    # quoted but never invented — the C=24-mislabelled-as-14 incident is
+    # what happens when scale numbers travel by hand.
+    results["scale"] = {
+        "params": int(n_par2),
+        "batch": int(a.batch),
+        "steps": int(a.steps),
+        "data_points": int(len(pool_t)),   # train windows in the pool
+        "n_pixels": int(P),
+        "n_train_months": int((~t_hold).sum()),
+    }
 
     # ---- eval 1: z-space t+1 on held-out target months --------------------
     with torch.no_grad():

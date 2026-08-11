@@ -1,5 +1,30 @@
 # Leaderboard — predictive skill of frozen embeddings
 
+**Every entry carries the four scale numbers** (Chris, 2026-08-11):
+parameters · batch · steps · data points. Stage-2 rows quote them from the
+run's own `temporal.json:scale` block (written by the trainer since
+2026-08-11); older codec rows backfill as their runs recur
+(EXPERIMENTS.md rule 6).
+
+## Stage-2 heads at 60k on tensor `adcbe700` (2026-08-11)
+
+All on the frozen run-62 codec, expdecay no-taper, K=24, d_z=64. k-fold =
+`rapid_probe_kfold` (240 months, year-blocked); z-ratio = model/persistence
+z-MSE at t+1 (lower is better). Seed noise on the k-fold at this budget:
+sd 0.066.
+
+| arm | seeds landed | params | batch | steps | data points | k-fold per seed | z-ratio |
+|---|---|---|---|---|---|---|---|
+| U=1 plain (E-012) | 0, 1, 2 | 1,822,144 | 512 | 60,000 | ≈26.1 M windows | 0.363 / 0.446 / 0.493 | 0.388–0.391 |
+| U=4 (E-012/13b) | 0, 1 (2 running) | 1,822,144 | 512 | 60,000 | ≈26.0 M windows | 0.519 / 0.502 / … | 0.495 / 0.510 |
+| U=1 direct 3,6,12 (E-014) | 0, 1 (2 running) | 1,859,200 | 512 | 60,000 | 26,073,420 windows | 0.418 / 0.369 / … | 0.671 / 0.676 |
+| U=1 width 384/6 (E-015) | queued | 10,732,096 | 512 | 60,000 | ≈26.1 M windows | … | … |
+
+Direct arms also beat frozen-z persistence at their trained horizons
+(z-MSE ratios ≈0.56 / 0.50 / 0.65 at h=3/6/12, seed-stable ±0.006) — the
+t+1 z-ratio is the price of that objective, not a defect. The AMOC verdict
+at horizon comes from the combined rolleval once all seeds land.
+
 **The ranking metric is prediction, not reconstruction** (`trainprobe.py`,
 runnable mid-training via `train.py --eval-every N`): freeze the codec as it
 is, train a small fixed-seed temporal transformer on its embeddings (600
