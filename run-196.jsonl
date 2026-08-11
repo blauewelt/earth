@@ -1,0 +1,19 @@
+{"config": {"steps": 60000, "batch": 512, "d_z": 64, "patch": 3, "d_model": 576, "n_layers": 10, "n_heads": 8, "d_dec": 768, "anomaly": true, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 40.693, "data": "family3_na025.npz", "C": 39, "T": 516, "resume": "run-62,run-63"}}
+{"resumed": {"from": "run-62.pt", "parent_tag": "run-80", "at_step": 60000}}
+{"stage2_config": {"d_model": 192, "layers": 4, "K": 24, "steps": 60000, "params_M": 1.822, "d_z": 64, "seed": 1, "unroll": 4, "direct": "", "tag": ""}}
+{"stage2_step": 600, "stage2_zmse": 5.93526, "stage2_lr": 0.0002067431366294249, "stage2_wall_s": 11.9}
+{"stage2_step": 1200, "stage2_zmse": 4.97761, "stage2_lr": 0.0006552552643043062, "stage2_wall_s": 23.7}
+{"stage2_step": 1800, "stage2_zmse": 4.46879, "stage2_lr": 0.0009757703727682574, "stage2_wall_s": 35.5}
+{"stage2_step": 2400, "stage2_zmse": 4.10587, "stage2_lr": 0.0009930752866045584, "stage2_wall_s": 47.3}
+{"stage2_step": 3000, "stage2_zmse": 3.6457, "stage2_lr": 0.0009828035677096406, "stage2_wall_s": 59.1}
+{"stage2_step": 3600, "stage2_zmse": 3.55105, "stage2_lr": 0.0009726380927324591, "stage2_wall_s": 70.9}
+{"stage2_step": 4200, "stage2_zmse": 3.4443, "stage2_lr": 0.0009625777627556695, "stage2_wall_s": 82.7}
+{"stage2_step": 4800, "stage2_zmse": 3.20066, "stage2_lr": 0.0009526214902284061, "stage2_wall_s": 94.5}
+{"stage2_step": 5400, "stage2_zmse": 3.09952, "stage2_lr": 0.0009427681988487161, "stage2_wall_s": 106.3}
+{"stage2_step": 6000, "stage2_zmse": 2.95493, "stage2_lr": 0.0009330168234472073, "stage2_wall_s": 118.2}
+{"stage2_step": 6600, "stage2_zmse": 2.97155, "stage2_lr": 0.0009233663098719006, "stage2_wall_s": 130.0}
+{"stage2_step": 7200, "stage2_zmse": 2.76296, "stage2_lr": 0.000913815614874273, "stage2_wall_s": 141.8}
+{"stage2_step": 7800, "stage2_zmse": 2.78744, "stage2_lr": 0.0009043637059964794, "stage2_wall_s": 153.7}
+{"stage2_step": 8400, "stage2_zmse": 2.76383, "stage2_lr": 0.000895009561459741, "stage2_wall_s": 165.5}
+{"stage2_step": 9000, "stage2_zmse": 2.67067, "stage2_lr": 0.0008857521700538879, "stage2_wall_s": 177.3}
+{"stage2_step": 9600, "stage2_zmse": 2.58312, "stage2_lr": 0.0008765905310280445, "stage2_wall_s": 189.1}
