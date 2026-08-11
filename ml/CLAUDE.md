@@ -361,6 +361,15 @@ archive.
   changed to exit 1 on failure and the bare call site was not updated: #131's
   5.2 GiB upload found no room, exited 1, and took `probe_kfold.py` and
   `dip_check.py` down with it. The run reported success.
+- **`curl --data-binary "@file"` BUFFERS THE WHOLE FILE.** Use `-T file`,
+  which streams. Measured on a 300 MiB file: 226 MiB peak RSS against 10 MiB,
+  both returning 201. This is why `embed-cache-v1` sat at zero assets for a
+  full day of runs — a 1.5 GiB chunk died with `curl: option --data-binary:
+  out of memory` on the FIRST chunk, every time, since the day the feature
+  was written. Three other real bugs were found and fixed at that same call
+  site first (an always-zero exit code, an ENOSPC that filled a box, a caller
+  with no `|| true`); none of them was the reason it had never worked. **Read
+  the failing line before fixing the third thing around it.**
 - **`2>/dev/null` on a command whose failure you are branching on** hides the
   one line that explains the branch.
 - **A channel that starts later than the tensor** makes a month-0 mask empty,
