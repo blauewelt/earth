@@ -706,6 +706,43 @@ jobs:
           # the regime an unroll objective de-emphasises by design. Trains
           # nothing; `exit 0` skips the training-run ladder below.
           case "${{ inputs.window }}" in
+            disktriage*)
+              # DISK TRIAGE (2026-08-11): the box went 50/50 mid-queue and the
+              # failure mode was a treadmill — hygiene freed the published Z
+              # (correct: re-pullable), but the disk stayed full from
+              # something else, so the pull refused and every run paid an
+              # 80-minute in-RAM rebuild it could not persist. This mode
+              # answers "what is actually eating the disk" from a normal job,
+              # because the box has no SSH path from the session sandbox.
+              echo "== df =="; df -h / /opt/earth-cache 2>/dev/null || df -h /
+              echo "== du / (level 1) =="
+              du -x -BM --max-depth=1 / 2>/dev/null | sort -rn | head -15
+              echo "== du /opt (level 2) =="
+              du -x -BM --max-depth=2 /opt 2>/dev/null | sort -rn | head -25
+              echo "== du workspace =="
+              du -x -BM --max-depth=2 "$GITHUB_WORKSPACE/.." 2>/dev/null | sort -rn | head -20
+              echo "== du /root =="
+              du -x -BM --max-depth=2 /root 2>/dev/null | sort -rn | head -20
+              echo "== biggest files =="
+              find / -xdev -type f -size +200M -printf "%s\t%p\n" 2>/dev/null | sort -rn | head -25
+              case "${{ inputs.window }}" in
+                "disktriage:rm "*)
+                  # Targeted removal, allowlisted roots only — a typo in a
+                  # window input must not be able to delete the OS.
+                  P="${{ inputs.window }}"; P="${P#disktriage:rm }"
+                  for x in $P; do
+                    case "$x" in
+                      /opt/earth-cache/*|/root/.cache/*|/tmp/*|/opt/runner/_work/*|/opt/runner/_diag/*)
+                        du -sh "$x" 2>/dev/null
+                        rm -rf "$x" && echo "removed $x";;
+                      *) echo "REFUSED (not an allowlisted root): $x";;
+                    esac
+                  done
+                  echo "== df after =="; df -h /
+                  ;;
+              esac
+              exit 0
+              ;;
             publishtensor)
               # One-off: push this box's BUILT tensor to the data-cache
               # release, keyed by its sha256 prefix. The sources are durable;
