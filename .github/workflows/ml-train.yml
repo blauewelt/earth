@@ -393,6 +393,42 @@ jobs:
       - name: Build dataset (repo channels + RG-Argo depth + NCEP wind stress)
         run: |
           if [ "${{ inputs.tensor || 'family2' }}" = "family3_na025" ]; then
+            # PULL THE PUBLISHED TENSOR BEFORE BUILDING ONE. Boxes building
+            # their own produced different bytes under one filename (b40f5b0b
+            # vs adcbe700, measured 2026-08-11) and the tensor moves the head
+            # k-fold by 0.041 — the box-effect confound. Since #150 the
+            # canonical build is on data-cache-v1; a SECOND box (2026-08-11,
+            # Chris: "get a second box") is only cross-comparable because
+            # this pull makes every box hold the same bytes. sha256-verified;
+            # a failed pull falls back to building, LOUDLY, and provenance
+            # still records whatever tensor the run really used.
+            TPIN="adcbe700fb6e160b1c84d7acd8dc0333b34d07829db9abd62c721aab278b4848"
+            TF="ml/cache/family3_na025.npz"
+            if [ -f "$TF" ] && [ "$(sha256sum "$TF" | cut -d' ' -f1)" = "$TPIN" ]; then
+              echo "tensor already present and matches pin ${TPIN:0:10}"
+            else
+              echo "pulling pinned tensor ${TPIN:0:10} from data-cache-v1 …"
+              ok=1
+              for sfx in aa ab; do
+                curl -fsSL --max-time 1800 -o "$TF.$sfx.part" \
+                  "https://github.com/${GITHUB_REPOSITORY}/releases/download/data-cache-v1/family3_na025_${TPIN:0:10}.npz.$sfx" \
+                  || { ok=0; break; }
+              done
+              if [ "$ok" = 1 ]; then
+                cat "$TF.aa.part" "$TF.ab.part" > "$TF.new" && rm -f "$TF".*.part
+                got=$(sha256sum "$TF.new" | cut -d' ' -f1)
+                if [ "$got" = "$TPIN" ]; then
+                  mv "$TF.new" "$TF"
+                  echo "tensor seeded from the release, sha verified"
+                else
+                  rm -f "$TF.new"
+                  echo "::warning::pulled tensor sha $got != pin — discarded, will build"
+                fi
+              else
+                rm -f "$TF".*.part
+                echo "::warning::tensor pull failed — this box will BUILD its own, which may not hash ${TPIN:0:10}"
+              fi
+            fi
             python -u ml/build_family3.py
           else
             python ml/build_dataset.py --window "${{ inputs.window }}"

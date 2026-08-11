@@ -56,7 +56,12 @@ async function registrationToken() {
 // at $1/GB/month and asked for 120 GB, so storage was $0.167/h against a
 // $0.251/h GPU — 40% of the bill, and 100% of it while idle. What we
 // actually need is ~10 GB of data cache, ~5 GB of torch, plus checkouts.
-const DISK = 50;
+// 100 GB since 2026-08-11: 50 filled mid-queue (published-Z eviction →
+// refused pull → unpersistable in-RAM rebuild treadmill, ~80 min per run).
+// Vast cannot resize an existing instance (see `resize` below), so the size
+// chosen here is the size for the box's whole life. Override per-call with
+// DISK_GB when experimenting.
+const DISK = Number(process.env.DISK_GB || 100);
 
 // Our jobs are CPU-heavy at the edges (tensor build, embedding passes) and
 // GPU-bound in the middle, so the filter asks for real RAM and disk as well
