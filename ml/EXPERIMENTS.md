@@ -34,6 +34,67 @@ low-pass).
 
 ---
 
+<a id="e-010"></a>
+## E-010 · The unroll question, redesigned around REPLICATES — DISPATCHED 2026-08-11, #139 first
+
+**Why this replaces E-009's remaining arms.** Chris, after seeing the
+two-arm result: *"reshape toward seeds."*
+
+E-009 asked four unroll values at one seed each. That design can resolve the
+**0.28** effect the archive claimed and essentially nothing smaller — 95%
+intervals on `rapid_probe_kfold` run about ±0.14. And the 0.28 is exactly
+what stopped being believable: #131 (U=1) and #132 (U=2) **rank oppositely**
+on the k-fold and on the 36-month split that produced it. So the design was
+powered for an effect we no longer think exists, and blind to whatever is
+actually there.
+
+**The missing number is the noise floor, and it has never been measured.**
+`rapid_probe_kfold` is a day old. The nearest evidence is E-001's two seeds
+on the *unpooled head* at 1° (0.690 vs 0.654) and E-003b, where an attempted
+second seed reproduced bit-for-bit and was not a seed at all. So when U=1
+reads 0.555 and U=2 reads 0.377, **nobody can say whether 0.178 is large.**
+
+**Design.** U ∈ {1, 4} — the two most distant values — at **seeds 0, 1, 2**.
+Six runs, 6,000 steps each, everything else pinned to E-009's arms. The seed
+travels in `window` as `unroll:4,seed:2`, because `workflow_dispatch` is at
+its 25-input ceiling.
+
+**What it answers, in order of importance.**
+
+1. *What is the seed-to-seed spread of the head k-fold?* Three replicates at
+   each U give it directly. Every stage-2 comparison in this log has been
+   quoted without it.
+2. *Do U=1 and U=4 separate above that spread?* If not, **the unroll axis is
+   closed** and E-005's result is dead rather than merely withdrawn.
+3. Only if they do separate is filling in U=2 and U=8 worth anything.
+
+**What would falsify the unroll hypothesis.** Three seeds at U=1 and three at
+U=4 whose ranges overlap. That is the likely outcome on current evidence, and
+saying so at dispatch is the point of writing this now.
+
+**Analysis is PAIRED, not two intervals.** `scripts/paired_probe.py` over
+arms sharing folds; marginal CIs overlapping is not a test, and the house
+rule has said so since E-001.
+
+**Sequencing and a confound to avoid.** The arms must land on ONE box. Boxes
+build and cache their own `family3_na025.npz` and two have diverged — #121's
+persistence baseline reads 3.139 against 3.343 on the box #131/#132 used, so
+a sweep spread across boxes is cross-tensor as well as cross-unroll. Runs go
+out one at a time and the runner is checked on each; `sweep_table` reports the
+persistence fingerprint and refuses to compare arms that disagree.
+
+E-009's #131/#132 are on the retired box's tensor, so they are **not**
+poolable with these six.
+
+**Cost so far.** E-009 spent four dispatches that never started (#135–#138,
+~10 s each, wedged runner) plus three arms lost to the disk incident. The
+runner `gpu-box-45318655` was dropped from the pool at Chris's instruction to
+unblock the queue.
+
+**Result.** *pending.*
+
+---
+
 <a id="e-009"></a>
 ## E-009 · The unroll sweep: is U the axis that moves the AMOC probe? — RE-DISPATCHED 2026-08-10 as #131–#134
 
