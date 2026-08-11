@@ -59,10 +59,14 @@ def main():
                    os.path.join(run_dir, "pixelmae.pt"))
 
         heads = []
-        for unroll, seed in ((1, 0), (4, 1)):
+        # DELIBERATELY one head per convention: temporal.py builds its
+        # position table at k_max=K, train_joint.py at max(K, 36), and
+        # rollout.py guessed wrong in both directions on consecutive runs.
+        # It must load BOTH, by reading the table's own shape.
+        for (unroll, seed), kmax in (((1, 0), K), ((4, 1), max(K, 36))):
             torch.manual_seed(seed)
             hm = TemporalTransformer(d_z=DZ, d_model=8, n_heads=4,
-                                     n_layers=1, k_max=max(K, 36))
+                                     n_layers=1, k_max=kmax)
             hp = os.path.join(tmp, f"head_u{unroll}_s{seed}.pt")
             torch.save({"model": hm.state_dict(),
                         "args": {"K": K, "d_model": 8, "layers": 1,

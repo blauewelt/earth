@@ -330,13 +330,17 @@ def main():
     results = {"run": a.run, "data": os.path.basename(a.data),
                "K": K, "horizon": a.horizon, "heads": {}}
     for label, tk_ in head_specs:
-        # k_max mirrors TRAINING, not the window: temporal.py builds the
-        # position table at max(K, 36), so k_max=K fails to load any head
-        # trained with K < 36 — which is every production head (K=24). The
-        # toy test caught this; the GPU would have.
+        # k_max comes FROM THE CHECKPOINT, not from a convention. There are
+        # two conventions in this repo — temporal.py builds its position
+        # table at k_max=K, train_joint.py at max(K, 36) — and this line has
+        # now guessed wrong in BOTH directions: k_max=K failed the toy (whose
+        # fixture used the joint convention), max(K, 36) failed #157 against
+        # real stage-2 heads (pos.weight [24, 192]). The table's own first
+        # dimension is the one answer that cannot disagree with the file.
+        k_tbl = tk_["model"]["pos.weight"].shape[0]
         model = TemporalTransformer(d_z=ck["d_z"], d_model=tk_["args"]["d_model"],
                                     n_heads=4, n_layers=tk_["args"]["layers"],
-                                    k_max=max(K, 36))
+                                    k_max=k_tbl)
         model.load_state_dict(tk_["model"])
         model.eval()
         results["heads"][label] = eval_one(model, label)
