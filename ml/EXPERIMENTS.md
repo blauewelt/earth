@@ -61,8 +61,9 @@ schedule and tensor?
 this data size either, and the bottleneck moves definitively to the
 OBJECTIVE (E-006) and the embeddings themselves.
 
-**Dispatched 16:00Z as #180–#182** (seeds 0/1/2), plans published,
-queued behind E-013 (#176) and E-014 (#177–#179).
+**Dispatched 16:00Z as #180–#182** (seeds 0/1/2) — cancelled unstarted in
+the disk incident (see E-014's re-dispatch note) and re-queued 17:45Z as
+**#188–#190** on the two-box fleet with the sha-pinned tensor seed.
 
 **Result.** *pending.*
 
@@ -98,7 +99,16 @@ loss is not an artifact of iteration; it is in the embeddings or the
 predictability itself, and no readout change will buy it back.
 
 **Dispatched 16:00Z as #177–#179** (seeds 0/1/2), plans published,
-queued behind E-013 (#176).
+queued behind E-013 (#176). **Re-dispatched 17:45Z**: the box disk hit
+50/50 GB mid-#177 (hygiene freed the published Z, the re-pull refused
+for headroom, #177 fell back to an unpersistable in-RAM rebuild and went
+metrics-blind — every write to disk fails silently while the compute is
+fine). #178/#179 were cancelled unstarted; a SECOND box (Vast 47483091,
+100 GB disk, per Chris) was rented, the workflow now seeds the PINNED
+tensor `adcbe700…` from data-cache-v1 with sha verification (so
+cross-box arms are identical by construction), and seeds 0/1/2 re-queued
+as **#185–#187**. #177 itself runs to completion — if its API-side
+uploads survive the full disk it is a valid (duplicate) seed-0 arm.
 
 **Result.** *pending.*
 
