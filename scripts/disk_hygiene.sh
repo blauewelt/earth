@@ -97,6 +97,30 @@ done
 echo "  after embeddings: $(free_gb) GB free"
 [ "$(free_gb)" -ge "$MIN_FREE_GB" ] && exit 0
 
+# Per-run codec mirrors: run-<n>.pt. THE 2026-08-11 DISK KILLER — measured
+# by Vast-execute du on the stopped box: 47 files x 466 MB = 22 GB, almost
+# all byte-identical copies of the same frozen codec (runs that resume
+# run-62 at its final step and train only stage 2 still mirror the codec
+# under their own run number). ~1 GB/hour of unbounded growth under a busy
+# queue; it is what starved the Z cache, the pull headroom, and finally
+# "Set up job" itself. A mirror exists to survive job death MID-RUN, so
+# only the newest two run numbers can matter (the current job's and one
+# back for the rescue step); everything older is a mirror of state that
+# either completed (artifacts uploaded) or was already rescued.
+keep=$(ls "$CACHE"/ckpt/run-*.pt 2>/dev/null \
+       | sed 's/.*run-\([0-9]*\)\.pt/\1/' | sort -n | tail -2)
+for f in "$CACHE"/ckpt/run-*.pt; do
+  [ -e "$f" ] || continue
+  n=$(basename "$f" | sed 's/run-\([0-9]*\)\.pt/\1/')
+  case " $keep " in
+    *" $n "*) ;;  # one of the two newest — keep
+    *) sz=$(du -h "$f" | cut -f1)
+       rm -f "$f" && echo "    freed ckpt/run-$n.pt ($sz) — a stale per-run codec mirror";;
+  esac
+done
+echo "  after run mirrors: $(free_gb) GB free"
+[ "$(free_gb)" -ge "$MIN_FREE_GB" ] && exit 0
+
 # Rescued orphan checkpoints: copies of copies, and the rescue step uploads
 # them. Only drop the ones the release confirms.
 for f in "$CACHE"/ckpt/orphan-*; do
