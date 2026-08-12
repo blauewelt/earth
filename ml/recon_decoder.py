@@ -253,6 +253,12 @@ def main():
             print(f"  step {s:>5}/{a.steps}  train {float(loss):.4f}  "
                   f"val {vl:.4f}  ({time.time()-t0:.0f}s){tag}", flush=True)
     dec.load_state_dict(best_state)
+    # persist the trained decoder next to its JSON — the sweep's first pass
+    # threw the weights away, which blocked the decoded-fields transport
+    # probe until a retrain
+    torch.save({"hidden": a.hidden, "layers": a.layers, "d_z": ck["d_z"],
+                "C": C, "model": best_state, "best_val_mse": best_val},
+               a.out.replace(".json", ".pt"))
 
     # ---- score with the exact E-019a section audit ------------------------
     with torch.no_grad():

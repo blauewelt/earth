@@ -161,6 +161,59 @@ standardisation leaves spatial variance structure inside a channel (the
 optimizer samples basin-wide; a channel whose variance lives away from
 26.5°N earns little gradient there).
 
+### E-019b1 RESULT (sandbox CPU sweep, `ml/recon_decoder.py`, `ml/runs/recon_decoder/`) — the deep-ocean information was in z all along
+
+Multi-output decoders (z → hidden^L → 39) trained on the published
+f16 Z cache (verified against a local f32 re-encode before training),
+6M identical pairs from train months × non-holdout lons, scored by the
+E-019a audit. Deep-T variance lost (train / held-out months):
+
+| decoder | params | deep-T lost | held-out months |
+|---|---|---|---|
+| production (E-019a) | 1.3M | 6.9% | 7.0% |
+| retrained 768×2 | **0.67M** | 2.2% | 2.4% |
+| retrained 1536×3 | 4.9M | 1.4% | 1.9% |
+| retrained 3072×3 (⅓ the budget) | 19.2M | 1.6% | 2.2% |
+
+A decoder HALF the production size recovers most of the "lost" deep-T
+— so E-019a's deficit was TRAINING EMPHASIS (masked-dominated
+objective, visible weight 0.1, equal channel weights, neighbour
+duties), not encoder loss and not even decoder capacity. Held-out
+months (excluded from codec training, decoder training, and the
+stats) and the held-out lon block read within noise of train
+throughout: real compression, not memorisation. On a samples-seen
+axis the 19.2M curve dominates the 4.9M everywhere they overlap with
+NO train-val gap anywhere — budget-limited, not data- or z-limited;
+extended runs are in flight. b2 (encoder retrain) is NOT needed for
+fidelity.
+
+### The ceiling decomposition (`ml/probe_state_ceiling.py`) — 0.631 is a STATE/LABEL ceiling, not a representation tax
+
+Chris asked what the "decoder-induced ceiling" becomes. The decoder
+was never in the 0.631 chain, so the answer is a decomposition: the
+exact probe_kfold protocol over feature sets bracketing the pipeline
+(protocol checks reproduced the published numbers: pooled z 0.627 vs
+0.631 published; wind 0.568 exactly):
+
+| features | ridge | MLP |
+|---|---|---|
+| pooled z (64f) | 0.627 [0.503, 0.735] | 0.611 |
+| pooled TRUE fields (39f, decoder=identity) | 0.631 [0.496, 0.746] | 0.530 |
+| 5-segment z (320f) | 0.646 [0.539, 0.741] | — |
+| 5-segment TRUE (195f) | 0.653 [0.549, 0.741] | — |
+
+**z matches the true uncompressed state at every read-out** (and beats
+it under the MLP — compression aids small-sample learnability). So the
+0.631 is what THIS monthly-mean section state yields to a 240-label
+read-out — not an encoder tax, not a decoder tax. Nonlinearity does
+not help at this n; zonal structure helps mildly (+0.02, inside the
+CIs). Consequences: E-018 (layer sweep) is predicted null on the probe
+and downgraded; E-019b2 unnecessary for the probe; the levers that
+remain on the nowcast axis are LABELS (longer series — the Florida
+Current cable reaches back to 1982) and read-out structure under
+sample constraints; the levers on the FORECAST axis are unchanged
+(capacity at horizon, E-006).
+
 ---
 
 <a id="e-017"></a>
