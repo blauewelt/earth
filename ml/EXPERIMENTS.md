@@ -44,6 +44,43 @@ low-pass).
 
 ---
 
+<a id="e-020"></a>
+## E-020 · U=4 at the 32M trunk: does unroll's probe gain survive capacity? — DISPATCHED 2026-08-12 ~18:10Z
+
+**Why, from Chris.** *"It would be nice to have our current best: best
+decoder, best large stage 2, with U=1 and U=4 done till the morning."*
+U=1 at 576/8 exists (E-017, three seeds). U=4 has only ever been run at
+the 1.8M trunk, where it is a genuine nowcast-probe specialist: **+0.09
+k-fold at every seed (E-013b), +28% one-step forecast cost, no horizon
+gain**. Nobody knows whether that composes with capacity — and the
+stakes changed today: U=1's head probe SATURATED at ~0.49 across
+10.7M→32M while the state/label ceiling sits at 0.63 (E-019's
+decomposition). If unroll's compression mechanism still buys +0.09 at
+32M, the head closes most of the remaining gap to the ceiling.
+
+**Design.** Identical to E-017's arms except `unroll:4`: 576/8 =
+**32,038,336 params · batch 256 · 60,000 steps · ~28M windows** (the
+trainer's scale block is authoritative), expdecay no-taper, tensor
+`adcbe700`, frozen run-62 codec, seeds {0, 1, 2}, pinned two-and-one
+across the boxes, job_timeout 600 (U=4 ≈ 2.5–3× stage-2 wall time).
+
+**Pre-registered questions.** (1) Does the nowcast probe move ABOVE
+E-017's 0.462–0.497 band — toward the 0.63 ceiling — with U=4-typical
+seed-tightness? (2) Is the forecast cost still ~+28% (predict z-ratio
+≈ 0.24–0.25 vs U=1's 0.190–0.194)? (3) Held-out val curve and amp: does
+full-depth BPTT at 32M stay stable? Rollout at horizon is a follow-up
+eval (the #211 protocol, and through the retrained decoder), not part
+of these runs.
+
+**Falsifier.** Probe stays inside U=1's band → the U=4 gain is a
+small-trunk phenomenon and the axis closes at scale; the morning
+package is then U=1 + best decoder, and the remaining nowcast gap
+belongs to the read-out/labels, not the trunk.
+
+**Result.** *pending.*
+
+---
+
 <a id="e-019"></a>
 ## E-019 · COPY RECONSTRUCTION: how much does the codec's round trip lose? — audit dispatched 2026-08-12 ~10:20Z, RESULT ~10:35Z
 
