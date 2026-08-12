@@ -55,7 +55,15 @@ const runsRes = await fetch(
 if (!runsRes.ok) { console.error("cannot list runs:", runsRes.status); process.exit(1); }
 const RUNS = { workflow_runs: (await runsRes.json()).workflow_runs };
 
-const data = { runs: RUNS, live: {}, phase: {}, plan: {}, docs: "{}", fleet: null };
+// Releases must be real: the stub used to answer "[]" for every API URL
+// except the runs list, so the RELEASES section rendered "no releases
+// found" in every screenshot — the one check that exists so my model of
+// the page cannot fool me was itself serving fiction for that section
+// (caught 2026-08-12 when it matched a transient on Chris's phone).
+const relRes = await fetch(`https://api.github.com/repos/${REPO}/releases`, { headers: H });
+const RELS = relRes.ok ? await relRes.json() : [];
+
+const data = { runs: RUNS, rels: RELS, live: {}, phase: {}, plan: {}, docs: "{}", fleet: null };
 for (const r of RUNS.workflow_runs) {
   const n = r.run_number;
   data.live[n] = await txt(`https://raw.githubusercontent.com/${REPO}/ml-live-${n}/metrics.jsonl`)
@@ -82,9 +90,13 @@ const b = await chromium.launch();
 const p = await b.newPage({ viewport: { width: 430, height: 1600 }, deviceScaleFactor: 2 });
 const errs = [];
 p.on("pageerror", (e) => errs.push(e.message));
-await p.route(/https:\\/\\/api\\.github\\.com\\/.*/, (r) => r.fulfill({
-  status: 200, contentType: "application/json",
-  body: /workflows/.test(r.request().url()) ? JSON.stringify(D.runs) : "[]" }));
+await p.route(/https:\\/\\/api\\.github\\.com\\/.*/, (r) => {
+  const u = r.request().url();
+  const body = /workflows/.test(u) ? JSON.stringify(D.runs)
+             : /releases/.test(u)  ? JSON.stringify(D.rels)
+             : "[]";
+  return r.fulfill({ status: 200, contentType: "application/json", body });
+});
 await p.route(/https:\\/\\/raw\\.githubusercontent\\.com\\/.*/, (r) => {
   const u = r.request().url();
   const ok = (t) => r.fulfill({ status: 200, contentType: "text/plain", body: t });

@@ -1345,12 +1345,17 @@
       var m0 = parseJsonl(text);
       m0.__plan = run.__plan;      // so the LR overlay can draw the remainder
       if (!m0.loss.length) {
-        if (run.status === "completed") return "";
         // Stage-2 and head-probe jobs never train a codec, so they have no
         // loss curve by design — but they DO have a stage-2 panel worth
-        // showing. Only fall back to the waiting card when there is nothing.
+        // showing, WHATEVER the run's status. This branch used to return ""
+        // for completed runs BEFORE trying the stage-2 panel, so #208-#210's
+        // stage-2 curves showed while they ran and vanished the moment they
+        // finished — "None of the last 24 runs produced curves" over a row
+        // of successful 60k trainings (Chris, 2026-08-12). Completed-and-
+        // empty still returns "" — a cancelled run has nothing to show.
         var s2only = stage2Chart(m0) + jointChart(m0);
         if (s2only) return head + s2only + "</div>";
+        if (run.status === "completed") return "";
         return waitingCard(run, m0);
       }
       return withParent(m0, run).then(function (m) {
