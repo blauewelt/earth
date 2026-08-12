@@ -8,6 +8,24 @@ run's own `temporal.json:scale` block (written by the trainer since
 
 ## Reading the numbers (arrows say which way is good)
 
+**The jargon, once — none of it is ocean-specific.** A **probe** is a
+deliberately simple model (here: linear) trained on top of FROZEN
+features to test what information those features already contain — the
+standard evaluation trick from representation learning (a "linear
+probe" on a frozen image encoder is the classic case). The probe is
+kept weak ON PURPOSE: if the readout were an expressive network, a good
+score could mean "the readout is clever" instead of "the features carry
+the signal", and the leaderboard would stop measuring the thing it
+ranks. **Ridge** (ridge regression, statistics, 1970) is plain linear
+regression plus a penalty that shrinks the coefficients — needed here
+because 64–576 correlated features against only ~200 usable months
+would otherwise memorise the noise; the penalty strength λ is chosen on
+a held-out slice of the training years, never on test months. And
+**k-fold** means the months are split into blocks (whole YEARS here, so
+adjacent-month leakage can't flatter the score), each block scored by a
+probe trained on the others, so every month is scored out-of-sample
+exactly once.
+
 - **k-fold RAPID r ↑** — can a ridge read the CURRENT month's transport
   out of the features? Year-blocked k-fold over ~240 RAPID months,
   deseasonalised, block-bootstrap CI. 0 = nothing, 1 = perfect; the
