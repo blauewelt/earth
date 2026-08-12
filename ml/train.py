@@ -46,6 +46,25 @@ def parse():
     p.add_argument("--d-dec", type=int, default=256,
                    help="decoder width (scale with d_model; 512 at 320x8)")
     p.add_argument("--mask-ratio", type=float, default=0.5)
+    # ---- E-019b: copy-reconstruction knobs (audit: ml/recon_eval.py) ------
+    p.add_argument("--rec-w-visible", type=float, default=0.1,
+                   help="loss weight of VISIBLE channels in the offset-0 "
+                        "reconstruction (masked channels weigh 1.0). The "
+                        "full-visibility round trip is the artefact stage 2 "
+                        "and every probe consume, yet historically it was "
+                        "trained only as this 0.1 side effect; E-019a "
+                        "measured it losing 6.9% of deep-T variance.")
+    p.add_argument("--upweight-chans", default="",
+                   help="regex over channel NAMES (e.g. "
+                        "'rg_[ts](900|1100|1300|1500|1700|1900)'); matched "
+                        "channels get --upweight in both recon and "
+                        "neighbour losses. Refuses to run if it matches "
+                        "nothing — a typo'd regex silently doing nothing is "
+                        "the classic reports-success-does-nothing failure.")
+    p.add_argument("--upweight", type=float, default=1.0,
+                   help="loss multiplier for --upweight-chans channels")
+    p.add_argument("--dec-layers", type=int, default=2,
+                   help="decoder HIDDEN layers (2 = every pre-E-019b codec)")
     p.add_argument("--holdout-years", default="2009,2017,2023")
     p.add_argument("--holdout-lon", default="-45,-25")   # a mid-Atlantic block
     p.add_argument("--anomaly", action="store_true",
@@ -189,8 +208,22 @@ def main():
         return (torch.as_tensor(t), torch.as_tensor(y), torch.as_tensor(x),
                 torch.as_tensor(ctx, dtype=torch.float32))
 
+    # ---- per-channel loss weights (E-019b) --------------------------------
+    cw = np.ones(C, np.float32)
+    if a.upweight_chans:
+        import re as _re
+        hit = [c for c in range(C) if _re.fullmatch(a.upweight_chans, chan[c])]
+        if not hit:
+            raise SystemExit(f"--upweight-chans {a.upweight_chans!r} matches "
+                             f"no channel in {chan} — refusing (a silent "
+                             f"no-op here is a fake experiment)")
+        cw[hit] = a.upweight
+        print(f"upweight ×{a.upweight}: {[chan[c] for c in hit]}")
+    cwt = torch.as_tensor(cw, device=dev)
+
     model = PixelMAE(n_chan=C, d_z=a.d_z, patch=a.patch, d_model=a.d_model,
-                     n_layers=a.n_layers, n_heads=a.n_heads, d_dec=a.d_dec).to(dev)
+                     n_layers=a.n_layers, n_heads=a.n_heads, d_dec=a.d_dec,
+                     dec_layers=a.dec_layers).to(dev)
     print(f"codec parameters: {sum(p_.numel() for p_ in model.parameters())/1e6:.2f}M")
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     # Cosine annealing whose TOTAL can be re-fitted mid-run (--max-minutes):
@@ -229,7 +262,9 @@ def main():
         off0 = torch.zeros(B, C, 3, dtype=torch.long, device=dev)
         pred = model.query(z, qc, off0)
         l_rec = huber(pred, v)
-        w = mask.float() + 0.1 * (o & ~mask).float()          # masked channels dominate
+        # masked channels dominate; visible weight and per-channel upweights
+        # are E-019b knobs (defaults reproduce the historical 0.1 exactly)
+        w = (mask.float() + a.rec_w_visible * (o & ~mask).float()) * cwt[None, :]
         l_rec = (l_rec * w).sum() / w.sum().clamp(min=1)
 
         # neighbours: one random offset per sample
@@ -241,7 +276,8 @@ def main():
         vn, on = gather(tn.cpu(), yn.cpu(), xn.cpu())
         offn = dxyz[:, None, :].expand(-1, C, -1).long()
         predn = model.query(z, qc, offn)
-        l_nei = (huber(predn, vn) * on.float()).sum() / on.float().sum().clamp(min=1)
+        wn = on.float() * cwt[None, :]
+        l_nei = (huber(predn, vn) * wn).sum() / wn.sum().clamp(min=1)
         return l_rec, l_nei
 
     if (a.eval_every or a.light_probe_every) and not a.anomaly:

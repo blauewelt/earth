@@ -31,7 +31,7 @@ import torch.nn as nn
 
 class PixelMAE(nn.Module):
     def __init__(self, n_chan, d_model=128, n_heads=4, n_layers=4,
-                 d_z=32, d_dec=256, max_abs_offset=3, patch=1):
+                 d_z=32, d_dec=256, max_abs_offset=3, patch=1, dec_layers=2):
         super().__init__()
         self.n_chan = n_chan
         self.d_z = d_z
@@ -67,11 +67,17 @@ class PixelMAE(nn.Module):
         # embedded; decoder never sees the input values, only z.
         self.q_chan = nn.Embedding(n_chan, 64)
         self.q_off = nn.Embedding(2 * max_abs_offset + 1, 16)  # shared per axis
-        self.decoder = nn.Sequential(
-            nn.Linear(d_z + 64 + 3 * 16, d_dec), nn.GELU(),
-            nn.Linear(d_dec, d_dec), nn.GELU(),
-            nn.Linear(d_dec, 1),
-        )
+        # dec_layers = HIDDEN layers. The historical decoder (2 hidden) is a
+        # ~1.3M-param MLP against a 40M encoder; E-019a measured the round
+        # trip losing 6.9% of deep-temperature variance, so the depth is now
+        # a knob (E-019b). dec_layers=2 reproduces every old checkpoint
+        # exactly — codec_from_ckpt defaults it for args written before the
+        # knob existed.
+        dec = [nn.Linear(d_z + 64 + 3 * 16, d_dec), nn.GELU()]
+        for _ in range(dec_layers - 1):
+            dec += [nn.Linear(d_dec, d_dec), nn.GELU()]
+        dec += [nn.Linear(d_dec, 1)]
+        self.decoder = nn.Sequential(*dec)
         for p in (self.mask_tok, self.miss_tok, self.cls_tok):
             nn.init.normal_(p, std=0.02)
 
@@ -151,4 +157,5 @@ def codec_from_ckpt(ck, n_chan):
                     d_model=a.get("d_model", 128),
                     n_layers=a.get("n_layers", 4),
                     n_heads=a.get("n_heads", 4),
-                    d_dec=a.get("d_dec", 256))
+                    d_dec=a.get("d_dec", 256),
+                    dec_layers=a.get("dec_layers", 2))

@@ -596,6 +596,29 @@ jobs:
           CKPT_TAG: run-${{ github.run_number }}
           TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
         run: |
+          # E-019b: `window` may carry a recw: token with the codec's
+          # copy-reconstruction knobs, e.g.
+          #   recw:vis=0.3;upw=3;chans=rg_[ts](900|1100|1300|1500|1700|1900);declayers=4
+          # Semicolon-separated k=v pairs, no spaces (token ends at the first
+          # space). Built as a bash ARRAY because the chans value is a regex
+          # whose (|) would be glob-fodder in an unquoted $VAR expansion.
+          # Unknown keys are FATAL: a typo'd knob silently ignored is the
+          # reports-success-does-nothing failure this file keeps relearning.
+          RECW=()
+          case "${{ inputs.window }}" in *recw:*)
+            SPEC="${{ inputs.window }}"; SPEC="${SPEC#*recw:}"; SPEC="${SPEC%% *}"
+            IFS=';' read -ra KV <<< "$SPEC"
+            for kv in "${KV[@]}"; do
+              case "$kv" in
+                vis=*)       RECW+=(--rec-w-visible "${kv#vis=}");;
+                upw=*)       RECW+=(--upweight "${kv#upw=}");;
+                chans=*)     RECW+=(--upweight-chans "${kv#chans=}");;
+                declayers=*) RECW+=(--dec-layers "${kv#declayers=}");;
+                *) echo "::error::unknown recw key: $kv"; exit 1;;
+              esac
+            done
+            echo "recw flags: ${RECW[*]}"
+          ;; esac
           python -u ml/train.py \
             --data "$TENSOR" \
             --steps "${{ inputs.steps }}" \
@@ -611,6 +634,7 @@ jobs:
             --n-layers "${{ inputs.codec_layers || '4' }}" \
             --n-heads "${{ inputs.codec_heads || '4' }}" \
             --d-dec "${{ inputs.codec_d_dec || '256' }}" \
+            "${RECW[@]}" \
             $([ "${{ inputs.anomaly }}" = "true" ] && echo --anomaly) \
             $([ "${{ inputs.anomaly }}" = "true" ] && [ "${{ inputs.eval_every }}" != "0" ] \
               && echo --eval-every "${{ inputs.eval_every }}") \
