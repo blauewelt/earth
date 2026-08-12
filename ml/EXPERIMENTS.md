@@ -44,6 +44,53 @@ low-pass).
 
 ---
 
+<a id="e-019"></a>
+## E-019 · COPY RECONSTRUCTION: how much does the codec's round trip lose? — audit dispatched 2026-08-12 ~10:20Z
+
+**Why, from Chris.** *"We take some input. We encode it. We decode it, and
+then we look how far away it is, and it should be almost identical."* His
+framing: the 0.631 read-out ceiling is encoder-derived — the bottleneck
+throws information away before any predictor sees it — and a system aiming
+at the best possible AMOC prediction should not be paying an avoidable
+representation tax. The decoder programme starts by MEASURING that tax.
+
+**What has never been measured.** The codec trains on MASKED reconstruction
+(hidden channels weight 1.0, visible 0.1, Huber); its final train loss_rec
+≈ 0.09 is a masked-dominated mix. Nobody has ever scored the
+full-visibility round trip — encode exactly what stage 2 and the probes
+consume (mask = none), decode all 39 channels at offset 0, compare — and
+that is the identity Chris is asking about.
+
+**Design (E-019a, the audit).** `ml/recon_eval.py`: the 26.5°N section
+(265 px × 516 months), encode via `temporal.embed_everything` itself (the
+production code path, on a 3-row latitude slab whose streaming
+standardization is verified against the exact in-RAM recipe on two full
+channels before scoring), decode all channels, per-channel r and RMSE in
+standardized units (RMSE² ≈ fraction of channel variance lost). Split
+three ways along the codec's own blocked holdout: train · held-out months
+(2009/2017/2023) · held-out lon block (−45,−25). Pooled section-mean
+scores reported separately (the transport ridge reads pooled features).
+Runs on sandbox CPU — no GPU spend. **Scale: 40,693,xxx-param codec
+(run-62 `f3_anchor41M`), eval-only, 136,740 encoder forwards, 0 training
+steps.**
+
+**Pre-registered questions.** (1) How far from identity is the round trip
+— mean r, and which channels lose most? (2) Do the transport-carrying
+channels (ssh, deep rg_t/rg_s) reconstruct better or worse than average?
+(3) Does fidelity hold on held-out months and the held-out lon block
+(compression that generalises), or collapse there (memorisation)?
+
+**Falsifier.** If full-visibility reconstruction already reads r ≈ 0.99
+everywhere, the bottleneck is NOT materially lossy at the section, the
+0.631 ceiling is a read-out/label-noise story rather than an
+encoder-lossiness story, and decoder-capacity work is the wrong lever —
+E-006/E-018 remain the levers. Large per-channel losses instead name
+exactly what d_z / decoder capacity / loss weighting should recover.
+
+**Result.** *pending.*
+
+---
+
 <a id="e-017"></a>
 ## E-017 · The second capacity rung: 768/8 — DISPATCHED 2026-08-11 ~22:45Z
 
