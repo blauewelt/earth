@@ -121,16 +121,45 @@ within noise of train (e.g. rg_t1900: 0.938/0.940/0.936) — genuine
 compression, not memorisation. The audit's falsifier did NOT fire: the
 round trip is not ≈0.99, so decoder work has a real target.
 
-**E-019b design (next).** Retrain the 41M codec, d_z=64 held fixed to
-isolate the change from stage 2, with: per-channel loss weights
-upweighting the deep channels; visible-channel weight raised from 0.1
-(the full-visibility round trip IS the consumed artefact — today it is
-a side effect); decoder widened/deepened (the current decoder is a
-~1.3M-param MLP against a 40.7M encoder). Score: this audit re-run +
-`probe_kfold` vs 0.631. Falsifier: recon improves but the probe does
-not move → the lost variance was not transport-readable, and the
-ceiling is a label/read-out story after all. d_z=128 is the SECOND
-rung, only if the first moves the probe.
+**E-019b design (next), REVISED per Chris's co-training question into two
+stages that separate the two possible culprits.** The audit is a LOWER
+BOUND on what z contains — it can under-read z if the ~1.3M decoder is
+too small to EXPRESS what the encoder kept. So:
+
+- **E-019b1 — decoder-only, encoder FROZEN.** Retrain just a bigger
+  decoder (4 hidden × d_dec 1536, ~7M params) against run-62's frozen
+  embeddings. z does not change, so every probe and stage-2 head is
+  untouched by construction; the question is purely *"was the deep-T
+  variance in z all along, unexpressed?"* Recovers → the audit was
+  decoder-limited, z is richer than measured, and rollout field skill
+  improves for free (chan_skill decodes through query()). Does not
+  recover → the information is genuinely absent from z, and only b2
+  can put it there. Nearly free: trains from the published Z cache
+  with zero encoder forwards.
+- **E-019b2 — full co-trained retrain** (the codec has ALWAYS been
+  co-trained end-to-end — one AdamW over encoder+decoder, loss
+  l_rec + 0.5·l_nei — so this is a retrain with different weights, not
+  a first co-training): d_z=64 held fixed, per-channel loss weights
+  upweighting deep rg_t/rg_s, visible-channel weight raised from 0.1,
+  the bigger decoder. Changes z; scored by this audit + `probe_kfold`
+  vs 0.631. Falsifier: recon improves but the probe does not move →
+  the lost variance was not transport-readable, and the ceiling is a
+  label/read-out story after all. d_z=128 is the rung after, only if
+  b2 moves the probe.
+
+Normalization check (Chris asked whether channel amplitudes could be
+driving the deficit): every dynamic channel is deseasonalised per-pixel
+then standardised to UNIT VARIANCE per channel (train-years,
+non-holdout-lon stats), so the loss and the audit see equalised
+amplitudes, and r is scale-free besides. Verified at the section:
+rmse ≈ √(1−r²) for the deep channels (rg_t1900: 0.332 vs 0.347), i.e.
+section-local variance ≈ the global unit — the deep-T deficit is not an
+amplitude artefact. Residual normalization-adjacent contributors worth
+remembering: Huber's transition sits at 1.0 in these units (tail-heavy
+channels get extremes down-weighted), and global-per-channel
+standardisation leaves spatial variance structure inside a channel (the
+optimizer samples basin-wide; a channel whose variance lives away from
+26.5°N earns little gradient there).
 
 ---
 
