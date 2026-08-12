@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-019"></a>
-## E-019 · COPY RECONSTRUCTION: how much does the codec's round trip lose? — audit dispatched 2026-08-12 ~10:20Z
+## E-019 · COPY RECONSTRUCTION: how much does the codec's round trip lose? — audit dispatched 2026-08-12 ~10:20Z, RESULT ~10:35Z
 
 **Why, from Chris.** *"We take some input. We encode it. We decode it, and
 then we look how far away it is, and it should be almost identical."* His
@@ -87,7 +87,50 @@ encoder-lossiness story, and decoder-capacity work is the wrong lever —
 E-006/E-018 remain the levers. Large per-channel losses instead name
 exactly what d_z / decoder capacity / loss weighting should recover.
 
-**Result.** *pending.*
+### RESULT (sandbox CPU, `ml/runs/recon_audit/recon_eval.json`) — the round trip is good, NOT identical, and the loss concentrates exactly where the transport lives
+
+Mean r **0.975** per-pixel / **0.979** pooled over 39 channels (train
+split). Both exactness checks passed on the real tensor (streaming vs
+in-RAM recipe, max |Δ| 1.9e-06); section resolved to the production 265
+pixels.
+
+**(1) Distance from identity, by channel group** (per-pixel variance
+lost = rmse², train split):
+
+| group | variance lost | worst members |
+|---|---|---|
+| winds (tau_*) | 1.0–1.2% | — |
+| ssh | 1.8% | — |
+| upper-ocean rg_t/rg_s (10–700 dbar) | 2.1–2.3% | — |
+| deep rg_s (900–1900) | 3.5% | rg_s1900 r=0.952 |
+| **deep rg_t (900–1900)** | **6.9%** | **rg_t1900 r=0.938, rg_t1700 r=0.941** |
+
+**(2) The transport carriers answer in two directions**: ssh
+reconstructs best of the ocean channels (r 0.990), but the DEEP
+TEMPERATURE channels reconstruct worst — 6.9% of variance lost,
+3× the upper ocean — and deep salinity is second-worst. RAPID's
+mid-ocean transport is thermal wind: the vertical integral of the
+density gradient, i.e. precisely deep T and S. The bottleneck
+preferentially discards the channels the transport integral weights.
+Pooling does NOT cancel it (pooled deep-T r ≈ 0.95): the probe's
+input genuinely lacks deep-density detail. This is Chris's
+"encoder-derived prediction uncertainty", measured and localised.
+
+**(3) It generalises**: held-out months and the held-out lon block read
+within noise of train (e.g. rg_t1900: 0.938/0.940/0.936) — genuine
+compression, not memorisation. The audit's falsifier did NOT fire: the
+round trip is not ≈0.99, so decoder work has a real target.
+
+**E-019b design (next).** Retrain the 41M codec, d_z=64 held fixed to
+isolate the change from stage 2, with: per-channel loss weights
+upweighting the deep channels; visible-channel weight raised from 0.1
+(the full-visibility round trip IS the consumed artefact — today it is
+a side effect); decoder widened/deepened (the current decoder is a
+~1.3M-param MLP against a 40.7M encoder). Score: this audit re-run +
+`probe_kfold` vs 0.631. Falsifier: recon improves but the probe does
+not move → the lost variance was not transport-readable, and the
+ceiling is a label/read-out story after all. d_z=128 is the SECOND
+rung, only if the first moves the probe.
 
 ---
 
