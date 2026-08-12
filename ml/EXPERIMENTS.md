@@ -101,7 +101,42 @@ FORECAST. For TRANSPORT, capacity is done: this is E-008's lesson at the
 next level ("the thing more buys is not the thing we want"), and it moves
 the AMOC bottleneck decisively to the OBJECTIVE and the EMBEDDINGS —
 E-006's territory. A third rung is justified only for field-forecast
-goals, not for the probe.
+goals, not for the probe. *(Revised by the rollout below: the nowcast
+probe saturated, but AMOC-at-HORIZON did not.)*
+
+### ROLLOUT (#211, closed ~09:55Z 08-12) — at horizon, capacity has NOT saturated; the 32 M trunk is the programme's best AMOC forecaster
+
+Instrument: `rollout.py` staggered starts into 3 holdout years, K=24,
+h=1..12, MSSS per Goddard 2013 vs clim/persistence/damped-AR1; AMOC via
+the truefit band ridge on rolled section states (the noisiest instrument
+in the ladder — but read here at 3 seeds per rung). Baselines measured
+on identical points in #200: 1.8 M trunk AUC(msss_damped) 0.27–0.29,
+truefit ensemble bands 0.41/0.16/0.23.
+
+| rung | AUC(msss_damped), 3 seeds | truefit h1-3 | h4-6 | h7-12 |
+|---|---|---|---|---|
+| 1.8 M (#200) | 0.27–0.29 | 0.41 | 0.16 | 0.23 (ens) |
+| 10.7 M E-015 | 0.499 / 0.510 / 0.518 | 0.466 | 0.348 | 0.398 (seed means) |
+| 32 M E-017 | **0.643 / 0.644 / 0.645** | 0.458 | 0.353 | **0.463** |
+
+**Field skill at horizon scales without any visible bend** — 0.28 →
+0.51 → 0.64, and the 32 M seeds agree to 0.002. The skill CURVE also
+changes shape: seed-mean msss_clim runs 0.760 (h=1) → 0.586 (h=12),
+nearly flat beyond h≈6, with amplitude held at 0.81–0.88 (the small
+trunks smoothed toward climatology; 32 M keeps variance out to a year).
+ACC 0.87 → 0.77 across the year.
+
+**AMOC at 7–12 months lead roughly DOUBLES over the small trunk**
+(0.23 → 0.46), and the E-017 triple is tight (0.492/0.425/0.473, sd
+0.034) where E-015's spread is wide (0.314/0.568/0.313 — seed 1 a high
+outlier throughout). So the Q2 "saturation" is a NOWCAST-only story:
+what capacity stopped buying is current-month transport read-out; what
+it kept buying is the dynamics that carry transport information months
+ahead. For the main objective — predicting AMOC, not nowcasting it —
+the capacity axis is still open, and a third rung is back on the table
+alongside E-006/E-018. (rolledfit bands again read broken — 0.16–0.21
+at h4+ — consistent with the established overfit; truefit remains the
+instrument.)
 
 ---
 
@@ -220,8 +255,12 @@ then re-pinned to the new box per Chris as **#193–#195** (final).
 probe moves up: mean **0.486** vs the 1.8 M trio's 0.434, with U=4-like
 tight seeds (sd 0.024 vs 0.066) — and WITHOUT unroll's +28% forecast
 tax, which makes width strictly preferable to fixed U=4 as a probe
-carrier (U=4's 0.524 edge costs a fifth of the forecast). (2) Rollout
-verdict pending the morning rolleval. (3) z-ratio **0.245–0.250**
+carrier (U=4's 0.524 edge costs a fifth of the forecast). (2) Answered
+by #211: AUC(msss_damped) 0.499/0.510/0.518 vs the 1.8 M trunk's
+0.27–0.29 on identical points, truefit bands 0.466/0.348/0.398 (seed
+means; seed 1 a high outlier) vs 0.41/0.16/0.23 — width moves every
+horizon metric; full table and the capacity-at-horizon verdict in
+E-017's ROLLOUT section. (3) z-ratio **0.245–0.250**
 (replicating to 4 decimals across seeds) against the 1.8 M plateau of
 0.39 — the largest stage-2 improvement in the log, on the axis E-008
 predicted. E-017 (one rung further) then showed the probe SATURATES here
