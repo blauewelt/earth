@@ -1,0 +1,1074 @@
+{
+ "run_number": 211,
+ "files": {
+  "rollout_eval.json": {
+   "run": "actions",
+   "data": "family3_na025.npz",
+   "K": 24,
+   "horizon": 12,
+   "heads": {
+    "u1_s0": {
+     "head": "u1_s0",
+     "K": 24,
+     "horizon": 12,
+     "protocol": "staggered starts into holdout years, true-context init",
+     "metric_names": "MSSS per Goddard et al. 2013; ACC = centered anomaly correlation; amp = sigma_f/sigma_o",
+     "chan_skill": [
+      {
+       "h": 1,
+       "n": 1082232,
+       "msss_clim": 0.71,
+       "msss_pers": 0.708,
+       "msss_damped": 0.581,
+       "acc": 0.842,
+       "amp_ratio": 0.86
+      },
+      {
+       "h": 2,
+       "n": 992046,
+       "msss_clim": 0.624,
+       "msss_pers": 0.724,
+       "msss_damped": 0.555,
+       "acc": 0.79,
+       "amp_ratio": 0.828
+      },
+      {
+       "h": 3,
+       "n": 901860,
+       "msss_clim": 0.578,
+       "msss_pers": 0.716,
+       "msss_damped": 0.536,
+       "acc": 0.76,
+       "amp_ratio": 0.802
+      },
+      {
+       "h": 4,
+       "n": 811674,
+       "msss_clim": 0.535,
+       "msss_pers": 0.712,
+       "msss_damped": 0.508,
+       "acc": 0.732,
+       "amp_ratio": 0.785
+      },
+      {
+       "h": 5,
+       "n": 721488,
+       "msss_clim": 0.51,
+       "msss_pers": 0.715,
+       "msss_damped": 0.494,
+       "acc": 0.715,
+       "amp_ratio": 0.775
+      },
+      {
+       "h": 6,
+       "n": 631302,
+       "msss_clim": 0.482,
+       "msss_pers": 0.706,
+       "msss_damped": 0.47,
+       "acc": 0.697,
+       "amp_ratio": 0.777
+      },
+      {
+       "h": 7,
+       "n": 541116,
+       "msss_clim": 0.459,
+       "msss_pers": 0.691,
+       "msss_damped": 0.449,
+       "acc": 0.682,
+       "amp_ratio": 0.772
+      },
+      {
+       "h": 8,
+       "n": 450930,
+       "msss_clim": 0.458,
+       "msss_pers": 0.685,
+       "msss_damped": 0.447,
+       "acc": 0.68,
+       "amp_ratio": 0.768
+      },
+      {
+       "h": 9,
+       "n": 360744,
+       "msss_clim": 0.451,
+       "msss_pers": 0.687,
+       "msss_damped": 0.439,
+       "acc": 0.676,
+       "amp_ratio": 0.762
+      },
+      {
+       "h": 10,
+       "n": 270558,
+       "msss_clim": 0.419,
+       "msss_pers": 0.651,
+       "msss_damped": 0.405,
+       "acc": 0.653,
+       "amp_ratio": 0.757
+      },
+      {
+       "h": 11,
+       "n": 180372,
+       "msss_clim": 0.404,
+       "msss_pers": 0.648,
+       "msss_damped": 0.389,
+       "acc": 0.642,
+       "amp_ratio": 0.756
+      },
+      {
+       "h": 12,
+       "n": 90186,
+       "msss_clim": 0.36,
+       "msss_pers": 0.624,
+       "msss_damped": 0.345,
+       "acc": 0.614,
+       "amp_ratio": 0.765
+      }
+     ],
+     "horizon_auc": 0.499,
+     "amoc_bands": {
+      "h1-3": {
+       "r": 0.426,
+       "n": 99
+      },
+      "h4-6": {
+       "r": 0.286,
+       "n": 72
+      },
+      "h7-12": {
+       "r": 0.314,
+       "n": 63
+      }
+     },
+     "amoc_bands_rolledfit": {
+      "h1-3": {
+       "r": 0.416,
+       "n": 99,
+       "n_fit": 561
+      },
+      "h4-6": {
+       "r": 0.239,
+       "n": 72,
+       "n_fit": 408
+      },
+      "h7-12": {
+       "r": 0.244,
+       "n": 63,
+       "n_fit": 357
+      }
+     }
+    },
+    "u1_s1": {
+     "head": "u1_s1",
+     "K": 24,
+     "horizon": 12,
+     "protocol": "staggered starts into holdout years, true-context init",
+     "metric_names": "MSSS per Goddard et al. 2013; ACC = centered anomaly correlation; amp = sigma_f/sigma_o",
+     "chan_skill": [
+      {
+       "h": 1,
+       "n": 1082232,
+       "msss_clim": 0.71,
+       "msss_pers": 0.708,
+       "msss_damped": 0.581,
+       "acc": 0.842,
+       "amp_ratio": 0.851
+      },
+      {
+       "h": 2,
+       "n": 992046,
+       "msss_clim": 0.632,
+       "msss_pers": 0.73,
+       "msss_damped": 0.565,
+       "acc": 0.795,
+       "amp_ratio": 0.819
+      },
+      {
+       "h": 3,
+       "n": 901860,
+       "msss_clim": 0.587,
+       "msss_pers": 0.722,
+       "msss_damped": 0.546,
+       "acc": 0.766,
+       "amp_ratio": 0.795
+      },
+      {
+       "h": 4,
+       "n": 811674,
+       "msss_clim": 0.547,
+       "msss_pers": 0.72,
+       "msss_damped": 0.521,
+       "acc": 0.74,
+       "amp_ratio": 0.777
+      },
+      {
+       "h": 5,
+       "n": 721488,
+       "msss_clim": 0.523,
+       "msss_pers": 0.723,
+       "msss_damped": 0.507,
+       "acc": 0.723,
+       "amp_ratio": 0.767
+      },
+      {
+       "h": 6,
+       "n": 631302,
+       "msss_clim": 0.503,
+       "msss_pers": 0.718,
+       "msss_damped": 0.491,
+       "acc": 0.71,
+       "amp_ratio": 0.764
+      },
+      {
+       "h": 7,
+       "n": 541116,
+       "msss_clim": 0.48,
+       "msss_pers": 0.703,
+       "msss_damped": 0.47,
+       "acc": 0.695,
+       "amp_ratio": 0.762
+      },
+      {
+       "h": 8,
+       "n": 450930,
+       "msss_clim": 0.468,
+       "msss_pers": 0.692,
+       "msss_damped": 0.458,
+       "acc": 0.686,
+       "amp_ratio": 0.752
+      },
+      {
+       "h": 9,
+       "n": 360744,
+       "msss_clim": 0.456,
+       "msss_pers": 0.69,
+       "msss_damped": 0.445,
+       "acc": 0.678,
+       "amp_ratio": 0.749
+      },
+      {
+       "h": 10,
+       "n": 270558,
+       "msss_clim": 0.426,
+       "msss_pers": 0.655,
+       "msss_damped": 0.411,
+       "acc": 0.656,
+       "amp_ratio": 0.738
+      },
+      {
+       "h": 11,
+       "n": 180372,
+       "msss_clim": 0.406,
+       "msss_pers": 0.648,
+       "msss_damped": 0.391,
+       "acc": 0.642,
+       "amp_ratio": 0.736
+      },
+      {
+       "h": 12,
+       "n": 90186,
+       "msss_clim": 0.385,
+       "msss_pers": 0.639,
+       "msss_damped": 0.371,
+       "acc": 0.627,
+       "amp_ratio": 0.735
+      }
+     ],
+     "horizon_auc": 0.51,
+     "amoc_bands": {
+      "h1-3": {
+       "r": 0.531,
+       "n": 99
+      },
+      "h4-6": {
+       "r": 0.452,
+       "n": 72
+      },
+      "h7-12": {
+       "r": 0.568,
+       "n": 63
+      }
+     },
+     "amoc_bands_rolledfit": {
+      "h1-3": {
+       "r": 0.399,
+       "n": 99,
+       "n_fit": 561
+      },
+      "h4-6": {
+       "r": 0.188,
+       "n": 72,
+       "n_fit": 408
+      },
+      "h7-12": {
+       "r": 0.169,
+       "n": 63,
+       "n_fit": 357
+      }
+     }
+    },
+    "u1_s2": {
+     "head": "u1_s2",
+     "K": 24,
+     "horizon": 12,
+     "protocol": "staggered starts into holdout years, true-context init",
+     "metric_names": "MSSS per Goddard et al. 2013; ACC = centered anomaly correlation; amp = sigma_f/sigma_o",
+     "chan_skill": [
+      {
+       "h": 1,
+       "n": 1082232,
+       "msss_clim": 0.712,
+       "msss_pers": 0.71,
+       "msss_damped": 0.584,
+       "acc": 0.844,
+       "amp_ratio": 0.855
+      },
+      {
+       "h": 2,
+       "n": 992046,
+       "msss_clim": 0.633,
+       "msss_pers": 0.731,
+       "msss_damped": 0.566,
+       "acc": 0.796,
+       "amp_ratio": 0.825
+      },
+      {
+       "h": 3,
+       "n": 901860,
+       "msss_clim": 0.588,
+       "msss_pers": 0.723,
+       "msss_damped": 0.547,
+       "acc": 0.767,
+       "amp_ratio": 0.807
+      },
+      {
+       "h": 4,
+       "n": 811674,
+       "msss_clim": 0.554,
+       "msss_pers": 0.724,
+       "msss_damped": 0.529,
+       "acc": 0.745,
+       "amp_ratio": 0.793
+      },
+      {
+       "h": 5,
+       "n": 721488,
+       "msss_clim": 0.526,
+       "msss_pers": 0.724,
+       "msss_damped": 0.51,
+       "acc": 0.726,
+       "amp_ratio": 0.782
+      },
+      {
+       "h": 6,
+       "n": 631302,
+       "msss_clim": 0.503,
+       "msss_pers": 0.718,
+       "msss_damped": 0.491,
+       "acc": 0.712,
+       "amp_ratio": 0.789
+      },
+      {
+       "h": 7,
+       "n": 541116,
+       "msss_clim": 0.49,
+       "msss_pers": 0.709,
+       "msss_damped": 0.48,
+       "acc": 0.702,
+       "amp_ratio": 0.778
+      },
+      {
+       "h": 8,
+       "n": 450930,
+       "msss_clim": 0.48,
+       "msss_pers": 0.699,
+       "msss_damped": 0.47,
+       "acc": 0.696,
+       "amp_ratio": 0.771
+      },
+      {
+       "h": 9,
+       "n": 360744,
+       "msss_clim": 0.462,
+       "msss_pers": 0.693,
+       "msss_damped": 0.45,
+       "acc": 0.683,
+       "amp_ratio": 0.765
+      },
+      {
+       "h": 10,
+       "n": 270558,
+       "msss_clim": 0.444,
+       "msss_pers": 0.666,
+       "msss_damped": 0.43,
+       "acc": 0.671,
+       "amp_ratio": 0.763
+      },
+      {
+       "h": 11,
+       "n": 180372,
+       "msss_clim": 0.424,
+       "msss_pers": 0.659,
+       "msss_damped": 0.409,
+       "acc": 0.656,
+       "amp_ratio": 0.759
+      },
+      {
+       "h": 12,
+       "n": 90186,
+       "msss_clim": 0.398,
+       "msss_pers": 0.647,
+       "msss_damped": 0.384,
+       "acc": 0.638,
+       "amp_ratio": 0.755
+      }
+     ],
+     "horizon_auc": 0.518,
+     "amoc_bands": {
+      "h1-3": {
+       "r": 0.441,
+       "n": 99
+      },
+      "h4-6": {
+       "r": 0.306,
+       "n": 72
+      },
+      "h7-12": {
+       "r": 0.313,
+       "n": 63
+      }
+     },
+     "amoc_bands_rolledfit": {
+      "h1-3": {
+       "r": 0.427,
+       "n": 99,
+       "n_fit": 561
+      },
+      "h4-6": {
+       "r": 0.19,
+       "n": 72,
+       "n_fit": 408
+      },
+      "h7-12": {
+       "r": -0.042,
+       "n": 63,
+       "n_fit": 357
+      }
+     }
+    },
+    "u1_s0_e017_u1_s0": {
+     "head": "u1_s0_e017_u1_s0",
+     "K": 24,
+     "horizon": 12,
+     "protocol": "staggered starts into holdout years, true-context init",
+     "metric_names": "MSSS per Goddard et al. 2013; ACC = centered anomaly correlation; amp = sigma_f/sigma_o",
+     "chan_skill": [
+      {
+       "h": 1,
+       "n": 1082232,
+       "msss_clim": 0.76,
+       "msss_pers": 0.759,
+       "msss_damped": 0.654,
+       "acc": 0.872,
+       "amp_ratio": 0.888
+      },
+      {
+       "h": 2,
+       "n": 992046,
+       "msss_clim": 0.708,
+       "msss_pers": 0.786,
+       "msss_damped": 0.655,
+       "acc": 0.841,
+       "amp_ratio": 0.868
+      },
+      {
+       "h": 3,
+       "n": 901860,
+       "msss_clim": 0.682,
+       "msss_pers": 0.786,
+       "msss_damped": 0.65,
+       "acc": 0.825,
+       "amp_ratio": 0.853
+      },
+      {
+       "h": 4,
+       "n": 811674,
+       "msss_clim": 0.658,
+       "msss_pers": 0.789,
+       "msss_damped": 0.639,
+       "acc": 0.811,
+       "amp_ratio": 0.841
+      },
+      {
+       "h": 5,
+       "n": 721488,
+       "msss_clim": 0.644,
+       "msss_pers": 0.793,
+       "msss_damped": 0.632,
+       "acc": 0.802,
+       "amp_ratio": 0.834
+      },
+      {
+       "h": 6,
+       "n": 631302,
+       "msss_clim": 0.633,
+       "msss_pers": 0.792,
+       "msss_damped": 0.625,
+       "acc": 0.796,
+       "amp_ratio": 0.837
+      },
+      {
+       "h": 7,
+       "n": 541116,
+       "msss_clim": 0.622,
+       "msss_pers": 0.784,
+       "msss_damped": 0.615,
+       "acc": 0.789,
+       "amp_ratio": 0.836
+      },
+      {
+       "h": 8,
+       "n": 450930,
+       "msss_clim": 0.617,
+       "msss_pers": 0.778,
+       "msss_damped": 0.61,
+       "acc": 0.785,
+       "amp_ratio": 0.826
+      },
+      {
+       "h": 9,
+       "n": 360744,
+       "msss_clim": 0.615,
+       "msss_pers": 0.78,
+       "msss_damped": 0.606,
+       "acc": 0.784,
+       "amp_ratio": 0.823
+      },
+      {
+       "h": 10,
+       "n": 270558,
+       "msss_clim": 0.599,
+       "msss_pers": 0.759,
+       "msss_damped": 0.589,
+       "acc": 0.774,
+       "amp_ratio": 0.815
+      },
+      {
+       "h": 11,
+       "n": 180372,
+       "msss_clim": 0.594,
+       "msss_pers": 0.76,
+       "msss_damped": 0.583,
+       "acc": 0.77,
+       "amp_ratio": 0.816
+      },
+      {
+       "h": 12,
+       "n": 90186,
+       "msss_clim": 0.582,
+       "msss_pers": 0.755,
+       "msss_damped": 0.572,
+       "acc": 0.762,
+       "amp_ratio": 0.812
+      }
+     ],
+     "horizon_auc": 0.643,
+     "amoc_bands": {
+      "h1-3": {
+       "r": 0.47,
+       "n": 99
+      },
+      "h4-6": {
+       "r": 0.375,
+       "n": 72
+      },
+      "h7-12": {
+       "r": 0.492,
+       "n": 63
+      }
+     },
+     "amoc_bands_rolledfit": {
+      "h1-3": {
+       "r": 0.459,
+       "n": 99,
+       "n_fit": 561
+      },
+      "h4-6": {
+       "r": 0.254,
+       "n": 72,
+       "n_fit": 408
+      },
+      "h7-12": {
+       "r": 0.349,
+       "n": 63,
+       "n_fit": 357
+      }
+     }
+    },
+    "u1_s1_e017_u1_s1": {
+     "head": "u1_s1_e017_u1_s1",
+     "K": 24,
+     "horizon": 12,
+     "protocol": "staggered starts into holdout years, true-context init",
+     "metric_names": "MSSS per Goddard et al. 2013; ACC = centered anomaly correlation; amp = sigma_f/sigma_o",
+     "chan_skill": [
+      {
+       "h": 1,
+       "n": 1082232,
+       "msss_clim": 0.762,
+       "msss_pers": 0.76,
+       "msss_damped": 0.656,
+       "acc": 0.872,
+       "amp_ratio": 0.878
+      },
+      {
+       "h": 2,
+       "n": 992046,
+       "msss_clim": 0.706,
+       "msss_pers": 0.784,
+       "msss_damped": 0.653,
+       "acc": 0.84,
+       "amp_ratio": 0.854
+      },
+      {
+       "h": 3,
+       "n": 901860,
+       "msss_clim": 0.684,
+       "msss_pers": 0.788,
+       "msss_damped": 0.653,
+       "acc": 0.827,
+       "amp_ratio": 0.835
+      },
+      {
+       "h": 4,
+       "n": 811674,
+       "msss_clim": 0.661,
+       "msss_pers": 0.79,
+       "msss_damped": 0.642,
+       "acc": 0.812,
+       "amp_ratio": 0.821
+      },
+      {
+       "h": 5,
+       "n": 721488,
+       "msss_clim": 0.643,
+       "msss_pers": 0.793,
+       "msss_damped": 0.631,
+       "acc": 0.801,
+       "amp_ratio": 0.814
+      },
+      {
+       "h": 6,
+       "n": 631302,
+       "msss_clim": 0.625,
+       "msss_pers": 0.787,
+       "msss_damped": 0.616,
+       "acc": 0.79,
+       "amp_ratio": 0.813
+      },
+      {
+       "h": 7,
+       "n": 541116,
+       "msss_clim": 0.609,
+       "msss_pers": 0.777,
+       "msss_damped": 0.602,
+       "acc": 0.78,
+       "amp_ratio": 0.809
+      },
+      {
+       "h": 8,
+       "n": 450930,
+       "msss_clim": 0.618,
+       "msss_pers": 0.778,
+       "msss_damped": 0.611,
+       "acc": 0.785,
+       "amp_ratio": 0.801
+      },
+      {
+       "h": 9,
+       "n": 360744,
+       "msss_clim": 0.616,
+       "msss_pers": 0.781,
+       "msss_damped": 0.607,
+       "acc": 0.784,
+       "amp_ratio": 0.798
+      },
+      {
+       "h": 10,
+       "n": 270558,
+       "msss_clim": 0.611,
+       "msss_pers": 0.766,
+       "msss_damped": 0.601,
+       "acc": 0.78,
+       "amp_ratio": 0.791
+      },
+      {
+       "h": 11,
+       "n": 180372,
+       "msss_clim": 0.606,
+       "msss_pers": 0.767,
+       "msss_damped": 0.596,
+       "acc": 0.777,
+       "amp_ratio": 0.795
+      },
+      {
+       "h": 12,
+       "n": 90186,
+       "msss_clim": 0.587,
+       "msss_pers": 0.757,
+       "msss_damped": 0.577,
+       "acc": 0.765,
+       "amp_ratio": 0.794
+      }
+     ],
+     "horizon_auc": 0.644,
+     "amoc_bands": {
+      "h1-3": {
+       "r": 0.454,
+       "n": 99
+      },
+      "h4-6": {
+       "r": 0.339,
+       "n": 72
+      },
+      "h7-12": {
+       "r": 0.425,
+       "n": 63
+      }
+     },
+     "amoc_bands_rolledfit": {
+      "h1-3": {
+       "r": 0.219,
+       "n": 99,
+       "n_fit": 561
+      },
+      "h4-6": {
+       "r": 0.13,
+       "n": 72,
+       "n_fit": 408
+      },
+      "h7-12": {
+       "r": 0.019,
+       "n": 63,
+       "n_fit": 357
+      }
+     }
+    },
+    "u1_s2_e017_u1_s2": {
+     "head": "u1_s2_e017_u1_s2",
+     "K": 24,
+     "horizon": 12,
+     "protocol": "staggered starts into holdout years, true-context init",
+     "metric_names": "MSSS per Goddard et al. 2013; ACC = centered anomaly correlation; amp = sigma_f/sigma_o",
+     "chan_skill": [
+      {
+       "h": 1,
+       "n": 1082232,
+       "msss_clim": 0.758,
+       "msss_pers": 0.757,
+       "msss_damped": 0.651,
+       "acc": 0.871,
+       "amp_ratio": 0.882
+      },
+      {
+       "h": 2,
+       "n": 992046,
+       "msss_clim": 0.707,
+       "msss_pers": 0.785,
+       "msss_damped": 0.653,
+       "acc": 0.84,
+       "amp_ratio": 0.863
+      },
+      {
+       "h": 3,
+       "n": 901860,
+       "msss_clim": 0.68,
+       "msss_pers": 0.785,
+       "msss_damped": 0.648,
+       "acc": 0.824,
+       "amp_ratio": 0.847
+      },
+      {
+       "h": 4,
+       "n": 811674,
+       "msss_clim": 0.66,
+       "msss_pers": 0.79,
+       "msss_damped": 0.641,
+       "acc": 0.812,
+       "amp_ratio": 0.836
+      },
+      {
+       "h": 5,
+       "n": 721488,
+       "msss_clim": 0.653,
+       "msss_pers": 0.798,
+       "msss_damped": 0.641,
+       "acc": 0.807,
+       "amp_ratio": 0.83
+      },
+      {
+       "h": 6,
+       "n": 631302,
+       "msss_clim": 0.637,
+       "msss_pers": 0.794,
+       "msss_damped": 0.629,
+       "acc": 0.798,
+       "amp_ratio": 0.832
+      },
+      {
+       "h": 7,
+       "n": 541116,
+       "msss_clim": 0.621,
+       "msss_pers": 0.784,
+       "msss_damped": 0.614,
+       "acc": 0.788,
+       "amp_ratio": 0.829
+      },
+      {
+       "h": 8,
+       "n": 450930,
+       "msss_clim": 0.618,
+       "msss_pers": 0.779,
+       "msss_damped": 0.611,
+       "acc": 0.786,
+       "amp_ratio": 0.824
+      },
+      {
+       "h": 9,
+       "n": 360744,
+       "msss_clim": 0.612,
+       "msss_pers": 0.779,
+       "msss_damped": 0.604,
+       "acc": 0.783,
+       "amp_ratio": 0.823
+      },
+      {
+       "h": 10,
+       "n": 270558,
+       "msss_clim": 0.603,
+       "msss_pers": 0.762,
+       "msss_damped": 0.593,
+       "acc": 0.776,
+       "amp_ratio": 0.817
+      },
+      {
+       "h": 11,
+       "n": 180372,
+       "msss_clim": 0.603,
+       "msss_pers": 0.765,
+       "msss_damped": 0.593,
+       "acc": 0.775,
+       "amp_ratio": 0.816
+      },
+      {
+       "h": 12,
+       "n": 90186,
+       "msss_clim": 0.59,
+       "msss_pers": 0.759,
+       "msss_damped": 0.58,
+       "acc": 0.767,
+       "amp_ratio": 0.809
+      }
+     ],
+     "horizon_auc": 0.645,
+     "amoc_bands": {
+      "h1-3": {
+       "r": 0.45,
+       "n": 99
+      },
+      "h4-6": {
+       "r": 0.346,
+       "n": 72
+      },
+      "h7-12": {
+       "r": 0.473,
+       "n": 63
+      }
+     },
+     "amoc_bands_rolledfit": {
+      "h1-3": {
+       "r": 0.423,
+       "n": 99,
+       "n_fit": 561
+      },
+      "h4-6": {
+       "r": 0.233,
+       "n": 72,
+       "n_fit": 408
+      },
+      "h7-12": {
+       "r": 0.148,
+       "n": 63,
+       "n_fit": 357
+      }
+     }
+    }
+   },
+   "ensembles": {
+    "all": {
+     "truefit": {
+      "h1-3": {
+       "r": 0.466,
+       "n": 99,
+       "members": 6
+      },
+      "h4-6": {
+       "r": 0.355,
+       "n": 72,
+       "members": 6
+      },
+      "h7-12": {
+       "r": 0.442,
+       "n": 63,
+       "members": 6
+      }
+     },
+     "rolledfit": {
+      "h1-3": {
+       "r": 0.403,
+       "n": 99,
+       "members": 6
+      },
+      "h4-6": {
+       "r": 0.211,
+       "n": 72,
+       "members": 6
+      },
+      "h7-12": {
+       "r": 0.165,
+       "n": 63,
+       "members": 6
+      }
+     }
+    },
+    "u1": {
+     "truefit": {
+      "h1-3": {
+       "r": 0.469,
+       "n": 99,
+       "members": 3
+      },
+      "h4-6": {
+       "r": 0.351,
+       "n": 72,
+       "members": 3
+      },
+      "h7-12": {
+       "r": 0.406,
+       "n": 63,
+       "members": 3
+      }
+     },
+     "rolledfit": {
+      "h1-3": {
+       "r": 0.417,
+       "n": 99,
+       "members": 3
+      },
+      "h4-6": {
+       "r": 0.21,
+       "n": 72,
+       "members": 3
+      },
+      "h7-12": {
+       "r": 0.155,
+       "n": 63,
+       "members": 3
+      }
+     }
+    }
+   }
+  },
+  "provenance.json": {
+   "run_number": 211,
+   "sha": "b9df31538b61a2a34bf9424b5ad1ab376c869324",
+   "code": "https://github.com/blauewelt/earth/tree/b9df31538b61a2a34bf9424b5ad1ab376c869324",
+   "inputs": {
+    "doc": "E-015/E-017 rollout eval: the capacity trunks at horizon. The forecast ladder read 0.39 -> 0.25 (10.7M) -> 0.19 (32M) while the nowcast probe saturated at ~0.49; this asks what the capacity gains buy WHERE IT MATTERS - field skill at h=1..12 vs damped persistence and AMOC-at-horizon via the truefit probe, against the small-trunk baselines measured on identical points in #200 (u1 AUC 0.27-0.29, bands 0.41/0.16/0.23 ensemble). Eval only, no plan (E-011 precedent).",
+    "steps": "60000",
+    "batch": "512",
+    "d_z": "64",
+    "anomaly": "true",
+    "temporal_steps": "60000",
+    "temporal_d_model": "192",
+    "temporal_layers": "4",
+    "eval_every": "0",
+    "resume": "!run-62,run-63",
+    "head_probe": "false",
+    "light_probe_every": "0",
+    "window": "rolleval:e015_u1_s0,e015_u1_s1,e015_u1_s2,e017_u1_s0,e017_u1_s1,e017_u1_s2",
+    "tensor": "family3_na025",
+    "sst_channel": "false",
+    "patch": "3",
+    "max_minutes": "0",
+    "runner": "gpu-box-42005419",
+    "job_timeout": "400",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "576",
+    "codec_layers": "10",
+    "codec_heads": "8",
+    "codec_d_dec": "768"
+   },
+   "tensor": {
+    "file": "ml/cache/family3_na025.npz",
+    "sha256": "adcbe700fb6e160b1c84d7acd8dc0333b34d07829db9abd62c721aab278b4848",
+    "bytes": 2984746794,
+    "X_shape": [
+     516,
+     281,
+     481,
+     39
+    ],
+    "C": 39,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 516
+   },
+   "torch": "2.13.0+cu126",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-42005419"
+  }
+ }
+}
