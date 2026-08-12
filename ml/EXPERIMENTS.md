@@ -76,7 +76,32 @@ windows.** Dispatch note: E-015's remaining seeds (#194/#195) had not
 landed when this was queued — accepted risk (~$2 of GPU) to use the
 overnight boxes; if they contradict seed 0, this entry records it.
 
-**Result.** *pending — #208–#210, pinned to `gpu-box-42005419`.*
+### RESULT (#208–#210, landed overnight, closed 07:50Z 08-12) — the forecast keeps scaling; the transport probe has SATURATED
+
+| seed | k-fold | z-ratio |
+|---|---|---|
+| 0 | 0.497 [0.389, 0.599] | 0.1937 |
+| 1 | 0.497 [0.387, 0.597] | 0.1930 |
+| 2 | 0.462 [0.341, 0.568] | 0.1898 |
+
+**Q1 — yes, and cleanly**: z-ratio **0.190–0.194** (seed spread 0.004),
+val curves healthy throughout (the first arms with live monitoring: val
+tracked ≈0.24 of persistence from a quarter of the way in, amplitude
+0.93, no divergence). The scaling ladder now reads **0.39 → 0.25 → 0.19**
+(1.8 M → 10.7 M → 32 M).
+
+**Q2 — no. The probe did NOT follow the second rung**: mean **0.485**
+(sd 0.020) against the 10.7 M trio's **0.486** (sd 0.024) — identical.
+Capacity lifted the transport nowcast exactly once (0.434 → 0.486, the
+first rung) and then saturated, ~0.15 below the codec's own 0.631.
+
+**Q3 — the bend, answered**: the second rung bought 24% relative forecast
+improvement where the first bought 36% — bending but alive for the
+FORECAST. For TRANSPORT, capacity is done: this is E-008's lesson at the
+next level ("the thing more buys is not the thing we want"), and it moves
+the AMOC bottleneck decisively to the OBJECTIVE and the EMBEDDINGS —
+E-006's territory. A third rung is justified only for field-forecast
+goals, not for the probe.
 
 ---
 
@@ -183,7 +208,24 @@ OBJECTIVE (E-006) and the embeddings themselves.
 the disk incident (see E-014's re-dispatch note), re-queued as #188–#190,
 then re-pinned to the new box per Chris as **#193–#195** (final).
 
-**Result.** *pending.*
+### RESULT (#193–#195, closed 07:50Z 08-12) — capacity was the forecast bottleneck, and it helps the probe once
+
+| seed | k-fold | z-ratio |
+|---|---|---|
+| 0 | 0.504 [0.389, 0.611] | 0.2498 |
+| 1 | 0.458 [0.363, 0.543] | 0.2500 |
+| 2 | 0.495 [0.377, 0.596] | 0.2455 |
+
+**All three pre-registered questions answer YES-with-shape.** (1) The
+probe moves up: mean **0.486** vs the 1.8 M trio's 0.434, with U=4-like
+tight seeds (sd 0.024 vs 0.066) — and WITHOUT unroll's +28% forecast
+tax, which makes width strictly preferable to fixed U=4 as a probe
+carrier (U=4's 0.524 edge costs a fifth of the forecast). (2) Rollout
+verdict pending the morning rolleval. (3) z-ratio **0.245–0.250**
+(replicating to 4 decimals across seeds) against the 1.8 M plateau of
+0.39 — the largest stage-2 improvement in the log, on the axis E-008
+predicted. E-017 (one rung further) then showed the probe SATURATES here
+while the forecast keeps scaling — see that entry.
 
 ---
 
