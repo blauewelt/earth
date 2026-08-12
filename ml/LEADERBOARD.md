@@ -6,14 +6,34 @@ run's own `temporal.json:scale` block (written by the trainer since
 2026-08-11); older codec rows backfill as their runs recur
 (EXPERIMENTS.md rule 6).
 
+## Reading the numbers (arrows say which way is good)
+
+- **k-fold RAPID r ↑** — can a ridge read the CURRENT month's transport
+  out of the features? Year-blocked k-fold over ~240 RAPID months,
+  deseasonalised, block-bootstrap CI. 0 = nothing, 1 = perfect; the
+  wind-only bar (0.568 on this tensor) is the line to beat.
+- **z-ratio ↓** — held-out next-month embedding error as a fraction of
+  "predict no change" (persistence). 1.0 = no better than persistence,
+  0 = perfect; this is the objective stage 2 trains.
+- **chan% ↑** — held-out next-month error reduction vs persistence in
+  real data space, as a percentage.
+- **RMSE Sv ↓** — the probe's transport error in Sverdrups (RAPID's
+  deseasonalised σ ≈ 2.79 Sv; matching that = knowing nothing).
+- **dip ↑** — share of the 2009–10 AMOC collapse captured out-of-fold.
+- **Two INSTRUMENTS, one protocol**: `probe_kfold` pools the CODEC's raw
+  current-month embeddings over the 26.5°N section; `rapid_probe_kfold`
+  pools the stage-2 HEAD's hidden state instead. Same ridge, same folds,
+  same months — directly comparable. The codec reads **0.631** and no
+  head has matched it: the trunk is trained to predict next month's z,
+  so it attenuates current-month detail that doesn't help forecasting —
+  the price of the forecast objective, and the reason E-006 exists.
+
 ## Stage-2 heads at 60k on tensor `adcbe700` (2026-08-11)
 
-All on the frozen run-62 codec, expdecay no-taper, K=24, d_z=64. k-fold =
-`rapid_probe_kfold` (240 months, year-blocked); z-ratio = model/persistence
-z-MSE at t+1 (lower is better). Seed noise on the k-fold at this budget:
-sd 0.066.
+All on the frozen run-62 codec, expdecay no-taper, K=24, d_z=64. Seed
+noise on the head k-fold at this budget: sd 0.066.
 
-| arm | seeds landed | params | batch | steps | data points | k-fold per seed | z-ratio |
+| arm | seeds landed | params | batch | steps | data points | head k-fold r ↑ per seed | z-ratio ↓ |
 |---|---|---|---|---|---|---|---|
 | U=1 plain (E-012) | 0, 1, 2 | 1,822,144 | 256 | 60,000 | ≈26.1 M windows | 0.363 / 0.446 / 0.493 | 0.388–0.391 |
 | U=4 (E-012/13b) | 0, 1, 2 | 1,822,144 | 256 | 60,000 | ≈26.0 M windows | 0.519 / 0.502 / 0.551 | 0.495–0.510 |
@@ -49,7 +69,7 @@ year-blocked k-fold RAPID r and RMSE in Sv. Dip = share of the 2009-10
 collapse amplitude captured out-of-fold. Wind-stress-only ridge baseline
 (no embedding): r 0.531, the line every codec must beat.
 
-| run | window | C | patch | d_z | steps | chan%† | k-fold RAPID r [95% CI] | RMSE Sv | dip | status |
+| run | window | C | patch | d_z | steps | chan% ↑† | codec k-fold RAPID r ↑ [95% CI] | RMSE Sv ↓ | dip ↑ | status |
 |---|---|---|---|---|---|---|---|---|---|---|
 | pilot4_anom | NA | 4 | 1 | 32 | 8k | +29.3 | — | — | — | done |
 | dz8 (#2) | NA | 12 | 1 | 8 | 30k | +28.6 | 0.111 [0.01, 0.20] | — | — | done |
