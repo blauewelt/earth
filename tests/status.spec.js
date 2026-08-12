@@ -58,6 +58,30 @@ const RUN_S2 = jsonl([
                      rapid_r_deseas: 0.385, rapid_r_raw: 0.341 } },
 ]);
 
+// A COMPLETED stage-2-only run: the codec resumed at its final step, so the
+// metrics carry NO stage-1 loss records at all — only stage-2. This is what
+// every E-012+ arm looks like in the archive, and it is the exact shape that
+// vanished on completion (2026-08-12): renderLiveRun returned "" for
+// completed runs before trying the stage-2 panel, so a row of successful 60k
+// trainings rendered as "None of the last N runs produced curves".
+const RUN_S2_DONE = jsonl([
+  { config: { steps: 60000, params_M: 40.7, data: "f3_na025.npz", C: 39,
+              resume: "run-62" } },
+  { resumed: { from: "run-62.pt", parent_tag: "run-62", at_step: 60000 } },
+  { stage2_config: { d_model: 576, layers: 8, K: 24, steps: 60000,
+                     params_M: 32.038, batch: 256, train_windows: 28900000,
+                     d_z: 64, seed: 2, tag: "" } },
+  { stage2_step: 30000, stage2_zmse: 0.31, stage2_wall_s: 900,
+    stage2_val_zmse: 0.70, stage2_amp: 0.93, stage2_grad_norm: 0.6 },
+  { stage2_step: 60000, stage2_zmse: 0.197, stage2_wall_s: 1800,
+    stage2_val_zmse: 0.598, stage2_amp: 0.95, stage2_grad_norm: 0.5 },
+  { stage2_result: { d_model: 576, layers: 8, K: 24, steps: 60000,
+                     params_M: 32.038, seed: 2, tag: "",
+                     z_mse_model: 0.598, z_mse_persistence: 3.149,
+                     chan_mse_model: 0.76, chan_mse_persistence: 3.1,
+                     rapid_r_deseas: 0.462, rapid_r_raw: 0.41 } },
+]);
+
 const RUN_B = jsonl([
   { config: { steps: 60000, batch: 256, d_z: 64, params_M: 40.7, data: "f3_na025.npz", C: 39, T: 528, resume: "run-101" } },
   { resumed: { from: "run-101.pt", parent_tag: "run-101", at_step: 22500 } },
@@ -131,6 +155,12 @@ const RUNS = {
       head_sha: "b".repeat(40),
     },
     {
+      id: 8, run_number: 108, status: "completed", conclusion: "success",
+      created_at: iso(20), html_url: "https://example.invalid/108",
+      display_title: "E-017 capacity rung (stage-2 only)", name: "ml-train",
+      head_sha: "f".repeat(40),
+    },
+    {
       id: 1, run_number: 101, status: "completed", conclusion: "cancelled",
       created_at: iso(300), html_url: "https://example.invalid/101",
       display_title: "f3_anchor41M", name: "ml-train",
@@ -186,6 +216,7 @@ test.beforeEach(async ({ page }) => {
     if (/ml-live-106\/metrics\.jsonl/.test(url)) return fulfill(RUN_S2_LIVE);
     if (/ml-live-107\/metrics\.jsonl/.test(url)) return fulfill(RUN_S2_CONT);
     if (/ml-metrics\/run-103\.jsonl/.test(url)) return fulfill(RUN_S2);
+    if (/ml-metrics\/run-108\.jsonl/.test(url)) return fulfill(RUN_S2_DONE);
     if (/ml-metrics\/run-101\.jsonl/.test(url)) return fulfill(RUN_A);
     // #104 is mid-build and it is the case that actually bit: a live branch
     // that ALREADY has a metrics.jsonl (the `config` line is published within
@@ -257,6 +288,21 @@ test("a resumed run charts the WHOLE trajectory, parent included", async ({ page
   // The x-axis is framed on the planned 60,000 steps, so the curve visibly
   // has a third of the run left.
   await expect(card.locator("svg.chart").first()).toContainText("60,000");
+});
+
+test("a COMPLETED stage-2-only run keeps its stage-2 card", async ({ page }) => {
+  // #108 resumed the codec at its final step, so its archive has NO stage-1
+  // loss records — only stage-2. The card must still render (curve, held-out
+  // line, verdict). This is the regression of 2026-08-12: completed runs
+  // returned "" before the stage-2 fallback, so every finished E-012+ arm
+  // vanished from TRAINING CURVES the moment it succeeded.
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #108" }) });
+  await expect(card).toHaveCount(1);
+  await expect(card).toContainText("stage 2");
+  await expect(card).toContainText("HELD-OUT");
+  await expect(card.locator("svg.chart")).toHaveCount(1);
 });
 
 test("ETA is measured against this job's own steps, not the inherited ones", async ({ page }) => {
