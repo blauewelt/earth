@@ -45,6 +45,90 @@ low-pass).
 ---
 
 <a id="e-020"></a>
+## E-021 · The 20-year fan: long-horizon AMOC projection with ensembles — #219, 2026-08-13 08:02Z → RESULT same day
+
+**Why, from Chris.** *"Could we try to now run repeated predictions on 20
+years of AMOC and observe stats on the different possible outcomes?"* and
+then *"plot the current for the next 20 years as well as predicted vs
+measured for the past 20 years."*
+
+**Process note, recorded against myself.** Rule 1 of this file says the
+entry is written AT DISPATCH. This one was not — the design went straight
+from chat into `ml/project_amoc.py` and a `project:` window token, and the
+entry is being written after the numbers landed. The hypothesis below is
+reconstructed from the script's docstring and the dispatch `doc` field,
+both of which predate the result; but the rule exists precisely so that
+claim doesn't have to be taken on trust, and it was broken.
+
+**Design.** Six published 32M heads (`e017_u1_s0..2`, `e020_u4_s0..2`)
+rolled autoregressively on frozen run-62 embeddings over the RAPID
+section only — exact, not an approximation, because the head attends over
+TIME per pixel with a static spatial identity and has no cross-pixel
+coupling for a full-grid roll to add. Two ensemble families, 12 members
+each: **ic** perturbs only the initial 24-month context, **sde** injects
+noise at every rolled month; both scaled by each head's OWN measured
+teacher-forced one-step residual, so the spread is a measurement rather
+than a chosen number. Two starts: `future` (context ends 2024-12) and
+`2004-12`, whose 240 rolled months land on 2005–2024 where RAPID exists.
+Read-out is rollout.py's truefit ridge (val-tail r 0.606). Cost: ~45 min
+on one 4090, one dispatch, no dead runs.
+
+**Hypothesis.** The fan quantifies "possible outcomes"; the 2004 start
+calibrates its width before the future fan is believed.
+
+### RESULT — the fan is not a forecast, for two independent reasons
+
+**1 · The hindcast tracking is largely MEMORISATION.** The 2004 roll
+receives no data after 2004-12 and still follows RAPID at **r = +0.78**
+(ic) / +0.55 (sde) across twenty years. That is impossible for a genuine
+forecast, so it was treated as a bug and chased:
+
+| test | result | verdict |
+|---|---|---|
+| lag-12 autocorrelation of the median | 0.26 | not a seasonal loop |
+| r(median, its own first-12 loop) | −0.07 | not a seasonal loop |
+| r detrended | 0.726 | not a trend artefact |
+| r of first differences | 0.66 | month-specific, not low-frequency |
+| year-block-shuffled null | mean 0.00, 95th 0.16 | not chance |
+| **r(FUTURE roll 2025–44, truth 2005–24)** | **+0.05** | **specific to the initial condition** |
+| agreement across 6 independent heads | ±0.01 | not one seed's quirk |
+
+Split by what the codec actually trained on: **r = +0.78 on trained
+months vs +0.42 on the three held-out years** (2009 +0.53, 2017 +0.09,
+2023 +0.67). A model trained on 2005–2024 replays those years when handed
+a matching starting state; the initial condition acts as a key.
+
+**2 · The ensemble is UNDER-DISPERSED by about an order of magnitude.**
+Pooled 90% band ≈ **0.9 Sv** against **10.3 Sv** of observed spread, and
+it contains **19%** of observations where a calibrated 90% band contains
+~90%. The cause is structural, not a tuning error: the rolled dynamics is
+**contractive** and settles onto a stable seasonal limit cycle near
+−0.8 Sv (future-tail lag-12 autocorrelation 0.99), so injected noise is
+absorbed rather than amplified. Inflating the noise cannot fix it.
+
+**What it points at.** The model has **no forcing input** — no surface
+heat flux, no freshwater, and no wind after the context ends. Unforced,
+the only thing a dissipative learned dynamics can do is decay to
+climatology, which is exactly what both panels show. This is the first
+measurement that ranks the data backlog: surface fluxes ahead of further
+capacity work.
+
+**Consequences.**
+- **No hindcast over the training era may be quoted as skill** — here or
+  in the paper. This entry is the reason why.
+- The honest forecast evidence remains the h=1..12 rollout numbers
+  against damped persistence (E-017 ROLLOUT / #211).
+- The figure ships the negative result on its face:
+  `ml/figs/amoc_projection.html` (built by `ml/plot_projection.py`), with
+  the held-out years shaded and both r values in the subtitle.
+
+**Falsifier for the memorisation claim, if anyone wants to retest it:** a
+head trained with 2005–2024 fully excluded should hindcast those years at
+the held-out r (~0.4) rather than the trained r (~0.78). We have not run
+that; the future-roll control is what stands in for it.
+
+---
+
 ## E-020 · U=4 at the 32M trunk: does unroll's probe gain survive capacity? — DISPATCHED 2026-08-12 ~18:10Z
 
 **Why, from Chris.** *"It would be nice to have our current best: best
