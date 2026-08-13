@@ -245,7 +245,13 @@ def main():
         k_tbl = tk["model"]["pos.weight"].shape[0]   # the file, not a convention
         model = TemporalTransformer(d_z=ck["d_z"], d_model=ta["d_model"],
                                     n_heads=4, n_layers=ta["layers"],
-                                    k_max=k_tbl)
+                                    k_max=k_tbl,
+                                    stencil=ta.get("stencil", 1))
+        if getattr(model, "stencil", 1) > 1:
+            sys.exit(f"{hp} was trained with --stencil {model.stencil}: "
+                     f"this script rolls the section per-pixel and cannot "
+                     f"supply neighbourhood inputs — use ml/rollout_spatial"
+                     f".py (E-022)")
         model.load_state_dict(tk["model"])
         model.eval().to(dev)
 

@@ -60,10 +60,22 @@ class TemporalTransformer(nn.Module):
     """
 
     def __init__(self, d_z=32, d_model=96, n_heads=4, n_layers=3, k_max=36,
-                 direct=()):
+                 direct=(), stencil=1):
         super().__init__()
-        self.inp = nn.Linear(d_z + 2, d_model)     # z_t + (sin m, cos m)
-        self.static = nn.Linear(d_z + 2, d_model)  # static-z + (lat, lon)
+        # E-022: stencil>1 widens the per-step input to the neighbourhood's
+        # z (S*d_z, missing cells zero-filled) and appends the S static
+        # observed-flags to the static context (geometry doesn't change
+        # with time, so the flags belong there, not in every step).
+        # stencil==1 keeps the EXACT legacy shapes so every published head
+        # loads strict=True; the layout (centre slot first, STENCILS order)
+        # is pinned by the zero-weight-equivalence unit test.
+        self.stencil = stencil
+        if stencil == 1:
+            self.inp = nn.Linear(d_z + 2, d_model)     # z_t + (sin m, cos m)
+            self.static = nn.Linear(d_z + 2, d_model)  # static-z + (lat, lon)
+        else:
+            self.inp = nn.Linear(stencil * d_z + 2, d_model)
+            self.static = nn.Linear(d_z + 2 + stencil, d_model)
         self.pos = nn.Embedding(k_max, d_model)
         layer = nn.TransformerEncoderLayer(
             d_model, n_heads, dim_feedforward=4 * d_model,
@@ -91,6 +103,70 @@ class TemporalTransformer(nn.Module):
         causal = nn.Transformer.generate_square_subsequent_mask(K, device=z_seq.device)
         h = self.encoder(h, mask=causal, is_causal=True)
         return self.head(h), h
+
+
+# ---- E-022: spatial stencils ------------------------------------------
+# Predict a pixel's z_{t+1} from its NEIGHBOURHOOD's z, not just its own —
+# the per-pixel model has zero cross-pixel coupling (measured consequences
+# in E-021: rolls decay to a seasonal limit cycle; nothing can advect).
+# Offsets are (dy, dx) in grid cells, CENTRE FIRST and in this fixed order
+# — the input layout of every checkpoint depends on it. 13 is the classic
+# 13-point stencil ("2 in each cardinal direction, 1 on the diagonal",
+# Chris's spec): the 5x5 with its outer diagonal ring trimmed.
+# Physics stated where the shape is chosen: one roll step is ONE MONTH, so
+# stencil reach is 1-2 cells/month (~9-18 mm/s). Slow interior dynamics
+# and deep flow are within reach; Gulf Stream advection (100-200 cells per
+# month) is structurally NOT — see ml/plans/E022_spatial_coupling.md §1.
+STENCILS = {
+    1:  [(0, 0)],
+    9:  [(0, 0), (-1, -1), (-1, 0), (-1, 1), (0, -1),
+         (0, 1), (1, -1), (1, 0), (1, 1)],
+    13: [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1),
+         (-1, -1), (-1, 1), (1, -1), (1, 1),
+         (-2, 0), (2, 0), (0, -2), (0, 2)],
+}
+
+
+def build_stencil(H, W, ys, xs, stencil):
+    """NBR [P, S] int64 indices into the P (ocean-pixel) ordering; -1 =
+    missing (land, or outside the window). NO longitude wrap — the family3
+    window is regional (-100..+20 E), unlike the codec's global gather_px.
+    Slot 0 is always the centre pixel itself. Takes the grid SHAPE rather
+    than the mask array: the pixel list ys/xs IS the mask (and under
+    --max-pixels subsampling, absent pixels correctly read as missing)."""
+    lin = np.full((H, W), -1, np.int64)
+    lin[ys, xs] = np.arange(len(ys))
+    offs = STENCILS[stencil]
+    NBR = np.full((len(ys), len(offs)), -1, np.int64)
+    for k, (dy, dx) in enumerate(offs):
+        yy, xx = ys + dy, xs + dx
+        ok = (yy >= 0) & (yy < H) & (xx >= 0) & (xx < W)
+        NBR[ok, k] = lin[yy[ok], xx[ok]]
+    assert (NBR[:, 0] == np.arange(len(ys))).all()
+    return NBR
+
+
+def gather_stencil(Zt, base, p, NBR_t, K):
+    """The ONE window-input gather (plan §3.4): every consumer of model
+    inputs — train batch, monitor, light probe, eval — goes through here,
+    so the stencil logic exists exactly once. Targets stay centre-only
+    gathers at their call sites: the model predicts the CENTRE.
+
+    Zt [T, P, d_z] · base [n] window-start month indices · p [n] centre
+    pixels · NBR_t None (stencil 1 → the exact legacy gather) or [P, S]
+    int64 with -1 = missing. Returns zseq [n, K, d_z] or [n, K, S*d_z]
+    float32; missing neighbours are zero-filled."""
+    if NBR_t is None:
+        return torch.stack([Zt[base + j, p] for j in range(K)], 1).float()
+    nbr = NBR_t[p]                                        # [n, S]
+    miss = nbr < 0
+    safe = nbr.clamp(min=0)
+    cols = []
+    for j in range(K):
+        zj = Zt[(base + j).unsqueeze(1), safe].float()    # [n, S, d_z]
+        zj[miss] = 0.0
+        cols.append(zj.flatten(1))
+    return torch.stack(cols, 1)
 
 
 # Protocol v3 (2026-08-07, the global window): the RAPID probe section is
@@ -678,6 +754,16 @@ def main():
                     help="torch/numpy seed (sweeps need more than one)")
     ap.add_argument("--tag", default="",
                     help="suffix for output files: temporal_<tag>.json/.pt")
+    ap.add_argument("--stencil", type=int, default=1, choices=(1, 9, 13),
+                    help="E-022 SPATIAL INPUT: predict the centre pixel's "
+                         "z_{t+1} from this many neighbourhood pixels' z per "
+                         "step (1 = the original per-pixel model; 9 = 3x3; "
+                         "13 = 2 in each cardinal direction, 1 on each "
+                         "diagonal). Missing neighbours (land/window edge) "
+                         "are zero-filled with static observed-flags. "
+                         "Incompatible with --unroll>1 and --direct: both "
+                         "feed predictions back, and a random pixel batch "
+                         "does not contain the neighbours' predictions.")
     ap.add_argument("--unroll", type=int, default=1,
                     help="AUTOREGRESSIVE UNROLL DEPTH in the loss. 1 (default) "
                          "is the original teacher-forced t+1 objective. >1 "
@@ -860,7 +946,27 @@ def main():
                                        torch.as_tensor(ctx).to(EDEV)).cpu().numpy())
         Zstat = np.concatenate(zs, 0)
     codec.to("cpu")          # everything below is CPU/numpy, unchanged
-    static_ctx = torch.as_tensor(np.concatenate([Zstat, coords], 1))
+    # E-022: build the neighbourhood index once; static_ctx carries the
+    # per-cell observed flags (time-invariant geometry) when stencil > 1.
+    if a.stencil > 1:
+        if max(1, a.unroll) > 1 or a.direct.strip():
+            raise SystemExit(
+                f"--stencil {a.stencil} is incompatible with --unroll>1 and "
+                f"--direct: the unroll/direct paths feed predictions back, "
+                f"and a random pixel batch does not contain the neighbours' "
+                f"predictions. Train stencil arms at U=1 (E-010/E-020 closed "
+                f"the unroll axis anyway).")
+        NBR = build_stencil(ocean.shape[0], ocean.shape[1], ys, xs, a.stencil)
+        NBR_t = torch.as_tensor(NBR)
+        obs_flags = (NBR >= 0).astype(np.float32)
+        static_ctx = torch.as_tensor(
+            np.concatenate([Zstat, coords, obs_flags], 1))
+        print(f"stencil {a.stencil}: input {a.stencil}x{ck['d_z']}+2 per "
+              f"step; {int((NBR < 0).sum()):,} missing neighbour slots "
+              f"of {NBR.size:,}")
+    else:
+        NBR_t = None
+        static_ctx = torch.as_tensor(np.concatenate([Zstat, coords], 1))
 
     # ---- train pool: windows [t-K+1 .. t] whose TARGET month t+1 is a train
     # month and whose pixel is outside the longitude holdout. Windows may LOOK
@@ -900,7 +1006,8 @@ def main():
     print(f"train windows: {len(pool_t):,}")
 
     model = TemporalTransformer(d_z=ck["d_z"], d_model=a.d_model,
-                                n_layers=a.layers, k_max=K, direct=D)
+                                n_layers=a.layers, k_max=K, direct=D,
+                                stencil=a.stencil)
     # STAGE-2 TRAINING RUNS ON THE ACCELERATOR TOO.
     # The comment above this block used to say stage-2 training is "a small
     # transformer for a few thousand steps" and therefore not worth a GPU.
@@ -1064,7 +1171,7 @@ def main():
         k = torch.randint(0, len(idx_t), (n,))
         t, p = idx_t[k], idx_p[k]
         base = t - K + 1
-        zseq = torch.stack([Zt[base + j, p] for j in range(K)], 1).float()
+        zseq = gather_stencil(Zt, base, p, NBR_t, K)
         mseq = torch.stack([Mt[base + j] for j in range(K)], 1)
         ztgt = torch.stack([Zt[base + j + 1, p] for j in range(K)], 1).float()
         # True embeddings BEYOND the window, for the autoregressive unroll:
@@ -1148,7 +1255,7 @@ def main():
     emt = torch.as_tensor(emt[msel], dtype=torch.long)
     emp = torch.as_tensor(emp[msel], dtype=torch.long)
     _mb = emt - K + 1
-    mon_zseq = torch.stack([Zt[_mb + j, emp] for j in range(K)], 1).float().to(TDEV)
+    mon_zseq = gather_stencil(Zt, _mb, emp, NBR_t, K).to(TDEV)
     mon_mseq = torch.stack([Mt[_mb + j] for j in range(K)], 1).to(TDEV)
     mon_sctx = static_ctx[emp].to(TDEV)
     mon_ztrue = Zt[emt + 1, emp].float().to(TDEV)
@@ -1259,8 +1366,9 @@ def main():
                         F_ = np.zeros((T, a.d_model), np.float32)
                         for t_ in range(K - 1, T):
                             b_ = t_ - K + 1
-                            zs_ = torch.stack([Zt[b_ + j, _psec_t]
-                                               for j in range(K)], 1).float()
+                            zs_ = gather_stencil(
+                                Zt, torch.full_like(_psec_t, b_), _psec_t,
+                                NBR_t, K)
                             ms_ = torch.stack(
                                 [Mt[b_ + j].expand(len(_psec), -1)
                                  for j in range(K)], 1)
@@ -1333,7 +1441,7 @@ def main():
         et = torch.as_tensor(et[sel], dtype=torch.long)
         ep = torch.as_tensor(ep[sel], dtype=torch.long)
         base = et - K + 1
-        zseq = torch.stack([Zt[base + j, ep] for j in range(K)], 1).float()
+        zseq = gather_stencil(Zt, base, ep, NBR_t, K)
         mseq = torch.stack([Mt[base + j] for j in range(K)], 1)
         pred, hid = model(zseq.to(TDEV), mseq.to(TDEV), static_ctx[ep].to(TDEV))
         pred, hid = pred.cpu(), hid.cpu()        # back to CPU: everything
@@ -1385,8 +1493,7 @@ def main():
                 et_ = torch.as_tensor(eth[sel], dtype=torch.long)
                 ep_ = torch.as_tensor(eph[sel], dtype=torch.long)
                 base = et_ - K + 1
-                zsq = torch.stack([Zt[base + j, ep_] for j in range(K)],
-                                  1).float()
+                zsq = gather_stencil(Zt, base, ep_, NBR_t, K)
                 msq = torch.stack([Mt[base + j] for j in range(K)], 1)
                 _, hd = model(zsq.to(TDEV), msq.to(TDEV),
                               static_ctx[ep_].to(TDEV))
@@ -1411,7 +1518,8 @@ def main():
         F = np.zeros((T, a.d_model), dtype=np.float32)
         for t in range(K - 1, T):
             base = t - K + 1
-            zseq = torch.stack([Zt[base + j, sec_pix] for j in range(K)], 1).float()
+            zseq = gather_stencil(Zt, torch.full_like(sec_pix, base),
+                                  sec_pix, NBR_t, K)
             mseq = torch.stack([Mt[base + j].expand(len(sec_pix), -1)
                                 for j in range(K)], 1)
             _, hid = model(zseq.to(TDEV), mseq.to(TDEV),

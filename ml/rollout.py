@@ -574,7 +574,13 @@ def main():
                      if x.strip())
         model = TemporalTransformer(d_z=ck["d_z"], d_model=tk_["args"]["d_model"],
                                     n_heads=4, n_layers=tk_["args"]["layers"],
-                                    k_max=k_tbl, direct=dir_)
+                                    k_max=k_tbl, direct=dir_,
+                                    stencil=tk_["args"].get("stencil", 1))
+        if getattr(model, "stencil", 1) > 1:
+            sys.exit(f"head {label} was trained with --stencil "
+                     f"{model.stencil}: this evaluator rolls pixels "
+                     f"independently and cannot supply neighbourhood "
+                     f"inputs — use ml/rollout_spatial.py (E-022)")
         model.load_state_dict(tk_["model"])
         model.eval()
         results["heads"][label], ens_by_head[label] = eval_one(model, label)
