@@ -98,13 +98,16 @@ months vs +0.42 on the three held-out years** (2009 +0.53, 2017 +0.09,
 2023 +0.67). A model trained on 2005–2024 replays those years when handed
 a matching starting state; the initial condition acts as a key.
 
-**2 · The ensemble is UNDER-DISPERSED by about an order of magnitude.**
-Pooled 90% band ≈ **0.9 Sv** against **10.3 Sv** of observed spread, and
-it contains **19%** of observations where a calibrated 90% band contains
-~90%. The cause is structural, not a tuning error: the rolled dynamics is
-**contractive** and settles onto a stable seasonal limit cycle near
-−0.8 Sv (future-tail lag-12 autocorrelation 0.99), so injected noise is
-absorbed rather than amplified. Inflating the noise cannot fix it.
+**2 · The ensemble is UNDER-DISPERSED — but see E-021b, part of this was
+my method, not the model.** As first measured: pooled 90% band ≈ **0.9 Sv**
+against **10.3 Sv** of observed spread, containing **19%** of observations
+where a calibrated band contains ~90%. I attributed all of it to the
+rolled dynamics being **contractive** (it is — the future tail settles
+onto a seasonal limit cycle near −0.8 Sv, lag-12 autocorrelation 0.99).
+Chris then asked whether spatial correlation reaches the roll through the
+embeddings, which exposed that the perturbations were white per-pixel
+noise against a strongly correlated field. **E-021b corrects the number to
+~5×, not ~10×.** Read that entry before quoting either.
 
 **What it points at.** The model has **no forcing input** — no surface
 heat flux, no freshwater, and no wind after the context ends. Unforced,
@@ -112,6 +115,74 @@ the only thing a dissipative learned dynamics can do is decay to
 climatology, which is exactly what both panels show. This is the first
 measurement that ranks the data backlog: surface fluxes ahead of further
 capacity work.
+
+### E-021b — the perturbations were white; the field is not. #220, same day
+
+**Why, from Chris.** *"Two pixel embeddings depend on other pixels near
+them. So maybe the spatial correlation comes via the embeddings. No?"*
+Yes — and measuring it turned a reported model failure partly into a
+method failure of mine.
+
+**Measured on the run-62 cache, along the 26.5°N section:**
+
+| separation | 1 cell | 5 | 20 | 80 | 150 |
+|---|---|---|---|---|---|
+| r of z | 0.986 | 0.875 | 0.680 | 0.345 | 0.247 |
+
+e-folding near 18°. Pixels 20° apart share no input cells, so this is
+inherited from the ocean, not manufactured by the 3×3 encoder patch. The
+consequence for the read-out is the whole point: the section mean of 265
+pixels has an **effective N of 2.5**, measured as var(section mean) /
+mean(per-pixel var). White per-pixel noise therefore averages down by
+√265 ≈ 16× where structured error averages down by √2.5 ≈ 1.6× — so
+E-021's ensemble was narrowed ~10× by its own noise model.
+
+**Design.** Identical to E-021 except the perturbation: instead of
+synthesising white noise at the measured per-dimension scale, resample the
+head's OWN one-step residual FIELDS ([S, dz] snapshots kept during the
+residual pass). That carries the true spatial and cross-dimension
+covariance exactly, with nothing fitted and no free parameter.
+`--noise white` retains the original as the control, so exactly one thing
+changes. Pre-registered falsifier: if coverage stayed near 19% the
+under-dispersion was the model's and E-021 stood unchanged; if it rose
+toward 90% the calibration claim was mine and had to be retracted.
+
+**RESULT — neither pole; the honest answer is in between.**
+
+| | white (E-021) | field (E-021b) |
+|---|---|---|
+| hindcast **sde** coverage of the 90% band | 19.5% | **42.4%** |
+| hindcast **sde** mean band width | 1.11 Sv | **2.08 Sv** |
+| future **sde** mean band width | 1.00 Sv | **2.12 Sv** (2.1×) |
+| hindcast **ic** coverage | 13.9% | 14.7% |
+| future **ic** band width | 1.15 Sv | 1.18 Sv (1.0×) |
+
+**My ~10× estimate was itself an over-claim, and the reason is
+instructive.** The √N argument governs the noise AT INJECTION; the
+contraction then decides how much survives. For **sde**, which
+re-injects every month, the fan reaches an injection-versus-decay balance
+and correlated structure buys **2.1×** — real, and less than predicted.
+For **ic**, which injects once, the structure of the kick is irrelevant by
+month 12 because the dynamics has absorbed it either way: **1.0×**, no
+change at all. That contrast is itself the cleanest evidence that the
+contraction is real and dominant.
+
+**So the corrected verdict.** The fan is still under-dispersed — 2.1 Sv
+against 10.1 Sv observed, **~5× too narrow, not ~10×** — and roughly half
+of what E-021 charged to the model was mine. The remaining factor is the
+model's, and the diagnosis stands: a contractive per-pixel dynamics with
+no forcing input cannot manufacture variance.
+
+**Unchanged by this.** The memorisation finding concerns the MEDIAN, not
+the spread, and both runs agree on it (field: r +0.72 trained / +0.34
+held-out; white: +0.55 / +0.16 — the same story, and the corrected run
+reads slightly *more* memorised, not less). Cost: ~20 min on one 4090.
+
+**The lesson, general enough to keep.** A perturbation is a claim about
+the error's *structure*, not only its size, and a spatially-averaged
+read-out is exactly where an unstructured claim is punished by √N. Where
+the real errors are available as fields, resample them; do not synthesise
+noise and hope the covariance did not matter.
 
 **Consequences.**
 - **No hindcast over the training era may be quoted as skill** — here or
