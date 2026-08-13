@@ -125,7 +125,8 @@ as suspected — the codec does carry Florida Current signal.
 #223 / #224**, queued on gpu-box-42005419 (60k steps, job_timeout 400,
 plan-22N.json published by dispatch_run). gpu-box-40623952 (47483091) is
 resource-unavailable at its Vast host — start queued; the stencil:13 trio
-dispatches when it wakes, or queues behind the s9 trio if it stays down.
+dispatched once it woke: **#225 / #226 / #227** on gpu-box-40623952
+(same 60k/expdecay recipe, ~20 min behind the s9 trio).
 
 | metric | stencil 1 (e017) | 3×3 (e022s9) | 13-pt (e022s13) |
 |---|---|---|---|
