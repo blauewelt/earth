@@ -158,6 +158,8 @@ def main():
         codec = codec_from_ckpt(ck, C)
         codec.load_state_dict(ck["model"])
         codec.eval()
+        if torch.cuda.is_available():
+            codec = codec.cuda()   # embed_everything follows the model's device
         ctx_all = np.stack([np.sin(2 * np.pi * moy / 12),
                             np.cos(2 * np.pi * moy / 12)], 1)
         k = rng.choice(len(xs_sec), 8, replace=False)
@@ -223,9 +225,16 @@ def main():
     Mv = torch.isfinite(Xv)
     Xv = torch.nan_to_num(Xv, nan=0.0)
 
-    dec = MultiDec(ck["d_z"], C, a.hidden, a.layers)
+    # CUDA when present (the GPU boxes; ~1 min instead of ~65 in the sandbox,
+    # measured 2026-08-13 when three sandbox attempts died to ~2h container
+    # restarts mid-train). The pair arrays stay in host memory — only the
+    # per-batch slice crosses, same policy as embed_everything.
+    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    dec = MultiDec(ck["d_z"], C, a.hidden, a.layers).to(dev)
     n_par = sum(p.numel() for p in dec.parameters())
-    print(f"decoder {a.hidden}x{a.layers}: {n_par:,} params", flush=True)
+    print(f"decoder {a.hidden}x{a.layers}: {n_par:,} params (on {dev})",
+          flush=True)
+    Zv, Xv, Mv = Zv.to(dev), Xv.to(dev), Mv.to(dev)
     opt = torch.optim.AdamW(dec.parameters(), lr=a.lr, weight_decay=1e-4)
     import math
     sched = torch.optim.lr_scheduler.LambdaLR(
@@ -234,8 +243,8 @@ def main():
     best_val, best_state, t0 = float("inf"), None, time.time()
     for s in range(1, a.steps + 1):
         idx = ti[np.random.randint(0, len(ti), a.batch)]
-        z = torch.from_numpy(ZT[idx].astype(np.float32))
-        x = torch.from_numpy(XT[idx].astype(np.float32))
+        z = torch.from_numpy(ZT[idx].astype(np.float32)).to(dev)
+        x = torch.from_numpy(XT[idx].astype(np.float32)).to(dev)
         m = torch.isfinite(x)
         x = torch.nan_to_num(x, nan=0.0)
         pred = dec(z)
@@ -249,7 +258,9 @@ def main():
             tag = ""
             if vl < best_val:
                 best_val, tag = vl, "  *best"
-                best_state = {k: v.clone() for k, v in dec.state_dict().items()}
+                # keep the snapshot on CPU so the saved .pt loads anywhere
+                best_state = {k: v.detach().cpu().clone()
+                              for k, v in dec.state_dict().items()}
             print(f"  step {s:>5}/{a.steps}  train {float(loss):.4f}  "
                   f"val {vl:.4f}  ({time.time()-t0:.0f}s){tag}", flush=True)
     dec.load_state_dict(best_state)
@@ -262,8 +273,9 @@ def main():
 
     # ---- score with the exact E-019a section audit ------------------------
     with torch.no_grad():
-        pred_sec = np.stack([dec(torch.from_numpy(Z_sec[t])).numpy()
-                             for t in range(T)])
+        pred_sec = np.stack(
+            [dec(torch.from_numpy(Z_sec[t]).to(dev)).cpu().numpy()
+             for t in range(T)])
     px_hold = x_hold[xs_sec]
     sel_train_t = np.where(~t_hold)[0]
     sel_hold_t = np.where(t_hold)[0]
