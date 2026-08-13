@@ -185,14 +185,42 @@ val divergence.
 **So the morning package's nowcast column is settled** — U=1 and U=4
 are interchangeable there, and the remaining gap to the 0.63 ceiling
 belongs to the read-out/labels axis (E-019's decomposition), not the
-trunk or the unroll objective. What is NOT settled is the horizon:
-U=4 pays its h=1 tax to move the ROLLED regime, which teacher-forced
-z-ratio structurally cannot see, and #211 measured U=1's rolled AUC
-at 0.643–0.645 with truefit h7–12 at 0.425–0.492. #217 (dispatched
-03:51Z) rolls all six heads on identical points; if U=4 clears those
-bands, the tax bought something real at horizon and the "current
-best" table gets a second row. Cost: 3 runs × ~3.3–4 h ≈ 10.6 GPU·h
+trunk or the unroll objective. Cost: 3 runs × ~3.3–4 h ≈ 10.6 GPU·h
 on two 4090s, zero dead dispatches.
+
+### E-020 ROLLOUT (#217, 2026-08-13) — the horizon column closes too, and against U=4
+
+The one place U=4 could still have earned its ~+33% teacher-forced tax
+was the ROLLED regime the unroll objective actually optimises, which
+teacher-forced z-ratio is structurally blind to. All six 32M heads
+rolled on identical points, three seeds each:
+
+| metric (h=1..12) | U=1 (E-017) | U=4 (E-020) |
+|---|---|---|
+| **AUC(msss_damped)** | 0.643 / 0.644 / 0.645 — **mean 0.644, sd 0.0008** | 0.556 / 0.568 / 0.563 — **mean 0.562, sd 0.005** |
+| msss_damped at h=12 | +0.576 | +0.469 |
+| amplitude retention at h=12 | 0.805 | 0.710 |
+| AMOC truefit h1–3 | 0.458 [0.450–0.470] | 0.500 [0.463–0.529] |
+| AMOC truefit h4–6 | 0.353 [0.339–0.375] | 0.377 [0.345–0.421] |
+| AMOC truefit h7–12 | 0.463 [0.425–0.492] | 0.445 [0.387–0.526] |
+
+**U=4 is decisively WORSE where it should have been better.** Field
+skill against damped persistence falls 0.644 → 0.562 — a gap ~16 seed
+standard deviations wide, i.e. the cleanest signal in the whole unroll
+programme — and amplitude retention falls with it at every horizon
+(0.883 → 0.795 at h=1, 0.805 → 0.710 at h=12): the unrolled objective
+makes the model MORE smoothing, not less. The AMOC transport bands
+differ by 0.02–0.04 with seed spreads of 0.02–0.07, i.e. nothing.
+
+**The U axis is now closed at both trunk sizes and on every axis we
+measure**: nowcast probe (null, E-020), teacher-forced forecast (−33%),
+rolled field skill (−13%), amplitude (−12%), transport at horizon
+(null). E-010 reached the same verdict at 1.8M; capacity does not
+rescue it. `--unroll` should default to 1 and the knob is done.
+
+Cost: #217 ran 4h51m of the documented CPU-bound `rollout.py` burn
+(~$1.35) — the `model.to(_dev)` fix is still unlanded and is now the
+single cheapest infrastructure win outstanding.
 
 ---
 
