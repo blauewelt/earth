@@ -1235,6 +1235,11 @@ def main():
                           "train_windows": int(len(pool_t)),
                           "d_z": int(ck["d_z"]), "seed": a.seed,
                           "unroll": a.unroll,
+                          # E-022: named here so the arm is readable from the
+                          # live branch — on #221 it had to be inferred from
+                          # params_M (32.338 = 32.038 + the 300,096 extra
+                          # input columns), which is a check, not a record
+                          "stencil": a.stencil,
                           "unroll_probs": a.unroll_probs,
                           "direct": a.direct,
                           "tag": a.tag or ""}})
@@ -1430,6 +1435,7 @@ def main():
         "data_points": int(len(pool_t)),   # train windows in the pool
         "n_pixels": int(P),
         "n_train_months": int((~t_hold).sum()),
+        "stencil": int(a.stencil),         # E-022: part of the arm's identity
     }
 
     # ---- eval 1: z-space t+1 on held-out target months --------------------
