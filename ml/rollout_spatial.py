@@ -173,12 +173,14 @@ def month_feats(moys, dev):
          np.cos(2 * np.pi * m / 12)], 1).astype(np.float32)).to(dev)
 
 
-def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk):
+def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False):
     """One autoregressive step over ALL pixels. Zwin [P, K, d_z] on the
-    device; NBR_t None (stencil 1) or [P, S]; mfeat [K, 2]. → ẑ [P, d_z].
-    The gather mirrors temporal.gather_stencil's layout exactly (slot-major
-    over d_z, centre slot 0, missing → zeros); the zero-weight-equivalence
-    test pins that layout at the model boundary."""
+    device; NBR_t None (stencil 1) or [P, S]; mfeat [K, 2]. → ẑ [P, d_z]
+    float32. The gather mirrors temporal.gather_stencil's layout exactly
+    (slot-major over d_z, centre slot 0, missing → zeros); the zero-weight-
+    equivalence test pins that layout at the model boundary. `amp` runs the
+    forward under fp16 autocast — a SPEED knob whose honesty is enforced by
+    the #217 gate, which scores through the identical path."""
     P = Zwin.shape[0]
     outs = []
     for i in range(0, P, chunk):
@@ -192,14 +194,16 @@ def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk):
             zj[miss] = 0.0
             zin = zj.permute(0, 2, 1, 3).reshape(
                 zj.shape[0], Zwin.shape[1], -1)               # [n, K, S*dz]
-        pred, _ = model(zin,
-                        mfeat[None].expand(zin.shape[0], -1, -1),
-                        static_ctx[sl])
-        outs.append(pred[:, -1])
+        with torch.autocast(device_type="cuda", dtype=torch.float16,
+                            enabled=amp):
+            pred, _ = model(zin,
+                            mfeat[None].expand(zin.shape[0], -1, -1),
+                            static_ctx[sl])
+        outs.append(pred[:, -1].float())
     return torch.cat(outs, 0)
 
 
-def decode_all(codec, zhat, C, chunk):
+def decode_all(codec, zhat, C, chunk, amp=False):
     """codec.query at every (pixel, channel), offset 0 — [P, C] numpy."""
     outs = []
     for i in range(0, zhat.shape[0], chunk):
@@ -207,7 +211,10 @@ def decode_all(codec, zhat, C, chunk):
         n = z.shape[0]
         qc = torch.arange(C, device=z.device)[None].expand(n, -1)
         off0 = torch.zeros(n, C, 3, dtype=torch.long, device=z.device)
-        outs.append(codec.query(z, qc, off0).float().cpu().numpy())
+        with torch.autocast(device_type="cuda", dtype=torch.float16,
+                            enabled=amp):
+            xq = codec.query(z, qc, off0)
+        outs.append(xq.float().cpu().numpy())
     return np.concatenate(outs, 0)
 
 
@@ -297,9 +304,20 @@ def main():
                     help="0 skips the future roll")
     ap.add_argument("--no-gate", action="store_true",
                     help="score without the e017_u1_s0 gate — smoke/toy ONLY")
+    ap.add_argument("--amp", action="store_true",
+                    help="fp16 autocast for the roll/decode forwards — the "
+                         "gate decides whether the numbers survive it")
     ap.add_argument("--cache-dir", default=os.path.join(HERE, "cache"))
     a = ap.parse_args()
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if dev.type == "cuda":
+        # TF32 matmuls: ~2x on Ada at ~10-bit mantissa with fp32 accumulate.
+        # The 9-head R4 eval is ~2M forward tokens per roll step x ~700 steps
+        # per head — at strict fp32 that is ~11 h of 4090; with TF32 it fits
+        # a job_timeout. Numerically far gentler than bf16, and the #217 gate
+        # (±0.01) is the check that it changed nothing that matters.
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
 
     # gate discipline up front, where it has cost nothing (ml/CLAUDE.md §0.3)
     gate_paths = [h for h in a.heads if GATE_HEAD in os.path.basename(h)]
@@ -541,10 +559,11 @@ def main():
                         # rollout.py's mseq at step h spans s-K+h .. s+h-1;
                         # advance AFTER the forward, like project_amoc.py
                         zhat = roll_step(model, Zwin, NBR_t, static_ctx,
-                                         month_feats(cur, dev), a.chunk)
+                                         month_feats(cur, dev), a.chunk,
+                                         a.amp)
                         Zwin = torch.cat([Zwin[:, 1:], zhat[:, None]], 1)
                         cur = cur[1:] + [(cur[-1] + 1) % 12]
-                        xhat = decode_all(codec, zhat, C, a.chunk)
+                        xhat = decode_all(codec, zhat, C, a.chunk, a.amp)
                         v_true, obs_tt = std_m.get(t_tgt)
                         op = obs_tt & obs_s
                         v_damp = v_pers * r1 ** h
@@ -618,7 +637,7 @@ def main():
                     if mm > 12:
                         mm, yy = 1, yy + 1
                     zhat = roll_step(model, Zwin, NBR_t, static_ctx,
-                                     month_feats(cur, dev), a.chunk)
+                                     month_feats(cur, dev), a.chunk, a.amp)
                     Zwin = torch.cat([Zwin[:, 1:], zhat[:, None]], 1)
                     cur = cur[1:] + [(cur[-1] + 1) % 12]
                     sv.append(read_sv(zhat))
