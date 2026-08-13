@@ -562,6 +562,127 @@ test.describe("drivers.json (categorical grid)", () => {
   });
 });
 
+test.describe("amoc_eval_mask.json (what the forecaster actually computes)", () => {
+  const g = read("amoc_eval_mask.json");
+
+  // This file is not a measurement of the world — it is a picture of an
+  // EXPERIMENT, written by the experiment's own scoring code
+  // (ml/rollout_spatial.py --export-mask). So the tests here are about it
+  // still describing the same experiment: the same window, the same nesting,
+  // the same counts the evaluator reports in rollout_spatial.json. If the
+  // tensor window or the corridor recipe changes and this file is not re-baked,
+  // the globe would be drawing last week's experiment — which is the one
+  // failure a picture of a model can have and still look perfectly fine.
+  test("is a packed categorical grid over the family3 window", () => {
+    for (const f of ["id", "title", "units", "source", "citation", "classes",
+                     "west", "south", "east", "north", "dlon", "dlat", "nx", "ny",
+                     "period", "counts", "corridor_def", "packed"]) {
+      expect(g[f], `amoc_eval_mask.json missing ${f}`).not.toBeUndefined();
+    }
+    expect(g.values).toBeUndefined();     // categorical: palette, not a ramp
+    expect(g.ramp).toBeUndefined();
+    expect(g.doc).toMatch(/^https:\/\/github\.com\/blauewelt\/earth\/blob\/main\/ml\//);
+
+    // the ML window: lat 0..70 N, lon -100..+20 E at a quarter degree, cell
+    // CENTRES on the tensor's own lat/lon vectors (hence the half-cell bounds)
+    expect(g.nx).toBe(481); expect(g.ny).toBe(281);
+    expect(g.dlon).toBeCloseTo(0.25, 6); expect(g.dlat).toBeCloseTo(0.25, 6);
+    expect(g.west).toBeCloseTo(-100.125, 6); expect(g.east).toBeCloseTo(20.125, 6);
+    expect(g.south).toBeCloseTo(-0.125, 6); expect(g.north).toBeCloseTo(70.125, 6);
+    expect(g.packed.length).toBe(g.nx * g.ny);
+
+    expect(g.classes.map((c) => c.code)).toEqual([1, 2, 3]);
+    for (const c of g.classes) {
+      expect(c.label.length).toBeGreaterThan(3);
+      expect(c.rgb.length).toBe(3);
+      for (const ch of c.rgb) { expect(ch).toBeGreaterThanOrEqual(0); expect(ch).toBeLessThan(256); }
+    }
+  });
+
+  test("the roles NEST and the counts match the pixels actually drawn", () => {
+    // One pass with counters, never expect() per cell (135k cells).
+    const counts = new Map();
+    for (let i = 0; i < g.packed.length; i++) {
+      const c = g.packed[i];
+      counts.set(c, (counts.get(c) ?? 0) + 1);
+    }
+    for (const c of counts.keys()) {
+      expect(new Set([".", "1", "2", "3"]).has(c), `illegal char ${JSON.stringify(c)}`).toBe(true);
+    }
+    const n1 = counts.get("1") ?? 0, n2 = counts.get("2") ?? 0, n3 = counts.get("3") ?? 0;
+    // The header's counts are the NESTED sets (rolled ⊇ corridor ⊇ section);
+    // the packed cells carry only the most specific role. Checking one against
+    // the other is what makes the legend's promise true.
+    expect(n1 + n2 + n3).toBe(g.counts.rolled);
+    expect(n2 + n3).toBe(g.counts.corridor);
+    expect(n3).toBe(g.counts.section);
+
+    // the eval's own numbers, as reported by rollout_spatial.py on the
+    // sha-pinned family3 tensor — 84,405 ocean pixels, 265 section cells
+    expect(g.counts.rolled).toBe(84405);
+    expect(g.counts.section).toBe(265);
+    expect(g.counts.corridor).toBe(g.corridor_def.n_px);
+    expect(g.corridor_def.of).toBe(g.counts.rolled);
+    // the corridor is a MINORITY of the window (it is the fast quarter plus a
+    // dilation): a corridor that swallowed the basin would score nothing in
+    // particular, and one that vanished would score almost nothing
+    expect(g.counts.corridor / g.counts.rolled).toBeGreaterThan(0.1);
+    expect(g.counts.corridor / g.counts.rolled).toBeLessThan(0.6);
+    expect(g.corridor_def.pctl).toBe(75);
+    expect(g.corridor_def.dilate_cells).toBe(2);
+    expect(g.section_row.lat).toBeCloseTo(26.5, 2);   // RAPID's latitude
+  });
+
+  test("the section really lies on the RAPID row, and the Gulf Stream is in the corridor", () => {
+    const at = (lon, lat) => {
+      const ix = Math.floor((lon - g.west) / g.dlon);
+      const iy = Math.floor((lat - g.south) / g.dlat);
+      return g.packed[iy * g.nx + ix];
+    };
+    // RAPID sits at 26.5°N between the Bahamas and the African shelf
+    expect(at(-70, 26.5)).toBe("3");
+    expect(at(-40, 26.5)).toBe("3");
+    // one row north is corridor or plain ocean, never section — a section that
+    // smeared across rows would mean the row index is off by one
+    expect(["1", "2"]).toContain(at(-40, 26.8));
+    // Gulf Stream off Cape Hatteras — the one place in this basin where a
+    // "fastest quarter by mean current speed" rule cannot miss
+    expect(at(-73, 36)).toBe("2");
+    // outside the window there is nothing at all (the model has no state there)
+    expect(at(-99, 40)).toBe(".");     // Pacific side of the window edge: land
+
+    // Chris's spec for the corridor was a ROUTE — "from the Gulf of Mexico to
+    // northern Europe, and back" — so test the route as coverage per region,
+    // not at hand-picked points. (Written after a point test at 62°N/10°W
+    // failed: the North Atlantic Current is there, but its fastest quarter
+    // hugs the shelf edge a few hundred km away. The percentile threshold is
+    // the data's opinion about where the flow is, and a single coordinate is
+    // mine.)
+    const arr = new Uint8Array(g.packed.length);
+    for (let i = 0; i < g.packed.length; i++) arr[i] = g.packed[i] === "." ? 0 : +g.packed[i];
+    const frac = (la0, la1, lo0, lo1) => {
+      let cor = 0, ocean = 0;
+      for (let iy = 0; iy < g.ny; iy++) {
+        const la = g.south + (iy + 0.5) * g.dlat;
+        if (la < la0 || la >= la1) continue;
+        for (let ix = 0; ix < g.nx; ix++) {
+          const lo = g.west + (ix + 0.5) * g.dlon;
+          if (lo < lo0 || lo >= lo1) continue;
+          const v = arr[iy * g.nx + ix];
+          if (v >= 1) ocean++;
+          if (v >= 2) cor++;
+        }
+      }
+      return ocean ? cor / ocean : 0;
+    };
+    expect(frac(20, 30, -98, -80)).toBeGreaterThan(0.3);   // Gulf of Mexico / Loop
+    expect(frac(30, 45, -80, -60)).toBeGreaterThan(0.3);   // Gulf Stream
+    expect(frac(45, 60, -50, -10)).toBeGreaterThan(0.1);   // North Atlantic Current
+    expect(frac(55, 70, -20, 20)).toBeGreaterThan(0.05);   // reaches northern Europe
+    expect(frac(0, 20, -60, -20)).toBeGreaterThan(0.2);    // and the tropical return
+  });
+});
+
 test.describe("cities.json (place-name reference points)", () => {
   const d = read("cities.json");
 

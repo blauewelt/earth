@@ -414,6 +414,34 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    id: "amoc-eval",
+    // OUR OWN artefact, and the only layer on the globe that describes a model
+    // run rather than the world. It is written BY the evaluator
+    // (`python3 ml/rollout_spatial.py --export-mask-only`, which calls the same
+    // corridor_pixels() the scoring calls) and never drawn here: a corridor
+    // hand-traced in the frontend would be a second definition of the
+    // experiment, and the second definition is the one that goes stale.
+    // CATEGORICAL — a cell carries a ROLE, not a quantity — so classGrid and
+    // the file's own palette, and therefore neither aggregable nor
+    // deltaRange. Untimed: the geometry comes from the tensor's window and the
+    // corridor recipe, not from a date.
+    // NO catalog record, deliberately: §2.6 catalogues open DATASETS, and this
+    // is a description of our own experiment — the same reason the city labels
+    // have none. Its `doc` points at the experiment's plan instead.
+    grid: true, classGrid: true, gridFile: "data/amoc_eval_mask.json",
+    classNote: "the roles are NESTED — the section lies inside the corridor, which lies " +
+      "inside the rolled window &mdash; and each cell shows its most specific one",
+    datelessNote: "<strong>AMOC forecast: pixels rolled forward</strong> is the fixed " +
+      "geometry of an experiment — the tensor window and the corridor recipe — so the " +
+      "<strong>date selector doesn't change it</strong>. What changes with time is the " +
+      "forecast itself, which lives in the <strong>AMOC tab</strong>.",
+    maxLevel: 7,
+    doc: "https://github.com/blauewelt/earth/blob/main/ml/plans/E022_spatial_coupling.md",
+    title: "AMOC forecast: pixels rolled forward",
+    meta: "Where the model actually computes — and which of those pixels its AMOC score is read from",
+    on: false,
+  },
+  {
     id: "tides",
     grid: true, gridFile: "data/tides.json",
     // Not a climatology and not a snapshot: a harmonic ANALYSIS (fixed
@@ -3379,6 +3407,12 @@ function datelessToast(id) {
     if (cfg.monthlyGrid) return null;      // month-aware — its own toast (maybeMonthlyGridToast)
     if (cfg.grid) {
       if (cfg.classGrid) {
+        // Each categorical grid is dateless for its OWN reason and must say
+        // which: the drivers map attributes a 25-year record, the AMOC-eval
+        // mask is an experiment's fixed geometry. The sentence below was
+        // written for the first one and would have been simply false for the
+        // second, so a layer may carry its own `datelessNote`.
+        if (cfg.datelessNote) return cfg.datelessNote;
         // Not a climatology and not a snapshot: one attribution computed over
         // the whole 2001–2025 record, so no single date owns it.
         return `<strong>${cfg.title}</strong> attributes the <strong>whole ` +
@@ -3619,6 +3653,20 @@ const LAYER_FACTS = {
          "between them is the difference between forest that is gone and " +
          "forest that will grow back. This is the companion to the OPERA alert " +
          "layers, which see the loss at 30 m but say nothing about its cause." },
+  "amoc-eval": { rec: "fixed — the geometry of the 1982-01 → 2024-12 tensor the model is trained on, re-baked when the window or the corridor recipe changes", int: "not dated — one fixed geometry, not a measurement", sp: "0.25° (~27 km here) — 84,405 ocean pixels, of which 29,627 are scored",
+    sum: "The only layer here that shows a MODEL rather than the world. The " +
+         "forecaster works pixel by pixel: each ocean cell is compressed to a " +
+         "64-number embedding, and the model predicts every cell's next month " +
+         "from its own recent history and — since E-022 — its neighbours', " +
+         "then feeds the prediction back in and steps again. Blue is every " +
+         "pixel that gets advanced that way, all 84,405 of them, because a " +
+         "model that reads its neighbours cannot roll a small region without " +
+         "the region around it. Orange is the AMOC corridor the skill score is " +
+         "actually read from — the fastest quarter of the ocean by mean " +
+         "current speed, dilated two cells, which the data itself picks out as " +
+         "the Loop Current, the Gulf Stream, the North Atlantic Current and " +
+         "the return flow. Red is the RAPID array's 26.5°N section, where the " +
+         "transport this whole project tries to predict is measured." },
   "grace": { rec: "this map: 2002-08 → 2022-07 (last month GIBS serves; GRACE-FO continues) · 2017–18 has a between-missions gap", int: "monthly", sp: "~300 km (3° mascons)",
     sum: "Where Earth gained or lost water mass — all of it: groundwater, soil, " +
          "snow, ice — measured by how the mass below tugs at a pair of " +

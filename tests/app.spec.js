@@ -2546,6 +2546,70 @@ test("drivers is a categorical grid: swatch legend, named driver, dateless", asy
   expect(cfg.dr).toBeNull();
 });
 
+test("the AMOC eval mask shows where the model computes, and says it is not a measurement", async ({ page }) => {
+  // The one layer here that draws a MODEL rather than the world, so the thing
+  // to protect is that a reader can tell those apart: three named roles, a
+  // probe that answers with the role, and a toast that says the date does
+  // nothing. Chris asked for it directly — "see which pixels will all be
+  // rolled forward in the amoc eval" — and the answer is only useful if the
+  // scored corridor is visibly a SUBSET of the rolled window.
+  const g = await page.evaluate(async () => {
+    const cfg = window.__earth.GIBS_LAYERS.find((l) => l.id === "amoc-eval");
+    const g = await window.__earth.loadGrid(cfg);
+    return { classes: g.classes, counts: g.counts, nx: g.nx, ny: g.ny,
+             len: g.values.length, doc: cfg.doc };
+  });
+  expect(g.classes.map((c) => c.code)).toEqual([1, 2, 3]);
+  expect(g.len).toBe(g.nx * g.ny);                 // packed → values
+  expect(g.counts.corridor).toBeLessThan(g.counts.rolled);   // scored ⊂ rolled
+  expect(g.counts.section).toBeLessThan(g.counts.corridor);
+  // its "documentation" is the experiment's own plan, since there is no
+  // third-party dataset behind it
+  expect(g.doc).toMatch(/E022_spatial_coupling\.md$/);
+
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="amoc-eval"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
+  const item = page.locator("#legend-panel .legend-item", { hasText: "pixels rolled forward" });
+  await expect(item.locator(".legend-class")).toHaveCount(3);
+  await expect(item.locator("canvas.legend-bar")).toHaveCount(0);
+  await expect(item.locator(".legend-class")).toContainText([/rolled/i], { useInnerText: true });
+
+  // Dateless, but for its OWN reason: this is an experiment's fixed geometry,
+  // not the drivers map's 25-year attribution. A shared sentence would be
+  // false here, which is why the config carries its own note.
+  const toast = page.locator("#toast-host .toast").last();
+  await expect(toast).toContainText("geometry of an experiment");
+  await expect(toast).toContainText("doesn't change it");
+
+  // The probe answers with the ROLE. Cape Hatteras is scored corridor, the
+  // RAPID row is section, and the Pacific side of the window has no state at
+  // all — "no data" there is the honest answer, not a gap in a dataset.
+  const probe = await page.evaluate(async () => {
+    const e = window.__earth.colormapLayersTopDown().find((l) => l.cfg.id === "amoc-eval");
+    const at = (lon, lat) =>
+      window.__earth.probeEntryValue(e, Cesium.Cartographic.fromDegrees(lon, lat));
+    return { gs: await at(-73, 36), sec: await at(-70, 26.5),
+             deep: await at(-30, 40), out: await at(-140, 40) };
+  });
+  expect(probe.gs.label).toMatch(/corridor/i);
+  expect(probe.sec.label).toMatch(/RAPID/i);
+  expect(probe.deep.label).toMatch(/rolled/i);
+  expect(probe.gs.value).toBeUndefined();          // a role is not a number
+  expect(probe.out.noData).toBe(true);
+
+  // posture: categorical AND untimed, so neither averaging nor differencing
+  const cfg = await page.evaluate(() => {
+    const c = window.__earth.GIBS_LAYERS.find((l) => l.id === "amoc-eval");
+    return { agg: c.aggregable ?? null, dr: c.deltaRange ?? null, cg: c.classGrid };
+  });
+  expect(cfg.cg).toBe(true);
+  expect(cfg.agg).toBeNull();
+  expect(cfg.dr).toBeNull();
+});
+
 test("place names orient the map: a zoom ladder, optional borders, and a click that goes through", async ({ page }) => {
   // The feature exists for one reason: an SST anomaly off a coastline you can't
   // name tells you nothing about WHERE the ocean is warm. So the test is about

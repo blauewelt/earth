@@ -110,6 +110,108 @@ def corridor_pixels(Xm, ocean, ys, xs, t_hold, sec_sel, pctl, dilate):
     return cp, thr
 
 
+def export_mask(path, lats, lons, ocean, ys, xs, corridor, gate_mask,
+                sec_sel, sec_y, corridor_def, months, x_name):
+    """Write the eval's OWN pixel sets as a baked categorical grid the globe
+    app can draw (root CLAUDE.md §2 `classGrid` + `packed` format, row 0 =
+    south). Chris, 2026-08-13: *"add a layer to the globe visualiser to see
+    which pixels will all be rolled forward in the amoc eval"*.
+
+    It is written HERE, by the evaluator, from the same `corridor_pixels`
+    call the scoring uses, so the picture cannot drift from the experiment —
+    a hand-drawn corridor in the frontend would be a second definition, and
+    the second definition is always the one that goes stale.
+
+    Classes are NESTED (section ⊂ corridor ⊂ rolled); each cell shows its
+    most specific one:
+      1 rolled   — a window ocean pixel the roll advances every step
+      2 corridor — also scored as the headline AMOC corridor
+      3 section  — also on the RAPID 26.5°N transport section
+    Land and out-of-window cells are empty ("."), which is the honest
+    answer: the model has no state there at all."""
+    H, W = ocean.shape
+    code = np.zeros((H, W), np.uint8)
+    code[ys, xs] = 1
+    code[ys[corridor], xs[corridor]] = 2
+    code[ys[sec_sel], xs[sec_sel]] = 3
+    # NO row flip here, unlike scripts/refresh_data.py's drivers bake: the app's
+    # grid format wants row 0 = SOUTH and this tensor is already south-first
+    # (lats[0] = 0.0 N, lats[-1] = 70.0 N). Flipping "to be safe" is what the
+    # first version did, and it put the Gulf Stream at the latitude of the
+    # Norwegian Sea — a map that still looks like a plausible ocean, which is
+    # exactly why the assertion below exists rather than an eyeball check.
+    assert lats[0] < lats[-1], \
+        f"lats run north-first ({lats[0]} → {lats[-1]}); this writer assumes " \
+        f"south-first rows and would emit a vertically mirrored grid"
+    dlat = float(np.round(np.diff(lats).mean(), 6))
+    dlon = float(np.round(np.diff(lons).mean(), 6))
+    payload = {
+        "id": "amoc-eval",
+        "title": "AMOC eval: the pixels the model rolls forward",
+        "units": "role",
+        "source": ("earth / E-022 · ml/rollout_spatial.py over the "
+                   f"{x_name} tensor"),
+        "citation": (
+            "Every pixel this experiment advances one month at a time. The "
+            "stage-2 head predicts each pixel's next embedding; the E-022 "
+            "evaluator rolls ALL window ocean pixels (a stencil head reads "
+            "its neighbours, so a region roll would need a growing halo), "
+            "then scores an AMOC corridor derived from the data itself: mean "
+            "current speed over training months at or above the "
+            f"{corridor_def['pctl']:g}th percentile, dilated "
+            f"{corridor_def['dilate_cells']} cells, unioned with the RAPID "
+            "26.5°N section. Not hand-drawn, and written by the scoring code."),
+        "doc": ("https://github.com/blauewelt/earth/blob/main/ml/plans/"
+                "E022_spatial_coupling.md"),
+        "classes": [
+            {"code": 1, "label": "Rolled forward", "rgb": [72, 116, 168]},
+            {"code": 2, "label": "Scored: AMOC corridor", "rgb": [232, 152, 48]},
+            {"code": 3, "label": "RAPID 26.5°N section", "rgb": [235, 74, 96]},
+        ],
+        # cell CENTRES are the tensor's lats/lons, so the bounds are half a
+        # cell outside them (sampleGrid floors from west/south)
+        "west": round(float(lons[0]) - dlon / 2, 6),
+        "east": round(float(lons[-1]) + dlon / 2, 6),
+        "south": round(float(lats[0]) - dlat / 2, 6),
+        "north": round(float(lats[-1]) + dlat / 2, 6),
+        "dlon": dlon, "dlat": dlat, "nx": W, "ny": H,
+        "period": f"{months[0]}–{months[-1]}",
+        "counts": {"rolled": int(len(ys)), "corridor": int(corridor.sum()),
+                   "section": int(len(sec_sel)),
+                   "gate_subset": int(gate_mask.sum())},
+        "corridor_def": corridor_def,
+        "section_row": {"lat": round(float(lats[sec_y]), 4),
+                        "n_px": int(len(sec_sel))},
+        "packed": "".join("." if v == 0 else str(v) for v in code.ravel()),
+    }
+    # Read the file back the way the BROWSER will (app.js sampleGrid: floor
+    # from west/south), and demand the RAPID section land on RAPID's latitude.
+    # An exact expected value, checked at the point of writing — the app's own
+    # geometry, not this function's, so an off-by-one or a mirrored row cannot
+    # leave here (ml/CLAUDE.md §4.9).
+    def _probe(lat, lon):
+        ix = int(np.floor((lon - payload["west"]) / payload["dlon"]))
+        iy = int(np.floor((lat - payload["south"]) / payload["dlat"]))
+        return payload["packed"][iy * payload["nx"] + ix]
+    sec_lat = float(lats[sec_y])
+    for lon in (-70.0, -40.0):
+        got = _probe(sec_lat, lon)
+        assert got == "3", (
+            f"the {sec_lat}°N section reads '{got}' at {lon}°E when sampled "
+            f"the way the app samples it — the grid is mis-oriented, refusing "
+            f"to write a map that would look fine and be wrong")
+    assert _probe(sec_lat + 5 * payload["dlat"], -40.0) != "3", \
+        "the section smears across rows — off-by-one in the row index"
+
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    print(f"wrote {path} ({os.path.getsize(path):,} bytes) — "
+          f"{payload['counts']['rolled']:,} rolled · "
+          f"{payload['counts']['corridor']:,} corridor · "
+          f"{payload['counts']['section']} section", flush=True)
+
+
 class StdMonths:
     """Standardized-anomaly month fields at the ocean pixels, cached.
     Exactly build_slab's per-month recipe (dyn channels de-climatologised
@@ -288,10 +390,19 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--x", required=True)
     ap.add_argument("--npz-small", required=True)
-    ap.add_argument("--z", required=True, help="Z cache .npy (f16 [T,P,dz])")
+    ap.add_argument("--z", help="Z cache .npy (f16 [T,P,dz])")
     ap.add_argument("--ckpt", required=True)
-    ap.add_argument("--heads", nargs="+", required=True)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--heads", nargs="+")
+    ap.add_argument("--out", help="rollout_spatial.json (not needed with "
+                                  "--export-mask-only)")
+    ap.add_argument("--export-mask",
+                    help="also write the eval's pixel sets as a baked "
+                         "categorical grid for the globe app "
+                         "(data/amoc_eval_mask.json)")
+    ap.add_argument("--export-mask-only", action="store_true",
+                    help="write that grid and stop — needs no Z, no heads "
+                         "and no GPU, because the masks depend only on the "
+                         "tensor and the corridor recipe")
     ap.add_argument("--horizon", type=int, default=12)
     ap.add_argument("--chunk", type=int, default=8192)
     ap.add_argument("--pixels-gate", type=int, default=600)
@@ -319,14 +430,24 @@ def main():
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
+    if a.export_mask_only and not a.export_mask:
+        sys.exit("--export-mask-only needs --export-mask <path>")
+    if not a.export_mask_only:
+        missing = [f"--{k}" for k in ("z", "heads", "out")
+                   if not getattr(a, k)]
+        if missing:
+            sys.exit(f"missing {', '.join(missing)} (required unless "
+                     f"--export-mask-only)")
     # gate discipline up front, where it has cost nothing (ml/CLAUDE.md §0.3)
-    gate_paths = [h for h in a.heads if GATE_HEAD in os.path.basename(h)]
-    if not gate_paths and not a.no_gate:
+    gate_paths = [h for h in (a.heads or [])
+                  if GATE_HEAD in os.path.basename(h)]
+    if not gate_paths and not a.no_gate and not a.export_mask_only:
         sys.exit(f"no {GATE_HEAD} head among --heads and --no-gate not set: "
                  f"the validation gate (plan §6.5) is what makes any spatial "
                  f"number here believable — add the gate head or pass "
                  f"--no-gate (smoke only)")
-    heads = gate_paths + [h for h in a.heads if h not in gate_paths]
+    heads = gate_paths + [h for h in (a.heads or [])
+                          if h not in gate_paths]
 
     d = np.load(a.npz_small, allow_pickle=False)
     months = [str(m) for m in d["months"]]
@@ -360,9 +481,11 @@ def main():
     print(f"window: {P} ocean px · section {S_sec} px at row {sec_y}",
           flush=True)
 
-    Zm = np.load(a.z, mmap_mode="r")
-    assert Zm.shape == (T, P, d_z), \
-        f"Z {Zm.shape} != {(T, P, d_z)} — ordering mismatch, refusing"
+    Zm = None
+    if not a.export_mask_only:
+        Zm = np.load(a.z, mmap_mode="r")
+        assert Zm.shape == (T, P, d_z), \
+            f"Z {Zm.shape} != {(T, P, d_z)} — ordering mismatch, refusing"
 
     # ---- anomaly stats + per-month standardized fields --------------------
     st_path = os.path.join(a.cache_dir, "std_stats.npz")
@@ -376,8 +499,10 @@ def main():
                  mean_c=mean_c, std_c=std_c)
     std_m = StdMonths(Xm, ys, xs, moy, clim, dyn, mean_c, std_c)
 
-    print("AR1 damped-persistence pass over the record ...", flush=True)
-    r1 = ar1_train(std_m, T, t_hold, P, C)                     # [P, C]
+    r1 = None
+    if not a.export_mask_only:     # the mask needs no baseline arithmetic
+        print("AR1 damped-persistence pass over the record ...", flush=True)
+        r1 = ar1_train(std_m, T, t_hold, P, C)                 # [P, C]
 
     # ---- the three scopes -------------------------------------------------
     corridor, cor_thr = corridor_pixels(Xm, ocean, ys, xs, t_hold, sec_sel,
@@ -398,6 +523,13 @@ def main():
           f"{int(corridor.sum())} px (cur_speed ≥ p{a.corridor_pctl:g} "
           f"= {cor_thr:.3f}, dilate {a.corridor_dilate}) · window {P} px",
           flush=True)
+
+    if a.export_mask:
+        export_mask(a.export_mask, lats, lons, ocean, ys, xs, corridor,
+                    gate_mask, sec_sel, sec_y, corridor_def, months,
+                    os.path.basename(a.x))
+        if a.export_mask_only:
+            return
 
     # ---- codec + static identity for ALL pixels ---------------------------
     codec = codec_from_ckpt(ck, C)

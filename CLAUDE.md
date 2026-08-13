@@ -278,8 +278,18 @@ A new layer is not done until it has **all** of:
    | Tide height (live) | ✗ | ✗ | animated harmonic reconstruction on its own clock — there is no date axis to average or difference; the Tides tab is its control room |
    | Grid climatologies | ✗ | ✗ | already multi-decade averages, not timed |
    | Drivers of forest loss (grid) | ✗ | ✗ | categorical AND untimed — one 2001–2025 attribution, and "logging" plus "wildfire" is not a quantity |
+   | AMOC eval mask (grid) | ✗ | ✗ | categorical AND untimed — a cell carries the ROLE it plays in an experiment, and an experiment's geometry has no date to average over |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set
    `globe: true` and append "Live globe layer in this app." to its notes.
+   **Exception, for layers that are not datasets:** a layer describing our OWN
+   work rather than an observation of the world gets no catalog record, for
+   the same reason the city labels have none — §2.6 catalogues open DATA, and
+   the catalog is what a reader mines for sources. Currently one such layer
+   exists, `amoc-eval` (the pixels the AMOC forecaster rolls forward, written
+   by `ml/rollout_spatial.py --export-mask`). Such a layer must still satisfy
+   every other item here, and its `doc` link points at the experiment's own
+   plan or log — a layer with nothing to click is the one that gets mistaken
+   for a measurement.
 7. **An active-layer chip.** Layers defined in `GIBS_LAYERS` get one for free.
    A hand-written layer (its own `#toggle-…` checkbox rather than a
    `GIBS_LAYERS` entry) must be added to `STATIC_LAYER_CHIPS` in `src/app.js`
@@ -1034,6 +1044,31 @@ and render transparent, so the layer paints only the deforestation frontiers.
 Bake: `refresh_data.py drivers` (~300 MB COG, needs `rasterio`). It is the
 companion to the OPERA rasters above, which see the loss at 30 m and say
 nothing about its cause.
+
+**AMOC eval mask (`data/amoc_eval_mask.json`, `classGrid`) — the globe's only
+picture of a MODEL:** requested by the user on 2026-08-13, *"add a layer to the
+globe visualiser to see which pixels will all be rolled forward in the amoc
+eval"*. Three nested roles per cell — **rolled forward** (all 84,405 window
+ocean pixels the E-022 evaluator advances a month at a time), **scored: AMOC
+corridor** (29,627 — the fastest quarter of the window by train-month mean
+current speed, dilated two cells, ∪ the RAPID section, which is what the
+headline skill number is read from), **RAPID 26.5°N section** (265). Land and
+everything outside the ML window (lat 0–70 N, lon −100..+20 E, 0.25°) is empty,
+which is the truthful answer: the model holds no state there.
+
+Two decisions worth keeping. **The file is written by the evaluator, not by the
+frontend** — `python3 ml/rollout_spatial.py --export-mask data/amoc_eval_mask.json
+--export-mask-only` calls the same `corridor_pixels()` the scoring calls, needs
+no GPU, no embeddings and no heads (~5 min against the local tensor, seconds
+warm). A corridor traced by hand in `app.js` would be a second definition of
+the experiment, and the second definition is the one that silently goes stale.
+**And its orientation is asserted, not eyeballed:** the writer re-samples its
+own output the way `sampleGrid` will and demands the RAPID section land on
+26.5°N. The first version copied the drivers bake's `[::-1]` row flip, which
+this tensor does not need (its `lats` already run south-first) — that put the
+Gulf Stream at the latitude of the Norwegian Sea and still looked like a
+perfectly plausible ocean. A picture of a model is exactly the artefact whose
+mistakes look fine.
 
 **Place names (`data/cities.json`) — the map's reference points:** 7,342
 Natural Earth 10m populated places (public domain, 166 KB gzipped, 200 national
