@@ -287,6 +287,7 @@ def main():
                 roll_ym.append(f"{yy:04d}-{mm:02d}")
 
             fams = {}
+            sv_raw = {}          # full [M, N] per family, pooled then dropped
             for fam in ("ic", "sde"):
                 M = a.members
                 # zlib.crc32, not hash(): str hash is salted per process,
@@ -317,14 +318,67 @@ def main():
                         sv[:, step] = read_sv(zhat.reshape(M, S, -1))
                         seq = torch.cat([seq[:, 1:], zhat[:, None]], 1)
                         cur = cur[1:] + [(cur[-1] + 1) % 12]
-                fams[fam] = [[round(float(v), 3) for v in row] for row in sv]
-                q = np.percentile(sv, [5, 50, 95], axis=1)
-                print(f"  {label} {start} {fam}: member-months p5/p50/p95 "
-                      f"{q[0].mean():+.2f}/{q[1].mean():+.2f}/{q[2].mean():+.2f} Sv"
-                      f" (des)", flush=True)
+                # Store COMPACT: per-month quantiles across members, the
+                # member-0 (unperturbed) trajectory, and 5 raw members for a
+                # spaghetti plot. The full [M, 240] array per head/start/
+                # family would be ~9 MB of JSON in an archive bundle that is
+                # committed to a branch; the quantiles are what the fan plot
+                # reads and the raw few are what makes it legible.
+                qs = np.percentile(sv, [5, 25, 50, 75, 95], axis=0)
+                sv_raw[fam] = sv.astype(np.float32).tolist()
+                fams[fam] = {
+                    "q": {k: [round(float(v), 3) for v in qs[i]]
+                          for i, k in enumerate(("p5", "p25", "p50", "p75", "p95"))},
+                    "unperturbed": [round(float(v), 3) for v in sv[0]],
+                    "members": [[round(float(v), 3) for v in row]
+                                for row in sv[:5]],
+                    "all_members_final_year": [
+                        round(float(v), 3) for v in sv[:, -12:].mean(1)],
+                }
+                print(f"  {label} {start} {fam}: month-1 p5/p50/p95 "
+                      f"{qs[0][0]:+.2f}/{qs[2][0]:+.2f}/{qs[4][0]:+.2f} · "
+                      f"month-240 {qs[0][-1]:+.2f}/{qs[2][-1]:+.2f}/{qs[4][-1]:+.2f} Sv (des)",
+                      flush=True)
             entry["starts"][start] = {"context_end": months[s_end],
-                                      "roll_ym": roll_ym, "families": fams}
+                                      "roll_ym": roll_ym, "families": fams,
+                                      "_raw": sv_raw}
         results["heads"][label] = entry
+
+    # ---- POOLED across heads: the ensemble that is "the model" ------------
+    # Seed spread is a real uncertainty (E-010: sd ~0.12 on the probe), so
+    # pooling every member of every head is the honest fan — not the spread
+    # of one lucky seed. Per-head quantiles stay above for decomposition.
+    pooled = {}
+    for start in {s for h in results["heads"].values() for s in h["starts"]}:
+        pooled[start] = {}
+        for fam in ("ic", "sde"):
+            stack = []
+            roll_ym = None
+            for lab, h in results["heads"].items():
+                st = h["starts"].get(start)
+                if not st or fam not in st.get("_raw", {}):
+                    continue
+                stack.append(np.asarray(st["_raw"][fam]))
+                roll_ym = st["roll_ym"]
+            if not stack:
+                continue
+            allsv = np.concatenate(stack, 0)                     # [heads*M, N]
+            q = np.percentile(allsv, [5, 25, 50, 75, 95], axis=0)
+            pooled[start][fam] = {
+                "n_members": int(allsv.shape[0]),
+                "roll_ym": roll_ym,
+                "q": {k: [round(float(v), 3) for v in q[i]]
+                      for i, k in enumerate(("p5", "p25", "p50", "p75", "p95"))},
+                "decadal_mean": [round(float(allsv[:, i:i + 120].mean()), 3)
+                                 for i in range(0, allsv.shape[1] - 119, 120)],
+                "p_below_start": [
+                    round(float((allsv[:, i] < allsv[:, 0].mean()).mean()), 3)
+                    for i in range(allsv.shape[1])],
+            }
+    results["pooled"] = pooled
+    for h in results["heads"].values():
+        for st in h["starts"].values():
+            st.pop("_raw", None)
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     with open(a.out, "w") as f:

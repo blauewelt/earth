@@ -860,6 +860,15 @@ jobs:
               bash scripts/dectrain_run.sh "${{ inputs.window }}"
               exit 0
               ;;
+            project:*)
+              # E-021 "the 20-year fan" — roll the published heads 240 months
+              # past the record (and from a 2004 context, where RAPID truth
+              # exists) with residual-scaled ensembles. Writes
+              # project_amoc.json for archive_probes.py. Body in the script:
+              # this run: block has a 21,000-char dispatch ceiling.
+              bash scripts/project_run.sh "${{ inputs.window }}"
+              exit 0
+              ;;
           esac
           # GUARDED, like every probe below it. These are independent
           # measurements: one failing is a missing number, not a reason to

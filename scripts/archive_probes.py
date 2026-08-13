@@ -39,7 +39,7 @@ BRANCH = "ml-metrics"
 # CODEC and is identical for every run freezing the same codec, so for a
 # stage-2 sweep it is the control rather than the result. Both belong here.
 WANT = ["probe_kfold.json", "temporal.json", "rollout_eval.json",
-        "probe_sequence.json",
+        "probe_sequence.json", "project_amoc.json",
         "dip_check.json", "probe_head.json", "probe_head_raw3x3.json",
         "probe_head_raw.json", "rollout.json", "provenance.json"]
 
