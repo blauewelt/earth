@@ -255,6 +255,28 @@ NO train-val gap anywhere — budget-limited, not data- or z-limited;
 extended runs are in flight. b2 (encoder retrain) is NOT needed for
 fidelity.
 
+**Weights DURABLE (2026-08-13, #216/#218 — the `dectrain:` window
+mode).** The retrained weights were lost to sandbox container
+restarts three times (~2h restart cadence vs a ~65-min CPU train), so
+decoder retraining moved to the boxes: `window:
+dectrain:<h>x<l>@<steps>@<pairs>` (scripts/dectrain_run.sh; the run
+extracts X from the box's sha-verified tensor, uses the box's own Z
+cache — verified against a local f32 re-encode — and publishes
+weights + audit JSON to model-checkpoints-v1 with an
+assert-the-effect re-list). Two findings worth the log: (1) the 4090
+does the whole 4000-step optimisation in **15 seconds** (the sandbox
+CPU took ~43 min), and the box trajectory matched the sandbox
+step-for-step to 4 decimals — same pairs, same optimum, CPU/CUDA
+agreeing; (2) the extended budget (12k steps, 12M pairs) reproduced
+the lost run exactly: best_val 0.00713, deep-T rmse² train 0.85% /
+**held-out months 1.90%** / held-out lons 1.43%. That decoder is now
+`dec1536x3s0__decoder.{pt,json}` on model-checkpoints-v1 —
+replace-don't-accumulate, so the name always carries the current best
+1536×3 seed-0. En route, the Probes `run:` block hit GitHub's
+21,000-char dispatch-time expression ceiling (422s EVERY dispatch of
+the workflow, the 26th-input failure shape; #215 is the phantom
+parse-failure marker) — window-token bodies now live in scripts/.
+
 ### The ceiling decomposition (`ml/probe_state_ceiling.py`) — 0.631 is a STATE/LABEL ceiling, not a representation tax
 
 Chris asked what the "decoder-induced ceiling" becomes. The decoder
