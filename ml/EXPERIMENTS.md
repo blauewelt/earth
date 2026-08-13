@@ -106,7 +106,38 @@ is not an arm. Also the first run of the re-sectioned FC probe
 (probe_kfold `fc` now reads the Florida Straits lon (−80.5,−78.5), 7 cells
 — the old basin-wide section diluted it 50:1 and read a false null).
 
-*R2 entry with the result table will be appended at R2 dispatch.*
+**R1 smoke (#221, 2026-08-13 20:20Z → green in ~35 min).** Everything the
+smoke was for, answered: stencil-9 model confirmed live from the record
+(params 32,338,432 = 32.038M + exactly the 300,096 stencil input columns);
+**~56 ms/step** — the plan's 180–400 ms estimate was pessimistic (the Z
+tensor is RAM-resident; torch's advanced-index gather is cheap), so no
+prefetch thread is needed and a 60k arm is ~1 h, not 3–4; loss fell
+2.00→1.79 by step 1260 on the planned warmup; temporal.json in the
+archive (trainer alive at the end); rapid_probe_kfold 0.579 at 6k steps —
+a smoke number, quoted only as "alive". **Side result, FC probe
+re-section:** first measurement of `fc` on the Florida Straits section
+(lon −80.5..−78.5, 7 cells): **r_kfold 0.320 [0.213, 0.428]** (n=490,
+lowpass18 0.337) vs wind-only **0.121 [0.013, 0.226]**. The old
+basin-wide section's −0.014 "null" was measurement error (50:1 dilution),
+as suspected — the codec does carry Florida Current signal.
+
+**R2 DISPATCHED 2026-08-13 ~20:5xZ:** stencil:9 seeds 0/1/2 = **#222 /
+#223 / #224**, queued on gpu-box-42005419 (60k steps, job_timeout 400,
+plan-22N.json published by dispatch_run). gpu-box-40623952 (47483091) is
+resource-unavailable at its Vast host — start queued; the stencil:13 trio
+dispatches when it wakes, or queues behind the s9 trio if it stays down.
+
+| metric | stencil 1 (e017) | 3×3 (e022s9) | 13-pt (e022s13) |
+|---|---|---|---|
+| AUC(msss_clim) corridor | | | |
+| AUC(msss_clim) full window | | | |
+| amp ratio at h=12 | (gate: 0.812 subset) | | |
+| AMOC truefit h1-3 / h4-6 / h7-12 | | | |
+| long-hindcast r trained / held-out | | | |
+| nowcast k-fold (temporal.json) | 0.556–0.672 (E-020) | | |
+
+*(table filled at R5 harvest; e017 column comes from the SAME
+rollout_spatial.py run as the spatial arms, behind the gate)*
 
 ---
 
