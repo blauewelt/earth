@@ -869,6 +869,13 @@ jobs:
               bash scripts/project_run.sh "${{ inputs.window }}"
               exit 0
               ;;
+            sroll:*)
+              # E-022 spatial rollout eval — full-window roll of stencil
+              # heads against the e017 baseline, gated on reproducing #217.
+              # Body in scripts/sroll_run.sh (21,000-char ceiling here).
+              bash scripts/sroll_run.sh "${{ inputs.window }}"
+              exit 0
+              ;;
           esac
           # GUARDED, like every probe below it. These are independent
           # measurements: one failing is a missing number, not a reason to
@@ -938,7 +945,13 @@ jobs:
                          UPROBS="${UPROBS##*uprobs:}"; UPROBS="${UPROBS%%,*}"
                          UPROBS="--unroll-probs ${UPROBS//-/,}";;
             esac
-            echo "stage 2: unroll=$UNROLL seed=$SEED ${DIRECT:-} ${UPROBS:-}"
+            # stencil:9 — E-022 spatial coupling: the neighbourhood input.
+            # Same anywhere-match + first-comma strip as seed:.
+            STENCIL=1
+            case "${{ inputs.window }}" in
+              *stencil:*) STENCIL="${{ inputs.window }}"; STENCIL="${STENCIL##*stencil:}"; STENCIL="${STENCIL%%,*}";;
+            esac
+            echo "stage 2: unroll=$UNROLL seed=$SEED stencil=$STENCIL ${DIRECT:-} ${UPROBS:-}"
             # `window` also carries resume2:<tag> — CONTINUE a stage-2 head
             # rather than train a fresh one. Packed into an existing input
             # because workflow_dispatch caps at 25 and this file is at the
@@ -1039,7 +1052,8 @@ jobs:
             python -u ml/temporal.py --run actions --K 24 \
               --data "$TENSOR" \
               --steps "${{ inputs.temporal_steps }}" \
-              --unroll "$UNROLL" --seed "$SEED" $R2 $SCHED $DIRECT $UPROBS \
+              --unroll "$UNROLL" --seed "$SEED" --stencil "$STENCIL" \
+              $R2 $SCHED $DIRECT $UPROBS \
               --d-model "${{ inputs.temporal_d_model }}" \
               --layers "${{ inputs.temporal_layers }}" &
             S2_PID=$!
