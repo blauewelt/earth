@@ -77,7 +77,38 @@ small-trunk phenomenon and the axis closes at scale; the morning
 package is then U=1 + best decoder, and the remaining nowcast gap
 belongs to the read-out/labels, not the trunk.
 
-**Result.** *pending.*
+**Result** (2026-08-13, #212/#213/#214, one per seed). The falsifier
+fired — but only the third seed said so, which is the E-010 lesson
+enforcing itself:
+
+| seed | run | k-fold (deseas) | 95% CI | z-ratio (t+1) |
+|---|---|---|---|---|
+| 0 | #212 | **0.556** | [0.463, 0.642] | 0.2602 |
+| 1 | #213 | **0.521** | [0.414, 0.623] | 0.2542 |
+| 2 | #214 | **0.443** | [0.327, 0.550] | 0.2531 |
+
+After two seeds (0.556, 0.521 — both above E-017 U=1's 0.462–0.497
+band) this read as "unroll composes with capacity." Seed 2 landed
+BELOW the band. Spread 0.113 at n=3, means 0.507 (U=4) vs ~0.480
+(U=1): a +0.027 difference under a ~0.12 seed sd is **no detectable
+nowcast effect**, the same verdict E-010 returned at the 1.8M trunk
+— where the +0.09 had at least been seed-consistent. At 32M it is not
+even that. (2) answered as predicted: z-ratio 0.253–0.260 vs U=1's
+0.190–0.194, ~+33% teacher-forced h=1 tax — the objective works as
+designed. (3) training stable at full-depth BPTT, amp healthy, no
+val divergence.
+
+**So the morning package's nowcast column is settled** — U=1 and U=4
+are interchangeable there, and the remaining gap to the 0.63 ceiling
+belongs to the read-out/labels axis (E-019's decomposition), not the
+trunk or the unroll objective. What is NOT settled is the horizon:
+U=4 pays its h=1 tax to move the ROLLED regime, which teacher-forced
+z-ratio structurally cannot see, and #211 measured U=1's rolled AUC
+at 0.643–0.645 with truefit h7–12 at 0.425–0.492. #217 (dispatched
+03:51Z) rolls all six heads on identical points; if U=4 clears those
+bands, the tax bought something real at horizon and the "current
+best" table gets a second row. Cost: 3 runs × ~3.3–4 h ≈ 10.6 GPU·h
+on two 4090s, zero dead dispatches.
 
 ---
 
