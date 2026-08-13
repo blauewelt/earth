@@ -23,13 +23,33 @@ ordinary prose: lay out the options briefly in the reply text, name the one
 you'd pick and why, proceed with it, and make it easy to reverse. The user
 answers or corrects course in a normal message.
 
-### 0b. Post full GitHub links for every doc you write
+### 0b. Post links as CLICKABLE MARKDOWN, always
 
 Whenever a session creates or substantially updates a Markdown document,
-its reply in chat must include the full clickable GitHub URL
-(https://github.com/blauewelt/earth/blob/main/<path>) — the user reads on
-a phone and cannot guess repo paths ("I often run into issues where you
-talk about documentation that I don't know how to access", 2026-08-06).
+its reply in chat must include a link to it — the user reads on a phone and
+cannot guess repo paths ("I often run into issues where you talk about
+documentation that I don't know how to access", 2026-08-06).
+
+**The link must be written as a markdown link — `[label](url)` — never as a
+bare URL.** Chris, 2026-08-13: *"I somehow cannot open the links you pasted
+(eg to the E-022 plan). Can you make it a standing rule to only paste
+clickable links?"* The message that failed was a run of bare URLs joined by
+`·` separators on one line; the client did not linkify them, so three
+correct URLs were three pieces of unusable text. A markdown link cannot fail
+that way, whatever the punctuation around it. Concretely:
+
+- ✅ `[E-022 plan](https://github.com/blauewelt/earth/blob/main/ml/plans/E022_spatial_coupling.md)`
+- ❌ `https://github.com/blauewelt/earth/blob/main/ml/plans/E022_spatial_coupling.md`
+- ❌ several bare URLs on one line separated by `·`, `|`, or commas
+
+**One link per line or per bullet.** Packing links into a prose line is what
+produced the failure; a list of labelled links is also what a phone can
+actually tap.
+
+The target must be something the browser can RENDER, not just serve. A
+GitHub `blob` URL is right for Markdown and code; it is wrong for an HTML
+figure, which renders as source (2026-08-13, "i cannot open the figures") —
+those go to the Pages URL, or as PNGs through the file-delivery tool.
 
 ### 1. Deploy first
 

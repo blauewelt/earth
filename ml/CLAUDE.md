@@ -109,6 +109,12 @@ Everything below elaborates these.
   the answer look cheaper than it was.
 - **A rerun is not a resample.** Before dispatching a repeat, check the code
   has a knob for the thing you intend to vary.
+- **Every link you post is a MARKDOWN link, one per line** — `[label](url)`,
+  never a bare URL and never several joined by `·` on one line (root
+  `CLAUDE.md` §0b; Chris could not open the E-022 plan on 2026-08-13 because
+  of exactly that). This bites here more than anywhere: a result report is
+  mostly links — the plan, EXPERIMENTS.md, the probe archive, the status
+  page — and an unclickable link is a result nobody can check.
 
 ---
 
