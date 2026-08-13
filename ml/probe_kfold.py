@@ -43,13 +43,24 @@ from temporal import embed_everything, section_of
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Every basin transport array gets its own zonal section (lat, lon range) —
-# the embeddings pooled along it are what the ridge reads. RAPID/FC share
-# the 26.5N Atlantic section (the cable is at 27N inside it; the two arrays
-# measure sibling quantities across the same boundary). Sections outside
+# the embeddings pooled along it are what the ridge reads. Sections outside
 # the tensor window (e.g. SAMBA on the NA pilot) are skipped with a note.
+#
+# FC USED TO SHARE RAPID'S BASIN-WIDE SECTION, and that was a measurement
+# error, not a modelling choice. The comment justifying it ("the cable is
+# at 27N inside it; sibling quantities across the same boundary") is true
+# and irrelevant: the read-out is a MEAN over the section's pixels, and the
+# Florida Straits are 5 of RAPID's 265 cells — 1.9%. The FC signal entered
+# the ridge diluted ~50:1 into a basin mean, and the probe duly returned
+# r = -0.014 [-0.151, 0.120] at n=490 (#214) — a null that was read as
+# "the FC labels carry nothing" when it only ever said "we averaged them
+# away". The cable runs West Palm Beach (80.0W) to Grand Bahama (78.8W),
+# so the section is the Straits themselves: 7 cells at quarter degree.
+# This is the labels lever the ceiling decomposition points at — 490
+# monthly values against RAPID's 240 — and it was never actually tested.
 TARGETS = {
     "rapid": {"lat": 26.5, "lon": (-80.0, -13.0), "key": "rapid"},
-    "fc":    {"lat": 26.5, "lon": (-80.0, -13.0), "key": "truth_fc"},
+    "fc":    {"lat": 26.5, "lon": (-80.5, -78.5), "key": "truth_fc"},
     "move":  {"lat": 16.5, "lon": (-61.0, -49.0), "key": "truth_move"},
     "osnap": {"lat": 58.0, "lon": (-45.0, -5.0),  "key": "truth_osnap"},
     "samba": {"lat": -34.5, "lon": (-52.0, 18.0), "key": "truth_samba"},
