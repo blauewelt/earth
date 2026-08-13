@@ -105,6 +105,13 @@ def main():
                     help="per family; member 0 is always unperturbed")
     ap.add_argument("--starts", default="future,2004-12",
                     help="comma list: 'future' and/or YYYY-MM context ends")
+    ap.add_argument("--noise", default="field", choices=("field", "white"),
+                    help="field = RESAMPLE the head's own one-step residual "
+                         "FIELDS, which carries their spatial and "
+                         "cross-dimension covariance exactly with nothing "
+                         "fitted; white = independent per-pixel noise at the "
+                         "same per-dimension scale (the original, kept as the "
+                         "control)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", required=True)
     ap.add_argument("--cache-dir", default=os.path.join(HERE, "cache"))
@@ -223,7 +230,7 @@ def main():
              np.cos(2 * np.pi * m / 12)], 1).astype(np.float32))
 
     results = {"months_record_end": months[-1], "n_roll": a.months,
-               "members": a.members, "section_px": S,
+               "members": a.members, "section_px": S, "noise": a.noise,
                "probe": {"val_tail_r": round(float(probe_val_r), 3),
                          "rclim": [round(float(v), 3) for v in rclim]},
                "rapid_truth": {"ym": [months[i] for i in ridx],
@@ -246,7 +253,7 @@ def main():
         # source for both ensemble families. Per-dz-dim std, pooled over
         # section pixels and months.
         with torch.no_grad():
-            res_sq, res_n = np.zeros(ck["d_z"]), 0
+            res_sq, res_n, res_fields = np.zeros(ck["d_z"]), 0, []
             for t in range(K, T - 1, 3):             # every 3rd month is plenty
                 if t_hold[t + 1]:
                     continue
@@ -258,10 +265,26 @@ def main():
                 r_ = (pred[:, -1] - torch.from_numpy(Zsec[t + 1]).to(dev))
                 res_sq += (r_ ** 2).sum(0).cpu().numpy()
                 res_n += S
+                res_fields.append(r_)            # [S, dz] — keep the FIELD
             sigma = np.sqrt(res_sq / max(res_n, 1)).astype(np.float32)
-        print(f"{label}: one-step residual σ mean {sigma.mean():.4f} "
-              f"(z-scale ~1)", flush=True)
+            R = torch.stack(res_fields, 0)       # [Nr, S, dz]
+        # Why the whole field and not just its scale: z is strongly correlated
+        # along the section (measured on the run-62 cache: r 0.99 at one cell,
+        # 0.88 at five, 0.35 at eighty), so the section MEAN averages only
+        # ~2.5 effective independent pixels, not 265. White per-pixel noise
+        # therefore shrinks by sqrt(265) ~ 16x where the true error shrinks by
+        # sqrt(2.5) ~ 1.6x — a 10x under-dispersion built into the method
+        # rather than found in the model. Resampling whole residual fields
+        # carries the real spatial AND cross-dimension covariance with nothing
+        # fitted and no free parameter.
+        nsm = float((R.mean(1) ** 2).mean().sqrt())      # scale of the MEAN
+        nsp = float((R ** 2).mean().sqrt())              # scale per pixel
+        print(f"{label}: one-step residual σ mean {sigma.mean():.4f} · "
+              f"{R.shape[0]} residual fields · per-pixel rms {nsp:.4f} vs "
+              f"section-mean rms {nsm:.4f} → N_eff ≈ {(nsp/max(nsm,1e-9))**2:.1f}"
+              f" of {S}", flush=True)
         sig_t = torch.from_numpy(sigma).to(dev)
+        Nr = R.shape[0]
 
         entry = {"sigma_mean": round(float(sigma.mean()), 4), "starts": {}}
         for start in a.starts.split(","):
@@ -298,9 +321,20 @@ def main():
                     + zlib.crc32(f"{label}|{start}|{fam}".encode()) % 65521)
                 seq = torch.from_numpy(np.tile(ctx_z, (M, 1, 1))).to(dev)
                 if M > 1:
-                    pert = torch.randn((M - 1) * S, K, ck["d_z"],
-                                       generator=g) * sig_t.cpu()
-                    seq[S:] += pert.to(dev)          # member 0 unperturbed
+                    # seq is [M*S, K, dz] tiled so member m owns rows
+                    # [m*S : (m+1)*S]; every perturbation below must be built
+                    # as [members, S, ...] and reshaped, never the reverse.
+                    if a.noise == "field":
+                        # one whole residual FIELD per (member, window step):
+                        # spatially correlated by construction
+                        idx = torch.randint(0, Nr, ((M - 1) * K,), generator=g)
+                        pert = R[idx].reshape(M - 1, K, S, ck["d_z"]) \
+                                     .permute(0, 2, 1, 3).reshape((M - 1) * S,
+                                                                  K, ck["d_z"])
+                    else:
+                        pert = (torch.randn((M - 1) * S, K, ck["d_z"],
+                                            generator=g) * sig_t.cpu()).to(dev)
+                    seq[S:] += pert                  # member 0 unperturbed
                 cur = list(win_moys)
                 sv = np.zeros((M, a.months), dtype=np.float32)
                 with torch.no_grad():
@@ -311,10 +345,16 @@ def main():
                         pred, _ = model(seq, mseq, sc)
                         zhat = pred[:, -1]
                         if fam == "sde" and M > 1:
-                            kick = torch.randn((M - 1) * S, ck["d_z"],
-                                               generator=g) * sig_t.cpu()
+                            if a.noise == "field":
+                                idx = torch.randint(0, Nr, (M - 1,),
+                                                    generator=g)
+                                kick = R[idx].reshape((M - 1) * S, ck["d_z"])
+                            else:
+                                kick = (torch.randn((M - 1) * S, ck["d_z"],
+                                                    generator=g)
+                                        * sig_t.cpu()).to(dev)
                             zhat = zhat.clone()
-                            zhat[S:] += kick.to(dev)
+                            zhat[S:] += kick
                         sv[:, step] = read_sv(zhat.reshape(M, S, -1))
                         seq = torch.cat([seq[:, 1:], zhat[:, None]], 1)
                         cur = cur[1:] + [(cur[-1] + 1) % 12]

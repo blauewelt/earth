@@ -19,12 +19,18 @@ WINDOW="${1:?usage: project_run.sh 'project:<months>@<members>@<tags>'}"
 
 SPEC="${WINDOW#project:}"
 MONTHS="${SPEC%%@*}"; REST="${SPEC#*@}"
-MEMBERS="${REST%%@*}"; TAGS="${REST#*@}"
+MEMBERS="${REST%%@*}"; REST2="${REST#*@}"
+# Optional noise field between members and the tag list, so the old
+# 3-part spec keeps working: project:<months>@<members>[@field|white]@<tags>
+case "${REST2%%@*}" in
+  field|white) NOISE="${REST2%%@*}"; TAGS="${REST2#*@}";;
+  *)           NOISE=field;          TAGS="$REST2";;
+esac
 case "$MONTHS$MEMBERS" in
   ''|*[!0-9]*) echo "::error::bad project spec '$SPEC'"; exit 1;;
 esac
 [ -n "$TAGS" ] || { echo "::error::no head tags in '$SPEC'"; exit 1; }
-echo "project: months=$MONTHS members=$MEMBERS tags=$TAGS"
+echo "project: months=$MONTHS members=$MEMBERS noise=$NOISE tags=$TAGS"
 df -h / | tail -1
 
 CKPT=ml/cache/f3_anchor41M__pixelmae.pt
@@ -63,7 +69,7 @@ OUT="ml/runs/actions/project_amoc.json"
 python -u ml/project_amoc.py --x ml/cache/family3_X.npy \
   --npz-small ml/cache/f3_dec_small.npz --z "$ZPATH" --ckpt "$CKPT" \
   --heads $HPATHS --months "$MONTHS" --members "$MEMBERS" \
-  --starts "future,2004-12" --out "$OUT"
+  --noise "$NOISE" --starts "future,2004-12" --out "$OUT"
 
 # Assert the EFFECT: the file exists, parses, and carries a pooled fan.
 python - "$OUT" <<'PYEOF'
