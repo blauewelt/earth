@@ -44,6 +44,72 @@ low-pass).
 
 ---
 
+<a id="e-022"></a>
+## E-022 · Spatial coupling: predict a pixel from its NEIGHBOURHOOD — R1 smoke DISPATCHED 2026-08-13
+
+**Why, from Chris.** *"Implement predictions that depend on the neighboring
+pixels … either 9 pixels (3×3) or a 5×5 … as an optimization leave out the
+second diagonal, so you'd have something more circular: 2 in each direction
+but only one on the diagonal. As a baseline, the eval needs to involve
+rolling forward all pixels that contribute to the AMOC current (from the
+Gulf of Mexico to northern Europe, and back)."* Follows directly from
+E-021/E-021b's diagnosis: the per-pixel head has zero cross-pixel coupling,
+so nothing can advect — rolls decay to a seasonal limit cycle.
+
+**Full pre-registered design: `ml/plans/E022_spatial_coupling.md`** (commit
+59175146a) — hypothesis, falsifiers, the physics table, settled decisions,
+dispatch plan R0–R5. Summary of the wager:
+
+**Hypothesis.** Feeding each pixel's stencil of embeddings (S ∈ {9, 13},
+missing neighbours zero-filled and flagged in the static context) lets
+stage 2 represent local transport/diffusion → higher rolled corridor skill,
+slower amplitude decay, better held-out-year hindcast tracking.
+
+**Primary metric & falsifier.** Rolled **AUC over the AMOC corridor**
+(data-derived: train-month mean cur_speed ≥ p75 ∪ RAPID section), h=1..12,
+3 seeds/arm, vs the e017 stencil-1 band. One correction to the plan's §1
+made at implementation, before any spatial number existed: the quoted
+0.643–0.645 band is rollout.py's `horizon_auc` = mean MSSS-vs-CLIMATOLOGY
+(the damped mean is 0.619) — the plan wrote "AUC(msss_damped)"; the gate
+targets what #217 actually measured. Falsifier: no spatial arm's 3-seed
+mean beats 0.645 + 3×(pooled seed sd) on the corridor → local monthly
+coupling closes. **Pre-registered physics caveat:** one roll step = one
+month; the stencil reaches 1–2 cells/month, Gulf Stream advection moves
+100–200 — a null closes LOCAL MONTHLY coupling only, not spatial coupling
+at daily cadence or with a global operator.
+
+**Controls.** The three published e017 heads re-rolled by the NEW evaluator
+(`ml/rollout_spatial.py`, full-window roll of all 84,405 px), behind a
+FATAL validation gate: e017_u1_s0 must reproduce #217's gate-subset AUC
+0.643 and truefit bands 0.470/0.375/0.492 within ±0.01 or nothing spatial
+gets scored. The zero-weight-equivalence test (tests/test_e022_stencil.py)
+proves a stencil model can represent the stencil-1 model exactly, so a
+REGRESSION would be evidence about training dynamics, not capacity.
+
+**Scale (per R2 arm).** 576/8 trunk as e017 (~32M + the wider `inp`:
+9×64+2 or 13×64+2 input columns), batch 256, 60,000 steps, U=1, K=24,
+~26–28M train windows. Six arms: stencil {9,13} × seeds {0,1,2}.
+
+**R0 (sandbox, 2026-08-13):** 8/8 stencil unit tests green (zero-weight
+equivalence exact at 1e-6; planted-advection toy: stencil-9 MSE < 0.6× of
+stencil-1; stencil-1 rebuilds legacy shapes strict=True). Evaluator toy
+e2e green incl. the gate refusal (tests/test_rollout_spatial.py). Code:
+bbf73c44e (temporal.py stencil), 841e74080 (rollout_spatial.py),
+15743e4f9 (workflow wiring).
+
+**R1 smoke (this dispatch):** `stencil:9,seed:0`, 6,000 steps, pinned
+gpu-box-42005419 (47483091 start is resource-queued at its host). Measures
+the real step time (expectation 180–400 ms/step from the S× gather; if
+>400 the gather moves to a prefetch thread before R2), checks loss falls
+and temporal.json lands in the archive. The head is thrown away — 6k steps
+is not an arm. Also the first run of the re-sectioned FC probe
+(probe_kfold `fc` now reads the Florida Straits lon (−80.5,−78.5), 7 cells
+— the old basin-wide section diluted it 50:1 and read a false null).
+
+*R2 entry with the result table will be appended at R2 dispatch.*
+
+---
+
 <a id="e-020"></a>
 ## E-021 · The 20-year fan: long-horizon AMOC projection with ensembles — #219, 2026-08-13 08:02Z → RESULT same day
 
