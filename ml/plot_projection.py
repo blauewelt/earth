@@ -62,6 +62,27 @@ def _line(vals, sx, sy, x0=0):
                     for i, v in enumerate(vals) if v is not None)
 
 
+def smooth(vals, k=18, min_valid=12):
+    """Centred k-month running mean — the SAME filter `lowpass_r` in
+    probe_kfold.py applies (k=18 after Frajka-Williams 2015 /
+    Sanchez-Franks 2021, the convention the AMOC-reconstruction literature
+    reports). Using the house filter matters: the curve drawn here then
+    means exactly what `r_lowpass18` in the experiment log means, instead
+    of being a prettier line with its own private definition.
+
+    Windows with fewer than `min_valid` finite months yield None, so gaps
+    stay gaps rather than being interpolated across."""
+    n = len(vals)
+    half = k // 2
+    out = [None] * n
+    for i in range(n):
+        lo, hi = max(0, i - half), min(n, i + half)
+        w = [v for v in vals[lo:hi] if v is not None]
+        if len(w) >= min_valid:
+            out[i] = sum(w) / len(w)
+    return out
+
+
 def panel(title, subtitle, series, bands, xlabels, ylo, yhi, n, seam=None,
           notes=(), pid="p", spans=(), ref=None):
     """series: [(label, values, color_role, x0)] · bands: [(lo, hi, opacity)]
@@ -115,14 +136,38 @@ def panel(title, subtitle, series, bands, xlabels, ylo, yhi, n, seam=None,
         pts += " " + " ".join(f"{sx(x0+i):.1f},{sy(v):.1f}"
                               for i, v in reversed(list(enumerate(hi))))
         out.append(f'<polygon class="band" points="{pts}" opacity="{op}"/>')
-    for lab, vals, role, x0 in series:
-        out.append(f'<polyline class="ln {role}" points="{_line(vals, sx, sy, x0)}"/>')
-        # direct label at the series end (never a number on every point)
+    used_y = []          # direct labels must not stack on each other
+    for spec in series:
+        lab, vals, role, x0 = spec[:4]
+        cls = spec[4] if len(spec) > 4 else ""       # "" | "raw" | "smooth"
+        # A smoothed series is the SAME ENTITY as its raw series, so it
+        # keeps the entity's hue and differs by weight — a third hue here
+        # would claim a third thing is being measured.
+        out.append(f'<polyline class="ln {role} {cls}" '
+                   f'points="{_line(vals, sx, sy, x0)}"/>')
+        if cls == "raw":                              # labelled by its smooth twin
+            continue
         last = [i for i, v in enumerate(vals) if v is not None]
         if last:
             i = last[-1]
-            out.append(f'<text class="dlab {role}" x="{sx(x0+i)+7:.1f}" '
-                       f'y="{sy(vals[i])+4:.1f}">{lab}</text>')
+            lx, ly = sx(x0 + i), sy(vals[i]) + 4
+            # A series that ENDS MID-PLOT (the observed record against a
+            # projection that continues past it) must be labelled to its
+            # LEFT — labelling right put "observed" on top of the model
+            # line in the middle of the fan panel.
+            inside = lx < W - PAD["r"] - 40
+            if inside:
+                # Anchoring to the endpoint still crosses the curve, because
+                # a right-anchored label runs back over the series it names.
+                # Park it in the clear space at the top of the plot instead.
+                ly = PAD["t"] + 16
+            while any(abs(ly - u) < 15 for u in used_y):
+                ly += 15
+            used_y.append(ly)
+            anchor = ' style="text-anchor:end"' if inside else ""
+            out.append(f'<text class="dlab {role}"{anchor} '
+                       f'x="{(lx - 7) if inside else (lx + 7):.1f}" '
+                       f'y="{ly:.1f}">{lab}</text>')
     out.append(f'<rect id="{pid}-hit" x="{PAD["l"]}" y="{PAD["t"]}" '
                f'width="{W-PAD["l"]-PAD["r"]}" height="{H-PAD["t"]-PAD["b"]}" '
                f'fill="transparent"/>')
@@ -141,6 +186,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--smooth", type=int, default=18,
+                    help="centred running-mean window in months; 18 is the "
+                         "house convention (probe_kfold.lowpass_r) so the "
+                         "curve means what r_lowpass18 means")
     ap.add_argument("--family", default="sde",
                     choices=("sde", "ic"),
                     help="sde = per-step stochastic forcing (the honest fan); "
@@ -184,12 +233,18 @@ def main():
         f"(6 heads × 12 members, {fam} family) · deseasonalised anomaly, "
         f"context ends {d['months_record_end']} · model 90% band ≈ "
         f"{band_w:.1f} Sv against {obs_w:.1f} Sv of observed spread",
-        [("observed (RAPID)", obs_vals, "s2", 0),
+        [("", obs_vals, "s2", 0, "raw"),
+         (f"observed · {a.smooth}-mo mean", smooth(obs_vals, a.smooth), "s2", 0, "smooth"),
          ("model median", mod_vals, "s1", 0)],
         [(lo90, hi90, 0.16, nh), (lo50, hi50, 0.28, nh)],
         xl1, ylo, yhi, n1, seam=nh,
         ref=(obs_p5, obs_p95, "observed 90% range"),
         notes=[
+            f"The heavy orange line is an {a.smooth}-month running mean of "
+            "the observations (the filter the AMOC literature reports); the "
+            "pale line behind it is the monthly record it comes from. It is "
+            "drawn here so the projection can be judged against the scale of "
+            "real low-frequency swings rather than against monthly noise.",
             "<strong>Read the width, not the line.</strong> The blue band is "
             f"the ensemble's own 90% range — about {band_w:.1f} Sv — while the "
             f"observed record spans {obs_w:.1f} Sv over the same kind of "
@@ -238,6 +293,22 @@ def main():
         tr_i = [i for i, y in enumerate(hym) if y[:4] not in HOLD]
         ho_i = [i for i, y in enumerate(hym) if y[:4] in HOLD]
         r_tr, r_ho = _r(tr_i), _r(ho_i)
+        # The smoothed band is where the AMOC's interesting variability
+        # lives, so quote agreement AND amplitude there — a high r with a
+        # third of the amplitude is a different animal from a good fit.
+        sm_o, sm_m = smooth(obs2, a.smooth), smooth(med, a.smooth)
+        pr = [(x, y) for x, y in zip(sm_m, sm_o)
+              if x is not None and y is not None]
+        if len(pr) > 24:
+            mx = sum(x for x, _ in pr) / len(pr)
+            my = sum(y for _, y in pr) / len(pr)
+            sxy = sum((x - mx) * (y - my) for x, y in pr)
+            sdx = (sum((x - mx) ** 2 for x, _ in pr) / len(pr)) ** 0.5
+            sdy = (sum((y - my) ** 2 for _, y in pr) / len(pr)) ** 0.5
+            r_lp = sxy / (len(pr) * sdx * sdy)
+            amp_lp = sdx / sdy
+        else:
+            r_lp = amp_lp = float("nan")
         spans = []
         for y in sorted(HOLD):
             idx = [i for i, m in enumerate(hym) if m[:4] == y]
@@ -248,9 +319,12 @@ def main():
             f"context ends {key} · {n_obs} months with RAPID truth · "
             f"r = {r_tr:+.2f} on months the model TRAINED on, "
             f"{r_ho:+.2f} on the three held-out years (shaded) · "
-            f"only {cov:.0f}% of observations fall inside the 90% band",
-            [("observed (RAPID)", obs2, "s2", 0),
-             ("model median", med, "s1", 0)],
+            f"at the {a.smooth}-month band r = {r_lp:+.2f} but amplitude "
+            f"only {amp_lp:.2f}× · {cov:.0f}% of observations inside the 90% band",
+            [("", obs2, "s2", 0, "raw"),
+             ("", med, "s1", 0, "raw"),
+             (f"observed · {a.smooth}-mo", smooth(obs2, a.smooth), "s2", 0, "smooth"),
+             (f"model · {a.smooth}-mo", smooth(med, a.smooth), "s1", 0, "smooth")],
             [(hq["p5"], hq["p95"], 0.16, 0), (hq["p25"], hq["p75"], 0.28, 0)],
             xl2, ylo2, yhi2, len(hym), spans=spans,
             notes=[
@@ -268,6 +342,17 @@ def main():
                 "blue band almost never contains the orange line. A calibrated "
                 "90% band would cover ~90% of observations; this one covers "
                 f"{cov:.0f}%.",
+                f"<strong>The heavy lines are {a.smooth}-month running means</strong> "
+                "— the filter the AMOC-reconstruction literature reports, and "
+                "the same one behind <code>r_lowpass18</code> in our experiment "
+                "log, so the curve means what that number means. They are worth "
+                "reading on their own: the smoothed model line is nearly flat "
+                f"while the observations swing about {amp_lp and 1/amp_lp:.1f}× "
+                "wider — the 2009–10 trough and the 2022–24 low barely register "
+                "in it. Even where the model gets the SHAPE of the "
+                f"low-frequency wiggle (r = {r_lp:+.2f}), it renders it at "
+                f"{amp_lp:.2f}× the real size. Shape without amplitude is the "
+                "signature of a shrunk, over-smoothed replay.",
             ], pid="p2")
 
     css = """
@@ -294,6 +379,8 @@ svg{width:100%;height:auto;display:block;overflow:visible}
 .span{fill:#9a9994;opacity:.14}
 .spanlab{fill:#52514e;font-size:10px;text-anchor:middle}
 .ln{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.ln.raw{stroke-width:1;opacity:.34}
+.ln.smooth{stroke-width:2.6}
 .s1{stroke:#2a78d6}.s2{stroke:#eb6834}
 .dlab{font-size:12px;font-weight:600;stroke:none}
 .dlab.s1{fill:#2a78d6}.dlab.s2{fill:#eb6834}
