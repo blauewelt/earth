@@ -140,6 +140,43 @@ dispatched once it woke: **#225 / #226 / #227** on gpu-box-40623952
 *(table filled at R5 harvest; e017 column comes from the SAME
 rollout_spatial.py run as the spatial arms, behind the gate)*
 
+**Interim, first arm home (#222, stencil:9 seed 0, 2026-08-13 ~22:40Z).**
+Green, temporal.json archived, `scale.stencil` 9, 32,338,432 params, 60,000
+steps, 28,857,960 train windows. Two numbers, and the quiet one is the
+informative one:
+
+| run | stencil | nowcast k-fold | z-MSE | forecast ratio vs persistence |
+|---|---|---|---|---|
+| e017 s0 (#208) | 1 | 0.497 [0.389, 0.599] | 0.6080 | 0.1937 |
+| e017 s1 (#209) | 1 | 0.497 [0.387, 0.597] | 0.6034 | 0.1930 |
+| e017 s2 (#210) | 1 | 0.462 [0.341, 0.568] | 0.5978 | 0.1898 |
+| **e022s9 s0 (#222)** | **9** | **0.437 [0.336, 0.529]** | **0.6056** | **0.1929** |
+
+The nowcast probe (0.437 vs 0.462–0.497) is BELOW the baseline seeds but at
+n = 1 on an instrument with seed sd ≈ 0.12 (E-010) that means nothing yet —
+do not quote it. The **forecast ratio is the one that can speak at n = 1**:
+that objective reproduces to sd ≈ 0.0017 across seeds, and 0.1929 lands dead
+centre of the stencil-1 spread 0.1898–0.1937. Nine times the input columns,
+and the one-step prediction of z is unchanged to within a fifth of the
+baseline's own seed range.
+
+*Post-hoc interpretation, flagged as post-hoc — this was noticed AFTER the
+number arrived, not predicted before it:* E-021b measured the spatial
+correlation of z on this very cache at **r = 0.99 at one cell** and 0.88 at
+five. If a neighbour's embedding is 0.99-correlated with the centre's, a 3×3
+stencil is not new information, it is the same information nine times — the
+per-pixel model was already, in effect, reading a locally smoothed field.
+That would predict exactly this null on the forecast objective, and it is a
+mechanism the plan's physics caveat (reach 1–2 cells/month vs advection
+100–200) did not name.
+
+**This does NOT decide E-022.** The pre-registered primary metric is the
+ROLLED corridor AUC at h=1..12 (R4), and identical one-step error is
+compatible with different rollout behaviour — error STRUCTURE, not error
+size, is what governs amplitude decay over twelve steps. Seeds 1–2 (#223,
+#224) and the 13-point trio (#225–#227) are still running; the verdict waits
+for the gated eval.
+
 ---
 
 <a id="e-020"></a>
