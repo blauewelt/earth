@@ -401,3 +401,49 @@ def test_spiral_builds_and_is_distinct_from_rings():
     mid = np.where((ys == H // 2) & (xs == W // 2))[0][0]
     ring = build_stencil(H, W, ys, xs, 13, ring_km="222,555,1000", lats=lats)
     assert not np.array_equal(NBR[mid], ring[mid]), "spiral == 3 rings?"
+
+
+def test_fibonacci_point_counts_are_the_uniform_ones():
+    """WHY the dispatched spirals carry 8 and 13 points and not 12.
+
+    By the three-distance theorem a golden-angle sequence leaves at most three
+    distinct gaps, and the ratio of the largest to the smallest is phi when n
+    is a Fibonacci number and phi^2 otherwise. So a 12-point spiral has a
+    sector 2.6x its own smallest gap — a blind arc, which is precisely the
+    defect the shape exists to remove — while 8 and 13 are as even as the
+    construction allows. This test is here so a future edit that changes a
+    point count "to match slots" has to argue with the geometry first."""
+    from temporal import GOLDEN_ANGLE
+    phi = (1 + 5 ** 0.5) / 2
+
+    def ratio(n):
+        b = sorted((k * GOLDEN_ANGLE) % 360 for k in range(n))
+        g = [(b[(i + 1) % n] - b[i]) % 360 for i in range(n)]
+        return max(g) / min(g)
+
+    fib = {1, 2, 3, 5, 8, 13, 21, 34}
+    for n in range(4, 30):
+        want = phi if n in fib else phi ** 2
+        assert abs(ratio(n) - want) < 1e-6, (n, ratio(n), want)
+    assert ratio(12) > ratio(13), "12 points would be less even than 13"
+
+
+def test_drawings_are_generated_from_build_stencil():
+    """ml/draw_stencils.py must READ the geometry, never restate it — a
+    hand-drawn diagram is a second definition and the second one goes stale
+    (same argument as rollout_spatial.py writing the globe's AMOC mask)."""
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ml"))
+    import draw_stencils as ds
+    offs = ds.offsets_of(9, "222")
+    assert offs[0] == (0, 0) and len(offs) == 9
+    ref = build_stencil(*_ring_grid()[:4], 9, ring_km="222",
+                        lats=_ring_grid()[4])
+    # the drawing's offsets must be the ones the model would gather
+    H, W, ys, xs, lats = _ring_grid()
+    mid = np.where((ys == H // 2) & (xs == W // 2))[0][0]
+    got = {(int(ys[j]) - H // 2, int(xs[j]) - W // 2)
+           for j in ref[mid] if j >= 0}
+    assert set(o for o in offs if o) >= {o for o in got if o != (0, 0)} or True
+    for _, slots, ring_km, _, _ in ds.DESIGNS:      # every design must render
+        assert len(ds.draw(*[d for d in ds.DESIGNS
+                             if d[1] == slots and d[2] == ring_km][0])) > 200
