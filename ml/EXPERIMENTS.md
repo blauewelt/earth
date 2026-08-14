@@ -44,6 +44,85 @@ low-pass).
 
 ---
 
+<a id="e-023"></a>
+## E-023 · The RING: neighbours far enough away to be new information — PREPARED 2026-08-14, dispatch queued behind R4
+
+**Why, from Chris.** *"Try also a different stencil shape, which is less
+correlated and therefore adds new information. For example pixels forming
+equidistant points on a circle of radius r (for which r is large enough such
+that correlation is lower than 0.99)."*
+
+**The measurement that chose the radius** (`ml/measure_ring_info.py`, frozen
+run-62 embeddings, 300 centre pixels, no GPU). For each radius: the mean
+correlation between a centre's embedding and its 8 ring neighbours', and the
+INCREMENTAL PREDICTIVE INFORMATION — how much held-out one-step residual
+variance the ring removes on top of the centre's own last three months, ridge
+with weights shared across pixels as stage 2 shares them.
+
+| radius | cells @ eq | corr | ring on ocean | variance gain |
+|---|---|---|---|---|
+| 27.8 km | 1 | 0.968 | 0.99 | +0.0063 |
+| 55.6 km | 2 | 0.936 | 0.97 | +0.0095 |
+| 83.4 km | 3 | 0.889 | 0.96 | +0.0125 |
+| 111 km | 4 | 0.845 | 0.96 | +0.0150 |
+| **167 km** | **6** | **0.783** | **0.94** | **+0.0162** |
+| **222 km** | **8** | **0.718** | **0.92** | **+0.0161** |
+| 334 km | 12 | 0.642 | 0.90 | +0.0145 |
+
+Information peaks at **167–222 km** and is **~3× what the touching neighbours
+carry**. That is the quantitative form of the mechanism guessed at in E-022:
+at one cell the neighbour correlates 0.97 with the centre and is very nearly
+a copy of it.
+
+**A prediction of mine died here, and is recorded rather than dropped.** I
+expected the 0.99 correlation to be seasonal-cycle inflation, so that
+deseasonalising would collapse it and the redundancy would turn out to be an
+artefact of the month features. It does not: 0.970 raw vs 0.968 deseasonalised
+at one cell. The redundancy is genuine spatial structure.
+
+**Instrument calibration, stated before the arms are dispatched.** At 1 cell
+this probe predicts +0.63% and E-022's real 3×3 delivered ~0% on the forecast
+ratio (0.19247 vs 0.19216 baseline, n=3 each). So the probe **overstates** what
+the transformer realises — unsurprising, since its baseline is a 3-lag linear
+AR and the real baseline is a 24-month transformer that has already extracted
+much of what a neighbour offers linearly. Read the ring's +1.6% as an upper
+bound against a weak baseline, and expect substantially less. Pre-registering
+this is the point: if the ring also lands at zero, the honest conclusion is
+that neighbours are redundant with the centre's own history at every radius
+tested, not that the radius was wrong.
+
+**Hypothesis.** A ring at 222 km carries information the 3×3 does not, and
+enough of it survives the nonlinear baseline to move the forecast ratio and/or
+the rolled corridor AUC.
+
+**Falsifier.** Three seeds at ring 222 km whose forecast ratio and rolled
+corridor AUC both sit inside the e017 stencil-1 seed band. That would close
+LOCAL SPATIAL COUPLING for this architecture at monthly cadence at every
+reach measured — 1 cell to 12 — and point the programme at what E-021
+identified as the other missing ingredient: forcing.
+
+**Design — capacity-matched, radius is the only difference.** `--stencil 9
+--ring-km 222` has the same nine slots, the same input width and the same
+parameter count (32,338,432) as E-022's `--stencil 9`. Set beside e022s9's
+three seeds it is a controlled comparison of DISTANCE, with everything else
+including the seeds held fixed. The ring is a circle on the ground (zonal step
+× 1/cos φ, per row), because a fixed cell offset spans 27.8 km at the equator
+and 9.5 km at 70 °N.
+
+Why 222 km and not 167 km, given their measured gains are equal to 0.0001:
+take the less redundant of two equally informative radii (corr 0.718 vs
+0.783) — that is Chris's own criterion, and it is the tie-break that does not
+depend on a difference smaller than the measurement.
+
+**Arms.** `stencil:9,ring:222` × seeds 0/1/2, 60k steps, U=1, everything else
+the e017 recipe. **Controls:** e022s9 (same shape at 1 cell, already run) and
+e017 (no neighbours, already run) — no new baseline runs needed.
+
+**Status:** implementation and tests landed (13 green, commit 20c967c9c);
+dispatch waits for the R4 evaluation to free the boxes.
+
+---
+
 <a id="e-022"></a>
 ## E-022 · Spatial coupling: predict a pixel from its NEIGHBOURHOOD — R1 smoke DISPATCHED 2026-08-13
 
