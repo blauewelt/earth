@@ -56,11 +56,15 @@ DESIGNS = [
      "the twin of the row above +1 slot: same reach, 13 bearings not 8."),
     ("spiral of 8, 111 -> 890 km", 9, "spiral:111-890", "#264-#266",
      "the champion's exact width, spent on eight radii instead of one."),
-    ("spiral of 24, 111 -> 4444 km", 25, "spiral:111-4444", "#267-#269",
+    ("spiral of 24, 111 -> 4444 km", 25, "spiral:111-4444", "#267/#268/#273",
      "24 bearings AND 4444 km: the first shape that can hold a month of"
      " Gulf Stream."),
-    ("spiral of 36, 111 -> 4444 km", 37, "spiral:111-4444", "#270-#272",
-     "the same reach at 1.5x the density — does the extra angle pay?"),
+    ("spiral of 34, 111 -> 4444 km", 35, "spiral:111-4444", "#279-#281",
+     "34 is Fibonacci: phi-even bearings where 36 left a 2.6x blind sector."),
+    ("ELLIPTIC spiral 24, zonal 111 -> 4444 km, aspect 0.71", 25,
+     "spiral:111-4444-0.71", "#276-#278",
+     "the flow-shaped arm: corridor mean flow moves 1.41x farther E-W than"
+     " N-S (measured), so the window has the same proportions."),
 ]
 
 
@@ -107,11 +111,21 @@ def nominal_radii(ring_km):
     which is the grid's error bar dressed up as structure."""
     s = str(ring_km)
     if s.startswith("spiral:"):
-        r0, r1 = (float(v) for v in s[len("spiral:"):].split("-"))
-        return [r0, r1]                        # ends only; the rest is a ramp
+        f = [float(v) for v in s[len("spiral:"):].split("-")]
+        return f[:2]                           # ends only; the rest is a ramp
+        # (a 3rd field is the ellipse aspect, handled by spiral_aspect)
     if s in ("0.0", "0", ""):
         return []                              # fixed table: cells, not circles
     return [float(r) for r in s.split(",")]
+
+
+def spiral_aspect(ring_km):
+    """The ellipse aspect a spiral declares (meridional/zonal), 1.0 if none."""
+    f = str(ring_km)
+    if not f.startswith("spiral:"):
+        return 1.0
+    parts = f[len("spiral:"):].split("-")
+    return float(parts[2]) if len(parts) > 2 else 1.0
 
 
 def draw(title, slots, ring_km, runs, note, width=63):
@@ -135,9 +149,10 @@ def draw(title, slots, ring_km, runs, note, width=63):
         # three times over" reads as such instead of as twenty-four points.
         # For a spiral only the OUTER circle is drawn: the inner one is a
         # 3-character blob around the centre that hides the near points.
+        asp = spiral_aspect(ring_km)
         for rad in (nom[-1:] if str(ring_km).startswith("spiral:") else nom):
             for a in np.arange(0, 2 * np.pi, 0.035):
-                put(rad * np.sin(a), rad * np.cos(a), ".")
+                put(rad * np.sin(a), asp * rad * np.cos(a), ".")
     ALPH = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
     for k, o in enumerate(offs[1:]):
         if o is None:
@@ -299,10 +314,12 @@ def svg(cols=4, cell=300, pad=62):
         out.append(f'<text x="{ox + 10}" y="{oy - 16}" fill="#7d8590" '
                    f'font-size="11">{runs} · {slots} slots · {nraw} bearings'
                    f'</text>')
+        asp = spiral_aspect(ring_km)
         for rad in nominal_radii(ring_km) or []:
             rr = R * np.sqrt(rad / S)
-            out.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{rr:.1f}" '
-                       f'fill="none" stroke="#30363d" stroke-dasharray="2 4"/>')
+            out.append(f'<ellipse cx="{cx:.1f}" cy="{cy:.1f}" rx="{rr:.1f}" '
+                       f'ry="{rr * np.sqrt(asp):.1f}" fill="none" '
+                       f'stroke="#30363d" stroke-dasharray="2 4"/>')
         for x, y in pts:
             px, py = place(x, y)
             out.append(f'<line x1="{cx:.1f}" y1="{cy:.1f}" '

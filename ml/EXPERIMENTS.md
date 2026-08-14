@@ -316,6 +316,108 @@ so they run *beside* the factorial rather than behind it.
 
 ---
 
+### HOW A STENCIL ROLLS FORWARD — the design theory behind the deep and elliptic arms (2026-08-14)
+
+Chris: *"think through the rolling forward predictions with the model. How
+should points be arranged best to roll forward over multiple months?"*
+
+**The governing constraint is the CFL condition, imported from numerical
+PDEs.** The evaluator advances the whole window one month per step, and each
+pixel's next state is computed from its stencil. Information therefore
+propagates through the rolled field at **at most one stencil-reach per
+month** — the numerical domain of dependence. For the roll to even in
+principle track moving water, that speed must cover the flow's own:
+
+| dynamics | speed | km/month | months for a 222 km stencil to keep up | for 4444 km |
+|---|---|---|---|---|
+| Gulf Stream core | 1–2 m/s | 2600–5200 | never (12–23× too slow) | ~1 step |
+| North Atlantic Current | 0.2–0.5 m/s | 520–1300 | 2.3–5.9× too slow | ~1 step |
+| interior / recirculation | 2–5 cm/s | 52–130 | keeps up | keeps up |
+| Rossby waves (westward) | ~2–5 cm/s | 52–130 | keeps up | keeps up |
+
+This reframes the whole shape programme: E-023's 222 km champion wins by
+coupling the *slow* rows of that table, and is structurally blind to the fast
+ones. The 4444 km spirals are the first shapes whose numerical domain of
+dependence contains the jet — which is why the reach arms are the priority,
+before density, before bearing count.
+
+**Two routes for multi-month information, and the ramp serves both.** A
+horizon-h prediction can get its far-field information (a) *compositionally* —
+h roll steps × reach, but every step after the first reads *predicted* states,
+so error compounds along the path — or (b) *directly* — the first step reads
+the observed state at distance ≈ flow × h, no compounding, but the model must
+internalise the whole transport path in one map. The geometric radius ramp is
+what lets one shape serve route (b) for every horizon at once: log-spaced
+radii are log-spaced horizons at fixed flow speed, and at fixed radius they
+are log-spaced horizons across the speed spectrum — 4444 km is ~1 month of
+jet, ~4 months of NAC, and ~3–7 *years* of interior drift. The same ramp that
+E-024 justified by information-per-point is also the horizon ladder.
+
+**Why an ellipse, and why 0.71 exactly.** Both zonal directions carry future
+information — mean advection in the jet arrives from the west, Rossby-wave
+anomalies propagate in from the east — while coherent meridional transport at
+these scales is weaker. So the window should be wide rather than tall, but
+*how much* wider is an empirical question, and `ml/measure_flow_anisotropy.py`
+answers it from the tensor's own SSH channel (geostrophic u,v; the per-channel
+global z-score makes the ratio exact):
+
+| population | flow | mean\|u\|/mean\|v\| | rms ratio |
+|---|---|---|---|
+| corridor | **MEAN (multi-month carrier)** | **1.41** | 1.16 |
+| corridor | monthly (incl. eddies) | 1.09 | 1.08 |
+| window | mean | 1.21 | 1.14 |
+
+The eddy field is nearly round; the **standing jet/gyre system — the thing
+that carries water coherently over multiple months — moves corridor water
+1.41× farther east-west than north-south**. The elliptic arm's aspect is
+1/1.41 = **0.71**, measured, not styled. (Chris's instinct pointed the right
+direction; the measurement sets the magnitude.) A side benefit, pre-measured:
+compression pulls slots back inside the window — corridor occupancy 71.6% vs
+68.1% circular.
+
+**36 → 34, what 36 was costing.** A golden-angle sequence's bearing gaps come
+in at most three sizes (three-distance theorem), and max/min = φ = 1.618
+exactly at Fibonacci counts, φ² = 2.618 at every other count. 36 points
+therefore carried a blind sector 2.6× its own smallest gap — the exact defect
+the spiral exists to remove — where 34 carries none, at two fewer points.
+The 36-point arms (#270/#271/#274, ~1 GPU-h sunk) were cancelled for
+34-point replacements. 24 stays 24 despite the same φ² gaps: its slot count
+(25) is the matched control for both three-rings-wide *and* the elliptic arm,
+and that pairing is worth more than gap uniformity.
+
+**Wind and CO₂ — where the other drivers stand.**
+
+- **Wind is already in, direction included.** family3 channels 35–38 are NCEP
+  wind stress **τx and τy** (signed components = direction) plus their
+  within-month stds, at every pixel. The stencil multiplies this: the model
+  now reads the wind field over the whole ellipse, i.e. the *upstream* wind
+  that drives the convergence arriving months later. No new plumbing needed —
+  every spiral arm already carries it.
+- **CO₂ is scoped, deliberately not dispatched** (E-025,
+  `ml/plans/E025_forcing.md`). Measured: CO₂ correlates +0.99 with bare time,
+  and beyond a smooth clock adds **+0.00043** one-step — for *monthly* rolls
+  it is a trend proxy, not a lever, and OHC/EEI is an *output* of the system
+  (using it as input is leakage). Where CO₂ genuinely matters is
+  multi-decade scenario projection, which is §8 of that plan and worth
+  running *after* the geometry question settles, on whatever shape wins here.
+
+**Priority order, by expected information about the programme** (most
+promising first, per Chris): **1. elliptic 24@4444×0.71** (#276/#277/#278) —
+flow-shaped reach, the design the CFL argument and the anisotropy measurement
+jointly pick; **2. circular 24@4444** (#267/#268/#273) — its exact control,
+already running; **3. spiral-34@4444** (#279/#280/#281) — density at fixed
+reach; **4.** the 222–1000 km factorial (two-rings / wide / narrow /
+spiral-13 / spiral-8) — settles bearing-vs-radius at the scales already
+known to carry signal.
+
+| arm | runs | shape | slots |
+|---|---|---|---|
+| **elliptic spiral 24** | #276 / #277 / #278 | golden angle, zonal 111→4444 km, aspect 0.71 | 25 |
+| **spiral of 34** | #279 / #280 / #281 | golden angle, 111→4444 km, circular | 35 |
+| ~~spiral of 36~~ | ~~#270/#271/#274~~ | cancelled for 34 (φ² blind sector), ~1 GPU-h sunk | — |
+
+---
+
 ### THE DESIGNS, DRAWN (Chris: *"Please draw all your designs in the experiment log."*)
 
 **These pictures are generated, not drawn.** `ml/draw_stencils.py` lays a
@@ -331,7 +433,7 @@ silently goes stale.) Regenerate with `python3 ml/draw_stencils.py --md`.
 
 ![the nine stencil designs, all at one scale](figs/stencil_designs.png)
 
-*The same eleven as one sheet, **all at a single scale** — which the ASCII
+*The same thirteen as one sheet, **all at a single scale** — which the ASCII
 below cannot do (the radial axis is √r, so a 222 km ring and a 4444 km spiral
 fit one sheet; bearings are exact and each panel prints its true reach). The
 span is the finding: 3×3 reaches 35 km, the champion 222, and the deep
@@ -341,7 +443,7 @@ spirals 4436 — a factor of 127 between the first shape tried and the newest. R
 Two things to read on each ASCII drawing. The **scale bar**, because at their own
 scales the 3×3 that lost by 6.3 seed sd and the 222 km ring that won by 4.4
 are the same picture — eight points around a centre, sixty times apart in
-width (the figure above is the other half of that: one scale, eleven panels).
+width (the figure above is the other half of that: one scale, thirteen panels).
 And the **bearing rose** under it (72 characters, 5° each), which is
 the quantity the spiral is an argument about: it shows at a glance that three
 rings of eight put `||` doubles on eight of their sixteen directions, while a
@@ -743,7 +845,7 @@ spiral puts one mark on each of its own.
   @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
 ```
 
-**spiral of 24, 111 -> 4444 km   [#267-#269]**
+**spiral of 24, 111 -> 4444 km   [#267/#268/#273]**
 
 ```
   25 slots = centre + 24 neighbours  ·  111/4444 km (geometric ramp)  ·  21 bearings >=10 deg apart (24 distinct to 1 deg)
@@ -787,63 +889,108 @@ spiral puts one mark on each of its own.
   @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
 ```
 
-**spiral of 36, 111 -> 4444 km   [#270-#272]**
+**spiral of 34, 111 -> 4444 km   [#279-#281]**
 
 ```
-  37 slots = centre + 36 neighbours  ·  111/4444 km (geometric ramp)  ·  21 bearings >=10 deg apart (36 distinct to 1 deg)
-  the same reach at 1.5x the density — does the extra angle pay?
+  35 slots = centre + 34 neighbours  ·  111/4444 km (geometric ramp)  ·  21 bearings >=10 deg apart (34 distinct to 1 deg)
+  34 is Fibonacci: phi-even bearings where 36 left a 2.6x blind sector.
 
 
-                       .................
-                   ....      z          .....
-               ....                          ...
-            ...                                 ...
-          ...                                      .
-         .                                          ...
-       ..                                             ..
-      .                                                ..
-     .                                u                  .
-    .                                                     .
-   ..          w          r                                .
+                     ....................
+                 ....                    .....
+              ....                            ...
+           ...                                   ..
+          ..                                       ..
+        ..                                           ..
+       .                                u             ...
+     ..                                                 ..
+    ..     w                                             ..
+    .                    r                                ..
    .                                                       .
-  .                             m                           .
-  .                         j     h    p            x       .
-  .                    o      e 9                           .
-  .                        g b8@7c  k                       .
-  .                           d5a f                         .
-  .               t       l    i                            .
-  .                                n       s                .
+  ..                            m                           .
+  .                                     p                   .
+ ..                        j  e   h                      x  ..
+ .                    o       6 9                            .
+ .                         g b8@7c   k                       .
+ .                            d5a f                          .
+ ..                       l                                 ..
+  .            t               i             s              .
+  .                                 n                       .
    .                                                       .
-   .                        q                              .
-    .                                                     .
-     .                                                   .
-      .                                                 .
-       ..                          v                  ..
-        ...      y                                   A
-          ...                                     ...
-             ..                                 ...
-               ...                           ...
-                  .....                 .....
-                       .................
+   ..                      q                              ..
+    ..                                                   ..
+     ..                                                 ..
+       .                                               ..
+        ..                                           ..
+         ...                        v              ..
+            .y                                  ...
+              ....                            ..
+                  ....                   .....
+                      ...................
 
   |-------------------------------| 5000 km
-  N||.|.|..|..||.|.|.E|..||.|.|..|.|.|.|S.|.|.|.|..|.|.|.|.W|.|.|.|..|.|.|.|.|N   <- bearings watched, 5 deg/char
+  N||.|.|..|..||.|.|.E|.|.|..||.|..|.|.|S.|.|..||.|..|.|.|.W|.|.|.|..|.|.|.|..N   <- bearings watched, 5 deg/char
   @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
 ```
 
-| shape                                | runs           | slots | pts | reach km | bear>=10 | bear~1 | b/pt | gap max/min |
-|--------------------------------------|----------------|-------|-----|----------|----------|--------|------|-------------|
-| 3x3 touching (E-022)                 | #219-#221      | 9     | 8   | 21-35    | 8        | 8      | 1.00 | -           |
-| 13-point (E-022)                     | #222-#224      | 13    | 12  | 21-56    | 8        | 8      | 0.67 | -           |
-| ring of 8 @ 222 km (E-023)           | e023r222       | 9     | 8   | 213-224  | 8        | 8      | 1.00 | -           |
-| ring of 16 @ 222 km                  | #234           | 17    | 16  | 213-229  | 16       | 16     | 1.00 | -           |
-| two rings, 8+8 @ 222/555 km          | #237-#239      | 17    | 16  | 213-558  | 16       | 16     | 1.00 | -           |
-| three rings, 8+8+8 @ 222/555/1000 km | #255-#257      | 25    | 24  | 213-1002 | 16       | 20     | 0.67 | -           |
-| three rings, 4+4+4 @ 222/555/1000 km | #275/#259/#260 | 13    | 12  | 213-1002 | 8        | 8      | 0.67 | -           |
-| spiral of 13, 222 -> 1000 km         | #261-#263      | 14    | 13  | 223-1003 | 13       | 13     | 1.00 | 1.62        |
-| spiral of 8, 111 -> 890 km           | #264-#266      | 9     | 8   | 111-892  | 8        | 8      | 1.00 | 1.62        |
-| spiral of 24, 111 -> 4444 km         | #267-#269      | 25    | 24  | 111-4436 | 21       | 24     | 0.88 | 2.62        |
-| spiral of 36, 111 -> 4444 km         | #270-#272      | 37    | 36  | 111-4435 | 21       | 36     | 0.58 | 2.62        |
+**ELLIPTIC spiral 24, zonal 111 -> 4444 km, aspect 0.71   [#276-#278]**
+
+```
+  25 slots = centre + 24 neighbours  ·  111/4444 km (geometric ramp)  ·  20 bearings >=10 deg apart (24 distinct to 1 deg)
+  the flow-shaped arm: corridor mean flow moves 1.41x farther E-W than N-S (measured), so the window has the same proportions.
+
+
+
+
+
+
+
+                        ...............
+                  ......               .......
+              ....                           ....
+           ...                    m              ...
+         ...                                        ..
+       ..                                             ..
+      ..                                               ..
+     .                j                                 ..
+    .o                        e      h                   ..
+    .                       b   9                         .
+    .                   g    86@47 c         k            .
+    .                        d  a   f                     .
+    ..                                                   ..
+     ..                                                 ..
+      ..          l            i                       ..
+       ..                                             ..
+         ..                                         ..
+           ...                              n    ...
+             ....                            ....
+                 .......               ......
+                        ...............
+
+
+
+
+
+
+  |----------------------------| 5000 km
+  N|.|.|.....|.|..|..E|.|..||..|..|....|S...|...|...|.|..|.W||.|...|.|....|...N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+| shape                                                 | runs           | slots | pts | reach km | bear>=10 | bear~1 | b/pt | gap max/min |
+|-------------------------------------------------------|----------------|-------|-----|----------|----------|--------|------|-------------|
+| 3x3 touching (E-022)                                  | #219-#221      | 9     | 8   | 21-35    | 8        | 8      | 1.00 | -           |
+| 13-point (E-022)                                      | #222-#224      | 13    | 12  | 21-56    | 8        | 8      | 0.67 | -           |
+| ring of 8 @ 222 km (E-023)                            | e023r222       | 9     | 8   | 213-224  | 8        | 8      | 1.00 | -           |
+| ring of 16 @ 222 km                                   | #234           | 17    | 16  | 213-229  | 16       | 16     | 1.00 | -           |
+| two rings, 8+8 @ 222/555 km                           | #237-#239      | 17    | 16  | 213-558  | 16       | 16     | 1.00 | -           |
+| three rings, 8+8+8 @ 222/555/1000 km                  | #255-#257      | 25    | 24  | 213-1002 | 16       | 20     | 0.67 | -           |
+| three rings, 4+4+4 @ 222/555/1000 km                  | #275/#259/#260 | 13    | 12  | 213-1002 | 8        | 8      | 0.67 | -           |
+| spiral of 13, 222 -> 1000 km                          | #261-#263      | 14    | 13  | 223-1003 | 13       | 13     | 1.00 | 1.62        |
+| spiral of 8, 111 -> 890 km                            | #264-#266      | 9     | 8   | 111-892  | 8        | 8      | 1.00 | 1.62        |
+| spiral of 24, 111 -> 4444 km                          | #267/#268/#273 | 25    | 24  | 111-4436 | 21       | 24     | 0.88 | 2.62        |
+| spiral of 34, 111 -> 4444 km                          | #279-#281      | 35    | 34  | 111-4443 | 21       | 34     | 0.62 | 1.62        |
+| ELLIPTIC spiral 24, zonal 111 -> 4444 km, aspect 0.71 | #276-#278      | 25    | 24  | 83-4383  | 20       | 24     | 0.83 | 2.62        |
 
 ---
 
