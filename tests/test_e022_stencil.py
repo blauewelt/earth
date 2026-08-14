@@ -447,3 +447,28 @@ def test_drawings_are_generated_from_build_stencil():
     for _, slots, ring_km, _, _ in ds.DESIGNS:      # every design must render
         assert len(ds.draw(*[d for d in ds.DESIGNS
                              if d[1] == slots and d[2] == ring_km][0])) > 200
+
+
+def test_spiral_survives_the_workflow_dash_rewrite():
+    """`ring:spiral:222-1000` does NOT arrive here as it was typed.
+
+    ml-train.yml parses the `ring:` field out of `window` and then runs
+    RING="${RING//-/,}", because dashes are how a multi-radius ring list gets
+    through an input whose own fields are comma-separated. So the dispatch
+    string `spiral:222-1000` reaches temporal.py as `spiral:222,1000`. This
+    is exactly the class of bug ml/CLAUDE.md §0.1 is about — the code would
+    have been correct about a string that never occurs — and it would have
+    burned six GPU-hours before raising, since the shape is only built after
+    the embedding. Both spellings must build the identical stencil."""
+    H, W, ys, xs, lats = _ring_grid()
+    typed = build_stencil(H, W, ys, xs, 9, ring_km="spiral:222-1000", lats=lats)
+    arrived = build_stencil(H, W, ys, xs, 9, ring_km="spiral:222,1000", lats=lats)
+    assert np.array_equal(typed, arrived)
+
+    # and the transform itself, applied the way the shell applies it
+    for s in ("spiral:111-890", "spiral:222-1000"):
+        assert s.replace("-", ",") != s, "test would pass vacuously"
+        assert np.array_equal(
+            build_stencil(H, W, ys, xs, 9, ring_km=s, lats=lats),
+            build_stencil(H, W, ys, xs, 9, ring_km=s.replace("-", ","),
+                          lats=lats))

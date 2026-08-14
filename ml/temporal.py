@@ -27,6 +27,7 @@ Usage:  python3 ml/temporal.py --run pilot4_anom --steps 4000
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import warnings
@@ -212,7 +213,16 @@ def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
     if str(ring_km).startswith("spiral:"):
         if lats is None:
             raise ValueError("spiral geometry needs `lats`")
-        r0, r1 = (float(v) for v in str(ring_km)[len("spiral:"):].split("-"))
+        # Either separator, because the WORKFLOW rewrites one into the other.
+        # ml-train.yml's `ring:` parser does RING="${RING//-/,}" — dashes are
+        # how a multi-radius ring list gets through an input whose fields are
+        # comma-separated — so a dispatch of `ring:spiral:222-1000` arrives
+        # here as `spiral:222,1000`. Accepting both is the fix that cannot
+        # cost a workflow edit: `ml-train.yml` sits exactly at the 25-input
+        # ceiling and a 26th breaks every dispatch in the repo (ml/CLAUDE.md
+        # §7). Pinned by test_spiral_survives_the_workflow_dash_rewrite.
+        r0, r1 = (float(v) for v in
+                  re.split(r"[-,]", str(ring_km)[len("spiral:"):]))
         dlat = float(np.round(np.diff(lats).mean(), 6))
         for y in np.unique(ys):
             sel = np.where(ys == y)[0]
