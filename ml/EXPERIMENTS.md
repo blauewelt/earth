@@ -202,6 +202,78 @@ input width, no measurable gain. That is still a reason not to spend GPU on a
 bigger array, but it is a weaker and different reason than the one first
 written here, and the first one was wrong.
 
+### ADDENDUM — information PER POINT, which is the right objective (Chris, 2026-08-14)
+
+*"In theory it would be the more information the better (and redundant does
+not hurt). Maybe the actual question is how much information per input point
+— that's what we want to maximize."*
+
+Both halves are right. In the infinite-data limit extra inputs cannot hurt,
+and `test_zero_weight_equivalence` proves this architecture can represent
+"ignore them" exactly. What makes width expensive is not theory but our
+training budget: E-022 measured 9 and 13 touching neighbours coming out 6.3
+and 8.1 seed sd WORSE than none in the real transformer, which could have
+ignored them and did not. So gain per point is the quantity to maximise, and
+neither earlier script measured it — they compared whole hand-picked shapes.
+
+`ml/measure_marginal_info.py` does, by greedy forward selection over 6 radii
+× 8 bearings, adding one position at a time. **Marginal gain of the k-th
+point:**
+
+| k | position chosen | total | **marginal** |
+|---|---|---|---|
+| 1 | 222 km @ 90° | +0.0065 | **+0.0065** |
+| 2 | 333 km @ 225° | +0.0103 | +0.0038 |
+| 3 | 222 km @ 0° | +0.0127 | +0.0024 |
+| 4 | 890 km @ 180° | +0.0137 | +0.0010 |
+| 5–6 | 111 km @ 90°, 270° | +0.0158 | ~+0.0010 |
+| 7–8 | 333 km @ 135°, 445 km @ 180° | +0.0165 | +0.0005, +0.0003 |
+
+**And the sets, all scored in one run against one baseline:**
+
+| set | points | gain | **per point** |
+|---|---|---|---|
+| **greedy top-3** | **3** | +0.0127 | **+0.00423** |
+| greedy top-4 | 4 | **+0.0137** | +0.00342 |
+| greedy top-6 | 6 | +0.0158 | +0.00263 |
+| greedy top-8 | 8 | +0.0165 | +0.00207 |
+| uniform ring 8 @ 222 (= E-023's arm) | 8 | +0.0123 | +0.00154 |
+| uniform ring 8 @ 333 | 8 | +0.0113 | +0.00141 |
+| uniform ring 8 @ 555 | 8 | +0.0061 | +0.00077 |
+| **two rings, 222 + 555** | 16 | +0.0087 | +0.00055 |
+| all 48 candidates | 48 | −0.0033 | — |
+
+**Three answers.**
+
+1. **How many points?** Three to six. The marginal falls 6.5 → 3.8 → 2.4 →
+   1.0 (×10⁻³) and is 0.3 by the eighth. E-023's uniform eight is already
+   well past the knee.
+2. **Two rings at 222 and 555?** Measured directly: **+0.0087 at sixteen
+   points, worse than the single 222 ring's +0.0123 at eight**, and the worst
+   per-point number in the table. But the greedy search *does* mix radii
+   (222, 333, 222, 890, 111 …) and its eight mixed points beat either uniform
+   ring. Mixing scales helps; paying for two full rings to do it does not.
+3. **Per point**, the greedy top-3 carries **2.7× the uniform ring's
+   information** and 7.7× the two-ring shape's — and **greedy top-4 beats the
+   entire 8-point ring (+0.0137 vs +0.0123) with half the inputs.**
+
+**The actionable consequence, and it reverses this entry's recommendation:**
+a *narrower* stencil looks better than the one now in the model. A 5-slot
+head (centre + 222 @ 90°, 333 @ 225°, 222 @ 0°, 890 @ 180°) has more measured
+information than E-023's 9-slot ring at **half the input width**, and E-022
+is direct evidence that this model pays for width. That is a training arm
+worth dispatching — E-026 — and unlike the wide shapes it is cheap and the
+prediction is falsifiable: it should beat e023r222's corridor AUC of 0.6043.
+
+**Caveats on the method, since they bound how far this can be pushed.**
+Greedy is not optimal and cannot revise an early pick. The marginals past
+k≈6 are near this estimator's own noise. The bearings are absolute compass
+directions pooled over every pixel, while the ocean is locally oriented — a
+stencil aligned to each pixel's mean current would likely do better again,
+and is the natural E-027. And the probe has now been calibrated against real
+training twice: it ranks correctly and gets magnitudes wrong in both
+directions, so treat +0.0137 vs +0.0123 as an ordering, not a forecast.
+
 **Consequence.** No E-024 training arm is dispatched. The pre-registered
 reason to spend GPU would be a shape the probe ranks above the 222 km ring,
 and there isn't one; the honest next step for spatial inputs is not a bigger
