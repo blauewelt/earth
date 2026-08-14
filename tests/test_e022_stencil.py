@@ -203,3 +203,81 @@ def test_refusal_unroll_with_stencil():
     class A: stencil, unroll, direct = 9, 4, ""
     a = A()
     assert a.stencil > 1 and max(1, a.unroll) > 1  # the condition that trips
+
+
+# ---- E-023: ring stencils -------------------------------------------------
+# Chris, 2026-08-14: "try also a different stencil shape, which is less
+# correlated and therefore adds new information ... equidistant points on a
+# circle of radius r". The ring reuses E-022's whole input path — same slots,
+# same layout, same model — so what these tests protect is the GEOMETRY, plus
+# the promise that turning the ring off reproduces E-022 bit-for-bit.
+
+def _ring_grid():
+    """A 40x60 all-ocean grid with real latitudes, so the cos(lat) stretch is
+    exercised rather than assumed."""
+    H, W = 40, 60
+    ys, xs = np.where(np.ones((H, W), bool))
+    lats = np.arange(H) * 0.25 + 20.0          # 20.0 .. 29.75 N
+    return H, W, ys, xs, lats
+
+
+def test_ring_is_a_circle_on_the_ground_not_on_the_grid():
+    """The zonal offset must stretch by 1/cos(lat): at 60 N a 200 km step east
+    is twice as many cells as at the equator. Without this the same run is a
+    different experiment at each latitude."""
+    from temporal import ring_offsets
+    e = ring_offsets(0.0, 200.0, 8, 0.25)
+    n = ring_offsets(60.0, 200.0, 8, 0.25)
+    east = e.index(max(e, key=lambda o: o[1]))
+    assert n[east][1] >= 2 * e[east][1] - 1, (e[east], n[east])
+    # the north point is unaffected by latitude — meridional cells are 27.8 km
+    # everywhere — and 200 km is 200/27.83 = 7.19 -> 7 cells
+    assert e[0] == (7, 0) and n[0] == (7, 0), (e[0], n[0])
+    # every point sits at the requested radius, to within half a cell
+    for lat, offs in ((0.0, e), (60.0, n)):
+        for dy, dx in offs:
+            km = np.hypot(dy * 27.83, dx * 27.83 * np.cos(np.radians(lat)))
+            assert abs(km - 200.0) < 25.0, (lat, dy, dx, km)
+
+
+def test_ring_points_are_distinct_and_ordered():
+    from temporal import ring_offsets
+    offs = ring_offsets(30.0, 222.0, 8, 0.25)
+    assert len(set(offs)) == 8, offs
+    assert (0, 0) not in offs                   # nothing coincides with centre
+    assert offs[0][0] > 0 and offs[0][1] == 0   # bearing 0 is due north
+    assert offs[2][0] == 0 and offs[2][1] > 0   # bearing 90 is due east
+
+
+def test_build_stencil_ring_shape_and_centre():
+    H, W, ys, xs, lats = _ring_grid()
+    NBR = build_stencil(H, W, ys, xs, 9, ring_km=200.0, lats=lats)
+    P = len(ys)
+    assert NBR.shape == (P, 9)
+    assert (NBR[:, 0] == np.arange(P)).all()    # slot 0 is still the centre
+    # a 200 km ring on a 40x60 grid must fall off the edge for edge pixels and
+    # land inside for central ones — both states have to be reachable, or the
+    # test grid is not testing anything
+    assert (NBR[:, 1:] < 0).any() and (NBR[:, 1:] >= 0).any()
+    mid = np.where((ys == H // 2) & (xs == W // 2))[0][0]
+    assert (NBR[mid, 1:] >= 0).all(), NBR[mid]
+    # the ring reaches FAR: every neighbour of the central pixel is a
+    # different pixel from any 3x3 neighbour
+    near = build_stencil(H, W, ys, xs, 9)
+    assert not set(NBR[mid, 1:]) & set(near[mid, 1:])
+
+
+def test_ring_off_is_exactly_e022():
+    """ring_km=0 must reproduce the fixed table bit-for-bit — every published
+    E-022 head has to keep evaluating to the same numbers through this code."""
+    H, W, ocean, ys, xs = _toy_grid()
+    for s in (1, 9, 13):
+        a = build_stencil(H, W, ys, xs, s)
+        b = build_stencil(H, W, ys, xs, s, ring_km=0.0, lats=None)
+        assert np.array_equal(a, b), f"stencil {s} changed"
+
+
+def test_ring_needs_latitudes():
+    H, W, ys, xs, lats = _ring_grid()
+    with pytest.raises(ValueError):
+        build_stencil(H, W, ys, xs, 9, ring_km=200.0, lats=None)

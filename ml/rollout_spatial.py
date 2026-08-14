@@ -618,19 +618,25 @@ def main():
     # ---- per-stencil geometry, built once, shared across heads ------------
     nbr_cache, sctx_cache = {}, {}
 
-    def geometry(stencil):
-        if stencil not in nbr_cache:
+    def geometry(stencil, ring_km=0.0):
+        # keyed on the FULL geometry, not just the slot count: E-023's ring
+        # has the same 9 slots as E-022's 3x3 and a completely different
+        # neighbour set, so caching on `stencil` alone would silently score
+        # one arm with the other's geometry.
+        key = (stencil, round(float(ring_km), 3))
+        if key not in nbr_cache:
             if stencil == 1:
-                nbr_cache[1] = None
-                sctx_cache[1] = torch.from_numpy(
+                nbr_cache[key] = None
+                sctx_cache[key] = torch.from_numpy(
                     np.concatenate([Zstat, coords], 1)).to(dev)
             else:
-                NBR = build_stencil(Hg, Wg, ys, xs, stencil)
-                nbr_cache[stencil] = torch.as_tensor(NBR, device=dev)
-                sctx_cache[stencil] = torch.from_numpy(np.concatenate(
+                NBR = build_stencil(Hg, Wg, ys, xs, stencil,
+                                    ring_km=ring_km, lats=lats)
+                nbr_cache[key] = torch.as_tensor(NBR, device=dev)
+                sctx_cache[key] = torch.from_numpy(np.concatenate(
                     [Zstat, coords,
                      (NBR >= 0).astype(np.float32)], 1)).to(dev)
-        return nbr_cache[stencil], sctx_cache[stencil]
+        return nbr_cache[key], sctx_cache[key]
 
     results = {"data": os.path.basename(a.x), "horizon": a.horizon,
                "hold_years": hold_years, "corridor_def": corridor_def,
@@ -651,8 +657,10 @@ def main():
         elif K != K_seen:
             sys.exit(f"{hp} has K={K} != {K_seen} — windows not comparable")
         stencil = ta.get("stencil", 1)
+        ring_km = float(ta.get("ring_km", 0) or 0)
         unroll = ta.get("unroll", 1)
-        label = (f"s{stencil}" + (f"u{unroll}" if unroll != 1 else "")
+        label = (f"s{stencil}" + (f"r{ring_km:g}" if ring_km > 0 else "")
+                 + (f"u{unroll}" if unroll != 1 else "")
                  + f"_s{ta.get('seed', 0)}")
         if label in results["heads"]:
             label += "_" + os.path.basename(hp).replace(".pt", "")
@@ -664,10 +672,12 @@ def main():
                                     k_max=k_tbl, direct=dir_, stencil=stencil)
         model.load_state_dict(tk["model"])
         model.eval().to(dev)
-        NBR_t, static_ctx = geometry(stencil)
+        NBR_t, static_ctx = geometry(stencil, ring_km)
         print(f"head {label}: {os.path.basename(hp)} "
               f"(d_model={ta['d_model']}, layers={ta['layers']}, K={K}, "
-              f"stencil={stencil})", flush=True)
+              f"stencil={stencil}"
+              + (f", ring {ring_km:g} km" if ring_km > 0 else "") + ")",
+              flush=True)
 
         Hh = a.horizon
         sums = {name: new_sums(Hh) for name, _ in scopes}
@@ -712,7 +722,8 @@ def main():
                     print(f"  {label} start {start_m}: rolled", flush=True)
 
         entry = {"meta": {"file": os.path.basename(hp), "stencil": stencil,
-                          "seed": ta.get("seed", 0), "unroll": unroll}}
+                          "ring_km": ring_km, "seed": ta.get("seed", 0),
+                          "unroll": unroll}}
         for name, _ in scopes:
             entry[name] = skill_block(sums[name], Hh)
         entry["amoc_bands"] = {}

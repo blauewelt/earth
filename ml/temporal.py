@@ -117,6 +117,8 @@ class TemporalTransformer(nn.Module):
 # stencil reach is 1-2 cells/month (~9-18 mm/s). Slow interior dynamics
 # and deep flow are within reach; Gulf Stream advection (100-200 cells per
 # month) is structurally NOT — see ml/plans/E022_spatial_coupling.md §1.
+KM_PER_DEG = 111.32
+
 STENCILS = {
     1:  [(0, 0)],
     9:  [(0, 0), (-1, -1), (-1, 0), (-1, 1), (0, -1),
@@ -127,21 +129,72 @@ STENCILS = {
 }
 
 
-def build_stencil(H, W, ys, xs, stencil):
+def ring_offsets(lat_deg, r_km, n_pts, dlat_deg):
+    """E-023: (dy, dx) grid offsets of `n_pts` equidistant points on a circle
+    of radius `r_km` around a pixel at `lat_deg`, bearing 0 = north.
+
+    The ring is a circle on the GROUND, not on the grid: one cell spans
+    27.8 km meridionally but 27.8·cos(φ) km zonally, so a fixed cell offset
+    would be a 27 km step at the equator and a 9 km step at 70 °N — three
+    different experiments in one run. The zonal step is therefore stretched
+    by 1/cos(φ), which is why offsets are computed per pixel ROW."""
+    coslat = max(np.cos(np.radians(lat_deg)), 0.05)
+    out = []
+    for k in range(n_pts):
+        th = 2 * np.pi * k / n_pts
+        dy = (r_km / KM_PER_DEG) * np.cos(th) / dlat_deg
+        dx = (r_km / (KM_PER_DEG * coslat)) * np.sin(th) / dlat_deg
+        out.append((int(round(dy)), int(round(dx))))
+    return out
+
+
+def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
     """NBR [P, S] int64 indices into the P (ocean-pixel) ordering; -1 =
     missing (land, or outside the window). NO longitude wrap — the family3
     window is regional (-100..+20 E), unlike the codec's global gather_px.
     Slot 0 is always the centre pixel itself. Takes the grid SHAPE rather
     than the mask array: the pixel list ys/xs IS the mask (and under
-    --max-pixels subsampling, absent pixels correctly read as missing)."""
+    --max-pixels subsampling, absent pixels correctly read as missing).
+
+    `ring_km` > 0 selects E-023 RING geometry instead of the fixed STENCILS
+    table: slot 0 stays the centre and the remaining `stencil - 1` slots are
+    equidistant points on a circle of that radius. Everything downstream —
+    the input layout, the model, the checkpoint — is bit-identical to the
+    fixed-table case with the same slot count, so `--stencil 9 --ring-km 222`
+    and `--stencil 9` differ in exactly one thing: how far away the eight
+    neighbours are. That is the whole experiment."""
     lin = np.full((H, W), -1, np.int64)
     lin[ys, xs] = np.arange(len(ys))
-    offs = STENCILS[stencil]
-    NBR = np.full((len(ys), len(offs)), -1, np.int64)
-    for k, (dy, dx) in enumerate(offs):
-        yy, xx = ys + dy, xs + dx
-        ok = (yy >= 0) & (yy < H) & (xx >= 0) & (xx < W)
-        NBR[ok, k] = lin[yy[ok], xx[ok]]
+    NBR = np.full((len(ys), stencil), -1, np.int64)
+    NBR[:, 0] = np.arange(len(ys))
+    if ring_km > 0:
+        if lats is None:
+            raise ValueError("ring geometry needs `lats` — the zonal step "
+                             "depends on latitude")
+        dlat = float(np.round(np.diff(lats).mean(), 6))
+        # per ROW, not per pixel: 281 offset computations instead of 84,405,
+        # and every pixel in a row shares a latitude by construction
+        for y in np.unique(ys):
+            sel = np.where(ys == y)[0]
+            for k, (dy, dx) in enumerate(
+                    ring_offsets(float(lats[y]), ring_km, stencil - 1, dlat)):
+                yy, xx = y + dy, xs[sel] + dx
+                # yy is a SCALAR row here (every pixel in `sel` shares it), so
+                # an off-grid row must be skipped rather than masked: numpy
+                # validates a scalar index even when the column selection it
+                # is paired with is empty, and raises instead of returning
+                # nothing. Slots left at -1 are exactly right — a ring point
+                # past the window edge is missing, like one on land.
+                if not (0 <= yy < H):
+                    continue
+                ok = (xx >= 0) & (xx < W)
+                NBR[sel[ok], k + 1] = lin[yy, xx[ok]]
+    else:
+        offs = STENCILS[stencil]
+        for k, (dy, dx) in enumerate(offs):
+            yy, xx = ys + dy, xs + dx
+            ok = (yy >= 0) & (yy < H) & (xx >= 0) & (xx < W)
+            NBR[ok, k] = lin[yy[ok], xx[ok]]
     assert (NBR[:, 0] == np.arange(len(ys))).all()
     return NBR
 
@@ -754,6 +807,14 @@ def main():
                     help="torch/numpy seed (sweeps need more than one)")
     ap.add_argument("--tag", default="",
                     help="suffix for output files: temporal_<tag>.json/.pt")
+    ap.add_argument("--ring-km", type=float, default=0.0,
+                    help="E-023: put the non-centre slots on a circle of this "
+                         "radius in KM instead of using the fixed STENCILS "
+                         "table. Measured by ml/measure_ring_info.py: the "
+                         "incremental information a neighbour carries peaks "
+                         "at 167-222 km (3x the touching neighbours'), because "
+                         "at one cell the neighbour's embedding correlates "
+                         "0.97 with the centre's and is nearly a copy of it.")
     ap.add_argument("--stencil", type=int, default=1, choices=(1, 9, 13),
                     help="E-022 SPATIAL INPUT: predict the centre pixel's "
                          "z_{t+1} from this many neighbourhood pixels' z per "
@@ -956,13 +1017,16 @@ def main():
                 f"and a random pixel batch does not contain the neighbours' "
                 f"predictions. Train stencil arms at U=1 (E-010/E-020 closed "
                 f"the unroll axis anyway).")
-        NBR = build_stencil(ocean.shape[0], ocean.shape[1], ys, xs, a.stencil)
+        NBR = build_stencil(ocean.shape[0], ocean.shape[1], ys, xs, a.stencil,
+                            ring_km=a.ring_km, lats=lats)
         NBR_t = torch.as_tensor(NBR)
         obs_flags = (NBR >= 0).astype(np.float32)
         static_ctx = torch.as_tensor(
             np.concatenate([Zstat, coords, obs_flags], 1))
-        print(f"stencil {a.stencil}: input {a.stencil}x{ck['d_z']}+2 per "
-              f"step; {int((NBR < 0).sum()):,} missing neighbour slots "
+        print(f"stencil {a.stencil}"
+              + (f" RING r={a.ring_km:g} km" if a.ring_km > 0 else "")
+              + f": input {a.stencil}x{ck['d_z']}+2 per step; "
+              f"{int((NBR < 0).sum()):,} missing neighbour slots "
               f"of {NBR.size:,}")
     else:
         NBR_t = None
@@ -1240,6 +1304,7 @@ def main():
                           # params_M (32.338 = 32.038 + the 300,096 extra
                           # input columns), which is a check, not a record
                           "stencil": a.stencil,
+                          "ring_km": a.ring_km,
                           "unroll_probs": a.unroll_probs,
                           "direct": a.direct,
                           "tag": a.tag or ""}})
@@ -1436,6 +1501,7 @@ def main():
         "n_pixels": int(P),
         "n_train_months": int((~t_hold).sum()),
         "stencil": int(a.stencil),         # E-022: part of the arm's identity
+        "ring_km": float(a.ring_km),       # E-023: and how far away it reaches
     }
 
     # ---- eval 1: z-space t+1 on held-out target months --------------------
