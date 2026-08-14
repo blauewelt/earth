@@ -200,7 +200,7 @@
 <circle cx="450.0" cy="568.0" r="4.2" fill="#f85149"/>
 <text x="310" y="710" fill="#7d8590" font-size="10">reach 213–1002 km</text>
 <text x="610" y="392" fill="#e6edf3" font-size="13">three rings, 4+4+4 @ 222/555/1000 km</text>
-<text x="610" y="408" fill="#7d8590" font-size="11">#249/#259/#260 · 13 slots · 8 bearings</text>
+<text x="610" y="408" fill="#7d8590" font-size="11">#275/#259/#260 · 13 slots · 8 bearings</text>
 <circle cx="750.0" cy="568.0" r="28.3" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
 <circle cx="750.0" cy="568.0" r="44.8" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
 <circle cx="750.0" cy="568.0" r="60.1" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>

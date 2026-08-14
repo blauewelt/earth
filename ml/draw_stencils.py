@@ -50,7 +50,7 @@ DESIGNS = [
      "outer ring rotated half a sector: 16 bearings, not 8 bearings twice."),
     ("three rings, 8+8+8 @ 222/555/1000 km", 25, "222,555,1000", "#255-#257",
      "the widest shape yet: 24 points, but only 16 distinct bearings."),
-    ("three rings, 4+4+4 @ 222/555/1000 km", 13, "222,555,1000", "#249/#259/#260",
+    ("three rings, 4+4+4 @ 222/555/1000 km", 13, "222,555,1000", "#275/#259/#260",
      "same reach at half the width. 12 points on 8 bearings, 4 of them twice."),
     ("spiral of 13, 222 -> 1000 km", 14, "spiral:222-1000", "#261-#263",
      "the twin of the row above +1 slot: same reach, 13 bearings not 8."),

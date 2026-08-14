@@ -133,7 +133,7 @@ confounded all along — **how many scales** the input reaches across, and
 | density control (n=1) | #234 | 16 @ 222 km | 17 |
 | **two rings** | #237 / #238 / #239 | 8 @ 222 + 8 @ 555 | 17 |
 | **three rings, wide** | #255 / #256 / #257 | 8 @ 222 + 8 @ 555 + 8 @ 1000 | 25 |
-| **three rings, narrow** | #249 / #259 / #260 | 4 @ 222 + 4 @ 555 + 4 @ 1000 | 13 |
+| **three rings, narrow** | #275 / #259 / #260 | 4 @ 222 + 4 @ 555 + 4 @ 1000 | 13 |
 | **spiral of 13** | #261 / #262 / #263 | golden angle, 222 → 1000 km | 14 |
 | **spiral of 8** | #264 / #265 / #266 | golden angle, 111 → 890 km | 9 |
 
@@ -220,7 +220,7 @@ even though 12 would have matched the three-rings-narrow slot count exactly.
 | **spiral of 13** | #261 / #262 / #263 | golden angle, 222 → 1000 km | 14 | 13 |
 | **spiral of 8** | #264 / #265 / #266 | golden angle, 111 → 890 km | 9 | 8 |
 
-The 13-point spiral is the matched twin of **three rings of four** (#249/#259/#260,
+The 13-point spiral is the matched twin of **three rings of four** (#275/#259/#260,
 13 slots, same 222–1000 km reach): one extra slot, and 13 distinct bearings
 against 8. The 8-point spiral is matched to the **champion** e023r222 (9
 slots, 8 bearings, corridor AUC 0.6043) and differs from it in one thing only
@@ -611,7 +611,7 @@ spiral puts one mark on each of its own.
   @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
 ```
 
-**three rings, 4+4+4 @ 222/555/1000 km   [#249/#259/#260]**
+**three rings, 4+4+4 @ 222/555/1000 km   [#275/#259/#260]**
 
 ```
   13 slots = centre + 12 neighbours  ·  222/555/1000 km  ·  8 bearings >=10 deg apart
@@ -839,7 +839,7 @@ spiral puts one mark on each of its own.
 | ring of 16 @ 222 km                  | #234           | 17    | 16  | 213-229  | 16       | 16     | 1.00 | -           |
 | two rings, 8+8 @ 222/555 km          | #237-#239      | 17    | 16  | 213-558  | 16       | 16     | 1.00 | -           |
 | three rings, 8+8+8 @ 222/555/1000 km | #255-#257      | 25    | 24  | 213-1002 | 16       | 20     | 0.67 | -           |
-| three rings, 4+4+4 @ 222/555/1000 km | #249/#259/#260 | 13    | 12  | 213-1002 | 8        | 8      | 0.67 | -           |
+| three rings, 4+4+4 @ 222/555/1000 km | #275/#259/#260 | 13    | 12  | 213-1002 | 8        | 8      | 0.67 | -           |
 | spiral of 13, 222 -> 1000 km         | #261-#263      | 14    | 13  | 223-1003 | 13       | 13     | 1.00 | 1.62        |
 | spiral of 8, 111 -> 890 km           | #264-#266      | 9     | 8   | 111-892  | 8        | 8      | 1.00 | 1.62        |
 | spiral of 24, 111 -> 4444 km         | #267-#269      | 25    | 24  | 111-4436 | 21       | 24     | 0.88 | 2.62        |
