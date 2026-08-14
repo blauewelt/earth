@@ -407,7 +407,7 @@ counterpart exists:
 | spiral-24 @ 4444 | 0.17943 | 0.17742 | 0.17430 | 0.17705 |
 | spiral-13 (s2 landed) | 0.18260 | 0.18140 | 0.17686 | 0.18029 |
 | spiral-8 (s2 landed) | 0.18465 | 0.18216 | 0.17906 | 0.18196 |
-| narrow (s2 landed) | 0.18162 | 0.17817 | **0.18296** | 0.18092 |
+| narrow (all seeds) | 0.18296 | 0.18162 | 0.17817 | 0.18092 |
 | **sunflower-34** | 0.18093 | 0.17910 | — | 0.18002 |
 
 Two things worth stating plainly. **The sunflower trails its own 4444 km
@@ -417,10 +417,17 @@ out exactly as the entry warned; on this metric the ramp verdict leans
 toward "keep the near field AND the reach" (spiral-34, near-heavy, is the
 new leader). The corridor AUC can still reverse this — one-step MSE says
 little about 12-month tracking, which is the sunflower's actual argument —
-and the decision rule is pre-committed. And **the seed-index monotonicity
-got its first counterexample** (narrow s2 = 0.18296 > s1): it is a partial
-effect, not a law; the pairing recommendation stands, the "fixed offset"
-story weakens.
+and the decision rule is pre-committed. And a CORRECTION recorded rather than
+edited away: the "seed-monotonicity counterexample" reported at first was MY
+seed mislabel, not the data's. The narrow arm's re-dispatch order after the
+runner-label fix was s1, s2, then the s0 replacement — so #259 carries seed
+1, #260 seed 2, #275 seed 0, which `publish_heads`' checkpoint verification
+caught when my claim said otherwise (three VERIFICATION FAILED lines, zero
+heads mislabelled on the release — the script existing is why this was a
+five-minute correction and not a poisoned eval). Correctly labelled, narrow
+reads 0.18296 > 0.18162 > 0.17817 and the seed-index effect is again
+monotone in EVERY arm measured. Pair by seed; treat unpaired CIs as
+overstated.
 
 Heads published so far: `e026tworing_u1_s{0,1,2}` and `e026wide_u1_s{0,1,2}`
 on `model-checkpoints-v1` — after fixing `publish_heads.mjs`, whose
