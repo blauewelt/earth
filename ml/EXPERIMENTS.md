@@ -152,7 +152,9 @@ informative one:
 | e017 s2 (#210) | 1 | 0.462 [0.341, 0.568] | 0.5978 | 0.1898 |
 | **e022s9 s0 (#222)** | **9** | **0.437 [0.336, 0.529]** | **0.6056** | **0.1929** |
 | **e022s9 s1 (#223)** | **9** | **0.547 [0.426, 0.659]** | **0.6056** | **0.1937** |
+| **e022s9 s2 (#224)** | **9** | **0.516 [0.411, 0.607]** | **0.6009** | **0.1908** |
 | **e022s13 s0 (#225)** | **13** | **0.541 [0.397, 0.660]** | **0.6065** | **0.1932** |
+| **e022s13 s1 (#226)** | **13** | **0.486 [0.372, 0.605]** | **0.6013** | **0.1923** |
 
 The nowcast probe (0.437 vs 0.462–0.497) is BELOW the baseline seeds but at
 n = 1 on an instrument with seed sd ≈ 0.12 (E-010) that means nothing yet —
@@ -161,6 +163,23 @@ that objective reproduces to sd ≈ 0.0017 across seeds, and 0.1929 lands dead
 centre of the stencil-1 spread 0.1898–0.1937. Nine times the input columns,
 and the one-step prediction of z is unchanged to within a fifth of the
 baseline's own seed range.
+
+**The 3×3 trio is complete (01:55Z) and both training-time metrics are
+null.**
+
+| arm | nowcast k-fold, mean [range] | forecast ratio, mean (sd) |
+|---|---|---|
+| e017 (stencil 1, n=3) | 0.485 [0.462–0.497] | 0.19216 (0.00205) |
+| e022s9 (3×3, n=3) | 0.500 [0.437–0.547] | 0.19247 (0.00150) |
+| e022s13 (13-pt, n=2) | 0.514 [0.486–0.541] | 0.19276 (0.00061) |
+
+Forecast: the 3×3 is +0.0003 on the baseline — **0.15 of the baseline's own
+seed sd**, and again in the worse direction. Nowcast: +0.015 against a
+per-seed sd of ~0.12 (sem ~0.07), a fifth of one standard error. Neither
+training-time metric can see the neighbourhood, at either reach. Worth noting
+for the earlier n=1 claim: the spatial arms' own ratio sd (0.0015 and 0.0006)
+is no LARGER than the baseline's 0.0021, so reading one seed on that metric
+was not resting on an unmeasured assumption about this architecture.
 
 **Three arms in (00:25Z), and the forecast null is no longer n = 1.** Baseline
 mean ratio **0.1922** (sd 0.0021, n = 3); spatial mean **0.1933** (sd 0.0004,
