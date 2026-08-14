@@ -368,16 +368,40 @@ so they run *beside* the factorial rather than behind it.
 
 ---
 
-### EARLY READS, updated 2026-08-14 ~18:30Z — forecast ratio only, corridor AUC pends the eval
+### EARLY READS, updated 2026-08-14 ~20:30Z — forecast ratio only, corridor AUC pends the eval
 
-Nine arms green, every archive carrying its correct geometry (all five spiral
-variants verified through the dash→comma path). Forecast-vs-persistence
-ratios; note the between-seed spread visible where two seeds exist (~0.003–
-0.004) is LARGER than e017's within-config sd of 0.00205, so single seeds
-separate only differences ≳0.005 — another reason the corridor AUC decides:
+Fifteen arms green, every geometry string verified in its archive. Per-seed
+ratios (e017 control 0.19216, champion 8@222 = 0.18476):
 
-| arm | reach km | seeds → ratio | mean |
-|---|---|---|---|
+| arm | reach km | s0 | s1 | s2 | mean |
+|---|---|---|---|---|---|
+| ring 16 @ 222 (density) | 222 | 0.18545 | — | — | 0.18545 |
+| spiral-8, 111→890 | 890 | 0.18465 | 0.18216 | — | 0.18341 |
+| spiral-13, 222→1000 | 1000 | 0.18260 | 0.18140 | — | 0.18200 |
+| two rings 8+8 | 555 | 0.18353 | 0.17931 | 0.17784 | 0.18023 |
+| three rings narrow 4+4+4 | 1000 | 0.18162 | 0.17817 | — | 0.17990 |
+| three rings wide 8+8+8 | 1000 | 0.17928 | 0.17592 | 0.17412 | 0.17644 |
+| **spiral-24, 111→4444** | 4444 | 0.17943 | — | 0.17430 | 0.17687 |
+| **ELLIPTIC 24, ×0.71** | 4444 | 0.17853 | — | 0.17471 | 0.17662 |
+
+**A systematic seed-index effect surfaced, and it changes the right
+analysis.** In every arm with multiple seeds the ratio falls with seed index
+— s0 > s1 > s2, five arms out of five (~1/288 under exchangeability). The
+seed enters the eval slice as well as the init, so part of the "seed spread"
+is a FIXED per-seed offset shared by all arms. Consequence: cross-arm
+comparisons must be **paired by seed** (as `paired_probe.py` pairs folds),
+and unpaired seed-sd confidence intervals overstate the noise. Paired, the
+standings are stable: at every matched seed, wide > narrow > two-ring >
+spirals-at-1000 > 890 > 222, and the two 4444 km arms (circular and
+elliptic) trade places within ±0.001 — aspect is second-order on this
+metric, exactly as the anisotropy measurement (1.41, mild) predicted.
+
+Heads published so far: `e026tworing_u1_s{0,1,2}` and `e026wide_u1_s{0,1,2}`
+on `model-checkpoints-v1` — after fixing `publish_heads.mjs`, whose
+inspector ran `float(ring_km)` and would have crashed on the first
+multi-radius head, and whose 50-run lookup no longer covered a day.
+
+---|---|---|---|
 | no neighbours (e017) | 0 | 0.19216 | 0.19216 |
 | ring 16 @ 222 (density) | 222 | #234 0.18545 | 0.18545 |
 | champion 8 @ 222 | 222 | 0.18476 | 0.18476 |
