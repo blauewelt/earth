@@ -118,8 +118,13 @@ depend on a difference smaller than the measurement.
 the e017 recipe. **Controls:** e022s9 (same shape at 1 cell, already run) and
 e017 (no neighbours, already run) — no new baseline runs needed.
 
-**Status:** implementation and tests landed (13 green, commit 20c967c9c);
-dispatch waits for the R4 evaluation to free the boxes.
+**DISPATCHED 2026-08-14 ~05:15Z: #230 / #231 / #232** (seeds 0/1/2,
+`stencil:9,ring:222`, 60k steps, job_timeout 400) — seeds 0 and 2 pinned to
+gpu-box-42005419, seed 1 to gpu-box-40623952. They QUEUE behind the R4
+evaluation (#228, #229) already running on both boxes and start as those
+finish. Implementation and tests landed first (13 green, commit 20c967c9c);
+workflow token `ring:` wired with the block re-measured at 20,670 of 21,000
+chars (commit 36318d756).
 
 ---
 
