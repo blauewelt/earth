@@ -61,7 +61,17 @@ print(json.dumps({"unroll": a.get("unroll", 1), "seed": a.get("seed", 0),
 
 const rel = await api(`/repos/${REPO}/releases/tags/${TAG}`);
 const assets = new Map(rel.assets.map((a) => [a.name, a]));
-const runsList = await api(`/repos/${REPO}/actions/workflows/ml-train.yml/runs?per_page=50`);
+// per_page=50 stopped being enough the day the fleet went to eleven boxes:
+// E-026 alone is 30+ runs and the sandbox pushes CI runs between them, so a
+// head published a few hours after its run fell off the first page and the
+// script said "not in the last 50 runs" about runs that exist. Walk pages.
+const runsList = { workflow_runs: [] };
+for (let page = 1; page <= 4; page++) {
+  const batch = await api(
+    `/repos/${REPO}/actions/workflows/ml-train.yml/runs?per_page=100&page=${page}`);
+  runsList.workflow_runs.push(...batch.workflow_runs);
+  if (batch.workflow_runs.length < 100) break;
+}
 
 let failed = 0;
 const published = [];
