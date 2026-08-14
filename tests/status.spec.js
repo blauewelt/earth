@@ -883,3 +883,40 @@ test("the live LR overlay plots the LOGGED rate, not a re-derived cosine", async
   // y is inverted: 1e-3 at the top, 2.5e-4 near the bottom of the box.
   expect(ys[ys.length - 1]).toBeGreaterThan(ys[0] + 10);
 });
+
+test("a rolled evaluation shows a progress bar and an ETA, not a blank card", async ({ page }) => {
+  // Chris, 2026-08-14: "Do you have any sense of progress or an expected end
+  // time on these evals? ... a progress bar would be helpful." He could not be
+  // told and neither could I: a rolled eval trains nothing, so it published no
+  // curve, and Actions will not serve a running job's log. The failure mode
+  // this pins is the one that existed for #228/#229 — hours of GPU showing as
+  // an empty panel — plus the subtler one it could have become: an sroll
+  // record has no `step`, so falling through to the probe array would chart it
+  // at x = undefined instead of being caught here.
+  const body = [
+    JSON.stringify({ config: { steps: 60000, params_M: 40.7 } }),
+    JSON.stringify({ sroll: { head: "s1_s0", head_i: 1, heads: 4, phase: "skill",
+                              done: 100, total: 714, pct: 14.0,
+                              elapsed_s: 300, eta_head_s: 1800, eta_all_s: 9000 } }),
+    JSON.stringify({ sroll: { head: "s9r222_s0", head_i: 2, heads: 4, phase: "long",
+                              done: 357, total: 714, pct: 50.0,
+                              elapsed_s: 4200, eta_head_s: 1050, eta_all_s: 5250 } }),
+  ].join("\n");
+  await page.route(/ml-live-106\/metrics\.jsonl/, (r) =>
+    r.fulfill({ status: 200, contentType: "text/plain", body }));
+  await page.goto("/status.html");
+  const card = page.locator("#live .card")
+    .filter({ has: page.locator("h3", { hasText: "run #106" }) });
+  await expect(card).toContainText("Rolled evaluation");
+  // the LATEST record wins — a progress bar is not a series
+  await expect(card).toContainText("head 2 of 4");
+  await expect(card).toContainText("s9r222_s0");
+  await expect(card).toContainText("357 of 714");
+  // and it says when to come back, which is the whole point of the request
+  await expect(card).toContainText(/1 h|87 min|min/);
+  // overall progress counts finished heads, not just this one: 1 done + half
+  // of the second, over four = 37.5%
+  const bar = card.locator('div[style*="background:#58a6ff"]').first();
+  const w = await bar.getAttribute("style");
+  expect(w).toMatch(/width:37\.5%/);
+});

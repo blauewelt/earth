@@ -477,7 +477,7 @@
   function parseJsonl(text) {
     var loss = [], probes = [], cfg = null, resumed = null, emb = null;
     var s2 = [], s2probe = [], s2cfg = null, s2res = null, s2res_from = null, s2warm = null;
-    var jt = [], jcfg = null;
+    var jt = [], jcfg = null, sroll = null;
     text.split("\n").forEach(function (line) {
       line = line.trim();
       if (!line) return;
@@ -493,7 +493,7 @@
         cfg = o.config;
         loss = []; probes = []; resumed = null; emb = null;
         s2 = []; s2probe = []; s2cfg = null; s2res = null; s2res_from = null; s2warm = null;
-        jt = []; jcfg = null;
+        jt = []; jcfg = null; sroll = null;
         return;
       }
       if (o && o.resumed) { resumed = o.resumed; return; }  // its PARENT
@@ -514,6 +514,11 @@
       // in-training transport probe points (2026-08-11): their own array —
       // they carry no stage2_step key, so the s2 series never sees them
       if (o && o.stage2_probe) { s2probe.push(o.stage2_probe); return; }
+      // A rolled EVALUATION's progress (E-022/E-023). Not a training record —
+      // no step, no loss — so it gets its own slot rather than falling through
+      // to the probe array, where a record with no `step` would chart at
+      // x = undefined. Latest only: it is a progress bar, not a series.
+      if (o && o.sroll) { sroll = o.sroll; return; }
       if (o && typeof o.stage2_step === "number") { s2.push(o); return; }
       if (o && typeof o.step === "number" && typeof o.loss_rec === "number" && typeof o.loss_nei === "number") {
         loss.push(o);
@@ -521,7 +526,7 @@
         probes.push(o);
       }
     });
-    return { loss: loss, probes: probes, cfg: cfg, resumed: resumed,
+    return { loss: loss, probes: probes, cfg: cfg, resumed: resumed, sroll: sroll,
              s2: s2, s2probe: s2probe, s2cfg: s2cfg, s2res: s2res, s2from: s2res_from,
              s2warm: s2warm,
              jt: jt, jcfg: jcfg, emb: emb };
@@ -765,6 +770,33 @@
   // directions all week (field prediction improves while the pooled RAPID
   // read-out drifts down), which is exactly why stage 2 needed its own panel
   // instead of being folded into the probe chart.
+  // A rolled evaluation is HOURS of GPU that publishes no curve — it trains
+  // nothing. Before 2026-08-14 it published nothing at all, so "how far along
+  // is it?" had no answer from outside the box for the whole run; Chris asked
+  // for exactly this ("the number of rolled pixels is quite large, a progress
+  // bar would be helpful"). Every roll step is one forward over all 84,405
+  // window pixels, and the total is known before the first step, so the bar
+  // and its ETA are arithmetic rather than a guess.
+  function srollPanel(m) {
+    var p = m.sroll;
+    if (!p) return "";
+    var pct = Math.max(0, Math.min(100, Number(p.pct) || 0));
+    var done = (p.head_i || 1) - 1;
+    var overall = p.heads ? (100 * (done + pct / 100) / p.heads) : pct;
+    return '<div class="panel"><div class="panel-title">Rolled evaluation ' +
+      '(all 84,405 window pixels)</div>' +
+      '<div class="bar-outer" style="height:10px;background:#21262d;' +
+      'border-radius:5px;overflow:hidden;margin:6px 0">' +
+      '<div style="height:100%;width:' + overall.toFixed(1) + '%;' +
+      'background:#58a6ff"></div></div>' +
+      '<div class="meta">head <b>' + esc(String(p.head_i)) + " of " +
+      esc(String(p.heads)) + "</b> (" + esc(String(p.head || "")) + ") · " +
+      esc(String(p.phase || "")) + " " + fmtInt(p.done) + " of " +
+      fmtInt(p.total) + " roll steps · " + pct.toFixed(0) + "% of this head" +
+      (p.eta_all_s ? " · " + esc(etaText(p.eta_all_s)) + " for the whole job"
+                   : "") + "</div></div>";
+  }
+
   function stage2Chart(m) {
     if (!m.s2 || !m.s2.length) return "";
     var pts = m.s2.filter(function (p) { return typeof p.stage2_zmse === "number"; });
@@ -1353,7 +1385,11 @@
         // finished — "None of the last 24 runs produced curves" over a row
         // of successful 60k trainings (Chris, 2026-08-12). Completed-and-
         // empty still returns "" — a cancelled run has nothing to show.
-        var s2only = stage2Chart(m0) + jointChart(m0);
+        // ...and a ROLLED EVALUATION has neither a loss curve NOR a stage-2
+        // one — it trains nothing at all — so it fell through this same hole
+        // one step further out and rendered as "waiting", which is what
+        // #228/#229 showed for four hours of real work (2026-08-14).
+        var s2only = srollPanel(m0) + stage2Chart(m0) + jointChart(m0);
         if (s2only) return head + s2only + "</div>";
         if (run.status === "completed") return "";
         return waitingCard(run, m0);
@@ -1436,6 +1472,7 @@
                 "runs at each eval interval, so the first one lands a few " +
                 "thousand steps in.</div>";
       }
+      html += srollPanel(m);
       html += stage2Chart(m);
       html += jointChart(m);
       return html + "</div>";

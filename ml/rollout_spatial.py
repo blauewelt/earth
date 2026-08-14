@@ -321,6 +321,65 @@ def decode_all(codec, zhat, C, chunk, amp=False):
     return np.concatenate(outs, 0)
 
 
+class Progress:
+    """Say how far along we are, to the LOG and to the live side channel.
+
+    Chris, 2026-08-14: *"Do you have any sense of progress or an expected end
+    time on these evals? The number of rolled pixels is quite large, a progress
+    bar would be helpful."* He could not be told, and neither could I: Actions
+    will not serve the log of a running job, and unlike the training path this
+    eval never wrote to `ml-live-<n>`. Two hours of rented GPU with no way to
+    answer "how far?" is a monitoring failure, not a slow job.
+
+    Total work is known before the first step: every roll step is one forward
+    over all 84,405 pixels, and the count follows from the protocol (staggered
+    starts truncated at the year end, plus the long and future rolls). So an
+    ETA is arithmetic, not a guess, from the second step onward."""
+
+    def __init__(self, path, n_heads, every=20):
+        self.path, self.n_heads, self.every = path, n_heads, every
+        self.t0 = time.time()
+        self.head_i = 0
+        self.label = ""
+        self.total = 1
+        self.done = 0
+        self.phase = ""
+
+    def start_head(self, i, label, total):
+        self.head_i, self.label, self.total, self.done = i, label, max(total, 1), 0
+        self.t_head = time.time()
+
+    def step(self, phase, n=1):
+        self.phase = phase
+        self.done += n
+        if self.done % self.every and self.done != self.total:
+            return
+        el = time.time() - self.t_head
+        rate = el / max(self.done, 1)
+        eta_head = rate * (self.total - self.done)
+        # heads run at the same cost, so the remaining ones are rate x total
+        eta_all = eta_head + rate * self.total * (self.n_heads - self.head_i)
+        pct = 100.0 * self.done / self.total
+        bar = "#" * int(pct // 5) + "-" * (20 - int(pct // 5))
+        print(f"  [{bar}] {pct:5.1f}%  head {self.head_i}/{self.n_heads} "
+              f"{self.label} · {self.phase} {self.done}/{self.total} steps · "
+              f"{el / 60:.1f} min in · ~{eta_head / 60:.0f} min left on this "
+              f"head, ~{eta_all / 60:.0f} min to finish", flush=True)
+        rec = {"sroll": {"head": self.label, "head_i": self.head_i,
+                         "heads": self.n_heads, "phase": self.phase,
+                         "done": self.done, "total": self.total,
+                         "pct": round(pct, 1),
+                         "elapsed_s": round(time.time() - self.t0),
+                         "eta_head_s": round(eta_head),
+                         "eta_all_s": round(eta_all)}}
+        try:
+            os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+            with open(self.path, "a") as f:
+                f.write(json.dumps(rec) + "\n")
+        except OSError:
+            pass          # instrumentation never breaks the run
+
+
 def new_sums(H):
     return {k: np.zeros(H + 1) for k in
             ("mse_m", "mse_p", "mse_c", "mse_d", "n",
@@ -419,6 +478,14 @@ def main():
     ap.add_argument("--amp", action="store_true",
                     help="fp16 autocast for the roll/decode forwards — the "
                          "gate decides whether the numbers survive it")
+    ap.add_argument("--metrics", default=os.path.join(HERE, "runs", "actions",
+                                                      "metrics.jsonl"),
+                    help="progress records are APPENDED here; "
+                         "scripts/publish_live_metrics.sh pushes this file to "
+                         "ml-live-<n>, which is the only way to watch a "
+                         "running job from outside")
+    ap.add_argument("--progress-every", type=int, default=20,
+                    help="roll steps between progress lines")
     ap.add_argument("--cache-dir", default=os.path.join(HERE, "cache"))
     a = ap.parse_args()
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -638,6 +705,7 @@ def main():
                      (NBR >= 0).astype(np.float32)], 1)).to(dev)
         return nbr_cache[key], sctx_cache[key]
 
+    prog = Progress(a.metrics, len(heads), every=a.progress_every)
     results = {"data": os.path.basename(a.x), "horizon": a.horizon,
                "hold_years": hold_years, "corridor_def": corridor_def,
                "gate_ref": dict(GATE_REF, head=GATE_HEAD, tol=GATE_TOL),
@@ -680,6 +748,29 @@ def main():
               flush=True)
 
         Hh = a.horizon
+        # planned roll steps for THIS head, computed from the protocol rather
+        # than guessed: a start at Dec(Y-1) rolls 12 months inside Y, Jan
+        # rolls 11 ... Nov rolls 1, so a holdout year costs 78 steps; then the
+        # long hindcast and the future roll are one step per month each.
+        n_skill = 0
+        for Y in hold_years:
+            for s_off in range(12):
+                start_m = (f"{int(Y) - 1}-12" if s_off == 0
+                           else f"{Y}-{s_off:02d}")
+                s_ = month_index.get(start_m)
+                if s_ is None or s_ - K + 1 < 0 or s_ + 1 >= T:
+                    continue
+                for h in range(1, Hh + 1):
+                    if s_ + h >= T or months[s_ + h][:4] != Y:
+                        break
+                    n_skill += 1
+        n_long = (a.long_months if a.long_start in month_index else 0)
+        prog.start_head(list(heads).index(hp) + 1, label,
+                        n_skill + n_long + a.future_months)
+        print(f"  {label}: {n_skill} scored roll steps + {n_long} hindcast + "
+              f"{a.future_months} future = "
+              f"{n_skill + n_long + a.future_months} steps over {P:,} pixels",
+              flush=True)
         sums = {name: new_sums(Hh) for name, _ in scopes}
         probe_pts = {h: [] for h in range(1, Hh + 1)}
         with torch.no_grad():
@@ -711,6 +802,7 @@ def main():
                         v_true, obs_tt = std_m.get(t_tgt)
                         op = obs_tt & obs_s
                         v_damp = v_pers * r1 ** h
+                        prog.step("skill")
                         for name, m_ in scopes:
                             accumulate(sums[name], h, xhat[m_], v_true[m_],
                                        v_pers[m_], v_damp[m_], op[m_])
@@ -771,7 +863,7 @@ def main():
             print(f"VALIDATION GATE PASSED: {got}", flush=True)
 
         # ---- long hindcast + future roll (median trajectory only) --------
-        def long_roll(s_end, n_months):
+        def long_roll(s_end, n_months, phase="long"):
             Zwin = zwin_from_true(s_end, K)
             cur = list(moy[s_end - K + 1: s_end + 1])
             yy, mm = int(months[s_end][:4]), int(months[s_end][5:7])
@@ -785,6 +877,7 @@ def main():
                                      month_feats(cur, dev), a.chunk, a.amp)
                     Zwin = torch.cat([Zwin[:, 1:], zhat[:, None]], 1)
                     cur = cur[1:] + [(cur[-1] + 1) % 12]
+                    prog.step(phase)
                     sv.append(read_sv(zhat))
                     roll_ym.append(f"{yy:04d}-{mm:02d}")
             return np.array(sv), roll_ym
@@ -825,7 +918,7 @@ def main():
                   f"r_trained {r_tr} (n={n_tr}) · r_heldout {r_ho} "
                   f"(n={n_ho}) · lp18 r {r_lp} amp {amp_lp}", flush=True)
         if a.future_months > 0:
-            sv, roll_ym = long_roll(T - 1, a.future_months)
+            sv, roll_ym = long_roll(T - 1, a.future_months, "future")
             entry["future"] = {"context_end": months[-1], "roll_ym": roll_ym,
                                "sv_des": [round(v, 3) for v in sv.tolist()]}
         results["heads"][label] = entry

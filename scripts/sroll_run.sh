@@ -57,9 +57,29 @@ done
 [ -n "$HPATHS" ] || { echo "::error::no heads fetched — nothing to roll"; exit 1; }
 
 OUT="ml/runs/actions/rollout_spatial.json"
+# BACKGROUNDED behind a publisher loop, exactly as the training step does.
+# This eval is hours long and, until 2026-08-14, published nothing while it
+# ran: Actions will not serve a running job's log, so "how far along is it?"
+# had no answer from outside for the whole run. rollout_spatial.py appends
+# progress records (head i/N, phase, steps done, ETA) to metrics.jsonl; this
+# loop pushes them to ml-live-<n> every ~2.5 minutes, which the status page
+# and any curl can read. Best-effort at the CALLER (`|| true`), because a
+# telemetry push must never take down the eval it is reporting on.
+rm -f ml/runs/actions/metrics.jsonl
 python -u ml/rollout_spatial.py --x ml/cache/family3_X.npy \
   --npz-small ml/cache/f3_dec_small.npz --z "$ZPATH" --ckpt "$CKPT" \
-  --heads $HPATHS --out "$OUT"
+  --heads $HPATHS --out "$OUT" &
+EVAL_PID=$!
+TICK=0
+while kill -0 $EVAL_PID 2>/dev/null; do
+  sleep 30
+  TICK=$((TICK + 1))
+  if [ $((TICK % 5)) -eq 0 ]; then
+    bash scripts/publish_live_metrics.sh "ml-live-${GITHUB_RUN_NUMBER}" || true
+  fi
+done
+wait $EVAL_PID || { echo "::error::rollout_spatial.py failed"; exit 1; }
+bash scripts/publish_live_metrics.sh "ml-live-${GITHUB_RUN_NUMBER}" || true
 
 # Assert the EFFECT: the file exists, parses, the gate PASSED, and every
 # fetched head carries a scored corridor block.
