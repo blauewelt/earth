@@ -316,6 +316,32 @@ so they run *beside* the factorial rather than behind it.
 
 ---
 
+### EARLY READS, 2026-08-14 ~17:20Z — forecast ratio only, corridor AUC pends the eval
+
+First four arms green; every archive carries the RIGHT geometry
+(`temporal.json.scale.ring_km` = `222` / `222,555` / `222,555,1000` /
+`spiral:222,1000` — the spiral path is proven end-to-end on a box, dash→comma
+included). The forecast-vs-persistence ratio reproduces to sd ≈ 0.002, so one
+seed is readable on THIS metric long before the rolled eval:
+
+| arm | run | forecast ratio | vs champion 0.18476 |
+|---|---|---|---|
+| no neighbours (e017, control) | — | 0.19216 | +0.0074 |
+| ring of 16 @ 222 (density) | #234 | 0.18545 | +0.0007 |
+| two rings 8+8 @ 222/555 | #237 | 0.18353 | −0.0012 |
+| spiral of 13, 222→1000 | #261 | 0.18260 | −0.0022 |
+| **three rings 8+8+8 @ 222→1000** | #255 | **0.17928** | **−0.0055 (~2.7 sd)** |
+
+The ordering is monotone in REACH: 222 → 555 → 1000 improves one-step
+forecast, density at fixed radius does not (#234 ≈ champion, as the ridge
+predicted), and #255 is the best forecast number the programme has recorded.
+Consistent with the CFL/reach hypothesis below — and exactly the pattern the
+4444 km arms exist to push further. Caveat, pre-registered: E-010 measured
+that the forecast objective and the AMOC probe can decouple; the deciding
+number remains rolled corridor AUC from the one evaluation at the end.
+
+---
+
 ### HOW A STENCIL ROLLS FORWARD — the design theory behind the deep and elliptic arms (2026-08-14)
 
 Chris: *"think through the rolling forward predictions with the model. How
