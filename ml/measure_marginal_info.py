@@ -205,6 +205,25 @@ def main():
         with open(a.out, "w") as f:
             json.dump(results, f, indent=1)
 
+    # ---- named reference sets, scored in THIS run so the comparison with
+    # the greedy curve is paired rather than across samples ----------------
+    refs = {"uniform ring8@222": [cidx[(222.0, b)] for b in range(BEARINGS)],
+            "uniform ring8@333": [cidx[(333.0, b)] for b in range(BEARINGS)],
+            "uniform ring8@555": [cidx[(555.0, b)] for b in range(BEARINGS)],
+            "two rings 222+555": ([cidx[(222.0, b)] for b in range(BEARINGS)]
+                                  + [cidx[(555.0, b)] for b in range(BEARINGS)]),
+            "greedy top-3": sel[:3], "greedy top-4": sel[:4],
+            "greedy top-6": sel[:6], "greedy top-8": sel[:8]}
+    results["references"] = {}
+    print(f"\n{'set':<20} {'points':>6} {'gain':>9} {'per point':>11}")
+    for name, ss in refs.items():
+        m, _ = fit_mse(ss)
+        g = 1 - m / base
+        results["references"][name] = {"n": len(ss), "gain": round(float(g), 5),
+                                       "per_point": round(float(g / len(ss)), 6)}
+        print(f"{name:<20} {len(ss):>6} {g:>+9.4f} {g / len(ss):>+11.5f}",
+              flush=True)
+
     m_all, _ = fit_mse(list(range(len(cand))))
     results["all_candidates"] = {"n": len(cand),
                                  "gain": round(float(1 - m_all / base), 5)}
