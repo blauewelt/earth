@@ -65,6 +65,10 @@ DESIGNS = [
      "spiral:111-4444-0.71", "#276-#278",
      "the flow-shaped arm: corridor mean flow moves 1.41x farther E-W than"
      " N-S (measured), so the window has the same proportions."),
+    ("SUNFLOWER 34: elliptic + sqrt ramp, 111 -> 4444 km", 35,
+     "spiral:111-4444-0.71-0.5", "#282-#284",
+     "Vogel's sunflower: uniform AREA density puts 26 of 34 points past"
+     " 2222 km — the far-heavy arm the early reads argue for."),
 ]
 
 

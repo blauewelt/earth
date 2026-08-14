@@ -505,3 +505,44 @@ def test_elliptic_spiral_compresses_meridionally():
     assert not np.array_equal(a[mid], c[mid]), "aspect 0.5 == circular?"
     with pytest.raises(ValueError):
         build_stencil(H, W, ys, xs, 25, ring_km="spiral:111-4444-1.5", lats=lats)
+
+
+def test_sunflower_ramp_weights_the_far_field():
+    """spiral:111-4444-0.71-0.5 — the Vogel/sunflower arm: r ~ sqrt(f) on the
+    span puts most points FAR (uniform area density), where the geometric
+    ramp puts them NEAR. Chris: 'an eliptic spiral but with heavier weight on
+    the outer points.' Both spellings must agree; 2- and 3-field strings must
+    keep their exact old meaning (geometric); and the far-field weighting
+    must actually hold: >70% of sunflower points beyond half-radius vs <25%
+    for geometric."""
+    from temporal import spiral_offsets
+    lat0, dlat = 40.0, 0.25
+    kmy, kmx = 111.32 * dlat, 111.32 * dlat * np.cos(np.radians(lat0))
+
+    def radii(offs):
+        return [np.hypot(dy * kmy, dx * kmx) for dy, dx in offs]
+
+    geo = radii(spiral_offsets(lat0, 111.0, 4444.0, 34, dlat))
+    sun = radii(spiral_offsets(lat0, 111.0, 4444.0, 34, dlat, ramp_p=0.5))
+    half = (111.0 + 4444.0) / 2
+    frac_geo = sum(r > half for r in geo) / 34
+    frac_sun = sum(r > half for r in sun) / 34
+    assert frac_geo < 0.25, f"geometric already far-heavy? {frac_geo}"
+    assert frac_sun > 0.70, f"sunflower not far-heavy: {frac_sun}"
+
+    H, W = 361, 481
+    ys, xs = np.meshgrid(np.arange(H), np.arange(W), indexing="ij")
+    ys, xs = ys.ravel(), xs.ravel()
+    lats = 40.0 + (np.arange(H) - H // 2) * dlat
+    a = build_stencil(H, W, ys, xs, 35, ring_km="spiral:111-4444-0.71-0.5",
+                      lats=lats)
+    b = build_stencil(H, W, ys, xs, 35, ring_km="spiral:111,4444,0.71,0.5",
+                      lats=lats)
+    assert np.array_equal(a, b), "dash and comma spellings must agree"
+    c = build_stencil(H, W, ys, xs, 35, ring_km="spiral:111-4444-0.71",
+                      lats=lats)
+    mid = H // 2 * W + W // 2
+    assert not np.array_equal(a[mid], c[mid]), "ramp 0.5 == geometric?"
+    with pytest.raises(ValueError):
+        build_stencil(H, W, ys, xs, 35, ring_km="spiral:111-4444-0.71-3",
+                      lats=lats)

@@ -152,7 +152,8 @@ def ring_offsets(lat_deg, r_km, n_pts, dlat_deg):
 GOLDEN_ANGLE = 137.50776405003785     # 360 * (1 - 1/phi)
 
 
-def spiral_offsets(lat_deg, r_min, r_max, n_pts, dlat_deg, aspect=1.0):
+def spiral_offsets(lat_deg, r_min, r_max, n_pts, dlat_deg, aspect=1.0,
+                   ramp_p=None):
     """E-026 SPIRAL (Chris, 2026-08-14): *"angular coordinates should be
     different for each point, think of a spiral going outward ... streams
     often flow straight, so it's important to catch 1-2 points for many
@@ -178,14 +179,30 @@ def spiral_offsets(lat_deg, r_min, r_max, n_pts, dlat_deg, aspect=1.0):
     that moves twice as far east as north per month is best watched by a
     window with the same proportions. Bearings stay distinct: the compression
     is a monotone map of angle, so no two points collapse onto one."""
+    # ramp_p switches the RADIUS RAMP (Chris, 2026-08-14: "an eliptic
+    # spiral but with heavier weight on the outer points"). None keeps the
+    # geometric ramp (log-uniform, near-heavy: of 34 points spanning
+    # 111-4444 km only 7 sit beyond the half-way radius). A float p uses
+    # r = r_min + (r_max - r_min) * f**p on uniform f. p = 0.5 is not a
+    # knob setting but a NAMED arrangement: r ~ sqrt(k) at the golden angle
+    # is Vogel's model of the sunflower head — the unique ramp with uniform
+    # density per unit AREA, and because area grows quadratically, 26 of 34
+    # points land beyond half-way and 32 beyond 1000 km. The near-field
+    # information peak at 222 km gets a single point; that is the
+    # HYPOTHESIS (the early E-026 reads attribute the wide arm's gain to
+    # its outer ring), not an accident — the geometric-ramp arms keep the
+    # near-heavy end of the spectrum as controls.
     coslat = max(np.cos(np.radians(lat_deg)), 0.05)
     out = []
     for k in range(n_pts):
         f = k / max(n_pts - 1, 1)
-        r_km = r_min * (r_max / r_min) ** f      # geometric: the near field,
-        th = np.radians(k * GOLDEN_ANGLE)        # where information peaks,
-        dy = (aspect * r_km / KM_PER_DEG) * np.cos(th) / dlat_deg   # gets
-        dx = (r_km / (KM_PER_DEG * coslat)) * np.sin(th) / dlat_deg # more pts
+        if ramp_p is None:
+            r_km = r_min * (r_max / r_min) ** f    # geometric (near-heavy)
+        else:
+            r_km = r_min + (r_max - r_min) * f ** ramp_p
+        th = np.radians(k * GOLDEN_ANGLE)
+        dy = (aspect * r_km / KM_PER_DEG) * np.cos(th) / dlat_deg
+        dx = (r_km / (KM_PER_DEG * coslat)) * np.sin(th) / dlat_deg
         out.append((int(round(dy)), int(round(dx))))
     return out
 
@@ -238,10 +255,19 @@ def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
         # must die here, not 6 GPU-hours in.
         parts = [float(v) for v in
                  re.split(r"[-,]", str(ring_km)[len("spiral:"):])]
-        if len(parts) not in (2, 3):
-            raise ValueError(f"spiral wants rmin-rmax[-aspect], got {ring_km}")
+        if len(parts) not in (2, 3, 4):
+            raise ValueError("spiral wants rmin-rmax[-aspect[-ramp_p]], "
+                             f"got {ring_km}")
         r0, r1 = parts[0], parts[1]
-        asp = parts[2] if len(parts) == 3 else 1.0
+        asp = parts[2] if len(parts) >= 3 else 1.0
+        # 4th field: radius-ramp exponent on the linear span (0.5 = Vogel /
+        # sunflower, uniform-area, far-heavy). Absent = geometric ramp —
+        # every checkpoint trained before this field existed keeps meaning
+        # exactly what it meant.
+        rp = parts[3] if len(parts) == 4 else None
+        if rp is not None and not (0 < rp <= 2):
+            raise ValueError(f"spiral ramp exponent must be in (0, 2], "
+                             f"got {rp}")
         if not (0 < asp <= 1):
             raise ValueError(f"spiral aspect must be in (0, 1], got {asp} — "
                              "it is meridional/zonal, and >1 would claim the "
@@ -251,7 +277,7 @@ def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
             sel = np.where(ys == y)[0]
             for k, (dy, dx) in enumerate(
                     spiral_offsets(float(lats[y]), r0, r1, stencil - 1, dlat,
-                                   aspect=asp)):
+                                   aspect=asp, ramp_p=rp)):
                 yy, xx = y + dy, xs[sel] + dx
                 if not (0 <= yy < H):
                     continue
