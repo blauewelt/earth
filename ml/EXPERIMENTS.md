@@ -258,10 +258,19 @@ change in `temporal.py` without its drawing changing too. (Same argument as
 `app.js` tracing a corridor by hand: the second definition is the one that
 silently goes stale.) Regenerate with `python3 ml/draw_stencils.py --md`.
 
-Two things to read on each drawing. The **scale bar**, because at their own
+![the nine stencil designs, all at one scale](figs/stencil_designs.png)
+
+*The same nine as one sheet, **all at a single scale** — which the ASCII
+below cannot do, because at a common scale the two E-022 shapes collapse to a
+dot. That dot is the finding: 3×3 reaches 35 km where the champion reaches
+222 and the widest arm reaches 1000. Regenerate with
+`python3 ml/draw_stencils.py --svg ml/figs/stencil_designs.svg`.*
+
+Two things to read on each ASCII drawing. The **scale bar**, because at their own
 scales the 3×3 that lost by 6.3 seed sd and the 222 km ring that won by 4.4
 are the same picture — eight points around a centre, sixty times apart in
-width. And the **bearing rose** under it (72 characters, 5° each), which is
+width (the figure above is the other half of that: one scale, nine panels).
+And the **bearing rose** under it (72 characters, 5° each), which is
 the quantity the spiral is an argument about: it shows at a glance that three
 rings of eight put `||` doubles on eight of their sixteen directions, while a
 spiral puts one mark on each of its own.

@@ -48,13 +48,13 @@ DESIGNS = [
      "density at ONE radius. n=1, kept as a control, not an arm."),
     ("two rings, 8+8 @ 222/555 km", 17, "222,555", "#237-#239",
      "outer ring rotated half a sector: 16 bearings, not 8 bearings twice."),
-    ("three rings, 8+8+8 @ 222/555/1000 km", 25, "222,555,1000", "#240-#242",
+    ("three rings, 8+8+8 @ 222/555/1000 km", 25, "222,555,1000", "#255-#257",
      "the widest shape yet: 24 points, but only 16 distinct bearings."),
-    ("three rings, 4+4+4 @ 222/555/1000 km", 13, "222,555,1000", "#243-#245",
+    ("three rings, 4+4+4 @ 222/555/1000 km", 13, "222,555,1000", "#249/#259/#260",
      "same reach at half the width. 12 points on 8 bearings, 4 of them twice."),
-    ("spiral of 13, 222 -> 1000 km", 14, "spiral:222-1000", "#246-#248",
+    ("spiral of 13, 222 -> 1000 km", 14, "spiral:222-1000", "#261-#263",
      "the twin of the row above +1 slot: same reach, 13 bearings not 8."),
-    ("spiral of 8, 111 -> 890 km", 9, "spiral:111-890", "#249-#251",
+    ("spiral of 8, 111 -> 890 km", 9, "spiral:111-890", "#264-#266",
      "the champion's exact width, spent on eight radii instead of one."),
 ]
 
@@ -235,10 +235,71 @@ def table():
     return "\n".join(out)
 
 
+def svg(cols=3, cell=300, pad=62):
+    """The same nine designs as one SVG sheet — for reading on a phone, where
+    a 95-column ASCII canvas is a horizontal scrollbar.
+
+    Panels share ONE scale (every design drawn against the widest, 1000 km),
+    which the ASCII cannot do: at a common scale the 3x3 collapses to a dot,
+    and here that dot is the point — it is why E-022 lost. Each panel keeps
+    its own km label so the collapse is legible rather than mysterious."""
+    S = max(max(np.hypot(*to_km(*o))
+                for o in offsets_of(s, r)[1:] if o) for _, s, r, _, _ in DESIGNS)
+    S *= 1.12
+    rows = -(-len(DESIGNS) // cols)
+    W, H = cols * cell, rows * (cell + pad) + 26
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
+           f'viewBox="0 0 {W} {H}" font-family="ui-monospace,monospace">',
+           f'<rect width="{W}" height="{H}" fill="#0d1117"/>']
+    for i, (title, slots, ring_km, runs, _) in enumerate(DESIGNS):
+        ox, oy = (i % cols) * cell, (i // cols) * (cell + pad) + pad
+        cx, cy, R = ox + cell / 2, oy + cell / 2 - 6, cell / 2 - 16
+        k = R / S                                  # px per km, SHARED by all
+        offs = offsets_of(slots, ring_km)
+        pts = [to_km(*o) for o in offs[1:] if o is not None]
+        nb, _r = bearings(pts)
+        out.append(f'<text x="{ox + 10}" y="{oy - 32}" fill="#e6edf3" '
+                   f'font-size="13">{title}</text>')
+        out.append(f'<text x="{ox + 10}" y="{oy - 16}" fill="#7d8590" '
+                   f'font-size="11">{runs} · {slots} slots · {nb} bearings'
+                   f'</text>')
+        for rad in nominal_radii(ring_km) or []:
+            out.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{rad * k:.1f}" '
+                       f'fill="none" stroke="#30363d" stroke-dasharray="2 4"/>')
+        for x, y in pts:
+            out.append(f'<line x1="{cx:.1f}" y1="{cy:.1f}" '
+                       f'x2="{cx + x * k:.1f}" y2="{cy - y * k:.1f}" '
+                       f'stroke="#1f6feb" stroke-opacity="0.35"/>')
+        for x, y in pts:
+            out.append(f'<circle cx="{cx + x * k:.1f}" cy="{cy - y * k:.1f}" '
+                       f'r="3.4" fill="#58a6ff"/>')
+        out.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="4.2" '
+                   f'fill="#f85149"/>')
+        out.append(f'<text x="{ox + 10}" y="{oy + cell - 14}" fill="#7d8590" '
+                   f'font-size="10">reach '
+                   f'{min(np.hypot(*p) for p in pts):.0f}–'
+                   f'{max(np.hypot(*p) for p in pts):.0f} km</text>')
+    out.append(f'<text x="10" y="{H - 26}" fill="#7d8590" font-size="11">'
+               f'ONE SCALE FOR ALL NINE · panel width {2 * S:.0f} km · red = '
+               f'the pixel predicted · blue = what it may read</text>')
+    out.append(f'<text x="10" y="{H - 9}" fill="#484f58" font-size="10">'
+               f'lat {LAT0:.0f}N, 0.25° grid · generated from build_stencil by '
+               f'ml/draw_stencils.py — the shapes cannot drift from the code'
+               f'</text>')
+    out.append("</svg>")
+    return "\n".join(out)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--md", action="store_true", help="fence each drawing")
+    ap.add_argument("--svg", metavar="PATH", help="write an SVG sheet instead")
     a = ap.parse_args()
+    if a.svg:
+        with open(a.svg, "w") as f:
+            f.write(svg())
+        print(f"wrote {a.svg}")
+        return
     for d in DESIGNS:
         art = draw(*d)
         if a.md:
