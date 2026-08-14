@@ -414,8 +414,17 @@ consistent with the dead slots costing sample efficiency. Reach remains the
 dominant axis: every 4444 arm beats every ≤1000 arm except wide, which holds
 rank 3 — 1000 km with a dense outer ring remains remarkable value per slot.
 
-Heads on the release: tworing, wide, narrow, sp13, sp8, sp24, esp24 (×3
-each). Pending: sp34 (needs s2), sun34, ring16. Eval wave 1 (#294: gate +
+**Decision rule AMENDED by Chris, 2026-08-14 ~23:30Z** — *"I am happy with
+your pick of stencil shape. Let's use whatever comes out best on AUC, or
+rather, you can judge and decide yourself while I am sleeping."* The
+sunflower tiebreak is withdrawn; the pick is the best rolled corridor AUC by
+paired-by-seed comparison, with judgment applied if the top arms are
+statistically indistinguishable — in that case secondary evidence (forecast
+metric, live-slot efficiency, the CFL/physics argument) decides, and the
+reasoning is written into the RESULT rather than exercised silently.
+
+Heads on the release: tworing, wide, narrow, sp13, sp8, sp24, esp24, sun34
+(×3 each), sp34 s0+s1, ring16. Eval wave 1 (#294: gate +
 sp24 + wide + champion) lands ~02:00Z; wave 2 (sunflower + elliptic +
 spiral-34) follows on the second eval box. Earlier per-seed detail and the
 seed-mislabel correction are preserved in git history (commits 324c796,
