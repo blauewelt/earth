@@ -56,7 +56,7 @@ print(json.dumps({"unroll": a.get("unroll", 1), "seed": a.get("seed", 0),
                   "K": a.get("K"), "steps": a.get("steps"),
                   "direct": str(a.get("direct") or ""),
                   "stencil": a.get("stencil", 1),
-                  "ring_km": float(a.get("ring_km", 0) or 0),
+                  "ring_km": str(a.get("ring_km", 0) or "0"),
                   "step": tk.get("step")}))`, pt], { encoding: "utf8" }));
 
 const rel = await api(`/repos/${REPO}/releases/tags/${TAG}`);
@@ -109,16 +109,38 @@ for (const spec of RUNS) {
     // the marker after a digit ("e022s9") — a first attempt guarded the match
     // with [^0-9] to avoid catching the run number and thereby matched
     // NOTHING in every name actually in use, silently checking nothing at all
+    // ring_km stopped being a NUMBER on 2026-08-14: E-026 heads carry
+    // "222,555", "spiral:111,4444,0.71,0.5" and friends, and the float()
+    // this used to run in the python inspector CRASHED on the first
+    // multi-radius head — which would have blocked every E-026 publish.
+    // For non-numeric geometries the prefix cannot carry the truth in two
+    // digits, so the caller must state it: --expect-ring "<exact string>"
+    // (comma form, i.e. what temporal.py received AFTER the workflow
+    // dash rewrite) and --expect-stencil N. Explicit beats parsed.
+    const ringStr = String(info.ring_km);
+    const ringNum = /^[0-9.]+$/.test(ringStr) ? Number(ringStr) : NaN;
+    const EXR = arg("--expect-ring", "");
+    const EXS = Number(arg("--expect-stencil", "0"));
+    if (EXR && ringStr !== EXR) {
+      bad.push(`--expect-ring "${EXR}" but checkpoint is "${ringStr}"`);
+    }
+    if (EXS && info.stencil !== EXS) {
+      bad.push(`--expect-stencil ${EXS} but checkpoint is ${info.stencil}`);
+    }
     const ps = [...PREFIX.matchAll(/s(\d+)/g)].pop();
     const pr = [...PREFIX.matchAll(/r(\d+)/g)].pop();
     if (ps && Number(ps[1]) !== info.stencil) {
       bad.push(`prefix says stencil ${ps[1]}, checkpoint is ${info.stencil}`);
     }
-    if (pr && Math.round(info.ring_km) !== Number(pr[1])) {
-      bad.push(`prefix says ring ${pr[1]} km, checkpoint is ${info.ring_km}`);
+    if (pr && (!Number.isFinite(ringNum) || Math.round(ringNum) !== Number(pr[1]))) {
+      bad.push(`prefix says ring ${pr[1]} km, checkpoint is "${ringStr}"`);
     }
-    if (!pr && info.ring_km > 0) {
-      bad.push(`checkpoint is a ${info.ring_km} km RING but the prefix `
+    if (!Number.isFinite(ringNum) && !EXR) {
+      bad.push(`checkpoint geometry "${ringStr}" is not a single radius — `
+               + `state it explicitly with --expect-ring`);
+    }
+    if (!pr && !EXR && Number.isFinite(ringNum) && ringNum > 0) {
+      bad.push(`checkpoint is a ${ringStr} km RING but the prefix `
                + `"${PREFIX}" does not say so`);
     }
     if (bad.length) {
