@@ -45,6 +45,58 @@ low-pass).
 ---
 
 <a id="e-026"></a>
+## E-027 · Scale analysis: transformer size × input width — DISPATCHED overnight 2026-08-14
+
+**Why, from Chris.** *"Once you found the optimal arrangement (i'm rooting for
+the sunflower, if confidence intervals overlap, please pick it), it's time to
+do another scale analysis over night: 1) does a larger transformer help? 2) do
+more input points (even further away, but sunflower style) help with the
+larger transformer?"*
+
+**The 2×2, three seeds per cell:**
+
+| | sunflower-34 (35 slots) | sunflower-55 (56 slots) |
+|---|---|---|
+| **576×8 (standard)** | #282/#283/#284 (E-026, running) | **base55** #288/#289/#290 |
+| **768×12 (2.7× params)** | **big34** #285/#286/#287 | **big55** #291/#292/#293 |
+
+All four cells share the identical recipe otherwise: 60k steps, expdecay,
+K=24, U=1, frozen run-62 codec, `spiral:111-4444-0.71-0.5`. The larger
+transformer is d_model 768 × 12 layers vs 576 × 8 — ~2.7× stage-2
+parameters, n_heads at the CLI default 4 either way (768 divides).
+
+**"Even further away" was measured and REFUSED.** The occupancy sweep over
+candidate 55-point sunflowers found that reach beyond 4444 km *deletes* live
+input: 26.1 live corridor slots at r_max 4444, 22.7 at 5555, 19.7 at 6666 —
+the extra reach lands off-window or on land and drags interior points outward
+too. An 89-point sunflower at 5555 km holds 36.5 live slots but at 90 slots of
+width (41 % occupancy). So more points: yes, 55 (next Fibonacci); further
+away: no, the window is the binding constraint at 4444 km. If a future tensor
+widens the window (global 0.25°), this decision should be remeasured.
+
+**Hypotheses.** (1) The larger transformer does NOT help at 34 points — E-010
+found stage-2 skill insensitive to capacity at these widths, and the codec is
+frozen — but (2) it DOES unlock the 55-point width: E-022's width penalty was
+sample efficiency, which capacity can buy back. Concretely: big55 > base55 and
+big55 > big34, while big34 ≈ #282-284.
+
+**Falsifiers.** big34 beating #282-284 by > 3 pooled seed sd falsifies (1) —
+capacity was binding even at 34 points. base55 ≥ big55 falsifies (2) — width
+is free or worthless regardless of capacity, and the interaction story dies.
+
+**Shape choice is Chris's pre-commitment, recorded before the eval.** The
+corridor-AUC eval of E-026 runs tonight in parallel; Chris pre-committed to
+the sunflower if its CI overlaps the leader's. If the eval instead shows the
+sunflower decisively BELOW the best arrangement, E-027 still answers its two
+scale questions on a near-optimal shape, and the width/size winner gets
+re-run on the winning arrangement — that cost is ~9 arms and is accepted in
+exchange for the overnight not idling.
+
+**Cost.** 3 base-sized arms ≈ 5 GPU-h + 6 large arms ≈ 15 GPU-h ⇒ ~20 GPU-h
+≈ **$5.5**, queued one arm per box behind the draining E-026 queues.
+
+---
+
 ## E-026 · Ring of 8 vs ring of 16, in the TRANSFORMER — DISPATCHED 2026-08-14
 
 **Why, from Chris.** *"I am not sure I trust the ridges. Linear is not enough.
