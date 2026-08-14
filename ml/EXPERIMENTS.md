@@ -316,16 +316,41 @@ so they run *beside* the factorial rather than behind it.
 
 ---
 
-### EARLY READS, 2026-08-14 ~17:20Z — forecast ratio only, corridor AUC pends the eval
+### EARLY READS, updated 2026-08-14 ~18:30Z — forecast ratio only, corridor AUC pends the eval
 
-First four arms green; every archive carries the RIGHT geometry
-(`temporal.json.scale.ring_km` = `222` / `222,555` / `222,555,1000` /
-`spiral:222,1000` — the spiral path is proven end-to-end on a box, dash→comma
-included). The forecast-vs-persistence ratio reproduces to sd ≈ 0.002, so one
-seed is readable on THIS metric long before the rolled eval:
+Nine arms green, every archive carrying its correct geometry (all five spiral
+variants verified through the dash→comma path). Forecast-vs-persistence
+ratios; note the between-seed spread visible where two seeds exist (~0.003–
+0.004) is LARGER than e017's within-config sd of 0.00205, so single seeds
+separate only differences ≳0.005 — another reason the corridor AUC decides:
 
-| arm | run | forecast ratio | vs champion 0.18476 |
+| arm | reach km | seeds → ratio | mean |
 |---|---|---|---|
+| no neighbours (e017) | 0 | 0.19216 | 0.19216 |
+| ring 16 @ 222 (density) | 222 | #234 0.18545 | 0.18545 |
+| champion 8 @ 222 | 222 | 0.18476 | 0.18476 |
+| spiral-8, 111→890 | 890 | #264 0.18465 | 0.18465 |
+| two rings 8+8 | 555 | #237 0.18353 · #238 0.17931 | 0.18142 |
+| spiral-13, 222→1000 | 1000 | #261 0.18260 | 0.18260 |
+| three rings narrow 4+4+4 | 1000 | #259 0.18162 | 0.18162 |
+| three rings wide 8+8+8 | 1000 | #255 0.17928 · #256 0.17592 | 0.17760 |
+| **spiral-24, 111→4444** | **4444** | #267 0.17943 · **#273 0.17430** | **0.17687** |
+
+Readings so far, against the pre-registered questions:
+
+- **Reach is the dominant axis and is still paying at 4444 km.** The
+  ordering by mean is monotone in reach; #273's 0.17430 is the best number
+  the programme has recorded, and the deep spiral's two seeds straddle the
+  wide arm's.
+- **Arrangement at fixed width and reach is second-order**: narrow rings
+  0.18162 vs spiral-13 0.18260 — a tie within seed noise, on the one pair
+  built to isolate arrangement.
+- **Density and radial spread at fixed small width buy nothing**: 16@222 ≈
+  8@222 ≈ spiral-8 (0.18545 / 0.18476 / 0.18465).
+- Pending: elliptic (#276–#278), sunflower (#282–#284), spiral-34
+  (#279–#281) — the arms that push the winning axis further.
+
+---|---|---|---|
 | no neighbours (e017, control) | — | 0.19216 | +0.0074 |
 | ring of 16 @ 222 (density) | #234 | 0.18545 | +0.0007 |
 | two rings 8+8 @ 222/555 | #237 | 0.18353 | −0.0012 |
