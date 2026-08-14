@@ -139,15 +139,68 @@ Three readings, in order of how much they constrain the next experiment:
    across scales barely matters, while how large the budget is matters a lot,
    in the wrong direction.
 
-**Known bias of the instrument, stated because it cuts toward the answer.**
-A pooled ridge pays for every extra column in estimation variance, and the
-transformer trains on ~15 M windows rather than 61 k samples, so the probe
-should overstate the penalty on wide shapes. Two things stop that from
+**Known bias of the instrument, stated because it cuts toward the answer —
+and which turned out to be the whole story for the wide shapes; see the
+CORRECTION below.** A pooled ridge pays for every extra column in estimation
+variance, and the transformer trains on ~15 M windows rather than 61 k
+samples, so the probe should overstate the penalty on wide shapes. Two things stop that from
 rescuing a larger array. E-022 measured the same axis in the REAL model —
 9 and 13 touching neighbours, both decisively worse than 1 — so the direction
 is confirmed where we have both instruments. And the ordering *within* equal
 widths (8 @ 222 ≫ 8 @ 445 ≫ 8 @ 890) is a pure information statement that no
 dimension penalty explains, since all three have identical width.
+
+### CORRECTION (2026-08-14, same day) — "larger is WORSE" was my estimator, not the ocean
+
+Chris asked the question that caught this: *"I assume a far away point to be
+less correlated than a closer one, how can it have lower information gain?"*
+The premise was right, and checking it properly broke part of the table above.
+
+**Re-measuring the same shapes with more centres moves every number up, and
+moves the wide and far ones up most:**
+
+| shape | 120 centres | 250 centres | 400 centres |
+|---|---|---|---|
+| ring 8 @ 222 | +0.0112 | +0.0152 | +0.0140 |
+| ring 8 @ 445 | +0.0021 | +0.0105 | — |
+| ring 8 @ 890 | **−0.0032** | **+0.0022** | — |
+| ring 16 @ 222 | +0.0051 | — | **+0.0134** |
+| ring 8 @ 222 + 8 @ 445 | +0.0019 | — | **+0.0128** |
+| ring 8 @ 111 + 8 @ 222 + 8 @ 445 | −0.0033 | — | **+0.0127** |
+
+At 120 centres doubling the width appeared to *halve* the gain (+0.0051 vs
++0.0112); at 400 centres the two are the same to within 0.0006. The 890 km
+ring went from negative to positive. **A ridge pays for every column in
+estimation variance, and at 120 centres that cost exceeded the signal in the
+wide shapes.** The negative gains were an artefact of my sample size. They
+were reported as though they were a property of the ocean, and they were not.
+
+**Why the peak at 222 km is nonetheless real** — `ml/measure_partial_info.py`
+decomposes what a neighbour brings into its two competing halves:
+
+| radius | redundancy r(nb_t, ctr_t) | relevance r(nb_t, ctr_{t+1}) | **partial (new AND relevant)** |
+|---|---|---|---|
+| 28 km | 0.971 | 0.374 | 0.0151 |
+| 56 km | 0.941 | 0.370 | 0.0217 |
+| 111 km | 0.851 | 0.348 | 0.0271 |
+| **222 km** | **0.724** | **0.311** | **0.0280** |
+| 445 km | 0.588 | 0.273 | 0.0236 |
+| 890 km | 0.398 | 0.216 | 0.0193 |
+
+Chris's premise is confirmed in column one: redundancy falls steeply with
+distance, 0.971 → 0.398. But **relevance falls too** — the far pixel knows
+less about *this* pixel's next month, 0.374 → 0.216. Usable information is
+what survives both, and it peaks in the middle at 222 km. This quantity is
+free of any dimension penalty (it is a correlation, not a fit), so the
+interior maximum is a property of the data. The RANKING in E-024 stands; the
+SIGN and the magnitudes at wide shapes did not.
+
+**What the corrected numbers actually say.** A wider array is not harmful —
+it is *redundant*: sixteen points at 222 km buy +0.0134 where eight buy
++0.0140, and twenty-four across three radii buy +0.0127. Double or triple the
+input width, no measurable gain. That is still a reason not to spend GPU on a
+bigger array, but it is a weaker and different reason than the one first
+written here, and the first one was wrong.
 
 **Consequence.** No E-024 training arm is dispatched. The pre-registered
 reason to spend GPU would be a shape the probe ranks above the 222 km ring,
