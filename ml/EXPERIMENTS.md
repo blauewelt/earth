@@ -132,8 +132,10 @@ confounded all along — **how many scales** the input reaches across, and
 | **one ring** | e023r222 (trained) | 8 @ 222 km | 9 |
 | density control (n=1) | #234 | 16 @ 222 km | 17 |
 | **two rings** | #237 / #238 / #239 | 8 @ 222 + 8 @ 555 | 17 |
-| **three rings, wide** | #240 / #241 / #242 | 8 @ 222 + 8 @ 555 + 8 @ 1000 | 25 |
-| **three rings, narrow** | #243 / #244 / #245 | 4 @ 222 + 4 @ 555 + 4 @ 1000 | 13 |
+| **three rings, wide** | #246 / #247 / #248 | 8 @ 222 + 8 @ 555 + 8 @ 1000 | 25 |
+| **three rings, narrow** | #249 / #250 / #251 | 4 @ 222 + 4 @ 555 + 4 @ 1000 | 13 |
+| **spiral of 13** | #252 / #253 / #254 | golden angle, 222 → 1000 km | 14 |
+| **spiral of 8** | dispatching | golden angle, 111 → 890 km | 9 |
 
 The last two are the pair that matters most. They have **identical geometry —
 same three scales, same maximum reach of 1000 km — and differ only in width**,
@@ -151,10 +153,510 @@ Note the density control (#234, 16 points on ONE circle) sits at the same
 slot count as the two-ring arm, so "more points" and "more scales" can be
 read apart at fixed width.
 
-**Cost of the extension:** 6 arms × ~1.5 GPU-h ≈ 9 GPU-h ≈ $2.5, queued
-serially behind #234 and #237–239 on gpu-box-42005419 (the second box has
-been answering `resources_unavailable` since ~12:00Z, so the queue runs
-single-file: ~15 h wall for all ten arms, then one evaluation).
+**Cost of the extension:** 6 arms × ~1.5 GPU-h ≈ 9 GPU-h ≈ $2.5.
+
+**RENUMBERED, 2026-08-14 — the six extension arms are #246–#251, not
+#240–#245.** They had been dispatched pinned to `gpu-box-42005419`, which
+would have run all ten arms single-file (~15 h wall) while other boxes sat
+idle. Chris: *"Make sure to restart the second box or decommission it,
+whatever is needed. More parallel boxes are fine, too."* The stuck box was
+destroyed and four more rented, so the six were cancelled while still queued
+(they had spent nothing) and re-dispatched one arm per box. The old numbers
+are dead and appear nowhere else; the live table is the one below.
+
+---
+
+### SPIRAL — every point on its own bearing (Chris, 2026-08-14)
+
+> *"One additional thing to try: angular coordinates should be different for
+> each point, think of a spiral going outward. this may be the best design, as
+> streams often flow straight, so it's important to catch 1-2 points for many
+> incoming angles."*
+
+This is a **physical** argument, and it names a defect every shape tried so
+far shares. Rings reuse bearings: the three-ring wide arm spends 24 points on
+16 directions, because rings 1 and 3 sit on the same eight. If what carries
+the signal is *which direction the water is arriving from*, those duplicate
+bearings bought nothing — they resolve a radius that is already resolved.
+
+`--ring-km spiral:222-1000` puts point *k* at bearing *k* × **137.50776°**
+(the golden angle, 360·(1−1/φ)) and at a radius growing geometrically from
+r_min to r_max. The golden angle is not decoration: it is the unique rotation
+for which **no prefix of the sequence ever clusters** — the phyllotaxis
+arrangement — so the points are as evenly spread in bearing as that many
+points can be, and stay so if the shape is later truncated.
+
+**The point count is chosen, not rounded.** By the three-distance theorem a
+golden-angle sequence leaves at most three distinct gaps, and the ratio of
+largest to smallest collapses to **φ = 1.618 exactly at Fibonacci n** and is
+**φ² = 2.618 for every other n** (measured over n = 4…29, exact to 1e-6;
+pinned in `test_fibonacci_point_counts_are_the_uniform_ones`). A 12-point
+spiral therefore has a blind sector 2.6× its own smallest gap — the one
+defect the design exists to remove. So the arms carry **8 and 13** points,
+even though 12 would have matched the three-rings-narrow slot count exactly.
+
+**Arms.**
+
+| arm | runs | shape | slots | bearings |
+|---|---|---|---|---|
+| **spiral of 13** | #252 / #253 / #254 | golden angle, 222 → 1000 km | 14 | 13 |
+| **spiral of 8** | dispatching | golden angle, 111 → 890 km | 9 | 8 |
+
+The 13-point spiral is the matched twin of **three rings of four** (#249–#251,
+13 slots, same 222–1000 km reach): one extra slot, and 13 distinct bearings
+against 8. The 8-point spiral is matched to the **champion** e023r222 (9
+slots, 8 bearings, corridor AUC 0.6043) and differs from it in one thing only
+— the ring puts all eight points at 222 km, the spiral spreads them 111 →
+890 km. So the pair separates the two halves of Chris's idea: *more distinct
+bearings* (spiral-13 vs narrow) and *more distinct radii at the same bearing
+count* (spiral-8 vs the champion).
+
+**Falsifier.** Three seeds of spiral-13 that fail to beat three-rings-narrow,
+AND three seeds of spiral-8 that fail to beat the 0.6043 champion, would say
+angular diversity is not what this model is short of, and send the next arm
+back to radius rather than geometry.
+
+**One infrastructure trap, caught before it cost anything.** `ml-train.yml`
+parses the `ring:` field and then runs `RING="${RING//-/,}"` — dashes are how
+a multi-radius list survives an input whose own fields are comma-separated —
+so `ring:spiral:222-1000` arrives at `temporal.py` as `spiral:222,1000`, and
+a `split("-")` parser would have raised **after the embedding**, six GPU-hours
+in. Fixed on the parser side (both separators accepted) rather than in the
+workflow, because `ml-train.yml` sits exactly at the 25-input
+`workflow_dispatch` ceiling and a 26th makes every dispatch in the repo 422.
+
+---
+
+### THE DESIGNS, DRAWN (Chris: *"Please draw all your designs in the experiment log."*)
+
+**These pictures are generated, not drawn.** `ml/draw_stencils.py` lays a
+synthetic all-ocean grid, calls the real `build_stencil` with the real
+latitude row, and decodes each neighbour's (dy, dx) back out of the indices
+the model would actually gather. So they show the integer rounding onto the
+0.25° grid, the 1/cos(φ) zonal stretch, and the half-sector rotation of every
+second ring — three things a freehand circle gets wrong — and no shape can
+change in `temporal.py` without its drawing changing too. (Same argument as
+`rollout_spatial.py --export-mask` writing the globe's AMOC mask rather than
+`app.js` tracing a corridor by hand: the second definition is the one that
+silently goes stale.) Regenerate with `python3 ml/draw_stencils.py --md`.
+
+Two things to read on each drawing. The **scale bar**, because at their own
+scales the 3×3 that lost by 6.3 seed sd and the 222 km ring that won by 4.4
+are the same picture — eight points around a centre, sixty times apart in
+width. And the **bearing rose** under it (72 characters, 5° each), which is
+the quantity the spiral is an argument about: it shows at a glance that three
+rings of eight put `||` doubles on eight of their sixteen directions, while a
+spiral puts one mark on each of its own.
+
+**3x3 touching (E-022)   [#219-#221]**
+
+```
+  9 slots = centre + 8 neighbours  ·  21-35 km (adjacent cells)  ·  8 distinct bearings
+  the first shape tried: eight cells that TOUCH. LOST by 6.3 seed sd.
+
+
+
+           o                   o                   o
+
+
+
+
+
+
+
+
+
+
+
+
+
+           o                   @                   o
+
+
+
+
+
+
+
+
+
+
+
+
+
+           o                   o                   o
+
+
+  |-----------------| 20 km
+  N|......|..........E|.........|.......S|......|..........W|.........|.......N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+**13-point (E-022)   [#222-#224]**
+
+```
+  13 slots = centre + 12 neighbours  ·  21-56 km (adjacent cells)  ·  8 distinct bearings
+  5x5 with the outer diagonals trimmed. LOST by 8.1 seed sd.
+
+
+
+                               o
+
+
+
+
+
+
+                     o         o         o
+
+
+
+
+
+
+           o         o         @         o         o
+
+
+
+
+
+
+                     o         o         o
+
+
+
+
+
+
+                               o
+
+
+  |----------------------| 50 km
+  N|......|..........E|.........|.......S|......|..........W|.........|.......N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+**ring of 8 @ 222 km (E-023)   [e023r222]**
+
+```
+  9 slots = centre + 8 neighbours  ·  222 km  ·  8 distinct bearings
+  WON: corridor AUC 0.6043, +4.4 seed sd. The reigning champion.
+
+
+
+                              .1.
+                      ........   .........
+                 .....                    ...
+               ...                           ...
+            .1.                                 .1
+           ..                                     ..
+         ...                                        ..
+        ..                                           ..
+       ..                                             ..
+       .                                               ..
+      .                                                 .
+     ..                                                 ..
+     .                                                   .
+     .                                                   .
+     .1                        @                        1.
+     .                                                   .
+     .                                                   .
+     ..                                                 ..
+      .                                                 .
+       .                                               ..
+       ..                                             ..
+        ..                                           ..
+          .                                         ..
+           ..                                     ..
+             1.                                 .1
+               ...                           ...
+                  ....                   .....
+                      ........   .........
+                              .1.
+
+
+  |----------------------| 200 km
+  N|.......|.........E|........|........S|.......|.........W|........|........N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+**ring of 16 @ 222 km   [#234]**
+
+```
+  17 slots = centre + 16 neighbours  ·  222 km  ·  16 distinct bearings
+  density at ONE radius. n=1, kept as a control, not an arm.
+
+
+
+                              .1.
+                      ........   .........
+                 ....1                   1...
+               ...                           ...
+            .1.                                 .1
+           ..                                     ..
+         ...                                        ..
+        ..                                           ..
+       ..                                             ..
+      1.                                               .1
+      .                                                 .
+     ..                                                 ..
+     .                                                   .
+     .                                                   .
+     .1                        @                        1.
+     .                                                   .
+     .                                                   .
+     ..                                                 ..
+      .                                                 .
+      1.                                               .1
+       ..                                             ..
+        ..                                           ..
+          .                                         ..
+           ..                                     ..
+             1.                                 .1
+               ...                           ...
+                  ...1                   1....
+                      ........   .........
+                              .1.
+
+
+  |----------------------| 200 km
+  N|...|...|....|....E|...|....|...|....S|...|...|....|....W|...|....|...|....N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+**two rings, 8+8 @ 222/555 km   [#237-#239]**
+
+```
+  17 slots = centre + 16 neighbours  ·  222/555 km  ·  16 distinct bearings
+  outer ring rotated half a sector: 16 bearings, not 8 bearings twice.
+
+
+                           .........
+                    .......         .......
+                ....2                     2...
+              ..                              ....
+            ..                                   ...
+         ...                                        .
+        ..                                           ..
+       ..                                              .
+      .                                                 .
+     2                     ....1....                     2
+    .                   ....       ....                  ..
+   ..                 .1              .1.                 ..
+   .                 ..                 ..                 .
+   .                ..                   ..                .
+   .                .                     .                .
+   .                1          @          1                .
+   .                .                     .                .
+   .                ..                   ..                .
+   .                 ..                 ..                 .
+    .                 .1.              1.                 ..
+    .                   ....       ....                   .
+     2                     ....1....                     2
+      .                                                 ..
+       .                                               .
+        ..                                           ..
+          ..                                       ...
+            ..                                   ...
+              ...                              ..
+                 ...2                     2....
+                    .......          .....
+                           ..........
+
+  |------------------------| 500 km
+  N|...|...|....|....E|...|....|...|....S|...|...|....|....W|...|....|...|....N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+**three rings, 8+8+8 @ 222/555/1000 km   [#240-#242]**
+
+```
+  25 slots = centre + 24 neighbours  ·  222/555/1000 km  ·  16 distinct bearings
+  the widest shape yet: 24 points, but only 16 distinct bearings.
+
+
+
+                              .3.
+                      ........   .........
+                 .....                    ...
+               ...                           ...
+            ...                                 ..
+           ..3                                   3..
+         ...                   ..                   ..
+        ..              .2..... .....2.              ..
+       ..            ...              ....            ..
+      ..           ...                   ..            ..
+      .           ..                       ..           .
+     ..          .2         ...1...         2.          ..
+     .           .        .1.     .1.        .           .
+     .          ..       ..         ..       .           .
+     3          .        1     @     1        .          3
+     .           .       ..         ..       ..          .
+     .           .        .1.     .1.        .           .
+     .           .2         ...1...         2.          ..
+      .           ..                       ..           .
+       .           ...                   ..            ..
+       ..            ....              ...            ..
+        ..              .2..... .....2.              ..
+          .                   ..                    ..
+           ..3                                   3..
+             ..                                 ..
+               ...                            ..
+                  ....                   .....
+                      ........    ........
+                              .3..
+
+
+  |------------------------| 1000 km
+  N|...|...||...|....E|...|...||...|....S|...|...||...|....W|...|...||...|....N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+**three rings, 4+4+4 @ 222/555/1000 km   [#243-#245]**
+
+```
+  13 slots = centre + 12 neighbours  ·  222/555/1000 km  ·  8 distinct bearings
+  same reach at half the width. 12 points on 8 bearings, 4 of them twice.
+
+
+
+                              .3.
+                      ........   .........
+                 .....                    ...
+               ...                           ...
+            ...                                 ..
+           ..                                     ..
+         ...                   ..                   ..
+        ..              ....... .......              ..
+       ..            ...              ....            ..
+      ..           ..2                   2.            ..
+      .           ..                       ..           .
+     ..          ..         ...1...         ..          ..
+     .           .        ...     ...        .           .
+     .          ..       ..         ..       .           .
+     3          .        1     @     1        .          3
+     .           .       ..         ..       ..          .
+     .           .        ...     ...        .           .
+     .           ..         ...1...         ..          ..
+      .           ..                       ..           .
+       .           ..2                   2.            ..
+       ..            ....              ...            ..
+        ..              ....... .......              ..
+          .                   ..                    ..
+           ..                                     ..
+             ..                                 ..
+               ...                            ..
+                  ....                   .....
+                      ........    ........
+                              .3..
+
+
+  |------------------------| 1000 km
+  N|.......|.........E|........|........S|.......|.........W|........|........N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+**spiral of 13, 222 -> 1000 km   [#246-#248]**
+
+```
+  14 slots = centre + 13 neighbours  ·  222/1000 km (geometric ramp)  ·  13 distinct bearings
+  the twin of the row above +1 slot: same reach, 13 bearings not 8.
+
+                          ..........
+                    ......          .......
+                ....                       ....
+             ...                               ...
+           ..                                     ..
+         ..                                         ..
+       ..                                             ..
+     ...                             9                  .
+    ..                                                   .
+   ..                                                     .
+   .                     6                                 .
+  .       b                                                 .
+  .                                                     c   ..
+ .                             1       4                     .
+ .                                                           .
+ .                                                           .
+ .                     3       @                             .
+ .                                                           .
+ .                                           7               .
+ .                                  2                        .
+ ..              8                                          ..
+  .                                                         .
+   .                         5                             .
+   ..                                                     .
+    ..                                                   .
+      .                                                 .
+       ..                              a              ..
+         ..                                         ...
+          ...                                     ..
+             ...                               ...
+               d...                        ....
+                   .......          .......
+                          . ........
+  |----------------------------| 1000 km
+  N|...|.....|...|...E..|......|...|....S..|...|.....|.....W.|...|.....|......N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+**spiral of 8, 111 -> 890 km   [#249-#251]**
+
+```
+  9 slots = centre + 8 neighbours  ·  111/890 km (geometric ramp)  ·  8 distinct bearings
+  the champion's exact width, spent on eight radii instead of one.
+
+
+                      ...................
+                 .....                   ....
+              ....                           ....
+           ...                                  ...
+          ..                                       ..
+        ..                                           ..
+       .                                              ...
+      .                                                 ..
+     .                6                                  ..
+    .                                                     ..
+   .                                                       .
+  ..                                                        .
+  .                                   4                     .
+  .                            1                            .
+ .                                                           .
+ .                       3     @                             .
+ .                                                           .
+  .                                2                        .
+  .                                                 7       .
+  .                                                        ..
+   .                                                       .
+   ..                        5                            .
+    .8                                                   ..
+     ..                                                 ..
+       .                                              ..
+        ..                                           ..
+         ...                                       ..
+            ..                                  ...
+              ....                            ..
+                  ....                   .....
+                      ...................
+
+  |-------------------------------| 1000 km
+  N|.........|.......E..|......|........S..|.........|.....W.|.........|......N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+| shape                                | runs      | slots | pts | reach km | bearings | b/pt | gap max/min |
+|--------------------------------------|-----------|-------|-----|----------|----------|------|-------------|
+| 3x3 touching (E-022)                 | #219-#221 | 9     | 8   | 21-35    | 8        | 1.00 | -           |
+| 13-point (E-022)                     | #222-#224 | 13    | 12  | 21-56    | 8        | 0.67 | -           |
+| ring of 8 @ 222 km (E-023)           | e023r222  | 9     | 8   | 213-224  | 8        | 1.00 | -           |
+| ring of 16 @ 222 km                  | #234      | 17    | 16  | 213-229  | 16       | 1.00 | -           |
+| two rings, 8+8 @ 222/555 km          | #237-#239 | 17    | 16  | 213-558  | 16       | 1.00 | -           |
+| three rings, 8+8+8 @ 222/555/1000 km | #240-#242 | 25    | 24  | 213-1002 | 16       | 0.67 | -           |
+| three rings, 4+4+4 @ 222/555/1000 km | #243-#245 | 13    | 12  | 213-1002 | 8        | 0.67 | -           |
+| spiral of 13, 222 -> 1000 km         | #246-#248 | 14    | 13  | 223-1003 | 13       | 1.00 | 1.62        |
+| spiral of 8, 111 -> 890 km           | #249-#251 | 9     | 8   | 111-892  | 8        | 1.00 | 1.62        |
+
+---
 
 ---
 
