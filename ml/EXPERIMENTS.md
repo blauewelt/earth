@@ -44,6 +44,58 @@ low-pass).
 
 ---
 
+<a id="e-025"></a>
+## E-025 · Forcing (CO₂ / energy balance) — SCOPED 2026-08-14, plan written, not dispatched
+
+**Why, from Chris.** *"How should the co2 / the energy balance be modeled as
+part of the prediction? Can you thoroughly investigate and make a proposal
+that can be implemented by a less capable model?"*
+
+**Full proposal: `ml/plans/E025_forcing.md`.** The scoping measurements
+(`ml/measure_forcing_info.py`, no GPU) that shape it:
+
+**1. Over 1982–2024, CO₂ *is* the calendar.** r with a linear time index:
+CO₂ **+0.9905**, CO₂ deseasonalised **+0.9946**, AR6 anthropogenic ERF
+**+0.9921**. Independent of time: ONI −0.0901, sunspots −0.2519, natural ERF
++0.3851. A model handed CO₂ over this window has been handed `t`, and would
+fit the trend, score well on held-out years *inside* the span, and be
+indistinguishable from the memorisation E-021 caught — while looking like
+physics.
+
+**2. At one step, forcing is worth almost nothing, because the state already
+contains it.** Incremental held-out variance over the centre's own 3-month
+history: linear time +0.00165, CO₂ +0.00196, **CO₂ beyond a clock +0.00043**,
+ONI +0.00005, sunspots +0.00044, everything together +0.00243 — against
+E-023's ring at +0.0112. The shuffled-CO₂ control goes negative (−0.00034),
+so the instrument is working and the small gain is real temporal alignment.
+
+*Caveat recorded rather than buried:* a pooled linear probe gives a global
+scalar one shared coefficient, so it is structurally blind to ENSO's
+patterned response. The ONI row means "not measurable this way", not zero,
+and the plan's R1 closes it with a per-pixel regression before spending GPU.
+
+**3. The energy balance is an OUTPUT and must not be an input.** Ocean heat
+content is a vertical integral of the same temperature field the codec embeds
+and the model predicts; feeding it in is feeding a smoothed copy of the
+target. Radiative forcing (CO₂, ERF) pushes the ocean and is a legitimate
+input; OHC/EEI is the ocean's response and belongs on the validation side.
+This distinction is the main structural claim of the proposal.
+
+**Consequence for the design.** The proposal splits forcing into a SLOW
+channel (CO₂/ERF, ~0.99 collinear with time, testable **only** on an era
+split: train 1982–2010, hold out 2011–2024 entirely) and a FAST channel
+(ENSO/volcanic/solar, independent of time, testable on the standard split);
+ships a bare linear-time control arm with every slow-channel arm, so that
+"we added a clock" is a reportable outcome; and makes the 20-year projection
+scenario-conditional (`flat` vs `ssp245`), with the *difference* between
+scenarios as the output rather than either trajectory.
+
+**Not dispatched.** ~20 GPU-h, ~$5.4, and it needs its own era-split baseline
+arm (nine runs at R3, not six) — worth doing deliberately rather than at the
+end of a long night.
+
+---
+
 <a id="e-024"></a>
 ## E-024 · Is a LARGER array of input pixels better? — MEASURED 2026-08-14, no GPU spent
 
