@@ -168,6 +168,9 @@ def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
     NBR = np.full((len(ys), stencil), -1, np.int64)
     NBR[:, 0] = np.arange(len(ys))
     if ring_km > 0:
+        # NB: STENCILS is not consulted in ring mode, which is why slot counts
+        # with no fixed-table entry (17 = centre + 16 ring points, E-026) are
+        # legal here and would KeyError below.
         if lats is None:
             raise ValueError("ring geometry needs `lats` — the zonal step "
                              "depends on latitude")
@@ -815,7 +818,7 @@ def main():
                          "at 167-222 km (3x the touching neighbours'), because "
                          "at one cell the neighbour's embedding correlates "
                          "0.97 with the centre's and is nearly a copy of it.")
-    ap.add_argument("--stencil", type=int, default=1, choices=(1, 9, 13),
+    ap.add_argument("--stencil", type=int, default=1, choices=(1, 9, 13, 17),
                     help="E-022 SPATIAL INPUT: predict the centre pixel's "
                          "z_{t+1} from this many neighbourhood pixels' z per "
                          "step (1 = the original per-pixel model; 9 = 3x3; "

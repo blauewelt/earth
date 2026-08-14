@@ -281,3 +281,26 @@ def test_ring_needs_latitudes():
     H, W, ys, xs, lats = _ring_grid()
     with pytest.raises(ValueError):
         build_stencil(H, W, ys, xs, 9, ring_km=200.0, lats=None)
+
+
+def test_ring17_is_sixteen_points_on_the_circle():
+    """E-026: 17 slots = centre + 16 ring points. The fixed STENCILS table has
+    no 17 entry on purpose — ring mode never consults it — so this also pins
+    that a slot count with no table entry is legal WITH a radius and would
+    KeyError without one."""
+    H, W, ys, xs, lats = _ring_grid()
+    NBR = build_stencil(H, W, ys, xs, 17, ring_km=200.0, lats=lats)
+    assert NBR.shape == (len(ys), 17)
+    assert (NBR[:, 0] == np.arange(len(ys))).all()
+    mid = np.where((ys == H // 2) & (xs == W // 2))[0][0]
+    ring = NBR[mid, 1:]
+    assert (ring >= 0).all(), ring
+    assert len(set(ring.tolist())) == 16, "16 ring points must be distinct"
+    # and they really are on a 200 km circle
+    from temporal import ring_offsets
+    for dy, dx in ring_offsets(float(lats[H // 2]), 200.0, 16, 0.25):
+        km = np.hypot(dy * 27.83,
+                      dx * 27.83 * np.cos(np.radians(float(lats[H // 2]))))
+        assert abs(km - 200.0) < 30.0, (dy, dx, km)
+    with pytest.raises(KeyError):
+        build_stencil(H, W, ys, xs, 17)          # no radius -> no table entry
