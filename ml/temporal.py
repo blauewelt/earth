@@ -152,7 +152,7 @@ def ring_offsets(lat_deg, r_km, n_pts, dlat_deg):
 GOLDEN_ANGLE = 137.50776405003785     # 360 * (1 - 1/phi)
 
 
-def spiral_offsets(lat_deg, r_min, r_max, n_pts, dlat_deg):
+def spiral_offsets(lat_deg, r_min, r_max, n_pts, dlat_deg, aspect=1.0):
     """E-026 SPIRAL (Chris, 2026-08-14): *"angular coordinates should be
     different for each point, think of a spiral going outward ... streams
     often flow straight, so it's important to catch 1-2 points for many
@@ -166,15 +166,26 @@ def spiral_offsets(lat_deg, r_min, r_max, n_pts, dlat_deg):
     three times over; a 24-point spiral samples 24 bearings once each. If what
     matters is catching a straight inflow from ANY direction rather than
     resolving one radius finely, that is the better trade — which is exactly
-    the argument Chris made."""
+    the argument Chris made.
+
+    `aspect` < 1 makes the spiral ELLIPTIC (Chris again, same day: *"the
+    north pole is less important than having a receptive window across 4k km
+    east / west"*): the meridional (north-south) extent is compressed to
+    `aspect` times the zonal, so `r_min`/`r_max` name the ZONAL semi-axis and
+    the shape reaches r*aspect north-south. The number is not a style choice
+    — it is MEASURED from the flow itself (ml/measure_flow_anisotropy.py:
+    geostrophic |u|/|v| from the tensor's own SSH channel), because water
+    that moves twice as far east as north per month is best watched by a
+    window with the same proportions. Bearings stay distinct: the compression
+    is a monotone map of angle, so no two points collapse onto one."""
     coslat = max(np.cos(np.radians(lat_deg)), 0.05)
     out = []
     for k in range(n_pts):
         f = k / max(n_pts - 1, 1)
         r_km = r_min * (r_max / r_min) ** f      # geometric: the near field,
         th = np.radians(k * GOLDEN_ANGLE)        # where information peaks,
-        dy = (r_km / KM_PER_DEG) * np.cos(th) / dlat_deg      # gets more of
-        dx = (r_km / (KM_PER_DEG * coslat)) * np.sin(th) / dlat_deg  # the pts
+        dy = (aspect * r_km / KM_PER_DEG) * np.cos(th) / dlat_deg   # gets
+        dx = (r_km / (KM_PER_DEG * coslat)) * np.sin(th) / dlat_deg # more pts
         out.append((int(round(dy)), int(round(dx))))
     return out
 
@@ -221,13 +232,26 @@ def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
         # cost a workflow edit: `ml-train.yml` sits exactly at the 25-input
         # ceiling and a 26th breaks every dispatch in the repo (ml/CLAUDE.md
         # §7). Pinned by test_spiral_survives_the_workflow_dash_rewrite.
-        r0, r1 = (float(v) for v in
-                  re.split(r"[-,]", str(ring_km)[len("spiral:"):]))
+        # 2 fields = circular (spiral:111-4444); an optional 3rd is the
+        # ELLIPSE aspect, meridional/zonal (spiral:111-4444-0.5) — measured
+        # from the flow, see spiral_offsets. Anything else is a typo and
+        # must die here, not 6 GPU-hours in.
+        parts = [float(v) for v in
+                 re.split(r"[-,]", str(ring_km)[len("spiral:"):])]
+        if len(parts) not in (2, 3):
+            raise ValueError(f"spiral wants rmin-rmax[-aspect], got {ring_km}")
+        r0, r1 = parts[0], parts[1]
+        asp = parts[2] if len(parts) == 3 else 1.0
+        if not (0 < asp <= 1):
+            raise ValueError(f"spiral aspect must be in (0, 1], got {asp} — "
+                             "it is meridional/zonal, and >1 would claim the "
+                             "flow moves farther north than east")
         dlat = float(np.round(np.diff(lats).mean(), 6))
         for y in np.unique(ys):
             sel = np.where(ys == y)[0]
             for k, (dy, dx) in enumerate(
-                    spiral_offsets(float(lats[y]), r0, r1, stencil - 1, dlat)):
+                    spiral_offsets(float(lats[y]), r0, r1, stencil - 1, dlat,
+                                   aspect=asp)):
                 yy, xx = y + dy, xs[sel] + dx
                 if not (0 <= yy < H):
                     continue

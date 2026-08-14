@@ -472,3 +472,36 @@ def test_spiral_survives_the_workflow_dash_rewrite():
             build_stencil(H, W, ys, xs, 9, ring_km=s, lats=lats),
             build_stencil(H, W, ys, xs, 9, ring_km=s.replace("-", ","),
                           lats=lats))
+
+
+def test_elliptic_spiral_compresses_meridionally():
+    """spiral:111-4444-0.5 must reach ~half as far north-south as east-west,
+    leave every bearing distinct, and parse identically through the workflow's
+    dash->comma rewrite. The aspect is meridional/zonal; r names the ZONAL
+    semi-axis."""
+    from temporal import spiral_offsets
+    lat0, dlat = 40.0, 0.25
+    kmy, kmx = 111.32 * dlat, 111.32 * dlat * np.cos(np.radians(lat0))
+    for asp in (1.0, 0.5, 0.3):
+        offs = spiral_offsets(lat0, 111.0, 4444.0, 24, dlat, aspect=asp)
+        ys_km = [abs(dy) * kmy for dy, dx in offs]
+        xs_km = [abs(dx) * kmx for dy, dx in offs]
+        # the extreme meridional reach must be ~aspect * the zonal reach
+        ratio = max(ys_km) / max(xs_km)
+        assert abs(ratio - asp) < 0.22 * asp + 0.05, (asp, ratio)
+        angs = sorted(np.degrees(np.arctan2(dx, dy)) % 360 for dy, dx in offs)
+        gaps = [b - a for a, b in zip(angs, angs[1:])]
+        assert min(gaps) > 1.0, f"aspect {asp} collapsed bearings"
+
+    H, W = 361, 481
+    ys, xs = np.meshgrid(np.arange(H), np.arange(W), indexing="ij")
+    ys, xs = ys.ravel(), xs.ravel()
+    lats = 40.0 + (np.arange(H) - H // 2) * dlat
+    a = build_stencil(H, W, ys, xs, 25, ring_km="spiral:111-4444-0.5", lats=lats)
+    b = build_stencil(H, W, ys, xs, 25, ring_km="spiral:111,4444,0.5", lats=lats)
+    c = build_stencil(H, W, ys, xs, 25, ring_km="spiral:111-4444", lats=lats)
+    assert np.array_equal(a, b), "dash and comma spellings must agree"
+    mid = H // 2 * W + W // 2
+    assert not np.array_equal(a[mid], c[mid]), "aspect 0.5 == circular?"
+    with pytest.raises(ValueError):
+        build_stencil(H, W, ys, xs, 25, ring_km="spiral:111-4444-1.5", lats=lats)
