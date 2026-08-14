@@ -56,6 +56,11 @@ DESIGNS = [
      "the twin of the row above +1 slot: same reach, 13 bearings not 8."),
     ("spiral of 8, 111 -> 890 km", 9, "spiral:111-890", "#264-#266",
      "the champion's exact width, spent on eight radii instead of one."),
+    ("spiral of 24, 111 -> 4444 km", 25, "spiral:111-4444", "PRIORITY",
+     "24 bearings AND 4444 km: the first shape that can hold a month of"
+     " Gulf Stream."),
+    ("spiral of 36, 111 -> 4444 km", 37, "spiral:111-4444", "PRIORITY",
+     "the same reach at 1.5x the density — does the extra angle pay?"),
 ]
 
 
@@ -64,8 +69,16 @@ def offsets_of(slots, ring_km):
 
     A synthetic all-ocean grid big enough that no point falls off it, one
     centre pixel picked in the middle, and the neighbour indices decoded back
-    into offsets. Nothing here re-derives the geometry."""
-    H, W = 121, 161
+    into offsets. Nothing here re-derives the geometry.
+
+    The grid is SIZED FROM THE DESIGN, not fixed. It was 121x161, which is
+    ample for a 1000 km ring and silently truncates a 4444 km spiral: six of
+    its twenty-four points fell off the synthetic edge, `build_stencil`
+    correctly wrote -1, and the table reported an 18-point shape reaching
+    1999 km. The drawing would have been of a design nobody dispatched."""
+    r_max = max(nominal_radii(ring_km) or [60.0])
+    half = int(r_max / (KM_PER_DEG * np.cos(np.radians(LAT0)) * DLAT)) + 4
+    H, W = 2 * half + 1, 2 * half + 1
     y0, x0 = H // 2, W // 2
     ys, xs = np.meshgrid(np.arange(H), np.arange(W), indexing="ij")
     ys, xs = ys.ravel(), xs.ravel()
@@ -125,7 +138,7 @@ def draw(title, slots, ring_km, runs, note, width=63):
         for rad in (nom[-1:] if str(ring_km).startswith("spiral:") else nom):
             for a in np.arange(0, 2 * np.pi, 0.035):
                 put(rad * np.sin(a), rad * np.cos(a), ".")
-    ALPH = "123456789abcdefghijklmnopqrstuvwx"
+    ALPH = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
     for k, o in enumerate(offs[1:]):
         if o is None:
             continue
@@ -142,7 +155,7 @@ def draw(title, slots, ring_km, runs, note, width=63):
         put(x, y, ch, over=True)
     put(0, 0, "@", over=True)
 
-    nb, rose = bearings(pts)
+    (nb, nraw), rose = bearings(pts)
     rad_s = (f"{min(np.hypot(*p) for p in pts):.0f}-"
              f"{max(np.hypot(*p) for p in pts):.0f} km (adjacent cells)"
              if not nom else
@@ -150,7 +163,8 @@ def draw(title, slots, ring_km, runs, note, width=63):
              + (" (geometric ramp)" if str(ring_km).startswith("spiral:") else ""))
     head = (f"{title}   [{runs}]\n"
             f"  {slots} slots = centre + {len(pts)} neighbours  ·  {rad_s}  ·  "
-            f"{nb} distinct bearings\n"
+            f"{nb} bearings >=10 deg apart"
+            + (f" ({nraw} distinct to 1 deg)" if nraw != nb else "") + "\n"
             f"  {note}")
     body = "\n".join("".join(r).rstrip() for r in grid)
     foot = (scale_bar(span, width) + "\n" + rose + "\n"
@@ -163,10 +177,16 @@ def bearings(pts, tol=10.0):
     """How many DIRECTIONS this shape watches, and a 5-degree-per-character
     rose showing which — the quantity Chris's spiral is an argument about.
 
-    Bearings are clustered at `tol` because the 0.25 deg rounding perturbs
-    them: three rings of eight nominally sample sixteen directions, and read
-    literally off the rounded cells they look like twenty. Twenty would be a
-    fiction of the grid, not a property of the design."""
+    TWO counts are reported and neither alone is honest. The 0.25 deg rounding
+    perturbs bearings, so read literally off the rounded cells a three-ring
+    shape that nominally samples sixteen directions looks like twenty — a
+    fiction of the grid. Clustering at 10 deg removes that fiction, and then
+    UNDERSTATES a dense spiral: at 36 points the golden angle puts some
+    bearings 4.8 deg apart, which merge under a 10 deg rule even though at
+    4000 km those two points sit 335 km apart and are in no sense the same
+    place. So `n10` is "directions at least 10 deg apart" and `nraw` is
+    "distinct to 1 deg"; for rings they agree, and where they diverge the gap
+    is itself the fact worth reading."""
     b = sorted(np.degrees(np.arctan2(x, y)) % 360 for x, y in pts)
     keep = []
     for v in b:
@@ -175,11 +195,12 @@ def bearings(pts, tol=10.0):
     if len(keep) > 1 and min((keep[0] - keep[-1]) % 360,
                              (keep[-1] - keep[0]) % 360) <= tol:
         keep.pop()
+    raw = len({round(v) % 360 for v in b})
     bins = ["."] * 72
     for v in b:
         bins[int(v // 5) % 72] = "|"
     r = "".join(bins)
-    return len(keep), ("  N" + r[:18] + "E" + r[18:36] + "S" + r[36:54]
+    return (len(keep), raw), ("  N" + r[:18] + "E" + r[18:36] + "S" + r[36:54]
                        + "W" + r[54:] + "N   <- bearings watched, 5 deg/char")
 
 
@@ -215,16 +236,16 @@ def table():
     """One row per design. `bearings/point` is the efficiency Chris's spiral
     argues for: a shape that spends two points on one direction has bought the
     second one nothing, if direction is what carries the signal."""
-    rows = [("shape", "runs", "slots", "pts", "reach km", "bearings", "b/pt",
-             "gap max/min")]
+    rows = [("shape", "runs", "slots", "pts", "reach km", "bear>=10", "bear~1",
+             "b/pt", "gap max/min")]
     for title, slots, ring_km, runs, _ in DESIGNS:
         offs = offsets_of(slots, ring_km)
         pts = [to_km(*o) for o in offs[1:] if o is not None]
-        nb, _ = bearings(pts)
+        (nb, nraw), _ = bearings(pts)
         rows.append((title, runs, str(slots), str(len(pts)),
                      f"{min(np.hypot(*p) for p in pts):.0f}-"
                      f"{max(np.hypot(*p) for p in pts):.0f}",
-                     str(nb), f"{nb / len(pts):.2f}",
+                     str(nb), str(nraw), f"{nb / len(pts):.2f}",
                      f"{gap_ratio(len(pts)):.2f}"
                      if str(ring_km).startswith("spiral:") else "-"))
     w = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
@@ -257,11 +278,11 @@ def svg(cols=3, cell=300, pad=62):
         k = R / S                                  # px per km, SHARED by all
         offs = offsets_of(slots, ring_km)
         pts = [to_km(*o) for o in offs[1:] if o is not None]
-        nb, _r = bearings(pts)
+        (nb, nraw), _r = bearings(pts)
         out.append(f'<text x="{ox + 10}" y="{oy - 32}" fill="#e6edf3" '
                    f'font-size="13">{title}</text>')
         out.append(f'<text x="{ox + 10}" y="{oy - 16}" fill="#7d8590" '
-                   f'font-size="11">{runs} · {slots} slots · {nb} bearings'
+                   f'font-size="11">{runs} · {slots} slots · {nraw} bearings'
                    f'</text>')
         for rad in nominal_radii(ring_km) or []:
             out.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{rad * k:.1f}" '
