@@ -57,8 +57,8 @@ larger transformer?"*
 
 | | sunflower-34 (35 slots) | sunflower-55 (56 slots) |
 |---|---|---|
-| **576×8 (standard)** | #282/#283/#284 (E-026, running) | **base55** #288/#289/#290 |
-| **768×12 (2.7× params)** | **big34** #285/#286/#287 | **big55** #291/#292/#293 |
+| **576×8 (standard)** | #282/#283/#284 (E-026) | **base55** #288/#289/#290 |
+| **768×12 (2.7× params)** | **big34** #295/#296/#297 (rerun, see incident) | **big55** #298/#299/#300 (rerun) |
 
 All four cells share the identical recipe otherwise: 60k steps, expdecay,
 K=24, U=1, frozen run-62 codec, `spiral:111-4444-0.71-0.5`. The larger
@@ -94,6 +94,21 @@ exchange for the overnight not idling.
 
 **Cost.** 3 base-sized arms ≈ 5 GPU-h + 6 large arms ≈ 15 GPU-h ⇒ ~20 GPU-h
 ≈ **$5.5**, queued one arm per box behind the draining E-026 queues.
+
+**INCIDENT, ~22:00Z — the 768×12 arms died silently at the finish line, and
+are re-dispatched fixed.** #285/#286 trained their full 60k steps cleanly
+(~2 h each, the expected big-model pace) and then hit CUDA OOM the moment
+eval 1 pushed its 20,000 held-out windows through the model in a single
+forward — "tried to allocate 5.9 GB, 1.1 GB free", on two *different* boxes,
+so config, not lemon. Both runs went green with no `temporal.json`: the
+backgrounded-trainer silent-death signature, reproduced by a size change.
+The one-shot eval batch was never a decision — it fit every 576×8 head ever
+trained, so it never surfaced. `_chunked_forward` (4096-row slices,
+numerically exact) now covers both 20k-window call sites; #287/#291–#293
+were cancelled before wasting their own two hours; the six big arms rerun as
+**#295–#297 (big34)** and **#298–#300 (big55)** on the fixed code. Cost of
+the incident: ~4.5 GPU-h ≈ $1.2. The base55 arms (#288–#290, 576×8) were
+never at risk and continue.
 
 ---
 
