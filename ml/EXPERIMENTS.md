@@ -129,6 +129,39 @@ depend on a difference smaller than the measurement.
 the e017 recipe. **Controls:** e022s9 (same shape at 1 cell, already run) and
 e017 (no neighbours, already run) — no new baseline runs needed.
 
+**INTERIM, two seeds home (2026-08-14 ~09:1xZ) — the ring moves the forecast
+objective, which neither E-022 arm did.** Geometry verified in both archives
+(`scale.ring_km` 222.0, `stencil` 9, params 32,338,432 — identical to its 3×3
+control, so the only difference is distance).
+
+| arm | forecast ratio, mean (sd) | seeds |
+|---|---|---|
+| e017 (no neighbours, n=3) | 0.19216 (0.00205) | 0.19366 / 0.19300 / 0.18982 |
+| e022s9 (3×3 at 1 cell, n=3) | 0.19247 (0.00150) | 0.19290 / 0.19371 / 0.19081 |
+| **e023r222 (ring at 222 km, n=2)** | **0.18634 (0.00209)** | **0.18782 / 0.18487** |
+
+−0.0058 against the baseline, i.e. **−2.8 baseline seed sd**, and **both ring
+seeds sit below the baseline's lowest seed** (0.18982) and below every 3×3
+seed. On the metric whose seed sd is ~0.002 that is a real displacement, not
+noise — a 3.0% relative cut in one-step z-MSE where nine touching neighbours
+bought nothing.
+
+**Both of my calibration expectations were wrong, in opposite directions**,
+and that is worth more than the number itself. I pre-registered that the
+linear probe *overstates* what the transformer realises, because at 1 cell it
+predicted +0.63% and the real 3×3 delivered ~0%. At 222 km it predicted +1.6%
+and the real ring delivered ~3.0% — it *understated* by about a factor of two.
+So the probe ranked the radii correctly (its central claim, and the one the
+radius choice rested on) and was wrong about magnitude at both ends. A probe
+that gets the ordering right and the size wrong is still the right instrument
+for choosing a radius and the wrong one for predicting an effect.
+
+**This does NOT decide E-023.** The pre-registered primary is the rolled
+corridor AUC, and E-022 is the standing proof that the two can disagree: its
+3×3 arm was flat on this exact forecast metric and 6.3 seed sd WORSE once
+rolled. One-step error and twelve-step behaviour are different questions.
+Seed 2 (#232) and the gated evaluation follow.
+
 **DISPATCHED 2026-08-14 ~05:15Z: #230 / #231 / #232** (seeds 0/1/2,
 `stencil:9,ring:222`, 60k steps, job_timeout 400) — seeds 0 and 2 pinned to
 gpu-box-42005419, seed 1 to gpu-box-40623952. They QUEUE behind the R4
