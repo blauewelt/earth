@@ -132,10 +132,10 @@ confounded all along — **how many scales** the input reaches across, and
 | **one ring** | e023r222 (trained) | 8 @ 222 km | 9 |
 | density control (n=1) | #234 | 16 @ 222 km | 17 |
 | **two rings** | #237 / #238 / #239 | 8 @ 222 + 8 @ 555 | 17 |
-| **three rings, wide** | #246 / #247 / #248 | 8 @ 222 + 8 @ 555 + 8 @ 1000 | 25 |
-| **three rings, narrow** | #249 / #250 / #251 | 4 @ 222 + 4 @ 555 + 4 @ 1000 | 13 |
-| **spiral of 13** | #252 / #253 / #254 | golden angle, 222 → 1000 km | 14 |
-| **spiral of 8** | dispatching | golden angle, 111 → 890 km | 9 |
+| **three rings, wide** | #255 / #256 / #257 | 8 @ 222 + 8 @ 555 + 8 @ 1000 | 25 |
+| **three rings, narrow** | #249 / #259 / #260 | 4 @ 222 + 4 @ 555 + 4 @ 1000 | 13 |
+| **spiral of 13** | #261 / #262 / #263 | golden angle, 222 → 1000 km | 14 |
+| **spiral of 8** | #264 / #265 / #266 | golden angle, 111 → 890 km | 9 |
 
 The last two are the pair that matters most. They have **identical geometry —
 same three scales, same maximum reach of 1000 km — and differ only in width**,
@@ -155,14 +155,32 @@ read apart at fixed width.
 
 **Cost of the extension:** 6 arms × ~1.5 GPU-h ≈ 9 GPU-h ≈ $2.5.
 
-**RENUMBERED, 2026-08-14 — the six extension arms are #246–#251, not
-#240–#245.** They had been dispatched pinned to `gpu-box-42005419`, which
-would have run all ten arms single-file (~15 h wall) while other boxes sat
-idle. Chris: *"Make sure to restart the second box or decommission it,
-whatever is needed. More parallel boxes are fine, too."* The stuck box was
-destroyed and four more rented, so the six were cancelled while still queued
-(they had spent nothing) and re-dispatched one arm per box. The old numbers
-are dead and appear nowhere else; the live table is the one below.
+**RENUMBERED TWICE, 2026-08-14 — the live numbers are in the table below;
+#240–#254 are dead.** Chris: *"Make sure to restart the second box or
+decommission it, whatever is needed. More parallel boxes are fine, too."* The
+stuck box was destroyed and four more rented, and the arms — all originally
+pinned to `gpu-box-42005419`, which would have run the lot single-file for
+~15 h while four boxes sat idle — were cancelled while still queued (they had
+spent nothing) and re-dispatched one arm per box.
+
+The second renumbering is worth recording, because it was **a real bug wearing
+the costume of a known one**. The re-dispatch queued and stayed queued while
+the API reported every new runner `online` and `idle` — which `ml/CLAUDE.md`
+§2 tells you to read as a wedged runner and cure by cancel-and-re-dispatch.
+It was not that. `runs-on:` matches **labels, never names**, and
+`scripts/gpu_box.mjs` had never put the box's own name in `--labels`; the two
+older boxes carry it only because someone added it by hand. So
+`runner: gpu-box-46045353` matched nothing at all, and the documented cure
+would have re-queued the arms into the same hole indefinitely, each cycle
+looking like more evidence for the wrong diagnosis. Labels added to the live
+runners, `gpu_box.mjs` fixed at registration, arms re-dispatched. Adding a
+label does NOT rescue an already-queued job — measured; the match is decided
+when the job is queued — which is why the numbers moved a second time.
+
+**The fleet now runs five boxes, one arm each, three deep:** two rings on
+`gpu-box-42005419`, wide on `-46045353`, narrow on `-47094145`, spiral-13 on
+`-45731106`, spiral-8 on `-47566395`. ~4.5 h wall for fifteen arms instead of
+~22 h, at ~$1.35/h across the fleet.
 
 ---
 
@@ -199,10 +217,10 @@ even though 12 would have matched the three-rings-narrow slot count exactly.
 
 | arm | runs | shape | slots | bearings |
 |---|---|---|---|---|
-| **spiral of 13** | #252 / #253 / #254 | golden angle, 222 → 1000 km | 14 | 13 |
-| **spiral of 8** | dispatching | golden angle, 111 → 890 km | 9 | 8 |
+| **spiral of 13** | #261 / #262 / #263 | golden angle, 222 → 1000 km | 14 | 13 |
+| **spiral of 8** | #264 / #265 / #266 | golden angle, 111 → 890 km | 9 | 8 |
 
-The 13-point spiral is the matched twin of **three rings of four** (#249–#251,
+The 13-point spiral is the matched twin of **three rings of four** (#249/#259/#260,
 13 slots, same 222–1000 km reach): one extra slot, and 13 distinct bearings
 against 8. The 8-point spiral is matched to the **champion** e023r222 (9
 slots, 8 bearings, corridor AUC 0.6043) and differs from it in one thing only
