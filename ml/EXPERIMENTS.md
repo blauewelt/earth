@@ -223,17 +223,69 @@ resource-unavailable at its Vast host — start queued; the stencil:13 trio
 dispatched once it woke: **#225 / #226 / #227** on gpu-box-40623952
 (same 60k/expdecay recipe, ~20 min behind the s9 trio).
 
+### RESULT (2026-08-14 07:5xZ) — spatial coupling does not help, and at this cadence it HURTS
+
+Both evaluations passed the fatal validation gate **exactly**: the new
+full-window evaluator reproduced #217's stencil-1 numbers to three decimals in
+each run (AUC 0.643, bands 0.470/0.375/0.492, `gate.pass: true`), independently
+on two boxes with TF32 on. Every number below is therefore from a verified
+instrument, not a new one that happens to agree with itself.
+
+Three seeds per arm, all rolled by the same code over all 84,405 window pixels:
+
 | metric | stencil 1 (e017) | 3×3 (e022s9) | 13-pt (e022s13) |
 |---|---|---|---|
-| AUC(msss_clim) corridor | | | |
-| AUC(msss_clim) full window | | | |
-| amp ratio at h=12 | (gate: 0.812 subset) | | |
-| AMOC truefit h1-3 / h4-6 / h7-12 | | | |
-| long-hindcast r trained / held-out | | | |
-| nowcast k-fold (temporal.json) | 0.556–0.672 (E-020) | | |
+| **corridor AUC** (primary) | **0.5837** [0.580–0.589] | **0.5537** [0.551–0.558] | **0.5453** [0.539–0.555] |
+| window AUC | 0.6193 [0.617–0.622] | 0.5987 [0.595–0.602] | 0.5897 [0.586–0.597] |
+| gate-subset AUC | 0.6440 [0.643–0.645] | 0.6250 [0.619–0.629] | 0.6147 [0.603–0.625] |
+| amp ratio at h=12 (corridor) | 0.742 | 0.731 | 0.753 |
+| AMOC truefit h1-3 / h4-6 / h7-12 | 0.458 / 0.354 / 0.464 | 0.466 / 0.369 / 0.451 | 0.472 / 0.324 / 0.366 |
+| long-hindcast r, held-out months | 0.401 | 0.373 | 0.361 |
+| nowcast k-fold (temporal.json) | 0.485 | 0.500 | 0.510 |
+| forecast ratio vs persistence | 0.19216 | 0.19247 | 0.19091 |
 
-*(table filled at R5 harvest; e017 column comes from the SAME
-rollout_spatial.py run as the spatial arms, behind the gate)*
+**The falsifier fired, in the direction nobody pre-registered.** The rule was
+"no arm beating 0.5837 + 3 sd (= 0.5978) closes local monthly coupling". The
+baseline's own seed sd on the corridor is 0.0047, and the spatial arms land
+**−0.030 (−6.3 sd)** and **−0.038 (−8.1 sd)** BELOW it. Not a null: a
+consistent, large regression, monotone in the amount of neighbourhood
+supplied — more neighbours, less skill — on every rolled scope (corridor,
+window, gate subset) and on the long hindcast.
+
+**This is evidence about optimisation, not about capacity, and the experiment
+was built so that claim is not a rationalisation.** `test_zero_weight_equivalence`
+proves a stencil-9 or -13 model can represent the stencil-1 model exactly (a
+zeroed neighbour block, `allclose` at 1e-6), so every one of these arms could
+have matched the baseline by ignoring its extra inputs and did not. What the
+extra inputs cost is sample efficiency: E-023's measurement puts the neighbour
+correlation at **0.97 at one cell**, so a 3×3 adds ~9× the input columns and
+almost no information — collinear predictors, diluted gradient signal, same
+step budget.
+
+**The one place the neighbourhood is not worse is the short AMOC band**: h1-3
+truefit runs 0.458 → 0.466 → 0.472, ordered the *other* way. Three seeds on a
+240-month probe with sd ≈ 0.12 cannot support that as a finding; it is noted
+as the only counter-current in the table, not claimed.
+
+**Pre-registered physics caveat, restated because the result needs it.** One
+roll step is one month; a 3×3 reaches 1 cell/month and the 13-point 2, against
+Gulf Stream advection of 100–200 cells/month. This experiment therefore closes
+**LOCAL coupling at MONTHLY cadence** for this architecture. It says nothing
+about daily cadence, nor about a global operator (attention over the whole
+field), nor — the E-023 follow-up — about neighbours far enough away to carry
+information the centre does not already have.
+
+**Cost.** 9 dispatches, **15.5 GPU-hours, ~$4.19**: R1 smoke 30 min; six 60k
+arms 73–105 min each (533 min); two evaluations 212 + 156 min. The evaluation
+itself was 5.71 GPU-h across 10 head-evals, a flat **34.3 min per head** (714
+roll steps × 84,405 pixels). Zero dead dispatches — the toy end-to-end test and
+the fatal gate both did their jobs.
+
+**What it changes.** The unroll axis closed at E-010/E-020; local spatial
+coupling closes here. Of E-021's two named missing ingredients — spatial
+coupling and forcing — one is now measured and rejected at this cadence and
+reach. E-023 (already running) tests the remaining spatial hypothesis: that the
+useful neighbour is not the adjacent one but the distant one.
 
 **Interim, first arm home (#222, stencil:9 seed 0, 2026-08-13 ~22:40Z).**
 Green, temporal.json archived, `scale.stencil` 9, 32,338,432 params, 60,000
