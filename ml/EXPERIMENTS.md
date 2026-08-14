@@ -282,6 +282,53 @@ corridor AUC, and E-022 is the standing proof that the two can disagree: its
 rolled. One-step error and twelve-step behaviour are different questions.
 Seed 2 (#232) and the gated evaluation follow.
 
+### RESULT (2026-08-14 ~12:0xZ) — the ring WINS, on the pre-registered primary metric
+
+The gate passed **exactly** for the third independent time (AUC 0.643, bands
+0.470/0.375/0.492 in #228, #229 and #233 alike), so the four arms below are
+comparable across runs: the evaluator is deterministic given a head, and it
+has now reproduced #217 on three separate boxes.
+
+| arm (3 seeds) | **corridor AUC** | vs baseline | window AUC | amp h12 | AMOC h1-3/h4-6/h7-12 | long ho r |
+|---|---|---|---|---|---|---|
+| stencil 1 (e017) | 0.5837 [0.580–0.589] | — | 0.6193 | 0.742 | 0.458/0.354/0.464 | 0.401 |
+| 3×3 at 1 cell (e022s9) | 0.5537 | −6.3 sd | 0.5987 | 0.731 | 0.466/0.369/0.451 | 0.373 |
+| 13-point (e022s13) | 0.5453 | −8.1 sd | 0.5897 | 0.753 | 0.472/0.324/0.366 | 0.361 |
+| **ring 222 km (e023r222)** | **0.6043 [0.599–0.608]** | **+4.4 sd** | **0.6257** | **0.765** | 0.460/**0.400**/**0.492** | 0.354 |
+
+**The pre-registered falsifier is cleared.** The bar was 0.5837 + 3 × 0.0047
+= **0.5978**, and all three ring seeds (0.599, 0.606, 0.608) sit above it.
+This is the first arm in the programme to beat the no-neighbour baseline on
+the primary metric — after unroll (E-010/E-020), local coupling (E-022) and
+bigger arrays (E-024) each failed.
+
+**It is the same intervention that failed at one cell.** Identical
+architecture, identical parameter count (32,338,432), identical seeds; the
+eight neighbours are simply 222 km away instead of 28. Moving them is worth
+**+0.021 corridor AUC**, where leaving them adjacent cost −0.030.
+
+**Two secondary readings support the mechanism rather than merely agreeing.**
+Amplitude retention at h=12 rises 0.742 → 0.765: the rolled field damps less,
+which is what a coupling term that carries real information should do, and
+the opposite of what a smoothing input does. And the AMOC transport bands
+improve exactly where a ~200 km/month coupling scale predicts — h4-6 0.354 →
+0.400 and h7-12 0.464 → 0.492, while h1-3 is flat (0.458 → 0.460), because
+at one to three months the centre's own history already carries the answer.
+
+**Recorded against the result:** the long hindcast's held-out r is *lower*
+(0.354 vs 0.401) and its three seeds span 0.281–0.393, which at that spread
+says nothing either way. It is quoted because it is the one secondary metric
+that does not agree.
+
+**Physics.** 222 km per month is ~8.5 cm/s — the interior and deep-western-
+boundary flow scale from the E-022 plan's own table, not the Gulf Stream's
+100–200 cells/month. The experiment that worked is the one aimed at the
+speed the model can actually resolve at monthly cadence.
+
+**Cost.** Three training arms (75/118/74 min) + one 4-head evaluation
+(144 min) = **6.9 GPU-h, ~$1.9**, plus ~40 min of sandbox CPU for the radius
+measurement that chose 222 km before any GPU ran.
+
 **DISPATCHED 2026-08-14 ~05:15Z: #230 / #231 / #232** (seeds 0/1/2,
 `stencil:9,ring:222`, 60k steps, job_timeout 400) — seeds 0 and 2 pinned to
 gpu-box-42005419, seed 1 to gpu-box-40623952. They QUEUE behind the R4
