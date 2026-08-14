@@ -232,6 +232,16 @@ def main():
         results["rows"].append(row)
         keep[r_km] = (np.concatenate(ring_cols), np.concatenate(targ),
                       np.concatenate(split), np.concatenate(base_cols))
+        # WRITE AFTER EVERY RADIUS. Cost per radius grows with the radius --
+        # a far ring's pixels are scattered across a 5.6 GB memmap, so the
+        # gather degrades from page-cache hits to random reads and the last
+        # radii take an order of magnitude longer than the first. Writing only
+        # at the end means an interrupted sweep loses every row it measured,
+        # which is what happened on the first run of this file: the numbers
+        # survived in the log and had to be read back out of it.
+        os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+        with open(a.out, "w") as f:
+            json.dump(results, f, indent=1)
         print(f"  r={r_km:>7.1f} km ({row['r_cells_equator']:>4.1f} cells)  "
               f"corr {cor_mean:+.3f} (raw {cor_raw:+.3f})  ring-ocean {row['ring_ocean_frac']:.2f}  "
               f"MSE {mse_b:.5f} -> {mse_r:.5f}  gain {gain:+.4f}", flush=True)

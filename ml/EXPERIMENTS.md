@@ -69,6 +69,17 @@ with weights shared across pixels as stage 2 shares them.
 | **222 km** | **8** | **0.718** | **0.92** | **+0.0161** |
 | 334 km | 12 | 0.642 | 0.90 | +0.0145 |
 
+Truncated there, and said out loud rather than presented as a finished sweep:
+445 km and beyond were requested and never returned. The cost per radius grows
+with the radius — a far ring's pixels are scattered across the 5.6 GB embedding
+memmap, so the gather degrades from page-cache hits to random reads — and the
+445 km row ran an order of magnitude longer than the 27.8 km one before it was
+killed. The curve already has its maximum and its decline on both sides, which
+is what the radius choice needed; the far tail is unmeasured. (The script now
+writes after every radius, because this first run kept its rows only in memory
+and the numbers above had to be read back out of the log — the same defect,
+found the same night, as the evaluator that wrote only at the end.)
+
 Information peaks at **167–222 km** and is **~3× what the touching neighbours
 carry**. That is the quantitative form of the mechanism guessed at in E-022:
 at one cell the neighbour correlates 0.97 with the centre and is very nearly
