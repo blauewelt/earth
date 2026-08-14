@@ -55,6 +55,8 @@ a = tk.get("args", {})
 print(json.dumps({"unroll": a.get("unroll", 1), "seed": a.get("seed", 0),
                   "K": a.get("K"), "steps": a.get("steps"),
                   "direct": str(a.get("direct") or ""),
+                  "stencil": a.get("stencil", 1),
+                  "ring_km": float(a.get("ring_km", 0) or 0),
                   "step": tk.get("step")}))`, pt], { encoding: "utf8" }));
 
 const rel = await api(`/repos/${REPO}/releases/tags/${TAG}`);
@@ -95,6 +97,30 @@ for (const spec of RUNS) {
     if (info.seed !== cs) bad.push(`seed ${info.seed} != claimed ${cs}`);
     if (STEPS && info.steps !== STEPS) bad.push(`steps ${info.steps} != ${STEPS}`);
     if (STEPS && info.step !== STEPS) bad.push(`trained to ${info.step}, not ${STEPS}`);
+    // GEOMETRY vs PREFIX. The claim (u1s0) cannot tell an E-022 3x3 head from
+    // an E-023 ring head: same unroll, same seed, same steps, same direct,
+    // same byte size — the ONLY thing that distinguishes them is the name I
+    // type. So the prefix's own markers are verified against the checkpoint:
+    // `...s9...` must be stencil 9, `...s13...` stencil 13, `...r222...` a
+    // 222 km ring, and a prefix claiming no ring must not carry one. Without
+    // this, one mistyped --prefix publishes a ring head as its own control
+    // and every number downstream is confidently wrong.
+    // the LAST s<n> / r<n> group in the prefix, because every real prefix has
+    // the marker after a digit ("e022s9") — a first attempt guarded the match
+    // with [^0-9] to avoid catching the run number and thereby matched
+    // NOTHING in every name actually in use, silently checking nothing at all
+    const ps = [...PREFIX.matchAll(/s(\d+)/g)].pop();
+    const pr = [...PREFIX.matchAll(/r(\d+)/g)].pop();
+    if (ps && Number(ps[1]) !== info.stencil) {
+      bad.push(`prefix says stencil ${ps[1]}, checkpoint is ${info.stencil}`);
+    }
+    if (pr && Math.round(info.ring_km) !== Number(pr[1])) {
+      bad.push(`prefix says ring ${pr[1]} km, checkpoint is ${info.ring_km}`);
+    }
+    if (!pr && info.ring_km > 0) {
+      bad.push(`checkpoint is a ${info.ring_km} km RING but the prefix `
+               + `"${PREFIX}" does not say so`);
+    }
     if (bad.length) {
       console.error(`#${n}: VERIFICATION FAILED — ${bad.join("; ")}`);
       failed++; continue;
