@@ -138,13 +138,19 @@ control, so the only difference is distance).
 |---|---|---|
 | e017 (no neighbours, n=3) | 0.19216 (0.00205) | 0.19366 / 0.19300 / 0.18982 |
 | e022s9 (3×3 at 1 cell, n=3) | 0.19247 (0.00150) | 0.19290 / 0.19371 / 0.19081 |
-| **e023r222 (ring at 222 km, n=2)** | **0.18634 (0.00209)** | **0.18782 / 0.18487** |
+| **e023r222 (ring at 222 km, n=3)** | **0.18476 (0.00311)** | **0.18782 / 0.18487 / 0.18160** |
 
-−0.0058 against the baseline, i.e. **−2.8 baseline seed sd**, and **both ring
-seeds sit below the baseline's lowest seed** (0.18982) and below every 3×3
-seed. On the metric whose seed sd is ~0.002 that is a real displacement, not
-noise — a 3.0% relative cut in one-step z-MSE where nine touching neighbours
-bought nothing.
+**All three seeds in (#232 landed at 0.18160, the best of them):** −0.0074
+against the baseline, i.e. **−3.6 baseline seed sd**, with **every ring seed
+below the baseline's lowest** (0.18982) and below every 3×3 seed. A **3.9%
+relative cut in one-step z-MSE** where nine touching neighbours bought
+nothing. Geometry verified in all three archives (`ring_km` 222.0,
+`stencil` 9, params 32,338,432 — identical to the 3×3 control).
+
+The nowcast k-fold reads 0.449 against the baseline's 0.485, i.e. slightly
+lower — but that probe's seed sd is ~0.12, so at three seeds it says nothing
+in either direction and is quoted only to avoid the appearance of picking the
+metric that agreed.
 
 **Both of my calibration expectations were wrong, in opposite directions**,
 and that is worth more than the number itself. I pre-registered that the
