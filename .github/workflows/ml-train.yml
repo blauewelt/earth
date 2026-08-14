@@ -950,7 +950,8 @@ jobs:
             # of that radius in KM instead of the touching-neighbour table.
             RING=0
             case "${{ inputs.window }}" in
-              *ring:*) RING="${{ inputs.window }}"; RING="${RING##*ring:}"; RING="${RING%%,*}";;
+              *ring:*) RING="${{ inputs.window }}"; RING="${RING##*ring:}"; RING="${RING%%,*}"
+                       RING="${RING//-/,}";;
             esac
             echo "stage 2: unroll=$UNROLL seed=$SEED stencil=$STENCIL ring=$RING ${DIRECT:-} ${UPROBS:-}"
             # `window` also carries resume2:<tag> — CONTINUE a stage-2 head

@@ -57,7 +57,7 @@ sys.path.insert(0, HERE)
 from model import codec_from_ckpt, gather_px                    # noqa: E402
 from recon_eval import stream_stats, build_slab                 # noqa: E402
 from temporal import (TemporalTransformer, build_stencil,       # noqa: E402
-                      embed_everything, rapid_section)
+                      embed_everything, rapid_section, _ring_on)
 from project_amoc import fit_ridge                              # noqa: E402
 
 # The gate reference: #217 (ml-metrics probes-217.json), head u1_s0 —
@@ -690,7 +690,7 @@ def main():
         # has the same 9 slots as E-022's 3x3 and a completely different
         # neighbour set, so caching on `stencil` alone would silently score
         # one arm with the other's geometry.
-        key = (stencil, round(float(ring_km), 3))
+        key = (stencil, str(ring_km))
         if key not in nbr_cache:
             if stencil == 1:
                 nbr_cache[key] = None
@@ -725,9 +725,10 @@ def main():
         elif K != K_seen:
             sys.exit(f"{hp} has K={K} != {K_seen} — windows not comparable")
         stencil = ta.get("stencil", 1)
-        ring_km = float(ta.get("ring_km", 0) or 0)
+        ring_km = ta.get("ring_km", 0) or 0        # number OR "222,555"
         unroll = ta.get("unroll", 1)
-        label = (f"s{stencil}" + (f"r{ring_km:g}" if ring_km > 0 else "")
+        label = (f"s{stencil}"
+                 + (f"r{str(ring_km).replace(',', '-')}" if _ring_on(ring_km) else "")
                  + (f"u{unroll}" if unroll != 1 else "")
                  + f"_s{ta.get('seed', 0)}")
         if label in results["heads"]:
@@ -744,7 +745,7 @@ def main():
         print(f"head {label}: {os.path.basename(hp)} "
               f"(d_model={ta['d_model']}, layers={ta['layers']}, K={K}, "
               f"stencil={stencil}"
-              + (f", ring {ring_km:g} km" if ring_km > 0 else "") + ")",
+              + (f", ring {ring_km} km" if _ring_on(ring_km) else "") + ")",
               flush=True)
 
         Hh = a.horizon

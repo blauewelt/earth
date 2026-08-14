@@ -148,6 +148,16 @@ def ring_offsets(lat_deg, r_km, n_pts, dlat_deg):
     return out
 
 
+def _ring_on(ring_km):
+    """True when `ring_km` names at least one positive radius. Accepts a
+    number, a list, or the CLI's comma string ("222,555")."""
+    if isinstance(ring_km, str):
+        return any(float(r) > 0 for r in ring_km.split(",") if r.strip())
+    if isinstance(ring_km, (list, tuple)):
+        return any(float(r) > 0 for r in ring_km)
+    return float(ring_km or 0) > 0
+
+
 def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
     """NBR [P, S] int64 indices into the P (ocean-pixel) ordering; -1 =
     missing (land, or outside the window). NO longitude wrap — the family3
@@ -167,20 +177,39 @@ def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
     lin[ys, xs] = np.arange(len(ys))
     NBR = np.full((len(ys), stencil), -1, np.int64)
     NBR[:, 0] = np.arange(len(ys))
-    if ring_km > 0:
+    radii = ([float(r) for r in str(ring_km).split(",") if str(r).strip()]
+             if isinstance(ring_km, str) else
+             ([float(r) for r in ring_km] if isinstance(ring_km, (list, tuple))
+              else ([float(ring_km)] if float(ring_km) > 0 else [])))
+    if radii:
         # NB: STENCILS is not consulted in ring mode, which is why slot counts
         # with no fixed-table entry (17 = centre + 16 ring points, E-026) are
         # legal here and would KeyError below.
         if lats is None:
             raise ValueError("ring geometry needs `lats` — the zonal step "
                              "depends on latitude")
+        n_ring = stencil - 1
+        if n_ring % len(radii):
+            raise ValueError(f"{n_ring} ring slots do not divide evenly among "
+                             f"{len(radii)} radii — a shape whose rings differ "
+                             f"in point count is not what any caller means")
+        per = n_ring // len(radii)
         dlat = float(np.round(np.diff(lats).mean(), 6))
         # per ROW, not per pixel: 281 offset computations instead of 84,405,
         # and every pixel in a row shares a latitude by construction
         for y in np.unique(ys):
             sel = np.where(ys == y)[0]
-            for k, (dy, dx) in enumerate(
-                    ring_offsets(float(lats[y]), ring_km, stencil - 1, dlat)):
+            offs = []
+            for ri, r_km in enumerate(radii):
+                o = ring_offsets(float(lats[y]), r_km, per, dlat)
+                if ri % 2:
+                    # rotate every second ring by half a sector, so a two-ring
+                    # shape samples 2*per bearings instead of `per` bearings
+                    # twice — otherwise the outer ring sits directly behind the
+                    # inner one and buys strictly less than it could
+                    o = ring_offsets(float(lats[y]), r_km, 2 * per, dlat)[1::2]
+                offs.extend(o)
+            for k, (dy, dx) in enumerate(offs):
                 yy, xx = y + dy, xs[sel] + dx
                 # yy is a SCALAR row here (every pixel in `sel` shares it), so
                 # an off-grid row must be skipped rather than masked: numpy
@@ -810,14 +839,18 @@ def main():
                     help="torch/numpy seed (sweeps need more than one)")
     ap.add_argument("--tag", default="",
                     help="suffix for output files: temporal_<tag>.json/.pt")
-    ap.add_argument("--ring-km", type=float, default=0.0,
+    ap.add_argument("--ring-km", default="0",
                     help="E-023: put the non-centre slots on a circle of this "
                          "radius in KM instead of using the fixed STENCILS "
                          "table. Measured by ml/measure_ring_info.py: the "
                          "incremental information a neighbour carries peaks "
                          "at 167-222 km (3x the touching neighbours'), because "
                          "at one cell the neighbour's embedding correlates "
-                         "0.97 with the centre's and is nearly a copy of it.")
+                         "0.97 with the centre's and is nearly a copy of it. "
+                         "A COMMA LIST makes concentric rings sharing the "
+                         "slots equally: '222,555' with --stencil 17 is eight "
+                         "points at each radius, the outer ring rotated half a "
+                         "sector off the inner one (E-026).")
     ap.add_argument("--stencil", type=int, default=1, choices=(1, 9, 13, 17),
                     help="E-022 SPATIAL INPUT: predict the centre pixel's "
                          "z_{t+1} from this many neighbourhood pixels' z per "
@@ -1027,7 +1060,7 @@ def main():
         static_ctx = torch.as_tensor(
             np.concatenate([Zstat, coords, obs_flags], 1))
         print(f"stencil {a.stencil}"
-              + (f" RING r={a.ring_km:g} km" if a.ring_km > 0 else "")
+              + (f" RING r={a.ring_km} km" if _ring_on(a.ring_km) else "")
               + f": input {a.stencil}x{ck['d_z']}+2 per step; "
               f"{int((NBR < 0).sum()):,} missing neighbour slots "
               f"of {NBR.size:,}")
@@ -1504,7 +1537,7 @@ def main():
         "n_pixels": int(P),
         "n_train_months": int((~t_hold).sum()),
         "stencil": int(a.stencil),         # E-022: part of the arm's identity
-        "ring_km": float(a.ring_km),       # E-023: and how far away it reaches
+        "ring_km": a.ring_km,              # E-023/E-026: radius, or radii
     }
 
     # ---- eval 1: z-space t+1 on held-out target months --------------------

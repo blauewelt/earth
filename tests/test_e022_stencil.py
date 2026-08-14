@@ -304,3 +304,40 @@ def test_ring17_is_sixteen_points_on_the_circle():
         assert abs(km - 200.0) < 30.0, (dy, dx, km)
     with pytest.raises(KeyError):
         build_stencil(H, W, ys, xs, 17)          # no radius -> no table entry
+
+
+def test_two_rings_share_the_slots_and_are_rotated():
+    """E-026, Chris's actual request: 'two rings, eight points each'.
+    17 slots + '222,555' = centre + 8 at each radius, and the outer ring must
+    be rotated half a sector off the inner one — otherwise the far points sit
+    directly behind the near ones and sample only 8 bearings twice."""
+    H, W, ys, xs, lats = _ring_grid()
+    NBR = build_stencil(H, W, ys, xs, 17, ring_km="222,555", lats=lats)
+    assert NBR.shape == (len(ys), 17)
+    assert (NBR[:, 0] == np.arange(len(ys))).all()
+    from temporal import ring_offsets
+    lat0 = float(lats[H // 2])
+    inner = ring_offsets(lat0, 222.0, 8, 0.25)
+    outer = ring_offsets(lat0, 555.0, 16, 0.25)[1::2]
+    for dy, dx in inner:
+        assert abs(np.hypot(dy * 27.83, dx * 27.83 * np.cos(np.radians(lat0)))
+                   - 222.0) < 30.0
+    for dy, dx in outer:
+        assert abs(np.hypot(dy * 27.83, dx * 27.83 * np.cos(np.radians(lat0)))
+                   - 555.0) < 40.0
+    # bearings interleave: no outer point shares an inner point's direction
+    ang = lambda o: round(np.degrees(np.arctan2(o[1], o[0])) % 360)
+    assert not (set(map(ang, inner)) & set(map(ang, outer))), \
+        "outer ring is not rotated off the inner one"
+    # uneven splits are refused rather than silently truncated
+    with pytest.raises(ValueError):
+        build_stencil(H, W, ys, xs, 10, ring_km="222,555", lats=lats)
+
+
+def test_single_radius_still_reads_as_before():
+    """The E-023 heads carry ring_km=222.0 as a FLOAT; the multi-radius change
+    must not alter the geometry they were trained with."""
+    H, W, ys, xs, lats = _ring_grid()
+    a = build_stencil(H, W, ys, xs, 9, ring_km=222.0, lats=lats)
+    b = build_stencil(H, W, ys, xs, 9, ring_km="222", lats=lats)
+    assert np.array_equal(a, b)
