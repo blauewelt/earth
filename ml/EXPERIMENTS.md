@@ -444,6 +444,56 @@ known to carry signal.
 
 ---
 
+### SUNFLOWER — elliptic + far-heavy √-ramp, 34 points (Chris, 2026-08-14 evening) · **PRIORITY**
+
+> *"Let's run (and prioritize) an additional experiment ... an eliptic spiral
+> but with heavier weight on the outer points. And let's use 34 points in
+> total."*
+
+**The principled far-heavy ramp is the literal sunflower.** Vogel's model of
+the sunflower head — r ∝ √k at the golden angle — is the unique arrangement
+with uniform density per unit *area*, and because area grows quadratically,
+uniformity in area IS far-weighting in radius. Encoded as the spiral's 4th
+field (ramp exponent on the linear span): `spiral:111-4444-0.71-0.5`. Of 34
+points: **26 beyond 2222 km** (geometric ramp: 7), **32 beyond 1000 km**
+(geometric: 14). 34 is Fibonacci, so bearings are φ-even.
+
+**Why now.** The early reads attribute the wide arm's −0.0043 to its eight
+OUTER points at 1000 km, while density at 222 km bought nothing (#234). The
+geometric ramp concentrates points exactly where density was shown not to
+pay. This arm moves the weight to where the early evidence says the value is.
+
+**Arms.** #282 (s0, behind the elliptic on `gpu-box-47566393`) · #283 (s1,
+running on a box rented for it) · #284 (s2, queued behind s1; the second
+rented box, Vast 47726881, stalled provisioning and was not waited for).
+
+**Pre-registered cost, measured before dispatch: corridor occupancy 47.6 %**
+(16.2 of 34 slots live) — the steepest structural-zero fraction of any
+design, because past 2222 km much of the ellipse is off-window or land. The
+arm pays 35 slots of width for ~17 live inputs: E-022's sample-efficiency
+risk in its purest form, on the record so the result reads against it either
+way. It is still the most *live far-field* coverage of any shape (~16 points
+beyond 1000 km).
+
+**Controls.** spiral-34 geometric (#279–#281): same 34 points, same reach,
+near-heavy — the ramp is the only difference bar the ellipse. espiral-24
+(#276–#278): same ellipse, geometric ramp — the ramp at fixed aspect.
+e023r222 and e017 as always.
+
+**Falsifier.** Three sunflower seeds at or below the geometric spiral-34
+would say the far field does NOT reward extra weight once reach exists, and
+the geometric ramp's near-field coverage was doing real work — sending the
+next design back toward a hybrid (near ring + far spiral).
+
+**One near-miss recorded.** The commit carrying this geometry was destroyed
+minutes after being written — a `git reset --hard origin/main` chained after
+a push that was REFUSED (remote had moved) wiped it, the exact failure root
+`CLAUDE.md` §1 documents from 2026-08-07. Recovered from the reflog,
+rebased, pushed bare. The rule stands: push bare, read the output, sync in a
+separate command — never chain the sync.
+
+---
+
 ### THE DESIGNS, DRAWN (Chris: *"Please draw all your designs in the experiment log."*)
 
 **These pictures are generated, not drawn.** `ml/draw_stencils.py` lays a
@@ -459,7 +509,7 @@ silently goes stale.) Regenerate with `python3 ml/draw_stencils.py --md`.
 
 ![the nine stencil designs, all at one scale](figs/stencil_designs.png)
 
-*The same thirteen as one sheet, **all at a single scale** — which the ASCII
+*The same fourteen as one sheet, **all at a single scale** — which the ASCII
 below cannot do (the radial axis is √r, so a 222 km ring and a 4444 km spiral
 fit one sheet; bearings are exact and each panel prints its true reach). The
 span is the finding: 3×3 reaches 35 km, the champion 222, and the deep
@@ -469,7 +519,7 @@ spirals 4436 — a factor of 127 between the first shape tried and the newest. R
 Two things to read on each ASCII drawing. The **scale bar**, because at their own
 scales the 3×3 that lost by 6.3 seed sd and the 222 km ring that won by 4.4
 are the same picture — eight points around a centre, sixty times apart in
-width (the figure above is the other half of that: one scale, thirteen panels).
+width (the figure above is the other half of that: one scale, fourteen panels).
 And the **bearing rose** under it (72 characters, 5° each), which is
 the quantity the spiral is an argument about: it shows at a glance that three
 rings of eight put `||` doubles on eight of their sixteen directions, while a
@@ -1003,6 +1053,50 @@ spiral puts one mark on each of its own.
   @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
 ```
 
+**SUNFLOWER 34: elliptic + sqrt ramp, 111 -> 4444 km   [#282-#284]**
+
+```
+  35 slots = centre + 34 neighbours  ·  111/4444 km (geometric ramp)  ·  22 bearings >=10 deg apart (34 distinct to 1 deg)
+  Vogel's sunflower: uniform AREA density puts 26 of 34 points past 2222 km — the far-heavy arm the early reads argue for.
+
+
+
+
+
+
+
+                        ...............
+                 .......               .......
+              ...    r            m        u ....
+           ...                                   ...
+         ..                e                        ...
+       ..w       j                  9      h          ..
+      ..                                           p   ..
+     .                   6                               .
+    ..   o       b                    4       c          x.
+    .                                                     .
+    .                   3      @                    k     .
+    .        g                     2       7              .
+    ..              8                                    ..
+     . t                                                ..
+      .                      5                f       s..
+       ..      l       d            a                 ..
+         ..                                         ..
+           ...                  i           n    ...
+             .y..       q                    ....
+                 ......               v......
+                       ................
+
+
+
+
+
+
+  |-----------------------------| 5000 km
+  N|.|..|.|..|.||.||.E|.||.|.|.|..||...|S..|.|..|.|.|.|.||.W||.||..|.|.|..|...N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
 | shape                                                 | runs           | slots | pts | reach km | bear>=10 | bear~1 | b/pt | gap max/min |
 |-------------------------------------------------------|----------------|-------|-----|----------|----------|--------|------|-------------|
 | 3x3 touching (E-022)                                  | #219-#221      | 9     | 8   | 21-35    | 8        | 8      | 1.00 | -           |
@@ -1017,6 +1111,7 @@ spiral puts one mark on each of its own.
 | spiral of 24, 111 -> 4444 km                          | #267/#268/#273 | 25    | 24  | 111-4436 | 21       | 24     | 0.88 | 2.62        |
 | spiral of 34, 111 -> 4444 km                          | #279-#281      | 35    | 34  | 111-4443 | 21       | 34     | 0.62 | 1.62        |
 | ELLIPTIC spiral 24, zonal 111 -> 4444 km, aspect 0.71 | #276-#278      | 25    | 24  | 83-4383  | 20       | 24     | 0.83 | 2.62        |
+| SUNFLOWER 34: elliptic + sqrt ramp, 111 -> 4444 km    | #282-#284      | 35    | 34  | 83-4339  | 22       | 34     | 0.65 | 1.62        |
 
 ---
 
