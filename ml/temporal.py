@@ -882,6 +882,23 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
     return out, coords
 
 
+
+def _chunked_forward(model, zseq, mseq, sctx, dev, chunk=4096):
+    """The eval forwards used to push 20,000 windows through the model in ONE
+    call. That fit every 576x8 head ever trained and OOM-killed the first
+    768x12 within seconds of finishing 60k healthy training steps (E-027
+    #285/#286, 2026-08-14: "tried to allocate 5.9 GB, 1.1 GB free", two
+    different boxes, run green, no temporal.json — the classic backgrounded
+    silent death). Same numbers, chunked: concatenation over disjoint slices
+    is exact for a pointwise forward."""
+    preds, hids = [], []
+    for i in range(0, len(zseq), chunk):
+        sl = slice(i, i + chunk)
+        p_, h_ = model(zseq[sl].to(dev), mseq[sl].to(dev), sctx[sl].to(dev))
+        preds.append(p_.cpu()); hids.append(h_.cpu())
+    return torch.cat(preds), torch.cat(hids)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", default="pilot4_anom")
@@ -1677,8 +1694,8 @@ def main():
         base = et - K + 1
         zseq = gather_stencil(Zt, base, ep, NBR_t, K)
         mseq = torch.stack([Mt[base + j] for j in range(K)], 1)
-        pred, hid = model(zseq.to(TDEV), mseq.to(TDEV), static_ctx[ep].to(TDEV))
-        pred, hid = pred.cpu(), hid.cpu()        # back to CPU: everything
+        pred, hid = _chunked_forward(model, zseq, mseq, static_ctx[ep], TDEV)
+        # already on CPU: everything
         zhat = pred[:, -1]                       # below here is numpy-bound
         ztrue = Zt[et + 1, ep].float()
         zlast = Zt[et, ep].float()                        # persistence in z
@@ -1729,9 +1746,9 @@ def main():
                 base = et_ - K + 1
                 zsq = gather_stencil(Zt, base, ep_, NBR_t, K)
                 msq = torch.stack([Mt[base + j] for j in range(K)], 1)
-                _, hd = model(zsq.to(TDEV), msq.to(TDEV),
-                              static_ctx[ep_].to(TDEV))
-                zh = model.heads_direct[str(h_)](hd[:, -1]).cpu()
+                _, hd = _chunked_forward(model, zsq, msq,
+                                         static_ctx[ep_], TDEV)
+                zh = model.heads_direct[str(h_)](hd[:, -1].to(TDEV)).cpu()
                 zt_ = Zt[et_ + h_, ep_].float()
                 zp_ = Zt[et_, ep_].float()
                 mm = float((zh - zt_).pow(2).mean())
