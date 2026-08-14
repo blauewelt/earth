@@ -92,7 +92,39 @@ and E-024's whole line of reasoning weakens. If width costs, then the greedy
 4-point stencil (more measured information at half the width) becomes the
 clear next arm rather than one option among several.
 
+### CORRECTION before any of it finished — "two rings, eight points each"
+
+Chris, minutes after the first dispatch: *"to be clear, I meant two rings,
+eight points each."* I had read "the ring of 16" as sixteen points on ONE
+circle and dispatched `stencil:17,ring:222`, which is a different experiment:
+**density at one radius**, not **reach across two**. #235 and #236 were
+cancelled within minutes. **#234 is kept deliberately**, relabelled as a
+single-seed DENSITY control — the forecast ratio reproduces to sd ≈ 0.002, so
+one seed is readable on that metric, and having 8-at-222 vs 16-at-222 vs
+8-at-222+8-at-555 separates "more points" from "more scales" for ~$0.40.
+
+**The arms that answer the question as asked: #237 / #238 / #239**,
+`stencil:17,ring:222-555` — centre + 8 points at 222 km + 8 at 555 km, the
+outer ring **rotated half a sector** off the inner one so the shape samples
+sixteen bearings instead of eight bearings twice. (Without that rotation the
+far points sit directly behind the near ones, which is the one arrangement
+guaranteed to buy less than it could.)
+
+**This is the shape the ridge rated worst per point** (+0.0087 for sixteen
+points against the single ring's +0.0123 for eight), so it is the sharpest
+available test of Chris's objection to the ridge. Three outcomes, all
+informative: the two-ring shape wins → the ridge's width penalty is an
+artefact of the estimator and E-024's reasoning collapses; it ties → width is
+free and the per-point framing is about efficiency, not skill; it loses →
+the ridge and E-022 agree, and the narrow greedy stencil becomes the next arm.
+
 **Status: DISPATCHED** — runs recorded below at dispatch time.
+
+| arm | runs | shape |
+|---|---|---|
+| two rings (the question) | #237 / #238 / #239 | centre + 8 @ 222 km + 8 @ 555 km |
+| density control (n=1) | #234 | centre + 16 @ 222 km |
+| controls, already trained | e023r222, e017 | one ring of 8; no neighbours |
 
 ---
 
