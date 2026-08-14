@@ -148,10 +148,42 @@ def ring_offsets(lat_deg, r_km, n_pts, dlat_deg):
     return out
 
 
+GOLDEN_ANGLE = 137.50776405003785     # 360 * (1 - 1/phi)
+
+
+def spiral_offsets(lat_deg, r_min, r_max, n_pts, dlat_deg):
+    """E-026 SPIRAL (Chris, 2026-08-14): *"angular coordinates should be
+    different for each point, think of a spiral going outward ... streams
+    often flow straight, so it's important to catch 1-2 points for many
+    incoming angles."*
+
+    Point k sits at bearing k x the GOLDEN ANGLE, at a radius growing
+    geometrically from r_min to r_max. The golden angle is not decoration: it
+    is the unique rotation for which no prefix of the sequence ever clusters,
+    so every k points are as evenly spread in bearing as k points can be (the
+    sunflower/phyllotaxis arrangement). A three-ring shape samples 8 bearings
+    three times over; a 24-point spiral samples 24 bearings once each. If what
+    matters is catching a straight inflow from ANY direction rather than
+    resolving one radius finely, that is the better trade — which is exactly
+    the argument Chris made."""
+    coslat = max(np.cos(np.radians(lat_deg)), 0.05)
+    out = []
+    for k in range(n_pts):
+        f = k / max(n_pts - 1, 1)
+        r_km = r_min * (r_max / r_min) ** f      # geometric: the near field,
+        th = np.radians(k * GOLDEN_ANGLE)        # where information peaks,
+        dy = (r_km / KM_PER_DEG) * np.cos(th) / dlat_deg      # gets more of
+        dx = (r_km / (KM_PER_DEG * coslat)) * np.sin(th) / dlat_deg  # the pts
+        out.append((int(round(dy)), int(round(dx))))
+    return out
+
+
 def _ring_on(ring_km):
     """True when `ring_km` names at least one positive radius. Accepts a
     number, a list, or the CLI's comma string ("222,555")."""
     if isinstance(ring_km, str):
+        if ring_km.startswith("spiral:"):
+            return True
         return any(float(r) > 0 for r in ring_km.split(",") if r.strip())
     if isinstance(ring_km, (list, tuple)):
         return any(float(r) > 0 for r in ring_km)
@@ -177,6 +209,22 @@ def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
     lin[ys, xs] = np.arange(len(ys))
     NBR = np.full((len(ys), stencil), -1, np.int64)
     NBR[:, 0] = np.arange(len(ys))
+    if str(ring_km).startswith("spiral:"):
+        if lats is None:
+            raise ValueError("spiral geometry needs `lats`")
+        r0, r1 = (float(v) for v in str(ring_km)[len("spiral:"):].split("-"))
+        dlat = float(np.round(np.diff(lats).mean(), 6))
+        for y in np.unique(ys):
+            sel = np.where(ys == y)[0]
+            for k, (dy, dx) in enumerate(
+                    spiral_offsets(float(lats[y]), r0, r1, stencil - 1, dlat)):
+                yy, xx = y + dy, xs[sel] + dx
+                if not (0 <= yy < H):
+                    continue
+                okc = (xx >= 0) & (xx < W)
+                NBR[sel[okc], k + 1] = lin[yy, xx[okc]]
+        assert (NBR[:, 0] == np.arange(len(ys))).all()
+        return NBR
     radii = ([float(r) for r in str(ring_km).split(",") if str(r).strip()]
              if isinstance(ring_km, str) else
              ([float(r) for r in ring_km] if isinstance(ring_km, (list, tuple))
@@ -1052,7 +1100,8 @@ def main():
         # whitelist had to be widened for every new design (17 for E-026's
         # two rings, 25 for its three) which is a sign it was the wrong guard.
         if _ring_on(a.ring_km):
-            n_r = len([r for r in str(a.ring_km).split(",") if r.strip()])
+            n_r = (1 if str(a.ring_km).startswith("spiral:")
+                   else len([r for r in str(a.ring_km).split(",") if r.strip()]))
             if (a.stencil - 1) % n_r:
                 raise SystemExit(
                     f"--stencil {a.stencil} gives {a.stencil - 1} ring slots, "

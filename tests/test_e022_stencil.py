@@ -367,3 +367,37 @@ def test_three_rings_divide_evenly():
                 assert abs(km - r_km) < 0.15 * r_km, (r_km, km)
     with pytest.raises(ValueError):
         build_stencil(H, W, ys, xs, 18, ring_km="222,555,1000", lats=lats)
+
+
+def test_spiral_gives_every_point_its_own_bearing():
+    """E-026 spiral (Chris: 'angular coordinates should be different for each
+    point ... streams often flow straight, so it's important to catch 1-2
+    points for many incoming angles'). Golden-angle bearings, geometrically
+    growing radii: every point must have a DISTINCT bearing, and the radii
+    must span the requested range monotonically."""
+    from temporal import spiral_offsets, ring_offsets, GOLDEN_ANGLE
+    lat0, dlat = 30.0, 0.25
+    offs = spiral_offsets(lat0, 111.0, 1000.0, 24, dlat)
+    assert len(offs) == 24
+    kms = [np.hypot(dy * 27.83, dx * 27.83 * np.cos(np.radians(lat0)))
+           for dy, dx in offs]
+    assert abs(kms[0] - 111.0) < 20 and abs(kms[-1] - 1000.0) < 60, (kms[0], kms[-1])
+    assert all(b >= a - 25 for a, b in zip(kms, kms[1:])), "radii not monotone"
+    # bearings: 24 distinct directions, none within 5 deg of another
+    angs = sorted(np.degrees(np.arctan2(dx, dy)) % 360 for dy, dx in offs)
+    gaps = [b - a for a, b in zip(angs, angs[1:])] + [360 - angs[-1] + angs[0]]
+    assert min(gaps) > 5.0, f"bearings cluster: min gap {min(gaps):.1f} deg"
+    # a ring of the same size samples only `n` bearings; the spiral samples 24
+    ring_angs = {round(np.degrees(np.arctan2(dx, dy)) % 360)
+                 for dy, dx in ring_offsets(lat0, 222.0, 8, dlat)}
+    assert len(ring_angs) == 8 and len(set(map(round, angs))) >= 20
+
+
+def test_spiral_builds_and_is_distinct_from_rings():
+    H, W, ys, xs, lats = _ring_grid()
+    NBR = build_stencil(H, W, ys, xs, 13, ring_km="spiral:111-1000", lats=lats)
+    assert NBR.shape == (len(ys), 13)
+    assert (NBR[:, 0] == np.arange(len(ys))).all()
+    mid = np.where((ys == H // 2) & (xs == W // 2))[0][0]
+    ring = build_stencil(H, W, ys, xs, 13, ring_km="222,555,1000", lats=lats)
+    assert not np.array_equal(NBR[mid], ring[mid]), "spiral == 3 rings?"
