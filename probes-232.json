@@ -1,0 +1,315 @@
+{
+ "run_number": 232,
+ "files": {
+  "probe_kfold.json": {
+   "actions": {
+    "rapid": {
+     "r_kfold_deseas": 0.627,
+     "ci95": [
+      0.503,
+      0.735
+     ],
+     "n": 240,
+     "rmse_sv": 2.17,
+     "sigma_sv": 2.79,
+     "r_lowpass18": 0.811,
+     "wind_only_baseline": {
+      "r": 0.568,
+      "ci95": [
+       0.428,
+       0.696
+      ],
+      "rmse_sv": 2.29
+     }
+    },
+    "fc": {
+     "r_kfold_deseas": 0.32,
+     "ci95": [
+      0.213,
+      0.428
+     ],
+     "n": 490,
+     "rmse_sv": 2.04,
+     "sigma_sv": 2.15,
+     "r_lowpass18": 0.337,
+     "wind_only_baseline": {
+      "r": 0.121,
+      "ci95": [
+       0.013,
+       0.226
+      ],
+      "rmse_sv": 2.13
+     }
+    },
+    "move": {
+     "r_kfold_deseas": 0.177,
+     "ci95": [
+      0.023,
+      0.317
+     ],
+     "n": 271,
+     "rmse_sv": 4.2,
+     "sigma_sv": 3.73,
+     "r_lowpass18": 0.691,
+     "wind_only_baseline": {
+      "r": -0.376,
+      "ci95": [
+       -0.45,
+       -0.284
+      ],
+      "rmse_sv": 3.79
+     }
+    },
+    "osnap": {
+     "r_kfold_deseas": -0.037,
+     "ci95": [
+      -0.205,
+      0.144
+     ],
+     "n": 96,
+     "rmse_sv": 3.96,
+     "sigma_sv": 2.63,
+     "r_lowpass18": 0.157,
+     "wind_only_baseline": {
+      "r": 0.031,
+      "ci95": [
+       -0.217,
+       0.231
+      ],
+      "rmse_sv": 2.64
+     }
+    }
+   }
+  },
+  "temporal.json": {
+   "run": "actions",
+   "K": 24,
+   "d_model": 576,
+   "layers": 8,
+   "steps": 60000,
+   "scale": {
+    "params": 32338432,
+    "batch": 256,
+    "steps": 60000,
+    "data_points": 28857960,
+    "n_pixels": 84405,
+    "n_train_months": 480,
+    "stencil": 9,
+    "ring_km": 222.0
+   },
+   "z_t+1": {
+    "mse_model": 0.5719212293624878,
+    "mse_persistence": 3.149423122406006,
+    "beats_persistence": true
+   },
+   "chan_t+1": {
+    "mse_model": 0.2613450586795807,
+    "mse_persistence": 1.1510298252105713,
+    "beats_persistence": true,
+    "channels": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ]
+   },
+   "rapid_probe": {
+    "r_raw": 0.491,
+    "r_deseasonalised": 0.349,
+    "n_test": 36,
+    "features": "hidden(-1) mean over section"
+   },
+   "rapid_probe_kfold": {
+    "r_kfold_deseas": 0.432,
+    "ci95": [
+     0.332,
+     0.53
+    ],
+    "n": 240,
+    "rmse_sv": 2.52,
+    "sigma_sv": 2.79,
+    "features": "hidden(-1) mean over section",
+    "note": "year-blocked k-fold over the TEMPORAL HEAD's features. probe_kfold.json in this same run scores the CODEC and is identical for every run that freezes the same codec; this is the number that moves with stage-2 choices. Its comparable wind-only bar is the one printed beside the codec figure in probe_kfold.json."
+   },
+   "seed": 2
+  },
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.426,
+     "r_deseasonalised": 0.476,
+     "n_test": 36
+    },
+    {
+     "K": 3,
+     "r_raw": 0.448,
+     "r_deseasonalised": 0.337,
+     "n_test": 36
+    },
+    {
+     "K": 6,
+     "r_raw": 0.522,
+     "r_deseasonalised": 0.454,
+     "n_test": 36
+    },
+    {
+     "K": 12,
+     "r_raw": 0.599,
+     "r_deseasonalised": 0.548,
+     "n_test": 36
+    },
+    {
+     "K": 24,
+     "r_raw": 0.625,
+     "r_deseasonalised": 0.572,
+     "n_test": 36
+    }
+   ],
+   "seasonal_floor_raw": 0.272,
+   "seasonal_floor_deseas": -0.168
+  },
+  "dip_check.json": {
+   "run": "actions",
+   "window": [
+    "2009-09",
+    "2010-06"
+   ],
+   "r_out_of_fold": 0.627,
+   "sign_agreement_pct": 68.8,
+   "dip_observed_sv": -6.87,
+   "dip_predicted_sv": -3.27,
+   "dip_captured_pct": 47.5
+  },
+  "provenance.json": {
+   "run_number": 232,
+   "sha": "36318d7565dc31357b1b7637faf69110b70d95f0",
+   "code": "https://github.com/blauewelt/earth/tree/36318d7565dc31357b1b7637faf69110b70d95f0",
+   "inputs": {
+    "doc": "E-023 arm: stencil:9 RING r=222 km, seed 2 \u2014 the same nine slots, input width and parameter count as E-022's 3x3 (32,338,432), with the eight neighbours moved from touching the centre to a circle 222 km away. Radius chosen by measurement, not taste: ml/measure_ring_info.py puts the incremental one-step information a ring carries at its peak over 167-222 km (+1.6% of held-out residual variance vs +0.63% at one cell), because at one cell a neighbour correlates 0.968 with the centre and is nearly a copy of it. 222 km is the less redundant of the two peak radii (corr 0.718 vs 0.783). The ring is a circle on the GROUND: the zonal step is stretched by 1/cos(lat) per row. Controls already run: e022s9 (identical shape at 1 cell) and e017 (no neighbours). Pre-registered calibration: this probe predicted +0.63% at 1 cell where the real 3x3 delivered ~0%, so +1.6% is an upper bound against a weak linear baseline. Entry: ml/EXPERIMENTS.md E-023.",
+    "steps": "60000",
+    "batch": "512",
+    "d_z": "64",
+    "anomaly": "true",
+    "temporal_steps": "60000",
+    "temporal_d_model": "576",
+    "temporal_layers": "8",
+    "eval_every": "0",
+    "resume": "!run-62,run-63",
+    "head_probe": "false",
+    "light_probe_every": "0",
+    "window": "stencil:9,ring:222,seed:2,sched:expdecay --lr-cooldown-frac 0",
+    "tensor": "family3_na025",
+    "sst_channel": "false",
+    "patch": "3",
+    "max_minutes": "0",
+    "runner": "gpu-box-42005419",
+    "job_timeout": "400",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "576",
+    "codec_layers": "10",
+    "codec_heads": "8",
+    "codec_d_dec": "768"
+   },
+   "tensor": {
+    "file": "ml/cache/family3_na025.npz",
+    "sha256": "adcbe700fb6e160b1c84d7acd8dc0333b34d07829db9abd62c721aab278b4848",
+    "bytes": 2984746794,
+    "X_shape": [
+     516,
+     281,
+     481,
+     39
+    ],
+    "C": 39,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 516
+   },
+   "torch": "2.13.0+cu126",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-42005419"
+  }
+ }
+}
