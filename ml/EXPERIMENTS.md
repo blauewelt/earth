@@ -44,6 +44,68 @@ low-pass).
 
 ---
 
+<a id="e-024"></a>
+## E-024 · Is a LARGER array of input pixels better? — MEASURED 2026-08-14, no GPU spent
+
+**Why, from Chris.** *"Can you experiment with more input pixels, adding some
+further away? or is there a larger array of pixels that would be particularly
+useful?"* — asked after E-023's 8-point ring at 222 km cut one-step error 3.9%.
+
+**Answer: no. Eight points at ~222 km is at or past the optimum, and every
+larger array measured is worse.** `ml/measure_shape_info.py`, same instrument
+as E-023 (incremental held-out variance explained on top of the centre's own
+three-month history), 120 centres, all shapes paired on one sample:
+
+| shape | inputs | on ocean | gain |
+|---|---|---|---|
+| **ring 8 @ 222 km** | **8** | 0.95 | **+0.0112** |
+| ring 4 @ 222 + 4 @ 445 | 8 | 0.94 | +0.0106 |
+| ring 8 @ 111 + 8 @ 334 | 16 | 0.95 | +0.0056 |
+| ring 16 @ 222 | 16 | 0.95 | +0.0051 |
+| ring 8 @ 445 | 8 | 0.91 | +0.0021 |
+| ring 8 @ 222 + 8 @ 445 | 16 | 0.93 | +0.0019 |
+| ring 8 @ 222 + 8 @ 890 | 16 | 0.90 | −0.0000 |
+| ring 8 @ 890 | 8 | 0.87 | −0.0032 |
+| ring 8 @ 111 + 8 @ 222 + 8 @ 445 | 24 | 0.94 | −0.0033 |
+| ring 16 @ 445 | 16 | 0.91 | −0.0062 |
+
+Three readings, in order of how much they constrain the next experiment:
+
+1. **Density does not help.** Doubling the points on the *same* circle
+   (16 @ 222 vs 8 @ 222) *halves* the gain, +0.0051 against +0.0112. Eight
+   samples already resolve whatever structure a 222 km circle carries; the
+   ninth through sixteenth are interpolations of their neighbours.
+2. **Adding a second, farther ring costs more than it brings.** 8 @ 222
+   alone beats 8 @ 222 + 8 @ 445 by 6×, and the three-ring shape is
+   *negative*. Distance past ~300 km is not a new information channel — the
+   445 km ring alone is worth +0.0021 and the 890 km ring is worth less than
+   nothing.
+3. **Width is the binding constraint, not reach.** The one 16-point shape
+   that nearly holds its own (8 @ 111 + 8 @ 334, +0.0056) still loses to half
+   its width at one radius. And at FIXED width the split shape
+   (4 @ 222 + 4 @ 445, +0.0106) ties 8 @ 222 — so how the budget is spread
+   across scales barely matters, while how large the budget is matters a lot,
+   in the wrong direction.
+
+**Known bias of the instrument, stated because it cuts toward the answer.**
+A pooled ridge pays for every extra column in estimation variance, and the
+transformer trains on ~15 M windows rather than 61 k samples, so the probe
+should overstate the penalty on wide shapes. Two things stop that from
+rescuing a larger array. E-022 measured the same axis in the REAL model —
+9 and 13 touching neighbours, both decisively worse than 1 — so the direction
+is confirmed where we have both instruments. And the ordering *within* equal
+widths (8 @ 222 ≫ 8 @ 445 ≫ 8 @ 890) is a pure information statement that no
+dimension penalty explains, since all three have identical width.
+
+**Consequence.** No E-024 training arm is dispatched. The pre-registered
+reason to spend GPU would be a shape the probe ranks above the 222 km ring,
+and there isn't one; the honest next step for spatial inputs is not a bigger
+array but a different KIND of input, and E-025 (forcing) is the untested axis
+with an actual physical mechanism. Cost of answering this question: **0 GPU-h**
+— roughly 20 minutes of sandbox CPU against the frozen cache.
+
+---
+
 <a id="e-023"></a>
 ## E-023 · The RING: neighbours far enough away to be new information — PREPARED 2026-08-14, dispatch queued behind R4
 
