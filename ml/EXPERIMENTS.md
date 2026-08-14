@@ -44,6 +44,58 @@ low-pass).
 
 ---
 
+<a id="e-026"></a>
+## E-026 · Ring of 8 vs ring of 16, in the TRANSFORMER — DISPATCHED 2026-08-14
+
+**Why, from Chris.** *"I am not sure I trust the ridges. Linear is not enough.
+Let's try our stage 2 transformer on the ring of 8 (already trained?) and
+compare it with the ring of 16."*
+
+Correct instinct, and the ridge has earned the suspicion. It has been wrong
+about magnitude every time it has been checked against real training: it
+predicted +0.63 % at one cell where E-022's 3×3 delivered ~0 %, and +1.6 % at
+222 km where E-023's ring delivered ~3.9 %. It has only ever been reliable for
+ORDERING, and the width question is precisely where its two predictions
+disagree with each other:
+
+- the **ridge** (400 centres) says 16 points ≈ 8 points, +0.0134 vs +0.0140 —
+  a wider ring is redundant but harmless;
+- **E-022** says the real model pays for width — 9 and 13 touching neighbours
+  came out 6.3 and 8.1 seed sd WORSE than none, with
+  `test_zero_weight_equivalence` proving it could have ignored them.
+
+Both are predictions about the transformer and neither is the transformer.
+
+**Hypothesis.** Doubling the ring to 16 points at the same 222 km radius does
+not improve rolled corridor AUC, and may degrade it, because the extra eight
+points are interpolations of the first eight (the ridge measures their joint
+information as flat) while the input width doubles.
+
+**Falsifier.** Three seeds of ring-16 whose corridor AUC exceeds ring-8's
+0.6043 by more than 3 × the pooled seed sd (~0.005 → bar ≈ 0.619). That would
+say width is cheap for this model after all and E-022's penalty came from
+something specific to touching neighbours, not from width as such.
+
+**Design.** `stencil:17,ring:222` — centre + 16 equidistant points on the same
+222 km circle. Everything else is the e017/e023 recipe verbatim: 576/8 trunk,
+60 k steps, U=1, K=24, expdecay. **Controls, both already trained and already
+rolled by the same evaluator behind the same gate:** e023r222 (8 points, same
+radius — the paired comparison, differing ONLY in point count) and e017 (no
+neighbours). No new baseline runs are needed, which is what makes this cheap.
+
+**Cost.** 3 arms × ~75–120 min ≈ 4.5 GPU-h, plus one 4-head evaluation
+≈ 2.4 GPU-h ⇒ **~7 GPU-h, ~$1.9.**
+
+**What it settles beyond itself.** If width is free in the real model, the
+per-point framing still says to spend it well but removes the penalty term,
+and E-024's whole line of reasoning weakens. If width costs, then the greedy
+4-point stencil (more measured information at half the width) becomes the
+clear next arm rather than one option among several.
+
+**Status: DISPATCHED** — runs recorded below at dispatch time.
+
+---
+
 <a id="e-025"></a>
 ## E-025 · Forcing (CO₂ / energy balance) — SCOPED 2026-08-14, plan written, not dispatched
 
