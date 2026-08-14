@@ -1,0 +1,136 @@
+{
+ "run_number": 286,
+ "files": {
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.426,
+     "r_deseasonalised": 0.476,
+     "n_test": 36
+    },
+    {
+     "K": 3,
+     "r_raw": 0.448,
+     "r_deseasonalised": 0.337,
+     "n_test": 36
+    },
+    {
+     "K": 6,
+     "r_raw": 0.522,
+     "r_deseasonalised": 0.454,
+     "n_test": 36
+    },
+    {
+     "K": 12,
+     "r_raw": 0.599,
+     "r_deseasonalised": 0.548,
+     "n_test": 36
+    },
+    {
+     "K": 24,
+     "r_raw": 0.625,
+     "r_deseasonalised": 0.572,
+     "n_test": 36
+    }
+   ],
+   "seasonal_floor_raw": 0.272,
+   "seasonal_floor_deseas": -0.168
+  },
+  "provenance.json": {
+   "run_number": 286,
+   "sha": "69ea03af8fa261065eee6828e0e2032efe36e298",
+   "code": "https://github.com/blauewelt/earth/tree/69ea03af8fa261065eee6828e0e2032efe36e298",
+   "inputs": {
+    "doc": "E-027 SCALE arm big34, seed 1: the SUNFLOWER-34 stencil (spiral:111-4444-0.71-0.5) under a 2.7x LARGER stage-2 transformer \u2014 d_model 768 x 12 layers vs the standard 576 x 8. Q1 of Chris's overnight scale analysis: does a larger transformer help? Identical recipe otherwise (60k steps, expdecay, K=24, U=1); its exact base-scale control is E-026's #282-#284 (same stencil, 576x8). Shape chosen per Chris's pre-commitment: \"rooting for the sunflower; if confidence intervals overlap, pick it\" \u2014 corridor-AUC eval runs in parallel tonight and the log records the conditional.",
+    "steps": "60000",
+    "batch": "512",
+    "d_z": "64",
+    "anomaly": "true",
+    "temporal_steps": "60000",
+    "temporal_d_model": "768",
+    "temporal_layers": "12",
+    "eval_every": "0",
+    "resume": "!run-62,run-63",
+    "head_probe": "false",
+    "light_probe_every": "0",
+    "window": "stencil:35,ring:spiral:111-4444-0.71-0.5,seed:1,sched:expdecay --lr-cooldown-frac 0",
+    "tensor": "family3_na025",
+    "sst_channel": "false",
+    "patch": "3",
+    "max_minutes": "0",
+    "runner": "gpu-box-46045353",
+    "job_timeout": "600",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "576",
+    "codec_layers": "10",
+    "codec_heads": "8",
+    "codec_d_dec": "768"
+   },
+   "tensor": {
+    "file": "ml/cache/family3_na025.npz",
+    "sha256": "adcbe700fb6e160b1c84d7acd8dc0333b34d07829db9abd62c721aab278b4848",
+    "bytes": 2984746794,
+    "X_shape": [
+     516,
+     281,
+     481,
+     39
+    ],
+    "C": 39,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 516
+   },
+   "torch": "2.13.0+cu130",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-46045353"
+  }
+ }
+}
