@@ -120,11 +120,41 @@ the ridge and E-022 agree, and the narrow greedy stencil becomes the next arm.
 
 **Status: DISPATCHED** — runs recorded below at dispatch time.
 
-| arm | runs | shape |
-|---|---|---|
-| two rings (the question) | #237 / #238 / #239 | centre + 8 @ 222 km + 8 @ 555 km |
-| density control (n=1) | #234 | centre + 16 @ 222 km |
-| controls, already trained | e023r222, e017 | one ring of 8; no neighbours |
+### EXTENDED — a factorial over scales and width (Chris: *"try a few different designs. Eg 3 rings, last ring at 1000"*)
+
+Six more arms, chosen so the table separates the two things that have been
+confounded all along — **how many scales** the input reaches across, and
+**how wide** the input is:
+
+| arm | runs | shape | slots |
+|---|---|---|---|
+| no neighbours | e017 (trained) | — | 1 |
+| **one ring** | e023r222 (trained) | 8 @ 222 km | 9 |
+| density control (n=1) | #234 | 16 @ 222 km | 17 |
+| **two rings** | #237 / #238 / #239 | 8 @ 222 + 8 @ 555 | 17 |
+| **three rings, wide** | #240 / #241 / #242 | 8 @ 222 + 8 @ 555 + 8 @ 1000 | 25 |
+| **three rings, narrow** | #243 / #244 / #245 | 4 @ 222 + 4 @ 555 + 4 @ 1000 | 13 |
+
+The last two are the pair that matters most. They have **identical geometry —
+same three scales, same maximum reach of 1000 km — and differ only in width**,
+13 slots against 25. That is the per-point question asked in the transformer
+instead of in the ridge:
+
+- narrow ≈ wide → **width is what costs**, and every future design should
+  spend its slots on distinct scales rather than on filling circles;
+- wide > narrow → the extra bearings carry real information and the ridge's
+  per-point framing (and my E-024 reasoning) is too pessimistic;
+- both < the single ring → reach past ~222 km does not help this model at
+  monthly cadence, whatever the width, and E-023's radius was the whole story.
+
+Note the density control (#234, 16 points on ONE circle) sits at the same
+slot count as the two-ring arm, so "more points" and "more scales" can be
+read apart at fixed width.
+
+**Cost of the extension:** 6 arms × ~1.5 GPU-h ≈ 9 GPU-h ≈ $2.5, queued
+serially behind #234 and #237–239 on gpu-box-42005419 (the second box has
+been answering `resources_unavailable` since ~12:00Z, so the queue runs
+single-file: ~15 h wall for all ten arms, then one evaluation).
 
 ---
 
