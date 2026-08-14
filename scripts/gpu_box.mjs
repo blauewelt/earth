@@ -107,6 +107,22 @@ async function vast(method, path, body, base = BASE) {
 //     re-register with a dead token and abort. Hence the .runner check:
 //     configure once, thereafter just run. That is also what makes
 //     stop/start (rather than destroy/create) the cheap everyday loop.
+// A runner's NAME IS NOT A LABEL unless you say so. `runs-on:` matches labels
+// only, so the fleet-pinning convention that ml/CLAUDE.md §7 describes --
+// `runner: gpu-box-40623952`, an experiment nailed to a box with a known-good
+// disk -- depends entirely on `${name}` appearing in this list. It did not,
+// until 2026-08-14. The two boxes that predate that day carry the label
+// because it was added to them by hand at some point; every box created by
+// this script since has registered without it.
+//
+// The failure is quiet in the worst way. GitHub accepts the dispatch, the run
+// appears, the job sits `queued`, and the API cheerfully reports the runner
+// `online` and `idle` -- which is the exact signature ml/CLAUDE.md §2 tells
+// you to read as "a wedged runner, cancel and re-dispatch". Nine arms sat
+// that way against four idle boxes, and the documented cure would have
+// re-queued them into the same hole forever. Adding the label to a live
+// runner does NOT rescue jobs already queued: the label match is decided when
+// the job is queued, so the fix is here, before registration.
 function onstart(token, name) {
   return `#!/bin/bash
 set -eux
@@ -121,7 +137,7 @@ if [ ! -f /opt/runner/.runner ]; then
   ./config.sh --unattended --replace \\
     --url https://github.com/blauewelt/earth \\
     --token ${token} \\
-    --name ${name} --labels self-hosted,linux,x64,gpu,cuda \\
+    --name ${name} --labels self-hosted,linux,x64,gpu,cuda,${name} \\
     --work /opt/runner/_work
 fi
 cd /opt/runner
