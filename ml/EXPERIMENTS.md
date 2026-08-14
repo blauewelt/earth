@@ -383,113 +383,43 @@ so they run *beside* the factorial rather than behind it.
 
 ---
 
-### EARLY READS, updated 2026-08-14 ~20:30Z — forecast ratio only, corridor AUC pends the eval
+### EARLY READS — full standings at 22:35Z, forecast ratio (corridor AUC pends the evals)
 
-Fifteen arms green, every geometry string verified in its archive. Per-seed
-ratios (e017 control 0.19216, champion 8@222 = 0.18476):
+Every E-026 arm complete except spiral-34 s2 (#281, in flight). Ranked by
+mean; per-seed columns are directly comparable DOWN the table (the seed-index
+effect makes rows comparable only within a column):
 
-| arm | reach km | s0 | s1 | s2 | mean |
-|---|---|---|---|---|---|
-| ring 16 @ 222 (density) | 222 | 0.18545 | — | — | 0.18545 |
-| spiral-8, 111→890 | 890 | 0.18465 | 0.18216 | — | 0.18341 |
-| spiral-13, 222→1000 | 1000 | 0.18260 | 0.18140 | — | 0.18200 |
-| two rings 8+8 | 555 | 0.18353 | 0.17931 | 0.17784 | 0.18023 |
-| three rings narrow 4+4+4 | 1000 | 0.18162 | 0.17817 | — | 0.17990 |
-| three rings wide 8+8+8 | 1000 | 0.17928 | 0.17592 | 0.17412 | 0.17644 |
-| **spiral-24, 111→4444** | 4444 | 0.17943 | — | 0.17430 | 0.17687 |
-| **ELLIPTIC 24, ×0.71** | 4444 | 0.17853 | — | 0.17471 | 0.17662 |
+| rank | arm | reach km | pts | s0 | s1 | s2 | mean | vs champion |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **spiral-34, geometric** | 4444 | 34 | 0.17702 | 0.17501 | *(running)* | **0.17602** | **−0.0087** |
+| 2 | **elliptic-24 ×0.71** | 4444 | 24 | 0.17853 | 0.17563 | 0.17471 | 0.17629 | −0.0085 |
+| 3 | three rings wide 8+8+8 | 1000 | 24 | 0.17928 | 0.17592 | 0.17412 | 0.17644 | −0.0083 |
+| 4 | spiral-24, geometric | 4444 | 24 | 0.17943 | 0.17742 | 0.17430 | 0.17705 | −0.0077 |
+| 5 | **sunflower-34 (far-heavy)** | 4444 | 34 | 0.18093 | 0.17910 | 0.17692 | 0.17898 | −0.0058 |
+| 6 | two rings 8+8 | 555 | 16 | 0.18353 | 0.17931 | 0.17784 | 0.18023 | −0.0045 |
+| 7 | spiral-13 | 1000 | 13 | 0.18260 | 0.18140 | 0.17686 | 0.18029 | −0.0045 |
+| 8 | three rings narrow 4+4+4 | 1000 | 12 | 0.18296 | 0.18162 | 0.17817 | 0.18092 | −0.0038 |
+| 9 | spiral-8 | 890 | 8 | 0.18465 | 0.18216 | 0.17906 | 0.18196 | −0.0028 |
+| 10 | ring 16 @ 222 (density, n=1) | 222 | 16 | 0.18545 | — | — | 0.18545 | +0.0007 |
+| — | champion 8 @ 222 (e023r222) | 222 | 8 | | | | 0.18476 | 0 |
+| — | no neighbours (e017) | 0 | 0 | | | | 0.19216 | +0.0074 |
 
-**A systematic seed-index effect surfaced, and it changes the right
-analysis.** In every arm with multiple seeds the ratio falls with seed index
-— s0 > s1 > s2, five arms out of five (~1/288 under exchangeability). The
-seed enters the eval slice as well as the init, so part of the "seed spread"
-is a FIXED per-seed offset shared by all arms. Consequence: cross-arm
-comparisons must be **paired by seed** (as `paired_probe.py` pairs folds),
-and unpaired seed-sd confidence intervals overstate the noise. Paired, the
-standings are stable: at every matched seed, wide > narrow > two-ring >
-spirals-at-1000 > 890 > 222, and the two 4444 km arms (circular and
-elliptic) trade places within ±0.001 — aspect is second-order on this
-metric, exactly as the anisotropy measurement (1.41, mild) predicted.
+The paired-by-seed ordering inside the 4444 km family is CONSISTENT at every
+seed: **spiral-34 ≤ elliptic-24 ≤ spiral-24 < sunflower** — so on one-step
+forecast the ramp verdict reads "keep the near field", the aspect is worth a
+small positive nudge (elliptic beats circular spiral-24 at s0 and s1, ties at
+s2), and 34 points beat 24 at the same reach. The sunflower's s2 (0.17692)
+closed much of its gap; its penalty is real but shrinking with seed,
+consistent with the dead slots costing sample efficiency. Reach remains the
+dominant axis: every 4444 arm beats every ≤1000 arm except wide, which holds
+rank 3 — 1000 km with a dense outer ring remains remarkable value per slot.
 
-**Late-evening additions (~21:00Z).** Sunflower geometry verified end-to-end
-in #282/#283's archives (`spiral:111,4444,0.71,0.5`, stencil 35) — every
-E-027 arm sharing the string is safe. New numbers, paired by seed where the
-counterpart exists:
-
-| arm | s0 | s1 | s2 | mean |
-|---|---|---|---|---|
-| **spiral-34 @ 4444 (geometric)** | 0.17702 | 0.17501 | — | **0.17602 — new best** |
-| spiral-24 @ 4444 | 0.17943 | 0.17742 | 0.17430 | 0.17705 |
-| spiral-13 (s2 landed) | 0.18260 | 0.18140 | 0.17686 | 0.18029 |
-| spiral-8 (s2 landed) | 0.18465 | 0.18216 | 0.17906 | 0.18196 |
-| narrow (all seeds) | 0.18296 | 0.18162 | 0.17817 | 0.18092 |
-| **sunflower-34** | 0.18093 | 0.17910 | — | 0.18002 |
-
-Two things worth stating plainly. **The sunflower trails its own 4444 km
-family at every completed seed** — the pre-registered occupancy cost (47.6 %,
-half its slots structural zeros) and the abandoned 222 km near field playing
-out exactly as the entry warned; on this metric the ramp verdict leans
-toward "keep the near field AND the reach" (spiral-34, near-heavy, is the
-new leader). The corridor AUC can still reverse this — one-step MSE says
-little about 12-month tracking, which is the sunflower's actual argument —
-and the decision rule is pre-committed. And a CORRECTION recorded rather than
-edited away: the "seed-monotonicity counterexample" reported at first was MY
-seed mislabel, not the data's. The narrow arm's re-dispatch order after the
-runner-label fix was s1, s2, then the s0 replacement — so #259 carries seed
-1, #260 seed 2, #275 seed 0, which `publish_heads`' checkpoint verification
-caught when my claim said otherwise (three VERIFICATION FAILED lines, zero
-heads mislabelled on the release — the script existing is why this was a
-five-minute correction and not a poisoned eval). Correctly labelled, narrow
-reads 0.18296 > 0.18162 > 0.17817 and the seed-index effect is again
-monotone in EVERY arm measured. Pair by seed; treat unpaired CIs as
-overstated.
-
-Heads published so far: `e026tworing_u1_s{0,1,2}` and `e026wide_u1_s{0,1,2}`
-on `model-checkpoints-v1` — after fixing `publish_heads.mjs`, whose
-inspector ran `float(ring_km)` and would have crashed on the first
-multi-radius head, and whose 50-run lookup no longer covered a day.
-
----|---|---|---|
-| no neighbours (e017) | 0 | 0.19216 | 0.19216 |
-| ring 16 @ 222 (density) | 222 | #234 0.18545 | 0.18545 |
-| champion 8 @ 222 | 222 | 0.18476 | 0.18476 |
-| spiral-8, 111→890 | 890 | #264 0.18465 | 0.18465 |
-| two rings 8+8 | 555 | #237 0.18353 · #238 0.17931 | 0.18142 |
-| spiral-13, 222→1000 | 1000 | #261 0.18260 | 0.18260 |
-| three rings narrow 4+4+4 | 1000 | #259 0.18162 | 0.18162 |
-| three rings wide 8+8+8 | 1000 | #255 0.17928 · #256 0.17592 | 0.17760 |
-| **spiral-24, 111→4444** | **4444** | #267 0.17943 · **#273 0.17430** | **0.17687** |
-
-Readings so far, against the pre-registered questions:
-
-- **Reach is the dominant axis and is still paying at 4444 km.** The
-  ordering by mean is monotone in reach; #273's 0.17430 is the best number
-  the programme has recorded, and the deep spiral's two seeds straddle the
-  wide arm's.
-- **Arrangement at fixed width and reach is second-order**: narrow rings
-  0.18162 vs spiral-13 0.18260 — a tie within seed noise, on the one pair
-  built to isolate arrangement.
-- **Density and radial spread at fixed small width buy nothing**: 16@222 ≈
-  8@222 ≈ spiral-8 (0.18545 / 0.18476 / 0.18465).
-- Pending: elliptic (#276–#278), sunflower (#282–#284), spiral-34
-  (#279–#281) — the arms that push the winning axis further.
-
----|---|---|---|
-| no neighbours (e017, control) | — | 0.19216 | +0.0074 |
-| ring of 16 @ 222 (density) | #234 | 0.18545 | +0.0007 |
-| two rings 8+8 @ 222/555 | #237 | 0.18353 | −0.0012 |
-| spiral of 13, 222→1000 | #261 | 0.18260 | −0.0022 |
-| **three rings 8+8+8 @ 222→1000** | #255 | **0.17928** | **−0.0055 (~2.7 sd)** |
-
-The ordering is monotone in REACH: 222 → 555 → 1000 improves one-step
-forecast, density at fixed radius does not (#234 ≈ champion, as the ridge
-predicted), and #255 is the best forecast number the programme has recorded.
-Consistent with the CFL/reach hypothesis below — and exactly the pattern the
-4444 km arms exist to push further. Caveat, pre-registered: E-010 measured
-that the forecast objective and the AMOC probe can decouple; the deciding
-number remains rolled corridor AUC from the one evaluation at the end.
-
----
+Heads on the release: tworing, wide, narrow, sp13, sp8, sp24, esp24 (×3
+each). Pending: sp34 (needs s2), sun34, ring16. Eval wave 1 (#294: gate +
+sp24 + wide + champion) lands ~02:00Z; wave 2 (sunflower + elliptic +
+spiral-34) follows on the second eval box. Earlier per-seed detail and the
+seed-mislabel correction are preserved in git history (commits 324c796,
+e3bcb0e).
 
 ### HOW A STENCIL ROLLS FORWARD — the design theory behind the deep and elliptic arms (2026-08-14)
 
