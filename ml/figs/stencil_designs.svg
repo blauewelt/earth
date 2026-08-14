@@ -1,289 +1,421 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1112" viewBox="0 0 900 1112" font-family="ui-monospace,monospace">
-<rect width="900" height="1112" fill="#0d1117"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1112" viewBox="0 0 1200 1112" font-family="ui-monospace,monospace">
+<rect width="1200" height="1112" fill="#0d1117"/>
 <text x="10" y="30" fill="#e6edf3" font-size="13">3x3 touching (E-022)</text>
 <text x="10" y="46" fill="#7d8590" font-size="11">#219-#221 · 9 slots · 8 bearings</text>
-<line x1="150.0" y1="206.0" x2="147.5" y2="209.3" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="206.0" x2="150.0" y2="209.3" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="206.0" x2="152.5" y2="209.3" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="206.0" x2="147.5" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="206.0" x2="152.5" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="206.0" x2="147.5" y2="202.7" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="206.0" x2="150.0" y2="202.7" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="206.0" x2="152.5" y2="202.7" stroke="#1f6feb" stroke-opacity="0.35"/>
-<circle cx="147.5" cy="209.3" r="3.4" fill="#58a6ff"/>
-<circle cx="150.0" cy="209.3" r="3.4" fill="#58a6ff"/>
-<circle cx="152.5" cy="209.3" r="3.4" fill="#58a6ff"/>
-<circle cx="147.5" cy="206.0" r="3.4" fill="#58a6ff"/>
-<circle cx="152.5" cy="206.0" r="3.4" fill="#58a6ff"/>
-<circle cx="147.5" cy="202.7" r="3.4" fill="#58a6ff"/>
-<circle cx="150.0" cy="202.7" r="3.4" fill="#58a6ff"/>
-<circle cx="152.5" cy="202.7" r="3.4" fill="#58a6ff"/>
+<line x1="150.0" y1="206.0" x2="143.2" y2="214.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="206.0" x2="150.0" y2="216.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="206.0" x2="156.8" y2="214.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="206.0" x2="141.2" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="206.0" x2="158.8" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="206.0" x2="143.2" y2="197.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="206.0" x2="150.0" y2="196.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="206.0" x2="156.8" y2="197.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<circle cx="143.2" cy="214.9" r="3.4" fill="#58a6ff"/>
+<circle cx="150.0" cy="216.0" r="3.4" fill="#58a6ff"/>
+<circle cx="156.8" cy="214.9" r="3.4" fill="#58a6ff"/>
+<circle cx="141.2" cy="206.0" r="3.4" fill="#58a6ff"/>
+<circle cx="158.8" cy="206.0" r="3.4" fill="#58a6ff"/>
+<circle cx="143.2" cy="197.1" r="3.4" fill="#58a6ff"/>
+<circle cx="150.0" cy="196.0" r="3.4" fill="#58a6ff"/>
+<circle cx="156.8" cy="197.1" r="3.4" fill="#58a6ff"/>
 <circle cx="150.0" cy="206.0" r="4.2" fill="#f85149"/>
 <text x="10" y="348" fill="#7d8590" font-size="10">reach 21–35 km</text>
 <text x="310" y="30" fill="#e6edf3" font-size="13">13-point (E-022)</text>
 <text x="310" y="46" fill="#7d8590" font-size="11">#222-#224 · 13 slots · 8 bearings</text>
-<line x1="450.0" y1="206.0" x2="450.0" y2="209.3" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="206.0" x2="450.0" y2="202.7" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="206.0" x2="447.5" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="206.0" x2="452.5" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="206.0" x2="447.5" y2="209.3" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="206.0" x2="452.5" y2="209.3" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="206.0" x2="447.5" y2="202.7" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="206.0" x2="452.5" y2="202.7" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="206.0" x2="450.0" y2="212.6" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="206.0" x2="450.0" y2="199.4" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="206.0" x2="444.9" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="206.0" x2="455.1" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<circle cx="450.0" cy="209.3" r="3.4" fill="#58a6ff"/>
-<circle cx="450.0" cy="202.7" r="3.4" fill="#58a6ff"/>
-<circle cx="447.5" cy="206.0" r="3.4" fill="#58a6ff"/>
-<circle cx="452.5" cy="206.0" r="3.4" fill="#58a6ff"/>
-<circle cx="447.5" cy="209.3" r="3.4" fill="#58a6ff"/>
-<circle cx="452.5" cy="209.3" r="3.4" fill="#58a6ff"/>
-<circle cx="447.5" cy="202.7" r="3.4" fill="#58a6ff"/>
-<circle cx="452.5" cy="202.7" r="3.4" fill="#58a6ff"/>
-<circle cx="450.0" cy="212.6" r="3.4" fill="#58a6ff"/>
-<circle cx="450.0" cy="199.4" r="3.4" fill="#58a6ff"/>
-<circle cx="444.9" cy="206.0" r="3.4" fill="#58a6ff"/>
-<circle cx="455.1" cy="206.0" r="3.4" fill="#58a6ff"/>
+<line x1="450.0" y1="206.0" x2="450.0" y2="216.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="206.0" x2="450.0" y2="196.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="206.0" x2="441.2" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="206.0" x2="458.8" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="206.0" x2="443.2" y2="214.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="206.0" x2="456.8" y2="214.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="206.0" x2="443.2" y2="197.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="206.0" x2="456.8" y2="197.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="206.0" x2="450.0" y2="220.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="206.0" x2="450.0" y2="191.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="206.0" x2="437.6" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="206.0" x2="462.4" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<circle cx="450.0" cy="216.0" r="3.4" fill="#58a6ff"/>
+<circle cx="450.0" cy="196.0" r="3.4" fill="#58a6ff"/>
+<circle cx="441.2" cy="206.0" r="3.4" fill="#58a6ff"/>
+<circle cx="458.8" cy="206.0" r="3.4" fill="#58a6ff"/>
+<circle cx="443.2" cy="214.9" r="3.4" fill="#58a6ff"/>
+<circle cx="456.8" cy="214.9" r="3.4" fill="#58a6ff"/>
+<circle cx="443.2" cy="197.1" r="3.4" fill="#58a6ff"/>
+<circle cx="456.8" cy="197.1" r="3.4" fill="#58a6ff"/>
+<circle cx="450.0" cy="220.2" r="3.4" fill="#58a6ff"/>
+<circle cx="450.0" cy="191.8" r="3.4" fill="#58a6ff"/>
+<circle cx="437.6" cy="206.0" r="3.4" fill="#58a6ff"/>
+<circle cx="462.4" cy="206.0" r="3.4" fill="#58a6ff"/>
 <circle cx="450.0" cy="206.0" r="4.2" fill="#f85149"/>
 <text x="310" y="348" fill="#7d8590" font-size="10">reach 21–56 km</text>
 <text x="610" y="30" fill="#e6edf3" font-size="13">ring of 8 @ 222 km (E-023)</text>
 <text x="610" y="46" fill="#7d8590" font-size="11">e023r222 · 9 slots · 8 bearings</text>
-<circle cx="750.0" cy="206.0" r="26.5" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<line x1="750.0" y1="206.0" x2="750.0" y2="179.4" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="206.0" x2="767.8" y2="186.1" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="206.0" x2="775.4" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="206.0" x2="767.8" y2="225.9" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="206.0" x2="750.0" y2="232.6" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="206.0" x2="732.2" y2="225.9" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="206.0" x2="724.6" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="206.0" x2="732.2" y2="186.1" stroke="#1f6feb" stroke-opacity="0.35"/>
-<circle cx="750.0" cy="179.4" r="3.4" fill="#58a6ff"/>
-<circle cx="767.8" cy="186.1" r="3.4" fill="#58a6ff"/>
-<circle cx="775.4" cy="206.0" r="3.4" fill="#58a6ff"/>
-<circle cx="767.8" cy="225.9" r="3.4" fill="#58a6ff"/>
-<circle cx="750.0" cy="232.6" r="3.4" fill="#58a6ff"/>
-<circle cx="732.2" cy="225.9" r="3.4" fill="#58a6ff"/>
-<circle cx="724.6" cy="206.0" r="3.4" fill="#58a6ff"/>
-<circle cx="732.2" cy="186.1" r="3.4" fill="#58a6ff"/>
+<circle cx="750.0" cy="206.0" r="28.3" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<line x1="750.0" y1="206.0" x2="750.0" y2="177.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="206.0" x2="769.0" y2="184.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="206.0" x2="777.8" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="206.0" x2="769.0" y2="227.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="206.0" x2="750.0" y2="234.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="206.0" x2="731.0" y2="227.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="206.0" x2="722.2" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="206.0" x2="731.0" y2="184.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<circle cx="750.0" cy="177.6" r="3.4" fill="#58a6ff"/>
+<circle cx="769.0" cy="184.8" r="3.4" fill="#58a6ff"/>
+<circle cx="777.8" cy="206.0" r="3.4" fill="#58a6ff"/>
+<circle cx="769.0" cy="227.2" r="3.4" fill="#58a6ff"/>
+<circle cx="750.0" cy="234.4" r="3.4" fill="#58a6ff"/>
+<circle cx="731.0" cy="227.2" r="3.4" fill="#58a6ff"/>
+<circle cx="722.2" cy="206.0" r="3.4" fill="#58a6ff"/>
+<circle cx="731.0" cy="184.8" r="3.4" fill="#58a6ff"/>
 <circle cx="750.0" cy="206.0" r="4.2" fill="#f85149"/>
 <text x="610" y="348" fill="#7d8590" font-size="10">reach 213–224 km</text>
-<text x="10" y="392" fill="#e6edf3" font-size="13">ring of 16 @ 222 km</text>
-<text x="10" y="408" fill="#7d8590" font-size="11">#234 · 17 slots · 16 bearings</text>
-<circle cx="150.0" cy="568.0" r="26.5" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<line x1="150.0" y1="568.0" x2="150.0" y2="541.4" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="160.2" y2="544.8" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="167.8" y2="548.1" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="175.4" y2="558.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="175.4" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="175.4" y2="578.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="167.8" y2="587.9" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="160.2" y2="591.2" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="150.0" y2="594.6" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="139.8" y2="591.2" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="132.2" y2="587.9" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="124.6" y2="578.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="124.6" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="124.6" y2="558.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="132.2" y2="548.1" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="568.0" x2="139.8" y2="544.8" stroke="#1f6feb" stroke-opacity="0.35"/>
-<circle cx="150.0" cy="541.4" r="3.4" fill="#58a6ff"/>
-<circle cx="160.2" cy="544.8" r="3.4" fill="#58a6ff"/>
-<circle cx="167.8" cy="548.1" r="3.4" fill="#58a6ff"/>
-<circle cx="175.4" cy="558.0" r="3.4" fill="#58a6ff"/>
-<circle cx="175.4" cy="568.0" r="3.4" fill="#58a6ff"/>
-<circle cx="175.4" cy="578.0" r="3.4" fill="#58a6ff"/>
-<circle cx="167.8" cy="587.9" r="3.4" fill="#58a6ff"/>
-<circle cx="160.2" cy="591.2" r="3.4" fill="#58a6ff"/>
-<circle cx="150.0" cy="594.6" r="3.4" fill="#58a6ff"/>
-<circle cx="139.8" cy="591.2" r="3.4" fill="#58a6ff"/>
-<circle cx="132.2" cy="587.9" r="3.4" fill="#58a6ff"/>
-<circle cx="124.6" cy="578.0" r="3.4" fill="#58a6ff"/>
-<circle cx="124.6" cy="568.0" r="3.4" fill="#58a6ff"/>
-<circle cx="124.6" cy="558.0" r="3.4" fill="#58a6ff"/>
-<circle cx="132.2" cy="548.1" r="3.4" fill="#58a6ff"/>
-<circle cx="139.8" cy="544.8" r="3.4" fill="#58a6ff"/>
+<text x="910" y="30" fill="#e6edf3" font-size="13">ring of 16 @ 222 km</text>
+<text x="910" y="46" fill="#7d8590" font-size="11">#234 · 17 slots · 16 bearings</text>
+<circle cx="1050.0" cy="206.0" r="28.3" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<line x1="1050.0" y1="206.0" x2="1050.0" y2="177.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1061.1" y2="180.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1069.0" y2="184.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1076.8" y2="195.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1077.8" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1076.8" y2="216.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1069.0" y2="227.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1061.1" y2="231.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1050.0" y2="234.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1038.9" y2="231.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1031.0" y2="227.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1023.2" y2="216.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1022.2" y2="206.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1023.2" y2="195.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1031.0" y2="184.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="206.0" x2="1038.9" y2="180.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<circle cx="1050.0" cy="177.6" r="3.4" fill="#58a6ff"/>
+<circle cx="1061.1" cy="180.6" r="3.4" fill="#58a6ff"/>
+<circle cx="1069.0" cy="184.8" r="3.4" fill="#58a6ff"/>
+<circle cx="1076.8" cy="195.5" r="3.4" fill="#58a6ff"/>
+<circle cx="1077.8" cy="206.0" r="3.4" fill="#58a6ff"/>
+<circle cx="1076.8" cy="216.5" r="3.4" fill="#58a6ff"/>
+<circle cx="1069.0" cy="227.2" r="3.4" fill="#58a6ff"/>
+<circle cx="1061.1" cy="231.4" r="3.4" fill="#58a6ff"/>
+<circle cx="1050.0" cy="234.4" r="3.4" fill="#58a6ff"/>
+<circle cx="1038.9" cy="231.4" r="3.4" fill="#58a6ff"/>
+<circle cx="1031.0" cy="227.2" r="3.4" fill="#58a6ff"/>
+<circle cx="1023.2" cy="216.5" r="3.4" fill="#58a6ff"/>
+<circle cx="1022.2" cy="206.0" r="3.4" fill="#58a6ff"/>
+<circle cx="1023.2" cy="195.5" r="3.4" fill="#58a6ff"/>
+<circle cx="1031.0" cy="184.8" r="3.4" fill="#58a6ff"/>
+<circle cx="1038.9" cy="180.6" r="3.4" fill="#58a6ff"/>
+<circle cx="1050.0" cy="206.0" r="4.2" fill="#f85149"/>
+<text x="910" y="348" fill="#7d8590" font-size="10">reach 213–229 km</text>
+<text x="10" y="392" fill="#e6edf3" font-size="13">two rings, 8+8 @ 222/555 km</text>
+<text x="10" y="408" fill="#7d8590" font-size="11">#237-#239 · 17 slots · 16 bearings</text>
+<circle cx="150.0" cy="568.0" r="28.3" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<circle cx="150.0" cy="568.0" r="44.8" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<line x1="150.0" y1="568.0" x2="150.0" y2="539.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="169.0" y2="546.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="177.8" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="169.0" y2="589.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="150.0" y2="596.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="131.0" y2="589.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="122.2" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="131.0" y2="546.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="167.4" y2="527.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="191.2" y2="550.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="191.2" y2="585.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="167.4" y2="608.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="132.6" y2="608.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="108.8" y2="585.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="108.8" y2="550.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="568.0" x2="132.6" y2="527.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<circle cx="150.0" cy="539.6" r="3.4" fill="#58a6ff"/>
+<circle cx="169.0" cy="546.8" r="3.4" fill="#58a6ff"/>
+<circle cx="177.8" cy="568.0" r="3.4" fill="#58a6ff"/>
+<circle cx="169.0" cy="589.2" r="3.4" fill="#58a6ff"/>
+<circle cx="150.0" cy="596.4" r="3.4" fill="#58a6ff"/>
+<circle cx="131.0" cy="589.2" r="3.4" fill="#58a6ff"/>
+<circle cx="122.2" cy="568.0" r="3.4" fill="#58a6ff"/>
+<circle cx="131.0" cy="546.8" r="3.4" fill="#58a6ff"/>
+<circle cx="167.4" cy="527.2" r="3.4" fill="#58a6ff"/>
+<circle cx="191.2" cy="550.1" r="3.4" fill="#58a6ff"/>
+<circle cx="191.2" cy="585.9" r="3.4" fill="#58a6ff"/>
+<circle cx="167.4" cy="608.8" r="3.4" fill="#58a6ff"/>
+<circle cx="132.6" cy="608.8" r="3.4" fill="#58a6ff"/>
+<circle cx="108.8" cy="585.9" r="3.4" fill="#58a6ff"/>
+<circle cx="108.8" cy="550.1" r="3.4" fill="#58a6ff"/>
+<circle cx="132.6" cy="527.2" r="3.4" fill="#58a6ff"/>
 <circle cx="150.0" cy="568.0" r="4.2" fill="#f85149"/>
-<text x="10" y="710" fill="#7d8590" font-size="10">reach 213–229 km</text>
-<text x="310" y="392" fill="#e6edf3" font-size="13">two rings, 8+8 @ 222/555 km</text>
-<text x="310" y="408" fill="#7d8590" font-size="11">#237-#239 · 17 slots · 16 bearings</text>
-<circle cx="450.0" cy="568.0" r="26.5" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<circle cx="450.0" cy="568.0" r="66.2" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<line x1="450.0" y1="568.0" x2="450.0" y2="541.4" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="467.8" y2="548.1" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="475.4" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="467.8" y2="587.9" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="450.0" y2="594.6" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="432.2" y2="587.9" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="424.6" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="432.2" y2="548.1" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="475.4" y2="508.2" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="511.0" y2="541.4" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="511.0" y2="594.6" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="475.4" y2="627.8" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="424.6" y2="627.8" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="389.0" y2="594.6" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="389.0" y2="541.4" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="568.0" x2="424.6" y2="508.2" stroke="#1f6feb" stroke-opacity="0.35"/>
-<circle cx="450.0" cy="541.4" r="3.4" fill="#58a6ff"/>
-<circle cx="467.8" cy="548.1" r="3.4" fill="#58a6ff"/>
-<circle cx="475.4" cy="568.0" r="3.4" fill="#58a6ff"/>
-<circle cx="467.8" cy="587.9" r="3.4" fill="#58a6ff"/>
-<circle cx="450.0" cy="594.6" r="3.4" fill="#58a6ff"/>
-<circle cx="432.2" cy="587.9" r="3.4" fill="#58a6ff"/>
-<circle cx="424.6" cy="568.0" r="3.4" fill="#58a6ff"/>
-<circle cx="432.2" cy="548.1" r="3.4" fill="#58a6ff"/>
-<circle cx="475.4" cy="508.2" r="3.4" fill="#58a6ff"/>
-<circle cx="511.0" cy="541.4" r="3.4" fill="#58a6ff"/>
-<circle cx="511.0" cy="594.6" r="3.4" fill="#58a6ff"/>
-<circle cx="475.4" cy="627.8" r="3.4" fill="#58a6ff"/>
-<circle cx="424.6" cy="627.8" r="3.4" fill="#58a6ff"/>
-<circle cx="389.0" cy="594.6" r="3.4" fill="#58a6ff"/>
-<circle cx="389.0" cy="541.4" r="3.4" fill="#58a6ff"/>
-<circle cx="424.6" cy="508.2" r="3.4" fill="#58a6ff"/>
+<text x="10" y="710" fill="#7d8590" font-size="10">reach 213–558 km</text>
+<text x="310" y="392" fill="#e6edf3" font-size="13">three rings, 8+8+8 @ 222/555/1000 km</text>
+<text x="310" y="408" fill="#7d8590" font-size="11">#255-#257 · 25 slots · 20 bearings</text>
+<circle cx="450.0" cy="568.0" r="28.3" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<circle cx="450.0" cy="568.0" r="44.8" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<circle cx="450.0" cy="568.0" r="60.1" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<line x1="450.0" y1="568.0" x2="450.0" y2="539.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="469.0" y2="546.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="477.8" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="469.0" y2="589.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="450.0" y2="596.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="431.0" y2="589.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="422.2" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="431.0" y2="546.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="467.4" y2="527.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="491.2" y2="550.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="491.2" y2="585.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="467.4" y2="608.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="432.6" y2="608.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="408.8" y2="585.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="408.8" y2="550.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="432.6" y2="527.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="450.0" y2="507.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="492.5" y2="526.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="510.2" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="492.5" y2="610.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="450.0" y2="628.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="407.5" y2="610.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="389.8" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="568.0" x2="407.5" y2="526.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<circle cx="450.0" cy="539.6" r="3.4" fill="#58a6ff"/>
+<circle cx="469.0" cy="546.8" r="3.4" fill="#58a6ff"/>
+<circle cx="477.8" cy="568.0" r="3.4" fill="#58a6ff"/>
+<circle cx="469.0" cy="589.2" r="3.4" fill="#58a6ff"/>
+<circle cx="450.0" cy="596.4" r="3.4" fill="#58a6ff"/>
+<circle cx="431.0" cy="589.2" r="3.4" fill="#58a6ff"/>
+<circle cx="422.2" cy="568.0" r="3.4" fill="#58a6ff"/>
+<circle cx="431.0" cy="546.8" r="3.4" fill="#58a6ff"/>
+<circle cx="467.4" cy="527.2" r="3.4" fill="#58a6ff"/>
+<circle cx="491.2" cy="550.1" r="3.4" fill="#58a6ff"/>
+<circle cx="491.2" cy="585.9" r="3.4" fill="#58a6ff"/>
+<circle cx="467.4" cy="608.8" r="3.4" fill="#58a6ff"/>
+<circle cx="432.6" cy="608.8" r="3.4" fill="#58a6ff"/>
+<circle cx="408.8" cy="585.9" r="3.4" fill="#58a6ff"/>
+<circle cx="408.8" cy="550.1" r="3.4" fill="#58a6ff"/>
+<circle cx="432.6" cy="527.2" r="3.4" fill="#58a6ff"/>
+<circle cx="450.0" cy="507.8" r="3.4" fill="#58a6ff"/>
+<circle cx="492.5" cy="526.0" r="3.4" fill="#58a6ff"/>
+<circle cx="510.2" cy="568.0" r="3.4" fill="#58a6ff"/>
+<circle cx="492.5" cy="610.0" r="3.4" fill="#58a6ff"/>
+<circle cx="450.0" cy="628.2" r="3.4" fill="#58a6ff"/>
+<circle cx="407.5" cy="610.0" r="3.4" fill="#58a6ff"/>
+<circle cx="389.8" cy="568.0" r="3.4" fill="#58a6ff"/>
+<circle cx="407.5" cy="526.0" r="3.4" fill="#58a6ff"/>
 <circle cx="450.0" cy="568.0" r="4.2" fill="#f85149"/>
-<text x="310" y="710" fill="#7d8590" font-size="10">reach 213–558 km</text>
-<text x="610" y="392" fill="#e6edf3" font-size="13">three rings, 8+8+8 @ 222/555/1000 km</text>
-<text x="610" y="408" fill="#7d8590" font-size="11">#255-#257 · 25 slots · 16 bearings</text>
-<circle cx="750.0" cy="568.0" r="26.5" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<circle cx="750.0" cy="568.0" r="66.2" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<circle cx="750.0" cy="568.0" r="119.3" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<line x1="750.0" y1="568.0" x2="750.0" y2="541.4" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="767.8" y2="548.1" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="775.4" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="767.8" y2="587.9" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="750.0" y2="594.6" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="732.2" y2="587.9" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="724.6" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="732.2" y2="548.1" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="775.4" y2="508.2" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="811.0" y2="541.4" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="811.0" y2="594.6" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="775.4" y2="627.8" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="724.6" y2="627.8" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="689.0" y2="594.6" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="689.0" y2="541.4" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="724.6" y2="508.2" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="750.0" y2="448.5" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="833.9" y2="485.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="869.5" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="833.9" y2="651.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="750.0" y2="687.5" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="666.1" y2="651.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="630.5" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="568.0" x2="666.1" y2="485.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<circle cx="750.0" cy="541.4" r="3.4" fill="#58a6ff"/>
-<circle cx="767.8" cy="548.1" r="3.4" fill="#58a6ff"/>
-<circle cx="775.4" cy="568.0" r="3.4" fill="#58a6ff"/>
-<circle cx="767.8" cy="587.9" r="3.4" fill="#58a6ff"/>
-<circle cx="750.0" cy="594.6" r="3.4" fill="#58a6ff"/>
-<circle cx="732.2" cy="587.9" r="3.4" fill="#58a6ff"/>
-<circle cx="724.6" cy="568.0" r="3.4" fill="#58a6ff"/>
-<circle cx="732.2" cy="548.1" r="3.4" fill="#58a6ff"/>
-<circle cx="775.4" cy="508.2" r="3.4" fill="#58a6ff"/>
-<circle cx="811.0" cy="541.4" r="3.4" fill="#58a6ff"/>
-<circle cx="811.0" cy="594.6" r="3.4" fill="#58a6ff"/>
-<circle cx="775.4" cy="627.8" r="3.4" fill="#58a6ff"/>
-<circle cx="724.6" cy="627.8" r="3.4" fill="#58a6ff"/>
-<circle cx="689.0" cy="594.6" r="3.4" fill="#58a6ff"/>
-<circle cx="689.0" cy="541.4" r="3.4" fill="#58a6ff"/>
-<circle cx="724.6" cy="508.2" r="3.4" fill="#58a6ff"/>
-<circle cx="750.0" cy="448.5" r="3.4" fill="#58a6ff"/>
-<circle cx="833.9" cy="485.0" r="3.4" fill="#58a6ff"/>
-<circle cx="869.5" cy="568.0" r="3.4" fill="#58a6ff"/>
-<circle cx="833.9" cy="651.0" r="3.4" fill="#58a6ff"/>
-<circle cx="750.0" cy="687.5" r="3.4" fill="#58a6ff"/>
-<circle cx="666.1" cy="651.0" r="3.4" fill="#58a6ff"/>
-<circle cx="630.5" cy="568.0" r="3.4" fill="#58a6ff"/>
-<circle cx="666.1" cy="485.0" r="3.4" fill="#58a6ff"/>
+<text x="310" y="710" fill="#7d8590" font-size="10">reach 213–1002 km</text>
+<text x="610" y="392" fill="#e6edf3" font-size="13">three rings, 4+4+4 @ 222/555/1000 km</text>
+<text x="610" y="408" fill="#7d8590" font-size="11">#249/#259/#260 · 13 slots · 8 bearings</text>
+<circle cx="750.0" cy="568.0" r="28.3" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<circle cx="750.0" cy="568.0" r="44.8" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<circle cx="750.0" cy="568.0" r="60.1" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<line x1="750.0" y1="568.0" x2="750.0" y2="539.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="568.0" x2="777.8" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="568.0" x2="750.0" y2="596.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="568.0" x2="722.2" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="568.0" x2="781.2" y2="536.3" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="568.0" x2="781.2" y2="599.7" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="568.0" x2="718.8" y2="599.7" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="568.0" x2="718.8" y2="536.3" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="568.0" x2="750.0" y2="507.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="568.0" x2="810.2" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="568.0" x2="750.0" y2="628.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="568.0" x2="689.8" y2="568.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<circle cx="750.0" cy="539.6" r="3.4" fill="#58a6ff"/>
+<circle cx="777.8" cy="568.0" r="3.4" fill="#58a6ff"/>
+<circle cx="750.0" cy="596.4" r="3.4" fill="#58a6ff"/>
+<circle cx="722.2" cy="568.0" r="3.4" fill="#58a6ff"/>
+<circle cx="781.2" cy="536.3" r="3.4" fill="#58a6ff"/>
+<circle cx="781.2" cy="599.7" r="3.4" fill="#58a6ff"/>
+<circle cx="718.8" cy="599.7" r="3.4" fill="#58a6ff"/>
+<circle cx="718.8" cy="536.3" r="3.4" fill="#58a6ff"/>
+<circle cx="750.0" cy="507.8" r="3.4" fill="#58a6ff"/>
+<circle cx="810.2" cy="568.0" r="3.4" fill="#58a6ff"/>
+<circle cx="750.0" cy="628.2" r="3.4" fill="#58a6ff"/>
+<circle cx="689.8" cy="568.0" r="3.4" fill="#58a6ff"/>
 <circle cx="750.0" cy="568.0" r="4.2" fill="#f85149"/>
 <text x="610" y="710" fill="#7d8590" font-size="10">reach 213–1002 km</text>
-<text x="10" y="754" fill="#e6edf3" font-size="13">three rings, 4+4+4 @ 222/555/1000 km</text>
-<text x="10" y="770" fill="#7d8590" font-size="11">#249/#259/#260 · 13 slots · 8 bearings</text>
-<circle cx="150.0" cy="930.0" r="26.5" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<circle cx="150.0" cy="930.0" r="66.2" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<circle cx="150.0" cy="930.0" r="119.3" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<line x1="150.0" y1="930.0" x2="150.0" y2="903.4" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="930.0" x2="175.4" y2="930.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="930.0" x2="150.0" y2="956.6" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="930.0" x2="124.6" y2="930.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="930.0" x2="195.8" y2="883.5" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="930.0" x2="195.8" y2="976.5" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="930.0" x2="104.2" y2="976.5" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="930.0" x2="104.2" y2="883.5" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="930.0" x2="150.0" y2="810.5" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="930.0" x2="269.5" y2="930.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="930.0" x2="150.0" y2="1049.5" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="150.0" y1="930.0" x2="30.5" y2="930.0" stroke="#1f6feb" stroke-opacity="0.35"/>
-<circle cx="150.0" cy="903.4" r="3.4" fill="#58a6ff"/>
-<circle cx="175.4" cy="930.0" r="3.4" fill="#58a6ff"/>
-<circle cx="150.0" cy="956.6" r="3.4" fill="#58a6ff"/>
-<circle cx="124.6" cy="930.0" r="3.4" fill="#58a6ff"/>
-<circle cx="195.8" cy="883.5" r="3.4" fill="#58a6ff"/>
-<circle cx="195.8" cy="976.5" r="3.4" fill="#58a6ff"/>
-<circle cx="104.2" cy="976.5" r="3.4" fill="#58a6ff"/>
-<circle cx="104.2" cy="883.5" r="3.4" fill="#58a6ff"/>
-<circle cx="150.0" cy="810.5" r="3.4" fill="#58a6ff"/>
-<circle cx="269.5" cy="930.0" r="3.4" fill="#58a6ff"/>
-<circle cx="150.0" cy="1049.5" r="3.4" fill="#58a6ff"/>
-<circle cx="30.5" cy="930.0" r="3.4" fill="#58a6ff"/>
+<text x="910" y="392" fill="#e6edf3" font-size="13">spiral of 13, 222 -> 1000 km</text>
+<text x="910" y="408" fill="#7d8590" font-size="11">#261-#263 · 14 slots · 13 bearings</text>
+<circle cx="1050.0" cy="568.0" r="28.3" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<circle cx="1050.0" cy="568.0" r="60.1" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<line x1="1050.0" y1="568.0" x2="1050.0" y2="539.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1070.1" y2="591.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1018.4" y2="564.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1077.1" y2="547.3" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1043.7" y2="603.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1030.2" y2="534.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1089.6" y2="577.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1011.3" y2="588.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1066.6" y2="524.7" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1068.5" y2="614.3" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1002.1" y2="545.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1103.6" y2="551.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="1050.0" y1="568.0" x2="1019.3" y2="619.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<circle cx="1050.0" cy="539.6" r="3.4" fill="#58a6ff"/>
+<circle cx="1070.1" cy="591.0" r="3.4" fill="#58a6ff"/>
+<circle cx="1018.4" cy="564.8" r="3.4" fill="#58a6ff"/>
+<circle cx="1077.1" cy="547.3" r="3.4" fill="#58a6ff"/>
+<circle cx="1043.7" cy="603.9" r="3.4" fill="#58a6ff"/>
+<circle cx="1030.2" cy="534.4" r="3.4" fill="#58a6ff"/>
+<circle cx="1089.6" cy="577.9" r="3.4" fill="#58a6ff"/>
+<circle cx="1011.3" cy="588.6" r="3.4" fill="#58a6ff"/>
+<circle cx="1066.6" cy="524.7" r="3.4" fill="#58a6ff"/>
+<circle cx="1068.5" cy="614.3" r="3.4" fill="#58a6ff"/>
+<circle cx="1002.1" cy="545.2" r="3.4" fill="#58a6ff"/>
+<circle cx="1103.6" cy="551.8" r="3.4" fill="#58a6ff"/>
+<circle cx="1019.3" cy="619.8" r="3.4" fill="#58a6ff"/>
+<circle cx="1050.0" cy="568.0" r="4.2" fill="#f85149"/>
+<text x="910" y="710" fill="#7d8590" font-size="10">reach 223–1003 km</text>
+<text x="10" y="754" fill="#e6edf3" font-size="13">spiral of 8, 111 -> 890 km</text>
+<text x="10" y="770" fill="#7d8590" font-size="11">#264-#266 · 9 slots · 8 bearings</text>
+<circle cx="150.0" cy="930.0" r="20.0" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<circle cx="150.0" cy="930.0" r="56.7" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<line x1="150.0" y1="930.0" x2="150.0" y2="909.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="930.0" x2="166.3" y2="947.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="930.0" x2="123.8" y2="926.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="930.0" x2="174.6" y2="910.7" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="930.0" x2="143.7" y2="965.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="930.0" x2="128.0" y2="894.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="930.0" x2="197.3" y2="942.3" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="150.0" y1="930.0" x2="99.8" y2="956.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<circle cx="150.0" cy="909.9" r="3.4" fill="#58a6ff"/>
+<circle cx="166.3" cy="947.0" r="3.4" fill="#58a6ff"/>
+<circle cx="123.8" cy="926.2" r="3.4" fill="#58a6ff"/>
+<circle cx="174.6" cy="910.7" r="3.4" fill="#58a6ff"/>
+<circle cx="143.7" cy="965.9" r="3.4" fill="#58a6ff"/>
+<circle cx="128.0" cy="894.1" r="3.4" fill="#58a6ff"/>
+<circle cx="197.3" cy="942.3" r="3.4" fill="#58a6ff"/>
+<circle cx="99.8" cy="956.6" r="3.4" fill="#58a6ff"/>
 <circle cx="150.0" cy="930.0" r="4.2" fill="#f85149"/>
-<text x="10" y="1072" fill="#7d8590" font-size="10">reach 213–1002 km</text>
-<text x="310" y="754" fill="#e6edf3" font-size="13">spiral of 13, 222 -> 1000 km</text>
-<text x="310" y="770" fill="#7d8590" font-size="11">#261-#263 · 14 slots · 13 bearings</text>
-<circle cx="450.0" cy="930.0" r="26.5" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<circle cx="450.0" cy="930.0" r="119.3" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<line x1="450.0" y1="930.0" x2="450.0" y2="903.4" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="470.3" y2="953.2" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="416.9" y2="926.7" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="480.5" y2="906.8" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="442.4" y2="973.2" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="424.6" y2="886.8" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="503.4" y2="943.3" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="394.1" y2="959.9" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="475.4" y2="863.6" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="480.5" y2="1006.3" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="366.1" y2="890.2" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="549.2" y2="900.1" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="450.0" y1="930.0" x2="389.0" y2="1032.9" stroke="#1f6feb" stroke-opacity="0.35"/>
-<circle cx="450.0" cy="903.4" r="3.4" fill="#58a6ff"/>
-<circle cx="470.3" cy="953.2" r="3.4" fill="#58a6ff"/>
-<circle cx="416.9" cy="926.7" r="3.4" fill="#58a6ff"/>
-<circle cx="480.5" cy="906.8" r="3.4" fill="#58a6ff"/>
-<circle cx="442.4" cy="973.2" r="3.4" fill="#58a6ff"/>
-<circle cx="424.6" cy="886.8" r="3.4" fill="#58a6ff"/>
-<circle cx="503.4" cy="943.3" r="3.4" fill="#58a6ff"/>
-<circle cx="394.1" cy="959.9" r="3.4" fill="#58a6ff"/>
-<circle cx="475.4" cy="863.6" r="3.4" fill="#58a6ff"/>
-<circle cx="480.5" cy="1006.3" r="3.4" fill="#58a6ff"/>
-<circle cx="366.1" cy="890.2" r="3.4" fill="#58a6ff"/>
-<circle cx="549.2" cy="900.1" r="3.4" fill="#58a6ff"/>
-<circle cx="389.0" cy="1032.9" r="3.4" fill="#58a6ff"/>
+<text x="10" y="1072" fill="#7d8590" font-size="10">reach 111–892 km</text>
+<text x="310" y="754" fill="#e6edf3" font-size="13">spiral of 24, 111 -> 4444 km</text>
+<text x="310" y="770" fill="#7d8590" font-size="11">#267-#269 · 25 slots · 24 bearings</text>
+<circle cx="450.0" cy="930.0" r="20.0" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<circle cx="450.0" cy="930.0" r="126.7" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<line x1="450.0" y1="930.0" x2="450.0" y2="909.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="464.8" y2="944.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="426.8" y2="930.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="470.8" y2="914.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="444.3" y2="956.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="434.8" y2="903.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="481.0" y2="939.3" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="419.3" y2="947.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="462.0" y2="893.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="464.8" y2="968.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="409.8" y2="911.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="496.2" y2="915.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="423.7" y2="975.7" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="437.7" y2="874.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="500.0" y2="965.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="384.0" y2="939.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="496.7" y2="874.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="452.9" y2="1008.3" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="390.2" y2="869.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="542.0" y2="934.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="373.4" y2="993.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="464.3" y2="822.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="516.5" y2="1026.3" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="450.0" y1="930.0" x2="326.5" y2="902.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<circle cx="450.0" cy="909.9" r="3.4" fill="#58a6ff"/>
+<circle cx="464.8" cy="944.5" r="3.4" fill="#58a6ff"/>
+<circle cx="426.8" cy="930.0" r="3.4" fill="#58a6ff"/>
+<circle cx="470.8" cy="914.5" r="3.4" fill="#58a6ff"/>
+<circle cx="444.3" cy="956.2" r="3.4" fill="#58a6ff"/>
+<circle cx="434.8" cy="903.6" r="3.4" fill="#58a6ff"/>
+<circle cx="481.0" cy="939.3" r="3.4" fill="#58a6ff"/>
+<circle cx="419.3" cy="947.2" r="3.4" fill="#58a6ff"/>
+<circle cx="462.0" cy="893.4" r="3.4" fill="#58a6ff"/>
+<circle cx="464.8" cy="968.8" r="3.4" fill="#58a6ff"/>
+<circle cx="409.8" cy="911.8" r="3.4" fill="#58a6ff"/>
+<circle cx="496.2" cy="915.5" r="3.4" fill="#58a6ff"/>
+<circle cx="423.7" cy="975.7" r="3.4" fill="#58a6ff"/>
+<circle cx="437.7" cy="874.8" r="3.4" fill="#58a6ff"/>
+<circle cx="500.0" cy="965.9" r="3.4" fill="#58a6ff"/>
+<circle cx="384.0" cy="939.1" r="3.4" fill="#58a6ff"/>
+<circle cx="496.7" cy="874.5" r="3.4" fill="#58a6ff"/>
+<circle cx="452.9" cy="1008.3" r="3.4" fill="#58a6ff"/>
+<circle cx="390.2" cy="869.6" r="3.4" fill="#58a6ff"/>
+<circle cx="542.0" cy="934.4" r="3.4" fill="#58a6ff"/>
+<circle cx="373.4" cy="993.6" r="3.4" fill="#58a6ff"/>
+<circle cx="464.3" cy="822.9" r="3.4" fill="#58a6ff"/>
+<circle cx="516.5" cy="1026.3" r="3.4" fill="#58a6ff"/>
+<circle cx="326.5" cy="902.2" r="3.4" fill="#58a6ff"/>
 <circle cx="450.0" cy="930.0" r="4.2" fill="#f85149"/>
-<text x="310" y="1072" fill="#7d8590" font-size="10">reach 223–1003 km</text>
-<text x="610" y="754" fill="#e6edf3" font-size="13">spiral of 8, 111 -> 890 km</text>
-<text x="610" y="770" fill="#7d8590" font-size="11">#264-#266 · 9 slots · 8 bearings</text>
-<circle cx="750.0" cy="930.0" r="13.2" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<circle cx="750.0" cy="930.0" r="106.2" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
-<line x1="750.0" y1="930.0" x2="750.0" y2="916.7" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="930.0" x2="762.7" y2="943.3" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="930.0" x2="727.1" y2="926.7" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="930.0" x2="775.4" y2="910.1" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="930.0" x2="742.4" y2="973.2" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="930.0" x2="719.5" y2="880.2" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="930.0" x2="826.3" y2="949.9" stroke="#1f6feb" stroke-opacity="0.35"/>
-<line x1="750.0" y1="930.0" x2="655.9" y2="979.8" stroke="#1f6feb" stroke-opacity="0.35"/>
-<circle cx="750.0" cy="916.7" r="3.4" fill="#58a6ff"/>
-<circle cx="762.7" cy="943.3" r="3.4" fill="#58a6ff"/>
-<circle cx="727.1" cy="926.7" r="3.4" fill="#58a6ff"/>
-<circle cx="775.4" cy="910.1" r="3.4" fill="#58a6ff"/>
-<circle cx="742.4" cy="973.2" r="3.4" fill="#58a6ff"/>
-<circle cx="719.5" cy="880.2" r="3.4" fill="#58a6ff"/>
-<circle cx="826.3" cy="949.9" r="3.4" fill="#58a6ff"/>
-<circle cx="655.9" cy="979.8" r="3.4" fill="#58a6ff"/>
+<text x="310" y="1072" fill="#7d8590" font-size="10">reach 111–4436 km</text>
+<text x="610" y="754" fill="#e6edf3" font-size="13">spiral of 36, 111 -> 4444 km</text>
+<text x="610" y="770" fill="#7d8590" font-size="11">#270-#272 · 37 slots · 36 bearings</text>
+<circle cx="750.0" cy="930.0" r="20.0" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<circle cx="750.0" cy="930.0" r="126.7" fill="none" stroke="#30363d" stroke-dasharray="2 4"/>
+<line x1="750.0" y1="930.0" x2="750.0" y2="909.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="764.8" y2="944.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="728.5" y2="930.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="769.7" y2="917.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="746.9" y2="954.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="735.6" y2="907.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="775.8" y2="937.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="723.9" y2="943.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="760.0" y2="900.7" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="761.7" y2="960.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="718.7" y2="915.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="784.2" y2="918.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="731.4" y2="962.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="742.1" y2="891.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="784.7" y2="953.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="706.2" y2="934.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="780.1" y2="895.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="751.6" y2="979.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="714.1" y2="892.9" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="804.8" y2="931.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="705.8" y2="966.7" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="757.7" y2="870.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="786.3" y2="982.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="684.6" y2="915.0" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="811.7" y2="894.7" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="727.3" y2="1001.3" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="716.8" y2="858.5" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="826.7" y2="962.6" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="667.5" y2="959.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="793.4" y2="848.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="774.6" y2="1024.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="663.7" y2="874.2" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="856.7" y2="911.4" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="680.3" y2="1020.1" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="740.4" y2="810.3" stroke="#1f6feb" stroke-opacity="0.35"/>
+<line x1="750.0" y1="930.0" x2="843.1" y2="1015.8" stroke="#1f6feb" stroke-opacity="0.35"/>
+<circle cx="750.0" cy="909.9" r="3.4" fill="#58a6ff"/>
+<circle cx="764.8" cy="944.5" r="3.4" fill="#58a6ff"/>
+<circle cx="728.5" cy="930.0" r="3.4" fill="#58a6ff"/>
+<circle cx="769.7" cy="917.2" r="3.4" fill="#58a6ff"/>
+<circle cx="746.9" cy="954.5" r="3.4" fill="#58a6ff"/>
+<circle cx="735.6" cy="907.4" r="3.4" fill="#58a6ff"/>
+<circle cx="775.8" cy="937.5" r="3.4" fill="#58a6ff"/>
+<circle cx="723.9" cy="943.6" r="3.4" fill="#58a6ff"/>
+<circle cx="760.0" cy="900.7" r="3.4" fill="#58a6ff"/>
+<circle cx="761.7" cy="960.6" r="3.4" fill="#58a6ff"/>
+<circle cx="718.7" cy="915.4" r="3.4" fill="#58a6ff"/>
+<circle cx="784.2" cy="918.8" r="3.4" fill="#58a6ff"/>
+<circle cx="731.4" cy="962.4" r="3.4" fill="#58a6ff"/>
+<circle cx="742.1" cy="891.6" r="3.4" fill="#58a6ff"/>
+<circle cx="784.7" cy="953.9" r="3.4" fill="#58a6ff"/>
+<circle cx="706.2" cy="934.6" r="3.4" fill="#58a6ff"/>
+<circle cx="780.1" cy="895.1" r="3.4" fill="#58a6ff"/>
+<circle cx="751.6" cy="979.1" r="3.4" fill="#58a6ff"/>
+<circle cx="714.1" cy="892.9" r="3.4" fill="#58a6ff"/>
+<circle cx="804.8" cy="931.8" r="3.4" fill="#58a6ff"/>
+<circle cx="705.8" cy="966.7" r="3.4" fill="#58a6ff"/>
+<circle cx="757.7" cy="870.1" r="3.4" fill="#58a6ff"/>
+<circle cx="786.3" cy="982.2" r="3.4" fill="#58a6ff"/>
+<circle cx="684.6" cy="915.0" r="3.4" fill="#58a6ff"/>
+<circle cx="811.7" cy="894.7" r="3.4" fill="#58a6ff"/>
+<circle cx="727.3" cy="1001.3" r="3.4" fill="#58a6ff"/>
+<circle cx="716.8" cy="858.5" r="3.4" fill="#58a6ff"/>
+<circle cx="826.7" cy="962.6" r="3.4" fill="#58a6ff"/>
+<circle cx="667.5" cy="959.8" r="3.4" fill="#58a6ff"/>
+<circle cx="793.4" cy="848.4" r="3.4" fill="#58a6ff"/>
+<circle cx="774.6" cy="1024.1" r="3.4" fill="#58a6ff"/>
+<circle cx="663.7" cy="874.2" r="3.4" fill="#58a6ff"/>
+<circle cx="856.7" cy="911.4" r="3.4" fill="#58a6ff"/>
+<circle cx="680.3" cy="1020.1" r="3.4" fill="#58a6ff"/>
+<circle cx="740.4" cy="810.3" r="3.4" fill="#58a6ff"/>
+<circle cx="843.1" cy="1015.8" r="3.4" fill="#58a6ff"/>
 <circle cx="750.0" cy="930.0" r="4.2" fill="#f85149"/>
-<text x="610" y="1072" fill="#7d8590" font-size="10">reach 111–892 km</text>
-<text x="10" y="1086" fill="#7d8590" font-size="11">ONE SCALE FOR ALL NINE · panel width 2247 km · red = the pixel predicted · blue = what it may read</text>
+<text x="610" y="1072" fill="#7d8590" font-size="10">reach 111–4435 km</text>
+<text x="10" y="1086" fill="#7d8590" font-size="11">ONE SCALE FOR ALL 11 · panel radius 4968 km on a SQUARE-ROOT radial axis (bearings exact; true reach printed per panel) · red = the pixel predicted</text>
 <text x="10" y="1103" fill="#484f58" font-size="10">lat 40N, 0.25° grid · generated from build_stencil by ml/draw_stencils.py — the shapes cannot drift from the code</text>
 </svg>

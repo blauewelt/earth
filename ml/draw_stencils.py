@@ -56,10 +56,10 @@ DESIGNS = [
      "the twin of the row above +1 slot: same reach, 13 bearings not 8."),
     ("spiral of 8, 111 -> 890 km", 9, "spiral:111-890", "#264-#266",
      "the champion's exact width, spent on eight radii instead of one."),
-    ("spiral of 24, 111 -> 4444 km", 25, "spiral:111-4444", "PRIORITY",
+    ("spiral of 24, 111 -> 4444 km", 25, "spiral:111-4444", "#267-#269",
      "24 bearings AND 4444 km: the first shape that can hold a month of"
      " Gulf Stream."),
-    ("spiral of 36, 111 -> 4444 km", 37, "spiral:111-4444", "PRIORITY",
+    ("spiral of 36, 111 -> 4444 km", 37, "spiral:111-4444", "#270-#272",
      "the same reach at 1.5x the density — does the extra angle pay?"),
 ]
 
@@ -256,7 +256,7 @@ def table():
     return "\n".join(out)
 
 
-def svg(cols=3, cell=300, pad=62):
+def svg(cols=4, cell=300, pad=62):
     """The same nine designs as one SVG sheet — for reading on a phone, where
     a 95-column ASCII canvas is a horizontal scrollbar.
 
@@ -275,7 +275,22 @@ def svg(cols=3, cell=300, pad=62):
     for i, (title, slots, ring_km, runs, _) in enumerate(DESIGNS):
         ox, oy = (i % cols) * cell, (i // cols) * (cell + pad) + pad
         cx, cy, R = ox + cell / 2, oy + cell / 2 - 6, cell / 2 - 16
-        k = R / S                                  # px per km, SHARED by all
+
+        def place(x, y):
+            """km -> px on a SQUARE-ROOT radial axis, shared by every panel.
+
+            A linear common scale stopped working the moment a 4444 km spiral
+            joined a 222 km ring on the same sheet: at 9937 km across, the
+            champion is 2% of its panel and the four E-022/E-023 shapes are
+            indistinguishable dots. sqrt(r) keeps one scale — so the panels
+            are still comparable, which is the whole reason for the sheet —
+            while spending pixels where the designs actually differ. Bearings
+            are untouched (this is a radial transform only), and each panel
+            prints its true reach in km underneath, so nothing here has to be
+            read off the picture."""
+            r = np.hypot(x, y)
+            f = 0.0 if r == 0 else (R * np.sqrt(r / S)) / r
+            return cx + x * f, cy - y * f
         offs = offsets_of(slots, ring_km)
         pts = [to_km(*o) for o in offs[1:] if o is not None]
         (nb, nraw), _r = bearings(pts)
@@ -285,14 +300,17 @@ def svg(cols=3, cell=300, pad=62):
                    f'font-size="11">{runs} · {slots} slots · {nraw} bearings'
                    f'</text>')
         for rad in nominal_radii(ring_km) or []:
-            out.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{rad * k:.1f}" '
+            rr = R * np.sqrt(rad / S)
+            out.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{rr:.1f}" '
                        f'fill="none" stroke="#30363d" stroke-dasharray="2 4"/>')
         for x, y in pts:
+            px, py = place(x, y)
             out.append(f'<line x1="{cx:.1f}" y1="{cy:.1f}" '
-                       f'x2="{cx + x * k:.1f}" y2="{cy - y * k:.1f}" '
+                       f'x2="{px:.1f}" y2="{py:.1f}" '
                        f'stroke="#1f6feb" stroke-opacity="0.35"/>')
         for x, y in pts:
-            out.append(f'<circle cx="{cx + x * k:.1f}" cy="{cy - y * k:.1f}" '
+            px, py = place(x, y)
+            out.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" '
                        f'r="3.4" fill="#58a6ff"/>')
         out.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="4.2" '
                    f'fill="#f85149"/>')
@@ -301,8 +319,9 @@ def svg(cols=3, cell=300, pad=62):
                    f'{min(np.hypot(*p) for p in pts):.0f}–'
                    f'{max(np.hypot(*p) for p in pts):.0f} km</text>')
     out.append(f'<text x="10" y="{H - 26}" fill="#7d8590" font-size="11">'
-               f'ONE SCALE FOR ALL NINE · panel width {2 * S:.0f} km · red = '
-               f'the pixel predicted · blue = what it may read</text>')
+               f'ONE SCALE FOR ALL {len(DESIGNS)} · panel radius {S:.0f} km on '
+               f'a SQUARE-ROOT radial axis (bearings exact; true reach printed '
+               f'per panel) · red = the pixel predicted</text>')
     out.append(f'<text x="10" y="{H - 9}" fill="#484f58" font-size="10">'
                f'lat {LAT0:.0f}N, 0.25° grid · generated from build_stencil by '
                f'ml/draw_stencils.py — the shapes cannot drift from the code'

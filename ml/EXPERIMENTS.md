@@ -245,6 +245,77 @@ workflow, because `ml-train.yml` sits exactly at the 25-input
 
 ---
 
+### DEEP SPIRALS — 24 and 36 points reaching 4444 km (Chris, 2026-08-14) · **PRIORITY**
+
+> *"Please add and prioritize a 24 and a 36 point spiral experiment as well
+> (each point at a different angle, and farthest point up to 4444km away)."*
+
+**Why 4444 km is a bigger change than the point count.** E-022's standing
+physical caveat is that one roll step is ONE MONTH, so a stencil that reaches
+1–2 cells reaches 1–2 cells *per month* — while the Gulf Stream advects
+**100–200 cells per month**, which at 0.25° is **2800–5600 km**. Every shape
+tried so far, up to and including the 1000 km three-ring arm, is therefore
+*structurally* unable to see where this month's water came from; the coupling
+they buy is slow interior dynamics, not advection. **A 4444 km reach is the
+first geometry in this programme that can hold a month of Gulf Stream inside
+itself.** That is a different hypothesis from "more bearings help", and these
+two arms test it.
+
+| arm | runs | shape | slots | points | bearings (≥10° / distinct) |
+|---|---|---|---|---|---|
+| **spiral of 24** | #267 / #268 / #269 | golden angle, 111 → 4444 km | 25 | 24 | 21 / 24 |
+| **spiral of 36** | #270 / #271 / #272 | golden angle, 111 → 4444 km | 37 | 36 | 21 / 36 |
+
+Both start at 111 km and end at 4444, so **24 vs 36 is purely density at fixed
+reach**, and each is comparable to the shallower spirals through its shared
+r_min. The 24-point arm also sits at **exactly the slot count of the
+three-rings-wide arm** (#255–#257, 25 slots, 1000 km, 16 bearings) — same
+width, 4.4× the reach, 24 bearings instead of 16.
+
+**Hypothesis.** Reach, not width and not bearing count, is the binding
+constraint: a stencil that spans a month of advection beats the 222 km
+champion's 0.6043 corridor AUC by more than the pooled seed sd, and the
+36-point arm adds little over the 24-point one because the extra twelve points
+resolve angle the model was not short of.
+
+**Falsifier.** Three seeds of spiral-24 at or below 0.6043. That would say the
+monthly-cadence model cannot use distant information *at all* — which, given
+that E-023 found information peaking at 222 km and decaying outward, is the
+live alternative and would close the whole "reach" line rather than just this
+arm.
+
+**Precondition, checked before any GPU was spent** (`ml/CLAUDE.md` §0.3).
+4444 km is ~40° of latitude or ~52° of longitude and the family3 window is
+only 70°×120°, so the far slots could have been mostly off-window or on land —
+where `build_stencil` writes −1 and `gather_stencil` substitutes exact zeros.
+That design would be a *narrow* shape paying a wide shape's parameter count,
+and it would have trained perfectly happily while being that.
+`ml/measure_slot_occupancy.py` measures it against the evaluator's own mask:
+
+| design | slots live, all rolled px | slots live, corridor px |
+|---|---|---|
+| ring of 8 @ 222 km (champion) | 88.2 % (7.1/8) | 88.2 % (7.1/8) |
+| three rings 8+8+8 @ 1000 km | 79.0 % (19.0/24) | 77.0 % (18.5/24) |
+| **spiral of 24 @ 4444 km** | **70.4 % (16.9/24)** | **68.1 % (16.4/24)** |
+| **spiral of 36 @ 4444 km** | **70.6 % (25.4/36)** | **68.6 % (24.7/36)** |
+
+Thinner than the champion, but real and usable — the check clears, and the
+number is on the record so a weak result can be read against it rather than
+explained by it afterwards.
+
+**One deliberate deviation from the shape's own optimum, recorded not
+silently fixed.** 24 and 36 are not Fibonacci numbers, so their bearing gaps
+have ratio φ² = 2.618 rather than φ (21 and 34 would be the φ-uniform counts).
+At 36 points that puts some bearings 4.8° apart. It is recorded rather than
+substituted because at *these* radii a 4.8° gap is still 335 km of separation
+at the outer edge — the near-clustering that makes 12 a bad count for a
+1000 km spiral is not the same defect at 4444 km.
+
+**Cost.** 6 arms × ~1.5 GPU-h ≈ 9 GPU-h ≈ $2.6, on two boxes rented for them
+so they run *beside* the factorial rather than behind it.
+
+---
+
 ### THE DESIGNS, DRAWN (Chris: *"Please draw all your designs in the experiment log."*)
 
 **These pictures are generated, not drawn.** `ml/draw_stencils.py` lays a
@@ -260,16 +331,17 @@ silently goes stale.) Regenerate with `python3 ml/draw_stencils.py --md`.
 
 ![the nine stencil designs, all at one scale](figs/stencil_designs.png)
 
-*The same nine as one sheet, **all at a single scale** — which the ASCII
-below cannot do, because at a common scale the two E-022 shapes collapse to a
-dot. That dot is the finding: 3×3 reaches 35 km where the champion reaches
-222 and the widest arm reaches 1000. Regenerate with
+*The same eleven as one sheet, **all at a single scale** — which the ASCII
+below cannot do (the radial axis is √r, so a 222 km ring and a 4444 km spiral
+fit one sheet; bearings are exact and each panel prints its true reach). The
+span is the finding: 3×3 reaches 35 km, the champion 222, and the deep
+spirals 4436 — a factor of 127 between the first shape tried and the newest. Regenerate with
 `python3 ml/draw_stencils.py --svg ml/figs/stencil_designs.svg`.*
 
 Two things to read on each ASCII drawing. The **scale bar**, because at their own
 scales the 3×3 that lost by 6.3 seed sd and the 222 km ring that won by 4.4
 are the same picture — eight points around a centre, sixty times apart in
-width (the figure above is the other half of that: one scale, nine panels).
+width (the figure above is the other half of that: one scale, eleven panels).
 And the **bearing rose** under it (72 characters, 5° each), which is
 the quantity the spiral is an argument about: it shows at a glance that three
 rings of eight put `||` doubles on eight of their sixteen directions, while a
@@ -278,7 +350,7 @@ spiral puts one mark on each of its own.
 **3x3 touching (E-022)   [#219-#221]**
 
 ```
-  9 slots = centre + 8 neighbours  ·  21-35 km (adjacent cells)  ·  8 distinct bearings
+  9 slots = centre + 8 neighbours  ·  21-35 km (adjacent cells)  ·  8 bearings >=10 deg apart
   the first shape tried: eight cells that TOUCH. LOST by 6.3 seed sd.
 
 
@@ -322,7 +394,7 @@ spiral puts one mark on each of its own.
 **13-point (E-022)   [#222-#224]**
 
 ```
-  13 slots = centre + 12 neighbours  ·  21-56 km (adjacent cells)  ·  8 distinct bearings
+  13 slots = centre + 12 neighbours  ·  21-56 km (adjacent cells)  ·  8 bearings >=10 deg apart
   5x5 with the outer diagonals trimmed. LOST by 8.1 seed sd.
 
 
@@ -366,7 +438,7 @@ spiral puts one mark on each of its own.
 **ring of 8 @ 222 km (E-023)   [e023r222]**
 
 ```
-  9 slots = centre + 8 neighbours  ·  222 km  ·  8 distinct bearings
+  9 slots = centre + 8 neighbours  ·  222 km  ·  8 bearings >=10 deg apart
   WON: corridor AUC 0.6043, +4.4 seed sd. The reigning champion.
 
 
@@ -410,7 +482,7 @@ spiral puts one mark on each of its own.
 **ring of 16 @ 222 km   [#234]**
 
 ```
-  17 slots = centre + 16 neighbours  ·  222 km  ·  16 distinct bearings
+  17 slots = centre + 16 neighbours  ·  222 km  ·  16 bearings >=10 deg apart
   density at ONE radius. n=1, kept as a control, not an arm.
 
 
@@ -454,7 +526,7 @@ spiral puts one mark on each of its own.
 **two rings, 8+8 @ 222/555 km   [#237-#239]**
 
 ```
-  17 slots = centre + 16 neighbours  ·  222/555 km  ·  16 distinct bearings
+  17 slots = centre + 16 neighbours  ·  222/555 km  ·  16 bearings >=10 deg apart
   outer ring rotated half a sector: 16 bearings, not 8 bearings twice.
 
 
@@ -495,10 +567,10 @@ spiral puts one mark on each of its own.
   @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
 ```
 
-**three rings, 8+8+8 @ 222/555/1000 km   [#240-#242]**
+**three rings, 8+8+8 @ 222/555/1000 km   [#255-#257]**
 
 ```
-  25 slots = centre + 24 neighbours  ·  222/555/1000 km  ·  16 distinct bearings
+  25 slots = centre + 24 neighbours  ·  222/555/1000 km  ·  16 bearings >=10 deg apart (20 distinct to 1 deg)
   the widest shape yet: 24 points, but only 16 distinct bearings.
 
 
@@ -539,10 +611,10 @@ spiral puts one mark on each of its own.
   @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
 ```
 
-**three rings, 4+4+4 @ 222/555/1000 km   [#243-#245]**
+**three rings, 4+4+4 @ 222/555/1000 km   [#249/#259/#260]**
 
 ```
-  13 slots = centre + 12 neighbours  ·  222/555/1000 km  ·  8 distinct bearings
+  13 slots = centre + 12 neighbours  ·  222/555/1000 km  ·  8 bearings >=10 deg apart
   same reach at half the width. 12 points on 8 bearings, 4 of them twice.
 
 
@@ -583,10 +655,10 @@ spiral puts one mark on each of its own.
   @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
 ```
 
-**spiral of 13, 222 -> 1000 km   [#246-#248]**
+**spiral of 13, 222 -> 1000 km   [#261-#263]**
 
 ```
-  14 slots = centre + 13 neighbours  ·  222/1000 km (geometric ramp)  ·  13 distinct bearings
+  14 slots = centre + 13 neighbours  ·  222/1000 km (geometric ramp)  ·  13 bearings >=10 deg apart
   the twin of the row above +1 slot: same reach, 13 bearings not 8.
 
                           ..........
@@ -627,10 +699,10 @@ spiral puts one mark on each of its own.
   @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
 ```
 
-**spiral of 8, 111 -> 890 km   [#249-#251]**
+**spiral of 8, 111 -> 890 km   [#264-#266]**
 
 ```
-  9 slots = centre + 8 neighbours  ·  111/890 km (geometric ramp)  ·  8 distinct bearings
+  9 slots = centre + 8 neighbours  ·  111/890 km (geometric ramp)  ·  8 bearings >=10 deg apart
   the champion's exact width, spent on eight radii instead of one.
 
 
@@ -671,17 +743,107 @@ spiral puts one mark on each of its own.
   @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
 ```
 
-| shape                                | runs      | slots | pts | reach km | bearings | b/pt | gap max/min |
-|--------------------------------------|-----------|-------|-----|----------|----------|------|-------------|
-| 3x3 touching (E-022)                 | #219-#221 | 9     | 8   | 21-35    | 8        | 1.00 | -           |
-| 13-point (E-022)                     | #222-#224 | 13    | 12  | 21-56    | 8        | 0.67 | -           |
-| ring of 8 @ 222 km (E-023)           | e023r222  | 9     | 8   | 213-224  | 8        | 1.00 | -           |
-| ring of 16 @ 222 km                  | #234      | 17    | 16  | 213-229  | 16       | 1.00 | -           |
-| two rings, 8+8 @ 222/555 km          | #237-#239 | 17    | 16  | 213-558  | 16       | 1.00 | -           |
-| three rings, 8+8+8 @ 222/555/1000 km | #240-#242 | 25    | 24  | 213-1002 | 16       | 0.67 | -           |
-| three rings, 4+4+4 @ 222/555/1000 km | #243-#245 | 13    | 12  | 213-1002 | 8        | 0.67 | -           |
-| spiral of 13, 222 -> 1000 km         | #246-#248 | 14    | 13  | 223-1003 | 13       | 1.00 | 1.62        |
-| spiral of 8, 111 -> 890 km           | #249-#251 | 9     | 8   | 111-892  | 8        | 1.00 | 1.62        |
+**spiral of 24, 111 -> 4444 km   [#267-#269]**
+
+```
+  25 slots = centre + 24 neighbours  ·  111/4444 km (geometric ramp)  ·  21 bearings >=10 deg apart (24 distinct to 1 deg)
+  24 bearings AND 4444 km: the first shape that can hold a month of Gulf Stream.
+
+
+
+                         ..............
+                    .....             ......
+                ....                        ...
+              ..                               ..
+            ..                    m              ..
+          ..                                       ..
+        ..                                           .
+       ..                                             ..
+       .                                               ..
+      .                                                 .
+     .                j                                  .
+    .o                        e      h                   .
+    .                                                     .
+    .                       b 6 9  c                      .
+    .                         3@47           k            .
+    .                   g    8 5a                         .
+    .                        d      f                     .
+     .                                                   .
+     .                                                   .
+      .           l            i                        .
+      ..                                               ..
+       ..                                             ..
+        ...                                          .
+          ..                                       ..
+           ...                              n    ..
+             ....                              ..
+                ....                       ....
+                    .....             ......
+                         .............
+
+
+  |----------------------------| 5000 km
+  N||.|....|.|...|...E|..|...||..|.|...|S..|..|....|.|...|.W|.|.|....|..|..|..N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+**spiral of 36, 111 -> 4444 km   [#270-#272]**
+
+```
+  37 slots = centre + 36 neighbours  ·  111/4444 km (geometric ramp)  ·  21 bearings >=10 deg apart (36 distinct to 1 deg)
+  the same reach at 1.5x the density — does the extra angle pay?
+
+
+                       .................
+                   ....      z          .....
+               ....                          ...
+            ...                                 ...
+          ...                                      .
+         .                                          ...
+       ..                                             ..
+      .                                                ..
+     .                                u                  .
+    .                                                     .
+   ..          w          r                                .
+   .                                                       .
+  .                             m                           .
+  .                         j     h    p            x       .
+  .                    o      e 9                           .
+  .                        g b8@7c  k                       .
+  .                           d5a f                         .
+  .               t       l    i                            .
+  .                                n       s                .
+   .                                                       .
+   .                        q                              .
+    .                                                     .
+     .                                                   .
+      .                                                 .
+       ..                          v                  ..
+        ...      y                                   A
+          ...                                     ...
+             ..                                 ...
+               ...                           ...
+                  .....                 .....
+                       .................
+
+  |-------------------------------| 5000 km
+  N||.|.|..|..||.|.|.E|..||.|.|..|.|.|.|S.|.|.|.|..|.|.|.|.W|.|.|.|..|.|.|.|.|N   <- bearings watched, 5 deg/char
+  @ = the pixel predicted  ·  lat 40 N, 0.25 deg grid  ·  THE NINE VIEWS ARE NOT TO A COMMON SCALE
+```
+
+| shape                                | runs           | slots | pts | reach km | bear>=10 | bear~1 | b/pt | gap max/min |
+|--------------------------------------|----------------|-------|-----|----------|----------|--------|------|-------------|
+| 3x3 touching (E-022)                 | #219-#221      | 9     | 8   | 21-35    | 8        | 8      | 1.00 | -           |
+| 13-point (E-022)                     | #222-#224      | 13    | 12  | 21-56    | 8        | 8      | 0.67 | -           |
+| ring of 8 @ 222 km (E-023)           | e023r222       | 9     | 8   | 213-224  | 8        | 8      | 1.00 | -           |
+| ring of 16 @ 222 km                  | #234           | 17    | 16  | 213-229  | 16       | 16     | 1.00 | -           |
+| two rings, 8+8 @ 222/555 km          | #237-#239      | 17    | 16  | 213-558  | 16       | 16     | 1.00 | -           |
+| three rings, 8+8+8 @ 222/555/1000 km | #255-#257      | 25    | 24  | 213-1002 | 16       | 20     | 0.67 | -           |
+| three rings, 4+4+4 @ 222/555/1000 km | #249/#259/#260 | 13    | 12  | 213-1002 | 8        | 8      | 0.67 | -           |
+| spiral of 13, 222 -> 1000 km         | #261-#263      | 14    | 13  | 223-1003 | 13       | 13     | 1.00 | 1.62        |
+| spiral of 8, 111 -> 890 km           | #264-#266      | 9     | 8   | 111-892  | 8        | 8      | 1.00 | 1.62        |
+| spiral of 24, 111 -> 4444 km         | #267-#269      | 25    | 24  | 111-4436 | 21       | 24     | 0.88 | 2.62        |
+| spiral of 36, 111 -> 4444 km         | #270-#272      | 37    | 36  | 111-4435 | 21       | 36     | 0.58 | 2.62        |
 
 ---
 
