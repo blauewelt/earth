@@ -25,9 +25,14 @@ const vast = (p) => fetch(`https://console.vast.ai/api/v1${p}`, {
   headers: { Authorization: `Bearer ${VAST}` },
 }).then((r) => r.json());
 
+// per_page must cover EVERY live run, not a taste of them. At 15, the
+// 2026-08-14 E-026 fan-out (10 boxes, 22 live runs) fell off the window:
+// six busy boxes read as IDLE BURN (their runs were older than the 15
+// newest) and this script printed "stop it" for boxes mid-job. 100 is the
+// API max; live runs are bounded by fleet size + queue depth, far below it.
 const [inst, runners, runs] = await Promise.all([
-  vast("/instances/"), gh("/actions/runners"),
-  gh("/actions/workflows/ml-train.yml/runs?per_page=15"),
+  vast("/instances/"), gh("/actions/runners?per_page=100"),
+  gh("/actions/workflows/ml-train.yml/runs?per_page=100"),
 ]);
 
 // Runner names are stale instance IDs; the only mapping is inside onstart.
@@ -55,9 +60,20 @@ for (const i of inst.instances || []) {
   console.log(`  ${tag.padEnd(46)} job=${running ? "yes" : "NO "} gpu=${String(gpu).padStart(3)}% cpu=${cpu.toFixed(0).padStart(3)}% disk=${diskPct.toFixed(0)}%`);
 }
 const idleOnline = (runners.runners || []).filter((r) => r.status === "online" && !r.busy);
+const idleNames = new Set(idleOnline.map((r) => r.name));
 for (const { run, job } of jobs) {
-  if (job?.status === "queued" && idleOnline.length)
-    problems.push(`QUEUE STALL #${run.run_number} is queued while ${idleOnline.map((r) => r.name).join(", ")} sits online and idle — cancel and re-dispatch`);
+  if (job?.status !== "queued") continue;
+  // Dispatches pin runs to one runner via a gpu-box-* label; a run queued
+  // behind ITS OWN busy box is the normal fan-out pattern, not a stall
+  // (the documented label-pin false positive). A stall is: the runner this
+  // run is pinned to (or, unpinned, any runner) sits idle — and has for a
+  // few minutes, because a just-freed box takes ~1 min to pick up its next
+  // pinned run (watched #278 do exactly that, 2026-08-14 17:23→17:28).
+  const pins = (job.labels || []).filter((l) => l.startsWith("gpu-box-"));
+  const target = pins.length ? pins.filter((p) => idleNames.has(p)) : [...idleNames];
+  const ageMin = (Date.now() - new Date(run.created_at)) / 60000;
+  if (target.length && ageMin > 5)
+    problems.push(`QUEUE STALL #${run.run_number} queued ${ageMin.toFixed(0)} min while ${target.join(", ")} sits online and idle — cancel and re-dispatch`);
 }
 console.log(`\n${live.length} run(s) not finished · ${idleOnline.length} runner(s) online+idle`);
 if (!problems.length) { console.log("HEALTHY"); process.exit(0); }
