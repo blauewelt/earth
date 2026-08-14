@@ -54,13 +54,32 @@ const plan = JSON.parse(readFileSync(planPath, "utf8"));
 const problems = [];
 const n = (v) => (v === undefined || v === null || v === "" ? NaN : Number(v));
 
-if (!(n(plan.steps) > 0)) problems.push("plan.steps must be a positive number");
-if (!(n(plan.lr) > 0)) problems.push("plan.lr must be a positive number");
+// An EVAL run (sroll: with temporal_steps 0) trains nothing, so a plan with
+// an LR curve is not merely unnecessary — it is FALSE, and the status page
+// drew it as a real decaying schedule on #233/#294/#303 until Chris asked
+// why an eval run was decaying its learning rate (2026-08-14). The honest
+// plan for an eval is {"eval": true, "heads": [...]}: the page renders a
+// label, not a curve. The curve checks below do not apply to it.
+const isEval = String(inputs.temporal_steps ?? "") === "0"
+  && String(inputs.window ?? "").startsWith("sroll:");
+if (isEval) {
+  if (!plan.eval) {
+    problems.push(
+      "this is an EVAL dispatch (sroll:, temporal_steps 0) — its plan must " +
+      "be {\"eval\": true, \"heads\": [...]}, not a training curve the " +
+      "status page would draw as a schedule the run does not have");
+  }
+} else if (plan.eval) {
+  problems.push("plan.eval is set but this dispatch trains — wrong plan file");
+}
+
+if (!isEval && !(n(plan.steps) > 0)) problems.push("plan.steps must be a positive number");
+if (!isEval && !(n(plan.lr) > 0)) problems.push("plan.lr must be a positive number");
 // THE CURVE MUST COME FROM THE TRAINER. A plan without `points` would be
 // re-derived by the status page, which is a second implementation of the
 // schedule and would happily draw a cosine for a wsd run — certifying a
 // schedule the run does not use. Generate it with ml/plan_schedule.py.
-if (!Array.isArray(plan.points) || plan.points.length < 2) {
+if (!isEval && (!Array.isArray(plan.points) || plan.points.length < 2)) {
   problems.push(
     "plan.points is missing: the curve must be computed from the trainer's " +
     "own scheduler, not re-derived by the page. Generate the plan with\n" +

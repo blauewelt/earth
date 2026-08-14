@@ -1213,6 +1213,18 @@
   }
 
   function planChart(plan) {
+    // An EVAL plan carries no schedule because the run trains nothing.
+    // Before this branch existed, eval dispatches attached a real training
+    // curve to satisfy precertification, and this chart drew a decaying
+    // learning rate for runs whose learning rate never exists — spotted by
+    // Chris on 2026-08-14 ("is it correct that pure eval runs show a
+    // learning rate decay?"). It was not correct. Say what the run IS.
+    if (plan && plan.eval) {
+      var nh = (plan.heads && plan.heads.length) || 0;
+      return '<div class="muted" style="margin:6px 0">evaluation run — ' +
+             'rolls ' + (nh ? nh + ' published head(s)' : 'published heads') +
+             ' forward; no training, so no learning-rate schedule</div>';
+    }
     if (!plan || !(plan.steps > 0) || !(plan.lr > 0)) return "";
     // A WARM RESTART's plan is drawn on the axis of TOTAL compute, because
     // that is the axis its sibling run is drawn on and the pair only means
