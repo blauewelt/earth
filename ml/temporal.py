@@ -851,7 +851,7 @@ def main():
                          "slots equally: '222,555' with --stencil 17 is eight "
                          "points at each radius, the outer ring rotated half a "
                          "sector off the inner one (E-026).")
-    ap.add_argument("--stencil", type=int, default=1, choices=(1, 9, 13, 17),
+    ap.add_argument("--stencil", type=int, default=1,
                     help="E-022 SPATIAL INPUT: predict the centre pixel's "
                          "z_{t+1} from this many neighbourhood pixels' z per "
                          "step (1 = the original per-pixel model; 9 = 3x3; "
@@ -1046,6 +1046,23 @@ def main():
     # E-022: build the neighbourhood index once; static_ctx carries the
     # per-cell observed flags (time-invariant geometry) when stencil > 1.
     if a.stencil > 1:
+        # slot counts are validated against the GEOMETRY rather than a
+        # whitelist: the fixed table has entries for 9 and 13, while a ring
+        # shape admits any count that divides evenly among its radii. The
+        # whitelist had to be widened for every new design (17 for E-026's
+        # two rings, 25 for its three) which is a sign it was the wrong guard.
+        if _ring_on(a.ring_km):
+            n_r = len([r for r in str(a.ring_km).split(",") if r.strip()])
+            if (a.stencil - 1) % n_r:
+                raise SystemExit(
+                    f"--stencil {a.stencil} gives {a.stencil - 1} ring slots, "
+                    f"which does not divide among {n_r} radii "
+                    f"({a.ring_km}). Use 1 + a multiple of {n_r}.")
+        elif a.stencil not in STENCILS:
+            raise SystemExit(
+                f"--stencil {a.stencil} has no fixed-table entry "
+                f"(have {sorted(STENCILS)}); pass --ring-km to place that "
+                f"many slots on rings instead.")
         if max(1, a.unroll) > 1 or a.direct.strip():
             raise SystemExit(
                 f"--stencil {a.stencil} is incompatible with --unroll>1 and "

@@ -341,3 +341,29 @@ def test_single_radius_still_reads_as_before():
     a = build_stencil(H, W, ys, xs, 9, ring_km=222.0, lats=lats)
     b = build_stencil(H, W, ys, xs, 9, ring_km="222", lats=lats)
     assert np.array_equal(a, b)
+
+
+def test_three_rings_divide_evenly():
+    """E-026 extension (Chris: 'try a few different designs, eg 3 rings, last
+    ring at 1000'). 25 slots = centre + 8 at each of three radii; 13 slots =
+    centre + 4 at each. Both are legal ring shapes with no fixed-table entry,
+    which is why the slot count is validated against the geometry."""
+    H, W, ys, xs, lats = _ring_grid()
+    for stencil, per in ((25, 8), (13, 4)):
+        NBR = build_stencil(H, W, ys, xs, stencil, ring_km="222,555,1000",
+                            lats=lats)
+        assert NBR.shape == (len(ys), stencil)
+        assert (NBR[:, 0] == np.arange(len(ys))).all()
+        mid = np.where((ys == H // 2) & (xs == W // 2))[0][0]
+        # the three radii appear in slot order, `per` slots each
+        from temporal import ring_offsets
+        lat0 = float(lats[H // 2])
+        for ri, r_km in enumerate((222.0, 555.0, 1000.0)):
+            o = (ring_offsets(lat0, r_km, per, 0.25) if ri % 2 == 0
+                 else ring_offsets(lat0, r_km, 2 * per, 0.25)[1::2])
+            for dy, dx in o:
+                km = np.hypot(dy * 27.83,
+                              dx * 27.83 * np.cos(np.radians(lat0)))
+                assert abs(km - r_km) < 0.15 * r_km, (r_km, km)
+    with pytest.raises(ValueError):
+        build_stencil(H, W, ys, xs, 18, ring_km="222,555,1000", lats=lats)
