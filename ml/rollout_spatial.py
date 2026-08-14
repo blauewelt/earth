@@ -46,6 +46,7 @@ import argparse
 import json
 import os
 import sys
+import time
 
 import numpy as np
 import torch
@@ -640,6 +641,7 @@ def main():
     K_seen = None
 
     for hp in heads:
+        t_head = time.time()
         tk = torch.load(hp, map_location="cpu", weights_only=False)
         ta = tk["args"]
         K = ta["K"]
@@ -816,6 +818,18 @@ def main():
             entry["future"] = {"context_end": months[-1], "roll_ym": roll_ym,
                                "sv_des": [round(v, 3) for v in sv.tolist()]}
         results["heads"][label] = entry
+        # WRITE AFTER EVERY HEAD, not once at the end. This eval is hours of
+        # rented GPU; a job_timeout with the file still in memory would spend
+        # all of it and archive nothing (the same shape as a green run with no
+        # temporal.json). Partial output also lets the harvest read the gate
+        # head's numbers while the rest is still rolling.
+        entry["wall_s"] = round(time.time() - t_head, 1)
+        os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+        with open(a.out, "w") as f:
+            json.dump(results, f, indent=1)
+        print(f"  {label} done in {entry['wall_s'] / 60:.1f} min — "
+              f"{len(results['heads'])}/{len(heads)} heads written to {a.out}",
+              flush=True)
         model.to("cpu")
         if dev.type == "cuda":
             torch.cuda.empty_cache()
