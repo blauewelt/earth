@@ -151,6 +151,8 @@ informative one:
 | e017 s1 (#209) | 1 | 0.497 [0.387, 0.597] | 0.6034 | 0.1930 |
 | e017 s2 (#210) | 1 | 0.462 [0.341, 0.568] | 0.5978 | 0.1898 |
 | **e022s9 s0 (#222)** | **9** | **0.437 [0.336, 0.529]** | **0.6056** | **0.1929** |
+| **e022s9 s1 (#223)** | **9** | **0.547 [0.426, 0.659]** | **0.6056** | **0.1937** |
+| **e022s13 s0 (#225)** | **13** | **0.541 [0.397, 0.660]** | **0.6065** | **0.1932** |
 
 The nowcast probe (0.437 vs 0.462–0.497) is BELOW the baseline seeds but at
 n = 1 on an instrument with seed sd ≈ 0.12 (E-010) that means nothing yet —
@@ -159,6 +161,20 @@ that objective reproduces to sd ≈ 0.0017 across seeds, and 0.1929 lands dead
 centre of the stencil-1 spread 0.1898–0.1937. Nine times the input columns,
 and the one-step prediction of z is unchanged to within a fifth of the
 baseline's own seed range.
+
+**Three arms in (00:25Z), and the forecast null is no longer n = 1.** Baseline
+mean ratio **0.1922** (sd 0.0021, n = 3); spatial mean **0.1933** (sd 0.0004,
+n = 3 across BOTH stencils). The gap is +0.0011 — half the baseline's own seed
+sd, and in the direction of very slightly WORSE. Every spatial arm lands inside
+the stencil-1 range [0.1898, 0.1937], and the 13-point (double the reach, 13×
+the input columns) is indistinguishable from the 3×3. On the objective these
+models actually optimise, neighbourhood inputs buy nothing at either reach.
+
+The nowcast k-fold behaved exactly as its noise floor says it must: #222's
+0.437 looked low, #223 came back 0.547 on the identical recipe — a 0.11 swing
+between seeds of one arm, against a baseline mean of 0.485. Anyone quoting
+either number alone would have "found" an effect in both directions. This is
+E-010's lesson arriving on schedule; the probe is not usable at n < 3.
 
 *Post-hoc interpretation, flagged as post-hoc — this was noticed AFTER the
 number arrived, not predicted before it:* E-021b measured the spatial
