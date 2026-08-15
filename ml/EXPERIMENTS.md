@@ -561,6 +561,54 @@ and the 1000-km-and-under family) decide whether ANY E-026 arm beats it —
 the near-field arms (tworing, sp13, sp8, ring16) are now the live
 candidates, exactly the opposite of what the forecast table suggested.
 
+### CORRIDOR AUC, wave 2 (#303, landed 05:39Z) — the deciding arms confirm it: rolled skill falls monotonically with reach
+
+Gate PASSED again (e017 → 0.643 exactly, third eval in a row). The wave-2
+arms — the three forecast leaders Chris and I spent the day designing — all
+roll WORSE than wave 1's:
+
+| head | s0 | s1 | s2 | mean |
+|---|---|---|---|---|
+| elliptic-24 ×0.71 @4444 | 0.569 (0.557) | 0.563 (0.551) | 0.572 (0.560) | 0.568 |
+| spiral-34 @4444 | 0.551 (0.540) | 0.573 (0.562) | *(wave 3b)* | 0.562² |
+| sunflower-34 @4444 | 0.557 (0.545) | 0.559 (0.548) | 0.543 (0.531) | 0.553 |
+
+²two seeds until #305 lands.
+
+**The full ordering as of wave 2, by corridor AUC mean:** champion 8@222
+**0.6043** > e017 no-neighbours 0.589 > wide@1000 0.5813 > sp24@4444 0.578 >
+esp24@4444 0.568 > sp34@4444 0.562² > sun34@4444 0.553. Rolled corridor
+skill is **monotone decreasing in reach** (222 → 0 → 1000 → 4444) and,
+within 4444 km, decreasing in point count and far-weighting — the exact
+inverse of the forecast-ratio table, where sp34 leads and the champion
+trails by 0.010. The two objectives are not merely uncorrelated across
+stencil geometry; they are anti-correlated, and the effect (−0.05 AUC from
+best to worst) is ten times the seed noise (~0.005). The forecast axis
+optimises next-month fidelity; the roll rewards whatever stays stable when
+its own output is its input. A wide stencil gives the head detail it trusts
+at h=1 and compounds at h=6; e017's stencil-of-one cannot even see the
+neighbouring pixels' drift, and the 222 km ring adds just enough context to
+correct locally without importing far-field noise. Waves 3a/3b (tworing 555,
+narrow/sp13/sp8 ≤1000, ring16 222) fill in the near-field candidates — on
+this curve the interesting question is whether ring16@222 (denser at the
+champion's own radius) can move 0.6043.
+
+### INCIDENT 3 (#290): a queued run executes the sha of main AT DISPATCH, not at start
+
+#290 (base55 s2) went green with **no temporal.json**: 60k clean training
+steps, final in-training probe written (rapid 0.529), then death at the
+one-shot 20k-window eval — the same 56-slot input-tensor OOM as #288/#289.
+It was dispatched at 18:59Z, six hours before it started running: the
+`_chunked_forward` fix was on main by 22:30Z and #290 began at ~01:00Z, but
+a workflow run pins the commit **at dispatch time** (provenance sha 69ea03a,
+18:22Z — pre-fix). Pass 6's note "picks up the fixed code at checkout" was
+wrong, and is exactly the kind of assumption §0.1 exists for: the artefact
+(provenance.json's sha) says what ran; the intention does not. **Lore: a fix
+merged while a run sits queued does NOT reach that run — cancel and
+re-dispatch anything queued at a bad sha.** Re-dispatched on fixed code as
+**#307** (box 30257785, warm from the wave-2 eval). Incident cost: ~3.5
+GPU-h ≈ $1 and the base55 cell waiting on its third seed until ~08:30Z.
+
 ### HOW A STENCIL ROLLS FORWARD — the design theory behind the deep and elliptic arms (2026-08-14)
 
 Chris: *"think through the rolling forward predictions with the model. How
