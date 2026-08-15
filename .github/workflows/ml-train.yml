@@ -981,6 +981,14 @@ jobs:
                        echo "stage-2 schedule: $SCHED";; esac
             case "${{ inputs.window }}" in
               resume2:*) T2="${{ inputs.window }}"; T2="${T2#resume2:}"
+                         # The tag ends at the first comma, so resume2: can
+                         # COMPOSE with the stencil-era window fields
+                         # ("resume2:<tag>,stencil:90,ring:…,seed:1,sched:…").
+                         # Without this strip the curl below asked the release
+                         # for "<tag>,stencil:90,….pt" — which is why the
+                         # E-028b xl continuations had to ride the sched: tail
+                         # with a box-local path instead (2026-08-15).
+                         T2="${T2%%,*}"
                          # resume2:<tag>@<lr> — the continuation's PEAK learning
                          # rate. Kept here with the other stage-2 modifiers
                          # rather than smuggled into lr_decay_steps, which
@@ -1004,6 +1012,7 @@ jobs:
               # state at all: every one is {args, model}, so a continuation
               # from them is impossible and asking for one earns a refusal.
               warm2:*)   T2="${{ inputs.window }}"; T2="${T2#warm2:}"
+                         T2="${T2%%,*}"     # compose with stencil windows, as above
                          case "$T2" in *@*) LR2="${T2#*@}"; T2="${T2%@*}";; esac
                          if [ ! -f "/opt/earth-cache/ckpt/${T2}.pt" ]; then
                            curl -fsSL --max-time 900 -o "/opt/earth-cache/ckpt/${T2}.pt.part" \
