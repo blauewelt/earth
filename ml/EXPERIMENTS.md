@@ -147,11 +147,16 @@ forecast ratio (lower = better), per seed and mean:
 | cell | s0 | s1 | s2 | mean |
 |---|---|---|---|---|
 | base34 · 576×8 × 35 slots (#282–284) | 0.18093 | 0.17910 | 0.17692 | 0.17898 |
-| base55 · 576×8 × 56 slots (#301/#302/#290) | 0.17860 | 0.17692 | *(#290 running)* | 0.17776² |
+| base55 · 576×8 × 56 slots (#301/#302/#307) | 0.17860 | 0.17692 | 0.17380 | 0.17644 |
 | big34 · 768×12 × 35 slots (#295–297) | 0.15186 | 0.14911 | 0.14827 | 0.14975 |
 | **big55 · 768×12 × 56 slots (#298–300)** | 0.14997 | 0.14728 | **0.14562** | **0.14762** |
 
-²mean of two seeds.
+*(2×2 COMPLETED 09:20Z: #307 — the incident-3 re-run on fixed code —
+delivered base55 s2 = 0.17380, seed/stencil verified in the archive
+(34.098M, seed 2), head `e027base55_u1_s2` published. The width effect is
+now confirmed paired at all three seeds at base scale too: −0.0023 /
+−0.0022 / −0.0031, same sign every time, mean −0.0025 — slightly larger
+than at 768×12 (−0.0021). Both main effects stand; still no interaction.)*
 
 **Q1 — does a larger transformer help? YES, dramatically.** Paired at every
 seed, big34 − base34 = −0.02907 / −0.02999 / −0.02865 (mean **−0.0292**, ~30×
