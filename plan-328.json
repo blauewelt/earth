@@ -1,0 +1,11 @@
+{
+ "eval": true,
+ "heads": [
+  "e017_u1_s0 (gate)",
+  "e028xl55_u1_s0",
+  "e028xl55_u1_s1",
+  "e028xl55_u1_s2"
+ ],
+ "note": "corridor AUC for the 205.4M xl tier; gate must reproduce 0.643",
+ "published_at": "2026-08-15T14:08:15.583Z"
+}
