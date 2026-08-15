@@ -1169,6 +1169,11 @@ jobs:
             ml/runs/actions/rollout.json
             ml/runs/actions/rollout_eval.json
             ml/runs/actions/temporal.pt
+            # Milestone checkpoints (--milestone-steps, E-031/E-032): weights-only
+            # saves at named steps, so a single 200k run retains its 60k/120k
+            # rungs — release snapshots fail silently over 2 GiB, so for xl-tier
+            # heads the artifact is the ONLY off-box carrier of intermediates.
+            ml/runs/actions/temporal_ms*.pt
             # PROVENANCE RIDES WITH THE RESULTS. It carries the sha256 of the
             # tensor the run actually used, added after E-007 found that two
             # boxes had silently diverged caches — and it was only in the

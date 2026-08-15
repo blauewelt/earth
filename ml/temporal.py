@@ -1051,6 +1051,19 @@ def main():
                          "~55x the base step; 64 of 512 keeps the overhead "
                          "near ~7x the plain forward while every step still "
                          "carries a depth-2 gradient signal.")
+    ap.add_argument("--milestone-steps", default="",
+                    help="E-031/E-032: comma list of steps at which to save a "
+                         "WEIGHTS-ONLY milestone checkpoint "
+                         "(temporal_ms<step>.pt in the run dir, riding the "
+                         "probes artifact). Exists because a single 200k run "
+                         "must retain its 60k/120k rungs (Chris, 2026-08-15) "
+                         "and the xl tier cannot leg-and-resume: a >2 GiB "
+                         "full head fits neither the release (2 GiB asset "
+                         "cap) nor the snapshot path. Weights-only (~0.86 GB "
+                         "at 206M) is enough for the corridor-AUC evals and "
+                         "the ratio-vs-steps curve; it is NOT resumable — "
+                         "the box mirror keeps the resumable state. Rides "
+                         "the sched: tail.")
     ap.add_argument("--unroll-probs", default="",
                     help="comma probabilities for sampling the unroll depth "
                          "PER STEP, e.g. '0.5,0.25,0.125,0.125' with "
@@ -1305,6 +1318,16 @@ def main():
                 "and --unroll-probs: one exposure-bias mechanism per arm, "
                 "or the ablation cannot attribute the effect.")
     UF = max(U, UW)     # how far past the window the loss reaches
+    MILESTONES = {int(x) for x in a.milestone_steps.split(",") if x.strip()}
+    if MILESTONES:
+        dead = {m for m in MILESTONES if not (0 < m < a.steps)}
+        if dead:
+            # A milestone at or past --steps can never fire; refuse rather
+            # than let a retention request silently retain nothing (§4.6).
+            raise SystemExit(f"--milestone-steps {sorted(dead)} outside "
+                             f"(0, {a.steps}) — those saves would never "
+                             f"happen.")
+        print(f"milestone checkpoints at steps {sorted(MILESTONES)}")
     UP = None
     if a.unroll_probs.strip():
         UP = np.array([float(x) for x in a.unroll_probs.split(",")])
@@ -1813,6 +1836,22 @@ def main():
                 os.replace(tmp_path + ".part", tmp_path)
             except Exception as e:                       # never fatal
                 print(f"  (head mirror failed: {e})", flush=True)
+        if s in MILESTONES:
+            # Weights-only rung checkpoint (see --milestone-steps help).
+            # Atomic and never fatal, like the mirror; named by step so a
+            # 200k run's artifact carries temporal_ms60000.pt and
+            # temporal_ms120000.pt beside the final temporal.pt.
+            try:
+                mp = os.path.join(run_dir, f"temporal_ms{s}.pt")
+                torch.save({"model": model.state_dict(), "args": vars(a),
+                            "step": s,
+                            "run_number": os.environ.get("GITHUB_RUN_NUMBER")},
+                           mp + ".part")
+                os.replace(mp + ".part", mp)
+                print(f"  milestone checkpoint saved: temporal_ms{s}.pt",
+                      flush=True)
+            except Exception as e:                       # never fatal
+                print(f"  (milestone save failed at {s}: {e})", flush=True)
         if s % max(1, a.steps // 10) == 0:
             print(f"  step {s:>6}/{a.steps}  z-mse {loss.item():.4f}"
                   f"  ({time.time() - t0:.0f}s)", flush=True)
