@@ -86,6 +86,23 @@ and the question merits two seeds — but the next uw iteration should cut
 gather cost (cache slot windows across steps, or sample S) before any
 scale-up.
 
+## E-028 EVAL wave 5 · xl corridor AUC — DISPATCHED 2026-08-15 ~14:15Z
+
+Question on record before the numbers: #304 showed capacity transfers to
+the roll at 768×12 (+0.05 AUC paired vs 576×8, breaking the E-026
+inversion). Does the trend continue at 205M, where the forecast ratios
+(0.1295/0.1331) are the project's best? **Hypothesis**: xl corridor AUC >
+the big tier's 0.621–0.628. **Falsifier**: xl ≤ big = the roll axis
+saturates at ~88M even though the forecast axis doesn't, and the 120k
+continuations (#326/#327) answer only forecast. Heads are the
+weights-only e028xl55 publishes (opt state stripped for the 2 GiB cap —
+evals need model+args only); gate e017_u1_s0 must reproduce 0.643.
+Pinned behind #318 on gpu-box-45731106 (~17:30Z start, xl chunked eval is
+the slowest yet — est. 8–12 h). Landed heads e029ar222_u1_s1/s2 and
+e029bznoise_u1_s0 published this pass (znoise checkpoint's own args
+confirm input_znoise=0.7); the E-029/E-030 eval wave dispatches when
+their remaining arms land.
+
 ## E-028b · xl continuation 60k→120k — DISPATCHED 2026-08-15 ~12:10Z
 
 **Why.** The xl arms (#308–#310, 205.4M) finished 60k NOT converged: val
