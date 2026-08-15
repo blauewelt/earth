@@ -465,6 +465,11 @@ def main():
                          "tensor and the corridor recipe")
     ap.add_argument("--horizon", type=int, default=12)
     ap.add_argument("--chunk", type=int, default=8192)
+    ap.add_argument("--map-h", type=int, default=6,
+                    help="horizon for the E-026b per-pixel skill map "
+                         "(mid-roll by default: late enough for the reach "
+                         "divergence to be visible, early enough that most "
+                         "starts still reach it)")
     ap.add_argument("--pixels-gate", type=int, default=600)
     ap.add_argument("--corridor-pctl", type=float, default=75.0)
     ap.add_argument("--corridor-dilate", type=int, default=2)
@@ -773,6 +778,21 @@ def main():
               f"{n_skill + n_long + a.future_months} steps over {P:,} pixels",
               flush=True)
         sums = {name: new_sums(Hh) for name, _ in scopes}
+        # E-026b AUDIT instrumentation (2026-08-15, Chris: "investigate
+        # thoroughly and not hypothesize — there could still be an issue in
+        # how we compute auc"). Two decompositions ride along with EVERY
+        # eval from now on — always-on because the workflow's 25-input
+        # ceiling makes a flag expensive and the cost is a few hundred KB:
+        #   per-CHANNEL msss curves on the corridor scope (the aggregate
+        #   could hide a channel subset driving the reach divergence), and
+        #   a per-PIXEL msss map at h=--map-h on the FULL window (where
+        #   does the far-reach decay live — near pixels whose stencils
+        #   reach off-window, or everywhere). msss_clim = 1 - mse_m/mse_c,
+        #   so only the two sums are kept; n cancels. An exact identity
+        #   guards the instrumentation: the corridor aggregate recomposed
+        #   from the channel sums must match skill_block's own number.
+        aud = {"ch_m": np.zeros((Hh + 1, C)), "ch_c": np.zeros((Hh + 1, C)),
+               "px_m": np.zeros(P), "px_c": np.zeros(P)}
         probe_pts = {h: [] for h in range(1, Hh + 1)}
         with torch.no_grad():
             for Y in hold_years:
@@ -807,6 +827,14 @@ def main():
                         for name, m_ in scopes:
                             accumulate(sums[name], h, xhat[m_], v_true[m_],
                                        v_pers[m_], v_damp[m_], op[m_])
+                        of_ = op.astype(np.float64)
+                        err_ = ((xhat - v_true) ** 2) * of_
+                        tru_ = (v_true ** 2) * of_
+                        aud["ch_m"][h] += err_[corridor].sum(axis=0)
+                        aud["ch_c"][h] += tru_[corridor].sum(axis=0)
+                        if h == a.map_h:
+                            aud["px_m"] += err_.sum(axis=1)
+                            aud["px_c"] += tru_.sum(axis=1)
                         ym = (int(months[t_tgt][:4]) * 100
                               + int(months[t_tgt][5:7]))
                         if ym in ym_to_r:
@@ -819,6 +847,35 @@ def main():
                           "unroll": unroll}}
         for name, _ in scopes:
             entry[name] = skill_block(sums[name], Hh)
+        # --- E-026b audit block + exact-identity check -------------------
+        ch_rows, max_dev = [], 0.0
+        cor_rows = {r["h"]: r["msss_clim"]
+                    for r in entry["corridor"]["chan_skill"]}
+        for h in range(1, Hh + 1):
+            cm, cc = aud["ch_m"][h], aud["ch_c"][h]
+            ch_rows.append([round(float(1 - m / c), 3) if c > 0 else None
+                            for m, c in zip(cm, cc)])
+            if cc.sum() > 0 and h in cor_rows:
+                agg = 1 - cm.sum() / cc.sum()
+                max_dev = max(max_dev, abs(agg - cor_rows[h]))
+        if max_dev > 2e-3:
+            # instrumentation disagrees with the metric it decomposes —
+            # the audit block is untrustworthy; say so IN the artefact
+            # (a print alone would scroll away) but do not kill a
+            # multi-hour eval whose aggregate numbers are still sound
+            print(f"::error::audit identity FAILED: per-channel recompose "
+                  f"deviates {max_dev:.4f} from corridor msss", flush=True)
+        entry["audit"] = {
+            "channels": [str(c) for c in ck["chan"]],
+            "per_channel_msss_clim_corridor": ch_rows,
+            "identity_max_dev": round(float(max_dev), 5),
+            "map_h": a.map_h,
+            "note": ("map pixel order = the eval's ys/xs arrays "
+                     "(same ordering --export-mask writes)"),
+            "map_msss_clim_window": [
+                round(float(1 - m / c), 2) if c > 0 else None
+                for m, c in zip(aud["px_m"], aud["px_c"])],
+        }
         entry["amoc_bands"] = {}
         for bn, hs in BANDS:
             pts = [(h, s_, pr, y) for h in hs if h <= Hh
