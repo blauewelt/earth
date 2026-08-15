@@ -1,0 +1,315 @@
+{
+ "run_number": 310,
+ "files": {
+  "probe_kfold.json": {
+   "actions": {
+    "rapid": {
+     "r_kfold_deseas": 0.627,
+     "ci95": [
+      0.503,
+      0.735
+     ],
+     "n": 240,
+     "rmse_sv": 2.17,
+     "sigma_sv": 2.79,
+     "r_lowpass18": 0.811,
+     "wind_only_baseline": {
+      "r": 0.568,
+      "ci95": [
+       0.428,
+       0.696
+      ],
+      "rmse_sv": 2.29
+     }
+    },
+    "fc": {
+     "r_kfold_deseas": 0.32,
+     "ci95": [
+      0.213,
+      0.428
+     ],
+     "n": 490,
+     "rmse_sv": 2.04,
+     "sigma_sv": 2.15,
+     "r_lowpass18": 0.337,
+     "wind_only_baseline": {
+      "r": 0.121,
+      "ci95": [
+       0.013,
+       0.226
+      ],
+      "rmse_sv": 2.13
+     }
+    },
+    "move": {
+     "r_kfold_deseas": 0.177,
+     "ci95": [
+      0.023,
+      0.317
+     ],
+     "n": 271,
+     "rmse_sv": 4.2,
+     "sigma_sv": 3.73,
+     "r_lowpass18": 0.691,
+     "wind_only_baseline": {
+      "r": -0.376,
+      "ci95": [
+       -0.45,
+       -0.284
+      ],
+      "rmse_sv": 3.79
+     }
+    },
+    "osnap": {
+     "r_kfold_deseas": -0.037,
+     "ci95": [
+      -0.205,
+      0.144
+     ],
+     "n": 96,
+     "rmse_sv": 3.96,
+     "sigma_sv": 2.63,
+     "r_lowpass18": 0.157,
+     "wind_only_baseline": {
+      "r": 0.031,
+      "ci95": [
+       -0.217,
+       0.231
+      ],
+      "rmse_sv": 2.64
+     }
+    }
+   }
+  },
+  "temporal.json": {
+   "run": "actions",
+   "K": 24,
+   "d_model": 1024,
+   "layers": 16,
+   "steps": 60000,
+   "scale": {
+    "params": 205428800,
+    "batch": 256,
+    "steps": 60000,
+    "data_points": 28857960,
+    "n_pixels": 84405,
+    "n_train_months": 480,
+    "stencil": 56,
+    "ring_km": "spiral:111,4444,0.71,0.5"
+   },
+   "z_t+1": {
+    "mse_model": 0.40775731205940247,
+    "mse_persistence": 3.149423122406006,
+    "beats_persistence": true
+   },
+   "chan_t+1": {
+    "mse_model": 0.22901156544685364,
+    "mse_persistence": 1.1510298252105713,
+    "beats_persistence": true,
+    "channels": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ]
+   },
+   "rapid_probe": {
+    "r_raw": 0.549,
+    "r_deseasonalised": 0.444,
+    "n_test": 36,
+    "features": "hidden(-1) mean over section"
+   },
+   "rapid_probe_kfold": {
+    "r_kfold_deseas": 0.458,
+    "ci95": [
+     0.345,
+     0.558
+    ],
+    "n": 240,
+    "rmse_sv": 2.48,
+    "sigma_sv": 2.79,
+    "features": "hidden(-1) mean over section",
+    "note": "year-blocked k-fold over the TEMPORAL HEAD's features. probe_kfold.json in this same run scores the CODEC and is identical for every run that freezes the same codec; this is the number that moves with stage-2 choices. Its comparable wind-only bar is the one printed beside the codec figure in probe_kfold.json."
+   },
+   "seed": 2
+  },
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.426,
+     "r_deseasonalised": 0.476,
+     "n_test": 36
+    },
+    {
+     "K": 3,
+     "r_raw": 0.448,
+     "r_deseasonalised": 0.337,
+     "n_test": 36
+    },
+    {
+     "K": 6,
+     "r_raw": 0.522,
+     "r_deseasonalised": 0.454,
+     "n_test": 36
+    },
+    {
+     "K": 12,
+     "r_raw": 0.599,
+     "r_deseasonalised": 0.548,
+     "n_test": 36
+    },
+    {
+     "K": 24,
+     "r_raw": 0.625,
+     "r_deseasonalised": 0.572,
+     "n_test": 36
+    }
+   ],
+   "seasonal_floor_raw": 0.272,
+   "seasonal_floor_deseas": -0.168
+  },
+  "dip_check.json": {
+   "run": "actions",
+   "window": [
+    "2009-09",
+    "2010-06"
+   ],
+   "r_out_of_fold": 0.627,
+   "sign_agreement_pct": 68.8,
+   "dip_observed_sv": -6.87,
+   "dip_predicted_sv": -3.27,
+   "dip_captured_pct": 47.5
+  },
+  "provenance.json": {
+   "run_number": 310,
+   "sha": "925c73880eaff50a8982da8dc6dfd6317de662f9",
+   "code": "https://github.com/blauewelt/earth/tree/925c73880eaff50a8982da8dc6dfd6317de662f9",
+   "inputs": {
+    "doc": "E-028 SCALE arm xl55, seed 2: sunflower-55 (stencil:56, spiral:111-4444-0.71-0.5) under a 1024x16 stage-2 transformer (~207M params, 2.4x big55's compute) \u2014 Chris, 2026-08-15 morning: 'in the meantime, let's try even bigger transformers.' Extends the E-027 capacity axis on the SAME stencil so the curve stays controlled: 576x8 = 0.17776+, 768x12 = 0.14762 (big55 mean) \u2014 no sign of saturation at the last step. Hypothesis: the forecast ratio improves again; falsifier: mean within 3 seed sd (~0.005) of big55 = the curve is flattening. NOTE the corridor-AUC verdict for ALL capacity cells pends #304 and the E-026b anti-correlation audit \u2014 this run tracks the forecast axis; where the big models should LIVE (which stencil) is decided after the audit. Carries _chunked_forward (eval input at 56 slots + 1024-wide activations both bounded by the 4096-row slices).",
+    "steps": "60000",
+    "batch": "512",
+    "d_z": "64",
+    "anomaly": "true",
+    "temporal_steps": "60000",
+    "temporal_d_model": "1024",
+    "temporal_layers": "16",
+    "eval_every": "0",
+    "resume": "!run-62,run-63",
+    "head_probe": "false",
+    "light_probe_every": "0",
+    "window": "stencil:56,ring:spiral:111-4444-0.71-0.5,seed:2,sched:expdecay --lr-cooldown-frac 0",
+    "tensor": "family3_na025",
+    "sst_channel": "false",
+    "patch": "3",
+    "max_minutes": "0",
+    "runner": "gpu-box-47566395",
+    "job_timeout": "700",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "576",
+    "codec_layers": "10",
+    "codec_heads": "8",
+    "codec_d_dec": "768"
+   },
+   "tensor": {
+    "file": "ml/cache/family3_na025.npz",
+    "sha256": "adcbe700fb6e160b1c84d7acd8dc0333b34d07829db9abd62c721aab278b4848",
+    "bytes": 2984746794,
+    "X_shape": [
+     516,
+     281,
+     481,
+     39
+    ],
+    "C": 39,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 516
+   },
+   "torch": "2.13.0+cu130",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-47566395"
+  }
+ }
+}
