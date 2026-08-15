@@ -789,6 +789,43 @@ while `stencil:/ring:/seed:` match anywhere, so the U=2 windows begin
 `unroll:2,stencil:56,…`. Cost: 10 arms ≈ 32 GPU-h ≈ $9.5, plus the later
 AUC eval wave that arms (b) and (c) exist for.
 
+**CORRECTION, 10:40Z — arms (c) RETRACTED: U>1 × stencil>1 is
+architecturally impossible as dispatched, and I dispatched it anyway.**
+temporal.py guards exactly this (line ~1210): the training-time unroll
+feeds back only the CENTRE pixel's predicted z, and at u≥1 the neighbour
+slots would need the NEIGHBOURS' own predictions, which a random-pixel
+batch does not contain — the shapes do not even align (pred is [B,K,d_z],
+the wide input needs [B,K,S·d_z]). E-010 never met the guard because it
+ran at stencil 1. #315 refused at startup and went GREEN anyway (the
+backgrounded-trainer signature, ~40 min of box setup wasted); #316
+cancelled before starting. This is a §1 violation on my part — "check the
+configuration can produce it" — caught by Chris asking how missing slots
+are encoded, which put my eyes on the neighbouring code block. A TRUE
+wide-stencil unroll requires predicting the neighbours too, i.e.
+field-level training (rollout-with-gradients over tiles or the window) —
+recorded below as the E-030 candidate; feasible cheaply only for
+short-reach stencils (ring-8@222 = ±2 cells → tile batches). Until then
+the exposure-bias discrimination rests entirely on arms (b), which are
+architecturally fine precisely because znoise SIMULATES predicted-input
+degradation statistically instead of needing actual neighbour predictions.
+
+**Missing-slot encoding, documented while answering Chris's question
+("does a missing pixel need a special symbolic token?").** A dead slot
+(off-window or land) is zero-filled in z-space by `gather_stencil` — no
+in-band token — but the model is TOLD the deadness explicitly and
+out-of-band: `static_ctx` = [Zstat · coords · obs_flags], where obs_flags
+is one binary per slot (1=live, 0=dead) and coords is the pixel's own
+position. So "the model knows west/east/middle" is true BY DESIGN, through
+flags and coordinates, not inferred from the zeros; the zero-vs-real-value
+collision is disambiguated by the flags; and the encoding is identical at
+train and roll time (geometry is static), so it opens no train/roll gap.
+The audit's phase-2 finding cross-checks it from the other side: the
+inversion is WORST where nothing is missing, so missing-slot handling is
+measurably not the driver. A learned missing-embedding (the true "token"
+analogue — slots are concatenated features per timestep, not transformer
+tokens) remains a cheap testable variant if the flags ever prove
+insufficient.
+
 ### E-028 · Even bigger transformers — DISPATCHED 08-15 ~07:15Z
 
 Chris: *"let's try even bigger transformers."* **xl55 = 1024×16 (~207M
