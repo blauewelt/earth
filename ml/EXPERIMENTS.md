@@ -58,12 +58,22 @@ same scale-invariant fraction as 34 (47.6%), 55 (47.4%), 89 (47.1%). More
 points = proportionally more live input; nothing about the geometry
 degrades at this count.
 
-**Hypothesis**: another paired ~−0.002 vs sun89. **Falsifier**: within
-seed noise (~0.0015) of sun89 = the width axis finally saturates, and the
-paper's width story gets its endpoint. Arms: 2 seeds, 60k expdecay,
-768×12, stencil:145 (144 % n_radii=1 ✓). Queued s0 behind #325 on the HK
-box, s1 on gpu-box-47529389 (ahead of the leg-2 re-queue — ordering
-inverted deliberately so no box idles; everything still lands overnight).
+**REVISED 18:15Z (Chris): "the 144 points XL experiments should also run
+for 200k steps (please cancel the 60k ones) … let's setup 200k and make
+sure to retain some checkpoints 60k, 120k."** The big-tier 60k arms
+(#338/#339) were cancelled unstarted; E-032 is now **xl144 × 200k ×2**
+(1024×16, stencil:145, ~215M with the 145-slot proj). The 60k/120k rungs
+are retained by the new `--milestone-steps 60000,120000` (weights-only
+in-run saves riding the probes artifact, commit 7dc6fca) — the confident
+single-run design, chosen over legs because an xl-tier full head cannot
+cross a leg boundary (>2 GiB, no release seed; today's green-dead lesson).
+#336/#337 (xl89, 20 min in) were also cancelled and re-dispatched with
+milestones so both flagship cells retain their rungs. Two more parked
+boxes started for xl144; all four XL runs land ~12:00–13:00Z 08-16.
+
+**Hypothesis**: another paired ~−0.002 vs sun89 (at xl: vs xl89's own
+milestones, paired at every rung). **Falsifier**: within seed noise of xl89's milestone at the matched step
+= width saturates under the large head.
 
 ## E-031 · xl89: widest input × largest transformer × 200k — DISPATCHED 2026-08-15 ~17:55Z
 
