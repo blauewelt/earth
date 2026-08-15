@@ -166,6 +166,16 @@ rotated; the split backup is now the ONLY copy besides 30-day artifacts) —
 deferred to the workflow-refactor pass, which gives the seed step a script
 body with room for multi-part assembly.
 
+**120k HARVEST (#334/#335, 2026-08-15 ~19:40Z): the second 60k steps buy
+a paired −0.007 — step budget is a REAL third axis.** Ratios s1 0.13842 /
+s2 0.13689 (from 0.14556/0.14420 at 60k), continuations verified (resumed
+at exactly 60000, lr 3.58e-4, seams clean on the status page). sun89-big
+at 120k now sits between xl55-60k (0.1295–0.1331) and big55-60k (0.1476):
+doubling steps at 88M bought about half of what 2.3× parameters bought.
+120k full heads published as e029dsun89x120_u1_s1/s2__temporal.pt (the
+retained rung + leg-2 resume source). Leg 2 (120k→200k) dispatched from
+them.
+
 **60k HARVEST (with #318/#319/#321/#324 landing): sunflower-89 BEATS big55
 — width still pays at 89 points.** sun89 s1 0.14556 / s2 0.14420 (mean
 0.1449) vs big55's 0.1476: paired −0.0027, same size as the 34→55 width
