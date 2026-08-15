@@ -614,6 +614,40 @@ candidates in #305: sp13/sp8 (≤1000 spirals), ring16@222 (the density arm
 at the champion's own radius, n=1) and sp34 s2 (completes the forecast
 leader's AUC row).
 
+### CORRIDOR AUC, wave 3b (#305, landed 07:29Z) — the base-scale table is COMPLETE; two clean isolations for the audit
+
+Gate PASSED (fifth eval, e017 → 0.643). New rows: sp13 0.585/0.595/0.579
+(mean 0.5863) · sp8 0.591/0.589/0.585 (**0.5883**, the best new arm —
+statistically at the baseline) · ring16@222 s0 **0.564** (n=1) · sp34 s2
+0.574 (completing sp34 at 0.566). The full E-026 table by corridor-AUC
+mean, all gates passed, all seeds paired-comparable:
+
+| rank | stencil | pts | reach km | AUC mean | vs champion |
+|---|---|---|---|---|---|
+| — | **champion ring-8 @222 (E-023)** | 8 | 222 | **0.6043** | 0 |
+| 1 | spiral-8 | 8 | 890 | 0.5883 | −0.016 |
+| 1 | e017 no neighbours | 0 | 0 | 0.589 | −0.015 |
+| 1 | three rings narrow | 12 | 1000 | 0.589 | −0.015 |
+| 4 | spiral-13 | 13 | 1000 | 0.5863 | −0.018 |
+| 5 | two rings 8+8 | 16 | 555 | 0.5857 | −0.019 |
+| 6 | three rings wide | 24 | 1000 | 0.5813 | −0.023 |
+| 7 | spiral-24 | 24 | 4444 | 0.578 | −0.026 |
+| 8 | elliptic-24 | 24 | 4444 | 0.568 | −0.036 |
+| 9 | spiral-34 | 34 | 4444 | 0.566 | −0.038 |
+| 10 | ring-16 @222 (n=1) | 16 | 222 | 0.564 | −0.040 |
+| 11 | sunflower-34 | 34 | 4444 | 0.553 | −0.051 |
+
+The champion beats every arm paired at every seed. **Two isolations the
+audit can use, measured not hypothesized:** (1) point count at FIXED
+radius — ring16@222 vs ring8@222, same 222 km, doubled points, −0.044 at
+s0; (2) reach at FIXED count — sp8@890 vs ring8@222, same 8 points, wider
+reach, −0.016. Within the spiral family the AUC is monotone in count
+(8→13→24→34 = 0.588→0.586→0.578→0.566). Whatever the roll penalizes, it
+scales with BOTH slot count and reach, and count at least as strongly —
+the ring16 datum kills any story that is purely about physical distance.
+Per Chris's directive the PICK remains ON HOLD pending E-026b (a)+(b) and
+the #304 capacity AUCs; no RESULT is written yet.
+
 ### E-026b · AUDIT of the anti-correlation (Chris, 08-15 morning: "investigate thoroughly and not hypothesize — there could still be an issue in how we compute AUC")
 
 **The pick is ON HOLD pending this audit and #304.** The two mechanism
