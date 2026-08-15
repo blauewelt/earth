@@ -86,6 +86,39 @@ and the question merits two seeds — but the next uw iteration should cut
 gather cost (cache slot windows across steps, or sample S) before any
 scale-up.
 
+## E-029d-ext · sunflower-89 → 200k steps — DISPATCHED 2026-08-15 ~14:45Z
+
+**Chris (14:35Z): "Let's make sure to immediately continue the large input
+(89 points sunflower) run to 200k steps. Let's backup the intermediate 60k
+and 120k checkpoints as well."** Live curves motivated it: at step ~50k the
+sun89 arms read val 0.458/0.463 — under big55's FINAL 0.4615 — so width may
+not saturate at 55, and the widest input deserves the longest budget.
+
+**Structure: two legs per seed, 60k→120k (this dispatch) then 120k→200k**,
+because expdecay is horizon-free (a leg boundary changes nothing about the
+trajectory) and each leg's end gives a durable full checkpoint (88M+opt ≈
+1.07 GB — fits the 2 GiB release cap whole) plus a probe-ladder reading, so
+the ratio-vs-steps curve gets points at 60k/120k/200k for free. Backups per
+Chris: the 60k heads publish as e029dsun89_u1_s1/s2__temporal.pt (full,
+resumable — backup AND resume source in one), 120k as e029dsun89x120_*.
+
+**Mechanics.** The resume2: window token now composes with stencil fields
+(workflow fix 8d5e711 — tag ends at first comma; the PAT turned out to
+carry the Workflows permission). But the ~30-min release snapshots have
+been SILENT since ~10:59Z (run-318/319-temporal-latest.pt never appeared —
+run-313/320's stopped mid-run too; watch item, cause unknown), so leg 1
+seed 1 rides the sched: tail against the home-box mirror
+(/opt/earth-cache/ckpt/run-318-temporal.pt, exact 60k) on gpu-box-45731106
+— #328 (xl eval) cancelled and re-queued BEHIND it there, xl verdict slips
+~4h — and seed 2 dispatches at ~15:45Z as resume2:e029dsun89_u1_s2 from
+the published 60k head, pinned behind #324 on gpu-box-47529389. Seed 0
+(#325, HK box) continuation decided when it lands.
+
+**Hypothesis**: the 60k→120k leg buys ≥ the xl continuation's expected
+gain (the sun89 val slope at 60k mirrors xl's — neither is converged);
+falsifier: 120k ratio within seed noise of 60k = step-budget saturated at
+this width, don't run leg 2.
+
 ## E-028 EVAL wave 5 · xl corridor AUC — DISPATCHED 2026-08-15 ~14:15Z
 
 Question on record before the numbers: #304 showed capacity transfers to
