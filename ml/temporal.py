@@ -998,6 +998,24 @@ def main():
                          "programme (rollout.py), measured on a model that "
                          "was never trained for it. Costs one extra forward "
                          "and backward per extra step.")
+    ap.add_argument("--input-znoise", type=float, default=0.0,
+                    help="E-029b: Gaussian noise (std, in normalised z units) "
+                         "added to the LIVE input slots during training — the "
+                         "cheap alternative to --unroll for the same exposure "
+                         "bias. At roll time every input is a model "
+                         "prediction, not an observation; training on clean "
+                         "context therefore mismatches the roll's input "
+                         "distribution, and E-026b measured the penalty "
+                         "growing with slot count. Calibrate to the model's "
+                         "own one-step error: sigma = sqrt(val_zmse) of the "
+                         "matching clean run (big55: sqrt(0.55) ~ 0.74 -> "
+                         "0.7). DEAD slots stay exact zeros — zero IS the "
+                         "dead-slot encoding (test_zero_weight_equivalence), "
+                         "and the roll feeds exact zeros there too, so "
+                         "noising them would train against an input state "
+                         "the roll never produces. Reaches temporal.py "
+                         "through the window's sched: tail, which the "
+                         "workflow hands over verbatim — no workflow edit.")
     ap.add_argument("--unroll-probs", default="",
                     help="comma probabilities for sampling the unroll depth "
                          "PER STEP, e.g. '0.5,0.25,0.125,0.125' with "
@@ -1534,6 +1552,16 @@ def main():
     for s in range(start_step + 1, a.steps + 1):
         zseq, mseq, sctx, ztgt, zfut, mfut, zdir = batch_windows(
             pool_t, pool_p, a.batch)
+        if a.input_znoise > 0:
+            # E-029b: perturb only LIVE slots (see the flag's help). A slot
+            # is live iff any of its d_z components is nonzero — zero is the
+            # dead-slot encoding, so this recovers slot liveness without a
+            # separate mask, at the cost of treating an exactly-all-zero
+            # live embedding as dead (measure-zero in float32).
+            z4 = zseq.view(*zseq.shape[:2], -1, ck["d_z"])    # [n,K,S,d_z]
+            live = (z4 != 0).any(-1, keepdim=True)            # [n,K,S,1]
+            zseq = (z4 + torch.randn_like(z4) * a.input_znoise
+                    * live).view(zseq.shape)
         pred, hid1 = model(zseq, mseq, sctx)
         l_base = (pred - ztgt).pow(2).mean()
         loss = l_base
