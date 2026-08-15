@@ -138,6 +138,65 @@ at K=6 with 1 slot; it does not survive K=24 × 35 slots. Await #295/#297
 (same 2 h pace ⇒ ~00:20–00:45Z dispatch cohort lands through the night) and
 the big55 cell before calling the interaction.
 
+**RESULT (forecast axis), 01:40Z — all six arms landed green with
+temporal.json; seeds and stencils verified from each archive's own
+`stage2_result` (params_M disambiguates the stencil: 86.923M = 35 slots,
+87.971M = 56 slots at 768×12; 34.098M = 56 slots at 576×8).** The 2×2 in
+forecast ratio (lower = better), per seed and mean:
+
+| cell | s0 | s1 | s2 | mean |
+|---|---|---|---|---|
+| base34 · 576×8 × 35 slots (#282–284) | 0.18093 | 0.17910 | 0.17692 | 0.17898 |
+| base55 · 576×8 × 56 slots (#301/#302/#290) | 0.17860 | 0.17692 | *(#290 running)* | 0.17776² |
+| big34 · 768×12 × 35 slots (#295–297) | 0.15186 | 0.14911 | 0.14827 | 0.14975 |
+| **big55 · 768×12 × 56 slots (#298–300)** | 0.14997 | 0.14728 | **0.14562** | **0.14762** |
+
+²mean of two seeds.
+
+**Q1 — does a larger transformer help? YES, dramatically.** Paired at every
+seed, big34 − base34 = −0.02907 / −0.02999 / −0.02865 (mean **−0.0292**, ~30×
+the ~3-seed-sd bar). Hypothesis (1) is falsified three times over. The whole
+E-026 shape table spans 0.010 from best arm to worst; capacity is worth three
+times the entire geometry axis.
+
+**Q2 — do more input points help with the larger transformer? YES,
+consistently.** big55 − big34 paired: −0.00189 / −0.00183 / −0.00265 (mean
+**−0.0021**, same sign at all three seeds). 55 sunflower points beat 34 under
+768×12.
+
+**But the INTERACTION story is dead: width is additive, not unlocked.**
+base55 − base34 paired at the two finished seeds: −0.00233 / −0.00218 —
+width helps by the SAME ~0.002 at 576×8 as at 768×12. Capacity did not "buy
+back" a width penalty, because at this geometry there is no width penalty to
+buy back: E-022's penalty was measured on TOUCHING 3×3 neighbours
+(redundant, interpolable inputs), and a sunflower's 55 points at 111–4444 km
+are not redundant. Two clean main effects — capacity ~−0.029, width ~−0.002
+— and no detectable interaction. Hypothesis (2)'s prediction (big55 best)
+was RIGHT, its mechanism (capacity unlocks width) was WRONG.
+
+**Best model in the project as of 01:40Z: big55 s2 (#300), forecast ratio
+0.14562** — 16% better than the pre-E-027 best (0.17412). Both scale axes
+are OPEN at the top end: 768×12 is not a measured ceiling (E-028 candidate:
+960×16), and neither is 55 points. Corridor AUC for all eight big/base55
+heads pends the wave-4 eval; the E-026 shape decision is unaffected (it
+compares base-scale arms under the pre-committed rule).
+
+**Wall-times, all sane for their size** (fast=lemon check): big arms 136–200
+min for 60k steps + chunked eval; base55 107–136 min; #281's 456 min is the
+slow-box tax (same box that took 262 min for #284), not a config signal.
+
+**EVAL wave 4 dispatched 02:04Z as #304** (box 47094145): rolled corridor
+AUC for all eight landed scale heads — e027big34 s0–s2, e027big55 s0–s2,
+e027base55 s0–s1 — against the e017 gate, heads published and
+checkpoint-verified (`--expect-ring "spiral:111,4444,0.71,0.5"`,
+`--expect-stencil 35/56`) at 01:50Z. Question on record before the numbers:
+does the corridor AUC reproduce the forecast axis's two clean main effects
+(capacity ~−0.029, width ~−0.002, additive)? E-022 is the standing warning
+that a forecast gain can roll into an AUC loss; a big-arm AUC at or below
+the base band would mean the capacity gain is one-step-ahead overfitting,
+and the E-028 scale push dies before it is born. base55 s2 (#290, still
+training) joins a later eval or is noted as the one silent cap.
+
 ---
 
 ## E-026 · Ring of 8 vs ring of 16, in the TRANSFORMER — DISPATCHED 2026-08-14
@@ -419,7 +478,7 @@ effect makes rows comparable only within a column):
 
 | rank | arm | reach km | pts | s0 | s1 | s2 | mean | vs champion |
 |---|---|---|---|---|---|---|---|---|
-| 1 | **spiral-34, geometric** | 4444 | 34 | 0.17702 | 0.17501 | *(running)* | **0.17602** | **−0.0087** |
+| 1 | **spiral-34, geometric** | 4444 | 34 | 0.17702 | 0.17501 | **0.17209** | **0.17471** | **−0.0101** |
 | 2 | **elliptic-24 ×0.71** | 4444 | 24 | 0.17853 | 0.17563 | 0.17471 | 0.17629 | −0.0085 |
 | 3 | three rings wide 8+8+8 | 1000 | 24 | 0.17928 | 0.17592 | 0.17412 | 0.17644 | −0.0083 |
 | 4 | spiral-24, geometric | 4444 | 24 | 0.17943 | 0.17742 | 0.17430 | 0.17705 | −0.0077 |
@@ -431,6 +490,11 @@ effect makes rows comparable only within a column):
 | 10 | ring 16 @ 222 (density, n=1) | 222 | 16 | 0.18545 | — | — | 0.18545 | +0.0007 |
 | — | champion 8 @ 222 (e023r222) | 222 | 8 | | | | 0.18476 | 0 |
 | — | no neighbours (e017) | 0 | 0 | | | | 0.19216 | +0.0074 |
+
+*(Table completed 01:40Z: #281 landed spiral-34 s2 = 0.17209 — the best
+576×8 forecast number ever recorded, beating the previous best single ratio
+0.17412 by 0.002 and pulling spiral-34's mean to 0.17471. The paired order
+below is unchanged; spiral-34 is now best at all three seeds.)*
 
 The paired-by-seed ordering inside the 4444 km family is CONSISTENT at every
 seed: **spiral-34 ≤ elliptic-24 ≤ spiral-24 < sunflower** — so on one-step
@@ -457,6 +521,16 @@ sp24 + wide + champion) lands ~02:00Z; wave 2 (sunflower + elliptic +
 spiral-34) follows on the second eval box. Earlier per-seed detail and the
 seed-mislabel correction are preserved in git history (commits 324c796,
 e3bcb0e).
+
+**Waves 3a/3b dispatched 02:04–02:08Z as #306/#305** (boxes 45731106
+(revived from self-exit) and 47529389), splitting the remaining arms across
+two freed boxes so the WHOLE table lands by morning instead of noon: 3a =
+gate + tworing ×3 + narrow ×3; 3b = gate + sp13 ×3 + sp8 ×3 + ring16 (n=1) +
+**sp34 s2** — #281 landed at 01:00Z with forecast ratio **0.17209**, the
+best 576×8 number ever recorded, completing the forecast leader's third
+seed (head `e026sp34_u1_s2` published 01:47Z, checkpoint-verified seed 2 /
+stencil 35 / `spiral:111,4444`). With waves 1+2 this is every E-026 arm,
+every seed, no silent caps: 33 head-evals across five boxes.
 
 ### HOW A STENCIL ROLLS FORWARD — the design theory behind the deep and elliptic arms (2026-08-14)
 
