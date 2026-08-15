@@ -98,6 +98,24 @@ it gave up. Assert the **effect**, not the invocation — the seed step logged
 minutes of being made, and the second place must not be the machine that made
 it. Write atomically; a mirror that can be truncated is not a mirror.
 
+**The 2 GiB cliff (found 2026-08-15, E-028).** GitHub release assets cap at
+2 GiB, and a 205M-parameter head with optimiser moments is ~2.5 GB — so the
+xl tier silently fell out of *every* off-box path at once: the ~30-min
+`snapshot_head.sh` uploads (`run-<n>-temporal-latest.pt`) simply never
+appeared, and the run's own artifact copy expires after 30 days. For a day
+the only durable copies of the largest models in the project were on rented
+boxes. Convention now: any checkpoint over the cap is published to
+`model-checkpoints-v1` in TWO forms — a weights-only
+`<tag>__temporal.pt` ({model, args, step}; what evals need, and it fits) and
+the full resumable file split as `<tag>__temporal.full.partNN` +
+`<tag>__temporal.full.sha256` (per-part and whole-file hashes; reassemble
+with `cat <tag>__temporal.full.part* > temporal.pt`). The E-028 xl heads
+(seeds 0–2, step 60000, opt+sched+RNG verified before upload) are stored
+this way. `snapshot_head.sh` still fails silently over the cap for LIVE
+runs — a known gap; until it splits, a >2 GiB run's insurance is the box
+mirror plus same-box resume, and its completed artifact must be backed up
+within 30 days.
+
 ### 2c · Limits treated as physics
 
 - `job_timeout` defaults to 350 minutes, and a 60,000-step stage 2 needs ~7.9
