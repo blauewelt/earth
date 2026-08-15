@@ -1444,18 +1444,31 @@ def main():
         prev_total = int(tk.get("args", {}).get("steps", start_step))
         extending = (a.steps != prev_total) or (abs(a.lr - float(
             tk.get("args", {}).get("lr", a.lr))) > 1e-12)
-        if a.lr_schedule in ("invsqrt", "wsd"):
+        if a.lr_schedule in ("invsqrt", "wsd", "expdecay"):
             # NOTHING TO DECIDE. A horizon-free schedule is a pure function of
             # the step, so extending is not a case: rebuild it at the same
             # position and it produces exactly what an uninterrupted run of
             # any length would produce there. This branch existing at all is
             # the cost of baking the total into the rate.
+            #
+            # expdecay was MISSING from this tuple until 2026-08-15 — it is
+            # the most horizon-free of the three (lr = peak * 2^(-s/H), H
+            # absolute), yet an extension request fell through to the branch
+            # below and silently replaced it with a fresh COSINE over the new
+            # total: different family, different rate at every remaining
+            # step, and nothing in the output but a line saying "EXTENDING"
+            # while the run trained under a schedule nobody asked for. Found
+            # by reading, not by a burned run — the E-028 xl heads (expdecay,
+            # taper off, lr still 3.7e-4 at 60k) are the first anyone wanted
+            # to continue. (With --lr-cooldown-frac > 0 the taper end is
+            # horizon-coupled and rebuilding moves it — the same accepted
+            # coupling wsd's cooldown already has in this branch.)
             for g in opt.param_groups:
                 g["lr"] = a.lr
                 g["initial_lr"] = a.lr
             sched = make_sched(opt, a, last_epoch=start_step - 1)
-            print(f"  invsqrt: horizon-free, so the continuation simply "
-                  f"resumes at step {start_step:,} — no extension case",
+            print(f"  {a.lr_schedule}: horizon-free, so the continuation "
+                  f"simply resumes at step {start_step:,} — no extension case",
                   flush=True)
         elif extending:
             for g in opt.param_groups:
