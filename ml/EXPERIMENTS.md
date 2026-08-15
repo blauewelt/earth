@@ -614,6 +614,70 @@ candidates in #305: sp13/sp8 (≤1000 spirals), ring16@222 (the density arm
 at the champion's own radius, n=1) and sp34 s2 (completes the forecast
 leader's AUC row).
 
+### E-026b · AUDIT of the anti-correlation (Chris, 08-15 morning: "investigate thoroughly and not hypothesize — there could still be an issue in how we compute AUC")
+
+**The pick is ON HOLD pending this audit and #304.** The two mechanism
+paragraphs written overnight (waves 1–2 above) are hereby demoted to
+conjecture; below is what has been MEASURED, all from the four archived
+rollout JSONs (#233/#294/#303/#306, 27 head-evals) — zero GPU spent.
+
+**Artifact classes eliminated:**
+
+1. **Different scored sets per stencil — NO.** Every one of the 27 heads has
+   IDENTICAL sample counts at every horizon (h1 n = 37,528,668 …
+   h12 n = 3,127,389, corridor). The evaluator scores the same pixels,
+   months and channels for a 1-slot head and a 56-slot head.
+2. **Broken input construction in the roll (dead slots, boundary handling)
+   — NO.** At h=1 the rolled context IS observed truth, so the roll's input
+   path is exercised with training-equivalent inputs — and the h=1 corridor
+   msss reproduces the training forecast ordering exactly: sp34 0.737 >
+   sp24 0.736 > wide 0.735 > … > champion 0.727 > e017 0.713. If slot
+   handling differed from training, the far-reach heads would already
+   suffer at h=1. They lead at h=1.
+3. **Baseline choice — NO.** The ordering is identical against climatology
+   and against persistence, and under the damped variant.
+4. **Amplitude collapse masquerading as skill loss — NO.** amp_ratio does
+   not track the inversion: sp34 holds amplitude best-in-class at h=1
+   (0.888) AND near-best at h=12 (0.766) while showing the fastest msss
+   decay. The decay is in ACC (pattern correlation): sp34 0.858→0.683
+   vs champion 0.852→0.730. The far-reach heads predict confident,
+   full-amplitude, increasingly WRONG patterns.
+5. **Horizon weighting of the AUC — TOP IS INVARIANT.** Flat mean vs
+   n-weighted mean (which favours early horizons and thus the far-reach
+   heads): the champion's three seeds are ranks 1–3 under both. The
+   mid-table (arms within ~0.01 of the baseline) DOES shuffle under
+   re-weighting — differences at that scale should not be read.
+
+**What the data says without hypothesis:** the inversion is not present at
+entry (h=1 matches training) and develops smoothly with horizon; crossover
+at h≈3–4; by h7–12 the spread is 0.564 (champion) vs 0.478 (sp34 s0). It
+is a pattern-error phenomenon under iteration, not an accounting artifact
+in the metric, in the masks, or in the input plumbing.
+
+**Remaining checks (next, in order of cost):** (a) per-CHANNEL horizon
+curves — the aggregate could hide a channel subset driving the divergence
+(late-starting channels, wind stress); needs a lightly instrumented eval
+re-run on 3 heads (champion / sp34 / e017). (b) SPATIAL skill maps at h=6 —
+where in the corridor the far-reach decay lives (boundary-adjacent pixels
+whose stencils reach off-window vs interior); same instrumented run.
+(c) the `long` (240-month) and `future` blocks of the existing archives —
+consistency of the same ordering on an independent protocol. (d) exact
+month-set assertion per head (implied by n-equality; cheap to assert
+exactly). No further conclusions until (a)+(b) are measured.
+
+### E-028 · Even bigger transformers — DISPATCHED 08-15 ~07:15Z
+
+Chris: *"let's try even bigger transformers."* **xl55 = 1024×16 (~207M
+stage-2 params, 2.4× big55's compute)** on the same sunflower-55 stencil so
+the capacity axis stays controlled: 576×8 → 0.17776 (2 seeds) → 768×12 →
+0.14762 → 1024×16 → ? Three seeds: **#308/#309/#310** (boxes 45731106,
+47094143, 47566395 — two revived from self-exit). Hypothesis: the forecast
+ratio improves again — the 768×12 step showed no saturation. Falsifier:
+mean within ~3 seed sd (0.005) of big55's 0.14762 = the curve is
+flattening. The corridor-AUC standing of ALL capacity cells pends #304 and
+E-026b; which stencil the big models should live on is decided after both.
+~5–6 h/arm ≈ 16 GPU-h ≈ $4.5.
+
 ### INCIDENT 3 (#290): a queued run executes the sha of main AT DISPATCH, not at start
 
 #290 (base55 s2) went green with **no temporal.json**: 60k clean training
