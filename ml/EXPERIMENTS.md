@@ -166,6 +166,23 @@ rotated; the split backup is now the ONLY copy besides 30-day artifacts) —
 deferred to the workflow-refactor pass, which gives the seed step a script
 body with room for multi-part assembly.
 
+**E-030 arms CANCELLED BY OPERATOR 22:22:40/47Z (#322/#323, ~10h into
+~21h)** — 8 s apart, deliberate; not the monitor, not any watch, no
+accompanying commit. #323 had reached ~step 27k+ with in-training
+rapid_r_deseas 0.509@24k and both were pacing healthily (1.19–1.29
+s/step). State is PRESERVED: the box mirrors (untagged temporal.pt on the
+now-parked 47717171/47724559, opt+sched+rng at ~step 27–35k) survive the
+stop, so E-030 is resumable same-box for ~$3/arm (~10h) whenever wanted —
+or stays closed as "gather cost made it uneconomical at this
+implementation," with the code and alignment tests still landed for a
+cheaper rewrite (cache slot windows across steps). DECISION PENDING
+CHRIS. Cost so far ~$7.3 for zero completed arms — recorded per §3.
+
+**sun89 s0 60k HARVEST (#325, HK box, ~7h): ratio 0.14624** — third seed
+lands right in the s1/s2 band (0.14556/0.14420, mean now 0.1453); the
+sun89>big55 width result holds at n=3. rapid_r_kfold 0.543 [0.422,
+0.649]. Full head published (e029dsun89_u1_s0__temporal.pt).
+
 **120k HARVEST (#334/#335, 2026-08-15 ~19:40Z): the second 60k steps buy
 a paired −0.007 — step budget is a REAL third axis.** Ratios s1 0.13842 /
 s2 0.13689 (from 0.14556/0.14420 at 60k), continuations verified (resumed
