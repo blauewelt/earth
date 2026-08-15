@@ -202,6 +202,40 @@ the base band would mean the capacity gain is one-step-ahead overfitting,
 and the E-028 scale push dies before it is born. base55 s2 (#290, still
 training) joins a later eval or is noted as the one silent cap.
 
+**HARVESTED 2026-08-15 11:35Z — capacity transfers to the roll, and it
+BREAKS THE INVERSION.** Gate: e017_u1_s0 reproduces 0.643 exactly, pass.
+Rolled corridor AUC (flat mean msss_clim h1–12, 29,627 px):
+
+| arm | s0 | s1 | s2 | mean |
+|---|---|---|---|---|
+| big34 (768×12, sun-34) | 0.6280 | 0.6180 | 0.6250 | **0.6237** |
+| big55 (768×12, sun-55) | 0.6210 | 0.6210 | 0.6220 | **0.6213** |
+| base55 (576×8, sun-55) | 0.5690 | 0.5730 | — | 0.5710 |
+| e017 gate (576×8, stencil 1) | 0.5890 | | | 0.5890 |
+
+Three findings. (1) **Capacity is worth +0.050 AUC paired by seed**
+(big55−base55: +0.052 / +0.048) — the forecast gain is NOT one-step
+overfitting; it rolls. The E-028 scale push lives. (2) **The E-026
+anti-correlation was a CAPACITY-STARVATION artifact, not a property of
+stencil geometry.** At 576×8 the sunflower arms rolled at 0.553–0.571,
+WORSE than stencil-1's 0.589, while their one-step forecasts were the best
+in the project — that was the inversion. Under 768×12 the same geometry
+rolls at 0.621–0.628, BEATING everything: a small head fed 55×64-dim
+inputs learns a one-step mapping whose errors compound under iteration; a
+big head learns one whose errors don't. The channel/spatial structure
+E-026b measured (slow subsurface pays, wind inverts) is the fingerprint of
+that starved mapping, localized as the audit said in the
+model-under-iteration. (3) **New AUC champions, +0.02 over ring-8@222's
+0.6043**: big34 0.6237 > big55 0.6213 ≫ champion 0.6043 > e017 0.589.
+big34 vs big55 is inside seed noise (ranges overlap); width beyond 34
+points buys the roll nothing measurable, consistent with its tiny −0.002
+forecast effect. Implication for the ON-HOLD E-026 pick: the pick was
+scoped to base-scale arms and is now MOOT as a production decision —
+production geometry should be re-decided at big scale, where #313/#314
+(big-ring222) will say whether 8 points at 222 km still beat 34 spread to
+4444 km once capacity is adequate. The eval wave for E-028 xl / E-029 /
+E-030 heads is now the decisive experiment of the programme.
+
 ---
 
 ## E-026 · Ring of 8 vs ring of 16, in the TRANSFORMER — DISPATCHED 2026-08-14
