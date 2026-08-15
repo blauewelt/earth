@@ -44,6 +44,33 @@ low-pass).
 
 ---
 
+## E-031 · xl89: widest input × largest transformer × 200k — DISPATCHED 2026-08-15 ~17:55Z
+
+**Chris (17:50Z): "so the sun89 experiments are not xl? Then let's combine
+89 + xl and train for 200k steps overnight?"** Correct observation — every
+sun89 arm so far is 768×12. This is the flagship cell: 1024×16 (≈206M with
+the 90-slot input proj) × sunflower-89 × 200k expdecay, seeds 0–1, from
+scratch.
+
+**Hypothesis.** The two axes have been additive everywhere measured
+(E-027: no width×capacity interaction; #304: both transfer to the roll).
+Stacking the measured effects: xl55 0.1295–0.1331 plus the big-tier width
+gain (−0.0027 at 55→89) predicts ~0.127–0.130 at 60k-equivalent, and the
+xl val slope (−0.008/10k at 60k, unconverged) suggests meaningfully lower
+by 200k. **Falsifier**: ratio ≥ xl55's own (width stops paying under the
+larger head — the interaction that was dead at 768×12 reappearing at
+1024×16). The decisive number remains the corridor AUC eval.
+
+**Mechanics.** ~260–290 ms/step expected (xl55 ran 242; the 90-slot input
+proj adds a little) → 200k ≈ 15–16 h + probe ladder, so `job_timeout`
+raised to 1600 min (the 350-min default and the 700-min template would
+both kill it — sized against its own timeout, §1). Mid-run release
+snapshots WILL silently fail (head ~2.6 GB > 2 GiB, known gap until the
+snapshot-split lands with the workflow refactor): overnight insurance is
+the box mirror; the completed artifact gets the split-backup treatment on
+landing. Boxes: parked instances restarted if available, else queued
+behind the sun89-big leg-2 runs (~20:30Z start, landing midday).
+
 ## E-030 · One-hop unroll for wide stencils (--unroll-wide 2) — DISPATCHED 2026-08-15 ~12:10Z
 
 **Why, from Chris** (2026-08-15): *"For U equals two or three or four:
