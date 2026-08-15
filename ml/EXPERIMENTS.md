@@ -44,6 +44,76 @@ low-pass).
 
 ---
 
+## E-030 · One-hop unroll for wide stencils (--unroll-wide 2) — DISPATCHED 2026-08-15 ~12:10Z
+
+**Why, from Chris** (2026-08-15): *"For U equals two or three or four:
+don't we need to just predict the inputs to a given pixel? So not all
+pixels, and not all pixels that are four thousand kilometers away — just
+the ones that are the input to the next stage."* That dependency-cone
+observation makes unrolled training implementable at stencil>1, where
+E-029c found plain --unroll architecturally impossible: the centre
+pixel's t+1 input window needs its NEIGHBOURS' t+1 embeddings, and each
+of those is exactly a depth-1 prediction from that neighbour's own
+observed window — no feedback, reach-independent, S no-grad forwards per
+unrolled window whatever the ring radius. Implemented as
+`--unroll-wide 2` (commit 8854056: detached depth-1 pass over the S slot
+pixels, dead slots zeroed — zero IS the dead-slot encoding — assembled
+t+1 window, differentiable second step scored against Z[t+2] at weight
+1/2, on a --uw-batch 64 sub-batch of each 512-window step; alignment
+pinned by tests/test_e030_unroll_wide.py).
+
+**Hypothesis.** Training through one hop of self-generated wide context
+closes part of the train/roll input gap and improves rolled corridor AUC
+over clean big55; the forecast ratio reads slightly worse (the objective
+now spends gradient on a harder task). **Falsifier**: corridor AUC ≤
+clean big55's (0.6213 mean, #304). Discriminates against E-029b (znoise)
+— same target, different mechanism (noise is isotropic; one-hop context
+carries the model's actual error structure).
+
+**Arms**: 2 seeds on the big55 config (768×12, sunflower-55), 60k
+expdecay, dispatched to the two drained boxes (gpu-box-47094145,
+gpu-box-31479844). Wall estimate 5–7h/arm (the uw term costs ~55/512·S
+extra forward per step ≈ 2–3× step time). Verdict comes from the E-029/
+E-030 AUC eval wave.
+
+## E-028b · xl continuation 60k→120k — DISPATCHED 2026-08-15 ~12:10Z
+
+**Why.** The xl arms (#308–#310, 205.4M) finished 60k NOT converged: val
+z-MSE still falling at −0.007..−0.009 per 10k steps with lr at 3.7e-4,
+and the final ratios (s1 0.13308, s2 0.12947 — new project bests, −0.016
+vs big55) say the capacity curve hasn't bent at 205M. expdecay is
+horizon-free (lr = peak·2^(−s/40000)), so an extension IS the
+uninterrupted trajectory — commit 022f468 fixed the resume path, which
+silently swapped expdecay for a fresh cosine on extension. #304's result
+(capacity transfers to the roll, +0.05 AUC) makes the xl roll the most
+promising open axis in the programme.
+
+**Mechanics, for the record.** The mid-run head snapshots
+(`run-<n>-temporal-latest.pt`) never reached the release for xl: a 205M
+head with optimiser moments is ~2.5 GB, over GitHub's 2 GiB asset limit —
+so the continuations resume the BOX-LOCAL mirrors
+(`/opt/earth-cache/ckpt/run-{309,310}-temporal.pt`, written every metrics
+point with opt/sched/RNG), each pinned to the box that trained that seed;
+the `--resume-temporal <path>` rides the sched: tail because the
+workflow's `resume2:` token cannot compose with stencil windows (its tag
+parse takes everything after the colon — one-line fix deferred, needs the
+PAT Workflows permission). Same-box pinning means they queue behind
+#319/#321 (~2–4h) and start from files already on disk.
+
+**Hypothesis**: another −0.005..−0.010 on the forecast ratio by 120k
+(tail-slope extrapolation), and — the real question — a corridor AUC at
+or above big-tier's 0.621–0.628 when the eval wave rolls the 120k heads.
+**Falsifier**: 120k ratio within noise of 60k = converged, the extension
+money buys nothing, don't extend again. Seeds 1–2 only (seed 0's box went
+to E-029 work; two paired deltas answer the question).
+
+**Also this pass**: #312 (E-029a s0) and #317 (E-029d s0) re-pinned off
+their never-materialised Vast hosts (cancel + re-dispatch onto
+gpu-box-47529389 / gpu-box-39184683 queues) — no new rentals; the two
+hosts stay parked.
+
+---
+
 <a id="e-026"></a>
 ## E-027 · Scale analysis: transformer size × input width — DISPATCHED overnight 2026-08-14
 
