@@ -47,9 +47,27 @@ produced the failure; a list of labelled links is also what a phone can
 actually tap.
 
 The target must be something the browser can RENDER, not just serve. A
-GitHub `blob` URL is right for Markdown and code; it is wrong for an HTML
-figure, which renders as source (2026-08-13, "i cannot open the figures") —
-those go to the Pages URL, or as PNGs through the file-delivery tool.
+GitHub `blob` URL is right for code; it is wrong for an HTML figure, which
+renders as source (2026-08-13, "i cannot open the figures") — those go to
+the Pages URL, or as PNGs through the file-delivery tool.
+
+**For MARKDOWN, link the phone reader, not the blob URL** (2026-08-15,
+Chris: *"could you somehow change all .md files such that they render well
+on mobile?"*). GitHub's mobile view pans a nine-column result table
+sideways with no row label in sight, which is the state most of this
+project's documents are in. `docs.html` renders any repo `.md` live from
+`main` with the label column pinned, prose tables stacked, and a contents
+drawer — so the link that gets posted is:
+
+- ✅ `[the experiment log](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md)`
+- ✅ deep link to a section: `…/docs.html?f=ml/EXPERIMENTS.md#e-026b-audit-of-the-anti-correlation`
+- ❌ `https://github.com/blauewelt/earth/blob/main/ml/EXPERIMENTS.md` — correct, unreadable on a phone
+
+The blob URL is still right when the point is the SOURCE (a diff, a
+permalink to a line, something to copy). Adding a new document means adding
+one line to `DOCS` in `docs.html`, and `tests/docs.spec.js` renders the real
+files at 360px — a document that grows a table the reader mishandles fails
+the suite.
 
 ### 1. Deploy first
 
@@ -798,6 +816,7 @@ worth keeping in front of a frontend reader:
 
 | File | Role |
 |---|---|
+| `docs.html` | **The phone reader for every file below** — renders any repo `.md` live from `main` with pinned table labels, stacked prose tables and a contents drawer (§0b). Add new documents to its `DOCS` list |
 | `CLAUDE.md` | Standing instructions + holistic record (this file — keep current) |
 | `README.md` | Quick start, repo layout, testing. Opens with a link to the live demo. Keep its counts (catalog size, `globe`/`amoc` flags, spec count) and feature list current — they drift silently. Hero image: `node scripts/screenshot.js` (see the header comment for the sandbox invocation); re-shoot it when the UI changes visibly |
 | `ml/CLAUDE.md` | **Standing instructions for all ML work** — dispatch discipline, working principles, fleet lore, security posture. This file does not govern `ml/` |

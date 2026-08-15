@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>earth · docs</title>
+<!--
+  MOBILE DOC READER — why this page exists.
+
+  Chris reads this project from a phone, and the documents are the project:
+  ml/EXPERIMENTS.md is 2,400 lines with nine-column result tables, CLAUDE.md
+  is 1,100 lines with 300-character prose cells, LEADERBOARD.md has eleven
+  columns. GitHub's mobile view renders all of that as a single pinched
+  column with tables you must pan sideways blind — you scroll right to read
+  a number and lose which row it belongs to.
+
+  The fix deliberately does NOT touch the documents. They are the scientific
+  record; rewriting tables to fit a phone would cost information that the
+  desktop and the repo readers need, and it would have to be redone every
+  time an experiment adds a row. Instead the RENDERER adapts:
+
+    · wide numeric tables scroll horizontally inside their own box, with the
+      first column PINNED — the row label stays on screen while the numbers
+      move under it, which is the whole trick;
+    · narrow tables whose cells are prose (the "file | governs" tables) stop
+      being tables below 640px and become labelled blocks, because a
+      two-column table of paragraphs is a worse phone layout than a list;
+    · every document gets a table of contents drawer built from its own
+      headings, because 2,400 lines with no navigation is unreadable however
+      pretty the type is;
+    · code blocks (the ASCII stencil drawings) scroll inside themselves and
+      never widen the page.
+
+  Content is fetched RAW FROM main at read time, not from the deployed copy:
+  EXPERIMENTS.md changes several times an hour while a queue is draining,
+  and a reader that shows yesterday's file would be worse than no reader.
+  On localhost it reads the working copy instead, so the test suite needs no
+  network (tests/docs.spec.js).
+-->
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2230;
+    --line: #30363d;
+    --ink: #e6edf3;
+    --dim: #9aa7b4;
+    --accent: #58a6ff;
+    --warn: #f0883e;
+    --radius: 10px;
+    --head-h: 52px;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+    /* long tokens (sha hashes, URLs, spiral:111-4444-0.71-0.5) must never
+       widen the page on a 360px screen */
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  /* ---- sticky header: doc name, TOC, source ------------------------- */
+  header {
+    position: sticky; top: 0; z-index: 40;
+    height: var(--head-h);
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 10px;
+    padding-top: env(safe-area-inset-top);
+    background: rgba(13,17,23,.94);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  header .title {
+    flex: 1 1 auto; min-width: 0;
+    font-size: 15px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  header .title small { color: var(--dim); font-weight: 400; }
+  /* 44px minimum tap targets — thumb, not cursor */
+  .btn {
+    flex: 0 0 auto;
+    min-width: 44px; height: 38px;
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 6px; padding: 0 10px;
+    background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px;
+    font-size: 13px; text-decoration: none; cursor: pointer;
+  }
+  .btn:active { background: var(--panel-2); }
+
+  /* ---- content ------------------------------------------------------ */
+  main {
+    max-width: 46rem;           /* comfortable measure on tablet/desktop */
+    margin: 0 auto;
+    padding: 14px 14px 96px;
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+  main h1, main h2, main h3, main h4 {
+    line-height: 1.25; margin: 1.6em 0 .5em;
+    scroll-margin-top: calc(var(--head-h) + 8px);   /* anchors clear the bar */
+  }
+  main h1 { font-size: 25px; margin-top: .3em; }
+  main h2 {
+    font-size: 21px; padding-bottom: .25em;
+    border-bottom: 1px solid var(--line);
+  }
+  main h3 { font-size: 18px; }
+  main h4 { font-size: 16px; color: var(--dim); }
+  main p, main li { font-size: 17px; }
+  main a { color: var(--accent); }
+  main ul, main ol { padding-left: 1.35em; }
+  main li { margin: .3em 0; }
+  main blockquote {
+    margin: 1em 0; padding: .1px 0 .1px 14px;
+    border-left: 3px solid var(--line); color: var(--dim);
+  }
+  main hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+  main img { max-width: 100%; height: auto; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .86em;
+    background: var(--panel); padding: .15em .35em; border-radius: 5px;
+  }
+  /* a code BLOCK scrolls inside itself; it may never widen the document.
+     the ASCII stencil drawings in EXPERIMENTS.md are ~70 columns wide. */
+  pre {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px; margin: 1em 0;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  pre code {
+    background: none; padding: 0; font-size: 12.5px; line-height: 1.45;
+    white-space: pre; word-break: normal; overflow-wrap: normal;
+  }
+
+  /* ---- TABLES, the actual problem ----------------------------------- */
+  /* WIDE tables: scroll box + pinned first column. Scrolling right without
+     a pinned label is what makes a 9-column result table useless on a
+     phone — you can see 0.5883 but not which stencil it belongs to. */
+  .tbox { position: relative; margin: 1em 0; }
+  .tscroll {
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--line); border-radius: var(--radius);
+  }
+  .tbox table { margin: 0; border: 0; }
+  main table {
+    border-collapse: separate; border-spacing: 0;
+    width: 100%; font-size: 14px;
+  }
+  main th, main td {
+    padding: 8px 10px; text-align: left; vertical-align: top;
+    border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  main thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--panel-2); font-size: 13px; color: var(--dim);
+  }
+  main tbody tr:last-child td { border-bottom: 0; }
+  .pin th:first-child, .pin td:first-child {
+    position: sticky; left: 0; z-index: 1;
+    background: var(--bg);
+    box-shadow: 1px 0 0 var(--line);
+    white-space: normal; min-width: 8.5em; max-width: 13em;
+  }
+  .pin thead th:first-child { z-index: 3; background: var(--panel-2); }
+  /* Some tables lead with a RANK, not a name — "rank | stencil | pts | …".
+     Pinning "1" tells you nothing, so the identity column travels with it
+     and the rank column shrinks to what a number needs. */
+  .pin2 th:first-child, .pin2 td:first-child {
+    min-width: 2.6em; max-width: none; white-space: nowrap;
+  }
+  .pin2 th:nth-child(2), .pin2 td:nth-child(2) {
+    position: sticky; z-index: 1;
+    background: var(--bg);
+    box-shadow: 1px 0 0 var(--line);
+    white-space: normal; min-width: 7.5em; max-width: 12em;
+  }
+  .pin2 thead th:nth-child(2) { z-index: 3; background: var(--panel-2); }
+  /* the fade + hint appear only when the table really does overflow */
+  .tbox.over::after {
+    content: ""; position: absolute; top: 0; right: 0; bottom: 0;
+    width: 34px; pointer-events: none; border-radius: 0 var(--radius) var(--radius) 0;
+    background: linear-gradient(90deg, rgba(13,17,23,0), rgba(13,17,23,.92));
+  }
+  .tbox.over.ended::after { opacity: 0; }
+  .thint {
+    display: none; font-size: 12px; color: var(--dim); margin: 4px 2px 0;
+  }
+  .tbox.over .thint { display: block; }
+
+  /* NARROW prose tables: below 640px a two-column table of paragraphs is
+     worse than a list, so it becomes labelled blocks. */
+  @media (max-width: 640px) {
+    .stack thead { display: none; }
+    .stack, .stack tbody, .stack tr, .stack td { display: block; width: 100%; }
+    .stack tr {
+      border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 4px 12px 10px; margin: 0 0 10px;
+      background: var(--panel);
+    }
+    .stack td {
+      border: 0; padding: 8px 0 0; white-space: normal; font-size: 15.5px;
+    }
+    .stack td::before {
+      content: attr(data-label);
+      display: block; font-size: 11.5px; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--dim); margin-bottom: 2px;
+    }
+    .stack td:first-child { font-weight: 600; }
+    .tbox.stacked .tscroll { border: 0; overflow: visible; }
+    .tbox.stacked::after, .tbox.stacked .thint { display: none; }
+  }
+
+  /* ---- table of contents drawer ------------------------------------- */
+  #scrim {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,.55); opacity: 0; pointer-events: none;
+    transition: opacity .18s ease;
+  }
+  #scrim.on { opacity: 1; pointer-events: auto; }
+  #toc {
+    position: fixed; z-index: 60; top: 0; bottom: 0; right: 0;
+    width: min(86vw, 22rem);
+    background: var(--panel); border-left: 1px solid var(--line);
+    transform: translateX(101%); transition: transform .22s ease;
+    display: flex; flex-direction: column;
+    padding-top: env(safe-area-inset-top);
+  }
+  #toc.on { transform: none; }
+  #toc header {
+    position: static; background: none; border-bottom: 1px solid var(--line);
+    backdrop-filter: none;
+  }
+  #toc nav { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 6px 0 30px; }
+  #toc a {
+    display: block; padding: 11px 14px; color: var(--ink);
+    text-decoration: none; font-size: 15px; line-height: 1.35;
+    border-left: 3px solid transparent;
+  }
+  #toc a.h3 { padding-left: 28px; font-size: 14px; color: var(--dim); }
+  #toc a.here { border-left-color: var(--accent); background: var(--panel-2); }
+  @media (prefers-reduced-motion: reduce) {
+    #toc, #scrim { transition: none; }
+  }
+
+  /* ---- index / status ----------------------------------------------- */
+  .idx { display: grid; gap: 10px; margin: 14px 0 0; }
+  .idx a {
+    display: block; padding: 13px 14px; text-decoration: none;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); color: var(--ink);
+  }
+  .idx a b { display: block; font-size: 16px; color: var(--accent); }
+  .idx a span { font-size: 13.5px; color: var(--dim); }
+  .grp { margin: 22px 0 0; font-size: 12px; letter-spacing: .08em;
+         text-transform: uppercase; color: var(--dim); }
+  .note { color: var(--dim); font-size: 14px; }
+  .err { color: var(--warn); }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="btn" id="home" href="?" aria-label="All documents">☰</a>
+  <div class="title" id="title">earth · docs</div>
+  <a class="btn" id="gh" href="https://github.com/blauewelt/earth" target="_blank"
+     rel="noopener" aria-label="Open on GitHub">src</a>
+  <button class="btn" id="tocBtn" hidden aria-label="Table of contents">⇕</button>
+</header>
+
+<main id="out"><p class="note">loading…</p></main>
+
+<div id="scrim"></div>
+<aside id="toc" aria-label="Table of contents">
+  <header>
+    <div class="title">Contents</div>
+    <button class="btn" id="tocClose" aria-label="Close">✕</button>
+  </header>
+  <nav id="tocNav"></nav>
+</aside>
+
+<script src="lib/marked.umd.js"></script>
+<script>
+(function () {
+  "use strict";
+  var REPO = "blauewelt/earth", BRANCH = "main";
+
+  // The document set, grouped the way CLAUDE.md §7 describes it. Adding a
+  // doc here is the only step needed to make it readable on a phone.
+  var DOCS = [
+    ["Research log", [
+      ["ml/EXPERIMENTS.md", "Every experiment, its hypothesis at dispatch, its result and its cost"],
+      ["ml/FINDINGS.md", "What the programme has established, condensed"],
+      ["ml/LEADERBOARD.md", "Every run, ranked"],
+      ["ml/SCALING.md", "How skill moves with model and data size"],
+      ["ml/METRICS.md", "What each number means and how it is computed"],
+      ["ml/LITERATURE.md", "The outside work this builds on"]
+    ]],
+    ["How the system works", [
+      ["docs/ML_BASICS.md", "Architecture, protocol, the probe ladder, baselines, settled negatives"],
+      ["docs/INFRASTRUCTURE.md", "The fleet, its failure taxonomy, its invariants"],
+      ["ml/HANDBOOK.md", "Operating the training pipeline"],
+      ["docs/PIXEL_STATE.md", "Which sources compose into a per-pixel state vector"]
+    ]],
+    ["Data", [
+      ["docs/CATALOG.md", "The open-data catalog, human readable"],
+      ["docs/COMBINING_DATASETS.md", "Which datasets measure the same quantity"],
+      ["docs/SPECIES_AND_CLIMATE.md", "Why biodiversity data belongs in a climate app"]
+    ]],
+    ["Standing instructions", [
+      ["CLAUDE.md", "Frontend + project conventions, and the holistic record"],
+      ["ml/CLAUDE.md", "All ML work: dispatch discipline, principles, fleet lore"],
+      ["README.md", "Quick start, repo layout, testing"],
+      ["ml/README.md", "The ML half at a glance"]
+    ]]
+  ];
+
+  var out = document.getElementById("out"),
+      titleEl = document.getElementById("title"),
+      ghEl = document.getElementById("gh"),
+      tocBtn = document.getElementById("tocBtn"),
+      toc = document.getElementById("toc"),
+      tocNav = document.getElementById("tocNav"),
+      scrim = document.getElementById("scrim");
+
+  function qs(k) {
+    var m = new RegExp("[?&]" + k + "=([^&#]*)").exec(location.search);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+
+  // Read the LIVE file. On the deployed site that means raw main, not the
+  // gh-pages copy: EXPERIMENTS.md is edited several times an hour while a
+  // queue drains, and Pages only updates when someone deploys. On localhost
+  // (the test suite, `python3 -m http.server`) read the working copy, so
+  // the suite needs no network at all.
+  var LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  function srcUrl(path) {
+    return LOCAL ? path
+      : "https://raw.githubusercontent.com/" + REPO + "/" + BRANCH + "/" +
+        path + "?cb=" + Date.now();
+  }
+
+  function slug(s) {
+    return s.toLowerCase().replace(/[`*_~]/g, "")
+            .replace(/[^a-z0-9À-ɏ]+/g, "-")
+            .replace(/^-+|-+$/g, "").slice(0, 60) || "s";
+  }
+
+  function renderIndex() {
+    titleEl.innerHTML = "earth · docs";
+    ghEl.href = "https://github.com/" + REPO;
+    tocBtn.hidden = true;
+    var h = ['<h1>Documentation</h1>',
+             '<p class="note">Built for reading on a phone: wide result ',
+             'tables keep their row labels pinned while the numbers scroll, ',
+             'long documents get a contents drawer, and every file is read ',
+             'live from <code>main</code>.</p>'];
+    DOCS.forEach(function (grp) {
+      h.push('<div class="grp">' + grp[0] + '</div><div class="idx">');
+      grp[1].forEach(function (d) {
+        h.push('<a href="?f=' + encodeURIComponent(d[0]) + '"><b>' +
+               d[0] + '</b><span>' + d[1] + '</span></a>');
+      });
+      h.push('</div>');
+    });
+    out.innerHTML = h.join("");
+    document.title = "earth · docs";
+  }
+
+  function enhanceTables() {
+    Array.prototype.forEach.call(out.querySelectorAll("table"), function (t) {
+      var heads = Array.prototype.map.call(
+        t.querySelectorAll("thead th"), function (th) { return th.textContent.trim(); });
+      var cols = heads.length || (t.rows[0] ? t.rows[0].cells.length : 0);
+      var longest = 0;
+      Array.prototype.forEach.call(t.querySelectorAll("td"), function (td) {
+        longest = Math.max(longest, td.textContent.trim().length);
+      });
+
+      var box = document.createElement("div"); box.className = "tbox";
+      var sc = document.createElement("div"); sc.className = "tscroll";
+      t.parentNode.insertBefore(box, t);
+      box.appendChild(sc); sc.appendChild(t);
+
+      // A few columns of long prose reads better stacked than scrolled;
+      // many columns of short values reads better scrolled with the label
+      // pinned. ~80 characters is two phone lines at this type size, and a
+      // two-column table earns stacking sooner because pinning its label
+      // would leave almost nothing to scroll.
+      if ((cols <= 2 && longest > 45) || (cols <= 3 && longest > 80)) {
+        t.classList.add("stack");
+        box.classList.add("stacked");
+        Array.prototype.forEach.call(t.querySelectorAll("tbody tr"), function (tr) {
+          Array.prototype.forEach.call(tr.cells, function (td, i) {
+            if (heads[i]) td.setAttribute("data-label", heads[i]);
+          });
+        });
+      } else {
+        t.classList.add("pin");
+        // is the first column a rank/index rather than a name?
+        var firstMax = 0;
+        Array.prototype.forEach.call(t.querySelectorAll("tr"), function (tr) {
+          if (tr.cells[0]) firstMax = Math.max(firstMax, tr.cells[0].textContent.trim().length);
+        });
+        var two = cols >= 4 && firstMax <= 5;
+        if (two) t.classList.add("pin2");
+
+        var hint = document.createElement("div");
+        hint.className = "thint";
+        hint.textContent = "swipe the table sideways · " +
+          (two ? "rank and name stay put" : "first column stays put");
+        box.appendChild(hint);
+        var check = function () {
+          box.classList.toggle("over", sc.scrollWidth - sc.clientWidth > 4);
+          if (two) {
+            // the second sticky column starts where the first one ends
+            var w = t.rows[0] && t.rows[0].cells[0]
+              ? t.rows[0].cells[0].getBoundingClientRect().width : 0;
+            Array.prototype.forEach.call(t.querySelectorAll("tr"), function (tr) {
+              if (tr.cells[1]) tr.cells[1].style.left = w + "px";
+            });
+          }
+        };
+        check();
+        window.addEventListener("resize", check);
+        sc.addEventListener("scroll", function () {
+          box.classList.toggle("ended",
+            sc.scrollLeft + sc.clientWidth >= sc.scrollWidth - 4);
+        }, { passive: true });
+      }
+    });
+  }
+
+  function buildToc() {
+    var hs = out.querySelectorAll("h2, h3");
+    if (hs.length < 3) { tocBtn.hidden = true; return; }
+    tocBtn.hidden = false;
+    var seen = {}, html = [];
+    Array.prototype.forEach.call(hs, function (h) {
+      var id = slug(h.textContent);
+      if (seen[id]) { seen[id]++; id += "-" + seen[id]; } else { seen[id] = 1; }
+      h.id = id;
+      html.push('<a href="#' + id + '" class="' + h.tagName.toLowerCase() +
+                '">' + h.textContent + "</a>");
+    });
+    tocNav.innerHTML = html.join("");
+
+    // highlight the section you are actually in
+    var links = {};
+    Array.prototype.forEach.call(tocNav.querySelectorAll("a"), function (a) {
+      links[a.getAttribute("href").slice(1)] = a;
+    });
+    if ("IntersectionObserver" in window) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          Array.prototype.forEach.call(tocNav.querySelectorAll("a.here"),
+            function (a) { a.classList.remove("here"); });
+          var a = links[e.target.id];
+          if (a) { a.classList.add("here"); }
+        });
+      }, { rootMargin: "-15% 0px -70% 0px" });
+      Array.prototype.forEach.call(hs, function (h) { io.observe(h); });
+    }
+    Array.prototype.forEach.call(tocNav.querySelectorAll("a"), function (a) {
+      a.addEventListener("click", function () { drawer(false); });
+    });
+  }
+
+  function drawer(on) {
+    toc.classList.toggle("on", on);
+    scrim.classList.toggle("on", on);
+  }
+  tocBtn.addEventListener("click", function () { drawer(!toc.classList.contains("on")); });
+  document.getElementById("tocClose").addEventListener("click", function () { drawer(false); });
+  scrim.addEventListener("click", function () { drawer(false); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") drawer(false);
+  });
+
+  function renderDoc(path) {
+    titleEl.innerHTML = path.replace(/^.*\//, "") +
+      ' <small>' + (path.indexOf("/") > 0 ? path.replace(/\/[^/]*$/, "/") : "") + '</small>';
+    document.title = path + " · earth docs";
+    ghEl.href = "https://github.com/" + REPO + "/blob/" + BRANCH + "/" + path;
+    out.innerHTML = '<p class="note">loading ' + path + "…</p>";
+
+    fetch(srcUrl(path), { cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.text();
+      })
+      .then(function (md) {
+        out.innerHTML = marked.parse(md, { gfm: true, breaks: false });
+        enhanceTables();
+        buildToc();
+        // a deep link (?f=…#heading) must land after the render
+        if (location.hash) {
+          var el = document.getElementById(location.hash.slice(1));
+          if (el) el.scrollIntoView();
+        }
+      })
+      .catch(function (e) {
+        out.innerHTML = '<p class="err">Could not load <code>' + path +
+          "</code> (" + e.message + ").</p>" +
+          '<p><a href="https://github.com/' + REPO + "/blob/" + BRANCH + "/" +
+          path + '">Open it on GitHub instead →</a></p>';
+      });
+  }
+
+  var f = qs("f");
+  // only ever read markdown from inside the repo
+  if (f && (!/\.md$/i.test(f) || /^https?:|\.\./i.test(f))) f = "";
+  if (f) renderDoc(f); else renderIndex();
+})();
+</script>
+</body>
+</html>

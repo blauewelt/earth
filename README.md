@@ -111,6 +111,12 @@ Conventions and the full record of what has been built live in
 
 ## Documentation
 
+Reading on a phone? Every document below is also served through
+**[the phone reader](https://blauewelt.github.io/earth/docs.html)** — same
+files, read live from `main`, but wide result tables keep their row label
+pinned while the numbers scroll, two-column prose tables become labelled
+blocks, and long documents get a contents drawer.
+
 | Document | What it covers |
 |---|---|
 | [docs/PRIMER.pdf](docs/PRIMER.pdf) | Background knowledge: GIBS and WMTS, tiling schemes, colormaps, satellite product levels, what a climatology is |
