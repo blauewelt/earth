@@ -55,6 +55,9 @@ DESIGNS = [
     # per the E-027 occupancy refusal, so more points = more density, not
     # more reach.
     ("sunflower 89, 111-4444 a.71 p.5", 90, "spiral:111-4444-0.71-0.5"),
+    # E-032 (Chris, 2026-08-15: "the next Fibonacci number after 89") — same
+    # spiral, count 144; the live FRACTION has been scale-invariant 34->55->89.
+    ("sunflower 144, 111-4444 a.71 p.5", 145, "spiral:111-4444-0.71-0.5"),
 ]
 
 

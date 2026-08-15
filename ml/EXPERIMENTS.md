@@ -44,6 +44,27 @@ low-pass).
 
 ---
 
+## E-032 · sunflower-144: the width ladder's next rung — DISPATCHED 2026-08-15 ~18:05Z
+
+**Chris (18:00Z): "Can we also add more input points? That is: the next
+Fibonacci number after 89? … in a separate experiment."** Separate from
+E-031 by design: the width ladder stays at the 768×12 tier where its three
+existing rungs live, so the paired comparison is clean (34→55→89 each paid
+−0.002..−0.003; sun89's fresh 60k baseline is 0.14556/0.14420).
+
+**Pre-registered occupancy** (measure_slot_occupancy, row added):
+sunflower-144 at r_max 4444 = **47.0% corridor live (67.7/144)** — the
+same scale-invariant fraction as 34 (47.6%), 55 (47.4%), 89 (47.1%). More
+points = proportionally more live input; nothing about the geometry
+degrades at this count.
+
+**Hypothesis**: another paired ~−0.002 vs sun89. **Falsifier**: within
+seed noise (~0.0015) of sun89 = the width axis finally saturates, and the
+paper's width story gets its endpoint. Arms: 2 seeds, 60k expdecay,
+768×12, stencil:145 (144 % n_radii=1 ✓). Queued s0 behind #325 on the HK
+box, s1 on gpu-box-47529389 (ahead of the leg-2 re-queue — ordering
+inverted deliberately so no box idles; everything still lands overnight).
+
 ## E-031 · xl89: widest input × largest transformer × 200k — DISPATCHED 2026-08-15 ~17:55Z
 
 **Chris (17:50Z): "so the sun89 experiments are not xl? Then let's combine
