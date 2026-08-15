@@ -981,11 +981,8 @@ jobs:
                        echo "stage-2 schedule: $SCHED";; esac
             case "${{ inputs.window }}" in
               resume2:*) T2="${{ inputs.window }}"; T2="${T2#resume2:}"
-                         T2="${T2%%,*}"  # tag ends at 1st comma: composes with stencil windows (8d5e711)
-                         # resume2:<tag>@<lr> — the continuation's PEAK learning
-                         # rate. Kept here with the other stage-2 modifiers
-                         # rather than smuggled into lr_decay_steps, which
-                         # would have made an input named "steps" carry a rate.
+                         T2="${T2%%,*}"  # tag ends at 1st comma (8d5e711)
+                         # @<lr> suffix = the continuation's PEAK learning rate
                          case "$T2" in *@*) LR2="${T2#*@}"; T2="${T2%@*}";; esac
                          # Pull it from the release if this box does not hold it.
                          if [ ! -f "/opt/earth-cache/ckpt/${T2}.pt" ]; then
