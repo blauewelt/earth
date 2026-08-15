@@ -1016,6 +1016,41 @@ def main():
                          "the roll never produces. Reaches temporal.py "
                          "through the window's sched: tail, which the "
                          "workflow hands over verbatim — no workflow edit.")
+    ap.add_argument("--unroll-wide", type=int, default=0,
+                    help="E-030: unrolled training for WIDE stencils via "
+                         "one-hop self-generated context (Chris, 2026-08-15: "
+                         "'we need to just predict the inputs to a given "
+                         "pixel — not all pixels, just the ones that are the "
+                         "input to the next stage'). Plain --unroll is "
+                         "incompatible with --stencil>1 because the model "
+                         "predicts only its centre pixel, while its t+1 input "
+                         "window needs the NEIGHBOURS' t+1 embeddings too. "
+                         "But those are exactly S depth-1 predictions from "
+                         "OBSERVED context: for each of the pixel's S slot "
+                         "positions, forward that slot-pixel's own observed "
+                         "window one step (detached, no grad), assemble the "
+                         "centre pixel's t+1 input window from the S "
+                         "predictions, and take a second, differentiable "
+                         "step scored against Z[t+2], weighted 1/2 like "
+                         "--unroll's u=2 term. Reach-independent: the cost is "
+                         "S extra no-grad forwards per unrolled pixel, "
+                         "whatever the ring radius, because depth-1 needs no "
+                         "context beyond each slot-pixel's own window. Only "
+                         "the value 2 is supported — U=3 would need S^2 "
+                         "depth-1 forwards plus S depth-2 assemblies "
+                         "(S^(U-1) growth). Requires --stencil>1; "
+                         "incompatible with --unroll>1, --direct and "
+                         "--unroll-probs. Applied to a sub-batch "
+                         "(--uw-batch) of each step's windows. Rides the "
+                         "sched: tail like --input-znoise.")
+    ap.add_argument("--uw-batch", type=int, default=64,
+                    help="E-030: how many of each step's windows get the "
+                         "--unroll-wide 2 term. The one-hop pass costs S "
+                         "no-grad forwards per window (S=55 for ring 4444), "
+                         "so unrolling the full 512-window batch would be "
+                         "~55x the base step; 64 of 512 keeps the overhead "
+                         "near ~7x the plain forward while every step still "
+                         "carries a depth-2 gradient signal.")
     ap.add_argument("--unroll-probs", default="",
                     help="comma probabilities for sampling the unroll depth "
                          "PER STEP, e.g. '0.5,0.25,0.125,0.125' with "
@@ -1213,7 +1248,9 @@ def main():
                 f"--direct: the unroll/direct paths feed predictions back, "
                 f"and a random pixel batch does not contain the neighbours' "
                 f"predictions. Train stencil arms at U=1 (E-010/E-020 closed "
-                f"the unroll axis anyway).")
+                f"the unroll axis anyway) — or use --unroll-wide 2, which "
+                f"GENERATES the neighbours' predictions itself from their own "
+                f"observed windows (E-030).")
         NBR = build_stencil(ocean.shape[0], ocean.shape[1], ys, xs, a.stencil,
                             ring_km=a.ring_km, lats=lats)
         NBR_t = torch.as_tensor(NBR)
@@ -1245,6 +1282,29 @@ def main():
     # train month. With --direct empty the set reduces to the old guard
     # exactly, so default arms keep the identical window pool.
     U = max(1, a.unroll)
+    UW = a.unroll_wide
+    if UW:
+        # E-030 preconditions, checked before any GPU time is spent. The
+        # asymmetric shape (plain --unroll for stencil 1, --unroll-wide for
+        # stencil > 1) exists because the two need different machinery, not
+        # because they answer different questions — see the flag's help.
+        if UW != 2:
+            raise SystemExit(
+                f"--unroll-wide {UW}: only 2 is supported. Depth 3 needs "
+                f"S^2 depth-1 forwards plus S depth-2 assemblies per window "
+                f"(S^(U-1) growth) — implement it deliberately if E-030 at "
+                f"depth 2 earns it, don't fall into it.")
+        if a.stencil <= 1:
+            raise SystemExit(
+                "--unroll-wide requires --stencil>1: at stencil 1 the "
+                "window IS the centre pixel's own history, and plain "
+                "--unroll already does exactly this, cheaper.")
+        if U > 1 or a.direct.strip() or a.unroll_probs.strip():
+            raise SystemExit(
+                "--unroll-wide is incompatible with --unroll>1, --direct "
+                "and --unroll-probs: one exposure-bias mechanism per arm, "
+                "or the ablation cannot attribute the effect.")
+    UF = max(U, UW)     # how far past the window the loss reaches
     UP = None
     if a.unroll_probs.strip():
         UP = np.array([float(x) for x in a.unroll_probs.split(",")])
@@ -1256,7 +1316,9 @@ def main():
                              f"to 1 (got sum {UP.sum():.6f})")
         print(f"sampled unroll: P(U=1..{U}) = {list(UP)}")
     D = tuple(sorted({int(x) for x in a.direct.split(",") if x.strip()}))
-    reach = sorted(set(range(1, U + 1)) | set(D))
+    # UF, not U: --unroll-wide 2 scores the centre pixel at t+2, so t+2 must
+    # exist and be a train month exactly as a plain U=2 would require.
+    reach = sorted(set(range(1, UF + 1)) | set(D))
     ok_t = np.array([t + reach[-1] < T and t + 1 >= K
                      and not any(t_hold[t + r] for r in reach)
                      for t in range(T)])
@@ -1445,14 +1507,17 @@ def main():
         # pre-unroll one. (The comment here previously said "u+1 self-fed
         # steps", which contradicted both the code and ml/EXPERIMENTS.md;
         # the code was right.)
-        zfut = torch.stack([Zt[t + 1 + u, p] for u in range(U)], 1).float()
-        mfut = torch.stack([Mt[t + 1 + u] for u in range(U)], 1)
+        zfut = torch.stack([Zt[t + 1 + u, p] for u in range(UF)], 1).float()
+        mfut = torch.stack([Mt[t + 1 + u] for u in range(UF)], 1)
         # direct-horizon targets: zdir[:, i] = Z[t + D[i]] — the truth each
         # direct head must hit from the hidden state at t. Pool-guarded above.
         zdir = (torch.stack([Zt[t + h_, p] for h_ in D], 1).float().to(TDEV)
                 if D else None)
+        # base and p stay on the CPU: --unroll-wide re-gathers the slot
+        # pixels' own windows from the memmap, which is CPU work by design
+        # (the 5.2 GiB of Z lives where the pages are).
         return (zseq.to(TDEV), mseq.to(TDEV), static_ctx[p].to(TDEV),
-                ztgt.to(TDEV), zfut.to(TDEV), mfut.to(TDEV), zdir)
+                ztgt.to(TDEV), zfut.to(TDEV), mfut.to(TDEV), zdir, base, p)
 
     # Stage 2 goes into the RUN'S OWN metrics.jsonl, not just temporal.json.
     # temporal.json is uploaded as a build artifact, and artifacts need an
@@ -1550,8 +1615,8 @@ def main():
     log_every = max(1, a.steps // 100)     # ~100 curve points, as stage 1 does
     probe_every = max(1, a.steps // 10)    # the transport curve, 10 points
     for s in range(start_step + 1, a.steps + 1):
-        zseq, mseq, sctx, ztgt, zfut, mfut, zdir = batch_windows(
-            pool_t, pool_p, a.batch)
+        (zseq, mseq, sctx, ztgt, zfut, mfut, zdir,
+         wbase, wp) = batch_windows(pool_t, pool_p, a.batch)
         if a.input_znoise > 0:
             # E-029b: perturb only LIVE slots (see the flag's help). A slot
             # is live iff any of its d_z components is nonzero — zero is the
@@ -1599,6 +1664,52 @@ def main():
             term = (pred[:, -1] - zfut[:, u]).pow(2).mean() / (u + 1)
             l_unr = term if l_unr is None else l_unr + term
             loss = loss + term
+        l_uw = None
+        if UW:
+            # E-030: ONE-HOP UNROLL FOR WIDE STENCILS (Chris's dependency-cone
+            # observation, 2026-08-15). The plain unroll above cannot run at
+            # stencil>1 because the model predicts only its centre pixel while
+            # its t+1 input window needs the NEIGHBOURS' t+1 embeddings. But
+            # each neighbour's t+1 embedding is a DEPTH-1 prediction from that
+            # neighbour's own fully-observed window — no feedback, no reach
+            # beyond one hop. So: for a sub-batch of bu windows, forward all
+            # S slot pixels' own windows once (detached — the gradient path
+            # to the second step is through the assembled input's USE, not
+            # its construction; letting gradients flow through S auxiliary
+            # forwards would triple memory for a signal the plain unroll also
+            # discards via its own detach-free but centre-only path), zero
+            # the dead slots (zero IS the dead-slot encoding, and the roll
+            # feeds zeros there too), assemble the centre pixel's t+1 window,
+            # and score a differentiable second step against Z[t+2] at
+            # weight 1/2 — exactly the u=2 term of --unroll.
+            bu = min(a.uw_batch, zseq.shape[0])
+            q = NBR_t[wp[:bu]]                     # [bu,S] pixel ids, -1=dead
+            valid = (q >= 0)
+            safe = q.clamp(min=0)                  # -1 -> 0: a real pixel id,
+            Sn = q.shape[1]                        # its prediction zeroed below
+            b_rep = wbase[:bu].repeat_interleave(Sn)
+            p_rep = safe.reshape(-1)               # row-major: window-major,
+            z1 = gather_stencil(Zt, b_rep, p_rep, NBR_t, K)   # matches b_rep
+            m1 = mseq[:bu].repeat_interleave(Sn, 0)        # months are
+            s1 = static_ctx[p_rep]                         # pixel-independent
+            with torch.no_grad():
+                # not _chunked_forward: that would round-trip the hidden
+                # states through the CPU (~350 MB/step at big), and only
+                # pred[:, -1] is needed — chunk inline, keep just that.
+                _sp = []
+                for i0 in range(0, len(z1), 4096):
+                    _sl = slice(i0, i0 + 4096)
+                    p1_, _ = model(z1[_sl].to(TDEV), m1[_sl],
+                                   s1[_sl].to(TDEV))
+                    _sp.append(p1_[:, -1])
+                step1 = torch.cat(_sp)                     # [bu*S, d_z]
+            step1 = step1 * valid.reshape(-1, 1).to(TDEV)  # dead slots: zeros
+            newstep = step1.reshape(bu, -1)                # [bu, S*d_z]
+            zseq2 = torch.cat([zseq[:bu, 1:], newstep[:, None]], 1)
+            mseq2 = torch.cat([mseq[:bu, 1:], mfut[:bu, 0:1]], 1)
+            pred2, _ = model(zseq2, mseq2, sctx[:bu])
+            l_uw = (pred2[:, -1] - zfut[:bu, 1]).pow(2).mean() / 2
+            loss = loss + l_uw
         opt.zero_grad(); loss.backward()
         if s % log_every == 0 or s == a.steps:
             # gradient norm BEFORE the step, only on log steps (a .item()
@@ -1633,6 +1744,8 @@ def main():
                 rec["stage2_loss_direct"] = round(float(l_dir.item()), 5)
             if l_unr is not None:
                 rec["stage2_loss_unroll"] = round(float(l_unr.item()), 5)
+            if l_uw is not None:
+                rec["stage2_loss_unroll_wide"] = round(float(l_uw.item()), 5)
             m2(rec)
             # the light transport probe, ten times per run: hidden(-1)
             # pooled over the section, 36-month-split ridge — the NOISY
