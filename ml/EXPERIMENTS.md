@@ -57,7 +57,7 @@ larger transformer?"*
 
 | | sunflower-34 (35 slots) | sunflower-55 (56 slots) |
 |---|---|---|
-| **576×8 (standard)** | #282/#283/#284 (E-026) | **base55** #288/#289/#290 |
+| **576×8 (standard)** | #282/#283/#284 (E-026) | **base55** #301/#302 (rerun, see incident 2) + #290 (s2, queued on fixed code) |
 | **768×12 (2.7× params)** | **big34** #295/#296/#297 (rerun, see incident) | **big55** #298/#299/#300 (rerun) |
 
 All four cells share the identical recipe otherwise: 60k steps, expdecay,
@@ -109,6 +109,34 @@ were cancelled before wasting their own two hours; the six big arms rerun as
 **#295–#297 (big34)** and **#298–#300 (big55)** on the fixed code. Cost of
 the incident: ~4.5 GPU-h ≈ $1.2. The base55 arms (#288–#290, 576×8) were
 never at risk and continue.
+
+**INCIDENT 2, ~23:00Z — base55 was at risk after all, by a different route.**
+"Never at risk" above was written about *activations* — 576×8 fits the 20k
+one-shot on every head ever trained. What it missed is the *input* tensor:
+20,000 windows × K=24 steps × **56 slots** × 64-d z is ~6.9 GB on device
+before the model computes anything, and the 56-slot column is exactly what
+this cell varies. #288/#289 trained their 60k steps cleanly and died at
+eval 1 with the same green-run/no-temporal.json signature. `_chunked_forward`
+(already merged for incident 1) covers this identically — the 4096-row slice
+bounds input and activations together — so the fix needed no new code, only
+re-dispatch: base55 s0/s1 rerun as **#301/#302**; #290 (s2) had not started
+and picks up the fixed code at checkout. Incident cost: ~4 GPU-h ≈ $1.
+Lesson appended to the OOM class: an eval batch scales with *stencil width*
+as well as model size — any future input-shape change re-raises it, and
+chunking is now unconditional so it cannot.
+
+**FIRST RESULT, 00:17Z — the larger transformer helps, dramatically.**
+#296 (big34 s1) landed green WITH temporal.json: d_model 768 / 12 layers
+confirmed in the archive, wall 136 min (in family with #285/#286's healthy
+60k-step pace — not a lemon), kfold 0.553, forecast ratio **0.14911**.
+Paired at seed 1 the base cell (#283) is 0.17910 → **Δ = −0.0300**, ten times
+the ~3-seed-sd falsifier bar (~0.009). One seed, but hypothesis (1) — "capacity
+is not binding at 34 points" — is already dead unless #295/#297 reverse it,
+and the best forecast ratio ever recorded anywhere in the project (previous:
+0.17430) just fell by 0.025. E-010's "capacity doesn't matter" was measured
+at K=6 with 1 slot; it does not survive K=24 × 35 slots. Await #295/#297
+(same 2 h pace ⇒ ~00:20–00:45Z dispatch cohort lands through the night) and
+the big55 cell before calling the interaction.
 
 ---
 
