@@ -704,6 +704,47 @@ consistency of the same ordering on an independent protocol. (d) exact
 month-set assertion per head (implied by n-equality; cheap to assert
 exactly). No further conclusions until (a)+(b) are measured.
 
+**PHASE 2 (#311, landed 10:10Z) — (a) and (b) measured.** The instrumented
+eval re-rolled e017 / champion / sp34-s1 with per-channel corridor curves
+and the h=6 per-pixel window map. Trust checks first: gate PASSED (sixth
+eval), the recomposition identity holds on all three heads
+(identity_max_dev ≤ 0.0005 vs the 0.002 bar), and all three corridor AUCs
+reproduce their earlier evals to the third decimal.
+
+**(a) The divergence is CHANNEL-STRUCTURED, not broad-spectrum.** At h=6,
+sp34 loses to the champion by ~0.10 msss on the slow subsurface fields —
+rg_t400/500/700 and rg_s300–500, the 300–700 m heat/salt reservoir — with
+29 of 39 channels negative. But SIX channels run the OTHER way: sp34 BEATS
+the champion at h=6 on the wind-stress channels (tau_x +0.099, tau_y_std
++0.075, tau_y +0.043) and rg_t100 (+0.059). The far-reach stencil keeps
+its advantage on fast atmospheric forcing under iteration and pays on the
+slow ocean-memory fields — which are precisely the AMOC-relevant ones, and
+precisely the fields where climatology is hardest to beat at depth.
+
+**(b) The decay does NOT live at the boundary — it lives where the far
+stencil is FULLY LIVE.** Per-pixel dead-slot fraction of the sp34 stencil
+vs its h=6 penalty: corr = **+0.176**, monotone in quintiles — pixels
+whose stencils are 0–12% dead (mid-Atlantic interior) carry the largest
+penalty (mean Δ −0.061), pixels whose stencils are ≥47% dead roll at
+PARITY (+0.003). The boundary/dead-slot artifact hypothesis predicted the
+opposite sign; it is dead (sixth artifact class eliminated). The map
+(figure with #311) shows the effect as a mottled band through the open
+Atlantic interior, near-white along coasts and marginal seas.
+
+**What the audit now supports saying, as measurement:** the rolled-skill
+penalty of wide/far stencils (i) is absent at h=1, (ii) grows with
+horizon, (iii) scales with slot count and reach, (iv) scales with the
+amount of LIVE far-field input actually consumed, (v) lands on the slow
+subsurface channels while sparing — even favouring — the fast wind
+channels, and (vi) is robust to every metric-accounting alternative
+tested (masks, baselines, amplitude, weighting, identity). This localises
+the phenomenon in the model-under-iteration, not the evaluator. The
+E-029 arms are the discrimination experiments for the remaining candidate
+mechanisms: if input-noise training (b) or U=2 (c) closes the gap, the
+train/roll input mismatch was the cause; if neither moves it, the
+explanation must live elsewhere (e.g. in what the objective optimises at
+depth), and that is a finding too.
+
 ### E-029 · Reuniting the two axes — DISPATCHED 08-15 ~09:45Z
 
 Chris approved the full proposal slate ("All sounds good. Also curious
