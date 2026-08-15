@@ -532,6 +532,35 @@ seed (head `e026sp34_u1_s2` published 01:47Z, checkpoint-verified seed 2 /
 stencil 35 / `spiral:111,4444`). With waves 1+2 this is every E-026 arm,
 every seed, no silent caps: 33 head-evals across five boxes.
 
+### CORRIDOR AUC, wave 1 (#294, landed 02:13Z) — the reach arms roll WORSE than no neighbours
+
+Gate PASSED: e017_u1_s0 reproduces horizon_auc 0.643 exactly (tol 0.0101),
+and #294's corridor read for the champion s0 (0.608) matches #233's to the
+third decimal — the evaluator is stable across boxes and days. Metric =
+`horizon_auc` on the corridor subset (mean MSSS-vs-climatology over h=1–12;
+`auc_damped` in parentheses as the secondary):
+
+| head | s0 | s1 | s2 | mean |
+|---|---|---|---|---|
+| champion 8@222 (e023r222, #233) | 0.608 (0.596) | 0.599 (0.587) | 0.606 (0.594) | **0.6043** |
+| e017 no-neighbours s0 | 0.589 (0.577) | | | 0.589 |
+| three rings wide 8+8+8 @1000 | 0.571 (0.559) | 0.584 (0.573) | 0.589 (0.578) | 0.5813 |
+| spiral-24 @4444 | 0.572 (0.561) | 0.584 (0.573) | 0.578 (0.567) | 0.578 |
+
+**E-022's warning fires again, at full scale.** Spiral-24 was 0.0077 better
+than the champion on one-step forecast; rolled twelve months over the
+corridor it is 0.026 WORSE, and even sits below the no-neighbour baseline at
+every seed but s1-vs-e017-s0. Same for wide. The one-step forecast axis and
+the rolled-AUC axis are ANTI-correlated across these arms — reach helps the
+model predict next month and hurts what compounds. A plausible mechanism:
+far-field inputs let the head fit advective detail that is right at h=1 and
+wrong by h=6, where a 222 km ring can only smooth. The decision rule reads
+corridor AUC, so as of wave 1 the standing champion (ring-8 @ 222 km) is
+still the best stencil measured. Waves 2/3 (sunflower, elliptic, spiral-34,
+and the 1000-km-and-under family) decide whether ANY E-026 arm beats it —
+the near-field arms (tworing, sp13, sp8, ring16) are now the live
+candidates, exactly the opposite of what the forecast table suggested.
+
 ### HOW A STENCIL ROLLS FORWARD — the design theory behind the deep and elliptic arms (2026-08-14)
 
 Chris: *"think through the rolling forward predictions with the model. How
