@@ -1,0 +1,5 @@
+{"config": {"steps": 60000, "batch": 512, "d_z": 64, "patch": 3, "d_model": 576, "n_layers": 10, "n_heads": 8, "d_dec": 768, "anomaly": true, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 40.693, "data": "family3_na025.npz", "C": 39, "T": 516, "resume": "run-62,run-63"}}
+{"resumed": {"from": "run-62.pt", "parent_tag": "run-80", "at_step": 60000}}
+{"stage2_config": {"d_model": 1024, "layers": 16, "K": 24, "steps": 200000, "params_M": 207.692, "batch": 256, "train_windows": 28857960, "d_z": 64, "seed": 1, "unroll": 1, "stencil": 90, "ring_km": "spiral:111,4444,0.71,0.5", "unroll_probs": "", "direct": "", "tag": ""}}
+{"stage2_monitor": {"n_windows": 4096, "val_persistence": 3.09512}}
+{"stage2_step": 2000, "stage2_zmse": 0.7686, "stage2_loss_base": 0.7686, "stage2_val_zmse": 1.21241, "stage2_amp": 0.8613, "stage2_grad_norm": 2.0557, "stage2_lr": 0.0009999826714706267, "stage2_wall_s": 497.3}
