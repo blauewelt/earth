@@ -76,6 +76,16 @@ gpu-box-31479844). Wall estimate 5–7h/arm (the uw term costs ~55/512·S
 extra forward per step ≈ 2–3× step time). Verdict comes from the E-029/
 E-030 AUC eval wave.
 
+**In-flight correction (13:50Z): the wall estimate was wrong — measured
+pace is ~1.2 s/step (#322/#323), 8.5× the clean big55 step, not 2–3×.**
+The dominant cost is the depth-1 GATHER, not the forward: 64 windows × 55
+slot pixels × 24 months × 3,520 floats ≈ 1.2 GB re-gathered from the Z
+memmap every step. 60k steps ≈ 20 h ≈ $6/arm. Left running — the term is
+healthy (stage2_loss_unroll_wide ≈ 0.73–0.76 and falling, val decreasing)
+and the question merits two seeds — but the next uw iteration should cut
+gather cost (cache slot windows across steps, or sample S) before any
+scale-up.
+
 ## E-028b · xl continuation 60k→120k — DISPATCHED 2026-08-15 ~12:10Z
 
 **Why.** The xl arms (#308–#310, 205.4M) finished 60k NOT converged: val
@@ -866,11 +876,25 @@ pay, and the interaction that was dead on the width axis lives on the
 reach axis. The rolled corridor AUC — the number that decides whether this
 IS the production model — comes from a later eval wave.
 
+**Harvested (#313 s1, #314 s2, 2026-08-15): ratio 0.15278 / 0.15088.**
+Capacity transfers to the champion geometry too: −0.033 vs base ring222's
+0.18476, right on the ≈−0.030 prediction. Note big-ring222 (~0.152) reads
+WORSE on forecast than big55 (0.1476) — same direction and size as the
+width effect at base scale — so the forecast axis now says wide-and-far
+beats narrow-and-near at BIG scale as well; the rolled AUC (eval wave,
+with #324's s0) decides whether ring222's roll advantage survives adequate
+capacity, which #304 predicts it will not.
+
 **(b) znoise ×2 — attack the train/roll gap directly** (code pending, dispatched
 after it lands): Gaussian noise on the input z during training, σ set from
 the model's own measured one-step error (√val_zmse ≈ 0.7 z-units), so
 training-time context statistically resembles roll-time context.
 Hypothesis: forecast ratio worsens slightly, rolled AUC improves.
+**Harvested (#320 s0, 2026-08-15): ratio 0.15480** vs clean big55's
+0.14762 — worse by 0.007, as predicted (noise makes the one-step task
+harder). The AUC eval decides whether the robustness pays where it
+matters. rapid_r_kfold 0.553 [0.429, 0.651], the best single-head kfold
+seen on a big-tier arm.
 
 **(c) U=2 × wide ×2 — the interaction E-010 could not test.** E-010's
 "unroll buys nothing" (settled negative, §8) was measured at STENCIL 1,
