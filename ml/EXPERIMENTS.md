@@ -704,6 +704,50 @@ consistency of the same ordering on an independent protocol. (d) exact
 month-set assertion per head (implied by n-equality; cheap to assert
 exactly). No further conclusions until (a)+(b) are measured.
 
+### E-029 · Reuniting the two axes — DISPATCHED 08-15 ~09:45Z
+
+Chris approved the full proposal slate ("All sounds good. Also curious
+about U=2, as well as all your proposals. Consider adding more points
+(sunflower style), too."). Four arms families, all at the 768×12
+transformer that E-027 showed is worth 3× the whole geometry axis:
+
+**(a) big-ring222 ×3 — the production candidate.** 768×12 on the champion
+ring-8@222 (stencil 9), seeds 0–2. The AUC champion has only ever been
+trained at 576×8; the capacity gain has only ever been measured on
+sunflowers. Hypothesis: the capacity effect transfers (forecast ratio well
+below e023r222's 0.18476, plausibly ~0.155 if the −0.029 is
+geometry-independent). Falsifier: ratio ≳ 0.18 = capacity needs width to
+pay, and the interaction that was dead on the width axis lives on the
+reach axis. The rolled corridor AUC — the number that decides whether this
+IS the production model — comes from a later eval wave.
+
+**(b) znoise ×2 — attack the train/roll gap directly** (code pending, dispatched
+after it lands): Gaussian noise on the input z during training, σ set from
+the model's own measured one-step error (√val_zmse ≈ 0.7 z-units), so
+training-time context statistically resembles roll-time context.
+Hypothesis: forecast ratio worsens slightly, rolled AUC improves.
+
+**(c) U=2 × wide ×2 — the interaction E-010 could not test.** E-010's
+"unroll buys nothing" (settled negative, §8) was measured at STENCIL 1,
+before stencils existed; unroll's mechanism is feedback through the
+inputs, which a 1-slot model barely has. U=2 on big55, seeds 0–1, paired
+against #298/#299. The forecast ratio will read WORSE (E-010's 29.7%
+at U=4 says so); the question is the later AUC. Falsifier for "unroll
+fixes wide stencils": corridor AUC ≤ big55's own.
+
+**(d) sunflower-89 ×3 — the width axis continues.** Next Fibonacci; r_max
+stays 4444 (E-027 occupancy refusal). Pre-registered occupancy: **47.1%
+corridor (41.9/89 live)** — the same live fraction as sunflower-34 (47.6%)
+and 55 (46.6%), so more points = proportionally more live input.
+Hypothesis: another paired ~−0.002 vs big55 (width effect was −0.0025/
+−0.0021 at 34→55); falsifier: within seed noise (~0.0015) = width
+saturates at 55.
+
+Windows note for the record: `unroll:` is a PREFIX match in the workflow
+while `stencil:/ring:/seed:` match anywhere, so the U=2 windows begin
+`unroll:2,stencil:56,…`. Cost: 10 arms ≈ 32 GPU-h ≈ $9.5, plus the later
+AUC eval wave that arms (b) and (c) exist for.
+
 ### E-028 · Even bigger transformers — DISPATCHED 08-15 ~07:15Z
 
 Chris: *"let's try even bigger transformers."* **xl55 = 1024×16 (~207M

@@ -49,6 +49,12 @@ DESIGNS = [
     ("espiral 24, 111-4444 a=0.5", 25, "spiral:111-4444-0.5"),
     ("spiral 34, 111-4444", 35, "spiral:111-4444"),
     ("sunflower 34, 111-4444 a.71 p.5", 35, "spiral:111-4444-0.71-0.5"),
+    ("sunflower 55, 111-4444 a.71 p.5", 56, "spiral:111-4444-0.71-0.5"),
+    # E-029 width extension (Chris, 08-15: "consider adding more points,
+    # sunflower style") — 89 is the next Fibonacci count; r_max stays 4444
+    # per the E-027 occupancy refusal, so more points = more density, not
+    # more reach.
+    ("sunflower 89, 111-4444 a.71 p.5", 90, "spiral:111-4444-0.71-0.5"),
 ]
 
 
