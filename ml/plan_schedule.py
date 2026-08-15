@@ -110,6 +110,23 @@ def main():
                      "parent_points": curve(a.parent_steps, a.parent_lr,
                                             a.parent_schedule, a.warmup,
                                             a.cooldown_frac, a.halflife)})
+    elif a.parent_steps > 0:
+        # A CONTINUATION (resume2:) — not warm, but the chart still needs the
+        # parent segment, and it must be the parent's REAL schedule. Without
+        # parent_points, status.html falls back to drawing the parent as a
+        # COSINE ("every parent so far is a completed cosine") — which became
+        # false on 2026-08-15 when the first expdecay continuations shipped:
+        # Chris saw the sun89 legs' first 60k drawn as a cosine sweeping to
+        # zero instead of the expdecay the runs actually followed. Emit the
+        # sampled parent curve whenever a parent is named, so the fallback
+        # never fires for new plans.
+        plan.update({"parent_steps": a.parent_steps,
+                     "parent_lr": a.parent_lr or a.lr,
+                     "parent_schedule": a.parent_schedule,
+                     "parent_points": curve(a.parent_steps,
+                                            a.parent_lr or a.lr,
+                                            a.parent_schedule, a.warmup,
+                                            a.cooldown_frac, a.halflife)})
     if a.parent_run:
         plan["parent_run"] = a.parent_run
     if a.note:
