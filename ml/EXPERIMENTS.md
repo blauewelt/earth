@@ -88,6 +88,36 @@ scale-up.
 
 ## E-029d-ext · sunflower-89 → 200k steps — DISPATCHED 2026-08-15 ~14:45Z
 
+**UPDATE 16:10Z — first attempt GREEN-DEAD ×3, root-caused, re-dispatched.**
+#332 (sun89 s1 cont) and #326/#327 (xl conts) all completed "success" in
+minutes with NO temporal.json: `--resume-temporal: no checkpoint at
+/opt/earth-cache/ckpt/run-<n>-temporal.pt` — refused correctly, loudly,
+inside a backgrounded step, so the runs went green (the §2f/#196 signature,
+now produced by design rather than a sick GPU). ROOT CAUSE: `CKPT_TAG` is
+set only on the codec/joint steps, so the stage-2 mirror is the UNTAGGED
+`temporal.pt`, overwritten by every subsequent job on the box and rescued
+under rotating orphan names — my `run-<n>-temporal.pt` paths never existed.
+Resume-by-box-path is fragile by design; **resume-by-published-name is the
+fix**: the 60k heads are published FULL (opt+sched+rng, 1.076 GB, verified)
+as `e029dsun89_u1_s1/s2__temporal.pt` — Chris's 60k backups and the resume
+sources in one — and the continuations re-dispatched as #334/#335 via the
+composable `resume2:` (workflow fix 8d5e711 doing exactly what it was built
+for). The xl continuations need their 2.5 GB heads REASSEMBLED from the
+split backups (the boxes no longer hold them — mirror overwritten, orphans
+rotated; the split backup is now the ONLY copy besides 30-day artifacts) —
+deferred to the workflow-refactor pass, which gives the seed step a script
+body with room for multi-part assembly.
+
+**60k HARVEST (with #318/#319/#321/#324 landing): sunflower-89 BEATS big55
+— width still pays at 89 points.** sun89 s1 0.14556 / s2 0.14420 (mean
+0.1449) vs big55's 0.1476: paired −0.0027, same size as the 34→55 width
+effect (−0.0021). The width axis has NOT saturated. Also completed:
+ring222-big s0 (#324) 0.15571 → trio 0.15571/0.15278/0.15088 (mean 0.1531,
+sd 0.0024); znoise s1 (#321) 0.15387 → pair 0.15480/0.15387. Forecast
+leaderboard: xl55 0.1295–0.1331 > sun89 0.1449 > big55 0.1476 > big34
+0.1498 > ring222-big 0.1531 > znoise-big55 0.1543.
+
+
 **Chris (14:35Z): "Let's make sure to immediately continue the large input
 (89 points sunflower) run to 200k steps. Let's backup the intermediate 60k
 and 120k checkpoints as well."** Live curves motivated it: at step ~50k the
