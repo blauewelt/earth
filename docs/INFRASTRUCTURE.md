@@ -355,6 +355,18 @@ One legitimate CPU-bound case to know: the k-fold ridge solves are numpy and
 genuinely CPU work. They are minutes. Sustained CPU-only for half an hour or
 more means a missing device move.
 
+One false positive to know: Vast's `/instances/` intermittently serves a
+**dead GPU frame** — `gpu_util`, `gpu_temp` and `vmem_usage` all exactly 0 —
+for a box that is mid-training (first seen 2026-08-15 on run #310: dead frames
+alternated with 89–100% / 69–75°C / 16 GB frames ~20 s apart). `cpu_util` is
+host-side and stays real, so a dead frame satisfies the CPU-BOUND condition
+while the job trains at full speed. A real §2f failure still produces live
+frames (an idle GPU reads ~30–50 °C, never 0 °C). The monitor now resamples
+for up to a minute and judges only live frames; if every frame stays dead it
+reports `TELEMETRY` instead of CPU-BOUND. Ground truth either way is the
+run's `ml-live-<n>` branch: a training job appends `stage2_wall_s` every
+~5 min, and a step rate matching its sibling boxes cannot be a CPU run.
+
 ## 4 · Invariants
 
 These are the properties the system should hold. Each one is here because its

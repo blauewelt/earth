@@ -35,8 +35,31 @@ const [inst, runners, runs] = await Promise.all([
   gh("/actions/workflows/ml-train.yml/runs?per_page=100"),
 ]);
 
+// DEAD TELEMETRY FRAMES (2026-08-15, run #310): /instances/ intermittently
+// returns a GPU frame of ALL zeros — gpu_util 0, gpu_temp 0, vmem_usage 0 —
+// for a box mid-training (live frames ~20s apart read 89-100% util, 69-75°C,
+// 16 GB VRAM). cpu_util is collected host-side and stays real, so a dead
+// frame walks straight into the CPU-BOUND condition and a box training at
+// full speed reads as the §2f failure. A REAL cpu-bound box still produces a
+// live frame — an idle GPU reads ~30-50°C, never exactly 0°C — so a frame
+// with temp AND vmem both 0 carries no information. Resample until a live
+// frame appears (they alternate within ~20s), and only judge gpu_util on a
+// live frame. Ground truth if in doubt: the run's ml-live-<n> branch — a
+// training job pushes stage2_wall_s there every ~5 min.
+const deadFrame = (i) => !Number(i.gpu_temp || 0) && !Number(i.vmem_usage || 0);
+let instances = inst.instances || [];
+for (let tries = 0;
+     tries < 3 && instances.some((i) => i.actual_status === "running" && deadFrame(i));
+     tries++) {
+  await new Promise((r) => setTimeout(r, 20000));
+  const again = await vast("/instances/");
+  const fresh = new Map((again.instances || []).map((i) => [i.id, i]));
+  instances = instances.map((i) =>
+    deadFrame(i) && fresh.has(i.id) && !deadFrame(fresh.get(i.id)) ? fresh.get(i.id) : i);
+}
+
 // Runner names are stale instance IDs; the only mapping is inside onstart.
-const nameOf = new Map((inst.instances || []).map((i) => {
+const nameOf = new Map(instances.map((i) => {
   const m = (i.onstart || "").match(/--name[= ]"?([^"\s\\]+)/);
   return [i.id, m ? m[1] : String(i.id)];
 }));
@@ -46,7 +69,7 @@ const jobs = await Promise.all(live.map((r) =>
 const busyRunners = new Set(jobs.filter((x) => x.job?.runner_name).map((x) => x.job.runner_name));
 
 const problems = [];
-for (const i of inst.instances || []) {
+for (const i of instances) {
   if (i.actual_status !== "running") continue;
   const name = nameOf.get(i.id);
   const running = busyRunners.has(name);
@@ -54,6 +77,8 @@ for (const i of inst.instances || []) {
   const diskPct = 100 * (i.disk_util || 0) / (i.disk_space || 1);
   const tag = `${name} (${i.id}, $${(i.dph_total || 0).toFixed(3)}/h)`;
   if (!running) problems.push(`IDLE BURN   ${tag} is running with no job on it`);
+  else if (deadFrame(i))
+    problems.push(`TELEMETRY   ${tag} GPU stats read all-zero for ~60s — CPU-BOUND check is blind; verify via the run's ml-live branch before acting`);
   else if (gpu < 5 && cpu > 20)
     problems.push(`CPU-BOUND   ${tag} has a job but gpu_util=${gpu}% cpu_util=${cpu.toFixed(0)}%`);
   if (diskPct > 90) problems.push(`DISK        ${tag} at ${diskPct.toFixed(0)}% — a full disk takes a runner offline`);
