@@ -593,6 +593,27 @@ narrow/sp13/sp8 ≤1000, ring16 222) fill in the near-field candidates — on
 this curve the interesting question is whether ring16@222 (denser at the
 champion's own radius) can move 0.6043.
 
+### CORRIDOR AUC, wave 3a (#306, landed 06:44Z) — first arms to MATCH the baseline; none beat the champion
+
+Gate PASSED (fourth eval, e017 → 0.643 again). The near-field factorial
+arms are the first E-026 geometry to climb back to the no-neighbour line:
+
+| head | s0 | s1 | s2 | mean |
+|---|---|---|---|---|
+| three rings narrow 4+4+4 @222–1000 | 0.583 (0.571) | 0.591 (0.580) | 0.593 (0.582) | **0.589** |
+| two rings 8+8 @222–555 | 0.590 (0.578) | 0.588 (0.577) | 0.579 (0.568) | 0.5857 |
+
+narrow exactly MATCHES e017's 0.589 on the mean and beats it at two of
+three seeds — the first stencil since the champion to not pay for its
+neighbours on the roll. But paired against the champion (0.608/0.599/0.606)
+both arms lose at every seed: tworing by −0.018/−0.011/−0.027, narrow by
+−0.025/−0.008/−0.013. The reach curve now reads: 222 km ring (0.6043) >
+{narrow ≤1000 sparse, e017 nothing} (0.589) > tworing ≤555 (0.586) >
+wide@1000 dense (0.581) > everything @4444 (0.578→0.553). Remaining
+candidates in #305: sp13/sp8 (≤1000 spirals), ring16@222 (the density arm
+at the champion's own radius, n=1) and sp34 s2 (completes the forecast
+leader's AUC row).
+
 ### INCIDENT 3 (#290): a queued run executes the sha of main AT DISPATCH, not at start
 
 #290 (base55 s2) went green with **no temporal.json**: 60k clean training
