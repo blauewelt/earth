@@ -1144,7 +1144,18 @@ per request (16× less download than 1/12°, and we bin to 1° anyway), then
 1/12° GLORYS12 my/myint per month for the tail (also rebuilds
 ocean_surface.json). Resume-friendly: years already complete in
 data/currents_y// data/mld_y/ are skipped, per-request NetCDFs deleted after
-baking. Credentials were deleted after each use, per the user.
+baking. **The CMEMS credentials live in the claude.ai project doc
+`claude/copernicus-marine-access.md`** (same footing as the GitHub PAT) and
+are read as environment variables for the life of one command. An earlier
+version of this line read "Credentials were deleted after each use, per the
+user", which froze a single 2026-08-04 use-and-discard episode into what
+looked like a standing policy — on 2026-08-16 that sentence caused a session
+to tell Chris the credentials were unavailable and to plan around their
+absence, when they were in the project doc the whole time. Chris: *"I don't
+have such a policy."* The real rule, from the credential doc itself, is
+narrower and is about PERSISTENCE, not access: env vars only, never written
+to disk, never committed. Check the project docs before concluding a
+credential is missing.
 `refresh_data.py gfs` (NO account — NOMADS grib filter + pygrib) bakes the
 10-day GFS forecast: newest COMPLETE cycle (probes for f240), 2 m temperature
 one frame per day, precipitation as 24-h sums of the 6-h APCP buckets grouped

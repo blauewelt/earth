@@ -47,40 +47,42 @@ it is not forgotten.
 | NCEP R1 wind stress τx, τy | **daily** — already read as dailies today, to build the within-month σ | pentad mean of the dailies |
 | NCEP R1 storminess τ_std | daily | **within-PENTAD** σ — the same statistic over a 5-day window, which is a strictly better storminess measure than a monthly σ |
 | OISST SST | daily | pentad mean |
-| GLORYS currents, MLD, SSH | daily in GLORYS12; **our base cache is monthly means** | see §3 — the open item |
+| GLORYS currents, MLD, SSH | **daily** (GLORYS12 `cmems_mod_glo_phy_my_0.083deg_P1D-m`, verified reachable 2026-08-16) | pentad mean of the dailies, subsetted to the NA window and binned to 0.25° |
 | RG-Argo T/S, 16 levels | **monthly gridded** (floats profile ~10-daily) | see §4 — the missing-token decision |
 
 ---
 
-## 3 · Open item: the GLORYS base channels
+## 3 · RESOLVED: the GLORYS base channels come from GLORYS12 daily
 
-Our `base025_na.npz` holds monthly means of `cur_speed`, `log_mld`, `ssh`
-from the CMEMS 1/4° ensemble reanalysis. GLORYS12 serves daily fields, but
-the ensemble member we use for 1993–2024 is a monthly product, and CMEMS
-requires credentials that are deleted after each use by standing policy.
+*This section originally read "Open item ... I cannot verify this without
+Chris", on the belief that CMEMS credentials were deleted after each use by
+policy. That belief was wrong — it came from a stale line in the root
+`CLAUDE.md` which had frozen one 2026-08-04 episode into an apparent standing
+rule. Chris: "I don't have such a policy." The credentials are in the project
+doc `claude/copernicus-marine-access.md`, and the root CLAUDE.md line has
+been corrected so the next session does not repeat the mistake.*
 
-**This is the one thing I cannot verify without Chris.** Three options, in
-order of my preference:
+**Verified 2026-08-16**, by calling the API rather than reading about it:
+`cmems_mod_glo_phy_my_0.083deg_P1D-m` — GLORYS12 reanalysis, **daily**, 1/12°
+— is reachable with the account. So the highest-fidelity option is available
+and is the one to take:
 
-1. **Fetch GLORYS12 daily for the NA window** and pentad-mean it. Highest
-   fidelity; needs a CMEMS session and a long download (the reason the
-   original bake took the 1/4° ensemble route was that 1/12° is 16× the
-   bytes).
-2. **Hold the GLORYS channels at monthly cadence inside a pentad axis** —
-   each month's value repeated across its ~6 pentads. Honest only if
-   flagged; it is a *stale* value, not a measurement, and the model would
-   learn that those channels never move within a month. **I recommend
-   against this** for the same reason forward-filling Argo is wrong.
-3. **Ship pentad-1 without the GLORYS channels moving** — i.e. build the
-   first pentad tensor from the channels that genuinely are daily (wind,
-   storminess, SST) plus Argo/GLORYS as slower channels with explicit
-   missing tokens between updates. This tests Claim A and Claim B
-   immediately and defers the CMEMS work.
+- **Fetch GLORYS12 daily for the NA window and pentad-mean it.** The base
+  channels (`cur_speed`, `log_mld`, `ssh`) then move at true pentad cadence
+  like the wind and SST channels, and only Argo remains a slow channel.
+- Download cost is the real constraint, not access: 1/12° is 16× the pixels
+  of the 1/4° ensemble we used for the monthly bake, and we bin down to 0.25°
+  anyway. Fetch **subsetted to the NA window** (100 W–20 E, 0–70 N) and
+  daily-to-pentad average server-side where the toolbox allows it, or
+  stream year-by-year as the monthly bake already does — that pattern is
+  written and resume-friendly.
+- The interim (`myint`) stream for the most recent months carries a different
+  dataset ID than the one guessed here; look it up in the catalogue at build
+  time rather than hardcoding, the same way the monthly bake resolves it.
 
-**Decision needed from Chris**, and option 3 is the one that lets the build
-start today.
-
----
+Consequence for §6: the pentad tensor no longer has to ship with stale base
+channels, and the "option 3" fallback (build from the daily-native channels
+only) is retired.
 
 ## 4 · The Argo missing-token decision (explicit, per E-033)
 
@@ -134,10 +136,11 @@ rather than scaled.
 1. **Pentad truth first** (`ml/build_truth_pentad.py`) — no credentials
    needed, and it is the claim worth testing. Re-derive RAPID, FC, MOVE and
    SAMBA at 5-day cadence from their native archives.
-2. Chris's decision on §3.
-3. The pentad tensor builder.
-4. Re-anchor Chinchilla from observed-value counts; re-size the codec.
-5. Then daily, once object storage exists.
+2. ~~Chris's decision on §3~~ — resolved: GLORYS12 daily, credentials in the project doc.
+3. The GLORYS12 daily → pentad fetcher (the long pole: 1/12° subsetted to the NA window, year-by-year, resume-friendly).
+4. The pentad tensor builder.
+5. Re-anchor Chinchilla from observed-value counts; re-size the codec.
+6. Then daily, once object storage exists.
 
 ---
 
