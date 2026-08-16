@@ -58,6 +58,7 @@ jobs:
       # not as an auth error after the install and the catalogue query --
       # which reads like a bad credential rather than an absent one.
       - name: Preconditions
+        id: preflight
         env:
           CM_USER: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
           CM_PASS: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
@@ -123,8 +124,12 @@ jobs:
               --hf-repo earth-tensors \
               --min-free-gb 5
 
+      # always(), so the tally is printed whether the fetch finished, timed
+      # out at the 6-hour wall, or died -- but NOT when the preconditions
+      # failed, because without HF_TOKEN this step can only fail too, and a
+      # second failure buries the one that says which secret is missing.
       - name: Done for this run
-        if: always()
+        if: always() && steps.preflight.outcome == 'success'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
