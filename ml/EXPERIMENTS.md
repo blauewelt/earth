@@ -44,6 +44,122 @@ low-pass).
 
 ---
 
+## E-035 / E-036 · The two compositions nobody has run — DISPATCHED 2026-08-16 ~18:40Z
+
+Wave 8. Four training arms across the four warm boxes, ~200k steps each at
+the 205M tier. Chris approved the spend after the #354–#356 harvest: *"sounds
+great, let's start it."* Both arms exist because that harvest **reversed a
+conclusion this log had already recorded**, and the reversal has a second
+prediction each.
+
+### The reversal being acted on
+
+E-032 measured 89 vs 144 points at 205M/200k on the FORECAST ratio and closed
+the width axis: paired −0.00004 / −0.00012, ~17× inside seed spread, and this
+log said *"the width axis CLOSES at 89"* and *do not build 233*. #355/#356
+then rolled the same two checkpoints twelve months:
+
+| arm | s0 | s1 | mean | vs previous rung |
+|---|---|---|---|---|
+| xl55 (60k) | 0.664 | 0.663 | 0.6637 | — |
+| xl89 (200k) | 0.67433 | 0.67058 | 0.6725 | +0.0088 |
+| xl144 (200k) | 0.68067 | 0.67558 | **0.6781** | +0.0056 |
+
+Paired by seed xl144 − xl89 = **+0.0063 / +0.0050**, same sign at both seeds,
+monotone ladder, no flattening. **Saturation on a one-step metric is not
+saturation under iteration.** The programme has now made that error in both
+directions — E-010 closed the capacity axis in a regime that could not
+exercise it, E-032 closed the width axis on a scoreboard that could not see
+it. A settled negative is settled only on the scoreboard that settled it.
+
+### E-035 · sunflower-233 × 1024×16 × 200k, seeds 0 and 1
+
+**Hypothesis.** Corridor AUC ≈ **0.683 ± 0.005** if the +0.005/rung trend
+continues — above xl144 and at or above znoise-big55's 0.6785. The forecast
+ratio stays ≈0.1225, indistinguishable from xl89 and xl144: width is
+genuinely finished on that axis and nothing here should move it.
+
+**Falsifier.** xl233 within seed noise of xl144's 0.6781 = width finally
+saturates on the roll too, and the ladder has a top.
+
+**The confound, pre-registered because it is the whole risk.**
+§8.6's cone measurement says ~50% of a 4444 km stencil's slots already
+resolve to land or off-window. If 233 returns a null, *"width saturated"* and
+*"the window ran out"* look identical from the AUC alone. So occupancy was
+measured BEFORE dispatch (`ml/measure_slot_occupancy.py`, row added):
+
+| design | slots | rolled live | corridor live |
+|---|---|---|---|
+| sunflower 34 | 35 | 50.2% | 47.6% |
+| sunflower 55 | 56 | 50.2% | 47.4% |
+| sunflower 89 | 90 | 50.0% | 47.1% |
+| sunflower 144 | 145 | 49.9% | 47.0% |
+| **sunflower 233** | **234** | **49.9%** | **46.9% (109.4/233)** |
+
+Scale-invariant to a tenth of a point across a 7× range of counts. **A null at
+233 therefore cannot be blamed on occupancy** — more points buy proportionally
+more live input, exactly as at every rung below. If it IS a null, width and
+window have become the same axis and only the global tensor (E-033/E-034) can
+separate them.
+
+**Artefact checks done at dispatch, not at use.** `build_stencil` builds the
+234-slot table (the occupancy run above IS that check). A CPU toy instantiated
+both heads and ran forward+backward: xl144 **211.4M** params, xl233
+**217.3M** — the width axis costs only the input projection, +5.9M — all
+gradients finite, `pred` shape `[B,K,64]`. Input gather at B=512 goes
+0.42 → 0.69 GiB per copy, +0.27 GiB on a card that already ran 145 slots.
+
+### E-036 · znoise σ=0.7 × sunflower-144 × 1024×16 × 200k, seeds 0 and 1
+
+The other half of the #352 result. At 88M, σ=0.7 input noise bought **+0.057**
+corridor AUC and produced a model (0.6785) that beat the clean 205M one
+(0.6637). Nobody has composed it with capacity.
+
+**Hypothesis.** Noise and scale compound: corridor AUC **> 0.6781** (xl144
+clean, the paired control at identical width and capacity), plausibly ~0.72 if
+the 88M delta survives intact. The forecast ratio gets WORSE, as it did at 88M
+(0.1548/0.1539 vs 0.1476) — that cost is the mechanism, not a defect.
+
+**Falsifier.** ≤ 0.6781 = input noise was a small-model regulariser whose
+benefit capacity already supplies, and the +0.057 does not generalise up the
+ladder. That would close the arm and leave exposure bias to E-030's mechanism.
+
+**Control.** xl144 clean, 0.68067 / 0.67558 (#356) — same width, same
+capacity, same steps, same seeds, differing in one flag.
+
+### Why these two and not a σ sweep
+
+σ=0.7 was set from the model's own measured one-step error and never tuned, so
+a sweep is real work — but it is only worth doing if noise still pays at 205M,
+which is exactly what E-036 asks. Sequenced experiments are a smell
+(§4.4), and this is the rare case where the sequence is genuine: the sweep's
+existence is conditional on this run's sign.
+
+### Dispatch record
+
+Four warm boxes, all four having just finished #354–#356, so each holds the
+sha-pinned tensor, the `run-62/63` codec and a warm Z cache.
+
+| arm | seed | runner | Vast |
+|---|---|---|---|
+| E-035 xl233 | 0 | gpu-box-42005419 | 47487801 |
+| E-035 xl233 | 1 | gpu-box-46045353 | 47717160 |
+| E-036 znoise×xl144 | 0 | gpu-box-47094143 | 47720660 |
+| E-036 znoise×xl144 | 1 | gpu-box-47529389 | 47720664 |
+
+`--milestone-steps 600,60000,120000` on every arm: the 600 rung is the
+early-save proof (Chris, 08-15: *"execute the checkpoint save also early on —
+otherwise we risk a crash after 60k steps"*), and the 60k/120k rungs make each
+run its own step-budget ladder instead of a single terminal number.
+`job_timeout 1800`, because 200k steps at this tier is ~15–18 h and
+`job_timeout` is an input, not a cap.
+
+**Cost, recorded at dispatch per §3:** 4 boxes × ~18 h × ~$0.28/h ≈ **$20**,
+plus the eval wave that must follow (a `sroll:` run per arm, ~6 h each) before
+any of it is a result.
+
+---
+
 ## E-032 · sunflower-144: the width ladder's next rung — DISPATCHED 2026-08-15 ~18:05Z
 
 **Chris (18:00Z): "Can we also add more input points? That is: the next

@@ -58,6 +58,16 @@ DESIGNS = [
     # E-032 (Chris, 2026-08-15: "the next Fibonacci number after 89") — same
     # spiral, count 144; the live FRACTION has been scale-invariant 34->55->89.
     ("sunflower 144, 111-4444 a.71 p.5", 145, "spiral:111-4444-0.71-0.5"),
+    # E-035 (2026-08-16) — the next Fibonacci count, and the rung a previous
+    # revision said not to build. That refusal was read off the FORECAST
+    # ratio, where 89 -> 144 is -0.0001 (17x inside seed noise); the rolled
+    # corridor then went 0.6637 -> 0.6725 -> 0.6781 across 55 -> 89 -> 144,
+    # monotone and same-signed at both seeds. Occupancy is pre-registered
+    # here BEFORE the dispatch precisely because it is the confound: if 233
+    # returns a null, "width saturated" and "the window ran out" look
+    # identical from the AUC alone, and only the live fraction tells them
+    # apart. The fraction has been scale-invariant 34 -> 55 -> 89 -> 144.
+    ("sunflower 233, 111-4444 a.71 p.5", 234, "spiral:111-4444-0.71-0.5"),
 ]
 
 
