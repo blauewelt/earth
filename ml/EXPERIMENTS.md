@@ -75,6 +75,59 @@ boxes started for xl144; all four XL runs land ~12:00–13:00Z 08-16.
 milestones, paired at every rung). **Falsifier**: within seed noise of xl89's milestone at the matched step
 = width saturates under the large head.
 
+## E-031/E-032 HARVEST (#344–#347, 2026-08-16 ~10:30Z) — the stack lands, and the WIDTH AXIS CLOSES at 89
+
+All four 200k XL arms green with temporal.json. **New project bests on the
+forecast axis, and the first clean saturation anywhere in the scale
+programme.**
+
+| arm | stencil | params | s0 | s1 | mean |
+|---|---|---|---|---|---|
+| **xl89** (E-031) | 90 | 207.7M | 0.12362 | **0.12158** | **0.12260** |
+| xl144 (E-032) | 145 | 211.4M | 0.12358 | 0.12146 | 0.12252 |
+
+**(1) The three axes DO stack.** xl89-200k at 0.1226 vs xl55-60k's 0.1313
+(−0.0087) and sun89-big-200k's 0.1361 (−0.0135): capacity + width + steps
+compose, and the combination is the best forecaster the project has ever
+had — 0.1226 against a persistence baseline of 3.126 z-units², i.e. the
+one-step error is 12.3% of no-change.
+
+**(2) The width axis is CLOSED at 89 points.** xl144 − xl89 paired:
+**−0.00004 / −0.00012** — two seeds, same sign, and ~17× SMALLER than the
+seed spread (0.0020–0.0021). The Fibonacci ladder paid −0.002 per rung at
+34→55→89 (768×12); at 205M the 89→144 rung pays essentially exactly zero.
+Falsifier for E-032's hypothesis ("ratio < xl89's") is met in sign but the
+effect is inside noise by any reading, so the honest statement is
+**saturation, not a win**: 144 points costs 3.7M extra parameters and ~8%
+more wall-clock for nothing measurable. Do not commission a 233-point rung.
+Note this is width saturating at FIXED capacity — the corridor AUC could
+still separate them, and both arms' heads are published for that eval.
+
+**(3) Chris's milestone requirement is VERIFIED END-TO-END.** Every one of
+the four artifacts contains all three rungs — `temporal_ms600.pt`,
+`temporal_ms60000.pt`, `temporal_ms120000.pt` — written at the named steps
+with the correct step/seed/stencil in their own args, and the step-600 proof
+rung fired 25 minutes into a 15-hour run, exactly as designed. A crash after
+60k would have cost nothing. All twelve milestone heads published
+weights-only as `e031xlx{600,60000,120000}_u1_s{0,1}` and
+`e032xlx{...}`; the four finals published per INFRASTRUCTURE §2b (weights-only
+asset + `.full.part00/01` + `.sha256` manifest, since a 205M head with
+optimiser state is ~2.5 GB and the release cap is 2 GiB).
+
+**Head-probe k-folds** (secondary, ~9 effective DOF — quoted as alive, not
+argued from): xl89 s0 0.467 [0.367, 0.552], s1 0.470 [0.370, 0.558];
+xl144 s1 0.429 [0.294, 0.544].
+
+**Cost**: 4 arms × ~15 h × $0.26 ≈ **$15.6**. Wall 14.7–14.9 h for 200k
+steps at 205M — ~265 ms/step, in family with the xl55 pace.
+
+**Sandbox lore added (disk):** an XL probes artifact is now ~4.6 GB of zip
+holding four ~830 MB checkpoints; extracting it whole needs ~9 GB and blew
+the sandbox disk on the first attempt. `/tmp/harvest_xl.mjs` extracts ONE
+member at a time and deletes the zip before splitting the final head (split
+writes a second full copy) — peak usage is then zip + one member, or head +
+its parts, never both.
+
 ## E-031 · xl89: widest input × largest transformer × 200k — DISPATCHED 2026-08-15 ~17:55Z
 
 **Chris (17:50Z): "so the sun89 experiments are not xl? Then let's combine
