@@ -95,13 +95,24 @@ geometry that lost at 34M gains $+0.050$ corridor AUC paired by seed,
 and at $1024\times16$ (205M) the corridor AUC reaches
 $\mathbf{0.664}$/$0.663$/$0.664$ across three seeds --- against
 $0.589$ for the no-neighbour baseline and $0.604$ for the best
-small-model geometry --- with no sign of saturation. Parameters beat
-every other axis measured: input width (Fibonacci sunflower layouts,
-34$\to$89 points, $\approx-0.002$ forecast ratio per rung, still
-unsaturated) and step budget ($60\mathrm{k}\to200\mathrm{k}$ steps,
-decelerating toward an asymptote) both pay, and both pay less. The
-small-model geometry ranking that occupied a week of experiments is
-preserved in Appendix~\ref{app:base} as a capacity-starvation artifact.
+small-model geometry --- with no sign of saturation. On the one-step
+forecast, parameters beat every other axis measured: input width
+(Fibonacci sunflower layouts, 34$\to$89 points, $\approx-0.002$ per
+rung, then \emph{saturating} at 89 --- 144 points buy nothing) and step
+budget ($60\mathrm{k}\to200\mathrm{k}$, decelerating toward an
+asymptote) both pay, and both pay less. \textbf{On the rolled forecast,
+scale is not the largest effect.} Adding Gaussian noise to the model's
+own inputs at its measured one-step error scale is worth $+0.057$
+corridor AUC at fixed capacity --- enough that a noised 88M model beats
+the clean 205M one --- and a near-field 8-point stencil is worth
+$+0.035$ over wide-and-far inputs at equal parameters, reversing the
+forecast-axis ranking. A geometric measurement plausibly explains both:
+at 4444\,km reach a head's dependency cone covers the entire model
+domain by horizon three and about half its input slots fall outside it,
+so every rolled number here rests on holding the world beyond the
+window at climatology. The small-model geometry ranking that occupied a
+week of experiments is preserved in Appendix~\ref{app:base} as a
+capacity-starvation artifact.
 \end{abstract}
 
 \section{Introduction}
@@ -1275,17 +1286,25 @@ base55 (sunflower-55) & $576\times8$ & 0.569 & 0.573 & --- & 0.5710 \\
 ring-8@222 (base champion) & $576\times8$ & 0.608 & 0.599 & 0.606 & 0.6043 \\
 big55 (sunflower-55) & $768\times12$ & 0.621 & 0.621 & 0.622 & 0.6213 \\
 big34 (sunflower-34) & $768\times12$ & 0.628 & 0.618 & 0.625 & 0.6237 \\
-\textbf{xl55 (sunflower-55)} & $1024\times16$ & \textbf{0.664} & \textbf{0.663} & \textbf{0.664} & \textbf{0.6637} \\
+xl55 (sunflower-55) & $1024\times16$ & 0.664 & 0.663 & 0.664 & 0.6637 \\
+\midrule
+\multicolumn{6}{l}{\emph{not a capacity change --- same 88M tier, different input or objective}}\\
+ring-8@222 (near-field) & $768\times12$ & 0.646 & 0.661 & 0.661 & 0.6560 \\
+\textbf{znoise, $\sigma{=}0.7$ (sun-55)} & $768\times12$ & \textbf{0.683} & \textbf{0.674} & --- & \textbf{0.6785} \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Rolled corridor AUC, per seed} --- the reference table
 for the metric defined in \S\ref{sec:gloss}. Every row is read from an
 evaluation whose gate head reproduced its pinned $0.643$ exactly; the
 full per-horizon and per-channel outputs are archived per evaluation
-run (\texttt{ml-metrics} branch). The base-scale geometry table behind
-the ring-8@222 row is Appendix~\ref{app:base}; the width, step-budget,
-and exposure-bias rows land with the evaluations in flight
-(Table~\ref{tab:standings}).}
+run (\texttt{ml-metrics} branch). The upper block is the capacity ladder
+at fixed input. \textbf{The lower block is the result that reorders this
+section}: neither row is a capacity change, and both beat the tier they
+belong to --- input noise by $+0.057$ and near-field geometry by
+$+0.035$ over the same 88M model, with the \emph{noised 88M} model
+beating the \emph{clean 205M} one outright. The base-scale geometry
+table behind the ring-8@222 row is Appendix~\ref{app:base}; the
+width and step-budget rows await the evaluations still in flight.}
 \label{tab:auc}
 \end{table}
 
@@ -1345,6 +1364,39 @@ decision on resumption. Neither mechanism has yet produced a rolled
 verdict; both are falsifiable against the clean 88M tier's corridor
 AUC of $0.6213$.
 
+\subsection{The dependency cone, and what every rolled number
+assumes}\label{sec:cone}
+
+A stencil head predicts a pixel from its $S$ neighbours, so a two-step
+prediction depends on the neighbours' neighbours, and the set of pixels an
+$h$-step prediction depends on --- its \emph{cone} --- grows by the
+stencil's reach every step. At 4444\,km that is $4444h$\,km against Earth's
+40{,}075\,km circumference, so the cone wraps the planet within a few steps
+while our window is a basin. The evaluator already rolls every one of the
+84{,}405 window ocean pixels, which is the most it can do; the question is
+whether the window is large enough.
+
+Measured rather than argued (pure geometry over the real neighbour table,
+seeded from the RAPID section): for the 144-point sunflower the cone covers
+26.9\% of the window at $h{=}1$, 99.5\% at $h{=}2$ and \textbf{100\% at
+$h{=}3$}, after which \textbf{$\sim$50\% of every step's requested
+neighbours resolve to land or off-window}. The near-field ring-8@222 reaches
+only 30.7\% of the window by $h{=}12$ with 4.8\% of its demand unmet --- so
+it is \emph{reach}, not slot count, that escapes.
+
+This is not an error: dead slots are encoded as zero in training exactly as
+in evaluation, so no number here is invalidated. But it means every rolled
+result in this report carries a boundary condition we had not stated ---
+\textbf{the world outside the window is held at its climatological mean} ---
+and that the fraction of a model's input owned by that assumption grows with
+its reach. It is the most plausible single explanation for
+\S\ref{sec:standings}'s two surprises: a wide-and-far model rolls on a state
+that is half boundary assumption, a near-field one barely depends on the
+boundary, and input noise makes a model robust to exactly the kind of
+corrupted context the assumption produces. It also promotes a global tensor
+from a data-volume argument to a correctness requirement for long rolls at
+wide reach.
+
 \subsection{Standings}\label{sec:standings}
 
 \begin{table}[htbp]
@@ -1359,8 +1411,8 @@ sun89 (120k) & $768\times12$ & 89.7M & 89 & 0.1369--0.1384 & --- \\
 sun89 (60k) & $768\times12$ & 89.7M & 89 & 0.1442--0.1462 & in flight \\
 big55 (60k) & $768\times12$ & 88.0M & 55 & 0.1456--0.1500 & 0.6213 \\
 big34 (60k) & $768\times12$ & 86.9M & 34 & 0.1483--0.1519 & 0.6237 \\
-big-ring222 (60k) & $768\times12$ & --- & 8 & 0.1509--0.1557 & in flight \\
-znoise-55 (60k) & $768\times12$ & 88.0M & 55 & 0.1539--0.1548 & in flight \\
+big-ring222 (60k) & $768\times12$ & --- & 8 & 0.1509--0.1557 & \textbf{0.6560} \\
+\textbf{znoise-55 (60k)} & $768\times12$ & 88.0M & 55 & 0.1539--0.1548 & \textbf{0.6785} \\
 base55 (60k) & $576\times8$ & 34.1M & 55 & 0.1738--0.1786 & 0.5710 \\
 ring-8@222 (base) & $576\times8$ & --- & 8 & 0.1848 & 0.6043 \\
 no neighbours (gate) & $576\times8$ & --- & 0 & --- & 0.5890 \\
@@ -1375,12 +1427,27 @@ is confined to the 34M tier.}
 \label{tab:standings}
 \end{table}
 
-Table~\ref{tab:standings} is the current state of the programme. Three
-regularities: capacity dominates both scoreboards; width and steps are
-real but secondary on the forecast axis; and every mechanism arm
-(geometry, noise, unroll) so far matters less than making the head
-bigger. The obvious open question --- where the capacity curve bends
---- is the programme's next experiment; nothing measured yet bounds it.
+Table~\ref{tab:standings} is the current state of the programme, and
+the rolled column has just overturned the reading this section was
+drafted with. Capacity dominates the \emph{forecast} axis and pays
+handsomely on the roll --- both of those stand. What is no longer true
+is that capacity dominates \emph{everything}: at a fixed 88M, adding
+Gaussian noise to the model's own inputs is worth $+0.057$ corridor AUC
+and beats the 205M model, while a near-field 8-point stencil is worth
+$+0.035$ and also beats every wide-input arm of its own tier. The two
+cheapest interventions in the programme outrank its most expensive one.
+
+The honest summary is therefore a rebalanced one. On one-step forecast,
+scale is the whole story and the axes are ordered parameters $\gg$ width
+$>$ steps. On the twelve-month roll, \emph{robustness to the model's own
+error} is at least as valuable as parameters, and the ranking of input
+geometries does not follow the forecast ranking at all --- the two
+scoreboards disagree again (\S\ref{sec:inversion}) at a capacity where
+starvation cannot explain it. \S\ref{sec:cone} gives what we think is
+the underlying reason. The next experiments are the compositions
+nobody has run: noise $\times$ 205M, noise $\times$ near-field, and a
+sweep of $\sigma$, which was set from the model's measured one-step
+error and never tuned.
 
 \section{The static-channel lesson}\label{sec:static}
 
