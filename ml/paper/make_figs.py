@@ -271,4 +271,83 @@ strip(ax)
 fig.savefig(os.path.join(FIGS, "fig_train.pdf"))
 plt.close(fig)
 
+# ---- Fig 7: the capacity ladder at fixed input (sunflower-55) -------------
+# src: EXPERIMENTS.md E-027 2x2 (#282-#307) + eval #304 (probes-304) +
+#      E-028 (#308-#310) + eval #333 (ml-metrics probes-333.json).
+#      Params are MEASURED from each run's own archived head (params_M).
+cap_params = [34.098, 87.971, 205.4]
+cap_labels = ["576$\\times$8\n34.1M", "768$\\times$12\n88.0M",
+              "1024$\\times$16\n205.4M"]
+cap_ratio = [[0.17860, 0.17692, 0.17380],          # base55 s0-s2
+             [0.14997, 0.14728, 0.14562],          # big55 s0-s2
+             [0.13308, 0.12947]]                   # xl55 s1-s2 (two quoted)
+cap_auc = [[0.5690, 0.5730],                       # base55 s0-s1
+           [0.6210, 0.6210, 0.6220],               # big55 s0-s2
+           [0.664, 0.663, 0.664]]                  # xl55 s0-s2 (#333)
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.4, 3.0))
+for ax, data, ylab in ((a1, cap_ratio, "forecast ratio (lower = better)"),
+                       (a2, cap_auc, "rolled corridor AUC (higher = better)")):
+    mid = [np.mean(s) for s in data]
+    ax.plot(cap_params, mid, "-", color=C1, lw=2)
+    for p, s in zip(cap_params, data):
+        ax.plot([p] * len(s), s, "o", color=C1, ms=4)
+    ax.set_xscale("log")
+    ax.set_xticks(cap_params)
+    ax.set_xticklabels(cap_labels, fontsize=7.5)
+    ax.set_xlabel("stage-2 parameters")
+    ax.set_ylabel(ylab)
+    ax.minorticks_off()
+    strip(ax)
+a2.axhline(0.589, color=INK2, ls=":", lw=1.2)
+a2.text(90, 0.5905, "no-neighbour baseline 0.589", color=INK2, fontsize=7)
+a2.axhline(0.6043, color=INK2, ls="--", lw=1.2)
+a2.text(90, 0.598, "base-scale champion\n(ring-8@222) 0.604",
+        color=INK2, fontsize=7, va="top")
+a1.set_title("one-step forecast", loc="left", fontsize=9)
+a2.set_title("12-month roll, AMOC corridor", loc="left", fontsize=9)
+fig.suptitle("Capacity improves BOTH axes and does not saturate through 205M "
+             "parameters (fixed sunflower-55 input, 60k steps)",
+             fontsize=9, x=0.02, ha="left")
+fig.savefig(os.path.join(FIGS, "fig_capacity.pdf"))
+plt.close(fig)
+
+# ---- Fig 8: the secondary axes — input width and step budget --------------
+# src: EXPERIMENTS.md E-027 (width, 768x12 @60k), E-029d (#318/#319/#321/
+#      #324/#325 sun89 60k), E-029d-ext (#334/#335 120k, #350/#351 200k),
+#      E-028 xl55 (#308-#310).
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.4, 3.0))
+wpts = [34, 55, 89]
+wdata = [[0.15186, 0.14911, 0.14827],
+         [0.14997, 0.14728, 0.14562],
+         [0.14624, 0.14556, 0.14420]]
+mid = [np.mean(s) for s in wdata]
+a1.plot(wpts, mid, "-", color=C3, lw=2)
+for p, s in zip(wpts, wdata):
+    a1.plot([p] * len(s), s, "o", color=C3, ms=4)
+a1.set_xticks(wpts)
+a1.set_xlabel("sunflower input points (768$\\times$12, 60k steps)")
+a1.set_ylabel("forecast ratio")
+a1.set_title("width: still paying at 89 points", loc="left", fontsize=9)
+steps = [60, 120, 200]
+s1 = [0.14556, 0.13842, 0.13663]
+s2 = [0.14420, 0.13689, 0.13550]
+a2.plot(steps, s1, "o-", color=C2, lw=2, ms=4, label="seed 1")
+a2.plot(steps, s2, "o-", color=C1, lw=2, ms=4, label="seed 2")
+a2.axhspan(0.12947, 0.13308, color=INK2, alpha=0.18, lw=0)
+a2.text(200, 0.1312, "xl55 (205M)\nat only 60k steps", color=INK2,
+        fontsize=7, ha="right", va="center")
+a2.set_xticks(steps)
+a2.set_xticklabels(["60k", "120k", "200k"])
+a2.set_xlabel("training steps (sunflower-89, 768$\\times$12)")
+a2.set_ylabel("forecast ratio")
+a2.legend(frameon=False, fontsize=8)
+a2.set_title("steps: decelerating toward $\\approx$0.135", loc="left",
+             fontsize=9)
+for a in (a1, a2):
+    strip(a)
+fig.suptitle("The secondary axes: width and step budget both pay, and both "
+             "pay less than parameters", fontsize=9, x=0.02, ha="left")
+fig.savefig(os.path.join(FIGS, "fig_axes.pdf"))
+plt.close(fig)
+
 print("figures written to", FIGS)

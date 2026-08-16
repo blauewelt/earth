@@ -15,8 +15,8 @@
 \title{Earth-State Embeddings:\\
 \large self-supervised representations of the observed ocean,\\
 probed against the Atlantic overturning circulation}
-\author{blauewelt/earth --- technical report, v5}
-\date{8 August 2026 (second evening revision)}
+\author{blauewelt/earth --- technical report, v6}
+\date{16 August 2026}
 
 \begin{document}
 \maketitle
@@ -61,6 +61,30 @@ apparent finding that expanding the input from 14 to 24--25 channels had
 the genuine gain those channels brought at the deep MOVE array at
 $16^\circ$N ($r=0.206$ [$0.044$, $0.346$], our first multi-target
 confidence interval excluding zero) stands.
+
+This revision (v6) reports the programme's move to the \emph{rolled
+forecast at scale} (\S\ref{sec:roll}), and its central finding is about
+capacity. The temporal model now reads a \emph{stencil} of distant
+neighbour embeddings alongside the pixel's own history; skill is scored
+both one step ahead (forecast ratio against persistence) and rolled
+twelve months over the AMOC corridor (corridor AUC), with a frozen gate
+head that must reproduce its pinned score before any evaluation counts.
+At the original stage-2 size ($576\times8$, 34M parameters) the two
+scores \emph{anti-correlated} across input geometries --- the best
+one-step arms rolled worst --- and a systematic audit cleared the
+instrument and localized the effect in the model-under-iteration. The
+resolution is capacity: at $768\times12$ (88M) the same wide-input
+geometry that lost at 34M gains $+0.050$ corridor AUC paired by seed,
+and at $1024\times16$ (205M) the corridor AUC reaches
+$\mathbf{0.664}$/$0.663$/$0.664$ across three seeds --- against
+$0.589$ for the no-neighbour baseline and $0.604$ for the best
+small-model geometry --- with no sign of saturation. Parameters beat
+every other axis measured: input width (Fibonacci sunflower layouts,
+34$\to$89 points, $\approx-0.002$ forecast ratio per rung, still
+unsaturated) and step budget ($60\mathrm{k}\to200\mathrm{k}$ steps,
+decelerating toward an asymptote) both pay, and both pay less. The
+small-model geometry ranking that occupied a week of experiments is
+preserved in Appendix~\ref{app:base} as a capacity-starvation artifact.
 \end{abstract}
 
 \section{Introduction}
@@ -198,6 +222,38 @@ Terms are used throughout in the following precise senses.
   $16^\circ$N (2000--2022, the \emph{deep} western-boundary flow),
   OSNAP in the subpolar gyre (2014--2022), SAMBA at $34.5^\circ$S
   (2009--2017). None is ever an input.
+\item[Stencil] the set of \emph{neighbour pixels} whose embedding
+  sequences the temporal model reads alongside the centre pixel's own
+  (\S\ref{sec:roll}). A stencil of $S$ slots turns the model's input
+  from one 24-month embedding sequence into $S{+}1$ of them. Geometries
+  used: rings at a fixed radius, spirals (every point on its own
+  bearing), and \emph{sunflower} layouts --- golden-angle spirals with a
+  far-heavy radial ramp, at Fibonacci counts 34/55/89/144, reaching
+  111--4444\,km. A neighbour that falls on land or off-window is a
+  \emph{dead slot}, encoded as zero.
+\item[Forecast ratio] the one-step scoreboard of the stencil programme:
+  $\mathrm{MSE}_{\mathrm{model}}/\mathrm{MSE}_{\mathrm{pers}}$ for
+  $z_{t+1}$ prediction on held-out windows, in embedding space. Lower is
+  better; persistence sits at $1.0$ by construction and the measured
+  persistence MSE is $\approx$3.1 $z$-units$^2$. Reproduces to
+  $\pm0.002$ across seeds, so paired differences of $0.002$ are readable.
+\item[Corridor] the scored subset of the rolled evaluation: the fastest
+  quarter of the window's pixels by train-month mean current speed,
+  dilated two cells, plus the RAPID section --- 29{,}627 of 84{,}405
+  window pixels. It is where the AMOC's limbs live, and it is rendered
+  as a globe layer in the companion visualization.
+\item[Corridor AUC] the rolled scoreboard: initialize with true
+  embeddings, roll twelve months feeding predictions back, score
+  MSSS-vs-climatology over the corridor at each horizon, and average
+  over $h=1\ldots12$. Higher is better.
+\item[Gate head] a frozen reference head (\texttt{e017}, no neighbours)
+  re-evaluated at the start of every corridor evaluation; it must
+  reproduce its pinned AUC of $0.643$ to the third decimal or the
+  evaluation is void. Every number in \S\ref{sec:roll} passed this gate.
+\item[Capacity tiers] the three stage-2 sizes of \S\ref{sec:roll}, with
+  parameters measured from the checkpoints: \emph{base} $576\times8$
+  (34.1M at 56 slots), \emph{big} $768\times12$ (88.0M), \emph{xl}
+  $1024\times16$ (205.4M).
 \end{description}
 
 \section{Data}\label{sec:data}
@@ -1007,23 +1063,6 @@ throughout). The AMOC read-out on rolled embeddings, by contrast, dies
 after about a season --- transport forecasting at range remains open,
 consistent with its wind-driven monthly variance.
 
-\subsection{Stage-2 capacity and the training curves}
-
-\begin{figure}[t]
-\centering
-\begin{minipage}{.44\linewidth}
-\includegraphics[width=\linewidth]{fig_stage2.pdf}
-\end{minipage}\hfill
-\begin{minipage}{.52\linewidth}
-\includegraphics[width=\linewidth]{fig_train.pdf}
-\end{minipage}
-\caption{Left: stage-2 capacity sweep (both seeds shown per size) ---
-width$\times$depth buys real dynamics, still rising at 4M parameters;
-the steps-matched control (orange square) separates capacity from
-training length. Right: codec training curves across generations.}
-\label{fig:stage2}
-\end{figure}
-
 \subsection{Case study: the winter 2009--10 collapse}
 
 \begin{figure}[t]
@@ -1035,6 +1074,218 @@ reaches 59\% (not plotted; see Table~\ref{tab:master}). The November
 onset --- triggered inside a month --- stays invisible to monthly data.}
 \label{fig:dip}
 \end{figure}
+
+\section{The rolled forecast at scale}\label{sec:roll}
+
+Everything above probes what the representation \emph{contains}. This
+section --- the work of 13--16 August, and the reason for v6 --- is about
+what the temporal model can \emph{do} with it: predict the ocean's state
+forward, month over month, over the pixels that carry the overturning.
+The section's one-sentence summary: input geometry looked decisive and
+was a symptom; \textbf{capacity was the variable}, and it has not
+stopped paying at 205M parameters.
+
+\subsection{Spatial coupling: the stencil}\label{sec:stencil}
+
+The stage-2 model of \S\ref{sec:methods} predicts a pixel's next
+embedding from that pixel's own history --- an ocean of independent
+columns. Physically that is wrong in a specific way: anomalies
+\emph{advect}, and a month of Gulf Stream transport moves water hundreds
+of kilometres. The stencil gives the temporal model that information:
+alongside the centre pixel's 24-month embedding sequence it reads the
+sequences of $S$ neighbour pixels at fixed geographic offsets. Three
+geometry families were swept (rings at one radius; spirals, every point
+on its own bearing; and golden-angle \emph{sunflower} layouts with a
+far-heavy $\sqrt{\cdot}$ radial ramp at Fibonacci counts), with reach up
+to 4444\,km. Reach beyond 4444\,km was measured and \emph{refused}
+before any training: on this window it deletes live input (26.1 live
+corridor slots at $r_{\max}{=}4444$\,km for a 55-point sunflower, 19.7
+at 6666\,km), because the extra reach lands on land or off-window.
+
+Two scoreboards, defined in the glossary, are kept strictly apart ---
+the \term{forecast ratio} (one step ahead, against persistence,
+reproducible to $\pm0.002$ across seeds) and the \term{corridor AUC}
+(twelve months rolled, feeding predictions back, scored where the AMOC
+lives). The programme's founding observation (E-022, 13 August) was
+that they can \emph{disagree}: a change that improves the one-step
+forecast can worsen what compounds under iteration. Every evaluation
+runs behind the \term{gate head} discipline --- a frozen no-neighbour
+reference must reproduce its pinned corridor AUC of $0.643$ exactly
+before any new number is accepted; it has now done so on every
+evaluation in this section.
+
+\subsection{An inversion at base scale, and the audit that cleared the
+instrument}\label{sec:inversion}
+
+At the then-standard stage-2 size ($576\times8$, 34M parameters), a
+factorial over stencil geometries produced a clean and disturbing
+result: across eleven arms the one-step and rolled scoreboards were
+\emph{anti-correlated}. The widest, farthest-reaching stencils posted
+the best forecast ratios in the programme and rolled \emph{worse than
+the no-neighbour baseline}; the best rolled arm was a minimal ring of 8
+points at 222\,km whose one-step forecast was mediocre. The full
+base-scale table is preserved in Appendix~\ref{app:base}.
+
+Because an inversion of that shape could equally be a bug in the
+evaluator, it was audited before being believed
+(``investigate thoroughly and not hypothesize''). Six artifact classes
+were tested and eliminated on the archived evaluations alone, zero GPU
+spent: per-head scored-set differences (sample counts are identical to
+the pixel), broken rolled-input construction (at $h{=}1$ the roll
+consumes observed truth and reproduces the training ordering exactly),
+baseline choice (ordering invariant under climatology, persistence, and
+damped persistence), amplitude collapse (amplitude ratios do not track
+the inversion --- the far-reach heads predict confident, full-amplitude,
+increasingly \emph{wrong} patterns), horizon weighting (the top ranks
+are invariant), and boundary/dead-slot artifacts --- eliminated with the
+sharpest measurement of the audit: the rolled penalty \emph{rises} with
+the fraction of the stencil that is live ($r=+0.176$, monotone in
+quintiles), so pixels whose far stencils are fully over ocean pay most.
+An instrumented re-roll added channel structure: the penalty
+concentrates on the slow 300--700\,m heat and salt reservoir --- the
+AMOC-relevant fields --- while the same wide stencils \emph{keep} their
+advantage on fast wind-stress channels under iteration. The instrument
+was clean; the phenomenon lived in the model-under-iteration.
+
+\subsection{Capacity breaks the inversion}\label{sec:capacity}
+
+\begin{figure}[t]
+\centering\includegraphics[width=.98\linewidth]{fig_capacity.pdf}
+\caption{The capacity ladder at fixed input (sunflower-55, 60k steps),
+all seeds shown, parameters measured from the checkpoints. Left: the
+one-step forecast ratio. Right: the rolled corridor AUC, against the
+no-neighbour baseline (dotted) and the best base-scale geometry
+(dashed). The $576\times8$ tier is \emph{below} both reference lines ---
+that is the inversion of \S\ref{sec:inversion} --- and the same input
+geometry crosses both lines the moment the head is large enough.
+Neither panel shows saturation at 205M.}
+\label{fig:capacity}
+\end{figure}
+
+The resolving experiment was a $2\times2$ --- head size ($576\times8$ vs
+$768\times12$) $\times$ input width (34 vs 55 sunflower points), three
+seeds per cell, everything else frozen. On the forecast ratio the
+capacity main effect is $-0.029$ paired at every seed ($\sim$30$\times$
+the three-seed noise bar); the width effect is $-0.002$, same sign at
+every seed; and there is \emph{no interaction} --- width helps by the
+same small amount at both sizes. Capacity is worth three times the
+entire geometry axis of Appendix~\ref{app:base}.
+
+The decisive question was whether that gain \emph{rolls} --- a
+one-step gain that evaporated under iteration would have been exposure
+bias wearing a scaling law's clothes. It rolls: paired by seed, the
+$768\times12$ tier gains $\mathbf{+0.050}$ corridor AUC over
+$576\times8$ on the same 55-point sunflower ($+0.052$/$+0.048$), and
+the same geometry that rolled at $0.569$--$0.573$ (below the
+no-neighbour $0.589$) rolls at $0.621$--$0.622$ --- past the
+no-neighbour baseline \emph{and} past the base-scale champion's
+$0.604$. The E-026 inversion was a capacity-starvation artifact: a
+34M head fed $55\times64$-dimensional inputs learns a one-step mapping
+whose errors compound under iteration; an 88M head learns one whose
+errors do not. The channel fingerprint of the audit (slow subsurface
+pays, wind survives) is what that starved mapping looks like.
+
+One tier up ($1024\times16$, 205.4M, same input, same steps), both
+scoreboards improve again: forecast ratio $0.1295$--$0.1331$ (the
+project's best), corridor AUC $\mathbf{0.664}$/$0.663$/$0.664$ ---
+$+0.042$ over the 88M tier, $+0.075$ over the no-neighbour baseline,
+with a seed spread of $0.001$ against the forecast axis's $0.004$: at
+this capacity the rolled skill is essentially deterministic given the
+data. Fig.~\ref{fig:capacity} shows the ladder. No saturation is
+visible on either axis through 205M parameters.
+
+\subsection{The other axes: width and step budget}\label{sec:axes}
+
+\begin{figure}[t]
+\centering\includegraphics[width=.98\linewidth]{fig_axes.pdf}
+\caption{Left: input width at the 88M tier --- the forecast ratio
+improves by $\approx0.002$ per Fibonacci rung and has not saturated at
+89 points. Right: step budget at 89 points --- the first 60k-step
+extension buys $-0.0072$ paired, the second (80k steps) only
+$-0.0016$; the trajectory is bending toward $\approx$0.135, and the
+205M tier at 60k steps (grey band) remains out of reach of the 88M
+tier at any step budget measured.}
+\label{fig:axes}
+\end{figure}
+
+With capacity established as the first-order variable, the remaining
+axes were measured against it (Fig.~\ref{fig:axes}). \textbf{Width}:
+at the 88M tier, sunflower inputs of 34, 55, and 89 points give
+forecast ratios of $0.1498 \to 0.1476 \to 0.1453$ (means of three
+seeds; paired per rung $\approx-0.002$, same sign at every seed) ---
+small, consistent, unsaturated. \textbf{Step budget}: extending the
+89-point arms from 60k to 120k to 200k steps under a horizon-free
+exponential-decay schedule traces $0.1449 \to 0.1377 \to 0.1361$
+(two-seed means), i.e.\ a per-step value that falls $\sim$6$\times$
+between the first extension and the second. The comparison that
+matters: the 88M/89-point model at its \emph{full} 200k budget
+($0.1355$--$0.1366$) still does not reach the 205M model at 60k
+($0.1295$--$0.1331$). At this scale, \emph{parameters beat steps},
+which is the same verdict the corridor gave. Runs combining the widest
+inputs with the largest head (89 and 144 points at $1024\times16$,
+200k steps) are in flight at the time of writing, as are the rolled
+corridor evaluations of the width and step-budget arms.
+
+\subsection{Exposure bias: two mechanisms under test}\label{sec:exposure}
+
+The audit's finding --- errors that compound under iteration ---
+suggests the classic exposure-bias remedies, and two are under test.
+\emph{Input-noise training} adds Gaussian noise to the input embeddings
+at the model's own measured one-step error scale ($\sigma=0.7$
+$z$-units), so training-time context statistically resembles roll-time
+context; as predicted it \emph{costs} one-step forecast ($0.1548$/
+$0.1539$ vs.\ the clean tier's $0.1476$), and whether it buys the roll
+is being evaluated now. \emph{One-hop wide unroll} exploits a
+dependency-cone observation: to train through one step of self-generated
+context at stencil width $S$, one does not need to roll the whole
+ocean --- only the $S$ input pixels of the next step, each of which is
+exactly a depth-1 prediction from its own observed window. This is
+implemented (detached depth-1 forwards over the slot pixels, an
+assembled $t{+}1$ window, a differentiable second step against
+$Z_{t+2}$ at half weight) and verified by alignment tests; its first
+two arms were stopped mid-run by an operator decision after the
+measured step cost came in at $8.5\times$ the clean model
+(gather-dominated), and the checkpoint state is preserved for a
+decision on resumption. Neither mechanism has yet produced a rolled
+verdict; both are falsifiable against the clean 88M tier's corridor
+AUC of $0.6213$.
+
+\subsection{Standings}\label{sec:standings}
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{llrrcc}
+\toprule
+arm & tier & params & input pts & forecast ratio & corridor AUC \\
+\midrule
+xl55 (60k) & $1024\times16$ & 205.4M & 55 & \textbf{0.1295--0.1331} & \textbf{0.6637} \\
+sun89 (200k) & $768\times12$ & 89.7M & 89 & 0.1355--0.1366 & in flight \\
+sun89 (120k) & $768\times12$ & 89.7M & 89 & 0.1369--0.1384 & --- \\
+sun89 (60k) & $768\times12$ & 89.7M & 89 & 0.1442--0.1462 & in flight \\
+big55 (60k) & $768\times12$ & 88.0M & 55 & 0.1456--0.1500 & 0.6213 \\
+big34 (60k) & $768\times12$ & 86.9M & 34 & 0.1483--0.1519 & 0.6237 \\
+big-ring222 (60k) & $768\times12$ & --- & 8 & 0.1509--0.1557 & in flight \\
+znoise-55 (60k) & $768\times12$ & 88.0M & 55 & 0.1539--0.1548 & in flight \\
+base55 (60k) & $576\times8$ & 34.1M & 55 & 0.1738--0.1786 & 0.5710 \\
+ring-8@222 (base) & $576\times8$ & --- & 8 & 0.1848 & 0.6043 \\
+no neighbours (gate) & $576\times8$ & --- & 0 & --- & 0.5890 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Stage-2 standings, both scoreboards}, 16 August 2026.
+Forecast ratio ranges are seed min--max; corridor AUC is the seed mean,
+every value behind a passed gate. ``In flight'' marks evaluations
+running at the time of writing. The two scoreboards now \emph{agree} at
+adequate capacity --- the anti-correlation of Appendix~\ref{app:base}
+is confined to the 34M tier.}
+\label{tab:standings}
+\end{table}
+
+Table~\ref{tab:standings} is the current state of the programme. Three
+regularities: capacity dominates both scoreboards; width and steps are
+real but secondary on the forecast axis; and every mechanism arm
+(geometry, noise, unroll) so far matters less than making the head
+bigger. The obvious open question --- where the capacity curve bends
+--- is the programme's next experiment; nothing measured yet bounds it.
 
 \section{The static-channel lesson}\label{sec:static}
 
@@ -1079,6 +1330,19 @@ a miss rather than a lie. We report the affected numbers as withdrawn
 rather than regenerating them, because both codecs belong to the
 superseded coarse tensor.
 
+For the rolled-forecast programme of \S\ref{sec:roll}, four things are
+open at the time of writing, all mechanical rather than conceptual: the
+rolled corridor evaluations of the width, step-budget, and
+exposure-bias arms are in flight (their forecast-axis numbers are
+final); the widest-input $\times$ largest-head runs (89 and 144 points
+at 205M, 200k steps) land within hours; the one-hop unroll arms await a
+resume decision; and the capacity ladder has no measured top --- every
+tier so far improved both scoreboards, and the next tier is the
+programme's standing next experiment. The corridor AUC itself carries
+one structural caveat: it scores the model's own input fields rolled
+forward, not transport --- the bridge from rolled field skill to
+transport skill at range is the same open problem as (6) below.
+
 The training-time ceiling has now been located directly: a
 1,000,000-step run at pilot size (LR decayed to a constant 10\% floor by
 50k steps, probes every 50k) completed in 2.6\,h on one RTX~4090 and is
@@ -1099,6 +1363,86 @@ the GLORYS-derived channels ($16\times$ the pixels), (c) doubling the
 Argo pressure levels --- with the Chinchilla arithmetic redone and the
 codec re-sized at each rung; and label-efficiency curves over the 792
 non-RAPID truth months.
+
+\appendix
+
+\section{Base-scale results superseded by capacity}\label{app:base}
+
+Everything in this appendix was measured at the $576\times8$ (34M)
+stage-2 tier, and \S\ref{sec:capacity} showed that tier to be
+capacity-starved for wide inputs: the geometry ranking below is a
+property of a too-small head, not of the ocean. It is preserved because
+the numbers are real, the discipline that produced them (pre-registered
+hypotheses, paired seeds, gate reproduction) is the same as the main
+text's, and because a ranking this clean that \emph{dissolved} under one
+scaling step is itself a finding worth keeping in view.
+
+\subsection{The geometry factorial at 34M}
+
+Eleven stencil arrangements, three seeds each where completed, rolled
+corridor AUC (every evaluation gate-passed):
+
+\begin{center}\small
+\begin{tabular}{llrrr}
+\toprule
+stencil & pts & reach km & AUC mean & vs champion \\
+\midrule
+\textbf{ring-8 @222} & 8 & 222 & \textbf{0.6043} & 0 \\
+spiral-8 & 8 & 890 & 0.5883 & $-0.016$ \\
+no neighbours & 0 & 0 & 0.5890 & $-0.015$ \\
+three rings narrow & 12 & 1000 & 0.589 & $-0.015$ \\
+spiral-13 & 13 & 1000 & 0.5863 & $-0.018$ \\
+two rings 8+8 & 16 & 555 & 0.5857 & $-0.019$ \\
+three rings wide & 24 & 1000 & 0.5813 & $-0.023$ \\
+spiral-24 & 24 & 4444 & 0.578 & $-0.026$ \\
+elliptic-24 & 24 & 4444 & 0.568 & $-0.036$ \\
+spiral-34 & 34 & 4444 & 0.566 & $-0.038$ \\
+ring-16 @222 ($n{=}1$) & 16 & 222 & 0.564 & $-0.040$ \\
+sunflower-34 & 34 & 4444 & 0.553 & $-0.051$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The ranking is monotone in slot count within the spiral family
+($8\to13\to24\to34$ gives $0.588\to0.586\to0.578\to0.566$), and two
+isolations pin the axes: doubling points at fixed 222\,km radius costs
+$-0.044$; widening reach at fixed 8 points costs $-0.016$. Meanwhile the
+\emph{forecast} ordering of the same arms ran the other way --- the
+sunflower and deep-spiral arms were the best one-step models in the
+programme at the time. That anti-correlation, audited clean in
+\S\ref{sec:inversion}, is what \S\ref{sec:capacity} resolved: at 88M and
+205M the wide sunflower geometry wins \emph{both} scoreboards, and the
+production-geometry question was re-opened at scale rather than settled
+by this table. The base-scale champion's ring-8@222 configuration is
+itself being re-evaluated at the 88M tier at the time of writing.
+
+\subsection{Early stage-2 capacity sweep and codec training curves}
+
+\begin{figure}[h]
+\centering
+\begin{minipage}{.44\linewidth}
+\includegraphics[width=\linewidth]{fig_stage2.pdf}
+\end{minipage}\hfill
+\begin{minipage}{.52\linewidth}
+\includegraphics[width=\linewidth]{fig_train.pdf}
+\end{minipage}
+\caption{Left: the original stage-2 capacity sweep (0.11--4M
+parameters, 12-channel coarse tensor, no stencil) --- the first sign,
+in retrospect, that stage-2 capacity was the binding axis; it was still
+rising at its top end. Right: codec training curves across
+generations.}
+\label{fig:stage2}
+\end{figure}
+
+The original stage-2 capacity sweep (Fig.~\ref{fig:stage2}, left) was
+run on the coarse tensor at 0.11--4M parameters and read, at the time,
+as ``capacity buys dynamics.'' It deserved more weight than it got: an
+early experiment at one slot and small $K$ (``E-010'') found stage-2
+skill insensitive to capacity and closed the axis; that negative was
+real \emph{in its regime} (a 1-slot input barely exercises a large
+head) and wrong outside it, and re-opening the axis at $K{=}24\times55$
+slots is what produced \S\ref{sec:capacity}. A settled negative is
+settled only in the regime that settled it.
 
 \begin{thebibliography}{9}\small
 \bibitem{fw2015} E. Frajka-Williams (2015). Estimating the Atlantic
@@ -1186,6 +1530,13 @@ generated by scripts in \texttt{ml/} of
 \href{https://github.com/blauewelt/earth}{github.com/blauewelt/earth}
 (see \texttt{ml/FINDINGS.md} \S8); the master table by
 \texttt{ml/make\_table.py}; figures by \texttt{ml/paper/make\_figs.py}.
+The stage-2 experiments of \S\ref{sec:roll} are logged
+hypothesis-first in \texttt{ml/EXPERIMENTS.md} (entries E-022 through
+E-032); every corridor evaluation's full per-horizon, per-channel
+output is archived on the repository's \texttt{ml-metrics} branch
+(\texttt{probes-\textless run\textgreater.json}), and every head named
+in Table~\ref{tab:standings} is published as a release asset and can be
+re-evaluated without a GPU (\texttt{docs/INFRASTRUCTURE.md}).
 Raw source data is mirrored in the repository's \texttt{data-cache-v1}
 release (RG Argo, cite Roemmich \& Gilson 2009; NCEP R1, public
 domain); a DOI-carrying archive (Zenodo) is planned once the in-flight
