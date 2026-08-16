@@ -1,10 +1,10 @@
 {
- "at": "2026-08-15T23:36:55.255Z",
- "credit_usd": 21.88,
+ "at": "2026-08-16T05:38:06.728Z",
+ "credit_usd": 13.76,
  "balance_usd": 0,
  "boxes_total": 11,
- "boxes_running": 7,
- "burn_usd_per_h": 1.925,
+ "boxes_running": 6,
+ "burn_usd_per_h": 1.6306,
  "boxes": [
   {
    "id": 47487801,
@@ -17,7 +17,7 @@
    "id": 47717160,
    "status": "running",
    "dph": 0.2678,
-   "disk_used_gb": 41,
+   "disk_used_gb": 42,
    "disk_gb": 100
   },
   {
@@ -31,12 +31,12 @@
    "id": 47718224,
    "status": "running",
    "dph": 0.2551,
-   "disk_used_gb": 43,
+   "disk_used_gb": 44,
    "disk_gb": 100
   },
   {
    "id": 47718230,
-   "status": "running",
+   "status": "exited",
    "dph": 0.2944,
    "disk_used_gb": 54,
    "disk_gb": 100
@@ -45,14 +45,14 @@
    "id": 47720655,
    "status": "running",
    "dph": 0.2551,
-   "disk_used_gb": 51,
+   "disk_used_gb": 52,
    "disk_gb": 100
   },
   {
    "id": 47720660,
    "status": "running",
    "dph": 0.2878,
-   "disk_used_gb": 42,
+   "disk_used_gb": 43,
    "disk_gb": 100
   },
   {
