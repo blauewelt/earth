@@ -1,6 +1,17 @@
 # Where the artifacts live — off-GitHub archive plan
 
-**Status: decided, awaiting two accounts.** Chris, 2026-08-16: *"We also need
+**Status: HUGGING FACE IS LIVE (2026-08-16) — 11 crown-jewel checkpoints
+mirrored and restore-verified at
+<https://huggingface.co/chfrank/earth-checkpoints>. Zenodo still awaiting an
+account.**
+
+**Namespace note, because it cost a 403:** the Hub account is the USER
+`chfrank`. `blauewelt` is the GitHub org and does not exist on Hugging Face,
+so `create_repo` under it returns *"You don't have the rights to create a
+model under the namespace"*. `ml/hf_mirror.py` now resolves the namespace
+from `whoami()` rather than hardcoding it.
+
+ Chris, 2026-08-16: *"We also need
 a backup strategy that is not github. You proposed some research-centric
 services (archiv related?). Let's get that started."*
 
@@ -95,18 +106,35 @@ or rate limits become the constraint — E-033 §5 has the arithmetic.
 
 ---
 
-## 5 · What happens once the tokens exist
+## 5 · Status
 
-1. Exercise the whole path against **Zenodo sandbox** and a throwaway HF repo.
-2. Mirror the crown jewels first: the xl89/xl144 200k heads, the xl55 tier,
-   the 41M codec, and the family-3 tensor.
-3. Verify by **downloading back and checking sha256 against the manifest** —
-   an upload that reports success is not evidence the bytes are retrievable
-   (ml/CLAUDE.md §0.2), and this is a backup, so the restore path is the
-   only part that matters.
-4. Only then prune GitHub further, and retire the 2 GiB split machinery.
-5. At paper submission: one Zenodo record with the tensor, the final
-   checkpoints and the code snapshot; put the DOI in the paper.
+**Done (2026-08-16).** `ml/hf_mirror.py` mirrors from the GitHub release to
+the Hub, one file at a time through a scratch path (the sandbox had 8.7 GB
+free against 0.8–2.5 GB assets), and **verifies every file by downloading it
+back and comparing sha256** before counting it. 11 files / 8.84 GB:
+
+| what | files |
+|---|---|
+| xl89 200k — the project best | `e031xl_u1_s0/s1` |
+| xl144 200k | `e032xl_u1_s0/s1` |
+| xl55 — the roll-champion tier | `e028xl55_u1_s0/s1/s2` |
+| sun89 200k | `e029dsun89x200_u1_s1/s2` |
+| the frozen codec everything rides | `f3_anchor41M__pixelmae.pt` |
+| the validation gate head | `e017_u1_s0__temporal.pt` |
+
+Every one restored byte-identical. That is the whole point: an upload that
+returns 200 is not evidence the bytes come back.
+
+**Next, in order.**
+
+1. Mirror the family-3 tensor (10.9 GB, chunked on `data-cache-v1`) — it is
+   the input every published number was computed from.
+2. Mirror the remaining heads and milestone rungs (the rest of the 136 GB).
+3. Only THEN prune GitHub further, and retire the 2 GiB split machinery —
+   the splits exist solely to work around a cap Hugging Face does not have.
+4. Zenodo, once the account exists: one record at paper time with the
+   tensor, the final checkpoints and a code snapshot, and its DOI in the
+   paper's Data Availability section.
 
 ---
 
