@@ -3333,6 +3333,11 @@ test("one hanging source cannot stop the pixel card from rendering", async ({ pa
   // A handler that never fulfils, continues OR aborts — the connection just
   // stays open. (A handler that merely returns lets Playwright fail the
   // request immediately, which is a different, much kinder failure.)
+  // The MIRROR beforeEach already routes this host to the local proxy, and a
+  // handler added on top of it is not reliably the one that answers — with the
+  // proxy in play the request FAILS FAST instead of hanging, which is the
+  // opposite of the case under test. Drop that route first.
+  await page.unroute(/https:\/\/climate-api\.open-meteo\.com\/.*/);
   await page.route(/https:\/\/climate-api\.open-meteo\.com\/.*/,
     () => new Promise(() => {}));
   // fire and forget: showPixelState only resolves once it has given up on the
@@ -3341,8 +3346,10 @@ test("one hanging source cannot stop the pixel card from rendering", async ({ pa
     window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(8.54, 47.37));
   });
   const card = page.locator("#pixel-card");
-  // it renders, and with the sections that DID answer
-  await expect(card).toContainText("Air temperature", { timeout: 60000 });
+  // it renders, and with the sections that DID answer. Generous: the deadline
+  // is wall-clock, and on the sandbox's software-GL render loop a 15 s timer
+  // measured 20-25 s — starved timers, not a slow card.
+  await expect(card).toContainText("Air temperature", { timeout: 120000 });
   await expect(card).toContainText("Heat load");
   // the CMIP6 outlook is the section the dead host feeds — absent, and named
   // as still outstanding, because at this moment the app genuinely cannot tell
@@ -3361,7 +3368,11 @@ test("a slow source is only late, not lost — the card redraws when it lands", 
   const deadline = await page.evaluate(() => window.__earth.PIXEL_DEADLINE_MS);
   expect(deadline).toBeGreaterThan(0);
   await page.route(/ocean_column\.json/, async (route) => {
-    await new Promise((r) => setTimeout(r, deadline + 5000));   // late, but it arrives
+    // Comfortably past the deadline: the draw is fired by a wall-clock timer,
+    // and on the sandbox's starved render loop a 15 s timer has been measured
+    // firing at 20-25 s. A margin under that drift would let the "straggler"
+    // arrive before the first draw, and the test would prove nothing.
+    await new Promise((r) => setTimeout(r, deadline + 20000));   // late, but it arrives
     await route.continue();
   });
   // Fire and FORGET — showPixelState resolves only after its second pass, so
@@ -3384,7 +3395,7 @@ test("a straggler cannot redraw the card under a newer point", async ({ page }) 
   test.setTimeout(240000);
   const deadline = await page.evaluate(() => window.__earth.PIXEL_DEADLINE_MS);
   await page.route(/ocean_column\.json/, async (route) => {
-    await new Promise((r) => setTimeout(r, deadline + 5000));
+    await new Promise((r) => setTimeout(r, deadline + 20000));
     await route.continue();
   });
   await page.evaluate(() => {
@@ -3398,7 +3409,7 @@ test("a straggler cannot redraw the card under a newer point", async ({ page }) 
   });
   await expect(card).toContainText("47.37\u00b0N 8.54\u00b0E", { timeout: 90000 });
   // long enough for A's second pass to have fired
-  await page.waitForTimeout(deadline + 10000);
+  await page.waitForTimeout(deadline + 30000);
   await expect(card).toContainText("47.37\u00b0N 8.54\u00b0E");
   await expect(card).not.toContainText("40.00\u00b0N 30.00\u00b0W");
   // and B's own content, not A's ocean rows, is what's in the body
