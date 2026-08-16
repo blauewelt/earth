@@ -469,11 +469,17 @@ def smooth(vals, k=18, min_valid=12):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--x", required=True)
+    ap.add_argument("--x", default="",
+                    help="the tensor memmap; not needed for --dump-truth")
     ap.add_argument("--npz-small", required=True)
     ap.add_argument("--z", help="Z cache .npy (f16 [T,P,dz])")
     ap.add_argument("--ckpt", required=True)
     ap.add_argument("--heads", nargs="+")
+    ap.add_argument("--dump-truth", default="",
+                    help="write the deseasonalised RAPID series to this path "
+                         "and exit — the plotting scripts' truth source, so "
+                         "the climatology rule has exactly one implementation. "
+                         "Needs only --npz-small and --ckpt.")
     ap.add_argument("--out", help="rollout_spatial.json (not needed with "
                                   "--export-mask-only)")
     ap.add_argument("--export-mask",
@@ -524,10 +530,12 @@ def main():
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
+    if a.export_mask_only and not a.x:
+        sys.exit("--export-mask-only needs --x")
     if a.export_mask_only and not a.export_mask:
         sys.exit("--export-mask-only needs --export-mask <path>")
-    if not a.export_mask_only:
-        missing = [f"--{k}" for k in ("z", "heads", "out")
+    if not a.export_mask_only and not a.dump_truth:
+        missing = [f"--{k}" for k in ("x", "z", "heads", "out")
                    if not getattr(a, k)]
         if missing:
             sys.exit(f"missing {', '.join(missing)} (required unless "
@@ -535,7 +543,8 @@ def main():
     # gate discipline up front, where it has cost nothing (ml/CLAUDE.md §0.3)
     gate_paths = [h for h in (a.heads or [])
                   if GATE_HEAD in os.path.basename(h)]
-    if not gate_paths and not a.no_gate and not a.export_mask_only:
+    if not gate_paths and not a.no_gate and not a.export_mask_only \
+            and not a.dump_truth:
         sys.exit(f"no {GATE_HEAD} head among --heads and --no-gate not set: "
                  f"the validation gate (plan §6.5) is what makes any spatial "
                  f"number here believable — add the gate head or pass "
@@ -556,6 +565,36 @@ def main():
     t_hold = np.array([m[:4] in set(hold_years) for m in months])
     lo, hi = (float(v) for v in ck["args"]["holdout_lon"].split(","))
     x_hold = (lons >= lo) & (lons < hi)
+
+    if a.dump_truth:
+        # The deseasonalised RAPID series, written by THE EVALUATOR that
+        # defines it. `ml/plot_amoc_roll.py` needs the same truth the rolls
+        # are scored against, and the alternative — re-deseasonalising in the
+        # plot script — would be a second copy of the rule (train-month
+        # climatology, holdout years excluded from the mean), which is the
+        # defect that put a cosine on the status page's continuation charts.
+        # Needs no GPU, no Z and no heads, so it runs in seconds anywhere the
+        # small npz and a codec checkpoint exist.
+        rp = d["rapid"]
+        ri = rp[:, 0].astype(int)
+        rv_ = rp[:, 1].copy()
+        rmoy_ = moy[ri]
+        tr_ = ~t_hold[ri]
+        rclim_ = np.array([rv_[tr_ & (rmoy_ == m)].mean() for m in range(12)])
+        des = rv_ - rclim_[rmoy_]
+        os.makedirs(os.path.dirname(a.dump_truth) or ".", exist_ok=True)
+        with open(a.dump_truth, "w") as fh:
+            json.dump({"ym": [months[i] for i in ri],
+                       "sv_des": [round(float(v), 4) for v in des],
+                       "trained": [bool(v) for v in tr_],
+                       "hold_years": hold_years,
+                       "clim_note": "deseasonalised with the TRAIN-month "
+                                    "climatology (holdout years excluded from "
+                                    "the monthly means), the same rule the "
+                                    "rolls are scored against"}, fh)
+        print(f"wrote {a.dump_truth}: {len(des)} RAPID months, "
+              f"holdout {','.join(hold_years)}")
+        return
 
     Xm = np.load(a.x, mmap_mode="r")
     Hg, Wg = Xm.shape[1], Xm.shape[2]
