@@ -3321,6 +3321,90 @@ test("the pixel card reports heat load on a body, not just air temperature", asy
   expect(Number(trop[1])).toBeLessThanOrEqual(7);
 });
 
+test("one hanging source cannot stop the pixel card from rendering", async ({ page }) => {
+  // Reported 2026-08-16: "the load all data / inspect all data mode is no
+  // longer working". Measured against the live site: one climate-api request
+  // stayed open for a full minute, and because the card awaits every source
+  // before it draws anything, the inspector sat on "Reading this point…" the
+  // whole time. fetch() has no timeout, so a connection that never settles
+  // used to mean a card that never appears — indistinguishable, from the
+  // outside, from a broken app.
+  test.setTimeout(240000);
+  // A handler that never fulfils, continues OR aborts — the connection just
+  // stays open. (A handler that merely returns lets Playwright fail the
+  // request immediately, which is a different, much kinder failure.)
+  await page.route(/https:\/\/climate-api\.open-meteo\.com\/.*/,
+    () => new Promise(() => {}));
+  // fire and forget: showPixelState only resolves once it has given up on the
+  // dead host, and the point is what the card shows long before then
+  await page.evaluate(() => {
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(8.54, 47.37));
+  });
+  const card = page.locator("#pixel-card");
+  // it renders, and with the sections that DID answer
+  await expect(card).toContainText("Air temperature", { timeout: 60000 });
+  await expect(card).toContainText("Heat load");
+  // the CMIP6 outlook is the section the dead host feeds — absent, and named
+  // as still outstanding, because at this moment the app genuinely cannot tell
+  // "slow" from "never"
+  await expect(card).not.toContainText("Projected change");
+  await expect(card).toContainText("Still waiting on climate outlook");
+});
+
+test("a slow source is only late, not lost — the card redraws when it lands", async ({ page }) => {
+  // The other half of the deadline: a source that is merely slow must not cost
+  // its section. The card draws at the deadline with what it has, then redraws
+  // complete — so "slow" costs a redraw, never data. Delayed on a baked file
+  // rather than a weather host, because those carry no timeout of their own and
+  // are therefore the sources that can genuinely still be in flight.
+  test.setTimeout(240000);
+  const deadline = await page.evaluate(() => window.__earth.PIXEL_DEADLINE_MS);
+  expect(deadline).toBeGreaterThan(0);
+  await page.route(/ocean_column\.json/, async (route) => {
+    await new Promise((r) => setTimeout(r, deadline + 5000));   // late, but it arrives
+    await route.continue();
+  });
+  // Fire and FORGET — showPixelState resolves only after its second pass, so
+  // awaiting it here would skip past the very state under test. The assertions
+  // below watch the card the way the user does: incomplete, then filled in.
+  await page.evaluate(() => {
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(-30, 40));
+  });
+  const card = page.locator("#pixel-card");
+  // first pass: drawn without it, and honest about why
+  await expect(card).toContainText("Still waiting on ocean column", { timeout: 90000 });
+  // second pass: the straggler lands, its section appears, the notice is gone
+  await expect(card).toContainText("Ocean column", { timeout: 90000 });
+  await expect(card).not.toContainText("Still waiting on");
+});
+
+test("a straggler cannot redraw the card under a newer point", async ({ page }) => {
+  // The second pass makes this reachable: tap A, tap B while A's slow source is
+  // still out, and A's late data would arrive to find the card headed "B".
+  test.setTimeout(240000);
+  const deadline = await page.evaluate(() => window.__earth.PIXEL_DEADLINE_MS);
+  await page.route(/ocean_column\.json/, async (route) => {
+    await new Promise((r) => setTimeout(r, deadline + 5000));
+    await route.continue();
+  });
+  await page.evaluate(() => {
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(-30, 40));   // A, ocean
+  });
+  const card = page.locator("#pixel-card");
+  await expect(card).toContainText("40.00\u00b0N 30.00\u00b0W", { timeout: 90000 });
+  // B, before A's straggler lands
+  await page.evaluate(() => {
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(8.54, 47.37));
+  });
+  await expect(card).toContainText("47.37\u00b0N 8.54\u00b0E", { timeout: 90000 });
+  // long enough for A's second pass to have fired
+  await page.waitForTimeout(deadline + 10000);
+  await expect(card).toContainText("47.37\u00b0N 8.54\u00b0E");
+  await expect(card).not.toContainText("40.00\u00b0N 30.00\u00b0W");
+  // and B's own content, not A's ocean rows, is what's in the body
+  await expect(card).toContainText("Heat load");
+});
+
 test("searching a place points the tide dashboard at it, by name", async ({ page }) => {
   // Reported 2026-08-07: "if I search for a place, the left panel should show
   // data for that place (without clicking on the globe)" — and should say

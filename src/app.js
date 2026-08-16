@@ -3075,6 +3075,14 @@ function getValueLut(url) {
 }
 
 function fmtVal(v) {
+  // A missing number prints as a dash, it does not throw. Every read-out in
+  // the app funnels through here, and the pixel card builds its entire body in
+  // one pass — so one null field in one upstream response used to take down
+  // the whole card, which then sat on "Reading this point…" forever. Formatting
+  // is the wrong layer to enforce presence: a caller that cares whether a value
+  // exists checks before it asks for a string.
+  if (v == null || !Number.isFinite(Number(v))) return "–";
+  v = Number(v);
   const a = Math.abs(v);
   return a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2);
 }
@@ -4986,6 +4994,13 @@ window.__runProbe = runProbe; // for tests
  * GIBS + GBIF" rule (see CLAUDE.md §3): key-free, CORS-open, and hit only by
  * an explicit click for a single point — never tile streaming. */
 
+/* How long the card will wait for any ONE of its ~twenty sources before it
+ * renders without that source. Sized off the measured live distribution (the
+ * slowest healthy response in a full card load was 1.5 s, the largest baked
+ * file 4.2 MB) with room for a phone on mobile data — generous enough that a
+ * working source is never cut off, short enough that a dead one doesn't decide
+ * whether the inspector opens. */
+const PIXEL_DEADLINE_MS = 15000;
 const PIXEL_RASTERS = ["sst", "sst-anom", "ssh-anom", "precip", "seaice", "snow", "aod", "lst",
   "soilmoisture", "ndvi", "grace", "ceres", "chlor", "salinity", "dist-alert"];
 const PIXEL_GRIDS = ["oisst", "gpcp", "eobs", "meteoswiss", "tides"];
@@ -5056,15 +5071,33 @@ function pixelJson(file) {
  * (Open-Meteo counts per IP across its whole family) into a self-inflicted
  * one. 429/5xx and network errors retry; a 400 is our own bad URL and never
  * will succeed, so it doesn't. */
+/* A REQUEST THAT NEVER SETTLES IS THE WORST FAILURE MODE HERE, so every
+ * attempt carries its own deadline. `fetch()` has no timeout — measured
+ * against the live site 2026-08-16, one climate-api call sat open for a full
+ * minute and, because the card awaits Promise.all before it renders anything,
+ * the whole inspector showed "Reading this point…" for 64 s. A phone user
+ * reads that as "the app is broken", and correctly so. The retry above only
+ * made it worse: with no deadline there is nothing to retry FROM.
+ * The timeout is DELIBERATELY GENEROUS, and that is not a contradiction: it
+ * is a stop on hanging, not a service-level target. Timed through the proxy,
+ * three consecutive climate-api calls took 1.0 s, 23 s, and never — the same
+ * query, minutes apart. Cutting the 23 s one off would throw away a good
+ * answer to save time the card no longer spends waiting anyway, because
+ * PIXEL_DEADLINE_MS already renders without it and the redraw collects it
+ * when it lands. So: short deadline to DRAW, long timeout to GIVE UP. */
+const OM_TIMEOUT_MS = 45000;
 function omGet(url, tries = 2) {
-  return fetch(url).then((r) => {
+  // AbortSignal.timeout is not in older Safari; the controller form is.
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), OM_TIMEOUT_MS);
+  return fetch(url, { signal: ctl.signal }).then((r) => {
     if (r.ok) return r.json();
     if (tries > 1 && (r.status === 429 || r.status >= 500)) throw new Error(r.status);
     return null;
-  }).catch((e) => {
+  }).catch(() => {
     if (tries <= 1) return null;
     return new Promise((res) => setTimeout(res, 700)).then(() => omGet(url, tries - 1));
-  });
+  }).finally(() => clearTimeout(timer));
 }
 function omLL(lon, lat) {
   return `latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}`;
@@ -5204,6 +5237,11 @@ function columnProfileSvg(col) {
 }
 
 const pixelCardEl = document.getElementById("pixel-card");
+/* Which point the card is currently about. The card draws twice when a source
+ * is slow, so a tap on a NEW point can land between the two — and the old
+ * point's straggler would then redraw its data under the new point's heading.
+ * Every draw checks it still owns the card. */
+let pixelCardSeq = 0;
 /* Third argument is the row's own observation time (a whenAt() object), because
  * a section-wide heading cannot tell the truth here: gibsTime() clamps and snaps
  * PER LAYER, so rows sitting side by side under one heading are routinely years
@@ -5216,6 +5254,7 @@ function pixelRow(label, value, when = null) {
 }
 
 async function showPixelState(carto) {
+  const myTurn = ++pixelCardSeq;
   const lon = Cesium.Math.toDegrees(carto.longitude);
   const lat = Cesium.Math.toDegrees(carto.latitude);
   const coord = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"} ` +
@@ -5262,366 +5301,445 @@ async function showPixelState(carto) {
   // Everything in parallel; the card renders once, complete.
   const rasterCfgs = PIXEL_RASTERS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
   const gridCfgs = PIXEL_GRIDS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
-  const [rasters, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid] = await Promise.all([
-    Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null))),
+  /* THE CARD MUST RENDER, AND NOTHING IS THROWN AWAY. It composes about twenty
+   * sources and used to show nothing until every one of them answered, so the
+   * slowest single source decided whether the inspector worked at all — and a
+   * stalled connection has no slowest, it simply never returns. That is what
+   * was reported on 2026-08-16 ("load all data is no longer working"):
+   * measured against the live site, one climate-api call hung and the card sat
+   * on "Reading this point…" for 64 s.
+   *
+   * So the card draws TWICE when it has to. At PIXEL_DEADLINE_MS it draws with
+   * whatever has arrived, naming the sources that haven't (a section that
+   * vanishes silently cannot be told from one that was never built); when the
+   * stragglers land it redraws complete. Slow now costs a redraw, not a
+   * section — only never-arriving costs the section. The promises are shared
+   * between the two passes, so the second draw re-requests nothing: it would
+   * otherwise double our Open-Meteo burst, which is rate-limited per IP across
+   * the whole family. */
+  const jobs = [
+    ["satellite fields",
+      Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null)))],
     // {g, v}, not just v: the grid carries its own observation period/month, and
     // the row prints that — so the value and its date come from the same object.
-    Promise.all(gridCfgs.map((cfg) => loadGridMonth(cfg)
-      .then((g) => (g ? { g, v: sampleGrid(g, lon, lat) } : null)).catch(() => null))),
-    fetchOpenMeteo(lon, lat),
-    fetchAirQuality(lon, lat),
-    fetchRiver(lon, lat),
-    fetchMarine(lon, lat),
-    fetchClimateWindow(lon, lat, ...CLIM_BASE_WIN),
-    fetchClimateWindow(lon, lat, ...CLIM_FUT_WIN),
-    pixelJson("data/ocean_column.json"),
-    pixelJson("data/ocean_surface.json"),
-    pixelJson("data/stations.geojson"),
-    pixelJson("data/climatetrace.json"),
-    pixelJson("data/argo.json"),
-    // In the batch, not after it: the card renders once, complete, and must
-    // never serialise a round-trip. Packed, so ~0.8 MB and cached thereafter.
-    loadGrid(GIBS_LAYERS.find((l) => l.id === "drivers")).catch(() => null),
-  ]);
-  if (pixelCardEl.classList.contains("hidden")) return;   // closed while loading
-
-  const sec = [];
-
-  /* -- live weather now + the near future (the prediction axis) ------------ */
-  if (meteo?.current) {
-    const c = meteo.current;
-    // Open-Meteo stamps its own current block; "live" in the heading was never
-    // quite true — the model step behind it can be up to an hour old.
-    const OFF = meteo.utc_offset_seconds || 0;
-    const wNow = whenAt("instant", omUTC(c.time, OFF));
-    let rows = pixelRow("Air temperature", `${fmtVal(c.temperature_2m)} °C`, wNow) +
-      pixelRow("Wind", `${fmtVal(c.wind_speed_10m)} km/h from ${Math.round(c.wind_direction_10m)}°`, wNow) +
-      pixelRow("Humidity · pressure", `${Math.round(c.relative_humidity_2m)} % · ${Math.round(c.pressure_msl)} hPa`, wNow) +
-      (c.precipitation > 0 ? pixelRow("Precipitation now", `${fmtVal(c.precipitation)} mm/h`, wNow) : "");
-    if (c.soil_moisture_0_to_1cm != null) {
-      rows += pixelRow("Soil (top cm)", `${fmtVal(c.soil_moisture_0_to_1cm)} m³/m³ · ${fmtVal(c.soil_temperature_0cm)} °C`, wNow);
+    ["climate normals",
+      Promise.all(gridCfgs.map((cfg) => loadGridMonth(cfg)
+        .then((g) => (g ? { g, v: sampleGrid(g, lon, lat) } : null)).catch(() => null)))],
+    ["weather", fetchOpenMeteo(lon, lat)],
+    ["air quality", fetchAirQuality(lon, lat)],
+    ["river discharge", fetchRiver(lon, lat)],
+    ["waves", fetchMarine(lon, lat)],
+    ["climate outlook", fetchClimateWindow(lon, lat, ...CLIM_BASE_WIN)],
+    ["climate outlook", fetchClimateWindow(lon, lat, ...CLIM_FUT_WIN)],
+    ["ocean column", pixelJson("data/ocean_column.json")],
+    ["ocean surface", pixelJson("data/ocean_surface.json")],
+    ["stations", pixelJson("data/stations.geojson")],
+    ["emitters", pixelJson("data/climatetrace.json")],
+    ["Argo floats", pixelJson("data/argo.json")],
+    // In the batch, not after it: the card must never serialise a round-trip.
+    // Packed, so ~0.8 MB and cached thereafter.
+    ["forest-loss drivers", loadGrid(GIBS_LAYERS.find((l) => l.id === "drivers")).catch(() => null)],
+  ];
+  const settled = jobs.map(([, p]) => Promise.resolve(p).catch(() => null));
+  const late = [];
+  // The timer is CLEARED when the value wins: an uncleared one still fires and
+  // would name a source that in fact answered, besides holding a closure alive
+  // for the whole deadline, per source, per click.
+  const firstPass = settled.map((p, i) => {
+    let timer;
+    return Promise.race([
+      p.then((v) => { clearTimeout(timer); return v; }),
+      new Promise((res) => {
+        timer = setTimeout(() => { late.push(jobs[i][0]); res(null); }, PIXEL_DEADLINE_MS);
+      }),
+    ]);
+  });
+  /* A throw inside the draw must not leave "Reading this point…" on screen
+   * forever — that is the same broken-looking outcome the deadline exists to
+   * prevent, arrived at from the other side. So: say what happened, then
+   * rethrow OUT of band. The rethrow matters as much as the message; swallowed
+   * here, a rendering bug would show up as a slightly emptier card and the
+   * suite's "loads without page errors" check would never see it. */
+  const draw = (values, missing, final) => {
+    if (myTurn !== pixelCardSeq) return;   // a newer point owns the card now
+    try {
+      drawPixelCard(values, missing, final);
+    } catch (e) {
+      const body = pixelCardEl.querySelector(".px-body");
+      if (body) {
+        body.innerHTML = `<div class="px-note px-late">Something went wrong ` +
+          `composing this point. The details are in the browser console.</div>`;
+      }
+      setTimeout(() => { throw e; });
     }
-    if (c.shortwave_radiation != null && c.shortwave_radiation > 0) {
-      rows += pixelRow("Solar radiation", `${Math.round(c.shortwave_radiation)} W/m²`, wNow);
-    }
-    const mc = marine?.current;
-    if (mc?.wave_height != null) {
-      // separate API call, separate clock — its own stamp, not the weather one
-      rows += pixelRow("Waves", `${fmtVal(mc.wave_height)} m` +
-        (mc.wave_period != null ? ` every ${fmtVal(mc.wave_period)} s` : ""),
-        whenAt("instant", omUTC(mc.time, marine.utc_offset_seconds || 0)));
-    }
-    const rd = river?.daily?.river_discharge?.[0];
-    if (rd != null && rd > 0) {
-      // GloFAS is a DAILY product: stamping it with the current hour would
-      // claim a precision the number does not have.
-      rows += pixelRow("River discharge", `${fmtVal(rd)} m³/s in this GloFAS cell`,
-        whenAt("day", river.daily.time?.[0]));
-    }
-    if (Number.isFinite(meteo.elevation) && Math.abs(meteo.elevation) > 1) {
-      // no stamp: terrain height is not an observation with a time
-      rows = pixelRow("Elevation", `${Math.round(meteo.elevation)} m`) + rows;
-    }
-    const d = meteo.daily;
-    if (d?.time?.length) {
-      const days = d.time.map((t, i) =>
-        `<div class="px-day"><span>${t.slice(5)}</span>` +
-        `<span>${Math.round(d.temperature_2m_min[i])}–${Math.round(d.temperature_2m_max[i])}°</span>` +
-        `<span>${d.precipitation_sum[i] > 0.4 ? fmtVal(d.precipitation_sum[i]) + " mm" : "·"}</span></div>`).join("");
-      rows += `<div class="px-forecast">${days}</div>`;
-    }
-    // The forecast strip already prints a date per column, so it needs no stamp.
-    sec.push(`<div class="px-sec"><div class="px-sec-title">Now &amp; next 7 days <span class="px-src">Open-Meteo</span></div>${rows}</div>`);
-  }
-
-  /* -- heat load on a body ------------------------------------------------- */
-  // Air temperature is not what harms people: humidity, wind and sun decide
-  // how much heat a body can shed, and the NIGHT decides whether it recovers.
-  // Two numbers carry that — the day's felt peak, and whether the night stays
-  // above 20 °C ("tropical night", the standard health threshold).
-  if (meteo?.daily?.apparent_temperature_max) {
-    const d = meteo.daily;
-    const c = meteo.current;
-    const OFF2 = meteo.utc_offset_seconds || 0;
-    const fmtC = (v) => `${fmtVal(v)} °C`;
-    let rows = "";
-    if (c?.apparent_temperature != null) {
-      const gap = c.apparent_temperature - c.temperature_2m;
-      rows += pixelRow("Feels like now", `${fmtC(c.apparent_temperature)} · ` +
-        `${gap >= 0 ? "+" : "−"}${fmtVal(Math.abs(gap))} vs air`,
-        whenAt("instant", omUTC(c.time, OFF2)));
-    }
-    rows += pixelRow("Felt peak today", fmtC(d.apparent_temperature_max[0]),
-                     whenAt("day", d.time[0]));
-    // Tomorrow's daily minimum IS tonight's low: minima fall near dawn.
-    const lowTonight = d.temperature_2m_min[1];
-    if (lowTonight != null) {
-      rows += pixelRow("Tonight's low", `${fmtC(lowTonight)}` +
-        (lowTonight >= 20 ? ` · <strong>tropical night</strong>` : ""),
-        whenAt("day", d.time[1]));
-    }
-    const tropical = d.temperature_2m_min.filter((v) => v != null && v >= 20).length;
-    const peak = Math.max(...d.apparent_temperature_max.filter((v) => v != null));
-    rows += pixelRow("Next 7 days", `felt peak ${fmtC(peak)} · ` +
-      `${tropical} tropical night${tropical === 1 ? "" : "s"}`);
-    // Name the index. A city climate-analysis map (PET) and UTCI model the
-    // body's radiation balance explicitly and run warmer in sun, so their
-    // 35 °C / 41 °C class limits do NOT transfer to this number.
-    rows += `<div class="px-note">"Feels like" is Open-Meteo's apparent temperature —
-      air temperature corrected for humidity, wind and sun. City heat maps use
-      <em>PET</em> and heat warnings often use <em>UTCI</em>; both model a body's
-      radiation balance explicitly and read warmer in direct sun, so their
-      35/41 °C thresholds are not comparable with this figure. A night at or
-      above 20 °C is the standard "tropical night", when the body gets no
-      recovery.</div>`;
-    sec.push(`<div class="px-sec"><div class="px-sec-title">Heat load ` +
-      `<span class="px-src">Open-Meteo</span></div>${rows}</div>`);
-  }
-
-  /* -- air quality (CAMS via Open-Meteo) ----------------------------------- */
-  if (air?.current && air.current.pm2_5 != null) {
-    const a = air.current;
-    const wAir = whenAt("instant", a.time);
-    const rows =
-      pixelRow("PM2.5 · PM10", `${fmtVal(a.pm2_5)} · ${fmtVal(a.pm10)} µg/m³`, wAir) +
-      pixelRow("Ozone · NO₂", `${fmtVal(a.ozone)} · ${fmtVal(a.nitrogen_dioxide)} µg/m³`, wAir) +
-      (a.european_aqi != null ? pixelRow("Air-quality index", `${Math.round(a.european_aqi)} (EU scale, lower is better)`, wAir) : "");
-    sec.push(`<div class="px-sec"><div class="px-sec-title">Air quality <span class="px-src">CAMS</span></div>${rows}</div>`);
-  }
-
-  /* -- satellite fields at the app's current date -------------------------- */
-  // No derived SST-vs-normal line: the baked OISST normal is the ANNUAL mean,
-  // so the difference would mostly be the seasonal cycle (~±4 °C at
-  // midlatitudes), not a climate signal. The seasonally-correct departure is
-  // the "SST anomalies" row (MUR25 vs its own monthly climatology), and the
-  // annual mean itself prints as its own line under Climate normals.
-  const rrows = rasters.map((r, i) => {
-    if (!r) return "";
-    const cfg = rasterCfgs[i];
-    const label = cfg.title.replace(/\s*\(.*\)$/, "");
-    const w = whenOfGibs(cfg);
-    return r.label ? pixelRow(label, r.label, w)
-      : r.cap ? pixelRow(label, `${r.cap.sign} ${fmtVal(r.cap.bound)} ${r.units}`, w)
-        : pixelRow(label, `${fmtVal(r.v)} ${r.units}`, w);
-  }).join("");
-  if (rrows) {
-    // The heading no longer claims a date. It used to say state.date for the
-    // whole block, which was wrong for most of it: GRACE ends 2022-07, CERES
-    // 2018-10, sea ice 2025-09, and the monthly layers snap to a first-of-month
-    // — all of them were printed under today's date. Each row now says its own.
-    sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">NASA GIBS</span></div>${rrows}</div>`);
-  }
-
-  /* -- why forest was lost here (categorical, so its own row) --------------- */
-  {
-    const g = driversGrid;
-    const v = g && sampleGrid(g, lon, lat);
-    const label = v == null ? null : gridClassLabel(g, v);
-    if (label) {
-      sec.push(`<div class="px-sec"><div class="px-sec-title">Forest loss ` +
-        `<span class="px-src">WRI/DeepMind</span></div>` +
-        pixelRow("Dominant driver", label, whenOfGrid(GIBS_LAYERS.find((l) => l.id === "drivers"), g)) +
-        `</div>`);
-    }
-  }
-
-  /* -- long-term normals (the memory channels) ----------------------------- */
-  // No years in the labels any more — the stamp says them, read from the file
-  // rather than typed here, so a re-bake over a longer record cannot leave a
-  // stale span behind in the UI. (GPCP averages its whole record, not 1991–2020.)
-  // Keyed by layer id, NOT a parallel array: PIXEL_GRIDS grew a fifth entry
-  // (tides) while these stayed four long, and the card printed a literal
-  // "undefined 1.20 undefined" for months. A map cannot drift out of step —
-  // an id with no entry falls back to the layer's own title and units.
-  const GRID_ROW = {
-    oisst: ["SST annual mean", "°C"],
-    gpcp: ["Precip normal (GPCP)", "mm/yr"],
-    eobs: ["Precip normal (E-OBS)", "mm/yr"],
-    meteoswiss: ["Precip normal (MeteoSwiss)", "mm/yr"],
-    tides: ["Tidal range (EOT20)", "m"],
   };
-  // Each normal states the years it averages, read from the baked `period` —
-  // these are the one kind of row with no age at all, because a fixed span is
-  // not "N years old", it simply is what it is.
-  const grows = grids.map((r, i) => {
-    if (r?.v == null) return "";
-    const cfg = gridCfgs[i];
-    const [title, unit] = GRID_ROW[cfg?.id] ||
-      [String(cfg?.title || cfg?.id || "").replace(/\s*\(.*\)$/, ""), cfg?.units || ""];
-    return pixelRow(title, `${fmtVal(r.v)} ${unit}`.trim(), whenOfGrid(cfg, r.g));
-  }).join("");
-  if (grows) {
-    sec.push(`<div class="px-sec"><div class="px-sec-title">Climate normals</div>${grows}</div>`);
-  }
+  draw(await Promise.all(firstPass), late);
+  if (!late.length) return;
+  const full = await Promise.all(settled);
+  if (pixelCardEl.classList.contains("hidden")) return;   // closed while waiting
+  // On the last pass "still waiting" would be a lie, but silence would be too:
+  // a source that was late AND came back empty never answered at all, and only
+  // this pass can tell the two apart.
+  const dead = [...new Set(late)].filter((n) =>
+    jobs.every(([name], i) => name !== n || full[i] == null));
+  draw(full, dead, true);
 
-  /* -- ocean circulation at the point (GLORYS monthly mean) ---------------- */
-  if (oceanSurf) {
-    const ix = Math.floor((lon - oceanSurf.west) / oceanSurf.dlon);
-    const iy = Math.floor((lat - oceanSurf.south) / oceanSurf.dlat);
-    const i = iy * oceanSurf.nx + ix;
-    const u = oceanSurf.u?.[i], v = oceanSurf.v?.[i];
-    if (u != null && v != null) {
-      const spd = Math.hypot(u, v) / 100;                       // cm/s → m/s
-      const brg = (Math.atan2(u, v) * 180 / Math.PI + 360) % 360; // "toward"
-      const rose = "N NE E SE S SW W NW".split(" ")[Math.round(brg / 45) % 8];
-      // GLORYS lands months behind real time; the stamp's age is the point.
-      const wSurf = whenAt("month", oceanSurf.month);
-      let rows = pixelRow("Surface current",
-        `${fmtVal(spd)} m/s toward ${rose} (${Math.round(brg)}°)`, wSurf);
-      if (oceanSurf.mld?.[i] != null) rows += pixelRow("Mixed-layer depth", `${oceanSurf.mld[i]} m`, wSurf);
-      if (oceanSurf.zos?.[i] != null) {
-        const z = oceanSurf.zos[i];
-        rows += pixelRow("Sea surface height", `${z >= 0 ? "+" : "−"}${Math.abs(z)} cm`, wSurf);
+  function drawPixelCard(values, missing, final) {
+    const [rasters, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid] = values;
+    if (pixelCardEl.classList.contains("hidden")) return;   // closed while loading
+
+    const sec = [];
+
+    /* -- live weather now + the near future (the prediction axis) ------------ */
+    if (meteo?.current) {
+      const c = meteo.current;
+      // Open-Meteo stamps its own current block; "live" in the heading was never
+      // quite true — the model step behind it can be up to an hour old.
+      const OFF = meteo.utc_offset_seconds || 0;
+      const wNow = whenAt("instant", omUTC(c.time, OFF));
+      let rows = pixelRow("Air temperature", `${fmtVal(c.temperature_2m)} °C`, wNow) +
+        pixelRow("Wind", `${fmtVal(c.wind_speed_10m)} km/h from ${Math.round(c.wind_direction_10m)}°`, wNow) +
+        pixelRow("Humidity · pressure", `${Math.round(c.relative_humidity_2m)} % · ${Math.round(c.pressure_msl)} hPa`, wNow) +
+        (c.precipitation > 0 ? pixelRow("Precipitation now", `${fmtVal(c.precipitation)} mm/h`, wNow) : "");
+      if (c.soil_moisture_0_to_1cm != null) {
+        rows += pixelRow("Soil (top cm)", `${fmtVal(c.soil_moisture_0_to_1cm)} m³/m³ · ${fmtVal(c.soil_temperature_0cm)} °C`, wNow);
       }
-      sec.push(`<div class="px-sec"><div class="px-sec-title">Ocean circulation <span class="px-src">GLORYS</span></div>${rows}</div>`);
-    }
-  }
-
-  /* -- the ocean beneath: Argo T/S column, now vs the same-month normal ---- */
-  const col = oceanCol ? oceanColumnAt(oceanCol, lon, lat) : null;
-  if (col) {
-    const dT = col.levels.map((_, k) =>
-      col.tNow[k] != null && col.tNorm[k] != null ? col.tNow[k] - col.tNorm[k] : null);
-    // thickness-weighted mean warming of the upper 700 m — where the heat goes
-    let wsum = 0, w = 0;
-    for (let k = 0; k < col.levels.length && col.levels[k] <= 700; k++) {
-      if (dT[k] == null) continue;
-      const thick = (col.levels[k + 1] ?? 700) - (k ? col.levels[k - 1] : 0);
-      wsum += dT[k] * thick; w += thick;
-    }
-    const heat = w ? wsum / w : null;
-    // warm-layer depth: where T first drops 0.5 °C below the 10 dbar value
-    let wl = null;
-    const t10 = col.tNow[1];
-    if (t10 != null) {
-      for (let k = 2; k < col.levels.length; k++) {
-        if (col.tNow[k] != null && col.tNow[k] < t10 - 0.5) { wl = col.levels[k]; break; }
+      if (c.shortwave_radiation != null && c.shortwave_radiation > 0) {
+        rows += pixelRow("Solar radiation", `${Math.round(c.shortwave_radiation)} W/m²`, wNow);
       }
+      const mc = marine?.current;
+      if (mc?.wave_height != null) {
+        // separate API call, separate clock — its own stamp, not the weather one
+        rows += pixelRow("Waves", `${fmtVal(mc.wave_height)} m` +
+          (mc.wave_period != null ? ` every ${fmtVal(mc.wave_period)} s` : ""),
+          whenAt("instant", omUTC(mc.time, marine.utc_offset_seconds || 0)));
+      }
+      const rd = river?.daily?.river_discharge?.[0];
+      if (rd != null && rd > 0) {
+        // GloFAS is a DAILY product: stamping it with the current hour would
+        // claim a precision the number does not have.
+        rows += pixelRow("River discharge", `${fmtVal(rd)} m³/s in this GloFAS cell`,
+          whenAt("day", river.daily.time?.[0]));
+      }
+      if (Number.isFinite(meteo.elevation) && Math.abs(meteo.elevation) > 1) {
+        // no stamp: terrain height is not an observation with a time
+        rows = pixelRow("Elevation", `${Math.round(meteo.elevation)} m`) + rows;
+      }
+      const d = meteo.daily;
+      if (d?.time?.length) {
+        const days = d.time.map((t, i) =>
+          `<div class="px-day"><span>${t.slice(5)}</span>` +
+          `<span>${Math.round(d.temperature_2m_min[i])}–${Math.round(d.temperature_2m_max[i])}°</span>` +
+          `<span>${d.precipitation_sum[i] > 0.4 ? fmtVal(d.precipitation_sum[i]) + " mm" : "·"}</span></div>`).join("");
+        rows += `<div class="px-forecast">${days}</div>`;
+      }
+      // The forecast strip already prints a date per column, so it needs no stamp.
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Now &amp; next 7 days <span class="px-src">Open-Meteo</span></div>${rows}</div>`);
     }
-    let rows = columnProfileSvg(col) +
-      `<div class="px-day"><span style="color:#f0883e">━ ${oceanCol.month}</span>` +
-      `<span style="color:#58a6ff">━ normal</span><span>(same month, 2004–18)</span></div>`;
-    // Each of these is an anomaly: the OBSERVED month minus a fixed 2004–18
-    // baseline. The stamp is the observed month — the moving half, and the only
-    // half that can go stale. The baseline is named in the legend row above.
-    const wCol = whenAt("month", oceanCol.month);
-    if (dT[0] != null) {
-      rows += pixelRow("Surface vs normal",
-        `<span class="${dT[0] >= 0 ? "px-warm" : "px-cool"}">${dT[0] >= 0 ? "+" : "−"}${fmtVal(Math.abs(dT[0]))} °C</span>`, wCol);
-    }
-    if (heat != null) {
-      rows += pixelRow("Upper 700 m vs normal",
-        `<span class="${heat >= 0 ? "px-warm" : "px-cool"}">${heat >= 0 ? "+" : "−"}${fmtVal(Math.abs(heat))} °C</span> stored heat`, wCol);
-    }
-    if (wl != null) rows += pixelRow("Warm-layer depth", `~${wl} m`, wCol);
-    if (col.sNow[0] != null && col.sNorm[0] != null) {
-      const ds = col.sNow[0] - col.sNorm[0];
-      rows += pixelRow("Surface salinity", `${fmtVal(col.sNow[0])} PSU ` +
-        `<span class="px-src">(${ds >= 0 ? "+" : "−"}${Math.abs(ds).toFixed(2)} vs normal${ds < -0.05 ? " — fresher" : ds > 0.05 ? " — saltier" : ""})</span>`, wCol);
-    }
-    sec.push(`<div class="px-sec"><div class="px-sec-title">Ocean column 0–2000 m <span class="px-src">Argo floats</span></div>${rows}</div>`);
-  }
 
-  /* -- the decadal future axis: this pixel's own 2050 trajectory ----------- */
-  const base = climateWindowStats(climNow);
-  const fut = climateWindowStats(climFut);
-  if (base && fut) {
-    const models = OM_CLIMATE_MODELS.filter((m) => base[m] && fut[m]);
-    if (models.length >= 2) {
-      const dt = models.map((m) => fut[m].t - base[m].t);
-      const dp = models.map((m) => (fut[m].p - base[m].p) / Math.max(base[m].p, 1) * 100);
-      const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
-      const rng = (a) => [Math.min(...a), Math.max(...a)];
-      const [tlo, thi] = rng(dt), [plo, phi] = rng(dp);
-      const mt = mean(dt), mp = mean(dp);
-      // Both windows are fixed spans, so these rows carry a period and NO age:
-      // "2045–2049" is not "19 years away", it is simply the window projected.
-      const wFut = winPeriod(CLIM_FUT_WIN);
+    /* -- heat load on a body ------------------------------------------------- */
+    // Air temperature is not what harms people: humidity, wind and sun decide
+    // how much heat a body can shed, and the NIGHT decides whether it recovers.
+    // Two numbers carry that — the day's felt peak, and whether the night stays
+    // above 20 °C ("tropical night", the standard health threshold).
+    if (meteo?.daily?.apparent_temperature_max) {
+      const d = meteo.daily;
+      const c = meteo.current;
+      const OFF2 = meteo.utc_offset_seconds || 0;
+      const fmtC = (v) => `${fmtVal(v)} °C`;
+      let rows = "";
+      if (c?.apparent_temperature != null) {
+        const gap = c.apparent_temperature - c.temperature_2m;
+        rows += pixelRow("Feels like now", `${fmtC(c.apparent_temperature)} · ` +
+          `${gap >= 0 ? "+" : "−"}${fmtVal(Math.abs(gap))} vs air`,
+          whenAt("instant", omUTC(c.time, OFF2)));
+      }
+      rows += pixelRow("Felt peak today", fmtC(d.apparent_temperature_max[0]),
+                       whenAt("day", d.time[0]));
+      // Tomorrow's daily minimum IS tonight's low: minima fall near dawn.
+      const lowTonight = d.temperature_2m_min[1];
+      if (lowTonight != null) {
+        rows += pixelRow("Tonight's low", `${fmtC(lowTonight)}` +
+          (lowTonight >= 20 ? ` · <strong>tropical night</strong>` : ""),
+          whenAt("day", d.time[1]));
+      }
+      const tropical = d.temperature_2m_min.filter((v) => v != null && v >= 20).length;
+      const peak = Math.max(...d.apparent_temperature_max.filter((v) => v != null));
+      rows += pixelRow("Next 7 days", `felt peak ${fmtC(peak)} · ` +
+        `${tropical} tropical night${tropical === 1 ? "" : "s"}`);
+      // Name the index. A city climate-analysis map (PET) and UTCI model the
+      // body's radiation balance explicitly and run warmer in sun, so their
+      // 35 °C / 41 °C class limits do NOT transfer to this number.
+      rows += `<div class="px-note">"Feels like" is Open-Meteo's apparent temperature —
+        air temperature corrected for humidity, wind and sun. City heat maps use
+        <em>PET</em> and heat warnings often use <em>UTCI</em>; both model a body's
+        radiation balance explicitly and read warmer in direct sun, so their
+        35/41 °C thresholds are not comparable with this figure. A night at or
+        above 20 °C is the standard "tropical night", when the body gets no
+        recovery.</div>`;
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Heat load ` +
+        `<span class="px-src">Open-Meteo</span></div>${rows}</div>`);
+    }
+
+    /* -- air quality (CAMS via Open-Meteo) ----------------------------------- */
+    if (air?.current && air.current.pm2_5 != null) {
+      const a = air.current;
+      const wAir = whenAt("instant", a.time);
       const rows =
-        pixelRow("Temperature", `<span class="${mt >= 0 ? "px-warm" : "px-cool"}">${mt >= 0 ? "+" : "−"}${fmtVal(Math.abs(mt))} °C</span>` +
-          ` <span class="px-src">(models ${tlo >= 0 ? "+" : "−"}${fmtVal(Math.abs(tlo))}…${thi >= 0 ? "+" : "−"}${fmtVal(Math.abs(thi))})</span>`, wFut) +
-        pixelRow("Precipitation", `${mp >= 0 ? "+" : "−"}${Math.round(Math.abs(mp))} %` +
-          ` <span class="px-src">(${plo >= 0 ? "+" : "−"}${Math.round(Math.abs(plo))}…${phi >= 0 ? "+" : "−"}${Math.round(Math.abs(phi))} %)</span>`, wFut);
-      sec.push(`<div class="px-sec"><div class="px-sec-title">Projected change ` +
-        `<span class="px-src">vs ${whenText(winPeriod(CLIM_BASE_WIN))} · CMIP6-HighResMIP · ${models.length} models</span>` +
-        `</div>${rows}</div>`);
+        pixelRow("PM2.5 · PM10", `${fmtVal(a.pm2_5)} · ${fmtVal(a.pm10)} µg/m³`, wAir) +
+        pixelRow("Ozone · NO₂", `${fmtVal(a.ozone)} · ${fmtVal(a.nitrogen_dioxide)} µg/m³`, wAir) +
+        (a.european_aqi != null ? pixelRow("Air-quality index", `${Math.round(a.european_aqi)} (EU scale, lower is better)`, wAir) : "");
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Air quality <span class="px-src">CAMS</span></div>${rows}</div>`);
     }
-  }
 
-  /* -- context: what observes / affects this point ------------------------- */
-  const nrows = [];
-  if (stations?.features) {
-    let best = null, bd = Infinity;
-    for (const f of stations.features) {
-      const [slon, slat] = f.geometry.coordinates;
-      const d = haversineKm(lon, lat, slon, slat);
-      if (d < bd) { bd = d; best = f; }
+    /* -- satellite fields at the app's current date -------------------------- */
+    // No derived SST-vs-normal line: the baked OISST normal is the ANNUAL mean,
+    // so the difference would mostly be the seasonal cycle (~±4 °C at
+    // midlatitudes), not a climate signal. The seasonally-correct departure is
+    // the "SST anomalies" row (MUR25 vs its own monthly climatology), and the
+    // annual mean itself prints as its own line under Climate normals.
+    const rrows = rasters.map((r, i) => {
+      if (!r) return "";
+      const cfg = rasterCfgs[i];
+      const label = cfg.title.replace(/\s*\(.*\)$/, "");
+      const w = whenOfGibs(cfg);
+      return r.label ? pixelRow(label, r.label, w)
+        : r.cap ? pixelRow(label, `${r.cap.sign} ${fmtVal(r.cap.bound)} ${r.units}`, w)
+          : pixelRow(label, `${fmtVal(r.v)} ${r.units}`, w);
+    }).join("");
+    if (rrows) {
+      // The heading no longer claims a date. It used to say state.date for the
+      // whole block, which was wrong for most of it: GRACE ends 2022-07, CERES
+      // 2018-10, sea ice 2025-09, and the monthly layers snap to a first-of-month
+      // — all of them were printed under today's date. Each row now says its own.
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">NASA GIBS</span></div>${rrows}</div>`);
     }
-    // A station's position and name are not an observation — no stamp.
-    if (best) nrows.push(pixelRow("Nearest monitoring site", `${best.properties.name} · ${Math.round(bd)} km`));
-  }
-  if (argo?.floats) {
-    let n300 = 0, bd = Infinity, nearest = null;
-    for (const f of argo.floats) {
-      const d = haversineKm(lon, lat, f[0], f[1]);
-      if (d < bd) { bd = d; nearest = f; }
-      if (d < 300) n300++;
-    }
-    // Stamped with the NEAREST float's own last report, which is the freshness
-    // that matters when you ask "is anything watching this water right now?".
-    if (bd < 3000) nrows.push(pixelRow("Argo floats",
-      `${n300} within 300 km · nearest ${Math.round(bd)} km`,
-      whenAt("day", nearest?.[3])));
-  }
-  {
-    // Climate TRACE ships one asset list PER YEAR and the app picks the year
-    // from the date selector. This row read `trace.assets`, a key the baked file
-    // has never had, so it silently never rendered; it reads the year now, and
-    // that same year is what the row is stamped with.
-    const tyear = trace?.years?.length ? climateTraceYear(trace) : null;
-    const assets = tyear == null ? null : trace.assets_by_year?.[String(tyear)];
-    if (assets?.length) {
-      let best = null, bd = Infinity, n100 = 0;
-      for (const a of assets) {
-        const d = haversineKm(lon, lat, a[0], a[1]);
-        if (d < bd) { bd = d; best = a; }
-        if (d < 100) n100++;
-      }
-      if (bd < 500 && best) {
-        nrows.push(pixelRow("Top-1000 emitters",
-          `${n100} within 100 km · nearest: ${best[3]} (${fmtVal(best[2])} Mt/yr, ${Math.round(bd)} km)`,
-          whenAt("year", String(tyear))));
-      }
-    }
-  }
-  // glaciers only if the (7 MB) inventory is already loaded — no click-cost
-  if (glacierData) {
-    let n = 0, dh = 0, ndh = 0;
-    for (let i = 0; i < glacierData.count; i++) {
-      if (haversineKm(lon, lat, glacierData.lon[i], glacierData.lat[i]) < 100) {
-        n++;
-        const v = glacierData.dhdt[i];
-        if (v != null) { dh += v; ndh++; }
-      }
-    }
-    // Two rows, because they have two different times: the RGI inventory is
-    // compiled from imagery spanning decades and has no single honest date, so
-    // the count carries no stamp — while the thinning RATE is measured over one
-    // definite window, which travels in the file as `dhdt_period`.
-    if (n) {
-      nrows.push(pixelRow("Glaciers within 100 km", `${n}`));
-      if (ndh) {
-        nrows.push(pixelRow("Mean thickness change", `${fmtVal(dh / ndh)} m/yr`,
-          whenAt("period", glacierData.dhdt_period)));
-      }
-    }
-  }
-  if (nrows.length) {
-    sec.push(`<div class="px-sec"><div class="px-sec-title">Context nearby</div>${nrows.join("")}</div>`);
-  }
 
-  sec.push(`<div class="px-note">Channels &amp; roles: <a href="docs/PIXEL_STATE.md" target="_blank" rel="noopener">PIXEL_STATE.md</a> · weather &amp; forecast by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></div>`);
-  pixelCardEl.querySelector(".px-body").innerHTML = sec.join("");
+    /* -- why forest was lost here (categorical, so its own row) --------------- */
+    {
+      const g = driversGrid;
+      const v = g && sampleGrid(g, lon, lat);
+      const label = v == null ? null : gridClassLabel(g, v);
+      if (label) {
+        sec.push(`<div class="px-sec"><div class="px-sec-title">Forest loss ` +
+          `<span class="px-src">WRI/DeepMind</span></div>` +
+          pixelRow("Dominant driver", label, whenOfGrid(GIBS_LAYERS.find((l) => l.id === "drivers"), g)) +
+          `</div>`);
+      }
+    }
+
+    /* -- long-term normals (the memory channels) ----------------------------- */
+    // No years in the labels any more — the stamp says them, read from the file
+    // rather than typed here, so a re-bake over a longer record cannot leave a
+    // stale span behind in the UI. (GPCP averages its whole record, not 1991–2020.)
+    // Keyed by layer id, NOT a parallel array: PIXEL_GRIDS grew a fifth entry
+    // (tides) while these stayed four long, and the card printed a literal
+    // "undefined 1.20 undefined" for months. A map cannot drift out of step —
+    // an id with no entry falls back to the layer's own title and units.
+    const GRID_ROW = {
+      oisst: ["SST annual mean", "°C"],
+      gpcp: ["Precip normal (GPCP)", "mm/yr"],
+      eobs: ["Precip normal (E-OBS)", "mm/yr"],
+      meteoswiss: ["Precip normal (MeteoSwiss)", "mm/yr"],
+      tides: ["Tidal range (EOT20)", "m"],
+    };
+    // Each normal states the years it averages, read from the baked `period` —
+    // these are the one kind of row with no age at all, because a fixed span is
+    // not "N years old", it simply is what it is.
+    const grows = grids.map((r, i) => {
+      if (r?.v == null) return "";
+      const cfg = gridCfgs[i];
+      const [title, unit] = GRID_ROW[cfg?.id] ||
+        [String(cfg?.title || cfg?.id || "").replace(/\s*\(.*\)$/, ""), cfg?.units || ""];
+      return pixelRow(title, `${fmtVal(r.v)} ${unit}`.trim(), whenOfGrid(cfg, r.g));
+    }).join("");
+    if (grows) {
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Climate normals</div>${grows}</div>`);
+    }
+
+    /* -- ocean circulation at the point (GLORYS monthly mean) ---------------- */
+    if (oceanSurf) {
+      const ix = Math.floor((lon - oceanSurf.west) / oceanSurf.dlon);
+      const iy = Math.floor((lat - oceanSurf.south) / oceanSurf.dlat);
+      const i = iy * oceanSurf.nx + ix;
+      const u = oceanSurf.u?.[i], v = oceanSurf.v?.[i];
+      if (u != null && v != null) {
+        const spd = Math.hypot(u, v) / 100;                       // cm/s → m/s
+        const brg = (Math.atan2(u, v) * 180 / Math.PI + 360) % 360; // "toward"
+        const rose = "N NE E SE S SW W NW".split(" ")[Math.round(brg / 45) % 8];
+        // GLORYS lands months behind real time; the stamp's age is the point.
+        const wSurf = whenAt("month", oceanSurf.month);
+        let rows = pixelRow("Surface current",
+          `${fmtVal(spd)} m/s toward ${rose} (${Math.round(brg)}°)`, wSurf);
+        if (oceanSurf.mld?.[i] != null) rows += pixelRow("Mixed-layer depth", `${oceanSurf.mld[i]} m`, wSurf);
+        if (oceanSurf.zos?.[i] != null) {
+          const z = oceanSurf.zos[i];
+          rows += pixelRow("Sea surface height", `${z >= 0 ? "+" : "−"}${Math.abs(z)} cm`, wSurf);
+        }
+        sec.push(`<div class="px-sec"><div class="px-sec-title">Ocean circulation <span class="px-src">GLORYS</span></div>${rows}</div>`);
+      }
+    }
+
+    /* -- the ocean beneath: Argo T/S column, now vs the same-month normal ---- */
+    const col = oceanCol ? oceanColumnAt(oceanCol, lon, lat) : null;
+    if (col) {
+      const dT = col.levels.map((_, k) =>
+        col.tNow[k] != null && col.tNorm[k] != null ? col.tNow[k] - col.tNorm[k] : null);
+      // thickness-weighted mean warming of the upper 700 m — where the heat goes
+      let wsum = 0, w = 0;
+      for (let k = 0; k < col.levels.length && col.levels[k] <= 700; k++) {
+        if (dT[k] == null) continue;
+        const thick = (col.levels[k + 1] ?? 700) - (k ? col.levels[k - 1] : 0);
+        wsum += dT[k] * thick; w += thick;
+      }
+      const heat = w ? wsum / w : null;
+      // warm-layer depth: where T first drops 0.5 °C below the 10 dbar value
+      let wl = null;
+      const t10 = col.tNow[1];
+      if (t10 != null) {
+        for (let k = 2; k < col.levels.length; k++) {
+          if (col.tNow[k] != null && col.tNow[k] < t10 - 0.5) { wl = col.levels[k]; break; }
+        }
+      }
+      let rows = columnProfileSvg(col) +
+        `<div class="px-day"><span style="color:#f0883e">━ ${oceanCol.month}</span>` +
+        `<span style="color:#58a6ff">━ normal</span><span>(same month, 2004–18)</span></div>`;
+      // Each of these is an anomaly: the OBSERVED month minus a fixed 2004–18
+      // baseline. The stamp is the observed month — the moving half, and the only
+      // half that can go stale. The baseline is named in the legend row above.
+      const wCol = whenAt("month", oceanCol.month);
+      if (dT[0] != null) {
+        rows += pixelRow("Surface vs normal",
+          `<span class="${dT[0] >= 0 ? "px-warm" : "px-cool"}">${dT[0] >= 0 ? "+" : "−"}${fmtVal(Math.abs(dT[0]))} °C</span>`, wCol);
+      }
+      if (heat != null) {
+        rows += pixelRow("Upper 700 m vs normal",
+          `<span class="${heat >= 0 ? "px-warm" : "px-cool"}">${heat >= 0 ? "+" : "−"}${fmtVal(Math.abs(heat))} °C</span> stored heat`, wCol);
+      }
+      if (wl != null) rows += pixelRow("Warm-layer depth", `~${wl} m`, wCol);
+      if (col.sNow[0] != null && col.sNorm[0] != null) {
+        const ds = col.sNow[0] - col.sNorm[0];
+        rows += pixelRow("Surface salinity", `${fmtVal(col.sNow[0])} PSU ` +
+          `<span class="px-src">(${ds >= 0 ? "+" : "−"}${Math.abs(ds).toFixed(2)} vs normal${ds < -0.05 ? " — fresher" : ds > 0.05 ? " — saltier" : ""})</span>`, wCol);
+      }
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Ocean column 0–2000 m <span class="px-src">Argo floats</span></div>${rows}</div>`);
+    }
+
+    /* -- the decadal future axis: this pixel's own 2050 trajectory ----------- */
+    const base = climateWindowStats(climNow);
+    const fut = climateWindowStats(climFut);
+    if (base && fut) {
+      const models = OM_CLIMATE_MODELS.filter((m) => base[m] && fut[m]);
+      if (models.length >= 2) {
+        const dt = models.map((m) => fut[m].t - base[m].t);
+        const dp = models.map((m) => (fut[m].p - base[m].p) / Math.max(base[m].p, 1) * 100);
+        const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+        const rng = (a) => [Math.min(...a), Math.max(...a)];
+        const [tlo, thi] = rng(dt), [plo, phi] = rng(dp);
+        const mt = mean(dt), mp = mean(dp);
+        // Both windows are fixed spans, so these rows carry a period and NO age:
+        // "2045–2049" is not "19 years away", it is simply the window projected.
+        const wFut = winPeriod(CLIM_FUT_WIN);
+        const rows =
+          pixelRow("Temperature", `<span class="${mt >= 0 ? "px-warm" : "px-cool"}">${mt >= 0 ? "+" : "−"}${fmtVal(Math.abs(mt))} °C</span>` +
+            ` <span class="px-src">(models ${tlo >= 0 ? "+" : "−"}${fmtVal(Math.abs(tlo))}…${thi >= 0 ? "+" : "−"}${fmtVal(Math.abs(thi))})</span>`, wFut) +
+          pixelRow("Precipitation", `${mp >= 0 ? "+" : "−"}${Math.round(Math.abs(mp))} %` +
+            ` <span class="px-src">(${plo >= 0 ? "+" : "−"}${Math.round(Math.abs(plo))}…${phi >= 0 ? "+" : "−"}${Math.round(Math.abs(phi))} %)</span>`, wFut);
+        sec.push(`<div class="px-sec"><div class="px-sec-title">Projected change ` +
+          `<span class="px-src">vs ${whenText(winPeriod(CLIM_BASE_WIN))} · CMIP6-HighResMIP · ${models.length} models</span>` +
+          `</div>${rows}</div>`);
+      }
+    }
+
+    /* -- context: what observes / affects this point ------------------------- */
+    const nrows = [];
+    if (stations?.features) {
+      let best = null, bd = Infinity;
+      for (const f of stations.features) {
+        const [slon, slat] = f.geometry.coordinates;
+        const d = haversineKm(lon, lat, slon, slat);
+        if (d < bd) { bd = d; best = f; }
+      }
+      // A station's position and name are not an observation — no stamp.
+      if (best) nrows.push(pixelRow("Nearest monitoring site", `${best.properties.name} · ${Math.round(bd)} km`));
+    }
+    if (argo?.floats) {
+      let n300 = 0, bd = Infinity, nearest = null;
+      for (const f of argo.floats) {
+        const d = haversineKm(lon, lat, f[0], f[1]);
+        if (d < bd) { bd = d; nearest = f; }
+        if (d < 300) n300++;
+      }
+      // Stamped with the NEAREST float's own last report, which is the freshness
+      // that matters when you ask "is anything watching this water right now?".
+      if (bd < 3000) nrows.push(pixelRow("Argo floats",
+        `${n300} within 300 km · nearest ${Math.round(bd)} km`,
+        whenAt("day", nearest?.[3])));
+    }
+    {
+      // Climate TRACE ships one asset list PER YEAR and the app picks the year
+      // from the date selector. This row read `trace.assets`, a key the baked file
+      // has never had, so it silently never rendered; it reads the year now, and
+      // that same year is what the row is stamped with.
+      const tyear = trace?.years?.length ? climateTraceYear(trace) : null;
+      const assets = tyear == null ? null : trace.assets_by_year?.[String(tyear)];
+      if (assets?.length) {
+        let best = null, bd = Infinity, n100 = 0;
+        for (const a of assets) {
+          const d = haversineKm(lon, lat, a[0], a[1]);
+          if (d < bd) { bd = d; best = a; }
+          if (d < 100) n100++;
+        }
+        if (bd < 500 && best) {
+          nrows.push(pixelRow("Top-1000 emitters",
+            `${n100} within 100 km · nearest: ${best[3]} (${fmtVal(best[2])} Mt/yr, ${Math.round(bd)} km)`,
+            whenAt("year", String(tyear))));
+        }
+      }
+    }
+    // glaciers only if the (7 MB) inventory is already loaded — no click-cost
+    if (glacierData) {
+      let n = 0, dh = 0, ndh = 0;
+      for (let i = 0; i < glacierData.count; i++) {
+        if (haversineKm(lon, lat, glacierData.lon[i], glacierData.lat[i]) < 100) {
+          n++;
+          const v = glacierData.dhdt[i];
+          if (v != null) { dh += v; ndh++; }
+        }
+      }
+      // Two rows, because they have two different times: the RGI inventory is
+      // compiled from imagery spanning decades and has no single honest date, so
+      // the count carries no stamp — while the thinning RATE is measured over one
+      // definite window, which travels in the file as `dhdt_period`.
+      if (n) {
+        nrows.push(pixelRow("Glaciers within 100 km", `${n}`));
+        if (ndh) {
+          nrows.push(pixelRow("Mean thickness change", `${fmtVal(dh / ndh)} m/yr`,
+            whenAt("period", glacierData.dhdt_period)));
+        }
+      }
+    }
+    if (nrows.length) {
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Context nearby</div>${nrows.join("")}</div>`);
+    }
+
+    // Name what didn't arrive. A section that is absent because its source timed
+    // out looks exactly like a section that was never built, and the difference
+    // matters: one of them comes back if you tap again.
+    if (missing.length) {
+      const names = [...new Set(missing)];
+      const one = names.length === 1;
+      sec.push(`<div class="px-note px-late">` + (final
+        ? `${names.join(", ")} didn't answer, so ` +
+          `${one ? "that section is" : "those sections are"} missing here. ` +
+          `Tap the point again to retry.`
+        : `Still waiting on ${names.join(", ")} — ` +
+          `${one ? "that section" : "those sections"} will appear ` +
+          `${one ? "as soon as it answers" : "as soon as they answer"}.`) + `</div>`);
+    }
+    sec.push(`<div class="px-note">Channels &amp; roles: <a href="docs/PIXEL_STATE.md" target="_blank" rel="noopener">PIXEL_STATE.md</a> · weather &amp; forecast by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></div>`);
+    pixelCardEl.querySelector(".px-body").innerHTML = sec.join("");
+  }
 }
 
 document.addEventListener("keydown", (e) => {
@@ -7307,6 +7425,9 @@ loadCatalog();
 /* Test hook: stable handle for the Playwright suite (tests/) — not a public API. */
 window.__earth = {
   viewer,
+  // exported so a test can derive its own waits from the app's deadline
+  // instead of hard-coding a second copy of the number
+  PIXEL_DEADLINE_MS,
   get baseImageryLayer() { return baseImageryLayer; },
   parseColormap,
   parseColormapEntries,

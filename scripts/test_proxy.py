@@ -14,8 +14,13 @@ import sys, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]); UPSTREAM = sys.argv[2]
-TRIES = 4          # transport-level only
-BACKOFF = 0.6      # seconds, doubling
+TRIES = 3          # transport-level only
+# The whole retry budget must fit inside the app's own per-request timeout
+# (OM_TIMEOUT_MS in src/app.js), or the proxy's patience becomes indistinguish-
+# able from a dead endpoint and the browser gives up on a call that was about
+# to succeed. 0.25 + 0.5 = 0.75 s of waiting, against a ~10% drop rate, covers
+# 99.9% of attempts without eating the budget.
+BACKOFF = 0.25     # seconds, doubling
 
 
 class H(BaseHTTPRequestHandler):
