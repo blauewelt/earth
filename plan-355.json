@@ -1,0 +1,10 @@
+{
+ "eval": true,
+ "heads": [
+  "e017_u1_s0 (gate)",
+  "e031xl_u1_s0",
+  "e031xl_u1_s1"
+ ],
+ "note": "wave 7A: xl89 corridor AUC + AMOC hindcast/future curves",
+ "published_at": "2026-08-16T10:42:41.743Z"
+}
