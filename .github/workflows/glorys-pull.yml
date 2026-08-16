@@ -1,0 +1,149 @@
+# E-034: pull GLORYS12 daily chunks to the Hugging Face Hub.
+#
+# WHY THIS IS A WORKFLOW AND NOT A SANDBOX JOB. The pull is ~384 month-chunks
+# at ~105 s each, i.e. about eleven hours. Measured 2026-08-16: a backgrounded
+# run in the Cowork sandbox dies silently while the session is idle — twice,
+# once plain `nohup` (13 minutes in) and once under `setsid` with its own
+# session and process group (12 minutes in). No error, no OOM, no traceback,
+# the log simply stops mid-chunk. That container cannot host a job that
+# outlives a turn.
+#
+# WHY NOT THE VAST FLEET. `ml/CLAUDE.md` §6: the boxes are strangers'
+# machines whose hosts have root, and the CMEMS credentials are named there
+# as something that must NEVER be on one. A GitHub-hosted runner is the
+# opposite case — the secrets are masked, the machine is disposable, and
+# nothing survives the job.
+#
+# `runs-on: ubuntu-latest`, deliberately and permanently. §6's prohibition on
+# giving a `schedule:` trigger to anything on `runs-on: gpu` is what makes the
+# self-hosted fleet safe on a public repo; this workflow is scheduled, so it
+# must never be pointed at `gpu`. Nothing here needs a GPU.
+#
+# THE SCHEDULE IS THE RESUME MECHANISM. `fetch_glorys_daily.py` treats the
+# Hub as its resume source: it lists what is already backed up and skips it.
+# So a six-hour job that hits the runner's wall loses nothing, and the next
+# firing continues. Once all 384 chunks are present every run is a ~1-minute
+# no-op that says so and stops.
+name: GLORYS pull
+
+on:
+  workflow_dispatch:
+  schedule:
+    # every 6 hours; each firing continues where the last one stopped
+    - cron: '0 */6 * * *'
+
+permissions:
+  contents: read          # uploads go to Hugging Face, not to this repo
+
+concurrency:
+  # Two pulls at once would fetch the same months twice and race on the same
+  # Hub paths. Never cancel a run in flight — it is doing real work and its
+  # progress is only durable per completed chunk.
+  group: glorys-pull
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350          # GitHub-hosted jobs are capped at 6 h
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Check the preconditions while the inputs are all they have cost
+      # (ml/CLAUDE.md §0.3). A missing secret must fail HERE, in seconds,
+      # not as an auth error after the install and the catalogue query --
+      # which reads like a bad credential rather than an absent one.
+      - name: Preconditions
+        env:
+          CM_USER: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          CM_PASS: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          missing=""
+          [ -n "$CM_USER" ] || missing="$missing COPERNICUSMARINE_SERVICE_USERNAME"
+          [ -n "$CM_PASS" ] || missing="$missing COPERNICUSMARINE_SERVICE_PASSWORD"
+          [ -n "$HF_TOKEN" ] || missing="$missing HF_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::error::missing repo Actions secret(s):$missing"
+            echo "Set them at Settings -> Secrets and variables -> Actions."
+            echo "Values live in the claude.ai project docs"
+            echo "claude/copernicus-marine-access.md and claude/huggingface-access.md."
+            exit 1
+          fi
+          echo "all three secrets present"
+          df -h / | tail -1
+
+      - name: Install
+        run: pip install --quiet copernicusmarine huggingface_hub
+
+      # How much is left, BEFORE spending anything -- and the number that
+      # decides whether this run does any work at all.
+      - name: Count what the Hub already has
+        id: remaining
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo = f"{api.whoami()['name']}/earth-tensors"
+          have = {f for f in api.list_repo_files(repo, repo_type="dataset")
+                  if f.endswith(".nc")}
+          want = [f"glorys_{y}{m:02d}.nc"
+                  for y in range(1993, 2025) for m in range(1, 13)]
+          left = [w for w in want if w not in have]
+          # The step OUTPUT goes to the file; the human-readable line goes to
+          # the log. Redirecting the whole heredoc into $GITHUB_OUTPUT would
+          # post the notice into the output file, where nobody reads it.
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"left={len(left)}\n")
+          print(f"::notice::{len(have)}/{len(want)} chunks already on {repo}; "
+                f"{len(left)} remaining")
+          PY
+
+      - name: Fetch
+        if: steps.remaining.outputs.left != '0'
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        # --min-free-gb 5: a GitHub-hosted runner has ~14 GB free, and the
+        # script's default guard of 20 would refuse to start. The real
+        # requirement is one chunk (~300 MB), because each is deleted once it
+        # is uploaded and restore-verified.
+        run: |
+          python3 -u ml/fetch_glorys_daily.py \
+              --start 1993-01 --end 2024-12 \
+              --out "$RUNNER_TEMP/glorys_pull" \
+              --hf-repo earth-tensors \
+              --min-free-gb 5
+
+      - name: Done for this run
+        if: always()
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo = f"{api.whoami()['name']}/earth-tensors"
+          have = {f for f in api.list_repo_files(repo, repo_type="dataset")
+                  if f.endswith(".nc")}
+          want = [f"glorys_{y}{m:02d}.nc"
+                  for y in range(1993, 2025) for m in range(1, 13)]
+          left = [w for w in want if w not in have]
+          print(f"{len(have)}/{len(want)} chunks on the Hub")
+          if left:
+              print(f"{len(left)} remaining; next scheduled firing continues "
+                    f"from here (first missing: {left[0]})")
+          else:
+              print("COMPLETE -- every chunk 1993-01..2024-12 is on the Hub. "
+                    "Next: ml/aggregate_cadence.py --hf-repo earth-tensors "
+                    "--cadence pentad --bin-deg 0.25")
+          PY
