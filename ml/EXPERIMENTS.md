@@ -144,6 +144,42 @@ and the question merits two seeds — but the next uw iteration should cut
 gather cost (cache slot windows across steps, or sample S) before any
 scale-up.
 
+## EVAL wave 6 · E-029 heads on the roll — DISPATCHED 2026-08-16 ~05:45Z
+
+Question on record before the numbers. #333 settled the capacity axis on
+the roll (xl55 corridor 0.664, +0.042 over big). Wave 6 asks whether the
+OTHER two forecast-axis results transfer, and whether the exposure-bias
+mitigation does anything for the thing it exists for. Two boxes, six heads
+each, gate first on both (must reproduce 0.643 or the wave is void).
+
+**Wave 6A (mechanism at 768×12)** — ring222-big s0/s1/s2 + znoise-big55
+s0/s1. Hypotheses: (a) ring-222's geometry, the BASE-scale champion, sits
+WITHIN seed noise of big55's 0.6213 at adequate capacity — E-026's
+inversion was starvation, so geometry should stop mattering once width is
+adequate; (b) input-znoise (0.7), which COSTS one-step forecast
+(0.1548/0.1539 vs big55's 0.1476), BUYS rolled corridor AUC > 0.6213 —
+robustness under self-rolled inputs is its entire purpose. Falsifier for
+(b): znoise ≤ big55 on the roll = input noise buys nothing anywhere, close
+the arm and leave exposure bias to the E-030 mechanism. Falsifier for (a):
+ring222 > big55 by more than pooled seed sd = geometry survives capacity,
+E-026's ranking was real after all.
+
+**Wave 6B (width and steps on the roll, 88M)** — sun89-big 60k s0/s1/s2 +
+sun89-big 200k s1/s2. Hypotheses: (a) width transfers: sun89-60k corridor
+> big55's 0.6213, as capacity did; (b) steps transfer: sun89x200 >
+sun89-60k paired by seed. Falsifiers: (a) sun89 ≤ big55 = the 89-point
+forecast win is one-step-only; (b) x200 ≤ 60k = the −0.009 forecast gain
+from 200k never reaches the roll. Either falsification would put the
+forecast ratio and the corridor AUC in open disagreement at 88M — which
+E-022 proved possible and #304 made the central question of the programme.
+
+Heads verified on the release before dispatch (all 11 assets present,
+sun89x200 published full 00:50Z). Boxes: wave A on gpu-box-47094143
+(Vast 47720660), wave B on gpu-box-47529389 (47720664) — both restarted
+from stop with warm tensor+Z caches, both freshly drained of their sun89
+legs. Est. ~6–8 h each (gate ~12 min + 5 big heads; #333's 8.7 h was
+three 205M heads chunked).
+
 ## E-029d-ext · sunflower-89 → 200k steps — DISPATCHED 2026-08-15 ~14:45Z
 
 **200k HARVEST (#350/#351, 2026-08-16 ~00:50Z) — the curve is complete and
