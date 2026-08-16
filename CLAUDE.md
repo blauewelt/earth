@@ -492,6 +492,32 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   normal is the annual mean, so the difference would mostly be the seasonal
   cycle — the MUR25 anomalies row is the seasonally-correct departure.
   `showPixelState(carto)` is exported for tests. Esc or × closes.
+  - **THE CARD MUST RENDER, and nothing is thrown away.** It composes ~20
+    sources and used to await all of them, so the slowest one decided whether
+    the inspector worked at all — and `fetch()` has no timeout, so a stalled
+    connection meant a card that never appeared. Reported 2026-08-16 as "load
+    all data is no longer working"; measured on the live site, the card took
+    64.6 s with one climate-api call open the whole time. The same query,
+    minutes apart, took 1.0 s, 23 s, and never.
+    So the card draws **twice** when it has to: at `PIXEL_DEADLINE_MS` (15 s)
+    with whatever arrived, naming what hasn't; again, complete, when the
+    stragglers land. Slow costs a redraw, never a section; only never-arriving
+    costs the section, and the final pass switches the wording from "still
+    waiting on X" to "X didn't answer". Keep these four properties:
+    **deadline ≠ timeout** — a SHORT deadline to draw, a LONG one
+    (`OM_TIMEOUT_MS`, 45 s) to give up; cutting off the 23 s response would
+    discard a good answer to save time the card no longer spends waiting.
+    **The promises are shared between passes** — re-requesting would double
+    the Open-Meteo burst, which is rate-limited per IP across the family.
+    **Every draw checks it still owns the card** (`pixelCardSeq`): tap A, tap
+    B while A's slow source is out, and A's data would otherwise redraw under
+    B's heading. **A throw in the draw says so and rethrows out of band** —
+    swallowed, a rendering bug becomes a slightly emptier card and the suite's
+    "loads without page errors" check never sees it.
+    Related: `fmtVal(null)` used to throw, and because the body is built in one
+    pass, one null field in one upstream response took the whole card down to a
+    permanent "Reading this point…". It prints a dash now. Formatting is the
+    wrong layer to enforce presence — a caller that cares checks first.
   - **Heat load** is its own section (added 2026-08-10 from a Zürich
     Klimaanalysekarte the user sent): felt temperature now with its gap
     against air, today's felt peak, tonight's low flagged as a **tropical
