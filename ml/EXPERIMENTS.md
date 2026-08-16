@@ -265,6 +265,70 @@ in that comparison, and nobody had noticed.)
 
 ## EVAL wave 6 · E-029 heads on the roll — DISPATCHED 2026-08-16 ~05:45Z
 
+### WAVE 6A RESULT (#352, landed ~13:00Z) — BOTH HYPOTHESES RESOLVED, AND THE PROGRAMME'S DIRECTION CHANGES
+
+Gate PASSED (e017 → 0.643 exactly; corridor 0.589 as always). Rolled
+corridor AUC:
+
+| arm | s0 | s1 | s2 | mean | vs clean big55 (0.6213) |
+|---|---|---|---|---|---|
+| **znoise-big55** (σ=0.7 input noise) | 0.683 | 0.674 | — | **0.6785** | **+0.057** |
+| **ring222-big** (8 pts @222 km) | 0.646 | 0.661 | 0.661 | **0.6560** | **+0.035** |
+
+**(1) The znoise hypothesis is CONFIRMED, and it is the largest single
+effect in the roll programme.** Input noise at the model's own one-step
+error scale buys **+0.057** corridor AUC while *costing* one-step forecast
+(0.1548/0.1539 vs clean 0.1476). That is exposure-bias mitigation behaving
+exactly as the theory says it should: trade the metric you are not scored on
+for the one you are.
+
+**THE HEADLINE, and it reorders everything: znoise at 88M (0.6785) BEATS
+xl55 at 205M (0.6637) by +0.015.** A 2.3× parameter increase bought +0.042
+on the roll; adding noise to the inputs of the *smaller* model bought
++0.057. **The cheapest thing we have ever done outperforms the most
+expensive.** Every scale conclusion in the paper stands — capacity does pay
+— but "scale is what pays most" is no longer true on the rolled axis, and
+the next scale push must carry znoise rather than race it.
+
+**(2) The ring222 hypothesis is FALSIFIED, cleanly.** I predicted the
+base-scale champion's geometry would collapse into big55's band once
+capacity was adequate ("geometry stops mattering"). It does the opposite:
++0.035 over big55 at the same 88M, and +0.052 over its own base-scale self
+(0.6043). **Geometry SURVIVES capacity.** Eight points at 222 km beat 55
+sunflower points reaching 4444 km on the roll, at equal parameters — while
+losing on one-step forecast (0.152 vs 0.148). The forecast and roll axes
+disagree again, in the same direction E-022 first found, and this time at
+adequate capacity where the starvation explanation is unavailable.
+
+**(3) Both winners are near-field or noise-regularised, and that is
+probably one finding rather than two.** The dependency-cone measurement
+earlier today showed a 4444 km stencil has ~50% dead slots and a cone
+covering the whole window by h=3, where ring-8@222 stays at 4.8% unmet and
+30.7% of the window at h=12. Wide-and-far models therefore roll on a state
+that is half boundary assumption; znoise makes a model robust to its own
+error; ring222 avoids depending on the far field at all. Both may be
+attacking the same weakness from opposite ends.
+
+**Updated corridor-AUC standings (all gate-passed):**
+
+| rank | arm | params | AUC |
+|---|---|---|---|
+| 1 | **znoise-big55** | 88M | **0.6785** |
+| 2 | xl55 | 205M | 0.6637 |
+| 3 | ring222-big | 88M | 0.6560 |
+| 4 | big34 | 87M | 0.6237 |
+| 5 | big55 | 88M | 0.6213 |
+| 6 | ring-8@222 (base) | 34M | 0.6043 |
+| 7 | e017 gate | 34M | 0.5890 |
+| 8 | base55 | 34M | 0.5710 |
+
+**What this makes obvious as the next experiments** (none dispatched):
+znoise × xl (205M) — does the largest model plus noise compound to ~0.72?
+znoise × ring222 — do the two winners compose? And a σ sweep, since 0.7 was
+picked from the model's own error and never tuned.
+
+## EVAL wave 6 dispatch record
+
 **WAVE 6B PARTIAL RESULT + AN OOM (#353, 07:45Z): WIDTH TRANSFERS TO THE
 ROLL, and the evaluator has a width-scaled memory bug.** Gate PASSED
 (e017 → 0.643 exactly, corridor 0.589 as always). Then:
