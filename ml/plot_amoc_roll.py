@@ -274,12 +274,36 @@ def main():
     js = src.split('    js = """', 1)[1].split('"""', 1)[0]
     # two extra roles this page needs: a third arm colour and the observed
     # series. Kept next to the imported palette so the pair stays validated.
+    #
+    # s4 is the OBSERVED record, and it is deliberately ink rather than a hue.
+    # It shipped as #eb6834 — byte-identical to s2, the third arm colour — so
+    # the page drew three orange lines and reality was one of them (Chris,
+    # 2026-08-16: "can you render the reality in a different color"). Ink is
+    # the right answer rather than a fourth hue: the arms are members of one
+    # comparison and should share a hue family, while the measurement is not
+    # an arm at all, and every other page in this project already draws the
+    # observations heavier than the model lines. It also matches
+    # make_figs.py's fig_amoc_roll, so the printed and interactive versions
+    # of this figure cannot disagree about which line is the ocean.
+    # The gate is DASHED, not merely grey. Once the observed series stopped
+    # being orange, two neutral lines shared the page — the gate's smooth
+    # curve and the observed monthly series behind it — and hue alone no
+    # longer told them apart. A dash is carried by the line itself, so it
+    # survives greyscale printing and the dark-mode palette swap.
+    #
+    # Note the stroke-width lives on `.ln.smooth.s4`, never on `.s4`: the
+    # direct labels are <text class="dlab s4">, the base sheet neutralises
+    # them with `.dlab{stroke:none}`, and a bare `.s4{stroke-width:…}` has
+    # equal specificity and comes later — which drew every legend label with
+    # a 2.6px outline and made "observed · 18-mo" look struck through.
     css += """
-.s3{stroke:#6f6e66}.s4{stroke:#eb6834}
-.dlab.s3{fill:#6f6e66}.dlab.s4{fill:#eb6834}
+.s3{stroke:#6f6e66}.s4{stroke:#1a1a19}
+.ln.smooth.s3{stroke-dasharray:6 4}
+.ln.smooth.s4{stroke-width:3.2}
+.dlab.s3{fill:#6f6e66}.dlab.s4{fill:#1a1a19;stroke:none}
 @media (prefers-color-scheme:dark){
- .s3{stroke:#a5a396}.s4{stroke:#d95926}
- .dlab.s3{fill:#a5a396}.dlab.s4{fill:#d95926}
+ .s3{stroke:#a5a396}.s4{stroke:#e8e6df}
+ .dlab.s3{fill:#a5a396}.dlab.s4{fill:#e8e6df}
 }
 """
     html = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
