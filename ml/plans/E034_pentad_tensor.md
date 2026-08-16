@@ -169,14 +169,63 @@ cannot see that.
 
 ## 6 · Order of work
 
-1. **Pentad truth first** (`ml/build_truth_pentad.py`) — no credentials
-   needed, and it is the claim worth testing. Re-derive RAPID, FC, MOVE and
-   SAMBA at 5-day cadence from their native archives.
+1. ~~**Pentad truth first**~~ (`ml/build_truth_pentad.py`) — done.
 2. ~~Chris's decision on §3~~ — resolved: GLORYS12 daily, credentials in the project doc.
-3. The GLORYS12 daily → pentad fetcher (the long pole: 1/12° subsetted to the NA window, year-by-year, resume-friendly).
-4. The pentad tensor builder.
-5. Re-anchor Chinchilla from observed-value counts; re-size the codec.
+3. **The GLORYS12 daily fetcher** — running unattended as
+   `.github/workflows/glorys-pull.yml` (the Cowork sandbox kills a
+   backgrounded job while the session is idle; the Vast fleet is ruled out by
+   `ml/CLAUDE.md` §6, which forbids CMEMS credentials on a rented box). The
+   6-hourly schedule IS the resume mechanism — the fetcher treats the Hub as
+   its resume source, so the runner's 6-hour cap costs nothing.
+4. ~~**The pentad tensor builder**~~ — **built 2026-08-16**:
+   `ml/build_family4.py`, `RECIPE_REV = "f4r1"`, output
+   `ml/cache/family4_na025_pentad.npz`. See below.
+5. Re-anchor Chinchilla from observed-value counts; re-size the codec. The
+   build prints the inventory; **re-read it, do not scale the monthly one** —
+   the Argo policy in §4 drops the observed count per pentad by construction.
 6. Then daily, once object storage exists.
+
+### 4 · What the builder does, and the three things it refuses
+
+**The grid is family-3's, and that is a precondition rather than an
+aspiration.** `base025_na.npz` was opened on 2026-08-16: lats 0.0..70.0 (281),
+lons −100.0..20.0 (481) — samples **on** multiples of 0.25°, not cell centres.
+`aggregate_cadence.py` was emitting centres (280×480, a half-cell off), so it
+gained `--grid-align point` (now the default) which reproduces those axes
+exactly. `build_family4.py` **asserts** it against the artefact and refuses
+otherwise, because a half-cell offset would leave every stencil geometry, the
+AMOC eval mask and the corridor definitions quietly describing different
+pixels than they name — and would be invisible in every plot anyone would
+draw.
+
+**Channels are family-3's 39, imported from that module** so there is one
+definition, with the cadence policy of §2 applied per group:
+
+- **base** — `cur_speed = hypot(mean uo, mean vo)` from the *binned
+  components*, never a mean of magnitudes. `log_mld` is **log10**, measured
+  against family 3 rather than assumed: January 1993 peaks at 2439 m under
+  log10 (Labrador Sea convection); natural log would read 30 m, which is not
+  a January.
+- **rg** — one live pentad per month, `missing` in the other five, per §4
+  above. The nominal timestamp is the **15th**: RG carries no within-month
+  time and a monthly mean is most nearly centred on the midpoint.
+- **wind** — pentad mean, and `tau_std` as the **within-pentad** σ computed
+  from the dailies. This is the one channel strictly better at this cadence:
+  family 3's is a within-*month* σ, which mixes the storm band with the
+  seasonal cycle. A σ is not aggregable from a mean, so it cannot be derived
+  from family 3.
+
+**float16, and it is a BOX build.** [3142, 281, 481, 39] is 66.2 GB at float32
+and **33.1 GB at float16** — measured by `--dry-run`, and close to this
+section's 32.6 GB estimate. It does not fit the sandbox; `--max-bins` builds a
+prefix for exercising the path.
+
+`tests/test_e034_family4.py` runs the real builder end to end over a complete
+miniature of every source — a pentad aggregation, RG cubes in SIO's schema,
+NCEP dailies in PSL's schema, a pentad truth record — and pins seven
+properties, including the two that no summary statistic would reveal: that RG
+is **not** forward-filled, and that `tau_std` is distinguishable from a
+within-month σ on the fixture (a check that cannot fail is not a check).
 
 ---
 

@@ -297,7 +297,33 @@ def main():
           f"({got_cell:+.6f}), not the {pooled_n}-value pool "
           f"({pooled:+.6f}); grid {nlat}x{nlon}")
 
-    print("\ntests/test_e034_aggregate.py: all 5 checks passed")
+    # ---- 6: point alignment IS the family-3 grid --------------------------
+    # Measured from base025_na.npz on 2026-08-16 and recorded here as numbers
+    # rather than as a dependency, so the check runs without the 358 MB
+    # artefact. build_family4.py re-checks against the artefact itself when it
+    # is present; this is the cheap version that runs everywhere.
+    #
+    # It matters more than it looks: family 4 must land on family 3's pixels
+    # or every stencil geometry, the AMOC eval mask and the corridor
+    # definitions quietly describe different points than they name — and a
+    # half-cell offset is invisible in every plot anyone would draw.
+    g_lat = np.linspace(0.0, 70.0, 841)          # GLORYS12 native, E-034 window
+    g_lon = np.linspace(-100.0, 20.0, 1441)
+    p = ag.bin_plan(g_lat, g_lon, 0.25, "point")
+    assert (p["nlat"], p["nlon"]) == (281, 481), \
+        f"point grid is {p['nlat']}x{p['nlon']}, family 3 is 281x481"
+    assert p["lat"][0] == 0.0 and p["lat"][-1] == 70.0
+    assert p["lon"][0] == -100.0 and p["lon"][-1] == 20.0
+    assert np.allclose(np.diff(p["lat"]), 0.25) and \
+        np.allclose(np.diff(p["lon"]), 0.25)
+    e = ag.bin_plan(g_lat, g_lon, 0.25, "edge")
+    assert (e["nlat"], e["nlon"]) == (280, 480) and e["lat"][0] == 0.125, \
+        "edge alignment should still be the half-cell-offset centres grid"
+    print(f"  6. --grid-align point reproduces the family-3 grid exactly "
+          f"({p['nlat']}x{p['nlon']}, {p['lat'][0]}..{p['lat'][-1]} N, "
+          f"{p['lon'][0]}..{p['lon'][-1]} E); edge stays {e['nlat']}x{e['nlon']}")
+
+    print("\ntests/test_e034_aggregate.py: all 6 checks passed")
 
 
 if __name__ == "__main__":

@@ -143,27 +143,51 @@ def peak_gb():
 # spatial binning
 # --------------------------------------------------------------------------
 
-def bin_plan(lat, lon, deg):
-    """Index map from the source grid onto a regular `deg` grid.
+def axis_for(lo, hi, deg, align):
+    """Target axis over [lo, hi] at spacing `deg`.
+
+    `point` — samples ON multiples of deg: …, -100.00, -99.75, … This is the
+    family-3 grid, MEASURED from `base025_na.npz` on 2026-08-16: lats
+    0.0..70.0 (281), lons -100.0..20.0 (481). A pentad tensor that does not
+    land on those exact axes cannot share an architecture, a stencil geometry
+    or an eval mask with everything already measured, and the half-cell
+    offset would be invisible in every plot.
+
+    `edge` — samples at cell CENTRES, …, -99.875, -99.625, … The natural
+    choice for a fresh product and what this function did first; kept because
+    it is the right answer when nothing downstream is already pinned.
+
+    Either way the axis is anchored to whole multiples of `deg` rather than
+    to the data's own min/max, so two runs over different subsets of the same
+    archive land on the same grid instead of drifting apart silently.
+    """
+    if align == "point":
+        k0 = int(np.ceil(lo / deg - 1e-9))
+        k1 = int(np.floor(hi / deg + 1e-9))
+        return np.arange(k0, k1 + 1) * deg
+    v0 = np.floor(lo / deg) * deg
+    n = int(np.ceil((hi - v0) / deg))
+    return v0 + (np.arange(n) + 0.5) * deg
+
+
+def bin_plan(lat, lon, deg, align="point"):
+    """Index map from the source grid onto the target grid.
 
     Nearest scatter-binning by INDEX (the `_write_grid` convention), so a
-    target cell is the mean of the source cells whose centres fall in it and
-    nothing is interpolated into existence. Edges are snapped to whole
-    multiples of `deg` so that two runs over different subsets of the same
-    archive land on the same grid — a grid defined by its own data's min/max
-    would drift with the subset and silently make two tensors incomparable.
+    target cell is the mean of the source cells nearest to it and nothing is
+    interpolated into existence. Under `point` alignment the boundary cells
+    are half-width — a sample at exactly 0.0 N owns [-0.125, 0.125] but the
+    archive only covers [0, 70] — which is the same thing a native 0.25 deg
+    model grid point does at its own boundary, so it needs no correction.
     """
-    lat0 = np.floor(float(lat.min()) / deg) * deg
-    lon0 = np.floor(float(lon.min()) / deg) * deg
-    nlat = int(np.ceil((float(lat.max()) - lat0) / deg))
-    nlon = int(np.ceil((float(lon.max()) - lon0) / deg))
-    ilat = np.clip(((lat - lat0) / deg).astype(np.int64), 0, nlat - 1)
-    ilon = np.clip(((lon - lon0) / deg).astype(np.int64), 0, nlon - 1)
+    a_lat = axis_for(float(lat.min()), float(lat.max()), deg, align)
+    a_lon = axis_for(float(lon.min()), float(lon.max()), deg, align)
+    nlat, nlon = len(a_lat), len(a_lon)
+    ilat = np.clip(np.round((lat - a_lat[0]) / deg).astype(np.int64), 0, nlat - 1)
+    ilon = np.clip(np.round((lon - a_lon[0]) / deg).astype(np.int64), 0, nlon - 1)
     flat = (ilat[:, None] * nlon + ilon[None, :]).ravel()
-    centres_lat = lat0 + (np.arange(nlat) + 0.5) * deg
-    centres_lon = lon0 + (np.arange(nlon) + 0.5) * deg
     return dict(flat=flat, nlat=nlat, nlon=nlon, ncell=nlat * nlon,
-                lat=centres_lat, lon=centres_lon, deg=deg)
+                lat=a_lat, lon=a_lon, deg=deg, align=align)
 
 
 def bin_slice(arr, plan):
@@ -291,6 +315,12 @@ def main():
                     help="bin each daily slice onto a regular grid of this "
                          "size in degrees before accumulating (E-034 §2: "
                          "0.25 for the GLORYS channels). 0 = native grid.")
+    ap.add_argument("--grid-align", default="point", choices=("point", "edge"),
+                    help="'point' puts samples ON multiples of --bin-deg, "
+                         "which is the family-3 grid (281x481 over the NA "
+                         "window) and therefore the only choice that keeps a "
+                         "pentad tensor comparable with everything already "
+                         "measured. 'edge' puts them at cell centres.")
     ap.add_argument("--report-mem", action="store_true",
                     help="print peak RSS at the end — this is how the "
                          "streaming claim stays a measurement")
@@ -387,9 +417,9 @@ def main():
             if a.bin_deg:
                 plan = bin_plan(d.variables["latitude"][:].astype(np.float64),
                                 d.variables["longitude"][:].astype(np.float64),
-                                a.bin_deg)
+                                a.bin_deg, a.grid_align)
                 print(f"grid     {plan['nlat']}x{plan['nlon']} at "
-                      f"{a.bin_deg} deg (from "
+                      f"{a.bin_deg} deg ({a.grid_align}-aligned, from "
                       f"{len(d.variables['latitude'])}x"
                       f"{len(d.variables['longitude'])} native)")
                 ensure_out((plan["nlat"], plan["nlon"]))
@@ -470,6 +500,7 @@ def main():
              "cadence_days": np.array(days), "stat": np.array(a.stats),
              "min_days": np.array(min_days),
              "bin_deg": np.array(a.bin_deg or 0.0),
+             "grid_align": np.array(a.grid_align),
              "vars": np.array(want)}
     if plan is not None:
         store["lat"] = plan["lat"]
