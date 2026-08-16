@@ -499,21 +499,44 @@ stops two copies sharing the screen; it is not a memory of what has been said.
     all data is no longer working"; measured on the live site, the card took
     64.6 s with one climate-api call open the whole time. The same query,
     minutes apart, took 1.0 s, 23 s, and never.
-    So the card draws **twice** when it has to: at `PIXEL_DEADLINE_MS` (15 s)
-    with whatever arrived, naming what hasn't; again, complete, when the
-    stragglers land. Slow costs a redraw, never a section; only never-arriving
-    costs the section, and the final pass switches the wording from "still
-    waiting on X" to "X didn't answer". Keep these four properties:
+    So the card **appears at `PIXEL_DEADLINE_MS` (2 s) and fills in as the
+    data lands** — every source that arrives after the first paint redraws it
+    in place. The two halves depend on each other: 2 s was Chris's ask
+    ("15s is still a very long time"), and it is only affordable because the
+    deadline is no longer a CUTOFF. Shortening a cutoff would have traded a
+    slow card for a sparse one. Being slow now costs a section its place in
+    the first frame, not its place in the card. Measured live: complete in
+    one paint under 8 s healthy; with a host killed outright, on screen at
+    ~2 s carrying everything else. Keep these properties:
     **deadline ≠ timeout** — a SHORT deadline to draw, a LONG one
     (`OM_TIMEOUT_MS`, 45 s) to give up; cutting off the 23 s response would
     discard a good answer to save time the card no longer spends waiting.
-    **The promises are shared between passes** — re-requesting would double
-    the Open-Meteo burst, which is rate-limited per IP across the family.
+    **Redraws coalesce** (`PIXEL_REDRAW_MS`, 250 ms) — the Open-Meteo family
+    answers within a few hundred ms of itself and each redraw rebuilds the
+    DOM; uncoalesced, one click meant fourteen rebuilds.
+    **The body's scroll offset survives the swap** — the card is taller than
+    a phone screen, and a reader would otherwise be yanked to the top each
+    time a source landed.
+    **Sources declare an `empty`** (the third element of a `jobs` entry) —
+    the two collection slots are read as arrays, and at 2 s they usually have
+    not arrived; seeded with null the first draw threw, and the error guard
+    turned that into "something went wrong" for data merely being in flight.
+    **The promises are created once and shared by every draw** — re-requesting
+    per pass would multiply the Open-Meteo burst, rate-limited per IP across
+    the family.
     **Every draw checks it still owns the card** (`pixelCardSeq`): tap A, tap
     B while A's slow source is out, and A's data would otherwise redraw under
     B's heading. **A throw in the draw says so and rethrows out of band** —
     swallowed, a rendering bug becomes a slightly emptier card and the suite's
     "loads without page errors" check never sees it.
+    The pending note names three sources and counts the rest (at 2 s most of
+    the twenty are still out, and the full list was a wall of text under a
+    nearly empty card), and **"still loading" and "didn't answer" are visually
+    distinct** — accent and gently pulsing versus amber and static, because
+    one is expected and transient and the other is final. A source counts as
+    having not answered only if it was outstanding at first paint AND came
+    back empty: there are no waves inland and no river mid-ocean, and naming
+    those would cry wolf on every second click.
     Related: `fmtVal(null)` used to throw, and because the body is built in one
     pass, one null field in one upstream response took the whole card down to a
     permanent "Reading this point…". It prints a dash now. Formatting is the
