@@ -358,3 +358,103 @@ fig.savefig(os.path.join(FIGS, "fig_axes.pdf"))
 plt.close(fig)
 
 print("figures written to", FIGS)
+
+
+# ---- Fig 9: the AMOC read-out of the two widest 205M arms, rolled ---------
+# src: run #355 (xl89) and #356 (xl144) rollout_spatial.json, staged here as
+#      roll_355.json / roll_356.json; truth from
+#      `rollout_spatial.py --dump-truth` (the evaluator's own train-month
+#      climatology rule, so the deseasonalisation matches the roll's).
+# The interactive version with the per-arm table is
+#      ml/paper/figs/amoc_roll.html -> blauewelt.github.io/earth/...
+# Heads are DEDUPLICATED BY CHECKPOINT: both runs re-roll the frozen gate,
+# and drawing it twice would misstate how many arms are on the page.
+def _amoc_arms():
+    seen, arms = set(), []
+    for src, colour in (("roll_355.json", C1), ("roll_356.json", C3)):
+        d = json.load(open(os.path.join(HERE, src)))
+        for key, h in d["heads"].items():
+            ident = h.get("meta", {}).get("file", key)
+            if ident in seen:
+                continue
+            seen.add(ident)
+            slots = int(h.get("meta", {}).get("stencil", 1) or 1)
+            lab = {1: "gate (no neighbours)"}.get(slots, "%d inputs" % (slots - 1))
+            arms.append({"lab": "%s, s%s" % (lab, h["meta"].get("seed", 0)),
+                         "c": INK2 if slots == 1 else colour,
+                         "gate": slots == 1,
+                         "long": h["long"], "future": h["future"],
+                         "r": h["long"].get("r_heldout")})
+    return arms
+
+
+def _sm(v, w=18):
+    v = np.asarray(v, float)
+    if len(v) < w:
+        return v
+    k = np.ones(w) / w
+    out = np.convolve(v, k, mode="same")
+    half = w // 2                      # convolve's edges average in zeros
+    out[:half] = np.nan
+    out[len(out) - half:] = np.nan
+    return out
+
+
+def _yr(yms):
+    return np.array([int(s[:4]) + (int(s[5:7]) - 1) / 12.0 for s in yms])
+
+
+try:
+    arms = _amoc_arms()
+    truth = json.load(open(os.path.join(HERE, "truth_rapid.json")))
+    ty, tv = _yr(truth["ym"]), np.asarray(truth["sv_des"], float)
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.6, 3.1),
+                                 gridspec_kw={"width_ratios": [1.25, 1]})
+
+    for yr in (2009, 2017, 2023):                 # the never-trained years
+        a1.axvspan(yr, yr + 1, color=INK2, alpha=0.13, lw=0)
+        a1.text(yr + 0.5, 7.0, str(yr), color=INK2, fontsize=6.5, ha="center")
+    a1.plot(ty, _sm(tv), color=INK, lw=2.4, zorder=5)
+    a1.text(ty[-1], _sm(tv)[~np.isnan(_sm(tv))][-1], "  observed",
+            color=INK, fontsize=7, va="center", fontweight="bold")
+    for arm in arms:
+        a1.plot(_yr(arm["long"]["roll_ym"]), _sm(arm["long"]["sv_des"]),
+                color=arm["c"], lw=1.5 if arm["gate"] else 1.1,
+                ls="--" if arm["gate"] else "-", alpha=0.95)
+    a1.set_ylim(-8.5, 8.5)
+    a1.set_ylabel("deseasonalised anomaly (Sv)")
+    a1.set_xlabel("18-month running mean; shaded = held out")
+    a1.set_title("hindcast, rolled from a 2004 context", loc="left", fontsize=9)
+
+    lo, hi = np.percentile(tv, [5, 95])
+    a2.axhspan(lo, hi, color=INK2, alpha=0.13, lw=0)
+    a2.text(2043, hi - 0.4, "observed 90% range", color=INK2, fontsize=6.5,
+            ha="right", va="top")
+    a2.plot(ty, _sm(tv), color=INK, lw=2.4, zorder=5)
+    a2.axvline(2025, color=INK2, lw=0.9, ls=":")
+    for arm in arms:
+        a2.plot(_yr(arm["future"]["roll_ym"]), _sm(arm["future"]["sv_des"]),
+                color=arm["c"], lw=1.5 if arm["gate"] else 1.1,
+                ls="--" if arm["gate"] else "-", alpha=0.95)
+    a2.set_ylim(-8.5, 8.5)
+    a2.set_xlabel("no forcing arrives after the dotted seam")
+    a2.set_title("unforced roll, 20 years past the record", loc="left",
+                 fontsize=9)
+
+    for a in (a1, a2):
+        strip(a)
+    hand = [matplotlib.lines.Line2D([], [], color=a["c"], lw=1.4,
+                                    ls="--" if a["gate"] else "-",
+                                    label="%s  (r=%s)" % (a["lab"], a["r"]))
+            for a in arms]
+    fig.legend(handles=hand, frameon=False, fontsize=6.5, ncol=3,
+               loc="lower center", bbox_to_anchor=(0.5, -0.13))
+    fig.suptitle("The corridor's best arms, read out as transport: the gain "
+                 "does not transfer (r = held-out years)",
+                 fontsize=9, x=0.02, ha="left")
+    fig.savefig(os.path.join(FIGS, "fig_amoc_roll.pdf"))
+    plt.close(fig)
+except FileNotFoundError as e:
+    print("fig_amoc_roll skipped:", e)
+
+print("figures written to", FIGS)

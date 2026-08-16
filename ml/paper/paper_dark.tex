@@ -101,7 +101,11 @@ forecast, parameters beat every other axis measured: input width
 rung, then \emph{saturating} at 89 --- 144 points buy nothing) and step
 budget ($60\mathrm{k}\to200\mathrm{k}$, decelerating toward an
 asymptote) both pay, and both pay less. \textbf{On the rolled forecast,
-scale is not the largest effect.} Adding Gaussian noise to the model's
+scale is not the largest effect, and neither axis behaves as the
+forecast ratio said it would}: the step budget that bought the most
+one-step skill buys \emph{exactly nothing} rolled, while the width that
+had visibly saturated at 89 points keeps paying to 144
+($0.6637\to0.6725\to0.6781$ at 205M, same sign at every seed). Adding Gaussian noise to the model's
 own inputs at its measured one-step error scale is worth $+0.057$
 corridor AUC at fixed capacity --- enough that a noised 88M model beats
 the clean 205M one --- and a near-field 8-point stencil is worth
@@ -1287,6 +1291,8 @@ ring-8@222 (base champion) & $576\times8$ & 0.608 & 0.599 & 0.606 & 0.6043 \\
 big55 (sunflower-55) & $768\times12$ & 0.621 & 0.621 & 0.622 & 0.6213 \\
 big34 (sunflower-34) & $768\times12$ & 0.628 & 0.618 & 0.625 & 0.6237 \\
 xl55 (sunflower-55) & $1024\times16$ & 0.664 & 0.663 & 0.664 & 0.6637 \\
+xl89 (sunflower-89) & $1024\times16$ & 0.674 & 0.671 & --- & 0.6725 \\
+\textbf{xl144 (sunflower-144)} & $1024\times16$ & \textbf{0.681} & \textbf{0.676} & --- & \textbf{0.6781} \\
 \midrule
 \multicolumn{6}{l}{\emph{not a capacity change --- same 88M tier, different input or objective}}\\
 sun89, 60k steps & $768\times12$ & --- & 0.639 & 0.630 & 0.6345 \\
@@ -1339,12 +1345,37 @@ matters: the 88M/89-point model at its \emph{full} 200k budget
 ($0.1295$--$0.1331$). At this scale, \emph{parameters beat steps},
 which is the same verdict the corridor gave.
 
-\paragraph{Both axes, rolled.} Those are forecast-axis numbers, and the
-corridor evaluations have since landed for both arms (gate $0.643$, five
-of five heads). They split. \textbf{Width does roll}: at the 88M tier,
-89 points give corridor AUC $0.6345$ against $0.6213$ for 55 and
-$0.6237$ for 34 --- $+0.013$, several times the tier's $\pm0.005$ seed
-spread, and in the same direction as the forecast axis.
+\paragraph{Where width really stops.} Combining the widest inputs with
+the largest head settles the width question on the forecast axis and
+re-opens it on the roll. At $1024\times16$ and 200k steps, 89 and 144
+points give forecast ratios of $0.12362$/$0.12158$ and
+$0.12358$/$0.12146$ --- paired differences of $-0.00004$ and $-0.00012$,
+roughly $17\times$ inside the seed spread. On the one-step scoreboard
+width is \emph{finished} at 89 points, and we said so.
+
+The corridor disagrees, and it is the scoreboard that matters. Paired by
+seed, xl144 rolls at $0.68067$/$0.67558$ against xl89's
+$0.67433$/$0.67058$: $+0.0063$ and $+0.0050$, same sign at both seeds,
+and the ladder $0.6637 \to 0.6725 \to 0.6781$ across
+$55\to89\to144$ points is monotone with no visible flattening. The
+effect is comparable to the tier's own seed spread ($0.004$--$0.005$
+here, against the $0.001$ we measured at xl55), so we read it as
+consistent and suggestive rather than decisive --- but its
+\emph{direction} is not in doubt, and it is the opposite of what the
+forecast ratio predicted. \textbf{The decision this reverses is a
+concrete one}: a previous revision concluded from the forecast axis
+alone that a 233-point stencil should not be built. That conclusion is
+withdrawn. Saturation on a one-step metric is not evidence of
+saturation under iteration, and this programme has now made that
+mistake in both directions --- E-010 closed the capacity axis in a
+regime that could not exercise it, and E-032 closed the width axis on a
+scoreboard that could not see it.
+
+\paragraph{Both axes, rolled at 88M.} The same split appears one tier
+down (gate $0.643$, five of five heads). \textbf{Width does roll}: at
+the 88M tier, 89 points give corridor AUC $0.6345$ against $0.6213$ for
+55 and $0.6237$ for 34 --- $+0.013$, several times the tier's
+$\pm0.005$ seed spread, and in the same direction as the forecast axis.
 \textbf{Steps do not.} Paired by seed, the 200k arms roll at $0.63867$
 and $0.62958$ against the 60k arms' $0.63883$ and $0.63017$: differences
 of $-0.0002$ and $-0.0006$, both \emph{negative}, both an order of
@@ -1364,9 +1395,37 @@ cancelling. That is the same trade the noise experiment of
 gaining $+0.057$ for it. Extra steps are the anti-noise intervention,
 and the roll prices them accordingly.
 
-Runs combining the widest inputs with the largest head (89 and 144
-points at $1024\times16$, 200k steps) are in flight at the time of
-writing.
+\begin{figure}[t]
+\centering\includegraphics[width=.92\linewidth]{fig_amoc_roll.pdf}
+\caption{The AMOC read-out of the two widest 205M arms, rolled. Left:
+hindcast from a 2004 context, with the three never-trained years shaded
+--- those columns are the honest test, because outside them the roll
+replays months the codec saw in pretraining. Right: twenty years of
+unforced roll past the end of the record. The flatness on the right is
+the finding, not a forecast: with no wind or heat-flux forcing after the
+seam, the learned dynamics relaxes toward climatology and stops moving,
+which is a damped attractor rather than a quiet ocean. Interactive
+version, with the per-arm table, at
+\texttt{blauewelt.github.io/earth/ml/paper/figs/amoc\_roll.html}.}
+\label{fig:amocroll}
+\end{figure}
+
+\paragraph{What the corridor gain does \emph{not} buy.}
+Fig.~\ref{fig:amocroll} rolls these same two arms out as transport, and
+the result is a caution against reading corridor AUC as AMOC skill.
+Over the three held-out years the no-neighbour gate reads $r=+0.45$,
+xl89 reads $+0.44$/$+0.39$ and xl144 reads $+0.42$/$+0.35$ --- if
+anything a mild \emph{decline} with the input width that gains most on
+the corridor, and a seed spread ($0.05$--$0.07$) that swamps every
+difference between arms. The corridor ranking does not transfer to the
+transport read-out at all. Two readings are available and we cannot yet
+separate them: the corridor scores the model's own input fields where
+the transport probe scores a thin integral of them, so the gain may be
+real and simply not where the probe looks; or the wide arms are winning
+the corridor on fields the transport does not depend on. Either way,
+\S\ref{sec:limits}(6) stands unchanged, and the bridge from rolled field
+skill to transport skill at range remains the programme's open problem
+rather than something scale has quietly solved.
 
 \subsection{Exposure bias: two mechanisms under test}\label{sec:exposure}
 
@@ -1433,7 +1492,9 @@ wide reach.
 \toprule
 arm & tier & params & input pts & forecast ratio & corridor AUC \\
 \midrule
-xl55 (60k) & $1024\times16$ & 205.4M & 55 & \textbf{0.1295--0.1331} & \textbf{0.6637} \\
+\textbf{xl144 (200k)} & $1024\times16$ & 208.9M & 144 & 0.12358/0.12146 & \textbf{0.6781} \\
+xl89 (200k) & $1024\times16$ & 206.9M & 89 & \textbf{0.12362/0.12158} & 0.6725 \\
+xl55 (60k) & $1024\times16$ & 205.4M & 55 & 0.1295--0.1331 & 0.6637 \\
 sun89 (200k) & $768\times12$ & 89.7M & 89 & 0.1355--0.1366 & 0.6341 \\
 sun89 (120k) & $768\times12$ & 89.7M & 89 & 0.1369--0.1384 & --- \\
 sun89 (60k) & $768\times12$ & 89.7M & 89 & 0.1442--0.1462 & 0.6345 \\

@@ -85,17 +85,36 @@ def pearson(xs, ys):
 
 
 def load_heads(paths):
-    """Every head from every rollout_spatial.json given, tagged by arm."""
-    out = []
+    """Every head from every rollout_spatial.json given, tagged by arm.
+
+    DEDUPLICATED BY CHECKPOINT. Every evaluation re-rolls the frozen gate head
+    (that is the point of the gate), so handing this script two runs draws the
+    gate twice — two identical lines, two identical legend entries, two
+    identical table rows, and a reader who counts arms gets the wrong number.
+    The identity of a head is the checkpoint file it was loaded from, not the
+    run it happened to be evaluated in; first occurrence wins and the duplicate
+    is recorded so the caller can see what was folded.
+    """
+    out, seen = [], {}
     for p in paths:
         d = json.load(open(p))
         for key, entry in d.get("heads", {}).items():
             meta = entry.get("meta", {})
+            ident = meta.get("file") or key
+            if ident in seen:
+                seen[ident]["also_in"].append(os.path.basename(p))
+                continue
             lab, role, slots = arm_of(key, meta)
-            out.append({"key": key, "label": lab, "role": role, "slots": slots,
-                        "seed": meta.get("seed", 0),
-                        "long": entry.get("long"), "future": entry.get("future"),
-                        "src": os.path.basename(p)})
+            h = {"key": key, "label": lab, "role": role, "slots": slots,
+                 "seed": meta.get("seed", 0),
+                 "long": entry.get("long"), "future": entry.get("future"),
+                 "src": os.path.basename(p), "ident": ident, "also_in": []}
+            seen[ident] = h
+            out.append(h)
+    for h in out:
+        if h["also_in"]:
+            print("  folded duplicate %s (also in %s)"
+                  % (h["ident"], ", ".join(h["also_in"])), file=sys.stderr)
     # gate first (it is the reference), then by slot count, then seed
     out.sort(key=lambda h: (h["slots"] != 1, h["slots"], h["seed"]))
     return out
