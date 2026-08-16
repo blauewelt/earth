@@ -129,6 +129,42 @@ rather than scaled.
 - Provenance must record the cadence explicitly, so a run's own manifest
   says which axis it trained on.
 
+**The aggregator's output contract, settled 2026-08-16 — `build_family4.py`
+reads this, so it is written down before that script exists.** The first
+`ml/aggregate_cadence.py` could not have completed this step at all: it kept
+one accumulator per (bin, variable) resident for the whole run and
+materialised a single stacked `.npz` at the end, which over the 2,339 pentad
+bins of 1993-01..2024-12 at 1/12° is **227 GB of RAM and a 45.4 GB file**.
+Measured, not modelled — one real month peaked at 0.93 GB for 7 bins and the
+arithmetic scales exactly. It would have failed *after* the ~8-hour GLORYS12
+pull, not before it. Three consequences now hold:
+
+- **Streaming.** A bin is flushed the instant the date crosses out of it, so
+  memory is O(one bin) and does not grow with the run. Measured over three
+  real months: peak open bins 1, peak RSS **0.16 GB** at 0.25° and 0.56 GB on
+  the native grid.
+- **Spatial binning happens HERE** (`--bin-deg 0.25`), as §2 of this document
+  already specified for the GLORYS channels and nothing was yet doing. Full
+  archive at 0.25°: **5.0 GB**, which fits; at 1/12° it does not. Each DAILY
+  slice is binned and only then averaged in time, so the day count that
+  `--min-days` guards stays a count of *days* rather than of source-cell-days.
+- **Output is one memmapped `.npy` per variable plus `index.npz`** (`bin_index`
+  = the full contiguous bin range, `has_data` marking bins no chunk covered,
+  plus `lat`/`lon` when binned). Row *i* is `bin_index[i]`; nothing has to
+  exist in RAM before it can be written.
+- **The dailies stream back from the Hub** (`--hf-repo earth-tensors`), because
+  `fetch_glorys_daily.py` deletes each chunk once it is restore-verified —
+  after the pull there is no local archive to aggregate, by design.
+
+`tests/test_e034_aggregate.py` pins all of it, and the pin that matters is
+**bit-identity**: with no `--bin-deg` the streaming version reproduces the
+pre-streaming one exactly — same means, same NaN mask, same dropped straddle
+bin — verified both on a three-month synthetic fixture and on three real
+GLORYS12 months at full 841×1441. That test is three months rather than one
+on purpose: the rewrite's first version re-created the output memmap once per
+chunk and silently erased every bin already written, and a single-chunk test
+cannot see that.
+
 ---
 
 ## 6 · Order of work
