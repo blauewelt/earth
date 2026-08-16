@@ -1289,6 +1289,8 @@ big34 (sunflower-34) & $768\times12$ & 0.628 & 0.618 & 0.625 & 0.6237 \\
 xl55 (sunflower-55) & $1024\times16$ & 0.664 & 0.663 & 0.664 & 0.6637 \\
 \midrule
 \multicolumn{6}{l}{\emph{not a capacity change --- same 88M tier, different input or objective}}\\
+sun89, 60k steps & $768\times12$ & --- & 0.639 & 0.630 & 0.6345 \\
+sun89, \textbf{200k} steps & $768\times12$ & --- & 0.639 & 0.630 & 0.6341 \\
 ring-8@222 (near-field) & $768\times12$ & 0.646 & 0.661 & 0.661 & 0.6560 \\
 \textbf{znoise, $\sigma{=}0.7$ (sun-55)} & $768\times12$ & \textbf{0.683} & \textbf{0.674} & --- & \textbf{0.6785} \\
 \bottomrule
@@ -1335,10 +1337,36 @@ between the first extension and the second. The comparison that
 matters: the 88M/89-point model at its \emph{full} 200k budget
 ($0.1355$--$0.1366$) still does not reach the 205M model at 60k
 ($0.1295$--$0.1331$). At this scale, \emph{parameters beat steps},
-which is the same verdict the corridor gave. Runs combining the widest
-inputs with the largest head (89 and 144 points at $1024\times16$,
-200k steps) are in flight at the time of writing, as are the rolled
-corridor evaluations of the width and step-budget arms.
+which is the same verdict the corridor gave.
+
+\paragraph{Both axes, rolled.} Those are forecast-axis numbers, and the
+corridor evaluations have since landed for both arms (gate $0.643$, five
+of five heads). They split. \textbf{Width does roll}: at the 88M tier,
+89 points give corridor AUC $0.6345$ against $0.6213$ for 55 and
+$0.6237$ for 34 --- $+0.013$, several times the tier's $\pm0.005$ seed
+spread, and in the same direction as the forecast axis.
+\textbf{Steps do not.} Paired by seed, the 200k arms roll at $0.63867$
+and $0.62958$ against the 60k arms' $0.63883$ and $0.63017$: differences
+of $-0.0002$ and $-0.0006$, both \emph{negative}, both an order of
+magnitude inside seed noise. Three and a third times the training
+compute bought a decisive $-0.0088$ on the one-step forecast and
+\emph{nothing at all} on the twelve-month roll.
+
+The per-horizon breakdown says why, and it is not a flat null. The 200k
+model is \emph{better} than the 60k model at short range (seed 1,
+$h{=}1$: $0.761$ vs $0.756$) and \emph{worse} at long range ($h{=}9$:
+$0.602$ vs $0.607$), with the crossover near $h{=}5$; the extra
+training sharpened the one-step mapping at the cost of its behaviour
+under iteration, and the corridor's flat average is those two effects
+cancelling. That is the same trade the noise experiment of
+\S\ref{sec:exposure} attacks from the other end --- deliberately
+\emph{worsening} the one-step fit to buy iteration robustness, and
+gaining $+0.057$ for it. Extra steps are the anti-noise intervention,
+and the roll prices them accordingly.
+
+Runs combining the widest inputs with the largest head (89 and 144
+points at $1024\times16$, 200k steps) are in flight at the time of
+writing.
 
 \subsection{Exposure bias: two mechanisms under test}\label{sec:exposure}
 
@@ -1406,9 +1434,9 @@ wide reach.
 arm & tier & params & input pts & forecast ratio & corridor AUC \\
 \midrule
 xl55 (60k) & $1024\times16$ & 205.4M & 55 & \textbf{0.1295--0.1331} & \textbf{0.6637} \\
-sun89 (200k) & $768\times12$ & 89.7M & 89 & 0.1355--0.1366 & in flight \\
+sun89 (200k) & $768\times12$ & 89.7M & 89 & 0.1355--0.1366 & 0.6341 \\
 sun89 (120k) & $768\times12$ & 89.7M & 89 & 0.1369--0.1384 & --- \\
-sun89 (60k) & $768\times12$ & 89.7M & 89 & 0.1442--0.1462 & in flight \\
+sun89 (60k) & $768\times12$ & 89.7M & 89 & 0.1442--0.1462 & 0.6345 \\
 big55 (60k) & $768\times12$ & 88.0M & 55 & 0.1456--0.1500 & 0.6213 \\
 big34 (60k) & $768\times12$ & 86.9M & 34 & 0.1483--0.1519 & 0.6237 \\
 big-ring222 (60k) & $768\times12$ & --- & 8 & 0.1509--0.1557 & \textbf{0.6560} \\
@@ -1440,10 +1468,14 @@ cheapest interventions in the programme outrank its most expensive one.
 The honest summary is therefore a rebalanced one. On one-step forecast,
 scale is the whole story and the axes are ordered parameters $\gg$ width
 $>$ steps. On the twelve-month roll, \emph{robustness to the model's own
-error} is at least as valuable as parameters, and the ranking of input
+error} is at least as valuable as parameters; the ranking of input
 geometries does not follow the forecast ranking at all --- the two
 scoreboards disagree again (\S\ref{sec:inversion}) at a capacity where
-starvation cannot explain it. \S\ref{sec:cone} gives what we think is
+starvation cannot explain it --- and the step-budget axis, worth
+$-0.0088$ on the forecast, is worth \emph{zero} rolled
+(\S\ref{sec:axes}). Of the four axes measured at fixed 88M capacity,
+only two survive iteration: width, weakly ($+0.013$), and error
+robustness, decisively ($+0.057$). \S\ref{sec:cone} gives what we think is
 the underlying reason. The next experiments are the compositions
 nobody has run: noise $\times$ 205M, noise $\times$ near-field, and a
 sweep of $\sigma$, which was set from the model's measured one-step
