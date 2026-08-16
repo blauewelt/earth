@@ -197,6 +197,72 @@ and the question merits two seeds — but the next uw iteration should cut
 gather cost (cache slot windows across steps, or sample S) before any
 scale-up.
 
+## THE DEPENDENCY CONE — measured 2026-08-16, and it leaves the window
+
+**Chris:** *"are we certain we are rolling forward all the necessary pixels?
+each point points towards 144 other points. Which means we need to roll
+forward the whole world?"*
+
+Measured with `ml/measure_cone_escape.py` (pure geometry over the real
+`build_stencil` table, no GPU), seeding from the RAPID section:
+
+| h | cone size | % of window | of THIS step's requested neighbours, % land/off-window |
+|---|---|---|---|
+| 1 | 22,738 px | 26.9% | 29.8% |
+| 2 | 83,961 px | 99.5% | 38.8% |
+| **3** | **84,405 px** | **100.0%** | 49.6% |
+| 4–12 | 84,405 px | 100.0% | 49.8% |
+
+*(sunflower-144, `spiral:111,4444,0.71,0.5`. For contrast the base-scale
+champion ring-8@222 reaches only 30.7% of the window by h=12 with 4.8%
+unmet — reach, not slot count, is what escapes.)*
+
+**Three findings, in order of how much they matter.**
+
+**(1) The eval already rolls everything it can.** `rollout_spatial.py`
+advances all 84,405 window ocean pixels every step — that is the maximum
+available, and it is why this evaluator exists. So the answer to "are we
+rolling the necessary pixels" is yes *within the window*.
+
+**(2) But the window is not big enough, and Chris's intuition is right.**
+The cone saturates the entire window at **h=3**, and a 4444 km stencil in a
+basin-sized window has **~50% of its slots resolving to land-or-outside at
+every step** — half the input of our best model is the dead-slot encoding.
+Since the corridor AUC averages h=1..12, ten of its twelve horizons are
+scored on a state whose dependency cone has already left the domain. The
+strict reading of the geometry is that a 4444 km reach rolled 12 months
+needs 53,000 km of halo, against Earth's 40,075 km circumference: the
+honest cone is the whole planet, several times over.
+
+**(3) It is not a BUG, and the distinction is the important part.** Dead
+slots are encoded as zero in TRAINING exactly as in evaluation, so there is
+no train/eval mismatch and nothing here invalidates a published number. What
+it means is that every rolled number in this programme is measured under a
+specific, previously unstated boundary condition: **the world outside the
+window is held at its climatological mean.** The corridor AUC is a
+well-defined quantity; it is just not the quantity a global model would
+produce, and the difference grows with reach — which is exactly the axis
+E-026 was comparing when it found its inversion. (E-026b's dead-slot
+measurement argues the boundary is not that inversion's mechanism —
+fully-LIVE pixels carried the larger penalty, corr +0.176 — so this does not
+overturn it. But it does mean reach and boundary-dependence were confounded
+in that comparison, and nobody had noticed.)
+
+**Consequences, now recorded rather than deferred:**
+
+- The paper must state the boundary condition wherever a rolled number
+  appears. Added to the limitations.
+- **This promotes the global tensor from "more independent samples" to a
+  CORRECTNESS requirement** for wide-stencil long rolls — E-033's Phase 4
+  argument is now much stronger than when it was written this morning.
+- A cheap interim experiment falls out: at fixed slot count, a *narrower
+  reach* is far more self-contained (ring-8@222 leaves 95% of its demand
+  met at h=12). Since the width axis just saturated at 89 points, the open
+  question is whether reach can be cut without losing the capacity-era gains
+  — which would buy correctness and speed at once.
+- The measurement is cheap and should be run for any future stencil before
+  it is trained, alongside `measure_slot_occupancy.py`.
+
 ## EVAL wave 6 · E-029 heads on the roll — DISPATCHED 2026-08-16 ~05:45Z
 
 **WAVE 6B PARTIAL RESULT + AN OOM (#353, 07:45Z): WIDTH TRANSFERS TO THE

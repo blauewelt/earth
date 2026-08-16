@@ -162,6 +162,17 @@ channels — the ones thermal wind says carry the transport — even more
 obviously interpolated. Finer resolution should wait until a density product
 justifies it.
 
+**Global is now also a CORRECTNESS requirement, not only a data one.**
+Measured after this plan was first written (`ml/measure_cone_escape.py`): a
+144-point stencil reaching 4444 km has a dependency cone that covers the
+ENTIRE window by horizon 3, and ~50% of its slots resolve to land-or-outside
+at every step. Ten of the twelve horizons in our headline corridor AUC are
+therefore scored under an unstated boundary condition — the world outside the
+window held at its climatological mean. Going global does not remove the
+boundary (the Southern Ocean edge remains) but it moves it thousands of
+kilometres from the corridor and eliminates the Atlantic-basin walls that
+currently consume half of every wide stencil's input.
+
 **Global, by contrast, adds genuinely independent samples**: the Pacific and
 Southern Ocean are different dynamical regimes, not more of the same
 correlated Atlantic. That is exactly what a data-starved model needs, and it
