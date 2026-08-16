@@ -1,0 +1,13 @@
+{
+ "eval": true,
+ "heads": [
+  "e017_u1_s0 (gate)",
+  "e029ar222_u1_s0",
+  "e029ar222_u1_s1",
+  "e029ar222_u1_s2",
+  "e029bznoise_u1_s0",
+  "e029bznoise_u1_s1"
+ ],
+ "note": "wave 6A: mechanism heads on the roll; gate must reproduce 0.643",
+ "published_at": "2026-08-16T05:37:17.782Z"
+}
