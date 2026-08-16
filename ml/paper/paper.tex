@@ -506,6 +506,41 @@ all-time fixed-holdout record (0.528) while the k-fold read 0.166 ---
 the coarse instrument flatters widest exactly where overfitting is
 easiest.
 
+The stage-2 programme of \S\ref{sec:roll} adds two instruments at
+opposite ends of the power spectrum. The \textbf{forecast ratio} is the
+sharpest number in the project:
+\[
+  \mathrm{ratio}
+  \;=\;
+  \frac{\mathrm{MSE}\bigl(\hat z_{t+1},\,z_{t+1}\bigr)}
+       {\mathrm{MSE}\bigl(z_{t},\,z_{t+1}\bigr)}
+\]
+over held-out windows --- the temporal model's one-step error in
+embedding space, divided by the error of simply asserting that next
+month's embedding equals this month's (persistence, whose measured MSE
+is $\approx$3.1 $z$-units$^2$). A ratio of $0.13$ therefore reads
+``the model's one-step error is 13\% of the no-change forecast's.''
+Because every stage-2 arm shares the same frozen codec, the denominator
+is identical across arms and the ratio is directly comparable across
+the whole of \S\ref{sec:roll} --- which is exactly why it, and not a
+channel-space score, is the ladder's screening metric. Its
+statistical power is what makes the paired designs work: three-seed
+spread is $\pm0.002$, so paired same-seed differences of $0.002$
+(the width effect) are readable and differences of $0.03$ (the
+capacity effect) are $\sim$30$\sigma$. Its limitation is inherited
+from its space: it is an internal, embedding-space quantity, blind by
+construction to anything the frozen codec cannot represent, and a
+gain on it need not survive iteration --- which is what the
+\textbf{corridor AUC} exists to test. That instrument is the
+opposite trade: physically meaningful (channel-space MSSS against
+climatology, rolled twelve months, averaged over horizons, scored on
+the 29{,}627 corridor pixels), expensive (hours per head), and
+guarded rather than powerful --- its error discipline is the gate
+head's exact reproduction ($0.643$, third decimal, every run) plus
+paired seeds, and its decision threshold is the observed seed spread
+($\pm0.005$ at the 88M tier, $\pm0.001$ at 205M). Every claim in
+\S\ref{sec:roll} names which of the two instruments it is read from.
+
 \section{Related work}\label{sec:related}
 
 Three literatures border this project; we take them in turn. (The
@@ -1081,9 +1116,16 @@ Everything above probes what the representation \emph{contains}. This
 section --- the work of 13--16 August, and the reason for v6 --- is about
 what the temporal model can \emph{do} with it: predict the ocean's state
 forward, month over month, over the pixels that carry the overturning.
-The section's one-sentence summary: input geometry looked decisive and
-was a symptom; \textbf{capacity was the variable}, and it has not
-stopped paying at 205M parameters.
+One sentence of configuration so the reader carries the right picture:
+\emph{everything in this section runs on the quarter-degree tensor} ---
+all 39 channels of Table~\ref{tab:channels}, including the sixteen Argo
+depth levels to 1900\,dbar and sea-surface height --- through the frozen
+40.7M anchor codec of \S\ref{sec:qd}; the 14- and 24--25-channel tensors
+of the earlier sections are history here, and ``scale'' below always
+means the size of the \emph{stage-2 temporal head}, never the codec or
+the channel count. The section's one-sentence summary: input geometry
+looked decisive and was a symptom; \textbf{capacity was the variable},
+and it has not stopped paying at 205M parameters.
 
 \subsection{Spatial coupling: the stencil}\label{sec:stencil}
 
