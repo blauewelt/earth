@@ -5,6 +5,15 @@ mirrored and restore-verified at
 <https://huggingface.co/chfrank/earth-checkpoints>. Zenodo still awaiting an
 account.**
 
+**Plan note, and a reporting error worth recording.** The first check
+printed "plan: free" — but that string was the DEFAULT in my own
+`u.get('plan', 'free')` call, not a value the API returned. The field that
+actually carries this is `isPro`, and it reads **True**. So a default was
+reported as a measurement, which is precisely the failure `ml/CLAUDE.md`
+§4.12 names ("report measurements, not intentions"): an unchecked status
+claim is a guess wearing a fact's clothes. Check `isPro`; `plan` is `None`
+for individual accounts.
+
 **Namespace note, because it cost a 403:** the Hub account is the USER
 `chfrank`. `blauewelt` is the GitHub org and does not exist on Hugging Face,
 so `create_repo` under it returns *"You don't have the rights to create a
@@ -48,7 +57,7 @@ after August's 85 GB prune. Against that:
 | **Mutability** | versioned, overwrite freely | immutable once published; new version = new DOI |
 | **Identifier** | repo path | **a real DOI** |
 | **Per-file limit** | 500 GB hard, <200 GB recommended | part of the record quota |
-| **Capacity** | free public storage is *best-effort* for a few GB; PRO ($9/mo) covers up to 10 TB public; add-ons $12/TB/month | 50 GB per record by default; a one-time increase to **200 GB / <100 files** can be requested |
+| **Capacity** | **account is PRO (verified 2026-08-16, period ends 2026-09-01) → up to 10 TB public**; free tier is best-effort past a few GB; add-ons $12/TB/month | 50 GB per record by default; a one-time increase to **200 GB / <100 files** can be requested |
 | **Good at** | large, changing, frequently pulled | permanent, small-ish, cited |
 | **Bad at** | citation, permanence guarantees | iteration, big mutable working sets |
 
