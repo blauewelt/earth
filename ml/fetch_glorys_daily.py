@@ -49,6 +49,7 @@ import argparse
 import calendar
 import datetime as dt
 import os
+import shutil
 import sys
 
 DATASET = "cmems_mod_glo_phy_my_0.083deg_P1D-m"
@@ -78,6 +79,68 @@ def months_between(start, end):
             y, m = y + 1, 1
 
 
+def sha256(path, buf=1 << 22):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for b in iter(lambda: f.read(buf), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+def hf_connect(repo_name):
+    """Resolve the namespace and ensure the dataset repo exists."""
+    import os as _os
+    tok = _os.environ.get("HF_TOKEN") or (
+        open("/home/claude/.hf_token").read().strip()
+        if _os.path.exists("/home/claude/.hf_token") else "")
+    if not tok:
+        sys.exit("no HF_TOKEN (env or ~/.hf_token) and backup is enabled — "
+                 "see claude/huggingface-access.md, or pass --no-backup and "
+                 "accept that a dead box costs the whole pull")
+    from huggingface_hub import HfApi
+    api = HfApi(token=tok)
+    repo = repo_name if "/" in repo_name else f"{api.whoami()['name']}/{repo_name}"
+    api.create_repo(repo, repo_type="dataset", exist_ok=True, private=False)
+    return api, repo, tok
+
+
+def hf_preflight(api, repo, tok, scratch):
+    """PROVE THE BACKUP WORKS BEFORE FETCHING ANYTHING.
+
+    Chris, 2026-08-16: *"I would build the HF backup into that script (test
+    it in the beginning). Otherwise we will have built the training data and
+    then lost it."* Exactly right, and the repo already has the scar: the
+    embed-cache push sat AFTER `wait $S2_PID`, so a cache that existed for
+    sixteen hours was published at the very end — and when the upload failed
+    for lack of room, the run reported success (ml/CLAUDE.md §5.20, §4.6).
+
+    So this uploads a few bytes, downloads them BACK, compares, and deletes —
+    the entire round trip, exercised while it has cost nothing. If the token,
+    the namespace, the quota or the network is wrong, the job dies here
+    instead of after 110 GB."""
+    import os as _os
+    from huggingface_hub import hf_hub_download
+    probe = _os.path.join(scratch, ".preflight")
+    payload = b"earth/E-034 backup preflight\n"
+    with open(probe, "wb") as f:
+        f.write(payload)
+    want = sha256(probe)
+    api.upload_file(path_or_fileobj=probe, path_in_repo=".preflight",
+                    repo_id=repo, repo_type="dataset",
+                    commit_message="backup preflight")
+    back = hf_hub_download(repo, ".preflight", repo_type="dataset", token=tok,
+                           cache_dir=_os.path.join(scratch, "pf"))
+    got = sha256(back)
+    _os.remove(probe)
+    shutil.rmtree(_os.path.join(scratch, "pf"), ignore_errors=True)
+    if got != want:
+        sys.exit(f"BACKUP PREFLIGHT FAILED: uploaded {want}, got back {got}. "
+                 f"Refusing to fetch — the point of the preflight is that we "
+                 f"find this out now and not after 110 GB.")
+    print("backup   preflight OK: uploaded, downloaded back, sha256 matched")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", default="1993-01")
@@ -90,6 +153,18 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--min-free-gb", type=float, default=20.0,
                     help="refuse to start below this much free disk")
+    ap.add_argument("--hf-repo", default="earth-tensors",
+                    help="Hugging Face dataset repo for the running backup; "
+                         "namespace resolved from the token. '' disables, "
+                         "which you should not do — see --no-backup.")
+    ap.add_argument("--no-backup", action="store_true",
+                    help="fetch without mirroring. Prints a loud warning: a "
+                         "110 GB pull with no backup is one dead box away "
+                         "from being done twice.")
+    ap.add_argument("--keep-local", action="store_true",
+                    help="keep chunks on local disk after they are backed up "
+                         "(default: delete, so the pull needs ~1 chunk of "
+                         "disk rather than 110 GB)")
     a = ap.parse_args()
 
     chunks = list(months_between(a.start, a.end))
@@ -145,10 +220,34 @@ def main():
     except ImportError:
         sys.exit("pip install copernicusmarine")
 
+    api = repo = tok = None
+    hf_have = set()
+    if a.no_backup:
+        print("::warning:: --no-backup: a 110 GB pull with no mirror is one "
+              "dead box away from being done twice")
+    else:
+        api, repo, tok = hf_connect(a.hf_repo)
+        print(f"backup   https://huggingface.co/datasets/{repo}")
+        hf_preflight(api, repo, tok, a.out)
+        try:
+            hf_have = {f for f in api.list_repo_files(repo, repo_type="dataset")}
+        except Exception:                            # noqa: BLE001
+            pass
+        if hf_have:
+            print(f"resume   {len(hf_have)} file(s) already backed up — "
+                  f"those chunks are skipped")
+
     done = fail = skip = 0
     for y, m in chunks:
-        out = os.path.join(a.out, f"glorys_{y}{m:02d}.nc")
-        if os.path.exists(out) and os.path.getsize(out) > 0:
+        fname = f"glorys_{y}{m:02d}.nc"
+        out = os.path.join(a.out, fname)
+        # HF is the resume source, not the local disk: a box that dies takes
+        # its disk with it, and the whole point of backing up per chunk is
+        # that the next box starts where this one stopped.
+        if fname in hf_have:
+            skip += 1
+            continue
+        if os.path.exists(out) and os.path.getsize(out) > 0 and a.keep_local:
             skip += 1
             continue
         last = calendar.monthrange(y, m)[1]
@@ -159,9 +258,29 @@ def main():
                       minimum_depth=0, maximum_depth=1,
                       output_filename=out, **WINDOW)
             sz = os.path.getsize(out) / 1e6
+            if api is not None:
+                # PUBLISH WHEN THE ARTEFACT EXISTS, not when the job ends
+                # (ml/CLAUDE.md §5.20) — and verify the restore, because an
+                # upload returning 200 is not evidence the bytes come back.
+                src = sha256(out)
+                api.upload_file(path_or_fileobj=out, path_in_repo=fname,
+                                repo_id=repo, repo_type="dataset",
+                                commit_message=f"glorys daily {y}-{m:02d}")
+                from huggingface_hub import hf_hub_download
+                back = hf_hub_download(repo, fname, repo_type="dataset",
+                                       token=tok,
+                                       cache_dir=os.path.join(a.out, "vf"))
+                if sha256(back) != src:
+                    shutil.rmtree(os.path.join(a.out, "vf"), ignore_errors=True)
+                    raise RuntimeError(f"{fname} restored with a DIFFERENT "
+                                       f"sha256 — backup not trustworthy")
+                shutil.rmtree(os.path.join(a.out, "vf"), ignore_errors=True)
+                if not a.keep_local:
+                    os.remove(out)
             done += 1
-            print(f"  {y}-{m:02d}: {sz:,.0f} MB ({done} fetched, {skip} skipped)",
-                  flush=True)
+            print(f"  {y}-{m:02d}: {sz:,.0f} MB"
+                  + ("" if api is None else " · backed up + restore-verified")
+                  + f" ({done} fetched, {skip} skipped)", flush=True)
         except Exception as e:                       # noqa: BLE001
             # Say WHY it gave up — best effort is a promise about delivery,
             # never about reporting (ml/CLAUDE.md section 4.6).
