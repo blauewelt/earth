@@ -243,9 +243,19 @@ Terms are used throughout in the following precise senses.
   window pixels. It is where the AMOC's limbs live, and it is rendered
   as a globe layer in the companion visualization.
 \item[Corridor AUC] the rolled scoreboard: initialize with true
-  embeddings, roll twelve months feeding predictions back, score
-  MSSS-vs-climatology over the corridor at each horizon, and average
-  over $h=1\ldots12$. Higher is better.
+  embeddings, roll twelve months feeding predictions back, decode, and
+  score MSSS against climatology over the corridor's pixel-months at
+  each horizon,
+  \[
+    \mathrm{AUC} \;=\; \frac{1}{12}\sum_{h=1}^{12}
+    \Bigl(1-\tfrac{\mathrm{MSE}_h}{\mathrm{MSE}_{\mathrm{clim},h}}\Bigr).
+  \]
+  ``AUC'' is \emph{area under the skill-versus-horizon curve} --- a
+  plain mean over twelve monthly horizons --- \textbf{not} a ROC
+  statistic. Higher is better; climatology sits at $0$ by construction,
+  and the ranking is unchanged under persistence and damped-persistence
+  references and under horizon re-weighting (\S\ref{sec:inversion}).
+  Table~\ref{tab:auc} is the reference table.
 \item[Gate head] a frozen reference head (\texttt{e017}, no neighbours)
   re-evaluated at the start of every corridor evaluation; it must
   reproduce its pinned AUC of $0.643$ to the third decimal or the
@@ -1233,8 +1243,34 @@ project's best), corridor AUC $\mathbf{0.664}$/$0.663$/$0.664$ ---
 $+0.042$ over the 88M tier, $+0.075$ over the no-neighbour baseline,
 with a seed spread of $0.001$ against the forecast axis's $0.004$: at
 this capacity the rolled skill is essentially deterministic given the
-data. Fig.~\ref{fig:capacity} shows the ladder. No saturation is
+data. Fig.~\ref{fig:capacity} shows the ladder;
+Table~\ref{tab:auc} is the per-seed record. No saturation is
 visible on either axis through 205M parameters.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{llrrrr}
+\toprule
+head & tier & s0 & s1 & s2 & mean \\
+\midrule
+no neighbours (gate) & $576\times8$ & 0.589 & --- & --- & 0.5890 \\
+base55 (sunflower-55) & $576\times8$ & 0.569 & 0.573 & --- & 0.5710 \\
+ring-8@222 (base champion) & $576\times8$ & 0.608 & 0.599 & 0.606 & 0.6043 \\
+big55 (sunflower-55) & $768\times12$ & 0.621 & 0.621 & 0.622 & 0.6213 \\
+big34 (sunflower-34) & $768\times12$ & 0.628 & 0.618 & 0.625 & 0.6237 \\
+\textbf{xl55 (sunflower-55)} & $1024\times16$ & \textbf{0.664} & \textbf{0.663} & \textbf{0.664} & \textbf{0.6637} \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Rolled corridor AUC, per seed} --- the reference table
+for the metric defined in \S\ref{sec:gloss}. Every row is read from an
+evaluation whose gate head reproduced its pinned $0.643$ exactly; the
+full per-horizon and per-channel outputs are archived per evaluation
+run (\texttt{ml-metrics} branch). The base-scale geometry table behind
+the ring-8@222 row is Appendix~\ref{app:base}; the width, step-budget,
+and exposure-bias rows land with the evaluations in flight
+(Table~\ref{tab:standings}).}
+\label{tab:auc}
+\end{table}
 
 \subsection{The other axes: width and step budget}\label{sec:axes}
 
