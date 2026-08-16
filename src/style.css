@@ -391,8 +391,13 @@ footer a { color: var(--fg-dim); }
 .px-day span:nth-child(2) { flex: 0 0 60px; color: var(--fg); }
 .px-profile { display: block; margin: 2px 0 4px; }
 .px-note { margin-top: 8px; font-size: 10.5px; color: var(--fg-dim); }
-/* A timed-out source is a different kind of note from a footnote: it explains
- * an ABSENCE, so it needs to be findable without being alarming. */
+/* Two notes about sources, and they mean opposite things. Still loading is
+ * transient and expected — accent, and it pulses so it reads as motion rather
+ * than as a warning that has stopped changing. Didn't answer is final. */
+.px-loading { border-left: 2px solid var(--accent); padding-left: 7px;
+  animation: px-pulse 1.6s ease-in-out infinite; }
+@keyframes px-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .px-loading { animation: none; } }
 .px-late { border-left: 2px solid var(--warn, #d19a3a); padding-left: 7px; }
 .px-note a { color: var(--accent); text-decoration: none; }
 

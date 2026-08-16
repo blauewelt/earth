@@ -4994,13 +4994,19 @@ window.__runProbe = runProbe; // for tests
  * GIBS + GBIF" rule (see CLAUDE.md §3): key-free, CORS-open, and hit only by
  * an explicit click for a single point — never tile streaming. */
 
-/* How long the card will wait for any ONE of its ~twenty sources before it
- * renders without that source. Sized off the measured live distribution (the
- * slowest healthy response in a full card load was 1.5 s, the largest baked
- * file 4.2 MB) with room for a phone on mobile data — generous enough that a
- * working source is never cut off, short enough that a dead one doesn't decide
- * whether the inspector opens. */
-const PIXEL_DEADLINE_MS = 15000;
+/* How long before the card appears at all. Two seconds, because the card
+ * exists to answer "what is happening HERE" and a tap that shows nothing for
+ * longer than that reads as a tap that didn't register (Chris, 2026-08-16:
+ * "15s is still a very long time"). It is NOT a cutoff — nothing is dropped
+ * for missing it. Sources that land later redraw the card in place, so the
+ * cost of being slow is appearing a moment after the frame, not being left
+ * out of it. */
+const PIXEL_DEADLINE_MS = 2000;
+/* Arrivals cluster — the whole Open-Meteo family answers within a few hundred
+ * ms of itself — and every redraw rebuilds the card's DOM. Coalescing over
+ * this window turns a burst into one rebuild. Long enough to catch a cluster,
+ * short enough that no row is visibly late to its own section. */
+const PIXEL_REDRAW_MS = 250;
 const PIXEL_RASTERS = ["sst", "sst-anom", "ssh-anom", "precip", "seaice", "snow", "aod", "lst",
   "soilmoisture", "ndvi", "grace", "ceres", "chlor", "salinity", "dist-alert"];
 const PIXEL_GRIDS = ["oisst", "gpcp", "eobs", "meteoswiss", "tides"];
@@ -5301,30 +5307,41 @@ async function showPixelState(carto) {
   // Everything in parallel; the card renders once, complete.
   const rasterCfgs = PIXEL_RASTERS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
   const gridCfgs = PIXEL_GRIDS.map((id) => GIBS_LAYERS.find((l) => l.id === id));
-  /* THE CARD MUST RENDER, AND NOTHING IS THROWN AWAY. It composes about twenty
-   * sources and used to show nothing until every one of them answered, so the
-   * slowest single source decided whether the inspector worked at all — and a
-   * stalled connection has no slowest, it simply never returns. That is what
-   * was reported on 2026-08-16 ("load all data is no longer working"):
-   * measured against the live site, one climate-api call hung and the card sat
-   * on "Reading this point…" for 64 s.
+  /* THE CARD MUST RENDER, AND IT FILLS IN AS THE DATA ARRIVES. It composes
+   * about twenty sources and used to show nothing until every one of them
+   * answered, so the slowest single source decided whether the inspector
+   * worked at all — and a stalled connection has no slowest, it simply never
+   * returns. Reported 2026-08-16 ("load all data is no longer working"):
+   * measured on the live site, one climate-api call hung and the card sat on
+   * "Reading this point…" for 64 s.
    *
-   * So the card draws TWICE when it has to. At PIXEL_DEADLINE_MS it draws with
-   * whatever has arrived, naming the sources that haven't (a section that
-   * vanishes silently cannot be told from one that was never built); when the
-   * stragglers land it redraws complete. Slow now costs a redraw, not a
-   * section — only never-arriving costs the section. The promises are shared
-   * between the two passes, so the second draw re-requests nothing: it would
-   * otherwise double our Open-Meteo burst, which is rate-limited per IP across
-   * the whole family. */
+   * So the card appears at PIXEL_DEADLINE_MS with whatever is in hand, and
+   * every source that lands after that redraws it. Not a fixed second pass —
+   * Chris, 2026-08-16: "I hope that all the different data that come in can be
+   * updated on the fly into the dialog box that renders after 2s." Two seconds
+   * is short enough that most sources are still out at first draw, so a single
+   * catch-up pass would leave the card visibly stale for as long as the
+   * slowest one took. Redraws are coalesced over PIXEL_REDRAW_MS so a burst of
+   * arrivals costs one rebuild, not fourteen.
+   *
+   * The promises are created ONCE and shared by every draw: re-requesting per
+   * pass would multiply our Open-Meteo burst, which is rate-limited per IP
+   * across the whole family. */
+  /* [name, promise, empty] — `empty` is what this slot holds before its source
+   * answers. It matters because the two collection sources are READ AS ARRAYS
+   * by the draw (`rasters.forEach`, `grids.map`), and at a two-second first
+   * paint they have usually not arrived: seeding them with null made the very
+   * first draw throw, which the guard then turned into "something went wrong"
+   * — an error message for the ordinary case of data still being in flight.
+   * A scalar source's empty is null, which every section already tests for. */
   const jobs = [
     ["satellite fields",
-      Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null)))],
+      Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null))), []],
     // {g, v}, not just v: the grid carries its own observation period/month, and
     // the row prints that — so the value and its date come from the same object.
     ["climate normals",
       Promise.all(gridCfgs.map((cfg) => loadGridMonth(cfg)
-        .then((g) => (g ? { g, v: sampleGrid(g, lon, lat) } : null)).catch(() => null)))],
+        .then((g) => (g ? { g, v: sampleGrid(g, lon, lat) } : null)).catch(() => null))), []],
     ["weather", fetchOpenMeteo(lon, lat)],
     ["air quality", fetchAirQuality(lon, lat)],
     ["river discharge", fetchRiver(lon, lat)],
@@ -5340,28 +5357,19 @@ async function showPixelState(carto) {
     // Packed, so ~0.8 MB and cached thereafter.
     ["forest-loss drivers", loadGrid(GIBS_LAYERS.find((l) => l.id === "drivers")).catch(() => null)],
   ];
-  const settled = jobs.map(([, p]) => Promise.resolve(p).catch(() => null));
-  const late = [];
-  // The timer is CLEARED when the value wins: an uncleared one still fires and
-  // would name a source that in fact answered, besides holding a closure alive
-  // for the whole deadline, per source, per click.
-  const firstPass = settled.map((p, i) => {
-    let timer;
-    return Promise.race([
-      p.then((v) => { clearTimeout(timer); return v; }),
-      new Promise((res) => {
-        timer = setTimeout(() => { late.push(jobs[i][0]); res(null); }, PIXEL_DEADLINE_MS);
-      }),
-    ]);
-  });
+  const values = jobs.map(([, , empty]) => (empty === undefined ? null : empty));
+  const done = new Array(jobs.length).fill(false);
+  const pendingNames = () => [...new Set(jobs.filter((_, i) => !done[i]).map(([n]) => n))];
+
   /* A throw inside the draw must not leave "Reading this point…" on screen
    * forever — that is the same broken-looking outcome the deadline exists to
    * prevent, arrived at from the other side. So: say what happened, then
    * rethrow OUT of band. The rethrow matters as much as the message; swallowed
    * here, a rendering bug would show up as a slightly emptier card and the
    * suite's "loads without page errors" check would never see it. */
-  const draw = (values, missing, final) => {
-    if (myTurn !== pixelCardSeq) return;   // a newer point owns the card now
+  const draw = (missing, final) => {
+    if (myTurn !== pixelCardSeq) return;          // a newer point owns the card
+    if (pixelCardEl.classList.contains("hidden")) return;
     try {
       drawPixelCard(values, missing, final);
     } catch (e) {
@@ -5373,16 +5381,54 @@ async function showPixelState(carto) {
       setTimeout(() => { throw e; });
     }
   };
-  draw(await Promise.all(firstPass), late);
-  if (!late.length) return;
-  const full = await Promise.all(settled);
-  if (pixelCardEl.classList.contains("hidden")) return;   // closed while waiting
-  // On the last pass "still waiting" would be a lie, but silence would be too:
-  // a source that was late AND came back empty never answered at all, and only
-  // this pass can tell the two apart.
-  const dead = [...new Set(late)].filter((n) =>
-    jobs.every(([name], i) => name !== n || full[i] == null));
-  draw(full, dead, true);
+
+  let shown = false, queued = 0;
+  const redraw = () => {
+    // Coalesce: sources arrive in bursts (the whole Open-Meteo family answers
+    // within a few hundred ms of each other) and each rebuild throws away the
+    // card's DOM. One timer per burst, not one per arrival.
+    if (!shown || queued) return;
+    queued = setTimeout(() => {
+      queued = 0;
+      const pend = pendingNames();
+      // Nothing pending means this is the last word, and "still waiting" would
+      // become a lie. A source that never answered is named instead — silence
+      // would leave a missing section indistinguishable from one that was
+      // never built, and only this draw can tell those apart.
+      draw(pend.length ? pend : deadNames(), !pend.length);
+    }, PIXEL_REDRAW_MS);
+  };
+  /* Which sources never answered — for the LAST draw only, when "still
+   * waiting" would be a lie. Restricted to the ones that were still out at
+   * first paint, because plenty of sources return null perfectly correctly:
+   * there are no waves inland and no river in mid-ocean, and naming those as
+   * failures would cry wolf on every second click. A name counts as dead only
+   * if every job carrying it came back empty (the CMIP6 outlook is two). */
+  let lateAtFirst = [];
+  const deadNames = () => [...new Set(lateAtFirst)]
+    .filter((n) => jobs.every(([m, , empty], i) =>
+      m !== n || values[i] == null || (Array.isArray(empty) && !values[i].some((v) => v != null))));
+
+  const settled = jobs.map(([, p, empty], i) => Promise.resolve(p).catch(() => null).then((v) => {
+    values[i] = v == null && empty !== undefined ? empty : v;
+    done[i] = true;
+    redraw();
+    return v;
+  }));
+  const all = Promise.all(settled);
+
+  // First paint: as soon as everything is in, or at the deadline — whichever
+  // comes first. Below the deadline the common case is ONE draw, complete.
+  await Promise.race([all, new Promise((r) => setTimeout(r, PIXEL_DEADLINE_MS))]);
+  shown = true;
+  const pend0 = pendingNames();
+  lateAtFirst = pend0;
+  draw(pend0.length ? pend0 : deadNames(), !pend0.length);
+  if (!pend0.length) return;
+  await all;
+  // Flush the last coalesced redraw so this promise resolves with the card in
+  // its final state — tests and callers may reasonably assume that.
+  await new Promise((r) => setTimeout(r, PIXEL_REDRAW_MS + 20));
 
   function drawPixelCard(values, missing, final) {
     const [rasters, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid] = values;
@@ -5729,16 +5775,27 @@ async function showPixelState(carto) {
     if (missing.length) {
       const names = [...new Set(missing)];
       const one = names.length === 1;
-      sec.push(`<div class="px-note px-late">` + (final
-        ? `${names.join(", ")} didn't answer, so ` +
+      // At two seconds most of the twenty sources are still out, so the full
+      // list would be a wall of text under a nearly empty card. Name a few and
+      // count the rest: the point is that more is coming, not an inventory.
+      const shownNames = names.length > 4 ? names.slice(0, 3) : names;
+      const rest = names.length - shownNames.length;
+      const list = shownNames.join(", ") + (rest ? ` and ${rest} more` : "");
+      sec.push(`<div class="px-note ${final ? "px-late" : "px-loading"}">` + (final
+        ? `${list} didn't answer, so ` +
           `${one ? "that section is" : "those sections are"} missing here. ` +
           `Tap the point again to retry.`
-        : `Still waiting on ${names.join(", ")} — ` +
-          `${one ? "that section" : "those sections"} will appear ` +
-          `${one ? "as soon as it answers" : "as soon as they answer"}.`) + `</div>`);
+        : `Still loading ${list}…`) + `</div>`);
     }
     sec.push(`<div class="px-note">Channels &amp; roles: <a href="docs/PIXEL_STATE.md" target="_blank" rel="noopener">PIXEL_STATE.md</a> · weather &amp; forecast by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></div>`);
-    pixelCardEl.querySelector(".px-body").innerHTML = sec.join("");
+    // The body is rebuilt wholesale on every arrival, which resets the scroll
+    // position — and the card is taller than a phone screen, so a user reading
+    // the satellite rows would be yanked back to the top each time a source
+    // landed. Hold the offset across the swap.
+    const body = pixelCardEl.querySelector(".px-body");
+    const top = body.scrollTop;
+    body.innerHTML = sec.join("");
+    if (top) body.scrollTop = top;
   }
 }
 

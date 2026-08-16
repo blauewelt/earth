@@ -3355,7 +3355,7 @@ test("one hanging source cannot stop the pixel card from rendering", async ({ pa
   // as still outstanding, because at this moment the app genuinely cannot tell
   // "slow" from "never"
   await expect(card).not.toContainText("Projected change");
-  await expect(card).toContainText("Still waiting on climate outlook");
+  await expect(card).toContainText(/Still loading[^\u2026]*climate outlook/, { timeout: 60000 });
 });
 
 test("a slow source is only late, not lost — the card redraws when it lands", async ({ page }) => {
@@ -3383,10 +3383,10 @@ test("a slow source is only late, not lost — the card redraws when it lands", 
   });
   const card = page.locator("#pixel-card");
   // first pass: drawn without it, and honest about why
-  await expect(card).toContainText("Still waiting on ocean column", { timeout: 90000 });
+  await expect(card).toContainText(/Still loading[^\u2026]*ocean column/, { timeout: 90000 });
   // second pass: the straggler lands, its section appears, the notice is gone
   await expect(card).toContainText("Ocean column", { timeout: 90000 });
-  await expect(card).not.toContainText("Still waiting on");
+  await expect(card).not.toContainText("Still loading");
 });
 
 test("a straggler cannot redraw the card under a newer point", async ({ page }) => {
