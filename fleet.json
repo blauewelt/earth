@@ -1,10 +1,10 @@
 {
- "at": "2026-08-16T10:31:08.459Z",
- "credit_usd": 5.62,
+ "at": "2026-08-16T10:39:08.590Z",
+ "credit_usd": 5.53,
  "balance_usd": 0,
  "boxes_total": 11,
- "boxes_running": 3,
- "burn_usd_per_h": 0.798,
+ "boxes_running": 2,
+ "burn_usd_per_h": 0.5941,
  "boxes": [
   {
    "id": 47487801,
@@ -29,7 +29,7 @@
   },
   {
    "id": 47718224,
-   "status": "running",
+   "status": "exited",
    "dph": 0.2551,
    "disk_used_gb": 46,
    "disk_gb": 100
@@ -43,7 +43,7 @@
   },
   {
    "id": 47720655,
-   "status": "running",
+   "status": "exited",
    "dph": 0.2551,
    "disk_used_gb": 54,
    "disk_gb": 100
@@ -57,7 +57,7 @@
   },
   {
    "id": 47720664,
-   "status": "exited",
+   "status": "running",
    "dph": 0.3063,
    "disk_used_gb": 59,
    "disk_gb": 100
