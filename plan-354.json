@@ -1,0 +1,12 @@
+{
+ "eval": true,
+ "heads": [
+  "e017_u1_s0 (gate)",
+  "e029dsun89_u1_s1",
+  "e029dsun89_u1_s2",
+  "e029dsun89x200_u1_s1",
+  "e029dsun89x200_u1_s2"
+ ],
+ "note": "wave 6B rerun on the byte-budgeted roll gather; sun89-60k s0 already read 0.636",
+ "published_at": "2026-08-16T10:37:21.587Z"
+}
