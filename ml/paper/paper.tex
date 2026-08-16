@@ -12,6 +12,21 @@
 \graphicspath{{figs/}}
 \setlength{\parskip}{2pt}
 
+% FLOAT PLACEMENT. Learned the hard way on 2026-08-16: Chris could not find
+% Table 4 because it had floated ten pages past the text that cites it. LaTeX
+% places floats STRICTLY IN ORDER, so one oversized table that cannot fit
+% anywhere dams every float declared after it — the master table (Table 3) was
+% the dam, and the two new stage-2 tables queued behind it onto the last page.
+% Two fixes, both needed: let a page carry more float and less text before
+% LaTeX gives up, and send the genuinely page-sized tables to their own float
+% page (`[p]`) so they leave the queue instead of blocking it.
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.7}
+\renewcommand{\textfraction}{0.1}
+\renewcommand{\floatpagefraction}{0.7}
+\setcounter{topnumber}{3}
+\setcounter{totalnumber}{4}
+
 \title{Earth-State Embeddings:\\
 \large self-supervised representations of the observed ocean,\\
 probed against the Atlantic overturning circulation}
@@ -789,7 +804,7 @@ system, remain unoccupied territory.
 
 \section{Results}\label{sec:results}
 
-\begin{table}[t]
+\begin{table}[p]
 \centering\small
 \begin{tabular}{llrrrrrlr}
 \toprule
@@ -1247,7 +1262,7 @@ data. Fig.~\ref{fig:capacity} shows the ladder;
 Table~\ref{tab:auc} is the per-seed record. No saturation is
 visible on either axis through 205M parameters.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering\small
 \begin{tabular}{llrrrr}
 \toprule
@@ -1330,7 +1345,7 @@ AUC of $0.6213$.
 
 \subsection{Standings}\label{sec:standings}
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering\small
 \begin{tabular}{llrrcc}
 \toprule

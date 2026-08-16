@@ -298,11 +298,18 @@ for ax, data, ylab in ((a1, cap_ratio, "forecast ratio (lower = better)"),
     ax.set_ylabel(ylab)
     ax.minorticks_off()
     strip(ax)
+# The two reference lines sit 0.015 apart, so their labels must be pushed to
+# OPPOSITE sides of their own lines — stacked between them they overlap, which
+# is how this figure first shipped (caught in the page-17 render, 2026-08-16).
 a2.axhline(0.589, color=INK2, ls=":", lw=1.2)
-a2.text(90, 0.5905, "no-neighbour baseline 0.589", color=INK2, fontsize=7)
+# Labels are kept SHORT and pinned to the right edge: the trend line sweeps
+# diagonally through this whole y-range, so any long annotation is crossed by
+# it somewhere. The lines' identities are spelled out in the caption.
+a2.text(205, 0.5875, "no-neighbour 0.589", color=INK2, fontsize=7,
+        va="top", ha="right")
 a2.axhline(0.6043, color=INK2, ls="--", lw=1.2)
-a2.text(90, 0.598, "base-scale champion\n(ring-8@222) 0.604",
-        color=INK2, fontsize=7, va="top")
+a2.text(205, 0.6028, "base champion 0.604", color=INK2, fontsize=7,
+        va="top", ha="right")
 a1.set_title("one-step forecast", loc="left", fontsize=9)
 a2.set_title("12-month roll, AMOC corridor", loc="left", fontsize=9)
 fig.suptitle("Capacity improves BOTH axes and does not saturate through 205M "
