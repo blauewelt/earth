@@ -199,6 +199,46 @@ scale-up.
 
 ## EVAL wave 6 · E-029 heads on the roll — DISPATCHED 2026-08-16 ~05:45Z
 
+**WAVE 6B PARTIAL RESULT + AN OOM (#353, 07:45Z): WIDTH TRANSFERS TO THE
+ROLL, and the evaluator has a width-scaled memory bug.** Gate PASSED
+(e017 → 0.643 exactly, corridor 0.589 as always). Then:
+
+| head | corridor AUC | vs big55 (0.6213) |
+|---|---|---|
+| **sun89-big 60k s0** | **0.636** | **+0.015** |
+
+That is hypothesis 6B(a) confirmed at n=1: 89 sunflower points beat 55 on
+the ROLL as well as on the forecast, and sun89-60k also beats big34's
+0.6237. Width is not a one-step-only axis. (Its window AUC 0.664, gate-scope
+0.689, amp h12 0.751; long-block r_heldout 0.401, lp18 0.842.)
+
+**Then head 3 of 6 died: `torch.OutOfMemoryError: Tried to allocate
+4.22 GiB` in `roll_step`'s stencil gather** — after two heads of the SAME
+90-slot width had rolled fine, which is the signature of a marginal
+allocation failing on fragmentation rather than a hard limit. Root cause,
+and it is the third instance of one family: **`--chunk` counts PIXELS, but
+the gather it bounds is [n, S, K, dz], so its true size scales with STENCIL
+WIDTH.** At the 8192 default a 90-slot head requests
+8192·90·24·64·4 B = 4.5 GB in a single allocation. E-027's incidents 1 and 2
+taught exactly this for the TRAINER's eval batch (fixed by
+`_chunked_forward`); the rollout evaluator never learned it because no
+90-slot head had been rolled before.
+
+**Fixed properly rather than by lowering a number:** `roll_step` now derives
+its row count from a ~1 GiB BYTE budget and treats `--chunk` as an upper
+bound — so any future width is bounded automatically (S=90 → 1941 rows,
+S=145 → 1205, S=233 → 806) while narrow stencils keep the full 8192 and lose
+no speed. Pinned by `tests/test_roll_chunk_budget.py`, which asserts the
+budget holds at S=56/90/145/233, that the cap is never RAISED, that every
+pixel is still visited exactly once, and that the stencil-1 path is
+unchanged. Note the run still went GREEN with a partial
+`rollout_spatial.json` — the archive's contents are the truth, not the
+run's colour (§ failure signatures), which is how a 2-of-6 wave could have
+been read as complete.
+
+**Re-dispatch**: the four unscored 6B heads (sun89 s1/s2 60k, sun89x200
+s1/s2) plus wave 6A's remainder if #352 hits the same wall at 56 slots.
+
 Question on record before the numbers. #333 settled the capacity axis on
 the roll (xl55 corridor 0.664, +0.042 over big). Wave 6 asks whether the
 OTHER two forecast-axis results transfer, and whether the exposure-bias

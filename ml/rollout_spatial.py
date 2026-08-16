@@ -283,8 +283,29 @@ def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False):
     (slot-major over d_z, centre slot 0, missing → zeros); the zero-weight-
     equivalence test pins that layout at the model boundary. `amp` runs the
     forward under fp16 autocast — a SPEED knob whose honesty is enforced by
-    the #217 gate, which scores through the identical path."""
+    the #217 gate, which scores through the identical path.
+
+    THE CHUNK IS A BYTE BUDGET, NOT A ROW COUNT. `--chunk` counts pixels, and
+    the gather below materialises [n, S, K, dz] — so its size scales with the
+    STENCIL WIDTH, which the row count knows nothing about. At the 8192
+    default a 90-slot head asks for 8192·90·24·64·4 B = 4.5 GB in one
+    allocation, and that is precisely the request that killed eval wave 6B
+    (#353) partway through its third head on 2026-08-16, after two heads of
+    the same width had succeeded — a 24 GB card with 10 GB already reserved
+    has no contiguous 4.5 GB left. This is the third OOM of one family: an
+    eval batch scales with stencil width as well as model size (E-027
+    incidents 1 and 2 taught it for the trainer; `_chunked_forward` is the
+    trainer's version of this fix). So the row count is derived from a byte
+    target and the caller's `--chunk` becomes an upper bound, which makes the
+    guard automatic for any future width instead of a number someone has to
+    remember to lower."""
     P = Zwin.shape[0]
+    if NBR_t is not None:
+        S, K, dz = NBR_t.shape[1], Zwin.shape[1], Zwin.shape[2]
+        row_bytes = S * K * dz * 4                    # float32 gather, per pixel
+        # ~1 GiB per gather: comfortably inside the free space left on a 24 GB
+        # card after weights, the Z window and allocator fragmentation.
+        chunk = max(256, min(chunk, (1 << 30) // max(1, row_bytes)))
     outs = []
     for i in range(0, P, chunk):
         sl = slice(i, min(i + chunk, P))
