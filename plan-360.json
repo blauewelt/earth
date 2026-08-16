@@ -1,0 +1,17 @@
+{
+ "steps": 200000,
+ "lr": 0.001,
+ "schedule": "expdecay",
+ "cooldown_frac": 0,
+ "d_model": 1024,
+ "layers": 16,
+ "stencil": 145,
+ "arm": "znoise-xl144",
+ "seed": "s1",
+ "milestones": [
+  600,
+  60000,
+  120000
+ ],
+ "published_at": "2026-08-16T20:07:08.736Z"
+}
