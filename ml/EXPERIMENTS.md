@@ -146,6 +146,23 @@ scale-up.
 
 ## E-029d-ext · sunflower-89 → 200k steps — DISPATCHED 2026-08-15 ~14:45Z
 
+**200k HARVEST (#350/#351, 2026-08-16 ~00:50Z) — the curve is complete and
+it is bending hard.** Ratios s1 **0.13663** / s2 **0.13550** (mean 0.13607).
+The full trajectory per seed: s1 0.14556 → 0.13842 → 0.13663, s2 0.14420 →
+0.13689 → 0.13550. The first extension (60k steps) bought a paired −0.0072;
+the second (80k steps) bought −0.0016 — per-step value down ~6×, so the
+88M/89-point configuration is close to its asymptote somewhere near ~0.135.
+The decisive comparison: sun89-big at 200k still does NOT reach xl55 at
+60k (0.1295–0.1331) — 2.3× parameters at 1/3.3 the steps beats 1× parameters
+at full budget, i.e. **at this scale parameters buy more than steps**, which
+is the same verdict the forecast leaderboard has given at every rung. Both
+finals verified (step 200000, expdecay, stencil 90 / spiral ring, opt
+present, 89.7M params) and published FULL as
+e029dsun89x200_u1_s1/s2__temporal.pt (backup + any future resume in one).
+Cost of the two 120k→200k legs ≈ $7 combined. Remaining open arm: seed 0
+(60k head published; continuation never commissioned — decide at the eval
+wave whether n=2 on the trajectory suffices, it almost certainly does).
+
 **UPDATE 16:10Z — first attempt GREEN-DEAD ×3, root-caused, re-dispatched.**
 #332 (sun89 s1 cont) and #326/#327 (xl conts) all completed "success" in
 minutes with NO temporal.json: `--resume-temporal: no checkpoint at
@@ -235,6 +252,26 @@ falsifier: 120k ratio within seed noise of 60k = step-budget saturated at
 this width, don't run leg 2.
 
 ## E-028 EVAL wave 5 · xl corridor AUC — DISPATCHED 2026-08-15 ~14:15Z
+
+**RESULT (#333, landed 2026-08-15 23:53Z, ~8.7 h of chunked eval):
+CONFIRMED — capacity keeps transferring to the roll at 205M. The xl tier
+is the new roll champion by a wide margin.** Rolled corridor AUC: xl55 s0
+**+0.664** / s1 **+0.663** / s2 **+0.664** (window +0.692/+0.690/+0.692;
+gate scope 0.714/0.716/0.719). Gate e017_u1_s0 reproduced its pinned
++0.643 exactly — VALIDATION GATE PASSED — and read corridor +0.589, its
+usual value, so the instrument is the same one that scored every previous
+wave. Standings: xl55 0.6637 mean > big34 0.6237 > big55 0.6213 >
+ring-8@222 champion 0.6043 > e017 0.589. That is **+0.042 over the big
+tier** — the 576→768 capacity step bought +0.050 (#304), and 768→1024
+bought +0.040 more: no saturation visible on the roll axis through 205M,
+mirroring the forecast axis. The seed spread is astonishing: 0.001 across
+three seeds (the forecast ratios spread 0.004), so at this capacity the
+rolled skill is essentially deterministic given the data. The two E-026
+stencil arms' inversion is now fully explained as capacity starvation:
+with enough width, more input points help BOTH axes. Next questions this
+number opens: (a) does the xl 60k→120k continuation move it further
+(E-028b, waiting on the workflow refactor); (b) does xl89/xl144 at 200k
+(#344–#347) beat 0.664 — landing today.
 
 Question on record before the numbers: #304 showed capacity transfers to
 the roll at 768×12 (+0.05 AUC paired vs 576×8, breaking the E-026
