@@ -86,6 +86,29 @@ class PixelMAE(nn.Module):
         """patch=1: x, obs [B,C] · patch>1: x, obs [B,C,patch²] (obs = that
         cell observed; the channel counts as observed iff its CENTER is).
         mask [B,C] bool masked-by-training · ctx [B,4] → z [B,d_z]."""
+        # WIDEN THE INPUT TO THE WEIGHTS' DTYPE. Family 4 is the project's
+        # first float16 tensor, and every reader hands the codec a batch whose
+        # dtype follows the tensor — `torch.from_numpy(np.nan_to_num(X))` did,
+        # and LazyPixels preserves that faithfully. Against float32 weights
+        # that is an immediate
+        #     RuntimeError: mat1 and mat2 must have the same dtype,
+        #                   but got Half and Float
+        # on the first forward pass. Run #365 never reached it: the host OOM
+        # killer took the process during the preamble, so the pentad arm would
+        # have died here on the re-dispatch instead, one failure later, after
+        # another tensor build. Caught on a 48x12x14 toy in seconds
+        # (ml/CLAUDE.md §4.8) rather than on a rented GPU.
+        #
+        # Here rather than at the six call sites: probe_kfold, temporal,
+        # rollout, probe_sequence, ablate_channels and train all build their
+        # own value tensor, and a cast per call site is five chances to miss
+        # one. float16 -> float32 is exact, and on family 2/3 (float32) it is
+        # a no-op, so no existing run's arithmetic moves.
+        wdt = self.val_proj.weight.dtype
+        if x.dtype != wdt:
+            x = x.to(wdt)
+        if ctx.dtype != wdt:
+            ctx = ctx.to(wdt)
         if self.patch > 1:
             B, C, P2 = x.shape
             ce = self.chan_emb.weight[None, :, :].expand(B, -1, -1)
@@ -210,3 +233,68 @@ def codec_from_ckpt(ck, n_chan):
                     n_heads=a.get("n_heads", 4),
                     d_dec=a.get("d_dec", 256),
                     dec_layers=a.get("dec_layers", 2))
+
+
+def obs_any_chunked(X, min_chan=2, chunk=64):
+    """`np.isfinite(X).sum(-1) >= min_chan`, without the full-size temporaries.
+
+    Identical values, elementwise. What changes is the peak: the one-liner
+    materialises a [T,H,W,C] bool AND a [T,H,W] int64 at once — **15.4 GiB
+    plus 3.4 GiB on the pentad tensor, 77 GiB plus 17 GiB at daily** — and
+    both are live simultaneously.
+
+    That spike is the first place `ml/train.py` can die, and it was invisible
+    in the diagnosis of run #365: it is transient, so an RSS delta column
+    shows nothing, and only VmHWM records it (`ml/measure_train_memory.py`
+    measured 85.2 GiB resident against a 146.9 GiB peak). LazyPixels removed
+    the two RESIDENT copies and left this one untouched, which would have
+    OOM-killed the re-dispatch on the same 63 GB box for a different reason
+    — the classic "fixed the term you can see".
+
+    A chunk of 64 timesteps costs 337 MB regardless of T, so this is the term
+    that stops scaling with the tensor. `np.count_nonzero(..., axis=-1)` is
+    the same reduction `.sum(-1)` performs on a bool, spelled so it cannot
+    accidentally accumulate in the input dtype.
+    """
+    out = np.empty(X.shape[:3], bool)
+    for i in range(0, X.shape[0], chunk):
+        sl = X[i:i + chunk]
+        out[i:i + chunk] = np.count_nonzero(np.isfinite(sl), axis=-1) >= min_chan
+    return out
+
+
+def pool_idx(mask, chunk=256):
+    """`np.where(mask)` as int32 triples, in the identical order.
+
+    Two savings, both structural rather than clever:
+
+      · **int32, not int64.** These arrays are indices into a [T,H,W] volume
+        whose largest axis is 15,706 at daily cadence, so int64 spends exactly
+        half its bytes on sign-extension. Family 4's train pool is ~272M
+        pixels — 6.5 GiB as int64, 3.3 GiB as int32 — and it stays resident
+        for the whole run.
+      · **chunked over T**, so the int64 array numpy builds internally is
+        1/12th of the pool at a time rather than all of it. Counted first and
+        written into a preallocated output rather than concatenated: a
+        concatenate holds the parts AND the result at once, which doubles
+        exactly the term this is trying to halve.
+
+    Order is preserved exactly because the chunks partition the FIRST axis in
+    ascending order and `np.where` returns C-order within each chunk;
+    concatenating them reproduces the global C-order listing. `tests/
+    test_train_pool_memory.py` asserts equality against `np.where` rather
+    than trusting that argument.
+    """
+    n = int(np.count_nonzero(mask))
+    ts, ys, xs = (np.empty(n, np.int32) for _ in range(3))
+    o = 0
+    for i in range(0, mask.shape[0], chunk):
+        t, y, x = np.where(mask[i:i + chunk])
+        k = len(t)
+        ts[o:o + k], ys[o:o + k], xs[o:o + k] = t + i, y, x
+        o += k
+    if o != n:
+        raise AssertionError(f"pool_idx filled {o} of {n} — the chunk walk "
+                             f"and the count disagree, which can only mean "
+                             f"the mask changed underneath")
+    return ts, ys, xs

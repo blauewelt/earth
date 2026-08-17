@@ -22,7 +22,8 @@ import time
 import numpy as np
 import torch
 
-from model import PixelMAE, gather_px, LazyPixels
+from model import (PixelMAE, gather_px, LazyPixels, obs_any_chunked,
+                   pool_idx)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -186,9 +187,16 @@ def main():
               f"({[chan[c] for c in dynamic]})")
 
     # train pool: any (t, y, x) with ≥2 observed channels, outside holdouts
-    obs_any = np.isfinite(X).sum(-1) >= 2
-    tt, yy, xx = np.where(obs_any & ~t_hold[:, None, None] & ~x_hold[None, None, :])
-    vt, vy, vx = np.where(obs_any & (t_hold[:, None, None] | x_hold[None, None, :]))
+    #
+    # Chunked and int32 — identical values and identical order, a fraction of
+    # the memory. The one-liner this replaces was measured as the trainer's
+    # PEAK (a [T,H,W,C] bool + a [T,H,W] int64, live together), and the pool
+    # itself is the largest thing that stays resident after it. See
+    # obs_any_chunked / pool_idx in ml/model.py and
+    # tests/test_train_pool_memory.py, which pins both against the originals.
+    obs_any = obs_any_chunked(X)
+    tt, yy, xx = pool_idx(obs_any & ~t_hold[:, None, None] & ~x_hold[None, None, :])
+    vt, vy, vx = pool_idx(obs_any & (t_hold[:, None, None] | x_hold[None, None, :]))
     print(f"train pixels {len(tt):,} · held-out pixels {len(vt):,}")
 
     # Derived PER BATCH, not materialised: eagerly these two cost 49.7 GB
@@ -203,7 +211,15 @@ def main():
         k = np.random.randint(0, len(idx_t), n)
         t, y, x = idx_t[k], idx_y[k], idx_x[k]
         ctx = np.concatenate([ctx_all[t], (lats[y] / 90)[:, None], (lons[x] / 180)[:, None]], 1)
-        return (torch.as_tensor(t), torch.as_tensor(y), torch.as_tensor(x),
+        # dtype=torch.long EXPLICITLY: the pool arrays are int32 now (half the
+        # bytes, see pool_idx), and torch's advanced indexing has historically
+        # accepted only long/byte/bool. Naming it here keeps every tensor that
+        # leaves this function bit-identical to what the int64 pool produced,
+        # so nothing downstream — gather, gather_px, the neighbour offsets —
+        # can behave differently. The cast is n elements, not T·H·W.
+        return (torch.as_tensor(t, dtype=torch.long),
+                torch.as_tensor(y, dtype=torch.long),
+                torch.as_tensor(x, dtype=torch.long),
                 torch.as_tensor(ctx, dtype=torch.float32))
 
     # ---- per-channel loss weights (E-019b) --------------------------------
@@ -241,7 +257,15 @@ def main():
     NEI = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
 
     def gather(t, y, x):
-        v = Xt[t, y, x].to(dev)
+        # float32 EXPLICITLY. The batch's dtype follows the tensor's, and
+        # family 4 is float16 — which reaches the codec as Half against Float
+        # weights (handled in PixelMAE.encode) and, less obviously, becomes
+        # the huber TARGET here. A Half target makes the backward pass fail
+        # outright: `RuntimeError: Found dtype Half but expected Float`. So
+        # the widening belongs at the gather, where values enter the graph at
+        # all, not only at the encoder. Exact for float16 and a no-op for the
+        # float32 families, so nothing already measured moves.
+        v = Xt[t, y, x].to(dev, torch.float32)
         o = OBS[t, y, x].to(dev)
         return v, o
 
@@ -251,7 +275,8 @@ def main():
         mask = (torch.rand(B, C, device=dev) < a.mask_ratio) & o
         if a.patch > 1:
             vp, op = gather_px(Xt, OBS, t, y, x, a.patch)
-            z = model.encode(vp.to(dev), op.to(dev), mask, ctx.to(dev))
+            z = model.encode(vp.to(dev, torch.float32), op.to(dev), mask,
+                             ctx.to(dev))
         else:
             z = model.encode(v * (~mask), o, mask, ctx.to(dev))
 
