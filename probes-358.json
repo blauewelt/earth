@@ -1,0 +1,136 @@
+{
+ "run_number": 358,
+ "files": {
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.426,
+     "r_deseasonalised": 0.476,
+     "n_test": 36
+    },
+    {
+     "K": 3,
+     "r_raw": 0.448,
+     "r_deseasonalised": 0.337,
+     "n_test": 36
+    },
+    {
+     "K": 6,
+     "r_raw": 0.522,
+     "r_deseasonalised": 0.454,
+     "n_test": 36
+    },
+    {
+     "K": 12,
+     "r_raw": 0.599,
+     "r_deseasonalised": 0.548,
+     "n_test": 36
+    },
+    {
+     "K": 24,
+     "r_raw": 0.625,
+     "r_deseasonalised": 0.572,
+     "n_test": 36
+    }
+   ],
+   "seasonal_floor_raw": 0.272,
+   "seasonal_floor_deseas": -0.168
+  },
+  "provenance.json": {
+   "run_number": 358,
+   "sha": "2187ee7cc88a49a29a0b80d383a10245a2109100",
+   "code": "https://github.com/blauewelt/earth/tree/2187ee7cc88a49a29a0b80d383a10245a2109100",
+   "inputs": {
+    "doc": "E-035b xl233 seed 1 - the replicate. A stage-2 number at n=1 means nothing (ml/CLAUDE.md \u00a73); the xl tier spreads 0.004-0.005 between seeds on the corridor, and the effect under test is +0.005/rung, so the pair is the experiment, not two runs of it.",
+    "steps": "60000",
+    "batch": "512",
+    "d_z": "64",
+    "anomaly": "true",
+    "temporal_steps": "200000",
+    "temporal_d_model": "1024",
+    "temporal_layers": "16",
+    "eval_every": "0",
+    "resume": "!run-62,run-63",
+    "head_probe": "false",
+    "light_probe_every": "0",
+    "window": "stencil:234,ring:spiral:111-4444-0.71-0.5,seed:1,sched:expdecay --lr-cooldown-frac 0 --milestone-steps 600,60000,120000",
+    "tensor": "family3_na025",
+    "sst_channel": "false",
+    "patch": "3",
+    "max_minutes": "0",
+    "runner": "gpu-box-46045353",
+    "job_timeout": "1800",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "576",
+    "codec_layers": "10",
+    "codec_heads": "8",
+    "codec_d_dec": "768"
+   },
+   "tensor": {
+    "file": "ml/cache/family3_na025.npz",
+    "sha256": "adcbe700fb6e160b1c84d7acd8dc0333b34d07829db9abd62c721aab278b4848",
+    "bytes": 2984746794,
+    "X_shape": [
+     516,
+     281,
+     481,
+     39
+    ],
+    "C": 39,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 516
+   },
+   "torch": "2.13.0+cu130",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-46045353"
+  }
+ }
+}
