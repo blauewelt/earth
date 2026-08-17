@@ -183,7 +183,20 @@ cannot see that.
 5. Re-anchor Chinchilla from observed-value counts; re-size the codec. The
    build prints the inventory; **re-read it, do not scale the monthly one** —
    the Argo policy in §4 drops the observed count per pentad by construction.
-6. Then daily, once object storage exists.
+6. **Train four codecs FROM SCRATCH before embedding anything** — see
+   `ml/plans/E038_codec_matrix.md`. Chris, 2026-08-17: the pentad and daily
+   fields are *out of domain* for the existing codec, so re-encoding with it
+   would measure the codec's extrapolation rather than the cadence's value.
+   The sharpest form of that argument is the missingness pattern: RG is 32 of
+   39 channels, and §4's one-live-timestep-per-month policy takes the share of
+   steps carrying a `missing` token on those channels from ~0% at monthly to
+   **~83% at pentad and ~97% at daily**. A codec that has never had to
+   represent that is being asked to spend most of its capacity on it.
+   This REPLACES the old ordering, in which the codec was frozen and only the
+   embeddings were recomputed.
+7. Then daily — which needs a large-disk box, not new engineering: the daily
+   tensor is **165.6 GB** at fp16 over the full 1982-2024 axis (123.2 GB from
+   1993), against a 100 GB fleet. E-038 §3 has the staging.
 
 ### 4 · What the builder does, and the three things it refuses
 
