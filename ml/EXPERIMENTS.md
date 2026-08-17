@@ -44,6 +44,106 @@ low-pass).
 
 ---
 
+<a id="e-038"></a>
+## E-038a/b · The first codecs trained ON the pentad tensor — DISPATCHED 2026-08-17 ~18:20Z
+
+Chris, 2026-08-17: *"let's change the plan to retrain the codec (40m and 200m?)
+on the new data (1 day, 5 days) … the reason is that we have a new kind of
+data that is out of domain for the existing codec"*, and then *"Please start
+(also the 200M rung) both on pentad and daily."* These two arms are the pentad
+half. The daily half (E-038c/d) needs a tensor that does not exist yet.
+
+Full reasoning: [the E-038 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E038_codec_matrix.md).
+
+### Hypothesis, and what would falsify it
+
+Every run for six weeks froze the codec (`resume: "!run-62,run-63"`). Applied
+to pentad fields that would embed **out-of-domain data with an in-domain
+codec**. The shift is not a vibe — on 32 of 39 channels the RG `missing`-token
+share goes from ~0% at monthly to **~83% at pentad**, because E-034 §4 puts one
+live RG timestep per month at every cadence. A codec that has essentially never
+seen the `missing` token is being asked to spend most of its capacity on it.
+
+**Hypothesis.** A codec of the SAME capacity retrained on the pentad tensor
+beats the frozen monthly codec applied to that tensor.
+
+**Control**, and it is the point of the design: `f3_anchor41M` (run #62,
+40.7 M) evaluated on the family-4 tensor by `probe_kfold.py`. Capacity is held
+fixed at ~40 M and only the data changes, so the difference IS the domain
+shift. **Falsified** if the fresh 38 M codec does not beat that baseline — in
+which case the reordering was unnecessary and the cadence work should go back
+to reusing the codec. That control is an evaluation pass with no training loop;
+it is the cheapest number in the plan and the only one that can falsify the
+premise, so it is not optional.
+
+The 200 M rung asks the independent question — does the answer depend on
+capacity? — and wave 6A says it might: znoise-big55 at 88 M beat xl55 at 205 M
+on the rolled corridor AUC, so "scale pays most" is already false on one axis.
+
+### The four scale numbers (rule 6), MEASURED at build time on #365
+
+| | f4-40M (E-038a) | f4-200M (E-038b) |
+|---|---|---|
+| codec params | **37,975,889** (512 × 12, d_dec 256) | **201,962,577** (1024 × 16, d_dec 512) |
+| batch | 512 | 512 |
+| steps | 200,000 (cosine, re-fit by `max_minutes`) | 200,000 |
+| data points | train pool **191,520,806** pixel-pentads of 272.4 M (holdouts removed: 219/3142 months, 80/481 lon cols); 86,698 ocean cells of 135,161 | same tensor |
+
+`build_family4.py` measured the Chinchilla inventory itself:
+**2,252,509,289 observed values → a 112.6 M anchor**, against E-038 §2b's
+prediction of 2,204.0 M → 110.2 M. **2.2% out**, fully explained by 86,698
+ocean cells where the prediction assumed family 3's 84,405. The rungs bracket
+it at 0.34× and 1.79× and stand as chosen.
+
+**Why 200,000 steps for both, and what that costs the 200 M rung.** At batch
+512 the train pool carries ~8.27 observed values per pixel, so 200 k steps is
+**~848 M observed values** — 1.1× the Chinchilla optimum for 38 M params, and
+within 3% of the 829 M that run #62 itself saw at monthly cadence. So E-038a
+is matched to its control in capacity *and* in values seen, which is as clean
+as this comparison gets. The same budget is **0.21× the optimum for 202 M
+params**, deliberately: budget-matched is the comparison that isolates
+capacity. One epoch of the pentad pool is 374 k steps and a compute-optimal
+200 M run wants ~4.0 G values, i.e. 2.5 epochs — that is the natural follow-up
+if the 200 M rung looks starved rather than saturated.
+
+### Three defects sat between run #365 and a trained codec
+
+#365 (04:07Z) was killed by the **host** OOM killer, not the GPU, and it died
+early enough that everything downstream stayed unexercised. Fixed and pinned
+before this dispatch, each by a test that fails on a laptop in seconds rather
+than on a rented 4090 in hours:
+
+1. **Host residency.** `LazyPixels` removed 49.7 GB of resident copies;
+   `obs_any_chunked` + `pool_idx` remove the actual PEAK — a full `[T,H,W,C]`
+   bool plus a `[T,H,W]` int64, live together, 18.8 GiB here and 94 GiB at
+   daily. Measured 3.7× lower VmHWM, values and ORDER pinned against the
+   originals (`tests/test_train_pool_memory.py`).
+2. **float16 into float32 weights.** Family 4 is the project's first float16
+   tensor: `mat1 and mat2 must have the same dtype, but got Half and Float`, on
+   the first forward pass.
+3. **float16 as the loss TARGET.** With (2) fixed, the backward pass fails
+   instead: `Found dtype Half but expected Float`.
+
+Nothing else in the chain is unexercised now: `tests/test_float16_training.py`
+runs the real trainer end to end on a float16 toy at both patch settings.
+
+### Also fixed before this dispatch
+
+`truth_pentad.npz` existed only in a previous session's sandbox, so #365 built
+its tensor with **no transport labels at all** and the probe died on
+`KeyError: 'rapid'`. It is now published on the Hub and the workflow's fetch is
+**fatal** — a tensor with no labels is worse than a failed build. The labels
+themselves are the cadence dividend, measured: **RAPID 1,459 pentad labels
+against 240 monthly (6.1×)** and **Florida Current 2,553 against 433 (5.9×)**,
+means physically right at 17.0 Sv and 31.8 Sv.
+
+**Runs:** #TBD (f4-40M, `gpu-box-47094145`) and #TBD (f4-200M,
+`gpu-box-46996216`) → head_sha TBD.
+
+**Result:** pending.
+
+---
+
 ## E-037 · xl233 × znoise: the corner that completes the factorial — QUEUED 2026-08-16 ~22:00Z
 
 Chris, reading the wave-8 dispatch: *"I thought you proposed xl233 + znoise
