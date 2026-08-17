@@ -25,6 +25,7 @@ The decoder is a neural-field-style MLP conditioned on (z, query): it can be
 asked for any offset at inference, which is what "use the embedding to predict
 nearby pixels" means operationally.
 """
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -120,6 +121,56 @@ class PixelMAE(nn.Module):
         qo = self.q_off(off + self.max_off).reshape(B, Q, -1)
         zq = z.unsqueeze(1).expand(-1, Q, -1)
         return self.decoder(torch.cat([zq, qc, qo], dim=-1)).squeeze(-1)
+
+
+class LazyPixels:
+    """A drop-in stand-in for `nan_to_num(X)` / `isfinite(X)` that derives
+    them PER BATCH instead of materialising either at full size.
+
+    WHY. `ml/train.py` used to build both eagerly:
+
+        Xt  = torch.from_numpy(np.nan_to_num(X, nan=0.0))
+        OBS = torch.from_numpy(np.isfinite(X))
+
+    For family 3 ([516, 281, 481, 39]) that is 13.6 GB alongside X and nobody
+    noticed. For family 4's pentad tensor ([3142, 281, 481, 39] float16) it is
+    **33.1 GB for X + 33.1 GB for the copy + 16.6 GB for the mask = 82.8 GB**
+    against a 64 GB box, and run #365 was killed by the host OOM killer (exit
+    137) after six hours. Measured, not modelled — the element count is
+    16,562,358,618.
+
+    Both arrays are pure functions of X evaluated elementwise, and every
+    consumer only ever indexes a BATCH of pixels out of them. So computing
+    them after the index rather than before is arithmetically identical and
+    costs a few hundred KB instead of 49.7 GB. This removes the failure mode
+    rather than guarding it (ml/CLAUDE.md §4.1); the daily tensor is 5x larger
+    again and would not have fitted any box under the old shape.
+
+    Behaviour is preserved by construction: the SAME numpy functions are
+    applied to the SAME elements, and dtype follows X exactly as
+    `torch.from_numpy` did — so a float16 tensor still yields float16 and a
+    float32 one still yields float32. `tests/test_train_lazy_pixels.py` pins
+    that against the eager arrays elementwise.
+    """
+
+    def __init__(self, X, obs=False):
+        self._X = X
+        self._obs = obs
+        self.shape = X.shape          # gather_px reads .shape[1], .shape[2]
+
+    def __len__(self):
+        return self._X.shape[0]
+
+    def __getitem__(self, idx):
+        # Consumers index with torch CPU tensors; numpy needs arrays.
+        if isinstance(idx, tuple):
+            idx = tuple(np.asarray(i) if hasattr(i, "numpy") else i for i in idx)
+        elif hasattr(idx, "numpy"):
+            idx = np.asarray(idx)
+        raw = self._X[idx]
+        if self._obs:
+            return torch.from_numpy(np.isfinite(raw))
+        return torch.from_numpy(np.nan_to_num(raw, nan=0.0))
 
 
 def gather_px(Xt, OBS, t, y, x, patch):

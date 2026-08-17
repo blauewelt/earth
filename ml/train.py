@@ -22,7 +22,7 @@ import time
 import numpy as np
 import torch
 
-from model import PixelMAE, gather_px
+from model import PixelMAE, gather_px, LazyPixels
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -196,8 +196,11 @@ def main():
     vt, vy, vx = np.where(obs_any & (t_hold[:, None, None] | x_hold[None, None, :]))
     print(f"train pixels {len(tt):,} · held-out pixels {len(vt):,}")
 
-    Xt = torch.from_numpy(np.nan_to_num(X, nan=0.0))
-    OBS = torch.from_numpy(np.isfinite(X))
+    # Derived PER BATCH, not materialised: eagerly these two cost 49.7 GB
+    # on top of X's 33.1 GB and OOM-killed run #365 on a 64 GB box (exit 137).
+    # See LazyPixels in ml/model.py; arithmetic is unchanged.
+    Xt = LazyPixels(X)
+    OBS = LazyPixels(X, obs=True)
     mvec = np.array([int(m[5:7]) - 1 for m in months])
     ctx_all = np.stack([np.sin(2 * np.pi * mvec / 12), np.cos(2 * np.pi * mvec / 12)], 1)
 
