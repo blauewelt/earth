@@ -355,6 +355,32 @@ def truth_pentad(bins):
     return out
 
 
+def missing_truth_keys(have):
+    """Label keys the truth file OFFERS that a cached tensor does not carry.
+
+    The recipe string is a claim about the CODE that built the tensor. It says
+    nothing about what was on disk beside that code — and run #365 built the
+    33 GB pentad tensor on a box where `truth_pentad.npz` did not yet exist,
+    so it wrote a physically perfect state tensor with **no transport labels
+    at all**. The recipe guard then did exactly what it was written to do and
+    skipped the rebuild on the next run, which would have trained for twenty
+    hours and died in `probe_kfold` on `KeyError: 'rapid'` — the one number
+    E-038 exists to produce.
+
+    Verify the ARTEFACT, not the intention (ml/CLAUDE.md §0.1). Reading the
+    npz directory and the truth file's key list costs milliseconds; both are
+    headers, not data. Returns [] when there is no truth file to compare
+    against, so a box that legitimately has no labels is not put into a
+    rebuild loop.
+    """
+    if not os.path.exists(TRUTH_PENTAD):
+        return []
+    want = {k for k in np.load(TRUTH_PENTAD).files if k.startswith("truth_")}
+    if "truth_rapid" in want:
+        want.add("rapid")            # the alias the trainer actually reads
+    return sorted(want - set(have))
+
+
 # ---------------------------------------------------------------- main ----
 def main():
     ap = argparse.ArgumentParser()
@@ -419,14 +445,23 @@ def main():
 
     if not a.force and os.path.exists(a.out):
         try:
-            prev = str(np.load(a.out)["recipe"])
+            cached = np.load(a.out)
+            prev, have = str(cached["recipe"]), set(cached.files)
         except Exception:                                 # noqa: BLE001
-            prev = "unreadable"
-        if prev == RECIPE_REV:
+            prev, have = "unreadable", set()
+        lack = missing_truth_keys(have)
+        if prev == RECIPE_REV and not lack:
             print(f"{a.out} already built by recipe {RECIPE_REV} — skipping "
                   f"(--force to rebuild)")
             return
-        print(f"cached tensor is recipe {prev!r}, want {RECIPE_REV!r} — rebuilding")
+        if prev == RECIPE_REV:
+            print(f"cached tensor is recipe {RECIPE_REV} but carries no "
+                  f"{lack} — rebuilding. It was built before the labels were "
+                  f"published, and the recipe string cannot tell the two "
+                  f"apart.")
+        else:
+            print(f"cached tensor is recipe {prev!r}, want {RECIPE_REV!r} — "
+                  f"rebuilding")
 
     X = np.lib.format.open_memmap(a.memmap, mode="w+", dtype=np.float16,
                                   shape=(T, H, W, NC))
