@@ -467,6 +467,18 @@ jobs:
             PD=/opt/earth-cache/glorys_pentad
             mkdir -p "$PD"
             HFB="https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/pentad025"
+            # The pentad TRUTH, without which the tensor is built with no
+            # transport labels at all and the probe dies on KeyError:'rapid'.
+            # Run #365 hit exactly that: truth_pentad.npz existed only in a
+            # sandbox and had never been published anywhere a box can reach.
+            if [ ! -s /opt/earth-cache/truth_pentad.npz ]; then
+              curl -fsSL --max-time 600 -o /opt/earth-cache/truth_pentad.npz.part \
+                "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/truth/truth_pentad.npz" || {
+                  echo "::error::could not fetch truth_pentad.npz — the tensor "
+                  echo "would be built with no labels, which is worse than failing"
+                  exit 1; }
+              mv -f /opt/earth-cache/truth_pentad.npz.part /opt/earth-cache/truth_pentad.npz
+            fi
             for f in index.npz pentad_mean_uo.npy pentad_mean_vo.npy \
                      pentad_mean_mlotst.npy pentad_mean_zos.npy; do
               if [ ! -s "$PD/$f" ]; then
