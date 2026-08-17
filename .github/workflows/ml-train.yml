@@ -232,6 +232,18 @@ jobs:
         with:
           python-version: "3.11"
 
+
+      # PHASE 2 STEP 1 of retiring the overloaded `window` field: SHADOW MODE.
+      # This decodes `window` with ml/dispatch_config.py and PRINTS what it
+      # makes of it. It decides nothing — the eight shell decode sites below
+      # are untouched and still govern the run. Every real dispatch therefore
+      # produces both readings, so a disagreement between the new decoder and
+      # the shell shows up in a log rather than in a retracted result.
+      # `|| true`: this step must never be able to fail a training run, and it
+      # says so rather than pretending it did something (§4.6).
+      - name: Decode dispatch config (shadow — decides nothing)
+        run: |
+          python3 ml/dispatch_config.py --window "${{ inputs.window }}" || true
       - name: Install deps (torch matches the hardware)
         run: |
           pip install --quiet numpy netCDF4 matplotlib

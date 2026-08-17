@@ -141,3 +141,40 @@ def equivalent(w):
     b = decode_config(to_config(w))
     b["raw"] = a["raw"]          # `raw` is provenance, not behaviour
     return a == b, a, b
+
+
+def _cli():
+    """Shadow mode: print what this decoder makes of a dispatch, change nothing.
+
+    Phase 2 step 1. The workflow calls this AFTER checkout and BEFORE anything
+    decodes `window` in shell, so every real run prints both readings and any
+    disagreement shows up in the log without affecting the job. A refactor that
+    silently changes behaviour is the failure mode here; running both in
+    parallel for a while is how it gets caught by a run rather than by a
+    retracted result.
+    """
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--window", default="")
+    ap.add_argument("--config", default="")
+    a = ap.parse_args()
+    if a.config.strip():
+        d = decode_config(a.config)
+        src = "config(JSON)"
+    else:
+        d = decode_window(a.window)
+        src = "window(legacy string)"
+    print(f"dispatch config decoded from {src}:")
+    for k in sorted(d):
+        if d[k] is not None:
+            print(f"  {k:10s} {d[k]!r}")
+    if a.window.strip() and not a.config.strip():
+        ok, _, _ = equivalent(a.window)
+        print(f"  json-route equivalence: {'OK' if ok else 'MISMATCH'}")
+        if not ok:
+            print("::warning::the JSON route disagrees with the legacy string "
+                  "for this input — do NOT migrate this form until it matches")
+
+
+if __name__ == "__main__":
+    _cli()
