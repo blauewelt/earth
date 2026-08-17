@@ -37,6 +37,29 @@ test.describe("docs.html · mobile markdown reader", () => {
     for (const h of hrefs) expect(h).toMatch(/^\?f=[\w./%-]+\.md$/i);
   });
 
+  /* A plan nobody can open is a plan nobody reads. CLAUDE.md SS0b says a new
+   * markdown document gets one line in docs.html's DOCS — and that step was
+   * missed twice in one day (E-038 and E-039, 2026-08-16), each time silently:
+   * the file was on main, the blob URL was correct, and the reader's index
+   * simply did not know it existed. Nothing in the suite noticed, because
+   * every test asked about documents that WERE listed. So ask the filesystem
+   * instead of the list: ml/plans/ is the directory whose whole purpose is to
+   * be read by someone deciding whether to spend a week, and it is small
+   * enough that "all of them" is the right rule. */
+  test("every experiment plan is reachable from the docs reader", async ({ page }) => {
+    const fs = require("fs"), path = require("path");
+    const dir = path.join(__dirname, "..", "ml", "plans");
+    const plans = fs.readdirSync(dir).filter((f) => f.endsWith(".md")).sort();
+    expect(plans.length).toBeGreaterThan(0);
+    await page.goto("/docs.html");
+    const hrefs = await page.locator(".idx a").evaluateAll((as) =>
+      as.map((a) => decodeURIComponent(a.getAttribute("href") || "")));
+    const listed = new Set(hrefs.map((h) => h.replace(/^\?f=/, "")));
+    const missing = plans.filter((f) => !listed.has("ml/plans/" + f));
+    expect(missing, `add these to DOCS in docs.html: ${missing.join(", ")}`)
+      .toEqual([]);
+  });
+
   // The whole point. Checked on the biggest, widest document we have.
   test("no document widens the page", async ({ page }) => {
     for (const doc of ["ml/EXPERIMENTS.md", "ml/LEADERBOARD.md", "CLAUDE.md",

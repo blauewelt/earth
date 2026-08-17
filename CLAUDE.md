@@ -69,6 +69,17 @@ one line to `DOCS` in `docs.html`, and `tests/docs.spec.js` renders the real
 files at 360px — a document that grows a table the reader mishandles fails
 the suite.
 
+**Registering the document is part of writing it, and the suite now says so.**
+That step was skipped four times before anyone noticed (E-022, E-025, E-038,
+E-039), each time silently: the file was on `main`, the blob URL resolved, and
+the reader's index simply did not know it existed — so the plans written to be
+read before spending a week were the ones hardest to open. Chris, 2026-08-16,
+on the E-039 link: *"Are you sure the link to E039 is correct? I tried opening
+it, and it failed."* It was correct and it was the wrong KIND of link, for a
+document the reader had never been told about. `tests/docs.spec.js` now reads
+`ml/plans/` off disk and fails on any plan missing from `DOCS`, because the
+old tests could only ask about documents that were already listed.
+
 ### 1. Deploy first
 
 Deploy **before** running the full test suite: commit, deploy (below), then
