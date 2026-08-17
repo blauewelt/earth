@@ -1,0 +1,157 @@
+# E-034: derive the PENTAD state fields from the daily GLORYS12 chunks.
+#
+# Runs `ml/aggregate_cadence.py --hf-repo earth-tensors`, which streams each
+# daily chunk back from the Hub, folds it into its 5-day bins and deletes it —
+# so the job needs ~300 MB of disk at a time rather than the 113 GB the
+# archive occupies.
+#
+# WHY A WORKFLOW. Measured 2026-08-16: a backgrounded job in the Cowork
+# sandbox dies silently while the session is idle (13 min under nohup, 12 min
+# under setsid with its own process group). This one is ~1.9 h at the measured
+# ~18 s/chunk over 384 chunks. `runs-on: ubuntu-latest` — never `gpu`, per
+# ml/CLAUDE.md §6, which is the line of defence that keeps self-hosted runners
+# safe on a public repo.
+#
+# THIS JOB HAS NO RESUME, and that is the one way it differs from the pull.
+# The fetcher treats the Hub as its resume source and can be killed freely;
+# the aggregator recomputes from the first chunk every time, because a pentad
+# bin can straddle a month boundary and a half-accumulated bin on disk would
+# be indistinguishable from a complete one. 1.9 h against a 350-minute cap is
+# comfortable, so it is one-shot on purpose: `workflow_dispatch` only, NO
+# schedule. A schedule here would silently redo two hours of work.
+#
+# GRID: --grid-align point, which reproduces family 3's axes exactly (281x481,
+# lats 0..70, lons -100..20 — measured from base025_na.npz). build_family4.py
+# refuses anything else, and a half-cell offset would leave every stencil and
+# the AMOC eval mask naming different pixels than they describe.
+name: Pentad aggregate
+
+on:
+  workflow_dispatch:
+    inputs:
+      cadence:
+        description: 'pentad (5-day bins) or daily (passthrough)'
+        required: false
+        default: 'pentad'
+      prefix:
+        description: 'Hub folder to publish under'
+        required: false
+        default: 'pentad025'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pentad-aggregate
+  cancel-in-progress: false
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Preconditions while the inputs are all they have cost (§0.3): a
+      # missing secret or an incomplete archive must fail in seconds, not
+      # after ninety minutes of streaming.
+      - name: Preconditions
+        id: preflight
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::error::HF_TOKEN secret is not set"; exit 1
+          fi
+          pip install --quiet huggingface_hub
+          python3 - <<'PY'
+          import os, sys
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo = f"{api.whoami()['name']}/earth-tensors"
+          have = {f for f in api.list_repo_files(repo, repo_type="dataset")
+                  if f.endswith(".nc") and "/" not in f}
+          want = [f"glorys_{y}{m:02d}.nc"
+                  for y in range(1993, 2025) for m in range(1, 13)]
+          left = [w for w in want if w not in have]
+          print(f"{len(have)}/{len(want)} daily chunks on {repo}")
+          if left:
+              # A DEFINITE answer may be fatal (§5.17). An incomplete archive
+              # is definite: aggregating it would write a tensor with holes
+              # that nothing downstream could tell from a complete one.
+              print(f"::error::{len(left)} chunks missing, first {left[0]} — "
+                    f"run the GLORYS pull to completion first")
+              sys.exit(1)
+          PY
+          df -h / | tail -1
+
+      - name: Install
+        run: pip install --quiet netCDF4 numpy huggingface_hub
+
+      - name: Aggregate
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python3 -u ml/aggregate_cadence.py \
+              --hf-repo earth-tensors \
+              --cadence "${{ github.event.inputs.cadence || 'pentad' }}" \
+              --out "$RUNNER_TEMP/pentad" \
+              --bin-deg 0.25 --grid-align point --report-mem
+          ls -la "$RUNNER_TEMP/pentad"
+          du -sh "$RUNNER_TEMP/pentad"
+
+      # Publish when the artefact EXISTS (§5.20), and verify the restore:
+      # an upload returning 200 is not evidence the bytes come back.
+      - name: Publish to the Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PREFIX: ${{ github.event.inputs.prefix || 'pentad025' }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, sys
+          from huggingface_hub import HfApi, hf_hub_download
+          out = os.path.join(os.environ["RUNNER_TEMP"], "pentad")
+          prefix = os.environ["PREFIX"]
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo = f"{api.whoami()['name']}/earth-tensors"
+
+          def sha256(p, buf=1 << 22):
+              h = hashlib.sha256()
+              with open(p, "rb") as f:
+                  for b in iter(lambda: f.read(buf), b""):
+                      h.update(b)
+              return h.hexdigest()
+
+          names = sorted(os.listdir(out))
+          if not names:
+              sys.exit("nothing to publish — the aggregation produced no files")
+          bad = 0
+          for n in names:
+              p = os.path.join(out, n)
+              if not os.path.isfile(p):
+                  continue
+              src = sha256(p)
+              dest = f"{prefix}/{n}"
+              api.upload_file(path_or_fileobj=p, path_in_repo=dest,
+                              repo_id=repo, repo_type="dataset",
+                              commit_message=f"pentad aggregate: {n}")
+              back = hf_hub_download(repo, dest, repo_type="dataset",
+                                     token=os.environ["HF_TOKEN"],
+                                     cache_dir=os.path.join(out, "_vf"))
+              if sha256(back) != src:
+                  print(f"::error::{dest} restored with a DIFFERENT sha256")
+                  bad += 1
+              else:
+                  print(f"  {dest}: {os.path.getsize(p)/1e6:,.0f} MB · "
+                        f"backed up + restore-verified")
+              os.remove(back)
+          if bad:
+              sys.exit(f"{bad} file(s) did not restore identically")
+          print(f"\npublished to https://huggingface.co/datasets/{repo}"
+                f"/tree/main/{prefix}")
+          print("next: ml/build_family4.py --pentad-dir <that folder>")
+          PY
