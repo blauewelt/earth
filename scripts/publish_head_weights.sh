@@ -37,12 +37,30 @@
 #
 #   window: headpub                      # publish orphan-temporal-latest.pt
 #   window: headpub:<tag>                # name the asset explicitly
+#   window: headpub:<tag>@temporal       # pin the source to temporal.pt
+#   window: headpub:<tag>@orphan         # pin the source to orphan-temporal-latest.pt
+#
+# WHY @temporal EXISTS — measured 2026-08-17, runs #378/#381/#382. Orphan-first
+# is right ONLY on a box whose run DIED mid-training (the orphan snapshot is
+# the head). On a box whose run COMPLETED, temporal.pt is the head and
+# orphan-temporal-latest.pt can be a STALE leftover from an earlier
+# experiment: #381/#382 stripped Aug-15 leftovers (768x12 and 576x8 models)
+# and published them under E-037 names; #378 published a stale xl144 s1 head
+# as e035b. The printed step/d_model/layers/stencil/seed/znoise line below is
+# how a reader catches this — CHECK IT against the arm before trusting the
+# asset.
 set -e
 WINDOW="${1:-headpub}"
 TAG="${WINDOW#headpub}"; TAG="${TAG#:}"
-SRC=/opt/earth-cache/ckpt/orphan-temporal-latest.pt
-[ -f "$SRC" ] || SRC=/opt/earth-cache/ckpt/temporal.pt
-[ -f "$SRC" ] || { echo "::error::no head on this box (looked for orphan-temporal-latest.pt and temporal.pt)"; exit 1; }
+PICK="${TAG##*@}"; [ "$PICK" = "$TAG" ] && PICK=""; TAG="${TAG%@*}"
+case "$PICK" in
+  temporal) SRC=/opt/earth-cache/ckpt/temporal.pt ;;
+  orphan)   SRC=/opt/earth-cache/ckpt/orphan-temporal-latest.pt ;;
+  "")       SRC=/opt/earth-cache/ckpt/orphan-temporal-latest.pt
+            [ -f "$SRC" ] || SRC=/opt/earth-cache/ckpt/temporal.pt ;;
+  *) echo "::error::unknown headpub source '@${PICK}' (use @temporal or @orphan)"; exit 1 ;;
+esac
+[ -f "$SRC" ] || { echo "::error::no head on this box at $SRC"; exit 1; }
 ASSET="head-weights-${TAG:-${GITHUB_RUN_NUMBER}}.pt"
 OUT="/tmp/${ASSET}"
 
