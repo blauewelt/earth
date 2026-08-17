@@ -170,23 +170,18 @@ def main():
     # not targets in disguise: they pass through unchanged.
     if a.anomaly:
         moy = np.array([int(m[5:7]) - 1 for m in months])
-        dynamic = [c for c in range(C) if np.nanstd(np.nanmean(X[..., c], axis=(1, 2))) > 1e-6]
-        clim = np.full((12, H, W, C), np.nan, dtype=np.float32)
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")           # all-NaN cells are fine
-            for m in range(12):
-                sel = (moy == m) & ~t_hold
-                clim[m] = np.nanmean(X[sel], axis=0)
-        for c in dynamic:
-            # clim[moy, :, :, c] is [T,H,W]; clim[moy][..., c] would
-            # materialise the whole [T,H,W,C] fancy index per channel —
-            # ~11 GB per channel on the family-3 tensor (trainprobe.py
-            # documents the same trap).
-            X[..., c] = X[..., c] - clim[moy, :, :, c]
-            v = X[..., c][np.isfinite(X[..., c]) & ~t_hold[:, None, None]
-                          & ~x_hold[None, None, :]]
-            X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)
+        # This was a hand-inlined SECOND copy of trainprobe.anomaly_transform,
+        # and two copies of one transform are two places for the same
+        # numerical bug to live. On 2026-08-17 they were exactly that: both
+        # z-scored with numpy's default accumulator, which for float16 sums
+        # ~204M squared residuals past 65504, returns inf, and drives every
+        # dynamic channel to 0.0. Family 4 is the first float16 tensor, so the
+        # duplicate would have had to be found and fixed twice. It is gone;
+        # this is the one implementation, and it is the same one probe_kfold
+        # scores against — which is what makes E-038's frozen control
+        # comparable to the trained arms at all.
+        from trainprobe import anomaly_transform   # lazy: plain runs skip it
+        X, dynamic = anomaly_transform(X, moy, t_hold, x_hold)
         print(f"anomaly space: {len(dynamic)}/{C} dynamic channels "
               f"({[chan[c] for c in dynamic]})")
 

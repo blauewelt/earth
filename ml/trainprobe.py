@@ -46,13 +46,30 @@ def anomaly_transform(X, moy, t_hold, x_hold):
     channels become departures from their own train-years monthly
     climatology, then z-scored on train data. Returns (X, dynamic)."""
     T, H, W, C = X.shape
+    # EVERY reduction below names dtype=float64, and that is not cosmetic.
+    # Family 4 is the project's first float16 tensor (build_family4.py chose
+    # it to fit 33.1 GB rather than 66.3). numpy upcasts the accumulator for
+    # np.mean on float16 but NOT for np.std/np.var — _methods._var only
+    # upcasts integer and bool. The z-score at the end of this function sums
+    # ~204M squared residuals; in float16 that passes 65504, returns inf, and
+    # (X - mu) / (inf + 1e-6) is exactly 0.0. Every dynamic channel would
+    # become zeros while every loss, gpu_util and probe still looked healthy —
+    # and probe_kfold.py calls this function, so E-038's frozen control would
+    # have "falsified" its premise against an all-zero tensor. Family 3 was
+    # float32 and never reached the limit. Measured 2026-08-17: float16 pool
+    # of 30M -> inf; the same pool in float64 -> 0.999844. The float32 path
+    # moves by 5.2e-9 relative, ~7 orders below the sd 0.123 seed noise the
+    # stage-2 probe already carries (ml/CLAUDE.md §3).
     dynamic = [c for c in range(C)
-               if np.nanstd(np.nanmean(X[..., c], axis=(1, 2))) > 1e-6]
+               if np.nanstd(np.nanmean(X[..., c], axis=(1, 2),
+                                       dtype=np.float64),
+                            dtype=np.float64) > 1e-6]
     clim = np.full((12, H, W, C), np.nan, dtype=np.float32)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for m in range(12):
-            clim[m] = np.nanmean(X[(moy == m) & ~t_hold], axis=0)
+            clim[m] = np.nanmean(X[(moy == m) & ~t_hold], axis=0,
+                                 dtype=np.float64)
     for c in dynamic:
         # clim[moy, :, :, c] is [T,H,W]; the equivalent-looking
         # clim[moy][..., c] materialises the whole [T,H,W,C] fancy index and
@@ -61,7 +78,8 @@ def anomaly_transform(X, moy, t_hold, x_hold):
         X[..., c] = X[..., c] - clim[moy, :, :, c]
         v = X[..., c][np.isfinite(X[..., c]) & ~t_hold[:, None, None]
                       & ~x_hold[None, None, :]]
-        X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)
+        X[..., c] = (X[..., c] - v.mean(dtype=np.float64)) / (
+            v.std(dtype=np.float64) + 1e-6)
     return X, dynamic
 
 
