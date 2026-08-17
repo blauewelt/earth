@@ -1,0 +1,1 @@
+{"config": {"steps": 200000, "batch": 512, "d_z": 32, "patch": 1, "d_model": 1024, "n_layers": 16, "n_heads": 4, "d_dec": 512, "anomaly": true, "eval_every": 7500, "light_probe_every": 10000, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 201.963, "data": "family4_na025_pentad.npz", "C": 39, "T": 3142, "resume": null}}
