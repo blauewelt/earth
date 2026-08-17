@@ -219,10 +219,39 @@ def _ring_on(ring_km):
     return float(ring_km or 0) > 0
 
 
-def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
+def wraps_longitude(W, dlat, wrap_lon=None):
+    """Should the zonal axis wrap? AUTO by default, because this is the one
+    property that must not be remembered.
+
+    Clipping longitude is CORRECT for a regional basin — a neighbour past
+    -100 E genuinely is outside the experiment — and it becomes a WALL AT THE
+    DATELINE the moment the window is global, which is precisely the change
+    E-033 proposes. Measured on a land-free 0.5 deg rectangle with the
+    sunflower-89 at 4444 km, dead-slot fraction:
+
+        NA window (-100..20 E)   clip 33.7%   wrap 17.1%
+        global (-180..180)       clip 15.4%   wrap  7.0%
+
+    So going global while still clipping recovers only half of what the domain
+    was costing, and the wrap is worth as much again as the tensor. A flag
+    someone has to set would be a flag someone forgets, and the failure is
+    silent: the run trains, the curves look normal, and a third of the
+    Pacific's neighbours are zeros. So the DEFAULT IS DERIVED FROM THE GRID —
+    a longitude axis that spans the planet wraps, one that does not, does not.
+    Pass wrap_lon=True/False only to override deliberately (a regional window
+    that happens to be 360 wide does not exist; a global one that must not
+    wrap is a test)."""
+    if wrap_lon is not None:
+        return bool(wrap_lon)
+    return abs(W * dlat - 360.0) < 1.5 * dlat
+
+
+def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None,
+                  wrap_lon=None):
     """NBR [P, S] int64 indices into the P (ocean-pixel) ordering; -1 =
-    missing (land, or outside the window). NO longitude wrap — the family3
-    window is regional (-100..+20 E), unlike the codec's global gather_px.
+    missing (land, or outside the window). Longitude wraps only when the grid
+    is global — see `wraps_longitude`; the family3 window is regional
+    (-100..+20 E) and clips, unlike the codec's global gather_px.
     Slot 0 is always the centre pixel itself. Takes the grid SHAPE rather
     than the mask array: the pixel list ys/xs IS the mask (and under
     --max-pixels subsampling, absent pixels correctly read as missing).
@@ -238,6 +267,14 @@ def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
     lin[ys, xs] = np.arange(len(ys))
     NBR = np.full((len(ys), stencil), -1, np.int64)
     NBR[:, 0] = np.arange(len(ys))
+    # Derived once, used by every branch. With no `lats` there is no grid step
+    # to reason from, so an unset wrap_lon stays False — the historical
+    # behaviour, and the fixed-table stencils reach 1-2 cells, where a
+    # dateline is a rounding error rather than a wall.
+    _dl = (float(np.round(np.diff(lats).mean(), 6))
+           if lats is not None and len(np.asarray(lats)) > 1 else None)
+    wrap = (wraps_longitude(W, _dl, wrap_lon) if _dl is not None
+            else bool(wrap_lon))
     if str(ring_km).startswith("spiral:"):
         if lats is None:
             raise ValueError("spiral geometry needs `lats`")
@@ -281,8 +318,11 @@ def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
                 yy, xx = y + dy, xs[sel] + dx
                 if not (0 <= yy < H):
                     continue
-                okc = (xx >= 0) & (xx < W)
-                NBR[sel[okc], k + 1] = lin[yy, xx[okc]]
+                if wrap:
+                    NBR[sel, k + 1] = lin[yy, xx % W]
+                else:
+                    okc = (xx >= 0) & (xx < W)
+                    NBR[sel[okc], k + 1] = lin[yy, xx[okc]]
         assert (NBR[:, 0] == np.arange(len(ys))).all()
         return NBR
     radii = ([float(r) for r in str(ring_km).split(",") if str(r).strip()]
@@ -327,14 +367,21 @@ def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None):
                 # past the window edge is missing, like one on land.
                 if not (0 <= yy < H):
                     continue
-                ok = (xx >= 0) & (xx < W)
-                NBR[sel[ok], k + 1] = lin[yy, xx[ok]]
+                if wrap:
+                    NBR[sel, k + 1] = lin[yy, xx % W]
+                else:
+                    ok = (xx >= 0) & (xx < W)
+                    NBR[sel[ok], k + 1] = lin[yy, xx[ok]]
     else:
         offs = STENCILS[stencil]
         for k, (dy, dx) in enumerate(offs):
             yy, xx = ys + dy, xs + dx
-            ok = (yy >= 0) & (yy < H) & (xx >= 0) & (xx < W)
-            NBR[ok, k] = lin[yy[ok], xx[ok]]
+            if wrap:
+                ok = (yy >= 0) & (yy < H)
+                NBR[ok, k] = lin[yy[ok], xx[ok] % W]
+            else:
+                ok = (yy >= 0) & (yy < H) & (xx >= 0) & (xx < W)
+                NBR[ok, k] = lin[yy[ok], xx[ok]]
     assert (NBR[:, 0] == np.arange(len(ys))).all()
     return NBR
 
