@@ -72,10 +72,33 @@ result (§3).
 
 ## 2 · The matrix
 
+**40M and 200M are CODEC PARAMETER COUNTS** — `PixelMAE` in `ml/model.py`,
+not tensor sizes, not head widths, not months of data.
+
 |  | **pentad (5-day)** | **daily (1-day)** |
 |---|---|---|
-| **~40M** | f4-40M | f5-40M |
-| **~200M** | f4-200M | f5-200M |
+| **~40M codec params** | f4-40M | f5-40M |
+| **~200M codec params** | f4-200M | f5-200M |
+
+Measured by instantiating the real class at `n_chan=39`, rather than
+estimated:
+
+| `d_model` | `n_layers` | `d_dec` | codec params |
+|---|---|---|---|
+| 512 | 12 | 256 | **37,975,889** ← the ~40M rung |
+| 640 | 12 | 320 | 59,286,161 |
+| 768 | 12 | 384 | 85,323,217 |
+| 896 | 16 | 448 | 154,668,817 |
+| 1024 | 16 | 512 | **201,962,577** ← the ~200M rung |
+
+**The 40M rung is the CURRENT codec's capacity, and that is what makes this a
+clean experiment.** `f3_anchor41M` (run #62) is **40.7M params** — the frozen
+codec everything since has ridden on. So the f4-40M cell holds architecture
+and capacity fixed and changes *only the data*. If it beats the frozen 40.7M
+codec applied to pentad fields, that difference **is** the domain shift, with
+capacity controlled — which is exactly the claim §1 makes and exactly what a
+single-arm test could not have isolated. The 200M row is then the independent
+scale question, asked on top of a control that already holds.
 
 Two axes, deliberately: capacity × cadence. It answers "does finer cadence
 pay?" and "does the answer depend on capacity?" in one design, which matters
