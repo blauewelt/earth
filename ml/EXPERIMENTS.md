@@ -92,20 +92,36 @@ of a factorial whose interesting axis collapsed. Running it concurrently
 rather than after E-036's verdict is a deliberate trade: $10 against a day of
 wall-clock, on a fleet that is otherwise idle the moment wave 8 lands.
 
-### Dispatch — DELIBERATELY QUEUED against BUSY runners
+### Dispatch — QUEUED, then MOVED ONTO RESTARTED BOXES
 
-Pinned to the two boxes now running E-036, so they start the instant those
-finish (~11:00–11:30Z 08-17). **This is the one case where a queued job is
-correct**: ml/CLAUDE.md §7 says a queued job against an *idle* runner is stuck
-and must be cancelled and re-dispatched — that rule is about idle runners, and
-these two are mid-run. GitHub holds a job for a self-hosted runner for up to
-24 h; the wait is ~13, so the margin is ~10 h and the scheduled check-in will
-catch it if it lapses.
+First dispatched as **#361/#362**, deliberately queued behind E-036 on its own
+two boxes. Chris then said *"let's run those now"*, so two stopped boxes were
+restarted and the arms re-dispatched onto them as **#363/#364**; #361/#362
+were cancelled once #363/#364 were confirmed picked up (dispatch first, verify,
+then cancel — the reverse order leaves a window with no arm at all).
 
-| run | arm | seed | runner | starts after |
+| run | arm | seed | runner | Vast |
 |---|---|---|---|---|
-| **#361** | xl233 + znoise 0.7 | 0 | gpu-box-47094143 | #359 |
-| **#362** | xl233 + znoise 0.7 | 1 | gpu-box-47529389 | #360 |
+| **#363** | xl233 + znoise 0.7 | 0 | gpu-box-45731106 | 47718230 |
+| **#364** | xl233 + znoise 0.7 | 1 | gpu-box-30257785 | 47726876 |
+| ~~#361/#362~~ | superseded, cancelled while still queued | | | |
+
+**Vast `start` is not reliable, and the API says so quietly.** Four of five
+stopped boxes answered `resources_unavailable` with *"state change queued"* —
+and that queue did not hold: `intended_status` read back as `stopped` minutes
+later, so the box was never coming. Only two of five actually started. Read
+`actual_status` AND `intended_status` after any start; the success message is
+not evidence (ml/CLAUDE.md §0.2). A fifth box (47724565) accepted the start
+late and was stopped again rather than left to drift into an unplanned $0.31/h.
+
+Restarting a stopped box was preferred over renting new ones: it keeps the
+disk, the runner registration, the data cache and the checkpoint mirror, so it
+is both cheaper and warmer. The standing rule that NEW boxes must be
+large-disk 600 GB+ is about renting, not about restarting what we already own.
+
+This also means the fleet is now **six arms on six boxes** — the two xl233
+boxes are no longer reserved for tomorrow's eval wave, which will need a box
+freed by whichever arm lands first.
 
 ```
 stencil:234,ring:spiral:111-4444-0.71-0.5,seed:0,sched:expdecay --lr-cooldown-frac 0 --milestone-steps 600,60000,120000 --input-znoise 0.7
