@@ -916,6 +916,15 @@ jobs:
               bash scripts/project_run.sh "${{ inputs.window }}"
               exit 0
               ;;
+            headpub*)
+              # Publish this box's stage-2 head as WEIGHTS ONLY. Wave 8's
+              # heads are ~2.5 GB with optimiser state and a release asset
+              # caps around 2 GiB, so every upload answered 422 while the
+              # run stayed green. See scripts/publish_head_weights.sh for
+              # the measurement; an eval needs weights, not moments.
+              bash scripts/publish_head_weights.sh "${{ inputs.window }}"
+              exit 0
+              ;;
             sroll:*)
               # E-022 spatial rollout eval — full-window roll of stencil
               # heads against the e017 baseline, gated on reproducing #217.
