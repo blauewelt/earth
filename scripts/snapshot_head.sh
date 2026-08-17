@@ -60,8 +60,23 @@ import torch,sys
 try: print(torch.load('$CP', map_location='cpu', weights_only=False).get('step','?'))
 except Exception as e: print('?')" 2>/dev/null)
 
+# `-T` STREAMS the body. `--data-binary "@f"` buffers the whole file in
+# memory, and that is what stood here until 2026-08-17: at the 88M tier a
+# head with optimiser state was ~1 GB and curl could hold it, but at 205-217M
+# it is ~2.6 GB and every upload died with "curl: option --data-binary: out
+# of memory". #358 trained all 200,000 steps and published NOTHING for the
+# last fifteen hours, warning quietly every thirty minutes while the run
+# stayed green.
+#
+# The exact same defect, in the same words, is already recorded in
+# ml/CLAUDE.md and already fixed in the ORPHAN-RESCUE loop twenty lines into
+# ml-train.yml -- which streams with `-T` and carries a comment explaining
+# why. One of the two call sites was fixed and its sibling was not, which is
+# the "read the failing line before fixing the third thing around it" lesson
+# arriving from the other direction: the fix was found, applied once, and
+# never grepped for.
 if curl -fsSL -X POST "${AUTH[@]}" \
-     -H "Content-Type: application/octet-stream" --data-binary "@${CP}" \
+     -H "Content-Type: application/octet-stream" -T "${CP}" \
      "https://uploads.github.com/repos/${REPO}/releases/${REL_ID}/assets?name=${ASSET}" \
      >/dev/null; then
   echo "snapshot: ${ASSET} saved at step ${STEP} ($(du -h "$CP" | cut -f1)) — "\
