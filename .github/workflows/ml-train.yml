@@ -57,7 +57,7 @@ on:
         description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum, optionally mode@ref or mode@twin), on a stage-2 run unroll:N for the autoregressive unroll, resume2:<tag>[@lr] to CONTINUE an existing stage-2 head (needs optimiser state: only heads written after 2026-08-10 have it), or warm2:<tag>[@lr] for a WARM RESTART from its weights alone with a fresh cosine, where temporal_steps is the EXTRA steps rather than the total (both seeded from the model-checkpoints release if the box lacks the file) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
         default: "global"
       tensor:
-        description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA builder)"
+        description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA monthly) | family4_na025_pentad (0.25° NA 5-day, E-034/E-038). A VALUE on an existing input, never a 26th input — this file sits at the 25-input ceiling and a 26th makes the WHOLE workflow unparseable."
         default: "family2"
       sst_channel:
         description: "append monthly OISST as channel 15 (true | false)"
@@ -350,7 +350,8 @@ jobs:
           # (wind_daily_8292.tar.aa, one chunk) that extracts ADDITIVELY into
           # wind_daily/ — so no rm -rf and no seed(): the shared dir must
           # survive a failed extension seed.
-          if [ "${{ inputs.tensor }}" = "family3_na025" ]; then
+          if [ "${{ inputs.tensor }}" = "family3_na025" ] || \
+             [ "${{ inputs.tensor }}" = "family4_na025_pentad" ]; then
             n8292=$(ls /opt/earth-cache/wind_daily/*.sfc.gauss.198[2-9].nc \
                        /opt/earth-cache/wind_daily/*.sfc.gauss.199[0-2].nc \
                        2>/dev/null | wc -l)
@@ -376,7 +377,8 @@ jobs:
           # The family-3 base tensor is a single (non-tar) release asset;
           # build_family3.py can fetch it itself, but seeding it here keeps
           # the build step offline like everything else.
-          if [ "${{ inputs.tensor }}" = "family3_na025" ]; then
+          if [ "${{ inputs.tensor }}" = "family3_na025" ] || \
+             [ "${{ inputs.tensor }}" = "family4_na025_pentad" ]; then
             [ -f /opt/earth-cache/base025_na.npz ] || curl -sL \
               --max-time 900 --retry 3 --retry-delay 10 \
               -o /opt/earth-cache/base025_na.npz \
@@ -445,6 +447,27 @@ jobs:
               fi
             fi
             python -u ml/build_family3.py
+          elif [ "${{ inputs.tensor }}" = "family4_na025_pentad" ]; then
+            # E-034 step 4 / E-038. The 5-day fields are published PUBLICLY on
+            # the Hub, so this needs no credential on the box — deliberately:
+            # the box is a stranger's machine whose host has root (§6), and
+            # nothing here requires a secret, so nothing here gets one.
+            PD=/opt/earth-cache/glorys_pentad
+            mkdir -p "$PD"
+            HFB="https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/pentad025"
+            for f in index.npz pentad_mean_uo.npy pentad_mean_vo.npy \
+                     pentad_mean_mlotst.npy pentad_mean_zos.npy; do
+              if [ ! -s "$PD/$f" ]; then
+                echo "fetching pentad025/$f …"
+                curl -fsSL --max-time 1800 -o "$PD/$f.part" "$HFB/$f" || {
+                  echo "::error::could not fetch pentad025/$f from the Hub"
+                  exit 1; }
+                mv -f "$PD/$f.part" "$PD/$f"
+              fi
+            done
+            # build_family4.py checks the grid against base025_na.npz and
+            # REFUSES a mismatch before writing any of the 33 GB.
+            python -u ml/build_family4.py --pentad-dir "$PD"
           else
             python ml/build_dataset.py --window "${{ inputs.window }}"
             python ml/fetch_rg_channels.py
@@ -472,7 +495,7 @@ jobs:
       - name: Record provenance
         env:
           INPUTS_JSON: ${{ toJSON(inputs) }}
-          TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
+          TENSOR: ml/cache/${{ inputs.tensor == 'family4_na025_pentad' && 'family4_na025_pentad' || (inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels') }}.npz
         run: |
           mkdir -p ml/runs/actions
           python - <<'EOF'
@@ -594,7 +617,7 @@ jobs:
           # Every N-step checkpoint is mirrored to /opt/earth-cache/ckpt
           # under this tag, so a cancel leaves something to resume FROM.
           CKPT_TAG: run-${{ github.run_number }}
-          TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
+          TENSOR: ml/cache/${{ inputs.tensor == 'family4_na025_pentad' && 'family4_na025_pentad' || (inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels') }}.npz
         run: |
           # E-019b: `window` may carry a recw: token with the codec's
           # copy-reconstruction knobs, e.g.
@@ -705,7 +728,7 @@ jobs:
           # this line; the joint step was added later and never got it.
           GITHUB_TOKEN: ${{ github.token }}
           CKPT_TAG: run-${{ github.run_number }}
-          TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
+          TENSOR: ml/cache/${{ inputs.tensor == 'family4_na025_pentad' && 'family4_na025_pentad' || (inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels') }}.npz
         run: |
           JS="${{ inputs.temporal_steps }}"; JS="${JS#joint:}"
           # window carries "mode" or "mode@ref_fore" — e.g. lse@0.29. The
@@ -768,7 +791,7 @@ jobs:
           # therefore been a no-op since it was written — which is why a
           # stage-2-only run shows an empty chart for its whole life.
           GITHUB_TOKEN: ${{ github.token }}
-          TENSOR: ml/cache/${{ inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels' }}.npz
+          TENSOR: ml/cache/${{ inputs.tensor == 'family4_na025_pentad' && 'family4_na025_pentad' || (inputs.tensor == 'family3_na025' && 'family3_na025' || 'na_pixels') }}.npz
         run: |
           # ROLLOUT EVALUATION MODE — window carries `rolleval:<tag>,<tag>,…`
           # (the 25-input cap again). Fetches published temporal heads from
