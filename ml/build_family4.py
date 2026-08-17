@@ -506,9 +506,27 @@ def main():
     print(f"  TOTAL {total:>15,}  ->  params anchor ~ "
           f"{total / 20 / 1e6:.1f} M (values/20)")
 
+    # THE TRAINER LOADS THIS UNCHANGED, and that is a deliberate result
+    # rather than a coincidence. `ml/train.py` touches `months` in exactly
+    # five places: it loads it, prints it, takes `m[:4]` for the year-blocked
+    # holdout, and takes `int(m[5:7])-1` twice for the season context token.
+    # A pentad bin answers both questions correctly — it has a year, and it
+    # has a time of year — so emitting one YYYY-MM per bin from the bin's
+    # START date makes family 4 loadable with no edit to the trainer at all.
+    # Removing the failure mode beats guarding it (ml/CLAUDE.md §4.1); the
+    # alternative was a cadence branch threaded through the loader.
+    # `bin_index` remains the authoritative axis; `months` is a label.
+    months = np.array([f"{bin_start(b, PENTAD_DAYS).year:04d}-"
+                       f"{bin_start(b, PENTAD_DAYS).month:02d}" for b in bins])
+    # train.py reads d["rapid"] (axis-index, value) pairs, the name family 3
+    # writes. truth_pentad() already produced exactly that shape under
+    # `truth_rapid`; alias it rather than compute it twice.
+    if "truth_rapid" in truths:
+        truths.setdefault("rapid", truths["truth_rapid"])
+
     print(f"\nwriting {a.out} …", flush=True)
     np.savez_compressed(
-        a.out, X=X, bin_index=np.array(bins, np.int64),
+        a.out, X=X, bin_index=np.array(bins, np.int64), months=months,
         epoch=np.array(str(EPOCH)), pentad_days=np.array(PENTAD_DAYS),
         lats=lats, lons=lons, chan=np.array(CHANS), norm=norm,
         window=np.array("na025"), cadence=np.array("pentad"),

@@ -327,7 +327,26 @@ def main():
     assert not os.path.exists(out2), "the refused build still wrote its output"
     print("  7. a half-cell-offset grid is refused, and nothing is written")
 
-    print("\ntests/test_e034_family4.py: all 7 checks passed")
+    # ---- 8: the existing trainer can load this, unmodified ---------------
+    # ml/train.py touches `months` in five places: load, print, m[:4] for the
+    # year-blocked holdout, and int(m[5:7])-1 twice for the season token.
+    # Reproduce all of them here rather than trusting that they work.
+    mo = [str(m) for m in d["months"]]
+    assert len(mo) == T, f"months has {len(mo)} entries for {T} rows"
+    for r, b in enumerate(bins):
+        st = pentad_start(b)
+        assert mo[r] == f"{st.year:04d}-{st.month:02d}", \
+            f"row {r}: months says {mo[r]}, bin starts {st}"
+    years = {m[:4] for m in mo}                       # train.py:156
+    moy = [int(m[5:7]) - 1 for m in mo]               # train.py:172, 201
+    assert years == {"2004"} and set(moy) <= {0, 1}, \
+        f"holdout/season decode wrong: years {years}, months {sorted(set(moy))}"
+    assert "rapid" in d.files, "train.py:648 reads d['rapid'] — absent"
+    assert np.array_equal(d["rapid"], d["truth_rapid"])
+    print(f"  8. loadable by the unmodified trainer: months decodes to "
+          f"year {sorted(years)} and months {sorted(set(moy))}; rapid aliased")
+
+    print("\ntests/test_e034_family4.py: all 8 checks passed")
 
 
 if __name__ == "__main__":
