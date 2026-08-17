@@ -44,6 +44,80 @@ low-pass).
 
 ---
 
+## E-037 · xl233 × znoise: the corner that completes the factorial — QUEUED 2026-08-16 ~22:00Z
+
+Chris, reading the wave-8 dispatch: *"I thought you proposed xl233 + znoise
+above. Why xl144? Let's queue xl233 + noise after."* He is right that the
+proposal was ambiguous — the message said "the 233-point stencil, plus the
+noise × 205M composition", and E-036 resolved "205M" to xl144 without saying
+so. **The reason for that choice was interpretability, not interest**: xl144
+is the only width with a paired clean control already measured at 205M
+(#346/#347 → 0.68067 / 0.67558), so the noise delta lands on one flag. xl233
+clean did not exist when E-036 was written; it was starting in the same wave.
+That argument is about which cell is cleanest to READ, and it is not a reason
+to leave the most interesting cell unrun.
+
+### What this arm actually buys
+
+With it, the 205M tier becomes a complete **2×2 factorial**, which no part of
+this programme has had on the rolled scoreboard:
+
+| | clean | znoise σ=0.7 |
+|---|---|---|
+| **sunflower-144** | 0.6781 (#346/#347, eval #356) | #359/#360 — in flight |
+| **sunflower-233** | #357/#358 — in flight | **#361/#362 — this entry** |
+
+The three cells already running give two main effects. Only the fourth gives
+the **interaction**, and the interaction is the question §8.7 of the paper
+actually poses: width adds live input, noise adds robustness to corrupted
+input, and §8.6 measured that ~50% of a 4444 km stencil's slots are *already*
+dead zeros. If those two mechanisms are the same mechanism — if wide-and-far
+inputs help precisely because they teach a model to work with a half-empty
+context — the corner cell comes in BELOW the sum of its main effects. If they
+are independent, it lands at the sum. Neither is predictable from the other
+three cells, which is exactly what makes it worth the box.
+
+**Hypothesis.** Sub-additive: corridor AUC above both single-intervention
+cells but below (xl233 gain) + (znoise gain) added onto xl144-clean's 0.6781.
+
+**Falsifier.** At or above the additive prediction = width and noise are
+independent axes and the "dead-slot robustness" reading of §8.6 is wrong.
+A cell BELOW both single interventions would say they actively conflict —
+the only outcome that would make the composition a mistake rather than a
+measurement.
+
+**Honest note on sequencing.** §4.4 calls sequenced experiments a smell, and
+if E-036 falsifies — noise dead at 205M — this arm was ~$10 spent on a corner
+of a factorial whose interesting axis collapsed. Running it concurrently
+rather than after E-036's verdict is a deliberate trade: $10 against a day of
+wall-clock, on a fleet that is otherwise idle the moment wave 8 lands.
+
+### Dispatch — DELIBERATELY QUEUED against BUSY runners
+
+Pinned to the two boxes now running E-036, so they start the instant those
+finish (~11:00–11:30Z 08-17). **This is the one case where a queued job is
+correct**: ml/CLAUDE.md §7 says a queued job against an *idle* runner is stuck
+and must be cancelled and re-dispatched — that rule is about idle runners, and
+these two are mid-run. GitHub holds a job for a self-hosted runner for up to
+24 h; the wait is ~13, so the margin is ~10 h and the scheduled check-in will
+catch it if it lapses.
+
+| run | arm | seed | runner | starts after |
+|---|---|---|---|---|
+| **#361** | xl233 + znoise 0.7 | 0 | gpu-box-47094143 | #359 |
+| **#362** | xl233 + znoise 0.7 | 1 | gpu-box-47529389 | #360 |
+
+```
+stencil:234,ring:spiral:111-4444-0.71-0.5,seed:0,sched:expdecay --lr-cooldown-frac 0 --milestone-steps 600,60000,120000 --input-znoise 0.7
+```
+
+That also fixes the fleet allocation for tomorrow: the two xl233 boxes
+(gpu-box-42005419, gpu-box-46045353) stay free for the wave-8 **eval** wave,
+which needs only two `sroll:` runs — one per arm, both seeds plus the gate in
+a single dispatch, the way #352 rolled six heads at once.
+
+---
+
 ## E-035 / E-036 · The two compositions nobody has run — DISPATCHED 2026-08-16 ~18:40Z
 
 Wave 8. Four training arms across the four warm boxes, ~200k steps each at
