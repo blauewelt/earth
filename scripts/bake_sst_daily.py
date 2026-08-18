@@ -54,7 +54,15 @@ for t in range(T):
     a = np.ma.filled(sst[t], np.nan).astype(np.float32)
     a = np.roll(a, NX // 2, axis=1)               # lon 0..360 -> -180..180
     ok = np.isfinite(a)
-    out[:, t] = np.where(ok, np.clip(a * 100, -32767, 32767), -32768).astype(np.int16).ravel()
+    # np.round, NOT the implicit truncation of .astype(int16). The source is
+    # itself int16-at-0.01 degC, so a * 100 lands a hair below the exact
+    # multiple often enough that truncation returns one count LOW — 24.22 degC
+    # baking as 24.21, data-dependently. Found 2026-08-18 while building the
+    # ML-side cut of the same download (ml/fetch_sst_na.py), which rounds and
+    # pins the round trip to half a count. E-040's "bit-identical" measurement
+    # was one point that happened not to hit the case.
+    out[:, t] = np.where(ok, np.round(np.clip(a * 100, -32767, 32767)),
+                         -32768).astype(np.int16).ravel()
     if t % 60 == 0:
         print("  day", t, flush=True)
 

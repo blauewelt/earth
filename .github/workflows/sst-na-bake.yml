@@ -1,0 +1,163 @@
+# E-040 / E-034: DAILY OISST on the ML window's own grid.
+#
+# Runs `ml/fetch_sst_na.py`, which streams one year of OISST v2.1 at a time
+# (~476 MB), interpolates every day onto family 3's 281x481 axes and DELETES
+# the source before pulling the next — so the job needs ~1 GB of scratch plus
+# the growing output rather than the ~20 GB the 43-year archive occupies.
+#
+# TIME. One real year folds in 14.5 s at 0.26 GB peak RSS (measured
+# 2026-08-18 on 1993), so the ~43-year run is bounded by 43 x 477 MB of
+# download, not by the arithmetic. 350 minutes is comfortable, not tight.
+#
+# SIZE. The artifact is int16 (15,706, 281, 481) = ~4.25 GB, and the restore
+# verification downloads it back, so the peak is ~8.5 GB. The runner had
+# ~87 GB free (measured 2026-08-17 in the pentad-aggregate run's log), which
+# is why this is comfortable rather than tight.
+#
+# WHY A WORKFLOW. Same reason as pentad-aggregate.yml: a backgrounded job in
+# the Cowork sandbox dies silently while the session is idle (measured
+# 2026-08-16 — 13 min under nohup, 12 min under setsid). `runs-on:
+# ubuntu-latest` — NEVER `gpu`, per ml/CLAUDE.md §6, which is the line of
+# defence that keeps the self-hosted runners safe on a public repo.
+#
+# NO SCHEDULE, `workflow_dispatch` only. The fetcher recomputes from the
+# first year every time (it prefills the whole axis with nodata), so a
+# schedule would silently redo an hour of downloads.
+#
+# GRID: read from ml/cache/base025_na.npz when present — lats 0..70 (281),
+# lons -100..20 (481), sampled ON the multiples of 0.25. OISST's own lat/lon
+# are cell CENTRES (0.125 + k*0.25), so the fetcher INTERPOLATES with
+# build_family3's NaN-aware bilinear. Nearest-indexing would displace every
+# pixel by half a cell in both axes, invisibly.
+name: SST NA bake
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: 'first year (the axis epoch is 1982-01-01)'
+        required: false
+        default: '1982'
+      end:
+        description: 'last year'
+        required: false
+        default: '2024'
+      prefix:
+        description: 'Hub folder to publish under'
+        required: false
+        default: 'sst_na025'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sst-na-bake
+  cancel-in-progress: false
+
+jobs:
+  bake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Preconditions while the inputs are all they have cost (§0.3): a
+      # missing secret or an unreachable source must fail in seconds, not
+      # after forty years of downloads.
+      - name: Preconditions
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          START: ${{ github.event.inputs.start || '1982' }}
+          END: ${{ github.event.inputs.end || '2024' }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::error::HF_TOKEN secret is not set"; exit 1
+          fi
+          if [ "$START" -lt 1982 ]; then
+            echo "::error::start $START is before the axis epoch 1982-01-01"
+            exit 1
+          fi
+          if [ "$START" -gt "$END" ]; then
+            echo "::error::start $START is after end $END"; exit 1
+          fi
+          url="https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2.highres/sst.day.mean.$START.nc"
+          code=$(curl -sSI -o /dev/null -w '%{http_code}' --max-time 120 "$url" || echo 000)
+          echo "HEAD $url -> $code"
+          if [ "$code" != "200" ]; then
+            echo "::warning::PSL returned $code for the first year — the fetcher will retry and fall back to the thredds mirror"
+          fi
+          df -h / | tail -1
+
+      - name: Install
+        run: pip install --quiet netCDF4 numpy huggingface_hub
+
+      - name: Bake
+        env:
+          START: ${{ github.event.inputs.start || '1982' }}
+          END: ${{ github.event.inputs.end || '2024' }}
+        run: |
+          python3 -u ml/fetch_sst_na.py \
+              --start "$START" --end "$END" \
+              --out "$RUNNER_TEMP/sst_na" --report-mem
+          rm -rf "$RUNNER_TEMP/sst_na/_src"
+          ls -la "$RUNNER_TEMP/sst_na"
+          du -sh "$RUNNER_TEMP/sst_na"
+          df -h / | tail -1
+
+      # Publish when the artefact EXISTS (§5.20), and verify the restore: an
+      # upload returning 200 is not evidence the bytes come back.
+      - name: Publish to the Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PREFIX: ${{ github.event.inputs.prefix || 'sst_na025' }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, sys
+          from huggingface_hub import HfApi, hf_hub_download
+          out = os.path.join(os.environ["RUNNER_TEMP"], "sst_na")
+          prefix = os.environ["PREFIX"]
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo = f"{api.whoami()['name']}/earth-tensors"
+
+          def sha256(p, buf=1 << 22):
+              h = hashlib.sha256()
+              with open(p, "rb") as f:
+                  for b in iter(lambda: f.read(buf), b""):
+                      h.update(b)
+              return h.hexdigest()
+
+          names = sorted(os.listdir(out))
+          if not names:
+              sys.exit("nothing to publish — the bake produced no files")
+          bad = 0
+          for n in names:
+              p = os.path.join(out, n)
+              if not os.path.isfile(p):
+                  continue
+              src = sha256(p)
+              dest = f"{prefix}/{n}"
+              api.upload_file(path_or_fileobj=p, path_in_repo=dest,
+                              repo_id=repo, repo_type="dataset",
+                              commit_message=f"daily SST on the ML grid: {n}")
+              back = hf_hub_download(repo, dest, repo_type="dataset",
+                                     token=os.environ["HF_TOKEN"],
+                                     cache_dir=os.path.join(out, "_vf"))
+              if sha256(back) != src:
+                  print(f"::error::{dest} restored with a DIFFERENT sha256")
+                  bad += 1
+              else:
+                  print(f"  {dest}: {os.path.getsize(p)/1e9:,.2f} GB · "
+                        f"backed up + restore-verified")
+              os.remove(back)
+          if bad:
+              sys.exit(f"{bad} file(s) did not restore identically")
+          print(f"\npublished to https://huggingface.co/datasets/{repo}"
+                f"/tree/main/{prefix}")
+          print("next: the family-4 build reads sst_daily_na.npy + index.npz "
+                "from that folder (daily rows; the pentad mean is derived "
+                "downstream, never fetched)")
+          PY
