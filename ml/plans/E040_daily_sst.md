@@ -1,6 +1,13 @@
 # E-040 — daily SST since 1991, read two bytes at a time from Hugging Face
 
-**Status:** design PROVEN end to end, bake not started. Written 2026-08-18.
+**Status:** SHIPPED 2026-08-18 (same day). Client live on the globe; bake
+pipeline running to completion (`scripts/sst_daily_pipeline.py`, newest-first,
+restore-verified per year). Implemented by two Opus subagents per
+ml/CLAUDE.md §0b; reviewed, tested and deployed by the main session. One bug
+found in review: the uncapped case's null read as "didn't answer — tap to
+retry"; fixed with the `SST_ANOM_NONE` sentinel before shipping. Live check
+against the deployed site: `sstDailyAnomaly(-85, -5, "2026-07-20")` →
++4.49 °C (25.84 vs 21.35 normal), daily-stamped.
 
 > Chris: "Can this data be pulled from hugging face 'live' when a user clicks?
 > If so (and this is not too complex to do) then let's do daily OISST since
