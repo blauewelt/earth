@@ -359,6 +359,18 @@ def main():
             RESUME_CK = torch.load(RESUME_PATH, map_location="cpu",
                                    weights_only=False)
 
+    # `--resume !tag` on a box that does not hold the checkpoint has its own,
+    # much more useful message, and it lives in the resume block below. Raise
+    # it HERE too, because the architecture check now runs first and would
+    # otherwise answer "no architecture" — true, but it would send the reader
+    # after the wrong problem: the dispatch is fine, the box is wrong.
+    if a.require_resume and RESUME_CK is None:
+        raise SystemExit(
+            f"--require-resume: no checkpoint at {RESUME_PATH}. This box is "
+            f"not the one that wrote it (checkpoint mirrors are box-local). "
+            f"Exiting in seconds rather than retraining from scratch for "
+            f"hours under a doc string that claims to be a continuation.")
+
     ARCH = ("d_z", "patch", "d_model", "n_layers", "n_heads", "d_dec",
             "dec_layers")
     if RESUME_CK is not None:
