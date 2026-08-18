@@ -1,0 +1,2 @@
+{"config": {"steps": 60000, "batch": 512, "d_z": 64, "patch": 3, "d_model": 576, "n_layers": 10, "n_heads": 8, "d_dec": 768, "anomaly": true, "eval_every": 7500, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 40.693, "data": "family4_na025_pentad.npz", "C": 39, "T": 3142, "resume": "f3_anchor41M"}}
+{"resumed": {"from": "f3_anchor41M.pt", "parent_tag": "run-80", "at_step": 60000}}
