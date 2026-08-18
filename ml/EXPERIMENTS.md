@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-042"></a>
-## E-042 · SST as channel 40 — BUILT 2026-08-18; DISPATCH ATTEMPTED 2026-08-18 ~21:00Z AND BLOCKED ON BOX CAPACITY
+## E-042 · SST as channel 40 — DISPATCHED 2026-08-18 21:55Z as #405
 
 Chris, 2026-08-18, reading the channel table: the embedding *"should
 represent a holistic view on any point of the world"*. The 39 channels are
@@ -209,7 +209,36 @@ pinned, before the comparison is quoted.
 **Cost so far:** one `ubuntu-latest` bake run, no GPU. Tonight added no GPU
 cost — the box never started, so nothing was billed beyond storage.
 
-**Result: none — nothing has been trained on r2.**
+### Dispatched — #405, 2026-08-18 21:55Z, `head_sha` 78d66a6
+
+**The blocker above cleared within the hour, and it cleared on a box nobody
+had costed.** The earlier survey read Vast's `disk_usage` as a percentage; it
+is in GB, and `cpu_ram` is in MiB. Re-read in absolute units, one box in the
+fleet cleared both bars at once.
+
+Box **gpu-box-39184683** (Vast 47724565): 57 GB free of 100 against the ~42 GB
+the r2 build needs, and 504 GiB RAM against the 126 GB class family-4 requires
+(#368 host-OOMed on a 63 GB box). It was also the fleet's one idle-burning box,
+so the arm and the waste cancelled. Inputs are #386's 24-field `INPUTS_JSON`
+verbatim, plus `resume: ""`, with `head_probe` `false → true` and `window`
+`global → recipe:f4r2-40M`.
+
+**The plan's own dispatch instruction was wrong, and would have produced a
+green run reporting SST numbers for an experiment with no SST in it.** §5 said
+to dispatch `window: recipe:f4-40M` with the tensor overridden.
+`ml/recipes/f4-40M.json` PINS `"tensor": "family4_na025_pentad"`, and every
+consumption site — `ml-train.yml:762`, `:881`, `scripts/probes_run.sh:43`, and
+the build branches at 378–412 and 518–591 — reads `${RECIPE_TENSOR:-$IN_TENSOR}`.
+The `:-` fallback fires only when `RECIPE_TENSOR` is UNSET, so the recipe wins
+and `inputs.tensor` is discarded entirely, while `provenance.json` (raw
+`toJSON(inputs)`) would have faithfully recorded `family4_na025_pentad_r2`.
+Intent and reality disagreeing in exactly the way the manifest exists to catch.
+A recipe's tensor is **not overridable from a dispatch**, so the r2 arm got its
+own recipe, `ml/recipes/f4r2-40M.json`, and the plan is corrected. Note the
+`resolve_recipe.sh` header comment claiming "a recipe cannot silently override
+something a dispatch stated on purpose" is false for any key the recipe names.
+
+**Result: pending.** ~14 h of training plus the probe ladder.
 
 ---
 
@@ -223,6 +252,108 @@ data that is out of domain for the existing codec"*, and then *"Please start
 half. The daily half (E-038c/d) needs a tensor that does not exist yet.
 
 Full reasoning: [the E-038 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E038_codec_matrix.md).
+
+### STATUS 2026-08-18 22:30Z — the codec trained cleanly; NEITHER number exists
+
+Both headline numbers this arm and its read-out ladder were dispatched to
+produce were lost to instrumentation, not to science. Recorded here at the
+same weight as a result, per rule 4, because the pattern is the finding.
+
+**#386 (E-038a f4-40M, `head_sha` c7ba151) — trained clean, probe ladder
+annihilated.** Stage 1 ran 06:47:53 → 20:58:34Z and finished at step
+**166,752**: `fit_schedule` correctly re-fit 200,000 down to fit the 850-minute
+budget, so the cosine annealed to zero rather than being cut off (this is the
+mechanism that was broken on the VOID #366; it worked). Loss finite throughout,
+`loss_rec` 0.297 → 0.220, **190 ms/step steady** — matching the recorded rate
+for this configuration exactly, i.e. no lemon-box signature. The in-training
+light probe (single 36-month split, noisy — rule 5) rose `linear_r_deseas`
+0.564 → **0.624** and `temporal_r_deseas` 0.531 → 0.604, with
+`chan_vs_persistence_pct` 4.0 → 31.8.
+
+Then **all three probes were SIGKILLed by the host OOM killer**, at 21:10:29
+(`probe_sequence`), 21:38:23 (`probe_kfold`) and 22:03:56 (`dip_check`) — each
+~28 min in, immediately after the anomaly transform, on the full-size
+`np.isfinite(Xa)` bool: **16.56 GB** of bool live alongside the 33.1 GB float16
+tensor. Each rung was individually `|| echo "::warning::…"`, so all three
+warnings fired and the run reported **success** with an archive containing only
+`provenance.json`. This is NOT the #131 `bash -e` shape — nothing aborted the
+step; every rung ran and every rung died.
+
+**The fix was already on `main` while the run was still training.** `70ffe2d`
+("The probes get the LazyPixels treatment") landed 08:39:15Z — 2 h 33 m after
+#386 checked out c7ba151, and **12 h 21 m before** #386 reached its probes. A
+long run's code is frozen at checkout, so a fix that lands mid-run does not
+reach that run's probe phase. #388 hit this identical defect and was
+re-dispatched as #390, which succeeded; #386 was left to walk into it.
+**A 14-hour run and a 30-minute eval should not share a checkout.**
+
+What survives: `eval.json` is NOT empty — per-channel reconstruction skill
+(best `rg_t400` 0.941, `rg_t500` 0.929, `rg_t300` 0.896; worst `cur_speed`
+0.022, `ssh` 0.052) and a `t+1` result that **beats persistence** (mse 0.958 vs
+1.317). Only `rapid_probe` is NaN — and note it was WRITTEN as NaN, which
+`docs/INFRASTRUCTURE.md` §4 invariant 12 forbids ("a result file is never
+written containing NaN — the job stops instead"). That guard did not fire.
+
+The trained codec is now durable: verified as the real artefact (`tag`
+`run-386`, `step` 166752, 37,975,889 params, `args` matching the dispatch —
+NOT the `rescued-orphan-latest-386.pt` on the release, which is an earlier
+job's leftover carrying #386's run number) and uploaded as
+**`run-386__pixelmae.pt`** (455,908,861 B) and `run-386__metrics.jsonl` to
+`model-checkpoints-v1`, re-downloaded and hashed to confirm. Before that it
+existed only in an Actions artifact expiring 2026-09-17 and on one rented
+disk — invariant 7 ("recoverable from the release without a GPU") was violated
+for a 14-hour result. **The re-score is the next action**: eval-only at current
+`main`, warm tensor, ~30 min.
+
+**#392 / #397 (the read-out ladder) — the unpooled head still does not exist.**
+The question is whether E-038's headline is read-out-limited or
+representation-limited: `probe_kfold`'s ridge reads `Z.mean(1)` over the 26.5°N
+section, and geostrophic transport IS the east-minus-west contrast across that
+line, which a mean annihilates by construction. Two attempts, two different
+deaths, both green:
+
+- **#392** — pooled ridge landed (rapid **0.660** [0.593, 0.722], n 1459, RMSE
+  2.97 Sv, against a wind-only bar of **0.670** [0.601, 0.733]: two raw wind
+  features still beat 64 mean-pooled learned ones). Both `probe_head.py` calls
+  OOM-killed by an 82.8 GB transient inside `np.nan_to_num(Xa, copy=False)` —
+  `copy=False` never copies the values, but the masked-copyto form builds
+  `isnan` + `isposinf` + `isneginf`, and the latter two each build `isinf` and
+  `signbit` underneath: five full-size bools live at once, 132.5 GB peak on a
+  126 GB box. Fixed in `f2ee8b8` (LazyPixels).
+- **#397** — the fix WORKED. Both invocations cleared the full anomaly
+  transform and the entire 3,142-month embedding pass with no OOM marker
+  anywhere. They then died on the **first `loss.backward()`** in `fold_fit`
+  with `RuntimeError: Failed to find C compiler. Please specify via CC
+  environment variable or set triton.knobs.build.impl` — `SectionHead`'s
+  cross-attention backward dispatches to a Triton-JIT kernel, Triton builds its
+  CUDA-utils C extension on first use, and the box has no compiler and no `CC`.
+  Cost: 24.5 min of GPU, the anomaly transform run twice, for an error
+  decidable in the first second.
+
+  And behind it a second bug that had never fired because the first masked it:
+  `fold_fit` ended `net(Xte).numpy()` with no `.cpu()`, which raises on CUDA.
+  **The GPU read-out path had never once executed end to end**, though the
+  comment above it asserted the move was deliberate and done — §0.1, verify the
+  artefact, not the intention.
+
+  Both fixed in **78d66a6**: `.cpu().numpy()`, plus `_usable_device()`, which
+  runs one real `SectionHead` forward+backward+`opt.step` on the preferred
+  device **before** the checkpoint, the anomaly transform and the embedding,
+  and falls back to CPU on any exception with the reason printed. §0.3/§5.16 —
+  a precondition that depends only on the inputs must be checked while the
+  inputs are all it has cost you. `torch.cuda.is_available()` was TRUE on the
+  box that failed, so the self-test exercises the same forward and backward
+  that died. The global RNG is saved and restored around it, so the fold
+  numbers stay a function of the data and the seed and never of the device.
+  `--head-device auto|cpu|cuda` makes it reversible from a dispatch.
+  `tests/test_head_device.py` pins all of it.
+
+**Standing lesson from the three runs together.** Every one of them was GREEN.
+The archive's file list was the truth each time and the run's colour was not —
+exactly the failure signature §7 already names. Three consecutive experiments
+lost their headline number to a best-effort guard reporting success, and in
+each case the run cost hours and the diagnosis cost minutes. Best-effort is a
+promise about *delivery*, never about *reporting*.
 
 ### Hypothesis, and what would falsify it
 
