@@ -417,8 +417,11 @@ dispatch asking for it. Every result below therefore belongs to one of
 three \emph{tensor generations} --- the \textbf{coarse tensor}
 ($1^\circ$, 4 Argo levels), the \textbf{deep tensor} ($1^\circ$, 8
 levels), and the \textbf{quarter-degree tensor} ($0.25^\circ$ NA, 16
-levels, SSH, axis from 1982) --- and cross-generation comparison is not
-licensed: the persistence baseline that chan\% is measured against
+levels, SSH, axis from 1982) --- with a fourth and fifth (the
+\textbf{pentad} and \textbf{daily} tensors of \S\ref{sec:inputdata},
+same window and channels, finer time axes) in training as this revision
+is written, carrying no results yet --- and cross-generation comparison
+is not licensed: the persistence baseline that chan\% is measured against
 moves with the channel set, the wind-only ridge baseline moves with the
 grid (0.531 on the $1^\circ$ tensors, 0.568 on the quarter-degree), and,
 as \S\ref{sec:tradeoff} shows, so does the meaning of
@@ -428,6 +431,114 @@ in this report are read from each
 checkpoint, never from a run's name --- a run directory carried a
 misleading name for an hour before this was enforced, and every run now
 ships a provenance manifest recording the tensor it actually saw.
+
+\subsection{Input data}\label{sec:inputdata}
+
+The subsections above are the history; this one is the specification,
+current as of the two cadence rebuilds of the quarter-degree tensor ---
+\textbf{family 4} (pentad) and \textbf{family 5} (daily), which share
+family 3's grid and channel set exactly and differ only in the time
+axis. The encoder sees one array, $[T, 281, 481, 39]$: a $0.25^\circ$
+North Atlantic window ($0$--$70^\circ$N, $100^\circ$W--$20^\circ$E)
+whose samples sit \emph{on} multiples of $0.25^\circ$ rather than at
+cell centres, 39 channels, stored \texttt{float16} and z-scored per
+channel. The time axis is fixed bins counted from the epoch
+1982-01-01 --- monthly for family 3, 5-day for family 4 ($T{=}3142$),
+1-day for family 5 ($T{=}15706$) --- the same bin definition the
+transport labels are reduced onto, so a label is the target of a state
+with no re-alignment step anywhere. Table~\ref{tab:inputdata} is the
+channel list, in tensor order.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{p{2.3cm}p{2.6cm}p{1.5cm}p{2.75cm}p{2.0cm}p{1.9cm}}
+\toprule
+channels & source & native & into the pentad tensor & into the daily
+tensor & live coverage \\
+\midrule
+\texttt{cur\_speed}, \texttt{log\_mld}, \texttt{ssh} (3) &
+CMEMS \mbox{GLORYS12V1} reanalysis (\texttt{uo}, \texttt{vo},
+\texttt{mlotst}, \texttt{zos}) &
+$1/12^\circ$, daily &
+5-day means of the daily fields, binned to the point-aligned
+$0.25^\circ$ grid; \texttt{cur\_speed} is the hypotenuse of the
+\emph{binned mean components}, never a mean of magnitudes;
+\texttt{log\_mld} is $\log_{10}$ of \texttt{mlotst} &
+the day's own fields &
+1993-01-01 to 2024-12-31; 1982--92 enters as missing tokens \\
+\addlinespace
+\texttt{rg\_t}, \texttt{rg\_s} at 16 pressures, 10--1900\,dbar (32) &
+Roemmich--Gilson Argo climatology (Scripps): monthly mean $+$ anomaly &
+$1^\circ$, monthly &
+one live bin per month --- the bin containing the 15th --- lifted to
+$0.25^\circ$ by NaN-aware bilinear; missing tokens in every other bin &
+the same policy, one live day per month &
+2004-01 onward \\
+\addlinespace
+$\tau_x$, $\tau_y$ (2) &
+NCEP/NCAR Reanalysis 1 momentum flux (\texttt{uflx}, \texttt{vflx}),
+sign-flipped so positive is stress \emph{on} the ocean &
+$\approx1.9^\circ$ Gaussian, daily &
+5-day mean &
+the day's field &
+the full axis, 1982--2024 \\
+\addlinespace
+$\tau_x$ std., $\tau_y$ std.\ (2) &
+as above &
+$\approx1.9^\circ$ Gaussian, daily &
+within-pentad standard deviation &
+$\sigma$ over the 5 calendar days \emph{centred} on the bin's midpoint
+&
+the full axis, 1982--2024 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{What the encoder tensors contain}, families 4 and 5.
+Both are $[T,281,481,39]$ \texttt{float16}, z-scored per channel, on
+the axis described above. The daily storminess channels are
+the same quantity as the pentad ones --- for a pentad bin the centred
+5-day window \emph{is} the bin --- sampled every day instead of every
+fifth, which is what keeps the two cadences comparable. The Argo
+policy is deliberate: forward-filling was rejected because it would
+tell the model the subsurface was observed on days it was not, so even
+inside the Argo era the one-live-bin rule leaves $\approx83\%$ of
+pentad bins and $\approx97\%$ of daily bins carrying the missing token
+on those 32 channels ($92\%$ and $98\%$ over the whole
+1982--2024 axis). Missingness is information, and it is represented,
+never imputed.}
+\label{tab:inputdata}
+\end{table}
+
+\paragraph{Labels are not inputs.} The transport series ride along as
+never-input targets, reduced to bin means on the same axis: RAPID
+$26.5^\circ$N overturning transport (240 monthly, 1{,}459 pentad,
+7{,}290 daily labels) and the NOAA Florida Current submarine cable
+(daily since 1982; 433, 2{,}553, 13{,}931). The anomaly baseline used
+for training and probing is a \emph{train-years-only} monthly
+climatology computed inside the pipeline --- never the WMO 1991--2020
+normal that the companion visualization uses, which contains held-out
+years and would leak test-period information into training through the
+baseline. The two baselines look interchangeable and are not.
+
+\paragraph{What is deliberately not an input.} There is no
+sea-surface-temperature field of any kind in these 39 channels. The
+E-034 cadence audit declared an OISST SST channel (daily, entering as
+a pentad mean); it was never implemented, and the closest proxy the
+tensor actually carries is \texttt{rg\_t10} --- Argo temperature at
+10\,dbar, $1^\circ$ and monthly, one live bin per month. Daily
+$0.25^\circ$ OISST (the E-040 bake) is the planned first channel
+addition of the next recipe revision: it would be the only channel
+native to the tensor's own grid, and its record covers the full
+1982--2024 axis, including the GLORYS-less 1982--92 decade. It is
+named here as a plan and not a result, because any channel addition
+changes $C$ and requires retraining every codec --- a new recipe
+revision, not something comparable to the present one
+(\S\ref{sec:families}).
+
+\paragraph{Provenance.} Every training run records the built tensor's
+sha256, shape and channel list beside the verbatim dispatch inputs, in
+a provenance manifest written after the build. A result therefore
+names the exact bytes it was measured on, rather than the recipe it
+was supposed to have used.
 
 \section{Methods}\label{sec:methods}
 
