@@ -312,14 +312,20 @@ in this file is affected.**
 logs for a run in progress and neither had archived provenance yet:
 
 - **#392** (E-038 read-out ladder on the frozen anchor, `family4_na025_pentad`,
-  phase "probes and stage 2" at 13:32Z) — its `temporal_steps` could not be
-  read. If it is non-zero it ran `ml/temporal.py` against a float16 tensor at
-  sha `d3ea240`, i.e. through the broken copy, and **its stage-2 number must
-  be discarded**. Every earlier E-038 dispatch used 0, and its plan is an
-  eval pass, so 0 is the expectation — but it is an expectation, not a
-  reading. Check the archived `probes-392.json` when it lands.
-- **#386** (E-038a f4-40M, `family4_na025_pentad`, stage-1 at step 96,000) —
-  same, and it has not reached its probe ladder yet.
+  phase "probes and stage 2" at 13:32Z) — **RESOLVED at 15:40Z**, when
+  `probes-392.json` landed on `ml-metrics`: `temporal_steps: 0`,
+  `head_probe: true`, `resume: !f3_anchor41M`, and the bundle carries
+  `probe_kfold.json` + `dip_check.json` and neither a `temporal.json` nor a
+  `probe_sequence.json`. **Unaffected**, on the same reasoning as #390.
+- **#386** (E-038a f4-40M, `family4_na025_pentad`) — STILL OPEN at 15:40Z:
+  124 metric lines, no stage-2 line, no archived provenance, so its
+  `temporal_steps` is unread. It is stage-1 training and has not reached its
+  probe ladder. It will run the code it CHECKED OUT AT JOB START — sha
+  `c7ba151`, 06:02Z — which still carries both broken copies; this commit
+  cannot reach it. **Read `probes-386.json` when it lands and confirm
+  `temporal_steps`. If it is non-zero, that run's stage-2 number came through
+  the broken copy on a float16 tensor and must be discarded, and the run will
+  also have spent hours in the 249-traversal transform.**
 - **#393 / #394 / #396** are `sroll:`/family-3 and unaffected.
 
 Both copies are now calls to `trainprobe.anomaly_transform`, and the class of
