@@ -697,6 +697,45 @@ test("with the Hub unreachable the card still shows the monthly departure", asyn
   expect(hf.length, "the daily path was never attempted").toBeGreaterThan(0);
 });
 
+test("a capped probe shows a BOUND first, never a number it will contradict", async ({ page }) => {
+  // Chris, 2026-08-18, clicking the Mediterranean: "I see two values, first a
+  // lower value (2.x C) and then a higher one (4.y C)." Both were right and
+  // measured different things — the monthly path had fallen back to 2026-07 on
+  // a 1° cell while the daily read answered for the selected day at 0.25°
+  // (measured in the Balearic: +2.25 vs +4.57) — and the monthly figure even
+  // sat BELOW the ≥3 bound it was correcting. A number replaced by a different
+  // number reads as the app fixing a mistake; a bound replaced by a number
+  // reads as a refinement. So the first paint of an upgradable cap must be the
+  // bound.
+  test.setTimeout(240000);
+  await page.evaluate(() => {
+    const el = document.getElementById("layer-date");
+    el.value = "2015-07-02"; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="sst-anom"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  // let the monthly normals become resident — they are what used to be shown
+  await page.waitForFunction(() => !!window.__earth.sstAnomalyAt(-85, -5), null,
+                             { timeout: 60000 });
+  const monthly = await page.evaluate(() => window.__earth.sstAnomalyAt(-85, -5));
+  expect(monthly, "the monthly value must exist, or this proves nothing").toBeTruthy();
+
+  const res = await page.evaluate(() =>
+    window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(-85, -5)));
+  expect(res.cap, "pick a capped point or the test is vacuous").toBeTruthy();
+  expect(res.upgradable).toBe(true);
+
+  // the synchronous render: a bound, and NOT the resident monthly number
+  const first = await page.evaluate((r) => {
+    window.__earth.renderProbe(r, 400, 300);
+    return document.querySelector("#value-probe .vp-head").innerText;
+  }, res);
+  expect(first).toMatch(/≥|</);
+  expect(first).not.toMatch(new RegExp(Math.abs(monthly.v).toFixed(2)));
+});
+
 test("the hover probe upgrades a capped read in place, and only for its own point", async ({ page }) => {
   /* The tooltip renders SYNCHRONOUSLY — that is the whole design of the dwell
    * probe — so the daily read can only ever land after the box is drawn. Two

@@ -5044,15 +5044,23 @@ let probeSeq = 0;
  * exactly the pre-E-040 tooltip. */
 async function upgradeProbeAnomaly(res, turn) {
   const daily = await sstDailyAnomaly(res.lon, res.lat, state.date).catch(() => null);
-  if (!daily) return;
+  // Second choice, not a placeholder: if the Hub could not answer, the resident
+  // monthly figure is still better than a bare bound — but it is a DIFFERENT
+  // month at a coarser cell, so it arrives carrying that label rather than
+  // impersonating an answer for the selected day.
+  const val = daily || res.trueAnom;
+  if (!val) return;
   if (turn !== probeSeq) return;                        // a newer point owns the box
   if (probeEl.classList.contains("hidden")) return;
   const head = probeEl.querySelector(".vp-head");
   if (!head) return;
+  const qualifier = daily
+    ? `(palette ${res.cap.sign} ${fmtVal(res.cap.bound)})`
+    : `(1° monthly, ${val.month})`;
   head.innerHTML =
-    `<span class="vp-val">${daily.v >= 0 ? "+" : "−"}${fmtVal(Math.abs(daily.v))}</span> ` +
+    `<span class="vp-val">${val.v >= 0 ? "+" : "−"}${fmtVal(Math.abs(val.v))}</span> ` +
     `<span class="vp-unit">°C</span> ` +
-    `<span class="vp-unit">(palette ${res.cap.sign} ${fmtVal(res.cap.bound)})</span>`;
+    `<span class="vp-unit">${qualifier}</span>`;
 }
 
 function renderProbe(res, sx, sy) {
@@ -5078,11 +5086,25 @@ function renderProbe(res, sx, sy) {
       : `<span class="vp-val">×${fmtVal(fold >= 1 ? fold : 1 / fold)}</span> ` +
         `<span class="vp-unit">${fold >= 1 ? "more" : "less"}</span>`;
   } else if (res.cap) {
-    // Catch-all colormap bin: the tile only says "off this scale". For SST
-    // anomalies we can do better than the bound — the normals are resident
-    // (prefetched with the layer), so subtract and show the real departure,
-    // with the bound kept beside it as the thing the COLOUR meant.
-    const real = res.trueAnom;
+    /* Catch-all colormap bin: the tile only says "off this scale".
+     *
+     * WHEN A BETTER READ IS COMING, SHOW THE BOUND AND WAIT. It is tempting to
+     * fill the gap with the resident MONTHLY correction, and that is what this
+     * did until 2026-08-18, when Chris clicked the Mediterranean and watched
+     * the tooltip say 2.x and then 4.y. Both numbers were right and they
+     * measured different things: the monthly path had fallen back to 2026-07
+     * (the archive's newest month ≤ the selected date) on a 1° cell, while the
+     * daily read answered for 2026-08-16 at 0.25°. Measured that day in the
+     * Balearic: monthly +2.25 (25.8 vs 23.55, JULY) against daily +4.57
+     * (29.55 vs 24.98, the selected day) — and the monthly figure even
+     * contradicted the palette it was correcting, sitting below the ≥3 bound.
+     *
+     * A number that is replaced by a DIFFERENT number reads as the app
+     * correcting a mistake. A bound replaced by a number reads as what it is:
+     * a refinement. So the sequence is bound → best available value, and the
+     * monthly figure becomes the upgrade's own fallback (labelled with its
+     * month) rather than a placeholder pretending to be the answer. */
+    const real = res.upgradable ? null : res.trueAnom;
     head = real
       ? `<span class="vp-val">${real.v >= 0 ? "+" : "−"}${fmtVal(Math.abs(real.v))}</span> ` +
         `<span class="vp-unit">°C</span> ` +
@@ -5995,7 +6017,10 @@ async function showPixelState(carto) {
               `monthly normal, so the within-month part of the seasonal cycle stays in.`
             : `NOAA OISST v2.1 monthly mean minus the same calendar month's ` +
               `${trueAnom.period} normal. Coarser than the raster it corrects — 1° and ` +
-              `monthly, against 25 km and daily.`) +
+              `monthly, against 25 km and daily — and it is the newest month at or ` +
+              `before the selected date, which in the weeks after a month ends is the ` +
+              `PREVIOUS one. The stamp beside the value says which; that is why it can ` +
+              `differ from the daily figure by more than rounding.`) +
           `</div>`
         : "";
       sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">NASA GIBS</span></div>${rrows}${anomNote}</div>`);
