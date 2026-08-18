@@ -4847,7 +4847,11 @@ async function probeEntryValue(entry, carto) {
   // edge, not a limit of the instrument. SMAP's "< 30 PSU" is a genuine
   // retrieval floor and must keep reading as a bound.
   const trueAnom = cap && cfg.id === "sst-anom" ? sstAnomalyAt(lon, lat) : null;
-  return { ...base, value: v, cap, trueAnom };
+  // `upgradable` marks the one cap the tooltip can improve on AFTER it has been
+  // drawn: the daily 0.25° read needs a round-trip and this function must not
+  // grow one, because the whole probe is on the dwell path. renderProbe fires
+  // it and rewrites the value in place — see upgradeProbeAnomaly.
+  return { ...base, value: v, cap, trueAnom, upgradable: !!cap && cfg.id === "sst-anom" };
 }
 
 const probeEl = document.getElementById("value-probe");
@@ -5024,8 +5028,36 @@ function placeProbe(sx, sy) {
   probeEl.style.top = `${top}px`;
 }
 
+/* Which point the tooltip is currently about — the same guard as pixelCardSeq,
+ * one rung down. The tooltip renders SYNCHRONOUSLY (that is the whole design of
+ * the dwell probe), so the daily 0.25° read can only ever arrive after the box
+ * is already on screen, and by then the cursor may be somewhere else entirely.
+ * A hover that moved on must never receive another point's value: every render
+ * takes a ticket, and the upgrade only writes if its ticket is still current. */
+let probeSeq = 0;
+
+/* The in-place upgrade: replace the capped read-out with the true departure for
+ * the exact selected day, once the Hub answers. Deliberately NOT awaited by
+ * renderProbe — the instant behaviour (monthly `trueAnom` when the normals are
+ * resident, else the honest palette bound) is what the user sees at once, and
+ * this only ever improves it. On failure it does nothing at all, which leaves
+ * exactly the pre-E-040 tooltip. */
+async function upgradeProbeAnomaly(res, turn) {
+  const daily = await sstDailyAnomaly(res.lon, res.lat, state.date).catch(() => null);
+  if (!daily) return;
+  if (turn !== probeSeq) return;                        // a newer point owns the box
+  if (probeEl.classList.contains("hidden")) return;
+  const head = probeEl.querySelector(".vp-head");
+  if (!head) return;
+  head.innerHTML =
+    `<span class="vp-val">${daily.v >= 0 ? "+" : "−"}${fmtVal(Math.abs(daily.v))}</span> ` +
+    `<span class="vp-unit">°C</span> ` +
+    `<span class="vp-unit">(palette ${res.cap.sign} ${fmtVal(res.cap.bound)})</span>`;
+}
+
 function renderProbe(res, sx, sy) {
   if (!res) { hideProbe(); return; }
+  const myTurn = ++probeSeq;
   const coord = `${Math.abs(res.lat).toFixed(2)}°${res.lat >= 0 ? "N" : "S"}, ` +
                 `${Math.abs(res.lon).toFixed(2)}°${res.lon >= 0 ? "E" : "W"}`;
   let head;
@@ -5070,11 +5102,19 @@ function renderProbe(res, sx, sy) {
   // The date line the user asked for: every hovered or tapped value now says
   // when it was observed, at that dataset's own honest granularity.
   const stamp = whenLabel(res.when);
-  probeEl.innerHTML = `${head}<div class="vp-meta">${res.title}${suffix}` +
+  // The value is wrapped so the daily upgrade below has ONE node to rewrite —
+  // the read-out is otherwise three sibling spans and a partial replacement
+  // would leave the old unit or the old bound standing next to a new number.
+  probeEl.innerHTML = `<span class="vp-head">${head}</span>` +
+    `<div class="vp-meta">${res.title}${suffix}` +
     `${res.extra ? `<br/>${res.extra}` : ""}` +
     `${stamp ? `<br/>${stamp}` : ""}<br/>${coord}</div>`;
   probeEl.classList.remove("hidden");
   placeProbe(sx, sy);
+  // Rendered first, corrected after: the capped SST anomaly is the one read
+  // where the tile genuinely cannot carry the answer, so it is worth a
+  // round-trip the tooltip does not wait for.
+  if (res.upgradable && res.cap) upgradeProbeAnomaly(res, myTurn);
   // even a "no data" read marks its cell — seeing WHERE the empty cell sits is
   // what tells a salinity mask edge apart from a broken layer. With the pixel
   // card open the marks belong to the card's point; a hover read-out has the
@@ -5467,6 +5507,142 @@ function sstAnomalyAt(lon, lat) {
            sst: now, norm };
 }
 
+/* THE SAME QUESTION, ANSWERED FOR THE ACTUAL DAY — read live from Hugging Face.
+ *
+ * The monthly path above is honest and blunt: it corrects a 25 km DAILY raster
+ * with a 1° MONTHLY mean. E-040 (ml/plans/E040_daily_sst.md) removes that
+ * mismatch on the measurement side. `sst/quarter/YEAR.i16` on the Hub stores
+ * OISST at 0.25° PIXEL-MAJOR — value(px, day) at byte (px*days + day)*2 — so a
+ * point query is ONE contiguous range read, and the transfer is bounded by the
+ * question rather than by the archive: 730 bytes out of a 757 MB file for a
+ * whole pixel-year. (Day-major would have forced a full frame per click and
+ * killed the idea. This layout is the entire reason it is cheap.)
+ *
+ * Measured, not estimated (2026-08-18): CORS open, a browser range read on a
+ * foreign origin returns HTTP 206 with exactly the bytes asked for, ~630 ms for
+ * a pixel-year through the proxy, and the value round-trips bit-identically
+ * against the source NetCDF (24.22 °C vs 24.22 °C).
+ *
+ * huggingface.co is the SECOND deliberate exception to CLAUDE.md §3, on the
+ * same four conditions the Open-Meteo family was granted on: no key, CORS
+ * verified rather than assumed, click-triggered single-point range reads and
+ * never tile streaming, and it degrades — every failure here returns null and
+ * the monthly path above serves the row instead, so a Hub outage costs
+ * precision, not the feature. */
+/* The "true SST anomaly" job's answer for an UNCAPPED pixel — there is nothing
+ * to correct, and that is different from having failed to answer. */
+const SST_ANOM_NONE = Object.freeze({ none: true });
+
+const SST_DAILY_BASE =
+  "https://huggingface.co/datasets/chfrank/earth-sst-daily/resolve/main/sst/quarter/";
+const SST_DAILY_TIMEOUT_MS = 10000;   // a stalled read must not outlive the click
+const SST_DAILY_CACHE_MAX = 50;       // ~50 × 730 B — a session of clicking costs nothing
+/* Keyed `${year}/${px}`, insertion-ordered as an LRU. ONLY SUCCESSES ARE
+ * CACHED: a failure here is a network event, not a fact about the archive, and
+ * remembering it would make one dropped packet permanent for the session. The
+ * next click retries, which is exactly the cost of one 730-byte request. */
+const sstDailyCache = new Map();
+
+/* The whole pixel-year in one ranged fetch. Returns an Int16Array of `days`
+ * raw counts (scale 0.01 °C, `nodata` = -32768), or null on anything at all
+ * going wrong. */
+async function sstDailySeries(lon, lat, year) {
+  // index.json goes through pixelJson, so it is fetched once per session and
+  // shares the card's cache. Note that pixelJson remembers a FAILURE too —
+  // deliberate here: if the index is unreachable the feature is simply off for
+  // this session and every caller falls back, rather than each click paying a
+  // round-trip to rediscover that.
+  const idx = await pixelJson(SST_DAILY_BASE + "index.json");
+  // A year absent from `years` is not on the Hub — asking for it would read
+  // some other year's bytes at an offset computed from the wrong day count.
+  const days = idx?.years?.[String(year)];
+  if (!days || !idx.nx || !idx.ny) return null;
+  const ix = Math.floor((lon - idx.west) / idx.dlon);
+  const iy = Math.floor((lat - idx.south) / idx.dlat);
+  if (ix < 0 || ix >= idx.nx || iy < 0 || iy >= idx.ny) return null;
+  const px = iy * idx.nx + ix;
+  const key = `${year}/${px}`;
+  if (sstDailyCache.has(key)) {
+    const hit = sstDailyCache.get(key);
+    sstDailyCache.delete(key); sstDailyCache.set(key, hit);   // touch: most-recent last
+    return hit;
+  }
+  const start = px * days * 2, bytes = days * 2;
+  // AbortSignal.timeout is not in older Safari; the controller form is (same
+  // reasoning as omGet). This deadline is SHORT where Open-Meteo's is long:
+  // there is a good answer waiting on the other path, so waiting 45 s for a
+  // better one would be spending the user's click on precision.
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), SST_DAILY_TIMEOUT_MS);
+  try {
+    const r = await fetch(`${SST_DAILY_BASE}${year}.i16`, {
+      headers: { Range: `bytes=${start}-${start + bytes - 1}` },
+      signal: ctl.signal,
+    });
+    // 206 is the contract. A 200 means the range was ignored and the body is
+    // the whole 757 MB file — refuse it rather than read it.
+    if (r.status !== 206) return null;
+    const buf = await r.arrayBuffer();
+    if (buf.byteLength !== bytes) return null;
+    // Little-endian is explicit, not inherited from the host: Int16Array over
+    // the buffer would read whatever the CPU does, and the file is LE by spec.
+    const dv = new DataView(buf);
+    const out = new Int16Array(days);
+    for (let d = 0; d < days; d++) out[d] = dv.getInt16(d * 2, true);
+    sstDailyCache.set(key, out);
+    // Evict oldest first; the Map's insertion order is the LRU order.
+    while (sstDailyCache.size > SST_DAILY_CACHE_MAX) {
+      sstDailyCache.delete(sstDailyCache.keys().next().value);
+    }
+    return out;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* The selected day's departure: OISST daily 0.25° minus the SAME CALENDAR
+ * MONTH's 1991-2020 normal. Label-critical, and the card's note says so: this
+ * is a DAILY reading against a MONTHLY normal, so the within-month part of the
+ * seasonal cycle is not removed by it. That is still much closer to the
+ * question than the monthly-vs-monthly answer, because the resolution mismatch
+ * — a 1° cell averaging away the coastal upwelling tongue off Peru, measured
+ * at 2.1 °C — dominates the within-month drift.
+ *
+ * Reads the climatology through pixelJson, deliberately NOT through the
+ * sstNorm machinery: that object is a single-slot cache serving the monthly
+ * path, and re-pointing it at another month here would silently answer the
+ * hover probe with the wrong normals. */
+async function sstDailyAnomaly(lon, lat, dateStr) {
+  const date = (dateStr || state.date || "").slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const [idx, series, climIdx, clim] = await Promise.all([
+    pixelJson(SST_DAILY_BASE + "index.json"),
+    sstDailySeries(lon, lat, year),
+    pixelJson("data/oisst_clim.json"),
+    pixelJson(`data/oisst_clim/${m[2]}.json`),
+  ]);
+  if (!idx || !series || !climIdx || !clim?.values) return null;
+  // Day index from Jan 1 in UTC — the file's own axis. Date arithmetic in
+  // local time would put 1 January on 31 December west of Greenwich.
+  const doy = Math.round(
+    (Date.UTC(year, Number(m[2]) - 1, Number(m[3])) - Date.UTC(year, 0, 1)) / 86400000);
+  if (!(doy >= 0 && doy < series.length)) return null;
+  const raw = series[doy];
+  if (raw === (idx.nodata ?? -32768)) return null;      // land, ice mask, or a gap
+  const sst = raw * (idx.scale ?? 0.01);
+  const norm = sampleGrid({
+    west: climIdx.west, south: climIdx.south, east: climIdx.east, north: climIdx.north,
+    dlon: climIdx.dlon, dlat: climIdx.dlat, nx: climIdx.nx, ny: climIdx.ny,
+    values: clim.values,
+  }, lon, lat);
+  if (norm == null) return null;
+  return { v: sst - norm, sst, norm, date, period: climIdx.period, daily: true };
+}
+
 async function showPixelState(carto) {
   const myTurn = ++pixelCardSeq;
   const lon = Cesium.Math.toDegrees(carto.longitude);
@@ -5549,11 +5725,25 @@ async function showPixelState(carto) {
     // Costs NOTHING in the ordinary case: it waits for the anomaly probe and
     // returns null unless that probe came back CAPPED, so the two extra files
     // are fetched only when the picture genuinely could not carry the number.
+    // The daily 0.25° read off the Hub is TRIED FIRST and the monthly archive
+    // is the fallback, not the other way round: the daily value answers the
+    // question that was asked (this point, this day) while the monthly one
+    // answers a coarser neighbour of it. Any failure — no index, year not
+    // uploaded, timeout, nodata — returns null and the monthly path serves the
+    // row, so the Hub being down costs precision rather than the whole row.
     ["true SST anomaly", rasterJob.then(async (vals) => {
       const r = vals[PIXEL_RASTERS.indexOf("sst-anom")];
-      if (!r || !r.cap) return null;
+      // "Nothing to correct" is an ANSWER, not a failure. Returning null here
+      // used to make deadNames() report "true SST anomaly didn't answer, so
+      // that section is missing — tap the point again to retry" on every
+      // ordinary uncapped pixel, promising a retry that could never produce
+      // anything. The sentinel is truthy, so the late-source machinery counts
+      // this job as answered; the card renders it as absence.
+      if (!r || !r.cap) return SST_ANOM_NONE;
+      const daily = await sstDailyAnomaly(lon, lat, state.date).catch(() => null);
+      if (daily) return daily;
       await ensureSstNormals(state.date);
-      return sstAnomalyAt(lon, lat);
+      return sstAnomalyAt(lon, lat);   // null now genuinely means "didn't answer"
     }).catch(() => null)],
     // {g, v}, not just v: the grid carries its own observation period/month, and
     // the row prints that — so the value and its date come from the same object.
@@ -5649,7 +5839,8 @@ async function showPixelState(carto) {
   await new Promise((r) => setTimeout(r, PIXEL_REDRAW_MS + 20));
 
   function drawPixelCard(values, missing, final) {
-    const [rasters, trueAnom, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid] = values;
+    const [rasters, trueAnomRaw, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid] = values;
+    const trueAnom = trueAnomRaw && !trueAnomRaw.none ? trueAnomRaw : null;
     if (pixelCardEl.classList.contains("hidden")) return;   // closed while loading
 
     const sec = [];
@@ -5775,23 +5966,37 @@ async function showPixelState(carto) {
       // El Nino is the entire question.
       const capped = pixelRow(label, `${r.cap.sign} ${fmtVal(r.cap.bound)} ${r.units}`, w);
       if (cfg.id !== "sst-anom" || !trueAnom) return capped;
+      // The stamp follows the MEASUREMENT, not the row: the daily read is for
+      // the exact selected day, the monthly fallback for a whole month, and
+      // printing one granularity for both would misdate whichever lost.
       return capped + pixelRow("&nbsp;&nbsp;&#8627; actual departure",
         `<strong>${trueAnom.v >= 0 ? "+" : "−"}${fmtVal(Math.abs(trueAnom.v))} °C</strong>` +
         ` · ${fmtVal(trueAnom.sst)} vs ${fmtVal(trueAnom.norm)} normal`,
-        whenAt("month", trueAnom.month));
+        trueAnom.daily ? whenAt("day", trueAnom.date) : whenAt("month", trueAnom.month));
     }).join("");
     if (rrows) {
       // The heading no longer claims a date. It used to say state.date for the
       // whole block, which was wrong for most of it: GRACE ends 2022-07, CERES
       // 2018-10, sea ice 2025-09, and the monthly layers snap to a first-of-month
       // — all of them were printed under today's date. Each row now says its own.
+      // Two provenances, because they are two different measurements. The
+      // daily line must say "daily reading, monthly normal" out loud: the
+      // within-month part of the seasonal cycle is NOT removed by it, and a
+      // reader who assumes a like-for-like anomaly would over-read a spring or
+      // autumn value by the month's own drift.
       const anomNote = trueAnom
         ? `<div class="px-note">The anomaly palette stops at ±3 °C — its end bins are ` +
           `catch-alls, so the tile cannot express more and the probe can only say ` +
           `“≥ 3”. The actual departure above is computed instead of read off a ` +
-          `colour: NOAA OISST v2.1 monthly mean minus the same calendar month's ` +
-          `${trueAnom.period} normal. Coarser than the raster it corrects — 1° and ` +
-          `monthly, against 25 km and daily.</div>`
+          `colour: ` + (trueAnom.daily
+            ? `NOAA OISST daily 0.25° for that exact day, read live from Hugging Face ` +
+              `(730 bytes — one range read of the pixel's year), minus the same ` +
+              `calendar month's ${trueAnom.period} normal. A daily reading against a ` +
+              `monthly normal, so the within-month part of the seasonal cycle stays in.`
+            : `NOAA OISST v2.1 monthly mean minus the same calendar month's ` +
+              `${trueAnom.period} normal. Coarser than the raster it corrects — 1° and ` +
+              `monthly, against 25 km and daily.`) +
+          `</div>`
         : "";
       sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">NASA GIBS</span></div>${rrows}${anomNote}</div>`);
     }
@@ -7748,6 +7953,8 @@ window.__earth = {
   compareDate,
   sstAnomalyAt,
   ensureSstNormals,
+  sstDailySeries,
+  sstDailyAnomaly,
   get stations() { return stationsDs; },
   get rapid() { return rapidData; },
   get sealevel() { return seaLevelData; },

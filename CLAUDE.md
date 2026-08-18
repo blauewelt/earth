@@ -340,14 +340,31 @@ A new layer is not done until it has **all** of:
 ### 3. Data pipeline: static snapshots, never live third-party calls
 
 The browser must depend only on NASA GIBS (tiles) and GBIF (occurrence tiles).
-**One deliberate exception**: the pixel inspector calls the Open-Meteo
-family (`api`, `air-quality-api`, `flood-api`, `marine-api`,
+**Two deliberate exceptions.** The first: the pixel inspector calls the
+Open-Meteo family (`api`, `air-quality-api`, `flood-api`, `marine-api`,
 `climate-api`.open-meteo.com) — key-free, CORS-open, and only ever a
-single-point query triggered by an explicit click, never tile streaming. Any
-further live endpoint must clear the same bar (no key, no quota pain,
+single-point query triggered by an explicit click, never tile streaming.
+
+The second, added 2026-08-18 for E-040: **`huggingface.co`**, from which the
+pixel card and the hover probe read the true daily SST for one point
+(`sstDailySeries` / `sstDailyAnomaly`, `ml/plans/E040_daily_sst.md`). It clears
+the same bar on all four conditions, and each was measured rather than assumed:
+**no key** (anonymous reads, no account, no quota to manage); **CORS verified**
+— the Hub echoes our Origin and exposes `Accept-Ranges`/`Content-Range`, and a
+browser range read on a foreign origin returns HTTP 206 with exactly the bytes
+asked for; **click-triggered single-point range reads, never streaming** — the
+file is stored pixel-major, so one point-year is 730 contiguous bytes out of a
+757 MB file and the transfer is bounded by the question rather than by the
+archive; and it **degrades to the monthly value** — every failure path returns
+null. The monthly OISST correction remains the fallback, so a Hub outage costs
+precision, not the feature.
+
+Any further live endpoint must clear the same bar (no key, no quota pain,
 click-triggered, degrades to an omitted card section on failure) and be added
 to the MIRROR proxy set (`:8083`–`:8087` are the Open-Meteo hosts, in the
-order above). Everything else is baked offline by
+order above; the Hub is routed pass-through in `tests/app.spec.js` instead,
+because the Playwright node process has egress even where the sandbox browser
+does not). Everything else is baked offline by
 `scripts/refresh_data.py` into small static
 JSON files under `data/` (one function per dataset, runnable individually:
 `python3 scripts/refresh_data.py gpcp eobs`). Grids use the common format
@@ -552,6 +569,19 @@ stops two copies sharing the screen; it is not a memory of what has been said.
     pass, one null field in one upstream response took the whole card down to a
     permanent "Reading this point…". It prints a dash now. Formatting is the
     wrong layer to enforce presence — a caller that cares checks first.
+    A job whose honest answer is "nothing to say" (the SST-anomaly correction
+    on an uncapped pixel) returns the truthy `SST_ANOM_NONE` sentinel, never
+    null — null is reserved for "didn't answer", which the final pass reports
+    with "tap again to retry", a promise that must only be made when a retry
+    could actually change something.
+  - **The capped-anomaly correction is DAILY first, monthly fallback**
+    (E-040, 2026-08-18): a capped "≥ 3" read fetches the exact selected day's
+    OISST 0.25° value from Hugging Face (730-byte range read — §3's second
+    exception) minus that calendar month's 1991-2020 normal; any failure falls
+    back to the resident monthly path, and the row's stamp follows the
+    measurement (day vs month). The hover probe renders its instant answer and
+    UPGRADES IN PLACE when the Hub replies, guarded by `probeSeq` so a hover
+    that moved on never receives another point's value.
   - **Heat load** is its own section (added 2026-08-10 from a Zürich
     Klimaanalysekarte the user sent): felt temperature now with its gap
     against air, today's felt peak, tonight's low flagged as a **tropical
@@ -1055,7 +1085,11 @@ worth keeping in front of a frontend reader:
   instead. The numeric midpoint is retained in the lut for mean/delta
   arithmetic, and `kelvinToC` converts cap bounds along with values. Test:
   "catch-all colormap bins probe as bounds" (Gotland deep = capped, 30W/40N =
-  numeric — anchors verified against the real July-2026 tile).
+  numeric — anchors verified against the real July-2026 tile). One cap is
+  CORRECTABLE and corrected: the SST-anomaly ±3 °C bins are a palette edge,
+  not an instrument limit, so both read-outs print the computed true departure
+  beside the bound (daily from the Hub, monthly fallback — §5). SMAP's
+  "< 30 PSU" is a genuine retrieval floor and stays a bound.
 - **There is no PET or UTCI on either allowed path — checked 2026-08-10, do
   not re-check.** GIBS's WMTSCapabilities has AIRS surface *air* and *skin*
   temperature and nothing that models a body, and the Open-Meteo family

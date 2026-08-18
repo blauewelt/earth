@@ -8,6 +8,13 @@ const { test, expect } = require("@playwright/test");
 
 const CDN = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1";
 
+/* The Hugging Face Hub and everywhere a `resolve/` URL can redirect to: the
+ * repo host itself, the LFS CDN, and the Xet bridge on *.hf.co. One regex,
+ * used both to route the Hub through (beforeEach) and to cut it off (the
+ * fallback test) — written once so those two can never disagree about what
+ * "the Hub" means. See CLAUDE.md §3, second deliberate exception. */
+const HF_HOSTS = /^https:\/\/(huggingface\.co|cdn-lfs[^/]*\.huggingface\.co|[^/]+\.hf\.co)\//;
+
 test.beforeEach(async ({ page, baseURL }) => {
   if (process.env.MIRROR) {
     await page.route(/https:\/\/cdnjs\.cloudflare\.com\/.*/, async (route) => {
@@ -58,6 +65,21 @@ test.beforeEach(async ({ page, baseURL }) => {
         }
       });
     }
+    /* The Hub is PASSED THROUGH, not mirrored — it is the thing under test,
+     * and E-040's whole claim is that a browser range read against the real
+     * Hub returns 206 with exactly the bytes asked for. The sandbox BROWSER
+     * has no egress; the Playwright node process does, so hand the request to
+     * node and fulfil with whatever comes back, headers and status intact.
+     * maxRedirects matters: a `resolve/` URL 302s to the CDN, and without
+     * following it the client would see a redirect body instead of bytes. */
+    await page.route(HF_HOSTS, async (route) => {
+      try {
+        const response = await page.request.fetch(route.request(), { maxRedirects: 5 });
+        await route.fulfill({ response });
+      } catch {
+        await route.abort().catch(() => {});
+      }
+    });
   }
   page.__errors = [];
   page.on("pageerror", (e) => page.__errors.push(String(e)));
@@ -585,13 +607,165 @@ test("a capped SST anomaly reports its actual departure, computed not read", asy
   await expect(card).toContainText("OISST");
 });
 
+/* Read the "actual departure" row out of the card as {value, stamp}. The STAMP
+ * is the point: the daily Hub read is for one calendar day and the monthly
+ * fallback for a whole month, so the granularity of that dim right-hand string
+ * is what says which measurement actually served the row. Anything that reads
+ * the two off the card's flat innerText cannot tell "2015-07" from
+ * "2015-07-15" reliably once ages are appended. */
+async function departureRow(page) {
+  return page.evaluate(() => {
+    const row = [...document.querySelectorAll("#pixel-card .px-row")]
+      .find((r) => r.querySelector(".px-label")?.textContent.includes("actual departure"));
+    if (!row) return null;
+    return {
+      value: row.querySelector(".px-val")?.textContent || "",
+      stamp: row.querySelector(".px-when")?.textContent || "",
+    };
+  });
+}
+
+test("the true SST anomaly is read for the exact day, straight off the Hub", async ({ page }) => {
+  /* E-040. The monthly correction answers a coarser question than the one that
+   * was asked: a 1° monthly mean against a 25 km daily raster. The Hub carries
+   * OISST daily at 0.25° stored pixel-major, so the true value for THIS day at
+   * THIS point is one 730-byte range read — and the row must then be stamped to
+   * the DAY, because a day-granularity value under a month stamp is the same
+   * class of misdating the per-row stamps exist to prevent.
+   *
+   * The point and date are VERIFIED, not guessed (2026-08-18). At 5°S 85°W the
+   * MUR25 tile for 2015-07-02 reads rgb(128,0,0) at the level the card probes —
+   * the palette's `[3.0,+INF)` catch-all, so there is genuinely something to
+   * correct — and OISST daily reads 25.34 °C there against a July 1991-2020
+   * normal of 21.35 °C, i.e. +3.99 °C. The same point on 2015-07-15 is NOT
+   * capped (the tile inverts to 2.95), which is why the date is 07-02: a test
+   * pinned to an uncapped pixel would pass by never exercising the path. */
+  test.setTimeout(240000);
+  await page.evaluate(() => {
+    const el = document.getElementById("layer-date");
+    el.value = "2015-07-02"; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await page.evaluate(() =>
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(-85, -5)));
+  const card = page.locator("#pixel-card");
+  await expect(card).toContainText("SST anomalies", { timeout: 90000 });
+  await expect(card).toContainText("actual departure", { timeout: 90000 });
+  await expect.poll(() => departureRow(page).then((r) => r?.stamp || ""),
+    { timeout: 60000, message: "the departure row never carried a day stamp" })
+    .toMatch(/^2015-07-02\b/);
+
+  const row = await departureRow(page);
+  const m = /([+−-][\d.]+) °C/.exec(row.value);
+  expect(m, `no computed value in "${row.value}"`).not.toBeNull();
+  const v = Number(m[1].replace("−", "-"));
+  expect(Number.isFinite(v)).toBe(true);
+  expect(Math.abs(v)).toBeGreaterThan(3);      // or there was nothing to correct
+  expect(Math.abs(v)).toBeLessThan(12);        // and it is a temperature, not a bug
+  // the provenance must name the daily product AND admit the monthly normal —
+  // this is a daily reading against a monthly baseline, and saying otherwise
+  // would overstate what the number removes
+  await expect(card).toContainText("OISST daily 0.25°");
+  await expect(card).toContainText("1991-2020");
+});
+
+test("with the Hub unreachable the card still shows the monthly departure", async ({ page }) => {
+  /* The fallback is the whole reason huggingface.co could be admitted under
+   * CLAUDE.md §3 at all: a Hub outage must cost PRECISION, not the feature.
+   * Registered after the beforeEach pass-through, so this handler wins. */
+  test.setTimeout(240000);
+  const hf = [];
+  page.on("request", (r) => { if (HF_HOSTS.test(r.url())) hf.push(r.url()); });
+  await page.route(HF_HOSTS, (route) => route.abort());
+
+  await page.evaluate(() => {
+    const el = document.getElementById("layer-date");
+    el.value = "2026-07-15"; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await page.evaluate(() =>
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(-85, -5)));
+  const card = page.locator("#pixel-card");
+  await expect(card).toContainText("actual departure", { timeout: 90000 });
+  await expect.poll(() => departureRow(page).then((r) => r?.stamp || ""),
+    { timeout: 60000, message: "the monthly fallback never stamped its row" })
+    .toMatch(/^2026-07\b(?!-)/);
+
+  const row = await departureRow(page);
+  expect(/([+−-][\d.]+) °C/.test(row.value), `no computed value in "${row.value}"`).toBe(true);
+  await expect(card).toContainText("OISST v2.1 monthly mean");
+  // and the app really did try the Hub first — a fallback that is never
+  // exercised because the daily path was silently skipped proves nothing
+  expect(hf.length, "the daily path was never attempted").toBeGreaterThan(0);
+});
+
+test("the hover probe upgrades a capped read in place, and only for its own point", async ({ page }) => {
+  /* The tooltip renders SYNCHRONOUSLY — that is the whole design of the dwell
+   * probe — so the daily read can only ever land after the box is drawn. Two
+   * properties, and the second is the one that can hurt: it must improve the
+   * read-out in place, and it must never write into a box that has since moved
+   * to another point. Same guard as pixelCardSeq, one rung down. */
+  test.setTimeout(240000);
+  await page.evaluate(() => {
+    const el = document.getElementById("layer-date");
+    el.value = "2015-07-02"; el.dispatchEvent(new Event("change", { bubbles: true }));
+    const cb = document.querySelector('input[data-id="sst-anom"]');
+    cb.checked = true; cb.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const probeAt = (lon, lat) => page.evaluate(async ([x, y]) => {
+    const E = window.__earth;
+    const entry = E.colormapLayersTopDown().find((e) => e.cfg.id === "sst-anom");
+    const res = await E.probeEntryValue(entry, Cesium.Cartographic.fromDegrees(x, y));
+    E.renderProbe(res, 60, 60);
+    return { cap: res.cap ? res.cap.bound : null, upgradable: !!res.upgradable };
+  }, [lon, lat]);
+  const headText = () => page.evaluate(() =>
+    document.querySelector("#value-probe .vp-head")?.textContent || "");
+
+  // 5°S 85°W on 2015-07-02: the tile is the palette's +3 catch-all (verified),
+  // and OISST daily says +3.99 there
+  const first = await probeAt(-85, -5);
+  expect(first.cap, "the anchor point is no longer capped — see the card test").toBe(3);
+  expect(first.upgradable).toBe(true);
+  expect(await headText()).toContain("3.00");          // instant: the palette bound
+  await expect.poll(headText, { timeout: 30000 }).toMatch(/\+3\.99/);
+  // the bound stays beside it — it is what the COLOUR meant, and we correct the
+  // reading rather than hiding it
+  expect(await headText()).toContain("palette");
+
+  /* The guard. Hold the Hub open and probe a DIFFERENT capped pixel (a
+   * different pixel-year, so the cache cannot answer it instantly), then move
+   * to an ordinary mid-Atlantic point while that read is still out. The stale
+   * answer must be dropped: the box shows the point the cursor is on, and an
+   * uncapped read has no "palette" clause at all.
+   *
+   * The margins are what make this test real rather than decorative. Probe the
+   * mid-Atlantic point FIRST so its tile is cached — on the sandbox's proxy a
+   * cold tile read took longer than the hold, which let the held answer land
+   * while its OWN point was still displayed and the test passed for the wrong
+   * reason (verified: it passed with the guard deleted). And hold the Hub for
+   * eight seconds, comfortably longer than anything on the probe path. */
+  await probeAt(-30, 40);                        // warm the tile; timing, not assertion
+  await page.route(HF_HOSTS, async (route) => {
+    await new Promise((r) => setTimeout(r, 8000));
+    await route.fallback();
+  });
+  const held = await probeAt(-84, -2);           // also capped 2015-07-02, another pixel
+  expect(held.upgradable).toBe(true);
+  const moved = await probeAt(-30, 40);          // mid-Atlantic, ordinary
+  expect(moved.upgradable).toBe(false);
+  await page.waitForTimeout(14000);              // well past the held read
+  const after = await headText();
+  expect(after, `a moved-on probe was overwritten: "${after}"`).not.toContain("palette");
+});
+
 test("an uncapped anomaly costs no extra request", async ({ page }) => {
   // The correction must be free in the ordinary case: the climatology and the
   // OISST year file are ~0.4 and ~3.8 MB, and a mid-ocean pixel with a normal
-  // anomaly has nothing to correct.
+  // anomaly has nothing to correct. The Hub is on the same footing — a 730-byte
+  // read is cheap, but a request per click to a third-party host for a value
+  // nobody needs is exactly what CLAUDE.md §3 exists to prevent.
   const asked = [];
   page.on("request", (r) => {
-    if (/oisst_clim|oisst_y/.test(r.url())) asked.push(r.url());
+    if (/oisst_clim|oisst_y/.test(r.url()) || HF_HOSTS.test(r.url())) asked.push(r.url());
   });
   await page.evaluate(() =>
     window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(-30, 40)));
