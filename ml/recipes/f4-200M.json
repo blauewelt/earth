@@ -1,0 +1,13 @@
+{
+  "_description": "E-038b family-4 pentad codec at ~202M: 1024x16, 16 heads, d_dec 512, d_z 32, patch 1. NOT YET VALIDATED - see _provenance.",
+  "_provenance": "#387 ran this width with codec_heads 4 (head_dim 256) and its embedding COLLAPSED between step 10k and 15k: probe r 0.540 -> 0.316 -> 0.392 -> 0.000, z-mse 0.20 -> 9,685, while loss_rec sat at 0.27-0.32 and hid it. This recipe raises heads to 16 (head_dim 64) on the theory that head_dim 256 was a contributing cause. That theory is UNTESTED. train.py still has no LR warmup and no gradient clipping, and --lr is hard-coded at 3e-4 for every width, so a re-run may well collapse again for those reasons instead. Treat the first run of this recipe as an experiment about the collapse, not as the 200M arm.",
+  "tensor": "family4_na025_pentad",
+  "d_z": 32,
+  "patch": 1,
+  "codec_d_model": 1024,
+  "codec_layers": 16,
+  "codec_heads": 16,
+  "codec_d_dec": 512,
+  "anomaly": "true",
+  "batch": 512
+}

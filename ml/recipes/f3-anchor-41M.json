@@ -1,0 +1,13 @@
+{
+  "_description": "The frozen 41M PixelMAE codec every stage-2 experiment reads: 576x10, 8 heads, d_dec 768, d_z 64, patch 3, family-3 0.25 deg North Atlantic monthly.",
+  "_provenance": "run-62/run-63, tagged run-80 as f3_anchor41M (40,692,849 params). Restated identically by every wave since; #358 is a representative dispatch.",
+  "tensor": "family3_na025",
+  "d_z": 64,
+  "patch": 3,
+  "codec_d_model": 576,
+  "codec_layers": 10,
+  "codec_heads": 8,
+  "codec_d_dec": 768,
+  "anomaly": "true",
+  "batch": 512
+}

@@ -1,0 +1,13 @@
+{
+  "_description": "E-038a family-4 pentad codec at 38M: 512x12, 4 heads, d_dec 256, d_z 32, patch 1.",
+  "_provenance": "#386, which trained cleanly - loss_rec 0.297 -> 0.212 by step 71,000 and probe r 0.564 -> ~0.62. head_dim is 512/4 = 128, at the top of the healthy band but inside it.",
+  "tensor": "family4_na025_pentad",
+  "d_z": 32,
+  "patch": 1,
+  "codec_d_model": 512,
+  "codec_layers": 12,
+  "codec_heads": 4,
+  "codec_d_dec": 256,
+  "anomaly": "true",
+  "batch": 512
+}

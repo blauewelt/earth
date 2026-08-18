@@ -80,6 +80,37 @@ taken 11 h — the kind of surprise a summary can smooth over.
 - **`runner` defaults to `gpu`.** Omitting it used to send jobs to a free
   4-core CPU box where a 40M codec "trains" and nothing says wrong-hardware.
   Check `runner_name` on any dispatch you care about.
+- **Name a recipe; never hand-assemble an architecture.** On #358 — an
+  entirely ordinary run — **17 of 24 inputs had to be overridden**, so every
+  dispatch was a 24-field copying exercise, and copying exercises are what
+  produced #395 (resume without a width: sixty `size mismatch` lines in 90 s)
+  and #387 (`codec_heads` left at 4 while `d_model` went to 1024: head_dim
+  256, and the 202M codec's embedding collapsed at ~step 12k while `loss_rec`
+  hid it). A default that is never correct is not a default. Three mechanisms
+  replace the vigilance, and they are load-bearing rather than advisory:
+  - **`window: recipe:<name>`** expands a checked-in `ml/recipes/<name>.json`
+    into the full parameter set. Recipes carry `_description` and
+    `_provenance` — which run measured this configuration — and a key the
+    workflow does not actually read as `$RECIPE_<KEY>` is REFUSED, so a
+    setting cannot appear to apply and quietly do nothing.
+  - **`--resume` DERIVES the architecture** from the checkpoint's own `args`.
+    Do not restate a width the file already holds; a dispatch that
+    contradicts its checkpoint now refuses before the model is built.
+  - **Nothing falls back to the pilot.** An unset architecture with no recipe
+    and no resume refuses in seconds, naming the flags it wants.
+  `python3 tests/test_train_config_guards.py` pins all of it, and
+  `python3 tests/test_workflow_config.py` pins the workflow side — including
+  the 21,000-char ceiling that took every dispatch in the repo down for ten
+  minutes on 2026-08-17.
+- **A collapsed codec is invisible to every monitor we had.** `loss_rec`
+  cannot see it (the decoder rescales freely, so reconstruction stays
+  mediocre-but-finite while the latent runs away — #387 sat at 0.27–0.32 for
+  9 hours after it died) and the fleet health checks cannot see it (a dead
+  model holds the GPU at 100%). The probe correlation can, because a
+  correlation is scale-invariant: `--collapse-r` (default 0.05) aborts after
+  two consecutive sub-threshold probes. A NaN probe is NO READING, not
+  collapse — instrumentation must never be the thing that loses a job — and a
+  genuinely non-finite loss is caught separately in the training loop.
 - **A dispatch input you omit is not "inherited" — it is the DEFAULT.** The
   workflow's defaults describe the 0.92M pilot codec (`codec_d_model` 128,
   `codec_layers` 4, `codec_d_dec` 256, `d_z` 32, `patch` 1), and every real

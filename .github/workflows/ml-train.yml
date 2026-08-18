@@ -91,16 +91,16 @@ on:
         default: "0"
       codec_d_model:
         description: "encoder width (128 = 0.92M pilot; 320 with 8 layers = 10.3M Chinchilla anchor)"
-        default: "128"
+        default: ""
       codec_layers:
         description: "encoder depth (4 pilot; 8 at the 10M size)"
-        default: "4"
+        default: ""
       codec_heads:
         description: "attention heads (4 pilot; 8 at the 10M size)"
-        default: "4"
+        default: ""
       codec_d_dec:
         description: "decoder width (256 pilot; 512 at the 10M size)"
-        default: "256"
+        default: ""
 
 # contents: write ONLY for the live-metrics side channel — the training
 # step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every
@@ -232,6 +232,19 @@ jobs:
         with:
           python-version: "3.11"
 
+      # RESOLVE THE RECIPE, if the window names one. Must run before ANY step
+      # that reads $WINDOW or $RECIPE_*, and after checkout (it reads
+      # ml/recipes/ and this file). On a window with no `recipe:` prefix it
+      # exports WINDOW unchanged and nothing else — a no-op on every dispatch
+      # written before recipes existed, which is the point.
+      - name: Resolve recipe
+        env:
+          # THE ONE PLACE that still reads inputs.window directly — this step
+          # is what DEFINES $WINDOW for every step after it, so referring to
+          # $WINDOW here would be circular (and empty).
+          IN_WINDOW: ${{ inputs.window }}
+        run: bash scripts/resolve_recipe.sh "$IN_WINDOW"
+
 
       # PHASE 2 STEP 1 of retiring the overloaded `window` field: SHADOW MODE.
       # This decodes `window` with ml/dispatch_config.py and PRINTS what it
@@ -243,7 +256,7 @@ jobs:
       # says so rather than pretending it did something (§4.6).
       - name: Decode dispatch config (shadow — decides nothing)
         run: |
-          python3 ml/dispatch_config.py --window "${{ inputs.window }}" || true
+          python3 ml/dispatch_config.py --window "${WINDOW}" || true
       - name: Install deps (torch matches the hardware)
         run: |
           pip install --quiet numpy netCDF4 matplotlib
@@ -362,11 +375,11 @@ jobs:
           # (wind_daily_8292.tar.aa, one chunk) that extracts ADDITIVELY into
           # wind_daily/ — so no rm -rf and no seed(): the shared dir must
           # survive a failed extension seed.
-          if [ "${{ inputs.tensor }}" = "family3_na025" ] || \
-             [ "${{ inputs.tensor }}" = "family4_na025_pentad" ] || \
-             [ "${{ inputs.tensor }}" = "family4_na025_pentad_r2" ] || \
-             [ "${{ inputs.tensor }}" = "family5_na025_daily" ] || \
-             [ "${{ inputs.tensor }}" = "family5_na025_daily_r2" ]; then
+          if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family3_na025" ] || \
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad" ] || \
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r2" ] || \
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily" ] || \
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily_r2" ]; then
             n8292=$(ls /opt/earth-cache/wind_daily/*.sfc.gauss.198[2-9].nc \
                        /opt/earth-cache/wind_daily/*.sfc.gauss.199[0-2].nc \
                        2>/dev/null | wc -l)
@@ -392,11 +405,11 @@ jobs:
           # The family-3 base tensor is a single (non-tar) release asset;
           # build_family3.py can fetch it itself, but seeding it here keeps
           # the build step offline like everything else.
-          if [ "${{ inputs.tensor }}" = "family3_na025" ] || \
-             [ "${{ inputs.tensor }}" = "family4_na025_pentad" ] || \
-             [ "${{ inputs.tensor }}" = "family4_na025_pentad_r2" ] || \
-             [ "${{ inputs.tensor }}" = "family5_na025_daily" ] || \
-             [ "${{ inputs.tensor }}" = "family5_na025_daily_r2" ]; then
+          if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family3_na025" ] || \
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad" ] || \
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r2" ] || \
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily" ] || \
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily_r2" ]; then
             [ -f /opt/earth-cache/base025_na.npz ] || curl -sL \
               --max-time 900 --retry 3 --retry-delay 10 \
               -o /opt/earth-cache/base025_na.npz \
@@ -464,7 +477,7 @@ jobs:
           PY
           }
           export SD
-          if [ "${{ inputs.tensor || 'family2' }}" = "family3_na025" ]; then
+          if [ "${RECIPE_TENSOR:-${{ inputs.tensor || 'family2' }}}" = "family3_na025" ]; then
             # PULL THE PUBLISHED TENSOR BEFORE BUILDING ONE. Boxes building
             # their own produced different bytes under one filename (b40f5b0b
             # vs adcbe700, measured 2026-08-11) and the tensor moves the head
@@ -502,8 +515,8 @@ jobs:
               fi
             fi
             python -u ml/build_family3.py
-          elif [ "${{ inputs.tensor }}" = "family4_na025_pentad" ] || \
-               [ "${{ inputs.tensor }}" = "family4_na025_pentad_r2" ]; then
+          elif [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad" ] || \
+               [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r2" ]; then
             # E-034 step 4 / E-038. The 5-day fields are published PUBLICLY on
             # the Hub, so this needs no credential on the box — deliberately:
             # the box is a stranger's machine whose host has root (§6), and
@@ -534,15 +547,15 @@ jobs:
               fi
             done
             REV=""
-            if [ "${{ inputs.tensor }}" = "family4_na025_pentad_r2" ]; then
+            if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r2" ]; then
               REV="--rev r2 --sst-dir $SD"
               seed_sst
             fi
             # build_family4.py checks the grid against base025_na.npz and
             # REFUSES a mismatch before writing any of the 33 GB.
             python -u ml/build_family4.py --pentad-dir "$PD" $REV
-          elif [ "${{ inputs.tensor }}" = "family5_na025_daily" ] || \
-               [ "${{ inputs.tensor }}" = "family5_na025_daily_r2" ]; then
+          elif [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily" ] || \
+               [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily_r2" ]; then
             # E-038 Phase B. Same shape as the family-4 branch, daily inputs:
             # public Hub fetch (no credential on a stranger's machine, §6),
             # labels FATAL (a tensor with no labels is worse than a failed
@@ -575,16 +588,16 @@ jobs:
               fi
             done
             REV=""
-            if [ "${{ inputs.tensor }}" = "family5_na025_daily_r2" ]; then
+            if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily_r2" ]; then
               REV="--rev r2 --sst-dir $SD"
               seed_sst
             fi
             python -u ml/build_family5.py --pentad-dir "$DD" $REV
           else
-            python ml/build_dataset.py --window "${{ inputs.window }}"
+            python ml/build_dataset.py --window "${WINDOW}"
             python ml/fetch_rg_channels.py
             python ml/fetch_wind_channels.py
-            if [ "${{ inputs.sst_channel }}" = "true" ]; then python ml/fetch_sst_channel.py; fi
+            if [ "${RECIPE_SST_CHANNEL:-${{ inputs.sst_channel }}}" = "true" ]; then python ml/fetch_sst_channel.py; fi
             python ml/fetch_wind_stats.py
             python ml/fetch_truth.py
           fi
@@ -684,7 +697,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAGS="${{ inputs.resume }}"; TAGS="${TAGS#!}"
+          TAGS="${RECIPE_RESUME:-${{ inputs.resume }}}"; TAGS="${TAGS#!}"
           mkdir -p /opt/earth-cache/ckpt
           for TAG in ${TAGS//,/ }; do
             case "$TAG" in */*) continue;; esac        # a path, not a tag
@@ -725,7 +738,7 @@ jobs:
         # false, and it is what made #97 look stuck for 45 minutes when it was
         # doing exactly what it was told.
         run: |
-          case "${{ inputs.temporal_steps }}" in
+          case "${RECIPE_TEMPORAL_STEPS:-${{ inputs.temporal_steps }}}" in
             joint:*) bash scripts/publish_phase.sh "ml-live-${{ github.run_number }}" \
                        "reloading the parent codec" \
                        "a joint run trains in the fine-tune step; no stage-1 curve for this one" ;;
@@ -750,8 +763,8 @@ jobs:
           # Unknown keys are FATAL: a typo'd knob silently ignored is the
           # reports-success-does-nothing failure this file keeps relearning.
           RECW=()
-          case "${{ inputs.window }}" in *recw:*)
-            SPEC="${{ inputs.window }}"; SPEC="${SPEC#*recw:}"; SPEC="${SPEC%% *}"
+          case "${WINDOW}" in *recw:*)
+            SPEC="${WINDOW}"; SPEC="${SPEC#*recw:}"; SPEC="${SPEC%% *}"
             IFS=';' read -ra KV <<< "$SPEC"
             for kv in "${KV[@]}"; do
               case "$kv" in
@@ -766,23 +779,23 @@ jobs:
           ;; esac
           python -u ml/train.py \
             --data "$TENSOR" \
-            --steps "${{ inputs.steps }}" \
-            --batch "${{ inputs.batch }}" \
-            --d-z "${{ inputs.d_z }}" \
-            --patch "${{ inputs.patch || '1' }}" \
-            --max-minutes "${{ inputs.max_minutes || '0' }}" \
-            --lr-floor "${{ inputs.lr_floor || '0' }}" \
-            --lr-decay-steps "${{ inputs.lr_decay_steps || '0' }}" \
-            --light-probe-every "${{ inputs.light_probe_every || '2000' }}" \
-            --resume "${{ inputs.resume }}" \
-            --d-model "${{ inputs.codec_d_model || '128' }}" \
-            --n-layers "${{ inputs.codec_layers || '4' }}" \
-            --n-heads "${{ inputs.codec_heads || '4' }}" \
-            --d-dec "${{ inputs.codec_d_dec || '256' }}" \
+            --steps "${RECIPE_STEPS:-${{ inputs.steps }}}" \
+            --batch "${RECIPE_BATCH:-${{ inputs.batch }}}" \
+            --d-z "${RECIPE_D_Z:-${{ inputs.d_z }}}" \
+            --patch "${RECIPE_PATCH:-${{ inputs.patch || '1' }}}" \
+            --max-minutes "${RECIPE_MAX_MINUTES:-${{ inputs.max_minutes || '0' }}}" \
+            --lr-floor "${RECIPE_LR_FLOOR:-${{ inputs.lr_floor || '0' }}}" \
+            --lr-decay-steps "${RECIPE_LR_DECAY_STEPS:-${{ inputs.lr_decay_steps || '0' }}}" \
+            --light-probe-every "${RECIPE_LIGHT_PROBE_EVERY:-${{ inputs.light_probe_every || '2000' }}}" \
+            --resume "${RECIPE_RESUME:-${{ inputs.resume }}}" \
+            --d-model "${RECIPE_CODEC_D_MODEL:-${{ inputs.codec_d_model }}}" \
+            --n-layers "${RECIPE_CODEC_LAYERS:-${{ inputs.codec_layers }}}" \
+            --n-heads "${RECIPE_CODEC_HEADS:-${{ inputs.codec_heads }}}" \
+            --d-dec "${RECIPE_CODEC_D_DEC:-${{ inputs.codec_d_dec }}}" \
             "${RECW[@]}" \
-            $([ "${{ inputs.anomaly }}" = "true" ] && echo --anomaly) \
-            $([ "${{ inputs.anomaly }}" = "true" ] && [ "${{ inputs.eval_every }}" != "0" ] \
-              && echo --eval-every "${{ inputs.eval_every }}") \
+            $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && echo --anomaly) \
+            $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && [ "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}" != "0" ] \
+              && echo --eval-every "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}") \
             --out ml/runs/actions &
           TRAIN_PID=$!
           # Live-metrics side channel: publish curves every ~5 min while
@@ -852,7 +865,7 @@ jobs:
           CKPT_TAG: run-${{ github.run_number }}
           TENSOR: ml/cache/${{ inputs.tensor == 'family2' && 'na_pixels' || inputs.tensor }}.npz
         run: |
-          JS="${{ inputs.temporal_steps }}"; JS="${JS#joint:}"
+          JS="${RECIPE_TEMPORAL_STEPS:-${{ inputs.temporal_steps }}}"; JS="${JS#joint:}"
           # window carries "mode" or "mode@ref_fore" — e.g. lse@0.29. The
           # second field is the FROZEN-CODEC control's forecast loss in
           # persistence units, and it is what puts both terms of the loss on
@@ -861,7 +874,7 @@ jobs:
           # of every gradient step goes to the wrong objective (measured on
           # #94). Packed into an existing input because workflow_dispatch caps
           # at 25 and this file is at the ceiling.
-          W="${{ inputs.window }}"
+          W="${WINDOW}"
           MODE="${W%%@*}"
           case "$W" in *@*) REF="${W#*@}";; *) REF=0;; esac
           # "twin" -> -1, which selects the SELF-NORMALISING reference: a
@@ -874,13 +887,13 @@ jobs:
           case "$REF" in twin) REF=-1;; esac
           python -u ml/train_joint.py \
             --data "$TENSOR" \
-            --resume "${{ inputs.resume }}" \
+            --resume "${RECIPE_RESUME:-${{ inputs.resume }}}" \
             --steps "$JS" \
             --loss-mode "$MODE" \
             --ref-fore="$REF" \
             --lr "${{ inputs.lr_floor != '0' && inputs.lr_floor || '3e-5' }}" \
-            --temporal-d-model "${{ inputs.temporal_d_model }}" \
-            --temporal-layers "${{ inputs.temporal_layers }}" \
+            --temporal-d-model "${RECIPE_TEMPORAL_D_MODEL:-${{ inputs.temporal_d_model }}}" \
+            --temporal-layers "${RECIPE_TEMPORAL_LAYERS:-${{ inputs.temporal_layers }}}" \
             --out ml/runs/actions &
           JOINT_PID=$!
           # Same side channel as the Train step. Without it a 12,000-step
@@ -925,7 +938,7 @@ jobs:
           # E-010 lacked: its z-ratio was teacher-forced horizon-1, which is
           # the regime an unroll objective de-emphasises by design. Trains
           # nothing; `exit 0` skips the training-run ladder below.
-          case "${{ inputs.window }}" in
+          case "${WINDOW}" in
             disktriage*)
               # DISK TRIAGE (2026-08-11): the box went 50/50 mid-queue and the
               # failure mode was a treadmill — hygiene freed the published Z
@@ -945,11 +958,11 @@ jobs:
               du -x -BM --max-depth=2 /root 2>/dev/null | sort -rn | head -20
               echo "== biggest files =="
               find / -xdev -type f -size +200M -printf "%s\t%p\n" 2>/dev/null | sort -rn | head -25
-              case "${{ inputs.window }}" in
+              case "${WINDOW}" in
                 "disktriage:rm "*)
                   # Targeted removal, allowlisted roots only — a typo in a
                   # window input must not be able to delete the OS.
-                  P="${{ inputs.window }}"; P="${P#disktriage:rm }"
+                  P="${WINDOW}"; P="${P#disktriage:rm }"
                   for x in $P; do
                     case "$x" in
                       /opt/earth-cache/*|/root/.cache/*|/tmp/*|/opt/runner/_work/*|/opt/runner/_diag/*)
@@ -973,7 +986,7 @@ jobs:
               exit 0
               ;;
             rolleval:*)
-              SPEC="${{ inputs.window }}"; SPEC="${SPEC#rolleval:}"
+              SPEC="${WINDOW}"; SPEC="${SPEC#rolleval:}"
               mkdir -p ml/runs/heads
               HPATHS=""
               for tag in ${SPEC//,/ }; do
@@ -1002,7 +1015,7 @@ jobs:
               # ceiling ("Exceeded max expression length" — the whole
               # workflow 422s, same all-or-nothing as the 26th input).
               # Fatal on failure, deliberately: training IS this mode's job.
-              bash scripts/dectrain_run.sh "${{ inputs.window }}"
+              bash scripts/dectrain_run.sh "${WINDOW}"
               exit 0
               ;;
             project:*)
@@ -1011,18 +1024,18 @@ jobs:
               # exists) with residual-scaled ensembles. Writes
               # project_amoc.json for archive_probes.py. Body in the script:
               # this run: block has a 21,000-char dispatch ceiling.
-              bash scripts/project_run.sh "${{ inputs.window }}"
+              bash scripts/project_run.sh "${WINDOW}"
               exit 0
               ;;
             headpub*)
-              bash scripts/publish_head_weights.sh "${{ inputs.window }}"
+              bash scripts/publish_head_weights.sh "${WINDOW}"
               exit 0
               ;;
             sroll:*)
               # E-022 spatial rollout eval — full-window roll of stencil
               # heads against the e017 baseline, gated on reproducing #217.
               # Body in scripts/sroll_run.sh (21,000-char ceiling here).
-              bash scripts/sroll_run.sh "${{ inputs.window }}"
+              bash scripts/sroll_run.sh "${WINDOW}"
               exit 0
               ;;
           esac
@@ -1041,15 +1054,15 @@ jobs:
           # it. That is why #94 finished a clean joint run and produced no
           # k-fold number at all. Skip stage 2 here on joint runs; the ladder
           # below still scores the resulting codec, which is the whole point.
-          case "${{ inputs.temporal_steps }}" in joint:*) SKIP_S2=1;; *) SKIP_S2=0;; esac
-          if [ "${{ inputs.temporal_steps }}" != "0" ] && [ "$SKIP_S2" = "0" ]; then
+          case "${RECIPE_TEMPORAL_STEPS:-${{ inputs.temporal_steps }}}" in joint:*) SKIP_S2=1;; *) SKIP_S2=0;; esac
+          if [ "${RECIPE_TEMPORAL_STEPS:-${{ inputs.temporal_steps }}}" != "0" ] && [ "$SKIP_S2" = "0" ]; then
             # `window` doubles as a stage-2 modifier here, same reuse as on a
             # joint: run — "unroll:4" turns on the autoregressive unroll that
             # matches training to how rollout.py actually scores the model.
             # Another input is not available: workflow_dispatch caps at 25 and
             # this file is exactly at the ceiling.
             UNROLL=1
-            case "${{ inputs.window }}" in unroll:*) UNROLL="${{ inputs.window }}"; UNROLL="${UNROLL#unroll:}";; esac
+            case "${WINDOW}" in unroll:*) UNROLL="${WINDOW}"; UNROLL="${UNROLL#unroll:}";; esac
             # SEED, same overloaded input, comma-separated so it composes:
             # "unroll:4,seed:2". No room for a 26th input, and a 26th breaks
             # every dispatch. WHY seeds exist here: ml/CLAUDE.md §3
@@ -1057,8 +1070,8 @@ jobs:
             # four-arm sweep at one seed each could only have detected an
             # effect the instrument itself could not hold still.
             SEED=0
-            case "${{ inputs.window }}" in
-              *seed:*) SEED="${{ inputs.window }}"; SEED="${SEED##*seed:}"; SEED="${SEED%%,*}";;
+            case "${WINDOW}" in
+              *seed:*) SEED="${WINDOW}"; SEED="${SEED##*seed:}"; SEED="${SEED%%,*}";;
             esac
             # Strip any trailing ,seed:N from the unroll value, so
             # "unroll:4,seed:2" yields UNROLL=4 rather than "4,seed:2" — which
@@ -1074,8 +1087,8 @@ jobs:
             # sched:-goes-LAST convention still holds, since sched: swallows
             # the rest of the string verbatim.
             DIRECT=""
-            case "${{ inputs.window }}" in
-              *direct:*) DIRECT="${{ inputs.window }}"
+            case "${WINDOW}" in
+              *direct:*) DIRECT="${WINDOW}"
                          DIRECT="${DIRECT##*direct:}"; DIRECT="${DIRECT%%,*}"
                          DIRECT="--direct ${DIRECT//-/,}";;
             esac
@@ -1084,22 +1097,22 @@ jobs:
             # Dashes because commas separate window fields; same anywhere-
             # match + first-comma strip as seed:/direct:; sched: stays LAST.
             UPROBS=""
-            case "${{ inputs.window }}" in
-              *uprobs:*) UPROBS="${{ inputs.window }}"
+            case "${WINDOW}" in
+              *uprobs:*) UPROBS="${WINDOW}"
                          UPROBS="${UPROBS##*uprobs:}"; UPROBS="${UPROBS%%,*}"
                          UPROBS="--unroll-probs ${UPROBS//-/,}";;
             esac
             # stencil:9 — E-022 spatial coupling: the neighbourhood input.
             # Same anywhere-match + first-comma strip as seed:.
             STENCIL=1
-            case "${{ inputs.window }}" in
-              *stencil:*) STENCIL="${{ inputs.window }}"; STENCIL="${STENCIL##*stencil:}"; STENCIL="${STENCIL%%,*}";;
+            case "${WINDOW}" in
+              *stencil:*) STENCIL="${WINDOW}"; STENCIL="${STENCIL##*stencil:}"; STENCIL="${STENCIL%%,*}";;
             esac
             # ring:222 — E-023: put the stencil's non-centre slots on a circle
             # of that radius in KM instead of the touching-neighbour table.
             RING=0
-            case "${{ inputs.window }}" in
-              *ring:*) RING="${{ inputs.window }}"; RING="${RING##*ring:}"; RING="${RING%%,*}"
+            case "${WINDOW}" in
+              *ring:*) RING="${WINDOW}"; RING="${RING##*ring:}"; RING="${RING%%,*}"
                        RING="${RING//-/,}";;
             esac
             echo "stage 2: unroll=$UNROLL seed=$SEED stencil=$STENCIL ring=$RING ${DIRECT:-} ${UPROBS:-}"
@@ -1116,7 +1129,7 @@ jobs:
             # forces every budget to be its own experiment); wsd holds a
             # horizon-free stable phase and then cools down, so a run can be
             # extended AND still converge.
-            case "${{ inputs.window }}" in
+            case "${WINDOW}" in
               *sched:*)
                        # ANYWHERE-match, so the schedule composes with the
                        # other window fields: "unroll:4,seed:2,sched:expdecay
@@ -1125,11 +1138,11 @@ jobs:
                        # seed:, which E-012 was the first to need. CONVENTION:
                        # sched: goes LAST — everything after it (spaces and
                        # flags included) is handed to temporal.py verbatim.
-                       SCHED="${{ inputs.window }}"
+                       SCHED="${WINDOW}"
                        SCHED="--lr-schedule ${SCHED##*sched:}"
                        echo "stage-2 schedule: $SCHED";; esac
-            case "${{ inputs.window }}" in
-              resume2:*) T2="${{ inputs.window }}"; T2="${T2#resume2:}"
+            case "${WINDOW}" in
+              resume2:*) T2="${WINDOW}"; T2="${T2#resume2:}"
                          T2="${T2%%,*}"  # tag ends at 1st comma (8d5e711)
                          # @<lr> suffix = the continuation's PEAK learning rate
                          case "$T2" in *@*) LR2="${T2#*@}"; T2="${T2%@*}";; esac
@@ -1150,7 +1163,7 @@ jobs:
               # because no head published before 2026-08-10 carries optimiser
               # state at all: every one is {args, model}, so a continuation
               # from them is impossible and asking for one earns a refusal.
-              warm2:*)   T2="${{ inputs.window }}"; T2="${T2#warm2:}"
+              warm2:*)   T2="${WINDOW}"; T2="${T2#warm2:}"
                          T2="${T2%%,*}"
                          case "$T2" in *@*) LR2="${T2#*@}"; T2="${T2%@*}";; esac
                          if [ ! -f "/opt/earth-cache/ckpt/${T2}.pt" ]; then
@@ -1201,12 +1214,12 @@ jobs:
             # defect as the joint step had, one step further down.
             python -u ml/temporal.py --run actions --K 24 \
               --data "$TENSOR" \
-              --steps "${{ inputs.temporal_steps }}" \
+              --steps "${RECIPE_TEMPORAL_STEPS:-${{ inputs.temporal_steps }}}" \
               --unroll "$UNROLL" --seed "$SEED" --stencil "$STENCIL" \
               --ring-km "$RING" \
               $R2 $SCHED $DIRECT $UPROBS \
-              --d-model "${{ inputs.temporal_d_model }}" \
-              --layers "${{ inputs.temporal_layers }}" &
+              --d-model "${RECIPE_TEMPORAL_D_MODEL:-${{ inputs.temporal_d_model }}}" \
+              --layers "${RECIPE_TEMPORAL_LAYERS:-${{ inputs.temporal_layers }}}" &
             S2_PID=$!
             TICK=0
             while kill -0 $S2_PID 2>/dev/null; do
@@ -1295,7 +1308,7 @@ jobs:
           # the SAME head on raw 3x3 tokens: the pair is what separates "the
           # codec knows this" from "any read-out with spatial structure knows
           # this". Matched to a patch codec via --raw-patch.
-          if [ "${{ inputs.head_probe }}" = "true" ]; then
+          if [ "${RECIPE_HEAD_PROBE:-${{ inputs.head_probe }}}" = "true" ]; then
             python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1 \
               || echo "::warning::head probe failed — its raw control still runs"
             python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1 \

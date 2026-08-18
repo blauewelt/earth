@@ -47,6 +47,18 @@ def fit_schedule(s, steady_elapsed, total_elapsed, max_minutes, steps0):
     return max(s + 1, min(steps0, fit)), rate
 
 
+def _optint(v):
+    """int, but an EMPTY string means "not set" rather than a parse error.
+
+    The workflow always passes --d-model and friends; whether the dispatch
+    filled them in is expressed by the value being empty. Without this,
+    `--d-model ""` dies in argparse with "invalid int value: ''" — a refusal,
+    but one whose message says nothing about what the operator should do.
+    """
+    v = (v or "").strip()
+    return None if v == "" else int(v)
+
+
 def parse():
     p = argparse.ArgumentParser()
     p.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"))
@@ -54,16 +66,33 @@ def parse():
     p.add_argument("--steps", type=int, default=20000)
     p.add_argument("--batch", type=int, default=512)
     p.add_argument("--lr", type=float, default=3e-4)
-    p.add_argument("--d-z", type=int, default=32)
-    p.add_argument("--patch", type=int, default=1, choices=[1, 3],
+    # ARCHITECTURE: every one of these defaults to None, and None is FATAL
+    # unless --resume supplies it or --smoke asks for the pilot. They used to
+    # default to the 0.92M pilot (32/1/128/4/4/256), which nothing has trained
+    # since run-62 — so the default was never the right answer, and omitting a
+    # flag did not fail, it silently ran a DIFFERENT EXPERIMENT. Run #395 died
+    # after 90 s with sixty "size mismatch ... [576] vs [128]" lines for
+    # exactly that reason, and #387's 202M codec trained with n_heads=4
+    # (head_dim 256) because the head count was the one field nobody restated.
+    # A default that is never correct is not a default. See ml/CLAUDE.md §1.
+    p.add_argument("--d-z", type=_optint, default=None)
+    # None is in `choices` because the workflow passes --patch "" when the
+    # dispatch did not set it, and argparse validates choices against the
+    # PARSED value — so without None here an unset patch dies in argparse
+    # ("invalid choice: None") instead of reaching the architecture check that
+    # can actually explain itself.
+    p.add_argument("--patch", type=_optint, default=None, choices=[1, 3, None],
                    help="encoder receptive field per channel token (3 = 3x3)")
-    p.add_argument("--d-model", type=int, default=128,
+    p.add_argument("--d-model", type=_optint, default=None,
                    help="encoder width (128x4 = the 0.92M pilot; 320x8 = ~10M "
                         "-- the Chinchilla-anchored size for the C=24 global "
                         "tensor: ~270M observed values / 20 ~ 13M params)")
-    p.add_argument("--n-layers", type=int, default=4)
-    p.add_argument("--n-heads", type=int, default=4)
-    p.add_argument("--d-dec", type=int, default=256,
+    p.add_argument("--n-layers", type=_optint, default=None)
+    p.add_argument("--n-heads", type=_optint, default=None,
+                   help="attention heads. Keep d_model/n_heads (head_dim) in "
+                        "64-128: the f3 anchor is 576/8 = 72. #387 ran "
+                        "1024/4 = 256 and collapsed.")
+    p.add_argument("--d-dec", type=_optint, default=None,
                    help="decoder width (scale with d_model; 512 at 320x8)")
     p.add_argument("--mask-ratio", type=float, default=0.5)
     # ---- E-019b: copy-reconstruction knobs (audit: ml/recon_eval.py) ------
@@ -147,6 +176,15 @@ def parse():
                         "kills at timeout-minutes with NO checkpoint: run "
                         "#12 (25 channels) measured ~1.3 steps/s against a "
                         "40k-step dispatch — 6 runner-hours, nothing saved.")
+    p.add_argument("--collapse-r", type=float, default=0.05,
+                   help="ABORT the run when the probe's linear_r_deseas falls "
+                        "to or below this on --collapse-strikes consecutive "
+                        "probes (0 = off). A codec whose embedding has stopped "
+                        "carrying linearly decodable signal is dead, and it "
+                        "burns a GPU at exactly the same rate as a live one.")
+    p.add_argument("--collapse-strikes", type=int, default=2,
+                   help="consecutive sub-threshold probes before aborting; 2 "
+                        "so one bad probe cannot kill a healthy run")
     p.add_argument("--smoke", action="store_true")
     return p.parse_args()
 
@@ -161,7 +199,13 @@ def main():
     if a.resume.startswith("!"):
         a.require_resume, a.resume = True, a.resume[1:]
     if a.smoke:
+        # --smoke is the ONE place the 0.92M pilot architecture is still
+        # spelled out, now that it is no longer anybody's silent default.
         a.steps, a.batch = 1500, 256
+        for k, v in (("d_z", 32), ("patch", 1), ("d_model", 128),
+                     ("n_layers", 4), ("n_heads", 4), ("d_dec", 256)):
+            if getattr(a, k) is None:
+                setattr(a, k, v)
     os.makedirs(a.out, exist_ok=True)
     dev = ("cuda" if torch.cuda.is_available() else "cpu")
     # load_tensor == np.load for every single-file npz (families 2/3/4,
@@ -280,6 +324,85 @@ def main():
         print(f"upweight ×{a.upweight}: {[chan[c] for c in hit]}")
     cwt = torch.as_tensor(cw, device=dev)
 
+    # ---- ARCHITECTURE RESOLUTION (2026-08-18) ----------------------------
+    # DERIVE, DON'T RESTATE. A checkpoint already knows its own architecture:
+    # save_ckpt() writes vars(a) into ck["args"]. Until now the model was
+    # built from the CLI flags and the checkpoint was loaded into it 200 lines
+    # later, so a dispatch that named a checkpoint but not its width built the
+    # WRONG model and died in load_state_dict — #395, sixty size-mismatch
+    # lines, 90 seconds. Restating a fact the file already holds is redundant
+    # data entry, and redundant data entry is where the drift lives.
+    #
+    # So: resolve --resume FIRST, adopt the checkpoint's architecture for any
+    # field the dispatch left unset, and REFUSE when the dispatch states one
+    # that contradicts the file. Then refuse again if anything is still unset.
+    # Both refusals cost seconds; the failures they replace cost hours.
+    CKPT_DIR = "/opt/earth-cache/ckpt"
+
+    def _resume_candidates(spec):
+        cands = [c.strip() for c in spec.split(",") if c.strip()]
+        for c in cands:
+            pth = c if os.path.sep in c else os.path.join(CKPT_DIR, c + ".pt")
+            if os.path.exists(pth):
+                return pth, cands
+        first = cands[0] if cands else ""
+        return (first if os.path.sep in first
+                else os.path.join(CKPT_DIR, first + ".pt")), cands
+
+    RESUME_PATH, RESUME_CANDS, RESUME_CK = None, [], None
+    if a.resume:
+        RESUME_PATH, RESUME_CANDS = _resume_candidates(a.resume)
+        if os.path.exists(RESUME_PATH):
+            # ONE load, to CPU, reused by the resume block below. Loading to
+            # CPU rather than the device also halves peak memory on a 2.5 GB
+            # checkpoint; load_state_dict copies across devices anyway.
+            RESUME_CK = torch.load(RESUME_PATH, map_location="cpu",
+                                   weights_only=False)
+
+    ARCH = ("d_z", "patch", "d_model", "n_layers", "n_heads", "d_dec",
+            "dec_layers")
+    if RESUME_CK is not None:
+        ca = RESUME_CK.get("args", {}) or {}
+        ca = ca if isinstance(ca, dict) else vars(ca)
+        adopted, clash = [], []
+        for k in ARCH:
+            # d_z is also a top-level key on every checkpoint ever written;
+            # args is the newer home. Prefer args, fall back to the old key.
+            want = ca.get(k)
+            if want is None and k == "d_z":
+                want = RESUME_CK.get("d_z")
+            if want is None:
+                continue
+            have = getattr(a, k)
+            if have is None:
+                setattr(a, k, want)
+                adopted.append(f"{k}={want}")
+            elif have != want:
+                clash.append(f"    {k}: dispatch says {have}, "
+                             f"checkpoint holds {want}")
+        if clash:
+            raise SystemExit(
+                "REFUSING to resume: the dispatch contradicts the "
+                f"checkpoint's own architecture.\n{chr(10).join(clash)}\n"
+                f"  checkpoint: {RESUME_PATH}\n"
+                "  Either drop the contradicting flags and let the checkpoint "
+                "supply them, or resume from a different checkpoint. Loading "
+                "anyway is how #395 spent 90 s printing size mismatches.")
+        if adopted:
+            print(f"  architecture ADOPTED from {os.path.basename(RESUME_PATH)}: "
+                  + " ".join(adopted), flush=True)
+
+    missing = [k for k in ARCH if getattr(a, k) is None]
+    if missing:
+        raise SystemExit(
+            "REFUSING to train: no architecture. Unset: "
+            + ", ".join("--" + m.replace("_", "-") for m in missing) + ".\n"
+            "  These no longer default to the 0.92M pilot, because that "
+            "default was never the right answer and omitting a flag used to "
+            "run a different experiment in silence.\n"
+            "  Name a recipe (window: recipe:<name>, see ml/recipes/), resume "
+            "a checkpoint that carries the architecture, or pass every flag.")
+
     model = PixelMAE(n_chan=C, d_z=a.d_z, patch=a.patch, d_model=a.d_model,
                      n_layers=a.n_layers, n_heads=a.n_heads, d_dec=a.d_dec,
                      dec_layers=a.dec_layers).to(dev)
@@ -373,13 +496,20 @@ def main():
             "params_M": round(sum(p_.numel() for p_ in model.parameters()) / 1e6, 3),
             "data": os.path.basename(a.data), "C": int(C), "T": int(T),
             "resume": a.resume or None,
+            # WHICH RECIPE produced this curve. Exported by
+            # scripts/resolve_recipe.sh; empty on a hand-assembled dispatch.
+            # #387's post-mortem had to be reconstructed from this record
+            # because force-cancel had destroyed the job log — the config line
+            # in metrics.jsonl was the only surviving account of what ran.
+            "recipe": os.environ.get("RECIPE_NAME") or None,
         }}) + "\n")
 
     # Where a checkpoint can outlive its job. /opt/earth-cache is the box's
     # persistent cache directory: it sits OUTSIDE the Actions workspace, so
     # actions/checkout's clean does not touch it, and a later job on the same
     # box can resume from it with no upload and no download.
-    CKPT_DIR = "/opt/earth-cache/ckpt"
+    # CKPT_DIR is defined in the architecture-resolution block above, which
+    # has to resolve --resume before the model is built.
     ckpt_tag = os.environ.get("CKPT_TAG", "")
 
     def save_ckpt(step=None):
@@ -443,6 +573,69 @@ def main():
             model.to(dev)
             return m_
 
+    # ---- COLLAPSE GUARD (2026-08-18, from #387) --------------------------
+    # #387 (f4-200M) trained for 27,000 steps. Its embedding died somewhere
+    # between step 10k and 15k: linear_r_deseas went 0.540 -> 0.316 -> 0.392
+    # -> 0.000 -> 0.000 -> 0.000 while z-space MSE ran 0.20 -> 323 -> 2,614
+    # -> 9,685. Nothing stopped it, and it burned ~9 more hours before a human
+    # looked at the curve.
+    #
+    # loss_rec could not have caught this and never will: the decoder is a
+    # free MLP over z, so it absorbs an arbitrary rescaling of its input and
+    # reconstruction stays mediocre-but-finite while the latent runs away.
+    # #387's loss_rec sat at 0.27-0.32 throughout. The fleet health checks
+    # could not catch it either — a collapsed model holds the GPU at 100%.
+    #
+    # The probe correlation CAN catch it, because a correlation is scale
+    # invariant. Two consecutive readings at or below --collapse-r is the
+    # signal; on #387 that fires at step 20,000.
+    #
+    # Deliberately NOT a relative test against the step-0 value: a resumed run
+    # has no step-0 probe, and "half of baseline" would also fire on a healthy
+    # run that started lucky. An absolute floor near zero only ever means one
+    # thing.
+    strikes = [0]
+
+    def _collapse_check(m, step):
+        # Step 0 is EXEMPT: it measures an untrained codec on purpose, and a
+        # random encoder is allowed to read near zero. Counting it would let
+        # one weak baseline plus one slow start abort a healthy run.
+        if not a.collapse_r or m is None or step == 0:
+            return
+        r = m.get("linear_r_deseas")
+        if r is None:
+            return
+        r = float(r)
+        # NaN is NOT collapse — it is NO READING. A degenerate probe (too few
+        # held-out pixels, an all-NaN slice) returns NaN on a perfectly
+        # healthy run, and killing training on instrumentation failure is the
+        # #56-#59 lesson in a new costume. Neither strike nor reset: wait for
+        # a real number. A model that has genuinely gone non-finite is caught
+        # by the loss check in the training loop, which is unambiguous.
+        if r != r:
+            print(f"  COLLAPSE WATCH: probe returned NaN at step {step} — "
+                  f"no reading, strike count held at {strikes[0]}", flush=True)
+            return
+        if abs(r) > a.collapse_r:
+            strikes[0] = 0
+            return
+        strikes[0] += 1
+        print(f"  COLLAPSE WATCH: linear r_des {r:+.3f} at step {step} "
+              f"— strike {strikes[0]}/{a.collapse_strikes}", flush=True)
+        if strikes[0] < a.collapse_strikes:
+            return
+        with open(metrics_path, "a") as f:
+            f.write(json.dumps({"step": step, "collapsed": {
+                "linear_r_deseas": r, "threshold": a.collapse_r,
+                "strikes": strikes[0]}}) + "\n")
+        raise SystemExit(
+            f"ABORTING at step {step}: the probe's linear_r_deseas has been "
+            f"<= {a.collapse_r} on {strikes[0]} consecutive probes (last "
+            f"{r:+.3f}). The embedding carries no linearly decodable signal — "
+            f"this codec is dead and further steps cannot revive it. Check "
+            f"LR/warmup/head_dim before re-dispatching; see the #387 "
+            f"post-mortem. Pass --collapse-r 0 to disable this guard.")
+
     def run_probe(step, light):
         """Write one probe record to metrics.jsonl and return it (or None).
 
@@ -472,6 +665,7 @@ def main():
         m["wall_s"] = round(time.time() - t0, 1)
         with open(metrics_path, "a") as f:
             f.write(json.dumps(m) + "\n")
+        _collapse_check(m, step)
         return m
 
     def run_light_probe(step):
@@ -531,18 +725,11 @@ def main():
         # of three boxes hold one. Listing them turns 1-in-3 into 2-in-3, and
         # the log still says exactly which checkpoint was used, so provenance
         # is unchanged.
-        cands = [c.strip() for c in a.resume.split(",") if c.strip()]
-        rpath = None
-        for c in cands:
-            pth = c if os.path.sep in c else os.path.join(CKPT_DIR, c + ".pt")
-            if os.path.exists(pth):
-                rpath = pth
-                break
-        if rpath is None:
-            rpath = (cands[0] if os.path.sep in cands[0]
-                     else os.path.join(CKPT_DIR, cands[0] + ".pt"))
-            if len(cands) > 1:
-                print(f"  --resume: none of {cands} is on this box", flush=True)
+        # Resolved once, up in the architecture block — the same path and the
+        # same already-loaded checkpoint, so the file is read exactly once.
+        rpath, cands = RESUME_PATH, RESUME_CANDS
+        if RESUME_CK is None and len(cands) > 1:
+            print(f"  --resume: none of {cands} is on this box", flush=True)
         if not os.path.exists(rpath):
             if a.require_resume:
                 raise SystemExit(
@@ -555,7 +742,7 @@ def main():
                   f"from scratch (this is not an error, but the run is now a "
                   f"fresh one; say so in its doc string)", flush=True)
         else:
-            ck = torch.load(rpath, map_location=dev, weights_only=False)
+            ck = RESUME_CK
             # SAY WHAT WE LOADED. /opt/earth-cache/ckpt/orphan-latest.pt is
             # whatever the last job on THIS box left behind, which is not
             # necessarily this experiment. load_state_dict fails loudly on an
@@ -634,6 +821,22 @@ def main():
         t, y, x, ctx = batch(tt, yy, xx, a.batch)
         l_rec, l_nei = step_loss(t, y, x, ctx)
         loss = l_rec + 0.5 * l_nei
+        # NON-FINITE LOSS IS UNAMBIGUOUS — stop before the NaN is written into
+        # every weight by the next opt.step(). The collapse guard above works
+        # on the probe and deliberately treats NaN as "no reading"; this is the
+        # other half, and it is the one case where NaN means the model, not the
+        # instrument.
+        if not torch.isfinite(loss):
+            with open(metrics_path, "a") as f:
+                f.write(json.dumps({"step": s, "diverged": {
+                    "loss_rec": float(l_rec.item()),
+                    "loss_nei": float(l_nei.item())}}) + "\n")
+            raise SystemExit(
+                f"ABORTING at step {s}: loss is {loss.item()} (rec "
+                f"{l_rec.item()}, nei {l_nei.item()}). The model has gone "
+                f"non-finite; every further step writes NaN into the weights. "
+                f"There is no warmup and no gradient clipping on this path — "
+                f"suspect the learning rate first.")
         opt.zero_grad(); loss.backward(); opt.step(); sched.step()
         if s == 1:
             t1 = time.time()

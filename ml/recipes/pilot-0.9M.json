@@ -1,0 +1,10 @@
+{
+  "_description": "The 0.92M pilot: 128x4, 4 heads, d_dec 256, d_z 32, patch 1. A CPU-scale sanity configuration, not a research one.",
+  "_provenance": "The historical argparse defaults in ml/train.py, which until 2026-08-18 were also every dispatch's silent fallback. Named here so the configuration still exists on purpose rather than by omission.",
+  "d_z": 32,
+  "patch": 1,
+  "codec_d_model": 128,
+  "codec_layers": 4,
+  "codec_heads": 4,
+  "codec_d_dec": 256
+}
