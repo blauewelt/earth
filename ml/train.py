@@ -164,8 +164,27 @@ def main():
         a.steps, a.batch = 1500, 256
     os.makedirs(a.out, exist_ok=True)
     dev = ("cuda" if torch.cuda.is_available() else "cpu")
-    d = np.load(a.data, allow_pickle=False)
+    # load_tensor == np.load for every single-file npz (families 2/3/4,
+    # unchanged); for family 5's sidecar layout it memory-maps X instead of
+    # decompressing 165.6 GB into RAM no box has. See ml/tensor_io.py.
+    from tensor_io import load_tensor, writable_copy
+    d = load_tensor(a.data, allow_pickle=False)
     X, months = d["X"], [str(m) for m in d["months"]]
+    if a.anomaly and isinstance(X, np.memmap) and not X.flags.writeable:
+        # anomaly_transform writes into X in place — deliberate, and cheap for
+        # an in-RAM array. A read-only map refuses it; an r+ map on the
+        # CANONICAL tensor would succeed and leave anomaly-space data where
+        # state-space data is documented, so the next run would z-score it
+        # again. The scratch copy is the only correct option, and it is disk,
+        # not RAM (chunked; the box needs the bytes free — 166 GB at daily,
+        # which is why the family-5 box wants >= 400 GB).
+        scratch = a.data[:-4] + "_scratch.npy"
+        print(f"X is a read-only map ({X.nbytes / 2**30:.1f} GiB) — writable "
+              f"scratch copy at {scratch} for the anomaly transform",
+              flush=True)
+        X = writable_copy(X, scratch)
+        import atexit
+        atexit.register(lambda: os.path.exists(scratch) and os.remove(scratch))
     lats, lons, chan = d["lats"], d["lons"], [str(c) for c in d["chan"]]
     T, H, W, C = X.shape
     print(f"X [T={T} H={H} W={W} C={C}] on {dev} · channels {chan}")

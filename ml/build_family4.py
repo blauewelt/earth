@@ -105,6 +105,19 @@ PENTAD_DAYS = 5
 START = dt.date(1982, 1, 1)
 END = dt.date(2024, 12, 31)
 
+# E-038: family 5 is THIS builder at days=1 — "build_family4.py with
+# PENTAD_DAYS = 1 and its own RECIPE_REV, not a copy" — so the cadence is a
+# parameter and everything family-specific hangs off it. The family-4 path
+# (days=5) is byte-identical to what built the tensors E-038a/b train on.
+CADENCE = {
+    5: dict(name="pentad", recipe="f4r1",
+            out="family4_na025_pentad.npz",
+            truth="truth_pentad.npz"),
+    1: dict(name="daily", recipe="f5r1",
+            out="family5_na025_daily.npz",
+            truth="truth_daily.npz"),
+}
+
 # ONE definition of the channel set, imported rather than restated.
 CHANS, LEVELS = f3.CHANS, f3.LEVELS
 C_BASE, C_RG, C_WIND, NC = f3.C_BASE, f3.C_RG, f3.C_WIND, f3.NC
@@ -118,28 +131,38 @@ def pentad_days(b):
     return [s + dt.timedelta(days=k) for k in range(PENTAD_DAYS)]
 
 
+def truth_path(days):
+    """Where this cadence's labels live. TRUTH_PENTAD stays the module-level
+    name for days=5 because the tests monkeypatch it; days=1 derives from the
+    same directory so a test that moves one moves both."""
+    if days == PENTAD_DAYS:
+        return TRUTH_PENTAD
+    return os.path.join(os.path.dirname(TRUTH_PENTAD), CADENCE[days]["truth"])
+
+
 # ---------------------------------------------------------------- base ----
-def load_pentad_base(pentad_dir):
+def load_pentad_base(pentad_dir, days=PENTAD_DAYS):
     """The aggregator's output, with the grid checked before anything else."""
+    cad = CADENCE[days]["name"]
     idx_path = os.path.join(pentad_dir, "index.npz")
     if not os.path.exists(idx_path):
         sys.exit(f"no index.npz in {pentad_dir} — run:\n"
                  f"  python3 ml/aggregate_cadence.py --hf-repo earth-tensors "
-                 f"--cadence pentad --out {pentad_dir} --bin-deg 0.25")
+                 f"--cadence {cad} --out {pentad_dir} --bin-deg 0.25")
     idx = np.load(idx_path)
-    if int(idx["cadence_days"]) != PENTAD_DAYS:
+    if int(idx["cadence_days"]) != days:
         sys.exit(f"{pentad_dir} is cadence_days={int(idx['cadence_days'])}, "
-                 f"not {PENTAD_DAYS} — this is the PENTAD builder")
+                 f"not {days} — this build is --days {days} ({cad})")
     if str(idx["epoch"]) != str(EPOCH):
         sys.exit(f"{pentad_dir} epoch {str(idx['epoch'])!r} != {str(EPOCH)!r} "
                  f"— the state and label axes would not share bins")
     if "lat" not in idx:
         sys.exit(f"{pentad_dir} was built without --bin-deg (native 1/12 deg "
-                 f"grid). Family 4 is a 0.25 deg tensor; rebuild with "
+                 f"grid). This is a 0.25 deg tensor; rebuild with "
                  f"--bin-deg 0.25 --grid-align point.")
     arrs = {}
     for v in ("uo", "vo", "mlotst", "zos"):
-        p = os.path.join(pentad_dir, f"pentad_mean_{v}.npy")
+        p = os.path.join(pentad_dir, f"{cad}_mean_{v}.npy")
         if not os.path.exists(p):
             sys.exit(f"missing {p}")
         arrs[v] = np.load(p, mmap_mode="r")
@@ -176,7 +199,7 @@ def check_grid(lats, lons):
 
 
 # ------------------------------------------------------------------ rg ----
-def fill_rg_pentad(X, bins, lats, lons):
+def fill_rg_pentad(X, bins, lats, lons, days=PENTAD_DAYS):
     """RG monthly -> ONE live pentad per month (E-034 §4), missing elsewhere.
 
     Returns the number of live pentads written. Reuses family-3's readers and
@@ -207,7 +230,11 @@ def fill_rg_pentad(X, bins, lats, lons):
     row_of = {b: i for i, b in enumerate(bins)}
 
     def live_row(y, m):
-        return row_of.get(bin_index(dt.date(y, m, 15), PENTAD_DAYS))
+        # ONE live bin per month at every cadence (E-034 §4): the bin holding
+        # the 15th. At days=5 that is one pentad in six; at days=1, one day in
+        # ~30 — which is why the rg term of the Chinchilla inventory does not
+        # scale with cadence (E-038 §2b).
+        return row_of.get(bin_index(dt.date(y, m, 15), days))
 
     def write(row, at, as_):
         for k in range(L):
@@ -245,7 +272,7 @@ def fill_rg_pentad(X, bins, lats, lons):
 
 
 # ---------------------------------------------------------------- wind ----
-def fill_wind_pentad(X, bins, lats, lons, min_days=3):
+def fill_wind_pentad(X, bins, lats, lons, min_days=3, days=PENTAD_DAYS):
     """NCEP R1 daily -> pentad mean + WITHIN-PENTAD std, channels 35..38.
 
     The std is why this cannot be derived from family-3's monthly channels: a
@@ -253,6 +280,8 @@ def fill_wind_pentad(X, bins, lats, lons, min_days=3):
     the days of each 5-day bin, which is a storminess measure rather than a
     seasonal one.
     """
+    if days == 1:
+        return fill_wind_daily(X, bins, lats, lons)
     import netCDF4 as ncdf
     daily = os.path.join(CACHE, "wind_daily")
     psl = ("https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis/"
@@ -331,17 +360,130 @@ def fill_wind_pentad(X, bins, lats, lons, min_days=3):
     return n
 
 
+def fill_wind_daily(X, bins, lats, lons, sigma_window=5, min_sigma_days=3):
+    """NCEP R1 daily -> the day's stress + a CENTRED 5-day rolling sigma.
+
+    THE SIGMA DECISION (E-038 daily arm). tau_x_std/tau_y_std are family 4's
+    within-pentad standard deviation — five daily values per bin. At days=1 a
+    within-bin sigma is IDENTICALLY ZERO (one value has no spread), so left
+    alone family 5 would ship two dead channels out of 39 and every downstream
+    number would quietly carry them.
+
+    The formulation chosen KEEPS FAMILY 4's MEANING rather than inventing a
+    new channel: sigma over the five calendar days CENTRED on the bin's
+    midpoint. For a pentad bin the centred window IS the bin — the same five
+    days — so at days=5 this is the identical quantity, and at days=1 it is
+    that quantity sampled every day instead of every fifth day. The two
+    cadences stay comparable by construction, which is what E-038's capacity x
+    cadence matrix needs. `tests/test_e034_family5.py` pins the identity: the
+    daily sigma at a pentad's midpoint equals the pentad tensor's sigma for
+    that bin.
+
+    Same estimator as family 4's: population (ddof=0), NaN-aware, written only
+    where >= 3 of the 5 window days are present (family 4's min_days). The
+    mean channels carry the day itself — a one-day bin's mean IS the day,
+    matching `aggregate_cadence --cadence daily` (min_days=1).
+
+    MEMORY, stated because the daily axis makes everything a memory question:
+    all per-day native fields are held at once — 15,710 days x 2 vars x 94x192
+    float32 = 2.3 GB — which buys the +-2-day windows across year boundaries
+    without a chunked walk. The interpolation to 0.25 deg happens per bin and
+    never materialises more than one field.
+    """
+    import netCDF4 as ncdf
+    daily = os.path.join(CACHE, "wind_daily")
+    psl = ("https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis/"
+           "surface_gauss")
+    thredds = ("https://psl.noaa.gov/thredds/fileServer/Datasets/"
+               "ncep.reanalysis/surface_gauss")
+    row_of = {b: i for i, b in enumerate(bins)}
+    half = sigma_window // 2
+    d_lo = bin_start(bins[0], 1) - dt.timedelta(days=half)
+    d_hi = bin_start(bins[-1], 1) + dt.timedelta(days=half)
+    years = list(range(d_lo.year, d_hi.year + 1))
+
+    fields = {}                      # date -> [u, v] native, sign-flipped
+    wy = wx = None
+    for y in years:
+        for ci, var in enumerate(("uflx", "vflx")):
+            path = os.path.join(daily, f"{var}.sfc.gauss.{y}.nc")
+            if not os.path.exists(path):
+                try:
+                    f3.fetch(f"{psl}/{var}.sfc.gauss.{y}.nc", path,
+                             mirrors=(f"{thredds}/{var}.sfc.gauss.{y}.nc",))
+                except Exception as e:                    # noqa: BLE001
+                    print(f"  ::warning:: wind {y} {var} unavailable "
+                          f"({str(e)[:80]}) — that year's wind is missing")
+                    continue
+            nc = ncdf.Dataset(path)
+            if wy is None:
+                wy = f3.lin_weights(np.array(nc.variables["lat"][:]), lats)
+                wx = f3.lin_weights(np.array(nc.variables["lon"][:]),
+                                    np.where(lons < 0, lons + 360.0, lons),
+                                    wrap_period=360.0)
+            tv = nc.variables["time"]
+            dates = ncdf.num2date(tv[:], tv.units,
+                                  only_use_cftime_datetimes=False)
+            vals = np.ma.filled(nc.variables[var][:], np.nan)
+            nc.close()
+            for i, dd in enumerate(dates):
+                d = dt.date(dd.year, dd.month, dd.day)
+                if d < d_lo or d > d_hi:
+                    continue
+                # sign flip here, once, exactly as the pentad path does it
+                fields.setdefault(d, [None, None])[ci] = \
+                    (-vals[i]).astype(np.float32)
+        print(f"  wind {y}: read", flush=True)
+
+    n = 0
+    for b in bins:
+        d0 = bin_start(b, 1)
+        f = fields.get(d0)
+        if f is None or f[0] is None or f[1] is None:
+            continue
+        win_days = [d0 + dt.timedelta(days=k) for k in range(-half, half + 1)]
+        r = row_of[b]
+        for ci in range(2):
+            stack = np.stack([fields[d][ci] for d in win_days
+                              if d in fields and fields[d][ci] is not None])
+            cnt = np.isfinite(stack).sum(0)
+            with np.errstate(invalid="ignore"), warnings_suppressed():
+                sd = np.nanstd(stack, axis=0)             # ddof=0, like f4
+            sd = np.where(cnt >= min_sigma_days, sd, np.nan)
+            X[r, :, :, C_BASE + C_RG + ci] = f3.interp2_nan(f[ci], wy, wx)
+            X[r, :, :, C_BASE + C_RG + 2 + ci] = f3.interp2_nan(sd, wy, wx)
+        n += 1
+    print(f"  wind: {n} days written (day value + centred {sigma_window}-day "
+          f"sigma, >= {min_sigma_days} days present)")
+    return n
+
+
+class warnings_suppressed:
+    """nanstd over an all-NaN cell warns; land is all-NaN by design."""
+
+    def __enter__(self):
+        import warnings
+        self._c = warnings.catch_warnings()
+        self._c.__enter__()
+        import warnings as w
+        w.simplefilter("ignore")
+
+    def __exit__(self, *exc):
+        return self._c.__exit__(*exc)
+
+
 # --------------------------------------------------------------- truth ----
-def truth_pentad(bins):
+def truth_pentad(bins, days=PENTAD_DAYS, path=None):
     """(row, transport) pairs on THIS axis, from build_truth_pentad.py."""
     out = {}
-    if not os.path.exists(TRUTH_PENTAD):
-        print(f"  ::warning:: {TRUTH_PENTAD} absent — run "
+    path = path or truth_path(days)
+    if not os.path.exists(path):
+        print(f"  ::warning:: {path} absent — run "
               f"ml/build_truth_pentad.py. No truth attached.")
         return out
-    d = np.load(TRUTH_PENTAD)
-    if str(d["epoch"]) != str(EPOCH) or int(d["pentad_days"]) != PENTAD_DAYS:
-        sys.exit(f"truth_pentad.npz has epoch {str(d['epoch'])!r}/"
+    d = np.load(path)
+    if str(d["epoch"]) != str(EPOCH) or int(d["pentad_days"]) != days:
+        sys.exit(f"{os.path.basename(path)} has epoch {str(d['epoch'])!r}/"
                  f"{int(d['pentad_days'])}d — refusing to attach labels from a "
                  f"different axis to a state tensor.")
     row_of = {b: i for i, b in enumerate(bins)}
@@ -355,7 +497,7 @@ def truth_pentad(bins):
     return out
 
 
-def missing_truth_keys(have):
+def missing_truth_keys(have, path=None):
     """Label keys the truth file OFFERS that a cached tensor does not carry.
 
     The recipe string is a claim about the CODE that built the tensor. It says
@@ -373,9 +515,11 @@ def missing_truth_keys(have):
     against, so a box that legitimately has no labels is not put into a
     rebuild loop.
     """
-    if not os.path.exists(TRUTH_PENTAD):
+    if path is None:
+        path = TRUTH_PENTAD
+    if not os.path.exists(path):
         return []
-    want = {k for k in np.load(TRUTH_PENTAD).files if k.startswith("truth_")}
+    want = {k for k in np.load(path).files if k.startswith("truth_")}
     if "truth_rapid" in want:
         want.add("rapid")            # the alias the trainer actually reads
     return sorted(want - set(have))
@@ -388,8 +532,13 @@ def main():
                     default=os.path.join(CACHE, "glorys_pentad"),
                     help="aggregate_cadence.py output (index.npz + "
                          "pentad_mean_<var>.npy)")
-    ap.add_argument("--out", default=OUT_NPZ)
-    ap.add_argument("--memmap", default=MEMMAP)
+    ap.add_argument("--days", type=int, default=PENTAD_DAYS,
+                    choices=sorted(CADENCE),
+                    help="bin width: 5 = family 4 (pentad), 1 = family 5 "
+                         "(daily). Everything family-specific — recipe, "
+                         "output name, truth file, storage layout — follows.")
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--memmap", default=None)
     ap.add_argument("--start", default=str(START))
     ap.add_argument("--end", default=str(END))
     ap.add_argument("--max-bins", type=int, default=0,
@@ -400,19 +549,31 @@ def main():
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--keep-memmap", action="store_true")
     a = ap.parse_args()
+    days = a.days
+    cad = CADENCE[days]
+    recipe = cad["recipe"]
+    if a.out is None:
+        a.out = os.path.join(os.path.dirname(OUT_NPZ), cad["out"])
+    if a.memmap is None:
+        a.memmap = a.out[:-4] + "_build.npy"
+    # Family 5 stores X as a bare .npy BESIDE the npz (tensor_io.save_tensor):
+    # 165.6 GB decompressed does not fit any box's RAM, and np.load on a
+    # compressed member allocates the whole array. The memmap the build fills
+    # is RENAMED into place, so the sidecar costs no second copy.
+    sidecar = days == 1
 
     y0, m0, d0 = (int(x) for x in a.start.split("-"))
     y1, m1, d1 = (int(x) for x in a.end.split("-"))
-    b_lo = bin_index(dt.date(y0, m0, d0), PENTAD_DAYS)
-    b_hi = bin_index(dt.date(y1, m1, d1), PENTAD_DAYS)
+    b_lo = bin_index(dt.date(y0, m0, d0), days)
+    b_hi = bin_index(dt.date(y1, m1, d1), days)
     bins = list(range(b_lo, b_hi + 1))
     if a.max_bins:
         bins = bins[:a.max_bins]
     T = len(bins)
 
-    print(f"axis      {bin_start(bins[0], PENTAD_DAYS)} .. "
-          f"{bin_start(bins[-1], PENTAD_DAYS)}  T={T} pentads "
-          f"(bins {bins[0]}..{bins[-1]})")
+    print(f"axis      {bin_start(bins[0], days)} .. "
+          f"{bin_start(bins[-1], days)}  T={T} {cad['name']} bins "
+          f"(bins {bins[0]}..{bins[-1]}, recipe {recipe})")
 
     if a.dry_run:
         H, W = 281, 481
@@ -425,7 +586,7 @@ def main():
         return
 
     print(f"base      {a.pentad_dir}")
-    idx, arrs = load_pentad_base(a.pentad_dir)
+    idx, arrs = load_pentad_base(a.pentad_dir, days)
     lats = np.asarray(idx["lat"], np.float32)
     lons = np.asarray(idx["lon"], np.float32)
     check_grid(lats, lons)
@@ -445,22 +606,23 @@ def main():
 
     if not a.force and os.path.exists(a.out):
         try:
-            cached = np.load(a.out)
+            from tensor_io import load_tensor
+            cached = load_tensor(a.out)
             prev, have = str(cached["recipe"]), set(cached.files)
         except Exception:                                 # noqa: BLE001
             prev, have = "unreadable", set()
-        lack = missing_truth_keys(have)
-        if prev == RECIPE_REV and not lack:
-            print(f"{a.out} already built by recipe {RECIPE_REV} — skipping "
+        lack = missing_truth_keys(have, truth_path(days))
+        if prev == recipe and not lack:
+            print(f"{a.out} already built by recipe {recipe} — skipping "
                   f"(--force to rebuild)")
             return
-        if prev == RECIPE_REV:
-            print(f"cached tensor is recipe {RECIPE_REV} but carries no "
+        if prev == recipe:
+            print(f"cached tensor is recipe {recipe} but carries no "
                   f"{lack} — rebuilding. It was built before the labels were "
                   f"published, and the recipe string cannot tell the two "
                   f"apart.")
         else:
-            print(f"cached tensor is recipe {prev!r}, want {RECIPE_REV!r} — "
+            print(f"cached tensor is recipe {prev!r}, want {recipe!r} — "
                   f"rebuilding")
 
     X = np.lib.format.open_memmap(a.memmap, mode="w+", dtype=np.float16,
@@ -500,11 +662,11 @@ def main():
     print(f"  ocean cells: {int(ocean.sum())}/{H * W}")
 
     print("rg channels (one live pentad per month) …", flush=True)
-    n_rg = fill_rg_pentad(X, bins, lats, lons)
+    n_rg = fill_rg_pentad(X, bins, lats, lons, days)
     print("wind channels (pentad mean + within-pentad std) …", flush=True)
-    n_wind = fill_wind_pentad(X, bins, lats, lons)
+    n_wind = fill_wind_pentad(X, bins, lats, lons, days=days)
     print("truth series …", flush=True)
-    truths = truth_pentad(bins)
+    truths = truth_pentad(bins, days)
 
     # ---- mask + stats, one slab pass -------------------------------------
     print("mask + stats pass …", flush=True)
@@ -551,8 +713,8 @@ def main():
     # Removing the failure mode beats guarding it (ml/CLAUDE.md §4.1); the
     # alternative was a cadence branch threaded through the loader.
     # `bin_index` remains the authoritative axis; `months` is a label.
-    months = np.array([f"{bin_start(b, PENTAD_DAYS).year:04d}-"
-                       f"{bin_start(b, PENTAD_DAYS).month:02d}" for b in bins])
+    months = np.array([f"{bin_start(b, days).year:04d}-"
+                       f"{bin_start(b, days).month:02d}" for b in bins])
     # train.py reads d["rapid"] (axis-index, value) pairs, the name family 3
     # writes. truth_pentad() already produced exactly that shape under
     # `truth_rapid`; alias it rather than compute it twice.
@@ -560,18 +722,27 @@ def main():
         truths.setdefault("rapid", truths["truth_rapid"])
 
     print(f"\nwriting {a.out} …", flush=True)
-    np.savez_compressed(
-        a.out, X=X, bin_index=np.array(bins, np.int64), months=months,
-        epoch=np.array(str(EPOCH)), pentad_days=np.array(PENTAD_DAYS),
-        lats=lats, lons=lons, chan=np.array(CHANS), norm=norm,
-        window=np.array("na025"), cadence=np.array("pentad"),
-        recipe=np.array(RECIPE_REV), n_rg_live=np.array(n_rg),
-        n_wind=np.array(n_wind), **truths)
+    meta = dict(bin_index=np.array(bins, np.int64), months=months,
+                epoch=np.array(str(EPOCH)), pentad_days=np.array(days),
+                lats=lats, lons=lons, chan=np.array(CHANS), norm=norm,
+                window=np.array("na025"), cadence=np.array(cad["name"]),
+                recipe=np.array(recipe), n_rg_live=np.array(n_rg),
+                n_wind=np.array(n_wind), **truths)
+    if sidecar:
+        # RENAME the build memmap into place — a copy would double 166 GB.
+        from tensor_io import save_tensor
+        xp = save_tensor(a.out, X, **meta)
+        print(f"wrote {a.out} + {os.path.basename(xp)}  "
+              f"[T={T} H={H} W={W} C={NC}] float16  "
+              f"{os.path.getsize(xp) / 1e9:.2f} GB (memmappable)  "
+              f"recipe={recipe}")
+        return
+    np.savez_compressed(a.out, X=X, **meta)
     del X
     if not a.keep_memmap:
         os.remove(a.memmap)
     print(f"wrote {a.out}  [T={T} H={H} W={W} C={NC}] float16  "
-          f"{os.path.getsize(a.out) / 1e9:.2f} GB  recipe={RECIPE_REV}")
+          f"{os.path.getsize(a.out) / 1e9:.2f} GB  recipe={recipe}")
 
 
 if __name__ == "__main__":

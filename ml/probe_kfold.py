@@ -200,7 +200,10 @@ def main():
     ap.add_argument("--probe", choices=["ridge", "mlp"], default="ridge",
                     help="read-out family; see kfold_r docstring")
     a = ap.parse_args()
-    d = np.load(a.data)
+    # load_tensor == np.load for a single-file npz; for family 5's sidecar it
+    # memory-maps X (see ml/tensor_io.py — 165.6 GB does not decompress).
+    from tensor_io import load_tensor
+    d = load_tensor(a.data)
     months = [str(m) for m in d["months"]]
     moy = np.array([int(m[5:7]) - 1 for m in months])
     yr = np.array([int(m[:4]) for m in months])
@@ -259,6 +262,17 @@ def main():
                      f"{os.path.basename(a.data)} has {d['X'].shape[-1]} — "
                      f"pass --data with the matching tensor.")
         X = d["X"]          # NpzFile decompresses fresh; .copy() doubled it
+        if isinstance(X, np.memmap) and not X.flags.writeable:
+            # Sidecar tensor (family 5): anomaly_transform and the in-place
+            # nan_to_num below both WRITE. The canonical map must never take
+            # those writes — a second probe would z-score anomaly-space data.
+            # A per-run scratch copy is disk, not RAM (tensor_io docstring).
+            from tensor_io import writable_copy
+            scratch = a.data[:-4] + "_probe_scratch.npy"
+            X = writable_copy(X, scratch, verbose=False)
+            import atexit
+            atexit.register(lambda p=scratch:
+                            os.path.exists(p) and os.remove(p))
         t_hold = np.array([m[:4] in set(ck["args"]["holdout_years"].split(","))
                            for m in months])
         lo_, hi_ = (float(v) for v in ck["args"]["holdout_lon"].split(","))

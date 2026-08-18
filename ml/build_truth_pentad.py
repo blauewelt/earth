@@ -189,8 +189,20 @@ def fc():
 
 
 def main():
+    # --days 1 is the family-5 axis (E-038 Phase B): same epoch, same code,
+    # bin = the calendar day. The knob mutates the module global because
+    # pentad_of/pentad_start close over it — one binning definition, not two.
+    import argparse
+    global PENTAD_DAYS, OUT
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--days", type=int, default=5, choices=(5, 1),
+                    help="bin width: 5 -> truth_pentad.npz, 1 -> truth_daily.npz")
+    a = ap.parse_args()
+    PENTAD_DAYS = a.days
+    if a.days == 1:
+        OUT = os.path.join(CACHE, "truth_daily.npz")
     os.makedirs(CACHE, exist_ok=True)
-    print(f"pentads: {PENTAD_DAYS}-day bins from {EPOCH} "
+    print(f"bins: {PENTAD_DAYS}-day bins from {EPOCH} "
           f"({365 // PENTAD_DAYS} per common year)")
     store = {"epoch": np.array(str(EPOCH)),
              "pentad_days": np.array(PENTAD_DAYS)}
