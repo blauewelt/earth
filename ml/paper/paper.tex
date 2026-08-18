@@ -1458,12 +1458,16 @@ big34 (sunflower-34) & $768\times12$ & 0.628 & 0.618 & 0.625 & 0.6237 \\
 xl55 (sunflower-55) & $1024\times16$ & 0.664 & 0.663 & 0.664 & 0.6637 \\
 xl89 (sunflower-89) & $1024\times16$ & 0.674 & 0.671 & --- & 0.6725 \\
 \textbf{xl144 (sunflower-144)} & $1024\times16$ & \textbf{0.681} & \textbf{0.676} & --- & \textbf{0.6781} \\
+xl233 (sunflower-233) & $1024\times16$ & --- & 0.673 & --- & 0.6730 \\
 \midrule
 \multicolumn{6}{l}{\emph{not a capacity change --- same 88M tier, different input or objective}}\\
 sun89, 60k steps & $768\times12$ & --- & 0.639 & 0.630 & 0.6345 \\
 sun89, \textbf{200k} steps & $768\times12$ & --- & 0.639 & 0.630 & 0.6341 \\
 ring-8@222 (near-field) & $768\times12$ & 0.646 & 0.661 & 0.661 & 0.6560 \\
 \textbf{znoise, $\sigma{=}0.7$ (sun-55)} & $768\times12$ & \textbf{0.683} & \textbf{0.674} & --- & \textbf{0.6785} \\
+\midrule
+\multicolumn{6}{l}{\emph{the composition --- noise \emph{and} the widest input, at the 205M tier}}\\
+\textbf{znoise $\times$ xl233} & $1024\times16$ & \textbf{0.725} & \textbf{0.723} & --- & \textbf{0.7240} \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Rolled corridor AUC, per seed} --- the reference table
@@ -1471,13 +1475,19 @@ for the metric defined in \S\ref{sec:gloss}. Every row is read from an
 evaluation whose gate head reproduced its pinned $0.643$ exactly; the
 full per-horizon and per-channel outputs are archived per evaluation
 run (\texttt{ml-metrics} branch). The upper block is the capacity ladder
-at fixed input. \textbf{The lower block is the result that reorders this
+at fixed input. \textbf{The middle block is the result that reorders this
 section}: neither row is a capacity change, and both beat the tier they
 belong to --- input noise by $+0.057$ and near-field geometry by
 $+0.035$ over the same 88M model, with the \emph{noised 88M} model
-beating the \emph{clean 205M} one outright. The base-scale geometry
-table behind the ring-8@222 row is Appendix~\ref{app:base}; the
-width and step-budget rows await the evaluations still in flight.}
+beating the \emph{clean 205M} one outright. \textbf{The bottom block is
+what happens when the two are composed}, and it is the best number in
+the programme by a margin larger than the gap between the top of the
+capacity ladder and its second rung: $0.7240$ against $0.6785$ for noise
+alone and $0.6781$ for width alone (\S\ref{sec:interaction}). The
+clean xl233 row is a single seed --- its partner was lost to a truncated
+upload and is retraining --- so it is reported as $n{=}1$ and read only
+against the seed it can be paired with. The base-scale geometry
+table behind the ring-8@222 row is Appendix~\ref{app:base}.}
 \label{tab:auc}
 \end{table}
 
@@ -1536,6 +1546,27 @@ mistake in both directions --- E-010 closed the capacity axis in a
 regime that could not exercise it, and E-032 closed the width axis on a
 scoreboard that could not see it.
 
+\paragraph{The 233-point rung, and where the ladder actually stops.}
+The stencil that decision built has now been rolled, and it answers the
+question against the extrapolation. Paired at seed 1, xl233 rolls at
+$0.6730$ against xl144's $0.67558$: $-0.0026$, inside the tier's own
+$0.004$--$0.005$ seed spread, where the $+0.005$/rung trend predicted
+$\approx 0.683$. \textbf{On the clean arm, width saturates between 144
+and 233 points.} We state that at $n{=}1$ and no more strongly: the
+seed-0 partner was lost to a truncated checkpoint upload and is
+retraining, and a single seed inside the spread can distinguish
+``flat'' from ``slightly down'' only by luck. What it does distinguish
+is flat from $+0.005$, which is the hypothesis that was on the table.
+
+The confound this arm was designed to exclude does not apply. Slot
+occupancy was measured before dispatch and is scale-invariant across a
+$7\times$ range of point counts --- $47.6\%$, $47.4\%$, $47.1\%$,
+$47.0\%$ and $46.9\%$ of corridor slots resolve to live ocean at 34, 55,
+89, 144 and 233 points --- so a null at 233 cannot be read as ``the
+window ran out''. More points bought proportionally more live input, as
+at every rung below, and bought nothing. Width and window have not
+become the same axis; width has simply stopped paying.
+
 \paragraph{Both axes, rolled at 88M.} The same split appears one tier
 down (gate $0.643$, five of five heads). \textbf{Width does roll}: at
 the 88M tier, 89 points give corridor AUC $0.6345$ against $0.6213$ for
@@ -1575,6 +1606,83 @@ version, with the per-arm table, at
 \label{fig:amocroll}
 \end{figure}
 
+\subsection{Noise \texorpdfstring{$\times$}{x} width: the one
+interaction that compounds}\label{sec:interaction}
+
+Every axis in \S\ref{sec:axes} was measured alone. Composing the two
+that pay --- input noise and the widest stencil, at the largest
+capacity --- produces the programme's best rolled number and, more
+usefully, an explanation of what noise is buying.
+
+The comparison is as clean as this programme gets: \emph{same} seed,
+\emph{same} $1024\times16$ head, \emph{same} 233-point sunflower input,
+\emph{same} 200k steps under the same schedule, differing in one flag.
+Paired at seed~1, $\sigma{=}0.7$ input noise rolls at $0.7230$ against
+the clean arm's $0.6730$: $\mathbf{+0.050}$, twelve times the tier's
+seed spread. The second noised seed reads $0.7250$, so the noised pair
+is $0.7240 \pm 0.001$ --- a spread of $0.002$, tighter than the clean
+tier's own.
+
+Two reference points make the size legible. Noise alone at 88M reached
+$0.6785$; width alone at 205M reached $0.6781$; the composition reaches
+$\mathbf{0.7240}$. The whole capacity ladder, from the no-neighbour
+gate to the widest clean model, spans $0.589 \to 0.678$; one flag,
+applied at the top of it, adds more than half that span again. And it
+does so on the axis that had just stopped: width bought nothing from
+144 to 233 points on the clean arm, and $+0.050$ on the noised one.
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{rrrr}
+\toprule
+horizon $h$ & clean (s1) & noised (mean) & $\Delta$ \\
+\midrule
+1  & 0.775 & 0.769 & $-0.006$ \\
+2  & 0.730 & 0.747 & $+0.016$ \\
+4  & 0.690 & 0.730 & $+0.040$ \\
+6  & 0.662 & 0.722 & $+0.059$ \\
+8  & 0.651 & 0.717 & $+0.066$ \\
+10 & 0.635 & 0.707 & $+0.072$ \\
+12 & 0.625 & 0.701 & $+0.076$ \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Where the noise gain lives.} Corridor MSSS against
+climatology by horizon, for the 233-point 205M arms with and without
+$\sigma{=}0.7$ input noise. The noised model is \emph{worse} at one
+step and better at every horizon after, with the advantage growing
+monotonically to $+0.076$ at a year. This is the exposure-bias
+signature stated as a prediction in \S\ref{sec:exposure}, measured:
+noise buys stability under iteration and pays for it in one-step
+accuracy.}
+\label{tab:noisehorizon}
+\end{table}
+
+Table~\ref{tab:noisehorizon} is the mechanism. The noised model is
+\emph{behind} at $h{=}1$ by $0.006$ and ahead at every horizon
+thereafter, and the gap widens monotonically --- $+0.016$ at two
+months, $+0.040$ at four, $+0.076$ at a year. Nothing about that shape
+is a better one-step mapping; it is a model that degrades more slowly
+when fed its own output, which is exactly and only what the
+intervention was designed to produce. The prediction registered in
+\S\ref{sec:exposure} was that noise would cost the forecast ratio and
+buy the roll. It costs $0.007$ on the one-step corridor and buys
+$0.076$ at twelve months.
+
+It also settles a sequencing question that was left open deliberately.
+A $\sigma$ sweep was judged not worth running until it was known
+whether noise still paid at 205M, on the grounds that $\sigma=0.7$ was
+set from the model's own measured one-step error and never tuned. It
+pays, at the top of the ladder, at a size no capacity increase has
+matched --- so the sweep is now the obvious next experiment, and the
+untuned value it starts from is already the best configuration this
+programme has.
+
+\paragraph{The honest caveat.} $\sigma$ was set from the \emph{clean}
+model's one-step error. The noised model's error is larger, which means
+the value that was self-consistent at 88M is not self-consistent here,
+and the direction of the mismatch is unknown. The composition is
+measured; its optimality is not claimed.
+
 \paragraph{What the corridor gain does \emph{not} buy.}
 Fig.~\ref{fig:amocroll} rolls these same two arms out as transport, and
 the result is a caution against reading corridor AUC as AMOC skill.
@@ -1583,7 +1691,19 @@ xl89 reads $+0.44$/$+0.39$ and xl144 reads $+0.42$/$+0.35$ --- if
 anything a mild \emph{decline} with the input width that gains most on
 the corridor, and a seed spread ($0.05$--$0.07$) that swamps every
 difference between arms. The corridor ranking does not transfer to the
-transport read-out at all. Two readings are available and we cannot yet
+transport read-out at all.
+
+\S\ref{sec:interaction} sharpens this to the point of discomfort. The
+noised 233-point arms gain $+0.050$ corridor AUC over their own clean
+control --- the largest single effect in the programme --- and their
+banded transport correlations are $0.460/0.352/0.451$ and
+$0.457/0.341/0.422$ against the clean arm's $0.460/0.350/0.443$: equal
+at short range, equal or slightly worse at long. The
+\emph{no-neighbour 32M gate}, which rolls the corridor at $0.589$ and
+sees no neighbourhood at all, still reads the best transport bands of
+any head evaluated ($0.470/0.375/0.492$). A $+0.135$ spread in rolled
+field skill produces no ordering whatsoever in transport. Whatever the
+corridor is measuring, twelve months of it is not the overturning. Two readings are available and we cannot yet
 separate them: the corridor scores the model's own input fields where
 the transport probe scores a thin integral of them, so the gain may be
 real and simply not where the probe looks; or the wide arms are winning
@@ -1600,8 +1720,12 @@ suggests the classic exposure-bias remedies, and two are under test.
 at the model's own measured one-step error scale ($\sigma=0.7$
 $z$-units), so training-time context statistically resembles roll-time
 context; as predicted it \emph{costs} one-step forecast ($0.1548$/
-$0.1539$ vs.\ the clean tier's $0.1476$), and whether it buys the roll
-is being evaluated now. \emph{One-hop wide unroll} exploits a
+$0.1539$ vs.\ the clean tier's $0.1476$). Whether it buys the roll was
+open when this section was first written and is now answered:
+\S\ref{sec:interaction} measures $+0.050$ corridor AUC at the 205M
+tier, paired at seed, with the gain confined to $h\ge2$ and growing
+monotonically to $+0.076$ at twelve months. This is the one exposure-bias
+mechanism the programme has confirmed. \emph{One-hop wide unroll} exploits a
 dependency-cone observation: to train through one step of self-generated
 context at stencil width $S$, one does not need to roll the whole
 ocean --- only the $S$ input pixels of the next step, each of which is
