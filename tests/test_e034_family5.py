@@ -33,6 +33,19 @@ What is asserted:
   6. **truth_daily.npz attaches on the daily axis** with the `rapid` alias the
      trainer reads.
 
+E-041 adds recipe r2 (the appended `sst` channel) at both cadences, and two
+more checks, again about a relationship rather than a value:
+
+  7. **r1 is BIT-IDENTICAL inside r2 on the daily path too** — the sidecar
+     layout means family 5's X is written and read back through a different
+     code path from family 4's npz, so the appending is pinned here as well.
+  8. **THE CADENCE IDENTITY FOR SST**: the pentad tensor's sst equals the
+     MEAN OF THE FIVE daily tensors' sst for the same bin, and a single day
+     does not equal the pentad value. Family 4 aggregates SST where family 5
+     samples it, so if this drifts the two cadences are carrying different
+     fields under one channel name — the same failure the wind-sigma
+     identity (check 4) exists to catch, from the other direction.
+
     python3 tests/test_e034_family5.py
 """
 import datetime as dt
@@ -51,7 +64,7 @@ import build_family3 as f3                                   # noqa: E402
 from tensor_io import load_tensor                            # noqa: E402
 from test_e034_family4 import (EPOCH, LATS, LONS, H, W,      # noqa: E402
                                START, END, write_fake_base025, write_rg,
-                               write_wind)
+                               write_sst, write_wind)
 
 DBINS = list(range((START - EPOCH).days, (END - EPOCH).days + 1))
 PBINS = list(range((START - EPOCH).days // 5, (END - EPOCH).days // 5 + 1))
@@ -110,14 +123,14 @@ def write_truth_daily(cache):
     return inside
 
 
-def run_build(cache, src_dir, out, days):
+def run_build(cache, src_dir, out, days, extra=()):
     f4.CACHE = cache
     f3.CACHE = cache
     f4.TRUTH_PENTAD = os.path.join(cache, "truth_pentad.npz")
     argv = sys.argv
     sys.argv = ["build", "--days", str(days), "--pentad-dir", src_dir,
                 "--out", out, "--memmap", os.path.join(cache, f"b{days}.npy"),
-                "--start", str(START), "--end", str(END)]
+                "--start", str(START), "--end", str(END), *extra]
     try:
         f4.main()
     finally:
@@ -139,7 +152,11 @@ def main():
     write_pentad_from_daily(os.path.join(tmp, "pentad"), daily_vals)
     write_fake_base025(cache, LATS, LONS)
     write_rg(cache, rng)
-    write_wind(cache, rng)
+    # The daily path's centred +-2-day sigma window reaches back into
+    # December 2003, so that year is part of the fixture. Without it the
+    # builder falls through to f3.fetch and a unit test downloads 120 MB
+    # from PSL — which is also how it fails when that transfer truncates.
+    write_wind(cache, rng, years=(2003, 2004))
     truth_row_bin = write_truth_daily(cache)
     # family 4's truth too, so ITS build stays on its usual path
     np.savez(os.path.join(cache, "truth_pentad.npz"),
@@ -228,7 +245,60 @@ def main():
     print("  6. truth_daily attaches on the daily axis, out-of-axis labels "
           "dropped, `rapid` alias present")
 
-    print("\ntests/test_e034_family5.py: all 6 checks passed")
+    # =================== E-041: recipe r2 at both cadences ================
+    sst_dir = os.path.join(tmp, "sst_na025")
+    write_sst(sst_dir, PBINS, 5)
+    r2 = ("--rev", "r2", "--sst-dir", sst_dir)
+    out5b = os.path.join(tmp, "family5_r2.npz")
+    out4b = os.path.join(tmp, "family4_r2.npz")
+    run_build(cache, os.path.join(tmp, "daily"), out5b, days=1, extra=r2)
+    run_build(cache, os.path.join(tmp, "pentad"), out4b, days=5, extra=r2)
+    e5, e4 = load_tensor(out5b), np.load(out4b)
+
+    # ---- 7: r1 is bit-identical inside r2, through the sidecar path -------
+    assert str(e5["recipe"]) == "f5r2" and str(e4["recipe"]) == "f4r2"
+    assert [str(c) for c in e5["chan"]] == list(f3.CHANS) + ["sst"]
+    assert e5["X"].shape[3] == 40 and isinstance(e5["X"], np.memmap), \
+        "the r2 daily tensor lost the sidecar layout"
+    x1, x2 = np.asarray(d5["X"]), np.asarray(e5["X"])
+    assert x1.dtype == x2.dtype == np.float16
+    assert np.array_equal(x1, x2[..., :f4.NC], equal_nan=True), \
+        "appending sst changed one of the 39 channels on the daily path"
+    assert np.array_equal(np.asarray(d5["norm"]),
+                          np.asarray(e5["norm"])[:f4.NC])
+    print(f"  7. daily r2: {e5['X'].shape[3]} channels with `sst` last, "
+          f"recipe f5r2, still memmapped — and channels 0..{f4.NC - 1} are "
+          f"BIT-IDENTICAL to the r1 daily tensor")
+
+    # ---- 8: the cadence identity for sst ---------------------------------
+    r5 = denorm(e5)
+    r4 = denorm(e4)
+    c = f4.C_SST
+    day_of = {b: i for i, b in enumerate(DBINS)}
+    pent_of = {b: i for i, b in enumerate(e4["bin_index"].tolist())}
+    checked = 0
+    for pb in PBINS:
+        rows = [day_of[dd] for dd in range(pb * 5, pb * 5 + 5) if dd in day_of]
+        if len(rows) < 5 or pb not in pent_of:
+            continue
+        want = np.nanmean(np.stack([r5[i, :, :, c] for i in rows]), axis=0)
+        got = r4[pent_of[pb], :, :, c]
+        ok = np.isfinite(want) & np.isfinite(got)
+        assert ok.sum() > 20, f"pentad {pb}: only {int(ok.sum())} cells"
+        assert np.allclose(got[ok], want[ok], atol=0.05), (
+            f"pentad {pb}: the pentad sst is not the mean of the five daily "
+            f"sst values (max err {np.max(np.abs(got[ok] - want[ok])):.3f}) — "
+            f"the two cadences carry different fields under one name")
+        mid = r5[day_of[pb * 5 + 2], :, :, c]
+        assert not np.allclose(mid[ok], got[ok], atol=0.05), (
+            "one day equals the pentad mean — the fixture cannot tell a "
+            "sample from a mean, so the check above cannot fail")
+        checked += 1
+    assert checked >= 5, f"only {checked} pentads checked"
+    print(f"  8. sst cadence identity at {checked} pentads: the pentad value "
+          f"is the mean of the five daily values, and one day is not")
+
+    print("\ntests/test_e034_family5.py: all 8 checks passed")
 
 
 if __name__ == "__main__":

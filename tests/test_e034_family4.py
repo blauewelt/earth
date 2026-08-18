@@ -43,14 +43,41 @@ regression:
   6. **Truth attaches by ROW on this axis**, and labels outside it are
      dropped rather than clamped to an edge bin.
 
+E-041 added recipe r2 — the same tensor with OISST SST appended as channel
+40 — and with it four checks that are all about the r1/r2 relationship,
+because the safety argument for shipping a new recipe is that the old one
+did not move:
+
+ 10. **r1 is BIT-IDENTICAL inside r2.** Built from the same fixtures, the
+     r2 tensor's channels 0..38 equal the r1 tensor's float16 for float16,
+     NaN pattern included, and so do `norm`, `months`, the axis and the
+     labels. Appending cannot perturb an existing channel; this is what
+     makes an r1 result and an r2 result comparable at all.
+ 11. **The pentad value is the NaN-AWARE mean of the bin's days**, checked
+     against an analytic field, with one bin deliberately losing two of its
+     five days by the two mechanisms the artifact has (a masked source day
+     and a has_data=False gap). Land stays a missing token: the -32768
+     sentinel decodes to -327.68 degC and must never reach the arithmetic.
+ 12. **SST is live before 2004, where rg_t cannot be.** On a 1990 axis every
+     bin carries SST and all 32 rg channels are missing — that hole (22 of
+     the 43 years with no temperature at all) is the reason for the channel.
+ 13. **The recipe guard refuses an r1 cache for an r2 build**, and still
+     reuses an r2 one. A recipe string is a claim about the CODE; a 39-
+     channel tensor sitting under r2's name would otherwise be loaded.
+ 14. **Each recipe's output name IS its ml-train.yml `tensor` value**, read
+     out of the workflow — $TENSOR is derived from that input verbatim, so a
+     rename here makes a run that cannot find the tensor it just built.
+
     python3 tests/test_e034_family4.py
 """
 import contextlib
 import datetime as dt
 import io
 import os
+import shutil
 import sys
 import tempfile
+import warnings
 
 import numpy as np
 
@@ -86,12 +113,13 @@ START, END = dt.date(2004, 1, 1), dt.date(2004, 2, 29)
 BINS = list(range(pentad_of(START), pentad_of(END) + 1))
 
 
-def write_pentad_dir(path, rng):
+def write_pentad_dir(path, rng, bins=None):
     """A miniature aggregate_cadence.py output."""
+    bins = BINS if bins is None else bins
     os.makedirs(path, exist_ok=True)
     vals = {}
     for v in ("uo", "vo", "mlotst", "zos"):
-        a = rng.normal(size=(len(BINS), H, W)).astype(np.float32)
+        a = rng.normal(size=(len(bins), H, W)).astype(np.float32)
         if v == "mlotst":
             a = np.abs(a) * 200 + 20            # a depth in metres, positive
         # a fixed land mask, so the ocean mask has something to find
@@ -99,8 +127,8 @@ def write_pentad_dir(path, rng):
         np.save(os.path.join(path, f"pentad_mean_{v}.npy"), a)
         vals[v] = a
     np.savez(os.path.join(path, "index.npz"),
-             bin_index=np.array(BINS, np.int64),
-             has_data=np.ones(len(BINS), bool),
+             bin_index=np.array(bins, np.int64),
+             has_data=np.ones(len(bins), bool),
              epoch=np.array(str(EPOCH)), cadence_days=np.array(PD),
              stat=np.array("mean"), min_days=np.array(3),
              bin_deg=np.array(0.25), grid_align=np.array("point"),
@@ -141,30 +169,106 @@ def write_rg(cache, rng):
         d.close()
 
 
-def write_wind(cache, rng):
-    """NCEP R1 daily momentum flux in PSL's schema, for 2004."""
+def write_wind(cache, rng, years=(2004,), ndays=90):
+    """NCEP R1 daily momentum flux in PSL's schema.
+
+    `years` is a tuple because the DAILY path (family 5) reads a centred
+    +-2-day window, so its first bins reach back into the previous
+    December. Those earlier years are written WHOLE; only the last year —
+    the one the checks index into — is truncated to `ndays`, and it is that
+    year's fields that come back. Writing them is not a nicety: without the
+    December the builder falls through to `f3.fetch`, which puts a 60 MB
+    download of somebody else's server inside a unit test, and a truncated
+    transfer there fails as `NetCDF: HDF error` on a file this fixture is
+    supposed to own.
+    """
     import netCDF4 as nc
     daily = os.path.join(cache, "wind_daily")
     os.makedirs(daily, exist_ok=True)
     g_lat = np.linspace(88.0, -88.0, 94)             # descending, like gaussian
     g_lon = np.arange(0.0, 360.0, 1.875)
-    ndays = 90
     fields = {}
-    for var in ("uflx", "vflx"):
-        d = nc.Dataset(os.path.join(daily, f"{var}.sfc.gauss.2004.nc"), "w")
-        d.createDimension("time", ndays)
-        d.createDimension("lat", len(g_lat))
-        d.createDimension("lon", len(g_lon))
-        t = d.createVariable("time", "f8", ("time",))
-        t.units = "days since 2004-01-01 00:00:0.0"
-        t[:] = np.arange(ndays, dtype=float)
-        d.createVariable("lat", "f4", ("lat",))[:] = g_lat
-        d.createVariable("lon", "f4", ("lon",))[:] = g_lon
-        a = rng.normal(size=(ndays, len(g_lat), len(g_lon))).astype(np.float32)
-        d.createVariable(var, "f4", ("time", "lat", "lon"))[:] = a
-        d.close()
-        fields[var] = a
+    for y in years:
+        n = ndays if y == years[-1] else 366
+        for var in ("uflx", "vflx"):
+            d = nc.Dataset(os.path.join(daily, f"{var}.sfc.gauss.{y}.nc"), "w")
+            d.createDimension("time", n)
+            d.createDimension("lat", len(g_lat))
+            d.createDimension("lon", len(g_lon))
+            t = d.createVariable("time", "f8", ("time",))
+            t.units = f"days since {y}-01-01 00:00:0.0"
+            t[:] = np.arange(n, dtype=float)
+            d.createVariable("lat", "f4", ("lat",))[:] = g_lat
+            d.createVariable("lon", "f4", ("lon",))[:] = g_lon
+            a = rng.normal(size=(n, len(g_lat), len(g_lon))).astype(np.float32)
+            d.createVariable(var, "f4", ("time", "lat", "lon"))[:] = a
+            d.close()
+            if y == years[-1]:
+                fields[var] = a
     return g_lat, g_lon, fields
+
+
+# E-041. `ml/fetch_sst_na.py`'s contract, restated here as a FIXTURE rather
+# than imported, so a change to that contract breaks this test instead of
+# silently travelling through it: int16 (NDAYS, H, W), day-major, scale
+# 0.01 degC, nodata -32768, index.npz carrying bin_index (days since the
+# epoch, contiguous), has_data, lat, lon.
+SST_SCALE = 0.01
+SST_NODATA = -32768
+SST_LAND = (slice(3, 5), slice(6, 8))     # ocean in the tensor, land in OISST
+
+
+def sst_degc(dayno, day0):
+    """The fixture's field: exact multiples of 0.01 degC, so the int16
+    round trip is lossless and every expected value below is analytic.
+
+    The `t % 4` term is what makes the field NON-LINEAR in the day, and it
+    is load-bearing. A field linear in time has mean(5 consecutive days) ==
+    the middle day exactly, so every "a mean is not a sample" check — this
+    file's 3-of-5 check and family 5's cadence identity — would pass on a
+    builder that took one day and called it a mean. Period 4 against a
+    5-day bin never repeats a phase, so no bin is a symmetric special case.
+    """
+    t = float(dayno - day0)
+    iy = np.arange(H)[:, None].astype(np.float64)
+    ix = np.arange(W)[None, :].astype(np.float64)
+    return 15.0 + 0.25 * t + 0.5 * (t % 4) + 0.10 * iy + 0.05 * ix
+
+
+def write_sst(path, bins, days=PD, nodata_days=(), gap_days=()):
+    """A miniature ml/fetch_sst_na.py output over the days of `bins`.
+
+    `nodata_days` are days whose CELLS are all the nodata sentinel with
+    has_data True (a source day the analysis masked); `gap_days` are days
+    with has_data False as well (fetch_sst_na's posture for a year that could
+    not be downloaded). Both must be excluded from the pentad mean, and they
+    are written as two separate mechanisms because they fail differently: the
+    sentinel decodes to -327.68 degC if it ever reaches the arithmetic.
+    """
+    os.makedirs(path, exist_ok=True)
+    d0, d1 = bins[0] * days, bins[-1] * days + days - 1
+    idx = np.arange(d0, d1 + 1, dtype=np.int64)
+    arr = np.zeros((len(idx), H, W), np.int16)
+    has = np.ones(len(idx), bool)
+    dec = np.full((len(idx), H, W), np.nan, np.float64)   # what it decodes to
+    for i, dayno in enumerate(idx):
+        f = sst_degc(int(dayno), d0)
+        enc = np.round(f / SST_SCALE).astype(np.int16)
+        enc[SST_LAND] = SST_NODATA
+        if int(dayno) in nodata_days or int(dayno) in gap_days:
+            enc[:] = SST_NODATA
+            has[i] = int(dayno) not in gap_days
+        arr[i] = enc
+        d = np.where(enc == SST_NODATA, np.nan, enc * SST_SCALE)
+        dec[i] = np.where(has[i], d, np.nan)
+    np.save(os.path.join(path, "sst_daily_na.npy"), arr)
+    np.savez(os.path.join(path, "index.npz"),
+             bin_index=idx, has_data=has,
+             epoch=np.array(str(EPOCH)), cadence_days=np.array(1),
+             scale=np.array(SST_SCALE), nodata=np.array(SST_NODATA),
+             lat=LATS, lon=LONS,
+             source=np.array("synthetic (tests/test_e034_family4.py)"))
+    return dict(bin_index=idx, decoded=dec, day0=d0)
 
 
 def write_truth(cache):
@@ -180,7 +284,7 @@ def write_truth(cache):
 
 
 # ------------------------------------------------------------------ run --
-def run_build(cache, pentad_dir, out, extra=()):
+def run_build(cache, pentad_dir, out, extra=(), start=None, end=None):
     """Call the real main() in-process with the module's caches redirected."""
     f4.CACHE = cache
     f3.CACHE = cache
@@ -188,7 +292,8 @@ def run_build(cache, pentad_dir, out, extra=()):
     argv = sys.argv
     sys.argv = ["build_family4.py", "--pentad-dir", pentad_dir, "--out", out,
                 "--memmap", os.path.join(cache, "build.npy"),
-                "--start", str(START), "--end", str(END), *extra]
+                "--start", str(start or START), "--end", str(end or END),
+                *extra]
     try:
         f4.main()
     finally:
@@ -384,7 +489,165 @@ def main():
     print("  9. an already-built tensor skips even when the free-space guard "
           "would refuse a fresh build (run #391)")
 
-    print("\ntests/test_e034_family4.py: all 9 checks passed")
+    # ======================= E-041: recipe r2, the sst channel ============
+    # r1 is everything above and MUST NOT MOVE — #386/#387 are training on it
+    # and every number in EXPERIMENTS.md was measured on it. So r2 is built
+    # from the SAME fixtures and compared against the r1 tensor already on
+    # disk, channel by channel.
+    sst_dir = os.path.join(tmp, "sst_na025")
+    # bin BINS[4] loses two of its five days: one masked at the source
+    # (has_data True, cells nodata) and one whole-day gap (has_data False).
+    dead_bin = BINS[4]
+    # days 0 and 1, deliberately NOT a symmetric pair: the fixture's field
+    # is linear in the day, so dropping days 1 and 3 would leave the 3-day
+    # mean numerically equal to the 5-day mean and the check could not fail.
+    nodata_day = dead_bin * PD + 0
+    gap_day = dead_bin * PD + 1
+    sst = write_sst(sst_dir, BINS, PD, nodata_days=(nodata_day,),
+                    gap_days=(gap_day,))
+    out_r2 = os.path.join(tmp, "family4_r2.npz")
+    run_build(cache, pentad_dir, out_r2,
+              extra=("--rev", "r2", "--sst-dir", sst_dir))
+    d2 = np.load(out_r2)
+    raw2 = np.asarray(d2["X"], np.float32) * d2["norm"][:, 1] + d2["norm"][:, 0]
+
+    # ---- 10: r2 = 40 channels, `sst` last, and r1 UNTOUCHED ---------------
+    assert [str(c) for c in d2["chan"]] == list(f3.CHANS) + ["sst"], \
+        f"r2 channel set is {[str(c) for c in d2['chan']]}"
+    assert d2["X"].shape[3] == 40 and str(d2["recipe"]) == "f4r2"
+    x1 = np.asarray(np.load(out)["X"])            # the r1 tensor, float16
+    x2 = np.asarray(d2["X"])
+    assert x1.dtype == x2.dtype == np.float16
+    assert np.array_equal(x1, x2[..., :f3.NC], equal_nan=True), \
+        "appending sst CHANGED one of the 39 published channels — the whole " \
+        "safety argument for r1/r2 comparability is that it cannot"
+    assert np.array_equal(d2["norm"][:f3.NC], np.load(out)["norm"]), \
+        "the per-channel z-score of the 39 moved when a 40th was appended"
+    for k in ("months", "bin_index", "lats", "lons", "truth_rapid", "rapid"):
+        assert np.array_equal(np.load(out)[k], d2[k]), f"{k} differs"
+    print(f"  10. r2: 40 channels with `sst` last, recipe f4r2 — and "
+          f"channels 0..{f3.NC - 1} are BIT-IDENTICAL to the r1 tensor "
+          f"(float16, NaN pattern included)")
+
+    # ---- 11: the pentad value is the NaN-AWARE 5-day mean -----------------
+    c = f4.C_SST
+    day_row = {int(b): i for i, b in enumerate(sst["bin_index"])}
+    ocean2 = np.isfinite(raw2[0, :, :, 0])
+    for r, b in enumerate(bins):
+        with warnings.catch_warnings():          # an all-nodata cell is a
+            warnings.simplefilter("ignore")      # missing token, not a bug
+            want = np.nanmean(
+                np.stack([sst["decoded"][day_row[b * PD + k]]
+                          for k in range(PD)]), axis=0)
+        got = raw2[r, :, :, c]
+        m = ocean2 & np.isfinite(want)
+        assert m.any(), f"bin {b}: nothing to compare"
+        assert np.allclose(got[m], want[m], atol=0.02), (
+            f"bin {b}: sst is not the NaN-aware 5-day mean "
+            f"(max err {np.max(np.abs(got[m] - want[m])):.3f})")
+        assert not np.isfinite(got[ocean2 & ~np.isfinite(want)]).any(), \
+            f"bin {b}: a cell with no valid day carries a value"
+    # the doctored bin, ANALYTICALLY: the mean of days 0, 2, 4 only, and
+    # nowhere near the sentinel (-327.68) or the all-five mean.
+    rr = bins.index(dead_bin)
+    cell = (6, 3)
+    good = [dead_bin * PD + k for k in (2, 3, 4)]
+    want3 = np.mean([sst_degc(dd, sst["day0"])[cell] for dd in good])
+    want5 = np.mean([sst_degc(dead_bin * PD + k, sst["day0"])[cell]
+                     for k in range(PD)])
+    got1 = float(raw2[rr, cell[0], cell[1], c])
+    assert abs(got1 - want3) < 0.02, \
+        f"a bin with 2 nodata days reads {got1:.3f}, want {want3:.3f} " \
+        f"(the mean of the OTHER three)"
+    assert abs(want3 - want5) > 0.02, \
+        "the fixture cannot distinguish a 3-day mean from a 5-day mean"
+    assert np.isfinite(raw2[:, :, :, c]).any()
+    land_ok = ~np.isfinite(raw2[:, SST_LAND[0], SST_LAND[1], c])
+    assert land_ok.all(), \
+        "OISST land/nodata decoded to a temperature instead of a missing token"
+    print(f"  11. sst is the NaN-aware {PD}-day mean over every bin; the bin "
+          f"with one masked and one gap day reads {got1:.3f} degC (the mean "
+          f"of its 3 valid days, not {want5:.3f} and not the sentinel), and "
+          f"nodata cells stay missing")
+
+    # ---- 12: SST is live BEFORE 2004, where rg_t cannot be ----------------
+    # The reason for the channel (E-041): the tensor's only other temperature
+    # is Argo rg_t, whose product starts in 2004 (fill_rg_pentad walks
+    # `y, m = 2004 + k // 12, ...`), so 1982-2003 carries none at all.
+    START90, END90 = dt.date(1990, 1, 1), dt.date(1990, 2, 28)
+    B90 = list(range(pentad_of(START90), pentad_of(END90) + 1))
+    p90 = os.path.join(tmp, "pentad90")
+    write_pentad_dir(p90, rng, bins=B90)
+    # 1989 as well: the pentad holding 1990-01-01 STARTS on 1989-12-30, so
+    # fill_wind_pentad reads both years, and a year the fixture does not own
+    # is a year this test downloads from PSL.
+    write_wind(cache, rng, years=(1989, 1990))
+    sst90 = os.path.join(tmp, "sst90")
+    write_sst(sst90, B90, PD)
+    out90 = os.path.join(tmp, "family4_1990_r2.npz")
+    run_build(cache, p90, out90, extra=("--rev", "r2", "--sst-dir", sst90),
+              start=START90, end=END90)
+    d90 = np.load(out90)
+    raw90 = np.asarray(d90["X"], np.float32) * d90["norm"][:, 1] + d90["norm"][:, 0]
+    rg_slice = raw90[:, :, :, f3.C_BASE:f3.C_BASE + f3.C_RG]
+    assert int(d90["n_rg_live"]) == 0 and not np.isfinite(rg_slice).any(), \
+        "the 1990 fixture has live rg — it cannot test the hole it is for"
+    live_sst = [r for r in range(len(B90))
+                if np.isfinite(raw90[r, :, :, f4.C_SST]).any()]
+    assert live_sst == list(range(len(B90))), \
+        f"sst live in {len(live_sst)}/{len(B90)} pre-2004 bins, want all"
+    assert int(d90["n_sst"]) == len(B90)
+    print(f"  12. on a 1990 axis every one of the {len(B90)} bins carries "
+          f"sst while all {f3.C_RG} rg channels are missing tokens — the "
+          f"22-year temperature hole is exactly what the channel fills")
+
+    # ---- 13: the recipe guard refuses an r1 cache for an r2 build ---------
+    # A recipe string is a claim about the CODE that wrote the file. An r1
+    # tensor sitting where r2 is wanted has 39 channels and no sst; reusing
+    # it would train a 40-channel experiment on a 39-channel tensor, or
+    # (worse) skip the build and load the wrong file entirely.
+    out_guard = os.path.join(tmp, "guard_r2.npz")
+    shutil.copy(out, out_guard)                   # an r1 tensor, r2's name
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        run_build(cache, pentad_dir, out_guard,
+                  extra=("--rev", "r2", "--sst-dir", sst_dir))
+    said = buf.getvalue()
+    assert "cached tensor is recipe 'f4r1', want 'f4r2'" in said, \
+        f"the r1 cache was not refused for an r2 build:\n{said}"
+    assert "already built" not in said
+    dg = np.load(out_guard)
+    assert str(dg["recipe"]) == "f4r2" and dg["X"].shape[3] == 40, \
+        "the guard printed a rebuild and left the r1 tensor in place"
+    # and the converse: an r2 tensor is not rebuilt by an r2 build
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        run_build(cache, pentad_dir, out_guard,
+                  extra=("--rev", "r2", "--sst-dir", sst_dir))
+    assert "already built by recipe f4r2" in buf.getvalue(), \
+        "an r2 cache is not being reused — every run would rebuild 33 GB"
+    print("  13. an r1 cache is REFUSED for an r2 build (and rebuilt as 40 "
+          "channels); an r2 cache is still reused")
+
+    # ---- 14: the builder's output names ARE the dispatch values ----------
+    # ml-train.yml derives $TENSOR as ml/cache/<inputs.tensor>.npz, so a
+    # rename here silently produces a run whose provenance step cannot find
+    # its own tensor. Read the workflow rather than trusting the comment.
+    wf = open(os.path.join(HERE, "..", ".github", "workflows",
+                           "ml-train.yml")).read()
+    for days, rev, value in ((5, "r2", "family4_na025_pentad_r2"),
+                             (1, "r2", "family5_na025_daily_r2"),
+                             (5, "r1", "family4_na025_pentad"),
+                             (1, "r1", "family5_na025_daily")):
+        assert f4.CADENCE[days]["revs"][rev]["out"] == value + ".npz", \
+            f"{days}d/{rev} writes {f4.CADENCE[days]['revs'][rev]['out']}, " \
+            f"but ml-train.yml would look for {value}.npz"
+        assert f'= "{value}"' in wf, \
+            f"ml-train.yml has no branch for tensor={value}"
+    print("  14. every recipe's output name equals the ml-train.yml `tensor` "
+          "value that selects it (r1 and r2, both cadences)")
+
+    print("\ntests/test_e034_family4.py: all 14 checks passed")
 
 
 if __name__ == "__main__":

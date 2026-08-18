@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Family-4 tensor: the 0.25-degree North Atlantic at PENTAD cadence.
 
-E-034 step 4. Output `ml/cache/family4_na025_pentad.npz`.
+E-034 step 4. Output `ml/cache/family4_na025_pentad.npz` (recipe f4r1), or
+`family4_na025_pentad_r2.npz` at `--rev r2` (f4r2, E-041: + the sst channel).
 
 WHY A NEW FAMILY AND NOT AN EDIT TO build_family3.py (E-034 §5). A pentad
 tensor and a monthly tensor must never be silently mixed: every result in
@@ -33,8 +34,9 @@ definitions quietly describing different pixels than they name, and it would
 be invisible in every plot.
 
 CHANNELS are family-3's 39, in family-3's order, imported from that module so
-there is ONE definition. Per E-034 §2 the cadence policy differs per channel
-group, and that is the whole substance of this file:
+there is ONE definition — plus, at recipe r2 (E-041), an APPENDED 40th. Per
+E-034 §2 the cadence policy differs per channel group, and that is the whole
+substance of this file:
 
   base (3)  cur_speed, log_mld, ssh — from the pentad GLORYS12 aggregation.
             cur_speed = hypot(mean_uo, mean_vo), built from the BINNED
@@ -65,6 +67,17 @@ group, and that is the whole substance of this file:
             the dailies directly and never from a mean, because a standard
             deviation is not aggregable from one.
 
+  sst (1)   OISST v2.1 daily 0.25 degree, on this grid already
+            (`ml/fetch_sst_na.py` does the interpolation), as the NaN-aware
+            mean of the bin's days. RECIPE r2 ONLY — r1 is the 39-channel
+            tensor #386/#387 are training on and stays buildable and
+            unchanged. It is APPENDED so channels 0..38 keep their published
+            indices and an r1/r2 pair is diffable channel by channel.
+            Why: `rg_t` is the only other temperature and it starts in 2004,
+            so 22 of the 43 years carry none at all, and even inside the Argo
+            era it is one live bin per month. SST is live in ~100% of bins
+            over the whole axis.
+
 The time axis starts at 1982-01-01 like family-3's, not at GLORYS12's 1993:
 wind covers the gap, the Florida cable's 1982-92 decade becomes usable truth,
 and pre-1993 base channels are simply missing tokens.
@@ -80,6 +93,7 @@ Run:
   python3 ml/build_family4.py --dry-run
   python3 ml/build_family4.py --pentad-dir ml/cache/glorys_pentad
   python3 ml/build_family4.py --pentad-dir ... --max-bins 40   # smoke
+  python3 ml/build_family4.py --rev r2 --pentad-dir ...        # E-041, +sst
 """
 import argparse
 import datetime as dt
@@ -109,20 +123,51 @@ END = dt.date(2024, 12, 31)
 # PENTAD_DAYS = 1 and its own RECIPE_REV, not a copy" — so the cadence is a
 # parameter and everything family-specific hangs off it. The family-4 path
 # (days=5) is byte-identical to what built the tensors E-038a/b train on.
+#
+# E-041: the RECIPE REVISION is the second axis of this table. r2 appends SST
+# (below); r1 is kept, buildable and byte-identical, because #386/#387 are in
+# flight on it and every number in EXPERIMENTS.md before E-041 was measured on
+# it. The output NAME carries the rev, so an r1 and an r2 tensor can sit on
+# one box without either overwriting the other — and `ml-train.yml` derives
+# $TENSOR from the `tensor` input verbatim, so these file stems ARE the
+# dispatch values (family4_na025_pentad_r2 -> ml/cache/family4_na025_pentad_r2.npz).
 CADENCE = {
-    5: dict(name="pentad", recipe="f4r1",
-            out="family4_na025_pentad.npz",
-            truth="truth_pentad.npz"),
-    1: dict(name="daily", recipe="f5r1",
-            out="family5_na025_daily.npz",
-            truth="truth_daily.npz"),
+    5: dict(name="pentad", truth="truth_pentad.npz", revs={
+        "r1": dict(recipe="f4r1", out="family4_na025_pentad.npz"),
+        "r2": dict(recipe="f4r2", out="family4_na025_pentad_r2.npz"),
+    }),
+    1: dict(name="daily", truth="truth_daily.npz", revs={
+        "r1": dict(recipe="f5r1", out="family5_na025_daily.npz"),
+        "r2": dict(recipe="f5r2", out="family5_na025_daily_r2.npz"),
+    }),
 }
 
 # ONE definition of the channel set, imported rather than restated.
 CHANS, LEVELS = f3.CHANS, f3.LEVELS
 C_BASE, C_RG, C_WIND, NC = f3.C_BASE, f3.C_RG, f3.C_WIND, f3.NC
 
-RECIPE_REV = "f4r1"      # bump on ANY recipe change — it is the skip guard
+# E-041. SST is APPENDED, and the appending is the whole safety argument:
+# channels 0..38 keep the indices every published result was measured at,
+# `build_family3.py` is not touched, and an r1 and an r2 tensor are diffable
+# channel by channel. Channel ORDER is not information the model uses —
+# identity comes from `chan_emb` (ml/model.py), which embeds the channel
+# INDEX and is trained from scratch per run — so "last" costs nothing.
+#
+# WHY SST AT ALL (E-041): of the 39 channels, the only temperature is Argo
+# `rg_t`, which starts in 2004 and is live in one bin per month. 1982-2003 —
+# 22 of the 43 years — carries no temperature at all. OISST is on the tensor's
+# own grid, daily, and live in 100% of the bins across the whole axis.
+CHANS_R1 = list(CHANS)
+CHANS_R2 = list(CHANS) + ["sst"]
+C_SST = NC                            # channel 40 (index 39), r2 only
+CHANS_BY_REV = {"r1": CHANS_R1, "r2": CHANS_R2}
+
+SST_NAME = "sst_na025"       # ml/fetch_sst_na.py's output dir, under CACHE
+
+# Kept for readers who grep for it: the live recipe strings are in CADENCE
+# above (one per cadence x rev), and THEY are the skip guard. Bump a recipe on
+# ANY change to what the build writes.
+RECIPE_REV = "f4r1"
 
 
 def pentad_days(b):
@@ -472,6 +517,113 @@ class warnings_suppressed:
         return self._c.__exit__(*exc)
 
 
+# ----------------------------------------------------------------- sst ----
+def fill_sst(X, bins, lats, lons, days=PENTAD_DAYS, sst_dir=None):
+    """OISST daily SST -> the appended `sst` channel (recipe r2 only).
+
+    THE ARTIFACT is `ml/fetch_sst_na.py`'s: int16 (NDAYS, 281, 481) at
+    0.01 degC with nodata -32768, day-major, ALREADY on this tensor's grid
+    (the fetcher interpolates OISST's half-cell-offset centres onto family
+    3's axes with the same `f3.interp2_nan` the wind channel uses). Nothing
+    here regrids; this function only bins in time and decodes.
+
+    CADENCE. days=1 takes the day itself. days=5 takes the NaN-AWARE MEAN of
+    the bin's five days: nodata rows and nodata cells are excluded, and a cell
+    with no valid day in the bin stays NaN. That NaN is the missing token —
+    the same way every other fill_* in this file expresses missingness, since
+    the memmap starts as NaN and the mask/stat pass counts only `isfinite`.
+    Land must therefore never decode to a temperature: -32768 at scale 0.01
+    is -327.68 degC, which would be obvious, but 0 (a fresh memmap, or a
+    truncated read) is 0.00 degC and would not be — so the decode is
+    where-based and the sentinel never reaches the arithmetic.
+
+    WHY A MEAN AND NOT A SAMPLE. Unlike rg, SST is observed EVERY day, so a
+    bin has five real observations and their mean is the bin's state; taking
+    one day would throw four fifths of the information away and alias the
+    storm band. Unlike the wind std, a mean is aggregable from dailies, which
+    is why no second cadence-specific estimator is needed.
+
+    COVERAGE is the point of the channel (E-041): OISST runs 1982-present, so
+    this is live in ~100% of the bins across the whole axis, where `rg_t` —
+    the tensor's only other temperature — starts in 2004 and is live in one
+    bin per month. Returns the number of rows that received any value.
+    """
+    # Resolved from CACHE at call time, not at import: the tests redirect
+    # CACHE, and ml-train.yml makes ml/cache a symlink to the box-persistent
+    # /opt/earth-cache, where it seeds the Hub's sst_na025/ folder.
+    sst_dir = sst_dir or os.path.join(CACHE, SST_NAME)
+    idx_path = os.path.join(sst_dir, "index.npz")
+    npy = os.path.join(sst_dir, "sst_daily_na.npy")
+    if not (os.path.exists(idx_path) and os.path.exists(npy)):
+        # Same posture as fill_rg_pentad's missing cubes: loud, and the
+        # channel is missing tokens rather than invented values.
+        print(f"  ::warning:: no SST artifact in {sst_dir} — the sst channel "
+              f"would be ENTIRELY missing tokens. Seed it from the Hub "
+              f"(sst_na025/, published by .github/workflows/sst-na-bake.yml) "
+              f"before building r2 for real.")
+        return 0
+    idx = np.load(idx_path)
+    if str(idx["epoch"]) != str(EPOCH):
+        sys.exit(f"{idx_path} epoch {str(idx['epoch'])!r} != {str(EPOCH)!r} — "
+                 f"the SST rows would land on the wrong bins")
+    if int(idx["cadence_days"]) != 1:
+        sys.exit(f"{idx_path} is cadence_days={int(idx['cadence_days'])}; the "
+                 f"SST artifact must be DAILY — every coarser cadence is "
+                 f"derived here, never fetched (aggregate_cadence.py's rule)")
+    src_lat = np.asarray(idx["lat"], np.float64)
+    src_lon = np.asarray(idx["lon"], np.float64)
+    if (len(src_lat) != len(lats) or len(src_lon) != len(lons)
+            or not np.allclose(src_lat, lats) or not np.allclose(src_lon, lons)):
+        # A precondition that depends only on the inputs, checked while the
+        # inputs are all it has cost (ml/CLAUDE.md §5.16). fetch_sst_na.py
+        # already put the field on this grid; if it did not, a half-cell
+        # offset would be invisible in every plot.
+        sys.exit(
+            f"SST GRID MISMATCH with the tensor.\n"
+            f"  tensor: {len(lats)}x{len(lons)}  lat {lats[0]}..{lats[-1]}  "
+            f"lon {lons[0]}..{lons[-1]}\n"
+            f"  sst:    {len(src_lat)}x{len(src_lon)}  "
+            f"lat {src_lat[0]}..{src_lat[-1]}  "
+            f"lon {src_lon[0]}..{src_lon[-1]}\n"
+            f"Rebuild the artifact with ml/fetch_sst_na.py against this "
+            f"window's base025_na.npz.")
+    scale = float(idx["scale"])
+    nodata = int(idx["nodata"])
+    src = np.load(npy, mmap_mode="r")
+    day_row = {int(b): i for i, b in enumerate(idx["bin_index"])}
+    has = np.asarray(idx["has_data"], bool)
+    if src.shape != (len(has), len(lats), len(lons)):
+        sys.exit(f"{npy} is {src.shape}, but index.npz describes "
+                 f"{(len(has), len(lats), len(lons))} — the artifact is "
+                 f"inconsistent with its own index")
+
+    n = 0
+    n_days = 0
+    for r, b in enumerate(bins):
+        d0 = bin_start(b, days)
+        rows = []
+        for k in range(days):
+            j = day_row.get((d0 - EPOCH).days + k)
+            if j is not None and has[j]:
+                rows.append(j)
+        if not rows:
+            continue                      # missing token, by construction
+        raw = np.asarray(src[rows], np.int16)
+        # nodata NEVER enters the arithmetic: it becomes NaN first, and the
+        # mean is taken over the finite days only.
+        vals = np.where(raw == nodata, np.nan,
+                        raw.astype(np.float32) * np.float32(scale))
+        with np.errstate(invalid="ignore"), warnings_suppressed():
+            m = np.nanmean(vals, axis=0)   # all-NaN cell -> NaN -> missing
+        X[r, :, :, C_SST] = m
+        n += 1
+        n_days += len(rows)
+    print(f"  sst: {n}/{len(bins)} bins carry SST "
+          f"({n_days} daily field(s) folded, NaN-aware {days}-day mean); "
+          f"{len(bins) - n} missing")
+    return n
+
+
 # --------------------------------------------------------------- truth ----
 def truth_pentad(bins, days=PENTAD_DAYS, path=None):
     """(row, transport) pairs on THIS axis, from build_truth_pentad.py."""
@@ -537,6 +689,18 @@ def main():
                     help="bin width: 5 = family 4 (pentad), 1 = family 5 "
                          "(daily). Everything family-specific — recipe, "
                          "output name, truth file, storage layout — follows.")
+    ap.add_argument("--rev", default="r1", choices=("r1", "r2"),
+                    help="recipe revision: r1 = the 39 family-3 channels "
+                         "(f4r1/f5r1, what #386/#387 train on); r2 = those 39 "
+                         "plus appended `sst` from ml/fetch_sst_na.py's "
+                         "artifact (f4r2/f5r2). It is a FLAG and never "
+                         "inferred from what happens to be on disk — a recipe "
+                         "the filesystem decides is not a recipe.")
+    ap.add_argument("--sst-dir", default=None,
+                    help="ml/fetch_sst_na.py's output (sst_daily_na.npy + "
+                         "index.npz); r2 only. Default ml/cache/sst_na025, "
+                         "which is where ml-train.yml seeds the Hub's "
+                         "sst_na025/ folder.")
     ap.add_argument("--out", default=None)
     ap.add_argument("--memmap", default=None)
     ap.add_argument("--start", default=str(START))
@@ -551,9 +715,12 @@ def main():
     a = ap.parse_args()
     days = a.days
     cad = CADENCE[days]
-    recipe = cad["recipe"]
+    rev = cad["revs"][a.rev]
+    recipe = rev["recipe"]
+    chans = CHANS_BY_REV[a.rev]
+    nchan = len(chans)
     if a.out is None:
-        a.out = os.path.join(os.path.dirname(OUT_NPZ), cad["out"])
+        a.out = os.path.join(os.path.dirname(OUT_NPZ), rev["out"])
     if a.memmap is None:
         a.memmap = a.out[:-4] + "_build.npy"
     # Family 5 stores X as a bare .npy BESIDE the npz (tensor_io.save_tensor):
@@ -574,12 +741,14 @@ def main():
     print(f"axis      {bin_start(bins[0], days)} .. "
           f"{bin_start(bins[-1], days)}  T={T} {cad['name']} bins "
           f"(bins {bins[0]}..{bins[-1]}, recipe {recipe})")
+    print(f"channels  {nchan} ({a.rev})"
+          + (f" — family 3's {NC} + {chans[NC:]}" if nchan > NC else ""))
 
     if a.dry_run:
         H, W = 281, 481
         for name, bpe in (("float32", 4), ("float16", 2)):
-            print(f"dense     [{T}, {H}, {W}, {NC}] {name}: "
-                  f"{T * H * W * NC * bpe / 1e9:.1f} GB")
+            print(f"dense     [{T}, {H}, {W}, {nchan}] {name}: "
+                  f"{T * H * W * nchan * bpe / 1e9:.1f} GB")
         st = os.statvfs(CACHE if os.path.isdir(CACHE) else HERE)
         print(f"disk      {st.f_bavail * st.f_frsize / 1e9:.1f} GB free")
         print("\n--dry-run: nothing built.")
@@ -621,10 +790,10 @@ def main():
             print(f"cached tensor is recipe {prev!r}, want {recipe!r} — "
                   f"rebuilding")
 
-    need = T * H * W * NC * 2
+    need = T * H * W * nchan * 2
     st = os.statvfs(os.path.dirname(os.path.abspath(a.memmap)))
     free = st.f_bavail * st.f_frsize
-    print(f"tensor    [{T}, {H}, {W}, {NC}] float16 = {need / 1e9:.1f} GB · "
+    print(f"tensor    [{T}, {H}, {W}, {nchan}] float16 = {need / 1e9:.1f} GB · "
           f"{free / 1e9:.1f} GB free")
     if need > free * 0.95:
         sys.exit(f"refusing to start: {need / 1e9:.1f} GB needed, "
@@ -632,7 +801,7 @@ def main():
                  f"use --max-bins to exercise the path here.")
 
     X = np.lib.format.open_memmap(a.memmap, mode="w+", dtype=np.float16,
-                                  shape=(T, H, W, NC))
+                                  shape=(T, H, W, nchan))
     for t in range(T):
         X[t] = np.nan
 
@@ -671,14 +840,19 @@ def main():
     n_rg = fill_rg_pentad(X, bins, lats, lons, days)
     print("wind channels (pentad mean + within-pentad std) …", flush=True)
     n_wind = fill_wind_pentad(X, bins, lats, lons, days=days)
+    n_sst = 0
+    if nchan > NC:
+        print(f"sst channel (NaN-aware {days}-day mean of the dailies) …",
+              flush=True)
+        n_sst = fill_sst(X, bins, lats, lons, days=days, sst_dir=a.sst_dir)
     print("truth series …", flush=True)
     truths = truth_pentad(bins, days)
 
     # ---- mask + stats, one slab pass -------------------------------------
     print("mask + stats pass …", flush=True)
-    cnt = np.zeros(NC, np.int64)
-    s1 = np.zeros(NC, np.float64)
-    s2 = np.zeros(NC, np.float64)
+    cnt = np.zeros(nchan, np.int64)
+    s1 = np.zeros(nchan, np.float64)
+    s2 = np.zeros(nchan, np.float64)
     for r in range(T):
         slab = np.asarray(X[r], np.float32)
         slab[~ocean] = np.nan
@@ -700,7 +874,8 @@ def main():
 
     # ---- Chinchilla inventory, from OBSERVED VALUES (E-034 §4) -----------
     groups = (("base", 0, C_BASE), ("rg", C_BASE, C_BASE + C_RG),
-              ("wind", C_BASE + C_RG, NC))
+              ("wind", C_BASE + C_RG, NC)) \
+        + ((("sst", NC, nchan),) if nchan > NC else ())
     total = int(cnt.sum())
     print("\nobserved values (the Chinchilla inventory — re-read it, do not "
           "scale the monthly one):")
@@ -730,16 +905,16 @@ def main():
     print(f"\nwriting {a.out} …", flush=True)
     meta = dict(bin_index=np.array(bins, np.int64), months=months,
                 epoch=np.array(str(EPOCH)), pentad_days=np.array(days),
-                lats=lats, lons=lons, chan=np.array(CHANS), norm=norm,
+                lats=lats, lons=lons, chan=np.array(chans), norm=norm,
                 window=np.array("na025"), cadence=np.array(cad["name"]),
                 recipe=np.array(recipe), n_rg_live=np.array(n_rg),
-                n_wind=np.array(n_wind), **truths)
+                n_wind=np.array(n_wind), n_sst=np.array(n_sst), **truths)
     if sidecar:
         # RENAME the build memmap into place — a copy would double 166 GB.
         from tensor_io import save_tensor
         xp = save_tensor(a.out, X, **meta)
         print(f"wrote {a.out} + {os.path.basename(xp)}  "
-              f"[T={T} H={H} W={W} C={NC}] float16  "
+              f"[T={T} H={H} W={W} C={nchan}] float16  "
               f"{os.path.getsize(xp) / 1e9:.2f} GB (memmappable)  "
               f"recipe={recipe}")
         return
@@ -747,7 +922,7 @@ def main():
     del X
     if not a.keep_memmap:
         os.remove(a.memmap)
-    print(f"wrote {a.out}  [T={T} H={H} W={W} C={NC}] float16  "
+    print(f"wrote {a.out}  [T={T} H={H} W={W} C={nchan}] float16  "
           f"{os.path.getsize(a.out) / 1e9:.2f} GB  recipe={recipe}")
 
 
