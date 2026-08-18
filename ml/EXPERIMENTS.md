@@ -692,6 +692,58 @@ run its own step-budget ladder instead of a single terminal number.
 plus the eval wave that must follow (a `sroll:` run per arm, ~6 h each) before
 any of it is a result.
 
+### E-036 eval · #393 died with nothing archived — re-dispatched as #401
+
+**#393** (2026-08-18 13:29Z, `gpu-box-42005419` / Vast 47487801,
+`sroll:e017_u1_s0,head-weights-e036a-zn-xl144-s0,head-weights-e036b-zn-xl144-s1`)
+ran 4 h 42 m and returned **no number**. At **18:11:25Z the self-hosted runner
+lost communication with GitHub**: the job closed as `failure`, its log blobs
+were deleted, and **no `probes-393.json` exists on `ml-metrics`**. The last
+`ml-live-393` push (17:59:59Z) shows head 1 (the gate, `s1_s0`) and head 2
+(`s145rspiral:111-4444-0.71-0.5_s0`) through all three sroll phases and head 3
+(`…_s1`) at 28% of `skill` — but `ml/rollout_spatial.py` writes
+`rollout_spatial.json` only at the END, so **two completed rolls died with the
+runner**. §5.20 (publish a shared artefact when it EXISTS, not when the job
+ends) is the rule this evaluator does not follow; that is an open lever, not
+something changed here. The box is UA-hosted, is left STOPPED, and is treated
+as suspect.
+
+**Re-dispatched 20:37Z as [#401](https://github.com/blauewelt/earth/actions/runs/32183242672)
+on `gpu-box-31479844`** (Vast 47724559, reliability 0.994, 58 GB free,
+$0.2944/h). The inputs had to be RECONSTRUCTED — #393's provenance was never
+archived and its log is gone — and every field is corroborated by at least two
+sources: `ml-live-393`'s head labels, which `rollout_spatial.py:795` derives
+from each head file's own `args` and which therefore identify the ARTEFACTS
+rather than the tags; the release asset names those labels can only match; the
+headpub provenance that produced them (**#379** → `head-weights-e036a-zn-xl144-s0`
+from #359, **#380** → `head-weights-e036b-zn-xl144-s1` from #360, each run on
+the very box that trained its arm); and the 25-field `sroll:` dispatch that is
+identical across #355, #356 and #382. Sibling **#394** (E-037 eval, same wave,
+still healthy past 7 h) puts `job_timeout` above the 350-minute default,
+confirming the 700 the two earlier sroll runs used. `ml/rollout_spatial.py`,
+`scripts/sroll_run.sh` and every module they import are **byte-identical**
+between #393's sha (`bfd2248`) and #401's (`9dcbd65`), so the two runs measure
+the same thing and both are comparable to #356's 0.6781.
+
+Harvest criteria unchanged: the `e017_u1_s0` gate must reproduce **0.643**
+within `GATE_TOL` = 0.0101, `len(rollout_spatial.json['heads'])` must be **3**
+(#353 went green holding 2 of 6 after a CUDA OOM), and the two znoise xl144
+corridor AUCs are read against xl144 clean **0.6781**. Falsifier unchanged:
+**≤ 0.6781** = input noise was a small-model regulariser whose benefit capacity
+already supplies.
+
+**Cost:** #393 burned ~4.7 h × ~$0.26/h ≈ **$1.2** for nothing; #401 is
+~6.5 h × $0.2944/h ≈ **$1.9**.
+
+**One signature worth not misreading.** #393 and #394 both had their `Train`
+step FAIL at exactly 2 m 30 s and continued into a healthy sroll regardless —
+`Probes (K-sweep + stage 2)` carries `if: always()` and `continue-on-error:
+true`, so the eval never depended on it. That failure was a real regression at
+`bfd2248` and is now GONE: at `9dcbd65` #401's `Train` succeeded in 90 s,
+because 86c012b resolves `--resume` and adopts the checkpoint's architecture
+before the model is built. On an `sroll:` run a failed `Train` is not the eval
+dying; read the Probes step.
+
 ---
 
 ## E-032 · sunflower-144: the width ladder's next rung — DISPATCHED 2026-08-15 ~18:05Z
