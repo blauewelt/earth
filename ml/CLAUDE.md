@@ -110,6 +110,21 @@ taken 11 h — the kind of surprise a summary can smooth over.
 
 - **Numbers come from `probe_kfold.py`** — the year-blocked k-fold. Anything
   else (in-training light probe, a 36-month split) must be labelled as such.
+- **At pentad/daily cadence, spatially POOLED read-outs are distrusted and
+  the HEAD probe is primary** (Chris, 2026-08-18: "I don't trust ridge or
+  mlp. We should not pool spatially. Let's always look at head").
+  probe_kfold's ridge reads `Z.mean(1)` over the ~265-pixel 26.5°N section —
+  and geostrophic transport is the east-minus-west contrast ACROSS that
+  line, which a mean annihilates. So: pass `head_probe: "true"` on every
+  eval dispatch at the new cadences and report `probe_head` (unpooled
+  cross-attention over section tokens) next to its raw-3x3 control as the
+  headline; keep the pooled ridge as the comparable-to-history number, never
+  as the verdict. KNOWN GAP, measured 2026-08-18: stage 2's own transport
+  number (`rapid_probe_kfold`) is ALSO section-pooled — temporal.py:2018
+  does `hid[:, -1].mean(0)` — so even the big temporal heads are read
+  through a spatial mean at the last step. Upgrading that read-out to a
+  learned pool (probe_head's mechanism) is an open lever, to be changed as
+  its own experiment, never silently.
 - **REPLICATES, NOT ARMS. A stage-2 number at n = 1 means nothing.** Measured
   2026-08-11 (E-010): three seeds at one fixed configuration span **0.245** on
   the RAPID head k-fold — sd 0.123 — while the forecast objective those same

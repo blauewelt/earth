@@ -594,16 +594,12 @@ def main():
     src_bins = {int(b): i for i, b in enumerate(idx["bin_index"])}
     has = np.asarray(idx["has_data"], bool)
 
-    need = T * H * W * NC * 2
-    st = os.statvfs(os.path.dirname(os.path.abspath(a.memmap)))
-    free = st.f_bavail * st.f_frsize
-    print(f"tensor    [{T}, {H}, {W}, {NC}] float16 = {need / 1e9:.1f} GB · "
-          f"{free / 1e9:.1f} GB free")
-    if need > free * 0.95:
-        sys.exit(f"refusing to start: {need / 1e9:.1f} GB needed, "
-                 f"{free / 1e9:.1f} GB free. This is a BOX build (E-034 §5); "
-                 f"use --max-bins to exercise the path here.")
-
+    # Run #391 died in 0.3 s: the free-space guard below ran BEFORE this
+    # short-circuit and refused 33.1 GB for a tensor that was already on
+    # disk and about to be skipped one line later. A guard must not cost
+    # more than the thing it guards — check preconditions in DEPENDENCY
+    # order, so a precondition is only demanded by work that still has to
+    # happen. Nothing here needs free space, so nothing here may demand it.
     if not a.force and os.path.exists(a.out):
         try:
             from tensor_io import load_tensor
@@ -624,6 +620,16 @@ def main():
         else:
             print(f"cached tensor is recipe {prev!r}, want {recipe!r} — "
                   f"rebuilding")
+
+    need = T * H * W * NC * 2
+    st = os.statvfs(os.path.dirname(os.path.abspath(a.memmap)))
+    free = st.f_bavail * st.f_frsize
+    print(f"tensor    [{T}, {H}, {W}, {NC}] float16 = {need / 1e9:.1f} GB · "
+          f"{free / 1e9:.1f} GB free")
+    if need > free * 0.95:
+        sys.exit(f"refusing to start: {need / 1e9:.1f} GB needed, "
+                 f"{free / 1e9:.1f} GB free. This is a BOX build (E-034 §5); "
+                 f"use --max-bins to exercise the path here.")
 
     X = np.lib.format.open_memmap(a.memmap, mode="w+", dtype=np.float16,
                                   shape=(T, H, W, NC))

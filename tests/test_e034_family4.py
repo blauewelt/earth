@@ -45,7 +45,9 @@ regression:
 
     python3 tests/test_e034_family4.py
 """
+import contextlib
 import datetime as dt
+import io
 import os
 import sys
 import tempfile
@@ -346,7 +348,43 @@ def main():
     print(f"  8. loadable by the unmodified trainer: months decodes to "
           f"year {sorted(years)} and months {sorted(set(moy))}; rapid aliased")
 
-    print("\ntests/test_e034_family4.py: all 8 checks passed")
+    # ---- 9: a cached tensor skips BEFORE the free-space guard ------------
+    # Run #391: the guard ran first and refused 33.1 GB for a tensor that
+    # was already built and would have been skipped one line later. Starve
+    # statvfs so a FRESH build is refused, then prove the already-built
+    # output still short-circuits — the guard must not cost more than the
+    # thing it guards.
+    class _Starved:
+        f_bavail, f_frsize = 1, 4096            # 4 KB free, refuses anything
+
+    real_statvfs = os.statvfs
+    os.statvfs = lambda _p: _Starved()
+    try:
+        out3 = os.path.join(tmp, "family4_fresh.npz")
+        refused = ""
+        try:
+            run_build(cache, pentad_dir, out3)
+        except SystemExit as e:
+            refused = str(e)
+        assert "refusing to start" in refused, \
+            f"the starved guard did not refuse a FRESH build: {refused!r}"
+        assert not os.path.exists(out3), "the refused build still wrote output"
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            run_build(cache, pentad_dir, out)   # already built by check 1
+        said = buf.getvalue()
+    finally:
+        os.statvfs = real_statvfs
+    assert "already built" in said and "skipping" in said, \
+        f"the cached tensor did not take the skip path:\n{said}"
+    assert "refusing to start" not in said, \
+        "the free-space guard still runs before the already-built check"
+    assert os.path.getsize(out) > 0
+    print("  9. an already-built tensor skips even when the free-space guard "
+          "would refuse a fresh build (run #391)")
+
+    print("\ntests/test_e034_family4.py: all 9 checks passed")
 
 
 if __name__ == "__main__":
