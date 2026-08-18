@@ -35,10 +35,13 @@ Check 0 proves the fixture is IN THE OVERFLOW REGIME rather than assuming it
 from the element count -- tests/test_e038_anomaly_dtype.py records a first
 version whose pool summed to ~45k and passed against the broken code.
 
-Check 4 pins the OTHER half of the same commit: both scripts used to open the
-tensor with `np.load(...)["X"].copy()` and so could not open family 5's
-sidecar layout at all (measured on the old code: `KeyError: 'X is not a file
-in the archive'`, both scripts). They now go through `tensor_io.load_tensor`,
+Check 4 pins the OTHER half of the same commit, and now covers FOUR scripts:
+temporal.py and probe_sequence.py used to open the tensor with
+`np.load(...)["X"].copy()`, and probe_head.py and dip_check.py with a bare
+`np.load(...)`, so none of them could open family 5's sidecar layout at all
+(measured on the old code: `KeyError: 'X is not a file in the archive'`).
+probe_head.py and dip_check.py were converted on 2026-08-18 alongside
+probe_head's LazyPixels fix. They now go through `tensor_io.load_tensor`,
 which returns a READ-ONLY memmap, so each has to take a scratch copy -- and
 must not write through to the stored tensor, and must not leave a 166 GB
 orphan behind. That runs in a subprocess (tests/_sidecar_driver.py), because
@@ -144,7 +147,16 @@ def run_transform(module_name, data, tmp, extra_argv):
     grabbed = {}
 
     def spy(ck, nchan, *a, **k):
-        grabbed["X"] = np.array(sys._getframe(1).f_locals["X"], dtype=np.float64)
+        # "X" in most callers; probe_head.py `del X` right after the transform
+        # (it is in-place, so Xa IS that buffer and the del frees nothing), so
+        # accept either name rather than ask a script to keep a dead local
+        # alive for a test.
+        f = sys._getframe(1).f_locals
+        buf = f.get("X", f.get("Xa"))
+        assert buf is not None, (
+            f"{module_name}.main() called codec_from_ckpt with neither X nor "
+            f"Xa in scope -- this test cannot see the transformed tensor")
+        grabbed["X"] = np.array(buf, dtype=np.float64)
         raise _Stop()
 
     old_here, old_ccf, old_argv = mod.HERE, mod.codec_from_ckpt, sys.argv
@@ -262,11 +274,20 @@ def main():
         # tensor, and must not leave a 166 GB orphan behind. Run in a
         # SUBPROCESS, because the scratch is removed by atexit.
         print("  sidecar layout (family 5), one subprocess per script:")
-        for mod, argv in (("temporal", []), ("probe_sequence", ["--anomaly"])):
+        # probe_head.py and dip_check.py were added on 2026-08-18. Both still
+        # opened the tensor with a bare `np.load`, so both raised
+        # `KeyError: 'X is not a file in the archive'` on a family-5 sidecar --
+        # and probe_head is the read-out the daily arm is FOR (ml/CLAUDE.md
+        # §3), so the gap would have been found by a dispatch, not a test.
+        SCRATCH = {"temporal": "_temporal_scratch.npy",
+                   "probe_sequence": "_seqprobe_scratch.npy",
+                   "probe_head": "_head_scratch.npy",
+                   "dip_check": "_dip_scratch.npy"}
+        for mod, argv in (("temporal", []), ("probe_sequence", ["--anomaly"]),
+                          ("probe_head", []), ("dip_check", [])):
             side, xpath = sidecar_fixture(tmp, mod)
             before = sha256(xpath)
-            scratch = side[:-4] + ("_temporal_scratch.npy" if mod == "temporal"
-                                   else "_seqprobe_scratch.npy")
+            scratch = side[:-4] + SCRATCH[mod]
             out = subprocess.run(
                 [sys.executable, os.path.join(HERE, "_sidecar_driver.py"),
                  mod, side, tmp, scratch] + argv,
@@ -292,7 +313,7 @@ def main():
             assert not os.path.exists(scratch), (
                 f"{mod}.py left its scratch copy behind -- 166 GB per run at "
                 f"family 5")
-        print("  4. both scripts open a sidecar tensor, through a scratch "
+        print("  4. all four scripts open a sidecar tensor, through a scratch "
               "copy, leaving the canonical X byte-identical and no orphan")
 
         print("\ntests/test_stage2_float16_anomaly.py: all 5 checks passed")

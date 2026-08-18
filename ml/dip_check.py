@@ -36,7 +36,12 @@ def main():
     ap.add_argument("--window", nargs=2, default=["2009-09", "2010-06"])
     ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"))
     a = ap.parse_args()
-    d = np.load(a.data)
+    # load_tensor == np.load for a single-file npz; for family 5's sidecar it
+    # memory-maps X (see ml/tensor_io.py — 165.6 GB does not decompress). With
+    # the bare np.load this script could not open a family-5 tensor AT ALL:
+    # `KeyError: 'X is not a file in the archive'`.
+    from tensor_io import load_tensor
+    d = load_tensor(a.data)
     months = [str(m) for m in d["months"]]
     moy = np.array([int(m[5:7]) - 1 for m in months])
     yr = np.array([int(m[:4]) for m in months])
@@ -54,6 +59,19 @@ def main():
     X = d["X"]          # NpzFile decompresses fresh; .copy() doubled it
     if X.shape[-1] != len(ck["chan"]):
         sys.exit(f"tensor C={X.shape[-1]} != checkpoint C={len(ck['chan'])} — rebuild the tensor")
+    if isinstance(X, np.memmap) and not X.flags.writeable:
+        # Sidecar tensor (family 5): anomaly_transform WRITES into X and
+        # refuses a read-only map by design. The canonical map must never take
+        # those writes either — a later run would z-score anomaly-space data
+        # with nothing to say so. A per-run scratch copy is disk, not RAM
+        # (tensor_io docstring). AFTER the channel guard, so a mismatched
+        # tensor costs a message rather than a 166 GB copy (ml/CLAUDE.md §5.16).
+        from tensor_io import writable_copy
+        scratch = a.data[:-4] + "_dip_scratch.npy"
+        X = writable_copy(X, scratch, verbose=False)
+        import atexit
+        atexit.register(lambda p=scratch:
+                        os.path.exists(p) and os.remove(p))
     t_hold = np.array([m[:4] in set(ck["args"]["holdout_years"].split(",")) for m in months])
     lo_, hi_ = (float(v) for v in ck["args"]["holdout_lon"].split(","))
     x_hold = (lons >= lo_) & (lons < hi_)

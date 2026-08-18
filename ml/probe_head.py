@@ -36,7 +36,7 @@ import torch
 import torch.nn as nn
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model import PixelMAE, codec_from_ckpt
+from model import PixelMAE, LazyPixels, codec_from_ckpt
 from trainprobe import anomaly_transform
 from temporal import embed_everything, rapid_section
 
@@ -159,11 +159,33 @@ def main():
 
     ck = torch.load(os.path.join(HERE, "runs", a.run, "pixelmae.pt"),
                     map_location="cpu", weights_only=False)
-    d = np.load(a.data)
-    if len(ck["chan"]) != d["X"].shape[-1]:
-        sys.exit(f"{a.run}: codec has {len(ck['chan'])} channels but the tensor "
-                 f"has {d['X'].shape[-1]} — pass --data with the matching tensor.")
+    # load_tensor == np.load for a single-file npz; for family 5's sidecar it
+    # memory-maps X (see ml/tensor_io.py — 165.6 GB does not decompress). With
+    # the bare np.load this script could not open a family-5 tensor AT ALL:
+    # `KeyError: 'X is not a file in the archive'`.
+    from tensor_io import load_tensor
+    d = load_tensor(a.data)
+    # ONE read of d["X"]. On an npz every subscript DECOMPRESSES the whole
+    # member afresh, so `d["X"].shape[-1]` in the guard below cost a full
+    # 33.1 GB materialisation (measured: +0.523 GiB on a 0.523 GiB fixture)
+    # purely to read an integer, and the next line paid for it a second time.
     X = d["X"]
+    if len(ck["chan"]) != X.shape[-1]:
+        sys.exit(f"{a.run}: codec has {len(ck['chan'])} channels but the tensor "
+                 f"has {X.shape[-1]} — pass --data with the matching tensor.")
+    if isinstance(X, np.memmap) and not X.flags.writeable:
+        # Sidecar tensor (family 5): anomaly_transform WRITES into X and
+        # refuses a read-only map by design. The canonical map must never take
+        # those writes either — a later run would z-score anomaly-space data
+        # with nothing to say so. A per-run scratch copy is disk, not RAM
+        # (tensor_io docstring). AFTER the channel guard, so a mismatched
+        # tensor costs a message rather than a 166 GB copy (ml/CLAUDE.md §5.16).
+        from tensor_io import writable_copy
+        scratch = a.data[:-4] + "_head_scratch.npy"
+        X = writable_copy(X, scratch, verbose=False)
+        import atexit
+        atexit.register(lambda p=scratch:
+                        os.path.exists(p) and os.remove(p))
     months = [str(m) for m in d["months"]]
     moy = np.array([int(m[5:7]) - 1 for m in months])
     yr = np.array([int(m[:4]) for m in months])
@@ -173,7 +195,7 @@ def main():
     lo, hi = (float(v) for v in ck["args"]["holdout_lon"].split(","))
     x_hold = (lons >= lo) & (lons < hi)
     Xa, _ = anomaly_transform(X, moy, t_hold, x_hold)
-    del X
+    del X               # transforms in place: Xa IS that buffer, nothing frees
 
     codec = codec_from_ckpt(ck, Xa.shape[-1])
     codec.load_state_dict(ck["model"])
@@ -189,9 +211,46 @@ def main():
     _dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     codec.to(_dev)
     print(f"codec on {_dev.type}")
-    OBS = torch.from_numpy(np.isfinite(Xa))
-    np.nan_to_num(Xa, nan=0.0, copy=False)
-    Xt = torch.from_numpy(Xa)
+    # Derived PER BATCH, not materialised. This is where BOTH probe_head
+    # invocations of run #392 were OOM-killed (2026-08-18), each ~112 s after
+    # the "codec on cuda" line above, on family 4's [3142, 281, 481, 39]
+    # float16 — the same allocation that took all three probes down in #388
+    # and train.py in #365. probe_kfold, probe_sequence and dip_check were
+    # converted to LazyPixels then; this file was missed, so it was the last
+    # script in the ladder still building the eager pair, and it is the ONE
+    # read-out Chris trusts at pentad cadence (ml/CLAUDE.md §3).
+    #
+    # THE ARITHMETIC, measured on a 0.523 GiB fixture and scaled by the real
+    # element count (16,562,358,618):
+    #     X                              33.1 GB   resident
+    #     np.isfinite(Xa)                16.6 GB   resident
+    #     np.nan_to_num(Xa, copy=False)  82.8 GB   TRANSIENT
+    #                                   -------
+    #                                   132.5 GB   peak
+    # The third line is the surprise and it is why `copy=False` did not save
+    # us: numpy's nan_to_num never copies the VALUES but its masked-copyto
+    # form allocates full-size bools —
+    #     idx_nan = isnan(d); idx_posinf = isposinf(d); idx_neginf = isneginf(d)
+    # — and isposinf/isneginf each build isinf(d) and signbit(d) underneath,
+    # so five [T,H,W,C] bools are live at once. Measured exactly 5.00x one
+    # full bool (1.3082 GiB against 0.2615 GiB), i.e. 82.8 GB at pentad and
+    # 414 GB at daily. No box we can rent survives that.
+    #
+    # Both arrays are elementwise pure functions of Xa and every consumer only
+    # ever indexes a BATCH out of them, so evaluating them after the index is
+    # arithmetically identical (LazyPixels in ml/model.py; ml/CLAUDE.md §4.1 —
+    # remove the failure mode rather than guard it).
+    #
+    # THE `np.nan_to_num(Xa, copy=False)` LINE IS DELETED ON PURPOSE, and must
+    # not come back. LazyPixels(Xa) fills each indexed batch, so filling Xa in
+    # place would be redundant for the values and FATAL for the mask:
+    # LazyPixels(Xa, obs=True) evaluates isfinite(Xa) per batch, and a
+    # pre-filled Xa is finite everywhere. OBS would silently become all-True —
+    # every land cell and every missing channel entering the encoder as an
+    # observed 0.0 instead of a missing token, with no error and no NaN to
+    # notice. `ocean` below is derived from OBS and would go all-True with it.
+    Xt = LazyPixels(Xa)
+    OBS = LazyPixels(Xa, obs=True)
 
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12),
                         np.cos(2 * np.pi * moy / 12)], 1)
