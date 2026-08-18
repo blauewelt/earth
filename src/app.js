@@ -1935,14 +1935,20 @@ function clampUiDate(d) {
 /* Push the comparison state into its controls. Called whenever either date
  * moves, because in offset mode the compare date is a FUNCTION of the main
  * one and a stale read-out would be a lie about what is on screen. */
-function syncCompareUi() {
+function syncCompareUi(opts) {
   const on = comparing();
   document.getElementById("compare-date-row").classList.toggle("hidden", !on);
   document.getElementById("compare-steps").classList.toggle("hidden", !on);
   const input = document.getElementById("compare-date");
   input.max = uiMaxDate();
   input.min = "2000-01-01";
-  if (on) input.value = compareDate();
+  // `keepInput` is set by exactly one caller: the field's OWN change handler,
+  // mid-edit. Writing back there resets the caret to the first segment (see
+  // the comment on the change handler). It is deliberately not a focus check:
+  // focus can still be in this field while a DIFFERENT control changes the
+  // comparison, and that update must land or the read-out lies about what is
+  // on the globe.
+  if (on && !opts?.keepInput) input.value = compareDate();
   const sel = document.getElementById("compare-select");
   const want = state.compareFixed ? "custom" : String(state.compareYears);
   if (sel.value !== want) sel.value = want;
@@ -2701,11 +2707,26 @@ document.getElementById("compare-select").addEventListener("change", (e) => {
 
 /* Typing a comparison date PINS it — the offset is abandoned, because the two
  * cannot both be true and the one you just typed is the one you meant. */
+/* Typing a comparison date PINS it — the offset is abandoned, because the two
+ * cannot both be true and the one you just typed is the one you meant.
+ *
+ * Shaped exactly like the Date field above, and that shape IS the fix. An
+ * `<input type="date">` fires `change` as each SEGMENT completes, so typing
+ * "2010" reports the real dates 0002, 0020, 0201 on the way. The first
+ * version answered each of those by clamping to the floor and writing the
+ * clamp back into the field — which reset the caret to the first segment on
+ * every keystroke, so the year could never get past its first digit (Chris,
+ * 2026-08-18: "I cannot type 2010 into it ... editing only the first number
+ * of the year"). Date never had the bug because Date never writes into its
+ * own field. Neither does this now: `keepInput` suppresses exactly that one
+ * write, and an out-of-range partial is simply ignored rather than corrected.
+ * The steppers still clamp and still write back — also like Date's. */
 document.getElementById("compare-date").addEventListener("change", (e) => {
-  if (!e.target.value) return;
-  state.compareFixed = clampUiDate(e.target.value);
+  const v = e.target.value;
+  if (!v || v < "2000-01-01" || v > uiMaxDate()) return;
+  state.compareFixed = v;
   state.compareYears = 0;
-  syncCompareUi();
+  syncCompareUi({ keepInput: true });
   refreshTimedLayers();
 });
 

@@ -552,6 +552,49 @@ test("the comparison date is steered like the main date, and knows when it track
   expect(await page.evaluate(() => window.__earth.compareDate())).toBeNull();
 });
 
+test("a half-typed year does not fight the typist", async ({ page }) => {
+  // Chris, 2026-08-18: "I cannot type 2010 into it. It looks like it's editing
+  // only the first number of the year." An <input type="date"> fires `change`
+  // as each SEGMENT completes, so typing 2010 reports the real dates 0002,
+  // 0020, 0201 on the way. The first version clamped each to the floor and
+  // wrote the clamp BACK into the field, which reset the caret to the first
+  // segment on every keystroke. The Date field never had the bug because it
+  // never writes into its own field — "just replicate what Date does".
+  await page.fill("#layer-date", "2020-06-15");
+  await page.dispatchEvent("#layer-date", "change");
+  await page.selectOption("#compare-select", "10");
+  await expect(page.locator("#compare-date")).toHaveValue("2010-06-15");
+
+  // type a year one digit at a time, exactly as the widget reports it
+  for (const partial of ["0002-06-15", "0020-06-15", "0201-06-15"]) {
+    await page.evaluate((v) => {
+      const el = document.getElementById("compare-date");
+      el.focus();
+      el.value = v;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }, partial);
+    // THE BUG: the field must still hold what was typed. Any write-back here
+    // is the caret reset, and the year can never be finished.
+    await expect(page.locator("#compare-date")).toHaveValue(partial);
+  }
+
+  // finishing the year commits it, and the select says it is pinned now
+  await page.evaluate(() => {
+    const el = document.getElementById("compare-date");
+    el.value = "2010-06-15";
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(await page.evaluate(() => window.__earth.compareDate())).toBe("2010-06-15");
+  await expect(page.locator("#compare-select")).toHaveValue("custom");
+
+  // leaving the field alone must not pin a TRACKING offset — clicking another
+  // control while an offset was showing used to convert it into a fixed date
+  await page.selectOption("#compare-select", "5");
+  await page.click("#date-steps button[data-step='-1y']");
+  await expect(page.locator("#compare-select")).toHaveValue("5");
+  await expect(page.locator("#compare-date")).toHaveValue("2014-06-15");
+});
+
 test("both date steppers obey the same calendar rules and the same bounds", async ({ page }) => {
   // One stepper function serves both rows; these are the cases where naive
   // arithmetic differs from the calendar, plus the clamps that keep the
@@ -568,6 +611,7 @@ test("both date steppers obey the same calendar rules and the same bounds", asyn
   // the floor is GIBS's, and it is shared with the Date row
   await page.fill("#compare-date", "2000-01-02");
   await page.dispatchEvent("#compare-date", "change");
+  await expect(page.locator("#compare-date")).toHaveValue("2000-01-02");
   await page.click("#compare-steps button[data-cstep='-1y']");
   await expect(page.locator("#compare-date")).toHaveValue("2000-01-01");
   // and the ceiling: a comparison cannot be asked for past the newest date
