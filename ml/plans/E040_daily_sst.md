@@ -82,12 +82,31 @@ Hub outage costs precision rather than the feature.
 Chris asked whether the daily pipeline depends on this. Two halves, opposite
 answers, and the second is a correctness trap.
 
-**The field: already shared, and going daily helps.** `ml/fetch_sst_channel.py`
-builds the tensor's `sst_monthly` channel by reading *the repo's own baked
-OISST files* (`data/oisst_monthly.json`, `data/oisst_y/*.json`) — "no download
-at all". So the app's bake already feeds the embedding. A daily/pentad SST
-artifact would feed **E-034**, the 5-day tensor, directly, and the two efforts
-should share one fetch rather than each growing their own.
+**The field: this is not an ADDITIONAL import — it is the import E-034
+already owes.** Resolved with Chris 2026-08-18. The pentad plan's cadence
+table already declares `OISST SST: daily → pentad mean`, but nothing in the
+repo fetches daily OISST yet: the only script touching `sst.day.mean` is
+`scripts/bake_sst_daily.py`, written for this plan. So E-040 and E-034 have
+the SAME upstream download, and it should be pulled once.
+
+Two consumers, two artifacts, shared at the DOWNLOAD level — not the artifact
+level, because the layouts are transposes of each other:
+
+    sst.day.mean.YYYY.nc  (PSL, 476 MB/yr, cached then deleted)
+        ├── day-major pentad means, NA window → the E-034 tensor channel
+        └── pixel-major int16 → HF → the app's 2-byte point reads
+
+Building the tensor from the pixel-major file would mean reading all 757 MB
+back and transposing; building the app file from pentad means would throw away
+the daily axis. Each consumer takes its natural cut of one download.
+
+Worth saying plainly: this is also a QUALITY fix for training, not just
+plumbing. The current tensor's SST arrives via the 1° monthly bake, upsampled
+to 0.25° — carrying no sub-degree structure, exactly like the RG channels the
+build notes already flag. Daily 0.25° OISST is native-resolution signal on the
+tensor's own grid. (OISST's effective resolution is coarser than its 0.25°
+posting — it is an AVHRR analysis, not MUR — but it is real sub-degree
+information against a 1° bin.)
 
 **The climatology: must stay separate.** The ML pipeline computes its anomaly
 baseline INSIDE the pipeline, from **train years only**:
@@ -111,5 +130,7 @@ notices "we compute the climatology twice".
    fallback and the ±3 palette bound as the stated colour meaning.
 4. §3 amendment + a test that the daily read degrades to monthly when the Hub
    is unreachable.
-5. Only then consider the E-034 sharing, which is a separate decision with the
-   leakage rule above attached.
+5. The E-034 pentad builder consumes the same cached NetCDFs (its natural,
+   day-major cut) — resolved above; the leakage rule travels with it: the
+   pipeline's climatology stays train-years-only, computed inside temporal.py,
+   never the app's 1991-2020 normal.
