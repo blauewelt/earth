@@ -1,0 +1,190 @@
+{
+ "run_number": 397,
+ "files": {
+  "probe_kfold.json": {
+   "actions": {
+    "rapid": {
+     "r_kfold_deseas": 0.66,
+     "ci95": [
+      0.593,
+      0.722
+     ],
+     "n": 1459,
+     "rmse_sv": 2.97,
+     "sigma_sv": 3.95,
+     "r_lowpass18": 0.582,
+     "wind_only_baseline": {
+      "r": 0.67,
+      "ci95": [
+       0.601,
+       0.733
+      ],
+      "rmse_sv": 2.93
+     }
+    },
+    "fc": {
+     "r_kfold_deseas": 0.395,
+     "ci95": [
+      0.3,
+      0.487
+     ],
+     "n": 2490,
+     "rmse_sv": 2.53,
+     "sigma_sv": 2.75,
+     "r_lowpass18": 0.28,
+     "wind_only_baseline": {
+      "r": 0.199,
+      "ci95": [
+       0.129,
+       0.271
+      ],
+      "rmse_sv": 2.7
+     }
+    }
+   }
+  },
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.595,
+     "r_deseasonalised": 0.577,
+     "n_test": 219
+    },
+    {
+     "K": 3,
+     "r_raw": 0.6,
+     "r_deseasonalised": 0.586,
+     "n_test": 219
+    },
+    {
+     "K": 6,
+     "r_raw": 0.564,
+     "r_deseasonalised": 0.552,
+     "n_test": 219
+    },
+    {
+     "K": 12,
+     "r_raw": 0.556,
+     "r_deseasonalised": 0.539,
+     "n_test": 219
+    },
+    {
+     "K": 24,
+     "r_raw": 0.563,
+     "r_deseasonalised": 0.549,
+     "n_test": 219
+    }
+   ],
+   "seasonal_floor_raw": 0.19,
+   "seasonal_floor_deseas": -0.043
+  },
+  "dip_check.json": {
+   "run": "actions",
+   "window": [
+    "2009-09",
+    "2010-06"
+   ],
+   "r_out_of_fold": 0.66,
+   "sign_agreement_pct": 71.4,
+   "dip_observed_sv": -6.95,
+   "dip_predicted_sv": -3.14,
+   "dip_captured_pct": 45.2
+  },
+  "provenance.json": {
+   "run_number": 397,
+   "sha": "f2ee8b8b5c5b409c92a65c35df7350d2158d5802",
+   "code": "https://github.com/blauewelt/earth/tree/f2ee8b8b5c5b409c92a65c35df7350d2158d5802",
+   "inputs": {
+    "doc": "E-038 READ-OUT LADDER, RE-RUN of #392 with the FIXED probe_head.py. #392's probe_kfold landed - rapid r 0.660 [0.593, 0.722] against a wind-only ridge bar of 0.670 [0.601, 0.733], i.e. two raw wind features still beat 64 mean-pooled learned ones - but BOTH ml/probe_head.py invocations were OOM-KILLED (15:00:48 and 15:26:06), and because both steps are best-effort the run went GREEN; the only honest trace was the archive step's 'not present: probe_head.json, probe_head_raw3x3.json'. Cause: an 82.8 GB TRANSIENT inside np.nan_to_num(Xa, copy=False). copy=False never copies the VALUES, but the masked-copyto form builds isnan + isposinf + isneginf, and isposinf/isneginf each build isinf and signbit underneath, so five full-size bools are live at once (measured 5.00x one bool) - 132.5 GB peak on a 126 GB box. FIXED in f2ee8b8: probe_head gets the LazyPixels treatment the #388 fix gave probe_kfold/probe_sequence/dip_check and missed here; on a 1/59-scale fixture VmHWM went 2.132 -> 0.642 GiB (3.3x). THIS RUN EXISTS TO PRODUCE ONE THING: the UNPOOLED head number - cross-attention over the ~67 raw section pixel embeddings - and its MATCHED raw-3x3 end-to-end control. That pair is the decisive test of whether E-038's headline is READ-OUT-LIMITED (the ridge on Z.mean(1) annihilates the east-minus-west contrast across 26.5N that geostrophic transport IS, so the head clears the wind bar) or REPRESENTATION-LIMITED (the head does not clear it either, and the pentad codec has not learned transport). Inputs are #392's verbatim, all 25 - only doc changed. EVAL ONLY: --steps 60000 = the checkpoint's own step, zero training.",
+    "steps": "60000",
+    "batch": "512",
+    "d_z": "64",
+    "anomaly": "true",
+    "temporal_steps": "0",
+    "temporal_d_model": "96",
+    "temporal_layers": "3",
+    "eval_every": "7500",
+    "resume": "!f3_anchor41M",
+    "head_probe": "true",
+    "light_probe_every": "0",
+    "window": "global",
+    "tensor": "family4_na025_pentad",
+    "sst_channel": "false",
+    "patch": "3",
+    "max_minutes": "0",
+    "runner": "gpu-box-47529389",
+    "job_timeout": "350",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "576",
+    "codec_layers": "10",
+    "codec_heads": "8",
+    "codec_d_dec": "768"
+   },
+   "tensor": {
+    "file": "ml/cache/family4_na025_pentad.npz",
+    "sha256": "f07cae8a5184a3b3e2909b36ba1ea0f60b27d092f747c87783f4100c1985df3d",
+    "bytes": 4045556276,
+    "X_shape": [
+     3142,
+     281,
+     481,
+     39
+    ],
+    "C": 39,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 3142
+   },
+   "torch": "2.13.0+cu130",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-47529389"
+  }
+ }
+}
