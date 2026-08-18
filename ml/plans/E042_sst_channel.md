@@ -189,9 +189,20 @@ ml/CLAUDE.md §1, with `tensor` the **only** change:
 | `eval_every` / `light_probe_every` | 7,500 / 10,000 | same |
 | `resume` | null (fresh codec) | null |
 
-The recipe `ml/recipes/f4-40M.json` carries this configuration and its
-`_provenance` names #386, so the arm should be dispatched as
-`window: recipe:f4-40M` with the tensor overridden — not hand-assembled.
+The arm is dispatched as `window: recipe:f4r2-40M` — not hand-assembled, and
+**not** as `recipe:f4-40M` with the tensor overridden, which is what an
+earlier version of this paragraph said and which does not work. `f4-40M.json`
+PINS `"tensor": "family4_na025_pentad"`, and every consumption site
+(`ml-train.yml:762`, `:881`, `scripts/probes_run.sh:43`, plus the build
+branches at 378-412 and 518-591) reads `${RECIPE_TENSOR:-$IN_TENSOR}`. The
+`:-` fallback fires only when `RECIPE_TENSOR` is UNSET, so a recipe that names
+`tensor` discards `inputs.tensor` entirely — while `provenance.json`, which
+records raw `toJSON(inputs)`, would faithfully report `family4_na025_pentad_r2`.
+That run would train **r1**, go green, and publish E-042 numbers for an
+experiment in which SST never appeared: intent and reality disagreeing in
+exactly the way the manifest exists to catch. A recipe's tensor is not
+overridable from a dispatch, so the r2 arm gets its own recipe
+(`ml/recipes/f4r2-40M.json`, identical but for the tensor).
 `head_probe: "true"`, because at pentad cadence the unpooled head is the
 primary read-out and the pooled ridge is the comparable-to-history number,
 never the verdict (ml/CLAUDE.md §3).

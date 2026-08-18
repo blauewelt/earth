@@ -25,6 +25,11 @@ the head is regularized hard (weight decay 1e-2, dropout on tokens).
 Usage:
   python3 ml/probe_head.py --run global14 --data ml/cache/na_pixels_c14_global.npz
   python3 ml/probe_head.py --run pixel25_40k --data ml/cache/na_pixels_c25_global.npz --K 3
+  python3 ml/probe_head.py --run global14 --data ... --head-device cpu
+
+The codec/embedding pass always uses the GPU when there is one; --head-device
+only says where the read-out TRAINS, and `auto` decides that with a real
+SectionHead training step before the embedding starts (see `_usable_device`).
 """
 import argparse
 import json
@@ -78,13 +83,85 @@ class SectionHead(nn.Module):
         return self.out(pooled[:, 0]).squeeze(-1)
 
 
+def _selftest_step(dev, in_dim=8, d=16):
+    """ONE full training step of a tiny SectionHead on `dev`: forward,
+    backward, optimiser step. Separated out so a test can force it to raise.
+
+    The shapes are irrelevant and deliberately minimal — what this exercises
+    is the DISPATCH, i.e. which kernels the cross-attention forward and
+    backward select on this device, on this box, with this torch build. That
+    is the only thing `_usable_device` can decide from the inputs alone."""
+    net = SectionHead(in_dim, d=d).to(dev)
+    opt = torch.optim.AdamW(net.parameters(), lr=1e-3)
+    tok = torch.randn(2, 3, in_dim, device=dev)
+    y = torch.zeros(2, device=dev)
+    loss = (net(tok) - y).pow(2).mean()
+    opt.zero_grad(); loss.backward(); opt.step()
+
+
+def _usable_device(pref):
+    """The device the READ-OUT can actually train on, decided in the first
+    second of the job instead of after the 13-minute embedding pass.
+
+    Run #397 (2026-08-18) proved out both probe_head invocations the
+    expensive way: full anomaly transform plus the entire 3142-month
+    embedding, ~13 minutes each, and then, on the FIRST `loss.backward()` in
+    fold_fit,
+
+        RuntimeError: Failed to find C compiler. Please specify via CC
+        environment variable or set triton.knobs.build.impl
+
+    — the cross-attention backward dispatches to a Triton-JIT kernel, Triton
+    builds its CUDA-utils C extension on first use, and that Vast box had no
+    C compiler and no CC. Both calls are wrapped `|| echo "::warning::..."`
+    in scripts/probes_run.sh, so the run went green with no head number: the
+    second consecutive failure to produce the one read-out that is primary at
+    pentad cadence (ml/CLAUDE.md §3), after #392's OOM.
+
+    `torch.cuda.is_available()` was TRUE on that box — it is the wrong
+    question. This runs the same forward AND backward that failed, so a
+    device that cannot finish a training step is discovered while the inputs
+    are all it has cost us (ml/CLAUDE.md §0.3 / §5.16), and ANY exception
+    means CPU rather than no number at all: a slower read-out is a result, a
+    fallen-over one is not.
+
+    The global RNG is saved and restored around the probe, so the fold
+    numbers stay a function of the data and the seed and never of whether
+    this self-test ran."""
+    dev = pref if isinstance(pref, torch.device) else torch.device(pref)
+    if dev.type == "cpu":
+        return dev
+    state = torch.get_rng_state()
+    try:
+        _selftest_step(dev)
+    except Exception as e:              # noqa: BLE001 — ANY failure means CPU
+        msg = " ".join(str(e).split())
+        print(f"head read-out: {dev.type} FAILED its self-test, falling back "
+              f"to CPU — one SectionHead train step raised "
+              f"{type(e).__name__}: {msg[:200]}"
+              f"{'...' if len(msg) > 200 else ''}")
+        return torch.device("cpu")
+    finally:
+        torch.set_rng_state(state)
+    return dev
+
+
 def fold_fit(Xtr, ytr, Xte, in_dim, seed, steps=4000, d=64, n_blocks=0):
-    # THE READ-OUT TRAINS WHERE ITS DATA IS. codec.to(_dev) below moved the
-    # EMBEDDING pass to the GPU, but this function built its SectionHead on
-    # CPU and ran 4,000 optimiser steps per fold there — for the head probe
-    # and again for its matched raw-3x3 control. That is the 96%-CPU /
-    # 0%-GPU tail seen on #116. Following Xtr's device keeps this correct
-    # whichever way the caller supplies the tokens.
+    # THE READ-OUT TRAINS WHERE ITS DATA IS, and main() now decides where that
+    # is BEFORE embedding (`--head-device`, `_usable_device`). Following Xtr's
+    # device keeps this function correct whichever way the caller supplies the
+    # tokens; it does not, by itself, make any device work.
+    #
+    # The #116 context, corrected. #116's tail was 96% CPU / 0% GPU because
+    # codec.to(_dev) moved the EMBEDDING pass to the GPU while this function
+    # stayed on the CPU tokens it was handed. Moving the tokens to the GPU was
+    # a real fix for that — but the GPU path it opened had never once executed
+    # end to end, and the claim that it had is what this comment used to
+    # assert. Two bugs sat in it: the cross-attention BACKWARD needs a Triton
+    # JIT build, which failed on the box in #397 (see `_usable_device`), and
+    # the return below reached `.numpy()` on a CUDA tensor, which raises
+    # `TypeError: can't convert cuda:0 device type tensor to numpy` — never
+    # observed only because the backward died first.
     dev = Xtr.device
     torch.manual_seed(seed)
     g = torch.Generator().manual_seed(seed)
@@ -116,7 +193,10 @@ def fold_fit(Xtr, ytr, Xte, in_dim, seed, steps=4000, d=64, n_blocks=0):
         net.load_state_dict(best_state)
     net.eval()
     with torch.no_grad():
-        return net(Xte).numpy()
+        # .cpu() is a no-op on a CPU tensor and the only way off a CUDA one:
+        # `.numpy()` on cuda:0 raises TypeError. This line is why the GPU path
+        # could not have worked even had the backward built.
+        return net(Xte).cpu().numpy()
 
 
 def main():
@@ -129,6 +209,16 @@ def main():
                     help="head width (64 = the ~23k original)")
     ap.add_argument("--head-blocks", type=int, default=0,
                     help="pre-pooling self-attention blocks (0 = original)")
+    ap.add_argument("--head-device", choices=("auto", "cpu", "cuda"),
+                    default="auto",
+                    help="where fold_fit trains the read-out. auto = try cuda "
+                         "when it is available and fall back to CPU if a real "
+                         "SectionHead train step fails there (run #397: no C "
+                         "compiler for Triton's JIT); cpu = force CPU, no "
+                         "self-test; cuda = ask for cuda, still self-tested. "
+                         "The codec/EMBEDDING pass is on the GPU either way — "
+                         "this flag only moves the read-out training, so the "
+                         "device is reversible from the dispatch.")
     ap.add_argument("--raw-patch", action="store_true",
                     help="with --raw: raw tokens carry the 3x3 neighbourhood "
                          "(matches the patch codec's receptive field)")
@@ -156,6 +246,23 @@ def main():
                          "independent draw; the file name carries it so two "
                          "draws cannot overwrite each other.")
     a = ap.parse_args()
+
+    # FIRST, before the checkpoint, the anomaly transform and the ~13-minute
+    # embedding pass: decide where the read-out can train. This is a
+    # precondition that depends only on the inputs, so it is checked while the
+    # inputs are all it has cost us (ml/CLAUDE.md §0.3 / §5.16) — #397 spent
+    # two full embedding passes to learn it, twice, and reported success.
+    if a.head_device == "cpu":
+        head_dev = torch.device("cpu")
+        print("head read-out on cpu (--head-device cpu; no self-test)")
+    else:
+        want = ("cuda" if (a.head_device == "cuda" or torch.cuda.is_available())
+                else "cpu")
+        head_dev = _usable_device(torch.device(want))
+        why = ("no cuda on this box" if want == "cpu"
+               else "passed the SectionHead forward+backward self-test"
+               if head_dev.type == "cuda" else "self-test failed, see above")
+        print(f"head read-out on {head_dev.type} ({why})")
 
     ck = torch.load(os.path.join(HERE, "runs", a.run, "pixelmae.pt"),
                     map_location="cpu", weights_only=False)
@@ -307,8 +414,11 @@ def main():
             toks[i, block, :feat_dim] = z
             toks[i, block, feat_dim] = lon_frac
             toks[i, block, feat_dim + 1] = j / max(1, a.K - 1) if a.K > 1 else 0.0
-    # ...and the tokens go with it, so fold_fit trains on the GPU.
-    T_ = torch.as_tensor(toks).to(_dev)
+    # ...and the tokens go to whichever device the read-out was CLEARED for at
+    # the top of main(), which is not necessarily the codec's: fold_fit follows
+    # Xtr.device, so this line is what decides where 4,000 optimiser steps per
+    # fold happen. `_dev` (the codec) stays on the GPU regardless.
+    T_ = torch.as_tensor(toks).to(head_dev)
 
     pred = np.full(len(v_des), np.nan)
     years = yr[ridx]
