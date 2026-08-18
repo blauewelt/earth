@@ -551,6 +551,151 @@ canonical map never takes the transform's writes.
   2.132 → 0.642 GiB, 3.3×, with the eager path pinned as a tripwire).
   **Re-dispatched as #397** to produce the head number.
 
+### #397 — the head probe died a THIRD time, and the cause was neither memory nor code: THE BOX HAS NO C COMPILER
+
+**The memory fix held.** `f2ee8b8`'s LazyPixels treatment worked exactly as
+measured: #397's embedding completed in **~2.5 minutes at low RAM**, where
+#392 had been OOM-killed in `np.nan_to_num`. Nothing about the 132.5 GB
+transient recurred.
+
+**Then the FIRST `loss.backward()` in `fold_fit` (`ml/probe_head.py:102`)
+raised**, verbatim from the job log of run #397 (id 32174255568):
+
+```
+File ".../torch/_native/ops/bmm_outer_product/triton_impl.py", line 28,
+  in _bmm_outer_product_impl
+File ".../triton/runtime/build.py", line 32, in _build
+RuntimeError: Failed to find C compiler. Please specify via CC environment
+  variable or set triton.knobs.build.impl.
+```
+
+Both invocations died identically — the head at **20:14:54** and its matched
+raw-3×3 control at **20:26:23**. So for the third time in one day, and for
+the third distinct reason, the run that exists to produce the unpooled head
+number produced provenance and a `probe_kfold` and nothing else. (#397's
+`probe_kfold` did land, and reproduces #392 exactly: rapid
+**0.660** [0.593, 0.722] against the wind-only ridge bar of **0.670**
+[0.601, 0.733].)
+
+**Mechanism.** torch 2.13's `_native` eager router dispatches this backward
+through a **triton** kernel, and triton **JIT-compiles C at first use**. The
+Vast box image ships no `cc`. It is a dispatch-table property of the op, not
+of our code — which is why it bites `probe_head` and has never bitten
+anything else here: an eval-only run does no codec backward at all, and
+`probe_sequence`'s temporal-transformer backward does not route through this
+op. Whether the codec-TRAINING runs (e.g. #386) miss the op or merely happen
+to sit on boxes that carry a compiler is **not established and does not
+matter for the fix**.
+
+**Fix (this commit).** The `Install deps` step of `.github/workflows/ml-train.yml`
+now ensures a C compiler exists before anything that can backprop:
+install-if-missing (`command -v cc || command -v gcc` → `apt-get install -y -qq
+gcc`; the boxes run as root, same as `gpu_box.mjs`'s onstart), then resolve the
+binary and export **`CC` through `$GITHUB_ENV`**, so the **Train** step and the
+**probe ladder** both inherit it — a future codec architecture that happens to
+route through triton must not die at step 1 of a fourteen-hour run. A warm box
+skips the apt entirely in well under a second; `ubuntu-latest` never enters the
+branch. It is deliberately **not fatal** (§5.17 — most runs never touch a
+triton path, and killing them for a transient apt mirror costs more than it
+protects), but it **asserts the effect** (§0.2): it re-checks for the binary
+after the install and prints its version, so "installing gcc" can never be a
+log line about nothing. Both branches were exercised locally under `bash -e`
+before the push — compiler-present (exits 0, writes `CC=/usr/bin/cc`) and
+compiler-absent with a stub `apt-get` (warns, exits 0, writes nothing).
+
+### #386 — the run COMPLETED and all three of its probes OOM-died on code that predated the day's fixes
+
+**#386 (E-038a, f4-40M, the first codec trained from scratch on the r1 pentad
+tensor) finished successfully at 22:04Z.** It was dispatched at **06:02Z**
+pinned to sha `c7ba151` — before **every one** of 2026-08-18's probe fixes —
+so `probe_sequence` (21:10), `probe_kfold` (21:38) and `dip_check` (22:03)
+were **all OOM-killed**, and `probes-386.json` carries **provenance only**.
+This is the outcome the audit above predicted in writing while the run was
+still open ("it will run the code it CHECKED OUT AT JOB START — sha
+`c7ba151`, 06:02Z — which still carries both broken copies; this commit
+cannot reach it").
+
+**The trained checkpoint is safe.** `Upload checkpoint + eval` was green
+(artifact `pixelmae-386`, 323 MB, ID 9342241162, 21:00Z). Its training ran
+under `max_minutes: 850`, and `fit_schedule` re-fitted the cosine repeatedly —
+the last re-fit line reads *"re-fitting … from 158766 to 166752 steps"* — and
+the run trained that annealed schedule **to completion**:
+`run-386.jsonl` on `ml-metrics` ends at **step 166,752** (`loss_rec` 0.22035,
+`loss_nei` 0.19750, `wall_s` 48,849.1), and the log's final progress line is
+`step 166750/166752`, followed by `saved ml/runs/actions/pixelmae.pt`.
+`train.py:897` assigns the re-fit total back into `a.steps`, and the final
+save is `save_ckpt(a.steps)` (line 1030), so the checkpoint's **recorded step
+is 166,752**, not the dispatched 200,000.
+
+**Where the checkpoint is.** There is **no** `run-386` asset on the
+`model-checkpoints-v1` release — codec checkpoints reach that release only via
+the rescue path, and `rescued-orphan-latest-386.pt` (06:05:55Z) is the file
+#386 *rescued from the previous job on its box*, not its own. #386's own
+checkpoint lives in two places: the Actions artifact `pixelmae-386`, and the
+box-persistent mirror `/opt/earth-cache/ckpt/run-386.pt` written by
+`save_ckpt` under `CKPT_TAG=run-386`. That mirror is intact on
+**gpu-box-47094143**: the mirror never reported a skip, `disk_hygiene.sh`
+exited at its first check on that job (`disk hygiene: 44 GB free, want 16 GB`)
+so it pruned no `run-*.pt`, its prune rule keeps the two highest run numbers
+in any case, and **no job has run on that box since**. Hence the eval below
+resumes `!run-386`.
+
+**In-training numbers #386 did produce** (light probe at its final step, NOT
+`probe_kfold` and not comparable to the headline bar): `linear_r_deseas`
+**0.624**, `linear_r_raw` 0.646, `temporal_r_deseas` 0.604,
+`chan_vs_persistence` +31.8%, `z_vs_persistence` +43.3%.
+
+### Two EVAL-ONLY dispatches, 2026-08-18 ~22:15Z — both on boxes that were burning idle anyway
+
+Both carry the `cc` guard above; both are dispatched on `ref: main` at the
+sha this commit creates, and both run on boxes that are RUNNING and idle, so
+their marginal GPU cost is zero (Vast balance ~$16.02, fleet ~$1.78/h over 6
+boxes). Run numbers are assigned by GitHub at dispatch, which is *after* this
+commit — that ordering is deliberate (the fix and the log go up together, in
+one push, before anything is queued).
+
+**Eval A — the anchor head number, ATTEMPT 3.** On `gpu-box-47529389` (vast
+47720664; warm: r1 pentad tensor + `f3_anchor41M`). #397's verbatim inputs,
+all 25, `doc` alone changed: `steps` 60000 (= the checkpoint's own step, so
+nothing trains), `resume` `!f3_anchor41M`, `head_probe` true, `tensor`
+`family4_na025_pentad`, `patch` 3, codec 576/10/8/768, `d_z` 64,
+`temporal_steps` 0, `light_probe_every` 0, `eval_every` 7500, `window` global,
+`anomaly` true, `max_minutes` 0, `job_timeout` 350, `lr_floor` 0,
+`lr_decay_steps` 0, `batch` 512, `sst_channel` false, `runner`
+gpu-box-47529389.
+
+*What it must produce:* the **unpooled head number** — cross-attention over
+the ~67 raw 26.5°N section pixel embeddings — and its **matched raw-3×3
+end-to-end control**. *Falsifier, unchanged since #392:* if the head does not
+clear the wind-only ridge bar of **0.670**, E-038's pentad headline is
+**representation-limited** (the pentad codec has not learned transport); if it
+does clear it, the pooled decline is a **read-out artefact** of
+`probe_kfold`'s `Z.mean(1)`, which annihilates the east-minus-west contrast
+across 26.5°N that geostrophic transport *is*. Three attempts, three distinct
+deaths: **#392** the 82.8 GB `nan_to_num` transient, **#397** the missing C
+compiler, and before them #391 the tensor step.
+
+**Eval B — #386's own codec, full probe ladder + head.** On
+`gpu-box-47094143` (vast 47720660; warm: r1 pentad tensor + `run-386.pt`).
+Eval-only by the same mechanism: `steps` **166752** = the checkpoint's recorded
+step, so `train.py`'s `while s < a.steps` never turns over. Codec geometry
+**matches #386 exactly** — 512/12/4/256, `d_z` 32, `patch` 1 — because
+`--resume` derives architecture from the checkpoint's own `args` and a
+contradicting dispatch is refused (this is the #395 failure, sixty
+`size mismatch` lines in 90 s). Inputs: `resume` `!run-386`, `head_probe`
+true, `anomaly` true, `temporal_steps` 0, `light_probe_every` 0, `eval_every`
+7500, `tensor` `family4_na025_pentad`, `window` global, `sst_channel` false,
+`max_minutes` 0, `job_timeout` 350, `lr_floor` 0, `lr_decay_steps` 0, `batch`
+512, `runner` gpu-box-47094143.
+
+*What it must produce:* #386's **`probe_kfold`** — the number the whole E-038a
+arm was trained to generate and which has never existed — against the
+wind-only ridge bar of **0.670** and the frozen-anchor bar of **0.660**, AND
+its **unpooled head number** on the fixed code. *Falsified* if the
+from-scratch pentad codec does not beat the frozen monthly anchor: that is
+E-038a's original out-of-domain hypothesis, and 21 hours of training have so
+far bought no measurement of it at all.
+
 ### E-038c ATTEMPT 2 (2026-08-18 20:35Z): #400, the daily arm re-dispatched
 
 **Hypothesis, unchanged from #389.** A 38 M codec trained from scratch on the

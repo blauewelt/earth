@@ -259,6 +259,54 @@ jobs:
           python3 ml/dispatch_config.py --window "${WINDOW}" || true
       - name: Install deps (torch matches the hardware)
         run: |
+          # A C COMPILER, BEFORE ANYTHING THAT CAN BACKPROP. torch 2.13's
+          # _native eager router dispatches some backward kernels (measured:
+          # bmm_outer_product, which is what SectionHead's cross-attention
+          # backward lands on) through TRITON, and triton JIT-COMPILES C at
+          # first use. The Vast box image ships no `cc`, so the very first
+          # loss.backward() in ml/probe_head.py:fold_fit died with
+          #   triton/runtime/build.py: RuntimeError: Failed to find C compiler.
+          #   Please specify via CC environment variable or set
+          #   triton.knobs.build.impl
+          # — #397, BOTH invocations (head 20:14:54, raw-3x3 control 20:26:23),
+          # after the run had already spent ~2.5 min embedding. It is the third
+          # death of probe_head in one day and the first with this cause.
+          #
+          # Why it only ever bit probe_head: eval-only runs do no codec
+          # backward at all, and probe_sequence's temporal transformer
+          # backward does not route through that op. That is an observation,
+          # not a guarantee — a codec architecture that happens to route
+          # through triton would die at step 1 of a fourteen-hour run — so the
+          # guard is set HERE, in the step every later step inherits from,
+          # rather than next to the probe ladder.
+          #
+          # INSTALL-IF-MISSING, not install: a warm box already carrying gcc
+          # skips apt entirely in well under a second, and ubuntu-latest
+          # never enters the branch at all. The boxes run as root
+          # (RUNNER_ALLOW_RUNASROOT=1), same as gpu_box.mjs's onstart, so no
+          # sudo. NOT FATAL on failure (§5.17: only a definite answer may be
+          # fatal — most runs never touch a triton path, and killing them for
+          # a transient apt mirror would cost more than it protects), but it
+          # asserts the EFFECT (§0.2): it re-checks for the binary afterwards
+          # and prints the version, so "installed gcc" can never be a log
+          # line about nothing.
+          if ! command -v cc >/dev/null 2>&1 && ! command -v gcc >/dev/null 2>&1; then
+            echo "no C compiler on this box — installing gcc for triton's JIT"
+            (apt-get update -qq && apt-get install -y -qq gcc) \
+              || echo "::warning::gcc install failed — a triton JIT path will still die at first use"
+          fi
+          CC_BIN="$(command -v cc || command -v gcc || true)"
+          if [ -n "$CC_BIN" ]; then
+            # Exported to $GITHUB_ENV, so TRAIN and the PROBE LADDER both
+            # inherit it. triton reads $CC before it goes looking, and a box
+            # where gcc exists but /usr/bin/cc was never alternatives-linked
+            # would otherwise still fail the lookup.
+            echo "CC=$CC_BIN" >> "${GITHUB_ENV:-/dev/null}"
+            export CC="$CC_BIN"
+            echo "C compiler: $CC_BIN — $("$CC_BIN" --version 2>&1 | head -1)"
+          else
+            echo "::warning::no C compiler and none could be installed — any triton JIT kernel (e.g. probe_head's backward) will fail"
+          fi
           pip install --quiet numpy netCDF4 matplotlib
           # CUDA wheel when the runner has a GPU, CPU wheel otherwise —
           # train.py auto-selects the device, so the same dispatch works on both.
