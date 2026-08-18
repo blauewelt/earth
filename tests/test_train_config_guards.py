@@ -26,6 +26,9 @@ Case 2: --resume with NO architecture    -> ADOPT the checkpoint's, and
 Case 3: --resume with a CONTRADICTING    -> REFUSE, naming both values, and
         architecture                        refuse BEFORE loading weights.
 Case 4: --collapse-r above every probe   -> ABORT with a "collapsed" record
+Case 5: --resume a checkpoint whose      -> ADOPT it. A field carrying a real
+        dec_layers differs from the         default is not a contradiction just
+        argparse default                    because it is non-None.
         reading                             in metrics.jsonl.
 
     python3 tests/test_train_config_guards.py
@@ -190,7 +193,36 @@ def main():
     print("case 4 ok — fires on collapse, records it, spares a healthy run")
     ok += 1
 
-    print(f"\nall {ok}/4 dispatch-configuration guards hold")
+    # ---- case 5: a DEFAULTED field must not read as a contradiction ------
+    # --dec-layers still carries a real default (2, every pre-E-019b codec),
+    # so "the dispatch did not ask" and "the dispatch asked for 2" are the
+    # same value. Resuming an E-019b 3-hidden-layer decoder without naming
+    # --dec-layers must ADOPT 3, not refuse a dispatch that expressed no
+    # opinion. This is the false-refusal twin of case 3 and it shipped broken
+    # for about ten minutes.
+    deep = os.path.join(tmp, "deep")
+    r = trainer(npz, deep, ARCH + ["--dec-layers", "3"])
+    if r.returncode != 0:
+        print((r.stdout + r.stderr)[-2500:])
+        raise SystemExit("case 5 setup FAILED: --dec-layers 3 did not train")
+    dck = os.path.join(deep, "pixelmae.pt")
+    r = trainer(npz, os.path.join(tmp, "deepchild"),
+                ["--resume", dck, "--steps", "50"])
+    out = r.stdout + r.stderr
+    if r.returncode != 0:
+        print(out[-2500:])
+        raise SystemExit("case 5 FAILED: resuming a 3-decoder-layer checkpoint "
+                         "without naming --dec-layers was REFUSED. A field the "
+                         "dispatch never set cannot be a contradiction.")
+    if "dec_layers=3" not in out:
+        print(out[-2500:])
+        raise SystemExit("case 5 FAILED: it trained but did not report "
+                         "adopting dec_layers=3 — check it did not silently "
+                         "rebuild a 2-layer decoder")
+    print("case 5 ok — a defaulted field adopts instead of refusing")
+    ok += 1
+
+    print(f"\nall {ok}/5 train.py configuration guards hold")
 
 
 if __name__ == "__main__":

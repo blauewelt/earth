@@ -17,6 +17,7 @@ Real  (Colab TPU/GPU): colab run --gpu v6e1 ml/train.py   (see ml/README.md)
 import argparse
 import json
 import os
+import sys
 import time
 
 import numpy as np
@@ -386,9 +387,17 @@ def main():
             if want is None:
                 continue
             have = getattr(a, k)
-            if have is None:
-                setattr(a, k, want)
-                adopted.append(f"{k}={want}")
+            # "Did the dispatch ASK for this?" is not the same question as "is
+            # it non-None". --dec-layers still carries a real default of 2
+            # (every pre-E-019b codec), so a resume from one of E-019b's
+            # 3-hidden-layer decoders would read have=2, want=3 and refuse a
+            # dispatch that never expressed an opinion — the false-refusal
+            # twin of the bug this block exists to kill. Ask argv instead.
+            explicit = ("--" + k.replace("_", "-")) in sys.argv
+            if have is None or not explicit:
+                if have != want:
+                    setattr(a, k, want)
+                    adopted.append(f"{k}={want}")
             elif have != want:
                 clash.append(f"    {k}: dispatch says {have}, "
                              f"checkpoint holds {want}")
