@@ -43,7 +43,7 @@ regression:
   6. **Truth attaches by ROW on this axis**, and labels outside it are
      dropped rather than clamped to an edge bin.
 
-E-041 added recipe r2 — the same tensor with OISST SST appended as channel
+E-042 added recipe r2 — the same tensor with OISST SST appended as channel
 40 — and with it four checks that are all about the r1/r2 relationship,
 because the safety argument for shipping a new recipe is that the old one
 did not move:
@@ -208,7 +208,7 @@ def write_wind(cache, rng, years=(2004,), ndays=90):
     return g_lat, g_lon, fields
 
 
-# E-041. `ml/fetch_sst_na.py`'s contract, restated here as a FIXTURE rather
+# E-042. `ml/fetch_sst_na.py`'s contract, restated here as a FIXTURE rather
 # than imported, so a change to that contract breaks this test instead of
 # silently travelling through it: int16 (NDAYS, H, W), day-major, scale
 # 0.01 degC, nodata -32768, index.npz carrying bin_index (days since the
@@ -489,7 +489,7 @@ def main():
     print("  9. an already-built tensor skips even when the free-space guard "
           "would refuse a fresh build (run #391)")
 
-    # ======================= E-041: recipe r2, the sst channel ============
+    # ======================= E-042: recipe r2, the sst channel ============
     # r1 is everything above and MUST NOT MOVE — #386/#387 are training on it
     # and every number in EXPERIMENTS.md was measured on it. So r2 is built
     # from the SAME fixtures and compared against the r1 tensor already on
@@ -571,7 +571,7 @@ def main():
           f"nodata cells stay missing")
 
     # ---- 12: SST is live BEFORE 2004, where rg_t cannot be ----------------
-    # The reason for the channel (E-041): the tensor's only other temperature
+    # The reason for the channel (E-042): the tensor's only other temperature
     # is Argo rg_t, whose product starts in 2004 (fill_rg_pentad walks
     # `y, m = 2004 + k // 12, ...`), so 1982-2003 carries none at all.
     START90, END90 = dt.date(1990, 1, 1), dt.date(1990, 2, 28)

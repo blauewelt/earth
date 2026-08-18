@@ -10,7 +10,7 @@ memmappable `_X.npy` sidecar, `truth_daily.npz`, the centred 5-day rolling
 wind sigma) hangs off that one flag inside the shared builder, where the
 pentad path stays byte-identical to what built E-038a/b's tensors.
 
-E-041 adds the second axis, `--rev`: `--rev r2` builds
+E-042 adds the second axis, `--rev`: `--rev r2` builds
 `family5_na025_daily_r2.npz` under recipe `f5r2`, the same 39 channels plus
 the appended `sst`. It passes straight through to the shared builder like
 every other flag — this wrapper still pins nothing but the cadence.
@@ -19,7 +19,7 @@ Run:
   python3 ml/build_family5.py --dry-run
   python3 ml/build_family5.py --pentad-dir ml/cache/glorys_daily025
   python3 ml/build_family5.py --pentad-dir ... --max-bins 40   # smoke
-  python3 ml/build_family5.py --rev r2 --pentad-dir ...        # E-041, +sst
+  python3 ml/build_family5.py --rev r2 --pentad-dir ...        # E-042, +sst
 
 Sizes, so nobody re-derives them: [15706, 281, 481, 39] float16 = 165.6 GB.
 The sidecar layout exists because np.load on a compressed npz member

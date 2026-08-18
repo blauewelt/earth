@@ -2,7 +2,7 @@
 """Family-4 tensor: the 0.25-degree North Atlantic at PENTAD cadence.
 
 E-034 step 4. Output `ml/cache/family4_na025_pentad.npz` (recipe f4r1), or
-`family4_na025_pentad_r2.npz` at `--rev r2` (f4r2, E-041: + the sst channel).
+`family4_na025_pentad_r2.npz` at `--rev r2` (f4r2, E-042: + the sst channel).
 
 WHY A NEW FAMILY AND NOT AN EDIT TO build_family3.py (E-034 §5). A pentad
 tensor and a monthly tensor must never be silently mixed: every result in
@@ -34,7 +34,7 @@ definitions quietly describing different pixels than they name, and it would
 be invisible in every plot.
 
 CHANNELS are family-3's 39, in family-3's order, imported from that module so
-there is ONE definition — plus, at recipe r2 (E-041), an APPENDED 40th. Per
+there is ONE definition — plus, at recipe r2 (E-042), an APPENDED 40th. Per
 E-034 §2 the cadence policy differs per channel group, and that is the whole
 substance of this file:
 
@@ -93,7 +93,7 @@ Run:
   python3 ml/build_family4.py --dry-run
   python3 ml/build_family4.py --pentad-dir ml/cache/glorys_pentad
   python3 ml/build_family4.py --pentad-dir ... --max-bins 40   # smoke
-  python3 ml/build_family4.py --rev r2 --pentad-dir ...        # E-041, +sst
+  python3 ml/build_family4.py --rev r2 --pentad-dir ...        # E-042, +sst
 """
 import argparse
 import datetime as dt
@@ -124,9 +124,9 @@ END = dt.date(2024, 12, 31)
 # parameter and everything family-specific hangs off it. The family-4 path
 # (days=5) is byte-identical to what built the tensors E-038a/b train on.
 #
-# E-041: the RECIPE REVISION is the second axis of this table. r2 appends SST
+# E-042: the RECIPE REVISION is the second axis of this table. r2 appends SST
 # (below); r1 is kept, buildable and byte-identical, because #386/#387 are in
-# flight on it and every number in EXPERIMENTS.md before E-041 was measured on
+# flight on it and every number in EXPERIMENTS.md before E-042 was measured on
 # it. The output NAME carries the rev, so an r1 and an r2 tensor can sit on
 # one box without either overwriting the other — and `ml-train.yml` derives
 # $TENSOR from the `tensor` input verbatim, so these file stems ARE the
@@ -146,14 +146,14 @@ CADENCE = {
 CHANS, LEVELS = f3.CHANS, f3.LEVELS
 C_BASE, C_RG, C_WIND, NC = f3.C_BASE, f3.C_RG, f3.C_WIND, f3.NC
 
-# E-041. SST is APPENDED, and the appending is the whole safety argument:
+# E-042. SST is APPENDED, and the appending is the whole safety argument:
 # channels 0..38 keep the indices every published result was measured at,
 # `build_family3.py` is not touched, and an r1 and an r2 tensor are diffable
 # channel by channel. Channel ORDER is not information the model uses —
 # identity comes from `chan_emb` (ml/model.py), which embeds the channel
 # INDEX and is trained from scratch per run — so "last" costs nothing.
 #
-# WHY SST AT ALL (E-041): of the 39 channels, the only temperature is Argo
+# WHY SST AT ALL (E-042): of the 39 channels, the only temperature is Argo
 # `rg_t`, which starts in 2004 and is live in one bin per month. 1982-2003 —
 # 22 of the 43 years — carries no temperature at all. OISST is on the tensor's
 # own grid, daily, and live in 100% of the bins across the whole axis.
@@ -543,7 +543,7 @@ def fill_sst(X, bins, lats, lons, days=PENTAD_DAYS, sst_dir=None):
     storm band. Unlike the wind std, a mean is aggregable from dailies, which
     is why no second cadence-specific estimator is needed.
 
-    COVERAGE is the point of the channel (E-041): OISST runs 1982-present, so
+    COVERAGE is the point of the channel (E-042): OISST runs 1982-present, so
     this is live in ~100% of the bins across the whole axis, where `rg_t` —
     the tensor's only other temperature — starts in 2004 and is live in one
     bin per month. Returns the number of rows that received any value.

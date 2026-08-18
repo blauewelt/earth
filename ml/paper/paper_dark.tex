@@ -455,7 +455,20 @@ transport labels are reduced onto, so a label is the target of a state
 with no re-alignment step anywhere. Table~\ref{tab:inputdata} is the
 channel list, in tensor order.
 
-\begin{table}[t]
+A second axis crosses the cadence axis: the \emph{recipe revision}.
+Revision \textbf{r1} is the 39-channel tensor every number in this report
+was measured on. Revision \textbf{r2} appends one channel --- daily
+$0.25^\circ$ OISST sea-surface temperature, channel 40 --- and is built,
+tested and published as an artifact, with no codec trained on it yet. It is
+listed here because the two revisions are one specification with one
+difference, and because a channel addition is not a variation of a tensor
+but a new one: it changes $C$, so it changes the encoder's input projection
+and channel embedding, and every codec must be retrained rather than
+fine-tuned. Appending rather than inserting is what keeps the two comparable
+--- channels 1--39 hold the indices at which every published result was
+measured, and an r1 and an r2 tensor are diffable channel by channel.
+
+\begin{table}[p]
 \centering\small
 \setlength{\tabcolsep}{4pt}
 % Narrow p-columns: justify them and LaTeX stretches interword space into
@@ -504,10 +517,20 @@ within-pentad standard deviation &
 $\sigma$ over the 5 calendar days \emph{centred} on the bin's midpoint
 &
 the full axis, 1982--2024 \\
+\addlinespace
+40 (r2) &
+\texttt{sst} (1), \emph{revision r2 only} &
+NOAA OISST v2.1 \texttt{sst.day.mean} (AVHRR analysis, NOAA PSL) &
+$0.25^\circ$, daily &
+NaN-aware mean of the bin's 5 days, on the window's own grid &
+the day's own field &
+the full axis, 1982--2024; live in $\approx$100\% of bins \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{What the encoder tensors contain}, families 4 and 5.
-Both are $[T,281,481,39]$ \texttt{float16}, z-scored per channel, on
+Both are $[T,281,481,39]$ \texttt{float16} at recipe revision r1 ---
+$[T,281,481,40]$ at r2, whose appended \texttt{sst} channel is the last
+row and is carried by no trained model yet --- z-scored per channel, on
 the axis described above. The \emph{ch.} column gives each group's
 1-based position along the channel axis, in tensor order; that order is
 defined once, in \texttt{ml/build\_family3.py}, and imported by every
@@ -522,7 +545,10 @@ inside the Argo era the one-live-bin rule leaves $\approx83\%$ of
 pentad bins and $\approx97\%$ of daily bins carrying the missing token
 on those 32 channels ($92\%$ and $98\%$ over the whole
 1982--2024 axis). Missingness is information, and it is represented,
-never imputed.}
+never imputed. The r2 channel is the complement of that row: OISST is
+observed daily on the tensor's own grid, so it is the one channel live in
+essentially every bin of the full axis, including the 22 years
+(1982--2003) in which the tensor otherwise holds no temperature at all.}
 \label{tab:inputdata}
 \end{table}
 
@@ -537,20 +563,34 @@ normal that the companion visualization uses, which contains held-out
 years and would leak test-period information into training through the
 baseline. The two baselines look interchangeable and are not.
 
-\paragraph{What is deliberately not an input.} There is no
-sea-surface-temperature field of any kind in these 39 channels. The
-E-034 cadence audit declared an OISST SST channel (daily, entering as
-a pentad mean); it was never implemented, and the closest proxy the
-tensor actually carries is \texttt{rg\_t10} --- Argo temperature at
-10\,dbar, $1^\circ$ and monthly, one live bin per month. Daily
-$0.25^\circ$ OISST (the E-040 bake) is the planned first channel
-addition of the next recipe revision: it would be the only channel
-native to the tensor's own grid, and its record covers the full
-1982--2024 axis, including the GLORYS-less 1982--92 decade. It is
-named here as a plan and not a result, because any channel addition
-changes $C$ and requires retraining every codec --- a new recipe
-revision, not something comparable to the present one
-(\S\ref{sec:families}).
+\paragraph{The temperature channel, and what is still not an input.}
+Every result in this report was measured on r1, and r1 carries no
+sea-surface-temperature field of any kind. Its only temperature is Argo
+\texttt{rg\_t}, which begins in 2004 and is live one bin per month, so
+\textbf{22 of the 43 years on the axis carry no temperature at all}, and
+inside the Argo era the channel is a missing token in $\approx$83\% of
+pentad and $\approx$97\% of daily bins. That is the gap revision r2
+closes, and it closes only that: daily $0.25^\circ$ OISST is the sole
+channel native to the tensor's own grid and the sole channel live across
+the whole 1982--2024 axis, including the GLORYS-less 1982--92 decade in
+which the Florida Current cable supplies the labels. Because the source's
+grid is offset from the tensor's by exactly half a cell in each axis ---
+OISST posts at cell centres $0.125^\circ + k\cdot0.25^\circ$, the window
+samples \emph{on} the multiples --- the channel is bilinearly
+interpolated rather than nearest-sampled; nearest-indexing would displace
+the entire field by half a cell, consistently, and would look like an
+ordinary SST map. The planned test is a matched pair against the r1 codec
+in which the tensor is the only difference, so what SST is worth can be
+read off directly.
+
+Three things remain deliberately absent. There is \textbf{no air--sea heat
+or freshwater flux}: the ocean's thermal forcing enters only through the
+state fields it has already acted on. There is \textbf{no sea-ice field},
+although the window reaches $70^\circ$N. And there is \textbf{no CO$_2$ or
+radiative-forcing series}, which is a decision rather than an omission ---
+over 1982--2024 monthly CO$_2$ correlates with a linear time index at
+$r={+}0.99$, so a model handed it has been handed the calendar, and would
+fit the trend while being indistinguishable from one that learned the date.
 
 \paragraph{Provenance.} Every training run records the built tensor's
 sha256, shape and channel list beside the verbatim dispatch inputs, in

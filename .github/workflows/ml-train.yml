@@ -57,7 +57,7 @@ on:
         description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum, optionally mode@ref or mode@twin), on a stage-2 run unroll:N for the autoregressive unroll, resume2:<tag>[@lr] to CONTINUE an existing stage-2 head (needs optimiser state: only heads written after 2026-08-10 have it), or warm2:<tag>[@lr] for a WARM RESTART from its weights alone with a fresh cosine, where temporal_steps is the EXTRA steps rather than the total (both seeded from the model-checkpoints release if the box lacks the file) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
         default: "global"
       tensor:
-        description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA monthly) | family4_na025_pentad (0.25° NA 5-day, E-034/E-038) | family5_na025_daily (0.25° NA 1-day, E-038 Phase B; sidecar layout, needs a 400+ GB disk) | family4_na025_pentad_r2 and family5_na025_daily_r2 (E-041: the same tensors plus an appended 40th channel, daily OISST SST — recipes f4r2/f5r2, their own file names, so an r1 build in flight is never overwritten). A VALUE on an existing input, never a 26th input — this file sits at the 25-input ceiling and a 26th makes the WHOLE workflow unparseable."
+        description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA monthly) | family4_na025_pentad (0.25° NA 5-day, E-034/E-038) | family5_na025_daily (0.25° NA 1-day, E-038 Phase B; sidecar layout, needs a 400+ GB disk) | family4_na025_pentad_r2 and family5_na025_daily_r2 (E-042: the same tensors plus an appended 40th channel, daily OISST SST — recipes f4r2/f5r2, their own file names, so an r1 build in flight is never overwritten). A VALUE on an existing input, never a 26th input — this file sits at the 25-input ceiling and a 26th makes the WHOLE workflow unparseable."
         default: "family2"
       sst_channel:
         description: "append monthly OISST as channel 15 (true | false)"
@@ -440,7 +440,7 @@ jobs:
 
       - name: Build dataset (repo channels + RG-Argo depth + NCEP wind stress)
         run: |
-          # E-041 recipe r2 = the same tensor plus an appended `sst` channel,
+          # E-042 recipe r2 = the same tensor plus an appended `sst` channel,
           # from the DAILY OISST artifact ml/fetch_sst_na.py bakes onto this
           # window's own grid (.github/workflows/sst-na-bake.yml publishes it
           # to the Hub's sst_na025/). Public files, so no credential reaches a
@@ -450,7 +450,7 @@ jobs:
           # reason: build_family4.py warns and leaves the channel entirely
           # missing tokens if the artifact is absent, so a silent fetch
           # failure would produce a run that TRAINS, goes green, and reports
-          # E-041 numbers for an experiment in which SST never appeared.
+          # E-042 numbers for an experiment in which SST never appeared.
           SD=/opt/earth-cache/sst_na025
           seed_sst() {
             mkdir -p "$SD"

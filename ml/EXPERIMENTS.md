@@ -44,6 +44,108 @@ low-pass).
 
 ---
 
+<a id="e-042"></a>
+## E-042 · SST as channel 40 — BUILT 2026-08-18, NOT YET DISPATCHED
+
+Chris, 2026-08-18, reading the channel table: the embedding *"should
+represent a holistic view on any point of the world"*. The 39 channels are
+almost entirely AMOC plumbing, and the tensor's only temperature is Argo
+`rg_t`.
+
+Full reasoning: [the E-042 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E042_sst_channel.md).
+
+**A numbering note.** Four commit messages from 2026-08-18 (`bcacf89`,
+`e2438c7` and the two follow-ups) and the code comments they landed label this
+work **E-041**, which was already spent on the globe playback feature that
+shipped the same day. The work is **E-042**; the code and this log are
+corrected, the commit messages are not — rewriting published history for a
+label is the worse trade. Anyone grepping `E-041` in the SST code is in the
+right place.
+
+### The gap, in coverage percentages
+
+`build_family4.fill_rg_pentad` walks the RG cubes from
+`y, m = 2004 + k // 12, k % 12 + 1` — **Argo starts in 2004**. So 1982–2003,
+**22 of the 43 years on the axis, carry no temperature at all**, and inside
+the Argo era E-034 §4's one-live-bin-per-month policy leaves `rg_t` a missing
+token in **83.6%** of pentad bins and **96.7%** of daily bins (**92%** and
+**98%** over the whole axis). OISST v2.1 is daily, native $0.25^\circ$ — the
+tensor's own grid, not an upsample — and live in ~100% of bins across the
+whole 1982–2024 axis.
+
+### Hypothesis, control, and what would falsify it
+
+**Hypothesis.** A codec of the same capacity trained on the 40-channel r2
+pentad tensor reads the RAPID transport better than the same codec trained on
+r1, because 22 of 43 years gain their first temperature field and the added
+channel is the only one native to the tensor's grid.
+
+**Control: run #386** (E-038a, f4-40M on r1) — a matched A/B in which
+`tensor: family4_na025_pentad_r2` is the ONLY difference from a dispatch
+otherwise copied verbatim from #386's own `INPUTS_JSON`. **The frozen anchor
+is NOT available as a control here**: `f3_anchor41M` has a 39-row `chan_emb`
+and cannot encode a 40-channel tensor at all, so E-038's frozen-codec baseline
+retires on r2 and the only surviving external baseline is the wind-only ridge,
+**0.670** at pentad.
+
+**Falsified** if the r2 arm's `probe_kfold` rapid r does not exceed #386's, or
+exceeds it by less than the seed band (sd 0.123, E-010), at matched steps. The
+discriminating follow-up is the **1982–92 block**, where GLORYS is absent: if
+r2 wins only there, SST is a coverage fix rather than an information gain.
+**A result that would retire the channel**: r2 measurably worse than r1 beyond
+the seed band — the fortieth channel costing capacity it does not repay.
+
+### The four scale numbers (rule 6)
+
+| | #386 (control, r1) | E-042 arm (r2) |
+|---|---|---|
+| codec params | 37,975,889 | **37,976,465** (+576: one row each in `chan_emb` and `q_chan`, measured by instantiating the real class at `n_chan=40`) |
+| batch | 512 | 512 |
+| steps | 200,000 | 200,000 |
+| data points | train pool 191,520,806 pixel-pentads | the same pool; the OBSERVED-value count rises by the sst channel and must be **read from the build's own Chinchilla inventory**, not scaled by hand |
+
+Everything else is held: `d_z` 32, `patch` 1, 512 × 12 × 4 heads, `d_dec` 256,
+`anomaly` true, `eval_every` 7,500, `light_probe_every` 10,000, `resume` null.
+`head_probe: "true"`, because at pentad cadence the unpooled head is the
+primary read-out (§3).
+
+### What exists, verified
+
+- `ml/fetch_sst_na.py` — OISST v2.1 streamed one year at a time from PSL,
+  cropped to the E-034 window and **bilinearly** interpolated onto the
+  tensor's axes. Bilinear is load-bearing: OISST's lat/lon are cell CENTRES at
+  $0.125 + k\cdot0.25$ while the window samples ON multiples of $0.25$, so
+  every target falls exactly halfway between two source centres in each axis
+  and nearest-indexing would displace the whole field by half a cell,
+  invisibly. Test 2 measures an analytic ramp's reproduction at
+  **7.6e-07 °C**. Measured on 1993: 365 rows in **14.5 s**, 0.26 GB peak RSS.
+- `.github/workflows/sst-na-bake.yml` — **run #1 completed**, and the bytes
+  are verified on the Hub (`chfrank/earth-tensors`): `sst_na025/index.npz`
+  **146,802 B**, `sst_na025/sst_daily_na.npy` **4,245,677,460 B**. That second
+  number is the artefact checking itself — $15{,}706\times281\times481\times2
+  = 4{,}245{,}677{,}332$ plus numpy's 128-byte header — so the file is the
+  whole axis, not a run that stopped early.
+- Recipes **f4r2 / f5r2**: `CHANS_R2 = list(f3.CHANS) + ["sst"]`, appended so
+  channels 1–39 keep the indices every published result was measured at (a
+  test pins r2's channels 0–38 bit-identical to r1 from the same fixtures),
+  each `(cadence, rev)` with its own output name so an r1 build in flight is
+  never overwritten. Two new VALUES on the `tensor` input, never a 26th input.
+  `tests/test_e034_family4.py` 14/14 and `tests/test_e034_family5.py` 8/8.
+- The climatology is deliberately **not** shared with the app's SST bake: this
+  emits the FIELD; the pipeline's baseline is train-years-only, the app's is
+  the WMO 1991–2020 normal which includes the holdout years (E-040 §5).
+
+**Blocked on disk, not on a decision.** The r2 pentad tensor is
+$[3142,281,481,40]$ float16 = **34.0 GB** and the build wants ~42 GB free
+while the memmap and the archive coexist; no box has that headroom while
+#386/#387 hold the 126 GB boxes on r1.
+
+**Cost so far:** one `ubuntu-latest` bake run, no GPU.
+
+**Result: none — nothing has been trained on r2.**
+
+---
+
 <a id="e-038"></a>
 ## E-038a/b · The first codecs trained ON the pentad tensor — DISPATCHED 2026-08-17 ~18:20Z
 
@@ -354,7 +456,33 @@ all. That failure is a `KeyError`, i.e. loud, and both already call the
 canonical transform — so it produces no wrong number, only a missing one. Left
 untouched here deliberately: neither can be exercised end to end in the
 sandbox, and an unverified change to two more probe scripts on the eve of an
-eval wave is the wrong trade.
+eval wave is the wrong trade. **RESOLVED the same evening** by #392's OOM (below):
+both now open the tensor through `tensor_io.load_tensor` + a scratch
+`writable_copy`, taken after the channel guard and removed at exit, so the
+canonical map never takes the transform's writes.
+
+### Run ledger, 2026-08-18 evening — two runs that produced no number
+
+- **#389 (f5-40M, daily) — CANCELLED at ~7 h**, having never left
+  `anomaly_transform`. The per-channel loop charged **249.8 full-extent
+  traversals** of a 165.6 GB memmap on a 64 GB box: ~41 TB of physical read,
+  not the 13 TB the in-flight note guessed. The transform is now time-chunked
+  at **6.0 traversals** (40.4 TB → 994 GB; measured end to end 1.95 h →
+  352.8 s on a 7.46 GiB float16 memmap, output bit-identical over 3,182,755
+  entries). Nothing was trained; the daily arm is unmeasured.
+- **#392 (read-out ladder on the frozen anchor, pentad) — its `probe_kfold`
+  landed, both `probe_head.py` invocations were OOM-KILLED**, and the job
+  still reported SUCCESS because both steps are best-effort. So the one
+  number Chris says he trusts at this cadence — the unpooled head and its
+  matched raw-3×3 control — does not exist for #392. The peak was **132.5 GB**:
+  the 33.1 GB tensor, a 16.6 GB `isfinite`, and an **82.8 GB transient inside
+  `np.nan_to_num(..., copy=False)`**, which allocates five full-size bools at
+  once (`isnan`, `isposinf`, `isneginf`, and the `isinf`/`signbit` underneath
+  the last two) — `copy=False` promises no copy of the VALUES, not no
+  allocation. `probe_head` and `dip_check` got the LazyPixels treatment they
+  were missed by in the #388 round (measured on a 0.523 GiB fixture: VmHWM
+  2.132 → 0.642 GiB, 3.3×, with the eager path pinned as a tripwire).
+  **Re-dispatched as #397** to produce the head number.
 
 **Result (pentad trained arms):** pending.
 

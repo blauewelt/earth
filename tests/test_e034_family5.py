@@ -33,7 +33,7 @@ What is asserted:
   6. **truth_daily.npz attaches on the daily axis** with the `rapid` alias the
      trainer reads.
 
-E-041 adds recipe r2 (the appended `sst` channel) at both cadences, and two
+E-042 adds recipe r2 (the appended `sst` channel) at both cadences, and two
 more checks, again about a relationship rather than a value:
 
   7. **r1 is BIT-IDENTICAL inside r2 on the daily path too** — the sidecar
@@ -245,7 +245,7 @@ def main():
     print("  6. truth_daily attaches on the daily axis, out-of-axis labels "
           "dropped, `rapid` alias present")
 
-    # =================== E-041: recipe r2 at both cadences ================
+    # =================== E-042: recipe r2 at both cadences ================
     sst_dir = os.path.join(tmp, "sst_na025")
     write_sst(sst_dir, PBINS, 5)
     r2 = ("--rev", "r2", "--sst-dir", sst_dir)
