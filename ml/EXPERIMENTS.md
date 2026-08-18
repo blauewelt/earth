@@ -776,14 +776,29 @@ resumes `!run-386`.
 **0.624**, `linear_r_raw` 0.646, `temporal_r_deseas` 0.604,
 `chan_vs_persistence` +31.8%, `z_vs_persistence` +43.3%.
 
-### Two EVAL-ONLY dispatches, 2026-08-18 ~22:15Z — both on boxes that were burning idle anyway
+### Two EVAL-ONLY dispatches, 2026-08-18 ~22:20Z — #406 and #407, both QUEUED AGAINST A STOPPED BOX
 
-Both carry the `cc` guard above; both are dispatched on `ref: main` at the
-sha this commit creates, and both run on boxes that are RUNNING and idle, so
-their marginal GPU cost is zero (Vast balance ~$16.02, fleet ~$1.78/h over 6
-boxes). Run numbers are assigned by GitHub at dispatch, which is *after* this
-commit — that ordering is deliberate (the fix and the log go up together, in
-one push, before anything is queued).
+Both carry the `cc` guard above and both are dispatched on `ref: main` at
+`c215ba7`, the commit that introduced it — verified on the runs themselves,
+`head_sha == c215ba7d0244a14b7f89b340fbca1f6591137e12` for each.
+
+**They are queued and will not start.** Both were dispatched on the premise
+that their target boxes were RUNNING and idle-burning, so that the evals were
+free in the marginal sense. **That premise was false at dispatch time**, and
+it was measured after: `/api/v1/instances/` reports vast **47720664**
+(`gpu-box-47529389`) and **47720660** (`gpu-box-47094143`) both
+`actual_status: exited`, `cur_state: stopped`, and GitHub independently
+reports both runners **offline** — two independent sources agreeing.
+`scripts/fleet_health.mjs` reads **"0 runner(s) online+idle"** across a fleet
+of six boxes, all of them busy with other work. Neither box was stopped by
+this task; the hourly fleet-health check had already stopped them after #397
+(20:26Z) and #386 (22:04Z) finished. **No box was started or stopped here**,
+so the two runs sit queued until one is, at which point the pinned `runner`
+input routes each to the box that holds its warm tensor and checkpoint.
+Queued jobs cost nothing. Costs so far: **zero GPU-seconds**.
+
+**Eval A is #406** ([run 32192203050](https://github.com/blauewelt/earth/actions/runs/32192203050)),
+**Eval B is #407** ([run 32192246793](https://github.com/blauewelt/earth/actions/runs/32192246793)).
 
 **Eval A — the anchor head number, ATTEMPT 3.** On `gpu-box-47529389` (vast
 47720664; warm: r1 pentad tensor + `f3_anchor41M`). #397's verbatim inputs,
