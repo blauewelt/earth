@@ -77,7 +77,10 @@
           <li><strong>Date</strong> — every timed layer follows it (±1d/1m/1y steps; a ±30m
             stepper appears for the half-hourly rain layer, so you can watch storms cross a
             day). Layers that ignore the date say so when switched on.</li>
-          <li><strong>Compare</strong> — any dated layer vs 1–20 years ago: side-by-side swipe
+          <li><strong>Compare</strong> — any dated layer against another date: pick an offset
+            (1–20 years ago, which <em>tracks</em> the date as you scrub, so both sides stay in
+            the same season) or <em>a specific date</em>, which gets the same date field and
+            steppers the Date row has. Then: side-by-side swipe
             with a draggable divider, or a <em>computed per-pixel change</em> — an absolute
             difference for continuous fields (SST, ice, vegetation …), a ×-fold ratio for
             log-distributed ones (rain, chlorophyll), because that's the sound comparison for
@@ -154,7 +157,25 @@
           <option value="5">vs 5 years ago</option>
           <option value="10">vs 10 years ago</option>
           <option value="20">vs 20 years ago</option>
+          <option value="custom">vs a specific date&hellip;</option>
         </select>
+      </div>
+      <!-- The comparison date, steered exactly like Date above. The two are
+           deliberately analogous: a date input plus calendar-correct steppers.
+           An OFFSET (“vs 10 years ago”) tracks the main date as you scrub, so
+           the two sides stay in the same season; typing or stepping this field
+           PINS it and the select flips to “a specific date”. -->
+      <div class="control-row hidden" id="compare-date-row">
+        <label for="compare-date">Compare date</label>
+        <input type="date" id="compare-date" />
+      </div>
+      <div class="control-row date-steps hidden" id="compare-steps">
+        <button data-cstep="-1y" title="comparison back one year">−1y</button>
+        <button data-cstep="-1m" title="comparison back one month">−1m</button>
+        <button data-cstep="-1d" title="comparison back one day">−1d</button>
+        <button data-cstep="+1d" title="comparison forward one day">+1d</button>
+        <button data-cstep="+1m" title="comparison forward one month">+1m</button>
+        <button data-cstep="+1y" title="comparison forward one year">+1y</button>
       </div>
       <div class="control-row hidden" id="compare-mode-row">
         <label for="compare-mode">Display</label>
@@ -199,6 +220,13 @@
           (clouds, night) are excluded — each pixel divides by the days it was actually observed, so
           cloudy-day gaps fill in; for precipitation, dry pixels count as <em>zero</em>, so the result
           is a true mean rate. Independent of the comparison mode.</p>
+        <p class="hint"><strong>Which date it compares against.</strong> An <em>offset</em>
+          (&ldquo;vs 10 years ago&rdquo;) is relative: move the Date and the comparison moves with
+          it, keeping the same month on both sides — which is what makes a satellite comparison
+          mean anything, since most of a raw month-to-month difference is the seasonal cycle.
+          <em>A specific date</em> pins it instead, for reading everything against one reference.
+          Typing in the comparison date field, or stepping it, pins it automatically; choosing an
+          offset again hands it back to tracking.</p>
         <p class="hint"><strong>Side-by-side</strong>: drag the divider (left = past, right = current).
           <strong>Computed change</strong>: per-pixel "now − then" for continuous layers (SST &amp;
           anomalies, sea ice, snow, land temperature, salinity), and a ×-fold <em>ratio</em> of window
@@ -709,8 +737,9 @@
       <ul>
         <li>Zoom: scroll, pinch (touch or trackpad), or the +/− buttons; drag the panel edge to
           resize it (double-click resets)</li>
-        <li>Compare: pick "vs N years ago" and drag the divider — or switch to the computed
-          per-pixel change</li>
+        <li>Compare: pick "vs N years ago" — or "a specific date", which gives the comparison
+          its own date field and ±1d/1m/1y buttons — then drag the divider, or switch to the
+          computed per-pixel change</li>
         <li>Check <em>Everything we know</em>, then click anywhere: the full state of that point,
           from live weather to its 2050 outlook</li>
         <li>Biodiversity: pick a climate-indicator species to see its shifting range</li>
@@ -737,7 +766,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">7c30f140</code></p>
+      <p class="build-line">Build <code id="build-id">311cc0bc</code></p>
     </section>
 
     <footer>
@@ -782,6 +811,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=7c30f140"></script>
+  <script src="src/app.js?v=311cc0bc"></script>
 </body>
 </html>

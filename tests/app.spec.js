@@ -500,6 +500,84 @@ test("aggregation window is orthogonal to the display mode", async ({ page }) =>
   expect(r.name).not.toBe("AggregateProvider");
 });
 
+test("the comparison date is steered like the main date, and knows when it tracks", async ({ page }) => {
+  // Chris, 2026-08-17: "let's make the Date and Compare Date selections
+  // analogous (with buttons + also allow for comparing to a specific date)".
+  // The two semantics are the substance: an OFFSET tracks the main date so
+  // both sides stay in the same season; a PINNED date does not. Getting that
+  // backwards would look fine and compare the wrong months.
+  await page.fill("#layer-date", "2020-06-15");
+  await page.dispatchEvent("#layer-date", "change");
+
+  // off by default: no date field, no steppers
+  await expect(page.locator("#compare-date-row")).toBeHidden();
+  await expect(page.locator("#compare-steps")).toBeHidden();
+
+  // an offset reveals them and shows the derived date
+  await page.selectOption("#compare-select", "10");
+  await expect(page.locator("#compare-date-row")).toBeVisible();
+  await expect(page.locator("#compare-steps")).toBeVisible();
+  await expect(page.locator("#compare-date")).toHaveValue("2010-06-15");
+
+  // ... and TRACKS: moving the main date moves it, same month either side
+  await page.click("#date-steps button[data-step='-1m']");
+  await expect(page.locator("#layer-date")).toHaveValue("2020-05-15");
+  await expect(page.locator("#compare-date")).toHaveValue("2010-05-15");
+
+  // stepping the comparison PINS it, and the select says so
+  await page.click("#compare-steps button[data-cstep='-1y']");
+  await expect(page.locator("#compare-date")).toHaveValue("2009-05-15");
+  await expect(page.locator("#compare-select")).toHaveValue("custom");
+
+  // pinned means pinned: the main date moves, this does not
+  await page.click("#date-steps button[data-step='-1m']");
+  await expect(page.locator("#layer-date")).toHaveValue("2020-04-15");
+  await expect(page.locator("#compare-date")).toHaveValue("2009-05-15");
+
+  // typing a date pins it too, and the app compares against what is typed
+  await page.fill("#compare-date", "2003-07-04");
+  await page.dispatchEvent("#compare-date", "change");
+  await expect(page.locator("#compare-select")).toHaveValue("custom");
+  expect(await page.evaluate(() => window.__earth.compareDate())).toBe("2003-07-04");
+
+  // choosing an offset again hands it back to tracking
+  await page.selectOption("#compare-select", "5");
+  await expect(page.locator("#compare-date")).toHaveValue("2015-04-15");
+  await page.click("#date-steps button[data-step='-1y']");
+  await expect(page.locator("#compare-date")).toHaveValue("2014-04-15");
+
+  // and Off puts everything away
+  await page.selectOption("#compare-select", "0");
+  await expect(page.locator("#compare-date-row")).toBeHidden();
+  expect(await page.evaluate(() => window.__earth.compareDate())).toBeNull();
+});
+
+test("both date steppers obey the same calendar rules and the same bounds", async ({ page }) => {
+  // One stepper function serves both rows; these are the cases where naive
+  // arithmetic differs from the calendar, plus the clamps that keep the
+  // comparison on the axis the UI actually offers.
+  await page.selectOption("#compare-select", "custom");
+  await page.fill("#compare-date", "2020-03-31");
+  await page.dispatchEvent("#compare-date", "change");
+  await page.click("#compare-steps button[data-cstep='-1m']");
+  await expect(page.locator("#compare-date")).toHaveValue("2020-02-29");   // not Mar 2
+  await page.fill("#compare-date", "2020-02-29");
+  await page.dispatchEvent("#compare-date", "change");
+  await page.click("#compare-steps button[data-cstep='-1y']");
+  await expect(page.locator("#compare-date")).toHaveValue("2019-02-28");   // leap day
+  // the floor is GIBS's, and it is shared with the Date row
+  await page.fill("#compare-date", "2000-01-02");
+  await page.dispatchEvent("#compare-date", "change");
+  await page.click("#compare-steps button[data-cstep='-1y']");
+  await expect(page.locator("#compare-date")).toHaveValue("2000-01-01");
+  // and the ceiling: a comparison cannot be asked for past the newest date
+  const max = await page.evaluate(() => document.getElementById("layer-date").max);
+  await page.fill("#compare-date", max);
+  await page.dispatchEvent("#compare-date", "change");
+  await page.click("#compare-steps button[data-cstep='+1y']");
+  await expect(page.locator("#compare-date")).toHaveValue(max);
+});
+
 test("comparison hint explains non-differenceable & point layers in both modes", async ({ page }) => {
   // 274k glacier billboards plus a full delta tile set: this one genuinely
   // needs more than the 90 s default, and hitting that wall reported itself as

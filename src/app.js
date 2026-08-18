@@ -1863,7 +1863,8 @@ async function updateEnsembleLayer() {
 
 const state = {
   date: defaultDate(),
-  compareYears: 0,       // comparison offset (0 = not comparing)
+  compareYears: 0,       // comparison offset in years (0 = no offset)
+  compareFixed: null,    // pinned comparison date; overrides the offset when set
   compareMode: "split",  // "split" | "delta" — display mode, orthogonal to the window
   windowDays: 1,         // rolling aggregation window ending at `date` (1 = single day)
   timeMin: 0,            // time of day (UTC minutes) for sub-daily layers, stepped ±30m
@@ -1881,11 +1882,70 @@ function addDays(dateStr, n) {
   return d.toISOString().slice(0, 10);
 }
 
+/* ONE calendar stepper, shared by the Date row and the Compare-date row.
+ * They are meant to behave identically — Chris, 2026-08-17: "let's make the
+ * Date and Compare Date selections analogous" — and two copies of month/year
+ * arithmetic is exactly how they would stop being identical. Real calendar
+ * rules: -1m from Mar 31 lands on Feb 28, -1y from Feb 29 lands on Feb 28. */
+function stepCalendar(dateStr, step) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  const n = step.startsWith("-") ? -1 : 1;
+  const unit = step.slice(-1);
+  if (unit === "d") {
+    d.setUTCDate(d.getUTCDate() + n);
+  } else if (unit === "m") {
+    const day = d.getUTCDate();
+    d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + n);
+    const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+    d.setUTCDate(Math.min(day, last));
+  } else {
+    const day = d.getUTCDate(), mon = d.getUTCMonth();
+    d.setUTCDate(1); d.setUTCFullYear(d.getUTCFullYear() + n); d.setUTCMonth(mon);
+    const last = new Date(Date.UTC(d.getUTCFullYear(), mon + 1, 0)).getUTCDate();
+    d.setUTCDate(Math.min(day, last));
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+/* The comparison has TWO ways to name its date, and the difference is the
+ * whole reason both exist:
+ *   OFFSET  (state.compareYears > 0) — "10 years ago", RELATIVE, so it tracks
+ *           the main date as you scrub and both sides stay in the same season,
+ *           which is what makes a satellite comparison mean anything.
+ *   PINNED  (state.compareFixed)     — an absolute date, for "everything vs
+ *           July 2003" regardless of where the main date goes.
+ * Pinned wins when set; picking an offset from the select clears it. */
 function compareDate() {
+  if (state.compareFixed) return state.compareFixed;
   if (!state.compareYears) return null;
   const [y, m, d] = state.date.split("-").map(Number);
   const day = m === 2 && d === 29 ? 28 : d; // leap-day safety
   return `${y - state.compareYears}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+const comparing = () => compareDate() !== null;
+
+/* The comparison date is a DATE, so it obeys the same bounds the main one
+ * does: never before GIBS's floor, never past what the UI currently offers. */
+function clampUiDate(d) {
+  const hi = uiMaxDate();
+  return d > hi ? hi : d < "2000-01-01" ? "2000-01-01" : d;
+}
+
+/* Push the comparison state into its controls. Called whenever either date
+ * moves, because in offset mode the compare date is a FUNCTION of the main
+ * one and a stale read-out would be a lie about what is on screen. */
+function syncCompareUi() {
+  const on = comparing();
+  document.getElementById("compare-date-row").classList.toggle("hidden", !on);
+  document.getElementById("compare-steps").classList.toggle("hidden", !on);
+  const input = document.getElementById("compare-date");
+  input.max = uiMaxDate();
+  input.min = "2000-01-01";
+  if (on) input.value = compareDate();
+  const sel = document.getElementById("compare-select");
+  const want = state.compareFixed ? "custom" : String(state.compareYears);
+  if (sel.value !== want) sel.value = want;
 }
 
 
@@ -2555,6 +2615,11 @@ function syncDateMax() {
     refreshYearlyLayers();
     refreshMonthlyGrids();
   }
+  // The comparison lives on the same axis: when the axis shortens, a pinned
+  // date past the new end has to come back with it, or the comparison would
+  // silently request tiles the UI no longer admits exist.
+  if (state.compareFixed && state.compareFixed > max) state.compareFixed = max;
+  syncCompareUi();
 }
 
 /* Month-keyed grids don't listen to refreshTimedLayers (they're not `timed`),
@@ -2583,8 +2648,8 @@ const splitHandle = document.getElementById("split-handle");
 const splitLabels = document.getElementById("split-labels");
 
 function updateSplitUI() {
-  document.getElementById("compare-mode-row").classList.toggle("hidden", state.compareYears === 0);
-  const active = state.compareYears > 0 && anyTimedActive() && state.compareMode === "split";
+  document.getElementById("compare-mode-row").classList.toggle("hidden", !comparing());
+  const active = comparing() && anyTimedActive() && state.compareMode === "split";
   splitHandle.classList.toggle("hidden", !active);
   splitLabels.classList.toggle("hidden", !active);
   if (active) {
@@ -2618,7 +2683,45 @@ function positionSplit(frac) {
 })();
 
 document.getElementById("compare-select").addEventListener("change", (e) => {
-  state.compareYears = Number(e.target.value);
+  const v = e.target.value;
+  if (v === "custom") {
+    // Seed the pin from whatever is on screen, so choosing "a specific date"
+    // never blanks the comparison — it hands you the date you were already
+    // looking at, to edit. A default of "today" would be a zero difference.
+    state.compareFixed = state.compareFixed || compareDate() ||
+      clampUiDate(stepCalendar(state.date, "-1y"));
+    state.compareYears = 0;
+  } else {
+    state.compareYears = Number(v);
+    state.compareFixed = null;   // an offset TRACKS; a pin does not
+  }
+  syncCompareUi();
+  refreshTimedLayers();
+});
+
+/* Typing a comparison date PINS it — the offset is abandoned, because the two
+ * cannot both be true and the one you just typed is the one you meant. */
+document.getElementById("compare-date").addEventListener("change", (e) => {
+  if (!e.target.value) return;
+  state.compareFixed = clampUiDate(e.target.value);
+  state.compareYears = 0;
+  syncCompareUi();
+  refreshTimedLayers();
+});
+
+/* The comparison's own steppers — the same calendar arithmetic as the Date
+ * row, through the same function. Stepping pins, for the same reason typing
+ * does: "10 years ago, minus a month" is not an offset any more. */
+document.getElementById("compare-steps").addEventListener("click", (e) => {
+  const step = e.target.getAttribute?.("data-cstep");
+  if (!step) return;
+  const from = compareDate();
+  if (!from) return;
+  const next = clampUiDate(stepCalendar(from, step));
+  if (next === from) return;
+  state.compareFixed = next;
+  state.compareYears = 0;
+  syncCompareUi();
   refreshTimedLayers();
 });
 
@@ -2724,7 +2827,7 @@ function updateDeltaHint() {
   // of a comparison can clamp to the same last-served month — the difference
   // is then zero by construction and renders as nothing. Say so, and say how
   // to fix it, instead of leaving a silently empty comparison.
-  if (state.compareYears) {
+  if (comparing()) {
     const cmp = compareDate();
     const stuck = Object.values(state.layers).filter((e) =>
       (e.layer || e.suppressed) && e.cfg.timed && e.cfg.endTime &&
@@ -2735,11 +2838,12 @@ function updateDeltaHint() {
         `“${state.date}” and “${cmp}” fall after that — so both sides clamp to the same ` +
         `last month and the comparison is empty by construction. Set the date to ` +
         `<em>${end}</em> or earlier to compare within the archive (e.g. ${end} vs ` +
-        `${Number(end.slice(0, 4)) - state.compareYears}-${end.slice(5)}).`);
+        `${Number(end.slice(0, 4)) - (Number(state.date.slice(0, 4)) -
+           Number(cmp.slice(0, 4)))}-${end.slice(5)}).`);
     }
   }
 
-  if (state.compareYears) {
+  if (comparing()) {
     // Point/snapshot layers can't be compared over time (they have one state) —
     // relevant in BOTH side-by-side and computed-difference modes.
     if (pointLayerActive()) {
@@ -3881,9 +3985,11 @@ function buildLayerPanel() {
   const dateInput = document.getElementById("layer-date");
   dateInput.value = state.date;
   dateInput.max = uiMaxDate();
+  syncCompareUi();
   dateInput.addEventListener("change", () => {
     if (!dateInput.value) return;
     state.date = dateInput.value;
+    syncCompareUi();          // an OFFSET comparison moved with it
     refreshTimedLayers();
     refreshYearlyLayers();
     refreshMonthlyGrids();
@@ -3895,32 +4001,12 @@ function buildLayerPanel() {
   document.getElementById("date-steps").addEventListener("click", (e) => {
     const step = e.target.getAttribute?.("data-step");
     if (!step) return;
-    let next;
-    if (step === "today") {
-      next = defaultDate();
-    } else {
-      const d = new Date(state.date + "T00:00:00Z");
-      const n = step.startsWith("-") ? -1 : 1;
-      const unit = step.slice(-1);
-      if (unit === "d") d.setUTCDate(d.getUTCDate() + n);
-      else if (unit === "m") {
-        const day = d.getUTCDate();
-        d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + n);
-        const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
-        d.setUTCDate(Math.min(day, last));
-      } else {
-        const day = d.getUTCDate(), mon = d.getUTCMonth();
-        d.setUTCDate(1); d.setUTCFullYear(d.getUTCFullYear() + n); d.setUTCMonth(mon);
-        const last = new Date(Date.UTC(d.getUTCFullYear(), mon + 1, 0)).getUTCDate();
-        d.setUTCDate(Math.min(day, last));
-      }
-      next = d.toISOString().slice(0, 10);
-    }
-    if (next > uiMaxDate()) next = uiMaxDate();
-    if (next < "2000-01-01") next = "2000-01-01";
+    const next = clampUiDate(step === "today" ? defaultDate()
+                                              : stepCalendar(state.date, step));
     if (next === state.date) return;
     state.date = next;
     dateInput.value = next;
+    syncCompareUi();          // an OFFSET comparison moved with it
     refreshTimedLayers();
     refreshYearlyLayers();
     refreshMonthlyGrids();
