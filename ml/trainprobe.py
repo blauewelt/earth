@@ -41,45 +41,245 @@ from temporal import TemporalTransformer, embed_everything, rapid_section
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def anomaly_transform(X, moy, t_hold, x_hold):
+def anomaly_transform(X, moy, t_hold, x_hold, chunk=64, verbose=None):
     """The one anomaly transform (train.py --anomaly), in one place: dynamic
     channels become departures from their own train-years monthly
-    climatology, then z-scored on train data. Returns (X, dynamic)."""
+    climatology, then z-scored on train data. Returns (X, dynamic).
+
+    WHY THIS IS CHUNKED OVER TIME AND NOT OVER CHANNELS. The tensor is
+    channel-interleaved [T, H, W, C], so `X[..., c]` has a stride of C*itemsize
+    — 78 bytes at C=39 float16, an order of magnitude SMALLER than a 4 KB
+    page. Every per-channel operation therefore has to fault in every page of
+    the file to use 2.6% of what it reads. The original implementation looped
+    per channel over the whole tensor: 39 traversals for the dynamic test,
+    then ~6 more per dynamic channel (subtract clim read+write, isfinite,
+    the boolean gather, the z-score read+write), i.e. ~249 full-extent
+    traversals. Family 4 (pentad, 33.1 GB) on a 128 GB box holds the whole
+    file in page cache, so those traversals are free after the first and this
+    was never a problem. Family 5 (daily, 165.6 GB) on a 64 GB box is 2.6x
+    oversubscribed — ZERO cache reuse, every traversal physical, ~41 TB of
+    read. Run #389 sat seven hours in this function with the GPU at 0% and
+    0.3 CPU cores and never emitted a metric line.
+
+    So: iterate over BLOCKS OF THE TIME AXIS and do all channels inside each
+    block. Three sequential passes, each one traversal:
+      1. per-(t,c) spatial means (the dynamic test) and the monthly
+         climatology's masked sum/count — both exactly chunkable, since the
+         first is a per-timestep reduction and the second is a sum;
+      2. write the anomaly (X - clim) and accumulate its count/mean/M2 over
+         the valid pool;
+      3. write (anomaly - mu) / (sd + 1e-6).
+    Passes 2 and 3 are NOT folded: mu and sd must be over the whole array
+    before any value is written. tests/test_anomaly_chunked.py check 3
+    MEASURES the byte span both versions charge against X, at family 5's
+    C=39 with 4 baked channels: **249.8 traversals before, 6.0 after**
+    (41.6x; 40.4 TB -> 994 GB at 165.6 GB). Five of the six are physical —
+    the sixth is pass 2 reading back pages it has just dirtied. Measured
+    end to end on a 7.46 GiB float16 memmap at H=281 W=481 C=39, caches
+    dropped, 1.6x oversubscribed: one cold traversal costs 28.1 s, so the
+    old shape costs 249.8 * 28.1 s ~ 1.95 h; the new one ran in 352.8 s.
+
+    Pass 2 stores the anomaly at the storage dtype and pass 3 reads it back,
+    which is exactly what the two-step original did. Do not "optimise" that
+    into a fused (X - clim - mu)/sd: at float16 the intermediate rounding is
+    5e-4 and the result would stop matching the implementation every
+    published number was produced with.
+
+    EVERY reduction below names float64, and that is not cosmetic.
+    Family 4 is the project's first float16 tensor (build_family4.py chose
+    it to fit 33.1 GB rather than 66.3). numpy upcasts the accumulator for
+    np.mean on float16 but NOT for np.std/np.var — _methods._var only
+    upcasts integer and bool. The z-score at the end of this function sums
+    ~204M squared residuals; in float16 that passes 65504, returns inf, and
+    (X - mu) / (inf + 1e-6) is exactly 0.0. Every dynamic channel would
+    become zeros while every loss, gpu_util and probe still looked healthy —
+    and probe_kfold.py calls this function, so E-038's frozen control would
+    have "falsified" its premise against an all-zero tensor. Family 3 was
+    float32 and never reached the limit. Measured 2026-08-17: float16 pool
+    of 30M -> inf; the same pool in float64 -> 0.999844. The float32 path
+    moves by 5.2e-9 relative, ~7 orders below the sd 0.123 seed noise the
+    stage-2 probe already carries (ml/CLAUDE.md §3).
+
+    CHUNKING MAKES THAT OVERFLOW MORE DANGEROUS, NOT LESS, because the
+    z-score's second moment is now a sum of PARTIAL sums and a partial sum
+    that saturates is invisible in the total. Two consequences, both
+    deliberate:
+      · every accumulator here is float64 — the per-(t,c) spatial sums, the
+        climatology sum, and the count/mean/M2 triple;
+      · the variance is combined across blocks with CHAN'S PARALLEL
+        ALGORITHM (Chan, Golub & LeVeque 1979) — each block's (n, mean, M2)
+        is computed by numpy's own two-pass estimator in float64, and blocks
+        are merged with
+            delta = mean_b - mean;  n' = n + n_b
+            mean' = mean + delta * n_b / n'
+            M2'   = M2 + M2_b + delta^2 * n * n_b / n'
+        rather than accumulating sum(x) and sum(x^2) and finishing with
+        sum(x^2)/n - mu^2. The naive form catastrophically cancels when |mu|
+        is large next to sd, and the anomaly's mu is only near zero because
+        the climatology happens to nearly centre it — that is a property of
+        the data we would be silently relying on. Chan's form has no such
+        cancellation and needs no provisional offset to be chosen.
+
+    `chunk` is in TIMESTEPS and bounds the working set independently of T.
+    Arithmetic for the daily tensor (T=15706, H=281, W=481, C=39, float16),
+    where one timestep is H*W*C = 5,271,279 elements:
+      persistent  climatology sum    12 * 5,271,279 * 8 B = 0.47 GiB
+                  climatology count  12 * 5,271,279 * 4 B = 0.24 GiB
+      pass 1      finite mask        chunk * 5,271,279 * 1 B
+      pass 2      climatology gather chunk * 5,271,279 * 4 B  (float32)
+                  float64 block      chunk * 5,271,279 * 8 B
+                  finite mask        chunk * 5,271,279 * 1 B
+      pass 3      float64 block      chunk * 5,271,279 * 8 B
+    Pass 2 is the peak, and the gather and the float64 block coexist in RSS
+    even though the gather is dead by then — glibc does not return a 1.3 GiB
+    arena and numpy cannot reuse a 1.3 GiB hole for a 2.5 GiB request. So
+    take the peak as (13 * chunk * H * W * C) bytes plus 0.7 GiB. MEASURED
+    peak RssAnon at H=281, W=481, C=39, polling /proc/self/status:
+    **1.57 GiB at chunk=16 and 4.48 GiB at chunk=64** — the default is 7% of
+    the 64 GB box, which leaves the page cache the room it needs to make
+    these reads sequential in the first place. 64 timesteps is also 168 MB of
+    contiguous file per read, far above any readahead window. Lower `chunk`
+    on a small box; it changes only memory, never the answer
+    (tests/test_anomaly_chunked.py check 2 pins that at chunk 1/7/64/T).
+    """
     T, H, W, C = X.shape
-    # EVERY reduction below names dtype=float64, and that is not cosmetic.
-    # Family 4 is the project's first float16 tensor (build_family4.py chose
-    # it to fit 33.1 GB rather than 66.3). numpy upcasts the accumulator for
-    # np.mean on float16 but NOT for np.std/np.var — _methods._var only
-    # upcasts integer and bool. The z-score at the end of this function sums
-    # ~204M squared residuals; in float16 that passes 65504, returns inf, and
-    # (X - mu) / (inf + 1e-6) is exactly 0.0. Every dynamic channel would
-    # become zeros while every loss, gpu_util and probe still looked healthy —
-    # and probe_kfold.py calls this function, so E-038's frozen control would
-    # have "falsified" its premise against an all-zero tensor. Family 3 was
-    # float32 and never reached the limit. Measured 2026-08-17: float16 pool
-    # of 30M -> inf; the same pool in float64 -> 0.999844. The float32 path
-    # moves by 5.2e-9 relative, ~7 orders below the sd 0.123 seed noise the
-    # stage-2 probe already carries (ml/CLAUDE.md §3).
-    dynamic = [c for c in range(C)
-               if np.nanstd(np.nanmean(X[..., c], axis=(1, 2),
-                                       dtype=np.float64),
-                            dtype=np.float64) > 1e-6]
-    clim = np.full((12, H, W, C), np.nan, dtype=np.float32)
+    moy = np.asarray(moy)
+    t_hold = np.asarray(t_hold, dtype=bool)
+    x_hold = np.asarray(x_hold, dtype=bool)
+    if verbose is None:
+        # Silence is what made #389 unreadable: seven hours with no output at
+        # all. Announce progress only when this is going to take a while.
+        verbose = X.dtype.itemsize * X.size > 8 << 30
+    chunk = max(1, int(chunk))
+    nblk = (T + chunk - 1) // chunk
+
+    def _say(msg):
+        if verbose:
+            print(f"  anomaly_transform: {msg}", flush=True)
+
+    # The climatology is a mean over the timesteps of one month-of-year that
+    # are NOT held out, so the only thing that varies along t inside the sum
+    # is (moy, t_hold). Precompute the runs where that pair is constant: each
+    # run is a CONTIGUOUS slice, so a block's contribution is a handful of
+    # contiguous reductions rather than a fancy-index gather (which would
+    # copy the block) or twelve masked sweeps of it.
+    key = moy.astype(np.int64) * 2 + t_hold.astype(np.int64)
+    edges = np.flatnonzero(np.diff(key)) + 1
+    run_lo = np.concatenate(([0], edges)).astype(int)
+    run_hi = np.concatenate((edges, [T])).astype(int)
+
+    csum = np.zeros((12, H, W, C), dtype=np.float64)
+    ccnt = np.zeros((12, H, W, C), dtype=np.int32)
+    smean = np.empty((T, C), dtype=np.float64)      # per-(t,c) spatial mean
+
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        for m in range(12):
-            clim[m] = np.nanmean(X[(moy == m) & ~t_hold], axis=0,
-                                 dtype=np.float64)
-    for c in dynamic:
-        # clim[moy, :, :, c] is [T,H,W]; the equivalent-looking
-        # clim[moy][..., c] materialises the whole [T,H,W,C] fancy index and
-        # throws all but one channel away — 2.4 GB per dynamic channel at
-        # C=24, which OOM-killed every probe on a 7 GB box (2026-08-08).
-        X[..., c] = X[..., c] - clim[moy, :, :, c]
-        v = X[..., c][np.isfinite(X[..., c]) & ~t_hold[:, None, None]
-                      & ~x_hold[None, None, :]]
-        X[..., c] = (X[..., c] - v.mean(dtype=np.float64)) / (
-            v.std(dtype=np.float64) + 1e-6)
+        warnings.simplefilter("ignore")             # all-NaN slices are data
+        # ---- pass 1: spatial means + climatology sums ---------------------
+        for b, i0 in enumerate(range(0, T, chunk)):
+            i1 = min(i0 + chunk, T)
+            blk = X[i0:i1]
+            fin = np.isfinite(blk)
+            cnt = fin.sum(axis=(1, 2))                          # [n, C]
+            tot = np.sum(blk, axis=(1, 2), where=fin, dtype=np.float64)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                smean[i0:i1] = tot / cnt
+            for lo, hi in zip(run_lo, run_hi):
+                a, z = max(lo, i0), min(hi, i1)
+                if a >= z or t_hold[a]:
+                    continue
+                m = int(moy[a])
+                sub = slice(a - i0, z - i0)
+                csum[m] += np.sum(blk[sub], axis=0, where=fin[sub],
+                                  dtype=np.float64)
+                ccnt[m] += fin[sub].sum(axis=0, dtype=np.int32)
+            if verbose and b % 20 == 0:
+                _say(f"pass 1/3 (climatology) {i1}/{T}")
+        fin = blk = None            # the mask is chunk*H*W*C bytes; drop it
+
+        # A channel with no temporal variance is a baked climatology: it is
+        # context, not a target in disguise, and passes through untouched.
+        dynamic = [c for c in range(C)
+                   if np.nanstd(smean[:, c], dtype=np.float64) > 1e-6]
+        if not dynamic:
+            return X, dynamic
+
+        with np.errstate(invalid="ignore", divide="ignore"):
+            clim = (csum / ccnt).astype(np.float32)   # [12,H,W,C], NaN if n=0
+        del csum, ccnt
+        # Zero on the STATIC channels, so a whole block can be subtracted and
+        # written back contiguously while the static channels come out
+        # bit-identical: x -> float32(x) - 0.0f -> back is exact for every
+        # float16/float32 value, and NaN stays NaN. The alternative — a fancy
+        # index on the last axis, X[..., dynamic] — would scatter every write
+        # across the same sub-page stride this rewrite exists to avoid.
+        stat = np.setdiff1d(np.arange(C), np.asarray(dynamic))
+        clim[..., stat] = 0.0
+        _say(f"{len(dynamic)}/{C} dynamic channels; climatology done")
+
+        # ---- pass 2: write the anomaly, accumulate (n, mean, M2) ----------
+        wdt = np.promote_types(X.dtype, np.float32)
+        n_t = np.zeros(C, dtype=np.float64)
+        mu_t = np.zeros(C, dtype=np.float64)
+        m2_t = np.zeros(C, dtype=np.float64)
+        keep_x = ~x_hold
+        for b, i0 in enumerate(range(0, T, chunk)):
+            i1 = min(i0 + chunk, T)
+            cm = clim[moy[i0:i1]]                     # [n,H,W,C] float32
+            if cm.dtype == wdt:
+                np.subtract(X[i0:i1], cm, out=cm)     # in place: no 2nd copy
+                anom = cm
+            else:
+                anom = np.subtract(X[i0:i1], cm, dtype=wdt)
+                del cm
+            X[i0:i1] = anom                           # rounds to storage dtype
+            del anom
+
+            # Read back what was STORED, not what was computed — the original
+            # took its mean and sd from the rounded float16 values and so
+            # must this.
+            blk = np.asarray(X[i0:i1], dtype=np.float64)
+            msk = np.isfinite(blk)
+            msk &= (~t_hold[i0:i1])[:, None, None, None]
+            msk &= keep_x[None, None, :, None]
+            n_b = msk.sum(axis=(0, 1, 2)).astype(np.float64)      # [C]
+            s_b = np.sum(blk, axis=(0, 1, 2), where=msk, dtype=np.float64)
+            nz = n_b > 0
+            mu_b = np.where(nz, s_b / np.maximum(n_b, 1.0), 0.0)
+            np.subtract(blk, mu_b, out=blk)
+            np.square(blk, out=blk)
+            m2_b = np.sum(blk, axis=(0, 1, 2), where=msk, dtype=np.float64)
+            del blk, msk
+            # Chan's parallel combination (see the docstring).
+            n_new = n_t + n_b
+            delta = mu_b - mu_t
+            safe = np.maximum(n_new, 1.0)
+            mu_t = np.where(nz, mu_t + delta * (n_b / safe), mu_t)
+            m2_t = np.where(nz, m2_t + m2_b + delta * delta * n_t * n_b / safe,
+                            m2_t)
+            n_t = n_new
+            if verbose and b % 20 == 0:
+                _say(f"pass 2/3 (anomaly + moments) {i1}/{T}")
+        del clim
+
+        with np.errstate(invalid="ignore", divide="ignore"):
+            sd = np.sqrt(m2_t / n_t)          # ddof=0, as np.std defaults
+        mu = mu_t
+        # Static channels must survive pass 3 untouched, and (x - 0.0) / 1.0
+        # is exactly x in float64 for every finite or NaN input.
+        mu[stat] = 0.0
+        den = sd + 1e-6
+        den[stat] = 1.0
+
+        # ---- pass 3: z-score in place ------------------------------------
+        for b, i0 in enumerate(range(0, T, chunk)):
+            i1 = min(i0 + chunk, T)
+            out = np.subtract(X[i0:i1], mu, dtype=np.float64)
+            np.divide(out, den, out=out)
+            X[i0:i1] = out
+            del out
+            if verbose and b % 20 == 0:
+                _say(f"pass 3/3 (z-score) {i1}/{T}")
+    _say(f"done ({nblk} blocks of {chunk} timesteps, 3 sequential passes)")
     return X, dynamic
 
 
