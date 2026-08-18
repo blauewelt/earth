@@ -259,6 +259,97 @@ healthy) — the §4.10 two-sided-guard story, watched, not yet acted on.
 per-channel anomaly transform over a 166 GB memmap pages in the whole file
 per channel, ~13 TB of I/O; silence until ~12:30Z is consistent with health.
 
+**That last sentence was wrong, and the correction is the reason for the two
+entries below.** #389 was CANCELLED at ~7 h, still in the same function: the
+per-channel loop charges **249.8 full-extent traversals**, so 165.6 GB on a
+64 GB box is ~41 TB of physical read, not 13. `anomaly_transform` is now
+time-chunked at 6.0 traversals (commit `fba358c`; 40.4 TB → 994 GB, measured
+end to end 1.95 h → 352.8 s on a 7.46 GiB float16 memmap, bit-identical output
+over 3,182,755 entries). "Consistent with health" was a model of the code
+standing in for a measurement — ml/CLAUDE.md §4.12.
+
+### AUDIT (2026-08-18): two more copies of the anomaly transform, and what they touched
+
+`ml/temporal.py` and `ml/probe_sequence.py` each carried a hand-inlined THIRD
+and FOURTH copy of the transform, both frozen at the **pre-2026-08-17**
+arithmetic — `v.std()` with no `dtype=np.float64`. On a float16 tensor that
+sums ~204M squared residuals past 65504, returns `inf`, and
+`(X - mu) / (inf + 1e-6)` is **exactly 0.0**: every dynamic channel becomes
+zeros while every loss, `gpu_util` and probe still reads healthy. Families 4
+(pentad) and 5 (daily) are float16. Measured on a shared fixture: the inlined
+copy returns sd 0.000000 with 100.0% of entries exactly zero at float16, and
+sd 1.012848 with 0.0% at float32. Both copies also carried the 249-traversal
+shape, so stage 2 on the daily tensor would have reproduced #389's hang.
+
+**Which results on record came through those two copies on a float16 tensor:
+NONE.** The audit, over every `ml-train.yml` run #1–#396 (workflow logs plus
+the `ml-metrics` archive's `probes-<n>.json` / `provenance.json`):
+
+| run | tensor | dtype | `temporal_steps` | what the two scripts produced |
+|---|---|---|---|---|
+| #365 f4-40M | family4_na025_pentad | f16 | 0 | `probe_sequence` died at `torch.load` (no checkpoint — the run OOMed first); no `temporal.json` |
+| #366 f4-40M (VOID) | family4_na025_pentad | f16 | 0 | `probe_sequence` **OOM-killed** in the transform; no `temporal.json` |
+| #367 f4-200M | family4_na025_pentad | f16 | 0 | cancelled at 4 min; `probe_sequence` died at `torch.load` |
+| #368 f4-200M | family4_na025_pentad | f16 | 0 | exit 137; `probe_sequence` died at `torch.load` |
+| #388 frozen control | family4_na025_pentad | f16 | 0 | `probe_sequence` **OOM-killed**; no `temporal.json` |
+| #389 f5-40M (daily) | family5_na025_daily | f16 | 0 | cancelled; `probe_sequence` died at `torch.load` |
+| #390 frozen control | family4_na025_pentad | f16 | 0 | `probe_sequence` **OOM-killed**. Its `probe_kfold` **0.660** and `dip_check` came through `trainprobe.anomaly_transform`, which had the float64 fix at that sha (`70ffe2d` contains `2752b8b`) — **the E-038 baseline stands** |
+| #391 read-out ladder | family4_na025_pentad | f16 | — | failed at the tensor step (exit 1); no probes |
+
+Not one of them archived a `probe_sequence.json` or a `temporal.json`. Every
+family-4/5 dispatch to date carries **`temporal_steps: 0`**, so
+`ml/temporal.py` has never executed against a float16 tensor at all.
+
+Everything that DID run stage 2 — the wave-8 heads and the E-035/E-036/E-037
+arms — ran on **`family3_na025`, which is float32** and never reaches the
+limit: #350, #351, #357, #358, #359, #360, #363, #364, #395, and the eval
+runs #352–#356, #369, #380–#382. Provenance read from
+`probes-<n>.json:provenance.json` for each; #357/#363/#364 from their live
+`metrics.jsonl` and job logs (#357's log has expired). **No published number
+in this file is affected.**
+
+**NOT DETERMINABLE at the time of the audit**, because GitHub does not serve
+logs for a run in progress and neither had archived provenance yet:
+
+- **#392** (E-038 read-out ladder on the frozen anchor, `family4_na025_pentad`,
+  phase "probes and stage 2" at 13:32Z) — its `temporal_steps` could not be
+  read. If it is non-zero it ran `ml/temporal.py` against a float16 tensor at
+  sha `d3ea240`, i.e. through the broken copy, and **its stage-2 number must
+  be discarded**. Every earlier E-038 dispatch used 0, and its plan is an
+  eval pass, so 0 is the expectation — but it is an expectation, not a
+  reading. Check the archived `probes-392.json` when it lands.
+- **#386** (E-038a f4-40M, `family4_na025_pentad`, stage-1 at step 96,000) —
+  same, and it has not reached its probe ladder yet.
+- **#393 / #394 / #396** are `sroll:`/family-3 and unaffected.
+
+Both copies are now calls to `trainprobe.anomaly_transform`, and the class of
+defect is pinned rather than fixed one file at a time:
+`tests/test_one_anomaly_transform.py` fails if ANY file under `ml/`
+re-implements the transform, and `tests/test_stage2_float16_anomaly.py` runs
+both scripts' real transform path on a float16 fixture in the overflow regime
+(train pool 746,712; the old arithmetic reads `inf`) and asserts the dynamic
+channels are not zero — verified to FAIL on the pre-fix code at 100.0%
+exactly-zero for both scripts.
+
+One more copy exists and is deliberately left: `ml/recon_eval.py` carries a
+STREAMING replica (its docstring says so; the in-RAM recipe needs >11 GB) with
+its own `verify_streaming` cross-check. It cannot hit this bug — every
+reduction in it is float64 or preceded by `.astype(np.float32)` — and it has
+never run in any workflow run. It is named in the test's exemption list with
+that reason. **Separate task:** its climatology counter is
+`n = np.zeros(..., np.uint8)`, sized for "≤43 train months per moy"; that
+wraps silently at family 4's ~262 and family 5's ~1309 timesteps per
+month-of-year, so it must not be pointed at a pentad/daily tensor as it
+stands.
+
+**Also separate:** `ml/probe_head.py` and `ml/dip_check.py` still open the
+tensor with plain `np.load`, so they cannot read a family-5 sidecar tensor at
+all. That failure is a `KeyError`, i.e. loud, and both already call the
+canonical transform — so it produces no wrong number, only a missing one. Left
+untouched here deliberately: neither can be exercised end to end in the
+sandbox, and an unverified change to two more probe scripts on the eve of an
+eval wave is the wrong trade.
+
 **Result (pentad trained arms):** pending.
 
 ---

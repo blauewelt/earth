@@ -219,6 +219,13 @@ def main():
         # this is the one implementation, and it is the same one probe_kfold
         # scores against — which is what makes E-038's frozen control
         # comparable to the trained arms at all.
+        #
+        # "The one implementation" was still not TRUE when that was written:
+        # temporal.py and probe_sequence.py each carried a THIRD and FOURTH
+        # copy, both at the broken pre-2026-08-17 arithmetic, found on
+        # 2026-08-18. Both are calls now, and the claim is pinned rather than
+        # asserted: tests/test_one_anomaly_transform.py fails if any file
+        # under ml/ re-implements the transform.
         from trainprobe import anomaly_transform   # lazy: plain runs skip it
         X, dynamic = anomaly_transform(X, moy, t_hold, x_hold)
         print(f"anomaly space: {len(dynamic)}/{C} dynamic channels "

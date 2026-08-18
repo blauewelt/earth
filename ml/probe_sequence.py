@@ -19,7 +19,6 @@ import argparse
 import json
 import os
 import sys
-import warnings
 
 import numpy as np
 import torch
@@ -65,8 +64,16 @@ def main():
 
     ck = torch.load(os.path.join(HERE, "runs", a.run, "pixelmae.pt"),
                     map_location="cpu", weights_only=False)
-    d = np.load(a.data)
-    X = d["X"].copy()
+    # load_tensor == np.load for every single-file npz (families 2/3/4); for
+    # family 5's sidecar layout it MEMORY-MAPS X, because 165.6 GB cannot be
+    # decompressed on any box we can rent (ml/tensor_io.py). The old
+    # `np.load(...)["X"].copy()` could not open family 5 at all, and on a
+    # single-file npz the .copy() held the decompressed tensor TWICE — the
+    # residual #390 recorded when this script was OOM-killed on the 33 GB
+    # pentad tensor even after the LazyPixels work below.
+    from tensor_io import load_tensor
+    d = load_tensor(a.data)
+    X = d["X"]
     months = [str(m) for m in d["months"]]
     lats, lons = d["lats"], d["lons"]
     T, H, W, C = X.shape
@@ -76,19 +83,47 @@ def main():
     x_hold = (lons >= lo) & (lons < hi)
     moy = np.array([int(m[5:7]) - 1 for m in months])
 
-    if a.anomaly:   # identical transform to train.py --anomaly
-        dynamic = [c for c in range(C)
-                   if np.nanstd(np.nanmean(X[..., c], axis=(1, 2))) > 1e-6]
-        clim = np.full((12, H, W, C), np.nan, dtype=np.float32)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            for m in range(12):
-                clim[m] = np.nanmean(X[(moy == m) & ~t_hold], axis=0)
-        for c in dynamic:
-            X[..., c] = X[..., c] - clim[moy][..., c]
-            v = X[..., c][np.isfinite(X[..., c]) & ~t_hold[:, None, None]
-                          & ~x_hold[None, None, :]]
-            X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)
+    if a.anomaly:
+        # THE anomaly transform, and there is exactly one of it. What stood
+        # here was a hand-inlined FOURTH copy (train.py had the second until
+        # 2026-08-17, temporal.py the third), frozen at the pre-2026-08-17
+        # shape, and it carried three defects the canonical one does not:
+        #
+        #   1. `v.std()` with no `dtype=np.float64`. numpy upcasts the
+        #      accumulator for np.mean on float16 but NOT for np.std/np.var.
+        #      The z-score sums ~204M squared residuals; in float16 that
+        #      passes 65504, returns inf, and (X - mu) / (inf + 1e-6) is
+        #      EXACTLY 0.0 — every dynamic channel silently zero, with every
+        #      downstream correlation still finite and plausible. Families 4
+        #      and 5 are float16. Family 3 is float32 and never reached the
+        #      limit, which is the only reason this copy never returned a
+        #      wrong number.
+        #   2. ~249 full-extent strided traversals of X, ~41 TB of physical
+        #      read at family 5's 165.6 GB on a 64 GB box (run #389: seven
+        #      hours in the equivalent code, GPU at 0%). Canonical: 6.0.
+        #   3. `clim[moy][..., c]` — the form trainprobe's own comment warns
+        #      against. It materialises the whole [T,H,W,C] fancy index and
+        #      throws all but one channel away, once per dynamic channel
+        #      (2.4 GB per channel at pentad). temporal.py's copy used the
+        #      cheap `clim[moy, :, :, c]`; this one never got that fix.
+        #
+        # The import is LAZY because trainprobe imports this module.
+        from trainprobe import anomaly_transform
+        if isinstance(X, np.memmap) and not X.flags.writeable:
+            # Sidecar tensor (family 5): anomaly_transform writes into X in
+            # place, and the canonical map must never take those writes — it
+            # would leave an anomaly-space tensor where a state-space one is
+            # documented, and the next reader would z-score it again with
+            # nothing to say so. A scratch copy is disk, not RAM (tensor_io
+            # docstring). Only on THIS branch: the state-space path never
+            # writes X, so it needs no second 166 GB. X must also STAY ALIVE
+            # past here — LazyPixels below uses it as its buffer.
+            from tensor_io import writable_copy
+            scratch = a.data[:-4] + "_seqprobe_scratch.npy"
+            X = writable_copy(X, scratch, verbose=False)
+            import atexit
+            atexit.register(lambda q=scratch: os.path.exists(q) and os.remove(q))
+        X, _dynamic = anomaly_transform(X, moy, t_hold, x_hold)
 
     model = codec_from_ckpt(ck, C)
     model.load_state_dict(ck["model"])

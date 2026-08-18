@@ -30,7 +30,6 @@ import os
 import re
 import sys
 import time
-import warnings
 
 import numpy as np
 import torch
@@ -1151,8 +1150,27 @@ def main():
     if not ck["args"].get("anomaly"):
         sys.exit("stage 2 requires an anomaly-space codec (train.py --anomaly): "
                  "state-space embeddings failed the K-sweep precondition.")
-    d = np.load(a.data)
-    X = d["X"].copy()
+    # load_tensor == np.load for every single-file npz (families 2/3/4); for
+    # family 5's sidecar layout it MEMORY-MAPS X, because 165.6 GB cannot be
+    # decompressed on any box we can rent (ml/tensor_io.py). The old
+    # `np.load(...)["X"].copy()` could not open family 5 at all, and on a
+    # single-file npz the .copy() was pure waste: NpzFile decompresses a FRESH
+    # writable array on every `d["X"]`, so the copy simply held the tensor
+    # twice (33 GB at pentad) — the residency probe_kfold.py already dropped.
+    from tensor_io import load_tensor
+    d = load_tensor(a.data)
+    X = d["X"]
+    if isinstance(X, np.memmap) and not X.flags.writeable:
+        # Sidecar tensor (family 5): anomaly_transform writes into X, and so
+        # does the nan_to_num below. The canonical map must never take those
+        # writes — it would leave an anomaly-space tensor where a state-space
+        # one is documented and the NEXT run would z-score it again, silently.
+        # A per-run scratch copy is disk, not RAM (tensor_io docstring).
+        from tensor_io import writable_copy
+        scratch = a.data[:-4] + "_temporal_scratch.npy"
+        X = writable_copy(X, scratch, verbose=False)
+        import atexit
+        atexit.register(lambda q=scratch: os.path.exists(q) and os.remove(q))
     months = [str(m) for m in d["months"]]
     lats, lons, chan = d["lats"], d["lons"], [str(c) for c in d["chan"]]
     T, H, W, C = X.shape
@@ -1162,25 +1180,31 @@ def main():
     lo, hi = (float(v) for v in ck["args"]["holdout_lon"].split(","))
     x_hold = (lons >= lo) & (lons < hi)
 
-    # identical anomaly transform to train.py --anomaly (train-years clim)
-    dynamic = [c for c in range(C)
-               if np.nanstd(np.nanmean(X[..., c], axis=(1, 2))) > 1e-6]
-    clim = np.full((12, H, W, C), np.nan, dtype=np.float32)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        for m in range(12):
-            clim[m] = np.nanmean(X[(moy == m) & ~t_hold], axis=0)
-    for c in dynamic:
-        # clim[moy, :, :, c] is [T,H,W] (98 MB); the equivalent-looking
-        # clim[moy][..., c] materialises the whole [T,H,W,C] fancy index
-        # (1.4 GB) and throws all but one channel away — once per dynamic
-        # channel. That transient is most of why this OOM-killed the
-        # xlarge stage-2 on a 7 GB box (2026-08-07).
-        X[..., c] = X[..., c] - clim[moy, :, :, c]
-        v = X[..., c][np.isfinite(X[..., c]) & ~t_hold[:, None, None]
-                      & ~x_hold[None, None, :]]
-        X[..., c] = (X[..., c] - v.mean()) / (v.std() + 1e-6)
-    del clim
+    # THE anomaly transform, and there is exactly one of it. What stood here
+    # was a hand-inlined THIRD copy (train.py had the second until 2026-08-17,
+    # probe_sequence.py the fourth), frozen at the pre-2026-08-17 shape, and
+    # it carried both bugs the canonical one has since had fixed:
+    #
+    #   1. `v.std()` with no `dtype=np.float64`. numpy upcasts the accumulator
+    #      for np.mean on float16 but NOT for np.std/np.var. The z-score sums
+    #      ~204M squared residuals; in float16 that passes 65504, returns inf,
+    #      and (X - mu) / (inf + 1e-6) is EXACTLY 0.0. Families 4 (pentad) and
+    #      5 (daily) are float16, so stage 2 on either would have trained on
+    #      all-zero dynamic channels while every loss, gpu_util and probe still
+    #      read healthy. Family 3 is float32 and never reached the limit, which
+    #      is the only reason this copy never produced a wrong number.
+    #   2. ~249 full-extent strided traversals of X (39 for the dynamic test,
+    #      ~6 per dynamic channel). At family 5's 165.6 GB on a 64 GB box that
+    #      is ~41 TB of physical read: run #389 sat SEVEN HOURS in the
+    #      equivalent code in trainprobe.py with the GPU at 0%. The canonical
+    #      version is time-chunked at 6.0 traversals.
+    #
+    # Duplication was the defect, not either bug — one fix landed in one file
+    # and the other three kept the broken arithmetic. tests/test_one_anomaly_
+    # transform.py now fails if a second implementation reappears anywhere in
+    # ml/. The import is LAZY because trainprobe imports this module.
+    from trainprobe import anomaly_transform
+    X, dynamic = anomaly_transform(X, moy, t_hold, x_hold)
 
     codec = codec_from_ckpt(ck, C)
     codec.load_state_dict(ck["model"])
