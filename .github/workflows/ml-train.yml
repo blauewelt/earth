@@ -149,7 +149,8 @@ jobs:
           # step was written when only the codec mattered. Same reasoning as
           # the codec: the file on disk is real whether or not the job that
           # made it survived to upload it.
-          REL_ID=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+          REL_ID=$(curl -s --connect-timeout 15 --max-time 60 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/model-checkpoints-v1" \
             | sed -n 's/.*"id": *\([0-9]*\).*/\1/p' | head -1)
           # metrics.jsonl TOO — and it may matter more than the weights.
@@ -209,7 +210,16 @@ jobs:
             [ -f "$f" ] || continue
             base=$(basename "$f"); ext="${base##*.}"
             asset="rescued-${base%.*}-${{ github.run_number }}.${ext}"
+            # BOUNDED. These curls carried no timeout at all, and #405 sat
+            # 45 minutes on this step with the box at 0% CPU before anyone
+            # looked — against a job_timeout of 1000 minutes, i.e. a
+            # best-effort rescue could have burned sixteen hours of a rented
+            # GPU without ever reaching checkout. A step that cannot fail
+            # must still be able to GIVE UP; "best effort" is a promise about
+            # delivery, not a licence to hang. 900 s is generous for the
+            # 466 MB codec on a slow box and still bounds the wedge.
             up=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              --connect-timeout 15 --max-time 900 \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "Content-Type: application/octet-stream" \
               -T "$f" \
