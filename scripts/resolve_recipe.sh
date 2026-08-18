@@ -54,6 +54,13 @@ python3 - "$FILE" "$NAME" <<'PY'
 import json, re, sys
 path, name = sys.argv[1], sys.argv[2]
 wf = open(".github/workflows/ml-train.yml").read()
+# The consumer corpus is the workflow PLUS the scripts it calls: bodies that
+# outgrew the 21,000-char run-block ceiling (probes_run.sh, dectrain_run.sh,
+# sroll_run.sh) now hold most of the ${RECIPE_X} reads, and a check that only
+# looked at the workflow would refuse a key purely because its consumer had
+# been carved out into a file.
+import glob as _glob
+consumers = wf + "".join(open(f).read() for f in sorted(_glob.glob("scripts/*.sh")))
 blk = wf[wf.index("  workflow_dispatch:"):wf.index("\npermissions:")]
 valid = set(re.findall(r'^      (\w+):\s*$', blk, re.M))
 d = json.load(open(path))
@@ -70,13 +77,57 @@ if bad:
 # are read by runs-on/timeout-minutes at JOB START, before any step can set an
 # env var — so a recipe naming them would look applied and do nothing, which is
 # the precise failure this whole change exists to remove.
-unread = [k for k in keys if ("RECIPE_" + k.upper()) not in wf]
+unread = [k for k in keys if ("RECIPE_" + k.upper()) not in consumers]
 if unread:
     raise SystemExit(f"::error::recipe {name} sets {sorted(unread)}, which "
                      f"ml-train.yml never reads as $RECIPE_<KEY>. Either wire "
                      f"the input up in the workflow or drop it from the "
                      f"recipe — a setting that appears to apply and does not "
                      f"is worse than no setting at all.")
+
+# AND every reference to it must be reachable from a shell. `if:`, `env:`,
+# `with:`, `runs-on:` and `timeout-minutes:` are YAML expression contexts,
+# evaluated by GitHub before any step runs — ${RECIPE_X} there is literal
+# text. An input read in BOTH places is the worst case of all: the recipe
+# governs half the job and the dispatch governs the other half, and the two
+# halves disagree in silence. That is exactly how `tensor` behaved on the
+# first cut of this feature (recipe switched the data-cache branch, env: kept
+# the old path, so the trainer would have read a different file than the log
+# claimed) and how `anomaly` behaved (governed the trainer, not whether the
+# probes phase ran). Both were fixed by moving the read into a run: block.
+#
+# The one legal YAML-context form is `IN_<KEY>: ${{ inputs.<key> }}` — that
+# is the deliberate hand-off, where a script applies ${RECIPE_X:-$IN_X}.
+import yaml
+doc = yaml.safe_load(wf)
+unreachable = {}
+for st in doc["jobs"]["train"]["steps"]:
+    for field, val in st.items():
+        if field == "run":
+            continue
+        for line in yaml.dump(val).splitlines():
+            for k in keys:
+                if f"inputs.{k}" not in line:
+                    continue
+                if re.match(r'\s*IN_' + k.upper() + r'\s*:', line):
+                    continue          # the sanctioned hand-off
+                unreachable.setdefault(k, []).append(
+                    f"{st.get('name', '?')}::{field}")
+job = doc["jobs"]["train"]
+for field in ("runs-on", "timeout-minutes"):
+    for k in keys:
+        if f"inputs.{k}" in str(job.get(field, "")):
+            unreachable.setdefault(k, []).append(f"job::{field}")
+if unreachable:
+    detail = "; ".join(f"{k} read at {sorted(set(v))}"
+                       for k, v in sorted(unreachable.items()))
+    raise SystemExit(
+        f"::error::recipe {name} sets input(s) that ml-train.yml also reads "
+        f"in a YAML expression context, where $RECIPE_<KEY> is literal text: "
+        f"{detail}. The recipe would apply to some of the job and not the "
+        f"rest. Move the read into a run: block (hand off as "
+        f"IN_<KEY>: ${{{{ inputs.<key> }}}} and resolve ${{RECIPE_X:-$IN_X}} "
+        f"in the shell), or drop the key from the recipe.")
 lines = [f"RECIPE_{k.upper()}={v}" for k, v in d.items() if not k.startswith("_")]
 open("/tmp/recipe.env", "w").write("\n".join(lines) + ("\n" if lines else ""))
 print(f"recipe {name}: {d.get('_description', '(no description)')}")

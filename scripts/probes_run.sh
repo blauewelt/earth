@@ -36,6 +36,22 @@ set -e
 # then WINDOW is not merely empty, it is unset, and every `case "${WINDOW}"`
 # below silently takes the default branch. Empty is legitimate (a bare
 # `recipe:<name>` with no tail leaves nothing behind); UNSET is not.
+# TENSOR is derived here for the same reason the Train step derives it: the
+# step's env: is a YAML expression context, so ${RECIPE_TENSOR} cannot be
+# resolved there. A recipe naming family4 must reach THIS phase too, or the
+# probes would read a different tensor than the training did.
+T="${RECIPE_TENSOR:-$IN_TENSOR}"
+[ "$T" = "family2" ] && T=na_pixels
+TENSOR="ml/cache/${T}.npz"
+
+# ANOMALY gate, moved out of the step's `if:` for the same reason — an `if:`
+# reads inputs.anomaly and a recipe cannot reach it, so a recipe that set
+# anomaly would have governed the trainer and not whether this phase ran.
+if [ "${RECIPE_ANOMALY:-$IN_ANOMALY}" != "true" ]; then
+  echo "probes: anomaly is not true — this phase is anomaly-space only, skipping"
+  exit 0
+fi
+
 if [ -z "${WINDOW+x}" ]; then
   echo "::error::WINDOW is unset — the 'Resolve recipe' step did not run or "\
        "failed. Refusing to guess the mode: an unset window looks exactly "\
