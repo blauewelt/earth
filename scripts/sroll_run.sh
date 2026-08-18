@@ -46,9 +46,20 @@ echo "Z: $ZPATH ($(stat -c%s "$ZPATH") bytes)"
 
 mkdir -p ml/runs/heads
 HPATHS=""
+# Two asset-name conventions live on the release. The original one is
+# "<tag>__temporal.pt" — a full training checkpoint (weights + Adam moments
+# + args), written by snapshot_head.sh. From 2026-08-16 a head that big no
+# longer fits: a 205-217M head with moments is 2.49-2.61 GB and GitHub
+# rejects any release asset over ~2 GiB with HTTP 422. Those heads are
+# published weights-only by scripts/publish_head_weights.sh under their own
+# name, "head-weights-<arm>.pt" (~845-869 MB). rollout_spatial.py reads both
+# shapes. So: try the __temporal.pt name first (every pre-wave-8 head, and
+# the e017_u1_s0 gate, still lives there), fall back to the tag verbatim.
 for tag in ${TAGS//,/ }; do
   if curl -fsSL -o "ml/runs/heads/${tag}.pt" \
-      "https://github.com/${GITHUB_REPOSITORY}/releases/download/model-checkpoints-v1/${tag}__temporal.pt"; then
+      "https://github.com/${GITHUB_REPOSITORY}/releases/download/model-checkpoints-v1/${tag}__temporal.pt" \
+   || curl -fsSL -o "ml/runs/heads/${tag}.pt" \
+      "https://github.com/${GITHUB_REPOSITORY}/releases/download/model-checkpoints-v1/${tag}.pt"; then
     HPATHS="$HPATHS ml/runs/heads/${tag}.pt"
   else
     echo "::warning::head ${tag} not on the release — skipped"
