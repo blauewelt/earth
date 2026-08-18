@@ -2571,6 +2571,11 @@ function addLayer(cfg) {
   // Ask GIBS what this layer actually serves. No-op after the first enable
   // (cached for the session), and it never blocks the paint above.
   ensureGibsDomain(cfg);
+  // PREFETCH the SST normals with the anomaly layer. The hover probe renders
+  // synchronously, so a value that needs a round-trip cannot appear in it at
+  // all — loading here is what lets a saturated pixel read its real departure
+  // the moment it is hovered, instead of "≥ 3".
+  if (cfg.id === "sst-anom") ensureSstNormals(state.date);
 }
 
 function removeLayer(id) {
@@ -2588,6 +2593,10 @@ function removeLayer(id) {
 }
 
 function refreshTimedLayers() {
+  // The date moved, so the normals may be for the wrong month now. Reload in
+  // the background if the anomaly layer is on; the stamp check makes this a
+  // no-op while the month is unchanged.
+  if (state.layers["sst-anom"]?.layer) ensureSstNormals(state.date);
   // Suppressed entries (hidden because the active window can't average them)
   // must also refresh, so they reappear when the window returns to 1 day.
   for (const [id, entry] of Object.entries(state.layers)) {
@@ -4833,7 +4842,12 @@ async function probeEntryValue(entry, carto) {
   const v = await probePixel(cfg, state.date, z, x, y, px, py, vlut.lut);
   if (v == null) return { ...base, noData: true };
   // A catch-all bin answers with its bound ("< 30"), not an invented midpoint.
-  return { ...base, value: v, cap: vlut.caps?.get(v) };
+  const cap = vlut.caps?.get(v);
+  // Only the anomaly layer has a correctable cap: its ±3 bound is a palette
+  // edge, not a limit of the instrument. SMAP's "< 30 PSU" is a genuine
+  // retrieval floor and must keep reading as a bound.
+  const trueAnom = cap && cfg.id === "sst-anom" ? sstAnomalyAt(lon, lat) : null;
+  return { ...base, value: v, cap, trueAnom };
 }
 
 const probeEl = document.getElementById("value-probe");
@@ -5032,10 +5046,17 @@ function renderProbe(res, sx, sy) {
       : `<span class="vp-val">×${fmtVal(fold >= 1 ? fold : 1 / fold)}</span> ` +
         `<span class="vp-unit">${fold >= 1 ? "more" : "less"}</span>`;
   } else if (res.cap) {
-    // catch-all colormap bin: the tile only says "off this scale", so the
-    // read-out says the bound rather than inventing a number inside the bin
-    head = `<span class="vp-val">${res.cap.sign} ${fmtVal(res.cap.bound)}</span> ` +
-           `<span class="vp-unit">${res.units}</span>`;
+    // Catch-all colormap bin: the tile only says "off this scale". For SST
+    // anomalies we can do better than the bound — the normals are resident
+    // (prefetched with the layer), so subtract and show the real departure,
+    // with the bound kept beside it as the thing the COLOUR meant.
+    const real = res.trueAnom;
+    head = real
+      ? `<span class="vp-val">${real.v >= 0 ? "+" : "−"}${fmtVal(Math.abs(real.v))}</span> ` +
+        `<span class="vp-unit">°C</span> ` +
+        `<span class="vp-unit">(palette ${res.cap.sign} ${fmtVal(res.cap.bound)})</span>`
+      : `<span class="vp-val">${res.cap.sign} ${fmtVal(res.cap.bound)}</span> ` +
+        `<span class="vp-unit">${res.units}</span>`;
   } else {
     head = `<span class="vp-val">${fmtVal(res.value)}</span> <span class="vp-unit">${res.units}</span>`;
   }
@@ -5380,8 +5401,9 @@ function pixelRow(label, value, when = null) {
  * -3..+3 degC with catch-all end bins (`[3.0,+INF)`). So at the height of a
  * strong El Nino the eastern Pacific saturates and every pixel inverts to
  * "at least 3" — the reading is capped exactly when the magnitude is the
- * whole story (Chris, 2026-08-18: "The SST anomaly layer is capped at +3C?").
- * No client work recovers it: the information is not in the tile.
+ * whole story (Chris, 2026-08-18: "I understand if the legend caps at 3C. But
+ * that doesn't mean we cannot know the values"). No client work recovers it
+ * from the tile: the information is not in the picture.
  *
  * So this subtracts instead of inverting a colour: OISST monthly mean minus
  * that same calendar month's 1991-2020 normal, both from the archive we
@@ -5390,35 +5412,59 @@ function pixelRow(label, value, when = null) {
  * because MUR resolves the coastal upwelling tongue that a 1-degree cell
  * averages away, and Peru is precisely where this gets used.
  *
- * The cost of that honesty is resolution: 1 degree and monthly, against the
- * raster's 25 km and daily. The row says so rather than presenting the two as
- * the same measurement. */
-function oisstClimIndex() {
-  return pixelJson("data/oisst_clim.json");
+ * PREFETCHED, not fetched on demand: the hover probe renders synchronously,
+ * so a value that needs a round-trip cannot appear in it at all. Enabling the
+ * anomaly layer (or moving the date while it is on) loads the two files in the
+ * background; `sstAnomalyAt` is then a pure lookup that either has the answer
+ * or honestly does not. */
+const sstNorm = { stamp: null, geom: null, clim: null, frame: null, loading: null };
+
+function sstNormalsStamp(dateStr, oiIdx) {
+  const want = (dateStr || state.date).slice(0, 7);
+  const stamps = oiIdx?.monthsAvailable || [];
+  return stamps.filter((s) => s <= want).pop() || stamps[0] || null;
 }
-async function trueSstAnomaly(lon, lat) {
-  const idx = await oisstClimIndex();
-  if (!idx) return null;
-  // The archive is monthly and lags; use the newest month at or before the
-  // date on screen, and report which one that was.
-  const want = state.date.slice(0, 7);
-  const oiIdx = await pixelJson("data/oisst_monthly.json");
-  if (!oiIdx) return null;
-  const stamps = oiIdx.monthsAvailable || [];
-  const use = stamps.filter((s) => s <= want).pop() || stamps[0];
-  if (!use) return null;
-  const [clim, yearFile] = await Promise.all([
-    pixelJson(`${idx.monthDir}/${use.slice(5, 7)}.json`),
-    pixelJson(`${oiIdx.yearDir}/${use.slice(0, 4)}.json`),
-  ]);
-  const frame = yearFile?.months?.[use];
-  if (!clim?.values || !frame) return null;
-  const geom = { west: idx.west, south: idx.south, east: idx.east, north: idx.north,
-                 dlon: idx.dlon, dlat: idx.dlat, nx: idx.nx, ny: idx.ny };
-  const now = sampleGrid({ ...geom, values: frame }, lon, lat);
-  const norm = sampleGrid({ ...geom, values: clim.values }, lon, lat);
+
+function ensureSstNormals(dateStr) {
+  // Serialise rather than skip: scrubbing the date while a month is in flight
+  // used to return the IN-FLIGHT promise and never load the month actually
+  // asked for, so the probe kept answering with the previous month's normals.
+  const run = async () => {
+    const [idx, oiIdx] = await Promise.all([
+      pixelJson("data/oisst_clim.json"), pixelJson("data/oisst_monthly.json"),
+    ]);
+    if (!idx || !oiIdx) return null;
+    const use = sstNormalsStamp(dateStr, oiIdx);
+    if (!use) return null;
+    if (sstNorm.stamp === use) return sstNorm;
+    const [clim, yearFile] = await Promise.all([
+      pixelJson(`${idx.monthDir}/${use.slice(5, 7)}.json`),
+      pixelJson(`${oiIdx.yearDir}/${use.slice(0, 4)}.json`),
+    ]);
+    const frame = yearFile?.months?.[use];
+    if (!clim?.values || !frame) return null;
+    sstNorm.stamp = use;
+    sstNorm.period = idx.period;
+    sstNorm.geom = { west: idx.west, south: idx.south, east: idx.east, north: idx.north,
+                     dlon: idx.dlon, dlat: idx.dlat, nx: idx.nx, ny: idx.ny };
+    sstNorm.clim = clim.values;
+    sstNorm.frame = frame;
+    return sstNorm;
+  };
+  sstNorm.loading = sstNorm.loading ? sstNorm.loading.then(run, run) : run();
+  return sstNorm.loading;
+}
+
+/* Synchronous by design — see the prefetch note above. Returns null when the
+ * normals are not resident yet, which the callers render as the honest capped
+ * bound rather than as a wrong number. */
+function sstAnomalyAt(lon, lat) {
+  if (!sstNorm.clim || !sstNorm.frame) return null;
+  const now = sampleGrid({ ...sstNorm.geom, values: sstNorm.frame }, lon, lat);
+  const norm = sampleGrid({ ...sstNorm.geom, values: sstNorm.clim }, lon, lat);
   if (now == null || norm == null) return null;
-  return { v: now - norm, month: use, period: idx.period, sst: now, norm };
+  return { v: now - norm, month: sstNorm.stamp, period: sstNorm.period,
+           sst: now, norm };
 }
 
 async function showPixelState(carto) {
@@ -5503,9 +5549,11 @@ async function showPixelState(carto) {
     // Costs NOTHING in the ordinary case: it waits for the anomaly probe and
     // returns null unless that probe came back CAPPED, so the two extra files
     // are fetched only when the picture genuinely could not carry the number.
-    ["true SST anomaly", rasterJob.then((vals) => {
+    ["true SST anomaly", rasterJob.then(async (vals) => {
       const r = vals[PIXEL_RASTERS.indexOf("sst-anom")];
-      return r && r.cap ? trueSstAnomaly(lon, lat) : null;
+      if (!r || !r.cap) return null;
+      await ensureSstNormals(state.date);
+      return sstAnomalyAt(lon, lat);
     }).catch(() => null)],
     // {g, v}, not just v: the grid carries its own observation period/month, and
     // the row prints that — so the value and its date come from the same object.
@@ -7698,6 +7746,8 @@ window.__earth = {
   GIBS_LAYERS,
   GIBSGeographicTilingScheme,
   compareDate,
+  sstAnomalyAt,
+  ensureSstNormals,
   get stations() { return stationsDs; },
   get rapid() { return rapidData; },
   get sealevel() { return seaLevelData; },
