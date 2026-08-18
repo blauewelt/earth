@@ -85,49 +85,15 @@ if unread:
                      f"recipe — a setting that appears to apply and does not "
                      f"is worse than no setting at all.")
 
-# AND every reference to it must be reachable from a shell. `if:`, `env:`,
-# `with:`, `runs-on:` and `timeout-minutes:` are YAML expression contexts,
-# evaluated by GitHub before any step runs — ${RECIPE_X} there is literal
-# text. An input read in BOTH places is the worst case of all: the recipe
-# governs half the job and the dispatch governs the other half, and the two
-# halves disagree in silence. That is exactly how `tensor` behaved on the
-# first cut of this feature (recipe switched the data-cache branch, env: kept
-# the old path, so the trainer would have read a different file than the log
-# claimed) and how `anomaly` behaved (governed the trainer, not whether the
-# probes phase ran). Both were fixed by moving the read into a run: block.
-#
-# The one legal YAML-context form is `IN_<KEY>: ${{ inputs.<key> }}` — that
-# is the deliberate hand-off, where a script applies ${RECIPE_X:-$IN_X}.
-import yaml
-doc = yaml.safe_load(wf)
-unreachable = {}
-for st in doc["jobs"]["train"]["steps"]:
-    for field, val in st.items():
-        if field == "run":
-            continue
-        for line in yaml.dump(val).splitlines():
-            for k in keys:
-                if f"inputs.{k}" not in line:
-                    continue
-                if re.match(r'\s*IN_' + k.upper() + r'\s*:', line):
-                    continue          # the sanctioned hand-off
-                unreachable.setdefault(k, []).append(
-                    f"{st.get('name', '?')}::{field}")
-job = doc["jobs"]["train"]
-for field in ("runs-on", "timeout-minutes"):
-    for k in keys:
-        if f"inputs.{k}" in str(job.get(field, "")):
-            unreachable.setdefault(k, []).append(f"job::{field}")
-if unreachable:
-    detail = "; ".join(f"{k} read at {sorted(set(v))}"
-                       for k, v in sorted(unreachable.items()))
-    raise SystemExit(
-        f"::error::recipe {name} sets input(s) that ml-train.yml also reads "
-        f"in a YAML expression context, where $RECIPE_<KEY> is literal text: "
-        f"{detail}. The recipe would apply to some of the job and not the "
-        f"rest. Move the read into a run: block (hand off as "
-        f"IN_<KEY>: ${{{{ inputs.<key> }}}} and resolve ${{RECIPE_X:-$IN_X}} "
-        f"in the shell), or drop the key from the recipe.")
+# The OTHER half of "does this setting fully apply?" — that no reference to
+# the key sits in a YAML expression context (if:, env:, with:, runs-on:),
+# where ${RECIPE_X} is literal text — is enforced by
+# tests/test_workflow_config.py rather than here. Deliberately: it is a
+# static property of the repo, identical for every run, and checking it needs
+# a YAML parser. This step runs BEFORE "Install deps", so the box has no
+# PyYAML — run #402 died exactly there, `ModuleNotFoundError: No module named
+# 'yaml'`, on a check that could never have told one dispatch from another.
+# Development-time rules belong in tests; run-time rules belong here.
 lines = [f"RECIPE_{k.upper()}={v}" for k, v in d.items() if not k.startswith("_")]
 open("/tmp/recipe.env", "w").write("\n".join(lines) + ("\n" if lines else ""))
 print(f"recipe {name}: {d.get('_description', '(no description)')}")

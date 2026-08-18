@@ -96,6 +96,8 @@ def main():
     if not valid:
         raise SystemExit("case 3 FAILED: parsed zero inputs out of the "
                          "workflow — the input-block markers moved")
+    consumers = raw + "".join(
+        open(f).read() for f in sorted(glob.glob(os.path.join(ROOT, "scripts", "*.sh"))))
     recipes = sorted(glob.glob(os.path.join(ROOT, "ml", "recipes", "*.json")))
     if not recipes:
         raise SystemExit("case 3 FAILED: no recipes found")
@@ -109,11 +111,46 @@ def main():
             if k not in valid:
                 raise SystemExit(f"case 3 FAILED: recipe {name} sets {k!r}, "
                                  f"which is not an ml-train.yml input")
-            if f"RECIPE_{k.upper()}" not in raw:
+            # Same corpus as scripts/resolve_recipe.sh: the workflow PLUS
+            # the scripts it calls, since probes_run.sh now holds most of the
+            # ${RECIPE_X} reads.
+            if f"RECIPE_{k.upper()}" not in consumers:
                 raise SystemExit(
                     f"case 3 FAILED: recipe {name} sets {k!r} but the "
                     f"workflow never reads $RECIPE_{k.upper()} — the setting "
                     f"would appear to apply and do nothing")
+            # ...and no reference to it may sit in a YAML expression
+            # context, where ${RECIPE_X} is literal text and the recipe would
+            # govern half the job while the dispatch governs the other half.
+            # `tensor` and `anomaly` both shipped that way for an hour: the
+            # recipe switched the data-cache branch while `env: TENSOR:` kept
+            # the old path, and the recipe governed the trainer while
+            # `if: inputs.anomaly` governed whether the probes ran at all.
+            # The one legal form is the deliberate hand-off,
+            # `IN_<KEY>: ${{ inputs.<key> }}`, resolved in a shell afterwards.
+            for st2 in steps:
+                for field, val in st2.items():
+                    if field == "run":
+                        continue
+                    for line in yaml.dump(val).splitlines():
+                        if f"inputs.{k}" not in line:
+                            continue
+                        if re.match(r"\s*IN_" + k.upper() + r"\s*:", line):
+                            continue
+                        raise SystemExit(
+                            f"case 3 FAILED: recipe {name} sets {k!r}, but "
+                            f"{st2.get('name', '?')}::{field} reads "
+                            f"inputs.{k} in a YAML expression context — "
+                            f"evaluated before any shell, so $RECIPE_{k.upper()}"
+                            f" cannot reach it. The recipe would apply to part "
+                            f"of the job only. Move the read into a run: block "
+                            f"(hand off as IN_{k.upper()}) or drop the key.")
+            job = doc["jobs"]["train"]
+            for field in ("runs-on", "timeout-minutes"):
+                if f"inputs.{k}" in str(job.get(field, "")):
+                    raise SystemExit(
+                        f"case 3 FAILED: recipe {name} sets {k!r}, read at "
+                        f"job::{field} — before any step can set an env var.")
         if not d.get("_description") or not d.get("_provenance"):
             raise SystemExit(f"case 3 FAILED: recipe {name} is missing "
                              f"_description or _provenance. A recipe records "
