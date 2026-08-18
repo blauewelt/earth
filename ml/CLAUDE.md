@@ -80,6 +80,19 @@ taken 11 h — the kind of surprise a summary can smooth over.
 - **`runner` defaults to `gpu`.** Omitting it used to send jobs to a free
   4-core CPU box where a 40M codec "trains" and nothing says wrong-hardware.
   Check `runner_name` on any dispatch you care about.
+- **A dispatch input you omit is not "inherited" — it is the DEFAULT.** The
+  workflow's defaults describe the 0.92M pilot codec (`codec_d_model` 128,
+  `codec_layers` 4, `codec_d_dec` 256, `d_z` 32, `patch` 1), and every real
+  run since run-62 is 576/10/8/768 at `d_z` 64, `patch` 3. `resume: !run-62`
+  does NOT carry the architecture with it: it names a file, and the file is
+  then loaded into whatever model the OTHER inputs built. Run #395 (E-035
+  seed 0 re-run) died 90 s in with ~60 lines of `size mismatch for
+  encoder.layers.N...: copying a param with shape [576] ... the shape in
+  current model is [128]` for exactly this reason. The dispatch is a
+  25-field record with no partial-update semantics, so **copy the full
+  INPUTS_JSON block out of the log of the run you are replicating** — it is
+  printed verbatim near the top of every job — rather than writing the
+  handful of fields the experiment is "about".
 
 ## 2 · While it runs
 
