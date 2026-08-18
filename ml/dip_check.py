@@ -23,7 +23,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model import PixelMAE, codec_from_ckpt
+from model import PixelMAE, LazyPixels, codec_from_ckpt
 from trainprobe import anomaly_transform
 from temporal import embed_everything, rapid_section
 
@@ -76,9 +76,22 @@ def main():
     ys, xs = np.where(ocean)
     sec_y, sec_sel = rapid_section(lats, lons, ys, xs)   # protocol v3 clip
     ctx = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
-    OBS = torch.from_numpy(np.isfinite(Xa))          # mask BEFORE filling
-    np.nan_to_num(Xa, nan=0.0, copy=False)           # in place: no second copy
-    Z, _ = embed_everything(codec, torch.from_numpy(Xa), OBS, ctx, lats, lons,
+    # Derived PER BATCH, not materialised: `isfinite(Xa)` is a full-size bool
+    # (16.6 GB at pentad, 83 GB at daily) allocated immediately after the
+    # ~31-minute anomaly transform — the allocation that OOM-killed this script
+    # in run #388. `torch.from_numpy(Xa)` itself was already zero-copy; the
+    # mask was not. Same numpy functions, same elements, evaluated after the
+    # index (LazyPixels in ml/model.py), so every printed number is unchanged.
+    #
+    # THE IN-PLACE `np.nan_to_num(Xa, copy=False)` IS DELETED ON PURPOSE.
+    # LazyPixels(Xa) fills each indexed batch, so pre-filling Xa would leave
+    # LazyPixels(Xa, obs=True) reading isfinite() over an array with no NaNs
+    # left: the observation mask would silently be all-True and land would
+    # enter the encoder as observed zeros. (`ocean` above is computed from the
+    # NaNs and already runs before this point — it must stay there.)
+    Xt = LazyPixels(Xa)
+    OBS = LazyPixels(Xa, obs=True)
+    Z, _ = embed_everything(codec, Xt, OBS, ctx, lats, lons,
                             ys[sec_sel], xs[sec_sel], ck["d_z"])
     F = Z.mean(1)[ridx]
 

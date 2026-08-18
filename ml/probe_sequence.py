@@ -25,7 +25,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model import PixelMAE, codec_from_ckpt
+from model import PixelMAE, LazyPixels, codec_from_ckpt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -99,8 +99,21 @@ def main():
     model.to(_dev)
 
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
-    Xt = torch.from_numpy(np.nan_to_num(X, nan=0.0))
-    OBS = torch.from_numpy(np.isfinite(X))
+    # Derived PER BATCH, not materialised. Eagerly these two were a full float
+    # copy PLUS a full bool on top of X — 49.7 GB at pentad, 248 GB at daily —
+    # allocated right after the anomaly transform, which is where run #388
+    # OOM-killed this script. LazyPixels (ml/model.py) applies the same numpy
+    # functions to the same elements after the index instead of before, so the
+    # embedding is bit-identical; `X` must stay alive, since it is the buffer.
+    #
+    # X KEEPS ITS NaNs FROM HERE ON, deliberately. LazyPixels(X) does the
+    # nan_to_num per batch, so filling X in place would leave
+    # LazyPixels(X, obs=True) reading isfinite() over an all-finite array — the
+    # observation mask would silently become all-True and every land cell would
+    # enter the encoder as an observed 0.0. The section mask below (`ocean_row`)
+    # reads OBS and depends on this too.
+    Xt = LazyPixels(X)
+    OBS = LazyPixels(X, obs=True)
 
     # The section is the pixels observed at ANY time, not the ones observed in
     # the FIRST month. Those are different sets the moment a channel starts

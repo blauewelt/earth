@@ -36,7 +36,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model import PixelMAE, codec_from_ckpt
+from model import PixelMAE, LazyPixels, codec_from_ckpt
 from trainprobe import anomaly_transform
 from temporal import embed_everything, section_of
 
@@ -284,9 +284,24 @@ def main():
         # See the note in probe_head.py: embed_everything follows the model's
         # device, so moving the codec is the entire GPU fix here.
         codec.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-        OBS = torch.from_numpy(np.isfinite(Xa))      # mask BEFORE filling
-        np.nan_to_num(Xa, nan=0.0, copy=False)       # in place: no second copy
-        Xt = torch.from_numpy(Xa)
+        # Derived PER BATCH, not materialised. `isfinite(Xa)` is a full-size
+        # bool — 16.6 GB at pentad, 83 GB at daily — and it was allocated here,
+        # immediately after the ~31-minute anomaly transform. That is exactly
+        # where run #388 had all three post-training probes OOM-killed. The
+        # same numpy functions are applied to the same elements, after the
+        # index rather than before, so nothing numerical moves (LazyPixels in
+        # ml/model.py; ml/train.py already reads the tensor this way).
+        #
+        # THE `np.nan_to_num(Xa, copy=False)` LINE IS DELETED ON PURPOSE, and
+        # must not come back. LazyPixels(Xa) applies nan_to_num to each indexed
+        # batch, so filling Xa in place would be redundant for the values and
+        # FATAL for the mask: LazyPixels(Xa, obs=True) evaluates isfinite(Xa)
+        # per batch, and a pre-filled Xa is finite everywhere. OBS would
+        # silently become all-True — every land cell and every missing channel
+        # entering the encoder as an observed 0.0 instead of a missing token,
+        # with no error and no NaN to notice.
+        Xt = LazyPixels(Xa)
+        OBS = LazyPixels(Xa, obs=True)
         del X               # Xa IS Xt's buffer now — never free it here
         gc.collect()
         out[run] = {}
