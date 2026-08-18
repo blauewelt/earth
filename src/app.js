@@ -1948,7 +1948,13 @@ function syncCompareUi(opts) {
   // focus can still be in this field while a DIFFERENT control changes the
   // comparison, and that update must land or the read-out lies about what is
   // on the globe.
-  if (on && !opts?.keepInput) input.value = compareDate();
+  // Belt and braces: `keepInput` covers the field's own handler, and the focus
+  // check covers anything ELSE that fires while the user is mid-date
+  // (syncDateMax, a layer rebuild). Either way the rule is the same one the
+  // Date field gets for free — never write into the field being typed in.
+  if (on && !opts?.keepInput && document.activeElement !== input) {
+    input.value = compareDate();
+  }
   const sel = document.getElementById("compare-select");
   const want = state.compareFixed ? "custom" : String(state.compareYears);
   if (sel.value !== want) sel.value = want;
@@ -2722,11 +2728,13 @@ document.getElementById("compare-select").addEventListener("change", (e) => {
  * write, and an out-of-range partial is simply ignored rather than corrected.
  * The steppers still clamp and still write back — also like Date's. */
 document.getElementById("compare-date").addEventListener("change", (e) => {
-  const v = e.target.value;
-  if (!v || v < "2000-01-01" || v > uiMaxDate()) return;
-  state.compareFixed = v;
+  if (!e.target.value) return;
+  state.compareFixed = e.target.value;
   state.compareYears = 0;
-  syncCompareUi({ keepInput: true });
+  // The select is a different element, so writing it is safe. The INPUT is
+  // deliberately not touched — not even through syncCompareUi — which is the
+  // whole of the fix and exactly what the Date field does.
+  document.getElementById("compare-select").value = "custom";
   refreshTimedLayers();
 });
 

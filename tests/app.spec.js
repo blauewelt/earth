@@ -537,6 +537,7 @@ test("the comparison date is steered like the main date, and knows when it track
   // typing a date pins it too, and the app compares against what is typed
   await page.fill("#compare-date", "2003-07-04");
   await page.dispatchEvent("#compare-date", "change");
+  await page.locator("#compare-date").blur();   // as a real user leaves the field
   await expect(page.locator("#compare-select")).toHaveValue("custom");
   expect(await page.evaluate(() => window.__earth.compareDate())).toBe("2003-07-04");
 
@@ -583,6 +584,7 @@ test("a half-typed year does not fight the typist", async ({ page }) => {
     const el = document.getElementById("compare-date");
     el.value = "2010-06-15";
     el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.blur();
   });
   expect(await page.evaluate(() => window.__earth.compareDate())).toBe("2010-06-15");
   await expect(page.locator("#compare-select")).toHaveValue("custom");
@@ -602,15 +604,18 @@ test("both date steppers obey the same calendar rules and the same bounds", asyn
   await page.selectOption("#compare-select", "custom");
   await page.fill("#compare-date", "2020-03-31");
   await page.dispatchEvent("#compare-date", "change");
+  await page.locator("#compare-date").blur();
   await page.click("#compare-steps button[data-cstep='-1m']");
   await expect(page.locator("#compare-date")).toHaveValue("2020-02-29");   // not Mar 2
   await page.fill("#compare-date", "2020-02-29");
   await page.dispatchEvent("#compare-date", "change");
+  await page.locator("#compare-date").blur();
   await page.click("#compare-steps button[data-cstep='-1y']");
   await expect(page.locator("#compare-date")).toHaveValue("2019-02-28");   // leap day
   // the floor is GIBS's, and it is shared with the Date row
   await page.fill("#compare-date", "2000-01-02");
   await page.dispatchEvent("#compare-date", "change");
+  await page.locator("#compare-date").blur();
   await expect(page.locator("#compare-date")).toHaveValue("2000-01-02");
   await page.click("#compare-steps button[data-cstep='-1y']");
   await expect(page.locator("#compare-date")).toHaveValue("2000-01-01");
@@ -618,6 +623,7 @@ test("both date steppers obey the same calendar rules and the same bounds", asyn
   const max = await page.evaluate(() => document.getElementById("layer-date").max);
   await page.fill("#compare-date", max);
   await page.dispatchEvent("#compare-date", "change");
+  await page.locator("#compare-date").blur();
   await page.click("#compare-steps button[data-cstep='+1y']");
   await expect(page.locator("#compare-date")).toHaveValue(max);
 });
