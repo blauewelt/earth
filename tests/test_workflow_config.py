@@ -184,7 +184,52 @@ def main():
     print("case 4 ok — architecture flows through, with no literal fallback")
     ok += 1
 
-    print(f"\nall {ok}/4 workflow guards hold")
+    # ---- case 5: anything that READS $TENSOR must derive and export it ---
+    # TENSOR used to arrive from each step's env:, where a recipe could not
+    # reach it. It is now derived in the shell — but a shell assignment is
+    # invisible to a python heredoc, and "Record provenance" reads
+    # os.environ["TENSOR"] with no `$` anywhere, so the first sweep missed it
+    # and #403 died with KeyError: 'TENSOR'. Reads take three forms; check
+    # for all three, and require `export`.
+    READS = re.compile(r'\$\{?TENSOR\b|environ\["TENSOR"\]|environ\.get\("TENSOR"')
+    bodies = [(st.get("name", f"step {i}"), st["run"])
+              for i, st in enumerate(steps) if isinstance(st.get("run"), str)]
+    bodies += [(os.path.basename(f), open(f).read())
+               for f in sorted(glob.glob(os.path.join(ROOT, "scripts", "*.sh")))]
+    checked = 0
+    for name, body in bodies:
+        if not READS.search(body):
+            continue
+        checked += 1
+        if "export TENSOR=" in body:
+            if "RECIPE_TENSOR" not in body:
+                raise SystemExit(
+                    f"case 5 FAILED: {name} exports TENSOR without consulting "
+                    f"$RECIPE_TENSOR — a recipe naming a different family "
+                    f"would apply to the rest of the job and not to this "
+                    f"step.")
+            continue
+        # Not exporting is fine IF something that does export INVOKES it —
+        # sroll_run.sh and dectrain_run.sh are called by probes_run.sh and
+        # inherit its environment. That inheritance is the whole reason the
+        # export matters, so assert the chain rather than the symbol.
+        callers = [n for n, b in bodies
+                   if name in b and n != name and "export TENSOR=" in b]
+        if not callers:
+            raise SystemExit(
+                f"case 5 FAILED: {name} reads $TENSOR, does not export it, "
+                f"and nothing that does export it invokes {name}. It used to "
+                f"arrive from the step's env:; it is now derived from "
+                f"${{RECIPE_TENSOR:-$IN_TENSOR}} so a recipe can reach it, "
+                f"and it must be exported or inherited — otherwise the "
+                f"python heredocs cannot see it (#403, KeyError: 'TENSOR').")
+    if checked < 3:
+        raise SystemExit(f"case 5 FAILED: only {checked} TENSOR readers found; "
+                         f"the detector has stopped seeing them")
+    print(f"case 5 ok — all {checked} $TENSOR readers derive and export it")
+    ok += 1
+
+    print(f"\nall {ok}/5 workflow guards hold")
 
 
 if __name__ == "__main__":

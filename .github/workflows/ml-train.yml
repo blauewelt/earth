@@ -622,6 +622,16 @@ jobs:
           INPUTS_JSON: ${{ toJSON(inputs) }}
           IN_TENSOR: ${{ inputs.tensor }}
         run: |
+          # TENSOR is derived HERE rather than in the step's env:, because
+          # env: is a YAML expression context that ${RECIPE_TENSOR} cannot
+          # reach — a recipe naming family4 would have switched the data-cache
+          # branch and left this path on family3, i.e. trained on the wrong
+          # file while every log line said otherwise. EXPORTED, because the
+          # python heredocs below read os.environ["TENSOR"] — a plain shell
+          # assignment is invisible to them, which is how #403 died.
+          T="${RECIPE_TENSOR:-$IN_TENSOR}"
+          [ "$T" = "family2" ] && T=na_pixels
+          export TENSOR="ml/cache/${T}.npz"
           mkdir -p ml/runs/actions
           python - <<'EOF'
           import hashlib, json, os, subprocess, sys
@@ -758,10 +768,12 @@ jobs:
           # env: is a YAML expression context that ${RECIPE_TENSOR} cannot
           # reach — a recipe naming family4 would have switched the data-cache
           # branch and left this path on family3, i.e. trained on the wrong
-          # file while every log line said otherwise.
+          # file while every log line said otherwise. EXPORTED, because the
+          # python heredocs below read os.environ["TENSOR"] — a plain shell
+          # assignment is invisible to them, which is how #403 died.
           T="${RECIPE_TENSOR:-$IN_TENSOR}"
           [ "$T" = "family2" ] && T=na_pixels
-          TENSOR="ml/cache/${T}.npz"
+          export TENSOR="ml/cache/${T}.npz"
           # E-019b: `window` may carry a recw: token with the codec's
           # copy-reconstruction knobs, e.g.
           #   recw:vis=0.3;upw=3;chans=rg_[ts](900|1100|1300|1500|1700|1900);declayers=4
@@ -877,10 +889,12 @@ jobs:
           # env: is a YAML expression context that ${RECIPE_TENSOR} cannot
           # reach — a recipe naming family4 would have switched the data-cache
           # branch and left this path on family3, i.e. trained on the wrong
-          # file while every log line said otherwise.
+          # file while every log line said otherwise. EXPORTED, because the
+          # python heredocs below read os.environ["TENSOR"] — a plain shell
+          # assignment is invisible to them, which is how #403 died.
           T="${RECIPE_TENSOR:-$IN_TENSOR}"
           [ "$T" = "family2" ] && T=na_pixels
-          TENSOR="ml/cache/${T}.npz"
+          export TENSOR="ml/cache/${T}.npz"
           JS="${RECIPE_TEMPORAL_STEPS:-${{ inputs.temporal_steps }}}"; JS="${JS#joint:}"
           # window carries "mode" or "mode@ref_fore" — e.g. lse@0.29. The
           # second field is the FROZEN-CODEC control's forecast loss in

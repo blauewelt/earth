@@ -42,7 +42,7 @@ set -e
 # probes would read a different tensor than the training did.
 T="${RECIPE_TENSOR:-$IN_TENSOR}"
 [ "$T" = "family2" ] && T=na_pixels
-TENSOR="ml/cache/${T}.npz"
+export TENSOR="ml/cache/${T}.npz"   # exported: heredocs read os.environ["TENSOR"]
 
 # ANOMALY gate, moved out of the step's `if:` for the same reason — an `if:`
 # reads inputs.anomaly and a recipe cannot reach it, so a recipe that set
