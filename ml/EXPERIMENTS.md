@@ -167,9 +167,9 @@ works — it found the label-less cached tensor and rebuilt with labels in
 
 ### Attempt 2 (2026-08-18 ~06:15Z): re-dispatch on 126 GB boxes, plus the control
 
-- **f4-40M** → #TBD on `gpu-box-47094143` (126 GB)
-- **f4-200M** → #TBD on `gpu-box-47094145` (126 GB, warm labeled tensor)
-- **FROZEN CONTROL** → #TBD on `gpu-box-47529389` (126 GB):
+- **f4-40M** → **#386** on `gpu-box-47094143` (126 GB)
+- **f4-200M** → **#387** on `gpu-box-47094145` (126 GB, warm labeled tensor)
+- **FROZEN CONTROL** → **#388** on `gpu-box-47529389` (126 GB):
   `resume: !f3_anchor41M` at `--steps 60000` = the checkpoint's own recorded
   step, so the loop never runs — a cross-tensor EVAL, newly allowed by the
   resume guard exactly when nothing will train
