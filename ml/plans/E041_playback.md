@@ -1,6 +1,11 @@
 # E-041 — playback: the date, animated
 
-**Status:** Part 1 **SHIPPED 2026-08-18**, same day. The **Play** tab is live;
+**Status:** Part 1 **SHIPPED 2026-08-18**, same day; the **preload ring**
+(§2.3) landed later the same day, replacing the HTTP-cache prefetch that
+shipped with it — GIBS sends `no-store`, so that prefetch could never have
+warmed anything, and the working prefetch turned out to be a Cesium layer at
+`alpha: 0`. Both measurements are in §2.3 and in `CLAUDE.md` Part 2.
+The **Play** tab is live;
 the blink fix (§2.2) went app-wide, so the date stepper, the compare stepper
 and the window presets stopped flashing through base map too. Implemented by
 two Opus subagents on disjoint files per `ml/CLAUDE.md` §0b; reviewed here,
@@ -137,15 +142,64 @@ with an 8 s per-frame ceiling after which we advance anyway (a late frame beats
 a stuck player). Requested fps is therefore a *speed limit*, not a promise, and
 the panel says which one is binding ("1.4 fps — network-bound"). A player that
 claimed 8 fps while showing 1.4 would be lying about the thing the user is
-staring at.
+staring at. (Shipped with a third answer, `device` — "the browser cannot
+repaint any faster" — which only became visible once the preload ring below
+took the network out of the common case.)
 
-**Prefetch, decoupled.** While frame *i* is displayed, warm the browser's HTTP
-cache for frame *i+1* by `fetch(url, {mode: "no-cors"})` on exactly the tiles
-currently in view (`scene.globe._surface._tilesToRender` → the same URL builder
-`gibsProvider` uses). Cesium is not involved and nothing breaks if it fails;
-when the frame arrives its tiles come from cache. This is the piece that turns
-network-rate playback into requested-rate playback, and it is the only piece
-that is allowed to be best-effort.
+**Prefetch — and the correction, measured 2026-08-18.** The paragraph that
+stood here said: warm the browser's HTTP cache for frame *i+1* by fetching the
+tiles currently in view with CORS disabled. **That was wrong, and it shipped.**
+Every GIBS tile response carries
+`cache-control: max-age=0, no-store, no-cache, must-revalidate` (checked on
+`MODIS_Terra_CorrectedReflectance_TrueColor` and
+`GHRSST_L4_MUR_Sea_Surface_Temperature`, on 2015, 2026 and default dates), and
+`no-store` means the browser MUST NOT retain the response. The HTTP cache is
+not available to this app at all. The prefetch was up to 60 extra requests per
+frame to a public NASA service in exchange for nothing, and it failed in the
+direction that looks like success — the tiles arrived when the frame was
+shown, from the network, exactly as they would have anyway. It has been
+deleted; do not re-add it.
+
+**What replaces it: a PRELOAD RING, in Cesium's texture cache.** Also measured,
+in the browser against the real app:
+
+| the layer | tile requests |
+|---|---|
+| layer added with `show = false` | **0** |
+| layer added with `show = true, alpha = 0` | **11** — the whole visible set |
+| promoting it (`alpha = 0 → 1`) | **0 new**, `globe.tilesLoaded === true` |
+
+Same mechanism as §2.2's retirement queue, read the other way round: skeletons
+live behind `layer.show && _createTileImagerySkeletons(...)`, so `show` gates
+loading and `alpha` does not. Cesium's cache is the only one available here and
+it is *better* than the HTTP cache would have been, because the tiles it holds
+are already decoded and on the GPU — a promote is a property assignment, not a
+round trip.
+
+So frames *i+1 … i+depth* sit on the globe at `alpha: 0`, built by
+`providersFor(cfg, dateStr)` — the one pure "what does a frame look like"
+function, which `addLayer` also consumes, so the ring cannot drift from the
+live path. The date is a PARAMETER of it: an offset comparison must be
+preloaded against its own frame's past, or a preloaded frame is a frame that
+lies. `PLAY_PRELOAD_DEPTH` is 2, reduced to 1 on `navigator.deviceMemory < 4`
+or more than 32 visible tiles (a ring layer is real GPU texture — 512×512×4 a
+tile), and to 0 for grid-only frame sets, which draw from a baked file and need
+nothing but `ensureGridMonth` a frame ahead. The effective depth is printed in
+the panel. A stale ring is worse than no ring, so it is cleared on every
+rebuild of the timed layers and each entry re-checks the configuration key it
+was built under before it is allowed to promote.
+
+The keyed-grid half of the old prefetch survives untouched: `ensureGridMonth`
+for the next frame is a real fetch of a real file we host, one per year rather
+than one per tile, and it genuinely warms.
+
+With the ring, a promoted frame does not wait on the tile queue at all — by
+that point the queue holds the ring's *speculative* loads, and waiting on it
+would gate the visible playhead on frames nobody is looking at. `bound`
+therefore normally reads `fps`, which is the whole point; it gained a third
+value, `device`, because once the tiles are already there the remaining cost is
+the app's own repaint, and calling that "network-bound" would name the wrong
+culprit.
 
 **Stop when nobody is watching.** Pause on `document.hidden`. Streaming NASA
 tiles into a background tab is both rude and pointless.
@@ -203,9 +257,11 @@ Requirements, stated as things that would be bugs:
 GIBS is a public NASA service and this feature is the first thing in the app
 that can issue thousands of tile requests from one click. The controls that
 make that acceptable are already above and are load-bearing, not decorative:
-signature dedupe (§2.1.3), the 500-frame cap (§2.1.4), prefetch limited to
-tiles **in view** (§2.3), advance-on-loaded rather than fire-and-forget
-(§2.3), and pause-when-hidden (§2.3).
+signature dedupe (§2.1.3), the 500-frame cap (§2.1.4), a preload ring bounded
+at two frames of tiles **in view** and no duplicate warm-up fetches at all
+(§2.3 — the deleted HTTP-cache prefetch was doubling the request count for
+nothing), advance-on-loaded rather than fire-and-forget (§2.3), and
+pause-when-hidden (§2.3).
 
 ---
 
@@ -258,7 +314,7 @@ compare-during-playback for free.
 
 1. `retireLayer` / `sweepRetired` + `refreshTimedLayers({hold})` — the blink
    fix, shippable and useful on its own.
-2. `playbackFrames()` + the play state machine + prefetch warming.
+2. `playbackFrames()` + the play state machine + the preload ring (§2.3).
 3. The **Play** tab and the globe chip readout.
 4. Tests: frame enumeration collapses a monthly layer's duplicate days; a
    clamped archive yields one frame not four hundred; stop restores the

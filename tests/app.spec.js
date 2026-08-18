@@ -4093,6 +4093,9 @@ test("the Play tab drives the date, and says so when there is nothing to play", 
   expect(open.end).toBe(open.date);
   expect(open.start).toBe(`${Number(open.end.slice(0, 4)) - 1}${open.end.slice(4)}`);
   expect(open.status).toContain("1 day");            // auto read daily SST's cadence
+  // How deep the lookahead actually is, said out loud: a device that quietly
+  // dropped to one frame should say so rather than just feeling worse.
+  expect(open.status).toMatch(/[12] frames? preloaded/);
   expect(open.empty).toBe(true);
   // The read-out carries the frame AND the time the layer actually served for
   // it, through the same helper as the pixel card — a clamped archive has to
@@ -4124,4 +4127,253 @@ test("the Play tab drives the date, and says so when there is nothing to play", 
   });
   expect(none.empty).toBe(false);
   expect(none.disabled).toBe(true);
+});
+
+/* ------------------------------------------------- E-041 the preload ring
+ * The ring exists because of two measurements (2026-08-18), and both are
+ * pinned here rather than left in a plan nobody re-reads:
+ *
+ *   1. GIBS answers every tile with `cache-control: … no-store …`, so the
+ *      browser's HTTP cache CANNOT be warmed. The shipped first version of the
+ *      prefetch fetched every visible tile of the next frame with CORS
+ *      disabled, purely to fill a cache the service forbids — sixty requests a
+ *      frame to a public NASA service, buying nothing.
+ *   2. A Cesium layer at `show: true, alpha: 0` requests its whole visible
+ *      tile set, and promoting it (alpha 0 → 1) requests NOTHING. Cesium's
+ *      texture cache is the only cache available here, and it holds tiles
+ *      already decoded and on the GPU.
+ *
+ * These tests count REQUESTS rather than milliseconds on purpose: through the
+ * sandbox proxies a frame takes seconds, so timings measure the harness, while
+ * the request count is the same number in the sandbox, in CI and on a phone. */
+
+// The globe reporting an empty tile queue is the closest thing to "the picture
+// is finished" that Cesium offers; the proxies are slow enough that this needs
+// a far more generous ceiling than the app's own 8 s.
+async function tilesSettled(page, timeout = 180000) {
+  await page.waitForFunction(
+    () => window.__earth.viewer.scene.globe.tilesLoaded, null, { timeout });
+}
+
+// Point the transport at a range. The DOM fields are the source of truth for
+// `playbackRebuild`, so setting only the state object would silently get the
+// panel's defaults back.
+async function playRange(page, start, end, step) {
+  await page.evaluate(({ s, e, st }) => {
+    const E = window.__earth;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set("pb-start", s); set("pb-end", e); set("pb-step", st);
+    E.playback.start = s; E.playback.end = e; E.playback.step = st;
+    E.playbackRebuild();
+  }, { s: start, e: end, st: step });
+}
+
+test("a promoted frame costs ZERO new tile requests", async ({ page }) => {
+  test.setTimeout(300000);
+  await onlyLayers(page, ["sst"]);
+  // Every GIBS request for this layer, for the whole test. Counting URLs (not
+  // elapsed time) is what makes this assertion mean the same thing everywhere.
+  const tiles = [];
+  page.on("request", (r) => {
+    const u = r.url();
+    if (u.includes("GHRSST")) tiles.push(u);
+  });
+
+  await playRange(page, "2015-01-01", "2015-05-01", "1mo");
+  await page.evaluate(() => window.__earth.playbackShowFrame(0));
+  await tilesSettled(page);
+
+  // Warm frames i+1 … i+depth at alpha 0, the way the run loop does.
+  const ring = await page.evaluate(() => {
+    const E = window.__earth;
+    E.playbackEnsurePreload(0);
+    return { depth: E.playback.preloadDepth, held: [...E.playPreload.keys()],
+             next: E.playback.frames[1],
+             nextTime: E.gibsTime(E.state.layers.sst.cfg, E.playback.frames[1]) };
+  });
+  expect(ring.depth).toBeGreaterThanOrEqual(1);
+  expect(ring.held).toContain(ring.next);
+
+  const forNext = () => tiles.filter((u) => u.includes(ring.nextTime)).length;
+  // The alpha-0 layer really does load: this is measurement 2's second row, and
+  // without it the "no new requests" assertion below would also pass for a ring
+  // that never fetched anything at all.
+  await expect.poll(forNext, { timeout: 180000 }).toBeGreaterThan(0);
+  await tilesSettled(page);
+  const before = forNext();
+
+  const promoted = await page.evaluate(async () => {
+    const E = window.__earth;
+    const d = E.playback.frames[1];
+    const ringLayer = E.playPreload.get(d).built[0].layer;
+    await E.playbackShowFrame(1);
+    return {
+      // The live layer IS the layer that was warming a moment ago — promoting
+      // is an assignment, not a rebuild.
+      same: E.state.layers.sst.layer === ringLayer,
+      alpha: E.state.layers.sst.layer.alpha,
+      date: E.state.date,
+      stillHeld: E.playPreload.has(d),
+      settledNow: E.viewer.scene.globe.tilesLoaded,
+    };
+  });
+  expect(promoted.same).toBe(true);
+  expect(promoted.alpha).toBe(1);              // at the entry's alpha, not 0
+  expect(promoted.date).toBe(ring.next);
+  expect(promoted.stillHeld).toBe(false);      // and the ring gave it up
+  // Measurement 2's third row: the globe is still reporting a settled tile
+  // queue one tick after the frame changed, because nothing was asked for.
+  expect(promoted.settledNow).toBe(true);
+
+  // THE measurement. Anything that quietly breaks the mechanism — a Cesium
+  // upgrade that discards a layer's textures on an alpha change, a refactor
+  // that rebuilds the provider on promote — shows up here as a non-zero delta
+  // while every other playback test still passes.
+  await page.waitForTimeout(6000);
+  await tilesSettled(page);
+  expect(forNext()).toBe(before);
+});
+
+test("show:false loads nothing; alpha 0 loads everything; alpha 0→1 loads nothing", async ({ page }) => {
+  test.setTimeout(300000);
+  await onlyLayers(page, ["sst"]);
+  await tilesSettled(page);
+
+  // A date nothing else on the page is asking for, so every hit below belongs
+  // to the layer this test added.
+  const day = "2011-07-15";
+  const hits = [];
+  page.on("request", (r) => { if (r.url().includes(day)) hits.push(r.url()); });
+
+  // `show` must be false FROM CONSTRUCTION: the collection raises layerAdded
+  // synchronously, so a layer added shown and hidden on the next line has
+  // already been given its tile skeletons.
+  await page.evaluate((d) => {
+    const E = window.__earth;
+    window.__t = new Cesium.ImageryLayer(E.gibsProvider(E.state.layers.sst.cfg, d), { show: false });
+    E.viewer.imageryLayers.add(window.__t);
+  }, day);
+  await page.waitForTimeout(5000);
+  // Tile skeletons live behind `layer.show && _createTileImagerySkeletons(...)`,
+  // which is why a hidden layer is not a prefetch — it is nothing at all.
+  expect(hits.length).toBe(0);
+
+  await page.evaluate(() => { window.__t.show = true; window.__t.alpha = 0; });
+  await expect.poll(() => hits.length, { timeout: 180000 }).toBeGreaterThan(0);
+  await tilesSettled(page);
+  const warmed = hits.length;
+
+  // …and the promote is free, which is the property the whole ring is built on.
+  await page.evaluate(() => { window.__t.alpha = 1; });
+  await page.waitForTimeout(5000);
+  expect(hits.length).toBe(warmed);
+
+  await page.evaluate(() => window.__earth.viewer.imageryLayers.remove(window.__t, true));
+});
+
+test("stopping playback leaves no ring layers behind", async ({ page }) => {
+  test.setTimeout(300000);
+  await onlyLayers(page, ["sst"]);
+  await tilesSettled(page);
+  const baseline = await page.evaluate(() => window.__earth.viewer.imageryLayers.length);
+
+  await playRange(page, "2015-01-01", "2015-05-01", "1mo");
+  await page.evaluate(() => {
+    const E = window.__earth;
+    E.playback.fps = 8;                       // a speed limit, not a promise
+    E.playbackPlay();
+  });
+  // The ring fills as soon as the first frame is on screen.
+  await expect
+    .poll(() => page.evaluate(() => window.__earth.playPreload.size), { timeout: 180000 })
+    .toBeGreaterThan(0);
+  const during = await page.evaluate(() => window.__earth.viewer.imageryLayers.length);
+  expect(during).toBeGreaterThan(baseline);   // the ring IS extra imagery layers
+
+  await page.evaluate(() => window.__earth.playbackStop());
+  /* Stop sweeps the retirement queue and empties the ring synchronously, but a
+   * frame that was already mid-flight when stop landed can still finish adding
+   * its layers — so poll for the resting state rather than reading it once and
+   * timing a race. */
+  const state = () => page.evaluate(() => {
+    const E = window.__earth;
+    const L = E.viewer.imageryLayers;
+    let invisible = 0;
+    for (let k = 0; k < L.length; k++) if (L.get(k).alpha === 0) invisible++;
+    return { held: E.playPreload.size, count: L.length, retiring: E.retiring.length, invisible };
+  });
+  await expect.poll(state, { timeout: 30000 }).toEqual(
+    { held: 0, count: baseline, retiring: 0, invisible: 0 });
+});
+
+test("a configuration change clears the ring instead of promoting a stale frame", async ({ page }) => {
+  test.setTimeout(300000);
+  await onlyLayers(page, ["sst"]);
+  await tilesSettled(page);
+  await playRange(page, "2015-01-01", "2015-05-01", "1mo");
+  await page.evaluate(() => window.__earth.playbackShowFrame(0));
+  await page.evaluate(() => window.__earth.playbackEnsurePreload(0));
+  expect(await page.evaluate(() => window.__earth.playPreload.size)).toBeGreaterThan(0);
+
+  // The aggregation window changes what a frame IS — a 30-day mean instead of a
+  // day — so every layer the ring holds was built for a picture the user has
+  // just left. Promoting one would show the old render mode under the new
+  // label, instantly and with no round trip in which to notice.
+  const cleared = await page.evaluate(() => {
+    const slider = document.getElementById("window-days");
+    slider.value = "30";
+    slider.dispatchEvent(new Event("change", { bubbles: true }));
+    return window.__earth.playPreload.size;
+  });
+  expect(cleared).toBe(0);
+
+  // Same for the comparison, and the ring's own key is the belt behind that
+  // brace: a frame built before the comparison moved refuses to promote even
+  // if some future call site forgets to clear.
+  const stale = await page.evaluate(async () => {
+    const E = window.__earth;
+    const slider = document.getElementById("window-days");
+    slider.value = "1";
+    slider.dispatchEvent(new Event("change", { bubbles: true }));
+    E.playbackEnsurePreload(0);
+    const held = E.playback.frames[1];
+    const size = E.playPreload.size;
+    E.state.compareYears = 10;               // straight into state: no handler, no clear
+    return { size, promoted: E.playbackPromote(held), left: E.playPreload.size };
+  });
+  expect(stale.size).toBeGreaterThan(0);
+  expect(stale.promoted).toBe(false);        // refused, and destroyed rather than shown
+  expect(stale.left).toBe(0);
+});
+
+test("playback warms tiles through Cesium, never through a no-cors refetch", async ({ page }) => {
+  test.setTimeout(300000);
+  await onlyLayers(page, ["sst"]);
+  await tilesSettled(page);
+
+  // The source itself: GIBS sends `no-store`, so a fetch whose only purpose is
+  // to fill the HTTP cache is dead code by construction. It is an obvious
+  // enough idea that this asserts the string literal is gone, not merely that
+  // the behaviour looks right today.
+  const src = await page.evaluate(() => fetch("/src/app.js").then((r) => r.text()));
+  expect(src).not.toMatch(/["']no-cors["']/);
+
+  const tiles = [];
+  page.on("request", (r) => { if (r.url().includes("GHRSST")) tiles.push(r.url()); });
+  await playRange(page, "2015-01-01", "2015-05-01", "1mo");
+  await page.evaluate(() => {
+    const E = window.__earth;
+    E.playback.fps = 8;
+    E.playbackPlay();
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.__earth.playback.i), { timeout: 180000 })
+    .toBeGreaterThan(1);
+  await page.evaluate(() => window.__earth.playbackStop());
+
+  // The prefetch built exactly the URLs Cesium was about to request, so it
+  // doubled every one of them. One request per tile URL is the shape of a
+  // playback that warms through Cesium's own texture cache and nowhere else.
+  expect(tiles.length).toBeGreaterThan(0);
+  expect(tiles.length - new Set(tiles).size).toBe(0);
 });

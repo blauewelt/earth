@@ -487,11 +487,32 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   `PLAY_MAX_FRAMES` (500) the step COARSENS and the panel says so; the range is
   never truncated. The playhead advances on the FRAME, not on a timer —
   `max(1/fps, tiles settled)`, 8 s ceiling — so requested fps is a speed limit,
-  not a promise, and the status line names which limit is binding rather than
-  claiming a rate it is not achieving. Prefetch warms only tiles already in
-  view (capped at 60, best-effort) and playback pauses on `document.hidden`:
+  not a promise, and the status line names which of THREE limits is binding
+  (`fps` · `network` · `device`, the last being "the browser cannot repaint any
+  faster") rather than claiming a rate it is not achieving.
+  **Frames are prefetched by a PRELOAD RING, not by warming the HTTP cache**
+  — GIBS sends `no-store` and that cache is simply not available to us
+  (Part 2). Frames *i+1 … i+depth* exist on the globe as ordinary imagery
+  layers at `alpha: 0`, built by `providersFor(cfg, dateStr)` — the SAME pure
+  function `addLayer` uses, which is the only thing that stops the animation
+  and the paused globe disagreeing about what frame *N* looks like, and which
+  takes the date as a parameter precisely so an OFFSET comparison is preloaded
+  against ITS frame's past rather than the displayed frame's. `playbackPromote`
+  then assigns the warmed layers into `state.layers`, retires the outgoing
+  generation through the existing queue, and costs **zero requests**; a frame
+  the ring missed falls back to the ordinary held refresh. `PLAY_PRELOAD_DEPTH`
+  is 2, dropping to 1 when `navigator.deviceMemory < 4` or more than 32 tiles
+  are in view (each ring layer holds the whole visible set as GPU texture), and
+  to 0 for grid-only frame sets, which draw from a baked file and need no ring
+  — the effective depth is printed in the status line rather than left as
+  magic. A promoted frame does NOT wait on the tile queue, because by then that
+  queue holds the ring's speculative loads and waiting would gate the visible
+  playhead on frames nobody is looking at. **A stale ring is worse than no
+  ring**, so `refreshTimedLayers` clears it on every rebuild (layer set,
+  comparison, window, re-enumeration) and each entry additionally carries the
+  configuration key it was built under. Playback pauses on `document.hidden`:
   this is the first thing in the app that can issue thousands of requests to a
-  public NASA service from one click, and §5's politeness controls are
+  public NASA service from one click, and the plan's politeness controls are
   load-bearing, not decorative.
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
 - The header tagline's words are one-click SCENES (`.tag-link`,
@@ -981,6 +1002,31 @@ worth keeping in front of a frontend reader:
   too early shows a blank overlay and looks exactly like a broken layer.
   The linework is also *inherently* pale one-pixel hairlines, so it wants
   ~0.9 alpha; fading it "politely" to 0.55 makes it invisible over SST.
+- **GIBS tiles are `no-store`: the browser HTTP cache CANNOT be warmed, and the
+  only prefetch that works is a Cesium layer at `alpha: 0`.** Measured
+  2026-08-18 on `MODIS_Terra_CorrectedReflectance_TrueColor` and
+  `GHRSST_L4_MUR_Sea_Surface_Temperature`, on 2015, 2026 and default dates:
+  every tile response carries
+  `cache-control: max-age=0, no-store, no-cache, must-revalidate`. `no-store`
+  means the browser MUST NOT retain the response, so "fetch the next frame's
+  tiles ahead of time to warm the cache" — the obvious idea, and the one
+  E-041's playback shipped with — cannot work at all. It was up to 60 extra
+  requests per frame to a public NASA service, buying nothing, and it failed in
+  the direction that looks like success: the tiles do arrive when the frame is
+  shown, from the network, exactly as they would have anyway. **Do not re-add
+  it.** What DOES work is Cesium's own texture cache, measured in the browser
+  against the real app: a layer added with `show = false` issues **0** tile
+  requests; the same layer at `show = true, alpha = 0` issues **11** (the whole
+  visible set); promoting it (`alpha = 0 → 1`) issues **0 new requests** and
+  leaves `globe.tilesLoaded === true`. The mechanism is the one the retirement
+  queue leans on (Part 1 §5): tile skeletons are created behind
+  `layer.show && _createTileImagerySkeletons(...)`, so `show` gates loading and
+  `alpha` does not. It is strictly better than the HTTP cache would have been —
+  the tiles it holds are already decoded and uploaded to the GPU, so a promote
+  is a property assignment rather than a round trip. Playback's preload ring
+  (`playPreload`, `playbackEnsurePreload`, `playbackPromote`) is built on
+  exactly this, and `tests/app.spec.js` pins all four numbers so a Cesium
+  upgrade cannot quietly take them away.
 - **GIBS serves pictures, not numbers.** Values are recovered by inverting the
   layer's XML colormap (rgb → value LUT). Inversion recovers bin centres
   (quantised), works only for continuous one-to-one colormaps. Colormap

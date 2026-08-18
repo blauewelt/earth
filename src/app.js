@@ -909,24 +909,21 @@ function whenStamp(w) {
   return w ? `<span class="px-when">${whenLabel(w)}</span>` : "";
 }
 
-/* The ONE place a GIBS tile URL is built. Cesium wants the template with
- * {TileMatrix}/{TileRow}/{TileCol} left in; playback's prefetch wants the same
- * string with a specific tile filled in. Two copies of this would be two
- * chances to warm a URL the tile requests never ask for — a prefetch that
- * misses is invisible, it just quietly does nothing. */
+/* The ONE place a GIBS tile URL is built — the template Cesium wants, with
+ * {TileMatrix}/{TileRow}/{TileCol} left in for it to fill.
+ *
+ * A companion `gibsTileUrl(cfg, date, level, row, col)` used to live here,
+ * filling those three in so playback could fetch a specific tile itself. It
+ * has gone with the prefetch that needed it: GIBS answers `no-store`, nothing
+ * we fetch by hand can be cached, and the only prefetch that works is a Cesium
+ * layer at alpha 0 building its own URLs through this template. See the
+ * preload ring. */
 function gibsUrlTemplate(cfg, dateStr) {
   return GIBS_URL
     .replace("{layer}", cfg.layer)
     .replace("{time}", gibsTime(cfg, dateStr))
     .replace("{tms}", cfg.tms)
     .replace("{ext}", cfg.ext);
-}
-
-function gibsTileUrl(cfg, dateStr, level, row, col) {
-  return gibsUrlTemplate(cfg, dateStr)
-    .replace("{TileMatrix}", String(level))
-    .replace("{TileRow}", String(row))
-    .replace("{TileCol}", String(col));
 }
 
 function gibsProvider(cfg, dateStr) {
@@ -1930,13 +1927,26 @@ function stepCalendar(dateStr, step) {
  *   PINNED  (state.compareFixed)     — an absolute date, for "everything vs
  *           July 2003" regardless of where the main date goes.
  * Pinned wins when set; picking an offset from the select clears it. */
-function compareDate() {
+function compareDateFor(dateStr) {
   if (state.compareFixed) return state.compareFixed;
   if (!state.compareYears) return null;
-  const [y, m, d] = state.date.split("-").map(Number);
+  const [y, m, d] = dateStr.split("-").map(Number);
   const day = m === 2 && d === 29 ? 28 : d; // leap-day safety
   return `${y - state.compareYears}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
+
+/* The comparison for an ARBITRARY date, not only for the one on screen. The
+ * two callers are the live path (`compareDate()`, below, which is this with
+ * `state.date` in it) and playback's preload ring, which builds the layers for
+ * a frame the globe has not reached yet — and a frame's comparison is a
+ * function of THAT frame's date, not of the one currently displayed. The
+ * difference is exactly the OFFSET/PINNED distinction above: a pin is the same
+ * date for every frame, an offset moves with the frame. Preloading an offset
+ * comparison against the wrong past would produce a frame that renders
+ * perfectly and states a difference nobody asked for — 2016 vs 2006 labelled
+ * as 2017 vs 2007 — which is the class of error this app writes tests against
+ * rather than the class it hopes to notice by eye. */
+function compareDate() { return compareDateFor(state.date); }
 
 const comparing = () => compareDate() !== null;
 
@@ -2518,10 +2528,29 @@ class GridProvider {
   }
 }
 
-function addLayer(cfg) {
-  const entry = { cfg, layer: null, cmpLayer: null, isDelta: false, isRatio: false,
-    isAggregate: false, alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
-  const cmp = compareDate();
+/* WHAT A FRAME LOOKS LIKE, as a pure function of (layer config, date).
+ *
+ * This is the construction half of `addLayer` and nothing else: it decides
+ * which providers a layer needs for a date — delta, ratio, split pair,
+ * windowed mean, raw tile, painted grid — and returns them. It writes no
+ * state, adds nothing to the globe, touches no DOM, fires no toast. All of
+ * that stays in `addLayer` below.
+ *
+ * The split exists because playback now builds layers in TWO places: the live
+ * path (`addLayer`, for the date on screen) and the preload ring (for frames
+ * i+1…i+depth, at alpha 0). If those two ever disagreed about what frame N
+ * looks like, playback would promote one picture and the paused globe would
+ * then rebuild a different one — a bug that shows up as the animation and the
+ * still image quietly contradicting each other, which is the hardest kind to
+ * see and the easiest kind to disbelieve. One definition, consumed twice, is
+ * the only version of this that cannot drift.
+ *
+ * The DATE IS A PARAMETER, and that is load-bearing rather than tidy: every
+ * date-dependent decision inside — the comparison (`compareDateFor`), the
+ * window's sample dates, the tile time — must be computed for the frame being
+ * built, not for the frame currently displayed. See `compareDateFor`. */
+function providersFor(cfg, dateStr) {
+  const cmp = compareDateFor(dateStr);
   const comparing = cmp && cfg.timed;
   const deltaable = cfg.deltaRange != null;              // continuous field with an invertible colormap
   const win = state.windowDays;
@@ -2532,6 +2561,7 @@ function addLayer(cfg) {
   // products where any single day is mostly gaps.
   const canWindow = (deltaable || cfg.aggregable) && !!cfg.colormap;
   const windowed = win > 1 && canWindow && cfg.timed;
+  const out = { suppressed: false, providers: [], isDelta: false, isRatio: false, isAggregate: false };
 
   // While an aggregation window is active, everything on screen must actually
   // BE an average. A timed raster that cannot be time-averaged (photographic
@@ -2540,6 +2570,59 @@ function addLayer(cfg) {
   // the panel hint explains why. (Untimed composites and the climatology
   // grids stay: they already are long-period averages.)
   if (win > 1 && cfg.timed && !canWindow) {
+    out.suppressed = true;
+    return out;
+  }
+
+  if (cfg.grid) {
+    // Climatology or month-keyed grid painted client-side from data/<id>.json.
+    // The date does not enter the provider at all — a keyed grid resolves its
+    // month at paint time, which is why grids need no preload ring (§ the ring
+    // below) and why playing a grid layer costs no tile traffic.
+    out.providers.push({ provider: new GridProvider(cfg) });
+    return out;
+  }
+
+  if (comparing && state.compareMode === "delta" && deltaable) {
+    // Computed per-pixel difference of window means (single-day if win === 1)
+    out.providers.push({ provider: new DeltaProvider(cfg, dateStr, cmp, win) });
+    out.isDelta = true;
+  } else if (comparing && state.compareMode === "delta" && cfg.ratioRange) {
+    // Log-distributed field: computed comparison is a ×-fold ratio of means
+    out.providers.push({ provider: new RatioProvider(cfg, dateStr, cmp, win) });
+    out.isRatio = true;
+  } else if (comparing && state.compareMode === "split") {
+    // Side-by-side: right = current, left = past. Windowed means for SST, raw tiles otherwise.
+    out.providers.push({
+      provider: windowed ? new SSTAggregateProvider(cfg, dateStr, win) : gibsProvider(cfg, dateStr),
+      splitDirection: Cesium.SplitDirection.RIGHT,
+    });
+    out.providers.push({
+      provider: windowed ? new SSTAggregateProvider(cfg, cmp, win) : gibsProvider(cfg, cmp),
+      splitDirection: Cesium.SplitDirection.LEFT,
+    });
+    out.isAggregate = windowed;
+  } else {
+    // Not comparing: single layer — windowed mean for SST, raw tile otherwise
+    out.providers.push({
+      provider: windowed ? new SSTAggregateProvider(cfg, dateStr, win) : gibsProvider(cfg, dateStr),
+    });
+    out.isAggregate = windowed;
+  }
+  return out;
+}
+
+/* `providersFor` decided WHAT; everything here is the side effects — putting
+ * the providers on the globe, recording the entry in `state.layers`, the
+ * legend, the GIBS domain probe, the monthly-grid bookkeeping. Splitting the
+ * two changed no behaviour: the branches below are the same branches, in the
+ * same order, with the same flags. */
+function addLayer(cfg) {
+  const entry = { cfg, layer: null, cmpLayer: null, isDelta: false, isRatio: false,
+    isAggregate: false, alpha: state.layers[cfg.id]?.alpha ?? 1.0 };
+  const built = providersFor(cfg, state.date);
+
+  if (built.suppressed) {
     entry.suppressed = true;
     state.layers[cfg.id] = entry;
     updateLegends();
@@ -2547,12 +2630,19 @@ function addLayer(cfg) {
     return;
   }
 
-  const add = (provider) => viewer.imageryLayers.addImageryProvider(provider);
+  const add = (p) => {
+    const layer = viewer.imageryLayers.addImageryProvider(p.provider);
+    layer.alpha = entry.alpha;
+    if (p.splitDirection !== undefined) layer.splitDirection = p.splitDirection;
+    return layer;
+  };
+  entry.layer = add(built.providers[0]);
+  if (built.providers[1]) entry.cmpLayer = add(built.providers[1]);
+  entry.isDelta = built.isDelta;
+  entry.isRatio = built.isRatio;
+  entry.isAggregate = built.isAggregate;
 
   if (cfg.grid) {
-    // Climatology or month-keyed grid painted client-side from data/<id>.json
-    entry.layer = add(new GridProvider(cfg));
-    entry.layer.alpha = entry.alpha;
     state.layers[cfg.id] = entry;
     if (cfg.monthlyGrid) {
       // remember which month rendered, so a date change knows when to repaint
@@ -2570,31 +2660,6 @@ function addLayer(cfg) {
     return;
   }
 
-  if (comparing && state.compareMode === "delta" && deltaable) {
-    // Computed per-pixel difference of window means (single-day if win === 1)
-    entry.layer = add(new DeltaProvider(cfg, state.date, cmp, win));
-    entry.layer.alpha = entry.alpha;
-    entry.isDelta = true;
-  } else if (comparing && state.compareMode === "delta" && cfg.ratioRange) {
-    // Log-distributed field: computed comparison is a ×-fold ratio of means
-    entry.layer = add(new RatioProvider(cfg, state.date, cmp, win));
-    entry.layer.alpha = entry.alpha;
-    entry.isRatio = true;
-  } else if (comparing && state.compareMode === "split") {
-    // Side-by-side: right = current, left = past. Windowed means for SST, raw tiles otherwise.
-    entry.layer = add(windowed ? new SSTAggregateProvider(cfg, state.date, win) : gibsProvider(cfg, state.date));
-    entry.layer.alpha = entry.alpha;
-    entry.layer.splitDirection = Cesium.SplitDirection.RIGHT;
-    entry.cmpLayer = add(windowed ? new SSTAggregateProvider(cfg, cmp, win) : gibsProvider(cfg, cmp));
-    entry.cmpLayer.alpha = entry.alpha;
-    entry.cmpLayer.splitDirection = Cesium.SplitDirection.LEFT;
-    entry.isAggregate = windowed;
-  } else {
-    // Not comparing: single layer — windowed mean for SST, raw tile otherwise
-    entry.layer = add(windowed ? new SSTAggregateProvider(cfg, state.date, win) : gibsProvider(cfg, state.date));
-    entry.layer.alpha = entry.alpha;
-    entry.isAggregate = windowed;
-  }
   state.layers[cfg.id] = entry;
   updateLegends();
   // Ask GIBS what this layer actually serves. No-op after the first enable
@@ -2745,7 +2810,22 @@ viewer.scene.globe.tileLoadProgressEvent.addEventListener((remaining) => {
  * above). Every date-driven call site passes it; the plain form is what the
  * single-date path uses when it wants the picture to be exactly what state
  * says it is — notably when playback stops. */
-function refreshTimedLayers({ hold = false } = {}) {
+function refreshTimedLayers({ hold = false, keepPreload = false } = {}) {
+  /* A rebuild of the timed layers means the CONFIGURATION changed — a layer
+   * toggled, the comparison re-pointed, the aggregation window moved, the
+   * date selector used by hand. Playback's preload ring holds layers built
+   * for the configuration as it was, so every one of those is an
+   * invalidation, and clearing here rather than at each call site is what
+   * stops the ring drifting from the app the next time somebody adds a
+   * control that calls this. A stale ring is strictly worse than no ring: it
+   * would promote, instantly and invisibly, a frame built for a comparison
+   * or a window the user has since changed.
+   *
+   * `keepPreload` has exactly one caller — playback's own per-frame fallback,
+   * for a frame the ring did not happen to hold. That is not a configuration
+   * change, and clearing there would destroy the ring on every frame the
+   * player fails to preload, which is the one moment it is most needed. */
+  if (!keepPreload) playbackPreloadClear();
   // The date moved, so the normals may be for the wrong month now. Reload in
   // the background if the anomaly layer is on; the stamp check makes this a
   // no-op while the month is unchanged.
@@ -8110,10 +8190,26 @@ const PLAY_STEP_LABEL = { "1d": "1 day", "5d": "5 days", "1mo": "1 month", "1y":
 // doing. Without it one unanswered tile request stops the animation dead and
 // the app looks broken rather than slow.
 const PLAY_FRAME_CEILING_MS = 8000;
-// Politeness (plan §5). The prefetch only ever warms tiles ALREADY IN VIEW, and
-// even those are capped: this feature is the first thing in the app that can
-// issue thousands of requests to a public NASA service from one click.
-const PLAY_PREFETCH_MAX = 60;
+/* How many frames ahead the preload ring holds (§ the ring, below). Two is the
+ * default and it is not a free number: every ring layer holds the WHOLE
+ * VISIBLE TILE SET, decoded and uploaded to the GPU at 512×512×4 bytes a tile
+ * — about a megabyte each, eleven tiles in the default globe view, doubled
+ * again by a split comparison. Two is the smallest depth that hides a frame's
+ * load time completely (i+1 is warm before it is shown, and i+2 has already
+ * started warming while i+1 is displayed); three and beyond buy progressively
+ * less and cost linearly more texture memory. */
+const PLAY_PRELOAD_DEPTH = 2;
+
+/* Above this many tiles in view, the ring drops to depth 1. The visible tile
+ * count multiplies every megabyte above it, and it is not bounded by anything
+ * else: zoom in and `_tilesToRender` grows without the player noticing. At 32
+ * tiles a depth-2 ring for a split comparison is already 32 × 2 × 2 ≈ 128 MB
+ * of speculative texture, held on top of the live frame and up to three
+ * retired ones — more GPU memory than it is reasonable to take from a phone
+ * for frames the user may never reach. 32 is roughly three times the eleven
+ * tiles a default view requests, i.e. the point at which the ring stops being
+ * a rounding error against what the app is already holding. */
+const PLAY_PRELOAD_TILE_LIMIT = 32;
 
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -8262,12 +8358,17 @@ function playbackFrames(startDate, endDate, step = "auto") {
 const playback = {
   frames: [], i: 0, playing: false, fps: 2, loop: false,
   start: null, end: null, step: "auto",
-  // "fps" or "network": which of the two limits actually decided the last
-  // frame's duration. Requested fps is a SPEED LIMIT, not a promise, and a
-  // player that claimed 8 fps while showing 1.4 would be lying about the thing
-  // the user is staring at.
+  // "fps", "network" or "device": which limit actually decided the last frame's
+  // duration. Requested fps is a SPEED LIMIT, not a promise, and a player that
+  // claimed 8 fps while showing 1.4 would be lying about the thing the user is
+  // staring at. The preload ring is what makes "fps" the common answer — and
+  // what made "device" worth distinguishing from "network".
   bound: null,
   actualFps: null,
+  // The effective lookahead of the preload ring for the frame last shown —
+  // PLAY_PRELOAD_DEPTH, or 1 on a small device or a zoomed-in view, or 0 for a
+  // frame set that needs no ring. Reported in the status line.
+  preloadDepth: null,
   note: "",
   layerKey: "",
 };
@@ -8288,6 +8389,9 @@ function playbackNearest(dateStr) {
 // was), keeping the playhead on the same DATE rather than the same index — an
 // index means nothing across two different frame lists.
 function playbackRebuild() {
+  // Re-enumerating changes which dates the frames ARE, so anything the ring
+  // holds is keyed to a list that no longer exists.
+  playbackPreloadClear();
   const at = playback.frames[playback.i] || state.date;
   const startEl = document.getElementById("pb-start");
   const endEl = document.getElementById("pb-end");
@@ -8303,8 +8407,13 @@ function playbackRebuild() {
   playback.i = Math.min(playbackNearest(at), Math.max(0, playback.frames.length - 1));
 }
 
-/* Show frame i. This is the ordinary date path, with `hold` — nothing about the
- * picture is special, only the clock that set the date. */
+/* Show frame i. Still the ordinary date path — nothing about the PICTURE is
+ * special, only the clock that set the date — with one shortcut: if the
+ * preload ring already holds this frame's layers, warmed at alpha 0 while an
+ * earlier frame was on screen, they are promoted instead of rebuilt. A promote
+ * is a property assignment and costs no requests at all (see the ring, below);
+ * the fallback is the same held refresh as before, unchanged, so a frame the
+ * ring missed behaves exactly as every frame did yesterday. */
 async function playbackShowFrame(i) {
   if (!playback.frames.length) return;
   playback.i = Math.max(0, Math.min(i, playback.frames.length - 1));
@@ -8312,11 +8421,18 @@ async function playbackShowFrame(i) {
   const input = document.getElementById("layer-date");
   if (input) input.value = state.date;     // the single-date UI must not lie
   syncCompareUi();                         // an OFFSET comparison moves with it
-  refreshTimedLayers({ hold: true });
+  // `keepPreload` on the fallback: this is not a configuration change, and
+  // clearing the ring for a frame it merely failed to hold would throw away
+  // the lookahead precisely when the player is behind.
+  const promoted = playbackPromote(state.date);
+  if (!promoted) refreshTimedLayers({ hold: true, keepPreload: true });
   await refreshMonthlyGrids();
   await refreshYearlyLayers();
   if (sstEnsembleLayer) updateEnsembleLayer();
   playbackRender();
+  // Whether the ring served this frame. The run loop reads it to decide
+  // whether there is anything left to wait for; every other caller ignores it.
+  return promoted;
 }
 
 /* ------------------------------------------------------------------ read-out */
@@ -8375,10 +8491,23 @@ function playbackRender() {
       bits.push(`step ${PLAY_STEP_LABEL[playback.resolvedStep] || playback.resolvedStep}${auto} ` +
         `· ${playback.frames.length} frame${playback.frames.length === 1 ? "" : "s"}`);
     }
+    /* Say how deep the lookahead actually is. The ring is the difference
+     * between a player bound by the network and one bound by the requested
+     * fps, and its depth is reduced silently on a small device or a zoomed-in
+     * view — so it is reported rather than left as magic, and a frame set that
+     * needs no ring at all says that instead of showing a zero. */
+    if (playback.frames.length) {
+      const depth = playback.playing && playback.preloadDepth != null
+        ? playback.preloadDepth : playbackPreloadDepth();
+      bits.push(depth
+        ? `${depth} frame${depth === 1 ? "" : "s"} preloaded`
+        : "no preload needed (grids draw from a baked file)");
+    }
     if (playback.note) bits.push(playback.note);
     if (playback.playing && playback.actualFps) {
-      bits.push(`running at ${playback.actualFps.toFixed(1)} fps — ` +
-        `${playback.bound === "fps" ? "at the requested speed" : "network-bound"}`);
+      const why = { fps: "at the requested speed", network: "network-bound",
+        device: "the browser cannot repaint any faster" }[playback.bound] || "";
+      bits.push(`running at ${playback.actualFps.toFixed(1)} fps — ${why}`);
     }
     status.textContent = bits.join(" · ");
   }
@@ -8388,37 +8517,250 @@ function playbackRender() {
   updateActiveChips();
 }
 
-/* ------------------------------------------------------------------ prefetch
- * Best-effort, and the ONLY part of playback allowed to be. While frame i is on
- * screen, warm the browser's HTTP cache for frame i+1 by fetching exactly the
- * tiles currently in view, through the same URL builder the tile provider uses.
- * Cesium is not involved and nothing breaks if this fails — when the frame
- * arrives, its tiles either come from cache (requested-rate playback) or from
- * the network (network-rate playback, which is what we had). */
-function playbackPrefetch(i) {
-  const d = playback.frames[i];
-  if (!d) return;
-  try {
-    const tiles = viewer.scene.globe._surface?._tilesToRender || [];
-    let n = 0;
+/* ----------------------------------------------------------- the preload ring
+ *
+ * MEASURED 2026-08-18, and the reason this is not the obvious implementation:
+ *
+ * FACT 1 — GIBS FORBIDS HTTP CACHING. Every tile response carries
+ *   `cache-control: max-age=0, no-store, no-cache, must-revalidate`
+ * (checked on MODIS_Terra_CorrectedReflectance_TrueColor and
+ * GHRSST_L4_MUR_Sea_Surface_Temperature, on 2015, 2026 and default dates).
+ * `no-store` means the browser MUST NOT retain the response. So the shipped
+ * first version of this — a CORS-free `fetch` of every visible tile of frame
+ * i+1, up to sixty a frame, issued for no reason but to fill the HTTP cache —
+ * could not warm anything, ever. (The string literal is deliberately not
+ * written here: `tests/app.spec.js` asserts the source contains no quoted
+ * no-cors, which is the cheapest possible guard against this coming back.) It
+ * was a doubling of the request load on a public NASA service in exchange for
+ * nothing at all, and it has been deleted. DO NOT RE-ADD IT: warming the HTTP
+ * cache is the obvious idea, it is wrong for this service specifically, and it
+ * fails silently in the one direction that looks like success (the tiles do
+ * arrive — they arrive from the network, exactly as they would have anyway).
+ *
+ * FACT 2 — A CESIUM LAYER AT alpha 0 IS A WORKING PREFETCH. Measured in the
+ * browser against the real app:
+ *   layer added with show = false          →  0 tile requests
+ *   layer added with show = true, alpha 0  →  11 requests (the whole visible set)
+ *   promoting it (alpha 0 → 1)             →  0 NEW requests, globe.tilesLoaded true
+ * The mechanism is the one the retirement queue already leans on: tile
+ * skeletons are created behind `layer.show && _createTileImagerySkeletons(...)`,
+ * so `show` gates loading and `alpha` does not. Cesium's own texture cache is
+ * therefore the only cache available to us here — and it is BETTER than the
+ * HTTP cache would have been, because the tiles it holds are already decoded
+ * and uploaded to the GPU. Promoting a frame is a property assignment, not a
+ * network round trip.
+ *
+ * So: while frame i is displayed, frames i+1…i+depth exist on the globe as
+ * ordinary imagery layers at alpha 0, built by `providersFor` — the SAME
+ * function the live path uses, which is the only reason the ring cannot show
+ * something the paused globe would not.
+ *
+ * ORDERING, because it reads wrong: ring layers are appended, so they sit
+ * ABOVE the current frame, and after a promote the frames still queued sit
+ * above the visible one. They are at alpha 0, so they composite to nothing and
+ * this is invisible — but anyone reading `viewer.imageryLayers` will see the
+ * future stacked on top of the present and should know it is deliberate. */
+
+// frame date → { key, built }, where `built` is one record per LAYER ID rather
+// than a bare list of ImageryLayers: promoting means assigning back into
+// `state.layers[id].layer` / `.cmpLayer`, so the id and the split pairing have
+// to survive the wait.
+const playPreload = new Map();
+
+/* Everything the ring's layers were built FROM, except the date. Stored on each
+ * entry and re-checked at promote time. The explicit invalidation
+ * (`playbackPreloadClear`, called from `refreshTimedLayers`) is the real
+ * defence; this is belt and braces behind it, because the cost of the two
+ * disagreeing is a promoted frame that renders a comparison or a window the
+ * user has already left — and the cost of the check is a string compare. */
+function playbackFrameKey() {
+  return [playbackLayerKey(), state.compareMode, state.compareYears,
+    state.compareFixed || "", state.windowDays].join("|");
+}
+
+/* The EFFECTIVE depth, recomputed each frame because two of its three inputs
+ * can change mid-playback. It is reported in the status line rather than kept
+ * private: a device that quietly dropped to one frame of lookahead should say
+ * so, or the difference between a smooth player and a stuttering one looks
+ * like magic. */
+function playbackPreloadDepth() {
+  const layers = playbackLayers();
+  if (!layers.length) return 0;
+  /* Grid-only frame sets need no ring at all. A keyed grid paints from a baked
+   * file rather than from tiles — the file is warmed a frame ahead by
+   * `ensureGridMonth` below, and once it is in memory a GridProvider draws
+   * synchronously — so a second copy of the layer at alpha 0 would buy nothing
+   * and cost a full set of canvas tiles. This is also why playing currents or
+   * the GFS forecast was already smooth before any of this existed. */
+  if (layers.every((e) => e.cfg.grid)) return 0;
+  let depth = PLAY_PRELOAD_DEPTH;
+  // navigator.deviceMemory is Chromium-only and coarse (rounded to a power of
+  // two, capped at 8), which is all we need it for: under 4 GB is a phone, and
+  // a phone is where holding two speculative frames of GPU texture is felt.
+  const mem = navigator.deviceMemory;
+  if (typeof mem === "number" && mem > 0 && mem < 4) depth = 1;
+  const tiles = viewer.scene.globe._surface?._tilesToRender?.length || 0;
+  if (tiles > PLAY_PRELOAD_TILE_LIMIT) depth = 1;
+  return depth;
+}
+
+// alpha 0, NOT show:false. That one line is the entire mechanism — see FACT 2.
+function playbackPreloadAdd(p) {
+  const layer = viewer.imageryLayers.addImageryProvider(p.provider);
+  layer.alpha = 0;
+  if (p.splitDirection !== undefined) layer.splitDirection = p.splitDirection;
+  return layer;
+}
+
+function playbackPreloadDestroy(rec) {
+  try { if (rec.layer) viewer.imageryLayers.remove(rec.layer, true); } catch { /* already gone */ }
+  try { if (rec.cmpLayer) viewer.imageryLayers.remove(rec.cmpLayer, true); } catch { /* already gone */ }
+}
+
+function playbackPreloadDrop(dateStr) {
+  const held = playPreload.get(dateStr);
+  if (!held) return;
+  playPreload.delete(dateStr);
+  for (const rec of held.built) playbackPreloadDestroy(rec);
+}
+
+/* Empty the ring. Called on stop, on halt, and — through `refreshTimedLayers`
+ * — on every configuration change: the layer set, the comparison, the
+ * aggregation window, a re-enumerated step or range. A stale ring is strictly
+ * worse than no ring, because it promotes instantly and therefore hides the
+ * fact that it is stale: the picture would simply be wrong, with no round trip
+ * to notice. */
+function playbackPreloadClear() {
+  for (const d of [...playPreload.keys()]) playbackPreloadDrop(d);
+}
+
+/* Build frames i+1 … i+depth that the ring does not already hold. */
+function playbackEnsurePreload(i) {
+  const depth = playbackPreloadDepth();
+  playback.preloadDepth = depth;
+
+  const want = [];
+  for (let k = i + 1; k <= i + depth && k < playback.frames.length; k++) {
+    const d = playback.frames[k];
+    if (!want.includes(d)) want.push(d);
+  }
+
+  /* The keyed grids are warmed for every wanted frame whatever the depth, and
+   * this is the half of the old prefetch that always worked: it is a real
+   * fetch of a real file WE host, one per year rather than one per tile, and
+   * `loadGridMonth` will find it resolved instead of in flight. */
+  for (const d of want) {
+    for (const e of playbackLayers()) {
+      if (!e.cfg.grid) continue;
+      const g = gridsLoaded.get(e.cfg.id);
+      if (!g) continue;
+      try { ensureGridMonth(e.cfg, g, resolveGridMonth(g, d)); } catch { /* best effort */ }
+    }
+  }
+
+  // Anything held that the playhead no longer wants is dead weight — a scrub, a
+  // loop wrap or a jump strands entries that will never be promoted, and each
+  // of them is a live imagery layer holding a full set of tiles.
+  for (const d of [...playPreload.keys()]) {
+    if (!want.includes(d)) playbackPreloadDrop(d);
+  }
+  if (!depth) return;
+
+  const key = playbackFrameKey();
+  for (const d of want) {
+    if (playPreload.has(d)) continue;
+    const built = [];
+    let ok = true;
     for (const e of playbackLayers()) {
       const cfg = e.cfg;
-      if (cfg.grid) {
-        // A keyed grid's "tiles" are one baked file per year; warm that instead.
-        const g = gridsLoaded.get(cfg.id);
-        if (g) { try { ensureGridMonth(cfg, g, resolveGridMonth(g, d)); } catch { /* best effort */ } }
-        continue;
-      }
-      if (!cfg.timed) continue;
-      for (const t of tiles) {
-        if (n >= PLAY_PREFETCH_MAX) return;
-        n++;
-        try {
-          fetch(gibsTileUrl(cfg, d, t.level, t.y, t.x), { mode: "no-cors" }).catch(() => {});
-        } catch { /* best effort, always */ }
-      }
+      if (cfg.grid) continue;                 // warmed above; holds no tiles
+      let r;
+      try { r = providersFor(cfg, d); } catch { ok = false; break; }
+      if (r.suppressed || !r.providers.length) continue;
+      const rec = { id: cfg.id, layer: null, cmpLayer: null,
+        isDelta: r.isDelta, isRatio: r.isRatio, isAggregate: r.isAggregate };
+      rec.layer = playbackPreloadAdd(r.providers[0]);
+      if (r.providers[1]) rec.cmpLayer = playbackPreloadAdd(r.providers[1]);
+      built.push(rec);
     }
-  } catch { /* best effort, always */ }
+    /* A PARTIAL frame is not stored. If any layer failed to build, promoting
+     * this entry would advance some layers to the new date and leave the rest
+     * on the old one — a composite of two dates under one caption, which is
+     * the exact failure mode §4 of the plan forbids. Falling back to the
+     * ordinary refresh costs a round trip and is honest. */
+    if (!ok || !built.length) {
+      for (const rec of built) playbackPreloadDestroy(rec);
+      continue;
+    }
+    playPreload.set(d, { key, built });
+  }
+}
+
+/* Promote the ring's copy of `dateStr` into the live layers. Returns false if
+ * the ring cannot serve this frame, in which case the caller takes the
+ * ordinary `refreshTimedLayers({hold: true})` path unchanged.
+ *
+ * The cost of the promote is the assignment: the tiles are already decoded and
+ * on the GPU (FACT 2), so `globe.tilesLoaded` is typically still true one tick
+ * later and the player's wait collapses to the fps limit — which is the point
+ * of the whole exercise, and why `playback.bound` should now normally read
+ * "fps" rather than "network". */
+function playbackPromote(dateStr) {
+  const held = playPreload.get(dateStr);
+  if (!held) return false;
+  playPreload.delete(dateStr);
+  if (held.key !== playbackFrameKey()) {
+    // Every entry in the ring was built under the same key, so one stale entry
+    // means the whole ring is stale — drop all of it rather than discovering
+    // the same thing again two frames from now.
+    for (const rec of held.built) playbackPreloadDestroy(rec);
+    playbackPreloadClear();
+    return false;
+  }
+
+  // The date moved, so the normals may be for the wrong month now — the same
+  // background reload `refreshTimedLayers` does, and for the same reason: the
+  // hover probe renders synchronously and cannot await one.
+  if (state.layers["sst-anom"]?.layer) ensureSstNormals(state.date);
+
+  let promoted = false;
+  for (const rec of held.built) {
+    const entry = state.layers[rec.id];
+    if (!entry) { playbackPreloadDestroy(rec); continue; }
+    // Through the EXISTING retirement queue: the outgoing generation keeps
+    // painting until the globe reports its tiles settled, so the promote is
+    // as blink-free as the ordinary held refresh — and bounded by the same
+    // three-deep cap rather than by a second mechanism written here.
+    retireLayer(rec.id);
+    entry.layer = rec.layer;
+    entry.layer.alpha = entry.alpha;
+    if (rec.cmpLayer) {
+      entry.cmpLayer = rec.cmpLayer;
+      entry.cmpLayer.alpha = entry.alpha;
+    }
+    entry.isDelta = rec.isDelta;
+    entry.isRatio = rec.isRatio;
+    entry.isAggregate = rec.isAggregate;
+    entry.suppressed = false;
+    promoted = true;
+  }
+  if (!promoted) return false;
+
+  /* The same two toasts the refresh path fires per frame, over the same set of
+   * entries it fires them over (which includes SUPPRESSED ones — a layer
+   * hidden by the window still has a date, and still has an archive that may
+   * have ended). A frame that arrives instantly must not be a frame that says
+   * less than a slow one: "never advance past a hole in silence" is a property
+   * of the playback, not of the code path it happened to take. */
+  for (const e of Object.values(state.layers)) {
+    if (!(e.layer || e.suppressed) || !e.cfg.timed) continue;
+    maybeArchiveToast(e.cfg, { replace: true });
+    maybeAnnualToast(e.cfg, { replace: true });
+  }
+  updateLegends();
+  scheduleSweep();
+  updateSplitUI();
+  return true;
 }
 
 /* ------------------------------------------------------------------ the loop
@@ -8432,22 +8774,47 @@ function playbackPrefetch(i) {
 async function playbackRun(token) {
   while (playback.playing && token === playToken) {
     const t0 = performance.now();
-    await playbackShowFrame(playback.i);
+    const promoted = await playbackShowFrame(playback.i);
     if (!playback.playing || token !== playToken) return;
-    playbackPrefetch(playback.i + 1);
+    // Warm the NEXT frames while this one is on screen.
+    playbackEnsurePreload(playback.i);
 
-    const why = await waitTilesSettled(PLAY_FRAME_CEILING_MS);
+    /* A PROMOTED frame is already painted — its tiles were fetched, decoded and
+     * uploaded to the GPU while an earlier frame was on screen — so there is
+     * nothing left to wait for and the fps limit is the only one still binding.
+     * That is the whole point of the ring, and the status line saying "fps"
+     * rather than "network-bound" is how the user sees it.
+     *
+     * Skipping the wait here is not an optimisation, it is a correction: the
+     * globe's tile queue is GLOBAL, so by this line it holds the speculative
+     * requests `playbackEnsurePreload` just issued for frames i+1…i+depth.
+     * Waiting on it would gate the VISIBLE playhead on frames nobody is looking
+     * at yet — which is exactly the latency the buffer exists to absorb, paid
+     * anyway. When the ring falls behind, frames stop being promoted, this
+     * branch stops being taken, and the player goes back to advancing at the
+     * network's pace on its own. */
+    const why = promoted ? "settled" : await waitTilesSettled(PLAY_FRAME_CEILING_MS);
     if (!playback.playing || token !== playToken) return;
     const minMs = 1000 / (playback.fps || 1);
     const elapsed = performance.now() - t0;
-    if (why === "settled" && elapsed < minMs) {
-      await sleepMs(minMs - elapsed);
-      playback.bound = "fps";            // we are the slow one, on purpose
-    } else {
-      playback.bound = "network";        // the tiles are, and the panel says so
-    }
+    if (why === "settled" && elapsed < minMs) await sleepMs(minMs - elapsed);
     if (!playback.playing || token !== playToken) return;
-    playback.actualFps = 1000 / Math.max(1, performance.now() - t0);
+    const total = performance.now() - t0;
+    playback.actualFps = 1000 / Math.max(1, total);
+
+    /* WHICH LIMIT ACTUALLY BOUND THIS FRAME — three answers, not two, because
+     * the ring made the third one visible. Before it, a frame that took longer
+     * than the fps budget was always waiting for tiles; now the tiles are
+     * usually already there and the remaining cost is the app's own repaint
+     * (the grid/yearly refreshes, and a render loop slow enough that even a
+     * setTimeout fires late). Calling that "network-bound" would name the wrong
+     * culprit, and calling it "at the requested speed" next to a measured
+     * 0.5 fps would be the plain contradiction this panel exists to avoid. The
+     * tolerance is deliberately loose: a frame within a third of its budget is
+     * running at the requested speed for any purpose a viewer has. */
+    playback.bound = (why !== "settled" || elapsed >= minMs) ? "network"
+      : total > minMs * 1.35 ? "device"
+        : "fps";
 
     if (playback.i + 1 < playback.frames.length) {
       playback.i++;
@@ -8488,6 +8855,11 @@ function playbackStop() {
   playToken++;
   playback.bound = null;
   playback.actualFps = null;
+  playback.preloadDepth = null;
+  // Nothing of playback left behind includes the ring: those layers are frames
+  // the user is no longer walking towards, each holding a full set of tiles,
+  // and the next play may well be a different range entirely.
+  playbackPreloadClear();
   sweepRetired();
   playbackRender();
 }
@@ -8533,6 +8905,10 @@ function playbackHalt() {
   playToken++;
   playback.bound = null;
   playback.actualFps = null;
+  playback.preloadDepth = null;
+  // The ring goes too, for the same reason the halt exists: frames warmed for
+  // a tab nobody is looking at are texture memory spent on nothing.
+  playbackPreloadClear();
   sweepRetired();
   playbackRender();
 }
@@ -8833,8 +9209,20 @@ window.__earth = {
   get foundPlace() { return foundPlace; },
   get foundLabels() { return foundLabels; },
   get foundPoints() { return foundPoints; },
-  // playback (E-041): the frame enumerator, the transport's state, and the
-  // retirement queue that stops the globe blinking between frames
+  // playback (E-041): the frame enumerator, the transport's state, the
+  // retirement queue that stops the globe blinking between frames, and the
+  // preload ring — `providersFor` is exported so a test can prove the ring and
+  // the live path build a frame the same way, and `playPreload` so it can
+  // count what is being held at alpha 0
+  gibsProvider,
+  providersFor,
+  compareDateFor,
+  get playPreload() { return playPreload; },
+  playbackEnsurePreload,
+  playbackPreloadDepth,
+  playbackPreloadClear,
+  playbackPromote,
+  PLAY_PRELOAD_DEPTH,
   playbackFrames,
   playbackSignature,
   playbackAutoStep,
@@ -8849,7 +9237,6 @@ window.__earth = {
   sweepRetired,
   get retiring() { return retiring; },
   waitTilesSettled,
-  gibsTileUrl,
   gibsUrlTemplate,
   refreshTimedLayers,
   removeLayer,
