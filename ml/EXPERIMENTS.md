@@ -599,6 +599,26 @@ short-circuit sees #389's cached `f5r1` tensor and returns before the free-space
 check, and `load_pentad_base` opens the daily base fields with `mmap_mode="r"`,
 so confirming "already built" costs no read at all.
 
+**THE FIX TOOK — measured, 21:52:53Z.** The `metrics.jsonl` config line appeared
+on `ml-live-400` at **21:52:53Z**, i.e. **~71 minutes** after the Train step
+began, inside the 90-minute deadline and later than the 20–40 min the fix's own
+arithmetic suggested. It reads `d_model 512, n_layers 12, n_heads 4, d_dec 256,
+d_z 32, patch 1, batch 512, steps 200000, params_M 37.976, data
+family5_na025_daily.npz, C 39, T 15706, resume null` — #389's intended
+configuration, on the daily tensor. `gpu_util` went to **98%** at the same
+moment. **The daily arm exists**: #389 spent seven hours in
+`anomaly_transform` and never reached this line.
+
+The config line is written at `train.py:502`, *after* `anomaly_transform` at
+`train.py:274`, which is exactly why its appearance is the proof and not merely
+a sign of life — and why the deadline was set on it rather than on CPU or GPU
+utilisation, both of which looked identical during #389's seven-hour hang (0%
+GPU, ~1 core busy) and during this run's healthy 71-minute preamble.
+The preamble decomposes as the ~3 min `writable_copy` #389 measured, the
+time-chunked transform, and the `obs_any_chunked` / `pool_idx` pool build — the
+last two not separable from outside the box, since a running job's step log is
+not served.
+
 **Disk, verified before dispatch rather than assumed.** The tensor is on the
 box already, but `train.py` still takes a writable `_scratch.npy` copy of the
 WHOLE thing for the anomaly transform (`tensor_io.writable_copy`, chunk 64,
