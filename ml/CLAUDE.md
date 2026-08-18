@@ -38,6 +38,29 @@ Everything below elaborates these.
 
 ---
 
+## 0b · Model economics: the session plans, subagents implement
+
+Standing rule, Chris 2026-08-18: *"make sure that it is you who plans
+(Fable), but that you use subagents (with Opus 5) for the implementation
+details"* — after one long session burned ~10% of the weekly Fable quota.
+
+The split: the MAIN session does the thinking that benefits from the larger
+model — experiment design, hypothesis and falsifier statements, diagnosis of
+surprising failures, dispatch decisions, reading results, anything touching
+EXPERIMENTS.md's claims. SUBAGENTS (Agent tool, `model: "opus"`) do the
+implementation details — writing and editing code and tests to a stated
+spec, pulling and summarising logs, monitoring runs, mechanical refactors,
+doc formatting. Subagents share the working directory and credentials
+(`/home/claude/.gh_pat` etc. are on disk), so monitoring scripts run
+unchanged.
+
+Two cautions from the day the rule was made. A subagent's report is an
+intention until verified — the main session still runs the tests and reads
+the diff before committing (§0.2 applies to subagents exactly as it applies
+to workflow steps). And diagnosis stays in the main session: the #366
+green-but-void run was found by noticing a 2.6 h "success" that should have
+taken 11 h — the kind of surprise a summary can smooth over.
+
 ## 1 · Before you dispatch
 
 - **State what result would FALSIFY the hypothesis**, and check the
