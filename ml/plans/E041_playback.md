@@ -1,9 +1,27 @@
 # E-041 — playback: the date, animated
 
-**Status:** PLAN, written 2026-08-18. Part 1 (historical playback) is specified
-here and being implemented. Part 2 (playing a PREDICTION) is deliberately
-deferred — but its hooks are decided here, because they are cheap now and
-expensive later.
+**Status:** Part 1 **SHIPPED 2026-08-18**, same day. The **Play** tab is live;
+the blink fix (§2.2) went app-wide, so the date stepper, the compare stepper
+and the window presets stopped flashing through base map too. Implemented by
+two Opus subagents on disjoint files per `ml/CLAUDE.md` §0b; reviewed here,
+where one redundant unheld refresh at stop — which would have ended every
+playback with the exact blink the retirement queue removes — was dropped.
+Verified in the browser rather than only in unit tests: twelve monthly frames
+of MUR SST, four consecutive screenshots all distinct, retirement queue never
+above one, zero page errors, stop landing on its own frame with the date
+selector agreeing. Suite: 95/97 app + 67/67 data/docs, the two failures being
+the sandbox's known Open-Meteo climate-api handshake timeout and a
+phase-dependent tide-curve assertion that passes in isolation.
+
+**One §4 requirement is NOT built and is deliberately still open:** "never
+advance past a hole in silence". The signature dedupe (§2.1.3) handles the
+common case by collapsing a dead zone to one frame, but a whole missing SPAN
+does not yet DRAW as a gap in the scrubber — an `<input type="range">` cannot
+render one, so it needs a real frame axis. Until then a gap reads as a frozen
+picture, which is the one place this feature can still mislead.
+
+Part 2 (playing a PREDICTION) is deliberately deferred — but its hooks are
+decided here (§6), because they are cheap now and expensive later.
 
 > Chris: "Let's try to animate climate development on the globe. […] Add a
 > feature in the UI to 'playback' some historical data. That is, given a view

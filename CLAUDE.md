@@ -459,6 +459,40 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   stepper (`#time-steps`) appears only while a sub-daily layer is on; crossing
   midnight rolls the date, and stepping refreshes only the sub-daily layers
   (no churn of the daily/monthly rasters).
+- **A date change HOLDS the old frame. Never destroy imagery before its
+  replacement is painted.** `refreshTimedLayers({hold: true})` retires the old
+  `ImageryLayer` onto a bounded queue (`retireLayer` / `sweepRetired`, max 3)
+  and builds the new one above it; the queue is swept when the globe's tile
+  queue empties. Before E-041 every date move flashed through bare base map for
+  one network round trip — a blink on the stepper, a strobe at 2 fps — because
+  the old layer was destroyed first. Cesium is what makes the fix a
+  postponement rather than a rewrite: tile skeletons are created behind
+  `layer.show && _createTileImagerySkeletons(...)`, so a still-shown layer keeps
+  painting and requests nothing new (an `alpha: 0` layer, by contrast, requests
+  everything). `addLayer` is untouched, so delta/split/aggregate/window/grid all
+  keep working. Every date-driven call site passes `hold`; the UNHELD form is
+  for when the picture must become exactly what state says it is — and is
+  deliberately NOT used when playback stops, because by then it would only
+  destroy and refetch an identical layer set, ending every playback with the
+  blink the queue exists to remove.
+- The **Play** tab (E-041) is a clock that drives `state.date` and nothing
+  else — it is not a rendering mode, which is why the comparison, the computed
+  difference and the aggregation window all keep working underneath it, and why
+  a prediction that lands as a timed layer will be playable with no playback
+  code at all. Frames come from the DATA, not the calendar: the step defaults to
+  the finest cadence among the layers on, and candidates are deduped by
+  SIGNATURE (what each active layer would actually request for that date), which
+  collapses a monthly product's thirty identical days to one frame and a closed
+  archive's dead zone to one frame instead of four hundred. Over
+  `PLAY_MAX_FRAMES` (500) the step COARSENS and the panel says so; the range is
+  never truncated. The playhead advances on the FRAME, not on a timer —
+  `max(1/fps, tiles settled)`, 8 s ceiling — so requested fps is a speed limit,
+  not a promise, and the status line names which limit is binding rather than
+  claiming a rate it is not achieving. Prefetch warms only tiles already in
+  view (capped at 60, best-effort) and playback pauses on `document.hidden`:
+  this is the first thing in the app that can issue thousands of requests to a
+  public NASA service from one click, and §5's politeness controls are
+  load-bearing, not decorative.
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
 - The header tagline's words are one-click SCENES (`.tag-link`,
   `SCENES` map in app.js) with two hard rules learned from feedback: ONE
