@@ -1,0 +1,133 @@
+{
+ "run_number": 390,
+ "files": {
+  "probe_kfold.json": {
+   "actions": {
+    "rapid": {
+     "r_kfold_deseas": 0.66,
+     "ci95": [
+      0.593,
+      0.722
+     ],
+     "n": 1459,
+     "rmse_sv": 2.97,
+     "sigma_sv": 3.95,
+     "r_lowpass18": 0.582,
+     "wind_only_baseline": {
+      "r": 0.67,
+      "ci95": [
+       0.601,
+       0.733
+      ],
+      "rmse_sv": 2.93
+     }
+    }
+   }
+  },
+  "dip_check.json": {
+   "run": "actions",
+   "window": [
+    "2009-09",
+    "2010-06"
+   ],
+   "r_out_of_fold": 0.66,
+   "sign_agreement_pct": 71.4,
+   "dip_observed_sv": -6.95,
+   "dip_predicted_sv": -3.14,
+   "dip_captured_pct": 45.2
+  },
+  "provenance.json": {
+   "run_number": 390,
+   "sha": "70ffe2d3898974ab94e7ab4b5b209c3d82030066",
+   "code": "https://github.com/blauewelt/earth/tree/70ffe2d3898974ab94e7ab4b5b209c3d82030066",
+   "inputs": {
+    "doc": "E-038 FROZEN CONTROL, attempt 2 (re-run of #388, whose eval path worked perfectly - CROSS-TENSOR EVAL banner, zero training - and whose probes were then ALL OOM-killed on the full-size isfinite bool, the same allocation that killed #365. probe_kfold/probe_sequence/dip_check now read the tensor through LazyPixels; embeddings pinned bit-identical by tests/test_probe_lazy_pixels.py.) f3_anchor41M (run-80, 40,692,849 params, patch 3, d_z 64, step 60000) evaluated on the family-4 pentad tensor. Its probe_kfold IS the baseline both trained arms are reported against - the only number that can falsify E-038 premise. Warm cache: this box built the labeled tensor for #388.",
+    "steps": "60000",
+    "batch": "512",
+    "d_z": "64",
+    "anomaly": "true",
+    "temporal_steps": "0",
+    "temporal_d_model": "96",
+    "temporal_layers": "3",
+    "eval_every": "7500",
+    "resume": "!f3_anchor41M",
+    "head_probe": "false",
+    "light_probe_every": "0",
+    "window": "global",
+    "tensor": "family4_na025_pentad",
+    "sst_channel": "false",
+    "patch": "3",
+    "max_minutes": "0",
+    "runner": "gpu-box-47529389",
+    "job_timeout": "350",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "576",
+    "codec_layers": "10",
+    "codec_heads": "8",
+    "codec_d_dec": "768"
+   },
+   "tensor": {
+    "file": "ml/cache/family4_na025_pentad.npz",
+    "sha256": "f07cae8a5184a3b3e2909b36ba1ea0f60b27d092f747c87783f4100c1985df3d",
+    "bytes": 4045556276,
+    "X_shape": [
+     3142,
+     281,
+     481,
+     39
+    ],
+    "C": 39,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 3142
+   },
+   "torch": "2.13.0+cu130",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-47529389"
+  }
+ }
+}
