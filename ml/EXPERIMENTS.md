@@ -183,7 +183,83 @@ works — it found the label-less cached tensor and rebuilt with labels in
   Its `probe_kfold` on the family-4 tensor is the baseline both trained arms
   are reported against, and the number that can falsify E-038's premise.
 
-**Result:** pending.
+### #388 (frozen control, attempt 1): the eval mechanism worked; the probes died where #365 did
+
+**The cross-tensor eval path ran exactly as designed** — `CROSS-TENSOR EVAL:
+codec trained on family3_na025.npz, evaluated on family4_na025_pentad.npz. No
+training will occur (checkpoint step 60000 >= --steps 60000)`, then
+`checkpoint is already at/past --steps; nothing to do`. Zero steps trained.
+**And then all three probes were OOM-killed**, each ~30 min in — immediately
+after the anomaly transform, on the same full-size `isfinite` bool that
+killed #365's trainer (16.6 GB at pentad; 83 GB at daily, i.e. impossible for
+#389). The run went green; the only trace was the workflow's own warning
+`no probe_kfold.json — this bundle has no CODEC control`. Fixed by giving
+probe_kfold / probe_sequence / dip_check the LazyPixels treatment
+(embeddings pinned bit-identical, `tests/test_probe_lazy_pixels.py`);
+re-dispatched as **#390**.
+
+### E-038c (2026-08-18 ~07:00Z): the daily arm's first run
+
+**#389 (f5-40M, `gpu-box-46996216`, the 700 GB box)** — the first run of the
+whole daily pipeline: `family5_na025_daily` built on the box in 52 min
+(sidecar layout, 165.6 GB memmappable `_X.npy`), memmapped training with the
+scratch-copy anomaly transform, centred 5-day rolling wind σ. Budget-matched
+to the pentad arms at 200k × 512; 37,975,889 params against a ~441 M daily
+Chinchilla anchor — deliberately far under; the capacity rung (E-038d, 200M)
+waits for a second 600 GB+ box and for this run to validate the pipeline.
+Labels: `truth_daily.npz` — **RAPID 7,290 daily labels = 30.4× monthly, FC
+13,931 = 29.2×** (the ~30× prediction, confirmed).
+
+### THE FROZEN-CONTROL BASELINE (#390, completed 2026-08-18 10:10Z)
+
+The number E-038 is measured against, from `probe_kfold` on run-80's monthly
+anchor evaluated frozen on the pentad tensor — log verbatim:
+
+> `rapid  k-fold r +0.660 [+0.593, +0.722]  (n=1459) · RMSE 2.97 Sv (sigma
+> 3.95) · 18mo-lowpass r +0.582 · wind-only +0.670 [+0.601, +0.733] (RMSE
+> 2.93)`
+
+Dip check: 2009–10 event 45% captured, out-of-fold r +0.660, sign agreement
+71%.
+
+**Reading, in three parts:**
+
+1. **At pentad, the frozen monthly codec does NOT clear the wind bar.** The
+   codec reads 0.660 against wind-only 0.670 — indistinguishable (shared
+   folds; a paired test would be needed for the sign, per §3), and clearly
+   not ABOVE it. At monthly the same codec cleared the same bar by +0.063
+   (0.631 vs 0.568). Whatever the anchor's embeddings add beyond wind at
+   monthly, they add nothing at pentad — the direct, quantitative form of
+   the out-of-domain premise. **The bar for E-038a/b is therefore 0.670**,
+   the pentad wind baseline, not 0.660.
+2. **The wind floor itself rose from 0.568 (monthly) to 0.670 (pentad).**
+   Physically sensible: at 5-day resolution RAPID transport variability is
+   increasingly Ekman/wind-driven, so raw wind stress explains more of it.
+   Finer cadence raises the floor the codec must beat — more labels, but a
+   harder null.
+3. The trainer's crude in-train `rapid_probe` returned NaN on the resumed
+   codec (both #388 and #390) while the k-fold ran cleanly — an instrument
+   nit to chase, not a result.
+
+**Two defects #390 exposed:** `probe_sequence` was STILL OOM-killed (its
+`d["X"].copy()` holds the decompressed tensor twice — residual, recorded, off
+the critical path); and the k-fold silently carried **no FC entry**:
+`target_series` decoded family-4 truth arrays as (YYYYMM, value) monthly
+pairs, matched 0 of 2,553 row-indexed FC labels, and returned None with
+nothing in the log. Fixed (row-decode when the tensor carries `bin_index`);
+the FC baseline needs one cheap re-probe, which can ride any later eval
+dispatch.
+
+**In-flight at 11:15Z:** #386 (40M) step 42,000, light probe 0.617 and
+climbing, ~0.23 s/step, no refit. #387 (200M) step 15,000 — early z-space
+EXPANSION (step-7500 full probe: z_mse_persistence overflowed to Infinity,
+linear probe dipped 0.54 → 0.32 → 0.39 recovering; losses and temporal_r
+healthy) — the §4.10 two-sided-guard story, watched, not yet acted on.
+#389 (daily) ~4 h into its preamble with no metrics yet — expected: the
+per-channel anomaly transform over a 166 GB memmap pages in the whole file
+per channel, ~13 TB of I/O; silence until ~12:30Z is consistent with health.
+
+**Result (pentad trained arms):** pending.
 
 ---
 

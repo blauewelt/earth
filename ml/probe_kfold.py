@@ -220,11 +220,27 @@ def main():
             if spec["key"] not in d:
                 return None
             arr = d[spec["key"]]
-            keep = [(month_of_ym[int(ym)], v) for ym, v in arr if int(ym) in month_of_ym]
-            if len(keep) < 48:
+            if "bin_index" in d:
+                # Families 4/5: truth_* arrays are (AXIS ROW, value) pairs,
+                # written onto the tensor's own axis by build_family4's
+                # truth_pentad(). Run #390 measured what happens when this
+                # branch is missing: the ym-decode below matched 0 of 2,553
+                # FC pentad labels (row indices against a YYYYMM dict), fell
+                # under the 48 floor and returned None — so the SECOND
+                # LARGEST label series was silently absent from the k-fold,
+                # with nothing in the log to say so.
+                tidx = arr[:, 0].astype(int)
+                vals = arr[:, 1].astype(float).copy()
+            else:
+                # Families 2/3: (YYYYMM, value) monthly pairs.
+                keep = [(month_of_ym[int(ym)], v) for ym, v in arr
+                        if int(ym) in month_of_ym]
+                if len(keep) < 48:
+                    return None
+                tidx = np.array([k[0] for k in keep], dtype=int)
+                vals = np.array([k[1] for k in keep], dtype=float)
+            if len(tidx) < 48:
                 return None
-            tidx = np.array([k[0] for k in keep], dtype=int)
-            vals = np.array([k[1] for k in keep], dtype=float)
         tmoy = moy[tidx]
         # deseasonalise with the OVERALL monthly climatology (every month is
         # test in some fold; per-fold climatologies differ by <0.1 Sv and
