@@ -137,8 +137,49 @@ themselves are the cadence dividend, measured: **RAPID 1,459 pentad labels
 against 240 monthly (6.1×)** and **Florida Current 2,553 against 433 (5.9×)**,
 means physically right at 17.0 Sv and 31.8 Sv.
 
-**Runs:** #TBD (f4-40M, `gpu-box-47094145`) and #TBD (f4-200M,
-`gpu-box-46996216`) → head_sha TBD.
+### Attempt 1 (2026-08-17 ~18:20Z): both arms dead, one of them GREEN
+
+- **#366 (f4-40M, `gpu-box-47094145`) — VOID, and it reported SUCCESS.** Its
+  first training step carried ~537 s of one-time cost (first CUDA kernels,
+  first touch of the 33 GB tensor). The `--max-minutes` calibration fired at
+  `elapsed > 60 s` — i.e. at step 1 — read 537.54 s/step against a true steady
+  rate of **0.19 s/step**, and re-fit the cosine schedule from 200,000 steps to
+  **66**. The run trained 66 steps, annealed the LR to zero, saved, passed
+  every probe and went green with 691 of its 700 budgeted minutes unspent.
+  **Do not quote any number from #366's probe archive** — its codec is
+  effectively untrained. Fix: `fit_schedule` (rate excludes step 1, minimum
+  3-step sample, periodically re-checked and allowed to grow back), pinned by
+  `tests/test_max_minutes_refit.py`, which replays #366's exact numbers.
+- **#367 (f4-200M, `gpu-box-46996216`) — CANCELLED at 4 min**, deliberately:
+  the box still held #365's tensor, built before the labels were published —
+  same recipe string, no labels — so the recipe guard skipped the rebuild and
+  the run would have died 20 h later in `probe_kfold` on `KeyError: 'rapid'`.
+  The guard now verifies the labels themselves (`missing_truth_keys`).
+- **#368 (f4-200M re-dispatch, same box) — exit 137 at 26 min.** Host OOM:
+  `gpu-box-46996216` has **63 GB** RAM against X's 33 GB decompressed plus the
+  anomaly transform's float64 temporaries. #366's preamble survived only
+  because its box has 126 GB. Interim rule until the memmap reader lands:
+  **family-4 jobs go on 126 GB boxes only.**
+
+One incidental positive: #368's build step is direct evidence the truth guard
+works — it found the label-less cached tensor and rebuilt with labels in
+12 min.
+
+### Attempt 2 (2026-08-18 ~06:15Z): re-dispatch on 126 GB boxes, plus the control
+
+- **f4-40M** → #TBD on `gpu-box-47094143` (126 GB)
+- **f4-200M** → #TBD on `gpu-box-47094145` (126 GB, warm labeled tensor)
+- **FROZEN CONTROL** → #TBD on `gpu-box-47529389` (126 GB):
+  `resume: !f3_anchor41M` at `--steps 60000` = the checkpoint's own recorded
+  step, so the loop never runs — a cross-tensor EVAL, newly allowed by the
+  resume guard exactly when nothing will train
+  (`tests/test_frozen_control_resume.py` pins that the "frozen" control's
+  saved weights are bit-identical to the loaded anchor). The released
+  `f3_anchor41M__pixelmae.pt` was **opened and read** (ml/CLAUDE.md §0.1):
+  step 60000, tag run-80, d_z **64**, **patch 3**, 576/10/8/768 = 40,692,849
+  params, `data=family3_na025.npz`, same holdouts as family 4's defaults.
+  Its `probe_kfold` on the family-4 tensor is the baseline both trained arms
+  are reported against, and the number that can falsify E-038's premise.
 
 **Result:** pending.
 

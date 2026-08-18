@@ -28,6 +28,25 @@ from model import (PixelMAE, gather_px, LazyPixels, obs_any_chunked,
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def fit_schedule(s, steady_elapsed, total_elapsed, max_minutes, steps0):
+    """How many steps fit the wall-clock budget, from the STEADY rate.
+
+    Pure, so tests/test_max_minutes_refit.py can replay run #366's exact
+    numbers against it. The three commitments (see the call site for the
+    incident): the rate is `steady_elapsed / (s - 1)` — measured AFTER step 1,
+    because step 1 carries one-time cost that is not a rate; the fit never
+    exceeds the dispatched `steps0`, and never falls below `s + 1`; the budget
+    spends from `total_elapsed`, step-1 cost included, because that time is
+    genuinely gone. 15% of the remaining budget is held back for the probes.
+
+    Returns (fit, rate).
+    """
+    rate = steady_elapsed / (s - 1)
+    budget = max_minutes * 60 - total_elapsed
+    fit = s + int(0.85 * budget / rate)
+    return max(s + 1, min(steps0, fit)), rate
+
+
 def parse():
     p = argparse.ArgumentParser()
     p.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"))
@@ -472,6 +491,11 @@ def main():
               "baseline to measure — the original run's step-0 point is the "
               "one that applies)", flush=True)
     CAL = 200                                  # steps before the rate is trusted
+    t1 = None                                  # wall clock AFTER step 1 lands
+    next_cal = None                            # next step to re-check the fit
+    steps0 = a.steps                           # the DISPATCHED total — refits
+    #                                            may never exceed it, and a
+    #                                            recovery may grow back to it
     s = 0
     if a.resume:
         # --resume takes a COMMA-SEPARATED CANDIDATE LIST and uses the first
@@ -519,12 +543,35 @@ def main():
                   f"patch={ca.get('patch')} data={os.path.basename(str(ca.get('data','?')))}\n"
                   f"    it was trained toward {ca.get('steps')} steps",
                   flush=True)
-            if ca.get("data") and os.path.basename(str(ca["data"])) != os.path.basename(a.data):
-                raise SystemExit(
-                    f"REFUSING to resume: checkpoint was trained on "
-                    f"{os.path.basename(str(ca['data']))} but this run uses "
-                    f"{os.path.basename(a.data)}. Cross-tensor resume would "
-                    f"produce a codec whose provenance is a lie.")
+            ck_data = os.path.basename(str(ca.get("data", ""))) if ca.get("data") else ""
+            if ck_data and ck_data != os.path.basename(a.data):
+                # The refusal guards TRAINING: continuing a codec on a tensor
+                # it was not trained on writes a checkpoint whose provenance
+                # is a lie. An EVAL-ONLY pass trains nothing — the loop below
+                # is `while s < a.steps`, so a checkpoint already at/past
+                # --steps changes no weight — and cross-tensor evaluation is
+                # not an accident here, it is E-038's FROZEN CONTROL: score
+                # the monthly anchor on the pentad tensor, the one number
+                # that can falsify the out-of-domain premise. So the refusal
+                # keys on whether anything will train, which is exactly what
+                # the stated reason protects. A checkpoint with no recorded
+                # step cannot prove it will not train (the warm-start branch
+                # restarts s at 0), so it stays refused.
+                if "step" in ck and int(ck["step"]) >= a.steps:
+                    print(f"  CROSS-TENSOR EVAL: codec trained on {ck_data}, "
+                          f"evaluated on {os.path.basename(a.data)}. No "
+                          f"training will occur (checkpoint step "
+                          f"{int(ck['step'])} >= --steps {a.steps}); the "
+                          f"saved artefact is the loaded weights, re-scored.",
+                          flush=True)
+                else:
+                    raise SystemExit(
+                        f"REFUSING to resume: checkpoint was trained on "
+                        f"{ck_data} but this run uses "
+                        f"{os.path.basename(a.data)}. Cross-tensor TRAINING "
+                        f"would produce a codec whose provenance is a lie. "
+                        f"(Eval-only is allowed: pass --steps at or below "
+                        f"the checkpoint's recorded step, so nothing trains.)")
             model.load_state_dict(ck["model"])
             if "opt" in ck and "step" in ck:
                 opt.load_state_dict(ck["opt"])
@@ -562,15 +609,41 @@ def main():
         l_rec, l_nei = step_loss(t, y, x, ctx)
         loss = l_rec + 0.5 * l_nei
         opt.zero_grad(); loss.backward(); opt.step(); sched.step()
-        if a.max_minutes and CAL and (s >= CAL or time.time() - t0 > 60):
-            CAL = 0                            # calibrate once: 200 steps or 60 s
-            rate = (time.time() - t0) / s      # s/step, measured not guessed
-            budget = a.max_minutes * 60 - (time.time() - t0)
-            fit = s + int(0.85 * budget / rate)     # 15% held back for probes
-            if fit < a.steps and FLOOR == 0:        # constant-tail runs just hard-stop
-                print(f"  time budget: {rate:.2f} s/step → re-fitting the "
-                      f"cosine schedule from {a.steps} to {fit} steps so the "
-                      f"LR anneals to zero inside {a.max_minutes} min")
+        if s == 1:
+            t1 = time.time()
+        # Wall-clock refit — MEASURED steady-state rate, re-checked as it runs.
+        # The first version of this block calibrated ONCE, at `s >= 200 or
+        # elapsed > 60s`, over elapsed/s FROM THE START. Run #366 (2026-08-17,
+        # the first pentad codec) hit all three of its latent defects at once:
+        # step 1 carried ~9 minutes of one-time cost (first CUDA kernels +
+        # first touch of a 33 GB tensor), so the 60 s branch fired at s=1,
+        # concluded 537.54 s/step against a true steady rate of ~0.19, re-fit
+        # 200,000 steps to SIXTY-SIX, annealed the LR to zero and reported
+        # success — a green run carrying a near-random codec into the probe
+        # archive, with 691 of its 700 budgeted minutes unspent. Three rules,
+        # each of which would have prevented it alone:
+        #   1. the rate EXCLUDES step 1 (t1, not t0) — one-time cost is not a
+        #      rate;
+        #   2. no fit from fewer than 3 steady steps — a 1-step sample is a
+        #      guess wearing a measurement's clothes;
+        #   3. the fit is RE-CHECKED (cheaply, on a step schedule), and may
+        #      grow back toward the dispatched total — calibrate-once turns
+        #      one bad reading into the run's final answer.
+        # The budget itself still counts from t0: step 1's cost was real spend.
+        if (a.max_minutes and FLOOR == 0 and t1 is not None and s >= 4
+                and (s >= CAL or time.time() - t1 > 60)
+                and (next_cal is None or s >= next_cal)):
+            now = time.time()
+            fit, rate = fit_schedule(s, now - t1, now - t0,
+                                     a.max_minutes, steps0)
+            # re-check soon while young (a shrunk schedule must be able to
+            # recover before it expires), sparsely once the estimate is stable
+            next_cal = s + max(25, min(2000, (fit - s) // 4))
+            if abs(fit - a.steps) > max(50, a.steps // 20):
+                print(f"  time budget: {rate:.2f} s/step steady (n={s - 1}) → "
+                      f"re-fitting the cosine schedule from {a.steps} to {fit} "
+                      f"steps so the LR anneals to zero inside "
+                      f"{a.max_minutes} min")
                 a.steps = fit
                 sched_total[0] = fit
         if a.max_minutes and (time.time() - t0) > a.max_minutes * 60:
