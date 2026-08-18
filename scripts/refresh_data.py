@@ -1904,6 +1904,79 @@ def oisst_monthly():
           f"hottest August cell {hot:.1f} °C (the reason this layer exists)")
 
 
+def oisst_clim():
+    """The 1991-2020 monthly SST climatology, from the year files oisst_monthly
+    already wrote — no download, it is a re-average of data in the repo.
+
+    Exists because the GIBS anomaly palette runs -3..+3 degC with catch-all end
+    bins (`[3.0,+INF)`), so the TILE cannot express a larger departure: at the
+    height of a strong El Nino the eastern Pacific saturates and every pixel
+    reads "at least 3", which is exactly when the number matters most (Chris,
+    2026-08-18: "The SST anomaly layer is capped at +3C? Can you make sure the
+    point renders the actual anomaly value without capping it?"). With this
+    baseline the pixel card can subtract instead of inverting a colour, and
+    report the real figure.
+
+    Same calendar month, always: an annual-mean baseline would make the
+    "anomaly" mostly the seasonal cycle, which is why CLAUDE.md previously
+    refused a derived SST-vs-normal row. A per-month baseline removes that
+    objection, and 1991-2020 is the WMO standard normal period the rest of the
+    app already uses (GPCP, MeteoSwiss, E-OBS)."""
+    import numpy as np
+    print("OISST 1991-2020 monthly climatology (from data/oisst_y) ...")
+    ydir = os.path.join(DATA, "oisst_y")
+    lo, hi = 1991, 2020
+    # Accumulate per cell AND count per cell: a cell can be ice-masked in some
+    # years and not others, so a fixed divisor would bias those cells cold.
+    acc = {f"{m:02d}": np.zeros(64800) for m in range(1, 13)}
+    num = {f"{m:02d}": np.zeros(64800) for m in range(1, 13)}
+    for yr in range(lo, hi + 1):
+        path = os.path.join(ydir, f"{yr}.json")
+        if not os.path.exists(path):
+            raise SystemExit(f"missing {path} — run `refresh_data.py oisst_monthly` first")
+        for stamp, frame in json.load(open(path))["months"].items():
+            mm = stamp[5:7]
+            a = np.array([np.nan if v is None else v for v in frame], dtype=np.float64)
+            ok = np.isfinite(a)
+            acc[mm][ok] += a[ok]
+            num[mm][ok] += 1
+    frames, cov = {}, []
+    for mm in sorted(acc):
+        with np.errstate(invalid="ignore"):
+            mean = np.where(num[mm] > 0, acc[mm] / np.maximum(num[mm], 1), np.nan)
+        cov.append(int(np.isfinite(mean).sum()))
+        frames[mm] = [None if not np.isfinite(v) else round(float(v), 2)
+                      for v in mean]
+    # ONE FILE PER MONTH, not one file of twelve. The card needs exactly the
+    # month it is looking at, and the whole set is 4.3 MB — larger than any
+    # other file a click fetches. Split, it is ~355 KB, and the index below
+    # carries only metadata. Same lazy-per-file contract as `yearDir`.
+    cdir = os.path.join(DATA, "oisst_clim")
+    os.makedirs(cdir, exist_ok=True)
+    for mm, frame in frames.items():
+        with open(os.path.join(cdir, f"{mm}.json"), "w") as f:
+            json.dump({"month": mm, "values": frame}, f, separators=(",", ":"))
+    payload = {
+        "id": "oisst-clim", "title": "SST normal 1991-2020 (OISST, by month)",
+        "units": "°C",
+        "source": "NOAA OISST v2.1 monthly means (PSL), 1991-2020 mean per calendar month",
+        "citation": "Huang et al. 2021, doi:10.1175/JCLI-D-20-0166.1",
+        "doc": "https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html",
+        "period": f"{lo}-{hi}",
+        "west": -180, "south": -90, "east": 180, "north": 90,
+        "dlon": 1.0, "dlat": 1.0, "nx": 360, "ny": 180,
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "monthDir": "data/oisst_clim",
+        "monthsAvailable": sorted(frames),
+    }
+    out = os.path.join(DATA, "oisst_clim.json")
+    with open(out, "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    per = os.path.getsize(os.path.join(cdir, "08.json")) / 1e6
+    print(f"  wrote oisst_clim.json ({os.path.getsize(out)} B index) + 12 month "
+          f"files, {min(cov)}-{max(cov)} ocean cells, {per:.2f} MB each")
+
+
 def tides():
     """EOT20 (DGFI-TUM) global ocean tide model — harmonic constants from
     multi-mission satellite altimetry (Hart-Davis et al. 2021,
@@ -2041,6 +2114,7 @@ if __name__ == "__main__":
            "species": species, "argo_column": argo_column, "glorys": glorys, "eei": eei,
            "gfs": gfs, "drivers": drivers, "cities": cities, "tides": tides,
            "oisst_monthly": oisst_monthly,
+           "oisst_clim": oisst_clim,
            "gazetteer": gazetteer, "islands": islands, "icon_sources": icon_sources}
     for w in which:
         fns[w]()

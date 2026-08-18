@@ -5374,6 +5374,53 @@ function pixelRow(label, value, when = null) {
     `<span class="px-val">${value}</span>${whenStamp(when)}</div>`;
 }
 
+/* THE TRUE SST ANOMALY, when the picture cannot carry it.
+ *
+ * GIBS serves colours, not numbers, and the MUR25 anomaly palette runs
+ * -3..+3 degC with catch-all end bins (`[3.0,+INF)`). So at the height of a
+ * strong El Nino the eastern Pacific saturates and every pixel inverts to
+ * "at least 3" — the reading is capped exactly when the magnitude is the
+ * whole story (Chris, 2026-08-18: "The SST anomaly layer is capped at +3C?").
+ * No client work recovers it: the information is not in the tile.
+ *
+ * So this subtracts instead of inverting a colour: OISST monthly mean minus
+ * that same calendar month's 1991-2020 normal, both from the archive we
+ * already ship. Same dataset on both sides ON PURPOSE — mixing MUR's 1 km
+ * daily field with a 1-degree monthly normal reads ~2 degC cold off Peru,
+ * because MUR resolves the coastal upwelling tongue that a 1-degree cell
+ * averages away, and Peru is precisely where this gets used.
+ *
+ * The cost of that honesty is resolution: 1 degree and monthly, against the
+ * raster's 25 km and daily. The row says so rather than presenting the two as
+ * the same measurement. */
+function oisstClimIndex() {
+  return pixelJson("data/oisst_clim.json");
+}
+async function trueSstAnomaly(lon, lat) {
+  const idx = await oisstClimIndex();
+  if (!idx) return null;
+  // The archive is monthly and lags; use the newest month at or before the
+  // date on screen, and report which one that was.
+  const want = state.date.slice(0, 7);
+  const oiIdx = await pixelJson("data/oisst_monthly.json");
+  if (!oiIdx) return null;
+  const stamps = oiIdx.monthsAvailable || [];
+  const use = stamps.filter((s) => s <= want).pop() || stamps[0];
+  if (!use) return null;
+  const [clim, yearFile] = await Promise.all([
+    pixelJson(`${idx.monthDir}/${use.slice(5, 7)}.json`),
+    pixelJson(`${oiIdx.yearDir}/${use.slice(0, 4)}.json`),
+  ]);
+  const frame = yearFile?.months?.[use];
+  if (!clim?.values || !frame) return null;
+  const geom = { west: idx.west, south: idx.south, east: idx.east, north: idx.north,
+                 dlon: idx.dlon, dlat: idx.dlat, nx: idx.nx, ny: idx.ny };
+  const now = sampleGrid({ ...geom, values: frame }, lon, lat);
+  const norm = sampleGrid({ ...geom, values: clim.values }, lon, lat);
+  if (now == null || norm == null) return null;
+  return { v: now - norm, month: use, period: idx.period, sst: now, norm };
+}
+
 async function showPixelState(carto) {
   const myTurn = ++pixelCardSeq;
   const lon = Cesium.Math.toDegrees(carto.longitude);
@@ -5449,9 +5496,17 @@ async function showPixelState(carto) {
    * first draw throw, which the guard then turned into "something went wrong"
    * — an error message for the ordinary case of data still being in flight.
    * A scalar source's empty is null, which every section already tests for. */
+  const rasterJob = Promise.all(
+    rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null)));
   const jobs = [
-    ["satellite fields",
-      Promise.all(rasterCfgs.map((cfg) => pixelRasterValue(cfg, lon, lat).catch(() => null))), []],
+    ["satellite fields", rasterJob, []],
+    // Costs NOTHING in the ordinary case: it waits for the anomaly probe and
+    // returns null unless that probe came back CAPPED, so the two extra files
+    // are fetched only when the picture genuinely could not carry the number.
+    ["true SST anomaly", rasterJob.then((vals) => {
+      const r = vals[PIXEL_RASTERS.indexOf("sst-anom")];
+      return r && r.cap ? trueSstAnomaly(lon, lat) : null;
+    }).catch(() => null)],
     // {g, v}, not just v: the grid carries its own observation period/month, and
     // the row prints that — so the value and its date come from the same object.
     ["climate normals",
@@ -5546,7 +5601,7 @@ async function showPixelState(carto) {
   await new Promise((r) => setTimeout(r, PIXEL_REDRAW_MS + 20));
 
   function drawPixelCard(values, missing, final) {
-    const [rasters, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid] = values;
+    const [rasters, trueAnom, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid] = values;
     if (pixelCardEl.classList.contains("hidden")) return;   // closed while loading
 
     const sec = [];
@@ -5664,16 +5719,33 @@ async function showPixelState(carto) {
       const cfg = rasterCfgs[i];
       const label = cfg.title.replace(/\s*\(.*\)$/, "");
       const w = whenOfGibs(cfg);
-      return r.label ? pixelRow(label, r.label, w)
-        : r.cap ? pixelRow(label, `${r.cap.sign} ${fmtVal(r.cap.bound)} ${r.units}`, w)
-          : pixelRow(label, `${fmtVal(r.v)} ${r.units}`, w);
+      if (r.label) return pixelRow(label, r.label, w);
+      if (!r.cap) return pixelRow(label, `${fmtVal(r.v)} ${r.units}`, w);
+      // A capped bin is the palette's edge, not a measurement. Where we can
+      // compute the real figure, print it right here — the bound alone hides
+      // the difference between "just over 3" and "nearly 5", which during an
+      // El Nino is the entire question.
+      const capped = pixelRow(label, `${r.cap.sign} ${fmtVal(r.cap.bound)} ${r.units}`, w);
+      if (cfg.id !== "sst-anom" || !trueAnom) return capped;
+      return capped + pixelRow("&nbsp;&nbsp;&#8627; actual departure",
+        `<strong>${trueAnom.v >= 0 ? "+" : "−"}${fmtVal(Math.abs(trueAnom.v))} °C</strong>` +
+        ` · ${fmtVal(trueAnom.sst)} vs ${fmtVal(trueAnom.norm)} normal`,
+        whenAt("month", trueAnom.month));
     }).join("");
     if (rrows) {
       // The heading no longer claims a date. It used to say state.date for the
       // whole block, which was wrong for most of it: GRACE ends 2022-07, CERES
       // 2018-10, sea ice 2025-09, and the monthly layers snap to a first-of-month
       // — all of them were printed under today's date. Each row now says its own.
-      sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">NASA GIBS</span></div>${rrows}</div>`);
+      const anomNote = trueAnom
+        ? `<div class="px-note">The anomaly palette stops at ±3 °C — its end bins are ` +
+          `catch-alls, so the tile cannot express more and the probe can only say ` +
+          `“≥ 3”. The actual departure above is computed instead of read off a ` +
+          `colour: NOAA OISST v2.1 monthly mean minus the same calendar month's ` +
+          `${trueAnom.period} normal. Coarser than the raster it corrects — 1° and ` +
+          `monthly, against 25 km and daily.</div>`
+        : "";
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Satellite fields <span class="px-src">NASA GIBS</span></div>${rrows}${anomNote}</div>`);
     }
 
     /* -- why forest was lost here (categorical, so its own row) --------------- */

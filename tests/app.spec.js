@@ -553,6 +553,53 @@ test("the comparison date is steered like the main date, and knows when it track
   expect(await page.evaluate(() => window.__earth.compareDate())).toBeNull();
 });
 
+test("a capped SST anomaly reports its actual departure, computed not read", async ({ page }) => {
+  // Chris, 2026-08-18: "The SST anomaly layer is capped at +3C? Can you make
+  // sure the point renders the actual anomaly value without capping it?"
+  // GIBS serves colours: the MUR25 anomaly palette's end bins are catch-alls
+  // (`[3.0,+INF)`), so the tile cannot express more than 3 and the probe can
+  // only honestly say "≥ 3" — exactly when the magnitude is the whole story.
+  // The card computes the real figure instead, from the OISST monthly archive
+  // minus that calendar month's 1991-2020 normal.
+  test.setTimeout(240000);
+  await page.evaluate(() => {
+    const el = document.getElementById("layer-date");
+    el.value = "2026-07-15"; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  // Niño 1+2 centre during the 2026 El Niño: far past the palette's ceiling
+  await page.evaluate(() =>
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(-85, -5)));
+  const card = page.locator("#pixel-card");
+  await expect(card).toContainText("SST anomalies", { timeout: 90000 });
+  await expect(card).toContainText("actual departure", { timeout: 90000 });
+  const t = await page.evaluate(() => document.getElementById("pixel-card").innerText);
+  // the capped read-out is still shown — we correct it, we do not hide it
+  expect(t).toMatch(/SST anomalies\s*\n?≥ 3/);
+  const m = /actual departure\s*\n?([+−-][\d.]+) °C/.exec(t);
+  expect(m, "the computed departure row is missing").not.toBeNull();
+  const v = Number(m[1].replace("−", "-"));
+  expect(Math.abs(v)).toBeGreaterThan(3);      // or there was nothing to correct
+  expect(Math.abs(v)).toBeLessThan(12);        // and it is a temperature, not a bug
+  // provenance is stated, because it is a DIFFERENT measurement from the raster
+  await expect(card).toContainText("1991-2020");
+  await expect(card).toContainText("OISST");
+});
+
+test("an uncapped anomaly costs no extra request", async ({ page }) => {
+  // The correction must be free in the ordinary case: the climatology and the
+  // OISST year file are ~0.4 and ~3.8 MB, and a mid-ocean pixel with a normal
+  // anomaly has nothing to correct.
+  const asked = [];
+  page.on("request", (r) => {
+    if (/oisst_clim|oisst_y/.test(r.url())) asked.push(r.url());
+  });
+  await page.evaluate(() =>
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(-30, 40)));
+  await expect(page.locator("#pixel-card")).toContainText("SST anomalies", { timeout: 90000 });
+  await page.waitForTimeout(2000);
+  expect(asked, `fetched ${asked.join(", ")} for a pixel that was not capped`).toEqual([]);
+});
+
 test("a half-typed year does not fight the typist", async ({ page }) => {
   // Chris, 2026-08-18: "I cannot type 2010 into it. It looks like it's editing
   // only the first number of the year." An <input type="date"> fires `change`

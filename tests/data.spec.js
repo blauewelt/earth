@@ -13,6 +13,40 @@ test.describe("catalog.json", () => {
 
   // Lower bound, not equality: the catalog only grows. The title tracks the
   // current size so it doesn't quietly drift the way the README's did.
+  test("the OISST monthly normals are a usable, seasonally-correct baseline", () => {
+    // The pixel card subtracts these from OISST monthly means to report an
+    // anomaly the GIBS palette cannot express (its end bins are catch-alls at
+    // ±3 °C). Two things have to hold or that subtraction is meaningless.
+    const idx = read("oisst_clim.json");
+    expect(idx.period).toBe("1991-2020");
+    expect(idx.monthsAvailable).toHaveLength(12);
+    expect(idx.nx * idx.ny).toBe(64800);
+    const jan = read("oisst_clim/01.json").values;
+    const jul = read("oisst_clim/07.json").values;
+    expect(jan).toHaveLength(idx.nx * idx.ny);
+    // (1) it is PER MONTH, not an annual mean — an annual baseline would make
+    // the "anomaly" mostly the seasonal cycle, which is why a derived
+    // SST-vs-normal row was refused before this file existed.
+    let diffs = 0, maxSwing = 0;
+    for (let i = 0; i < jan.length; i++) {
+      if (jan[i] == null || jul[i] == null) continue;
+      const d = Math.abs(jan[i] - jul[i]);
+      if (d > 0.5) diffs++;
+      maxSwing = Math.max(maxSwing, d);
+    }
+    expect(diffs).toBeGreaterThan(20000);       // most of the ocean has a season
+    expect(maxSwing).toBeGreaterThan(10);       // midlatitude shelves swing hard
+    // (2) the values are sea temperatures, and land is absent rather than zero
+    let lo = Infinity, hi = -Infinity, nulls = 0;
+    for (const v of jul) {
+      if (v == null) { nulls++; continue; }
+      lo = Math.min(lo, v); hi = Math.max(hi, v);
+    }
+    expect(lo).toBeGreaterThan(-2.5);           // freezing point of seawater
+    expect(hi).toBeLessThan(36);
+    expect(nulls).toBeGreaterThan(15000);       // land is null, not 0 °C
+  });
+
   test("has 244+ records with required fields", () => {
     expect(cat.record_count).toBeGreaterThanOrEqual(244);
     expect(cat.records.length).toBeGreaterThanOrEqual(244);
