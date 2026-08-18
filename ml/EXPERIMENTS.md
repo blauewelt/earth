@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-042"></a>
-## E-042 · SST as channel 40 — BUILT 2026-08-18, NOT YET DISPATCHED
+## E-042 · SST as channel 40 — BUILT 2026-08-18; DISPATCH ATTEMPTED 2026-08-18 ~21:00Z AND BLOCKED ON BOX CAPACITY
 
 Chris, 2026-08-18, reading the channel table: the embedding *"should
 represent a holistic view on any point of the world"*. The 39 channels are
@@ -140,7 +140,74 @@ $[3142,281,481,40]$ float16 = **34.0 GB** and the build wants ~42 GB free
 while the memmap and the archive coexist; no box has that headroom while
 #386/#387 hold the 126 GB boxes on r1.
 
-**Cost so far:** one `ubuntu-latest` bake run, no GPU.
+### Dispatch attempted 2026-08-18 ~20:20–21:00Z — NOT DISPATCHED, and the blocker MOVED
+
+The disk arithmetic now clears, and it was checked against the artefacts rather
+than re-derived. `gpu-box-47566395` (Vast **47718224**, 100 GB) reports 46 GB
+used → **54 GB free**, against a peak of:
+
+| item | bytes | source of the number |
+|---|---|---|
+| pentad025 base fields | 5.058 GB | `Content-Length` of the four `pentad_mean_*.npy` on the Hub, 1,264,566,444 B each |
+| SST artifact | 4.246 GB | `sst_na025/sst_daily_na.npy` 4,245,677,460 B + its index |
+| dense `_build.npy` memmap | 33.974 GB | $3142\times281\times481\times40\times2$ exactly |
+| compressed archive, coexisting with the memmap | ~4.2–8 GB | estimated, **not measured** — §7 above guessed the pair at ~42 GB |
+| **peak** | **47.4–51.3 GB** | **~2.7–6.6 GB of margin** |
+
+The builder's guard is `need > free * 0.95` on the memmap's own directory, i.e.
+it demands **≥ 35.76 GB free** at the moment it runs — comfortably met — and
+since `d3ea240` it sits AFTER the recipe short-circuit, so it can no longer
+refuse a build that was about to be skipped.
+
+**What stopped it was the box, not the bytes.** `47718224` would not start:
+sixteen start calls spread over forty minutes, 20:20Z to 21:00Z, every one of
+them `resources_unavailable` ("state change queued"), and the instance's own
+`intended_status` / `next_state` never left `stopped` — so the queued change is
+not pending, it was refused. Its host (machine 145738) is full, which also rules
+out its sibling `gpu-box-47566393` (47720655, same host, and 46 GB free anyway).
+No other box in the fleet clears the precondition: `gpu-box-39184683` (47724565,
+57 GB free, 515 GB RAM) is the one that would, and it refused to start the same
+way; `gpu-box-47529389` has 30 GB free, `gpu-box-47094145` 37 GB,
+`gpu-box-30257785` 45 GB, `gpu-box-42005419` 25 GB. The four boxes that were
+busy stayed untouched, and no box was rented — a precondition is not something
+to lower until a dispatch fits through it.
+
+**The dispatch is prepared, and its 25 fields are recorded here so the next
+session copies rather than reconstructs.** Every training-relevant field was
+cross-checked against **#386's own `config` line on `ml-live-386`** — the
+artefact, not the plan — and matches exactly:
+
+```json
+{"doc": "E-042 SST A/B: the FIRST r2 codec …",
+ "steps": "200000", "batch": "512", "d_z": "32", "anomaly": "true",
+ "temporal_steps": "0", "temporal_d_model": "96", "temporal_layers": "3",
+ "eval_every": "7500", "resume": "", "head_probe": "true",
+ "light_probe_every": "10000", "window": "global",
+ "tensor": "family4_na025_pentad_r2", "sst_channel": "false", "patch": "1",
+ "max_minutes": "0", "runner": "gpu-box-47566395", "job_timeout": "1500",
+ "lr_floor": "0", "lr_decay_steps": "0", "codec_d_model": "512",
+ "codec_layers": "12", "codec_heads": "4", "codec_d_dec": "256"}
+```
+
+`resume` is empty **by construction, not by omission**: the 39-row `chan_emb`
+of `f3_anchor41M` cannot encode 40 channels, so there is nothing to seed from
+(ml/CLAUDE.md §1 — an omitted input is the DEFAULT, never an inheritance).
+`head_probe` is the one field that is NOT copied from #386, and it is eval-side
+only: probes do not touch trained weights, so the arm stays weight-comparable
+while gaining the unpooled read-out §3 makes primary at this cadence.
+
+**One confound to state now rather than discover later.** #386 built its own r1
+tensor on `gpu-box-47094143`, and that box is occupied until #386 finishes, so
+the r2 arm will build its own tensor on a DIFFERENT box whichever box it lands
+on. Family 4 has no pinned pull from `data-cache-v1` the way family 3 does, so
+the A/B is cross-box either way and the box-effect measured at family 3
+(0.041 on the head k-fold) is not excluded by construction. That is a property
+of the design, not of which box tonight's dispatch would have landed on — but
+it is worth pinning the r2 tensor to `data-cache-v1` the way family 3 is
+pinned, before the comparison is quoted.
+
+**Cost so far:** one `ubuntu-latest` bake run, no GPU. Tonight added no GPU
+cost — the box never started, so nothing was billed beyond storage.
 
 **Result: none — nothing has been trained on r2.**
 
@@ -483,6 +550,64 @@ canonical map never takes the transform's writes.
   were missed by in the #388 round (measured on a 0.523 GiB fixture: VmHWM
   2.132 → 0.642 GiB, 3.3×, with the eager path pinned as a tripwire).
   **Re-dispatched as #397** to produce the head number.
+
+### E-038c ATTEMPT 2 (2026-08-18 20:35Z): #400, the daily arm re-dispatched
+
+**Hypothesis, unchanged from #389.** A 38 M codec trained from scratch on the
+DAILY family-5 tensor beats the frozen monthly `f3_anchor41M` applied to that
+same tensor — E-038a/b's domain-shift claim one cadence finer, where E-034 §4's
+one-live-RG-bin-per-month policy pushes the `missing`-token share to **96.7%**
+of daily bins against ~83.6% at pentad.
+
+**Control.** `f3_anchor41M` (run #62, 40.7 M) scored by `probe_kfold.py` on the
+family-5 tensor, plus the pentad row from E-038a. **Falsified** if the fresh
+daily codec does not beat that baseline — in which case retraining per cadence
+buys nothing and the daily arm should go back to reusing the codec.
+
+**What this dispatch actually risks is the PREAMBLE, not the science.** #389
+was cancelled at ~7 h having never written a metric line, so #400 re-runs its
+EXACT inputs — recovered verbatim from `probes-389.json`'s provenance block on
+`ml-metrics`, which archived provenance only and is the sole surviving record
+of them, since a cancelled run's log blobs expire. Only `doc` differs. `resume`
+was ABSENT from #389's provenance and is passed here as `""`; that is the
+workflow's own default, so it is not a change. The fixes it is testing are
+`aea7d63` (anomaly_transform time-chunked, 249.8 → 6.0 full-extent traversals,
+bit-identical, peak RAM ~4.5 GB at chunk 64), `22a5b27` (the third and fourth
+inlined copies of the same transform) and the probe memory work in `70ffe2d` /
+`f2ee8b8`.
+
+**A falsifier for the FIX, stated at dispatch and cheap to check.** The
+`metrics.jsonl` config line must appear on `ml-live-400` within ~45 min of the
+Train step starting. **If it is absent at 90 minutes — 22:11:47Z — the fix did
+not take and the run must be KILLED rather than left to burn.** #389's failure
+mode was a job that looked healthy for seven hours, so "still running" is not
+evidence here and a deadline stated in advance is the only instrument that
+works.
+
+| | |
+|---|---|
+| run | [#400](https://github.com/blauewelt/earth/actions/runs/32183046877) |
+| box | `gpu-box-46996216` (Vast 47913006, 700 GB disk, 64,164 MB RAM, $0.333/h) |
+| code | dispatch ref `main` = `a1c7411` |
+| params · batch · steps · data | 37,975,889 · 512 · 200,000 · `[15706, 281, 481, 39]` float16, 165.6 GB |
+| build step | **0 seconds** (20:35:15Z → 20:35:15Z) |
+| provenance step | 6 min 30 s (sha256 over the 165.6 GB sidecar) |
+| Train step began | 20:41:47Z |
+
+The 0-second build is the #391 guard ordering working as intended: the recipe
+short-circuit sees #389's cached `f5r1` tensor and returns before the free-space
+check, and `load_pentad_base` opens the daily base fields with `mmap_mode="r"`,
+so confirming "already built" costs no read at all.
+
+**Disk, verified before dispatch rather than assumed.** The tensor is on the
+box already, but `train.py` still takes a writable `_scratch.npy` copy of the
+WHOLE thing for the anomaly transform (`tensor_io.writable_copy`, chunk 64,
+peak RSS one chunk — #389 measured that copy at 2 min 45 s), so the run needs a
+second 165.6 GB. 364/700 GB used → **336 GB free, ~170 GB margin**.
+`disk_hygiene.sh` runs at a 16 GB floor and therefore does nothing on this box,
+which is what keeps the cached tensor safe.
+
+**Result:** pending.
 
 **Result (pentad trained arms):** pending.
 
