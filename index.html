@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=9027ba24" />
+  <link rel="stylesheet" href="src/style.css?v=df04e1f2" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -53,6 +53,7 @@
         <button id="tab-amoc" class="tab">AMOC</button>
         <button id="tab-sealevel" class="tab">Sea level</button>
         <button id="tab-tides" class="tab">Tides</button>
+        <button id="tab-play" class="tab">Play</button>
         <button id="tab-catalog" class="tab">Catalog</button>
         <button id="tab-about" class="tab">About</button>
       </nav>
@@ -707,6 +708,107 @@
         the date selector.</p>
     </section>
 
+
+    <!-- Playback (E-041 §3). This tab is a control room for a CLOCK: it drives
+         the Date selector in the Layers tab and nothing else, so every render
+         mode the app already has — compare wipe, computed difference, rolling
+         window, grids — keeps working, unchanged, while it runs. -->
+    <section id="panel-play" class="panel hidden">
+      <h2>Play the date</h2>
+      <p><strong>The picture is on the globe</strong> — this tab animates the <em>date</em>, so
+        whatever you have on the globe right now is what plays. Set the view up in the
+        <em>Layers</em> tab, come back here, choose a span and press play: the date walks from
+        start to end and every dated layer follows it, exactly as if you were holding down the
+        <em>+1d</em> button.</p>
+      <p>Which means the comparison and the aggregate come along for free. Play with a
+        <em>side-by-side</em> comparison on and you get a wipe of a moving present against a
+        pinned past; play in <em>computed difference</em> and you animate the anomaly rather than
+        the field; play with a <em>30-day window</em> and you get a running mean instead of daily
+        weather noise. Nothing here overrides those — it just moves the date underneath them.</p>
+
+      <p class="hint" id="pb-empty">Nothing on the globe follows the date yet, so there is nothing
+        to play. Switch a dated layer on in the <em>Layers</em> tab first — <em>surface
+        temperature</em> or <em>sea ice</em> are good ones to watch — and its frames will show up
+        here.</p>
+
+      <div class="control-row">
+        <label for="pb-start">Start</label>
+        <input type="date" id="pb-start" />
+      </div>
+      <div class="control-row">
+        <label for="pb-end">End</label>
+        <input type="date" id="pb-end" />
+      </div>
+      <!-- Presets, because typing two dates to see the obvious span is friction.
+           "The whole record" is the union of what the active layers actually
+           serve, not a hard-coded year. -->
+      <div class="control-row" id="pb-presets">
+        <button class="td-btn" data-range="12m" title="the year up to the current date">last 12 months</button>
+        <button class="td-btn" data-range="5y" title="the five years up to the current date">last 5 years</button>
+        <button class="td-btn" data-range="all" title="everything the active layers serve">the whole record</button>
+      </div>
+      <div class="control-row">
+        <label for="pb-step">Step</label>
+        <select id="pb-step">
+          <option value="auto" selected>auto &mdash; the layer's own cadence</option>
+          <option value="1d">day</option>
+          <option value="5d">5 days</option>
+          <option value="1mo">month</option>
+          <option value="1y">year</option>
+        </select>
+      </div>
+      <div class="control-row">
+        <label for="pb-speed">Speed</label>
+        <select id="pb-speed">
+          <option value="0.5">0.5 frames/s</option>
+          <option value="1">1 frame/s</option>
+          <option value="2" selected>2 frames/s</option>
+          <option value="4">4 frames/s</option>
+          <option value="8">8 frames/s</option>
+        </select>
+        <label class="check-inline" for="pb-loop"><input type="checkbox" id="pb-loop" /> loop</label>
+      </div>
+      <div class="control-row" id="pb-transport">
+        <button id="pb-first" class="td-btn" title="jump to the first frame">&#9198;</button>
+        <button id="pb-play" class="td-btn" title="play / pause">&#9654;</button>
+        <button id="pb-last" class="td-btn" title="jump to the last frame">&#9197;</button>
+      </div>
+      <input type="range" id="pb-scrub" min="0" max="0" step="1" value="0"
+             title="scrub through the frames" aria-label="frame" />
+      <!-- Filled per frame: the frame index, the date on screen, and the time
+           each layer actually served for it (which is not always the date we
+           asked for — a clamped archive says so here, every frame). -->
+      <div id="pb-readout">&ndash;</div>
+      <p class="hint" id="pb-status">Choose a start and an end date &mdash; or one of the presets
+        &mdash; and press &#9654;. What the step resolved to, and how fast the frames are really
+        arriving, is reported here while it plays.</p>
+
+      <details class="hint-details" id="pb-fine-print">
+        <summary class="hint">What step, speed and range really do (the fine print)</summary>
+        <p class="hint"><strong>The step follows the data, not the calendar.</strong> On
+          <em>auto</em> it takes the finest cadence among the layers you have on &mdash; a day for
+          daily products, five days for the 5-day sea-surface-height epochs, a month for the
+          monthly ones, a year for the annual ones. A monthly product has nothing new to show on
+          the 2nd of the month, so stepping it a day at a time would mean thirty identical
+          pictures and thirty identical requests to NASA. Frames that would look the same are
+          dropped; you can still force a step by hand.</p>
+        <p class="hint"><strong>The requested speed is a speed limit, not a promise.</strong>
+          Frames are satellite tiles arriving over the network from NASA, and the player waits for
+          the picture to be on screen before advancing &mdash; so asking for 8 frames/s on a slow
+          link gets you whatever the link gives. The status line above says which of the two is
+          binding, because a player that claimed 8 while showing 1.4 would be lying about the
+          thing you are looking at.</p>
+        <p class="hint"><strong>A long range coarsens the step; it never shortens the range.</strong>
+          Thirty years at one day is twelve thousand frames, which is neither watchable nor polite
+          to a public NASA service. Past a few hundred frames the step widens a notch &mdash; day
+          to 5 days, 5 days to a month &mdash; and the panel says so. The span you asked for is
+          always the span you get; only its resolution gives way.</p>
+        <p class="hint">Not offered, deliberately: saving the animation as a GIF or a video. What
+          you are watching is the live globe, with everything that implies &mdash; you can still
+          spin it, click a pixel and read its value mid-play.</p>
+      </details>
+    </section>
+
     <section id="panel-catalog" class="panel hidden">
       <input type="search" id="catalog-search" placeholder="Search 249 datasets…" />
       <div class="control-row filters">
@@ -766,7 +868,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">30c8b21b</code></p>
+      <p class="build-line">Build <code id="build-id">5df3d856</code></p>
     </section>
 
     <footer>
@@ -811,6 +913,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=30c8b21b"></script>
+  <script src="src/app.js?v=5df3d856"></script>
 </body>
 </html>

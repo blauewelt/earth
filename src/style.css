@@ -51,7 +51,9 @@ html, body {
 }
 .tag-link:hover { text-decoration-style: solid; }
 
-nav { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+/* Nine labels do not fit one row of a 320 px sidebar, so the row wraps to two
+   rather than overflowing — a second row beats a tab you cannot reach. */
+nav { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--border); }
 /* Tabs size to their labels rather than sharing the width equally: with six of
    them in a 320 px sidebar, an equal split wrapped "Sea level" onto two lines. */
 .tab {
@@ -628,3 +630,41 @@ footer a { color: var(--fg-dim); }
   background: linear-gradient(to right, #f22 0%, #f2bf26 45%, #8fb0d0 60%, #388ff2 100%);
 }
 .glacier-scale-labels { display: flex; justify-content: space-between; font-size: 9px; color: var(--fg-dim); margin-top: 2px; }
+
+/* ---- Play tab (E-041): the transport for the date clock. Everything here is
+ * either a primitive that already exists (.control-row, .td-btn, .hint) or one
+ * of the four things the panel needs that no primitive covers: a left column
+ * the four rows can line up on, a full-width scrub, a transport row whose
+ * three buttons are the same size, and a readout with room for two lines. */
+#panel-play .control-row > label:first-child { flex: 0 0 44px; }
+#pb-step, #pb-speed {
+  flex: 1; min-width: 0; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; font-size: 12.5px;
+}
+/* three prose labels in a 320 px sidebar: smaller face, equal shares, no wrap */
+#pb-presets { gap: 4px; margin-top: -2px; }
+#pb-presets .td-btn { flex: 1 1 0; padding: 4px 2px; font-size: 11px; white-space: nowrap; }
+/* ⏮ ▶ ⏭ read as one control, so they share the row evenly and sit taller than
+ * an ordinary button — this is the thing a finger aims at. */
+#pb-transport { gap: 6px; margin-top: 2px; }
+#pb-transport .td-btn { flex: 1; padding: 5px 0; font-size: 16px; line-height: 1.2; }
+#pb-transport .td-btn.playing { border-color: var(--accent); color: var(--accent); }
+/* the scrub is the frame axis: it spans the panel, not a label's leftovers */
+#pb-scrub { display: block; width: 100%; margin: 8px 0 2px; accent-color: var(--accent); }
+/* frame / date on line one, the per-layer provenance stamp on line two — sized
+ * for both so the box does not jump as the stamp appears and disappears */
+#pb-readout {
+  min-height: 54px; padding: 7px 10px; margin: 4px 0 2px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 7px;
+  font-size: 12.5px; line-height: 1.45; color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+#pb-readout .pb-when { color: var(--fg-dim); font-size: 11px; display: block; margin-top: 2px; }
+#pb-readout .pb-frame { color: var(--fg-dim); }
+/* The playback read-out that rides in the chip row. It is not a layer — no ×,
+ * nothing to click — so it takes the right-hand padding the missing close
+ * button would have provided, and wears the accent so it reads as a state the
+ * app is IN rather than one more thing that is switched on. */
+.chip-play { border-color: var(--accent); }
+.chip-play .chip-label { padding-right: 18px; color: var(--accent); cursor: default; }
+.chip-play .chip-label:hover { color: var(--accent); }

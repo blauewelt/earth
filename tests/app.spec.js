@@ -858,6 +858,11 @@ test("a half-typed year does not fight the typist", async ({ page }) => {
 });
 
 test("both date steppers obey the same calendar rules and the same bounds", async ({ page }) => {
+  // Six real clicks, each rebuilding the comparison's imagery on a software-GL
+  // stack: this ran at ~84 s of the 90 s default before E-041, and holding the
+  // old frame until the new one paints (retireLayer) costs the few seconds that
+  // pushed it over. What is under test here is calendar arithmetic, not speed.
+  test.setTimeout(150000);
   // One stepper function serves both rows; these are the cases where naive
   // arithmetic differs from the calendar, plus the clamps that keep the
   // comparison on the axis the UI actually offers.
@@ -3912,3 +3917,211 @@ test("installed-app update check: a newer served build offers a one-tap reload",
   expect(same).toBe(true);
 });
 
+
+/* ------------------------------------------------------------ E-041 playback
+ * Playback is a clock that drives state.date, so most of what it does is
+ * already covered by the single-date tests. What is NEW and worth pinning is
+ * the arithmetic that decides WHICH dates are frames, and the retirement queue
+ * that stops the globe blinking through base map between them. */
+
+// Switch every layer off, then exactly the ones a playback test is about — a
+// frame list is a function of the layers on, so a stray default layer would
+// silently set the cadence.
+async function onlyLayers(page, ids) {
+  await page.evaluate((ids) => {
+    for (const box of document.querySelectorAll("#layer-list input[data-id]")) {
+      const want = ids.includes(box.dataset.id);
+      if (box.checked !== want) {
+        box.checked = want;
+        box.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+  }, ids);
+}
+
+test("playback frames follow the layer's cadence, not the calendar's", async ({ page }) => {
+  await onlyLayers(page, ["ndvi"]);
+  const r = await page.evaluate(() => {
+    const E = window.__earth;
+    return {
+      daily: E.playbackFrames("2023-01-01", "2023-03-31", "1d"),
+      auto: E.playbackFrames("2023-01-01", "2023-03-31", "auto"),
+    };
+  });
+  // Ninety calendar days over a MONTHLY product are ninety identical requests
+  // and ninety identical pictures. The signature dedupe collapses them to the
+  // three months the data actually has — whichever step you ask for.
+  expect(r.daily.frames.length).toBe(3);
+  expect(r.daily.frames[0]).toBe("2023-01-01");
+  expect(r.auto.step).toBe("1mo");                 // auto reads the layer, not the range
+  expect(r.auto.frames).toEqual(r.daily.frames);
+
+  // And with a DAILY layer on beside it, auto goes to the finest cadence: the
+  // monthly layer repeating for thirty frames is the price of seeing SST move.
+  await onlyLayers(page, ["ndvi", "sst"]);
+  const mixed = await page.evaluate(() =>
+    window.__earth.playbackFrames("2023-01-01", "2023-01-31", "auto"));
+  expect(mixed.step).toBe("1d");
+  expect(mixed.frames.length).toBe(31);
+});
+
+test("a closed archive's dead zone is one frame, not four hundred", async ({ page }) => {
+  // GRACE's tiles end in 2022-07: every date after that resolves to the same
+  // last-served map. Playing 2023→2026 must therefore be ONE frame — the
+  // picture never changes, and four hundred identical frames would be four
+  // hundred identical tile requests to a public NASA service.
+  await onlyLayers(page, ["grace"]);
+  const r = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "grace");
+    return {
+      monthly: E.playbackFrames("2023-01-01", "2026-01-01", "1mo"),
+      daily: E.playbackFrames("2023-01-01", "2026-01-01", "1d"),
+      resolved: E.gibsTime(cfg, "2025-06-15"),
+      endTime: cfg.endTime,
+    };
+  });
+  expect(r.monthly.frames.length).toBe(1);
+  expect(r.daily.frames.length).toBe(1);           // 1,096 candidates, one picture
+  expect(r.resolved <= r.endTime).toBe(true);      // and it is the archive's last map
+});
+
+test("over the frame cap, playback coarsens the step and keeps the whole span", async ({ page }) => {
+  await onlyLayers(page, ["sst"]);
+  const r = await page.evaluate(() => {
+    const E = window.__earth;
+    const end = E.state.date;
+    const out = E.playbackFrames("2002-06-01", end, "1d");
+    return { ...out, end, cap: E.PLAY_MAX_FRAMES };
+  });
+  // Twenty-four years of daily SST is ~8,800 frames. The cap coarsens the step
+  // until it fits and SAYS SO; what it must never do is truncate the range,
+  // which would show 2002-2003 while claiming to show 2002-today.
+  expect(r.frames.length).toBeLessThanOrEqual(r.cap);
+  expect(r.step).not.toBe("1d");
+  expect(r.frames[0]).toBe("2002-06-01");
+  expect(r.frames[r.frames.length - 1]).toBe(r.end);
+  expect(r.note).toContain("1 day");
+  expect(r.note).toContain(r.step === "1mo" ? "1 month" : r.step);
+});
+
+test("the date stepper holds the old frame until the new one is painted", async ({ page }) => {
+  await onlyLayers(page, ["sst"]);
+  // Read the whole outcome inside the SAME evaluate as the click: the sweep is
+  // scheduled asynchronously, so a click→assert round trip would be timing the
+  // clean-up rather than the hold.
+  const held = await page.evaluate(() => {
+    const E = window.__earth;
+    const before = E.state.layers.sst.layer;
+    document.querySelector('#date-steps button[data-step="-1d"]').click();
+    const after = E.state.layers.sst.layer;
+    const L = E.viewer.imageryLayers;
+    return {
+      replaced: before !== after,
+      alive: !before.isDestroyed(),
+      onGlobe: L.indexOf(before) >= 0,
+      shown: before.show,
+      queued: E.retiring.some((r) => r.layer === before),
+      newOnTop: L.indexOf(after) > L.indexOf(before),
+    };
+  });
+  expect(held.replaced).toBe(true);
+  expect(held.alive).toBe(true);       // the old imagery still exists…
+  expect(held.onGlobe).toBe(true);     // …is still on the globe…
+  expect(held.shown).toBe(true);       // …and still painting the last date
+  expect(held.queued).toBe(true);
+  expect(held.newOnTop).toBe(true);    // the new date covers it as tiles arrive
+
+  // …and it does not stay: once the globe reports its tile queue empty (or the
+  // sweep's own ceiling passes) the held layer is destroyed, so a long scrub
+  // cannot stack live imagery layers.
+  await expect
+    .poll(() => page.evaluate(() => window.__earth.retiring.length), { timeout: 20000 })
+    .toBe(0);
+});
+
+test("stopping playback hands the picture back to the single-date path", async ({ page }) => {
+  await onlyLayers(page, ["sst"]);
+  await page.evaluate(() => {
+    const E = window.__earth;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    E.playback.start = "2015-01-01"; E.playback.end = "2015-06-01"; E.playback.step = "1mo";
+    set("pb-start", "2015-01-01"); set("pb-end", "2015-06-01"); set("pb-step", "1mo");
+    E.playback.fps = 8;                       // a speed limit, not a promise
+    E.playbackRebuild();
+    E.playbackPlay();
+  });
+  // The playhead advances on its own…
+  await expect
+    .poll(() => page.evaluate(() => window.__earth.playback.i), { timeout: 60000 })
+    .toBeGreaterThan(0);
+
+  const after = await page.evaluate(() => {
+    const E = window.__earth;
+    E.playbackStop();
+    return {
+      playing: E.playback.playing,
+      retiring: E.retiring.length,
+      date: E.state.date,
+      frame: E.playback.frames[E.playback.i],
+      input: document.getElementById("layer-date").value,
+      bound: E.playback.bound,
+    };
+  });
+  expect(after.playing).toBe(false);
+  expect(after.retiring).toBe(0);        // nothing held over from a frame we left
+  expect(after.date).toBe(after.frame);  // stopped ON the frame, not back at today
+  expect(after.input).toBe(after.frame); // and the date selector says so
+  expect(after.bound).toBe(null);
+});
+
+test("the Play tab drives the date, and says so when there is nothing to play", async ({ page }) => {
+  await onlyLayers(page, ["sst"]);
+  await page.click("#tab-play");
+  const open = await page.evaluate(() => {
+    const t = (id) => document.getElementById(id);
+    return { shown: !t("panel-play").classList.contains("hidden"),
+             start: t("pb-start").value, end: t("pb-end").value,
+             date: window.__earth.state.date,
+             status: t("pb-status").textContent,
+             readout: t("pb-readout").textContent,
+             empty: t("pb-empty").classList.contains("hidden") };
+  });
+  expect(open.shown).toBe(true);
+  // Opens on the twelve months ending where the globe already is — the panel is
+  // a control room for the date on screen, not a separate place with its own.
+  expect(open.end).toBe(open.date);
+  expect(open.start).toBe(`${Number(open.end.slice(0, 4)) - 1}${open.end.slice(4)}`);
+  expect(open.status).toContain("1 day");            // auto read daily SST's cadence
+  expect(open.empty).toBe(true);
+  // The read-out carries the frame AND the time the layer actually served for
+  // it, through the same helper as the pixel card — a clamped archive has to
+  // say so on every frame, not only when its toast fires.
+  expect(open.readout).toContain("frame");
+  expect(open.readout).toMatch(/\d{4}-\d\d-\d\d/);
+  expect(open.readout).toContain("Sea surface temperature");
+
+  // Transport moves the app's own date: playback IS the date selector, wound on.
+  const last = await page.evaluate(async () => {
+    document.getElementById("pb-last").click();
+    await new Promise((r) => setTimeout(r, 400));
+    return { date: window.__earth.state.date,
+             input: document.getElementById("layer-date").value,
+             frame: window.__earth.playback.frames.at(-1) };
+  });
+  expect(last.date).toBe(last.frame);
+  expect(last.input).toBe(last.frame);
+
+  // Nothing dated on the globe = nothing to play, and the panel says which tab
+  // to fix that in rather than offering a dead ▶.
+  const none = await page.evaluate(async () => {
+    for (const box of document.querySelectorAll("#layer-list input[data-id]")) {
+      if (box.checked) { box.checked = false; box.dispatchEvent(new Event("change", { bubbles: true })); }
+    }
+    await new Promise((r) => setTimeout(r, 200));
+    return { empty: document.getElementById("pb-empty").classList.contains("hidden"),
+             disabled: document.getElementById("pb-play").disabled };
+  });
+  expect(none.empty).toBe(false);
+  expect(none.disabled).toBe(true);
+});

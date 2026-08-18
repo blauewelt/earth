@@ -909,13 +909,28 @@ function whenStamp(w) {
   return w ? `<span class="px-when">${whenLabel(w)}</span>` : "";
 }
 
-function gibsProvider(cfg, dateStr) {
-  const time = gibsTime(cfg, dateStr);
-  const url = GIBS_URL
+/* The ONE place a GIBS tile URL is built. Cesium wants the template with
+ * {TileMatrix}/{TileRow}/{TileCol} left in; playback's prefetch wants the same
+ * string with a specific tile filled in. Two copies of this would be two
+ * chances to warm a URL the tile requests never ask for — a prefetch that
+ * misses is invisible, it just quietly does nothing. */
+function gibsUrlTemplate(cfg, dateStr) {
+  return GIBS_URL
     .replace("{layer}", cfg.layer)
-    .replace("{time}", time)
+    .replace("{time}", gibsTime(cfg, dateStr))
     .replace("{tms}", cfg.tms)
     .replace("{ext}", cfg.ext);
+}
+
+function gibsTileUrl(cfg, dateStr, level, row, col) {
+  return gibsUrlTemplate(cfg, dateStr)
+    .replace("{TileMatrix}", String(level))
+    .replace("{TileRow}", String(row))
+    .replace("{TileCol}", String(col));
+}
+
+function gibsProvider(cfg, dateStr) {
+  const url = gibsUrlTemplate(cfg, dateStr);
   return new Cesium.WebMapTileServiceImageryProvider({
     url,
     layer: cfg.layer,
@@ -2348,11 +2363,16 @@ function gridMonths(g) {
   if (g.monthsAvailable) return g.monthsAvailable;   // index file: full archive list
   return g.months ? Object.keys(g.months).sort() : null;
 }
-function resolveGridMonth(g) {
+/* `dateStr` defaults to the date on screen, which is what every read-out and
+ * every provider wants. Playback needs the same question asked about a date
+ * that is NOT on screen yet — "what would this grid serve on 2015-03-04?" — to
+ * decide whether that candidate frame differs from its predecessor at all, so
+ * the date is a parameter rather than a global read. */
+function resolveGridMonth(g, dateStr = state.date) {
   const ms = gridMonths(g);
   if (!ms) return null;
   // keyLen 7 = month-keyed (GLORYS); keyLen 10 = day-keyed (GFS forecast)
-  const want = state.date.slice(0, g.keyLen || 7);
+  const want = dateStr.slice(0, g.keyLen || 7);
   let best = ms[0];                       // dates before the range clamp up
   for (const m of ms) {
     if (m <= want) best = m;              // floor; dates after the range clamp down
@@ -2397,10 +2417,19 @@ function sampleGrid(g, lonDeg, latDeg) {
 }
 
 const gridCache = new Map();
+/* The resolved grids, readable WITHOUT awaiting. `loadGrid` is a promise cache
+ * and every renderer is happy to await it; frame enumeration is not — it runs
+ * synchronously from the panel and from tests, and a grid that has not arrived
+ * yet must cost it nothing. So a resolved grid is also parked here, and the
+ * enumerator simply omits any grid it cannot see (a signature missing a part is
+ * COARSER — it can merge two frames that differ — never wrong about a date). */
+const gridsLoaded = new Map();
 function loadGrid(cfg) {
   if (!gridCache.has(cfg.id)) {
     gridCache.set(cfg.id, fetch(cfg.gridFile).then((r) => r.json())
-      .then(unpackGrid).catch(() => null));
+      .then(unpackGrid)
+      .then((g) => { if (g) gridsLoaded.set(cfg.id, g); return g; })
+      .catch(() => null));
   }
   return gridCache.get(cfg.id);
 }
@@ -2592,7 +2621,131 @@ function removeLayer(id) {
   updateLegends();
 }
 
-function refreshTimedLayers() {
+/* ------------------------------------------------------- the retirement queue
+ * `removeLayer` destroys the old ImageryLayer BEFORE the replacement has any
+ * tiles, so for the length of one network round trip the globe shows bare base
+ * map. On the date stepper you see it as a blink; at 2 fps of playback it is a
+ * strobe, and it makes correct data look broken.
+ *
+ * Cesium settles the fix for us. In GlobeSurfaceTileProvider the tile skeletons
+ * are created behind `layer.show && layer._createTileImagerySkeletons(...)`, so
+ * a layer that is still SHOWN keeps painting what it already has and costs
+ * nothing new, while the replacement — appended above it — requests its own
+ * tiles and covers it the moment they arrive. Holding the old frame is
+ * therefore a matter of postponing the destroy, not of rewriting `addLayer`:
+ * delta/split/aggregate/window/grid all keep working, untouched.
+ *
+ * The queue is BOUNDED at three. On a slow network a scrub could otherwise
+ * stack fifty live imagery layers, each still compositing, each holding its
+ * tile textures — which trades a blink for a memory leak and a fps cliff. When
+ * a fourth arrives the oldest is destroyed on the spot: at that depth it is
+ * certainly covered, and if it is not, one blink is the honest price. */
+const RETIRE_MAX = 3;
+const retiring = [];
+let lastRetireMs = 0;
+
+function destroyRetired(layer) {
+  try { viewer.imageryLayers.remove(layer, true); } catch { /* already gone */ }
+}
+
+function retireLayer(id) {
+  const entry = state.layers[id];
+  if (!entry) return;
+  /* One held generation PER LAYER. Holding two old generations of the same
+   * layer buys nothing — the newer one already covers the older, so the older
+   * can only cost tile memory and compositing time — and a fast scrub is
+   * exactly where that cost lands. */
+  for (let k = retiring.length - 1; k >= 0; k--) {
+    if (retiring[k].id === id) destroyRetired(retiring.splice(k, 1)[0].layer);
+  }
+  if (entry.layer) retiring.push({ id, layer: entry.layer });
+  if (entry.cmpLayer) retiring.push({ id, layer: entry.cmpLayer });
+  lastRetireMs = Date.now();
+  // Over the bound, destroy from the FRONT — the oldest held frame is the one
+  // most likely to be hidden under everything added since.
+  while (retiring.length > RETIRE_MAX) destroyRetired(retiring.shift().layer);
+  entry.layer = null;
+  entry.cmpLayer = null;
+  entry.isDelta = false;
+  entry.isRatio = false;
+  entry.isAggregate = false;
+  entry.suppressed = false;
+  updateLegends();
+}
+
+function sweepRetired() {
+  while (retiring.length) destroyRetired(retiring.shift().layer);
+}
+
+/* "The new frame is on screen" is not a thing Cesium tells us directly; the
+ * closest true statement is "the globe's tile queue is empty". Two subtleties
+ * decide whether reading it means anything:
+ *
+ *  - A GRACE PERIOD is mandatory. Immediately after `addLayer` the queue is
+ *    still empty because the new layer has not been asked for anything yet, so
+ *    an unguarded read says "settled" about the frame we just replaced and we
+ *    would destroy the old layer before the new one requested a single tile —
+ *    exactly the blink this whole mechanism exists to remove.
+ *  - It must POLL as well as listen. `tileLoadProgressEvent` fires on CHANGE,
+ *    so a frame that needs no new tiles at all (a grid-only layer set, a
+ *    suppressed layer, a repeat of a cached date) never fires it, and a
+ *    listener alone would wait for an event that is never coming.
+ *
+ * Resolves "settled" or "ceiling", and cleans up on both paths — a leaked tile
+ * listener per frame would be a slow poisoning of the render loop. */
+const PLAY_SETTLE_GRACE_MS = 180;
+const PLAY_SWEEP_MAX_MS = 10000;
+
+function waitTilesSettled(maxMs) {
+  return new Promise((resolve) => {
+    const globe = viewer.scene.globe;
+    let off = null, poll = null, graceT = null, done = false;
+    const finish = (why) => {
+      if (done) return;
+      done = true;
+      if (off) off();
+      if (poll) clearInterval(poll);
+      clearTimeout(graceT);
+      clearTimeout(capT);
+      resolve(why);
+    };
+    const capT = setTimeout(() => finish("ceiling"), maxMs);
+    graceT = setTimeout(() => {
+      if (done) return;
+      off = globe.tileLoadProgressEvent.addEventListener((n) => { if (n === 0) finish("settled"); });
+      poll = setInterval(() => { if (globe.tilesLoaded) finish("settled"); }, 120);
+      if (globe.tilesLoaded) finish("settled");
+    }, PLAY_SETTLE_GRACE_MS);
+  });
+}
+
+// One sweep in flight at a time. The cap matters: a layer set that requests no
+// tiles (everything suppressed by the aggregation window) would otherwise hold
+// its retired predecessors on screen forever, which reads as the window having
+// done nothing.
+let sweepPending = false;
+function scheduleSweep() {
+  if (sweepPending) return;
+  sweepPending = true;
+  waitTilesSettled(PLAY_SWEEP_MAX_MS).then(() => { sweepPending = false; sweepRetired(); });
+}
+
+/* The fast path: the globe reporting an empty queue is the earliest honest
+ * moment to drop the held frame. Guarded by the same grace as above, because
+ * the queue is briefly empty between retiring the old layer and the new one
+ * enqueueing its first request. */
+viewer.scene.globe.tileLoadProgressEvent.addEventListener((remaining) => {
+  if (remaining === 0 && retiring.length && Date.now() - lastRetireMs > PLAY_SETTLE_GRACE_MS) {
+    sweepRetired();
+  }
+});
+
+/* `hold: true` builds the new layer ON TOP of the old one and leaves the old
+ * one painting until the replacement has covered it (see the retirement queue
+ * above). Every date-driven call site passes it; the plain form is what the
+ * single-date path uses when it wants the picture to be exactly what state
+ * says it is — notably when playback stops. */
+function refreshTimedLayers({ hold = false } = {}) {
   // The date moved, so the normals may be for the wrong month now. Reload in
   // the background if the anomaly layer is on; the stamp check makes this a
   // no-op while the month is unchanged.
@@ -2602,7 +2755,7 @@ function refreshTimedLayers() {
   for (const [id, entry] of Object.entries(state.layers)) {
     if ((entry.layer || entry.suppressed) && entry.cfg.timed) {
       const cfg = entry.cfg;
-      removeLayer(id);
+      if (hold) retireLayer(id); else removeLayer(id);
       addLayer(cfg);
       // A date change can land in a hole as easily as an enable can — browsing
       // NDVI back through 2025 walks straight into a month GIBS never
@@ -2611,6 +2764,7 @@ function refreshTimedLayers() {
       maybeAnnualToast(cfg, { replace: true });
     }
   }
+  if (hold) scheduleSweep();
   updateSplitUI();
 }
 
@@ -2717,7 +2871,7 @@ document.getElementById("compare-select").addEventListener("change", (e) => {
     state.compareFixed = null;   // an offset TRACKS; a pin does not
   }
   syncCompareUi();
-  refreshTimedLayers();
+  refreshTimedLayers({ hold: true });
 });
 
 /* Typing a comparison date PINS it — the offset is abandoned, because the two
@@ -2744,7 +2898,7 @@ document.getElementById("compare-date").addEventListener("change", (e) => {
   // deliberately not touched — not even through syncCompareUi — which is the
   // whole of the fix and exactly what the Date field does.
   document.getElementById("compare-select").value = "custom";
-  refreshTimedLayers();
+  refreshTimedLayers({ hold: true });
 });
 
 /* The comparison's own steppers — the same calendar arithmetic as the Date
@@ -2760,13 +2914,13 @@ document.getElementById("compare-steps").addEventListener("click", (e) => {
   state.compareFixed = next;
   state.compareYears = 0;
   syncCompareUi();
-  refreshTimedLayers();
+  refreshTimedLayers({ hold: true });
 });
 
 document.getElementById("compare-mode").addEventListener("change", (e) => {
   state.compareMode = e.target.value;
   updateDeltaHint();
-  refreshTimedLayers();
+  refreshTimedLayers({ hold: true });
 });
 
 // Aggregation window slider (1..730 days) — orthogonal to the display mode.
@@ -2780,7 +2934,7 @@ windowSlider.addEventListener("change", () => {
   state.windowDays = Number(windowSlider.value);
   syncWindowLabel();
   markWindowPreset();
-  refreshTimedLayers();
+  refreshTimedLayers({ hold: true });
   if (sstEnsembleLayer) updateEnsembleLayer();
 });
 
@@ -3032,7 +3186,23 @@ function updateActiveChips() {
   if (!host) return;
   const chips = activeLayerChips();
   host.innerHTML = "";
-  host.classList.toggle("hidden", chips.length === 0);
+  host.classList.toggle("hidden", chips.length === 0 && !playback.playing);
+
+  /* While playback runs, the date goes ON THE GLOBE. The picture is 55% of a
+   * phone's screen and the Play panel is a scroll and a tab away, so a viewer
+   * watching the animation would otherwise have no way to tell WHICH date is on
+   * screen without looking away from it. Not a layer, so no × and no reveal —
+   * it is a read-out that happens to live in the chip row. */
+  if (playback.playing && playback.frames.length) {
+    const el = document.createElement("div");
+    el.className = "chip chip-play";
+    const label = document.createElement("span");
+    label.className = "chip-label";
+    label.textContent = `▶ ${playback.frames[playback.i]}`;
+    label.title = `Playback: frame ${playback.i + 1} of ${playback.frames.length}`;
+    el.appendChild(label);
+    host.appendChild(el);
+  }
 
   for (const c of chips) {
     const el = document.createElement("div");
@@ -3070,7 +3240,7 @@ function updateActiveChips() {
   const container = document.getElementById("cesiumContainer");
   if (container) {
     container.style.setProperty(
-      "--chips-h", chips.length ? `${host.offsetHeight + 8}px` : "0px");
+      "--chips-h", host.childElementCount ? `${host.offsetHeight + 8}px` : "0px");
   }
 }
 
@@ -4028,7 +4198,7 @@ function buildLayerPanel() {
     if (!dateInput.value) return;
     state.date = dateInput.value;
     syncCompareUi();          // an OFFSET comparison moved with it
-    refreshTimedLayers();
+    refreshTimedLayers({ hold: true });
     refreshYearlyLayers();
     refreshMonthlyGrids();
     if (sstEnsembleLayer) updateEnsembleLayer();
@@ -4045,7 +4215,7 @@ function buildLayerPanel() {
     state.date = next;
     dateInput.value = next;
     syncCompareUi();          // an OFFSET comparison moved with it
-    refreshTimedLayers();
+    refreshTimedLayers({ hold: true });
     refreshYearlyLayers();
     refreshMonthlyGrids();
     if (sstEnsembleLayer) updateEnsembleLayer();
@@ -4065,15 +4235,18 @@ function buildLayerPanel() {
     if (date !== state.date) {
       state.date = date;
       dateInput.value = date;
-      refreshTimedLayers();          // date change affects every timed layer
+      refreshTimedLayers({ hold: true });   // date change affects every timed layer
       refreshMonthlyGrids();         // crossing midnight can cross a month
     } else {
       // Same date, new half-hour: only sub-daily layers see a different TIME,
       // so don't churn (refetch) the daily/monthly layers on every step.
       for (const [id, entry] of Object.entries(state.layers)) {
         if (entry.cfg.subDaily && (entry.layer || entry.suppressed)) {
-          removeLayer(id);
+          // Held, like every other date move: a half-hour step is the fastest
+          // stepper in the app and blinked the hardest.
+          retireLayer(id);
           addLayer(entry.cfg);
+          scheduleSweep();
         }
       }
     }
@@ -7917,22 +8090,603 @@ setInterval(() => {
 }, 900000);
 setTimeout(checkForNewBuild, 10000);
 
+/* ==================================================================== playback
+ * E-041. The one design decision that makes the rest of this small: PLAYBACK IS
+ * A CLOCK THAT DRIVES state.date. It is not a rendering mode. Everything on
+ * this globe already keys off that one string — GIBS tile times, month- and
+ * day-keyed grids, the comparison, the rolling window, the legends, the probe —
+ * so a player that sets the date and lets the ordinary machinery repaint
+ * inherits all of it, correctly, and cannot drift from the single-date path the
+ * way a bespoke animation renderer would. Press play with split compare on and
+ * you get a wipe of moving present against pinned past; press play in delta
+ * mode and you animate the anomaly; press play on a grid layer and it runs with
+ * no tile traffic at all. None of that is code below. */
+
+const PLAY_MAX_FRAMES = 500;
+// Coarsest-last, because that is the direction the cap walks.
+const PLAY_STEPS = ["1d", "5d", "1mo", "1y"];
+const PLAY_STEP_LABEL = { "1d": "1 day", "5d": "5 days", "1mo": "1 month", "1y": "1 year" };
+// A late frame beats a stuck player: past this, advance whatever the network is
+// doing. Without it one unanswered tile request stops the animation dead and
+// the app looks broken rather than slow.
+const PLAY_FRAME_CEILING_MS = 8000;
+// Politeness (plan §5). The prefetch only ever warms tiles ALREADY IN VIEW, and
+// even those are capped: this feature is the first thing in the app that can
+// issue thousands of requests to a public NASA service from one click.
+const PLAY_PREFETCH_MAX = 60;
+
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* The layers a frame actually shows something for. Two kinds qualify and the
+ * distinction matters everywhere below: `timed` GIBS rasters (the date is a
+ * tile URL) and month/day-keyed grids (the date is a key into a baked file).
+ * Everything else — climatologies, night lights, the point layers — is
+ * date-independent, so it neither sets the cadence nor changes between frames. */
+function playbackLayers() {
+  return Object.values(state.layers).filter(
+    (e) => (e.layer || e.suppressed) && (e.cfg.timed || e.cfg.monthlyGrid));
+}
+
+// Stable identity of the CURRENT layer set, so a toggle mid-play is detectable
+// without diffing objects (plan §4: the frame list is only valid for the layers
+// it was enumerated from).
+function playbackLayerKey() {
+  return playbackLayers().map((e) => e.cfg.id).sort().join(",");
+}
+
+/* A layer's own cadence. Asking for finer than this produces byte-identical
+ * requests; asking for coarser throws away frames the product actually has. */
+function playbackStepOf(cfg) {
+  if (cfg.annual) return "1y";
+  if (cfg.monthly) return "1mo";
+  if (cfg.snap5d) return "5d";
+  if (cfg.monthlyGrid) {
+    // keyLen 10 = day-keyed (the GFS forecast grids); anything else is monthly.
+    const g = gridsLoaded.get(cfg.id);
+    if (cfg.forecastGrid || g?.keyLen === 10) return "1d";
+    return "1mo";
+  }
+  return "1d";                          // sub-daily and daily rasters alike
+}
+
+/* "auto" = the FINEST cadence among the layers on. Stepping a calendar day at a
+ * time over a monthly product produces thirty identical frames and thirty
+ * identical tile requests; stepping a month at a time over daily SST throws
+ * away twenty-nine days of the thing you came to watch. The finest cadence is
+ * the only choice that does neither, and the dedupe below removes what it
+ * over-produces for the coarser layers in the same stack. */
+function playbackAutoStep(layers) {
+  let best = null;
+  for (const e of layers) {
+    const s = playbackStepOf(e.cfg);
+    if (best === null || PLAY_STEPS.indexOf(s) < PLAY_STEPS.indexOf(best)) best = s;
+  }
+  return best || "1d";
+}
+
+// The walk, through the app's own calendar arithmetic — so playback lands on
+// Feb 28 stepping a month from Jan 31 for exactly the same reason the date
+// stepper does, rather than for a second reason written here.
+function playAdvance(dateStr, step) {
+  if (step === "1mo") return stepCalendar(dateStr, "+1m");
+  if (step === "1y") return stepCalendar(dateStr, "+1y");
+  let d = dateStr;
+  const n = step === "5d" ? 5 : 1;
+  for (let k = 0; k < n; k++) d = stepCalendar(d, "+1d");
+  return d;
+}
+
+/* THE SIGNATURE: what the active layers would actually REQUEST for a candidate
+ * date. This is the whole of the frame list's intelligence, and it is worth
+ * more than it looks. It collapses the thirty identical days of a monthly
+ * product to one frame; it collapses a scrub through a closed archive's dead
+ * zone (GRACE ends 2022-07, CERES 2018-10, SSH 2019-01) from four hundred
+ * identical frames to ONE; and it is the reason this feature cannot hammer GIBS
+ * for tiles it already has.
+ *
+ * A grid whose file has not arrived yet contributes NOTHING rather than
+ * blocking. That is deliberate and it is safe in one direction only: a missing
+ * part can merge two frames that would have differed (you see fewer frames than
+ * the data holds), and it can never invent a frame or move one to a wrong date.
+ * The list is re-enumerated whenever the layer set changes, which is also when
+ * a newly loaded grid becomes visible to it. */
+function playbackSignature(dateStr, layers) {
+  const parts = [];
+  for (const e of layers) {
+    const cfg = e.cfg;
+    if (cfg.grid) {
+      const g = gridsLoaded.get(cfg.id);
+      if (g) parts.push(`${cfg.id}=${resolveGridMonth(g, dateStr)}`);
+    } else {
+      parts.push(`${cfg.id}=${gibsTime(cfg, dateStr)}`);
+    }
+  }
+  return parts.join("|");
+}
+
+function playbackEnumerate(start, end, step, layers) {
+  const out = [];
+  let prev = null;
+  let d = start;
+  for (let guard = 0; guard < 200000; guard++) {
+    const sig = playbackSignature(d, layers);
+    if (sig !== prev) { out.push(d); prev = sig; }
+    if (d >= end) break;
+    const next = playAdvance(d, step);
+    if (next <= d) break;                       // paranoia: never loop forever
+    // The END of the range is always offered as a candidate, even when the walk
+    // would step over it. The range the user asked for is never truncated; the
+    // dedupe may still drop this candidate, and when it does that is the honest
+    // answer — the last step of the walk already shows what the end date shows.
+    d = next > end ? end : next;
+  }
+  return out;
+}
+
+/* frames for [start, end] at `step` ("auto" resolves against the layers on).
+ * Returns the resolved step and a NOTE explaining anything the caller did not
+ * ask for, because the two things a frame list can silently do to you are
+ * change your step and shorten your range. It does the first and says so; it
+ * never does the second. */
+function playbackFrames(startDate, endDate, step = "auto") {
+  const layers = playbackLayers();
+  let start = startDate, end = endDate;
+  if (start > end) { const t = start; start = end; end = t; }
+  const asked = step === "auto" ? playbackAutoStep(layers) : step;
+  let resolved = PLAY_STEPS.includes(asked) ? asked : "1d";
+  let frames = playbackEnumerate(start, end, resolved, layers);
+  const firstStep = resolved, firstCount = frames.length;
+
+  /* The cap COARSENS, never truncates. A cap that quietly dropped the tail of
+   * the range would be the same class of lie the rest of this app keeps writing
+   * tests against: you would ask for 1993–2026 and watch 1993–1994 without ever
+   * being told. Coarsening still shows the whole span, at a step the panel
+   * names. */
+  let i = PLAY_STEPS.indexOf(resolved);
+  while (frames.length > PLAY_MAX_FRAMES && i < PLAY_STEPS.length - 1) {
+    resolved = PLAY_STEPS[++i];
+    frames = playbackEnumerate(start, end, resolved, layers);
+  }
+
+  let note = "";
+  if (resolved !== firstStep) {
+    note = `${start.slice(0, 4)}–${end.slice(0, 4)} at ${PLAY_STEP_LABEL[firstStep]} ` +
+      `would be ${firstCount.toLocaleString("en-US")} frames; ` +
+      `showing ${frames.length.toLocaleString("en-US")} at ${PLAY_STEP_LABEL[resolved]}`;
+  }
+  return { frames, step: resolved, note };
+}
+
+/* ------------------------------------------------------------ the transport */
+
+const playback = {
+  frames: [], i: 0, playing: false, fps: 2, loop: false,
+  start: null, end: null, step: "auto",
+  // "fps" or "network": which of the two limits actually decided the last
+  // frame's duration. Requested fps is a SPEED LIMIT, not a promise, and a
+  // player that claimed 8 fps while showing 1.4 would be lying about the thing
+  // the user is staring at.
+  bound: null,
+  actualFps: null,
+  note: "",
+  layerKey: "",
+};
+
+let playToken = 0;                      // bumped to abandon an in-flight loop
+
+function playbackNearest(dateStr) {
+  if (!playback.frames.length) return 0;
+  let best = 0, bestD = Infinity;
+  for (let k = 0; k < playback.frames.length; k++) {
+    const d = Math.abs(Date.parse(playback.frames[k]) - Date.parse(dateStr));
+    if (d < bestD) { bestD = d; best = k; }
+  }
+  return best;
+}
+
+// Re-enumerate from the panel (or from whatever the last programmatic range
+// was), keeping the playhead on the same DATE rather than the same index — an
+// index means nothing across two different frame lists.
+function playbackRebuild() {
+  const at = playback.frames[playback.i] || state.date;
+  const startEl = document.getElementById("pb-start");
+  const endEl = document.getElementById("pb-end");
+  const stepEl = document.getElementById("pb-step");
+  playback.start = (startEl?.value) || playback.start || clampPlayDate(stepCalendar(state.date, "-1y"));
+  playback.end = (endEl?.value) || playback.end || clampPlayDate(state.date);
+  playback.step = (stepEl?.value) || playback.step || "auto";
+  const r = playbackFrames(playback.start, playback.end, playback.step);
+  playback.frames = r.frames;
+  playback.resolvedStep = r.step;
+  playback.note = r.note;
+  playback.layerKey = playbackLayerKey();
+  playback.i = Math.min(playbackNearest(at), Math.max(0, playback.frames.length - 1));
+}
+
+/* Show frame i. This is the ordinary date path, with `hold` — nothing about the
+ * picture is special, only the clock that set the date. */
+async function playbackShowFrame(i) {
+  if (!playback.frames.length) return;
+  playback.i = Math.max(0, Math.min(i, playback.frames.length - 1));
+  state.date = playback.frames[playback.i];
+  const input = document.getElementById("layer-date");
+  if (input) input.value = state.date;     // the single-date UI must not lie
+  syncCompareUi();                         // an OFFSET comparison moves with it
+  refreshTimedLayers({ hold: true });
+  await refreshMonthlyGrids();
+  await refreshYearlyLayers();
+  if (sstEnsembleLayer) updateEnsembleLayer();
+  playbackRender();
+}
+
+/* ------------------------------------------------------------------ read-out */
+
+/* The date on the read-out is the frame's RESOLVED PER-LAYER time, not the
+ * calendar date we asked for. gibsTime() clamps and snaps per layer, so a
+ * playback over 2023–2026 with GRACE on is really showing 2022-07 in every
+ * frame — and a player that printed the calendar date would be captioning a
+ * four-year-old picture with today's date, on every frame, silently. Same
+ * helper as the pixel card and the hover probe (whenOfLayer → whenLabel), so
+ * the three can never disagree. */
+function playbackStamps() {
+  const out = [];
+  for (const e of playbackLayers()) {
+    const g = e.cfg.grid ? gridsLoaded.get(e.cfg.id) : null;
+    const w = whenOfLayer(e.cfg, g);
+    if (w) out.push(`<span class="pb-when">${esc(e.cfg.title)} · ${whenLabel(w)}</span>`);
+  }
+  return out.join("");
+}
+
+function playbackRender() {
+  const readout = document.getElementById("pb-readout");
+  const status = document.getElementById("pb-status");
+  const scrub = document.getElementById("pb-scrub");
+  const playBtn = document.getElementById("pb-play");
+  const empty = document.getElementById("pb-empty");
+  const nLayers = playbackLayers().length;
+
+  if (empty) empty.classList.toggle("hidden", nLayers > 0);
+  if (playBtn) {
+    playBtn.disabled = nLayers === 0 || playback.frames.length < 2;
+    playBtn.textContent = playback.playing ? "⏸" : "▶";
+    playBtn.classList.toggle("playing", playback.playing);
+  }
+  if (scrub) {
+    scrub.min = "0";
+    scrub.max = String(Math.max(0, playback.frames.length - 1));
+    scrub.value = String(playback.i);
+    scrub.disabled = playback.frames.length < 2;
+  }
+  if (readout) {
+    if (!playback.frames.length) {
+      readout.innerHTML = `<div class="pb-frame">no frames</div>`;
+    } else {
+      readout.innerHTML =
+        `<div class="pb-frame">frame ${playback.i + 1} / ${playback.frames.length} ` +
+        `· ${playback.frames[playback.i]}</div>` +
+        playbackStamps();
+    }
+  }
+  if (status) {
+    const bits = [];
+    if (playback.frames.length) {
+      const auto = playback.step === "auto" ? " (auto — the finest cadence of the layers on)" : "";
+      bits.push(`step ${PLAY_STEP_LABEL[playback.resolvedStep] || playback.resolvedStep}${auto} ` +
+        `· ${playback.frames.length} frame${playback.frames.length === 1 ? "" : "s"}`);
+    }
+    if (playback.note) bits.push(playback.note);
+    if (playback.playing && playback.actualFps) {
+      bits.push(`running at ${playback.actualFps.toFixed(1)} fps — ` +
+        `${playback.bound === "fps" ? "at the requested speed" : "network-bound"}`);
+    }
+    status.textContent = bits.join(" · ");
+  }
+  // The globe carries the date too: on a phone the picture is 55% of the
+  // screen and the panel is a scroll away, so a chip beside the layer chips is
+  // where the date is actually readable while watching.
+  updateActiveChips();
+}
+
+/* ------------------------------------------------------------------ prefetch
+ * Best-effort, and the ONLY part of playback allowed to be. While frame i is on
+ * screen, warm the browser's HTTP cache for frame i+1 by fetching exactly the
+ * tiles currently in view, through the same URL builder the tile provider uses.
+ * Cesium is not involved and nothing breaks if this fails — when the frame
+ * arrives, its tiles either come from cache (requested-rate playback) or from
+ * the network (network-rate playback, which is what we had). */
+function playbackPrefetch(i) {
+  const d = playback.frames[i];
+  if (!d) return;
+  try {
+    const tiles = viewer.scene.globe._surface?._tilesToRender || [];
+    let n = 0;
+    for (const e of playbackLayers()) {
+      const cfg = e.cfg;
+      if (cfg.grid) {
+        // A keyed grid's "tiles" are one baked file per year; warm that instead.
+        const g = gridsLoaded.get(cfg.id);
+        if (g) { try { ensureGridMonth(cfg, g, resolveGridMonth(g, d)); } catch { /* best effort */ } }
+        continue;
+      }
+      if (!cfg.timed) continue;
+      for (const t of tiles) {
+        if (n >= PLAY_PREFETCH_MAX) return;
+        n++;
+        try {
+          fetch(gibsTileUrl(cfg, d, t.level, t.y, t.x), { mode: "no-cors" }).catch(() => {});
+        } catch { /* best effort, always */ }
+      }
+    }
+  } catch { /* best effort, always */ }
+}
+
+/* ------------------------------------------------------------------ the loop
+ * The playhead advances when the frame is ON SCREEN, not when a timer says so:
+ *
+ *     show frame i  →  wait for max(1/fps, tile queue empty)  →  i++
+ *
+ * setTimeout and promises, deliberately not requestAnimationFrame: these frames
+ * are seconds apart, not 16 ms, and a rAF loop would spin sixty times for every
+ * one of them. */
+async function playbackRun(token) {
+  while (playback.playing && token === playToken) {
+    const t0 = performance.now();
+    await playbackShowFrame(playback.i);
+    if (!playback.playing || token !== playToken) return;
+    playbackPrefetch(playback.i + 1);
+
+    const why = await waitTilesSettled(PLAY_FRAME_CEILING_MS);
+    if (!playback.playing || token !== playToken) return;
+    const minMs = 1000 / (playback.fps || 1);
+    const elapsed = performance.now() - t0;
+    if (why === "settled" && elapsed < minMs) {
+      await sleepMs(minMs - elapsed);
+      playback.bound = "fps";            // we are the slow one, on purpose
+    } else {
+      playback.bound = "network";        // the tiles are, and the panel says so
+    }
+    if (!playback.playing || token !== playToken) return;
+    playback.actualFps = 1000 / Math.max(1, performance.now() - t0);
+
+    if (playback.i + 1 < playback.frames.length) {
+      playback.i++;
+    } else if (playback.loop) {
+      playback.i = 0;
+    } else {
+      playbackStop();
+      return;
+    }
+  }
+}
+
+function playbackPlay() {
+  if (playback.playing) return;
+  if (!playback.frames.length) playbackRebuild();
+  if (playback.frames.length < 2 || !playbackLayers().length) return;
+  // Starting from the last frame with loop off would show one frame and stop.
+  if (playback.i >= playback.frames.length - 1) playback.i = 0;
+  playback.playing = true;
+  playback.layerKey = playbackLayerKey();
+  playbackRender();
+  playbackRun(++playToken);
+}
+
+/* Stop leaves NOTHING of playback behind (plan §4). The retirement queue is
+ * swept, so the globe holds no frame we have already left, and state.date stays
+ * on the frame we stopped on — that is the picture on screen, and the date
+ * input, the probe and the pixel card all read it.
+ *
+ * It deliberately does NOT rebuild the layers. There is nothing to hand back:
+ * every frame WAS the ordinary date path (`refreshTimedLayers({hold: true})`),
+ * so `state.layers` already holds exactly what the single-date path would have
+ * built for this date. An unheld refresh here would destroy and refetch an
+ * identical set of layers — which is to say it would end every playback with
+ * the very blink the retirement queue exists to remove. */
+function playbackStop() {
+  playback.playing = false;
+  playToken++;
+  playback.bound = null;
+  playback.actualFps = null;
+  sweepRetired();
+  playbackRender();
+}
+
+/* A frame list is only valid for the layers it was enumerated from: switch NDVI
+ * off mid-play and every remaining frame is a duplicate; switch daily SST on and
+ * the monthly list is now showing one frame per month of a daily product. So a
+ * layer change stops the player and re-enumerates, keeping the playhead's DATE
+ * (its index means nothing in the new list). It does not auto-resume: the layer
+ * set changed because the user changed it, and they are looking at the globe. */
+function playbackInvalidate() {
+  const at = playback.frames[playback.i] || state.date;
+  playbackStop();
+  playbackRebuild();
+  playback.i = playbackNearest(at);
+  playbackRender();
+}
+
+document.addEventListener("change", () => {
+  const key = playbackLayerKey();
+  if (key === playback.layerKey) return;
+  if (playback.playing) { playbackInvalidate(); return; }
+  // Not playing, but the panel is a read-out of a frame list that is a function
+  // of the layers on — including the "switch a dated layer on" hint. An open
+  // panel showing yesterday's layer set would be describing a playback that no
+  // longer exists.
+  if (playbackUiWired && !document.getElementById("panel-play")?.classList.contains("hidden")) {
+    playbackRebuild();
+    playbackRender();
+  }
+});
+
+/* Streaming NASA tiles into a background tab is both rude and pointless
+ * (plan §5). Resume only if we were the ones who paused it.
+ *
+ * This HALTS rather than stops: `playbackStop`'s parting act is an unheld
+ * refresh, which would request a fresh set of tiles for a tab nobody is looking
+ * at — the precise thing this handler exists to avoid. The picture is left
+ * exactly as it was, which is also what the user comes back to. */
+let playbackHiddenPause = false;
+function playbackHalt() {
+  playback.playing = false;
+  playToken++;
+  playback.bound = null;
+  playback.actualFps = null;
+  sweepRetired();
+  playbackRender();
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    if (playback.playing) { playbackHiddenPause = true; playbackHalt(); }
+  } else if (playbackHiddenPause) {
+    playbackHiddenPause = false;
+    playbackPlay();
+  }
+});
+
+/* ------------------------------------------------------------------- the tab */
+
+// The whole record the layers on can actually show — the "all" preset. GIBS
+// layers know their own `start`; a keyed grid's first baked month is its start
+// (GLORYS reaches back to 1993, well before the date steppers' 2000 floor).
+function playbackRecordStart() {
+  let earliest = null;
+  for (const e of playbackLayers()) {
+    let s = null;
+    if (e.cfg.grid) {
+      const ms = gridMonths(gridsLoaded.get(e.cfg.id));
+      if (ms && ms.length) s = ms[0].length === 7 ? `${ms[0]}-01` : ms[0];
+    } else {
+      s = e.cfg.start;
+    }
+    if (s && (!earliest || s < earliest)) earliest = s;
+  }
+  return earliest || "2000-01-01";
+}
+
+/* Same upper bound as every other date in the app (`uiMaxDate`, which a
+ * forecast grid pushes past today), but a LOWER bound that follows the data
+ * rather than the date steppers' 2000-01-01 GIBS floor: GLORYS currents are
+ * baked back to 1993, and a playback panel that refused to start before 2000
+ * would be hiding seven years of the archive the layer actually has. */
+function clampPlayDate(d) {
+  const hi = uiMaxDate();
+  const rec = playbackRecordStart();
+  const lo = rec < "2000-01-01" ? rec : "2000-01-01";
+  return d > hi ? hi : d < lo ? lo : d;
+}
+
+let playbackUiWired = false;
+function loadPlayback() {
+  const startEl = document.getElementById("pb-start");
+  const endEl = document.getElementById("pb-end");
+  if (!startEl || !endEl) return;             // panel not in this build
+  if (!playbackUiWired) {
+    playbackUiWired = true;
+
+    const rebuild = () => { playbackRebuild(); playbackRender(); };
+
+    for (const el of [startEl, endEl]) {
+      el.addEventListener("change", () => {
+        if (!el.value) return;
+        // Same bounds as the main date. Unlike the compare field this one may
+        // safely write back: it is not the field whose caret a mid-typing
+        // clamp would reset, because we only correct a COMPLETE out-of-range
+        // date, and only downward to the max the UI admits exists.
+        const c = clampPlayDate(el.value);
+        if (c !== el.value) el.value = c;
+        rebuild();
+      });
+    }
+
+    document.getElementById("pb-presets")?.addEventListener("click", (e) => {
+      const r = e.target.getAttribute?.("data-range");
+      if (!r) return;
+      const end = clampUiDate(state.date);
+      let start;
+      if (r === "all") {
+        start = playbackRecordStart();
+      } else {
+        // stepCalendar walks one unit at a time, which is how "5 years back"
+        // stays the app's own leap-day arithmetic instead of a second copy of
+        // it written here.
+        const years = r === "5y" ? 5 : 1;
+        start = end;
+        for (let k = 0; k < years; k++) start = stepCalendar(start, "-1y");
+        start = clampPlayDate(start);
+      }
+      startEl.value = start;
+      endEl.value = end;
+      rebuild();
+    });
+
+    document.getElementById("pb-step")?.addEventListener("change", (e) => {
+      playback.step = e.target.value;
+      rebuild();
+    });
+    document.getElementById("pb-speed")?.addEventListener("change", (e) => {
+      playback.fps = Number(e.target.value) || 2;
+      playbackRender();
+    });
+    document.getElementById("pb-loop")?.addEventListener("change", (e) => {
+      playback.loop = !!e.target.checked;
+    });
+    document.getElementById("pb-first")?.addEventListener("click", () => {
+      playbackShowFrame(0);
+    });
+    document.getElementById("pb-last")?.addEventListener("click", () => {
+      playbackShowFrame(playback.frames.length - 1);
+    });
+    document.getElementById("pb-play")?.addEventListener("click", () => {
+      if (playback.playing) playbackStop(); else playbackPlay();
+    });
+    // Scrubbing while paused jumps to the frame. While PLAYING the slider is
+    // an output, not an input — the loop owns the playhead, and letting both
+    // write it would make the picture argue with the control.
+    document.getElementById("pb-scrub")?.addEventListener("input", (e) => {
+      if (playback.playing) return;
+      playbackShowFrame(Number(e.target.value));
+    });
+  }
+
+  // Defaults on first open: end where the globe already is, start twelve months
+  // back, both inside the bounds the date selector admits (a forecast grid can
+  // push the max past today; `uiMaxDate` is the single answer to that).
+  const max = uiMaxDate();
+  const rec = playbackRecordStart();
+  const min = rec < "2000-01-01" ? rec : "2000-01-01";
+  for (const el of [startEl, endEl]) { el.max = max; el.min = min; }
+  if (!endEl.value) endEl.value = clampPlayDate(state.date);
+  if (!startEl.value) startEl.value = clampPlayDate(stepCalendar(endEl.value, "-1y"));
+  const speed = document.getElementById("pb-speed");
+  if (speed && speed.value) playback.fps = Number(speed.value) || playback.fps;
+  const loop = document.getElementById("pb-loop");
+  if (loop) playback.loop = !!loop.checked;
+  const step = document.getElementById("pb-step");
+  if (step && step.value) playback.step = step.value;
+
+  playbackRebuild();
+  playbackRender();
+}
+
 /* --------------------------------------------------------------------- tabs */
 
 const tabs = { layers: "panel-layers", temp: "panel-temp", energy: "panel-energy",
   amoc: "panel-amoc", sealevel: "panel-sealevel", tides: "panel-tides",
-  catalog: "panel-catalog", about: "panel-about" };
+  play: "panel-play", catalog: "panel-catalog", about: "panel-about" };
 for (const t of Object.keys(tabs)) {
-  document.getElementById(`tab-${t}`).addEventListener("click", () => {
+  document.getElementById(`tab-${t}`)?.addEventListener("click", () => {
     for (const [k, panel] of Object.entries(tabs)) {
-      document.getElementById(panel).classList.toggle("hidden", k !== t);
-      document.getElementById(`tab-${k}`).classList.toggle("active", k === t);
+      document.getElementById(panel)?.classList.toggle("hidden", k !== t);
+      document.getElementById(`tab-${k}`)?.classList.toggle("active", k === t);
     }
     if (t === "amoc") loadAmoc();
     if (t === "sealevel") loadSeaLevel();
     if (t === "temp") loadTemp();
     if (t === "energy") loadEei();
     if (t === "tides") loadTides();
+    if (t === "play") loadPlayback();
   });
 }
 
@@ -8079,4 +8833,26 @@ window.__earth = {
   get foundPlace() { return foundPlace; },
   get foundLabels() { return foundLabels; },
   get foundPoints() { return foundPoints; },
+  // playback (E-041): the frame enumerator, the transport's state, and the
+  // retirement queue that stops the globe blinking between frames
+  playbackFrames,
+  playbackSignature,
+  playbackAutoStep,
+  playbackLayers,
+  playback,
+  playbackRebuild,
+  playbackShowFrame,
+  playbackPlay,
+  playbackStop,
+  loadPlayback,
+  retireLayer,
+  sweepRetired,
+  get retiring() { return retiring; },
+  waitTilesSettled,
+  gibsTileUrl,
+  gibsUrlTemplate,
+  refreshTimedLayers,
+  removeLayer,
+  addLayer,
+  PLAY_MAX_FRAMES,
 };
