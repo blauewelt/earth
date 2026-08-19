@@ -121,6 +121,128 @@ one or neither.
 The two halves are one rule: the summary says what the number means, the link
 says where to go and watch it.
 
+## 0d · An experiment description is a config, not a story
+
+Standing rule, Chris 2026-08-19: *"Make it a standing rule to have all
+experiments descriptions be: a) Structured, with fields: Num params, stage:
+encoder, data, ... (you could even automatically render an experiment config).
+b) Absolute, not relative: Not 'restart of #101' but 'Add SST to training data
+(restart of #101). Params: ...'"*
+
+§0c fixed the run number that arrives without a summary. This fixes the
+summary that arrives without a configuration.
+
+The incident is #409. Its dispatch `doc` string read **"RE-DISPATCH of #407"**.
+#407 was itself a re-dispatch — of #406's read-out protocol against #386's
+checkpoint — so a reader who wanted to know what the run TRAINED had three hops
+to make: #409 → #407 → #406/#386, two of them into descriptions that were also
+relative, and one into a cancelled job whose log blobs had already expired. The
+answer, after three hops, was that #409 trained nothing at all: it was
+eval-only, a probe ladder over a finished checkpoint. That fact sat in
+`provenance.json` the entire time, and in no sentence anybody would read.
+
+**(a) Every dispatch `doc` string and every EXPERIMENTS.md dispatch entry opens
+with a STRUCTURED header line, before the prose.** Fixed order, `·`-separated:
+
+> experiment ID · what the run does, in ABSOLUTE terms · `params` · `stage` ·
+> `data` · `arch` · `steps×batch` · `resume`
+
+- **`params`** — parameter count, e.g. `38.0M`.
+- **`stage`** — one of `encoder`, `stage-2`, `eval-only`, `headpub`, `sroll`.
+  This is the field that would have answered #409 in one word.
+- **`data`** — the tensor BY NAME, e.g. `family4_na025_pentad`, never "the
+  pentad one".
+- **`arch`** — the geometry, e.g. `512×12 d_z 32 patch 1`.
+- **`steps×batch`** — and where nothing trains, say so in the same breath
+  rather than printing a number that looks like a budget.
+- **`resume`** — what it seeds from, BY NAME (`run-386`, `f3_anchor41M`), never
+  a bare `!` reference the reader has to expand.
+
+❌ **"RE-DISPATCH of #407"** — relative, and the reader must chase #407, which
+was itself a re-dispatch of something else. Three hops to learn what trains.
+
+✅ **"#386's pentad codec through the full probe ladder + unpooled head
+(re-dispatch of #407) · params 38.0M · stage eval-only · data
+family4_na025_pentad · arch 512×12 d_z 32 patch 1 · steps 166752 (= checkpoint,
+nothing trains) · resume run-386"**
+
+**(b) The relative clause is allowed — in parentheses, AFTER the absolute
+description.** Genealogy is useful once the reader already knows what the run
+does; it is never the description itself. Chris's own shape: *"Add SST to
+training data (restart of #101). Params: ..."* — the change first, the ancestry
+second, the config after both.
+
+**(c) None of this is new data collection — it is placement.** `provenance.json`
+and `plan-*.json` already carry params, stage, tensor, geometry, step budget and
+resume for every run in the fleet; §1's recipe mechanism already refuses a
+dispatch whose architecture contradicts its checkpoint. The rule is about
+putting those fields where a reader's eyes actually land: the one line that
+appears in chat, on the status page, and in a hand-off six sessions later. The
+machine half of the same rule is that **the status page renders a config line
+directly from provenance under each run**, so the fields that can be generated
+are generated, and the fields a human must choose — what the run DOES, in
+absolute terms — are the ones the `doc` string is for.
+
+## What this programme is building
+
+Standing statement of purpose, Chris 2026-08-19: *"What we're building is a
+predictor for everything, so it doesn't matter whether the embedding will
+contain more or less information than the raw pixels. The embedding makes large
+chunks of data 'attendable' by a transformer. And we can predict everything
+from predicting embeddings (not just AMOC). That's the overall plan."*
+
+Read this before designing an experiment. It decides which comparisons are
+worth GPU and which are answering a question the programme is not asking.
+
+**1 · The object is a predictor of the WHOLE STATE, not an AMOC probe.** What
+is being learned is a forward model of the North Atlantic state — every channel,
+every pixel, rolled forward in time. AMOC transport at 26.5°N is the HEADLINE
+metric because RAPID is the best-instrumented read-out available to us: a long,
+continuous, physically meaningful series against which a forecast can be scored
+at all. That is a property of the INSTRUMENT, not of the target. AMOC is one
+read-out of a general forecast, and a design that improves the AMOC probe while
+degrading the forecast has moved the programme backwards.
+
+**2 · The embedding is not required to carry MORE information than the pixels.**
+It cannot. It is a compression; a compression's information content is bounded
+by its input, and any experiment framed as "does the embedding beat the pixels
+on information content" has a known answer and does not need running. The
+embedding's job is **ATTENDABILITY**. The 84,405 active ocean pixels × 39
+channels of one quarter-degree time step are not a sequence a transformer can
+attend over; a token sequence is. The daily family-5 tensor is **165.6 GB** of raw pixels and
+cannot be attended at all — not at any batch size, not on any box we rent. The
+codec is what turns the state into a sequence, and that is the whole of its
+mandate: make large chunks of data attendable, cheaply enough that the
+forecaster can roll them forward for twelve months.
+
+**3 · Therefore embedding quality is judged by what stage 2 can predict FROM
+it.** The operative instruments are rollout skill, corridor AUC and band
+correlations — exactly how E-022, E-035, E-036 and E-037 already score. Those
+are the numbers that say whether a representation is a good SUBSTRATE FOR
+FORECASTING. A current-state probe-vs-raw delta is not that number, and must
+not be used as one: it asks what today's embedding says about today's transport,
+which the forecaster never has to do.
+
+**4 · A raw-pixel head is a legitimate READ-OUT control, not a rival
+architecture.** E-038a used it exactly right — the raw-3×3 control is what
+exposed the pooling artefact and what kept "the codec knows this" separable from
+"any read-out with spatial structure knows this" (`docs/ML_BASICS.md` §5). Keep
+it. But when it comes back at parity, the finding is about READ-OUT DESIGN. It
+is not evidence that the codec should be replaced by raw pixels, because there
+is no raw-pixel forecaster to replace it WITH: the question a raw head answers
+is "what does today's state say about today's transport", and the programme's
+question is "what does the state do next".
+
+**5 · Predicting embeddings predicts everything at once.** Any quantity readable
+from a real embedding is readable from a predicted one — transport at 26.5°N,
+Florida Current, MOVE, OSNAP, SAMBA, and equally any field we have not thought
+to probe yet, because the decoder is already there. That is the plan, in three
+steps: **encode → predict forward in embedding space → read out anything.** The
+read-out is the cheap, replaceable end of the system. The forward model in
+embedding space is the programme.
+
+---
+
 ## 1 · Before you dispatch
 
 - **State what result would FALSIFY the hypothesis**, and check the

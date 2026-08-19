@@ -29,6 +29,43 @@ The programme is deliberately structured so that "the embedding knows this" and
 "a read-out with enough capacity can learn this from anything" are separable
 claims. Almost every design decision below exists to keep that separation
 honest.
+### 1b · What is actually being built: a predictor of everything
+
+Chris, 2026-08-19: *"What we're building is a predictor for everything, so it
+doesn't matter whether the embedding will contain more or less information than
+the raw pixels. The embedding makes large chunks of data 'attendable' by a
+transformer. And we can predict everything from predicting embeddings (not just
+AMOC). That's the overall plan."*
+
+The system is a **forward model of the North Atlantic state** — all channels,
+all pixels, rolled forward in time. AMOC at 26.5°N is the headline number
+because RAPID is the best-instrumented read-out we have to score against, not
+because transport is the thing being learned. It is one read-out of a general
+forecast.
+
+**The codec's job is ATTENDABILITY, not information.** An embedding is a
+compression, so it cannot contain more than the pixels it came from, and no
+experiment needs to establish that. What it does is turn the ~84,405 active
+ocean pixels × 39 channels of a single time step (§3) into a token sequence a
+transformer can attend over and roll forward. The daily family-5 tensor is 165.6 GB of raw
+pixels: not attendable at any batch size on any box we rent. The codec is what
+makes the state a *sequence*.
+
+**So the representation is scored by what stage 2 predicts FROM it** — rollout
+skill, corridor AUC, band correlations (§5b and the roll metrics). A
+current-state probe comparison — embedding-vs-raw on today's transport — is a
+**read-out control** (§5), and a valuable one: it is what separates "the codec
+knows this" from "any read-out with spatial structure knows this", and it is how
+the pooling artefact was caught. But parity there says nothing about forecast
+substrate quality, because the forecaster never has to answer the question that
+probe asks. There is also no raw-pixel forecaster to compare against at this
+resolution — that is the tractability problem the codec exists to solve.
+
+**Predicting embeddings predicts everything at once.** Anything readable from a
+real embedding is readable from a predicted one — RAPID, Florida Current, MOVE,
+OSNAP, SAMBA, and any field nobody has probed yet, because the decoder is
+already there. The plan in three steps: **encode → predict forward in embedding
+space → read out anything.**
 
 ---
 
