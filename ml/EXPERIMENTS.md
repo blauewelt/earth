@@ -108,6 +108,11 @@ own raw control, so both arms of that matrix are representations just measured
 as equivalent to raw pixels. It stays down-prioritised on evidence and should be
 re-scoped around a raw arm before it is re-dispatched (E-038a VERDICT §(d)).
 
+**AMENDED 2026-08-19 ~11:00Z — this de-prioritisation is REVERSED.** The matrix
+is re-prioritised: probe parity on the CURRENT state is not evidence about
+forecast-substrate quality, and "which embedding rolls forward better" is the
+programme's actual question. See E-038a VERDICT §(e).
+
 **What #400 bought before it was cancelled**, recorded so that 22k steps are not
 a total loss — these are the first daily-scale numbers this programme has:
 **22,000 / 200,000 steps**, **216.6 ms/step** pure training, **probes 65% of
@@ -1155,6 +1160,49 @@ dispatches.**
    now **DOWN-PRIORITISED ON EVIDENCE, not merely on credit.** Its two arms are
    the two representations just measured as equivalent-to-raw and to each
    other. Re-scope it around a raw arm before it is re-dispatched.
+
+**(e) ADDENDUM, 2026-08-19 ~11:00Z — the measurement stands; consequence (d.3)
+was drawn too narrowly and is REVERSED.** Chris, on the programme's object:
+*"What we're building is a predictor for everything, so it doesn't matter
+whether the embedding will contain more or less information than the raw pixels.
+The embedding makes large chunks of data 'attendable' by a transformer. And we
+can predict everything from predicting embeddings (not just AMOC). That's the
+overall plan."*
+
+Nothing in (a)–(c) changes. The numbers are what they are: head **0.680** vs raw
+**0.683** vs frozen anchor **0.691**, three read-outs inside a 0.011 band, and
+E-038's domain-shift hypothesis is still falsified in the head read-out. What
+changes is what those numbers are evidence ABOUT.
+
+1. **(d.1) and (d.2) STAND, as READ-OUT controls.** A raw-input arm remains
+   mandatory wherever a current-state probe is being quoted, and E-042's
+   decisive read-out is still the head + raw-3×3 pair on the r2 tensor. That is
+   exactly the job E-038a's raw control did correctly — it exposed the pooling
+   artefact and it keeps "the codec knows this" separable from "any read-out
+   with spatial structure knows this". Keep it.
+2. **(d.3) is REVERSED. The embedding-vs-embedding stage-2 matrix is
+   RE-PRIORITISED** (arm A `!run-386` against arm B `!f3_anchor41M`, temporal
+   384×6 @ 24k steps, `head_probe` on both). *Which embedding rolls forward
+   better* is the programme's actual question, and it is the one question the
+   #409 ladder does not touch. A current-state probe asks what today's
+   embedding says about today's transport; the forecaster never has to answer
+   that. Probe parity between two representations is therefore **not** evidence
+   that they are equivalent as forecast substrates, and (d.3) treated it as if
+   it were.
+3. **The primary embedding metric is corridor AUC from ROLLED-FORWARD
+   embeddings**, plus rollout skill and band correlations — the instruments
+   E-022, E-035, E-036 and E-037 already score. Judge a representation by what
+   stage 2 can predict from it, not by a probe on the un-rolled state.
+4. **A raw-pixel head is a control, not a rival architecture.** There is no
+   raw-pixel forecaster to re-scope the matrix around: 165.6 GB of daily pixels
+   is not attendable at any batch size on any box in the fleet, which is the
+   tractability problem the codec exists to solve. "Re-scope it around a raw
+   arm before it is re-dispatched" in (d.3) asked for an arm that cannot be
+   built at this cadence and resolution; the raw arm belongs in the read-out
+   ladder, where it already is.
+
+Standing form of this in `ml/CLAUDE.md` § "What this programme is building" and
+`docs/ML_BASICS.md` §1b.
 
 ### E-038c ATTEMPT 2 (2026-08-18 20:35Z): #400, the daily arm re-dispatched
 
