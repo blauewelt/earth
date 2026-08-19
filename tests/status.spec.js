@@ -1029,3 +1029,217 @@ test("the permalink handle puts the run's address in the URL", async ({ page }) 
   // and it is a real link, so a long-press "copy link address" works too
   await expect(page.locator("#run-101 a.plink")).toHaveAttribute("href", "#run-101");
 });
+
+/* ---- the structured config strip -----------------------------------------
+ *
+ * Standing rule, Chris 2026-08-19: *"make it a standing rule to have all
+ * experiments descriptions be a) Structured, with fields: Num params, stage:
+ * encoder, data, ... (you could even automatically render an experiment
+ * config). b) Absolute, not relative."*
+ *
+ * These four tests pin the machine half. The order is fixed so a reader can
+ * find a field by position; the SOURCES are the run's own records, so the
+ * strip cannot drift from what ran; and a field with no record is OMITTED
+ * rather than defaulted, because a zero a reader believes is worse than a gap
+ * a reader can see.
+ */
+
+// probes-109.json, cut to the two keys the page reads. `inputs` is the
+// verbatim dispatch block — strings, all of them, including "temporal_steps":
+// "0", which is TRUE for an eval and which JS reads as truthy unless it is
+// converted to a number first. That is the bug this fixture exists to catch.
+const PROBES_109 = {
+  run_number: 109,
+  files: {
+    "rollout_spatial.json": { heads: [] },
+    "provenance.json": {
+      run_number: 109,
+      sha: "b".repeat(40),
+      inputs: {
+        doc: "E-035 SEED-PAIR EVAL: roll the freshly published seed-0 head.",
+        steps: "60000", batch: "512", d_z: "64", anomaly: "true",
+        temporal_steps: "0", temporal_d_model: "576", temporal_layers: "8",
+        eval_every: "0", resume: "!run-62,run-63", head_probe: "false",
+        window: "sroll:e017_u1_s0,head-weights-e035a-xl233-s0",
+        tensor: "family3_na025", patch: "3", runner: "gpu-box-45731106",
+        codec_d_model: "576", codec_layers: "10", codec_heads: "8",
+        codec_d_dec: "768",
+      },
+    },
+  },
+};
+
+// A finished ROLLED EVALUATION. It trains nothing, so its archived metrics
+// carry no `config` line at all — no params, no batch, no tensor. Everything
+// on its strip has to come from the dispatch block in probes-109.json, and
+// `window` is the only field anywhere that separates an sroll job from a
+// headpub one (both are "resumed at their final step with nothing to train").
+const RUN_SROLL_DONE = jsonl([
+  { sroll: { head: "s1_s0", head_i: 2, heads: 2, phase: "skill", done: 714,
+             total: 714, pct: 100.0, elapsed_s: 2100, eta_head_s: 0, eta_all_s: 0 } },
+]);
+
+test("a finished run's config strip is rendered from its own records, in the fixed order",
+  async ({ page }) => {
+    await page.goto("/status.html");
+    const card = page.locator("#live .card")
+      .filter({ has: page.locator("h3", { hasText: "run #108" }) });
+    const strip = card.locator(".cfg");
+    await expect(strip).toHaveCount(1);
+    // The order is the contract. It never varies, so the eye can find a field
+    // by position on a card it has not read yet.
+    const keys = await strip.locator(".k").evaluateAll((els) =>
+      els.map((e) => e.textContent));
+    expect(keys).toEqual(["params", "stage", "data", "arch", "steps×batch", "resume"]);
+    // ...and every value is a number the run itself wrote. 40.7 is the codec's
+    // params_M from the `config` line, 32.038 the head's from `stage2_config`;
+    // neither is re-derived from d_model here, because re-deriving it would
+    // restate the architecture in a second language and be wrong the first
+    // time a channel is added.
+    await expect(strip).toContainText("40.7M codec + 32.038M head");
+    await expect(strip).toContainText("stage-2");
+    await expect(strip).toContainText("f3_na025");
+    await expect(strip).toContainText("head 576×8");
+    await expect(strip).toContainText("resume");
+    await expect(strip).toContainText("run-62");
+    // the .npz is noise; C 39 is a fact and travels
+    await expect(strip).toContainText("C 39");
+  });
+
+test("an eval that trained nothing takes its stage from probes-<n>.json, and omits the rest",
+  async ({ page }) => {
+    // The ambiguity that forces the provenance fetch: an sroll job and a
+    // headpub job both resume at their final step and both train nothing.
+    // Only `window` tells them apart, and `window` exists nowhere but the
+    // dispatch block. Without it the strip would have to print a stage it
+    // cannot know — which is the exact failure the "absolute" half of the
+    // rule is against.
+    const probeUrls = [];
+    await page.route(/\/actions\/workflows\/[^/]+\/runs/, (route) =>
+      route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({ workflow_runs: [
+          { id: 9, run_number: 109, status: "completed", conclusion: "success",
+            created_at: iso(25), html_url: "https://example.invalid/109",
+            display_title: "E-035 SEED-PAIR EVAL: roll the seed-0 head",
+            name: "ml-train", head_sha: "9".repeat(40) },
+        ] }),
+      }));
+    await page.route(/ml-metrics\/run-109\.jsonl/, (r) =>
+      r.fulfill({ status: 200, contentType: "text/plain", body: RUN_SROLL_DONE }));
+    await page.route(/ml-metrics\/probes-109\.json/, (r) => {
+      probeUrls.push(r.request().url());
+      return r.fulfill({ status: 200, contentType: "application/json",
+                         body: JSON.stringify(PROBES_109) });
+    });
+    await page.goto("/status.html");
+    const card = page.locator("#live .card")
+      .filter({ has: page.locator("h3", { hasText: "run #109" }) });
+    const strip = card.locator(".cfg");
+    await expect(strip).toHaveCount(1);
+    await expect(strip).toContainText("sroll");
+    // The dispatch block's fields, absolutely: the tensor by name, the codec
+    // shape, the steps it was given and the resume mark VERBATIM. The "!" is
+    // not decoration — train.py reads it as require_resume, so "!run-62" is a
+    // job that fails rather than quietly training from scratch, and the
+    // config line does not keep it.
+    await expect(strip).toContainText("family3_na025");
+    await expect(strip).toContainText("codec 576×10, 8 heads, d_dec 768");
+    await expect(strip).toContainText("60,000 × 512");
+    await expect(strip).toContainText("!run-62,run-63");
+    const keys = await strip.locator(".k").evaluateAll((els) =>
+      els.map((e) => e.textContent));
+    // No params: this run has no params_M record anywhere, and the field is
+    // simply ABSENT rather than 0 or a number recomputed from d_model.
+    expect(keys).not.toContain("params");
+    // ...and the fields it DOES have are still in the fixed order.
+    expect(keys).toEqual(["stage", "data", "arch", "steps×batch", "resume"]);
+    // temporal_steps is the string "0" — no head shape may be quoted for a
+    // network this run never built, and no ZERO may stand in for one either.
+    // The first draft of this strip rendered "head 0×0" and "head 0" here,
+    // because `guard && obj.field` collapses to the boolean false when the
+    // guard fails and Number(false) is 0. A reader would have read that as a
+    // measurement. Assert the shape is absent, not merely different.
+    const stripText = await strip.innerText();
+    expect(stripText).not.toMatch(/head \d/);   // "8 heads" is fine; "head 0" is not
+    expect(stripText).not.toMatch(/0×0/);
+    expect(probeUrls.length).toBeGreaterThan(0);
+  });
+
+test("an in-flight run's strip shows only its live config line, and costs no extra fetch",
+  async ({ page }) => {
+    // probes-<n>.json is written by the workflow's final archive step, the same
+    // one that deletes the live branch, so a running job HAS none. Asking for
+    // it every two minutes would be a request that can only 404 — and the live
+    // `config` line already carries enough to say something true.
+    const probeUrls = [];
+    await page.route(/ml-metrics\/probes-\d+\.json/, (r) => {
+      probeUrls.push(r.request().url());
+      return r.fulfill({ status: 404, body: "" });
+    });
+    await page.goto("/status.html");
+    const card = page.locator("#live .card")
+      .filter({ has: page.locator("h3", { hasText: "run #106" }) });
+    const strip = card.locator(".cfg");
+    await expect(strip).toHaveCount(1);
+    const keys = await strip.locator(".k").evaluateAll((els) =>
+      els.map((e) => e.textContent));
+    // RUN_S2_LIVE's config line records steps, params_M, data and C — and no
+    // batch and no resume. Those two fields are therefore absent, not zero
+    // and not "none": nothing recorded them.
+    expect(keys).toEqual(["params", "stage", "data", "arch", "steps×batch"]);
+    expect(keys).not.toContain("resume");
+    await expect(strip).toContainText("40.7M codec + 1.822M head");
+    await expect(strip).toContainText("head 192×4");
+    await expect(strip).toContainText("60,000");
+    await expect(strip).not.toContainText("× 512");
+    // no run in this fixture is finished-and-unresolvable, so nothing asked
+    expect(probeUrls).toEqual([]);
+  });
+
+test("the header row is the card's anchor: the run number links to the card itself",
+  async ({ page }) => {
+    await page.goto("/status.html");
+    const card = page.locator("#run-101");
+    await expect(card).toBeAttached();
+    const head = card.locator("h3");
+    // one affordance, not two: the run NUMBER is the permalink handle. There
+    // used to be a separate floated "#" beside a run number that linked to
+    // Actions, which put the more prominent of two links on the surface
+    // ml/CLAUDE.md §0c calls the wrong default.
+    await expect(head.locator("a.plink")).toHaveCount(1);
+    await expect(head.locator("a.plink")).toHaveAttribute("href", "#run-101");
+    await expect(head.locator("a.plink")).toHaveText("run #101");
+    // #NNN · E-tag · what the run DOES — the §0c form, rendered
+    const card102 = page.locator("#run-102");
+    await expect(card102.locator("h3")).toContainText("run #102");
+    await expect(card102.locator("h3 .htitle")).toContainText("f3_anchor41M continued");
+    // the Actions log is still reachable, just no longer the headline
+    await expect(head.locator('a[href="https://example.invalid/101"]')).toHaveCount(1);
+    // and the card's own id is what the header points at
+    const [href, id] = await page.evaluate(() => {
+      const c = document.getElementById("run-101");
+      return [c.querySelector("h3 a.plink").getAttribute("href"), c.id];
+    });
+    expect(href).toBe("#" + id);
+  });
+
+test("nothing on a run card is a blob URL", async ({ page }) => {
+    // CLAUDE.md §0b and ml/CLAUDE.md §0c: markdown goes to docs.html, never to
+    // a GitHub blob — and no object URLs are minted for anything here either,
+    // since a blob: href is unshareable by construction and this whole feature
+    // is about addresses a reader can paste.
+    await page.goto("/status.html");
+    await expect(page.locator("#live .card").first()).toBeVisible();
+    const hrefs = await page.locator("#live a").evaluateAll((as) =>
+      as.map((a) => a.getAttribute("href") || ""));
+    expect(hrefs.length).toBeGreaterThan(0);
+    for (const h of hrefs) {
+      expect(h).not.toMatch(/^blob:/);
+      expect(h).not.toMatch(/github\.com\/[^/]+\/[^/]+\/blob\//);
+    }
+    // no src attribute anywhere in the live section mints one either
+    const srcs = await page.locator("#live [src]").evaluateAll((els) =>
+      els.map((e) => e.getAttribute("src") || ""));
+    for (const s of srcs) expect(s).not.toMatch(/^blob:/);
+  });

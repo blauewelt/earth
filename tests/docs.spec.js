@@ -61,9 +61,10 @@ test.describe("docs.html · mobile markdown reader", () => {
   });
 
   // The whole point. Checked on the biggest, widest document we have.
-  // ml/RUNS.md is in the list because it is GENERATED — 413 rows of six
-  // columns, one of them 110 characters of prose — so the shape that has to
-  // stay readable is the shape a script decides, not one a human reviews.
+  // ml/RUNS.md is in the list because it is GENERATED — 413 rows of seven
+  // columns, one of them 110 characters of prose and one of them a rendered
+  // config strip — so the shape that has to stay readable is the shape a
+  // script decides, not one a human reviews.
   test("no document widens the page", async ({ page }) => {
     for (const doc of ["ml/EXPERIMENTS.md", "ml/LEADERBOARD.md", "CLAUDE.md",
                        "ml/RUNS.md", "docs/PIXEL_STATE.md"]) {

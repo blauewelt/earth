@@ -72,12 +72,25 @@
   @media (prefers-reduced-motion: no-preference) {
     .card.flash { transition: outline-color 0.2s; }
   }
-  /* the permalink grab-handle: unobtrusive until you look for it */
-  a.plink { float: right; margin-left: 8px; color: var(--muted); font-weight: 400;
-            font-size: 15px; padding: 0 4px; text-decoration: none; }
-  a.plink:hover { color: var(--accent); }
-  a.plink.copied { color: var(--ok); }
-  a.plink.copied::after { content: " link copied"; font-size: 11px; }
+  /* The run number IS the permalink handle — one affordance, not two. It used
+     to be a separate floated "#" next to a run number that linked to Actions;
+     a reader then had two things to aim at and neither said which was which.
+     Tapping it copies the deep link AND sets the hash. */
+  a.plink { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+  a.plink:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  a.plink.copied { color: var(--ok); border-bottom-color: var(--ok); }
+  a.plink.copied::after { content: " link copied"; font-size: 11px; font-weight: 400; }
+  /* the header row: the card's visual anchor. Wraps rather than truncates —
+     a 390px phone gets two or three lines, never a clipped run number. */
+  h3 .hsep { color: var(--muted); font-weight: 400; margin: 0 5px; }
+  h3 .htitle { font-weight: 400; color: var(--text-dim); }
+  h3 .hwhen { display: block; font-weight: 400; font-size: 12px; margin-top: 3px; }
+  /* the structured config strip: fixed fields, fixed order, one muted line */
+  .cfg { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 0 0 8px;
+         overflow-wrap: anywhere; }
+  .cfg b { color: var(--text-dim); font-weight: 600; }
+  .cfg .k { color: var(--muted); font-weight: 400; }
+  .cfg .sep { margin: 0 4px; opacity: .6; }
   .stepbig { font-size: 22px; font-weight: 700; margin: 4px 0 8px; }
   .stepbig .lbl { font-size: 13px; font-weight: 400; color: var(--text-dim); }
   svg.chart { width: 100%; height: auto; display: block; }
@@ -1385,29 +1398,331 @@
     return state + ", started " + esc(ago(startedAt));
   }
 
+  // ---- the run's configuration, as the run itself recorded it ---------------
+  //
+  // Standing rule (Chris, 2026-08-19): *"make it a standing rule to have all
+  // experiments descriptions be a) structured, with fields: Num params, stage:
+  // encoder, data, ... (you could even automatically render an experiment
+  // config). b) Absolute, not relative."* This is the machine half — the strip
+  // is RENDERED from the run's own recorded inputs, never typed by hand, so it
+  // cannot drift from what actually ran.
+  //
+  // The one rule it obeys: PRINT WHAT THE RUN RECORDED, OMIT WHAT IT DID NOT.
+  // An absent field means "this run left no record of it" — it does not mean
+  // zero, and it does not mean the default. Filling a gap with a plausible
+  // value would destroy the strip's only claim to be worth reading, which is
+  // that every character on it came from the run.
+  //
+  // Fixed field order, never rearranged, so the eye can find a field by
+  // position on a card it has not read yet:
+  //
+  //     params · stage · data · arch · steps×batch · resume
+  //
+  // TWO SOURCES, and the page already pays for the first one:
+  //   1. the run's metrics jsonl (live branch while it runs, ml-metrics
+  //      archive afterwards) — fetchMetrics() already pulls this for the
+  //      curves, and its `config` / `stage2_config` / `joint_config` records
+  //      carry params_M, steps, batch, the codec shape, the tensor, C, T and
+  //      resume. Reading it here costs NOTHING.
+  //   2. ml-metrics/probes-<n>.json → files["provenance.json"].inputs — the
+  //      verbatim dispatch block, which is the only place `window` lives and
+  //      therefore the only way to tell a headpub job from an eval-only one.
+
+  // A recorded value, or null. Distinguishes "absent" from 0 and from "0" —
+  // the dispatch inputs are all STRINGS, so `if (inputs.temporal_steps)` is
+  // true for "0" and has to be a number comparison instead.
+  function recNum(v) {
+    if (v === null || v === undefined || v === "") return null;
+    var n = Number(v);
+    return isFinite(n) ? n : null;
+  }
+  // First argument that was actually recorded. `null`/`undefined`/`""` are
+  // "not recorded"; 0 is a value and survives. `false` is rejected too, and
+  // that is not pedantry: an argument written as `guard && obj.field` collapses
+  // to the boolean `false` when the guard fails, and a recPick that accepted it
+  // fed `false` to recNum, which turned it into 0. That is exactly how this
+  // strip printed "head 0×0" for #413 — a stage-2 network the run never built,
+  // rendered as a real measurement of zero. Caught on a 390px screenshot
+  // before it shipped; the rule "omitted is not zero" has to hold in the
+  // plumbing, not just in the intent.
+  function recPick() {
+    for (var i = 0; i < arguments.length; i++) {
+      var v = arguments[i];
+      if (v !== null && v !== undefined && v !== "" && v !== false) return v;
+    }
+    return null;
+  }
+
+  // The stage-2 head's own fields, and ONLY when a head was actually trained.
+  // temporal_d_model / temporal_layers are present in every dispatch block,
+  // including the ones with temporal_steps 0, where they describe a network
+  // that was never instantiated. A stage2_config record, by contrast, is
+  // written by temporal.py itself and therefore proves the head exists.
+  function headField(s2, inp, s2key, inpKey) {
+    if (s2 && s2[s2key] !== null && s2[s2key] !== undefined) return recNum(s2[s2key]);
+    if (inp && recNum(inp.temporal_steps) > 0) return recNum(inp[inpKey]);
+    return null;
+  }
+
+  // The run's STAGE. This is the one field that cannot be read straight off a
+  // config line, so the derivation lives here, ONCE, commented, and every
+  // branch below reads a fact the run recorded:
+  //
+  //   window "sroll:…"       rolls already-published heads, trains nothing
+  //   window "headpub:…"     strips a checkpoint to weights and publishes it
+  //   a joint_config record   codec and head trained together in one job
+  //   temporal_steps > 0, or a stage2_config record   → stage-2
+  //   resumed at/past the run's own step total, no loss points  → eval-only
+  //   loss points                                              → encoder
+  //
+  // Where it CANNOT decide it returns null and the strip omits `stage`
+  // entirely — the raw facts (steps × batch, resume) are already fields on the
+  // same line, and a reader can see them. A guessed label would be read as a
+  // record, which is exactly the failure this whole rule exists to prevent.
+  // The eval-only / headpub pair is the ambiguity that forces the provenance
+  // fetch: both are "resumed at their final step with nothing to train", and
+  // only `window` separates them.
+  function stageOf(run, m, inp) {
+    var w = inp && typeof inp.window === "string" ? inp.window : null;
+    if (w && /^sroll:/.test(w)) return "sroll (rolls published heads)";
+    if (w && /^headpub:/.test(w)) return "headpub (publishes a head, trains nothing)";
+    if (m && m.sroll) return "sroll (rolls published heads)";
+    if (m && m.jcfg) return "joint (codec + head in one job)";
+    if (m && (m.s2cfg || m.s2res)) return "stage-2 (temporal head)";
+    if (inp && recNum(inp.temporal_steps) > 0) return "stage-2 (temporal head)";
+    if (m && m.cfg && !m.loss.length && m.resumed &&
+        recNum(m.resumed.at_step) !== null && recNum(m.cfg.steps) !== null &&
+        recNum(m.resumed.at_step) >= recNum(m.cfg.steps)) {
+      // Resumed AT the step total it was given, so the training loop has
+      // nothing left to run. Only true once we also know it is not a headpub
+      // job, which is why `w` is consulted first and why a run with no
+      // provenance and no window never reaches this branch as a certainty.
+      if (w) return "eval-only (resumed at its final step)";
+      return null;
+    }
+    if (m && m.loss && m.loss.length) return "encoder";
+    return null;
+  }
+
+  // The fields, in the fixed order, as [label, value] pairs. Anything the
+  // sources did not record simply never gets pushed.
+  function configFacts(run, m, inp) {
+    var f = [];
+    var cfg = m && m.cfg;
+    var s2 = (m && (m.s2cfg || m.s2res)) || null;
+    var jc = m && m.jcfg;
+
+    // params — RECORDED ONLY, never recomputed. train.py and temporal.py both
+    // count the real module's parameters and write params_M next to the curve.
+    // Re-deriving it here from d_model/layers would restate the architecture
+    // in a second language and be wrong the first time a channel is added:
+    // EXPERIMENTS.md records exactly that drift, 37,975,889 → 37,976,465, one
+    // row each in chan_emb and q_chan for the SST channel. No record, no
+    // number — the architecture is on the same line under `arch` anyway.
+    var pp = [];
+    var codecP = recPick(jc && jc.codec_params_M, cfg && cfg.params_M);
+    var headP = recPick(jc && jc.temporal_params_M, s2 && s2.params_M);
+    if (recNum(codecP) !== null) pp.push(codecP + "M codec");
+    if (recNum(headP) !== null) pp.push(headP + "M head");
+    if (pp.length) f.push(["params", pp.join(" + ")]);
+
+    var st = stageOf(run, m, inp);
+    if (st) f.push(["stage", st]);
+
+    // data — the tensor the run read. The dispatch names it without the
+    // extension, the config line with it; the same tensor either way.
+    var data = recPick(inp && inp.tensor, cfg && cfg.data);
+    if (data) {
+      var shape = [];
+      if (recNum(cfg && cfg.C) !== null) shape.push("C " + recNum(cfg.C));
+      if (recNum(cfg && cfg.T) !== null) shape.push("T " + recNum(cfg.T));
+      f.push(["data", String(data).replace(/\.npz$/, "") +
+                      (shape.length ? " (" + shape.join(", ") + ")" : "")]);
+    }
+
+    // arch — the shapes. Two networks may be in play and they are named, so
+    // "576×10" is never left to mean whichever one the reader assumes.
+    var a = [];
+    var dm = recNum(recPick(cfg && cfg.d_model, inp && inp.codec_d_model));
+    var nl = recNum(recPick(cfg && cfg.n_layers, inp && inp.codec_layers));
+    var nh = recNum(recPick(cfg && cfg.n_heads, inp && inp.codec_heads));
+    var dd = recNum(recPick(cfg && cfg.d_dec, inp && inp.codec_d_dec));
+    var dz = recNum(recPick(cfg && cfg.d_z, inp && inp.d_z));
+    var pt = recNum(recPick(cfg && cfg.patch, inp && inp.patch));
+    if (dm !== null && nl !== null) {
+      a.push("codec " + dm + "×" + nl +
+             (nh !== null ? ", " + nh + " heads" : "") +
+             (dd !== null ? ", d_dec " + dd : ""));
+    }
+    if (dz !== null) a.push("d_z " + dz);
+    if (pt !== null) a.push("patch " + pt);
+    var hdm = headField(s2, inp, "d_model", "temporal_d_model");
+    var hl = headField(s2, inp, "layers", "temporal_layers");
+    if (hdm !== null && hl !== null) a.push("head " + hdm + "×" + hl);
+    if (a.length) f.push(["arch", a.join(", ")]);
+
+    // steps × batch — the codec's, then the head's where both ran.
+    var sb = [];
+    var steps = recNum(recPick(cfg && cfg.steps, inp && inp.steps));
+    var batch = recNum(recPick(cfg && cfg.batch, inp && inp.batch));
+    if (steps !== null) {
+      sb.push(fmtInt(steps) + (batch !== null ? " × " + fmtInt(batch) : ""));
+    }
+    var hs = headField(s2, inp, "steps", "temporal_steps");
+    var hb = recNum(s2 && s2.batch);
+    if (hs !== null) sb.push("head " + fmtInt(hs) + (hb !== null ? " × " + fmtInt(hb) : ""));
+    if (sb.length) f.push(["steps×batch", sb.join(", ")]);
+
+    // resume — verbatim, INCLUDING the leading "!". That mark is not
+    // decoration: train.py reads it as require_resume, so "!run-62" is a job
+    // that FAILS rather than quietly starting from scratch, and the dispatch
+    // block is the only copy that still carries it (train.py strips it before
+    // writing the config line). Prefer the dispatch string for that reason.
+    var res = null, haveRes = false;
+    if (inp && typeof inp.resume === "string") { res = inp.resume; haveRes = true; }
+    else if (cfg && Object.prototype.hasOwnProperty.call(cfg, "resume")) {
+      res = cfg.resume; haveRes = true;
+    }
+    if (haveRes) {
+      // A recorded null IS a fact here — train.py writes `"resume": a.resume
+      // or None`, so null means "from scratch", not "unknown".
+      var rv = res ? String(res) : "none (from scratch)";
+      if (m && m.resumed && recNum(m.resumed.at_step) !== null) {
+        rv += " — loaded " + (m.resumed.from || "a checkpoint") +
+              " at step " + fmtInt(recNum(m.resumed.at_step));
+      }
+      f.push(["resume", rv]);
+    }
+    return f;
+  }
+
+  function configStrip(run, m, inp) {
+    var f = configFacts(run, m, inp);
+    if (!f.length) return "";
+    return '<div class="cfg">' + f.map(function (kv) {
+      return '<span class="k">' + esc(kv[0]) + "</span> <b>" + esc(kv[1]) + "</b>";
+    }).join('<span class="sep">·</span>') + "</div>";
+  }
+
+  // Provenance, fetched ONLY when it is the difference between a right label
+  // and no label, and cached for the life of the tab.
+  //
+  // The budget matters. renderLive() renders up to CHART_CANDIDATES + the
+  // in-flight runs every two minutes, and each of those already costs a plan
+  // fetch and one or two metrics fetches. A blanket probes-<n>.json per card
+  // would add ~26 requests per cycle forever, for a file that never changes.
+  //
+  // So: the metrics file the page ALREADY pulled answers the strip for every
+  // run that trained anything (see stageOf), and probes-<n>.json is asked for
+  // only when it does not. Two further cuts fall out of when the file is
+  // written — scripts/archive_probes.py runs in the workflow's final archive
+  // step, the same one that deletes the live branch — so an in-flight or
+  // queued run HAS no provenance by construction and is never asked. A
+  // completed run's provenance never changes, so both a hit and a miss are
+  // cached permanently. Steady state is therefore ONE request per newly
+  // finished eval-shaped run, once, ever — not one per card per cycle.
+  var PROV = {};
+  function fetchProvenance(runNumber) {
+    if (Object.prototype.hasOwnProperty.call(PROV, runNumber)) {
+      return Promise.resolve(PROV[runNumber]);
+    }
+    return fetch("https://raw.githubusercontent.com/" + REPO + "/ml-metrics/probes-" +
+                 runNumber + ".json?cb=" + Date.now())
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var p = j && j.files && j.files["provenance.json"];
+        var inp = (p && p.inputs) || null;
+        PROV[runNumber] = inp;
+        return inp;
+      })
+      .catch(function () { return null; });
+  }
+
+  function withProvenance(run, m) {
+    if (run.status !== "completed") return Promise.resolve(null);
+    // Two reasons to ask, and only these two.
+    //
+    // (a) The metrics cannot say what STAGE the run was. An sroll job and a
+    //     headpub job both resume at their final step and train nothing; only
+    //     `window` separates them, and `window` lives nowhere but the
+    //     dispatch block.
+    // (b) The metrics carry no config record AT ALL. That is every job that
+    //     trains nothing: it writes progress and a verdict and never a
+    //     `config` line, so without the dispatch block its card would name a
+    //     stage and then have nothing else to say — no tensor, no shape, no
+    //     steps, no resume.
+    //
+    // Every run that trained something falls through both and costs nothing.
+    var haveCfg = m && (m.cfg || m.s2cfg || m.s2res || m.jcfg);
+    if (haveCfg && stageOf(run, m, null)) return Promise.resolve(null);
+    return fetchProvenance(run.run_number);
+  }
+
   // The card is the anchor target for status.html#run-NNN, NOT the table row:
   // the card is the thing worth arriving at (it carries the doc, the plan and
   // the curves) and only ONE element may own the id — two elements with
   // id="run-413" and getElementById silently returns whichever came first.
   // The table row therefore stays id-less; its #N link still goes to Actions,
   // which is the right target when you want the LOG.
+  //
+  // The header row is the card's visual anchor and reads the way a run is
+  // written everywhere else (ml/CLAUDE.md §0c): the number, the experiment,
+  // and a few words naming what the run DOES —
+  //
+  //     run #413 · E-035 · E-035 SEED-PAIR EVAL
+  //
+  // The run NUMBER is the permalink handle. It used to be a separate floated
+  // "#" beside a run number that linked to the Actions page; that is two
+  // affordances for one job, and the more prominent of the two went to the
+  // surface §0c calls the wrong default. The Actions log is still one tap
+  // away, named "log", where a reader who wants a stack trace will look for it.
   function cardHead(run) {
     var doc = docOf(run);
+    var clause = headClause(doc || (run.display_title !== "ml-train" ? run.display_title : null));
+    var tag = expTag(run);
     return '<div class="card" id="run-' + esc(run.run_number) + '"><h3>' +
            plink(run) +
-           '<a href="' + esc(run.html_url) + '">run #' +
-           esc(run.run_number) + '</a> <span class="meta">· ' + whenText(run) +
-           "</span></h3>" +
-           (doc ? '<div class="rundoc">' + esc(doc) + expTag(run) + "</div>" : "");
+           (tag ? '<span class="hsep">·</span>' + tag.replace(/^\s+/, "") : "") +
+           (clause ? '<span class="hsep">·</span><span class="htitle">' +
+                     esc(clause) + "</span>" : "") +
+           '<span class="meta hwhen">' + whenText(run) +
+           ' · <a href="' + esc(run.html_url) + '">log</a></span>' +
+           "</h3>" +
+           (doc ? '<div class="rundoc">' + esc(doc) + "</div>" : "") +
+           (run.__cfg || "");
   }
 
-  // The grab-handle. Chris reads on a phone, where hand-editing a URL to add
-  // "#run-413" is not a thing anyone does; the "#" copies the permalink and
-  // sets the hash so the address bar carries it too. Click handling is
-  // delegated from #live, below, because cards are re-rendered every cycle.
+  // The header's third element: the first CLAUSE of the doc, so the card says
+  // what the run does before the reader has decided whether to read the
+  // paragraph. Cut at the first ":" or dash or sentence end, or ~60
+  // characters, whichever comes first; the full doc sits directly underneath,
+  // so nothing is lost by cutting here.
+  function headClause(text) {
+    if (!text) return null;
+    var s = String(text).replace(/\s+/g, " ").trim();
+    if (!s) return null;
+    var m = s.match(/^(.{8,60}?)\s*(?:[:—–]|[.!?](?:\s|$))/);
+    var out = m ? m[1] : s;
+    if (out.length > 60) {
+      var cut = out.slice(0, 60), sp = cut.lastIndexOf(" ");
+      out = (sp > 24 ? cut.slice(0, sp) : cut) + "…";
+    }
+    // A cut that opened a bracket and never closed it reads as a typo. Drop
+    // back to before the bracket rather than ship "(trained by #396, which".
+    var op = out.lastIndexOf("("), cl = out.lastIndexOf(")");
+    if (op > cl) out = out.slice(0, op);
+    return out.replace(/[\s,;:—–-]+$/, "") || null;
+  }
+
+  // The grab-handle, now merged into the run number itself. Chris reads on a
+  // phone, where hand-editing a URL to add "#run-413" is not a thing anyone
+  // does; tapping the number copies the permalink and sets the hash so the
+  // address bar carries it too. Click handling is delegated from #live, below,
+  // because cards are re-rendered every cycle.
   function plink(run) {
     return '<a class="plink" href="#run-' + esc(run.run_number) +
-           '" title="permalink to run #' + esc(run.run_number) + '">#</a>';
+           '" title="permalink to run #' + esc(run.run_number) +
+           ' — tap to copy">run #' + esc(run.run_number) + "</a>";
   }
 
   function renderLiveRun(run) {
@@ -1429,13 +1744,16 @@
     });
     return pre.then(function () { return fetchMetrics(run.run_number); })
       .then(function (text) {
+      if (text === null && run.status === "completed") return "";
+      var m0 = text === null ? null : parseJsonl(text);
+      if (m0) m0.__plan = run.__plan;   // so the LR overlay can draw the remainder
+      // The structured config strip. It rides the metrics file this function
+      // has ALREADY downloaded; withProvenance() adds a request only for the
+      // finished runs whose metrics cannot settle what stage they were.
+      return withProvenance(run, m0).then(function (inp) {
+      run.__cfg = configStrip(run, m0, inp);
       var head = cardHead(run);
-      if (text === null) {
-        if (run.status === "completed") return "";
-        return waitingCard(run);
-      }
-      var m0 = parseJsonl(text);
-      m0.__plan = run.__plan;      // so the LR overlay can draw the remainder
+      if (text === null) return waitingCard(run);
       if (!m0.loss.length) {
         // Stage-2 and head-probe jobs never train a codec, so they have no
         // loss curve by design — but they DO have a stage-2 panel worth
@@ -1457,13 +1775,14 @@
       return withParent(m0, run).then(function (m) {
         return renderRunBody(run, head, m);
       });
+      });
     }).catch(function (e) {
       // the id belongs on EVERY shape of this run's card, including the one
       // that reports a failure — a permalink that resolves only when the
       // fetch worked is a permalink that breaks exactly when it is wanted.
       return '<div class="card" id="run-' + esc(run.run_number) + '"><h3>' + plink(run) +
-             '<a href="' + esc(run.html_url) + '">run #' + esc(run.run_number) +
-             '</a></h3><div class="empty">could not load live metrics (' + esc(e.message) + ")</div></div>";
+             ' <span class="meta">· <a href="' + esc(run.html_url) + '">log</a></span>' +
+             '</h3><div class="empty">could not load live metrics (' + esc(e.message) + ")</div></div>";
     });
   }
 
