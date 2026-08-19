@@ -44,6 +44,260 @@ low-pass).
 
 ---
 
+<a id="e-043"></a>
+## E-043 · Retire the 45°W–25°W longitude holdout — CODEC ARM LANDED (#416); the decisive arm is #414 and is still in flight
+
+The wave that follows from
+[§0d · the skill map's central band is the held-out longitude block](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#holdout-lon-band-2026-08-19).
+Five arms were planned; A, B, D and E went out at main `8f0e5141` at ~16:49Z and F
+followed at 17:25Z. This section records **arm A (#416)** only; B, D, E and F are open.
+
+| arm | run | what it is |
+|---|---|---|
+| A | **#416** (E-043a: monthly f3 codec retrained with NO longitude holdout) | **landed — this entry** |
+| B | **#414** (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING frozen anchor) | in flight — **the decisive arm** |
+| D | **#417 / #418** (E-043d: sroll re-rolls, `_trainlon` / `_holdlon` split) | in flight / queued |
+| E | **#415** (E-043e: fresh 38.0M pentad r2 codec, all longitude columns) | in flight |
+| F | **#419** (E-043f: fresh 38.0M DAILY codec on all 481 longitude columns) | in flight — refused in the 17:2xZ dispatch pass for want of a daily recipe, then dispatched 17:25:14Z once `f5-40M-nolonhold` existed |
+
+<a id="e-043a"></a>
+### E-043a · #416 — RESULT, completed 2026-08-19 20:46:10Z
+
+**E-043a · Trains a FRESH 40.7M monthly f3 codec on ALL 481 longitude columns: the
+anchor's exact geometry with the −45..−25 block returned to the stage-1 training pool
+(recipe `f3-anchor-41M-nolonhold`, `holdout_lon '0,0'`) · params 40.693M · stage
+`encoder` · data `family3_na025` (C 39, T 516, tensor sha256 `adcbe700fb6e…`) · arch
+576×10, 8 heads, d_dec 768, d_z 64, patch 3 · steps×batch 60,000 × 512 (cosine 3e-4 to
+zero; `max_minutes 0`, so nothing refits) · resume EMPTY — a fresh codec, there is no
+no-holdout parent to continue from.**
+
+**Code.** #416 → `head_sha` `8f0e5141`, job `train` on `gpu-box-46045353` (vast 47717160).
+
+[#416 (E-043a monthly f3 codec, no lon holdout) — the CI log](https://github.com/blauewelt/earth/actions/runs/32278112904)
+
+[probes-416.json on ml-metrics](https://github.com/blauewelt/earth/blob/ml-metrics/probes-416.json)
+
+**Scale (rule 6).** parameters **40.693 M** (log: `codec parameters: 40.69M`; the
+anchor's geometry exactly, 40,692,849) · batch
+**512** · steps **60,000** · data points **40,514,400 train pixels** (= 480 train months
+× 84,405 ocean pixels), against the anchor's 30,376,800.
+
+#### 1 · The regime DID change — the log says so verbatim
+
+This is the only direct proof that the mechanism the whole wave shares actually took
+effect, so it is quoted rather than inferred. From #416's job log, lines 1348 and 1355:
+
+> `held-out months 36/516 · NO lon holdout — all 481 cols train (--holdout-lon '0,0') · ocean 84405`
+
+> `train pixels 40,514,400 · held-out pixels 3,038,580`
+
+**Both lines match the pre-registration character for character.** The expectation was
+written down before the run finished, from #62's own log
+(`held-out months 36/516 · held-out lon block 80/481 cols · ocean 84405` /
+`train pixels 30,376,800 · held-out pixels 13,176,180`), and predicted exactly
+`40,514,400` train pixels and `3,038,580` held-out pixels. Arithmetic:
+40,514,400 = 480 × 84,405; 3,038,580 = 36 × 84,405; and
+40,514,400 / 30,376,800 = **1.33333… = exactly 4/3**, the pre-registered ratio. The 80
+withheld columns carried 21,120 of 84,405 ocean pixels = **25.02%**, which is the 25.0%
+this log already records for the rolled window.
+
+`--holdout-lon=0,0` reached the trainer: `RECIPE_HOLDOUT_LON=0,0` appears in every
+Resolve/Train environment block in the log, and `[0,0)` is the empty half-open interval,
+so the mask is bit-identical to "none" while still parsing in the twelve eval scripts
+that `float()` the field.
+
+#### 2 · What it returned, and the number it must be read against
+
+`probe_kfold` (year-blocked, pooled ridge over `Z.mean(1)` on the 26.5°N section),
+monthly `family3_na025`, log verbatim:
+
+> `actions    d_z=64  rapid  k-fold r +0.613 [+0.493, +0.716]  (n=240) · RMSE 2.20 Sv (sigma 2.79) · 18mo-lowpass r +0.803 · wind-only +0.568`
+
+| probe (pooled ridge, year-blocked k-fold) | r | 95% CI | n | RMSE Sv |
+|---|---|---|---|---|
+| **#416 — no-lon-holdout codec** | **0.613** | [0.493, 0.716] | 240 | 2.20 |
+| **f3_anchor41M (run-62/run-63, tag run-80) — the CONTROL** | **0.627** | [0.503, 0.735] | 240 | 2.17 |
+| wind-only bar, this tensor (identical in both) | 0.568 | [0.428, 0.696] | 240 | 2.29 |
+
+**Where the control number comes from, and why it is 0.627 and not 0.631.** It is the
+archived `probe_kfold` block in **`probes-140.json`**, and identically in every one of the
+**95 archived bundles** from #140 to #360 that froze `!run-62,run-63` on
+`family3_na025` — §3b's *protocol determinism*, not 95 replicates. `probes-140.json` is
+cited because it is the earliest archived bundle whose `provenance.json` records
+**tensor sha256 `adcbe700fb6e…`, the same bytes #416 trained and was scored on**. The
+programme's *headline* anchor number, the 0.631 [0.513, 0.732] / 2.16 Sv in
+[E-003](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-003) and in
+`ml/LEADERBOARD.md`, comes from **`probes-116.json`**, whose provenance predates the
+tensor-sha field and which E-008 attributes to the **box effect** (two boxes each built
+their own `family3_na025`; §"A confound that is NOT float noise"). 0.627 is the
+tensor-matched comparison and 0.631 is the published one; the difference between them,
+**0.004, is a build-of-the-tensor artefact and is itself more than a quarter of the
+effect being discussed here.**
+
+Other targets: FC **0.278** [0.191, 0.366] (n=490) vs wind-only 0.121 — the one clear
+gain over wind in the bundle; MOVE 0.138 [−0.004, 0.279] vs wind-only −0.376; OSNAP 0.017.
+`probe_sequence` peaks at K=12 (r_deseas 0.569). `dip_check`: out-of-fold r 0.613, sign
+agreement **68.8%**, 2009–10 dip **44.3%** captured (anchor 51.2%).
+
+In-training light probe, for the trajectory only (labelled per rule 5, never a
+head-line): step-0 untrained `linear r_des +0.269`; `@2000 +0.491` against **#62's
++0.476 at the same step**; end of run `@58000 +0.459`. Reconstruction
+`rec 0.1512 → 0.0980` over the 60k steps. (#62's +0.476 is second-hand — it was read out
+of #62's own log by the dispatching session for the first-minutes check; that log has
+since aged out of the Actions API and is **not independently re-verifiable now**.)
+
+#### 3 · Is the −0.014 anything? — the paired test CANNOT be run, and this is a code gap
+
+§3 requires a **paired** comparison (`scripts/paired_probe.py`), because two probes
+scored on the same 240 months and the same year-blocked folds share most of their error
+and their overlapping CIs say nothing. **It could not be run, for a reason that is
+structural rather than an archiving oversight:**
+
+- `paired_probe.py` requires `pred`, `target_sv` and `years` in both files.
+- **`ml/probe_kfold.py` never writes them.** It computes `pred` — `r, lo95, hi95, n,
+  rmse, sigma, pred = kfold_r(...)` — and then emits only the summary block
+  (`r_kfold_deseas`, `ci95`, `n`, `rmse_sv`, `sigma_sv`, `r_lowpass18`,
+  `wind_only_baseline`). Only `ml/probe_head.py` dumps the per-month arrays (its
+  lines 469–471).
+- So **no pair of pooled-ridge k-fold results in this programme's history has ever been
+  paired-testable**, archived or not — not #416 against the anchor, not any other two.
+- And #416 has **no `probe_head.json` at all** (see §4), so the head route is closed too.
+
+**FIX, cheap and not dispatched:** have `probe_kfold.py` dump `pred` / `target_sv` /
+`years` alongside its summary — ~2 KB per target, the arrays already exist in memory at
+the point of the `json.dump`. That single change makes every future codec comparison
+paired-testable. It is the smallest lever in this entry.
+
+**So the difference is stated against the noise scale instead, per §3b.** The gap is
+**−0.014** (0.613 − 0.627), or −0.018 against the published 0.631.
+
+- §3b's **closest measured analogue** is the *codec head probe* row: a **codec-seed
+  pair** at **0.92M** parameters (patch24, #18 / #43) on the **1° global** tensor moved
+  the **pooled ridge by 0.012** and the **attention head by 0.036**. −0.014 is
+  **1.2× that pooled-ridge codec-seed delta**.
+- **That extrapolation must be flagged.** The analogue is at **0.92M params on a 1°
+  global tensor**; #416 is **40.7M on the 0.25° North Atlantic tensor** — 44× the
+  parameters and a different tensor family. §3b's own words: a band "is warranted only
+  where it was measured", and **no codec-seed pair has ever been measured at 40.7M**.
+  The 0.012 is the only number in the record that is even the right KIND of quantity.
+- Two other scales bracket it and both make −0.014 smaller still: the **box effect**
+  moved this very number by **0.004** on the same protocol, and E-003's whole capacity
+  result — 44× the parameters, 0.92M → 40.7M — was **+0.011** and was logged as a NULL.
+- The RAPID k-fold's own instrument noise is the widest in the programme: n = 240 with
+  **~9 effective DOF after the 18-month low-pass**, CI width ±0.11, and §3b's measured
+  probe-scale spreads run **0.036–0.245**.
+
+**Reading, per §3b's consistency form:** #416 is **consistent with the anchor at n = 1**
+— a −0.014 difference on a pooled probe whose only comparable codec-seed delta is 0.012
+and whose tensor-build artefact alone is 0.004. It is **not** evidence that removing the
+holdout hurt the codec, and it is **not** evidence that it helped. **Nothing here is a
+level and nothing here is quotable**: this is a new codec regime with no measured pair,
+so §3b's second clause applies in full — a headline claim buys its replicate first.
+
+Against the run's own pre-registered **falsifier** ("if its in-training linear r_deseas
+and its later `probe_kfold` rapid r sit at or below the anchor's on the shared columns,
+the holdout was buying real regularisation"): the probe r is **nominally below** and the
+early light probe is **nominally above**. Split verdict on an instrument that cannot
+resolve either sign — **the falsifier is not triggered and is not cleared.** The pooled
+monthly probe is simply too blunt to be the arbiter of this question, which was the prior
+going in and is why the wave does not rest on this arm.
+
+#### 4 · What #416 does NOT test — read this before reading its number
+
+**(a) It is the CODEC half only.** The holdout change has two halves, and this arm moves
+the stage-1 one. The prior was that it would change **little**, and it was a measured
+prior:
+[E-019b1](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-019)
+measured the retrained deep-T decoder at **1.43% rmse² on held-out longitudes against
+0.85% on trained ones** (and 1.90% on held-out *months*) — the codec already generalised
+across the block essentially perfectly, and the §0d finding's own conclusion was that the
+skill band is *"entirely a stage-2 forecast-head generalisation failure."* **Expected
+direction: ~zero, with a weak prior toward a small gain from 4/3 the training pixels.
+Observed: ~zero (−0.014, inside every relevant noise scale). Consistent with the prior.**
+A pooled 240-month ridge with ~9 effective DOF was never going to resolve "little", and
+it did not.
+
+**(b) THE DECISIVE ARM IS #414, NOT THIS ONE.**
+**#414 (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING
+frozen anchor)** is the clean test of the holdout change: it resumes `run-62,run-63` at
+step 60,000 with **stage 1 training nothing**, so the codec is the anchor, the **Z cache
+is byte-identical**, and the *only* thing that differs is the stage-2 training pool. That
+is where §0d located the failure and that is where the effect, if there is one, has to
+show up — scored on rolled corridor AUC, the one metric §3b licenses at n = 1.
+**Do not read #416 as the verdict on the longitude holdout.** #416's contribution is
+narrower and still worth having: it proves the training-pool mechanism fires (§1) and it
+shows the codec's own read-out did not move when it did.
+
+**(c) #416 HAS NO HEAD NUMBER — recorded as a gap, with its cause.** The bundle carries
+`probe_kfold.json`, `probe_sequence.json`, `dip_check.json`, `provenance.json` and the
+archiver's own line `not present: … probe_head.json, probe_head_raw3x3.json …`. Cause:
+`head_probe: "false"` in the inputs, because #416's dispatch inputs were copied verbatim
+from **#62 (the anchor's own dispatch)**, which **predates the `head_probe` flag**. Per
+§3 the pooled ridge "is the comparable-to-history number, never the verdict", so the
+read-out this programme actually trusts was never taken on this codec.
+
+> **NEXT CHEAP ACTION (recorded, NOT dispatched):** an **eval-only** re-dispatch against
+> #416's published checkpoint with `head_probe: true` — no training, one probe ladder —
+> would produce `probe_head.json` + `probe_head_raw3x3.json` for this codec and, because
+> `probe_head.py` writes `pred`/`target_sv`/`years`, would also make it the **first
+> no-holdout codec that can be paired-tested** against the anchor's head. #406's
+> precedent prices an eval-only ladder at ~2 h on a ~$0.29/h box.
+
+#### 5 · Cost (§3)
+
+| item | value |
+|---|---|
+| box | `gpu-box-46045353` (vast 47717160) |
+| wall clock, whole job | **3 h 56 min 37 s** (16:49:33Z → 20:46:10Z) |
+| training loop | **13,683 s** elapsed at step 60,000 = 3.80 h (0.228 s/step wall, including the 29 interleaved light probes and 5 full probes; ~0.203 s/step of pure training) |
+| dollars | **≈ $1.05** at ~$0.268/h |
+| dead dispatches | **none** — #416 ran once, green, first try |
+
+The $0.268/h is **inferred, not read off Vast**: the wave's five-box burn was $1.524/h at
+dispatch and $1.256/h at 20:55Z after this box was stopped, and the only other change in
+between was #419 starting on `gpu-box-46996216`, which was already burning idle at
+$0.333/h and so contributes no delta. It is consistent with the ~$0.26–0.29/h this wave's
+monthly boxes have billed. Treat the dollar figure as ±10%.
+
+---
+
+<a id="wave9-status-2026-08-19-2055"></a>
+## OPERATIONS · The E-043 wave at 20:55Z — one arm home, four running, runway shorter than two of them
+
+Not an experiment. Recorded because it sets what the next session inherits.
+
+| run | arm | progress at 20:55Z |
+|---|---|---|
+| **#414** (E-043b xl144 stage-2 head, all-longitude pool, frozen anchor) | B | stage-2 step **52,000 / 200,000** |
+| **#415** (E-043e fresh 38.0M pentad r2 codec, all longitude columns) | E | step **37,000 / 200,000** |
+| **#416** (E-043a monthly f3 codec, no lon holdout) | A | **DONE** 20:46:10Z — box stopped |
+| **#417** (E-043d sroll re-roll, gate + xl233 pair) | D1 | sroll head **3 / 3**, phase `skill` |
+| **#418** (E-043d sroll re-roll, gate + xl144 pair) | D2 | **queued** behind #417 on the same box, by design |
+| **#419** (E-043f fresh 38.0M daily codec, all longitude columns) | F | step **12,000 / 200,000** |
+
+**Money.** Credit **$30.60**, burn **$1.256/h** after `gpu-box-46045353` was stopped on
+#416's drain, runway **~24 h**. **#415 and #419 both run past it** — #415 needs ~163k
+more steps and #419 ~188k. Chris's instruction is to **count on a top-up rather than park
+the fleet**, so the fleet is not being triaged the way it was at
+[01:35Z](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#credit-triage-2026-08-19);
+the standing lesson from that night still applies — an exhaustion that stops N boxes at
+once produces N zero results, not N partial ones.
+
+**Open on this wave, in order of cheapness:**
+
+1. `probe_kfold.py` does not dump `pred`/`target_sv`/`years`, so **no two pooled-ridge
+   k-folds in this programme can be paired-tested**. ~2 KB per target, arrays already in
+   memory. E-043a §3.
+2. An **eval-only** ladder with `head_probe: true` over #416's codec — the head number
+   #416 never took, ~2 h, ~$0.6. E-043a §4(c).
+3. Arm **F (daily)** — **#419 (E-043f fresh 38.0M daily codec, all longitude columns)**
+   — is the arm the 17:2xZ pass refused, because `holdout_lon` is a recipe-only key and
+   no daily recipe existed on main. `f5-40M-nolonhold` landed and it went out at
+   17:25:14Z onto `gpu-box-46996216`, which had been idle-burning at $0.333/h. It is the
+   longest arm in the wave and the one most exposed to the runway.
+
+---
+
 <a id="holdout-lon-band-2026-08-19"></a>
 ## §0d · DEFECT & FINDING · The skill map's central band is the held-out longitude block, 2026-08-19 ~14:30Z
 
