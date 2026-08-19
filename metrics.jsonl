@@ -1,0 +1,19 @@
+{"config": {"steps": 200000, "batch": 512, "d_z": 32, "patch": 1, "d_model": 512, "n_layers": 12, "n_heads": 4, "d_dec": 256, "anomaly": true, "eval_every": 7500, "light_probe_every": 10000, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 37.976, "data": "family4_na025_pentad_r2.npz", "C": 40, "T": 3142, "resume": null, "recipe": "f4r2-40M"}}
+{"linear_r_deseas": 0.588, "linear_r_raw": 0.576, "z_mse_model": 0.08793395012617111, "z_mse_persistence": 0.58349609375, "chan_mse_model": 0.9366211295127869, "chan_mse_persistence": 0.869140625, "temporal_r_deseas": 0.496, "temporal_r_raw": 0.506, "chan_vs_persistence_pct": -7.8, "z_vs_persistence_pct": 84.9, "probe_seconds": 1282.9, "step": 0, "wall_s": 1282.9}
+{"step": 1000, "loss_rec": 0.24785, "loss_nei": 0.20809}
+{"step": 2000, "loss_rec": 0.271, "loss_nei": 0.21563}
+{"step": 3000, "loss_rec": 0.24185, "loss_nei": 0.20922}
+{"step": 4000, "loss_rec": 0.25144, "loss_nei": 0.22826}
+{"step": 5000, "loss_rec": 0.22889, "loss_nei": 0.20577}
+{"step": 6000, "loss_rec": 0.22725, "loss_nei": 0.20007}
+{"step": 7000, "loss_rec": 0.26786, "loss_nei": 0.20622}
+{"linear_r_deseas": 0.586, "linear_r_raw": 0.638, "z_mse_model": 7.523329257965088, "z_mse_persistence": 11.953125, "chan_mse_model": 0.6016529202461243, "chan_mse_persistence": 0.869140625, "temporal_r_deseas": 0.581, "temporal_r_raw": 0.587, "chan_vs_persistence_pct": 30.8, "z_vs_persistence_pct": 37.1, "probe_seconds": 1372.3, "step": 7500, "wall_s": 4065.4}
+{"step": 8000, "loss_rec": 0.22026, "loss_nei": 0.1864}
+{"step": 9000, "loss_rec": 0.22963, "loss_nei": 0.19173}
+{"step": 10000, "loss_rec": 0.22844, "loss_nei": 0.18709}
+{"linear_r_deseas": 0.625, "linear_r_raw": 0.617, "light": true, "probe_seconds": 784.0, "step": 10000, "wall_s": 5321.6}
+{"step": 11000, "loss_rec": 0.23855, "loss_nei": 0.19082}
+{"step": 12000, "loss_rec": 0.23892, "loss_nei": 0.2088}
+{"step": 13000, "loss_rec": 0.25309, "loss_nei": 0.21973}
+{"step": 14000, "loss_rec": 0.25224, "loss_nei": 0.2402}
+{"step": 15000, "loss_rec": 0.22369, "loss_nei": 0.20587}
