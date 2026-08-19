@@ -458,11 +458,12 @@ except FileNotFoundError as e:
     print("fig_amoc_roll skipped:", e)
 
 
-# ---- Fig 10: where the rolled skill actually sits, per pixel --------------
+# ---- Fig 10: the spatial generalisation gap ------------------------------
 # src: run #356 (xl144) rollout_spatial.json, staged as roll_356.json; the
 #      audit block's `map_msss_clim_window` — 84,405 per-pixel MSSS values
 #      against climatology at h = 6 months, pooled over all 39 channels and
-#      every evaluation start-month.
+#      every evaluation start-month. `s1_s0` in the same file is the frozen
+#      no-neighbour gate head, rolled through the identical protocol.
 #
 # THE PIXELS CARRY NO COORDINATES. rollout_spatial.py does `ys, xs =
 # np.where(ocean)` — row-major over the window grid, rows SOUTH-FIRST — and
@@ -474,7 +475,18 @@ except FileNotFoundError as e:
 # looking like a plausible ocean (root CLAUDE.md §2). The asserts below are
 # the price of not repeating that: counts against the mask's own recorded
 # totals, and the RAPID section's reconstructed latitude against 26.5 N.
-def _amoc_map(head_key, src_file):
+#
+# THE BAND IS A HELD-OUT LONGITUDE BLOCK, NOT AN OCEAN FEATURE. train.py's
+# `--holdout-lon` defaults to "-45,-25" and both stages honour it:
+# train.py:288 builds the stage-1 codec pool as `obs_any & ~t_hold &
+# ~x_hold` and temporal.py:1419 builds the stage-2 head pool as
+# `ok_p = ~x_hold[xs]`. rollout_spatial.py:566-567 recomputes the same
+# `x_hold` from the checkpoint's own args and then scores every pixel
+# anyway. So HOLD is drawn on both panels, and the figure names it.
+HOLD = (-45.0, -25.0)                 # train.py --holdout-lon, half-open
+
+
+def _amoc_map(head_key, src_file, gate_key="s1_s0"):
     mk = os.path.join(os.path.dirname(ML), "data", "amoc_eval_mask.json")
     m = json.load(open(mk))
     nx, ny = m["nx"], m["ny"]
@@ -486,9 +498,14 @@ def _amoc_map(head_key, src_file):
     lons = m["west"] + (np.arange(nx) + 0.5) * m["dlon"]
     ys, xs = np.where(code >= 1)                 # == the eval's ys/xs order
 
-    h = json.load(open(os.path.join(HERE, src_file)))["heads"][head_key]
-    v = np.array([np.nan if q is None else q
-                  for q in h["audit"]["map_msss_clim_window"]], float)
+    H = json.load(open(os.path.join(HERE, src_file)))["heads"]
+    h = H[head_key]
+
+    def vals(k):
+        return np.array([np.nan if q is None else q
+                         for q in H[k]["audit"]["map_msss_clim_window"]],
+                        float)
+    v, g = vals(head_key), vals(gate_key)
 
     cnt = m["counts"]
     assert len(v) == len(ys) == cnt["rolled"], (
@@ -510,11 +527,46 @@ def _amoc_map(head_key, src_file):
         "corridor centre of mass at %.1f N %.1f E — not the subtropical "
         "western basin; refusing to draw it" % com)
 
+    # zonal means, one per 0.25° column of the window
+    def zonal(a):
+        p = np.full(nx, np.nan)
+        for i in range(nx):
+            s = xs == i
+            if s.sum() >= 30:                    # ignore near-empty columns
+                p[i] = np.nanmean(a[s])
+        return p
+    zv, zg = zonal(v), zonal(g)
+
+    # THE CLAIM THE LOWER PANEL MAKES, asserted rather than eyeballed: the
+    # steepest zonal gradients anywhere in the 481-column window lie just
+    # inside the held-out edges — the profile falls off a cliff at -45 and
+    # climbs back at -25, and nowhere else. If a future rollout moves the
+    # holdout, this fires instead of quietly drawing a mislabelled band.
+    step = np.full(nx, np.nan)
+    step[1:] = zv[1:] - zv[:-1]
+    fin = np.where(np.isfinite(step), step, 0.0)
+    order = np.argsort(fin)
+    for i in list(order[:5]) + list(order[-5:]):
+        assert HOLD[0] <= lons[i] < HOLD[1], (
+            "steepest zonal step at %.2f is OUTSIDE the held-out block — "
+            "the band is not the holdout and the caption is wrong"
+            % lons[i])
+        edge_d = min(lons[i] - HOLD[0], HOLD[1] - lons[i])
+        assert edge_d < 3.0, (
+            "steepest zonal step at %.2f is %.1f deg inside the block — the "
+            "ramps are not at the training boundary" % (lons[i], edge_d))
+    ins = (lons >= HOLD[0]) & (lons < HOLD[1])
+    assert np.nanmean(zv[ins]) < 0.5 < np.nanmean(zv[~ins]), (
+        "in-block zonal mean %.3f vs out %.3f — the collapse this figure "
+        "is about is not there" % (np.nanmean(zv[ins]), np.nanmean(zv[~ins])))
+
     field = np.full((ny, nx), np.nan)
     field[ys, xs] = v                            # land / off-window stay NaN
+    inb = (lons[xs] >= HOLD[0]) & (lons[xs] < HOLD[1])
     return {"f": field, "cor": (code >= 2), "lats": lats, "lons": lons,
             "sec_lat": float(sec_lat[0]), "sec_lo": sec_lo, "com": com,
-            "meta": h["meta"], "hh": h["audit"]["map_h"], "m": m}
+            "meta": h["meta"], "hh": h["audit"]["map_h"], "m": m,
+            "zv": zv, "zg": zg, "inb": inb, "v": v, "g": g, "corx": cor}
 
 
 try:
@@ -539,26 +591,47 @@ try:
     cmap = cmap.copy()
     cmap.set_bad(BG)                             # land / outside the window
 
-    fig, ax = plt.subplots(figsize=(6.6, 3.9))
+    fig, (ax, axp) = plt.subplots(
+        2, 1, figsize=(6.6, 5.0), sharex=True,
+        gridspec_kw={"height_ratios": [2.9, 1.0], "hspace": 0.09})
     im = ax.imshow(f, origin="lower", extent=ext, cmap=cmap, vmin=-1, vmax=1,
-                   interpolation="nearest", aspect=1.35)
+                   interpolation="nearest", aspect="auto")
     ax.contour(D["lons"], D["lats"], D["cor"].astype(float), levels=[0.5],
                colors=[INK2], linewidths=0.4, alpha=0.75)
     ax.plot([D["sec_lo"][0], D["sec_lo"][1]], [D["sec_lat"]] * 2,
             color=C3, lw=1.4, solid_capstyle="butt")
-    hand = [matplotlib.lines.Line2D([], [], color=INK2, lw=0.8,
+
+    # The held-out block, on BOTH panels. Hatched rather than filled: the
+    # whole point is that the reader can still SEE the skill inside it decay.
+    HK = INK if not DARK else "#e8e6df"
+    matplotlib.rcParams["hatch.linewidth"] = 0.45
+    # the hatch is a MARK, not a mask: alpha low enough that the decay
+    # inside the block stays readable. Light ink on the dark page reads
+    # heavier than dark ink on the light one, so it is tuned per variant.
+    a_map, a_pro = (0.22, 0.13) if DARK else (0.30, 0.18)
+    for a_, lo_, hi_, al_ in ((ax, m["south"], m["north"], a_map),
+                              (axp, -0.15, 1.0, a_pro)):
+        a_.add_patch(matplotlib.patches.Rectangle(
+            (HOLD[0], lo_), HOLD[1] - HOLD[0], hi_ - lo_, facecolor="none",
+            edgecolor=HK, hatch="///", lw=0.0, alpha=al_, zorder=3))
+        for e_ in HOLD:
+            a_.axvline(e_, color=HK, lw=0.9, alpha=0.85, zorder=4)
+    ax.text(sum(HOLD) / 2, m["north"] - 7.0, "never trained here",
+            ha="center", va="top", fontsize=6.8, color=INK, zorder=5,
+            bbox=dict(boxstyle="round,pad=0.22", fc=BG, ec="none",
+                      alpha=0.85))
+
+    hand = [matplotlib.patches.Patch(facecolor="none", edgecolor=HK,
+                                     hatch="////", lw=0.6,
+                                     label="45°W–25°W: held out from ALL "
+                                           "training (train.py --holdout-lon)"),
+            matplotlib.lines.Line2D([], [], color=INK2, lw=0.8,
                                     label="corridor (29,627 px)"),
             matplotlib.lines.Line2D([], [], color=C3, lw=1.4,
                                     label="RAPID 26.5°N section")]
-    ax.legend(handles=hand, frameon=False, fontsize=6.5, ncol=2,
-              loc="upper left", bbox_to_anchor=(0.0, -0.10),
-              handlelength=1.8, columnspacing=1.6)
     ax.set_xlim(m["west"], m["east"])
     ax.set_ylim(m["south"], m["north"])
-    ax.set_xticks([-100, -80, -60, -40, -20, 0, 20])
     ax.set_yticks([0, 20, 40, 60])
-    ax.set_xticklabels(["100°W", "80°W", "60°W", "40°W", "20°W", "0°", "20°E"],
-                       fontsize=7.5)
     ax.set_yticklabels(["0°", "20°N", "40°N", "60°N"], fontsize=7.5)
     ax.grid(False)
     for s in ("top", "right", "bottom", "left"):
@@ -566,7 +639,32 @@ try:
         ax.spines[s].set_linewidth(0.6)
     ax.set_title("Rolled skill against climatology at 6 months, per pixel",
                  loc="left", fontsize=9)
-    cb = fig.colorbar(im, ax=ax, fraction=0.030, pad=0.02,
+
+    # Lower panel: the same field as a zonal mean, with the no-neighbour gate
+    # beneath it. Two cliffs, at exactly the two numbers in an argparse
+    # default. Nothing in the ocean has edges there.
+    axp.plot(D["lons"], D["zv"], color=C1, lw=1.3,
+             label="144-point stencil")
+    axp.plot(D["lons"], D["zg"], color=C2, lw=1.0, ls=(0, (3, 1.6)),
+             label="no-neighbour gate")
+    axp.axhline(0, color=INK2, lw=0.6)
+    axp.set_ylim(-0.15, 1.0)
+    axp.set_yticks([0, 0.5, 1.0])
+    axp.tick_params(labelsize=7)
+    axp.set_ylabel("zonal mean\nMSSS", fontsize=7.5)
+    axp.set_xticks([-100, -80, -60, -45, -25, 0, 20])
+    axp.set_xticklabels(["100°W", "80°W", "60°W", "45°W", "25°W", "0°",
+                         "20°E"], fontsize=7.5)
+    axp.grid(True, axis="y")
+    strip(axp)
+    axp.add_artist(axp.legend(frameon=False, fontsize=6.5, loc="lower left",
+                              bbox_to_anchor=(0.002, 0.02), handlelength=2.0,
+                              labelspacing=0.3))
+    axp.legend(handles=hand, frameon=False, fontsize=6.5, ncol=1,
+               loc="upper left", bbox_to_anchor=(-0.008, -0.36),
+               handlelength=1.9, labelspacing=0.38)
+
+    cb = fig.colorbar(im, ax=(ax, axp), fraction=0.030, pad=0.02,
                       ticks=[-1, -0.5, 0, 0.5, 1])
     cb.set_label("MSSS vs climatology  (0 = no better)", fontsize=7.5)
     cb.ax.tick_params(labelsize=7)
@@ -574,8 +672,13 @@ try:
     cb.outline.set_linewidth(0.6)
     fig.savefig(os.path.join(FIGS, "fig_gulfstream.pdf"))
     plt.close(fig)
-    print("fig_gulfstream: %s seed %s · corridor CoM %.1f N %.1f E"
-          % (D["meta"]["file"], D["meta"]["seed"], D["com"][0], D["com"][1]))
+    ib = D["inb"]
+    print("fig_gulfstream: %s seed %s · corridor CoM %.1f N %.1f E · "
+          "in-block %.3f vs out %.3f · stencil advantage in %.3f out %.3f"
+          % (D["meta"]["file"], D["meta"]["seed"], D["com"][0], D["com"][1],
+             np.nanmean(D["v"][ib]), np.nanmean(D["v"][~ib]),
+             np.nanmean(D["v"][ib]) - np.nanmean(D["g"][ib]),
+             np.nanmean(D["v"][~ib]) - np.nanmean(D["g"][~ib])))
 except FileNotFoundError as e:
     print("fig_gulfstream skipped:", e)
 

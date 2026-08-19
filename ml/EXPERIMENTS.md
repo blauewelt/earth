@@ -44,6 +44,151 @@ low-pass).
 
 ---
 
+<a id="holdout-lon-band-2026-08-19"></a>
+## §0d · DEFECT & FINDING · The skill map's central band is the held-out longitude block, 2026-08-19 ~14:30Z
+
+Not an experiment — a diagnosis, made from artefacts already on disk, that
+changes how every rolled number in this log should be read. It costs no GPU and
+it was available to be made at any point since E-022.
+
+**The finding.** `ml/paper/fig_gulfstream`'s dominant feature — a meridional
+band of collapsed skill through the central Atlantic — is **not an ocean
+feature and not a model failure in the ocean**. It is the longitude block
+`45°W–25°W`, which is withheld from training in **both** stages and then scored
+by the rolled evaluation along with everything else. The band is the model's
+**spatial generalisation gap**, and the map is a direct picture of one.
+
+**Verified in source, not inferred:**
+
+| where | what it does |
+|---|---|
+| `ml/train.py:119` | `p.add_argument("--holdout-lon", default="-45,-25")` |
+| `ml/train.py:288` | stage-1 codec pool = `obs_any & ~t_hold[:,None,None] & ~x_hold[None,None,:]` — line 289 puts the same block in *validation* |
+| `ml/temporal.py:1180-1181` | stage 2 reads `lo, hi` from the **frozen codec's** `ck["args"]["holdout_lon"]` and rebuilds `x_hold = (lons >= lo) & (lons < hi)` — half-open, so the edges are exactly −45.00 and −25.00 |
+| `ml/temporal.py:1419` | stage-2 head pool = `ok_p = ~x_hold[xs]` |
+| `ml/rollout_spatial.py:566-567` | recomputes the identical `x_hold` from the checkpoint's args … |
+| `ml/rollout_spatial.py:630` | … uses it **only** for `stream_stats`' normalisation constants, and then scores all three scopes over every pixel, recording nowhere in the artefact that it did |
+
+**The mechanism is explicit.** `temporal.py:826` builds
+`coords = np.stack([lats[ys]/90, lons[xs]/180], 1)` and lines 1343/1351
+concatenate it into `static_ctx`. **Longitude is a literal input feature with a
+20° hole in its training range.** The head is interpolating across a gap in its
+own input, which is why the failure is a smooth ramp rather than a cliff.
+
+**Evidence, all recomputed this session from `ml/paper/roll_356.json` +
+`data/amoc_eval_mask.json` (xl144 seed 0, h = 6):**
+
+- **Edges at exactly −45.00 / −25.00.** The earlier reading of "42°W–28°W,
+  near-vertical" was a **2.5°-binning artefact** — corrected. The edges are
+  **ramps 1–2° wide**.
+- **Monotone decay inward from BOTH trained edges**, meeting in the middle:
+  in from 45°W at 1° steps 0.702 / 0.485 / 0.341 / 0.233 / 0.186; in from 25°W
+  0.708 / 0.540 / 0.421 / 0.329 / 0.263; block centre (−36…−34) **0.171**.
+- **The ten steepest column-to-column gradients in the whole 481-column
+  window** all lie inside the block and within 2.25° of an edge. Nothing else
+  in the basin has a gradient like it. This is now **asserted** in
+  `ml/paper/make_figs.py`, so a future rollout that moves the holdout fails the
+  figure build instead of quietly drawing a mislabelled band.
+- **Latitude-invariant** (in/out by 10° band): 0–10N 0.290/0.834 · 10–20N
+  0.295/0.858 · 20–30N 0.436/0.849 · 30–40N 0.306/0.835 · 40–50N 0.157/0.865 ·
+  50–60N 0.386/0.900 · 60–70N 0.424/0.910. That **kills** the Mid-Atlantic-Ridge
+  and the Argo/observing-coverage readings, both of which are latitude-structured.
+- **The variance explanation is REFUTED by measurement.** MSSS is a
+  variance-normalised ratio, so the previous draft blamed a small denominator.
+  Per-pixel standardised-anomaly variance computed from `ml/cache/base025_na.npz`
+  on the eval's own recipe (train-month climatology, holdout years excluded,
+  per-channel σ over train months × non-holdout lons) is **smooth and edgeless**
+  through the region: −52 1.27 · −48 1.29 · −45 **1.38** · −42 1.42 · −40 1.24 ·
+  −36 0.99 · −30 0.83 · −25 **0.79** · −22 0.77 · −16 0.74. **Nothing happens at
+  −45 or −25.** Variance is nearly 2× larger at the west edge than the east
+  edge, where skill is equal to 0.01 (0.781 vs 0.772); the zonal minimum is at
+  **12°E**, far east of the band; and `corr(variance, skill)` over the window is
+  **−0.05**. Denominator size does not order skill. *(Caveat: `base025_na.npz`
+  carries 3 dynamic channels — `cur_speed`, `log_mld`, `ssh` — not the eval's
+  39. The shape of the profile is the claim; the absolute level is a proxy.)*
+- **Not the codec.** E-019b1 measured the retrained deep-T decoder's fidelity
+  at **1.43% rmse² on held-out longitudes vs 0.85% on trained ones** (against
+  1.90% on held-out *months*) — the codec generalises across the block
+  essentially perfectly. The collapse is **entirely a stage-2
+  forecast-head generalisation failure.**
+
+**Overlap with the published scopes**, measured off `data/amoc_eval_mask.json`:
+
+| scope | in-block / total | share |
+|---|---|---|
+| rolled window | 21,120 / 84,405 | **25.0%** |
+| AMOC corridor | 7,089 / 29,627 | **23.9%** |
+| RAPID 26.5°N section | 80 / 265 | **30.2%** |
+
+**Direction is DEFLATIONARY — nothing in this archive is inflated.** Including
+the block makes every published number *worse* than its trained-longitude
+counterpart. Rough implied trained-longitude corridor AUCs (an **estimate**, by
+reweighting the h = 6 map; NOT a re-rolled measurement): e017 `s1_s0`
+0.589 → ≈0.75, xl89 0.674 → ≈0.82, xl144 0.681 → ≈0.82.
+
+**What IS qualified: the stencil advantage.** At h = 6, stencil head vs the
+frozen 1-point gate:
+
+| head · file | scope | total adv | in-block adv × share | out-of-block adv × share | **in-block share of the advantage** |
+|---|---|---|---|---|---|
+| xl144 s0 (#356) | corridor | +0.0907 | +0.182 × 0.239 = +0.0436 | +0.062 × 0.761 = +0.0471 | **48%** |
+| xl144 s0 (#356) | window | +0.0798 | +0.187 × 0.250 = +0.0467 | +0.044 × 0.750 = +0.0331 | **59%** |
+| xl144 s1 (#356) | corridor / window | +0.0865 / +0.0768 | | | **45% / 57%** |
+| xl89 s0 (#355) | corridor / window | +0.0829 / +0.0723 | | | **43% / 57%** |
+| xl89 s1 (#355) | corridor / window | +0.0849 / +0.0771 | | | **42% / 57%** |
+
+**Roughly half of the stencil head's measured advantage is earned on pixels the
+model was never trained on.** That is defensible — reading neighbours is exactly
+how you cover a hole in your own coordinate input, and an untrained pixel's
+neighbours include trained ones — but *"spatial coupling helps forecasting"* and
+*"spatial coupling helps you extrapolate into a training hole"* are **different
+claims**, and no published number separates them. Every corridor-AUC comparison
+in `ml/LEADERBOARD.md` and the paper's Table 5 carries this qualification. The
+ranking is unaffected (all arms are scored on the same pixels).
+
+**The corridor paradox dissolves.** The previous reading — "the corridor is not
+the skilful part of the window" (0.71 in vs 0.74 out) — was an artefact of the
+same overlap. Split by the block: **out-of-block corridor 0.864 vs non-corridor
+0.866 — indistinguishable**; in-block corridor 0.229 vs non-corridor 0.369. The
+corridor is not selecting unskilful pixels. Fast-current pixels inside an
+untrained longitude block are simply the hardest thing in the window to
+extrapolate to, which is what one expects if the missing information is
+advective.
+
+**THE REPORTING DEFECT — found here, FIXED in the same session by the parallel
+arm (`58aad7f`).** `rollout_spatial.py` knew about the block — it recomputes
+`x_hold` at line 567 — and **recorded nothing about it in any artefact**. Every
+`rollout_spatial.json` on `ml-metrics`, every corridor AUC in
+`ml/LEADERBOARD.md`, and the paper up to this revision reported a single number
+blended over trained and untrained longitudes with no field naming the split.
+`58aad7f` adds a top-level `holdout_lon` block (bounds, column count, which
+pools exclude it, per-scope `in_block`/`of`/`frac`) and a `*_trainlon` /
+`*_holdlon` split beside every scope, plus `tests/test_roll_holdout_lon.py`.
+**Every number already on `ml-metrics` predates that**, so the archive stays
+blended and this entry is how those numbers are read. *(`rollout_spatial.py`
+and `tests/` are the parallel arm's; nothing under them was touched here.)*
+
+**DECISIVE CONFIRMATION STILL OUTSTANDING.** Everything above is consistent with
+the diagnosis and no alternative survives, but the experiment that would settle
+it beyond argument has not been run: **retrain one small stage-2 head with a
+DIFFERENT held-out longitude block and confirm the band moves with it.** It is
+not a one-line change — `temporal.py:1180` reads the block from the *frozen
+codec's* saved args and has no switch of its own, so it needs a
+`--train-lon-hold` knob on stage 2 (or a retrained codec). Cost once the knob
+exists: minutes of GPU at pilot scale. Until then the diagnosis is
+*overdetermined but unfalsified*, not *tested*.
+
+**Where it landed.** `ml/paper/paper.tex` — the figure is redrawn with the block
+hatched, outlined and named in the legend, plus a zonal-mean panel showing the
+two cliffs; the caption and four body paragraphs are rewritten around the
+finding; the glossary gains a **Holdout longitudes** entry; the abstract, §8.7
+(dependency cone), §8.8 (standings) and Limitations (7) carry the
+qualification. All contrasts reproduce on the arm's second seed to within 0.02
+(`ml/CLAUDE.md` §3b — the block-centre *level* is the one exception, 0.171 vs
+0.148, and is not quoted as a level).
+
+---
+
 <a id="seed-rule-2026-08-19"></a>
 ## OPERATIONS · The two-seed requirement is now conditional, 2026-08-19 ~11:40Z
 
