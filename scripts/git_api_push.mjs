@@ -111,12 +111,65 @@ for (const c of commits) {
     entries.push(entry);
   }
   const tree = (await api("POST", "/git/trees", { base_tree: prevTree, tree: entries })).sha;
-  const [an, ae, ad, ...msg] = git("log", "-1", "--format=%an%x00%ae%x00%aI%x00%B", c).split("\x00");
-  const person = { name: an, email: ae, date: ad };
-  const commit = await api("POST", "/git/commits", {
-    message: msg.join("\x00"), tree, parents: [prevSha], author: person, committer: person,
-  });
-  console.log(`  ${c.slice(0, 9)} -> ${commit.sha.slice(0, 9)}  ${msg.join("").split("\n")[0].slice(0, 70)}`);
+  // REPRODUCE THE COMMIT OBJECT, DO NOT PARAPHRASE IT.
+  //
+  // A commit's sha is the hash of its bytes: tree, parents, author line,
+  // committer line, optional gpgsig, blank line, message. Feed the API those
+  // exact fields and it returns THE SAME SHA — the local and remote histories
+  // are then literally the same objects and there is nothing to reconcile.
+  //
+  // This script used to paraphrase instead: it sent the author as the
+  // committer too, and took the message through a .trim(). Both change the
+  // bytes, so every push minted new shas, local looked permanently "ahead",
+  // and the signature was dropped, which is why the pushed commits showed as
+  // Unverified on GitHub. Measured 2026-08-19: passing the real committer,
+  // the exact message and the signature reproduces the sha exactly.
+  //
+  // Source of truth is `git cat-file commit`, not `git log --format`, because
+  // it is the object git actually hashed rather than a rendering of it.
+  const rawObj = gitB("cat-file", "commit", c).toString("utf8");
+  const sepAt = rawObj.indexOf("\n\n");
+  const objHead = rawObj.slice(0, sepAt);
+  const message = rawObj.slice(sepAt + 2);
+  const localTreeSha = /^tree (\w+)/m.exec(objHead)[1];
+  const localParents = [...objHead.matchAll(/^parent (\w+)/gm)].map((m) => m[1]);
+
+  const person = (kind) => {
+    const m = new RegExp(`^${kind} (.*) <(.*)> (\\d+) ([+-]\\d{4})$`, "m").exec(objHead);
+    // Keep the ORIGINAL UTC offset. Git stores the offset in the object, so
+    // the same instant written "+0200" and "Z" is different bytes and a
+    // different sha.
+    const off = m[4];
+    const mins = (off[0] === "-" ? -1 : 1) *
+                 (Number(off.slice(1, 3)) * 60 + Number(off.slice(3, 5)));
+    const wall = new Date((Number(m[3]) + mins * 60) * 1000).toISOString().slice(0, 19);
+    return { name: m[1], email: m[2], date: `${wall}${off.slice(0, 3)}:${off.slice(3)}` };
+  };
+
+  const sigMatch = /^gpgsig (.*(?:\n .*)*)$/m.exec(objHead);
+  const signature = sigMatch
+    ? sigMatch[1].split("\n").map((l) => (l.startsWith(" ") ? l.slice(1) : l)).join("\n")
+    : null;
+
+  const body = { message, tree, parents: [prevSha],
+                 author: person("author"), committer: person("committer") };
+
+  // A signature only means anything over the bytes it signed. If our
+  // reconstruction changed the parent or the tree, the original signature is
+  // no longer a signature OF this commit — passing it would produce an object
+  // carrying a signature that cannot verify, which is worse than none. Attach
+  // it only when the payload is genuinely identical.
+  const samePayload = tree === localTreeSha &&
+                      localParents.length === body.parents.length &&
+                      localParents.every((p, i) => p === body.parents[i]);
+  if (signature && samePayload) body.signature = signature;
+  else if (signature) console.log(`  note: ${c.slice(0, 9)} loses its signature ` +
+                                  `(tree or parent differs after replay)`);
+
+  const commit = await api("POST", "/git/commits", body);
+  const same = commit.sha === c;
+  console.log(`  ${c.slice(0, 9)} -> ${commit.sha.slice(0, 9)}` +
+              `${same ? " (identical)" : "         "}  ${message.split("\n")[0].slice(0, 60)}`);
   prevSha = commit.sha; prevTree = commit.tree.sha;
 }
 
