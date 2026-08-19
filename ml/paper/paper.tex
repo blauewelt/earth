@@ -1217,6 +1217,21 @@ not quote any of them as a level; the claim rests on their
 probe's own measured seed spread ($0.036$) and are therefore consistent
 with zero however the seeds fell.
 
+\paragraph{The scope of that statement.} It is a statement about the
+\emph{current-state} read-out: what today's fields, encoded or not, say
+about today's transport. The codec's function in this system is not to
+add information --- it is a compression and cannot --- but to make the
+state \emph{attendable}: to turn the $84{,}405$ ocean pixels $\times$ 39
+channels of one time step into a token sequence a transformer can carry
+and roll forward. The representation's operative test is therefore
+forecast skill from rolled-forward embeddings, the corridor AUCs of
+\S\ref{sec:roll}, and on that scoreboard the embedding pipeline is the
+only entrant: the matched raw-pixel control that makes the table above
+interpretable has no forecaster counterpart at this resolution, where the
+daily tensor alone is 165.6\,GB and attention over raw fields is not
+tractable on any hardware we run. We report the parity and do not read it
+as a verdict on the representation.
+
 Honesty box: the head is the most expressive probe we run
 ($\sim$25k parameters against $\sim$220 training months per fold), and
 although it is regularized hard, early-stopped on a train tail, and
