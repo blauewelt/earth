@@ -457,4 +457,126 @@ try:
 except FileNotFoundError as e:
     print("fig_amoc_roll skipped:", e)
 
+
+# ---- Fig 10: where the rolled skill actually sits, per pixel --------------
+# src: run #356 (xl144) rollout_spatial.json, staged as roll_356.json; the
+#      audit block's `map_msss_clim_window` — 84,405 per-pixel MSSS values
+#      against climatology at h = 6 months, pooled over all 39 channels and
+#      every evaluation start-month.
+#
+# THE PIXELS CARRY NO COORDINATES. rollout_spatial.py does `ys, xs =
+# np.where(ocean)` — row-major over the window grid, rows SOUTH-FIRST — and
+# its export_mask() writes exactly that boolean into data/amoc_eval_mask.json
+# as code>=1 (2 = corridor, 3 = RAPID section), with NO [::-1] flip. So the
+# geography is recovered by taking the mask's cells with code >= 1 in the
+# same row-major order. The first version of that mask writer DID flip, and
+# put the Gulf Stream at the latitude of the Norwegian Sea while still
+# looking like a plausible ocean (root CLAUDE.md §2). The asserts below are
+# the price of not repeating that: counts against the mask's own recorded
+# totals, and the RAPID section's reconstructed latitude against 26.5 N.
+def _amoc_map(head_key, src_file):
+    mk = os.path.join(os.path.dirname(ML), "data", "amoc_eval_mask.json")
+    m = json.load(open(mk))
+    nx, ny = m["nx"], m["ny"]
+    packed = m["packed"]
+    assert len(packed) == nx * ny, "packed grid is not nx*ny"
+    code = np.array([0 if c == "." else int(c) for c in packed],
+                    np.uint8).reshape(ny, nx)
+    lats = m["south"] + (np.arange(ny) + 0.5) * m["dlat"]   # row 0 = south
+    lons = m["west"] + (np.arange(nx) + 0.5) * m["dlon"]
+    ys, xs = np.where(code >= 1)                 # == the eval's ys/xs order
+
+    h = json.load(open(os.path.join(HERE, src_file)))["heads"][head_key]
+    v = np.array([np.nan if q is None else q
+                  for q in h["audit"]["map_msss_clim_window"]], float)
+
+    cnt = m["counts"]
+    assert len(v) == len(ys) == cnt["rolled"], (
+        "%d map values, %d mask cells, %d recorded — the mask and the roll "
+        "disagree about the window" % (len(v), len(ys), cnt["rolled"]))
+    assert int((code >= 2).sum()) == cnt["corridor"], "corridor count moved"
+    assert int((code == 3).sum()) == cnt["section"], "section count moved"
+    sec = code[ys, xs] == 3
+    sec_lat = np.unique(lats[ys[sec]])
+    assert len(sec_lat) == 1 and abs(sec_lat[0] - 26.5) < 1e-6, (
+        "the RAPID section reconstructs at %s N, not 26.5 — the grid is "
+        "mirrored and the map would look fine and be wrong" % sec_lat)
+    sec_lo = (lons[xs[sec]].min(), lons[xs[sec]].max())
+    assert -80.5 < sec_lo[0] < -79.5 and -14.5 < sec_lo[1] < -12.5, \
+        "section spans %s, not the Florida-to-Africa transect" % (sec_lo,)
+    cor = code[ys, xs] >= 2
+    com = (float(lats[ys[cor]].mean()), float(lons[xs[cor]].mean()))
+    assert 10.0 < com[0] < 45.0 and com[1] < -40.0, (
+        "corridor centre of mass at %.1f N %.1f E — not the subtropical "
+        "western basin; refusing to draw it" % com)
+
+    field = np.full((ny, nx), np.nan)
+    field[ys, xs] = v                            # land / off-window stay NaN
+    return {"f": field, "cor": (code >= 2), "lats": lats, "lons": lons,
+            "sec_lat": float(sec_lat[0]), "sec_lo": sec_lo, "com": com,
+            "meta": h["meta"], "hh": h["audit"]["map_h"], "m": m}
+
+
+try:
+    D = _amoc_map("s145rspiral:111-4444-0.71-0.5_s0", "roll_356.json")
+    m, f = D["m"], D["f"]
+    ext = [m["west"], m["east"], m["south"], m["north"]]
+
+    # Diverging, hard-centred on 0: zero is "no better than climatology",
+    # which is the line the whole figure is about. Symmetric ±1 (MSSS's own
+    # ceiling), so the midpoint cannot drift to wherever the data happens to
+    # sit. House palette: C2 (warm) below climatology, C1 (cool) above; the
+    # neutral centre is a TINT, not the page, because land is the page and an
+    # unmodelled cell must not read as a zero-skill cell.
+    # On the dark page the ramp is lightness-INVERTED (both ends pale, a mid
+    # grey at zero) so that a near-zero cell cannot be mistaken for the black
+    # land it sits next to.
+    stops = ([(0.0, "#6e2708"), (0.30, "#d9622b"), (0.5, "#ddd9cd"),
+              (0.70, C1), (1.0, "#0b2f5e")] if not DARK else
+             [(0.0, "#f2b48a"), (0.30, C2), (0.5, "#7d7b70"),
+              (0.70, C1), (1.0, "#cfe3fb")])
+    cmap = matplotlib.colors.LinearSegmentedColormap.from_list("msss", stops)
+    cmap = cmap.copy()
+    cmap.set_bad(BG)                             # land / outside the window
+
+    fig, ax = plt.subplots(figsize=(6.6, 3.9))
+    im = ax.imshow(f, origin="lower", extent=ext, cmap=cmap, vmin=-1, vmax=1,
+                   interpolation="nearest", aspect=1.35)
+    ax.contour(D["lons"], D["lats"], D["cor"].astype(float), levels=[0.5],
+               colors=[INK2], linewidths=0.4, alpha=0.75)
+    ax.plot([D["sec_lo"][0], D["sec_lo"][1]], [D["sec_lat"]] * 2,
+            color=C3, lw=1.4, solid_capstyle="butt")
+    hand = [matplotlib.lines.Line2D([], [], color=INK2, lw=0.8,
+                                    label="corridor (29,627 px)"),
+            matplotlib.lines.Line2D([], [], color=C3, lw=1.4,
+                                    label="RAPID 26.5°N section")]
+    ax.legend(handles=hand, frameon=False, fontsize=6.5, ncol=2,
+              loc="upper left", bbox_to_anchor=(0.0, -0.10),
+              handlelength=1.8, columnspacing=1.6)
+    ax.set_xlim(m["west"], m["east"])
+    ax.set_ylim(m["south"], m["north"])
+    ax.set_xticks([-100, -80, -60, -40, -20, 0, 20])
+    ax.set_yticks([0, 20, 40, 60])
+    ax.set_xticklabels(["100°W", "80°W", "60°W", "40°W", "20°W", "0°", "20°E"],
+                       fontsize=7.5)
+    ax.set_yticklabels(["0°", "20°N", "40°N", "60°N"], fontsize=7.5)
+    ax.grid(False)
+    for s in ("top", "right", "bottom", "left"):
+        ax.spines[s].set_visible(True)
+        ax.spines[s].set_linewidth(0.6)
+    ax.set_title("Rolled skill against climatology at 6 months, per pixel",
+                 loc="left", fontsize=9)
+    cb = fig.colorbar(im, ax=ax, fraction=0.030, pad=0.02,
+                      ticks=[-1, -0.5, 0, 0.5, 1])
+    cb.set_label("MSSS vs climatology  (0 = no better)", fontsize=7.5)
+    cb.ax.tick_params(labelsize=7)
+    cb.outline.set_edgecolor(INK2)
+    cb.outline.set_linewidth(0.6)
+    fig.savefig(os.path.join(FIGS, "fig_gulfstream.pdf"))
+    plt.close(fig)
+    print("fig_gulfstream: %s seed %s · corridor CoM %.1f N %.1f E"
+          % (D["meta"]["file"], D["meta"]["seed"], D["com"][0], D["com"][1]))
+except FileNotFoundError as e:
+    print("fig_gulfstream skipped:", e)
+
 print("figures written to", FIGS)

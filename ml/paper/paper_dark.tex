@@ -1417,6 +1417,56 @@ reference must reproduce its pinned corridor AUC of $0.643$ exactly
 before any new number is accepted; it has now done so on every
 evaluation in this section.
 
+\paragraph{Where the rolled skill actually sits.} Every rolled number in
+this section is a scalar summary of a field, and the field is not flat.
+Fig.~\ref{fig:gulfstream} draws it --- per-pixel skill against
+climatology at $h{=}6$ months over all 84{,}405 window pixels, for one
+seed of the widest 205M arm --- and three things are visible there that
+no scalar carries. The basin mostly beats climatology (2\% of pixels
+score below zero), and it does so most strongly along the western
+boundary: in a Gulf Stream box ($32$--$45^\circ$N, $75$--$45^\circ$W)
+the mean per-pixel score is $0.86$ against $0.73$ over the whole window.
+A meridional band through the central Atlantic near
+$42$--$28^\circ$W collapses to $0.23$, with patches below zero north of
+$40^\circ$N; MSSS is a variance-normalised ratio, so it falls where the
+anomaly energy in its denominator is smallest, and we have not separated
+that from a genuine failure of the rolled dynamics there. And the
+corridor is \emph{not} the skilful part of the window --- its pixels
+average $0.71$ against $0.74$ outside it. So the concentration in the
+west is partly definitional and partly earned, and it is worth being
+plain about which is which: the corridor is the fastest quarter of the
+window by train-month mean current speed, dilated and unioned with the
+section, so it covers $64\%$ of that Gulf Stream box against $35\%$ of
+the window by construction --- but the same construction also takes in a
+third of the low-skill central band, and the corridor average pays for
+it. Every one of these contrasts reproduces on the arm's second seed to
+within $0.02$; they are read here as a pattern, not as levels.
+
+\begin{figure}[t]
+\centering\includegraphics[width=.92\linewidth]{fig_gulfstream.pdf}
+\caption{\textbf{Where the rolled skill sits.} Per-pixel MSSS against
+climatology at a six-month horizon --- pooled over all 39 channels and
+every evaluation start-month --- for all 84{,}405 window pixels.
+Positive means beating the train-month climatology, zero means matching
+it, and the colour scale is symmetric about zero, so the midpoint is the
+climatological line itself. Land and out-of-window cells are blank: an
+unmodelled cell and a zero-skill cell are not the same thing. Grey: the
+29{,}627-pixel corridor, whose outline follows the coast almost
+everywhere because the fastest quarter of the window largely is coastal.
+Green: the 265-pixel RAPID $26.5^\circ$N section
+($80^\circ$W--$13^\circ$W), where the transport read-out is taken. The
+head is \texttt{e032xl\_u1\_s0.pt} --- sunflower-144 at $1024\times16$,
+seed 0 --- from run \#356, staged in the repository as
+\texttt{ml/paper/roll\_356.json}; the pixels carry no coordinates in
+that file, and their geography is recovered from
+\texttt{data/amoc\_eval\_mask.json}, which the evaluator writes from the
+same \texttt{ys/xs} arrays it scores. This is \emph{one seed}, and the
+figure is here to show \emph{where} the skill sits rather than to quote
+a level; the seed-averaged corridor AUC of Table~\ref{tab:auc} remains
+the number.}
+\label{fig:gulfstream}
+\end{figure}
+
 \subsection{An inversion at base scale, and the audit that cleared the
 instrument}\label{sec:inversion}
 
