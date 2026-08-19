@@ -223,6 +223,11 @@ are the numbers that say whether a representation is a good SUBSTRATE FOR
 FORECASTING. A current-state probe-vs-raw delta is not that number, and must
 not be used as one: it asks what today's embedding says about today's transport,
 which the forecaster never has to do.
+Those instruments are not equally reproducible, and §3b prices each of them: on
+the same xl checkpoints the corridor reproduces across a seed pair to
+0.002–0.005 while the transport band correlations spread 0.05–0.07. Choose the
+instrument the claim can survive, and read §3b before deciding how many seeds
+the arm buys.
 
 **4 · A raw-pixel head is a legitimate READ-OUT control, not a rival
 architecture.** E-038a used it exactly right — the raw-3×3 control is what
@@ -380,6 +385,159 @@ embedding space is the programme.
   of exactly that). This bites here more than anywhere: a result report is
   mostly links — the plan, EXPERIMENTS.md, the probe archive, the status
   page — and an unclickable link is a result nobody can check.
+
+## 3b · Replication is bought where variance lives, not everywhere
+
+Standing rule, Chris 2026-08-19: *"I don't think we need to runs for every
+experiment. At least when two experiments seem to agree a lot during our
+experience and the confidence intervals seem small (let's quantify them using
+past data given exp scale)."*
+
+§3 says **REPLICATES, NOT ARMS — a stage-2 number at n = 1 means nothing.**
+That sentence was written on 2026-08-11 out of exactly one measurement: the
+RAPID head k-fold, on a 1.8M head at 6,000 steps, where three seeds at a FIXED
+configuration spanned 0.245. It is still exactly right THERE. It is wrong as a
+blanket law, because seed spread is not a property of this programme — it is a
+property of **metric × scale**, and the archive now spans two orders of
+magnitude of it. The table below is that archive, mined from `ml/EXPERIMENTS.md`,
+`ml/LEADERBOARD.md` and every `probes-*.json` on `ml-metrics`. **The rule's
+authority is the table. When a new replicate lands, the table is extended in
+the same commit as the result** — a rule that stops being re-measured is an
+assertion.
+
+### (a) What the record has actually measured
+
+Corridor AUC is recomputed to five decimals from each head's twelve archived
+per-horizon `msss_clim` values (`horizon_auc` is their mean; the stored field
+is rounded to three), so the pair deltas below are not three-decimal artefacts.
+"Pooled sd" is the within-configuration sd pooled over every replicate group at
+that tier, with its degrees of freedom stated.
+
+| metric | scale — head params · steps · what is scored | replicates in the record | measured spread |
+|---|---|---|---|
+| rolled **corridor AUC** | **xl tier**: 205–217M head, 60k–200k steps, 12-month roll over the 29,627 corridor pixels | **5 pairs + 1 triple** — E-028 xl55, E-031 xl89, E-032 xl144, E-035 xl233, E-036 zn×xl144, E-037 zn×xl233 | pair \|Δ\| **0.0020, 0.0023, 0.0033, 0.0038, 0.0051**; xl55 triple range 0.0011. Pooled sd **0.0021** (7 dof), 95% upper bound **0.0037** |
+| rolled corridor AUC | **88M tier**: 768×12, 60k–200k | 4 triples + 2 pairs (E-027 big34/big55, E-029 r222/znoise/sun89 60k & 200k) | ranges **0.0011–0.0150**; pooled sd **0.0056** (10 dof) |
+| rolled corridor AUC | **34M tier**: 576×8 / 32.0M, 60k — the E-017/022/023/026/027 geometry arms | 13 triples + 1 pair, 14 configurations | ranges to **0.0224**; pooled sd **0.0070** (27 dof) |
+| **transport band r**, on the SAME xl checkpoints | 205–217M, three held-out years | 2 pairs (xl89, xl144) | **0.05 and 0.07** — 10–30× the corridor spread, read off the same checkpoints in the same files |
+| **forecast ratio** (z-mse / persistence) | 1.8M · 6k | 2 triples (E-010) | sd **0.0017** |
+| forecast ratio | 205M · 60k | 1 triple (E-028 xl55) | spread **0.004** |
+| **RAPID head k-fold** (`rapid_probe_kfold`; 240 months ≈ 9 effective DOF) | 1.8M · 6k | 2 triples (E-010) | U=1 range **0.245**, sd **0.123**; U=4 sd 0.040 |
+| RAPID head k-fold | 1.8–10.7M · 60k | 5 triples (E-012, E-013b, E-014, E-015, E-016) | per-arm sd 0.024–0.150; pooled **0.095** (10 dof) |
+| **codec head probe** (frozen embeddings, 240 months) | 0.92M codec · 40k · 1° global tensor | 1 codec-seed pair (patch24, #18 / #43) | attention head **0.036**, pooled ridge **0.012**, raw-pixel control **0.049** |
+| anything at **pentad or daily cadence** | E-038a/b/c, E-042, the family-4 codecs | **none — every arm at the new cadences is n = 1** | **UNMEASURED** |
+
+Be honest about the n. Three pairs at 0.002–0.003 is three pairs, not a
+distribution; the xl row is five pairs and one triple, seven degrees of freedom
+in total, and that is what licenses "the seed sd at this tier is 0.0021 and
+very unlikely to exceed 0.0037" — a bound, not a law. It says nothing whatever
+about the tail at a tier nobody has replicated.
+
+**Two things in the archive that look like replication and are not.**
+
+- **Protocol determinism.** The `e017_u1_s0` gate head has been re-rolled in
+  **eighteen** separate eval runs (#228 … #413) and returns gate AUC **0.643**,
+  corridor **0.589** and window **0.622** every single time. `probe_kfold` over
+  the f3_anchor41M codec on the pentad tensor returns rapid r **0.660**, rmse
+  2.97 and an identical CI in #390, #392, #397 and #406. #116 reproduced the
+  whole probe ladder bit-for-bit (E-003b) because `probe_head.py` had no seed
+  argument at all — its three per-fold seeds were the literal tuple `(0,1,2)`.
+  **Re-running a fixed checkpoint through a fixed protocol measures the
+  PROTOCOL.** It is a first-class integrity check — it is the certificate that
+  makes an eval wave readable at all — and it is not a replicate. Do not put it
+  in the spread column.
+- **The box effect.** Two boxes that had each built their own tensor moved the
+  head k-fold by **0.041** and the 36-month split by **0.111** at a fixed seed
+  (E-008 §"The box effect, finally MEASURED"; #131 against #140). That is an
+  environment term, not a seed term, and it is why cross-box arms are not
+  pooled. Published `Z` removed the cause; the number stays on the record as
+  the size of what a stray environment difference can buy.
+
+### (b) The rule
+
+**One seed is enough** when all three hold:
+
+1. the result is scored by **rolled corridor AUC**;
+2. at the **xl tier or above** — ≥205M head, ≥60k steps, frozen f3 anchor
+   codec, monthly `family3_na025` tensor: the one configuration the pairs above
+   actually measure;
+3. and the claimed effect is **≥ 0.025** corridor AUC.
+
+**Where 0.025 comes from, and why it is not 0.015.** Two derivations, both out
+of the table, and they agree. Five times the LARGEST pair delta ever measured
+at the tier (0.0051, E-032 xl144) is 0.0255. And the quantity actually at risk
+is a DIFFERENCE of two single-seed numbers, whose sd is √2 × the tier sd; at
+the 95% upper bound on that sd (0.0037) that is 0.0052, and five of those is
+0.0262. Call it **0.025**. The bar is anchored on the largest observed delta
+rather than the median one (0.0033) because a rule calibrated to the median is
+calibrated to the lucky half of the record.
+
+Read back against the record, 0.025 is the bar that behaves. It admits every
+effect this programme has replicated — input noise **+0.045 / +0.050**
+(E-036 / E-037), capacity **+0.042** across 88M → 205M (E-028) — and it refuses
+every effect the log later had to hedge: width **+0.005**/rung, the step
+budget's **−0.0006**, xl233's **−0.0026**. All three of those needed their
+pairs, and all three got them.
+
+**Two seeds remain mandatory.** No exceptions, and "the direction is obvious"
+is not one:
+
+- **Any probe-scored claim.** The head k-fold's regime is **0.036–0.245**, ten
+  to a hundred times the corridor's. No probe number is readable at n = 1, at
+  any scale this programme has run.
+- **Any new metric, cadence, tensor, codec or scale tier with no measured
+  pair. The first result at a tier buys its own replication.** Every pentad
+  and daily arm is in this class today. So is any run on a new codec: all six
+  xl pairs share one frozen 40.7M codec and one monthly tensor, and a band is
+  warranted only where it was measured.
+- **Any number that will be quoted as a headline in the paper**, whatever its
+  size. The paper's own voice already says single-seed head numbers *"should
+  not be quoted anywhere, including by us"*.
+- **Any claim that an effect is ZERO, or that an axis is CLOSED.** A null is a
+  statement ABOUT the noise band and cannot be made from one draw out of it. A
+  closure is the most fragile claim this programme makes — both of the ones it
+  has had to reverse (E-010 on capacity, E-032 on width) were nulls read off a
+  scoreboard that could not resolve the effect, and §"HARVEST #344–#347" states
+  the general form: *a settled negative is settled only on the scoreboard that
+  settled it*.
+
+**A single-seed result inside its tier's band is written as a CONSISTENCY,
+never as a level.** This is already the paper's voice; it is now the log's.
+
+- ✅ `consistent with zero at n = 1, against a tier spread of ±0.005`
+- ✅ `consistent with xl144's 0.6781 — a −0.0026 difference is inside the band`
+- ✅ `+0.050 at n = 1, ten times the tier's largest measured pair delta`
+- ❌ `xl233 rolls at 0.673` — a level, from one seed. This was the state on
+  2026-08-18 and the log said so at the time (*"that reading is currently
+  carried by an n = 1 number, which ml/CLAUDE.md §3 says means nothing"*);
+  #396 and #413 were dispatched for exactly that reason and the pair now reads
+  **0.67492 / 0.67292**.
+- ❌ `xl233 is 0.005 below xl144` — a difference quoted from one draw each,
+  which is the E-005 failure mode with a newer metric.
+
+### (c) Why the rule exists, and what it costs both ways
+
+**GPU-hours are the scarce resource, and the replicate is priced.** Measured on
+this wave: **#396 (E-035 seed-0 roll-forward, 200k steps at 217M) cost 15.6 h
+and ~$4.6**, and its share of the eval — one more xl233 head inside an existing
+`sroll:` run — is ~3–5 h and ~$1.0–1.5. A second seed at xl scale is therefore
+**about $6 and about a day of a rented box**, against a measured spread of
+0.002–0.005 on the metric it replicates. That is the trade the rule declines.
+
+At probe scale the same money is not optional, **because that noise once
+manufactured a result and the programme believed it.** E-005 reported
+**+0.28** on the AMOC probe for autoregressive unroll, from #88 (U=1, 0.173)
+against #93 (U=4, 0.449) — n = 1 each, different dispatches months apart,
+scored on a 36-month single split. E-009 re-scored the axis under the
+year-blocked k-fold and found U=1 ABOVE U=2 by 0.178 while the old split
+ordered the same two runs the other way. E-010 then measured the thing nobody
+had: three seeds at a FIXED U=1 span **0.245**, sd 0.123 — while the forecast
+objective those same runs optimise reproduces to **sd 0.0017**. The noise floor
+was larger than E-009's gap and the same size as the original claim. **E-005 is
+dead, not withdrawn**, one draw against another, and the unroll axis went with
+it.
+
+Which is the rule in one line: **the replicate is bought where the variance
+is, and the variance is in the READ-OUT, not in the training.**
 
 ---
 

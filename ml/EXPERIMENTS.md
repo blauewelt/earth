@@ -44,6 +44,72 @@ low-pass).
 
 ---
 
+<a id="seed-rule-2026-08-19"></a>
+## OPERATIONS · The two-seed requirement is now conditional, 2026-08-19 ~11:40Z
+
+Not an experiment. Recorded here because it changes how entries BELOW this line
+may be written, and because future readers of a single-seed entry are owed the
+reason it was allowed to be one.
+
+Chris, 2026-08-19: *"I don't think we need to runs for every experiment. At
+least when two experiments seem to agree a lot during our experience and the
+confidence intervals seem small (let's quantify them using past data given exp
+scale)."*
+
+The quantification was done from this log, `ml/LEADERBOARD.md` and every
+`probes-*.json` on `ml-metrics`, and the resulting standing rule is
+[`ml/CLAUDE.md` §3b](https://blauewelt.github.io/earth/docs.html?f=ml/CLAUDE.md)
+— "Replication is bought where variance lives, not everywhere". The table lives
+there and **must be extended whenever a new replicate lands**; the rule has no
+authority apart from it.
+
+**The headline numbers.** Seed spread is a property of METRIC × SCALE, and this
+programme spans two orders of magnitude of it:
+
+| metric · scale | replicates | measured spread |
+|---|---|---|
+| rolled corridor AUC, xl tier (205–217M, 60k–200k) | 5 pairs + 1 triple | pair \|Δ\| 0.0020–0.0051; pooled sd **0.0021** (7 dof), 95% upper bound 0.0037 |
+| rolled corridor AUC, 88M tier | 4 triples + 2 pairs | ranges 0.0011–0.0150; pooled sd **0.0056** |
+| rolled corridor AUC, 34M tier | 14 configurations | ranges to 0.0224; pooled sd **0.0070** |
+| transport band r, the SAME xl checkpoints | 2 pairs | **0.05–0.07** |
+| RAPID head k-fold, 1.8M · 6k (E-010) | 2 triples | range **0.245**, sd 0.123 |
+| RAPID head k-fold, 1.8–10.7M · 60k | 5 triples | pooled sd **0.095** |
+| codec head probe, 0.92M · 40k · 1° | 1 codec-seed pair | head **0.036**, ridge 0.012 |
+| anything at pentad or daily cadence | **none** | **UNMEASURED** |
+
+Corridor AUCs are recomputed to five decimals from each head's twelve archived
+per-horizon `msss_clim` values, since the stored `horizon_auc` is rounded to
+three.
+
+**What it permits.** A result scored by rolled corridor AUC, at ≥205M / ≥60k
+steps on the frozen f3 anchor codec and the monthly `family3_na025` tensor, may
+stand on **one seed** if its claimed effect is **≥ 0.025** — five times the
+largest pair delta ever measured at that tier (0.0051, E-032 xl144), and also
+five times the sd of a single-seed difference at the 95% upper bound of the
+tier sd. Two seeds remain mandatory for any probe-scored claim, any new metric
+/ cadence / tensor / codec / scale tier with no measured pair, any paper
+headline, and any claim that an effect is zero or that an axis is closed.
+
+**Two things that are not replication and must not be logged as spread.**
+`e017_u1_s0` has reproduced gate AUC 0.643 / corridor 0.589 / window 0.622 in
+**eighteen** eval runs (#228 … #413), and `probe_kfold` on the f3_anchor41M
+codec over the pentad tensor returned rapid r 0.660 identically in #390, #392,
+#397 and #406 — that is PROTOCOL determinism, the certificate that makes an
+eval wave readable, not a seed measurement. Separately, the 0.041 head-k-fold
+box effect (E-008) is an environment term, not a seed term.
+
+**Why the rule is worth having.** A second seed at the xl tier is ~15.6 h and
+~$4.6 of training (#396) plus ~3–5 h and ~$1.0–1.5 of eval (#413) — about $6
+and a day of a rented box — against a metric that reproduces to 0.002–0.005.
+At probe scale the same replicate is not optional: the 0.245 measured in E-010
+is what killed E-005's +0.28 unroll result, which had stood on two n = 1 runs
+from different dispatches scored on a 36-month single split.
+
+`ml/plans/E033_scale_program.md` §7b carries the consequence for the planned
+waves; `docs/ML_BASICS.md` §4 points at the rule from the protocol section.
+
+---
+
 <a id="credit-triage-2026-08-19"></a>
 ## OPERATIONS · Credit triage, 2026-08-19 01:35Z — two runs cancelled so three could finish
 

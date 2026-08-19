@@ -313,6 +313,53 @@ By then the Chinchilla arithmetic will say whether it can.
 **Rough total before Phase 5: on the order of $200–400 of GPU and about three
 weeks of wall-clock**, most of it data engineering rather than training.
 
+
+---
+
+## 7b · What the seed rule changes about these costs
+
+Added 2026-08-19, after `ml/CLAUDE.md` §3b measured the programme's seed spread
+per metric × scale and made single-seed results admissible where the archive
+says variance is small. Every phase above was costed assuming the standing
+two-seed discipline. It does not apply uniformly, and the difference is real
+money.
+
+**The prices, measured rather than estimated.** A second seed at the xl tier is
+**~15.6 h and ~$4.6 of training** (#396, 200k steps at 217M on a $0.2944/h box)
+plus **~3–5 h and ~$1.0–1.5** for its head inside an existing `sroll:` eval
+(#413) — call it **~$6 and about a day of a rented box, per arm**. Against that
+sits the measured spread the replicate would be buying down: **0.0021 pooled sd
+on rolled corridor AUC at that tier, 95% upper bound 0.0037**, from five pairs
+and a triple.
+
+**Where the second seed drops, and where it does not:**
+
+| phase | arm | seeds | why |
+|---|---|---|---|
+| **0 — codec rung** | first new codec (the ~120M rung) | **2 head seeds on it** | a new codec is a new tier: all six xl pairs share the one frozen 40.7M anchor, so the band is not warranted off it. This pair is what buys the band. **Note what is still unmeasured**: every pair in §3b varies the HEAD seed on a fixed codec. Codec-seed spread has been measured exactly once, at 0.92M on the 1° tensor, where it moved the head probe by 0.036 — nobody has ever measured it on the corridor |
+| 0 | the 400M rung, and any further rung on the same tensor | **1** | conditional on the 120M pair landing inside 0.005. The hypothesised effect is the capacity class — 88M → 205M was +0.042 — which clears the 0.025 bar by a wide margin |
+| **1 — pentad rebuild** | first pentad-cadence result | **2** | cadence, tensor and codec all change at once and **nothing at pentad or daily cadence has ever been replicated**. E-038a/b/c and E-042 are all n = 1 today; the first pair at that cadence is not overhead, it is the measurement that makes every later pentad arm readable |
+| 1 | later pentad arms | **1** | once the pentad band exists and the effect clears 5× its largest observed pair delta |
+| **2 — channels** | each channel's marginal contribution | **2**, or score it on the forecast axis | channel deltas are small by construction — the static-channel rule exists because a channel can be worth exactly nothing — so they live *inside* the corridor's band. The cheaper alternative is to read them on the forecast ratio, which reproduces to sd 0.0017–0.004: a tighter instrument for a small effect, at no extra GPU |
+| **4 — global 0.25°** | regional vs global codec | **2** | the pre-registered expectation is *parity*, and §3b forbids claiming a null from one draw inside a band. A parity claim needs the band, and the band needs the pair |
+| **5 — 10× transformer** | first arm at the new tier | **2** | new scale tier, no measured pairs. First result at a tier buys its own replication |
+
+**Net effect on the plan's budget.** Phase 0's two new rungs go from four
+read-out arms (two rungs × two head seeds) to three, and Phase 1's and Phase
+2's follow-ups each drop one arm once their band exists — roughly **$6 and a
+day of box time per arm dropped**, at the measured xl price above. The saving
+is real but it is not the point: the point is that **the phases where
+the second seed is dropped are exactly the phases whose hypothesised effects
+are large (capacity, cadence, noise), and the phases where it is kept are
+exactly the ones whose effects are small enough to live inside the noise
+(channels, global parity, any first result at a new tier).** Every gate in §7
+that reads "beyond seed noise" now has a number behind it, per tier, in
+`ml/CLAUDE.md` §3b — and the plan's own §1 table is the cautionary case: it
+records "input width saturates at 89 points — CLOSED — do not build 233" from
+a paired forecast-ratio result, and E-032/E-035 later reopened and then
+re-closed that axis on the corridor. A closure announced from inside a band is
+the failure mode this rule is written against.
+
 ---
 
 ## 8 · What I would argue about this plan

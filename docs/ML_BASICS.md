@@ -145,6 +145,16 @@ is not.
 - **The one instrument we argue from is `probe_kfold.py`** — year-blocked
   k-fold with a block bootstrap over years. In-training "light probe" values
   are single-split and must be labelled as such wherever quoted.
+- **How many seeds a result needs depends on the metric and the scale, and the
+  answer is measured, not assumed.** Seed spread in this programme runs from
+  0.002 (rolled corridor AUC at the 205M tier) to 0.245 (the RAPID head k-fold
+  on a 1.8M head) — two orders of magnitude, on the same programme, sometimes
+  on the same checkpoints. `ml/CLAUDE.md` §3b carries the table of every
+  replicate the archive holds and the rule that follows from it: a single seed
+  is quotable only for corridor AUC at the xl tier and only for effects
+  ≥ 0.025, every probe-scored claim and every untried tier still buys two
+  seeds, and a single-seed number inside its tier's band is written as
+  "consistent with X", never as a level.
 
 **Why year blocks and not months.** AMOC transport is autocorrelated over
 months (`r_lowpass18 = 0.82`). An i.i.d. month bootstrap would treat ~240
