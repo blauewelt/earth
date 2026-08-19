@@ -1,0 +1,227 @@
+{
+ "run_number": 416,
+ "files": {
+  "probe_kfold.json": {
+   "actions": {
+    "rapid": {
+     "r_kfold_deseas": 0.613,
+     "ci95": [
+      0.493,
+      0.716
+     ],
+     "n": 240,
+     "rmse_sv": 2.2,
+     "sigma_sv": 2.79,
+     "r_lowpass18": 0.803,
+     "wind_only_baseline": {
+      "r": 0.568,
+      "ci95": [
+       0.428,
+       0.696
+      ],
+      "rmse_sv": 2.29
+     }
+    },
+    "fc": {
+     "r_kfold_deseas": 0.278,
+     "ci95": [
+      0.191,
+      0.366
+     ],
+     "n": 490,
+     "rmse_sv": 2.12,
+     "sigma_sv": 2.15,
+     "r_lowpass18": 0.351,
+     "wind_only_baseline": {
+      "r": 0.121,
+      "ci95": [
+       0.013,
+       0.226
+      ],
+      "rmse_sv": 2.13
+     }
+    },
+    "move": {
+     "r_kfold_deseas": 0.138,
+     "ci95": [
+      -0.004,
+      0.279
+     ],
+     "n": 271,
+     "rmse_sv": 3.73,
+     "sigma_sv": 3.73,
+     "r_lowpass18": 0.782,
+     "wind_only_baseline": {
+      "r": -0.376,
+      "ci95": [
+       -0.45,
+       -0.284
+      ],
+      "rmse_sv": 3.79
+     }
+    },
+    "osnap": {
+     "r_kfold_deseas": 0.017,
+     "ci95": [
+      -0.078,
+      0.104
+     ],
+     "n": 96,
+     "rmse_sv": 3.05,
+     "sigma_sv": 2.63,
+     "r_lowpass18": 0.188,
+     "wind_only_baseline": {
+      "r": 0.031,
+      "ci95": [
+       -0.217,
+       0.231
+      ],
+      "rmse_sv": 2.64
+     }
+    }
+   }
+  },
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.524,
+     "r_deseasonalised": 0.461,
+     "n_test": 36
+    },
+    {
+     "K": 3,
+     "r_raw": 0.472,
+     "r_deseasonalised": 0.37,
+     "n_test": 36
+    },
+    {
+     "K": 6,
+     "r_raw": 0.547,
+     "r_deseasonalised": 0.497,
+     "n_test": 36
+    },
+    {
+     "K": 12,
+     "r_raw": 0.638,
+     "r_deseasonalised": 0.569,
+     "n_test": 36
+    },
+    {
+     "K": 24,
+     "r_raw": 0.609,
+     "r_deseasonalised": 0.534,
+     "n_test": 36
+    }
+   ],
+   "seasonal_floor_raw": 0.272,
+   "seasonal_floor_deseas": -0.168
+  },
+  "dip_check.json": {
+   "run": "actions",
+   "window": [
+    "2009-09",
+    "2010-06"
+   ],
+   "r_out_of_fold": 0.613,
+   "sign_agreement_pct": 68.8,
+   "dip_observed_sv": -6.87,
+   "dip_predicted_sv": -3.04,
+   "dip_captured_pct": 44.3
+  },
+  "provenance.json": {
+   "run_number": 416,
+   "sha": "8f0e51411d9baba6c62f8c9a9a21a9215e2dc860",
+   "code": "https://github.com/blauewelt/earth/tree/8f0e51411d9baba6c62f8c9a9a21a9215e2dc860",
+   "inputs": {
+    "doc": "E-043a \u00b7 Trains a FRESH 40.7M monthly f3 codec on ALL 481 longitude columns: the anchor's exact geometry with the -45..-25 block returned to the stage-1 training pool (recipe f3-anchor-41M-nolonhold, holdout_lon '0,0') \u00b7 params 40.693M \u00b7 stage encoder \u00b7 data family3_na025 (C 39, T 516) \u00b7 arch 576x10, 8 heads, d_dec 768, d_z 64, patch 3 \u00b7 steps x batch 60,000 x 512 (cosine 3e-4 to zero; max_minutes 0, so nothing refits) \u00b7 resume EMPTY \u2014 a fresh codec, there is no no-holdout parent to continue from. CONTROL: f3_anchor41M (run-62/run-63, 40,692,849 params), identical in every architectural field and differing in exactly one, holdout_lon '-45,-25'. HYPOTHESIS: the block cost 25% of the training pixels for regularisation the per-pixel anomaly transform already provides, so this codec should probe at least as well as the anchor on the columns both saw and better overall. FALSIFIER: if its in-training linear r_deseas and its later probe_kfold rapid r sit at or below the anchor's on the shared columns, the holdout was buying real regularisation and the 48%/59% hole-patching decomposition is measuring something else. VERIFY IN THE FIRST MINUTES (ml/CLAUDE.md \u00a72): train.py must print \"NO lon holdout \u2014 all 481 cols train (--holdout-lon '0,0')\" and a train-pixel count ~4/3 of the anchor's. NOTE the anomaly transform's z-score statistics are now taken over all longitudes, so this codec's weight hash and embedding cache are new, not a hit on the anchor's. ONE SEED (Chris 2026-08-19: \"we may not need two runs of everything\"); \u00a73b governs the reading \u2014 this is a new codec regime with no measured pair, so a headline claim buys its replicate before it is quoted.",
+    "steps": "60000",
+    "batch": "512",
+    "d_z": "64",
+    "anomaly": "true",
+    "temporal_steps": "0",
+    "temporal_d_model": "96",
+    "temporal_layers": "3",
+    "eval_every": "10000",
+    "head_probe": "false",
+    "light_probe_every": "2000",
+    "window": "recipe:f3-anchor-41M-nolonhold",
+    "tensor": "family3_na025",
+    "sst_channel": "false",
+    "patch": "3",
+    "max_minutes": "0",
+    "runner": "gpu-box-46045353",
+    "job_timeout": "1200",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "576",
+    "codec_layers": "10",
+    "codec_heads": "8",
+    "codec_d_dec": "768"
+   },
+   "tensor": {
+    "file": "ml/cache/family3_na025.npz",
+    "sha256": "adcbe700fb6e160b1c84d7acd8dc0333b34d07829db9abd62c721aab278b4848",
+    "bytes": 2984746794,
+    "X_shape": [
+     516,
+     281,
+     481,
+     39
+    ],
+    "C": 39,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 516
+   },
+   "torch": "2.13.0+cu130",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-46045353"
+  }
+ }
+}
