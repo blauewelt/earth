@@ -17,6 +17,10 @@ score ONE r over all ~240 assembled out-of-fold predictions. n_eff ~ 100
 after autocorrelation -> SE ~ 0.10, i.e. three times the resolution, for
 pure compute.
 
+Each target's block carries its OUT-OF-FOLD PREDICTIONS (`pred`,
+`target_sv`, `years`) beside the summary, so two k-folds can be compared
+with the paired test ml/CLAUDE.md §3 requires — see the note at the writer.
+
 The honest caveat, stated where the numbers are made: the codec itself
 was trained (self-supervised, RAPID never an input) with only 3 held-out
 years, so embeddings of the other years have seen those months' FIELDS.
@@ -30,6 +34,7 @@ import argparse
 import gc
 import json
 import os
+import re
 import sys
 
 import numpy as np
@@ -186,6 +191,51 @@ def lowpass_r(tidx, pred, truth, k=18, min_valid=12):
     if len(ps) < 24:
         return None
     return float(np.corrcoef(ps, ts)[0, 1])
+
+
+# Arrays of plain numbers (and nulls) only: no `[` inside, so this can never
+# span two of them, and no `"`, so it can never touch a string.
+_NUM_ARRAY = re.compile(r"\[[\s\d.,eE+\-nul]*\]")
+
+
+def _arr(v):
+    """A per-month array as JSON: rounded, with every non-finite value NULL.
+
+    `json.dump` writes a bare `NaN` token for a NaN, which is not JSON —
+    `JSON.parse` rejects it, and these blocks travel inside `probes-<n>.json`,
+    which scripts/sweep_table.mjs and status.html both parse. `null` reads
+    back as NaN through `np.asarray(..., float)`, which is what
+    scripts/paired_probe.py does with it.
+
+    4 decimals is probe_head.py's convention and is ~1e-5 of a Sv-scale
+    value — five orders below anything the correlation resolves.
+    """
+    return [round(float(x), 4) if np.isfinite(x) else None for x in v]
+
+
+def _dump(obj, path):
+    """`json.dump(indent=2)`, but all-numeric arrays stay on ONE line.
+
+    The per-month arrays are the bulk of this file now and indent=2 spends
+    ~17 bytes of whitespace on every element of them. Collapsing only the
+    numeric arrays roughly halves the file and changes nothing any consumer
+    reads: every one of them parses JSON, not text.
+
+    The compacted text is re-parsed and compared with the object before it is
+    written, and falls back to the plain dump if that ever fails — a
+    formatting trick that mangles a number at the end of a twenty-hour run
+    would be far worse than a large file.
+    """
+    plain = json.dumps(obj, indent=2)
+    txt = _NUM_ARRAY.sub(lambda m: "[" + " ".join(m.group(0)[1:-1].split()) + "]",
+                         plain)
+    try:
+        if json.loads(txt) != obj:
+            txt = plain
+    except ValueError:
+        txt = plain
+    with open(path, "w") as fh:
+        fh.write(txt)
 
 
 def main():
@@ -347,15 +397,47 @@ def main():
             wind_block = None
             if tname in wind_sec:
                 W = wind_sec[tname][tidx]
-                rw, low, hiw, _, rmw, _, _ = kfold_r(W, v_des, yr[tidx])
+                rw, low, hiw, _, rmw, _, predw = kfold_r(W, v_des, yr[tidx])
                 wind_block = {"r": round(rw, 3), "ci95": [round(low, 3), round(hiw, 3)],
-                              "rmse_sv": round(rmw, 2)}
+                              "rmse_sv": round(rmw, 2),
+                              # the baseline is a PROBE, and beating it is a
+                              # probe-vs-probe claim like any other: same rows,
+                              # same folds, same target, so it is paired too.
+                              # scripts/paired_probe.py reads it as
+                              # <file>#<run>/<target>/wind_only_baseline and
+                              # inherits target_sv/years from the block above.
+                              "probe": "wind-only", "pred": _arr(predw)}
+            # THE OUT-OF-FOLD PREDICTIONS ARE KEPT, not just their summary
+            # (2026-08-19). Every key above is written exactly as before; the
+            # three arrays are an addition.
+            #
+            # ml/CLAUDE.md §3: "comparing two probes needs a PAIRED test, not
+            # two overlapping intervals — they share folds, months and most of
+            # their error". scripts/paired_probe.py IS that test and it needs
+            # `pred`, `target_sv` and `years`. probe_head.py has dumped them
+            # since 2026-08-10; this file computed `pred` on the line above and
+            # threw it away, so no pooled-ridge k-fold in this programme's
+            # history has ever been paired-testable — not for lack of
+            # archiving, the numbers were never written. Every pooled
+            # comparison ever made was therefore two overlapping CIs, which §3
+            # says is not a result. Found 2026-08-19 trying to compare #416's
+            # codec against the frozen anchor.
+            #
+            # ONE BLOCK PER TARGET, because the targets do not share rows:
+            # `tidx` is the target's own label index, so at pentad cadence fc
+            # has ~2,490 rows where rapid has ~1,459. A flat top-level array
+            # (probe_head.py's shape — it probes one target) could only ever
+            # describe one of them, and would silently mis-pair the rest.
             out[run][tname] = {"r_kfold_deseas": round(r, 3),
                                "ci95": [round(lo95, 3), round(hi95, 3)], "n": n,
                                "rmse_sv": round(rmse, 2),
                                "sigma_sv": round(sigma, 2),
                                "r_lowpass18": None if r_lp is None else round(r_lp, 3),
-                               "wind_only_baseline": wind_block}
+                               "wind_only_baseline": wind_block,
+                               "probe": f"pooled-{a.probe}",
+                               "pred": _arr(pred),
+                               "target_sv": _arr(v_des),
+                               "years": [int(v) for v in yr[tidx]]}
             lp_s = "n/a" if r_lp is None else f"{r_lp:+.3f}"
             w_s = "n/a" if wind_block is None else f"{wind_block['r']:+.3f}"
             print(f"{run:<10} d_z={ck['d_z']:<3} {tname:<6} k-fold r {r:+.3f} "
@@ -377,11 +459,11 @@ def main():
         except json.JSONDecodeError:
             pass
     merged.update(out)
-    json.dump(merged, open(path, "w"), indent=2)
+    _dump(merged, path)
     for run, block in out.items():
         rp = os.path.join(HERE, "runs", run, f"probe_kfold{suffix}.json")
         if os.path.isdir(os.path.dirname(rp)):
-            json.dump({run: block}, open(rp, "w"), indent=2)
+            _dump({run: block}, rp)
     print("wrote", path, f"({len(merged)} runs)")
 
 

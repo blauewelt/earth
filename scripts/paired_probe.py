@@ -31,29 +31,100 @@ Usage:
   python3 scripts/paired_probe.py ml/runs/<run>/probe_head.json \\
                                   ml/runs/<run>/probe_head_raw3x3.json
 
-Both files must carry `pred`, `target_sv` and `years` — probe_head.py has
-written those since 2026-08-10. Older result files do not have them and
-cannot be compared this way without a rerun; the script says so rather than
-guessing.
+  python3 scripts/paired_probe.py ml/runs/probe_kfold.json#f3_anchor41M/rapid \\
+                                  ml/runs/probe_kfold.json#f4_nolonhold/rapid
+
+Both files must carry `pred`, `target_sv` and `years`. Two shapes carry them:
+
+  probe_head.py  writes them FLAT at the top level (since 2026-08-10) — it
+                 probes one target, so there is one set.
+  probe_kfold.py writes them per RUN per TARGET (since 2026-08-19) — it
+                 sweeps several codecs over rapid/fc/move at once, and those
+                 targets do not share rows, so a flat array could not describe
+                 them. Select one with a `#` fragment: `#<run>/<target>`, or
+                 `#<run>/<target>/wind_only_baseline` for the wind bar, which
+                 inherits `target_sv` and `years` from the target above it.
+                 With one run in the file and `--target` at its default, the
+                 fragment can be left off.
+
+Older result files have none of it and cannot be compared this way without a
+rerun; the script says so rather than guessing.
 """
 import argparse
 import json
+import os
 import sys
 
 import numpy as np
 
 
-def load(path):
+WANT = ("pred", "target_sv", "years")
+
+
+def split_spec(spec):
+    """`ml/runs/probe_kfold.json#codecA/rapid` -> (path, ['codecA','rapid']).
+
+    A path that exists as given wins over the fragment reading, so a file
+    with a literal `#` in its name is still openable.
+    """
+    if os.path.exists(spec) or "#" not in spec:
+        return spec, []
+    path, _, frag = spec.partition("#")
+    return path, [p for p in frag.split("/") if p]
+
+
+def walk(path, j, parts, target):
+    """Descend to the selected block and return (chain, label).
+
+    The chain is every node from the root down, because the three arrays do
+    not all have to live at the same depth: probe_kfold's wind-only baseline
+    carries its own `pred` and shares the target block's `target_sv` and
+    `years` — which is exactly right, since being scored on the same rows is
+    what makes the comparison paired in the first place.
+    """
+    if not parts and "pred" not in j:
+        runs = [k for k, v in j.items() if isinstance(v, dict)]
+        if len(runs) > 1:
+            sys.exit(f"{path}: holds {len(runs)} runs "
+                     f"({', '.join(runs)}) — name one with "
+                     f"'{os.path.basename(path)}#<run>/{target}'")
+        # No sub-blocks at all is not an ambiguous file, it is an OLD file —
+        # a probe_head.json from before the per-month dump. Fall through and
+        # let the caller say that, rather than reporting "0 runs" at someone
+        # who is holding a legacy result and needs to be told to rerun.
+        if runs:
+            parts = [runs[0], target]
+    chain, node = [j], j
+    for i, part in enumerate(parts):
+        if not isinstance(node, dict) or part not in node:
+            have = [k for k, v in (node or {}).items() if isinstance(v, dict)]
+            sys.exit(f"{path}: nothing at '{'/'.join(parts[:i + 1])}' — "
+                     f"this level offers {', '.join(have) or '(nothing)'}")
+        node = node[part]
+        chain.append(node)
+    label = node.get("probe") if isinstance(node, dict) else None
+    return chain, (label or "/".join(parts) or "probe")
+
+
+def load(spec, target):
+    path, parts = split_spec(spec)
     j = json.load(open(path))
-    missing = [k for k in ("pred", "target_sv", "years") if k not in j]
+    chain, label = walk(path, j, parts, target)
+    vals = {}
+    for k in WANT:
+        for node in reversed(chain):
+            if isinstance(node, dict) and node.get(k) is not None:
+                vals[k] = node[k]
+                break
+    missing = [k for k in WANT if k not in vals]
     if missing:
-        sys.exit(f"{path}: no {'/'.join(missing)} — this file predates the "
+        sys.exit(f"{spec}: no {'/'.join(missing)} — this file predates the "
                  f"per-month dump, so the paired comparison is impossible "
-                 f"without rerunning probe_head.py")
-    return (j,
-            np.asarray(j["pred"], float),
-            np.asarray(j["target_sv"], float),
-            np.asarray(j["years"], int))
+                 f"without rerunning probe_head.py / probe_kfold.py")
+    return (label,
+            np.asarray(vals["pred"], float),
+            np.asarray(vals["target_sv"], float),
+            np.asarray(vals["years"], int))
 
 
 def r_of(pred, targ, sel):
@@ -70,10 +141,14 @@ def main():
     ap.add_argument("b", help="the control (e.g. probe_head_raw3x3.json)")
     ap.add_argument("--n-boot", type=int, default=10000)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--target", default="rapid",
+                    help="which target block, for probe_kfold.py's multi-target "
+                         "files; overridden per file by a '#<run>/<target>' "
+                         "fragment. Ignored for probe_head.py's flat shape.")
     args = ap.parse_args()
 
-    ja, pa, ta, ya = load(args.a)
-    jb, pb, tb, yb = load(args.b)
+    ja, pa, ta, ya = load(args.a, args.target)
+    jb, pb, tb, yb = load(args.b, args.target)
 
     # The pairing is the whole argument — if the two probes were not scored on
     # the same months, differencing them is not a paired test and the interval
@@ -85,8 +160,12 @@ def main():
         sys.exit("the two probes were scored against different targets")
 
     ra, rb = r_of(pa, ta, slice(None)), r_of(pb, tb, slice(None))
-    print(f"{args.a.split('/')[-1]:<32} r = {ra:+.3f}  ({ja.get('probe')})")
-    print(f"{args.b.split('/')[-1]:<32} r = {rb:+.3f}  ({jb.get('probe')})")
+    # the last TWO path segments, because a probe_kfold comparison is very
+    # often `<runA>/probe_kfold.json` against `<runB>/probe_kfold.json` and
+    # the basename alone prints the same string twice.
+    na, nb = ("/".join(x.split("/")[-2:]) for x in (args.a, args.b))
+    print(f"{na:<44} r = {ra:+.3f}  ({ja})")
+    print(f"{nb:<44} r = {rb:+.3f}  ({jb})")
     print(f"{'point difference':<32} Δ = {ra - rb:+.3f}")
 
     rng = np.random.default_rng(args.seed)
@@ -109,7 +188,7 @@ def main():
     print(f"  P(Δr <= 0)      {p_one:.3f}")
     print()
     if lo > 0:
-        print(f"  → the {ja.get('probe')} beats the control on this record: "
+        print(f"  → the {ja} beats the control on this record: "
               f"the paired interval excludes zero.")
     elif hi < 0:
         print(f"  → the control BEATS the probe under test: the paired "
