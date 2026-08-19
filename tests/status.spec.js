@@ -452,6 +452,10 @@ test("a run's doc links to its experiment definition", async ({ page }) => {
   // the EXPLICIT anchor in EXPERIMENTS.md — not GitHub's auto-generated
   // heading anchor, which is derived from the whole heading text and rots the
   // first time a heading changes from "READY" to a verdict.
+  //
+  // ...and at docs.html, not at the blob URL it used to use. CLAUDE.md SS0b:
+  // a GitHub blob URL for markdown is "correct, unreadable on a phone", and
+  // this is the badge a phone reader taps to find out what E-007 even was.
   await page.route(/\/actions\/workflows\/[^/]+\/runs/, (route) =>
     route.fulfill({
       status: 200, contentType: "application/json",
@@ -472,6 +476,11 @@ test("a run's doc links to its experiment definition", async ({ page }) => {
   await expect(badge).toHaveCount(1);           // only the E-007 run gets one
   await expect(badge).toHaveText("E-007");
   await expect(badge).toHaveAttribute("href", /ml\/EXPERIMENTS\.md#e-007$/);
+  await expect(badge).toHaveAttribute(
+    "href", "https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-007");
+  // and never the blob form again
+  const href = await badge.getAttribute("href");
+  expect(href).not.toMatch(/github\.com\/[^/]+\/[^/]+\/blob\//);
 });
 
 test("a long stage-2 job says when it will finish, not just how far along", async ({ page }) => {
@@ -919,4 +928,104 @@ test("a rolled evaluation shows a progress bar and an ETA, not a blank card", as
   const bar = card.locator('div[style*="background:#58a6ff"]').first();
   const w = await bar.getAttribute("style");
   expect(w).toMatch(/width:37\.5%/);
+});
+
+/* ---- per-run deep links --------------------------------------------------
+ *
+ * Session reports quote runs as bare numbers ("#413"). Until now the only
+ * link that could be pasted went to the Actions page — a log, no curve — and
+ * there was no way at all to link to a run ON this page. These four tests
+ * cover the address (the id), the arrival (scroll + flash), the honest
+ * failure (a hash naming a run that is not here), and the grab-handle.
+ */
+
+test("every run card carries its own anchor id, and only one owns it", async ({ page }) => {
+  await page.goto("/status.html");
+  await expect(page.locator("#live .card").first()).toBeVisible();
+  const ids = await page.locator("#live .card").evaluateAll((els) =>
+    els.map((e) => e.id));
+  expect(ids.length).toBeGreaterThan(2);
+  for (const id of ids) expect(id).toMatch(/^run-\d+$/);
+  // Duplicate ids are the failure mode that matters: getElementById returns
+  // whichever came first, so the second card becomes unreachable in silence.
+  expect(new Set(ids).size).toBe(ids.length);
+  // ...and the table must NOT also claim them.
+  const tableIds = await page.locator("#runs [id]").evaluateAll((els) =>
+    els.map((e) => e.id).filter((i) => /^run-/.test(i)));
+  expect(tableIds).toEqual([]);
+});
+
+test("#run-NNN scrolls to that run's card and flashes it", async ({ page }) => {
+  await page.goto("/status.html");
+  await expect(page.locator("#run-101")).toBeAttached();
+  // The flash clears itself after 1.4 s, so the hash change and the read of
+  // the class happen in ONE evaluate — a round trip can outlast it on the
+  // slow sandbox (CLAUDE.md SS4).
+  const r = await page.evaluate(() => {
+    const before = window.scrollY;
+    location.hash = "#run-101";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    const el = document.getElementById("run-101");
+    return { before, flashed: el.classList.contains("flash"),
+             note: getComputedStyle(document.getElementById("runnote")).display };
+  });
+  expect(r.flashed).toBe(true);
+  expect(r.note).toBe("none");          // a card that IS here explains nothing
+  // and the page actually moved to it (smooth scrolling, so poll)
+  await expect.poll(async () =>
+    Math.abs(await page.evaluate(() =>
+      document.getElementById("run-101").getBoundingClientRect().top)),
+    { timeout: 5000 }).toBeLessThan(120);
+});
+
+test("a hash naming a run that is NOT on the page says so, and says where to look",
+  async ({ page }) => {
+    // The page fetches a window of runs. #386 fell out of it long ago, and a
+    // hash that resolves to nothing is indistinguishable from a broken link —
+    // the same reason SS4b makes a dateless layer announce itself.
+    await page.goto("/status.html#run-386");
+    const note = page.locator("#runnote");
+    await expect(note).toBeVisible();
+    await expect(note).toContainText("#386");
+    await expect(note).toContainText("not on this page");
+    // and it points at documents that DO have it, in the phone-readable form
+    const hrefs = await note.locator("a").evaluateAll((as) =>
+      as.map((a) => a.getAttribute("href")));
+    expect(hrefs.join(" ")).toContain("docs.html?f=ml/RUNS.md#run-386");
+    expect(hrefs.join(" ")).toContain("docs.html?f=ml/EXPERIMENTS.md");
+    for (const h of hrefs) expect(h).not.toMatch(/\/blob\//);
+    // no card was invented for it
+    await expect(page.locator("#run-386")).toHaveCount(0);
+  });
+
+test("a run inside the window but with nothing to chart gets its own explanation",
+  async ({ page }) => {
+    // Two different absences, two different stories: "older than the window"
+    // and "here, but cancelled before it plotted anything". #333 below is
+    // fetched, listed in the table, and has no metrics file at all.
+    await page.route(/\/actions\/workflows\/[^/]+\/runs/, (route) =>
+      route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({ workflow_runs: [
+          { id: 333, run_number: 333, status: "completed", conclusion: "cancelled",
+            created_at: iso(60), html_url: "https://example.invalid/333",
+            display_title: "cancelled before it trained anything", name: "ml-train",
+            head_sha: "3".repeat(40) },
+        ] }),
+      }));
+    await page.goto("/status.html#run-333");
+    const note = page.locator("#runnote");
+    await expect(note).toBeVisible();
+    await expect(note).toContainText("#333");
+    await expect(note).toContainText("no card");
+    await expect(page.locator("#run-333")).toHaveCount(0);
+  });
+
+test("the permalink handle puts the run's address in the URL", async ({ page }) => {
+  await page.goto("/status.html");
+  await expect(page.locator("#run-101")).toBeAttached();
+  await page.locator("#run-101 a.plink").click();
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe("#run-101");
+  // and it is a real link, so a long-press "copy link address" works too
+  await expect(page.locator("#run-101 a.plink")).toHaveAttribute("href", "#run-101");
 });

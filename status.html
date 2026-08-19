@@ -57,8 +57,27 @@
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
     padding: 14px; margin: 12px 0;
+    /* a deep-linked card is scrolled to; keep it clear of the topbar */
+    scroll-margin-top: 12px;
   }
   .card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  /* Briefly outlines a card arrived at by #run-NNN. Same visual language as
+     src/style.css's .layer-item.flash (2px accent outline, 2px offset, ~1.4 s)
+     so "the thing you asked for is THIS one" reads the same on both pages;
+     status.html is standalone, so the rule is duplicated here rather than
+     shared. */
+  .card.flash {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .card.flash { transition: outline-color 0.2s; }
+  }
+  /* the permalink grab-handle: unobtrusive until you look for it */
+  a.plink { float: right; margin-left: 8px; color: var(--muted); font-weight: 400;
+            font-size: 15px; padding: 0 4px; text-decoration: none; }
+  a.plink:hover { color: var(--accent); }
+  a.plink.copied { color: var(--ok); }
+  a.plink.copied::after { content: " link copied"; font-size: 11px; }
   .stepbig { font-size: 22px; font-weight: 700; margin: 4px 0 8px; }
   .stepbig .lbl { font-size: 13px; font-weight: 400; color: var(--text-dim); }
   svg.chart { width: 100%; height: auto; display: block; }
@@ -98,6 +117,7 @@
   </div>
 
   <div class="banner" id="banner"></div>
+  <div class="banner" id="runnote"></div>
 
   <h2>Fleet &amp; budget</h2>
   <div id="fleet"><div class="empty">loading…</div></div>
@@ -133,6 +153,10 @@
   var REFRESH_MS = 120000;
   var CHART_HISTORY = 6;      // finished runs WITH CURVES to keep charted
   var CHART_CANDIDATES = 24;  // how deep to look for them; see renderLive
+  // The phone reader for every markdown file in the repo (CLAUDE.md SS0b).
+  // Absolute, because status.html is opened from Pages, from a file:// copy
+  // and from localhost in the suite, and the badge must resolve in all three.
+  var DOCS_BASE = "https://blauewelt.github.io/earth/docs.html";
   var RUN_WINDOW = 75;        // runs FETCHED — must outrun a burst of dispatches.
                               // 30 stopped sufficing on 2026-08-11, when one
                               // day produced 41 ml-train runs (a sweep, two
@@ -377,8 +401,13 @@
     var m = d.match(/\bE-(\d{3})([a-z]?)\b/);
     if (!m) return "";
     var id = "E-" + m[1] + (m[2] || "");
-    return ' <a class="exp" href="https://github.com/' + REPO +
-      "/blob/main/ml/EXPERIMENTS.md#" + id.toLowerCase() + '">' + esc(id) + "</a>";
+    // ...and it goes to docs.html, not to the GitHub blob. SS0b: a blob URL
+    // for markdown is "correct, unreadable on a phone" — GitHub's mobile view
+    // pans EXPERIMENTS.md's nine-column result tables sideways with the row
+    // label off screen. docs.html renders the same file from main with the
+    // label pinned, and it honours the #fragment after the render lands.
+    return ' <a class="exp" href="' + DOCS_BASE +
+      "?f=ml/EXPERIMENTS.md#" + id.toLowerCase() + '">' + esc(id) + "</a>";
   }
 
   // ---- fleet & budget -------------------------------------------------------
@@ -1356,12 +1385,29 @@
     return state + ", started " + esc(ago(startedAt));
   }
 
+  // The card is the anchor target for status.html#run-NNN, NOT the table row:
+  // the card is the thing worth arriving at (it carries the doc, the plan and
+  // the curves) and only ONE element may own the id — two elements with
+  // id="run-413" and getElementById silently returns whichever came first.
+  // The table row therefore stays id-less; its #N link still goes to Actions,
+  // which is the right target when you want the LOG.
   function cardHead(run) {
     var doc = docOf(run);
-    return '<div class="card"><h3><a href="' + esc(run.html_url) + '">run #' +
+    return '<div class="card" id="run-' + esc(run.run_number) + '"><h3>' +
+           plink(run) +
+           '<a href="' + esc(run.html_url) + '">run #' +
            esc(run.run_number) + '</a> <span class="meta">· ' + whenText(run) +
            "</span></h3>" +
            (doc ? '<div class="rundoc">' + esc(doc) + expTag(run) + "</div>" : "");
+  }
+
+  // The grab-handle. Chris reads on a phone, where hand-editing a URL to add
+  // "#run-413" is not a thing anyone does; the "#" copies the permalink and
+  // sets the hash so the address bar carries it too. Click handling is
+  // delegated from #live, below, because cards are re-rendered every cycle.
+  function plink(run) {
+    return '<a class="plink" href="#run-' + esc(run.run_number) +
+           '" title="permalink to run #' + esc(run.run_number) + '">#</a>';
   }
 
   function renderLiveRun(run) {
@@ -1412,7 +1458,11 @@
         return renderRunBody(run, head, m);
       });
     }).catch(function (e) {
-      return '<div class="card"><h3><a href="' + esc(run.html_url) + '">run #' + esc(run.run_number) +
+      // the id belongs on EVERY shape of this run's card, including the one
+      // that reports a failure — a permalink that resolves only when the
+      // fetch worked is a permalink that breaks exactly when it is wanted.
+      return '<div class="card" id="run-' + esc(run.run_number) + '"><h3>' + plink(run) +
+             '<a href="' + esc(run.html_url) + '">run #' + esc(run.run_number) +
              '</a></h3><div class="empty">could not load live metrics (' + esc(e.message) + ")</div></div>";
     });
   }
@@ -1542,6 +1592,73 @@
     });
   }
 
+  // ---- deep links: status.html#run-413 --------------------------------------
+  // Session reports quote runs as bare numbers ("#413") and the only link
+  // anyone could paste went to the Actions page, which shows a log and no
+  // curve. A run now has an address on THIS page.
+  //
+  // The honest-failure case is the whole design problem. The page fetches
+  // RUN_WINDOW runs and charts only the ones that plot something, so
+  // "#run-386" routinely names a run that is not here — and a hash that
+  // resolves to nothing is indistinguishable from a broken page. Same
+  // principle as SS4b's dateless-layer toast: the absence gets ANNOUNCED,
+  // and the announcement says where the run can actually be read.
+  var fetchedRuns = [];        // the last window we fetched, for the note below
+  var flashedHash = null;      // flash on ARRIVAL only, not on every 2-min cycle
+
+  function runNote(html) {
+    var el = $("runnote");
+    el.innerHTML = html;
+    el.style.display = "block";
+  }
+  function hideRunNote() { $("runnote").style.display = "none"; }
+
+  function docsLink(path, frag, label) {
+    return '<a href="' + DOCS_BASE + "?f=" + path + (frag ? "#" + frag : "") +
+           '">' + label + "</a>";
+  }
+
+  function resolveRunHash() {
+    var m = /^#run-(\d+)$/.exec(location.hash || "");
+    if (!m) { hideRunNote(); flashedHash = null; return; }
+    var n = m[1];
+    var el = document.getElementById("run-" + n);
+    if (el) {
+      hideRunNote();
+      // Only on arrival. refresh() rebuilds #live every two minutes and
+      // re-flashing on each cycle would turn a one-time "here it is" into a
+      // blinking page nobody can read.
+      if (flashedHash !== location.hash) {
+        flashedHash = location.hash;
+        el.scrollIntoView({ block: "start", behavior: "smooth" });
+        el.classList.add("flash");
+        setTimeout(function () { el.classList.remove("flash"); }, 1400);
+      }
+      return;
+    }
+    flashedHash = null;
+    var known = false;
+    fetchedRuns.forEach(function (r) { if (String(r.run_number) === n) known = true; });
+    if (known) {
+      // In the window, but nothing to chart — cancelled, rescue-only or a
+      // probe-only eval. Say which of the two absences this is; they send the
+      // reader to different places.
+      runNote("Run <b>#" + n + "</b> is in this page's window but has no card: " +
+        "it produced no curve (cancelled, rescue-only, or resumed at its final " +
+        "step with stage 2 skipped). Its one-line purpose and verdict are in " +
+        docsLink("ml/RUNS.md", "run-" + n, "the run index") + ", and the " +
+        "experiment it belongs to is in " +
+        docsLink("ml/EXPERIMENTS.md", "", "the experiment log") + ".");
+    } else {
+      runNote("Run <b>#" + n + "</b> is not on this page — the dashboard only " +
+        "fetches the newest " + RUN_WINDOW + " runs, and older ones fall out " +
+        "of the window. Open it in " +
+        docsLink("ml/RUNS.md", "run-" + n, "the run index") +
+        " (every run, with its summary and verdict) or in " +
+        docsLink("ml/EXPERIMENTS.md", "", "the experiment log") + ".");
+    }
+  }
+
   // ---- releases -------------------------------------------------------------
   function renderReleases(rels) {
     var want = ["data-cache-v1", "model-checkpoints-v1"];
@@ -1572,9 +1689,12 @@
     ]).then(function (res) {
       hideBanner();
       var runs = renderRuns(res[0]);
+      fetchedRuns = runs;
       renderReleases(res[1]);
       renderFleet(res[3]);
-      return renderLive(runs);
+      // resolve the hash AFTER the cards exist — #run-413 names an element
+      // that renderLive is what creates.
+      return renderLive(runs).then(resolveRunHash);
     }).catch(function (e) {
       if (e && e.rateLimited) {
         var next = new Date(Date.now() + REFRESH_MS);
@@ -1591,6 +1711,26 @@
     if (timer) clearInterval(timer);
     timer = setInterval(refresh, REFRESH_MS);
   }
+
+  window.addEventListener("hashchange", resolveRunHash);
+
+  // The permalink handle. Delegated, because every card is thrown away and
+  // rebuilt on each refresh cycle.
+  $("live").addEventListener("click", function (e) {
+    var a = e.target && e.target.closest ? e.target.closest("a.plink") : null;
+    if (!a) return;
+    e.preventDefault();
+    var frag = a.getAttribute("href");
+    var url = location.origin + location.pathname + location.search + frag;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).catch(function () { /* no clipboard: the hash below still works */ });
+    }
+    // setting an IDENTICAL hash fires no hashchange, so resolve directly too
+    location.hash = frag;
+    resolveRunHash();
+    a.classList.add("copied");
+    setTimeout(function () { a.classList.remove("copied"); }, 1200);
+  });
 
   $("refresh").addEventListener("click", function () { refresh(); schedule(); });
   document.addEventListener("visibilitychange", function () {

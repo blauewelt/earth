@@ -65,6 +65,16 @@
     word-break: break-word;
   }
 
+  /* A deep link (?f=…#e-022, ?f=ml/RUNS.md#run-413) scrolls its target to
+     y = 0 — which is UNDER the sticky header, so the row you followed the
+     link for is the one row you cannot see. Measured on a 390px phone
+     viewport: RUNS.md#run-386 landed at top: 0, hidden behind the bar, with
+     #385 as the first legible row. Headings have had this rule since the TOC
+     drawer was built (see `main h1, main h2…` below); the explicit <a id>
+     anchors in EXPERIMENTS.md and the per-row anchors in RUNS.md did not,
+     which is exactly the class of target a session report links to. */
+  main [id], main :target { scroll-margin-top: calc(var(--head-h) + 8px); }
+
   /* ---- sticky header: doc name, TOC, source ------------------------- */
   header {
     position: sticky; top: 0; z-index: 40;
@@ -298,6 +308,7 @@
   var DOCS = [
     ["Research log", [
       ["ml/EXPERIMENTS.md", "Every experiment, its hypothesis at dispatch, its result and its cost"],
+      ["ml/RUNS.md", "GENERATED index of every ml-train run: what it was for, how it ended, which box — deep-linkable as #run-413"],
       ["ml/FINDINGS.md", "What the programme has established, condensed"],
       ["ml/LEADERBOARD.md", "Every run, ranked"],
       ["ml/SCALING.md", "How skill moves with model and data size"],
@@ -496,6 +507,49 @@
     if (e.key === "Escape") drawer(false);
   });
 
+  // ---- deep links ----------------------------------------------------------
+  // Fragments arrive from three places that do not know what this document
+  // contains: status.html's experiment badge (#e-035), ml/RUNS.md's per-row
+  // permalinks (#run-413), and session reports pasted by hand. MEASURED
+  // 2026-08-19: of the 54 experiment IDs status.html links to, only 19 have
+  // an explicit <a id> in EXPERIMENTS.md — so the plain getElementById lookup
+  // dropped two thirds of those links at the top of a 5,000-line file, which
+  // reads to the reader as "the link is broken" and to the author as "it
+  // worked". Hence a ladder, and an admission when the ladder runs out.
+  function anchorFor(frag) {
+    var el = document.getElementById(frag);
+    if (el) return el;
+    // Heading ids are slugs of the WHOLE heading ("E-042 · SST as channel 40
+    // — DISPATCHED…" -> "e-042-sst-as-channel-40-dispatched…"), so a fragment
+    // naming the ID alone is a prefix of the one we want. First wins: the
+    // document is chronological, so that is the section, not a back-reference.
+    var pre = null;
+    Array.prototype.forEach.call(out.querySelectorAll("[id]"), function (n) {
+      if (!pre && n.id.indexOf(frag + "-") === 0) pre = n;
+    });
+    if (pre) return pre;
+    // "E-035a" is an ARM of E-035 and usually has no section of its own; the
+    // parent's section is where the arm is actually written up.
+    var m = /^(e-\d{3})[a-z]$/.exec(frag);
+    if (m) return anchorFor(m[1]);
+    return null;
+  }
+
+  function resolveFragment() {
+    if (!location.hash) return;
+    var frag = decodeURIComponent(location.hash.slice(1)).toLowerCase();
+    var el = anchorFor(frag);
+    if (el) { el.scrollIntoView(); return; }
+    // Honest failure: the document loaded, the section did not. Say which,
+    // at the top, where the reader is already looking.
+    var p = document.createElement("p");
+    p.className = "note";
+    p.id = "fragmiss";
+    p.textContent = "This document has no section “" + frag +
+      "” — showing it from the top. Use the contents button for what it does have.";
+    out.insertBefore(p, out.firstChild);
+  }
+
   function renderDoc(path) {
     titleEl.innerHTML = path.replace(/^.*\//, "") +
       ' <small>' + (path.indexOf("/") > 0 ? path.replace(/\/[^/]*$/, "/") : "") + '</small>';
@@ -513,10 +567,7 @@
         enhanceTables();
         buildToc();
         // a deep link (?f=…#heading) must land after the render
-        if (location.hash) {
-          var el = document.getElementById(location.hash.slice(1));
-          if (el) el.scrollIntoView();
-        }
+        resolveFragment();
       })
       .catch(function (e) {
         out.innerHTML = '<p class="err">Could not load <code>' + path +
