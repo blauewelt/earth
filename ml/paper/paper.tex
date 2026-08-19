@@ -1186,6 +1186,37 @@ should be quoted --- \emph{one seed}. We wrote above that no head number
 in this programme should be quoted from a single seed, and we decline to
 exempt this one because it happens to point the way we would prefer.
 
+\paragraph{At 5-day cadence the decomposition sharpens, and the
+representation term goes to zero.} The quarter-degree tensor rebuilt at
+pentad cadence ($T{=}3142$, $n{=}1{,}459$ transport bins) supports the
+same comparison at six times the label count, and every rung of it has
+now been read under one protocol. The pooled ridge \emph{under-reads}:
+$0.660$ [$0.593$, $0.722$] against a wind-only bar of $0.670$ measured on
+that tensor --- on the pooled number alone this would have been recorded
+as another failure to clear wind. An attention head over the unpooled
+section pixels clears the bar: the frozen monthly codec reads $0.691$
+[$0.631$, $0.746$], recovering the $+0.031$ that pooling had destroyed.
+But the matched raw-pixel control --- the same head, same folds, fed
+section anomalies with no codec at all --- reads $0.683$ [$0.620$,
+$0.742$]; and a codec trained from scratch \emph{on the pentad tensor
+itself} (38M parameters, 167k steps) reads $0.680$ [$0.617$, $0.740$]
+through the identical head, $-0.003$ \emph{below} its own raw control.
+Three read-outs that see unpooled section pixels --- one frozen
+representation, one purpose-trained representation, and none at all ---
+land within $0.011$ of one another with nearly coincident intervals. So
+at 5-day cadence neither a frozen monthly representation nor 167k steps
+of matched-cadence pretraining adds measurable transport information
+beyond the raw fields: \emph{read-out design, not representation
+learning, is what moved the number.} This also disposes of the
+domain-shift reading the pentad arm was built on --- if monthly
+embeddings under-performed because 5-day fields are out of domain for
+them, a codec trained on 5-day fields should have beaten them, and it
+does not. Each of the three cells is one seed, and by our own rule we do
+not quote any of them as a level; the claim rests on their
+\emph{differences}, which are $3$--$12\times$ smaller than the head
+probe's own measured seed spread ($0.036$) and are therefore consistent
+with zero however the seeds fell.
+
 Honesty box: the head is the most expressive probe we run
 ($\sim$25k parameters against $\sim$220 training months per fold), and
 although it is regularized hard, early-stopped on a train tail, and

@@ -86,6 +86,28 @@ is the real gate, not the money: if #409's head does not beat its own raw
 control, the fresh-codec arm is not obviously the right next spend and the
 matrix would be measuring the wrong axis.
 
+### UPDATE, 2026-08-19 ~04:00Z — credit restored, and the triage's three runs all landed
+
+**Balance back to $53.40** on a top-up. The runway argument above is spent and
+the decisions it forced are being unwound in order: **#400** (E-038c, the daily
+codec) and **#408** (the E-042 SST arm) are being **re-dispatched VERBATIM** from
+their archived provenance — a separate step, not this one — and both boxes still
+hold what makes a re-dispatch cheap (#400's 165.6 GB daily tensor and its ~22k
+orphan checkpoint, #408's partial r2 build).
+
+All three runs the triage was built to protect finished inside it: **#401**
+(E-036 eval, gate passed, §"E-036 RESOLVED" below), **#409** (E-038a verdict,
+§"VERDICT, 2026-08-19 ~03:30Z" below), and **#396**, which is **on pace at
+170,000 / 200,000 steps, ETA ~06:10Z**. The triage cost two runs and saved
+three, which is the trade it was written to make.
+
+**One decision does NOT unwind with the money.** The stage-2 comparison matrix
+above was deferred on two gates, credit and #409's verdict. Credit is no longer
+a gate; **#409's verdict is now a reason of its own** — its head did not beat its
+own raw control, so both arms of that matrix are representations just measured
+as equivalent to raw pixels. It stays down-prioritised on evidence and should be
+re-scoped around a raw arm before it is re-dispatched (E-038a VERDICT §(d)).
+
 **What #400 bought before it was cancelled**, recorded so that 22k steps are not
 a total loss — these are the first daily-scale numbers this programme has:
 **22,000 / 200,000 steps**, **216.6 ms/step** pure training, **probes 65% of
@@ -960,8 +982,9 @@ READ-OUT artefact and is withdrawn as a statement about representation. What
 remains open is the sharper question the raw control makes askable at all: **does
 any TRAINED pentad codec's embedding beat its OWN raw control through the same
 head?** That is precisely what **#409** measures (#386's from-scratch pentad
-codec, in flight, ETA ~03:30Z). If #409's head ≈ its raw control too, then
-stage-1 pretraining is not paying at pentad **in the read-out we now trust** —
+codec — **LANDED, and the answer is no: 0.680 vs 0.683, see the VERDICT section
+immediately below**). #409's head ≈ its raw control too, so **stage-1
+pretraining is not paying at pentad in the read-out we now trust** —
 and **E-042** (SST) and **E-038c** (daily) must be judged on this same protocol:
 head against matched raw control, not head against wind.
 
@@ -972,6 +995,69 @@ OOM, **#392** the 82.8 GB `nan_to_num` OOM, **#397** triton-no-cc, **#406**
 success. Three of those four deaths were instrumentation and none were science,
 and each was diagnosed only after it had already spent the GPU — the argument
 for §0 rule 3 (guard at dispatch, where the inputs are all it has cost you).
+
+### VERDICT, 2026-08-19 ~03:30Z — #409: the trained pentad codec does not beat its own raw pixels
+
+The other half of the question the section above left open. **Run #409**
+(`head_sha` `c4c900c`, archived as `probes-409.json`) reads #386's OWN codec —
+**37,975,889 params**, trained from scratch on the r1 pentad tensor at **batch
+512** for **166,752 steps** over ~14 h, on the **191,520,806-pixel-pentad**
+train pool (E-038a's four scale numbers, above) — through the identical #406
+protocol: eval-only, **n = 1459**, year-blocked k-fold on every row.
+
+| read-out | rapid r (k-fold, deseasonalised) | 95% CI | RMSE (Sv) |
+|---|---|---|---|
+| pooled ridge on `Z.mean(1)` | **0.652** | [0.582, 0.719] | 3.00 |
+| **attention head over the UNPOOLED section tokens** | **0.680** | [0.617, 0.740] | 2.91 |
+| **matched raw-3×3 end-to-end control** (same head architecture, raw pixels, no codec) | **0.683** | [0.620, 0.742] | 2.89 |
+| wind-only ridge bar | 0.670 | [0.601, 0.733] | 2.93 |
+
+`fc`, same protocol: pooled **0.390** [0.316, 0.465] against a wind-only
+**0.199** [0.129, 0.271]. `dip_check` captures **40.6%** of the 2009/10 dip
+(−2.82 Sv predicted of −6.95 observed), sign agreement 72.4%.
+
+**(a) The trained codec's head does not beat its own raw control.** **0.680
+against 0.683 — Δ = −0.003**, the wrong sign, and far inside a CI ~0.12 wide.
+Fourteen hours of from-scratch pentad pretraining produced an embedding that is
+**indistinguishable from raw pixels** through the read-out this programme now
+trusts. This is the cleanest form the comparison can take: same tensor, same
+head architecture, same folds, same n, differing only in whether a codec sits
+between the pixels and the query.
+
+**(b) It does not beat the frozen monthly anchor either.** Head **0.680** vs the
+anchor's **0.691**; pooled **0.652** vs **0.660**; dip capture **40.6%** vs
+**45.2%**. E-038's central hypothesis — *pentad fields are out of domain for the
+frozen monthly codec, so a codec trained ON pentad beats it* — is **FALSIFIED in
+the head read-out**. The out-of-domain anchor is, if anything, slightly better,
+and it is better on all three rungs at once, which is harder to dismiss as one
+noisy number than any single row would be.
+
+**(c) The consolidated picture at pentad cadence.** All three read-outs that see
+UNPOOLED section pixels — frozen-anchor head 0.691, trained-codec head 0.680,
+raw-pixel control 0.683 — land in a **0.680–0.691** band with CIs that overlap
+almost completely, barely clearing the wind-only bar of **0.670**. **No
+embedding, frozen or trained, adds measurable transport information beyond the
+raw fields.** What the head reads is in the PIXELS, not in the representation;
+the only thing that moved the number in this whole ladder was unpooling, i.e.
+read-out design.
+
+**(d) Consequences for the programme, stated explicitly so they bind future
+dispatches.**
+
+1. **Any future stage-2 comparison must carry a RAW-INPUT control arm**, not
+   just embedding arms. On the numbers above the honest prior is that raw
+   would MATCH — an embedding-vs-embedding matrix cannot distinguish "this
+   representation is good" from "both representations are the pixels".
+2. **E-042 (SST) remains worth running**, because a new channel changes what
+   the pixels contain rather than how they are encoded. But its decisive
+   read-out is the **head + raw-3×3 pair on the r2 tensor** — *does SST move
+   the RAW ceiling?* — not the codec probe alone. An r2 codec probe that beats
+   r1's tells us nothing we could act on if the raw control moves with it.
+3. **The deferred embedding-vs-embedding stage-2 matrix** (arm A `!run-386`
+   against arm B `!f3_anchor41M`, held at the top of this file on credit) is
+   now **DOWN-PRIORITISED ON EVIDENCE, not merely on credit.** Its two arms are
+   the two representations just measured as equivalent-to-raw and to each
+   other. Re-scope it around a raw arm before it is re-dispatched.
 
 ### E-038c ATTEMPT 2 (2026-08-18 20:35Z): #400, the daily arm re-dispatched
 
@@ -1055,12 +1141,14 @@ arm's economics that the 22k steps did measure (216.6 ms/step, probes 65% of
 wall, the light-probe trace) are recorded there. Re-dispatch verbatim when
 credit allows; the box keeps the tensor and a ~22k orphan checkpoint.
 
-**Result (pentad trained arms): the frozen-anchor read-out ladder is RESOLVED,
-the trained-codec arm is not.** #406 (above): pooled **0.660**, unpooled head
-**0.691**, matched raw-3×3 control **0.683**, wind bar **0.670** — the head
-clears wind, and the anchor's embedding beats raw by +0.008, i.e. by nothing.
-The trained arm — #386's own codec through the identical head and its own raw
-control — is **#409**, in flight, ETA ~03:30Z.
+**Result (pentad trained arms): BOTH read-out ladders are now RESOLVED.** #406
+(above): the frozen anchor at pooled **0.660**, unpooled head **0.691**, matched
+raw-3×3 control **0.683**, wind bar **0.670** — the head clears wind, and the
+anchor's embedding beats raw by +0.008, i.e. by nothing. #409 (the VERDICT
+section above): #386's OWN codec through the identical head, pooled **0.652**,
+head **0.680**, its own raw control **0.683** — the trained embedding beats raw
+by **−0.003**, i.e. by nothing, in the other direction. No embedding at pentad
+adds transport information beyond the raw fields.
 
 ---
 
@@ -1346,6 +1434,52 @@ true`, so the eval never depended on it. That failure was a real regression at
 because 86c012b resolves `--resume` and adopts the checkpoint's architecture
 before the model is built. On an `sroll:` run a failed `Train` is not the eval
 dying; read the Probes step.
+
+### E-036 RESOLVED, 2026-08-19 ~03:12Z — #401: input noise still pays at 205M
+
+**Run #401** (`head_sha` `9dcbd65`, archived as `probes-401.json`,
+`gpu-box-31479844`). **Both harvest criteria met:** the `e017_u1_s0` gate
+reproduced `horizon_auc` **0.643 exactly** (`pass: true`, tol 0.0101, bands
+0.470 / 0.375 / 0.492 identical to the reference), and
+`len(rollout_spatial.json['heads'])` is **3**. The wave is valid and the numbers
+below are readable.
+
+| arm | corridor AUC | gate-scope AUC |
+|---|---|---|
+| znoise σ=0.7 × xl144 @ 205M, **seed 0** | **0.722** | **0.780** |
+| znoise σ=0.7 × xl144 @ 205M, **seed 1** | **0.725** | **0.777** |
+| **xl144 clean control** (#346/#347, eval #356) | **0.6781** | — |
+
+**The falsifier did NOT trigger.** It required **≤ 0.6781** — "input noise was a
+small-model regulariser whose benefit capacity already supplies". Both seeds
+land **+0.045** above it on the corridor, with a seed spread of 0.003, so the
+delta is more than an order of magnitude larger than the noise it must clear.
+Input noise still pays at 205 M on the 144-point stencil; the +0.057 measured at
+88 M generalises up the capacity ladder rather than being absorbed by it.
+
+**It agrees with E-037's independent pair.** The 233-stencil noised arms
+(#363/#364, eval #394) read **0.725 / 0.723** corridor and **0.780 / 0.778**
+gate-scope — the same numbers to within seed spread on a different stencil and a
+different eval run. Two widths, four seeds, two evaluators: the noise effect at
+205 M is the best-replicated result on the rolled scoreboard. It also closes the
+2×2 factorial's last unread cell, and the conditional σ sweep §"Why these two
+and not a σ sweep" made contingent on this sign is now UNBLOCKED.
+
+**Operational note — this one result cost FOUR dispatches**, and none of the
+three failures were scientific:
+
+| run | what killed it |
+|---|---|
+| **#393** | box died at 4 h 42 m with heads 1–2 rolled but UNARCHIVED — `rollout_spatial.py` writes its JSON only at the END (§5.20) |
+| **#402** | no PyYAML on the box in the Resolve recipe step |
+| **#403** | `TENSOR` assigned but never exported, so the step below it never saw it |
+| **#401** | clean |
+
+Two of the three are the same shape as every other loss this week: a
+precondition that is free to check at dispatch and expensive to discover at use
+(§0 rule 3). The third (#393) is an artefact-publication gap, not a guard gap —
+an evaluator that writes only at the end converts any box failure into total
+loss of everything it computed, which is the open lever §5.20 names.
 
 ---
 
