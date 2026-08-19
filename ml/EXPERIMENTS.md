@@ -1479,6 +1479,124 @@ run its own step-budget ladder instead of a single terminal number.
 plus the eval wave that must follow (a `sroll:` run per arm, ~6 h each) before
 any of it is a result.
 
+### E-035 seed 0 · #396 completes the pair — 2026-08-19 06:10Z
+
+**#396** (dispatched 2026-08-18 14:34Z on `gpu-box-45731106` / Vast 47718230,
+run id 32149161274) is the second attempt at the E-035 seed-0 arm, after #395
+died in 90 s carrying no codec architecture and after the ORIGINAL seed-0 head
+was lost as a 604 MB fragment of a 2.6 GB checkpoint. It ran the full **200,000
+stage-2 steps** on the frozen `run-62,run-63` f3 anchor codec, and its own
+`stage2_config` on `ml-metrics/run-396.jsonl` records the arm exactly:
+`d_model` **1024**, `layers` **16**, `K` **24**, `stencil` **234**, `ring_km`
+`spiral:111,4444,0.71,0.5`, `seed` **0**, `unroll` 1, `params_M` **217.276**,
+batch 256, 28,857,960 train windows. Terminal step 200,000:
+`stage2_val_zmse` **0.36782**, `stage2_zmse` 0.02937, `stage2_amp` 0.9734,
+`stage2_lr` 3.235e-05, wall **55,178 s** (15.3 h). The light in-training probe
+(NOISY, trend only — rule 5) read `rapid_r_deseas` 0.425 → 0.401 → 0.421 →
+0.415 → **0.429** across 120k–200k.
+
+**#396 is a GREEN run with no `temporal.json`, and for once that is not the
+usual story.** §7's signature says the trainer died and nothing noticed. Here
+the trainer **finished**: the log prints `step 200000/200000 z-mse 0.0294
+(55265s)` at 06:08:11Z and the process was **OOM-killed 31 s later** — `Killed
+… exit code 137` at 06:08:42Z — inside `temporal.py`'s POST-LOOP evaluation,
+before it could write its results file. So `probes-396.json` carries
+`probe_sequence.json` and `provenance.json` and nothing else: there is **no
+`rapid_probe_kfold` for this arm and there will not be one**, and the run went
+green only because `Probes` is `continue-on-error`. Two consequences worth
+naming. The head itself is INTACT, because `temporal.py` mirrors it inside the
+loop on `s % log_every == 0 or s == a.steps` — i.e. the 200,000-step mirror was
+written before the print that preceded the kill. And the arm's number must now
+come from the ROLL (`rollout_spatial.py`), which is the primary instrument
+anyway; nothing is lost that this programme quotes.
+
+**The head existed on exactly one rented disk.** `snapshot_head.sh` warned every
+~30 minutes for fifteen hours — `upload of run-396-temporal-latest.pt FAILED` —
+because a 217M head with Adam moments is 2.6 GB and a release asset caps near
+2 GiB. That is the wave-8 defect `publish_head_weights.sh` was written for, and
+it is why the publication below had to happen on the box itself.
+
+**Publication — #412, 2026-08-19 06:21Z** ([run](https://github.com/blauewelt/earth/actions/runs/32223060484)),
+`window: headpub:e035a-xl233-s0@temporal`, inputs otherwise #379's verbatim
+25-field block with the runner pinned to `gpu-box-45731106` (started for this
+purpose from `exited`; 43 GB free, well above `disk_hygiene`'s 16 GB trigger, so
+the box's warm Z cache was never at risk). Published
+**`head-weights-e035a-xl233-s0.pt`**, 869,180,725 bytes, HTTP **201**.
+
+Three details of the mechanism that cost a day on 2026-08-17 and should not be
+rediscovered:
+
+- **`@temporal` is mandatory on a box whose run COMPLETED.** The stage-2 head
+  mirror lands at `/opt/earth-cache/ckpt/temporal.pt` — bare, with no run tag —
+  because the `Probes` step does not set `CKPT_TAG` (only `Train` does), so
+  `temporal.py`'s `tag = os.environ.get("CKPT_TAG", "")` resolves empty. The
+  default `headpub:` source is `orphan-temporal-latest.pt`, which on this box was
+  a **stale 1.07 GB Aug-15 leftover**. Publishing that leftover is exactly what
+  #377/#378/#381/#382 did.
+- **#383/#384/#385 did NOT fail at publication.** All three printed HTTP 201 and
+  put correct heads on the release; `head-weights-e035b-xl233-s1.pt` is #383's.
+  They went red in an EARLIER step: their dispatches left `tensor` at the
+  workflow default **`family2`**, which routes the build step past the family3/4/5
+  branches into `python ml/build_dataset.py --window "${WINDOW}"` — and
+  `build_dataset.py --window` takes only `global|na`, so `headpub:…@temporal` is
+  an `invalid choice` and the step exits 2. #379 never hit it because
+  `family3_na025` takes the first branch and `build_dataset.py` is never invoked.
+  The red is a `tensor`-input bug, not a publication bug; #412 carries
+  `family3_na025` and went green end to end.
+- **The `step` key does not survive.** `publish_head_weights.sh` keeps only
+  `{args, model}`, so a weights-only asset has no `step` and no `run_number`.
+  The 200,000 is corroborated twice instead: the publisher printed
+  `step=200000 d_model=1024 layers=16 stencil=234 seed=0 znoise=0.0`,
+  `params=217.3M` from the SOURCE, and the asset's own `args.steps` is 200000.
+
+**Verified on the PUBLISHED BYTES, not on the publisher's log** (§0.1 — and
+#382's stale-leftover is why this check is not optional). The asset was
+downloaded and `torch.load`ed in the sandbox: `d_model` 1024, `layers` 16,
+`K` 24, `stencil` 234, `ring_km` `spiral:111,4444,0.71,0.5`, `seed` **0**,
+`input_znoise` 0.0, `steps` 200000, `lr_schedule` expdecay,
+`data` `family3_na025.npz`, **217,276,480 parameters** across 199 tensors —
+matching `stage2_config`'s `params_M` 217.276 to the digit. The load-bearing
+shape is `inp.weight` **(1024, 14978)**: 234 slots × `d_z` 64 = 14,976, +2. An
+xl144 head — the thing #382 published by mistake — would read 9,282 there.
+Downloading the sibling and diffing the two `args` dicts leaves **exactly one
+differing field, `seed` 0 vs 1**: a genuine seed pair, not two configurations.
+
+**Eval dispatched as #413**, 2026-08-19 06:30Z
+([run](https://github.com/blauewelt/earth/actions/runs/32223688147)), on the same
+warm `gpu-box-45731106` (its `Z_actions_6c52f0687b_adcbe700fb.npy` and the
+sha-pinned tensor are both resident, so the eval pays neither the 5.2 GiB pull
+nor a rebuild). `window: sroll:e017_u1_s0,head-weights-e035a-xl233-s0`,
+`job_timeout` 700, every other field copied verbatim from **#401**'s working
+block; plan published as `plan-413.json`. Two heads only.
+
+**Harvest criteria, written at dispatch.** The `e017_u1_s0` gate must reproduce
+`horizon_auc` **0.643** within `GATE_TOL` **0.0101** or the run is void;
+`len(rollout_spatial.json['heads'])` must be **2** (#353 went green holding 2 of
+6 after a CUDA OOM); the seed-0 corridor AUC is read against seed 1's **0.673**
+(#394) and the PAIR MEAN against xl144 clean **0.6781**. **Falsifier unchanged
+from E-035's dispatch:** a seed mean within seed noise of 0.6781 = clean width
+SATURATES at 233 points and the ladder has a top. That reading is currently
+carried by an n = 1 number, which ml/CLAUDE.md §3 says means nothing — and
+E-037's "noise × width compounds" conclusion leans on it as its control, so the
+pair is not bookkeeping.
+
+**First minutes verified, 06:44Z** (§2 — measurements, not intentions).
+`ml-live-413` is emitting on the 2.5-minute publisher cadence; head **1 of 2**
+is `s1_s0` — the gate — so it LOADED, and it is stepping at a flat
+**2.94 s/window** (20 / 40 / 60 / 80 of 714 at 59 / 118 / 176 / 235 s), i.e.
+~35 min for the gate. `gpu_util` on Vast 47718230 reads **64%**, so this is on
+the card and not on the CPU (§2, the four eval scripts that silently embedded on
+CPU). `eta_all_s` ~4,000 s is a KNOWN UNDER-ESTIMATE and should not be quoted:
+the reporter assumes "heads run at the same cost", and a 234-slot head is several
+times a 1-slot gate — expect ~3.5–5.5 h total, against `job_timeout` 700 min.
+
+**Cost:** #396 ~15.6 h × $0.2944/h ≈ **$4.6**; #412 ~5 min ≈ **$0.03**; #413
+~3.5–5.5 h × $0.2944/h ≈ **$1.0–1.6**. Fleet at 06:41Z: credit **$49.85**,
+3 boxes running, burn **$0.9352/h** — the status page's budget block was
+projecting **$0.00 / runway 0.0 h** from a snapshot taken before the top-up, so
+`scripts/publish_fleet_status.mjs` was re-run and `ml-metrics/fleet.json` now
+carries the real numbers.
+
 ### E-036 eval · #393 died with nothing archived — re-dispatched as #401
 
 **#393** (2026-08-18 13:29Z, `gpu-box-42005419` / Vast 47487801,
