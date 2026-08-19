@@ -114,3 +114,39 @@ for (const c of commits) {
 
 const ref = await api("PATCH", `/git/refs/heads/${BRANCH}`, { sha: prevSha, force: false });
 console.log(`${BRANCH} is now ${ref.object.sha}`);
+
+// FAST-FORWARD THE LOCAL BRANCH ONTO WHAT WE JUST CREATED.
+//
+// Every commit above is REPLAYED through the Git Data API, which mints a new
+// sha for it (the printed `abc -> def` lines are exactly that). So the moment
+// this script succeeds, the local branch points at the pre-push shas and the
+// remote points at the new ones: identical trees, different history, and
+// `git log origin/main..main` lists the commits as unpushed forever. On
+// 2026-08-19 that cost three separate rounds of "you have unpushed commits" —
+// each one investigated, each one a false alarm, and each one carrying a real
+// risk of "fixing" it with a force-push that would clobber another writer.
+//
+// The fetch+reset is safe precisely because of the check that follows it: we
+// only move local if its TREE already equals the remote's. If it does not,
+// something else is going on (a concurrent commit, a partial push) and the
+// right answer is to say so and leave the working state alone, not to reset
+// over it.
+try {
+  git("fetch", "origin", BRANCH);
+  const localTree = git("rev-parse", `HEAD^{tree}`);
+  const remoteTree = git("rev-parse", `${ref.object.sha}^{tree}`);
+  if (localTree !== remoteTree) {
+    console.log(`local tree ${localTree.slice(0, 9)} != pushed tree ${remoteTree.slice(0, 9)} — ` +
+                `NOT fast-forwarding; inspect before trusting either side`);
+  } else if (git("rev-parse", "HEAD") === ref.object.sha) {
+    console.log(`local ${BRANCH} already at ${ref.object.sha.slice(0, 9)}`);
+  } else if (git("status", "--porcelain")) {
+    console.log(`working tree is dirty — leaving local ${BRANCH} at its pre-push sha; ` +
+                `run: git reset --hard ${ref.object.sha.slice(0, 9)} when clean`);
+  } else {
+    git("reset", "--hard", ref.object.sha);
+    console.log(`local ${BRANCH} fast-forwarded to ${ref.object.sha.slice(0, 9)} (same tree, new shas)`);
+  }
+} catch (e) {
+  console.log(`could not sync local ${BRANCH}: ${e.message}`);
+}
