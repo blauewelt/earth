@@ -8,10 +8,13 @@
 //   node scripts/git_api_push.mjs --token-file ~/.gh_pat \
 //        [--repo blauewelt/earth] [--branch main] [--range origin/main..HEAD]
 //
-// Replays each commit in the range as a new API-side commit (same message,
-// author and dates; NEW shas — run `git pull --rebase` afterwards, identical
-// patches dedupe). Adding/updating .github/workflows/ files requires the
-// token to carry the "Workflows" permission. Refuses non-fast-forward.
+// Reproduces each commit in the range as the IDENTICAL object: same tree,
+// parents, author, committer, message and signature, so GitHub returns the
+// same sha and local history needs no reconciliation afterwards. (Until
+// 2026-08-19 it paraphrased — author used as committer, message trimmed,
+// signature dropped — which minted new shas and left every pushed commit
+// Unverified.) Adding/updating .github/workflows/ files requires the token to
+// carry the "Workflows" permission. Refuses non-fast-forward.
 //
 // It ALSO refuses to push a checkout of one branch onto another. --branch
 // defaults to main, so a bare invocation from a feature branch silently
@@ -217,9 +220,15 @@ try {
     // alone. Modified TRACKED files do, because it would discard them.
     console.log(`tracked files are modified — leaving local ${BRANCH} at its pre-push sha; ` +
                 `run: git reset --hard ${ref.object.sha.slice(0, 9)} when clean`);
+  } else if (head === ref.object.sha) {
+    // The normal case now that commits reproduce exactly: local already IS
+    // the pushed history, because they are the same objects.
+    console.log(`local ${BRANCH} already at ${ref.object.sha.slice(0, 9)} — same objects, nothing to sync`);
   } else {
     git("reset", "--hard", ref.object.sha);
-    console.log(`local ${BRANCH} fast-forwarded to ${ref.object.sha.slice(0, 9)} (same tree, new shas)`);
+    console.log(`local ${BRANCH} fast-forwarded to ${ref.object.sha.slice(0, 9)} ` +
+                `(replay produced different shas — check why: an unsigned commit, ` +
+                `or a rewritten parent)`);
   }
 } catch (e) {
   console.log(`could not sync local ${BRANCH}: ${e.message}`);
