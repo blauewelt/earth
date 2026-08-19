@@ -249,6 +249,41 @@ embedding space is the programme.
 
 ---
 
+## 0e · Never park the fleet over budget — report it and keep going
+
+Standing rule, Chris 2026-08-19: *"please don't worry about top ups and proceed
+in spite of remaining budget, I will make sure the top ups are happening in
+time."* Earlier the same evening: *"I really want to make progress without any
+holdups... do not hold up the fleet over night, just count on my top-up."*
+
+So the budget is HIS constraint, not a session's. A session must never decline
+a dispatch, cancel a healthy run, or stop a working box because credit looks
+short. What it owes him instead is **arithmetic, early**: the balance, the
+burn, the implied runway, and which specific runs finish inside it and which do
+not. That is actionable; "I paused the wave to be safe" is not — it costs a
+night and produces nothing.
+
+This does NOT relax the two rules it sits beside, because neither is about
+saving money:
+
+- **Idle burn is still stopped on sight** (§7, and the hourly fleet-health
+  check). A box running with no job is not progress at any price. Note the
+  ordering trap this created on 2026-08-19: five boxes were started for the
+  no-holdout wave, the hourly check fired in the gap before they had jobs, and
+  correctly stopped all five as idle burn. **Dispatch first, then let the watch
+  resume** — or disable it for the provisioning window and re-enable it the
+  moment the jobs are live.
+- **A run that cannot answer its question is still cancelled** (§4.13, §11).
+  Killing #410 and #411 mid-flight when the holdout regime changed was right,
+  and it was a scientific judgement, not a financial one. Preserve what the
+  dead run measured before you kill it — #411's SST evidence survives in
+  `ml/recipes/f4r2-40M-nolonhold.json`'s `_provenance` precisely because that
+  was done before its branch was deleted.
+
+The failure this rule forbids is the quiet one: a session that sees a short
+runway, silently scales the wave down to fit, and reports a tidy plan whose
+smallness nobody ever questions.
+
 ## 1 · Before you dispatch
 
 - **State what result would FALSIFY the hypothesis**, and check the
