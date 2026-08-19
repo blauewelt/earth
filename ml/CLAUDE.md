@@ -209,8 +209,9 @@ by its input, and any experiment framed as "does the embedding beat the pixels
 on information content" has a known answer and does not need running. The
 embedding's job is **ATTENDABILITY**. The 84,405 active ocean pixels × 39
 channels of one quarter-degree time step are not a sequence a transformer can
-attend over; a token sequence is. The daily family-5 tensor is **165.6 GB** of raw pixels and
-cannot be attended at all — not at any batch size, not on any box we rent. The
+attend over; a token sequence is. The daily family-5 tensor is **165.6 GB** of
+raw pixels and cannot be attended at all — not at any batch size, not on any
+box we rent. The
 codec is what turns the state into a sequence, and that is the whole of its
 mandate: make large chunks of data attendable, cheaply enough that the
 forecaster can roll them forward for twelve months.
