@@ -1140,6 +1140,20 @@ def main():
                          "the 26.5N section is always kept)")
     ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"),
                     help="tensor npz (family-3 runs pass family3_na025.npz)")
+    ap.add_argument("--train-lon-hold", default="inherit",
+                    help="which longitudes are EXCLUDED FROM THE STAGE-2 "
+                         "TRAINING POOL. 'inherit' (default, and the only "
+                         "behaviour before 2026-08-19) = whatever the frozen "
+                         "codec was trained under, read from its own args; "
+                         "'none' = no longitude is excluded, train on the "
+                         "whole basin and hold out YEARS only; 'lo,hi' = an "
+                         "explicit block. THIS GOVERNS THE POOL ONLY — never "
+                         "the anomaly-transform statistics, which always "
+                         "follow the codec. See the call sites for why the "
+                         "two cannot be moved together. PASS AN EXPLICIT "
+                         "BLOCK AS --train-lon-hold=lo,hi, ONE WORD — a bare "
+                         "'-45,-25' in the next argv slot is read by argparse "
+                         "as an option string, not a value.")
     a = ap.parse_args()
 
     torch.manual_seed(a.seed)
@@ -1177,8 +1191,44 @@ def main():
     moy = np.array([int(m[5:7]) - 1 for m in months])
     hold_years = set(ck["args"]["holdout_years"].split(","))
     t_hold = np.array([m[:4] in hold_years for m in months])
-    lo, hi = (float(v) for v in ck["args"]["holdout_lon"].split(","))
-    x_hold = (lons >= lo) & (lons < hi)
+    # TWO MASKS, AND THEY ARE NOT THE SAME OBJECT (2026-08-19).
+    #
+    # `x_hold` was one variable doing two jobs: it chose the anomaly
+    # transform's z-score statistics (just below) AND it chose the stage-2
+    # training pool (`ok_p`, far below). Chris's decision — hold out years
+    # only, train on every longitude — is about the POOL. Moving the
+    # statistics with it would be a silent covariate shift on a FROZEN
+    # encoder: the codec was fitted on inputs normalised over
+    # (train years x non-held-out longitudes), and re-deriving mu/sd over a
+    # 33%-larger pool rescales every pixel it is then asked to encode, in a
+    # run whose whole point is that the codec is unchanged.
+    #
+    # It is also unsafe in a way that would not show up as a bad number.
+    # The embedding cache Z is keyed by (codec weight hash, sha256 of the
+    # RAW tensor file) — embed_cache_sync.cache_name — and neither term sees
+    # the transform. Two runs on the same codec and the same tensor with
+    # different statistics would therefore share one cache key: whichever
+    # pulled would train on the other's embeddings, and every shape, dtype
+    # and length check would pass.
+    #
+    # So: `stat_x_hold` ALWAYS follows the codec's own saved args, and
+    # --train-lon-hold governs `pool_x_hold` alone. The eval side is
+    # untouched either way — every evaluation pool in this file keys on
+    # t_hold only (search `ev_t`/`ev_m`), so `inherit` vs `none` differ in
+    # exactly one thing, which is what makes the comparison an isolation of
+    # the stage-2 half of the effect rather than two changes at once.
+    from train import lon_holdout_mask     # lazy: the one parser for the spec
+    stat_x_hold = lon_holdout_mask(ck["args"]["holdout_lon"], lons)
+    _tlh = str(a.train_lon_hold).strip()
+    if _tlh.lower() == "inherit":
+        pool_x_hold = stat_x_hold
+    else:
+        pool_x_hold = lon_holdout_mask(_tlh, lons)
+    print(f"lon holdout · statistics (codec "
+          f"{ck['args']['holdout_lon']!r}): "
+          f"{int(stat_x_hold.sum())}/{len(lons)} cols · training pool "
+          f"(--train-lon-hold {a.train_lon_hold!r}): "
+          f"{int(pool_x_hold.sum())}/{len(lons)} cols", flush=True)
 
     # THE anomaly transform, and there is exactly one of it. What stood here
     # was a hand-inlined THIRD copy (train.py had the second until 2026-08-17,
@@ -1204,7 +1254,8 @@ def main():
     # transform.py now fails if a second implementation reappears anywhere in
     # ml/. The import is LAZY because trainprobe imports this module.
     from trainprobe import anomaly_transform
-    X, dynamic = anomaly_transform(X, moy, t_hold, x_hold)
+    # stat_x_hold, NOT pool_x_hold — see the two-masks comment above.
+    X, dynamic = anomaly_transform(X, moy, t_hold, stat_x_hold)
 
     codec = codec_from_ckpt(ck, C)
     codec.load_state_dict(ck["model"])
@@ -1416,7 +1467,9 @@ def main():
     ok_t = np.array([t + reach[-1] < T and t + 1 >= K
                      and not any(t_hold[t + r] for r in reach)
                      for t in range(T)])
-    ok_p = ~x_hold[xs]
+    # pool_x_hold, NOT stat_x_hold — --train-lon-hold governs exactly this
+    # line and nothing else in the file.
+    ok_p = ~pool_x_hold[xs]
     pool_t, pool_p = np.where(ok_t[:, None] & ok_p[None, :])
     pool_t = torch.as_tensor(pool_t, dtype=torch.long)
     pool_p = torch.as_tensor(pool_p, dtype=torch.long)
@@ -1676,6 +1729,12 @@ def main():
                           "ring_km": a.ring_km,
                           "unroll_probs": a.unroll_probs,
                           "direct": a.direct,
+                          # WHICH LONGITUDES TRAINED. Named here for the same
+                          # reason `stencil` is: an arm whose only difference
+                          # is its training pool must be readable from the
+                          # live branch, not inferred from train_windows.
+                          "train_lon_hold": a.train_lon_hold,
+                          "codec_holdout_lon": ck["args"].get("holdout_lon", ""),
                           "tag": a.tag or ""}})
 
     # ---- in-training monitoring (Chris, 2026-08-11: "it would be nice to

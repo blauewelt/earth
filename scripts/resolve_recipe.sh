@@ -47,9 +47,11 @@ FILE="ml/recipes/${NAME}.json"
   exit 1
 }
 
-# Keys must be REAL inputs of ml-train.yml, checked against the workflow file
-# itself rather than a list kept in step here — a list would drift, and a
-# recipe key nothing reads is a setting that appears to apply and does not.
+# Keys must be REAL inputs of ml-train.yml — or keys declared in that file's
+# "RECIPE-ONLY KEYS" block, for knobs the 25-input ceiling leaves no room for —
+# checked against the workflow file itself rather than a list kept in step
+# here: a list would drift, and a recipe key nothing reads is a setting that
+# appears to apply and does not.
 python3 - "$FILE" "$NAME" <<'PY'
 import json, re, sys
 path, name = sys.argv[1], sys.argv[2]
@@ -63,12 +65,22 @@ import glob as _glob
 consumers = wf + "".join(open(f).read() for f in sorted(_glob.glob("scripts/*.sh")))
 blk = wf[wf.index("  workflow_dispatch:"):wf.index("\npermissions:")]
 valid = set(re.findall(r'^      (\w+):\s*$', blk, re.M))
+# RECIPE-ONLY KEYS. workflow_dispatch takes at most 25 inputs and ml-train.yml
+# has exactly 25, so a knob that cannot be squeezed into an existing input has
+# nowhere to go as a 26th — a 26th makes the whole file unparseable and 422s
+# every dispatch in the repo. A key declared in the workflow's "RECIPE-ONLY
+# KEYS" block is exempt from "must be a dispatch input" and NOT exempt from
+# the check below, which is the one that actually protects anything: it must
+# still be read as $RECIPE_<KEY> somewhere the job runs. The declaration lives
+# in ml-train.yml so this list cannot drift from it.
+valid |= set(re.findall(r'#\s*recipe-only:\s*(\w+)', wf))
 d = json.load(open(path))
 keys = [k for k in d if not k.startswith("_")]
 bad = [k for k in keys if k not in valid]
 if bad:
     raise SystemExit(f"::error::recipe {name} sets unknown input(s) "
-                     f"{sorted(bad)} — not inputs of ml-train.yml. A key "
+                     f"{sorted(bad)} — neither an input of ml-train.yml nor a "
+                     f"key declared in its RECIPE-ONLY KEYS block. A key "
                      f"nothing reads is a setting that appears to apply and "
                      f"does not.")
 # AND the workflow must actually CONSUME it as ${RECIPE_<KEY>:-...}. This is

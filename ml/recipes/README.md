@@ -48,7 +48,66 @@ plus two reserved keys:
       "codec_d_model": 576, ...
     }
 
-Keys must be real `ml-train.yml` inputs; `resolve_recipe.sh` refuses an unknown
-one rather than exporting a variable nothing reads. Add a recipe when a
-configuration has been **run and measured**, and say in `_provenance` which run
-measured it — a recipe is a record of something that worked, not a wish.
+Keys must be real `ml-train.yml` inputs — or **recipe-only keys**, below;
+`resolve_recipe.sh` refuses an unknown one rather than exporting a variable
+nothing reads. Add a recipe when a configuration has been **run and measured**,
+and say in `_provenance` which run measured it — a recipe is a record of
+something that worked, not a wish.
+
+## Recipe-only keys
+
+`workflow_dispatch` takes at most 25 inputs and `ml-train.yml` has exactly 25;
+a 26th does not fail gracefully — GitHub refuses to parse the file and every
+dispatch in the repo 422s. So a knob with nowhere to go may instead be declared
+a **recipe-only key**, in the `RECIPE-ONLY KEYS` comment block of
+`ml-train.yml`, and set only by naming a recipe.
+
+The exemption is narrow, and it is the harmless half. What a recipe-only key
+does NOT escape is the check that actually protects anything: the job must read
+it as `$RECIPE_<KEY>` somewhere, or the dispatch is refused. A key that appears
+to apply and does nothing is still impossible. What it gives up is the ability
+to be overridden from the dispatch form — which is the direction §1 wants
+anyway ("name a recipe; never hand-assemble an architecture").
+
+Currently declared:
+
+| key | reaches | values |
+|---|---|---|
+| `holdout_lon` | `ml/train.py --holdout-lon` (Train step) | `lo,hi` \| `none` — but pass **`0,0`** for "no holdout", see below |
+| `train_lon_hold` | `ml/temporal.py --train-lon-hold` (`scripts/probes_run.sh`) | `inherit` \| `none` \| `lo,hi` |
+
+`holdout_lon` is saved verbatim into the checkpoint's `args`, and **twelve
+eval scripts under `ml/` still re-read it as
+`lo, hi = (float(v) for v in ...split(","))`** — `ablate_channels`,
+`dip_check`, `probe_head`, `probe_kfold`, `probe_sequence`, `project_amoc`,
+`recon_decoder`, `recon_eval`, `rollout`, `rollout_spatial`, `train_joint`,
+`trainprobe`: the whole probe ladder and the roll. A codec whose args say
+`none` trains perfectly and then loses every one of them to `ValueError:
+could not convert string to float`, each raise swallowed by a best-effort
+guard — a green run with an empty probe archive. So a recipe asks for "no
+holdout" as **`0,0`**: `[0, 0)` is the empty half-open interval, the mask is
+bit-identical, and all twelve can parse it. `train.py` accepts `none` and
+`""` and prints a `::warning::` naming this. `tests/test_lon_holdout_optional.py`
+check 6 pins it. Routing those twelve through `train.lon_holdout_mask` is the
+follow-up that retires the workaround.
+
+## Three fields a recipe still cannot carry
+
+Not every input is reachable, and the two guards that say so are correct — do
+not weaken them to make a recipe tidier.
+
+- **`resume`** and **`temporal_steps`** are read in `if:` conditions, which are
+  YAML expression contexts evaluated before any shell exists. A recipe setting
+  either would govern the trainer and not the gate — half-applied, which is the
+  failure recipes exist to abolish. `tests/test_workflow_config.py` case 3
+  refuses them.
+- **`runner`** and **`job_timeout`** are read by `runs-on` / `timeout-minutes`
+  at job start, before a step can set an env var.
+- **stage-2 window tokens** (`stencil:`, `ring:`, `seed:`, `direct:`,
+  `uprobs:`, `sched:`, `unroll:`) are not inputs at all — they are parsed out of
+  `window` in `scripts/probes_run.sh`, and the `recipe:` token is stripped from
+  the front of that same string, so a recipe and its window tokens travel
+  together: `window: recipe:xl144-nolonhold,stencil:145,ring:spiral:...`.
+
+A recipe whose arm needs any of these must say so in its `_description`, with
+the exact string to dispatch — see `xl144-nolonhold.json`.

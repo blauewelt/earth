@@ -343,12 +343,25 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
   # AFTER temporal.py returned — 7 hours on a 60,000-step run, so
   # the status page showed nothing for the entire experiment. Same
   # defect as the joint step had, one step further down.
+  # --train-lon-hold is a RECIPE-ONLY key (declared in ml-train.yml under
+  # "RECIPE-ONLY KEYS"): the 25-input ceiling is full, and a knob that can
+  # only be set by naming a recipe is what §1 asks a dispatch to do anyway.
+  # "inherit" is today's behaviour to the pixel — the pool follows whatever
+  # the frozen codec's own args say — so a dispatch that does not name a
+  # recipe carrying this key is bit-identical to one from before it existed.
+  # It governs the TRAINING POOL only; the anomaly-transform statistics
+  # always follow the codec (see the two-masks comment in ml/temporal.py).
+  # WRITTEN AS --train-lon-hold=VALUE, one word. An explicit block such as
+  # "-45,-25" in the NEXT argv slot is read by argparse as an option string
+  # (it starts with "-" and is not a negative number), and the job dies with
+  # "expected one argument" before temporal.py does anything.
   python -u ml/temporal.py --run actions --K 24 \
     --data "$TENSOR" \
     --steps "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" \
     --unroll "$UNROLL" --seed "$SEED" --stencil "$STENCIL" \
     --ring-km "$RING" \
     $R2 $SCHED $DIRECT $UPROBS \
+    "--train-lon-hold=${RECIPE_TRAIN_LON_HOLD:-inherit}" \
     --d-model "${RECIPE_TEMPORAL_D_MODEL:-$IN_TEMPORAL_D_MODEL}" \
     --layers "${RECIPE_TEMPORAL_LAYERS:-$IN_TEMPORAL_LAYERS}" &
   S2_PID=$!

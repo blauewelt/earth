@@ -96,6 +96,21 @@ def main():
     if not valid:
         raise SystemExit("case 3 FAILED: parsed zero inputs out of the "
                          "workflow — the input-block markers moved")
+    # THE INPUT LIST IS FULL AT 25 and a 26th makes the whole file
+    # unparseable, so a knob with nowhere to go may be declared a RECIPE-ONLY
+    # key in the workflow's own comment block. It is exempt from "must be a
+    # dispatch input" and NOT exempt from the $RECIPE_<KEY> consumption check
+    # below, which is the half that stops a setting from silently doing
+    # nothing. Same regex as scripts/resolve_recipe.sh, same source of truth.
+    recipe_only = set(re.findall(r"#\s*recipe-only:\s*(\w+)", raw))
+    if len(valid) > 25:
+        raise SystemExit(
+            f"case 3 FAILED: ml-train.yml declares {len(valid)} "
+            f"workflow_dispatch inputs. The cap is 25 and a 26th does not "
+            f"fail gracefully — GitHub refuses to parse the file and EVERY "
+            f"dispatch in the repo 422s (ml/CLAUDE.md §7). Encode the knob "
+            f"into an existing input, or declare it a RECIPE-ONLY key.")
+    valid |= recipe_only
     consumers = raw + "".join(
         open(f).read() for f in sorted(glob.glob(os.path.join(ROOT, "scripts", "*.sh"))))
     recipes = sorted(glob.glob(os.path.join(ROOT, "ml", "recipes", "*.json")))
@@ -110,7 +125,8 @@ def main():
         for k in keys:
             if k not in valid:
                 raise SystemExit(f"case 3 FAILED: recipe {name} sets {k!r}, "
-                                 f"which is not an ml-train.yml input")
+                                 f"which is neither an ml-train.yml input nor "
+                                 f"a declared RECIPE-ONLY key")
             # Same corpus as scripts/resolve_recipe.sh: the workflow PLUS
             # the scripts it calls, since probes_run.sh now holds most of the
             # ${RECIPE_X} reads.
@@ -155,7 +171,9 @@ def main():
             raise SystemExit(f"case 3 FAILED: recipe {name} is missing "
                              f"_description or _provenance. A recipe records "
                              f"a configuration that was RUN; say which run.")
-    print(f"case 3 ok — {len(recipes)} recipes, all wired and documented")
+    print(f"case 3 ok — {len(recipes)} recipes, all wired and documented; "
+          f"{len(valid) - len(recipe_only)} inputs (cap 25) + "
+          f"{len(recipe_only)} recipe-only keys {sorted(recipe_only)}")
     ok += 1
 
     # ---- case 4: the architecture still reaches train.py, unfaked --------

@@ -29,6 +29,34 @@ from model import (PixelMAE, gather_px, LazyPixels, obs_any_chunked,
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def lon_holdout_mask(spec, lons):
+    """The ONE reading of a `--holdout-lon` spec, shared with temporal.py.
+
+    Returns a [W] bool: True where the longitude is EXCLUDED from training.
+
+    `spec` is "lo,hi" (degrees east, half-open [lo, hi)) or — new on
+    2026-08-19 — "" / "none", which holds out NO longitude at all. The empty
+    mask is not a special case anywhere downstream and deliberately so:
+      · anomaly_transform's `keep_x = ~x_hold` becomes all-True, so the
+        z-score statistics are taken over all longitudes of the TRAIN YEARS.
+        That is correct, and it IS a change — a codec trained under it sees a
+        different input normalisation from the -45,-25 codecs.
+      · the train pool `obs_any & ~t_hold & ~x_hold` collapses to
+        `obs_any & ~t_hold`, and the validation pool
+        `obs_any & (t_hold | x_hold)` to `obs_any & t_hold`.
+      · trainprobe.probe_now's `ok_p = ~x_hold[kxs]` becomes all-True.
+    None of those need an `if`; they need a mask that is honestly all-False,
+    which is what this returns. A second parser for this string is how the
+    anomaly transform ended up with four copies of one bug (see
+    trainprobe.anomaly_transform) — so temporal.py imports this one.
+    """
+    s = "" if spec is None else str(spec).strip()
+    if s == "" or s.lower() == "none":
+        return np.zeros(len(lons), dtype=bool)
+    lo, hi = (float(v) for v in s.split(","))
+    return (np.asarray(lons) >= lo) & (np.asarray(lons) < hi)
+
+
 def fit_schedule(s, steady_elapsed, total_elapsed, max_minutes, steps0):
     """How many steps fit the wall-clock budget, from the STEADY rate.
 
@@ -116,7 +144,33 @@ def parse():
     p.add_argument("--dec-layers", type=int, default=2,
                    help="decoder HIDDEN layers (2 = every pre-E-019b codec)")
     p.add_argument("--holdout-years", default="2009,2017,2023")
-    p.add_argument("--holdout-lon", default="-45,-25")   # a mid-Atlantic block
+    # THE DEFAULT IS DELIBERATELY UNCHANGED (2026-08-19). Chris decided the
+    # spatial holdout should stop being a standing training exclusion — hold
+    # out YEARS only, train on every longitude — but flipping the argparse
+    # default would silently change the meaning of every in-flight dispatch
+    # and every replay of an old INPUTS_JSON block, none of which passes this
+    # flag at all. The new regime is therefore OPT-IN and is selected by name:
+    # `--holdout-lon none` (or ""), reached from a dispatch through
+    # ml/recipes/*.json -> $RECIPE_HOLDOUT_LON -> this flag.
+    p.add_argument("--holdout-lon", default="-45,-25",   # a mid-Atlantic block
+                   help="longitude block excluded from TRAINING in both "
+                        "stages, as 'lo,hi' in degrees east. Empty ('') or "
+                        "'none' = NO spatial holdout: every longitude trains "
+                        "and only the held-out YEARS are withheld. The "
+                        "per-pixel anomaly transform already removes "
+                        "location-memorised climatology, the block costs 25% "
+                        "of the training pixels, and it confounds the "
+                        "spatial-coupling claim (about half of the stencil "
+                        "head's measured advantage is earned patching the "
+                        "hole in its own coords=(lat/90, lon/180) feature). "
+                        "It stays AVAILABLE as a deliberate diagnostic — it "
+                        "produced the paper's Figure 7 — it is just no "
+                        "longer what a run gets for saying nothing. PASS IT "
+                        "AS --holdout-lon=lo,hi, ONE WORD: a bare '-45,-25' "
+                        "in the next argv slot starts with '-' and does not "
+                        "match argparse's negative-number pattern, so it is "
+                        "read as an option string and the process exits 2 "
+                        "with 'expected one argument'.")
     p.add_argument("--anomaly", action="store_true",
                    help="train dynamic channels as departures from their own "
                         "per-pixel monthly climatology (train years only)")
@@ -236,12 +290,39 @@ def main():
 
     # ---- blocked splits ----------------------------------------------------
     hold_years = set(a.holdout_years.split(","))
-    lo, hi = (float(v) for v in a.holdout_lon.split(","))
     t_hold = np.array([m[:4] in hold_years for m in months])
-    x_hold = (lons >= lo) & (lons < hi)
+    x_hold = lon_holdout_mask(a.holdout_lon, lons)
     ocean = np.isfinite(X[..., 0]).any(axis=0)
-    print(f"held-out months {int(t_hold.sum())}/{T} · held-out lon block "
-          f"{int(x_hold.sum())}/{W} cols · ocean {int(ocean.sum())}")
+    # Print what was held out EITHER WAY. "0/481 cols" is true but reads like
+    # a bug; a run that trains on every longitude should say so in the words
+    # a reader is looking for.
+    _lonmsg = (f"held-out lon block {int(x_hold.sum())}/{W} cols "
+               f"[{a.holdout_lon}]" if x_hold.any() else
+               f"NO lon holdout — all {W} cols train (--holdout-lon "
+               f"{a.holdout_lon!r})")
+    print(f"held-out months {int(t_hold.sum())}/{T} · {_lonmsg} · "
+          f"ocean {int(ocean.sum())}")
+    # THE SPEC IS SAVED VERBATIM INTO ck["args"]["holdout_lon"] (save_ckpt
+    # writes vars(a)), and TWELVE eval scripts under ml/ still read that
+    # field as `lo, hi = (float(v) for v in ...split(","))`:
+    # ablate_channels, dip_check, probe_head, probe_kfold, probe_sequence,
+    # project_amoc, recon_decoder, recon_eval, rollout, rollout_spatial,
+    # train_joint, trainprobe. A codec whose args say "none" trains fine, and
+    # then EVERY ONE of them dies with `ValueError: could not convert string
+    # to float: 'none'` — and probes_run.sh guards each with `|| echo
+    # ::warning::`, so the run goes GREEN with an empty probe archive: §7's
+    # "green run with no temporal.json" signature, from a new direction.
+    # Say so HERE, where the inputs are all it has cost (§0.3), rather than
+    # six hours later. `--holdout-lon=0,0` is the same empty mask ([0,0) is
+    # the empty half-open interval) in a form all twelve can parse, and is
+    # what ml/recipes/*-nolonhold.json pass for exactly this reason.
+    if not x_hold.any() and a.holdout_lon.strip().lower() in ("", "none"):
+        print(f"::warning:: --holdout-lon {a.holdout_lon!r} is saved verbatim "
+              f"into this checkpoint's args, and the twelve eval scripts that "
+              f"re-read that field parse it with float() — they will all "
+              f"raise on it, each behind a best-effort guard, leaving a green "
+              f"run with no probe results. Use --holdout-lon=0,0 for the "
+              f"identical (empty) mask in a form they can read.", flush=True)
 
     # ---- anomaly space (proposal §5) ---------------------------------------
     # A reconstruction loss on raw state is dominated by the seasonal cycle —

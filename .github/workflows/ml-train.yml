@@ -102,6 +102,33 @@ on:
         description: "decoder width (256 pilot; 512 at the 10M size)"
         default: ""
 
+# ---- RECIPE-ONLY KEYS ------------------------------------------------------
+# THE INPUT LIST ABOVE IS FULL. workflow_dispatch takes at most 25 inputs and
+# there are exactly 25; a 26th does not fail gracefully — GitHub refuses to
+# parse this file and EVERY dispatch in the repo 422s (§7).
+#
+# A recipe key does not have to be a dispatch input to be safe. The guard that
+# matters is the OTHER one: a key the job never reads as $RECIPE_<KEY> is a
+# setting that appears to apply and does nothing, and that is refused, at
+# dispatch, by scripts/resolve_recipe.sh. A key declared here is exempt from
+# the "must be a dispatch input" half and subject to the consumption half in
+# full — so it can only exist if something reads it, and it can only be set by
+# NAMING A RECIPE, which is what §1 asks a dispatch to do anyway.
+#
+# Declare one line per key. scripts/resolve_recipe.sh and
+# tests/test_workflow_config.py both parse these markers out of this file, so
+# this comment is the single source of truth rather than a list kept in step
+# with one by hand.
+#
+#   recipe-only: holdout_lon      -> ml/train.py --holdout-lon   (Train step)
+#       "lo,hi" | "none". The longitude block excluded from STAGE-1 training.
+#       Unset = train.py's own default, -45,-25, unchanged for every dispatch
+#       that does not name a recipe carrying this key.
+#   recipe-only: train_lon_hold   -> ml/temporal.py --train-lon-hold
+#       "inherit" | "none" | "lo,hi". Which longitudes are excluded from the
+#       STAGE-2 training pool, read in scripts/probes_run.sh. "inherit" is the
+#       default and reproduces every head trained before 2026-08-19.
+
 # contents: write ONLY for the live-metrics side channel — the training
 # step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every
 # 5 minutes so curves are plottable mid-run (ml/live_curve.py). The branch
@@ -855,6 +882,15 @@ jobs:
             done
             echo "recw flags: ${RECW[*]}"
           ;; esac
+          # --holdout-lon is passed ONLY when a recipe sets it (recipe-only
+          # key), so a dispatch that names no recipe gets train.py's own
+          # default and is bit-identical to one from before this existed.
+          # WRITTEN AS --holdout-lon=VALUE, one word: argparse reads a bare
+          # "-45,-25" in the next argv slot as an OPTION STRING (it starts
+          # with "-" and does not match argparse's negative-number pattern)
+          # and exits 2 with "expected one argument" before a line of this
+          # trainer runs. The =form is the only one that survives a value
+          # that opens with a minus sign.
           python -u ml/train.py \
             --data "$TENSOR" \
             --steps "${RECIPE_STEPS:-${{ inputs.steps }}}" \
@@ -871,6 +907,7 @@ jobs:
             --n-heads "${RECIPE_CODEC_HEADS:-${{ inputs.codec_heads }}}" \
             --d-dec "${RECIPE_CODEC_D_DEC:-${{ inputs.codec_d_dec }}}" \
             "${RECW[@]}" \
+            $([ -n "${RECIPE_HOLDOUT_LON:-}" ] && echo "--holdout-lon=${RECIPE_HOLDOUT_LON}") \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && echo --anomaly) \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && [ "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}" != "0" ] \
               && echo --eval-every "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}") \
