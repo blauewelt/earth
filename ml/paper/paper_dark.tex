@@ -1499,7 +1499,8 @@ sun89, \textbf{200k} steps & $768\times12$ & --- & 0.639 & 0.630 & 0.6341 \\
 ring-8@222 (near-field) & $768\times12$ & 0.646 & 0.661 & 0.661 & 0.6560 \\
 \textbf{znoise, $\sigma{=}0.7$ (sun-55)} & $768\times12$ & \textbf{0.683} & \textbf{0.674} & --- & \textbf{0.6785} \\
 \midrule
-\multicolumn{6}{l}{\emph{the composition --- noise \emph{and} the widest input, at the 205M tier}}\\
+\multicolumn{6}{l}{\emph{the composition --- noise $\times$ input width, at the 205M tier}}\\
+\textbf{znoise $\times$ xl144} & $1024\times16$ & \textbf{0.722} & \textbf{0.725} & --- & \textbf{0.7235} \\
 \textbf{znoise $\times$ xl233} & $1024\times16$ & \textbf{0.725} & \textbf{0.723} & --- & \textbf{0.7240} \\
 \bottomrule
 \end{tabular}
@@ -1513,10 +1514,12 @@ section}: neither row is a capacity change, and both beat the tier they
 belong to --- input noise by $+0.057$ and near-field geometry by
 $+0.035$ over the same 88M model, with the \emph{noised 88M} model
 beating the \emph{clean 205M} one outright. \textbf{The bottom block is
-what happens when the two are composed}, and it is the best number in
+what happens when the two are composed}, and it holds the best numbers in
 the programme by a margin larger than the gap between the top of the
-capacity ladder and its second rung: $0.7240$ against $0.6785$ for noise
-alone and $0.6781$ for width alone (\S\ref{sec:interaction}). The
+capacity ladder and its second rung: $0.7235$/$0.7240$ against $0.6785$
+for noise alone and $0.6781$ for width alone. The two noised rows sit
+$0.0005$ apart across a $1.6\times$ change in input width --- which is
+the finding of \S\ref{sec:interaction}, in one line. The
 clean xl233 row is a single seed --- its partner was lost to a truncated
 upload and is retraining --- so it is reported as $n{=}1$ and read only
 against the seed it can be paired with. The base-scale geometry
@@ -1639,30 +1642,80 @@ version, with the per-arm table, at
 \label{fig:amocroll}
 \end{figure}
 
-\subsection{Noise \texorpdfstring{$\times$}{x} width: the one
-interaction that compounds}\label{sec:interaction}
+\subsection{Noise \texorpdfstring{$\times$}{x} width: one axis carries
+all of it}\label{sec:interaction}
 
 Every axis in \S\ref{sec:axes} was measured alone. Composing the two
-that pay --- input noise and the widest stencil, at the largest
-capacity --- produces the programme's best rolled number and, more
-usefully, an explanation of what noise is buying.
+that appeared to pay --- input noise and the widest stencil, at the
+largest capacity --- produces the programme's best rolled numbers, and a
+sharper result than the one we expected: across the full $2\times2$,
+\emph{noise carries the entire gain and width contributes nothing}.
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{lrrr}
+\toprule
+input & clean & noised ($\sigma{=}0.7$) & $\Delta$ noise \\
+\midrule
+sunflower-144 & 0.6781 & \textbf{0.7235} & $+0.0454$ \\
+sunflower-233 & 0.6730 & \textbf{0.7240} & $+0.0510$ \\
+\midrule
+$\Delta$ width & $-0.0051$ & $+0.0005$ & \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{The $2\times2$, rolled corridor AUC.} Both rows at
+$1024\times16$, 200k steps, same schedule; means of two seeds except
+clean-233 ($n{=}1$). The noise column is $+0.045$ to $+0.051$; the
+width row is $-0.005$ and $+0.0005$. The interaction term --- whether
+noise pays \emph{more} at greater width --- is $+0.0056$, at the scale
+of the seed spread it would have to clear.}
+\label{tab:twobytwo}
+\end{table}
+
+Table~\ref{tab:twobytwo} is the whole experiment. Noise buys $+0.0454$
+at 144 points and $+0.0510$ at 233; width buys $-0.0051$ clean and
+$+0.0005$ noised. The interaction term is $+0.0056$, which is the size
+of the seed spread it would need to exceed, so we do not claim it. Read
+across the noised column instead: $0.7235$ and $0.7240$, five
+ten-thousandths apart, across a $1.6\times$ change in the number of
+input points. \textbf{Once noise is on, the stencil width stops
+mattering entirely.}
+
+\paragraph{A correction, recorded.} On the 233-point pair alone this
+section claimed a \emph{compounding} interaction --- that noise paid
+where width had just stopped paying. The 144-point pair, evaluated a
+few hours later, shows that reading was an artifact of having one cell
+of a $2\times2$: noise pays the same amount at both widths, so there is
+nothing for width to compound with. The claim was wrong in the direction
+this programme is most prone to, and \S\ref{sec:limits} keeps the
+general form of the lesson: a single arm of a factorial design licenses
+a main effect and never an interaction.
 
 The comparison is as clean as this programme gets: \emph{same} seed,
 \emph{same} $1024\times16$ head, \emph{same} 233-point sunflower input,
 \emph{same} 200k steps under the same schedule, differing in one flag.
-Paired at seed~1, $\sigma{=}0.7$ input noise rolls at $0.7230$ against
-the clean arm's $0.6730$: $\mathbf{+0.050}$, twelve times the tier's
-seed spread. The second noised seed reads $0.7250$, so the noised pair
-is $0.7240 \pm 0.001$ --- a spread of $0.002$, tighter than the clean
-tier's own.
+Paired at seed~1 on the 233-point input, $\sigma{=}0.7$ noise rolls at
+$0.7230$ against the clean arm's $0.6730$: $\mathbf{+0.050}$, twelve
+times the tier's seed spread. The second noised seed reads $0.7250$, so
+that pair is $0.7240 \pm 0.001$ --- tighter than the clean tier's own
+spread. The 144-point pair reads $0.7220$/$0.7250$ against a clean
+$0.6781$: $+0.045$, the same effect at a different width.
 
 Two reference points make the size legible. Noise alone at 88M reached
 $0.6785$; width alone at 205M reached $0.6781$; the composition reaches
-$\mathbf{0.7240}$. The whole capacity ladder, from the no-neighbour
-gate to the widest clean model, spans $0.589 \to 0.678$; one flag,
-applied at the top of it, adds more than half that span again. And it
-does so on the axis that had just stopped: width bought nothing from
-144 to 233 points on the clean arm, and $+0.050$ on the noised one.
+$\mathbf{0.7235}$/$\mathbf{0.7240}$. The whole capacity ladder, from the
+no-neighbour gate to the widest clean model, spans $0.589 \to 0.678$;
+one flag, applied at the top of it, adds more than half that span again.
+
+The effect is also strikingly \emph{constant}. Input noise bought
+$+0.057$ at 88M on a 55-point stencil, $+0.045$ at 205M on 144 points
+and $+0.051$ at 205M on 233 points --- a spread of $0.012$ across a
+$2.3\times$ change in capacity and a $4.2\times$ change in input width.
+Whatever exposure bias costs this architecture, it costs about the same
+everywhere we have looked, and correcting it returns about the same
+everywhere. That is a more useful shape than a compounding one: it makes
+noise a fixed dividend available at any point on the ladder, rather than
+a reward for having climbed it.
 
 \begin{table}[htbp]
 \centering\small
