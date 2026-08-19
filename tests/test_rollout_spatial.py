@@ -33,67 +33,84 @@ from temporal import TemporalTransformer, embed_everything    # noqa: E402
 T_M, H_G, W_G, C, DZ, K = 44, 8, 10, 5, 4, 6
 
 
+def build_fixture(tmp):
+    """The toy production inputs, as a reusable dict of paths.
+
+    Extracted from this test's main() so tests/test_roll_holdout_lon.py can
+    score the SAME synthetic ocean this one rolls, instead of standing up a
+    second toy that would drift from it. Returns the paths, plus the arrays a
+    caller needs to check the script's own arithmetic against.
+    """
+    rng = np.random.default_rng(0)
+    t = np.arange(T_M)[:, None, None, None]
+    X = (np.sin(2 * np.pi * t / 12) + 0.4 * (t / T_M)
+         + 0.3 * rng.standard_normal((T_M, H_G, W_G, C))).astype(np.float32)
+    X[:, 0, 0, :] = np.nan                    # land, so NBR misses fire
+    xpath = os.path.join(tmp, "X.npy")
+    np.save(xpath, X)
+    months = np.array([f"{1990 + i // 12}-{i % 12 + 1:02d}"
+                       for i in range(T_M)])
+    lats = np.linspace(20, 40, H_G).astype(np.float32)
+    lons = np.linspace(-60, -40, W_G).astype(np.float32)
+    ridx = np.arange(K, T_M)                  # RAPID truth from month K
+    rapid = np.stack([ridx.astype(float),
+                      2.79 * rng.standard_normal(len(ridx))], 1)
+    npz = os.path.join(tmp, "small.npz")
+    np.savez(npz, months=months, lats=lats, lons=lons, rapid=rapid)
+
+    codec = PixelMAE(n_chan=C, d_model=16, n_heads=2, n_layers=2,
+                     d_z=DZ, d_dec=16, patch=3)
+    ckpt = os.path.join(tmp, "pixelmae.pt")
+    torch.save({"model": codec.state_dict(),
+                "chan": [f"c{i}" for i in range(C)],
+                "d_z": DZ, "norm": None, "step": 0,
+                "args": {"patch": 3, "d_model": 16, "n_layers": 2,
+                         "n_heads": 2, "d_dec": 16,
+                         "holdout_years": "1992",
+                         "holdout_lon": "-45,-44"}}, ckpt)
+
+    # ---- Z cache: embed the toy exactly as production embeds ---------
+    moy = np.array([int(m[5:7]) - 1 for m in months])
+    t_hold = np.array([m[:4] == "1992" for m in months])
+    x_hold = (lons >= -45) & (lons < -44)
+    Xm = np.load(xpath, mmap_mode="r")
+    clim, dyn, mean_c, std_c = stream_stats(Xm, moy, t_hold, x_hold)
+    full, obs = build_slab(Xm, list(range(H_G)), moy, clim, dyn,
+                           mean_c, std_c)
+    ocean = np.isfinite(X[..., 0]).any(0)
+    ys, xs = np.where(ocean)
+    ctx_all = np.stack([np.sin(2 * np.pi * moy / 12),
+                        np.cos(2 * np.pi * moy / 12)], 1)
+    codec.eval()
+    Z, _ = embed_everything(codec, torch.from_numpy(
+        np.nan_to_num(full, nan=0.0)), torch.from_numpy(obs),
+        ctx_all, lats, lons, ys, xs, DZ, cache_path=None, batch=64)
+    zpath = os.path.join(tmp, "Z.npy")
+    np.save(zpath, np.asarray(Z).astype(np.float16))
+
+    heads = []
+    for stencil, kmax, seed in ((1, K, 0), (9, max(K, 36), 0)):
+        torch.manual_seed(10 + stencil)
+        hm = TemporalTransformer(d_z=DZ, d_model=8, n_heads=4,
+                                 n_layers=1, k_max=kmax, stencil=stencil)
+        hp = os.path.join(tmp, f"toy_s{stencil}_s{seed}.pt")
+        torch.save({"model": hm.state_dict(),
+                    "args": {"K": K, "d_model": 8, "layers": 1,
+                             "unroll": 1, "seed": seed,
+                             "stencil": stencil}}, hp)
+        heads.append(hp)
+
+    return {"x": xpath, "npz": npz, "z": zpath, "ckpt": ckpt,
+            "heads": heads, "lons": lons, "x_hold": x_hold,
+            "t_hold": t_hold, "ocean": ocean, "P": int(ocean.sum())}
+
+
 def main():
     tmp = tempfile.mkdtemp()
     try:
-        rng = np.random.default_rng(0)
-        t = np.arange(T_M)[:, None, None, None]
-        X = (np.sin(2 * np.pi * t / 12) + 0.4 * (t / T_M)
-             + 0.3 * rng.standard_normal((T_M, H_G, W_G, C))).astype(np.float32)
-        X[:, 0, 0, :] = np.nan                    # land, so NBR misses fire
-        xpath = os.path.join(tmp, "X.npy")
-        np.save(xpath, X)
-        months = np.array([f"{1990 + i // 12}-{i % 12 + 1:02d}"
-                           for i in range(T_M)])
-        lats = np.linspace(20, 40, H_G).astype(np.float32)
-        lons = np.linspace(-60, -40, W_G).astype(np.float32)
-        ridx = np.arange(K, T_M)                  # RAPID truth from month K
-        rapid = np.stack([ridx.astype(float),
-                          2.79 * rng.standard_normal(len(ridx))], 1)
-        npz = os.path.join(tmp, "small.npz")
-        np.savez(npz, months=months, lats=lats, lons=lons, rapid=rapid)
-
-        codec = PixelMAE(n_chan=C, d_model=16, n_heads=2, n_layers=2,
-                         d_z=DZ, d_dec=16, patch=3)
-        ckpt = os.path.join(tmp, "pixelmae.pt")
-        torch.save({"model": codec.state_dict(),
-                    "chan": [f"c{i}" for i in range(C)],
-                    "d_z": DZ, "norm": None, "step": 0,
-                    "args": {"patch": 3, "d_model": 16, "n_layers": 2,
-                             "n_heads": 2, "d_dec": 16,
-                             "holdout_years": "1992",
-                             "holdout_lon": "-45,-44"}}, ckpt)
-
-        # ---- Z cache: embed the toy exactly as production embeds ---------
-        moy = np.array([int(m[5:7]) - 1 for m in months])
-        t_hold = np.array([m[:4] == "1992" for m in months])
-        x_hold = (lons >= -45) & (lons < -44)
-        Xm = np.load(xpath, mmap_mode="r")
-        clim, dyn, mean_c, std_c = stream_stats(Xm, moy, t_hold, x_hold)
-        full, obs = build_slab(Xm, list(range(H_G)), moy, clim, dyn,
-                               mean_c, std_c)
-        ocean = np.isfinite(X[..., 0]).any(0)
-        ys, xs = np.where(ocean)
-        ctx_all = np.stack([np.sin(2 * np.pi * moy / 12),
-                            np.cos(2 * np.pi * moy / 12)], 1)
-        codec.eval()
-        Z, _ = embed_everything(codec, torch.from_numpy(
-            np.nan_to_num(full, nan=0.0)), torch.from_numpy(obs),
-            ctx_all, lats, lons, ys, xs, DZ, cache_path=None, batch=64)
-        zpath = os.path.join(tmp, "Z.npy")
-        np.save(zpath, np.asarray(Z).astype(np.float16))
-
-        heads = []
-        for stencil, kmax, seed in ((1, K, 0), (9, max(K, 36), 0)):
-            torch.manual_seed(10 + stencil)
-            hm = TemporalTransformer(d_z=DZ, d_model=8, n_heads=4,
-                                     n_layers=1, k_max=kmax, stencil=stencil)
-            hp = os.path.join(tmp, f"toy_s{stencil}_s{seed}.pt")
-            torch.save({"model": hm.state_dict(),
-                        "args": {"K": K, "d_model": 8, "layers": 1,
-                                 "unroll": 1, "seed": seed,
-                                 "stencil": stencil}}, hp)
-            heads.append(hp)
+        f = build_fixture(tmp)
+        xpath, npz, zpath = f["x"], f["npz"], f["z"]
+        ckpt, heads = f["ckpt"], f["heads"]
 
         out = os.path.join(tmp, "rollout_spatial.json")
         base = [sys.executable, "-u", os.path.join(ML, "rollout_spatial.py"),

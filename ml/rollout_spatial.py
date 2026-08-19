@@ -112,7 +112,7 @@ def corridor_pixels(Xm, ocean, ys, xs, t_hold, sec_sel, pctl, dilate):
 
 
 def export_mask(path, lats, lons, ocean, ys, xs, corridor, gate_mask,
-                sec_sel, sec_y, corridor_def, months, x_name):
+                sec_sel, sec_y, corridor_def, months, x_name, holdout_lon):
     """Write the eval's OWN pixel sets as a baked categorical grid the globe
     app can draw (root CLAUDE.md §2 `classGrid` + `packed` format, row 0 =
     south). Chris, 2026-08-13: *"add a layer to the globe visualiser to see
@@ -129,7 +129,28 @@ def export_mask(path, lats, lons, ocean, ys, xs, corridor, gate_mask,
       2 corridor — also scored as the headline AMOC corridor
       3 section  — also on the RAPID 26.5°N transport section
     Land and out-of-window cells are empty ("."), which is the honest
-    answer: the model has no state there at all."""
+    answer: the model has no state there at all.
+
+    The held-out longitude block rides along as an ADDITIVE header field
+    (`holdout_lon`), NOT as a 4th class code. Three reasons, in order of
+    weight:
+      1. It is orthogonal to the nesting. section subset-of corridor
+         subset-of rolled is a chain and each cell shows its most specific
+         role; "never trained" crosses all three. A pixel both on the RAPID
+         section and inside the block would have to give up one of the two
+         facts to fit one code -- and whichever it gave up, the legend would
+         be lying about the other.
+      2. The block IS a longitude interval -- two numbers. Baking it per-cell
+         would be a redundant second encoding of lo/hi that can drift from
+         the checkpoint the roll actually used.
+      3. The `classes` array is the data producer's own palette and the
+         frontend paints from it (root CLAUDE.md 2.3), so a new code is a UI
+         change: tests/data.spec.js pins the code set to [1,2,3] and the
+         packed alphabet to {".",1,2,3}, and ml/paper/make_figs.py rebuilds
+         the eval's pixel order from `code >= 1` and counts the corridor as
+         `code >= 2`. A 4th code would silently reclassify both.
+    A frontend that wants to draw the band has lo/hi in the same degrees as
+    west/east and can shade it without a re-bake."""
     H, W = ocean.shape
     code = np.zeros((H, W), np.uint8)
     code[ys, xs] = 1
@@ -181,6 +202,9 @@ def export_mask(path, lats, lons, ocean, ys, xs, corridor, gate_mask,
                    "section": int(len(sec_sel)),
                    "gate_subset": int(gate_mask.sum())},
         "corridor_def": corridor_def,
+        # Additive, deliberately -- see the docstring. The globe can shade
+        # the band from lo/hi; the class codes stay [1,2,3].
+        "holdout_lon": holdout_lon,
         "section_row": {"lat": round(float(lats[sec_y]), 4),
                         "n_px": int(len(sec_sel))},
         "packed": "".join("." if v == 0 else str(v) for v in code.ravel()),
@@ -210,7 +234,10 @@ def export_mask(path, lats, lons, ocean, ys, xs, corridor, gate_mask,
     print(f"wrote {path} ({os.path.getsize(path):,} bytes) — "
           f"{payload['counts']['rolled']:,} rolled · "
           f"{payload['counts']['corridor']:,} corridor · "
-          f"{payload['counts']['section']} section", flush=True)
+          f"{payload['counts']['section']} section · "
+          f"{holdout_lon['px']['window']['in_block']:,} of them inside the "
+          f"never-trained lon block [{holdout_lon['lo']}, "
+          f"{holdout_lon['hi']})", flush=True)
 
 
 class StdMonths:
@@ -645,22 +672,83 @@ def main():
                       sec_sel)
     gate_mask = np.zeros(P, bool)
     gate_mask[keep] = True
-    scopes = (("gate", gate_mask), ("corridor", corridor),
-              ("window", np.ones(P, bool)))
+    sec_mask = np.zeros(P, bool)
+    sec_mask[sec_sel] = True
+    base_scopes = (("gate", gate_mask), ("corridor", corridor),
+                   ("window", np.ones(P, bool)))
+
+    # ---- the training longitude block, split into every scope -------------
+    # x_hold was recomputed above only to reproduce the z-score statistics,
+    # and then thrown away -- while gate/corridor/window were scored over
+    # every pixel, INCLUDING the quarter of them that neither training stage
+    # ever saw (train.py's stage-1 pool is `obs_any & ~t_hold & ~x_hold`;
+    # temporal.py's stage-2 pool is `ok_p = ~x_hold[xs]`). Nothing was
+    # computed wrongly and nothing was inflated -- an untrained pixel scores
+    # LOW, so the blend deflates every headline number -- but the artefact
+    # recorded no way to tell, and a figure drawn from roll_*.json could not
+    # know the block existed. That is the defect: reporting, not arithmetic,
+    # and the guard belongs where the inputs are all it has cost (ml/CLAUDE.md
+    # 0.3, 5.16) -- i.e. here, in the writer, not in the reader.
+    #
+    # The split itself is recon_eval.py:298-302 / recon_decoder.py:279-283
+    # verbatim in spirit (`px_hold = x_hold[xs...]`, then sel_train_x /
+    # sel_hold_x). Those two evaluators take index arrays because they index
+    # a [T,P,C] block; accumulate() here takes a boolean mask over P, so the
+    # same partition is carried as booleans. Same rule, same names.
+    px_hold = x_hold[xs]                          # [P]
+    sel_train_x = ~px_hold
+    sel_hold_x = px_hold
+    # Scoring cost: the two children PARTITION their parent, so the masked
+    # pixel work per horizon doubles (parent + its two halves), it does not
+    # triple. Cheap next to a roll step.
+    scopes = tuple(sc for name, m_ in base_scopes
+                   for sc in ((name, m_),
+                              (name + "_trainlon", m_ & sel_train_x),
+                              (name + "_holdlon", m_ & sel_hold_x)))
     corridor_def = {"pctl": a.corridor_pctl, "threshold": round(cor_thr, 4),
                     "dilate_cells": a.corridor_dilate,
                     "structuring": "3x3 square",
                     "n_px": int(corridor.sum()), "of": P,
                     "union_section": True}
-    print(f"scopes: gate {int(gate_mask.sum())} px · corridor "
-          f"{int(corridor.sum())} px (cur_speed ≥ p{a.corridor_pctl:g} "
-          f"= {cor_thr:.3f}, dilate {a.corridor_dilate}) · window {P} px",
+    holdout_lon = {
+        "arg": str(ck["args"]["holdout_lon"]),
+        "lo": lo, "hi": hi,
+        "rule": "(lons >= lo) & (lons < hi), train.py's own expression",
+        "n_cols": int(x_hold.sum()), "of_cols": int(len(lons)),
+        "excluded_from": ["stage-1 pixel MAE (train.py: obs_any & ~t_hold "
+                          "& ~x_hold)",
+                          "stage-2 temporal head (temporal.py: "
+                          "ok_p = ~x_hold[xs])"],
+        "px": {name: {"in_block": int((m_ & px_hold).sum()),
+                      "of": int(m_.sum())}
+               for name, m_ in base_scopes + (("section", sec_mask),)},
+        "note": ("these longitude columns are held out of TRAINING in both "
+                 "stages, so each scope aggregate here is a blend of trained "
+                 "and never-trained pixels; the *_trainlon / *_holdlon "
+                 "splits beside every scope are the unblended numbers, and "
+                 "*_trainlon is the one that answers 'what did the model "
+                 "learn'. The blend is deflationary -- an untrained pixel "
+                 "scores low -- so a parent aggregate is a lower bound on "
+                 "its own _trainlon."),
+    }
+    for k, v in holdout_lon["px"].items():
+        v["frac"] = round(v["in_block"] / v["of"], 4) if v["of"] else None
+    print(f"scopes: gate {int(gate_mask.sum())} px \u00b7 corridor "
+          f"{int(corridor.sum())} px (cur_speed \u2265 p{a.corridor_pctl:g} "
+          f"= {cor_thr:.3f}, dilate {a.corridor_dilate}) \u00b7 window {P} px",
           flush=True)
+    print("held-out lon block [%g, %g): %d of %d columns \u00b7 " % (
+              lo, hi, holdout_lon["n_cols"], holdout_lon["of_cols"])
+          + " \u00b7 ".join(
+              "%s %d/%d (%.1f%%)" % (k, v["in_block"], v["of"],
+                                     100 * (v["frac"] or 0))
+              for k, v in holdout_lon["px"].items())
+          + " NEVER TRAINED - scored as <scope>_holdlon", flush=True)
 
     if a.export_mask:
         export_mask(a.export_mask, lats, lons, ocean, ys, xs, corridor,
                     gate_mask, sec_sel, sec_y, corridor_def, months,
-                    os.path.basename(a.x))
+                    os.path.basename(a.x), holdout_lon)
         if a.export_mask_only:
             return
 
@@ -772,7 +860,8 @@ def main():
 
     prog = Progress(a.metrics, len(heads), every=a.progress_every)
     results = {"data": os.path.basename(a.x), "horizon": a.horizon,
-               "hold_years": hold_years, "corridor_def": corridor_def,
+               "hold_years": hold_years, "holdout_lon": holdout_lon,
+               "corridor_def": corridor_def,
                "gate_ref": dict(GATE_REF, head=GATE_HEAD, tol=GATE_TOL),
                "probe": {"val_tail_r": round(float(probe_val_r), 3)},
                "gate": {"pass": None, "skipped": True},   # overwritten below
