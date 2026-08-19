@@ -842,6 +842,8 @@ from-scratch pentad codec does not beat the frozen monthly anchor: that is
 E-038a's original out-of-domain hypothesis, and 21 hours of training have so
 far bought no measurement of it at all.
 
+**Eval B update, 2026-08-19 01:22Z (hourly fleet-health check): #407 CANCELLED, re-dispatched as #409 on `gpu-box-47529389`.** #406 finished green at ~01:0xZ and left its box online+idle (the check's IDLE BURN flag); #407's pinned box `gpu-box-47094143` (vast 47720660) was still `exited` with `start` returning `resources_unavailable` — three hours after the first attempt, so the handoff's fallback applied. #409 carries #407's inputs verbatim except `runner: gpu-box-47529389` and the doc line; `resume` stays `!run-386`, satisfied on the new box by the "Seed resume checkpoint from the release" step pulling `run-386__pixelmae.pt` (455.9 MB, verified on `model-checkpoints-v1`) — the r1 pentad tensor is already warm there from #390/#392/#397/#406. Dispatched on current `main` (`c4c900c`, carries the `cc` guard and the bounded-rescue fix). Picked up in under 90 s. A `stop` was issued to vast 47720660 to cancel its queued start intent, so it does not come up idle later; nothing unique remains on that disk (`run-386.pt` is on the release).
+
 ### E-038c ATTEMPT 2 (2026-08-18 20:35Z): #400, the daily arm re-dispatched
 
 **Hypothesis, unchanged from #389.** A 38 M codec trained from scratch on the
