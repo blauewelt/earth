@@ -74,6 +74,14 @@ if (remoteHead !== localBase) {
 }
 
 const commits = git("rev-list", "--reverse", RANGE).split("\n").filter(Boolean);
+// NOTHING TO PUSH is not a push. Previously this fell through, PATCHed the
+// ref to the value it already had, and printed "main is now <sha>" — which
+// reads exactly like a successful push and is how a no-op gets mistaken for
+// work. It also put a needless write on a branch with other writers.
+if (commits.length === 0) {
+  console.log(`nothing to push: ${RANGE} is empty, ${BRANCH} already at ${remoteHead.slice(0, 9)}`);
+  process.exit(0);
+}
 console.log(`replaying ${commits.length} commit(s) onto ${REPO}@${BRANCH} (${remoteHead.slice(0, 9)})`);
 
 let prevSha = remoteHead;
@@ -133,15 +141,28 @@ console.log(`${BRANCH} is now ${ref.object.sha}`);
 // over it.
 try {
   git("fetch", "origin", BRANCH);
+  const head = git("rev-parse", "HEAD");
+  const lastReplayed = commits[commits.length - 1];
   const localTree = git("rev-parse", `HEAD^{tree}`);
-  const remoteTree = git("rev-parse", `${ref.object.sha}^{tree}`);
-  if (localTree !== remoteTree) {
-    console.log(`local tree ${localTree.slice(0, 9)} != pushed tree ${remoteTree.slice(0, 9)} — ` +
-                `NOT fast-forwarding; inspect before trusting either side`);
-  } else if (git("rev-parse", "HEAD") === ref.object.sha) {
-    console.log(`local ${BRANCH} already at ${ref.object.sha.slice(0, 9)}`);
-  } else if (git("status", "--porcelain")) {
-    console.log(`working tree is dirty — leaving local ${BRANCH} at its pre-push sha; ` +
+  const pushedTree = git("rev-parse", `${ref.object.sha}^{tree}`);
+  // THE GUARD IS IDENTITY, NOT RESEMBLANCE. Fast-forward only when HEAD is
+  // precisely the last commit we replayed. Tree-equality alone is not enough:
+  // an empty commit (or a message-only amend) has the same tree as its
+  // parent, so a HEAD carrying one extra such commit would have looked
+  // identical and been destroyed by the reset. Checking both means we move
+  // local only when it is exactly the thing we just pushed, containing
+  // exactly what we pushed.
+  if (head !== lastReplayed) {
+    console.log(`HEAD ${head.slice(0, 9)} is not the last replayed commit ` +
+                `${lastReplayed.slice(0, 9)} — NOT fast-forwarding; local has moved ` +
+                `since the push began`);
+  } else if (localTree !== pushedTree) {
+    console.log(`local tree ${localTree.slice(0, 9)} != pushed tree ${pushedTree.slice(0, 9)} — ` +
+                `NOT fast-forwarding; the replay did not reproduce the tree`);
+  } else if (git("status", "--porcelain", "--untracked-files=no")) {
+    // Untracked files deliberately do NOT block: `reset --hard` leaves them
+    // alone. Modified TRACKED files do, because it would discard them.
+    console.log(`tracked files are modified — leaving local ${BRANCH} at its pre-push sha; ` +
                 `run: git reset --hard ${ref.object.sha.slice(0, 9)} when clean`);
   } else {
     git("reset", "--hard", ref.object.sha);
