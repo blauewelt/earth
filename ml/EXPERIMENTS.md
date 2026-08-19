@@ -1480,7 +1480,15 @@ written up in the paper — `ml/paper/paper.tex`, new Table 6, committed
 
 ---
 
-## E-035 / E-036 · The two compositions nobody has run — DISPATCHED 2026-08-16 ~18:40Z
+<a id="e-035"></a>
+## E-035 / E-036 · The two compositions nobody has run — DISPATCHED 2026-08-16 ~18:40Z · BOTH RESOLVED 2026-08-19
+
+**Both verdicts are below in this section.** E-036 (input noise × xl144)
+resolved 2026-08-19 ~03:12Z on #401 (the E-036 eval): noise still pays at
+205M, §"E-036 RESOLVED". E-035 (clean width at 233 points) resolved
+2026-08-19 10:12Z on #413 (E-035 seed-0 roll-forward), which completed the
+seed pair: §"HARVEST — #413" — the falsifier fired and clean width buys
+nothing past 144 points.
 
 Wave 8. Four training arms across the four warm boxes, ~200k steps each at
 the 205M tier. Chris approved the spend after the #354–#356 harvest: *"sounds
@@ -1711,6 +1719,110 @@ times a 1-slot gate — expect ~3.5–5.5 h total, against `job_timeout` 700 min
 projecting **$0.00 / runway 0.0 h** from a snapshot taken before the top-up, so
 `scripts/publish_fleet_status.mjs` was re-run and `ml-metrics/fleet.json` now
 carries the real numbers.
+
+<a id="e-035-pair"></a>
+### HARVEST — #413 (E-035 seed-0 roll-forward) landed 2026-08-19 10:12Z: the xl233 pair is COMPLETE, and clean width buys nothing past 144
+
+**#413** · sroll of `head-weights-e035a-xl233-s0` against the pinned gate
+(the seed-0 half of E-035) · params 217.3M · stage `sroll` · data
+`family3_na025` · arch 1024×16 `stencil:234 ring spiral:111,4444,0.71,0.5`
+`d_z` 64 · steps 0 (eval-only; the head is the 200,000-step terminal
+mirror of #396, the E-035 seed-0 200k training run) · resume
+`head-weights-e035a-xl233-s0` (published by **#412**, headpub of that head).
+
+**All three harvest criteria written at dispatch PASSED.** The `e017_u1_s0`
+gate reproduced `horizon_auc` **0.643 exactly** (tol 0.0101, `pass: true`,
+`fails: []`), and `len(rollout_spatial.json['heads'])` is **2** — the gate and
+the seed-0 head, no silent OOM drop-out of the kind #353 (the wave-7 sroll
+that went green holding 2 of 6 heads) had. `probes-413.json` is on
+`ml-metrics`.
+
+**Corridor AUC, recomputed to five decimals from the twelve archived
+per-horizon `msss_clim` values** (the stored `horizon_auc` field is rounded to
+three, which is not enough to read a 0.002 pair delta):
+
+| arm | run | stored | recomputed | source |
+|---|---|---|---|---|
+| E-035a xl233 clean, **seed 0** | #413 (E-035 s0 sroll) | 0.675 | **0.67492** | `probes-413.json` |
+| E-035b xl233 clean, **seed 1** | #394 (E-037 eval) | 0.673 | **0.67292** | `probes-394.json` |
+| **pair mean** | | | **0.6739** | |
+| pair \|Δ\| | | | **0.0020** | |
+
+**The falsifier fired.** E-035's dispatch predicted **0.683 ± 0.005** if the
++0.005/rung width trend continued, and pre-registered the falsifier as *"xl233
+within seed noise of xl144's 0.6781 = width finally saturates on the roll too."*
+The pair mean is **0.6739**, **−0.0042** against xl144 clean
+(0.68067/0.67558, mean **0.6781**, #356 — the E-032 xl89/xl144 roll). Paired by seed it is **−0.0058** (s0)
+and **−0.0026** (s1) — same sign at both seeds.
+
+**How that reads under §3b, and how it does NOT.** The right claim is **"width
+beyond 144 points buys nothing measurable"**, not *"width hurts"*. The −0.0042
+is about twice the sd this tier's replicate record assigns to a difference of
+two paired means (pooled sd **0.0021**, 7 dof) — enough to exclude the
++0.005/rung extrapolation that was the hypothesis on the table, not enough to
+establish a sign, and far inside the **0.025** effect §3b requires before a
+single seed per arm would have sufficed. What the pair DOES license is stating
+the number as a **level** rather than a consistency: §3b's worked example
+(*"❌ `xl233 rolls at 0.673` — a level, from one seed"*) is now resolved, which
+is exactly the upgrade path #396 (the seed-0 retrain) and #413 (its
+roll-forward) were dispatched to buy. The clean
+width ladder in full: **0.6637 → 0.6725 → 0.6781 → 0.6739** across
+55 → 89 → 144 → 233 points, monotone to 144 and flat-to-slightly-down after.
+
+**§3b's own table is unchanged by this**, because it was written from these
+numbers: E-035's 0.0020 is the smallest of the five xl-tier pair deltas
+(0.0020, 0.0023, 0.0033, 0.0038, 0.0051) and is already inside the pooled
+0.0021 (7 dof).
+
+**Downstream: the E-037 control gets its second seed.** The
+*"noise × width compounds"* reading in the #394 harvest above leaned on the
+clean xl233 arm as an n = 1 control. With the pair in hand the 2×2 is complete
+at both seeds and the noise effect at 233 points reads **+0.0503** (s0:
+0.72517 vs 0.67492) and **+0.0500** (s1: 0.72292 vs 0.67292) — the same number
+to three decimals. Against xl144's **+0.0454** the interaction term is
+**+0.0047**, which is the size of the seed spread it would have to clear, so it
+stays unclaimed — the paper's *"a correction, recorded"* paragraph already
+retired the compounding reading and this pair does not revive it. Noise is a **main effect of constant size**
+(+0.057 at 88M/55pt, +0.045 at 205M/144pt, +0.050 at 205M/233pt).
+
+**The read-out is the roll, and that is symmetric across the pair.** Neither
+seed has a stage-2 `rapid_probe_kfold`: **#396** (seed 0) was OOM-killed 31 s
+after printing `step 200000/200000` inside `temporal.py`'s post-loop eval, so it
+archived `probe_sequence.json` + `provenance.json` and no `temporal.json`; and
+**#358** (the E-035 seed-1 200k training run) archived exactly the same two
+files. Both arms are therefore
+read from `rollout_spatial.py` alone — the primary instrument for this metric
+anyway — so the comparison is instrument-matched and nothing is lost that this
+programme quotes. Verified by reading `probes-396.json` and `probes-358.json`
+on `ml-metrics`, not inferred.
+
+**Paper updated in the same commit** (§3b: *"when a new replicate lands, the
+table is extended in the same commit as the result"*): `ml/paper/paper.tex`
+Table `tab:auc` carries the xl233 row at 0.675/0.673/**0.6739**, the `n = 1`
+hedge in its caption is retired, the 233-point-rung paragraph is rewritten as a
+pair, `tab:twobytwo` is now two seeds in every cell (clean-233 0.6739,
+Δ noise +0.0501, Δ width −0.0042, interaction +0.0047), and `tab:noisehorizon`
+now compares two-seed mean against two-seed mean (h=1 −0.006 → h=12 +0.074,
+max +0.077 at h=11).
+
+**One bookkeeping inconsistency found while verifying, NOT fixed here** (it
+belongs to E-036/E-037, not E-035, and moving it would change published
+deltas): the paper's two **noised** 205M means are averages of the 3-decimal
+`horizon_auc` field, while every clean mean in the same table is recomputed
+from the per-horizon arrays. znoise×xl144 recomputes to **0.723705**
+(0.72208/0.72533, #401 — the E-036 znoise×xl144 eval) i.e. **0.7237**, not
+the 0.7235 the table prints; znoise×xl233 recomputes to **0.724045** i.e.
+**0.7240**, which matches. On the
+recomputed convention the two noised rows sit **0.0003** apart rather than
+0.0005, Δ-noise at 144 points is **+0.0456** rather than +0.0454, and the
+interaction term is **+0.0045** rather than +0.0047. None of those move a
+conclusion — every one of them is an order of magnitude inside the tier's
+spread — but the table should pick one convention.
+
+**Cost of the pair, for the §3b ledger:** #396 15.6 h ≈ **$4.6**, #412 ~5 min
+≈ **$0.03**, #413 13,005 s of head wall (1,986 s gate + 11,019 s xl233) ≈ 3.6 h
+≈ **$1.1** — about **$5.7** to turn a consistency into a level, against §3b's
+estimate of "about $6 and about a day of a rented box".
 
 ### E-036 eval · #393 died with nothing archived — re-dispatched as #401
 

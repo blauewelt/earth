@@ -107,8 +107,9 @@ scale is not the largest effect, and neither axis behaves as the
 forecast ratio said it would}: the step budget that bought the most
 one-step skill buys \emph{exactly nothing} rolled, while the width that
 had visibly saturated at 89 points keeps paying to 144
-($0.6637\to0.6725\to0.6781$ at 205M, same sign at every seed). Adding Gaussian noise to the model's
-own inputs at its measured one-step error scale is worth $+0.057$
+($0.6637\to0.6725\to0.6781$ at 205M, same sign at every seed) and then
+stops, a paired 233-point stencil returning $0.6739$. Adding Gaussian
+noise to the model's own inputs at its measured one-step error scale is worth $+0.057$
 corridor AUC at fixed capacity --- enough that a noised 88M model beats
 the clean 205M one --- and a near-field 8-point stencil is worth
 $+0.035$ over wide-and-far inputs at equal parameters, reversing the
@@ -1507,7 +1508,7 @@ big34 (sunflower-34) & $768\times12$ & 0.628 & 0.618 & 0.625 & 0.6237 \\
 xl55 (sunflower-55) & $1024\times16$ & 0.664 & 0.663 & 0.664 & 0.6637 \\
 xl89 (sunflower-89) & $1024\times16$ & 0.674 & 0.671 & --- & 0.6725 \\
 \textbf{xl144 (sunflower-144)} & $1024\times16$ & \textbf{0.681} & \textbf{0.676} & --- & \textbf{0.6781} \\
-xl233 (sunflower-233) & $1024\times16$ & --- & 0.673 & --- & 0.6730 \\
+xl233 (sunflower-233) & $1024\times16$ & 0.675 & 0.673 & --- & 0.6739 \\
 \midrule
 \multicolumn{6}{l}{\emph{not a capacity change --- same 88M tier, different input or objective}}\\
 sun89, 60k steps & $768\times12$ & --- & 0.639 & 0.630 & 0.6345 \\
@@ -1536,9 +1537,11 @@ capacity ladder and its second rung: $0.7235$/$0.7240$ against $0.6785$
 for noise alone and $0.6781$ for width alone. The two noised rows sit
 $0.0005$ apart across a $1.6\times$ change in input width --- which is
 the finding of \S\ref{sec:interaction}, in one line. The
-clean xl233 row is a single seed --- its partner was lost to a truncated
-upload and is retraining --- so it is reported as $n{=}1$ and read only
-against the seed it can be paired with. The base-scale geometry
+clean xl233 row is now a completed pair: its seed-0 partner, lost at
+first to a truncated checkpoint upload, was retrained and rolled, and
+the two seeds read $0.67492$/$0.67292$ --- a spread of $0.0020$, the
+tightest of the five pairs at this tier, and a mean $0.0042$ below
+xl144. The base-scale geometry
 table behind the ring-8@222 row is Appendix~\ref{app:base}.}
 \label{tab:auc}
 \end{table}
@@ -1599,16 +1602,22 @@ regime that could not exercise it, and E-032 closed the width axis on a
 scoreboard that could not see it.
 
 \paragraph{The 233-point rung, and where the ladder actually stops.}
-The stencil that decision built has now been rolled, and it answers the
-question against the extrapolation. Paired at seed 1, xl233 rolls at
-$0.6730$ against xl144's $0.67558$: $-0.0026$, inside the tier's own
-$0.004$--$0.005$ seed spread, where the $+0.005$/rung trend predicted
-$\approx 0.683$. \textbf{On the clean arm, width saturates between 144
-and 233 points.} We state that at $n{=}1$ and no more strongly: the
-seed-0 partner was lost to a truncated checkpoint upload and is
-retraining, and a single seed inside the spread can distinguish
-``flat'' from ``slightly down'' only by luck. What it does distinguish
-is flat from $+0.005$, which is the hypothesis that was on the table.
+The stencil that decision built has now been rolled at \emph{both}
+seeds, and it answers the question against the extrapolation. xl233
+rolls at $0.67492$/$0.67292$ --- pair mean $0.6739$, seed spread
+$0.0020$ --- against xl144's $0.68067$/$0.67558$, mean $0.6781$.
+Paired by seed the difference is $-0.0058$ and $-0.0026$; on the means
+it is $-0.0042$, where the $+0.005$/rung trend predicted $\approx
+0.683$. \textbf{On the clean arm, width beyond 144 points buys nothing
+measurable.} That is what the pair licenses and it is deliberately not
+more. The $-0.0042$ is about twice the sd this tier's replicate record
+assigns to a difference of two paired means ($0.0021$ pooled, 7 dof):
+enough to exclude $+0.005$/rung, which is the hypothesis that was on
+the table, and not enough to say that width \emph{hurts}. The ladder
+$0.6637 \to 0.6725 \to 0.6781 \to 0.6739$ across $55\to89\to144\to233$
+points stops climbing at 144, and the earlier $n{=}1$ reading of this
+rung --- which could distinguish flat from $+0.005$ but not flat from
+slightly down --- is retired in favour of the pair.
 
 The confound this arm was designed to exclude does not apply. Slot
 occupancy was measured before dispatch and is scale-invariant across a
@@ -1674,24 +1683,25 @@ sharper result than the one we expected: across the full $2\times2$,
 input & clean & noised ($\sigma{=}0.7$) & $\Delta$ noise \\
 \midrule
 sunflower-144 & 0.6781 & \textbf{0.7235} & $+0.0454$ \\
-sunflower-233 & 0.6730 & \textbf{0.7240} & $+0.0510$ \\
+sunflower-233 & 0.6739 & \textbf{0.7240} & $+0.0501$ \\
 \midrule
-$\Delta$ width & $-0.0051$ & $+0.0005$ & \\
+$\Delta$ width & $-0.0042$ & $+0.0005$ & \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{The $2\times2$, rolled corridor AUC.} Both rows at
-$1024\times16$, 200k steps, same schedule; means of two seeds except
-clean-233 ($n{=}1$). The noise column is $+0.045$ to $+0.051$; the
-width row is $-0.005$ and $+0.0005$. The interaction term --- whether
-noise pays \emph{more} at greater width --- is $+0.0056$, at the scale
-of the seed spread it would have to clear.}
+$1024\times16$, 200k steps, same schedule; every cell is now the mean
+of two seeds. The noise column is $+0.045$ to $+0.050$; the width row
+is $-0.004$ and $+0.0005$. The interaction term --- whether noise pays
+\emph{more} at greater width --- is $+0.0047$, at the scale of the seed
+spread it would have to clear.}
 \label{tab:twobytwo}
 \end{table}
 
-Table~\ref{tab:twobytwo} is the whole experiment. Noise buys $+0.0454$
-at 144 points and $+0.0510$ at 233; width buys $-0.0051$ clean and
-$+0.0005$ noised. The interaction term is $+0.0056$, which is the size
-of the seed spread it would need to exceed, so we do not claim it. Read
+Table~\ref{tab:twobytwo} is the whole experiment, and every cell of it
+is a seed pair. Noise buys $+0.0454$ at 144 points and $+0.0501$ at
+233; width buys $-0.0042$ clean and $+0.0005$ noised. The interaction
+term is $+0.0047$, which is the size of the seed spread it would need
+to exceed, so we do not claim it. Read
 across the noised column instead: $0.7235$ and $0.7240$, five
 ten-thousandths apart, across a $1.6\times$ change in the number of
 input points. \textbf{Once noise is on, the stencil width stops
@@ -1710,12 +1720,15 @@ a main effect and never an interaction.
 The comparison is as clean as this programme gets: \emph{same} seed,
 \emph{same} $1024\times16$ head, \emph{same} 233-point sunflower input,
 \emph{same} 200k steps under the same schedule, differing in one flag.
-Paired at seed~1 on the 233-point input, $\sigma{=}0.7$ noise rolls at
-$0.7230$ against the clean arm's $0.6730$: $\mathbf{+0.050}$, twelve
-times the tier's seed spread. The second noised seed reads $0.7250$, so
-that pair is $0.7240 \pm 0.001$ --- tighter than the clean tier's own
-spread. The 144-point pair reads $0.7220$/$0.7250$ against a clean
-$0.6781$: $+0.045$, the same effect at a different width.
+Both arms are now two-seed, so the 233-point comparison pairs
+seed-for-seed twice over: $\sigma{=}0.7$ noise rolls at
+$0.72517$/$0.72292$ against the clean arm's $0.67492$/$0.67292$ ---
+$\mathbf{+0.0503}$ at seed~0 and $\mathbf{+0.0500}$ at seed~1, the same
+number to three decimals, and ten times the largest seed-pair delta
+measured anywhere at this tier ($0.0051$). Each pair is itself tight
+($0.0023$ noised, $0.0020$ clean). The 144-point pair reads
+$0.7220$/$0.7250$ against a clean $0.6781$: $+0.045$, the same effect
+at a different width.
 
 Two reference points make the size legible. Noise alone at 88M reached
 $0.6785$; width alone at 205M reached $0.6781$; the composition reaches
@@ -1725,7 +1738,7 @@ one flag, applied at the top of it, adds more than half that span again.
 
 The effect is also strikingly \emph{constant}. Input noise bought
 $+0.057$ at 88M on a 55-point stencil, $+0.045$ at 205M on 144 points
-and $+0.051$ at 205M on 233 points --- a spread of $0.012$ across a
+and $+0.050$ at 205M on 233 points --- a spread of $0.012$ across a
 $2.3\times$ change in capacity and a $4.2\times$ change in input width.
 Whatever exposure bias costs this architecture, it costs about the same
 everywhere we have looked, and correcting it returns about the same
@@ -1737,22 +1750,24 @@ a reward for having climbed it.
 \centering\small
 \begin{tabular}{rrrr}
 \toprule
-horizon $h$ & clean (s1) & noised (mean) & $\Delta$ \\
+horizon $h$ & clean (mean) & noised (mean) & $\Delta$ \\
 \midrule
 1  & 0.775 & 0.769 & $-0.006$ \\
-2  & 0.730 & 0.747 & $+0.016$ \\
-4  & 0.690 & 0.730 & $+0.040$ \\
-6  & 0.662 & 0.722 & $+0.059$ \\
+2  & 0.730 & 0.747 & $+0.017$ \\
+4  & 0.692 & 0.730 & $+0.038$ \\
+6  & 0.665 & 0.722 & $+0.057$ \\
 8  & 0.651 & 0.717 & $+0.066$ \\
 10 & 0.635 & 0.707 & $+0.072$ \\
-12 & 0.625 & 0.701 & $+0.076$ \\
+12 & 0.627 & 0.701 & $+0.074$ \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Where the noise gain lives.} Corridor MSSS against
 climatology by horizon, for the 233-point 205M arms with and without
-$\sigma{=}0.7$ input noise. The noised model is \emph{worse} at one
-step and better at every horizon after, with the advantage growing
-monotonically to $+0.076$ at a year. This is the exposure-bias
+$\sigma{=}0.7$ input noise. Both columns are two-seed means. The noised
+model is \emph{worse} at one step and better at every horizon after,
+with the advantage growing at every horizon shown and reaching
+$+0.074$ at a year (its maximum over all twelve is $+0.077$, at eleven
+months). This is the exposure-bias
 signature stated as a prediction in \S\ref{sec:exposure}, measured:
 noise buys stability under iteration and pays for it in one-step
 accuracy.}
@@ -1761,14 +1776,14 @@ accuracy.}
 
 Table~\ref{tab:noisehorizon} is the mechanism. The noised model is
 \emph{behind} at $h{=}1$ by $0.006$ and ahead at every horizon
-thereafter, and the gap widens monotonically --- $+0.016$ at two
-months, $+0.040$ at four, $+0.076$ at a year. Nothing about that shape
+thereafter, and the gap widens across the table --- $+0.017$ at two
+months, $+0.038$ at four, $+0.074$ at a year. Nothing about that shape
 is a better one-step mapping; it is a model that degrades more slowly
 when fed its own output, which is exactly and only what the
 intervention was designed to produce. The prediction registered in
 \S\ref{sec:exposure} was that noise would cost the forecast ratio and
-buy the roll. It costs $0.007$ on the one-step corridor and buys
-$0.076$ at twelve months.
+buy the roll. It costs $0.006$ on the one-step corridor and buys
+$0.074$ at twelve months.
 
 It also settles a sequencing question that was left open deliberately.
 A $\sigma$ sweep was judged not worth running until it was known
@@ -1825,8 +1840,8 @@ context; as predicted it \emph{costs} one-step forecast ($0.1548$/
 $0.1539$ vs.\ the clean tier's $0.1476$). Whether it buys the roll was
 open when this section was first written and is now answered:
 \S\ref{sec:interaction} measures $+0.050$ corridor AUC at the 205M
-tier, paired at seed, with the gain confined to $h\ge2$ and growing
-monotonically to $+0.076$ at twelve months. This is the one exposure-bias
+tier, paired at both seeds, with the gain confined to $h\ge2$
+and reaching $+0.074$ at twelve months. This is the one exposure-bias
 mechanism the programme has confirmed. \emph{One-hop wide unroll} exploits a
 dependency-cone observation: to train through one step of self-generated
 context at stencil width $S$, one does not need to roll the whole

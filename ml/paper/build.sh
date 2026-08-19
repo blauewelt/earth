@@ -17,10 +17,16 @@ fi
 # Dark variant: same source, dark page + light ink + dark-mode figures.
 python3 - <<'EOF'
 src = open("paper.tex").read()
+# NOTE: \normalcolor must be redefined too, not just \color. LaTeX's
+# \@arrayparboxrestore runs \normalcolor inside every float box, tabular
+# cell and minipage, so a bare \AtBeginDocument{\color{...}} leaves every
+# table and every caption rendering BLACK-ON-BLACK in the dark variant.
 src = src.replace(
     r"\definecolor{ink2}{HTML}{6F6E66}",
     "\\pagecolor[HTML]{14140F}\n"
-    "\\AtBeginDocument{\\color[HTML]{E8E6DF}}\n"
+    "\\definecolor{darkink}{HTML}{E8E6DF}\n"
+    "\\AtBeginDocument{\\color{darkink}\n"
+    "  \\renewcommand{\\normalcolor}{\\color{darkink}}}\n"
     "\\definecolor{ink2}{HTML}{A5A396}")
 src = src.replace(r"\graphicspath{{figs/}}", r"\graphicspath{{figs_dark/}}")
 open("paper_dark.tex", "w").write(src)
