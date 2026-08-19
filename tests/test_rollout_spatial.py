@@ -33,13 +33,21 @@ from temporal import TemporalTransformer, embed_everything    # noqa: E402
 T_M, H_G, W_G, C, DZ, K = 44, 8, 10, 5, 4, 6
 
 
-def build_fixture(tmp):
+def build_fixture(tmp, holdout_lon="-45,-44"):
     """The toy production inputs, as a reusable dict of paths.
 
     Extracted from this test's main() so tests/test_roll_holdout_lon.py can
     score the SAME synthetic ocean this one rolls, instead of standing up a
     second toy that would drift from it. Returns the paths, plus the arrays a
     caller needs to check the script's own arithmetic against.
+
+    `holdout_lon` is the spec written into the checkpoint's `args`, and the
+    SAME spec is used to build the Z cache's anomaly statistics — the two
+    cannot be set independently, because rollout_spatial re-derives the
+    statistics from the checkpoint and then verifies its Z against a live
+    re-encode. Pass `"0,0"` for a no-longitude-holdout codec, which is the
+    regime ml/recipes/*-nolonhold.json dispatch (E-043) and which gives the
+    `_holdlon` scopes ZERO pixels.
     """
     rng = np.random.default_rng(0)
     t = np.arange(T_M)[:, None, None, None]
@@ -67,12 +75,13 @@ def build_fixture(tmp):
                 "args": {"patch": 3, "d_model": 16, "n_layers": 2,
                          "n_heads": 2, "d_dec": 16,
                          "holdout_years": "1992",
-                         "holdout_lon": "-45,-44"}}, ckpt)
+                         "holdout_lon": holdout_lon}}, ckpt)
 
     # ---- Z cache: embed the toy exactly as production embeds ---------
     moy = np.array([int(m[5:7]) - 1 for m in months])
     t_hold = np.array([m[:4] == "1992" for m in months])
-    x_hold = (lons >= -45) & (lons < -44)
+    _lo, _hi = (float(v) for v in holdout_lon.split(","))
+    x_hold = (lons >= _lo) & (lons < _hi)
     Xm = np.load(xpath, mmap_mode="r")
     clim, dyn, mean_c, std_c = stream_stats(Xm, moy, t_hold, x_hold)
     full, obs = build_slab(Xm, list(range(H_G)), moy, clim, dyn,

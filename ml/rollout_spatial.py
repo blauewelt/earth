@@ -235,9 +235,10 @@ def export_mask(path, lats, lons, ocean, ys, xs, corridor, gate_mask,
           f"{payload['counts']['rolled']:,} rolled · "
           f"{payload['counts']['corridor']:,} corridor · "
           f"{payload['counts']['section']} section · "
-          f"{holdout_lon['px']['window']['in_block']:,} of them inside the "
-          f"never-trained lon block [{holdout_lon['lo']}, "
-          f"{holdout_lon['hi']})", flush=True)
+          + (f"{holdout_lon['px']['window']['in_block']:,} of them inside "
+             f"the never-trained lon block [{holdout_lon['lo']}, "
+             f"{holdout_lon['hi']})" if holdout_lon.get("any", True)
+             else "no lon holdout (all columns trained)"), flush=True)
 
 
 class StdMonths:
@@ -453,9 +454,23 @@ def accumulate(su, h, xhat, v_true, v_pers, v_damp, op):
     su["sy"][h] += ym.sum()
 
 
-def skill_block(su, H):
+def skill_block(su, H, n_px=None):
     """rollout.py's chan_skill rows + horizon_auc (mean MSSS-vs-climatology
-    — the #217 'AUC'), plus the damped mean for completeness."""
+    — the #217 'AUC'), plus the damped mean for completeness.
+
+    `n_px` is the scope's PIXEL COUNT, carried into the block so an empty
+    block can say WHY it is empty. Under a no-longitude-holdout codec
+    (`holdout_lon "0,0"`, ml/recipes/*-nolonhold.json, E-043) every
+    `<scope>_holdlon` child is a zero-pixel scope: accumulate() takes the
+    `n == 0` early return, no sum is ever touched, and the block that comes
+    back is `{"chan_skill": []}` with no `horizon_auc`. That is CORRECT — it
+    is the §5.22 behaviour, an omitted aggregate rather than a NaN one — but
+    it is indistinguishable, in the artefact, from a scope that had pixels
+    and scored nothing (a Z that never reached the horizon, a mask bug). One
+    integer separates the two, so it is written down: `n_px 0` means "there
+    was nothing to score", `n_px > 0` with no rows means "something is
+    wrong". `n_px` is None only for a caller that did not pass it, and the
+    key is then omitted, so old readers are unaffected."""
     rows = []
     for h in range(1, H + 1):
         if su["n"][h] == 0:
@@ -474,6 +489,13 @@ def skill_block(su, H):
                      "acc": round(float(acc), 3),
                      "amp_ratio": round(float(np.sqrt(vx / (vy + 1e-12))), 3)})
     out = {"chan_skill": rows}
+    if n_px is not None:
+        out["n_px"] = int(n_px)
+        if not rows:
+            out["empty"] = ("scope has 0 pixels — nothing to score"
+                            if int(n_px) == 0 else
+                            "scope has pixels but no horizon scored any of "
+                            "them — investigate")
     if rows:
         out["horizon_auc"] = round(
             float(np.mean([r["msss_clim"] for r in rows])), 3)
@@ -710,15 +732,26 @@ def main():
                     "structuring": "3x3 square",
                     "n_px": int(corridor.sum()), "of": P,
                     "union_section": True}
+    # `any` is the field a reader should branch on, and the note follows it.
+    # A no-longitude-holdout codec saves `holdout_lon "0,0"` (the empty
+    # half-open interval, in a spelling all twelve float()-parsers accept --
+    # ml/recipes/*-nolonhold.json, E-043), and under it the block below is an
+    # EMPTY set: every _holdlon child has zero pixels, every _trainlon child
+    # equals its parent exactly. Printing "-45..-25 was held out of training"
+    # under that regime is CLAUDE.md 5.24's stale reference table -- it gets
+    # checked, it matches nothing, and the run takes the blame for the
+    # document. So the note says which of the two worlds this artefact is in.
+    _lon_any = bool(x_hold.any())
     holdout_lon = {
         "arg": str(ck["args"]["holdout_lon"]),
         "lo": lo, "hi": hi,
+        "any": _lon_any,
         "rule": "(lons >= lo) & (lons < hi), train.py's own expression",
         "n_cols": int(x_hold.sum()), "of_cols": int(len(lons)),
-        "excluded_from": ["stage-1 pixel MAE (train.py: obs_any & ~t_hold "
-                          "& ~x_hold)",
-                          "stage-2 temporal head (temporal.py: "
-                          "ok_p = ~x_hold[xs])"],
+        "excluded_from": (["stage-1 pixel MAE (train.py: obs_any & ~t_hold "
+                           "& ~x_hold)",
+                           "stage-2 temporal head (temporal.py: "
+                           "ok_p = ~x_hold[xs])"] if _lon_any else []),
         "px": {name: {"in_block": int((m_ & px_hold).sum()),
                       "of": int(m_.sum())}
                for name, m_ in base_scopes + (("section", sec_mask),)},
@@ -729,7 +762,15 @@ def main():
                  "*_trainlon is the one that answers 'what did the model "
                  "learn'. The blend is deflationary -- an untrained pixel "
                  "scores low -- so a parent aggregate is a lower bound on "
-                 "its own _trainlon."),
+                 "its own _trainlon."
+                 if _lon_any else
+                 "NO longitude is held out of training by this codec "
+                 f"(holdout_lon {str(ck['args']['holdout_lon'])!r} is the "
+                 "empty interval), so every scope aggregate is already the "
+                 "trained-pixel number. The *_holdlon children are present "
+                 "and EMPTY by construction -- n_px 0, no rows, no "
+                 "horizon_auc -- and the *_trainlon children are their "
+                 "parents exactly. Read the parent."),
     }
     for k, v in holdout_lon["px"].items():
         v["frac"] = round(v["in_block"] / v["of"], 4) if v["of"] else None
@@ -737,13 +778,21 @@ def main():
           f"{int(corridor.sum())} px (cur_speed \u2265 p{a.corridor_pctl:g} "
           f"= {cor_thr:.3f}, dilate {a.corridor_dilate}) \u00b7 window {P} px",
           flush=True)
-    print("held-out lon block [%g, %g): %d of %d columns \u00b7 " % (
-              lo, hi, holdout_lon["n_cols"], holdout_lon["of_cols"])
-          + " \u00b7 ".join(
-              "%s %d/%d (%.1f%%)" % (k, v["in_block"], v["of"],
-                                     100 * (v["frac"] or 0))
-              for k, v in holdout_lon["px"].items())
-          + " NEVER TRAINED - scored as <scope>_holdlon", flush=True)
+    if _lon_any:
+        print("held-out lon block [%g, %g): %d of %d columns \u00b7 " % (
+                  lo, hi, holdout_lon["n_cols"], holdout_lon["of_cols"])
+              + " \u00b7 ".join(
+                  "%s %d/%d (%.1f%%)" % (k, v["in_block"], v["of"],
+                                         100 * (v["frac"] or 0))
+                  for k, v in holdout_lon["px"].items())
+              + " NEVER TRAINED - scored as <scope>_holdlon", flush=True)
+    else:
+        # train.py prints the same sentence at the same fork, and for the
+        # same reason: "0/481 cols" is true and reads like a bug.
+        print("NO lon holdout - all %d cols trained (codec holdout_lon %r) "
+              "\u00b7 every <scope>_holdlon is EMPTY by construction and "
+              "every <scope>_trainlon equals its parent"
+              % (holdout_lon["of_cols"], holdout_lon["arg"]), flush=True)
 
     if a.export_mask:
         export_mask(a.export_mask, lats, lons, ocean, ys, xs, corridor,
@@ -994,8 +1043,8 @@ def main():
         entry = {"meta": {"file": os.path.basename(hp), "stencil": stencil,
                           "ring_km": ring_km, "seed": ta.get("seed", 0),
                           "unroll": unroll}}
-        for name, _ in scopes:
-            entry[name] = skill_block(sums[name], Hh)
+        for name, m_ in scopes:
+            entry[name] = skill_block(sums[name], Hh, n_px=int(m_.sum()))
         # --- E-026b audit block + exact-identity check -------------------
         ch_rows, max_dev = [], 0.0
         cor_rows = {r["h"]: r["msss_clim"]
