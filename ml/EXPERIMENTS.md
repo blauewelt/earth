@@ -44,6 +44,61 @@ low-pass).
 
 ---
 
+<a id="credit-triage-2026-08-19"></a>
+## OPERATIONS · Credit triage, 2026-08-19 01:35Z — two runs cancelled so three could finish
+
+Not an experiment. Recorded here because it changes what several entries below
+are waiting for, and because the arithmetic is the whole argument.
+
+**The arithmetic, read at 01:25Z.** Credit **$6.21**, burn **$1.784/h** (five
+boxes plus storage), exhaustion **~04:53Z**. That deadline lands mid-flight for
+EVERY run in the fleet — including **#396**, which by then would be at ~97% of
+its 200,000 stage-2 steps. An exhaustion that stops five boxes at once does not
+produce five partial results; it produces five zero results, and the largest of
+them would be a 200k run lost in its final hour.
+
+**Two runs could not finish on any remaining credit, under any allocation.**
+**#400** (E-038c, the daily codec) had **~28 h** to go — its probe cadence alone
+is **65% of wall clock** at daily scale. **#408** (the E-042 SST arm) had
+**~14 h** to go. No triage makes either fit inside $6.21.
+
+**DECISION (main session): cancel #400 and #408, and stop their boxes** (Vast
+**47913006** and **47724565**). They are the right two to cut precisely because
+both are cheap to RESUME: #400's box keeps the **165.6 GB daily tensor** plus a
+**~22k-step orphan checkpoint** that the rescue step will pick up, and #408's
+box keeps whatever of the r2 build it completed. Neither cancellation destroys
+work that would have to be re-earned from nothing.
+
+**After triage:** burn **$1.184/h**, credit **$5.86**, runway **~4.9 h**. Inside
+that runway, **#401** (ETA 03:12Z), **#409** (~03:30Z) and **#396** (~06:06Z)
+all finish — and the hourly fleet-health check stops each box as it goes idle,
+so the runway lengthens as the runs land rather than being spent on idle GPUs.
+
+**Re-dispatch #400 and #408 VERBATIM the moment credit is topped up.** Their
+inputs survive in provenance — the same mechanism that recovered #389's inputs
+verbatim for #400 — so neither needs reconstructing, which is the expensive
+failure mode (#393, §"#393 died with nothing archived").
+
+**Also DEFERRED by this: the stage-2 comparison matrix** — arm A `!run-386`
+against arm B `!f3_anchor41M`, temporal 384×6 @ 24k steps, `head_probe` on
+both. It waits on **(i)** credit and **(ii)** #409's head-vs-raw verdict. (ii)
+is the real gate, not the money: if #409's head does not beat its own raw
+control, the fresh-codec arm is not obviously the right next spend and the
+matrix would be measuring the wrong axis.
+
+**What #400 bought before it was cancelled**, recorded so that 22k steps are not
+a total loss — these are the first daily-scale numbers this programme has:
+**22,000 / 200,000 steps**, **216.6 ms/step** pure training, **probes 65% of
+wall clock** at **~2,300 s per full eval** (which is why the daily arm costs 28 h
+and not 12), and a light-probe `linear_r_deseas` of **0.626 @ 7.5k → 0.554 @
+15k → 0.581 @ 20k** (the last of those a light rung). Against the pentad
+wind-only bar of **0.670** this is **not yet a comparison**: the **daily wind bar
+is unknown** — the probe ladder never reached it — and these are single-split
+light probes (rule 5), not `probe_kfold`. The non-monotonicity across
+7.5k/15k/20k is what a light probe does at this noise level and is not a trend.
+
+---
+
 <a id="e-042"></a>
 ## E-042 · SST as channel 40 — DISPATCHED 2026-08-18 21:55Z as #405
 
@@ -238,7 +293,14 @@ own recipe, `ml/recipes/f4r2-40M.json`, and the plan is corrected. Note the
 `resolve_recipe.sh` header comment claiming "a recipe cannot silently override
 something a dispatch stated on purpose" is false for any key the recipe names.
 
-**Result: pending.** ~14 h of training plus the probe ladder.
+**Result: PARKED, not pending.** The arm's live run at the time of writing was
+**#408** on Vast **47724565**, and it was **cancelled 2026-08-19 01:35Z with
+~14 h still to go** in the credit triage at the top of this file — a money
+decision, not a scientific one. Its box keeps whatever of the r2 build it
+completed, so the arm resumes warm: **re-dispatch #408's inputs verbatim once
+credit is topped up.** When it does land it must be read on the #406 protocol
+— head against its own matched raw control, not head against wind (see the
+E-038 read-out resolution below).
 
 ---
 
@@ -844,6 +906,73 @@ far bought no measurement of it at all.
 
 **Eval B update, 2026-08-19 01:22Z (hourly fleet-health check): #407 CANCELLED, re-dispatched as #409 on `gpu-box-47529389`.** #406 finished green at ~01:0xZ and left its box online+idle (the check's IDLE BURN flag); #407's pinned box `gpu-box-47094143` (vast 47720660) was still `exited` with `start` returning `resources_unavailable` — three hours after the first attempt, so the handoff's fallback applied. #409 carries #407's inputs verbatim except `runner: gpu-box-47529389` and the doc line; `resume` stays `!run-386`, satisfied on the new box by the "Seed resume checkpoint from the release" step pulling `run-386__pixelmae.pt` (455.9 MB, verified on `model-checkpoints-v1`) — the r1 pentad tensor is already warm there from #390/#392/#397/#406. Dispatched on current `main` (`c4c900c`, carries the `cc` guard and the bounded-rescue fix). Picked up in under 90 s. A `stop` was issued to vast 47720660 to cancel its queued start intent, so it does not come up idle later; nothing unique remains on that disk (`run-386.pt` is on the release).
 
+**CORRECTION, 2026-08-19 ~01:45Z — "they are queued and will not start" was
+wrong within three minutes of being committed.** The section above is left
+standing rather than rewritten, because the fleet reading it was written from
+was honest and correctly sourced; but the world moved under it. The main session
+started Vast **47720664** at **~22:22Z** — two minutes BEFORE the commit
+(`409b2c0`, 22:24:37Z) — and **#406 was picked up at 22:27:25Z**, three minutes
+after it. #406 then ran to **success at 00:24:48Z**. So **"zero GPU-seconds" was
+true for about seven minutes** and is false as a record of what this pair cost:
+#406 spent ~2 h of a $0.29/h box and produced the first `probe_head.json` in
+four attempts — the best money in the wave. Only the #407 half of the claim
+held: its box's host stayed full, it never started, and it was cancelled at
+01:22Z and re-dispatched as #409. The lesson is not that the measurement was
+bad but that **a cost claim written in the present tense expires** — state it
+as "as of HH:MMZ", or state it after the run ends.
+
+### RESOLVED, 2026-08-19 00:24:48Z — #406 landed, and E-038's pentad headline was a READ-OUT ARTEFACT
+
+**Run #406** (`head_sha` `c215ba7`, archived as `probes-406.json`): the frozen
+`f3_anchor41M` monthly anchor, scored on the r1 pentad tensor, **n = 1459**, the
+same year-blocked k-fold protocol on every row.
+
+| read-out | rapid r (k-fold, deseasonalised) | 95% CI | RMSE (Sv) |
+|---|---|---|---|
+| pooled ridge on `Z.mean(1)` | **0.660** | [0.593, 0.722] | 2.97 |
+| **attention head over the ~67 UNPOOLED section tokens** | **0.691** | [0.631, 0.746] | 2.87 |
+| matched raw-3×3 end-to-end control (same head architecture, raw pixels, no codec) | **0.683** | [0.620, 0.742] | 2.89 |
+| wind-only ridge bar | 0.670 | [0.601, 0.733] | — |
+
+`fc`, the same protocol: pooled **0.395** [0.300, 0.487] against a wind-only
+**0.199** [0.129, 0.271].
+
+**(a) The pooled read-out was destroying real signal.** Unpooling alone is worth
+**+0.031**, and the head is the ONLY read-out here that clears the wind-only bar
+— **0.691 against 0.670**, where the pooled ridge sat *below* it at 0.660.
+Chris's standing directive — distrust pooled read-outs, geostrophic transport is
+the east−west contrast ACROSS the section and a mean annihilates it — has been
+an argument since E-034; it is now a measurement. Every "does not clear wind"
+headline this programme has written off a `probe_kfold` number over a section
+tensor is suspect for exactly this reason.
+
+**(b) But the anchor's EMBEDDING adds ≈ nothing over raw pixels through the same
+head.** 0.691 against the raw control's 0.683: **Δ = +0.008**, with CIs that
+nearly coincide ([0.631, 0.746] against [0.620, 0.742]) — far inside noise at
+n = 1459. Read plainly: at pentad cadence, what the head reads out is already
+present in the raw fields, and the frozen monthly representation contributes no
+measurable additional transport information. The gain that looked like the
+codec's turns out to be the read-out's.
+
+**(c) E-038's pentad question therefore decomposes, and only half of it is still
+open.** The earlier headline — "the pentad arm does not clear wind" — was a
+READ-OUT artefact and is withdrawn as a statement about representation. What
+remains open is the sharper question the raw control makes askable at all: **does
+any TRAINED pentad codec's embedding beat its OWN raw control through the same
+head?** That is precisely what **#409** measures (#386's from-scratch pentad
+codec, in flight, ETA ~03:30Z). If #409's head ≈ its raw control too, then
+stage-1 pretraining is not paying at pentad **in the read-out we now trust** —
+and **E-042** (SST) and **E-038c** (daily) must be judged on this same protocol:
+head against matched raw control, not head against wind.
+
+**(d) Provenance — the `cc` guard did real work.** The box had **no C compiler at
+all**; the guard installed gcc in **~9.5 s** (the entire "Install deps" step took
+15 s). `probe_head.json` exists for the **first time in four attempts**: **#388**
+OOM, **#392** the 82.8 GB `nan_to_num` OOM, **#397** triton-no-cc, **#406**
+success. Three of those four deaths were instrumentation and none were science,
+and each was diagnosed only after it had already spent the GPU — the argument
+for §0 rule 3 (guard at dispatch, where the inputs are all it has cost you).
+
 ### E-038c ATTEMPT 2 (2026-08-18 20:35Z): #400, the daily arm re-dispatched
 
 **Hypothesis, unchanged from #389.** A 38 M codec trained from scratch on the
@@ -920,9 +1049,18 @@ second 165.6 GB. 364/700 GB used → **336 GB free, ~170 GB margin**.
 `disk_hygiene.sh` runs at a 16 GB floor and therefore does nothing on this box,
 which is what keeps the cached tensor safe.
 
-**Result:** pending.
+**Result: CANCELLED 2026-08-19 01:35Z at 22,000 / 200,000 steps** — in the
+credit triage at the top of this file, not on any scientific ground. The daily
+arm's economics that the 22k steps did measure (216.6 ms/step, probes 65% of
+wall, the light-probe trace) are recorded there. Re-dispatch verbatim when
+credit allows; the box keeps the tensor and a ~22k orphan checkpoint.
 
-**Result (pentad trained arms):** pending.
+**Result (pentad trained arms): the frozen-anchor read-out ladder is RESOLVED,
+the trained-codec arm is not.** #406 (above): pooled **0.660**, unpooled head
+**0.691**, matched raw-3×3 control **0.683**, wind bar **0.670** — the head
+clears wind, and the anchor's embedding beats raw by +0.008, i.e. by nothing.
+The trained arm — #386's own codec through the identical head and its own raw
+control — is **#409**, in flight, ETA ~03:30Z.
 
 ---
 
@@ -1013,6 +1151,33 @@ That also fixes the fleet allocation for tomorrow: the two xl233 boxes
 (gpu-box-42005419, gpu-box-46045353) stay free for the wave-8 **eval** wave,
 which needs only two `sroll:` runs — one per arm, both seeds plus the gate in
 a single dispatch, the way #352 rolled six heads at once.
+
+### HARVEST — #394 landed 2026-08-18 ~23:00Z: noise × width is the one interaction that COMPOUNDS
+
+**Gate PASSED:** `e017_u1_s0` reproduced `horizon_auc` **0.643 exactly** (tol
+0.0101), so the wave is valid and the numbers below are readable.
+
+| arm | corridor AUC | gate-scope AUC |
+|---|---|---|
+| xl233 + znoise 0.7, **seed 0** | **0.725** | **0.780** |
+| xl233 + znoise 0.7, **seed 1** | **0.723** | **0.778** |
+| **noised pair, mean** | **0.7240** | 0.779 |
+| E-035b xl233 **clean** control | 0.673 | 0.720 |
+
+**Noise × width compounds: +0.050 on the corridor** at the 205M / xl233 rung,
+and **+0.058** in gate scope, so the effect is not an artefact of one scoring
+region. The noised pair's seed spread is **0.002** — tighter than the clean
+tier's own — so the delta is many times the noise it must clear. Read this
+alongside E-035's finding that clean width SATURATES at 233 points: the
+composition gains its 0.050 on **exactly the rung where width alone gained
+nothing**, which is what makes it an interaction rather than two main effects
+added together.
+
+The mechanism (the exposure-bias horizon signature: worse at h=1, better at
+every horizon after, gap widening monotonically to +0.076 at twelve months), the
+width-saturation reading, and the transport caveat that survives all of it are
+written up in the paper — `ml/paper/paper.tex`, new Table 6, committed
+`c4c900c` — rather than duplicated here.
 
 ---
 
