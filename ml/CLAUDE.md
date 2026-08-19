@@ -61,6 +61,66 @@ to workflow steps). And diagnosis stays in the main session: the #366
 green-but-void run was found by noticing a 2.6 h "success" that should have
 taken 11 h — the kind of surprise a summary can smooth over.
 
+## 0c · A run number never travels alone
+
+Standing rule, Chris 2026-08-19: *"For these experiment pages, can you make
+sure they contain the summary from the status page? (as a first step, just
+make it a standing rule to provide a short summary next to each experiment
+number) And then maybe links could go to the status page or the
+experiments.md (which have summary and curves)"*
+
+He was reading a session report on a phone. It named **#413**, **#411** and
+**#410**, and linked each one to its GitHub Actions page — the single surface
+that can tell a reader neither what the run was FOR nor how it is doing. The
+summary had existed the whole time: every dispatch carries a `doc` string, and
+the status page renders it under each run (`docOf()` / `expTag()`). The report
+threw that away and posted the key instead.
+
+**(a) A run number never appears alone.** Every `#NNN` written anywhere — a
+chat reply, `ml/EXPERIMENTS.md`, a `claude/*` hand-off, a commit message, the
+dispatch `doc` string itself — carries a short summary in the same breath. The
+canonical form is **`#413 (E-035 seed-0 roll-forward)`**: the run number, then
+the experiment ID where there is one, then a few words naming what the run
+DOES. Not its hypothesis, not its result — its job.
+
+- ✅ `#410 (E-038c daily codec, re-run)`
+- ✅ `#411 (E-042 SST arm on the r2 tensor)`
+- ✅ `#409 (E-038a's own codec through the full probe ladder)`
+- ❌ `#413` — an opaque key
+- ❌ `#413 finished` — says nothing a reader can act on; every run finishes
+
+A run number is a database key with no meaning outside the database. The reader
+cannot resolve it: not on a phone, not mid-conversation, and not later — by the
+time a number reaches a hand-off doc the session that knew what it meant is
+gone, and the only surviving copy of that knowledge is the clause you did not
+write.
+
+**(b) Link the reader, not the raw CI page.** Root `CLAUDE.md` §0b already
+sorts link targets by what the reader needs to SEE — blob URLs for source,
+Pages URLs for rendered things, `docs.html?f=` for markdown. Runs get their own
+tier, and it exists because **the status page and `ml/EXPERIMENTS.md` are the
+two places that carry a summary AND the curves.** Every other target carries
+one or neither.
+
+- An **IN-FLIGHT or recent** run → the status page's per-run deep link:
+  `[#411 (E-042 SST arm)](https://blauewelt.github.io/earth/status.html#run-411)`.
+  That anchor resolves only while the run is still inside the page's fetch
+  window; once it has aged out the link lands on the page but not on the run,
+  which is why a settled run belongs in the next tier and not this one.
+- A **SETTLED** experiment → its section in the log:
+  `[E-042](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-042)`.
+  Use the explicit `<a id="e-042">` anchor, never a heading-derived one — these
+  headings change as results land ("DISPATCHED" → "RESOLVED"), so an auto anchor
+  rots on the first edit.
+- A raw `https://github.com/blauewelt/earth/actions/runs/<id>` URL **only when
+  the point genuinely IS the CI log** — a stack trace, a step timing, the
+  `INPUTS_JSON` block. **This is the exception, not the default.** The Actions
+  page needs an authenticated desktop browser before it is worth opening at
+  all, and even then it shows a reader nothing about what the run was for.
+
+The two halves are one rule: the summary says what the number means, the link
+says where to go and watch it.
+
 ## 1 · Before you dispatch
 
 - **State what result would FALSIFY the hypothesis**, and check the

@@ -52,7 +52,7 @@ are waiting for, and because the arithmetic is the whole argument.
 
 **The arithmetic, read at 01:25Z.** Credit **$6.21**, burn **$1.784/h** (five
 boxes plus storage), exhaustion **~04:53Z**. That deadline lands mid-flight for
-EVERY run in the fleet — including **#396**, which by then would be at ~97% of
+EVERY run in the fleet — including **#396** (the E-035 seed-0 re-run), which by then would be at ~97% of
 its 200,000 stage-2 steps. An exhaustion that stops five boxes at once does not
 produce five partial results; it produces five zero results, and the largest of
 them would be a 200k run lost in its final hour.
@@ -70,14 +70,14 @@ box keeps whatever of the r2 build it completed. Neither cancellation destroys
 work that would have to be re-earned from nothing.
 
 **After triage:** burn **$1.184/h**, credit **$5.86**, runway **~4.9 h**. Inside
-that runway, **#401** (ETA 03:12Z), **#409** (~03:30Z) and **#396** (~06:06Z)
-all finish — and the hourly fleet-health check stops each box as it goes idle,
+that runway, **#401** (the E-036 eval, ETA 03:12Z), **#409** (E-038a's own
+codec through the head probe, ~03:30Z) and **#396** (~06:06Z) all finish — and the hourly fleet-health check stops each box as it goes idle,
 so the runway lengthens as the runs land rather than being spent on idle GPUs.
 
 **Re-dispatch #400 and #408 VERBATIM the moment credit is topped up.** Their
-inputs survive in provenance — the same mechanism that recovered #389's inputs
-verbatim for #400 — so neither needs reconstructing, which is the expensive
-failure mode (#393, §"#393 died with nothing archived").
+inputs survive in provenance — the same mechanism that recovered the inputs of
+#389 (E-038c, the first daily codec) verbatim for #400 — so neither needs reconstructing, which is the expensive
+failure mode (#393, the E-036 eval, §"#393 died with nothing archived").
 
 **Also DEFERRED by this: the stage-2 comparison matrix** — arm A `!run-386`
 against arm B `!f3_anchor41M`, temporal 384×6 @ 24k steps, `head_probe` on
@@ -97,7 +97,7 @@ orphan checkpoint, #408's partial r2 build).
 
 All three runs the triage was built to protect finished inside it: **#401**
 (E-036 eval, gate passed, §"E-036 RESOLVED" below), **#409** (E-038a verdict,
-§"VERDICT, 2026-08-19 ~03:30Z" below), and **#396**, which is **on pace at
+§"VERDICT, 2026-08-19 ~03:30Z" below), and **#396** (the E-035 seed-0 re-run), which is **on pace at
 170,000 / 200,000 steps, ETA ~06:10Z**. The triage cost two runs and saved
 three, which is the trade it was written to make.
 
@@ -119,12 +119,12 @@ is unknown** — the probe ladder never reached it — and these are single-spli
 light probes (rule 5), not `probe_kfold`. The non-monotonicity across
 7.5k/15k/20k is what a light probe does at this noise level and is not a trend.
 
-### RESURRECTED, 2026-08-19 04:04Z — #400 → **#410**, #408 → **#411**
+### RESURRECTED, 2026-08-19 04:04Z — #400 → **#410** (E-038c daily codec), #408 → **#411** (E-042 SST arm)
 
 Both boxes came up on the first `gpu_box.mjs start` — no `resources_unavailable`,
 and neither sits on the two hosts that refused yesterday (these are machines
 **137260** and **137510**, not 145738/70981). Both runners were `online` and
-**idle** before either dispatch, and `47718230` (#396, ETA ~06:10Z) was not
+**idle** before either dispatch, and `47718230` (#396, the E-035 seed-0 re-run, ETA ~06:10Z) was not
 touched. Exactly two dispatches.
 
 | | #410 (was #400) | #411 (was #408) |
@@ -175,8 +175,9 @@ durable, they are simply not continued. Continuing them would need
 match nothing has checked.
 
 **#411 is #408 verbatim plus `head_probe: "true"`** — eval-side only, so the
-arm stays weight-comparable with #386 — on `window: recipe:f4r2-40M`, which
-PINS `family4_na025_pentad_r2` and beats `inputs.tensor` (#405's lesson).
+arm stays weight-comparable with #386 (E-038a, the f4-40M control on r1) — on
+`window: recipe:f4r2-40M`, which PINS `family4_na025_pentad_r2` and beats
+`inputs.tensor` (the lesson of #405, this arm's first, cancelled dispatch).
 **One field could not be recovered verbatim and is stated as such:** #408's
 `job_timeout`. Its logs are gone (GitHub returns 404 for a cancelled run's log
 blob) and no `provenance.json` was ever archived for it, so the two surviving
@@ -308,7 +309,7 @@ primary read-out (§3).
 **Blocked on disk, not on a decision.** The r2 pentad tensor is
 $[3142,281,481,40]$ float16 = **34.0 GB** and the build wants ~42 GB free
 while the memmap and the archive coexist; no box has that headroom while
-#386/#387 hold the 126 GB boxes on r1.
+#386/#387 (the E-038a/b pentad codecs) hold the 126 GB boxes on r1.
 
 ### Dispatch attempted 2026-08-18 ~20:20–21:00Z — NOT DISPATCHED, and the blocker MOVED
 
@@ -345,7 +346,7 @@ to lower until a dispatch fits through it.
 **The dispatch is prepared, and its 25 fields are recorded here so the next
 session copies rather than reconstructs.** Every training-relevant field was
 cross-checked against **#386's own `config` line on `ml-live-386`** — the
-artefact, not the plan — and matches exactly:
+E-038a control arm's artefact, not the plan — and matches exactly:
 
 ```json
 {"doc": "E-042 SST A/B: the FIRST r2 codec …",
@@ -379,7 +380,7 @@ pinned, before the comparison is quoted.
 **Cost so far:** one `ubuntu-latest` bake run, no GPU. Tonight added no GPU
 cost — the box never started, so nothing was billed beyond storage.
 
-### Dispatched — #405, 2026-08-18 21:55Z, `head_sha` 78d66a6
+### Dispatched — #405 (the E-042 SST arm, first attempt), 2026-08-18 21:55Z, `head_sha` 78d66a6
 
 **The blocker above cleared within the hour, and it cleared on a box nobody
 had costed.** The earlier survey read Vast's `disk_usage` as a percentage; it
@@ -389,7 +390,7 @@ fleet cleared both bars at once.
 Box **gpu-box-39184683** (Vast 47724565): 57 GB free of 100 against the ~42 GB
 the r2 build needs, and 504 GiB RAM against the 126 GB class family-4 requires
 (#368 host-OOMed on a 63 GB box). It was also the fleet's one idle-burning box,
-so the arm and the waste cancelled. Inputs are #386's 24-field `INPUTS_JSON`
+so the arm and the waste cancelled. Inputs are the E-038a control #386's 24-field `INPUTS_JSON`
 verbatim, plus `resume: ""`, with `head_probe` `false → true` and `window`
 `global → recipe:f4r2-40M`.
 
@@ -409,14 +410,14 @@ own recipe, `ml/recipes/f4r2-40M.json`, and the plan is corrected. Note the
 something a dispatch stated on purpose" is false for any key the recipe names.
 
 **Result: PARKED, not pending.** The arm's live run at the time of writing was
-**#408** on Vast **47724565**, and it was **cancelled 2026-08-19 01:35Z with
+**#408** (this arm's second dispatch) on Vast **47724565**, and it was **cancelled 2026-08-19 01:35Z with
 ~14 h still to go** in the credit triage at the top of this file — a money
 decision, not a scientific one. Its box keeps whatever of the r2 build it
 completed, so the arm resumes warm: **re-dispatch #408's inputs verbatim once
-credit is topped up.** — **DONE 2026-08-19 04:04Z as #411**, on the same box,
+credit is topped up.** — **DONE 2026-08-19 04:04Z as #411** (this arm, resurrected), on the same box,
 inputs verbatim plus `head_probe: "true"`; its `Build dataset` step took **0 s**,
 so the warm r2 build was real (§"RESURRECTED" above). When it does land it must
-be read on the #406 protocol
+be read on the #406 protocol (E-038's read-out ladder, attempt 3)
 — head against its own matched raw control, not head against wind (see the
 E-038 read-out resolution below).
 
@@ -463,8 +464,8 @@ step; every rung ran and every rung died.
 ("The probes get the LazyPixels treatment") landed 08:39:15Z — 2 h 33 m after
 #386 checked out c7ba151, and **12 h 21 m before** #386 reached its probes. A
 long run's code is frozen at checkout, so a fix that lands mid-run does not
-reach that run's probe phase. #388 hit this identical defect and was
-re-dispatched as #390, which succeeded; #386 was left to walk into it.
+reach that run's probe phase. #388 (the frozen control) hit this identical defect
+and was re-dispatched as #390, which succeeded; #386 was left to walk into it.
 **A 14-hour run and a 30-minute eval should not share a checkout.**
 
 What survives: `eval.json` is NOT empty — per-channel reconstruction skill
@@ -672,11 +673,11 @@ training will occur (checkpoint step 60000 >= --steps 60000)`, then
 **And then all three probes were OOM-killed**, each ~30 min in — immediately
 after the anomaly transform, on the same full-size `isfinite` bool that
 killed #365's trainer (16.6 GB at pentad; 83 GB at daily, i.e. impossible for
-#389). The run went green; the only trace was the workflow's own warning
+#389, the daily arm). The run went green; the only trace was the workflow's own warning
 `no probe_kfold.json — this bundle has no CODEC control`. Fixed by giving
 probe_kfold / probe_sequence / dip_check the LazyPixels treatment
 (embeddings pinned bit-identical, `tests/test_probe_lazy_pixels.py`);
-re-dispatched as **#390**.
+re-dispatched as **#390** (the frozen control, attempt 2).
 
 ### E-038c (2026-08-18 ~07:00Z): the daily arm's first run
 
@@ -718,7 +719,7 @@ Dip check: 2009–10 event 45% captured, out-of-fold r +0.660, sign agreement
    Finer cadence raises the floor the codec must beat — more labels, but a
    harder null.
 3. The trainer's crude in-train `rapid_probe` returned NaN on the resumed
-   codec (both #388 and #390) while the k-fold ran cleanly — an instrument
+   codec (both #388 and #390, the two frozen-control attempts) while the k-fold ran cleanly — an instrument
    nit to chase, not a result.
 
 **Two defects #390 exposed:** `probe_sequence` was STILL OOM-killed (its
@@ -730,8 +731,8 @@ nothing in the log. Fixed (row-decode when the tensor carries `bin_index`);
 the FC baseline needs one cheap re-probe, which can ride any later eval
 dispatch.
 
-**In-flight at 11:15Z:** #386 (40M) step 42,000, light probe 0.617 and
-climbing, ~0.23 s/step, no refit. #387 (200M) step 15,000 — early z-space
+**In-flight at 11:15Z:** #386 (E-038a, 40M) step 42,000, light probe 0.617 and
+climbing, ~0.23 s/step, no refit. #387 (E-038b, 200M) step 15,000 — early z-space
 EXPANSION (step-7500 full probe: z_mse_persistence overflowed to Infinity,
 linear probe dipped 0.54 → 0.32 → 0.39 recovering; losses and temporal_r
 healthy) — the §4.10 two-sided-guard story, watched, not yet acted on.
@@ -759,7 +760,7 @@ zeros while every loss, `gpu_util` and probe still reads healthy. Families 4
 (pentad) and 5 (daily) are float16. Measured on a shared fixture: the inlined
 copy returns sd 0.000000 with 100.0% of entries exactly zero at float16, and
 sd 1.012848 with 0.0% at float32. Both copies also carried the 249-traversal
-shape, so stage 2 on the daily tensor would have reproduced #389's hang.
+shape, so stage 2 on the daily tensor would have reproduced the daily arm #389's hang.
 
 **Which results on record came through those two copies on a float16 tensor:
 NONE.** The audit, over every `ml-train.yml` run #1–#396 (workflow logs plus
@@ -806,7 +807,7 @@ logs for a run in progress and neither had archived provenance yet:
   `temporal_steps`. If it is non-zero, that run's stage-2 number came through
   the broken copy on a float16 tensor and must be discarded, and the run will
   also have spent hours in the 249-traversal transform.**
-- **#393 / #394 / #396** are `sroll:`/family-3 and unaffected.
+- **#393 / #394 / #396** (the E-036, E-037 and E-035 evals) are `sroll:`/family-3 and unaffected.
 
 Both copies are now calls to `trainprobe.anomaly_transform`, and the class of
 defect is pinned rather than fixed one file at a time:
@@ -858,15 +859,15 @@ canonical map never takes the transform's writes.
   once (`isnan`, `isposinf`, `isneginf`, and the `isinf`/`signbit` underneath
   the last two) — `copy=False` promises no copy of the VALUES, not no
   allocation. `probe_head` and `dip_check` got the LazyPixels treatment they
-  were missed by in the #388 round (measured on a 0.523 GiB fixture: VmHWM
+  were missed by in the #388 (frozen control) round (measured on a 0.523 GiB fixture: VmHWM
   2.132 → 0.642 GiB, 3.3×, with the eager path pinned as a tripwire).
-  **Re-dispatched as #397** to produce the head number.
+  **Re-dispatched as #397** (read-out ladder, attempt 3) to produce the head number.
 
-### #397 — the head probe died a THIRD time, and the cause was neither memory nor code: THE BOX HAS NO C COMPILER
+### #397 (E-038 read-out ladder, attempt 3) — the head probe died a THIRD time, and the cause was neither memory nor code: THE BOX HAS NO C COMPILER
 
 **The memory fix held.** `f2ee8b8`'s LazyPixels treatment worked exactly as
 measured: #397's embedding completed in **~2.5 minutes at low RAM**, where
-#392 had been OOM-killed in `np.nan_to_num`. Nothing about the 132.5 GB
+#392 (the ladder's previous attempt) had been OOM-killed in `np.nan_to_num`. Nothing about the 132.5 GB
 transient recurred.
 
 **Then the FIRST `loss.backward()` in `fold_fit` (`ml/probe_head.py:102`)
@@ -894,7 +895,7 @@ Vast box image ships no `cc`. It is a dispatch-table property of the op, not
 of our code — which is why it bites `probe_head` and has never bitten
 anything else here: an eval-only run does no codec backward at all, and
 `probe_sequence`'s temporal-transformer backward does not route through this
-op. Whether the codec-TRAINING runs (e.g. #386) miss the op or merely happen
+op. Whether the codec-TRAINING runs (e.g. #386, the E-038a codec) miss the op or merely happen
 to sit on boxes that carry a compiler is **not established and does not
 matter for the fix**.
 
@@ -914,7 +915,7 @@ log line about nothing. Both branches were exercised locally under `bash -e`
 before the push — compiler-present (exits 0, writes `CC=/usr/bin/cc`) and
 compiler-absent with a stub `apt-get` (warns, exits 0, writes nothing).
 
-### #386 — the run COMPLETED and all three of its probes OOM-died on code that predated the day's fixes
+### #386 (E-038a, the f4-40M pentad codec) — the run COMPLETED and all three of its probes OOM-died on code that predated the day's fixes
 
 **#386 (E-038a, f4-40M, the first codec trained from scratch on the r1 pentad
 tensor) finished successfully at 22:04Z.** It was dispatched at **06:02Z**
@@ -972,7 +973,7 @@ reports both runners **offline** — two independent sources agreeing.
 `scripts/fleet_health.mjs` reads **"0 runner(s) online+idle"** across a fleet
 of six boxes, all of them busy with other work. Neither box was stopped by
 this task; the hourly fleet-health check had already stopped them after #397
-(20:26Z) and #386 (22:04Z) finished. **No box was started or stopped here**,
+(the ladder's third attempt, 20:26Z) and #386 (E-038a, 22:04Z) finished. **No box was started or stopped here**,
 so the two runs sit queued until one is, at which point the pinned `runner`
 input routes each to the box that holds its warm tensor and checkpoint.
 Queued jobs cost nothing. Costs so far: **zero GPU-seconds**.
@@ -992,7 +993,7 @@ gpu-box-47529389.
 
 *What it must produce:* the **unpooled head number** — cross-attention over
 the ~67 raw 26.5°N section pixel embeddings — and its **matched raw-3×3
-end-to-end control**. *Falsifier, unchanged since #392:* if the head does not
+end-to-end control**. *Falsifier, unchanged since #392, the ladder's second attempt:* if the head does not
 clear the wind-only ridge bar of **0.670**, E-038's pentad headline is
 **representation-limited** (the pentad codec has not learned transport); if it
 does clear it, the pooled decline is a **read-out artefact** of
@@ -1007,7 +1008,7 @@ Eval-only by the same mechanism: `steps` **166752** = the checkpoint's recorded
 step, so `train.py`'s `while s < a.steps` never turns over. Codec geometry
 **matches #386 exactly** — 512/12/4/256, `d_z` 32, `patch` 1 — because
 `--resume` derives architecture from the checkpoint's own `args` and a
-contradicting dispatch is refused (this is the #395 failure, sixty
+contradicting dispatch is refused (this is the #395 failure — E-035 seed 0, attempt 1 — sixty
 `size mismatch` lines in 90 s). Inputs: `resume` `!run-386`, `head_probe`
 true, `anomaly` true, `temporal_steps` 0, `light_probe_every` 0, `eval_every`
 7500, `tensor` `family4_na025_pentad`, `window` global, `sst_channel` false,
@@ -1039,7 +1040,7 @@ held: its box's host stayed full, it never started, and it was cancelled at
 bad but that **a cost claim written in the present tense expires** — state it
 as "as of HH:MMZ", or state it after the run ends.
 
-### RESOLVED, 2026-08-19 00:24:48Z — #406 landed, and E-038's pentad headline was a READ-OUT ARTEFACT
+### RESOLVED, 2026-08-19 00:24:48Z — #406 (the read-out ladder, attempt 3) landed, and E-038's pentad headline was a READ-OUT ARTEFACT
 
 **Run #406** (`head_sha` `c215ba7`, archived as `probes-406.json`): the frozen
 `f3_anchor41M` monthly anchor, scored on the r1 pentad tensor, **n = 1459**, the
@@ -1092,13 +1093,13 @@ success. Three of those four deaths were instrumentation and none were science,
 and each was diagnosed only after it had already spent the GPU — the argument
 for §0 rule 3 (guard at dispatch, where the inputs are all it has cost you).
 
-### VERDICT, 2026-08-19 ~03:30Z — #409: the trained pentad codec does not beat its own raw pixels
+### VERDICT, 2026-08-19 ~03:30Z — #409 (E-038a's own codec through the full probe ladder): the trained pentad codec does not beat its own raw pixels
 
 The other half of the question the section above left open. **Run #409**
 (`head_sha` `c4c900c`, archived as `probes-409.json`) reads #386's OWN codec —
 **37,975,889 params**, trained from scratch on the r1 pentad tensor at **batch
 512** for **166,752 steps** over ~14 h, on the **191,520,806-pixel-pentad**
-train pool (E-038a's four scale numbers, above) — through the identical #406
+train pool (E-038a's four scale numbers, above) — through the identical #406 (read-out ladder)
 protocol: eval-only, **n = 1459**, year-blocked k-fold on every row.
 
 | read-out | rapid r (k-fold, deseasonalised) | 95% CI | RMSE (Sv) |
@@ -1157,7 +1158,7 @@ dispatches.**
 
 ### E-038c ATTEMPT 2 (2026-08-18 20:35Z): #400, the daily arm re-dispatched
 
-**Hypothesis, unchanged from #389.** A 38 M codec trained from scratch on the
+**Hypothesis, unchanged from #389, this arm's first run.** A 38 M codec trained from scratch on the
 DAILY family-5 tensor beats the frozen monthly `f3_anchor41M` applied to that
 same tensor — E-038a/b's domain-shift claim one cadence finer, where E-034 §4's
 one-live-RG-bin-per-month policy pushes the `missing`-token share to **96.7%**
@@ -1198,7 +1199,7 @@ works.
 | provenance step | 6 min 30 s (sha256 over the 165.6 GB sidecar) |
 | Train step began | 20:41:47Z |
 
-The 0-second build is the #391 guard ordering working as intended: the recipe
+The 0-second build is the #391 (read-out ladder, attempt 1) guard ordering working as intended: the recipe
 short-circuit sees #389's cached `f5r1` tensor and returns before the free-space
 check, and `load_pentad_base` opens the daily base fields with `mmap_mode="r"`,
 so confirming "already built" costs no read at all.
@@ -1238,7 +1239,7 @@ wall, the light-probe trace) are recorded there. Re-dispatch verbatim when
 credit allows; the box keeps the tensor and a ~22k orphan checkpoint.
 
 **Result (pentad trained arms): BOTH read-out ladders are now RESOLVED.** #406
-(above): the frozen anchor at pooled **0.660**, unpooled head **0.691**, matched
+(the frozen anchor's ladder, above): the frozen anchor at pooled **0.660**, unpooled head **0.691**, matched
 raw-3×3 control **0.683**, wind bar **0.670** — the head clears wind, and the
 anchor's embedding beats raw by +0.008, i.e. by nothing. #409 (the VERDICT
 section above): #386's OWN codec through the identical head, pooled **0.652**,
@@ -1336,7 +1337,7 @@ That also fixes the fleet allocation for tomorrow: the two xl233 boxes
 which needs only two `sroll:` runs — one per arm, both seeds plus the gate in
 a single dispatch, the way #352 rolled six heads at once.
 
-### HARVEST — #394 landed 2026-08-18 ~23:00Z: noise × width is the one interaction that COMPOUNDS
+### HARVEST — #394 (the E-037 eval) landed 2026-08-18 ~23:00Z: noise × width is the one interaction that COMPOUNDS
 
 **Gate PASSED:** `e017_u1_s0` reproduced `horizon_auc` **0.643 exactly** (tol
 0.0101), so the wave is valid and the numbers below are readable.
@@ -1482,7 +1483,7 @@ any of it is a result.
 ### E-035 seed 0 · #396 completes the pair — 2026-08-19 06:10Z
 
 **#396** (dispatched 2026-08-18 14:34Z on `gpu-box-45731106` / Vast 47718230,
-run id 32149161274) is the second attempt at the E-035 seed-0 arm, after #395
+run id 32149161274) is the second attempt at the E-035 seed-0 arm, after #395 (attempt 1)
 died in 90 s carrying no codec architecture and after the ORIGINAL seed-0 head
 was lost as a 604 MB fragment of a 2.6 GB checkpoint. It ran the full **200,000
 stage-2 steps** on the frozen `run-62,run-63` f3 anchor codec, and its own
@@ -1516,7 +1517,7 @@ because a 217M head with Adam moments is 2.6 GB and a release asset caps near
 2 GiB. That is the wave-8 defect `publish_head_weights.sh` was written for, and
 it is why the publication below had to happen on the box itself.
 
-**Publication — #412, 2026-08-19 06:21Z** ([run](https://github.com/blauewelt/earth/actions/runs/32223060484)),
+**Publication — #412 (headpub of `e035a-xl233-s0`), 2026-08-19 06:21Z** ([run](https://github.com/blauewelt/earth/actions/runs/32223060484)),
 `window: headpub:e035a-xl233-s0@temporal`, inputs otherwise #379's verbatim
 25-field block with the runner pinned to `gpu-box-45731106` (started for this
 purpose from `exited`; 43 GB free, well above `disk_hygiene`'s 16 GB trigger, so
@@ -1561,19 +1562,19 @@ xl144 head — the thing #382 published by mistake — would read 9,282 there.
 Downloading the sibling and diffing the two `args` dicts leaves **exactly one
 differing field, `seed` 0 vs 1**: a genuine seed pair, not two configurations.
 
-**Eval dispatched as #413**, 2026-08-19 06:30Z
+**Eval dispatched as #413** (sroll of that freshly published seed-0 head), 2026-08-19 06:30Z
 ([run](https://github.com/blauewelt/earth/actions/runs/32223688147)), on the same
 warm `gpu-box-45731106` (its `Z_actions_6c52f0687b_adcbe700fb.npy` and the
 sha-pinned tensor are both resident, so the eval pays neither the 5.2 GiB pull
 nor a rebuild). `window: sroll:e017_u1_s0,head-weights-e035a-xl233-s0`,
-`job_timeout` 700, every other field copied verbatim from **#401**'s working
-block; plan published as `plan-413.json`. Two heads only.
+`job_timeout` 700, every other field copied verbatim from the E-036 eval **#401**'s
+working block; plan published as `plan-413.json`. Two heads only.
 
 **Harvest criteria, written at dispatch.** The `e017_u1_s0` gate must reproduce
 `horizon_auc` **0.643** within `GATE_TOL` **0.0101** or the run is void;
 `len(rollout_spatial.json['heads'])` must be **2** (#353 went green holding 2 of
 6 after a CUDA OOM); the seed-0 corridor AUC is read against seed 1's **0.673**
-(#394) and the PAIR MEAN against xl144 clean **0.6781**. **Falsifier unchanged
+(#394, the E-037 eval) and the PAIR MEAN against xl144 clean **0.6781**. **Falsifier unchanged
 from E-035's dispatch:** a seed mean within seed noise of 0.6781 = clean width
 SATURATES at 233 points and the ladder has a top. That reading is currently
 carried by an n = 1 number, which ml/CLAUDE.md §3 says means nothing — and
@@ -1672,7 +1673,7 @@ Input noise still pays at 205 M on the 144-point stencil; the +0.057 measured at
 88 M generalises up the capacity ladder rather than being absorbed by it.
 
 **It agrees with E-037's independent pair.** The 233-stencil noised arms
-(#363/#364, eval #394) read **0.725 / 0.723** corridor and **0.780 / 0.778**
+(#363/#364, eval #394 — the E-037 eval) read **0.725 / 0.723** corridor and **0.780 / 0.778**
 gate-scope — the same numbers to within seed spread on a different stencil and a
 different eval run. Two widths, four seeds, two evaluators: the noise effect at
 205 M is the best-replicated result on the rolled scoreboard. It also closes the
@@ -1682,7 +1683,7 @@ and not a σ sweep" made contingent on this sign is now UNBLOCKED.
 **Operational note — this one result cost FOUR dispatches**, and none of the
 three failures were scientific:
 
-| run | what killed it |
+| run (all four are E-036 eval attempts) | what killed it |
 |---|---|
 | **#393** | box died at 4 h 42 m with heads 1–2 rolled but UNARCHIVED — `rollout_spatial.py` writes its JSON only at the END (§5.20) |
 | **#402** | no PyYAML on the box in the Resolve recipe step |

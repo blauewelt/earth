@@ -80,6 +80,12 @@ document the reader had never been told about. `tests/docs.spec.js` now reads
 `ml/plans/` off disk and fails on any plan missing from `DOCS`, because the
 old tests could only ask about documents that were already listed.
 
+**A RUN NUMBER is a link target too, and it gets its own tier** — `#NNN` never
+appears without a short summary beside it, and it links to the status page's
+`#run-NNN` anchor or to `ml/EXPERIMENTS.md`, both of which carry a summary and
+the curves, rather than to an Actions log a phone cannot read: `ml/CLAUDE.md`
+§0c.
+
 ### 1. Deploy first
 
 Deploy **before** running the full test suite: commit, deploy (below), then
