@@ -119,6 +119,99 @@ is unknown** — the probe ladder never reached it — and these are single-spli
 light probes (rule 5), not `probe_kfold`. The non-monotonicity across
 7.5k/15k/20k is what a light probe does at this noise level and is not a trend.
 
+### RESURRECTED, 2026-08-19 04:04Z — #400 → **#410**, #408 → **#411**
+
+Both boxes came up on the first `gpu_box.mjs start` — no `resources_unavailable`,
+and neither sits on the two hosts that refused yesterday (these are machines
+**137260** and **137510**, not 145738/70981). Both runners were `online` and
+**idle** before either dispatch, and `47718230` (#396, ETA ~06:10Z) was not
+touched. Exactly two dispatches.
+
+| | #410 (was #400) | #411 (was #408) |
+|---|---|---|
+| box | `gpu-box-46996216` · Vast **47913006** · 700 GB | `gpu-box-39184683` · Vast **47724565** · 504 GiB RAM |
+| `head_sha` | `cac9a017` | `6bc9ef7b` |
+| rescue step | **85 s** (was 1 s in #400) | **1,400 s** (was 1,490 s in #408) |
+| build step | **1 s** — tensor warm | **0 s** — the r2 build is warm |
+| provenance | 351 s (re-hashing 165.6 GB) | 244 s |
+| `Seed resume checkpoint` | **skipped** | **skipped** |
+
+The two runs took **different shas** because `main` moved between the
+dispatches (`6bc9ef7` landed 40 s after #410 went out). The delta is
+`EXPERIMENTS.md` and the paper only — no code, no workflow — so the two runs
+are code-identical; both are current `main` as of their own dispatch instant.
+
+**#410 is #400 verbatim.** All 24 non-`doc` fields were copied from
+`probes-389.json`'s `provenance.json.inputs` — the archived artefact, not the
+plan — and the list in the hand-off matches it field for field: 200,000 × 512,
+codec 512×12, 4 heads, `d_dec` 256, `d_z` 32, `patch` 1, `anomaly`,
+`family5_na025_daily`, `eval_every` 7500, `light_probe_every` 10,000,
+`temporal_steps` 0 (`temporal_d_model` 96, `temporal_layers` 3),
+`head_probe` false, `window` global, `sst_channel` false, `resume` empty,
+`max_minutes` 2200, `job_timeout` 2600, `lr_floor` 0, `lr_decay_steps` 0.
+
+**The warm boxes did what they were kept for, and the STEP DURATIONS say so
+rather than the step names.** `Build dataset` **1 s** on #410 and **0 s** on
+#411 — against the **1,921 s** #408 paid to build the r2 tensor cold. Both
+short-circuited; nothing was rebuilt.
+
+**The orphan rescue RAN — and a rescue is not a resume.** Step 2 took **85 s**
+on #410 (against **1 s** in #400 itself, which had no orphan to find) and
+**1,400 s** on #411, and the effect is checkable OFF the box rather than from
+the step's own colour: `rescued-orphan-latest-410.pt` (456 MB, 04:05:31Z) and
+`rescued-orphan-latest-411.pt` (456 MB, 04:13:16Z) are now assets on the
+`model-checkpoints-v1` release, each with its `rescued-orphan-metrics-latest-*`
+sidecar. Both cancelled runs' weights are durable off-box for the first time.
+
+But the step **preserves** an orphan; it does not seed one. `--resume
+orphan-latest` is what reads it (`ml-train.yml:133`), the `Seed resume
+checkpoint from the release` step is `if: always() && inputs.resume != ''`
+(`:763`), and the trainer is invoked `--resume "${RECIPE_RESUME:-inputs.resume}"`
+(`:868`) — so with the verbatim empty `resume`, that step **skipped on both
+runs** and **both codecs train from step 0**. That is the documented behaviour,
+not a regression, and it was not fought: #400's 22,000 daily steps are now
+durable, they are simply not continued. Continuing them would need
+`resume: "orphan-latest"` — a different dispatch, and one whose architecture
+match nothing has checked.
+
+**#411 is #408 verbatim plus `head_probe: "true"`** — eval-side only, so the
+arm stays weight-comparable with #386 — on `window: recipe:f4r2-40M`, which
+PINS `family4_na025_pentad_r2` and beats `inputs.tensor` (#405's lesson).
+**One field could not be recovered verbatim and is stated as such:** #408's
+`job_timeout`. Its logs are gone (GitHub returns 404 for a cancelled run's log
+blob) and no `provenance.json` was ever archived for it, so the two surviving
+records disagree — the prepared 25-field block above says **1500**, while the
+2026-08-18c hand-off and #408's own run name both quote **1000** for its
+predecessor #405. **1500 was used**, because `job_timeout` is a timeout and
+touches no number the run produces, while 1000 min = 16.7 h against a warm run
+of ~16 h would put an artificial death inside the error bar of the estimate.
+`max_minutes` stays **0**, as recorded.
+
+**Both verified IN Train, from the artefact rather than the step colour** (§2).
+Each run's own `config` line on `ml-live-<n>` reproduces its predecessor's field
+for field — #410: `family5_na025_daily.npz`, C **39**, T **15,706**, 37.976 M
+params, `resume` **null**, `recipe` null; #411: `family4_na025_pentad_r2.npz`,
+C **40** (the SST channel is present; r1 is C=39), T **3,142**, 37.976 M params,
+`recipe` **f4r2-40M**. First numbers, against the runs they resurrect:
+
+| | #410 step-0 | #400 step-0 | #411 step-0 | #408 step-0 |
+|---|---|---|---|---|
+| `linear_r_deseas` | 0.556 | 0.526 | 0.518 | 0.588 |
+| `linear_r_raw` | 0.582 | 0.548 | 0.533 | 0.576 |
+| `probe_seconds` | 2,281.8 | 2,310.0 | 870.5 | 1,282.9 |
+
+Those are RANDOM-INIT probes and differ only by initialisation and batch draw;
+they are a liveness check, not a result. The line that does carry information is
+`chan_mse_persistence` = **0.44384765625** on #410, **bit-identical** to #400's —
+a data-only quantity no model can move, i.e. the same tensor, on the same box,
+to the last float32 digit. First loss lines are on trajectory (#410 step 2,000
+`loss_rec` 0.26655 / `loss_nei` 0.20238 against #400's 0.28569 / 0.20491 at step
+1,000; #411 step 11,000 `loss_rec` 0.23396 at ~155–198 ms/step, #386's measured
+pentad pace being 190). Both on GPU — 93% at 72 °C and 100% at 71 °C — which is
+the one check that catches the wrong-device failure. **And #410's step counter
+starts at 0 with `resume: null`: the rescue preserved the 22k checkpoint and did
+not continue it, exactly as the code above says.**
+
 ---
 
 <a id="e-042"></a>
@@ -320,7 +413,10 @@ something a dispatch stated on purpose" is false for any key the recipe names.
 ~14 h still to go** in the credit triage at the top of this file — a money
 decision, not a scientific one. Its box keeps whatever of the r2 build it
 completed, so the arm resumes warm: **re-dispatch #408's inputs verbatim once
-credit is topped up.** When it does land it must be read on the #406 protocol
+credit is topped up.** — **DONE 2026-08-19 04:04Z as #411**, on the same box,
+inputs verbatim plus `head_probe: "true"`; its `Build dataset` step took **0 s**,
+so the warm r2 build was real (§"RESURRECTED" above). When it does land it must
+be read on the #406 protocol
 — head against its own matched raw control, not head against wind (see the
 E-038 read-out resolution below).
 
