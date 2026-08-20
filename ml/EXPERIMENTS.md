@@ -45,19 +45,19 @@ low-pass).
 ---
 
 <a id="e-043"></a>
-## E-043 · Retire the 45°W–25°W longitude holdout — CODEC ARM LANDED (#416) and the SPLIT MEASURED (#417); the decisive arm is #414 and is still in flight
+## E-043 · Retire the 45°W–25°W longitude holdout — CODEC ARM LANDED (#416) and ARM D COMPLETE (#417 xl233, #418 xl144); the decisive arm is #414 and is in its probe ladder
 
 The wave that follows from
 [§0d · the skill map's central band is the held-out longitude block](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#holdout-lon-band-2026-08-19).
 Five arms were planned; A, B, D and E went out at main `8f0e5141` at ~16:49Z and F
-followed at 17:25Z. This section records **arm A (#416)** and **arm D1 (#417)**; B, D2, E
-and F are open.
+followed at 17:25Z. This section records **arm A (#416)** and **arm D (#417 + #418, both landed)**; B, E and F
+are open.
 
 | arm | run | what it is |
 |---|---|---|
 | A | **#416** (E-043a: monthly f3 codec retrained with NO longitude holdout) | **landed — this entry** |
 | B | **#414** (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING frozen anchor) | in flight — **the decisive arm** |
-| D | **#417 / #418** (E-043d: sroll re-rolls, `_trainlon` / `_holdlon` split) | **#417 landed — [E-043d1 below](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d1)**; #418 queued |
+| D | **#417 / #418** (E-043d: sroll re-rolls, `_trainlon` / `_holdlon` split) | **COMPLETE — [E-043d1 (#417, xl233 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d1)** and **[E-043d2 (#418, xl144 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d2)** |
 | E | **#415** (E-043e: fresh 38.0M pentad r2 codec, all longitude columns) | in flight |
 | F | **#419** (E-043f: fresh 38.0M DAILY codec on all 481 longitude columns) | in flight — refused in the 17:2xZ dispatch pass for want of a daily recipe, then dispatched 17:25:14Z once `f5-40M-nolonhold` existed |
 
@@ -356,6 +356,13 @@ xl233 s0 0.502 / 0.416 / 0.512; xl233 s1 0.460 / 0.350 / 0.443. The seed spread 
 **0.042 / 0.066 / 0.069** — §3b's "transport band r spreads 0.05–0.07 on the same
 checkpoints where the corridor reproduces to 0.002", reproduced here for a third pair.
 
+> **CORRECTED 2026-08-20 by [#418 / E-043d2 §7](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d2).** The
+> "0.05–0.07 regime" this paragraph confirmed did not exist: it was two replicate groups
+> summarised to one number each. The archive was re-mined in full — **five pairs and one
+> triple, per-band spreads 0.003 – 0.119, pooled sd 0.041 (15 dof)** — and §3b's row was
+> rewritten. xl233's 0.042 / 0.066 / 0.069 is unchanged and is now the MIDDLE of the range,
+> not a confirmation of its edges.
+
 **`long`** (20-year hindcast from context end 2004-12): gate `r_trained` 0.774 (n 195) /
 `r_heldout` 0.454 (n 36) / `r_lp18` 0.864 / `amp_lp18` 0.583; xl233 s0 0.770 / 0.478 /
 0.864 / 0.768; xl233 s1 0.777 / 0.441 / 0.835 / 0.763. (These `trained`/`heldout` labels are
@@ -460,7 +467,8 @@ n = 1**, and a `_holdlon` difference smaller than ~0.05 is not readable from one
 commit as a new replicate. This pair adds a `_trainlon` row (|Δ| 0.00075) and a `_holdlon`
 row (|Δ| 0.00958) at the xl tier, both n = 1 pair. `ml/CLAUDE.md` was outside this
 session's ownership and was **not** edited; the rows are recorded here so the next session
-can move them.
+can move them. **DONE 2026-08-20**: both rows are in §3b, and #418 took each of them to
+**2 pairs** — `_trainlon` pooled sd 0.00066, `_holdlon` 0.01079.
 
 #### 7 · What `_holdlon` 0.058 means for the gate — the mechanism, measured
 
@@ -515,6 +523,260 @@ Also still outstanding, unchanged by this arm: **#414 (E-043b: xl144 stage-2 hea
 on an all-longitude pool over the existing frozen anchor)** remains the decisive arm. #417
 measures how large the hole's effect on the reported numbers is; only #414 says what the
 numbers become when the hole is not there.
+
+---
+
+<a id="e-043d2"></a>
+### E-043d2 · #418 — RESULT, completed 2026-08-20 06:10:07Z; the flagship rung's split, and the width story survives onto honest pixels
+
+**E-043d2 · RE-ROLLS the E-032 xl144 seed pair (`e032xl_u1_s0`, `e032xl_u1_s1`) plus the
+frozen `e017_u1_s0` gate to read the `*_trainlon` / `*_holdlon` split beside every scope,
+so the paper's FLAGSHIP corridor AUC can be decomposed into the 75.98% of corridor pixels
+the heads trained on and the 24.02% they never saw (arm D2 of the E-043 wave) · params
+40.693M codec (frozen) + 211.353M per head · stage `sroll` (eval-only — NOTHING trains;
+the step field is the codec checkpoint's own count) · data `family3_na025` (C 39, T 516) ·
+arch codec 576×10, 8 heads, d_dec 768, d_z 64, patch 3; heads 1024×16, K 24, stencil 145,
+ring `spiral:111,4444,0.71,0.5` · steps×batch 60,000 × 512 (= f3_anchor41M's recorded step
+count; zero training steps) · resume `!run-62,run-63` (f3_anchor41M, frozen).**
+
+**Code.** #418 → `head_sha` `8f0e5141`, job `train` on `gpu-box-31479844` (vast 47724559),
+23:39:13Z → 06:10:07Z.
+
+[#418 (E-043d2 sroll re-roll, gate + xl144 pair) — the CI log](https://github.com/blauewelt/earth/actions/runs/32278157309)
+
+[probes-418.json on ml-metrics](https://github.com/blauewelt/earth/blob/ml-metrics/probes-418.json)
+
+[E-043d1 · #417, the xl233 half of the same arm](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d1)
+
+#### 1 · Integrity first — the run is readable
+
+Three checks, all passed, all read out of the artefact rather than the run's exit code:
+
+| check | expected | got |
+|---|---|---|
+| gate `e017_u1_s0` horizon AUC | 0.643 ± `GATE_TOL` 0.0101 | **0.643**, `gate.pass true`, `fails []` |
+| gate bands h1-3 / h4-6 / h7-12 | 0.470 / 0.375 / 0.492 | **0.470 / 0.375 / 0.492** |
+| xl144 blended corridor AUC | 0.68067 / 0.67558 as scored by #356 | **0.68067 / 0.67558**, recomputed to 5 dp from the twelve per-horizon `msss_clim` values |
+| pixel inventory | corridor 29,627 px, 7,089 in-block | **identical to #417** — same `holdout_lon` block, same `corridor_def` |
+
+The blended pair reproduces **exactly**, which is the point: nothing in the split changed
+what the parent aggregate reads, so the `_trainlon` / `_holdlon` blocks are a genuine
+decomposition of a number the log already published, not a re-scoring of it. §3b's warning
+applies in full — this is **PROTOCOL determinism, the nineteenth reproduction of the gate,
+not a replicate**, and none of these numbers may be entered in a spread column as such.
+
+Scored-element partition, h = 1, corridor: `_trainlon` 27,694,368 + `_holdlon` 9,834,300 =
+37,528,668 = the parent, **exactly** — as in #417, and at every horizon in every scope.
+
+#### 2 · The numbers
+
+`horizon_auc` as stored (3 dp) and **recomputed to 5 dp from each block's twelve archived
+per-horizon `msss_clim` values** (§3b's method — at 3 dp the deltas below are rounding
+artefacts). `auc_damped` recomputed the same way.
+
+| head · scope | blended (as published) | `_trainlon` | `_holdlon` |
+|---|---|---|---|
+| **gate `s1_s0`** · corridor | 0.589 · **0.58908** | 0.804 · **0.80425** | 0.058 · **0.05767** |
+| gate `s1_s0` · window | 0.622 · **0.62200** | 0.814 · **0.81367** | 0.120 · **0.12017** |
+| gate `s1_s0` · gate scope | 0.643 · **0.64283** | 0.805 · **0.80533** | 0.154 · **0.15350** |
+| **xl144 s0** · corridor | 0.681 · **0.68067** | 0.867 · **0.86700** | 0.221 · **0.22058** |
+| xl144 s0 · window | 0.703 · **0.70300** | 0.858 · **0.85842** | 0.295 · **0.29508** |
+| xl144 s0 · gate scope | 0.728 · **0.72775** | 0.846 · **0.84633** | 0.371 · **0.37083** |
+| **xl144 s1** · corridor | 0.676 · **0.67558** | 0.868 · **0.86808** | 0.201 · **0.20125** |
+| xl144 s1 · window | 0.699 · **0.69933** | 0.859 · **0.85892** | 0.283 · **0.28250** |
+| xl144 s1 · gate scope | 0.722 · **0.72200** | 0.848 · **0.84783** | 0.344 · **0.34433** |
+
+`auc_damped` moves the same way and by the same amounts: corridor xl144 s0
+0.67142 → 0.86400 / 0.19950; s1 0.66625 → 0.86500 / 0.17975.
+
+`long` (20-year hindcast from context end 2004-12): gate `r_trained` 0.774 (n 195) /
+`r_heldout` 0.454 (n 36) / `r_lp18` 0.864 / `amp_lp18` 0.583; xl144 s0 0.780 / 0.417 /
+0.852 / 0.739; xl144 s1 0.787 / 0.350 / 0.822 / 0.755. (`trained`/`heldout` here is the
+YEAR holdout, not the longitude one.) `probe.val_tail_r` 0.606. `future` carries 240 rolled
+`sv_des` per head from context end 2024-12.
+
+#### 3 · THE RESULT · On trained pixels, xl144 and xl233 are indistinguishable — and xl144 is the one that is (very slightly) ahead
+
+This is what arm D was for. The two top rungs of the width ladder, both now scored on the
+pixels they were actually trained on:
+
+| rung | seed 0 | seed 1 | pair mean | pair \|Δ\| |
+|---|---|---|---|---|
+| **xl144** (stencil 145, 211.353M) — #418 | **0.86700** | **0.86808** | **0.86754** | **0.00108** |
+| **xl233** (stencil 234, 217.3M) — #417 | 0.86525 | 0.86600 | 0.86563 | 0.00075 |
+| | | | **\|Δmeans\| 0.00192** | |
+
+Against the blended scope, where the same four heads read 0.68067 / 0.67558 and 0.67492 /
+0.67292 — pair means **0.67813** and **0.67392**, **\|Δmeans\| 0.00421**.
+
+**Scoring only trained pixels HALVES the gap between the two rungs, from 0.0042 to
+0.0019, and does not change its sign.** Both numbers are far below §3b's 0.025 bar; both
+are below the tier's pooled blended seed sd (0.0021, 7 dof); and the sign is the wrong way
+round for width — the NARROWER stencil is nominally ahead at both scopes.
+
+Is 0.00192 resolvable? Honestly, no, but the margin is thinner than the blended reading
+suggested and it is worth stating exactly. The `_trainlon` scope has its own, much tighter
+pair noise: pooled over #417's and #418's pairs, sd **0.00066** on 2 dof. A difference of
+two two-seed means has that same sd, so 0.00192 is **2.9σ** — inside a 2-dof *t* 95%
+interval of ±0.00283, and therefore **not resolvable**, but only just. The correct statement
+is a consistency, not a level (§3b):
+
+- ✅ **xl233's trained-pixel corridor AUC is consistent with xl144's; the difference is
+  0.0019 ± (2 dof), inside the interval, and if anything favours xl144.**
+- ❌ *xl144 beats xl233 by 0.002 on trained pixels* — a difference read off two pairs whose
+  own noise cannot resolve it.
+
+**What this does to "width beyond 144 buys nothing": it SURVIVES, and it is now made on
+honest pixels.** E-032's original closure was hedged precisely because it was a null read
+off the blended scoreboard, and §3b says *a settled negative is settled only on the
+scoreboard that settled it*. The blended scoreboard could be accused of one specific
+artefact — that the 24% never-trained block, being a pure extrapolation, might reward the
+wider stencil's longer reach and so *manufacture* a width effect (or, symmetrically, mask
+one). It does neither. Remove the block entirely and the two rungs converge rather than
+separate. The axis stays closed, on a scoreboard that no longer contains the hole. What is
+still NOT established is that width is closed for a model trained WITHOUT the hole; that is
+#414's question, not this one.
+
+#### 4 · `_holdlon` — the numbers, and why they still may not be quoted
+
+| rung | seed 0 | seed 1 | pair mean | pair \|Δ\| |
+|---|---|---|---|---|
+| **xl144** — #418 | **0.22058** | **0.20125** | **0.21092** | **0.01933** |
+| xl233 — #417 | 0.20592 | 0.19633 | 0.20112 | 0.00958 |
+
+**#418 doubles the largest `_holdlon` pair delta in the record, and the caution in
+[E-043d1 §6](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d1)
+gets stronger, not weaker.** 0.01933 is **3.8× the largest blended pair delta ever measured
+at this tier** (0.0051, this very pair) and **18× the same pair's own `_trainlon` delta**
+(0.00108). Pooled over the two pairs the `_holdlon` seed sd is **0.01079** against
+`_trainlon`'s **0.00066** — a **16.4× ratio**, from the same four checkpoints, in the same
+two files, at the same horizons. Extrapolating into a training hole is the least
+reproducible thing this programme measures, and the split now says so with two pairs
+instead of one.
+
+So: **a `_holdlon` number is a mechanism reading, never a level.** Quotable as *"the
+stencil head retains roughly a fifth of climatological skill inside the block where the
+1-point gate retains essentially none (0.211 vs 0.058)"*; not quotable as *"xl144 scores
+0.211 in the block"*, and emphatically not as a rung-to-rung comparison — xl144's 0.21092
+against xl233's 0.20112 is a 0.0098 difference against a 0.0108 seed sd, which is nothing
+at all.
+
+#### 5 · The stencil advantage decomposes the same way at BOTH rungs — the share replicates
+
+Rerunning #417 §5's computation on the flagship rung, corridor, pair means against the
+frozen 1-point gate, five decimals:
+
+| scope of the comparison | xl144 (#418) | xl233 (#417) |
+|---|---|---|
+| **blended — the published figure** | 0.67813 − 0.58908 = **+0.08904** | **+0.08483** |
+| **`_trainlon` — honest pixels** | 0.86754 − 0.80425 = **+0.06329** | **+0.06138** |
+| `_holdlon` — the training hole only | 0.21092 − 0.05767 = **+0.15325** | **+0.14346** |
+| **share of the published advantage present on trained pixels** | **71.1%** | 72.3% |
+
+Window: +0.07917 blended, **+0.04500** trainlon, +0.16862 holdlon — **56.8% / 43.2%**,
+against xl233's 55.0% / 45.0%. Gate scope: +0.08204 / **+0.04175** / +0.20408 — 50.9%.
+
+**Two independent rungs give 71.1% and 72.3% on the corridor, and 56.8% and 55.0% on the
+window.** That is the first thing in this arm that replicates across checkpoints rather than
+across seeds, and it is the number the paper should carry: **roughly 70% of the corridor
+stencil advantage, and only ~56% of the window one, is present on pixels the model trained
+on; the rest is what the blend buys by including a hole the 1-point gate cannot see into at
+all.** The scope-dependence is itself the mechanism — the window scope contains
+proportionally more of the block (25.02% of pixels vs the corridor's 23.93%) and more of the
+open ocean where the gate has no neighbours to lean on.
+
+#### 6 · What Table 5 becomes
+
+[E-043d1 §9](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d1) said
+nothing in Table 5 should be revised until #418 landed, because xl144 is the rung the paper
+quotes. It has landed. The revision is now available and is **not** done in this entry (the
+paper was outside this session's ownership):
+
+- xl144's published corridor **0.68067 / 0.67558** is a LOWER BOUND on the same heads'
+  skill over the pixels they trained on, by **+0.18633 / +0.19250** (mean **+0.18942**).
+- The retired §0d estimate for xl144 was ≈0.82. **Measured: 0.86754.** The estimate
+  understated by **+0.048**, the same direction and nearly the same size as the gate's
+  (+0.054) and xl233's (+0.046) misses. The ≈0.75 / ≈0.82 figures stay RETIRED.
+- The ranking is unaffected: every arm in `ml/LEADERBOARD.md` is scored over the same
+  pixels, so the blend is a common deflation, not a per-arm one.
+
+#### 7 · §3b's band-r row was WRONG and is rewritten in this commit
+
+`amoc_bands` (transport truefit r on rolled section states) is unchanged by the split — the
+26.5°N section carries no `_trainlon` block in any head — so #418's values are #356's,
+bit-for-bit: xl144 s0 **0.476 / 0.355 / 0.437**, s1 **0.430 / 0.243 / 0.318**, seed spreads
+**0.046 / 0.112 / 0.119**.
+
+Those spreads do not fit §3b's *"transport band r spreads 0.05–0.07"* row, and **the row
+was never right**: it summarised two replicate groups to one number each, and one of those
+two groups was this pair, whose own h4-6 and h7-12 spreads are 0.112 and 0.119 — nearly
+twice the top of the quoted regime. So the archive was re-mined rather than patched. Every
+xl-tier group with `amoc_bands` in `probes-*.json`, recomputed 2026-08-20:
+
+| group | source | h1-3 | h4-6 | h7-12 |
+|---|---|---|---|---|
+| E-028 xl55 (**triple**, ranges) | `probes-333` | 0.019 | 0.021 | 0.021 |
+| E-031 xl89 | `probes-355` | 0.037 | 0.055 | 0.070 |
+| **E-032 xl144** | `probes-356` = `probes-418` | 0.046 | **0.112** | **0.119** |
+| E-035 xl233 | `probes-417` | 0.042 | 0.066 | 0.069 |
+| E-036 zn × xl144 | `probes-401` | 0.021 | 0.014 | 0.023 |
+| E-037 zn × xl233 | `probes-394` | **0.003** | 0.011 | 0.029 |
+
+**Five pairs and one triple — the same replicate groups the corridor-AUC row already
+uses.** Two of them (E-036, E-037) had simply never been mined for bands. The range is
+**0.003 – 0.119**, and the pooled sd over the fifteen pair-band contrasts is **0.041**
+(15 dof) — **20× the corridor's 0.0021 on the identical checkpoints**. §3b's two band-r
+rows are replaced by one row carrying all of this, in the same commit as this entry, per
+§3b's own rule that the table is extended when a replicate lands.
+
+**#418 itself adds NO new band-r pair.** It reproduces E-032's bands exactly, which is
+protocol determinism. What #418 changed is that it forced the row to be checked.
+
+The `_trainlon` and `_holdlon` rows in §3b go from **1 pair to 2** on this entry — that IS
+a new replicate group, because #418's checkpoints are different heads from #417's:
+
+| §3b row | pairs | deltas | pooled sd |
+|---|---|---|---|
+| corridor AUC, `_trainlon` | 2 (xl233 #417, xl144 #418) | 0.00075, 0.00108 | **0.00066** (2 dof) |
+| corridor AUC, `_holdlon` | 2 (same) | 0.00958, 0.01933 | **0.01079** (2 dof) |
+| corridor AUC, blended, these two pairs | 2 | 0.00200, 0.00509 | 0.00273 (2 dof) |
+
+The ordering is the finding and it is now on two pairs: **`_trainlon` is TIGHTER than the
+blended scope, `_holdlon` is 16× looser.** Scoring only trained pixels removes a variance
+source; scoring only the hole is almost entirely that variance source.
+
+#### 8 · Cost (§3)
+
+| item | value |
+|---|---|
+| box | `gpu-box-31479844` (vast 47724559), shared with #417 by design |
+| wall clock | 23:39:13Z → 06:10:07Z = **6.51 h** |
+| gate head `s1_s0` | **1,993.0 s** |
+| xl144 s0 | **10,523.7 s** |
+| xl144 s1 | **10,521.2 s** |
+| head time, total | **23,037.9 s = 6.40 h** |
+| dead dispatches | **none** |
+| approx. cost | ~**$1.9** at $0.294/h |
+
+The gate cost 1,993.0 s here against 1,983.0 s in #417 — 0.5% apart on the same box, same
+protocol, ten hours apart. Per-step rate over 714 steps per head: **14.7 s/step** for a
+stencil-145 head, matching the 14.7–15.5 s/step band #394 / #401 / #413 / #417 established.
+Arm D cost **$3.8 and 13.0 h of one box in total** and produced the decomposition of every
+published corridor AUC at both top rungs.
+
+#### 9 · What is still open after arm D
+
+Arm D is **COMPLETE**. Both halves landed, the gate reproduced in both, and the paper's
+correction is now measured at both rungs rather than estimated at one.
+
+Still open on the wave: **#414 (E-043b: xl144 stage-2 head trained on the ALL-longitude
+pool over the existing frozen anchor)** — the decisive arm, and the one #418 is the control
+for. #418 says how much the hole deflates a number; only #414 says what the number becomes
+when there is no hole. **Note for whoever harvests #414's roll: its blended corridor AUC is
+NOT comparable to 0.67813.** A head trained on all longitudes has no `_holdlon` handicap,
+so its blended figure should EXCEED this pair's blended figure even if its skill is
+identical — the honest comparison is `_trainlon` against `_trainlon` (0.86754) and blended
+against blended only as a bound.
 
 ---
 
@@ -727,7 +989,9 @@ programme spans two orders of magnitude of it:
 | rolled corridor AUC, xl tier (205–217M, 60k–200k) | 5 pairs + 1 triple | pair \|Δ\| 0.0020–0.0051; pooled sd **0.0021** (7 dof), 95% upper bound 0.0037 |
 | rolled corridor AUC, 88M tier | 4 triples + 2 pairs | ranges 0.0011–0.0150; pooled sd **0.0056** |
 | rolled corridor AUC, 34M tier | 14 configurations | ranges to 0.0224; pooled sd **0.0070** |
-| transport band r, the SAME xl checkpoints | 2 pairs | **0.05–0.07** |
+| transport band r (`amoc_bands`), the SAME xl checkpoints | 5 pairs + 1 triple | per-band spreads **0.003–0.119**; pooled sd **0.041** (15 dof) — **20×** the corridor's, same files. Re-mined 2026-08-20 on #418; the old "0.05–0.07" was two groups summarised to one number each and is RETIRED |
+| rolled corridor AUC, `_trainlon` scope, xl tier | 2 pairs (#417, #418) | \|Δ\| 0.00075, 0.00108; pooled sd **0.00066** (2 dof) — TIGHTER than the blended scope |
+| rolled corridor AUC, `_holdlon` scope, xl tier | 2 pairs (#417, #418) | \|Δ\| 0.00958, 0.01933; pooled sd **0.01079** (2 dof) — **16.4×** `_trainlon`. **Never quotable as a level** |
 | RAPID head k-fold, 1.8M · 6k (E-010) | 2 triples | range **0.245**, sd 0.123 |
 | RAPID head k-fold, 1.8–10.7M · 60k | 5 triples | pooled sd **0.095** |
 | codec head probe, 0.92M · 40k · 1° | 1 codec-seed pair | head **0.036**, ridge 0.012 |
