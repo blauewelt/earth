@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-043"></a>
-## E-043 · Retire the 45°W–25°W longitude holdout — CODEC ARM LANDED (#416) and ARM D COMPLETE (#417 xl233, #418 xl144); the decisive arm is #414 and is in its probe ladder
+## E-043 · Retire the 45°W–25°W longitude holdout — CODEC ARM LANDED (#416), ARM D COMPLETE (#417 xl233, #418 xl144), and the DECISIVE ARM'S HEAD IS TRAINED (#414); its verdict waits on the sroll
 
 The wave that follows from
 [§0d · the skill map's central band is the held-out longitude block](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#holdout-lon-band-2026-08-19).
@@ -56,7 +56,7 @@ are open.
 | arm | run | what it is |
 |---|---|---|
 | A | **#416** (E-043a: monthly f3 codec retrained with NO longitude holdout) | **landed — this entry** |
-| B | **#414** (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING frozen anchor) | in flight — **the decisive arm** |
+| B | **#414** (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING frozen anchor) | **TRAINING HALF LANDED — [E-043b (#414)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)**. The 211.353M head ran its full 200,000 steps; **the decisive arm**, but its verdict is the sroll, not this run. Published by #420 (HEADPUB `e043b-xl144-nolonhold-s0`), rolled by #421 |
 | D | **#417 / #418** (E-043d: sroll re-rolls, `_trainlon` / `_holdlon` split) | **COMPLETE — [E-043d1 (#417, xl233 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d1)** and **[E-043d2 (#418, xl144 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d2)** |
 | E | **#415** (E-043e: fresh 38.0M pentad r2 codec, all longitude columns) | in flight |
 | F | **#419** (E-043f: fresh 38.0M DAILY codec on all 481 longitude columns) | in flight — refused in the 17:2xZ dispatch pass for want of a daily recipe, then dispatched 17:25:14Z once `f5-40M-nolonhold` existed |
@@ -777,6 +777,192 @@ NOT comparable to 0.67813.** A head trained on all longitudes has no `_holdlon` 
 so its blended figure should EXCEED this pair's blended figure even if its skill is
 identical — the honest comparison is `_trainlon` against `_trainlon` (0.86754) and blended
 against blended only as a bound.
+
+---
+
+<a id="e-043b"></a>
+### E-043b · #414 — RESULT (training half), completed 2026-08-19; the decisive arm's head exists, and its one-step ratio is NOT yet a result
+
+**E-043b · Trains a FRESH xl144 stage-2 head (1024×16, K 24, sunflower-144 = stencil 145)
+for 200,000 steps on the EXISTING frozen `f3_anchor41M` codec, with the stage-2 training
+pool opened to ALL 481 longitude columns (`--train-lon-hold none`, recipe
+`xl144-nolonhold`) — arm B of the E-043 wave, and the only arm that says what a number
+BECOMES when there is no hole · params 40.693M codec (frozen) + **211.353M** head · stage
+`stage-2` · data `family3_na025` (C 39, T 516, tensor sha256 `adcbe700fb6e…`) · arch codec
+576×10, 8 heads, d_dec 768, d_z 64, patch 3; head 1024×16, K 24, stencil 145, ring
+`spiral:111,4444,0.71,0.5` · steps×batch 60,000 × 512 stage-1 (= the checkpoint's own step
+count, so NOTHING trains in stage 1) then **200,000 × 256** stage-2, expdecay peak 1e-3,
+halflife 40,000, warmup 2,000, cooldown-frac 0 · resume `!run-62,run-63`
+(`f3_anchor41M`).**
+
+**Code.** #414 → `head_sha` `8f0e5141`, job `train` on `gpu-box-30257785`, torch
+2.13.0+cu126 on an RTX 4090.
+
+[#414 (E-043b xl144 stage-2 head, all-longitude pool) — the CI log](https://github.com/blauewelt/earth/actions/runs/32278072256)
+
+[probes-414.json on ml-metrics](https://github.com/blauewelt/earth/blob/ml-metrics/probes-414.json)
+
+[E-043d2 · #418, this arm's CONTROL pair, decomposed](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d2)
+
+**Scale (rule 6).** head parameters **211,352,640** (= 211.353M, the E-032 xl144 geometry
+exactly, and identical to #346/#347's `scale.params`) · batch **256** · steps **200,000** ·
+`data_points` **38,488,680** · 84,405 ocean pixels · 480 train months · stencil **145**.
+
+#### 1 · What this entry does and does NOT settle
+
+**#414 trained a head. It did not roll one.** The corridor AUC that decides this arm comes
+from the sroll, which needs the head published first (#420, HEADPUB) and then rolled. This
+entry records the training half and the probe ladder that shipped with it, so that the
+roll — when it lands — is read against numbers that were written down before it existed.
+
+#### 2 · THREE of the five archived probes carry no information about this run
+
+`probes-414.json` contains `probe_kfold`, `temporal.json`, `probe_sequence`, `dip_check`
+and `provenance` — and **`probe_kfold.json`, `probe_sequence.json` and `dip_check.json`
+are bit-identical to #346's and #347's**, field for field:
+
+| read-out | #414 | #346 | #347 | what it scores |
+|---|---|---|---|---|
+| `probe_kfold` rapid r | 0.627 [0.503, 0.735], RMSE 2.17, lp18 0.811 | **identical** | **identical** | the frozen CODEC |
+| `probe_sequence` K=1/3/6/12/24 (raw) | 0.426 / 0.448 / 0.522 / 0.599 / 0.625 | **identical** | **identical** | the frozen CODEC |
+| `dip_check` r_oof / sign / captured | 0.627 / 68.8% / 47.5% | **identical** | **identical** | the frozen CODEC |
+
+This is the arm working as designed, not a bug: E-043b freezes the anchor and changes only
+the stage-2 training pool, so every codec-side read-out MUST be unchanged, and the fact
+that all three are unchanged to the last digit is the strongest available confirmation
+that **the codec really was untouched** and that the Z cache is byte-identical to
+#346/#347's. It also means **only `temporal.json` may be quoted for this run.** Quoting
+0.627 as an E-043b result would be quoting the anchor.
+
+#### 3 · The one-step forecast ratio — 0.01392, and why it is NOT a 9× improvement
+
+`temporal.json` `z_t+1`, against the two published xl144 controls:
+
+| run | training pool | `mse_model` | `mse_persistence` | **ratio** |
+|---|---|---|---|---|
+| **#414** (E-043b, all longitudes) | ALL 481 cols | 0.0436946 | **3.13943290710449** | **0.01392** |
+| #346 (E-032 xl144 seed 0) — CONTROL | 401 cols, −45..−25 held out | 0.3879833 | **3.13943290710449** | 0.12358 |
+| #347 (E-032 xl144 seed 1) — CONTROL | 401 cols, −45..−25 held out | 0.3797261 | 3.12627625465393 | 0.12147 |
+
+Taken at face value that is **8.88× better than #346 and 8.73× better than #347**. It is
+not being taken at face value, and this section exists so that nobody later does.
+
+**(a) The denominator is bit-identical, so the val POPULATION is identical.** #414 and
+#346 report `mse_persistence` = 3.13943290710449 to the last bit (#347, a different seed,
+differs in the twelfth digit — the seed moves the val sample). Persistence depends only on
+the data, so an identical persistence MSE says the two runs scored **the same pixels in
+the same months**. That is good news for the comparison's cleanliness and *bad* news for
+its interpretation, because it pins down exactly what changed: not the test set, only who
+was allowed to train on it.
+
+**(b) That val population contains a block #346 never trained on and #414 did.** The
+−45..−25 holdout is **21,120 of 84,405 ocean pixels = 25.02%**. For #346 those pixels are
+pure extrapolation; for #414 they are training data. A quarter of the scored domain
+switched from "never seen" to "seen", and #418 measured what that switch is worth on the
+corridor: in-block h=6 skill ~0.23 against ~0.86 outside, and `_holdlon` pair deltas 16×
+looser than `_trainlon`'s off the identical checkpoints.
+
+**(c) The arithmetic says the whole 8.88× is consistent with pure scope.** Split each
+run's MSE into trained and held blocks, `m = (1−f)·m_train + f·m_hold` with f = 0.250222.
+Ask what must be true for #414 and #346 to have **identical trained-pixel skill** — i.e.
+for the entire gap to be scope. Then `m_hold(346) − m_hold(414)` = 0.3442886 / 0.250222 =
+**1.3759**, which is satisfiable (it needs `m_hold(346)` ∈ [1.376, 1.551], well inside the
+range a 25% block can carry), and it forces the common trained-pixel MSE to be at most
+`m_414/(1−f)` = **0.058277**, i.e. a trained-pixel ratio of **0.01856**. So a world in
+which the two heads are equally good on trained pixels is fully consistent with these
+archives, and in that world **#346's own honest ratio is 0.01856 — within 1.33× of
+#414's 0.01392, not 8.88× away.** Nothing in `probes-414.json` can distinguish that world
+from a real improvement, because `z_t+1` is not split by longitude scope.
+
+**HONEST STATEMENT: the one-step ratio is NOT comparable until the sroll lands.** It is a
+scope artefact of unknown size, in exactly the direction and for exactly the reason #418's
+closing note warned about for the corridor AUC. It must not be reported as a
+forecasting-improvement claim, in a session summary or anywhere else.
+
+**(d) The pixel-space number moves far less, which is itself a clue.** `chan_t+1` (the
+same forecast read out in channel space, same bit-identical persistence 1.15408134460449)
+goes 0.19979 → 0.05674, a factor of **3.52** against `z_t+1`'s 8.88. Two read-outs of one
+forecast disagreeing by 2.5× on the size of the effect is what a scope artefact looks like
+when the two spaces weight the held block differently; it is not what a uniform skill gain
+looks like.
+
+#### 4 · `rapid_probe_kfold` 0.389 — POOLED, and below both controls
+
+| run | `rapid_probe_kfold` r | 95% CI | RMSE Sv |
+|---|---|---|---|
+| **#414** | **0.389** | [0.255, 0.509] | 2.60 |
+| #346 (CONTROL) | 0.437 | [0.297, 0.556] | — |
+| #347 (CONTROL) | 0.429 | [0.294, 0.544] | — |
+
+#414 sits **0.044 below the control pair's mean (0.433)**, whose own seed range is 0.008.
+
+Two labels, both required by standing rules, and neither optional:
+
+- **POOLED, therefore distrusted.** §3: `rapid_probe_kfold` is section-pooled —
+  `temporal.py:2018` does `hid[:, -1].mean(0)` — and geostrophic transport is the
+  east-minus-west contrast ACROSS 26.5°N, which a mean annihilates. This is the
+  comparable-to-history number, **never the verdict**.
+- **NOT a distinguishable difference.** §3b has no xl-tier row for the RAPID head k-fold;
+  the nearest measured spread is the 1.8–10.7M · 60k pooled sd of **0.095** (10 dof), and
+  the 1.8M · 6k triples span **0.245**. A 0.044 gap is well inside both. It is recorded,
+  it is not a finding, and it is certainly not evidence that opening the pool hurt the
+  transport read-out.
+
+`rapid_probe` (the 36-month split, n_test 36) reads raw 0.458 / deseasonalised 0.372
+against #346's 0.460 / 0.328 and #347's 0.510 / 0.316 — labelled as the non-k-fold number
+§3 requires it to be labelled as, and used for nothing.
+
+#### 5 · GAP — there is no `probe_head.json` for this run, and the cause is in the inputs
+
+**`probes-414.json` has no `probe_head.json`.** The cause is not a crash and not a missing
+file: `provenance.json` records **`head_probe: "false"`** in the dispatch inputs.
+
+**How it got there.** §1 requires a replication to *copy the full INPUTS_JSON block out of
+the log of the run it is replicating* — the rule that exists because run #395 died in 90
+seconds with sixty `size mismatch` lines from hand-assembling a dispatch. #414's inputs
+were copied verbatim from #346, and **#346 predates the head probe**: its own provenance
+also carries `head_probe: "false"`. The rule worked exactly as written and carried a
+stale-but-valid field forward with everything else.
+
+**Is it a rule violation?** No — §3's "pass `head_probe: true` on every eval dispatch" is
+scoped to *the new cadences* (pentad/daily), and #414 is monthly `family3_na025`. It is
+still a **gap worth closing**, because §3's KNOWN GAP paragraph applies here at full
+force: this run's only stage-2 transport read-out (§4 above) is the section-pooled one,
+which is the read-out §3 says not to trust as a verdict. So the decisive arm currently has
+no unpooled transport number at all.
+
+**The cheap closure, priced and NOT dispatched.** An **eval-only** re-dispatch against the
+head #420 publishes, with `head_probe: "true"`, `temporal_steps: 0` and `max_minutes: 0`
+— nothing trains, the Z cache is warm and byte-identical, and the pattern is #409's. It
+costs one short job, not a retrain. **Deliberately not dispatched in this session**: the
+session's dispatch budget went to the sroll, which answers the arm's actual question,
+and stacking an eval behind it on a box mid-roll would only delay the number that matters.
+Recorded here so the next session can spend it in one step.
+
+#### 6 · What decides this arm, and the reading discipline it must be read under
+
+The verdict is the sroll of `e043b-xl144-nolonhold-s0` against the frozen `e017_u1_s0`
+gate. **Its BLENDED corridor AUC will exceed the control pair's blended 0.68067/0.67558
+even at identical skill**, because this head has no `_holdlon` handicap to drag its
+average down — the control pair's blended figure is deflated by a 24% block it never
+trained on, and #414's is not. Reading that excess as an improvement would be the same
+mistake as §3(c) above, made twice in one wave.
+
+The comparisons that mean something:
+
+1. **`_trainlon` against `_trainlon`** — #414's trained-pixel corridor AUC against the
+   control pair's **0.86700 / 0.86808, mean 0.86754** (#418). Both sides honest pixels,
+   both sides fully trained. This is the arm's headline.
+2. **Gate-anchored** — `e017_u1_s0` must reproduce 0.643 within `GATE_TOL` 0.0101 in
+   #414's roll as it did in #417's and #418's, or the roll is void and no number leaves it.
+3. **Blended against blended only as an upper bound**, explicitly labelled as one.
+
+And the falsifier, restated from the dispatch and unchanged by anything above: if the
+all-longitude head does not differ from the control pair beyond the xl tier's band
+(§3b pooled sd **0.0021** on 7 dof, 95% upper bound **0.0037**), the longitude holdout was
+costing stage 2 nothing, and the 48%/59% hole-patching decomposition of the stencil head's
+advantage needs re-reading. **ONE SEED** (Chris, 2026-08-19); an effect landing near the
+±0.025 corridor-AUC bar buys its second seed then, not now.
 
 ---
 
