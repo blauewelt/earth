@@ -156,34 +156,65 @@ this one there is room.
 | money | ~**$9.2** at $0.308/h |
 | `job_timeout` | 2,400 min (40 h) — an INPUT, not a cap on a self-hosted runner |
 | Z | 3,142 × 86,698 × 32 × 2 B = **16.24 GiB**, 11 chunks at `embed_cache_sync`'s 1.5 GiB |
-| **credit at dispatch** | **~$5.6, burning $0.95–1.02/h with two boxes ⇒ exhausted ~20:20–20:45Z TONIGHT** |
+| credit at dispatch (15:10Z) | ~$5.6, burning $0.95–1.02/h with two boxes ⇒ exhausted ~20:20–20:45Z |
+| **credit at 16:02Z — A TOP-UP LANDED** | **$54.48**, burn **$0.991/h**, runway **55.0 h** ⇒ ~23:00Z on **2026-08-22** |
 
-**This run does not fit inside the runway and was dispatched anyway, per §0e** (*"please
-don't worry about top ups and proceed in spite of remaining budget"*). Without a top-up it
-dies **inside its embed pass, ~5 h in, having produced nothing** — the embed alone is ~10 h.
-**≈ $15 more is needed today** to carry it and #419's tail; ≈ $19 including the follow-on
-pentad `sroll:`. The arithmetic, measured off the ledger rather than estimated, is in the
-OPERATIONS entry linked above.
+**This run was dispatched over a runway it did not fit inside, per §0e** (*"please don't
+worry about top ups and proceed in spite of remaining budget"*) — at 15:10Z it would have
+died **inside its embed pass, ~5 h in, having produced nothing**, since the embed alone is
+~10 h. **At 16:02Z the credit read $54.48 against $5.63 at 14:50Z: Chris topped up, and the
+constraint is gone.** At $0.991/h the fleet now has **55 hours**, and everything outstanding
+fits inside it with room:
+
+| | needs | finishes |
+|---|---|---|
+| **#419** (E-043f daily codec) tail | ~11 h, ~$3.7 | ~02:50Z on 2026-08-21 |
+| **#423** (E-044, this run) | ~30 h, ~$9.2 | ~21:45Z on 2026-08-21 |
+| the follow-on pentad `sroll:` over the head #423 publishes (spec §7b: `--horizon 73`, 3 starts) | ~14 h, ~$4.3 | ~12:00Z on 2026-08-22 |
+| **total against $54.48 at $0.991/h** | **~$17 of GPU + ~$14 of storage** | **fits, with ~$23 spare** |
+
+**So §0e paid.** The dispatch went out at 15:10Z against $5.63 and a five-hour runway, and
+52 minutes later it had 55 hours. A session that had "paused the wave to be safe" would have
+cost the night and produced nothing, which is the failure that rule exists to forbid.
 
 #### 6 · Verification — first minutes (§2, spec §5)
 
 Recorded as they are read. Items marked **PENDING** were not yet decidable when this entry
 was written at ~15:20Z.
 
+State at **16:05Z**. **The job log is not readable while the job runs** (`/actions/jobs/<id>/logs`
+returns 404 until it ends), so items whose evidence is a log LINE are marked
+`PENDING — LOG` and the ones that could be settled from behaviour, the API or the live branch
+are settled. Nothing was marked passed on an inference dressed as a reading.
+
 | # | check | state |
 |---|---|---|
 | 1 | `runner_name` is `gpu-box-39184683`, not `gpu` | **PASS** — the jobs API reads `gpu-box-39184683` |
-| 2 | Resolve prints the whole `RECIPE_*` block: `RECIPE_NAME=xl144-zn-pentad-nolonhold`, `RECIPE_HOLDOUT_LON=0,0`, `RECIPE_TRAIN_LON_HOLD=none`, `RECIPE_TENSOR=family4_na025_pentad_r2`, `RECIPE_HEAD_PROBE=true` | PENDING — reproduced locally by `bash scripts/resolve_recipe.sh` before dispatch |
-| 3 | **`RESUMED … at step 197428`** then **`checkpoint is already at/past --steps; nothing to do`**. `training on to <N>` ⇒ **CANCEL WITHIN SECONDS** | PENDING |
-| 4 | `held-out months 219/3142 · NO lon holdout — all 481 cols train (--holdout-lon '0,0') · ocean 86698` | PENDING |
-| 5 | `lon holdout · statistics (codec '0,0'): 0/481 cols · training pool (--train-lon-hold 'none'): 0/481 cols` — **both zeros** | PENDING |
-| 6 | `train windows: ~251,337,502` (ESTIMATE) — ~251M, not ~38M | PENDING |
-| 7 | `embed cache needs 16.24 GiB`, branch taken = **disk** | PENDING |
-| 8 | record `codec <whash> · tensor <dhash>` — the Z cache key; the §7a sroll refuses on disagreement | PENDING |
-| 9 | embed ETA ~9–10 h (ESTIMATE); ≫20 h ⇒ check `gpu_util` | PENDING |
-| 10 | `stage-2 head on cuda (206.536M params)` — exactly **206,535,712**; 211.35M ⇒ d_z 64 ⇒ **cancel** | PENDING |
-| 11 | first `stage2_lr` ~1e-3 and **not** 0.0 | PENDING |
-| 12 | ~0.27 s/step (ESTIMATE); above ~0.4 ⇒ re-time the budget and say so | PENDING |
+| 2 | Resolve prints the whole `RECIPE_*` block | **PASS (step)**, PENDING — LOG for the block itself. Step 5 `Resolve recipe` completed `success`; the identical block was reproduced locally by `bash scripts/resolve_recipe.sh` before dispatch |
+| 3 | **`RESUMED … at step 197428`** then **`checkpoint is already at/past --steps; nothing to do`**. `training on to <N>` ⇒ **CANCEL WITHIN SECONDS** | **PASS, by behaviour.** Step 16 `Train` ran **15:42:25Z → 15:55:29Z = 13 min 4 s** and completed `success`, and `ml-live-423` carries **`phase.json` only — no `metrics.jsonl` at all**. Stage 1 training even the 2,572 steps a wrong `steps` would have bought writes metric rows and takes longer than the whole step did; training toward 200,000 would still be running nineteen hours from now. 13 minutes is the tensor load, the three-pass anomaly transform, the checkpoint load and an immediate exit. The literal line is PENDING — LOG |
+| 4 | `held-out months 219/3142 · NO lon holdout — all 481 cols train (--holdout-lon '0,0') · ocean 86698` | PENDING — LOG |
+| 5 | `lon holdout · statistics (codec '0,0'): 0/481 cols · training pool (--train-lon-hold 'none'): 0/481 cols` — **both zeros** | PENDING — LOG. **This line is printed by `temporal.py` AFTER the ~10 h embed**, so it is not decidable before ~02:00Z |
+| 6 | `train windows: ~251,337,502` (ESTIMATE) — ~251M, not ~38M | PENDING — LOG, same reason as 5 |
+| 7 | `embed cache needs 16.24 GiB`, branch taken = **disk** | PENDING — LOG, but the precondition holds: `fleet_health` reads **disk 57%** of 100 GB at 16:00Z, i.e. **~43 GB free** against `_cache_plan`'s `need + min(RESERVE, need)` on a 16.24 GiB need. The RAM branch is not expected |
+| 8 | record `codec <whash> · tensor <dhash>` — the Z cache key; the §7a sroll refuses on disagreement | PENDING — LOG |
+| 9 | embed ETA ~9–10 h (ESTIMATE); if ≫20 h check `gpu_util` | **the CPU-embed failure mode is RULED OUT**: `fleet_health` at 16:00Z reads **`gpu=98.999908%`, `cpu=6%`** on `gpu-box-39184683`, so the embed is on the GPU. Four eval scripts have silently embedded on CPU before; this one is not. The ETA line itself is PENDING — LOG |
+| 10 | `stage-2 head on cuda (206.536M params)` — exactly **206,535,712**; 211.35M ⇒ d_z 64 ⇒ **cancel** | PENDING — LOG, after the embed |
+| 11 | first `stage2_lr` ~1e-3 and **not** 0.0 | PENDING — LOG, after the embed |
+| 12 | ~0.27 s/step (ESTIMATE); above ~0.4 ⇒ re-time the budget and say so | PENDING — LOG, after the embed |
+
+**Timeline so far.** Dispatched 15:10:05Z · `Set up job` 15:09:50Z · **`Rescue an orphaned
+checkpoint` 15:10:08Z → 15:39Z — twenty-nine minutes**, uploading `rescued-orphan-latest-423.pt`
+(455,915,837 B, which is #415's own checkpoint and already published by hand as
+`run-415__pixelmae.pt`) and `rescued-orphan-temporal-latest-423.pt` (1,076,218,089 B, a stale
+leftover) from a Hong Kong box at ~0.5 MB/s · checkout → build 15:39–15:42Z (tensor cached,
+seconds) · `Train` 15:42:25→15:55:29Z · `Upload checkpoint + eval` 40 s · **`Probes (K-sweep +
+stage 2)` from 15:56:11Z**, `phase.json` `probes and stage 2`, GPU 99%.
+
+**Operational finding worth a follow-up, recorded not fixed:** the orphan-rescue step spent
+**29 minutes and ~$0.15 of GPU** re-uploading 1.5 GB that was already published or already
+stale, before the job did anything. It runs before checkout, so it cannot consult the
+release to see that `run-415__pixelmae.pt` is already there. On a fast-uplink box this is
+invisible; on this one it is 5% of the embed pass.
 
 Pre-dispatch checks that WERE completed, where the inputs are all they cost (§0.3): all
 **25/25** input names matched against `.github/workflows/ml-train.yml`'s own
