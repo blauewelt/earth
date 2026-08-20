@@ -44,6 +44,157 @@ low-pass).
 
 ---
 
+<a id="e-044"></a>
+## E-044 · #423 — DISPATCHED 2026-08-20 15:10:05Z. The first stage-2 head at any cadence but monthly
+
+Written **at dispatch**, hypothesis and falsifier first, so the log cannot be rewritten to
+fit the answer (§1). Governed by `claude/E044-pentad-stage2-spec.md`; the finished input set
+and the artefact read-out behind `steps` are in `claude/E044-dispatch-READY.md`.
+
+**E-044 · Trains a 206.5M xl144+znoise stage-2 head on the PENTAD tensor over #415's frozen
+no-longitude-holdout pentad codec, with the stage-2 training pool open to every longitude and
+years-only holdout (the first stage-2 run at any cadence but monthly) · params 206.5M head
+over a frozen 37.976M codec · stage `stage-2` · data `family4_na025_pentad_r2` (C 40,
+T 3,142, sha256 `37e146384b6f…`) · arch head 1024×16, K 24, stencil 145, ring
+`spiral:111,4444,0.71,0.5`, znoise 0.7; codec 512×12, 4 heads, d_dec 256, d_z 32, patch 1 ·
+steps×batch stage-1 **0** (resumes at its own recorded step 197,428 — nothing trains) /
+stage-2 **200,000 × 256** · resume `run-415`.**
+
+[#423 (E-044 pentad xl144+znoise stage-2 head) — the live status page](https://blauewelt.github.io/earth/status.html#run-423)
+
+[#423 — the CI log](https://github.com/blauewelt/earth/actions/runs/32384499101)
+
+[E-043e · #415, the codec this freezes](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043e)
+
+[E-044 · the dispatch spec (project doc)](https://blauewelt.github.io/earth/docs.html?f=claude/E044-pentad-stage2-spec.md)
+
+#### 1 · Hypothesis and falsifier
+
+**HYPOTHESIS.** At matched stage-2 architecture, the pentad embedding forecasts better one
+step ahead than the monthly one, because five-day bins carry the mesoscale evolution that
+monthly averaging removes — and the stage-2 head has **6.5× the training windows** (~251M
+against the monthly arm's ~38M) to learn it from.
+
+**FALSIFIER, stated before the number exists.** If `z_t+1.mse_model / mse_persistence` does
+not beat the monthly xl144+znoise arm's ratio, the extra temporal resolution buys nothing at
+stage 2, and the pentad programme's cost — a ~10 h embed, a 16.24 GiB Z, a 4.5–6× more
+expensive roll — is not justified by its forecast.
+
+**Two reasons the headline is one-step MSE and not corridor AUC**, both from the spec: the
+corridor AUC comes from a **separate** `sroll:` dispatch (§7a/§7b — `--horizon 73`, 3 starts,
+day-defined bands, `horizon_auc_daymatched`), and at pentad that roll is **UNCERTIFIED by
+construction** because `GATE_REF_BY_CADENCE` has no pentad entry and `e017_u1_s0`'s 0.643 was
+measured over the monthly family-3 axis. The first published pentad roll is what would
+ESTABLISH a pentad reference.
+
+**SEEDS — §3b's one-seed licence does not reach here.** That licence is granted only for
+rolled corridor AUC at the xl tier on the frozen f3 anchor and the monthly `family3_na025`
+tensor. This run changes the **codec, the tensor and the cadence at once** and its headline
+metric is not corridor AUC, so §3b's harder clause governs verbatim: *"any new metric,
+cadence, tensor, codec or scale tier with no measured pair — the first result at a tier buys
+its own replication."* Seed 0 runs now; **a `seed:1` arm is required before any number from
+this run is written as a level rather than a first reading**, and it is cheap once the Z
+cache is published because it skips the ~10 h embed.
+
+#### 2 · `steps` is **197,428**, and this is the field that would have cost a day
+
+The spec's §3 expected 200,000 on the reasoning that #415 carried `max_minutes 0`. **It
+carried `max_minutes: "1150"`** and was re-fit fifteen times (E-043e §1). The value was read
+off the `pixelmae-415` artifact — `step` **197428**, `args['steps']` **197428**, `tag`
+`run-415`, `holdout_lon` **`'0,0'`**, 512×12/4/256, `d_z` 32, `patch` 1,
+`chan_emb.weight` **(40, 512)**. A dispatch stating 200,000 would have trained **2,572**
+stage-1 steps, changed the codec weight hash, and built a **different Z under a different
+cache key** — a job that looks perfect and is not the experiment.
+
+`max_minutes: "0"` on THIS dispatch is the other half of the same lesson: a non-zero budget
+here would re-fit **stage 2's** schedule. `job_timeout: "2400"` (40 h) is the cap that
+actually stops the job, against an estimated ~30 h.
+
+#### 3 · Read-outs, decided in advance
+
+- **HEADLINE** — `z_t+1.mse_model` / `mse_persistence`, plus the `stage2_val_zmse` curve on
+  the fixed held-out monitoring batch. Both z-space, both keyed on held-out YEARS only,
+  neither pools anything spatially.
+- **SECONDARY, on the CODEC** — `probe_head.json` + `probe_head_raw3x3.json`, from
+  `head_probe: true` (pinned in the recipe). **This also closes #415's own gap**: #414, #415
+  and #416 each lost a head number to a copied `head_probe: "false"`, and this is the run
+  that finally takes it at pentad. The references it will be judged against, written down
+  now: **anchor head 0.691 [0.631, 0.746] (#406) · #386's own r1 pentad head 0.680
+  [0.617, 0.740] (#409) · raw-3×3 control 0.683 [0.620, 0.742] · wind-only 0.670
+  [0.601, 0.733]**.
+- **EMITTED, LABELLED, EXCLUDED FROM EVERY CLAIM** — `rapid_probe`, `rapid_probe_kfold` and
+  the in-training `stage2_probe` are all `hid[:, -1].mean(0)`, section-pooled, the read-out
+  §3 distrusts at this cadence. They are kept because 95 archived bundles carry them and
+  their bit-for-bit reproducibility is the protocol-determinism certificate, and they cost
+  ~2.5 h of this job. Not disabled; not quoted.
+
+#### 4 · The box, and the two hours this dispatch spent blocked
+
+`gpu-box-39184683` (vast **47724565**, Hong Kong, RTX 4090, **504 GB RAM**, 100 GB disk,
+$0.308/h) — #415's own box, holding `/opt/earth-cache/ckpt/run-415.pt` and the **only copy of
+`family4_na025_pentad_r2` that exists anywhere**. It was `exited` and its host had no free
+GPU: every start from **14:31Z** returned `resources_unavailable` (the #407 failure), and it
+came up on the **28th consecutive attempt at 15:07:23Z**. The runner registered `online`,
+`busy: false`, and #423 went out at 15:10:05Z. Full record of the block and of why no other
+box was substituted — the pentad tensor is published nowhere, and a box that builds its own
+tensor is the **E-008 box effect**, 0.041 on the head k-fold at a fixed seed — is at
+[OPERATIONS · 2026-08-20 ~14:45Z](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#ops-2026-08-20-1445).
+
+**504 GB RAM matters more than it looks.** `temporal.py` keeps the tensor eager:
+`np.nan_to_num(X)` copies 34 GB beside the 34 GB `X` and `np.isfinite(X)` adds a 17 GB bool
+— an **~85 GB peak** at `temporal.py:1265-1266` before `del X`, settling to ~51 GB, plus
+~4.0 GB of int64 window-pool indices and the 17.4 GB Z in page cache. `probe_kfold.py` has
+had the LazyPixels treatment since #388; `temporal.py` has not. On a 126 GB box that peak is
+the single most likely way this run dies, and it dies as exit code 137 with no message. On
+this one there is room.
+
+#### 5 · Cost, and the runway it does not fit inside
+
+| item | value |
+|---|---|
+| ESTIMATE, total | ~**30 h** = embed ~10 + train 200,000 × 0.27 s = 15.0 + pooled probes ~2.5 + ladder ~2.5 |
+| money | ~**$9.2** at $0.308/h |
+| `job_timeout` | 2,400 min (40 h) — an INPUT, not a cap on a self-hosted runner |
+| Z | 3,142 × 86,698 × 32 × 2 B = **16.24 GiB**, 11 chunks at `embed_cache_sync`'s 1.5 GiB |
+| **credit at dispatch** | **~$5.6, burning $0.95–1.02/h with two boxes ⇒ exhausted ~20:20–20:45Z TONIGHT** |
+
+**This run does not fit inside the runway and was dispatched anyway, per §0e** (*"please
+don't worry about top ups and proceed in spite of remaining budget"*). Without a top-up it
+dies **inside its embed pass, ~5 h in, having produced nothing** — the embed alone is ~10 h.
+**≈ $15 more is needed today** to carry it and #419's tail; ≈ $19 including the follow-on
+pentad `sroll:`. The arithmetic, measured off the ledger rather than estimated, is in the
+OPERATIONS entry linked above.
+
+#### 6 · Verification — first minutes (§2, spec §5)
+
+Recorded as they are read. Items marked **PENDING** were not yet decidable when this entry
+was written at ~15:20Z.
+
+| # | check | state |
+|---|---|---|
+| 1 | `runner_name` is `gpu-box-39184683`, not `gpu` | **PASS** — the jobs API reads `gpu-box-39184683` |
+| 2 | Resolve prints the whole `RECIPE_*` block: `RECIPE_NAME=xl144-zn-pentad-nolonhold`, `RECIPE_HOLDOUT_LON=0,0`, `RECIPE_TRAIN_LON_HOLD=none`, `RECIPE_TENSOR=family4_na025_pentad_r2`, `RECIPE_HEAD_PROBE=true` | PENDING — reproduced locally by `bash scripts/resolve_recipe.sh` before dispatch |
+| 3 | **`RESUMED … at step 197428`** then **`checkpoint is already at/past --steps; nothing to do`**. `training on to <N>` ⇒ **CANCEL WITHIN SECONDS** | PENDING |
+| 4 | `held-out months 219/3142 · NO lon holdout — all 481 cols train (--holdout-lon '0,0') · ocean 86698` | PENDING |
+| 5 | `lon holdout · statistics (codec '0,0'): 0/481 cols · training pool (--train-lon-hold 'none'): 0/481 cols` — **both zeros** | PENDING |
+| 6 | `train windows: ~251,337,502` (ESTIMATE) — ~251M, not ~38M | PENDING |
+| 7 | `embed cache needs 16.24 GiB`, branch taken = **disk** | PENDING |
+| 8 | record `codec <whash> · tensor <dhash>` — the Z cache key; the §7a sroll refuses on disagreement | PENDING |
+| 9 | embed ETA ~9–10 h (ESTIMATE); ≫20 h ⇒ check `gpu_util` | PENDING |
+| 10 | `stage-2 head on cuda (206.536M params)` — exactly **206,535,712**; 211.35M ⇒ d_z 64 ⇒ **cancel** | PENDING |
+| 11 | first `stage2_lr` ~1e-3 and **not** 0.0 | PENDING |
+| 12 | ~0.27 s/step (ESTIMATE); above ~0.4 ⇒ re-time the budget and say so | PENDING |
+
+Pre-dispatch checks that WERE completed, where the inputs are all they cost (§0.3): all
+**25/25** input names matched against `.github/workflows/ml-train.yml`'s own
+`workflow_dispatch.inputs` block, no extras and no omissions · `python3
+tests/test_workflow_config.py` **5/5** · JSON **4,672 characters** against the 21,000-char
+ceiling that took every dispatch down on 2026-08-17 · the recipe resolving to spec §1's exact
+`RECIPE_*` block · and the resume checkpoint **opened and read** rather than assumed
+(§0.1, §2 above).
+
+---
+
 <a id="e-043"></a>
 ## E-043 · Retire the 45°W–25°W longitude holdout — ARMS A, B, D and E ALL LANDED (#416, #414+#422, #417+#418, #415); only F (#419, daily) is still running
 
@@ -1548,10 +1699,18 @@ whether the same is true unpooled.
 ---
 
 <a id="ops-2026-08-20-1445"></a>
-## OPERATIONS · 2026-08-20 ~14:45Z — **E-044 IS BLOCKED ON A VAST HOST, NOT ON ANY DECISION.** The dispatch is built, validated and ready to fire the moment `gpu-box-39184683` can start
+## OPERATIONS · 2026-08-20 ~14:45Z — E-044 was blocked for 36 minutes on a Vast host with no free GPU. **RESOLVED at 15:07:23Z; #423 went out at 15:10:05Z**
 
-Not an experiment. Recorded because a session ended with a prepared dispatch it could not
-fire, and the next one must not have to re-derive any of it.
+> **SUPERSEDED IN PART, 15:10Z.** `gpu-box-39184683` came up on the **28th consecutive start
+> attempt at 15:07:23Z**, the runner registered `online` / `busy: false`, and
+> **[E-044 · #423](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-044)**
+> was dispatched at 15:10:05Z with `steps: "197428"`. §1 below is therefore history — but it
+> is left standing, because the *reasoning* in §2 (why no other box was substituted) and the
+> credit arithmetic in §4 are unchanged and are what the next session needs. **§4's "if E-044
+> also starts" column is now the live case.**
+
+Not an experiment. Recorded because a session spent 36 minutes unable to fire a prepared
+dispatch, and the next one must not have to re-derive any of it.
 
 ### 1 · The block, measured
 
@@ -1568,7 +1727,9 @@ and the instance's `next_state` stays `stopped` — the "queued" in that message
 produced a queued state change on the object. Retried continuously since 14:31Z. This is
 the failure §4 of the dispatch spec named after **#407**.
 
-**It is host-specific, not account-level, and that was checked rather than assumed:**
+**RESOLVED at 15:07:23Z** — attempt 28 returned `{"success":true}` and the box is `running`
+with its runner `online` and `busy: false`. **It is host-specific, not account-level, and
+that was checked rather than assumed:**
 `47720664` (Brazil, 126 GB RAM) started **`{"success":true}`** on the first attempt at
 14:44Z. It was **stopped again within three minutes** (~$0.015) because idle burn is stopped
 on sight (§7); it was started as a diagnostic and for no other reason.
@@ -1599,7 +1760,8 @@ Spec §4 gave two reasons and this session removed the first one:
 
 1. **Wait for `47724565`.** Free, and it is the only path that produces the experiment as
    designed. Retry `node scripts/gpu_box.mjs start 47724565` until it returns
-   `{"success":true}`.
+   `{"success":true}`. **THIS IS WHAT HAPPENED** — 36 minutes and 28 attempts, at ~55 s
+   apart. Cost of waiting: nothing. Cost of not waiting: a contaminated n = 1.
 2. **PUBLISH THE PENTAD TENSOR** — the real fix, and it is a work item rather than a
    dispatch. `scripts/data_release.mjs` already streams a split tar to the release and
    `family3_na025_adcbe700fb.npz.{aa,ab}` is the pattern; `family4_na025_pentad_r2.npz` is
