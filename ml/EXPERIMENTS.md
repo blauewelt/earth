@@ -191,7 +191,7 @@ are settled. Nothing was marked passed on an inference dressed as a reading.
 |---|---|---|
 | 1 | `runner_name` is `gpu-box-39184683`, not `gpu` | **PASS** — the jobs API reads `gpu-box-39184683` |
 | 2 | Resolve prints the whole `RECIPE_*` block | **PASS (step)**, PENDING — LOG for the block itself. Step 5 `Resolve recipe` completed `success`; the identical block was reproduced locally by `bash scripts/resolve_recipe.sh` before dispatch |
-| 3 | **`RESUMED … at step 197428`** then **`checkpoint is already at/past --steps; nothing to do`**. `training on to <N>` ⇒ **CANCEL WITHIN SECONDS** | **PASS, by behaviour.** Step 16 `Train` ran **15:42:25Z → 15:55:29Z = 13 min 4 s** and completed `success`, and `ml-live-423` carries **`phase.json` only — no `metrics.jsonl` at all**. Stage 1 training even the 2,572 steps a wrong `steps` would have bought writes metric rows and takes longer than the whole step did; training toward 200,000 would still be running nineteen hours from now. 13 minutes is the tensor load, the three-pass anomaly transform, the checkpoint load and an immediate exit. The literal line is PENDING — LOG |
+| 3 | **`RESUMED … at step 197428`** then **`checkpoint is already at/past --steps; nothing to do`**. `training on to <N>` ⇒ **CANCEL WITHIN SECONDS** | **PASS — read off the run's OWN provenance, not inferred.** The status page's config line, rendered from `provenance.json`, reads **`steps×batch 197,428 × 512 · resume run-415 — loaded run-415.pt at step 197,428`**. `steps` and the checkpoint's recorded step are the same number, so `while s < a.steps` never turns over. Corroborated by behaviour: step 16 `Train` ran **15:42:25Z → 15:55:29Z = 13 min 4 s** and completed `success`, and `ml-live-423` carries **`phase.json` only — no `metrics.jsonl` at all**. Stage 1 training even the 2,572 steps a wrong `steps` would have bought writes metric rows and takes longer than the whole step did; training toward 200,000 would still be running nineteen hours from now. The literal `nothing to do` line is PENDING — LOG |
 | 4 | `held-out months 219/3142 · NO lon holdout — all 481 cols train (--holdout-lon '0,0') · ocean 86698` | PENDING — LOG |
 | 5 | `lon holdout · statistics (codec '0,0'): 0/481 cols · training pool (--train-lon-hold 'none'): 0/481 cols` — **both zeros** | PENDING — LOG. **This line is printed by `temporal.py` AFTER the ~10 h embed**, so it is not decidable before ~02:00Z |
 | 6 | `train windows: ~251,337,502` (ESTIMATE) — ~251M, not ~38M | PENDING — LOG, same reason as 5 |
@@ -208,7 +208,9 @@ checkpoint` 15:10:08Z → 15:39Z — twenty-nine minutes**, uploading `rescued-o
 `run-415__pixelmae.pt`) and `rescued-orphan-temporal-latest-423.pt` (1,076,218,089 B, a stale
 leftover) from a Hong Kong box at ~0.5 MB/s · checkout → build 15:39–15:42Z (tensor cached,
 seconds) · `Train` 15:42:25→15:55:29Z · `Upload checkpoint + eval` 40 s · **`Probes (K-sweep +
-stage 2)` from 15:56:11Z**, `phase.json` `probes and stage 2`, GPU 99%.
+stage 2)` from 15:56:11Z**, `phase.json` `probes and stage 2`, GPU 99%. The status page at
+16:04Z renders #423 under its **E-044** tag with the full `doc` string, the config line above
+and the planned-schedule curve from `plan-423.json`; **PAGE ERRORS: none**.
 
 **Operational finding worth a follow-up, recorded not fixed:** the orphan-rescue step spent
 **29 minutes and ~$0.15 of GPU** re-uploading 1.5 GB that was already published or already
