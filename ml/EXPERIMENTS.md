@@ -56,7 +56,7 @@ are open.
 | arm | run | what it is |
 |---|---|---|
 | A | **#416** (E-043a: monthly f3 codec retrained with NO longitude holdout) | **landed — this entry** |
-| B | **#414** (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING frozen anchor) | **TRAINING HALF LANDED — [E-043b (#414)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)**. The 211.353M head ran its full 200,000 steps; **the decisive arm**, but its verdict is the sroll, not this run. Published by #420 (HEADPUB `e043b-xl144-nolonhold-s0`), rolled by #421 |
+| B | **#414** (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING frozen anchor) | **TRAINING HALF LANDED — [E-043b (#414)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)**. The 211.353M head ran its full 200,000 steps; **the decisive arm**, but its verdict is the sroll, not this run. Published by #420 (HEADPUB `e043b-xl144-nolonhold-s0`), rolled by **#422** — [E-043b · the roll](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-roll) (#421 was the same roll and is VOID) |
 | D | **#417 / #418** (E-043d: sroll re-rolls, `_trainlon` / `_holdlon` split) | **COMPLETE — [E-043d1 (#417, xl233 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d1)** and **[E-043d2 (#418, xl144 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d2)** |
 | E | **#415** (E-043e: fresh 38.0M pentad r2 codec, all longitude columns) | in flight |
 | F | **#419** (E-043f: fresh 38.0M DAILY codec on all 481 longitude columns) | in flight — refused in the 17:2xZ dispatch pass for want of a daily recipe, then dispatched 17:25:14Z once `f5-40M-nolonhold` existed |
@@ -967,10 +967,10 @@ advantage needs re-reading. **ONE SEED** (Chris, 2026-08-19); an effect landing 
 ---
 
 <a id="e-043b-roll"></a>
-### E-043b · #420 (HEADPUB) and #421 (the roll) — DISPATCHED 2026-08-20 08:27:11Z; the verdict of the decisive arm
+### E-043b · #420 (HEADPUB) and #422 (the roll) — DISPATCHED 2026-08-20 09:36:14Z; the verdict of the decisive arm. #421 was the same roll, VOID, and is recorded in §2b
 
 Written **at dispatch**, hypothesis and falsifier first, so the log cannot be rewritten to
-fit the answer (§1). The numbers below are the pre-registration; #421's result goes under
+fit the answer (§1). The numbers below are the pre-registration; **#422**'s result goes under
 this heading when it lands.
 
 **E-043b-roll · ROLLS the freshly published e043b xl144 stage-2 head
@@ -985,7 +985,9 @@ K 24, stencil 145, ring `spiral:111,4444,0.71,0.5` · steps×batch 60,000 × 512
 f3_anchor41M's recorded step count, ZERO training steps) · resume `!run-62,run-63`
 (f3_anchor41M, frozen).**
 
-[#421 (E-043b roll, gate + the all-longitude xl144 head) — the CI log](https://github.com/blauewelt/earth/actions/runs/32348876544)
+[#422 (E-043b roll, gate + the all-longitude xl144 head) — the CI log](https://github.com/blauewelt/earth/actions/runs/32354718326)
+
+[#421 (E-043b roll, first attempt — VOID, rolled the gate alone) — the CI log](https://github.com/blauewelt/earth/actions/runs/32348876544)
 
 [#420 (HEADPUB `e043b-xl144-nolonhold-s0`) — the CI log](https://github.com/blauewelt/earth/actions/runs/32345210849)
 
@@ -1012,11 +1014,18 @@ measurement rather than an inference:
 | nothing intervened | a later run overwriting `temporal.pt` | #414 completed **07:41:51Z**, #420 started **07:42:06Z** — a **15-second** gap, and no other run touched that box in between |
 | the file's own fields | wrong arch / wrong seed / a milestone asset | the box's own `torch.load` printed **`step=200000 d_model=1024 layers=16 stencil=145 seed=0 znoise=0.0`**, **`params=211.4M`** — matching #414's `temporal.json` `scale.params` **211,352,640** exactly, and `step=200000` rules out the 600 / 60,000 / 120,000 milestone assets |
 | no confusable leftover exists | those six fields are IDENTICAL for #346 | #346 ran on `gpu-box-47566393` and #347 on `gpu-box-46045353` — **neither control head has ever run on `gpu-box-30257785`**, so no file with that field signature could be sitting there |
+| **the file itself, opened here** | any of the above being a misreading of a log | the 845,487,479-byte asset was downloaded at 09:35Z and `torch.load`-ed locally: `d_model` **1024**, `layers` **16**, **`K` 24**, `stencil` **145**, `seed` **0**, `ring_km` `spiral:111,4444,0.71,0.5`, `pos.weight` rows **24**, `params` **211,352,640**, and `steps` 200,000 / `batch` 256 / `lr` 1e-3 `expdecay` halflife 40,000 warmup 2,000 / `milestone_steps` `600,60000,120000` — #414's dispatch, field for field |
+| **`train_lon_hold` = `'none'`** | THE decisive field, and the only one that separates #414's head from #346's | read out of the file's own `args`: **`'none'`**. #346 trained with the −45..−25 block held out; this head did not. Nothing else in the checkpoint distinguishes them |
 
-That last row is the one that matters and it is the one the publish script's printed line
-CANNOT settle by itself: #346 is also 1024×16, stencil 145, seed 0, znoise 0, 200,000
-steps, 211.4M. The six printed fields do not distinguish #414's head from #346's. What
-distinguishes them is the box, so the box is what was checked.
+The last two rows are the ones that matter, and they are what the publish script's printed
+line CANNOT settle by itself: **#346 is also 1024×16, stencil 145, seed 0, znoise 0,
+200,000 steps, 211.4M.** The six printed fields do not distinguish #414's head from #346's.
+Two things do — the BOX (no #346-shaped file has ever existed on `gpu-box-30257785`) and
+**`train_lon_hold`**, which is `'none'` here and is the entire subject of this experiment.
+Both were checked. Note the ordering forced by §0.2: the box argument was available
+immediately and the file could not be opened until 09:35Z, because the CDN was serving a
+cached 404 (§2b) — so the run was verified by provenance first and by the artefact second,
+and the artefact confirmed the provenance.
 
 **The asset name is `head-weights-<tag>.pt`, not `<tag>.pt`.** `scripts/sroll_run.sh` tries
 `<tag>__temporal.pt` and then `<tag>` verbatim, so the roll's window token must be the FULL
@@ -1035,11 +1044,84 @@ ignoring the signed query string**. Measured here: the premature request at 07:5
 still being served from `cache-iad-kcgs7200068-IAD` with `X-Cache: HIT` and a monotonically
 rising `Age` past 1,536 s, through fresh signed URLs, `Cache-Control: no-cache`, byte-range
 requests and an added cache-buster parameter. **Poll `state` until `uploaded` before the
-first GET.** The roll itself is not believed to be affected — box `47724559` is in
-**Quebec, CA** and resolves a different POP, which was never poisoned because only IAD ever
-saw the bad request — but the verification of the artefact was therefore done from #420's
-log and the run/box ledger above rather than from a local `torch.load`, and that
-substitution is recorded rather than glossed.
+first GET.** The full measurement is in §2b.
+
+> **CORRECTED, 09:40Z — the paragraph that stood here was WRONG, and #421 falsified it
+> within twenty minutes.** It read: *"The roll itself is not believed to be affected — box
+> `47724559` is in Quebec, CA and resolves a different POP, which was never poisoned
+> because only IAD ever saw the bad request."* That was an inference from a geolocation
+> field, not a measurement, and it is exactly the class of reasoning §0.1 forbids — the
+> risk was named, judged low on a guess about CDN topology, and dispatched against. **#421
+> then hit a 404 on that head and rolled the gate alone** (§2b). The box had made its own
+> premature request and poisoned its own POP; "only IAD ever saw the bad request" was
+> false the moment the job started. The correct move, taken for #422, was to wait out the
+> hour and confirm `HTTP 200` with the exact bare-`curl` call the box makes before
+> dispatching — a check that costs one command. It is left visible rather than deleted
+> because the shape of the error is the lesson: a precondition was downgraded to a
+> probability estimate, and the estimate was wrong.
+
+#### 2b · #421 — the SAME roll, VOID: it rolled the gate alone and would have gone green
+
+**#421** (E-043b roll, first attempt) was dispatched **08:27:11Z** at `head_sha` `c3bdc95`
+with an identical window and was **CANCELLED at 08:44Z**, 17 minutes in, having produced
+nothing. It is recorded in full because the failure is invisible by construction and the
+next session will meet it again.
+
+**What it did.** The window named two heads. `scripts/sroll_run.sh` fetched the gate,
+**404'd on `head-weights-e043b-xl144-nolonhold-s0`**, emitted
+`::warning::head … not on the release — skipped`, and carried on: `[ -n "$HPATHS" ]`
+passes as long as ONE head arrived, and the gate always arrives. The roll started with
+`n_heads = 1`, and that one head was the gate.
+
+**Why nothing would have caught it.** Left alone it would have run ~30 minutes more,
+**passed its gate**, written a well-formed `rollout_spatial.json`, satisfied every one of
+the script's closing assertions — they check the heads that ARE present, and the gate was
+present and perfect — and archived a `probes-421.json` indistinguishable from a good run.
+It was caught by reading the live metrics: **`"heads": 1`**, and the head's label
+**`s1_s0`** — stencil 1, seed 0, which is the 1-point GATE, not the 211M stencil-145 head
+the run existed for. A run number, a green tick and a passing gate said nothing.
+
+**Why the fetch 404'd, and this is the part worth carrying forward.** A GitHub release
+asset **appears in the API with its final size while its `state` is still `starter`** —
+the blob is not yet fetchable, and a GET in that window returns Azure `BlobNotFound`.
+**GitHub's Fastly edge then caches that 404 on the asset PATH, ignoring the signed query
+string.** Measured here rather than assumed:
+
+| observation | value |
+|---|---|
+| asset created / `state: starter` | 07:55:21Z, 845,487,479 bytes |
+| upload completed (`HTTP 201`, step 21 green) | 08:07:36Z |
+| `state` polled to `uploaded` | 08:07:59Z |
+| a premature GET | **07:58:19Z** — the poisoning request, made by this session |
+| what it served afterwards | `404 BlobNotFound`, `X-Cache: HIT`, `X-Ms-Request-Id` frozen at the 07:58:19Z request, from `cache-iad-…-IAD` |
+| defeated by | fresh signed URLs · `Cache-Control: no-cache` · `Pragma: no-cache` · byte-range requests · an added cache-buster parameter — **all of them, because the cache key is the path** |
+| expired at | `Age` **3,691 s** — Fastly's default hour. The very next request was `200 OK`, `X-Cache: MISS` |
+
+The box made its OWN premature request at ~08:30 and poisoned whichever POP serves it, so
+#422 was held until **09:35Z** — past both hours — and dispatched only after the asset was
+confirmed `HTTP 200` with the exact bare-`curl` call `sroll_run.sh` makes.
+
+**Rule: poll the asset's `state` until `uploaded` BEFORE the first GET, from anywhere.**
+The size in the API is not evidence the bytes are there, and the POP that serves the box is
+poisoned by whoever asked first — including a session merely trying to verify the artefact.
+
+**The fix, shipped in the same session (main `32e4e06`).** A named head that does not
+arrive is now a **REFUSAL**, not a warning: `sroll_run.sh` collects the missing tags, exits
+1 naming each one and both asset-name conventions it tried, and prints
+`heads: N named, M fetched` beside the byte count of each head it did get — all before the
+roll starts, where the inputs are the only thing it has cost (§0.2, §1). The old behaviour
+existed so one bad tag could not lose a multi-head roll; that trade is wrong at this price,
+and a two-minute refusal is cheaper than a void six-hour roll discovered at harvest.
+`tests/test_sroll_wiring.py` **case 3b** is the regression itself — a `curl` stub that
+succeeds for one tag and 404s the other must take the run down and must NAME the missing
+tag. All 8 checks hold.
+
+**Cost of the void run:** 17 minutes of one box, ~**$0.08**, plus ~1.1 h of idle burn on
+`gpu-box-31479844` (~$0.32) across the cancel and the wait for the cache hour — during
+part of which the hourly health check correctly stopped the box, which is why the figure is
+not higher. GitHub had already discarded #421's logs by the time they were fetched (the
+archive returns a 22-byte empty zip), so the evidence above is the live-metrics records and
+a local reproduction of the box's exact `curl`, not the job log.
 
 #### 3 · READING DISCIPLINE — the blended number is a trap, and it is set before the answer exists
 
