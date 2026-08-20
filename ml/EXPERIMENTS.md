@@ -1646,31 +1646,42 @@ re-fit is 0**; `job_timeout 2400` is the cap that actually stops the job.
 
 ### 4 · Credit — MEASURED, and the fleet outlives it by hours in every scenario
 
-**Measured directly off the Vast account, twice, seventeen minutes apart:**
+**Measured directly off the Vast account, three samples across 24 minutes** — the ledger
+does not update continuously, so read the endpoints and not the middle:
 
-| at | credit |
-|---|---|
-| 2026-08-20 14:26Z | **$5.8854** |
-| 2026-08-20 14:43Z | **$5.7219** |
+| at | credit | implied burn since the previous sample |
+|---|---|---|
+| 2026-08-20 14:26Z | **$5.8854** | — |
+| 2026-08-20 14:43Z | **$5.7219** | $0.564/h |
+| 2026-08-20 14:50Z | **$5.63** | $0.78/h |
+| **14:26Z → 14:50Z, the honest endpoint-to-endpoint figure** | **−$0.2554** | **$0.639/h** |
 
-**Burn = $0.564/h.** That is one running box (`gpu-box-46996216`, $0.333/h, #419) plus
-storage on twelve stopped instances — storage is charged whether an instance runs or not,
-and at ~$0.23/h it is **41% of the bill while producing nothing**.
+`scripts/publish_fleet_status.mjs`'s own formula — running boxes' `dph_total` plus stopped
+boxes' `storage_total_cost` — reports **$0.711/h** and **7.92 h** of runway at 14:50Z, which
+brackets the ledger figure from above. **Take $0.64–0.71/h and a runway of 7.9–8.8 h:
+exhausted between ~22:45Z tonight and ~00:00Z.** (The comment in that script records the
+opposite bias on 2026-08-19 — $1.571/h actual against $1.256/h by the formula — so neither
+estimator is trusted alone; both are quoted.)
+
+One running box (`gpu-box-46996216`, $0.333/h, #419) plus storage on twelve stopped
+instances — storage is charged whether an instance runs or not, and at ~$0.38/h by the
+`storage_total_cost` sum it is **more than half the bill while producing nothing**.
 
 | | |
 |---|---|
-| credit now | **$5.72** |
-| burn now (1 box) | **$0.564/h** → exhausted **~00:50Z on 2026-08-21** |
-| burn with E-044 running (2 boxes) | ~$0.872/h → exhausted **~21:15Z TONIGHT** |
+| credit now (14:50Z) | **$5.63** |
+| burn now (1 box) | **$0.64–0.71/h** → exhausted **~22:45Z–00:00Z** |
+| burn with E-044 running (2 boxes) | ~$0.95–1.02/h → exhausted **~20:20Z–20:45Z TONIGHT** |
 | **#419's tail** — 73,000 steps at 0.60 s/step | 12.2 h, ETA **~02:50Z**, needs **~$4.1** of GPU |
 | **E-044** — ~30 h (embed ~10 + train ~15 + probes ~2.5 + ladder ~2.5) | needs **~$9.2** of GPU |
 | storage over that window | ~**$6.9** |
 | **to finish both** | **≈ $20** ⇒ **≈ $15 MORE IS NEEDED TODAY** |
 | including E-044's follow-on pentad `sroll:` (~14 h, spec §7b) | ≈ $24 ⇒ **≈ $19 more** |
 
-**Without a top-up: #419 dies at roughly step 188,000 / 200,000 around 00:50Z** — two hours
-and 12,000 steps short of a daily codec that has been running for 33 hours — **and E-044, if
-it starts, dies inside its embed pass having produced nothing.** Per §0e the fleet is not
+**Without a top-up: #419 dies at roughly step 176,000–184,000 / 200,000 between 22:45Z and
+midnight** — three to four hours and 16,000–24,000 steps short of a daily codec that has been
+running for 33 hours — **and E-044, if it starts, dies inside its embed pass having produced
+nothing at all.** Per §0e the fleet is not
 being parked for this and nothing has been scaled down to fit; the arithmetic is here because
 that is what §0e asks a session to owe instead.
 
