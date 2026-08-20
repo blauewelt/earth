@@ -1537,6 +1537,163 @@ whether the same is true unpooled.
 
 ---
 
+<a id="ops-2026-08-20-1445"></a>
+## OPERATIONS · 2026-08-20 ~14:45Z — **E-044 IS BLOCKED ON A VAST HOST, NOT ON ANY DECISION.** The dispatch is built, validated and ready to fire the moment `gpu-box-39184683` can start
+
+Not an experiment. Recorded because a session ended with a prepared dispatch it could not
+fire, and the next one must not have to re-derive any of it.
+
+### 1 · The block, measured
+
+**`gpu-box-39184683` (vast `47724565`, Hong Kong, RTX 4090, 504 GB RAM, 100 GB disk,
+$0.308/h) is `exited`, and its host has no free GPU.** Every start attempt since **14:31Z**
+returns
+
+```
+{"success":false,"error":"resources_unavailable",
+ "msg":"Required resources are currently unavailable, state change queued."}
+```
+
+and the instance's `next_state` stays `stopped` — the "queued" in that message has not
+produced a queued state change on the object. Retried continuously since 14:31Z. This is
+the failure §4 of the dispatch spec named after **#407**.
+
+**It is host-specific, not account-level, and that was checked rather than assumed:**
+`47720664` (Brazil, 126 GB RAM) started **`{"success":true}`** on the first attempt at
+14:44Z. It was **stopped again within three minutes** (~$0.015) because idle burn is stopped
+on sight (§7); it was started as a diagnostic and for no other reason.
+
+**The box is STOPPED, not destroyed.** Its disk — `/opt/earth-cache/ckpt/run-415.pt` and
+`ml/cache/family4_na025_pentad_r2.npz` — is intact. **Do not destroy it.**
+
+### 2 · Why E-044 waits for that box specifically, now that one of the two reasons is gone
+
+Spec §4 gave two reasons and this session removed the first one:
+
+- **`run-415.pt` existing only on that disk — FIXED.** `run-415__pixelmae.pt` is on
+  `model-checkpoints-v1` (§2 of the E-043e entry). `resume: !run-415` is now satisfiable on
+  any box, and the dangerous `f3_anchor41M__pixelmae.pt` fallback is unreachable.
+- **The warm tensor — STILL BINDING, and for a scientific reason rather than a cost one.**
+  `family4_na025_pentad_r2` is **not published anywhere**: the data release carries
+  `family3_na025` and the raw inputs only, and `gpu-box-39184683` is the **only box that has
+  ever touched it** (#405, #408, #411, #415). Any other box runs the family-4 branch of the
+  build step — a Hub fetch of `pentad025/{index,pentad_mean_uo,_vo,_mlotst,_zos}`,
+  `truth_pentad.npz` and the 4.25 GB SST artifact, then `build_family4.py` writing its own
+  33 GB — and **a box that builds its own tensor is the E-008 box effect**, measured at
+  **0.041 on the head k-fold and 0.111 on the 36-month split** at a fixed seed. Published Z
+  removed that cause; rebuilding the tensor reinstates it, on the **first stage-2 run at a
+  new cadence**, where §3b says every number is n = 1 already. A cheap-looking box swap
+  would buy a contaminated result.
+
+**So the honest options, in order, and none of them is "dispatch somewhere else today":**
+
+1. **Wait for `47724565`.** Free, and it is the only path that produces the experiment as
+   designed. Retry `node scripts/gpu_box.mjs start 47724565` until it returns
+   `{"success":true}`.
+2. **PUBLISH THE PENTAD TENSOR** — the real fix, and it is a work item rather than a
+   dispatch. `scripts/data_release.mjs` already streams a split tar to the release and
+   `family3_na025_adcbe700fb.npz.{aa,ab}` is the pattern; `family4_na025_pentad_r2.npz` is
+   4.5 GB, i.e. **three chunks**. It can only be done **from that box**, so it is blocked on
+   option 1 too — but it should be done the moment the box is up, before the training job
+   takes the machine, because it permanently removes this whole class of block **and** it is
+   a hard prerequisite for the §7a pentad `sroll:` (which needs the tensor on whatever box
+   rolls it).
+3. **Rebuild elsewhere and accept the box effect** — rejected above. If it is ever taken,
+   the rebuilt tensor's sha256 must be compared against **`37e146384b6f622fefe3c7e18ad9bab0389c9538be79536899fe8729bb2d0826`**
+   and a mismatch reported as a finding, not worked around.
+
+### 3 · The dispatch, built and validated — fire it verbatim
+
+`steps` is **197,428**, read off the `pixelmae-415` artifact (E-043e §1), **not** the 200,000
+the spec's §3 expected — #415 carried `max_minutes 1150`, not 0, and was re-fit fifteen
+times. All 25 inputs are present and their names were checked against
+`.github/workflows/ml-train.yml`'s own `workflow_dispatch.inputs` block (25/25, no extras,
+no omissions); `python3 tests/test_workflow_config.py` passes 5/5; the JSON is 4,672
+characters against the 21,000 ceiling; `bash scripts/resolve_recipe.sh` reproduces the whole
+`RECIPE_*` block of spec §1 including `RECIPE_HOLDOUT_LON=0,0`, `RECIPE_TRAIN_LON_HOLD=none`
+and `RECIPE_HEAD_PROBE=true`.
+
+The exact input set (the `doc` string carries the twelve-item first-minutes checklist and is
+elided here for width — **the complete 25-field JSON, verbatim and ready to paste, is in the
+project doc `claude/E044-dispatch-READY.md`**, together with the artefact read-out that
+produced `steps` and the first-minutes checklist):
+
+| field | value | | field | value |
+|---|---|---|---|---|
+| `steps` | **`197428`** | | `tensor` | `family4_na025_pentad_r2` |
+| `batch` | `512` | | `sst_channel` | `false` |
+| `d_z` | `32` | | `patch` | `1` |
+| `anomaly` | `true` | | `max_minutes` | **`0`** |
+| `temporal_steps` | `200000` | | `runner` | **`gpu-box-39184683`** |
+| `temporal_d_model` | `1024` | | `job_timeout` | `2400` |
+| `temporal_layers` | `16` | | `lr_floor` | `0` |
+| `eval_every` | `0` | | `lr_decay_steps` | `0` |
+| `resume` | **`!run-415`** | | `codec_d_model` | `512` |
+| `head_probe` | **`true`** | | `codec_layers` | `12` |
+| `light_probe_every` | `0` | | `codec_heads` | `4` |
+| `window` | `recipe:xl144-zn-pentad-nolonhold,stencil:145,ring:spiral:111-4444-0.71-0.5,seed:0,sched:expdecay --lr-cooldown-frac 0 --milestone-steps 600,60000,120000 --input-znoise 0.7` | | `codec_d_dec` | `256` |
+
+```
+node scripts/gpu_box.mjs start 47724565          # until it returns {"success":true}
+node scripts/fleet_dispatch_wf.mjs '<the JSON in claude/E044-dispatch-READY.md>' main
+node scripts/publish_plan.mjs <n> '{"steps":200000,"lr":1e-3,"schedule":"expdecay","halflife":40000,"stage":"stage-2"}'
+```
+
+`max_minutes: 0` is not decoration. #415 is the second run in three days whose cosine was
+re-fit by a non-zero `max_minutes` (#386 was the first, 200,000 → 166,752), and a re-fit here
+would move stage 2's own step budget rather than stage 1's. **The only budget that cannot be
+re-fit is 0**; `job_timeout 2400` is the cap that actually stops the job.
+
+### 4 · Credit — MEASURED, and the fleet outlives it by hours in every scenario
+
+**Measured directly off the Vast account, twice, seventeen minutes apart:**
+
+| at | credit |
+|---|---|
+| 2026-08-20 14:26Z | **$5.8854** |
+| 2026-08-20 14:43Z | **$5.7219** |
+
+**Burn = $0.564/h.** That is one running box (`gpu-box-46996216`, $0.333/h, #419) plus
+storage on twelve stopped instances — storage is charged whether an instance runs or not,
+and at ~$0.23/h it is **41% of the bill while producing nothing**.
+
+| | |
+|---|---|
+| credit now | **$5.72** |
+| burn now (1 box) | **$0.564/h** → exhausted **~00:50Z on 2026-08-21** |
+| burn with E-044 running (2 boxes) | ~$0.872/h → exhausted **~21:15Z TONIGHT** |
+| **#419's tail** — 73,000 steps at 0.60 s/step | 12.2 h, ETA **~02:50Z**, needs **~$4.1** of GPU |
+| **E-044** — ~30 h (embed ~10 + train ~15 + probes ~2.5 + ladder ~2.5) | needs **~$9.2** of GPU |
+| storage over that window | ~**$6.9** |
+| **to finish both** | **≈ $20** ⇒ **≈ $15 MORE IS NEEDED TODAY** |
+| including E-044's follow-on pentad `sroll:` (~14 h, spec §7b) | ≈ $24 ⇒ **≈ $19 more** |
+
+**Without a top-up: #419 dies at roughly step 188,000 / 200,000 around 00:50Z** — two hours
+and 12,000 steps short of a daily codec that has been running for 33 hours — **and E-044, if
+it starts, dies inside its embed pass having produced nothing.** Per §0e the fleet is not
+being parked for this and nothing has been scaled down to fit; the arithmetic is here because
+that is what §0e asks a session to owe instead.
+
+**One lever that costs nothing and is worth taking:** eleven of the twelve instances are
+stopped and eight of them have no unique warm state left worth keeping. Destroying the ones
+that do not (**keeping `47724565` — the pentad tensor and `run-415.pt`; `47724559` — #417/
+#418's warm family-3 Z; `46996216` — #419, running; `30257785` — #414's `temporal.pt`**)
+would cut ~$0.15/h of pure storage, ~27% of the current burn, and buy roughly 2.5 extra hours
+of #419. Not done here, because it trades a runway hour against a warm cache and that is
+Chris's call, not a night-shift session's.
+
+### 5 · #419 — one-line health
+
+**#419 (E-043f fresh 38.0M daily codec, all longitude columns)** on `gpu-box-46996216`
+($0.333/h, Austria): **step 127,000 / 200,000** at 14:35Z, `phase` `training`, GPU **97%**,
+CPU 5%, disk 52%, `loss_rec` **0.236** / `loss_nei` **0.187**, 0.60 s/step averaged over the
+whole run from the live branch's own `wall_s` — **~12.2 h remaining, ETA ~02:50Z on
+2026-08-21**, which is ~2 h past the credit. Healthy; nothing to do but feed it.
+
+[#419 (E-043f daily codec) — the live status page](https://blauewelt.github.io/earth/status.html#run-419)
+
+---
+
 <a id="wave9-status-2026-08-19-2055"></a>
 ## OPERATIONS · The E-043 wave at 20:55Z — one arm home, four running, runway shorter than two of them
 
