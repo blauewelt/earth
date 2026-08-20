@@ -1,0 +1,190 @@
+{
+ "run_number": 415,
+ "files": {
+  "probe_kfold.json": {
+   "actions": {
+    "rapid": {
+     "r_kfold_deseas": 0.637,
+     "ci95": [
+      0.578,
+      0.694
+     ],
+     "n": 1459,
+     "rmse_sv": 3.07,
+     "sigma_sv": 3.95,
+     "r_lowpass18": 0.513,
+     "wind_only_baseline": {
+      "r": 0.67,
+      "ci95": [
+       0.601,
+       0.733
+      ],
+      "rmse_sv": 2.93
+     }
+    },
+    "fc": {
+     "r_kfold_deseas": 0.375,
+     "ci95": [
+      0.286,
+      0.455
+     ],
+     "n": 2490,
+     "rmse_sv": 2.56,
+     "sigma_sv": 2.75,
+     "r_lowpass18": 0.297,
+     "wind_only_baseline": {
+      "r": 0.199,
+      "ci95": [
+       0.129,
+       0.271
+      ],
+      "rmse_sv": 2.7
+     }
+    }
+   }
+  },
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.6,
+     "r_deseasonalised": 0.575,
+     "n_test": 219
+    },
+    {
+     "K": 3,
+     "r_raw": 0.596,
+     "r_deseasonalised": 0.576,
+     "n_test": 219
+    },
+    {
+     "K": 6,
+     "r_raw": 0.561,
+     "r_deseasonalised": 0.539,
+     "n_test": 219
+    },
+    {
+     "K": 12,
+     "r_raw": 0.56,
+     "r_deseasonalised": 0.542,
+     "n_test": 219
+    },
+    {
+     "K": 24,
+     "r_raw": 0.579,
+     "r_deseasonalised": 0.523,
+     "n_test": 219
+    }
+   ],
+   "seasonal_floor_raw": 0.19,
+   "seasonal_floor_deseas": -0.043
+  },
+  "dip_check.json": {
+   "run": "actions",
+   "window": [
+    "2009-09",
+    "2010-06"
+   ],
+   "r_out_of_fold": 0.637,
+   "sign_agreement_pct": 72.0,
+   "dip_observed_sv": -6.95,
+   "dip_predicted_sv": -2.21,
+   "dip_captured_pct": 31.8
+  },
+  "provenance.json": {
+   "run_number": 415,
+   "sha": "8f0e51411d9baba6c62f8c9a9a21a9215e2dc860",
+   "code": "https://github.com/blauewelt/earth/tree/8f0e51411d9baba6c62f8c9a9a21a9215e2dc860",
+   "inputs": {
+    "doc": "E-043e \u00b7 Trains a FRESH 38.0M pentad codec on the r2 tensor (the 39 AMOC channels plus daily OISST SST as channel 40) with NO longitude holdout \u2014 the new PENTAD BASELINE, folding SST and the corrected holdout regime into one run (recipe f4r2-40M-nolonhold, holdout_lon '0,0') \u00b7 params 37.976M \u00b7 stage encoder \u00b7 data family4_na025_pentad_r2 (C 40, T 3142) \u00b7 arch 512x12, 4 heads, d_dec 256, d_z 32, patch 1 \u00b7 steps x batch 200,000 x 512, cosine 3e-4 to zero \u00b7 resume EMPTY \u2014 a fresh codec; f3_anchor41M's 39-row chan_emb cannot encode 40 channels, so there is nothing to seed from. CONTROLS: #386 (E-038a, the r1 39-channel pentad codec at this exact architecture) and cancelled #411 (E-042 SST arm, killed at step 107,000/200,000), whose 14 shared full-probe steps gave linear_r_deseas +0.0246 for SST at n=1. BUDGET, and it is a deliberate deviation from #386's verbatim block: max_minutes 1150 and job_timeout 1500 against #386's 850/1000, because run-386.jsonl records that #386's own 850-minute budget re-fit its cosine from 200,000 steps to 166,752 \u2014 a baseline whose step count is an accident of one box's speed is not a baseline, and ml/CLAUDE.md \u00a71 asks the job to be sized against its own timeout. HYPOTHESIS: SST and all-longitude training both help, and this codec's head + raw-3x3 pair beats #386's. FALSIFIER: if its probe ladder does not exceed #386's, neither change buys anything at pentad cadence and the pentad baseline stays where it is. VERIFY IN THE FIRST MINUTES (\u00a72): \"NO lon holdout \u2014 all 481 cols train (--holdout-lon '0,0')\", a train-pixel count ~4/3 of #386's, C 40 in the provenance channel list, and NO \"re-fitting the cosine schedule\" line. \u00a73b: pentad cadence has NO measured pair anywhere in the archive, so one seed runs now and the replicate is bought before any number from it is quoted.",
+    "steps": "200000",
+    "batch": "512",
+    "d_z": "32",
+    "anomaly": "true",
+    "temporal_steps": "0",
+    "temporal_d_model": "96",
+    "temporal_layers": "3",
+    "eval_every": "7500",
+    "head_probe": "false",
+    "light_probe_every": "10000",
+    "window": "recipe:f4r2-40M-nolonhold",
+    "tensor": "family4_na025_pentad_r2",
+    "sst_channel": "false",
+    "patch": "1",
+    "max_minutes": "1150",
+    "runner": "gpu-box-39184683",
+    "job_timeout": "1500",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "512",
+    "codec_layers": "12",
+    "codec_heads": "4",
+    "codec_d_dec": "256"
+   },
+   "tensor": {
+    "file": "ml/cache/family4_na025_pentad_r2.npz",
+    "sha256": "37e146384b6f622fefe3c7e18ad9bab0389c9538be79536899fe8729bb2d0826",
+    "bytes": 4515270439,
+    "X_shape": [
+     3142,
+     281,
+     481,
+     40
+    ],
+    "C": 40,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std",
+     "sst"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 3142
+   },
+   "torch": "2.13.0+cu126",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-39184683"
+  }
+ }
+}
