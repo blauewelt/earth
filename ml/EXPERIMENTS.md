@@ -320,7 +320,7 @@ inventory but **no head carries a `section` scope block**, so it cannot be score
 **The scored-ELEMENT share is not the pixel share, and the file says so.** Each
 `chan_skill` row carries `n`, the count of finite (pixel × channel × start) values at that
 horizon. At h = 1, corridor `n` = 37,528,668, of which `_trainlon` holds 27,694,368
-(**73.80%**) and `_holdlon` 9,834,300 (**26.21%**) — and the two sum to the parent
+(**73.80%**) and `_holdlon` 9,834,300 (**26.20%**) — and the two sum to the parent
 **exactly**, at every horizon, in every scope. So the split is a genuine partition. But
 73.80% ≠ the 76.07% pixel share, because the held-out block averages **38.54 finite
 channels per pixel against 34.13 on the trained set** (39 possible) — it is deep open
