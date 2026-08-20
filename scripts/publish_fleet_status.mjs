@@ -29,6 +29,10 @@ const boxes = (inst.instances || []).map((i) => ({
   id: i.id,
   status: i.actual_status,
   dph: Number((i.dph_total || 0).toFixed(4)),
+  // A STOPPED instance still bills storage. Omitting it understated the fleet
+  // burn by ~$0.29/h on 2026-08-20 (8 stopped 100 GB boxes), which put the
+  // status page's projected runway 2.5 h past reality on the day it mattered.
+  storage_dph: Number((i.storage_total_cost || 0).toFixed(4)),
   disk_used_gb: i.disk_util,
   disk_gb: i.disk_space,
 }));
@@ -42,7 +46,16 @@ const fleet = {
   balance_usd: Number((user.balance || 0).toFixed(4)),
   boxes_total: boxes.length,
   boxes_running: running.length,
-  burn_usd_per_h: Number(running.reduce((a, b) => a + b.dph, 0).toFixed(4)),
+  // burn = compute on running boxes + storage on STOPPED ones. A running
+  // box's dph_total already includes its own storage; a stopped box bills
+  // storage_total_cost alone. Measured 2026-08-19 20:55Z -> 2026-08-20 06:30Z
+  // against the credit ledger itself: $1.571/h actual vs $1.256/h by the old
+  // running-only formula.
+  burn_usd_per_h: Number((
+    running.reduce((a, b) => a + b.dph, 0) +
+    boxes.filter((b) => b.status !== "running")
+         .reduce((a, b) => a + b.storage_dph, 0)
+  ).toFixed(4)),
   boxes,
 };
 console.log(JSON.stringify(fleet, null, 1));

@@ -320,12 +320,12 @@ inventory but **no head carries a `section` scope block**, so it cannot be score
 **The scored-ELEMENT share is not the pixel share, and the file says so.** Each
 `chan_skill` row carries `n`, the count of finite (pixel × channel × start) values at that
 horizon. At h = 1, corridor `n` = 37,528,668, of which `_trainlon` holds 27,694,368
-(**73.79%**) and `_holdlon` 9,834,300 (**26.21%**) — and the two sum to the parent
+(**73.80%**) and `_holdlon` 9,834,300 (**26.21%**) — and the two sum to the parent
 **exactly**, at every horizon, in every scope. So the split is a genuine partition. But
-73.79% ≠ the 76.07% pixel share, because the held-out block averages **38.53 finite
+73.80% ≠ the 76.07% pixel share, because the held-out block averages **38.54 finite
 channels per pixel against 34.13 on the trained set** (39 possible) — it is deep open
 ocean with full Argo coverage, where the trained set carries shelf pixels missing the deep
-levels. Gate: 70.51% / 29.49%. Window: 70.81% / 29.19%. `n(h)` falls linearly as
+levels. Gate: 70.50% / 29.50%. Window: 70.81% / 29.19%. `n(h)` falls linearly as
 `3 × (13 − h)` accumulations, which is the staggered-start protocol: **234 scored roll
 steps per head** (78 per holdout year), plus 240 hindcast and 240 future.
 
@@ -403,7 +403,7 @@ number. **`msss_clim` is `1 − Σmse_model / Σmse_clim`, a ratio of sums, so a
 decompose linearly in pixel share and this share is not a pixel-share attribution.**
 Measured on this file, per horizon: the `n`-weighted linear blend of the two children
 differs from the parent by **+0.009 … +0.031 on the corridor** (parent BELOW the linear
-blend) and by **−0.019 … −0.028 on the gate scope** (parent ABOVE it) — the sign is
+blend) and by **−0.046 … −0.019 on the gate scope (the extreme is the gate head's own −0.046; the xl233 heads span −0.028 … −0.019)** (parent ABOVE it) — the sign is
 scope-dependent. Equivalently, the weight `w` that solves `parent = w·trainlon +
 (1−w)·holdlon` is **0.697–0.723** on the corridor and **0.746–0.764** on the gate scope,
 against `n`-shares of 0.738 and 0.705. So: quote 72.3% as *"the fraction of the published
