@@ -1703,8 +1703,24 @@ emitting; the config line reads the frozen anchor (`resumed from run-62.pt at st
 `params_M 40.693`, `eval_every 0` — eval-only, nothing trains); **`"heads": 2`**, so both
 heads were fetched and the #421 gate-alone failure is ruled out; head 1 of 2 is `s1_s0`, the
 gate, stepping at a flat **2.98 s/window**; `gpu_util` on vast 47724559 reads **99%**, so
-this is on the card and not on the CPU. Expect the gate at ~16:56Z and the xl144 head at
-~19:50Z, against `job_timeout` 700 min. **~3.5 h, ≈ $1.0.**
+this is on the card and not on the CPU.
+
+**Head 1 finished and head 2 LOADED, 17:12Z — and the head-2 label is the check that
+matters.** The gate completed its 714 steps in **1,989 s**, against #422's 1,988.5 s and
+#418's 1,993.0 s: the protocol is reproducing its own wall time to 0.2%. Head 2 then
+announced itself as **`s145rspiral:111-4444-0.71-0.5_s0`** — stencil 145, the spiral ring,
+seed 0. `rollout_spatial.py` derives that label from the head FILE's own `args`, so it
+identifies the ARTEFACT rather than the dispatch tag, and it is the one reading that rules
+out #421's failure mode by measurement instead of by a count. Head ETA **10,347 s**, so the
+artefact is expected ~**20:00Z**, against `job_timeout` 700 min. **~3.5 h, ≈ $1.0.**
+
+**Harvest instruction, so the reading is not reconstructed later.** Read
+`heads['s145rspiral:111-4444-0.71-0.5_s0'].corridor_trainlon` as the mean of its twelve
+archived `msss_clim` values (§3b's convention), against **#418's 0.86700**, and read the
+twelve values as a PROFILE against #418's `0.774 → 0.650`. Also read
+`window.chan_skill[0].msss_pers` against **0.811**, which is where §9's cross-check between
+the roll and #346's training-time `chan_t+1` lives. If those three reproduce, the roll code
+is clean on the production artefact as well as on the toy, and §9's suspects stand.
 
 **Whatever it returns, §9(ii) already holds independently**: the ring path is bit-identical
 to `BASE_SHA` on the toy, and the test that says so fails against the injected bug. #424's
