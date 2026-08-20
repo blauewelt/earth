@@ -1,0 +1,8 @@
+{
+ "steps": 200000,
+ "lr": 0.001,
+ "schedule": "expdecay",
+ "halflife": 40000,
+ "stage": "stage-2",
+ "published_at": "2026-08-20T15:10:44.253Z"
+}
