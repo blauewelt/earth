@@ -1213,8 +1213,18 @@ block, not the file's rounded `horizon_auc` field (§3b's convention).
 | window, blended / `_trainlon` / `_holdlon` | 0.93550 / 0.93625 / 0.93375 | 84,405 / 63,285 / 21,120 |
 | gate scope, blended / `_trainlon` / `_holdlon` | 0.93242 / 0.93350 / 0.92900 | 864 / 635 / 229 |
 
-**Skill is uniform across the basin.** The `_trainlon` − `_holdlon` gap is **0.0065** on the
-corridor. In the same run the gate head's gap is **0.746** (0.80425 → 0.05767); in #418 the
+**Precision first, because "the hole is gone" is easy to over-read: only STAGE 2's hole is
+gone.** The codec under this head is the unchanged frozen `f3_anchor41M`, trained by #62/#63
+**with** the −45..−25 block held out. So `_holdlon` here labels pixels the ENCODER still
+never saw and the temporal head did — which is exactly arm B's design, and it is why the
+comparison is informative at all. (Arm A, **#416**, is the run that removes the codec's hole,
+and it has no head.) The scope split itself is the same 80 columns / 7,089 corridor pixels
+as #417 and #418, from the same `holdout_lon` block and the same `corridor_def`.
+
+**Given that, skill is uniform across the basin.** The `_trainlon` − `_holdlon` gap is
+**0.0065** on the corridor. Both `_holdlon` figures below are quoted as a MECHANISM CONTRAST
+and never as levels — §3b's `_holdlon` row (2 pairs, pooled sd 0.01079, 16.4× the `_trainlon`
+sd) forbids the second reading and nothing here asks for it. In the same run the gate head's gap is **0.746** (0.80425 → 0.05767); in #418 the
 control pair's gaps are **0.646** and **0.667**. The hole that
 [§0d · the skill map's central band](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#holdout-lon-band-2026-08-19)
 identified as the dominant feature of every published skill map **is not present in this
