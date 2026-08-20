@@ -31,9 +31,18 @@ runs over three nested pixel scopes per horizon:
   window   — all window ocean pixels.
 
 Plus, per head: AMOC truefit r in horizon bands h1-3/h4-6/h7-12; a long
-hindcast (context ends --long-start, default 2004-12, rolled 240 months
-across the RAPID record, median trajectory only — E-021b owns ensembles);
-and a future roll from the record's end.
+hindcast (context ends --long-start, default 2004-12, rolled 20 years across
+the RAPID record, median trajectory only — E-021b owns ensembles); and a
+future roll from the record's end.
+
+CADENCE. Every horizon, start, band and roll step below is an AXIS STEP of
+the tensor being rolled, and the axis is DERIVED FROM THAT TENSOR (`TimeAxis`
+below) rather than assumed monthly or passed as a flag. On families 2/3 a
+step is a calendar month and this file behaves exactly as it always has,
+byte for byte (tests/test_roll_monthly_identity.py). On families 4/5 a step
+is a pentad or a day: the staggered starts span the axis's real
+steps-per-year, the RAPID truth attaches on the axis row, the season token
+comes from each bin's true date, and the band labels carry their day spans.
 
 Usage (box, GPU):
   python3 ml/rollout_spatial.py --x ml/cache/family3_X.npy \
@@ -43,6 +52,7 @@ Usage (box, GPU):
       --out ml/runs/actions/rollout_spatial.json
 """
 import argparse
+import datetime as dt
 import json
 import os
 import sys
@@ -59,6 +69,8 @@ from recon_eval import stream_stats, build_slab                 # noqa: E402
 from temporal import (TemporalTransformer, build_stencil,       # noqa: E402
                       embed_everything, rapid_section, _ring_on)
 from project_amoc import fit_ridge                              # noqa: E402
+from aggregate_cadence import (EPOCH as EPOCH_DEFAULT,          # noqa: E402
+                               bin_start)
 
 # The gate reference: #217 (ml-metrics probes-217.json), head u1_s0 —
 # e017_u1_s0 rolled by ml/rollout.py over its 600∪section subset. NOTE the
@@ -73,6 +85,285 @@ GATE_TOL = 0.0101          # plan §6.5: ±0.01 (float-boundary slack only)
 
 BANDS = (("h1-3", (1, 2, 3)), ("h4-6", (4, 5, 6)),
          ("h7-12", tuple(range(7, 13))))
+
+
+# The gate reference is a property of ONE CADENCE, not of the evaluator.
+# 0.643 was measured by ml/rollout.py over the MONTHLY family-3 axis; at
+# pentad the same head sees a different axis, a different step length and a
+# different number of starts, so the number it would have to reproduce does
+# not exist. A registry rather than a constant makes that explicit: a cadence
+# with no entry has NO reference, and the roll says so in the artefact
+# instead of passing a test it never took (see `gate_for_cadence`).
+GATE_REF_BY_CADENCE = {"monthly": GATE_REF}
+
+
+def gate_for_cadence(cadence):
+    """(reference or None, reason-when-None). One place decides."""
+    ref = GATE_REF_BY_CADENCE.get(cadence)
+    if ref is not None:
+        return ref, None
+    return None, (
+        f"no validation-gate reference exists at {cadence} cadence. The "
+        f"{GATE_HEAD} reference (auc {GATE_REF['auc']}, bands "
+        + ", ".join(f"{k} {v}" for k, v in GATE_REF["bands"].items())
+        + ") was measured by ml/rollout.py over the MONTHLY family-3 axis "
+        "(#217); it cannot certify a roll whose steps are a different "
+        "length, whose starts are a different count and whose horizon "
+        "bands span different durations. Passing it here would be a "
+        "certificate for an experiment nobody ran. The numbers below are "
+        "therefore UNCERTIFIED: report them as a first reading, and "
+        "register a reference for this cadence in GATE_REF_BY_CADENCE once "
+        "one has been measured and published.")
+
+
+def _ym_add(label, k):
+    """`YYYY-MM` advanced by k calendar months (k may be negative)."""
+    n = int(label[:4]) * 12 + int(label[5:7]) - 1 + int(k)
+    return f"{n // 12:04d}-{n % 12 + 1:02d}"
+
+
+class TimeAxis:
+    """The tensor's OWN time axis, DERIVED from its metadata — never told.
+
+    Why this class exists (2026-08-19). `ml/build_family4.py:897` emits one
+    `YYYY-MM` **label** per 5-day bin and says so in its own comment:
+    "`bin_index` remains the authoritative axis; `months` is a label". That
+    is exactly right for the two questions train.py asks of the array —
+    `m[:4]` for the year-blocked holdout and `int(m[5:7])-1` for the season
+    token — and wrong for every use that needs a UNIQUE KEY or a CALENDAR
+    STEP. This evaluator had four of those, and each was silently wrong at
+    pentad rather than loud:
+
+      * `month_index = {m: i for i, m in enumerate(months)}` collapsed 3,142
+        pentad bins to 516 keys, 6.09:1, last wins;
+      * `for s_off in range(12)` offered 12 staggered starts per holdout
+        year where the pentad axis has 73;
+      * `ym_to_r` keyed the RAPID truth attach on `YYYYMM`, discarding
+        ~83.6% of the pentad series before the band correlations;
+      * `long_roll` advanced a MONTH label AND the month-of-year context
+        token once per PENTAD step, so the model's own seasonal input ran a
+        full simulated year forward in 60 real days — a corrupted INPUT, not
+        merely a mislabelled output.
+
+    DETECTION IS FROM THE TENSOR, NOT FROM A FLAG, and it is the same test
+    `ml/probe_kfold.py:273` already uses to decode families 4/5 truth rows:
+    `"bin_index" in d`. A roll that must be TOLD its cadence will eventually
+    be told wrong, and the wrong answer looks exactly like the right one.
+
+    The step length comes from `pentad_days` (build_family4 writes it beside
+    `bin_index`) or, failing that, from the `cadence` name — and is then
+    CHECKED rather than trusted: `bin_start(bin_index[r], days)` must land in
+    the calendar month `months[r]` names, for every row. That is an exact
+    invariant with a known answer (ml/CLAUDE.md §4.9) and it fails loudly if
+    the step length, the epoch or the label array disagree.
+
+    The monthly path is pinned just as hard, because every published corridor
+    AUC came from it: labels must be UNIQUE and CALENDAR-CONTIGUOUS, which is
+    what makes `label_of_row(r) == months[r]` and lets one formula serve both
+    the in-record and the past-the-end (future roll) cases.
+    """
+
+    def __init__(self, d):
+        self.labels = [str(m) for m in d["months"]]
+        self.T = len(self.labels)
+        assert self.T > 0, "empty months array"
+        self.year = np.array([int(m[:4]) for m in self.labels])
+        self.moy = np.array([int(m[5:7]) - 1 for m in self.labels])
+        if "bin_index" in d:
+            self._init_binned(d)
+        else:
+            self._init_monthly()
+
+    # -- the two axes -----------------------------------------------------
+    def _init_monthly(self):
+        self.monthly = True
+        self.days = None
+        self.step_days = 365.2425 / 12.0
+        self.cadence = "monthly"
+        self.detected_from = ("months labels (no `bin_index` member — "
+                              "families 2/3)")
+        self.bins = None
+        seen = {}
+        for i, m in enumerate(self.labels):
+            if m in seen:
+                sys.exit(f"the months array repeats {m!r} at rows {seen[m]} "
+                         f"and {i} but carries no `bin_index`: this axis is "
+                         f"neither a unique monthly key nor a declared "
+                         f"cadence, and every index this evaluator builds "
+                         f"would silently keep one row per label. Refusing.")
+            seen[m] = i
+        self._row = seen
+        for i in range(self.T - 1):
+            if _ym_add(self.labels[i], 1) != self.labels[i + 1]:
+                sys.exit(f"monthly axis is not calendar-contiguous: row {i} "
+                         f"is {self.labels[i]} and row {i + 1} is "
+                         f"{self.labels[i + 1]}. The roll advances by ROWS "
+                         f"and labels by the calendar; with a gap the two "
+                         f"disagree and the long-roll labels would be wrong. "
+                         f"Refusing.")
+
+    def _init_binned(self, d):
+        self.monthly = False
+        bins = np.asarray(d["bin_index"]).astype(np.int64)
+        assert len(bins) == self.T, (len(bins), self.T)
+        step = np.diff(bins)
+        if self.T > 1 and not (step == 1).all():
+            bad = int(np.argmax(step != 1))
+            sys.exit(f"`bin_index` is not consecutive: row {bad} is bin "
+                     f"{bins[bad]} and row {bad + 1} is bin {bins[bad + 1]}. "
+                     f"The roll advances one AXIS ROW per step, so a gap in "
+                     f"the axis is a gap in simulated time that nothing "
+                     f"downstream could see. Refusing.")
+        name = str(d["cadence"]) if "cadence" in d else ""
+        if "pentad_days" in d:
+            days = int(np.asarray(d["pentad_days"]).item())
+            src = "`pentad_days`"
+        elif name in ("pentad", "daily"):
+            days = {"pentad": 5, "daily": 1}[name]
+            src = f"`cadence` == {name!r}"
+        else:
+            sys.exit("the tensor carries `bin_index` but neither "
+                     "`pentad_days` nor a known `cadence` name, so the "
+                     "length of one axis step is unknown. Every horizon, "
+                     "band and lowpass window this evaluator reports is "
+                     "measured in steps; without the step length it can "
+                     "only report numbers whose unit it is guessing. "
+                     "Refusing.")
+        self.days = days
+        self.step_days = float(days)
+        self.cadence = name or (f"{days}-day" if days != 5 else "pentad")
+        self.epoch = (dt.date.fromisoformat(str(d["epoch"]))
+                      if "epoch" in d else EPOCH_DEFAULT)
+        self.bins = bins
+        self.b0 = int(bins[0])
+        self.detected_from = (f"`bin_index` ({self.T} consecutive bins from "
+                              f"{self.b0}) + {src} = {days} d, epoch "
+                              f"{self.epoch}")
+        # date_of_row() is bin_start() with the TENSOR's epoch rather than the
+        # module constant; where the two epochs agree they must agree exactly,
+        # or this file is doing its own bin arithmetic (ml/CLAUDE.md §4.1).
+        if self.epoch == EPOCH_DEFAULT:
+            for r in (0, self.T // 2, self.T - 1):
+                assert self.date_of_row(r) == bin_start(int(bins[r]), days), \
+                    (f"row {r}: local bin arithmetic {self.date_of_row(r)} "
+                     f"!= aggregate_cadence.bin_start "
+                     f"{bin_start(int(bins[r]), days)}")
+        # EXACT invariant, ml/CLAUDE.md §4.9: the bin's own start date must
+        # land in the calendar month the label names, for EVERY row. This is
+        # what ties the derived step length to the stored labels; a wrong
+        # `days`, a wrong epoch or a shuffled label array cannot survive it.
+        for r in range(self.T):
+            b = self.date_of_row(r)
+            if f"{b.year:04d}-{b.month:02d}" != self.labels[r]:
+                sys.exit(f"row {r}: bin {int(bins[r])} starts {b} but the "
+                         f"label says {self.labels[r]}. The cadence derived "
+                         f"from this tensor ({days} d from {self.epoch}) "
+                         f"does not reproduce its own labels — one of the "
+                         f"two is wrong and this evaluator cannot tell "
+                         f"which. Refusing.")
+
+    # -- rows -> time ------------------------------------------------------
+    def date_of_row(self, r):
+        """Start date of axis row r. Defined for r >= T (the future roll)."""
+        if self.monthly:
+            lab = self.label_of_row(r)
+            return dt.date(int(lab[:4]), int(lab[5:7]), 1)
+        return self.epoch + dt.timedelta(
+            days=(self.b0 + int(r)) * self.days)
+
+    def label_of_row(self, r):
+        """The row's own label. `YYYY-MM` monthly, ISO date at a binned
+        cadence — the label carries the unit, so a pentad roll's trajectory
+        can never be read as a monthly one."""
+        if self.monthly:
+            return _ym_add(self.labels[0], int(r))
+        return self.date_of_row(r).isoformat()
+
+    def moy_of_row(self, r):
+        """Month-of-year (0-11) of row r, for the model's season token.
+        Defined past the end of the record, so the future roll feeds the
+        model a TRUE date rather than an incremented counter."""
+        if self.monthly:
+            return (int(self.labels[0][5:7]) - 1 + int(r)) % 12
+        return self.date_of_row(r).month - 1
+
+    # -- time -> rows ------------------------------------------------------
+    def row_of_label(self, s):
+        """Row for a `YYYY-MM` (or ISO `YYYY-MM-DD`) spec, or None.
+
+        At a binned cadence a bare `YYYY-MM` resolves to the FIRST row of
+        that month — deterministic, and the opposite of the last-wins dict
+        it replaces."""
+        if not s:
+            return None
+        if self.monthly:
+            return self._row.get(s)
+        try:
+            if len(s) >= 10:
+                d0 = dt.date(int(s[:4]), int(s[5:7]), int(s[8:10]))
+            else:
+                d0 = dt.date(int(s[:4]), int(s[5:7]), 1)
+        except ValueError:
+            return None
+        r = (d0 - self.epoch).days // self.days - self.b0
+        if len(s) < 10:                      # first row INSIDE that month
+            while 0 <= r < self.T and self.date_of_row(r) < d0:
+                r += 1
+        if not (0 <= r < self.T):
+            return None
+        if len(s) < 10 and self.labels[r] != f"{d0.year:04d}-{d0.month:02d}":
+            return None
+        return int(r)
+
+    def rows_in_year(self, Y):
+        return np.where(self.year == int(Y))[0]
+
+    def starts_for_year(self, Y):
+        """Staggered roll starts for holdout year Y, spanning the axis's
+        REAL steps-per-year: the last row before Y (so h=1 lands on Y's
+        first row) plus every row inside Y except its last.
+
+        At monthly this is exactly the old `for s_off in range(12)` list —
+        Dec(Y-1), Jan … Nov — in the same order. At pentad it is 73 starts,
+        not 12."""
+        rows = self.rows_in_year(Y)
+        if len(rows) == 0:
+            return []
+        out = [int(rows[0]) - 1] if int(rows[0]) - 1 >= 0 else []
+        return out + [int(r) for r in rows[:-1]]
+
+    # -- durations ---------------------------------------------------------
+    @property
+    def steps_per_year(self):
+        return 12.0 if self.monthly else 365.2425 / self.days
+
+    def steps_for_days(self, n_days):
+        return max(1, int(round(n_days / self.step_days)))
+
+    def steps_for_months(self, n_months):
+        """Steps covering n CALENDAR months. Exactly n at monthly."""
+        if self.monthly:
+            return int(n_months)
+        return self.steps_for_days(n_months * 365.2425 / 12.0)
+
+    def span_days(self, n_steps):
+        return round(n_steps * self.step_days, 1)
+
+    def describe(self):
+        return (f"time axis: {self.cadence} · T={self.T} · "
+                f"{self.labels[0]}..{self.labels[-1]} · "
+                f"{self.steps_per_year:.4g} steps/year · one step = "
+                f"{self.step_days:.4g} d · detected from "
+                f"{self.detected_from}")
+
+    def band_key(self, name, hs):
+        """Horizon-band label CARRYING ITS UNIT at any non-monthly cadence.
+        `h1-3` at monthly (what every published artefact calls it); at pentad
+        `h1-3_5-15d`, so a band can never be read as months by accident."""
+        if self.monthly:
+            return name
+        return (f"{name}_{self.span_days(min(hs)):g}-"
+                f"{self.span_days(max(hs)):g}d")
 
 
 def dilate8(m, iters):
@@ -504,6 +795,45 @@ def skill_block(su, H, n_px=None):
     return out
 
 
+def deseason_truth(rv, rmoy, tr_all, what):
+    """Train-month climatology, REFUSING rather than returning NaN.
+
+    `rclim[m] = rv[train & month == m].mean()` is a mean over an empty slice
+    whenever some calendar month carries no TRAINING label — and numpy's
+    answer is nan, which then flows through `rv_des` into every band
+    correlation and into the roll json as the literal `NaN` token that
+    ml/CLAUDE.md §5.22 forbids. It is a property of the INPUTS alone, so it
+    is checked here, where it has cost nothing (§5.16), and the message names
+    the months rather than leaving a reader to find them."""
+    rclim = np.zeros(12)
+    empty = []
+    for m in range(12):
+        sel = tr_all & (rmoy == m)
+        if not sel.any():
+            empty.append(m + 1)
+        else:
+            rclim[m] = rv[sel].mean()
+    if empty:
+        sys.exit(
+            f"{what}: calendar month(s) {empty} carry NO training label, so "
+            f"the train-month climatology is undefined there and every "
+            f"deseasonalised value in those months would be NaN — which "
+            f"ml/CLAUDE.md §5.22 forbids writing into a results file. "
+            f"{int(tr_all.sum())} of {len(tr_all)} labels are training "
+            f"labels. Refusing rather than scoring a series with holes in it.")
+    return rclim
+
+
+def corr_or_none(x, y):
+    """Pearson r, or None when it is not defined (a constant series, a
+    degenerate band). None is OMISSION — the shape `skill_block` already uses
+    for a scope it cannot score — never a NaN in the artefact."""
+    if len(x) < 2:
+        return None
+    r = np.corrcoef(x, y)[0, 1]
+    return None if not np.isfinite(r) else round(float(r), 3)
+
+
 def smooth(vals, k=18, min_valid=12):
     """Centred running mean — the house 18-month lowpass (plot_projection)."""
     v = np.asarray(vals, float)
@@ -550,10 +880,18 @@ def main():
     ap.add_argument("--corridor-pctl", type=float, default=75.0)
     ap.add_argument("--corridor-dilate", type=int, default=2)
     ap.add_argument("--long-start", default="2004-12",
-                    help="context end for the long hindcast; '' skips it")
-    ap.add_argument("--long-months", type=int, default=240)
-    ap.add_argument("--future-months", type=int, default=240,
-                    help="0 skips the future roll")
+                    help="context end for the long hindcast; '' skips it. "
+                         "`YYYY-MM` resolves to the FIRST row of that month "
+                         "at a binned cadence; `YYYY-MM-DD` names a bin")
+    ap.add_argument("--long-months", type=int, default=-1,
+                    help="length of the long hindcast in AXIS STEPS. The "
+                         "default -1 resolves to 20 YEARS at the tensor's "
+                         "own cadence — exactly the historical 240 at "
+                         "monthly, 1461 at pentad. A step is not a month "
+                         "once the tensor is not monthly, and a fixed 240 "
+                         "would silently become 3.3 years")
+    ap.add_argument("--future-months", type=int, default=-1,
+                    help="the same, past the end of the record; 0 skips it")
     ap.add_argument("--no-gate", action="store_true",
                     help="score without the e017_u1_s0 gate — smoke/toy ONLY")
     ap.add_argument("--amp", action="store_true",
@@ -589,10 +927,47 @@ def main():
         if missing:
             sys.exit(f"missing {', '.join(missing)} (required unless "
                      f"--export-mask-only)")
+    # THE AXIS FIRST, because the gate below is a property of the CADENCE and
+    # a gate check that does not know the cadence is the failure this whole
+    # change is about. Reading the small npz costs nothing (it holds no X), so
+    # this is still "check the precondition where the inputs are all it has
+    # cost you" (ml/CLAUDE.md §0.3).
+    d = np.load(a.npz_small, allow_pickle=False)
+    ax = TimeAxis(d)
+    months = ax.labels
+    lats, lons = d["lats"], d["lons"]
+    T = ax.T
+    moy = ax.moy
+    print(ax.describe(), flush=True)
+    if not ax.monthly:
+        # --horizon, --map-h, --long-months and --future-months are STEP
+        # counts and always were; at monthly a step is a month and nobody had
+        # to think about it. Say what they buy here, because "AUC over h=1..12"
+        # is 60 days at pentad and 12 months on every number it would be
+        # compared against — a DESIGN choice for the dispatcher, not something
+        # this file may quietly rescale (ml/CLAUDE.md §5.24).
+        print(f"  --horizon {a.horizon} = {ax.span_days(a.horizon):g} d at "
+              f"this cadence; the monthly archive's h=1..12 is 12 MONTHS, "
+              f"which here would be --horizon {ax.steps_for_months(12)}. "
+              f"--map-h {a.map_h} = {ax.span_days(a.map_h):g} d.", flush=True)
+
     # gate discipline up front, where it has cost nothing (ml/CLAUDE.md §0.3)
+    gate_ref, gate_skip = gate_for_cadence(ax.cadence)
     gate_paths = [h for h in (a.heads or [])
                   if GATE_HEAD in os.path.basename(h)]
-    if not gate_paths and not a.no_gate and not a.export_mask_only \
+    if gate_ref is None and not a.export_mask_only and not a.dump_truth:
+        # NOT a silent skip and NOT a monthly gate applied to a foreign axis.
+        # `--no-gate` is deliberately not demanded here: it is documented
+        # "smoke/toy ONLY", and making a real pentad eval wear that label to
+        # get past a check it cannot take would mislabel the run in its own
+        # artefact. The refusal to certify is RECORDED instead, in the log and
+        # in `gate.reason`, where the harvest can read it.
+        print(f"::warning::validation gate SKIPPED — {gate_skip}", flush=True)
+        if gate_paths:
+            print(f"::warning::{GATE_HEAD} was supplied but will NOT be "
+                  f"compared against its monthly reference at {ax.cadence} "
+                  f"cadence — it is scored like any other head", flush=True)
+    elif not gate_paths and not a.no_gate and not a.export_mask_only \
             and not a.dump_truth:
         sys.exit(f"no {GATE_HEAD} head among --heads and --no-gate not set: "
                  f"the validation gate (plan §6.5) is what makes any spatial "
@@ -600,13 +975,6 @@ def main():
                  f"--no-gate (smoke only)")
     heads = gate_paths + [h for h in (a.heads or [])
                           if h not in gate_paths]
-
-    d = np.load(a.npz_small, allow_pickle=False)
-    months = [str(m) for m in d["months"]]
-    lats, lons = d["lats"], d["lons"]
-    T = len(months)
-    moy = np.array([int(m[5:7]) - 1 for m in months])
-    month_index = {m: i for i, m in enumerate(months)}
     ck = torch.load(a.ckpt, map_location="cpu", weights_only=False)
     C = len(ck["chan"])
     d_z = ck["d_z"]
@@ -629,11 +997,11 @@ def main():
         rv_ = rp[:, 1].copy()
         rmoy_ = moy[ri]
         tr_ = ~t_hold[ri]
-        rclim_ = np.array([rv_[tr_ & (rmoy_ == m)].mean() for m in range(12)])
+        rclim_ = deseason_truth(rv_, rmoy_, tr_, "--dump-truth")
         des = rv_ - rclim_[rmoy_]
         os.makedirs(os.path.dirname(a.dump_truth) or ".", exist_ok=True)
         with open(a.dump_truth, "w") as fh:
-            json.dump({"ym": [months[i] for i in ri],
+            json.dump({"ym": [ax.label_of_row(i) for i in ri],
                        "sv_des": [round(float(v), 4) for v in des],
                        "trained": [bool(v) for v in tr_],
                        "hold_years": hold_years,
@@ -864,14 +1232,19 @@ def main():
     rv = rapid[:, 1].copy()
     rmoy = moy[ridx]
     tr_all = ~t_hold[ridx]
-    rclim = np.array([rv[tr_all & (rmoy == m)].mean() for m in range(12)])
+    rclim = deseason_truth(rv, rmoy, tr_all, "RAPID truth")
     rv_des = rv - rclim[rmoy]
     Fsec_true = Zsec.mean(1)
     mu_p, sd_p, w_probe, probe_val_r = fit_ridge(
         Fsec_true[ridx][tr_all], rv_des[tr_all])
-    ym_to_r = {int(months[mi][:4]) * 100 + int(months[mi][5:7]): i
-               for i, mi in enumerate(ridx)}
-    print(f"probe fit: {int(tr_all.sum())} train months, "
+    # KEYED ON THE AXIS ROW, which is what `rapid[:, 0]` already holds in
+    # every family (build_family3.py:311 writes month-indices; build_family4's
+    # truth_pentad() writes bin-row indices — ml/probe_kfold.py:276 is the
+    # precedent). The old `YYYYMM` key was identical to this at monthly and
+    # discarded 83.6% of the pentad series, because six pentad rows share one
+    # `YYYY-MM` label and the dict kept the last.
+    r_of_row = {int(mi): i for i, mi in enumerate(ridx)}
+    print(f"probe fit: {int(tr_all.sum())} train labels, "
           f"val-tail r {probe_val_r:+.3f}", flush=True)
     sec_t = torch.as_tensor(np.asarray(sec_sel), device=dev)
 
@@ -907,6 +1280,15 @@ def main():
                      (NBR >= 0).astype(np.float32)], 1)).to(dev)
         return nbr_cache[key], sctx_cache[key]
 
+    # 20 years of the AXIS, not 240 of whatever a step happens to be.
+    if a.long_months < 0:
+        a.long_months = int(round(20 * ax.steps_per_year))
+    if a.future_months < 0:
+        a.future_months = int(round(20 * ax.steps_per_year))
+    # the house 18-MONTH lowpass, in steps of THIS axis (18 at monthly)
+    lp_k = ax.steps_for_months(18)
+    lp_min = max(2, int(round(lp_k * 12 / 18)))
+
     prog = Progress(a.metrics, len(heads), every=a.progress_every)
     results = {"data": os.path.basename(a.x), "horizon": a.horizon,
                "hold_years": hold_years, "holdout_lon": holdout_lon,
@@ -915,6 +1297,39 @@ def main():
                "probe": {"val_tail_r": round(float(probe_val_r), 3)},
                "gate": {"pass": None, "skipped": True},   # overwritten below
                "heads": {}}
+    # NOTHING IS ADDED TO A MONTHLY ARTEFACT. Every published corridor AUC was
+    # written by this code on the monthly axis, and a roll json that gains a
+    # key is a roll json that no longer diffs byte-for-byte against the
+    # archive — which is the one property tests/test_roll_monthly_identity.py
+    # exists to hold. Monthly is the archive's default and reads as before;
+    # every OTHER cadence says what it is, in the artefact, where a harvest
+    # can see it.
+    if not ax.monthly:
+        results["cadence"] = {
+            "name": ax.cadence, "step_days": ax.days,
+            "steps_per_year": round(ax.steps_per_year, 4),
+            "T": ax.T, "first": ax.labels[0], "last": ax.labels[-1],
+            "detected_from": ax.detected_from,
+            "horizon_steps": a.horizon,
+            "horizon_span_days": ax.span_days(a.horizon),
+            "starts_per_holdout_year": {
+                str(Y): len(ax.starts_for_year(Y)) for Y in hold_years},
+            "long_steps": a.long_months,
+            "long_span_days": ax.span_days(a.long_months),
+            "future_steps": a.future_months,
+            "future_span_days": ax.span_days(a.future_months),
+            "lowpass_steps": lp_k, "lowpass_months": 18,
+            "map_h_span_days": ax.span_days(a.map_h),
+            "note": ("every `h` in this file is an AXIS STEP, not a month. "
+                     "The horizon-band keys carry their own day spans for "
+                     "the same reason."),
+        }
+        results["gate_ref"] = {"head": GATE_HEAD, "tol": GATE_TOL,
+                               "cadence": ax.cadence, "reference": None,
+                               "monthly_reference": dict(GATE_REF),
+                               "reason": gate_skip}
+        results["gate"] = {"pass": None, "skipped": True, "certified": False,
+                           "cadence": ax.cadence, "reason": gate_skip}
     K_seen = None
 
     for hp in heads:
@@ -953,22 +1368,23 @@ def main():
 
         Hh = a.horizon
         # planned roll steps for THIS head, computed from the protocol rather
-        # than guessed: a start at Dec(Y-1) rolls 12 months inside Y, Jan
-        # rolls 11 ... Nov rolls 1, so a holdout year costs 78 steps; then the
-        # long hindcast and the future roll are one step per month each.
+        # than guessed, and from the AXIS rather than from the calendar: a
+        # start at the last row before Y rolls min(H, |Y|) steps inside Y, the
+        # next start one fewer near the end ... so at monthly with H=12 a
+        # holdout year costs 78 steps and at pentad with 73 starts it costs
+        # 73*12 - 66 = 810; then the long hindcast and the future roll are one
+        # step per AXIS STEP each.
         n_skill = 0
         for Y in hold_years:
-            for s_off in range(12):
-                start_m = (f"{int(Y) - 1}-12" if s_off == 0
-                           else f"{Y}-{s_off:02d}")
-                s_ = month_index.get(start_m)
-                if s_ is None or s_ - K + 1 < 0 or s_ + 1 >= T:
+            for s_ in ax.starts_for_year(Y):
+                if s_ - K + 1 < 0 or s_ + 1 >= T:
                     continue
                 for h in range(1, Hh + 1):
-                    if s_ + h >= T or months[s_ + h][:4] != Y:
+                    if s_ + h >= T or ax.year[s_ + h] != int(Y):
                         break
                     n_skill += 1
-        n_long = (a.long_months if a.long_start in month_index else 0)
+        n_long = (a.long_months
+                  if ax.row_of_label(a.long_start) is not None else 0)
         prog.start_head(list(heads).index(hp) + 1, label,
                         n_skill + n_long + a.future_months)
         print(f"  {label}: {n_skill} scored roll steps + {n_long} hindcast + "
@@ -994,12 +1410,8 @@ def main():
         probe_pts = {h: [] for h in range(1, Hh + 1)}
         with torch.no_grad():
             for Y in hold_years:
-                for s_off in range(12):
-                    start_m = (f"{int(Y) - 1}-12" if s_off == 0
-                               else f"{Y}-{s_off:02d}")
-                    if start_m not in month_index:
-                        continue
-                    s = month_index[start_m]
+                for s in ax.starts_for_year(Y):
+                    start_m = ax.label_of_row(s)
                     if s - K + 1 < 0 or s + 1 >= T:
                         continue
                     Zwin = zwin_from_true(s, K)
@@ -1007,7 +1419,7 @@ def main():
                     v_pers, obs_s = std_m.get(s)
                     for h in range(1, Hh + 1):
                         t_tgt = s + h
-                        if t_tgt >= T or months[t_tgt][:4] != Y:
+                        if t_tgt >= T or ax.year[t_tgt] != int(Y):
                             break
                         # month features are the CURRENT window's months —
                         # rollout.py's mseq at step h spans s-K+h .. s+h-1;
@@ -1016,7 +1428,11 @@ def main():
                                          month_feats(cur, dev), a.chunk,
                                          a.amp)
                         Zwin = torch.cat([Zwin[:, 1:], zhat[:, None]], 1)
-                        cur = cur[1:] + [(cur[-1] + 1) % 12]
+                        # the season token of the row JUST PREDICTED, read off
+                        # its own date. `(cur[-1] + 1) % 12` advanced a MONTH
+                        # per step, which is right exactly when a step is a
+                        # month and corrupts the model's own input otherwise.
+                        cur = cur[1:] + [ax.moy_of_row(t_tgt)]
                         xhat = decode_all(codec, zhat, C, a.chunk, a.amp)
                         v_true, obs_tt = std_m.get(t_tgt)
                         op = obs_tt & obs_s
@@ -1033,11 +1449,9 @@ def main():
                         if h == a.map_h:
                             aud["px_m"] += err_.sum(axis=1)
                             aud["px_c"] += tru_.sum(axis=1)
-                        ym = (int(months[t_tgt][:4]) * 100
-                              + int(months[t_tgt][5:7]))
-                        if ym in ym_to_r:
+                        if t_tgt in r_of_row:
                             probe_pts[h].append(
-                                (s, read_sv(zhat), rv_des[ym_to_r[ym]]))
+                                (s, read_sv(zhat), rv_des[r_of_row[t_tgt]]))
                     print(f"  {label} start {start_m}: rolled", flush=True)
 
         entry = {"meta": {"file": os.path.basename(hp), "stencil": stencil,
@@ -1076,14 +1490,32 @@ def main():
         }
         entry["amoc_bands"] = {}
         for bn, hs in BANDS:
+            # the KEY carries the unit at any non-monthly cadence: `h1-3` is
+            # 1-3 months on the monthly axis and 5-15 DAYS at pentad, and a
+            # band that does not say which is a number waiting to be misread.
+            key = ax.band_key(bn, hs)
             pts = [(h, s_, pr, y) for h in hs if h <= Hh
                    for (s_, pr, y) in probe_pts.get(h, [])]
             if len(pts) >= 8:
                 pr = np.array([p[2] for p in pts])
                 tv = np.array([p[3] for p in pts])
-                entry["amoc_bands"][bn] = {
-                    "r": round(float(np.corrcoef(pr, tv)[0, 1]), 3),
-                    "n": len(pts)}
+                r_ = corr_or_none(pr, tv)
+                entry["amoc_bands"][key] = (
+                    {"r": r_, "n": len(pts)} if r_ is not None else
+                    {"n": len(pts),
+                     "undefined": ("r is not defined for this band — one of "
+                                   "the two series has zero variance over "
+                                   "its %d points; omitted rather than "
+                                   "written as NaN (ml/CLAUDE.md §5.22)"
+                                   % len(pts))})
+        if not ax.monthly:
+            entry["amoc_bands_def"] = {
+                ax.band_key(bn, hs): {
+                    "steps": [h for h in hs if h <= Hh],
+                    "step_days": ax.days,
+                    "span_days": [ax.span_days(min(hs)),
+                                  ax.span_days(max(hs))]}
+                for bn, hs in BANDS}
         for name, _ in scopes:
             if entry[name].get("chan_skill"):
                 print(f"  {label} {name}: AUC(clim) "
@@ -1092,18 +1524,19 @@ def main():
                       f"{entry[name]['chan_skill'][-1]['amp_ratio']:.3f}",
                       flush=True)
         print(f"  {label} amoc: " + " ".join(
-            f"{bn} {v['r']:+.3f}(n={v['n']})"
+            (f"{bn} {v['r']:+.3f}(n={v['n']})" if v.get("r") is not None
+             else f"{bn} UNDEFINED(n={v['n']})")
             for bn, v in entry["amoc_bands"].items()), flush=True)
 
         # ---- VALIDATION GATE (fatal, before any spatial head is scored) --
-        if hp in gate_paths and hp == gate_paths[0]:
+        if gate_ref is not None and hp in gate_paths and hp == gate_paths[0]:
             got = {"auc": entry["gate"].get("horizon_auc"),
                    "bands": {bn: entry["amoc_bands"].get(bn, {}).get("r")
                              for bn, _ in BANDS}}
             fails = []
-            if got["auc"] is None or abs(got["auc"] - GATE_REF["auc"]) > GATE_TOL:
-                fails.append(f"AUC {got['auc']} vs {GATE_REF['auc']}")
-            for bn, ref in GATE_REF["bands"].items():
+            if got["auc"] is None or abs(got["auc"] - gate_ref["auc"]) > GATE_TOL:
+                fails.append(f"AUC {got['auc']} vs {gate_ref['auc']}")
+            for bn, ref in gate_ref["bands"].items():
                 gv = got["bands"].get(bn)
                 if gv is None or abs(gv - ref) > GATE_TOL:
                     fails.append(f"{bn} {gv} vs {ref}")
@@ -1119,53 +1552,60 @@ def main():
             print(f"VALIDATION GATE PASSED: {got}", flush=True)
 
         # ---- long hindcast + future roll (median trajectory only) --------
-        def long_roll(s_end, n_months, phase="long"):
+        def long_roll(s_end, n_steps, phase="long"):
+            """Roll `n_steps` AXIS STEPS past row `s_end`.
+
+            The old body advanced a calendar month and a month-of-year token
+            once per step. At monthly that is the axis; at pentad it ran the
+            model's own seasonal input a full simulated year forward every 60
+            real days, and then attached truth on the wrong dates — a
+            corrupted INPUT, not merely a mislabelled output. Both now come
+            from the ROW: one step is one row, and the season token is that
+            row's true month.
+            """
             Zwin = zwin_from_true(s_end, K)
             cur = list(moy[s_end - K + 1: s_end + 1])
-            yy, mm = int(months[s_end][:4]), int(months[s_end][5:7])
-            sv, roll_ym = [], []
+            sv, roll_rows = [], []
             with torch.no_grad():
-                for _ in range(n_months):
-                    mm += 1
-                    if mm > 12:
-                        mm, yy = 1, yy + 1
+                for i in range(n_steps):
+                    r_next = s_end + 1 + i
                     zhat = roll_step(model, Zwin, NBR_t, static_ctx,
                                      month_feats(cur, dev), a.chunk, a.amp)
                     Zwin = torch.cat([Zwin[:, 1:], zhat[:, None]], 1)
-                    cur = cur[1:] + [(cur[-1] + 1) % 12]
+                    cur = cur[1:] + [ax.moy_of_row(r_next)]
                     prog.step(phase)
                     sv.append(read_sv(zhat))
-                    roll_ym.append(f"{yy:04d}-{mm:02d}")
-            return np.array(sv), roll_ym
+                    roll_rows.append(r_next)
+            return np.array(sv), roll_rows
 
-        if a.long_start and a.long_start in month_index \
-                and month_index[a.long_start] - K + 1 >= 0:
-            sv, roll_ym = long_roll(month_index[a.long_start], a.long_months)
+        _long_row = ax.row_of_label(a.long_start)
+        if a.long_start and _long_row is not None and _long_row - K + 1 >= 0:
+            sv, roll_rows = long_roll(_long_row, a.long_months)
+            roll_ym = [ax.label_of_row(r) for r in roll_rows]
             truth = np.full(len(sv), np.nan)
             trained = np.zeros(len(sv), bool)
-            for i, ym in enumerate(roll_ym):
-                key = int(ym[:4]) * 100 + int(ym[5:7])
-                if key in ym_to_r:
-                    truth[i] = rv_des[ym_to_r[key]]
-                    trained[i] = not t_hold[ridx[ym_to_r[key]]]
+            for i, r_ in enumerate(roll_rows):
+                if r_ in r_of_row:
+                    truth[i] = rv_des[r_of_row[r_]]
+                    trained[i] = not t_hold[ridx[r_of_row[r_]]]
 
             def _r(m_):
                 if m_.sum() < 8:
                     return None, int(m_.sum())
-                return (round(float(np.corrcoef(sv[m_], truth[m_])[0, 1]), 3),
-                        int(m_.sum()))
+                return corr_or_none(sv[m_], truth[m_]), int(m_.sum())
             fin = np.isfinite(truth)
             r_tr, n_tr = _r(fin & trained)
             r_ho, n_ho = _r(fin & ~trained)
-            sv_lp, tr_lp = smooth(sv), smooth(np.where(fin, truth, np.nan))
+            sv_lp = smooth(sv, lp_k, lp_min)
+            tr_lp = smooth(np.where(fin, truth, np.nan), lp_k, lp_min)
             both = np.isfinite(sv_lp) & np.isfinite(tr_lp)
             r_lp = amp_lp = None
-            if both.sum() >= 24:
-                r_lp = round(float(np.corrcoef(sv_lp[both],
-                                               tr_lp[both])[0, 1]), 3)
+            if both.sum() >= ax.steps_for_months(24):
+                r_lp = corr_or_none(sv_lp[both], tr_lp[both])
                 amp_lp = round(float(sv_lp[both].std()
                                      / (tr_lp[both].std() + 1e-9)), 3)
-            entry["long"] = {"context_end": a.long_start, "roll_ym": roll_ym,
+            entry["long"] = {"context_end": ax.label_of_row(_long_row),
+                             "roll_ym": roll_ym,
                              "sv_des": [round(v, 3) for v in sv.tolist()],
                              "r_trained": r_tr, "n_trained": n_tr,
                              "r_heldout": r_ho, "n_heldout": n_ho,
@@ -1174,8 +1614,10 @@ def main():
                   f"r_trained {r_tr} (n={n_tr}) · r_heldout {r_ho} "
                   f"(n={n_ho}) · lp18 r {r_lp} amp {amp_lp}", flush=True)
         if a.future_months > 0:
-            sv, roll_ym = long_roll(T - 1, a.future_months, "future")
-            entry["future"] = {"context_end": months[-1], "roll_ym": roll_ym,
+            sv, roll_rows = long_roll(T - 1, a.future_months, "future")
+            roll_ym = [ax.label_of_row(r) for r in roll_rows]
+            entry["future"] = {"context_end": ax.label_of_row(T - 1),
+                               "roll_ym": roll_ym,
                                "sv_des": [round(v, 3) for v in sv.tolist()]}
         results["heads"][label] = entry
         # WRITE AFTER EVERY HEAD, not once at the end. This eval is hours of

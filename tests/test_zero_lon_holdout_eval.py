@@ -35,13 +35,20 @@ fixes made in the same commit, which it also pins:
     training" over an empty set (§5.24: a stale reference table is worse than
     none — it gets checked, it matches nothing, and the run takes the blame).
 
-Check 5 is a different animal and is here because it shares the fixture: it is
-a TRIPWIRE for the pentad cadence, asserting that `rollout_spatial.py`'s
-`month_index` / `ym_to_r` dictionaries are NOT injective on a family-4 months
-array. They are not, by 6.09 to 1, and that is a DO-NOT-DISPATCH fact for any
-`sroll:` at pentad — see ml/recipes/xl144-zn-pentad-nolonhold.json's
-`_description`. The test asserts the defect so that whoever fixes it deletes a
-failing test rather than wondering whether anyone knew.
+Check 5 is a different animal and is here because it shares the fixture. It
+began life as a TRIPWIRE, asserting that `rollout_spatial.py`'s `month_index`
+/ `ym_to_r` dictionaries were NOT injective on a family-4 months array — 6.09
+to 1 — which was a DO-NOT-DISPATCH fact for any `sroll:` at pentad. THE ROLL
+IS CADENCE-AWARE SINCE 2026-08-19 (E-044), so the check now asserts the other
+side of the same fact: the naive month-keyed dictionaries are STILL 6.09 to 1
+on that array — that is a property of build_family4's labels and has not
+changed — and `rollout_spatial.TimeAxis`, which replaced them, is 1:1 with
+the axis, offers the axis's real number of starts, and reaches every label.
+It is deliberately kept rather than deleted: the collision is the reason the
+class exists, and a test that only checked the fix would lose the fact that
+makes it necessary. tests/test_roll_pentad_cadence.py is the end-to-end
+version; this one is the arithmetic, and it also pins that the two collapsing
+dictionaries are gone from the source rather than merely unused.
 
     python3 tests/test_zero_lon_holdout_eval.py
 
@@ -222,48 +229,80 @@ def main():
               "n_px reproduces the pre-change payload; '0,0' == 'none' as a "
               "mask over the production grid")
 
-        # ---- 5. TRIPWIRE: rollout_spatial is MONTHLY-KEYED ---------------
+        # ---- 5. the pentad axis: the defect, and the thing that fixed it -
         # family 4 emits one `YYYY-MM` LABEL per 5-day bin (build_family4.py
         # ~line 897: "`bin_index` remains the authoritative axis; `months` is
         # a label"), which is correct for the two things train.py asks of it
         # — `m[:4]` for the year holdout and `int(m[5:7])-1` for the season
-        # token — and WRONG for the two dictionaries rollout_spatial builds
-        # out of the same array, both of which need it to be a unique key.
-        # This assertion documents a defect on purpose. When somebody makes
-        # the roll cadence-aware, this check fails and they delete it; until
-        # then it is the reason `sroll:` must not be dispatched at pentad.
-        bins = np.arange(0, 3142)
+        # token — and was wrong for the two dictionaries rollout_spatial used
+        # to build out of the same array, both of which needed a unique key.
+        from rollout_spatial import TimeAxis                    # noqa: E402
+        import rollout_spatial as _rs                           # noqa: E402
+        days, b0 = 5, 0
+        bins = np.arange(b0, b0 + 3142)
         months_p = np.array(
-            ["%04d-%02d" % ((EPOCH + dt.timedelta(days=int(5 * b))).year,
-                            (EPOCH + dt.timedelta(days=int(5 * b))).month)
+            ["%04d-%02d" % ((EPOCH + dt.timedelta(days=int(days * b))).year,
+                            (EPOCH + dt.timedelta(days=int(days * b))).month)
              for b in bins])
+        # (a) THE DEFECT IS STILL THERE, in the labels. It is a property of
+        # the tensor, not of the evaluator, and it is why TimeAxis exists.
         month_index = {m: i for i, m in enumerate(months_p)}
         assert len(month_index) == 516 < len(months_p) == 3142, \
             (len(month_index), len(months_p))
         first_jan09 = int(np.where(months_p == "2009-01")[0][0])
-        assert month_index["2009-01"] != first_jan09, \
-            "the collision has gone away — re-read this check"
         assert month_index["2009-01"] == first_jan09 + 5, month_index["2009-01"]
-        # the staggered-start protocol asks for 12 starts per holdout year …
-        starts = {("%d-12" % 2008) if o == 0 else "2009-%02d" % o
-                  for o in range(12)}
-        n_pentads_2009 = int(np.char.startswith(months_p, "2009").sum())
-        assert len(starts) == 12 and n_pentads_2009 == 73, n_pentads_2009
-        # … and the RAPID truth attach keeps one pentad per calendar month
         ym_to_r = {int(months_p[m][:4]) * 100 + int(months_p[m][5:7]): i
                    for i, m in enumerate(range(len(months_p)))}
-        assert len(ym_to_r) == 516, len(ym_to_r)
-        kept = len(ym_to_r) / len(months_p)
-        assert kept < 0.17, kept
-        print("5. TRIPWIRE (expected to FAIL once the roll is cadence-aware): "
-              "on a family-4 months array rollout_spatial's month_index "
-              "collapses %d bins to %d keys (%.2f:1, last-wins), the "
-              "staggered protocol offers 12 of %d starts per holdout year, "
-              "and ym_to_r discards %.1f%% of the pentad RAPID series. "
-              "sroll: at pentad is BLOCKED on this."
+        assert len(ym_to_r) == 516 and len(ym_to_r) / len(months_p) < 0.17
+
+        # (b) AND THE ROLL NO LONGER BUILDS EITHER OF THEM. Not "does not use
+        # them" — does not contain them: a collapsing dict left in the file is
+        # one edit away from being read again.
+        src = open(os.path.join(ML, "rollout_spatial.py")).read()
+        body = "\n".join(l for l in src.splitlines()
+                          if not l.lstrip().startswith(("#", "*")))
+        for gone in ("month_index = {", "ym_to_r = {"):
+            assert gone not in body, \
+                f"{gone!r} is back in rollout_spatial.py — that dictionary " \
+                f"keeps one pentad row in six"
+
+        # (c) what replaced them, on the same 3,142-bin array
+        ax = TimeAxis({"months": months_p, "bin_index": bins,
+                       "pentad_days": np.array(days),
+                       "cadence": np.array("pentad"),
+                       "epoch": np.array(str(EPOCH))})
+        assert ax.cadence == "pentad" and ax.days == days and ax.T == 3142
+        assert len({ax.label_of_row(r) for r in range(ax.T)}) == ax.T
+        assert [ax.row_of_label(ax.label_of_row(r)) for r in range(0, ax.T, 7)] \
+            == list(range(0, ax.T, 7))
+        assert ax.row_of_label("2009-01") == first_jan09, \
+            "a bare YYYY-MM must resolve to the FIRST row of that month"
+        n_2009 = int((ax.year == 2009).sum())
+        starts = ax.starts_for_year("2009")
+        assert n_2009 == 73 and len(starts) == 73, (n_2009, len(starts))
+        # the truth attach, keyed the way the roll now keys it: every axis row
+        # that carries a label is reachable, where YYYYMM reached 16.4%.
+        ridx = np.arange(ax.T)
+        r_of_row = {int(r): i for i, r in enumerate(ridx)}
+        assert len(r_of_row) == ax.T
+        # and the band labels carry their real durations at this cadence
+        keys = [ax.band_key(bn, hs) for bn, hs in _rs.BANDS]
+        assert keys == ["h1-3_5-15d", "h4-6_20-30d", "h7-12_35-60d"], keys
+        # the gate cannot certify this axis, and says so instead of passing
+        ref, why = _rs.gate_for_cadence(ax.cadence)
+        assert ref is None and "MONTHLY" in why and _rs.GATE_HEAD in why
+        assert _rs.gate_for_cadence("monthly")[0] == _rs.GATE_REF
+        print("5. on a real 3,142-bin family-4 months array the LABELS still "
+              "collapse %d bins to %d keys (%.2f:1, last-wins) — that is the "
+              "tensor's property and the reason TimeAxis exists. The roll "
+              "builds neither collapsing dict any more: its axis is 1:1 "
+              "(%d labels, %d rows), 2009 gets %d staggered starts instead "
+              "of 12, the row-keyed truth index reaches %d of %d rows "
+              "(100.0%% vs 16.4%%), the bands are labelled %s, and the "
+              "monthly gate refuses to certify a pentad roll."
               % (len(months_p), len(month_index),
-                 len(months_p) / len(month_index), n_pentads_2009,
-                 100 * (1 - kept)))
+                 len(months_p) / len(month_index), ax.T, ax.T, len(starts),
+                 len(r_of_row), ax.T, ", ".join(keys)))
 
         print("\nzero-longitude-holdout eval path: all 5 checks hold ✓")
     finally:

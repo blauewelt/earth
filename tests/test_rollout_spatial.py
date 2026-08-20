@@ -13,6 +13,7 @@ refusal fires when no gate head is supplied.
 
     python3 tests/test_rollout_spatial.py
 """
+import datetime as dt
 import json
 import os
 import shutil
@@ -31,15 +32,41 @@ from recon_eval import stream_stats, build_slab               # noqa: E402
 from temporal import TemporalTransformer, embed_everything    # noqa: E402
 
 T_M, H_G, W_G, C, DZ, K = 44, 8, 10, 5, 4, 6
+EPOCH = dt.date(1982, 1, 1)
+# a 2-year PENTAD axis, 73 bins a year — enough for one holdout year with the
+# staggered starts the real protocol asks for, and small enough to embed on a
+# laptop. 1990-01-04 is the first bin START inside 1990.
+PENTAD_DAYS = 5
+PENTAD_B0 = (dt.date(1990, 1, 1) - EPOCH).days // PENTAD_DAYS + 1
+T_P = 146
 
 
-def build_fixture(tmp, holdout_lon="-45,-44"):
+def pentad_labels(b0=PENTAD_B0, n=T_P, days=PENTAD_DAYS):
+    """(bin indices, `YYYY-MM` labels) exactly as ml/build_family4.py emits
+    them: one label per bin, from the bin's START date — so six consecutive
+    rows share a label, which is the whole defect this fixture exists for."""
+    bins = np.arange(b0, b0 + n, dtype=np.int64)
+    lab = []
+    for b in bins:
+        d0 = EPOCH + dt.timedelta(days=int(b) * days)
+        lab.append(f"{d0.year:04d}-{d0.month:02d}")
+    return bins, np.array(lab)
+
+
+def build_fixture(tmp, holdout_lon="-45,-44", cadence_days=0):
     """The toy production inputs, as a reusable dict of paths.
 
     Extracted from this test's main() so tests/test_roll_holdout_lon.py can
     score the SAME synthetic ocean this one rolls, instead of standing up a
     second toy that would drift from it. Returns the paths, plus the arrays a
     caller needs to check the script's own arithmetic against.
+
+    `cadence_days` 0 builds the MONTHLY toy (families 2/3: a `months` array
+    and nothing else). 5 builds a PENTAD toy shaped like family 4 — the same
+    ocean and the same codec, but a `bin_index` axis, `pentad_days`, `cadence`
+    and `epoch` beside a `months` array that repeats every label six times,
+    and RAPID truth stored as (AXIS ROW, value) pairs, which is what
+    build_family4's truth_pentad() writes.
 
     `holdout_lon` is the spec written into the checkpoint's `args`, and the
     SAME spec is used to build the Z cache's anomaly statistics — the two
@@ -50,21 +77,37 @@ def build_fixture(tmp, holdout_lon="-45,-44"):
     `_holdlon` scopes ZERO pixels.
     """
     rng = np.random.default_rng(0)
-    t = np.arange(T_M)[:, None, None, None]
-    X = (np.sin(2 * np.pi * t / 12) + 0.4 * (t / T_M)
-         + 0.3 * rng.standard_normal((T_M, H_G, W_G, C))).astype(np.float32)
+    T = T_M if not cadence_days else T_P
+    spy = 12.0 if not cadence_days else 365.2425 / cadence_days
+    t = np.arange(T)[:, None, None, None]
+    X = (np.sin(2 * np.pi * t / spy) + 0.4 * (t / T)
+         + 0.3 * rng.standard_normal((T, H_G, W_G, C))).astype(np.float32)
     X[:, 0, 0, :] = np.nan                    # land, so NBR misses fire
     xpath = os.path.join(tmp, "X.npy")
     np.save(xpath, X)
-    months = np.array([f"{1990 + i // 12}-{i % 12 + 1:02d}"
-                       for i in range(T_M)])
+    extra = {}
+    if cadence_days:
+        bins, months = pentad_labels(n=T, days=cadence_days)
+        extra = dict(bin_index=bins, pentad_days=np.array(cadence_days),
+                     cadence=np.array("pentad"), epoch=np.array(str(EPOCH)))
+    else:
+        months = np.array([f"{1990 + i // 12}-{i % 12 + 1:02d}"
+                           for i in range(T)])
     lats = np.linspace(20, 40, H_G).astype(np.float32)
     lons = np.linspace(-60, -40, W_G).astype(np.float32)
-    ridx = np.arange(K, T_M)                  # RAPID truth from month K
+    # RAPID truth. Monthly: from row K, the historical fixture. Pentad: from
+    # row 0 with one row in seven MISSING, because the pentad truth series is
+    # neither complete nor month-aligned — and a fixture where every row
+    # carries a label could not tell "attaches on the axis row" apart from
+    # "attaches to everything". Every calendar month must appear among the
+    # TRAIN rows, or the train-month climatology is undefined and the roll
+    # (correctly) refuses.
+    ridx = (np.arange(K, T) if not cadence_days
+            else np.array([r for r in range(T) if r % 7 != 3]))
     rapid = np.stack([ridx.astype(float),
                       2.79 * rng.standard_normal(len(ridx))], 1)
     npz = os.path.join(tmp, "small.npz")
-    np.savez(npz, months=months, lats=lats, lons=lons, rapid=rapid)
+    np.savez(npz, months=months, lats=lats, lons=lons, rapid=rapid, **extra)
 
     codec = PixelMAE(n_chan=C, d_model=16, n_heads=2, n_layers=2,
                      d_z=DZ, d_dec=16, patch=3)
@@ -74,12 +117,14 @@ def build_fixture(tmp, holdout_lon="-45,-44"):
                 "d_z": DZ, "norm": None, "step": 0,
                 "args": {"patch": 3, "d_model": 16, "n_layers": 2,
                          "n_heads": 2, "d_dec": 16,
-                         "holdout_years": "1992",
+                         "holdout_years": "1992" if not cadence_days
+                                          else "1991",
                          "holdout_lon": holdout_lon}}, ckpt)
 
     # ---- Z cache: embed the toy exactly as production embeds ---------
     moy = np.array([int(m[5:7]) - 1 for m in months])
-    t_hold = np.array([m[:4] == "1992" for m in months])
+    t_hold = np.array([m[:4] == ("1992" if not cadence_days else "1991")
+                       for m in months])
     _lo, _hi = (float(v) for v in holdout_lon.split(","))
     x_hold = (lons >= _lo) & (lons < _hi)
     Xm = np.load(xpath, mmap_mode="r")
@@ -111,7 +156,9 @@ def build_fixture(tmp, holdout_lon="-45,-44"):
 
     return {"x": xpath, "npz": npz, "z": zpath, "ckpt": ckpt,
             "heads": heads, "lons": lons, "x_hold": x_hold,
-            "t_hold": t_hold, "ocean": ocean, "P": int(ocean.sum())}
+            "t_hold": t_hold, "ocean": ocean, "P": int(ocean.sum()),
+            "months": months, "T": T, "cadence_days": cadence_days,
+            "ridx": ridx, "K": K}
 
 
 def main():
