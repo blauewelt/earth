@@ -285,9 +285,11 @@ def main():
         ridx = np.arange(ax.T)
         r_of_row = {int(r): i for i, r in enumerate(ridx)}
         assert len(r_of_row) == ax.T
-        # and the band labels carry their real durations at this cadence
-        keys = [ax.band_key(bn, hs) for bn, hs in _rs.BANDS]
-        assert keys == ["h1-3_5-15d", "h4-6_20-30d", "h7-12_35-60d"], keys
+        # and the bands span the same DURATIONS they do at monthly (the edges
+        # are days, not steps — E-044, 2026-08-20), with keys that carry them
+        keys = [ax.band_key(bn, hs) for bn, hs in ax.bands()]
+        assert keys == ["h1-18_5-90d", "h19-36_95-180d",
+                        "h37-73_185-365d"], keys
         # the gate cannot certify this axis, and says so instead of passing
         ref, why = _rs.gate_for_cadence(ax.cadence)
         assert ref is None and "MONTHLY" in why and _rs.GATE_HEAD in why

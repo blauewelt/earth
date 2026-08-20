@@ -18,6 +18,7 @@ three artefacts.
 
     python3 tests/test_sroll_wiring.py
 """
+import datetime as dt
 import json
 import os
 import re
@@ -58,14 +59,25 @@ def sandbox():
     return tmp, cache, bin_
 
 
+EPOCH = dt.date(1982, 1, 1)
+
+
 def make_tensor(path, T=8, H=4, W=5, C=3, cadence=None):
     rng = np.random.default_rng(0)
     X = rng.standard_normal((T, H, W, C)).astype(np.float32)
     months = np.array([f"1990-{i % 12 + 1:02d}" for i in range(T)])
     kw = {}
     if cadence:
-        kw = dict(bin_index=np.arange(1000, 1000 + T),
-                  pentad_days=np.array(cadence), cadence=np.array("pentad"))
+        # the LABELS must be the bins' own calendar months. TimeAxis checks
+        # that for every row and refuses otherwise (ml/CLAUDE.md §4.9), which
+        # is the point — so a fixture that wants to reach the horizon
+        # derivation has to be a consistent axis, not a shaped one.
+        bins = np.arange(1000, 1000 + T)
+        d0 = [EPOCH + dt.timedelta(days=int(b) * cadence) for b in bins]
+        months = np.array([f"{d.year:04d}-{d.month:02d}" for d in d0])
+        kw = dict(bin_index=bins, pentad_days=np.array(cadence),
+                  cadence=np.array("pentad"),
+                  epoch=np.array(str(EPOCH)))
     np.savez(path, X=X, months=months, lats=np.arange(H, dtype=np.float32),
              lons=np.arange(W, dtype=np.float32),
              chan=np.array([f"c{i}" for i in range(C)]),
@@ -94,17 +106,19 @@ def run(tmp, bin_, window, env=None):
 def verify_block():
     """The script's OWN final check, lifted from the file it ships in."""
     src = open(os.path.join(ROOT, SCRIPT)).read()
-    m = re.search(r'python - "\$OUT" <<\'PYEOF\'\n(.*?)\nPYEOF\n', src, re.S)
+    m = re.search(r'python - "\$OUT" "\$HORIZON" <<\'PYEOF\'\n(.*?)\nPYEOF\n',
+                  src, re.S)
     assert m, "the final verification heredoc is no longer where this test looks"
     return m.group(1)
 
 
-def check_artefact(payload, tmp):
+def check_artefact(payload, tmp, horizon=None):
     p = os.path.join(tmp, "art.json")
     json.dump(payload, open(p, "w"))
     src = os.path.join(tmp, "verify.py")
     open(src, "w").write(verify_block())
-    return subprocess.run([sys.executable, src, p], capture_output=True,
+    h = str(horizon if horizon is not None else payload.get("horizon", 12))
+    return subprocess.run([sys.executable, src, p, h], capture_output=True,
                           text=True, cwd=ROOT)
 
 
@@ -177,13 +191,16 @@ def main():
               "real numbers belonging to the wrong rows")
 
         # ---- 5. the final check: pass, uncertified, and the bad case -----
-        head = {"corridor": {"chan_skill": [{"h": 1}], "horizon_auc": 0.5},
+        head = {"corridor": {"chan_skill": [{"h": 1}], "horizon_auc": 0.5,
+                             "horizon_auc_daymatched": 0.5},
                 "window": {"horizon_auc": 0.4}}
-        ok_m = {"gate": {"pass": True}, "heads": {"a": head}}
+        ok_m = {"gate": {"pass": True}, "horizon": 12,
+                "heads": {"a": head}}
         r1 = check_artefact(ok_m, tmp)
         assert r1.returncode == 0 and "gate: PASSED" in r1.stdout, r1
 
-        bad_m = {"gate": {"pass": None, "skipped": True}, "heads": {"a": head}}
+        bad_m = {"gate": {"pass": None, "skipped": True}, "horizon": 12,
+                 "heads": {"a": head}}
         r2 = check_artefact(bad_m, tmp)
         assert r2.returncode != 0, \
             "a MONTHLY roll whose gate was skipped was accepted — the " \
@@ -192,13 +209,22 @@ def main():
         pentad = {"gate": {"pass": None, "skipped": True, "certified": False,
                            "cadence": "pentad", "reason": "no reference at "
                            "pentad cadence; the monthly one cannot certify it"},
+                  "horizon": 73,
                   "cadence": {"name": "pentad", "step_days": 5,
-                              "horizon_steps": 12, "horizon_span_days": 60.0},
+                              "horizon_steps": 73,
+                              "horizon_span_days": 365.0,
+                              "horizon_daymatched_steps": 73,
+                              "horizon_is_daymatched": True,
+                              "starts_per_year": 3,
+                              "starts_available_per_holdout_year": {
+                                  "2009": 73, "2017": 73, "2023": 73},
+                              "daymatched_leads": [6, 12, 18, 24, 30, 37, 43,
+                                                   49, 55, 61, 67, 73]},
                   "heads": {"a": head}}
         r3 = check_artefact(pentad, tmp)
         assert r3.returncode == 0, r3.stderr[-800:]
         assert "NOT CERTIFIED at pentad cadence" in r3.stdout, r3.stdout
-        assert "60" in r3.stdout, r3.stdout
+        assert "365" in r3.stdout, r3.stdout
 
         mute = dict(pentad, gate={"pass": None, "skipped": True,
                                   "certified": False, "cadence": "pentad"})
@@ -212,10 +238,130 @@ def main():
               "step length, and a pentad skip with NO recorded reason fails "
               "(rc %d)" % (r2.returncode, r4.returncode))
 
-        print("\nsroll_run.sh wiring: all 5 checks hold ✓")
+        # ---- 6. THE HORIZON IS DERIVED AND PASSED (E-044 item 1) --------
+        # Until 2026-08-20 the invocation carried no --horizon at all, so a
+        # pentad roll took argparse's literal 12 = 60 DAYS and would have been
+        # reported beside the monthly archive's 365. What is checked here is
+        # the COMMAND LINE the script builds, captured by a `python` shim that
+        # records argv and exits 1 — the script's own flags, not a rehearsal
+        # of them. (rc 1 stops it at the roll, which is all this asks about.)
+        tmp3, cache3, bin3 = sandbox()
+        tpath3 = os.path.join(cache3, "family3_na025.npz")
+        make_tensor(tpath3)
+        ck3 = os.path.join(cache3, "toy_codec.pt")
+        make_ckpt(ck3)
+        wh3 = codec_weight_hash(torch.load(ck3, map_location="cpu",
+                                           weights_only=False))
+        dh3 = data_fingerprint(tpath3)
+        np.save(os.path.join(cache3, f"Z_actions_{wh3}_{dh3}.npy"),
+                np.zeros((8, 4, 4), np.float16))
+        # a pentad tensor beside it, same ocean, so the SAME script call can
+        # be asked what it does at each cadence
+        pent = os.path.join(cache3, "family4_na025_pentad_r2.npz")
+        make_tensor(pent, cadence=5)
+        dhp = data_fingerprint(pent)
+        np.save(os.path.join(cache3, f"Z_actions_{wh3}_{dhp}.npy"),
+                np.zeros((8, 4, 4), np.float16))
+        os.makedirs(os.path.join(tmp3, "ml", "runs", "heads"), exist_ok=True)
+        open(os.path.join(tmp3, "ml", "runs", "heads", "h1.pt"), "w").write("x")
+        argv_log = os.path.join(tmp3, "argv.log")
+        real_py = sys.executable
+        with open(os.path.join(bin3, "python"), "w") as fh:
+            fh.write(
+                "#!/bin/sh\n"
+                'if [ "$2" = "ml/rollout_spatial.py" ] || '
+                '[ "$1" = "ml/rollout_spatial.py" ]; then\n'
+                f'  echo "$@" >> {argv_log}\n'
+                '  echo "::error::stub roll" >&2\n  exit 1\nfi\n'
+                f'exec {real_py} "$@"\n')
+        os.chmod(os.path.join(bin3, "python"), 0o755)
+        # a `curl` that "downloads" the head, so HPATHS is non-empty
+        with open(os.path.join(bin3, "curl"), "w") as fh:
+            fh.write('#!/bin/sh\nfor a in "$@"; do case "$a" in '
+                     '*/h1__temporal.pt) shift; ;; esac; done\n'
+                     'o=""; p=""\nwhile [ $# -gt 0 ]; do case "$1" in '
+                     '-o) o="$2"; shift 2;; -*) shift;; *) p="$1"; shift;; '
+                     'esac; done\n'
+                     'case "$p" in *h1__temporal.pt) echo x > "$o"; exit 0;; '
+                     'esac\nexit 22\n')
+        os.chmod(os.path.join(bin3, "curl"), 0o755)
+
+        def roll_argv(window, tensor):
+            open(argv_log, "w").close()
+            r = run(tmp3, bin3, window, {"TENSOR": f"ml/cache/{tensor}"})
+            line = open(argv_log).read().strip().splitlines()
+            return (line[-1].split() if line else []), r
+
+        ck_rel = os.path.relpath(ck3, tmp3)
+        av_m, r_m = roll_argv(f"sroll:h1,ckpt:{ck_rel}", "family3_na025.npz")
+        av_p, r_p = roll_argv(f"sroll:h1,ckpt:{ck_rel}",
+                              "family4_na025_pentad_r2.npz")
+        assert av_m and av_p, (r_m.stdout[-1500:], r_p.stdout[-1500:])
+        assert "--horizon" in av_m and "--horizon" in av_p, (av_m, av_p)
+        h_m = av_m[av_m.index("--horizon") + 1]
+        h_p = av_p[av_p.index("--horizon") + 1]
+        assert h_m == "12", ("monthly must still be the archive's 12", av_m)
+        assert h_p == "73", ("pentad must be day-matched to 12 months, "
+                             "i.e. 73 steps = 365.0 d", av_p)
+        assert "--starts-per-year" not in av_m + av_p, \
+            "the starts knob must NOT be defaulted — it is a cost decision"
+        # item 4: long/future are NOT passed without an override, because the
+        # roll's own defaults resolve to 20 years of ITS axis at either cadence
+        assert "--long-months" not in av_m + av_p, av_p
+        assert "--future-months" not in av_m + av_p, av_p
+        assert "365" in r_p.stdout and "60" not in h_p, r_p.stdout[-800:]
+        print("6. the script DERIVES the horizon from the tensor and passes "
+              "it explicitly: --horizon %s at monthly (the archive's 12 "
+              "months, argparse's own default, so the artefact is unchanged) "
+              "and --horizon %s at pentad (365.0 d, not the silent 60 d the "
+              "missing flag used to buy). --starts-per-year, --long-months "
+              "and --future-months are absent, so the roll's cadence-correct "
+              "defaults govern" % (h_m, h_p))
+
+        # ---- 7. the tokens that override them (items 2 and 4) -----------
+        av, _ = roll_argv(
+            f"sroll:h1,ckpt:{ck_rel},horizon:36,starts:3,long:99,future:0",
+            "family4_na025_pentad_r2.npz")
+        for flag, val in (("--horizon", "36"), ("--starts-per-year", "3"),
+                          ("--long-months", "99"), ("--future-months", "0")):
+            assert flag in av and av[av.index(flag) + 1] == val, (flag, av)
+        _, r_bad = roll_argv(f"sroll:h1,ckpt:{ck_rel},horizon:x",
+                             "family4_na025_pentad_r2.npz")
+        assert r_bad.returncode != 0 and "whole number" in r_bad.stdout, \
+            r_bad.stdout[-600:]
+        assert "embed cache key" not in r_bad.stdout, \
+            "the bad-token refusal fired after doing work"
+        _, r_unk = roll_argv(f"sroll:h1,ckpt:{ck_rel},starts_per_year:3",
+                             "family4_na025_pentad_r2.npz")
+        assert r_unk.returncode != 0 and "unknown sroll token" in r_unk.stdout
+        print("7. `horizon:`/`starts:`/`long:`/`future:` reach the roll as "
+              "--horizon 36 --starts-per-year 3 --long-months 99 "
+              "--future-months 0; a non-numeric value is refused before any "
+              "hashing or extraction (rc %d) and an unknown token is still "
+              "refused (rc %d)" % (r_bad.returncode, r_unk.returncode))
+
+        # ---- 8. the dispatch numbers live in the header (item 5) --------
+        src = open(os.path.join(ROOT, SCRIPT)).read()
+        head = src[:src.index("set -e")]
+        for want in ("job_timeout", ">= 1000", ">= 1900", "starts:3",
+                     "1,461", "20 YEARS", "UNVERIFIED"):
+            assert want in head, (
+                f"{want!r} is not in sroll_run.sh's header. A dispatcher "
+                f"copying this pattern reads this file and nothing else, so "
+                f"the timeout arithmetic and the reason long/future are left "
+                f"alone have to be HERE (ml/CLAUDE.md §5.24).")
+        print("8. the header carries the dispatch numbers a copier needs: "
+              "job_timeout >= 1000 min for one pentad head and >= 1900 for a "
+              "pair, why --long-months/--future-months are left to the roll's "
+              "own 20-years-of-this-axis defaults (1,461 at pentad), the "
+              "starts:3 recommendation, and the UNVERIFIED marker on every "
+              "hour of it")
+
+        print("\nsroll_run.sh wiring: all 8 checks hold ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         shutil.rmtree(tmp2, ignore_errors=True)
+        shutil.rmtree(locals().get("tmp3", tmp), ignore_errors=True)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,53 @@
 #!/usr/bin/env bash
 # E-022 / E-044 spatial rollout eval — the body of the `sroll:` window token.
 #
-# Spec: sroll:<tag,tag,...>[,ckpt:<asset|path>]
+# Spec: sroll:<tag,tag,...>[,ckpt:<asset|path>][,horizon:N][,starts:N]
+#                          [,long:N][,future:N]
 #   e.g. sroll:e017_u1_s0,e017_u1_s1,e022s9_u1_s0,e022s13_u1_s0
-#        sroll:e044x144zn_u1_s0,ckpt:run-415.pt
+#        sroll:e044x144zn_u1_s0,ckpt:run-415.pt,starts:3
+#
+# THE HORIZON, THE STARTS AND THE JOB TIMEOUT (2026-08-20, E-044). Everything
+# in this block is a DISPATCH decision; it lives here because a dispatcher
+# copying the sroll pattern reads this file and nothing else.
+#
+#   horizon:N  rolled horizon in AXIS STEPS. OMIT IT and this script computes
+#              the DAY-MATCHED value from the tensor itself
+#              (`TimeAxis.steps_for_months(12)`) and passes it explicitly —
+#              12 at monthly, which is the argparse default and every
+#              archived roll, and 73 (365.0 d) at pentad. Until today the
+#              script passed no --horizon at all, so a pentad roll silently
+#              took the literal 12 = 60 DAYS and would have been reported
+#              beside the monthly archive's 365 (ml/recipes/
+#              xl144-zn-pentad-nolonhold.json `_description`, "THE HORIZON
+#              DECISION"). Pass it only to score something OTHER than the
+#              archive's twelve months; rollout_spatial.py then warns, in the
+#              artefact's log, that the resulting `horizon_auc` is not
+#              comparable with anything published.
+#   starts:N   staggered starts per holdout year: every k-th of the year's
+#              list, k = len(list)//N, first N. OMITTED = all of them, which
+#              is the monthly protocol's 12 and pentad's 73. E-044 RECOMMENDS
+#              starts:3 at pentad — stride 24 pentads, phases near
+#              1 Jan / 1 May / 1 Sep, the smallest count giving more than one
+#              seasonal phase. Not defaulted here on purpose: it is a COST
+#              decision, and 73 starts is a 34.6x monthly scored-step count.
+#   long:N     ) OMIT BOTH unless the dispatch deliberately overrides them.
+#   future:N   ) rollout_spatial.py's defaults are ALREADY day-correct since
+#              e9f3d8d: `--long-months`/`--future-months` default to -1, which
+#              resolves to `round(20 * ax.steps_per_year)` — exactly the
+#              historical 240 at monthly and 1,461 at pentad, i.e. 20 YEARS
+#              of the tensor's own axis at either cadence. Passing 240
+#              explicitly would silently become 3.3 years at pentad, so the
+#              trustworthy thing here is to pass NOTHING. The tokens exist
+#              only so a shortened hindcast is possible and VISIBLE.
+#
+#   job_timeout. #417's monthly sroll rolled three heads in 700 min. One
+#   PENTAD head at horizon:73,starts:3 is 3,363 roll steps against a monthly
+#   head's 714 — 4.71x — which at the measured monthly rate of ~15.1 s/step is
+#   ~14.1 h. So: job_timeout >= 1000 (minutes) for ONE pentad head, >= 1900
+#   for a seed pair. UNVERIFIED: every one of those hours is arithmetic over
+#   the MONTHLY per-step rate; nothing has ever rolled the pentad tensor. The
+#   first progress record in ml-live-<n> settles it in minutes — read it
+#   before letting a 14-hour job run.
 #
 # Pulls each published stage-2 head and rolls it over ALL window ocean
 # pixels with ml/rollout_spatial.py — the only evaluator that can feed a
@@ -51,12 +95,30 @@ WINDOW="${1:?usage: sroll_run.sh 'sroll:<tag,tag,...>[,ckpt:<asset|path>]'}"
 SPEC="${WINDOW#sroll:}"
 TAGS=""
 CKPT_SPEC=""
+HORIZON_TOK=""
+STARTS_TOK=""
+LONG_TOK=""
+FUTURE_TOK=""
+# A token whose value must be a step count is CHECKED here, where the inputs
+# are all it has cost (ml/CLAUDE.md §0.3/§5.16). `horizon:x` would otherwise
+# reach argparse as a string, die there, and take the whole dispatch with it
+# after the tensor pull and the extraction.
+want_int() {                       # want_int <token> <value>
+  case "$2" in
+    ''|*[!0-9]*) echo "::error::sroll token '$1' needs a whole number of AXIS"
+                 echo "::error::STEPS, got '$2'"; exit 1 ;;
+  esac
+}
 for tok in ${SPEC//,/ }; do
   case "$tok" in
-    ckpt:*) CKPT_SPEC="${tok#ckpt:}" ;;
-    *:*)    echo "::error::unknown sroll token '$tok'"; exit 1 ;;
-    "")     ;;
-    *)      TAGS="$TAGS $tok" ;;
+    ckpt:*)    CKPT_SPEC="${tok#ckpt:}" ;;
+    horizon:*) HORIZON_TOK="${tok#horizon:}"; want_int horizon "$HORIZON_TOK" ;;
+    starts:*)  STARTS_TOK="${tok#starts:}";   want_int starts  "$STARTS_TOK" ;;
+    long:*)    LONG_TOK="${tok#long:}";       want_int long    "$LONG_TOK" ;;
+    future:*)  FUTURE_TOK="${tok#future:}";   want_int future  "$FUTURE_TOK" ;;
+    *:*)       echo "::error::unknown sroll token '$tok'"; exit 1 ;;
+    "")        ;;
+    *)         TAGS="$TAGS $tok" ;;
   esac
 done
 [ -n "$TAGS" ] || { echo "::error::no head tags in '$WINDOW'"; exit 1; }
@@ -91,6 +153,52 @@ else
 fi
 [ -s "$CKPT" ] || { echo "::error::codec checkpoint $CKPT is missing/empty"; exit 1; }
 echo "codec: $CKPT ($(stat -c%s "$CKPT") bytes)"
+
+# ---- the HORIZON, in DAYS, derived from the tensor ------------------------
+# rollout_spatial.py's --horizon is a count of AXIS STEPS and stays one — it
+# is not this script's business to rescale a flag (ml/CLAUDE.md §5.24). It IS
+# this script's business not to leave it implicit: an omitted --horizon takes
+# argparse's literal 12, which is the archive's twelve months on families 2/3
+# and SIXTY DAYS on family 4. So the day-matched step count is computed HERE,
+# from the same TimeAxis the roll will build, and passed explicitly. At
+# monthly that is the literal 12 and the artefact is bit-identical to every
+# archived one; at pentad it is 73 = 365.0 d. Costs one import before any
+# extraction or GPU (§0.3) and prints what it will spend the day on.
+AXIS="$(python - "$TENSOR" <<'PY_AXIS'
+import sys
+sys.path.insert(0, "ml")
+import numpy as np
+from rollout_spatial import TimeAxis
+ax = TimeAxis(np.load(sys.argv[1], allow_pickle=False))
+h = ax.steps_for_months(12)
+print(f"{ax.cadence} {h} {ax.span_days(h):g} {ax.step_days:g} "
+      f"{len(ax.bands())}")
+PY_AXIS
+)" || { echo "::error::could not read the tensor's time axis — the horizon"
+        echo "::error::below would be a guess about what a step means"; exit 1; }
+read -r CADENCE H_DAYMATCH H_SPAN_D STEP_D N_BANDS <<< "$(echo "$AXIS" | tail -1)"
+[ -n "$H_DAYMATCH" ] || { echo "::error::empty time axis read: '$AXIS'"; exit 1; }
+HORIZON="${HORIZON_TOK:-$H_DAYMATCH}"
+echo "axis: $CADENCE · one step = ${STEP_D} d · 12 months = ${H_DAYMATCH} steps = ${H_SPAN_D} d"
+if [ -n "$HORIZON_TOK" ]; then
+  echo "horizon: $HORIZON steps (window token horizon:$HORIZON_TOK)"
+  [ "$HORIZON_TOK" = "$H_DAYMATCH" ] || \
+    echo "::warning::horizon:$HORIZON_TOK is NOT the day-matched $H_DAYMATCH steps (${H_SPAN_D} d) — rollout_spatial.py will say so in the artefact, and horizon_auc will not be comparable with the monthly archive"
+else
+  echo "horizon: $HORIZON steps = ${H_SPAN_D} d (day-matched to the monthly archive's 12 months; no horizon: token given)"
+fi
+if [ -n "$STARTS_TOK" ]; then
+  echo "starts: $STARTS_TOK per holdout year (window token starts:$STARTS_TOK)"
+else
+  echo "::warning::no starts: token — EVERY start of every holdout year is scored (12 at monthly, 73 at pentad). At pentad that is ~34.6x the monthly scored-step count; E-044 recommends starts:3"
+fi
+# `[ ... ] && [ ... ] && echo` would EXIT HERE under `set -e` the moment a
+# token was set — a false condition is a non-zero status (ml/CLAUDE.md §7).
+if [ -z "$LONG_TOK" ] && [ -z "$FUTURE_TOK" ]; then
+  echo "long/future: rollout_spatial.py's own defaults — round(20 * steps_per_year), i.e. 20 years of THIS axis (240 at monthly, 1461 at pentad)"
+else
+  echo "long/future: OVERRIDDEN by the window — long:${LONG_TOK:-<default>} future:${FUTURE_TOK:-<default>}, in AXIS STEPS"
+fi
 
 # ---- X: the sidecar if the tensor has one, else one extraction -----------
 SIDECAR="ml/cache/${STEM}_X.npy"
@@ -196,8 +304,16 @@ OUT="ml/runs/actions/rollout_spatial.json"
 # and any curl can read. Best-effort at the CALLER (`|| true`), because a
 # telemetry push must never take down the eval it is reporting on.
 rm -f ml/runs/actions/metrics.jsonl
+# --horizon is ALWAYS passed (derived above when no token names it); the other
+# three appear only when the window carried them, so the roll's own
+# cadence-correct defaults are what runs otherwise. Unquoted on purpose: each
+# is empty or a checked integer pair.
 python -u ml/rollout_spatial.py --x "$XPATH" \
   --npz-small "$TENSOR" --z "$ZPATH" --ckpt "$CKPT" \
+  --horizon "$HORIZON" \
+  ${STARTS_TOK:+--starts-per-year $STARTS_TOK} \
+  ${LONG_TOK:+--long-months $LONG_TOK} \
+  ${FUTURE_TOK:+--future-months $FUTURE_TOK} \
   --heads $HPATHS --out "$OUT" &
 EVAL_PID=$!
 TICK=0
@@ -212,14 +328,22 @@ wait $EVAL_PID || { echo "::error::rollout_spatial.py failed"; exit 1; }
 bash scripts/publish_live_metrics.sh "ml-live-${GITHUB_RUN_NUMBER}" || true
 
 # Assert the EFFECT: the file exists, parses, every fetched head carries a
-# scored corridor block, and the gate is either PASSED or explicitly
-# uncertified with a recorded reason — never silently absent.
-python - "$OUT" <<'PYEOF'
+# scored corridor block, the horizon this script chose is the horizon the roll
+# actually ran, every head carries the cross-cadence-comparable AUC, and the
+# gate is either PASSED or explicitly uncertified with a recorded reason —
+# never silently absent. `$HORIZON` is passed as argv[2] rather than read back
+# out of the file it is meant to be checking.
+python - "$OUT" "$HORIZON" <<'PYEOF'
 import json, os, sys
 p = sys.argv[1]
+want_h = int(sys.argv[2])
 d = json.load(open(p))
 g = d.get("gate") or {}
 cad = d.get("cadence")            # written only when a step is not a month
+assert d.get("horizon") == want_h, (
+    f"the roll scored horizon {d.get('horizon')} where this script asked for "
+    f"{want_h}. A horizon that does not survive the call is exactly the "
+    f"silent-60-days failure the horizon: token was added to close.")
 if cad is None:
     assert g.get("pass") is True, f"gate did not pass: {g}"
     print("gate: PASSED (monthly axis, #217 reference)")
@@ -231,13 +355,33 @@ else:
     assert g.get("reason"), "gate skipped with no recorded reason"
     print(f"gate: NOT CERTIFIED at {cad['name']} cadence — {g['reason'][:200]}")
     print(f"cadence: {cad['name']} · {cad['step_days']} d/step · "
-          f"horizon {cad['horizon_steps']} steps = {cad['horizon_span_days']} d")
+          f"horizon {cad['horizon_steps']} steps = {cad['horizon_span_days']} d"
+          f" · day-matched horizon {cad['horizon_daymatched_steps']} steps"
+          f" ({'YES' if cad['horizon_is_daymatched'] else 'NO'})"
+          f" · starts/yr {cad['starts_per_year']} of "
+          f"{sorted(set(cad['starts_available_per_holdout_year'].values()))}"
+          f" · leads {cad['daymatched_leads']}")
+    if not cad["horizon_is_daymatched"]:
+        print("::warning::this roll is NOT horizon-matched to the monthly "
+              "archive; horizon_auc below averages a different set of lead "
+              "times and only horizon_auc_daymatched may be compared")
 assert d.get("heads"), "no heads scored"
 for lab, e in d["heads"].items():
     cs = e.get("corridor", {}).get("chan_skill")
     assert cs, f"{lab}: no corridor skill rows"
+    # The comparable number must EXIST. It is a pure function of the rows
+    # right there in the file, so its absence means the roll never had the
+    # leads — a horizon too short to reach them — and the harvest would
+    # silently fall back to `horizon_auc`, which is the lead-sampling
+    # artefact this whole change exists to stop being quoted.
+    dm = e["corridor"].get("horizon_auc_daymatched")
+    assert dm is not None, (
+        f"{lab}: no corridor horizon_auc_daymatched — the roll reached none "
+        f"of the twelve monthly-equivalent leads, so nothing it produced can "
+        f"be compared with an archived corridor AUC")
     print(f"  {lab}: corridor AUC {e['corridor']['horizon_auc']:+.3f} "
-          f"(window {e['window']['horizon_auc']:+.3f})")
+          f"(day-matched {dm:+.3f}; window "
+          f"{e['window']['horizon_auc']:+.3f})")
 print(f"rollout_spatial.json OK ({os.path.getsize(p):,} bytes)")
 PYEOF
 echo "sroll: wrote $OUT — archive_probes.py will publish it"

@@ -206,11 +206,14 @@ def main():
                 if t >= ax.T or ax.year[t] != int(Y):
                     break
                 n_band += t in ridx
-        band = e["amoc_bands"]["h1-3_5-15d"]
+        # the first DAY-DEFINED band is h1-18 (5-90 d) — at HORIZON=3 only
+        # h1..3 are rolled, so it holds exactly the same points the old
+        # step-defined h1-3 did, under a key that names the duration
+        band = e["amoc_bands"]["h1-18_5-90d"]
         assert band["n"] == n_band, (band["n"], n_band)
         print("4. truth attaches on the AXIS ROW: the long roll keeps %d of "
               "the %d rolled rows that HAVE a label (100.0%% of them, %d "
-              "rolled in all) and the h1-3 band carries all %d (start, "
+              "rolled in all) and the first day-band carries all %d (start, "
               "horizon) pairs whose target row has a RAPID value"
               % (got, want, N_LONG, band["n"]))
 
@@ -240,8 +243,10 @@ def main():
         assert set(e["amoc_bands"]) <= set(e["amoc_bands_def"])
         assert all("_" in k and k.endswith("d")
                    for k in e["amoc_bands_def"]), e["amoc_bands_def"]
-        assert e["amoc_bands_def"]["h1-3_5-15d"]["span_days"] == [5, 15]
-        assert e["amoc_bands_def"]["h7-12_35-60d"]["span_days"] == [35, 60]
+        assert e["amoc_bands_def"]["h1-18_5-90d"]["span_days"] == [5, 90]
+        assert e["amoc_bands_def"]["h37-73_185-365d"]["span_days"] == [185, 365]
+        assert e["amoc_bands_def"]["h1-18_5-90d"]["steps"] == [1, 2, 3], \
+            "a band's `steps` must be filtered by the rolled horizon"
         g = res["gate"]
         assert g["pass"] is None and g["skipped"] is True
         assert g["certified"] is False and g["cadence"] == "pentad"
@@ -255,6 +260,116 @@ def main():
               % (cad["name"], cad["step_days"], cad["horizon_span_days"],
                  cad["starts_per_holdout_year"][Y], Y, cad["lowpass_steps"],
                  ", ".join(sorted(e["amoc_bands_def"])), g["reason"][:60]))
+
+        # ---- 6b. THE BANDS ARE CUT IN DAYS, and the cut is EXACT ---------
+        # ml/CLAUDE.md §4.9: an invariant with a KNOWN answer. `BANDS` was a
+        # module constant over h1..12; at --horizon 73 that covered the first
+        # 60 of 365 days and left 61 leads in no band. The edges are now the
+        # tropical year quartered/halved/whole, and the ONE thing they must
+        # not do is move the monthly partition every archived band correlation
+        # and the #217 gate are keyed on.
+        m_ax = rs.TimeAxis({"months": np.array(
+            ["%04d-%02d" % (1990 + i // 12, i % 12 + 1) for i in range(36)])})
+        assert m_ax.bands() == (("h1-3", (1, 2, 3)), ("h4-6", (4, 5, 6)),
+                                ("h7-12", tuple(range(7, 13)))), m_ax.bands()
+        assert [m_ax.band_key(b, h) for b, h in m_ax.bands()] \
+            == ["h1-3", "h4-6", "h7-12"]
+        pb = ax.bands()
+        assert [(n, min(h), max(h)) for n, h in pb] \
+            == [("h1-18", 1, 18), ("h19-36", 19, 36), ("h37-73", 37, 73)], pb
+        # every step from 1 to a year is in exactly ONE band, at both cadences
+        for a_ in (m_ax, ax):
+            cov = [h for _, hs in a_.bands() for h in hs]
+            assert cov == sorted(cov) == list(range(1, len(cov) + 1)) \
+                and len(set(cov)) == len(cov), cov
+            assert len(cov) == a_.steps_for_months(12), (len(cov), a_.cadence)
+            for _, hs in a_.bands():          # each band's span in DAYS
+                assert a_.span_days(max(hs)) <= 365.2425 + 1e-6
+        assert res["cadence"]["band_edge_days"] == list(rs.BAND_EDGE_DAYS)
+        print("6b. bands are cut at DAY edges (%s d): the monthly axis gives "
+              "h1-3 / h4-6 / h7-12 EXACTLY — the literal they replaced — and "
+              "the pentad axis gives %s, i.e. the same three durations. Every "
+              "step 1..%d falls in exactly one band at both cadences"
+              % ("/".join("%g" % v for v in rs.BAND_EDGE_DAYS),
+                 " / ".join(ax.band_key(n, h) for n, h in pb),
+                 ax.steps_for_months(12)))
+
+        # ---- 6c. horizon_auc_daymatched: the only cross-cadence number ---
+        leads = ax.daymatched_leads()
+        assert m_ax.daymatched_leads() == tuple(range(1, 13))
+        assert leads == (6, 12, 18, 24, 30, 37, 43, 49, 55, 61, 67, 73), leads
+        # within 2.4 d of the monthly leads everywhere — the claim the recipe
+        # makes, checked rather than repeated
+        dev = max(abs(ax.span_days(h) - m * 365.2425 / 12.0)
+                  for m, h in enumerate(leads, 1))
+        assert dev < 2.4, dev
+        assert res["cadence"]["daymatched_leads"] == list(leads)
+        # at HORIZON=3 only lead h=1..3 exist, so none of the twelve pentad
+        # leads is reachable and the key is OMITTED rather than written as a
+        # mean over nothing (§5.22) — the same rule that keeps NaN out
+        assert HORIZON < leads[0]
+        assert "horizon_auc_daymatched" not in e["corridor"], e["corridor"]
+        assert e["corridor"]["horizon_auc"] is not None
+        # and the arithmetic itself, on the block skill_block would be handed
+        rows = [{"h": h, "msss_clim": 0.1 * h} for h in range(1, 74)]
+        su = rs.new_sums(73)
+        for r in rows:                       # one observation per lead
+            su["n"][r["h"]] = 1
+            su["mse_m"][r["h"]] = 1.0 - r["msss_clim"]
+            su["mse_c"][r["h"]] = 1.0
+            su["mse_p"][r["h"]] = su["mse_d"][r["h"]] = 1.0
+        blk = rs.skill_block(su, 73, n_px=1, leads=leads)
+        want = round(float(np.mean([round(1 - (1 - 0.1 * h), 3)
+                                    for h in leads])), 3)
+        assert blk["horizon_auc_daymatched"] == want, (blk, want)
+        assert blk["horizon_auc"] != blk["horizon_auc_daymatched"], \
+            "over 73 leads the two means MUST differ — if they did not, the " \
+            "lead-sampling problem this key exists for would not exist"
+        print("6c. day-matched leads at pentad are %s = %s d, within %.2f d "
+              "of the monthly archive's 12 leads everywhere; over a full "
+              "73-lead block the raw horizon_auc is %+.3f and the day-matched "
+              "one %+.3f (the sampling difference this key exists to remove). "
+              "At HORIZON=%d not one of the twelve leads is reachable, so the "
+              "key is OMITTED rather than averaged over nothing"
+              % (list(leads), [ax.span_days(h) for h in leads], dev,
+                 blk["horizon_auc"], blk["horizon_auc_daymatched"], HORIZON))
+
+        # ---- 6d. --starts-per-year: fewer starts, recorded ---------------
+        n_all = len(ax.starts_for_year(Y))
+        s3 = ax.starts_for_year(Y, 3)
+        assert n_all == 73 and len(s3) == 3, (n_all, s3)
+        assert s3 == ax.starts_for_year(Y)[::n_all // 3][:3]
+        assert s3[0] == ax.starts_for_year(Y)[0], \
+            "the first start — whose h=1 is the year's first row — must survive"
+        assert ax.starts_for_year(Y, 0) == ax.starts_for_year(Y)
+        assert ax.starts_for_year(Y, 999) == ax.starts_for_year(Y), \
+            "N >= len(list) must return the full list, untouched"
+        assert ax.starts_for_year(Y, 3) == s3, "not deterministic"
+        # the phases are spread round the seasonal cycle, not clustered
+        moys = sorted(ax.moy_of_row(r) for r in s3)
+        assert len(set(moys)) == 3 and max(
+            (moys[(i + 1) % 3] - moys[i]) % 12 for i in range(3)) <= 5, moys
+        res3, steps3 = run_roll(rs, f, os.path.join(tmp, "roll3.json"),
+                                os.path.join(tmp, "cache3"),
+                                ("--starts-per-year", "3"))
+        n3 = sum(1 for p, _ in steps3 if p == "skill")
+        assert 0 < n3 < n_by["skill"], (n3, n_by["skill"])
+        st = res3["starts"]
+        assert st["per_year"] == 3 and st["available"][Y] == n_all
+        assert st["rows"][Y] == s3, (st["rows"][Y], s3)
+        assert st["labels"][Y] == [ax.label_of_row(r) for r in s3]
+        assert res3["cadence"]["starts_per_year"] == 3
+        assert res3["cadence"]["starts_per_holdout_year"][Y] == 3
+        assert res3["cadence"]["starts_available_per_holdout_year"][Y] == n_all
+        assert res["cadence"]["starts_per_year"] == "all" \
+            and "starts" not in res, \
+            "an unset knob must record itself as `all` and write no block"
+        print("6d. --starts-per-year 3 scored %d roll steps against %d for "
+              "all %d starts (%.2fx); the artefact records the N, the rows "
+              "%s and their labels %s — every k-th start with k = %d, so the "
+              "phases are months %s and the first start survives"
+              % (n3, n_by["skill"], n_all, n3 / n_by["skill"], st["rows"][Y],
+                 st["labels"][Y], n_all // 3, moys))
 
         # ---- 7. what the ARCHIVE's evaluator does with the same fixture ---
         base = load(base_copy(tmp), "rs_base")
@@ -319,7 +434,7 @@ def main():
         print("     gate: %s (fixed: skipped, certified False, with a reason)"
               % json.dumps(res0["gate"]))
 
-        print("\npentad cadence roll: all 7 checks hold ✓")
+        print("\npentad cadence roll: all 10 checks hold ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

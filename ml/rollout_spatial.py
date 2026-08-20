@@ -44,6 +44,40 @@ is a pentad or a day: the staggered starts span the axis's real
 steps-per-year, the RAPID truth attaches on the axis row, the season token
 comes from each bin's true date, and the band labels carry their day spans.
 
+WHAT A STEP IS AND WHAT A DAY IS (2026-08-20, E-044 horizon decision). Making
+the axis cadence-aware left three quantities still counted in STEPS whose
+meaning is a DURATION, and at --horizon 73 each of them was wrong in a way
+that reads as a result:
+
+  * `BANDS` was a module constant over h1..12, so the three AMOC bands covered
+    the first 60 of 365 days at pentad and 61 leads fell into no band at all.
+    Bands are now cut at fixed DAY EDGES (`BAND_EDGE_DAYS`, quarter/half/whole
+    tropical year) and `TimeAxis.bands()` converts them to this axis's steps —
+    which returns h1-3 / h4-6 / h7-12 EXACTLY at monthly (the ratios are
+    exactly 3.0, 6.0 and 12.0 in IEEE double; pinned by
+    tests/test_roll_bands_daydefined.py) and h1-18 / h19-36 / h37-73 at pentad.
+  * `horizon_auc` is the UNWEIGHTED mean of msss_clim over h = 1..H. At
+    monthly that averages 12 leads spanning 30-365 d; at pentad H=73 it
+    averages 73 leads spanning 5-365 d, most of them short, where skill is
+    highest — so a raw pentad `horizon_auc` beats the monthly archive on lead
+    SAMPLING alone. `horizon_auc_daymatched` is the mean over the twelve leads
+    that stand closest to the monthly archive's (`TimeAxis.daymatched_leads()`:
+    1..12 at monthly, {6,12,18,24,30,37,43,49,55,61,67,73} at pentad, within
+    2.4 d of the monthly leads everywhere). It is emitted at EVERY cadence and
+    ALONGSIDE `horizon_auc`, never instead — and at monthly, where the leads
+    ARE h=1..H, it is the same number by construction.
+  * the number of staggered starts is a COST, not a protocol constant: 12 a
+    year at monthly, 73 at pentad. `--starts-per-year N` takes every k-th
+    start of the year's list, k = len(list)//N, first N — deterministic, and
+    absent (0) it is today's behaviour exactly, so the monthly list and its
+    ORDER are untouched.
+
+The horizon itself is NOT rescaled here. `--horizon` is a step count and stays
+one (ml/CLAUDE.md §5.24: this file may say what a flag buys, not quietly
+change it); scripts/sroll_run.sh computes the day-matched value from the
+tensor and passes it explicitly, and this file warns when a non-monthly roll
+is asked for a horizon that is not the archive's 12 months.
+
 Usage (box, GPU):
   python3 ml/rollout_spatial.py --x ml/cache/family3_X.npy \
       --npz-small ml/cache/f3_dec_small.npz --z ml/cache/Z_....npy \
@@ -54,6 +88,7 @@ Usage (box, GPU):
 import argparse
 import datetime as dt
 import json
+import math
 import os
 import sys
 import time
@@ -83,8 +118,18 @@ GATE_REF = {"auc": 0.643,
             "bands": {"h1-3": 0.470, "h4-6": 0.375, "h7-12": 0.492}}
 GATE_TOL = 0.0101          # plan §6.5: ±0.01 (float-boundary slack only)
 
-BANDS = (("h1-3", (1, 2, 3)), ("h4-6", (4, 5, 6)),
-         ("h7-12", tuple(range(7, 13))))
+# HORIZON BANDS ARE DEFINED IN DAYS (2026-08-20, E-044). They used to be the
+# module constant `(("h1-3", (1,2,3)), ("h4-6", (4,5,6)), ("h7-12", 7..12))`,
+# which is a partition of the MONTHLY axis wearing the clothes of a partition
+# of time: at pentad it covered the first 60 of 365 days and left 61 of 73
+# leads in no band at all, while `band_key` renamed h1-3 to `h1-3_5-15d` and
+# so labelled a 5-15 DAY correlation with the key an archived 30-91 day one
+# carries. The edges are the tropical year quartered, halved and whole; the
+# steps of a given axis follow from them (`TimeAxis.bands`).
+YEAR_DAYS = 365.2425
+BAND_EDGE_DAYS = (YEAR_DAYS / 4.0,        # 91.310625 d
+                  YEAR_DAYS / 2.0,        # 182.62125 d
+                  YEAR_DAYS)              # 365.2425 d
 
 
 # The gate reference is a property of ONE CADENCE, not of the evaluator.
@@ -318,19 +363,37 @@ class TimeAxis:
     def rows_in_year(self, Y):
         return np.where(self.year == int(Y))[0]
 
-    def starts_for_year(self, Y):
+    def starts_for_year(self, Y, per_year=0):
         """Staggered roll starts for holdout year Y, spanning the axis's
         REAL steps-per-year: the last row before Y (so h=1 lands on Y's
         first row) plus every row inside Y except its last.
 
         At monthly this is exactly the old `for s_off in range(12)` list —
         Dec(Y-1), Jan … Nov — in the same order. At pentad it is 73 starts,
-        not 12."""
+        not 12.
+
+        `per_year` (0 = all, and the default, i.e. everything above unchanged)
+        SUBSAMPLES that list: every k-th start, k = len(list) // N, first N.
+        The starts are a COST, not a protocol constant — at pentad the roll
+        pays 73 of them for 73 leads each — and the count is the free
+        parameter of the E-044 horizon decision. The rule is a fixed stride
+        rather than a random or an edge-weighted choice for three reasons:
+        it is deterministic (a re-roll of the same head scores the same rows),
+        it keeps the FIRST start, which is the one whose h=1 lands on the
+        year's first row, and a constant stride spreads the starts evenly
+        round the seasonal cycle — at pentad, N=3 gives k=24 and phases near
+        1 Jan / 1 May / 1 Sep, so lead time is not confounded with season.
+        N >= len(list) (and N <= 0) return the full list untouched, which is
+        what keeps the monthly path — list AND order — bit-identical."""
         rows = self.rows_in_year(Y)
         if len(rows) == 0:
             return []
         out = [int(rows[0]) - 1] if int(rows[0]) - 1 >= 0 else []
-        return out + [int(r) for r in rows[:-1]]
+        out = out + [int(r) for r in rows[:-1]]
+        n = int(per_year or 0)
+        if n <= 0 or n >= len(out):
+            return out
+        return out[::len(out) // n][:n]
 
     # -- durations ---------------------------------------------------------
     @property
@@ -359,11 +422,64 @@ class TimeAxis:
     def band_key(self, name, hs):
         """Horizon-band label CARRYING ITS UNIT at any non-monthly cadence.
         `h1-3` at monthly (what every published artefact calls it); at pentad
-        `h1-3_5-15d`, so a band can never be read as months by accident."""
+        `h1-18_5-90d`, so a band can never be read as months by accident."""
         if self.monthly:
             return name
         return (f"{name}_{self.span_days(min(hs)):g}-"
                 f"{self.span_days(max(hs)):g}d")
+
+    # -- the two DAY-DEFINED quantities -----------------------------------
+    def bands(self):
+        """`((name, (h, ...)), ...)` — the horizon bands of THIS axis.
+
+        Cut at `BAND_EDGE_DAYS`, half-open on the left: band i holds every
+        step h whose lead `h * step_days` lies in `(edge[i-1], edge[i]]`. The
+        band therefore means the same DURATION at every cadence, which is the
+        whole point — `h1-3` was a partition of the monthly axis, not of time.
+
+        EXACT at monthly (ml/CLAUDE.md §4.9): step_days is 365.2425/12 and the
+        three ratios edge/step_days are 3.0, 6.0 and 12.0 with no residue in
+        IEEE double, so this returns (("h1-3", (1,2,3)), ("h4-6", (4,5,6)),
+        ("h7-12", (7..12))) — the literal it replaces, name for name and step
+        for step. tests/test_roll_bands_daydefined.py asserts that identity
+        rather than trusting it, and tests/test_roll_monthly_identity.py
+        proves the whole artefact did not move. At pentad (5 d) the same edges
+        give h1-18 / h19-36 / h37-73; at daily h1-91 / h92-182 / h183-365.
+
+        The `+ 1e-9` guards a representation ulp ONLY: it cannot move a
+        boundary at any cadence this repo has (the three monthly ratios are
+        exact integers, and pentad's 18.262125 / 36.52425 / 73.0485 and
+        daily's 91.310625 / 182.62125 / 365.2425 are nowhere near one).
+
+        Like the constant it replaces, this is a property of the AXIS and not
+        of --horizon: callers filter with `h <= Hh`, exactly as before, so a
+        short roll simply leaves the later bands empty."""
+        out, lo_h = [], 1
+        for edge in BAND_EDGE_DAYS:
+            hi_h = int(math.floor(edge / self.step_days + 1e-9))
+            if hi_h < lo_h:
+                continue
+            out.append((f"h{lo_h}-{hi_h}", tuple(range(lo_h, hi_h + 1))))
+            lo_h = hi_h + 1
+        return tuple(out)
+
+    def daymatched_leads(self):
+        """The axis steps standing closest to the monthly archive's 12 leads.
+
+        `horizon_auc` is the unweighted mean of msss_clim over h = 1..H, so
+        its value depends on WHICH LEADS the axis offers: 12 leads spanning
+        30-365 d at monthly, 73 spanning 5-365 d at pentad — most of them
+        short, where skill is highest. Comparing those two means directly
+        would report a lead-sampling difference as a forecasting result.
+
+        These are the same twelve DURATIONS at any cadence: 1..12 at monthly
+        (so `horizon_auc_daymatched` is `horizon_auc` there, exactly),
+        {6,12,18,24,30,37,43,49,55,61,67,73} at pentad = 30/60/90/120/150/
+        185/215/245/275/305/335/365 d, within 2.4 d of the monthly leads
+        everywhere, and {30,61,91,...,365} at daily."""
+        m_days = YEAR_DAYS / 12.0
+        return tuple(max(1, int(math.floor(m * m_days / self.step_days + 0.5)))
+                     for m in range(1, 13))
 
 
 def dilate8(m, iters):
@@ -745,9 +861,21 @@ def accumulate(su, h, xhat, v_true, v_pers, v_damp, op):
     su["sy"][h] += ym.sum()
 
 
-def skill_block(su, H, n_px=None):
+def skill_block(su, H, n_px=None, leads=None):
     """rollout.py's chan_skill rows + horizon_auc (mean MSSS-vs-climatology
     — the #217 'AUC'), plus the damped mean for completeness.
+
+    `leads` is `TimeAxis.daymatched_leads()` — the twelve steps standing for
+    the monthly archive's twelve lead DURATIONS on this axis. Given them, the
+    block also carries `horizon_auc_daymatched`, the mean of msss_clim over
+    exactly those leads. ALONGSIDE, never instead: `horizon_auc` is what every
+    archived number is, and this is the only quantity that may be compared
+    ACROSS cadences. At monthly the leads are 1..12, so over the archive's own
+    horizon the two are the same number, computed the same way, rounded the
+    same way — asserted in tests/test_roll_monthly_identity.py rather than
+    argued. Leads past the rolled horizon are absent from `rows` and are
+    dropped; with none left the key is omitted rather than written as a mean
+    over nothing (ml/CLAUDE.md §5.22).
 
     `n_px` is the scope's PIXEL COUNT, carried into the block so an empty
     block can say WHY it is empty. Under a no-longitude-holdout codec
@@ -792,6 +920,11 @@ def skill_block(su, H, n_px=None):
             float(np.mean([r["msss_clim"] for r in rows])), 3)
         out["auc_damped"] = round(
             float(np.mean([r["msss_damped"] for r in rows])), 3)
+        if leads is not None:
+            by_h = {r["h"]: r["msss_clim"] for r in rows}
+            got = [by_h[h] for h in leads if h in by_h]
+            if got:
+                out["horizon_auc_daymatched"] = round(float(np.mean(got)), 3)
     return out
 
 
@@ -869,7 +1002,24 @@ def main():
                     help="write that grid and stop — needs no Z, no heads "
                          "and no GPU, because the masks depend only on the "
                          "tensor and the corridor recipe")
-    ap.add_argument("--horizon", type=int, default=12)
+    ap.add_argument("--horizon", type=int, default=12,
+                    help="rolled horizon in AXIS STEPS. 12 is the monthly "
+                         "archive's 12 months and stays the default at every "
+                         "cadence, because a step count that silently means a "
+                         "different duration per tensor is the bug this file "
+                         "spent 2026-08-19 removing (§5.24). At pentad the "
+                         "day-matched value is 73 (365.0 d) and "
+                         "scripts/sroll_run.sh computes and passes it; a "
+                         "non-monthly roll that is NOT day-matched warns here")
+    ap.add_argument("--starts-per-year", type=int, default=0,
+                    help="score only N of the staggered starts per holdout "
+                         "year — every k-th, k = len(starts)//N, first N. 0 "
+                         "(the default) is every start, which is 12 at "
+                         "monthly and 73 at pentad. The starts are the free "
+                         "parameter of the pentad cost: at --horizon 73 three "
+                         "holdout years cost 219 scored steps at N=1, 441 at "
+                         "N=3 and 8,103 at all 73. What is recorded in the "
+                         "artefact is the N *and the rows chosen*")
     ap.add_argument("--chunk", type=int, default=8192)
     ap.add_argument("--map-h", type=int, default=6,
                     help="horizon for the E-026b per-pixel skill map "
@@ -946,10 +1096,39 @@ def main():
         # is 60 days at pentad and 12 months on every number it would be
         # compared against — a DESIGN choice for the dispatcher, not something
         # this file may quietly rescale (ml/CLAUDE.md §5.24).
+        h_match = ax.steps_for_months(12)
         print(f"  --horizon {a.horizon} = {ax.span_days(a.horizon):g} d at "
               f"this cadence; the monthly archive's h=1..12 is 12 MONTHS, "
-              f"which here would be --horizon {ax.steps_for_months(12)}. "
+              f"which here would be --horizon {h_match}. "
               f"--map-h {a.map_h} = {ax.span_days(a.map_h):g} d.", flush=True)
+        # ASSERT THE EFFECT, not the invocation (§0.2). Printing the day span
+        # was enough to make the horizon VISIBLE and not enough to stop the
+        # default being taken: scripts/sroll_run.sh passed no --horizon at all
+        # until 2026-08-20, so every pentad roll would have scored 60 days and
+        # reported it beside the archive's 365. This does not rescale — that
+        # is the dispatcher's decision — it refuses to let it be silent.
+        if a.horizon != h_match:
+            print(f"::warning::--horizon {a.horizon} is "
+                  f"{ax.span_days(a.horizon):g} d at {ax.cadence} cadence, "
+                  f"NOT the monthly archive's 12 months "
+                  f"({ax.span_days(h_match):g} d = --horizon {h_match}). "
+                  f"`horizon_auc` here averages {a.horizon} leads over "
+                  f"{ax.span_days(a.horizon):g} d and is NOT comparable with "
+                  f"any archived corridor AUC; `horizon_auc_daymatched` is "
+                  f"the quantity that is, and it needs leads out to "
+                  f"{h_match}.", flush=True)
+        print(f"  bands (day-defined, edges "
+              + "/".join(f"{e:g}" for e in BAND_EDGE_DAYS) + " d): "
+              + " · ".join(f"{ax.band_key(bn, hs)}" for bn, hs in ax.bands())
+              + f" · day-matched leads {list(ax.daymatched_leads())}",
+              flush=True)
+        if a.starts_per_year <= 0:
+            print("::warning::--starts-per-year not set: EVERY start of every "
+                  "holdout year is scored, which is the monthly protocol's 12 "
+                  "and this axis's full steps-per-year. At pentad that is 73 "
+                  "starts per holdout year — a COST decision the dispatch "
+                  "should make deliberately (E-044 recommends 3, giving "
+                  "phases near 1 Jan / 1 May / 1 Sep).", flush=True)
 
     # gate discipline up front, where it has cost nothing (ml/CLAUDE.md §0.3)
     gate_ref, gate_skip = gate_for_cadence(ax.cadence)
@@ -1297,13 +1476,25 @@ def main():
                "probe": {"val_tail_r": round(float(probe_val_r), 3)},
                "gate": {"pass": None, "skipped": True},   # overwritten below
                "heads": {}}
-    # NOTHING IS ADDED TO A MONTHLY ARTEFACT. Every published corridor AUC was
-    # written by this code on the monthly axis, and a roll json that gains a
-    # key is a roll json that no longer diffs byte-for-byte against the
-    # archive — which is the one property tests/test_roll_monthly_identity.py
-    # exists to hold. Monthly is the archive's default and reads as before;
-    # every OTHER cadence says what it is, in the artefact, where a harvest
-    # can see it.
+    # ALMOST NOTHING IS ADDED TO A MONTHLY ARTEFACT. Every published corridor
+    # AUC was written by this code on the monthly axis, and a roll json that
+    # gains a key is a roll json that no longer diffs byte-for-byte against
+    # the archive — which is the one property
+    # tests/test_roll_monthly_identity.py exists to hold. Monthly is the
+    # archive's default and reads as before; every OTHER cadence says what it
+    # is, in the artefact, where a harvest can see it.
+    #
+    # There is now EXACTLY ONE exception, and it is deliberate:
+    # `horizon_auc_daymatched` inside each scope's skill block. It is emitted
+    # at every cadence because a key that exists only where the reader is
+    # least likely to look is a key the harvest will forget to ask for; at
+    # monthly it is `horizon_auc` recomputed over the same leads, i.e. a NEW
+    # key carrying an OLD value, which cannot make anything incomparable. The
+    # bit-identity test strips it, counts what it stripped, and asserts each
+    # stripped value EQUALS that scope's `horizon_auc` before demanding the
+    # remainder be byte-identical.
+    bands = ax.bands()
+    leads = ax.daymatched_leads()
     if not ax.monthly:
         results["cadence"] = {
             "name": ax.cadence, "step_days": ax.days,
@@ -1312,7 +1503,14 @@ def main():
             "detected_from": ax.detected_from,
             "horizon_steps": a.horizon,
             "horizon_span_days": ax.span_days(a.horizon),
+            "horizon_daymatched_steps": ax.steps_for_months(12),
+            "horizon_is_daymatched":
+                a.horizon == ax.steps_for_months(12),
+            "starts_per_year": a.starts_per_year or "all",
             "starts_per_holdout_year": {
+                str(Y): len(ax.starts_for_year(Y, a.starts_per_year))
+                for Y in hold_years},
+            "starts_available_per_holdout_year": {
                 str(Y): len(ax.starts_for_year(Y)) for Y in hold_years},
             "long_steps": a.long_months,
             "long_span_days": ax.span_days(a.long_months),
@@ -1320,9 +1518,17 @@ def main():
             "future_span_days": ax.span_days(a.future_months),
             "lowpass_steps": lp_k, "lowpass_months": 18,
             "map_h_span_days": ax.span_days(a.map_h),
+            "band_edge_days": list(BAND_EDGE_DAYS),
+            "daymatched_leads": list(leads),
+            "daymatched_lead_days": [ax.span_days(h) for h in leads],
             "note": ("every `h` in this file is an AXIS STEP, not a month. "
                      "The horizon-band keys carry their own day spans for "
-                     "the same reason."),
+                     "the same reason. `horizon_auc` averages msss_clim over "
+                     "h=1..horizon_steps and is therefore a function of THIS "
+                     "axis's lead sampling; `horizon_auc_daymatched` averages "
+                     "the twelve leads above, which are the monthly "
+                     "archive's, and is the ONLY one of the two that may be "
+                     "compared against an archived corridor AUC."),
         }
         results["gate_ref"] = {"head": GATE_HEAD, "tol": GATE_TOL,
                                "cadence": ax.cadence, "reference": None,
@@ -1330,6 +1536,32 @@ def main():
                                "reason": gate_skip}
         results["gate"] = {"pass": None, "skipped": True, "certified": False,
                            "cadence": ax.cadence, "reason": gate_skip}
+    # WHICH ROWS WERE SCORED, not merely how many. A count says the knob was
+    # read; the rows say what the number is a number OF, and a harvest that
+    # wants to know whether two rolls sampled the same seasonal phases has no
+    # other way to find out. Written only when the knob was actually used —
+    # absent it, the starts are the protocol's own full list and a monthly
+    # artefact gains nothing (see the note above).
+    if a.starts_per_year > 0:
+        results["starts"] = {
+            "per_year": a.starts_per_year,
+            "rule": ("every k-th start of the holdout year's list, "
+                     "k = len(list)//N, first N — deterministic, keeps the "
+                     "start whose h=1 is the year's first row, and spreads "
+                     "the rest evenly round the seasonal cycle"),
+            "available": {str(Y): len(ax.starts_for_year(Y))
+                          for Y in hold_years},
+            "rows": {str(Y): ax.starts_for_year(Y, a.starts_per_year)
+                     for Y in hold_years},
+            "labels": {str(Y): [ax.label_of_row(s) for s in
+                                ax.starts_for_year(Y, a.starts_per_year)]
+                       for Y in hold_years},
+        }
+        print("starts: %d per holdout year — %s" % (
+            a.starts_per_year, "; ".join(
+                f"{Y} rows {results['starts']['rows'][str(Y)]} "
+                f"({', '.join(results['starts']['labels'][str(Y)])})"
+                for Y in hold_years)), flush=True)
     K_seen = None
 
     for hp in heads:
@@ -1376,7 +1608,7 @@ def main():
         # step per AXIS STEP each.
         n_skill = 0
         for Y in hold_years:
-            for s_ in ax.starts_for_year(Y):
+            for s_ in ax.starts_for_year(Y, a.starts_per_year):
                 if s_ - K + 1 < 0 or s_ + 1 >= T:
                     continue
                 for h in range(1, Hh + 1):
@@ -1410,7 +1642,7 @@ def main():
         probe_pts = {h: [] for h in range(1, Hh + 1)}
         with torch.no_grad():
             for Y in hold_years:
-                for s in ax.starts_for_year(Y):
+                for s in ax.starts_for_year(Y, a.starts_per_year):
                     start_m = ax.label_of_row(s)
                     if s - K + 1 < 0 or s + 1 >= T:
                         continue
@@ -1458,7 +1690,8 @@ def main():
                           "ring_km": ring_km, "seed": ta.get("seed", 0),
                           "unroll": unroll}}
         for name, m_ in scopes:
-            entry[name] = skill_block(sums[name], Hh, n_px=int(m_.sum()))
+            entry[name] = skill_block(sums[name], Hh, n_px=int(m_.sum()),
+                                      leads=leads)
         # --- E-026b audit block + exact-identity check -------------------
         ch_rows, max_dev = [], 0.0
         cor_rows = {r["h"]: r["msss_clim"]
@@ -1489,10 +1722,11 @@ def main():
                 for m, c in zip(aud["px_m"], aud["px_c"])],
         }
         entry["amoc_bands"] = {}
-        for bn, hs in BANDS:
+        for bn, hs in bands:
             # the KEY carries the unit at any non-monthly cadence: `h1-3` is
-            # 1-3 months on the monthly axis and 5-15 DAYS at pentad, and a
-            # band that does not say which is a number waiting to be misread.
+            # 1-3 months on the monthly axis and `h1-18_5-90d` spans the same
+            # 90 days at pentad, and a band that does not say which is a
+            # number waiting to be misread.
             key = ax.band_key(bn, hs)
             pts = [(h, s_, pr, y) for h in hs if h <= Hh
                    for (s_, pr, y) in probe_pts.get(h, [])]
@@ -1515,13 +1749,18 @@ def main():
                     "step_days": ax.days,
                     "span_days": [ax.span_days(min(hs)),
                                   ax.span_days(max(hs))]}
-                for bn, hs in BANDS}
+                for bn, hs in bands}
         for name, _ in scopes:
             if entry[name].get("chan_skill"):
+                dm = entry[name].get("horizon_auc_daymatched")
                 print(f"  {label} {name}: AUC(clim) "
                       f"{entry[name]['horizon_auc']:+.3f} · damped "
                       f"{entry[name]['auc_damped']:+.3f} · amp h{Hh} "
-                      f"{entry[name]['chan_skill'][-1]['amp_ratio']:.3f}",
+                      f"{entry[name]['chan_skill'][-1]['amp_ratio']:.3f}"
+                      + ("" if dm is None else
+                         f" · day-matched {dm:+.3f}"
+                         + ("" if ax.monthly else
+                            f" (leads {list(leads)})")),
                       flush=True)
         print(f"  {label} amoc: " + " ".join(
             (f"{bn} {v['r']:+.3f}(n={v['n']})" if v.get("r") is not None
@@ -1532,7 +1771,7 @@ def main():
         if gate_ref is not None and hp in gate_paths and hp == gate_paths[0]:
             got = {"auc": entry["gate"].get("horizon_auc"),
                    "bands": {bn: entry["amoc_bands"].get(bn, {}).get("r")
-                             for bn, _ in BANDS}}
+                             for bn, _ in bands}}
             fails = []
             if got["auc"] is None or abs(got["auc"] - gate_ref["auc"]) > GATE_TOL:
                 fails.append(f"AUC {got['auc']} vs {gate_ref['auc']}")
