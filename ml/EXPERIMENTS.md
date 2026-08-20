@@ -966,6 +966,140 @@ advantage needs re-reading. **ONE SEED** (Chris, 2026-08-19); an effect landing 
 
 ---
 
+<a id="e-043b-roll"></a>
+### E-043b · #420 (HEADPUB) and #421 (the roll) — DISPATCHED 2026-08-20 08:27:11Z; the verdict of the decisive arm
+
+Written **at dispatch**, hypothesis and falsifier first, so the log cannot be rewritten to
+fit the answer (§1). The numbers below are the pre-registration; #421's result goes under
+this heading when it lands.
+
+**E-043b-roll · ROLLS the freshly published e043b xl144 stage-2 head
+(`head-weights-e043b-xl144-nolonhold-s0`, trained by #414 for the full 200,000 steps on the
+EXISTING frozen `f3_anchor41M` codec with the stage-2 pool opened to ALL 481 longitude
+columns) twelve months forward beside the frozen `e017_u1_s0` validation gate, reading the
+`*_trainlon` / `*_holdlon` split in every scope — the VERDICT of arm B · params 40.693M
+codec (frozen) + 211.353M head · stage `sroll` (eval-only; NOTHING trains, the step field
+is the codec checkpoint's own count) · data `family3_na025` (C 39, T 516, sha256
+`adcbe700fb6e…`) · arch codec 576×10, 8 heads, d_dec 768, d_z 64, patch 3; head 1024×16,
+K 24, stencil 145, ring `spiral:111,4444,0.71,0.5` · steps×batch 60,000 × 512 (=
+f3_anchor41M's recorded step count, ZERO training steps) · resume `!run-62,run-63`
+(f3_anchor41M, frozen).**
+
+[#421 (E-043b roll, gate + the all-longitude xl144 head) — the CI log](https://github.com/blauewelt/earth/actions/runs/32348876544)
+
+[#420 (HEADPUB `e043b-xl144-nolonhold-s0`) — the CI log](https://github.com/blauewelt/earth/actions/runs/32345210849)
+
+[E-043b · #414, the head this rolls](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)
+
+[E-043d2 · #418, the control pair's `_trainlon` decomposition](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d2)
+
+#### 1 · #420 — the head was PUBLISHED, and the publication was verified before it was rolled
+
+#420 completed **2026-08-20 08:08:14Z** on `gpu-box-30257785`, window
+`headpub:e043b-xl144-nolonhold-s0@temporal`, asset
+**`head-weights-e043b-xl144-nolonhold-s0.pt`**, 845,487,479 bytes, upload **HTTP 201**,
+asset `state` polled to **`uploaded`**.
+
+§0.2 says verify the ARTEFACT, and the specific failure to rule out is #378/#381/#382 —
+three heads published from a **stale `orphan-temporal-latest.pt` leftover** and given the
+names of arms that had not produced them. Five independent checks, every one of them a
+measurement rather than an inference:
+
+| check | what would have failed | what was read |
+|---|---|---|
+| source pinned | `@temporal` vs orphan-first default | log: `source: /opt/earth-cache/ckpt/temporal.pt (2.4G)` — **the orphan path was never consulted** |
+| the box is #414's box | a head from some other run | #414 ran on `gpu-box-30257785`; #420 ran on `gpu-box-30257785` |
+| nothing intervened | a later run overwriting `temporal.pt` | #414 completed **07:41:51Z**, #420 started **07:42:06Z** — a **15-second** gap, and no other run touched that box in between |
+| the file's own fields | wrong arch / wrong seed / a milestone asset | the box's own `torch.load` printed **`step=200000 d_model=1024 layers=16 stencil=145 seed=0 znoise=0.0`**, **`params=211.4M`** — matching #414's `temporal.json` `scale.params` **211,352,640** exactly, and `step=200000` rules out the 600 / 60,000 / 120,000 milestone assets |
+| no confusable leftover exists | those six fields are IDENTICAL for #346 | #346 ran on `gpu-box-47566393` and #347 on `gpu-box-46045353` — **neither control head has ever run on `gpu-box-30257785`**, so no file with that field signature could be sitting there |
+
+That last row is the one that matters and it is the one the publish script's printed line
+CANNOT settle by itself: #346 is also 1024×16, stencil 145, seed 0, znoise 0, 200,000
+steps, 211.4M. The six printed fields do not distinguish #414's head from #346's. What
+distinguishes them is the box, so the box is what was checked.
+
+**The asset name is `head-weights-<tag>.pt`, not `<tag>.pt`.** `scripts/sroll_run.sh` tries
+`<tag>__temporal.pt` and then `<tag>` verbatim, so the roll's window token must be the FULL
+asset stem — `sroll:e017_u1_s0,head-weights-e043b-xl144-nolonhold-s0`, exactly as #413,
+#394 and #401 wrote it. A window naming the bare arm (`…,e043b-xl144-nolonhold-s0`) 404s on
+both attempts and the script emits only `::warning::head … not on the release — skipped`;
+with the gate still fetched, `[ -n "$HPATHS" ]` passes and the run goes **GREEN having
+rolled nothing but the gate**. Checked at dispatch, where the inputs are all it costs (§0.3).
+
+#### 2 · A CDN hazard this session created, recorded because the next one can trip it
+
+The asset record appears in the GitHub API with its final size **while `state` is still
+`starter`** — the blob is not yet fetchable. A download attempted in that window returns
+Azure `BlobNotFound`, and **GitHub's Fastly edge caches that 404 on the asset path,
+ignoring the signed query string**. Measured here: the premature request at 07:58:19Z was
+still being served from `cache-iad-kcgs7200068-IAD` with `X-Cache: HIT` and a monotonically
+rising `Age` past 1,536 s, through fresh signed URLs, `Cache-Control: no-cache`, byte-range
+requests and an added cache-buster parameter. **Poll `state` until `uploaded` before the
+first GET.** The roll itself is not believed to be affected — box `47724559` is in
+**Quebec, CA** and resolves a different POP, which was never poisoned because only IAD ever
+saw the bad request — but the verification of the artefact was therefore done from #420's
+log and the run/box ledger above rather than from a local `torch.load`, and that
+substitution is recorded rather than glossed.
+
+#### 3 · READING DISCIPLINE — the blended number is a trap, and it is set before the answer exists
+
+**This head trained on ALL longitudes and therefore carries no `_holdlon` handicap.** Its
+**blended** corridor AUC will EXCEED the published E-032 xl144 pair's blended
+**0.68067 / 0.67558** *even at identical skill*, because the controls' blended figures are
+deflated by a 24% block they never trained on and this one's is not. **A blended-vs-blended
+excess is not evidence of improvement and must not be reported as one.**
+
+The comparisons that mean something, in order:
+
+1. **HEADLINE — `_trainlon` against `_trainlon`.** This head's trained-pixel corridor AUC
+   against the control pair's **0.86700 / 0.86808, mean 0.86754** (#418). Both sides honest
+   pixels, both sides fully trained.
+2. **GATE-ANCHORED.** `e017_u1_s0` must reproduce **0.643** within `GATE_TOL` **0.0101**, as
+   it did in #417 and #418, or the roll is **VOID** and no number leaves it.
+3. **Blended against blended — admissible only as an explicitly labelled upper bound.**
+
+§3b's `_holdlon` row applies with full force to whatever this run's `_holdlon` figure is:
+2 pairs, pooled sd **0.01079**, 16.4× the `_trainlon` sd off identical checkpoints, and
+**never quotable as a level**. This run adds no pair to that row — it is one head.
+
+The same trap has already caught this arm once, in the one-step ratio: #414's `z_t+1`
+0.01392 against #346's 0.12358 looks like 8.9×, and the arithmetic shows the whole of it is
+consistent with pure scope (see [E-043b · #414
+§3](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)). Twice in one
+wave would be a pattern, not an accident.
+
+#### 4 · Hypothesis and falsifier
+
+**HYPOTHESIS.** Opening the stage-2 training pool to all longitudes leaves **trained-pixel
+skill essentially unchanged** — the head already saw 76% of the corridor and the anchor
+codec is untouched, so there is no new information about those pixels — while lifting
+`_holdlon` sharply, because the −45..−25 block stops being extrapolation.
+
+**FALSIFIER, stated before the number exists.** If `_trainlon` differs from **0.86754** by
+more than the xl tier's band (§3b pooled sd **0.0021** on 7 dof, 95% upper bound
+**0.0037**), then the longitude holdout **was** costing stage 2 real skill on pixels it had
+already trained on — a genuinely surprising result, since it would mean the held block was
+carrying information the trained pixels needed — and the 48% / 59% hole-patching
+decomposition of the stencil head's advantage needs re-reading.
+
+**ONE SEED**, per Chris 2026-08-19. §3b governs the reading: an effect landing near the
+±0.025 corridor-AUC bar buys its second seed then, not now. **NOT A REPLICATE** — the
+gate's reproduction measures the PROTOCOL and may not be entered in §3b's spread column.
+
+#### 5 · Cost and the standing gap
+
+Budget: gate + one head. #418 spent **1,993.0 s** on the gate and **~10,522 s** per xl144
+head, so this run is **~3.5 h** of head time against a `job_timeout` of **700 minutes**.
+The box (`gpu-box-31479844`, vast **47724559**, Quebec CA, $0.294/h) keeps #418's warm Z
+cache and tensor, so there is no embed pass.
+
+Still open, and deliberately not spent here: **#414 has no `probe_head.json`** (its dispatch
+carried `head_probe: "false"`, copied from #346 which predates the probe). The cheap closure
+is an eval-only re-dispatch against this same published asset with `head_probe: "true"` —
+see [E-043b · #414 §5](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b).
+
+---
+
 <a id="wave9-status-2026-08-19-2055"></a>
 ## OPERATIONS · The E-043 wave at 20:55Z — one arm home, four running, runway shorter than two of them
 

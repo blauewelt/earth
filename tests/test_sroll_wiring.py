@@ -170,12 +170,57 @@ def main():
         assert os.path.exists(os.path.join(cache, "f3_dec_small.npz")), \
             "the small npz was not written to the historical family-3 name"
         # the heads are the only thing left, and the stubbed curl has none
-        assert "no heads fetched" in out and r.returncode != 0
+        assert r.returncode != 0, out[-1200:]
+        assert "named head(s) not fetched from the release" in out, out[-1200:]
+        assert " h1" in out.split("named head(s) not fetched from the "
+                                  "release:")[1][:40], \
+            "the refusal must NAME the head it could not fetch"
         print("3. on a toy tensor + toy codec the script derived the embed "
               "cache key (codec %s · tensor %s) and found the Z named for it, "
               "extracted X to the historical family-3 names (so no warm box "
               "re-extracts 10.9 GiB), and carried no family-3 hash literal"
               % (wh, dh))
+
+        # ---- 3b. ONE named head missing is a REFUSAL, not a skip --------
+        # The #421 regression (2026-08-20). The dispatch named the gate and
+        # `head-weights-e043b-xl144-nolonhold-s0`; the head's fetch 404'd
+        # (Fastly had cached a `BlobNotFound` from a GET issued while the
+        # asset's `state` was still `starter`); the loop warned and skipped
+        # it; the run rolled the GATE ALONE and went green. Nothing in the
+        # artefact could catch it — every head that IS present is complete.
+        # So: a curl that succeeds for one tag and fails for the other must
+        # take the whole run down, and must say WHICH tag.
+        bin3 = os.path.join(tmp, "bin3")
+        os.makedirs(bin3)
+        with open(os.path.join(bin3, "curl"), "w") as f:
+            # succeed for the gate, 404 everything else — exactly #421's shape
+            f.write('#!/bin/sh\nfor a in "$@"; do case "$a" in\n'
+                    '  *gate_ok*) : ;; esac; done\n'
+                    'out=""; url=""\n'
+                    'while [ $# -gt 0 ]; do\n'
+                    '  case "$1" in -o) out="$2"; shift 2 ;;\n'
+                    '    http*) url="$1"; shift ;; *) shift ;; esac\n'
+                    'done\n'
+                    'case "$url" in *gate_ok*) echo stub > "$out"; exit 0 ;;\n'
+                    '  *) exit 22 ;; esac\n')
+        os.chmod(os.path.join(bin3, "curl"), 0o755)
+        np.save(zname, np.zeros((8, 4, 4), np.float16))
+        r = run(tmp, bin3, f"sroll:gate_ok,missing_head,ckpt:"
+                           f"{os.path.relpath(ck, tmp)}",
+                {"TENSOR": "ml/cache/family3_na025.npz"})
+        out = r.stdout + r.stderr
+        assert r.returncode != 0, \
+            "one named head 404'd and the run continued — this is #421, the " \
+            "void roll that went green:\n" + out[-1500:]
+        assert "named head(s) not fetched from the release" in out, out[-1500:]
+        assert "missing_head" in out.split("not fetched from the release:")[1][:60], \
+            "the refusal did not name the head that was missing"
+        assert "gate_ok: fetched" in out, \
+            "the head that DID arrive should still be reported"
+        assert "rollout_spatial" not in out or "Traceback" not in out, out[-800:]
+        print("3b. a run that names two heads and can fetch only one REFUSES "
+              "and names the missing tag — #421 rolled the gate alone, went "
+              "green, and answered nothing")
 
         # ---- 4. the Z it will not accept --------------------------------
         os.remove(zname)

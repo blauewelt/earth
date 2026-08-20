@@ -282,17 +282,52 @@ HPATHS=""
 # name, "head-weights-<arm>.pt" (~845-869 MB). rollout_spatial.py reads both
 # shapes. So: try the __temporal.pt name first (every pre-wave-8 head, and
 # the e017_u1_s0 gate, still lives there), fall back to the tag verbatim.
+# A NAMED HEAD THAT DOES NOT ARRIVE IS A REFUSAL, NOT A WARNING. Measured
+# 2026-08-20, run #421 (E-043b roll): the dispatch named the gate and
+# `head-weights-e043b-xl144-nolonhold-s0`, the head's fetch 404'd, this loop
+# warned and skipped it, `[ -n "$HPATHS" ]` passed because the GATE had
+# arrived, and the run went on to roll the gate ALONE — a green,
+# gate-passing, fully-archived job that answered nothing. It was caught only
+# because someone read `"heads": 1` in the live metrics; the artefact's own
+# assertions cannot catch it, because every head that IS present is complete
+# and correct. The old behaviour was written so one bad tag could not lose a
+# multi-head roll, but that trade is wrong at this cost: a head is named
+# because the run is FOR it, and re-dispatching a two-minute refusal is
+# cheaper than discovering a void six-hour roll at harvest (ml/CLAUDE.md
+# §0.2, §1 — check the precondition where the inputs are all it has cost).
+# Why the fetch 404'd is worth knowing, because it will happen again: a
+# release asset appears in the API with its final size while `state` is still
+# `starter`, and a GET in that window returns Azure `BlobNotFound` which
+# GitHub's Fastly edge then caches on the asset PATH for one hour, ignoring
+# the signed query string. Poll `state` until `uploaded` BEFORE the first GET,
+# from anywhere — the POP that serves the box is poisoned by whoever asked
+# first.
+MISSING=""
 for tag in $TAGS; do
   if curl -fsSL -o "ml/runs/heads/${tag}.pt" \
       "https://github.com/${GITHUB_REPOSITORY}/releases/download/model-checkpoints-v1/${tag}__temporal.pt" \
    || curl -fsSL -o "ml/runs/heads/${tag}.pt" \
       "https://github.com/${GITHUB_REPOSITORY}/releases/download/model-checkpoints-v1/${tag}.pt"; then
     HPATHS="$HPATHS ml/runs/heads/${tag}.pt"
+    echo "head ${tag}: fetched ($(stat -c%s "ml/runs/heads/${tag}.pt") bytes)"
   else
-    echo "::warning::head ${tag} not on the release — skipped"
+    rm -f "ml/runs/heads/${tag}.pt"
+    MISSING="$MISSING ${tag}"
   fi
 done
+if [ -n "$MISSING" ]; then
+  echo "::error::named head(s) not fetched from the release:${MISSING}"
+  echo "::error::tried both <tag>__temporal.pt and <tag>.pt for each. This is"
+  echo "::error::a REFUSAL, not a skip: the run was dispatched FOR these heads"
+  echo "::error::and rolling the rest would produce a green job that answers a"
+  echo "::error::different question than the one asked. Check the asset name"
+  echo "::error::(weights-only heads are published as 'head-weights-<arm>.pt',"
+  echo "::error::so the window token must carry that whole stem) and check the"
+  echo "::error::asset's 'state' is 'uploaded' rather than 'starter'."
+  exit 1
+fi
 [ -n "$HPATHS" ] || { echo "::error::no heads fetched — nothing to roll"; exit 1; }
+echo "heads: $(echo $TAGS | wc -w) named, $(echo $HPATHS | wc -w) fetched"
 
 OUT="ml/runs/actions/rollout_spatial.json"
 # BACKGROUNDED behind a publisher loop, exactly as the training step does.
