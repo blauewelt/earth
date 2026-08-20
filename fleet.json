@@ -1,15 +1,16 @@
 {
- "at": "2026-08-19T06:40:53.271Z",
- "credit_usd": 49.85,
+ "at": "2026-08-20T06:38:11.792Z",
+ "credit_usd": 15.38,
  "balance_usd": 0,
  "boxes_total": 12,
  "boxes_running": 3,
- "burn_usd_per_h": 0.9352,
+ "burn_usd_per_h": 1.2843,
  "boxes": [
   {
    "id": 47487801,
    "status": "exited",
    "dph": 0.2585,
+   "storage_dph": 0.0185,
    "disk_used_gb": 75,
    "disk_gb": 100
   },
@@ -17,13 +18,15 @@
    "id": 47717160,
    "status": "exited",
    "dph": 0.2678,
-   "disk_used_gb": 56,
+   "storage_dph": 0.0278,
+   "disk_used_gb": 55,
    "disk_gb": 100
   },
   {
    "id": 47717171,
-   "status": "exited",
+   "status": "offline",
    "dph": 0.2878,
+   "storage_dph": 0.0278,
    "disk_used_gb": 63,
    "disk_gb": 100
   },
@@ -31,13 +34,15 @@
    "id": 47718224,
    "status": "exited",
    "dph": 0.2551,
+   "storage_dph": 0.0593,
    "disk_used_gb": 46,
    "disk_gb": 100
   },
   {
    "id": 47718230,
-   "status": "running",
+   "status": "exited",
    "dph": 0.2944,
+   "storage_dph": 0.0278,
    "disk_used_gb": 57,
    "disk_gb": 100
   },
@@ -45,20 +50,23 @@
    "id": 47720655,
    "status": "exited",
    "dph": 0.2551,
+   "storage_dph": 0.0593,
    "disk_used_gb": 54,
    "disk_gb": 100
   },
   {
    "id": 47720660,
-   "status": "exited",
+   "status": "offline",
    "dph": 0.2878,
+   "storage_dph": 0.0278,
    "disk_used_gb": 66,
    "disk_gb": 100
   },
   {
    "id": 47720664,
-   "status": "exited",
+   "status": "offline",
    "dph": 0.3063,
+   "storage_dph": 0.0463,
    "disk_used_gb": 71,
    "disk_gb": 100
   },
@@ -66,28 +74,32 @@
    "id": 47724559,
    "status": "exited",
    "dph": 0.2944,
-   "disk_used_gb": 56,
+   "storage_dph": 0.0278,
+   "disk_used_gb": 57,
    "disk_gb": 100
   },
   {
    "id": 47724565,
    "status": "running",
    "dph": 0.3078,
+   "storage_dph": 0.0278,
    "disk_used_gb": 56,
    "disk_gb": 100
   },
   {
    "id": 47726876,
-   "status": "exited",
+   "status": "running",
    "dph": 0.3211,
-   "disk_used_gb": 55,
+   "storage_dph": 0.0278,
+   "disk_used_gb": 58,
    "disk_gb": 100
   },
   {
    "id": 47913006,
    "status": "running",
    "dph": 0.333,
-   "disk_used_gb": 365,
+   "storage_dph": 0.013,
+   "disk_used_gb": 367,
    "disk_gb": 700
   }
  ]
