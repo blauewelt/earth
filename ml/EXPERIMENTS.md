@@ -1555,6 +1555,161 @@ evidence of harm — but it is emphatically not corroboration of a +0.072 skill 
 | dead dispatches charged to this arm | **#421**, ~$0.08 + ~$0.32 idle — see §2b |
 | head roll rate | 10,497.9 s / 714 steps = **14.70 s/step**, the low end of the #394 / #401 / #413 / #417 band (14.7–15.5) and the fourth confirmation of the rate E-044's pentad arithmetic is built on |
 
+<a id="e-043b-roll-addendum"></a>
+#### 9 · ADDENDUM, 2026-08-20 16:15–17:00Z — the ROLL CODE is not the mechanism, and the anomaly is older than the roll
+
+§7 named the lead-time profile and said the mechanism was not diagnosed. The leading
+hypothesis afterwards was a wiring slip in the roll rewrite: **#422 is the first code any
+RING-STENCIL head has ever rolled** (#418 rolled the same-architecture E-032 pair at
+`8f0e514`, before `e9f3d8d`/`ef62fbf` landed, and decayed normally), so if the skill loop's
+neighbour gather read OBSERVED Z at rolled timesteps for the ring path, the centre pixel
+would roll while 144 neighbours carried ground truth — one-step skill at every horizon,
+flat, wind included, and the stencil-1 gate untouched. That story fits every symptom.
+
+**It is false, and three independent measurements say so.** None of them is a reading of
+intent; §0.1.
+
+**(i) The roll machinery is BYTE-IDENTICAL across the rewrite.** `diff` of `8f0e514` against
+`32e4e06` over `ml/rollout_spatial.py` (833 insertions, all of it `TimeAxis`, bands and
+starts) leaves four regions untouched, and they are exactly the regions the hypothesis is
+about: **`roll_step`** — old `306–355`, new `714–763`, the ONLY place a neighbour gather
+happens (`zj = Zwin[nbr.clamp(min=0)]`, new `752`) — is identical line for line;
+**`zwin_from_true`** and **`geometry()`** (old `830–859`, new `1434–1460`) are identical;
+the head-load block (old `871–898`, new `1567–1594`) is identical. There is exactly ONE Z
+buffer in each loop, `Zwin`, and both the skill loop (new `1662`) and `long_roll` (new
+`1813`) advance it the same way, `torch.cat([Zwin[:, 1:], zhat[:, None]], 1)`. The gather
+reads that buffer and nothing else. What DID change in the skill loop is the start
+enumeration (`ax.starts_for_year` for `for s_off in range(12)`), the season token
+(`ax.moy_of_row(t_tgt)` for `(cur[-1] + 1) % 12`) and the RAPID key — none of which touches
+where a neighbour's Z comes from, and all of which are identities at monthly.
+
+**(ii) `tests/test_roll_ring_identity.py` (NEW) — the ring path reproduces `BASE_SHA` bit for
+bit, and the test can detect the bug that was hypothesised.** The gap that made this
+expensive is real and is now closed: `tests/test_roll_monthly_identity.py` pins the monthly
+artefact on a fixture carrying **stencil 1 and stencil 9 with `ring_km` UNSET**, so
+`_ring_on` is false for both and the `spiral:` branch of `build_stencil` — the geometry
+every published stage-2 head since E-032 actually uses — had never once been compared
+across a change to this file. The new test adds a third head to the same toy whose only
+difference from the fixture's stencil-9 head is `ring_km` (`spiral:200,900,0.71,0.5`; small
+radii because the toy ocean is 8×10 cells), rolls it under both versions, and asserts three
+things: the ring head was SCORED (its label carries the spiral spec — the #421 shape of
+failure, a head silently absent, would otherwise leave both sides equal and the test green
+over nothing); its record DIFFERS from the same-slot-count fixed-table head's, so `ring_km`
+reached the geometry and the test is not comparing one geometry with itself; and the two
+payloads are **BYTE-IDENTICAL** after the same two documented exclusions
+(27 `horizon_auc_daymatched` keys, each asserted equal to its scope's `horizon_auc` before
+being dropped, plus the `wall_s` clock readings). All three hold. **And the test is not
+vacuous:** against a copy of `ml/` in which the skill loop was edited to do exactly what the
+hypothesis describes — `Zwin = zwin_from_true(t_tgt, K); Zwin[:, -1] = zhat` when
+`NBR_t is not None` — check 3 FAILS while 1 and 2 still pass.
+
+**(iii) The anomaly was already in #414's OWN training artefact, on the OLD sha, with no
+roll code involved.** #414 ran at `head_sha` **`8f0e514`** — *the same commit #418 ran*. Its
+in-process `t+1` eval (`ml/temporal.py:2011–2048`, `ev_t` keyed on `t_hold[t+1]` over all P
+pixels) returned `z_t+1` **0.04369** and `chan_t+1` **0.06548**, against #346's **0.38798**
+and **0.23057** — **8.9× and 3.5×**. And the two evals provably scored the SAME points:
+`mse_persistence` is bit-identical to sixteen digits in both spaces (**3.139432907104492**
+in z, **1.1540813446044922** in channels), which is a pure function of Z, X,
+`t_hold`, `K`, `T`, `P` and the seeded RNG draw — so the Z cache, the anomaly transform, the
+time holdout and the sample are all pinned identical, and `scale.data_points` confirms the
+one thing that did move: **84,405 × 456 = 38,488,680** for #414 against **63,285 × 456 =
+28,857,960** for #346, i.e. `ok_p` and nothing else (`temporal.py:1472` is the only line
+`pool_x_hold` reaches).
+
+**And the roll AGREES with those training numbers, for both heads, which is the opposite of
+what a leaking gather would do.** Window scope, h = 1:
+
+| | roll `msss_pers` h1 | its own training run's `1 − chan_t+1 ratio` | Δ |
+|---|---|---|---|
+| #422 / #414 head (anomalous) | **0.944** | **0.9433** | **0.0007** |
+| #418 / #346 head (control) | 0.811 | 0.8002 | 0.011 |
+
+A roll that injected truth through the neighbours would put #422's h = 1 **above** #414's
+own pre-rewrite measurement. It sits ON it — more tightly than the clean control does.
+
+**What that leaves.** The elevated h = 1 is a TRAINING result, not an eval artefact, and it
+predates every line of the rewrite. The residual anomaly is the one §7 already isolated —
+**error growth over the eleven steps after the first: 1.07× against the control's 1.55×** —
+and it cannot be blamed on the rewrite either, because the rewrite does not touch the loop
+that produces it. Two of §7's three "impossible" signatures also need softening now that the
+control's own audit block has been read: `tau_x` at h = 12 is **0.810 in #418**, on the old
+code, rising from 0.753 at h = 1, so "wind stress forecast at a year" is a property of this
+`msss_clim` definition on that channel and not something new; and the per-channel gain is
+not uniform (`cur_speed` +0.41, `rg_t10` +0.055 at h = 1). The genuinely unexplained
+observations are the h = 1 level, the flat error growth, and §6.4's contradiction — **the
+same `zhat`, in the same job, gives ORDINARY transport numbers** (`long.r_heldout` 0.469 vs
+the control pair's 0.417 / 0.350; `amoc_bands` 0.483 / 0.380 / 0.498 vs 0.476 / 0.355 /
+0.437). A rolled state that tracked truth to `acc` 0.97 for twelve months should not project
+onto RAPID like an ordinary one.
+
+**#424 was dispatched anyway** — see below. (i)–(iii) are a reading and two measurements on
+a toy; #424 is the same question asked of the production artefact, and the record should not
+rest on the cheap version of a check when the expensive one costs $1.
+
+**What to check next, in cost order, given the suspect has moved to #414's training:**
+
+1. **The `_trainlon` scope already rules out "the extra pixels were easy."** #414's head
+   beats the control on the SAME 22,538 corridor pixels both trained on (0.93933 vs
+   0.86700). Whatever happened is not a change in which pixels were scored.
+2. **The milestone assets.** #414 published at steps **600 / 60,000 / 120,000**
+   (`milestone_steps`). An eval-only re-dispatch of the step-600 milestone would settle
+   learning against leakage in one reading: a head 600 steps old cannot have LEARNED a
+   one-step error of 0.06 of climatological variance, so if the milestone already shows it,
+   the pool change opened a path to the answer rather than to more data.
+3. **`train_lon_hold: "none"` on a NON-ring head, or on the gate's architecture.** The
+   recipe (`ml/recipes/xl144-nolonhold.json`) differs from #346's dispatch in exactly one
+   field, and `pool_x_hold` reaches exactly one line — but it has only ever been run once,
+   at one architecture.
+4. **#414 has no `probe_head.json`** (its dispatch carried `head_probe: "false"`). The
+   unpooled read-out is still the cheapest independent opinion on whether this head knows
+   anything the controls do not — ~2 h, ~$0.6, already priced in E-043b §5.
+
+**Not changed here.** `ml/rollout_spatial.py` was read and left alone: the brief was to fix
+it only on a proven bug, and the bug is disproven rather than unproven. The only code that
+landed is `tests/test_roll_ring_identity.py`.
+
+---
+
+<a id="e-043b-control"></a>
+### E-043b-CONTROL · #424 — DISPATCHED 2026-08-20 16:19:42Z, in flight. The decisive re-roll of a KNOWN head on the NEW code
+
+**#424** re-rolls `e032xl_u1_s0` — **#418's own seed-0 head**, an archived published asset —
+beside the frozen `e017_u1_s0` gate, on `gpu-box-31479844` (vast 47724559, the box that ran
+both #418 and #422 and still holds their warm Z cache and tensor), at the current `main`.
+`window: sroll:e017_u1_s0,e032xl_u1_s0`; **every one of the other 24 inputs is copied
+verbatim from #422's own `INPUTS_JSON`**, read out of #422's job log rather than
+reconstructed. Both assets were confirmed `state: uploaded` and `HTTP 200` with the exact
+bare-`curl` call `sroll_run.sh` makes, before dispatch — the #421 Fastly-404 lesson (§2b),
+and cheap where the inputs are all it has cost (§0.3).
+
+**PREDICTION, registered in the dispatch `doc` before the job started, and it is a two-way
+falsifier:**
+
+- **If the new code is broken for ring heads**, `e032xl_u1_s0` comes back **flat and
+  inflated** — corridor `_trainlon` near 0.94 with a profile that does not decay — instead of
+  reproducing **#418's 0.86700** with its normal twelve-month decay (0.774 → 0.650). That
+  would locate the fault in `ml/rollout_spatial.py`, retract #422, and make every ring-head
+  number written on this sha suspect.
+- **If it reproduces 0.86700** within the xl tier's band (§3b pooled sd 0.0021, 95% upper
+  bound 0.0037) **with normal decay**, the roll code is CLEAN and #422's anomaly lives in the
+  head itself or its published asset — the suspects become #414's training and the #420
+  headpub, in the order §9 lists above.
+
+**VOID conditions, also pre-registered:** `e017_u1_s0` must reproduce `horizon_auc` **0.643**
+within `GATE_TOL` **0.0101**, and `len(rollout_spatial.json['heads'])` must be **2**.
+
+**First minutes verified, 16:26Z** (§2 — measurements, not intentions). `ml-live-424` is
+emitting; the config line reads the frozen anchor (`resumed from run-62.pt at step 60,000`,
+`params_M 40.693`, `eval_every 0` — eval-only, nothing trains); **`"heads": 2`**, so both
+heads were fetched and the #421 gate-alone failure is ruled out; head 1 of 2 is `s1_s0`, the
+gate, stepping at a flat **2.98 s/window**; `gpu_util` on vast 47724559 reads **99%**, so
+this is on the card and not on the CPU. Expect the gate at ~16:56Z and the xl144 head at
+~19:50Z, against `job_timeout` 700 min. **~3.5 h, ≈ $1.0.**
+
+**Whatever it returns, §9(ii) already holds independently**: the ring path is bit-identical
+to `BASE_SHA` on the toy, and the test that says so fails against the injected bug. #424's
+job is to say the same thing about the 211M head, the real tensor and the real Z.
+
 ---
 
 <a id="e-043e"></a>
