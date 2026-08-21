@@ -13,9 +13,18 @@ converter and `embed_everything_jax`. Gates so far:
   the archived control **0.627**; the two backends differ by **5.7e-8** in
   r, and their Z arrays by mean|Δ| 1.2e-6 (max 7.8e-3 = one float16
   storage ULP; float32 re-encode 1.0e-5).
-- **G3 not yet attempted** — it needs the rollout, which is the next slice.
+- **G3 PASSED** — the `e017_u1_s0` gate head re-rolls at gate AUC **0.643**
+  from both backends (recomputed 0.642833 either side, Δ 1.7e-4 vs the
+  archive, tol 0.0101), with `auc_damped` 0.619 also reproduced. All twelve
+  per-horizon rows — `msss_clim`, `msss_pers`, `msss_damped`, `acc`,
+  `amp_ratio` and the sample counts — are **bit-identical between torch and
+  jax**; the rolled states differ by mean|Δ| 2.4e-6 (max 1.1e-3 at h=12,
+  7e-5 relative), compounding monotonically over the 12 iterated steps as
+  it must. Scored on the gate scope's 864 pixels; corridor and window are
+  reported as NOT SCORED rather than approximated — see §6b.
 
-Reproduce: `python3 ml/jaxport/score_section_probe.py --backend {jax,torch}`.
+Reproduce: `ml/jaxport/score_section_probe.py` (G2′) and
+`ml/jaxport/score_gate_roll.py` (G3), both `--backend {jax,torch}`.
 
 ## 1 · Why
 
@@ -222,3 +231,42 @@ the repo's own flush-then-mark discipline (`ml/CLAUDE.md` §5.21): write a
 marker beside the tensor AFTER the transform completes, and refuse to embed
 a tensor whose marker is missing. That guard does not exist on the
 operational path today.
+
+## 6b · What G3 scored, and what it deliberately did not
+
+G3 was run on the **gate scope's 864 pixels**, not on the corridor (29,627)
+or the whole window (84,405). That is a compute refusal with an exactness
+argument behind it, not a shortcut, and the distinction matters enough to
+write down.
+
+One roll step is one forward per rolled pixel and the protocol rolls 234 of
+them. Measured on the two CPU cores available here: 7.1 s/step torch and
+8.6 s/step jax at 864 pixels — 27.6 and 33.4 minutes. The cost is linear in
+pixels, so the full window would be **~45 h and ~54 h**. Nothing about that
+is a statement about TPUs or GPUs; it is a statement about scoring a gate on
+a laptop-class box.
+
+**The reduction is exact for the gate scope and only for it.** `e017_u1_s0`
+is a **stencil-1** head, so `roll_step` has no cross-pixel term at all —
+window, static context, decode, the AR1 baseline and `accumulate`'s sums are
+each per-pixel — and the gate's sums are therefore bit-identical whether the
+other 83,541 pixels rolled beside them or not. Corridor and window are NOT
+recoverable that way, so the driver emits a `not_scored` key naming the
+archived value and the reason, rather than printing an AUC over
+corridor∩gate under the name "corridor". A stencil>1 head is refused
+outright under `--scope gate`, for the mirror-image reason: there the
+neighbours are part of the arithmetic and dropping them would change the
+number silently.
+
+Both backends ran the identical 864-pixel subset, the identical published Z
+and the identical cached static-identity embedding, which is what makes the
+backend-to-backend comparison like-for-like.
+
+**Why the published Z is the right input here.** G3's job is to isolate the
+ROLLOUT. The embedding path already has its own gate (G2′, backends agreeing
+to 5.7e-8 in r), so feeding both backends the same torch-produced
+`Z_6c52f0687b_adcbe700fb` — canonical for this codec on this tensor, keyed
+by the codec's own weight hash — removes the encoder as a variable instead
+of re-testing it. It also costs nothing: embedding 84,405 pixels from
+scratch is ~43.5M encoder forwards, which on this box is over a hundred
+hours.
