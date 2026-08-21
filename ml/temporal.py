@@ -1062,6 +1062,42 @@ def main():
                          "the roll never produces. Reaches temporal.py "
                          "through the window's sched: tail, which the "
                          "workflow hands over verbatim — no workflow edit.")
+    ap.add_argument("--grad-clip", type=float, default=0.0,
+                    help="E-044: max global gradient 2-norm, applied with "
+                         "torch.nn.utils.clip_grad_norm_ between backward() "
+                         "and opt.step(). 0.0 (DEFAULT) = OFF, and OFF MAKES "
+                         "NO CALL AT ALL — the pre-2026-08-21 code path "
+                         "exactly — so every archived stage-2 number stays "
+                         "bit-reproducible and no monthly dispatch has to "
+                         "opt out of anything. WHY IT EXISTS: #423 (E-044, "
+                         "the first stage-2 at pentad cadence) diverged from "
+                         "its step-2,000 best with grad norm 8.24 -> 787 -> "
+                         "3,891 -> 13,052 and two full blow-ups, in a "
+                         "trainer where grep -n 'clip_grad' returned "
+                         "NOTHING. WHY A CLIP WHEN THE OPTIMISER IS ADAM: "
+                         "Adam bounds the update per COORDINATE, not the "
+                         "damage per STEP. One outlier batch spikes m and v "
+                         "together, |m/(sqrt(v)+eps)| goes to ~1 in every "
+                         "coordinate at once, and the parameter vector moves "
+                         "by ~lr*sqrt(N) = 1e-3*sqrt(206.5M) = 14.4 in one "
+                         "step; v then stays inflated for ~1/(1-beta2) = "
+                         "1,000 steps, during which honest gradients are "
+                         "scaled to nothing. That is the shape #423 shows — "
+                         "a spike, thousands of steps of partial recovery, "
+                         "another spike. SIZE IT FROM THE MEASURED "
+                         "DISTRIBUTION: the monthly stage-2 archive is 8,080 "
+                         "logged grad norms over 83 runs on the ml-metrics "
+                         "branch (all at val_persistence 3.09512), median "
+                         "0.566, p99 4.30, and MAXIMUM 39.6165 (#308; #221 "
+                         "is 35.01). 128.0 is therefore 3.23x every monthly "
+                         "norm ever recorded — 0 of 8,080 would have been "
+                         "clipped, where a threshold of 32 would have "
+                         "clipped 2 — while sitting 15.5x above the healthy "
+                         "PENTAD norm (8.24/8.25 at steps 2,000/4,000, so it "
+                         "does not bind a healthy pentad run either) and "
+                         "6.15x below the smallest pentad excursion (787.2). "
+                         "Reaches temporal.py through the window's sched: "
+                         "tail, which the workflow hands over verbatim.")
     ap.add_argument("--unroll-wide", type=int, default=0,
                     help="E-030: unrolled training for WIDE stencils via "
                          "one-hop self-generated context (Chris, 2026-08-15: "
@@ -1116,8 +1152,8 @@ def main():
                          "--unroll 4: each training step draws U_t in "
                          "1..unroll from this distribution and unrolls that "
                          "far (Chris, 2026-08-11: 'probabilistically set U "
-                         "to 1 (50%), 2 (25%), 3+4 (12.5%)'). Rationale, "
-                         "measured: fixed U=4 pays +28% one-step z-MSE at "
+                         "to 1 (50%%), 2 (25%%), 3+4 (12.5%%)'). Rationale, "
+                         "measured: fixed U=4 pays +28%% one-step z-MSE at "
                          "every seed while buying the nowcast probe +0.09; "
                          "sampling spends half the steps on the pure "
                          "one-step map and reaches full depth only "
@@ -1155,6 +1191,15 @@ def main():
                          "'-45,-25' in the next argv slot is read by argparse "
                          "as an option string, not a value.")
     a = ap.parse_args()
+
+    # A PRECONDITION THAT DEPENDS ONLY ON THE INPUTS IS CHECKED WHILE THE
+    # INPUTS ARE ALL IT HAS COST (ml/CLAUDE.md §0.3). A negative max_norm is
+    # not "off": clip_grad_norm_ would scale every gradient by a negative
+    # coefficient and flip the descent direction, and nothing downstream
+    # would say so for the ten hours it took to notice.
+    if a.grad_clip < 0:
+        sys.exit(f"--grad-clip {a.grad_clip} must be >= 0 (0 = off, and off "
+                 f"makes no clip_grad_norm_ call at all).")
 
     torch.manual_seed(a.seed)
     np.random.seed(a.seed)
@@ -1729,6 +1774,15 @@ def main():
                           "ring_km": a.ring_km,
                           "unroll_probs": a.unroll_probs,
                           "direct": a.direct,
+                          # E-044: the two knobs that decide whether a stage-2
+                          # run is the one it says it is. #423's verification
+                          # item 10 could not settle `--input-znoise 0.7` from
+                          # anywhere but the (expired) job log, because no
+                          # record printed it; `grad_clip` would have had the
+                          # same gap the day after it was added. Both are
+                          # dispatch inputs, so both belong on the live branch.
+                          "input_znoise": a.input_znoise,
+                          "grad_clip": a.grad_clip,
                           # WHICH LONGITUDES TRAINED. Named here for the same
                           # reason `stencil` is: an arm whose only difference
                           # is its training pool must be readable from the
@@ -1758,8 +1812,57 @@ def main():
     mon_sctx = static_ctx[emp].to(TDEV)
     mon_ztrue = Zt[emt + 1, emp].float().to(TDEV)
     mon_pers = float((Zt[emt, emp].float().to(TDEV) - mon_ztrue).pow(2).mean())
+    # E-044: REPORT THE SCALE THE INPUT NOISE IS ACTUALLY BEING APPLIED AT.
+    # Nothing here changes behaviour — `--input-znoise` is used verbatim, as
+    # it always was. This exists because the flag is an ABSOLUTE sigma in
+    # whatever units the frozen codec's encoder happens to emit, and #423
+    # carried the monthly anchor's 0.7 to a codec whose z-space is on a
+    # different scale without one line of any record saying so. The flag's own
+    # help asks for sigma = sqrt(val_zmse) of the MATCHING CLEAN RUN; at a new
+    # cadence that reference run does not exist yet, so the honest thing to
+    # print is the scale we DO have — sqrt(val_persistence), the RMS one-step
+    # change of this z-space — and let the reader see how far the copied
+    # constant sits from the arm it was copied from. Monthly anchor, measured:
+    # val_persistence 3.09512, so 0.7 is 0.39788 x sqrt(persistence).
+    # AND THE ABSOLUTE SCALE OF THE Z-SPACE ITSELF, which no record has ever
+    # carried. `val_persistence` is the one-step CHANGE; `z_rms` is the size of
+    # the thing that changes. The two are different questions and #423 could
+    # answer neither from any artefact — its Z existed only on one rented disk,
+    # so the session diagnosing it had to derive the scale indirectly from
+    # `z_mse_persistence` in the CODEC's own stage-1 probe records. One
+    # reduction over a batch that is already resident makes the next session's
+    # answer a measurement instead (§4.10: instrument the quantity that
+    # distinguishes the stories). Both are per-component means, so they are
+    # comparable across codecs with different d_z — which is exactly the
+    # comparison that was in doubt.
+    _zrms = float(mon_ztrue.pow(2).mean().sqrt())
+    _zref = float(np.sqrt(max(mon_pers, 1e-12)))
+    _zrel = float(a.input_znoise) / _zref
+    _zrelz = float(a.input_znoise) / max(_zrms, 1e-12)
+    print(f"z-space scale (per component, over {len(msel)} held-out windows): "
+          f"RMS |z| {_zrms:.5f} · RMS one-step change sqrt(val_persistence) "
+          f"{_zref:.5f}", flush=True)
+    if a.input_znoise > 0:
+        print(f"input noise: --input-znoise {a.input_znoise:g} is an ABSOLUTE "
+              f"sigma, = {_zrel:.5f} x sqrt(val_persistence) = {_zrelz:.5f} x "
+              f"RMS |z|. The monthly anchor this constant was tuned on reads "
+              f"0.39788 x sqrt(val_persistence) (0.7 at val_persistence "
+              f"3.09512). A very different figure means the perturbation is "
+              f"NOT the one that was measured, only the same number.",
+              flush=True)
     m2({"stage2_monitor": {"n_windows": int(len(msel)),
-                           "val_persistence": round(mon_pers, 5)}})
+                           "val_persistence": round(mon_pers, 5),
+                           # the size of the z-space, beside the size of its
+                           # one-step change. Never one without the other.
+                           "z_rms": round(_zrms, 5),
+                           # the sigma actually used, beside the scale it is
+                           # judged against — never one without the other.
+                           # #423's verification could not settle its own
+                           # znoise from any record, only from a job log that
+                           # then expired.
+                           "input_znoise_sigma": round(float(a.input_znoise), 5),
+                           "input_znoise_rel_pers": round(_zrel, 5),
+                           "input_znoise_rel_zrms": round(_zrelz, 5)}})
     try:
         _pr = d["rapid"]
         _pridx = _pr[:, 0].astype(int)
@@ -1775,6 +1878,87 @@ def main():
     except Exception as _e:                     # monitoring never breaks a run
         print(f"  (in-training probe disabled: {_e})")
         _psec = None
+
+    # E-044: GRADIENT CLIPPING. Until 2026-08-21 this trainer had none at
+    # all — `grep -n "clip_grad\|max_norm\|grad_clip" ml/temporal.py`
+    # returned NOTHING — and the monthly regime never asked for one. Measured,
+    # not assumed: the `ml-metrics` branch holds 8,080 logged stage-2 grad
+    # norms over 83 monthly runs (all at val_persistence 3.09512), median
+    # 0.566, p99 4.30, p99.9 14.47, MAX 39.6165 (#308). #423, the first
+    # stage-2 at PENTAD cadence, left that band at step 6,000 and never came
+    # back: 8.24 -> 787 -> 3,891 -> 13,052, with two full blow-ups to
+    # zmse 121 / val 227, from a step-2,000 best of val/persistence 0.540.
+    #
+    # OFF IS THE DEFAULT AND OFF MAKES NO CALL. Not `clip_grad_norm_(…, inf)`,
+    # which is a no-op only for finite norms and multiplies every gradient by
+    # a tensor otherwise; not a "very large" threshold, which is a promise
+    # about a distribution nobody has measured on the next tensor. A default
+    # that is never correct is not a default (§1), and the default that is
+    # always correct here is "the code path every archived head was trained
+    # on, unchanged". That is what makes the monthly archive comparable: a
+    # monthly dispatch does not opt out, it simply never opts in.
+    #
+    # WHY A CLIP AT ALL WHEN THE OPTIMISER IS ADAM. Adam bounds the update per
+    # COORDINATE, not the damage per STEP: one outlier batch spikes m and v
+    # together, |m / (sqrt(v) + eps)| goes to ~1 in every coordinate at once,
+    # and the parameter vector moves by ~lr * sqrt(N) = 1e-3 * sqrt(206.5M) =
+    # 14.4 in one step. The second moment then stays inflated for
+    # ~1/(1-beta2) = 1,000 steps, during which honest gradients are scaled to
+    # nothing. That is the shape #423 actually shows: a spike, then thousands
+    # of steps of slow, incomplete recovery, then another spike — and after
+    # step 6,000 its grad norm NEVER returns below 1,000, so it is a sustained
+    # regime change and not a sequence of isolated events.
+    #
+    # HOW TO SIZE THE THRESHOLD, in the units that decide the damage. One step
+    # at norm g moves the second moment by v <- v + (1-beta2)*(g/g_ok)^2 * v,
+    # so what matters is the RATIO to the healthy norm, squared. #423's healthy
+    # norm is 8.25 (steps 2,000 and 4,000, and they agree to two decimals):
+    #
+    #   unclipped, at its worst 13,051.8 = 1,582x healthy -> v grows 2,503x,
+    #       sqrt(v) 50x, and every honest gradient for the next ~1,000 steps
+    #       is divided by 50. That is the poisoning, quantified.
+    #   clipped at 128.0 = 15.5x healthy -> v grows 1.24x, sqrt(v) 1.11x.
+    #       An 11% perturbation that decays in a few hundred steps.
+    #
+    # So 128 does not have to be tight to work: it turns a 50x derangement
+    # into an 11% one. It is also mild in DISTRIBUTION terms — 128/8.25 = 15.5
+    # healthy norms is, transferred to the monthly median of 0.566, a clip at
+    # 8.8, which would have bound on 20 of the archive's 8,080 logged steps
+    # (0.25%). A clip that occasionally bites the tail is the normal regime for
+    # a transformer, not a compromise.
+    CLIP = float(a.grad_clip)
+    if CLIP > 0:
+        # §4.10: INSTRUMENT THE QUANTITY THAT DISTINGUISHES THE STORIES. The
+        # existing grad-norm log samples ONE step in `log_every` — one in
+        # 2,000 on a 200,000-step run — so #423's excursion could have begun
+        # anywhere inside a 2,000-step window and no record can say where, nor
+        # whether the sampled step was typical or the single worst. Clipping
+        # computes the norm on EVERY step anyway, so the window max and the
+        # hit rate cost nothing extra. They are accumulated on-device and
+        # synced only at a log point, so no GPU sync is added per step.
+        #
+        # The pair is what distinguishes the two stories a single sampled
+        # norm cannot separate: "healthy, clip never binds" reads frac 0.0
+        # with norm_max well under CLIP, and "being clipped constantly" — a
+        # run whose effective learning rate is now set by the clip and not by
+        # the schedule — reads frac climbing off 0. A run that silently moved
+        # from the first to the second is the failure this logging exists to
+        # make visible, and it says so a full log window before the sampled
+        # norm would.
+        _cl_max = torch.zeros((), device=TDEV)
+        _cl_hit = torch.zeros((), device=TDEV)
+        _cl_bad = torch.zeros((), device=TDEV)
+        _cl_n = 0
+        print(f"gradient clipping ON: max_norm {CLIP:g}, applied every step "
+              f"between backward() and opt.step(). stage2_grad_norm keeps "
+              f"reporting the PRE-clip norm; stage2_grad_norm_max, "
+              f"stage2_grad_clip_frac and stage2_grad_nonfinite report over "
+              f"each {max(1, a.steps // 100)}-step window, not just the "
+              f"logged step.", flush=True)
+    else:
+        print("gradient clipping OFF (--grad-clip 0): no clip_grad_norm_ call "
+              "is made, which is the pre-2026-08-21 code path exactly.",
+              flush=True)
 
     print(f"training the temporal stage … ({n_par2:,} parameters)")
     t0 = time.time()
@@ -1877,7 +2061,31 @@ def main():
             l_uw = (pred2[:, -1] - zfut[:bu, 1]).pow(2).mean() / 2
             loss = loss + l_uw
         opt.zero_grad(); loss.backward()
-        if s % log_every == 0 or s == a.steps:
+        _logstep = (s % log_every == 0 or s == a.steps)
+        if CLIP > 0:
+            # clip_grad_norm_ RETURNS the PRE-clip total norm — the identical
+            # quantity the else-branch computes by hand — so the clipped path
+            # costs nothing extra to log and gets the norm on EVERY step
+            # instead of one step in log_every.
+            _gnt = torch.nn.utils.clip_grad_norm_(model.parameters(),
+                                                  CLIP).detach()
+            # §5.22, NEVER WRITE NaN INTO A RESULTS FILE. torch.maximum
+            # PROPAGATES NaN (it is not fmax), so a single non-finite step
+            # would pin the running max at NaN for the rest of the run and
+            # every later stage2_grad_norm_max would be a NaN — loud enough to
+            # notice and quiet enough to misattribute, which is the exact
+            # failure §5.22 names. A non-finite norm is NOT a big number: it
+            # is a different event, so it gets its own counter and is kept out
+            # of the max and out of the rate.
+            _fin = torch.isfinite(_gnt)
+            _cl_bad += (~_fin)
+            _g_ok = torch.where(_fin, _gnt, torch.zeros_like(_gnt))
+            torch.maximum(_cl_max, _g_ok, out=_cl_max)
+            _cl_hit += (_g_ok > CLIP)
+            _cl_n += 1
+            if _logstep:
+                gn = float(_g_ok)
+        elif _logstep:
             # gradient norm BEFORE the step, only on log steps (a .item()
             # per step would sync the GPU 60k times)
             gn = float(torch.sqrt(sum((p_.grad.detach() ** 2).sum()
@@ -1906,6 +2114,21 @@ def main():
                    # "not learning because the LR is zero".
                    "stage2_lr": float(sched.get_last_lr()[0]),
                    "stage2_wall_s": round(time.time() - t0, 1)}
+            if CLIP > 0:
+                # WINDOW statistics, not point statistics: the max PRE-clip
+                # norm seen since the last log point, and the fraction of
+                # steps at which the clip actually bound. A run whose frac
+                # climbs off 0 is leaving the regime the threshold was sized
+                # for — its effective learning rate is being set by the clip
+                # and not by the schedule — and it says so a whole log window
+                # before a single sampled norm could.
+                rec["stage2_grad_clip"] = CLIP
+                rec["stage2_grad_norm_max"] = round(float(_cl_max), 4)
+                rec["stage2_grad_clip_frac"] = round(
+                    float(_cl_hit) / max(1, _cl_n), 4)
+                # counted, never averaged into the two above
+                rec["stage2_grad_nonfinite"] = int(_cl_bad)
+                _cl_max.zero_(); _cl_hit.zero_(); _cl_bad.zero_(); _cl_n = 0
             if l_dir is not None:
                 rec["stage2_loss_direct"] = round(float(l_dir.item()), 5)
             if l_unr is not None:

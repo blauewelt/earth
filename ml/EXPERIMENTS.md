@@ -44,6 +44,261 @@ low-pass).
 
 ---
 
+<a id="e-044-423-diverged"></a>
+## E-044 · #423 DIVERGED AND WAS CANCELLED — stage 2 had no gradient clipping, and nothing was watching the norm it published
+
+**#423 (E-044 pentad xl144+znoise stage-2 head) · what it did, in absolute terms: trained a
+206.5M xl144+znoise stage-2 head on the PENTAD tensor over #415's frozen
+no-longitude-holdout pentad codec and diverged from its step-2,000 best · params 206.5M head
+over a frozen 37.976M codec · stage `stage-2` · data `family4_na025_pentad_r2` (C 40,
+T 3,142) · arch head 1024×16, K 24, stencil 145, ring `spiral:111,4444,0.71,0.5`,
+znoise 0.7, NO gradient clipping; codec 512×12, d_z 32, patch 1 · steps×batch stage-1 0 /
+stage-2 **28,000 of 200,000 × 256, CANCELLED 2026-08-21 04:39:42Z** · resume `run-415`.**
+
+Cancelled by the session at ~04:39Z. `head_sha` 8f0e514 (the code #415 and #423 both ran).
+
+### 1 · The full stage-2 trace, from `ml-live-423`
+
+`stage2_monitor.val_persistence` **21.44622**; `stage2_config.train_windows` **251,337,502**;
+`params_M` **206.536**; `d_z` **32**; `codec_holdout_lon` `0,0`; `train_lon_hold` `none` —
+every pre-registered first-minutes item PASSED. The run was the run it said it was. It still
+failed.
+
+| step | zmse | val_zmse | val/persistence | amp | grad norm | lr |
+|---|---|---|---|---|---|---|
+| 2,000 | 6.77614 | 11.58984 | **0.5404 ← BEST** | 0.8218 | **8.2372** | 1.000e-3 |
+| 4,000 | 5.26661 | 11.81387 | 0.5509 | 0.8372 | **8.2483** | 9.659e-4 |
+| 6,000 | 17.70444 | 22.41752 | 1.0453 | 0.8568 | **787.21** | 9.330e-4 |
+| 8,000 | 16.90655 | 19.25227 | 0.8977 | 0.8751 | 3,891.03 | 9.012e-4 |
+| 10,000 | 17.99294 | 20.56906 | 0.9591 | 0.8708 | 2,928.00 | 8.705e-4 |
+| 12,000 | 121.66760 | 220.34981 | **10.274** | **2.8252** | 6,277.70 | 8.409e-4 |
+| 14,000 | 20.92885 | 24.34108 | 1.1350 | 0.9110 | 2,078.22 | 8.122e-4 |
+| 16,000 | 18.11284 | 21.52560 | 1.0037 | 0.9670 | 2,998.00 | 7.846e-4 |
+| 18,000 | 13.54183 | 15.51535 | 0.7235 | 0.7660 | 1,106.62 | 7.578e-4 |
+| 20,000 | 13.53046 | 15.21943 | 0.7097 | 0.7338 | 1,026.88 | 7.320e-4 |
+| 22,000 | 13.39618 | 15.03861 | 0.7013 | 0.7529 | 1,168.29 | 7.071e-4 |
+| 24,000 | 120.73129 | 226.75468 | **10.573** | **2.8541** | **13,051.75** | 6.830e-4 |
+| 26,000 | 18.93076 | 20.89788 | 0.9744 | 0.7805 | 6,958.42 | 6.597e-4 |
+| 28,000 | 19.33818 | 20.20434 | 0.9421 | 0.9508 | 6,973.99 | 6.372e-4 |
+
+In-training probe at 20,000: `rapid_r_deseas` **0.579** (section-POOLED — emitted for
+protocol determinism, excluded from every claim, §7 of the spec).
+
+**Read the shape, not the levels.** The best validation is at step **2,000** and nothing
+after it comes close. After step 6,000 the grad norm **never returns below 1,000** — this is
+a sustained regime change, not a sequence of isolated spikes. And the two blow-ups are
+nearly the SAME state (zmse 121.67 / 120.73, val 220.35 / 226.75, amp 2.825 / 2.854), which
+says the run was oscillating in and out of one degenerate configuration rather than being
+hit by two unrelated bad batches.
+
+**The healthy comparator, same code, same architecture, monthly tensor.** #426
+(E-043b-SEED1) at step 52,000: `val_zmse` **0.09919** / persistence **3.09512** = ratio
+**0.03205**, grad norm **0.7274**, amp 0.9877, monotone. Its worst norm all run is 2.99.
+
+### 2 · Diagnosis — three candidates, and only one of them is load-bearing
+
+Established from artefacts, not from the shape of the failure.
+
+**(a) THE Z-SCALE DIFFERENCE IS REAL, REPLICATED — AND IS NOT WHAT BROKE THE RUN.**
+
+First, the comparison that was in doubt is sound as it stands. `val_persistence` is
+`(Z[t] - Z[t+1]).pow(2).mean()` — `ml/temporal.py:1814`, a **mean, not a sum** — so it is
+already a PER-COMPONENT quantity and **`d_z` 32 vs 64 and C 40 vs 39 do not enter it**.
+21.44622 against 3.09512 is apples to apples: the pentad z-space's RMS one-step change is
+**sqrt(21.44622) = 4.631** against the monthly anchor's **sqrt(3.09512) = 1.759**, a factor
+**2.63**.
+
+That factor is confirmed independently, off the CODECS' own stage-1 probe records on
+`ml-metrics`, in two pairs:
+
+| codec | tensor | d_z · patch | final `z_mse_persistence` | RMS |
+|---|---|---|---|---|
+| **#62** (f3 anchor, monthly) | `family3_na025` | 64 · 3 | 2.953 | 1.719 |
+| **#63** (f3 anchor, seed 1) | `family3_na025` | 64 · 3 | 3.298 | 1.816 |
+| **#386** (E-038a, pentad r1) | `family4_na025_pentad` | 32 · 1 | 20.98 | 4.581 |
+| **#415** (E-043e, pentad r2 — this codec) | `family4_na025_pentad_r2` | 32 · 1 | **19.875** | **4.458** |
+
+Two monthly codecs and two pentad codecs, agreeing within their pairs and separated by
+2.6× across them. It is a property of the pentad z-space, not of #415. (It is also not
+inherited: at step 0, before training, the same figures read 0.167 / 0.154 monthly against
+0.626 / 0.841 pentad — patch-1 encoding does no 3×3 spatial averaging, so its z is
+heavier-tailed from the start, and training then expands both.)
+
+**And yet the scale cannot be the destabiliser, because AdamW does not see it.** Multiply
+every gradient by a constant and AdamW's update `m̂/(√v̂ + ε)` is unchanged; the decoupled
+weight decay is unchanged too. Measured rather than asserted — 400 AdamW steps, same seed,
+loss multiplied by **6.929** (the exact `val_persistence` ratio):
+
+```
+A · PURE LOSS RESCALE  L -> 6.929 L   (gradients 6.929x, same problem)
+   grad-norm ratio step 0 / step 399 : 6.9290 / 6.9290
+   max |dparam| after 400 AdamW steps: 3.973e-05   (param scale 0.3054)  -> relative 1.30e-04
+B · TARGET RESCALE     y -> 2.632 y   (a genuinely 2.632x larger z-space)
+   grad-norm ratio step 0 / step 399 : 2.5848 / 3.7264
+   max |dparam| after 400 AdamW steps: 1.036e-01   -> relative 3.39e-01
+```
+
+So: **`stage2_grad_norm` reading 8.24 at pentad where the monthly arm reads 1.24 is a
+statement about the units of the z-space, not evidence of pathology** — 8.2372 and 8.2483
+at steps 2,000 and 4,000 are as stable a pair as the archive contains. Row B says the
+z-scale is not *inert* either (a larger target is a genuinely different optimisation
+problem, 34% different trajectory in the same toy) — but nothing in it predicts an episodic
+1,600× excursion, and **a lower learning rate is therefore NOT indicated**: lr 1e-3 is
+healthy at monthly, and it was healthy at pentad for 4,000 steps.
+
+**(b) `--input-znoise 0.7` IS MIS-SCALED — AND IN THE BENIGN DIRECTION, SO IT IS NOT THE
+CAUSE EITHER.** The flag adds `randn_like(z4) * 0.7` to live slots
+(`ml/temporal.py:1936`): an **absolute** sigma, in whatever units the frozen codec happens
+to emit. E-036/E-037 sized 0.7 on the MONTHLY z-space, from that arm's own one-step error
+(`sqrt(val_zmse) ≈ 0.74`), and nothing has ever checked that it transfers.
+
+| | monthly anchor (where 0.7 was measured) | #415's pentad codec (where #423 used it) |
+|---|---|---|
+| sqrt(`val_persistence`) | 1.7593 | 4.6310 |
+| `--input-znoise 0.7` as a fraction of it | **0.3979** | **0.1512** |
+
+**The same number is a 2.63× WEAKER perturbation at pentad.** Two consequences, and they
+point in different directions. It is *not* the divergence — weaker input noise does not
+explode gradients, and if anything it removes smoothing. But it is *also not the
+intervention E-036/E-037 measured* (+0.045/+0.050 corridor AUC, the largest replicated
+stage-2 effect in the log): #423 and its successor carry the monthly **number**, not the
+monthly **perturbation**, and no claim off this arm may say otherwise. §3b forbids carrying
+a level across a tier boundary and this is exactly that, caught after the fact.
+
+**(c) THE LOAD-BEARING FACT: there was no gradient clipping, and one unclipped step is
+worth a thousand.** Until 2026-08-21,
+`grep -n "clip_grad\|max_norm\|grad_clip" ml/temporal.py` returned **nothing**. AdamW
+bounds the update per COORDINATE, not the damage per STEP: one outlier batch spikes m and v
+together, and the second moment then stays inflated for ~1/(1−β₂) = 1,000 steps. In the
+numbers this run produced, with 8.25 as its own healthy norm:
+
+- **unclipped at its worst, 13,051.75 = 1,582× healthy** → v grows **2,503×**, √v **50×**, so
+  every honest gradient for the next ~1,000 steps is divided by 50;
+- **the same step clipped at 128.0 = 15.5× healthy** → v grows **1.24×**, √v **1.11×**.
+
+That is the whole difference between a run that recovers and one that does not, and it is
+exactly the shape #423 shows: a spike, thousands of steps of partial recovery, another
+spike, and a validation curve that never returns to step 2,000.
+
+**Verdict. Load-bearing: the missing clip.** Red herrings, both quantified above rather than
+waved away: the z-scale (real, replicated, invisible to AdamW) and `d_z`/channel-count
+(they do not enter a per-component mean at all). Mis-scaled but not causal, and now
+recorded rather than assumed: the znoise. Structural and unchanged, listed so the next
+reader does not re-derive them: K = 24 pentads is **120 days** of context against 24 months'
+730, the window pool is **251,337,502** against 38,488,680 (6.53×, so 200k × 256 = 51.2M
+draws covers 20% of the pentad pool once against 1.33 passes of the monthly one), and
+`d_z` is 32 against 64. None of these is a stability mechanism; the first two are why the
+pentad headline ratio (best 0.540) is not comparable to the monthly one (0.032) and must
+never be quoted against it without that sentence attached.
+
+### 3 · The cost, and what the cancel preserved
+
+| | |
+|---|---|
+| embed pass (8.5 h, 30,573 s to 95.6% + the tail) | ~**$2.6** at $0.308/h |
+| stage-2 training to step 28,000 (10,390.7 s = 2.89 h) | ~**$0.9** |
+| the job's other steps (checkout, deps, stage-1 no-op, provenance) | ~**$0.2** |
+| **total** | **≈ $3.7–4.2** |
+
+**What the cancel preserved, and it is most of the money.** The 16.24 GiB Z is on
+`gpu-box-39184683`'s disk at `/opt/earth-cache/Z_actions_<whash>_<dhash>.npy` and the
+re-dispatch reuses it, so the 8.5 h embed is **not** re-paid. Cancel stops the job and
+leaves the disk; a destroy would have cost the embed, `run-415.pt` and the warm 4.5 GB
+tensor. **DO NOT DESTROY vast 47724565.** The Z was never published to `embed-cache-v1`
+(zero assets created since 2026-08-20), so that one disk is the only copy — which also
+means `scripts/disk_hygiene.sh` will not touch it (tier 1 frees an embed cache only when a
+release CONFIRMS a second copy; an unpublished `Z_*.npy` is tier 2, "never").
+
+### 4 · §4 META-LESSON CANDIDATE — the run published the number that would have caught it
+
+**Stage 2 had no gradient clipping and no monitor that would have flagged the divergence,
+and the missing piece was not data — it was attention.** `stage2_grad_norm` was in every
+record from step 2,000 onward. 8.24 → 787 is a 95× jump inside one log window and it sat on
+the live branch for **hours** while the check-ins read `val_persistence`, `params_M` and
+`train_windows` and pronounced the run healthy. Three things follow, and they are why this
+is a §4 candidate rather than a bug report:
+
+1. **A quantity that is published and not watched is not instrumentation.** #423's own
+   trace contains its diagnosis in full. What was missing was a threshold — anything of the
+   form "grad norm × 10 in one window ⇒ say so" — and a first-minutes checklist that ended
+   at "the config is right" instead of continuing into "and the optimisation is sane".
+2. **A default calibrated on one distribution is a hypothesis everywhere else.** Every one
+   of the **8,080** stage-2 grad norms in the archive, across **83 runs**, is at
+   `val_persistence` **3.09512** — the programme has, until now, exactly ONE stage-2
+   z-space of experience, and both `--input-znoise 0.7` and "no clipping needed" are
+   properties of it. §3b already says a level does not cross a tier boundary; #423 is the
+   case where the level was not even in the dispatch, it was in the *absence* of a flag.
+3. **The check that would have cost nothing is the one at the top.** §4.10 asks for the
+   quantity that DISTINGUISHES the stories. A single grad norm sampled one step in 2,000
+   cannot distinguish "one bad batch" from "every batch is now bad"; a window max and a
+   clip-hit rate can, and they are free because clipping computes the norm every step
+   anyway. Both are now logged.
+
+### 5 · What changed in the code — `ml/temporal.py`, and the test that pins it
+
+**`--grad-clip`, default `0.0` = OFF, and OFF MAKES NO CALL AT ALL** — not
+`clip_grad_norm_(…, inf)`, not "a very large threshold". The default is the pre-2026-08-21
+code path exactly, so **every archived monthly number stays bit-reproducible and no monthly
+dispatch has to opt out of anything**. A negative value is refused at argument time (§0.3):
+`clip_grad_norm_` would scale every gradient by a negative coefficient and walk uphill.
+
+**Sizing 128.0 for the pentad arm, from the measured distribution.** Mined from
+`ml-metrics` this session: **8,080** logged `stage2_grad_norm` values over **83** runs,
+median **0.566**, p99 **4.279**, p99.9 **14.448**, **max 39.6165** (#308; #221 is 35.014).
+How many of those 8,080 each candidate threshold would have clipped:
+
+| threshold | 5 | 10 | 16 | 32 | 39.6165 | 64 | **128** |
+|---|---|---|---|---|---|---|---|
+| clipped | 34 | **16** | 5 | 2 | 0 | 0 | **0** |
+
+**A clip at 10.0 is NOT a no-op at monthly** — it would have bound on 16 archived steps.
+128.0 is **3.231×** the largest monthly norm ever recorded, **15.5×** the healthy pentad
+norm (so it does not bind a healthy pentad run either), and **6.15×** below the smallest
+pentad excursion. In distribution terms it is mild rather than exotic: 15.5 healthy norms
+transferred onto the monthly median is a clip at 8.8, which bites ~0.25% of the archive's
+steps — the ordinary regime for a transformer.
+
+**New instrumentation, per §4.10, all free because the clip computes the norm anyway.**
+`stage2_grad_norm` keeps reporting the **PRE**-clip norm (so the 83-run archive stays
+comparable to it); `stage2_grad_norm_max`, `stage2_grad_clip_frac` and
+`stage2_grad_nonfinite` report over the whole log **window** rather than the one sampled
+step. The pair is what separates "healthy, never binds" (frac 0.0, max well under the
+threshold) from "the clip is now setting the effective learning rate" (frac climbing off
+zero) — and it says so a full window before a sampled norm could. A non-finite norm is
+counted separately and kept out of the max, because `torch.maximum` PROPAGATES NaN and one
+such step would otherwise pin every later `stage2_grad_norm_max` at NaN (§5.22).
+
+**And the z-scale is now measured by the run instead of derived afterwards.**
+`stage2_monitor` gains `z_rms` (the size of the z-space) beside `val_persistence` (the size
+of its one-step change), and `input_znoise_sigma`, `input_znoise_rel_pers`,
+`input_znoise_rel_zrms` — the sigma actually used beside the two scales it should be judged
+against. #423's own znoise could not be settled from ANY record, only from a job log that
+then expired; and this session had to derive the pentad z-scale indirectly from the codec's
+stage-1 probes because the Z itself was unreachable. `input_znoise` and `grad_clip` are also
+added to `stage2_config` and to the checkpoint's `args`.
+
+**`tests/test_e044_grad_clip.py` — 5 checks, all passing.** Check 1 pins the mechanism with
+EXACT expected values (§4.9) using the archive's own numbers: #426's 1.2439 through a clip
+at 128.0 comes out `torch.equal` to its input, the archive's largest norm 39.6165 likewise,
+and #423's 13,051.751 comes out at **127.999992** with cosine similarity 1.000000000000 to
+its input direction. Check 3 is the archive-comparability proof: the pinned pre-fix revision
+**877ae5b** and the working tree run the same toy at the same seed with `--grad-clip` at its
+default, and all 31 parameter tensors compare `torch.equal`, with the val curve, the
+grad-norm curve and `z_t+1` identical over 100 logged points. Check 2 adds the stronger
+form — a clip at a threshold nothing reaches (`1e9`) is **also** bit-identical, because
+`clip_grad_norm_` clamps its coefficient at 1.0 and multiplying by exactly 1.0 is exact —
+and then asserts the EFFECT where it does bind (31/31 tensors moved) rather than the
+invocation.
+
+**NOT done, deliberately.** No `--input-znoise-rel` flag. The mis-scaling in §2(b) is real
+and the relative form is the right eventual fix (§4.2, normalise by properties of the DATA),
+but this dispatch does not use it, an unused knob is an untested knob, and §1's rule is that
+a setting must not appear to apply and quietly do nothing. It belongs to the arm that
+actually varies znoise at pentad. The reporting — which is what makes the defect visible in
+the artefact — shipped.
+
+---
+
 <a id="fleet-2026-08-21-0138"></a>
 ## OPERATIONS · The fleet at 2026-08-21 01:38Z — three boxes, three jobs, no idle burn
 
