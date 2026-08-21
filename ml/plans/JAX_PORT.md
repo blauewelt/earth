@@ -1,7 +1,11 @@
 # JAX port — effort assessment
 
-**Status: ASSESSMENT (2026-08-21). Nothing is ported yet; this document sizes
-the work and fixes the ground rules before any of it is delegated.**
+**Status: TIER 1 LANDED (2026-08-21). §§2–6 are the original assessment;
+`ml/jaxport/` now holds the tier-1 implementation, and gate G1 is measured
+PASSED — converted `f3_anchor41M` (40.7M, 576×10 patch 3, d_z 64) agrees
+with torch to max|Δ| 1.3e-5 on `encode` and 6.6e-7 on `query` (gate: 1e-4),
+with the toy parity suite (`python3 tests/test_jaxport_parity.py`, six
+checks) at ≤ 1e-6. Next: tier 2 (eval stack), gates G2/G3.**
 
 ## 1 · Why
 
@@ -18,6 +22,43 @@ dispatch workflow, the recipes and every operational number stay on the
 PyTorch stack. The JAX tree must be able to *read* the published artefacts
 (checkpoints, tensors, embedding caches) — it must never be required for
 producing them.
+
+## 1b · Goal update (2026-08-21): TPU training
+
+The port now has an operational target beyond reference: **be able to train
+these models on Google Cloud TPUs.** The rented-GPU fleet's economics are
+known ($0.30–0.94/h, 15–36 h per 200k-step run); TPU spot capacity is the
+one obvious lever this programme has not tried, and JAX is the native way
+to reach it. Consequences for the plan:
+
+- **Tier 3 (training parity) moves onto the critical path** — TPU training
+  is stage-1/stage-2 trainers in JAX, so tier 3 is no longer "only after
+  someone asks". The ordering discipline stands: tier 3 is dispatched only
+  after tier 2's gates are green, because a trainer validated against an
+  eval stack that itself drifted proves nothing.
+- **Tier 4 gets a concrete shape**: a TPU VM registered as a self-hosted
+  Actions runner, exactly the Vast pattern (`runner: tpu-<name>` pin, same
+  workflow, same artefact releases, same security posture — `ml/CLAUDE.md`
+  §6 applies unchanged, including never adding non-dispatch triggers).
+  Until then, TPU runs can be driven directly over `gcloud` without any
+  workflow changes.
+- **Data plane on TPU**: tensors stage to a GCS bucket and download to the
+  TPU VM's local disk/RAM at job start (the `data-cache-v1` seed pattern,
+  different remote). The per-batch host gather (`LazyPixels`/`gather_px`)
+  runs on the TPU VM's host CPU with prefetch/double-buffering; whether it
+  feeds a TPU fast enough is a MEASUREMENT for the first smoke run, not an
+  assumption — if it starves, the fix is a pre-gathered shard format, which
+  is a build-side change, not a model change.
+- **Cross-framework discipline (§3.4) applies with force**: TPU-trained
+  numbers are a new tier under `ml/CLAUDE.md` §3b — the first result buys
+  its own replication, and nothing is pooled with the torch/GPU record.
+  The cheap validation is the other direction: a TPU-trained checkpoint,
+  converted back, scored through the UNCHANGED torch eval ladder.
+
+What this needs from the operator, none of which blocks tiers 1–2: a GCP
+project with TPU quota (spot v5e/v6e-8 is the sensible first shape),
+credentials the session can use (a service account key, or the operator
+running the provisioning commands), and a GCS bucket for tensor staging.
 
 ## 2 · What exists (measured, not guessed)
 
@@ -93,7 +134,7 @@ Effort in focused agent-days (implementation delegated per `ml/CLAUDE.md`
 
 Total for the recommended scope (tiers 1–2): **roughly one to one-and-a-half
 weeks of delegated implementation**, ~3,500 lines of new code in an isolated
-`ml/jax/` package with zero imports from it into the operational tree. Tier
+`ml/jaxport/` package with zero imports from it into the operational tree. Tier
 3 roughly doubles that and should be dispatched only after tier 2's gates
 are green.
 
