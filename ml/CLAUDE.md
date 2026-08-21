@@ -531,10 +531,21 @@ that tier, with its degrees of freedom stated.
 | rolled corridor AUC, **`_holdlon` scope** | xl tier — the same two pairs (#417, #418) | **2 pairs** | \|Δ\| **0.00958, 0.01933**; pooled sd **0.01079** (2 dof) — **16.4× the `_trainlon` sd off the identical four checkpoints**, 5× the tier's blended pooled sd, and the larger of the two is 3.8× the largest blended pair delta ever measured here (0.0051). **A `_holdlon` number must never be quoted as a level, at n = 1 or n = 2.** It scores extrapolation into a training hole, which is the least reproducible thing this programme does; quote it as a mechanism contrast (stencil 0.211 vs 1-point gate 0.058), never as a rung-to-rung comparison |
 | **forecast ratio** (z-mse / persistence) | 1.8M · 6k | 2 triples (E-010) | sd **0.0017** |
 | forecast ratio | 205M · 60k | 1 triple (E-028 xl55) | spread **0.004** |
+| forecast ratio (z-mse / persistence) | **211M head · 200k steps**, all-longitude stage-2 pool (`xl144-nolonhold`) | **1 pair** — E-043b #414 (seed 0) / #426 (seed 1) | \|Δ\| **0.00008** (0.01392 vs 0.01400) |
 | **RAPID head k-fold** (`rapid_probe_kfold`; 240 months ≈ 9 effective DOF) | 1.8M · 6k | 2 triples (E-010) | U=1 range **0.245**, sd **0.123**; U=4 sd 0.040 |
 | RAPID head k-fold | 1.8–10.7M · 60k | 5 triples (E-012, E-013b, E-014, E-015, E-016) | per-arm sd 0.024–0.150; pooled **0.095** (10 dof) |
 | **codec head probe** (frozen embeddings, 240 months) | 0.92M codec · 40k · 1° global tensor | 1 codec-seed pair (patch24, #18 / #43) | attention head **0.036**, pooled ridge **0.012**, raw-pixel control **0.049** |
 | anything at **pentad or daily cadence** | E-038a/b/c, E-042, the family-4 codecs | **none — every arm at the new cadences is n = 1** | **UNMEASURED** |
+
+**What the new 211M forecast-ratio row licenses, and what it does not.** It is **one pair**,
+and its two members were scored against **different val draws** — the seed moves the val
+sample, so #414 (E-043b, the seed-0 all-longitude head) shares its persistence MSE to the
+last bit with #346 (E-032 xl144 seed 0, its control) while #426 (E-043b-SEED1, the seed-1
+head) shares #347's (E-032 xl144 seed 1). The 0.00008 therefore conflates seed-of-training
+with seed-of-val-sample, and is if anything an **upper bound on the training-seed spread
+alone**. It says nothing about the corridor AUC at this configuration: that row still reads
+2 pairs and its extension to 3 waits for #429 (the seed-1 xl144 roll), in the same commit as
+that result.
 
 Be honest about the n. Three pairs at 0.002–0.003 is three pairs, not a
 distribution; the xl row is five pairs and one triple, seven degrees of freedom

@@ -52,7 +52,7 @@ arithmetic, early — nothing here was scaled down to fit).
 
 | box | $/h | job | state at 07:40Z |
 |---|---|---|---|
-| `gpu-box-31479844` (vast 47724559, Quebec) | 0.294 | **#426** (E-043b-SEED1) | stage 2 step **80,000 / 200,000**, `val_zmse` **0.07085** / persistence 3.09512 = ratio **0.02289**, grad norm **0.3003**, amp 0.9913 — monotone, healthy, worst norm all run 2.99. 0.2776 s/step ⇒ ends **~16:50Z** |
+| `gpu-box-31479844` (vast 47724559, Quebec) | 0.294 | **#426** (E-043b-SEED1) at this hour; **#428 / #429 now** | Reading at 07:40Z: stage 2 step **80,000 / 200,000**, `val_zmse` **0.07085** / persistence 3.09512 = ratio **0.02289**, grad norm **0.3003**, amp 0.9913 — monotone, healthy, worst norm all run 2.99. 0.2776 s/step ⇒ ends ~16:50Z. **SINCE LANDED: #426 (E-043b-SEED1) completed 16:59:11Z, 15 h 46 min, ≈$4.64.** The box was stopped at 16:59Z, restarted 17:46:04Z, and its current occupants are **[#428 (HEADPUB e043b-xl144-nolonhold-s1) and #429 (E-043b-SEED1-roll)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1-roll)** |
 | `gpu-box-39184683` (vast 47724565, Hong Kong) | 0.308 | **#427** (E-044b) | stage 2 step **2,000 / 200,000** at 0.258 s/step ⇒ ends **~00:30Z on the 22nd**. **The 8.5 h embed was REUSED — zero embedding records.** `grad_clip` 128.0, `clip_frac` 0.0245, `grad_norm_max` **452.0** |
 | `gpu-box-46996216` (vast 47913006, Austria) | — | — | **STOPPED at 05:53Z**, not destroyed. #419 finished successfully at 05:22:58Z and had been burning idle for 30 min. Its 213 GB of daily tensor is intact on the disk |
 
@@ -66,8 +66,8 @@ been deferred twice.
 | what is outstanding | needs | finishes |
 |---|---|---|
 | **#427** (E-044b) | ~18–19 h, ~**$5.7** | ~00:30Z on 2026-08-22 |
-| **#426** (E-043b-SEED1) | ~9.3 h, ~**$2.7** | ~16:50Z on 2026-08-21 |
-| **#426**'s headpub + roll (§5 of that entry) | ~3.7 h, ~**$1.1** | ~21:00Z on 2026-08-21 |
+| ~~**#426** (E-043b-SEED1)~~ **DONE** | estimated ~9.3 h, ~**$2.7** from here; the whole job was **15 h 46 min, ≈$4.64** | **completed 16:59:11Z on 2026-08-21** |
+| **#426**'s headpub + roll (§5 of that entry) — dispatched as **[#428 + #429 (E-043b-SEED1-roll)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1-roll)** | ~3.7 h, ~**$1.1** — #428 done in ~6 min ≈$0.03, #429 ~3.5 h ≈$1.03 | **#429 in flight, ≈21:40Z on 2026-08-21** |
 | the pentad `sroll:` over #427's head | ~14 h, ~$4.3 | ~15:00Z on 2026-08-22 |
 
 **Everything fits inside the runway**, the pentad sroll with ~6 h to spare.
@@ -304,6 +304,49 @@ was derived indirectly before dispatch.
 they reported success, and #427 at ~19 h is inside the ceiling but not comfortably.
 **Harvest `ml-live-427` and its artifacts by hand regardless, and do not read a green
 `Archive metrics` step as evidence that anything was archived (§0.2).**
+
+#### In-flight reading, 2026-08-21 17:35Z — the clip fix WORKED and the run is nevertheless not learning
+
+**The fix is confirmed.** `--grad-clip 128` caught the startup spike exactly where **#423
+(the E-044 pentad stage-2 first attempt, CANCELLED on divergence)** blew up:
+`stage2_grad_clip_frac` **0.0245** in window 1 (step 2,000) with `stage2_grad_norm_max`
+**452.0087**, then **0.0 for all 67 subsequent windows**; `stage2_grad_nonfinite` **0
+everywhere**; `norm_max` max over windows 2–68 is **98.7448** (step 10,000), decaying to a
+stable **~3.7–4.0** band from ~step 24,000 and reading **3.7136** last. **No numerical
+instability at any point.**
+
+[E-044 · #423, the divergence this arm was built to fix](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-044-423-diverged)
+
+**And the run has saturated.** `val_persistence` **21.44622**. Normalised
+`stage2_val_zmse`: **0.4893** at step 36,000 → **0.4853** at 70,000 → **0.4867** at 102,000 →
+**0.4901** at 136,000. **Best-ever 0.4828 at step 66,000**, and the latest reading is above
+it and above the 0.49 health bar. Of 67 transitions, **34 are increases** — a
+noise-dominated flat curve, not a descending one. Corroborating and worse: `rapid_r_deseas`
+falls at **five of its six** probes — 0.596 (20k), 0.576, 0.584, 0.559, 0.543, **0.526
+(120k)** — a drift of **−0.070 across the run** with a single uptick at the third reading.
+(An earlier draft of this line said "monotonically"; it is not, and the numbers beside it
+say so. §0.1 — the claim is corrected here rather than the series being trimmed to fit it.)
+
+**The decision, and its reason. The run is NOT cancelled.** `scripts/probes_run.sh:428`
+pushes the **17.43 GB** pentad embedding cache `Z` to the `embed-cache-v1` release
+unconditionally but **only AFTER all 200,000 steps** — and that cache, **8.9 h of a 4090**,
+exists in exactly one place: box 47724565's local disk. Commit `93f1fc2` fixed the
+container-wide `/tmp/embed-cache-pushed` marker bug that had killed the in-training push, but
+**that fix takes effect on the NEXT job, not on #427**. Cancelling would forfeit the only
+backup route for the single largest single-copy artefact in the programme. The remaining
+~4.3 h and ~$1.3 buy that backup, plus a full-budget curve for a cadence §3b records as
+entirely **UNMEASURED**.
+
+**What it means for the next arm.** The E-044 question is **no longer clipping — that is
+settled.** It is **regularisation and step budget**: a 206.5M head at `input_znoise` 0.7 on
+`family4_na025_pentad_r2` reaches its best at roughly a third of its budget and then drifts.
+**Open follow-up:** the milestone heads should be checked, and the **step-60,000 milestone,
+not the final head, may be the one worth rolling.** Stated plainly: whether #427's milestone
+steps include 60,000 was **NOT verified in this session**.
+
+**The remaining arithmetic.** Measured rate **243.97 ms/step** over steps 126,000 → 136,000;
+64,000 steps remaining ⇒ **4 h 20 min**, plus ~**1,682 s** of probe overhead at 140k / 160k /
+180k ⇒ stage-2 end **≈ 22:23–22:33Z**, job end **≈ 22:40Z ± 20 min**.
 
 ---
 
@@ -569,7 +612,7 @@ Not an experiment. Recorded because it sets what the next check-in inherits.
 
 | box | $/h | job | state at 01:38Z |
 |---|---|---|---|
-| `gpu-box-31479844` (vast 47724559, Quebec) | 0.294 | **#426** (E-043b-SEED1) | stage 2 step **4,000 / 200,000**, gpu **83%**, disk 58%. Was idle from #425's finish (00:39Z) to 01:12Z — ~33 min, ≈$0.16 of idle burn, closed by this dispatch |
+| `gpu-box-31479844` (vast 47724559, Quebec) | 0.294 | **#426** (E-043b-SEED1) at this hour; **#428 / #429 now** | Reading at 01:38Z: stage 2 step **4,000 / 200,000**, gpu **83%**, disk 58%. Was idle from #425's finish (00:39Z) to 01:12Z — ~33 min, ≈$0.16 of idle burn, closed by this dispatch. **SINCE LANDED: #426 (E-043b-SEED1) completed 16:59:11Z, 15 h 46 min, ≈$4.64**, and the box now carries **[#428 (HEADPUB e043b-xl144-nolonhold-s1) and #429 (E-043b-SEED1-roll)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1-roll)** |
 | `gpu-box-39184683` (vast 47724565, Hong Kong) | 0.308 | **#423** (E-044) | **the embed→stage-2 TRANSITION HAPPENED at the 01:42:20Z push** — the ~8.5 h pentad embed finished (last frame 95.6%, month 3,003 / 3,142, 30,573 s) and `stage2_config` + `stage2_monitor` are on the branch. See E-044 §6 items 5, 6 and 10, now **PASS**: `params_M` **206.536**, `d_z` **32**, `train_windows` **251,337,502** (the pre-registered estimate, exact to the unit), `codec_holdout_lon` **`0,0`** and `train_lon_hold` **`none`**. `stage2_monitor.val_persistence` **21.44622** — finite and positive; it is **not** comparable to the monthly arm's 3.095 because it is a different codec's z-space, and its only job is to be the denominator of `stage2_val_zmse`, so read the RATIO at the next check-in, not the level. No `stage2_step` row yet (`log_every` = 2,000). **Vast's GPU stats read all-zero for this box**, which `fleet_health` flags as a blind CPU-BOUND check; the live branch is advancing normally, so the run is alive and the TELEMETRY is what is stale |
 | `gpu-box-46996216` (vast 47913006, Austria) | 0.333 | **#419** (E-043f) | still inside step 16 `Train`, gpu **89%**, job wall **31 h 45 min / 2,600 min** |
 
@@ -586,9 +629,9 @@ time a session has slack.
 | what is outstanding | needs | finishes |
 |---|---|---|
 | **#419** tail + probe ladder + upload | ~1 h + ladder, ~$0.5 | training ~01:20Z (arithmetic); ladder unknown — the daily ladder is untested |
-| **#426** (E-043b-SEED1) | ~15 h, ~**$4.4** | ~16:35Z on 2026-08-21 |
+| ~~**#426** (E-043b-SEED1)~~ **DONE** | estimated ~15 h, ~**$4.4**; actual **15 h 46 min, ≈$4.64** | **completed 16:59:11Z on 2026-08-21** |
 | **#423** (E-044) stage 2 after the embed | ~20 h, ~**$6.2** | ~21:45Z on 2026-08-21 |
-| **#426**'s headpub + roll (§5 of that entry) | ~3.7 h, ~**$1.1** | ~21:00Z on 2026-08-21 |
+| **#426**'s headpub + roll (§5 of that entry) — dispatched as **[#428 + #429 (E-043b-SEED1-roll)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1-roll)** | ~3.7 h, ~**$1.1** — #428 done in ~6 min ≈$0.03, #429 ~3.5 h ≈$1.03 | **#429 in flight, ≈21:40Z on 2026-08-21** |
 | the pentad `sroll:` over #423's head | ~14 h, ~$4.3 | ~12:00Z on 2026-08-22 |
 
 **Everything but the last row fits inside the runway; the pentad sroll ends within an hour of
@@ -828,7 +871,7 @@ headline. The seed pair is mandatory**, and it went out at 01:12:28Z as
 | arm | run | what it is |
 |---|---|---|
 | A | **#416** (E-043a: monthly f3 codec retrained with NO longitude holdout) | **landed — this entry** |
-| B | **#414** (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING frozen anchor) → **#420** (HEADPUB) → **#422** (the roll) | **COMPLETE, AND THE ONE TO READ CAREFULLY — [E-043b (#414, training half)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)** and **[E-043b · the roll (#420 + #422)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-roll)**. Gate PASSED (0.643, 20th reproduction). The hole is **gone** — corridor `_trainlon` − `_holdlon` **0.0065** against the control pair's 0.646 / 0.667 — which is arm B's hypothesis confirmed. The corridor `_trainlon` figure **0.93933 vs the control pair's 0.86754** is **NOT** yet quotable: §7 of that entry records a flat lead-time profile, a 39-channel gain including wind stress, and **no movement at all in any transport read-out**. (#421 was the same roll and is VOID.) **Both diagnostics have landed: [#424 (E-043b-CONTROL)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-control) cleared the roll code byte for byte, and [#425 (E-043b-MILESTONE)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-milestone) killed the structural explanation — the step-600 head rolls 0.02967 `_trainlon` with a monotone 0.179 → −0.068 decay, so the property was ACQUIRED over 200k steps.** The arm's only remaining gap is n = 1, and **[#426 (E-043b-SEED1)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1)** is in flight to close it. (§7(c)'s "uniform" is retired by #425 §6.4: the gain spans +0.055 to +0.467 at h = 12.) |
+| B | **#414** (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING frozen anchor) → **#420** (HEADPUB) → **#422** (the roll) | **COMPLETE, AND THE ONE TO READ CAREFULLY — [E-043b (#414, training half)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)** and **[E-043b · the roll (#420 + #422)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-roll)**. Gate PASSED (0.643, 20th reproduction). The hole is **gone** — corridor `_trainlon` − `_holdlon` **0.0065** against the control pair's 0.646 / 0.667 — which is arm B's hypothesis confirmed. The corridor `_trainlon` figure **0.93933 vs the control pair's 0.86754** is **NOT** yet quotable: §7 of that entry records a flat lead-time profile, a 39-channel gain including wind stress, and **no movement at all in any transport read-out**. (#421 was the same roll and is VOID.) **Both diagnostics have landed: [#424 (E-043b-CONTROL)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-control) cleared the roll code byte for byte, and [#425 (E-043b-MILESTONE)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-milestone) killed the structural explanation — the step-600 head rolls 0.02967 `_trainlon` with a monotone 0.179 → −0.068 decay, so the property was ACQUIRED over 200k steps.** The arm's only remaining gap was n = 1, and **[#426 (E-043b-SEED1, the seed-1 xl144 all-longitude head)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1) has LANDED** — completed 2026-08-21 16:59:11Z after 15 h 46 min, ≈$4.64. **Its one-step forecast ratio REPRODUCED: 0.01400 against #414's 0.01392, pair \|Δ\| 0.00008**, so the training-half anomaly is a property of the configuration and not a single draw — but that ratio carries the same scope confound in both seeds and is still not a skill result. **The corridor verdict is [#429 (E-043b-SEED1-roll, the seed-1 xl144 head rolled beside the e017_u1_s0 gate)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1-roll), in flight, ≈21:40Z**, its headpub [#428 (HEADPUB e043b-xl144-nolonhold-s1)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1-roll) already complete — until #429's `_trainlon` \|Δ\| against #422's 0.93933 is in, no level from this configuration may be quoted. (§7(c)'s "uniform" is retired by #425 §6.4: the gain spans +0.055 to +0.467 at h = 12.) |
 | D | **#417 / #418** (E-043d: sroll re-rolls, `_trainlon` / `_holdlon` split) | **COMPLETE — [E-043d1 (#417, xl233 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d1)** and **[E-043d2 (#418, xl144 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d2)** |
 | E | **#415** (E-043e: fresh 38.0M pentad r2 codec, all longitude columns) | **LANDED — [E-043e (#415)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043e)**, 12:55:52Z, recorded step **197,428** (the cosine was re-fit fifteen times despite `max_minutes 1150`), codec **published** as `run-415__pixelmae.pt`. **No head probe** — `head_probe: "false"` copied from #386, the third such miss in this wave — so its verdict arrives with E-044's ladder |
 | F | **#419** (E-043f: fresh 38.0M DAILY codec on all 481 longitude columns) | **LANDED 2026-08-21 05:22:58Z after 35.96 h — RESOLVED, PROVISIONALLY: [E-043f (#419)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043f)**. The first daily codec in the programme's history to reach a probe ladder at all. **Its pre-registered falsifier FIRED on both halves** — final `linear_r_deseas` **0.570** inside the 0.558–0.598 band, and the pooled trace flat across 40 probes from step 7,500 (0.545–0.596, slope −0.006 per 100k steps) — and the control comparison is the plain form of it: #410 (E-038c daily codec, the withheld-block run at this exact architecture) read **0.582** at step 60,000 where #419 reads **0.576**, so **returning the withheld quarter of the ocean bought the daily arm nothing**. **But read §3 of that entry before quoting any of this:** `head_probe: "false"` again (the fourth miss in this wave), so there is **no unpooled read-out** and every number here is one §3 distrusts at daily cadence; at n = 1, §3b forbids reading it as a closure. The codec is **published** as `run-419__pixelmae.pt`, so the settling move is an **eval-only ladder with `head_probe: "true"` over it — no retraining**. Also on the record from this arm: the pooled k-fold ties a raw wind-stress ridge on RAPID (0.612 vs 0.607, overlapping CIs, no paired test) while clearly beating it on the Florida Current (0.364 vs 0.110); probes were **62.4% of the training loop's wall clock**; and the job outran GitHub's 24-hour token ceiling, so both archive steps failed 401 and **reported success** |
@@ -2651,10 +2694,11 @@ will be read against.
 ---
 
 <a id="e-043b-seed1"></a>
-### E-043b-SEED1 · #426 — DISPATCHED 2026-08-21 01:12:28Z, in flight. The mandatory seed pair for #414
+### E-043b-SEED1 · #426 — RESULT (training half), completed 2026-08-21 16:59:11Z. **The one-step ratio REPRODUCES at seed 1 — 0.01400 against #414's 0.01392 — so the training-half anomaly is a property of the configuration, not a single draw. The corridor verdict is #429 and is not in yet.**
 
-Written **at dispatch**, hypothesis and falsifier first, so the log cannot be rewritten to fit
-the answer (§1).
+Sections 1–6 were written **at dispatch**, hypothesis and falsifier first, so the log could
+not be rewritten to fit the answer (§1). They are left exactly as they were written; the
+result is §7 onwards, appended when the job landed.
 
 **E-043b-SEED1 · Trains a SECOND xl144 stage-2 head (1024×16, K 24, sunflower-144 = stencil
 145) at **seed 1** for 200,000 steps on the EXISTING frozen `f3_anchor41M` codec, with the
@@ -2819,6 +2863,258 @@ Vast API. Nothing is marked passed on an inference.
 | 9 | **no embed pass was needed** | stage 2 began ~01:34Z, ~21 min after pickup: the frozen anchor's Z cache and the `family3_na025` tensor were already on this box from #418 / #422 / #424 / #425. #414 paid the same zero, and choosing this box over a cold start saved both an embed and a box-start |
 | 10 | **rate, and what it does to the ETA** | **528.2 s / 2,000 steps = 264.1 ms/step**, 7% above #414's 247 ms/step (the first 2,000 steps carry warm-up, so this is an upper bound on the steady rate). Stage 2 began ~**01:25Z**, so 200,000 steps at that rate is **14.7 h** ⇒ training ends ~**16:05Z** and the job, with its ladder and upload, ~**16:35Z**. Far inside `job_timeout` 1800 min. Independently, the status page's own render at 01:37Z reads **"4,000 of 200,000 steps · ~14.5 h left · ends ≈ 16:07"** — the same arithmetic from the other side. Re-time at the next check-in rather than treating 264 as settled |
 | 11 | **the STATUS PAGE, screenshotted rather than described** (§2) | `node scripts/status_shot.mjs` at 01:39Z: **`PAGE ERRORS: none`**, 30 runs captured with metrics for #426. The card renders under the **E-043b** tag with the full `doc` string, the generated config line (`params 40.693M codec + 211.353M head · stage stage-2 (temporal head) · data family3_na025 (C 39, T 516) · arch codec 576×10 … head 1024×16 · steps×batch 60,000 × 512, head 200,000 × 256 · resume run-62,run-63 — loaded run-62.pt at step 60,000`), the planned expdecay curve from `plan-426.json`, and a live stage-2 trace reading **z-MSE 0.5190 · held-out z-MSE 0.6643 · amplitude ratio 0.92 · grad norm 1.25 at step 4,000** |
+
+#### 7 · The run, as it happened
+
+Literal readings off the jobs API, the archived `run-426.jsonl` and the run's own step list.
+Nothing below is an inference.
+
+| what | reading |
+|---|---|
+| `run_started_at` | **2026-08-21T01:12:24Z** |
+| job wall | 01:12:28Z → **16:59:10Z** = **15 h 46 min** (**56,802 s**) |
+| `runner_name` | **gpu-box-31479844** (vast 47724559) |
+| `head_sha` | **`cb0bdbc2e49aa9ea7e74a8230fa6311195e90c6f`** |
+| conclusion | **success**, and **no step with conclusion `failure`**. Three `skipped`: the GitHub-hosted cache restore (this is a self-hosted runner) and the two joint fine-tune steps |
+| step 21 `Probes (K-sweep + stage 2)` | **56,337 s** |
+| final progress record | `stage2_step` **200000** · `stage2_zmse` **0.03636** · `stage2_val_zmse` **0.04293** · `stage2_amp` **0.9956** · `stage2_grad_norm` **0.1352** · `stage2_lr` 3.2351468e-05 · `stage2_wall_s` **55512.9** |
+| the denominator | `stage2_monitor.val_persistence` **3.09512** (`n_windows` 4096) ⇒ normalised **0.01387** |
+| `seed` | **1** — VOID condition cleared |
+| `train_lon_hold` | **`none`** — VOID condition cleared |
+| `params` | **211,352,640** — VOID condition cleared |
+| `stencil` | 145 |
+| `train_windows` | **38,488,680** — bit-equal to #414's `scale.data_points`, so the two seeds drew from an identical window pool |
+
+**`val_zmse` was strictly monotone: 100 records carry it, and ZERO of them is an increase.**
+First five (step, `val_zmse`): (2000, 1.14768) (4000, 0.66427) (6000, 0.51537) (8000, 0.43305)
+(10000, 0.36661). Last five: (192000, 0.04348) (194000, 0.04345) (196000, 0.04312)
+(198000, 0.04311) (200000, 0.04293).
+
+**The grad-clip fields are ABSENT and that is CORRECT.** The union of all top-level keys
+across the 115 records is exactly `config, resumed, stage2_config, stage2_monitor,
+stage2_step, stage2_zmse, stage2_loss_base, stage2_val_zmse, stage2_amp, stage2_grad_norm,
+stage2_lr, stage2_wall_s, stage2_probe, stage2_result` — no `stage2_grad_norm_max`, no
+`stage2_grad_clip_frac`, no `stage2_grad_nonfinite`. #426 ran the PRE-grad-clip trainer at
+`cb0bdbc2`, before `aced980`, exactly as its seed-0 partner #414 / #422 did. That is what
+keeps the pair a genuine ONE-VARIABLE seed replicate, and it must be preserved in any future
+re-reading: an unclipped seed-1 against a clipped seed-0 would not have been a pair.
+
+#### 8 · The one-step forecast ratio REPRODUCES — and it still is not evidence of skill
+
+This table extends the one in
+[E-043b · #414 §3](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b):
+
+| run | training pool | `mse_model` | `mse_persistence` | **ratio** |
+|---|---|---|---|---|
+| **#414** (E-043b, seed 0, all longitudes) | ALL 481 cols | 0.0436946 | 3.13943290710449 | **0.01392** |
+| **#426** (E-043b-SEED1, seed 1, all longitudes) | ALL 481 cols | 0.04376167 | 3.12627649 | **0.01400** |
+| #346 (E-032 xl144 seed 0) — CONTROL | 401 cols, −45..−25 held | 0.3879833 | 3.13943290710449 | 0.12358 |
+| #347 (E-032 xl144 seed 1) — CONTROL | 401 cols, −45..−25 held | 0.3797261 | 3.12627625465393 | 0.12147 |
+
+- **Pair |Δ| on the one-step ratio is 0.00008.** Two seeds of the all-longitude
+  configuration agree to the fifth decimal.
+- **The val draws pair up by SEED, and that is an internal consistency check worth
+  recording.** #426's `mse_persistence` **3.12627649** matches #347's **3.12627625465393**,
+  and #414's matches #346's to the last bit at 3.13943290710449. Persistence MSE is a pure
+  function of the data and the seeded val draw, so each nolonhold head is being read against
+  the SAME val sample as its same-seed control. The same-seed contrasts are therefore
+  0.12358 / 0.01392 = **8.88×** at seed 0 and 0.12147 / 0.01400 = **8.68×** at seed 1.
+- **This does NOT make the 8.7–8.9× a skill result, and §3 of
+  [E-043b · #414](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)
+  already showed why.** The arithmetic there demonstrated that the WHOLE of the seed-0 factor
+  is consistent with pure SCOPE: 21,120 of 84,405 ocean pixels (**25.02%**) moved from
+  never-seen to trained, and identical trained-pixel skill requires only
+  `m_hold(346) − m_hold(414)` = **1.376**. Reproducing at seed 1 confirms that the
+  CONFIGURATION reproduces. It cannot confirm skill, because the scope confound is present in
+  both members of the pair in equal measure. **The instrument that removes the confound is
+  the `_trainlon` corridor AUC, and that is #429's job, not this run's.**
+- Recorded without comment beyond the labels: `stage2_result` `chan_mse_model` 0.06428158 /
+  `chan_mse_persistence` 1.16594958 = 0.05513; `rapid_r_deseas` **0.496**, `rapid_r_raw`
+  0.581, `rapid_r_kfold` **0.476** CI [0.381, 0.564]. #426 carried `head_probe: "false"` by
+  design (§3 of this entry), so **there is no unpooled `probe_head` number for either seed**,
+  and the pooled `rapid_*` figures above are the legacy-labelled instrument §3 distrusts —
+  they are recorded, not quoted.
+
+#### 9 · Artefacts, verified as artefacts rather than as green steps (§0.2)
+
+**`ml-live-426` does not exist.** The run's own step 23 is named "Archive metrics, then clean
+up the live branch" and deleted it at 16:59:01–16:59:07Z; that is by design, and a future
+harvest should read `ml-metrics`, not the live branch.
+
+On `ml-metrics`: `run-426.jsonl` **23,639 B** (commit `bf56c2ce`, 16:59:03Z),
+`probes-426.json` **71,415 B** (commit `526abcca`, 16:59:04Z), `plan-426.json` 9,924 B.
+Actions artifacts unexpired: `probes-426` **4,649,445,719 B**, `pixelmae-426`
+**424,978,525 B**.
+
+[probes-426.json on ml-metrics](https://github.com/blauewelt/earth/blob/ml-metrics/probes-426.json)
+
+[run-426.jsonl on ml-metrics](https://github.com/blauewelt/earth/blob/ml-metrics/run-426.jsonl)
+
+The 24-hour archive-token failure mode does not apply — the job ran 15 h 46 min — **and it
+was checked by the artefacts existing and ending in a `stage2_result` block, not by the
+archive step's green tick.**
+
+#### 10 · A NEW infrastructure finding: an xl-tier head is single-copy for its whole run
+
+`scripts/snapshot_head.sh` ran **29 times** across #426, 02:19:36Z → 16:28:42Z, and **every
+one failed** with `curl: (22) … error: 422` — the ~2 GiB GitHub release-asset cap against a
+~2.4 GB optimiser-carrying checkpoint — each emitting
+`##[warning]snapshot: upload of run-426-temporal-latest.pt FAILED — the head is only on this
+box`.
+
+So for 15 h 46 min the only copy of 211M trained parameters was
+`/opt/earth-cache/ckpt/temporal.pt` on one rented box, and the mechanism built to prevent
+exactly that (#396's lesson) was failing silently-but-loudly on every tick.
+
+**This is not specific to #426: any head at this tier exceeds the cap, so every xl run since
+the tier existed has been single-copy until its headpub.** The weights-only asset is
+**845,487,479 B** and well under the cap — it is only the optimiser state that busts it.
+
+**FOLLOW-UP, not done here:** either strip to weights-only before the snapshot upload, or
+route the snapshot to a store without a 2 GiB object cap.
+
+#### 11 · Cost
+
+| item | value |
+|---|---|
+| box | `gpu-box-31479844` (vast 47724559, Quebec CA, $0.294/h) |
+| wall | **15 h 46 min** |
+| money | **≈ $4.64** |
+| against the estimate | §4 predicted **$4.38**; 6% over, because the measured rate held at ~264 ms/step rather than relaxing to #414's 247 |
+
+---
+
+<a id="e-043b-seed1-roll"></a>
+### E-043b-SEED1-roll · #428 (HEADPUB) and #429 (the roll) — DISPATCHED 2026-08-21, in flight. The seed pair §3b requires before any level from the all-longitude configuration may be quoted
+
+Written **at dispatch**, hypothesis first (§1), so the log cannot be rewritten to fit the
+answer. §4 was appended as each first-minutes reading landed, and is measurements only.
+
+**#428 · HEADPUB `e043b-xl144-nolonhold-s1` · PUBLISHES the xl144 stage-2 head that #426
+(E-043b-SEED1) trained for the full 200,000 steps at SEED 1 on the EXISTING frozen
+`f3_anchor41M` codec with the stage-2 pool opened to ALL 481 longitude columns
+(`--train-lon-hold none`, recipe `xl144-nolonhold`) · params 211.353M head (+ 40.693M frozen
+codec) · stage `headpub` (NOTHING trains; strips `/opt/earth-cache/ckpt/temporal.pt` to
+weights-only and uploads `head-weights-e043b-xl144-nolonhold-s1.pt`) · data `family3_na025`
+(C 39, T 516, sha256 `adcbe700fb6e…`) · arch codec 576×10, 8 heads, d_dec 768, d_z 64,
+patch 3; head 1024×16, K 24, stencil 145, ring `spiral:111,4444,0.71,0.5` · steps×batch
+200,000 × 256 stage-2 (= the checkpoint's own recorded count; this job trains zero steps) ·
+resume `!run-62,run-63` (`f3_anchor41M`, frozen).**
+
+**#429 · E-043b-SEED1-roll · ROLLS the freshly published seed-1 xl144 stage-2 head
+(`head-weights-e043b-xl144-nolonhold-s1`, trained by #426 for the full 200,000 steps at seed
+1 on the EXISTING frozen `f3_anchor41M` codec with the stage-2 pool opened to ALL 481
+longitude columns) twelve months forward beside the frozen `e017_u1_s0` validation gate,
+reading the `*_trainlon` / `*_holdlon` split in every scope — this is the SECOND SEED that
+decides whether #422's 0.93933 is a property of the configuration or a single draw · params
+40.693M codec (frozen) + 211.353M head · stage `sroll` (eval-only; NOTHING trains, the step
+field is the codec checkpoint's own count) · data `family3_na025` (C 39, T 516, sha256
+`adcbe700fb6e…`) · arch codec 576×10, 8 heads, d_dec 768, d_z 64, patch 3; head 1024×16,
+K 24, stencil 145, ring `spiral:111,4444,0.71,0.5` · steps×batch 60,000 × 512
+(= `f3_anchor41M`'s recorded step count, ZERO training steps) · resume `!run-62,run-63`
+(`f3_anchor41M`, frozen).**
+
+[#428 (HEADPUB e043b-xl144-nolonhold-s1) — the CI log](https://github.com/blauewelt/earth/actions/runs/32511031975)
+
+[#429 (E-043b-SEED1-roll, the seed-1 xl144 head beside the e017_u1_s0 gate) — the CI log](https://github.com/blauewelt/earth/actions/runs/32511564744)
+
+[#429 on the status page](https://blauewelt.github.io/earth/status.html#run-429)
+
+[E-043b-SEED1 · #426, the training half this publishes and rolls](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1)
+
+[E-043b · the roll (#420 + #422), the 0.93933 this exists to replicate](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-roll)
+
+[E-043b · #414, the seed-0 twin of the head being rolled](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)
+
+#### 1 · #428, the headpub, and the gate it had to pass
+
+#428 completed **success** in ~6 min on `gpu-box-31479844`. `publish_head_weights.sh` printed
+verbatim:
+
+```
+source: /opt/earth-cache/ckpt/temporal.pt (2.4G)
+step=200000 d_model=1024 layers=16 stencil=145 seed=1 znoise=0.0
+params=211.4M
+weights-only: head-weights-e043b-xl144-nolonhold-s1.pt  807M  (845487479 bytes)
+upload … -> HTTP 201
+```
+
+**`seed=1` was the whole gate**: it is the only printed field distinguishing this head from
+#414's seed-0 head, which matches every other one. `train_lon_hold` is not printed by that
+script, so it was verified at source in #426's own job log: `lon holdout · statistics (codec
+'-45,-25'): 80/481 cols · training pool (--train-lon-hold 'none'): 0/481 cols`.
+
+Release asset: **845,487,479 bytes, byte-for-byte the same size as its s0 partner**,
+`state: uploaded` at **18:03:46Z**. The **#421 CDN rule was observed** — the release JSON was
+listed, and **no GET was issued against the asset before `state` read `uploaded`**.
+
+#### 2 · The prediction, restated so the roll cannot be read loosely
+
+The reading is a **pair |Δ| on rolled corridor `_trainlon`**, this run against #422's
+**0.93933**, judged against the `_trainlon` pair noise measured on two independent xl pairs
+(**#417 |Δ| 0.00075**, **#418 |Δ| 0.00108**, pooled sd **0.00066** on 2 dof), with the xl
+tier's blended 95% upper bound **0.0037** as the outer marker.
+
+- **(1) IF |Δ| IS OF ORDER 0.001** — and in any case inside 0.0037 — then 0.93933 is a
+  **reproducible property of the all-longitude configuration**, n = 2 at last, and the level
+  becomes quotable subject to the two §7 qualifications that survived #425: the flat
+  lead-time profile, and no movement in any transport read-out.
+- **(2) IF |Δ| IS LARGE** — anywhere near the **0.07179** separating #422 from its control
+  pair, or even at the **0.0224** scale of the 34M tier's worst range — then 0.93933 is a
+  **single-seed excursion**, the E-043b headline dies exactly as E-005's +0.28 did, and the
+  surviving finding is the one clause nothing has ever qualified: the `_trainlon` −
+  `_holdlon` gap collapsing from ~0.65 to **0.0065**.
+
+**Both outcomes are results.**
+
+#### 3 · Reading discipline, pre-committed
+
+- **`_holdlon` is quoted as a MECHANISM CONTRAST and never as a level** (§3b: its pair sd
+  **0.01079** is **16.4×** `_trainlon`'s, off the identical four checkpoints).
+- **Blended-vs-blended is admissible only as an explicitly labelled upper bound**, because
+  this head has no `_holdlon` handicap and the E-032 controls' blended figures are deflated
+  by a 24% block they never trained on.
+- **The label trap** (#425 §5): `rollout_spatial.py` derives the head label from the FILE's
+  own `args`, and `args['seed']` here is **1**, so the label will render
+  `s145rspiral:111-4444-0.71-0.5_s1` — **match records on the run number and the asset name,
+  NEVER on the label alone.**
+- **VOID condition:** `e017_u1_s0` must reproduce `horizon_auc` **0.643** within `GATE_TOL`
+  **0.0101** with `len(heads)` **2**, or no number leaves the run.
+
+#### 4 · First minutes VERIFIED (§2 — measurements, not intentions)
+
+| # | check | reading |
+|---|---|---|
+| 1 | **`head_sha`** | **`bfbda006de00cb6deb10b4e7612fb0b3c79c9cdf`** — current `main` |
+| 2 | **`runner_name`** | **`gpu-box-31479844`**, job started **18:05:43Z** |
+| 3 | **both heads were fetched** | **`"heads": 2`**, read from `ml-live-429`'s `metrics.jsonl`: `{"sroll": {"head": "s1_s0", "head_i": 1, "heads": 2, "phase": "skill"}}`. This is the exact field that caught **#421 (the first E-043b roll attempt, VOID — it rolled the GATE ALONE because the head 404'd)**, and it reads 2, so the run is past `sroll_run.sh`'s hard `exit 1` refusal on a missing head |
+| 4 | **measured gate rate** | 160 roll steps in 480 s = **3.00 s/step** ⇒ ~**2,142 s** for the gate's 714 steps, consistent with #422's ~1,990 s |
+| 5 | **projected finish** | **≈ 21:40Z**, from roll t0 ≈ 18:11:42Z plus #422's measured gate 1,990 s + xl144 head 10,520 s = 12,510 s ≈ **3 h 28 min**. `job_timeout` **700 min** |
+
+#### 5 · One deviation from the dispatch recipe, recorded because it will bite the next session
+
+**`plan-420.json` and `plan-422.json` do not exist on `ml-metrics`** — nor do `plan-421.json`
+or `plan-424.json`. Runs #420 / #421 / #422 / #424 published **no plan at all**, so §1's
+"publish the plan" step was silently skipped four times in that wave.
+
+#428's plan was therefore built from **`plan-426.json`** — the curve that actually trained the
+head being published, with `note` rewritten to say so — and #429's from **`plan-425.json`**'s
+eval shape `{"eval": true, "heads": [...]}` with the head updated to the s1 asset. Both were
+precertified clean through `dispatch_run.mjs` and both are live at `ml-metrics/plan-428.json`
+and `ml-metrics/plan-429.json`.
+
+Note also that `dispatch_run.mjs`'s eval test is **`temporal_steps == "0"` AND the window
+starting with `sroll:`** — so a `headpub:` window falls through to the TRAINING branch and
+demands a curve-shaped plan. That asymmetry is what made the substitution necessary, and it
+is worth knowing before the next headpub.
+
+#### 6 · Cost
+
+| item | value |
+|---|---|
+| **#428** (headpub) | ~6 min ≈ **$0.03** |
+| **#429** (the roll) | ~3.5 h ≈ **$1.03** |
+| box restart | 47724559 was stopped when #426 ended at 16:59Z and was restarted at **17:46:04Z** for this pair, returning fleet burn from **$0.376/h** to **$0.643/h** |
 
 ---
 
