@@ -220,7 +220,7 @@ and leaves the bulk alone, which is what it was sized to do.
 |---|---|---|---|---|---|---|
 | 2,000 | 0.5404 | **0.5277** | 8.2372 | 8.7887 | **452.01** | **2.45%** |
 | 4,000 | 0.5509 | **0.4969** | 8.2483 | 5.5304 | **11.98** | **0.0%** |
-| 6,000 | **1.0453** | *pending* | **787.21** | | | |
+| 6,000 | **1.0453** | **0.5429** | **787.21** | **9.0505** | **11.64** | **0.0%** |
 
 **At step 4,000 #427 is already better than #423 ever got** — 0.4969 against #423's
 lifetime best of 0.5404 — and the second window is a textbook "healthy, never binds"
@@ -231,8 +231,40 @@ real and it is concentrated in the LR warmup (which reaches 1e-3 at step 2,000);
 it the pre-clip norm never approaches the threshold. #423 ran the same seed on the same
 data and therefore met the same 452-class steps — **unclipped** — and its published norms at
 2,000 and 4,000 (8.24, 8.25) said nothing about them at all. **Step 6,000 remains the
-decisive test**: that is where #423 left the band and never returned. Until it is past, this
-is a first reading of a one-seed arm and nothing more.
+decisive test**: that is where #423 left the band and never returned.
+
+#### 3b · STEP 6,000 — THE DIVERGENCE DID NOT HAPPEN
+
+```
+{"stage2_step": 6000, "stage2_zmse": 4.24833, "stage2_val_zmse": 11.64337,
+ "stage2_amp": 0.866, "stage2_grad_norm": 9.0505, "stage2_wall_s": 1501.4,
+ "stage2_grad_clip": 128.0, "stage2_grad_norm_max": 11.6429,
+ "stage2_grad_clip_frac": 0.0, "stage2_grad_nonfinite": 0}
+```
+
+Side by side at the step where #423 broke — **same seed, same data, same schedule, same
+z-space, one field different**:
+
+| | #423 (no clip) | **#427 (`--grad-clip 128`)** |
+|---|---|---|
+| `stage2_zmse` | 17.70444 | **4.24833** |
+| `stage2_val_zmse` | 22.41752 | **11.64337** |
+| val / persistence | **1.0453** | **0.5429** |
+| `stage2_grad_norm` | **787.21** | **9.0505** |
+| worst step in the window | *not measured* | **11.6429** |
+| steps clipped in the window | *no clip existed* | **0.0%** |
+
+**#427 passed the step at which #423 left its band and never returned, with a grad norm of
+9.05 against 787.21 and a whole window whose worst step was 11.64.** The hypothesis of §1 is
+supported and no falsifier has fired: `grad_norm_max` is not climbing, `clip_frac` is not
+rising off zero, and `val_zmse` has already beaten 11.58984.
+
+**What this is and is not.** It is **one seed**, 6,000 steps of 200,000, and §3b's harder
+clause applies verbatim — a seed-1 arm is required before any number here becomes a level.
+It is also not, by itself, proof that clipping is the *only* thing that was wrong: what it
+shows is that the mechanism operated (the tail is real, 2.45% of the warmup window needed
+the clip and got it) and that the failure it was aimed at did not recur under an otherwise
+identical configuration. The remaining 97% of the run is what turns that into a result.
 
 #### 4 · The z-space, measured for the first time
 
