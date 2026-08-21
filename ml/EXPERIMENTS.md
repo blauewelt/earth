@@ -216,14 +216,23 @@ and leaves the bulk alone, which is what it was sized to do.
 
 **Early comparison against #423 at matched steps**, first reading, one seed:
 
-| step | #423 val/persistence | #427 val/persistence | #423 grad norm | #427 grad norm (max in window) |
-|---|---|---|---|---|
-| 2,000 | 0.5404 | **0.5277** | 8.2372 | 8.7887 (**452.0**) |
-| 4,000 | 0.5509 | — | 8.2483 | — |
-| 6,000 | **1.0453** | — | **787.21** | — |
+| step | #423 val/pers | **#427 val/pers** | #423 grad norm | #427 grad norm | #427 window max | #427 clipped |
+|---|---|---|---|---|---|---|
+| 2,000 | 0.5404 | **0.5277** | 8.2372 | 8.7887 | **452.01** | **2.45%** |
+| 4,000 | 0.5509 | **0.4969** | 8.2483 | 5.5304 | **11.98** | **0.0%** |
+| 6,000 | **1.0453** | *pending* | **787.21** | | | |
 
-#427 is already marginally below #423's best at the same step. **Step 6,000 is the first real
-test**: that is where #423 left the band and never returned.
+**At step 4,000 #427 is already better than #423 ever got** — 0.4969 against #423's
+lifetime best of 0.5404 — and the second window is a textbook "healthy, never binds"
+reading: **maximum 11.98, nothing clipped**, against the first window's 452.01 and 2.45%.
+
+**Read the two windows together, because that contrast is the finding.** The tail is
+real and it is concentrated in the LR warmup (which reaches 1e-3 at step 2,000); once past
+it the pre-clip norm never approaches the threshold. #423 ran the same seed on the same
+data and therefore met the same 452-class steps — **unclipped** — and its published norms at
+2,000 and 4,000 (8.24, 8.25) said nothing about them at all. **Step 6,000 remains the
+decisive test**: that is where #423 left the band and never returned. Until it is past, this
+is a first reading of a one-seed arm and nothing more.
 
 #### 4 · The z-space, measured for the first time
 
