@@ -4377,3 +4377,251 @@ test("playback warms tiles through Cesium, never through a no-cors refetch", asy
   expect(tiles.length).toBeGreaterThan(0);
   expect(tiles.length - new Set(tiles).size).toBe(0);
 });
+
+/* ===================================================================== *
+ *  Politeness to GIBS — the request BUDGET per user interaction.
+ *
+ *  Every map tile this app draws is a direct browser→NASA request. No CDN of
+ *  ours stands in front of gibs.earthdata.nasa.gov, so the only thing between
+ *  a popular app and a block is how many requests one finger can generate.
+ *  These tests assert measured COUNTS with headroom, not implementation
+ *  details, so a future change that makes an interaction unbounded again
+ *  fails here rather than at NASA.
+ *
+ *  The numbers below are all derived inside the test from a UNIT measured on
+ *  the same machine in the same run (what ONE application of a date costs in
+ *  this viewport), because the visible tile count depends on the window size
+ *  and the zoom and is not a constant worth pinning.
+ * ===================================================================== */
+
+// Every GIBS TILE request (the `.../{z}/{y}/{x}.png|jpg` shape), as opposed to
+// the colormap and time-domain XML the app also fetches from the same host.
+function countTiles(page) {
+  const urls = [];
+  page.on("request", (r) => {
+    const u = r.url();
+    if (u.includes("gibs.earthdata.nasa.gov") && /\/\d+\/\d+\/\d+\.(png|jpe?g)/.test(u)) urls.push(u);
+  });
+  return { urls, since(n) { return urls.length - n; }, get n() { return urls.length; } };
+}
+
+test("a held date stepper costs a bounded number of tile requests", async ({ page }) => {
+  /* Measured 2026-08-21, MIRROR, 1280x720, one layer, four rendered tiles:
+   * sixty date changes at a browser's key-repeat rate issued 240 tile
+   * requests — exactly one whole visible tile set per keystroke, no debounce,
+   * and zero of the superseded requests cancelled. The count was a pure
+   * function of how long a finger stayed on the arrow key. */
+  test.setTimeout(300000);
+  await onlyLayers(page, ["sst"]);
+  await tilesSettled(page);
+  const c = countTiles(page);
+
+  // UNIT: what a single date step costs in THIS viewport, right now.
+  let mark = c.n;
+  await page.click('#date-steps button[data-step="-1d"]');
+  await page.waitForTimeout(1500);
+  await tilesSettled(page);
+  const unit = c.since(mark);
+  expect(unit).toBeGreaterThan(0);          // a date step really does fetch
+
+  // THE BURST: N changes spaced one animation frame apart — a held arrow key,
+  // a dragged date field, a repeated tap. Each gets its own render, so an
+  // uncoalesced app builds N generations and pays N units.
+  const N = 40;
+  mark = c.n;
+  const landed = await page.evaluate(async (n) => {
+    const inp = document.getElementById("layer-date");
+    const start = new Date(inp.value + "T00:00:00Z");
+    let last = inp.value;
+    for (let i = 1; i <= n; i++) {
+      last = new Date(start.getTime() - i * 86400000).toISOString().slice(0, 10);
+      inp.value = last;
+      inp.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    return last;
+  }, N);
+  await page.waitForTimeout(3000);
+  await tilesSettled(page);
+  const burst = c.since(mark);
+
+  /* The bound: a burst must not cost what the burst would cost unthrottled.
+   * Half of it is a deliberately loose ceiling — the real reduction measured
+   * on the sandbox was 4.3x and on a fast machine it is larger, because the
+   * gate is "one date generation in flight at a time" and a fast network
+   * paints more of them. Half is the line below which no per-event rebuild
+   * can hide. */
+  expect(burst).toBeLessThan(unit * N / 2);
+  // …and the app landed on the LAST date asked for, not the first: a
+  // coalescer that dropped the newest value would be quiet AND wrong.
+  expect(await page.evaluate(() => window.__earth.state.date)).toBe(landed);
+});
+
+test("dragging the playback scrub bar does not cost one tile set per pointer move", async ({ page }) => {
+  /* The scrub slider fires `input` on every pointer move (~60 a second) and
+   * each one used to run a whole frame change. Measured 2026-08-21: forty
+   * input events over a 366-frame range issued 160 tile requests, four per
+   * event, none cancelled. A real two-second drag is ~120 events. */
+  test.setTimeout(300000);
+  await onlyLayers(page, ["sst"]);
+  await tilesSettled(page);
+  await page.click("#tab-play");
+  await playRange(page, "2025-01-01", "2025-12-31", "1d");
+  await page.evaluate(() => window.__earth.playbackShowFrame(0));
+  await page.waitForTimeout(1500);
+  await tilesSettled(page);
+
+  const c = countTiles(page);
+  let mark = c.n;
+  await page.evaluate(() => window.__earth.playbackShowFrame(1));
+  await page.waitForTimeout(1500);
+  await tilesSettled(page);
+  const unit = Math.max(1, c.since(mark));
+
+  const N = 30;
+  mark = c.n;
+  const want = await page.evaluate(async (n) => {
+    const s = document.getElementById("pb-scrub");
+    const total = window.__earth.playback.frames.length;
+    let last = 0;
+    for (let i = 0; i < n; i++) {
+      last = Math.round((i + 1) * (total - 1) / n);
+      s.value = String(last);
+      s.dispatchEvent(new Event("input", { bubbles: true }));
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    return window.__earth.playback.frames[last];
+  }, N);
+  await page.waitForTimeout(4000);
+  await tilesSettled(page);
+  expect(c.since(mark)).toBeLessThan(unit * N / 2);
+  // The drag ends where the thumb ended.
+  await expect.poll(() => page.evaluate(() => window.__earth.state.date), { timeout: 30000 })
+    .toBe(want);
+});
+
+test("the aggregate window's raw tile reads share Cesium's per-server budget", async ({ page }) => {
+  /* The Aggregate slider does not draw tiles, it READS them — with a bare
+   * fetch(), which `Cesium.RequestScheduler` never sees. Measured 2026-08-21
+   * before the fix: a 365-day window over one layer in a four-tile viewport
+   * put **48 requests to gibs.earthdata.nasa.gov in flight at the same
+   * moment** (peak concurrency == total). The 12-sample cap bounded the count
+   * correctly; nothing bounded the concurrency, and a full-screen desktop
+   * view with three aggregable layers is ~400 simultaneous connections to one
+   * public host from one tab. */
+  test.setTimeout(300000);
+  await onlyLayers(page, ["sst"]);
+  await tilesSettled(page);
+
+  // The sample cap is what bounds the COUNT — assert it binds at every scale
+  // the slider offers, reduced to one array rather than one expect per point.
+  const caps = await page.evaluate(() => [1, 7, 30, 365, 730]
+    .map((w) => window.__earth.windowSampleDates("2026-06-15", w).length));
+  expect(caps[0]).toBe(1);                       // a single day is a single day
+  expect(Math.max(...caps)).toBe(12);            // and nothing ever exceeds 12
+
+  const peak = await page.evaluate(async () => {
+    let inflight = 0, top = 0, total = 0;
+    const real = window.fetch;
+    window.fetch = function (u, o) {
+      const url = typeof u === "string" ? u : u.url;
+      const tile = url.includes("gibs.earthdata.nasa.gov") &&
+        /\/\d+\/\d+\/\d+\.(png|jpe?g)/.test(url);
+      if (tile) { total++; inflight++; top = Math.max(top, inflight); }
+      return real.call(this, u, o).finally(() => { if (tile) inflight--; });
+    };
+    const s = document.getElementById("window-days");
+    s.value = "365";
+    s.dispatchEvent(new Event("input", { bubbles: true }));
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 25000));
+    window.fetch = real;
+    return { top, total, budget: Cesium.RequestScheduler.maximumRequestsPerServer };
+  });
+  expect(peak.total).toBeGreaterThan(0);         // the window really did read tiles
+  // ONE budget against GIBS, not two: the raw-read path is admitted through
+  // the same per-server number the scheduled tile path already respects.
+  expect(peak.top).toBeLessThanOrEqual(peak.budget);
+});
+
+test("GIBS asking us to slow down is visible, and we slow down", async ({ page }) => {
+  /* A 429 used to be indistinguishable from an empty tile: `sstFetchBitmap`
+   * returned null for every non-OK status, so the layer went quiet, the
+   * reader blamed the archive, and the app kept asking at the same rate —
+   * which is how a rate limit becomes a block on a service that cannot be
+   * bought back. */
+  test.setTimeout(180000);
+  await onlyLayers(page, ["sst"]);
+  await tilesSettled(page);
+  const toasts = await recordToasts(page);
+
+  const before = await page.evaluate(() => window.__earth.gibsRawLimit());
+  expect(before).toBeGreaterThan(1);
+
+  // One 429 from the raw-read path, delivered through the app's own fetch.
+  await page.evaluate(async () => {
+    const real = window.fetch;
+    window.fetch = async () => new Response("", { status: 429 });
+    const E = window.__earth;
+    // A window forces the aggregate provider down the raw-read path.
+    const s = document.getElementById("window-days");
+    s.value = "30";
+    s.dispatchEvent(new Event("input", { bubbles: true }));
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 8000));
+    window.fetch = real;
+    void E;
+  });
+
+  await expect.poll(() => page.evaluate(() => window.__earth.gibsRawLimit()), { timeout: 30000 })
+    .toBe(1);
+  await expect.poll(toasts, { timeout: 30000 }).toContain("slow down");
+});
+
+test("playback in a hidden tab stops asking NASA for tiles", async ({ page }) => {
+  /* Streaming tiles into a tab nobody is looking at is both rude and
+   * pointless, and it is the one politeness property of the player that costs
+   * nothing to break silently. Measured 2026-08-21: eight seconds of playback
+   * with the tab hidden issued four tile requests — the frame already in
+   * flight when the halt landed — and then nothing. */
+  test.setTimeout(300000);
+  await onlyLayers(page, ["sst"]);
+  await tilesSettled(page);
+  await page.click("#tab-play");
+  await playRange(page, "2015-01-01", "2016-01-01", "1mo");
+
+  const c = countTiles(page);
+  let mark = c.n;
+  await page.evaluate(() => {
+    const E = window.__earth;
+    E.playback.i = 0; E.playback.loop = true; E.playback.fps = 4;
+    E.playbackPlay();
+  });
+  await page.waitForTimeout(6000);
+  const whileVisible = c.since(mark);
+  expect(whileVisible).toBeGreaterThan(0);       // it really was playing
+
+  const stopped = await page.evaluate(async () => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await new Promise((r) => setTimeout(r, 500));
+    return window.__earth.playback.playing;
+  });
+  expect(stopped).toBe(false);
+
+  mark = c.n;
+  await page.waitForTimeout(8000);
+  const whileHidden = c.since(mark);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await page.evaluate(() => window.__earth.playbackStop());
+
+  /* Eight seconds at 4 fps is 32 frames the player would have shown; the
+   * comparison is against what the SAME eight seconds cost while visible, so
+   * the assertion means the same thing on any machine. A hidden tab may still
+   * finish the frame that was in flight when it was hidden — it must not
+   * start new ones. */
+  expect(whileHidden).toBeLessThan(whileVisible / 2);
+});

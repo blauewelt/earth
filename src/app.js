@@ -2084,13 +2084,87 @@ function getForward(url) {
   }
   return forwardCache.get(url);
 }
+/* ------------------------------------------- one GIBS budget, not two
+ *
+ * Every tile Cesium draws goes through `Cesium.RequestScheduler`, which caps
+ * how many requests may be open to one server at a time
+ * (`maximumRequestsPerServer`, 18 by default; the app has never overridden it
+ * and, measured, has never needed to). The aggregate / delta / ratio providers
+ * and the pixel probe do NOT draw tiles — they READ them, with a bare
+ * `fetch()` — so the scheduler never sees them and that cap never applied.
+ *
+ * Measured 2026-08-21 in MIRROR mode, one aggregable layer, a 1280x720
+ * viewport rendering four tiles: moving the Aggregate slider to 365 days
+ * issued 48 tile fetches to gibs.earthdata.nasa.gov and **all 48 were in
+ * flight simultaneously** (peak concurrency == total). The window's own
+ * `windowSampleDates` cap of 12 samples bounds the COUNT correctly; nothing
+ * bounded the CONCURRENCY. A full-screen desktop view (~11 rendered tiles)
+ * with three aggregable layers on is ~400 simultaneous connections to one
+ * public, taxpayer-funded NASA host from a single tab — which is what a
+ * denial-of-service looks like from the far end, whatever it was meant as.
+ *
+ * The fix deliberately invents no number: the raw-read path is admitted
+ * through the SAME per-server budget the scheduled path already respects,
+ * read from the scheduler itself rather than typed in a second time. If a
+ * future Cesium changes its default, both paths change together.
+ *
+ * `gibsSlowed` is the one thing that lowers it, and only on the server's own
+ * say-so — see `gibsPushback`. */
+function gibsRawLimit() {
+  if (gibsSlowed) return 1;                 // the least that still progresses
+  const n = Cesium.RequestScheduler.maximumRequestsPerServer;
+  return typeof n === "number" && n > 0 ? n : 6;
+}
+let gibsRawActive = 0;
+const gibsRawQueue = [];
+function gibsRawAcquire() {
+  if (gibsRawActive < gibsRawLimit()) { gibsRawActive++; return Promise.resolve(); }
+  return new Promise((r) => gibsRawQueue.push(r));
+}
+function gibsRawRelease() {
+  gibsRawActive = Math.max(0, gibsRawActive - 1);
+  while (gibsRawQueue.length && gibsRawActive < gibsRawLimit()) {
+    gibsRawActive++;
+    gibsRawQueue.shift()();
+  }
+}
+
+/* GIBS ASKING US TO SLOW DOWN IS AN ANSWER, AND IT USED TO BE INVISIBLE.
+ * `sstFetchBitmap` returned null for every non-OK status, so a 429 or a 503
+ * was indistinguishable from "this tile has no data" — the layer simply went
+ * quiet, the reader blamed the archive, and the app carried on asking at the
+ * same rate. That is precisely the behaviour that turns a rate limit into a
+ * block, and a block on a public service cannot be bought back.
+ *
+ * So the two statuses that MEAN "you are asking too fast" say so once, in the
+ * app's own toast, and collapse the GIBS budget to a single concurrent
+ * request for the rest of the session. Nothing here guesses a back-off
+ * interval: an invented delay would be a hand-picked threshold, and the
+ * session-long floor of one is both the minimum that still makes progress and
+ * the answer that cannot be wrong. A reload is the reset, and the toast says
+ * so. */
+let gibsSlowed = false;
+function gibsPushback(status) {
+  if (gibsSlowed) return;
+  gibsSlowed = true;
+  showToast(
+    `<strong>NASA GIBS asked us to slow down</strong> (HTTP ${status}). ` +
+    "The map now makes one tile request at a time, so it will fill in more " +
+    "slowly. Reload the page to go back to full speed.",
+    { key: "gibs-pushback", timeout: 12000 });
+}
+
 async function sstFetchBitmap(url) {
+  await gibsRawAcquire();
   try {
     const r = await fetch(url);
+    if (r.status === 429 || r.status === 503) { gibsPushback(r.status); return null; }
     if (!r.ok) return null;
     return await createImageBitmap(await r.blob());
   } catch {
     return null;
+  } finally {
+    gibsRawRelease();
   }
 }
 /* Mean °C per pixel across a set of sample dates (colormap-inverted). */
@@ -2846,6 +2920,71 @@ function refreshTimedLayers({ hold = false, keepPreload = false } = {}) {
   }
   if (hold) scheduleSweep();
   updateSplitUI();
+}
+
+/* ------------------------------------------------- the date scrub coalescer
+ *
+ * A date change costs one whole visible tile set PER TIMED LAYER, and nothing
+ * used to stand between the user's finger and that cost. Measured 2026-08-21
+ * in MIRROR mode, a 1280x720 viewport rendering four tiles per layer:
+ *
+ *   one -1d click, 1 layer .................................. 4 tile requests
+ *   one -1d click, 5 layers ................................ 20 tile requests
+ *   the date field moved 60 days at 30 Hz (a HELD arrow key,
+ *     which is what a browser's key-repeat does), 1 layer ... 240 requests
+ *   the Play tab's scrub slider dragged, 40 input events .... 160 requests
+ *
+ * — i.e. exactly 4 per event, with no debounce, and (measured on the same
+ * runs) **zero** of the superseded requests cancelled: every tile for a date
+ * the user had already left completed and was thrown away. The count is a
+ * pure function of how fast a finger can move, which is the definition of the
+ * hazard: hold the arrow key for ten seconds with five layers on and a single
+ * tab asks a public NASA service for ~6,000 tiles it will never show.
+ *
+ * The fix is not a timer and not a picked interval. The app already has a
+ * definition of "this date is now on screen" — `waitTilesSettled`, the same
+ * one the playback loop advances its playhead on — so the rule is simply
+ * ONE DATE GENERATION IN FLIGHT AT A TIME: apply the first change
+ * immediately, remember only the LATEST date requested while it paints, and
+ * apply that one when the globe reports its queue empty. The request rate
+ * stops being a function of the user's finger and becomes a function of the
+ * network's own throughput, which is the only rate that was ever affordable.
+ *
+ * Two properties this deliberately keeps:
+ *  - `state.date`, the date input, the comparison read-out and everything
+ *    else that costs NOTHING still move at the user's rate. Only the part
+ *    that issues requests is coalesced, so the UI never feels gated.
+ *  - An ISOLATED change still applies synchronously, on the same tick as the
+ *    click. That is what the retirement-queue test reads, and more
+ *    importantly it is what a single date step should do.
+ *
+ * It also makes request CANCELLATION unnecessary rather than adding it: the
+ * superseded requests measured above are not cancelled here, they are never
+ * issued. CLAUDE.md 4.1 — prefer removing a failure mode over guarding it. */
+let scrubBusy = false;
+let scrubPending = null;
+function scrubApply(fn) {
+  if (scrubBusy) { scrubPending = fn; return; }   // newest wins; the rest never run
+  scrubBusy = true;
+  fn();
+  waitTilesSettled(PLAY_FRAME_CEILING_MS).then(() => {
+    scrubBusy = false;
+    const next = scrubPending;
+    scrubPending = null;
+    if (next) scrubApply(next);
+  });
+}
+
+/* Everything a date move has to rebuild. The closure reads `state.date` at
+ * APPLY time rather than capturing it, so a coalesced burst lands on the date
+ * the user actually stopped at, not on the one that happened to arrive first. */
+function applyDateMove() {
+  scrubApply(() => {
+    refreshTimedLayers({ hold: true });
+    refreshYearlyLayers();
+    refreshMonthlyGrids();
+    if (sstEnsembleLayer) updateEnsembleLayer();
+  });
 }
 
 /* Forecast layers extend the date selector past today: while one is active,
@@ -4278,10 +4417,7 @@ function buildLayerPanel() {
     if (!dateInput.value) return;
     state.date = dateInput.value;
     syncCompareUi();          // an OFFSET comparison moved with it
-    refreshTimedLayers({ hold: true });
-    refreshYearlyLayers();
-    refreshMonthlyGrids();
-    if (sstEnsembleLayer) updateEnsembleLayer();
+    applyDateMove();          // coalesced onto the paint clock, never per keystroke
   });
 
   // Quick date stepping: real calendar arithmetic (−1m from Mar 31 → Feb 28,
@@ -4295,10 +4431,7 @@ function buildLayerPanel() {
     state.date = next;
     dateInput.value = next;
     syncCompareUi();          // an OFFSET comparison moved with it
-    refreshTimedLayers({ hold: true });
-    refreshYearlyLayers();
-    refreshMonthlyGrids();
-    if (sstEnsembleLayer) updateEnsembleLayer();
+    applyDateMove();          // a held stepper coalesces; one click does not
   });
 
   // ±30m time-of-day stepping for sub-daily layers. Crossing midnight rolls
@@ -4315,20 +4448,27 @@ function buildLayerPanel() {
     if (date !== state.date) {
       state.date = date;
       dateInput.value = date;
-      refreshTimedLayers({ hold: true });   // date change affects every timed layer
-      refreshMonthlyGrids();         // crossing midnight can cross a month
+      scrubApply(() => {
+        refreshTimedLayers({ hold: true }); // date change affects every timed layer
+        refreshMonthlyGrids();       // crossing midnight can cross a month
+      });
     } else {
       // Same date, new half-hour: only sub-daily layers see a different TIME,
       // so don't churn (refetch) the daily/monthly layers on every step.
-      for (const [id, entry] of Object.entries(state.layers)) {
-        if (entry.cfg.subDaily && (entry.layer || entry.suppressed)) {
-          // Held, like every other date move: a half-hour step is the fastest
-          // stepper in the app and blinked the hardest.
-          retireLayer(id);
-          addLayer(entry.cfg);
-          scheduleSweep();
+      // Coalesced on the same paint clock as every other date move — this is
+      // the FASTEST stepper in the app, so it is the one a repeated tap can
+      // run furthest ahead of the network.
+      scrubApply(() => {
+        for (const [id, entry] of Object.entries(state.layers)) {
+          if (entry.cfg.subDaily && (entry.layer || entry.suppressed)) {
+            // Held, like every other date move: a half-hour step is the
+            // fastest stepper in the app and blinked the hardest.
+            retireLayer(id);
+            addLayer(entry.cfg);
+            scheduleSweep();
+          }
         }
-      }
+      });
     }
   });
 }
@@ -9022,7 +9162,12 @@ function loadPlayback() {
     // write it would make the picture argue with the control.
     document.getElementById("pb-scrub")?.addEventListener("input", (e) => {
       if (playback.playing) return;
-      playbackShowFrame(Number(e.target.value));
+      /* Coalesced like every other date scrub — a slider drag fires one
+       * `input` per pointer move (~60 a second), and each one used to cost a
+       * whole visible tile set per layer. Reading `.value` at APPLY time
+       * rather than capturing it means the frame that lands is the one the
+       * thumb is on now, not the one it was on when the burst started. */
+      scrubApply(() => playbackShowFrame(Number(e.target.value)));
     });
   }
 
@@ -9239,6 +9384,10 @@ window.__earth = {
   waitTilesSettled,
   gibsUrlTemplate,
   refreshTimedLayers,
+  applyDateMove,
+  gibsRawLimit,
+  get gibsRawActive() { return gibsRawActive; },
+  get gibsSlowed() { return gibsSlowed; },
   removeLayer,
   addLayer,
   PLAY_MAX_FRAMES,

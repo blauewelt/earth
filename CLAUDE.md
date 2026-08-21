@@ -978,6 +978,7 @@ worth keeping in front of a frontend reader:
 | `docs/CATALOG.md` + `data/catalog.json` | The 248-record open-data catalog (human + machine readable) |
 | `docs/COMBINING_DATASETS.md` | Which datasets measure the same quantity; sound combinations |
 | `docs/PIXEL_STATE.md` | Which catalog sources compose into a per-pixel state vector (state/memory/forcing/flow/future); the 0.25°-daily common grid argument; the ~25-source minimal composition |
+| `docs/TILE_BUDGET.md` | What one user interaction costs NASA: the measured GIBS request count per click, drag, window and playback frame; the unbounded paths found and closed; the rule to check before adding any tile-issuing feature |
 | `docs/SPECIES_AND_CLIMATE.md` | Why biodiversity data belongs in a climate app |
 
 ---
@@ -1033,6 +1034,42 @@ worth keeping in front of a frontend reader:
   (`playPreload`, `playbackEnsurePreload`, `playbackPromote`) is built on
   exactly this, and `tests/app.spec.js` pins all four numbers so a Cesium
   upgrade cannot quietly take them away.
+- **The tile budget is MEASURED, and the hazard was never playback.** Every
+  tile the app draws is a direct browser→NASA request; no CDN of ours stands in
+  front of `gibs.earthdata.nasa.gov`, and GIBS's `no-store` (above) means the
+  browser cache does not either. Measured 2026-08-21 in MIRROR mode, four
+  rendered tiles per layer: first paint 10 requests · one date step 4 (1 layer)
+  / 20 (5 layers) · enable a layer 6 · a scene 10 · one pixel-inspector click 29
+  (15 tiles, the 15 colormapped rasters) · an Aggregate window 48 at 30 d AND at
+  365 d (`windowSampleDates` caps at 12 sample dates and the cap really binds) ·
+  playback ≈4.1 requests per frame with nothing wasted, halting to 0 in a hidden
+  tab. **Playback turned out to be the polite part** — every one of E-041's
+  documented controls holds (`PLAY_MAX_FRAMES` 500 coarsens rather than
+  truncates, `PLAY_PRELOAD_DEPTH` 2 → 1 above 32 tiles in view → 0 grid-only,
+  the signature dedupe collapses a monthly year to 12 frames). What was
+  unbounded was the ordinary date path: **60 date changes at a browser's
+  key-repeat rate issued 240 tile requests** (one whole visible tile set per
+  keystroke, ×layers) and forty `#pb-scrub` `input` events issued 160, with
+  **zero** superseded requests cancelled — every tile for a date the user had
+  already left completed and was discarded. Separately, the aggregate/delta/
+  ratio providers and the pixel probe read tiles with a bare `fetch()` that
+  `Cesium.RequestScheduler` never sees, so a 365-day window put **48 requests in
+  flight simultaneously** with no concurrency limit at all (the scheduler's own
+  defaults — 50 total, 18 per server, throttling on, no per-host override — were
+  and remain unconfigured, because nothing measured ever pushed against them).
+  The fixes invent no numbers: `scrubApply` allows ONE date generation in flight
+  at a time and applies only the newest pending date when `waitTilesSettled`
+  reports the globe painted (240→56, 160→40), which makes cancellation
+  unnecessary rather than adding it; the raw-read path is admitted through
+  `Cesium.RequestScheduler.maximumRequestsPerServer` itself (peak 48→18); and a
+  429/503 from GIBS — previously indistinguishable from an empty tile, which is
+  how a rate limit becomes a block — now says so in a toast and drops the budget
+  to one concurrent request for the session. **The rule for a future session:
+  before adding anything that issues tile requests, ask whether its count is a
+  function of something the user can hold down, drag or repeat; if it is, it
+  goes through `scrubApply`, and if it reads tiles with a bare `fetch` it goes
+  through `gibsRawAcquire`.** Full table, method and the five pinning tests:
+  `docs/TILE_BUDGET.md`.
 - **GIBS serves pictures, not numbers.** Values are recovered by inverting the
   layer's XML colormap (rgb → value LUT). Inversion recovers bin centres
   (quantised), works only for continuous one-to-one colormaps. Colormap
