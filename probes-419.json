@@ -1,0 +1,192 @@
+{
+ "run_number": 419,
+ "archived_at": "2026-08-21T05:56:56.034Z",
+ "files": {
+  "probe_kfold.json": {
+   "actions": {
+    "rapid": {
+     "r_kfold_deseas": 0.612,
+     "ci95": [
+      0.563,
+      0.659
+     ],
+     "n": 7290,
+     "rmse_sv": 3.26,
+     "sigma_sv": 4.11,
+     "r_lowpass18": 0.655,
+     "wind_only_baseline": {
+      "r": 0.607,
+      "ci95": [
+       0.547,
+       0.664
+      ],
+      "rmse_sv": 3.28
+     }
+    },
+    "fc": {
+     "r_kfold_deseas": 0.364,
+     "ci95": [
+      0.287,
+      0.432
+     ],
+     "n": 13613,
+     "rmse_sv": 2.81,
+     "sigma_sv": 3.01,
+     "r_lowpass18": 0.393,
+     "wind_only_baseline": {
+      "r": 0.11,
+      "ci95": [
+       0.068,
+       0.152
+      ],
+      "rmse_sv": 3
+     }
+    }
+   }
+  },
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.596,
+     "r_deseasonalised": 0.578,
+     "n_test": 1095
+    },
+    {
+     "K": 3,
+     "r_raw": 0.649,
+     "r_deseasonalised": 0.634,
+     "n_test": 1095
+    },
+    {
+     "K": 6,
+     "r_raw": 0.665,
+     "r_deseasonalised": 0.656,
+     "n_test": 1095
+    },
+    {
+     "K": 12,
+     "r_raw": 0.67,
+     "r_deseasonalised": 0.649,
+     "n_test": 1095
+    },
+    {
+     "K": 24,
+     "r_raw": 0.676,
+     "r_deseasonalised": 0.652,
+     "n_test": 1095
+    }
+   ],
+   "seasonal_floor_raw": 0.176,
+   "seasonal_floor_deseas": 0.084
+  },
+  "dip_check.json": {
+   "run": "actions",
+   "window": [
+    "2009-09",
+    "2010-06"
+   ],
+   "r_out_of_fold": 0.579,
+   "sign_agreement_pct": 69,
+   "dip_observed_sv": -6.84,
+   "dip_predicted_sv": -1.75,
+   "dip_captured_pct": 25.6
+  },
+  "provenance.json": {
+   "run_number": 419,
+   "sha": "19b50368f44b859373feaf8bbeff8edbc2458c75",
+   "code": "https://github.com/blauewelt/earth/tree/19b50368f44b859373feaf8bbeff8edbc2458c75",
+   "inputs": {
+    "doc": "E-043f · Trains a FRESH 38.0M daily codec on ALL 481 longitude columns, so the -45..-25 mid-Atlantic block (25.0% of the domain's ocean pixels) enters stage-1 training instead of being withheld — the daily arm of the wave-8 no-longitude-holdout regime change · params 38.0M · stage encoder · data family5_na025_daily · arch 512x12 d_z 32 heads 4 d_dec 256 patch 1 · steps 200000 x batch 512 · resume none (from scratch, recipe f5-40M-nolonhold). HYPOTHESIS: the withheld block is a quarter of the ocean and the daily codec is starved of it, so returning it lifts the linear section probe out of its flat band and gives it a trend. FALSIFIER: a final linear_r_deseas inside 0.558-0.598, or flat to within +/-0.02 across steps 7500-200000 — that would say the daily ceiling is set by cadence or capacity, not by the training pool, and the regime change buys the daily arm nothing. PRIOR AND CONTROL: #410 (E-038c daily codec, cancelled at step 67000 of 200000) is the withheld-block control at this exact architecture — its linear_r_deseas was FLAT in 0.558-0.598 with NO trend through step 67000, its last full probe (step 60000) reading linear_r_deseas 0.582, linear_r_raw 0.602, temporal_r_deseas 0.627, chan_vs_persistence 28.1%. FIRSTS AND CAVEATS: this is the first daily codec to reach a probe ladder at all — #389 (E-038c, the first daily attempt) wedged 7 h in the anomaly transform and #400/#410 (its two re-runs) were both cancelled mid-training — so the daily-scale ladder is UNTESTED and its cost unmeasured. Expected train pixels ~1.23e9, ~4/3 of #389's ~9.25e8. BUDGET: 200000 steps at #410's measured 217.4 ms/step is 12.1 h of training, but probes are 62% of loop wall clock at daily cadence (28 full evals at ~2293 s + 13 light probes at ~609 s), so the loop is ~32.5 h = 1947 min. max_minutes 2600, NOT #389/#410's 2200: 2200 sits only 2% above the point at which fit_schedule silently re-fits the cosine, the failure #386 (E-038a, the f4-40M pentad control) hit when 200000 became 166752. job_timeout 3400 leaves ~600 min for the unmeasured daily ladder.",
+    "steps": "200000",
+    "batch": "512",
+    "d_z": "32",
+    "anomaly": "true",
+    "temporal_steps": "0",
+    "temporal_d_model": "96",
+    "temporal_layers": "3",
+    "eval_every": "7500",
+    "head_probe": "false",
+    "light_probe_every": "10000",
+    "window": "recipe:f5-40M-nolonhold",
+    "tensor": "family5_na025_daily",
+    "sst_channel": "false",
+    "patch": "1",
+    "max_minutes": "2600",
+    "runner": "gpu-box-46996216",
+    "job_timeout": "3400",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "512",
+    "codec_layers": "12",
+    "codec_heads": "4",
+    "codec_d_dec": "256"
+   },
+   "tensor": {
+    "file": "ml/cache/family5_na025_daily.npz",
+    "sha256": "fa2401c2489df8d056d72bb8ebf3b858f31621af185e4921ba2baa542ec4608d",
+    "bytes": 799788,
+    "X_sha256": "452c5194ac67d5ef6de8c5d0430a674005d8108b5f0dd6a285657d06e0de515a",
+    "X_bytes": 165581416076,
+    "X_shape": [
+     15706,
+     281,
+     481,
+     39
+    ],
+    "C": 39,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 15706
+   },
+   "torch": "2.13.0+cu130",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-46996216"
+  }
+ }
+}
