@@ -51,7 +51,7 @@ Not an experiment. Recorded because it sets what the next check-in inherits.
 
 | box | $/h | job | state at 01:38Z |
 |---|---|---|---|
-| `gpu-box-31479844` (vast 47724559, Quebec) | 0.294 | **#426** (E-043b-SEED1) | stage 2 step 2,000 / 200,000, gpu **83%**, disk 58%. Was idle from #425's finish (00:39Z) to 01:12Z — ~33 min, ≈$0.16 of idle burn, closed by this dispatch |
+| `gpu-box-31479844` (vast 47724559, Quebec) | 0.294 | **#426** (E-043b-SEED1) | stage 2 step **4,000 / 200,000**, gpu **83%**, disk 58%. Was idle from #425's finish (00:39Z) to 01:12Z — ~33 min, ≈$0.16 of idle burn, closed by this dispatch |
 | `gpu-box-39184683` (vast 47724565, Hong Kong) | 0.308 | **#423** (E-044) | **embed 95.6%** (month 3,003 / 3,142, elapsed 30,573 s, `eta_s` 1,415 at the 01:37Z push) ⇒ **100% ~01:55Z**, stage 2 begins after it. **Vast's GPU stats read all-zero for this box**, which `fleet_health` flags as a blind CPU-BOUND check; the live branch is advancing normally, so the run is alive and the TELEMETRY is what is stale |
 | `gpu-box-46996216` (vast 47913006, Austria) | 0.333 | **#419** (E-043f) | still inside step 16 `Train`, gpu **89%**, job wall **31 h 45 min / 2,600 min** |
 
@@ -68,7 +68,7 @@ time a session has slack.
 | what is outstanding | needs | finishes |
 |---|---|---|
 | **#419** tail + probe ladder + upload | ~1 h + ladder, ~$0.5 | training ~01:20Z (arithmetic); ladder unknown — the daily ladder is untested |
-| **#426** (E-043b-SEED1) | ~15 h, ~**$4.4** | ~16:10–17:00Z on 2026-08-21 |
+| **#426** (E-043b-SEED1) | ~15 h, ~**$4.4** | ~16:35Z on 2026-08-21 |
 | **#423** (E-044) stage 2 after the embed | ~20 h, ~**$6.2** | ~21:45Z on 2026-08-21 |
 | **#426**'s headpub + roll (§5 of that entry) | ~3.7 h, ~**$1.1** | ~21:00Z on 2026-08-21 |
 | the pentad `sroll:` over #423's head | ~14 h, ~$4.3 | ~12:00Z on 2026-08-22 |
@@ -2260,7 +2260,8 @@ ran 2026-08-19 16:49:09Z → 2026-08-20 07:41:51Z = **14 h 52 min**.
 
 **#426 produces no readable number by itself.** Like #414 it trains a head; the corridor AUC
 that answers §2 comes from a roll, and the roll needs the head published first. On landing
-(**~16:10Z on 2026-08-21** by #414's own 14.9 h wall — arithmetic, not a reading):
+(**~16:35Z on 2026-08-21** — 200,000 steps from a ~01:25Z stage-2 start at the measured
+264 ms/step, plus the ladder and upload; arithmetic, not a reading):
 
 1. **HEADPUB** `e043b-xl144-nolonhold-s1` off `/opt/earth-cache/ckpt/temporal.pt` on this
    box, ~10 min, ~$0.05. Poll the release asset to `state: uploaded` **before any GET** —
@@ -2295,7 +2296,8 @@ Vast API. Nothing is marked passed on an inference.
 | 7 | **the run is learning** | step 2,000: `stage2_zmse` **0.8819**, `stage2_val_zmse` **1.14768** against `stage2_monitor.val_persistence` **3.09512** — a val/persistence ratio of **0.371** at 1% of the budget; `stage2_amp` **0.8614**, `grad_norm` **2.3841**. No collapse signature |
 | 8 | **it is on the GPU** | `fleet_health` reads **gpu 83%**, cpu 22%, `job=yes` on vast 47724559 — §2's four-silently-embedded-on-CPU lesson |
 | 9 | **no embed pass was needed** | stage 2 began ~01:34Z, ~21 min after pickup: the frozen anchor's Z cache and the `family3_na025` tensor were already on this box from #418 / #422 / #424 / #425. #414 paid the same zero, and choosing this box over a cold start saved both an embed and a box-start |
-| 10 | **rate, and what it does to the ETA** | **528.2 s / 2,000 steps = 264.1 ms/step**, 7% above #414's 247 ms/step. If it holds, 200,000 steps is **14.7 h** of training and the job lands **~17:00Z**; at #414's rate it lands ~16:10Z. Either is far inside `job_timeout` 1800 min. The first 2,000 steps include warm-up, so this is an upper bound on the steady rate — **re-time it at the next check-in** rather than treating 264 as settled |
+| 10 | **rate, and what it does to the ETA** | **528.2 s / 2,000 steps = 264.1 ms/step**, 7% above #414's 247 ms/step (the first 2,000 steps carry warm-up, so this is an upper bound on the steady rate). Stage 2 began ~**01:25Z**, so 200,000 steps at that rate is **14.7 h** ⇒ training ends ~**16:05Z** and the job, with its ladder and upload, ~**16:35Z**. Far inside `job_timeout` 1800 min. Independently, the status page's own render at 01:37Z reads **"4,000 of 200,000 steps · ~14.5 h left · ends ≈ 16:07"** — the same arithmetic from the other side. Re-time at the next check-in rather than treating 264 as settled |
+| 11 | **the STATUS PAGE, screenshotted rather than described** (§2) | `node scripts/status_shot.mjs` at 01:39Z: **`PAGE ERRORS: none`**, 30 runs captured with metrics for #426. The card renders under the **E-043b** tag with the full `doc` string, the generated config line (`params 40.693M codec + 211.353M head · stage stage-2 (temporal head) · data family3_na025 (C 39, T 516) · arch codec 576×10 … head 1024×16 · steps×batch 60,000 × 512, head 200,000 × 256 · resume run-62,run-63 — loaded run-62.pt at step 60,000`), the planned expdecay curve from `plan-426.json`, and a live stage-2 trace reading **z-MSE 0.5190 · held-out z-MSE 0.6643 · amplitude ratio 0.92 · grad norm 1.25 at step 4,000** |
 
 ---
 
