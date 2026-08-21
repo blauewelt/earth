@@ -44,6 +44,41 @@ low-pass).
 
 ---
 
+<a id="fleet-2026-08-21-0138"></a>
+## OPERATIONS · The fleet at 2026-08-21 01:38Z — three boxes, three jobs, no idle burn
+
+Not an experiment. Recorded because it sets what the next check-in inherits.
+
+| box | $/h | job | state at 01:38Z |
+|---|---|---|---|
+| `gpu-box-31479844` (vast 47724559, Quebec) | 0.294 | **#426** (E-043b-SEED1) | stage 2 step 2,000 / 200,000, gpu **83%**, disk 58%. Was idle from #425's finish (00:39Z) to 01:12Z — ~33 min, ≈$0.16 of idle burn, closed by this dispatch |
+| `gpu-box-39184683` (vast 47724565, Hong Kong) | 0.308 | **#423** (E-044) | **embed 95.6%** (month 3,003 / 3,142, elapsed 30,573 s, `eta_s` 1,415 at the 01:37Z push) ⇒ **100% ~01:55Z**, stage 2 begins after it. **Vast's GPU stats read all-zero for this box**, which `fleet_health` flags as a blind CPU-BOUND check; the live branch is advancing normally, so the run is alive and the TELEMETRY is what is stale |
+| `gpu-box-46996216` (vast 47913006, Austria) | 0.333 | **#419** (E-043f) | still inside step 16 `Train`, gpu **89%**, job wall **31 h 45 min / 2,600 min** |
+
+**No box was stopped, because there was none to stop**: `fleet_health` reads **0 runners
+online+idle** after the dispatch. §7's idle-burn rule is satisfied by occupancy, not by a
+stop.
+
+**Money.** Credit **$43.14**, balance $0.0000, burn **$1.2576/h** ⇒ runway **34.3 h**, i.e.
+to **~12:00Z on 2026-08-22**. The burn decomposes as **$0.935/h of compute on the three
+running boxes** and **$0.322/h of storage on nine STOPPED ones** — a quarter of the burn buys
+no computation at all, and stopped-box storage is the line item most worth a sweep the next
+time a session has slack.
+
+| what is outstanding | needs | finishes |
+|---|---|---|
+| **#419** tail + probe ladder + upload | ~1 h + ladder, ~$0.5 | training ~01:20Z (arithmetic); ladder unknown — the daily ladder is untested |
+| **#426** (E-043b-SEED1) | ~15 h, ~**$4.4** | ~16:10–17:00Z on 2026-08-21 |
+| **#423** (E-044) stage 2 after the embed | ~20 h, ~**$6.2** | ~21:45Z on 2026-08-21 |
+| **#426**'s headpub + roll (§5 of that entry) | ~3.7 h, ~**$1.1** | ~21:00Z on 2026-08-21 |
+| the pentad `sroll:` over #423's head | ~14 h, ~$4.3 | ~12:00Z on 2026-08-22 |
+
+**Everything but the last row fits inside the runway; the pentad sroll ends within an hour of
+it.** Per §0e this is arithmetic reported early, not a reason to decline anything — nothing
+was scaled down to fit.
+
+---
+
 <a id="e-044"></a>
 ## E-044 · #423 — DISPATCHED 2026-08-20 15:10:05Z. The first stage-2 head at any cadence but monthly
 
@@ -229,7 +264,7 @@ ceiling that took every dispatch down on 2026-08-17 · the recipe resolving to s
 ---
 
 <a id="e-043"></a>
-## E-043 · Retire the 45°W–25°W longitude holdout — ARMS A, B, D and E ALL LANDED (#416, #414+#422, #417+#418, #415); only F (#419, daily) is still running
+## E-043 · Retire the 45°W–25°W longitude holdout — ARMS A, B, D and E ALL LANDED (#416, #414+#422, #417+#418, #415); F (#419, daily) is still training, and arm B is now down to its seed pair (#426)
 
 The wave that follows from
 [§0d · the skill map's central band is the held-out longitude block](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#holdout-lon-band-2026-08-19).
@@ -240,25 +275,42 @@ that no other head in the archive has, so its headline number is recorded as **n
 readable as a level**; that is [E-043b · the roll §7](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-roll)
 and it is the most important open item on the wave.
 
-**Two diagnostic runs hang off arm B, and they are where the wave's attention is now.**
+**Two diagnostic runs hung off arm B; BOTH have now landed, and between them they have
+narrowed the question to one word — `n`.**
 **[E-043b-CONTROL (#424, re-roll of a KNOWN head on the new code)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-control)**
-**LANDED 19:53:47Z and exonerated the evaluator**: `e032xl_u1_s0` came back at corridor
-**0.68067 / 0.86700 / 0.22058**, reproducing #418's old-code record to every digit it
-stores and decaying normally — the clean branch of a pre-registered two-way falsifier — so
+**LANDED 2026-08-20 19:53:47Z and exonerated the evaluator**: `e032xl_u1_s0` came back at
+corridor **0.68067 / 0.86700 / 0.22058**, reproducing #418's old-code record to every digit
+it stores and decaying normally — the clean branch of a pre-registered two-way falsifier — so
 #422's flat 0.939 belongs to **the head**, not to `ml/rollout_spatial.py`.
 **[E-043b-MILESTONE (#425, #414's own step-600 head rolled)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-milestone)**
-went out at 21:04:37Z to split the two worlds that leaves: a 600-step head cannot have
-LEARNED the anomaly, so a flat-and-inflated milestone makes it structural and kills #422's
-number, while a normally-decaying one makes it acquired and sends the arm to a seed-1
-replicate.
+**LANDED 2026-08-21 00:39:08Z and killed the structural explanation**: the step-600
+milestone — identical geometry, identical seed, identical scope split, identical eval path,
+600 optimiser steps instead of 200,000 — rolls corridor **0.02125 blended / 0.02967
+`_trainlon`** with a **monotone** twelve-month decay **0.179 → −0.068** (spread 0.247, and
+`acc` 0.419 → 0.141). **Branch (2) of the pre-registered two-way prediction fired**: *"if it
+decays normally … the flat-and-inflated property was ACQUIRED over 200,000 steps of
+all-longitude training and may be a real result."* Branch (1) — flat and near 0.94, spread
+under ~0.05, STRUCTURAL, #422's number dead — did not fire and was not close.
+
+**The epistemic position after both, stated carefully.** The instrument is clean (#424,
+byte-identical reproduction). The structural story is dead (#425). Two of §7's four anomalous
+signatures have **softened under scrutiny**: the 39-channel gain is **not** uniform (#422 −
+#424 at h = 12 spans +0.055 to +0.467, sd 0.105 across 39 channels), and the "unforecastable
+wind stress" argument does not separate the heads because **#424's own control reads `tau_x`
+0.810 at h = 12** on the old code. The two that stand unchanged are the flat lead-time
+profile itself and the complete absence of movement in any transport read-out. **What is left
+between #422's 0.93933 and the paper is therefore not a code question and not a mechanism
+question — it is §3b: n = 1 at a configuration no other head shares, on a number that would
+headline. The seed pair is mandatory**, and it went out at 01:12:28Z as
+**[E-043b-SEED1 (#426)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1)**.
 
 | arm | run | what it is |
 |---|---|---|
 | A | **#416** (E-043a: monthly f3 codec retrained with NO longitude holdout) | **landed — this entry** |
-| B | **#414** (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING frozen anchor) → **#420** (HEADPUB) → **#422** (the roll) | **COMPLETE, AND THE ONE TO READ CAREFULLY — [E-043b (#414, training half)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)** and **[E-043b · the roll (#420 + #422)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-roll)**. Gate PASSED (0.643, 20th reproduction). The hole is **gone** — corridor `_trainlon` − `_holdlon` **0.0065** against the control pair's 0.646 / 0.667 — which is arm B's hypothesis confirmed. The corridor `_trainlon` figure **0.93933 vs the control pair's 0.86754** is **NOT** yet quotable: §7 of that entry records a flat lead-time profile, a uniform 39-channel gain including unforecastable wind stress, and **no movement at all in any transport read-out**. (#421 was the same roll and is VOID.) **Followed by two diagnostics: [#424 (E-043b-CONTROL)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-control) cleared the roll code, and [#425 (E-043b-MILESTONE)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-milestone) is in flight to say whether the anomaly was acquired or is structural.** |
+| B | **#414** (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING frozen anchor) → **#420** (HEADPUB) → **#422** (the roll) | **COMPLETE, AND THE ONE TO READ CAREFULLY — [E-043b (#414, training half)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)** and **[E-043b · the roll (#420 + #422)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-roll)**. Gate PASSED (0.643, 20th reproduction). The hole is **gone** — corridor `_trainlon` − `_holdlon` **0.0065** against the control pair's 0.646 / 0.667 — which is arm B's hypothesis confirmed. The corridor `_trainlon` figure **0.93933 vs the control pair's 0.86754** is **NOT** yet quotable: §7 of that entry records a flat lead-time profile, a 39-channel gain including wind stress, and **no movement at all in any transport read-out**. (#421 was the same roll and is VOID.) **Both diagnostics have landed: [#424 (E-043b-CONTROL)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-control) cleared the roll code byte for byte, and [#425 (E-043b-MILESTONE)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-milestone) killed the structural explanation — the step-600 head rolls 0.02967 `_trainlon` with a monotone 0.179 → −0.068 decay, so the property was ACQUIRED over 200k steps.** The arm's only remaining gap is n = 1, and **[#426 (E-043b-SEED1)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1)** is in flight to close it. (§7(c)'s "uniform" is retired by #425 §6.4: the gain spans +0.055 to +0.467 at h = 12.) |
 | D | **#417 / #418** (E-043d: sroll re-rolls, `_trainlon` / `_holdlon` split) | **COMPLETE — [E-043d1 (#417, xl233 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d1)** and **[E-043d2 (#418, xl144 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d2)** |
 | E | **#415** (E-043e: fresh 38.0M pentad r2 codec, all longitude columns) | **LANDED — [E-043e (#415)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043e)**, 12:55:52Z, recorded step **197,428** (the cosine was re-fit fifteen times despite `max_minutes 1150`), codec **published** as `run-415__pixelmae.pt`. **No head probe** — `head_probe: "false"` copied from #386, the third such miss in this wave — so its verdict arrives with E-044's ladder |
-| F | **#419** (E-043f: fresh 38.0M DAILY codec on all 481 longitude columns) | **in flight, and its TELEMETRY is stale — read this before quoting a step.** Last live-branch push **2026-08-20T17:21:31Z at step 142,000 / 200,000**; at 21:07Z there had been **no push for 3 h 46 min**, against a publish loop that fires every ~5 min (`ml-train.yml` step 16). The JOB is alive — the Actions job is still inside step 16 `Train` on `gpu-box-46996216` and the box read **gpu 69%** at 21:07Z (an earlier 0% frame in the same minute was stale, so one sample is not evidence either way here) — so this is a dead side channel, not a dead run: the `publish_live_metrics.sh` push is failing inside its `|| true`, which is the #100 shape of failure. **The status page will therefore show #419 frozen at 142,000.** Extrapolating the measured 0.607 s/step from the last real reading puts it near **step 164,000 at 21:07Z** and finishing **~00:40Z on 2026-08-21** — arithmetic, NOT a reading. Untouched deliberately (this session was scoped off #419) |
+| F | **#419** (E-043f: fresh 38.0M DAILY codec on all 481 longitude columns) | **STILL TRAINING at 2026-08-21 01:10Z, and its TELEMETRY is stale — read this before quoting a step.** Checked against the **jobs API**, which is the channel that has not died: the Actions job is `in_progress` inside **step 16 `Train`** on `gpu-box-46996216`, started **2026-08-19T17:33:11Z**, so the job's own wall is **31 h 45 min ≈ 1,905 min against the daily arm's 2,600-min `job_timeout`** — 73% spent, ~695 min of headroom. `probes-419.json` is **404** because a run publishes its bundle only when the job ends, and `ml-live-419` still holds only `metrics.jsonl` and `phase.json`, frozen at its last push **2026-08-20T17:21:31Z, step 142,000 / 200,000** — now **7 h 49 min** stale against a ~5-min publish loop, the same dead side channel diagnosed at 21:07Z (`publish_live_metrics.sh` failing inside its `|| true`, the #100 shape). The box read **gpu 67%** at 01:06Z. **Arithmetic, NOT a reading:** the last real `wall_s` in the branch is **80,169.4 s at step 140,000** = 0.5726 s/step averaged over the whole run including its light probes, so the remaining 60,000 steps are ~9.5 h and step 200,000 lands **~01:20Z on 2026-08-21**, with the probe ladder and upload after it. **Left alone**, per this session's scope. Its harvest will be the **first daily codec numbers this programme has ever had**; if the untested daily ladder OOMs or wedges at T = 15,706 (the LazyPixels analogues are unproven at that length), the finished log is the diagnosis and the mechanism goes in E-043f |
 
 <a id="e-043a"></a>
 ### E-043a · #416 — RESULT, completed 2026-08-19 20:46:10Z
@@ -1795,7 +1847,7 @@ dispatched immediately below, which rolls the same head at **step 600**.
 ---
 
 <a id="e-043b-milestone"></a>
-### E-043b-MILESTONE · #425 — DISPATCHED 2026-08-20 21:04:37Z, in flight. Was the anomaly ACQUIRED or is it STRUCTURAL? A 600-step head cannot have learned it
+### E-043b-MILESTONE · #425 — RESULT, completed 2026-08-21 00:39:08Z. **Branch (2) fired: the anomaly was ACQUIRED, not structural.** Sections 1–5 are the pre-registration written at dispatch; the result is §6
 
 **E-043b-MILESTONE · Rolls #414's OWN step-600 milestone checkpoint beside the frozen
 `e017_u1_s0` gate, to separate a LEARNED anomaly from a structural one · params 40.693M
@@ -1922,6 +1974,328 @@ goes to a seed-1 replicate of #414. Note that the head label will be
 `rollout_spatial.py` derives it from the file's `args` and this milestone shares #414's
 geometry and seed; the run number and the asset name are what distinguish them, so do not
 match records across runs on the label alone.
+
+#### 6 · HARVEST — completed 2026-08-21 00:39:08Z, 3 h 34 min 31 s, ≈ $1.05. **BRANCH (2) FIRED. The flat-and-inflated property is NOT structural**
+
+**E-043b-MILESTONE · result · Rolled #414's OWN step-600 milestone checkpoint beside the
+frozen `e017_u1_s0` gate · params 40.693M frozen codec + 211.353M head **at step 600** ·
+stage `sroll` (eval-only, nothing trained) · data `family3_na025` · arch head 1024×16, K 24,
+stencil 145, ring `spiral:111,4444,0.71,0.5` · resume `!run-62,run-63`.**
+
+**Code.** #425 → `head_sha` `1888f642` (`provenance.json` `sha`
+`1888f64297878d02a28a2641f2d467f1e1629418`), job `sroll:` on `gpu-box-31479844`
+(vast 47724559), torch 2.13.0+cu126 on an RTX 4090. Gate wall **1,993.0 s**, head wall
+**10,537.6 s**.
+
+[probes-425.json on ml-metrics](https://github.com/blauewelt/earth/blob/ml-metrics/probes-425.json)
+
+[#425 (E-043b-MILESTONE, #414's step-600 head rolled) — the CI log](https://github.com/blauewelt/earth/actions/runs/32417515891)
+
+**NEITHER VOID CONDITION FIRED.** `e017_u1_s0` returned `horizon_auc` **0.643** (recomputed
+from its own twelve `msss_clim` values: **0.64283**), bands 0.470 / 0.375 / 0.492,
+`pass: true`, `fails: []` — the **twenty-third** reproduction of that number
+(#228 … #424 → #425) — and `len(rollout_spatial.json['heads'])` is **2**. The gate's corridor
+scopes are again **0.58908 blended / 0.80425 `_trainlon` / 0.05767 `_holdlon`**, identical to
+#417, #418, #422 and #424. Per §3b this measures the PROTOCOL, is not a replicate, and does
+not enter the spread column; what it buys is that the numbers below are readable at all. The
+head that was scored identifies itself by its own file name in `meta`:
+**`head-weights-e043bx600-xl144-nolonhold-s0.pt`** — the step-600 asset, not the final one.
+
+##### 6.1 · The milestone's numbers, recomputed to five decimals from the twelve archived `msss_clim` values (§3b's convention)
+
+| scope | #425, the **step-600** head | #422, the **step-200,000** head | #424 / #418, the E-032 xl144 s0 control | n_px |
+|---|---|---|---|---|
+| corridor, **blended** | **0.02125** | 0.93733 | 0.68067 | 29,627 |
+| corridor, **`_trainlon`** | **0.02967** | 0.93933 | 0.86700 | 22,538 |
+| corridor, **`_holdlon`** | **−0.00058** | 0.93283 | 0.22058 | 7,089 |
+| window, blended / `_trainlon` / `_holdlon` | **0.03850 / 0.04408 / 0.02383** | 0.93550 / 0.93625 / 0.93375 | — | 84,405 / 63,285 / 21,120 |
+| gate scope, blended / `_trainlon` / `_holdlon` | **0.05933 / 0.07033 / 0.02625** | 0.93242 / 0.93350 / 0.92900 | — | 864 / 635 / 229 |
+
+##### 6.2 · The PROFILE, which is what the run was dispatched to read
+
+Corridor `msss_clim`, h = 1 … 12, blended scope:
+
+| head | h1 | h2 | h3 | h4 | h5 | h6 | h7 | h8 | h9 | h10 | h11 | h12 | h1 − h12 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **#425, step 600** | **0.179** | 0.101 | 0.062 | 0.040 | 0.018 | 0.006 | −0.003 | −0.009 | −0.012 | −0.023 | −0.036 | **−0.068** | **0.247** |
+| #422, step 200,000 | 0.940 | 0.939 | 0.939 | 0.939 | 0.939 | 0.938 | 0.938 | 0.937 | 0.935 | 0.935 | 0.933 | 0.936 | 0.004 |
+
+`_trainlon` decays the same way (0.188 → −0.076, spread **0.264**). The decay is **monotone
+at every one of the eleven steps** in both scopes. `acc` falls **0.419 → 0.141** where #422's
+is flat at 0.970 → 0.967; `amp_ratio` sits at **0.398–0.457**, i.e. the young head predicts
+about 40% of the observed amplitude, where #422's is 0.933–0.954.
+
+**That is branch (2), in the words the dispatch registered before the number existed:** *"IF
+IT DECAYS NORMALLY — a young head's profile, falling across leads, corridor `_trainlon` far
+below 0.94 and well below the control's 0.86700 — then the flat-and-inflated property was
+ACQUIRED over 200,000 steps of all-longitude training and may be a real result."* Corridor
+`_trainlon` came back at **0.02967**: 0.91 below #422 and 0.84 below the control, with a
+spread of 0.264 against branch (1)'s "under ~0.05" threshold — a **5.3×** margin on the
+quantity the decision rule was written on. **Branch (1) — STRUCTURAL, and #422's 0.93933 dead
+as a skill number — did not fire and is not close to firing.**
+
+##### 6.3 · Everything else in the record corroborates a genuinely near-initialisation head
+
+| read-out | #425 (step 600) | #422 (step 200k) | #424 (E-032 xl144 s0) |
+|---|---|---|---|
+| `window.chan_skill[0].msss_pers` | **0.275** | 0.944 | 0.811 |
+| `amoc_bands` h1-3 / h4-6 / h7-12 r | **0.323 / 0.319 / 0.194** | 0.483 / 0.380 / 0.498 | 0.476 / 0.355 / 0.437 |
+| `long` r_trained (n 195) | **0.040** | 0.790 | 0.780 |
+| `long` r_lp18 | **0.050** | 0.876 | 0.852 |
+| `long` amp_lp18 | **5.342** | 0.741 | 0.739 |
+
+The 20-year hindcast is the clearest of these: at step 600 the head rolls a smooth
+monotone drift with **7.2× the observed low-passed amplitude** and no correlation to truth
+(r_lp18 0.050), which is what an untrained autoregressive model does. **`amoc_bands` is the
+exception that proves §3b's own caution** — the milestone still returns 0.323 / 0.319 / 0.194
+on the three transport bands, numbers that would read as respectable skill if quoted as
+levels, from a head with r_lp18 0.05 and corridor AUC 0.021. §3b's band-r row says *"a band r
+is a direction, never a level, at any n this programme has"*; this is the strongest single
+demonstration of that in the archive, and it is now on the record.
+
+`horizon_auc_daymatched` equals `horizon_auc` in every scope block of this run, as at monthly
+it must. `audit.identity_max_dev` **0.0004** (#422: 0.00047).
+
+##### 6.4 · What #425 settles, and what it does not
+
+**SETTLES.** Two of the three worlds the wave has been arguing about are now closed by
+measurement rather than by argument:
+
+- **The evaluator is exonerated** (#424): the same asset, the same protocol, the new
+  `TimeAxis` code — byte-identical to the old-code record in every scope, every horizon, the
+  whole `audit` block, `amoc_bands`, `long` and `future`.
+- **The structural explanation is dead** (#425): the property is not in the head class, the
+  stencil-145 ring geometry, the `train_lon_hold 'none'` scope definition or the eval path,
+  because a head with the identical geometry, identical seed, identical scope split and
+  identical eval path — differing only in having taken 600 optimiser steps instead of 200,000
+  — rolls at 0.021 with an ordinary decaying profile. **Whatever #422's 0.93933 is, it was
+  ACQUIRED over 200,000 steps of all-longitude training.**
+
+**DOES NOT SETTLE — and this is the honest state, not a hedge.** "Acquired" is not
+"skill". A 200k-step optimisation can acquire a property that inflates the scored quantity
+without forecasting anything; what #425 rules out is only that the property was there before
+the optimisation started. Two of §7's four signatures have also **softened under scrutiny**,
+and both softenings were found by checking §7's own arithmetic against the control:
+
+- §7(c) called the 39-channel gain **uniform**, and it is not. Recomputed channel by channel
+  from `audit.per_channel_msss_clim_corridor`, #422 − #424 at h = 12 ranges from **+0.055**
+  (`rg_t10`) to **+0.467** (`rg_s900`), sd **0.105** across the 39 channels; at h = 1 the
+  range is +0.024 to +0.255, sd 0.056. The gain rises with lead and its dispersion rises with
+  it. "Every channel rises and every channel flattens" is correct; "uniform" is not, and the
+  8.5× spread between the smallest and largest channel gain is a shape a mechanism story has
+  to explain.
+- §7(c) also leaned on wind stress being *"an external forcing field the model cannot
+  forecast"*. **#424's own control reads `tau_x` 0.753 / 0.774 / 0.810 at h = 1 / 6 / 12** —
+  i.e. the E-032 control, which nobody disputes, already scores 0.81 on `tau_x` at a
+  twelve-month lead, and its `tau_x` skill *rises* with lead exactly as #422's does. Whatever
+  that says about the corridor metric on a slowly-varying forcing channel, it says about both
+  heads, so it cannot be the thing that distinguishes them.
+
+What has NOT softened is §7(a) — the profile itself, 0.004 of decay over twelve months where
+the control decays 0.124 and the gate 0.192 — and §7(d), no movement in any transport
+read-out. Those two stand exactly as written.
+
+**So the arm's remaining gap is neither the code nor the mechanism: it is `n`.** #422 is one
+seed at a configuration no other head in the archive shares, and its number is one that would
+headline. §3b names that case three separate times — *"any new metric, cadence, tensor, codec
+or scale tier with no measured pair"*, *"any number that will be quoted as a headline in the
+paper, whatever its size"*, and *"the first result at a tier buys its own replication"* — and
+none of the three has an exception for a direction that looks obvious. The seed pair is
+**mandatory**, it was already priced in
+[E-043b · the roll §7](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-roll)
+at ~$4.6 plus its roll, and it went out at 01:12:28Z as
+**[E-043b-SEED1 (#426)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1)**.
+
+##### 6.5 · §3b bookkeeping: this run adds NO row to the replicate table
+
+Stated explicitly because §3b requires the table to be extended in the same commit as any new
+replicate, and a reader could mistake three matching gate reproductions for three replicates.
+**#425 contributes nothing to the spread column.** Its gate is the 23rd run of a fixed
+checkpoint through a fixed protocol — §3b's "protocol determinism", a first-class integrity
+check and explicitly *not* a replicate. Its milestone head is a **different checkpoint** from
+#422's (step 600 against step 200,000), so the pair is not a seed pair and its 0.9081
+difference is not a spread. The table's `_trainlon` row therefore still reads **2 pairs,
+|Δ| 0.00075 / 0.00108, pooled sd 0.00066 (2 dof)** — which is precisely the yardstick #426
+will be read against.
+
+#### 7 · Cost
+
+| item | value |
+|---|---|
+| box | `gpu-box-31479844` (vast 47724559, Quebec CA, $0.294/h) — warm from #418 / #422 / #424, no embed pass |
+| wall | job 21:04:37Z → 00:39:08Z = **3 h 34 min 31 s**; scored wall 1,993.0 s (gate) + 10,537.6 s (head) = 3.48 h |
+| money | **≈ $1.05** |
+| head roll rate | 10,537.6 s / 714 steps = **14.76 s/step**, inside the 14.7–15.5 band (#394 / #401 / #413 / #417 / #422 / #424) — a step-600 head costs exactly what a step-200,000 head costs, which is worth knowing before the next milestone probe is priced |
+
+---
+
+<a id="e-043b-seed1"></a>
+### E-043b-SEED1 · #426 — DISPATCHED 2026-08-21 01:12:28Z, in flight. The mandatory seed pair for #414
+
+Written **at dispatch**, hypothesis and falsifier first, so the log cannot be rewritten to fit
+the answer (§1).
+
+**E-043b-SEED1 · Trains a SECOND xl144 stage-2 head (1024×16, K 24, sunflower-144 = stencil
+145) at **seed 1** for 200,000 steps on the EXISTING frozen `f3_anchor41M` codec, with the
+stage-2 training pool opened to ALL 481 longitude columns (`--train-lon-hold none`, recipe
+`xl144-nolonhold`) — the mandatory seed pair for #414's configuration, which no other head in
+the archive shares · params 40.693M codec (frozen) + 211.353M head · stage `stage-2` · data
+`family3_na025` (C 39, T 516, sha256 `adcbe700fb6e…`) · arch codec 576×10, 8 heads, d_dec
+768, d_z 64, patch 3; head 1024×16, K 24, stencil 145, ring `spiral:111,4444,0.71,0.5` ·
+steps×batch stage-1 **60,000 × 512** (= `f3_anchor41M`'s own recorded step count, so NOTHING
+trains in stage 1) then stage-2 **200,000 × 256**, expdecay peak 1e-3, halflife 40,000,
+warmup 2,000, cooldown-frac 0 · resume `!run-62,run-63` (`f3_anchor41M`, frozen).**
+
+[#426 (E-043b-SEED1, xl144 all-longitude head at seed 1) — the CI log](https://github.com/blauewelt/earth/actions/runs/32435476420)
+
+[#426 on the status page](https://blauewelt.github.io/earth/status.html#run-426)
+
+[plan-426.json — the schedule, published before the run spent anything](https://raw.githubusercontent.com/blauewelt/earth/ml-metrics/plan-426.json)
+
+[E-043b · #414, the seed-0 twin this replicates](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)
+
+[E-043b · the roll (#422), the number this exists to replicate](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-roll)
+
+#### 1 · Why this run, and why now rather than after more diagnosis
+
+Three runs have narrowed #422's anomaly to one remaining explanation each time, and the
+narrowing is finished:
+
+| run | what it ruled out | how |
+|---|---|---|
+| **#424** (CONTROL) | the evaluator | a KNOWN head re-rolled on the new code returned a byte-identical record |
+| **#425** (MILESTONE) | the structural explanation | the same head at step 600 rolls 0.021 with a monotone decaying profile |
+| **#426** (this run) | — | nothing is left to rule out by diagnosis; what remains is **n = 1** |
+
+§3b is unambiguous about this case and states it three ways. The seed pair is mandatory for
+*any new configuration with no measured pair*, for *any number that will be quoted as a
+headline in the paper, whatever its size*, and because *the first result at a tier buys its
+own replication*. #422 is all three at once: a training pool no other head in the archive
+shares, a corridor `_trainlon` figure that would be the largest in the record, and a single
+draw. **"The direction is obvious" is explicitly not an exception.**
+
+#### 2 · PREDICTION, registered in the dispatch `doc` before the job started — two-sided
+
+The reading is a **pair |Δ|** on rolled corridor `_trainlon`, #426 against #422's
+**0.93933**, judged against the `_trainlon` pair noise measured on two independent xl pairs:
+**#417 |Δ| 0.00075, #418 |Δ| 0.00108, pooled sd 0.00066 (2 dof)** — the tightest scope in the
+record — with the xl tier's blended 95% upper bound of **0.0037** as the outer marker.
+
+- **(1) IF |Δ| SITS IN THAT REGIME** — of order 0.001, and in any case inside 0.0037 — then
+  0.93933 is a **reproducible property of the all-longitude configuration**, n = 2 at last,
+  and the level becomes quotable subject to the two §7 qualifications that survived #425
+  (the flat lead-time profile, and no movement in any transport read-out). The mechanism
+  question stays open; the *number* stops being a single draw.
+- **(2) IF |Δ| IS LARGE** — anywhere near the **0.07179** that separates #422 from its
+  control pair, or even at the 0.0224 scale of the 34M tier's worst range — then **0.93933 is
+  a single-seed excursion, not a property of the configuration**, the E-043b headline dies
+  exactly as E-005's +0.28 did, and the wave's finding reduces to the one clause nothing has
+  ever qualified: the `_trainlon` − `_holdlon` gap collapses from ~0.65 to 0.0065, which is a
+  statement about WHERE skill sits and is supported by the pixel inventory.
+
+**Both outcomes are results, and both are cheap at this price** (~$4.4 of GPU plus ~$1.1 of
+roll). There is no configuration of this run that returns nothing.
+
+**VOID conditions.** The stage-2 checkpoint must record `seed` **1** and `train_lon_hold`
+`'none'` with `params` **211,352,640**; and when the roll follows, `e017_u1_s0` must reproduce
+`horizon_auc` **0.643** within `GATE_TOL` **0.0101** with `len(heads)` **2**, or no number
+leaves it.
+
+#### 3 · Dispatch discipline — 25 fields, 3 changed
+
+§1's rule is to **copy the full INPUTS_JSON block out of the run being replicated** rather
+than write the handful of fields the experiment is "about" (the rule that exists because #395
+died in 90 s with sixty `size mismatch` lines). The inputs here were read straight out of
+**`probes-414.json`'s own `provenance.json`** — the archived artefact, not the log, not a
+retype — and exactly three of the 25 fields differ:
+
+| field | #414 | #426 | why |
+|---|---|---|---|
+| `window` | `…,seed:0,sched:expdecay …` | `…,seed:1,sched:expdecay …` | **the experiment** — one token |
+| `runner` | `gpu-box-30257785` | `gpu-box-31479844` | #414's box is stopped; this one was online, idle and warm |
+| `doc` | E-043b's | E-043b-SEED1's | §0d |
+
+Everything else is byte-identical, including `head_probe: "false"`. **That is deliberate, not
+an oversight repeated.** [#414 §5](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)
+records the missing head probe as a gap and prices its closure as a separate **eval-only**
+dispatch over the published head; flipping it here would make the two seeds
+protocol-different on the one axis a paired comparison must hold fixed. The gap is closed for
+BOTH seeds at once by that eval, not by making seed 1 a different experiment from seed 0.
+
+**Pre-dispatch checks, all made before the inputs cost anything (§0.3):**
+
+- **The plan was regenerated from the trainer's own scheduler** — `python3
+  ml/plan_schedule.py --steps 200000 --lr 1e-3 --schedule expdecay --halflife 40000 --warmup
+  2000 --cooldown-frac 0` — and its 260 points are **equal element for element to the
+  published `plan-414.json`**. So the curve the status page will draw is provably the curve
+  #414 ran, and the `--cooldown-frac 0` that distinguishes this schedule from the script's
+  0.1 default was verified by that comparison rather than assumed.
+- **The recipe resolves with the seed carried through**: `scripts/resolve_recipe.sh` on the
+  exact window string emits `RECIPE_NAME=xl144-nolonhold`, `RECIPE_TRAIN_LON_HOLD=none`,
+  `RECIPE_TEMPORAL_D_MODEL=1024`, `RECIPE_TEMPORAL_LAYERS=16`, `RECIPE_STEPS=60000` and
+  `WINDOW=stencil:145,…,seed:1,…`.
+- **`dispatch_run.mjs` precertified** the plan against the inputs before anything was queued.
+- **The runner was online and idle** (`busy=false`) at dispatch and the job took it inside a
+  minute, so §0e's ordering trap — provision, then let the idle watch fire into the gap — does
+  not apply.
+
+#### 4 · Budget, checked against its own arithmetic rather than copied
+
+§1 says size the job against its own timeout. #414's measured rate is **~247 ms/step** of
+stage-2 training, so 200,000 steps is **13.7 h**; its `Probes (K-sweep + stage 2)` step took
+**51,317 s** end to end, i.e. 13.7 h of training plus ~32 min of ladder, and its **whole job**
+ran 2026-08-19 16:49:09Z → 2026-08-20 07:41:51Z = **14 h 52 min**.
+
+- **`job_timeout` 1800 min (30 h)** — copied from #414 and it does **not** contradict that
+  arithmetic: it is 2.0× the measured wall. `job_timeout` is an input, not a cap (§1), and a
+  self-hosted runner can run for days.
+- **`max_minutes` 0** — also copied, and copied deliberately. E-043e (#415) re-fit its cosine
+  **fifteen times** under `max_minutes 1150` and finished at 197,428 steps instead of 200,000;
+  `max_minutes: 0` is the only setting that cannot be re-fit, which is what #414 and #416
+  used and why their step counts are exact. A seed pair whose two members ran different step
+  counts would not be a pair.
+- **Expected cost:** 14.9 h × $0.294/h ≈ **$4.38**, plus the follow-on roll below.
+
+#### 5 · The follow-on, so the harvest does not have to re-derive it
+
+**#426 produces no readable number by itself.** Like #414 it trains a head; the corridor AUC
+that answers §2 comes from a roll, and the roll needs the head published first. On landing
+(**~16:10Z on 2026-08-21** by #414's own 14.9 h wall — arithmetic, not a reading):
+
+1. **HEADPUB** `e043b-xl144-nolonhold-s1` off `/opt/earth-cache/ckpt/temporal.pt` on this
+   box, ~10 min, ~$0.05. Poll the release asset to `state: uploaded` **before any GET** —
+   the #421 CDN rule, which is about the FIRST request, not about retries.
+2. **`sroll:e017_u1_s0,head-weights-e043b-xl144-nolonhold-s1`** on the same warm box: gate
+   ~1,990 s + head ~10,520 s ≈ **3.5 h, ≈ $1.03**, `job_timeout` 700.
+3. **Read** `heads['s145rspiral:111-4444-0.71-0.5_s0'].corridor_trainlon` as the mean of its
+   twelve archived `msss_clim` values against #422's **0.93933**, and the twelve values as a
+   profile against #422's flat 0.940 → 0.936. **Note the label trap** (#425's §5 records it):
+   `rollout_spatial.py` derives the head label from the FILE's `args`, and `args['seed']` for
+   this head is 1 — so the label will read `…_s1`, unlike the milestone which shared #414's
+   seed and printed `_s0`. Match records on the run number and the asset name, never on the
+   label alone.
+4. **Extend §3b's `_trainlon` row in the same commit as the result**, from 2 pairs to 3.
+
+#### 6 · First minutes VERIFIED, 01:38Z (§2 — measurements, not intentions)
+
+Every line below is a reading off the jobs API, the run's own `ml-live-426` branch or the
+Vast API. Nothing is marked passed on an inference.
+
+| # | check | reading |
+|---|---|---|
+| 1 | **`head_sha`** | **`cb0bdbc2e49aa9ea7e74a8230fa6311195e90c6f`** — current `main`, the sha #425's record was committed on |
+| 2 | **`runner_name` is the box, not the `gpu` label** | **`gpu-box-31479844`**, `labels: ["gpu-box-31479844"]`. Picked up **01:12:28Z**, ~14 s after dispatch — no queue-against-idle-runner stall (§2) |
+| 3 | **recipe resolved** | stage-1 config line carries **`"recipe": "xl144-nolonhold"`** |
+| 4 | **resumed from the anchor, and stage 1 trains NOTHING** | `{"resumed": {"from": "run-62.pt", "parent_tag": "run-80", "at_step": 60000}}` with `params_M` **40.693**, `steps` **60000**, `eval_every` **0** — `while s < a.steps` never turns over. Corroborated by the clock: steps 12–16 ran 01:13:30Z → ~01:17Z, ~3.5 min, which is what a no-op stage 1 costs |
+| 5 | **stage-2 config line carries SEED 1** | `{"stage2_config": {"d_model": 1024, "layers": 16, "K": 24, "steps": 200000, "params_M": 211.353, "batch": 256, "train_windows": 38488680, "d_z": 64, **"seed": 1**, "unroll": 1, "stencil": 145, "ring_km": "spiral:111,4444,0.71,0.5", "train_lon_hold": "none", "codec_holdout_lon": "-45,-25"}}` — **the experiment's one changed token, confirmed in the trainer's own record rather than in the dispatch** |
+| 5b | **the head is the same head** | `params_M` **211.353** = 211,352,640, equal to #414's `temporal.json` `scale.params` exactly, so `d_z` is 64 and the geometry is not a default-width accident (#395/#387) |
+| 5c | **the POOL is the same pool** | `train_windows` **38,488,680** — bit-equal to #414's `scale.data_points`. The two seeds draw from an identical window pool, which is what makes the pair a pair |
+| 5d | **the holdout regime is right on both sides** | `train_lon_hold` **`none`** (stage 2 sees all 481 columns) with `codec_holdout_lon` **`-45,-25`** (the frozen anchor's own statistics, untouched) — arm B's design, not arm A's |
+| 6 | **LR is non-zero and is the PUBLISHED schedule** | first row: **`stage2_lr` 0.0009999826714706267** at step 2,000. `plan-426.json`'s own point at step 2,000 is **0.000999982671** — the measured rate equals the published curve to nine digits. §2's "a reloaded cosine gave lr 0.0" failure mode is ruled out by measurement |
+| 7 | **the run is learning** | step 2,000: `stage2_zmse` **0.8819**, `stage2_val_zmse` **1.14768** against `stage2_monitor.val_persistence` **3.09512** — a val/persistence ratio of **0.371** at 1% of the budget; `stage2_amp` **0.8614**, `grad_norm` **2.3841**. No collapse signature |
+| 8 | **it is on the GPU** | `fleet_health` reads **gpu 83%**, cpu 22%, `job=yes` on vast 47724559 — §2's four-silently-embedded-on-CPU lesson |
+| 9 | **no embed pass was needed** | stage 2 began ~01:34Z, ~21 min after pickup: the frozen anchor's Z cache and the `family3_na025` tensor were already on this box from #418 / #422 / #424 / #425. #414 paid the same zero, and choosing this box over a cold start saved both an embed and a box-start |
+| 10 | **rate, and what it does to the ETA** | **528.2 s / 2,000 steps = 264.1 ms/step**, 7% above #414's 247 ms/step. If it holds, 200,000 steps is **14.7 h** of training and the job lands **~17:00Z**; at #414's rate it lands ~16:10Z. Either is far inside `job_timeout` 1800 min. The first 2,000 steps include warm-up, so this is an upper bound on the steady rate — **re-time it at the next check-in** rather than treating 264 as settled |
 
 ---
 
