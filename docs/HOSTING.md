@@ -31,9 +31,11 @@ live site and the two hosts' own documentation, not estimated.
 move, not a DNS record — Infomaniak cannot put a CNAME-like record at a zone
 apex, and Cloudflare Redirect Rules only run on traffic its proxy sees. **§6 is
 the runbook**, in the order the clicks happen, with the DNSSEC ordering that
-decides whether the domain stays reachable and the email checks that decide
-whether anyone notices. GitHub Pages keeps running throughout, indefinitely, so
-every link ever shared keeps resolving and no phase needs a site rollback.
+decides whether the domain stays reachable. Neither domain carries mail
+(Chris, 2026-08-21), which removes the half of the move that used to break
+silently — see §6's risk framing. GitHub Pages keeps running throughout,
+indefinitely, so every link ever shared keeps resolving and no phase needs a
+site rollback.
 
 ---
 
@@ -358,6 +360,45 @@ Everything below is a runbook to be followed with the Infomaniak Manager open in
 one tab and the Cloudflare dashboard in another. It is written in the order the
 clicks happen, and every phase names its own rollback.
 
+### How risky this actually is
+
+An earlier draft of this section braced the reader for a dangerous migration.
+Three answers from Chris on 2026-08-21 removed most of that danger, and the
+document should say so plainly rather than leave the warning standing over
+something that is no longer there:
+
+- *"I get no email"* — **neither `blauewelt.org` nor `blauewelt.ch` receives
+  mail.**
+- *"no the site is just registered"* — **`blauewelt.ch` hosts nothing**: no
+  site, no mail, no redirect.
+- The DNS-zone screenshots are **still outstanding**, and are the one thing
+  blocking a start (Phase A).
+
+So the mail migration that used to dominate this runbook — MX, SPF, DMARC, and
+above all the `_domainkey` **NS delegation** that has to become a literal TXT
+record or stop signing without a single bounce — **is not part of this move.**
+It is preserved, in full, as a clearly-marked subsection of Phase C, because the
+answer could change and the finding was expensive. It is no longer the main
+path. What is left is a nearly empty zone, a static site already deployed and
+byte-verified at a second origin, and a GitHub Pages copy that keeps serving
+every link ever shared no matter what happens here.
+
+**One real risk remains, at full strength: DNSSEC.** Move the nameservers while
+the DS record still stands at the `.org` registry and the domain goes
+**completely dark** — SERVFAIL from every validating resolver, which is not a
+wrong answer but *no* answer, and it looks fine from any network that does not
+validate. Phase B exists for that one step; its ordering is not negotiable and
+its 1.5 × TTL wait is not padding.
+
+Two smaller risks, both real and both bounded. A nameserver move that has to be
+reversed costs **24–48 h** at registry TTLs — which is why Phase C populates the
+zone *before* the switch rather than after. And a certificate that cannot issue
+(a CAA record forbidding Let's Encrypt, an Advanced Certificate ordered by
+mistake, a redirect rule swallowing `/.well-known/`) shows as a browser warning
+on a live domain; Phases D and E check all three.
+
+Everything else on the old risk list was email, and the email is gone.
+
 ### 6.0 · The shape of the decision, and why it is this shape
 
 | | Decision |
@@ -401,8 +442,8 @@ knowing before someone "simplifies" it back:
   everything issued afterwards is permanent.
 - **GitHub Pages keeps running, in parallel, indefinitely.** `pages.yml` is not
   touched by any step in this document. It costs nothing, every old link keeps
-  resolving, and it is the reason no phase below needs a site rollback — only an
-  *email* rollback.
+  resolving, and it is the reason no phase below needs a site rollback at all —
+  the only rollback in the document is a *DNS* rollback.
 - **`.org` moves alone.** While `.ch` is still on Infomaniak DNS it is both the
   control and the fallback: "is this Infomaniak or is this us?" is answerable in
   one `dig`.
@@ -445,20 +486,37 @@ problem into a public one.
 
 ---
 
-### Phase A — capture both zones, before anything changes
+### Phase A — capture both zones. There is less there than there looks
 
 **Do this for `blauewelt.org` and `blauewelt.ch` on the same day, before
-touching either.** This is the only phase whose output cannot be recreated
+touching either.** This is still the only phase whose output cannot be recreated
 afterwards: once the nameservers move, the Infomaniak zone is still there, but
 the moment anyone edits the Cloudflare copy you have lost the reference you
 would have compared it against.
 
+What changed is the *size* of the capture, not its necessity. Neither domain
+carries mail, so the mail records — MX, SPF, DKIM, DMARC, `autoconfig`,
+`autodiscover`, the SRV set — are not expected to exist. **A mail-less zone is
+not a recordless zone**, and what remains is exactly the kind of thing that is
+missed because nobody thinks to look for it: an existing **CAA** record set that
+does not permit Let's Encrypt (which makes the Pages certificate impossible to
+issue), a third-party **verification TXT** that un-verifies a property weeks
+later, whatever Infomaniak provisions **by default** on a domain nobody has
+configured, and the **DS record's TTL**, from which Phase B's wait is derived.
+
+> **BLOCKING — the DNS-zone screenshots are still outstanding.** Chris will send
+> them in a later session. **This is the one thing standing between here and a
+> start.** Everything below can be read from outside with `dig` *except* what
+> Infomaniak shows only in the Manager: the redirections list, and any record
+> whose name is not guessable from outside. Do not begin Phase B on the `dig`
+> output alone.
+
 **Cloudflare's automatic record scan is not a capture and must not be trusted as
 one.** There is no zone transfer on the public internet (no AXFR), so Cloudflare
 cannot enumerate a zone — it guesses from a list of common names. The records it
-misses are precisely the ones that break silently: DKIM selectors, `autodiscover`,
-and third-party verification TXTs. Capture by hand, then use the scan only as a
-second opinion.
+misses are precisely the ones that break silently: third-party verification
+TXTs, and anything whose name is not on somebody's list of common names. Capture
+by hand, then use the scan only as a second opinion.
 
 **From the Manager:** Domains → the domain → **DNS zone**. Export the zone if
 Infomaniak offers a zone-file download; otherwise screenshot **every record, of
@@ -468,55 +526,36 @@ outside, because the dashboard and the wire occasionally disagree:
 ```bash
 D=blauewelt.org
 for t in SOA NS A AAAA MX TXT CAA; do dig +noall +answer "$D" $t; done
-dig +noall +answer _dmarc.$D TXT
-dig +noall +answer _domainkey.$D NS          # delegation, or nothing — see below
-dig +noall +answer autoconfig.$D CNAME
-dig +noall +answer autodiscover.$D CNAME
-for s in _autodiscover._tcp _imaps._tcp _submission._tcp _caldavs._tcp; do
-  dig +noall +answer $s.$D SRV
-done
 dig +noall +answer DS $D                     # the PARENT's record. Read its TTL
 ```
 
 `+noall +answer` rather than `+short` throughout, because **the TTL column is
 half the point** and `+short` throws it away.
 
+`MX` and `TXT` are in that loop as a *check on the answer*, not as a capture.
+The expectation is that `MX` returns nothing and that no `v=spf1` TXT exists. If
+either turns out otherwise — or if
+`dig +noall +answer _domainkey.$D NS` returns a delegation — then this domain
+has mail history after all, and **Phase C's boxed subsection applies in full
+before anything else happens.**
+
 What to look for, and why each one matters:
 
 | Record | Why it matters |
 |---|---|
-| **MX** | Infomaniak Mail expects **exactly one**: `mta-gw.infomaniak.ch`, **priority 5**. They warn that any other MX, or more than one, voids their delivery guarantee. This is the record that stops inbound mail dead |
-| **SPF** (TXT at the apex) | `v=spf1 include:spf.infomaniak.ch -all`. Lose it and everything you send starts landing in spam. **Two** SPF records is a permerror, which is worse than none |
-| **`_domainkey`** | **The trap. Record which of two shapes it has.** See below |
-| **`_dmarc`** (TXT) | Copy the value verbatim. A DMARC policy of `p=reject` over a broken DKIM is how a mail domain deletes its own outbound mail without a single bounce reaching you |
-| **`autoconfig` / `autodiscover` / SRV** | Mail-client auto-setup. Nothing breaks today; it breaks the day someone adds the account to a new phone, months later, and reads as "your mail server is broken" |
-| **Verification TXTs** | Google/Microsoft/anything ending `-site-verification`. Dropping one un-verifies a property weeks later, silently |
 | **CAA** | If any CAA record exists it **must** permit `letsencrypt.org`, `pki.goog` and `ssl.com`, or Cloudflare's Universal SSL cannot issue and the domain serves a certificate error. **No CAA record at all is fine** — it means anyone may issue. Do not invent one |
-| **A / AAAA / CNAME for anything else** | A webmail vanity host, an old subdomain, something pointed at a service nobody remembers |
-| **The DS record, and its TTL** | The wait in Phase B is derived from this number. Write it down |
+| **Verification TXTs** | Google/Microsoft/anything ending `-site-verification`. Dropping one un-verifies a property weeks later, silently |
+| **The DS record, and its TTL** | The wait in Phase B is derived from this number. Write it down. This is the single most load-bearing value in the whole capture |
+| **Whatever Infomaniak provisions by default** | A registered-but-unused domain does not arrive empty: parking A/AAAA records, a webmail vanity CNAME, an SOA with a long TTL. None of it has to be carried over, but it has to be *seen* before it is dropped |
+| **A / AAAA / CNAME for anything else** | An old subdomain, something pointed at a service nobody remembers |
+| **MX / apex TXT** | Expected empty. If not, see above — the mail path is back on |
 | **Web redirections** | Infomaniak's redirections are a **hosting** feature, not DNS. They do **not** move with the zone and will simply stop existing. List them |
-
-**The DKIM trap, stated plainly.** Infomaniak's own words: DKIM is *"enabled by
-default for all Mail Services whose DNS zone is managed with Infomaniak"* — and
-the way it is enabled is usually an **NS delegation**: `_domainkey` is delegated
-to Infomaniak's nameservers, and they publish the selector record inside that
-delegated subtree. That arrangement is a *consequence of Infomaniak hosting the
-zone*, and it ends the instant the zone leaves. So the capture must answer one
-question: **is `_domainkey` an NS delegation, or a literal TXT at
-`<selector>._domainkey`?**
-
-- `dig +noall +answer _domainkey.blauewelt.org NS` returns records → **delegation**.
-  You cannot copy this to Cloudflare; Phase C converts it.
-- It returns nothing, and `dig +short <selector>._domainkey.blauewelt.org TXT`
-  returns a `v=DKIM1…` string → **a literal TXT**. Copy it verbatim, whole.
-
-Either way, **write down the selector name**. You will need it in Phase C and
-again in Phase E, and it is not guessable.
 
 **Rollback at Phase A: nothing has changed, so nothing to undo.** The failure
 mode of this phase is a *thin* capture, and you only discover it in Phase E when
-something is missing and there is nothing to compare against. If the capture
-feels thin, it is. Redo it before Phase B.
+something is missing and there is nothing to compare against. A short capture is
+correct here; a capture that was never taken because "the zone is empty anyway"
+is not. If the screenshots have not arrived, this phase is not done.
 
 ---
 
@@ -555,10 +594,11 @@ key the registry has never heard of. Every **validating** resolver — 1.1.1.1,
    Cloudflare scans and shows you what it found, and it assigns two nameservers.
    Note that **partial (CNAME) zone setup is Business-plan-only**, so "keep
    Infomaniak DNS and just proxy the one hostname" is not available here.
-5. **STOP.** Do **Phase C** now — populate the zone completely and check it
-   against the Phase A capture. A Cloudflare zone can be edited freely while it
-   is still inactive, and every record you get right before the switch is a
-   record that never has a broken minute. **Come back here for step 6.**
+5. **STOP.** Do **Phase C** now — populate the zone and check it against the
+   Phase A capture. It is a short list, and it is short work. A Cloudflare zone
+   can be edited freely while it is still inactive, and every record you get
+   right before the switch is a record that never has a broken minute. **Come
+   back here for step 6.**
 6. **Now change the nameservers at Infomaniak** to the two Cloudflare assigned.
    Manager → the domain → nameservers → custom.
 7. Wait for Cloudflare to mark the zone **Active** (it emails, and the Overview
@@ -585,9 +625,10 @@ $ dig +cd blauewelt.org @1.1.1.1        # +cd = checking disabled
 ```
 
 **SERVFAIL without `+cd`, NOERROR with it, is a DNSSEC validation failure, not an
-outage.** Nothing about the website or the mail server is wrong; resolvers are
-refusing to speak about the domain. Web *and* mail are both gone, everywhere that
-validates.
+outage.** Nothing about the website is wrong; resolvers are refusing to speak
+about the domain at all. Every name under it is gone, everywhere that validates
+— and with no mail on the domain that is the whole blast radius, which makes it
+smaller than it used to be and no less total.
 
 | Rollback at Phase B | |
 |---|---|
@@ -597,81 +638,196 @@ validates.
 | **Symptom** | SERVFAIL as above (nameservers moved while the DS still stood) |
 | **Action** | Turn DNSSEC **off** at Infomaniak — remove the DS. Do not try to fix it forward |
 | **Time** | Registry publish, then up to the **old DS TTL**. Typically under an hour. This is why that TTL was written down |
-| **Symptom** | Nameservers moved, zone is wrong, site and/or mail down |
+| **Symptom** | Nameservers moved, zone is wrong, site down |
 | **Action** | **Point the nameservers back at Infomaniak.** The Infomaniak zone is not deleted by delegating away — every record is still there |
 | **Time** | Up to the delegation's TTL at the registry, commonly **24–48 h**. This is the slowest rollback in the document, and it is the entire reason Phase C is done before step B6 |
 
 ---
 
-### Phase C — every record into Cloudflare, email first
+### Phase C — populate the zone. It is nearly empty
 
 Do this **while the zone is still inactive** (between B5 and B6). Work from the
 **Phase A capture**, not from Cloudflare's scan; use the scan only to notice
 something the capture missed, never the other way round.
 
-Email goes in first because it is the only thing here that breaks *silently*.
-A broken website is a phone call within the hour. A broken DKIM is three weeks
-of your mail quietly scoring as spam.
+**This used to be the most dangerous phase in the document, and it is now the
+shortest.** It was dangerous because of mail: MX, SPF, DMARC and a DKIM
+delegation that breaks without a bounce. Neither domain carries mail, so none of
+that is here. Read the boxed subsection below before deciding this paragraph
+applies to you, then do these four things:
 
-1. **MX — exactly one.** Add record → MX. Name `@`, server
-   `mta-gw.infomaniak.ch`, **priority 5**, TTL Auto. Then **delete every other MX
-   Cloudflare's scan invented.** Infomaniak's delivery guarantee is void with any
-   other MX or with more than one.
-2. **SPF — exactly one.** TXT at `@`: `v=spf1 include:spf.infomaniak.ch -all`.
-   If the capture showed extra `include:`s for other senders, keep them, in the
-   same single record. Two SPF TXTs is a permerror.
-3. **DMARC.** TXT at `_dmarc`, value copied verbatim from the capture.
-4. **DKIM — the NS → TXT conversion.** If Phase A found `_domainkey` as an **NS
-   delegation**, do **not** recreate those NS records in Cloudflare. Infomaniak's
-   own Cloudflare guide
-   ([faq/1619](https://www.infomaniak.com/en/support/faq/1619)) says to remove
-   them and publish a literal TXT instead.
-   - Get the value: **Manager → Mail Service → the domain → the DKIM /
-     signature panel.** It shows a Name (the selector) and a long
-     `v=DKIM1; k=rsa; p=…` value. Copy the **whole** value — the `p=` blob is
-     long and a copy that drops its middle produces a record that exists, looks
-     right, and fails every verification.
-   - Publish it in Cloudflare. Cloudflare's **DKIM record helper** (the
-     email-records shortcut in the DNS tab) takes the **selector alone** in the
-     Name field and appends `._domainkey` plus the zone for you; the plain
-     **TXT** form does not, and there the Name must be written out as
-     `<selector>._domainkey`. **Both are correct and they produce the same
-     name** — which is why the arbiter is not the form you used but this:
-     ```bash
-     dig +short <selector>._domainkey.blauewelt.org TXT
-     ```
-     It must return the `v=DKIM1…` string, **once**. A result at
-     `<selector>._domainkey._domainkey.blauewelt.org` is the classic error, and
-     an empty result with two records elsewhere is the second classic error.
-   - **Proxy status: DNS only.**
-5. **Grey cloud on everything mail touches.** Cloudflare's proxy handles HTTP and
-   HTTPS and nothing else. An orange-clouded hostname resolves to Cloudflare's
-   anycast addresses, and SMTP or IMAP to those goes nowhere. TXT and MX have no
-   proxy toggle, but `autoconfig`, `autodiscover`, `webmail` and any mail-server
-   A/CNAME do — and they **default to proxied**. Set every one of them to
-   **DNS only (grey cloud)**.
-6. **Everything else from the capture, verbatim**, TTL Auto: the verification
-   TXTs, the SRV records, any remaining A/AAAA/CNAME. TTL Auto is 300 s while
-   the zone is proxied, which is what makes Phase E's fixes five-minute fixes.
-7. **CAA.** If the capture found CAA records, make sure the set permits
-   `letsencrypt.org`, `pki.goog` and `ssl.com`. If it found none, **add none** —
+1. **Delete whatever the scan invented.** Cloudflare guesses from a list of
+   common names, and on a zone this empty most of what it offers is a guess.
+   **A record that is not in the Phase A capture does not go into the zone.**
+   Delete any **MX** the scan added in particular: an MX on a domain that
+   receives no mail is not harmless — it advertises a destination that will not
+   accept mail, and it is exactly the sort of record the next person copies
+   forward on the assumption that it was put there deliberately.
+2. **Everything from the capture, verbatim**, TTL Auto: the verification TXTs
+   and any remaining A/AAAA/CNAME. TTL Auto is 300 s while the zone is proxied,
+   which is what makes Phase E's fixes five-minute fixes. The free plan's
+   200-records-per-zone ceiling is not a consideration at this size.
+3. **CAA.** If the capture found CAA records, make sure the set permits
+   `letsencrypt.org`, `pki.goog` and `ssl.com`, or Universal SSL cannot issue
+   and the domain serves a certificate error. If it found none, **add none** —
    an absent CAA record set permits every issuer, which is what you want.
-8. **Do not add an A or CNAME for the site itself.** Phase D creates the right
+4. **Do not add an A or CNAME for the site itself.** Phase D creates the right
    record automatically when the domain is attached to the Pages project, and a
    hand-made one will fight it.
-9. **Count the records.** The free plan allows **200 per zone**. This zone will
-   be nowhere near it; the check costs one glance and rules the limit out
-   permanently.
 
 Then **go back to Phase B step 6** and move the nameservers.
+
+> #### If mail is ever added to these domains, read this first
+>
+> **Everything in this box is inactive as of 2026-08-21**, because Chris
+> answered *"I get no email"* for both domains. It is kept in full — not
+> summarised, not deleted — because the answer can change with one mailbox, the
+> DKIM finding below is genuinely hard-won, and its failure mode is silence.
+> **If Phase A found an MX, a `v=spf1` TXT, or a `_domainkey` NS delegation, or
+> if mail is ever added to `blauewelt.org` or `blauewelt.ch`, this box is the
+> main path and the four steps above are the footnote.**
+>
+> Mail goes in **first**, before anything else in the zone, because it is the
+> only thing here that breaks *silently*. A broken website is a phone call
+> within the hour. A broken DKIM is three weeks of your mail quietly scoring as
+> spam.
+>
+> **What Phase A must additionally capture**
+>
+> ```bash
+> D=blauewelt.org
+> dig +noall +answer _dmarc.$D TXT
+> dig +noall +answer _domainkey.$D NS          # delegation, or nothing — see below
+> dig +noall +answer autoconfig.$D CNAME
+> dig +noall +answer autodiscover.$D CNAME
+> for s in _autodiscover._tcp _imaps._tcp _submission._tcp _caldavs._tcp; do
+>   dig +noall +answer $s.$D SRV
+> done
+> ```
+>
+> | Record | Why it matters |
+> |---|---|
+> | **MX** | Infomaniak Mail expects **exactly one**: `mta-gw.infomaniak.ch`, **priority 5**. They warn that any other MX, or more than one, voids their delivery guarantee. This is the record that stops inbound mail dead |
+> | **SPF** (TXT at the apex) | `v=spf1 include:spf.infomaniak.ch -all`. Lose it and everything you send starts landing in spam. **Two** SPF records is a permerror, which is worse than none |
+> | **`_domainkey`** | **The trap. Record which of two shapes it has.** See below |
+> | **`_dmarc`** (TXT) | Copy the value verbatim. A DMARC policy of `p=reject` over a broken DKIM is how a mail domain deletes its own outbound mail without a single bounce reaching you |
+> | **`autoconfig` / `autodiscover` / SRV** | Mail-client auto-setup. Nothing breaks today; it breaks the day someone adds the account to a new phone, months later, and reads as "your mail server is broken" |
+>
+> **The DKIM trap, stated plainly.** Infomaniak's own words: DKIM is *"enabled
+> by default for all Mail Services whose DNS zone is managed with Infomaniak"* —
+> and the way it is enabled is usually an **NS delegation**: `_domainkey` is
+> delegated to Infomaniak's nameservers, and they publish the selector record
+> inside that delegated subtree. That arrangement is a *consequence of Infomaniak
+> hosting the zone*, and it ends the instant the zone leaves. So the capture must
+> answer one question: **is `_domainkey` an NS delegation, or a literal TXT at
+> `<selector>._domainkey`?**
+>
+> - `dig +noall +answer _domainkey.blauewelt.org NS` returns records →
+>   **delegation**. You cannot copy this to Cloudflare; it must be converted.
+> - It returns nothing, and `dig +short <selector>._domainkey.blauewelt.org TXT`
+>   returns a `v=DKIM1…` string → **a literal TXT**. Copy it verbatim, whole.
+>
+> Either way, **write down the selector name.** It is needed for the conversion
+> and again for the verification, and it is not guessable.
+>
+> **What Phase C must additionally do**
+>
+> 1. **MX — exactly one.** Add record → MX. Name `@`, server
+>    `mta-gw.infomaniak.ch`, **priority 5**, TTL Auto. Then **delete every other
+>    MX Cloudflare's scan invented.**
+> 2. **SPF — exactly one.** TXT at `@`: `v=spf1 include:spf.infomaniak.ch -all`.
+>    If the capture showed extra `include:`s for other senders, keep them, in the
+>    same single record. Two SPF TXTs is a permerror.
+> 3. **DMARC.** TXT at `_dmarc`, value copied verbatim from the capture.
+> 4. **DKIM — the NS → TXT conversion.** If the capture found `_domainkey` as an
+>    **NS delegation**, do **not** recreate those NS records in Cloudflare.
+>    Infomaniak's own Cloudflare guide
+>    ([faq/1619](https://www.infomaniak.com/en/support/faq/1619)) says to remove
+>    them and publish a literal TXT instead.
+>    - Get the value: **Manager → Mail Service → the domain → the DKIM /
+>      signature panel.** It shows a Name (the selector) and a long
+>      `v=DKIM1; k=rsa; p=…` value. Copy the **whole** value — the `p=` blob is
+>      long and a copy that drops its middle produces a record that exists, looks
+>      right, and fails every verification.
+>    - Publish it in Cloudflare. Cloudflare's **DKIM record helper** (the
+>      email-records shortcut in the DNS tab) takes the **selector alone** in the
+>      Name field and appends `._domainkey` plus the zone for you; the plain
+>      **TXT** form does not, and there the Name must be written out as
+>      `<selector>._domainkey`. **Both are correct and they produce the same
+>      name** — which is why the arbiter is not the form you used but this:
+>      ```bash
+>      dig +short <selector>._domainkey.blauewelt.org TXT
+>      ```
+>      It must return the `v=DKIM1…` string, **once**. A result at
+>      `<selector>._domainkey._domainkey.blauewelt.org` is the classic error, and
+>      an empty result with two records elsewhere is the second classic error.
+>    - **Proxy status: DNS only.**
+> 5. **Grey cloud on everything mail touches.** Cloudflare's proxy handles HTTP
+>    and HTTPS and nothing else. An orange-clouded hostname resolves to
+>    Cloudflare's anycast addresses, and SMTP or IMAP to those goes nowhere. TXT
+>    and MX have no proxy toggle, but `autoconfig`, `autodiscover`, `webmail` and
+>    any mail-server A/CNAME do — and they **default to proxied**. Set every one
+>    of them to **DNS only (grey cloud)**.
+> 6. **The SRV records, verbatim**, TTL Auto.
+>
+> **What Phase E must additionally verify — and this becomes the gate**
+>
+> ```bash
+> D=blauewelt.org
+> dig +short MX $D                           # exactly: 5 mta-gw.infomaniak.ch.
+> dig +short TXT $D                          # ONE v=spf1 …
+> dig +short TXT _dmarc.$D
+> dig +short TXT <selector>._domainkey.$D    # the v=DKIM1 string, exactly once
+> ```
+>
+> 1. **Inbound.** From an account at a completely unrelated provider — a phone,
+>    not this machine, not an alias on the same domain — send a message to a real
+>    mailbox at `blauewelt.org`. It must arrive within a minute. Open the received
+>    message's full headers and confirm `Received: … by mta-gw.infomaniak.ch`.
+> 2. **Outbound.** Reply from that Infomaniak mailbox to the external address.
+>    In the copy that arrives, open *Show original* / full headers and read the
+>    `Authentication-Results:` line at the **receiving** end:
+>    - `spf=pass` — the SPF TXT survived.
+>    - `dkim=pass header.d=blauewelt.org` — the NS→TXT conversion worked.
+>    - `dmarc=pass` — both of the above agree with the `_dmarc` policy.
+> 3. **Read a failure correctly:**
+>    - `dkim=none` or `dkim=fail` → the conversion. In order of likelihood: the
+>      record landed at `<selector>._domainkey._domainkey`, the `p=` value was
+>      truncated in the copy, or there are two TXT records at the name.
+>    - `spf=softfail` / `spf=fail` → the SPF TXT is missing, duplicated, or lost
+>      its `include:spf.infomaniak.ch`.
+>    - `dmarc=fail` with the other two passing → the `_dmarc` value was not
+>      copied verbatim.
+> 4. **Infomaniak's own checker**
+>    ([faq/2692](https://www.infomaniak.com/en/support/faq/2692)) — run it against
+>    the domain from the Manager. It checks MX, SPF, DKIM and DMARC *as
+>    Infomaniak expects them*, which makes it the authority on the only question
+>    that matters: will Infomaniak still deliver for this domain now that it does
+>    not own the zone.
+> 5. **A second opinion from outside.** Send one message from the Infomaniak
+>    mailbox to a mail-tester-style external checker and read the score. It flags
+>    things Infomaniak has no reason to flag — a missing PTR, a DMARC policy now
+>    enforcing against a DKIM that stopped signing.
+> 6. **If `autoconfig`/`autodiscover`/SRV records existed**, add the account from
+>    scratch in a mail client. That path is exercised by nobody until the day
+>    someone gets a new phone, and it fails as "your mail is broken".
+> 7. **Give it a few days of real mail** before calling it done. DKIM failures
+>    present as spam foldering, not as bounces, and low-volume domains take days
+>    to show it.
+>
+> **Rollback, in this world:** fix the record in Cloudflare, never the
+> nameservers. Check the **MX** first — a wrong MX is a two-minute fix and a
+> nameserver rollback is a 24–48 hour one. Only if the zone is comprehensively
+> wrong is Phase B's nameserver rollback the right tool.
 
 | Rollback at Phase C | |
 |---|---|
 | **Symptom** | A record is missing or wrong (found in Phase E, or by diffing against the capture) |
 | **Action** | Fix it in Cloudflare, against the Phase A capture |
 | **Time** | Cloudflare is authoritative and TTL Auto is 300 s → **~5 minutes**, worldwide |
-| **Symptom** | Inbound mail is actually bouncing |
-| **Action** | Check the **MX** first. A wrong MX is a two-minute fix; a nameserver rollback is a 24-hour one. Only if the zone is comprehensively wrong is B's nameserver rollback the right tool |
+| **Symptom** | The zone turned out to carry mail after all |
+| **Action** | Stop and work the boxed subsection above, in its own order — mail first, then everything else |
+| **Time** | An hour of careful copying, and a few days of watching |
 
 ---
 
@@ -751,10 +907,15 @@ on the certificate.
 
 ### Phase E — verify, and do not hand-wave it
 
-This is the phase that decides whether `.ch` is touched at all. Run every command.
-Compare every answer against the **Phase A capture**, line by line: anything in
-the capture that does not appear here has been dropped, and nothing will tell you
-so.
+This is the phase that decides whether `.ch` is touched at all. Run every
+command. Compare every answer against the **Phase A capture**, line by line:
+anything in the capture that does not appear here has been dropped, and nothing
+will tell you so.
+
+The email round-trip that used to be the gate here is gone with the mail — if
+that ever changes, the gate comes back, and it is written out in Phase C's boxed
+subsection. **What did not shrink** is everything below: DNSSEC, the
+certificate, the ACME path, CAA, and the byte-correctness of the deployed site.
 
 **DNS — is the zone what it used to be?**
 
@@ -763,13 +924,24 @@ D=blauewelt.org
 dig +short NS $D                      # the two Cloudflare nameservers, nothing else
 dig +short A $D                       # Cloudflare anycast addresses
 dig +short AAAA $D
-dig +short MX $D                      # exactly: 5 mta-gw.infomaniak.ch.
-dig +short TXT $D                     # ONE v=spf1 …, plus the verification TXTs
-dig +short TXT _dmarc.$D
-dig +short TXT <selector>._domainkey.$D    # the v=DKIM1 string, exactly once
+dig +short TXT $D                     # the verification TXTs from the capture — and nothing invented
+dig +short MX $D                      # expected: nothing. An MX here was invented by the scan
 dig +noall +answer CAA $D             # empty is fine; if not, letsencrypt.org must be allowed
 dig +noall +answer DS $D              # empty until Phase B8 re-enables DNSSEC
 ```
+
+**DNSSEC, both directions — the one step that can take the domain dark.**
+
+```bash
+dig blauewelt.org @1.1.1.1 | head -3          # NOERROR, not SERVFAIL
+dig +cd blauewelt.org @1.1.1.1 | head -3      # if this differs from the line above, see Phase B
+dig blauewelt.org @8.8.8.8 | head -3          # a second validating resolver, on a different network
+```
+
+A domain that answers here and SERVFAILs there is not intermittent — it is a
+validation failure being masked by whichever resolver happens not to validate.
+After **Phase B8** re-publishes the DS at Infomaniak, run these three again:
+re-enabling DNSSEC is the same hazard as removing it, pointed the other way.
 
 **HTTP and the certificate.**
 
@@ -782,7 +954,6 @@ curl -sSI 'https://www.blauewelt.org/docs.html?f=ml/EXPERIMENTS.md' | head -8
      # 301 → https://blauewelt.org/docs.html?f=ml/EXPERIMENTS.md   ← query preserved
 curl -sSI https://blauewelt.org/this-path-does-not-exist | head -3   # 404, NOT 200
 curl -sSI https://blauewelt.org/ml | head -8             # the /ml shortcut still lands
-curl -sS https://blauewelt.org/data/catalog.json | head -c 80; echo
 openssl s_client -connect blauewelt.org:443 -servername blauewelt.org </dev/null 2>/dev/null \
   | openssl x509 -noout -subject -issuer -dates
 ```
@@ -801,80 +972,79 @@ runs the zone, so this path is not load-bearing for the *first* certificate —
 which is exactly why it can be broken for a month without anyone noticing. Check
 `www` in particular: its whole existence is a redirect rule.
 
-**Email — both directions, and this is the gate.**
+**The site itself, byte for byte — this is the gate now.**
 
-1. **Inbound.** From an account at a completely unrelated provider — a phone, not
-   this machine, not an alias on the same domain — send a message to a real
-   mailbox at `blauewelt.org`. It must arrive within a minute. Open the received
-   message's full headers and confirm `Received: … by mta-gw.infomaniak.ch`.
-2. **Outbound.** Reply from that Infomaniak mailbox to the external address.
-   In the copy that arrives, open *Show original* / full headers and read the
-   `Authentication-Results:` line at the **receiving** end:
-   - `spf=pass` — the SPF TXT survived.
-   - `dkim=pass header.d=blauewelt.org` — the NS→TXT conversion worked.
-   - `dmarc=pass` — both of the above agree with the `_dmarc` policy.
-3. **Read a failure correctly:**
-   - `dkim=none` or `dkim=fail` → Phase C step 4. In order of likelihood: the
-     record landed at `<selector>._domainkey._domainkey`, the `p=` value was
-     truncated in the copy, or there are two TXT records at the name.
-   - `spf=softfail` / `spf=fail` → the SPF TXT is missing, duplicated, or lost
-     its `include:spf.infomaniak.ch`.
-   - `dmarc=fail` with the other two passing → the `_dmarc` value was not copied
-     verbatim.
-4. **Infomaniak's own checker**
-   ([faq/2692](https://www.infomaniak.com/en/support/faq/2692)) — run it against
-   the domain from the Manager. It checks MX, SPF, DKIM and DMARC *as Infomaniak
-   expects them*, which makes it the authority on the only question that matters
-   here: will Infomaniak still deliver for this domain now that it does not own
-   the zone.
-5. **A second opinion from outside.** Send one message from the Infomaniak
-   mailbox to a mail-tester-style external checker and read the score. It flags
-   things Infomaniak has no reason to flag — a missing PTR, a DMARC policy now
-   enforcing against a DKIM that stopped signing.
-6. **If `autoconfig`/`autodiscover`/SRV records existed**, add the account from
-   scratch in a mail client. That path is exercised by nobody until the day
-   someone gets a new phone, and it fails as "your mail is broken".
+The site is what the move is *for*, so verify it at the new hostname the same way
+§6.0b verified it at `earth.pages.dev`, and do not substitute looking at the
+globe: almost every fetch failure in this app degrades to `null` by design, so a
+missing data file renders as a perfectly convincing planet.
+
+1. **Every file, by hash.** For each of the 184 paths in the upload set, fetch
+   `https://blauewelt.org/<path>` and compare the sha256 with the local file.
+   Zero mismatches, zero non-200s.
+2. **The four entry points**, with the right content type: `/`, `/docs.html`,
+   `/status.html`, `/ml` (which must land on the status page).
+3. **The suite, against the live domain:**
+   `PLAYWRIGHT_BASE_URL=https://blauewelt.org npx playwright test tests/app.spec.js tests/docs.spec.js`
+4. **One `docs.html?f=…#…` and one `status.html#run-N` by hand, on a phone** —
+   the `.html` → extensionless redirect (§6.0b step 5) is now happening behind a
+   custom domain, and the query string has to survive both it and the `www`
+   rule.
 
 **`blauewelt.ch` is not touched until every check above passes.** Not the
 nameservers, not the DNSSEC toggle, nothing. While `.ch` is still wholly on
 Infomaniak it is a working control: any question of the form "is this Infomaniak
 misbehaving or is this our change?" is answered by running the same query against
-`.ch`. Give it a few days of real mail as well — DKIM failures present as spam
-foldering, not as bounces, and low-volume domains take days to show it.
+`.ch`.
 
 | Rollback at Phase E | |
 |---|---|
 | **Symptom** | A DNS answer disagrees with the capture |
 | **Action** | Fix the record in Cloudflare |
 | **Time** | ~5 minutes (TTL Auto = 300 s) |
-| **Symptom** | Mail fails a check but is still flowing |
-| **Action** | Fix the record. Do not roll back nameservers for a DKIM failure — the rollback is slower than the fix by two orders of magnitude |
-| **Time** | ~5 minutes, plus a re-test |
-| **Symptom** | Mail is genuinely not being delivered |
-| **Action** | MX first (2 min). If the zone is comprehensively wrong, nameservers back to Infomaniak |
-| **Time** | 2 minutes, or **24–48 h** for the nameserver route |
+| **Symptom** | SERVFAIL on one resolver and not another |
+| **Action** | DNSSEC. Phase B's rollback table, and do not try to fix it forward |
+| **Time** | Registry publish, then up to the old DS TTL |
+| **Symptom** | A file's hash disagrees, or an entry point 404s |
+| **Action** | Not a DNS problem — the deployment is wrong. Detach the custom domain, fix the deploy, re-attach. `blauewelt.github.io/earth/` is still live and current throughout |
+| **Time** | Immediate to detach |
 
 ---
 
 ### Phase F — `blauewelt.ch`, once and only once `.org` is healthy
 
-Same shape, smaller: `.ch` becomes a redirect and never an origin.
+**`blauewelt.ch` hosts nothing.** Chris, 2026-08-21: *"no the site is just
+registered"* — no site, no mail, no redirect. So there is nothing to preserve
+here and nothing that can break by being moved. This phase is a nameserver move
+with the same DNSSEC care as Phase B, and then three clicks.
 
-1. **Phase A again, in full.** Even if `.ch` "isn't used for anything" — that is
-   precisely where a forgotten verification TXT or an MX nobody remembers lives.
-   **If `.ch` carries mail, Phases A–C apply exactly as written**, DKIM
-   conversion included. Establish that first; it is not visible from outside.
-2. **Phase B again:** DNSSEC off → wait 1.5 × the DS TTL → add the zone →
-   populate it (Phase C) → move the nameservers → wait for Active → re-enable
-   DNSSEC and publish the new DS at Infomaniak.
+1. **A short Phase A anyway**, for the two things that are not about mail: the
+   **DS record's TTL**, which sets the wait in step 2 and is a different number
+   from `.org`'s; and any **CAA** record, which would stop a certificate
+   issuing for `blauewelt.ch` exactly as it would for `.org`. Also glance for a
+   verification TXT — a registered-and-unused domain is where one gets
+   forgotten. The rest of the capture is `dig +noall +answer` on the same seven
+   types and takes a minute.
+   If it turns out `.ch` carries mail after all, **Phase C's boxed subsection
+   applies in full** before anything else.
+2. **Phase B again, unchanged and at full strength:** DNSSEC off at Infomaniak →
+   confirm the DS is gone at the parent → wait 1.5 × the DS TTL → add the zone
+   to Cloudflare → populate it (step 3) → move the nameservers → wait for
+   **Active** → re-enable DNSSEC and publish the new DS at Infomaniak. The
+   domain being empty makes the *zone* trivial; it does not make the DNSSEC
+   ordering any less capable of taking the name completely dark.
 3. **Two placeholder records**, because both names must resolve and both must be
    proxied for a rule to run on them, and neither may reach an origin:
-   - **AAAA**, name `@`, `100::`, **Proxied**
+   - **AAAA**, name `@`, `100::` (the IPv6 discard prefix), **Proxied**
    - **AAAA**, name `www`, `100::`, **Proxied**
 4. **One redirect rule for both hostnames.** Rules → Redirect Rules → Create:
    - *When*: `http.host in {"blauewelt.ch" "www.blauewelt.ch"} and not starts_with(http.request.uri.path, "/.well-known/")`
    - *Then*: Dynamic → `concat("https://blauewelt.org", http.request.uri.path)`,
      **301**, **Preserve query string on**.
+
+   Both halves of that are deliberate. The `/.well-known/` exclusion keeps the
+   ACME path reachable, and **Preserve query string is an explicit toggle that
+   is off by default** — every `docs.html?f=…` link depends on it.
 5. **`blauewelt.ch` is never added to the Pages project.** It is a redirect. Add
    it as a custom domain and you have two origins serving the same app under two
    names, and every link ever shared afterwards is a coin flip.
@@ -883,19 +1053,23 @@ Same shape, smaller: `.ch` becomes a redirect and never an origin.
    curl -sSI 'https://blauewelt.ch/docs.html?f=ml/EXPERIMENTS.md' | head -8
    curl -sSI 'https://www.blauewelt.ch/status.html' | head -8
    curl -sSI https://blauewelt.ch/.well-known/acme-challenge/probe | head -3
+   dig blauewelt.ch @1.1.1.1 | head -3      # NOERROR, not SERVFAIL
+   dig blauewelt.ch @8.8.8.8 | head -3      # a second validating resolver
    ```
    The first two must be **301** to the same path and query on `blauewelt.org`;
-   the third must be a **404**, not a redirect. Then repeat Phase E's email
-   checks **for `.ch`** if it carries mail.
+   the third must be a **404**, not a redirect; the last two must agree.
 
 | Rollback at Phase F | |
 |---|---|
 | **Symptom** | The redirect loops, or does not fire |
 | **Action** | Disable the rule — one toggle. `.org` is untouched by construction: the rule is scoped to `.ch` hostnames |
 | **Time** | Immediate |
-| **Symptom** | `.ch` mail broke |
-| **Action** | Nameservers back to Infomaniak; the zone there is intact |
-| **Time** | **24–48 h**, which is why Phase C's "get it right before the switch" applies here too |
+| **Symptom** | SERVFAIL on `blauewelt.ch` |
+| **Action** | DNSSEC, exactly as in Phase B: turn it **off** at Infomaniak, do not fix it forward |
+| **Time** | Registry publish, then up to the old DS TTL |
+| **Symptom** | `.ch` is unreachable and the zone looks comprehensively wrong |
+| **Action** | Nameservers back to Infomaniak; the zone there is intact. Note that `.ch` served nothing before this phase, so the cost of leaving it broken while you think is close to zero |
+| **Time** | **24–48 h** |
 | **Symptom** | Anything at all wrong with `.org` |
 | **Action** | Not caused by this phase. Stop, and go back to Phase E |
 | **Time** | — |
