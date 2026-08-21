@@ -1,11 +1,21 @@
 # JAX port — effort assessment
 
-**Status: TIER 1 LANDED (2026-08-21). §§2–6 are the original assessment;
-`ml/jaxport/` now holds the tier-1 implementation, and gate G1 is measured
-PASSED — converted `f3_anchor41M` (40.7M, 576×10 patch 3, d_z 64) agrees
-with torch to max|Δ| 1.3e-5 on `encode` and 6.6e-7 on `query` (gate: 1e-4),
-with the toy parity suite (`python3 tests/test_jaxport_parity.py`, six
-checks) at ≤ 1e-6. Next: tier 2 (eval stack), gates G2/G3.**
+**Status: TIER 1 LANDED, TIER 2 EMBEDDING PATH LANDED (2026-08-21).**
+§§2–6 are the original assessment. `ml/jaxport/` holds the models, the
+converter and `embed_everything_jax`. Gates so far:
+
+- **G1 PASSED** — converted `f3_anchor41M` (40.7M, 576×10 patch 3, d_z 64)
+  agrees with torch to max|Δ| 1.3e-5 on `encode`, 6.6e-7 on `query` (gate
+  1e-4); toy suite (`tests/test_jaxport_parity.py`, 6 checks) ≤ 1e-6.
+- **G2′ PASSED** (the monthly stand-in defined in §5 — G2 itself stays
+  OPEN): the rapid ridge over the real `family3_na025` tensor reads
+  **r 0.62696** from the JAX embedding and **0.62696** from torch, against
+  the archived control **0.627**; the two backends differ by **5.7e-8** in
+  r, and their Z arrays by mean|Δ| 1.2e-6 (max 7.8e-3 = one float16
+  storage ULP; float32 re-encode 1.0e-5).
+- **G3 not yet attempted** — it needs the rollout, which is the next slice.
+
+Reproduce: `python3 ml/jaxport/score_section_probe.py --backend {jax,torch}`.
 
 ## 1 · Why
 
@@ -147,7 +157,25 @@ the number the port must reproduce and the tolerance it inherits:
   elementwise, atol 1e-4 fp32, on the pilot codec AND one xl checkpoint.
 - **G2 (tier 2):** `probe_kfold` over `f3_anchor41M` on the pentad tensor
   reads rapid r **0.660** (torch reproduces this identically across #390/
-  #392/#397/#406); accept within ±0.005.
+  #392/#397/#406); accept within ±0.005. **STILL OPEN**, for a data reason
+  rather than a port reason: the pentad tensor is not published on
+  `data-cache-v1`, so it cannot be staged into a sandbox. Score it on the
+  first box that has the tensor.
+- **G2′ (the monthly stand-in that was actually scored, 2026-08-21).** Same
+  codec, same instrument, the tensor that IS published:
+  `family3_na025_adcbe700fb` (sha `adcbe700fb…`, 516×281×481×39). Its
+  archived control is **rapid r 0.627 [0.503, 0.735], n 240, RMSE 2.17 Sv**
+  — `probes-140.json`, and identically in all 95 bundles #140→#360 that
+  froze `!run-62,run-63` on this tensor (`ml/EXPERIMENTS.md` §"Where the
+  control number comes from"). Accept within ±0.005.
+  **Substituting a gate needs saying out loud, so: G2′ is weaker than G2 in
+  one way and stronger in another.** Weaker — it is monthly, so it never
+  exercises the pentad cadence. Stronger — it is scored TWICE through the
+  identical numpy read-out, once from a torch Z and once from a JAX Z, so
+  it measures the thing G2 can only infer: that swapping the framework
+  moves the published instrument by 5.7e-8. Neither number was tuned; the
+  torch backend was required to land on 0.627 first, precisely so the JAX
+  number would be scored against the right thing.
 - **G3 (tier 2):** the `e017_u1_s0` gate head re-rolls at gate AUC
   **0.643** (18 torch reproductions on record); accept within the eval
   wave's own tolerance, 0.0101.
@@ -166,3 +194,31 @@ A gate that fails is a finding about the port, never something to widen.
   ladder; defer.
 - **Where parity tests run** — CPU-only in CI (JAX CPU wheel is cheap);
   no GPU rental for any of tiers 1–2.
+
+## 7 · Findings from the tier-2 work (2026-08-21)
+
+**A memmapped `anomaly_transform` can be OOM-killed silently on a
+RAM-oversubscribed box, leaving a HALF-TRANSFORMED tensor on disk.** Measured
+here on a 7 GB box against the 10.88 GB monthly tensor (1.55×
+oversubscribed): the transform's pass 3 died with no traceback and no OOM
+line, and the file left behind was z-scored for part of its time axis and
+raw for the rest. `trainprobe.py:anomaly_transform` is chunked over time
+precisely so it can run oversubscribed, but numpy's memmap only msyncs on an
+explicit `flush()`, which the transform never calls mid-pass — so on a box
+where writeback cannot keep up, the dirty pages accumulate until the kernel
+kills the process. The fix used here is caller-side (a write-through proxy
+that msyncs every 1 GiB, plus `chunk=8`); `trainprobe.py` was NOT changed,
+because changing it would change the arithmetic path of every published
+number and that is a decision for its own experiment.
+
+Why it matters beyond this sandbox: the daily family-5 tensor is **2.6×**
+oversubscribed on a 64 GB box, i.e. further into this regime than the case
+that failed here, and the surviving artefact is the dangerous part. A
+half-transformed tensor is not detectably wrong — it is finite, correctly
+shaped, and passes every check the pipeline makes — so the failure would be
+read as "the probe died, re-run it", and the re-run would embed a tensor
+that is anomaly-space in one half and raw in the other. The cheap guard is
+the repo's own flush-then-mark discipline (`ml/CLAUDE.md` §5.21): write a
+marker beside the tensor AFTER the transform completes, and refuse to embed
+a tensor whose marker is missing. That guard does not exist on the
+operational path today.
