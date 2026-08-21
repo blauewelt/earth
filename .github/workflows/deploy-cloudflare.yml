@@ -1,0 +1,151 @@
+# Standby deployment of the browser-facing site to Cloudflare Pages.
+#
+# WHY THIS EXISTS, AND WHY IT DOES NOTHING TODAY
+# ----------------------------------------------
+# GitHub Pages serves this site under a *soft* 100 GB/month bandwidth limit
+# (docs.github.com, "GitHub Pages limits"). Soft means GitHub may simply stop
+# serving the site rather than bill for it. Cloudflare Pages' free tier is
+# unlimited bandwidth and unlimited static requests, so it is the obvious
+# escape hatch — but an escape hatch is only useful if it was cut BEFORE the
+# fire. This workflow is that hatch, pre-cut and inert.
+#
+# `gh-pages` remains the live site. `pages.yml` is untouched. Both targets can
+# run indefinitely; a cutover is then a DNS/settings change, not a migration
+# under load. The whole runbook — limits side by side, the bandwidth
+# arithmetic, the exact click-path to enable this, and what breaks on cutover
+# (every shared URL) — is docs/HOSTING.md.
+#
+# THE BUILD-QUOTA PROBLEM THIS WORKFLOW'S `paths:` FILTER SOLVES
+# --------------------------------------------------------------
+# Cloudflare's free tier allows 500 builds/month. This repo took 594 commits
+# in the 14 days to 2026-08-21 — about 1,290/month, 2.6x the quota — and the
+# overwhelming majority are ML research commits that change nothing a browser
+# fetches. Measured over those same 14 days, only 99 commits touched any file
+# below, i.e. ~215 builds/month, 43% of the quota. So the filter is not a
+# nicety; it is the thing that makes free-tier Cloudflare viable here at all.
+# `scripts/` verification of that claim: docs/HOSTING.md, "Build budget".
+#
+# NEVER add `runs-on: gpu` here, and never add a trigger that a fork can fire
+# (`pull_request`, `issue_comment`, `workflow_run`). ml/CLAUDE.md §6: the one
+# line of defence for the self-hosted GPU boxes is that nothing fork-triggerable
+# ever reaches them. This job is `ubuntu-latest`, always.
+
+name: Deploy to Cloudflare Pages (standby)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    # Only the files a browser is actually served. Verified against the real
+    # asset graph on 2026-08-21: Cesium comes from cdnjs, and docs.html reads
+    # every .md from raw.githubusercontent.com on the deployed site — so
+    # neither _vendor/ (untracked anyway) nor ml/ is origin content. docs/ IS
+    # listed because index.html links docs/*.md with relative hrefs.
+    paths:
+      - 'index.html'
+      - 'status.html'
+      - 'docs.html'
+      - 'manifest.json'
+      - '.nojekyll'
+      - 'icon-*.png'
+      - 'src/**'
+      - 'lib/**'
+      - 'data/**'
+      - 'docs/**'
+      - '.github/workflows/deploy-cloudflare.yml'
+
+# No write scope of any kind: this job reads the repo and talks to Cloudflare.
+permissions:
+  contents: read
+
+# One deploy at a time; a burst of data commits should publish the tip, not
+# race three uploads of 400 MB against each other.
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # `secrets` is available to a job-level `env:` but NOT to an `if:`, so
+      # the presence check is reduced to a boolean here and read as `env.` in
+      # step conditions below. This stores "true"/"false" — never a token.
+      CONFIGURED: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      # Project name is not a secret. Override with a repository *variable*
+      # if the Cloudflare project ends up named something else.
+      PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT || 'earth' }}
+    steps:
+      # A feature nobody has enabled yet must never paint a red X on every
+      # push. This step exits 0 and explains what to do.
+      - name: Standby — Cloudflare not configured
+        if: env.CONFIGURED != 'true'
+        run: |
+          echo "::notice title=Cloudflare Pages standby::Not configured — nothing deployed, and this is not a failure. GitHub Pages remains the live site."
+          echo "::notice title=To enable::Create a Cloudflare Pages project (Direct Upload) named '$PROJECT', then add repo secrets CLOUDFLARE_API_TOKEN (token with the 'Cloudflare Pages:Edit' permission) and CLOUDFLARE_ACCOUNT_ID. Step-by-step: docs/HOSTING.md"
+          {
+            echo "### Cloudflare Pages: standby"
+            echo
+            echo "No deploy was attempted — \`CLOUDFLARE_API_TOKEN\` and/or \`CLOUDFLARE_ACCOUNT_ID\` are not set."
+            echo "GitHub Pages (\`gh-pages\`) is unaffected and remains the live site."
+            echo
+            echo "See [docs/HOSTING.md](../blob/main/docs/HOSTING.md) for the click-path that turns this on."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout
+        if: env.CONFIGURED == 'true'
+        uses: actions/checkout@v4
+
+      # Build the upload set from an ALLOWLIST of tracked files, not by
+      # deleting things from a checkout. An allowlist fails closed: a new
+      # top-level directory of model checkpoints is excluded by default
+      # instead of silently shipping 300 MB. `git ls-files` also means
+      # untracked build junk and _vendor/ can never leak in.
+      - name: Assemble the browser-facing site
+        if: env.CONFIGURED == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          # NUL-separated all the way through: `git ls-files -z` never quotes,
+          # and `tar --null -T -` copies exactly the listed paths, creating
+          # parent directories as it goes. No rsync dependency, no globbing
+          # in the shell, nothing untracked can ride along.
+          git ls-files -z -- \
+            index.html status.html docs.html manifest.json .nojekyll \
+            'icon-*.png' 'src/**' 'lib/**' 'data/**' 'docs/**' \
+            | tar --null -T - -cf - | tar -xf - -C _site
+          files=$(find _site -type f | wc -l)
+          bytes=$(du -sb _site | cut -f1)
+          big=$(find _site -type f -size +25000000c | head -5)
+          echo "::notice title=Upload set::${files} files, $((bytes/1048576)) MiB"
+          # Cloudflare Pages free tier: 20,000 files/site, 25 MiB per file.
+          # Fail loudly here rather than half-way through an upload.
+          if [ "$files" -gt 20000 ]; then
+            echo "::error title=Over Cloudflare's file limit::${files} files > 20,000. See docs/HOSTING.md."; exit 1
+          fi
+          if [ -n "$big" ]; then
+            echo "::error title=File over 25 MiB::$big — Cloudflare Pages will reject it. See docs/HOSTING.md."; exit 1
+          fi
+          {
+            echo "### Cloudflare Pages upload set"
+            echo
+            echo "- files: **${files}** / 20,000"
+            echo "- size: **$((bytes/1048576)) MiB**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Secrets go in `env:`, never in argv — CLAUDE.md's standing rule, and
+      # the permission classifier enforces it locally for good reason. Both
+      # `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are read from the
+      # environment by wrangler itself; only the non-secret project name and
+      # branch appear on the command line.
+      - name: Deploy to Cloudflare Pages
+        if: env.CONFIGURED == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 pages deploy _site \
+            --project-name "$PROJECT" \
+            --branch main \
+            --commit-dirty=true

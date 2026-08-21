@@ -979,6 +979,7 @@ worth keeping in front of a frontend reader:
 | `docs/COMBINING_DATASETS.md` | Which datasets measure the same quantity; sound combinations |
 | `docs/PIXEL_STATE.md` | Which catalog sources compose into a per-pixel state vector (state/memory/forcing/flow/future); the 0.25°-daily common grid argument; the ~25-source minimal composition |
 | `docs/TILE_BUDGET.md` | What one user interaction costs NASA: the measured GIBS request count per click, drag, window and playback frame; the unbounded paths found and closed; the rule to check before adding any tile-issuing feature |
+| `docs/HOSTING.md` | Where the site is served from: GitHub Pages' 100 GB *soft* bandwidth limit measured against the real per-visit payload, the Cloudflare Pages standby workflow and its `paths:` build-quota filter, the click-path to enable it, and why a custom domain is worth buying before it matters |
 | `docs/SPECIES_AND_CLIMATE.md` | Why biodiversity data belongs in a climate app |
 
 ---
