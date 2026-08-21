@@ -102,6 +102,10 @@ against a **wind-only baseline of 0.607** [0.547, 0.664] on the same folds — i
 cadence the codec and the wind-stress ridge are indistinguishable on this read-out. `fc`
 0.364 [0.287, 0.432] n 13,613 against a wind-only 0.110, where it is clearly ahead.
 `dip_check` r_out_of_fold 0.579, dip captured **25.6%** (against #415's pentad 31.8%).
+**The full entry now exists**, with the ladder, the fired falsifier, the cost split and this
+archival failure written up:
+
+[E-043f · #419 (fresh 38.0M daily codec, all longitude columns) — the RESULT](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043f)
 
 ---
 
@@ -778,12 +782,15 @@ ceiling that took every dispatch down on 2026-08-17 · the recipe resolving to s
 ---
 
 <a id="e-043"></a>
-## E-043 · Retire the 45°W–25°W longitude holdout — ARMS A, B, D and E ALL LANDED (#416, #414+#422, #417+#418, #415); F (#419, daily) is still training, and arm B is now down to its seed pair (#426)
+## E-043 · Retire the 45°W–25°W longitude holdout — ALL FIVE ARMS HAVE NOW LANDED (#416, #414+#422, #417+#418, #415, #419); arm F's verdict is PROVISIONAL on a distrusted read-out, and arm B is down to its seed pair (#426)
 
 The wave that follows from
 [§0d · the skill map's central band is the held-out longitude block](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#holdout-lon-band-2026-08-19).
 Five arms were planned; A, B, D and E went out at main `8f0e5141` at ~16:49Z and F
-followed at 17:25Z. As of **2026-08-20 ~14:40Z** every arm but F has landed. Arm B's roll
+followed at 17:25Z. As of **2026-08-21 05:22:58Z all five have landed** — F last, after
+35.96 h. Its verdict is **provisional**: it fired its own falsifier, on a read-out `ml/CLAUDE.md`
+§3 distrusts at daily cadence, at n = 1
+([E-043f · #419](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043f) §3). Arm B's roll
 (#422) fired its own pre-registered falsifier by 19× — and arrived with a lead-time profile
 that no other head in the archive has, so its headline number is recorded as **not yet
 readable as a level**; that is [E-043b · the roll §7](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-roll)
@@ -824,7 +831,7 @@ headline. The seed pair is mandatory**, and it went out at 01:12:28Z as
 | B | **#414** (E-043b: xl144 stage-2 head trained on an all-longitude pool over the EXISTING frozen anchor) → **#420** (HEADPUB) → **#422** (the roll) | **COMPLETE, AND THE ONE TO READ CAREFULLY — [E-043b (#414, training half)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b)** and **[E-043b · the roll (#420 + #422)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-roll)**. Gate PASSED (0.643, 20th reproduction). The hole is **gone** — corridor `_trainlon` − `_holdlon` **0.0065** against the control pair's 0.646 / 0.667 — which is arm B's hypothesis confirmed. The corridor `_trainlon` figure **0.93933 vs the control pair's 0.86754** is **NOT** yet quotable: §7 of that entry records a flat lead-time profile, a 39-channel gain including wind stress, and **no movement at all in any transport read-out**. (#421 was the same roll and is VOID.) **Both diagnostics have landed: [#424 (E-043b-CONTROL)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-control) cleared the roll code byte for byte, and [#425 (E-043b-MILESTONE)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-milestone) killed the structural explanation — the step-600 head rolls 0.02967 `_trainlon` with a monotone 0.179 → −0.068 decay, so the property was ACQUIRED over 200k steps.** The arm's only remaining gap is n = 1, and **[#426 (E-043b-SEED1)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1)** is in flight to close it. (§7(c)'s "uniform" is retired by #425 §6.4: the gain spans +0.055 to +0.467 at h = 12.) |
 | D | **#417 / #418** (E-043d: sroll re-rolls, `_trainlon` / `_holdlon` split) | **COMPLETE — [E-043d1 (#417, xl233 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d1)** and **[E-043d2 (#418, xl144 pair)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043d2)** |
 | E | **#415** (E-043e: fresh 38.0M pentad r2 codec, all longitude columns) | **LANDED — [E-043e (#415)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043e)**, 12:55:52Z, recorded step **197,428** (the cosine was re-fit fifteen times despite `max_minutes 1150`), codec **published** as `run-415__pixelmae.pt`. **No head probe** — `head_probe: "false"` copied from #386, the third such miss in this wave — so its verdict arrives with E-044's ladder |
-| F | **#419** (E-043f: fresh 38.0M DAILY codec on all 481 longitude columns) | **STILL TRAINING at 2026-08-21 01:10Z, and its TELEMETRY is stale — read this before quoting a step.** Checked against the **jobs API**, which is the channel that has not died: the Actions job is `in_progress` inside **step 16 `Train`** on `gpu-box-46996216`, started **2026-08-19T17:33:11Z**, so the job's own wall is **31 h 45 min ≈ 1,905 min against the daily arm's 2,600-min `job_timeout`** — 73% spent, ~695 min of headroom. `probes-419.json` is **404** because a run publishes its bundle only when the job ends, and `ml-live-419` still holds only `metrics.jsonl` and `phase.json`, frozen at its last push **2026-08-20T17:21:31Z, step 142,000 / 200,000** — now **7 h 49 min** stale against a ~5-min publish loop, the same dead side channel diagnosed at 21:07Z (`publish_live_metrics.sh` failing inside its `|| true`, the #100 shape). The box read **gpu 67%** at 01:06Z. **Arithmetic, NOT a reading:** the last real `wall_s` in the branch is **80,169.4 s at step 140,000** = 0.5726 s/step averaged over the whole run including its light probes, so the remaining 60,000 steps are ~9.5 h and step 200,000 lands **~01:20Z on 2026-08-21**, with the probe ladder and upload after it. **Left alone**, per this session's scope. Its harvest will be the **first daily codec numbers this programme has ever had**; if the untested daily ladder OOMs or wedges at T = 15,706 (the LazyPixels analogues are unproven at that length), the finished log is the diagnosis and the mechanism goes in E-043f |
+| F | **#419** (E-043f: fresh 38.0M DAILY codec on all 481 longitude columns) | **LANDED 2026-08-21 05:22:58Z after 35.96 h — RESOLVED, PROVISIONALLY: [E-043f (#419)](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043f)**. The first daily codec in the programme's history to reach a probe ladder at all. **Its pre-registered falsifier FIRED on both halves** — final `linear_r_deseas` **0.570** inside the 0.558–0.598 band, and the pooled trace flat across 40 probes from step 7,500 (0.545–0.596, slope −0.006 per 100k steps) — and the control comparison is the plain form of it: #410 (E-038c daily codec, the withheld-block run at this exact architecture) read **0.582** at step 60,000 where #419 reads **0.576**, so **returning the withheld quarter of the ocean bought the daily arm nothing**. **But read §3 of that entry before quoting any of this:** `head_probe: "false"` again (the fourth miss in this wave), so there is **no unpooled read-out** and every number here is one §3 distrusts at daily cadence; at n = 1, §3b forbids reading it as a closure. The codec is **published** as `run-419__pixelmae.pt`, so the settling move is an **eval-only ladder with `head_probe: "true"` over it — no retraining**. Also on the record from this arm: the pooled k-fold ties a raw wind-stress ridge on RAPID (0.612 vs 0.607, overlapping CIs, no paired test) while clearly beating it on the Florida Current (0.364 vs 0.110); probes were **62.4% of the training loop's wall clock**; and the job outran GitHub's 24-hour token ceiling, so both archive steps failed 401 and **reported success** |
 
 <a id="e-043a"></a>
 ### E-043a · #416 — RESULT, completed 2026-08-19 20:46:10Z
@@ -2986,6 +2993,286 @@ whether the same is true unpooled.
 | rate | 0.29–0.40 s/step, drifting upward through the run — which is what drove the fifteen re-fits |
 | money | **≈ $6.0** |
 | dead dispatches charged to this arm | none — #415 ran once, green, first try |
+
+---
+
+<a id="e-043f"></a>
+### E-043f · #419 — RESULT, completed 2026-08-21 05:22:58Z, and the verdict is **PROVISIONAL**. The pre-registered falsifier FIRED on both halves — **and every number that fires it is a POOLED one, which §3 distrusts at exactly this cadence.** The daily track is NOT closed by this run
+
+**E-043f · Trains a FRESH 37.976M DAILY codec on ALL 481 longitude columns, so the 45°W–25°W
+mid-Atlantic block (25.0% of the domain's ocean pixels) enters stage-1 training instead of
+being withheld — the daily arm of the E-043 no-longitude-holdout wave (recipe
+`f5-40M-nolonhold`, `holdout_lon "0,0"`) · params **37.976M** · stage `encoder` · data
+`family5_na025_daily` (C 39, T 15,706, sha256 `fa2401c248…`, X 165.6 GB fp16) · arch 512×12,
+4 heads, d_dec 256, d_z 32, patch 1 · steps×batch **200,000 × 512** · resume **none (fresh —
+the `Seed resume checkpoint` step skipped and the trainer started at step 0).**
+
+**Code.** #419 → `head_sha` `19b50368`, job `train` on `gpu-box-46996216` (vast 47913006,
+Austria, 700 GB, $0.333/h), torch 2.13.0+cu130 on an RTX 4090. **This is the first daily
+codec in the programme's history to reach a probe ladder at all** — #389 (E-038c, the first
+daily attempt) wedged 7 h inside the anomaly transform, and #400 and #410 (E-038c, the same
+daily codec re-dispatched twice) were cancelled at step 22,000 and step 67,000 of 200,000.
+
+[#419 (E-043f fresh 38.0M daily codec, all longitude columns) — the CI log](https://github.com/blauewelt/earth/actions/runs/32281487754)
+
+[probes-419.json on ml-metrics](https://github.com/blauewelt/earth/blob/ml-metrics/probes-419.json)
+
+[run-419.jsonl on ml-metrics — the complete 242-record ladder](https://github.com/blauewelt/earth/blob/ml-metrics/run-419.jsonl)
+
+[run-419__pixelmae.pt — the published codec, 455,908,925 B](https://github.com/blauewelt/earth/releases/download/model-checkpoints-v1/run-419__pixelmae.pt)
+
+[E-043 · the wave this arm belongs to](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043)
+
+[E-043e · #415, the pentad arm of the same wave, whose dip figure is the comparison below](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043e)
+
+#### 1 · The pre-registration — it exists, and it is in the dispatch `doc` string, not in this file
+
+Arm F went out at 17:25:14Z on 2026-08-19, after the wave's own entry had been written, and
+**no E-043f section was ever opened at dispatch** — so this entry is the first. That costs
+nothing here, because the hypothesis and the falsifier were written into the dispatch `doc`
+string and survive verbatim in `probes-419.json`'s `provenance.json.inputs.doc`, which is
+the artefact rather than anybody's memory of it. Quoted from there:
+
+> **HYPOTHESIS:** the withheld block is a quarter of the ocean and the daily codec is starved
+> of it, so returning it lifts the linear section probe out of its flat band and gives it a
+> trend.
+>
+> **FALSIFIER:** a final `linear_r_deseas` inside 0.558-0.598, or flat to within +/-0.02
+> across steps 7500-200000 — that would say the daily ceiling is set by cadence or capacity,
+> not by the training pool, and the regime change buys the daily arm nothing.
+>
+> **PRIOR AND CONTROL:** #410 (E-038c daily codec, cancelled at step 67000 of 200000) is the
+> withheld-block control at this exact architecture — its `linear_r_deseas` was FLAT in
+> 0.558-0.598 with NO trend through step 67000, its last full probe (step 60000) reading
+> `linear_r_deseas` 0.582, `linear_r_raw` 0.602, `temporal_r_deseas` 0.627,
+> `chan_vs_persistence` 28.1%.
+
+#### 2 · The falsifier FIRED, on both halves — and the control comparison is the cleanest statement of it
+
+`linear_r_deseas` is the in-training linear section probe, and it is **POOLED**: `trainprobe.py`
+builds it from `Fsec = Zsec.mean(1)` (`ml/trainprobe.py:336`), a spatial mean over the
+26.5°N section. Read every number in this section with that label attached.
+
+**Half one — the final value.** The step-200,000 full probe reads `linear_r_deseas`
+**0.570** (pooled). The falsifier band is 0.558–0.598. It fires.
+
+**Half two — flatness.** Across the 40 probes from step 7,500 to step 200,000 (27 full at
+`eval_every` 7,500, 13 light at `light_probe_every` 10,000) the pooled trace never leaves
+**0.545–0.596**: mean 0.572, sd 0.011, least-squares slope **−0.006 per 100,000 steps** —
+flat, and if anything pointing the wrong way. 36 of the 40 sit inside ±0.02 of that mean; the
+four that do not (0.593 at 15,000 · 0.596 at 20,000 · 0.549 at 37,500 · 0.545 at 80,000) are
+all before step 80,000 and split both ways, and from step 90,000 onward every probe is inside
+the band. Over the last 50,000 steps the trace is 0.568–0.574. **There is no trend to find.**
+
+| step | 0 | **7,500** | 20,000 (light) | 37,500 | 80,000 (light) | 120,000 | 150,000 | 180,000 | **200,000** |
+|---|---|---|---|---|---|---|---|---|---|
+| `linear_r_deseas` (POOLED) | 0.492 | **0.592** | **0.596** (max) | 0.549 | **0.545** (min) | 0.584 | 0.570 | 0.571 | **0.570** |
+| `linear_r_raw` (POOLED) | 0.523 | 0.596 | 0.597 | 0.569 | 0.557 | 0.603 | 0.588 | 0.592 | 0.590 |
+
+**The control comparison, which is what the arm was for.** #410 (E-038c daily codec, the
+withheld-block run at this exact architecture, cancelled at step 67,000) read `linear_r_deseas`
+**0.582** at step 60,000. #419, all 481 longitude columns training, reads **0.576** at step
+60,000 and 0.570 at the end. **Returning a quarter of the ocean to the training pool bought
+the daily arm nothing on this read-out** — which is the falsifier's own words, and it is the
+opposite of what arm B measured at monthly cadence.
+
+The rest of the step-200,000 full probe, each with its pooling label:
+
+| metric | value | pooled? |
+|---|---|---|
+| `linear_r_deseas` | **0.570** | **POOLED** — ridge on `Fsec = Zsec.mean(1)` (`ml/trainprobe.py:336`) |
+| `linear_r_raw` | 0.590 | POOLED (same line) |
+| `temporal_r_deseas` | **0.652** | **POOLED** — the mini-transformer's `F[t] = hid[:, -1].mean(0)` (`ml/trainprobe.py:435`) |
+| `temporal_r_raw` | 0.662 | POOLED (same line) |
+| `chan_vs_persistence_pct` | **+28.4 %** | not pooled — per-pixel channel-space MSE over 8,000 sampled (t, pixel) pairs (`ml/trainprobe.py:389`) |
+| `z_vs_persistence_pct` | +26.5 % | not pooled (same sample) |
+| `chan_mse_model` / `chan_mse_persistence` | 0.30655 / 0.42822 | |
+| `z_mse_model` / `z_mse_persistence` | 11.2086 / 15.25 | |
+
+The step-0 untrained-codec control, which is what says the ladder ran and the training did
+something: `linear_r_deseas` 0.492, `linear_r_raw` 0.523, `temporal_r_deseas` 0.565,
+`temporal_r_raw` 0.570, `chan_vs_persistence` **−98.2 %**, `z_vs_persistence` +46.5 %. Over
+the run `temporal_r_deseas` moves 0.620 → 0.653 and `chan_vs_persistence` 24.6 % → 28.4 % —
+**the forecast diagnostics improve monotonically while the pooled transport probe does not
+move at all**, which is the representation/transport divergence this log has recorded at
+every scale, now visible at daily cadence too.
+
+#### 3 · THE CAVEAT THAT OUTRANKS THE RESULT — there is NO head probe, so §3 distrusts every number above
+
+`probes-419.json` carries `probe_kfold`, `probe_sequence`, `dip_check` and `provenance`, and
+**no `probe_head.json` and no raw-3×3 control**. This was not an accident of the run: the
+dispatch carried `head_probe: "false"` (recovered verbatim from #389's block, the fourth such
+miss in this wave after #414 (E-043b, the xl144 stage-2 head on the all-longitude pool),
+#415 (E-043e, the fresh pentad r2 codec) and #416 (E-043a, the monthly f3 codec with no
+longitude holdout)), `ml/recipes/f5-40M-nolonhold.json` sets no
+`head_probe` key of its own, and the gate that would have run it —
+`[ "${RECIPE_HEAD_PROBE:-$IN_HEAD_PROBE}" = "true" ]`, `scripts/probes_run.sh:526` at
+`93f1fc2` — therefore never fired.
+
+`ml/CLAUDE.md` §3 is scoped to exactly this cadence: *"At pentad/daily cadence, spatially
+POOLED read-outs are distrusted and the HEAD probe is primary."* The reason is mechanical —
+`Z.mean(1)` averages over the ~265-pixel 26.5°N section, and geostrophic transport is the
+east-minus-west contrast ACROSS that line, the one statistic a mean annihilates. So:
+
+**Every headline number #419 produced is one this programme does not trust, and the null it
+appears to report is a null measured on the instrument §3 says not to read.** §2's falsifier
+fires on `linear_r_deseas`, which is pooled. §4's k-fold is pooled. §5's K-sweep is pooled.
+§6's dip is pooled. **The daily codec has no unpooled read-out and one cannot be quoted.**
+
+**What settles it, and why it is cheap.** The codec is now published as
+`run-419__pixelmae.pt` (455,908,925 B, uploaded 2026-08-21 11:51:25Z), so the answer needs
+**no retraining at all** — an eval-only ladder with `head_probe: "true"` over that checkpoint,
+on the box that still holds `family5_na025_daily`, is the whole cost. That is the named next
+action for the daily track, and it is the same shape as the pass E-043a §4(c) still owes
+#416 (E-043a, the monthly f3 codec with no longitude holdout).
+
+**And per §3b, this run cannot close the axis even with a head number.** *"Any claim that an
+effect is ZERO, or that an axis is CLOSED"* needs two seeds, and *"any new metric, cadence,
+tensor, codec or scale tier with no measured pair — the first result at a tier buys its own
+replication"* names daily cadence explicitly. This is **n = 1, on a distrusted instrument**.
+So the daily track is written here as **UNRESOLVED with a cheap named next step**, not as a
+dead end, and nobody should quote "daily buys nothing" as settled on the strength of it.
+
+#### 4 · The pooled k-fold — at daily cadence the codec and a raw wind-stress ridge are indistinguishable on RAPID
+
+`probe_kfold.json`, year-blocked k-fold over the frozen codec. **POOLED**: `F = Z.mean(1)[tidx]`
+(`ml/probe_kfold.py:388`), the same section mean §3 distrusts.
+
+| target | r_kfold_deseas | 95% CI | n | RMSE Sv | σ Sv | lp18 | wind-only baseline (same folds) |
+|---|---|---|---|---|---|---|---|
+| **RAPID** | **0.612** | [0.563, 0.659] | 7,290 | 3.26 | 4.11 | 0.655 | **r 0.607** [0.547, 0.664], RMSE 3.28 |
+| Florida Current | 0.364 | [0.287, 0.432] | 13,613 | 2.81 | 3.01 | 0.393 | r 0.110 [0.068, 0.152], RMSE 3.00 |
+
+**On RAPID the codec and the wind-stress ridge are indistinguishable on this read-out** —
+0.612 against 0.607, a 0.005 gap with CIs that overlap across almost their whole width. **No
+paired test was run**, and `probe_kfold.py` still does not dump `pred`/`target_sv`/`years`
+(the standing gap from E-043a §3), so this is two overlapping intervals and not a test —
+§3's *"comparing two probes needs a PAIRED test"* is not satisfied and no ordering is claimed.
+
+**On the Florida Current the codec is clearly ahead** — 0.364 [0.287, 0.432] against a
+wind-only 0.110 [0.068, 0.152], non-overlapping intervals on n = 13,613. That is the one
+comparison in this run where the embedding demonstrably carries something the wind does not,
+and it is worth more attention than the RAPID null: FC is the target where the daily cadence
+has the most truth to score against.
+
+#### 5 · `probe_sequence` K-sweep and `dip_check`
+
+`probe_sequence.json`, `anomaly_space: true`, n_test 1,095, **POOLED** — the section
+embedding it stacks is `emb[t] = z.mean(0)` (`ml/probe_sequence.py:199`), the same spatial
+mean under a different name:
+
+| K | 1 | 3 | 6 | 12 | 24 |
+|---|---|---|---|---|---|
+| r_raw | 0.596 | 0.649 | 0.665 | 0.670 | **0.676** |
+| r_deseas | 0.578 | 0.634 | **0.656** | 0.649 | 0.652 |
+
+`seasonal_floor_raw` 0.176 · `seasonal_floor_deseas` 0.084 — both far below the sweep, so the
+skill is not the seasonal cycle. **Skill RISES with history and holds** (0.578 → 0.656 by
+K = 6, flat thereafter), which is the anomaly-space signature and the opposite of the
+state-space failure mode; note that K here counts DAYS, so K = 24 is under a month of context
+where the monthly runs' K = 24 was two years.
+
+`dip_check.json` — the 2009–10 collapse, **POOLED** (`F = Z.mean(1)[ridx]`,
+`ml/dip_check.py:114`):
+
+Window **2009-09 → 2010-06**:
+
+| | #419 (daily) | #415 (pentad, E-043e) |
+|---|---|---|
+| `r_out_of_fold` | 0.579 | 0.637 |
+| `sign_agreement_pct` | 69 | 72.0 |
+| `dip_observed_sv` | −6.84 | −6.95 |
+| `dip_predicted_sv` | **−1.75** | −2.21 |
+| **`dip_captured_pct`** | **25.6** | 31.8 |
+
+The daily codec captures **a quarter** of the 2009–10 amplitude where the pentad arm captured
+a third and the monthly anchor captured half (51.2%, #62 — `f3_anchor41M`, the frozen 40.7M monthly
+codec every xl head is built on). All three figures are pooled, none of them is paired, and the two runs differ in cadence AND tensor — so this is a direction, not a
+level, and it is recorded because it is the only case-study read the daily track has.
+
+#### 6 · `eval.json` — reconstruction is fine, `t+1` LOSES to persistence, and the NaN defect recurs
+
+Recorded here because **this entry is `eval.json`'s only durable copy**: it was written
+inside the `pixelmae-419` artifact (id 9432308132, 293,515,844 B, expiring **2026-09-20**),
+and the three files on `ml-metrics` are `plan-419.json`, `probes-419.json` and
+`run-419.jsonl` — none of them is it.
+
+Per-channel reconstruction skill, **best**: `rg_t400` 0.919 · `rg_t300` 0.909 · `rg_t200`
+0.893 · `rg_t150` 0.862 · `rg_s400` 0.877. **Worst**: `cur_speed` 0.057 · `ssh` 0.075 ·
+`tau_x` 0.089 · `tau_y` 0.096 · `rg_s1700` 0.327. The shape is the familiar one — the codec
+reconstructs the smooth interior thermal structure and does not reconstruct the fast surface
+fields — and at daily cadence the surface channels are the ones that actually move day to
+day, which is the mechanism worth carrying into any daily stage-2 design.
+
+**`t+1`: `mse_model` 0.6626 against `mse_persistence` 0.5524 → `beats_persistence: false`.**
+On the eval's own one-step test the daily codec is WORSE than predicting no change — while
+the in-loop `chan_vs_persistence_pct` reads +28.4 %. The two are different tests (the in-loop
+figure is the mini-transformer over K days of context on 8,000 sampled pairs; this one is the
+codec's own decoded one-step), and at daily cadence persistence is a far harder baseline than
+at monthly — one day of ocean change is small. Both are recorded; neither is reconciled here.
+
+**The NaN defect fired again, unguarded.** `rapid_probe` in `eval.json` reads `pearson_train`
+**NaN** and `pearson_heldout_years` **NaN** with n_train 6,195 and n_test 1,095. That is
+`docs/INFRASTRUCTURE.md` §4 invariant 12 (*"a result file is never written containing NaN —
+the job stops instead"*) and `ml/CLAUDE.md` §5.22 (*"Never write NaN into a results file"*),
+and it is the **same defect, in the same file, that #386 (E-038a, the f4-40M pentad control)
+hit** — where the log already noted the guard did not fire. **Recorded as a defect
+recurrence**: the guard named after #386 still does not exist, so a second run has now
+written NaN into a results file and finished green. `ml/probe_sequence.py:203` shows what
+the fix looks like — it refuses and exits rather than writing a non-finite array — and
+`eval.json`'s `rapid_probe` has no such check.
+
+#### 7 · Cost — and the finding hiding inside it: at daily cadence the INSTRUMENT costs more than the EXPERIMENT
+
+| item | value |
+|---|---|
+| job wall | 2026-08-19T17:25:18Z → 2026-08-21T05:22:58Z = **35.96 h** on `gpu-box-46996216` (vast 47913006, RTX 4090, $0.333/h) |
+| money | **≈ $12** |
+| `Train` step | 17:33:11Z → 02:39:56Z = **33.11 h**; the trainer loop's own `wall_s` is **115,729.0 s = 32.15 h** |
+| `Probes (K-sweep + stage 2)` step | 02:40:57Z → 05:22:47Z = **2.70 h**, on top of the loop |
+| training only | **43,479.1 s = 12.08 h** ⇒ **217.4 ms/step** — identical to #410's measured 217.4 ms/step on this same box |
+| **in-loop probes** | **72,249.9 s = 20.07 h = 62.4 % of the loop** — 28 full probes (27 at 2,275.9–2,307.0 s plus the step-0 control at 2,316.6 s) and 13 light probes at 604.9–618.4 s |
+| dead dispatches charged to this arm | none — #419 ran once, green, first try. (#389, #400 and #410 — the three cancelled daily attempts — are charged to E-038c, not here.) |
+
+**Twelve hours of training bought twenty hours of measurement.** `eval_every` 7,500 and
+`light_probe_every` 10,000 were copied from #389's block (E-038c, the first daily attempt),
+where they were chosen for a run that never finished; at daily cadence a full probe costs ~38 min against 217 ms/step of
+training, so the settings that are merely generous at monthly cadence dominate the bill here.
+**Any future daily dispatch should cut `eval_every` and `light_probe_every`** — halving the
+full-probe count alone would have returned ~9.5 h and ~$3 with no loss to the ladder above,
+whose 40 points are flat to sd 0.011.
+
+#### 8 · The archive steps ran past GitHub's 24-hour token ceiling, failed with 401, and REPORTED SUCCESS
+
+`ml/CLAUDE.md` §0.2 (*"a step that reports success is not evidence it did anything"*) and §4.6
+(*"a step that can fail silently will"*) — the most expensive instance of that pair this
+programme has recorded, because it applies to every long run rather than to one bad step.
+
+An Actions job token hard-expires at **24 h**. #419 ran **35.96 h**, so by the time step 22
+`Upload probe results` and step 23 `Archive metrics, then clean up the live branch` executed
+at 05:22:47–05:22:54Z, the `GITHUB_TOKEN` was almost twelve hours past its ceiling. Both failed with `401 Bad
+credentials`; both **report `success` in the jobs API**, along with every other executed step
+in the job. The 401s exist only in the log text (`##[warning]metrics archive failed — live
+branch kept for recovery`, `##[warning]archive failed: 401 Bad credentials`,
+`##[warning]probe archive failed — results are only in the artifact, which expires`).
+
+**What that cost.** The archive steps landed **nothing**, and the hand rescue that followed
+inherited the failure: the copy pushed to `ml-metrics` at 05:57:07Z on the 21st
+(`1b6e26ec`) was taken from the **DEAD `ml-live-419` branch**, whose publisher had itself
+died at 2026-08-20T17:21:31Z — **172 records, last line `step 142000`**, while the run went
+on to 200,000. For the next six hours the only public copy of a 36-hour result stopped 58,000
+steps short of its own ending, and the complete log plus the 455.9 MB codec existed **only
+inside an Actions artifact expiring 2026-09-20**. Both are now published: the complete
+242-record `run-419.jsonl` on `ml-metrics` (`cd1bee82`, 11:50:29Z), and
+`run-419__metrics.jsonl` + `run-419__pixelmae.pt` on the `model-checkpoints-v1` release
+(11:51Z). Nothing was lost, and nothing about that was designed — **a truncated file with no
+error in it is exactly the shape §0.2 warns about**, and it looked complete.
+
+**The durable fix is still outstanding, and it is one line of workflow:** any job that can
+exceed 24 h needs a **PAT on its archive steps**, not the automatic job token. Every daily-arm
+training is in that class by construction. Until it lands, harvest every long run by hand and
+**never read a green archive step as evidence that anything was archived**. Filed as an open
+follow-up in `ml/CLAUDE.md` §8.
 
 ---
 

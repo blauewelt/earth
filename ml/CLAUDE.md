@@ -939,5 +939,26 @@ archive.
   costs skill and buys nothing on transport. `--unroll` should default to 1.
   Filling in U=2 and U=8 would be measuring a difference already shown to be
   absent.
+- **A job that can exceed 24 h needs a PAT on its archive steps, not the
+  automatic job token.** An Actions job token hard-expires at 24 h. #419
+  (E-043f, the fresh 38.0M daily codec on all longitude columns) ran **35.96 h**,
+  so `Upload probe results` and `Archive metrics` both failed `401 Bad
+  credentials` — and **both reported `success`** (§0.2, §4.6). The complete
+  242-record log and the 455.9 MB codec survived only inside an Actions artifact
+  expiring 2026-09-20, and the hand rescue that followed copied the DEAD live
+  branch instead, publishing a 172-record file that stopped at step 142,000 and
+  looked complete. Every daily-arm training is in this class by construction.
+  The fix is a workflow change (a PAT secret on those two steps, or an
+  incremental archive that runs before the token ages out); until it lands,
+  harvest every long run by hand and never read a green archive step as evidence
+  that anything was archived. See
+  [E-043f · #419 §8](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043f).
+- **An eval-only ladder with `head_probe: "true"` over the finished
+  no-longitude-holdout codecs** — #416's monthly f3 codec (E-043a §4(c)), #415's
+  pentad codec (arrives with E-044's ladder) and **#419's daily codec**, which is
+  published as `run-419__pixelmae.pt` and needs no retraining. Until each runs,
+  those three arms have only pooled read-outs, which §3 distrusts at pentad and
+  daily cadence — so E-043f's apparent null is provisional on an instrument this
+  programme does not trust.
 - **The parameter-bottleneck question** — needs a from-scratch run at larger
   width; deliberately deferred.

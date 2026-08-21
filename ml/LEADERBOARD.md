@@ -590,6 +590,23 @@ that.
 
 ## Provenance only (not rankable)
 
+- **#419 (E-043f, the first DAILY codec to finish)** — 37.976M, 512x12,
+  d_z 32, patch 1, `family5_na025_daily` (C 39, T 15,706), 200,000 x 512,
+  no longitude holdout, 2026-08-21. **Not rankable, twice over.** Its
+  k-fold RAPID r is **0.612 [0.563, 0.659]** on n = 7,290 DAILY samples
+  against an in-run wind-only baseline of **0.607** — neither the n nor
+  the baseline is the master table's (~240 monthly samples, wind-only
+  0.531/0.568), so the number cannot be placed beside those rows; and
+  `ml/CLAUDE.md` §3 distrusts pooled read-outs at this cadence, which is
+  the only kind this run has (`head_probe: "false"`, no
+  `probe_head.json`). chan% +28.4 is within a channel set no other row
+  shares (house rule 5). Dip capture **25.6%**. Recorded here so the run
+  exists on this page without being ranked from it; the entry that can
+  be read is
+  [E-043f · #419](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043f),
+  and the codec is published as `run-419__pixelmae.pt`, so an eval-only
+  ladder with `head_probe: "true"` would produce a rankable number
+  without retraining.
 - **xxlarge stage-2 attempt** (2026-08-06, in-sandbox): d320×6 (7.4 M
   params), the rung above xlarge on the width×depth curve — zero steps
   in 8 h on the sandbox's 2 CPU cores; killed. Needs the training
