@@ -365,6 +365,44 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
     --d-model "${RECIPE_TEMPORAL_D_MODEL:-$IN_TEMPORAL_D_MODEL}" \
     --layers "${RECIPE_TEMPORAL_LAYERS:-$IN_TEMPORAL_LAYERS}" &
   S2_PID=$!
+  # THE MARKER IS PER JOB, NOT PER CONTAINER. Its only job is "do not
+  # re-upload the same Z every ten minutes inside THIS job". Keyed to a fixed
+  # path it quietly meant something much larger — "never push again on this
+  # box" — because /tmp persists in the long-lived self-hosted runner
+  # container ACROSS JOBS and nothing ever clears it: scripts/disk_hygiene.sh
+  # tier 0 removes /opt/runner/_diag/*.log and /opt/runner/_work/_temp/* and
+  # touches nothing under /tmp.
+  #
+  # Measured 2026-08-21, the in-training push had stopped firing altogether.
+  # #414 (E-035 xl233 seed-1 roll-forward) ran 14 h of stage 2 on
+  # gpu-box-30257785 with this loop demonstrably alive — live metrics
+  # published every 5 min, a head snapshot every 30 — and the string "embed
+  # cache" appears exactly ONCE in its whole log, at 07:07:29Z, AFTER
+  # "saved .../temporal.pt": that is the post-training push at the bottom of
+  # this block, never the loop. #396 (E-035 seed-0 roll-forward) ran ~15.5 h
+  # on gpu-box-45731106 with the loop alive and its pull succeeding ("embed
+  # cache already local and valid") and produced ZERO push lines.
+  #
+  # The cost is the artefact sitting single-copy for the length of a run:
+  # #427's (E-044 pentad stage-2) Z is 17.43 GB and 8.9 h of a 4090 —
+  # ~10.14 s/month x 3142 months, from ml-live-423's own progress records —
+  # and without this it would not be published until the run's 200,000 steps
+  # end. ml/CLAUDE.md §5.20, verbatim: publish a shared artefact when it
+  # EXISTS, not when the job ends.
+  #
+  # ${GITHUB_RUN_ID} is the key, and the fallback is $$ — this shell's pid —
+  # rather than the bare path, because the bare path IS the bug: an unset run
+  # id would silently restore a container-wide marker and nothing would look
+  # wrong. A per-process key can only fail in the harmless direction (one
+  # extra push, which embed_cache_sync.py no-ops), and that is the direction
+  # a fallback has to fail in.
+  EMBED_MARK="/tmp/embed-cache-pushed.${GITHUB_RUN_ID:-$$}"
+  # The legacy container-wide marker, left behind on every box that has ever
+  # run this step. Nothing reads it any more; remove it so a future reader
+  # digging through /tmp is not told a story that stopped being true here.
+  rm -f /tmp/embed-cache-pushed
+  EMBED_STATE=""   # the last state ANNOUNCED, so a standing condition costs
+                   # one line in the log instead of one line every ten minutes
   TICK=0
   while kill -0 $S2_PID 2>/dev/null; do
     sleep 30
@@ -390,15 +428,36 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
     # then start the second" would not have helped: there was
     # nothing to wait FOR until the first run ended.
     # Retry every ~10 min until it actually lands. The marker is
-    # written only on a REAL success — the previous version marked it
-    # done whatever happened, because the script exited 0 on failure.
-    if [ ! -f /tmp/embed-cache-pushed ] && \
-       [ $((TICK % 20)) -eq 0 ] && \
-       ls /opt/earth-cache/Z_*.npy >/dev/null 2>&1; then
-      if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR"; then
-        touch /tmp/embed-cache-pushed
+    # written only on a REAL success — an early version marked it done
+    # whatever happened, because the script exited 0 on failure.
+    #
+    # AND SAY WHICH BRANCH RAN (ml/CLAUDE.md §4.6/§4.7). The silent skip is
+    # what made the bug above cost three runs' logs to find: a log with no
+    # "embed cache" line in it is equally consistent with "the loop never
+    # reached the push", "there was nothing to push yet" and "another job's
+    # marker suppressed it", and only the third was true. Every branch prints
+    # now, and $EMBED_STATE keeps a standing condition to one line.
+    if [ $((TICK % 20)) -eq 0 ]; then
+      if [ -f "$EMBED_MARK" ]; then
+        if [ "$EMBED_STATE" != published ]; then
+          echo "embed cache push: already published by this job ($EMBED_MARK) — not re-pushing"
+          EMBED_STATE=published
+        fi
+      elif ! ls /opt/earth-cache/Z_*.npy >/dev/null 2>&1; then
+        if [ "$EMBED_STATE" != waiting ]; then
+          echo "embed cache push: no /opt/earth-cache/Z_*.npy yet at tick ${TICK} (~$((TICK / 2)) min in) — nothing to publish; checking again every ~10 min"
+          EMBED_STATE=waiting
+        fi
       else
-        echo "::warning::embed cache push failed — retrying in ~10 min"
+        echo "embed cache push: STARTING in-training at tick ${TICK} (~$((TICK / 2)) min in) — $(du -h /opt/earth-cache/Z_*.npy 2>/dev/null | tr '\n' ' ')"
+        if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR"; then
+          touch "$EMBED_MARK"
+          echo "embed cache push: DONE in-training — the release has it now, hours before this job ends"
+          EMBED_STATE=published
+        else
+          echo "::warning::embed cache push: FAILED in-training at tick ${TICK} — no marker written, retrying in ~10 min"
+          EMBED_STATE=failed
+        fi
       fi
     fi
   done
@@ -425,8 +484,20 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
   # get published", which costs the NEXT run some GPU and costs this
   # one's results nothing. It must not be able to take the numbers
   # with it.
-  python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
-    || echo "::warning::embed cache push failed — the probe ladder continues"
+  #
+  # IT STAYS, and it stays UNCONDITIONAL — it is the net under the loop
+  # above. If the in-training push failed (no room, no token, a 500 from
+  # uploads.github.com) the marker was never written and this is the only
+  # thing left that publishes the cache. It costs nothing when the loop
+  # already succeeded: ml/embed_cache_sync.py:210-216 no-ops when every
+  # chunk name is present in the release AND their sizes sum to the file on
+  # disk, printing "already published and complete" and returning 0.
+  echo 'embed cache push: STARTING post-training (unconditional, after wait $S2_PID)'
+  if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR"; then
+    echo "embed cache push: DONE post-training — the line above says which it was: uploaded here, or already complete from the in-training push"
+  else
+    echo "::warning::embed cache push: FAILED post-training — the probe ladder continues"
+  fi
   # Publish so the stage-2 curve appears on the status page WHILE
   # the ladder finishes, not only after the archive step at the very
   # end. temporal.py writes into the same metrics.jsonl, but nothing
