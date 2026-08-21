@@ -44,6 +44,224 @@ low-pass).
 
 ---
 
+<a id="fleet-2026-08-21-0740"></a>
+## OPERATIONS · The fleet at 2026-08-21 07:40Z — two boxes, two jobs, one box stopped, burn down 25%
+
+Not an experiment. Recorded because it sets what the next check-in inherits (§0e: the
+arithmetic, early — nothing here was scaled down to fit).
+
+| box | $/h | job | state at 07:40Z |
+|---|---|---|---|
+| `gpu-box-31479844` (vast 47724559, Quebec) | 0.294 | **#426** (E-043b-SEED1) | stage 2 step **80,000 / 200,000**, `val_zmse` **0.07085** / persistence 3.09512 = ratio **0.02289**, grad norm **0.3003**, amp 0.9913 — monotone, healthy, worst norm all run 2.99. 0.2776 s/step ⇒ ends **~16:50Z** |
+| `gpu-box-39184683` (vast 47724565, Hong Kong) | 0.308 | **#427** (E-044b) | stage 2 step **2,000 / 200,000** at 0.258 s/step ⇒ ends **~00:30Z on the 22nd**. **The 8.5 h embed was REUSED — zero embedding records.** `grad_clip` 128.0, `clip_frac` 0.0245, `grad_norm_max` **452.0** |
+| `gpu-box-46996216` (vast 47913006, Austria) | — | — | **STOPPED at 05:53Z**, not destroyed. #419 finished successfully at 05:22:58Z and had been burning idle for 30 min. Its 213 GB of daily tensor is intact on the disk |
+
+**Money.** Credit **$35.56**, burn **$0.9374/h** ⇒ runway **37.9 h**, i.e. to **~21:30Z on
+2026-08-22**. The burn decomposes as **$0.6022/h of compute on the two running boxes** and
+**$0.3352/h of storage on ten STOPPED ones** — stopping #419's box cut the total from
+$1.2574/h, a **25% reduction**, and **36% of what remains still buys no computation at all**.
+The stopped-box sweep is now the largest single lever on this programme's burn and it has
+been deferred twice.
+
+| what is outstanding | needs | finishes |
+|---|---|---|
+| **#427** (E-044b) | ~18–19 h, ~**$5.7** | ~00:30Z on 2026-08-22 |
+| **#426** (E-043b-SEED1) | ~9.3 h, ~**$2.7** | ~16:50Z on 2026-08-21 |
+| **#426**'s headpub + roll (§5 of that entry) | ~3.7 h, ~**$1.1** | ~21:00Z on 2026-08-21 |
+| the pentad `sroll:` over #427's head | ~14 h, ~$4.3 | ~15:00Z on 2026-08-22 |
+
+**Everything fits inside the runway**, the pentad sroll with ~6 h to spare.
+
+**TWO SINGLE POINTS OF FAILURE, both on `gpu-box-39184683` (vast 47724565), both fixable by
+publishing.** (1) The **16.24 GiB pentad Z** — 8.5 h of GPU — exists on that one rented disk
+and nowhere else; it was never pushed to `embed-cache-v1`. (2)
+**`family4_na025_pentad_r2.npz`** (4.5 GB) is published nowhere and that box is the only one
+that has ever built it, so any other box reinstates the **E-008 box effect** (0.041 on the
+head k-fold at a fixed seed). **DO NOT DESTROY 47724565.** Publishing both is the work that
+would make the seed-1 arm and the §7a sroll dispatchable anywhere.
+
+**A THIRD, newly found and structural: a job over 24 hours cannot archive its own results.**
+See the #419 note in `claude/E044-pentad-stage2-spec.md` §0f. **#419 ran 35.96 h**, its
+`Archive metrics` and `Upload probe results` steps both failed on an expired `GITHUB_TOKEN`
+(`401 Bad credentials`, `Authentication failed`) and **both reported success** — §4.6
+exactly. Both fallbacks held (the live branch was kept rather than deleted, the artifact
+uploaded), and `run-419.jsonl` and `probes-419.json` were **rescued by hand into
+`ml-metrics`** at ~06:00Z on the 21st. The durable fix is a workflow change: those steps need
+a PAT rather than the job token on any job that can exceed 24 h. Until then, **harvest every
+long run by hand and never read a green archive step as evidence** that anything was
+archived.
+
+**#419's own result, recorded here because its entry cannot rely on its artifacts.**
+E-043f, the fresh 38.0M **daily** codec (`f5-40M-nolonhold`, `family5_na025_daily`, T
+15,706), completed **successfully** — Train **33.11 h**, Probes **2.70 h**, total 35.96 h. It
+was slow, never wedged. **`probe_head.json` is ABSENT from its bundle** — the fourth run in
+this wave to lose its head number — so the daily codec's **unpooled** verdict does not exist
+and cannot be quoted. Its pooled k-fold, written as the pooled number §3 says to distrust at
+this cadence: rapid `r_kfold_deseas` **0.612** [0.563, 0.659] n 7,290, `rmse_sv` 3.26,
+against a **wind-only baseline of 0.607** [0.547, 0.664] on the same folds — i.e. at daily
+cadence the codec and the wind-stress ridge are indistinguishable on this read-out. `fc`
+0.364 [0.287, 0.432] n 13,613 against a wind-only 0.110, where it is clearly ahead.
+`dip_check` r_out_of_fold 0.579, dip captured **25.6%** (against #415's pentad 31.8%).
+
+---
+
+<a id="e-044b"></a>
+## E-044b · #427 — DISPATCHED 2026-08-21 05:54:12Z. The same arm as #423 with gradient clipping, and the first log window already shows what #423 could not
+
+Written **at dispatch**, hypothesis and falsifier first (§1); the first-minutes verification
+below was appended as each item landed, not rewritten afterwards. Governed by
+`claude/E044-pentad-stage2-spec.md` (§0a–§0f are new and carry the diagnosis).
+Code: `head_sha` **aced980**.
+
+**E-044b · Trains a 206.5M xl144+znoise stage-2 head on the PENTAD tensor over #415's frozen
+no-longitude-holdout pentad codec, with the stage-2 training pool open to every longitude and
+years-only holdout, WITH GRADIENT CLIPPING AT 128 — the one field changed from #423, which
+ran this exact configuration and diverged (re-dispatch of #423) · params 206.5M head over a
+frozen 37.976M codec · stage `stage-2` · data `family4_na025_pentad_r2` (C 40, T 3,142,
+sha256 `37e146384b6f…`) · arch head 1024×16, K 24, stencil 145, ring
+`spiral:111,4444,0.71,0.5`, znoise 0.7, **grad-clip 128**; codec 512×12, 4 heads, d_dec 256,
+d_z 32, patch 1 · steps×batch stage-1 **0** (resumes at its own recorded step 197,428 —
+nothing trains) / stage-2 **200,000 × 256** · resume `run-415`.**
+
+[#427 (E-044b pentad xl144+znoise stage-2 head, with grad clipping) — the live status page](https://blauewelt.github.io/earth/status.html#run-427)
+
+[#427 — the CI log](https://github.com/blauewelt/earth/actions/runs/32452280284)
+
+[E-044 · #423, the run this replaces, and the full diagnosis](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-044-423-diverged)
+
+[E-044 · the dispatch spec (project doc)](https://blauewelt.github.io/earth/docs.html?f=claude/E044-pentad-stage2-spec.md)
+
+#### 1 · Hypothesis and falsifier
+
+**ONE FIELD CHANGED.** `--grad-clip 128` appended to the window's `sched:` tail. LR (1e-3),
+warmup (2,000), schedule (expdecay, halflife 40k), seed (0), znoise (0.7), stencil, ring and
+every architecture field are identical to #423, so this is a **one-variable test against
+#423's own trace** rather than a new experiment.
+
+**HYPOTHESIS.** #423's divergence was the missing clip. With it the arm trains to 200,000
+steps with the pre-clip grad norm in the 8-ish band and `val_zmse`/persistence descending
+past #423's best of 0.5404.
+
+**FALSIFIER, and it is sharp precisely because only one field moved.** If the run still
+leaves the healthy band — `stage2_grad_norm_max` climbing decade by decade,
+`stage2_grad_clip_frac` rising off 0 toward 1, `stage2_val_zmse` never beating 11.58984 —
+then clipping was **not** the mechanism, and the remaining candidates are the LR at pentad
+and the under-scaled znoise, **in that order**. A **separate** falsifier applies to the
+THRESHOLD rather than the mechanism: a `clip_frac` that saturates at 1.0 would mean 128 is
+setting the effective learning rate instead of the schedule, and the number is wrong even if
+the idea is right.
+
+**WHAT THIS RUN CANNOT ANSWER, said at dispatch.** It cannot separate "clipping fixed it"
+from "the run got a luckier draw", at n = 1 — what it can do is show the mechanism operating,
+which the instrumentation below now does directly. And it says nothing about whether znoise
+0.7 is the right level at pentad: §0a(2) of the spec shows it is **0.1512 ×** this z-space's
+own one-step scale where E-036/E-037 measured **0.3979 ×**, so this arm carries that
+finding's NUMBER and not its INTERVENTION. "znoise at pentad" remains an OPEN axis with no
+measurement at all.
+
+#### 2 · First-minutes verification — MEASURED, in order (§2)
+
+| # | item | reading | |
+|---|---|---|---|
+| 1 | `runner_name` | `gpu-box-39184683` | **PASS** |
+| 2 | recipe resolved | `recipe: xl144-zn-pentad-nolonhold` in the config record | **PASS** |
+| 3 | **stage 1 trains nothing** | `config.steps` **197428** = `resumed.at_step` **197428**, `from` `run-415.pt` | **PASS** |
+| 4 | Train step wall | **0.23 h** (13.8 min), no re-fit | **PASS** |
+| **0** | **the embed did NOT restart** | **ZERO `{"embedding": …}` records on `ml-live-427`.** `stage2_config` appeared 67 min after the `Probes` step began, which is the tensor load + anomaly transform + probe ladder and no embed at all | **PASS — 8.5 h and ~$2.6 saved** |
+| 8 | the Z is the SAME Z | `val_persistence` **21.44622** — identical to #423 to five decimals, on the same 4,096 monitor windows | **PASS** |
+| 10 | head size | `params_M` **206.536** (= 206,535,712), `d_z` **32** | **PASS** |
+| 6 | window pool | `train_windows` **251,337,502** | **PASS** |
+| 5 | holdout | `codec_holdout_lon` `0,0`, `train_lon_hold` `none` | **PASS** |
+| **13** | **clipping is ON** | `stage2_config.grad_clip` **128.0** | **PASS** |
+| **15** | znoise is recorded at last | `input_znoise` **0.7**, `input_znoise_rel_pers` **0.15116**, `input_znoise_rel_zrms` **0.13518**, `z_rms` **5.17825** | **PASS** |
+| 11 | LR non-zero | `stage2_lr` **9.9998e-4** at step 2,000 | **PASS** |
+| 12 | step rate | **0.258 s/step** (516.9 s / 2,000) — better than the 0.27 ESTIMATE and than #423's probe-inclusive 0.371 | **PASS** |
+
+**The `--grad-clip` flag reaches the trainer through the same route `--input-znoise` does:**
+`sched:` goes last, and `scripts/probes_run.sh` builds
+`SCHED="--lr-schedule ${WINDOW##*sched:}"` and word-splits it unquoted into the
+`python -u ml/temporal.py` line. Verified by resolving the recipe locally before dispatch,
+and confirmed after it by `grad_clip: 128.0` appearing in `stage2_config`.
+
+#### 3 · THE FIRST LOG WINDOW ALREADY SETTLES THE DIAGNOSIS
+
+```
+{"stage2_step": 2000, "stage2_zmse": 6.40817, "stage2_val_zmse": 11.31759,
+ "stage2_amp": 0.8235, "stage2_grad_norm": 8.7887, "stage2_lr": 0.0009999826714706267,
+ "stage2_wall_s": 516.9, "stage2_grad_clip": 128.0, "stage2_grad_norm_max": 452.0087,
+ "stage2_grad_clip_frac": 0.0245, "stage2_grad_nonfinite": 0}
+```
+
+**Read `grad_norm_max` against `grad_norm`.** The sampled pre-clip norm is **8.7887** — the
+number #423 also published at this step (8.2372), and the number every check-in read as
+healthy. The **worst step in the same 2,000-step window was 452.0087**, and **2.45% of the
+window's steps — about 49 of them — exceeded 128 and were clipped.**
+
+**So #423 was never in a healthy regime.** It was drawing gradients fifty times its own
+sampled norm from step one, at a rate of one step in forty, and **the one-step-in-2,000
+sampling was structurally blind to every one of them**. This is §4.10's question — *what
+would look identical whether this works or fails?* — answered on the first record the new
+instrumentation ever produced. The quantity that distinguishes the stories is not the grad
+norm; it is the grad norm's **tail**, and nothing was measuring it.
+
+It also confirms the mechanism claimed in the diagnosis rather than merely being consistent
+with it: a window pool of 251M pentad windows produces rare, enormous gradients at a
+measurable rate, and the only thing standing between that rate and an AdamW second moment is
+a clip.
+
+**And the threshold is in the right regime.** `clip_frac` 0.0245 is neither 0 (which would
+mean 128 never binds and buys nothing) nor near 1 (which would mean the clip, not the
+schedule, is setting the learning rate — the separate falsifier in §1). It bites the tail
+and leaves the bulk alone, which is what it was sized to do.
+
+**Early comparison against #423 at matched steps**, first reading, one seed:
+
+| step | #423 val/persistence | #427 val/persistence | #423 grad norm | #427 grad norm (max in window) |
+|---|---|---|---|---|
+| 2,000 | 0.5404 | **0.5277** | 8.2372 | 8.7887 (**452.0**) |
+| 4,000 | 0.5509 | — | 8.2483 | — |
+| 6,000 | **1.0453** | — | **787.21** | — |
+
+#427 is already marginally below #423's best at the same step. **Step 6,000 is the first real
+test**: that is where #423 left the band and never returned.
+
+#### 4 · The z-space, measured for the first time
+
+`z_rms` **5.17825** is the first absolute measurement of a stage-2 z-space in this
+programme's history — no archived run carries the field, which is why #423's diagnosis had to
+derive the pentad scale indirectly from the codecs' stage-1 `z_mse_persistence` records.
+Beside it, `sqrt(val_persistence)` = **4.6310**.
+
+**The ratio is 0.894, and it is worth staring at.** For a stationary series
+E[(z_t − z_{t+1})²] = 2σ²(1 − ρ), so a one-step change 0.894 × the size of the field itself
+implies a **five-day lag-1 autocorrelation of ρ ≈ 0.60**. The pentad z-space substantially
+decorrelates in five days. That, and not any defect of the head, is why the pentad headline
+ratio sits near 0.5 where the monthly arm reaches 0.032 — **the two numbers are answers to
+different questions and must never be quoted as a ladder.** The monthly counterpart of
+`z_rms` does not exist anywhere in the archive; the field now exists, so the next monthly
+stage-2 run will produce it and the comparison can finally be made properly.
+
+`input_znoise_rel_pers` **0.15116** confirms, from the run's own data, the **0.1512** that
+was derived indirectly before dispatch.
+
+#### 5 · Budget and the thing that will bite at the end
+
+| | |
+|---|---|
+| stage-2, 200,000 × 0.258 s/step | **14.3 h** |
+| in-training transport probes (10 × 3,119 forwards) + eval-3 | ~2.5 h |
+| already spent (tensor load, anomaly transform, probe ladder, stage-1 no-op) | 1.5 h |
+| **total job** | **≈ 18–19 h from 05:54Z ⇒ ends ~00:30Z on 2026-08-22** |
+| cost at $0.308/h | **≈ $5.7** |
+
+`job_timeout: 2400` (40 h) has ample margin. **§0f of the spec does not**: a GitHub Actions
+`GITHUB_TOKEN` expires at 24 hours, #419 lost both its archive steps to exactly that while
+they reported success, and #427 at ~19 h is inside the ceiling but not comfortably.
+**Harvest `ml-live-427` and its artifacts by hand regardless, and do not read a green
+`Archive metrics` step as evidence that anything was archived (§0.2).**
+
+---
+
 <a id="e-044-423-diverged"></a>
 ## E-044 · #423 DIVERGED AND WAS CANCELLED — stage 2 had no gradient clipping, and nothing was watching the norm it published
 
