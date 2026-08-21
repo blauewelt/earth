@@ -1,6 +1,21 @@
 #!/usr/bin/env python3
 """Year-blocked k-fold transport probe — RAPID plus every truth series.
 
+THIS IS THE LEGACY POOLED INSTRUMENT (2026-08-21). Its ridge reads
+`Z.mean(1)` over the section and its wind baseline reads
+`np.nanmean(tau, axis=1)` over the same one, so every block it writes is
+labelled `pooled-ridge` / `pooled-wind-only`. Geostrophic transport at
+26.5N is the east-minus-west contrast ACROSS the section and that mean
+annihilates it: measured on the run-62 cache (ml/project_amoc.py), z
+correlates r 0.99 at one cell, 0.88 at five and 0.35 at eighty, so the
+section mean averages ~2.5 effective independent pixels of 265.
+
+It is NOT deleted and it is not deprecated. It is the comparability bridge
+to a 107-run k-fold column, a 98-run stage-2 column, a 120-run K-sweep
+column and a 107-run dip column, and it stays computed and archived under
+clearly-marked legacy keys. It is never the VERDICT — that is
+ml/probe_head.py, unpooled, with its own unpooled bars (ml/CLAUDE.md §3).
+
 Since 2026-08-07 this is MULTI-TARGET (lever 1): each series in TARGETS
 (RAPID 26.5N, Florida Current cable 27N, MOVE 16N, OSNAP subpolar, SAMBA
 34.5S — the latter fetched by fetch_truth.py) is probed from its own zonal
@@ -238,6 +253,54 @@ def _dump(obj, path):
         fh.write(txt)
 
 
+def target_series(d, spec, moy, month_of_ym):
+    """-> (tidx time-indices, deseasonalised values) or None.
+
+    MODULE LEVEL, not a closure inside main(), because ml/probe_head.py needs
+    the SAME label decoding to give a target an unpooled read-out. Two copies
+    of this would be two ways of deciding which rows a target has, and the
+    pooled and unpooled numbers would then be scored on different months
+    while looking directly comparable — the exact failure both of them exist
+    to expose. Its captured names (`d`, `moy`, `month_of_ym`) became
+    arguments; nothing else moved.
+    """
+    if spec["key"] == "rapid":
+        arr = d["rapid"]
+        tidx = arr[:, 0].astype(int)
+        vals = arr[:, 1].copy()
+    else:
+        if spec["key"] not in d:
+            return None
+        arr = d[spec["key"]]
+        if "bin_index" in d:
+            # Families 4/5: truth_* arrays are (AXIS ROW, value) pairs,
+            # written onto the tensor's own axis by build_family4's
+            # truth_pentad(). Run #390 measured what happens when this
+            # branch is missing: the ym-decode below matched 0 of 2,553
+            # FC pentad labels (row indices against a YYYYMM dict), fell
+            # under the 48 floor and returned None — so the SECOND
+            # LARGEST label series was silently absent from the k-fold,
+            # with nothing in the log to say so.
+            tidx = arr[:, 0].astype(int)
+            vals = arr[:, 1].astype(float).copy()
+        else:
+            # Families 2/3: (YYYYMM, value) monthly pairs.
+            keep = [(month_of_ym[int(ym)], v) for ym, v in arr
+                    if int(ym) in month_of_ym]
+            if len(keep) < 48:
+                return None
+            tidx = np.array([k[0] for k in keep], dtype=int)
+            vals = np.array([k[1] for k in keep], dtype=float)
+        if len(tidx) < 48:
+            return None
+    tmoy = moy[tidx]
+    # deseasonalise with the OVERALL monthly climatology (every month is
+    # test in some fold; per-fold climatologies differ by <0.1 Sv and
+    # would leak nothing either way — chosen for simplicity, stated here).
+    clim = np.array([vals[tmoy == m].mean() for m in range(12)])
+    return tidx, vals - clim[tmoy]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", nargs="+", default=["actions"])
@@ -259,44 +322,6 @@ def main():
     yr = np.array([int(m[:4]) for m in months])
     lats, lons = d["lats"], d["lons"]
     month_of_ym = {int(m[:4]) * 100 + int(m[5:7]): i for i, m in enumerate(months)}
-
-    def target_series(spec):
-        """-> (tidx month-indices, deseasonalised values) or None."""
-        if spec["key"] == "rapid":
-            arr = d["rapid"]
-            tidx = arr[:, 0].astype(int)
-            vals = arr[:, 1].copy()
-        else:
-            if spec["key"] not in d:
-                return None
-            arr = d[spec["key"]]
-            if "bin_index" in d:
-                # Families 4/5: truth_* arrays are (AXIS ROW, value) pairs,
-                # written onto the tensor's own axis by build_family4's
-                # truth_pentad(). Run #390 measured what happens when this
-                # branch is missing: the ym-decode below matched 0 of 2,553
-                # FC pentad labels (row indices against a YYYYMM dict), fell
-                # under the 48 floor and returned None — so the SECOND
-                # LARGEST label series was silently absent from the k-fold,
-                # with nothing in the log to say so.
-                tidx = arr[:, 0].astype(int)
-                vals = arr[:, 1].astype(float).copy()
-            else:
-                # Families 2/3: (YYYYMM, value) monthly pairs.
-                keep = [(month_of_ym[int(ym)], v) for ym, v in arr
-                        if int(ym) in month_of_ym]
-                if len(keep) < 48:
-                    return None
-                tidx = np.array([k[0] for k in keep], dtype=int)
-                vals = np.array([k[1] for k in keep], dtype=float)
-            if len(tidx) < 48:
-                return None
-        tmoy = moy[tidx]
-        # deseasonalise with the OVERALL monthly climatology (every month is
-        # test in some fold; per-fold climatologies differ by <0.1 Sv and
-        # would leak nothing either way — chosen for simplicity, stated here).
-        clim = np.array([vals[tmoy == m].mean() for m in range(12)])
-        return tidx, vals - clim[tmoy]
 
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
     # HOIST the raw tensor's two uses out of the loops and free it. Indexing
@@ -372,7 +397,7 @@ def main():
         gc.collect()
         out[run] = {}
         for tname, spec in TARGETS.items():
-            ser = target_series(spec)
+            ser = target_series(d, spec, moy, month_of_ym)
             if ser is None:
                 continue
             sec_y, sec_sel = section_of(lats, lons, ys, xs,
@@ -406,7 +431,18 @@ def main():
                               # scripts/paired_probe.py reads it as
                               # <file>#<run>/<target>/wind_only_baseline and
                               # inherits target_sv/years from the block above.
-                              "probe": "wind-only", "pred": _arr(predw)}
+                              # BOTH SIDES OF A COMPARISON SWITCH TOGETHER
+                              # (ml/CLAUDE.md §3, 2026-08-21). The features
+                              # here are np.nanmean(tau, axis=1) over the same
+                              # section the codec ridge pools — so this bar is
+                              # POOLED, and pairing an UNPOOLED head against it
+                              # would manufacture a result out of the read-out
+                              # rather than measure one. The label says so in
+                              # the file, where a table generator can see it.
+                              # The matched unpooled bar is
+                              # ml/probe_head.py --raw --wind-only.
+                              "probe": "pooled-wind-only",
+                              "pred": _arr(predw)}
             # THE OUT-OF-FOLD PREDICTIONS ARE KEPT, not just their summary
             # (2026-08-19). Every key above is written exactly as before; the
             # three arrays are an addition.

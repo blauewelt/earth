@@ -82,32 +82,65 @@ RAPID months — r differences under ~0.1 are noise at this n.
 ## Master table — every codec run, one table
 
 chan% is comparable only WITHIN one channel set (its persistence baseline
-moves when channels change — house rule 5); the cross-run columns are the
-year-blocked k-fold RAPID r and RMSE in Sv. Dip = share of the 2009-10
-collapse amplitude captured out-of-fold. Wind-stress-only ridge baseline
-(no embedding): r 0.531, the line every codec must beat.
+moves when channels change — house rule 5). Dip = share of the 2009-10
+collapse amplitude captured out-of-fold.
 
-| run | window | C | patch | d_z | steps | chan% ↑† | codec k-fold RAPID r ↑ [95% CI] | RMSE Sv ↓ | dip ↑ | status |
-|---|---|---|---|---|---|---|---|---|---|---|
-| pilot4_anom | NA | 4 | 1 | 32 | 8k | +29.3 | — | — | — | done |
-| dz8 (#2) | NA | 12 | 1 | 8 | 30k | +28.6 | 0.111 [0.01, 0.20] | — | — | done |
-| dz16 (#3) | NA | 12 | 1 | 16 | 30k | +30.3 | 0.151 [0.01, 0.28] | — | — | done |
-| actions (#1) | NA | 12 | 1 | 32 | 30k | +30.5 | 0.182 [0.05, 0.31] | — | — | done |
-| dz64 (#4) | NA | 12 | 1 | 64 | 30k | +30.6 | 0.308 [0.13, 0.46] | — | 16% | done |
-| dz128 (#5) | NA | 12 | 1 | 128 | 30k | +30.2 | 0.166 [0.072, 0.295] | — | — | done |
-| wind14 (#6) | NA | 14 | 1 | 64 | 30k | +35.6 | 0.604 [0.474, 0.720] | — | 50% | done |
-| global14 (#8) | global | 14 | 1 | 64 | 30k | +30.6 | **0.602** [0.461, 0.728] | 2.23 | 50% | done |
-| global14b (#11 codec) | global | 14 | 1 | 64 | 30k | +30.9 | 0.556 [0.434, 0.676] | 2.34 | — | replication |
-| global15sst (#10) | global | 15 | 1 | 64 | 30k | +30.8 | 0.582 [0.43, 0.71] | 2.27 | 47% | done |
-| patch24_40k (#18) | global | 24 | **3** | 64 | 40k | — | 0.543 [0.428, 0.659] | 2.36 | 27% | done |
-| pixel25_40k (#17) | global | 25 | 1 | 64 | 40k | — | 0.536 [0.378, 0.683] | 2.35 | **59%** | done |
-| pixel24 (#21/#22) | global | 24 | 1 | 64 | 40k/30k | — | … | … | … | queued (controls) |
-| patch24_30k (#19r) | global | 24 | 3 | 64 | 30k | — | … | … | … | queued |
-| patch25_30k (#20) | global | 25 | 3 | 64 | 30k | — | … | … | … | running |
-| patch24_40k_seed2 (#43) | global | 24 | 3 | 64 | 40k | — | 0.531 [0.404, 0.654] | 2.39 | 27% | done |
-| **patch24_10M_60k** (#40) | global | 24 | 3 | 64 | 60k | — | **0.578** [0.451, 0.695] | 2.34 | 26% | done (10.26M params) |
-| f3_pilot_40k (#44) | NA 0.25° | 39 | 3 | 64 | 40k | — | 0.620 [0.484, 0.741] | 2.25 | 46% | done (0.92M) |
-| **f3_anchor41M** (#62) | NA 0.25° | 39 | 3 | 64 | 60k | +31.5 | **0.631** [0.513, 0.732] | 2.16 | **51%** | done (40.7M) |
+**READ THE FIRST NUMERIC COLUMN, NOT THE SECOND (2026-08-21).** The headline
+is now `probe_head`'s **UNPOOLED** k-fold — one learned query attending over
+the section's individual pixels — and the column beside it, `legacy_pooled
+k-fold RAPID r`, is `probe_kfold`'s section-mean ridge, retained as the
+comparability bridge to this archive and **never as a verdict**. Chris,
+2026-08-21: *"we should not do pooled evals anywhere."* The justification is
+mechanical: geostrophic transport at 26.5°N is the east-minus-west contrast
+ACROSS the section, and `ml/project_amoc.py` measures z along that line
+correlating r 0.99 at one cell, 0.88 at five and 0.35 at eighty — so the
+section mean averages **~2.5 effective independent pixels of 265**.
+
+**Every row below has `n/a` in the unpooled column, and that is the honest
+entry.** `head_probe` defaulted to `"false"` until 2026-08-21, so `probe_head`
+produced output in **3 of 183** archived bundles and none of them is one of
+these codecs. The pooled numbers have **not** been copied across to fill the
+gap: a blank says "not measured", a back-filled pooled number would say
+"measured, unpooled", and only one of those is true. Rows fill in as runs land
+under the new default; `python3 ml/make_table.py --markdown` reads
+`probe_head.json` and regenerates this table with the column populated.
+
+**Both bars are unpooled too, and they must stay matched.** The wind-only
+line quoted below — **r 0.531**, the line every codec had to beat — is
+`np.nanmean(tau, axis=1)` over the same section, i.e. POOLED. It is the bar
+for the `legacy_pooled` column and for nothing else. The matched bar for the
+unpooled column is `ml/probe_head.py --raw --wind-only`, fitted in the same
+loop as the head since 2026-08-21 (`scripts/probes_run.sh`). Comparing an
+unpooled codec against a pooled bar measures the read-out and reports it as
+the codec — E-038 is the worked example: pooled ridge 0.660 and unpooled head
+0.691 straddle a pooled wind bar of 0.670, so *which side of the bar the codec
+lands on is decided by the read-out.* (That +0.031 is a **two-interval**
+comparison, which `ml/CLAUDE.md` §3 forbids as a probe-vs-probe test, and it
+could not be re-run as a paired one — no archived `probe_kfold.json` carries
+`pred`/`target_sv`/`years`. It illustrates the mechanism; it is not evidence
+for the switch, which rests on the physics above.)
+
+| run | window | C | patch | d_z | steps | chan% ↑† | **UNPOOLED head RAPID r ↑** [95% CI] | legacy_pooled k-fold RAPID r [95% CI] | legacy RMSE Sv ↓ | dip ↑ | status |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| pilot4_anom | NA | 4 | 1 | 32 | 8k | +29.3 | n/a | — | — | — | done |
+| dz8 (#2) | NA | 12 | 1 | 8 | 30k | +28.6 | n/a | 0.111 [0.01, 0.20] | — | — | done |
+| dz16 (#3) | NA | 12 | 1 | 16 | 30k | +30.3 | n/a | 0.151 [0.01, 0.28] | — | — | done |
+| actions (#1) | NA | 12 | 1 | 32 | 30k | +30.5 | n/a | 0.182 [0.05, 0.31] | — | — | done |
+| dz64 (#4) | NA | 12 | 1 | 64 | 30k | +30.6 | n/a | 0.308 [0.13, 0.46] | — | 16% | done |
+| dz128 (#5) | NA | 12 | 1 | 128 | 30k | +30.2 | n/a | 0.166 [0.072, 0.295] | — | — | done |
+| wind14 (#6) | NA | 14 | 1 | 64 | 30k | +35.6 | n/a | 0.604 [0.474, 0.720] | — | 50% | done |
+| global14 (#8) | global | 14 | 1 | 64 | 30k | +30.6 | n/a | **0.602** [0.461, 0.728] | 2.23 | 50% | done |
+| global14b (#11 codec) | global | 14 | 1 | 64 | 30k | +30.9 | n/a | 0.556 [0.434, 0.676] | 2.34 | — | replication |
+| global15sst (#10) | global | 15 | 1 | 64 | 30k | +30.8 | n/a | 0.582 [0.43, 0.71] | 2.27 | 47% | done |
+| patch24_40k (#18) | global | 24 | **3** | 64 | 40k | — | n/a | 0.543 [0.428, 0.659] | 2.36 | 27% | done |
+| pixel25_40k (#17) | global | 25 | 1 | 64 | 40k | — | n/a | 0.536 [0.378, 0.683] | 2.35 | **59%** | done |
+| pixel24 (#21/#22) | global | 24 | 1 | 64 | 40k/30k | — | n/a | … | … | … | queued (controls) |
+| patch24_30k (#19r) | global | 24 | 3 | 64 | 30k | — | n/a | … | … | … | queued |
+| patch25_30k (#20) | global | 25 | 3 | 64 | 30k | — | n/a | … | … | … | running |
+| patch24_40k_seed2 (#43) | global | 24 | 3 | 64 | 40k | — | n/a | 0.531 [0.404, 0.654] | 2.39 | 27% | done |
+| **patch24_10M_60k** (#40) | global | 24 | 3 | 64 | 60k | — | n/a | **0.578** [0.451, 0.695] | 2.34 | 26% | done (10.26M params) |
+| f3_pilot_40k (#44) | NA 0.25° | 39 | 3 | 64 | 40k | — | n/a | 0.620 [0.484, 0.741] | 2.25 | 46% | done (0.92M) |
+| **f3_anchor41M** (#62) | NA 0.25° | 39 | 3 | 64 | 60k | +31.5 | n/a | **0.631** [0.513, 0.732] | 2.16 | **51%** | done (40.7M) |
 
 **The 10M codec is the first 24-channel run back above the wind-only
 line (2026-08-08, #40).** Ridge 0.578 vs baseline 0.531 and vs 0.543 /
@@ -232,6 +265,16 @@ free on every future run.
 
 
 ## The classical inputs, re-scored in our protocol (2026-08-08)
+
+**Every row in this section is section-POOLED, and stays that way (2026-08-21).**
+The ladder holds the read-out fixed and varies only what the model is allowed
+to see — wind, cable, cable+wind — which is the entire measurement; making one
+row unpooled would break exactly the thing it measures. So it is internally
+matched and it is **not a bar for `probe_head`'s unpooled numbers**.
+`ml/classical_baseline.py` now writes `"pooled": true` and `probe:
+"pooled-ridge"` into every row so a table generator cannot mix the two by
+accident.
+
 
 `ml/classical_baseline.py` — the answer to "can we produce numbers that
 ARE comparable?". Instead of dressing our number in their conventions,

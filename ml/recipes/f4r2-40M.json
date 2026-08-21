@@ -1,5 +1,5 @@
 {
-  "_description": "E-042 SST arm: the f4-40M configuration on the r2 tensor (SST as channel 40). 512x12, 4 heads, d_dec 256, d_z 32, patch 1 — architecturally identical to f4-40M, which is the point: the only difference between this recipe and that one is the tensor, so the pair is an A/B on SST and nothing else.",
+  "_description": "E-042 SST arm: the f4-40M configuration on the r2 tensor (SST as channel 40). 512x12, 4 heads, d_dec 256, d_z 32, patch 1 — architecturally identical to f4-40M, which is the point: the only difference between this recipe and that one is the tensor, so the pair is an A/B on SST and nothing else. HEAD_PROBE IS 'true' HERE EXPLICITLY (2026-08-21). The workflow's default is now true as well, so this key changes nothing about what runs — it states it, because a recipe is the record of a configuration that was RUN and 'which read-out produced the verdict' is now part of that configuration. ml/CLAUDE.md §3: unpooled is the verdict, the pooled ridge is a labelled legacy comparable, and both sides of a comparison switch together (the head's raw-3x3 and wind-only bars are fitted in the same loop, scripts/probes_run.sh).",
   "_provenance": "#386 measured this configuration on the r1 tensor (loss_rec 0.297 -> 0.212 by step 71,000, probe r 0.564 -> ~0.62, 190 ms/step steady, params 37,975,889). This recipe exists because f4-40M.json PINS \"tensor\": \"family4_na025_pentad\", and every consumption site in ml-train.yml and scripts/probes_run.sh reads ${RECIPE_TENSOR:-$IN_TENSOR} — so the recipe wins and a dispatch that also passes tensor: family4_na025_pentad_r2 would train r1 while provenance.json (raw toJSON(inputs)) recorded r2. E-042's plan section 5 told the reader to do exactly that; a green run reporting SST numbers for a run in which SST never appeared. Overriding a recipe's tensor from the dispatch is not possible, so the r2 arm gets its own recipe rather than an override. Params here are 37,976,465 (+576 over #386: chan_emb +512 and q_chan +64, one row each for channel 40).",
   "tensor": "family4_na025_pentad_r2",
   "d_z": 32,
@@ -9,5 +9,6 @@
   "codec_heads": 4,
   "codec_d_dec": 256,
   "anomaly": "true",
-  "batch": 512
+  "batch": 512,
+  "head_probe": "true"
 }

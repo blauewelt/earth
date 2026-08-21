@@ -24,6 +24,9 @@
 #   IN_TEMPORAL_D_MODEL     ) consulted as ${RECIPE_X:-$IN_X} so a recipe wins
 #   IN_TEMPORAL_LAYERS     /  over the dispatch default and nothing else moves
 #   IN_HEAD_PROBE          /
+#   RECIPE_HEAD_TARGETS    recipe-only (no dispatch input — the list is full
+#                          at 25): comma-separated probe_head targets,
+#                          default "rapid"
 #   GITHUB_RUN_NUMBER      supplied by Actions itself
 #
 # `set -e` reproduces the default `bash -e {0}` the run: block ran under, so
@@ -523,10 +526,35 @@ python -u ml/dip_check.py --run actions --data "$TENSOR" \
 # the SAME head on raw 3x3 tokens: the pair is what separates "the
 # codec knows this" from "any read-out with spatial structure knows
 # this". Matched to a patch codec via --raw-patch.
+#
+# BOTH SIDES OF A COMPARISON SWITCH TOGETHER (ml/CLAUDE.md §3, 2026-08-21).
+# The head is scored against TWO unpooled bars, both fitted here in the same
+# loop as the head itself, because a bar that is dispatched separately is a
+# bar that goes missing: probe_head has produced output in 3 of 183 archived
+# bundles, and every one of those numbers was quoted against probe_kfold's
+# POOLED wind baseline. An unpooled codec beside a pooled bar does not measure
+# the codec, it measures the read-out.
+#   --raw --raw-patch   the 3x3 end-to-end control (is this PRETRAINING or
+#                       merely RECEPTIVE FIELD?)
+#   --raw --wind-only   the wind bar with the section mean removed and nothing
+#                       else changed
+# HEAD_TARGETS is a recipe-only key (declared in ml-train.yml) because the
+# input list is full at 25. Default "rapid" reproduces every head-probe
+# dispatch before today; each extra target is a whole head fit x3, so this is
+# a cost knob and it is opt-in.
 if [ "${RECIPE_HEAD_PROBE:-$IN_HEAD_PROBE}" = "true" ]; then
-  python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1 \
-    || echo "::warning::head probe failed — its raw control still runs"
-  python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1 \
-    --raw --raw-patch \
-    || echo "::warning::raw-3x3 control failed — the head number has no control"
+  for HT in $(echo "${RECIPE_HEAD_TARGETS:-rapid}" | tr ',' ' '); do
+    echo "head probe: target ${HT} (unpooled), with its 3x3 and wind bars"
+    python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1 \
+      --target "$HT" \
+      || echo "::warning::head probe (${HT}) failed — its controls still run"
+    python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1 \
+      --target "$HT" --raw --raw-patch \
+      || echo "::warning::raw-3x3 control (${HT}) failed — the head number for ${HT} has no receptive-field control"
+    python -u ml/probe_head.py --run actions --data "$TENSOR" --K 1 \
+      --target "$HT" --raw --wind-only \
+      || echo "::warning::UNPOOLED WIND BAR (${HT}) failed — the head number for ${HT} has no matched bar, and must NOT be read against probe_kfold's pooled one"
+  done
+else
+  echo "::warning::head_probe is not true — this run produces POOLED numbers only. ml/CLAUDE.md §3 (2026-08-21) says a pooled read-out is a legacy comparable and never a verdict, so nothing this run archives can settle a comparison."
 fi

@@ -21,6 +21,19 @@
 //     and still be a null result about the head, and an ordering is the part
 //     that looks like a finding.
 //
+// A FOURTH, added 2026-08-21: it orders the UNPOOLED read-out and refuses to
+// bar it with a pooled number. Chris: "we should not do pooled evals
+// anywhere" / "move from pooled to unpooled when running evals". The
+// mechanism is the argument — geostrophic transport at 26.5N is the
+// east-minus-west contrast ACROSS the section, and every legacy_* column
+// here is that section averaged away first (probe_kfold's Z.mean(1);
+// temporal.py:2349's hid[:,-1].mean(0) for the stage-2 one). The pooled
+// columns are KEPT and clearly labelled, because 183 archived bundles carry
+// them and deleting them orphans the archive; they are never the verdict.
+// When an unpooled head arrives with no unpooled bar, the "does it beat
+// wind?" line is WITHHELD rather than answered against the pooled bar —
+// switching one side of a comparison manufactures a result.
+//
 //   node scripts/sweep_table.mjs --runs 127:U=1,128:U=2,129:U=4,130:U=8
 //   node scripts/sweep_table.mjs --runs 127:U=1,128:U=2 --target move
 import { readFileSync } from "node:fs";
@@ -103,14 +116,37 @@ for (const a of ARMS) {
   const prov = bundle.files?.["provenance.json"];
   const hk = tj?.rapid_probe_kfold;
   const z = tj?.["z_t+1"];
+  // THE UNPOOLED READ-OUT, and its two UNPOOLED bars. ml/probe_head.py keeps
+  // every (pixel, month) token and lets one query learn what to pool;
+  // everything else on this row averages the section first. Since 2026-08-21
+  // this is the verdict and the pooled columns are a labelled legacy
+  // comparable (ml/CLAUDE.md §3). RAPID keeps the historical file names; a
+  // non-default --target adds a suffix, which is why these are looked up by
+  // the same rule ml/probe_head.py writes them under.
+  const hsfx = TARGET === "rapid" ? "" : `_${TARGET}`;
+  const hf = (kind) =>
+    bundle.files?.[`probe_head${kind ? "_" + kind : ""}${hsfx}.json`] ?? null;
+  const head = hf(""), head3 = hf("raw3x3"), headw = hf("wind");
   rows.push({
     ...a,
-    // headline: the head's own k-fold, when the run is new enough to have it
-    r: hk?.r_kfold_deseas ?? null, ci: hk?.ci95 ?? null, n: hk?.n ?? null,
+    // ---- THE VERDICT ---------------------------------------------------
+    hr: head?.r_kfold_deseas ?? null,
+    hci: head?.ci95 ?? null,
+    hbar3: head3?.r_kfold_deseas ?? null,
+    hbarw: headw?.r_kfold_deseas ?? null,
+    // ---- LEGACY, POOLED, retained as the bridge to the archive ---------
+    // `rapid_probe_kfold` is the STAGE-2 head's k-fold and it is pooled too:
+    // ml/temporal.py:2349 reads `hid[:, -1].mean(0)  # pool along the
+    // section`, and the in-training `stage2_probe` at :2181 does the same.
+    // It was this table's headline until 2026-08-21. There is no unpooled
+    // stage-2 read-out yet — that is the open follow-up, not something this
+    // table can paper over — so the column stays, renamed to what it is.
+    legacyPooledStage2: hk?.r_kfold_deseas ?? null,
+    ci: hk?.ci95 ?? null, n: hk?.n ?? null,
     split: tj?.rapid_probe?.r_deseasonalised ?? null,
     zratio: z && z.mse_persistence ? z.mse_model / z.mse_persistence : null,
     steps: tj?.steps ?? null,
-    codec: t.r_kfold_deseas,                 // the control column
+    legacyPooledCodec: t.r_kfold_deseas,     // the control column
     // THE CONTROL IS THE TENSOR HASH, not the persistence baseline.
     //
     // The first version used z_mse_persistence, on the reasoning that it is
@@ -131,24 +167,38 @@ for (const a of ARMS) {
     tensor: prov?.tensor?.sha256 ?? null,
     seed: tj?.seed ?? null,
     fingerprint: z?.mse_persistence ?? null,
-    bar: t.wind_only_baseline?.r,
+    // POOLED: np.nanmean(tau, axis=1) over the same section
+    // (ml/probe_kfold.py). Its own block now says `probe: "pooled-wind-only"`.
+    legacyPooledBar: t.wind_only_baseline?.r,
     dip: bundle.files?.["dip_check.json"]?.capture_pct ?? null,
   });
 }
 
 const f = (v, d = 3) => (v === null || v === undefined || Number.isNaN(v) ? "  —  " : Number(v).toFixed(d));
 const pad = (s, w) => String(s).padEnd(w);
-console.log(`\n${TARGET.toUpperCase()} · the HEAD's year-blocked k-fold ` +
-            `(temporal.json → rapid_probe_kfold)\n`);
-console.log(pad("arm", 12) + pad("run", 6) + pad("r", 8) + pad("95% CI", 18) +
-            pad("36-mo", 8) + pad("z-ratio", 9) + "codec kfold");
-console.log("-".repeat(76));
+console.log(`\n${TARGET.toUpperCase()} · UNPOOLED verdict (probe_head.json) ` +
+            `with its own unpooled bars, then the LEGACY POOLED columns\n`);
+console.log(pad("arm", 12) + pad("run", 6) + pad("UNPOOL r", 10) +
+            pad("95% CI", 18) + pad("3x3 bar", 9) + pad("wind bar", 10) +
+            pad("legacy_pooled_s2", 17) + pad("legacy_bar", 11) +
+            "legacy_codec");
+console.log("-".repeat(105));
 for (const r of rows) {
   if (r.missing) { console.log(pad(r.label, 12) + pad("#" + r.run, 6) + r.missing); continue; }
-  console.log(pad(r.label, 12) + pad("#" + r.run, 6) + pad(f(r.r), 8) +
-              pad(r.ci ? `[${f(r.ci[0])}, ${f(r.ci[1])}]` : "     —     ", 18) +
-              pad(f(r.split), 8) + pad(f(r.zratio), 9) + f(r.codec));
+  console.log(pad(r.label, 12) + pad("#" + r.run, 6) + pad(f(r.hr), 10) +
+              pad(r.hci ? `[${f(r.hci[0])}, ${f(r.hci[1])}]` : "     —     ", 18) +
+              pad(f(r.hbar3), 9) + pad(f(r.hbarw), 10) +
+              pad(f(r.legacyPooledStage2), 17) +
+              pad(f(r.legacyPooledBar), 11) + f(r.legacyPooledCodec));
 }
+console.log(
+  `\nUNPOOLED IS THE VERDICT (ml/CLAUDE.md §3, 2026-08-21). Columns marked ` +
+  `legacy_* read the\nsection MEAN — probe_kfold's Z.mean(1), and ` +
+  `temporal.py:2349's hid[:,-1].mean(0) for the\nstage-2 one. Transport at ` +
+  `26.5N is the east−west contrast ACROSS the section and that\nmean ` +
+  `averages ~2.5 effective independent pixels of 265 (ml/project_amoc.py). ` +
+  `They are\nkept because 183 archived bundles carry them; they are not a ` +
+  `verdict.`);
 
 const have = rows.filter((r) => !r.missing);
 if (!have.length) {
@@ -166,7 +216,7 @@ const sameSeed = seeds.length <= 1;
 const fps = sameSeed
   ? [...new Set(have.map((r) => String(r.fingerprint)).filter((x) => x !== "null"))]
   : [];
-const codecs = [...new Set(have.map((r) => f(r.codec)).filter((x) => x.trim() !== "—"))];
+const codecs = [...new Set(have.map((r) => f(r.legacyPooledCodec)).filter((x) => x.trim() !== "—"))];
 const noHash = have.filter((r) => !r.tensor).map((r) => "#" + r.run);
 if (tensors.length > 1) {
   console.log(`\nCONTROL FAILED: the arms used DIFFERENT TENSORS ` +
@@ -216,31 +266,90 @@ if (tensors.length > 1) {
               "that the arms held the codec fixed.");
 }
 
-const scored = have.filter((r) => r.r !== null);
+// WHICH READ-OUT IS BEING ORDERED. The unpooled head when the bundles carry
+// one; otherwise the legacy pooled stage-2 number, said out loud.
+const unpooled = have.filter((r) => r.hr !== null);
+const pooledOnly = have.filter((r) => r.legacyPooledStage2 !== null);
+const useUnpooled = unpooled.length > 0;
+const scored = useUnpooled ? unpooled : pooledOnly;
+const key = (r) => (useUnpooled ? r.hr : r.legacyPooledStage2);
+if (useUnpooled && unpooled.length < have.length) {
+  const gap = have.filter((r) => r.hr === null).map((r) => "#" + r.run);
+  console.log(`\nMIXED READ-OUTS: ${gap.join(", ")} carry no probe_head.json, ` +
+              `so they have no unpooled\nnumber at all. They are NOT ordered ` +
+              `below against the arms that do — a pooled number\nstanding in ` +
+              `an unpooled column is the failure this whole change exists to ` +
+              `remove.\nRe-dispatch them with head_probe: "true" (the ` +
+              `workflow default since 2026-08-21).`);
+}
 if (!scored.length) {
-  console.log("\nno arm carries rapid_probe_kfold — these ran before it existed " +
-              "(added 2026-08-10). Their only stage-2 number is the 36-mo column.");
+  console.log("\nno arm carries probe_head.json OR rapid_probe_kfold — these " +
+              "ran before either existed. Their only stage-2 number is the " +
+              "36-mo column.");
   process.exit(0);
 }
-const bar = have.find((r) => r.bar != null)?.bar;
-const best = scored.reduce((a, b) => (b.r > a.r ? b : a));
-const worst = scored.reduce((a, b) => (b.r < a.r ? b : a));
-console.log(`spread ${f(worst.r)} (${worst.label}) → ${f(best.r)} (${best.label}) ` +
-            `= ${f(best.r - worst.r)}`);
-if (bar != null) {
-  // THE BAR IS DIRECTLY COMPARABLE, and an earlier version of this line
-  // hedged that it was not. Checked in the source: probe_kfold scores the
-  // wind baseline with the SAME kfold_r, on the same deseasonalised RAPID
-  // months, with the same year blocks and the same n=240 — only the features
-  // differ (raw tau channels against the head's pooled hidden state). That is
-  // exactly the comparison "does the model beat wind stress" means, so it is
-  // a threshold and should be read as one.
-  console.log(`wind-only bar, same protocol and same 240 months: ${f(bar)}`);
-  const under = scored.filter((r) => r.r <= bar);
+if (!useUnpooled) {
+  console.log(`\nNO UNPOOLED NUMBER IN ANY BUNDLE. The ordering below is off ` +
+              `the LEGACY POOLED\nstage-2 k-fold, which ml/CLAUDE.md §3 says ` +
+              `is a comparability bridge and never a\nverdict. Read it as ` +
+              `provenance for the archive, not as an answer; the arms need ` +
+              `a\nre-dispatch with head_probe: "true".`);
+}
+const best = scored.reduce((a, b) => (key(b) > key(a) ? b : a));
+const worst = scored.reduce((a, b) => (key(b) < key(a) ? b : a));
+console.log(`\nspread ${f(key(worst))} (${worst.label}) → ${f(key(best))} ` +
+            `(${best.label}) = ${f(key(best) - key(worst))}` +
+            `${useUnpooled ? "  [unpooled]" : "  [LEGACY POOLED]"}`);
+
+// THE BAR MUST BE THE SAME KIND OF READ-OUT AS THE NUMBER IT BARS.
+//
+// Until 2026-08-21 this block printed probe_kfold's wind_only_baseline
+// beside whatever the headline was, on the reasoning that the protocol,
+// months and year-blocks all match — which is true, and which is exactly
+// what makes the mismatch invisible. The features do NOT match: that bar is
+// np.nanmean(tau, axis=1), a section MEAN, and pairing it with an unpooled
+// head credits the read-out's gain to the model. E-038's own numbers show
+// the size of it: 0.660 pooled ridge → 0.691 unpooled head, against a pooled
+// wind bar of 0.670. Which side of the bar the codec lands on is decided by
+// the read-out, not by the codec.
+//
+// So the bar is chosen to MATCH, and when no matching bar exists the table
+// refuses to draw one rather than reaching for the pooled number.
+const unBar = have.find((r) => r.hbarw != null)?.hbarw;
+const unBar3 = have.find((r) => r.hbar3 != null)?.hbar3;
+const poBar = have.find((r) => r.legacyPooledBar != null)?.legacyPooledBar;
+if (useUnpooled && unBar != null) {
+  console.log(`unpooled wind bar (probe_head --raw --wind-only, same head, ` +
+              `same folds): ${f(unBar)}` +
+              (unBar3 != null ? ` · unpooled raw-3x3 bar: ${f(unBar3)}` : ""));
+  const under = scored.filter((r) => key(r) <= unBar);
   if (under.length) {
     console.log(`BELOW THE BAR: ${under.map((r) => r.label).join(", ")} — these ` +
-                `arms do not beat wind stress alone, so an ordering among them ` +
-                `is not a result about the head.`);
+                `arms do not beat wind stress alone through the SAME unpooled ` +
+                `read-out, so an ordering among them is not a result about the ` +
+                `head.`);
+  }
+  if (poBar != null) {
+    console.log(`(legacy pooled wind bar ${f(poBar)} is in the table for ` +
+                `continuity with the archive. It is NOT this bar and the two ` +
+                `are not interchangeable.)`);
+  }
+} else if (useUnpooled) {
+  console.log(`NO MATCHED BAR: these bundles carry an unpooled head and NO ` +
+              `unpooled wind bar` +
+              (poBar != null ? `, only the pooled ${f(poBar)}` : "") +
+              `.\nThe "does it beat wind?" verdict is WITHHELD rather than ` +
+              `answered against a pooled\nbar — that comparison measures the ` +
+              `read-out and reports it as the codec. Re-run\n` +
+              `ml/probe_head.py --raw --wind-only (scripts/probes_run.sh does ` +
+              `this automatically\nsince 2026-08-21).`);
+} else if (poBar != null) {
+  console.log(`legacy pooled wind bar, matched to the legacy pooled column ` +
+              `above: ${f(poBar)}`);
+  const under = scored.filter((r) => key(r) <= poBar);
+  if (under.length) {
+    console.log(`BELOW THE BAR (pooled vs pooled — matched, but neither is a ` +
+                `verdict): ${under.map((r) => r.label).join(", ")}`);
   }
 }
 console.log(

@@ -43,6 +43,15 @@ WANT = ["probe_kfold.json", "temporal.json", "rollout_eval.json",
         "dip_check.json", "probe_head.json", "probe_head_raw3x3.json",
         "probe_head_raw.json", "rollout.json", "provenance.json"]
 
+# ...AND EVERY OTHER probe_head*.json. Since 2026-08-21 that family is
+# generated rather than enumerated: --target adds a suffix per transport
+# series and --wind-only adds the head's own unpooled BAR, so the three names
+# above are only the RAPID defaults. A hand-kept list would have archived an
+# unpooled head number and silently dropped the unpooled bar it must be read
+# against, which is the comparison ml/CLAUDE.md §3 exists to protect. The
+# explicit names stay so a missing one is still REPORTED as missing.
+WANT_GLOB = ["probe_head*.json"]
+
 
 def api(url, token, method="GET", payload=None):
     data = json.dumps(payload).encode() if payload is not None else None
@@ -82,7 +91,12 @@ def main():
     dirs = [a.dir, os.path.join(a.dir, "..")]
     bundle = {"run_number": int(a.run_number), "files": {}}
     missing = []
-    for f in WANT:
+    import glob as _glob
+    extra = sorted({os.path.basename(p) for pat in WANT_GLOB for d in dirs
+                    for p in _glob.glob(os.path.join(d, pat))} - set(WANT))
+    if extra:
+        print(f"  glob {WANT_GLOB} also matched: {', '.join(extra)}")
+    for f in WANT + extra:
         path = next((p for p in (os.path.join(d, f) for d in dirs)
                      if os.path.exists(p)), None)
         if not path:

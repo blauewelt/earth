@@ -19,7 +19,7 @@
 // while the artifact is still inside its 30-day window.
 //
 //   node scripts/rescue_probe_kfold.mjs --runs 131,132,133,134 [--token-file ~/.gh_pat]
-import { readFileSync, writeFileSync, mkdtempSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -102,8 +102,23 @@ for (const n of RUNS) {
   const WANT = ["probe_kfold.json", "temporal.json", "probe_sequence.json",
                 "dip_check.json", "probe_head.json", "probe_head_raw3x3.json",
                 "probe_head_raw.json", "rollout.json", "provenance.json"];
+  // ...plus EVERY OTHER probe_head*.json actually in the artifact. Since
+  // 2026-08-21 that family is generated rather than enumerated: --target adds
+  // a suffix per transport series and --raw --wind-only adds the head's own
+  // unpooled BAR (ml/probe_head.py). Rescuing the head and dropping its
+  // matched bar would leave a bundle whose only available bar is the POOLED
+  // one, and scripts/sweep_table.mjs then correctly refuses to draw a
+  // verdict — a repair that quietly costs the comparison it was made for.
+  // Mirrors scripts/archive_probes.py's WANT_GLOB.
+  const found = new Set(WANT);
+  for (const base of [dir, join(dir, "actions")]) {
+    if (!existsSync(base)) continue;
+    for (const f of readdirSync(base)) {
+      if (/^probe_head.*\.json$/.test(f)) found.add(f);
+    }
+  }
   let added = 0;
-  for (const f of WANT) {
+  for (const f of found) {
     const q = [join(dir, f), join(dir, "actions", f)].find((x) => existsSync(x));
     if (!q || bundle.files[f]) continue;
     try { bundle.files[f] = JSON.parse(readFileSync(q, "utf8")); added++; }

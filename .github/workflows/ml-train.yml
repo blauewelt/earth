@@ -48,8 +48,8 @@ on:
         description: "continue from a checkpoint: a tag under /opt/earth-cache/ckpt (e.g. orphan-latest) or a path. Empty = fresh run. Prefix ! (e.g. !run-62) to REQUIRE it: the job exits in seconds if this box does not hold that checkpoint, instead of silently retraining from scratch"
         default: ""
       head_probe:
-        description: "run the UNPOOLED attention-head probe (top rung of the ladder) plus its matched raw-3x3 end-to-end control. The decisive test of whether a pooled-probe decline is a read-out artifact or real information loss"
-        default: "false"
+        description: "run the UNPOOLED attention-head probe (top rung of the ladder) plus its matched raw-3x3 and wind-only end-to-end controls. DEFAULT TRUE since 2026-08-21 (Chris: 'we should not do pooled evals anywhere'). The mechanism is the justification: geostrophic transport at 26.5N is the east-minus-west contrast ACROSS the section, and probe_kfold's ridge reads Z.mean(1) over it — ml/project_amoc.py measures z correlating r 0.99 at one cell, 0.88 at five, 0.35 at eighty, so the section mean averages ~2.5 effective independent pixels of 265. This default being 'false' is the documented cause of every missing head number in the current wave (#414, #415, #416, #419); probe_head has produced output in 3 of 183 archived bundles. Set 'false' only to deliberately reproduce a legacy pooled-only bundle. Targets beyond rapid: the recipe-only key head_targets"
+        default: "true"
       light_probe_every:
         description: "CHEAP probe cadence in steps (linear 26.5N section probe only, over the RAPID timesteps thinned to one sample per decorrelation time). MEASURED on #419: ~17 s at daily, ~22 s at pentad, ~7 s at monthly — the old '~30 s' was a family-3 figure and the daily light probe actually cost 611 s. THE COLLAPSE GUARD FIRES ON THIS PROBE, so its worst-case detection span is 2 x this value: keep it at 2,000 (= 4,000 steps) and cut eval_every instead. 0 = off, which also blinds the guard"
         default: "2000"
@@ -128,6 +128,15 @@ on:
 #       "inherit" | "none" | "lo,hi". Which longitudes are excluded from the
 #       STAGE-2 training pool, read in scripts/probes_run.sh. "inherit" is the
 #       default and reproduces every head trained before 2026-08-19.
+#   recipe-only: head_targets     -> ml/probe_head.py --target (probes_run.sh)
+#       Comma-separated subset of ml/probe_kfold.py's TARGETS
+#       (rapid | fc | move | osnap | samba). Unset = "rapid", which is what
+#       every head-probe dispatch before 2026-08-21 did. Each named target
+#       costs a full head fit plus its two unpooled controls, so this is a
+#       COST knob, not a correctness one: probe_kfold scores all five for
+#       free off one embedding pass, probe_head trains a read-out per target.
+#       A target whose section falls outside the tensor window is skipped by
+#       name, exactly as probe_kfold skips it.
 
 # contents: write ONLY for the live-metrics side channel — the training
 # step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every
@@ -1077,8 +1086,13 @@ jobs:
             ml/runs/actions/temporal.json
             ml/runs/probe_kfold.json
             ml/runs/actions/dip_check.json
-            ml/runs/actions/probe_head.json
-            ml/runs/actions/probe_head_raw3x3.json
+            # A GLOB, not three names. --target and --wind-only (2026-08-21)
+            # multiply these files by target, and the RAPID names are only the
+            # default case: probe_head_move.json and probe_head_wind.json are
+            # the head's own BAR and would have been dropped silently by a
+            # hand-kept list — an unpooled number arriving with no unpooled
+            # control is exactly what ml/CLAUDE.md §3 now forbids quoting.
+            ml/runs/actions/probe_head*.json
             ml/runs/actions/rollout.json
             ml/runs/actions/rollout_eval.json
             ml/runs/actions/temporal.pt

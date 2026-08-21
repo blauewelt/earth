@@ -378,21 +378,93 @@ smallness nobody ever questions.
 
 - **Numbers come from `probe_kfold.py`** — the year-blocked k-fold. Anything
   else (in-training light probe, a 36-month split) must be labelled as such.
-- **At pentad/daily cadence, spatially POOLED read-outs are distrusted and
-  the HEAD probe is primary** (Chris, 2026-08-18: "I don't trust ridge or
-  mlp. We should not pool spatially. Let's always look at head").
-  probe_kfold's ridge reads `Z.mean(1)` over the ~265-pixel 26.5°N section —
-  and geostrophic transport is the east-minus-west contrast ACROSS that
-  line, which a mean annihilates. So: pass `head_probe: "true"` on every
-  eval dispatch at the new cadences and report `probe_head` (unpooled
-  cross-attention over section tokens) next to its raw-3x3 control as the
-  headline; keep the pooled ridge as the comparable-to-history number, never
-  as the verdict. KNOWN GAP, measured 2026-08-18: stage 2's own transport
-  number (`rapid_probe_kfold`) is ALSO section-pooled — temporal.py:2018
-  does `hid[:, -1].mean(0)` — so even the big temporal heads are read
-  through a spatial mean at the last step. Upgrading that read-out to a
-  learned pool (probe_head's mechanism) is an open lever, to be changed as
-  its own experiment, never silently.
+- **UNPOOLED IS THE VERDICT, EVERYWHERE. Pooled is a labelled legacy
+  comparable and is never a verdict.** Standing rule, Chris 2026-08-21: *"we
+  should not do pooled evals anywhere"* / *"move from pooled to unpooled when
+  running evals"* — generalising the 2026-08-18 pentad/daily ruling (*"I
+  don't trust ridge or mlp. We should not pool spatially. Let's always look
+  at head"*) to every cadence.
+
+  **The argument is the MECHANISM, and it has to be, because the number
+  cannot carry it.** Geostrophic transport at 26.5°N is the east-minus-west
+  contrast ACROSS the section; a spatial mean annihilates exactly that
+  contrast. `ml/project_amoc.py` measures the cost on the run-62 cache: z
+  along the section correlates r 0.99 at one cell, 0.88 at five, 0.35 at
+  eighty, so `Z.mean(1)` averages **~2.5 effective independent pixels of
+  265**. The often-quoted **+0.031** (pooled ridge 0.660 → unpooled head
+  0.691, E-038) is a **two-interval comparison**, which the *"comparing two
+  probes needs a PAIRED test"* bullet below forbids as a way to compare two
+  probes. A paired test was attempted on
+  2026-08-21 and **could not be run**: no `probe_kfold.json` in any of the 183
+  archived bundles carries `pred`/`target_sv`/`years`, so pooled-vs-unpooled
+  is untestable on existing data. **Do not launder +0.031 into evidence.**
+  `probe_kfold` has dumped those three arrays for every target since
+  `c176de0`, so the first wave under the new default can settle it with
+  `scripts/paired_probe.py`.
+
+  In practice:
+  - `head_probe` **defaults to `"true"`** in `.github/workflows/ml-train.yml`
+    since 2026-08-21, and every recipe states it. The old `"false"` default is
+    the documented cause of every missing head number in the #414–#419 wave;
+    `probe_head` produced output in **3 of 183** archived bundles. Report
+    `probe_head` as the headline. `head_targets` (a recipe-only key — the
+    input list is full at 25) extends it beyond RAPID.
+  - **BOTH SIDES OF A COMPARISON SWITCH TOGETHER.** Switching the codec's
+    read-out to unpooled while leaving the bar pooled manufactures a result.
+    `scripts/probes_run.sh` fits both unpooled bars in the same loop as the
+    head — `--raw --raw-patch` (3×3 receptive-field control) and `--raw
+    --wind-only` (the wind bar with the section mean removed and nothing else
+    changed). Never quote an unpooled number against `probe_kfold`'s
+    `wind_only_baseline`, which is `np.nanmean(tau, axis=1)` and now labels
+    itself `pooled-wind-only`. `scripts/sweep_table.mjs` **withholds** the
+    "does it beat wind?" verdict rather than answering it across that
+    mismatch.
+  - **Pooled numbers stay COMPUTED and ARCHIVED under `legacy_pooled_*`.**
+    They are the comparability bridge to a 107-run k-fold column, a 98-run
+    stage-2 column, a 120-run K-sweep column and a 107-run dip column;
+    deleting them orphans the archive. `ml/make_table.py` and
+    `scripts/sweep_table.mjs` print them beside the unpooled headline, so
+    labelled. A historical row with no unpooled number shows a **dash** —
+    unavailable is honest, a back-filled pooled number in an unpooled column
+    is not.
+
+  **THREE DELIBERATE EXCEPTIONS. Each is pooled on purpose; do not "fix" one
+  without doing the work named beside it.**
+  1. **`ml/rollout_spatial.py`'s `read_sv` (:1430) and the eval gate.** Three
+     of the four `e017_u1_s0` gate criteria (the `amoc_bands` r's) come
+     through that pooled path, and `GATE_REF` (:117) is a hardcoded literal
+     transcribed from `probes-217.json` with `GATE_TOL` 0.0101. Changing
+     `read_sv` makes every eval wave `sys.exit("VALIDATION GATE FAILED")`
+     before scoring anything, destroying the integrity certificate §3b calls
+     the thing that "makes an eval wave readable at all". FOLLOW-UP: an
+     unpooled transport read-out must be an ADDITIONAL function writing NEW
+     keys beside `amoc_bands`, never a change to that one.
+  2. **The collapse guard's input** — `ml/train.py:738` reads
+     `linear_r_deseas`, fed by `ml/trainprobe.py`'s section mean (:510, and
+     the light probe at :462). Removing the pooled field makes `m.get(...)`
+     return `None` and the guard **silently stops guarding**, on the only
+     monitor that can see a collapsed codec. Its threshold 0.05 was calibrated
+     on the pooled instrument and does not transfer. FOLLOW-UP: a candidate
+     replacement is already in the repo — `ml/probe_state_ceiling.py`'s
+     5-segment ridge (:118), measured +0.02 over full pooling, a plain ridge
+     with no GPU training — but arming a guard on a new instrument requires
+     measuring its healthy range first.
+  3. **`ml/jaxport/score_section_probe.py:343`** — deliberately pooled; it
+     exists to reproduce an archived pooled number to 4e-5 as a
+     backend-equivalence certificate. An unpooled version would certify
+     nothing.
+
+  **STILL POOLED, AND NOT YET FIXABLE HERE: the stage-2 transport read-out.**
+  `rapid_probe_kfold` is `hid[:, -1].mean(0)` at `ml/temporal.py:2349` (the
+  line §3 used to cite as `:2018`), and there is a **second site at
+  `ml/temporal.py:2181`** feeding the in-training `stage2_probe.rapid_r_deseas`
+  — undocumented until 2026-08-21. So even the big temporal heads are read
+  through a spatial mean at the last step, and `sweep_table.mjs`'s stage-2
+  column is labelled `legacy_pooled_stage2` for that reason. **This is the one
+  comparison still mismatched by construction**: there is no unpooled stage-2
+  read-out to compare against. Upgrading it to a learned pool (probe_head's
+  mechanism) is an open lever, to be changed as its own experiment, never
+  silently.
 - **REPLICATES, NOT ARMS. A stage-2 number at n = 1 means nothing.** Measured
   2026-08-11 (E-010): three seeds at one fixed configuration span **0.245** on
   the RAPID head k-fold — sd 0.123 — while the forecast objective those same
@@ -908,6 +980,36 @@ archive.
 ---
 
 ## 8 · Deferred / open follow-ups
+
+- **The three pooled read-outs §3 deliberately did NOT switch, in the order
+  they should be done** (added 2026-08-21 with the unpooled ruling):
+  1. **An unpooled transport read-out beside `amoc_bands`**, as an ADDITIONAL
+     function in `ml/rollout_spatial.py` writing NEW keys. Not a change to
+     `read_sv` (:1430): three of the four `e017_u1_s0` gate criteria come
+     through it against a hardcoded `GATE_REF` at `GATE_TOL` 0.0101, so
+     touching it makes every eval wave `sys.exit("VALIDATION GATE FAILED")`
+     before it scores anything. The new keys can then be gated in their own
+     right once a reference exists for them.
+  2. **Re-arm the collapse guard on an unpooled instrument.** `ml/train.py`
+     reads `linear_r_deseas` from `ml/trainprobe.py`'s section mean; delete
+     the pooled field and `m.get(...)` returns `None` and the guard silently
+     stops guarding, on the ONLY monitor that can see a collapsed codec. The
+     candidate is `ml/probe_state_ceiling.py`'s 5-segment ridge (:118) —
+     measured +0.02 over full pooling, a plain ridge, no GPU training — and
+     the work is not the swap, it is **measuring that instrument's healthy
+     range first** so a threshold can be set the way 0.05 was.
+  3. **An unpooled stage-2 transport read-out** to replace
+     `hid[:, -1].mean(0)` at `ml/temporal.py:2349` and `:2181`. This is the
+     one comparison still mismatched by construction: the sweep table's
+     stage-2 column has no unpooled counterpart to be compared against, and
+     is labelled `legacy_pooled_stage2` until it does. Its own experiment,
+     never a silent change — 98 archived runs read that key.
+- **Settle pooled-vs-unpooled with a PAIRED test on the first wave under the
+  new default.** It has never been done: no `probe_kfold.json` in any of the
+  183 archived bundles carries `pred`/`target_sv`/`years`, so the +0.031 the
+  log quotes is a two-interval comparison and stays unquotable as evidence.
+  `probe_kfold` has written the arrays for every target since `c176de0` and
+  `probe_head` since 2026-08-10, so one run now produces both sides.
 
 - ~~**Build E-006**~~ — done 2026-08-10: `--loss-mode data` in
   `ml/train_joint.py`, with the gauge invariance checked on the real model

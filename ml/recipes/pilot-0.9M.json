@@ -1,10 +1,11 @@
 {
-  "_description": "The 0.92M pilot: 128x4, 4 heads, d_dec 256, d_z 32, patch 1. A CPU-scale sanity configuration, not a research one.",
+  "_description": "The 0.92M pilot: 128x4, 4 heads, d_dec 256, d_z 32, patch 1. A CPU-scale sanity configuration, not a research one. HEAD_PROBE IS 'true' HERE EXPLICITLY (2026-08-21). The workflow's default is now true as well, so this key changes nothing about what runs — it states it, because a recipe is the record of a configuration that was RUN and 'which read-out produced the verdict' is now part of that configuration. ml/CLAUDE.md §3: unpooled is the verdict, the pooled ridge is a labelled legacy comparable, and both sides of a comparison switch together (the head's raw-3x3 and wind-only bars are fitted in the same loop, scripts/probes_run.sh).",
   "_provenance": "The historical argparse defaults in ml/train.py, which until 2026-08-18 were also every dispatch's silent fallback. Named here so the configuration still exists on purpose rather than by omission.",
   "d_z": 32,
   "patch": 1,
   "codec_d_model": 128,
   "codec_layers": 4,
   "codec_heads": 4,
-  "codec_d_dec": 256
+  "codec_d_dec": 256,
+  "head_probe": "true"
 }

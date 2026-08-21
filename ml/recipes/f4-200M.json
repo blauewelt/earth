@@ -1,5 +1,5 @@
 {
-  "_description": "E-038b family-4 pentad codec at ~202M: 1024x16, 16 heads, d_dec 512, d_z 32, patch 1. NOT YET VALIDATED - see _provenance.",
+  "_description": "E-038b family-4 pentad codec at ~202M: 1024x16, 16 heads, d_dec 512, d_z 32, patch 1. NOT YET VALIDATED - see _provenance. HEAD_PROBE IS 'true' HERE EXPLICITLY (2026-08-21). The workflow's default is now true as well, so this key changes nothing about what runs — it states it, because a recipe is the record of a configuration that was RUN and 'which read-out produced the verdict' is now part of that configuration. ml/CLAUDE.md §3: unpooled is the verdict, the pooled ridge is a labelled legacy comparable, and both sides of a comparison switch together (the head's raw-3x3 and wind-only bars are fitted in the same loop, scripts/probes_run.sh).",
   "_provenance": "#387 ran this width with codec_heads 4 (head_dim 256) and its embedding COLLAPSED between step 10k and 15k: probe r 0.540 -> 0.316 -> 0.392 -> 0.000, z-mse 0.20 -> 9,685, while loss_rec sat at 0.27-0.32 and hid it. This recipe raises heads to 16 (head_dim 64) on the theory that head_dim 256 was a contributing cause. That theory is UNTESTED. train.py still has no LR warmup and no gradient clipping, and --lr is hard-coded at 3e-4 for every width, so a re-run may well collapse again for those reasons instead. Treat the first run of this recipe as an experiment about the collapse, not as the 200M arm.",
   "tensor": "family4_na025_pentad",
   "d_z": 32,
@@ -9,5 +9,6 @@
   "codec_heads": 16,
   "codec_d_dec": 512,
   "anomaly": "true",
-  "batch": 512
+  "batch": 512,
+  "head_probe": "true"
 }

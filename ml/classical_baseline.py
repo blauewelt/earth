@@ -70,6 +70,14 @@ def main():
     y = vals - clim[tmoy]
 
     # ---- feature 1: wind stress on the 26.5N section ----------------------
+    # POOLED, and it stays pooled ON PURPOSE (2026-08-21). Every row in this
+    # file is a section MEAN through the same ridge, so the LADDER is
+    # internally matched — wind, cable and cable+wind differ only in what the
+    # model is allowed to see, which is the whole point of the file. Making
+    # one row unpooled would break exactly that. What must not happen is the
+    # OTHER comparison: these rows are not a bar for ml/probe_head.py's
+    # unpooled numbers, and the JSON says so in `probe` and `pooled` below so
+    # a table generator cannot mix them by accident.
     X = d["X"]
     ocean = np.isfinite(X[..., 0]).any(axis=0)
     ys, xs = np.where(ocean)
@@ -110,6 +118,7 @@ def main():
                       "ci95": [round(float(lo), 3), round(float(hi), 3)],
                       "n": int(n), "rmse_sv": round(float(rmse), 2),
                       "r_lowpass18": None if lp is None else round(float(lp), 3),
+                      "probe": "pooled-ridge", "pooled": True,
                       "inputs": note}
         print(f"  {name:<12} r={r:+.3f} [{lo:+.3f},{hi:+.3f}]  RMSE {rmse:.2f} Sv  "
               f"n={n}  18mo-lowpass {lp if lp is None else round(lp,3)}   ({note})")
@@ -122,8 +131,22 @@ def main():
           "the FW2015 input set minus altimetry — two of RAPID's three terms, measured")
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
+    print("\nALL ROWS ABOVE ARE SECTION-POOLED, and they are matched to each "
+          "other on purpose:\nthe ladder holds the read-out fixed and varies "
+          "only the inputs. Do NOT read any of\nthem as a bar for "
+          "ml/probe_head.py's unpooled numbers — that comparison would "
+          "credit\nthe read-out's gain to the model (ml/CLAUDE.md §3, "
+          "2026-08-21). The matched unpooled\nwind bar is "
+          "`ml/probe_head.py --raw --wind-only`.")
     json.dump({"protocol": "year-blocked k-fold, monthly, deseasonalised, "
                            "block-bootstrap CI — identical to probe_kfold.py",
+               "pooled": True,
+               "pooled_note": "Every row is a section MEAN through the same "
+                              "ridge. The ladder is internally matched and "
+                              "that is what it measures; it is NOT a bar for "
+                              "the unpooled attention head, and a table that "
+                              "puts them in one column is comparing "
+                              "read-outs. See ml/CLAUDE.md §3 (2026-08-21).",
                "target": "RAPID 26.5N",
                "note": "The cable is normally a TRUTH series here; it is used as an "
                        "input in these rows only, to reproduce the classical input "

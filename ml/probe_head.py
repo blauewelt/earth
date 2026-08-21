@@ -22,9 +22,23 @@ stop at the cached embeddings. Same year-blocked folds, same inner-tail
 early stopping, 3 seeds averaged per fold; with n~240 and ~25k parameters
 the head is regularized hard (weight decay 1e-2, dropout on tokens).
 
+Since 2026-08-21 this is the VERDICT read-out, not the top rung of a ladder
+whose lower rungs are quoted (ml/CLAUDE.md §3, Chris: "we should not do pooled
+evals anywhere"). Two consequences live in this file:
+
+  · `--target` — every series ml/probe_kfold.py scores (rapid, fc, move,
+    osnap, samba) now has an unpooled read-out. It was RAPID-only, so for
+    four of the five the pooled ridge was the only number in existence.
+  · `--raw --wind-only` — the UNPOOLED WIND BAR. Both sides of a comparison
+    switch together; scoring an unpooled head against probe_kfold's POOLED
+    wind baseline would manufacture a margin out of the read-out.
+
 Usage:
   python3 ml/probe_head.py --run global14 --data ml/cache/na_pixels_c14_global.npz
   python3 ml/probe_head.py --run pixel25_40k --data ml/cache/na_pixels_c25_global.npz --K 3
+  python3 ml/probe_head.py --run actions --data ... --target move
+  python3 ml/probe_head.py --run actions --data ... --raw --raw-patch   # 3x3 control
+  python3 ml/probe_head.py --run actions --data ... --raw --wind-only   # the bar
   python3 ml/probe_head.py --run global14 --data ... --head-device cpu
 
 The codec/embedding pass always uses the GPU when there is one; --head-device
@@ -43,7 +57,13 @@ import torch.nn as nn
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model import PixelMAE, LazyPixels, codec_from_ckpt
 from trainprobe import anomaly_transform
-from temporal import embed_everything, rapid_section
+from temporal import embed_everything, section_of
+# ONE definition of what a target's section and label series ARE.
+# probe_kfold owns them; a second copy here would be a second way of
+# deciding which rows a target has, and the pooled and unpooled
+# numbers would then be scored on different months while looking
+# directly comparable — the precise failure this file exists to expose.
+from probe_kfold import TARGETS, target_series
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -235,6 +255,32 @@ def main():
                          "a patch=3 codec's embedding saw its 3x3 "
                          "neighbourhood — pair raw against a PIXEL codec for "
                          "the strictly matched comparison.")
+    ap.add_argument("--target", default="rapid", choices=sorted(TARGETS),
+                    help="which transport series to probe. This file was "
+                         "hardcoded to RAPID (rapid_section() and d['rapid']) "
+                         "until 2026-08-21, so fc/move/osnap/samba — every "
+                         "other target ml/probe_kfold.py scores — had NO "
+                         "unpooled path at all, and the only number available "
+                         "for them was the section-mean ridge the programme "
+                         "has stopped treating as a verdict. Sections and "
+                         "label decoding come from probe_kfold.TARGETS and "
+                         "probe_kfold.target_series, so the unpooled read-out "
+                         "is scored on exactly the rows the pooled one was. "
+                         "A section outside the tensor window is refused by "
+                         "name, as probe_kfold skips it by name.")
+    ap.add_argument("--wind-only", action="store_true",
+                    help="with --raw: the UNPOOLED WIND BAR. Raw tokens carry "
+                         "tau_x/tau_y only, so this is probe_kfold's "
+                         "wind_only_baseline with the section mean removed "
+                         "and nothing else changed. It exists because BOTH "
+                         "SIDES OF A COMPARISON MUST SWITCH TOGETHER: an "
+                         "unpooled codec head scored against a POOLED wind "
+                         "bar manufactures a margin out of the read-out. NOT "
+                         "numerically comparable to the pooled bar — these "
+                         "tokens are anomaly-transformed, exactly as the "
+                         "codec's inputs are, where probe_kfold's bar reads "
+                         "the raw tau channels. It is the matched bar for the "
+                         "head, not a re-measurement of the old one.")
     ap.add_argument("--seed-base", type=int, default=0,
                     help="the three per-fold seeds are (base, base+1, base+2). "
                          "This exists because run #116 was dispatched as 'head "
@@ -246,6 +292,21 @@ def main():
                          "independent draw; the file name carries it so two "
                          "draws cannot overwrite each other.")
     a = ap.parse_args()
+    if a.wind_only and not a.raw:
+        # A precondition that depends only on the inputs, checked while the
+        # inputs are all it has cost us (ml/CLAUDE.md §5.16). --wind-only
+        # selects a subset of the RAW channels; without --raw the tokens are
+        # codec embeddings and the flag would silently do nothing, which is
+        # the one failure mode this repository refuses everywhere else.
+        sys.exit("--wind-only requires --raw: it selects raw tau channels, "
+                 "and on an embedding there is nothing for it to select. The "
+                 "unpooled wind bar is `--raw --wind-only`.")
+    if a.wind_only and a.raw_patch:
+        sys.exit("--wind-only with --raw-patch is not the bar: probe_kfold's "
+                 "wind baseline reads one pixel's tau, pooled. Drop "
+                 "--raw-patch, or say in the dispatch what the 3x3 wind "
+                 "control is a control FOR.")
+    spec = TARGETS[a.target]
 
     # FIRST, before the checkpoint, the anomaly transform and the ~13-minute
     # embedding pass: decide where the read-out can train. This is a
@@ -363,7 +424,21 @@ def main():
                         np.cos(2 * np.pi * moy / 12)], 1)
     ocean = OBS[..., 0].any(axis=0).numpy()
     ys, xs = np.where(ocean)
-    sec_y, sec_sel = rapid_section(lats, lons, ys, xs)
+    sec_y, sec_sel = section_of(lats, lons, ys, xs, spec["lat"], *spec["lon"])
+    # argmin() clamps to the window edge, so a SAMBA request on a North
+    # Atlantic tensor would silently probe the northern boundary row and
+    # report a number. probe_kfold prints "section outside window, skipped"
+    # and moves on; here the target IS the whole invocation, so REFUSE —
+    # a probe with nothing to say must not write a file that looks like a
+    # reading (ml/CLAUDE.md §5.22).
+    if abs(float(lats[sec_y]) - spec["lat"]) > 1.0 or len(sec_sel) < 5:
+        sys.exit(f"--target {a.target}: its section ({spec['lat']}N, "
+                 f"{spec['lon'][0]}..{spec['lon'][1]}) is outside this "
+                 f"tensor's window — nearest row {float(lats[sec_y]):.2f}N, "
+                 f"{len(sec_sel)} ocean cells. ml/probe_kfold.py skips this "
+                 f"target on this tensor too; there is no unpooled number to "
+                 f"be had here and inventing a section would be worse than "
+                 f"the pooled one.")
     if a.raw:
         # raw features per (pixel, month): C anomaly values (0 where
         # unobserved) + C observed flags — exactly what the encoder itself
@@ -385,8 +460,22 @@ def main():
                                         o.reshape(len(sy), -1).float()], -1))
             Z = torch.stack(feats).numpy()
         else:
-            Z = np.concatenate([Xt[:, sy, sx].numpy(),
-                                OBS[:, sy, sx].numpy().astype(np.float32)], -1)
+            v_ = Xt[:, sy, sx].numpy()
+            o_ = OBS[:, sy, sx].numpy().astype(np.float32)
+            if a.wind_only:
+                # The UNPOOLED BAR. Same head, same folds, same section,
+                # same anomaly space as the codec's inputs — the only thing
+                # that differs from probe_kfold's wind_only_baseline is that
+                # the section is NOT averaged away first.
+                chan_names = [str(c) for c in d["chan"]]
+                wsel = [i for i, c in enumerate(chan_names)
+                        if c in ("tau_x", "tau_y")]
+                if not wsel:
+                    sys.exit("--wind-only: this tensor has no tau_x/tau_y "
+                             "channel, so there is no wind bar to draw. "
+                             f"channels: {chan_names}")
+                v_, o_ = v_[..., wsel], o_[..., wsel]
+            Z = np.concatenate([v_, o_], -1)
         feat_dim = Z.shape[-1]
     else:
         Z, _ = embed_everything(codec, Xt, OBS, ctx_all, lats, lons,
@@ -396,12 +485,22 @@ def main():
     lon_frac = ((lons[xs[sec_sel]] - lons[xs[sec_sel]].min())
                 / max(1e-6, np.ptp(lons[xs[sec_sel]]))).astype(np.float32)
 
-    rapid = d["rapid"]
-    ridx = rapid[:, 0].astype(int)
-    vals = rapid[:, 1].copy()
-    rmoy = moy[ridx]
-    clim = np.array([vals[rmoy == m].mean() for m in range(12)])
-    v_des = vals - clim[rmoy]
+    # ONE decoder for the labels, shared with ml/probe_kfold.py. The four
+    # lines this replaces read d["rapid"] directly and knew only the
+    # (time-index, value) shape, which is RAPID's; families 4/5 write the
+    # truth_* series onto the tensor's own axis and families 2/3 write
+    # (YYYYMM, value) — so a target other than rapid decoded to nothing here.
+    # Deseasonalisation is byte-for-byte the same operation it always was;
+    # it now lives in one place instead of two.
+    month_of_ym = {int(m[:4]) * 100 + int(m[5:7]): i
+                   for i, m in enumerate(months)}
+    ser = target_series(d, spec, moy, month_of_ym)
+    if ser is None:
+        sys.exit(f"--target {a.target}: this tensor carries no usable "
+                 f"'{spec['key']}' series (absent, or under the 48-sample "
+                 f"floor ml/probe_kfold.py applies). Run ml/fetch_truth.py, "
+                 f"or probe a target this tensor actually has.")
+    ridx, v_des = ser
     ok = ridx >= a.K - 1
     ridx, v_des = ridx[ok], v_des[ok]
 
@@ -451,8 +550,18 @@ def main():
     out = {"run": a.run,
            "head_dim": a.head_dim, "head_blocks": a.head_blocks,
            "probe": ("attention-head-raw3x3" if (a.raw and a.raw_patch)
+                     else "attention-head-wind" if (a.raw and a.wind_only)
                      else "attention-head-raw" if a.raw
                      else "attention-head"), "K": a.K,
+           # THE TARGET TRAVELS WITH THE NUMBER. Until 2026-08-21 this file
+           # probed RAPID and only RAPID, so the field was implicit; now that
+           # `fc` and `move` have unpooled read-outs, a bundle carrying two of
+           # these files needs to say which is which, and a reader of an older
+           # file needs "rapid" to be the answer it already was.
+           "target": a.target,
+           "pooled": False,
+           "section": {"lat": spec["lat"], "lon": list(spec["lon"]),
+                       "pixels": int(P)},
            "r_kfold_deseas": round(r, 3),
            "ci95": [round(float(lo95), 3), round(float(hi95), 3)],
            "rmse_sv": round(rmse, 2), "n": int(okp.sum()),
@@ -471,7 +580,8 @@ def main():
            "years": [int(v) for v in years],
            "note": "unpooled section: one query attends over "
                    f"{P} pixels x {a.K} months"}
-    print(f"{a.run} head-probe (K={a.K}): rapid k-fold r {r:+.3f} "
+    print(f"{a.run} head-probe ({out['probe']}, target {a.target}, "
+          f"K={a.K}): unpooled k-fold r {r:+.3f} "
           f"[{lo95:+.3f}, {hi95:+.3f}] · RMSE {rmse:.2f} Sv")
     size = ("" if (a.head_dim == 64 and a.head_blocks == 0)
             else f"_d{a.head_dim}b{a.head_blocks}")
@@ -479,9 +589,15 @@ def main():
     # to look like a confirmation of a number it had merely recomputed.
     if a.seed_base:
         size += f"_s{a.seed_base}"
-    fn = (f"probe_head_raw3x3{size}.json" if (a.raw and a.raw_patch)
-          else f"probe_head_raw{size}.json" if a.raw
-          else f"probe_head{size}.json")
+    # rapid keeps the historical file names EXACTLY — probes-<n>.json bundles,
+    # scripts/sweep_table.mjs, ml/make_table.py and status.html all address
+    # these by name, and 183 archived bundles already use them. A non-default
+    # target is a new file beside them, never a rename of one.
+    tsfx = "" if a.target == "rapid" else f"_{a.target}"
+    kind = ("raw3x3" if (a.raw and a.raw_patch)
+            else "wind" if (a.raw and a.wind_only)
+            else "raw" if a.raw else "")
+    fn = f"probe_head{'_' + kind if kind else ''}{tsfx}{size}.json"
     path = os.path.join(HERE, "runs", a.run, fn)
     json.dump(out, open(path, "w"), indent=2)
     print("wrote", path)
