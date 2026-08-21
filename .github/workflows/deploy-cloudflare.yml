@@ -114,7 +114,7 @@ jobs:
             exit 1
           fi
           if [ "$EVENT" = "workflow_dispatch" ]; then
-            echo "::error title=Cloudflare not configured::You asked for a deploy by hand and there is nothing to deploy with. Add repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID first — docs/HOSTING.md §4 is the click-path."
+            echo "::error title=Cloudflare not configured::You asked for a deploy by hand and there is nothing to deploy with. Add repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID first — docs/HOSTING.md §5 is the click-path."
             exit 1
           fi
           echo "::notice title=Cloudflare Pages standby::Not configured — nothing deployed, and this is not a failure. GitHub Pages remains the live site."
@@ -125,7 +125,7 @@ jobs:
             echo "No deploy was attempted — \`CLOUDFLARE_API_TOKEN\` and \`CLOUDFLARE_ACCOUNT_ID\` are not set."
             echo "GitHub Pages is unaffected and remains the live site."
             echo
-            echo "See [docs/HOSTING.md](../blob/main/docs/HOSTING.md) §4 for the click-path that turns this on."
+            echo "See [docs/HOSTING.md](../blob/main/docs/HOSTING.md) §5 for the click-path that turns this on."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Checkout
@@ -168,7 +168,7 @@ jobs:
             [ -f "_site/$f" ] || missing="$missing $f"
           done
           if [ -n "$missing" ]; then
-            echo "::error title=Allowlist dropped a required file::${missing# } — the git ls-files allowlist in this workflow no longer matches the site. See docs/HOSTING.md §7."; exit 1
+            echo "::error title=Allowlist dropped a required file::${missing# } — the git ls-files allowlist in this workflow no longer matches the site. See docs/HOSTING.md §3 and §9."; exit 1
           fi
 
           files=$(find _site -type f | wc -l)

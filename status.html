@@ -157,7 +157,10 @@
     <li><a href="docs.html?f=ml/LEADERBOARD.md">Leaderboard</a></li>
     <li><a href="docs.html?f=ml/HANDBOOK.md">Handbook</a></li>
     <li><a href="https://github.com/blauewelt/earth/actions">GitHub Actions</a></li>
-    <li><a href="https://blauewelt.github.io/earth/">Live app</a></li>
+    <!-- href is rewritten to APP_BASE on load so it follows whichever origin
+         served this page; the literal below is the no-JS / saved-copy value
+         and is the same string APP_BASE computes on GitHub Pages. -->
+    <li><a id="live-app" href="https://blauewelt.github.io/earth/">Live app</a></li>
   </ul>
 
   <footer>Reads only public unauthenticated GitHub endpoints · no credentials in this page.</footer>
@@ -198,10 +201,31 @@
   var RATE_MIN_WAIT_MS = 5000;   // never spin
   var CHART_HISTORY = 6;      // finished runs WITH CURVES to keep charted
   var CHART_CANDIDATES = 24;  // how deep to look for them; see renderLive
-  // The phone reader for every markdown file in the repo (CLAUDE.md SS0b).
-  // Absolute, because status.html is opened from Pages, from a file:// copy
-  // and from localhost in the suite, and the badge must resolve in all three.
-  var DOCS_BASE = "https://blauewelt.github.io/earth/docs.html";
+  // The phone reader for every markdown file in the repo (CLAUDE.md SS0b),
+  // and the link back to the globe. Both must resolve from three places:
+  // whichever origin serves this page, a saved file:// copy, and localhost in
+  // the suite. They used to be HARDCODED at blauewelt.github.io/earth/, which
+  // resolves everywhere but pins every badge to one host — so the moment the
+  // site is also served from Cloudflare Pages or from blauewelt.org, a reader
+  // who arrived at the new origin is silently sent back to the old one, and a
+  // stale copy of docs.html is the thing they read.
+  //
+  // ORIGIN-FOLLOWING is the fix, with the saved-copy fallback kept intact: a
+  // file:// document has no origin to follow (`location.host` is "" and a
+  // relative URL would resolve to a path on the reader's disk), so that case
+  // alone falls back to the public GitHub Pages copy, which stays live
+  // indefinitely and is the rollback target — docs/HOSTING.md.
+  //
+  // On GitHub Pages these evaluate to EXACTLY the two strings that used to be
+  // written here, so the change is behaviour-preserving in production and only
+  // the suite's expectation moves. Verified in three contexts by
+  // tests/status.spec.js.
+  var SAVED_COPY = "https://blauewelt.github.io/earth/";
+  var ORIGINLESS = (location.protocol === "file:" || !location.host);
+  var DOCS_BASE = ORIGINLESS ? SAVED_COPY + "docs.html"
+                             : new URL("docs.html", location.href).href;
+  var APP_BASE = ORIGINLESS ? SAVED_COPY
+                            : new URL("./", location.href).href;
   var RUN_WINDOW = 75;        // runs FETCHED — must outrun a burst of dispatches.
                               // 30 stopped sufficing on 2026-08-11, when one
                               // day produced 41 ml-train runs (a sweep, two
@@ -215,6 +239,14 @@
   var timer = null;          // a TIMEOUT id, not an interval: see nextDelay()
 
   function $(id) { return document.getElementById(id); }
+
+  // The one static link that names the app. Written into the markup as the
+  // saved-copy value so it works with JS off, and re-pointed at the serving
+  // origin here. This script tag sits after the markup, so the node exists.
+  (function () {
+    var a = $("live-app");
+    if (a) a.href = APP_BASE;
+  }());
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];

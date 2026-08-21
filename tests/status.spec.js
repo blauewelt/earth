@@ -12,6 +12,8 @@
 // and raw.githubusercontent.com, and both are intercepted below.
 "use strict";
 const { test, expect } = require("@playwright/test");
+const path = require("path");
+const { pathToFileURL } = require("url");
 
 const NOW = Date.now();
 const iso = (minsAgo) => new Date(NOW - minsAgo * 60000).toISOString();
@@ -476,11 +478,78 @@ test("a run's doc links to its experiment definition", async ({ page }) => {
   await expect(badge).toHaveCount(1);           // only the E-007 run gets one
   await expect(badge).toHaveText("E-007");
   await expect(badge).toHaveAttribute("href", /ml\/EXPERIMENTS\.md#e-007$/);
-  await expect(badge).toHaveAttribute(
-    "href", "https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-007");
+  await expect(badge).toHaveAttribute("href", /\/docs\.html\?f=ml\/EXPERIMENTS\.md#e-007$/);
   // and never the blob form again
   const href = await badge.getAttribute("href");
   expect(href).not.toMatch(/github\.com\/[^/]+\/[^/]+\/blob\//);
+});
+
+test("the docs badge and the Live app link follow the origin, in all three contexts",
+  async ({ page }) => {
+  // This assertion used to read `"https://blauewelt.github.io/earth/docs.html
+  // ?f=ml/EXPERIMENTS.md#e-007"` — the literal origin, hardcoded in
+  // status.html and echoed here on purpose as the tripwire that would notice
+  // the day the site moved (docs/HOSTING.md SS8 listed it as exactly that).
+  // The site is moving, so the tripwire moves with it rather than being
+  // deleted: what must now hold is that NOTHING pins the page to one host.
+  //
+  // Three contexts, because status.html is opened from all three and the
+  // right answer is different in each:
+  //   1. the origin that served it        -> follow it
+  //   2. some OTHER origin that served it -> follow that one instead
+  //   3. a saved file:// copy             -> no origin to follow; fall back
+  //      to the public GitHub Pages copy, which stays live indefinitely and
+  //      is the rollback target
+  // (2) is the one that matters for the cutover: earth.pages.dev and
+  // blauewelt.org must send readers to their OWN docs.html, not to a
+  // github.io copy that is only as fresh as its last Pages deploy. 127.0.0.1
+  // is the same test server behind a different host string, which is all the
+  // page can tell about "a different origin" anyway.
+  await page.route(/\/actions\/workflows\/[^/]+\/runs/, (route) =>
+    route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({ workflow_runs: [
+        { id: 12, run_number: 112, status: "in_progress", conclusion: null,
+          created_at: iso(20), run_started_at: iso(18),
+          html_url: "https://example.invalid/112", name: "ml-train",
+          display_title: "E-007 third point: stage-2 only, 60,000 steps",
+          head_sha: "f".repeat(40) },
+      ] }),
+    }));
+
+  const badge = page.locator("#runs a.exp");
+  const liveApp = page.locator("#live-app");
+
+  // 1 — the serving origin (localhost, the suite and any dev server).
+  await page.goto("/status.html");
+  await expect(badge).toHaveAttribute(
+    "href", "http://localhost:8080/docs.html?f=ml/EXPERIMENTS.md#e-007");
+  await expect(liveApp).toHaveAttribute("href", "http://localhost:8080/");
+
+  // 2 — a different serving origin. Standing in for earth.pages.dev and
+  //     blauewelt.org: same bytes, different host, links must follow.
+  await page.goto("http://127.0.0.1:8080/status.html");
+  await expect(badge).toHaveAttribute(
+    "href", "http://127.0.0.1:8080/docs.html?f=ml/EXPERIMENTS.md#e-007");
+  await expect(liveApp).toHaveAttribute("href", "http://127.0.0.1:8080/");
+
+  // 3 — a saved copy on disk. A relative URL here would resolve to a path on
+  //     the reader's own filesystem, so this case, and only this case, keeps
+  //     the absolute GitHub Pages fallback.
+  await page.goto(pathToFileURL(path.join(__dirname, "..", "status.html")).href);
+  await expect(liveApp).toHaveAttribute("href", "https://blauewelt.github.io/earth/");
+  await expect(badge).toHaveAttribute(
+    "href", "https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-007");
+
+  // The behaviour-preservation claim in docs/HOSTING.md SS8, checked rather
+  // than asserted in prose: on GitHub Pages the origin-following branch
+  // produces exactly the two strings that used to be hardcoded.
+  const onPages = await page.evaluate(() => ({
+    docs: new URL("docs.html", "https://blauewelt.github.io/earth/status.html").href,
+    app: new URL("./", "https://blauewelt.github.io/earth/status.html").href,
+  }));
+  expect(onPages.docs).toBe("https://blauewelt.github.io/earth/docs.html");
+  expect(onPages.app).toBe("https://blauewelt.github.io/earth/");
 });
 
 test("a long stage-2 job says when it will finish, not just how far along", async ({ page }) => {

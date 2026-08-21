@@ -66,8 +66,11 @@ test.describe("docs.html · mobile markdown reader", () => {
   // config strip — so the shape that has to stay readable is the shape a
   // script decides, not one a human reviews.
   test("no document widens the page", async ({ page }) => {
+    // docs/HOSTING.md joined the list when §6 became the domain runbook: it is
+    // a dozen small tables and a lot of fenced shell, and it is read on a phone
+    // while someone is halfway through a nameserver change.
     for (const doc of ["ml/EXPERIMENTS.md", "ml/LEADERBOARD.md", "CLAUDE.md",
-                       "ml/RUNS.md", "docs/PIXEL_STATE.md"]) {
+                       "ml/RUNS.md", "docs/PIXEL_STATE.md", "docs/HOSTING.md"]) {
       await page.goto("/docs.html?f=" + doc);
       await expect(page.locator("main h1, main h2").first()).toBeVisible();
       const width = await page.evaluate(() => document.documentElement.scrollWidth);

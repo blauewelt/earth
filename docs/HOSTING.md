@@ -1,4 +1,4 @@
-# Hosting: GitHub Pages today, Cloudflare Pages on standby
+# Hosting: GitHub Pages today, Cloudflare Pages and blauewelt.org next
 
 The globe is served by **GitHub Pages**, published by the `pages.yml` Actions
 workflow from `main` (`actions/upload-pages-artifact` with `path: .`, so the
@@ -24,6 +24,16 @@ a migration under load.
 
 Everything below was measured on 2026-08-21 against the real repo, the real
 live site and the two hosts' own documentation, not estimated.
+
+**Where this is going.** The escape hatch has a destination now:
+**`blauewelt.org`**, registered at Infomaniak, with the app at the **apex** and
+`www.blauewelt.org` and `blauewelt.ch` both 301-ing to it. That is a nameserver
+move, not a DNS record — Infomaniak cannot put a CNAME-like record at a zone
+apex, and Cloudflare Redirect Rules only run on traffic its proxy sees. **§6 is
+the runbook**, in the order the clicks happen, with the DNSSEC ordering that
+decides whether the domain stays reachable and the email checks that decide
+whether anyone notices. GitHub Pages keeps running throughout, indefinitely, so
+every link ever shared keeps resolving and no phase needs a site rollback.
 
 ---
 
@@ -327,8 +337,9 @@ the names Cloudflare's own CI guide uses.
    *Run workflow*. It assembles 184 files (~400 MiB) and uploads them; the first
    upload takes a few minutes, later ones send only what changed. The run
    summary prints the file count, the size and the deployed commit.
-8. **Check it** — §6 has the byte-for-byte verification, which is the step that
-   decides whether any link ever moves.
+8. **Check it** — §6.0b has the byte-for-byte verification, which is the
+   prerequisite for every domain step in §6 and the thing that decides whether
+   any link ever moves.
 
 Until step 6 is done the workflow still runs on qualifying pushes and **exits
 green**, printing a `::notice::` that says it is on standby. It never shows a
@@ -340,100 +351,583 @@ tick and no deploy is the worst possible answer.
 
 ---
 
-## 6 · The cutover, as a reversible sequence
+## 6 · The cutover: `blauewelt.github.io/earth` → `blauewelt.org`
 
-**Nothing has to be switched off, ever.** Both hosts can serve the same content
-from the same branch indefinitely, at no cost, and GitHub Pages costs nothing to
-leave running. So there is no big-bang: "cutover" means *changing where links
-point*, and every step below is undone by changing them back.
+**The site moves to a domain Chris owns, in one step, and never moves again.**
+Everything below is a runbook to be followed with the Infomaniak Manager open in
+one tab and the Cloudflare dashboard in another. It is written in the order the
+clicks happen, and every phase names its own rollback.
 
-### Phase 0 — parallel, indefinite (this is the default state)
+### 6.0 · The shape of the decision, and why it is this shape
 
-`pages.yml` and `deploy-cloudflare.yml` both fire on a push to `main`. GitHub
-Pages publishes the whole repo; Cloudflare publishes the 184-file browser set.
-Both are current within a minute of every push. Nobody's links change. **Stay
-here as long as you like** — this is not a staging phase to be got through, it
-is a supported configuration.
+| | Decision |
+|---|---|
+| Canonical name | **`blauewelt.org`**, and the app lives at the **apex** — `https://blauewelt.org/`, no `www`, no path prefix |
+| `www.blauewelt.org` | **301** to the apex, path and query preserved |
+| `blauewelt.ch` | **301** to `blauewelt.org`, path and query preserved. Never an origin |
+| Nameservers | **both zones move to Cloudflare** |
+| `earth.pages.dev` | stays reachable as the verification surface. **Never advertised** |
+| `blauewelt.github.io/earth/` | **stays live indefinitely.** Free, unchanged, and the rollback |
+| Order | **`.org` first and alone.** `.ch` is untouched until `.org` is verified healthy |
 
-### Phase 1 — verify the Cloudflare copy is byte-correct
+Five of those follow from constraints rather than taste, and each is worth
+knowing before someone "simplifies" it back:
 
-Do not compare by looking at it. The globe looks identical when a data file is
-missing, because almost every fetch failure degrades to `null` by design.
+- **The apex forces the nameserver move.** A Pages custom domain at a zone apex
+  needs a record that behaves like a CNAME at the root, and Infomaniak cannot do
+  it. Their own FAQ:
+  > *"Créer un ANAME revient à créer un CNAME directement à la racine du domaine
+  > et cela n'est pas possible."*
+  > — [infomaniak.com/en/support/faq/2493](https://www.infomaniak.com/en/support/faq/2493)
 
-1. **Every file, by hash.** For each of the 184 paths in the upload set, fetch
-   `https://<project>.pages.dev/<path>` and compare the sha256 with the local
-   file. Zero mismatches, zero non-200s. This is the whole test; the rest are
-   checks that the *shape* of the site matches.
-2. **The four entry points return 200 and the right content type:** `/`,
-   `/docs.html`, `/status.html`, `/ml/` (which must land on the status page).
-3. **A path that does not exist returns 404, not 200.** Without a top-level
+  Cloudflare states the other half:
+  > *"If you are deploying to an apex domain… you will need to add your site as a
+  > Cloudflare zone and configure your nameservers."*
+
+  A **subdomain** would not need this — `earth.blauewelt.org CNAME earth.pages.dev`
+  works on Infomaniak DNS, provided the domain is added in the Pages dashboard
+  **first** (a CNAME pointed at `earth.pages.dev` before Pages knows the name
+  answers **522**). That option was considered and rejected: the apex is the name
+  worth having, and a subdomain would spend the one permitted link-breakage on a
+  URL nobody wants to type.
+- **The `.ch` redirect forces its nameservers too.** Cloudflare Redirect Rules
+  only run on traffic the Cloudflare proxy actually sees, so `blauewelt.ch` has
+  to be a proxied zone on Cloudflare. It becomes a second zone **on the same
+  account** — which is required anyway, because a Pages apex custom domain must
+  be a zone on the account that owns the project.
+- **One breakage, not two.** Do **not** cut over to `earth.pages.dev` and then
+  again to the domain. Go straight from `blauewelt.github.io/earth/` to
+  `blauewelt.org/`. Links shared before the move break exactly once, and
+  everything issued afterwards is permanent.
+- **GitHub Pages keeps running, in parallel, indefinitely.** `pages.yml` is not
+  touched by any step in this document. It costs nothing, every old link keeps
+  resolving, and it is the reason no phase below needs a site rollback — only an
+  *email* rollback.
+- **`.org` moves alone.** While `.ch` is still on Infomaniak DNS it is both the
+  control and the fallback: "is this Infomaniak or is this us?" is answerable in
+  one `dig`.
+
+### 6.0b · Phase 0 — the prerequisite, and it is not optional
+
+Everything in §5 must be done and **verified byte-for-byte** before a single DNS
+record changes. Attaching a domain to a broken deployment converts a private
+problem into a public one.
+
+1. `pages.yml` and `deploy-cloudflare.yml` both fire on a push to `main`. Both
+   are current within a minute of every push. Nobody's links have changed yet.
+   **This is a supported configuration, not a staging phase to get through** —
+   stay here as long as you like.
+2. **Every file, by hash.** For each of the 184 paths in the upload set, fetch
+   `https://earth.pages.dev/<path>` and compare the sha256 with the local file.
+   Zero mismatches, zero non-200s. Do not compare by looking at it: the globe
+   looks identical when a data file is missing, because almost every fetch
+   failure degrades to `null` by design.
+3. **The four entry points return 200 and the right content type:** `/`,
+   `/docs.html`, `/status.html`, `/ml` (which must land on the status page).
+4. **A path that does not exist returns 404, not 200.** Without a top-level
    `404.html`, Cloudflare treats a site as a single-page app and answers *every*
-   unknown path with the root document at HTTP 200 — so a dropped data file
-   would arrive as HTML and a missing page would look like the globe. `404.html`
-   is in the repo and in the upload set for exactly this reason; confirm it is
-   working before trusting anything else on this list.
-4. **The `.html` → extensionless redirect is understood.** Cloudflare Pages
+   unknown path with the root document at HTTP 200 — a dropped data file would
+   arrive as HTML and a missing page would look like the globe. `404.html` is in
+   the repo and in the upload set for exactly this reason; confirm it works
+   before trusting anything else on this list.
+5. **The `.html` → extensionless redirect is understood.** Cloudflare Pages
    *"will redirect HTML pages to their extension-less counterparts"*, so
-   `/docs.html?f=x#y` answers with a redirect to `/docs?f=x` (query preserved,
-   fragment is client-side and survives). Every shared link still resolves; it
-   costs one hop. Check one `docs.html?f=…#…` and one `status.html#run-N` by
+   `/docs.html?f=x#y` answers with a redirect to `/docs?f=x` (query preserved;
+   the fragment is client-side and survives). Every shared link still resolves;
+   it costs one hop. Check one `docs.html?f=…#…` and one `status.html#run-N` by
    hand, on a phone.
-5. **Run the suite against it.** `PLAYWRIGHT_BASE_URL=https://<project>.pages.dev
-   npx playwright test tests/app.spec.js tests/docs.spec.js` — note that
-   `docs.html` reads from `raw.githubusercontent.com` on any non-localhost host,
-   so this exercises the real deployed path rather than the working copy.
-6. **Watch it for a week.** Deploy normally; confirm the Cloudflare copy tracks
-   `main` and that no ML-only day triggers a deploy.
+6. **Run the suite against it.**
+   `PLAYWRIGHT_BASE_URL=https://earth.pages.dev npx playwright test tests/app.spec.js tests/docs.spec.js`
+7. **Watch it for a week.** Confirm the Cloudflare copy tracks `main` and that no
+   ML-only day triggers a deploy.
 
-**Rollback at this phase: none needed.** Nothing has been pointed anywhere.
+**Rollback at Phase 0: none needed.** Nothing has been pointed anywhere.
 
-### Phase 2 — move the links
+---
 
-This is the only irreversible-feeling step, and it is irreversible only in the
-sense that links already sent cannot be edited.
+### Phase A — capture both zones, before anything changes
 
-1. Update the three places in the repo that name the origin (§8).
-2. Update `docs.html`'s and `status.html`'s own links if they moved.
-3. Start posting Cloudflare URLs in chat and in session reports.
+**Do this for `blauewelt.org` and `blauewelt.ch` on the same day, before
+touching either.** This is the only phase whose output cannot be recreated
+afterwards: once the nameservers move, the Infomaniak zone is still there, but
+the moment anyone edits the Cloudflare copy you have lost the reference you
+would have compared it against.
 
-**Rollback: change them back.** GitHub Pages is still live and still current,
-because `pages.yml` was never touched. The rollback is a commit, not a
-migration, and it takes the same 44 seconds as any other deploy.
+**Cloudflare's automatic record scan is not a capture and must not be trusted as
+one.** There is no zone transfer on the public internet (no AXFR), so Cloudflare
+cannot enumerate a zone — it guesses from a list of common names. The records it
+misses are precisely the ones that break silently: DKIM selectors, `autodiscover`,
+and third-party verification TXTs. Capture by hand, then use the scan only as a
+second opinion.
 
-### Phase 3 — retire GitHub Pages (optional, and not recommended)
+**From the Manager:** Domains → the domain → **DNS zone**. Export the zone if
+Infomaniak offers a zone-file download; otherwise screenshot **every record, of
+every type, with its TTL column visible**. Then take the same capture from
+outside, because the dashboard and the wire occasionally disagree:
 
-Only if the 1 GB published-site limit is actually being hit. Deleting the Pages
-deployment removes the rollback. There is no cost reason to do it.
+```bash
+D=blauewelt.org
+for t in SOA NS A AAAA MX TXT CAA; do dig +noall +answer "$D" $t; done
+dig +noall +answer _dmarc.$D TXT
+dig +noall +answer _domainkey.$D NS          # delegation, or nothing — see below
+dig +noall +answer autoconfig.$D CNAME
+dig +noall +answer autodiscover.$D CNAME
+for s in _autodiscover._tcp _imaps._tcp _submission._tcp _caldavs._tcp; do
+  dig +noall +answer $s.$D SRV
+done
+dig +noall +answer DS $D                     # the PARENT's record. Read its TTL
+```
 
-### What actually breaks at the moment of cutover
+`+noall +answer` rather than `+short` throughout, because **the TTL column is
+half the point** and `+short` throws it away.
 
-The site is `https://blauewelt.github.io/earth/`. On Cloudflare it becomes
-`https://earth.pages.dev/` (or a custom domain). **Every link ever shared
-stops resolving** — and this project shares a *lot* of links, by standing rule
-(CLAUDE.md §0b):
+What to look for, and why each one matters:
+
+| Record | Why it matters |
+|---|---|
+| **MX** | Infomaniak Mail expects **exactly one**: `mta-gw.infomaniak.ch`, **priority 5**. They warn that any other MX, or more than one, voids their delivery guarantee. This is the record that stops inbound mail dead |
+| **SPF** (TXT at the apex) | `v=spf1 include:spf.infomaniak.ch -all`. Lose it and everything you send starts landing in spam. **Two** SPF records is a permerror, which is worse than none |
+| **`_domainkey`** | **The trap. Record which of two shapes it has.** See below |
+| **`_dmarc`** (TXT) | Copy the value verbatim. A DMARC policy of `p=reject` over a broken DKIM is how a mail domain deletes its own outbound mail without a single bounce reaching you |
+| **`autoconfig` / `autodiscover` / SRV** | Mail-client auto-setup. Nothing breaks today; it breaks the day someone adds the account to a new phone, months later, and reads as "your mail server is broken" |
+| **Verification TXTs** | Google/Microsoft/anything ending `-site-verification`. Dropping one un-verifies a property weeks later, silently |
+| **CAA** | If any CAA record exists it **must** permit `letsencrypt.org`, `pki.goog` and `ssl.com`, or Cloudflare's Universal SSL cannot issue and the domain serves a certificate error. **No CAA record at all is fine** — it means anyone may issue. Do not invent one |
+| **A / AAAA / CNAME for anything else** | A webmail vanity host, an old subdomain, something pointed at a service nobody remembers |
+| **The DS record, and its TTL** | The wait in Phase B is derived from this number. Write it down |
+| **Web redirections** | Infomaniak's redirections are a **hosting** feature, not DNS. They do **not** move with the zone and will simply stop existing. List them |
+
+**The DKIM trap, stated plainly.** Infomaniak's own words: DKIM is *"enabled by
+default for all Mail Services whose DNS zone is managed with Infomaniak"* — and
+the way it is enabled is usually an **NS delegation**: `_domainkey` is delegated
+to Infomaniak's nameservers, and they publish the selector record inside that
+delegated subtree. That arrangement is a *consequence of Infomaniak hosting the
+zone*, and it ends the instant the zone leaves. So the capture must answer one
+question: **is `_domainkey` an NS delegation, or a literal TXT at
+`<selector>._domainkey`?**
+
+- `dig +noall +answer _domainkey.blauewelt.org NS` returns records → **delegation**.
+  You cannot copy this to Cloudflare; Phase C converts it.
+- It returns nothing, and `dig +short <selector>._domainkey.blauewelt.org TXT`
+  returns a `v=DKIM1…` string → **a literal TXT**. Copy it verbatim, whole.
+
+Either way, **write down the selector name**. You will need it in Phase C and
+again in Phase E, and it is not guessable.
+
+**Rollback at Phase A: nothing has changed, so nothing to undo.** The failure
+mode of this phase is a *thin* capture, and you only discover it in Phase E when
+something is missing and there is nothing to compare against. If the capture
+feels thin, it is. Redo it before Phase B.
+
+---
+
+### Phase B — DNSSEC off, wait, *then* nameservers
+
+**This is the highest-risk step in the whole document.** Infomaniak enables
+DNSSEC by default on purchase, and Cloudflare is blunt about the consequence:
+
+> *"Changing nameservers while DNSSEC is active can cause your domain to become
+> unreachable."*
+
+The mechanism: the DS record at the `.org` registry commits to a signing key.
+Move the nameservers while it stands, and Cloudflare's answers are signed by a
+key the registry has never heard of. Every **validating** resolver — 1.1.1.1,
+8.8.8.8, most ISPs — then refuses to return anything at all. Not a wrong answer:
+**no** answer.
+
+**The order is not negotiable.**
+
+1. **Infomaniak Manager → the domain → DNSSEC → off.** This is what removes the
+   DS record from the registry. Do it *at the registrar*, not by deleting keys in
+   a zone.
+2. **Confirm the DS is gone at the parent**, not just in the dashboard:
+   ```bash
+   dig +noall +answer DS blauewelt.org        # must return nothing
+   dig +dnssec blauewelt.org @1.1.1.1 | grep -c ' ad'   # the AD flag should stop appearing
+   ```
+3. **Wait 1.5 × the DS record's TTL** — the number written down in Phase A. A
+   3600 s TTL means **90 minutes**. Why 1.5 and not 1.0: a resolver may have
+   cached the DS one second before you removed it, so a full TTL is the *floor*,
+   not the guarantee; the extra half covers that plus clock skew. This wait is
+   the cheapest insurance in the runbook. Do not shorten it because the
+   dashboard already says DNSSEC is off — the dashboard is not what resolvers
+   read.
+4. **Add the zone to Cloudflare.** *Add a site → `blauewelt.org` → Free plan.*
+   Cloudflare scans and shows you what it found, and it assigns two nameservers.
+   Note that **partial (CNAME) zone setup is Business-plan-only**, so "keep
+   Infomaniak DNS and just proxy the one hostname" is not available here.
+5. **STOP.** Do **Phase C** now — populate the zone completely and check it
+   against the Phase A capture. A Cloudflare zone can be edited freely while it
+   is still inactive, and every record you get right before the switch is a
+   record that never has a broken minute. **Come back here for step 6.**
+6. **Now change the nameservers at Infomaniak** to the two Cloudflare assigned.
+   Manager → the domain → nameservers → custom.
+7. Wait for Cloudflare to mark the zone **Active** (it emails, and the Overview
+   page says so). This is usually minutes and can take hours.
+8. **Re-enable DNSSEC, in the right direction.** Cloudflare → DNS → Settings →
+   DNSSEC → Enable. Cloudflare gives you a DS record; publish it at **Infomaniak**,
+   which documents this exact combination at
+   [faq/2187](https://www.infomaniak.com/en/support/faq/2187) with the field
+   mapping spelled out — Cloudflare's **Digest** → Infomaniak's *Hash*,
+   **Digest Type** → *Hash Type*, **Algorithm** → *Algorithm*, **Key Tag** →
+   *Key*. Do this only after the zone is Active and Phase E has passed.
+
+**What it looks like if the order is wrong.** The signature is unmistakable once
+you know it, and invisible if you do not, because *non-validating* resolvers keep
+working — so the domain will look fine from one network and dead from another:
+
+```bash
+$ dig blauewelt.org @1.1.1.1
+;; ->>HEADER<<- opcode: QUERY, status: SERVFAIL, id: 12345
+
+$ dig +cd blauewelt.org @1.1.1.1        # +cd = checking disabled
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 12346
+;; ANSWER SECTION: ... 104.21.x.x
+```
+
+**SERVFAIL without `+cd`, NOERROR with it, is a DNSSEC validation failure, not an
+outage.** Nothing about the website or the mail server is wrong; resolvers are
+refusing to speak about the domain. Web *and* mail are both gone, everywhere that
+validates.
+
+| Rollback at Phase B | |
+|---|---|
+| **Symptom** | Step 1 done, nothing else: none. Removing a DS never breaks resolution — it only stops validation |
+| **Action** | Re-enable DNSSEC at Infomaniak if you change your mind |
+| **Time** | Registry publish: minutes to an hour |
+| **Symptom** | SERVFAIL as above (nameservers moved while the DS still stood) |
+| **Action** | Turn DNSSEC **off** at Infomaniak — remove the DS. Do not try to fix it forward |
+| **Time** | Registry publish, then up to the **old DS TTL**. Typically under an hour. This is why that TTL was written down |
+| **Symptom** | Nameservers moved, zone is wrong, site and/or mail down |
+| **Action** | **Point the nameservers back at Infomaniak.** The Infomaniak zone is not deleted by delegating away — every record is still there |
+| **Time** | Up to the delegation's TTL at the registry, commonly **24–48 h**. This is the slowest rollback in the document, and it is the entire reason Phase C is done before step B6 |
+
+---
+
+### Phase C — every record into Cloudflare, email first
+
+Do this **while the zone is still inactive** (between B5 and B6). Work from the
+**Phase A capture**, not from Cloudflare's scan; use the scan only to notice
+something the capture missed, never the other way round.
+
+Email goes in first because it is the only thing here that breaks *silently*.
+A broken website is a phone call within the hour. A broken DKIM is three weeks
+of your mail quietly scoring as spam.
+
+1. **MX — exactly one.** Add record → MX. Name `@`, server
+   `mta-gw.infomaniak.ch`, **priority 5**, TTL Auto. Then **delete every other MX
+   Cloudflare's scan invented.** Infomaniak's delivery guarantee is void with any
+   other MX or with more than one.
+2. **SPF — exactly one.** TXT at `@`: `v=spf1 include:spf.infomaniak.ch -all`.
+   If the capture showed extra `include:`s for other senders, keep them, in the
+   same single record. Two SPF TXTs is a permerror.
+3. **DMARC.** TXT at `_dmarc`, value copied verbatim from the capture.
+4. **DKIM — the NS → TXT conversion.** If Phase A found `_domainkey` as an **NS
+   delegation**, do **not** recreate those NS records in Cloudflare. Infomaniak's
+   own Cloudflare guide
+   ([faq/1619](https://www.infomaniak.com/en/support/faq/1619)) says to remove
+   them and publish a literal TXT instead.
+   - Get the value: **Manager → Mail Service → the domain → the DKIM /
+     signature panel.** It shows a Name (the selector) and a long
+     `v=DKIM1; k=rsa; p=…` value. Copy the **whole** value — the `p=` blob is
+     long and a copy that drops its middle produces a record that exists, looks
+     right, and fails every verification.
+   - Publish it in Cloudflare. Cloudflare's **DKIM record helper** (the
+     email-records shortcut in the DNS tab) takes the **selector alone** in the
+     Name field and appends `._domainkey` plus the zone for you; the plain
+     **TXT** form does not, and there the Name must be written out as
+     `<selector>._domainkey`. **Both are correct and they produce the same
+     name** — which is why the arbiter is not the form you used but this:
+     ```bash
+     dig +short <selector>._domainkey.blauewelt.org TXT
+     ```
+     It must return the `v=DKIM1…` string, **once**. A result at
+     `<selector>._domainkey._domainkey.blauewelt.org` is the classic error, and
+     an empty result with two records elsewhere is the second classic error.
+   - **Proxy status: DNS only.**
+5. **Grey cloud on everything mail touches.** Cloudflare's proxy handles HTTP and
+   HTTPS and nothing else. An orange-clouded hostname resolves to Cloudflare's
+   anycast addresses, and SMTP or IMAP to those goes nowhere. TXT and MX have no
+   proxy toggle, but `autoconfig`, `autodiscover`, `webmail` and any mail-server
+   A/CNAME do — and they **default to proxied**. Set every one of them to
+   **DNS only (grey cloud)**.
+6. **Everything else from the capture, verbatim**, TTL Auto: the verification
+   TXTs, the SRV records, any remaining A/AAAA/CNAME. TTL Auto is 300 s while
+   the zone is proxied, which is what makes Phase E's fixes five-minute fixes.
+7. **CAA.** If the capture found CAA records, make sure the set permits
+   `letsencrypt.org`, `pki.goog` and `ssl.com`. If it found none, **add none** —
+   an absent CAA record set permits every issuer, which is what you want.
+8. **Do not add an A or CNAME for the site itself.** Phase D creates the right
+   record automatically when the domain is attached to the Pages project, and a
+   hand-made one will fight it.
+9. **Count the records.** The free plan allows **200 per zone**. This zone will
+   be nowhere near it; the check costs one glance and rules the limit out
+   permanently.
+
+Then **go back to Phase B step 6** and move the nameservers.
+
+| Rollback at Phase C | |
+|---|---|
+| **Symptom** | A record is missing or wrong (found in Phase E, or by diffing against the capture) |
+| **Action** | Fix it in Cloudflare, against the Phase A capture |
+| **Time** | Cloudflare is authoritative and TTL Auto is 300 s → **~5 minutes**, worldwide |
+| **Symptom** | Inbound mail is actually bouncing |
+| **Action** | Check the **MX** first. A wrong MX is a two-minute fix; a nameserver rollback is a 24-hour one. Only if the zone is comprehensively wrong is B's nameserver rollback the right tool |
+
+---
+
+### Phase D — attach the apex to the Pages project
+
+Do not start until the Cloudflare Overview page says the zone is **Active**.
+Universal SSL is issued **only after that**, and everything in this phase depends
+on the certificate.
+
+1. **Set the SSL mode first.** SSL/TLS → Overview → **Full (strict)**.
+   **Not Flexible.** Flexible sends plain HTTP to the origin; Pages redirects
+   HTTP → HTTPS; the browser follows that back into Cloudflare, which strips it
+   to HTTP again, and the visitor gets **`ERR_TOO_MANY_REDIRECTS`** on a site
+   that is otherwise perfectly deployed. Pages presents a valid, publicly
+   trusted certificate, so **Full (strict)** is not merely safe here, it is
+   correct.
+2. **Attach the domain in the Pages project, not in DNS.** Workers & Pages →
+   `earth` → **Custom domains** → *Set up a custom domain* → `blauewelt.org`.
+   Because the zone is on the same Cloudflare account, Cloudflare creates the
+   apex record itself. **The registration in the Pages dashboard must come
+   first**: a record pointed at `earth.pages.dev` before Pages knows the name
+   answers **522**, which reads exactly like an origin outage and is not one.
+3. **Wait for the custom domain to read *Active*** and for the certificate to
+   issue. Universal SSL covers the **apex and first-level subdomains only** —
+   here that is exactly `blauewelt.org` and `www.blauewelt.org`, which is all
+   this design needs. **Do not order an Advanced Certificate: they are
+   incompatible with Pages.**
+4. **Never flip a custom domain's DNS away and back to "retry".** Cloudflare
+   marks the domain inactive when its record stops pointing at Pages, and
+   visitors get errors until it reactivates. If something looks stuck, wait and
+   read the status text; do not poke the record.
+5. **`www`, which exists only to redirect.** It needs a record so that the
+   hostname resolves, and it needs to be **proxied** so a Redirect Rule can run
+   on it — but it must never reach an origin. Add:
+   - **AAAA**, name `www`, address `100::` (the IPv6 discard prefix), **Proxied
+     (orange cloud)**.
+
+   The proxy answers, the rule below fires, and nothing is ever forwarded.
+6. **The redirect rule.** Rules → **Redirect Rules** → *Create rule* → Single
+   Redirect. The free plan allows **10 per zone**; this is one.
+   - **Wildcard form** — *When incoming requests match*: wildcard pattern
+     `https://www.blauewelt.org/*`; *Then*: target
+     `https://blauewelt.org/${1}`, status **301**, and switch
+     **Preserve query string** **on**.
+   - **Expression form**, identical in effect and easier to read back later:
+     when `http.host eq "www.blauewelt.org"`, then *Dynamic* →
+     `concat("https://blauewelt.org", http.request.uri.path)`, **301**,
+     **Preserve query string on**.
+   - **Exclude the ACME path.** Add
+     `and not starts_with(http.request.uri.path, "/.well-known/")` to the match.
+     A redirect rule that swallows `/.well-known/acme-challenge/` is the single
+     most common way a certificate silently stops renewing thirty days later.
+   - **Preserve query string is an explicit toggle and it is off by default.**
+     Every `docs.html?f=…` link in this project's history depends on it.
+     Fragments (`#anchor`) need nothing: browsers never send them, so they
+     survive any redirect by construction.
+7. **Do not add `www` — or anything else — as a second Pages custom domain.** A
+   second origin name means two live copies of the app and every future link
+   split between them.
+
+| Rollback at Phase D | |
+|---|---|
+| **Symptom** | `ERR_TOO_MANY_REDIRECTS` |
+| **Action** | SSL mode is Flexible. Set **Full (strict)** |
+| **Time** | ~1 minute |
+| **Symptom** | **522** on the custom domain |
+| **Action** | The name was not registered in the Pages project first, or it is still initialising. Add it in the Pages project and wait. Do **not** edit the DNS record |
+| **Time** | Minutes |
+| **Symptom** | Certificate warning in the browser |
+| **Action** | Zone not Active yet, or a CAA record forbids the issuer (Phase A). Universal SSL issues only after Active |
+| **Time** | Minutes to a few hours |
+| **Symptom** | Anything worse |
+| **Action** | Remove the custom domain from the Pages project. The site is still live and current at `blauewelt.github.io/earth/` and at `earth.pages.dev` — **there is no site rollback to perform**, only a domain to detach |
+| **Time** | Immediate |
+
+---
+
+### Phase E — verify, and do not hand-wave it
+
+This is the phase that decides whether `.ch` is touched at all. Run every command.
+Compare every answer against the **Phase A capture**, line by line: anything in
+the capture that does not appear here has been dropped, and nothing will tell you
+so.
+
+**DNS — is the zone what it used to be?**
+
+```bash
+D=blauewelt.org
+dig +short NS $D                      # the two Cloudflare nameservers, nothing else
+dig +short A $D                       # Cloudflare anycast addresses
+dig +short AAAA $D
+dig +short MX $D                      # exactly: 5 mta-gw.infomaniak.ch.
+dig +short TXT $D                     # ONE v=spf1 …, plus the verification TXTs
+dig +short TXT _dmarc.$D
+dig +short TXT <selector>._domainkey.$D    # the v=DKIM1 string, exactly once
+dig +noall +answer CAA $D             # empty is fine; if not, letsencrypt.org must be allowed
+dig +noall +answer DS $D              # empty until Phase B8 re-enables DNSSEC
+```
+
+**HTTP and the certificate.**
+
+```bash
+curl -sSI https://blauewelt.org/ | head -20              # 200, and a cf-ray header
+curl -sSI http://blauewelt.org/ | head -5                # 301 → https, ONE hop
+curl -sS -o /dev/null -w '%{num_redirects}\n' -L https://blauewelt.org/
+                                                          # 0 or 1. Never climbing
+curl -sSI 'https://www.blauewelt.org/docs.html?f=ml/EXPERIMENTS.md' | head -8
+     # 301 → https://blauewelt.org/docs.html?f=ml/EXPERIMENTS.md   ← query preserved
+curl -sSI https://blauewelt.org/this-path-does-not-exist | head -3   # 404, NOT 200
+curl -sSI https://blauewelt.org/ml | head -8             # the /ml shortcut still lands
+curl -sS https://blauewelt.org/data/catalog.json | head -c 80; echo
+openssl s_client -connect blauewelt.org:443 -servername blauewelt.org </dev/null 2>/dev/null \
+  | openssl x509 -noout -subject -issuer -dates
+```
+
+**The ACME probe — the check for a failure that is thirty days away.**
+
+```bash
+curl -sSI https://blauewelt.org/.well-known/acme-challenge/probe | head -3
+curl -sSI https://www.blauewelt.org/.well-known/acme-challenge/probe | head -3
+```
+
+A **404** is the healthy answer. A **301 to somewhere else** means a redirect
+rule is eating the path certificate authorities use, and the failure surfaces at
+the next renewal, not today. Cloudflare validates Universal SSL over DNS while it
+runs the zone, so this path is not load-bearing for the *first* certificate —
+which is exactly why it can be broken for a month without anyone noticing. Check
+`www` in particular: its whole existence is a redirect rule.
+
+**Email — both directions, and this is the gate.**
+
+1. **Inbound.** From an account at a completely unrelated provider — a phone, not
+   this machine, not an alias on the same domain — send a message to a real
+   mailbox at `blauewelt.org`. It must arrive within a minute. Open the received
+   message's full headers and confirm `Received: … by mta-gw.infomaniak.ch`.
+2. **Outbound.** Reply from that Infomaniak mailbox to the external address.
+   In the copy that arrives, open *Show original* / full headers and read the
+   `Authentication-Results:` line at the **receiving** end:
+   - `spf=pass` — the SPF TXT survived.
+   - `dkim=pass header.d=blauewelt.org` — the NS→TXT conversion worked.
+   - `dmarc=pass` — both of the above agree with the `_dmarc` policy.
+3. **Read a failure correctly:**
+   - `dkim=none` or `dkim=fail` → Phase C step 4. In order of likelihood: the
+     record landed at `<selector>._domainkey._domainkey`, the `p=` value was
+     truncated in the copy, or there are two TXT records at the name.
+   - `spf=softfail` / `spf=fail` → the SPF TXT is missing, duplicated, or lost
+     its `include:spf.infomaniak.ch`.
+   - `dmarc=fail` with the other two passing → the `_dmarc` value was not copied
+     verbatim.
+4. **Infomaniak's own checker**
+   ([faq/2692](https://www.infomaniak.com/en/support/faq/2692)) — run it against
+   the domain from the Manager. It checks MX, SPF, DKIM and DMARC *as Infomaniak
+   expects them*, which makes it the authority on the only question that matters
+   here: will Infomaniak still deliver for this domain now that it does not own
+   the zone.
+5. **A second opinion from outside.** Send one message from the Infomaniak
+   mailbox to a mail-tester-style external checker and read the score. It flags
+   things Infomaniak has no reason to flag — a missing PTR, a DMARC policy now
+   enforcing against a DKIM that stopped signing.
+6. **If `autoconfig`/`autodiscover`/SRV records existed**, add the account from
+   scratch in a mail client. That path is exercised by nobody until the day
+   someone gets a new phone, and it fails as "your mail is broken".
+
+**`blauewelt.ch` is not touched until every check above passes.** Not the
+nameservers, not the DNSSEC toggle, nothing. While `.ch` is still wholly on
+Infomaniak it is a working control: any question of the form "is this Infomaniak
+misbehaving or is this our change?" is answered by running the same query against
+`.ch`. Give it a few days of real mail as well — DKIM failures present as spam
+foldering, not as bounces, and low-volume domains take days to show it.
+
+| Rollback at Phase E | |
+|---|---|
+| **Symptom** | A DNS answer disagrees with the capture |
+| **Action** | Fix the record in Cloudflare |
+| **Time** | ~5 minutes (TTL Auto = 300 s) |
+| **Symptom** | Mail fails a check but is still flowing |
+| **Action** | Fix the record. Do not roll back nameservers for a DKIM failure — the rollback is slower than the fix by two orders of magnitude |
+| **Time** | ~5 minutes, plus a re-test |
+| **Symptom** | Mail is genuinely not being delivered |
+| **Action** | MX first (2 min). If the zone is comprehensively wrong, nameservers back to Infomaniak |
+| **Time** | 2 minutes, or **24–48 h** for the nameserver route |
+
+---
+
+### Phase F — `blauewelt.ch`, once and only once `.org` is healthy
+
+Same shape, smaller: `.ch` becomes a redirect and never an origin.
+
+1. **Phase A again, in full.** Even if `.ch` "isn't used for anything" — that is
+   precisely where a forgotten verification TXT or an MX nobody remembers lives.
+   **If `.ch` carries mail, Phases A–C apply exactly as written**, DKIM
+   conversion included. Establish that first; it is not visible from outside.
+2. **Phase B again:** DNSSEC off → wait 1.5 × the DS TTL → add the zone →
+   populate it (Phase C) → move the nameservers → wait for Active → re-enable
+   DNSSEC and publish the new DS at Infomaniak.
+3. **Two placeholder records**, because both names must resolve and both must be
+   proxied for a rule to run on them, and neither may reach an origin:
+   - **AAAA**, name `@`, `100::`, **Proxied**
+   - **AAAA**, name `www`, `100::`, **Proxied**
+4. **One redirect rule for both hostnames.** Rules → Redirect Rules → Create:
+   - *When*: `http.host in {"blauewelt.ch" "www.blauewelt.ch"} and not starts_with(http.request.uri.path, "/.well-known/")`
+   - *Then*: Dynamic → `concat("https://blauewelt.org", http.request.uri.path)`,
+     **301**, **Preserve query string on**.
+5. **`blauewelt.ch` is never added to the Pages project.** It is a redirect. Add
+   it as a custom domain and you have two origins serving the same app under two
+   names, and every link ever shared afterwards is a coin flip.
+6. **Verify:**
+   ```bash
+   curl -sSI 'https://blauewelt.ch/docs.html?f=ml/EXPERIMENTS.md' | head -8
+   curl -sSI 'https://www.blauewelt.ch/status.html' | head -8
+   curl -sSI https://blauewelt.ch/.well-known/acme-challenge/probe | head -3
+   ```
+   The first two must be **301** to the same path and query on `blauewelt.org`;
+   the third must be a **404**, not a redirect. Then repeat Phase E's email
+   checks **for `.ch`** if it carries mail.
+
+| Rollback at Phase F | |
+|---|---|
+| **Symptom** | The redirect loops, or does not fire |
+| **Action** | Disable the rule — one toggle. `.org` is untouched by construction: the rule is scoped to `.ch` hostnames |
+| **Time** | Immediate |
+| **Symptom** | `.ch` mail broke |
+| **Action** | Nameservers back to Infomaniak; the zone there is intact |
+| **Time** | **24–48 h**, which is why Phase C's "get it right before the switch" applies here too |
+| **Symptom** | Anything at all wrong with `.org` |
+| **Action** | Not caused by this phase. Stop, and go back to Phase E |
+| **Time** | — |
+
+---
+
+### What actually breaks, and what it costs
+
+The site is `https://blauewelt.github.io/earth/`; it becomes
+`https://blauewelt.org/`. **Every link ever shared points at the old address**,
+and this project shares a *lot* of links, by standing rule (CLAUDE.md §0b):
 
 - every `docs.html?f=ml/EXPERIMENTS.md#e-026b` posted in chat
 - every `status.html#run-427` in a session report
 - every `ml/figs/*.html` figure link
-- the `/earth/ml` shortcut, if anyone typed it into a phone's home screen
+- the `/earth/ml` shortcut, if it is on a phone's home screen
 
-Those live in chat history, in the paper's trail, and on Chris's phone. Nothing
-rewrites them. Chris has accepted this explicitly — *"the deep links are
-normally not saved, and our status page can be changed by us"* — so it is not a
-blocker. It is written down so that nobody rediscovers it under pressure.
+Nothing rewrites them, and Chris has accepted this explicitly — *"the deep links
+are normally not saved, and our status page can be changed by us"*. Two things
+reduce it to almost nothing:
 
-**Two things reduce the blast radius, and both are cheap:**
+- **GitHub Pages keeps running.** Every old link keeps resolving, forever, at no
+  cost. That is the whole reason nothing in this document needs a site rollback.
+- **It happens once.** `blauewelt.org` is a name we control; any future host
+  change is a DNS record and breaks nothing. This is the last time these links
+  move.
 
-- **Leave GitHub Pages running.** Every old link keeps working. This is free and
-  it is the reason Phase 3 is optional.
-- **A custom domain is the real fix, and its value is that it is bought before
-  it matters.** A domain pointed at GitHub Pages *today* makes every link issued
-  from today onward portable: the cutover then becomes one DNS record and no
-  broken link at all. Bought after the traffic spike, it fixes nothing already
-  shared. GitHub Pages supports one (Settings → Pages → Custom domain, plus a
-  `CNAME` file) and Cloudflare Pages supports 100 per project, free — the same
-  domain can point at either. This is the single highest-value five-minute
-  action in this document, and it is the one with a deadline.
+### Retiring GitHub Pages — optional, and not recommended
+
+Only if the 1 GB published-site limit is actually being hit. Deleting the Pages
+deployment removes the rollback and the permanent home of every link shared
+before the cutover. There is no cost reason to do it.
 
 ---
 
@@ -467,52 +961,111 @@ would keep serving from Pages as a fallback. Cloudflare does not raise it; only
 moving `data/`'s per-year archives off the repo would.
 
 ---
-
 ## 8 · Everything that names the origin
 
-Swept 2026-08-21 across `index.html`, `status.html`, `docs.html`,
-`manifest.json`, `src/`, `data/`, `lib/` and `.github/workflows/`.
+Swept 2026-08-21 across `index.html`, `status.html`, `docs.html`, `404.html`,
+`ml/index.html`, `manifest.json`, `src/`, `lib/`, `data/`, `scripts/` and
+`.github/workflows/`. Re-swept and **closed** the same day, when the destination
+stopped being hypothetical.
 
-**Nothing in the app breaks when the origin changes.** Every asset, data file
-and internal page is fetched by a *relative* path, and `manifest.json` uses
-`"start_url": "./index.html"` and `"scope": "./"` — confirmed — so an installed
-PWA follows whichever origin it was installed from. The build check
-(`checkForNewBuild()`, `src/app.js:8288`) fetches `index.html?fresh=…`
-relatively and is origin-agnostic. `docs.html` reads markdown from
-`raw.githubusercontent.com` on any non-`localhost` host
-(`docs.html:368–372`) and `status.html` reads only `api.github.com` and
-`raw.githubusercontent.com` — all cross-origin already, all unaffected.
+**Nothing in the app breaks when the origin changes, and nothing points at the
+old one any more.**
 
-Four hits name the GitHub Pages origin. All four **degrade** (they keep working,
-they just point back at GitHub Pages) as long as Pages stays up, which is the
-plan:
+### The parts that were already right (verified, not assumed)
 
-| File · line | What | Verdict |
-|---|---|---|
-| `status.html:204` | `DOCS_BASE = "https://blauewelt.github.io/earth/docs.html"` | degrades — every experiment badge links back to the GitHub Pages copy |
-| `status.html:160` | `<a href="https://blauewelt.github.io/earth/">Live app</a>` | degrades — sends readers to the old copy |
-| `tests/status.spec.js:480` | asserts that exact absolute URL | fine, and deliberate — it is the tripwire that stops the change going unnoticed |
-| `README.md` ×4, `CLAUDE.md` ×2 | documentation links | fine — they are about where the site is, and can be edited any time |
+- **Every asset, data file and internal page is fetched by a *relative* path.**
+  No `href="/…"` or `src="/…"` exists anywhere in the browser-facing set — which
+  is what makes the `/earth/` path prefix a non-issue: the same files work at
+  `/earth/` on Pages, at `/` on Cloudflare, and at `/` on the test server.
+- **`manifest.json` — confirmed by reading it, not by memory:**
+  `"start_url": "./index.html"`, `"scope": "./"`, and all three icons are
+  relative (`icon-192.png?v=…`). An installed PWA therefore follows whichever
+  origin it was installed from, and an install made from `blauewelt.org` scopes
+  to `blauewelt.org`.
+- **The build check** (`checkForNewBuild()`, `src/app.js:8288`) fetches
+  `index.html?fresh=…` relatively. Origin-agnostic.
+- **`404.html`** links `./index.html`, `./docs.html`, `./status.html` — relative,
+  and a relative link on a 404 resolves against the URL that failed, which is
+  exact for the mistyped-path case it exists for.
+- **`ml/index.html`** redirects to `../status.html`. Relative.
+- **`docs.html`** reads markdown from `raw.githubusercontent.com` on any
+  non-`localhost` host (`docs.html:369–374`) and **`status.html`** reads only
+  `api.github.com` and `raw.githubusercontent.com`. All cross-origin already,
+  all unaffected by the move — and note that this is why the docs reader stays
+  correct on a brand-new origin from its first minute.
+- **No `<link rel="canonical">`, no `og:url`, no Content-Security-Policy** in any
+  page. Nothing to re-point, and nothing that would refuse to load on a new
+  hostname.
+- **No absolute self-origin URL in `data/`.** Checked across every file.
 
-`DOCS_BASE` is absolute on purpose: `status.html` is opened from Pages, from a
-`file://` copy and from `localhost` in the suite, and the badge must resolve in
-all three. **Do not simply make it relative** — that breaks the `file://` case.
-The origin-following form that keeps all three working is:
+### The two hits, and how they were closed
+
+`status.html` was the only browser-facing file that named the GitHub Pages
+origin, in two places, and both were on the reader's path rather than in a
+comment: the experiment badge on every run card, and the "Live app" link. Left
+alone they would have *degraded* rather than broken — a reader on
+`blauewelt.org` would have been quietly handed back to the GitHub Pages copy,
+which is only as fresh as its last deploy. Both are now **origin-following with
+a saved-copy fallback**:
 
 ```js
-var DOCS_BASE = (location.protocol === "file:" || !location.host)
-  ? "https://blauewelt.github.io/earth/docs.html"          // a saved copy
-  : new URL("docs.html", location.href).href;              // follow the origin
+var SAVED_COPY = "https://blauewelt.github.io/earth/";
+var ORIGINLESS = (location.protocol === "file:" || !location.host);
+var DOCS_BASE = ORIGINLESS ? SAVED_COPY + "docs.html"
+                           : new URL("docs.html", location.href).href;
+var APP_BASE  = ORIGINLESS ? SAVED_COPY
+                           : new URL("./", location.href).href;
 ```
 
-On GitHub Pages that evaluates to exactly today's string, so the change is
-behaviour-preserving in production and only the suite's expectation moves. It is
-a Phase-2 edit, listed here so it is a two-line diff rather than a search.
+The `file://` branch is the reason this is not simply a relative URL: a saved
+copy has no origin to follow, and a relative link there would resolve to a path
+on the reader's own disk. GitHub Pages stays live indefinitely (§6.0), so the
+fallback target is a real page and not a hopeful one.
 
-Non-hits worth recording so nobody looks again: `index.html:866`,
-`status.html:153–154` and `src/app.js:439` contain `github.com/blauewelt/earth/blob/…`
-URLs — those point at the *repository*, not the site, and are correct on any
-host.
+**On GitHub Pages both expressions evaluate to exactly the strings that were
+hardcoded before**, so the change is behaviour-preserving in production; only
+the suite's expectation moved.
+
+| File · line | What it is now |
+|---|---|
+| `status.html:223–228` | `SAVED_COPY` / `ORIGINLESS` / `DOCS_BASE` / `APP_BASE` — the block above |
+| `status.html:163` | `<a id="live-app" href="https://blauewelt.github.io/earth/">` — the literal is the no-JS and saved-copy value; `status.html:245–249` re-points it at `APP_BASE` on load |
+| `tests/status.spec.js:487` | the tripwire, **moved rather than deleted**: it now asserts the behaviour in all three contexts — the serving origin, a *different* serving origin (127.0.0.1 standing in for `earth.pages.dev` / `blauewelt.org`), and a real `file://` load. The second of those is the one that fails if anything is ever pinned to a host again |
+
+### Deliberate non-hits, recorded so nobody sweeps them twice
+
+- `index.html:866`, `status.html:153–154` and `src/app.js:439` contain
+  `github.com/blauewelt/earth/blob/…` URLs. Those point at the **repository**,
+  not the site, and are correct on any host.
+- `README.md` ×4 and `CLAUDE.md` ×2 name the live site in prose. They are
+  *about* where the site is; they get edited when it moves, and a stale one is
+  visible rather than silent.
+- `scripts/run_index.mjs:39` defaults `--docs-base` to the Pages URL and
+  `scripts/dispatch_run.mjs:206` prints the Pages status URL to a console. Both
+  are agent-side tooling, neither is served to a browser, `run_index.mjs`
+  already takes an override on the command line, and both keep working because
+  GitHub Pages keeps running. Change them when the domain is live and verified —
+  not before, or they will print a URL that does not resolve yet.
+
+### `_headers` and `_redirects`: audited, and deliberately absent
+
+Both were considered and neither is added, because the audit produced no
+requirement for either:
+
+- **`_headers`** — there is no CSP to extend, no cross-origin font or asset to
+  permit, and no header the app depends on. The one *speculative* use (marking
+  the `?v=<sha8>`-stamped assets `immutable`, §2) is a caching optimisation with
+  no measurement behind it and no bearing on the domain move. Adding
+  configuration "while we're in there" is how a file nobody understands ends up
+  in front of every request. If the stamped-asset caching is ever wanted, it is
+  its own change with its own before/after numbers.
+- **`_redirects`** — it cannot do what this cutover needs. Pages' `_redirects`
+  is scoped to paths within one deployment: it cannot redirect one *domain* to
+  another, and it does not preserve query strings. `www.blauewelt.org` and
+  `blauewelt.ch` are therefore handled by **Cloudflare Single Redirect Rules**
+  (§6, Phases D and F), which do both and expose "Preserve query string" as an
+  explicit toggle. Putting a `_redirects` file in the repo would look like it
+  was doing that job and would not be.
 
 ---
 
