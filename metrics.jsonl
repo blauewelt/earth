@@ -1,0 +1,39 @@
+{"config": {"steps": 197428, "batch": 512, "d_z": 32, "patch": 1, "d_model": 512, "n_layers": 12, "n_heads": 4, "d_dec": 256, "anomaly": true, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 37.976, "data": "family4_na025_pentad_r2.npz", "C": 40, "T": 3142, "resume": "run-415", "recipe": "xl144-zn-pentad-nolonhold"}}
+{"resumed": {"from": "run-415.pt", "parent_tag": "run-415", "at_step": 197428}}
+{"embedding": {"pct": 0.0, "month": 1, "months": 3142, "elapsed_s": 0, "eta_s": 0, "where": "disk"}}
+{"embedding": {"pct": 5.1, "month": 159, "months": 3142, "elapsed_s": 1602, "eta_s": 30056, "where": "disk"}}
+{"embedding": {"pct": 10.1, "month": 317, "months": 3142, "elapsed_s": 3204, "eta_s": 28549, "where": "disk"}}
+{"embedding": {"pct": 15.1, "month": 475, "months": 3142, "elapsed_s": 4805, "eta_s": 26981, "where": "disk"}}
+{"embedding": {"pct": 20.1, "month": 633, "months": 3142, "elapsed_s": 6407, "eta_s": 25396, "where": "disk"}}
+{"embedding": {"pct": 25.2, "month": 791, "months": 3142, "elapsed_s": 8020, "eta_s": 23835, "where": "disk"}}
+{"embedding": {"pct": 30.2, "month": 949, "months": 3142, "elapsed_s": 9623, "eta_s": 22238, "where": "disk"}}
+{"embedding": {"pct": 35.2, "month": 1107, "months": 3142, "elapsed_s": 11237, "eta_s": 20657, "where": "disk"}}
+{"embedding": {"pct": 40.3, "month": 1265, "months": 3142, "elapsed_s": 12853, "eta_s": 19071, "where": "disk"}}
+{"embedding": {"pct": 45.3, "month": 1423, "months": 3142, "elapsed_s": 14468, "eta_s": 17477, "where": "disk"}}
+{"embedding": {"pct": 50.3, "month": 1581, "months": 3142, "elapsed_s": 16082, "eta_s": 15879, "where": "disk"}}
+{"embedding": {"pct": 55.3, "month": 1739, "months": 3142, "elapsed_s": 17696, "eta_s": 14277, "where": "disk"}}
+{"embedding": {"pct": 60.4, "month": 1897, "months": 3142, "elapsed_s": 19309, "eta_s": 12672, "where": "disk"}}
+{"embedding": {"pct": 65.4, "month": 2055, "months": 3142, "elapsed_s": 20920, "eta_s": 11066, "where": "disk"}}
+{"embedding": {"pct": 70.4, "month": 2213, "months": 3142, "elapsed_s": 22534, "eta_s": 9460, "where": "disk"}}
+{"embedding": {"pct": 75.5, "month": 2371, "months": 3142, "elapsed_s": 24144, "eta_s": 7851, "where": "disk"}}
+{"embedding": {"pct": 80.5, "month": 2529, "months": 3142, "elapsed_s": 25752, "eta_s": 6242, "where": "disk"}}
+{"embedding": {"pct": 85.5, "month": 2687, "months": 3142, "elapsed_s": 27359, "eta_s": 4633, "where": "disk"}}
+{"embedding": {"pct": 90.5, "month": 2845, "months": 3142, "elapsed_s": 28966, "eta_s": 3024, "where": "disk"}}
+{"embedding": {"pct": 95.6, "month": 3003, "months": 3142, "elapsed_s": 30573, "eta_s": 1415, "where": "disk"}}
+{"stage2_config": {"d_model": 1024, "layers": 16, "K": 24, "steps": 200000, "params_M": 206.536, "batch": 256, "train_windows": 251337502, "d_z": 32, "seed": 0, "unroll": 1, "stencil": 145, "ring_km": "spiral:111,4444,0.71,0.5", "unroll_probs": "", "direct": "", "train_lon_hold": "none", "codec_holdout_lon": "0,0", "tag": ""}}
+{"stage2_monitor": {"n_windows": 4096, "val_persistence": 21.44622}}
+{"stage2_step": 2000, "stage2_zmse": 6.77614, "stage2_loss_base": 6.77614, "stage2_val_zmse": 11.58984, "stage2_amp": 0.8218, "stage2_grad_norm": 8.2372, "stage2_lr": 0.0009999826714706267, "stage2_wall_s": 731.7}
+{"stage2_step": 4000, "stage2_zmse": 5.26661, "stage2_loss_base": 5.26661, "stage2_val_zmse": 11.81387, "stage2_amp": 0.8372, "stage2_grad_norm": 8.2483, "stage2_lr": 0.0009659195906687971, "stage2_wall_s": 1418.4}
+{"stage2_step": 6000, "stage2_zmse": 17.70444, "stage2_loss_base": 17.70444, "stage2_val_zmse": 22.41752, "stage2_amp": 0.8568, "stage2_grad_norm": 787.2139, "stage2_lr": 0.0009330168234472073, "stage2_wall_s": 2121.2}
+{"stage2_step": 8000, "stage2_zmse": 16.90655, "stage2_loss_base": 16.90655, "stage2_val_zmse": 19.25227, "stage2_amp": 0.8751, "stage2_grad_norm": 3891.0281, "stage2_lr": 0.0009012348452657163, "stage2_wall_s": 2786.1}
+{"stage2_step": 10000, "stage2_zmse": 17.99294, "stage2_loss_base": 17.99294, "stage2_val_zmse": 20.56906, "stage2_amp": 0.8708, "stage2_grad_norm": 2928.0017, "stage2_lr": 0.0008705354779351171, "stage2_wall_s": 3453.4}
+{"stage2_step": 12000, "stage2_zmse": 121.6676, "stage2_loss_base": 121.6676, "stage2_val_zmse": 220.34981, "stage2_amp": 2.8252, "stage2_grad_norm": 6277.7021, "stage2_lr": 0.0008408818437554829, "stage2_wall_s": 4128.2}
+{"stage2_step": 14000, "stage2_zmse": 20.92885, "stage2_loss_base": 20.92885, "stage2_val_zmse": 24.34108, "stage2_amp": 0.911, "stage2_grad_norm": 2078.2205, "stage2_lr": 0.0008122383212167268, "stage2_wall_s": 4796.1}
+{"stage2_step": 16000, "stage2_zmse": 18.11284, "stage2_loss_base": 18.11284, "stage2_val_zmse": 21.5256, "stage2_amp": 0.967, "stage2_grad_norm": 2998.001, "stage2_lr": 0.0007845705022081645, "stage2_wall_s": 5475.8}
+{"stage2_step": 18000, "stage2_zmse": 13.54183, "stage2_loss_base": 13.54183, "stage2_val_zmse": 15.51535, "stage2_amp": 0.766, "stage2_grad_norm": 1106.6249, "stage2_lr": 0.0007578451506856769, "stage2_wall_s": 6143.1}
+{"stage2_step": 20000, "stage2_zmse": 13.53046, "stage2_loss_base": 13.53046, "stage2_val_zmse": 15.21943, "stage2_amp": 0.7338, "stage2_grad_norm": 1026.8826, "stage2_lr": 0.0007320301627468191, "stage2_wall_s": 6818.1}
+{"stage2_probe": {"step": 20000, "rapid_r_deseas": 0.579}}
+{"stage2_step": 22000, "stage2_zmse": 13.39618, "stage2_loss_base": 13.39618, "stage2_val_zmse": 15.03861, "stage2_amp": 0.7529, "stage2_grad_norm": 1168.2882, "stage2_lr": 0.0007070945280659197, "stage2_wall_s": 8243.3}
+{"stage2_step": 24000, "stage2_zmse": 120.73129, "stage2_loss_base": 120.73129, "stage2_val_zmse": 226.75468, "stage2_amp": 2.8541, "stage2_grad_norm": 13051.751, "stage2_lr": 0.0006830082926428405, "stage2_wall_s": 8898.5}
+{"stage2_step": 26000, "stage2_zmse": 18.93076, "stage2_loss_base": 18.93076, "stage2_val_zmse": 20.89788, "stage2_amp": 0.7805, "stage2_grad_norm": 6958.4155, "stage2_lr": 0.0006597425228206521, "stage2_wall_s": 9555.1}
+{"stage2_step": 28000, "stage2_zmse": 19.33818, "stage2_loss_base": 19.33818, "stage2_val_zmse": 20.20434, "stage2_amp": 0.9508, "stage2_grad_norm": 6973.9971, "stage2_lr": 0.0006372692705289969, "stage2_wall_s": 10390.7}
