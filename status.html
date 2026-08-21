@@ -35,6 +35,9 @@
   a { color: var(--accent); text-decoration: none; }
   a:active { opacity: .7; }
   .meta { color: var(--text-dim); font-size: 13px; }
+  /* the API budget, stated before it runs out rather than after */
+  .budget { color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.5; }
+  .budget.low { color: var(--warn); }
   .topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   button#refresh {
     background: var(--surface); color: var(--text); border: 1px solid var(--border);
@@ -125,6 +128,7 @@
     <div style="flex:1 1 auto">
       <h1>earth · ML status</h1>
       <div class="meta" id="updated">loading…</div>
+      <div class="budget" id="budget"></div>
     </div>
     <button id="refresh" type="button">Refresh</button>
   </div>
@@ -163,7 +167,35 @@
 "use strict";
 (function () {
   var REPO = "blauewelt/earth";
-  var REFRESH_MS = 120000;
+  // ---- the API budget, and why the cycle is five minutes -------------------
+  // Unauthenticated api.github.com allows 60 requests per hour per IP, and a
+  // browser has no token. This page spends exactly 2 of them per cycle (the
+  // ml-train runs list and /releases); everything else goes to
+  // raw.githubusercontent.com, which is CDN-served and NOT counted. So the
+  // cycle length IS the budget, and the arithmetic is short:
+  //
+  //     120 s -> 30 cycles/h x 2 = 60/h = 100% of the cap, zero headroom
+  //     240 s -> 15 cycles/h x 2 = 30/h =  50%; a SECOND TAB makes it 100%
+  //     300 s -> 12 cycles/h x 2 = 24/h =  40%; two tabs = 80%, leaving 12
+  //              calls — six manual Refresh taps — still unspent
+  //
+  // 120 s was the setting until 2026-08-21, when Chris opened the page and got
+  // "GitHub rate limit hit" over four sections all reading "loading…": one tab
+  // at exactly the cap, plus a couple of Refresh taps, is over it. 300 s is the
+  // first value that survives a second open tab AND leaves the manual button
+  // something to spend. Note the conditional-request escape does not apply: a
+  // 304 skips the rate limit only for an AUTHORIZED request, so ETags would buy
+  // this page nothing. Staleness costs little — raw is ~5 minutes behind by
+  // construction anyway (see fetchMetrics), and foregrounding the tab refreshes.
+  var REFRESH_MS = 300000;
+  // Calls held back from the AUTO poll so the Refresh button always has some.
+  // Three manual refreshes: the button may spend them, the timer may not.
+  var RATE_RESERVE = 6;
+  // Slack added to x-ratelimit-reset before retrying. That header is a UTC
+  // epoch in SECONDS; a clock a second fast would retry straight into the
+  // same 403, and a 403 is itself a request.
+  var RATE_GRACE_MS = 2000;
+  var RATE_MIN_WAIT_MS = 5000;   // never spin
   var CHART_HISTORY = 6;      // finished runs WITH CURVES to keep charted
   var CHART_CANDIDATES = 24;  // how deep to look for them; see renderLive
   // The phone reader for every markdown file in the repo (CLAUDE.md SS0b).
@@ -180,7 +212,7 @@
                               // (ml-metrics/run-N.jsonl + probes-N.json); the
                               // page was windowing them away. API max is 100.
   var TABLE_ROWS = 12;        // runs LISTED in the table; see renderRuns
-  var timer = null;
+  var timer = null;          // a TIMEOUT id, not an interval: see nextDelay()
 
   function $(id) { return document.getElementById(id); }
   function esc(s) {
@@ -209,6 +241,7 @@
   }
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
   function hms(d) { return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds()); }
+  function hm(d) { return pad2(d.getHours()) + ":" + pad2(d.getMinutes()); }
 
   function statusColor(run) {
     if (run.status !== "completed") return "var(--warn)";
@@ -228,8 +261,30 @@
   }
   function hideBanner() { $("banner").style.display = "none"; }
 
+  // ---- what is left of the budget, read from the API rather than assumed ----
+  // Every api.github.com response carries x-ratelimit-remaining / -limit /
+  // -reset, and GitHub lists all three in Access-Control-Expose-Headers
+  // (verified against the live API 2026-08-21), so a browser can read them.
+  // The 403 that says we ran out carries them too — which is the only way to
+  // learn WHEN we get them back.
+  var rate = { remaining: null, limit: null, reset: null, at: 0 };
+
+  function readRateHeaders(r) {
+    var rem = r.headers.get("x-ratelimit-remaining");
+    var lim = r.headers.get("x-ratelimit-limit");
+    var res = r.headers.get("x-ratelimit-reset");
+    if (rem !== null && rem !== "") rate.remaining = Number(rem);
+    if (lim !== null && lim !== "") rate.limit = Number(lim);
+    // x-ratelimit-reset is a UTC epoch in SECONDS. Storing it in ms here is
+    // the one conversion; everything downstream compares against Date.now().
+    if (res !== null && res !== "") rate.reset = Number(res) * 1000;
+    rate.at = Date.now();
+    renderBudget();
+  }
+
   function apiGet(url) {
     return fetch(url, { headers: { Accept: "application/vnd.github+json" } }).then(function (r) {
+      readRateHeaders(r);
       if (r.status === 403 || r.status === 429) {
         var err = new Error("ratelimit");
         err.rateLimited = true;
@@ -238,6 +293,25 @@
       if (!r.ok) throw new Error("HTTP " + r.status + " for " + url);
       return r.json();
     });
+  }
+
+  function resetClock() { return rate.reset ? hm(new Date(rate.reset)) : null; }
+  // The AUTO poll must not spend the reserve; the Refresh button may.
+  function budgetSpent() {
+    return rate.remaining !== null && rate.remaining <= RATE_RESERVE;
+  }
+  function resetPassed() { return !rate.reset || Date.now() >= rate.reset; }
+  function pollBlocked() { return budgetSpent() && !resetPassed(); }
+
+  function renderBudget() {
+    var el = $("budget");
+    if (!el) return;
+    if (rate.remaining === null) { el.textContent = ""; return; }
+    var t = "GitHub API budget " + rate.remaining + "/" +
+            (rate.limit === null ? "?" : rate.limit);
+    if (rate.reset) t += " · resets " + hm(new Date(rate.reset));
+    el.textContent = t;
+    el.className = "budget" + (budgetSpent() ? " low" : "");
   }
 
   // ---- run documentation ----------------------------------------------------
@@ -1166,11 +1240,13 @@
   // It would break the page.
   //
   // A browser has no token. Unauthenticated api.github.com allows 60 requests
-  // per hour per IP, and this page already spends 2 per 2-minute cycle — 60
-  // an hour, exactly the cap. Adding one content fetch per charted run would
-  // multiply that by seven or eight and rate-limit the dashboard within
-  // minutes. raw is CORS-open and NOT counted against that budget, which is
-  // why every non-API fetch on this page goes through it.
+  // per hour per IP, and this page spends 2 per cycle — which used to be a
+  // 2-minute cycle, i.e. 60 an hour, exactly the cap, and on 2026-08-21 it
+  // duly blew it (see REFRESH_MS: the cycle is 300 s now, 24/h, 40%). Adding
+  // one content fetch per charted run would multiply that by seven or eight
+  // and rate-limit the dashboard within minutes at ANY cadence. raw is
+  // CORS-open and NOT counted against that budget, which is why every non-API
+  // fetch on this page goes through it.
   //
   // So the dashboard is a few minutes stale by construction. That is fine for
   // what it is — a status page refreshed every two minutes, read by a human —
@@ -1997,38 +2073,184 @@
     $("releases").innerHTML = found ? html : '<div class="empty">no releases found</div>';
   }
 
+  // ---- the last good API payload -------------------------------------------
+  // Rate-limited is a state this page is read in, not an exception to it, and
+  // an empty dashboard says nothing at all. So the API half is cached: the
+  // runs list is what the table, the cards AND the curves are all keyed off,
+  // and with a cached list every curve can still be fetched from raw, which
+  // has no rate limit. Stamped with its age on screen — stale is fine, stale
+  // pretending to be live is not.
+  //
+  // Only the fields this page reads are kept. Measured against the live
+  // endpoint on 2026-08-21: the full 75-run payload is 1,080,264 bytes, the
+  // digest below is 86,422 — the difference is almost entirely fields nobody
+  // here reads, and what remains is dominated by display_title, which IS the
+  // run's documentation and the reason a cached table is worth reading at all.
+  // Comfortably inside a 5 MB origin quota; the write is still guarded (the
+  // try/catch idiom every localStorage write in src/app.js uses) and falls
+  // back to a shorter window before giving up.
+  var CACHE_KEY = "statusApiCache";
+  var RUN_FIELDS = ["run_number", "status", "conclusion", "created_at",
+                    "run_started_at", "html_url", "display_title", "name",
+                    "head_sha"];
+
+  function digestRuns(data) {
+    return ((data && data.workflow_runs) || []).map(function (r) {
+      var o = {};
+      RUN_FIELDS.forEach(function (k) {
+        if (r[k] !== undefined && r[k] !== null) o[k] = r[k];
+      });
+      return o;
+    });
+  }
+  function digestReleases(rels) {
+    return (rels || []).map(function (r) {
+      return {
+        tag_name: r.tag_name, html_url: r.html_url,
+        assets: (r.assets || []).map(function (a) {
+          return { size: a.size, download_count: a.download_count };
+        })
+      };
+    });
+  }
+  function cacheSave(runsData, rels) {
+    var runs = digestRuns(runsData);
+    if (!runs.length) return;                 // never overwrite good with empty
+    var payload = { at: Date.now(), runs: runs, releases: digestReleases(rels) };
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+    } catch (e) {
+      // Quota, or storage refused outright (private mode). Try the shorter
+      // window once — CHART_CANDIDATES is as deep as renderLive ever looks —
+      // then give up quietly. The cache is a courtesy, not a feature.
+      try {
+        payload.runs = runs.slice(0, CHART_CANDIDATES);
+        payload.truncated = true;
+        localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+      } catch (e2) { /* no cache this session */ }
+    }
+  }
+  function cacheLoad() {
+    try {
+      var raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      var o = JSON.parse(raw);
+      return (o && o.runs && o.runs.length) ? o : null;
+    } catch (e) { return null; }
+  }
+
   // ---- main cycle -----------------------------------------------------------
-  function refresh() {
-    // 2 api.github.com calls per cycle; raw.githubusercontent.com is uncounted.
-    Promise.all([
-      apiGet("https://api.github.com/repos/" + REPO + "/actions/workflows/ml-train.yml/runs?per_page=" + RUN_WINDOW),
-      apiGet("https://api.github.com/repos/" + REPO + "/releases"),
-      loadRunDocs(),
-      fetchFleet()          // raw.githubusercontent — costs nothing against the cap
-    ]).then(function (res) {
-      hideBanner();
-      var runs = renderRuns(res[0]);
-      fetchedRuns = runs;
-      renderReleases(res[1]);
-      renderFleet(res[3]);
-      // resolve the hash AFTER the cards exist — #run-413 names an element
-      // that renderLive is what creates.
-      return renderLive(runs).then(resolveRunHash);
-    }).catch(function (e) {
-      if (e && e.rateLimited) {
-        var next = new Date(Date.now() + REFRESH_MS);
-        showBanner("GitHub rate limit hit — retrying at :" + pad2(next.getMinutes()));
-      } else {
-        showBanner("Could not reach GitHub (" + (e && e.message ? e.message : "error") + ") — will retry.");
-      }
-    }).then(function () {
-      $("updated").textContent = "last updated " + hms(new Date()) + " · refreshes every 2 min";
+  function renderApi(runsData, rels) {
+    var runs = renderRuns(runsData);
+    fetchedRuns = runs;
+    renderReleases(rels);
+    // resolve the hash AFTER the cards exist — #run-413 names an element
+    // that renderLive is what creates.
+    return renderLive(runs).then(resolveRunHash);
+  }
+
+  // The API is unavailable. Draw everything that never needed it: the curves,
+  // the probes and the fleet all live on raw.githubusercontent.com, so the one
+  // thing genuinely missing is the runs LIST — and a cached list is enough to
+  // ask raw for every one of those files again.
+  function renderStale(reason) {
+    var c = cacheLoad();
+    var when = resetClock();
+    if (!c) {
+      var msg = reason === "ratelimit"
+        ? "the GitHub API is rate limited" + (when ? " until " + when : "") +
+          ", and nothing has been cached yet"
+        : "GitHub could not be reached";
+      ["runs", "releases"].forEach(function (id) {
+        $(id).innerHTML = '<div class="empty">' + esc(msg) +
+          " — this section is read from the API.</div>";
+      });
+      $("live").innerHTML = '<div class="empty">' + esc(msg) +
+        ", so there is no list of runs to chart. The curves themselves are not " +
+        "rate limited — they come back with the list.</div>";
+      return Promise.resolve();
+    }
+    var stamp = hm(new Date(c.at));
+    return renderApi({ workflow_runs: c.runs }, c.releases).then(function () {
+      $("runs").insertAdjacentHTML("beforeend",
+        '<div class="budget low">runs list from ' + esc(stamp) + " (" +
+        esc(ago(new Date(c.at).toISOString())) + ")" +
+        (reason === "ratelimit"
+          ? " — rate limited" + (when ? ", resumes " + esc(when) : "")
+          : " — GitHub unreachable") +
+        (c.truncated ? " · shortened to the newest " + c.runs.length +
+                       " runs to fit storage" : "") +
+        ". The curves and the fleet are live: they come from " +
+        "raw.githubusercontent.com, which is not rate limited.</div>");
     });
   }
 
-  function schedule() {
-    if (timer) clearInterval(timer);
-    timer = setInterval(refresh, REFRESH_MS);
+  function refresh(opts) {
+    var manual = !!(opts && opts.manual);
+    // The raw.githubusercontent side FIRST and ON ITS OWN. It is not part of
+    // the API budget and must render whatever the API half does. Until
+    // 2026-08-21 all four fetches sat in ONE Promise.all, so a single 403 on
+    // the runs call rejected the whole thing and the fleet panel — already
+    // fetched, from a host with no rate limit at all — was thrown away with
+    // it, along with every curve. That is why a spent budget blanked the page
+    // instead of degrading it: not a render bug, an all-or-nothing await.
+    return Promise.all([loadRunDocs(), fetchFleet()]).then(function (res) {
+      renderFleet(res[1]);
+      if (!manual && pollBlocked()) {
+        // Do not spend a call we do not have. A 403 costs a request too.
+        showBanner("GitHub API budget spent (" + rate.remaining + " of " +
+          (rate.limit === null ? "?" : rate.limit) + " left) — auto-refresh " +
+          "paused until " + (resetClock() || "the next reset") +
+          ". Showing the last cached runs list; curves and fleet are live.");
+        return renderStale("ratelimit");
+      }
+      // 2 api.github.com calls per cycle; raw.githubusercontent.com is uncounted.
+      return Promise.all([
+        apiGet("https://api.github.com/repos/" + REPO + "/actions/workflows/ml-train.yml/runs?per_page=" + RUN_WINDOW),
+        apiGet("https://api.github.com/repos/" + REPO + "/releases")
+      ]).then(function (api) {
+        hideBanner();
+        cacheSave(api[0], api[1]);
+        return renderApi(api[0], api[1]);
+      }).catch(function (e) {
+        if (e && e.rateLimited) {
+          showBanner("GitHub rate limit hit (" +
+            (rate.remaining === null ? 0 : rate.remaining) + " of " +
+            (rate.limit === null ? 60 : rate.limit) + " left) — auto-refresh " +
+            "resumes " + (resetClock() || "shortly") +
+            ". Showing the last cached runs list; curves and fleet are live.");
+          return renderStale("ratelimit");
+        }
+        showBanner("Could not reach GitHub (" +
+          (e && e.message ? e.message : "error") +
+          ") — will retry. Showing the last cached runs list.");
+        return renderStale("offline");
+      });
+    }).then(function () {
+      renderBudget();
+      $("updated").textContent = "last updated " + hms(new Date()) +
+        (pollBlocked()
+          ? " · auto-refresh paused until " + (resetClock() || "the next API reset")
+          : " · refreshes every " + Math.round(REFRESH_MS / 60000) + " min");
+    });
+  }
+
+  // A self-rescheduling timeout rather than setInterval, because the interval
+  // is no longer constant: when the budget is spent the next poll waits for
+  // the RESET, not for REFRESH_MS. Retrying inside the window can only earn
+  // another 403, and each one of those is itself a counted request.
+  function nextDelay() {
+    if (!pollBlocked()) return REFRESH_MS;
+    return Math.max(RATE_MIN_WAIT_MS, rate.reset - Date.now() + RATE_GRACE_MS);
+  }
+  function scheduleNext() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(tick, nextDelay());
+  }
+  function tick() {
+    // refresh() renders its own failures; the catch is only so one bad cycle
+    // cannot end the polling loop for the life of the tab.
+    refresh().catch(function () {}).then(scheduleNext);
   }
 
   window.addEventListener("hashchange", resolveRunHash);
@@ -2051,13 +2273,18 @@
     setTimeout(function () { a.classList.remove("copied"); }, 1200);
   });
 
-  $("refresh").addEventListener("click", function () { refresh(); schedule(); });
+  // The manual button is what the reserve is FOR: it passes manual, so it may
+  // spend into RATE_RESERVE when the auto poll may not.
+  $("refresh").addEventListener("click", function () {
+    refresh({ manual: true }).catch(function () {}).then(scheduleNext);
+  });
   document.addEventListener("visibilitychange", function () {
-    if (!document.hidden) { refresh(); schedule(); }
+    // Foregrounding is a reader arriving, not a reader asking — it fires on
+    // every tab switch, so it must NOT be allowed to burn the reserve.
+    if (!document.hidden) refresh().catch(function () {}).then(scheduleNext);
   });
 
-  refresh();
-  schedule();
+  tick();
 })();
 </script>
 </body>

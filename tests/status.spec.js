@@ -1243,3 +1243,210 @@ test("nothing on a run card is a blob URL", async ({ page }) => {
       els.map((e) => e.getAttribute("src") || ""));
     for (const s of srcs) expect(s).not.toMatch(/^blob:/);
   });
+
+// ---- the API budget ---------------------------------------------------------
+// 2026-08-21: Chris opened the page to "GitHub rate limit hit — retrying at :09"
+// over four sections all reading "loading…". Unauthenticated api.github.com is
+// 60 requests/hour/IP, the page spent exactly 60 (2 calls x 30 two-minute
+// cycles), and a single 403 rejected the ONE Promise.all that also held the
+// fleet and run-doc fetches — which come from raw.githubusercontent.com and are
+// not rate limited at all. The page did not fail to render; it refused to.
+//
+// Headers below are stubbed exactly as GitHub sends them: x-ratelimit-reset is
+// a UTC epoch in SECONDS, and all three are listed in GitHub's real
+// Access-Control-Expose-Headers (checked against the live API the same day),
+// so the expose header is stubbed too or the page could not read them.
+const RATE_CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-expose-headers":
+    "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset",
+  "content-type": "application/json; charset=utf-8",
+};
+const hhmm = (ms) => {
+  const d = new Date(ms);
+  const p = (n) => (n < 10 ? "0" : "") + n;
+  return p(d.getHours()) + ":" + p(d.getMinutes());
+};
+
+// Every api.github.com call answers 403 with an exhausted budget.
+async function routeExhausted(page, resetMs, counter) {
+  await page.route(/https:\/\/api\.github\.com\/.*/, async (route) => {
+    if (counter) counter.push(route.request().url());
+    await route.fulfill({
+      status: 403,
+      headers: {
+        ...RATE_CORS,
+        "x-ratelimit-limit": "60",
+        "x-ratelimit-remaining": "0",
+        "x-ratelimit-reset": String(Math.floor(resetMs / 1000)),
+      },
+      body: JSON.stringify({
+        message: "API rate limit exceeded for 203.0.113.7.",
+        documentation_url: "https://docs.github.com/rest/overview/rate-limits",
+      }),
+    });
+  });
+}
+
+test("a spent budget still renders everything raw.githubusercontent can provide",
+  async ({ page }) => {
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    const reset = Date.now() + 45 * 60000;
+    await routeExhausted(page, reset);
+    await page.goto("/status.html");
+
+    // The fleet panel is fetched from raw and needs no API call whatsoever.
+    // Before this change it was fetched, resolved, and then discarded with the
+    // rejected Promise.all — the section it filled stayed on "loading…".
+    const fleet = page.locator("#fleet");
+    await expect(fleet.locator(".card")).toHaveCount(1);
+    await expect(fleet).toContainText("credit left (projected)");
+    await expect(fleet).not.toContainText("loading…");
+
+    // No section is left on the initial placeholder: the two that genuinely
+    // need the API say WHY they are empty instead of pretending to load.
+    for (const id of ["#runs", "#releases", "#live"]) {
+      await expect(page.locator(id)).not.toContainText("loading…");
+      await expect(page.locator(id)).toContainText("rate limited");
+    }
+    expect(errors).toEqual([]);
+  });
+
+test("the reset time is on screen, and so is the budget it ran out of",
+  async ({ page }) => {
+    const reset = Date.now() + 45 * 60000;
+    await routeExhausted(page, reset);
+    await page.goto("/status.html");
+
+    // The banner names the clock time the page comes back, not ":09".
+    const banner = page.locator("#banner");
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText("0 of 60 left");
+    await expect(banner).toContainText("resumes " + hhmm(reset));
+
+    // ...and the budget line states it before it runs out, every cycle.
+    await expect(page.locator("#budget")).toHaveText(
+      "GitHub API budget 0/60 · resets " + hhmm(reset));
+    await expect(page.locator("#updated"))
+      .toContainText("auto-refresh paused until " + hhmm(reset));
+  });
+
+test("the budget line reads the API's own headers on a SUCCESSFUL call too",
+  async ({ page }) => {
+    const reset = Date.now() + 20 * 60000;
+    await page.route(/https:\/\/api\.github\.com\/.*/, async (route) => {
+      const url = route.request().url();
+      const body = /\/actions\/workflows\/[^/]+\/runs/.test(url) ? RUNS : [];
+      await route.fulfill({
+        status: 200,
+        headers: {
+          ...RATE_CORS,
+          "x-ratelimit-limit": "60",
+          "x-ratelimit-remaining": "41",
+          "x-ratelimit-reset": String(Math.floor(reset / 1000)),
+        },
+        body: JSON.stringify(body),
+      });
+    });
+    await page.goto("/status.html");
+    await expect(page.locator("#budget")).toHaveText(
+      "GitHub API budget 41/60 · resets " + hhmm(reset));
+    // 41 is above the reserve, so nothing is paused and the cadence is stated.
+    await expect(page.locator("#updated")).toContainText("refreshes every 5 min");
+    await expect(page.locator("#banner")).toBeHidden();
+  });
+
+test("a rate-limited page renders the CACHED runs list, curves and all",
+  async ({ page }) => {
+    // First visit succeeds and fills the cache (the beforeEach stubs are live).
+    await page.goto("/status.html");
+    await expect(page.locator("#live .card").first()).toBeVisible();
+    const cached = await page.evaluate(() => {
+      const raw = localStorage.getItem("statusApiCache");
+      return raw ? JSON.parse(raw).runs.length : 0;
+    });
+    expect(cached).toBe(RUNS.workflow_runs.length);
+
+    // Now the budget is gone. Same origin, so the same localStorage.
+    const reset = Date.now() + 62 * 60000;
+    await routeExhausted(page, reset);
+    await page.reload();
+
+    // The table is back, from cache...
+    const runs = page.locator("#runs");
+    await expect(runs).toContainText("#108");
+    await expect(runs).toContainText("E-017 capacity rung");
+    // ...stamped with its age and the time it stops being stale, never
+    // presented as live.
+    await expect(runs).toContainText("runs list from");
+    await expect(runs).toContainText("resumes " + hhmm(reset));
+
+    // And the curves — which come from raw and were never rate limited —
+    // are drawn for the cached runs, because the list is all they needed.
+    const card = page.locator("#live .card")
+      .filter({ has: page.locator("h3", { hasText: "run #102" }) });
+    await expect(card).toHaveCount(1);
+    await expect(card.locator("svg.chart")).toHaveCount(2);
+    await expect(card).toContainText("continues run #101 from step 22,500");
+  });
+
+test("the auto poll stops when the budget is spent; the Refresh button may still spend",
+  async ({ page }) => {
+    // A 200 with only 3 calls left — below RATE_RESERVE (6) but not a 403, so
+    // the page has real data AND knows it must stop polling. This is the case
+    // that keeps the page alive: the reserve exists so the human's own button
+    // still works after the timer has been told to stand down.
+    const reset = Date.now() + 50 * 60000;
+    const calls = [];
+    await page.route(/https:\/\/api\.github\.com\/.*/, async (route) => {
+      const url = route.request().url();
+      calls.push(url);
+      const body = /\/actions\/workflows\/[^/]+\/runs/.test(url) ? RUNS : [];
+      await route.fulfill({
+        status: 200,
+        headers: {
+          ...RATE_CORS,
+          "x-ratelimit-limit": "60",
+          "x-ratelimit-remaining": "3",
+          "x-ratelimit-reset": String(Math.floor(reset / 1000)),
+        },
+        body: JSON.stringify(body),
+      });
+    });
+    await page.goto("/status.html");
+    await expect(page.locator("#live .card").first()).toBeVisible();
+    const afterLoad = calls.length;
+    expect(afterLoad).toBe(2);          // the runs list and /releases, once
+    await expect(page.locator("#updated"))
+      .toContainText("auto-refresh paused until " + hhmm(reset));
+
+    // An automatic cycle — foregrounding the tab — must spend NOTHING.
+    await page.evaluate(() =>
+      document.dispatchEvent(new Event("visibilitychange")));
+    await expect(page.locator("#banner")).toContainText("auto-refresh paused");
+    expect(calls.length).toBe(afterLoad);
+
+    // The button is what the reserve was held back for.
+    await page.locator("#refresh").click();
+    await expect.poll(() => calls.length).toBe(afterLoad + 2);
+  });
+
+test("the poll resumes at x-ratelimit-reset, not at the refresh interval",
+  async ({ page }) => {
+    // REFRESH_MS is 300,000 ms. A reset two seconds out proves the wait is
+    // computed from the header rather than from the cadence: if the page were
+    // still on setInterval(refresh, REFRESH_MS) nothing would happen here for
+    // five minutes. x-ratelimit-reset is in SECONDS — a page that read it as
+    // milliseconds would schedule the retry for 1970 and fire instantly, or
+    // for the year 58,600 and never fire; neither passes this.
+    const calls = [];
+    const reset = Date.now() + 2000;
+    await routeExhausted(page, reset, calls);
+    await page.goto("/status.html");
+    await expect(page.locator("#banner")).toBeVisible();
+    expect(calls.length).toBe(2);
+    // reset + 2 s of grace; allow generous slack for the sandbox.
+    await expect.poll(() => calls.length, { timeout: 15000 })
+      .toBeGreaterThanOrEqual(4);
+  });
