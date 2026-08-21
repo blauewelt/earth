@@ -895,10 +895,25 @@ stops two copies sharing the screen; it is not a memory of what has been said.
 
 ### 6. Commits & deployment
 
-- GitHub Pages serves the `gh-pages` branch; it always mirrors `main`. Use the
-  four-line sequence in §1 — `main` is fast-forwarded, only `gh-pages` is
-  forced. (An earlier version of this line read `git push origin main gh-pages
-  -f`, which force-pushes main and once discarded a bot commit. It is gone.)
+- **The published site comes from `main` via the `pages.yml` Actions workflow,
+  not from `gh-pages`.** Measured 2026-08-21: `GET /repos/blauewelt/earth/pages`
+  answers `"build_type": "workflow"`, and the live deployment was for `0c84d800`
+  (main's tip) while `gh-pages` still stood at `27319fd4`, two commits behind —
+  a browser was being served main. `pages.yml` uploads `path: .`, so the
+  published site is the whole tracked tree. Keep updating `gh-pages` anyway
+  (it costs one fast-forward and it is a warm spare), but do not reason about
+  what is live from it, and never gate a deploy on it. Use the four-line
+  sequence in §1 — `main` is fast-forwarded, only `gh-pages` is forced. (An
+  earlier version of this line read `git push origin main gh-pages -f`, which
+  force-pushes main and once discarded a bot commit. It is gone.)
+- **A push reaches the origin in ~44 s and a returning visitor in up to
+  10 minutes more.** Measured over ten `pages.yml` runs: 4 s to pick the job
+  up, 40 s median deploy job (34–83 s). Then Fastly's fixed
+  `cache-control: max-age=600` — observed serving a page with `age: 245` four
+  minutes after a deploy. That ten-minute window is the thing `?v=<sha8>` and
+  `checkForNewBuild()` exist to work around; the build check is exempt from it
+  because its `?fresh=<now>` nonce is part of the CDN cache key and reaches
+  the origin. Full numbers and the Cloudflare comparison: `docs/HOSTING.md` §4.
 - Run `python3 scripts/stamp_assets.py` before committing anything under
   `src/`, or the deploy will not reach browsers that already have the old file.
 - Commit messages explain the *why* (data quirks, bug mechanics), not just the
@@ -979,7 +994,7 @@ worth keeping in front of a frontend reader:
 | `docs/COMBINING_DATASETS.md` | Which datasets measure the same quantity; sound combinations |
 | `docs/PIXEL_STATE.md` | Which catalog sources compose into a per-pixel state vector (state/memory/forcing/flow/future); the 0.25°-daily common grid argument; the ~25-source minimal composition |
 | `docs/TILE_BUDGET.md` | What one user interaction costs NASA: the measured GIBS request count per click, drag, window and playback frame; the unbounded paths found and closed; the rule to check before adding any tile-issuing feature |
-| `docs/HOSTING.md` | Where the site is served from: GitHub Pages' 100 GB *soft* bandwidth limit measured against the real per-visit payload, the Cloudflare Pages standby workflow and its `paths:` build-quota filter, the click-path to enable it, and why a custom domain is worth buying before it matters |
+| `docs/HOSTING.md` | Where the site is served from: GitHub Pages' 100 GB *soft* bandwidth limit measured against the real per-visit payload, the MEASURED push-to-visible latency of both hosts (§4), the Cloudflare Pages standby workflow and its `paths:` filter, the click-path to enable it, the reversible cutover sequence, and why a custom domain is worth buying before it matters |
 | `docs/SPECIES_AND_CLIMATE.md` | Why biodiversity data belongs in a climate app |
 
 ---

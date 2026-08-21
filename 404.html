@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>earth — page not found</title>
+<!-- WHY THIS FILE EXISTS, AND WHY IT IS NOT DECORATION.
+     Cloudflare Pages: "If your project does not include a top-level 404.html
+     file, Pages assumes that you are deploying a single-page application …
+     matches all incoming paths to the root (/)."
+     (developers.cloudflare.com/pages/configuration/serving-pages/)
+     Without this file, EVERY missing path on the Cloudflare copy would answer
+     HTTP 200 with the whole globe app — a mistyped link, a data file dropped
+     from the upload allowlist, and a genuinely deleted page would all look
+     like success. `fetch(...).then(r => r.json())` would receive HTML and
+     throw a parse error instead of seeing a clean 404, and /ml would quietly
+     render the globe instead of redirecting to the status page.
+     GitHub Pages uses this file for the same purpose today, so both hosts
+     answer a missing path identically. That is the point: the two copies must
+     be indistinguishable before anything is switched off.
+
+     The links are RELATIVE, like every other path in this app, so the page
+     works at / (Cloudflare, the test server) and at /earth/ (GitHub Pages).
+     A relative link resolves against the URL that 404'd, so it is exact for a
+     missing path directly under the site root — which is what a mistyped or
+     stale link almost always is. -->
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d1117; color: #e6edf3;
+         font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 12vh 20px 40px; }
+  h1 { font-size: 26px; margin: 0 0 6px; font-weight: 650; letter-spacing: -0.01em; }
+  .code { color: #9aa7b4; font-size: 14px; letter-spacing: 0.08em;
+          text-transform: uppercase; margin: 0 0 20px; }
+  p { color: #c6d0da; }
+  ul { list-style: none; padding: 0; margin: 24px 0 0; }
+  li { margin: 0 0 10px; }
+  a { color: #58a6ff; text-decoration: none; }
+  a:hover, a:focus { text-decoration: underline; }
+  .path { color: #f0883e; word-break: break-all; }
+  footer { margin-top: 32px; color: #9aa7b4; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="code">404 · not found</p>
+  <h1>There is nothing at <span class="path" id="what">this address</span>.</h1>
+  <p>The page may have been renamed, or the link may have lost a character on
+     its way through a chat window.</p>
+  <ul>
+    <li><a href="./index.html">The globe</a> — every layer, the date, the pixel inspector</li>
+    <li><a href="./docs.html">Documentation</a> — every document in the repo, made readable on a phone</li>
+    <li><a href="./status.html">ML status</a> — training runs, curves and probes</li>
+    <li><a href="https://github.com/blauewelt/earth">The repository</a> — all of it, open</li>
+  </ul>
+  <footer>earth — the open climate record</footer>
+</div>
+<script>
+  // Show what was actually asked for. textContent, never innerHTML: the path
+  // is attacker-chosen, and this page is served for any URL under the site.
+  try { document.getElementById("what").textContent = location.pathname; } catch (e) {}
+</script>
+</body>
+</html>
