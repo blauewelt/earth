@@ -810,7 +810,7 @@ def _prune_stale(cache_path, want):
 
 def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                      cache_path=None, batch=8192, mask_chan=None,
-                     progress=None):
+                     progress=None, t_sel=None):
     """Frozen codec embeddings for every (t, pixel in ys/xs): [T, P, d_z].
     Cached on disk — the embedding pass is the expensive part of stage 2
     (T×P encoder forwards), and every probe variant reuses it.
@@ -819,10 +819,34 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
     is 18M encoder forwards, which is hours of CPU and minutes of GPU. The
     big tensors (X, OBS, and the output) stay in host memory — only the
     per-batch slice crosses — because Z alone is ~4.6 GB at global scale and
-    the point is to spend VRAM on arithmetic, not storage."""
+    the point is to spend VRAM on arithmetic, not storage.
+
+    `t_sel` EMBEDS ONLY THE TIMESTEPS ASKED FOR, and returns [len(t_sel), P,
+    d_z] in that order. Written for the in-training LIGHT probe, which spent
+    its whole budget embedding all T and then read only the ~46% of rows the
+    RAPID record covers (trainprobe.probe_now: `ridge_r(Fsec[ridx], ...)` is
+    the sole reader). Every timestep is an independent forward — the loop
+    below has no state that crosses `t` — so the rows that come back are
+    BIT-IDENTICAL to the corresponding rows of a full pass, not merely close.
+
+    It is refused together with `cache_path`: the cache is keyed by shape and
+    a partial-time array of the right (T, P, d_z) shape could never be told
+    from a complete one, which is `flush, THEN mark` (CLAUDE.md §5.21) failing
+    in the one direction that over-claims."""
     dev = next(model.parameters()).device
     T, H, W, C = X.shape
     P = len(ys)
+    if t_sel is None:
+        ts = np.arange(T)
+    else:
+        ts = np.asarray(t_sel, dtype=np.int64)
+        if cache_path:
+            raise ValueError(
+                "embed_everything: t_sel and cache_path are mutually "
+                "exclusive — a time-subset cache is indistinguishable from a "
+                "complete one by shape, so the next run would silently resume "
+                "from an array that is missing most of its months.")
+    T_out = len(ts)
     coords = np.stack([lats[ys] / 90, lons[xs] / 180], 1).astype(np.float32)
     # Z is T*P*d_z*4 bytes — 4.6 GB on the global grid at d_z=64, next to a
     # 1.4 GB tensor and a 0.3 GB mask. Built in RAM it OOM-kills a 7 GB box
@@ -833,22 +857,22 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
     # Without a cache path (the --max-pixels smoke) it stays an ordinary array.
     if cache_path and os.path.exists(cache_path):
         out = np.load(cache_path, mmap_mode="r+")
-        if out.shape == (T, P, d_z):
+        if out.shape == (T_out, P, d_z):
             print(f"  (cached: {cache_path})")
             return out, coords
     start_t = 0
     if cache_path and _cache_plan(cache_path,
-                              T * P * d_z * CACHE_DTYPE(0).itemsize):
+                              T_out * P * d_z * CACHE_DTYPE(0).itemsize):
         tmp = cache_path + ".partial"
         # RESUMABLE. The embedding is ~95 minutes; dying at 80% and starting
         # again from zero is the difference between losing twenty minutes and
         # losing eighty. The half-written memmap already holds every completed
         # month — what was missing was a record of how many, so a restart
         # could trust it. Chris asked for exactly this on 2026-08-10.
-        out, start_t = _resume_partial(tmp, T, P, d_z)
+        out, start_t = _resume_partial(tmp, T_out, P, d_z)
         if out is None:
             out = np.lib.format.open_memmap(tmp, mode="w+", dtype=CACHE_DTYPE,
-                                            shape=(T, P, d_z))
+                                            shape=(T_out, P, d_z))
     else:
         # NOT resumable, and say so rather than let it be discovered at 80%:
         # an in-memory array dies with the process. Since the cache went to
@@ -858,7 +882,7 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
         print("  building Z in RAM: NOT resumable — if this process dies the "
               "whole embedding is lost. (Free disk so the cache fits and it "
               "becomes restartable.)", flush=True)
-        out = np.zeros((T, P, d_z), dtype=CACHE_DTYPE)
+        out = np.zeros((T_out, P, d_z), dtype=CACHE_DTYPE)
     # THE EMBEDDING REPORTS ITS OWN PROGRESS. It is the longest single phase of
     # a stage-2 run — ~95 minutes for 43.5M encoder forwards on the
     # quarter-degree tensor — and until 2026-08-10 it printed one line when it
@@ -871,17 +895,18 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
     t_emb = time.time()
     next_mark = 0.0
     with torch.no_grad():
-        for t in range(start_t, T):
-            frac = (t + 1) / T
+        for i_out in range(start_t, T_out):
+            t = int(ts[i_out])
+            frac = (i_out + 1) / T_out
             if frac >= next_mark:
                 el = time.time() - t_emb
                 eta = el / frac - el if frac > 0 else 0
-                print(f"  embedding {frac * 100:5.1f}%  month {t + 1}/{T}  "
+                print(f"  embedding {frac * 100:5.1f}%  month {i_out + 1}/{T_out}  "
                       f"{el / 60:.0f} min elapsed, ~{eta / 60:.0f} min left",
                       flush=True)
                 if progress:
-                    progress({"pct": round(frac * 100, 1), "month": t + 1,
-                              "months": T, "elapsed_s": round(el),
+                    progress({"pct": round(frac * 100, 1), "month": i_out + 1,
+                              "months": T_out, "elapsed_s": round(el),
                               "eta_s": round(eta),
                               "where": "disk" if cache_path else "ram"})
                 next_mark = frac + 0.05
@@ -905,12 +930,12 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                     v = X[t, ys[sl], xs[sl]] * (~mk)
                     z = model.encode(v.to(dev), OBS[t, ys[sl], xs[sl]].to(dev),
                                      mk.to(dev), ctx_t)
-                out[t, sl] = z.cpu().numpy()
+                out[i_out, sl] = z.cpu().numpy()
             # Every 8 months (~1.5 minutes of work) flush the pages and record
             # the count. Cheap enough to be unnoticeable, fine-grained enough
             # that a crash costs a couple of minutes rather than an hour.
-            if cache_path and (t + 1) % 8 == 0:
-                _mark_progress(tmp, out, t + 1, T, P, d_z)
+            if cache_path and (i_out + 1) % 8 == 0:
+                _mark_progress(tmp, out, i_out + 1, T_out, P, d_z)
     if cache_path:
         # Already on disk in .npy form — flush the pages, then publish
         # atomically so an interrupted run never leaves a half-filled cache

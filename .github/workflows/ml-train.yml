@@ -42,8 +42,8 @@ on:
         description: "stage-2 depth (3=mid, 4=large, 5=xlarge, 6=xxlarge)"
         default: "3"
       eval_every:
-        description: "FULL trainprobe cadence in steps (~300 s each on the 10M codec; 0 = off; requires anomaly)"
-        default: "7500"
+        description: "FULL trainprobe cadence in steps. MEASURED on #419 (daily, T=15,706): 1,683 s per probe after the 2026-08-21 probe-cost work, of which 1,641 s is the ~864-pixel embedding — ~371 s at pentad, ~96 s at monthly. The stale '~300 s on the 10M codec' was a family-3 figure and wrong for every tensor now in use. This cadence does NOT set the collapse guard's latency (the light probe fires it too), so it is cut hard and light_probe_every is not: 25,000 gives 9 full probes over a 200k run. 0 = off, which ALSO disables the guard; requires anomaly"
+        default: "25000"
       resume:
         description: "continue from a checkpoint: a tag under /opt/earth-cache/ckpt (e.g. orphan-latest) or a path. Empty = fresh run. Prefix ! (e.g. !run-62) to REQUIRE it: the job exits in seconds if this box does not hold that checkpoint, instead of silently retraining from scratch"
         default: ""
@@ -51,7 +51,7 @@ on:
         description: "run the UNPOOLED attention-head probe (top rung of the ladder) plus its matched raw-3x3 end-to-end control. The decisive test of whether a pooled-probe decline is a read-out artifact or real information loss"
         default: "false"
       light_probe_every:
-        description: "CHEAP probe cadence in steps (linear section probe only, ~30 s; the headline r at high cadence so a bad run shows early). 0 = off"
+        description: "CHEAP probe cadence in steps (linear 26.5N section probe only, over the RAPID timesteps thinned to one sample per decorrelation time). MEASURED on #419: ~17 s at daily, ~22 s at pentad, ~7 s at monthly — the old '~30 s' was a family-3 figure and the daily light probe actually cost 611 s. THE COLLAPSE GUARD FIRES ON THIS PROBE, so its worst-case detection span is 2 x this value: keep it at 2,000 (= 4,000 steps) and cut eval_every instead. 0 = off, which also blinds the guard"
         default: "2000"
       window:
         description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum, optionally mode@ref or mode@twin), on a stage-2 run unroll:N for the autoregressive unroll, resume2:<tag>[@lr] to CONTINUE an existing stage-2 head (needs optimiser state: only heads written after 2026-08-10 have it), or warm2:<tag>[@lr] for a WARM RESTART from its weights alone with a fresh cosine, where temporal_steps is the EXTRA steps rather than the total (both seeded from the model-checkpoints release if the box lacks the file) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"

@@ -40,6 +40,102 @@ from temporal import TemporalTransformer, embed_everything, rapid_section
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# ---------------------------------------------------------------------------
+# HOW MANY RAPID SAMPLES THE LIGHT PROBE NEEDS — derived, not chosen.
+#
+# The light probe exists for ONE consumer: train.py's collapse guard, which
+# asks `|linear_r_deseas| <= 0.05` twice in a row (ml/CLAUDE.md §1 — the only
+# monitor that can see a dead codec, because a correlation is scale
+# invariant). The full probe keeps carrying the trend at full resolution.
+#
+# The guard's expensive error is the FALSE ABORT: killing a healthy run. A
+# healthy daily codec reads r ~ 0.58 (#419's linear_r_deseas ran 0.558-0.598
+# across 200k steps), so the guard must resolve 0.58 away from 0.05 with
+# margin. Fisher: sd(r) ~ (1 - r^2)/sqrt(m - 3) on m INDEPENDENT scored
+# samples, so a 3-sigma margin needs
+#
+#     3 * 0.6636 / sqrt(m - 3) <= 0.53   ->   m >= 18
+#
+# eighteen effectively-independent held-out samples. That is the floor, and
+# it is the only sample-count requirement the guard actually generates: the
+# other direction (a collapsed codec reading ABOVE 0.05 by chance) is not a
+# sampling question, because collapse does not produce a noisy r — it
+# produces a DEGENERATE feature matrix. #387 read 0.000, 0.000, 0.000 to
+# three decimals on three consecutive probes. What protects against a merely
+# noisy collapse is the two-strike rule, not m; at 0.05 = k/sqrt(m-1) a
+# 3-sigma line would need m = 3,601 SCORED samples and the daily tensor has
+# only ~1,096 held-out RAPID days in total, so that bar is unreachable at any
+# subsample and thinning cannot forfeit what was never there.
+#
+# EFFECTIVELY-INDEPENDENT is the operative word, and it is what makes the
+# saving free. Measured on the archived series (data/rapid_moc.json, 729
+# ten-day means, 2004-04-07 -> 2024-03-13 = exactly the 7,290 days the daily
+# tensor's `rapid` array covers): the deseasonalised transport has lag-1
+# autocorrelation +0.474 at 10 days, +0.225 at 20, +0.140 at 40. An AR(1)
+# e-folding fitted to the 10-day lag-1 is
+#
+#     tau = -10 / ln(0.4743) = 13.4 days
+#
+# so two consecutive DAYS correlate at exp(-1/13.4) = 0.928: they are 93% the
+# same number. Embedding all 7,290 daily RAPID timesteps to score a
+# correlation buys ~560 samples' worth of information and pays for 7,290.
+#
+# So the light probe keeps one RAPID sample per e-folding, at whatever cadence
+# the tensor runs: stride = floor(tau / dt). Daily -> 13 (561 kept, ~84 held
+# out), pentad -> 2 (729 kept, ~109 held out), monthly -> 1 (no thinning at
+# all: 30.4-day steps are already coarser than tau). Every one of those is
+# four to six times the m >= 18 floor, and LIGHT_MIN_TEST re-checks it against
+# the tensor in hand rather than trusting this arithmetic.
+#
+# This is the one change in the probe-cost work that is not free: the light
+# probe's r is now a guard-grade estimate on a coarser sample, so it can sit a
+# little below the full probe's. That is measured rather than assumed — the
+# FULL probe emits `linear_r_deseas_light`, the identical estimator on the
+# identical subsample, next to its own full-resolution number, at the cost of
+# one extra ridge solve (~0.006% of a probe).
+RAPID_TAU_DAYS = 13.4
+LIGHT_MIN_TEST = 30          # kept held-out samples; 1.7x the m >= 18 floor
+
+
+def cadence_days(months):
+    """Median spacing, in days, between consecutive tensor timesteps.
+
+    The `months` array is "YYYY-MM" on the monthly families and "YYYY-MM-DD"
+    on the pentad and daily ones; both are handled, and a single-timestep or
+    unparseable array falls back to 1.0 (which disables the light-probe
+    thinning rather than guessing at it)."""
+    import datetime as _dt
+    ds = []
+    for m in months[:64]:
+        m = str(m)
+        try:
+            ds.append(_dt.date(int(m[:4]), int(m[5:7]),
+                               int(m[8:10]) if len(m) >= 10 else 15))
+        except (ValueError, IndexError):
+            return 1.0
+    if len(ds) < 2:
+        return 1.0
+    gaps = [(ds[i + 1] - ds[i]).days for i in range(len(ds) - 1)]
+    return max(1.0, float(np.median(gaps)))
+
+
+def light_rows(ridx, tr_all, te_all, months):
+    """Which positions in `ridx` the LIGHT probe embeds and scores.
+
+    Returns (positions, stride). See RAPID_TAU_DAYS above for the derivation;
+    the floor is enforced against THIS tensor: if the stride would leave fewer
+    than LIGHT_MIN_TEST held-out samples it is walked back until it does, so a
+    short record or an unusual --holdout-years can never thin the guard's
+    scored sample below what resolves 0.58 from 0.05."""
+    dt = cadence_days(months)
+    stride = max(1, int(RAPID_TAU_DAYS // dt))
+    while stride > 1:
+        sel = np.arange(0, len(ridx), stride)
+        if int(te_all[sel].sum()) >= LIGHT_MIN_TEST:
+            break
+        stride -= 1
+    return np.arange(0, len(ridx), stride), stride
+
 
 def anomaly_transform(X, moy, t_hold, x_hold, chunk=64, verbose=None):
     """The one anomaly transform (train.py --anomaly), in one place: dynamic
@@ -285,7 +381,7 @@ def anomaly_transform(X, moy, t_hold, x_hold, chunk=64, verbose=None):
 
 def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
               n_pixels=600, K=12, tsteps=400, tbatch=128, seed=0, obs_in=None,
-              mask_chan=None, light=False):
+              mask_chan=None, light=False, ocean=None):
     """All metrics for the codec AS IT IS NOW. X must already be in the
     space the codec was trained in (anomaly). Returns a flat dict.
 
@@ -294,15 +390,30 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
     Scoring targets always use the true OBS, so 'predict the field from
     less input' is measured against the same reality.
 
-    light=True computes ONLY the linear section probe and returns. That is
-    the cheap part by an order of magnitude: it embeds ~67 section pixels,
-    where the full probe embeds 600 more and then trains a mini temporal
-    transformer for 400 steps (measured on the 10M codec: 300 s full,
-    ~30 s light). Its purpose is cadence — a headline number every couple
-    of thousand steps instead of every ten thousand, so a run that is not
-    going to clear the wind baseline can be seen failing early rather than
-    at the end. Both modes emit `linear_r_deseas`, so downstream readers
-    (metrics.jsonl, the status page) need no special case."""
+    ocean: the [H, W] ocean mask, `np.isfinite(d["X"][..., 0]).any(axis=0)`.
+    HOISTED, not recomputed. It is a pure function of the tensor and train.py
+    already computes exactly this expression at line 295, before the anomaly
+    transform, from the same array — so every probe was re-deriving a constant.
+    It is not a cheap constant: `d["X"][..., 0]` walks the whole
+    channel-interleaved tensor at a stride of C*itemsize = 78 bytes, faulting
+    every 4 KB page to use 2.6% of it — the pathology anomaly_transform's
+    docstring documents and that sat run #389 in one function for seven hours.
+    Measured on #419 at daily cadence it cost **150.2 s of every full probe
+    and 148.2 s of every light one**, 8.5% of all probe time, and on #415 the
+    same term ranged 125.8 s to 3,657.2 s depending on what the page cache
+    happened to hold. Passing None recomputes it (the CLI backfill path).
+
+    light=True computes ONLY the linear section probe and returns, and it does
+    so on the ~46% of timesteps the RAPID record covers, thinned to one sample
+    per decorrelation time (see RAPID_TAU_DAYS). Measured on #419's daily
+    codec: the FULL probe costs 2,296.6 s and the light one 611.3 s; after the
+    hoisted mask, the ridx-only embedding and the thinning they are ~1,683 s
+    and ~17 s. Its purpose is cadence — the collapse guard fires on BOTH
+    probes, so the guard's detection latency tracks the LIGHT cadence and the
+    two knobs are separable: the full probe can be cut hard while the light
+    one stays every 2,000 steps. Both modes emit `linear_r_deseas`, so
+    downstream readers (metrics.jsonl, the status page) need no special
+    case."""
     was_training = codec.training
     codec.eval()
     t0 = time.time()
@@ -313,7 +424,8 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
     T, H, W, C = X.shape
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12),
                         np.cos(2 * np.pi * moy / 12)], 1)
-    ocean = np.isfinite(d["X"][..., 0]).any(axis=0)
+    if ocean is None:                      # CLI backfill; train.py passes it in
+        ocean = np.isfinite(d["X"][..., 0]).any(axis=0)
     ys, xs = np.where(ocean)
     sec_y, sec_sel = rapid_section(lats, lons, ys, xs)   # protocol v3 clip
 
@@ -328,29 +440,81 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
     te_all = t_hold[ridx]
 
     out = {}
+    # Which rows of `ridx` the LIGHT probe uses. Computed in BOTH modes: the
+    # full probe reports the same estimator on the same rows so the two curves
+    # can be read against each other instead of assumed comparable.
+    lsel, lstride = light_rows(ridx, tr_all, te_all, d["months"])
 
     # ---- 1 · linear section probe (K=1) ----------------------------------
-    Zsec, _ = embed_everything(codec, X, obs_in, ctx_all, lats, lons,
-                               ys[sec_sel], xs[sec_sel], codec.d_z,
-                               mask_chan=mask_chan)
-    Fsec = Zsec.mean(1)                                   # [T, d_z]
-    out["linear_r_deseas"], _ = ridge_r(Fsec[ridx], rv_des, tr_all, te_all)
-    out["linear_r_raw"], _ = ridge_r(Fsec[ridx], rv_raw, tr_all, te_all)
-
     if light:
+        # ONLY THE TIMESTEPS THAT ARE READ. `Fsec` has exactly one consumer in
+        # this branch — ridge_r(Fsec[ridx][lsel], ...) — so embedding all T
+        # spent the majority of the light probe's budget on rows nobody ever
+        # indexes. At daily that is 561 of 15,706 timesteps instead of all of
+        # them. Every timestep is an independent encoder forward, so the rows
+        # that come back are bit-identical to the corresponding rows of a full
+        # pass (tests/test_probe_cost.py case 3 pins it).
+        rt = ridx[lsel]
+        tsel, inv = np.unique(rt, return_inverse=True)
+        Zsec, _ = embed_everything(codec, X, obs_in, ctx_all, lats, lons,
+                                   ys[sec_sel], xs[sec_sel], codec.d_z,
+                                   mask_chan=mask_chan, t_sel=tsel)
+        Fl = np.asarray(Zsec).mean(1)[inv]                # [len(lsel), d_z]
+        out["linear_r_deseas"], _ = ridge_r(Fl, rv_des[lsel],
+                                            tr_all[lsel], te_all[lsel])
+        out["linear_r_raw"], _ = ridge_r(Fl, rv_raw[lsel],
+                                         tr_all[lsel], te_all[lsel])
         out["light"] = True
+        out["light_stride"] = int(lstride)
+        out["light_n"] = int(len(lsel))
+        out["light_n_test"] = int(te_all[lsel].sum())
         out["probe_seconds"] = round(time.time() - t0, 1)
         if was_training:
             codec.train()
         return out
 
     # ---- 2 · mini temporal transformer on frozen embeddings ---------------
+    # THE SECTION IS EMBEDDED ONCE, NOT TWICE. `keep` is a strict superset of
+    # `sec_sel` by construction (the union below), and PixelMAE.encode treats
+    # the batch dimension as independent pixels — attention runs over the
+    # 2 + C channel/cls/ctx tokens only, the encoder layers are LayerNorm
+    # (feature-wise), and there is no BatchNorm anywhere in the model — so the
+    # section's embeddings are the same whether they arrive in a batch of 266
+    # or a batch of 864. This block therefore moved ABOVE the linear probe and
+    # `Fsec` is sliced out of `Z`, which deletes a whole second embedding pass:
+    # **463.3 s of every full probe at daily cadence, 20.2% of it.**
+    #
+    # The GEMM's row count changes 266 -> 864, so a BLAS is free to pick a
+    # different blocking and reorder its reductions; equivalence in principle
+    # is not equality in floating point, and the claim was MEASURED rather
+    # than argued (tests/test_probe_cost.py case 2). At #419's own geometry —
+    # 512x12, C=39, d_z 32, 266 rows against 864 — the float32 encoder output
+    # is **bit-identical, 8,512/8,512 elements, max |dz|/mean|z| = 0.0e+00**
+    # on CPU, and so is the float16 Z the probe stores and the section mean it
+    # reads. oneDNN does not change its reduction order across that row count.
+    # cuBLAS is not promised to behave the same way, so the test's tolerance
+    # is 1e-4 rather than exact equality: what the model guarantees is that
+    # rows do not COUPLE, and any residual difference is a reduction order,
+    # ~1e-6 relative at worst, three orders below the float16 the cache holds.
     keep = rng.choice(len(ys), min(n_pixels, len(ys)), replace=False)
     keep = np.union1d(keep, sec_sel)
     kys, kxs = ys[keep], xs[keep]
     Z, coords = embed_everything(codec, X, obs_in, ctx_all, lats, lons,
                                  kys, kxs, codec.d_z, mask_chan=mask_chan)
     P = len(kys)
+    # np.union1d sorts, and section_of returns np.where(...)[0] which is
+    # already sorted, so these positions come back in sec_sel's own order —
+    # Z[:, sec_in_keep] is row-for-row what a separate section embed produced.
+    sec_in_keep = np.where(np.isin(keep, sec_sel))[0]
+    Fsec = np.asarray(Z[:, sec_in_keep]).mean(1)          # [T, d_z]
+    out["linear_r_deseas"], _ = ridge_r(Fsec[ridx], rv_des, tr_all, te_all)
+    out["linear_r_raw"], _ = ridge_r(Fsec[ridx], rv_raw, tr_all, te_all)
+    # The light probe's OWN estimator, on the identical subsample, so the two
+    # curves in metrics.jsonl are comparable by measurement rather than by
+    # assertion. One ridge solve: ridge is 0.006% of probe time.
+    out["linear_r_deseas_light"], _ = ridge_r(
+        Fsec[ridx[lsel]], rv_des[lsel], tr_all[lsel], te_all[lsel])
+    out["light_stride"] = int(lstride)
     Zt = torch.from_numpy(Z)
     Mt = torch.as_tensor(ctx_all, dtype=torch.float32)
     static_ctx = torch.as_tensor(
@@ -423,8 +587,7 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
         out["chan_mse_persistence"] = float(((v0 - v1).pow(2) * both).sum() / both.sum())
 
         # RAPID probe from the mini transformer's section hidden state
-        sec_in_keep = torch.as_tensor(
-            np.where(np.isin(keep, sec_sel))[0], dtype=torch.long)
+        sec_in_keep = torch.as_tensor(sec_in_keep, dtype=torch.long)
         F = np.zeros((T, 64), dtype=np.float32)
         for t in range(K - 1, T):
             base = t - K + 1

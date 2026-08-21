@@ -131,7 +131,10 @@ def parse():
                         "full-visibility round trip is the artefact stage 2 "
                         "and every probe consume, yet historically it was "
                         "trained only as this 0.1 side effect; E-019a "
-                        "measured it losing 6.9% of deep-T variance.")
+                        "measured it losing 6.9%% of deep-T variance.")   # %% : argparse
+                        # runs every help string through %-interpolation, and a bare
+                        # `% o` is a valid octal conversion, so this one character
+                        # made `train.py --help` raise TypeError for every flag.
     p.add_argument("--upweight-chans", default="",
                    help="regex over channel NAMES (e.g. "
                         "'rg_[ts](900|1100|1300|1500|1700|1900)'); matched "
@@ -158,7 +161,7 @@ def parse():
                         "'none' = NO spatial holdout: every longitude trains "
                         "and only the held-out YEARS are withheld. The "
                         "per-pixel anomaly transform already removes "
-                        "location-memorised climatology, the block costs 25% "
+                        "location-memorised climatology, the block costs 25%% "
                         "of the training pixels, and it confounds the "
                         "spatial-coupling claim (about half of the stencil "
                         "head's measured advantage is earned patching the "
@@ -179,6 +182,13 @@ def parse():
                         "frozen current embeddings (trainprobe.py: linear "
                         "section probe + mini temporal transformer) on the "
                         "blocked holdout; appends to <out>/metrics.jsonl. "
+                        "MEASURED on #419's daily tensor (T=15,706): 1,683 s "
+                        "per probe, of which 1,641 s is the ~864-pixel "
+                        "embedding — ~371 s at pentad, ~96 s at monthly. This "
+                        "is the EXPENSIVE cadence and it does NOT carry the "
+                        "collapse guard's latency (the light probe fires that "
+                        "too), so cut it hard: the workflow default is 25,000, "
+                        "which is 9 full probes over a 200k run. "
                         "Requires --anomaly.")
     p.add_argument("--resume", default="",
                    help="continue a run from a checkpoint written by an "
@@ -203,13 +213,23 @@ def parse():
     p.add_argument("--light-probe-every", type=int, default=0,
                    help="every N steps, run the CHEAP half of the probe (the "
                         "linear 26.5N section probe only — no mini temporal "
-                        "transformer). Measured on the 10M codec the full "
-                        "probe costs ~300 s and the light one ~30 s, so this "
-                        "is what makes an intermediate metric affordable at "
-                        "high cadence: a headline r every couple of thousand "
-                        "steps, so a run that will not clear the wind "
-                        "baseline is visible early. Emits the same "
-                        "linear_r_deseas key as the full probe. Requires "
+                        "transformer), over the RAPID timesteps thinned to "
+                        "one sample per decorrelation time. THE OLD HELP HERE "
+                        "SAID 'full ~300 s, light ~30 s' off a family-3 10M "
+                        "codec and was wrong for every tensor in use. "
+                        "Measured on #419 (daily, T=15,706, 38.0M codec): "
+                        "full 2,296.6 s, light 611.3 s; after the hoisted "
+                        "ocean mask, the ridx-only embedding and the thinning, "
+                        "~1,683 s and ~17 s. Scaled from the same "
+                        "decomposition: pentad ~371 s / ~22 s, monthly ~96 s "
+                        "/ ~7 s. THIS is the cadence the collapse guard's "
+                        "latency tracks — the guard fires on both probes, so "
+                        "its worst case is 2 x this — which is why it stays at "
+                        "2,000 while --eval-every goes to 25,000. Emits the "
+                        "same linear_r_deseas key as the full probe (which "
+                        "also emits linear_r_deseas_light, the identical "
+                        "estimator on the identical subsample, so the two "
+                        "curves are comparable by measurement). Requires "
                         "--anomaly; 0 disables.")
     p.add_argument("--lr-floor", type=float, default=0.0,
                    help="decay-then-constant schedule: cosine-decay the LR "
@@ -660,18 +680,29 @@ def main():
         probe is instrumentation, and instrumentation must never be the
         thing that loses a training job. empty_cache() first because the
         optimiser state and activations are still resident.
+
+        `ocean=ocean` HOISTS the ocean mask out of the probe. It is exactly
+        the expression probe_now used to evaluate on every call —
+        `np.isfinite(X[..., 0]).any(axis=0)`, computed at line 295 above from
+        the same array, before the anomaly transform — and it is a pure
+        function of the tensor, so recomputing it per probe was buying a
+        constant at 150.2 s a time on #419's daily tensor (8.5% of ALL probe
+        wall clock; 125.8-3,657.2 s on #415 depending on page cache). It is a
+        strided traversal of the whole [T,H,W,C] array at 78-byte stride,
+        i.e. the pathology that wedged #389 for seven hours, and it was being
+        paid ~120 times per run.
         """
         try:
             if str(dev).startswith("cuda"):
                 torch.cuda.empty_cache()
             return trainprobe.probe_now(model, Xt, OBS, d, mvec, t_hold,
-                                        x_hold, dynamic, **kw)
+                                        x_hold, dynamic, ocean=ocean, **kw)
         except torch.cuda.OutOfMemoryError:            # cuda-only path
             print("  probe OOM on GPU — falling back to CPU for this one",
                   flush=True)
             torch.cuda.empty_cache()
             m_ = trainprobe.probe_now(model.cpu(), Xt, OBS, d, mvec, t_hold,
-                                      x_hold, dynamic, **kw)
+                                      x_hold, dynamic, ocean=ocean, **kw)
             model.to(dev)
             return m_
 
