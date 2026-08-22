@@ -146,7 +146,17 @@ jobs:
         if: env.CONFIGURED == 'true'
         run: |
           set -euo pipefail
-          mkdir -p _site
+          # The site lives at blauewelt.org/earth/ (Chris, 2026-08-22) — the
+          # same path it had on GitHub Pages, so every relative link keeps
+          # working and the apex stays free for whatever comes next. The
+          # upload set therefore goes under _site/earth/, plus two root files:
+          #   _redirects  — the bare apex forwards to /earth/ (302, deliberately
+          #                 not 301, so the root can be repurposed without a
+          #                 cached redirect outliving the decision);
+          #   404.html    — Cloudflare looks for 404.html from the requested
+          #                 path upward to the root; without a ROOT copy a
+          #                 request outside /earth/ would get the SPA fallback.
+          mkdir -p _site/earth
           # NUL-separated all the way through: `git ls-files -z` never quotes,
           # and `tar --null -T -` copies exactly the listed paths, creating
           # parent directories as it goes. No rsync dependency, no globbing
@@ -155,7 +165,9 @@ jobs:
             index.html status.html docs.html 404.html manifest.json .nojekyll \
             'icon-*.png' 'src/**' 'lib/**' 'data/**' 'docs/**' \
             ml/index.html 'ml/figs/*.html' 'ml/paper/figs/*.html' \
-            | tar --null -T - -cf - | tar -xf - -C _site
+            | tar --null -T - -cf - | tar -xf - -C _site/earth
+          cp _site/earth/404.html _site/404.html
+          printf '/ /earth/ 302\n' > _site/_redirects
 
           # Every entry point the site is actually entered through. An
           # allowlist that quietly stopped matching one of these would deploy a
@@ -165,7 +177,7 @@ jobs:
                    src/app.js src/style.css lib/marked.umd.js \
                    icon-192.png data/catalog.json docs/PIXEL_STATE.md \
                    ml/index.html; do
-            [ -f "_site/$f" ] || missing="$missing $f"
+            [ -f "_site/earth/$f" ] || missing="$missing $f"
           done
           if [ -n "$missing" ]; then
             echo "::error title=Allowlist dropped a required file::${missing# } — the git ls-files allowlist in this workflow no longer matches the site. See docs/HOSTING.md §3 and §9."; exit 1

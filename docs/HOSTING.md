@@ -367,7 +367,7 @@ tick and no deploy is the worst possible answer.
 
 ## 6 · The cutover: `blauewelt.github.io/earth` → `blauewelt.org`
 
-> **DONE 2026-08-22.** `https://blauewelt.org` (and `www.`) serves the Pages
+> **DONE 2026-08-22.** `https://blauewelt.org/earth/` (and `www.`) serves the Pages
 > project `blauewelt`; DNS is at Cloudflare (`kinsley` / `trace.ns.cloudflare.com`),
 > DNSSEC is on (DS 2371/13/2 published at Infomaniak), Phase E passed
 > (184/184 sha256, entry points, 404, redirects). `blauewelt.ch` **stays at
@@ -378,6 +378,14 @@ tick and no deploy is the worst possible answer.
 > been **registry-suspended** (ICANN owner-verification) and had to be
 > verified first; and the zone was added with **manual entry, not the scan**,
 > because the scan would have imported the suspension page's A record.
+> The site sits under **`/earth/`** (same path as on GitHub Pages; the
+> workflow uploads the set as `earth/` plus a root `404.html` and a
+> `_redirects` that sends the bare apex to `/earth/` with a 302 — replace that
+> line when the root gets a purpose of its own). Note the Playwright remote
+> config uses root-absolute `page.goto("/docs.html")`, so
+> `verify-remote.yml` only fits a site served at `/`; it still works against
+> `blauewelt.pages.dev`-style roots only if the set is at the root there, which
+> it no longer is — run it against a local server or extend the specs.
 > Full log: project doc `session-2026-08-22e-org-cutover-done.md`.
 > The phases below are kept as the record of how, and as the rollback guide.
 
