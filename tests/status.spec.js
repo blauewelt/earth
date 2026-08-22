@@ -500,7 +500,7 @@ test("the docs badge and the Live app link follow the origin, in all three conte
   //   3. a saved file:// copy             -> no origin to follow; fall back
   //      to the public GitHub Pages copy, which stays live indefinitely and
   //      is the rollback target
-  // (2) is the one that matters for the cutover: earth.pages.dev and
+  // (2) is the one that matters for the cutover: blauewelt.pages.dev and
   // blauewelt.org must send readers to their OWN docs.html, not to a
   // github.io copy that is only as fresh as its last Pages deploy. 127.0.0.1
   // is the same test server behind a different host string, which is all the
@@ -526,7 +526,7 @@ test("the docs badge and the Live app link follow the origin, in all three conte
     "href", "http://localhost:8080/docs.html?f=ml/EXPERIMENTS.md#e-007");
   await expect(liveApp).toHaveAttribute("href", "http://localhost:8080/");
 
-  // 2 — a different serving origin. Standing in for earth.pages.dev and
+  // 2 — a different serving origin. Standing in for blauewelt.pages.dev and
   //     blauewelt.org: same bytes, different host, links must follow.
   await page.goto("http://127.0.0.1:8080/status.html");
   await expect(badge).toHaveAttribute(

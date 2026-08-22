@@ -310,18 +310,21 @@ the names Cloudflare's own CI guide uses.
    **API**; it is also the 32-character hex string in the dashboard URL,
    `dash.cloudflare.com/<account-id>/...`.
 3. **Create the Pages project.** *Workers & Pages → Create → Pages → Upload
-   assets* (**not** "Connect to Git"). Name it **`earth`**. Cloudflare asks for
+   assets* (**not** "Connect to Git"). Name it **`blauewelt`**. (Done
+   2026-08-22. `earth.pages.dev` was already taken by a third party — never use
+   it.) Cloudflare asks for
    an initial upload — any single placeholder file is fine, the workflow
    replaces everything.
    Three things about this step are one-way, so get them right now:
    - **Direct Upload cannot be switched to Git integration later** (Cloudflare
      documents this). That is the direction we want.
-   - **The `*.pages.dev` subdomain cannot be changed later.** If `earth` is
+   - **The `*.pages.dev` subdomain cannot be changed later.** If the name is
      taken, Cloudflare appends random characters, and the only fix is to delete
      the project and make a new one. Note the real name it gives you.
-   - If the project ends up named something other than `earth`, add a
-     repository **variable** (not a secret) `CLOUDFLARE_PAGES_PROJECT` with the
-     real name.
+   - The workflow's default project name is `earth`; the repository
+     **variable** (not a secret) `CLOUDFLARE_PAGES_PROJECT=blauewelt` overrides
+     it and is set. If the project is ever recreated under another name, change
+     the variable, not the workflow.
 4. **Set the production branch to `main`.** *The project → Settings → Builds &
    deployments → Production branch*. The workflow deploys with `--branch main`
    deliberately, so that "production" and the repo's default branch are the same
@@ -329,7 +332,15 @@ the names Cloudflare's own CI guide uses.
    with a random subdomain, which looks like a broken deploy and is not one.
 5. **Create the API token.** *My Profile → API Tokens → Create Token → Create
    Custom Token*. Permissions: **Account → Cloudflare Pages → Edit**. Nothing
-   else — no Zone permissions, no DNS. Copy it; it is shown once.
+   else — no Zone permissions, no DNS. Account Resources: *Include → this
+   account*. Copy it; it is shown once.
+   Two things learned 2026-08-22: user API tokens are now issued with a
+   `cfut_` prefix (52 characters) and wrangler accepts them — check with
+   `GET https://api.cloudflare.com/client/v4/user/tokens/verify` (Bearer),
+   expect `success:true`. A `cfk_`-prefixed string is **not** an API token
+   (it fails that check with "Invalid API Token") and wrangler fails with
+   "Authentication error [code: 10000]". The first attempt used one; the
+   working token is named `blauewelt-pages-deploy (GitHub Actions)`.
 6. **Add the two repo secrets.** GitHub →
    [Settings → Secrets and variables → Actions](https://github.com/blauewelt/earth/settings/secrets/actions)
    → *New repository secret*, twice, spelled exactly:
@@ -339,6 +350,7 @@ the names Cloudflare's own CI guide uses.
    *Run workflow*. It assembles 184 files (~400 MiB) and uploads them; the first
    upload takes a few minutes, later ones send only what changed. The run
    summary prints the file count, the size and the deployed commit.
+   (First successful run: 32558177294, 2026-08-22, commit `f3ddcfb7`.)
 8. **Check it** — §6.0b has the byte-for-byte verification, which is the
    prerequisite for every domain step in §6 and the thing that decides whether
    any link ever moves.
@@ -407,7 +419,7 @@ Everything else on the old risk list was email, and the email is gone.
 | `www.blauewelt.org` | **301** to the apex, path and query preserved |
 | `blauewelt.ch` | **301** to `blauewelt.org`, path and query preserved. Never an origin |
 | Nameservers | **both zones move to Cloudflare** |
-| `earth.pages.dev` | stays reachable as the verification surface. **Never advertised** |
+| `blauewelt.pages.dev` | stays reachable as the verification surface. **Never advertised** |
 | `blauewelt.github.io/earth/` | **stays live indefinitely.** Free, unchanged, and the rollback |
 | Order | **`.org` first and alone.** `.ch` is untouched until `.org` is verified healthy |
 
@@ -425,9 +437,9 @@ knowing before someone "simplifies" it back:
   > *"If you are deploying to an apex domain… you will need to add your site as a
   > Cloudflare zone and configure your nameservers."*
 
-  A **subdomain** would not need this — `earth.blauewelt.org CNAME earth.pages.dev`
+  A **subdomain** would not need this — `earth.blauewelt.org CNAME blauewelt.pages.dev`
   works on Infomaniak DNS, provided the domain is added in the Pages dashboard
-  **first** (a CNAME pointed at `earth.pages.dev` before Pages knows the name
+  **first** (a CNAME pointed at `blauewelt.pages.dev` before Pages knows the name
   answers **522**). That option was considered and rejected: the apex is the name
   worth having, and a subdomain would spend the one permitted link-breakage on a
   URL nobody wants to type.
@@ -436,7 +448,7 @@ knowing before someone "simplifies" it back:
   to be a proxied zone on Cloudflare. It becomes a second zone **on the same
   account** — which is required anyway, because a Pages apex custom domain must
   be a zone on the account that owns the project.
-- **One breakage, not two.** Do **not** cut over to `earth.pages.dev` and then
+- **One breakage, not two.** Do **not** cut over to `blauewelt.pages.dev` and then
   again to the domain. Go straight from `blauewelt.github.io/earth/` to
   `blauewelt.org/`. Links shared before the move break exactly once, and
   everything issued afterwards is permanent.
@@ -459,7 +471,7 @@ problem into a public one.
    **This is a supported configuration, not a staging phase to get through** —
    stay here as long as you like.
 2. **Every file, by hash.** For each of the 184 paths in the upload set, fetch
-   `https://earth.pages.dev/<path>` and compare the sha256 with the local file.
+   `https://blauewelt.pages.dev/<path>` and compare the sha256 with the local file.
    Zero mismatches, zero non-200s. Do not compare by looking at it: the globe
    looks identical when a data file is missing, because almost every fetch
    failure degrades to `null` by design.
@@ -478,9 +490,24 @@ problem into a public one.
    it costs one hop. Check one `docs.html?f=…#…` and one `status.html#run-N` by
    hand, on a phone.
 6. **Run the suite against it.**
-   `PLAYWRIGHT_BASE_URL=https://earth.pages.dev npx playwright test tests/app.spec.js tests/docs.spec.js`
+   `PLAYWRIGHT_BASE_URL=https://blauewelt.pages.dev npx playwright test -c playwright.remote.config.js tests/app.spec.js tests/docs.spec.js`
+   — `playwright.config.js` hard-codes `localhost:8080` and starts its own
+   server, so the env var alone does nothing; `playwright.remote.config.js`
+   (in the repo root) takes the base URL from the env and skips the server.
+   This needs a machine whose browser can reach the internet: the Cowork
+   sandbox's Chromium cannot (its egress proxy resets every browser TLS
+   connection, although Node `fetch` and curl go through), so run it locally.
 7. **Watch it for a week.** Confirm the Cloudflare copy tracks `main` and that no
    ML-only day triggers a deploy.
+
+**Status 2026-08-22:** steps 2–5 verified against `blauewelt.pages.dev` at
+commit `f3ddcfb7`: 184/184 files sha256-identical (the seven `.html` paths
+answer 308 → extensionless first, then match); `/` 200, `/docs.html` →
+`/docs` 200, `/status.html` → `/status` 200, `/ml` → `/ml/` 200;
+`/this-does-not-exist` and `/data/nope.json` → 404 `text/html`;
+`/docs.html?f=docs/HOSTING.md#6-0b-phase-0-…` redirects to
+`/docs?f=docs/HOSTING.md#6-0b-…` and lands on the section. Step 6 (the suite)
+and step 7 (the one-week soak, from 2026-08-22) are still open.
 
 **Rollback at Phase 0: none needed.** Nothing has been pointed anywhere.
 
@@ -518,9 +545,15 @@ misses are precisely the ones that break silently: third-party verification
 TXTs, and anything whose name is not on somebody's list of common names. Capture
 by hand, then use the scan only as a second opinion.
 
-**From the Manager:** Domains → the domain → **DNS zone**. Export the zone if
-Infomaniak offers a zone-file download; otherwise screenshot **every record, of
-every type, with its TTL column visible**. Then take the same capture from
+**From the Manager:** Domains → the domain → **DNS Zone** → **Advanced View**
+(top right) → **Export** — Infomaniak exports the zone as a **BIND zone file**,
+which is the capture: every record, every type, TTLs included, in a form
+`diff` can compare against later. Save it as
+`zone-captures/<domain>-infomaniak-<date>.txt` outside the repo (it is a
+reference, not site content). Only if the export is unavailable, screenshot
+**every record, of every type, with its TTL column visible**. The
+**Web-redirections** list (a separate Manager page, see the table below) is
+not part of the zone file and has to be captured separately either way. Then take the same capture from
 outside, because the dashboard and the wire occasionally disagree:
 
 ```bash
@@ -848,7 +881,7 @@ on the certificate.
    `earth` → **Custom domains** → *Set up a custom domain* → `blauewelt.org`.
    Because the zone is on the same Cloudflare account, Cloudflare creates the
    apex record itself. **The registration in the Pages dashboard must come
-   first**: a record pointed at `earth.pages.dev` before Pages knows the name
+   first**: a record pointed at `blauewelt.pages.dev` before Pages knows the name
    answers **522**, which reads exactly like an origin outage and is not one.
 3. **Wait for the custom domain to read *Active*** and for the certificate to
    issue. Universal SSL covers the **apex and first-level subdomains only** —
@@ -900,7 +933,7 @@ on the certificate.
 | **Action** | Zone not Active yet, or a CAA record forbids the issuer (Phase A). Universal SSL issues only after Active |
 | **Time** | Minutes to a few hours |
 | **Symptom** | Anything worse |
-| **Action** | Remove the custom domain from the Pages project. The site is still live and current at `blauewelt.github.io/earth/` and at `earth.pages.dev` — **there is no site rollback to perform**, only a domain to detach |
+| **Action** | Remove the custom domain from the Pages project. The site is still live and current at `blauewelt.github.io/earth/` and at `blauewelt.pages.dev` — **there is no site rollback to perform**, only a domain to detach |
 | **Time** | Immediate |
 
 ---
@@ -975,7 +1008,7 @@ which is exactly why it can be broken for a month without anyone noticing. Check
 **The site itself, byte for byte — this is the gate now.**
 
 The site is what the move is *for*, so verify it at the new hostname the same way
-§6.0b verified it at `earth.pages.dev`, and do not substitute looking at the
+§6.0b verified it at `blauewelt.pages.dev`, and do not substitute looking at the
 globe: almost every fetch failure in this app degrades to `null` by design, so a
 missing data file renders as a perfectly convincing planet.
 
@@ -1204,7 +1237,7 @@ the suite's expectation moved.
 |---|---|
 | `status.html:223–228` | `SAVED_COPY` / `ORIGINLESS` / `DOCS_BASE` / `APP_BASE` — the block above |
 | `status.html:163` | `<a id="live-app" href="https://blauewelt.github.io/earth/">` — the literal is the no-JS and saved-copy value; `status.html:245–249` re-points it at `APP_BASE` on load |
-| `tests/status.spec.js:487` | the tripwire, **moved rather than deleted**: it now asserts the behaviour in all three contexts — the serving origin, a *different* serving origin (127.0.0.1 standing in for `earth.pages.dev` / `blauewelt.org`), and a real `file://` load. The second of those is the one that fails if anything is ever pinned to a host again |
+| `tests/status.spec.js:487` | the tripwire, **moved rather than deleted**: it now asserts the behaviour in all three contexts — the serving origin, a *different* serving origin (127.0.0.1 standing in for `blauewelt.pages.dev` / `blauewelt.org`), and a real `file://` load. The second of those is the one that fails if anything is ever pinned to a host again |
 
 ### Deliberate non-hits, recorded so nobody sweeps them twice
 
