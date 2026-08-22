@@ -119,6 +119,43 @@ case "${WINDOW}" in
       || echo "::warning::tensor publish failed — it remains single-copy"
     exit 0
     ;;
+  publishembed)
+    # The publishtensor of the OTHER single-copy artefact. Until now
+    # `embed_cache_sync.py push` was reachable ONLY from inside the
+    # stage-2 block below, i.e. only on a dispatch that trains — so
+    # the one way to publish an existing Z was to spend 1.5-2 h and
+    # an ~85 GB RAM peak re-entering temporal.py for a cache that was
+    # already sitting on the disk. E-044's 16.24 GiB pentad Z (8.5 h
+    # of a 4090, #423, never published) is exactly that case, and
+    # while it lives on one rented disk the seed-1 arm and the
+    # pentad sroll are pinned to one box (E-044 §4).
+    #
+    # push() derives the cache's own name from the codec at
+    # ml/runs/actions/pixelmae.pt and this tensor (cache_name ->
+    # codec_weight_hash + data_fingerprint), verifies the .npy
+    # header length and dtype before uploading, no-ops when every
+    # chunk is already on the release with the right total size, and
+    # refuses when the disk cannot hold one 1.5 GiB part. So the
+    # dispatch decides only WHICH codec is on disk — which is what
+    # `steps` + `resume` decide, and why they must be the pair that
+    # trains nothing (E-044 §3).
+    #
+    # `|| echo`, at the CALLER, per ml/CLAUDE.md §7: a failed push
+    # exits 1 (correctly, since 2026-08-10) and `bash -e` would
+    # otherwise take the step down. Which also means THIS STEP GOES
+    # GREEN ON A FAILED PUBLISH — read the durable/no-op line below,
+    # never the step's colour (§0.2).
+    echo "publishembed: pushing this box's embed cache for the codec at"
+    echo "  ml/runs/actions/pixelmae.pt against ${TENSOR}."
+    echo "  VERIFY THE EFFECT, not this step's colour: the next lines must end"
+    echo "  in 'is now durable' (uploaded) or 'already published and complete'"
+    echo "  (no-op). Anything else — 'no embed cache on disk', 'refusing',"
+    echo "  'chunk ... failed' — means the release did NOT gain the cache."
+    ls -l /opt/earth-cache/Z_*.npy 2>/dev/null || echo "  (no /opt/earth-cache/Z_*.npy on this box)"
+    python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
+      || echo "::warning::embed cache publish failed — the Z remains single-copy on this box's disk"
+    exit 0
+    ;;
   rolleval:*)
     SPEC="${WINDOW}"; SPEC="${SPEC#rolleval:}"
     mkdir -p ml/runs/heads
