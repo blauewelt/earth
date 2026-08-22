@@ -44,8 +44,86 @@ low-pass).
 
 ---
 
+<a id="e-043b-phase"></a>
+## E-043b-PHASE · Calendar or context? — RESOLVED 2026-08-22: **the pre-registered CALENDAR-REPLAY reading fires.** #434 (E-043b-PHASE, six-context-end hindcasts of the gate + the nolonhold s0 head) rolled 06:20→15:26Z on gpu-box-31479844
+
+Dispatched 2026-08-22 06:20Z with the hypothesis pre-registered **in the dispatch doc**
+(the log entry is written at harvest — a §1 debt, noted). The question: every head's
+unforced future roll mode-locks to the calendar (gate 12-mo; the #414/#426 nolonhold pair
+at exactly **36.0 months**, peaks Nov 2027/+36/+36, both seeds phase-identical, ACF 0.85 at
+lag 36 and ~0 at 35/37), and from ONE context end that admits two readings: the phase is
+the CALENDAR's (replay) or the phase is SELECTED BY THE STATE (a dynamical mode). #434
+hindcasts both heads from six context ends — 2004-12, 2014-12, 2018-09, 2020-06, 2022-03,
+2024-03 — via the new `longstart:` token (`long_multi`, f3ddcfb). Gate reproduced 0.643
+EXACTLY → run VALID · params 211.4M head + frozen 40.7M f3 anchor · stage sroll ·
+data family3_na025 · steps 0 (nothing trains) · cost ~9.1 h ≈ $2.7.
+
+**RESULT.** The nolonhold head's post-record peaks are **pinned to the same calendar
+months whatever the starting state**: from every one of the six context ends the smoothed
+trajectory peaks at **Nov 2027, Nov 2030, Nov 2033, …** — six different initial states
+spanning a decade, one attractor branch, calendar-locked. And the within-record halves
+carry the second signature: rolls launched in 2014-12, 2018-09, 2020-06 and 2022-03 track
+the subsequently observed record at **r_trained 0.70, 0.68, 0.70, 0.71** — *flat in lead
+time*. A 10-year-old context "forecasts" 2023 exactly as well as a 15-month-old one.
+Genuine forecast skill decays with lead; replay does not. Combined with the architecture
+test (the 206M stencil head and the 1-pixel gate head correlate **0.93** with each other
+over the 2004-context hindcast — 0.91 on held-out months — against 0.79/0.47 with
+reality), the conclusion is:
+
+**The 20-year hindcast tracking is trajectory replay — the training record is embedded in
+the learned dynamics and the rolled state indexes it — and the archived `long` r's must
+not be read as forecast skill.** This is E-021's finding (the 20-year fan's hindcast
+skill was memorisation) reproduced at xl scale with a cleaner instrument. Scope guard on
+the conclusion: it is about the LONG hindcast/future rolls. The 12-month scored blocks
+(corridor AUC) are a separate instrument — truth-anchored starts, scored against held-out
+years, with the #424/#425 controls behind them — but they too inherit a caveat this
+finding sharpens: training windows may LOOK at held-out months as context
+(`temporal.py:1474`, by documented design), so held-out-year skill on trained pixels is
+softer than the words "held out" suggest. The gate head shows the same replay signatures
+on its own 12-month lock (ac12 rising from 0.27 at the 2004 context to 0.87 at 2024-03).
+
+**What would still rescue a dynamics reading, and how to test it:** a mode that is real
+but weak would phase-lock to the calendar through the seasonal token while still carrying
+state information in amplitude. The falsifier for THAT is ensemble dispersion under
+context perturbation (E-021's under-dispersion test, rerunnable here), and it is not
+dispatched — the replay reading already explains every observation with fewer parts.
+
+---
+
 <a id="e-044b-roll"></a>
-## E-044b-roll · The pentad corridor AUC — DISPATCHED 2026-08-22 03:53Z as **#433 (E-044b-roll, pentad sroll of #427's head, horizon 73 / starts 3 / dumproll)** on gpu-box-46996216
+## E-044b-roll · The pentad corridor AUC — RESOLVED 2026-08-22: **the hypothesis is REFUTED at n=1 — the pentad roll lands BELOW CLIMATOLOGY.** #433 (E-044b-roll, pentad sroll of #427's head, horizon 73 / starts 3 / dumproll) rolled 03:53→17:50Z on gpu-box-46996216
+
+**RESULT (harvested 2026-08-22 ~19:30Z from `probes-433.json` on ml-metrics).** Day-matched
+corridor AUC **−0.499** (corridor = corridor_trainlon, n_px 30,158 — no holdout, all
+columns trained); window **−0.352**; gate scope **−0.365**. Raw 73-lead horizon_auc
+−0.492, quoted only beside the day-matched form per §7b(g). Against the monthly nolonhold
+pair's **+0.93933 / +0.93933** (#422 / #429), the pentad roll is not "worse by a band" —
+it is **negative**: the rolled forecast's MSE exceeds climatology's by ~50% over the year.
+The 20-year hindcast collapses the same way: r_trained **0.256**, r_heldout **0.016**,
+lp18 **0.381**, amp **0.304** (the monthly heads read 0.79 / 0.47 / 0.88 / 0.74 on the
+same protocol). Gate: the machine-readable SKIP (`certified: false`, pentad has no
+reference) — the protocol behaved exactly as §7a specifies; this number is an UNCERTIFIED
+FIRST READING at n=1, but the gap to refute (−1.44 AUC) is not a seed-band question.
+
+**Reading.** Coherent with the one-step numbers, and quantitatively so: #427's one-step
+ratio is 0.506 of persistence where the monthly arm's is 0.032 — ~16× the per-step relative
+error — and the day-matched horizon takes **73** autoregressive steps where monthly takes
+**12**. Six times as many steps, each injecting an order more error: the roll compounds it
+into collapse. "6× cadence should improve things" is refuted in its strong form: the pentad
+EMBEDDING may still be fine (the codec's k-fold numbers are ordinary), but the pentad
+STAGE-2 HEAD cannot yet carry a year-long roll. The levers the result points at, in order:
+the under-scaled znoise (this arm runs 0.1512× where E-036/E-037 measured 0.3979× — the
+exposure-bias regulariser is 2.63× weaker than the one that bought +0.045/+0.050 at
+monthly, exactly the mechanism a 73-step roll leans on), and per-step LR/schedule at pentad.
+
+**Two mechanical notes.** (a) The run shows `completed failure` — that is step 22 ONLY:
+`actions/upload-artifact@v4` refuses the dump filenames because the head label carries a
+COLON (`roll_s145rspiral:111-…npz` — "path … is not valid"). The roll itself finished; the
+JSON archived to ml-metrics (step 23 green). Fix: sanitize dump filenames. (b) The nine
+dump trajectories (2.4 GB, 74/50/26 states × [86,698 × 32] f16 per start) exist ONLY on
+gpu-box-46996216's stopped disk — stop-only, never destroy, until rescued or declared
+expendable (given the collapse, the monthly nolonhold roll is the better animation
+candidate anyway; a monthly `dumproll` re-roll costs ~3 h ≈ $1).
 
 Written **at dispatch form, before the run exists** (§1: hypothesis first, so the log cannot
 be rewritten to fit the answer). It is the second half of what Chris asked for on 2026-08-19
