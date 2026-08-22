@@ -523,17 +523,19 @@ that tier, with its degrees of freedom stated.
 
 | metric | scale — head params · steps · what is scored | replicates in the record | measured spread |
 |---|---|---|---|
-| rolled **corridor AUC** | **xl tier**: 205–217M head, 60k–200k steps, 12-month roll over the 29,627 corridor pixels | **5 pairs + 1 triple** — E-028 xl55, E-031 xl89, E-032 xl144, E-035 xl233, E-036 zn×xl144, E-037 zn×xl233 | pair \|Δ\| **0.0020, 0.0023, 0.0033, 0.0038, 0.0051**; xl55 triple range 0.0011. Pooled sd **0.0021** (7 dof), 95% upper bound **0.0037** |
+| rolled **corridor AUC** | **xl tier**: 205–217M head, 60k–200k steps, 12-month roll over the 29,627 corridor pixels | **6 pairs + 1 triple** — E-028 xl55, E-031 xl89, E-032 xl144, E-035 xl233, E-036 zn×xl144, E-037 zn×xl233, **E-043b xl144-nolonhold (#422/#429, added 2026-08-22)** | pair \|Δ\| **0.0003, 0.0020, 0.0023, 0.0033, 0.0038, 0.0051**; xl55 triple range 0.0011. Pooled sd **0.0020** (8 dof), 95% upper bound **0.0033**. (Was 0.0021 / 7 dof / 0.0037 before the E-043b pair; that pair — 0.93733 vs 0.93758 blended — is the tightest in the record.) |
 | rolled corridor AUC | **88M tier**: 768×12, 60k–200k | 4 triples + 2 pairs (E-027 big34/big55, E-029 r222/znoise/sun89 60k & 200k) | ranges **0.0011–0.0150**; pooled sd **0.0056** (10 dof) |
 | rolled corridor AUC | **34M tier**: 576×8 / 32.0M, 60k — the E-017/022/023/026/027 geometry arms | 13 triples + 1 pair, 14 configurations | ranges to **0.0224**; pooled sd **0.0070** (27 dof) |
 | **transport band r** (`amoc_bands`, truefit r on rolled section states, three held-out years) | xl tier, 205–217M — the SAME checkpoints and the SAME files as the corridor rows above | **5 pairs + 1 triple** — the identical replicate groups the top row uses. Re-mined in full 2026-08-20 (#418) from `probes-333/355/356/394/401/417` | per-band pair spreads, h1-3 · h4-6 · h7-12: xl89 0.037 · 0.055 · 0.070 — xl144 **0.046 · 0.112 · 0.119** — xl233 0.042 · 0.066 · 0.069 — zn×xl144 0.021 · 0.014 · 0.023 — zn×xl233 **0.003** · 0.011 · 0.029; xl55 triple ranges 0.019 · 0.021 · 0.021. **Range 0.003 – 0.119. Pooled sd 0.041** over the 15 pair-band contrasts (15 dof) — **20× the corridor's 0.0021**, off the same checkpoints in the same files. The earlier *"0.05–0.07 band-r regime"* is **RETIRED**: it summarised two groups to one number each, and one of those two (xl144) has h4-6/h7-12 spreads of 0.112/0.119, nearly twice the top of the regime it was said to define. E-036/E-037 had never been mined at all, and they sit an order of magnitude BELOW it. **A band r is a direction, never a level, at any n this programme has** |
-| rolled corridor AUC, **`_trainlon` scope** | xl tier — xl233 pair (#417) and xl144 pair (#418), 2026-08-20 | **2 pairs** | \|Δ\| **0.00075, 0.00108**; pooled sd **0.00066** (2 dof). Both are well under the same pairs' blended deltas (0.00200, 0.00509) — **scoring only pixels the model was trained on removes a variance source, it does not add one**, and that now holds on two independent pairs. This is the tightest scope in the record |
+| rolled corridor AUC, **`_trainlon` scope** | xl tier — xl233 pair (#417) and xl144 pair (#418), 2026-08-20; **E-043b all-longitude pair (#422/#429), 2026-08-21** | **3 pairs** | \|Δ\| **0.00075, 0.00108, 0.00000** (E-043b: 0.93933 / 0.93933, all twelve per-horizon values identical at stored precision); pooled sd **0.00054** (3 dof). All are well under the same pairs' blended deltas (0.00200, 0.00509, 0.00025) — **scoring only pixels the model was trained on removes a variance source, it does not add one**, and that now holds on three independent pairs. This is the tightest scope in the record. (The E-043b `_holdlon` pair reads 0.93283 / 0.93333, \|Δ\| 0.0005 — but with `train_lon_hold none` its "held-out" columns were trained on, so it is NOT added to the `_holdlon` row below, which measures extrapolation into a real hole.) |
 | rolled corridor AUC, **`_holdlon` scope** | xl tier — the same two pairs (#417, #418) | **2 pairs** | \|Δ\| **0.00958, 0.01933**; pooled sd **0.01079** (2 dof) — **16.4× the `_trainlon` sd off the identical four checkpoints**, 5× the tier's blended pooled sd, and the larger of the two is 3.8× the largest blended pair delta ever measured here (0.0051). **A `_holdlon` number must never be quoted as a level, at n = 1 or n = 2.** It scores extrapolation into a training hole, which is the least reproducible thing this programme does; quote it as a mechanism contrast (stencil 0.211 vs 1-point gate 0.058), never as a rung-to-rung comparison |
 | **forecast ratio** (z-mse / persistence) | 1.8M · 6k | 2 triples (E-010) | sd **0.0017** |
-| forecast ratio | 205M · 60k | 1 triple (E-028 xl55) | spread **0.004** |
+| forecast ratio | 205M · 60k | 1 triple (E-028 xl55) | spread **0.0046** (0.13408 / 0.13308 / 0.12947) |
+| forecast ratio | 207–211M · **200k**, monthly f3 anchor | 3 pairs — E-031 xl89 (#344/#345), E-032 xl144 (#346/#347), E-036 zn×xl144 (#359/#360); re-mined from `run-*.jsonl` `stage2_result` 2026-08-22 | \|Δ\| **0.00205, 0.00212, 0.00156** — and the same caveat as the 211M row below: the seed moves the val draw too, so these bound training-seed spread from above |
 | forecast ratio (z-mse / persistence) | **211M head · 200k steps**, all-longitude stage-2 pool (`xl144-nolonhold`) | **1 pair** — E-043b #414 (seed 0) / #426 (seed 1) | \|Δ\| **0.00008** (0.01392 vs 0.01400) |
 | **RAPID head k-fold** (`rapid_probe_kfold`; 240 months ≈ 9 effective DOF) | 1.8M · 6k | 2 triples (E-010) | U=1 range **0.245**, sd **0.123**; U=4 sd 0.040 |
 | RAPID head k-fold | 1.8–10.7M · 60k | 5 triples (E-012, E-013b, E-014, E-015, E-016) | per-arm sd 0.024–0.150; pooled **0.095** (10 dof) |
+| RAPID head k-fold (`rapid_r_kfold`, in-training, pooled) | **205–211M · 60k–200k** — the SAME checkpoints as the corridor rows | xl55 triple, xl89, xl144, zn×xl144, E-043b pairs (re-mined 2026-08-22) | ranges **0.037 · 0.003 · 0.008 · 0.030 · 0.087** (E-043b: 0.389 vs 0.476). Off the identical heads whose corridor AUC agrees to ≤ 0.005. `rapid_r_deseas` is worse still (xl89 0.231, E-043b 0.124). **Capacity tightened the corridor; it did nothing for the probe** |
 | **codec head probe** (frozen embeddings, 240 months) | 0.92M codec · 40k · 1° global tensor | 1 codec-seed pair (patch24, #18 / #43) | attention head **0.036**, pooled ridge **0.012**, raw-pixel control **0.049** |
 | anything at **pentad or daily cadence** | E-038a/b/c, E-042, the family-4 codecs | **none — every arm at the new cadences is n = 1** | **UNMEASURED** |
 
@@ -545,13 +547,20 @@ head) shares #347's (E-032 xl144 seed 1). The 0.00008 therefore conflates seed-o
 with seed-of-val-sample, and is if anything an **upper bound on the training-seed spread
 alone**. It says nothing about the corridor AUC at this configuration: that row still reads
 2 pairs and its extension to 3 waits for #429 (the seed-1 xl144 roll), in the same commit as
-that result.
+that result. *(Done 2026-08-22: #429 landed 2026-08-21 21:40Z and the `_trainlon` and
+corridor rows above now carry it.)*
 
 Be honest about the n. Three pairs at 0.002–0.003 is three pairs, not a
-distribution; the xl row is five pairs and one triple, seven degrees of freedom
-in total, and that is what licenses "the seed sd at this tier is 0.0021 and
-very unlikely to exceed 0.0037" — a bound, not a law. It says nothing whatever
+distribution; the xl row is six pairs and one triple, eight degrees of freedom
+in total, and that is what licenses "the seed sd at this tier is 0.0020 and
+very unlikely to exceed 0.0033" — a bound, not a law. It says nothing whatever
 about the tail at a tier nobody has replicated.
+
+**The spread falls with capacity, and that is why the licence below is tier-bound.**
+Same instrument, same protocol, recomputed 2026-08-22: pooled corridor sd ≈ **0.0058** at
+34M (gate / base55 / e022 triples, largest range 0.0157), **0.0034** at 88M (big34 / big55,
+largest range 0.0092), **0.0020** at 205M+. A 205M head is close to deterministic on the
+rolled field; a 34M head is not.
 
 **Two things in the archive that look like replication and are not.**
 
@@ -573,24 +582,58 @@ about the tail at a tier nobody has replicated.
   pooled. Published `Z` removed the cause; the number stays on the record as
   the size of what a stray environment difference can buy.
 
-### (b) The rule
+### (b) The rule — amended 2026-08-22 (Chris: *"the two training runs turn out to be very very close … revert to a single experiment for now"*)
 
-**One seed is enough** when all three hold:
+**ONE SEED IS THE DEFAULT** for any stage-2 arm that is:
 
-1. the result is scored by **rolled corridor AUC**;
+1. scored by **rolled corridor AUC**;
 2. at the **xl tier or above** — ≥205M head, ≥60k steps, frozen f3 anchor
    codec, monthly `family3_na025` tensor: the one configuration the pairs above
-   actually measure;
-3. and the claimed effect is **≥ 0.025** corridor AUC.
+   actually measure (six pairs and a triple, 8 dof, sd 0.0020).
+
+That default now covers **new stage-2 configurations** (training pool, stencil,
+noise, schedule — anything that changes the head but not the codec, tensor or
+cadence) **and numbers that will headline**, provided the tier's replicate
+record is quoted beside them ("n = 1; tier sd 0.0020, 8 dof"). Both were
+mandatory-replicate cases in the 2026-08-19 version of this rule. What changed
+the reading is the E-043b pair, bought under exactly those two clauses: a new
+pool, a headline number, and a pair |Δ| of **0.0003** — the record's tightest.
+The full analysis is `claude/seed-rule-analysis-2026-08-22.md` in the project;
+its arithmetic in one line: at sd 0.0020 a single-seed comparison misorders two
+arms 0.010 apart about once in 7,000 draws, and every effect the programme has
+acted on at this tier (+0.042 capacity, +0.045/+0.050 noise, +0.071 nolonhold)
+sits far above that. The effects a second seed was nominally FOR (width
++0.005/rung, steps −0.0006, xl233 −0.004) are not resolved by n = 2 either — they
+need n ≥ 4 — so two was the wrong n for both jobs.
+
+**The decision bar stays at 0.025.** A single-seed effect below it is written as
+a consistency, never as a level (see the ✅/❌ forms below). A sub-0.025 effect
+that a decision genuinely turns on buys replication ON DEMAND, **n ≥ 3 per arm,
+not 2** — two seeds cannot resolve a 0.005 effect at this sd either.
 
 **Where 0.025 comes from, and why it is not 0.015.** Two derivations, both out
 of the table, and they agree. Five times the LARGEST pair delta ever measured
 at the tier (0.0051, E-032 xl144) is 0.0255. And the quantity actually at risk
 is a DIFFERENCE of two single-seed numbers, whose sd is √2 × the tier sd; at
-the 95% upper bound on that sd (0.0037) that is 0.0052, and five of those is
-0.0262. Call it **0.025**. The bar is anchored on the largest observed delta
-rather than the median one (0.0033) because a rule calibrated to the median is
-calibrated to the lucky half of the record.
+the 95% upper bound on that sd (0.0033 after E-043b; 0.0037 before) that is
+0.0047, and five of those is 0.0236. Call it **0.025**. The bar is anchored on
+the largest observed delta rather than the median one (0.0033) because a rule
+calibrated to the median is calibrated to the lucky half of the record.
+
+**The replicate that IS still bought, once per wave: the winner.** Before any
+configuration is written up as the programme's best, its seed-1 twin is trained
+and rolled — one run, ~$6, ~a day of one box. Replicating every losing arm buys
+nothing; replicating the winner turns every headline into a pair. Per wave of
+N arms this is N + 1 trainings instead of 2N, i.e. a 40–45 % saving on stage-2
+training and the same on roll time for N = 4–5.
+
+**What this does NOT relax.** The band is measured on one frozen codec and one
+monthly tensor. The moment the codec, tensor or cadence changes the band is
+unmeasured again and the first pair at the new tier is owed (below) — that is
+why #432 (E-044b-SEED1, pentad) was correctly dispatched on 2026-08-22, and
+why its step-6,000 gradient spike (96,469 at seed 1 against 452 at seed 0,
+absorbed by the clip) is the kind of seed dependence — training dynamics, not
+rolled skill — that no monthly corridor pair says anything about.
 
 Read back against the record, 0.025 is the bar that behaves. It admits every
 effect this programme has replicated — input noise **+0.045 / +0.050**
@@ -607,12 +650,18 @@ is not one:
   any scale this programme has run.
 - **Any new metric, cadence, tensor, codec or scale tier with no measured
   pair. The first result at a tier buys its own replication.** Every pentad
-  and daily arm is in this class today. So is any run on a new codec: all six
-  xl pairs share one frozen 40.7M codec and one monthly tensor, and a band is
-  warranted only where it was measured.
-- **Any number that will be quoted as a headline in the paper**, whatever its
-  size. The paper's own voice already says single-seed head numbers *"should
-  not be quoted anywhere, including by us"*.
+  and daily arm is in this class today. So is any run on a new codec: all
+  seven xl groups share one frozen 40.7M codec and one monthly tensor, and a
+  band is warranted only where it was measured. *(Amended 2026-08-22: a new
+  STAGE-2 configuration on the same codec/tensor/cadence is no longer in this
+  class — the E-043b pair measured that case at |Δ| 0.0003 and it now falls
+  under the default above.)*
+- **Any number that will be quoted as a headline in the paper — when it is a
+  PROBE number.** The paper's own voice says single-seed head numbers *"should
+  not be quoted anywhere, including by us"*, and that stands. A corridor-AUC
+  headline at the xl tier is covered by the default above plus the
+  winner-replicate clause: the best configuration gets its pair before it is
+  written up, the also-rans do not. *(Amended 2026-08-22.)*
 - **Any claim that an effect is ZERO, or that an axis is CLOSED.** A null is a
   statement ABOUT the noise band and cannot be made from one draw out of it. A
   closure is the most fragile claim this programme makes — both of the ones it
