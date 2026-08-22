@@ -44,6 +44,244 @@ low-pass).
 
 ---
 
+<a id="e-044b-roll"></a>
+## E-044b-roll · The pentad corridor AUC — DRAFTED 2026-08-22 02:40Z, **NOT YET DISPATCHED**
+
+Written **at dispatch form, before the run exists** (§1: hypothesis first, so the log cannot
+be rewritten to fit the answer). It is the second half of what Chris asked for on 2026-08-19
+— *"report one-step MSE and corridor AUC"* — of which #427 delivered the first half only:
+corridor AUC comes from a **separate `sroll:` dispatch** over the head #427 trained (spec
+§7a/§7b). Code: `head_sha` **at dispatch**; the roll is `ml/rollout_spatial.py` at 52ad4a4.
+
+**E-044b-roll · ROLLS #427's pentad xl144+znoise stage-2 head
+(`head-weights-e044b-xl144zn-pentad-s0`) 365 DAYS forward over the pentad axis — horizon
+**73 steps = 365.0 d**, day-matched to the monthly archive's 12 months (E-044 §7b), **3**
+evenly-strided starts per holdout year (stride 24 pentads, phases ≈ 30 Dec / 29 Apr /
+27 Aug), day-defined bands h1-18 / h19-36 / h37-73 — and DUMPS the full-window roll-forward
+sequences for the UI's animation · params 206.5M head over a frozen 37.976M codec, **both
+frozen, NOTHING trains** · stage `sroll` · data `family4_na025_pentad_r2` (C 40, T 3,142,
+sha256 `37e146384b6f…`) · arch head 1024×16, K 24, stencil 145, ring
+`spiral:111,4444,0.71,0.5`; codec 512×12, d_z 32, patch 1 · steps×batch **0 × 0** (the
+`steps` field is the codec's own recorded 197,428) · resume `run-415`.**
+
+[E-044 · the dispatch spec, §7a/§7b (project doc)](https://blauewelt.github.io/earth/docs.html?f=claude/E044-pentad-stage2-spec.md)
+
+[E-044b · #427, the head this rolls](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-044b)
+
+[E-043b · #422/#429, the monthly control pair](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-043b-seed1-roll)
+
+#### 1 · Hypothesis and falsifier
+
+**HYPOTHESIS (Chris's, in his words: a 6× finer cadence "should improve things").** The
+pentad head's **day-matched** corridor AUC — `horizon_auc_daymatched` on the
+`corridor_trainlon` scope — is **at or above the monthly no-longitude-holdout pair's 0.939**.
+The mechanism claimed is that a 5-day step lets the forecaster carry structure a 30-day step
+integrates away, and that this survives all the way out to a 365-day horizon.
+
+**FALSIFIER — and its weak half is stated first, because it is the honest part.** A
+day-matched corridor `_trainlon` AUC **materially below 0.939** falsifies it. *"Materially"
+cannot be quantified at this cadence today:* the pentad pair spread does not exist, because
+no second pentad head has ever been rolled. The monthly xl `_trainlon` pair noise is
+**|Δ| 0.00075 (#417) and 0.00108 (#418)**, pooled sd 0.00066 on 2 dof, with the xl tier's
+blended 95% upper bound 0.0037 — those are the numbers a monthly comparison would be judged
+against, and **they may not be borrowed across a cadence boundary** (§3b). So: a gap of
+order 0.01 or larger is a result either way; a gap of order 0.001 is **uninterpretable until
+the seed-1 pentad roll exists**, and must be written as "no measurable difference at n = 1",
+never as agreement.
+
+**CONTROL, named explicitly (§3).** The monthly no-longitude-holdout xl144 pair —
+**#422 (seed 0) and #429 (seed 1)**, rolled on `family3_na025` at the identical protocol:
+corridor `_trainlon` **0.939 / 0.939** (archived to three decimals; quoted as 0.93933 in the
+E-043b harvest), corridor blended 0.937 / 0.938, `_holdlon` 0.933 / 0.933. The control is a
+PAIR on purpose — a single monthly number would give the comparison no noise floor at all,
+and the pair is the only reason the paragraph above can say what 0.001 means at monthly.
+
+**WHAT THIS RUN CANNOT ANSWER, said before it runs.**
+
+- **The gate is UNCERTIFIED BY CONSTRUCTION.** `GATE_REF_BY_CADENCE` has no pentad entry:
+  `e017_u1_s0`'s 0.643 was measured by `ml/rollout.py` over the MONTHLY family-3 axis (#217),
+  and it cannot certify a roll whose steps are a different length, whose starts are a
+  different count and whose bands span different durations. The artefact will carry
+  `"gate": {"pass": null, "skipped": true, "certified": false, "reason": …}` and every number
+  from it is a **first reading**, in the §10 sense. The gate head is deliberately **not
+  named** to this dispatch: it is a d_z-64 monthly head and `load_state_dict` against the
+  d_z-32 pentad codec would kill the job.
+- **Only `horizon_auc_daymatched` may be compared.** The raw `horizon_auc` averages 73 leads
+  spanning 5–365 d against the archive's 12 spanning 30–365 d, most of them short, where
+  skill is highest — a raw pentad number would beat the monthly one on lead SAMPLING alone
+  (§7b(g)). Both are emitted; only the day-matched one is quotable against the control.
+- **The intervals are not like-for-like.** At S = 3 there are **9** (start, year) samples
+  behind each lead against monthly's **36**. The POINT ESTIMATES are comparable; the CIs are
+  not, and no CI from this run may be set beside a monthly one below S = 12.
+- **n = 1.** §3b's one-seed licence does not reach here — this changes codec, tensor and
+  cadence at once. A seed-1 pentad head (E-044b-SEED1, below) must exist before any number
+  here is written as a level.
+
+#### 2 · The dispatch
+
+```
+"window": "recipe:xl144-zn-pentad-nolonhold,sroll:head-weights-e044b-xl144zn-pentad-s0,ckpt:run-415__pixelmae.pt,horizon:73,starts:3,dumproll",
+"steps": "197428", "resume": "!run-415", "temporal_steps": "0",
+"tensor": "family4_na025_pentad_r2", "anomaly": "true",
+"runner": "gpu-box-46996216", "job_timeout": "1200"
+```
+
+**Three prerequisites, in order, and the roll cannot run before all three.**
+(1) `publishtensor` on `gpu-box-39184683` → `family4_na025_pentad_r2_37e146384b.npz.{aa,ab,ac}`
+on `data-cache-v1`, without which the roll box builds its own bytes, gets a different
+fingerprint and **cannot find the published Z** (closed in the workflow at `ce361b0`, which
+pulls and sha-verifies the pin). (2) A **HEADPUB** of #427's head off
+`/opt/earth-cache/ckpt/temporal.pt` with `@temporal` — its 2.5 GB full checkpoint failed
+**37** release uploads over the ~2 GiB asset cap, so it exists on one rented disk and in the
+`probes-427` artifact only. (3) `ckpt:run-415__pixelmae.pt` — **not** `run-415.pt`, which is
+not an asset name; a failed `curl` under `set -e` kills the script.
+
+**Cost.** 3,363 roll steps = 441 scored + 2,922 long+future ≈ **14.1 h ESTIMATE at the
+MONTHLY per-step rate**, plus ~10 min tensor pull, ~20–30 min X extraction (~34 GB, which is
+why this is not on the 100 GB box) and ~2 min of dump upload ⇒ **≈15–16 h, ≈$4.6**. Every
+hour of that is arithmetic over a rate measured on a different cadence: **nothing has ever
+rolled the pentad tensor**, and the first `sroll` progress record settles it in minutes.
+Read it before letting a 14-hour job run.
+
+**Verification (§2), in order:** `axis: pentad · one step = 5 d · 12 months = 73 steps =
+365 d` · `horizon: 73 steps (window token horizon:73)` · `starts: 3 per holdout year` ·
+**`embed cache key: codec 8b639abe36 · tensor 37e146384b`** — the single most important line,
+both halves must match or the box is holding the wrong tensor · `Z: … (3142, 86698, 32)
+float16, 16.24 GiB` · `::warning::validation gate SKIPPED` · then `dump roll_…npz: 74 states
+[86,698, 32] f16, 411 MB` per start, and at the end `gate: NOT CERTIFIED at pentad cadence`
+and `dumproll: 9 trajectories, 3.70 GB`.
+
+#### 3 · What rides along: the roll-forward sequences
+
+Chris, 2026-08-22: *"Save the roll forward sequence for the held out years somewhere (so
+that we can use it as animation in the UI)"*, and *"Roll forward all of the earth's pixels
+(these are required by the stencil size, not just the relevant area)"*. The second half was
+already true — `roll_step` advances all 86,698 window ocean pixels every step, because a
+stencil head's step t+1 at a pixel reads its NEIGHBOURS at t, and gate/corridor/window are
+masks applied to the decoded field afterwards. What was missing is that the state was
+discarded one step after it existed.
+
+`dumproll` writes one `.npz` per (head, holdout year, start): the full-window z trajectory
+`[74, 86698, 32]` float16 (state 0 = the TRUE embedding of the start row), the axis
+rows/labels/dates, the pixel index map, and the codec's `weight_hash` — **z, not pixels**,
+because the decoder is published and deterministic and pixel space is ~20× the bytes at
+C = 40. 9 files, ≈3.70 GB, in the probe artifact (30-day retention), NOT on `ml-metrics`.
+The roll JSON is **byte-identical** with the flag on or off, which is what stops the
+animation and the archived skill from being records of two different rolls.
+
+---
+
+<a id="e-044b-seed1"></a>
+## E-044b-SEED1 · The replicate #427 owes — DRAFTED 2026-08-22 02:40Z, **NOT YET DISPATCHED**
+
+Written at dispatch form, before the run exists (§1). Required, not optional: §3b's one-seed
+licence needs all three of *scored by rolled corridor AUC*, *at the xl tier on the frozen f3
+anchor and the monthly tensor*, and *effect ≥ 0.025*. #427 satisfies **none** of them — it
+moves codec, tensor and cadence at once — so §3b's harder clause governs verbatim: *"Any new
+metric, cadence, tensor, codec or scale tier with no measured pair. The first result at a
+tier buys its own replication."* Code: `head_sha` **at dispatch**.
+
+**E-044b-SEED1 · Trains a SECOND 206.5M xl144+znoise stage-2 head on the PENTAD tensor over
+#415's frozen no-longitude-holdout pentad codec, IDENTICAL to #427 in every field but the
+seed (`seed:0` → `seed:1`), with gradient clipping at 128 · params 206.5M head over a frozen
+37.976M codec · stage `stage-2` · data `family4_na025_pentad_r2` (C 40, T 3,142, sha256
+`37e146384b6f…`) · arch head 1024×16, K 24, stencil 145, ring `spiral:111,4444,0.71,0.5`,
+znoise 0.7, grad-clip 128; codec 512×12, 4 heads, d_dec 256, d_z 32, patch 1 · steps×batch
+stage-1 **0** (resumes at its own recorded step 197,428 — nothing trains) / stage-2
+**200,000 × 256**, pool 251,337,502 windows · resume `run-415`.**
+
+[E-044b · #427, the seed-0 arm this replicates](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-044b)
+
+[E-044 · #423, which ran this configuration WITHOUT the clip and diverged](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-044-423-diverged)
+
+#### 1 · Hypothesis and falsifier
+
+**HYPOTHESIS, in two parts.** (a) With `--grad-clip 128` the seed-1 arm also trains to
+200,000 steps **without divergence** — `stage2_grad_norm_max` bounded, `clip_frac` near 0,
+`val_zmse` descending monotonically — which is what turns #427 from "one run that happened
+not to blow up" into evidence that clipping was the mechanism. (b) Its one-step ratio
+`z_t+1.mse_model / mse_persistence` lands **within a first-measured pair spread** of #427's
+**0.50560** (10.746222 / 21.254400).
+
+**FALSIFIER, two-sided and sharp.**
+- **Divergence** — `stage2_grad_norm_max` climbing decade by decade, `clip_frac` rising off 0
+  toward 1, `val_zmse` above 10× persistence at any window. Then **clipping was not the
+  mechanism**, #423's other two candidates reopen in the order §0a set them: the **LR at
+  pentad** first, the **under-scaled znoise** second (0.7 is 0.1512× this z-space's own
+  one-step scale where E-036/E-037 measured 0.3979×). One arm cannot separate "clipping
+  fixed it" from "two lucky draws", but two divergences out of two would settle it the
+  other way.
+- **A pair spread far above the monthly tier's.** The monthly 211M xl144 nolonhold pair
+  measured **0.013918 (#414) / 0.013998 (#426), |Δ| 0.000080** on the identical quantity.
+  A pentad |Δ| of that order is a reproducible level; one one or two ORDERS above it means
+  the pentad one-step ratio is a draw, not a property, and every number quoted off #427 —
+  including its corridor AUC — inherits that.
+
+**CONTROL (§3).** #427 itself for (b), at 0.50560; the monthly pair above for the spread
+that a "small" |Δ| would have to be read against. And the standing sentence that must travel
+with every quotation of either: **the pentad ratio is NOT comparable to the monthly arm's
+0.0139 as a level** — a 5-day step in a patch-1 z-space is a far harder one-step problem
+than a monthly step in a patch-3 one, and the two differ in cadence, codec, patch size and
+`d_z` at once. What is comparable is pentad against ITSELF across seeds, which is exactly
+what this arm buys.
+
+#### 2 · The dispatch, and why it costs no embed
+
+Identical to #427's validated 25-field block (spec §0c) with **one** field changed —
+`seed:0` → `seed:1` in the window's tail — plus the `runner`. `--grad-clip 128` stays; the
+`sched:` tail goes LAST and `scripts/probes_run.sh` word-splits it into the `python -u
+ml/temporal.py` line.
+
+**NO EMBED PASS, and this now holds on a box that has never seen the tensor** — which was
+not true before tonight. Two mechanisms, both verified in the code rather than assumed:
+
+1. **The stage-2 path DOES pull a published embed cache before deciding to embed.**
+   `scripts/probes_run.sh:379` runs `python -u ml/embed_cache_sync.py pull --run actions
+   --data "$TENSOR"` — guarded `|| echo`, because a miss is the normal path — and it sits
+   **before** the trainer at `:398`. `ml/temporal.py:1379` names the cache
+   `embed_cache_path(run, whash, dhash)`, and `embed_everything` short-circuits at
+   `:858-862`: an existing file of the right `(T, P, d_z)` prints `(cached: …)` and returns.
+   #427's own log is the proof — `embed cache already local and valid: (3142, 86698, 32)
+   float16, 16.24 GiB`, zero `{"embedding": …}` records.
+2. **The cache key is now reproducible off-box.** The key is (codec weight hash, tensor
+   sha256) = `8b639abe36` / `37e146384b`. The codec half travels through the release
+   (`run-415__pixelmae.pt`, seeded by the workflow's own step; verified locally —
+   `codec_weight_hash` of that asset **is** `8b639abe36`). The tensor half could NOT travel
+   until `ce361b0`: `np.savez` stamps zip timestamps, so a rebuilt tensor never hashes the
+   same, and the Build step now **pulls the pinned tensor** and sha-verifies it. #427 pushed
+   the Z itself (`embed cache for codec 8b639abe36/37e146384b is now durable`, 12 chunks,
+   17,433,927,552 B on `embed-cache-v1`).
+
+So this arm's cost is **train only: ≈20.6 h at #427's 0.371 s/step, ≈$6.5**, against the
+≈24–26 h and ≈$7.5–8 #423 paid with its embed. It also inherits **§0f's 24-hour
+`GITHUB_TOKEN` ceiling**: at ~21 h it is close enough that the harvest should be planned off
+`ml-live-<n>` and the artifacts by hand.
+
+**BOX — UNRESOLVED AT DRAFTING, and it is the one blocker.** The arm needs a **126 GB RAM**
+machine: `temporal.py` keeps the tensor eager, `np.nan_to_num(X)` copies 34 GB beside the
+34 GB `X` and `np.isfinite(X)` adds a 17 GB bool — an ~85 GB peak before `del X`, and it
+dies as exit 137 with no message. At drafting time **the repo has four registered runners
+(`gpu-box-30257785`, `31479844`, `39184683`, `46996216`) and ALL FOUR ARE OFFLINE**;
+`gpu-box-47094145` is **not registered at all**. A dispatch naming a runner that does not
+exist queues forever. Start (or create) the box and confirm it appears in
+`node scripts/fleet_run_state.mjs` BEFORE dispatching, and check the disk: this arm needs the
+4.5 GB tensor + the 17.4 GB Z + ~50 GB of resident tensor in RAM, but **not** the 34 GB `X`
+extraction the roll needs.
+
+**First minutes (§2), unchanged from #427's list except item 0:** `runner_name` is the box
+you named · the recipe block resolves with `RECIPE_HOLDOUT_LON=0,0` · **stage 1 trains
+nothing** (`config.steps` 197428 = `resumed.at_step` 197428 — anything else means the codec
+is being modified AND the Z cache key with it: cancel within seconds) · **`(cached: …)` and
+ZERO `{"embedding": …}` records** — a restart here is ~8.5 h and ~$2.6 and means the tensor
+pull or the codec seed did not produce the pinned pair · `params_M` **206.536** ·
+`train_windows` **251,337,502** · `val_persistence` **21.44622**, identical to #427/#423 to
+five decimals, which is the tightest possible check that this is the same Z · **`gradient
+clipping ON: max_norm 128`** — if it says OFF the `sched:` tail lost the flag, and this is
+#423 again: cancel · `stage2_config.seed` **1**, which is the ONLY field that distinguishes
+this run's artefacts from #427's.
+
+---
+
 <a id="fleet-2026-08-21-0740"></a>
 ## OPERATIONS · The fleet at 2026-08-21 07:40Z — two boxes, two jobs, one box stopped, burn down 25%
 
