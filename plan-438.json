@@ -1,0 +1,8 @@
+{
+ "steps": 20000,
+ "lr": 0.001,
+ "schedule": "expdecay",
+ "stage": "stage-2",
+ "note": "E-045-A3 pentad, Argo-target windows excluded",
+ "published_at": "2026-08-22T23:27:51.719Z"
+}
