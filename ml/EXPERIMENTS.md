@@ -326,7 +326,21 @@ animation and the archived skill from being records of two different rolls.
 ---
 
 <a id="e-044b-seed1"></a>
-## E-044b-SEED1 · The replicate #427 owes — DISPATCHED 2026-08-22 03:17Z as **#432 (E-044b-SEED1, pentad xl144+znoise stage-2 head, grad-clip 128, seed 1)** on gpu-box-39184683, #427's own box (Z and tensor local)
+## E-044b-SEED1 · The replicate #427 owes — RESOLVED 2026-08-22: **both hypotheses hold.** #432 (E-044b-SEED1, pentad xl144+znoise stage-2 head, grad-clip 128, seed 1) ✓ GREEN 22:56Z on gpu-box-39184683, #427's own box
+
+**RESULT (probes-432.json, harvested 23:30Z).** (a) Trained to 200,000 steps with **no
+divergence** — with n=2 both seeds of the exact #423 configuration-plus-clip complete
+where #423 died at 28k: **clipping-as-mechanism stands.** (b) One-step ratio
+**0.50447** (10.729206 / 21.268318) vs #427's **0.50560** — the first measured pentad
+pair spread, **|Δ| 0.00113**. Per §3b's 211M-row caveat this conflates training-seed with
+val-draw and is an upper bound on the seed term; it is ~14× the monthly 211M pair's
+0.00008 and still small in absolute terms, so the pentad one-step level **≈0.505 is now
+pair-backed** — the pentad stage-2 task really is ~16× harder per step than monthly, and
+E-044b-roll's collapse mechanism stands on a replicated footing. Integrity checks:
+probe_head / raw-3×3 come back bit-identical to #427's (0.659 / 0.693) — CORRECT, these
+score the frozen codec Z with fixed fold seeds (protocol determinism, not a replicate);
+the pooled stage-2 probe spreads 0.583 / 0.630 (pair |Δ| 0.047, inside §3b's probe band,
+labelled legacy). §3b's table gains the pentad forecast-ratio pair row in this commit.
 
 Written at dispatch form, before the run exists (§1). Required, not optional: §3b's one-seed
 licence needs all three of *scored by rolled corridor AUC*, *at the xl tier on the frozen f3
