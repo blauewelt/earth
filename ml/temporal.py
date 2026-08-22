@@ -25,7 +25,9 @@ held-out years and the same mid-Atlantic longitude block, never random.
 Usage:  python3 ml/temporal.py --run pilot4_anom --steps 4000
 """
 import argparse
+import datetime as dt
 import json
+import math
 import os
 import re
 import sys
@@ -954,6 +956,71 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
 
 
 
+def season_ctx(months, mode="month", d=None):
+    """[T, 2] season features for the HEAD, sin/cos of the year phase.
+
+    `month` (the default, and every archived run) is
+    sin/cos(2*pi*(month-1)/12) — an INTEGER month-of-year, so on a pentad axis
+    all ~6 bins inside a month carry one identical token and the forcing is a
+    staircase. It is the array `ctx_all` has always been, and the caller
+    asserts that equality rather than trusting this docstring.
+
+    `fine` is the continuous phase of the bin's OWN date: the centre of the
+    bin, as a fraction of the tropical year from that year's 1 January. At a
+    binned cadence the date comes from the tensor's own `bin_index`, `epoch`
+    and `pentad_days` — the same three members `ml/rollout_spatial.py`'s
+    TimeAxis derives its calendar from — so a 5-day bin advances the token by
+    5/365.2425 of a turn instead of by nothing five times and 1/12 once. At
+    monthly there is no `bin_index`, so a bin is its calendar month and the
+    centre is the month's midpoint: close to the month-quantized value but
+    NOT equal to it, deliberately (a month's token stops being the value at
+    its start and becomes the value at its middle).
+
+    Only the head sees this. The frozen codec's own context is built from the
+    month-quantized array at the embed call and must stay that way: Z exists
+    already and was produced with it.
+    """
+    moy = np.array([int(m[5:7]) - 1 for m in months])
+    if mode == "month":
+        return np.stack([np.sin(2 * np.pi * moy / 12),
+                         np.cos(2 * np.pi * moy / 12)], 1)
+    if mode != "fine":
+        raise ValueError(f"season_ctx: unknown mode {mode!r}")
+    if d is not None and "bin_index" in d:
+        days = (int(np.asarray(d["pentad_days"]).item()) if "pentad_days" in d
+                else {"pentad": 5, "daily": 1}[str(d["cadence"])])
+        ep = (dt.date.fromisoformat(str(d["epoch"])) if "epoch" in d
+              else dt.date(1982, 1, 1))
+        spans = [(ep + dt.timedelta(days=int(b) * days), float(days))
+                 for b in np.asarray(d["bin_index"]).astype(np.int64)]
+    else:
+        # monthly: the bin IS the calendar month, so its span is that month
+        spans = []
+        for m in months:
+            y, mm = int(m[:4]), int(m[5:7])
+            first = dt.date(y, mm, 1)
+            nxt = dt.date(y + (mm == 12), (mm % 12) + 1, 1)
+            spans.append((first, float((nxt - first).days)))
+    return np.array([season_feat_of(s, n) for s, n in spans])
+
+
+def season_feat_of(start, span_days):
+    """(sin, cos) of the year phase at the CENTRE of a bin.
+
+    ONE definition, used by both ends of the system: `season_ctx` builds the
+    trainer's [T, 2] table from it, and `ml/rollout_spatial.py` calls it per
+    ROW so a rolled step past the end of the record is phased the same way as
+    a step inside it. Sub-day arithmetic is done in datetimes on purpose —
+    `date + timedelta(days=2.5)` silently truncates to 2 days, which would
+    put a pentad's centre half a day early and a February's a half day late.
+    """
+    c = (dt.datetime.combine(start, dt.time())
+         + dt.timedelta(days=float(span_days) / 2.0))
+    frac = ((c - dt.datetime(c.year, 1, 1)).total_seconds()
+            / (365.2425 * 86400.0))
+    return math.sin(2 * math.pi * frac), math.cos(2 * math.pi * frac)
+
+
 def _chunked_forward(model, zseq, mseq, sctx, dev, chunk=4096):
     """The eval forwards used to push 20,000 windows through the model in ONE
     call. That fit every 576x8 head ever trained and OOM-killed the first
@@ -1199,6 +1266,67 @@ def main():
     ap.add_argument("--max-pixels", type=int, default=0,
                     help="subsample ocean pixels (code-path smoke only; "
                          "the 26.5N section is always kept)")
+    # ---- E-044c overnight instruments (2026-08-22). All four default to OFF
+    # and OFF is the pre-existing code path, asserted rather than asserted-to:
+    # tests/test_e044c_knobs.py pins bit-identity against the unflagged run
+    # the way tests/test_e044_grad_clip.py pins --grad-clip 0.
+    ap.add_argument("--time-stride", type=int, default=0,
+                    help="SUBSAMPLE THE TIME AXIS: keep bins "
+                         "range(--time-offset, T, N). 0 (default) keeps every "
+                         "bin and is today's path exactly. At pentad N=6 is "
+                         "~one bin per month, so a K of 24 kept bins is 24 "
+                         "MONTHS of context instead of 120 days — the E-044 "
+                         "question 'is the pentad collapse about cadence or "
+                         "about context span' asked directly, at 1/6 the "
+                         "windows. Everything keyed on the axis (months, moy, "
+                         "t_hold, the season features, the pool, the monitor, "
+                         "every eval) is subsampled TOGETHER; persistence "
+                         "baselines are recomputed on the kept axis by "
+                         "construction, so a strided val_persistence is the "
+                         "one-step change OF THE STRIDED AXIS and is not "
+                         "comparable with a full-axis one")
+    ap.add_argument("--time-offset", type=int, default=0,
+                    help="phase of --time-stride (0 <= O < N). At pentad, "
+                         "offset 2 is the mid-month bin, which is the one "
+                         "carrying Argo (n_rg_live 252/3142, measured "
+                         "2026-08-22)")
+    ap.add_argument("--target-bins-argo", default="all",
+                    choices=("all", "exclude", "only"),
+                    help="filter the TRAINING POOL by whether a window's "
+                         "SCORED bins carry Argo. A bin carries Argo iff any "
+                         "rg_* channel has a finite value in it — measured, "
+                         "8.02%% of pentad bins (one per month, the mid-month "
+                         "stamp). 'all' (default) is today's pool exactly. "
+                         "'exclude' drops every window whose target reach "
+                         "(t+1..t+UF and each --direct horizon) touches an "
+                         "Argo bin; 'only' keeps just those. THE POOL AND "
+                         "NOTHING ELSE: the monitor batch, both z-space "
+                         "evals and the transport probes are untouched, so "
+                         "the ratios stay comparable across arms")
+    ap.add_argument("--season-dropout", type=float, default=0.0,
+                    help="probability, per TRAINING window, that the season "
+                         "features are replaced by zeros (the neutral value "
+                         "for a sin/cos pair: no point on the unit circle, so "
+                         "the month projection contributes nothing). 0 = off "
+                         "= today. Eval, monitor and roll paths NEVER drop — "
+                         "this is a regulariser against the calendar lock the "
+                         "unforced rolls show, not a change of protocol")
+    ap.add_argument("--season-phase", default="month",
+                    choices=("month", "fine"),
+                    help="what the HEAD's season features mean. 'month' "
+                         "(default, and every archived run) is "
+                         "sin/cos(2*pi*moy/12) with an INTEGER month-of-year, "
+                         "so all ~6 pentad bins inside a month share one "
+                         "identical token — a staircase forcing on a 5-day "
+                         "axis. 'fine' uses the continuous fraction-of-year "
+                         "phase of each bin's TRUE date, derived from "
+                         "bin_index/epoch/pentad_days. THE CODEC'S OWN ctx "
+                         "STAYS MONTH-QUANTIZED either way: Z is frozen and "
+                         "was built that way, so this changes the head's "
+                         "conditioning only. It is written into the "
+                         "checkpoint args and ml/rollout_spatial.py reads it "
+                         "back, so a fine-phase head can never be rolled with "
+                         "coarse tokens")
     ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"),
                     help="tensor npz (family-3 runs pass family3_na025.npz)")
     ap.add_argument("--train-lon-hold", default="inherit",
@@ -1327,10 +1455,82 @@ def main():
     # stat_x_hold, NOT pool_x_hold — see the two-masks comment above.
     X, dynamic = anomaly_transform(X, moy, t_hold, stat_x_hold)
 
+    # ---- --time-stride: subsample the axis, and mind the ORDER ------------
+    # WHERE THIS SITS IS THE WHOLE DESIGN, and it is not where a first reading
+    # would put it.
+    #
+    #   * AFTER the anomaly transform, never before. The transform's
+    #     climatology and per-channel z-score are computed over the TRAIN
+    #     bins of the FULL axis; recomputing them over one bin in six would
+    #     shift every normalised value the frozen encoder is then asked to
+    #     encode — a covariate shift on a codec whose whole premise is that
+    #     it is unchanged. Worse, it would be INVISIBLE: the embed cache is
+    #     keyed by (codec weight hash, sha256 of the RAW tensor file) and
+    #     neither term sees the transform OR the stride, so a strided run
+    #     would publish embeddings of a differently-normalised tensor under
+    #     the name every other run pulls. That is #10/#11 with a new cause.
+    #   * BEFORE nan_to_num/isfinite, which is where the memory goes: those
+    #     two build a float16 copy and a bool of the SAME shape as X (34 GB
+    #     and 17 GB at pentad, an ~85 GB peak that is the first place this
+    #     file can die). Slicing first makes both of them 1/N.
+    #
+    # The cost of being safe: the embedding cannot use the shared cache,
+    # because a [T/N, P, d_z] array is indistinguishable by shape from a
+    # complete one for a different tensor — embed_everything refuses t_sel
+    # with cache_path for exactly this reason. A strided run therefore
+    # re-embeds its own kept bins (1/N of the pass) and writes nothing.
+    tsel = None
+    if a.time_stride:
+        if a.time_stride < 1:
+            sys.exit(f"--time-stride {a.time_stride}: must be >= 1")
+        if not (0 <= a.time_offset < a.time_stride):
+            sys.exit(f"--time-offset {a.time_offset} must satisfy "
+                     f"0 <= O < N for --time-stride {a.time_stride}")
+        # The ocean mask is a property of the FULL record and must not become
+        # a property of the sample: computed here, channel 0 only, chunked, so
+        # a pixel observed only in dropped bins still counts as ocean exactly
+        # as it does in an unstrided run.
+        ocean_full = np.zeros(X.shape[1:3], bool)
+        for i0 in range(0, T, 64):
+            ocean_full |= np.isfinite(X[i0:i0 + 64, :, :, 0]).any(axis=0)
+        tsel = np.arange(a.time_offset, T, a.time_stride)
+        X = np.ascontiguousarray(X[tsel])
+        months = [months[i] for i in tsel]
+        moy, t_hold = moy[tsel], t_hold[tsel]
+        T = len(tsel)
+        print(f"--time-stride {a.time_stride} offset {a.time_offset}: "
+              f"{T} of {len(tsel) * a.time_stride + a.time_offset} bins kept "
+              f"({months[0]}..{months[-1]}), held-out {int(t_hold.sum())} · "
+              f"K={a.K} now spans {a.K} KEPT bins · the embed cache is "
+              f"DISABLED for this run (a strided Z must never be published "
+              f"under an unstrided name)", flush=True)
+
+    # THE RAPID TRUTH IS KEYED ON THE AXIS ROW, so it is subsampled with the
+    # axis or it points at the wrong bins. `rapid[:, 0]` holds row indices of
+    # the FULL record (build_family4's truth_pentad writes exactly that), and
+    # both readers below — the in-training transport probe and eval 3 — index
+    # `moy`/`t_hold` with them. Unstrided this is `d["rapid"]` itself, so
+    # nothing moves; strided, a row that survives is renumbered to its
+    # position in the kept axis and a row that does not is dropped.
+    rapid_arr = d["rapid"]
+    if tsel is not None:
+        _pos = {int(r): i for i, r in enumerate(tsel)}
+        _keepr = [i for i, r in enumerate(rapid_arr[:, 0].astype(int))
+                  if int(r) in _pos]
+        rapid_arr = rapid_arr[_keepr].copy()
+        rapid_arr[:, 0] = [_pos[int(r)] for r in rapid_arr[:, 0].astype(int)]
+        print(f"  RAPID truth on the strided axis: {len(rapid_arr)} of "
+              f"{len(d['rapid'])} rows survive", flush=True)
+
     codec = codec_from_ckpt(ck, C)
     codec.load_state_dict(ck["model"])
     codec.eval()
 
+    # The CODEC's context stays month-quantized whatever --season-phase says:
+    # Z is frozen and was built with this exact array (embed_everything reads
+    # ctx_all), so changing it here would silently re-key nothing and
+    # re-encode everything. --season-phase governs the HEAD's `Mt` only,
+    # built further down from season_ctx().
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
     Xt = torch.from_numpy(np.nan_to_num(X, nan=0.0))
     OBS = torch.from_numpy(np.isfinite(X))
@@ -1339,7 +1539,25 @@ def main():
     # 1.4 GB anomaly copy has to go before it is allocated. Likewise `ocean`
     # comes from OBS rather than d["X"][..., 0], which would load the whole
     # 1.4 GB npz member again just to slice one channel off it.
-    ocean = OBS[..., 0].any(axis=0).numpy()
+    ocean = OBS[..., 0].any(axis=0).numpy() if tsel is None else ocean_full
+    # The per-bin Argo mask, for --target-bins-argo. A bin carries Argo iff
+    # any rg_* channel has a finite value in it — the definition the tensor
+    # itself implies (`n_rg_live` counts exactly these bins) and the one
+    # measured on 2026-08-22: 252 of 3,142 pentad bins, one per month, at the
+    # mid-month stamp. Cheap here because OBS already exists; computed always
+    # so the LOG can report it even when the filter is off.
+    # PER BIN, one at a time: `OBS[..., rg]` in one expression is a
+    # [T,H,W,35] bool — 14.9 GB at pentad — which is the shape of allocation
+    # this file exists to avoid.
+    _rg = [i for i, nm in enumerate(chan) if str(nm).startswith("rg_")]
+    argo_bin = np.zeros(T, bool)
+    if _rg:
+        _rgt = torch.as_tensor(_rg, dtype=torch.long)
+        for _t in range(T):
+            argo_bin[_t] = bool(OBS[_t].index_select(-1, _rgt).any())
+    print(f"Argo-carrying bins: {int(argo_bin.sum())}/{T} "
+          f"({100.0 * argo_bin.mean():.2f}%) over {len(_rg)} rg_* channels",
+          flush=True)
     del X
     import gc
     gc.collect()
@@ -1476,7 +1694,20 @@ def main():
     # at held-out months (persistence can too); they may never be SCORED on
     # them in training.
     Zt = torch.from_numpy(Z)
-    Mt = torch.as_tensor(ctx_all, dtype=torch.float32)
+    # THE HEAD'S SEASON FEATURES, which are `ctx_all` itself in the default
+    # 'month' mode — `np.array_equal` asserted below rather than trusted, so
+    # the default path is the same numbers and not merely the same intent.
+    head_ctx = season_ctx(months, a.season_phase, d)
+    if a.season_phase == "month":
+        assert np.array_equal(head_ctx, ctx_all), \
+            "season_ctx('month') must reproduce the archived sin/cos(2pi*moy/12)"
+    else:
+        _dd = np.abs(head_ctx - ctx_all).max()
+        print(f"--season-phase fine: the head's season token is the "
+              f"continuous fraction-of-year phase of each bin's TRUE date "
+              f"(max |Δ| vs the month-quantized token {_dd:.4f}). The "
+              f"CODEC's ctx stays month-quantized — Z is frozen.", flush=True)
+    Mt = torch.as_tensor(head_ctx, dtype=torch.float32)
     K = a.K
     # With --unroll U the loss reaches U months past the window, so the pool
     # must guarantee those months EXIST and are TRAIN months. Without this the
@@ -1537,6 +1768,38 @@ def main():
     ok_t = np.array([t + reach[-1] < T and t + 1 >= K
                      and not any(t_hold[t + r] for r in reach)
                      for t in range(T)])
+    # --target-bins-argo: the SAME reach, filtered by what the scored bins
+    # carry. On the pentad axis 92% of bins have no Argo at all (measured:
+    # 252/3142 carry it, one per month), so 'exclude' trains a head that
+    # never scores a bin whose 35 rg_* channels are present, and 'only'
+    # trains on nothing else. THE TRAIN POOL AND NOTHING ELSE — the monitor
+    # batch below is built from `ev_m` (windows whose t+1 is a HOLDOUT bin,
+    # 4,096 of them, fixed seed) and is deliberately left on the full
+    # population so `val_zmse`, `val_persistence` and every ratio quoted off
+    # them stay comparable across arms; the two z-space evals and the
+    # transport probes key on t_hold alone and are likewise untouched.
+    if a.target_bins_argo != "all":
+        want = (a.target_bins_argo == "only")
+        # `ok_t` has already excluded every t whose reach runs off the end;
+        # this predicate must not index past it while computing a value that
+        # `ok_t` will discard anyway.
+        def _reach_argo(t, agg):
+            return agg(argo_bin[t + r] for r in reach) \
+                if t + reach[-1] < T else False
+        hit = np.array([_reach_argo(t, all) if want
+                        else not _reach_argo(t, any)
+                        for t in range(T)])
+        n_before = int(ok_t.sum())
+        ok_t = ok_t & hit
+        print(f"--target-bins-argo {a.target_bins_argo}: {int(ok_t.sum()):,} "
+              f"of {n_before:,} eligible target bins survive the filter "
+              f"(reach {reach}); the monitor and both evals are unfiltered",
+              flush=True)
+        if not ok_t.any():
+            sys.exit(f"--target-bins-argo {a.target_bins_argo} leaves NO "
+                     f"trainable window: {int(argo_bin.sum())}/{T} bins carry "
+                     f"Argo and the scored reach is {reach}. Refusing to "
+                     f"train on an empty pool.")
     # pool_x_hold, NOT stat_x_hold — --train-lon-hold governs exactly this
     # line and nothing else in the file.
     ok_p = ~pool_x_hold[xs]
@@ -1743,6 +2006,19 @@ def main():
         # direct head must hit from the hidden state at t. Pool-guarded above.
         zdir = (torch.stack([Zt[t + h_, p] for h_ in D], 1).float().to(TDEV)
                 if D else None)
+        # --season-dropout: TRAINING FORWARDS ONLY, and this is the only
+        # place a training forward's season features are built. Zeros are the
+        # neutral value for a sin/cos pair — not a point on the unit circle at
+        # all, so the month projection contributes nothing and the window has
+        # to be dated from its own z. Per WINDOW, not per step: dropping some
+        # steps of a window and not others would teach the head that the
+        # calendar is intermittently observable, which is not the ablation.
+        # The monitor batch (`mon_mseq`), both z-space evals and every roll
+        # build their own mseq and are untouched by construction.
+        if a.season_dropout > 0:
+            keep_m = (torch.rand(len(t), 1, 1) >= a.season_dropout).float()
+            mseq = mseq * keep_m
+            mfut = mfut * keep_m
         # base and p stay on the CPU: --unroll-wide re-gathers the slot
         # pixels' own windows from the memmap, which is CPU work by design
         # (the 5.2 GiB of Z lives where the pages are).
@@ -1889,7 +2165,7 @@ def main():
                            "input_znoise_rel_pers": round(_zrel, 5),
                            "input_znoise_rel_zrms": round(_zrelz, 5)}})
     try:
-        _pr = d["rapid"]
+        _pr = rapid_arr
         _pridx = _pr[:, 0].astype(int)
         _prv = _pr[:, 1].copy()
         _prmoy = moy[_pridx]
@@ -2333,7 +2609,7 @@ def main():
     # ---- eval 3: RAPID probe from temporal hidden state -------------------
     # protocol v2: deseasonalised target (train-years clim), seasonal floor,
     # lambda on a train tail — identical scoring path to probe_sequence.py.
-    rapid = d["rapid"]
+    rapid = rapid_arr
     _, sec_after = rapid_section(lats, lons, ys, xs)   # ys/xs possibly subsampled
     sec_pix = torch.as_tensor(sec_after, dtype=torch.long)
     with torch.no_grad():

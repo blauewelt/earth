@@ -104,7 +104,7 @@ from model import codec_from_ckpt, gather_px                    # noqa: E402
 from recon_eval import stream_stats, build_slab                 # noqa: E402
 from temporal import (TemporalTransformer, build_stencil,       # noqa: E402
                       embed_everything, rapid_section, _ring_on,
-                      codec_weight_hash)
+                      codec_weight_hash, season_feat_of)
 from project_amoc import fit_ridge                              # noqa: E402
 from aggregate_cadence import (EPOCH as EPOCH_DEFAULT,          # noqa: E402
                                bin_start)
@@ -711,6 +711,36 @@ def month_feats(moys, dev):
     return torch.from_numpy(np.stack(
         [np.sin(2 * np.pi * m / 12),
          np.cos(2 * np.pi * m / 12)], 1).astype(np.float32)).to(dev)
+
+
+def row_feats(ax, rows, dev, mode="month"):
+    """The season features a head is fed, for a list of AXIS ROWS.
+
+    THE HEAD'S OWN RECORDED MODE DECIDES, NOT THIS FILE (2026-08-22). A head
+    trained with `--season-phase fine` was conditioned on the continuous
+    fraction-of-year phase of each bin; rolling it with the month-quantized
+    staircase would feed it a token it never saw at a resolution it was
+    trained to resolve, and the roll would score the mismatch rather than the
+    head. `ml/temporal.py` writes `season_phase` into the checkpoint args
+    (`vars(a)`), so the caller reads it back the way it already reads
+    `stencil` and `ring_km`, and passes it here.
+
+    `mode="month"` reproduces `month_feats(ax.moy_of_row(r) ...)` exactly —
+    which is what every archived roll fed — and `TimeAxis`'s own §4.9
+    invariant is what makes that identical to the old `moy[r]` for rows
+    inside the record (the axis asserts that each bin's true date lands in
+    the calendar month its label names). Rows PAST the end of the record are
+    defined for both modes, which is why the future roll can use one call.
+    """
+    rows = [int(r) for r in rows]
+    if mode == "month":
+        return month_feats([ax.moy_of_row(r) for r in rows], dev)
+    if mode != "fine":
+        sys.exit(f"unknown season phase mode {mode!r} in the head's args — "
+                 f"this roll cannot reproduce the conditioning it was "
+                 f"trained under, and guessing would score the mismatch")
+    sc = [season_feat_of(ax.date_of_row(r), ax.step_days) for r in rows]
+    return torch.from_numpy(np.asarray(sc, dtype=np.float32)).to(dev)
 
 
 def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False):
@@ -1850,6 +1880,11 @@ def main():
             sys.exit(f"{hp} has K={K} != {K_seen} — windows not comparable")
         stencil = ta.get("stencil", 1)
         ring_km = ta.get("ring_km", 0) or 0        # number OR "222,555"
+        # The head's SEASON CONDITIONING, read back the way stencil and
+        # ring_km are: ml/temporal.py saves vars(a), so a head trained with
+        # --season-phase fine carries it and a head that predates the flag
+        # carries nothing — which is 'month', the only thing it can be.
+        sphase = str(ta.get("season_phase", "month") or "month")
         unroll = ta.get("unroll", 1)
         label = (f"s{stencil}"
                  + (f"r{str(ring_km).replace(',', '-')}" if _ring_on(ring_km) else "")
@@ -1929,7 +1964,7 @@ def main():
                     if s - K + 1 < 0 or s + 1 >= T:
                         continue
                     Zwin = zwin_from_true(s, K)
-                    cur = list(moy[s - K + 1: s + 1])
+                    cur = list(range(s - K + 1, s + 1))
                     v_pers, obs_s = std_m.get(s)
                     # The trajectory buffer, sized from the SAME break
                     # condition the h-loop below uses, so its last slot is
@@ -1951,8 +1986,8 @@ def main():
                         # rollout.py's mseq at step h spans s-K+h .. s+h-1;
                         # advance AFTER the forward, like project_amoc.py
                         zhat = roll_step(model, Zwin, NBR_t, static_ctx,
-                                         month_feats(cur, dev), a.chunk,
-                                         a.amp)
+                                         row_feats(ax, cur, dev, sphase),
+                                         a.chunk, a.amp)
                         if traj is not None:
                             # ẑ for THIS row, before it is folded into the
                             # window — the same tensor the scoring decodes,
@@ -1965,7 +2000,7 @@ def main():
                         # its own date. `(cur[-1] + 1) % 12` advanced a MONTH
                         # per step, which is right exactly when a step is a
                         # month and corrupts the model's own input otherwise.
-                        cur = cur[1:] + [ax.moy_of_row(t_tgt)]
+                        cur = cur[1:] + [t_tgt]
                         xhat = decode_all(codec, zhat, C, a.chunk, a.amp)
                         v_true, obs_tt = std_m.get(t_tgt)
                         op = obs_tt & obs_s
@@ -2124,15 +2159,16 @@ def main():
             row's true month.
             """
             Zwin = zwin_from_true(s_end, K)
-            cur = list(moy[s_end - K + 1: s_end + 1])
+            cur = list(range(s_end - K + 1, s_end + 1))
             sv, roll_rows = [], []
             with torch.no_grad():
                 for i in range(n_steps):
                     r_next = s_end + 1 + i
                     zhat = roll_step(model, Zwin, NBR_t, static_ctx,
-                                     month_feats(cur, dev), a.chunk, a.amp)
+                                     row_feats(ax, cur, dev, sphase),
+                                     a.chunk, a.amp)
                     Zwin = torch.cat([Zwin[:, 1:], zhat[:, None]], 1)
-                    cur = cur[1:] + [ax.moy_of_row(r_next)]
+                    cur = cur[1:] + [r_next]
                     prog.step(phase)
                     sv.append(read_sv(zhat))
                     roll_rows.append(r_next)
