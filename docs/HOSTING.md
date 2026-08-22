@@ -367,6 +367,20 @@ tick and no deploy is the worst possible answer.
 
 ## 6 · The cutover: `blauewelt.github.io/earth` → `blauewelt.org`
 
+> **DONE 2026-08-22.** `https://blauewelt.org` (and `www.`) serves the Pages
+> project `blauewelt`; DNS is at Cloudflare (`kinsley` / `trace.ns.cloudflare.com`),
+> DNSSEC is on (DS 2371/13/2 published at Infomaniak), Phase E passed
+> (184/184 sha256, entry points, 404, redirects). `blauewelt.ch` **stays at
+> Infomaniak** — it carries kSuite mail and DNSSEC, and only ever needs a web
+> redirection, not a move. Mail on `.org` is Cloudflare Email Routing
+> (`chris@` → Proton), which replaced the `v=spf1 -all` posture with MX +
+> Cloudflare SPF/DKIM. Two things not in the original plan: the `.org` had
+> been **registry-suspended** (ICANN owner-verification) and had to be
+> verified first; and the zone was added with **manual entry, not the scan**,
+> because the scan would have imported the suspension page's A record.
+> Full log: project doc `session-2026-08-22e-org-cutover-done.md`.
+> The phases below are kept as the record of how, and as the rollback guide.
+
 **The site moves to a domain Chris owns, in one step, and never moves again.**
 Everything below is a runbook to be followed with the Infomaniak Manager open in
 one tab and the Cloudflare dashboard in another. It is written in the order the
