@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-044b-roll"></a>
-## E-044b-roll · The pentad corridor AUC — DRAFTED 2026-08-22 02:40Z, **NOT YET DISPATCHED**
+## E-044b-roll · The pentad corridor AUC — DISPATCHED 2026-08-22 03:53Z as **#433 (E-044b-roll, pentad sroll of #427's head, horizon 73 / starts 3 / dumproll)** on gpu-box-46996216
 
 Written **at dispatch form, before the run exists** (§1: hypothesis first, so the log cannot
 be rewritten to fit the answer). It is the second half of what Chris asked for on 2026-08-19
@@ -172,7 +172,7 @@ animation and the archived skill from being records of two different rolls.
 ---
 
 <a id="e-044b-seed1"></a>
-## E-044b-SEED1 · The replicate #427 owes — DRAFTED 2026-08-22 02:40Z, **NOT YET DISPATCHED**
+## E-044b-SEED1 · The replicate #427 owes — DISPATCHED 2026-08-22 03:17Z as **#432 (E-044b-SEED1, pentad xl144+znoise stage-2 head, grad-clip 128, seed 1)** on gpu-box-39184683, #427's own box (Z and tensor local)
 
 Written at dispatch form, before the run exists (§1). Required, not optional: §3b's one-seed
 licence needs all three of *scored by rolled corridor AUC*, *at the xl tier on the frozen f3
