@@ -1,0 +1,43 @@
+# Run the browser suite against a DEPLOYED site — docs/HOSTING.md §6.0b step 6
+# (and §6 Phase E). Dispatch-only: nothing fires it but a person, it never runs
+# on a fork's event, and it is `ubuntu-latest` — never `gpu` (ml/CLAUDE.md §6).
+#
+# Exists because the Cowork sandbox's browser cannot reach the internet, and
+# Chris has no local checkout: the one place with a real Chromium and a real
+# network is this runner. `playwright.remote.config.js` takes the base URL from
+# the env and skips the local server that `playwright.config.js` would start.
+
+name: Verify a deployed site (browser suite)
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Site to test, e.g. https://blauewelt.pages.dev or https://blauewelt.org"
+        required: true
+        default: "https://blauewelt.pages.dev"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run app + docs specs against ${{ inputs.base_url }}
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ inputs.base_url }}
+        run: npx playwright test -c playwright.remote.config.js tests/app.spec.js tests/docs.spec.js
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-remote
+          path: playwright-report/
+          retention-days: 7

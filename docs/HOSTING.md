@@ -494,9 +494,14 @@ problem into a public one.
    — `playwright.config.js` hard-codes `localhost:8080` and starts its own
    server, so the env var alone does nothing; `playwright.remote.config.js`
    (in the repo root) takes the base URL from the env and skips the server.
-   This needs a machine whose browser can reach the internet: the Cowork
+   This needs a machine whose browser can reach the internet, and the Cowork
    sandbox's Chromium cannot (its egress proxy resets every browser TLS
-   connection, although Node `fetch` and curl go through), so run it locally.
+   connection, although Node `fetch` and curl go through). The place that can
+   is GitHub Actions: **Actions → *Verify a deployed site (browser suite)* →
+   Run workflow**, with the base URL as the input (default
+   `blauewelt.pages.dev`; later `blauewelt.org` for Phase E). Or from a
+   session: `POST /actions/workflows/verify-remote.yml/dispatches` with
+   `{"ref":"main","inputs":{"base_url":"https://blauewelt.pages.dev"}}`.
 7. **Watch it for a week.** Confirm the Cloudflare copy tracks `main` and that no
    ML-only day triggers a deploy.
 
