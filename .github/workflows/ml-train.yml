@@ -615,6 +615,62 @@ jobs:
             # the Hub, so this needs no credential on the box — deliberately:
             # the box is a stranger's machine whose host has root (§6), and
             # nothing here requires a secret, so nothing here gets one.
+            # PULL THE PUBLISHED TENSOR BEFORE BUILDING ONE, exactly as the
+            # family-3 branch above does and for a sharper reason. np.savez
+            # stamps zip timestamps, so a REBUILT family-4 tensor never hashes
+            # the same as the published one even from identical inputs — and
+            # the embed cache is keyed by (codec weight hash, TENSOR sha256).
+            # The 16.24 GiB pentad Z on embed-cache-v1 is 8.5 h of a 4090
+            # (#423/#427) and is named Z_8b639abe36_37e146384b: a box that
+            # builds its own tensor gets a different fingerprint, misses that
+            # cache, and re-spends the 8.5 h — or, on the sroll path, fails
+            # outright with "no embed cache published for ...". So on family 4
+            # the pull is not a convenience, it is what makes the published Z
+            # and every cross-box pentad number reachable at all.
+            TPIN=37e146384b6f622fefe3c7e18ad9bab0389c9538be79536899fe8729bb2d0826
+            TF="ml/cache/${RECIPE_TENSOR:-${{ inputs.tensor }}}.npz"
+            PULLED=0
+            if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r2" ]; then
+              if [ -f "$TF" ] && [ "$(sha256sum "$TF" | cut -d' ' -f1)" = "$TPIN" ]; then
+                echo "tensor already present and matches pin ${TPIN:0:10}"
+                PULLED=1
+              else
+                echo "pulling pinned tensor ${TPIN:0:10} from data-cache-v1 …"
+                ok=1
+                for sfx in aa ab ac; do
+                  curl -fsSL --max-time 1800 -o "$TF.$sfx.part" \
+                    "https://github.com/${GITHUB_REPOSITORY}/releases/download/data-cache-v1/family4_na025_pentad_r2_${TPIN:0:10}.npz.$sfx" \
+                    || { ok=0; break; }
+                done
+                if [ "$ok" = 1 ]; then
+                  cat "$TF.aa.part" "$TF.ab.part" "$TF.ac.part" > "$TF.new" && rm -f "$TF".*.part
+                  got=$(sha256sum "$TF.new" | cut -d' ' -f1)
+                  if [ "$got" = "$TPIN" ]; then
+                    mv "$TF.new" "$TF"; PULLED=1
+                    echo "tensor seeded from the release, sha verified ${TPIN:0:10}"
+                  else
+                    rm -f "$TF.new"
+                    echo "::warning::pulled tensor sha $got != pin — discarded, will build"
+                  fi
+                else
+                  rm -f "$TF".*.part
+                  echo "::warning::tensor pull failed — this box will BUILD its own, which may not hash ${TPIN:0:10}. The published embed cache is keyed on that hash, so this run will also re-spend the 8.5 h embed."
+                fi
+              fi
+            fi
+            if [ "$PULLED" = 1 ]; then
+              # SKIP THE BUILD INPUTS TOO, and say what was skipped. The npz
+              # is complete and self-describing: build_family4.py's own skip
+              # guard reads the RECIPE STRING AND THE TRUTH KEYS OUT OF THE
+              # FILE, and the truth npz, the pentad025 means and the SST
+              # artifact are BUILD inputs only — nothing downstream opens
+              # them. Fetching ~GB of them to run a builder that returns at
+              # its first check is cost with no effect (#391's lesson, one
+              # level up: a precondition may only be demanded by work that
+              # still has to happen).
+              echo "family 4: tensor is the published ${TPIN:0:10} — skipping the pentad025/truth/SST fetch and the build entirely"
+              ls -l "$TF"
+            else
             PD=/opt/earth-cache/glorys_pentad
             mkdir -p "$PD"
             HFB="https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/pentad025"
@@ -648,6 +704,7 @@ jobs:
             # build_family4.py checks the grid against base025_na.npz and
             # REFUSES a mismatch before writing any of the 33 GB.
             python -u ml/build_family4.py --pentad-dir "$PD" $REV
+            fi
           elif [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily" ] || \
                [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily_r2" ]; then
             # E-038 Phase B. Same shape as the family-4 branch, daily inputs:
