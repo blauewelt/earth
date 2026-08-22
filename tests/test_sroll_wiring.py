@@ -402,7 +402,41 @@ def main():
               "starts:3 recommendation, and the UNVERIFIED marker on every "
               "hour of it")
 
-        print("\nsroll_run.sh wiring: all 8 checks hold ✓")
+        # ---- 9. `dumproll` — the BARE token, and the artifact that carries
+        # what it writes (2026-08-22, Chris: "Save the roll forward sequence
+        # for the held out years somewhere ... as animation in the UI").
+        # Two ways this token could fail silently, and both are checked: the
+        # `*)` arm of the token loop reads anything without a colon as a HEAD
+        # TAG, so an unmatched `dumproll` would be fetched from the release,
+        # 404 and (since 32e4e06) refuse the whole dispatch; and the workflow's
+        # "Upload probe results" step takes a LIST OF NAMES, not a directory,
+        # so a dump written into the bundle dir but not named there would be
+        # deleted with the box while every step still reported success.
+        av_d, r_d = roll_argv(f"sroll:h1,ckpt:{ck_rel},dumproll,starts:3",
+                              "family4_na025_pentad_r2.npz")
+        assert "--dump-roll" in av_d, av_d
+        ddir = av_d[av_d.index("--dump-roll") + 1]
+        assert ddir == "ml/runs/actions/roll_dump", ddir
+        tail = av_d[av_d.index("--heads") + 1:av_d.index("--out")]
+        assert tail == ["ml/runs/heads/h1.pt"], (
+            "`dumproll` leaked into the head list — the bare-token arm is "
+            "below the catch-all", tail)
+        assert "--dump-roll" not in av_p and "--dump-roll" not in av_m, \
+            "the dump must be OFF unless the window asks for it"
+        wf = open(os.path.join(ROOT, ".github", "workflows",
+                               "ml-train.yml")).read()
+        up = wf[wf.index("name: Upload probe results"):]
+        up = up[:up.index("retention-days")]
+        assert ddir + "/*" in up, (
+            "the workflow's probe artifact does not name " + ddir +
+            "/* — the trajectories would never leave the box")
+        print("9. `dumproll` reaches the roll as --dump-roll %s and is absent "
+              "from every window that does not name it; the bare token does "
+              "not leak into --heads; and the workflow's probe artifact names "
+              "%s/* explicitly, which is the only reason the files survive "
+              "the box" % (ddir, ddir))
+
+        print("\nsroll_run.sh wiring: all 9 checks hold ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         shutil.rmtree(tmp2, ignore_errors=True)

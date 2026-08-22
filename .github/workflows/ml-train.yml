@@ -1109,6 +1109,19 @@ jobs:
             # its persistence baseline (3.139 on one box, 3.343 on the other)
             # instead of by the hash that exists precisely to say so.
             ml/runs/actions/provenance.json
+            # THE ROLL-FORWARD SEQUENCES (`sroll:...,dumproll`, 2026-08-22).
+            # ml/rollout_spatial.py --dump-roll writes one .npz per (head,
+            # holdout year, staggered start) holding the FULL-window z
+            # trajectory the roll advanced, for the UI's animation. This
+            # `path:` is a LIST OF NAMES, not a directory — rollout_spatial.json
+            # itself is not in it — so "written into the bundle dir" would NOT
+            # have carried them: without this line the dumps die with the box.
+            # ~411 MB per pentad trajectory, ~3.7 GB for one head at horizon
+            # 73 / starts 3, against the 4.55 GB this repo has already uploaded
+            # in one artifact (probes-427). They are deliberately NOT archived
+            # to ml-metrics: scripts/archive_probes.py takes named JSONs, and a
+            # gigabyte on a git branch is forever.
+            ml/runs/actions/roll_dump/*
           retention-days: 30
           if-no-files-found: ignore
 

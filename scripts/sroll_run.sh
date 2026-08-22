@@ -99,6 +99,7 @@ HORIZON_TOK=""
 STARTS_TOK=""
 LONG_TOK=""
 FUTURE_TOK=""
+DUMP_TOK=""
 # A token whose value must be a step count is CHECKED here, where the inputs
 # are all it has cost (ml/CLAUDE.md §0.3/§5.16). `horizon:x` would otherwise
 # reach argparse as a string, die there, and take the whole dispatch with it
@@ -116,6 +117,11 @@ for tok in ${SPEC//,/ }; do
     starts:*)  STARTS_TOK="${tok#starts:}";   want_int starts  "$STARTS_TOK" ;;
     long:*)    LONG_TOK="${tok#long:}";       want_int long    "$LONG_TOK" ;;
     future:*)  FUTURE_TOK="${tok#future:}";   want_int future  "$FUTURE_TOK" ;;
+    # A BARE token, and it must be matched BEFORE the `*)` arm below, which
+    # reads anything without a colon as a HEAD TAG — an unmatched `dumproll`
+    # would be fetched from the release, 404, and (since 2026-08-20) refuse
+    # the whole dispatch.
+    dumproll)  DUMP_TOK=1 ;;
     *:*)       echo "::error::unknown sroll token '$tok'"; exit 1 ;;
     "")        ;;
     *)         TAGS="$TAGS $tok" ;;
@@ -330,6 +336,29 @@ fi
 echo "heads: $(echo $TAGS | wc -w) named, $(echo $HPATHS | wc -w) fetched"
 
 OUT="ml/runs/actions/rollout_spatial.json"
+# ---- the roll-forward sequence dump (window token `dumproll`) -------------
+# Chris, 2026-08-22: "Save the roll forward sequence for the held out years
+# somewhere (so that we can use it as animation in the UI)". OFF unless the
+# token says so, because it is BYTES: ~411 MB per pentad trajectory, ~3.7 GB
+# for one head at horizon 73 / starts 3, and a roll nobody animates should
+# not carry them.
+#
+# It writes into a SUBDIRECTORY of the probe bundle dir, and the subdirectory
+# is load-bearing twice over: `.github/workflows/ml-train.yml`'s "Upload probe
+# results" step names `ml/runs/actions/roll_dump/*` explicitly (its `path:` is
+# a LIST, not a directory — rollout_spatial.json itself is not in it, so
+# "write it in the bundle dir and the artifact carries it" is false here),
+# and scripts/archive_probes.py globs `probe_head*.json` in `ml/runs/actions`
+# and its parent — a manifest sitting beside those would be one widened glob
+# away from a 3.7 GB push to the ml-metrics BRANCH.
+DUMPDIR="ml/runs/actions/roll_dump"
+if [ -n "$DUMP_TOK" ]; then
+  rm -rf "$DUMPDIR"
+  echo "dumproll: roll-forward sequences -> $DUMPDIR (uploaded with the probe artifact; NOT archived to ml-metrics)"
+  df -h . | tail -1
+else
+  echo "dumproll: not set — no roll-forward sequences are written (the roll JSON is unchanged either way)"
+fi
 # BACKGROUNDED behind a publisher loop, exactly as the training step does.
 # This eval is hours long and, until 2026-08-14, published nothing while it
 # ran: Actions will not serve a running job's log, so "how far along is it?"
@@ -349,6 +378,7 @@ python -u ml/rollout_spatial.py --x "$XPATH" \
   ${STARTS_TOK:+--starts-per-year $STARTS_TOK} \
   ${LONG_TOK:+--long-months $LONG_TOK} \
   ${FUTURE_TOK:+--future-months $FUTURE_TOK} \
+  ${DUMP_TOK:+--dump-roll $DUMPDIR} \
   --heads $HPATHS --out "$OUT" &
 EVAL_PID=$!
 TICK=0
@@ -420,3 +450,38 @@ for lab, e in d["heads"].items():
 print(f"rollout_spatial.json OK ({os.path.getsize(p):,} bytes)")
 PYEOF
 echo "sroll: wrote $OUT — archive_probes.py will publish it"
+
+# The dump is asserted the same way, and only when it was ASKED FOR: a token
+# that silently produced nothing is the failure this repo keeps relearning
+# (ml/CLAUDE.md §0.2). Fatal, because `dumproll` is a request for data the
+# UI work depends on, and a 14-hour roll that has to be repeated for it is
+# far more expensive than a refusal here.
+if [ -n "$DUMP_TOK" ]; then
+  python - "$DUMPDIR" <<'PYEOF'
+import json, os, sys
+d = sys.argv[1]
+mp = os.path.join(d, "dump_manifest.json")
+assert os.path.exists(mp), (
+    f"dumproll was set and {mp} does not exist — the roll wrote no "
+    f"trajectories at all")
+m = json.load(open(mp))
+fs = m.get("files") or []
+assert fs, "dump_manifest.json lists no files"
+tot = 0
+for f in fs:
+    p = os.path.join(d, f["file"])
+    assert os.path.exists(p), f"manifest names {f['file']}, which is not there"
+    got = os.path.getsize(p)
+    assert got == f["bytes"], (f["file"], got, f["bytes"])
+    assert f["n_states"] == f["shape"][0] >= 2, f
+    tot += got
+assert tot == m["total_bytes"], (tot, m["total_bytes"])
+heads = sorted({f["head"] for f in fs})
+print(f"dumproll: {len(fs)} trajectories, {tot / 1e9:.2f} GB, heads {heads}, "
+      f"codec {m['codec']['weight_hash']} ({m['codec']['file']}), "
+      f"{m['n_px']:,} px x d_z {m['d_z']} float16")
+for f in fs[:3]:
+    print(f"  {f['file']}: {f['n_states']} states {f['dates'][0]}..{f['dates'][1]}")
+PYEOF
+  du -sh "$DUMPDIR"
+fi

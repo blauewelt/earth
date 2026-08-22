@@ -102,7 +102,8 @@ sys.path.insert(0, HERE)
 from model import codec_from_ckpt, gather_px                    # noqa: E402
 from recon_eval import stream_stats, build_slab                 # noqa: E402
 from temporal import (TemporalTransformer, build_stencil,       # noqa: E402
-                      embed_everything, rapid_section, _ring_on)
+                      embed_everything, rapid_section, _ring_on,
+                      codec_weight_hash)
 from project_amoc import fit_ridge                              # noqa: E402
 from aggregate_cadence import (EPOCH as EPOCH_DEFAULT,          # noqa: E402
                                bin_start)
@@ -777,6 +778,155 @@ def decode_all(codec, zhat, C, chunk, amp=False):
     return np.concatenate(outs, 0)
 
 
+def scored_horizon(ax, s, Hh, T, Y):
+    """How many of the Hh leads from start row `s` are SCORED for holdout
+    year Y.
+
+    The roll breaks at the record's end and at the year boundary
+    (`ax.year[s + h] != Y`), so a start late in Y contributes fewer steps
+    than the horizon asks for — which is why the monthly protocol's twelve
+    starts cost 78 steps a year and not 144. One expression, used by the
+    step PLAN and by `RollDump`, because two copies of a break condition are
+    two chances to disagree about how long a trajectory is."""
+    n = 0
+    for h in range(1, Hh + 1):
+        if s + h >= T or ax.year[s + h] != int(Y):
+            break
+        n += 1
+    return n
+
+
+class RollDump:
+    """`--dump-roll DIR`: the rolled Z TRAJECTORY of every scored start.
+
+    Chris, 2026-08-22: *"Save the roll forward sequence for the held out years
+    somewhere (so that we can use it as animation in the UI)"*, alongside
+    *"Roll forward all of the earth's pixels (these are required by the
+    stencil size, not just the relevant area)"*. The second half is already
+    true and always was — `roll_step` advances the FULL window state, all P
+    ocean pixels, every step, because a stencil head's step t+1 at pixel p
+    reads p's NEIGHBOURS at t (module docstring §1), and the gate/corridor/
+    window scopes are boolean masks applied to the DECODED field afterwards.
+    What was missing is that the state itself was discarded one step after it
+    existed: the roll kept scalar skill sums of it and nothing else.
+
+    WHAT IS SAVED IS Z, NOT PIXELS, deliberately. Decoding [n+1, P, C] on the
+    box costs a second decode pass per step and ships ~20x the bytes at
+    family 4's C=40 against d_z 32; the decoder is published, frozen and
+    deterministic, so pixel space is recoverable offline for whichever
+    channels the UI actually draws. What is NOT recoverable after the fact is
+    WHICH codec speaks this z, so `codec_weight_hash` — the same identity the
+    embed cache is named by — rides in every file and in the manifest. That
+    is the #10/#11 failure mode written down: a z decoded by a different
+    codec passes every shape check and is beautiful nonsense.
+
+    float16 because that is the dtype the embed cache itself stores (Z is
+    read straight off a float16 memmap, so state 0 is not even a conversion),
+    and because the alternative doubles a 3.7 GB artefact to say nothing new.
+
+    OPT-IN AND ADDITIVE. Nothing is written unless --dump-roll names a
+    directory; no key of the roll JSON moves either way; and the GATE head is
+    never dumped — it is a certificate, not an experiment, and its
+    trajectories would double the bytes for a head nobody will animate.
+    """
+
+    def __init__(self, dirpath, ax, ys, xs, lats, lons, grid_shape,
+                 ckpt_path, ck, cfg):
+        self.dir = dirpath
+        os.makedirs(self.dir, exist_ok=True)
+        self.ax = ax
+        self.path = os.path.join(self.dir, "dump_manifest.json")
+        # The pixel index map travels IN EVERY FILE (0.3% of one file's
+        # bytes) rather than only in the manifest: a trajectory whose pixel
+        # order is defined in another file is one careless copy away from
+        # being unreadable, and this data is meant to outlive the run.
+        self.px = {
+            "px_y": np.asarray(ys, np.int32),
+            "px_x": np.asarray(xs, np.int32),
+            "px_lat": np.asarray(lats, np.float32)[np.asarray(ys)],
+            "px_lon": np.asarray(lons, np.float32)[np.asarray(xs)],
+            "grid_lats": np.asarray(lats, np.float32),
+            "grid_lons": np.asarray(lons, np.float32),
+            "grid_shape": np.asarray(grid_shape, np.int32),
+        }
+        self.codec = {"file": os.path.basename(ckpt_path),
+                      "tag": str(ck.get("tag") or ""),
+                      "step": int(ck.get("step", -1)),
+                      "d_z": int(ck["d_z"]),
+                      "weight_hash": codec_weight_hash(ck)}
+        self.man = {
+            "written_by": "ml/rollout_spatial.py --dump-roll",
+            "created_utc": dt.datetime.now(dt.timezone.utc)
+                             .isoformat(timespec="seconds"),
+            "cadence": ax.cadence, "step_days": ax.step_days,
+            "axis_detected_from": ax.detected_from,
+            "codec": self.codec, "dtype": "float16",
+            "n_px": int(len(ys)), "d_z": int(ck["d_z"]),
+            "state_0": "the TRUE embedding of the start row (Z[start_row]); "
+                       "states 1..n are the model's own predictions, each fed "
+                       "back as the next input",
+            "pixel_order": "row-major over the window's ocean mask; px_y/px_x "
+                           "index the tensor grid, px_lat/px_lon are the same "
+                           "pixels in degrees. Identical in every file and to "
+                           "the Z the roll read.",
+            "decode_note": "z, not pixels: decode offline with the codec named "
+                           "above (weight_hash must match) — see "
+                           "ml/rollout_spatial.py decode_all().",
+            "config": dict(cfg), "files": [], "total_bytes": 0}
+        self._flush()
+
+    def _flush(self):
+        with open(self.path, "w") as fh:
+            json.dump(self.man, fh, indent=1)
+
+    def plan(self, heads, starts_by_year, horizon, P, d_z):
+        """Say what this will cost BEFORE it is spent (ml/CLAUDE.md §0.3)."""
+        n_roll = len(heads) * sum(starts_by_year.values())
+        gb = n_roll * (horizon + 1) * P * d_z * 2 / 1e9
+        print(f"--dump-roll {self.dir}: up to {n_roll} trajectories "
+              f"({len(heads)} non-gate head(s) x {sum(starts_by_year.values())} "
+              f"scored starts), <= {horizon + 1} states of [{P:,}, {d_z}] "
+              f"float16 each — at most {gb:.2f} GB. Starts truncated at the "
+              f"year boundary write fewer states, so this is a ceiling.",
+              flush=True)
+
+    def write(self, head_label, head_file, head_meta, Y, s, z):
+        """One (year, start) trajectory. `z` is [n_states, P, d_z] float16."""
+        rows = [int(s) + k for k in range(z.shape[0])]
+        name = f"roll_{head_label}_{Y}_r{int(s)}.npz"
+        path = os.path.join(self.dir, name)
+        meta = {**head_meta, "head": head_label, "head_file": head_file,
+                "year": str(Y), "start_row": int(s),
+                "start_label": self.ax.label_of_row(s),
+                "cadence": self.ax.cadence, "step_days": self.ax.step_days,
+                "codec": self.codec}
+        np.savez(path, z=z,
+                 rows=np.asarray(rows, np.int32),
+                 labels=np.asarray([self.ax.label_of_row(r) for r in rows]),
+                 dates=np.asarray([self.ax.date_of_row(r).isoformat()
+                                   for r in rows]),
+                 meta_json=np.asarray(json.dumps(meta)),
+                 **self.px)
+        nb = os.path.getsize(path)
+        self.man["files"].append({
+            "file": name, "head": head_label, "head_file": head_file,
+            "year": str(Y), "start_row": int(s),
+            "start_label": self.ax.label_of_row(s),
+            "n_states": int(z.shape[0]),
+            "shape": [int(v) for v in z.shape], "bytes": int(nb),
+            "rows": [rows[0], rows[-1]],
+            "dates": [self.ax.date_of_row(rows[0]).isoformat(),
+                      self.ax.date_of_row(rows[-1]).isoformat()]})
+        self.man["total_bytes"] = int(self.man["total_bytes"]) + int(nb)
+        # REWRITTEN AFTER EVERY FILE, like the roll JSON itself (c31a679): a
+        # 14-hour job that is cancelled at hour 12 must leave a manifest that
+        # describes what is actually on the disk.
+        self._flush()
+        print(f"  dump {name}: {z.shape[0]} states "
+              f"[{z.shape[1]:,}, {z.shape[2]}] f16, {nb / 1e6:.0f} MB "
+              f"({self.man['total_bytes'] / 1e9:.2f} GB total)", flush=True)
+
+
 class Progress:
     """Say how far along we are, to the LOG and to the live side channel.
 
@@ -1020,6 +1170,20 @@ def main():
                          "holdout years cost 219 scored steps at N=1, 441 at "
                          "N=3 and 8,103 at all 73. What is recorded in the "
                          "artefact is the N *and the rows chosen*")
+    ap.add_argument("--dump-roll", default="",
+                    help="directory for the ROLL-FORWARD SEQUENCES of the "
+                         "scored holdout-year starts: one .npz per (head, "
+                         "year, start) holding the full-window z trajectory "
+                         "[n_states, P, d_z] float16 (state 0 = the true "
+                         "embedding of the start row), the axis rows/labels/"
+                         "dates, the pixel index map and the codec's weight "
+                         "hash, plus a dump_manifest.json. For the UI's "
+                         "animation (Chris, 2026-08-22); decoding to pixels "
+                         "happens offline, from these files and the published "
+                         "decoder. Empty (the default) writes NOTHING and the "
+                         "roll is bit-identical. The gate head is never "
+                         "dumped. Budget ~%.2f GB per 74-state pentad roll at "
+                         "86,698 px x d_z 32" % (74 * 86698 * 32 * 2 / 1e9))
     ap.add_argument("--chunk", type=int, default=8192)
     ap.add_argument("--map-h", type=int, default=6,
                     help="horizon for the E-026b per-pixel skill map "
@@ -1562,6 +1726,24 @@ def main():
                 f"{Y} rows {results['starts']['rows'][str(Y)]} "
                 f"({', '.join(results['starts']['labels'][str(Y)])})"
                 for Y in hold_years)), flush=True)
+
+    # ---- the roll-forward sequence dump (opt-in) --------------------------
+    # Built here, where the pixel map and the codec identity are both in
+    # scope and before a single roll step has been spent, so its cost is
+    # PRINTED rather than discovered (ml/CLAUDE.md §0.3). `dump is None` is
+    # the untouched path in every branch below.
+    dump = None
+    if a.dump_roll:
+        dump = RollDump(a.dump_roll, ax, ys, xs, lats, lons, ocean.shape,
+                        a.ckpt, ck,
+                        {"horizon": a.horizon,
+                         "horizon_span_days": ax.span_days(a.horizon),
+                         "starts_per_year": a.starts_per_year or "all",
+                         "hold_years": hold_years,
+                         "gate_head_excluded": GATE_HEAD})
+        dump.plan([h for h in heads if GATE_HEAD not in os.path.basename(h)],
+                  {Y: len(ax.starts_for_year(Y, a.starts_per_year))
+                   for Y in hold_years}, a.horizon, P, d_z)
     K_seen = None
 
     for hp in heads:
@@ -1611,10 +1793,7 @@ def main():
             for s_ in ax.starts_for_year(Y, a.starts_per_year):
                 if s_ - K + 1 < 0 or s_ + 1 >= T:
                     continue
-                for h in range(1, Hh + 1):
-                    if s_ + h >= T or ax.year[s_ + h] != int(Y):
-                        break
-                    n_skill += 1
+                n_skill += scored_horizon(ax, s_, Hh, T, Y)
         n_long = (a.long_months
                   if ax.row_of_label(a.long_start) is not None else 0)
         prog.start_head(list(heads).index(hp) + 1, label,
@@ -1640,6 +1819,12 @@ def main():
         aud = {"ch_m": np.zeros((Hh + 1, C)), "ch_c": np.zeros((Hh + 1, C)),
                "px_m": np.zeros(P), "px_c": np.zeros(P)}
         probe_pts = {h: [] for h in range(1, Hh + 1)}
+        # THE GATE HEAD IS NEVER DUMPED (see RollDump): it is the run's
+        # certificate, it is re-rolled in every eval wave, and nobody
+        # animates it.
+        dump_head = dump is not None and GATE_HEAD not in os.path.basename(hp)
+        if dump is not None and not dump_head:
+            print(f"  {label}: --dump-roll skips the gate head", flush=True)
         with torch.no_grad():
             for Y in hold_years:
                 for s in ax.starts_for_year(Y, a.starts_per_year):
@@ -1649,6 +1834,18 @@ def main():
                     Zwin = zwin_from_true(s, K)
                     cur = list(moy[s - K + 1: s + 1])
                     v_pers, obs_s = std_m.get(s)
+                    # The trajectory buffer, sized from the SAME break
+                    # condition the h-loop below uses, so its last slot is
+                    # the last state that loop produces — never a zero row
+                    # that would animate as a dead ocean. State 0 is the
+                    # TRUE embedding of the start row: Zwin's last slot,
+                    # read from the cache in its own float16.
+                    n_dump = (scored_horizon(ax, s, Hh, T, Y)
+                              if dump_head else 0)
+                    traj = (np.empty((n_dump + 1, P, d_z), np.float16)
+                            if n_dump else None)
+                    if traj is not None:
+                        traj[0] = np.asarray(Zm[s])
                     for h in range(1, Hh + 1):
                         t_tgt = s + h
                         if t_tgt >= T or ax.year[t_tgt] != int(Y):
@@ -1659,6 +1856,13 @@ def main():
                         zhat = roll_step(model, Zwin, NBR_t, static_ctx,
                                          month_feats(cur, dev), a.chunk,
                                          a.amp)
+                        if traj is not None:
+                            # ẑ for THIS row, before it is folded into the
+                            # window — the same tensor the scoring decodes,
+                            # so the animation and the numbers cannot be of
+                            # two different rolls.
+                            traj[h] = zhat.detach().to(torch.float16) \
+                                          .cpu().numpy()
                         Zwin = torch.cat([Zwin[:, 1:], zhat[:, None]], 1)
                         # the season token of the row JUST PREDICTED, read off
                         # its own date. `(cur[-1] + 1) % 12` advanced a MONTH
@@ -1685,6 +1889,15 @@ def main():
                             probe_pts[h].append(
                                 (s, read_sv(zhat), rv_des[r_of_row[t_tgt]]))
                     print(f"  {label} start {start_m}: rolled", flush=True)
+                    if traj is not None:
+                        dump.write(label, os.path.basename(hp),
+                                   {"stencil": stencil, "ring_km": ring_km,
+                                    "seed": ta.get("seed", 0),
+                                    "unroll": unroll, "K": K,
+                                    "d_model": ta["d_model"],
+                                    "layers": ta["layers"]},
+                                   Y, s, traj)
+                        traj = None
 
         entry = {"meta": {"file": os.path.basename(hp), "stencil": stencil,
                           "ring_km": ring_km, "seed": ta.get("seed", 0),
