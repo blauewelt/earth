@@ -1,0 +1,8 @@
+{
+ "steps": 20000,
+ "lr": 0.001,
+ "schedule": "expdecay",
+ "stage": "stage-2",
+ "note": "E-045-A2a monthly-cadence-from-pentad-z, Argo bins",
+ "published_at": "2026-08-22T23:27:49.817Z"
+}
