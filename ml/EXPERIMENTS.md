@@ -44,6 +44,44 @@ low-pass).
 
 ---
 
+<a id="e-045"></a>
+## E-045 · The pentad component ladder — six one-variable arms, DISPATCHING overnight 2026-08-22/23 (Chris's divide-and-conquer mandate, $20 envelope)
+
+Question: which component breaks when the programme moves monthly → pentad? The ladder so
+far, each rung measured 2026-08-22 evening at $0: the anomaly TRANSFORM reproduces the
+recorded loss_rec (1.7 SE); the CODEC round-trips at FVU 0.4–0.6% on Argo-free bins
+(healthy) and collapses on the fast channels only where 40 channels compete for d_z 32
+(the 8% Argo-carrying bins); the PUBLISHED Z equals a local re-encode to one float16 ULP
+(wrong-codec hypothesis dead — control: different bins differ by mean |Δ| 4.478). What
+remains is the HEAD and the CADENCE, and the arms below split them. All use #427's exact
+configuration (206.5M xl144+znoise head, frozen run-415 codec, grad-clip 128) at
+temporal_steps 20,000 (#423 read 0.5404 at step 2,000, so a 20k monitor curve is a
+readable one-step instrument), milestones 600 only, seed 0. Read-out: the stage2 monitor
+ratio (val_zmse / val_persistence, each arm against ITS OWN persistence baseline) +
+in-training probes. Bars: #427/#432 read ≈0.50 at 20k (pentad); the monthly xl tier reads
+an order of magnitude lower. Instruments landed at 46d2a01 (`--time-stride/offset`,
+`--target-bins-argo`, `--season-dropout`, `--season-phase`), all default-off with
+bit-identity pinned in tests/test_e044c_knobs.py.
+
+| arm | one variable | hypothesis (falsifier = the opposite branch) |
+|---|---|---|
+| **A2a** `--time-stride 6 --time-offset 2` | monthly CADENCE from pentad z, Argo-carrying bins (Chris's "pool 6 bins back into a month", by selection not averaging — z-means are off-manifold) | if the ratio lands in the monthly class, the pipeline is sound and pentad cadence/regime is the problem; pentad-class ratio here = something deeper |
+| **A2b** `--time-stride 6 --time-offset 0` | monthly cadence, Argo-FREE bins (the clean 8-channel regime) | A2b good + A2a bad = the Argo-bin z regime is the poison; both good = switching/cadence; both bad = pipeline |
+| **A3** `--target-bins-argo exclude` | pentad cadence, but never scored on regime-switch targets | if the grad-spike regime (#423's divergence class) disappears and the ratio improves, the regime SWITCHING is the mechanism that made clipping necessary |
+| **A6** `--season-phase fine` | the season token staircase (all ~6 bins of a month share one token — Chris's catch, month_feats/ctx_all are integer-month sin/cos) is replaced by continuous fraction-of-year phase, head-side only | better one-step and/or changed mode-locking = the staircase mattered; unchanged = it did not |
+| **A4** `--input-znoise 1.84` | the roll-repair lever: znoise rescaled to the pentad z-scale (0.7×2.63, restoring E-036/E-037's measured 0.3979× relative sigma) | one-step may WORSEN slightly (noise costs one-step, buys the roll) — judged by a later quick roll, not by this ratio alone |
+| **A5** `--season-dropout 0.5` | Chris's anti-calendar-memorisation idea (note: no year token exists — the season token is month-only, and the "year" is carried by the state, which is the replay channel E-043b-PHASE identified) | judged by a later roll's mode-locking, not by one-step |
+
+Boxes: A2a/A2b on gpu-box-31479844 / gpu-box-46996216 (the stride slices X before
+nan_to_num so the 85 GB peak shrinks ~6x and 64 GB boxes suffice; strided runs re-embed
+their kept bins — 1/N of the pass — and deliberately publish nothing to the shared Z
+cache); A3/A6/A4/A5 need the full-tensor peak and run SEQUENTIALLY on gpu-box-39184683
+(515 GB RAM), chained by session wakeups after #432's drain. Cost: ~$2.2 + ~4 x $1.1
+≈ **$6.5** of the $20. Rolls for the winning arms (short future-only srolls) follow
+tomorrow on the day-matched protocol.
+
+---
+
 <a id="e-043b-phase"></a>
 ## E-043b-PHASE · Calendar or context? — RESOLVED 2026-08-22: **the pre-registered CALENDAR-REPLAY reading fires.** #434 (E-043b-PHASE, six-context-end hindcasts of the gate + the nolonhold s0 head) rolled 06:20→15:26Z on gpu-box-31479844
 
