@@ -2,7 +2,7 @@
 # E-022 / E-044 spatial rollout eval — the body of the `sroll:` window token.
 #
 # Spec: sroll:<tag,tag,...>[,ckpt:<asset|path>][,horizon:N][,starts:N]
-#                          [,long:N][,future:N]
+#                          [,long:N][,future:N][,longstart:L[+L...]][,dumproll]
 #   e.g. sroll:e017_u1_s0,e017_u1_s1,e022s9_u1_s0,e022s13_u1_s0
 #        sroll:e044x144zn_u1_s0,ckpt:run-415.pt,starts:3
 #
@@ -30,6 +30,18 @@
 #              1 Jan / 1 May / 1 Sep, the smallest count giving more than one
 #              seasonal phase. Not defaulted here on purpose: it is a COST
 #              decision, and 73 starts is a 34.6x monthly scored-step count.
+#   longstart:L[+L...]  context END(s) for the long hindcast, `+`-separated
+#              because `,` already splits tokens: `longstart:2004-12+2014-12`.
+#              OMITTED = the roll's own single default (2004-12), which is
+#              every archived hindcast. The FIRST label lands in the artefact's
+#              `long` block exactly as it always has; the rest land in the NEW
+#              `long_multi` block. This is the CALENDAR-vs-CONTEXT phase
+#              discriminator (2026-08-22): every head's unforced future roll
+#              mode-locks to the calendar, and one context end cannot tell a
+#              model that replays the calendar from one whose phase its own
+#              state selects. Each extra label costs a full `--long-months`
+#              roll — 240 steps at monthly, i.e. ~1 h/head at 15.06 s/step —
+#              so five extra ends are ~5 h per head. SIZE THE TIMEOUT FOR IT.
 #   long:N     ) OMIT BOTH unless the dispatch deliberately overrides them.
 #   future:N   ) rollout_spatial.py's defaults are ALREADY day-correct since
 #              e9f3d8d: `--long-months`/`--future-months` default to -1, which
@@ -100,6 +112,7 @@ STARTS_TOK=""
 LONG_TOK=""
 FUTURE_TOK=""
 DUMP_TOK=""
+LS_TOK=""
 # A token whose value must be a step count is CHECKED here, where the inputs
 # are all it has cost (ml/CLAUDE.md §0.3/§5.16). `horizon:x` would otherwise
 # reach argparse as a string, die there, and take the whole dispatch with it
@@ -110,11 +123,32 @@ want_int() {                       # want_int <token> <value>
                  echo "::error::STEPS, got '$2'"; exit 1 ;;
   esac
 }
+# The SHAPE of a date label, checked here where the inputs are all it has cost
+# (§0.3); whether the label has a ROW is the axis's question and the roll
+# answers it by SKIPPING with a reason. `2004_12` would otherwise reach the
+# roll, resolve to None, be skipped, and leave a dispatch that asked for six
+# hindcasts quietly producing five.
+want_labels() {                    # want_labels <token> <comma list>
+  [ -n "$2" ] || { echo "::error::sroll token '$1' is empty"; exit 1; }
+  local IFS=,
+  for l in $2; do
+    case "$l" in
+      [0-9][0-9][0-9][0-9]-[0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+      *) echo "::error::sroll token '$1' wants YYYY-MM or YYYY-MM-DD labels"
+         echo "::error::joined by '+', got '$l' in '$2'"; exit 1 ;;
+    esac
+  done
+}
 for tok in ${SPEC//,/ }; do
   case "$tok" in
     ckpt:*)    CKPT_SPEC="${tok#ckpt:}" ;;
     horizon:*) HORIZON_TOK="${tok#horizon:}"; want_int horizon "$HORIZON_TOK" ;;
     starts:*)  STARTS_TOK="${tok#starts:}";   want_int starts  "$STARTS_TOK" ;;
+    # BEFORE `long:*` — the two are distinguishable to the glob (`longstart:`
+    # does not start with `long:`), but a reader should not have to prove that,
+    # and a future `long*:` would silently swallow this one.
+    longstart:*) LS_TOK="${tok#longstart:}"; LS_TOK="${LS_TOK//+/,}"
+                 want_labels longstart "$LS_TOK" ;;
     long:*)    LONG_TOK="${tok#long:}";       want_int long    "$LONG_TOK" ;;
     future:*)  FUTURE_TOK="${tok#future:}";   want_int future  "$FUTURE_TOK" ;;
     # A BARE token, and it must be matched BEFORE the `*)` arm below, which
@@ -200,6 +234,11 @@ else
 fi
 # `[ ... ] && [ ... ] && echo` would EXIT HERE under `set -e` the moment a
 # token was set — a false condition is a non-zero status (ml/CLAUDE.md §7).
+if [ -n "$LS_TOK" ]; then
+  echo "longstart: $LS_TOK — $(echo "$LS_TOK" | tr ',' '\n' | wc -l) hindcast(s) per head, the first into \`long\` (today's key) and the rest into \`long_multi\`. Each is a full --long-months roll: budget for it."
+else
+  echo "longstart: not set — one hindcast per head from rollout_spatial.py's own default context end (2004-12), exactly as every archived roll"
+fi
 if [ -z "$LONG_TOK" ] && [ -z "$FUTURE_TOK" ]; then
   echo "long/future: rollout_spatial.py's own defaults — round(20 * steps_per_year), i.e. 20 years of THIS axis (240 at monthly, 1461 at pentad)"
 else
@@ -376,6 +415,7 @@ python -u ml/rollout_spatial.py --x "$XPATH" \
   --npz-small "$TENSOR" --z "$ZPATH" --ckpt "$CKPT" \
   --horizon "$HORIZON" \
   ${STARTS_TOK:+--starts-per-year $STARTS_TOK} \
+  ${LS_TOK:+--long-start $LS_TOK} \
   ${LONG_TOK:+--long-months $LONG_TOK} \
   ${FUTURE_TOK:+--future-months $FUTURE_TOK} \
   ${DUMP_TOK:+--dump-roll $DUMPDIR} \

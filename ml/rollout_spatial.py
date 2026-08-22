@@ -1196,7 +1196,15 @@ def main():
     ap.add_argument("--long-start", default="2004-12",
                     help="context end for the long hindcast; '' skips it. "
                          "`YYYY-MM` resolves to the FIRST row of that month "
-                         "at a binned cadence; `YYYY-MM-DD` names a bin")
+                         "at a binned cadence; `YYYY-MM-DD` names a bin. A "
+                         "COMMA-SEPARATED LIST rolls one hindcast per label: "
+                         "the first goes to `long` exactly as it always has, "
+                         "the rest to the new `long_multi` block. That is the "
+                         "calendar-vs-context phase discriminator (2026-08-22) "
+                         "— one context end cannot tell a model that replays "
+                         "the calendar from one whose phase its state selects. "
+                         "A label with no axis row, or with less than K rows "
+                         "of history, is SKIPPED with a printed reason")
     ap.add_argument("--long-months", type=int, default=-1,
                     help="length of the long hindcast in AXIS STEPS. The "
                          "default -1 resolves to 20 YEARS at the tensor's "
@@ -1794,8 +1802,12 @@ def main():
                 if s_ - K + 1 < 0 or s_ + 1 >= T:
                     continue
                 n_skill += scored_horizon(ax, s_, Hh, T, Y)
-        n_long = (a.long_months
-                  if ax.row_of_label(a.long_start) is not None else 0)
+        # One hindcast per `--long-start` label that resolves to a row. With
+        # the single default this is exactly `a.long_months if the label
+        # resolves else 0`, which is what it has always been.
+        n_long = a.long_months * sum(
+            ax.row_of_label(s.strip()) is not None
+            for s in str(a.long_start or "").split(",") if s.strip())
         prog.start_head(list(heads).index(hp) + 1, label,
                         n_skill + n_long + a.future_months)
         print(f"  {label}: {n_skill} scored roll steps + {n_long} hindcast + "
@@ -2030,9 +2042,17 @@ def main():
                     roll_rows.append(r_next)
             return np.array(sv), roll_rows
 
-        _long_row = ax.row_of_label(a.long_start)
-        if a.long_start and _long_row is not None and _long_row - K + 1 >= 0:
-            sv, roll_rows = long_roll(_long_row, a.long_months)
+        _long_specs = [s.strip() for s in str(a.long_start or "").split(",")
+                       if s.strip()]
+
+        def long_block(row, spec):
+            """The hindcast block for ONE context end. Identical arithmetic to
+            the single-start version it was factored out of (2026-08-22) —
+            truth attaches on the AXIS ROW through `r_of_row`, `trained` is
+            `t_hold` on that row's RAPID index, the lowpass is the same
+            `smooth`, and the dict is built key for key in the same order, so
+            a single-start run is byte-identical to before the list existed."""
+            sv, roll_rows = long_roll(row, a.long_months)
             roll_ym = [ax.label_of_row(r) for r in roll_rows]
             truth = np.full(len(sv), np.nan)
             trained = np.zeros(len(sv), bool)
@@ -2056,15 +2076,48 @@ def main():
                 r_lp = corr_or_none(sv_lp[both], tr_lp[both])
                 amp_lp = round(float(sv_lp[both].std()
                                      / (tr_lp[both].std() + 1e-9)), 3)
-            entry["long"] = {"context_end": ax.label_of_row(_long_row),
-                             "roll_ym": roll_ym,
-                             "sv_des": [round(v, 3) for v in sv.tolist()],
-                             "r_trained": r_tr, "n_trained": n_tr,
-                             "r_heldout": r_ho, "n_heldout": n_ho,
-                             "r_lp18": r_lp, "amp_lp18": amp_lp}
-            print(f"  {label} long({a.long_start}+{a.long_months}m): "
+            blk = {"context_end": ax.label_of_row(row),
+                   "roll_ym": roll_ym,
+                   "sv_des": [round(v, 3) for v in sv.tolist()],
+                   "r_trained": r_tr, "n_trained": n_tr,
+                   "r_heldout": r_ho, "n_heldout": n_ho,
+                   "r_lp18": r_lp, "amp_lp18": amp_lp}
+            print(f"  {label} long({spec}+{a.long_months}m): "
                   f"r_trained {r_tr} (n={n_tr}) · r_heldout {r_ho} "
                   f"(n={n_ho}) · lp18 r {r_lp} amp {amp_lp}", flush=True)
+            return blk
+
+        # THE FIRST SPEC IS TODAY'S ROLL, under today's key, with today's
+        # arithmetic. The rest (2026-08-22) are the PHASE DISCRIMINATOR: every
+        # head's unforced future roll mode-locks to the calendar — the
+        # nolonhold pair peaks exactly 36 months apart, pinned to the same
+        # months, phase-identical across seeds — and one context end cannot
+        # tell "the model replays the calendar" from "the model's phase is
+        # selected by its state". Rolling from SEVERAL ends can: if the peaks
+        # stay on the same calendar months the phase is the calendar's, and if
+        # they follow the context end it is the state's. They go in a NEW key
+        # so no archived reader moves.
+        multi = []
+        for _i, _spec in enumerate(_long_specs):
+            _row = ax.row_of_label(_spec)
+            if _row is None:
+                print(f"  {label} long({_spec}): SKIPPED — no axis row for "
+                      f"that label (the record runs {ax.labels[0]}..."
+                      f"{ax.labels[-1]})", flush=True)
+                continue
+            if _row - K + 1 < 0:
+                print(f"  {label} long({_spec}): SKIPPED — row {_row} has "
+                      f"only {_row + 1} rows of history and this head needs "
+                      f"K={K} for its context window", flush=True)
+                continue
+            blk = long_block(_row, _spec)
+            if "long" not in entry:
+                entry["long"] = blk
+            else:
+                multi.append(blk)
+        if multi:
+            entry["long_multi"] = multi
+
         if a.future_months > 0:
             sv, roll_rows = long_roll(T - 1, a.future_months, "future")
             roll_ym = [ax.label_of_row(r) for r in roll_rows]

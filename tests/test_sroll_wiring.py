@@ -436,7 +436,43 @@ def main():
               "%s/* explicitly, which is the only reason the files survive "
               "the box" % (ddir, ddir))
 
-        print("\nsroll_run.sh wiring: all 9 checks hold ✓")
+        # ---- 10. `longstart:` — `+`-joined, because `,` splits tokens ----
+        # The phase discriminator (2026-08-22). Three ways this could fail
+        # silently and all three are checked: the separator (a `,` inside the
+        # value would be read as the NEXT token and, having no colon, as a
+        # HEAD TAG); the ordering against `long:` (a future `long*:` arm would
+        # swallow it); and the shape of the labels, refused HERE rather than
+        # discovered by the roll, which skips an unresolvable label with a
+        # reason and would leave a dispatch asking for six hindcasts quietly
+        # producing five.
+        av_l, _ = roll_argv(
+            f"sroll:h1,ckpt:{ck_rel},longstart:2004-12+2014-12+2024-03,long:99",
+            "family3_na025.npz")
+        assert "--long-start" in av_l, av_l
+        assert av_l[av_l.index("--long-start") + 1] == \
+            "2004-12,2014-12,2024-03", av_l
+        assert av_l[av_l.index("--long-months") + 1] == "99", av_l
+        assert av_l[av_l.index("--heads") + 1:av_l.index("--out")] == \
+            ["ml/runs/heads/h1.pt"], av_l
+        assert "--long-start" not in av_m and "--long-start" not in av_p, \
+            "an absent longstart: must leave the roll's own single default"
+        _, r_lbad = roll_argv(f"sroll:h1,ckpt:{ck_rel},longstart:2004_12",
+                              "family3_na025.npz")
+        assert r_lbad.returncode != 0 and "YYYY-MM" in r_lbad.stdout, \
+            r_lbad.stdout[-600:]
+        assert "embed cache key" not in r_lbad.stdout, \
+            "the bad-label refusal fired after doing work"
+        src_h = open(os.path.join(ROOT, SCRIPT)).read()
+        assert src_h.index("longstart:*)") < src_h.index("long:*)"), \
+            "`longstart:*` must be matched before `long:*`"
+        print("10. `longstart:2004-12+2014-12+2024-03` reaches the roll as "
+              "--long-start 2004-12,2014-12,2024-03 (the `+` is because `,` "
+              "already splits tokens), composes with long:99, does not leak "
+              "into --heads, is absent when the window does not ask for it, "
+              "and a malformed label is refused before any hashing (rc %d)"
+              % r_lbad.returncode)
+
+        print("\nsroll_run.sh wiring: all 10 checks hold ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         shutil.rmtree(tmp2, ignore_errors=True)
