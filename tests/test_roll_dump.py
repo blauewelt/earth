@@ -213,7 +213,47 @@ def main():
               "std_stats.npz, which every run writes)"
               % (len(npzs), os.path.basename(ddir)))
 
-        print("\nroll-forward sequence dump: all 6 checks hold ✓")
+        # ---- 7. the FILENAME survives an artifact upload ------------------
+        # Measured on #433: the roll finished, ml-metrics archived, and
+        # actions/upload-artifact@v4 refused the whole path list with "The
+        # path for one of the files in artifact is not valid" — because a
+        # stencil+ring head label is `s145rspiral:111-4444-0.71-0.5_s0` and
+        # the COLON went into the filename. 2.4 GB stranded on a rented box
+        # for one character. The label is not reachable from the toy head's
+        # args without building a real ring geometry, so the writer is driven
+        # DIRECTLY here with the label #433 actually produced.
+        assert all(re.fullmatch(r"[A-Za-z0-9._-]+", p) for p in npzs), npzs
+        real_label = "s145rspiral:111-4444-0.71-0.5_s0"
+        for bad in ('"', ":", "<", ">", "|", "*", "?", "\r", "\n", " ", "/"):
+            assert bad not in rs._fs_safe(f"a{bad}b"), bad
+        assert rs._fs_safe(real_label) == "s145rspiral-111-4444-0.71-0.5_s0"
+        assert rs._fs_safe("plain_s0.v2-x") == "plain_s0.v2-x", \
+            "a label that is already safe must not be rewritten"
+        d2 = os.path.join(tmp, "dump2")
+        dumper = rs.RollDump(d2, ax, ys, xs, lats, lons, ocean.shape,
+                             f["ckpt"], ck, {"probe": True})
+        s0 = starts[0]
+        dumper.write(real_label, "head-weights-e044b.pt", {"stencil": 145},
+                     HOLD_Y, s0, np.zeros((2, P, ck["d_z"]), np.float16))
+        got = [p for p in os.listdir(d2) if p.endswith(".npz")]
+        assert len(got) == 1 and re.fullmatch(r"[A-Za-z0-9._-]+", got[0]), got
+        assert got[0] == f"roll_s145rspiral-111-4444-0.71-0.5_s0_{HOLD_Y}_r{s0}.npz"
+        man2 = json.load(open(os.path.join(d2, "dump_manifest.json")))
+        assert man2["files"][0]["head"] == real_label, man2["files"][0]
+        assert man2["files"][0]["file"] == got[0]
+        assert "filename_rule" in man2 and "upload-artifact" in \
+            man2["filename_rule"]
+        meta2 = json.loads(str(np.load(os.path.join(d2, got[0]),
+                                       allow_pickle=False)["meta_json"]))
+        assert meta2["head"] == real_label, meta2["head"]
+        print("7. a head label carrying a COLON (%s — #433's own) writes as "
+              "%s: every basename matches ^[A-Za-z0-9._-]+$, which is what "
+              "upload-artifact will accept, while the manifest's files[].head "
+              "and the npz's own meta_json still carry the ORIGINAL label, so "
+              "nothing about the file's identity is lost to its name"
+              % (real_label, got[0]))
+
+        print("\nroll-forward sequence dump: all 7 checks hold ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

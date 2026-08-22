@@ -90,6 +90,7 @@ import datetime as dt
 import json
 import math
 import os
+import re
 import sys
 import time
 
@@ -796,6 +797,27 @@ def scored_horizon(ax, s, Hh, T, Y):
     return n
 
 
+def _fs_safe(s):
+    """A head label reduced to what an ARTIFACT UPLOAD will accept.
+
+    Measured on #433 (2026-08-22): the roll finished, the ml-metrics archive
+    was fine, and `actions/upload-artifact@v4` refused the whole path list with
+    "The path for one of the files in artifact is not valid" — because a
+    stencil+ring label is `s145rspiral:111-4444-0.71-0.5_s0` and the COLON went
+    into the filename. 2.4 GB of trajectories stayed on a rented box for one
+    character. upload-artifact rejects `" : < > | * ? \\r \\n` in a path (it is
+    the Windows-portable set, enforced on every runner), so the rule here is
+    the tighter and simpler one: keep `[A-Za-z0-9._-]`, turn everything else
+    into `-`.
+
+    It is applied to the LABEL COMPONENT ONLY — the year and start-row parts
+    are already digits — and the ORIGINAL label is kept verbatim in
+    `dump_manifest.json` (`files[].head`) and inside each npz's own
+    `meta_json`, so nothing about the file's identity is lost to its name.
+    """
+    return re.sub(r"[^A-Za-z0-9._-]", "-", str(s))
+
+
 class RollDump:
     """`--dump-roll DIR`: the rolled Z TRAJECTORY of every scored start.
 
@@ -865,6 +887,13 @@ class RollDump:
             "state_0": "the TRUE embedding of the start row (Z[start_row]); "
                        "states 1..n are the model's own predictions, each fed "
                        "back as the next input",
+            "filename_rule": "roll_<head>_<year>_r<start_row>.npz, where "
+                             "<head> is the head label with every character "
+                             "outside [A-Za-z0-9._-] replaced by '-' "
+                             "(actions/upload-artifact rejects : and the rest "
+                             "of the Windows-portable set). `files[].head` "
+                             "below and each npz's meta_json carry the "
+                             "ORIGINAL label.",
             "pixel_order": "row-major over the window's ocean mask; px_y/px_x "
                            "index the tensor grid, px_lat/px_lon are the same "
                            "pixels in degrees. Identical in every file and to "
@@ -893,7 +922,7 @@ class RollDump:
     def write(self, head_label, head_file, head_meta, Y, s, z):
         """One (year, start) trajectory. `z` is [n_states, P, d_z] float16."""
         rows = [int(s) + k for k in range(z.shape[0])]
-        name = f"roll_{head_label}_{Y}_r{int(s)}.npz"
+        name = f"roll_{_fs_safe(head_label)}_{Y}_r{int(s)}.npz"
         path = os.path.join(self.dir, name)
         meta = {**head_meta, "head": head_label, "head_file": head_file,
                 "year": str(Y), "start_row": int(s),
