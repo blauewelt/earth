@@ -1,0 +1,10 @@
+{
+ "eval": true,
+ "heads": [
+  "head-weights-e044b-xl144zn-pentad-s0"
+ ],
+ "horizon": 73,
+ "starts_per_year": 3,
+ "dumproll": true,
+ "published_at": "2026-08-22T03:45:09.795Z"
+}
