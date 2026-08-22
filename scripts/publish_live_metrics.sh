@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Publish a running job's live state to its orphan `ml-live-<n>` branch.
 #
-# Two files, both optional:
-#   metrics.jsonl — the curves (loss, probes, stage 2)
-#   phase.json    — WHICH WORKFLOW STEP the job is in right now
+# Three files, all optional:
+#   metrics.jsonl        — the curves (loss, probes, stage 2)
+#   phase.json           — WHICH WORKFLOW STEP the job is in right now
+#   rollout_spatial.json — the roll's result file, written incrementally at
+#                          every phase boundary, `in_progress` key present
+#                          until the last head finishes
 #
 # phase.json exists because the status page is credential-free by design: it
 # reads public raw branch content and never authenticates. The GitHub API
@@ -31,10 +34,17 @@ if [ -z "${GITHUB_TOKEN:-}" ]; then
 fi
 M=ml/runs/actions/metrics.jsonl
 P=ml/runs/actions/phase.json
-[ -s "$M" ] || [ -s "$P" ] || exit 0
+# The ROLL's own result file. `rollout_spatial.py` rewrites it atomically at
+# every phase boundary (ml/CLAUDE.md §5.25), so shipping it here is what turns
+# "the scored numbers exist somewhere inside a 13-hour job" into "the scored
+# numbers are readable two and a half minutes after they exist". `cp` of a
+# file replaced by `os.replace` can only ever see a complete version.
+R=ml/runs/actions/rollout_spatial.json
+[ -s "$M" ] || [ -s "$P" ] || [ -s "$R" ] || exit 0
 DIR=$(mktemp -d)
 [ -s "$M" ] && cp "$M" "$DIR/metrics.jsonl"
 [ -s "$P" ] && cp "$P" "$DIR/phase.json"
+[ -s "$R" ] && cp "$R" "$DIR/rollout_spatial.json"
 cd "$DIR"
 git init -q -b "$BRANCH" 2>/dev/null || { git init -q && git checkout -q -b "$BRANCH"; }
 git config user.email "ml-live@users.noreply.github.com"

@@ -444,6 +444,14 @@ p = sys.argv[1]
 want_h = int(sys.argv[2])
 d = json.load(open(p))
 g = d.get("gate") or {}
+# THE ROLL MUST HAVE FINISHED. rollout_spatial.py rewrites this file at every
+# phase boundary and marks each of those writes with `in_progress`; only its
+# very last write drops the key. So the key still being here means the process
+# died mid-roll and left a partial artefact that parses, carries plausible
+# numbers, and is not the thing anyone asked for (ml/CLAUDE.md §5.25).
+assert "in_progress" not in d, (
+    "rollout_spatial.json still carries in_progress — the roll "
+    "did not reach its final write: " + repr(d.get("in_progress")))
 cad = d.get("cadence")            # written only when a step is not a month
 assert d.get("horizon") == want_h, (
     f"the roll scored horizon {d.get('horizon')} where this script asked for "

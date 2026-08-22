@@ -852,6 +852,25 @@ failures.
 24. **Do not leave a stale reference table in the log.** A planned-LR table
     that no longer matches the run is worse than none: it gets checked, it
     matches nothing, and the run takes the blame for the document.
+25. **Progress is an artefact, not a log line.** Standing rule from Chris,
+    2026-08-22: any compute step longer than ~30 min writes its RESULT FILE
+    incrementally, at every phase boundary — atomically (temp sibling +
+    `os.replace`, so a reader never catches a half-written file) and marked
+    with a top-level `in_progress` key — and the live publisher ships that
+    file to `ml-live-<n>` beside `metrics.jsonl` and `phase.json`. A progress
+    line in a log the box takes with it is not progress anybody has. The
+    trigger: #433 (E-044b-roll, the first pentad corridor AUC) computed every
+    number anyone was waiting for in its first ~2 h and then held them in
+    memory behind 2,922 long/future steps — 87% of a ~13 h job — so a
+    timeout, a token expiry or a cancellation would have spent all of it and
+    archived nothing. Chris: *"Otherwise we wait 10h, spend money, and then
+    have nothing."* Two obligations come with it. The FINAL artefact is
+    unchanged — same bytes, no marker (`tests/test_roll_monthly_identity.py`
+    pins that against an archived base sha), and its absence is how a run
+    script certifies the job reached its end. And a READER must treat any file
+    carrying `in_progress` as partial: those numbers are real, but the roll
+    they belong to has not finished, and nothing published may quote them
+    without saying so.
 
 ---
 

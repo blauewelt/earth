@@ -1129,6 +1129,40 @@ def smooth(vals, k=18, min_valid=12):
     return out
 
 
+def write_results(path, results, partial=None):
+    """Write the roll's result file ATOMICALLY, optionally marked partial.
+
+    A roll is hours of rented GPU and its scored numbers exist LONG before it
+    ends (at pentad the long/future phases are 87% of the wall clock), so the
+    file is rewritten at every phase boundary rather than once at the end
+    (ml/CLAUDE.md §5.25). Two properties make that safe:
+
+      * ATOMIC. The bytes land in `path + ".tmp"` in the same directory and
+        `os.replace` swaps them in, so a reader — the live publisher runs
+        every ~2.5 min — sees either the previous complete file or the new
+        one, never a half-written one, and no `.tmp` survives.
+      * MARKED. A write with `partial` set carries a top-level `in_progress`
+        key describing where the roll is; a reader that finds it must treat
+        every number under it as provisional. `partial=None` writes EXACTLY
+        what this file has always written — same indent, no extra keys — so
+        the final artefact stays byte-identical to the archive
+        (tests/test_roll_monthly_identity.py).
+    """
+    d = os.path.dirname(path) or "."
+    os.makedirs(d, exist_ok=True)
+    payload = results if partial is None else dict(results,
+                                                   in_progress=partial)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(payload, f, indent=1)
+    os.replace(tmp, path)
+
+
+def _utc_now():
+    return dt.datetime.now(dt.timezone.utc).replace(
+        microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--x", default="",
@@ -1754,6 +1788,27 @@ def main():
                    for Y in hold_years}, a.horizon, P, d_z)
     K_seen = None
 
+    def mark(stage, label=None, head_i=None):
+        """The `in_progress` value for a partial write — WHERE this roll is."""
+        p = {}
+        if label is not None:
+            p["head"] = label
+        if head_i is not None:
+            p["head_i"] = head_i
+        p["heads"] = len(heads)
+        p["stage"] = stage
+        p["at"] = _utc_now()
+        return p
+
+    # THE FILE EXISTS FROM MINUTE ONE. Everything above this line is setup the
+    # roll's reader cannot see, so a skeleton goes out before the first head
+    # rolls a single step: the live publisher then has something to ship on
+    # its very first pass, and a job that dies in hour one is distinguishable
+    # from one that never started.
+    write_results(a.out, results, partial=mark("started"))
+    print(f"wrote skeleton {a.out} (partial, stage=started, "
+          f"{len(heads)} heads to roll)", flush=True)
+
     for hp in heads:
         t_head = time.time()
         tk = torch.load(hp, map_location="cpu", weights_only=False)
@@ -1808,7 +1863,8 @@ def main():
         n_long = a.long_months * sum(
             ax.row_of_label(s.strip()) is not None
             for s in str(a.long_start or "").split(",") if s.strip())
-        prog.start_head(list(heads).index(hp) + 1, label,
+        head_i = list(heads).index(hp) + 1
+        prog.start_head(head_i, label,
                         n_skill + n_long + a.future_months)
         print(f"  {label}: {n_skill} scored roll steps + {n_long} hindcast + "
               f"{a.future_months} future = "
@@ -2015,6 +2071,17 @@ def main():
                          + f" — partial results in {a.out}.gatefail")
             print(f"VALIDATION GATE PASSED: {got}", flush=True)
 
+        # THE SCORED NUMBERS ARE OUT OF THE BOX HERE, not in eleven hours.
+        # `entry` goes into `results` NOW and is mutated in place afterwards,
+        # so every later write in this head picks the same object up with more
+        # in it. At pentad the long+future phases below are 87% of this job's
+        # wall clock (2,922 of 3,363 steps) and everyone downstream is waiting
+        # on the block above them (ml/CLAUDE.md §5.25).
+        results["heads"][label] = entry
+        write_results(a.out, results, partial=mark("scored", label, head_i))
+        print(f"  {label} scored → {a.out} (partial, stage=scored)",
+              flush=True)
+
         # ---- long hindcast + future roll (median trajectory only) --------
         def long_roll(s_end, n_steps, phase="long"):
             """Roll `n_steps` AXIS STEPS past row `s_end`.
@@ -2115,8 +2182,15 @@ def main():
                 entry["long"] = blk
             else:
                 multi.append(blk)
-        if multi:
-            entry["long_multi"] = multi
+            # `long_multi` is attached HERE rather than after the loop (where
+            # it used to live) so a partial write carries it too. Same key in
+            # the same place: the assignment first fires on the iteration that
+            # first appends, and the list is mutated in place afterwards.
+            if multi:
+                entry["long_multi"] = multi
+            write_results(a.out, results, partial=mark("long", label, head_i))
+            print(f"  {label} long({_spec}) → {a.out} "
+                  f"(partial, stage=long)", flush=True)
 
         if a.future_months > 0:
             sv, roll_rows = long_roll(T - 1, a.future_months, "future")
@@ -2124,6 +2198,10 @@ def main():
             entry["future"] = {"context_end": ax.label_of_row(T - 1),
                                "roll_ym": roll_ym,
                                "sv_des": [round(v, 3) for v in sv.tolist()]}
+            write_results(a.out, results,
+                          partial=mark("future", label, head_i))
+            print(f"  {label} future → {a.out} (partial, stage=future)",
+                  flush=True)
         results["heads"][label] = entry
         # WRITE AFTER EVERY HEAD, not once at the end. This eval is hours of
         # rented GPU; a job_timeout with the file still in memory would spend
@@ -2131,9 +2209,13 @@ def main():
         # temporal.json). Partial output also lets the harvest read the gate
         # head's numbers while the rest is still rolling.
         entry["wall_s"] = round(time.time() - t_head, 1)
-        os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
-        with open(a.out, "w") as f:
-            json.dump(results, f, indent=1)
+        # STILL IN PROGRESS while heads remain. A file that drops the marker
+        # after head 1 of 4 tells a reader the roll is finished, which is the
+        # one thing `in_progress` exists to prevent; only the write at the end
+        # of main() is allowed to be unmarked.
+        write_results(a.out, results,
+                      partial=(None if head_i >= len(heads)
+                               else mark("head_done", label, head_i)))
         print(f"  {label} done in {entry['wall_s'] / 60:.1f} min — "
               f"{len(results['heads'])}/{len(heads)} heads written to {a.out}",
               flush=True)
@@ -2141,9 +2223,10 @@ def main():
         if dev.type == "cuda":
             torch.cuda.empty_cache()
 
-    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
-    with open(a.out, "w") as f:
-        json.dump(results, f, indent=1)
+    # THE ONLY UNMARKED WRITE. `in_progress` disappears exactly here, so its
+    # absence is the roll's own statement that it reached the end — which is
+    # what scripts/sroll_run.sh asserts before anything is published.
+    write_results(a.out, results)
     print(f"wrote {a.out} ({os.path.getsize(a.out):,} bytes)", flush=True)
 
 
