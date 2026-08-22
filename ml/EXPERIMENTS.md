@@ -116,6 +116,44 @@ the under-scaled znoise (this arm runs 0.1512× where E-036/E-037 measured 0.397
 exposure-bias regulariser is 2.63× weaker than the one that bought +0.045/+0.050 at
 monthly, exactly the mechanism a 73-step roll leans on), and per-step LR/schedule at pentad.
 
+**MECHANISM, from the 2026-08-22 evening audit (channel autopsy of this roll + a local
+copy-reconstruction audit of the run-415 codec — scripts and results in the session
+record, `recon433/results.json`).** Four findings that recolour the number above:
+
+1. **All 32 Argo T/S channels scored NaN in this roll** (`audit.per_channel_msss_clim_corridor`
+   — only cur_speed, log_mld, ssh, sst and the four τ channels carry numbers). Cause,
+   measured from the tensor itself: **`rg_*` is a monthly product written into exactly ONE
+   pentad bin per month** (`n_rg_live` 252/3142 = 8.02%, deterministically the mid-month
+   bin, offset 2), absent — not sparse — everywhere else. The −0.499 is an 8-fast-channel
+   weather score; the monthly +0.939 averages 39 channels dominated by persistent deep
+   density. **The two headline AUCs never measured the same quantity.**
+2. **But channel composition does NOT explain the gap**: the monthly nolonhold heads
+   restricted to the same fast channels still read **0.925/0.926** (recomputed from
+   #422/#429's audits). Under E-043b-PHASE's replay finding, that monthly fast-channel
+   0.93 is the replay mechanism working on trained pixels; the pentad head fails BOTH modes
+   — its 20-year hindcast is flat near climatology (model sd 1.59 vs truth 3.96,
+   r_trained 0.256), and its unforced future locks 1:1 annual (ACF peak at 73 steps =
+   365 d; not 36 steps, so the K-window-echo mechanism is ruled out).
+3. **The codec is HEALTHY — verified, not assumed**: a local encode→decode roundtrip with
+   the exact training transform (verified by reproducing run-415's recorded loss_rec to
+   1.7 SE; the roll itself also printed `Z cache verified vs live re-encode ✓`, so the
+   right encoder ran) reads **FVU 0.4–0.6% (r 0.997)** on the 92% of bins that carry only
+   the 8 fast channels — near-identity — and held-out ≤ trained everywhere (no
+   memorisation in the codec).
+4. **The real structural defect is the r2 tensor design meeting d_z 32**: on the 8% of
+   bins that DO carry Argo, 40 channels compete for 32 latent dims and the fast channels'
+   reconstruction **collapses** (cur_speed FVU 112%, ssh 86% — restored to 0.4–0.6% by
+   hiding Argo from the encoder, same bins, same pixels). So the z-sequence the head must
+   forecast SWITCHES REPRESENTATION REGIME every ~6th step, and the corridor scoring
+   decodes through the lossy regime at exactly the rows where Argo truth exists. Deep-Argo
+   FVU at those bins is ~2× the monthly d_z-64 anchor's (12–17% vs 6.9%), the direction
+   and size that halving d_z while adding a channel predicts.
+
+   Follow-ups this points at, in order: a pentad tensor revision that carries the monthly
+   Argo state into every bin (persistence-fill or a separate slow-state pathway) so the
+   representation regime stops oscillating; a d_z 64 pentad codec; then the znoise rescale
+   for the head. Each is its own experiment with its own falsifier.
+
 **Two mechanical notes.** (a) The run shows `completed failure` — that is step 22 ONLY:
 `actions/upload-artifact@v4` refuses the dump filenames because the head label carries a
 COLON (`roll_s145rspiral:111-…npz` — "path … is not valid"). The roll itself finished; the
