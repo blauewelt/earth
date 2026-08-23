@@ -1,0 +1,8 @@
+{
+ "steps": 200000,
+ "lr": 0.001,
+ "schedule": "cosine",
+ "stage": "stage-1",
+ "note": "E-047b retry, batch 64 (OOM fix)",
+ "published_at": "2026-08-23T16:30:54.384Z"
+}
