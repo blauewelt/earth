@@ -1,0 +1,8 @@
+{
+ "steps": 200000,
+ "lr": 0.001,
+ "schedule": "cosine",
+ "stage": "stage-1",
+ "note": "E-047b Chinchilla-anchored 126.9M d_z128 month-block codec",
+ "published_at": "2026-08-23T15:37:38.591Z"
+}
