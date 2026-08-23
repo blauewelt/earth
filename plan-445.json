@@ -1,0 +1,8 @@
+{
+ "steps": 20000,
+ "lr": 0.001,
+ "schedule": "expdecay",
+ "stage": "stage-2",
+ "note": "E-045-A6 fine season phase (head-side)",
+ "published_at": "2026-08-23T11:42:26.625Z"
+}
