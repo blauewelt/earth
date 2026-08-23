@@ -133,6 +133,23 @@ bit-identity pinned in tests/test_e044c_knobs.py.
   E-046 waits. Takes the A5 slot on the HK chain (season-dropout defers — its readout
   needs a roll; Chris's active direction outranks it).
 
+**LADDER FINALS + TWO OPS INSTANCES, 18:00Z (chain step 5).**
+
+- **A7 (#441, stride 3 = 15-day cadence): ratio 0.1620** (4.3466 / 26.8270 at 20k; run
+  shows `cancelled` — its OWN job_timeout 360 again, mid-ladder, training complete on
+  ml-live). The cadence ladder now reads **30 d 0.072 · 15 d 0.162 · 5 d 0.505** —
+  smooth and monotone through three rungs. No cliff, no hidden monthly assumption:
+  the 5-day one-step difficulty is INTRINSIC. (In-training probes for the record:
+  rapid_r_kfold 0.638 [0.579, 0.692] at stride 3 — labelled, pooled.)
+- **A8 (#443, stride 2) is a GREEN-WITHOUT-THE-GOODS instance of the standing
+  temporal.py blindspot**: run green at 73 min, metrics carrying ONLY config+resumed —
+  the stage-2 head never trained (the pre-registered 51 GB-on-64 GB slice peak,
+  OOM-killed behind the best-effort guards). Re-dispatched to the 515 GB box per the
+  arm's own fallback line; the 10-day rung lands overnight.
+- **The EIGHTH drain orphan on gpu-box-31479844** (identical signature, two live frames
+  at 81.0 °C), stopped after queue check. Eight for eight on drains: the retirement case
+  is now complete — recommend destroy/re-rent at the next natural break.
+
 **FINALS, 09:40Z (chain step 3).**
 
 - **A2b (#439, monthly cadence, Argo-FREE bins): 0.0729** (2.0638 / 28.3183) — twin to
