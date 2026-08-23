@@ -58,8 +58,14 @@ the CONTINUOUS block-centre phase (the labelling fix, at the codec level from bi
 and the two deliberately-skipped per-bin evaluations are in the dispatch doc and
 `ml/plans/E047_block_codec.md`. The block axis reads as MONTHLY downstream, so the
 follow-on roll is day-matched comparable to the monthly archive while built entirely
-from 5-day inputs. E-047a = the codec retrain (#TBD, gpu-box-31479844, queued behind
-E-045-A8, ~$3.5-4); the 20k head and the `longstart:` calendar-lock read follow. Code:
+from 5-day inputs. E-047a = #448 (40M, d_z 64) on fresh box gpu-box-42005419; **E-047b = #449 — the
+CHINCHILLA-ANCHORED sibling** (measured 126.943M = 1.006× the tensor's own anchor of
+2,524,251,443 values/20, 1024×10, head_dim exactly 128, d_z 128, batch 256-estimated) on
+fresh box gpu-box-40623952, dispatched IN PARALLEL per Chris's sizing question and
+parallelization mandate (~$4 + ~$10). The pair answers fusion-vs-selection AND
+40M-vs-anchor AND d_z-64-vs-128 in one overnight wave; 20k heads + block-decode rolls
+(Tier-2 roll reconstruction landed at aacb014 — every cell of each predicted block scores
+against its own bin, cell-level persistence baselines, dumps stay z-states) follow. Code:
 timeblocks module + wiring at 2e03913/41086a3, smoke-tested end to end on CPU;
 `time_block` is a recipe-only key (`f4r2-40M-monthblock`, d_z 64).
 
