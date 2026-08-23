@@ -804,6 +804,33 @@ def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False,
     return torch.cat(outs, 0)
 
 
+def decode_cells(codec, zhat, C, k_time, chunk, amp=False):
+    """E-047 TIER 2: decode EVERY CELL of a block embedding — [P, k_time, C].
+
+    `decode_all` asks a per-bin codec for C channels at offset 0. A block
+    codec's z answers for a whole month, so the same question has k_time
+    answers per channel: the value in the 1st pentad of that month, the 2nd,
+    and so on. Each is scored against the truth of ITS OWN source bin, which
+    is what makes a block roll comparable with a per-bin one at all — the
+    alternative, scoring one representative cell, would throw away five
+    sixths of the prediction and call the remainder a monthly number.
+    """
+    outs = []
+    for i in range(0, zhat.shape[0], chunk):
+        z = zhat[i:i + chunk]
+        n = z.shape[0]
+        qc = (torch.arange(C, device=z.device)[None, None, :]
+              .expand(n, k_time, -1).reshape(n, k_time * C))
+        qt = (torch.arange(k_time, device=z.device)[None, :, None]
+              .expand(n, -1, C).reshape(n, k_time * C))
+        off0 = torch.zeros(n, k_time * C, 3, dtype=torch.long, device=z.device)
+        with torch.autocast(device_type="cuda", dtype=torch.float16,
+                            enabled=amp):
+            xq = codec.query(z, qc, off0, qt)
+        outs.append(xq.float().reshape(n, k_time, C).cpu().numpy())
+    return np.concatenate(outs, 0)
+
+
 def decode_all(codec, zhat, C, chunk, amp=False):
     """codec.query at every (pixel, channel), offset 0 — [P, C] numpy."""
     outs = []
@@ -1358,7 +1385,44 @@ def main():
     # this is still "check the precondition where the inputs are all it has
     # cost you" (ml/CLAUDE.md §0.3).
     d = np.load(a.npz_small, allow_pickle=False)
-    ax = TimeAxis(d)
+    # E-047 TIER 2. A block codec's Z has ONE ROW PER BLOCK, so the axis this
+    # roll advances is the BLOCK axis — in `month` mode its labels are
+    # `YYYY-MM` and TimeAxis reads it as monthly, which is exactly why the
+    # roll's horizon, bands and day-matched leads come out as the archive's.
+    # The block map is loaded the way ml/temporal.py's embed path loads it
+    # (from the tensor's own bin_index/epoch/pentad_days) and its ABSENCE is
+    # a refusal, not a fallback: rolling a block codec on a per-bin axis
+    # would advance the state six times too fast and every number would look
+    # ordinary.
+    BLKR = None
+    _ck_peek = torch.load(a.ckpt, map_location="cpu", weights_only=False)
+    _k_time = int(_ck_peek.get("args", {}).get("k_time", 1) or 1)
+    if _k_time > 1:
+        tb = str(_ck_peek["args"].get("time_block", "") or "")
+        if not tb:
+            sys.exit(f"{os.path.basename(a.ckpt)} has k_time={_k_time} but no "
+                     f"`time_block` in its args: this checkpoint cannot say "
+                     f"how its blocks were cut, and guessing the grouping "
+                     f"would score a different experiment.")
+        if "bin_index" not in d:
+            sys.exit(f"{os.path.basename(a.ckpt)} is a BLOCK codec "
+                     f"(time_block {tb!r}) but {os.path.basename(a.npz_small)} "
+                     f"carries no `bin_index`: the block map cannot be "
+                     f"rebuilt from a monthly tensor, and without it the "
+                     f"cells have no dates to be scored against.")
+        from timeblocks import BlockAxis
+        BLKR = BlockAxis(tb, [str(m) for m in d["months"]], d["bin_index"],
+                         dt.date.fromisoformat(str(d["epoch"]))
+                         if "epoch" in d else EPOCH_DEFAULT,
+                         int(np.asarray(d["pentad_days"]).item())
+                         if "pentad_days" in d else None)
+        print(f"block codec: k_time {_k_time} · {BLKR.describe(len(d['chan']), _ck_peek['d_z'])}",
+              flush=True)
+        ax = TimeAxis({"months": np.array(BLKR.labels)})
+        src_ax = TimeAxis(d)
+    else:
+        ax = TimeAxis(d)
+        src_ax = ax
     months = ax.labels
     lats, lons = d["lats"], d["lons"]
     T = ax.T
@@ -1434,6 +1498,14 @@ def main():
     d_z = ck["d_z"]
     hold_years = sorted(ck["args"]["holdout_years"].split(","))
     t_hold = np.array([m[:4] in set(hold_years) for m in months])
+    # E-047: `months`/`t_hold`/`moy` above are the ROLL's axis, which for a
+    # block codec is the BLOCK axis. `stream_stats` and `StdMonths` read rows
+    # of X — bins, whatever the codec embeds — so they keep the SOURCE axis's
+    # own month-of-year and holdout mask. Identical objects when there are no
+    # blocks, so the per-bin path is the same call it always was.
+    src_moy = src_ax.moy if BLKR is not None else moy
+    src_t_hold = (np.array([m[:4] in set(hold_years) for m in src_ax.labels])
+                  if BLKR is not None else t_hold)
     lo, hi = (float(v) for v in ck["args"]["holdout_lon"].split(","))
     x_hold = (lons >= lo) & (lons < hi)
 
@@ -1498,10 +1570,11 @@ def main():
         clim, dyn = s_["clim"], list(s_["dyn"])
         mean_c, std_c = s_["mean_c"], s_["std_c"]
     else:
-        clim, dyn, mean_c, std_c = stream_stats(Xm, moy, t_hold, x_hold)
+        clim, dyn, mean_c, std_c = stream_stats(Xm, src_moy, src_t_hold,
+                                                x_hold)
         np.savez(st_path, clim=clim, dyn=np.array(dyn),
                  mean_c=mean_c, std_c=std_c)
-    std_m = StdMonths(Xm, ys, xs, moy, clim, dyn, mean_c, std_c)
+    std_m = StdMonths(Xm, ys, xs, src_moy, clim, dyn, mean_c, std_c)
 
     r1 = None
     if not a.export_mask_only:     # the mask needs no baseline arithmetic
@@ -1630,7 +1703,7 @@ def main():
     x0 = np.asarray(Xm[0]).astype(np.float32)
     obs0 = np.isfinite(x0)
     for c in dyn:
-        x0[..., c] = ((x0[..., c] - clim[moy[0], :, :, c]
+        x0[..., c] = ((x0[..., c] - clim[src_moy[0], :, :, c]
                        - mean_c[c]) / (std_c[c] + 1e-6))
     Xt0 = torch.from_numpy(np.where(obs0, x0, 0.0)[None])      # [1,H,W,C]
     stat_obs = torch.from_numpy(obs0).clone()
@@ -1648,12 +1721,24 @@ def main():
                                    torch.zeros(n, dtype=torch.long),
                                    torch.as_tensor(ys[sl]),
                                    torch.as_tensor(xs[sl]), codec.patch)
+            elif BLKR is not None:
+                # E-047: a block codec's static identity is the same question
+                # asked of a GRID — static channels repeated across the first
+                # block's cells, pad cells unobserved (ml/temporal.py does the
+                # identical thing at its own static pass).
+                kt = BLKR.k_max
+                vv = Xt0[0, ys[sl], xs[sl]][:, None, :].expand(-1, kt, -1)
+                oo = (stat_obs[ys[sl], xs[sl]][:, None, :]
+                      .expand(-1, kt, -1).clone())
+                oo &= torch.as_tensor(~BLKR.pad[0])[None, :, None]
             else:
                 vv = Xt0[0, ys[sl], xs[sl]]
                 oo = stat_obs[ys[sl], xs[sl]]
+            _mk = (torch.zeros(n, C, dtype=torch.bool, device=dev)
+                   if BLKR is None else
+                   torch.zeros(n, BLKR.k_max, C, dtype=torch.bool, device=dev))
             zs.append(codec.encode(
-                vv.to(dev), oo.to(dev),
-                torch.zeros(n, C, dtype=torch.bool, device=dev),
+                vv.to(dev), oo.to(dev), _mk,
                 torch.as_tensor(ctx).to(dev)).cpu().numpy())
     Zstat = np.concatenate(zs, 0)
     print(f"static identity encoded for {P} px", flush=True)
@@ -1662,17 +1747,24 @@ def main():
     # guard: a silent ordering mismatch would roll beautiful nonsense) ------
     Zsec = np.asarray(Zm[:, sec_sel]).astype(np.float32)       # [T,S,dz]
     rows3 = [sec_y - 1, sec_y, sec_y + 1]
-    slab, obs_sl = build_slab(Xm, rows3, moy, clim, dyn, mean_c, std_c)
+    slab, obs_sl = build_slab(Xm, rows3, src_moy, clim, dyn, mean_c,
+                              std_c)
     slab_t = torch.from_numpy(np.nan_to_num(slab, nan=0.0))
     obs_t = torch.from_numpy(obs_sl)
-    ctx_all = np.stack([np.sin(2 * np.pi * moy / 12),
-                        np.cos(2 * np.pi * moy / 12)], 1)
+    # E-047: the re-encode must feed the codec what the EMBED fed it — a
+    # block codec's ctx is the block CENTRE's continuous phase and its input
+    # is the grid, so the same block map goes in here. Per-bin: unchanged.
+    ctx_all = (np.stack([np.sin(2 * np.pi * moy / 12),
+                         np.cos(2 * np.pi * moy / 12)], 1)
+               if BLKR is None else BLKR.ctx_phase())
     rngv = np.random.default_rng(1)
     kv = rngv.choice(S_sec, min(8, S_sec), replace=False)
     sxs = xs[sec_sel]
     Zl, _ = embed_everything(codec, slab_t, obs_t, ctx_all, lats[rows3], lons,
                              np.ones(len(kv), dtype=int), sxs[kv], d_z,
-                             cache_path=None, batch=64)
+                             cache_path=None, batch=64,
+                             blk_rows=(None if BLKR is None else BLKR.rows),
+                             blk_pad=(None if BLKR is None else BLKR.pad))
     for tt in (0, T // 2, T - 1):
         dmax = float(np.abs(Zl[tt] - Zsec[tt][kv]).max())
         zscale = float(np.abs(Zl[tt]).max())
@@ -1681,7 +1773,11 @@ def main():
     print("Z cache verified vs live re-encode ✓", flush=True)
 
     # ---- transport read-out (truefit protocol, rollout.py verbatim) ------
-    rapid = d["rapid"]
+    # E-047: `rapid[:, 0]` is a SOURCE row. On a block roll the read-out
+    # lives on the block axis (Zsec has one row per block), so the truth is
+    # remapped to the block CONTAINING each row — the same remap the embed
+    # path uses, from the same function.
+    rapid = d["rapid"] if BLKR is None else BLKR.remap_rows(d["rapid"])
     ridx = rapid[:, 0].astype(int)
     rv = rapid[:, 1].copy()
     rmoy = moy[ridx]
@@ -1811,6 +1907,35 @@ def main():
                                "reason": gate_skip}
         results["gate"] = {"pass": None, "skipped": True, "certified": False,
                            "cadence": ax.cadence, "reason": gate_skip}
+    # E-047 TIER 2: what one scored horizon actually covers. A block roll's
+    # `h` is a BLOCK step, and each one accumulates every real cell of that
+    # block against its own bin — so the LEAD IN DAYS of a scored value is a
+    # pair (h, cell), and it is derived from the axis rather than assumed.
+    if BLKR is not None:
+        _b0 = int(ax.T // 2)                       # a mid-record reference
+        _lead = {}
+        for _h in range(1, min(a.horizon, ax.T - _b0 - 1) + 1):
+            _tb = _b0 + _h
+            _lead[str(_h)] = [
+                round((src_ax.date_of_row(int(BLKR.rows[_tb, _j]))
+                       - src_ax.date_of_row(int(BLKR.rows[_b0, _j]))).days, 1)
+                for _j in range(int(BLKR.n_bins[_tb]))
+                if _j < int(BLKR.n_bins[_b0])]
+        results["blocks"] = {
+            "time_block": str(ck["args"].get("time_block", "")),
+            "k_time": int(ck["args"].get("k_time", 1)),
+            "k_max": int(BLKR.k_max),
+            "n_blocks": int(BLKR.n_blocks),
+            "bins_per_block": [int(BLKR.n_bins.min()),
+                               int(BLKR.n_bins.max())],
+            "scored_per_block": "every real cell, against its own source bin",
+            "lead_days_by_horizon_and_cell": _lead,
+            "note": ("`h` counts BLOCKS. chan_skill's `n` at horizon h counts "
+                     "CELL-months, ~k_time times a per-bin roll's, because "
+                     "one block prediction is scored at every bin it covers. "
+                     "Persistence and the damped baseline use the START "
+                     "block's SAME cell.")}
+
     # WHICH ROWS WERE SCORED, not merely how many. A count says the knob was
     # read; the rows say what the number is a number OF, and a harvest that
     # wants to know whether two rolls sampled the same seasonal phases has no
@@ -2028,22 +2153,46 @@ def main():
                         # per step, which is right exactly when a step is a
                         # month and corrupts the model's own input otherwise.
                         cur = cur[1:] + [t_tgt]
-                        xhat = decode_all(codec, zhat, C, a.chunk, a.amp)
-                        v_true, obs_tt = std_m.get(t_tgt)
-                        op = obs_tt & obs_s
-                        v_damp = v_pers * r1 ** h
+                        if BLKR is None:
+                            cells = [(None, t_tgt, decode_all(
+                                codec, zhat, C, a.chunk, a.amp))]
+                        else:
+                            # E-047 TIER 2: one decode, k_time answers. Cell j
+                            # of the predicted BLOCK is scored against the
+                            # truth of the SOURCE BIN it stands for, so a
+                            # month-block roll accumulates ~6 cell-months per
+                            # scored block and `n` in chan_skill grows with
+                            # it. Pad cells have no bin and are skipped.
+                            xg = decode_cells(codec, zhat, C, BLKR.k_max,
+                                              a.chunk, a.amp)
+                            cells = [(j, int(BLKR.rows[t_tgt, j]), xg[:, j])
+                                     for j in range(int(BLKR.n_bins[t_tgt]))]
                         prog.step("skill")
-                        for name, m_ in scopes:
-                            accumulate(sums[name], h, xhat[m_], v_true[m_],
-                                       v_pers[m_], v_damp[m_], op[m_])
-                        of_ = op.astype(np.float64)
-                        err_ = ((xhat - v_true) ** 2) * of_
-                        tru_ = (v_true ** 2) * of_
-                        aud["ch_m"][h] += err_[corridor].sum(axis=0)
-                        aud["ch_c"][h] += tru_[corridor].sum(axis=0)
-                        if h == a.map_h:
-                            aud["px_m"] += err_.sum(axis=1)
-                            aud["px_c"] += tru_.sum(axis=1)
+                        for j_, row_, xhat in cells:
+                            # THE BASELINES MOVE WITH THE CELL. Persistence is
+                            # the start block's SAME cell (the analogue of "the
+                            # last state you saw"), which is what keeps a
+                            # cell's skill a statement about forecasting rather
+                            # than about which pentad of a month it is.
+                            if j_ is None:
+                                v_p, obs_p = v_pers, obs_s
+                            else:
+                                v_p, obs_p = std_m.get(int(BLKR.rows[s, j_]))
+                            v_true, obs_tt = std_m.get(row_)
+                            op = obs_tt & obs_p
+                            v_damp = v_p * r1 ** h
+                            for name, m_ in scopes:
+                                accumulate(sums[name], h, xhat[m_],
+                                           v_true[m_], v_p[m_], v_damp[m_],
+                                           op[m_])
+                            of_ = op.astype(np.float64)
+                            err_ = ((xhat - v_true) ** 2) * of_
+                            tru_ = (v_true ** 2) * of_
+                            aud["ch_m"][h] += err_[corridor].sum(axis=0)
+                            aud["ch_c"][h] += tru_[corridor].sum(axis=0)
+                            if h == a.map_h:
+                                aud["px_m"] += err_.sum(axis=1)
+                                aud["px_c"] += tru_.sum(axis=1)
                         if t_tgt in r_of_row:
                             probe_pts[h].append(
                                 (s, read_sv(zhat), rv_des[r_of_row[t_tgt]]))

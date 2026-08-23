@@ -22,6 +22,7 @@ here is about blocking and not about the fixture.
 ~2 minutes on two cores. No GPU, no network, no real tensor.
 """
 import datetime as dt
+import glob
 import json
 import os
 import shutil
@@ -130,7 +131,7 @@ def main():
         out2 = run([sys.executable, "-u", os.path.join(ML, "temporal.py"),
                     "--run", run_name, "--data", npz, "--K", "4",
                     "--steps", "6", "--batch", "8", "--d-model", "16",
-                    "--layers", "2", "--max-pixels", "20", "--lr-warmup", "2"],
+                    "--layers", "2", "--lr-warmup", "2"],
                    "temporal.py on the block codec")
         assert "block axis: T " in out2, out2[-2000:]
         line = [l for l in out2.splitlines() if "block axis: T " in l][0]
@@ -140,6 +141,14 @@ def main():
                                         if l.strip().startswith("Z [")]
         tj = json.load(open(os.path.join(run_dir, "temporal.json")))
         assert tj["z_t+1"]["mse_model"] >= 0
+        blk_ck = os.path.join(tmp, "blk_pixelmae.pt")
+        shutil.copyfile(os.path.join(run_dir, "pixelmae.pt"), blk_ck)
+        # BUILD THE ROLL'S Z HERE, with the same call temporal.py makes.
+        # temporal.py keeps a toy's Z in RAM (_cache_plan: no file when the
+        # array fits), so there is nothing on disk to reuse — and a globbed
+        # leftover from an earlier run would be another codec's z, which is
+        # the #10/#11 failure the cache names exist to prevent.
+        blk_z = os.path.join(tmp, "Z_blk.npy")
         print("2. ml/temporal.py embeds the SAME tensor into %d block "
               "embeddings, its axis is the block labels (YYYY-MM — a monthly "
               "axis built entirely from 5-day data), the RAPID rows remap to "
@@ -183,10 +192,118 @@ def main():
               "than quietly producing embeddings of a different thing than it "
               "was trained on")
 
-        print("\nE-047 end-to-end smoke: all 4 checks hold ✓")
+        # ---- 5. TIER 2: the roll decodes a block codec's cells ----------
+        # Rebuild the month-block codec (check 3 overwrote the run dir with
+        # the knob-off one), then roll a tiny head on its z.
+        from timeblocks import BlockAxis
+        dd = np.load(npz, allow_pickle=False)
+        BA = BlockAxis("month", [str(m) for m in dd["months"]],
+                       dd["bin_index"], EPOCH, DAYS)
+        # a toy stage-2 head over the BLOCK axis
+        from temporal import TemporalTransformer
+        torch.manual_seed(0)
+        K = 3
+        head = TemporalTransformer(d_z=DZ, d_model=8, n_heads=4, n_layers=1,
+                                   k_max=K, stencil=1)
+        hp = os.path.join(tmp, "toy_head.pt")
+        torch.save({"model": head.state_dict(),
+                    "args": {"K": K, "d_model": 8, "layers": 1, "unroll": 1,
+                             "seed": 0, "stencil": 1}}, hp)
+        # X and Z on disk, exactly as the roll expects them
+        Xs = np.load(npz)["X"]
+        xpath = os.path.join(tmp, "X.npy")
+        np.save(xpath, Xs)
+        # The REAL embedding of this codec, not a random array: the roll
+        # verifies its Z against a live re-encode and that guard is one of
+        # the things under test here.
+        from temporal import embed_everything
+        from trainprobe import anomaly_transform
+        _ckb = torch.load(blk_ck, map_location="cpu", weights_only=False)
+        from model import codec_from_ckpt as _cfc
+        _codec = _cfc(_ckb, C)
+        _codec.load_state_dict(_ckb["model"])
+        _codec.eval()
+        _mo = np.array([int(m[5:7]) - 1 for m in dd["months"]])
+        _th = np.array([str(m)[:4] == "1991" for m in dd["months"]])
+        _Xa = np.array(Xs, np.float32, copy=True)
+        _Xa, _dyn = anomaly_transform(_Xa, _mo, _th,
+                                      np.zeros(len(dd["lons"]), bool))
+        _ocean = np.isfinite(_Xa[..., 0]).any(0)
+        _ys, _xs = np.where(_ocean)
+        _Z, _ = embed_everything(
+            _codec, torch.from_numpy(np.nan_to_num(_Xa, nan=0.0)),
+            torch.from_numpy(np.isfinite(_Xa)), BA.ctx_phase(),
+            np.asarray(dd["lats"]), np.asarray(dd["lons"]), _ys, _xs, DZ,
+            cache_path=None, batch=64, blk_rows=BA.rows, blk_pad=BA.pad)
+        np.save(blk_z, np.asarray(_Z, np.float16))
+        zpath = blk_z
+        out5 = os.path.join(tmp, "roll_blk.json")
+        ddir = os.path.join(tmp, "dump_blk")
+        r = subprocess.run(
+            [sys.executable, "-u", os.path.join(ML, "rollout_spatial.py"),
+             "--x", xpath, "--npz-small", npz, "--z", zpath,
+             "--ckpt", blk_ck, "--out", out5,
+             "--horizon", "2", "--long-start", "", "--future-months", "0",
+             "--cache-dir", os.path.join(tmp, "cache_blk"), "--no-gate",
+             "--dump-roll", ddir, "--heads", hp],
+            capture_output=True, text=True, timeout=1800, cwd=ROOT)
+        if r.returncode != 0:
+            print(r.stdout[-4000:]); print(r.stderr[-2500:])
+            raise SystemExit("block roll failed")
+        assert "block codec: k_time 7" in r.stdout, r.stdout[:1500]
+        res = json.load(open(out5))
+        bl = res["blocks"]
+        assert bl["k_time"] == 7 and bl["time_block"] == "month"
+        assert bl["k_max"] == 7 and bl["n_blocks"] == BA.n_blocks
+        lead = bl["lead_days_by_horizon_and_cell"]
+        assert set(lead) == {"1", "2"}, lead
+        for h_, ds in lead.items():
+            assert all(abs(v - 0) > 0 for v in ds)
+            assert len(ds) >= 5, (h_, ds)
+        head_lab = list(res["heads"])[0]
+        cs = res["heads"][head_lab]["window"]["chan_skill"]
+        n1 = [row["n"] for row in cs if row["h"] == 1][0]
+        print("5. a BLOCK codec rolls: the roll loads the block map off the "
+              "tensor, reads k_time 7 from the checkpoint, decodes every cell "
+              "of each predicted block and scores it against its OWN bin — "
+              "horizon 1 accumulates n=%d channel-values, and the artefact "
+              "records the lead in DAYS for each (horizon, cell): h=1 -> %s"
+              % (n1, lead["1"][:4]))
+
+        # ---- 6. cell scoring is per-bin, on a constructed case ------------
+        # n at horizon h must be the sum over scored (start, block) pairs of
+        # the OBSERVED cell-values, i.e. ~k_time times a per-bin roll's.
+        # A per-bin roll would score ONE value per (step, pixel, channel);
+        # a block roll scores one per CELL, so n at h=1 must exceed the
+        # step-count times the scope's pixels times C — strictly, and by
+        # about the mean cells per block.
+        import re as _re
+        n_steps = int(_re.search(r"(\d+) scored roll steps",
+                                 r.stdout).group(1))
+        n_px = res["heads"][head_lab]["window"]["n_px"]
+        one_cell = n_steps / 2 * n_px * C          # h=1 gets half the steps
+        assert n1 > 1.5 * one_cell, (n1, one_cell, n_steps, n_px)
+        per_bin_like = one_cell
+        # the dump is shape-agnostic and still writes z-states, not cells
+        man = json.load(open(os.path.join(ddir, "dump_manifest.json")))
+        f0 = man["files"][0]
+        assert f0["shape"][2] == DZ, f0["shape"]
+        zdump = np.load(os.path.join(ddir, f0["file"]),
+                        allow_pickle=False)["z"]
+        assert zdump.dtype == np.float16 and zdump.shape[2] == DZ
+        assert len(man["files"]) >= 1 and man["d_z"] == DZ
+        print("6. n grows with the cells (%d at h=1 against ~%d for a "
+              "one-cell-per-block roll), and --dump-roll still writes Z "
+              "STATES — [%d, %d, %d] float16, d_z not k_time*C — so the "
+              "offline decode stays the Tier-3 plan"
+              % (n1, int(per_bin_like), *zdump.shape))
+
+        print("\nE-047 end-to-end smoke: all 6 checks hold ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         shutil.rmtree(run_dir, ignore_errors=True)
+        for _f in glob.glob(os.path.join(ML, "cache", "Z_*_blk*.npy")):
+            os.remove(_f)
 
 
 if __name__ == "__main__":
