@@ -178,3 +178,94 @@ step time against the fleet's measured pace. Nothing on this list blocks the
 JAX work that is still outstanding — the trainers (tier 3) are being built
 against CPU parity first, which is the right order regardless of what the
 hardware turns out to cost.
+
+## 8 · What provisioning actually returned (2026-08-22, all measured)
+
+The checklist above was executed on 2026-08-22 (browser session driving the
+console, Chris granting the IAM roles and minting the key by hand). What
+exists now:
+
+| thing | value |
+|---|---|
+| project | `earth-tpu` · ID **`earth-tpu-blauewelt`** · no organisation · billing linked |
+| bucket | **`gs://earth-tpu-staging`** · us-central1 · Standard · not public |
+| service account | `tpu-runner@earth-tpu-blauewelt.iam.gserviceaccount.com` · TPU Admin + Storage Object Admin + Service Account User |
+| key | on the operator's Mac at `~/.gcp/earth-tpu-sa.json` (0600) — not in GitHub secrets yet |
+| launcher | `scripts/tpu_box.py` (REST, stdlib-only, `--dry-run` on every mutation) |
+| smoke script | `ml/jaxport/tpu_smoke.sh` (`__BUCKET__`/`__NODE__`/`__TPUZONE__` substituted at launch) |
+
+**§3's quota table is right about the names and wrong about which one a
+small node draws from.** A single-host v5e node — `v5litepod-1/-4/-8` — is
+booked against the **"… for serving per project per zone"** metrics, which
+default to **4 cores**, not against the 16-core training metrics the console
+shows first. So out of the box a v5litepod-8 is refused (HTTP 429,
+`TPUV5sPreemptibleLitepodServingPerProjectPerZone…`) while a **v5litepod-4
+fits exactly**, both spot and on-demand. An increase of spot-serving
+us-central1-a from 4→8 was filed (case `27f8c674-8894-4026-9dfa-793bd1513e67`)
+and was still pending review hours later — "auto-approves" (§3) did not
+happen within the day for the serving pool.
+
+**Where v5e actually lives, asked of the API rather than the docs**
+(`GET /v2/projects/…/locations/{zone}/acceleratorTypes`): in the regions we
+probed, only **us-central1-a**, **us-east5-a/b/c** and **us-west1-c** serve
+`v5litepod-4` at all — us-central1-b/c/f answer HTTP 400 "accelerator not
+found in zone", which looks like a quota problem and is not one. Capacity on
+the day: us-central1-a exhausted for **both** spot and on-demand (op error
+code 8), us-east5-a/c refused spot with the misleading **"Reservation not
+found"** (code 5 — that is a *spot capacity* refusal, not a config error),
+us-east5-b code 8, and **us-west1-c had spot capacity** and served us a
+v5litepod-4 in ~3 minutes.
+
+**The two traps that cost real money, and their fixes (both landed):**
+
+1. **The raw v2 API gives a TPU VM NO external IP unless
+   `networkConfig.enableExternalIps: true` is in the create body.** `gcloud`
+   requests one by default, which is why no tutorial mentions it. Without it
+   the VM has no internet egress, so a startup script that fetches from
+   GitHub hangs forever — while the node sits READY with `health: TIMEOUT`,
+   which reads like a warm-up symptom rather than a dead box.
+   `create_request` now always sets it.
+2. **A watcher on the operator's machine is a hope, not a guarantee.** The
+   first smoke node (spot v5litepod-4, us-west1-c, created 13:44Z) outlived
+   the session that was watching it and billed for **~8.1 hours** doing
+   nothing before the next session found and deleted it. `tpu_smoke.sh` now
+   **self-reaps**: a `trap … EXIT` deletes the node on completion or any
+   failure, and a disowned 55-minute watchdog deletes it unconditionally —
+   both via the metadata-server token, no key on the box. The Vast fleet
+   never needed this because an idle box is $0.27/h and the hourly fleet
+   check sees it; a TPU node is 10–20× that and there is no fleet check
+   watching this project.
+
+## 9 · The first smoke run's numbers (2026-08-23, measured on a spot v5e-4)
+
+Node: spot `v5litepod-4` in **us-west1-c** (the one zone with spot capacity
+across two evenings), 112-CPU / 189 GB host, jax 0.6.2 · flax 0.10.7. Results
+in `gs://earth-tpu-staging/tpu_smoke/20260823T001419Z.json` and
+`…/tpu_smoke_train/20260823T001419Z.json`; the node's full log is beside them
+in `tpu_smoke_logs/`. Four failed attempts preceded the clean one, each
+diagnosed from the shipped log (venv missing → apt; `nnx.data` needs flax
+≥ 0.11 which needs Python ≥ 3.11 → parity-verified identity shim; a warm-up
+indexing bug) — and each node self-reaped, which is the §8 guard doing its job
+four times without a human.
+
+**The §6 question is answered: the host gather does NOT starve the chips.**
+Embedding the 40.7M anchor codec (576×10, d_z 64, patch 3) over 16 batches of
+8192 real pixels: **10,120 pixel-encodes/s** end to end, and the gather alone
+is **2.15 % of that wall time** (165M values/s, host CPU 1.8 % busy). No
+pre-gathered shard format is needed; the bottleneck is the device side, not
+the feed. Steady-state after the first month's retrace is ~1.8 s/month at this
+batch, i.e. a full 516-month × 84,405-pixel embed extrapolates to ~70 min on
+ONE chip — and `embed_everything_jax` currently uses one of the four (no
+sharding), so ~4× sits on the table before any real optimisation.
+
+**A small model actually TRAINED on the TPU.** From-scratch PixelMAE at the
+pilot geometry (0.91M params), toy masked-recon MSE (30 % of observed channels
+hidden, scored on the hidden cells), Adam 3e-4, batch 4096 real pixels:
+**300 steps at 10.6 steps/s** (43,500 pixel-examples/s) after a 7.4 s XLA
+compile, loss **0.612 → 0.116** over the run. A toy objective, so the only
+claims are mechanical: the jaxport model, a functional nnx.split/merge train
+step and optax run correctly on TPU hardware, and the loss falls.
+
+Total cost of the whole §9 campaign (four failures + the clean run): about an
+hour of accumulated spot v5litepod-4, order $1–2. The §8 orphan remains the
+expensive lesson of the exercise.

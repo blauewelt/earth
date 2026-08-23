@@ -32,6 +32,16 @@ import jax
 import jax.numpy as jnp
 from flax import nnx
 
+# flax 0.11 made a plain container attribute STATIC (its parameters vanish
+# from the pytree) and introduced _nnx_data() to mark containers as data;
+# flax <= 0.10 auto-registers plain lists — the very behaviour nnx.data makes
+# explicit — and has no `data` attribute at all. flax >= 0.11 also requires
+# Python >= 3.11, which the Cloud TPU VM image (Ubuntu 22.04, Python 3.10)
+# does not carry, so this module must run under both regimes. The identity
+# fallback restores the old auto-registration path on old flax; the parity
+# suite is the check that the two regimes compute the same numbers.
+_nnx_data = getattr(nnx, "data", lambda x: x)
+
 
 def gelu_exact(x):
     """torch `nn.GELU()` — the erf form. See the module docstring."""
@@ -129,7 +139,7 @@ class TransformerEncoder(nnx.Module):
             dim_feedforward = 4 * d_model
         # nnx.data: a plain list of submodules is treated as a STATIC
         # attribute otherwise, and the parameters vanish from the pytree.
-        self.layers = nnx.data([EncoderLayer(d_model, n_heads, dim_feedforward,
+        self.layers = _nnx_data([EncoderLayer(d_model, n_heads, dim_feedforward,
                                              rngs=rngs)
                                 for _ in range(n_layers)])
 
@@ -186,7 +196,7 @@ class PixelMAE(nnx.Module):
         # that. dec_layers counts HIDDEN layers.
         self.dec_layers = dec_layers
         dims = [d_z + 64 + 3 * 16] + [d_dec] * dec_layers
-        self.decoder = nnx.data([nnx.Linear(dims[i], dims[i + 1], rngs=rngs)
+        self.decoder = _nnx_data([nnx.Linear(dims[i], dims[i + 1], rngs=rngs)
                                  for i in range(dec_layers)]
                                 + [nnx.Linear(d_dec, 1, rngs=rngs)])
 
@@ -277,7 +287,7 @@ class TemporalTransformer(nnx.Module):
         self.direct = tuple(int(h) for h in direct)
         # A dict keyed by str(h), the same way nn.ModuleDict exposes it — the
         # torch keys are `heads_direct.<h>.weight`.
-        self.heads_direct = nnx.data(
+        self.heads_direct = _nnx_data(
             {str(h): nnx.Linear(d_model, d_z, rngs=rngs)
              for h in self.direct}) if self.direct else None
         self.d_model = d_model
