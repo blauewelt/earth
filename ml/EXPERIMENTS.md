@@ -86,6 +86,27 @@ bit-identity pinned in tests/test_e044c_knobs.py.
   the fallback build then died writing the npz on a 43 GB-free disk. Retry pinned to
   gpu-box-31479844 (tensor already present there) after #435 drains.
 
+**FINALS, 09:40Z (chain step 3).**
+
+- **A2b (#439, monthly cadence, Argo-FREE bins): 0.0729** (2.0638 / 28.3183) — twin to
+  A2a's 0.0721. **The 2x2's monthly row is uniformly monthly-class**: at 30-day steps the
+  pentad z is a sound substrate whichever representation regime supplies the states.
+  CADENCE IS THE VARIABLE, now on both cells.
+- **A3 final (#438, ml-live; run cancelled by its own job_timeout 360 at exactly 6h on
+  the 2.2x box — training finished, ladder lost): ratio 0.5665**, grad_norm spiking to
+  94.6 at 19k where the control settles at 2-3. Inversion final-grade: the Argo targets
+  STABILISE pentad training.
+- **A4 (#440, znoise 1.84) at 14k: val 22.55 / 21.45 = 1.051 — WORSE THAN PERSISTENCE**,
+  pre-clip grad_norm 215.8, with `input_znoise_rel_pers` 0.39732 confirming the rescale
+  hit E-036/E-037's measured relative sigma exactly. The monthly exposure-bias dose is
+  fatal at pentad: the 5-day z-dynamics are too weak-signal to survive noise sized on the
+  monthly regime. The roll-repair lever must be sized DOWN from the pentad one-step
+  error, not carried across as a relative constant. (Run left to finish for the record.)
+- Fleet lore bought overnight: a refused Vast start ("state change queued") can execute
+  HOURS later — check for surprise starts; the E-045 job_timeouts on the HK box needed
+  600 min, not 360; 31479844 produced its SEVENTH drain orphan (same signature, verified
+  two frames, stopped).
+
 Reading so far: encode, transform, Z, head architecture and pipeline are all healthy;
 **the 5-day step itself is the difficulty** — one-step ratio 0.505 vs 0.072 with cadence
 as the only variable. The year-roll repair that follows from this is hierarchical: roll
