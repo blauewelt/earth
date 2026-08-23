@@ -1,0 +1,8 @@
+{
+ "steps": 20000,
+ "lr": 0.001,
+ "schedule": "expdecay",
+ "stage": "stage-2",
+ "note": "E-045-A4 pentad, znoise rescaled to 1.84",
+ "published_at": "2026-08-23T05:42:52.954Z"
+}
