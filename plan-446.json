@@ -1,0 +1,8 @@
+{
+ "steps": 20000,
+ "lr": 0.001,
+ "schedule": "expdecay",
+ "stage": "stage-2",
+ "note": "E-045-A9 input-quant 8 (FSQ-style, gates E-046)",
+ "published_at": "2026-08-23T11:42:27.528Z"
+}
