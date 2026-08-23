@@ -72,6 +72,26 @@ bit-identity pinned in tests/test_e044c_knobs.py.
 | **A4** `--input-znoise 1.84` | the roll-repair lever: znoise rescaled to the pentad z-scale (0.7×2.63, restoring E-036/E-037's measured 0.3979× relative sigma) | one-step may WORSEN slightly (noise costs one-step, buys the roll) — judged by a later quick roll, not by this ratio alone |
 | **A5** `--season-dropout 0.5` | Chris's anti-calendar-memorisation idea (note: no year token exists — the season token is month-only, and the "year" is carried by the state, which is the replay channel E-043b-PHASE identified) | judged by a later roll's mode-locking, not by one-step |
 
+**INTERIM, 03:30Z 08-23 (chain step 2).** The 2x2 is resolving toward CADENCE:
+
+- **A2a (#435, monthly cadence from pentad z, Argo bins): final ratio 0.0721**
+  (z_mse 2.0339 / persistence 28.2068 at 20k) — **monthly-class**, on the same codec,
+  same z, same head, same pixels as the 0.505 control; only the step size differs.
+  The pentad z is a sound MONTHLY substrate even using the worst-recon-regime bins.
+- **A3 (#438, pentad, Argo-target windows excluded): 0.570 at 18k with grad_norm 24**
+  (control: ~0.50 and settled 2-3 by then) — the hypothesis INVERTS: the slow-density
+  Argo targets were stabilising training, not poisoning it. Removing them hurts.
+- **A2b (#437) failed on infrastructure**, twice removed from the science: a transient
+  curl (56) reset killed the tensor pull (no retry — fixed in this commit, --retry 3),
+  the fallback build then died writing the npz on a 43 GB-free disk. Retry pinned to
+  gpu-box-31479844 (tensor already present there) after #435 drains.
+
+Reading so far: encode, transform, Z, head architecture and pipeline are all healthy;
+**the 5-day step itself is the difficulty** — one-step ratio 0.505 vs 0.072 with cadence
+as the only variable. The year-roll repair that follows from this is hierarchical: roll
+at monthly stride THROUGH the pentad stack (A2a's head is exactly that object), keep the
+pentad steps for within-month detail. A4/A6/A5 still to run.
+
 Boxes: A2a/A2b on gpu-box-31479844 / gpu-box-46996216 (the stride slices X before
 nan_to_num so the 85 GB peak shrinks ~6x and 64 GB boxes suffice; strided runs re-embed
 their kept bins — 1/N of the pass — and deliberately publish nothing to the shared Z

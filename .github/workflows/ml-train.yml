@@ -589,7 +589,10 @@ jobs:
               echo "pulling pinned tensor ${TPIN:0:10} from data-cache-v1 …"
               ok=1
               for sfx in aa ab; do
-                curl -fsSL --max-time 1800 -o "$TF.$sfx.part" \
+                # --retry 3: #437 lost this pull to a single transient
+                # "curl (56) connection reset", then spent 45 min on a doomed
+                # fallback build that died on disk. One retry saves the job.
+                curl -fsSL --max-time 1800 --retry 3 --retry-delay 10 -o "$TF.$sfx.part" \
                   "https://github.com/${GITHUB_REPOSITORY}/releases/download/data-cache-v1/family3_na025_${TPIN:0:10}.npz.$sfx" \
                   || { ok=0; break; }
               done
@@ -638,7 +641,8 @@ jobs:
                 echo "pulling pinned tensor ${TPIN:0:10} from data-cache-v1 …"
                 ok=1
                 for sfx in aa ab ac; do
-                  curl -fsSL --max-time 1800 -o "$TF.$sfx.part" \
+                  # --retry 3: see the family-3 pull above (#437's lesson).
+                  curl -fsSL --max-time 1800 --retry 3 --retry-delay 10 -o "$TF.$sfx.part" \
                     "https://github.com/${GITHUB_REPOSITORY}/releases/download/data-cache-v1/family4_na025_pentad_r2_${TPIN:0:10}.npz.$sfx" \
                     || { ok=0; break; }
                 done
