@@ -821,16 +821,44 @@ def main():
         try:
             if str(dev).startswith("cuda"):
                 torch.cuda.empty_cache()
-            return trainprobe.probe_now(model, Xt, OBS, d, mvec, t_hold,
-                                        x_hold, dynamic, ocean=ocean, **kw)
+            return trainprobe.probe_now(model, Xt, OBS, _probe_d,
+                                        _probe_moy, _probe_hold,
+                                        x_hold, dynamic, ocean=ocean,
+                                        **_blkkw, **kw)
         except torch.cuda.OutOfMemoryError:            # cuda-only path
             print("  probe OOM on GPU — falling back to CPU for this one",
                   flush=True)
             torch.cuda.empty_cache()
-            m_ = trainprobe.probe_now(model.cpu(), Xt, OBS, d, mvec, t_hold,
-                                      x_hold, dynamic, ocean=ocean, **kw)
+            m_ = trainprobe.probe_now(model.cpu(), Xt, OBS, _probe_d,
+                                      _probe_moy, _probe_hold,
+                                      x_hold, dynamic, ocean=ocean,
+                                      **_blkkw, **kw)
             model.to(dev)
             return m_
+
+    # E-047: the probe path embeds through the SAME contract as the main one.
+    # #448 (2026-08-23) ran a month-block codec whose every probe raised
+    # "BLOCK codec and no block map was passed" — caught, warned and skipped,
+    # which is the RIGHT failure mode for a probe and the WRONG outcome for a
+    # run: the collapse guard eats probe values, so a run with no probes has a
+    # guard with nothing to guard on, and the end-of-run head probe cannot
+    # work either. The map is in scope exactly when --time-block is on.
+    _blkkw = ({} if BLK is None
+              else {"blk_rows": BLK.rows, "blk_pad": BLK.pad})
+    # ...AND THE AXIS THE PROBE READS MUST BE THE ONE IT EMBEDS. probe_now
+    # keys the RAPID truth, the month-of-year and the holdout mask on the
+    # rows of the Z it just built, and a block codec's Z has one row per
+    # BLOCK — so `rapid` is remapped to blocks (the same BlockAxis.remap_rows
+    # the embed path uses), `months`/`moy`/`t_hold` become the block axis's,
+    # and only the members the probe actually reads are copied (never X,
+    # which is 34 GB at pentad).
+    _probe_d, _probe_moy, _probe_hold = d, mvec, t_hold
+    if BLK is not None:
+        _probe_d = {"lats": d["lats"], "lons": d["lons"],
+                    "months": np.array(BLK.labels),
+                    "rapid": BLK.remap_rows(d["rapid"])}
+        _probe_moy = np.array([int(m[5:7]) - 1 for m in BLK.labels])
+        _probe_hold = blk_hold
 
     # ---- COLLAPSE GUARD (2026-08-18, from #387) --------------------------
     # #387 (f4-200M) trained for 27,000 steps. Its embedding died somewhere

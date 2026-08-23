@@ -478,8 +478,31 @@ def main():
             Z = np.concatenate([v_, o_], -1)
         feat_dim = Z.shape[-1]
     else:
+        # E-047: a BLOCK codec embeds GRIDS, and embed_everything refuses
+        # without the map (#448: every probe in that run raised, was caught
+        # and skipped, and the run finished with no head number at all). The
+        # map is rebuilt here from the tensor's own axis members, exactly as
+        # ml/temporal.py's embed path rebuilds it.
+        _bkw = {}
+        if int(ck.get("args", {}).get("k_time", 1) or 1) > 1:
+            import datetime as _dt
+            from timeblocks import BlockAxis
+            _tb = str(ck["args"].get("time_block", "") or "")
+            if not _tb or "bin_index" not in d:
+                raise SystemExit(
+                    "probe_head: this codec is a BLOCK codec but its blocks "
+                    "cannot be rebuilt (time_block "
+                    f"{_tb!r}, bin_index present: {'bin_index' in d}). "
+                    "Refusing to embed it one bin at a time.")
+            _ba = BlockAxis(_tb, months, d["bin_index"],
+                            _dt.date.fromisoformat(str(d["epoch"]))
+                            if "epoch" in d else None,
+                            int(np.asarray(d["pentad_days"]).item())
+                            if "pentad_days" in d else None)
+            _bkw = {"blk_rows": _ba.rows, "blk_pad": _ba.pad}
+            ctx_all = _ba.ctx_phase()
         Z, _ = embed_everything(codec, Xt, OBS, ctx_all, lats, lons,
-                                ys[sec_sel], xs[sec_sel], codec.d_z)
+                                ys[sec_sel], xs[sec_sel], codec.d_z, **_bkw)
         feat_dim = codec.d_z
     P = Z.shape[1]
     lon_frac = ((lons[xs[sec_sel]] - lons[xs[sec_sel]].min())

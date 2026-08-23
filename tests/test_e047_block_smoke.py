@@ -108,7 +108,9 @@ def main():
                 "--holdout-lon=0,0", "--collapse-r", "0"]
 
         # ---- 1. the codec trains on month blocks -------------------------
-        out = run(base + ["--time-block", "month"], "train --time-block month")
+        out = run(base + ["--time-block", "month",
+                          "--light-probe-every", "6"],
+                  "train --time-block month")
         assert "time blocks: mode 'month'" in out, out[-1500:]
         assert "k_max 7" in out and "encoder tokens per block" in out
         ck = torch.load(os.path.join(run_dir, "pixelmae.pt"),
@@ -298,7 +300,50 @@ def main():
               "offline decode stays the Tier-3 plan"
               % (n1, int(per_bin_like), *zdump.shape))
 
-        print("\nE-047 end-to-end smoke: all 6 checks hold ✓")
+        # ---- 7. the light probe FEEDS the collapse guard ----------------
+        # #448 (2026-08-23): every probe of a month-block run raised "BLOCK
+        # codec and no block map was passed", was caught, warned and skipped
+        # — the right failure mode for a probe and the wrong outcome for a
+        # run, because the collapse guard eats probe values and a run with no
+        # probes has a guard with nothing to guard on.
+        assert "no block map was passed" not in out, out[-2000:]
+        recs = [json.loads(l) for l in
+                open(os.path.join(run_dir, "metrics.jsonl")) if l.strip()]
+        lp = [r for r in recs if "linear_r_deseas" in r]
+        assert lp, ("the block run produced NO probe point at all",
+                    [sorted(r) for r in recs][:4])
+        # linear_r_RAW is the one that must be finite here: deseasonalising
+        # needs train rows in every month-of-year, and this 2-year toy loses
+        # half of them to the 1991 holdout, so `linear_r_deseas` is legitimately
+        # NaN on the fixture (the collapse guard treats NaN as "no reading").
+        # What is under test is that the probe EMBEDDED AND SCORED at all.
+        assert all(np.isfinite(r["linear_r_raw"]) for r in lp), lp
+        assert all(r.get("light_n", 0) > 0 for r in lp), lp
+        # and the refusal still fires for a caller that genuinely lacks it
+        import trainprobe as tprobe
+        from model import codec_from_ckpt as _cfc2
+        _c2 = _cfc2(ckb if False else torch.load(
+            blk_ck, map_location="cpu", weights_only=False), C)
+        try:
+            _dmin = {"lats": dd["lats"], "lons": dd["lons"],
+                     "months": np.array(["1990-01"] * 4),
+                     "rapid": np.array([[0.0, 1.0], [1.0, -1.0],
+                                        [2.0, 0.5], [3.0, -0.5]])}
+            tprobe.probe_now(_c2, torch.zeros(4, H, W, C),
+                             torch.ones(4, H, W, C, dtype=torch.bool),
+                             _dmin, np.zeros(4, int), np.zeros(4, bool),
+                             np.zeros(W, bool), list(range(C)), light=True,
+                             ocean=np.ones((H, W), bool))
+            raise AssertionError("probe_now embedded a block codec blind")
+        except ValueError as e:
+            assert "BLOCK codec" in str(e), e
+        print("7. with --time-block month the LIGHT PROBE runs rather than "
+              "skipping: %d probe point(s), linear_r_deseas %s — so the "
+              "collapse guard has something to guard on — and probe_now "
+              "still REFUSES for a caller that has no block map"
+              % (len(lp), [round(r["linear_r_raw"], 3) for r in lp][:3]))
+
+        print("\nE-047 end-to-end smoke: all 7 checks hold ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         shutil.rmtree(run_dir, ignore_errors=True)

@@ -381,7 +381,8 @@ def anomaly_transform(X, moy, t_hold, x_hold, chunk=64, verbose=None):
 
 def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
               n_pixels=600, K=12, tsteps=400, tbatch=128, seed=0, obs_in=None,
-              mask_chan=None, light=False, ocean=None):
+              mask_chan=None, light=False, ocean=None,
+              blk_rows=None, blk_pad=None):
     """All metrics for the codec AS IT IS NOW. X must already be in the
     space the codec was trained in (anomaly). Returns a flat dict.
 
@@ -458,7 +459,8 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
         tsel, inv = np.unique(rt, return_inverse=True)
         Zsec, _ = embed_everything(codec, X, obs_in, ctx_all, lats, lons,
                                    ys[sec_sel], xs[sec_sel], codec.d_z,
-                                   mask_chan=mask_chan, t_sel=tsel)
+                                   mask_chan=mask_chan, t_sel=tsel,
+                                   blk_rows=blk_rows, blk_pad=blk_pad)
         Fl = np.asarray(Zsec).mean(1)[inv]                # [len(lsel), d_z]
         out["linear_r_deseas"], _ = ridge_r(Fl, rv_des[lsel],
                                             tr_all[lsel], te_all[lsel])
@@ -500,7 +502,8 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
     keep = np.union1d(keep, sec_sel)
     kys, kxs = ys[keep], xs[keep]
     Z, coords = embed_everything(codec, X, obs_in, ctx_all, lats, lons,
-                                 kys, kxs, codec.d_z, mask_chan=mask_chan)
+                                 kys, kxs, codec.d_z, mask_chan=mask_chan,
+                                 blk_rows=blk_rows, blk_pad=blk_pad)
     P = len(kys)
     # np.union1d sorts, and section_of returns np.where(...)[0] which is
     # already sorted, so these positions come back in sec_sel's own order —
