@@ -1,0 +1,8 @@
+{
+ "steps": 200000,
+ "lr": 0.001,
+ "schedule": "cosine",
+ "stage": "stage-1",
+ "note": "E-047a month-block codec, k_max 7, d_z 64, fine-phase ctx",
+ "published_at": "2026-08-23T11:29:50.972Z"
+}
