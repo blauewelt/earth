@@ -44,6 +44,27 @@ low-pass).
 
 ---
 
+<a id="e-047"></a>
+## E-047 · The month-block codec — fusion vs selection, DISPATCHED 2026-08-23 ~12:00Z (Chris's direction: combine multiple 5-day points into one embedding, with the time labelled properly)
+
+One embedding per CALENDAR MONTH built from a 7×40 cell grid over the pentad tensor
+(k_max 7, learned within-block time-offset embeddings on both encoder cells and decoder
+queries — decision (b), one symbol one meaning; padded/missing cells ride the
+unobserved-cell path, so the mid-month Argo anchor fuses with its pentads into ONE
+uniform representation — the architectural form of the r3 Argo-fill repair), ctx carrying
+the CONTINUOUS block-centre phase (the labelling fix, at the codec level from birth).
+**Hypothesis: fusion beats selection** — the 20k stage-2 head on this z beats E-045-A2a's
+0.0721, which answered the cadence question by SELECTING one bin per month; falsifiers
+and the two deliberately-skipped per-bin evaluations are in the dispatch doc and
+`ml/plans/E047_block_codec.md`. The block axis reads as MONTHLY downstream, so the
+follow-on roll is day-matched comparable to the monthly archive while built entirely
+from 5-day inputs. E-047a = the codec retrain (#TBD, gpu-box-31479844, queued behind
+E-045-A8, ~$3.5-4); the 20k head and the `longstart:` calendar-lock read follow. Code:
+timeblocks module + wiring at 2e03913/41086a3, smoke-tested end to end on CPU;
+`time_block` is a recipe-only key (`f4r2-40M-monthblock`, d_z 64).
+
+---
+
 <a id="e-045"></a>
 ## E-045 · The pentad component ladder — six one-variable arms, DISPATCHING overnight 2026-08-22/23 (Chris's divide-and-conquer mandate, $20 envelope)
 
