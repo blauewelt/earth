@@ -86,6 +86,26 @@ bit-identity pinned in tests/test_e044c_knobs.py.
   the fallback build then died writing the npz on a 43 GB-free disk. Retry pinned to
   gpu-box-31479844 (tensor already present there) after #435 drains.
 
+**EXTENSION, 09:40–10:00Z (Chris's two directions, dispatched while he is away).**
+
+- **A7 (#441, half-month cadence — stride 3 offset 2, ~15-day steps)** and **A8 (10-day
+  cadence — stride 2 offset 0; queued behind A7 on the same box after 30257785's disk
+  filled)**: the interior points of the CADENCE LADDER. Pre-registered reading: with
+  stride 6 = 0.072/0.073 and stride 1 = 0.5056/0.50447 as the endpoints, a smooth
+  monotone interpolation (≈0.15–0.2 at 15 d, ≈0.3 at 10 d) says the 5-day difficulty is
+  INTRINSIC signal-to-noise; a cliff or non-monotonicity anywhere says some code path
+  still assumes monthly cadence — Chris's suspected hidden bug, localised by which rung
+  breaks.
+- **A9 (--input-quant 8, pentad control + FSQ-style input tokenization, dc7cf13)**: the
+  $0.6 version of Chris's capacity hypothesis — the head's input alphabet restricted to
+  8 levels/dim (3 bits/dim) with straight-through gradients, targets continuous,
+  spec+sigma riding the checkpoint so the roll honors it. Pre-registered: a one-step
+  ratio meaningfully BELOW the 0.5056 control says input compression helps and funds the
+  E-046 FSQ codec retrain (`ml/plans/E046_fsq_codec.md`, specced and priced ~$9 to a
+  first verdict); parity or worse says the capacity story is weaker than it looks and
+  E-046 waits. Takes the A5 slot on the HK chain (season-dropout defers — its readout
+  needs a roll; Chris's active direction outranks it).
+
 **FINALS, 09:40Z (chain step 3).**
 
 - **A2b (#439, monthly cadence, Argo-FREE bins): 0.0729** (2.0638 / 28.3183) — twin to
