@@ -1,0 +1,8 @@
+{
+ "steps": 200000,
+ "lr": 0.001,
+ "schedule": "cosine",
+ "stage": "stage-1",
+ "note": "E-047a month-block codec 40M d_z64, fresh box 42005419",
+ "published_at": "2026-08-23T15:37:37.604Z"
+}
