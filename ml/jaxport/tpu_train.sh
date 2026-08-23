@@ -9,6 +9,16 @@
 #       ml/jaxport/tpu_train.sh > /tmp/t.sh
 #   python3 scripts/tpu_box.py create codec-a --spot --startup-file /tmp/t.sh
 #
+# A STARTUP SCRIPT INHERITS NO ENVIRONMENT FROM THE MACHINE THAT LAUNCHED IT.
+# The `${STEPS:-60000}` forms in the knobs block below therefore always take
+# their DEFAULTS on a node; the `${VAR:-…}` spelling is there so the file can
+# also be sourced or run locally with overrides while it is being tested. To
+# change a knob for a real run, sed it in the same call as __BUCKET__:
+#
+#       -e 's|^STEPS=.*|STEPS="200000"|' -e 's|^PATCH=.*|PATCH="1"|'
+#
+# and read the launch log back: the script prints every knob it resolved.
+#
 # ──────────────────────────────────────────────────────────────────────────
 # THERE IS NO CHEAP STOPPED STATE. DELETE IS THE NORMAL END.
 #
@@ -208,6 +218,14 @@ disown
 
 echo "=== tpu_train ${STAMP} · node ${NODE} · bucket ${BUCKET} ==="
 echo "lifecycle: ship every ${SHIP_EVERY_MIN} min · stall watchdog ${STALL_MIN} min · hard cap ${HARD_CAP_HOURS} h"
+# EVERY KNOB, RESOLVED, in one line. A startup script inherits no environment,
+# so "I set STEPS=200000 when I launched it" is a claim about the launching
+# shell and not about this node; this is the line that settles it.
+echo "resolved knobs: steps ${STEPS} · batch ${BATCH} · lr ${LR} · d_z ${D_Z}" \
+     "· patch ${PATCH} · ${D_MODEL}x${N_LAYERS} heads ${N_HEADS} · d_dec" \
+     "${D_DEC} · holdout_lon ${HOLDOUT_LON} · time_block '${TIME_BLOCK}' ·" \
+     "light_probe_every ${LIGHT_PROBE_EVERY} · ckpt_every ${CKPT_EVERY} ·" \
+     "extra '${EXTRA_ARGS}'"
 
 # --------------------------------------------------------------------------
 # 1 · what this host actually is
