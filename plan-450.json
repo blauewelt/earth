@@ -1,0 +1,8 @@
+{
+ "steps": 200000,
+ "lr": 0.001,
+ "schedule": "cosine",
+ "stage": "stage-1",
+ "note": "E-047a retry, batch 128 (OOM fix), probe block-map plumbed",
+ "published_at": "2026-08-23T16:30:53.364Z"
+}
