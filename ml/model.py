@@ -32,11 +32,24 @@ import torch.nn as nn
 
 class PixelMAE(nn.Module):
     def __init__(self, n_chan, d_model=128, n_heads=4, n_layers=4,
-                 d_z=32, d_dec=256, max_abs_offset=3, patch=1, dec_layers=2):
+                 d_z=32, d_dec=256, max_abs_offset=3, patch=1, dec_layers=2,
+                 k_time=1):
         super().__init__()
         self.n_chan = n_chan
         self.d_z = d_z
         self.max_off = max_abs_offset
+        # E-047 TIME BLOCKS. k_time = 1 is the per-bin codec every archived
+        # checkpoint is, and it adds NO parameter and NO branch that runs:
+        # `time_emb` is created only when k_time > 1, so a k_time=1 model's
+        # state_dict is key-for-key what it has always been. k_time > 1 makes
+        # the encoder's input a k_time x C GRID of cells — one month of pentad
+        # bins, say — whose cell token is the channel embedding plus a learned
+        # WITHIN-BLOCK TIME-OFFSET embedding, so the encoder can tell the 3rd
+        # pentad of the month from the 5th. Missing and PAD cells go through
+        # the existing miss_tok path unchanged, which is the whole design:
+        # Argo present in one bin of six is not a special case, it is six
+        # cells of which five are unobserved.
+        self.k_time = int(k_time)
         # patch=1: one value per channel token (the pilot design).
         # patch=3: each channel token carries its 3x3 neighbourhood — 9
         # values + 9 observed flags through one projection. Same token
@@ -50,6 +63,8 @@ class PixelMAE(nn.Module):
         self.val_proj = (nn.Linear(1, d_model) if patch == 1
                          else nn.Linear(2 * p2, d_model))
         self.chan_emb = nn.Embedding(n_chan, d_model)
+        if self.k_time > 1:
+            self.time_emb = nn.Embedding(self.k_time, d_model)
         self.mask_tok = nn.Parameter(torch.zeros(d_model))     # channel masked by US
         self.miss_tok = nn.Parameter(torch.zeros(d_model))     # channel unobserved in the DATA
         self.cls_tok = nn.Parameter(torch.zeros(d_model))
@@ -124,6 +139,30 @@ class PixelMAE(nn.Module):
                               self.ctx_proj(ctx).unsqueeze(1), vt], dim=1)
             h = self.encoder(toks)
             return self.to_z(h[:, 0])
+        if self.k_time > 1:
+            # x, obs, mask [B, k_time, C] -> [B, k_time*C] tokens, cell (j, c)
+            # carrying chan_emb[c] + time_emb[j]. Flattened j-major so a
+            # reader of the attention map sees each bin's channels together.
+            B, KT, C = x.shape
+            assert KT == self.k_time, (KT, self.k_time)
+            x = x.reshape(B, KT * C)
+            obs = obs.reshape(B, KT * C)
+            mask = mask.reshape(B, KT * C)
+            ce = (self.chan_emb.weight[None, None, :, :]
+                  + self.time_emb.weight[None, :, None, :]).reshape(
+                      1, KT * C, -1).expand(B, -1, -1)
+            vt = self.val_proj(x.unsqueeze(-1)) + ce
+            vt = torch.where((obs & ~mask).unsqueeze(-1), vt,
+                             torch.zeros_like(vt))
+            vt = vt + torch.where((obs & mask).unsqueeze(-1),
+                                  self.mask_tok.expand(B, KT * C, -1) + ce,
+                                  torch.zeros_like(vt))
+            vt = vt + torch.where((~obs).unsqueeze(-1),
+                                  self.miss_tok.expand(B, KT * C, -1) + ce,
+                                  torch.zeros_like(vt))
+            toks = torch.cat([self.cls_tok.expand(B, 1, -1),
+                              self.ctx_proj(ctx).unsqueeze(1), vt], dim=1)
+            return self.to_z(self.encoder(toks)[:, 0])
         B, C = x.shape
         ce = self.chan_emb.weight[None, :, :].expand(B, -1, -1)
         vt = self.val_proj(x.unsqueeze(-1)) + ce
@@ -227,6 +266,7 @@ def codec_from_ckpt(ck, n_chan):
     the size knobs, so every .get() default is the pilot architecture."""
     a = ck.get("args", {})
     return PixelMAE(n_chan=n_chan, d_z=ck["d_z"],
+                    k_time=int(a.get("k_time", 1) or 1),
                     patch=a.get("patch", 1),
                     d_model=a.get("d_model", 128),
                     n_layers=a.get("n_layers", 4),
