@@ -137,7 +137,12 @@ bit-identity pinned in tests/test_e044c_knobs.py.
   the 2.2x box — training finished, ladder lost): ratio 0.5665**, grad_norm spiking to
   94.6 at 19k where the control settles at 2-3. Inversion final-grade: the Argo targets
   STABILISE pentad training.
-- **A4 (#440, znoise 1.84) at 14k: val 22.55 / 21.45 = 1.051 — WORSE THAN PERSISTENCE**,
+- **A4 FINAL (#440, znoise 1.84): 0.8145** (17.3128 / 21.2544) — recovered from 1.051
+  mid-run but still catastrophic against the 0.5056 control: the E-036/E-037 relative
+  dose (0.3973x, confirmed on target in-run) is REFUTED as a transferable constant at
+  pentad; any pentad exposure-bias noise needs its own calibration, and the window
+  between "helps the roll" and "drowns the one-step signal" is far narrower here.
+  (Interim record: at 14k it read 1.051 — worse than persistence,
   pre-clip grad_norm 215.8, with `input_znoise_rel_pers` 0.39732 confirming the rescale
   hit E-036/E-037's measured relative sigma exactly. The monthly exposure-bias dose is
   fatal at pentad: the 5-day z-dynamics are too weak-signal to survive noise sized on the
