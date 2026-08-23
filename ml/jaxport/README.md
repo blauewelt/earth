@@ -66,9 +66,38 @@ Three things worth knowing before reading the code:
   inside G3 would fold two independent differences into one number and G3
   would stop isolating the rollout.
 
+## What is ported (tier 3, stage-1 only)
+
+| here | mirrors |
+|---|---|
+| `train_stage1.py` | `ml/train.py`'s stage-1 path: masking recipe, `loss_rec` + `loss_nei` at the same weighting, cosine (+ `--lr-floor` / `--lr-decay-steps`) in optax, the `--max-minutes` refit, the collapse guard, light probes, milestone checkpoints and resume, `--time-block`, and `metrics.jsonl` with THE SAME KEYS |
+| `convert.export_pt` | the REVERSE direction — NNX → a `.pt` blob the UNCHANGED torch stack loads (`JAX_PORT.md` §1b: a TPU-trained codec is scored by the torch eval ladder, not by a second scoreboard) |
+| `models.PixelMAE(k_time=…)` | `ml/model.py`'s E-047 block codec: the `k_time × C` cell grid, `time_emb`, and `query`'s own `q_time` embedding with `tpos` REQUIRED |
+| `tpu_train.sh` | a real training launch, modelled on `tpu_smoke.sh` — periodic checkpoint/metrics shipping to `gs://<bucket>/runs/<node>/`, resume from the bucket, a PROGRESS watchdog (no new checkpoint object for 90 min → reap) and a 30 h hard cap |
+
+Stage-1 features `ml/train.py` has and this deliberately does not:
+
+- **`--eval-every` (the FULL probe) REFUSES.** Its second half trains a mini
+  `TemporalTransformer` inside the probe, which is stage-2 machinery. Running
+  the light probe under the full probe's flag would put a different estimator
+  into the archive under a name that already means something.
+- **`plot_run`** — a matplotlib rendering, not an arithmetic step.
+- **warmup and gradient clipping exist here as `--warmup-steps` /
+  `--grad-clip`, both DEFAULT OFF**, because `ml/train.py` stage-1 has neither
+  and the default trajectory must be the torch one. There is no EMA and no
+  gradient accumulation on either side.
+
+`train_stage1.py` **imports** the shared numpy plumbing (`anomaly_transform`,
+`ridge_r`, `rapid_section`, `light_rows`, `lon_holdout_mask`, `fit_schedule`,
+`obs_any_chunked`, `pool_idx`, `LazyPixels`) rather than copying it, per
+`ml/CLAUDE.md`. Those helpers are pure numpy but live in modules that import
+torch, so **this driver needs a CPU torch wheel** — the same wheel
+`jaxport.convert` already needs to read a `.pt`. `models.py` and `convert.py`
+themselves still import no torch at module scope.
+
 Not ported yet: `MultiDec` (`ml/recon_decoder.py`), the head fold-fit, the
-transport read-out (`fit_ridge`/`read_sv`) and the band correlations, and the
-trainers (tier 3).
+transport read-out (`fit_ridge`/`read_sv`), the band correlations, and the
+STAGE-2 trainer.
 
 ## Running the parity tests
 
@@ -76,6 +105,7 @@ trainers (tier 3).
 python3 tests/test_jaxport_parity.py      # tier 1 — CPU, fp32, exits 0/1
 python3 tests/test_jaxport_embed.py       # tier 2 embedding path, synthetic
 python3 tests/test_jaxport_roll.py        # tier 2 rollout path, synthetic
+python3 tests/test_jaxport_train.py       # tier 3 gates G4a-G4e, synthetic
 ```
 
 None of them needs the tensor or a checkpoint.
@@ -86,6 +116,18 @@ the head's single forward, and what a roll adds is compounding. It covers
 stencil 1 and stencil 9, pins the `[n,S,K,dz] → [n,K,S·dz]` gather against
 `temporal.gather_stencil` itself (centre slot first, missing slots
 zero-filled), pins the chunk byte budget, and checks that `amp=True` refuses.
+
+`test_jaxport_train.py` is the tier-3 gate set: **G4a** loss parity (identical
+weights, batch and mask → `loss_rec`/`loss_nei` agree to 1e-5 at patch 1,
+patch 3 and k_time 7), **G4b** one-step parity (plain SGD lr 1e-2 →
+max |Δweight| < 1e-6; AdamW → 2e-5 over all parameters and 1e-6 over the
+entries where |g| > 1e-6, because Adam's first update is ~sign(g) and is
+therefore hypersensitive where a gradient is near zero), **G4c** 300 toy steps
+of the REAL `ml/train.py` against 300 of `train_stage1.py` (a band, not an
+equality — the RNG streams cannot match), **G4d** the export round trip
+(torch→jax→torch state_dicts IDENTICAL; a JAX codec exported to `.pt` and
+re-encoded under torch matches to 1e-5) and **G4e** k_time=7 forward parity
+plus the converter's refusals across the k_time boundary.
 
 Six checks: the shared encoder layer (plain and causal), PixelMAE at patch 1
 and patch 3 (including the float16-widening path), TemporalTransformer at

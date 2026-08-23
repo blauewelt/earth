@@ -100,18 +100,41 @@ def _encode_fn():
 
 
 def embed_everything_jax(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
-                         batch=8192, mask_chan=None, progress=None):
+                         batch=8192, mask_chan=None, progress=None,
+                         t_sel=None, blk_rows=None, blk_pad=None, quiet=False):
     """Frozen-codec embeddings for every (t, pixel in ys/xs): [T, P, d_z].
 
     Same signature, same semantics and the same float16 output convention as
     `ml/temporal.py:embed_everything`, minus the disk cache (see the module
     docstring). Returns `(Z, coords)`; `coords` is [P,2] float32, lat/90 and
     lon/180, which is what the context token's last two slots carry.
+
+    `t_sel` EMBEDS ONLY THE TIMESTEPS ASKED FOR and returns [len(t_sel), P,
+    d_z] in that order — the in-training light probe reads ~46% of the rows
+    and used to pay for all of them. Every timestep is an independent forward
+    (the loop has no state that crosses `t`), so the rows that come back are
+    bit-identical to the corresponding rows of a full pass.
+
+    `blk_rows`/`blk_pad` are E-047's block map (`ml/timeblocks.py:BlockAxis`)
+    and are REQUIRED by a k_time > 1 codec: embedding a block codec one bin at
+    a time would silently produce embeddings of a different thing than it was
+    trained on, which is why the torch original raises on the same condition
+    rather than falling back.
     """
     T, H, W, C = X.shape
     P = len(ys)
+    if getattr(model, "k_time", 1) > 1:
+        if blk_rows is None:
+            raise ValueError(
+                "embed_everything_jax: this codec is a BLOCK codec (k_time="
+                f"{model.k_time}) and no block map was passed. Embedding it "
+                "one bin at a time would silently produce embeddings of a "
+                "different thing than it was trained on.")
+        T = len(blk_rows)                      # the BLOCK axis is the axis
+    ts = np.arange(T) if t_sel is None else np.asarray(t_sel, np.int64)
+    T_out = len(ts)
     coords = np.stack([lats[ys] / 90, lons[xs] / 180], 1).astype(np.float32)
-    out = np.zeros((T, P, d_z), dtype=CACHE_DTYPE)
+    out = np.zeros((T_out, P, d_z), dtype=CACHE_DTYPE)
     patch = getattr(model, "patch", 1)
     enc = _encode_fn()
 
@@ -126,17 +149,19 @@ def embed_everything_jax(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
 
     t_emb = time.time()
     next_mark = 0.0
-    for t in range(T):
-        frac = (t + 1) / T
+    for i_out in range(T_out):
+        t = int(ts[i_out])
+        frac = (i_out + 1) / T_out
         if frac >= next_mark:
             el = time.time() - t_emb
             eta = el / frac - el if frac > 0 else 0
-            print(f"  embedding {frac * 100:5.1f}%  month {t + 1}/{T}  "
-                  f"{el / 60:.0f} min elapsed, ~{eta / 60:.0f} min left",
-                  flush=True)
+            if not quiet:
+                print(f"  embedding {frac * 100:5.1f}%  month "
+                      f"{i_out + 1}/{T_out}  {el / 60:.0f} min elapsed, "
+                      f"~{eta / 60:.0f} min left", flush=True)
             if progress:
-                progress({"pct": round(frac * 100, 1), "month": t + 1,
-                          "months": T, "elapsed_s": round(el),
+                progress({"pct": round(frac * 100, 1), "month": i_out + 1,
+                          "months": T_out, "elapsed_s": round(el),
                           "eta_s": round(eta), "where": "ram"})
             next_mark = frac + 0.05
         for i in range(0, P, batch):
@@ -153,6 +178,19 @@ def embed_everything_jax(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                 # here and the mask token is applied inside `encode`. Doing
                 # only one of the two is a silent half-mask.
                 v = v * (~mk)[..., None]
+            elif getattr(model, "k_time", 1) > 1:
+                # E-047 BLOCK CODEC. `t` indexes the BLOCK axis and
+                # `blk_rows[t]` names its source rows; the grid is assembled at
+                # FULL VISIBILITY exactly as the per-bin path is, with pad
+                # cells forced unobserved.
+                rr = blk_rows[t]
+                v = np.stack([np.asarray(X[int(r), ys[sl], xs[sl]])
+                              for r in rr], 1)
+                o = np.stack([np.asarray(OBS[int(r), ys[sl], xs[sl]])
+                              for r in rr], 1)
+                o = o & (~np.asarray(blk_pad[t]))[None, :, None]
+                mk = np.zeros_like(o)
+                v = v * ~mk
             else:
                 v = np.asarray(X[t, ys[sl], xs[sl]]) * (~mk)
                 o = np.asarray(OBS[t, ys[sl], xs[sl]])
@@ -160,5 +198,5 @@ def embed_everything_jax(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                     jnp.asarray(mk), ctx_j)
             # np.asarray(z) is float32; the store rounds to CACHE_DTYPE, which
             # is where — and only where — the torch original rounds too.
-            out[t, sl] = np.asarray(z)
+            out[i_out, sl] = np.asarray(z)
     return out, coords

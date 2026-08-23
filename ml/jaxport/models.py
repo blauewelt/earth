@@ -168,17 +168,28 @@ class PixelMAE(nnx.Module):
 
     def __init__(self, n_chan, d_model=128, n_heads=4, n_layers=4,
                  d_z=32, d_dec=256, max_abs_offset=3, patch=1, dec_layers=2,
-                 *, rngs=None):
+                 k_time=1, *, rngs=None):
         rngs = rngs if rngs is not None else nnx.Rngs(0)
         self.n_chan = n_chan
         self.d_z = d_z
         self.max_off = max_abs_offset
+        # E-047 TIME BLOCKS, mirroring ml/model.py exactly: k_time == 1 adds NO
+        # parameter and NO branch that runs, so a k_time=1 model's pytree is
+        # key-for-key what it has always been and tier 1's forward parity is
+        # untouched. k_time > 1 makes the encoder's input a k_time x C GRID of
+        # cells whose token is chan_emb[c] + time_emb[j].
+        self.k_time = int(k_time)
         self.patch = patch
         p2 = patch * patch
 
         self.val_proj = nnx.Linear(1 if patch == 1 else 2 * p2, d_model,
                                    rngs=rngs)
         self.chan_emb = nnx.Embed(n_chan, d_model, rngs=rngs)
+        # Created ONLY when k_time > 1 — the torch module does the same, and
+        # the converter's refusal contract is what turns "created only when"
+        # into a checked property rather than a hoped-for one.
+        self.time_emb = (nnx.Embed(self.k_time, d_model, rngs=rngs)
+                         if self.k_time > 1 else None)
         # Bare parameters, not modules — torch keys are `mask_tok` etc.
         self.mask_tok = nnx.Param(jnp.zeros((d_model,)))
         self.miss_tok = nnx.Param(jnp.zeros((d_model,)))
@@ -191,11 +202,17 @@ class PixelMAE(nnx.Module):
 
         self.q_chan = nnx.Embed(n_chan, 64, rngs=rngs)
         self.q_off = nnx.Embed(2 * max_abs_offset + 1, 16, rngs=rngs)
+        # E-047 option (b): WITHIN-BLOCK POSITION GETS ITS OWN QUERY EMBEDDING
+        # rather than reusing `off`'s dt slot, so one index never means two
+        # things. `off`'s dt keeps meaning BLOCKS.
+        self.q_time = (nnx.Embed(self.k_time, 16, rngs=rngs)
+                       if self.k_time > 1 else None)
         # torch builds this as an nn.Sequential of Linear/GELU pairs, so the
         # LINEARS sit at even indices 0, 2, 4 ... and the converter keys off
         # that. dec_layers counts HIDDEN layers.
         self.dec_layers = dec_layers
-        dims = [d_z + 64 + 3 * 16] + [d_dec] * dec_layers
+        dims = [d_z + 64 + 3 * 16 + (16 if self.k_time > 1 else 0)] \
+            + [d_dec] * dec_layers
         self.decoder = _nnx_data([nnx.Linear(dims[i], dims[i + 1], rngs=rngs)
                                  for i in range(dec_layers)]
                                 + [nnx.Linear(d_dec, 1, rngs=rngs)])
@@ -218,7 +235,8 @@ class PixelMAE(nnx.Module):
         return jnp.concatenate([cls, self.ctx_proj(ctx)[:, None, :], vt], axis=1)
 
     def encode(self, x, obs, mask, ctx):
-        """patch=1: x, obs [B,C] · patch>1: x, obs [B,C,patch²]
+        """patch=1: x, obs [B,C] · patch>1: x, obs [B,C,patch²] ·
+        k_time>1: x, obs, mask [B,k_time,C]
         mask [B,C] bool · ctx [B,4] → z [B,d_z]."""
         # WIDEN THE INPUT TO THE WEIGHTS' DTYPE, at the top of encode, for the
         # same reason ml/model.py does it here rather than at the six call
@@ -230,28 +248,60 @@ class PixelMAE(nnx.Module):
             x = x.astype(wdt)
         if ctx.dtype != wdt:
             ctx = ctx.astype(wdt)
-        ce = jnp.broadcast_to(self.chan_emb.embedding.value[None, :, :],
-                              (x.shape[0], self.n_chan,
-                               self.chan_emb.embedding.value.shape[1]))
+        cw = self.chan_emb.embedding.value
         if self.patch > 1:
             B, C, P2 = x.shape
+            ce = jnp.broadcast_to(cw[None, :, :], (B, self.n_chan, cw.shape[1]))
             feat = jnp.concatenate([x * obs, obs.astype(x.dtype)], axis=-1)
             vt = self.val_proj(feat) + ce
             obs = obs[..., P2 // 2]        # the CENTER cell defines the channel
+        elif self.k_time > 1:
+            # x, obs, mask [B, k_time, C] -> [B, k_time*C] tokens, cell (j, c)
+            # carrying chan_emb[c] + time_emb[j]. Flattened j-major, exactly as
+            # ml/model.py does it, so the two token orders cannot diverge.
+            B, KT, C = x.shape
+            if KT != self.k_time:
+                raise ValueError(f"encode: input has {KT} cells on the time "
+                                 f"axis but this codec is k_time={self.k_time}")
+            x = x.reshape(B, KT * C)
+            obs = obs.reshape(B, KT * C)
+            mask = mask.reshape(B, KT * C)
+            ce = jnp.broadcast_to(
+                (cw[None, None, :, :]
+                 + self.time_emb.embedding.value[None, :, None, :]
+                 ).reshape(1, KT * C, cw.shape[1]),
+                (B, KT * C, cw.shape[1]))
+            vt = self.val_proj(x[..., None]) + ce
+            C = KT * C
         else:
             B, C = x.shape
+            ce = jnp.broadcast_to(cw[None, :, :], (B, self.n_chan, cw.shape[1]))
             vt = self.val_proj(x[..., None]) + ce
         toks = self._tokens(vt, ce, obs, mask, ctx, B, C)
         h = self.encoder(toks)
         return self.to_z(h[:, 0])
 
-    def query(self, z, chan_idx, off):
-        """z [B,d_z] · chan_idx [B,Q] · off [B,Q,3] ints in [-max,max] → [B,Q]."""
+    def query(self, z, chan_idx, off, tpos=None):
+        """z [B,d_z] · chan_idx [B,Q] · off [B,Q,3] ints in [-max,max] → [B,Q].
+
+        `tpos` [B,Q] is the WITHIN-BLOCK cell position and is required exactly
+        when k_time > 1 — a block codec asked for "channel c" without saying
+        WHICH CELL would be answering a question with no answer, so it raises
+        rather than picking one (ml/model.py:query says the same in the same
+        words)."""
         B, Q = chan_idx.shape
         qc = self.q_chan(chan_idx)
         qo = self.q_off(off + self.max_off).reshape(B, Q, -1)
         zq = jnp.broadcast_to(z[:, None, :], (B, Q, z.shape[-1]))
-        h = jnp.concatenate([zq, qc, qo], axis=-1)
+        parts = [zq, qc, qo]
+        if self.k_time > 1:
+            if tpos is None:
+                raise ValueError(
+                    f"query(): this codec has k_time={self.k_time}, so every "
+                    f"query names a cell (tpos [B,Q] in 0..{self.k_time - 1}) "
+                    f"as well as a channel")
+            parts.append(self.q_time(tpos))
+        h = jnp.concatenate(parts, axis=-1)
         for lin in self.decoder[:-1]:
             h = gelu_exact(lin(h))        # nn.GELU() — the erf form
         return self.decoder[-1](h)[..., 0]

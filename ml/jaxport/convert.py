@@ -1,7 +1,18 @@
-"""torch → JAX weight conversion for the tier-1 models.
+"""torch ↔ JAX weight conversion for the tier-1 models.
 
-One direction only (`ml/plans/JAX_PORT.md` §6): tiers 1–2 need to READ the
-published artefacts, never to write them.
+**Both directions, since tier 3.** Tiers 1–2 only ever needed to READ the
+published artefacts (`ml/plans/JAX_PORT.md` §6 deferred the reverse). Tier 3
+trains on a TPU, and §1b names the cheap validation of a TPU-trained codec
+explicitly: *convert it back and score it through the UNCHANGED torch eval
+ladder*. That is what `export_pt` is for, and it is the only reason it exists —
+nothing in the operational tree is asked to change, and no torch script learns
+about JAX. The artefact a JAX run hands over is an ordinary `.pt` blob with the
+ordinary `model`/`args`/`d_z`/`chan`/`norm` keys, which `codec_from_ckpt` and
+all twelve eval scripts read exactly as they read a GPU-trained one.
+
+The round trip is a GATE, not an aspiration: `tests/test_jaxport_train.py`
+(G4d) converts a torch state_dict → NNX → back and requires the two
+state_dicts to be **identical**, key set and values alike.
 
 The contract every loader here honours, and the reason the file is written
 this way: **a partial load must be impossible.** A checkpoint whose keys
@@ -137,6 +148,13 @@ def load_pixelmae(state_dict, model):
     c = _Consumer(dict(state_dict), "load_pixelmae")
     _linear(model.val_proj, c, "val_proj")
     _embed(model.chan_emb, c, "chan_emb.weight")
+    # E-047: `time_emb` and `q_time` exist in the torch module ONLY when
+    # k_time > 1, so they are asked for on exactly the same condition. The
+    # refusal contract then does the rest in both directions: a k_time=1 model
+    # handed a block checkpoint refuses on the unconsumed `time_emb.weight`,
+    # and a block model handed a per-bin checkpoint refuses on the missing one.
+    if model.k_time > 1:
+        _embed(model.time_emb, c, "time_emb.weight")
     _param(model.mask_tok, c, "mask_tok")
     _param(model.miss_tok, c, "miss_tok")
     _param(model.cls_tok, c, "cls_tok")
@@ -145,6 +163,8 @@ def load_pixelmae(state_dict, model):
     _linear(model.to_z, c, "to_z")
     _embed(model.q_chan, c, "q_chan.weight")
     _embed(model.q_off, c, "q_off.weight")
+    if model.k_time > 1:
+        _embed(model.q_time, c, "q_time.weight")
     # nn.Sequential(Linear, GELU, Linear, GELU, ..., Linear): the LINEARS are
     # at even indices, the GELUs (parameterless) at odd ones.
     for i, lin in enumerate(model.decoder):
@@ -182,6 +202,129 @@ def load_section_head(state_dict, model):
     return model
 
 
+# --------------------------------------------------------------------------
+# the REVERSE direction: NNX → a torch state_dict the unchanged torch model
+# loads. See the module docstring for why it exists.
+# --------------------------------------------------------------------------
+def _np(x):
+    """A JAX array as a contiguous float32 numpy array.
+
+    float32 EXPLICITLY: a checkpoint written from a bf16 training run would
+    otherwise hand the torch eval ladder bf16 weights, and every published
+    number was produced against float32 ones. Widening is exact; it is the
+    silent narrowing that would move numbers.
+    """
+    # A COPY, not a view: `np.asarray` of a JAX array borrows read-only
+    # memory, and `torch.from_numpy` on that warns and hands back a tensor
+    # whose writes are undefined behaviour. A checkpoint is exactly the object
+    # nobody wants to discover that on.
+    return np.array(np.asarray(x), dtype=np.float32, order="C", copy=True)
+
+
+class _Emitter:
+    """The mirror of `_Consumer`: it records every key it WRITES so the export
+    can be checked against the torch module's own key set, rather than trusted.
+    """
+
+    def __init__(self, what):
+        self.what = what
+        self.sd = {}
+
+    def put(self, key, value):
+        if key in self.sd:
+            raise KeyError(f"{self.what}: {key!r} emitted twice")
+        self.sd[key] = _np(value)
+
+
+def _emit_linear(src, e, prefix):
+    """Flax kernel [in, out] → torch Linear.weight [out, in]."""
+    e.put(prefix + ".weight", src.kernel.value.T)
+    e.put(prefix + ".bias", src.bias.value)
+
+
+def _emit_layernorm(src, e, prefix):
+    e.put(prefix + ".weight", src.scale.value)
+    e.put(prefix + ".bias", src.bias.value)
+
+
+def _emit_attention(src, e, prefix):
+    """q, k, v → one packed `in_proj_weight` [3d, d], IN THAT ORDER."""
+    e.put(prefix + ".in_proj_weight",
+          np.concatenate([_np(lin.kernel.value.T) for lin in
+                          (src.q_proj, src.k_proj, src.v_proj)], axis=0))
+    e.put(prefix + ".in_proj_bias",
+          np.concatenate([_np(lin.bias.value) for lin in
+                          (src.q_proj, src.k_proj, src.v_proj)], axis=0))
+    _emit_linear(src.out_proj, e, prefix + ".out_proj")
+
+
+def _emit_encoder(src, e, prefix):
+    for i, lyr in enumerate(src.layers):
+        p = f"{prefix}.layers.{i}" if prefix else f"layers.{i}"
+        _emit_attention(lyr.self_attn, e, p + ".self_attn")
+        _emit_linear(lyr.linear1, e, p + ".linear1")
+        _emit_linear(lyr.linear2, e, p + ".linear2")
+        _emit_layernorm(lyr.norm1, e, p + ".norm1")
+        _emit_layernorm(lyr.norm2, e, p + ".norm2")
+
+
+def export_pixelmae(model):
+    """NNX PixelMAE → an ORDERED dict of numpy arrays in torch's key order.
+
+    Key order matters only cosmetically (torch's `load_state_dict` is keyed,
+    not positional), but emitting in the module's own construction order makes
+    a diff of two state_dicts readable, and the ordering is the same one
+    `load_pixelmae` consumes in — one list, read forwards and backwards.
+    """
+    e = _Emitter("export_pixelmae")
+    _emit_linear(model.val_proj, e, "val_proj")
+    e.put("chan_emb.weight", model.chan_emb.embedding.value)
+    if model.k_time > 1:
+        e.put("time_emb.weight", model.time_emb.embedding.value)
+    e.put("mask_tok", model.mask_tok.value)
+    e.put("miss_tok", model.miss_tok.value)
+    e.put("cls_tok", model.cls_tok.value)
+    _emit_linear(model.ctx_proj, e, "ctx_proj")
+    _emit_encoder(model.encoder, e, "encoder")
+    _emit_linear(model.to_z, e, "to_z")
+    e.put("q_chan.weight", model.q_chan.embedding.value)
+    e.put("q_off.weight", model.q_off.embedding.value)
+    if model.k_time > 1:
+        e.put("q_time.weight", model.q_time.embedding.value)
+    for i, lin in enumerate(model.decoder):
+        _emit_linear(lin, e, f"decoder.{2 * i}")
+    return e.sd
+
+
+def export_pt(model, args, path=None, **extra):
+    """A `.pt` blob the UNCHANGED torch stack loads: `{model, args, d_z, ...}`.
+
+    `args` is the run's own argument namespace (a dict, or anything `vars()`
+    accepts) — the same `vars(a)` that `ml/train.py:save_ckpt` writes, because
+    `codec_from_ckpt` and the twelve eval scripts read the architecture out of
+    exactly that field. Extra top-level keys (`chan`, `norm`, `step`, `tag`)
+    are passed through as-is so the artefact is indistinguishable in SHAPE
+    from a GPU-trained one; it is distinguishable in PROVENANCE, which is the
+    point — `args["backend"]` says `jax` and `ml/CLAUDE.md` §3b makes a
+    TPU-trained number a new tier that buys its own replication.
+
+    Returns the blob. With `path`, also `torch.save`s it (torch is imported
+    HERE, function-locally, so importing this module still needs no torch).
+    """
+    import torch                                   # local: JAX users need not
+    if not isinstance(args, dict):
+        args = dict(vars(args))
+    else:
+        args = dict(args)
+    args.setdefault("backend", "jax")
+    sd = {k: torch.from_numpy(v) for k, v in export_pixelmae(model).items()}
+    blob = {"model": sd, "args": args, "d_z": int(model.d_z)}
+    blob.update(extra)
+    if path is not None:
+        torch.save(blob, path)
+    return blob
+
+
 def codec_from_ckpt_jax(ck, n_chan):
     """`ml/model.py:codec_from_ckpt`, for the NNX PixelMAE.
 
@@ -192,6 +335,7 @@ def codec_from_ckpt_jax(ck, n_chan):
     """
     a = ck.get("args", {})
     model = PixelMAE(n_chan=n_chan, d_z=ck["d_z"],
+                     k_time=int(a.get("k_time", 1) or 1),
                      patch=a.get("patch", 1),
                      d_model=a.get("d_model", 128),
                      n_layers=a.get("n_layers", 4),

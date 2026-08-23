@@ -1,8 +1,44 @@
 # JAX port — effort assessment
 
-**Status: TIER 1 LANDED, TIER 2 EMBEDDING PATH LANDED (2026-08-21).**
-§§2–6 are the original assessment. `ml/jaxport/` holds the models, the
-converter and `embed_everything_jax`. Gates so far:
+**Status: TIER 1 LANDED, TIER 2 EMBEDDING PATH LANDED (2026-08-21), TIER 3
+STAGE-1 LANDED (2026-08-23).** §§2–6 are the original assessment.
+`ml/jaxport/` holds the models, the two-way converter, `embed_everything_jax`,
+the rollout slice, and now `train_stage1.py` + `tpu_train.sh`. Gates so far:
+
+- **G4 PASSED (stage-1 only), and it is five gates rather than the one §5
+  pre-registered** — a from-scratch toy run tracking the torch curve is the
+  WEAKEST of the five and would not have caught a wrong mask weighting, so it
+  is G4c and the other four sit around it. Measured 2026-08-23, CPU, fp32:
+  **G4a** loss parity — identical converted weights, batch and mask → torch
+  and jax `loss_rec`/`loss_nei` agree to **2.7e-7** (gate 1e-5) at patch 1,
+  patch 3 and k_time 7; **G4b** one-step parity — plain SGD at lr 1e-2 gives
+  max |Δweight| **7.5e-9** (gate 1e-6), AdamW gives **6.3e-6** over all
+  parameters (gate 2e-5) and **2.4e-7** over the 25,655 entries with
+  |g| > 1e-6 (gate 1e-6); **G4c** 300 toy steps — `loss_rec` falls **2.082×**
+  under the real `ml/train.py` and **2.151×** under `train_stage1.py`, ratio
+  1.033 inside the pre-registered band [0.5, 2.0]; **G4d** round trip —
+  torch→jax→torch state_dicts **identical** at patch 1, patch 3 and k_time 7,
+  and a perturbed JAX codec exported to `.pt` re-encodes under torch to
+  **4.8e-7**; **G4e** k_time=7 forward parity — encode **1.8e-7**, query with
+  `tpos` **6.5e-8**. Reproduce: `python3 tests/test_jaxport_train.py`.
+
+  **Why G4b's Adam bar is looser than its SGD bar, stated rather than
+  widened.** Adam's first update is `m_hat/(sqrt(v_hat)+eps) ≈ sign(g)`, a
+  discontinuous function of the gradient smoothed only over |g| ~ eps = 1e-8.
+  Two frameworks whose gradients agree to 1e-9 therefore disagree by O(1) in
+  the UPDATE wherever a gradient is that small — measured: the five largest
+  weight deltas all sit on tensors whose minimum |gradient| is 1e-9 to 1e-13.
+  So the gate is stated twice: 2e-5 everywhere, and the SGD bar of 1e-6 on the
+  entries where Adam is well-conditioned. The second line has no escape hatch
+  in it and is what a real disagreement in the objective would fail.
+
+  **What tier 3 does NOT cover.** The stage-2 trainer (`ml/temporal.py`) is
+  untouched, and with it the `invsqrt`/`wsd`/`expdecay` schedules, which live
+  there and not on the stage-1 path. `--eval-every` (the full probe) REFUSES
+  in the JAX trainer because its second half trains a mini
+  `TemporalTransformer` inside the probe. No TPU run has been made: the gates
+  above are CPU, and the first TPU-trained number is a NEW TIER under
+  `ml/CLAUDE.md` §3b that buys its own replication.
 
 - **G1 PASSED** — converted `f3_anchor41M` (40.7M, 576×10 patch 3, d_z 64)
   agrees with torch to max|Δ| 1.3e-5 on `encode`, 6.6e-7 on `query` (gate
@@ -188,8 +224,17 @@ the number the port must reproduce and the tolerance it inherits:
 - **G3 (tier 2):** the `e017_u1_s0` gate head re-rolls at gate AUC
   **0.643** (18 torch reproductions on record); accept within the eval
   wave's own tolerance, 0.0101.
-- **G4 (tier 3, if built):** a from-scratch toy training run (the
-  `--smoke` tensor) tracks the torch loss curve within seed-level spread.
+- **G4 (tier 3):** originally *"a from-scratch toy training run tracks the
+  torch loss curve within seed-level spread"*. That is the weakest available
+  check — the RNG streams cannot match across frameworks, so it can only ever
+  be a band, and a band would not catch a wrong mask weighting or a dropped
+  loss term. It survives as **G4c**, surrounded by four gates that can:
+  **G4a** loss parity on one identical batch (1e-5), **G4b** one-step update
+  parity (SGD 1e-6; Adam 2e-5 overall / 1e-6 where |g| > 1e-6), **G4d** the
+  `torch → jax → torch` export round trip (identical state_dicts; re-encode to
+  1e-5), **G4e** k_time=7 forward parity. All five are
+  `tests/test_jaxport_train.py`, CPU, no network. **PASSED 2026-08-23** —
+  numbers at the top of this file.
 
 A gate that fails is a finding about the port, never something to widen.
 
@@ -200,7 +245,12 @@ A gate that fails is a finding about the port, never something to widen.
   Recommendation: NNX.
 - **Converter direction** — one-way (torch → JAX) is all tiers 1–2 need.
   Two-way is only needed if a JAX-trained model must enter the torch eval
-  ladder; defer.
+  ladder; defer. **SETTLED 2026-08-23: two-way, because tier 3 arrived and
+  §1b's cheap validation IS that direction.** `convert.export_pt` writes an
+  ordinary `.pt` blob (`model`/`args`/`d_z`/`chan`/`norm`/`step`/`tag`) that
+  `codec_from_ckpt` and the twelve eval scripts read exactly as they read a
+  GPU-trained one; `args["backend"] == "jax"` is the only thing that
+  distinguishes it, and it is there so the provenance cannot go missing.
 - **Where parity tests run** — CPU-only in CI (JAX CPU wheel is cheap);
   no GPU rental for any of tiers 1–2.
 
