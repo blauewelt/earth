@@ -610,6 +610,33 @@ def main(argv=None):
             print(f"  architecture ADOPTED from "
                   f"{os.path.basename(a.resume)}: " + " ".join(adopted),
                   flush=True)
+        # CROSS-TENSOR TRAINING IS REFUSED, cross-tensor EVAL is not
+        # (ml/train.py has the identical guard for the identical reason).
+        # Continuing a codec on a tensor it was not trained on writes a
+        # checkpoint whose provenance is a lie; a pass that TRAINS NOTHING —
+        # a checkpoint already at or past --steps — is E-038's frozen control,
+        # which is a deliberate and useful thing to do. So the refusal keys on
+        # whether anything will train, which is exactly what the stated reason
+        # protects.
+        ck_data = os.path.basename(str(RESUME_ARGS.get("data", "")))
+        if ck_data and ck_data != os.path.basename(a.data):
+            ck_step = RESUME_ARGS.get("_step_hint")
+            if ck_step is None and RESUME_KIND == "npz":
+                ck_step = int(np.load(a.resume, allow_pickle=False)["_step"])
+            if ck_step is not None and int(ck_step) >= a.steps:
+                print(f"  CROSS-TENSOR EVAL: codec trained on {ck_data}, "
+                      f"evaluated on {os.path.basename(a.data)}. No training "
+                      f"will occur (checkpoint step {int(ck_step)} >= --steps "
+                      f"{a.steps}); the saved artefact is the loaded weights, "
+                      f"re-scored.", flush=True)
+            else:
+                raise SystemExit(
+                    f"REFUSING to resume: checkpoint was trained on {ck_data} "
+                    f"but this run uses {os.path.basename(a.data)}. "
+                    f"Cross-tensor TRAINING would produce a codec whose "
+                    f"provenance is a lie. (Eval-only is allowed: pass "
+                    f"--steps at or below the checkpoint's recorded step, so "
+                    f"nothing trains.)")
 
     missing = [k for k in ARCH if getattr(a, k) is None]
     if missing:
