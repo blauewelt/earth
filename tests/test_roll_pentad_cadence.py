@@ -69,9 +69,11 @@ def run_roll(mod, f, out, cache, extra=()):
     calls, phases = [], []
     real_roll, real_step = mod.roll_step, mod.Progress.step
 
-    def spy_roll(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False):
+    def spy_roll(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False,
+                 **kw):
         calls.append(decode_moy(mfeat))
-        return real_roll(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp)
+        return real_roll(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp,
+                         **kw)
 
     def spy_step(self, phase, n=1):
         phases.append(phase)

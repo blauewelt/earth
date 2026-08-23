@@ -1004,6 +1004,129 @@ def season_ctx(months, mode="month", d=None):
     return np.array([season_feat_of(s, n) for s, n in spans])
 
 
+class InputQuant:
+    """FSQ-style scalar quantization of everything the HEAD READS.
+
+    Chris's capacity hypothesis (2026-08-22): the stage-2 head has too much
+    input for its capacity, and the pentad z is 32 continuous float32
+    dimensions per pixel per step — at K=24 and stencil 145 that is 111,360
+    real numbers entering one forward. FSQ (arxiv 2309.15505, "Finite Scalar
+    Quantization: VQ-VAE Made Simple") is the cheapest way to ask "how much of
+    that does the head actually need?": bound each dimension, round it to one
+    of L levels, and pass the gradient straight through. No codebook, no
+    commitment loss, no EMA, no dead-code problem — the paper's own claim is
+    that this matches VQ-VAE at large codebook sizes while removing all of
+    that machinery.
+
+    INPUTS ONLY, AND THE TARGET STAYS CONTINUOUS. What is under test is what
+    the head can READ, not what it must WRITE: quantizing the target as well
+    would change the objective into "predict a bin index" and make every
+    z-space MSE incomparable with every archived one. So the contract is
+    quantized-state -> TRUE-next-state, and `val_zmse`, `z_t+1` and the roll's
+    own numbers stay in the same units they have always been in.
+
+    The map, per dimension d (`sigma_d` = that dimension's std over train
+    bins, measured once at startup), following the paper's own bound
+    including its even/odd handling:
+
+        half = (L-1)/2 ;  offset = 0.5 if L is even else 0
+        shift = atanh(offset/half)                 (0 when L is odd)
+        g = half * tanh(z/(2*sigma_d) + shift) - offset
+        q = g + (round(g) - g).detach()            FSQ's straight-through
+        z_q = (q + offset) * 2*sigma_d / half      back to z-space units
+
+    THE OFFSET IS WHY "L LEVELS" IS TRUE. Without it an even L gives L-1
+    reachable levels, because tanh never attains +/-1 and the two outermost
+    integers are never rounded to: L=8 without the offset is 7 levels, which
+    would make every bits/dim number in the log a small lie. With it, g lands
+    in (-L/2, L/2 - offset) and round() reaches exactly L integers.
+
+    The de-scale is LINEAR, not atanh: inverting the tanh would send the
+    outermost levels to infinity, and the point of the bound is that the tails
+    ARE the outermost levels. A dimension therefore saturates at
+    +/-2*sigma_d, 95% of a Gaussian, which is a deliberate part of the
+    capacity restriction rather than an accident of it.
+
+    EXACT ZEROS ARE PASSED THROUGH UNCHANGED. A zero in a stencil slot is not
+    a small value, it is the absence of a neighbour (`zj[miss] = 0.0` in
+    ml/rollout_spatial.py, and the same convention in the trainer's
+    `live` mask for --input-znoise); an even L has no zero level, so without
+    this the structural zeros would all become one small nonzero constant.
+    """
+
+    def __init__(self, spec, sigma, d_z):
+        lv = [int(x) for x in str(spec).split(",") if str(x).strip()]
+        if not lv:
+            raise SystemExit(f"--input-quant {spec!r}: no levels")
+        if any(l < 3 for l in lv):
+            # L=2 is degenerate in this parameterisation and not merely
+            # small: half = 0.5 and offset = 0.5 give shift = atanh(1) = inf,
+            # so every input collapses to one value. The FSQ paper's own
+            # level sets start at 3 for the same reason (its published
+            # configurations are 8/6/5-style); refuse rather than train a
+            # head whose input is a constant.
+            raise SystemExit(f"--input-quant {spec!r}: every level count must "
+                             f"be >= 3 (L=2 collapses to a single value in "
+                             f"the bounded-tanh parameterisation)")
+        if len(lv) == 1:
+            lv = lv * d_z
+        if len(lv) != d_z:
+            raise SystemExit(
+                f"--input-quant {spec!r} gives {len(lv)} level counts for "
+                f"d_z {d_z}: pass one number (applied to every dimension) or "
+                f"exactly d_z of them")
+        self.spec = str(spec)
+        self.levels = torch.as_tensor(lv, dtype=torch.float32)
+        self.sigma = torch.as_tensor(np.asarray(sigma, np.float32))
+        assert self.sigma.shape == (d_z,), (self.sigma.shape, d_z)
+        self.d_z = int(d_z)
+        self._half = (self.levels - 1.0) / 2.0
+        self._offset = torch.where(self.levels % 2 == 0,
+                                   torch.full_like(self.levels, 0.5),
+                                   torch.zeros_like(self.levels))
+        self._shift = torch.atanh(self._offset / self._half)
+        self._scale = 2.0 * self.sigma
+        self.bits_per_dim = float(np.mean(np.log2(np.asarray(lv, float))))
+        self.codebook_log2 = float(np.sum(np.log2(np.asarray(lv, float))))
+
+    def to(self, dev):
+        for k in ("levels", "sigma", "_half", "_offset", "_shift", "_scale"):
+            setattr(self, k, getattr(self, k).to(dev))
+        return self
+
+    def __call__(self, z):
+        """z [..., n*d_z] (the stencil flattens slots into the last axis)."""
+        if z is None:
+            return z
+        shp = z.shape
+        assert shp[-1] % self.d_z == 0, (shp, self.d_z)
+        v = z.reshape(-1, self.d_z)
+        half = self._half.to(v.dtype).to(v.device)
+        sc = self._scale.to(v.dtype).to(v.device)
+        off = self._offset.to(v.dtype).to(v.device)
+        sh = self._shift.to(v.dtype).to(v.device)
+        g = half * torch.tanh(v / sc + sh) - off
+        q = g + (torch.round(g) - g).detach()          # FSQ straight-through
+        out = (q + off) * sc / half
+        return torch.where(v == 0, v, out).reshape(shp)
+
+    def describe(self, zsample):
+        """One line of what this costs, measured on real z rather than
+        claimed: bits per dimension, the codebook size the paper counts, and
+        the quantization MSE against the raw z it replaces."""
+        with torch.no_grad():
+            zq = self(zsample)
+            mse = float((zq - zsample).pow(2).mean())
+            var = float(zsample.pow(2).mean())
+        return (f"--input-quant {self.spec}: {self.bits_per_dim:.3f} bits/dim "
+                f"x d_z {self.d_z} = {self.codebook_log2:.1f} bits "
+                f"(codebook 2^{self.codebook_log2:.1f}) · quantization MSE vs "
+                f"raw z {mse:.5f} on a mean-square {var:.5f} z "
+                f"({100.0 * mse / max(var, 1e-12):.2f}% of its energy) · "
+                f"sigma per dim {float(self.sigma.min()):.3f}.."
+                f"{float(self.sigma.max()):.3f}")
+
+
 def season_feat_of(start, span_days):
     """(sin, cos) of the year phase at the CENTRE of a bin.
 
@@ -1327,6 +1450,20 @@ def main():
                          "checkpoint args and ml/rollout_spatial.py reads it "
                          "back, so a fine-phase head can never be rolled with "
                          "coarse tokens")
+    ap.add_argument("--input-quant", default="",
+                    help="FSQ-style scalar quantization of every z the HEAD "
+                         "READS — the cheap form of the capacity hypothesis "
+                         "(Chris, 2026-08-22; arxiv 2309.15505). '' (default) "
+                         "is off and bit-identical. '8' quantizes every "
+                         "dimension to 8 levels; '8,8,6,5,...' names one level "
+                         "count per dimension (exactly d_z of them). INPUTS "
+                         "ONLY: the training TARGET stays continuous, so the "
+                         "objective is still quantized-state -> true-next-"
+                         "state and every z-space MSE stays comparable with "
+                         "the archive. It rides the checkpoint args, and "
+                         "ml/rollout_spatial.py applies the same quantizer at "
+                         "roll time — quantized input is part of the model's "
+                         "contract, not a training trick")
     ap.add_argument("--data", default=os.path.join(HERE, "cache", "na_pixels.npz"),
                     help="tensor npz (family-3 runs pass family3_na025.npz)")
     ap.add_argument("--train-lon-hold", default="inherit",
@@ -1708,6 +1845,33 @@ def main():
               f"(max |Δ| vs the month-quantized token {_dd:.4f}). The "
               f"CODEC's ctx stays month-quantized — Z is frozen.", flush=True)
     Mt = torch.as_tensor(head_ctx, dtype=torch.float32)
+    # ---- --input-quant: the head's input alphabet -------------------------
+    # sigma is measured ONCE, on TRAIN bins only, from the Z this run will
+    # actually read. It is written into the checkpoint args beside the spec,
+    # because the quantizer is part of the MODEL'S CONTRACT and not a training
+    # trick: ml/rollout_spatial.py has to reproduce the same map at roll time,
+    # and recomputing sigma there from a different slice of Z would hand a
+    # head a grid it was never trained on.
+    QIN = None
+    if a.input_quant:
+        _tr = np.where(~t_hold)[0]
+        _rq = np.random.default_rng(0)
+        _ti = np.sort(_rq.choice(_tr, min(256, len(_tr)), replace=False))
+        _pi = np.sort(_rq.choice(Z.shape[1], min(1024, Z.shape[1]),
+                                 replace=False))
+        _samp = torch.from_numpy(
+            np.asarray(Z[np.ix_(_ti, _pi)], dtype=np.float32)
+            .reshape(-1, ck["d_z"]))
+        _sig = _samp.std(0).clamp(min=1e-6).numpy()
+        QIN = InputQuant(a.input_quant, _sig, ck["d_z"])
+        a.input_quant_sigma = [round(float(v), 6) for v in _sig]
+        print(QIN.describe(_samp), flush=True)
+
+    def qz(z):
+        """Every z that ENTERS the model goes through here, and nothing that
+        leaves it does. Identity (the same object) when the knob is off."""
+        return z if QIN is None else QIN(z)
+
     K = a.K
     # With --unroll U the loss reaches U months past the window, so the pool
     # must guarantee those months EXIST and are TRAIN months. Without this the
@@ -2108,7 +2272,7 @@ def main():
     emt = torch.as_tensor(emt[msel], dtype=torch.long)
     emp = torch.as_tensor(emp[msel], dtype=torch.long)
     _mb = emt - K + 1
-    mon_zseq = gather_stencil(Zt, _mb, emp, NBR_t, K).to(TDEV)
+    mon_zseq = qz(gather_stencil(Zt, _mb, emp, NBR_t, K).to(TDEV))
     mon_mseq = torch.stack([Mt[_mb + j] for j in range(K)], 1).to(TDEV)
     mon_sctx = static_ctx[emp].to(TDEV)
     mon_ztrue = Zt[emt + 1, emp].float().to(TDEV)
@@ -2278,6 +2442,7 @@ def main():
             live = (z4 != 0).any(-1, keepdim=True)            # [n,K,S,1]
             zseq = (z4 + torch.randn_like(z4) * a.input_znoise
                     * live).view(zseq.shape)
+        zseq = qz(zseq)
         pred, hid1 = model(zseq, mseq, sctx)
         l_base = (pred - ztgt).pow(2).mean()
         loss = l_base
@@ -2309,7 +2474,7 @@ def main():
         zin, min_ = zseq, mseq
         l_unr = None
         for u in range(1, U_t):
-            zin = torch.cat([zin[:, 1:], pred[:, -1:]], 1)      # graph intact
+            zin = qz(torch.cat([zin[:, 1:], pred[:, -1:]], 1))  # graph intact
             min_ = torch.cat([min_[:, 1:], mfut[:, u - 1:u]], 1)
             pred, _ = model(zin, min_, sctx)
             term = (pred[:, -1] - zfut[:, u]).pow(2).mean() / (u + 1)
@@ -2350,7 +2515,7 @@ def main():
                 _sp = []
                 for i0 in range(0, len(z1), 4096):
                     _sl = slice(i0, i0 + 4096)
-                    p1_, _ = model(z1[_sl].to(TDEV), m1[_sl],
+                    p1_, _ = model(qz(z1[_sl].to(TDEV)), m1[_sl],
                                    s1[_sl].to(TDEV))
                     _sp.append(p1_[:, -1])
                 step1 = torch.cat(_sp)                     # [bu*S, d_z]
@@ -2358,7 +2523,7 @@ def main():
             newstep = step1.reshape(bu, -1)                # [bu, S*d_z]
             zseq2 = torch.cat([zseq[:bu, 1:], newstep[:, None]], 1)
             mseq2 = torch.cat([mseq[:bu, 1:], mfut[:bu, 0:1]], 1)
-            pred2, _ = model(zseq2, mseq2, sctx[:bu])
+            pred2, _ = model(qz(zseq2), mseq2, sctx[:bu])
             l_uw = (pred2[:, -1] - zfut[:bu, 1]).pow(2).mean() / 2
             loss = loss + l_uw
         opt.zero_grad(); loss.backward()
@@ -2452,7 +2617,7 @@ def main():
                             ms_ = torch.stack(
                                 [Mt[b_ + j].expand(len(_psec), -1)
                                  for j in range(K)], 1)
-                            _, hd_ = model(zs_.to(TDEV), ms_.to(TDEV),
+                            _, hd_ = model(qz(zs_.to(TDEV)), ms_.to(TDEV),
                                            _psec_ctx)
                             F_[t_] = hd_[:, -1].mean(0).cpu().numpy()
                     ri_ = _pridx[_pok]
@@ -2541,7 +2706,8 @@ def main():
         base = et - K + 1
         zseq = gather_stencil(Zt, base, ep, NBR_t, K)
         mseq = torch.stack([Mt[base + j] for j in range(K)], 1)
-        pred, hid = _chunked_forward(model, zseq, mseq, static_ctx[ep], TDEV)
+        pred, hid = _chunked_forward(model, qz(zseq), mseq,
+                                     static_ctx[ep], TDEV)
         # already on CPU: everything
         zhat = pred[:, -1]                       # below here is numpy-bound
         ztrue = Zt[et + 1, ep].float()
@@ -2593,7 +2759,7 @@ def main():
                 base = et_ - K + 1
                 zsq = gather_stencil(Zt, base, ep_, NBR_t, K)
                 msq = torch.stack([Mt[base + j] for j in range(K)], 1)
-                _, hd = _chunked_forward(model, zsq, msq,
+                _, hd = _chunked_forward(model, qz(zsq), msq,
                                          static_ctx[ep_], TDEV)
                 zh = model.heads_direct[str(h_)](hd[:, -1].to(TDEV)).cpu()
                 zt_ = Zt[et_ + h_, ep_].float()
@@ -2620,7 +2786,7 @@ def main():
                                   sec_pix, NBR_t, K)
             mseq = torch.stack([Mt[base + j].expand(len(sec_pix), -1)
                                 for j in range(K)], 1)
-            _, hid = model(zseq.to(TDEV), mseq.to(TDEV),
+            _, hid = model(qz(zseq.to(TDEV)), mseq.to(TDEV),
                            static_ctx[sec_pix].to(TDEV))
             F[t] = hid[:, -1].mean(0).cpu().numpy()   # pool along the section
     ridx = rapid[:, 0].astype(int)

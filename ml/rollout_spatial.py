@@ -104,7 +104,8 @@ from model import codec_from_ckpt, gather_px                    # noqa: E402
 from recon_eval import stream_stats, build_slab                 # noqa: E402
 from temporal import (TemporalTransformer, build_stencil,       # noqa: E402
                       embed_everything, rapid_section, _ring_on,
-                      codec_weight_hash, season_feat_of)
+                      codec_weight_hash, season_feat_of,
+                      InputQuant)
 from project_amoc import fit_ridge                              # noqa: E402
 from aggregate_cadence import (EPOCH as EPOCH_DEFAULT,          # noqa: E402
                                bin_start)
@@ -743,7 +744,8 @@ def row_feats(ax, rows, dev, mode="month"):
     return torch.from_numpy(np.asarray(sc, dtype=np.float32)).to(dev)
 
 
-def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False):
+def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False,
+              quant=None):
     """One autoregressive step over ALL pixels. Zwin [P, K, d_z] on the
     device; NBR_t None (stencil 1) or [P, S]; mfeat [K, 2]. → ẑ [P, d_z]
     float32. The gather mirrors temporal.gather_stencil's layout exactly
@@ -766,6 +768,14 @@ def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False):
     target and the caller's `--chunk` becomes an upper bound, which makes the
     guard automatic for any future width instead of a number someone has to
     remember to lower."""
+    # A head trained with --input-quant reads a QUANTIZED state, and that is
+    # part of its contract rather than a training trick: rolling it on
+    # continuous z would feed it an alphabet it has never seen. Applied to
+    # the whole window before the gather, which is equivalent to applying it
+    # after (the gather only selects and permutes, and a missing slot is
+    # zeroed below either way) and costs one pass instead of S.
+    if quant is not None:
+        Zwin = quant(Zwin)
     P = Zwin.shape[0]
     if NBR_t is not None:
         S, K, dz = NBR_t.shape[1], Zwin.shape[1], Zwin.shape[2]
@@ -1885,6 +1895,23 @@ def main():
         # --season-phase fine carries it and a head that predates the flag
         # carries nothing — which is 'month', the only thing it can be.
         sphase = str(ta.get("season_phase", "month") or "month")
+        # THE HEAD'S INPUT ALPHABET, read back the same way. A head that
+        # predates the flag carries neither key and rolls continuous, which
+        # is every archived head.
+        iq_spec = str(ta.get("input_quant", "") or "")
+        iq = None
+        if iq_spec:
+            _sg = ta.get("input_quant_sigma")
+            if not _sg:
+                sys.exit(f"{os.path.basename(hp)} was trained with "
+                         f"--input-quant {iq_spec!r} but carries no "
+                         f"input_quant_sigma: the quantizer's per-dimension "
+                         f"scale is measured at TRAIN time and cannot be "
+                         f"re-derived here without handing this head a grid "
+                         f"it never saw. Refusing to roll it.")
+            iq = InputQuant(iq_spec, np.asarray(_sg, np.float32), d_z)
+            print(f"  {label}: rolling with the head's own input quantizer "
+                  f"({iq_spec}, {iq.bits_per_dim:.3f} bits/dim)", flush=True)
         unroll = ta.get("unroll", 1)
         label = (f"s{stencil}"
                  + (f"r{str(ring_km).replace(',', '-')}" if _ring_on(ring_km) else "")
@@ -1987,7 +2014,7 @@ def main():
                         # advance AFTER the forward, like project_amoc.py
                         zhat = roll_step(model, Zwin, NBR_t, static_ctx,
                                          row_feats(ax, cur, dev, sphase),
-                                         a.chunk, a.amp)
+                                         a.chunk, a.amp, quant=iq)
                         if traj is not None:
                             # ẑ for THIS row, before it is folded into the
                             # window — the same tensor the scoring decodes,
@@ -2166,7 +2193,7 @@ def main():
                     r_next = s_end + 1 + i
                     zhat = roll_step(model, Zwin, NBR_t, static_ctx,
                                      row_feats(ax, cur, dev, sphase),
-                                     a.chunk, a.amp)
+                                     a.chunk, a.amp, quant=iq)
                     Zwin = torch.cat([Zwin[:, 1:], zhat[:, None]], 1)
                     cur = cur[1:] + [r_next]
                     prog.step(phase)

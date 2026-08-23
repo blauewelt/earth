@@ -132,12 +132,12 @@ def main():
             cur, npz, run, tmp,
             ["--time-stride", "0", "--time-offset", "0",
              "--target-bins-argo", "all", "--season-dropout", "0",
-             "--season-phase", "month"], "explicit")
+             "--season-phase", "month", "--input-quant", ""], "explicit")
         bad = params_equal(ck_new, ck_d)
         assert not bad, bad[:4]
         assert tj_d["z_t+1"] == tj_new["z_t+1"]
         for k in ("time_stride", "time_offset", "target_bins_argo",
-                  "season_dropout", "season_phase"):
+                  "season_dropout", "season_phase", "input_quant"):
             assert k in ck_d["args"], f"{k} is not written into the checkpoint"
         assert ck_d["args"]["season_phase"] == "month"
         print("2. the four flags at their DEFAULT values reproduce the "
@@ -274,7 +274,77 @@ def main():
               "from the axis alone, past the end of the record included"
               % step)
 
-        print("\nE-044c knobs: all 6 checks hold ✓")
+        # ---- 7. --input-quant: the head's input alphabet ------------------
+        # Chris's capacity hypothesis, in its cheap form (arxiv 2309.15505).
+        # What has to be true: the map lands on the grid it claims, gradients
+        # reach the model through the round, the TARGET stays continuous, the
+        # spec and its measured sigma ride the checkpoint, and the roll reads
+        # both back.
+        d_z = ckd["d_z"]
+        sig = np.full(d_z, 2.0, np.float32)
+        q8 = tp.InputQuant("8", sig, d_z)
+        assert abs(q8.bits_per_dim - 3.0) < 1e-12
+        assert abs(q8.codebook_log2 - 3.0 * d_z) < 1e-9
+        zt = torch.linspace(-12, 12, 4001).unsqueeze(1).repeat(1, d_z)
+        zq = q8(zt)
+        lv = torch.unique(torch.round(zq[:, 0] / (2 * 2.0) * 3.5), sorted=True)
+        assert len(torch.unique(zq[:, 0])) == 8, len(torch.unique(zq[:, 0]))
+        assert float(zq.abs().max()) <= 2 * 2.0 + 1e-6, float(zq.abs().max())
+        assert float(q8(torch.zeros(3, d_z)).abs().max()) == 0.0, \
+            "an exactly-zero input (a missing stencil slot) must stay zero"
+        # straight-through: d(z_q)/dz is the derivative of the BOUND, not zero
+        zg = torch.zeros(64, d_z, requires_grad=True)
+        with torch.no_grad():
+            zg += 0.3
+        zg.requires_grad_(True)
+        q8(zg).sum().backward()
+        assert zg.grad is not None and float(zg.grad.abs().min()) > 0, \
+            "straight-through did not deliver a gradient"
+        # per-dimension levels, and the refusals
+        q_mixed = tp.InputQuant(",".join(["8"] * (d_z - 1) + ["3"]), sig, d_z)
+        assert len(torch.unique(q_mixed(zt)[:, -1])) == 3
+        assert abs(q_mixed.bits_per_dim
+                   - ((d_z - 1) * 3.0 + np.log2(3)) / d_z) < 1e-9
+        for bad in ("2", "8,8"):
+            try:
+                tp.InputQuant(bad, sig, d_z)
+                raise AssertionError(f"{bad!r} was accepted")
+            except SystemExit:
+                pass
+        # end to end: the run trains, the args carry spec AND sigma, and the
+        # z_t+1 block still exists (the target stayed continuous, so the
+        # number is in the same units the archive quotes)
+        r_q, tj_q, ck_q, out_q = train(cur, npz, run, tmp,
+                                       ["--input-quant", "8"], "quant")
+        assert ck_q["args"]["input_quant"] == "8"
+        assert len(ck_q["args"]["input_quant_sigma"]) == d_z, \
+            ck_q["args"].get("input_quant_sigma")
+        assert "bits/dim" in out_q and "quantization MSE" in out_q, out_q[:600]
+        assert tj_q["z_t+1"]["mse_model"] > 0
+        c_q = [(x["stage2_step"], x["stage2_zmse"]) for x in r_q
+               if "stage2_step" in x]
+        assert c_q != cn, "quantized inputs changed nothing in training"
+        # the roll honours it, and refuses a head that cannot be reproduced
+        ta = {"input_quant": "8", "input_quant_sigma": list(map(float, sig))}
+        iq = rs.InputQuant(ta["input_quant"],
+                           np.asarray(ta["input_quant_sigma"], np.float32),
+                           d_z)
+        zw = torch.randn(7, 3, d_z * 2)
+        assert torch.equal(iq(zw), q8(zw)), \
+            "the roll's quantizer is not the trainer's"
+        assert len(torch.unique(iq(zw))) <= 8 * 2, len(torch.unique(iq(zw)))
+        src = open(os.path.join(ML, "rollout_spatial.py")).read()
+        assert "input_quant_sigma" in src and "quant=iq" in src
+        print("7. --input-quant 8 puts every input dimension on 8 levels "
+              "(%.3f bits/dim, codebook 2^%.0f), keeps exact zeros exact, "
+              "passes a gradient through the round, leaves the TARGET "
+              "continuous (z_t+1 still reported in z units), writes spec AND "
+              "the measured per-dim sigma into the checkpoint, and "
+              "rollout_spatial rebuilds the identical quantizer from those "
+              "two — a head that carries a spec without its sigma is refused"
+              % (q8.bits_per_dim, q8.codebook_log2))
+
+        print("\nE-044c knobs: all 7 checks hold ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         bp = os.path.join(ML, "_temporal_e044c_base.py")
