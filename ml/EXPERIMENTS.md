@@ -77,6 +77,44 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+**NIGHT HARVEST, 23:00Z 08-23.** Four results and one cut:
+
+- **E-045-A6 (#445, fine season phase) FINAL: 20k ratio 0.5077** (z_mse 10.791 /
+  persistence 21.254; rapid_r_deseas 0.604) vs the 0.50560/0.50447 control pair —
+  ~2.4 pair-spreads ABOVE the pair mean: the head-side continuous phase token does NOT
+  improve pentad one-step. The staircase hypothesis is dead at the one-step tier; its
+  roll-lock arm (does fine phase change calendar mode-locking?) still needs a roll and
+  stays open. A9 (#446, input-quant — the E-046 gate) was at 18k with val_zmse 10.62
+  (trending ≈0.500, marginally below the pair) at 22:35Z; verdict at its final.
+- **THE TPU TRAINS THE BLOCK CODEC 4.5× FASTER THAN THE RENTED H100.** The JAX tier-3
+  stage-1 trainer (commits f3978f5..d116055, parity gates G4a-e: loss parity 2.7e-07,
+  one-step parity, round-trip .pt export) ran the full E-047a-fast geometry (40M
+  month-block, batch 512) on a v5litepod-4: **0.206 s/step measured over a clean
+  0→3000-step run** (2,490 block-samples/s; light probe 0.192 at 3k; two spot
+  preemptions along the way, and the bucket-keyed resume worked exactly as designed —
+  the third node found the finished state, added nothing, exported and reaped). The
+  rented H100 SXM does 0.93 s/step on the same config (#453) — per-sample the TPU is
+  ~8× the 4090 and ~4.5× the H100. **A full 60k-step TPU run (node e047a-tpu-60k,
+  on-demand, ~$22, ETA ~03:15Z) launched 22:40Z** — §3b: a NEW TIER, never pooled with
+  torch numbers; #453 is its exact same-recipe torch twin, which makes the pair the
+  cross-framework validation. Ops lesson for the record: three "empty bucket" reads
+  earlier tonight were a malformed access token whose 401 was misparsed as zero items —
+  the measurement had in fact shipped everything. Assert the ERROR KEY of a JSON
+  listing, not just the absence of items.
+- **E-047b-fast (#454) CANCELLED at ~3.5k steps, box destroyed — a cost cut, not a
+  failure.** Measured 1.58 s/step on the $2.37/h H100 NVL → 60k ≈ 27 h ≈ $63 to beat
+  the $0.28/h long form #451 (Tue ~08:30Z) by ~7 h. Not defensible inside Chris's $100
+  envelope; the 126M question rides on #451, and a TPU 126M attempt is the cheaper
+  accelerant if wanted (per-chip memory arithmetic says batch 128/chip plausibly fits;
+  unmeasured).
+- **All four in-flight month-block runs share a dead FULL probe** (light probes fine):
+  probe_now derived its axis length from the tensor's 3,142 bins against 516-row
+  block-z — every eval_every probe died wrapped (`IndexError: 516`). Fixed at e424692
+  (T from the embedded axis; block cells decoded each against its own source bin,
+  rollout_spatial's rule; per-bin path proven byte-identical pre/post). In-flight runs
+  keep the bug (non-fatal); every missing z%/chan% number is recomputable offline from
+  their checkpoints on the fixed tree.
+
 **FAST ARMS, dispatched ~20:00Z 08-23 (Chris: "$100, ideally the new codecs trained by
 morning"): E-047a-fast + E-047b-fast — the SAME two codecs at their recipes' ORIGINAL
 batches on hardware sized for them.** New recipes `f4r2-40M-monthblock-b512` (H100 SXM
