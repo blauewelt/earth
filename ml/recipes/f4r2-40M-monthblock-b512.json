@@ -1,0 +1,16 @@
+{
+  "_description": "E-047a-fast: f4r2-40M-monthblock AT ITS OWN ORIGINAL BATCH, on hardware sized for it. Field for field the E-047a recipe (one CALENDAR MONTH of pentad bins as one z; k_max 7 grid; q_time decoder query; continuous fraction-of-year ctx; d_z 64 — full design ml/plans/E047_block_codec.md) with exactly one change: batch 512, the value E-047a's own _description originally specified before #448's CUDA OOM on a 24 GB card forced the cut to 128. This recipe exists for 80 GB-class boxes (dispatched to an H100 SXM, 2026-08-23): the OOM was a hardware bound, not a design decision, and restoring the batch on adequate VRAM restores the design. Dispatch with steps 60000 (the f3_anchor41M workhorse's own step-count class): 60k x 512 = 30.7M block-samples vs the 200k x 128 = 25.6M of the in-flight #450, so the fast arm sees MORE data, not less, and lands overnight instead of in a day. #450 continues untouched as the long form; the two are the same recipe family at two (batch, steps) points and are reported side by side, never pooled.",
+  "_provenance": "Copied field for field from ml/recipes/f4r2-40M-monthblock.json changing batch 128 -> 512 only. NOTHING HAS BEEN RUN AT THIS CONFIGURATION; the controls are E-045-A2a (selection, 0.0721) and the in-flight #450 (same design, batch 128).",
+  "tensor": "family4_na025_pentad_r2",
+  "time_block": "month",
+  "d_z": 64,
+  "patch": 1,
+  "codec_d_model": 512,
+  "codec_layers": 12,
+  "codec_heads": 4,
+  "codec_d_dec": 256,
+  "anomaly": "true",
+  "batch": 512,
+  "holdout_lon": "0,0",
+  "head_probe": "true"
+}

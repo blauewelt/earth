@@ -69,6 +69,27 @@ against its own bin, cell-level persistence baselines, dumps stay z-states) foll
 timeblocks module + wiring at 2e03913/41086a3, smoke-tested end to end on CPU;
 `time_block` is a recipe-only key (`f4r2-40M-monthblock`, d_z 64).
 
+**RE-DISPATCH, 16:29Z: E-047a = #450, E-047b = #451.** #448/#449 both died of CUDA OOM
+mid-training on their 24 GB cards — a month block is 282 encoder tokens against a per-bin
+sample's 42 and attention is quadratic in that — and #448's probe path additionally
+refused block-z (the collapse guard would have starved; block map plumbed through
+probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 256→64 (b) as
+a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
+by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
+
+**FAST ARMS, dispatched ~20:00Z 08-23 (Chris: "$100, ideally the new codecs trained by
+morning"): E-047a-fast + E-047b-fast — the SAME two codecs at their recipes' ORIGINAL
+batches on hardware sized for them.** New recipes `f4r2-40M-monthblock-b512` (H100 SXM
+80 GB, ~$1.49/h) and `f4r2-126M-monthblock-b256` (H100 NVL 94 GB, ~$1.47/h), steps
+60,000 — the f3_anchor41M workhorse's own step-count class, and MORE data than the 200k
+long forms (30.7M vs 25.6M block-samples at 40M; 15.4M vs 12.8M at 126M). Hypothesis
+unchanged from E-047 (fusion beats selection; the fast arms exist to land a usable codec
+overnight, ~9 h (a) / ~15 h (b) predicted from the measured 4090 step times × batch
+scaling ÷ H100 class speedup). #450/#451 continue untouched as the long forms — same
+family, two (batch, steps) points, reported side by side, never pooled (§3b). Estimated
+~$15 (a-fast) + ~$23 (b-fast). Tier-1 recon audit + 20k heads + block-decode roll follow
+on whichever codec lands first.
+
 ---
 
 <a id="e-045"></a>

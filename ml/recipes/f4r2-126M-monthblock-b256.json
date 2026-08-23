@@ -1,0 +1,16 @@
+{
+  "_description": "E-047b-fast: f4r2-126M-monthblock AT ITS OWN ORIGINAL BATCH, on hardware sized for it. Field for field the E-047b recipe (the Chinchilla-anchored month-block codec: 1024x10, 8 heads at the head_dim-128 ceiling, d_dec 768, d_z 128, measured 126.943M params — design and anchor arithmetic in the parent recipe and ml/plans/E047_block_codec.md) with exactly one change: batch 256, the value E-047b's own _provenance estimated before #449's CUDA OOM on a 24 GB card forced the cut to 64. This recipe exists for 90 GB-class boxes (dispatched to an H100 NVL 94 GB, 2026-08-23): the parent recipe's activation arithmetic put the FFN slab alone at ~11.8 GB at batch 256, far outside 24 GB with attention and optimiser state but comfortable at 94 GB. Dispatch with steps 60000: 60k x 256 = 15.4M block-samples vs the 200k x 64 = 12.8M of the in-flight #451, so the fast arm sees MORE data and lands ~a day earlier. #451 continues untouched as the long form; same recipe family at two (batch, steps) points, reported side by side, never pooled.",
+  "_provenance": "Copied field for field from ml/recipes/f4r2-126M-monthblock.json changing batch 64 -> 256 only. NOTHING HAS BEEN RUN AT THIS CONFIGURATION; the controls are E-047a-fast (same wave, 40M) and the in-flight #451 (same design, batch 64).",
+  "tensor": "family4_na025_pentad_r2",
+  "time_block": "month",
+  "d_z": 128,
+  "patch": 1,
+  "codec_d_model": 1024,
+  "codec_layers": 10,
+  "codec_heads": 8,
+  "codec_d_dec": 768,
+  "anomaly": "true",
+  "batch": 256,
+  "holdout_lon": "0,0",
+  "head_probe": "true"
+}
