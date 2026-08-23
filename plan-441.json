@@ -1,0 +1,8 @@
+{
+ "steps": 20000,
+ "lr": 0.001,
+ "schedule": "expdecay",
+ "stage": "stage-2",
+ "note": "E-045-A7 half-month cadence (stride 3)",
+ "published_at": "2026-08-23T09:38:14.764Z"
+}
