@@ -414,7 +414,15 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
     two knobs are separable: the full probe can be cut hard while the light
     one stays every 2,000 steps. Both modes emit `linear_r_deseas`, so
     downstream readers (metrics.jsonl, the status page) need no special
-    case."""
+    case.
+
+    blk_rows/blk_pad (E-047): the block map, required exactly when the codec is
+    a block codec. It puts the EMBEDDING on the block axis, so the caller must
+    hand in `months`/`moy`/`t_hold`/`rapid` already remapped to that axis
+    (ml/train.py does this with BlockAxis.remap_rows) — a mismatch is refused
+    above rather than discovered as an index error. `X`/`OBS` stay on the
+    SOURCE axis: they are the truth each of a block's cells is scored against,
+    and the channel probe decodes every real cell with its own `tpos`."""
     was_training = codec.training
     codec.eval()
     t0 = time.time()
@@ -422,7 +430,39 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
     if obs_in is None:
         obs_in = OBS
     lats, lons = d["lats"], d["lons"]
-    T, H, W, C = X.shape
+    # E-047: THE AXIS IS THE EMBEDDING'S, NOT THE TENSOR'S. With --time-block
+    # the codec embeds one BLOCK per z, so `Z` has one row per block (516 on
+    # family 4) while `X` still has one row per pentad BIN (3,142) — and every
+    # axis-keyed array train.py hands in is ALREADY on the block axis (`moy`,
+    # `t_hold` and `d["months"]` from BlockAxis.labels, `d["rapid"]` through
+    # BlockAxis.remap_rows). X and OBS alone stay on the source axis, because
+    # they are the truth a block's cells are decoded against.
+    #
+    # The light probe only ever indexes through those arrays, so it was right;
+    # the full path re-derived T from `X.shape[0]` and walked `t_hold[t + 1]`
+    # off the end of a 516-row array at t = 515. That is #450/#451/#453/#454's
+    # `IndexError: index 516 is out of bounds for axis 0 with size 516` — the
+    # first out-of-range gather, wrapped by train.py's run_probe guard into a
+    # {"probe_error"} record, on every FULL probe of every month-block run.
+    T_src, H, W, C = X.shape
+    T = T_src if blk_rows is None else len(blk_rows)
+    # A precondition where the inputs are all it has cost (ml/CLAUDE.md §0.3):
+    # the same mismatch now names itself instead of surfacing as a bare index
+    # error a thousand lines away.
+    if len(moy) != T or len(t_hold) != T:
+        unit = "blocks" if blk_rows is not None else "timesteps"
+        raise ValueError(
+            f"probe_now: the axis-keyed arrays are on a different axis than "
+            f"the embedding — moy {len(moy)}, t_hold {len(t_hold)}, but the "
+            f"probe embeds {T} {unit}. A block codec's probe needs "
+            f"months/moy/t_hold/rapid remapped to the BLOCK axis "
+            f"(ml/train.py does this with BlockAxis.remap_rows).")
+    kt = int(getattr(codec, "k_time", 1) or 1)
+    if blk_rows is not None and np.asarray(blk_rows).shape[1] != kt:
+        raise ValueError(
+            f"probe_now: the block map is {np.asarray(blk_rows).shape[1]} "
+            f"cells wide and this codec has k_time={kt} — the grid it is "
+            f"asked to embed is not the grid it was trained on.")
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12),
                         np.cos(2 * np.pi * moy / 12)], 1)
     if ocean is None:                      # CLI backfill; train.py passes it in
@@ -575,19 +615,65 @@ def probe_now(codec, X, OBS, d, moy, t_hold, x_hold, dynamic,
         # their first full probe (step 10k): a cuda channel-embedding weight
         # indexed by a cpu chan_idx is the index_select device mismatch.
         qdev = next(codec.parameters()).device
-        xhat = codec.query(
-            zhat.to(qdev), qc.to(qdev),
-            torch.zeros(len(et), C, 3, dtype=torch.long, device=qdev)).cpu()
+        qoff = torch.zeros(len(et), C, 3, dtype=torch.long)
         kys_t = torch.as_tensor(kys, dtype=torch.long)
         kxs_t = torch.as_tensor(kxs, dtype=torch.long)
-        v1 = Xt[et + 1, kys_t[ep], kxs_t[ep]]
-        o1 = OBSt[et + 1, kys_t[ep], kxs_t[ep]]
-        v0 = Xt[et, kys_t[ep], kxs_t[ep]]
-        o0 = OBSt[et, kys_t[ep], kxs_t[ep]]
         dyn = torch.zeros(C, dtype=torch.bool); dyn[dynamic] = True
-        both = o0 & o1 & dyn[None, :]
-        out["chan_mse_model"] = float(((xhat - v1).pow(2) * both).sum() / both.sum())
-        out["chan_mse_persistence"] = float(((v0 - v1).pow(2) * both).sum() / both.sum())
+        # E-047: WHICH CELLS ARE DECODED, AND AGAINST WHICH BIN. A per-bin
+        # codec's z answers for one row and its query names no cell at all —
+        # `cells` is then the single (None, et, et+1) triple and every
+        # expression below is the one that has always run. A BLOCK codec's z
+        # answers for k_time cells, so each REAL cell is decoded with its own
+        # `tpos` and scored against the source bin it stands for, with
+        # persistence read from the start block's SAME cell. That is exactly
+        # ml/rollout_spatial.py's rule (`decode_cells` + the cell loop at
+        # :2168), deliberately mirrored rather than re-derived: two copies of
+        # an axis rule are two places for the same off-by-one to live.
+        if blk_rows is None:
+            cells = [(None, et, et + 1)]
+        else:
+            rows_t = torch.as_tensor(np.asarray(blk_rows), dtype=torch.long)
+            real = torch.as_tensor(~np.asarray(blk_pad))
+            # The TARGET block's real cells, as the roll does it. A pad cell
+            # has no bin of its own (its row repeats the block's last real
+            # one), so scoring it would count that bin twice.
+            cells = [(j, rows_t[et, j], rows_t[et + 1, j],
+                      real[et + 1, j][:, None])
+                     for j in range(rows_t.shape[1])]
+        se_m = se_p = n_ok = None
+        n_one = 0
+        for cell in cells:
+            j, s0, s1 = cell[0], cell[1], cell[2]
+            tpos = ({} if j is None else
+                    {"tpos": torch.full((len(et), C), j,
+                                        dtype=torch.long).to(qdev)})
+            xhat = codec.query(zhat.to(qdev), qc.to(qdev),
+                               qoff.to(qdev), **tpos).cpu()
+            v1 = Xt[s1, kys_t[ep], kxs_t[ep]]
+            o1 = OBSt[s1, kys_t[ep], kxs_t[ep]]
+            v0 = Xt[s0, kys_t[ep], kxs_t[ep]]
+            o0 = OBSt[s0, kys_t[ep], kxs_t[ep]]
+            both = o0 & o1 & dyn[None, :]
+            if j is not None:
+                both = both & cell[3]
+            e_m = (xhat - v1).pow(2) * both
+            e_p = (v0 - v1).pow(2) * both
+            if se_m is None:                  # the per-bin path stops here
+                se_m, se_p, n_ok = e_m, e_p, both
+                n_one = int(both.sum())
+            else:
+                se_m, se_p = se_m + e_m, se_p + e_p
+                n_ok = n_ok.long() + both.long()
+        out["chan_mse_model"] = float(se_m.sum() / n_ok.sum())
+        out["chan_mse_persistence"] = float(se_p.sum() / n_ok.sum())
+        if blk_rows is not None:
+            # BLOCK-ONLY, so a per-bin record stays key-for-key what it has
+            # always been. `chan_n` against `chan_n_one_cell` is the number
+            # that says the decode really did visit every cell — the same
+            # effect the roll's `n` in chan_skill carries.
+            out["chan_cells"] = int(rows_t.shape[1])
+            out["chan_n"] = int(n_ok.sum())
+            out["chan_n_one_cell"] = n_one
 
         # RAPID probe from the mini transformer's section hidden state
         sec_in_keep = torch.as_tensor(sec_in_keep, dtype=torch.long)
