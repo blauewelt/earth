@@ -812,7 +812,7 @@ def _prune_stale(cache_path, want):
 
 def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                      cache_path=None, batch=8192, mask_chan=None,
-                     progress=None, t_sel=None):
+                     progress=None, t_sel=None, blk_rows=None, blk_pad=None):
     """Frozen codec embeddings for every (t, pixel in ys/xs): [T, P, d_z].
     Cached on disk — the embedding pass is the expensive part of stage 2
     (T×P encoder forwards), and every probe variant reuses it.
@@ -838,6 +838,14 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
     dev = next(model.parameters()).device
     T, H, W, C = X.shape
     P = len(ys)
+    if getattr(model, "k_time", 1) > 1:
+        if blk_rows is None:
+            raise ValueError(
+                "embed_everything: this codec is a BLOCK codec (k_time="
+                f"{model.k_time}) and no block map was passed. Embedding it "
+                "one bin at a time would silently produce embeddings of a "
+                "different thing than it was trained on.")
+        T = len(blk_rows)                      # the BLOCK axis is the axis
     if t_sel is None:
         ts = np.arange(T)
     else:
@@ -928,6 +936,18 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                                      torch.as_tensor(xs[sl]), patch)
                     z = model.encode((v * (~mk).unsqueeze(-1)).to(dev),
                                      o.to(dev), mk.to(dev), ctx_t)
+                elif getattr(model, "k_time", 1) > 1:
+                    # E-047 BLOCK CODEC. `t` indexes the BLOCK axis and
+                    # `blk_rows[t]` names its source rows; the grid is
+                    # assembled at FULL VISIBILITY exactly as the per-bin path
+                    # is, with pad cells forced unobserved.
+                    rr = blk_rows[t]
+                    v = torch.stack([X[int(r), ys[sl], xs[sl]] for r in rr], 1)
+                    o = torch.stack([OBS[int(r), ys[sl], xs[sl]] for r in rr], 1)
+                    o = o & torch.as_tensor(~blk_pad[t])[None, :, None]
+                    mkg = torch.zeros_like(o)
+                    z = model.encode((v * ~mkg).to(dev), o.to(dev),
+                                     mkg.to(dev), ctx_t)
                 else:
                     v = X[t, ys[sl], xs[sl]] * (~mk)
                     z = model.encode(v.to(dev), OBS[t, ys[sl], xs[sl]].to(dev),
@@ -1659,6 +1679,44 @@ def main():
         print(f"  RAPID truth on the strided axis: {len(rapid_arr)} of "
               f"{len(d['rapid'])} rows survive", flush=True)
 
+    # ---- E-047: a BLOCK codec makes the block axis the axis ---------------
+    # k_time comes from the CODEC, not from a flag here: the head consumes
+    # whatever the frozen encoder emits, and a block codec emits one z per
+    # block. In `month` mode the block labels are `YYYY-MM`, so everything
+    # downstream — TimeAxis, the roll's horizon and bands, the persistence
+    # baselines — reads a MONTHLY axis that was built entirely from 5-day
+    # data, which is E-047's whole point.
+    BLKA = None
+    if int(ck["args"].get("k_time", 1) or 1) > 1:
+        tb = str(ck["args"].get("time_block", "") or "")
+        if not tb:
+            sys.exit("the codec has k_time > 1 but no `time_block` in its "
+                     "args: this checkpoint cannot say how its blocks were "
+                     "cut, and guessing would embed a different grouping "
+                     "than it was trained on.")
+        if a.time_stride:
+            sys.exit("--time-stride on a BLOCK codec: two time surgeries at "
+                     "once. The blocks already re-cut the axis; striding it "
+                     "as well would leave an axis no artefact describes.")
+        from timeblocks import BlockAxis
+        BLKA = BlockAxis(tb, months,
+                         d["bin_index"] if "bin_index" in d else None,
+                         (dt.date.fromisoformat(str(d["epoch"]))
+                          if "epoch" in d else None),
+                         (int(np.asarray(d["pentad_days"]).item())
+                          if "pentad_days" in d else None))
+        print(BLKA.describe(C, ck["d_z"]), flush=True)
+        rapid_arr = BLKA.remap_rows(rapid_arr)
+        months = list(BLKA.labels)
+        moy = np.array([int(m[5:7]) - 1 for m in months])
+        t_hold = np.array([
+            t_hold[BLKA.rows[b, :int(BLKA.n_bins[b])]].any()
+            for b in range(BLKA.n_blocks)])
+        T = BLKA.n_blocks
+        print(f"  block axis: T {T} · held out {int(t_hold.sum())} · RAPID "
+              f"rows {len(rapid_arr)} · labels {months[0]}..{months[-1]}",
+              flush=True)
+
     codec = codec_from_ckpt(ck, C)
     codec.load_state_dict(ck["model"])
     codec.eval()
@@ -1732,6 +1790,12 @@ def main():
     dhash = data_fingerprint(a.data)
     print(f"  codec {whash} · tensor {dhash} ({os.path.basename(a.data)})", flush=True)
     cache = (embed_cache_path(a.run, whash, dhash) if not a.max_pixels else None)
+    # A block codec's Z has a different SHAPE and a different axis from a
+    # per-bin one. The weight hash already separates them (a block codec is a
+    # different codec), so this is belt and braces — but a name that says
+    # `blk` is one a human can triage on a full disk without loading it.
+    if cache and BLKA is not None:
+        cache = cache.replace(".npy", f"_blk{BLKA.k_max}.npy")
     # Progress goes into the run's OWN metrics.jsonl, which the publisher loop
     # in ml-train.yml pushes to ml-live-<n> every five minutes. A print reaches
     # the log, and Actions will not serve the log of a running job — so during
@@ -1747,7 +1811,11 @@ def main():
 
     Z, coords = embed_everything(codec, Xt, OBS, ctx_all, lats, lons, ys, xs,
                                  ck["d_z"], cache_path=cache,
-                                 progress=_emb_note)
+                                 progress=_emb_note,
+                                 blk_rows=(None if BLKA is None
+                                           else BLKA.rows),
+                                 blk_pad=(None if BLKA is None
+                                          else BLKA.pad))
     P = len(ys)
     print(f"  Z [T={T} P={P} d_z={ck['d_z']}]  ({time.time() - t0:.0f}s)")
 
@@ -1774,6 +1842,21 @@ def main():
                 zs.append(codec.encode(vv.to(EDEV), oo.to(EDEV),
                                        torch.zeros(n, C, dtype=torch.bool, device=EDEV),
                                        torch.as_tensor(ctx).to(EDEV)).cpu().numpy())
+            elif BLKA is not None:
+                # E-047: a block codec's static identity is the same question
+                # asked of a GRID — the static channels repeated across the
+                # first block's cells, with the pad cells unobserved. The
+                # channels are time-invariant, so which block is arbitrary;
+                # block 0 is chosen the way bin 0 is in the per-bin path.
+                kt = BLKA.k_max
+                vv = Xt[0, ys[sl], xs[sl]][:, None, :].expand(-1, kt, -1)
+                oo = (stat_obs[ys[sl], xs[sl]][:, None, :]
+                      .expand(-1, kt, -1).clone())
+                oo &= torch.as_tensor(~BLKA.pad[0])[None, :, None]
+                zs.append(codec.encode(
+                    vv.to(EDEV), oo.to(EDEV),
+                    torch.zeros(n, kt, C, dtype=torch.bool, device=EDEV),
+                    torch.as_tensor(ctx).to(EDEV)).cpu().numpy())
             else:
                 zs.append(codec.encode(Xt[0, ys[sl], xs[sl]].to(EDEV),
                                        stat_obs[ys[sl], xs[sl]].to(EDEV),
@@ -2720,23 +2803,40 @@ def main():
             results["z_t+1"]["mse_model"] < results["z_t+1"]["mse_persistence"])
 
         # ---- eval 2: decode ẑ through the frozen codec → channel space ----
+        # E-047: a BLOCK codec decodes a CELL, not a bin, and "the channel
+        # value at t+1" has k_max answers under blocking — one per cell of the
+        # predicted block — while the truth array here is still per-bin. Which
+        # cell stands for the block is an evaluation SEMANTIC nobody has
+        # chosen yet (ml/plans/E047_block_codec.md 7), so this eval records
+        # that it does not apply rather than picking a cell and reporting the
+        # number as if it were the old one. eval 1 above (z_t+1) is unchanged
+        # and is the headline either way.
+        if BLKA is not None:
+            results["chan_t+1"] = {"skipped": (
+                f"block codec (k_time {int(ck['args']['k_time'])}): decoding "
+                f"z to channel space names a CELL, and which cell stands for "
+                f"the block is not yet decided. z_t+1 above is unaffected.")}
+            print(f"::warning::chan_t+1 skipped — "
+                  f"{results['chan_t+1']['skipped']}", flush=True)
         qc = torch.arange(C)[None, :].expand(len(et), -1)
         off0 = torch.zeros(len(et), C, 3, dtype=torch.long)
-        xhat = codec.query(zhat, qc, off0)
+        xhat = (None if BLKA is not None else codec.query(zhat, qc, off0))
         ys_t = torch.as_tensor(ys, dtype=torch.long)
         xs_t = torch.as_tensor(xs, dtype=torch.long)
-        v1 = Xt[et + 1, ys_t[ep], xs_t[ep]]
-        o1 = OBS[et + 1, ys_t[ep], xs_t[ep]]
-        v0 = Xt[et, ys_t[ep], xs_t[ep]]
-        o0 = OBS[et, ys_t[ep], xs_t[ep]]
-        both = o0 & o1
-        dyn = torch.zeros(C, dtype=torch.bool); dyn[dynamic] = True
-        both = both & dyn[None, :]
-        mse_m = float(((xhat - v1).pow(2) * both).sum() / both.sum())
-        mse_p = float(((v0 - v1).pow(2) * both).sum() / both.sum())
-        results["chan_t+1"] = {"mse_model": mse_m, "mse_persistence": mse_p,
-                               "beats_persistence": mse_m < mse_p,
-                               "channels": [chan[c] for c in dynamic]}
+        if xhat is not None:
+            v1 = Xt[et + 1, ys_t[ep], xs_t[ep]]
+            o1 = OBS[et + 1, ys_t[ep], xs_t[ep]]
+            v0 = Xt[et, ys_t[ep], xs_t[ep]]
+            o0 = OBS[et, ys_t[ep], xs_t[ep]]
+            both = o0 & o1
+            dyn = torch.zeros(C, dtype=torch.bool); dyn[dynamic] = True
+            both = both & dyn[None, :]
+            mse_m = float(((xhat - v1).pow(2) * both).sum() / both.sum())
+            mse_p = float(((v0 - v1).pow(2) * both).sum() / both.sum())
+            results["chan_t+1"] = {"mse_model": mse_m,
+                                   "mse_persistence": mse_p,
+                                   "beats_persistence": mse_m < mse_p,
+                                   "channels": [chan[c] for c in dynamic]}
 
     # ---- eval 2b: DIRECT horizons, z-space, held-out targets --------------
     # One forward from true context, the horizon head reads hidden(-1) — the

@@ -83,13 +83,24 @@ class PixelMAE(nn.Module):
         # embedded; decoder never sees the input values, only z.
         self.q_chan = nn.Embedding(n_chan, 64)
         self.q_off = nn.Embedding(2 * max_abs_offset + 1, 16)  # shared per axis
+        # E-047, decided 2026-08-22 (option b): WITHIN-BLOCK POSITION GETS ITS
+        # OWN QUERY EMBEDDING. The alternative was to reuse the `dt` slot of
+        # `off`, which fits (a 7-cell block centred is dt in -3..+3, exactly
+        # this table's range) and costs nothing — and would make ONE index
+        # mean two things, "one bin later inside this block" for a cell query
+        # and "one block later" for the neighbour loss, with nothing in the
+        # input telling the decoder which. One symbol, one meaning. `off`'s
+        # dt keeps meaning BLOCKS, which is what the axis means downstream.
+        if self.k_time > 1:
+            self.q_time = nn.Embedding(self.k_time, 16)
         # dec_layers = HIDDEN layers. The historical decoder (2 hidden) is a
         # ~1.3M-param MLP against a 40M encoder; E-019a measured the round
         # trip losing 6.9% of deep-temperature variance, so the depth is now
         # a knob (E-019b). dec_layers=2 reproduces every old checkpoint
         # exactly — codec_from_ckpt defaults it for args written before the
         # knob existed.
-        dec = [nn.Linear(d_z + 64 + 3 * 16, d_dec), nn.GELU()]
+        dec = [nn.Linear(d_z + 64 + 3 * 16 + (16 if self.k_time > 1 else 0),
+                         d_dec), nn.GELU()]
         for _ in range(dec_layers - 1):
             dec += [nn.Linear(d_dec, d_dec), nn.GELU()]
         dec += [nn.Linear(d_dec, 1)]
@@ -176,13 +187,26 @@ class PixelMAE(nn.Module):
         h = self.encoder(toks)
         return self.to_z(h[:, 0])
 
-    def query(self, z, chan_idx, off):
-        """z [B,d_z] · chan_idx [B,Q] · off [B,Q,3] ints in [-max,max] → [B,Q]."""
+    def query(self, z, chan_idx, off, tpos=None):
+        """z [B,d_z] · chan_idx [B,Q] · off [B,Q,3] ints in [-max,max] → [B,Q].
+
+        `tpos` [B,Q] is the WITHIN-BLOCK cell position and is required exactly
+        when k_time > 1 — a block codec that was asked for "channel c" without
+        saying WHICH CELL would be answering a question with no answer, so it
+        raises rather than picking one."""
         B, Q = chan_idx.shape
         qc = self.q_chan(chan_idx)
         qo = self.q_off(off + self.max_off).reshape(B, Q, -1)
         zq = z.unsqueeze(1).expand(-1, Q, -1)
-        return self.decoder(torch.cat([zq, qc, qo], dim=-1)).squeeze(-1)
+        parts = [zq, qc, qo]
+        if self.k_time > 1:
+            if tpos is None:
+                raise ValueError(
+                    f"query(): this codec has k_time={self.k_time}, so every "
+                    f"query names a cell (tpos [B,Q] in 0..{self.k_time - 1}) "
+                    f"as well as a channel")
+            parts.append(self.q_time(tpos))
+        return self.decoder(torch.cat(parts, dim=-1)).squeeze(-1)
 
 
 class LazyPixels:

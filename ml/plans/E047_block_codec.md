@@ -1,8 +1,8 @@
 # E-047 · A codec that fuses several pentad bins into one embedding
 
-**Status: DESIGN + the axis half BUILT. One architectural decision is OPEN and
-blocks the training wiring — §6.** Written 2026-08-22. Nothing has been
-trained.
+**Status: BUILT AND SMOKE-TESTED END TO END. Not yet dispatched.** Written
+2026-08-22; the open decision of §6 was made the same day (option **b**) and
+the wiring landed with it. Nothing has been trained beyond a 12-step CPU toy.
 
 ## 1 · Why
 
@@ -122,59 +122,84 @@ the roll.
 | its roll (monthly cadence, so the ARCHIVE's cost, not the pentad one) | **$1-2** |
 | **to a first verdict** | **~$6-8** |
 
-## 6 · THE OPEN DECISION — how the decoder queries a cell
+## 6 · THE DECISION — how the decoder queries a cell: **(b), decided**
 
-**This blocks the training wiring and I am not choosing it unilaterally.**
+Point 5 said "decoder reconstructs all cells"; the decoder could not express a
+cell query without a choice, because `off = (Δlon, Δlat, Δmonth)` runs through
+ONE shared 7-entry table (`q_off`, `max_abs_offset` 3, `ml/model.py:140`).
 
-Point 5 of the design says "masked-reconstruction training as today, masking
-CELLS of the k_max x C grid; decoder reconstructs all cells". The encoder side
-is specified down to the embedding. The decoder side is not, and the existing
-decoder cannot express a cell query without a decision:
+**DECIDED: option (b) — a new `q_time = nn.Embedding(k_time, 16)`**, the exact
+mirror of the encoder's `time_emb`, concatenated into the decoder input. The
+rejected alternative (a) reused the `dt` slot centred at `j-3`, which fits the
+existing table exactly and costs nothing — and would make ONE index mean two
+things, "one bin later inside this block" for a cell query and "one block
+later" for the neighbour loss, with nothing in the input telling the decoder
+which. §4.1: prefer the formulation that removes a failure mode. The cost is 16
+input dimensions on a ~1.3M-parameter decoder; `k_time = 1` checkpoints keep
+their shape exactly, asserted in the tests.
 
-    query(z, chan_idx, off) ->  q_chan(chan) ++ q_off(off + max_off)     [ml/model.py:140]
-    q_off = nn.Embedding(2 * max_abs_offset + 1, 16)   shared by (dx, dy, dt)
+**AND `dt` NOW MEANS BLOCKS.** Under blocking the neighbour loss's `dt = ±1` is
+the next or previous BLOCK, not bin — because the block axis IS the time axis
+downstream, and the neighbour loss should see the world the head will see. A
+month codec's neighbour term therefore reaches one month either way, which is
+what the archive's monthly codecs have always meant by it.
 
-`off` is `(Δlon, Δlat, Δmonth)` and `max_abs_offset` is **3**, so the table
-holds exactly 7 entries. Three ways to ask for "channel c of cell j":
+## 7 · What was built (and the two things deliberately left)
 
-**(a) Reuse the `dt` slot, centred.** `dt = j - 3` for `k_max = 7` fits the
-existing 7-entry table exactly, adds no parameters, and changes no checkpoint
-shape. **Cost:** it COLLIDES with the neighbour loss, which already uses
-`dt = ±1` to mean *the next BIN* (`NEI` in `ml/train.py:547`). Under blocking,
-one index would mean both "one bin later inside this block" and "one block
-later", and the model cannot tell them apart.
+**Done, and tested before any GPU:**
 
-**(b) A new query-time embedding**, `q_time = nn.Embedding(k_time, 16)`
-concatenated into the decoder input — the exact mirror of the encoder's new
-`time_emb`. Clean separation: `off` keeps meaning spatial/inter-block, `q_time`
-means within-block position. **Cost:** the decoder's first layer grows by 16
-(`d_z + 64 + 3*16` → `+ 16`), so a `k_time > 1` checkpoint has a different
-decoder shape from every archived one. At `k_time = 1` nothing changes.
+1. **`ml/train.py --time-block`** (`month` | `N`, default `""` = off =
+   bit-identical). Blocks are cut AFTER the anomaly transform, never before —
+   the climatology and the per-channel z-score are properties of the SOURCE
+   axis, and computing them per block would change the statistics a frozen
+   encoder is later asked to reproduce. The pool is over (block, pixel); a
+   BLOCK is held out iff ANY of its bins is, so a block can never leak a
+   holdout bin into training through a shared embedding. `ctx` is the block
+   centre's continuous phase. `k_time`, `time_block` and `ctx_mode` ride
+   `vars(a)` into the checkpoint.
+2. **`ml/model.py`**: `PixelMAE(k_time=K)` reads a `[B, k_time, C]` grid
+   (cell token = `chan_emb[c] + time_emb[j]`), and `query(..., tpos)` names a
+   cell through `q_time`. A block codec asked for a channel without a cell
+   RAISES rather than picking one.
+3. **`ml/temporal.py`**: `k_time` comes from the CODEC, never a flag. The
+   block axis becomes the axis — labels, `moy`, `t_hold` (any bin held out ⇒
+   block held out), the RAPID rows (`BlockAxis.remap_rows`), the pool and the
+   persistence baselines. `embed_everything` assembles the same grids at full
+   visibility and REFUSES to embed a block codec bin-by-bin. `--time-stride`
+   on a block codec is refused: two time surgeries at once.
+4. **The cache name carries `blk<k_max>`.** The weight hash already separates
+   a block codec from a per-bin one; the name is so a human can triage a full
+   disk without loading the file.
+5. **Plumbing**: `time_block` is a RECIPE-ONLY key (`RECIPE_TIME_BLOCK`),
+   declared in the workflow's recipe-only block and passed by the Train step.
+   It is recipe-only for two reasons, not one: the 25-input list is full, AND
+   it is a property of a CODEC rather than of a dispatch — `temporal.py` reads
+   `k_time` back out of the checkpoint. **This also makes the `sched:`-tail
+   question moot for stage 1:** the tail is built by `scripts/probes_run.sh`
+   and reaches `ml/temporal.py`, not the Train step, so a stage-1 flag could
+   not have travelled that way regardless.
+6. **`ml/recipes/f4r2-40M-monthblock.json`** — `f4r2-40M-nolonhold` with
+   exactly two changes, `time_block: "month"` and `d_z: 64`.
+7. **Tests**: `tests/test_e047_time_blocks.py` (7 checks: grouping, ragged
+   edges, pad cells that point at real rows, the obs-mask fusion, block-centre
+   phase against `season_feat_of`, fixed-N, the RAPID remap, and `k_time=1`
+   identity) and `tests/test_e047_block_smoke.py` (4 checks end to end on a
+   CPU toy: the codec trains, the checkpoint carries both new embeddings,
+   `temporal.py` embeds one z per month onto a `YYYY-MM` axis and a stage-2
+   head trains on it, `--time-block 2` works, the knob off is the per-bin
+   codec, and a block codec refuses to be embedded as bins).
 
-**(c) Drop the neighbour loss's temporal offsets while blocking**, and reuse
-`dt` for the within-block position. No new parameters, no collision. **Cost:**
-it removes a training signal that exists today, and changes what the neighbour
-loss means in the one arm being compared against arms that have it.
+**Left, deliberately, and both SKIPPED LOUDLY rather than approximated:**
 
-**My recommendation is (b)** — it is the only one of the three where a symbol's
-meaning does not depend on which loss term is reading it, the cost is 16 input
-dimensions on a ~1.3M-parameter decoder, and `k_time = 1` stays bit-identical
-so nothing archived moves. But it changes an architecture, so it is Chris's
-call, not mine. Say the word and the wiring is a day.
-
-## 7 · What is left after the decision
-
-1. `--time-block` in `ml/train.py`: block assembly, the grid batch, the cell
-   mask, the sizing print, `k_time`/`ctx_mode` into the args, and the refusal
-   of `--time-block` together with `--time-stride` (one time-surgery at a time).
-2. The embed path in `ml/temporal.py`: one z per block, labelled with the
-   BLOCK's label; the pool, the persistence baselines, the monitor and the
-   RAPID row remap all keyed on the block axis (`BlockAxis.remap_rows`, which
-   is the same shape as the `--time-stride` remap that already exists).
-3. The CPU toy smoke: tiny tensor → month-block codec trains a few steps →
-   embeds → a tiny `temporal.py` head consumes the block-z without error.
-4. A recipe file (`ml/recipes/f4r2-40M-monthblock.json`) so the dispatch is one
-   token rather than fourteen fields.
+- **`ml/train.py`'s own end-of-run evaluation** is per-bin throughout (recon
+  rows, a `t+1` that means the next bin, per-channel skills). Under blocking
+  each of those is a different question. It records `eval_skipped` in
+  `eval.json` and says so in the log.
+- **`temporal.py`'s eval 2 (`chan_t+1`)** decodes ẑ to channel space, which
+  under blocking names a CELL — and which cell stands for the block is an
+  evaluation semantic nobody has chosen. It records `chan_t+1.skipped`.
+  **eval 1 (`z_t+1`) is unaffected and is the headline** the falsifier in §4
+  is written against.
 
 ## 8 · Relationship to E-046 (FSQ)
 

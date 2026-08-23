@@ -124,6 +124,16 @@ on:
 #       "lo,hi" | "none". The longitude block excluded from STAGE-1 training.
 #       Unset = train.py's own default, -45,-25, unchanged for every dispatch
 #       that does not name a recipe carrying this key.
+#   recipe-only: time_block       -> ml/train.py --time-block     (Train step)
+#       "" | "month" | "<N>". E-047: embed a BLOCK of consecutive bins as ONE
+#       z instead of one bin as one z. "month" groups the pentad axis by
+#       calendar month (6 or 7 bins, k_max 7, short months padded) so the
+#       embedding axis is MONTHLY while every input stays 5-day; an integer
+#       takes fixed N-bin blocks. Unset = "" = the per-bin codec every
+#       archived checkpoint is, bit-identical. It is recipe-only because the
+#       25-input list is full AND because it is a property of a CODEC, not of
+#       a dispatch: ml/temporal.py reads k_time back out of the checkpoint,
+#       never from a flag. See ml/plans/E047_block_codec.md.
 #   recipe-only: train_lon_hold   -> ml/temporal.py --train-lon-hold
 #       "inherit" | "none" | "lo,hi". Which longitudes are excluded from the
 #       STAGE-2 training pool, read in scripts/probes_run.sh. "inherit" is the
@@ -978,6 +988,7 @@ jobs:
             --d-dec "${RECIPE_CODEC_D_DEC:-${{ inputs.codec_d_dec }}}" \
             "${RECW[@]}" \
             $([ -n "${RECIPE_HOLDOUT_LON:-}" ] && echo "--holdout-lon=${RECIPE_HOLDOUT_LON}") \
+            $([ -n "${RECIPE_TIME_BLOCK:-}" ] && echo "--time-block=${RECIPE_TIME_BLOCK}") \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && echo --anomaly) \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && [ "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}" != "0" ] \
               && echo --eval-every "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}") \

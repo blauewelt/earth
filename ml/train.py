@@ -15,6 +15,7 @@ Smoke (CPU, ~2 min):   python3 ml/train.py --smoke
 Real  (Colab TPU/GPU): colab run --gpu v6e1 ml/train.py   (see ml/README.md)
 """
 import argparse
+import datetime as dt
 import json
 import os
 import sys
@@ -174,6 +175,22 @@ def parse():
                         "match argparse's negative-number pattern, so it is "
                         "read as an option string and the process exits 2 "
                         "with 'expected one argument'.")
+    p.add_argument("--time-block", default="",
+                   help="E-047: embed a BLOCK of consecutive bins as ONE z "
+                        "instead of one bin as one z. '' (default) is the "
+                        "per-bin codec every archived checkpoint is, and is "
+                        "bit-identical. 'month' groups the axis by calendar "
+                        "month (a pentad month is 6 or 7 bins, k_max 7, short "
+                        "months padded) so the resulting embedding axis is "
+                        "MONTHLY while every input is 5-day; an integer N "
+                        "takes fixed non-overlapping N-bin blocks. The "
+                        "encoder sees a k_max x C GRID of cells whose token "
+                        "is chan_emb[c] + time_emb[j]; a padded or missing "
+                        "cell rides the existing unobserved-cell path, which "
+                        "is the point (Argo present in one bin of six stops "
+                        "being a special case). ctx carries the CONTINUOUS "
+                        "fraction-of-year phase of the block's centre. See "
+                        "ml/plans/E047_block_codec.md")
     p.add_argument("--anomaly", action="store_true",
                    help="train dynamic channels as departures from their own "
                         "per-pixel monthly climatology (train years only)")
@@ -377,6 +394,40 @@ def main():
         print(f"anomaly space: {len(dynamic)}/{C} dynamic channels "
               f"({[chan[c] for c in dynamic]})")
 
+    # ---- E-047 time blocks ------------------------------------------------
+    # AFTER the anomaly transform, never before: the climatology and the
+    # per-channel z-score are properties of the SOURCE axis, and computing
+    # them per block would change the statistics a frozen encoder is later
+    # asked to reproduce (the same argument --time-stride carries in
+    # ml/temporal.py). The blocks are a view of the transformed tensor.
+    BLK = None
+    if a.time_block:
+        from timeblocks import BlockAxis
+        BLK = BlockAxis(a.time_block, months,
+                        d["bin_index"] if "bin_index" in d else None,
+                        (dt.date.fromisoformat(str(d["epoch"]))
+                         if "epoch" in d else None),
+                        (int(np.asarray(d["pentad_days"]).item())
+                         if "pentad_days" in d else None))
+        a.k_time = int(BLK.k_max)
+        a.ctx_mode = "block_phase"
+        print(BLK.describe(C, a.d_z), flush=True)
+        blk_rows = torch.as_tensor(BLK.rows.astype(np.int64))
+        blk_pad = torch.as_tensor(BLK.pad)
+        blk_ctx = BLK.ctx_phase()                       # [n_blocks, 2]
+        # A BLOCK is held out iff ANY of its real bins is: a block that mixes
+        # a holdout bin with train bins would leak the holdout into training
+        # through the same embedding, which is the one thing the year-blocked
+        # split exists to prevent.
+        blk_hold = np.array([t_hold[BLK.rows[b, :int(BLK.n_bins[b])]].any()
+                             for b in range(BLK.n_blocks)])
+        print(f"  blocks held out: {int(blk_hold.sum())}/{BLK.n_blocks} "
+              f"(any bin of the block held out makes the block held out)",
+              flush=True)
+    else:
+        a.k_time = 1
+        a.ctx_mode = "month_sincos"
+
     # train pool: any (t, y, x) with ≥2 observed channels, outside holdouts
     #
     # Chunked and int32 — identical values and identical order, a fraction of
@@ -397,6 +448,21 @@ def main():
     OBS = LazyPixels(X, obs=True)
     mvec = np.array([int(m[5:7]) - 1 for m in months])
     ctx_all = np.stack([np.sin(2 * np.pi * mvec / 12), np.cos(2 * np.pi * mvec / 12)], 1)
+    if BLK is not None:
+        # The pool is over (BLOCK, pixel). A block is poolable where any of
+        # its real bins is — obs_any is already the per-bin ">= 2 observed
+        # channels" test, so the block-level test is "some bin qualifies",
+        # which is exactly what a grid with unobserved cells is for.
+        b_any = np.stack([
+            obs_any[BLK.rows[b, :int(BLK.n_bins[b])]].any(axis=0)
+            for b in range(BLK.n_blocks)])
+        tt, yy, xx = pool_idx(b_any & ~blk_hold[:, None, None]
+                              & ~x_hold[None, None, :])
+        vt, vy, vx = pool_idx(b_any & (blk_hold[:, None, None]
+                                       | x_hold[None, None, :]))
+        ctx_all = blk_ctx
+        print(f"block pool: train {len(tt):,} · held-out {len(vt):,} "
+              f"(over {BLK.n_blocks} blocks)", flush=True)
 
     def batch(idx_t, idx_y, idx_x, n):
         k = np.random.randint(0, len(idx_t), n)
@@ -526,6 +592,7 @@ def main():
             "a checkpoint that carries the architecture, or pass every flag.")
 
     model = PixelMAE(n_chan=C, d_z=a.d_z, patch=a.patch, d_model=a.d_model,
+                     k_time=a.k_time,
                      n_layers=a.n_layers, n_heads=a.n_heads, d_dec=a.d_dec,
                      dec_layers=a.dec_layers).to(dev)
     print(f"codec parameters: {sum(p_.numel() for p_ in model.parameters())/1e6:.2f}M")
@@ -546,6 +613,24 @@ def main():
     # neighbour offsets (Δx, Δy, Δt): 4 spatial + 2 temporal
     NEI = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
 
+    def gather_block(b, y, x):
+        """[B, k_max, C] values and observed flags for whole blocks.
+
+        The cells of one block are k_max SOURCE rows of the same pixel, so
+        this is the per-bin gather done k_max times and stacked — the memory
+        stays per-batch (LazyPixels derives it), and a PAD cell is forced
+        unobserved here rather than anywhere downstream."""
+        rows = blk_rows[b]                                   # [B, k_max]
+        vs, os_ = [], []
+        for j in range(rows.shape[1]):
+            v_, o_ = Xt[rows[:, j], y, x], OBS[rows[:, j], y, x]
+            vs.append(v_)
+            os_.append(o_)
+        v = torch.stack(vs, 1).to(dev, torch.float32)
+        o = torch.stack(os_, 1).to(dev)
+        o = o & (~blk_pad[b]).to(o.device).unsqueeze(-1)
+        return v, o
+
     def gather(t, y, x):
         # float32 EXPLICITLY. The batch's dtype follows the tensor's, and
         # family 4 is float16 — which reaches the codec as Half against Float
@@ -559,7 +644,48 @@ def main():
         o = OBS[t, y, x].to(dev)
         return v, o
 
+    def step_loss_block(b, y, x, ctx):
+        """E-047: the same masked-reconstruction objective over a GRID.
+
+        Everything is the per-bin objective with a cell axis added: the mask
+        is drawn per CELL at the same --mask-ratio, the encoder reads the grid
+        at once, the decoder is asked for every cell (channel c AT cell j via
+        q_time, offset 0), and the loss weights are the existing
+        mask + rec_w_visible*(observed & unmasked) scheme. The neighbour term
+        keeps its meaning by moving with the axis: dt = +/-1 is the next or
+        previous BLOCK, because the block axis IS the time axis downstream.
+        """
+        B = len(b)
+        v, o = gather_block(b, y, x)                        # [B, KT, C]
+        KT = v.shape[1]
+        mask = (torch.rand(B, KT, C, device=dev) < a.mask_ratio) & o
+        z = model.encode(v * (~mask), o, mask, ctx.to(dev))
+        qc = (torch.arange(C, device=dev)[None, None, :]
+              .expand(B, KT, -1).reshape(B, KT * C))
+        qt = (torch.arange(KT, device=dev)[None, :, None]
+              .expand(B, -1, C).reshape(B, KT * C))
+        off0 = torch.zeros(B, KT * C, 3, dtype=torch.long, device=dev)
+        pred = model.query(z, qc, off0, qt).reshape(B, KT, C)
+        l_rec = huber(pred, v)
+        w = (mask.float() + a.rec_w_visible * (o & ~mask).float()) \
+            * cwt[None, None, :]
+        l_rec = (l_rec * w).sum() / w.sum().clamp(min=1)
+        # neighbours, in BLOCK units for dt
+        pick = np.random.randint(0, len(NEI), B)
+        dxyz = torch.as_tensor(np.array([NEI[i] for i in pick]), device=dev)
+        bn = (b.to(dev) + dxyz[:, 2]).clamp(0, len(ctx_all) - 1)
+        yn = (y.to(dev) + dxyz[:, 1]).clamp(0, H - 1)
+        xn = (x.to(dev) + dxyz[:, 0]).clamp(0, W - 1)
+        vn, on = gather_block(bn.cpu(), yn.cpu(), xn.cpu())
+        offn = dxyz[:, None, :].expand(-1, KT * C, -1).long()
+        predn = model.query(z, qc, offn, qt).reshape(B, KT, C)
+        wn = on.float() * cwt[None, None, :]
+        l_nei = (huber(predn, vn) * wn).sum() / wn.sum().clamp(min=1)
+        return l_rec, l_nei
+
     def step_loss(t, y, x, ctx):
+        if BLK is not None:
+            return step_loss_block(t, y, x, ctx)
         B = len(t)
         v, o = gather(t, y, x)
         mask = (torch.rand(B, C, device=dev) < a.mask_ratio) & o
@@ -1041,6 +1167,26 @@ def main():
     # ---- evaluation on the BLOCKED holdout --------------------------------
     model.eval()
     results = {}
+    if BLK is not None:
+        # E-047: this evaluation is per-BIN throughout — it gathers one row
+        # per sample, queries C channels at offset 0, and compares against a
+        # t+1 that means "the next bin". Every one of those is a different
+        # question under blocking, and a block-shaped rewrite of it is not
+        # what decides E-047 (stage 2 and the roll are). So it is SKIPPED,
+        # LOUDLY and in the artefact — never silently, and never by producing
+        # a number that answers a question nobody asked (ml/CLAUDE.md 4.6).
+        results["eval_skipped"] = (
+            f"--time-block {a.time_block!r}: the codec's own per-bin "
+            f"evaluation does not apply to a block codec (its recon rows, its "
+            f"t+1 persistence and its channel skills are all per-bin "
+            f"quantities). The verdict for a block codec is the stage-2 head "
+            f"and the roll — see ml/plans/E047_block_codec.md 4.")
+        print(f"::warning::{results['eval_skipped']}", flush=True)
+        json.dump(results, open(os.path.join(a.out, "eval.json"), "w"),
+                  indent=1)
+        save_ckpt(a.steps)
+        print(f"saved {os.path.join(a.out, 'pixelmae.pt')}", flush=True)
+        return
     with torch.no_grad():
         n_eval = min(20000, len(vt))
         t, y, x, ctx = batch(vt, vy, vx, n_eval)

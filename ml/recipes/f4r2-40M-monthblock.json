@@ -1,0 +1,16 @@
+{
+  "_description": "E-047a: the MONTH-BLOCK pentad codec. f4r2-40M-nolonhold field for field, with exactly two changes — time_block 'month' and d_z 64 — so the comparison against the per-bin pentad baseline is a comparison of the bottleneck's SCOPE and its width, and of nothing else. What changes: the codec embeds one CALENDAR MONTH of pentad bins as ONE z instead of one bin as one z. A pentad month is 6 or 7 bins, so the encoder reads a 7x40 GRID of cells (k_max 7, short months padded) whose token is the channel embedding plus a learned within-block time-offset embedding, and the decoder names a cell through its own q_time query embedding. Padded and missing cells ride the existing unobserved-cell path — which is the point: rg_* is a MONTHLY product written into ONE pentad bin per month (measured 2026-08-22: n_rg_live 252/3142 = 8.02%, the mid-month stamp, 79.41% of ocean pixels when present), so 'Argo is absent in five bins of six' stops being a special case and becomes six cells of which five are unobserved, fused into one representation. ctx carries the CONTINUOUS fraction-of-year phase of the block's centre rather than an integer month's sin/cos, so the labelling is right from birth (Chris, 2026-08-22). D_Z 64, NOT 32: one z now answers for ~6x as much input, and 64 is the monthly-codec capacity class the archive's own numbers were measured at. THE EMBEDDING AXIS BECOMES MONTHLY: block labels are 'YYYY-MM', so ml/temporal.py's TimeAxis reads a monthly axis built entirely out of 5-day data, and the roll's horizon, bands and day-matched leads are the archive's own with no cadence-matching argument at all. DISPATCH WITH `resume` EMPTY (fresh codec; a recipe cannot pin resume — the seed step reads inputs.resume in a YAML `if:`), on a 126 GB box (#368 host-OOMed a family-4 build on 63 GB). Full design, falsifiers and cost: ml/plans/E047_block_codec.md.",
+  "_provenance": "Copied field for field from ml/recipes/f4r2-40M-nolonhold.json (the pentad baseline, itself the f4r2-40M architecture with holdout_lon '0,0'), changing time_block and d_z only. NOTHING HAS BEEN RUN AT THIS CONFIGURATION — this recipe is the dispatch surface, and its _provenance becomes a measurement when the run lands. The controls it will be read against already exist and are measured: E-045's A2a arm, which answered the same cadence question by SELECTING one bin per month (stride 6) and reached a 20k one-step ratio of 0.0721, and the monthly archive's +0.939 corridor _trainlon line for the roll. The hypothesis is that FUSION beats SELECTION; parity with 0.0721 means selection suffices and this retrain is not worth repeating. The machinery is tested before any GPU: tests/test_e047_time_blocks.py (7 checks on the block axis and the encoder grid) and tests/test_e047_block_smoke.py (4 checks end to end on a CPU toy — codec trains, embeds, a stage-2 head consumes the block z).",
+  "tensor": "family4_na025_pentad_r2",
+  "time_block": "month",
+  "d_z": 64,
+  "patch": 1,
+  "codec_d_model": 512,
+  "codec_layers": 12,
+  "codec_heads": 4,
+  "codec_d_dec": 256,
+  "anomaly": "true",
+  "batch": 512,
+  "holdout_lon": "0,0",
+  "head_probe": "true"
+}
