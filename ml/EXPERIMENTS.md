@@ -77,6 +77,25 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+**14:30Z 08-24 — E-045.x, THE SPAN-FIXED LADDER (Chris's design, 14:15Z).** The original
+ladder held K=24 frames and let context span shrink with the stride (720 d at 30 d steps
+→ 120 d at 5 d steps) — step size and span were CONFOUNDED, which Chris caught. The new
+ladder holds the span at TWO YEARS everywhere and feeds more frames as the step shrinks:
+**E-045.3** = stride 3, `--K 48` (2× frames, predict +15 d) · **E-045.2** = stride 2,
+`--K 72` (3×, +10 d) · **E-045.1** = stride 1, `--K 144` (6×, +5 d); the existing
+A2a/b (stride 6, K=24, 720 d) is the completed corner, and A11 (K=4, 120 d span, 30 d
+step) stays as the cheap fourth corner of the step × span factorial. HYPOTHESIS, either
+way a result: if E-045.1 stays ~0.5-class with the full two years in view, short-step
+difficulty is intrinsic (the white-innovation floor reading holds); if it drops well
+below the K-fixed 0.506, the original ladder was substantially a CONTEXT-SPAN result and
+the pentad head was starved of history, not of predictability. Head capacity is
+DELIBERATELY FIXED (206M) — one variable; a capacity arm at the most interesting rung is
+the pre-registered follow-up (A9's alphabet win already hints the head is input-capacity
+bound, so K=144 at fixed params squeezes per-token capacity 6× and that is part of what
+is measured). Mechanics: `--K` is a plain temporal.py flag (default 24; k_max follows K
+for a fresh head), rides the sched tail. Sizing: memory ~∝K — .3 fits the 24 GB class;
+.2/.1 go to the 80 GB H100 when #453 frees it (batch 256 kept). n=1 each (§3b).
+
 **12:45Z 08-24 — THE CADENCE LADDER IS COMPLETE, THE ANCHOR-SIZED CODEC EXISTS, AND
 THE UNPOOLED COLUMN STARTS FILLING.** Midday harvest:
 
