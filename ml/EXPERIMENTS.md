@@ -126,6 +126,36 @@ four arms learn, input-dependent, near-full alphabet; JAX↔torch export parity 
 so this is a scale/data-regime phenomenon, not a toy-reproducible backend defect. **Arm B
 (w6s3) is HELD** until the fix below is in.
 
+*(d2, 21:00–22:30Z) #466 (E-047-HEAD, 3rd dispatch) CLEARED THE GUARD AND OOMed THE EMBED
+PASS — the first block-codec embed ever attempted.* `embed_everything`'s batch 8192 was
+sized for 42-token per-bin samples; a k_time-7 month block is 282 tokens and attention
+memory grows as B·tokens², so the same batch is ~45× the memory (1.10 GiB alloc against
+314 MiB free on the 24 GB HK card). Fixed at 5b3b0bb — the embed batch now holds
+B·tokens² at the per-bin value (181 for k_time 7; per-bin codecs bit-unchanged) — and
+re-dispatched as **#469 (E-047-HEAD, 4th dispatch, HK box)**, embedding at 21:50Z. Four
+dispatches, three distinct one-field lessons, ~$0.6 total: the d_z default trap (#457),
+the recipe-override trap (#460), the block-embed batch trap (#466).
+
+*(f, 22:00–22:45Z) THE SCALE FIT IS IMPLEMENTED, GATED, AND BACK ON THE TPU.* a1de68f:
+`fsq_ladder.fit_auto` now searches ladder × base × PER-DIM SCALE (candidates from the
+sample — 2·std_d, p90/p99/max of |v_d| at k∈{0.5,1} — default always wins ties, floored so
+a constant dim cannot make a zero lattice); the fit string carries the radius (`u:<R>` /
+`e<base>:<R>`, legacy bare entries = default scale, so every archived checkpoint rebuilds
+bit-identically — pinned by test); `--fsq-auto-step` is a comma list in both trainers;
+every light probe now logs `fsq_prequant {std_med, sat_frac}` — the monitor that would
+have shown e048a's collapse at step 300 instead of step 10,000. Gates: 13/13 FSQ-ladder
+checks (cross-backend parity to 1e-5 at per-dim scales), G4 5/5, config guards 5/5. Toy
+(1,500 steps, w6s6 fsq8 JAX): fitted radii TRACK a still-growing |v| (4.06→5.06→7.92
+chasing 3.07→4.21→5.53), distinct codes 66→115, out-of-bound fraction 0.81→0.21 — and
+loss_rec is WORSE on the toy (0.174→0.200): a wider bound trades step size for usage, and
+which way that trades AT SCALE is what the relaunch measures. **e048a2-w6s6 (TPU
+v5litepod-4, on-demand) launched 22:27Z** on a1de68f with `--fsq-auto-step 50,200,2000`,
+fresh bucket prefix (the collapsed run's evidence kept); ~$5, lands ~03:00Z. Arm B (w6s3)
+still HELD until e048a2 shows a healthy early read. Pre-registered readings: fsq_prequant
+sat_frac staying well under 1 + probe r > 0.05 = the collapse mode is closed; a repeat
+collapse WITH the monitor = the constant-encoder attractor is not a scale artefact and
+the design conversation reopens (LayerNorm-class normalization before the lattice).
+
 *(e) THE DISCOVERY: the "healthy" FSQ codec is a SIGN CODE.* The same measurement run on
 run-455's own trained weights: pre-quant |v| ≈ 3×10⁴ — fully saturated, one hundred times
 further past the tanh bound than the collapsed e048a — and its information travels as
