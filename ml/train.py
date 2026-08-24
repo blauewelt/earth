@@ -1265,6 +1265,25 @@ def main():
                         "parent_tag": ck.get("tag") or "",
                         "at_step": s,
                     }}) + "\n")
+            elif "step" in ck:
+                # WEIGHTS + STEP, NO OPTIMIZER: the TPU exports' shape
+                # (convert.py writes {args, model, step, ...} — JAX carries
+                # no torch optimizer moments). ADOPT the recorded step. The
+                # counter is provenance: these weights ARE ck["step"] steps
+                # old, and restarting s at 0 made the CROSS-TENSOR EVAL
+                # branch's promise above ("no training will occur, checkpoint
+                # step >= --steps") FALSE — #466 and #469 both then trained a
+                # fresh b512 block codec on a 24 GB card and OOMed, on a
+                # dispatch whose whole point was that stage 1 trains nothing.
+                # A caller who genuinely wants MORE training from these
+                # weights states --steps above the recorded step and gets
+                # exactly the difference, on a fresh optimizer.
+                s = int(ck["step"])
+                print(f"  WARM-STARTED from {rpath} at recorded step {s}: "
+                      f"weights only, fresh optimizer/schedule. Training "
+                      f"runs only if --steps ({a.steps}) exceeds it. Report "
+                      f"this run as a warm start, not a continuation.",
+                      flush=True)
             else:
                 print(f"  WARM-STARTED from {rpath}: weights only, no "
                       f"optimizer or step — the LR schedule restarts from 0. "
