@@ -1,0 +1,14 @@
+{"config": {"steps": 200000, "batch": 64, "d_z": 128, "patch": 1, "d_model": 1024, "n_layers": 10, "n_heads": 8, "d_dec": 768, "anomaly": true, "eval_every": 7500, "light_probe_every": 10000, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 126.943, "data": "family4_na025_pentad_r2.npz", "C": 40, "T": 3142, "resume": null, "recipe": "f4r2-126M-monthblock"}}
+{"step": 0, "wall_s": 1311.2, "probe_error": "IndexError: index 516 is out of bounds for axis 0 with size 516"}
+{"step": 1000, "loss_rec": 0.31787, "loss_nei": 0.31885}
+{"step": 2000, "loss_rec": 0.22889, "loss_nei": 0.22952}
+{"step": 3000, "loss_rec": 0.28431, "loss_nei": 0.31723}
+{"step": 4000, "loss_rec": 0.32774, "loss_nei": 0.32786}
+{"step": 5000, "loss_rec": 0.25499, "loss_nei": 0.263}
+{"step": 6000, "loss_rec": 0.3143, "loss_nei": 0.31266}
+{"step": 7000, "loss_rec": 0.27536, "loss_nei": 0.30713}
+{"step": 7500, "wall_s": 6436.1, "probe_error": "IndexError: index 516 is out of bounds for axis 0 with size 516"}
+{"step": 8000, "loss_rec": 0.24646, "loss_nei": 0.27587}
+{"step": 9000, "loss_rec": 0.23111, "loss_nei": 0.2575}
+{"step": 10000, "loss_rec": 0.25008, "loss_nei": 0.2447}
+{"step": 10000, "wall_s": 7724.1, "probe_error": "AcceleratorError: CUDA error: unspecified launch failure\nSearch for `cudaErrorLaunchFailure' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kerne"}
