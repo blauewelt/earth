@@ -77,6 +77,72 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+**20:30–22:00Z 08-24 — EVENING TRIAGE: two dispatch failures re-dispatched, the E-046
+verdict run launched, AND E-048a's COLLAPSE DIAGNOSED — with a discovery about the
+"healthy" FSQ codec on the way.**
+
+*(a) #461 (E-045.3, K=48 span-fixed rung) DIED OF CUDA OOM AND WENT GREEN.* The recipe's
+"the 24 GB class fits only K≤48" was arithmetic, not measurement: at stage-2 batch 256 the
+K=48 window OOMed the HK 4090 at ~step 200 (3 GiB alloc, 2 GiB free, 21.5 GiB in use) and
+the run concluded success anyway — the backgrounded-trainer signature (ml/CLAUDE.md §7),
+caught because its archive stops at stage2_step 200. Re-dispatched as **#467 (E-045.3
+re-run, 80 GB H100)**, queued behind #462 (E-045.2 K=72, healthy at 6.6k/20k, 0.82 s/step)
+→ #463 (E-045.1 K=144, the decisive rung) → #465 (E-047a-fast finish of #453). Cost ~$0.3.
+
+*(b) #460 (E-047-HEAD, fusion-vs-selection) REFUSED ON THE SAME d_z CONTRADICTION AS
+#457 — with the top-level input correctly reading 64.* Mechanism, now understood: recipe
+keys OVERRIDE dispatch inputs by construction (`${RECIPE_D_Z:-inputs.d_z}`), so the pentad
+recipe's d_z 32 wins whatever the input says. A top-level input cannot fix a recipe; only
+a recipe can — the month-block codec now has its own (`ml/recipes/xl144-zn-monthblock`,
+codec fields read OFF the e047a-tpu-60k file, ac12672). Re-dispatched as **#466
+(E-047-HEAD, 3rd dispatch, HK box)** — past the resume guard and embedding at 21:40Z.
+Cost of the lesson: ~$0.4 across two refusals.
+
+*(c) E-046 ENDGAME: the FSQ codec is done, its verdict head is running.* #455 (E-046 FSQ
+pentad codec, 200k×512) finished at loss_rec 0.337; final full probe: pooled ridge NaN on
+lattice z (the instrument gap pre-registered at dispatch — the collapse guard read NO
+READING all run), mini z-ratio 0.6516/1.40625 = 0.463 in LATTICE units (not comparable to
+run-415's continuous scale). Checkpoint verified off the file (tag run-455, step 200000,
+d_z 32, fsq_levels 8, 512×12) and published as `run-455__pixelmae.pt`. **#468 (E-046-HEAD,
+#427's exact 20k stage-2 window on run-455's z, Michigan box)** is the pre-registered
+verdict; controls at step 20k: #427 (continuous) 10.704/21.254 = **0.5036** in-flight, A9
+(#446, continuous + read-time 8-level input-quant) **0.4916** final. At-or-below A9 = the
+FSQ codec earns its place; #427-parity = A9's win was read-time denoising; clearly above =
+the lattice cost information.
+
+*(d) E-048a ABORTED ITSELF AT STEP 10k — THE COLLAPSE GUARD'S FIRST LIVE KILL, AND THE
+DIAGNOSIS IS A CONSTANT ENCODER, NOT SATURATION-AT-INIT.* The TPU window codec
+(w6s6, 71M, --fsq-levels 8 --fsq-ladder auto) hit `linear_r_deseas` exactly 0.000 on two
+consecutive probes and self-killed; node self-reaped (~$2 total). Measured on the step-8k
+export (torch side, synthetic z-scored inputs): the encoder is INPUT-INDEPENDENT — one
+distinct z vector across 1,024 samples, |pre-quant| ≈ 87 whether the input is data, zeros
+or all-unobserved — and loss_rec was flat at the ctx-only floor (~0.33) from step 300, so
+the collapse happened in the first ~300 steps, long before the step-2000 ladder fit (whose
+"+0.00%" and quantization MSE 12,776 were the tell: the fit measured a distribution the
+lattice could not reach). A FRESH model at the same arch is healthy at init (1.6%
+saturation) — the collapse DEVELOPED; it is not an initialization artefact. A paired CPU
+toy (both backends, w6s6 + fsq8 + controls, matched flags) does NOT reproduce it — all
+four arms learn, input-dependent, near-full alphabet; JAX↔torch export parity 6.0e-08 —
+so this is a scale/data-regime phenomenon, not a toy-reproducible backend defect. **Arm B
+(w6s3) is HELD** until the fix below is in.
+
+*(e) THE DISCOVERY: the "healthy" FSQ codec is a SIGN CODE.* The same measurement run on
+run-455's own trained weights: pre-quant |v| ≈ 3×10⁴ — fully saturated, one hundred times
+further past the tanh bound than the collapsed e048a — and its information travels as
+SIGN FLIPS: 15/32 dims flip with the input, ~1 bit/dim (synthetic-input caveat: a lower
+bound; real batches may use more levels). So the E-046 codec that scores z-ratio 0.463
+is effectively a ~2-level code wearing an 8-level lattice, and even healthy toys run
+pre-quant to 3–6× the bound. THE MECHANISM UNDER BOTH FINDINGS IS THE SAME: the codec-side
+FSQ fixes its scale at σ=1 by design ("no Z to measure") and the fit fits only
+exp-vs-uniform per dim, never the SCALE — Chris's original E-048 ask ("for each channel
+compute a distribution such that the levels can be level·c or c^level") was only half
+implemented. The half that was skipped is exactly the failure mode: an unfitted c leaves
+the lattice where the distribution is not. NEXT (tonight): complete the fit — per-dim c
+measured on real pre-quant values, fitted EARLY (step ~200, before the drift completes)
+and refitted at 2000, recorded in the fit string so checkpoints rebuild exactly; archived
+uniform checkpoints stay bit-identical. Then relaunch e048a; arm B follows a healthy
+step-3000 read. n=1 everywhere here (§3b).
+
 **18:40Z 08-24 — A11 OVERTURNS THE CADENCE READING: CONTEXT, NOT STEP SIZE, DROVE THE
 LADDER.** **E-045-A11 (#464, 30-day steps with the context cut to the 5-day arm's 120 d —
 stride 6, K=4): final 20k ratio 0.5274** (z_mse 15.0506 / persistence 28.5362). The
