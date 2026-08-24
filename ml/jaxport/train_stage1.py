@@ -1074,8 +1074,20 @@ def main(argv=None):
             ev, eo = gather(t, y, x)
             mk = np.zeros_like(eo)
         m = nnx.merge(gd, st)
-        pre = np.asarray(m.encode_pre(jnp.asarray(ev), jnp.asarray(eo),
-                                      jnp.asarray(mk), jnp.asarray(ctx)))
+        # CHUNK the fit forward. One unbatched encode_pre over --fsq-auto-n
+        # pixels allocated 2.81 GB of activations on ONE device — beside the
+        # training state that is more HBM than a v5e chip has, and the first
+        # e048a node died of exactly this at its step-2000 fit (RESOURCE_
+        # EXHAUSTED, 908 MB free). The fit is a statistic, not a training
+        # step: identical numbers arrive in device-batch-sized pieces.
+        FIT_CHUNK = 256
+        pre_parts = []
+        for c0 in range(0, len(ev), FIT_CHUNK):
+            c1 = min(c0 + FIT_CHUNK, len(ev))
+            pre_parts.append(np.asarray(m.encode_pre(
+                jnp.asarray(ev[c0:c1]), jnp.asarray(eo[c0:c1]),
+                jnp.asarray(mk[c0:c1]), jnp.asarray(ctx[c0:c1]))))
+        pre = np.concatenate(pre_parts, 0)
         lv = fql.parse_levels(a.fsq_levels, a.d_z, "--fsq-levels")
         is_exp, base, mse_u, mse_b = fql.fit_auto(pre.astype(np.float64), lv,
                                                   2.0)
