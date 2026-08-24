@@ -845,6 +845,42 @@ def main(argv=None):
     model = TemporalTransformer(d_z=d_z, d_model=a.d_model, n_heads=4,
                                 n_layers=a.layers, k_max=K, direct=(),
                                 stencil=a.stencil, rngs=nnx.Rngs(a.seed))
+    # THE INITIALISATION IS TORCH'S OWN, AND IT IS NOT A STYLE CHOICE.
+    #
+    # Flax's defaults are not `nn.Module`'s. The one that matters most here is
+    # the positional table: `nn.Embedding` initialises N(0, 1) and `nnx.Embed`
+    # initialises at std ~ 1/sqrt(d_model) — 5.7x smaller at d_model 32 — so a
+    # causal transformer whose only sense of WHERE IN THE WINDOW it is comes
+    # from `pos` starts with that signal an order of magnitude weaker. Every
+    # linear differs too (torch: U(±1/sqrt(fan_in)) weight AND bias; flax:
+    # lecun-normal weight, zero bias).
+    #
+    # MEASURED, which is why this is here: at 300 toy steps on an identical Z,
+    # an identical pool and an identical schedule, the flax-initialised head
+    # read model/persistence 1.46, 1.87, 1.68 at seeds 0/1/2 against the torch
+    # trainer's 0.71, 0.87, 0.77 — systematically ~2x worse at every seed, and
+    # the gap is entirely the init. On a cross-framework TWIN that difference
+    # would have been read as "the framework", which is precisely the box
+    # effect ml/CLAUDE.md §3b warns about, manufactured by a default nobody
+    # chose.
+    #
+    # So a fresh head is initialised by CONSTRUCTING THE TORCH MODULE under
+    # `torch.manual_seed(seed)` and converting it. That is stronger than
+    # matching the distributions: it matches the STREAM, so a JAX run and a
+    # torch run at the same seed begin from bit-identical weights and init
+    # stops being a variable at all. The cost is one transient torch module on
+    # the host (~0.9 GB at 206M) and a torch wheel this driver already needs.
+    _t0i = time.time()
+    from temporal import TemporalTransformer as _TorchTemporal
+    torch.manual_seed(a.seed)
+    _tmod = _TorchTemporal(d_z=d_z, d_model=a.d_model, n_heads=4,
+                           n_layers=a.layers, k_max=K, direct=(),
+                           stencil=a.stencil)
+    load_temporal(_tmod.state_dict(), model)
+    del _tmod
+    print(f"  init: torch's own (constructed under torch.manual_seed"
+          f"({a.seed}) and converted, so a same-seed torch run starts from "
+          f"bit-identical weights) — {time.time() - _t0i:.1f}s", flush=True)
     graphdef, state = nnx.split(model)
     n_par2 = sum(int(np.prod(v.shape)) for v in _leaves(state))
     print(f"stage-2 head: {n_par2 / 1e6:.3f}M parameters "
