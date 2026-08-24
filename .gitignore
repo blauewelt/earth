@@ -17,3 +17,7 @@ ml/paper/*.out
 ml/paper/*.fls
 ml/paper/*.fdb_latexmk
 ml/paper/*.synctex.gz
+
+# session tooling: agent worktrees land here when a sandbox session uses
+# worktree-isolated subagents; never repo content
+.claude/
