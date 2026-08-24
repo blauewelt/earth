@@ -251,12 +251,20 @@ echo "--- deps ---"
 # "ensurepip is not available". Retried because first-boot apt can hold locks
 # under cloud-init.
 export DEBIAN_FRONTEND=noninteractive
+# unattended-upgrades holds the dpkg lock for MINUTES on first boot — measured
+# 2026-08-24 on the first 60k launch: it outlived all five 20 s retries (the
+# smoke host's upgrade just happened to finish faster), the script exited 1
+# two minutes in, and the self-reap correctly threw away a healthy node. Stop
+# the service, then let apt WAIT on the lock (DPkg::Lock::Timeout) instead of
+# racing it; the retry loop stays for everything else apt can throw.
+systemctl stop unattended-upgrades 2>&1 || true
+systemctl kill --kill-who=all unattended-upgrades 2>&1 || true
 for i in 1 2 3 4 5; do
-  if apt-get update -qq && apt-get install -y -qq python3-venv; then
+  if apt-get -o DPkg::Lock::Timeout=600 update -qq && apt-get -o DPkg::Lock::Timeout=600 install -y -qq python3-venv; then
     echo "measured: python3-venv installed (attempt ${i})"; break
   fi
   if [ "${i}" = 5 ]; then echo "apt failed 5x — giving up"; exit 1; fi
-  echo "apt attempt ${i} failed (boot lock?) — retrying in 20 s"; sleep 20
+  echo "apt attempt ${i} failed (boot lock?) — retrying in 60 s"; sleep 60
 done
 python3 -m venv "${WORK}/venv"
 PY="${WORK}/venv/bin/python"
