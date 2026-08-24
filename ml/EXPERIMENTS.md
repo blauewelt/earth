@@ -77,6 +77,37 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+**12:45Z 08-24 — THE CADENCE LADDER IS COMPLETE, THE ANCHOR-SIZED CODEC EXISTS, AND
+THE UNPOOLED COLUMN STARTS FILLING.** Midday harvest:
+
+- **E-045-A8 (#452, 10-day cadence rung) FINAL: 0.3377** (z_mse 8.8629 / persistence
+  26.2455 at 20k). The ladder now reads, one codec, one head, only the step size moving:
+  **30d 0.0721/0.0729 · 15d 0.1620 · 10d 0.3377 · 5d 0.5056/0.50447** — smooth,
+  monotone, steeply super-linear in 1/Δt; no rung is a cliff, so no rung is a bug. n=1
+  at the interior rungs (§3b).
+- **E-047b-TPU LANDED: the 126.943M month-block codec**, 60k × 256 in ~4 h at 0.237
+  s/step (node e047b-tpu-60k, self-reaped; published as `e047b-tpu-60k__pixelmae.pt`).
+  First reads, pre-audit, n=1: final loss_rec 0.1428 (ABOVE the 40M twin's 0.0979 —
+  half the samples at batch 256, and 60k is far under the anchor's appetite) while the
+  in-training light probe reads BETTER all run (0.278 vs 0.242) — the wider z carries
+  more state before recon converges. Tier-1 audit + 20k head decide.
+- **E-043a-LADDER (#459) FILLS run-416's UNPOOLED DASH: 0.575 [0.445, 0.675]** vs its
+  pooled ridge 0.613 [0.493, 0.716] — the unpooled head reads BELOW the pooled ridge on
+  the monthly nolonhold codec (240 labels; overlapping CIs; a direction, not a level).
+  Controls in the same bundle (raw-3x3, unpooled wind) for the paper's Table-4 row.
+- **#457 (E-047-HEAD) FAILED CORRECTLY AND CHEAPLY**: the dispatch copied the A9
+  template's `d_z 32` against the block codec's d_z 64 and the architecture-contradiction
+  guard refused before training (~$0.2 of embed/transform). One field changed,
+  re-dispatched (queues behind #458 on the HK box).
+- **#450 (40M b128 long form) DIED TO ITS OWN job_timeout 900** at ~15 h, ~step 190k of
+  200k — the timeout was copied from the fast-arm sizing against a 23 h run, the same
+  §-class mistake as #438's. Training curve survives on ml-live-450; the last milestone
+  checkpoint sits on box 48478309's disk; a resume-finish (~$1) is optional since the
+  b512 twins (TPU done, #453 landing) carry the fast read. **#456 (126M b64) is in the
+  same trap by construction** (job_timeout 1400 vs ~38 h needed, plus the 24 h token
+  ceiling): decision tonight — resume-chain it or let the TPU 126M + audit carry the
+  Chinchilla read.
+
 **06:45Z 08-24 — THE FIRST MONTH-BLOCK CODEC EXISTS AND IS ACCEPTED; ITS HEAD AND TWO
 FOLLOW-ONS DISPATCH NOW (Chris's morning direction).** The TPU 60k run (node
 e047a-tpu-60k) finished all 60,000 steps in 2.8 h of training (0.167 s/step, loss_rec
