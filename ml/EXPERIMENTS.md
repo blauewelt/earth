@@ -132,9 +132,20 @@ sized for 42-token per-bin samples; a k_time-7 month block is 282 tokens and att
 memory grows as B·tokens², so the same batch is ~45× the memory (1.10 GiB alloc against
 314 MiB free on the 24 GB HK card). Fixed at 5b3b0bb — the embed batch now holds
 B·tokens² at the per-bin value (181 for k_time 7; per-bin codecs bit-unchanged) — and
-re-dispatched as **#469 (E-047-HEAD, 4th dispatch, HK box)**, embedding at 21:50Z. Four
-dispatches, three distinct one-field lessons, ~$0.6 total: the d_z default trap (#457),
-the recipe-override trap (#460), the block-embed batch trap (#466).
+re-dispatched as #469 — **which OOMed the same way from the other side (21:58Z): "eval-only"
+stage 1 TRAINED.** train.py's cross-tensor eval branch promises "no training will occur
+(checkpoint step ≥ --steps)" by reading ck['step'], but the step was only ADOPTED when the
+checkpoint also carried an optimizer — and the TPU exports are {args, model, step} with no
+torch optimizer moments by construction, so the warm-start branch restarted s at 0 and
+trained a fresh b512 block codec into #448's OOM, wearing an eval-only dispatch's clothes.
+Fixed at 7b1ce1d (a weights+step checkpoint warm-starts AT its recorded step — the counter
+is provenance) and re-dispatched as **#470 (E-047-HEAD, 5th dispatch, HK box)**. Five
+dispatches, four distinct one-field lessons, ~$0.8 total: the d_z default trap (#457), the
+recipe-override trap (#460), the block-embed batch trap (#466), the optimizer-less
+warm-start trap (#469). Also surfaced by #469's loud cross-tensor print: convert.py stamps
+args['data'] from its template, so e047a-tpu-60k.pt CLAIMS family3_na025 while it trained
+on family4_na025_pentad_r2 — holdout_lon is correct and nothing mis-chose tonight, but the
+export's provenance lies; convert.py fix is an open follow-up.
 
 *(f, 22:00–22:45Z) THE SCALE FIT IS IMPLEMENTED, GATED, AND BACK ON THE TPU.* a1de68f:
 `fsq_ladder.fit_auto` now searches ladder × base × PER-DIM SCALE (candidates from the
