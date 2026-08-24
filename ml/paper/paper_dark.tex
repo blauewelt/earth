@@ -38,8 +38,8 @@
 \title{Earth-State Embeddings:\\
 \large self-supervised representations of the observed ocean,\\
 probed against the Atlantic overturning circulation}
-\author{blauewelt/earth --- technical report, v6}
-\date{16 August 2026}
+\author{blauewelt/earth --- technical report, v7}
+\date{24 August 2026}
 
 \begin{document}
 \maketitle
@@ -131,6 +131,44 @@ input} are not separated by any number in this report
 (\S\ref{sec:stencil}). The small-model geometry ranking that occupied a
 week of experiments is preserved in Appendix~\ref{app:base} as a
 capacity-starvation artifact.
+
+This revision (v7) is mostly about what the rolled numbers were
+\emph{measuring}, and it retires a reading. Two structural questions were
+settled first. The held-out longitude block is gone from stage 2: a head
+trained on all 481 columns closes the trained-minus-held-out corridor gap
+from $\approx$$0.65$ to $\mathbf{0.0065}$, on both seeds
+(\S\ref{sec:nolonhold}) --- but its headline level is \emph{not} readable
+as forecast skill, because its skill does not decay with lead time
+($0.940\to0.936$ over twelve months where every other head in the archive
+falls by $0.12$--$0.19$), the gain is spread over channels the model cannot
+forecast, and no transport read-out moves at all. A dedicated experiment
+then explains that shape: rolled from six different context ends spanning a
+decade, the same head's unforced future peaks land in the \emph{same
+calendar months} every time, and its within-record tracking correlation is
+\emph{flat} in lead time ($0.70/0.68/0.70/0.71$ from contexts 15 months to
+ten years back). \textbf{Long rolls in this system are trajectory replay,
+not forecast} (\S\ref{sec:replay}); every long-hindcast correlation in the
+archive, this report's included, is withdrawn as a skill number and
+re-labelled as replay tracking. Second, the move to a finer time axis is
+measured, and it is expensive: at 5-day steps the one-step error ratio is
+$0.5056$/$0.5045$ (a seed pair) where the \emph{same} embeddings stepped
+monthly give $0.0721$/$0.0729$, the 15-day rung sits between at $0.1620$,
+and the day-matched 73-step roll scores corridor AUC $\mathbf{-0.499}$ ---
+\emph{below climatology} --- against $+0.939$ monthly. The ladder is smooth,
+so the difficulty is intrinsic to the step size rather than a defect
+(\S\ref{sec:cadence}); the mechanism is that the 5-day embedding sequence
+substantially decorrelates over one step (lag-1 $\rho\approx0.60$). Two
+repairs follow and are in flight: restricting the head's inputs to an
+8-level-per-dimension alphabet is the first intervention to beat the pentad
+baseline ($0.4916$), and a \emph{month-block} codec --- one embedding per
+calendar month, built from a grid of pentad cells --- cures the per-bin
+reconstruction collapse at the Argo anchor (fast channels $7.6\%$/$17.4\%$
+of variance lost, against $25$--$112\%$) at a flat structural price paid
+everywhere else ($9$--$19\%$ against $<$$1\%$). Finally, the models now have
+a second, framework-independent implementation in JAX, gated against the
+PyTorch stack at $10^{-7}$--$10^{-5}$ and against an eighteen-times-reproduced
+archived roll, on which a TPU v5litepod-4 trains the 40M block codec at
+$0.167$\,s/step against $0.93$ on a rented H100 (\S\ref{sec:jax}).
 \end{abstract}
 
 \section{Introduction}
@@ -342,6 +380,47 @@ Terms are used throughout in the following precise senses.
   parameters measured from the checkpoints: \emph{base} $576\times8$
   (34.1M at 56 slots), \emph{big} $768\times12$ (88.0M), \emph{xl}
   $1024\times16$ (205.4M).
+\item[Cadence] the length of one bin on the tensor's time axis, and
+  therefore of one forecast step: \emph{monthly} (family 3), \emph{pentad}
+  = 5 days (family 4), \emph{daily} (family 5). Cadence is not a tuning
+  knob but a tensor property --- a codec, its embeddings and every head
+  over them belong to one cadence, and \S\ref{sec:cadence} is about what
+  changes when it does.
+\item[Day-matched horizon] the convention that makes rolls of different
+  cadences comparable: they are compared at equal \emph{elapsed time}, not
+  at equal step count. Twelve monthly steps and 73 pentad steps are both
+  365 days, so the pentad roll's day-matched AUC averages the 73-step
+  curve at the twelve leads nearest those months. A raw 73-lead mean would
+  beat a 12-lead one on lead sampling alone --- most of its leads are
+  short, where skill is highest --- so only the day-matched form is ever
+  quoted across a cadence boundary.
+\item[Variance lost / FVU] the fraction of a channel's variance a
+  reconstruction fails to reproduce, $\mathrm{rmse}^2$ in standardized
+  units (equivalently $1-R^2$). $0\%$ is identity; $100\%$ means the
+  reconstruction carries none of the channel's variance and a constant
+  would have done as well. Used for the \emph{copy reconstruction} audits
+  of \S\ref{sec:recon}, which encode and decode at full visibility --- no
+  masking, no forecasting --- and so measure the representation tax alone.
+\item[Calendar replay] the failure mode of \S\ref{sec:replay}: a long
+  unforced roll whose trajectory is indexed by the calendar rather than by
+  its initial state. Its two signatures are a future that peaks in the
+  same calendar months from any starting state, and a within-record
+  tracking correlation that does \emph{not} decay with lead time. Genuine
+  forecast skill decays; replay does not.
+\item[Month-block codec] the E-047 variant of the stage-1 codec whose
+  encoder reads a $k_{\mathrm{time}}\times C$ grid of \emph{cells} --- up
+  to seven pentad bins $\times$ 40 channels --- and emits one $z$ for the
+  whole calendar month, with learned within-block time-offset embeddings
+  on both the cells and the decoder's queries. It is the architectural
+  answer to the Argo anchor problem (\S\ref{sec:block}): the one bin per
+  month that carries subsurface data fuses with its neighbours instead of
+  switching the representation regime under the forecaster.
+\item[Input quantization] snapping a head's input embeddings to a finite
+  per-dimension alphabet ($L$ levels, straight-through gradients, targets
+  left continuous). At $L=8$ this is three bits per dimension. The same
+  lattice applied \emph{inside} the codec's bottleneck is finite scalar
+  quantization (FSQ); \S\ref{sec:quant} measures the first and dispatches
+  the second.
 \end{description}
 
 \section{Data}\label{sec:data}
@@ -467,9 +546,9 @@ three \emph{tensor generations} --- the \textbf{coarse tensor}
 levels), and the \textbf{quarter-degree tensor} ($0.25^\circ$ NA, 16
 levels, SSH, axis from 1982) --- with a fourth and fifth (the
 \textbf{pentad} and \textbf{daily} tensors of \S\ref{sec:inputdata},
-same window and channels, finer time axes) in training as this revision
-is written, carrying no results yet --- and cross-generation comparison
-is not licensed: the persistence baseline that chan\% is measured against
+same window and channels, finer time axes), which carried no results when
+v6 was written and now carry \S\ref{sec:cadence} --- and cross-generation
+comparison is not licensed: the persistence baseline that chan\% is measured against
 moves with the channel set, the wind-only ridge baseline moves with the
 grid (0.531 on the $1^\circ$ tensors, 0.568 on the quarter-degree), and,
 as \S\ref{sec:tradeoff} shows, so does the meaning of
@@ -500,8 +579,13 @@ channel list, in tensor order.
 A second axis crosses the cadence axis: the \emph{recipe revision}.
 Revision \textbf{r1} is the 39-channel tensor every number in this report
 was measured on. Revision \textbf{r2} appends one channel --- daily
-$0.25^\circ$ OISST sea-surface temperature, channel 40 --- and is built,
-tested and published as an artifact, with no codec trained on it yet. It is
+$0.25^\circ$ OISST sea-surface temperature, channel 40. When v6 was written
+no codec had been trained on it; every codec in \S\ref{sec:cadence} now is,
+so the cadence results differ from the monthly ones in the channel set as
+well as in the time axis, and the two are never compared across that seam.
+What \emph{that} channel is worth on its own is still unmeasured: the
+matched pair that would answer it was dispatched and has returned no
+verdict. It is
 listed here because the two revisions are one specification with one
 difference, and because a channel addition is not a variation of a tensor
 but a new one: it changes $C$, so it changes the encoder's input projection
@@ -606,8 +690,11 @@ years and would leak test-period information into training through the
 baseline. The two baselines look interchangeable and are not.
 
 \paragraph{The temperature channel, and what is still not an input.}
-Every result in this report was measured on r1, and r1 carries no
-sea-surface-temperature field of any kind. Its only temperature is Argo
+Every monthly result in this report --- everything through
+\S\ref{sec:standings} --- was measured on r1, and r1 carries no
+sea-surface-temperature field of any kind. (\S\ref{sec:cadence}'s codecs
+are r2; that is one of the reasons its numbers are not a rung on the
+monthly ladder.) Its only temperature is Argo
 \texttt{rg\_t}, which begins in 2004 and is live one bin per month, so
 \textbf{22 of the 43 years on the axis carry no temperature at all}, and
 inside the Argo era the channel is a missing token in $\approx$83\% of
@@ -623,7 +710,9 @@ interpolated rather than nearest-sampled; nearest-indexing would displace
 the entire field by half a cell, consistently, and would look like an
 ordinary SST map. The planned test is a matched pair against the r1 codec
 in which the tensor is the only difference, so what SST is worth can be
-read off directly.
+read off directly. It was dispatched and has not returned a verdict, and
+nothing in \S\ref{sec:cadence} substitutes for it: those codecs are all r2,
+so SST is present in every one of them and varied in none.
 
 Three things remain deliberately absent. There is \textbf{no air--sea heat
 or freshwater flux}: the ocean's thermal forcing enters only through the
@@ -644,11 +733,16 @@ was supposed to have used.
 
 \paragraph{Stage 1 --- the codec.} A per-pixel masked autoencoder
 producing $z\in\mathbb{R}^{64}$ per pixel-month, trained on all
-pixel-months outside the holdout blocks. The pilot is 0.92M parameters;
-a 10.25M variant ($320\times8$, the size the Chinchilla-style
-arithmetic of the Compute paragraph anchors for the current tensor) is
-training at time of writing. Checkpoints carry their architecture, and
-every loader reconstructs from it.
+pixel-months outside the holdout blocks. The pilot is 0.92M parameters
+and a 10.25M variant ($320\times8$) followed; the workhorse of
+\S\ref{sec:roll} is the 40.7M quarter-degree anchor of \S\ref{sec:qd},
+sized by the Chinchilla-style arithmetic of the Compute paragraph, and
+\S\ref{sec:cadence} adds a 38.0M pentad codec and a 40M month-block
+variant on the finer time axes. Checkpoints carry their architecture, and
+every loader reconstructs from it. One structural variant is new in v7:
+the \term{month-block codec} of \S\ref{sec:block} encodes a
+$k_{\mathrm{time}}\times C$ grid of cells and emits one $z$ per calendar
+month rather than one per bin.
 
 \paragraph{What exactly enters the encoder.} The encoder is a small
 transformer ($128\times4$ in the pilot, $320\times8$ in the 10M
@@ -794,6 +888,23 @@ and $0.002$--$0.005$ across the five 200k-step pairs --- the full
 replicate record, with the single-seed rule it licenses, is in the
 repository's experiment log). Every claim in
 \S\ref{sec:roll} names which of the two instruments it is read from.
+
+\paragraph{Two instruments this revision demotes, and one convention it
+adds.} The rolled evaluation also emits a \emph{long} hindcast --- roll
+twenty years from a 2004 context and correlate against the observed
+transport --- and an unforced future roll past the end of the record.
+Those correlations were quoted in v6 as a weak skill read-out. They are
+not one: \S\ref{sec:replay} shows the trajectory is indexed by the
+calendar rather than by the initial state, so the \emph{long} $r$ is
+retired from the skill instruments and reported only as \emph{replay
+tracking} --- a diagnostic of how completely a head has memorized the
+training record. The convention added is the \term{day-matched horizon}
+(\S\ref{sec:gloss}): across a cadence boundary a roll is compared at equal
+elapsed days, never at equal step counts. At monthly cadence the two are
+the same quantity by construction --- checked on all eighteen scope blocks
+of the first run to emit both, where they agree exactly --- so adding it
+moved no number in this report. It exists for \S\ref{sec:cadence}, where
+73 steps and 12 steps have to be set beside one another.
 
 \section{Related work}\label{sec:related}
 
@@ -1842,12 +1953,22 @@ and the roll prices them accordingly.
 \centering\includegraphics[width=.92\linewidth]{fig_amoc_roll.pdf}
 \caption{The AMOC read-out of the two widest 205M arms, rolled. Left:
 hindcast from a 2004 context, with the three never-trained years shaded
---- those columns are the honest test, because outside them the roll
-replays months the codec saw in pretraining. Right: twenty years of
-unforced roll past the end of the record. The flatness on the right is
-the finding, not a forecast: with no wind or heat-flux forcing after the
-seam, the learned dynamics relaxes toward climatology and stops moving,
-which is a damped attractor rather than a quiet ocean. Interactive
+--- those columns were described in v6 as ``the honest test, because
+outside them the roll replays months the codec saw in pretraining''.
+\textbf{They are not a test at all, and the legend's $r$ is not a skill
+number}: \S\ref{sec:replay} rolls these same heads from six context ends
+spanning a decade and finds the tracking correlation \emph{flat} in lead
+time and the post-record peaks pinned to fixed calendar months whatever
+the starting state. The whole left panel --- shaded columns included ---
+is trajectory replay, and its $r$ is relabelled here as replay tracking:
+it measures how completely the head has memorized the record, not how
+well it forecasts. Right: twenty years of unforced roll past the end of
+the record. The flatness on the right is the finding, not a forecast:
+with no wind or heat-flux forcing after the seam, the learned dynamics
+relaxes toward climatology and stops moving, which is a damped attractor
+rather than a quiet ocean --- and \S\ref{sec:replay} adds that what
+residual motion there is repeats on an integer number of years.
+Interactive
 version, with the per-arm table, at
 \texttt{blauewelt.github.io/earth/ml/paper/figs/amoc\_roll.html}.}
 \label{fig:amocroll}
@@ -2039,9 +2160,23 @@ $Z_{t+2}$ at half weight) and verified by alignment tests; its first
 two arms were stopped mid-run by an operator decision after the
 measured step cost came in at $8.5\times$ the clean model
 (gather-dominated), and the checkpoint state is preserved for a
-decision on resumption. Neither mechanism has yet produced a rolled
-verdict; both are falsifiable against the clean 88M tier's corridor
-AUC of $0.6213$.
+decision on resumption. \emph{That} mechanism has still produced no rolled
+verdict and remains falsifiable against the clean 88M tier's corridor AUC
+of $0.6213$. (An earlier draft of this sentence said ``neither
+mechanism'', which contradicted the paragraph above it; the noise arm is
+answered and the unroll arm is not.)
+
+\paragraph{The dose does not travel across cadences.} $\sigma=0.7$ was set
+from the monthly model's measured one-step error, i.e.\ as a fixed
+\emph{fraction} of the one-step persistence scale ($0.398\times$).
+\S\ref{sec:components} carries that fraction across to five-day cadence,
+holding the relative dose constant to within a thousandth --- and the
+one-step ratio goes to $0.8145$ from a control of $\approx$$0.505$, having
+passed through worse-than-persistence mid-run. So the relative-dose
+formulation, which is what made $\sigma=0.7$ look like a constant of the
+architecture rather than of the monthly regime, is refuted the first time
+it leaves that regime. Whatever noise the pentad roll needs must be sized
+from the pentad model's own error.
 
 \subsection{The dependency cone, and what every rolled number
 assumes}\label{sec:cone}
@@ -2106,8 +2241,9 @@ no neighbours (gate) & $576\times8$ & --- & 0 & --- & 0.5890 \\
 \end{tabular}
 \caption{\textbf{Stage-2 standings, both scoreboards}, 16 August 2026.
 Forecast ratio ranges are seed min--max; corridor AUC is the seed mean,
-every value behind a passed gate. ``In flight'' marks evaluations
-running at the time of writing. The two scoreboards now \emph{agree} at
+every value behind a passed gate; every evaluation the v6 draft of this
+table marked ``in flight'' has since landed and is included. The two
+scoreboards now \emph{agree} at
 adequate capacity --- the anti-correlation of Appendix~\ref{app:base}
 is confined to the 34M tier.}
 \label{tab:standings}
@@ -2141,10 +2277,623 @@ earned on the quarter of the window whose longitudes no stage of the
 model was ever trained on. The advantage is real and the ranking is
 unaffected --- every arm here is scored on the same pixels --- but part
 of what the stencil is being rewarded for is covering a hole in the
-model's own coordinate input rather than forecasting the ocean. The next experiments are the compositions
-nobody has run: noise $\times$ 205M, noise $\times$ near-field, and a
-sweep of $\sigma$, which was set from the model's measured one-step
-error and never tuned.
+model's own coordinate input rather than forecasting the ocean --- and
+\S\ref{sec:nolonhold} has since closed that hole for future heads, though
+not for the ones in this table. Of the three compositions this table's v6
+draft named as next, noise $\times$ 205M has been run and is
+\S\ref{sec:interaction}; noise $\times$ near-field and the $\sigma$ sweep
+have not, and the sweep now has a second reason to exist ---
+\S\ref{sec:components} shows the untuned $\sigma$ does not survive a
+change of cadence.
+
+\section{What the rolled numbers were measuring}\label{sec:measuring}
+
+Everything in \S\ref{sec:roll} is a corridor AUC or a forecast ratio, and
+both are computed from a rolled state. This section is about two properties
+of that state which were not known when those numbers were produced. The
+first is good news and closes a caveat this report has carried since v6.
+The second is not, and it withdraws a class of number.
+
+\subsection{Retiring the held-out longitude block}\label{sec:nolonhold}
+
+\S\ref{sec:stencil} located a band of collapsed skill at exactly
+$45^\circ$W--$25^\circ$W and identified it as the longitude block that
+\texttt{train.py -{}-holdout-lon} withholds from training in both stages
+while the evaluation scores it anyway. \S\ref{sec:limits}(7) recorded the
+decisive experiment as un-run: retrain with the block returned and watch the
+band go. It has now been run, in two halves, because the holdout has two
+halves.
+
+\paragraph{The codec half moves nothing.} A fresh 40.7M monthly codec
+trained on all 481 columns --- the anchor's exact geometry with
+\texttt{-{}-holdout-lon '0,0'}, so the training pool grows by exactly $4/3$
+(40{,}514{,}400 train pixels against 30{,}376{,}800, verified against the
+run's own log) --- reads pooled k-fold RAPID $r=0.613$ [$0.493$, $0.716$],
+RMSE 2.20\,Sv, against $0.627$ for the tensor-matched anchor control. The
+difference is $-0.014$, and it is not a result in either direction: the only
+codec-seed pair this programme has ever measured moved the same pooled ridge
+by $0.012$, a re-build of the tensor on a different machine moved it by
+$0.004$, and the whole $44\times$ capacity step from the pilot to the anchor
+was $+0.011$ and was logged as a null. This was the predicted outcome and it
+was predicted from a measurement: the retrained decoder audit of
+\S\ref{sec:recon} already put the codec's reconstruction error on held-out
+longitudes at $1.43\%$ against $0.85\%$ on trained ones, i.e.\ the
+representation crossed the block essentially intact. The band was never a
+stage-1 failure. We note in passing a code gap the attempt exposed: no
+pooled k-fold result in this programme's history is paired-testable, because
+the k-fold script computes its per-month predictions and then writes only
+the summary. Two kilobytes per target would fix every future comparison.
+
+\paragraph{The stage-2 half moves everything, and then stops being
+readable.} The clean test resumes the \emph{existing} frozen anchor --- so
+the codec, the embeddings and the byte-identical embedding cache are held
+fixed --- and opens only the stage-2 training pool to all 481 columns, at
+the xl144 configuration of Table~\ref{tab:auc}. Trained at two seeds and
+rolled beside the frozen gate (which reproduced its pinned $0.643$ both
+times, the twentieth and twenty-first such reproduction):
+
+\begin{center}\small
+\begin{tabular}{lrrr}
+\toprule
+corridor AUC & trained lon. & held-out lon. & gap \\
+\midrule
+all-longitude pool, seed 0 & 0.93933 & 0.93283 & \textbf{0.0065} \\
+all-longitude pool, seed 1 & 0.93933 & --- & --- \\
+\midrule
+xl144 control, seed 0 & 0.86700 & 0.22058 & 0.646 \\
+xl144 control, seed 1 & 0.86808 & --- & 0.667 \\
+frozen gate head (same run) & 0.80425 & 0.05767 & 0.746 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{The hole is gone.} A gap of $0.65$--$0.75$ between the longitudes a
+head trained on and the ones it did not becomes $0.0065$, and the two seeds
+agree on the trained-longitude figure to every digit the artefact stores
+(all twelve per-horizon values identical). That is the one claim in this
+subsection that nothing below qualifies, and it retires
+\S\ref{sec:limits}(7)'s decisive experiment: the band was a stage-2
+coordinate-extrapolation failure, and returning the columns to the stage-2
+pool removes it. It also means the $48\%$ of stencil advantage
+\S\ref{sec:stencil} located inside the block was, as suspected, largely
+payment for covering a hole in the model's own coordinate input.
+
+\paragraph{Why the level beside it is not quotable.} $0.93933$ is the
+largest rolled number this programme has produced and it does not go in the
+standings. Four measurements, in the order they were made:
+
+\emph{(i) The skill does not decay with lead time, and nothing else in the
+archive does that.} Corridor MSSS at $h=1\ldots12$ runs
+$0.940, 0.939, \ldots, 0.936$ --- a fall of $0.004$ across a year, where the
+matched control falls $0.124$ and the frozen gate $0.192$. Anomaly
+correlation is flat at $0.966$--$0.970$ and the amplitude ratio at
+$0.933$--$0.954$, where the control decays $0.883\to0.751$. An anomaly
+correlation of $0.97$ over 29{,}627 North Atlantic pixels at a twelve-month
+lead is not a skill this programme has any basis to expect.
+
+\emph{(ii) The one-step value is honest; the eleven steps after it are the
+anomaly.} The $h=1$ figure is reproduced from the training run's own
+channel-space error on both sides of the comparison (predicted $0.935$,
+measured $0.940$; the control predicts $0.769$ and measures $0.774$). So the
+roll does not disagree with the training. What differs is compounding: the
+control's error grows $1.55\times$ over twelve steps and this head's grows
+$1.07\times$.
+
+\emph{(iii) The gain includes channels the model cannot forecast.} Wind
+stress is an external forcing field that arrives from an atmospheric
+reanalysis and is not predicted by anything in the ocean state; at $h=12$ it
+reads $0.935$ here against the control's $0.810$. Every channel rises and
+every channel flattens. A capability gain from a third more training pixels
+does not have that shape. (An earlier draft called the gain \emph{uniform};
+it is not --- across 39 channels it spans $+0.055$ to $+0.467$ at $h=12$ ---
+and the sentence is corrected here rather than dropped.)
+
+\emph{(iv) No transport read-out moves at all.} The banded transport
+correlations are $0.483/0.380/0.498$ against the control pair's
+$0.476/0.355/0.437$ and $0.430/0.243/0.318$: every one of them inside the
+pair's own spread, which the replicate record prices at a pooled sd of
+$0.041$. The head's own pooled RAPID k-fold sits \emph{below} both controls
+($0.389$ against $0.437$/$0.429$), which is well inside that read-out's
+noise and is therefore not evidence of harm --- but it is emphatically not
+corroboration of a $+0.072$ skill gain either.
+
+Two alternative explanations were bought and both died. Re-rolling a
+\emph{known} head on the new evaluation code reproduced its archived record
+to every stored digit, which clears the instrument. And rolling this head's
+own step-600 milestone --- identical geometry, identical seed, identical
+scope split, 600 optimizer steps instead of 200{,}000 --- gives corridor
+$0.0297$ with a \emph{monotone} decay $0.179 \to -0.068$, which kills the
+structural reading: whatever produces the flat profile was acquired over
+200{,}000 steps of all-longitude training. What is left is not a code
+question and not an instrument question. \S\ref{sec:replay} is what it is.
+
+\subsection{Calendar replay: the long rolls are not
+forecasts}\label{sec:replay}
+
+Every rolled evaluation in this report also produces two long trajectories:
+a hindcast rolled from a 2004 context across the whole record, and an
+unforced roll twenty years past its end (Fig.~\ref{fig:amocroll}). v6
+reported the hindcast's correlation with observed transport as a weak skill
+number and read the flat future as a damped attractor. The first of those
+readings is now withdrawn.
+
+\paragraph{The observation that started it.} Every head's unforced future
+mode-locks to an integer number of years. The frozen gate locks at 12
+months. The all-longitude pair of \S\ref{sec:nolonhold} locks at exactly
+$36.0$ months --- peaks at November 2027, $+36$, $+36$ --- \emph{phase
+identical on both seeds}, with an autocorrelation of $0.85$ at lag 36 and
+$\approx$$0$ at 35 and 37. A twelve- or thirty-six-month period in a rolled
+ocean is not by itself damning; the calendar is a genuine input, through the
+season token. But from one starting context it admits two readings: the
+phase belongs to the calendar (replay), or the phase is \emph{selected by
+the state} (a dynamical mode with a preferred period). Those differ in a
+testable way.
+
+\paragraph{The test.} Roll the same two heads from six different context
+ends --- 2004-12, 2014-12, 2018-09, 2020-06, 2022-03, 2024-03 --- and ask
+what changes. Under the dynamical reading, six different initial states
+spanning a decade should place their peaks differently. Under replay, they
+should not. Two signatures came back, and both are the replay branch:
+
+\begin{itemize}\itemsep2pt
+\item \textbf{The post-record peaks are pinned to the calendar.} From every
+  one of the six context ends the smoothed trajectory peaks at November
+  2027, November 2030, November 2033, and so on. Six initial states, one
+  attractor branch, the same months.
+\item \textbf{The within-record tracking correlation is flat in lead time.}
+  Rolls launched from 2014-12, 2018-09, 2020-06 and 2022-03 track the
+  subsequently observed record at $r = 0.70$, $0.68$, $0.70$, $0.71$. A
+  ten-year-old context ``forecasts'' 2023 exactly as well as a fifteen-month
+  old one. \textbf{Genuine forecast skill decays with lead. Replay does
+  not.}
+\end{itemize}
+
+A third measurement closes the architecture off as an explanation: the
+xl-tier stencil head and the frozen one-pixel gate head --- which share no
+input geometry, sit two capacity tiers apart, and differ more than sixfold
+in parameters --- correlate $0.93$ with
+\emph{each other} over the 2004-context hindcast ($0.91$ on held-out
+months), against $0.79$ and $0.47$ with reality. Two very different models
+agree with one another far more than either agrees with the ocean, which is
+what two readings of the same memorized trajectory look like.
+
+\paragraph{What this retires, and what it does not.} \textbf{The long
+hindcast's tracking correlation is trajectory replay: the training record is
+embedded in the learned dynamics and the rolled state indexes it.} Every
+archived \emph{long} $r$ --- including the ones in Fig.~\ref{fig:amocroll}'s
+legend and the $0.79$/$0.47$ quoted above --- is withdrawn as a forecast
+number and reported only as replay tracking. This reproduces at $205$M scale,
+with a cleaner instrument, a finding this programme first made at small
+scale and had insufficiently generalized: that the twenty-year fan's
+hindcast skill was memorization.
+
+The scope of the withdrawal is the \emph{long} rolls. The twelve-month
+scored blocks --- the corridor AUC of \S\ref{sec:roll} --- are a different
+instrument: truth-anchored starts, scored against held-out years, with the
+two diagnostic controls of \S\ref{sec:nolonhold} behind them. But they
+inherit a caveat this finding sharpens, and it is stated here because it
+applies to every rolled number in this report: a stage-2 training window may
+\emph{look at} held-out months as context, by documented design, so
+held-out-year skill on trained pixels is a softer claim than the words
+``held out'' suggest. Read together with \S\ref{sec:nolonhold}(i)--(iv), the
+most economical account of the $0.939$ is that an all-longitude head has
+memorized the record more completely than a hole-carrying one, and that the
+corridor at twelve months is measuring how well it can recite it. That
+account is not proven --- it is the reading with the fewest moving parts.
+
+\paragraph{What would still rescue a dynamics reading.} A mode that is real
+but weak would phase-lock to the calendar through the season token while
+still carrying state information in its \emph{amplitude}. The falsifier is
+ensemble dispersion under context perturbation, and it has not been run: the
+replay reading already explains every observation with fewer parts, and
+buying a test for the more elaborate one is not the best use of the next
+GPU-hour.
+
+\section{Cadence: what a five-day step costs}\label{sec:cadence}
+
+Everything above runs on a monthly axis. The obvious way to a better ocean
+forecast is a finer one --- a 5-day step should let the forecaster carry
+structure a 30-day step integrates away --- and the pentad and daily tensors
+of \S\ref{sec:inputdata} were built for exactly that. This section is what
+happened, and the headline is that finer is much harder, in a way that is
+now measured rather than suspected. Every number below is on the
+\emph{pentad} tensor (5-day bins, $T=3142$, the 40-channel r2 channel set),
+through a purpose-trained 38.0M pentad codec at $d_z=32$, under the same
+$1024\times16$ xl144 head with input noise that tops the monthly standings.
+
+\subsection{The one-step ratio, and the roll}
+
+The pentad stage-2 head was trained twice, and it is one of the few
+configurations in this report whose headline number is pair-backed rather
+than single-seed. Both seeds reach 200{,}000 steps with gradient clipping at
+128 (without it the arm diverges at 28k, which is its own small result), and
+the one-step forecast ratio reads $\mathbf{0.50560}$ and
+$\mathbf{0.50447}$: $|\Delta| = 0.00113$. That level is therefore quotable.
+It is also enormous. The same instrument at monthly cadence on the same
+architecture reads $\approx0.032$; a pentad model's one-step error is
+\emph{half} of the no-change forecast's, where a monthly model's is a
+thirtieth.
+
+\paragraph{Why, and it is not the head.} The run measured its own embedding
+scale for the first time: $z_{\mathrm{rms}} = 5.178$ against a one-step
+change of $\sqrt{\mathrm{MSE}_{\mathrm{pers}}} = 4.631$, a ratio of
+$0.894$. For a stationary series $E[(z_t-z_{t+1})^2] = 2\sigma^2(1-\rho)$, so
+a one-step change $0.894\times$ the size of the field itself implies a
+five-day lag-1 autocorrelation of $\rho \approx 0.60$. \textbf{The pentad
+embedding sequence substantially decorrelates in five days.} The monthly and
+pentad ratios are answers to different questions and must never be quoted as
+a ladder --- a fact this report states because its own v6 draft of this
+paragraph did exactly that.
+
+\paragraph{The roll compounds it into collapse.} Rolling that head 365 days
+forward --- 73 autoregressive steps, day-matched to the monthly archive's
+twelve --- gives a corridor AUC of $\mathbf{-0.499}$. Not worse by a band:
+\emph{negative}. The rolled forecast's mean squared error exceeds
+climatology's by about half over the year, where the monthly all-longitude
+pair reads $+0.939$ on the same scope definition. Window scope reads
+$-0.352$ and the gate scope $-0.365$; the raw 73-lead average is $-0.492$
+and is quoted only beside the day-matched form. The long roll collapses the
+same way (replay tracking $0.256$, amplitude $0.304$, against $0.79$ and
+$0.74$ for the monthly heads). The arithmetic is coherent: six times as many
+steps, each injecting an order of magnitude more relative error. This is
+$n=1$ --- no second pentad roll exists --- but the gap to refute is $1.44$
+AUC and that is not a seed-band question.
+
+\paragraph{One thing the two headline AUCs do \emph{not} share.} All 32 Argo
+temperature and salinity channels scored as missing in the pentad roll,
+because \texttt{rg\_*} is a monthly product written into exactly one pentad
+bin per month ($252$ of $3142$ bins, $8.0\%$) and absent --- not sparse ---
+everywhere else. So $-0.499$ is an eight-channel weather score while
+$+0.939$ averages 39 channels dominated by persistent deep density. That
+does not rescue the comparison: restricting the monthly heads to the same
+eight fast channels still reads $0.925$/$0.926$. The composition difference
+is real, it must be stated whenever the two numbers appear together, and it
+is not the explanation.
+
+\subsection{The cadence ladder: intrinsic difficulty, not a
+bug}\label{sec:ladder-cadence}
+
+A factor of sixteen in a one-step error ratio is the size of effect that is
+usually a defect --- some code path still assuming a monthly axis. The
+cheapest way to find such a path is to walk the axis, so the same head, the
+same frozen codec, the same embeddings and the same pixels were trained at
+four step sizes, varying only the stride at which the embedding sequence is
+sampled (Fig.~\ref{fig:cadence}, left):
+
+\begin{center}\small
+\begin{tabular}{lrl}
+\toprule
+step size & one-step ratio & how the states were selected \\
+\midrule
+30 days (stride 6) & 0.0721 & the bin containing each month's Argo anchor \\
+30 days (stride 6) & 0.0729 & an Argo-free bin, the clean 8-channel regime \\
+15 days (stride 3) & 0.1620 & \\
+5 days (stride 1) & 0.50560 / 0.50447 & the pair above \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Two things follow. First, \textbf{the ladder is smooth and monotone through
+three rungs}: no cliff, no non-monotonicity, and therefore no rung at which
+a hidden monthly assumption breaks. The five-day difficulty is
+\emph{intrinsic} --- it is the signal-to-noise of the step, not a defect of
+the implementation. Second, and more usefully, \textbf{the pentad embedding
+is a sound monthly substrate}. Stepped at 30 days it lands squarely in the
+monthly class, and it does so whether the states are drawn from the $8\%$ of
+bins that carry Argo or from the $92\%$ that do not. The pipeline, the
+anomaly transform, the published embeddings and the head architecture are
+all exonerated at once; what is left is the step.
+
+That is also the repair the result points at, and it is hierarchical rather
+than a retreat: roll at monthly stride \emph{through} the pentad stack and
+keep the five-day steps for within-month detail. \S\ref{sec:block} is the
+architectural form of the same idea.
+
+\begin{figure}[t]
+\centering\includegraphics[width=.98\linewidth]{fig_cadence.pdf}
+\caption{\textbf{Left: the cadence ladder.} One-step forecast ratio against
+step size, holding everything else fixed --- same frozen pentad codec, same
+embeddings, same $1024\times16$ head with input noise, same pixels, 20{,}000
+steps, each arm scored against its own persistence baseline. The two points
+at 30 days are the Argo-carrying and Argo-free bin selections. Smooth and
+monotone: the 5-day difficulty is intrinsic to the step size.
+\textbf{Right: the component ladder at 5 days}, one variable per arm against
+the two-seed control (dotted). Rescaling the exposure-bias noise to the
+pentad embedding scale is catastrophic, removing the Argo targets makes
+training \emph{worse}, a continuous season phase changes nothing, and only
+restricting the head's inputs to an 8-level-per-dimension alphabet beats the
+control. Every arm is $n{=}1$ except the control, so these are directions;
+the control pair's own $|\Delta|$ is $0.0011$.}
+\label{fig:cadence}
+\end{figure}
+
+\subsection{The component ladder: what breaks, one variable at a
+time}\label{sec:components}
+
+With the cadence localized, five one-variable arms were run at 5-day cadence
+against the two-seed control (Fig.~\ref{fig:cadence}, right). Each changes
+exactly one thing in the configuration that produced $0.5056$/$0.5045$, and
+each is $n=1$: at a cadence whose replicate record consists of the single
+pair above, these are \emph{directions}, and none of them is a level. Three
+of the four resolved arms inverted their own hypothesis, which is why they
+are worth the page.
+
+\begin{itemize}\itemsep3pt
+\item \textbf{The monthly noise dose is fatal here} ($0.8145$, against
+  $0.5056$). Input noise at $\sigma=0.7$ is the largest single effect in the
+  monthly programme (\S\ref{sec:interaction}), and it is calibrated as a
+  \emph{relative} quantity --- $0.398\times$ the one-step persistence
+  scale. Rescaled to the pentad embedding scale to preserve exactly that
+  ratio (confirmed in-run at $0.3973\times$), it does not merely fail to
+  help: it drives the one-step error to $0.81$ of persistence, having passed
+  through \emph{worse than persistence} mid-run. The monthly relative dose
+  is refuted as a transferable constant. The window between ``helps the
+  roll'' and ``drowns the one-step signal'' is far narrower at five days,
+  and any pentad exposure-bias noise must be sized from the pentad model's
+  own error rather than carried across.
+\item \textbf{The Argo targets \emph{stabilize} training} ($0.5665$).
+  The hypothesis was the opposite: that scoring the head on the $8\%$ of
+  bins whose representation regime switches was the poison that made
+  gradient clipping necessary. Excluding those targets makes the ratio
+  worse and the gradient norm spike to $94.6$ where the control settles at
+  $2$--$3$. The slow density channels are the part of the signal the head
+  can actually predict, and removing them leaves it fitting weather.
+\item \textbf{The season-token staircase is not the problem} ($0.5077$,
+  against a control mean of $0.5050$). All six bins of a month share one
+  integer-month season token, which is a genuine discretization; replacing
+  it with a continuous fraction-of-year phase on the head side changes the
+  one-step number by about $2.4$ control-spreads in the \emph{wrong}
+  direction, i.e.\ nothing. (Whether the same fix changes the calendar
+  mode-locking of \S\ref{sec:replay} is a separate question and needs a
+  roll, which has not been run.)
+\item \textbf{Input quantization is the first arm to move it}, and it gets
+  its own subsection below.
+\end{itemize}
+
+\subsection{Copy reconstruction, and the Argo
+anchor}\label{sec:recon}
+
+Before any of those arms, the pipeline itself was audited at zero GPU cost,
+because a factor of sixteen deserves a search for the trivial explanation.
+Three checks and one finding.
+
+\emph{The anomaly transform} reproduces the codec's own recorded training
+loss to $1.7$ standard errors, so the states being encoded are the states
+the codec was trained on. \emph{The published embeddings} equal a local
+re-encode of the same bins to one \texttt{float16} storage ULP --- against a
+control in which different bins differ by mean $|\Delta| = 4.478$ --- which
+kills the wrong-codec hypothesis outright. \emph{The round trip} is
+healthy: encoding and decoding at full visibility reads FVU $0.4$--$0.6\%$
+($r = 0.997$) on the $92\%$ of bins carrying only the eight fast channels,
+with held-out $\le$ trained everywhere, so there is no memorization in the
+codec either.
+
+\paragraph{The finding: 40 channels do not fit in 32 dimensions on the bins
+that carry Argo.} On the $8\%$ of bins that do, the fast channels'
+reconstruction \emph{collapses} --- surface current speed loses $112\%$ of
+its variance and sea-surface height $86\%$, both restored to $0.4$--$0.6\%$
+by hiding Argo from the encoder on the same bins and the same pixels --- and
+the deep Argo channels themselves read $12$--$17\%$ against the monthly
+$d_z{=}64$ anchor's $6.9\%$, the direction and size that halving $d_z$ while
+adding a channel predicts. So the sequence the head must forecast
+\textbf{switches representation regime every sixth step}, and the corridor
+scoring decodes through the lossy regime at exactly the rows where Argo
+truth exists.
+
+\paragraph{The monthly anchor, for comparison, and what it costs.} The same
+audit on the 40.7M monthly anchor at $d_z{=}64$ --- the codec every number
+in \S\ref{sec:roll} is built on, encoded and decoded at full visibility over
+the 265-pixel RAPID section and all 516 months --- reads mean $r = 0.975$
+per pixel and $0.979$ pooled across 39 channels. Per channel group, as
+fraction of variance lost: surface winds $1.0$--$1.2\%$, sea-surface height
+$1.8\%$ ($r=0.990$, the best of the ocean channels), upper-ocean $T$ and $S$
+to 700\,dbar $2.1$--$2.3\%$, deep salinity $3.5\%$, and \textbf{deep
+temperature to 1900\,dbar $6.9\%$} --- three times the upper ocean, and the
+worst group in the tensor ($r=0.938$ at 1900\,dbar). It generalizes: held-out
+months and the held-out longitude block read within noise of trained
+($0.938$/$0.940$/$0.936$ at 1900\,dbar). The concentration is exactly
+adverse, because RAPID's mid-ocean transport is thermal wind and thermal
+wind is the vertical integral of a density gradient --- deep $T$ and $S$.
+Pooling does not cancel it; the probe's input genuinely lacks deep-density
+detail.
+
+That deficit turned out to be \emph{training emphasis} rather than an
+encoder tax. Retraining the decoder alone against the same frozen
+embeddings --- $z$ unchanged, so no probe and no head is disturbed ---
+recovers most of it: a decoder \emph{half} the production size reads
+$2.2\%$ deep-$T$ variance lost, and the durable $1536\times3$ replacement
+reads $0.85\%$ trained, $1.90\%$ on held-out months, $1.43\%$ on the
+held-out longitudes. The information was in $z$ all along; the
+masked-dominated objective simply never asked the decoder for it. (This is
+the measurement \S\ref{sec:nolonhold} used to predict, correctly, that
+returning the longitude block to the \emph{codec} would move nothing.)
+
+Fig.~\ref{fig:recon} puts all three codecs on one axis, which is the
+comparison \S\ref{sec:block} exists to make.
+
+\begin{figure}[t]
+\centering\includegraphics[width=.98\linewidth]{fig_recon.pdf}
+\caption{\textbf{What each codec's round trip loses}, at full visibility ---
+encode and decode with nothing masked and nothing forecast, so this is the
+representation tax alone. Bars are fraction of channel variance lost
+($\mathrm{rmse}^2$ in standardized units); the dotted line at $100\%$ is the
+channel's own variance, so a bar reaching it carries none of that channel
+and a constant would have done as well. The monthly anchor is orderly and
+loses most where the transport integral weights most (deep temperature,
+$6.9\%$). The per-bin pentad codec is near-perfect on the $92\%$ of bins
+that carry no Argo and collapses on the $8\%$ that do --- 40 channels
+competing for 32 latent dimensions. The month-block codec cures that
+collapse at the anchor and pays a flat structural price everywhere else:
+one embedding per month is a genuine $\approx$$4{:}1$ squeeze in time.}
+\label{fig:recon}
+\end{figure}
+
+\subsection{Input quantization}\label{sec:quant}
+
+Of the five one-variable arms, one beat the control. Restricting the head's
+\emph{input} embeddings to an 8-level-per-dimension alphabet --- three bits
+per dimension, straight-through gradients, targets left continuous ---
+reads a one-step ratio of $\mathbf{0.4916}$ against the control pair's
+$0.50560$/$0.50447$. That is $0.0135$ below the pair mean and about twelve
+times the pair's own $|\Delta|$, with the in-training transport probe
+($0.677$ [$0.624$, $0.725$]) inside the control band, so nothing was traded
+away to get it. It is $n=1$, so it is a direction and not a level; what it
+licenses is a decision, and the decision was pre-registered before the arm
+ran.
+
+The reading is that at five-day cadence the head is not short of capacity so
+much as swamped by the resolution of its own input: an embedding coordinate
+carries more precision than the signal in it supports, and rounding it off
+costs nothing and helps. If that is right, the same alphabet belongs
+\emph{inside} the codec's bottleneck rather than bolted onto the head, which
+is finite scalar quantization. That retrain --- the same $L=8$ lattice on
+all 32 dimensions of the pentad codec, one variable against the existing
+baseline --- is dispatched and in flight as this revision is written, with
+its falsifier registered: if its 20{,}000-step stage-2 ratio does not land
+clearly below the existing head's, continuity was not the binding
+constraint. Two further questions ride on the same arm and are also
+dispatched: whether the quantization win survives off the pentad grid (the
+same flag at half-month cadence, against that rung's $0.1620$), and the
+$\sigma$ sweep the pentad noise result now requires.
+
+\subsection{The month-block codec}\label{sec:block}
+
+The cadence ladder and the reconstruction audit point at the same repair
+from two directions: the monthly \emph{step} is where the forecast works,
+and the once-a-month Argo bin is what makes the pentad representation
+oscillate. The month-block codec does both structurally. Its encoder reads a
+grid of $7 \times 40$ \emph{cells} --- up to seven pentad bins by forty
+channels --- and emits one embedding for the whole calendar month, with
+learned within-block time-offset embeddings on the encoder's cells and on
+the decoder's queries, and padded or missing cells riding the existing
+unobserved-cell path. The mid-month Argo anchor therefore \emph{fuses} with
+its neighbours into one uniform representation instead of switching regime
+under the forecaster, and the resulting axis reads as monthly downstream ---
+so a roll over it is day-matched comparable to the monthly archive while
+being built entirely from five-day inputs. The pre-registered hypothesis is
+that \emph{fusion beats selection}: this codec's head should beat the
+$0.0721$ that the cadence ladder got by \emph{selecting} one bin per month.
+
+The first such codec exists: 40M parameters at $d_z{=}64$, 60{,}000 steps.
+Its Tier-1 reconstruction audit, paired against the per-bin codec's own
+recorded numbers on the same blocks, is the reason it was accepted:
+
+\begin{itemize}\itemsep2pt
+\item \textbf{The per-bin Argo-anchor collapse is cured.} Fast channels at
+  the anchor cell read FVU $7.6\%$ trained and $17.4\%$ held out, where the
+  per-bin $d_z{=}32$ codec read $25$--$112\%$ on the same rows; the Argo
+  channels themselves come back at parity or better.
+\item \textbf{The price is structural and it is paid everywhere.} Argo-free
+  cells read $9$--$19\%$ where the per-bin codec read under $1\%$. That is
+  what one embedding per month costs: a real $\approx$$4{:}1$ squeeze in
+  time, and it lands on the fast channels because they are the ones with
+  within-month structure to lose. The winds carry most of it --- held-out
+  winter wind stress reads FVU $0.65$--$0.75$ even at full visibility, and
+  masked wind in-fill overfits ($0.30$ trained against $>$$1$ held out at
+  $0.69$ epochs).
+\item \textbf{The binding constraint is output capacity, not encoder
+  scale.} At 40M parameters and $d_z{=}64$ the Chinchilla-style reading of
+  these residuals is that the decoder and the bottleneck, not the encoder,
+  are what limit the round trip --- so the next rung is more data or more
+  masking before more parameters. A Chinchilla-anchored sibling at 126.9M
+  ($1.006\times$ the tensor's own value-count anchor, $d_z{=}128$) is
+  training as a direct test of that reading.
+\end{itemize}
+
+The stage-2 verdict --- the number that answers fusion-versus-selection ---
+is dispatched and not in. \textbf{Every number in this subsection is $n=1$
+at a tier with no measured pair}, and the codec was moreover trained on the
+JAX/TPU stack of \S\ref{sec:jax}, which is itself a new tier: a
+same-recipe PyTorch twin is training as the cross-framework check. Nothing
+here is a level.
+
+\section{A second implementation, and a new tier of
+hardware}\label{sec:jax}
+
+The models now have a second, framework-independent implementation in
+JAX/Flax, alongside a one-way weight converter and a reverse export that
+writes a checkpoint the \emph{unchanged} PyTorch stack loads. The point is
+not portability for its own sake. It is that a second implementation can be
+scored against the first, and that a model trained on hardware the PyTorch
+stack cannot reach is still evaluated by the PyTorch stack's own eval
+ladder rather than by a second scoreboard of its own.
+
+\paragraph{The gates.} Each tier is accepted against an archived number
+nobody chose afterwards, and the reference backend is required to land on
+that number first --- if it does not, the reproduction path differs from the
+archived protocol and the second backend would be scored against the wrong
+thing, which is a finding and never a tolerance to widen.
+
+\begin{itemize}\itemsep2pt
+\item \textbf{Forwards.} The converted 40.7M anchor agrees with PyTorch to
+  max $|\Delta|$ $1.3\times10^{-5}$ on \texttt{encode} and
+  $6.6\times10^{-7}$ on the decoder query, against a gate of $10^{-4}$;
+  the synthetic suite (encoder layer, both patch sizes, the temporal
+  transformer at two stencil widths with a causality check, the section
+  head, and the converter's refusal contract) agrees to $\le10^{-6}$.
+\item \textbf{Embeddings.} The pooled RAPID ridge over the real monthly
+  tensor reads $r = 0.62696$ from each backend against the archived control
+  $0.627$; \textbf{the two backends differ by $5.7\times10^{-8}$ in $r$},
+  and their embedding arrays by mean $|\Delta|$ $1.2\times10^{-6}$ (max
+  $7.8\times10^{-3}$, one \texttt{float16} storage ULP).
+\item \textbf{The rolled evaluation.} The frozen gate head's twelve-month
+  roll --- the number eighteen separate evaluation runs have returned
+  identically, which is exactly why it is the right gate for a port ---
+  comes back at AUC $0.643$ from both backends, with all twelve
+  per-horizon skill, correlation, amplitude and sample-count rows
+  \emph{identical}. The rolled states differ by mean $|\Delta|$
+  $2.4\times10^{-6}$, compounding monotonically from $1.9\times10^{-5}$ at
+  $h=1$ to $1.1\times10^{-3}$ at $h=12$, as an iterated map must.
+\item \textbf{The stage-1 trainer.} Identical weights, batch and mask give
+  reconstruction and neighbour losses agreeing to $2.7\times10^{-7}$ (gate
+  $10^{-5}$) at both patch sizes and at the block geometry; one plain SGD
+  step gives max $|\Delta w|$ $7.5\times10^{-9}$ (gate $10^{-6}$); 300 real
+  training steps of each trainer reduce the reconstruction loss by
+  $2.082\times$ and $2.151\times$, a ratio of $1.033$ inside its
+  pre-registered band; and the export round trip returns state dictionaries
+  that are \emph{identical}, with a perturbed JAX codec exported and
+  re-encoded under PyTorch to $4.8\times10^{-7}$. Adam's first update is
+  approximately $\mathrm{sign}(g)$ and is therefore hypersensitive where a
+  gradient is near zero, so its bar is stated twice --- $2\times10^{-5}$
+  over all parameters and the SGD bar of $10^{-6}$ over the entries where
+  $|g| > 10^{-6}$ --- rather than loosened once.
+\end{itemize}
+
+\paragraph{The hardware result.} On a cloud TPU (v5litepod-4) the JAX
+trainer runs the 40M month-block codec of \S\ref{sec:block} at batch 512 at
+$0.206$\,s/step measured over a clean 3{,}000-step run, and $0.167$\,s/step
+over the full 60{,}000-step run that produced the codec --- 2.8 hours of
+training. The same configuration on a rented H100 SXM measures
+$0.93$\,s/step. Per sample that is $\approx$$4.5\times$ the H100 and
+$\approx$$8\times$ the RTX 4090s of \S\ref{sec:methods}. Two operational
+properties are worth recording because they are what make a spot-priced
+accelerator usable at all: the run survived two preemptions and resumed from
+its checkpoint bucket exactly as designed (the third node found the finished
+state, added nothing, exported, and reaped itself), and it publishes its
+weights as an ordinary PyTorch checkpoint, so the codec it produced entered
+the same probe ladder and the same reconstruction audit as every other
+codec in this report.
+
+\paragraph{How its numbers are to be read.} A JAX-trained result is a
+\emph{new tier} in the replicate sense, and the first result at a tier buys
+its own replication. So the block codec's numbers in \S\ref{sec:block} are
+$n=1$ at a tier with no measured pair, they are cross-validated through the
+unchanged PyTorch eval ladder rather than through a JAX one, and a
+same-recipe PyTorch twin of that codec is training precisely so the pair
+exists. Nothing about the port licenses pooling a JAX-trained number with a
+PyTorch-trained one.
+
+\paragraph{What is not ported.} The stage-2 trainer, and with it the
+schedules that live there; the multi-output reconstruction decoder; the
+head's fold-fitting and the transport read-out. The full probe deliberately
+\emph{refuses} in the JAX trainer rather than running a reduced version of
+itself, because its second half trains a small temporal model inside the
+probe --- stage-2 machinery --- and running the light probe under the full
+probe's name would put a different estimator into the archive under a name
+that already means something. Mixed-precision autocast refuses for the same
+class of reason: honouring the flag would mean transcribing another
+framework's per-operation casting rules, and rolling at full precision
+under a flag that says half precision is worse than refusing.
 
 \section{The static-channel lesson}\label{sec:static}
 
@@ -2179,16 +2928,20 @@ anything); codec-to-codec comparisons are unaffected. (5) The rollout's
 horizon is measured only to the holdout-year boundary; the crossover to
 no skill lies beyond 12 months and is not yet located. (6) Transport
 forecasting at range is unsolved. (7) \emph{The held-out longitude block is scored
-anyway}. $45^\circ$W--$25^\circ$W is excluded from training in both
+anyway} --- \textbf{resolved in this revision, but only forward}.
+$45^\circ$W--$25^\circ$W is excluded from training in both
 stages and included in every rolled evaluation, unrecorded in the
-artefacts of every evaluation in this report (\S\ref{sec:stencil},
-Fig.~\ref{fig:gulfstream}); the evaluator now emits the split, but the
-numbers here predate it. Its effect on the reported levels is
-deflationary, so no published number is inflated; its effect on the
-stencil \emph{contrast} is not, and about half of that contrast is
-earned inside the block. The decisive confirmation --- retrain with a
-different block and watch the band move --- needs a stage-2 holdout
-knob the trainer does not have and has not been run. (8) \emph{A
+artefacts of every evaluation in \S\ref{sec:roll} (\S\ref{sec:stencil},
+Fig.~\ref{fig:gulfstream}); the evaluator now emits the split, and
+\S\ref{sec:nolonhold} closes the diagnosis: returning the block to the
+\emph{stage-2} pool collapses the trained-minus-held-out corridor gap from
+$0.65$--$0.75$ to $0.0065$ on both seeds, while returning it to the
+\emph{codec} moves nothing. So the band was a stage-2 coordinate
+extrapolation failure and it is fixable. Every number in \S\ref{sec:roll}
+nonetheless still carries it, because those heads were trained with the
+hole: their levels are deflated (no published number is inflated) and
+their stencil \emph{contrasts} are not, with about half of the contrast
+earned inside the block. (8) \emph{A
 methodological casualty worth recording}: the stage-2 results for two runs were
 withdrawn after we found their embedding cache had been populated by a
 different codec --- the shape check $(T, P, d_z)$ matched, so training
@@ -2199,18 +2952,44 @@ a miss rather than a lie. We report the affected numbers as withdrawn
 rather than regenerating them, because both codecs belong to the
 superseded coarse tensor.
 
-For the rolled-forecast programme of \S\ref{sec:roll}, four things are
-open at the time of writing, all mechanical rather than conceptual: the
-rolled corridor evaluations of the width, step-budget, and
-exposure-bias arms are in flight (their forecast-axis numbers are
-final); the widest-input $\times$ largest-head runs (89 and 144 points
-at 205M, 200k steps) land within hours; the one-hop unroll arms await a
-resume decision; and the capacity ladder has no measured top --- every
-tier so far improved both scoreboards, and the next tier is the
-programme's standing next experiment. The corridor AUC itself carries
+Three limitations are new in this revision and they are the largest ones
+here. \textbf{(9) Long rolls are replay, and we do not know how much of the
+twelve-month roll is too.} \S\ref{sec:replay} withdraws every
+long-hindcast correlation in the archive as a skill number. The corridor
+AUC is a different instrument and is not withdrawn --- but the same
+mechanism has a documented route into it (a stage-2 training window may
+look at held-out months as context, by design), the all-longitude head's
+flat lead-time profile is what a recited trajectory looks like, and no
+measurement in this report separates ``rolled twelve months well'' from
+``recited twelve months of a memorized record'' on trained pixels. The
+cleanest available test is the one \S\ref{sec:replay} declines to buy on
+cost grounds --- ensemble dispersion under context perturbation --- and it
+should be bought before any twelve-month number is quoted as a forecast.
+\textbf{(10) The finer time axis does not work yet, and its failure is
+measured rather than mysterious.} At 5-day steps the one-step ratio is
+$\approx0.505$ against $\approx0.032$ monthly, the year-long roll is
+\emph{below climatology}, and the cadence ladder is smooth --- so this is
+the step size, not a defect (\S\ref{sec:cadence}). The repairs under test
+are structural (a month-block representation, \S\ref{sec:block}) and
+informational (input quantization, \S\ref{sec:quant}); neither has a
+stage-2 verdict. Every pentad number except the one-step control pair is
+$n=1$ at a cadence with no measured replicate band, and none of them is a
+level. \textbf{(11) A second training tier now exists and is unreplicated.}
+The month-block codec was trained in JAX on a TPU (\S\ref{sec:jax}); the
+port is gated hard against the PyTorch stack and its products are evaluated
+by the unchanged PyTorch eval ladder, but a first result at a new tier buys
+its own replication and that twin is still training.
+
+For the rolled-forecast programme of \S\ref{sec:roll}, the mechanical
+follow-ups of v6 have landed --- the width, step-budget and exposure-bias
+corridor evaluations, the widest-input $\times$ largest-head runs, and the
+seed pairs they owed. What remains open there is unchanged in kind: the
+one-hop unroll arms await a resume decision, and the capacity ladder has no
+measured top, so the next tier is still the programme's standing next
+experiment. The corridor AUC itself carries
 one structural caveat: it scores the model's own input fields rolled
 forward, not transport --- the bridge from rolled field skill to
-transport skill at range is the same open problem as (6) below.
+transport skill at range is the same open problem as (6) above.
 
 The training-time ceiling has now been located directly: a
 1,000,000-step run at pilot size (LR decayed to a constant 10\% floor by
@@ -2221,17 +3000,22 @@ $32\%$, and the final checkpoint's k-fold ($0.571$) sits within seed
 noise of the 40k-step run. Twenty-five times the compute of the pilot
 regime buys nothing at 0.92M parameters: the pilot is capacity-limited,
 which is what the Chinchilla arithmetic predicted ($\sim$13M parameters
-for this tensor) and what the 10M-parameter codecs now training are for.
-Next levers, in expected-value order:
-paired significance for the head results; the head
+for this tensor), which is what the 10M-parameter codecs of that era, and
+in the end the 40.7M anchor of \S\ref{sec:qd}, were built to answer.
+Next levers, in expected-value order, and (9)--(11) have reordered them:
+the dispersion test that would say how much of the twelve-month roll is
+replay; the fusion-versus-selection verdict and the quantized-bottleneck
+retrain of \S\ref{sec:cadence}, both dispatched; then the pentad noise
+dose, re-derived from the pentad model's own one-step error rather than
+carried across from monthly. Behind those, and unchanged: paired
+significance for the head results; the head
 probe at MOVE and at low frequency; re-running the $d_z$ sweep at
-$C{=}24$; then the approved data ladder --- (a) extending the time axis
-to 1982, where monthly SST and wind exist pre-GLORYS and the Florida
-cable's 1982--92 decade becomes truth, (b) $0.25^\circ$ resolution for
-the GLORYS-derived channels ($16\times$ the pixels), (c) doubling the
-Argo pressure levels --- with the Chinchilla arithmetic redone and the
-codec re-sized at each rung; and label-efficiency curves over the 792
-non-RAPID truth months.
+$C{=}24$ --- now with a second reason, since \S\ref{sec:recon} shows a
+$d_z$ of 32 is where 40 channels stop fitting; and label-efficiency curves
+over the 792 non-RAPID truth months. The v6 data ladder is largely spent:
+the time axis reaches 1982, the GLORYS channels are at $0.25^\circ$, and
+the Argo levels are doubled --- what a data step buys now is a finer
+\emph{time} axis, which is exactly what \S\ref{sec:cadence} is about.
 
 \appendix
 
@@ -2283,7 +3067,8 @@ programme at the time. That anti-correlation, audited clean in
 205M the wide sunflower geometry wins \emph{both} scoreboards, and the
 production-geometry question was re-opened at scale rather than settled
 by this table. The base-scale champion's ring-8@222 configuration is
-itself being re-evaluated at the 88M tier at the time of writing.
+itself been re-evaluated at the 88M tier, where it rolls at $0.6560$ and
+beats every wide-input arm of its own tier (Table~\ref{tab:standings}).
 
 \subsection{Early stage-2 capacity sweep and codec training curves}
 
@@ -2404,7 +3189,10 @@ generated by scripts in \texttt{ml/} of
 \texttt{ml/make\_table.py}; figures by \texttt{ml/paper/make\_figs.py}.
 The stage-2 experiments of \S\ref{sec:roll} are logged
 hypothesis-first in \texttt{ml/EXPERIMENTS.md} (entries E-022 through
-E-032); every corridor evaluation's full per-horizon, per-channel
+E-032), and \S\ref{sec:measuring}--\S\ref{sec:cadence} in the same file's
+E-043 through E-047; the JAX port's tiering and acceptance gates are
+\texttt{ml/plans/JAX\_PORT.md} and its code
+\texttt{ml/jaxport/}. Every corridor evaluation's full per-horizon, per-channel
 output is archived on the repository's \texttt{ml-metrics} branch
 (\texttt{probes-\textless run\textgreater.json}), and every head named
 in Table~\ref{tab:standings} is published as a release asset and can be

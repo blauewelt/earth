@@ -173,25 +173,34 @@ def load_rollout(run):
             [c["acc"] for c in j["chan_skill"]],
             [c["msss_damped"] for c in j["chan_skill"]])
 
-fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.4, 3.0))
-for run, label, col in (("global14", "global codec (global domain)", C1),
-                        ("wind14", "NA codec (NA domain)", C2)):
-    h, msss, acc, mdamp = load_rollout(run)
-    a1.plot(h, msss, "o-", color=col, lw=2, ms=3.5, label=label)
-    a2.plot(h, acc, "o-", color=col, lw=2, ms=3.5, label=label)
-a1.axhline(0, color=INK2, lw=1, ls=":")
-a1.set_xlabel("forecast horizon (months)")
-a1.set_ylabel("MSSS vs climatology")
-a1.legend(frameon=False, fontsize=8)
-a2.axhline(0.5, color=INK2, lw=1, ls="--")
-a2.text(11.9, 0.505, "ACC 0.5", color=INK2, fontsize=8, ha="right", va="bottom")
-a2.set_xlabel("forecast horizon (months)")
-a2.set_ylabel("anomaly correlation (ACC)")
-for a in (a1, a2):
-    strip(a)
-    a.set_xticks(range(1, 13, 2))
-fig.savefig(os.path.join(FIGS, "fig_rollout.pdf"))
-plt.close(fig)
+# The two source run directories are build artifacts (gitignored), so a fresh
+# clone cannot regenerate this one. Skip rather than abort — the same posture
+# figs 6, 9 and 10 already take — so that a checkout without them still
+# rebuilds every OTHER figure. The committed fig_rollout.pdf stands.
+try:
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.4, 3.0))
+    for run, label, col in (("global14", "global codec (global domain)", C1),
+                            ("wind14", "NA codec (NA domain)", C2)):
+        h, msss, acc, mdamp = load_rollout(run)
+        a1.plot(h, msss, "o-", color=col, lw=2, ms=3.5, label=label)
+        a2.plot(h, acc, "o-", color=col, lw=2, ms=3.5, label=label)
+    a1.axhline(0, color=INK2, lw=1, ls=":")
+    a1.set_xlabel("forecast horizon (months)")
+    a1.set_ylabel("MSSS vs climatology")
+    a1.legend(frameon=False, fontsize=8)
+    a2.axhline(0.5, color=INK2, lw=1, ls="--")
+    a2.text(11.9, 0.505, "ACC 0.5", color=INK2, fontsize=8, ha="right",
+            va="bottom")
+    a2.set_xlabel("forecast horizon (months)")
+    a2.set_ylabel("anomaly correlation (ACC)")
+    for a in (a1, a2):
+        strip(a)
+        a.set_xticks(range(1, 13, 2))
+    fig.savefig(os.path.join(FIGS, "fig_rollout.pdf"))
+    plt.close(fig)
+except FileNotFoundError as e:
+    plt.close("all")
+    print("fig_rollout skipped:", e)
 
 # ---- Fig 4: stage-2 capacity (chan% vs parameters) ------------------------
 # src: SCALING.md steps-matched sweep, 12-ch NA embeddings, seeds shown
@@ -261,14 +270,22 @@ for run, label, col in (("wind14", "NA window, 14-ch (6.6 epochs)", C2),
         s, l = load_loss(run)
         ax.plot(s, l, color=col, lw=1.8, label=label)
     except FileNotFoundError:
-        pass
+        # These run directories are gitignored build artifacts. Silently
+        # dropping a curve used to mean a checkout without them REGENERATED
+        # AN EMPTY FIGURE over the committed one, which is a worse outcome
+        # than not rebuilding it at all — say so, loudly, and leave the
+        # committed PDF in place by not writing when nothing was drawn.
+        print("fig_train: %s missing, curve dropped" % run)
 ax.set_xlabel("training steps")
 ax.set_ylabel("masked reconstruction loss")
 ax.legend(frameon=False, fontsize=8)
 ax.set_title("Same architecture, more data and more channels",
              loc="left", fontsize=9)
 strip(ax)
-fig.savefig(os.path.join(FIGS, "fig_train.pdf"))
+if ax.lines:
+    fig.savefig(os.path.join(FIGS, "fig_train.pdf"))
+else:
+    print("fig_train SKIPPED: no source runs on disk, committed PDF stands")
 plt.close(fig)
 
 # ---- Fig 7: the capacity ladder at fixed input (sunflower-55) -------------
@@ -443,14 +460,21 @@ try:
 
     for a in (a1, a2):
         strip(a)
+    # E-043b-PHASE (#434) re-read the LEFT panel: hindcasting the same heads
+    # from six context ends spanning a decade gives a tracking r that is FLAT
+    # in lead time (0.70/0.68/0.70/0.71), and the post-record peaks stay
+    # pinned to the same calendar months whatever the starting state. So this
+    # r is a REPLAY-TRACKING statistic, not a forecast skill, and the legend
+    # must not print it under a name that reads as one.
     hand = [matplotlib.lines.Line2D([], [], color=a["c"], lw=1.4,
                                     ls="--" if a["gate"] else "-",
-                                    label="%s  (r=%s)" % (a["lab"], a["r"]))
+                                    label="%s  (tracking r=%s)" % (a["lab"],
+                                                                   a["r"]))
             for a in arms]
     fig.legend(handles=hand, frameon=False, fontsize=6.5, ncol=3,
                loc="lower center", bbox_to_anchor=(0.5, -0.13))
     fig.suptitle("The corridor's best arms, read out as transport: the gain "
-                 "does not transfer (r = held-out years)",
+                 "does not transfer — and the tracking r is REPLAY, not skill",
                  fontsize=9, x=0.02, ha="left")
     fig.savefig(os.path.join(FIGS, "fig_amoc_roll.pdf"))
     plt.close(fig)
@@ -681,5 +705,134 @@ try:
              np.nanmean(D["v"][~ib]) - np.nanmean(D["g"][~ib])))
 except FileNotFoundError as e:
     print("fig_gulfstream skipped:", e)
+
+
+# ---- Fig 11: the cadence ladder, and the pentad component ladder ----------
+# src: EXPERIMENTS.md E-045 (the pentad component ladder, 2026-08-22/23) and
+#      E-044b/E-044b-SEED1. EVERY arm below is #427's exact stage-2
+#      configuration (206.5M xl144+znoise head over the frozen 37.976M
+#      run-415 pentad codec, grad-clip 128, seed 0) at 20,000 steps, scored
+#      by its OWN persistence baseline — so the panels compare one variable.
+#      left  : step size. #435 (A2a, stride 6 offset 2, Argo-carrying bins)
+#              0.0721 and #439 (A2b, stride 6 offset 0, Argo-free bins)
+#              0.0729 at 30 d; #441 (A7, stride 3) 0.1620 at 15 d; the
+#              pentad control pair #427 0.50560 / #432 0.50447 at 5 d.
+#      right : the one-variable arms at 5 d against that same pair —
+#              #446 (A9, --input-quant 8) 0.4916, #445 (A6, fine season
+#              phase) 0.5077, #438 (A3, Argo targets excluded) 0.5665,
+#              #440 (A4, znoise rescaled to the pentad z-scale) 0.8145.
+cad_days = [30.0, 15.0, 5.0]
+cad_vals = [[0.0721, 0.0729], [0.1620], [0.50560, 0.50447]]
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.4, 3.0),
+                             gridspec_kw={"width_ratios": [1.0, 1.15]})
+a1.plot(cad_days, [np.mean(s) for s in cad_vals], "-", color=C1, lw=2)
+for d, s in zip(cad_days, cad_vals):
+    a1.plot([d] * len(s), s, "o", color=C1, ms=4)
+a1.set_xscale("log")
+a1.set_xticks(cad_days)
+a1.set_xticklabels(["30 d\n(stride 6)", "15 d\n(stride 3)", "5 d\n(stride 1)"],
+                   fontsize=7.5)
+a1.minorticks_off()
+a1.invert_xaxis()
+a1.set_xlabel("forecast step size, one substrate")
+a1.set_ylabel("one-step ratio (lower = better)")
+a1.set_ylim(0, 0.6)
+a1.set_title("smooth and monotone: no cliff", loc="left", fontsize=8.5)
+
+# The arms, worst first, so the eye reads down to the one that beat the pair.
+arms5 = [("noise at the monthly\nrelative dose (A4)", 0.8145, C2),
+         ("Argo targets removed (A3)", 0.5665, C2),
+         ("fine season phase (A6)", 0.5077, INK2),
+         ("control pair (#427/#432)", 0.50504, INK),
+         ("inputs on an 8-level\nalphabet (A9)", 0.4916, C3)]
+ypos = np.arange(len(arms5))
+a2.barh(ypos, [v for _, v, _ in arms5],
+        color=[c for _, _, c in arms5], height=0.62)
+a2.axvline(0.50504, color=INK2, ls=":", lw=1.2)
+for y, (_, v, _) in zip(ypos, arms5):
+    a2.text(v + 0.012, y, "%.4f" % v, fontsize=7, va="center", color=INK)
+a2.set_yticks(ypos)
+a2.set_yticklabels([n for n, _, _ in arms5], fontsize=7)
+a2.set_xlim(0, 0.95)
+a2.set_xlabel("one-step ratio at 5-day cadence")
+a2.set_title("one variable each, vs the pair", loc="left", fontsize=8.5)
+for a in (a1, a2):
+    strip(a)
+fig.suptitle("The five-day step is intrinsically harder, and only input "
+             "quantization has moved it",
+             fontsize=9, x=0.02, y=1.07, ha="left")
+fig.savefig(os.path.join(FIGS, "fig_cadence.pdf"))
+plt.close(fig)
+
+
+# ---- Fig 12: what each codec's round trip loses --------------------------
+# src: monthly anchor  — E-019a, ml/runs/recon_audit/recon_eval.json (the
+#        f3_anchor41M codec, d_z 64, 26.5N section, full visibility, train
+#        split; per-pixel variance lost = rmse^2). Mean r 0.975 per-pixel /
+#        0.979 pooled over 39 channels.
+#      pentad per-bin  — the E-044b-roll mechanism audit (2026-08-22),
+#        run-415's d_z-32 codec: FVU 0.4-0.6% on the 92% of bins carrying
+#        only the 8 fast channels, and the collapse on the 8% that carry
+#        Argo (cur_speed 112%, ssh 86%, deep Argo 12-17%).
+#      month block     — E-047 Tier-1 recon audit (2026-08-24), the 40M
+#        month-block codec at d_z 64: fast channels at the Argo anchor cell
+#        7.6% trained / 17.4% held out; Argo-free cells 9-19%.
+# Bars are FRACTION OF VARIANCE LOST, so lower is better and 100% means the
+# reconstruction carries none of the channel's variance. Log scale: the
+# quantities span three orders of magnitude and a linear axis shows one.
+# Horizontal, because the row labels are phrases ("cur_speed, Argo-carrying
+# bins") and a vertical bar chart renders those as overlapping stubs. Group
+# identity rides in the legend rather than in a second row of tick text.
+groups = [
+    ("monthly anchor, 40.7M, $d_z$ 64 — one $z$ per pixel-month",
+     [("surface winds $\\tau$", 1.1), ("ssh", 1.8),
+      ("upper-ocean T/S, 10-700 dbar", 2.2),
+      ("deep S, 900-1900 dbar", 3.5),
+      ("deep T, 900-1900 dbar", 6.9)], C1),
+    ("pentad per-bin, 38.0M, $d_z$ 32 — one $z$ per 5-day bin",
+     [("fast channels, Argo-free bins (92%)", 0.5),
+      ("deep T, Argo-carrying bins (8%)", 14.5),
+      ("ssh, Argo-carrying bins", 86.0),
+      ("surface current speed, Argo bins", 112.0)], C2),
+    ("month block, 40M, $d_z$ 64 — one $z$ per calendar month",
+     [("fast channels, Argo anchor cell", 7.6),
+      ("the same, held-out month", 17.4),
+      ("fast channels, Argo-free cells", 14.0)], C3),
+]
+fig, ax = plt.subplots(figsize=(7.0, 4.1))
+y, ticks, labels, hand = 0.0, [], [], []
+for gname, bars, colour in reversed(groups):        # first group at the TOP
+    for lab, v in reversed(bars):
+        ax.barh(y, v, color=colour, height=0.68)
+        ax.text(v * 1.13, y, ("%.1f%%" % v) if v < 10 else "%.0f%%" % v,
+                va="center", fontsize=7, color=INK)
+        ticks.append(y)
+        labels.append(lab)
+        y += 1
+    hand.insert(0, matplotlib.patches.Patch(color=colour, label=gname))
+    y += 0.7
+# The dotted 100% line is the channel's own variance — a reconstruction to
+# its right carries none of it. Named in the caption rather than annotated
+# in place: every horizontal position near that line is occupied by a bar.
+ax.axvline(100, color=INK2, ls=":", lw=1.2)
+ax.set_xscale("log")
+ax.set_xlim(0.3, 400)
+ax.set_xticks([0.5, 1, 5, 10, 50, 100])
+ax.set_xticklabels(["0.5%", "1%", "5%", "10%", "50%", "100%"])
+ax.minorticks_off()
+ax.set_yticks(ticks)
+ax.set_yticklabels(labels, fontsize=7.5)
+ax.set_ylim(-0.8, y - 0.2)
+ax.set_xlabel("variance lost in the round trip (lower = better)")
+ax.legend(handles=hand, frameon=False, fontsize=7.5, loc="upper right",
+          bbox_to_anchor=(1.0, 1.02), labelspacing=0.35)
+strip(ax)
+ax.grid(True, axis="x")
+fig.suptitle("Full-visibility copy reconstruction: the monthly anchor loses "
+             "1-7%, the pentad codec collapses\nwhere Argo lands, and the "
+             "month block cures that at a flat structural price",
+             fontsize=8.5, x=0.02, y=1.02, ha="left")
+fig.savefig(os.path.join(FIGS, "fig_recon.pdf"))
+plt.close(fig)
 
 print("figures written to", FIGS)
