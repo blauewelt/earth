@@ -77,6 +77,27 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+<a id="e-046"></a>
+**02:30Z 08-24 — E-046 DISPATCHED (Chris's cost nod, 02:00Z: "the costs are acceptable").**
+The FSQ bottleneck landed at 7f8dabb (`--fsq-levels`, default-off bit-identity pinned to
+0e10253; InputQuant moved to model.py as the ONE quantizer; every codec loader rebuilds
+the lattice or refuses; recipe-only key like time_block). **The arm is d_z 32 with L=8 on
+all 32 dimensions (recipe f4r2-40M-fsq8) — deliberately NOT the paper's option-A d_z-5:**
+the round-6 audit showed 40 channels already squeezed at 32 dims, and A9 measured the
+[8]^32 alphabet WINNING head-side at 0.4916 — E-046 moves exactly that alphabet into the
+codec, one variable. Hypothesis: the FSQ codec's 20k stage-2 ratio lands clearly below
+#427's 20k point (read off ml-metrics run-427.jsonl at harvest, per the plan §6);
+falsifier: at-or-above = continuity was not the binding constraint, answered for ~$9.
+Steps 200,000 clean (NOT #415's max_minutes-refit accident of 197,428 — the codec-step
+comparison is not the falsifier, the stage-2 20k point is). The plan §7 GPU smoke is
+SKIPPED as answered: test 6 pins loader↔trainer encode bit-equality and test 8 trains
+the lattice codec end to end on CPU. Fresh 258GB box (contract 48520137). Also
+02:30Z: **#451's replacement dispatched** — same f4r2-126M-monthblock b64 200k config on
+a fresh 128GB box (contract 48520140), since 48478310 has been Vast-offline 7+ h with
+metrics frozen at step 9000; if the host resurrects, the FURTHER-ALONG of the two is
+kept and the other cancelled (they are the same run re-attempted, not replicates — same
+seed).
+
 **01:30Z 08-24 — THE A9/E-046 GATE FIRES.** **E-045-A9 (#446, `--input-quant 8`, the
 head's inputs snapped to an 8-level-per-dim alphabet): final 20k ratio 0.4916**
 (z_mse 10.4486 / persistence 21.2544; rapid_r_kfold 0.677 [0.624, 0.725], in the
