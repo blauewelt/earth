@@ -1,0 +1,137 @@
+{
+ "run_number": 461,
+ "files": {
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.6,
+     "r_deseasonalised": 0.575,
+     "n_test": 219
+    },
+    {
+     "K": 3,
+     "r_raw": 0.596,
+     "r_deseasonalised": 0.576,
+     "n_test": 219
+    },
+    {
+     "K": 6,
+     "r_raw": 0.561,
+     "r_deseasonalised": 0.539,
+     "n_test": 219
+    },
+    {
+     "K": 12,
+     "r_raw": 0.56,
+     "r_deseasonalised": 0.542,
+     "n_test": 219
+    },
+    {
+     "K": 24,
+     "r_raw": 0.579,
+     "r_deseasonalised": 0.523,
+     "n_test": 219
+    }
+   ],
+   "seasonal_floor_raw": 0.19,
+   "seasonal_floor_deseas": -0.043
+  },
+  "provenance.json": {
+   "run_number": 461,
+   "sha": "f1482f5b0533aaca6c90162c49aa0780c1d11955",
+   "code": "https://github.com/blauewelt/earth/tree/f1482f5b0533aaca6c90162c49aa0780c1d11955",
+   "inputs": {
+    "doc": "E-045.3 \u00b7 SPAN-FIXED LADDER rung (Chris, 14:15Z 08-24): trains #427's exact configuration at HALF-MONTH CADENCE with the context span held at TWO YEARS \u2014 stride 3, offset 2, --K 48 (48 frames x 15 d spacing = 720 d, same span as A2's stride-6 K-24 arm; the K-fixed ladder confounded step size with span, this ladder unconfounds it) \u00b7 params 206.5M head + fresh k_max-48 positional table \u00b7 stage stage-2 \u00b7 data family4_na025_pentad_r2 \u00b7 resume run-415 (frozen codec) \u00b7 temporal_steps 20,000. CONTROLS: A7 (#441, stride 3, K=24, 360 d) 0.1620 and A2a/b 0.0713/0.0729 (stride 6, K=24, 720 d). READING: E-045.3 well below 0.1620 = span/frames were binding at 15 d; parity = the step itself is. Siblings E-045.2 (stride 2, K=72) and E-045.1 (stride 1, K=144) go to the 80 GB H100 when #453 frees it \u2014 memory ~ K. Head capacity deliberately FIXED (one variable); capacity is the pre-registered follow-up. COST ~6 h on the HK box (~$2). Log anchor e-045.",
+    "steps": "197428",
+    "batch": "512",
+    "d_z": "32",
+    "anomaly": "true",
+    "temporal_steps": "20000",
+    "temporal_d_model": "1024",
+    "temporal_layers": "16",
+    "eval_every": "0",
+    "resume": "!run-415",
+    "head_probe": "true",
+    "light_probe_every": "0",
+    "window": "recipe:xl144-zn-pentad-nolonhold,stencil:145,ring:spiral:111-4444-0.71-0.5,seed:0,sched:expdecay --lr-cooldown-frac 0 --milestone-steps 600 --input-znoise 0.7 --grad-clip 128 --time-stride 3 --time-offset 2 --K 48",
+    "tensor": "family4_na025_pentad_r2",
+    "sst_channel": "false",
+    "patch": "1",
+    "max_minutes": "0",
+    "runner": "gpu-box-39184683",
+    "job_timeout": "700",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "512",
+    "codec_layers": "12",
+    "codec_heads": "4",
+    "codec_d_dec": "256"
+   },
+   "tensor": {
+    "file": "ml/cache/family4_na025_pentad_r2.npz",
+    "sha256": "37e146384b6f622fefe3c7e18ad9bab0389c9538be79536899fe8729bb2d0826",
+    "bytes": 4515270439,
+    "X_shape": [
+     3142,
+     281,
+     481,
+     40
+    ],
+    "C": 40,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std",
+     "sst"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "T": 3142
+   },
+   "torch": "2.13.0+cu126",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-39184683"
+  }
+ }
+}
