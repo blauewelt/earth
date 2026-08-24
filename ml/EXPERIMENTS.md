@@ -77,6 +77,40 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+**06:45Z 08-24 — THE FIRST MONTH-BLOCK CODEC EXISTS AND IS ACCEPTED; ITS HEAD AND TWO
+FOLLOW-ONS DISPATCH NOW (Chris's morning direction).** The TPU 60k run (node
+e047a-tpu-60k) finished all 60,000 steps in 2.8 h of training (0.167 s/step, loss_rec
+0.098, light probe 0.242 at 60k) and self-reaped; the torch export is published as
+release asset `e047a-tpu-60k__pixelmae.pt` (model-checkpoints-v1). **Tier-1 recon audit
+(local CPU, 6 blocks × 512 px paired vs run-415's own recorded round-6 numbers, replay
+check 0.05%): ACCEPTED.** The round-6 collapse is CURED at the anchor: fast channels at
+the Argo cell read FVU 7.6%/17.4% (trained/held-out) where per-bin d_z-32 read 25–112%;
+rg_t/rg_s at parity-or-better. The price is structural: Argo-free cells read 9–19%
+where per-bin was <1% (one z per month is a real ~4:1 squeeze), and the WINDS carry it
+— held-out winter tau FVU 0.65/0.75 even at full visibility, masked wind in-fill
+overfits (0.30 trained vs >1 held-out at 0.69 epochs). Chinchilla reading at 40M/d_z 64:
+OUTPUT capacity (decoder/d_z), not encoder scale, is the binding constraint; more data
+or masking before more parameters at this rung. All n=1 at a new tier (JAX/TPU, §3b) —
+#453, the same-recipe torch twin (~13:00Z), is the cross-framework check. Dispatching:
+
+- **E-047-HEAD (block-z 20k stage-2, HK queue behind #452):** #427's exact head config
+  (xl144-zn-pentad-nolonhold, stencil 145, znoise 0.7, grad-clip 128, seed 0, 20k) on
+  the TPU block codec's z — the axis becomes MONTHLY by construction (temporal.py
+  adopts k_time/time_block from the checkpoint; --time-stride refused on blocks).
+  **Hypothesis: fusion beats selection — ratio below E-045-A2a's 0.0721** (selection,
+  same tensor/head/steps); parity means one-bin-per-month suffices and the block codec
+  buys the roll only. JAX-trained tier, never pooled.
+- **E-045-A10 (does the quantization win generalize off-pentad?):** Chris's question —
+  A9's gate fired at 5-day; is input-quant cadence-specific? A10 = A7's half-month
+  configuration (stride 3, offset 2) + --input-quant 8. Control: A7's 0.1620.
+  Hypothesis: below 0.1620 = the alphabet helps across cadences (an FSQ-15d codec
+  becomes thinkable); parity = the win is pentad's regime. Third in the HK queue.
+- **E-047b-TPU (the anchor-sized codec on the TPU, Chris: "spend is fine"):** same
+  126.943M month-block geometry as #456 (1024×10, 8 heads, d_dec 768, d_z 128) at
+  batch 256, steps 60k, node e047b-tpu-60k, on-demand (~$45 at a guessed ~0.5 s/step;
+  memory arithmetic says batch 64/chip fits 16 GB HBM — the first step will say).
+  #456 (torch b64 200k, Japan box) continues as the torch-tier long form.
+
 <a id="e-046"></a>
 **02:30Z 08-24 — E-046 DISPATCHED (Chris's cost nod, 02:00Z: "the costs are acceptable").**
 The FSQ bottleneck landed at 7f8dabb (`--fsq-levels`, default-off bit-identity pinned to
