@@ -77,6 +77,25 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+**18:40Z 08-24 — A11 OVERTURNS THE CADENCE READING: CONTEXT, NOT STEP SIZE, DROVE THE
+LADDER.** **E-045-A11 (#464, 30-day steps with the context cut to the 5-day arm's 120 d —
+stride 6, K=4): final 20k ratio 0.5274** (z_mse 15.0506 / persistence 28.5362). The
+factorial square so far: (5 d step, 120 d) 0.506 · (30 d step, 720 d) 0.071 · **(30 d
+step, 120 d) 0.527** — at MATCHED 120 d context the 30-day task is exactly as hard as the
+5-day one, so the K-fixed ladder was tracking the CONTEXT AXIS, not the step. The
+white-innovation-floor account is now WEAKENED where it was strong: A2a's model error
+2.03 vs A11's 15.05 on the same 30 d targets says the "irreducible" content is largely
+predictable GIVEN LONG CONTEXT. Leading mechanism candidate, pre-registered before the
+span-fixed rungs land: THE SEASONAL ANALOG — at stride 6, K=24 reaches the same-calendar
+frame one year back (12 strided frames), so the head can read last year's state; K=4
+cannot, and neither can stride 1 at K=24. This is the calendar-replay machinery (E-043b)
+showing up in one-step form. PREDICTIONS now on record: E-045.1 (5 d step, K=144, 720 d —
+includes t−73, the year-back frame) lands ~0.07–0.15 if the context/analog story is
+right, ~0.5 if step size is; E-045.3 (15 d, K=48) and E-045.2 (10 d, K=72) interpolate.
+Caveat: A11 moved span AND K together (120 d ∧ 4 frames), so "context" here bundles
+span with frame count — the span-fixed rungs unbundle it. n=1 (§3b). Chris's factorial
+design is what caught this; the K-fixed ladder alone had the wrong story.
+
 **18:00Z 08-24 — A10: THE ALPHABET WIN DOES NOT TRAVEL.** **E-045-A10 (#458, A7's
 half-month configuration + `--input-quant 8`): final 20k ratio 0.1692** (z_mse 4.5391 /
 persistence 26.8270) against A7's 0.1620 — +0.007, parity-to-slightly-worse, where the
