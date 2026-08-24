@@ -77,6 +77,25 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+**01:30Z 08-24 — THE A9/E-046 GATE FIRES.** **E-045-A9 (#446, `--input-quant 8`, the
+head's inputs snapped to an 8-level-per-dim alphabet): final 20k ratio 0.4916**
+(z_mse 10.4486 / persistence 21.2544; rapid_r_kfold 0.677 [0.624, 0.725], in the
+control band) against the 0.50560/0.50447 control pair — 0.0135 below the pair mean,
+~12× the pair's own |Δ|. The pre-registered E-046 gate condition ("meaningfully below
+the control") is met: **discretizing the pentad input helps one-step, so the E-046 FSQ
+codec retrain is FUNDED** — dispatch waits on Chris's cost nod (morning summary), per
+the overnight budget ambiguity. Ladder bookkeeping: A6 dead (0.5077), A9 is the first
+arm to move the pentad number in the right direction. Ops, same check: **#451 (126M
+long form) STALLED at step 9000 since ~19:15Z** — its box 48478310 is Vast-offline
+while its runner still reads online+BUSY: frozen metrics beat runner status (tonight's
+correction to the 22:30Z note); job_timeout ends it ~15:50Z if the host never returns;
+morning decision (fresh re-dispatch vs a TPU 126M attempt) — #454's cancellation makes
+this the only live 126M. And the first TPU 60k launch died at minute two to
+unattended-upgrades holding the dpkg lock through all five 20 s retries (self-reap
+worked; ~$0.30); fixed at cae981f (stop the service + DPkg::Lock::Timeout 600),
+relaunched 01:40Z — revised codec ETA ~05:45Z. #453 re-measured at 1.04 s/step →
+~13:45Z; #450 accelerated to ~0.21 s/step → lands ~08:45Z, BEFORE its own fast arm.
+
 **NIGHT HARVEST, 23:00Z 08-23.** Four results and one cut:
 
 - **E-045-A6 (#445, fine season phase) FINAL: 20k ratio 0.5077** (z_mse 10.791 /
