@@ -296,6 +296,62 @@ def export_pixelmae(model):
     return e.sd
 
 
+def export_temporal(model):
+    """NNX `TemporalTransformer` → an ORDERED dict of numpy arrays in the torch
+    module's own key order — the reverse of `load_temporal`, one list read
+    backwards.
+
+    The key set is what `ml/rollout_spatial.py` and every other torch reader
+    calls `load_state_dict(strict=True)` with, so a missing or extra key here
+    is a refusal there rather than a silently different model. `pos.weight` is
+    the one key those readers also SHAPE-read (`tk["model"]["pos.weight"]
+    .shape[0]` is how a roll recovers k_max from the file rather than from a
+    convention), which is why the positional table is emitted whole and never
+    sliced to the K a run happened to train at.
+    """
+    e = _Emitter("export_temporal")
+    _emit_linear(model.inp, e, "inp")
+    _emit_linear(model.static, e, "static")
+    e.put("pos.weight", model.pos.embedding.value)
+    _emit_encoder(model.encoder, e, "encoder")
+    _emit_linear(model.head, e, "head")
+    if model.heads_direct is not None:
+        for k, lin in model.heads_direct.items():
+            _emit_linear(lin, e, f"heads_direct.{k}")
+    return e.sd
+
+
+def export_temporal_pt(model, args, path=None, **extra):
+    """A stage-2 head `.pt` the UNCHANGED torch eval scripts load.
+
+    Shape matches what `ml/temporal.py` writes: `{model, args, step, ...}`.
+    `args` must be the trainer's own `vars(a)`, because that is the field
+    `ml/rollout_spatial.py` reads the head's geometry back out of — `K`,
+    `d_model`, `layers`, `stencil`, `ring_km`, `seed`, `direct`,
+    `season_phase`, and (absent here, deliberately) `input_quant`.
+
+    **NO `opt`/`sched`.** `ml/temporal.py --resume-temporal` refuses a
+    checkpoint missing them, and that refusal is CORRECT for this artefact:
+    optax's state is not torch Adam's state, mapping one into the other is
+    explicitly out of scope (`JAX_PORT.md` §3.3), and a blob carrying
+    torch-shaped moments this trainer never produced would be a continuation
+    wearing a warm restart's clothes — the exact confusion `--init-temporal`
+    exists to keep separate. The resumable state is the sibling `.npz`.
+    """
+    import torch                                   # local: JAX users need not
+    if not isinstance(args, dict):
+        args = dict(vars(args))
+    else:
+        args = dict(args)
+    args.setdefault("backend", "jax")
+    sd = {k: torch.from_numpy(v) for k, v in export_temporal(model).items()}
+    blob = {"model": sd, "args": args}
+    blob.update(extra)
+    if path is not None:
+        torch.save(blob, path)
+    return blob
+
+
 def export_pt(model, args, path=None, **extra):
     """A `.pt` blob the UNCHANGED torch stack loads: `{model, args, d_z, ...}`.
 
