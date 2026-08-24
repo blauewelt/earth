@@ -1,0 +1,2 @@
+{"config": {"steps": 60000, "batch": 512, "d_z": 64, "patch": 3, "d_model": 576, "n_layers": 10, "n_heads": 8, "d_dec": 768, "anomaly": true, "fsq_levels": null, "fsq_ladder": null, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 40.693, "data": "family3_na025.npz", "C": 39, "T": 516, "resume": "run-416", "recipe": "f3-anchor-41M-nolonhold"}}
+{"resumed": {"from": "run-416.pt", "parent_tag": "run-416", "at_step": 60000}}
