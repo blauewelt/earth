@@ -390,7 +390,15 @@ def parse(argv=None):
                         "rebuilds from and none re-fits.")
     p.add_argument("--fsq-exp-base", type=float, default=2.0)
     p.add_argument("--fsq-auto-n", type=int, default=4096)
-    p.add_argument("--fsq-auto-step", type=int, default=2000)
+    p.add_argument("--fsq-auto-step", default="2000",
+                   help="the step(s) at which --fsq-ladder auto fits: one "
+                        "number, or a COMMA LIST ('50,200,1000') to re-measure "
+                        "and re-install at each. The encoder's output scale is "
+                        "exactly what moves during training, so one fit is a "
+                        "guess about when it has settled; the LAST fit is what "
+                        "the checkpoint carries. The FIRST entry is clamped to "
+                        "steps//2 so an auto run always fits; later ones are "
+                        "clamped to --steps and not pulled inward.")
     p.add_argument("--fsq-ladder-fit", default="",
                    help="the per-dimension ladder 'u,e2,...' — normally "
                         "WRITTEN BY the run; pass it to reproduce an exact "
@@ -730,7 +738,9 @@ def main(argv=None):
               + (f" · fitted lattice IN HAND: {a.fsq_ladder_fit}"
                  if a.fsq_ladder_fit else "")
               + (f" · NOT YET FITTED — quantizing uniformly until step "
-                 f"{min(a.fsq_auto_step, max(1, a.steps // 2))}"
+                 f"{fql.fit_steps(a.fsq_auto_step, a.steps)[0]}, then "
+                 f"re-fitting at "
+                 f"{fql.fit_steps(a.fsq_auto_step, a.steps)}"
                  if (a.fsq_ladder == "auto" and not a.fsq_ladder_fit) else "")
               + " · straight-through gradient, no codebook parameters and no "
                 "commitment loss", flush=True)
@@ -932,6 +942,109 @@ def main(argv=None):
         export_pt(m, args, path=os.path.join(a.out, "pixelmae.pt"),
                   chan=chan, norm=d["norm"], step=int(step), tag=ckpt_tag)
 
+    # ---- E-048: the --fsq-ladder auto FIT ---------------------------------
+    # The mirror of ml/train.py's, FIRED from the loop for the same reason:
+    # what the fit measured is then a function of the run's own seed and step
+    # schedule and of nothing else. One deliberate eager `encode_pre` over a
+    # fresh TRAIN-pool draw, the shared per-dimension fit out of
+    # ml/fsq_ladder.py, then the new lattice is installed on the model, the
+    # graphdef is re-split and the jitted step is REBUILT (see
+    # `_make_train_step` for why rebuilding is not optional).
+    # DEFINED HERE, above the probe, because the probe reads the same
+    # instrument: `fsq_prequant` is the fit's sample AND the monitor's, and
+    # two draws of the pre-quantization distribution would be two answers to
+    # one question.
+    FSQ_FIT_AT = (set(fql.fit_steps(a.fsq_auto_step, a.steps))
+                  if (a.fsq_levels and a.fsq_ladder == "auto"
+                      and not a.fsq_ladder_fit) else set())
+
+    def fsq_prequant(n, gd, st):
+        """[n, d_z] of `to_z`'s RAW output on a fresh TRAIN-pool draw.
+
+        The fit's instrument, and the probe's: one deliberate eager forward
+        with nothing masked — a masked cell changes what the encoder is
+        asked, not what a ladder must serve.
+        """
+        n = max(2, int(n))
+        t, y, x, ctx = draw(tt, yy, xx, n)
+        if BLK is not None:
+            ev, eo = gather_block(t, y, x)
+            mk = np.zeros_like(eo)
+        elif a.patch > 1:
+            from jaxport.embed import gather_px_np
+            ev, eo = gather_px_np(Xt, OBS, t, y, x, a.patch)
+            ev = ev.astype(np.float32)
+            mk = np.zeros((n, C), bool)
+        else:
+            ev, eo = gather(t, y, x)
+            mk = np.zeros_like(eo)
+        m = nnx.merge(gd, st)
+        # CHUNK the fit forward. One unbatched encode_pre over --fsq-auto-n
+        # pixels allocated 2.81 GB of activations on ONE device — beside the
+        # training state that is more HBM than a v5e chip has, and the first
+        # e048a node died of exactly this at its step-2000 fit (RESOURCE_
+        # EXHAUSTED, 908 MB free). The fit is a statistic, not a training
+        # step: identical numbers arrive in device-batch-sized pieces.
+        FIT_CHUNK = 256
+        pre_parts = []
+        for c0 in range(0, len(ev), FIT_CHUNK):
+            c1 = min(c0 + FIT_CHUNK, len(ev))
+            pre_parts.append(np.asarray(m.encode_pre(
+                jnp.asarray(ev[c0:c1]), jnp.asarray(eo[c0:c1]),
+                jnp.asarray(mk[c0:c1]), jnp.asarray(ctx[c0:c1]))))
+        return np.concatenate(pre_parts, 0), m
+
+    def fsq_auto_fit(step, gd, st):
+        pre, m = fsq_prequant(a.fsq_auto_n, gd, st)
+        lv = fql.parse_levels(a.fsq_levels, a.d_z, "--fsq-levels")
+        # The DEFAULT this fit improves on is the lattice currently
+        # installed — 2.0 before the first fit, the last fit's radii after —
+        # so a re-fit can only move a dimension where it measured a gain over
+        # what the run is quantizing with right now.
+        R0 = (np.asarray(m.fsq[3], np.float64) if m.fsq is not None
+              else np.full(a.d_z, 2.0))
+        is_exp, base, sc, mse_u, mse_b = fql.fit_auto(
+            pre.astype(np.float64), lv, R0)
+        spec = fql.format_fit(is_exp, base, sc)
+        a.fsq_ladder_fit = spec
+        m.set_fsq_ladder(is_exp, base, spec, sc)
+        gd2, st2 = nnx.split(m)
+        print(f"  step {step}: --fsq-levels auto fitted on {len(pre):,} "
+              f"pre-quantization vectors (mean |v| "
+              f"{float(np.abs(pre).mean()):.4g}): "
+              f"{fql.describe_fit(is_exp, base, mse_u, mse_b, sc)}", flush=True)
+        with open(metrics_path, "a") as f:
+            f.write(json.dumps({"step": int(step), "fsq_ladder_fit": {
+                "spec": spec, "n": int(len(pre)),
+                "n_exp": int(np.asarray(is_exp).sum()),
+                "scale_min": round(float(np.min(sc)), 6),
+                "scale_med": round(float(np.median(sc)), 6),
+                "scale_max": round(float(np.max(sc)), 6),
+                "prequant_absmean": round(float(np.abs(pre).mean()), 6),
+                "d_z": int(a.d_z)}}) + "\n")
+        return gd2, st2
+
+    # The monitor that would have caught e048a at step 300 instead of at the
+    # post-mortem: the pre-quantization distribution against the bound it is
+    # being quantized into. `std_med` is the median per-dimension spread of
+    # `to_z`'s raw output and `sat_frac` the fraction of it beyond 2*R_d — a
+    # collapsed or runaway encoder shows here as sat_frac -> 1 while loss_rec,
+    # which cannot see a bottleneck that emits one vector, sits still.
+    PROBE_PRE_N = 512
+
+    def fsq_prequant_stats(gd, st):
+        try:
+            if not a.fsq_levels:
+                return None
+            pre, m = fsq_prequant(PROBE_PRE_N, gd, st)
+            R = (np.asarray(m.fsq[3], np.float64) if m.fsq is not None
+                 else np.full(a.d_z, 2.0))
+            return {"std_med": round(float(np.median(pre.std(0))), 6),
+                    "sat_frac": round(float((np.abs(pre)
+                                             > 2.0 * R).mean()), 6)}
+        except Exception as e:                       # instrumentation only
+            return {"error": f"{type(e).__name__}: {e}"[:120]}
+
     # ---- collapse guard ---------------------------------------------------
     strikes = [0]
 
@@ -999,6 +1112,14 @@ def main(argv=None):
             return None
         m["step"] = step
         m["wall_s"] = round(time.time() - t0, 1)
+        # The bottleneck's own health, on the SAME cadence as the probe: a
+        # collapsed or runaway encoder is invisible to loss_rec and to
+        # linear_r_deseas alike (e048a's was, for its whole run), and the one
+        # number that shows it is where `to_z`'s output sits relative to the
+        # bound it is quantized into.
+        pq = fsq_prequant_stats(graphdef, state)
+        if pq is not None:
+            m["fsq_prequant"] = pq
         with open(metrics_path, "a") as f:
             f.write(json.dumps(m) + "\n")
         collapse_check(m, step)
@@ -1047,67 +1168,9 @@ def main(argv=None):
                    else a.steps)
     CAL, t1, next_cal, steps0 = 200, None, None, a.steps
 
-    # ---- E-048: the --fsq-ladder auto FIT ---------------------------------
-    # The mirror of ml/train.py's, driven from the loop for the same reason:
-    # what the fit measured is then a function of the run's own seed and step
-    # schedule and of nothing else. One deliberate eager `encode_pre` over a
-    # fresh TRAIN-pool draw, the shared per-dimension fit out of
-    # ml/fsq_ladder.py, then the new lattice is installed on the model, the
-    # graphdef is re-split and the jitted step is REBUILT (see
-    # `_make_train_step` for why rebuilding is not optional).
-    FSQ_FIT_AT = (min(a.fsq_auto_step, max(1, a.steps // 2))
-                  if (a.fsq_levels and a.fsq_ladder == "auto"
-                      and not a.fsq_ladder_fit) else None)
-
-    def fsq_auto_fit(step, gd, st):
-        n = max(2, int(a.fsq_auto_n))
-        t, y, x, ctx = draw(tt, yy, xx, n)
-        if BLK is not None:
-            ev, eo = gather_block(t, y, x)
-            mk = np.zeros_like(eo)
-        elif a.patch > 1:
-            from jaxport.embed import gather_px_np
-            ev, eo = gather_px_np(Xt, OBS, t, y, x, a.patch)
-            ev = ev.astype(np.float32)
-            mk = np.zeros((n, C), bool)
-        else:
-            ev, eo = gather(t, y, x)
-            mk = np.zeros_like(eo)
-        m = nnx.merge(gd, st)
-        # CHUNK the fit forward. One unbatched encode_pre over --fsq-auto-n
-        # pixels allocated 2.81 GB of activations on ONE device — beside the
-        # training state that is more HBM than a v5e chip has, and the first
-        # e048a node died of exactly this at its step-2000 fit (RESOURCE_
-        # EXHAUSTED, 908 MB free). The fit is a statistic, not a training
-        # step: identical numbers arrive in device-batch-sized pieces.
-        FIT_CHUNK = 256
-        pre_parts = []
-        for c0 in range(0, len(ev), FIT_CHUNK):
-            c1 = min(c0 + FIT_CHUNK, len(ev))
-            pre_parts.append(np.asarray(m.encode_pre(
-                jnp.asarray(ev[c0:c1]), jnp.asarray(eo[c0:c1]),
-                jnp.asarray(mk[c0:c1]), jnp.asarray(ctx[c0:c1]))))
-        pre = np.concatenate(pre_parts, 0)
-        lv = fql.parse_levels(a.fsq_levels, a.d_z, "--fsq-levels")
-        is_exp, base, mse_u, mse_b = fql.fit_auto(pre.astype(np.float64), lv,
-                                                  2.0)
-        spec = fql.format_fit(is_exp, base)
-        a.fsq_ladder_fit = spec
-        m.set_fsq_ladder(is_exp, base, spec)
-        gd2, st2 = nnx.split(m)
-        print(f"  step {step}: --fsq-levels auto fitted on {len(pre):,} "
-              f"pre-quantization vectors: "
-              f"{fql.describe_fit(is_exp, base, mse_u, mse_b)}", flush=True)
-        with open(metrics_path, "a") as f:
-            f.write(json.dumps({"step": int(step), "fsq_ladder_fit": {
-                "spec": spec, "n": int(len(pre)),
-                "n_exp": int(np.asarray(is_exp).sum()),
-                "d_z": int(a.d_z)}}) + "\n")
-        return gd2, st2
-
     while s < a.steps:
         s += 1
-        if FSQ_FIT_AT is not None and s == FSQ_FIT_AT:
+        if s in FSQ_FIT_AT:
             graphdef, state = fsq_auto_fit(s, graphdef, state)
             train_step = _make_train_step(graphdef)
         bt = make_batch(tt, yy, xx, a.batch)
@@ -1159,9 +1222,13 @@ def main(argv=None):
         if a.light_probe_every and s % a.light_probe_every == 0:
             m = run_probe(s)
             if m:
+                pq = m.get("fsq_prequant") or {}
                 print(f"  light probe @{s}: linear r_des "
                       f"{m['linear_r_deseas']:+.3f} "
-                      f"({m['probe_seconds']:.0f}s)", flush=True)
+                      f"({m['probe_seconds']:.0f}s)"
+                      + (f" · pre-quant std_med {pq['std_med']:.4g}, "
+                         f"sat_frac {pq['sat_frac']:.3f}"
+                         if "std_med" in pq else ""), flush=True)
         if a.ckpt_every and s % a.ckpt_every == 0:
             save_ckpt(s)
 

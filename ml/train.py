@@ -26,6 +26,7 @@ import torch
 
 from model import (PixelMAE, gather_px, LazyPixels, obs_any_chunked,
                    pool_idx)
+import fsq_ladder as fql
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -256,14 +257,22 @@ def parse():
                    help="pre-quantization vectors the --fsq-ladder auto fit "
                         "measures on (one per pixel of one deliberate "
                         "forward, drawn from the TRAIN pool).")
-    p.add_argument("--fsq-auto-step", type=int, default=2000,
-                   help="the step at which --fsq-ladder auto fits. NOT 0: an "
-                        "untrained encoder's activations are not the "
-                        "distribution the ladder has to serve, and the whole "
-                        "point of 'auto' is that it is measured. Clamped to "
+    p.add_argument("--fsq-auto-step", default="2000",
+                   help="the step(s) at which --fsq-ladder auto fits — one "
+                        "number, or a COMMA LIST ('50,200,1000') to re-measure "
+                        "and re-install at each of them, the LAST fit being "
+                        "what the checkpoint carries. A list because the fit "
+                        "now also measures the per-dimension SATURATION "
+                        "RADIUS, and where `to_z`'s output sits is exactly "
+                        "what moves during training. NOT 0: an untrained "
+                        "encoder's activations are not the distribution the "
+                        "ladder has to serve, and the whole point of 'auto' is "
+                        "that it is measured. The FIRST entry is clamped to "
                         "steps//2 on a run too short to reach it, so an auto "
                         "run always fits and 'auto but never fitted' is not a "
-                        "state a checkpoint can be in.")
+                        "state a checkpoint can be in; later entries are "
+                        "clamped to --steps and not pulled inward, because a "
+                        "schedule that silently moves is worse than none.")
     p.add_argument("--fsq-ladder-fit", default="",
                    help="the per-dimension ladder, 'u,e2,e2,...' — normally "
                         "WRITTEN BY the run rather than passed. Pass it to "
@@ -733,7 +742,9 @@ def main():
                   + (f" · fitted lattice IN HAND from the dispatch/resume: "
                      f"{_q.fit}" if _q.fit else "")
                   + (f" · NOT YET FITTED — quantizing uniformly until step "
-                     f"{min(a.fsq_auto_step, max(1, a.steps // 2))}"
+                     f"{fql.fit_steps(a.fsq_auto_step, a.steps)[0]}, "
+                     f"re-fitting at "
+                     f"{fql.fit_steps(a.fsq_auto_step, a.steps)}"
                      if _q.needs_fit else ""), flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     # Cosine annealing whose TOTAL can be re-fitted mid-run (--max-minutes):
@@ -1264,11 +1275,16 @@ def main():
     # ---- E-048: the --fsq-ladder auto FIT --------------------------------
     # Driven from HERE rather than by a counter hidden inside the quantizer,
     # so what the fit measured is a function of the run's own seed and step
-    # schedule and nothing else. It fires once, on a deliberate no-grad
-    # forward over a fresh TRAIN-pool batch, and the lattice it installs is
-    # written into every checkpoint from that step on.
-    FSQ_FIT_AT = (min(a.fsq_auto_step, max(1, a.steps // 2))
-                  if (model.fsq is not None and model.fsq.needs_fit) else None)
+    # schedule and nothing else. It fires at every step in --fsq-auto-step, on
+    # a deliberate no-grad forward over a fresh TRAIN-pool batch, and the
+    # lattice it installs is written into every checkpoint from that step on.
+    # MORE THAN ONE FIT because the fit now measures the saturation RADIUS as
+    # well as the ladder, and `to_z`'s output scale is exactly what moves
+    # while the encoder trains: a single early fit bounds an encoder that no
+    # longer exists, and a single late one leaves the run quantizing into a
+    # constant bound for most of its steps.
+    FSQ_FIT_AT = (set(fql.fit_steps(a.fsq_auto_step, a.steps))
+                  if (model.fsq is not None and model.fsq.needs_fit) else set())
 
     def fsq_auto_fit(step):
         q = model.fsq
@@ -1296,14 +1312,20 @@ def main():
         line = q.fit_auto(sample)
         a.fsq_ladder_fit = q.fit
         print(f"  step {step}: {line}", flush=True)
+        R = q._scale.detach().cpu().numpy().astype(float)
         with open(metrics_path, "a") as f:
             f.write(json.dumps({"step": int(step), "fsq_ladder_fit": {
                 "spec": q.fit, "n": int(len(sample)),
-                "n_exp": int(q.is_exp_np.sum()), "d_z": int(a.d_z)}}) + "\n")
+                "n_exp": int(q.is_exp_np.sum()),
+                "scale_min": round(float(R.min()), 6),
+                "scale_med": round(float(np.median(R)), 6),
+                "scale_max": round(float(R.max()), 6),
+                "prequant_absmean": round(float(np.abs(sample).mean()), 6),
+                "d_z": int(a.d_z)}}) + "\n")
 
     while s < a.steps:
         s += 1
-        if FSQ_FIT_AT is not None and s == FSQ_FIT_AT:
+        if s in FSQ_FIT_AT:
             fsq_auto_fit(s)
         t, y, x, ctx = batch(tt, yy, xx, a.batch)
         l_rec, l_nei = step_loss(t, y, x, ctx)

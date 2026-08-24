@@ -239,11 +239,15 @@ class PixelMAE(nnx.Module):
         self.fsq_needs_fit = False
         if self.fsq_levels:
             lv = fql.parse_levels(self.fsq_levels, d_z, "--fsq-levels")
-            is_exp, base, _fitted = fql.resolve(
+            # scale=2.0 is `ml/model.py:fsq_from_levels`' sigma = 1, and it is
+            # what a LEGACY fit string (no ':<R>' fields) resolves to — so a
+            # checkpoint written before the scale was fitted rebuilds here on
+            # exactly the lattice it trained on.
+            is_exp, base, sc, _fitted = fql.resolve(
                 self.fsq_ladder, lv, d_z, self.fsq_exp_base,
-                self.fsq_ladder_fit)
+                self.fsq_ladder_fit, scale=2.0)
             self.fsq_needs_fit = not _fitted
-            self.set_fsq_ladder(is_exp, base, self.fsq_ladder_fit)
+            self.set_fsq_ladder(is_exp, base, self.fsq_ladder_fit, sc)
         elif self.fsq_ladder != "uniform" or self.fsq_ladder_fit:
             raise SystemExit(
                 f"--fsq-ladder {self.fsq_ladder!r} without --fsq-levels: "
@@ -309,9 +313,14 @@ class PixelMAE(nnx.Module):
         cls = jnp.broadcast_to(self.cls_tok.value, (B, 1, vt.shape[-1]))
         return jnp.concatenate([cls, self.ctx_proj(ctx)[:, None, :], vt], axis=1)
 
-    def set_fsq_ladder(self, is_exp, base, fit=""):
+    def set_fsq_ladder(self, is_exp, base, fit="", scales=None):
         """Install a per-dimension ladder — the constructor's path, and the
         one the E-048 `auto` fit takes mid-run.
+
+        `scales` is the per-dimension saturation radius R_d, or None to keep
+        the current one. It goes into the static tuple like every other
+        constant, so the fitted radius is part of the graphdef and the
+        re-split below is what makes it take effect.
 
         THE CALLER MUST RE-SPLIT AFTER THIS. `self.fsq` is a STATIC attribute,
         so it lives in the graphdef and a `jax.jit`-ed closure over the OLD
@@ -324,15 +333,25 @@ class PixelMAE(nnx.Module):
         half, off, shift = fql.uniform_params(lv)
         n, a_rel, logc, has_zero = fql.exp_params(lv, base,
                                                   flag="--fsq-levels exp")
-        # sigma = 1 on the codec side (there is no Z to measure), so the
-        # saturation radius is 2 — ml/model.py:fsq_from_levels' choice, not a
-        # second one.
-        scale = 2.0
+        # sigma = 1 on the codec side by DEFAULT (there is no Z to measure) —
+        # ml/model.py:fsq_from_levels' choice, so the radius is 2 — but under
+        # `--fsq-ladder auto` the radius is MEASURED per dimension and arrives
+        # here as `scales`. Keep the current one when nothing is passed.
+        if scales is None:
+            scale = (np.full(self.d_z, 2.0) if self.fsq is None
+                     else np.asarray(self.fsq[3], np.float64))
+        else:
+            scale = np.asarray(scales, np.float64) * np.ones(self.d_z)
+        if not np.isfinite(scale).all() or (scale <= 0).any():
+            raise SystemExit(
+                f"--fsq-levels: saturation radius {scale.tolist()[:4]}… is "
+                f"not finite and positive on every dimension — a lattice of "
+                f"extent 0 quantizes nothing.")
         self.fsq_ladder_fit = str(fit or "")
         self.fsq = (tuple(float(x) for x in half),
                     tuple(float(x) for x in off),
                     tuple(float(x) for x in shift),
-                    float(scale),
+                    tuple(float(x) for x in scale),
                     tuple(bool(x) for x in is_exp),
                     tuple(float(x) for x in a_rel * scale),
                     tuple(float(x) for x in logc),
@@ -354,7 +373,7 @@ class PixelMAE(nnx.Module):
         shp = z.shape
         v = z.reshape(-1, self.d_z)
         out = fsq_quantize(v, A(half), A(off), A(shift),
-                           jnp.asarray(scale, dt), jnp.asarray(is_exp),
+                           A(scale), jnp.asarray(is_exp),
                            A(exp_a), A(exp_logc), A(exp_n1), A(exp_jmin),
                            any_exp)
         return out.reshape(shp)

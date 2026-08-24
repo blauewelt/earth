@@ -7,7 +7,7 @@ exponential ladder (c**level)."* `--fsq-ladder` is that knob; z-dimensions are
 not channels, so the honest reading — and what this pins — is PER Z-DIMENSION
 (ml/fsq_ladder.py says why at length).
 
-Nine checks, and what each one is FOR:
+Thirteen checks, and what each one is FOR:
 
   1. **BIT-IDENTITY OF THE DEFAULT, against a pinned revision.** `uniform` is
      E-046's lattice, and E-046's lattice is what the dispatched #4xx arms
@@ -45,9 +45,33 @@ Nine checks, and what each one is FOR:
   9. **THE RECIPES RESOLVE**: both E-048 arms export RECIPE_FSQ_LADDER=auto
      and differ from each other in exactly one key, the stride.
 
+Checks 10-13 are the SCALE half of the fit (2026-08-24). Until then the
+saturation radius was a constant — `sigma = 1`, `R = 2` — while `to_z` is a
+free linear map under no pressure to land inside it, and the two codecs that
+existed said what that costs: e048a at pre-quantization |v| ~ 87 (a CONSTANT
+encoder, every dimension pinned to its outermost level) and the healthy
+run-455 at |v| ~ 3e4 (an eight-level ladder degenerated to a sign bit).
+
+ 10. **A SCALED LADDER IS ONE OBJECT IN BOTH BACKENDS.** Check 3 pinned the
+     ladders at one shared radius; this pins per-dimension radii spanning
+     three decades, built from the SAME fit string, torch vs JAX vs numpy.
+ 11. **THE FIT FINDS THE SCALE**, on dimensions of std 0.1 … 100: the fitted
+     radius lands inside a factor 4 of 2*std everywhere, and the MSE on the
+     wide dimensions falls far below the fixed lattice's — with the sign-code
+     degeneracy measured as a saturation fraction rather than asserted.
+ 12. **THE LEGACY SPELLING IS BIT-IDENTICAL.** A fit string with no `:<R>`
+     fields takes the constructor's radius and reproduces the pre-change
+     formula, computed inline from the algebra; and run-455's archived
+     checkpoint loads through `codec_from_ckpt` with `_scale` exactly 2.0 on
+     all 32 dimensions — the archived-checkpoint invariant, against a real
+     file rather than a fixture.
+ 13. **THE FIT STRING ROUND-TRIPS**, both spellings and mixtures of them,
+     plus the refusals and the `--fsq-auto-step` schedule parser.
+
     python3 tests/test_e048_fsq_ladders.py
 
-~4 minutes on two cores. No GPU, no network, no real tensor.
+~4 minutes on two cores. No GPU, no network, no real tensor — except
+check 12's `/home/claude/a455/pixelmae.pt`, which is the point of check 12.
 """
 import importlib.util
 import json
@@ -225,7 +249,7 @@ def main():
             zj = np.asarray(jmod.encode(*(jnp.asarray(t.numpy())
                                           for t in args)))
             lv = np.full(DZ, 8)
-            is_exp, bse, _ = fql.resolve(lad, lv, DZ, 2.0, fit)
+            is_exp, bse, _sc, _ = fql.resolve(lad, lv, DZ, 2.0, fit, scale=2.0)
             zn = fql.quantize_np(
                 tm.encode_pre(*args).detach().numpy(), lv, 2.0,
                 is_exp=is_exp, base=bse)
@@ -291,19 +315,39 @@ def main():
         line = qa.fit_auto(sample)
         assert not qa.needs_fit and qa.fit
         assert qa.is_exp_np.all(), qa.is_exp_np
-        # the narrowest dimension takes a LARGER base than the widest — the
-        # fit is reading the distribution, not returning a constant
-        assert qa.base_np[0] > qa.base_np[3], qa.base_np[:4]
+        # the narrowest dimension takes a SMALLER saturation radius than the
+        # widest — the fit is reading the distribution, not returning a
+        # constant — and the two identical blocks of four widths get the same
+        # answer, which is what "deterministic, from the sample" means
+        R_a = qa._scale.numpy()
+        assert R_a[0] < R_a[1] < R_a[3], R_a[:4]
+        assert np.allclose(R_a[:4], R_a[4:], rtol=0.25), R_a
         got = fql.parse_fit(qa.fit, DZ)
         assert np.array_equal(got[0], qa.is_exp_np)
         assert np.allclose(got[1][qa.is_exp_np], qa.base_np[qa.is_exp_np])
-        # THE TIE RULE, on an exact tie: both ladders saturate at the same
-        # +/-2, so a sample far outside the bound is quantized identically by
-        # every candidate and the DEFAULT must survive.
-        sat = np.where(rng.random((64, DZ)) < 0.5, -100.0, 100.0)
+        assert np.allclose(got[2], R_a, rtol=1e-6), (got[2], R_a)
+        # THE TIE RULE, on an exact tie: a sample that already sits on the
+        # default lattice's FIXED POINTS is reproduced by it with MSE exactly
+        # 0, which no candidate can STRICTLY beat — so the default ladder AND
+        # the default radius must both survive.
+        # The fixed points are FOUND, not assumed, and there are three of
+        # eight: `levels_of` gives where values LAND, and at even L this map
+        # does not fix most of them. +/-2 needs |v| -> inf (tanh never attains
+        # +/-1), and every NEGATIVE level rounds one step UP — the same
+        # half-step bias the antisymmetry measurement below quantifies.
         qt = fsq_from_levels("8", DZ, ladder="auto")
-        qt.fit_auto(sat)
+        pts_u = fql.levels_of(8, 2.0, "uniform")
+        rt = qt(torch.tensor(pts_u, dtype=torch.float64)[:, None]
+                .repeat(1, DZ)).numpy()[:, 0]
+        fixed = pts_u[np.abs(rt - pts_u) < 1e-9]
+        assert len(fixed) == 3, (fixed, rt)
+        lat = fixed[rng.integers(0, len(fixed), size=(2000, DZ))]
+        assert float(np.abs(qt(torch.from_numpy(lat)).numpy() - lat).max()) \
+            < 1e-12, "the tie fixture is not one"
+        qt.fit_auto(lat)
         assert not qt.is_exp_np.any(), qt.fit
+        assert np.allclose(qt._scale.numpy(), 2.0), qt._scale
+        assert set(qt.fit.split(",")) == {"u:2"}, qt.fit
         # AND WHY exp WINS SO BROADLY — measured, not assumed, because a
         # sweep that reported "the exponential ladder is better" without this
         # would be reporting a tail argument for something that is mostly a
@@ -324,17 +368,18 @@ def main():
         assert abs(bias[(7, "uniform")][0]) < 0.01, bias
         print("5. `auto` MEASURES: over eight dimensions of differing width "
               "the fit puts %d of %d on the exponential ladder and reads the "
-              "WIDTH — base %g for the narrowest, %g for the widest — '%s'; "
-              "the string round-trips; and on an exact TIE (values far outside "
-              "the bound, where both ladders saturate at the same +/-2) the "
-              "DEFAULT survives. WHY exp wins broadly, measured here so the "
+              "WIDTH — saturation radius %.4g for the narrowest, %.4g for the "
+              "widest — '%s'; the string round-trips; and on an exact TIE (a "
+              "sample already ON the default lattice, MSE 0) both the DEFAULT "
+              "ladder and the DEFAULT radius survive. WHY exp wins broadly, "
+              "measured here so the "
               "sweep cannot mistake it for a tail argument: at EVEN L the "
               "E-046 uniform map is NOT antisymmetric — mean z_q %+.3f on "
               "N(0,1) against the exp ladder's %+.3f, |q(-v)+q(v)| up to %.2f "
               "— because `shift` sits inside the tanh and `offset` outside it, "
               "so they cancel only at v = 0. At ODD L (no offset) the uniform "
               "map is unbiased (%+.3f) and exactly antisymmetric"
-              % (int(qa.is_exp_np.sum()), DZ, qa.base_np[0], qa.base_np[3],
+              % (int(qa.is_exp_np.sum()), DZ, R_a[0], R_a[3],
                  line.split(': ', 1)[1][:60], bias[(8, "uniform")][0],
                  bias[(8, "exp")][0], bias[(8, "uniform")][1],
                  bias[(7, "uniform")][0]))
@@ -438,13 +483,47 @@ def main():
                                "--fsq-ladder=exp"], "resume clash",
                    want_fail=True)
         assert "REFUSING to resume" in o_cl and "fsq_ladder" in o_cl, o_cl[-900:]
+        # THE SCHEDULE: a comma list fits at EVERY listed step, re-measuring
+        # and re-installing, and the LAST fit is what the checkpoint carries.
+        # One fit is a guess about when the encoder's output scale has
+        # settled, and that scale is now part of what is fitted.
+        sched_dir = os.path.join(ML, "runs", run_name + "_sched")
+        o_sc = run([c if c != run_dir else sched_dir for c in base_cmd]
+                   + ["--steps", "40", "--fsq-levels=8", "--fsq-ladder=auto",
+                      "--fsq-auto-n", "256", "--fsq-auto-step", "6,12,20"],
+                   "train --fsq-auto-step 6,12,20")
+        try:
+            assert "re-fitting at [6, 12, 20]" in o_sc, o_sc[-2000:]
+            srec = [r for r in (json.loads(l) for l in
+                                open(os.path.join(sched_dir, "metrics.jsonl"))
+                                if l.strip()) if "fsq_ladder_fit" in r]
+            assert [r["step"] for r in srec] == [6, 12, 20], srec
+            for r in srec:
+                assert set(r["fsq_ladder_fit"]) >= {
+                    "spec", "scale_min", "scale_med", "scale_max"}, r
+            n_moved = sum(1 for i in range(1, len(srec))
+                          if srec[i]["fsq_ladder_fit"]["spec"]
+                          != srec[i - 1]["fsq_ladder_fit"]["spec"])
+            ck_sc = torch.load(os.path.join(sched_dir, "pixelmae.pt"),
+                               map_location="cpu", weights_only=False)
+            assert ck_sc["args"]["fsq_ladder_fit"] == \
+                srec[-1]["fsq_ladder_fit"]["spec"]
+            sched_line = (
+                "  · the SCHEDULE: --fsq-auto-step 6,12,20 fitted at exactly "
+                "those three steps, %d of the later fits moving the lattice, "
+                "and the checkpoint carries the LAST one (radii %g..%g)"
+                % (n_moved, srec[-1]["fsq_ladder_fit"]["scale_min"],
+                   srec[-1]["fsq_ladder_fit"]["scale_max"]))
+        finally:
+            shutil.rmtree(sched_dir, ignore_errors=True)
         print("7. the checkpoint round-trips the LATTICE: an auto run fits "
               "mid-training, writes '%s' into args and into metrics.jsonl, and "
               "codec_from_ckpt rebuilds a codec whose encode equals the "
               "trainer's BIT-FOR-BIT while the same weights with the ladder "
               "dropped differ by up to %.3f. A resume ADOPTS the fit and does "
-              "NOT re-fit; a --fsq-ladder=exp resume REFUSES"
-              % (fit[:32] + ("…" if len(fit) > 32 else ""), drop_gap))
+              "NOT re-fit; a --fsq-ladder=exp resume REFUSES\n%s"
+              % (fit[:32] + ("…" if len(fit) > 32 else ""), drop_gap,
+                 sched_line))
 
         # ---- 8. the JAX trainer, and its .pt export ----------------------
         jrun = os.path.join(tmp, "jax_run")
@@ -552,7 +631,185 @@ def main():
               "recipes state is the one this geometry MEASURES, %s"
               % (sorted(diff), f"{n_par:,}"))
 
-        print("\nE-048 FSQ ladders: all 9 checks hold ✓")
+        # ---- 10. a SCALED ladder is the same object in both backends ------
+        # Test 3 pinned the two ladders at ONE radius, which every dimension
+        # shared. The fitted radius is per dimension and spans three orders of
+        # magnitude, so the parity that matters now is parity of the SCALE:
+        # a torch `_scale` vector and a JAX static tuple that disagreed by one
+        # dimension would be two codecs, and `loss_rec` would not say so.
+        R10 = np.array([float(f"{x:.6g}") for x in np.logspace(-1, 2, DZ)])
+        ie10 = np.array([i % 2 == 0 for i in range(DZ)])
+        b10 = np.array([2.0 if i % 4 == 0 else 3.0 for i in range(DZ)])
+        spec10 = fql.format_fit(ie10, b10, R10)
+        assert spec10.count(":") == DZ, spec10
+        q10 = fsq_from_levels("8", DZ, ladder="auto", fit=spec10)
+        j10 = jm.PixelMAE(**GEO, fsq_levels="8", fsq_ladder="auto",
+                          fsq_ladder_fit=spec10, rngs=nnx.Rngs(0))
+        assert np.allclose(q10._scale.numpy(), R10, rtol=1e-6)
+        assert np.allclose(np.asarray(j10.fsq[3], np.float64), R10, rtol=1e-12)
+        g10 = np.random.default_rng(101)
+        v10 = (g10.normal(size=(4000, DZ)) * R10).astype(np.float32)
+        z10t = q10(torch.from_numpy(v10)).numpy()
+        z10j = np.asarray(j10._bottleneck(jnp.asarray(v10)))
+        z10n = fql.quantize_np(v10.astype(np.float64), np.full(DZ, 8), R10,
+                               is_exp=ie10, base=b10)
+        d10j = float(np.abs(z10t - z10j).max())
+        d10n = float(np.abs(z10t - z10n).max())
+        assert d10j < 1e-5 and d10n < 1e-5, (d10j, d10n)
+        # and the lattice really is per-dimension: the outermost reachable
+        # magnitude of each dimension follows its own R, not one shared R
+        outer = np.abs(z10t).max(0)
+        assert (outer / R10).max() <= 1.0 + 1e-6, outer / R10
+        assert outer[-1] / max(outer[0], 1e-30) > 100, outer
+        print("10. a per-dimension SCALED ladder is one object in both "
+              "backends: eight radii from %.3g to %.3g, mixed uniform/exp, "
+              "built from the SAME fit string — torch vs JAX max|Δ| %.1e, "
+              "torch vs the numpy reference %.1e (gate 1e-5), and each "
+              "dimension saturates at its OWN radius (outermost |z_q| spans "
+              "%.3g..%.3g, a factor %.0f)"
+              % (R10[0], R10[-1], d10j, d10n, outer[0], outer[-1],
+                 outer[-1] / outer[0]))
+
+        # ---- 11. the fit finds the SCALE, and it is the scale that pays ---
+        # The bug this whole revision exists for: a lattice fixed at R = 2
+        # while `to_z` is a free linear map. e048a ran at |v| ~ 87 (a constant
+        # encoder), run-455 at |v| ~ 3e4 (a sign code). Both are dimensions
+        # whose distribution the fixed bound cannot see; here they are, at
+        # four decades of width, and what the fit must return is the WIDTH.
+        g11 = np.random.default_rng(11)
+        stds11 = np.array([0.1, 1.0, 10.0, 100.0] * (DZ // 4))[:DZ]
+        s11 = g11.normal(size=(6000, DZ)) * stds11
+        lv11 = np.full(DZ, 8)
+        ie11, b11, R11, mu11, mb11 = fql.fit_auto(s11, lv11, 2.0)
+        ratio = R11 / (2.0 * stds11)
+        assert (ratio > 0.25).all() and (ratio < 4.0).all(), (R11, stds11)
+        big = stds11 >= 10.0
+        assert (mb11[big] < mu11[big]).all(), (mu11[big], mb11[big])
+        # and the gain is not a rounding: at std 100 the fixed R = 2 lattice
+        # cannot represent the dimension at all
+        gain = float(mu11[big].mean() / max(mb11[big].mean(), 1e-30))
+        assert gain > 5.0, gain
+        # the SIGN CODE, named: at the fixed radius almost every value
+        # saturates, so eight levels carry one bit
+        sat_fixed = float((np.abs(s11[:, big]) > 2.0).mean())
+        sat_fit = float((np.abs(s11[:, big]) > R11[big]).mean())
+        assert sat_fixed > 0.9 and sat_fit < 0.5, (sat_fixed, sat_fit)
+        print("11. the fit finds the SCALE: per-dimension std %s -> fitted "
+              "radius %s, every one inside a factor 4 of 2*std, and the "
+              "quantization MSE on the wide dimensions falls %.1fx below the "
+              "fixed R = 2 lattice. That lattice was a SIGN CODE on them — "
+              "%.1f%% of values outside the bound at R = 2 against %.1f%% at "
+              "the fitted radius"
+              % (np.array2string(stds11[:4], precision=1),
+                 np.array2string(R11[:4], precision=2), gain,
+                 100 * sat_fixed, 100 * sat_fit))
+
+        # ---- 12. the legacy spelling is BIT-IDENTICAL --------------------
+        # Every archived checkpoint's `fsq_ladder_fit` has no ':<R>' fields.
+        # It must rebuild on the CONSTRUCTOR's radius, and the map it produces
+        # must be the pre-change formula — computed here from the algebra
+        # rather than from the code under test.
+        legacy = ",".join(["u"] * DZ)
+        ie12, b12, sc12 = fql.parse_fit(legacy, DZ)
+        assert not ie12.any() and np.isnan(sc12).all(), (ie12, sc12)
+        q12 = fsq_from_levels("8", DZ, ladder="auto", fit=legacy)
+        assert np.allclose(q12._scale.numpy(), 2.0), q12._scale
+        g12 = torch.Generator().manual_seed(12)
+        v12 = torch.randn(3000, DZ, generator=g12) * 3.0
+        got12 = q12(v12).numpy()
+        # the pre-change formula, inline: half/offset/shift, tanh, round,
+        # linear de-scale, at R = 2*sigma with sigma = 1
+        L, R_, vv = 8.0, 2.0, v12.numpy().astype(np.float64)
+        half = (L - 1.0) / 2.0
+        off = 0.5
+        shift = np.arctanh(off / half)
+        want12 = (np.round(half * np.tanh(vv / R_ + shift) - off) + off) \
+            * R_ / half
+        assert np.abs(got12 - want12).max() < 1e-6, \
+            float(np.abs(got12 - want12).max())
+        # AND the archived checkpoint itself: run-455's codec, d_z 32, no
+        # ladder fields at all — its lattice must still be the constructor's.
+        A455 = "/home/claude/a455/pixelmae.pt"
+        assert os.path.exists(A455), (
+            f"{A455} is the archived-checkpoint invariant's only witness; "
+            f"without it this check would pass vacuously")
+        ck455 = torch.load(A455, map_location="cpu", weights_only=False)
+        c455 = codec_from_ckpt(ck455, len(ck455["chan"]))
+        assert c455.fsq is not None and c455.d_z == 32
+        assert np.array_equal(c455.fsq._scale.numpy(),
+                              np.full(32, 2.0, np.float32)), \
+            c455.fsq._scale
+        assert c455.fsq.fit == "", c455.fsq.fit
+        print("12. the LEGACY spelling is bit-identical: '%s' parses to no "
+              "scales at all (NaN, not a guessed default), rebuilds on the "
+              "constructor's R = 2, and reproduces the pre-change formula "
+              "`(round(half*tanh(v/R + shift) - off) + off)*R/half` to %.1e "
+              "on 3,000x%d values — and run-455's archived codec (d_z 32, "
+              "--fsq-levels 8, no ladder fields) loads through "
+              "codec_from_ckpt with _scale exactly 2.0 on every one of its 32 "
+              "dimensions"
+              % (legacy[:9] + "…", float(np.abs(got12 - want12).max()), DZ))
+
+        # ---- 13. format_fit / parse_fit round-trip, both spellings --------
+        g13 = np.random.default_rng(13)
+        n_rt = 0
+        for trial in range(200):
+            ie13 = g13.random(DZ) < 0.5
+            b13 = np.array([float(g13.choice(fql.AUTO_BASES))
+                            for _ in range(DZ)])
+            R13 = np.array([float(f"{x:.6g}")
+                            for x in 10 ** g13.uniform(-4, 4, DZ)])
+            spec = fql.format_fit(ie13, b13, R13)
+            a13, c13, s13 = fql.parse_fit(spec, DZ)
+            assert np.array_equal(a13, ie13), (spec, a13, ie13)
+            assert np.array_equal(c13[ie13], b13[ie13]), spec
+            assert np.array_equal(s13, R13), (spec, s13, R13)
+            # the LEGACY form: same ladder, no radii, NaN back
+            lspec = fql.format_fit(ie13, b13)
+            assert ":" not in lspec, lspec
+            a13l, c13l, s13l = fql.parse_fit(lspec, DZ)
+            assert np.array_equal(a13l, ie13) and np.isnan(s13l).all()
+            assert np.array_equal(c13l[ie13], b13[ie13])
+            # a MIXED string — some entries scaled, some legacy — resolves
+            # each entry on its own, which is what a hand-edited fit needs
+            mix = ",".join(p if i % 2 else p.split(":")[0]
+                           for i, p in enumerate(spec.split(",")))
+            _, _, s13m = fql.parse_fit(mix, DZ)
+            assert np.isnan(s13m[::2]).all()
+            assert np.array_equal(s13m[1::2], R13[1::2])
+            got = fql.resolve("auto", np.full(DZ, 8), DZ, 2.0, mix, scale=7.0)
+            assert np.array_equal(got[2][::2], np.full(DZ // 2, 7.0))
+            assert np.array_equal(got[2][1::2], R13[1::2])
+            n_rt += 1
+        refuses(lambda: fql.parse_fit(",".join(["u:0"] * DZ), DZ),
+                "finite and > 0", "a zero saturation radius")
+        refuses(lambda: fql.parse_fit(",".join(["u:x"] * DZ), DZ),
+                "saturation radius", "a non-numeric radius")
+        refuses(lambda: fql.fit_steps("0", 100), "must be >= 1",
+                "a fit at step 0")
+        refuses(lambda: fql.fit_steps("early", 100), "not an integer step",
+                "a non-integer fit step")
+        assert fql.fit_steps("50,200,1000", 4000) == [50, 200, 1000]
+        assert fql.fit_steps("1000,50,50,200", 4000) == [50, 200, 1000]
+        # the clamp is the FIRST fit's, and for a single value it is exactly
+        # the rule this argument always had
+        assert fql.fit_steps("2000", 40) == [20]
+        assert fql.fit_steps("2000", 3000) == [1500]
+        assert fql.fit_steps("500", 3000) == [500]
+        # a later entry past the halfway mark is kept, not pulled inward
+        assert fql.fit_steps("50,200,1000", 1500) == [50, 200, 1000]
+        assert fql.fit_steps("50,200,9000", 1500) == [50, 200, 1500]
+        assert fql.fit_steps("900,1000", 1500) == [750, 1000]
+        print("13. the fit string round-trips over %d random fits: "
+              "format_fit -> parse_fit reproduces (is_exp, base, scale) "
+              "exactly in the scaled spelling, returns NaN for every legacy "
+              "entry, and resolves a MIXED string entry by entry (legacy "
+              "fields take the caller's default, scaled fields their own). "
+              "A radius of 0 or a non-numeric one is refused, as is a fit at "
+              "step 0; --fsq-auto-step '50,200,1000' is a schedule and "
+              "'2000' on a 40-step run still clamps to 20" % n_rt)
+
+        print("\nE-048 FSQ ladders: all 13 checks hold ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         shutil.rmtree(run_dir, ignore_errors=True)

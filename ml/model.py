@@ -113,6 +113,17 @@ class InputQuant:
     tanh bound rather than composing with it, and why "for each channel"
     honestly means per z-dimension.
 
+    THE SCALE IS PART OF THE FIT (2026-08-24). `auto` now also measures R_d,
+    the per-dimension saturation radius, and `_set_ladder` installs it into
+    `_scale`. That one assignment is the whole application — `_exp` builds its
+    innermost magnitude as `_exp_arel * _scale` and the uniform path divides
+    by `_scale` — and it is what stops the lattice being a constant while the
+    thing it quantizes is a free linear map's output: run-455's healthy FSQ
+    codec sits at pre-quantization |v| ~ 3e4 against R = 2, i.e. an eight-level
+    ladder degenerated to a sign bit. A fit string with no `:<R>` fields is
+    the legacy spelling and keeps the constructor's R exactly, so every
+    archived checkpoint rebuilds bit-identically.
+
     `zero_passthrough` — EXACT ZEROS ARE PASSED THROUGH UNCHANGED, ON THE HEAD
     SIDE ONLY, and it is the one behavioural difference between the two
     callers. A zero in a STENCIL SLOT is not a small value, it is the absence
@@ -147,18 +158,38 @@ class InputQuant:
         self.codebook_log2 = float(np.sum(np.log2(np.asarray(lv, float))))
         self.ladder = str(ladder or "uniform")
         self.exp_base = float(exp_base)
-        _is_exp, _base, _fitted = fql.resolve(self.ladder, lv, self.d_z,
-                                              self.exp_base, fit, flag=flag)
+        _is_exp, _base, _sc, _fitted = fql.resolve(
+            self.ladder, lv, self.d_z, self.exp_base, fit, flag=flag,
+            scale=self._scale.numpy())
         # True only for an `auto` run that has not fitted yet: it quantizes
         # UNIFORMLY until the trainer measures the distribution, and the
         # trainer asks this rather than re-deriving the condition.
         self.needs_fit = not _fitted
-        self._set_ladder(_is_exp, _base, fit=fit)
+        self._set_ladder(_is_exp, _base, fit=fit, scale=_sc)
 
-    def _set_ladder(self, is_exp, base, fit=""):
+    def _set_ladder(self, is_exp, base, fit="", scale=None):
         """Install a per-dimension ladder. One place, so the constructor and
-        `fit_auto` below cannot build the lattice two different ways."""
+        `fit_auto` below cannot build the lattice two different ways.
+
+        `scale` is the per-dimension saturation radius R_d. Installing it is
+        the WHOLE of applying a fitted scale: `_exp` already builds its
+        innermost magnitude as `_exp_arel * _scale` and the uniform path
+        divides by `_scale` directly, so one assignment moves both ladders.
+        `sigma` follows it (R = 2*sigma is the definition, and letting the two
+        drift would make `describe()` print a number that describes no
+        lattice); `scale=None` leaves both exactly as they were.
+        """
         self.fit = str(fit or "")
+        if scale is not None:
+            sc = np.asarray(scale, np.float64) * np.ones(self.d_z)
+            if not np.isfinite(sc).all() or (sc <= 0).any():
+                raise SystemExit(
+                    f"{self.flag}: saturation radius {sc.tolist()[:4]}… is "
+                    f"not finite and positive on every dimension — a lattice "
+                    f"of extent 0 quantizes nothing.")
+            dev = self._scale.device
+            self._scale = torch.as_tensor(sc.astype(np.float32)).to(dev)
+            self.sigma = (self._scale / 2.0).to(dev)
         self.is_exp_np = np.asarray(is_exp, bool)
         self.base_np = np.asarray(base, np.float64)
         self._any_exp = bool(self.is_exp_np.any())
@@ -184,13 +215,17 @@ class InputQuant:
         s = np.asarray(sample, np.float64).reshape(-1, self.d_z)
         lv = self.levels.to(torch.int64).numpy()
         sc = self._scale.detach().cpu().numpy().astype(np.float64)
-        is_exp, base, mse_u, mse_b = fql.fit_auto(s, lv, sc, bases)
+        is_exp, base, sc_fit, mse_u, mse_b = fql.fit_auto(s, lv, sc, bases)
         dev = self.levels.device
-        self._set_ladder(is_exp, base, fit=fql.format_fit(is_exp, base))
+        self._set_ladder(is_exp, base,
+                         fit=fql.format_fit(is_exp, base, sc_fit),
+                         scale=sc_fit)
         self.needs_fit = False
         self.to(dev)
+        pre = float(np.abs(s).mean())
         return (f"{self.flag} auto fitted on {len(s):,} pre-quantization "
-                f"vectors: " + fql.describe_fit(is_exp, base, mse_u, mse_b))
+                f"vectors (mean |v| {pre:.4g}): "
+                + fql.describe_fit(is_exp, base, mse_u, mse_b, sc_fit))
 
     def to(self, dev):
         for k in ("levels", "sigma", "_half", "_offset", "_shift", "_scale",
@@ -259,8 +294,10 @@ class InputQuant:
                 f"(codebook 2^{self.codebook_log2:.1f}) · quantization MSE vs "
                 f"raw z {mse:.5f} on a mean-square {var:.5f} z "
                 f"({100.0 * mse / max(var, 1e-12):.2f}% of its energy) · "
-                f"sigma per dim {float(self.sigma.min()):.3f}.."
-                f"{float(self.sigma.max()):.3f}")
+                f"saturation radius R per dim {float(self._scale.min()):.4g}.."
+                f"{float(self._scale.max()):.4g} (= 2*sigma; fitted per "
+                f"dimension under --fsq-ladder auto, otherwise the "
+                f"constructor's)")
 
 
 def fsq_from_levels(spec, d_z, ladder="uniform",
@@ -290,13 +327,22 @@ def fsq_from_levels(spec, d_z, ladder="uniform",
     absent-neighbour convention in a codec bottleneck, so an exact 0.0 rounds
     onto the lattice like any other value.
 
-    E-048 adds the LADDER (`--fsq-ladder`), which is orthogonal to everything
-    above: `uniform` is this docstring unchanged and bit-identical, `exp`
-    places the same L levels geometrically inside the same +/-2 bound, and
-    `auto` fits the choice per z-dimension on a measured sample. The bound's
-    scale stays sigma = 1 for the same reason it does today — there is no Z to
-    measure — so on the codec side a level's position is a pure function of
-    the ladder, and `to_z` learns the scale into it either way.
+    E-048 adds the LADDER (`--fsq-ladder`): `uniform` is this docstring
+    unchanged and bit-identical, `exp` places the same L levels geometrically
+    inside the same +/-2 bound, and `auto` fits the choice per z-dimension on
+    a measured sample.
+
+    `sigma = 1` HERE IS THE DEFAULT, NOT THE ANSWER, and the second half of
+    E-048 is why. "Let `to_z` learn the scale into it" is a claim about an
+    incentive that does not exist: nothing in the objective pushes a free
+    linear map's output INTO a bound the straight-through estimator lets it
+    ignore. Measured, on the two codecs there are: the JAX window codec e048a
+    ran at pre-quantization |v| ~ 87 against R = 2 (a CONSTANT encoder — every
+    dimension pinned to its outermost level), and the healthy torch codec
+    run-455 at |v| ~ 3e4, saturated by four orders of magnitude and therefore
+    coding one sign bit per dimension where the log claims three. So under
+    `auto` the fit measures R_d too and records it in `fsq_ladder_fit`;
+    `uniform`, `exp` and every legacy fit string keep R = 2*sigma = 2 exactly.
     """
     spec = str(spec or "").strip()
     if not spec:
