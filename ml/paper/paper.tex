@@ -596,6 +596,23 @@ fine-tuned. Appending rather than inserting is what keeps the two comparable
 --- channels 1--39 hold the indices at which every published result was
 measured, and an r1 and an r2 tensor are diffable channel by channel.
 
+\paragraph{The run-name grammar, in one place.} Codec and recipe names
+compose as
+\texttt{f$\langle$N$\rangle$$\langle$rev$\rangle$-$\langle$size$\rangle$%
+[-$\langle$variant$\rangle$]}: \texttt{f4} = family-4 tensor (pentad),
+\texttt{f5} = family 5 (daily), \texttt{r2} = recipe revision 2 (the
+appended OISST channel; family 5 runs to date are r1, so \texttt{f5-40M}
+carries no revision token), and the size is the parameter class
+(\texttt{40M} names the 38.0M geometry). Variant tokens:
+\texttt{monthblock} = one embedding per calendar month built from the
+month's $\le 7$ pentad cells (\S\ref{sec:cadence}); \texttt{fsq8} = the
+FSQ bottleneck at 8 levels per dimension; \texttt{w6s6}/\texttt{w6s3} =
+fixed 6-pentad windows advancing 6 or 3 pentads (the overlapping form);
+\texttt{b512}/\texttt{b256} = an explicit batch, used only where the same
+geometry runs at two batches; \texttt{nolonhold} = trained with no
+held-out longitude block. So \texttt{f4r2-40M-monthblock} reads: pentad
+tensor with SST, 38M-class encoder, one $z$ per calendar month.
+
 \begin{table}[p]
 \centering\small
 \setlength{\tabcolsep}{4pt}
@@ -1201,7 +1218,9 @@ f4r2-monthblock (TPU) & NA month blk & 40 & 1 & 64 & 60k & --- & ---$^\parallel$
 \bottomrule
 \end{tabular}
 \caption{\textbf{Master table: every codec run.} Generated from each
-run's own JSON by \texttt{ml/make\_table.py}, not transcribed.
+run's own JSON by \texttt{ml/make\_table.py}, not transcribed. Run-name
+grammar (\texttt{f4r2}, \texttt{monthblock}, \dots) is decoded in
+\S\ref{sec:inputdata}.
 \textbf{There are two read-out columns and they are not interchangeable.}
 $^\S$\emph{Pooled ridge} is \texttt{probe\_kfold}'s ridge on the
 \emph{section-mean} embedding. It is the comparability bridge across this
