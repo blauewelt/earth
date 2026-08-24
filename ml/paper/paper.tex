@@ -163,7 +163,7 @@ of variance lost, against $25$--$112\%$) at a flat structural price paid
 everywhere else ($9$--$19\%$ against $<$$1\%$). Finally, the models now have
 a second, framework-independent implementation in JAX, gated against the
 PyTorch stack at $10^{-7}$--$10^{-5}$ and against an eighteen-times-reproduced
-archived roll, on which a TPU v5litepod-4 trains the 40M block codec at
+archived roll, on which a TPU v5litepod-4 trains the 38.0M block codec at
 $0.167$\,s/step against $0.93$ on a rented H100 (\S\ref{sec:jax}).
 \end{abstract}
 
@@ -1142,6 +1142,7 @@ system, remain unoccupied territory.
 
 \begin{table}[p]
 \centering\small
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{llrrrrrlr}
 \toprule
 run & window & $C$ & patch & $d_z$ & steps & chan\%$^\dagger$ & k-fold $r$ [95\% CI] & dip \\
@@ -1173,6 +1174,13 @@ pixel24-seed2   & global & 24 & 1 & 64 & 40k & --- & 0.564 [0.44, 0.69] & --- \\
 \multicolumn{9}{l}{\emph{quarter-degree tensor ($0.25^\circ$ NA, 16 Argo levels, SSH; \S\ref{sec:qd})}}\\
 f3-pilot        & NA $0.25^\circ$ & 39 & 3 & 64 & 40k & --- & \textbf{0.620} [0.48, 0.74]$^\S$ & 46\% \\
 \textbf{f3-anchor41M} (40.7M) & NA $0.25^\circ$ & 39 & 3 & 64 & 60k & $+31.5$ & 0.631 [0.51, 0.73]$^\S$ & \textbf{51\%} \\
+f3-anchor41M-nolonhold & NA $0.25^\circ$ & 39 & 3 & 64 & 60k & --- & 0.613 [0.49, 0.72]$^\S$ & 44\% \\
+\midrule
+\multicolumn{9}{l}{\emph{pentad and daily tensors (finer time axes, r2;
+\S\ref{sec:cadence}) --- own baselines$^\P$}}\\
+f4r2-40M (run-415) & NA pentad & 40 & 1 & 32 & 197k & --- & 0.637 [0.58, 0.69]$^\P$ & 32\% \\
+f5-40M (run-419) & NA daily & 39 & 1 & 32 & 200k & --- & 0.612 [0.56, 0.66]$^\P$ & --- \\
+f4r2-monthblock (TPU) & NA month blk & 40 & 1 & 64 & 60k & --- & ---$^\parallel$ & --- \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Master table: every codec run.} Generated from each
@@ -1204,7 +1212,20 @@ first 50k-step probe to the millionth step
 compute-limited. $^\ddagger$in-training probe at the
 final step, not the post-hoc trainprobe used for coarse-tensor rows. Stage-2 figures for global14b and
 global15sst are \emph{withdrawn}, not stale: both were trained on a
-poisoned embedding cache (\S\ref{sec:limits}).}
+poisoned embedding cache (\S\ref{sec:limits}).
+$^\P$\textbf{The bottom block has its own baselines and none of its rows
+may be read against the rows above it}: r2 channels on finer time axes, so
+the channel set \emph{and} the label count both move. The wind-only ridge
+on the same folds is $0.670$ at pentad (1{,}459 labels) and $0.607$ at
+daily (7{,}290), against $0.568$ monthly (240) --- so f4r2-40M sits
+$0.033$ \emph{below} its own bar and f5-40M ties its own to within
+$0.005$. Both are pooled at a cadence with no unpooled read-out and no
+measured replicate band (\S\ref{sec:cadence}). $^\parallel$No k-fold: the
+block codec's probe path is block-shaped and its full probe did not run;
+its evidence is \S\ref{sec:block}'s reconstruction audit and a light probe
+of $0.242$ at 60k. It is JAX/TPU-trained and so never pooled with a
+PyTorch number. Codecs still training or not yet dispatched carry no
+number and are Table~\ref{tab:inflight}.}
 \label{tab:master}
 \end{table}
 
@@ -2495,7 +2516,10 @@ happened, and the headline is that finer is much harder, in a way that is
 now measured rather than suspected. Every number below is on the
 \emph{pentad} tensor (5-day bins, $T=3142$, the 40-channel r2 channel set),
 through a purpose-trained 38.0M pentad codec at $d_z=32$, under the same
-$1024\times16$ xl144 head with input noise that tops the monthly standings.
+$1024\times16$ xl144 head with input noise that tops the monthly standings. The
+codecs involved sit in two inventories: those that have returned a number are
+the bottom block of Table~\ref{tab:master}, and those still training or
+specified but not yet dispatched are Table~\ref{tab:inflight}.
 
 \subsection{The one-step ratio, and the roll}
 
@@ -2770,7 +2794,9 @@ being built entirely from five-day inputs. The pre-registered hypothesis is
 that \emph{fusion beats selection}: this codec's head should beat the
 $0.0721$ that the cadence ladder got by \emph{selecting} one bin per month.
 
-The first such codec exists: 40M parameters at $d_z{=}64$, 60{,}000 steps.
+The first such codec exists: 38.0M parameters at $d_z{=}64$, 60{,}000 steps
+(the recipe family is named for a rounded 40M; parameter counts here and in
+Table~\ref{tab:inflight} are measured from the model).
 Its Tier-1 reconstruction audit, paired against the per-bin codec's own
 recorded numbers on the same blocks, is the reason it was accepted:
 
@@ -2788,7 +2814,7 @@ recorded numbers on the same blocks, is the reason it was accepted:
   masked wind in-fill overfits ($0.30$ trained against $>$$1$ held out at
   $0.69$ epochs).
 \item \textbf{The binding constraint is output capacity, not encoder
-  scale.} At 40M parameters and $d_z{=}64$ the Chinchilla-style reading of
+  scale.} At 38.0M parameters and $d_z{=}64$ the Chinchilla-style reading of
   these residuals is that the decoder and the bottleneck, not the encoder,
   are what limit the round trip --- so the next rung is more data or more
   masking before more parameters. A Chinchilla-anchored sibling at 126.9M
@@ -2802,6 +2828,143 @@ at a tier with no measured pair}, and the codec was moreover trained on the
 JAX/TPU stack of \S\ref{sec:jax}, which is itself a new tier: a
 same-recipe PyTorch twin is training as the cross-framework check. Nothing
 here is a level.
+
+\subsection{The codecs in flight, and the hillclimb behind
+them}\label{sec:inflight}
+
+Table~\ref{tab:master} is a table of \emph{results}: a codec enters it when it
+has a number. That rule leaves this section's programme largely invisible,
+because most of it is still training. Table~\ref{tab:inflight} is the other
+half --- every codec now running or specified, as a configuration only, with
+its status stated rather than implied. Three properties of it are worth
+reading off directly.
+
+\emph{Every block-codec design exists at two (batch, steps) points.} A month
+block is 282 encoder tokens where a per-bin sample is 42, and attention is
+quadratic in that, so the first attempts at the recipes' own batches died of
+device memory on 24\,GB cards; the batch was cut and the step budget raised to
+compensate, and then the original batch was restored on larger hardware. The
+two points are the same recipe family, they are reported side by side, and
+they are \textbf{never pooled} --- $60\mathrm{k}\times512$ sees
+30.7M block-samples where $200\mathrm{k}\times128$ sees 25.6M, so the ``fast''
+arm is also the one that sees more data.
+
+\emph{The 40M and 126.9M month-block codecs are a sizing experiment, not a
+ladder.} The larger is $1.006\times$ the pentad tensor's own Chinchilla-style
+anchor (the builder counts 2{,}524{,}251{,}443 observed values; at $20{:}1$
+that is $\approx$126.2M parameters), with $d_z$ raised to 128 on the argument
+that a month block compresses about $6\times$ as much input as a per-bin
+sample. \S\ref{sec:block}'s reading of the smaller one --- that output capacity
+binds before encoder scale --- is precisely what the pair tests, and its
+attention heads are sized at the 128 ceiling deliberately, a larger head
+dimension having killed an earlier 202M run outright.
+
+\emph{Two rows are trained in JAX on a TPU and are a separate tier.} They are
+labelled as such in the table and are never pooled with a PyTorch-trained
+number (\S\ref{sec:jax}); each has a same-recipe PyTorch twin in the table for
+exactly that reason.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{R{2.5cm}rR{2.05cm}R{1.95cm}R{1.4cm}R{1.5cm}R{1.6cm}}
+\toprule
+recipe & params & one $z$ per & bottleneck & steps
+$\times$ batch & tier & status \\
+\midrule
+\multicolumn{7}{l}{\emph{E-047 --- month blocks over the pentad tensor
+(\S\ref{sec:block})}}\\
+\texttt{f4r2-40M-}\newline\texttt{monthblock-b512} & 38.0M &
+calendar month, $7\times40$ cells & $d_z$ 64, continuous &
+60k $\times$ 512 & JAX/TPU & \textbf{finished}, audited \\
+\addlinespace
+\texttt{f4r2-40M-}\newline\texttt{monthblock-b512} & 38.0M &
+the same & the same & 60k $\times$ 512 & torch &
+in flight --- the cross-framework twin \\
+\addlinespace
+\texttt{f4r2-40M-}\newline\texttt{monthblock} & 38.0M &
+the same & the same & 200k $\times$ 128 & torch &
+in flight --- the long form \\
+\addlinespace
+\texttt{f4r2-126M-}\newline\texttt{monthblock-b256} & 126.9M &
+calendar month, $7\times40$ cells & $d_z$ 128, continuous &
+60k $\times$ 256 & JAX/TPU & in flight \\
+\addlinespace
+\texttt{f4r2-126M-}\newline\texttt{monthblock} & 126.9M &
+the same & the same & 200k $\times$ 64 & torch &
+in flight --- the long form \\
+\midrule
+\multicolumn{7}{l}{\emph{E-046 --- the same alphabet, moved into the
+bottleneck (\S\ref{sec:quant})}}\\
+\texttt{f4r2-40M-fsq8} & 38.0M &
+5-day bin & $d_z$ 32, FSQ $[8]^{32}$ & 200k $\times$ 512 & torch &
+in flight \\
+\midrule
+\multicolumn{7}{l}{\emph{E-048 --- windows instead of months, and the level
+placement itself under test}}\\
+\texttt{f4r2-70M-}\newline\texttt{fsqblock-w6s6} & 71.3M &
+30-day window, advancing 30 days & $d_z$ 64, FSQ $L{=}8$,
+ladder fitted & 60k $\times$ 512 & TPU & \emph{planned} \\
+\addlinespace
+\texttt{f4r2-70M-}\newline\texttt{fsqblock-w6s3} & 71.3M &
+30-day window, advancing \textbf{15 days} & the same &
+60k $\times$ 512 & TPU & \emph{planned} \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Codecs in flight and planned} --- configurations, not
+results. Parameters are measured from the model rather than taken from the
+recipe's name, which is why the ``40M'' and ``70M'' families read 38.0M and
+71.3M here. All eight are on the pentad r2 tensor
+(\texttt{family4\_na025\_pentad\_r2}, $C{=}40$, $T{=}3142$) with the
+longitude holdout retired (\S\ref{sec:nolonhold}) and \texttt{patch} 1; the
+month-block rows are $512\times12$ / $d_{\mathrm{dec}}$ 256 at 38.0M and
+$1024\times10$ with 8 heads / $d_{\mathrm{dec}}$ 768 at 126.9M, and the E-048
+rows are $768\times10$ with 8 heads / $d_{\mathrm{dec}}$ 512. \emph{One $z$
+per} is the unit the codec emits and therefore the step the forecaster takes,
+which is the whole argument of \S\ref{sec:cadence}: only the last row emits
+faster than monthly. \emph{Tier} matters because a JAX-trained number and a
+PyTorch-trained one are not pooled (\S\ref{sec:jax}). No number from any of
+these rows may be written as a level --- each is a new codec, and several are
+a new codec, a new axis and a new bottleneck at once, which puts every one of
+them in the class where the first result buys its own replication.}
+\label{tab:inflight}
+\end{table}
+
+\paragraph{What E-048 climbs, and why it is a hillclimb rather than a
+factorial.} The two planned rows change three things at once against the
+month-block codec, deliberately. \textbf{A fixed window replaces the calendar
+month}: a pentad month is 6 or 7 bins, so a month block is ragged and about a
+sixth of its cells are padding, while a fixed 6-bin window is uniform, has no
+padding at all, and still contains exactly one Argo stamp --- because the
+subsurface product is monthly, written into one pentad bin per month, at
+$8.02\%$ of bins. \textbf{The second arm overlaps}: the window stays 30 days
+while the axis advances 15, so the forecaster gets twice the temporal
+resolution and consecutive embeddings share half their input, including that
+one Argo stamp. \textbf{And the bottleneck's level placement is itself
+measured} rather than assumed: \S\ref{sec:quant}'s lattice is evenly spaced,
+and this one fits each latent dimension's ladder --- evenly spaced or
+geometric --- to a sample of the run's own pre-quantization activations,
+writing the fitted lattice into the checkpoint so that no loader ever re-fits
+and scores a different model from the one that trained.
+
+Two things about that design are pre-registered here because they decide how
+its result may be read. \textbf{The overlapping arm's one-step ratio is
+comparable with nothing else in this report.} At stride 3 the previous
+embedding shares half its input with the target, so ``predict the next
+embedding'' is a strictly easier question and persistence is stronger by
+construction; that arm is read at a fixed horizon in \emph{days}, against its
+own persistence, and never against the non-overlapping arm or the pentad
+archive. And \textbf{a measurement made while building it already constrains
+the ladder claim}: at even $L$ the evenly-spaced map of \S\ref{sec:quant} is
+not antisymmetric --- its lattice sits about half a step high, mean $+0.233$
+on standard normal draws at $L{=}8$ --- which is part of why a fitted ladder
+would choose the geometric form on almost any centred distribution. So the
+contrast that separates the two stories is registered in advance: at odd $L$
+the evenly-spaced map is unbiased, and if the geometric ladder still wins
+there the win is about companding, while if the margin collapses the win was
+a bias correction and the cheaper fix is a symmetric uniform map. Nothing has
+been trained at either configuration; the arithmetic behind the table's step
+budget puts a pair at about nine hours of one TPU.
 
 \section{A second implementation, and a new tier of
 hardware}\label{sec:jax}
@@ -2856,7 +3019,7 @@ thing, which is a finding and never a tolerance to widen.
 \end{itemize}
 
 \paragraph{The hardware result.} On a cloud TPU (v5litepod-4) the JAX
-trainer runs the 40M month-block codec of \S\ref{sec:block} at batch 512 at
+trainer runs the 38.0M month-block codec of \S\ref{sec:block} at batch 512 at
 $0.206$\,s/step measured over a clean 3{,}000-step run, and $0.167$\,s/step
 over the full 60{,}000-step run that produced the codec --- 2.8 hours of
 training. The same configuration on a rented H100 SXM measures
@@ -3186,7 +3349,10 @@ generated by scripts in \texttt{ml/} of
 The stage-2 experiments of \S\ref{sec:roll} are logged
 hypothesis-first in \texttt{ml/EXPERIMENTS.md} (entries E-022 through
 E-032), and \S\ref{sec:measuring}--\S\ref{sec:cadence} in the same file's
-E-043 through E-047; the JAX port's tiering and acceptance gates are
+E-043 through E-048 (the E-048 sweep design, including the pre-registered
+odd-$L$ ladder contrast, is \texttt{ml/plans/E048\_fsq\_block\_sweep.md}, and
+every configuration in Table~\ref{tab:inflight} is a checked-in recipe under
+\texttt{ml/recipes/}); the JAX port's tiering and acceptance gates are
 \texttt{ml/plans/JAX\_PORT.md} and its code
 \texttt{ml/jaxport/}. Every corridor evaluation's full per-horizon, per-channel
 output is archived on the repository's \texttt{ml-metrics} branch
