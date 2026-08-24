@@ -354,8 +354,13 @@ def parse(argv=None):
     p.add_argument("--holdout-years", default="2009,2017,2023")
     p.add_argument("--holdout-lon", default="-45,-25")
     p.add_argument("--time-block", default="",
-                   help="E-047: 'month' or an integer N; '' is the per-bin "
-                        "codec every archived checkpoint is")
+                   help="E-047/E-048: 'month', an integer N, or 'W/S' — a "
+                        "width-W window advancing by S bins ('6/3' is 30 days "
+                        "of input every 15 days, consecutive embeddings "
+                        "sharing 3 of 6 bins). '' is the per-bin codec every "
+                        "archived checkpoint is. The axis arithmetic is "
+                        "ml/timeblocks.py's, imported, so a block boundary "
+                        "cannot drift between backends.")
     p.add_argument("--anomaly", action="store_true")
     p.add_argument("--light-probe-every", type=int, default=0,
                    help="steps between LIGHT probes (linear 26.5N section "

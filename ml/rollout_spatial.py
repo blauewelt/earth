@@ -1418,7 +1418,17 @@ def main():
                          if "pentad_days" in d else None)
         print(f"block codec: k_time {_k_time} · {BLKR.describe(len(d['chan']), _ck_peek['d_z'])}",
               flush=True)
-        ax = TimeAxis({"months": np.array(BLKR.labels)})
+        # THE ROLL'S AXIS IS THE BLOCK AXIS, AND THE BLOCK AXIS DESCRIBES
+        # ITSELF (E-048). This used to be `TimeAxis({"months": BLKR.labels})`,
+        # which is the MONTHLY path — correct for month mode, where the labels
+        # are unique contiguous `YYYY-MM` keys, and wrong for a window mode
+        # whose labels repeat (two windows 15 days apart can sit in one
+        # calendar month). `axis_dict()` returns the monthly descriptor
+        # unchanged for month mode and a BINNED one for a W/S window, whose
+        # step is the stride in days — so `--horizon`, the day-defined bands
+        # and the day-matched leads are read off the stride instead of being
+        # assumed to be months.
+        ax = TimeAxis(BLKR.axis_dict())
         src_ax = TimeAxis(d)
     else:
         ax = TimeAxis(d)
@@ -1930,11 +1940,30 @@ def main():
                                int(BLKR.n_bins.max())],
             "scored_per_block": "every real cell, against its own source bin",
             "lead_days_by_horizon_and_cell": _lead,
+            # E-048: the stride is what one roll STEP means, so it travels in
+            # the artefact beside the numbers rather than being recoverable
+            # only from the mode string.
+            "width_bins": (None if BLKR.width is None else int(BLKR.width)),
+            "stride_bins": (None if BLKR.stride is None else int(BLKR.stride)),
+            "overlap_bins": (None if BLKR.overlap is None
+                             else int(BLKR.overlap)),
+            "step_days": float(ax.step_days),
             "note": ("`h` counts BLOCKS. chan_skill's `n` at horizon h counts "
                      "CELL-months, ~k_time times a per-bin roll's, because "
                      "one block prediction is scored at every bin it covers. "
                      "Persistence and the damped baseline use the START "
-                     "block's SAME cell.")}
+                     "block's SAME cell."),
+            # THE BASELINE MOVED, NOT THE METRIC (E-048). Said in the
+            # artefact because this is where a reader meets the number.
+            "persistence_note": (
+                None if not BLKR.overlap else
+                f"OVERLAPPING WINDOWS: consecutive blocks share "
+                f"{int(BLKR.overlap)} of {int(BLKR.width)} bins, so the "
+                f"persistence baseline (the previous block's same cell) is "
+                f"stronger BY CONSTRUCTION than it is at stride "
+                f"{int(BLKR.width)}. Every ratio against persistence on this "
+                f"axis is comparable with another roll at the SAME stride and "
+                f"with nothing else.")}
 
     # WHICH ROWS WERE SCORED, not merely how many. A count says the knob was
     # read; the rows say what the number is a number OF, and a harvest that

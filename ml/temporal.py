@@ -1609,6 +1609,23 @@ def main():
     # re-encode everything. --season-phase governs the HEAD's `Mt` only,
     # built further down from season_ctx().
     ctx_all = np.stack([np.sin(2 * np.pi * moy / 12), np.cos(2 * np.pi * moy / 12)], 1)
+    # ...AND FOR A BLOCK CODEC THAT ARRAY IS NOT WHAT THE CODEC WAS TRAINED
+    # WITH (E-048, fixing an E-047 gap). `ml/train.py` sets
+    # `a.ctx_mode = "block_phase"` and feeds the encoder `BLK.ctx_phase()` —
+    # the CONTINUOUS fraction-of-year phase of the block's own centre — and
+    # `ml/rollout_spatial.py` re-encodes with `BLKR.ctx_phase()` for the same
+    # reason. Embedding here with the month-quantized token instead fed the
+    # frozen encoder a context it had never seen, and the two consumers of one
+    # codec disagreed with each other.
+    #
+    # It is a rounding error in month mode and a STRUCTURAL error at stride 3:
+    # two windows a fortnight apart share a calendar month, so the
+    # month-quantized token is IDENTICAL across a step the axis takes, and the
+    # encoder would be told the year had not moved. The context the codec
+    # reads is therefore the block axis's own, always; `ctx_all` stays the
+    # month array and stays the HEAD's default season token, which is what
+    # keeps `--season-phase month` bit-identical below.
+    codec_ctx = ctx_all if BLKA is None else BLKA.ctx_phase()
     Xt = torch.from_numpy(np.nan_to_num(X, nan=0.0))
     OBS = torch.from_numpy(np.isfinite(X))
     # X is dead from here (everything downstream reads Xt/OBS), and the
@@ -1677,7 +1694,14 @@ def main():
     # different codec), so this is belt and braces — but a name that says
     # `blk` is one a human can triage on a full disk without loading it.
     if cache and BLKA is not None:
-        cache = cache.replace(".npy", f"_blk{BLKA.k_max}.npy")
+        # The MODE is in the name too (E-048): '6/6' and '6/3' produce
+        # different axes from the same k_max and the same codec weights, and
+        # the E-048 fix to the embed context (above) changes every block Z
+        # written before it. A cache whose name cannot tell those apart is
+        # the #10/#11 failure again — "a stale cache must be a miss, never a
+        # lie". '/' is not a filename character, hence the '-'.
+        cache = cache.replace(".npy", f"_blk{BLKA.k_max}-"
+                              f"{str(BLKA.mode).replace('/', '-')}.npy")
     # Progress goes into the run's OWN metrics.jsonl, which the publisher loop
     # in ml-train.yml pushes to ml-live-<n> every five minutes. A print reaches
     # the log, and Actions will not serve the log of a running job — so during
@@ -1691,7 +1715,7 @@ def main():
         except OSError:
             pass                      # instrumentation never breaks the run
 
-    Z, coords = embed_everything(codec, Xt, OBS, ctx_all, lats, lons, ys, xs,
+    Z, coords = embed_everything(codec, Xt, OBS, codec_ctx, lats, lons, ys, xs,
                                  ck["d_z"], cache_path=cache,
                                  progress=_emb_note,
                                  blk_rows=(None if BLKA is None
@@ -1799,7 +1823,16 @@ def main():
     # THE HEAD'S SEASON FEATURES, which are `ctx_all` itself in the default
     # 'month' mode — `np.array_equal` asserted below rather than trusted, so
     # the default path is the same numbers and not merely the same intent.
-    head_ctx = season_ctx(months, a.season_phase, d)
+    # ON A BLOCK AXIS THE SEASON FEATURE COMES FROM THE BLOCK AXIS (E-048).
+    # `season_ctx(months, mode, d)` reads `d`'s per-BIN `bin_index` in 'fine'
+    # mode, and on a block axis that array has one row per SOURCE BIN while
+    # `months` has one per BLOCK — so 'fine' produced a [T_src, 2] token for a
+    # [n_blocks, ...] head. `head_season('month')` is the same sin/cos of the
+    # same labels (asserted below, as before), so the default path does not
+    # move; 'fine' becomes the block CENTRE's continuous phase, which is the
+    # only one of the two that can tell two windows inside one month apart.
+    head_ctx = (season_ctx(months, a.season_phase, d) if BLKA is None
+                else BLKA.head_season(a.season_phase))
     if a.season_phase == "month":
         assert np.array_equal(head_ctx, ctx_all), \
             "season_ctx('month') must reproduce the archived sin/cos(2pi*moy/12)"

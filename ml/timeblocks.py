@@ -20,7 +20,7 @@ grouping from the same function, because two copies of an axis rule are two
 places for the same off-by-one to live — this repo has paid that bill twice
 (the anomaly transform's four copies, and `month_index`'s 6.09:1 collapse).
 
-TWO MODES.
+THREE MODES.
 
   `month`   Group by CALENDAR MONTH LABEL. A pentad year has 73 bins, so a
             month carries 6 or 7 of them and blocks are RAGGED; k_max is 7 and
@@ -32,13 +32,41 @@ TWO MODES.
             FIRST bin. Blocks are uniform, k_max is N, and the trailing
             remainder is dropped rather than padded (a partial block at the
             end of the record would be the only ragged one in the mode whose
-            whole point is that it is not).
+            whole point is that it is not). Exactly `N/N` (below).
+  `W/S`     E-048 (Chris, 2026-08-24): a WIDTH-W window that advances by
+            STRIDE S bins. `6/6` is 6 pentads in, advance 30 days — the same
+            grouping as `6`, spelled so the advance is visible. `6/3` is the
+            same 6-pentad input advancing 15 days, so CONSECUTIVE EMBEDDINGS
+            OVERLAP by W-S = 3 bins and each embedding still carries the one
+            monthly Argo stamp its window covers. Chris: "One embedding every
+            15 days (6 pentads/30 days as input, OVERLAPPING windows), advance
+            by 15 days — each embedding has Argo as part of it, two consecutive
+            ones share the same monthly Argo values."
 
 WHAT A BLOCK IS CALLED. Month mode labels the block `YYYY-MM`, which makes the
 block axis indistinguishable from a monthly tensor's to everything downstream.
-Fixed-N mode labels it with its first bin's own label. Either way the label is
-what `TimeAxis` will parse, so it has to be the label of a real calendar
-position and not an index.
+Fixed-N and W/S mode label it with its FIRST bin's own label — the window's
+calendar ANCHOR — so a label is always the label of a real calendar position
+and never an index. `TimeAxis` parses it, so that is a requirement and not a
+convention.
+
+THE LABEL IS NOT THE AXIS, AND AT S=3 IT CANNOT BE. Two windows 15 days apart
+can carry the same `YYYY-MM` label, so a W/S axis is NOT a unique monthly key
+and must never be read as one. `axis_dict()` below is what every consumer
+reads instead: it hands `ml/rollout_spatial.py:TimeAxis` a BINNED descriptor
+whose step is S source bins (30 d at `6/6`, 15 d at `6/3`), so the horizon
+bands, the day-matched leads and the roll's own trajectory labels are derived
+from the stride rather than assumed to be months.
+
+WHAT OVERLAP DOES TO PERSISTENCE, stated here because it is a property of the
+AXIS and not of any metric. At S < W the persistence baseline — "the previous
+embedding" — is built from a window sharing W-S of its W bins with the target,
+so persistence is STRONGER BY CONSTRUCTION at stride 3 than at stride 6. That
+changes the BASELINE, not the instrument: a forecast ratio at `6/3` is
+comparable with another `6/3` ratio and is NOT comparable with a `6/6` one.
+Same for the neighbour term the codec trains on (`dt = +/-1` is the adjacent
+WINDOW, which overlaps). Every artefact that carries a block axis records the
+stride beside the numbers so a reader cannot lose this.
 """
 import datetime as dt
 
@@ -47,11 +75,61 @@ import numpy as np
 K_MONTH = 7          # a pentad month is 6 or 7 bins; the ragged one sets k_max
 
 
+def parse_mode(mode):
+    """`--time-block` -> ("month", None, None) or ("window", W, S).
+
+    ONE parser, because a mode string is read in five places (both trainers,
+    the embed path, the roll and the probe) and a second reading of "6/3" is
+    a second place for the same off-by-one. `N` is exactly `N/N`: the fixed-N
+    mode E-047 shipped is the non-overlapping case of E-048's window, and
+    spelling it as one thing means the axis arithmetic below has one branch
+    instead of two that must agree.
+    """
+    s = str(mode).strip()
+    if s == "month":
+        return "month", None, None
+    if "/" in s:
+        w, _, st = s.partition("/")
+        parts = (w.strip(), st.strip())
+    else:
+        parts = (s, s)
+    try:
+        W, S = int(parts[0]), int(parts[1])
+    except ValueError:
+        raise ValueError(
+            f"--time-block {mode!r}: expected 'month', an integer N (= N/N), "
+            f"or 'W/S' — a width-W window advancing by S bins (E-048: '6/6' "
+            f"is 30 days non-overlapping, '6/3' is 30 days of input every 15 "
+            f"days).")
+    if W < 1:
+        raise ValueError(f"--time-block {mode!r}: the window width W must be "
+                         f">= 1")
+    if S < 1:
+        raise ValueError(
+            f"--time-block {mode!r}: the stride S must be >= 1. S = 0 would "
+            f"emit the same window for ever.")
+    if S > W:
+        # NOT a coherent axis, and the failure is silent: bins between the
+        # end of one window and the start of the next enter NO embedding, so
+        # the record would carry gaps that nothing downstream can see — while
+        # the roll still advances S bins a step and every number looks
+        # ordinary. Refuse rather than subsample by accident.
+        raise ValueError(
+            f"--time-block {mode!r}: stride {S} exceeds width {W}, which "
+            f"would leave {S - W} bin(s) between consecutive windows in no "
+            f"embedding at all. A gap in the record is invisible downstream: "
+            f"refusing rather than silently subsampling the axis.")
+    return "window", W, S
+
+
 class BlockAxis:
     """The grouping of an input axis into blocks, and the labels that result.
 
     Attributes:
-      mode        "month" or "N" (the string that was asked for)
+      mode        "month", "N" or "W/S" (the string that was asked for)
+      width       W, the bins in one window (None in month mode)
+      stride      S, the bins one block advances (None in month mode)
+      overlap     W - S, the bins two consecutive windows SHARE (0 or None)
       k_max       cells along the time dimension of one block
       rows        [n_blocks, k_max] int32, the SOURCE row of each cell,
                   padded rows repeat the last real row (never a stray index)
@@ -71,7 +149,10 @@ class BlockAxis:
         self.epoch = epoch
         self.bin_index = (None if bin_index is None
                           else np.asarray(bin_index).astype(np.int64))
-        if self.mode == "month":
+        kind, W, S = parse_mode(self.mode)
+        self.width, self.stride = W, S
+        self.overlap = None if S is None else W - S
+        if kind == "month":
             groups, labels = [], []
             for i, lab in enumerate(self.src_labels):
                 if labels and lab == labels[-1]:
@@ -94,12 +175,21 @@ class BlockAxis:
                 seen.add(lab)
             self.k_max = max(K_MONTH, max(len(g) for g in groups))
         else:
-            n = int(self.mode)
-            if n < 1:
-                raise ValueError(f"--time-block {mode!r}: N must be >= 1")
-            self.k_max = n
-            groups = [list(range(i, i + n)) for i in range(0, T - n + 1, n)]
+            self.k_max = W
+            # n_blocks = floor((T - W)/S) + 1 — every COMPLETE window and no
+            # partial one, which is fixed-N's own rule (`range(0, T-N+1, N)`)
+            # with the step generalised. The trailing remainder is dropped
+            # rather than padded for the reason E-047 gives: a partial window
+            # at the end of the record would be the only ragged block in the
+            # mode whose whole point is that it is not.
+            if T < W:
+                raise ValueError(
+                    f"--time-block {mode!r}: the axis has {T} bins and one "
+                    f"window needs {W}. No complete window exists, so this "
+                    f"grouping has no blocks at all.")
+            groups = [list(range(i, i + W)) for i in range(0, T - W + 1, S)]
             labels = [self.src_labels[g[0]] for g in groups]
+            assert len(groups) == (T - W) // S + 1, (len(groups), T, W, S)
         self.n_blocks = len(groups)
         self.labels = labels
         self.n_bins = np.array([len(g) for g in groups], np.int32)
@@ -181,9 +271,21 @@ class BlockAxis:
         return o
 
     def block_of_row(self, r):
-        """Which block CONTAINS source row r (or None if it was dropped).
+        """Which block OWNS source row r (or None if it was dropped).
+
         The RAPID truth is keyed on the source row and has to move with the
-        axis — the same remap `--time-stride` needed, for the same reason."""
+        axis — the same remap `--time-stride` needed, for the same reason.
+
+        AT S < W A ROW IS IN SEVERAL WINDOWS, so "contains" stops being a
+        function and this has to pick one. The loop below writes ascending and
+        the last write wins, which makes the owner the LATEST window
+        containing r — i.e. the one whose calendar ANCHOR (its first bin, and
+        its label) is the nearest anchor at or before r, never more than S-1
+        bins earlier. That is the tightest anchoring available and it makes
+        the ownership a PARTITION: at S=3 each window owns the 3 bins it
+        advanced past (the last window additionally owning its tail), so every
+        covered row maps to exactly one block and no truth value is counted
+        twice on an overlapping axis."""
         if not hasattr(self, "_owner"):
             own = np.full(self.T_src, -1, np.int64)
             for b in range(self.n_blocks):
@@ -198,7 +300,16 @@ class BlockAxis:
         A row whose block was dropped disappears; several rows of one block
         collapse onto that block, in source order, and the CALLER decides what
         to do with duplicates (the truth is a monthly series, so in month mode
-        there is at most one per block in practice)."""
+        there is at most one per block in practice).
+
+        UNCHANGED FOR OVERLAPPING WINDOWS, and that is a property of
+        `block_of_row` rather than of this function: ownership is a partition
+        even at S < W, so a truth row still lands on exactly ONE block and the
+        remapped series still carries every row the axis covers. What DOES
+        change at S=3 is the density — a 15-day axis has twice as many blocks
+        as a 30-day one over the same record, so about half of them carry no
+        truth row at all, which is the ordinary "the truth is monthly" case
+        one rung finer."""
         rapid = np.asarray(rapid)
         keep, out = [], []
         for i, r in enumerate(rapid[:, 0].astype(int)):
@@ -211,6 +322,92 @@ class BlockAxis:
             res[:, 0] = out
         return res
 
+    # -- what the ROLL needs: this axis as a tensor descriptor --------------
+    def axis_dict(self):
+        """The block axis as the small-npz members `TimeAxis` reads.
+
+        WHY THIS EXISTS. `ml/rollout_spatial.py` used to build the roll's axis
+        as `TimeAxis({"months": BLK.labels})`, which takes TimeAxis's MONTHLY
+        path — right for month mode (the labels are unique, contiguous
+        `YYYY-MM` keys and that is E-047's entire point) and wrong for every
+        other mode: a fixed-N or W/S axis's labels repeat, so the monthly path
+        refuses, and if it did not it would advance the roll by a MONTH per
+        step while the state advances S bins. The step length of a window axis
+        is S source bins and nothing in a label says so.
+
+        So a window axis is handed over as a BINNED axis, which is the shape
+        TimeAxis already derives a calendar from — `bin_index` + a step length
+        + an epoch. Everything day-defined downstream then falls out of the
+        stride with no further edit: `step_days` = S x the source bin length
+        (30 d at 6/6, 15 d at 6/3), `bands()` cuts at the same DAY edges,
+        `daymatched_leads()` returns the same twelve durations, and
+        `span_days(h)` prints what one scored horizon actually covers.
+
+        The arithmetic, stated because it is the one place an off-by-one could
+        hide. Window b starts at source bin `src_b0 + b*S` (source bins are
+        consecutive, asserted below), so its start DATE is
+        `epoch + (src_b0 + b*S)*days`. Writing that as a binned axis of step
+        `S*days` needs an integer bin index, so the block index is
+        `b0 = src_b0 // S` and the leftover `src_b0 % S` source bins are
+        carried in a SHIFTED EPOCH. Where `src_b0` divides S the epoch is the
+        tensor's own and TimeAxis's `bin_start` cross-check applies unchanged.
+        """
+        if self.mode == "month":
+            # Bit-identical to what the roll built before E-048: a monthly
+            # key axis, which is what month mode is FOR.
+            return {"months": np.array(self.labels)}
+        if self.bin_index is None or self.days is None or self.epoch is None:
+            raise ValueError(
+                f"--time-block {self.mode!r}: this axis was built from month "
+                f"LABELS alone (no `bin_index`/`pentad_days`/`epoch`), so the "
+                f"length of one block step is unknown — a window of {self.width} "
+                f"labels advancing {self.stride} is not a duration. A window "
+                f"codec needs a binned tensor (family 4/5); month mode is the "
+                f"one that works on a monthly one.")
+        used = self.bin_index[int(self.rows[0, 0]):
+                              int(self.rows[-1, int(self.n_bins[-1]) - 1]) + 1]
+        if len(used) > 1 and not (np.diff(used) == 1).all():
+            raise ValueError(
+                "`bin_index` is not consecutive over the bins these blocks "
+                "cover, so a block step is not a fixed number of days and "
+                "this axis cannot be described as a binned one.")
+        step_days = self.stride * self.days
+        if abs(step_days - round(step_days)) > 1e-9:
+            raise ValueError(
+                f"--time-block {self.mode!r}: stride {self.stride} x source bin "
+                f"{self.days} d = {step_days} d, which is not a whole number "
+                f"of days; TimeAxis counts a step in whole days.")
+        step_days = int(round(step_days))
+        src_b0 = int(self.bin_index[int(self.rows[0, 0])])
+        b0, rem = divmod(src_b0, self.stride)
+        epoch = self.epoch + dt.timedelta(days=rem * self.days)
+        return {"months": np.array(self.labels),
+                "bin_index": np.arange(b0, b0 + self.n_blocks, dtype=np.int64),
+                "pentad_days": np.array(step_days),
+                "epoch": np.array(str(epoch)),
+                "cadence": np.array(f"{step_days}-day")}
+
+    def head_season(self, mode="month"):
+        """[n_blocks, 2] season features for a HEAD reading this axis.
+
+        `month` is the archived token, sin/cos(2*pi*(month-1)/12) of the
+        block's LABEL — bit-identical to what `ml/temporal.py:season_ctx`
+        computes from the same labels, which is why the caller asserts the
+        equality rather than trusting this sentence.
+
+        `fine` is `ctx_phase()`: the continuous fraction-of-year phase of the
+        block's own CENTRE. On a 15-day axis the two differ by more than a
+        rounding — two windows a fortnight apart can carry the SAME month
+        label, so the month token is literally constant across a step the
+        axis takes, and only the continuous phase says the state moved."""
+        if mode == "month":
+            moy = np.array([int(m[5:7]) - 1 for m in self.labels])
+            return np.stack([np.sin(2 * np.pi * moy / 12),
+                             np.cos(2 * np.pi * moy / 12)], 1)
+        if mode != "fine":
+            raise ValueError(f"head_season: unknown mode {mode!r}")
+        return self.ctx_phase()
+
     def describe(self, C, d_z):
         """The sizing line E-047 asks for at startup. Cost is quoted in ENCODER
         TOKENS because that is what the attention pays for: one block is
@@ -218,7 +415,23 @@ class BlockAxis:
         also carries the cls and ctx tokens at both."""
         tok = self.k_max * C + 2
         tok1 = C + 2
-        return (f"time blocks: mode {self.mode!r} · {self.n_blocks} blocks "
+        step = ""
+        if self.stride is not None:
+            step = (f" · width {self.width} stride {self.stride} "
+                    f"(overlap {self.overlap} bins"
+                    + (f", step {self.stride * self.days:g} d" if self.days
+                       else "") + ")")
+            if self.overlap:
+                # Said at STARTUP, not only in the plan: the number a reader
+                # is most likely to misread on an overlapping axis is the
+                # persistence baseline, and it is misread in the flattering
+                # direction.
+                step += (f" · PERSISTENCE IS STRONGER BY CONSTRUCTION here: "
+                         f"the previous window shares {self.overlap} of its "
+                         f"{self.width} bins with this one, so a forecast "
+                         f"ratio on this axis is comparable only with another "
+                         f"ratio at the same stride")
+        return (f"time blocks: mode {self.mode!r}{step} · {self.n_blocks} blocks "
                 f"from {self.T_src} bins ({self.labels[0]}..{self.labels[-1]}) "
                 f"· k_max {self.k_max} · bins/block "
                 f"{int(self.n_bins.min())}-{int(self.n_bins.max())} · pad "

@@ -147,6 +147,21 @@ on:
 #       checkpoint whose fsq_* args it does not implement. The dispatched arm
 #       is "8" at d_z 32; see ml/plans/E046_fsq_codec.md and the reasoning in
 #       ml/model.py for why NOT the plan's 5-dimensional option A.
+#   recipe-only: fsq_ladder       -> ml/train.py --fsq-ladder     (Train step)
+#       "uniform" | "exp" | "auto". E-048: WHERE the fsq_levels levels sit.
+#       Unset = "uniform" = E-046's evenly spaced lattice, bit-identical.
+#       "exp" puts the same L levels on a symmetric geometric ladder inside
+#       the same +/-2*sigma bound; "auto" MEASURES the choice per z-dimension
+#       at --fsq-auto-step and writes the fitted lattice into the checkpoint,
+#       from which every loader rebuilds it and none re-fits. Recipe-only for
+#       the same two reasons fsq_levels is: the 25-input list is full, and the
+#       ladder is a property of a CODEC rather than of a dispatch —
+#       ml/model.py:codec_from_ckpt reads it (and the fit) back out of the
+#       checkpoint for every eval. The base of the exp ladder is
+#       --fsq-exp-base, which no recipe sets: 'auto' fits it per dimension out
+#       of ml/fsq_ladder.py:AUTO_BASES, and a deliberate 'exp' arm gets the
+#       default 2.0 until an experiment needs otherwise. See
+#       ml/plans/E048_fsq_block_sweep.md.
 #   recipe-only: train_lon_hold   -> ml/temporal.py --train-lon-hold
 #       "inherit" | "none" | "lo,hi". Which longitudes are excluded from the
 #       STAGE-2 training pool, read in scripts/probes_run.sh. "inherit" is the
@@ -1003,6 +1018,7 @@ jobs:
             $([ -n "${RECIPE_HOLDOUT_LON:-}" ] && echo "--holdout-lon=${RECIPE_HOLDOUT_LON}") \
             $([ -n "${RECIPE_TIME_BLOCK:-}" ] && echo "--time-block=${RECIPE_TIME_BLOCK}") \
             $([ -n "${RECIPE_FSQ_LEVELS:-}" ] && echo "--fsq-levels=${RECIPE_FSQ_LEVELS}") \
+            $([ -n "${RECIPE_FSQ_LADDER:-}" ] && echo "--fsq-ladder=${RECIPE_FSQ_LADDER}") \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && echo --anomaly) \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && [ "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}" != "0" ] \
               && echo --eval-every "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}") \

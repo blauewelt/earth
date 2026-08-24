@@ -183,7 +183,16 @@ def parse():
                         "month (a pentad month is 6 or 7 bins, k_max 7, short "
                         "months padded) so the resulting embedding axis is "
                         "MONTHLY while every input is 5-day; an integer N "
-                        "takes fixed non-overlapping N-bin blocks. The "
+                        "takes fixed non-overlapping N-bin blocks; 'W/S' "
+                        "(E-048) takes a width-W window advancing by S bins, "
+                        "so 'W/W' is the integer mode and '6/3' is 30 days of "
+                        "input every 15 days, consecutive embeddings sharing "
+                        "3 of their 6 bins. S > W is REFUSED (it would leave "
+                        "bins in no embedding). AT S < W THE PERSISTENCE "
+                        "BASELINE IS STRONGER BY CONSTRUCTION — the previous "
+                        "window overlaps this one — so a ratio against "
+                        "persistence is comparable only with another roll at "
+                        "the same stride; the axis says so at startup. The "
                         "encoder sees a k_max x C GRID of cells whose token "
                         "is chan_emb[c] + time_emb[j]; a padded or missing "
                         "cell rides the existing unobserved-cell path, which "
@@ -215,6 +224,51 @@ def parse():
                         "option A: see ml/model.py's PixelMAE for the two "
                         "measurements that decide it. See "
                         "ml/plans/E046_fsq_codec.md.")
+    p.add_argument("--fsq-ladder", default="uniform",
+                   choices=["uniform", "exp", "auto"],
+                   help="E-048: WHERE the --fsq-levels levels sit. 'uniform' "
+                        "(the default) is E-046's evenly-spaced lattice and "
+                        "is BIT-IDENTICAL to it — no branch runs. 'exp' puts "
+                        "the same L levels on a symmetric GEOMETRIC ladder, "
+                        "sign(v)*a*c^j with a*c^(n-1) = the same +/-2*sigma "
+                        "saturation radius, assigned by nearest level in LOG "
+                        "space; it replaces the tanh bound rather than "
+                        "composing with it, because the tanh can only move "
+                        "the boundaries and never the points (see "
+                        "ml/fsq_ladder.py). 'auto' MEASURES the choice per "
+                        "z-dimension: at --fsq-auto-step the run captures "
+                        "--fsq-auto-n pre-quantization vectors, computes both "
+                        "ladders' quantization MSE per dimension, keeps "
+                        "uniform on a tie, and writes the fitted ladder into "
+                        "the checkpoint (`fsq_ladder_fit`) — which every "
+                        "loader rebuilds from and NONE re-fits. Chris asked "
+                        "for this 'for each channel'; z-dimensions are not "
+                        "channels, and per-dimension is the honest mapping "
+                        "(ml/fsq_ladder.py says why).")
+    p.add_argument("--fsq-exp-base", type=float, default=2.0,
+                   help="the base c of the exponential ladder (--fsq-ladder "
+                        "exp). c <= 1 is refused; so is a c so large the "
+                        "innermost level falls below 1e-6 of the saturation "
+                        "radius. Under 'auto' this is only the default the "
+                        "fit starts from — the fitted base per dimension is "
+                        "chosen from ml/fsq_ladder.py:AUTO_BASES and recorded.")
+    p.add_argument("--fsq-auto-n", type=int, default=4096,
+                   help="pre-quantization vectors the --fsq-ladder auto fit "
+                        "measures on (one per pixel of one deliberate "
+                        "forward, drawn from the TRAIN pool).")
+    p.add_argument("--fsq-auto-step", type=int, default=2000,
+                   help="the step at which --fsq-ladder auto fits. NOT 0: an "
+                        "untrained encoder's activations are not the "
+                        "distribution the ladder has to serve, and the whole "
+                        "point of 'auto' is that it is measured. Clamped to "
+                        "steps//2 on a run too short to reach it, so an auto "
+                        "run always fits and 'auto but never fitted' is not a "
+                        "state a checkpoint can be in.")
+    p.add_argument("--fsq-ladder-fit", default="",
+                   help="the per-dimension ladder, 'u,e2,e2,...' — normally "
+                        "WRITTEN BY the run rather than passed. Pass it to "
+                        "reproduce an exact lattice without re-measuring, or "
+                        "let --resume adopt it from the checkpoint.")
     p.add_argument("--anomaly", action="store_true",
                    help="train dynamic channels as departures from their own "
                         "per-pixel monthly climatology (train years only)")
@@ -569,8 +623,13 @@ def main():
     # quantized codec as a continuous one (or the reverse) while every tensor
     # in the state_dict loaded cleanly. So it rides the same adopt-or-refuse
     # machinery as d_z and the widths — E-046.
+    # E-048 adds the two ladder fields for the same reason E-046 added
+    # fsq_levels: they decide what a `z` IS. `fsq_ladder_fit` is NOT here —
+    # it is a MEASUREMENT the run made rather than a setting a dispatch
+    # states, so it is adopted unconditionally below instead of being
+    # contradicted.
     ARCH = ("d_z", "patch", "d_model", "n_layers", "n_heads", "d_dec",
-            "dec_layers", "fsq_levels")
+            "dec_layers", "fsq_levels", "fsq_ladder", "fsq_exp_base")
     if RESUME_CK is not None:
         ca = RESUME_CK.get("args", {}) or {}
         ca = ca if isinstance(ca, dict) else vars(ca)
@@ -618,6 +677,17 @@ def main():
         if adopted:
             print(f"  architecture ADOPTED from {os.path.basename(RESUME_PATH)}: "
                   + " ".join(adopted), flush=True)
+        # THE FITTED LADDER IS ALWAYS ADOPTED (E-048). A resumed `auto` run
+        # must continue with the lattice it already measured, not measure a
+        # second one against a half-trained encoder and change what its own
+        # earlier steps meant. The only way to re-fit is to start a fresh run.
+        _fit = str(ca.get("fsq_ladder_fit", "") or "")
+        if _fit and _fit != a.fsq_ladder_fit:
+            a.fsq_ladder_fit = _fit
+            print(f"  FSQ ladder fit ADOPTED from "
+                  f"{os.path.basename(RESUME_PATH)} ({_fit.count('e')} of "
+                  f"{_fit.count(',') + 1} dimensions exponential) — a resume "
+                  f"never re-fits", flush=True)
 
     missing = [k for k in ARCH if getattr(a, k) is None]
     if missing:
@@ -633,7 +703,9 @@ def main():
     model = PixelMAE(n_chan=C, d_z=a.d_z, patch=a.patch, d_model=a.d_model,
                      k_time=a.k_time,
                      n_layers=a.n_layers, n_heads=a.n_heads, d_dec=a.d_dec,
-                     dec_layers=a.dec_layers, fsq_levels=a.fsq_levels).to(dev)
+                     dec_layers=a.dec_layers, fsq_levels=a.fsq_levels,
+                     fsq_ladder=a.fsq_ladder, fsq_exp_base=a.fsq_exp_base,
+                     fsq_ladder_fit=a.fsq_ladder_fit).to(dev)
     print(f"codec parameters: {sum(p_.numel() for p_ in model.parameters())/1e6:.2f}M")
     # E-046: the codebook, logged ONCE at startup, from the object that will
     # actually do the rounding rather than from the flag string. A bits/dim
@@ -649,6 +721,20 @@ def main():
               f"(codebook 2^{_q.codebook_log2:.1f}) · bound tanh, sigma 1 "
               f"(the scale is learned into to_z) · straight-through gradient, "
               f"no codebook parameters and no commitment loss", flush=True)
+        # E-048: WHICH LADDER, and — for `auto` — that it has not measured
+        # anything yet. A run whose ladder is not the default says so in the
+        # first ten lines of its log, because `params_M` cannot distinguish
+        # one lattice from another any more than it can distinguish a
+        # quantized codec from a continuous one.
+        if _q.ladder != "uniform" or _q.fit:
+            print(f"FSQ ladder: --fsq-ladder {_q.ladder}"
+                  + (f" (base {a.fsq_exp_base:g})" if _q.ladder == "exp"
+                     else "")
+                  + (f" · fitted lattice IN HAND from the dispatch/resume: "
+                     f"{_q.fit}" if _q.fit else "")
+                  + (f" · NOT YET FITTED — quantizing uniformly until step "
+                     f"{min(a.fsq_auto_step, max(1, a.steps // 2))}"
+                     if _q.needs_fit else ""), flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     # Cosine annealing whose TOTAL can be re-fitted mid-run (--max-minutes):
     # a LambdaLR closure over a mutable total is the same curve as
@@ -707,6 +793,15 @@ def main():
         mask + rec_w_visible*(observed & unmasked) scheme. The neighbour term
         keeps its meaning by moving with the axis: dt = +/-1 is the next or
         previous BLOCK, because the block axis IS the time axis downstream.
+
+        E-048, ON AN OVERLAPPING AXIS (--time-block W/S with S < W): dt = +/-1
+        is the adjacent WINDOW, which SHARES W-S bins with this one, so the
+        temporal neighbour term is partly a reconstruction term. That is the
+        training-side twin of the persistence caveat the axis prints at
+        startup, and it is deliberate rather than overlooked: the alternative
+        — stepping to the first NON-overlapping window instead — would make dt
+        mean a different duration at every stride and break the one rule the
+        block axis has, that `off`'s dt counts BLOCKS.
         """
         B = len(b)
         v, o = gather_block(b, y, x)                        # [B, KT, C]
@@ -797,6 +892,11 @@ def main():
             # codec from a continuous one — and this record is sometimes the
             # only surviving account of what ran (#387). None = continuous.
             "fsq_levels": (a.fsq_levels or None),
+            # E-048: and WHICH LADDER those levels sit on. `auto` records the
+            # fitted lattice in its own metrics line at the fit step; this is
+            # the setting, and it is here for the same reason fsq_levels is —
+            # this record is sometimes the only surviving account of what ran.
+            "fsq_ladder": (a.fsq_ladder if a.fsq_levels else None),
             "eval_every": a.eval_every, "light_probe_every": a.light_probe_every,
             "lr_floor": a.lr_floor, "lr_decay_steps": a.lr_decay_steps,
             "params_M": round(sum(p_.numel() for p_ in model.parameters()) / 1e6, 3),
@@ -1161,8 +1261,50 @@ def main():
                       flush=True)
             if s >= a.steps:
                 print(f"  checkpoint is already at/past --steps; nothing to do")
+    # ---- E-048: the --fsq-ladder auto FIT --------------------------------
+    # Driven from HERE rather than by a counter hidden inside the quantizer,
+    # so what the fit measured is a function of the run's own seed and step
+    # schedule and nothing else. It fires once, on a deliberate no-grad
+    # forward over a fresh TRAIN-pool batch, and the lattice it installs is
+    # written into every checkpoint from that step on.
+    FSQ_FIT_AT = (min(a.fsq_auto_step, max(1, a.steps // 2))
+                  if (model.fsq is not None and model.fsq.needs_fit) else None)
+
+    def fsq_auto_fit(step):
+        q = model.fsq
+        n = max(2, int(a.fsq_auto_n))
+        # `encode_pre`: the real encoder, without the bottleneck. The fit has
+        # to see the distribution the quantizer will actually be handed, and
+        # nothing masked — a masked cell changes what the encoder is asked,
+        # not what a ladder must serve.
+        with torch.no_grad():
+            bt, by, bx, bctx = batch(tt, yy, xx, n)
+            if BLK is not None:
+                v_, o_ = gather_block(bt, by, bx)
+                pre = model.encode_pre(v_, o_, torch.zeros_like(o_),
+                                       bctx.to(dev))
+            elif a.patch > 1:
+                vp, op = gather_px(Xt, OBS, bt, by, bx, a.patch)
+                pre = model.encode_pre(vp.to(dev, torch.float32), op.to(dev),
+                                       torch.zeros(n, C, dtype=torch.bool,
+                                                   device=dev), bctx.to(dev))
+            else:
+                v_, o_ = gather(bt, by, bx)
+                pre = model.encode_pre(v_, o_, torch.zeros_like(o_),
+                                       bctx.to(dev))
+        sample = pre.detach().to("cpu", torch.float32).numpy()
+        line = q.fit_auto(sample)
+        a.fsq_ladder_fit = q.fit
+        print(f"  step {step}: {line}", flush=True)
+        with open(metrics_path, "a") as f:
+            f.write(json.dumps({"step": int(step), "fsq_ladder_fit": {
+                "spec": q.fit, "n": int(len(sample)),
+                "n_exp": int(q.is_exp_np.sum()), "d_z": int(a.d_z)}}) + "\n")
+
     while s < a.steps:
         s += 1
+        if FSQ_FIT_AT is not None and s == FSQ_FIT_AT:
+            fsq_auto_fit(s)
         t, y, x, ctx = batch(tt, yy, xx, a.batch)
         l_rec, l_nei = step_loss(t, y, x, ctx)
         loss = l_rec + 0.5 * l_nei

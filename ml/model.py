@@ -25,9 +25,20 @@ The decoder is a neural-field-style MLP conditioned on (z, query): it can be
 asked for any offset at inference, which is what "use the embedding to predict
 nearby pixels" means operationally.
 """
+import os
+import sys
+
 import numpy as np
 import torch
 import torch.nn as nn
+
+# `ml/` on the path so `import fsq_ladder` works however this module was
+# reached — bare `import model` (every script under ml/) or `ml.model` (the
+# tests that import through the package path). ml/temporal.py and
+# ml/rollout_spatial.py already do exactly this, for the same reason.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import fsq_ladder as fql                                        # noqa: E402
 
 
 class InputQuant:
@@ -88,6 +99,20 @@ class InputQuant:
     +/-2*sigma_d, 95% of a Gaussian, which is a deliberate part of the
     capacity restriction rather than an accident of it.
 
+    THE LADDER (E-048) — WHERE THOSE L LEVELS SIT. Everything above describes
+    the `uniform` ladder, which is the default, is what every archived
+    checkpoint has, and is bit-identical here: with `ladder="uniform"` the
+    `__call__` below runs the same four statements it ran at 7f8dabb, and the
+    exp branch is a Python `if` that is False. `ladder="exp"` places the L
+    levels GEOMETRICALLY instead — sign(v)*a*c^j, saturating at the same
+    +/-2*sigma_d — and `ladder="auto"` chooses per DIMENSION from a measured
+    sample. The ladder arithmetic, the fit and the recorded-fit string live in
+    `ml/fsq_ladder.py` because the JAX port reads the identical definitions;
+    what stays here is the torch application of them, with its native
+    straight-through gradient. Read that module for why `exp` REPLACES the
+    tanh bound rather than composing with it, and why "for each channel"
+    honestly means per z-dimension.
+
     `zero_passthrough` — EXACT ZEROS ARE PASSED THROUGH UNCHANGED, ON THE HEAD
     SIDE ONLY, and it is the one behavioural difference between the two
     callers. A zero in a STENCIL SLOT is not a small value, it is the absence
@@ -102,27 +127,9 @@ class InputQuant:
     """
 
     def __init__(self, spec, sigma, d_z, flag="--input-quant",
-                 zero_passthrough=True):
-        lv = [int(x) for x in str(spec).split(",") if str(x).strip()]
-        if not lv:
-            raise SystemExit(f"{flag} {spec!r}: no levels")
-        if any(l < 3 for l in lv):
-            # L=2 is degenerate in this parameterisation and not merely
-            # small: half = 0.5 and offset = 0.5 give shift = atanh(1) = inf,
-            # so every input collapses to one value. The FSQ paper's own
-            # level sets start at 3 for the same reason (its published
-            # configurations are 8/6/5-style); refuse rather than train a
-            # head whose input is a constant.
-            raise SystemExit(f"{flag} {spec!r}: every level count must "
-                             f"be >= 3 (L=2 collapses to a single value in "
-                             f"the bounded-tanh parameterisation)")
-        if len(lv) == 1:
-            lv = lv * d_z
-        if len(lv) != d_z:
-            raise SystemExit(
-                f"{flag} {spec!r} gives {len(lv)} level counts for "
-                f"d_z {d_z}: pass one number (applied to every dimension) or "
-                f"exactly d_z of them")
+                 zero_passthrough=True, ladder="uniform",
+                 exp_base=fql.DEFAULT_EXP_BASE, fit=""):
+        lv = [int(v) for v in fql.parse_levels(spec, d_z, flag)]
         self.spec = str(spec)
         self.flag = str(flag)
         self.zero_passthrough = bool(zero_passthrough)
@@ -138,11 +145,80 @@ class InputQuant:
         self._scale = 2.0 * self.sigma
         self.bits_per_dim = float(np.mean(np.log2(np.asarray(lv, float))))
         self.codebook_log2 = float(np.sum(np.log2(np.asarray(lv, float))))
+        self.ladder = str(ladder or "uniform")
+        self.exp_base = float(exp_base)
+        _is_exp, _base, _fitted = fql.resolve(self.ladder, lv, self.d_z,
+                                              self.exp_base, fit, flag=flag)
+        # True only for an `auto` run that has not fitted yet: it quantizes
+        # UNIFORMLY until the trainer measures the distribution, and the
+        # trainer asks this rather than re-deriving the condition.
+        self.needs_fit = not _fitted
+        self._set_ladder(_is_exp, _base, fit=fit)
+
+    def _set_ladder(self, is_exp, base, fit=""):
+        """Install a per-dimension ladder. One place, so the constructor and
+        `fit_auto` below cannot build the lattice two different ways."""
+        self.fit = str(fit or "")
+        self.is_exp_np = np.asarray(is_exp, bool)
+        self.base_np = np.asarray(base, np.float64)
+        self._any_exp = bool(self.is_exp_np.any())
+        self._is_exp = torch.as_tensor(self.is_exp_np)
+        lv = self.levels.to(torch.int64).numpy()
+        n, a_rel, logc, has_zero = fql.exp_params(lv, self.base_np,
+                                                  flag=self.flag + " exp")
+        self._exp_n = torch.as_tensor(np.asarray(n, np.float32))
+        self._exp_arel = torch.as_tensor(np.asarray(a_rel, np.float32))
+        self._exp_logc = torch.as_tensor(np.asarray(logc, np.float32))
+        self._exp_jmin = torch.as_tensor(
+            np.where(has_zero, -1.0, 0.0).astype(np.float32))
+        self._exp_zero = torch.as_tensor(np.asarray(has_zero, bool))
+        return self
+
+    def fit_auto(self, sample, bases=fql.AUTO_BASES):
+        """MEASURE the per-dimension ladder on real pre-quantization values.
+
+        `sample` is [N, d_z] — whatever the caller captured. Returns the one
+        line the log prints; the caller writes `self.fit` into the checkpoint,
+        and every later loader rebuilds from that string rather than
+        re-fitting (a loader that re-fitted would score a different model)."""
+        s = np.asarray(sample, np.float64).reshape(-1, self.d_z)
+        lv = self.levels.to(torch.int64).numpy()
+        sc = self._scale.detach().cpu().numpy().astype(np.float64)
+        is_exp, base, mse_u, mse_b = fql.fit_auto(s, lv, sc, bases)
+        dev = self.levels.device
+        self._set_ladder(is_exp, base, fit=fql.format_fit(is_exp, base))
+        self.needs_fit = False
+        self.to(dev)
+        return (f"{self.flag} auto fitted on {len(s):,} pre-quantization "
+                f"vectors: " + fql.describe_fit(is_exp, base, mse_u, mse_b))
 
     def to(self, dev):
-        for k in ("levels", "sigma", "_half", "_offset", "_shift", "_scale"):
+        for k in ("levels", "sigma", "_half", "_offset", "_shift", "_scale",
+                  "_is_exp", "_exp_n", "_exp_arel", "_exp_logc", "_exp_jmin",
+                  "_exp_zero"):
             setattr(self, k, getattr(self, k).to(dev))
         return self
+
+    def _exp(self, v):
+        """The GEOMETRIC ladder, straight-through. See ml/fsq_ladder.py for
+        the definition and for why it carries its own bound instead of
+        sitting behind the tanh."""
+        a = (self._exp_arel * self._scale).to(v.dtype).to(v.device)
+        logc = self._exp_logc.to(v.dtype).to(v.device)
+        n1 = (self._exp_n - 1.0).to(v.dtype).to(v.device)
+        jmin = self._exp_jmin.to(v.dtype).to(v.device)
+        one = torch.ones((), dtype=v.dtype, device=v.device)
+        s = torch.where(v < 0, -one, one)
+        m = torch.clamp(v.abs(), min=1e-30)
+        g = torch.log(m / a) / logc
+        gq = torch.maximum(torch.minimum(torch.round(g), n1), jmin)
+        # Straight-through: the round and the clamp carry no gradient, so in
+        # the interior a*c^g = |v| exactly and d out/d v is the identity.
+        q = g + (gq - g).detach()
+        out = s * a * torch.exp(q * logc)
+        # The zero level of an odd L, with the plain straight-through
+        # estimator: value 0, gradient 1.
+        return torch.where(gq < -0.5, v - v.detach(), out)
 
     def __call__(self, z):
         """z [..., n*d_z] (the stencil flattens slots into the last axis)."""
@@ -158,6 +234,12 @@ class InputQuant:
         g = half * torch.tanh(v / sc + sh) - off
         q = g + (torch.round(g) - g).detach()          # FSQ straight-through
         out = (q + off) * sc / half
+        # A PYTHON `if` ON A PYTHON BOOL: with the uniform ladder (the
+        # default, and every archived checkpoint) nothing above or below this
+        # line changed at E-048, which is what makes the bit-identity claim
+        # bit-identity and not near-identity.
+        if self._any_exp:
+            out = torch.where(self._is_exp.to(v.device), self._exp(v), out)
         if self.zero_passthrough:
             out = torch.where(v == 0, v, out)
         return out.reshape(shp)
@@ -179,7 +261,8 @@ class InputQuant:
                 f"{float(self.sigma.max()):.3f}")
 
 
-def fsq_from_levels(spec, d_z):
+def fsq_from_levels(spec, d_z, ladder="uniform",
+                    exp_base=fql.DEFAULT_EXP_BASE, fit=""):
     """E-046: the CODEC-side FSQ bottleneck (`--fsq-levels`), or None.
 
     THE ONE REAL DIFFERENCE FROM THE HEAD-SIDE KNOB IS THE BOUND'S SCALE, and
@@ -204,18 +287,28 @@ def fsq_from_levels(spec, d_z):
     `zero_passthrough=False`: see InputQuant's docstring. There is no
     absent-neighbour convention in a codec bottleneck, so an exact 0.0 rounds
     onto the lattice like any other value.
+
+    E-048 adds the LADDER (`--fsq-ladder`), which is orthogonal to everything
+    above: `uniform` is this docstring unchanged and bit-identical, `exp`
+    places the same L levels geometrically inside the same +/-2 bound, and
+    `auto` fits the choice per z-dimension on a measured sample. The bound's
+    scale stays sigma = 1 for the same reason it does today — there is no Z to
+    measure — so on the codec side a level's position is a pure function of
+    the ladder, and `to_z` learns the scale into it either way.
     """
     spec = str(spec or "").strip()
     if not spec:
         return None
     return InputQuant(spec, np.ones(int(d_z), np.float32), int(d_z),
-                      flag="--fsq-levels", zero_passthrough=False)
+                      flag="--fsq-levels", zero_passthrough=False,
+                      ladder=ladder, exp_base=exp_base, fit=fit)
 
 
 class PixelMAE(nn.Module):
     def __init__(self, n_chan, d_model=128, n_heads=4, n_layers=4,
                  d_z=32, d_dec=256, max_abs_offset=3, patch=1, dec_layers=2,
-                 k_time=1, fsq_levels=""):
+                 k_time=1, fsq_levels="", fsq_ladder="uniform",
+                 fsq_exp_base=fql.DEFAULT_EXP_BASE, fsq_ladder_fit=""):
         super().__init__()
         self.n_chan = n_chan
         self.d_z = d_z
@@ -249,8 +342,29 @@ class PixelMAE(nn.Module):
         # The paper's small-codebook configurations remain runnable through
         # this same flag ("--fsq-levels 8,8,8,6,5" with --d-z 5) as a later
         # arm; nothing here forecloses them.
+        # E-048: the LADDER is part of the same architecture field. It is
+        # carried on the module (not only inside the quantizer) because
+        # `codec_from_ckpt` reads it back out of `ck["args"]` for every eval,
+        # and because a run whose ladder is `auto` writes its FITTED ladder
+        # into the checkpoint — the fit is what the codec IS, in exactly the
+        # sense the level counts are.
         self.fsq_levels = str(fsq_levels or "")
-        self.fsq = fsq_from_levels(self.fsq_levels, d_z)
+        self.fsq_ladder = str(fsq_ladder or "uniform")
+        self.fsq_exp_base = float(fsq_exp_base)
+        self.fsq_ladder_fit = str(fsq_ladder_fit or "")
+        self.fsq = fsq_from_levels(self.fsq_levels, d_z,
+                                   ladder=self.fsq_ladder,
+                                   exp_base=self.fsq_exp_base,
+                                   fit=self.fsq_ladder_fit)
+        if self.fsq is None and (self.fsq_ladder != "uniform"
+                                 or self.fsq_ladder_fit):
+            # A ladder with no levels quantizes nothing, so it would be a
+            # setting that appears to apply and does not — the failure the
+            # recipe mechanism exists to remove, one layer down.
+            raise SystemExit(
+                f"--fsq-ladder {self.fsq_ladder!r} without --fsq-levels: "
+                f"there is no bottleneck to put a ladder on. Name the levels "
+                f"(e.g. --fsq-levels 8) or leave the ladder at 'uniform'.")
         self.max_off = max_abs_offset
         # E-047 TIME BLOCKS. k_time = 1 is the per-bin codec every archived
         # checkpoint is, and it adds NO parameter and NO branch that runs:
@@ -326,9 +440,9 @@ class PixelMAE(nn.Module):
         """`to_z`'s output, quantized when E-046's flag is on.
 
         ONE LINE OF FORWARD, at the one place `z` is born (plan §2.1). Every
-        `encode` branch — patch>1, k_time>1 (E-047 month blocks), and the
-        per-bin path — ends here, so the block codec composes with FSQ for
-        free and neither knob had to learn about the other: a block's z is
+        `encode_pre` branch — patch>1, k_time>1 (E-047 month blocks), and the
+        per-bin path — returns into here, so the block codec composes with FSQ
+        for free and neither knob had to learn about the other: a block's z is
         still one `to_z(h[:, 0])` and quantizing it is the same operation on
         the same tensor.
 
@@ -340,7 +454,18 @@ class PixelMAE(nn.Module):
     def encode(self, x, obs, mask, ctx):
         """patch=1: x, obs [B,C] · patch>1: x, obs [B,C,patch²] (obs = that
         cell observed; the channel counts as observed iff its CENTER is).
-        mask [B,C] bool masked-by-training · ctx [B,4] → z [B,d_z]."""
+        mask [B,C] bool masked-by-training · ctx [B,4] → z [B,d_z].
+
+        ONE LINE, because `encode_pre` is the whole encoder and
+        `_bottleneck` is the whole quantizer. The split exists so the E-048
+        `auto` fit can MEASURE the pre-quantization distribution through the
+        real encoder — the thing it has to fit — without a capture hook
+        reaching into the forward pass, and so the JAX mirror can do the same
+        under jit, where a side-effecting hook does not work at all."""
+        return self._bottleneck(self.encode_pre(x, obs, mask, ctx))
+
+    def encode_pre(self, x, obs, mask, ctx):
+        """`encode` WITHOUT the bottleneck: `to_z`'s raw output."""
         # WIDEN THE INPUT TO THE WEIGHTS' DTYPE. Family 4 is the project's
         # first float16 tensor, and every reader hands the codec a batch whose
         # dtype follows the tensor — `torch.from_numpy(np.nan_to_num(X))` did,
@@ -378,7 +503,7 @@ class PixelMAE(nn.Module):
             toks = torch.cat([self.cls_tok.expand(B, 1, -1),
                               self.ctx_proj(ctx).unsqueeze(1), vt], dim=1)
             h = self.encoder(toks)
-            return self._bottleneck(self.to_z(h[:, 0]))
+            return self.to_z(h[:, 0])
         if self.k_time > 1:
             # x, obs, mask [B, k_time, C] -> [B, k_time*C] tokens, cell (j, c)
             # carrying chan_emb[c] + time_emb[j]. Flattened j-major so a
@@ -402,7 +527,7 @@ class PixelMAE(nn.Module):
                                   torch.zeros_like(vt))
             toks = torch.cat([self.cls_tok.expand(B, 1, -1),
                               self.ctx_proj(ctx).unsqueeze(1), vt], dim=1)
-            return self._bottleneck(self.to_z(self.encoder(toks)[:, 0]))
+            return self.to_z(self.encoder(toks)[:, 0])
         B, C = x.shape
         ce = self.chan_emb.weight[None, :, :].expand(B, -1, -1)
         vt = self.val_proj(x.unsqueeze(-1)) + ce
@@ -414,7 +539,7 @@ class PixelMAE(nn.Module):
         toks = torch.cat([self.cls_tok.expand(B, 1, -1),
                           self.ctx_proj(ctx).unsqueeze(1), vt], dim=1)
         h = self.encoder(toks)
-        return self._bottleneck(self.to_z(h[:, 0]))
+        return self.to_z(h[:, 0])
 
     def query(self, z, chan_idx, off, tpos=None):
         """z [B,d_z] · chan_idx [B,Q] · off [B,Q,3] ints in [-max,max] → [B,Q].
@@ -530,12 +655,32 @@ def codec_from_ckpt(ck, n_chan):
     # ml/CLAUDE.md §0.2 — "a step that reports success is not evidence it did
     # anything" — so this reads the levels back and hands them to the model.
     fsq = str(a.get("fsq_levels", "") or "")
+    # E-048: the LADDER travels with the levels, and the FITTED ladder of an
+    # `auto` run travels with both. A loader that read the levels and dropped
+    # the fit would rebuild a uniform lattice under an `auto` checkpoint's
+    # name — the same silent-drop failure the levels themselves are read back
+    # for, one field along. NOTHING HERE RE-FITS: `fsq_ladder_fit` is the
+    # measurement the run made, and re-measuring it at eval time would score a
+    # different model from the one that trained.
+    fsq_ladder = str(a.get("fsq_ladder", "uniform") or "uniform")
+    fsq_fit = str(a.get("fsq_ladder_fit", "") or "")
+    fsq_base = float(a.get("fsq_exp_base", fql.DEFAULT_EXP_BASE) or
+                     fql.DEFAULT_EXP_BASE)
+    if fsq and fsq_ladder == "auto" and not fsq_fit:
+        raise SystemExit(
+            "codec_from_ckpt: this checkpoint says --fsq-ladder auto but "
+            "carries no `fsq_ladder_fit`, so the per-dimension ladder it "
+            "trained with is not recorded. Refusing rather than guessing a "
+            "lattice: re-run the fit is not an option at eval time (it would "
+            "measure this tensor's activations, not the ones that trained), "
+            "and quantizing uniformly would score a different model.")
     # And REFUSE what this code does not understand, rather than ignoring it.
     # A checkpoint written by a later revision that adds (say) `fsq_bound` or
     # `fsq_groups` would otherwise load here as a plain FSQ codec and be
     # scored as one. Unknown-key refusal is cheap, fires at load, and costs
     # the inputs alone (§0.3).
-    known = {"fsq_levels"}
+    known = {"fsq_levels", "fsq_ladder", "fsq_exp_base", "fsq_ladder_fit",
+             "fsq_auto_n", "fsq_auto_step"}
     unknown = sorted(k for k in a if str(k).startswith("fsq_")
                      and k not in known)
     if unknown:
@@ -554,7 +699,8 @@ def codec_from_ckpt(ck, n_chan):
                     n_heads=a.get("n_heads", 4),
                     d_dec=a.get("d_dec", 256),
                     dec_layers=a.get("dec_layers", 2),
-                    fsq_levels=fsq)
+                    fsq_levels=fsq, fsq_ladder=fsq_ladder,
+                    fsq_exp_base=fsq_base, fsq_ladder_fit=fsq_fit)
 
 
 def obs_any_chunked(X, min_chan=2, chunk=64):
