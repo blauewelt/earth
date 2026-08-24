@@ -191,6 +191,30 @@ def parse():
                         "being a special case). ctx carries the CONTINUOUS "
                         "fraction-of-year phase of the block's centre. See "
                         "ml/plans/E047_block_codec.md")
+    p.add_argument("--fsq-levels", default="",
+                   help="E-046: quantize the codec's own bottleneck with FSQ "
+                        "(arxiv 2309.15505) instead of leaving it continuous. "
+                        "'' (default) is today's continuous bottleneck and is "
+                        "BIT-IDENTICAL — no branch runs. A single integer N "
+                        "puts N levels on EVERY d_z dimension (codebook "
+                        "N^d_z); a comma list gives per-dimension counts and "
+                        "its length must then equal --d-z exactly, or the run "
+                        "refuses. L=2 is refused at any position: half = 0.5 "
+                        "and offset = 0.5 make the bound's shift atanh(1) = "
+                        "inf and every value collapses to one. The bound is "
+                        "tanh on the raw pre-quantization activation with "
+                        "sigma 1 — the paper's own form — so the SCALE is "
+                        "learned into to_z rather than measured, which is the "
+                        "one real difference from the head-side "
+                        "--input-quant knob (ml/temporal.py, E-044c), where "
+                        "sigma is measured off an existing Z. Gradients pass "
+                        "straight through the round; there is no codebook, "
+                        "so no commitment loss, no EMA and no dead-code "
+                        "machinery is added. THE DISPATCHED ARM IS '8' AT "
+                        "d_z 32 — [8]^32 — not the paper's 5-dimensional "
+                        "option A: see ml/model.py's PixelMAE for the two "
+                        "measurements that decide it. See "
+                        "ml/plans/E046_fsq_codec.md.")
     p.add_argument("--anomaly", action="store_true",
                    help="train dynamic channels as departures from their own "
                         "per-pixel monthly climatology (train years only)")
@@ -539,8 +563,14 @@ def main():
             f"Exiting in seconds rather than retraining from scratch for "
             f"hours under a doc string that claims to be a continuation.")
 
+    # `fsq_levels` is an ARCHITECTURE field, not a training knob: it decides
+    # what a `z` IS, every downstream consumer reads it back out of the
+    # checkpoint, and a resume that contradicted it would continue a
+    # quantized codec as a continuous one (or the reverse) while every tensor
+    # in the state_dict loaded cleanly. So it rides the same adopt-or-refuse
+    # machinery as d_z and the widths — E-046.
     ARCH = ("d_z", "patch", "d_model", "n_layers", "n_heads", "d_dec",
-            "dec_layers")
+            "dec_layers", "fsq_levels")
     if RESUME_CK is not None:
         ca = RESUME_CK.get("args", {}) or {}
         ca = ca if isinstance(ca, dict) else vars(ca)
@@ -560,7 +590,16 @@ def main():
             # 3-hidden-layer decoders would read have=2, want=3 and refuse a
             # dispatch that never expressed an opinion — the false-refusal
             # twin of the bug this block exists to kill. Ask argv instead.
-            explicit = ("--" + k.replace("_", "-")) in sys.argv
+            # BOTH SPELLINGS. argparse accepts `--flag value` and
+            # `--flag=value`, and the workflow writes the =form for any value
+            # that could open with a minus (--holdout-lon) and now for
+            # --fsq-levels too. Matching only the bare token would read an
+            # explicit `--fsq-levels=8` as "the dispatch said nothing", adopt
+            # the checkpoint's value over it, and run a different experiment
+            # in silence — the precise failure this block exists to remove.
+            _fl = "--" + k.replace("_", "-")
+            explicit = any(t == _fl or t.startswith(_fl + "=")
+                           for t in sys.argv)
             if have is None or not explicit:
                 if have != want:
                     setattr(a, k, want)
@@ -594,8 +633,22 @@ def main():
     model = PixelMAE(n_chan=C, d_z=a.d_z, patch=a.patch, d_model=a.d_model,
                      k_time=a.k_time,
                      n_layers=a.n_layers, n_heads=a.n_heads, d_dec=a.d_dec,
-                     dec_layers=a.dec_layers).to(dev)
+                     dec_layers=a.dec_layers, fsq_levels=a.fsq_levels).to(dev)
     print(f"codec parameters: {sum(p_.numel() for p_ in model.parameters())/1e6:.2f}M")
+    # E-046: the codebook, logged ONCE at startup, from the object that will
+    # actually do the rounding rather than from the flag string. A bits/dim
+    # line nobody can trace back to a live quantizer is a claim; this is a
+    # reading. (Nothing prints at all with the flag off — the log of a
+    # continuous run is unchanged too.)
+    if model.fsq is not None:
+        _q = model.fsq
+        print(f"FSQ bottleneck: --fsq-levels {_q.spec} -> "
+              f"{[int(v) for v in _q.levels.tolist()][:8]}"
+              f"{'...' if a.d_z > 8 else ''} · {_q.bits_per_dim:.3f} bits/dim "
+              f"x d_z {a.d_z} = {_q.codebook_log2:.1f} bits "
+              f"(codebook 2^{_q.codebook_log2:.1f}) · bound tanh, sigma 1 "
+              f"(the scale is learned into to_z) · straight-through gradient, "
+              f"no codebook parameters and no commitment loss", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     # Cosine annealing whose TOTAL can be re-fitted mid-run (--max-minutes):
     # a LambdaLR closure over a mutable total is the same curve as
@@ -739,6 +792,11 @@ def main():
             "steps": a.steps, "batch": a.batch, "d_z": a.d_z, "patch": a.patch,
             "d_model": a.d_model, "n_layers": a.n_layers, "n_heads": a.n_heads,
             "d_dec": a.d_dec, "anomaly": bool(a.anomaly),
+            # E-046. The bottleneck is the one architecture field that adds no
+            # parameters, so `params_M` above cannot distinguish a quantized
+            # codec from a continuous one — and this record is sometimes the
+            # only surviving account of what ran (#387). None = continuous.
+            "fsq_levels": (a.fsq_levels or None),
             "eval_every": a.eval_every, "light_probe_every": a.light_probe_every,
             "lr_floor": a.lr_floor, "lr_decay_steps": a.lr_decay_steps,
             "params_M": round(sum(p_.numel() for p_ in model.parameters()) / 1e6, 3),

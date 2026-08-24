@@ -134,6 +134,19 @@ on:
 #       25-input list is full AND because it is a property of a CODEC, not of
 #       a dispatch: ml/temporal.py reads k_time back out of the checkpoint,
 #       never from a flag. See ml/plans/E047_block_codec.md.
+#   recipe-only: fsq_levels       -> ml/train.py --fsq-levels     (Train step)
+#       "" | "<N>" | "<L1,...,Ld_z>". E-046: quantize the CODEC's bottleneck
+#       with FSQ (arxiv 2309.15505) instead of leaving it continuous. A single
+#       integer puts that many levels on every d_z dimension; a comma list
+#       gives per-dimension counts and must be exactly d_z long. Unset = "" =
+#       the continuous bottleneck every archived checkpoint has, bit-identical
+#       — no branch runs. Recipe-only for the same two reasons time_block is:
+#       the 25-input list is full, AND it is a property of a CODEC rather than
+#       of a dispatch — ml/model.py:codec_from_ckpt reads the levels back out
+#       of the checkpoint for every eval, never from a flag, and refuses a
+#       checkpoint whose fsq_* args it does not implement. The dispatched arm
+#       is "8" at d_z 32; see ml/plans/E046_fsq_codec.md and the reasoning in
+#       ml/model.py for why NOT the plan's 5-dimensional option A.
 #   recipe-only: train_lon_hold   -> ml/temporal.py --train-lon-hold
 #       "inherit" | "none" | "lo,hi". Which longitudes are excluded from the
 #       STAGE-2 training pool, read in scripts/probes_run.sh. "inherit" is the
@@ -989,6 +1002,7 @@ jobs:
             "${RECW[@]}" \
             $([ -n "${RECIPE_HOLDOUT_LON:-}" ] && echo "--holdout-lon=${RECIPE_HOLDOUT_LON}") \
             $([ -n "${RECIPE_TIME_BLOCK:-}" ] && echo "--time-block=${RECIPE_TIME_BLOCK}") \
+            $([ -n "${RECIPE_FSQ_LEVELS:-}" ] && echo "--fsq-levels=${RECIPE_FSQ_LEVELS}") \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && echo --anomaly) \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && [ "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}" != "0" ] \
               && echo --eval-every "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}") \

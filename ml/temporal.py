@@ -38,7 +38,12 @@ import torch
 import torch.nn as nn
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model import PixelMAE, codec_from_ckpt
+# InputQuant lives in model.py — E-046 gave it a second caller
+# (ml/model.py:PixelMAE's own FSQ bottleneck), and model.py is the
+# module both sides import. Re-exported from here unchanged, so
+# `from temporal import InputQuant` (ml/rollout_spatial.py) and
+# `tp.InputQuant` (tests) resolve exactly as they did.
+from model import PixelMAE, codec_from_ckpt, InputQuant
 from probe_sequence import ridge_r
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1022,129 +1027,6 @@ def season_ctx(months, mode="month", d=None):
             nxt = dt.date(y + (mm == 12), (mm % 12) + 1, 1)
             spans.append((first, float((nxt - first).days)))
     return np.array([season_feat_of(s, n) for s, n in spans])
-
-
-class InputQuant:
-    """FSQ-style scalar quantization of everything the HEAD READS.
-
-    Chris's capacity hypothesis (2026-08-22): the stage-2 head has too much
-    input for its capacity, and the pentad z is 32 continuous float32
-    dimensions per pixel per step — at K=24 and stencil 145 that is 111,360
-    real numbers entering one forward. FSQ (arxiv 2309.15505, "Finite Scalar
-    Quantization: VQ-VAE Made Simple") is the cheapest way to ask "how much of
-    that does the head actually need?": bound each dimension, round it to one
-    of L levels, and pass the gradient straight through. No codebook, no
-    commitment loss, no EMA, no dead-code problem — the paper's own claim is
-    that this matches VQ-VAE at large codebook sizes while removing all of
-    that machinery.
-
-    INPUTS ONLY, AND THE TARGET STAYS CONTINUOUS. What is under test is what
-    the head can READ, not what it must WRITE: quantizing the target as well
-    would change the objective into "predict a bin index" and make every
-    z-space MSE incomparable with every archived one. So the contract is
-    quantized-state -> TRUE-next-state, and `val_zmse`, `z_t+1` and the roll's
-    own numbers stay in the same units they have always been in.
-
-    The map, per dimension d (`sigma_d` = that dimension's std over train
-    bins, measured once at startup), following the paper's own bound
-    including its even/odd handling:
-
-        half = (L-1)/2 ;  offset = 0.5 if L is even else 0
-        shift = atanh(offset/half)                 (0 when L is odd)
-        g = half * tanh(z/(2*sigma_d) + shift) - offset
-        q = g + (round(g) - g).detach()            FSQ's straight-through
-        z_q = (q + offset) * 2*sigma_d / half      back to z-space units
-
-    THE OFFSET IS WHY "L LEVELS" IS TRUE. Without it an even L gives L-1
-    reachable levels, because tanh never attains +/-1 and the two outermost
-    integers are never rounded to: L=8 without the offset is 7 levels, which
-    would make every bits/dim number in the log a small lie. With it, g lands
-    in (-L/2, L/2 - offset) and round() reaches exactly L integers.
-
-    The de-scale is LINEAR, not atanh: inverting the tanh would send the
-    outermost levels to infinity, and the point of the bound is that the tails
-    ARE the outermost levels. A dimension therefore saturates at
-    +/-2*sigma_d, 95% of a Gaussian, which is a deliberate part of the
-    capacity restriction rather than an accident of it.
-
-    EXACT ZEROS ARE PASSED THROUGH UNCHANGED. A zero in a stencil slot is not
-    a small value, it is the absence of a neighbour (`zj[miss] = 0.0` in
-    ml/rollout_spatial.py, and the same convention in the trainer's
-    `live` mask for --input-znoise); an even L has no zero level, so without
-    this the structural zeros would all become one small nonzero constant.
-    """
-
-    def __init__(self, spec, sigma, d_z):
-        lv = [int(x) for x in str(spec).split(",") if str(x).strip()]
-        if not lv:
-            raise SystemExit(f"--input-quant {spec!r}: no levels")
-        if any(l < 3 for l in lv):
-            # L=2 is degenerate in this parameterisation and not merely
-            # small: half = 0.5 and offset = 0.5 give shift = atanh(1) = inf,
-            # so every input collapses to one value. The FSQ paper's own
-            # level sets start at 3 for the same reason (its published
-            # configurations are 8/6/5-style); refuse rather than train a
-            # head whose input is a constant.
-            raise SystemExit(f"--input-quant {spec!r}: every level count must "
-                             f"be >= 3 (L=2 collapses to a single value in "
-                             f"the bounded-tanh parameterisation)")
-        if len(lv) == 1:
-            lv = lv * d_z
-        if len(lv) != d_z:
-            raise SystemExit(
-                f"--input-quant {spec!r} gives {len(lv)} level counts for "
-                f"d_z {d_z}: pass one number (applied to every dimension) or "
-                f"exactly d_z of them")
-        self.spec = str(spec)
-        self.levels = torch.as_tensor(lv, dtype=torch.float32)
-        self.sigma = torch.as_tensor(np.asarray(sigma, np.float32))
-        assert self.sigma.shape == (d_z,), (self.sigma.shape, d_z)
-        self.d_z = int(d_z)
-        self._half = (self.levels - 1.0) / 2.0
-        self._offset = torch.where(self.levels % 2 == 0,
-                                   torch.full_like(self.levels, 0.5),
-                                   torch.zeros_like(self.levels))
-        self._shift = torch.atanh(self._offset / self._half)
-        self._scale = 2.0 * self.sigma
-        self.bits_per_dim = float(np.mean(np.log2(np.asarray(lv, float))))
-        self.codebook_log2 = float(np.sum(np.log2(np.asarray(lv, float))))
-
-    def to(self, dev):
-        for k in ("levels", "sigma", "_half", "_offset", "_shift", "_scale"):
-            setattr(self, k, getattr(self, k).to(dev))
-        return self
-
-    def __call__(self, z):
-        """z [..., n*d_z] (the stencil flattens slots into the last axis)."""
-        if z is None:
-            return z
-        shp = z.shape
-        assert shp[-1] % self.d_z == 0, (shp, self.d_z)
-        v = z.reshape(-1, self.d_z)
-        half = self._half.to(v.dtype).to(v.device)
-        sc = self._scale.to(v.dtype).to(v.device)
-        off = self._offset.to(v.dtype).to(v.device)
-        sh = self._shift.to(v.dtype).to(v.device)
-        g = half * torch.tanh(v / sc + sh) - off
-        q = g + (torch.round(g) - g).detach()          # FSQ straight-through
-        out = (q + off) * sc / half
-        return torch.where(v == 0, v, out).reshape(shp)
-
-    def describe(self, zsample):
-        """One line of what this costs, measured on real z rather than
-        claimed: bits per dimension, the codebook size the paper counts, and
-        the quantization MSE against the raw z it replaces."""
-        with torch.no_grad():
-            zq = self(zsample)
-            mse = float((zq - zsample).pow(2).mean())
-            var = float(zsample.pow(2).mean())
-        return (f"--input-quant {self.spec}: {self.bits_per_dim:.3f} bits/dim "
-                f"x d_z {self.d_z} = {self.codebook_log2:.1f} bits "
-                f"(codebook 2^{self.codebook_log2:.1f}) · quantization MSE vs "
-                f"raw z {mse:.5f} on a mean-square {var:.5f} z "
-                f"({100.0 * mse / max(var, 1e-12):.2f}% of its energy) · "
-                f"sigma per dim {float(self.sigma.min()):.3f}.."
-                f"{float(self.sigma.max()):.3f}")
 
 
 def season_feat_of(start, span_days):

@@ -31,7 +31,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from model import PixelMAE
+from model import codec_from_ckpt
 from trainprobe import anomaly_transform, probe_now
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -66,7 +66,11 @@ def main():
         sys.exit("ablation measures anomaly-space codecs only")
     X, dynamic = anomaly_transform(X, moy, t_hold, x_hold)
 
-    codec = PixelMAE(n_chan=len(chan), d_z=ck["d_z"])
+    # THROUGH codec_from_ckpt, not by hand. This site hand-built the pilot
+    # architecture from two fields, so it was already wrong for every codec
+    # wider than 128 — and with E-046 it would also silently drop the FSQ
+    # bottleneck, load the state_dict cleanly and ablate a different model.
+    codec = codec_from_ckpt(ck, len(chan))
     codec.load_state_dict(ck["model"])
 
     Xt = torch.from_numpy(np.nan_to_num(X, nan=0.0))

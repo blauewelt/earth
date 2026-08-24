@@ -334,6 +334,16 @@ def codec_from_ckpt_jax(ck, n_chan):
     TOP-LEVEL key of the blob, not one of `args`.
     """
     a = ck.get("args", {})
+    # E-046: the NNX PixelMAE has NO FSQ bottleneck. A quantized codec would
+    # load here parameter-for-parameter and embed a different function of the
+    # input, and the whole point of this port is bit-comparability with the
+    # torch backend. Refuse rather than certify an equivalence that is not one.
+    if str(a.get("fsq_levels", "") or ""):
+        raise SystemExit(
+            f"codec_from_ckpt_jax: this checkpoint was trained with "
+            f"--fsq-levels {a['fsq_levels']!r} (E-046), and the JAX PixelMAE "
+            f"has no FSQ bottleneck. Loading it would produce a codec that "
+            f"matches parameter-for-parameter and embeds something else.")
     model = PixelMAE(n_chan=n_chan, d_z=ck["d_z"],
                      k_time=int(a.get("k_time", 1) or 1),
                      patch=a.get("patch", 1),
