@@ -851,6 +851,17 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
                 "one bin at a time would silently produce embeddings of a "
                 "different thing than it was trained on.")
         T = len(blk_rows)                      # the BLOCK axis is the axis
+        # SCALE THE EMBED BATCH BY THE TOKEN COUNT. The default 8192 was
+        # sized for per-bin samples (C+2 = 42 encoder tokens); a k_time-7
+        # block is 282 tokens and attention activations grow as B*tokens^2,
+        # so the same batch is ~45x the memory — #466 (E-047-HEAD, the first
+        # dispatch to reach a block embed) OOMed a 24 GB card on exactly
+        # this line's downstream encode (1.10 GiB alloc, 314 MiB free).
+        # B * tokens^2 held constant: 8192 * (42/282)^2 = 181 for k_time 7.
+        # Per-bin codecs take the factor-1 branch and are bit-unchanged.
+        tok_bin = X.shape[3] + 2
+        tok_blk = model.k_time * X.shape[3] + 2
+        batch = max(64, int(batch * (tok_bin / tok_blk) ** 2))
     if t_sel is None:
         ts = np.arange(T)
     else:
