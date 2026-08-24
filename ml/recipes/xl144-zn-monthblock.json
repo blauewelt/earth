@@ -1,0 +1,21 @@
+{
+  "_description": "E-047-HEAD: the xl144-zn stage-2 configuration (1024x16, K 24, stencil 145, ring spiral:111-4444-0.71-0.5, znoise 0.7, grad-clip 128 in the window tail) over the MONTH-BLOCK codec e047a-tpu-60k — the JAX/TPU-trained 40M d_z-64 k_time-7 codec that fuses one calendar month of pentad bins into one z (Tier-1 recon audit ACCEPTED 2026-08-24 06:30Z). The head's time axis is MONTHLY: 516 blocks, so K 24 spans two years exactly as the monthly arms did, and no stride flags are passed (refused on blocks by design). WHY THIS RECIPE EXISTS AND xl144-zn-pentad-nolonhold CANNOT BE REUSED: recipe keys OVERRIDE dispatch inputs by construction (`${RECIPE_D_Z:-inputs.d_z}`), so a dispatch of the pentad recipe against this checkpoint carries RECIPE_D_Z 32 into train.py's resume whatever the d_z input says — #457 AND #460 both refused on exactly that contradiction (`d_z: dispatch says 32, checkpoint holds 64`), #460 after 19 minutes of tensor pull and anomaly transform. A top-level input cannot fix a recipe; only a recipe can. STAGE 1 TRAINS NOTHING: dispatch `resume: !e047a-tpu-60k` with `steps: 60000` = the checkpoint's OWN recorded step (read off the file: ck['step'] 60000, ck['args'] d_z 64 512x12 batch 512 time_block month). The dispatch must state: temporal_steps 20000, resume !e047a-tpu-60k, steps 60000, runner, and the window tokens `stencil:145,ring:spiral:111-4444-0.71-0.5,seed:0,sched:expdecay --lr-cooldown-frac 0 --milestone-steps 600 --input-znoise 0.7 --grad-clip 128` — same five recipe-unreachable fields, same reasons, as xl144-zn-pentad-nolonhold documents at length. READING (E-047's registered hypothesis, fusion vs selection): one-step z-ratio clearly below E-045-A2a's 0.0721 = fusing the month beats selecting one pentad bin per month; parity = selection suffices. JAX-TRAINED TIER (ml/CLAUDE.md 3b): never pooled with torch numbers; #465 (the torch same-recipe twin finishing #453) is the cross-framework control.",
+  "_provenance": "Stage-2 geometry field-for-field from ml/recipes/xl144-zn-pentad-nolonhold.json (itself from the published artefact e032xlx600_u1_s0__temporal.pt); znoise 0.7 and grad-clip 128 carried unchanged — NOTE the znoise caveat from that recipe applies here too: 0.7 is an ABSOLUTE sigma sized on the monthly anchor's z-space, and this codec's z-scale is its own; stage2_monitor records input_znoise_rel_pers so the realised ratio is on the record. Codec fields read OFF THE FILE from e047a-tpu-60k.pt on 2026-08-24 (d_z 64, 512x12, heads 4, d_dec 256, batch 512, holdout_lon '0,0', time_block month), matching ml/recipes/f4r2-40M-monthblock-b512.json, the recipe that trained it. NOTHING HAS RUN AT THIS CONFIGURATION: the block-z stage-2 head is a first reading (n=1 tier, 3b).",
+  "tensor": "family4_na025_pentad_r2",
+  "time_block": "month",
+  "d_z": 64,
+  "patch": 1,
+  "codec_d_model": 512,
+  "codec_layers": 12,
+  "codec_heads": 4,
+  "codec_d_dec": 256,
+  "anomaly": "true",
+  "batch": 512,
+  "eval_every": 0,
+  "light_probe_every": 0,
+  "head_probe": "true",
+  "holdout_lon": "0,0",
+  "temporal_d_model": 1024,
+  "temporal_layers": 16,
+  "train_lon_hold": "none"
+}
