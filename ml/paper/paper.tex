@@ -164,7 +164,13 @@ everywhere else ($9$--$19\%$ against $<$$1\%$). Finally, the models now have
 a second, framework-independent implementation in JAX, gated against the
 PyTorch stack at $10^{-7}$--$10^{-5}$ and against an eighteen-times-reproduced
 archived roll, on which a TPU v5litepod-4 trains the 38.0M block codec at
-$0.167$\,s/step against $0.93$ on a rented H100 (\S\ref{sec:jax}).
+$0.167$\,s/step against $0.93$ on a rented H100 (\S\ref{sec:jax}). One
+piece of bookkeeping in the same revision is load-bearing rather than
+cosmetic: Table~\ref{tab:master} now carries the \emph{unpooled} head
+read-out beside the pooled ridge and labels which is the verdict, because
+a section mean annihilates the east--west contrast the transport is made
+of --- and the column is mostly dashes, because the flag that produces it
+was off by default until late in the programme.
 \end{abstract}
 
 \section{Introduction}
@@ -841,8 +847,14 @@ spread $\pm0.5$\,points, so differences $\ge2$ points are real. The
 $\approx15$ after autocorrelation) has a 95\% CI of $\pm0.57$ --- a
 compass, never a verdict; the same configuration has drawn 0.09 and
 0.33 on two seeds. The \textbf{year-blocked k-fold} tests all 240 RAPID
-months once each (SE $\approx0.10$) and is the only probe number we
-argue from. The most instructive failure: a $d_z{=}128$ codec set the
+months once each (SE $\approx0.10$) and is the only probe protocol we
+argue from --- but \emph{which read-out} runs inside it is a second
+decision, and since 2026-08-21 the answer is the \emph{unpooled}
+attention head over the section's individual pixels, with the pooled
+section-mean ridge retained only as the bridge to an archive measured
+before the head existed. Both columns of Table~\ref{tab:master} are that
+k-fold; only the second is a verdict, for the mechanical reason its
+caption gives. The most instructive failure: a $d_z{=}128$ codec set the
 all-time fixed-holdout record (0.528) while the k-fold read 0.166 ---
 the coarse instrument flatters widest exactly where overfitting is
 easiest.
@@ -1141,91 +1153,105 @@ system, remain unoccupied territory.
 \section{Results}\label{sec:results}
 
 \begin{table}[p]
-\centering\small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{llrrrrrlr}
+\centering\footnotesize
+% Ten columns with TWO read-out columns, each carrying a point estimate and
+% an interval, does not fit at \small: measured 53.8pt over \textwidth.
+% footnotesize plus 3pt column separation brings it inside with room to
+% spare, and this table is on its own float page, so the vertical cost is nil.
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llrrrrrlll}
 \toprule
-run & window & $C$ & patch & $d_z$ & steps & chan\%$^\dagger$ & k-fold $r$ [95\% CI] & dip \\
+run & window & $C$ & patch & $d_z$ & steps & chan\%$^\dagger$ &
+\emph{pooled} ridge $r^{\,\S}$ & \textbf{unpooled head} $r^{\,\P}$ & dip \\
 \midrule
-\multicolumn{9}{l}{\emph{coarse tensor ($1^\circ$, 4 Argo levels)}}\\
-pilot4          & NA     & 4  & 1 & 32  & 8k  & $+29.3$ & ---                  & --- \\
-dz8             & NA     & 12 & 1 & 8   & 30k & $+28.6$ & 0.111 [0.01, 0.20]   & --- \\
-dz16            & NA     & 12 & 1 & 16  & 30k & $+30.3$ & 0.151 [0.01, 0.28]   & --- \\
-dz32            & NA     & 12 & 1 & 32  & 30k & $+30.5$ & 0.182 [0.05, 0.31]   & --- \\
-dz64            & NA     & 12 & 1 & 64  & 30k & $+30.6$ & 0.308 [0.13, 0.46]   & 16\% \\
-dz128           & NA     & 12 & 1 & 128 & 30k & $+30.2$ & 0.166 [0.07, 0.30]   & --- \\
-wind14          & NA     & 14 & 1 & 64  & 30k & $+35.6$ & \textbf{0.604} [0.47, 0.72] & 50\% \\
-global14        & global & 14 & 1 & 64  & 30k & $+30.6$ & \textbf{0.602} [0.46, 0.73] & 50\% \\
-global14b$^\ast$& global & 14 & 1 & 64  & 30k & $+30.9$ & 0.556 [0.43, 0.68]   & --- \\
-global15sst     & global & 15 & 1 & 64  & 30k & $+30.8$ & 0.582 [0.43, 0.71]   & 47\% \\
+\multicolumn{10}{l}{\emph{coarse tensor ($1^\circ$, 4 Argo levels)}}\\
+pilot4          & NA     & 4  & 1 & 32  & 8k  & $+29.3$ & ---                & ---                  & --- \\
+dz8             & NA     & 12 & 1 & 8   & 30k & $+28.6$ & 0.111 [0.01, 0.20] & ---                  & --- \\
+dz16            & NA     & 12 & 1 & 16  & 30k & $+30.3$ & 0.151 [0.01, 0.28] & ---                  & --- \\
+dz32            & NA     & 12 & 1 & 32  & 30k & $+30.5$ & 0.182 [0.05, 0.31] & ---                  & --- \\
+dz64            & NA     & 12 & 1 & 64  & 30k & $+30.6$ & 0.308 [0.13, 0.46] & ---                  & 16\% \\
+dz128           & NA     & 12 & 1 & 128 & 30k & $+30.2$ & 0.166 [0.07, 0.30] & ---                  & --- \\
+wind14          & NA     & 14 & 1 & 64  & 30k & $+35.6$ & 0.604 [0.47, 0.72] & ---                  & 50\% \\
+global14        & global & 14 & 1 & 64  & 30k & $+30.6$ & 0.602 [0.46, 0.73] & \textbf{0.635} [0.53, 0.74] & 50\% \\
+global14b$^\ast$& global & 14 & 1 & 64  & 30k & $+30.9$ & 0.556 [0.43, 0.68] & ---                  & --- \\
+global15sst     & global & 15 & 1 & 64  & 30k & $+30.8$ & 0.582 [0.43, 0.71] & ---                  & 47\% \\
 \midrule
-\multicolumn{9}{l}{\emph{deep tensor ($1^\circ$, 8 Argo levels; \S\ref{sec:families})}}\\
-patch24         & global & 24 & \textbf{3} & 64 & 40k & $+32.0^\ddagger$ & 0.543 [0.43, 0.66] & 27\% \\
-pixel25         & global & 25 & 1 & 64 & 40k & $+30.9^\ddagger$ & 0.536 [0.38, 0.68] & \textbf{59\%} \\
-pixel24         & global & 24 & 1 & 64 & 40k & --- & 0.515 [0.41, 0.63] & --- \\
-pixel24-30k     & global & 24 & 1 & 64 & 30k & --- & 0.585 [0.45, 0.71] & --- \\
-pixel24-60k     & global & 24 & 1 & 64 & 60k & --- & 0.549 [0.42, 0.67] & --- \\
-patch24-30k     & global & 24 & 3 & 64 & 30k & --- & 0.551 [0.42, 0.68] & --- \\
-patch24-1M      & global & 24 & 3 & 64 & \textbf{1M} & $+32.1^\ddagger$ & 0.571 [0.42, 0.70] & --- \\
-patch24-seed2   & global & 24 & 3 & 64 & 40k & --- & 0.531 [0.40, 0.65] & 27\% \\
-pixel24-seed2   & global & 24 & 1 & 64 & 40k & --- & 0.564 [0.44, 0.69] & --- \\
-\textbf{big10M} (10.26M) & global & 24 & 3 & 64 & 60k & --- & \textbf{0.578} [0.45, 0.70] & 26\% \\
+\multicolumn{10}{l}{\emph{deep tensor ($1^\circ$, 8 Argo levels; \S\ref{sec:families})}}\\
+patch24         & global & 24 & \textbf{3} & 64 & 40k & $+32.0^\ddagger$ & 0.543 [0.43, 0.66] & \textbf{0.690} [0.57, 0.78] & 27\% \\
+pixel25         & global & 25 & 1 & 64 & 40k & $+30.9^\ddagger$ & 0.536 [0.38, 0.68] & \textbf{0.617} [0.49, 0.73] & \textbf{59\%} \\
+pixel24         & global & 24 & 1 & 64 & 40k & --- & 0.515 [0.41, 0.63] & ---                  & --- \\
+pixel24-30k     & global & 24 & 1 & 64 & 30k & --- & 0.585 [0.45, 0.71] & ---                  & --- \\
+pixel24-60k     & global & 24 & 1 & 64 & 60k & --- & 0.549 [0.42, 0.67] & ---                  & --- \\
+patch24-30k     & global & 24 & 3 & 64 & 30k & --- & 0.551 [0.42, 0.68] & ---                  & --- \\
+patch24-1M      & global & 24 & 3 & 64 & \textbf{1M} & $+32.1^\ddagger$ & 0.571 [0.42, 0.70] & --- & --- \\
+patch24-seed2   & global & 24 & 3 & 64 & 40k & --- & 0.531 [0.40, 0.65] & 0.654 [0.54, 0.75] & 27\% \\
+pixel24-seed2   & global & 24 & 1 & 64 & 40k & --- & 0.564 [0.44, 0.69] & ---                  & --- \\
+\textbf{big10M} (10.26M) & global & 24 & 3 & 64 & 60k & --- & 0.578 [0.45, 0.70] & --- & 26\% \\
 \midrule
-\multicolumn{9}{l}{\emph{quarter-degree tensor ($0.25^\circ$ NA, 16 Argo levels, SSH; \S\ref{sec:qd})}}\\
-f3-pilot        & NA $0.25^\circ$ & 39 & 3 & 64 & 40k & --- & \textbf{0.620} [0.48, 0.74]$^\S$ & 46\% \\
-\textbf{f3-anchor41M} (40.7M) & NA $0.25^\circ$ & 39 & 3 & 64 & 60k & $+31.5$ & 0.631 [0.51, 0.73]$^\S$ & \textbf{51\%} \\
-f3-anchor41M-nolonhold & NA $0.25^\circ$ & 39 & 3 & 64 & 60k & --- & 0.613 [0.49, 0.72]$^\S$ & 44\% \\
+\multicolumn{10}{l}{\emph{quarter-degree tensor ($0.25^\circ$ NA, 16 Argo levels, SSH; \S\ref{sec:qd})}}\\
+f3-pilot        & NA $0.25^\circ$ & 39 & 3 & 64 & 40k & --- & 0.620 [0.48, 0.74] & ---   & 46\% \\
+\textbf{f3-anchor41M} (40.7M) & NA $0.25^\circ$ & 39 & 3 & 64 & 60k & $+31.5$ & 0.631 [0.51, 0.73] & \textbf{0.662} [0.56, 0.75] & \textbf{51\%} \\
+f3-anchor41M-nolonhold & NA $0.25^\circ$ & 39 & 3 & 64 & 60k & --- & 0.613 [0.49, 0.72] & ---  & 44\% \\
 \midrule
-\multicolumn{9}{l}{\emph{pentad and daily tensors (finer time axes, r2;
-\S\ref{sec:cadence}) --- own baselines$^\P$}}\\
-f4r2-40M (run-415) & NA pentad & 40 & 1 & 32 & 197k & --- & 0.637 [0.58, 0.69]$^\P$ & 32\% \\
-f5-40M (run-419) & NA daily & 39 & 1 & 32 & 200k & --- & 0.612 [0.56, 0.66]$^\P$ & --- \\
-f4r2-monthblock (TPU) & NA month blk & 40 & 1 & 64 & 60k & --- & ---$^\parallel$ & --- \\
+\multicolumn{10}{l}{\emph{pentad and daily tensors (finer time axes, r2;
+\S\ref{sec:cadence}) --- own baselines, and their own $n$}}\\
+f4r2-40M (run-415) & NA pentad & 40 & 1 & 32 & 197k & --- & 0.637 [0.58, 0.69] & \textbf{0.659} [0.60, 0.72] & 32\% \\
+f5-40M (run-419) & NA daily & 39 & 1 & 32 & 200k & --- & 0.612 [0.56, 0.66] & ---     & --- \\
+f4r2-monthblock (TPU) & NA month blk & 40 & 1 & 64 & 60k & --- & ---$^\parallel$ & ---$^\parallel$ & --- \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Master table: every codec run.} Generated from each
 run's own JSON by \texttt{ml/make\_table.py}, not transcribed.
+\textbf{There are two read-out columns and they are not interchangeable.}
+$^\S$\emph{Pooled ridge} is \texttt{probe\_kfold}'s ridge on the
+\emph{section-mean} embedding. It is the comparability bridge across this
+whole archive and it is never a verdict: geostrophic transport at
+$26.5^\circ$N is the east--west contrast \emph{across} the section, and a
+section mean is precisely the statistic in which that contrast cancels ---
+measured on the anchor's own embeddings, $z$ along the section correlates
+$r=0.99$ at one cell, $0.88$ at five and $0.35$ at eighty, so the mean
+averages about \textbf{2.5 effective independent pixels of 265}.
+$^\P$\textbf{Unpooled head} is \texttt{probe\_head}'s attention query over
+the section's \emph{individual} pixels (\S\ref{sec:ladder}) --- the
+verdict column. It is mostly empty because the flag that produces it
+defaulted to off until 2026-08-21: it exists in \textbf{12 of 204}
+archived bundles. \textbf{A dash means not measured and is never a copied
+pooled number}; the missing rows are being filled by eval-only ladders
+over the already-published checkpoints, which retrain nothing.
+\textbf{Each column has its own bar and they must not be crossed.} The
+pooled bar is the wind-stress-only \emph{ridge}: $r=0.531$ on the
+$1^\circ$ tensors, $0.568$ on the quarter-degree, $0.670$ at pentad and
+$0.607$ at daily, all on the same folds. The unpooled bar is the same head
+fed wind stress with nothing pooled, and where it has been measured ---
+the pentad section --- it reads $0.690$; there is no unpooled wind bar on
+the monthly section. The matched raw-data controls, the head fed section
+values instead of embeddings, are $0.659$ ($1^\circ$ deep, $3\times3$),
+$0.628$ (quarter-degree monthly) and $0.693$ (pentad). \textbf{Read the
+pentad row against those and the codec loses}: run-415's own head
+($0.659$) sits below both its raw-$3\times3$ control ($0.693$) and the
+unpooled wind bar ($0.690$), where its pooled figure ($0.637$) merely sat
+below a pooled bar. Sample sizes differ by cadence --- 240 monthly
+transport labels, 1{,}459 pentad, 7{,}290 daily --- so a CI in the bottom
+block is not comparable with one above it, and neither is a point estimate.
 $^\dagger$chan\% is comparable only within one channel set (its
-persistence baseline moves with the channels); cross-run comparison goes
-through the year-blocked k-fold RAPID correlation. Dip = share of the
-winter 2009--10 collapse amplitude captured out-of-fold. The
-wind-stress-only ridge baseline (no embedding) scores $r=0.531$ --- the
-line every codec must beat \emph{on the $1^\circ$ tensors}; the same
-baseline re-measured on the quarter-degree tensor is $0.568$, which is
-what the $^\S$ row must be read against --- never against $0.531$.
-k-fold $r$ here is the POOLED RIDGE rung of
-the probe ladder (the comparable-across-time instrument); the unpooled
-attention-head values (\S\ref{sec:ladder}) are higher for every codec
-measured: global14 $0.635$, pixel25 $0.617$, patch24 $\mathbf{0.690}$
-and $0.654$ on its second seed, and f3-anchor41M $\mathbf{0.662}$
-[0.56, 0.75] against $0.628$ [0.51, 0.73] for the matched raw-$3\times3$
-head on the same section --- a pretraining margin of $+0.034$ from one
-seed, reported here only because the pooled row above it would otherwise
-be read as the codec's ceiling. $^\ast$global14b is an exact-configuration
-replication on a different runner: it measures codec-training seed noise
-on the k-fold at $\approx\pm0.05$ --- the four pixel24/patch24 rows,
-spanning 0.515--0.585 across 30k--60k steps, are consistent with that
-noise and show no step-count trend; the patch24-1M row settles the
-saturation question directly --- every probe metric is flat from the
-first 50k-step probe to the millionth step
-(\S\ref{sec:limits}), so the pilot size is capacity-limited, not
-compute-limited. $^\ddagger$in-training probe at the
-final step, not the post-hoc trainprobe used for coarse-tensor rows. Stage-2 figures for global14b and
-global15sst are \emph{withdrawn}, not stale: both were trained on a
-poisoned embedding cache (\S\ref{sec:limits}).
-$^\P$\textbf{The bottom block has its own baselines and none of its rows
-may be read against the rows above it}: r2 channels on finer time axes, so
-the channel set \emph{and} the label count both move. The wind-only ridge
-on the same folds is $0.670$ at pentad (1{,}459 labels) and $0.607$ at
-daily (7{,}290), against $0.568$ monthly (240) --- so f4r2-40M sits
-$0.033$ \emph{below} its own bar and f5-40M ties its own to within
-$0.005$. Both are pooled at a cadence with no unpooled read-out and no
-measured replicate band (\S\ref{sec:cadence}). $^\parallel$No k-fold: the
-block codec's probe path is block-shaped and its full probe did not run;
-its evidence is \S\ref{sec:block}'s reconstruction audit and a light probe
-of $0.242$ at 60k. It is JAX/TPU-trained and so never pooled with a
-PyTorch number. Codecs still training or not yet dispatched carry no
-number and are Table~\ref{tab:inflight}.}
+persistence baseline moves with the channels). Dip = share of the
+winter 2009--10 collapse amplitude captured out-of-fold.
+$^\ast$global14b is an exact-configuration
+replication on a different runner: codec-seed noise on the pooled k-fold
+is $\approx\pm0.05$, which the four pixel24/patch24 rows (0.515--0.585
+across 30k--60k steps) are consistent with, and patch24-1M is flat from
+the first probe to the millionth step (\S\ref{sec:limits}). The two
+patch24 rows are a codec-seed pair and are why no single-seed number in
+either read-out column is a level: pooled moves $0.012$ between them,
+unpooled $0.036$. $^\ddagger$in-training probe at the
+final step. Stage-2 figures for global14b and
+global15sst are \emph{withdrawn}: a poisoned embedding cache
+(\S\ref{sec:limits}).
+$^\parallel$The month-block codec has neither number: no probe bundle was
+archived for it, its probe path is block-shaped, and it is JAX/TPU-trained
+and so never pooled with a PyTorch number (\S\ref{sec:jax}). Its evidence
+is \S\ref{sec:block}'s reconstruction audit. Codecs still training or not
+yet dispatched carry no number at all and are Table~\ref{tab:inflight}.}
 \label{tab:master}
 \end{table}
 
@@ -2336,7 +2362,11 @@ was predicted from a measurement: the retrained decoder audit of
 \S\ref{sec:recon} already put the codec's reconstruction error on held-out
 longitudes at $1.43\%$ against $0.85\%$ on trained ones, i.e.\ the
 representation crossed the block essentially intact. The band was never a
-stage-1 failure. We note in passing a code gap the attempt exposed: no
+stage-1 failure. It is also, and this is the honest gap, a codec with
+\emph{no unpooled read-out at all}: its dispatch inherited the head
+probe's off-by-default flag, so the one instrument \S\ref{sec:metrics}
+calls the verdict was never run on it. Table~\ref{tab:master} shows that
+as a dash rather than filling it with the pooled figure. We note in passing a code gap the attempt exposed: no
 pooled k-fold result in this programme's history is paired-testable, because
 the k-fold script computes its per-month predictions and then writes only
 the summary. Two kilobytes per target would fix every future comparison.
@@ -2569,6 +2599,28 @@ does not rescue the comparison: restricting the monthly heads to the same
 eight fast channels still reads $0.925$/$0.926$. The composition difference
 is real, it must be stated whenever the two numbers appear together, and it
 is not the explanation.
+
+\paragraph{And on the transport read-out the codec loses to its own
+controls.} \S\ref{sec:ladder} reported, on the r1 pentad tensor, that a
+frozen monthly representation, a purpose-trained pentad one and no
+representation at all land within $0.011$ of each other once the read-out
+sees unpooled section pixels. The r2 baseline codec sharpens that into
+something less comfortable. Read through the identical unpooled head over
+the identical 1{,}459 pentad transport bins, run-415 scores $0.659$
+[$0.598$, $0.716$] --- against $\mathbf{0.693}$ [$0.633$, $0.746$] for the
+same head fed \emph{raw} $3\times3$ section data with no codec anywhere in
+the path, and $\mathbf{0.690}$ [$0.620$, $0.751$] for the same head fed
+nothing but wind stress. The codec is below both of its own matched bars.
+Its \emph{pooled} figure ($0.637$) sat below a pooled bar too, but that
+comparison was between two blunt instruments; this one is between the
+verdict instrument and the two controls that make it interpretable, and it
+is the same conclusion arrived at by a sharper route. The intervals
+overlap heavily and each cell is one seed, so what this licenses is a
+direction and not a level --- and the direction is that at 5-day cadence
+this representation adds no transport information to the raw fields.
+Nothing about it is a statement on the codec's job in
+\S\ref{sec:cadence}, which is to make the state \emph{attendable} so it
+can be rolled forward; that scoreboard has no raw-pixel entrant.
 
 \subsection{The cadence ladder: intrinsic difficulty, not a
 bug}\label{sec:ladder-cadence}
