@@ -87,6 +87,77 @@ Stage-1 features `ml/train.py` has and this deliberately does not:
   and the default trajectory must be the torch one. There is no EMA and no
   gradient accumulation on either side.
 
+## What is ported (tier 3b, the stage-2 trainer)
+
+| here | mirrors |
+|---|---|
+| `train_stage2.py` | `ml/temporal.py`'s stage-2 path: the train/val window pools (`ok_t` ∧ `ok_p`, and the two-masks rule), the whole-window MSE objective, `--input-znoise`, `--grad-clip`, the four schedules out of `make_sched`, `--K` with `k_max = K`, `--time-stride`/`--time-offset`, the block-z axis adoption, milestone checkpoints, resume, the in-training pooled rapid probe, and `metrics.jsonl` with THE SAME KEYS |
+| `convert.export_temporal` / `export_temporal_pt` | the head's half of the two-way converter — a `.pt` the UNCHANGED torch eval scripts roll |
+| `tpu_train_s2.sh` | `tpu_train.sh`'s lifecycle (self-reap, progress watchdog, bucket resume, apt-lock fix) plus the staging stage 1 does not need: the tensor AND the Z |
+
+**Why it exists.** Chris's span-fixed ladder (E-045.x) holds the context span
+at two years and grows the frame count as the step shrinks — `--K` 48, 72, 144.
+Attention is quadratic in K, so stage-2 compute on that ladder is ~K²-heavy,
+which is exactly where the measured TPU advantage (4.5–8×) applies. First use:
+an E-045.1-class arm re-run on TPU as the cross-framework twin.
+
+**A fresh head is initialised by CONSTRUCTING THE TORCH MODULE under
+`torch.manual_seed(seed)` and converting it**, and that is a measurement, not a
+preference. Flax's defaults are not `nn.Module`'s — `nn.Embedding` is N(0, 1)
+and `nnx.Embed` is std ≈ 1/√d_model, 5.7× smaller at d_model 32 — and in a
+causal transformer whose only sense of *where in the window* it is comes from
+`pos`, that is not cosmetic. Measured at 300 toy steps on an identical Z, an
+identical pool and an identical schedule: the flax-initialised head read
+model/persistence **1.46 / 1.87 / 1.68** at seeds 0/1/2 against the torch
+trainer's **0.71 / 0.87 / 0.77** — systematically ~2× worse at every seed. On a
+cross-framework twin that would have been read as "the framework", which is the
+box effect `ml/CLAUDE.md` §3b warns about, manufactured by a default nobody
+chose. Matching the STREAM rather than the distribution means a JAX run and a
+torch run at the same seed begin from bit-identical weights, and init stops
+being a variable at all.
+
+Stage-2 features `ml/temporal.py` has and this deliberately does not — each
+REFUSES rather than being silently absent, so a dispatch string copied from a
+torch arm fails loudly instead of training something else:
+
+- **`--input-quant` — the KNOWN GAP.** The quantizer is part of the model's
+  CONTRACT (`ml/rollout_spatial.py` re-applies it at roll time from
+  `input_quant_sigma`), so a head trained without it and labelled with it would
+  be rolled through a grid it never saw. A-arm parity on quantized inputs waits
+  for this; train quantized arms on the torch stack.
+- **`--unroll`>1, `--unroll-wide`, `--unroll-probs`, `--direct`** — each feeds
+  predictions back and each is its own experiment.
+- **`--target-bins-argo`, `--season-dropout`** — E-044c pool/regulariser knobs.
+- **the full probe ladder (`probe_kfold` / `probe_head`) and the ROLL.** They
+  are eval and they run unchanged under torch on the exported head, which is
+  `JAX_PORT.md` §1b's cheap validation direction. `rapid_probe_kfold` is
+  therefore ABSENT from the results file rather than present and empty.
+
+The exported head carries **no `opt`/`sched`**, deliberately: optax state is not
+torch Adam state, mapping it is out of scope (§3.3), and
+`--resume-temporal`'s refusal on a blob missing them is correct for this
+artefact. The resumable state is the sibling `.npz`.
+
+### Staging the Z on a node, and a bug in the published cache
+
+`tpu_train_s2.sh` takes either a `Z_ASSET` name (pull the published chunks from
+`embed-cache-v1`) or nothing (embed on-node from the codec asset). It assembles
+the chunks **bounded by the `.npy` header, not by the first missing chunk**,
+and that is a fix rather than a refinement.
+
+Measured against `embed-cache-v1` on 2026-08-24:
+`Z_8b639abe36_37e146384b.npy` (the pentad cache for run-415's codec) has
+**twelve** chunk assets, of which `.af` is a short 852,643,840 B **in the middle
+of the run**. Chunk `aa`'s header declares `(1571, 86698, 32) float16` =
+8,716,963,840 B = exactly `aa..af`; `ag..al` are the orphaned tail of the
+12-chunk `(3142, 86698, 32)` cache that `ml/EXPERIMENTS.md` records #427
+pushing (17,433,927,552 B). `ml/embed_cache_sync.py:pull` concatenates until a
+fetch 404s, so today it produces 16,713,707,392 B — matching neither publish —
+and `verify()` correctly discards it. **That cache is currently unpullable by
+the operational path, and a puller pays the download and then the ~8.5 h
+rebuild.** `ml/embed_cache_sync.py` was NOT changed here: it is on the
+operational path, and a fix to it belongs to its own change with its own test.
+
 `train_stage1.py` **imports** the shared numpy plumbing (`anomaly_transform`,
 `ridge_r`, `rapid_section`, `light_rows`, `lon_holdout_mask`, `fit_schedule`,
 `obs_any_chunked`, `pool_idx`, `LazyPixels`) rather than copying it, per
@@ -106,6 +177,7 @@ python3 tests/test_jaxport_parity.py      # tier 1 — CPU, fp32, exits 0/1
 python3 tests/test_jaxport_embed.py       # tier 2 embedding path, synthetic
 python3 tests/test_jaxport_roll.py        # tier 2 rollout path, synthetic
 python3 tests/test_jaxport_train.py       # tier 3 gates G4a-G4e, synthetic
+python3 tests/test_jaxport_train_s2.py    # tier 3b gates G5a-G5e, synthetic
 ```
 
 None of them needs the tensor or a checkpoint.
@@ -128,6 +200,24 @@ equality — the RNG streams cannot match), **G4d** the export round trip
 (torch→jax→torch state_dicts IDENTICAL; a JAX codec exported to `.pt` and
 re-encoded under torch matches to 1e-5) and **G4e** k_time=7 forward parity
 plus the converter's refusals across the k_time boundary.
+
+`test_jaxport_train_s2.py` is the tier-3b gate set: **G5a** loss parity with
+the noise INJECTED as an array rather than drawn (two RNGs cannot be made to
+agree, so `apply_znoise` takes the perturbation as an argument and both
+frameworks get the same one), at stencil 1 and 9, plus the window gather pinned
+elementwise against `ml/temporal.py:gather_stencil`; **G5b** one-step parity —
+the GRADIENTS to 1e-6, plain SGD to 1e-6, and AdamW stated four ways because
+its first update is ~sign(g) and is therefore bounded by lr and hypersensitive
+below it; **G5c** 300 toy steps against the REAL `ml/temporal.py` as a
+subprocess on the SAME Z, so the encoder, the pool and the eval draw are all
+held fixed and the persistence baselines can be required to agree rather than
+merely banded; **G5d** the torch-format head round trip plus grad-clip and
+znoise pinned by targeted checks; **G5e** the block-z axis adoption against
+`ml/temporal.py`'s own block branch. Measured 2026-08-24, CPU, fp32: G5a
+**4.8e-7**, G5b grads **7.5e-8** / SGD **1.5e-8**, G5c ratio **1.238** inside
+the pre-registered band [0.5, 2.0] with the persistence baselines agreeing to
+**6.9e-8** relative, G5d **1.9e-6**, G5e identical labels, fused `t_hold` and
+remapped RAPID rows.
 
 Six checks: the shared encoder layer (plain and causal), PixelMAE at patch 1
 and patch 3 (including the float16-widening path), TemporalTransformer at

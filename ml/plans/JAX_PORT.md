@@ -1,9 +1,68 @@
 # JAX port — effort assessment
 
 **Status: TIER 1 LANDED, TIER 2 EMBEDDING PATH LANDED (2026-08-21), TIER 3
-STAGE-1 LANDED (2026-08-23).** §§2–6 are the original assessment.
-`ml/jaxport/` holds the models, the two-way converter, `embed_everything_jax`,
-the rollout slice, and now `train_stage1.py` + `tpu_train.sh`. Gates so far:
+STAGE-1 LANDED (2026-08-23), TIER 3b STAGE-2 LANDED (2026-08-24).** §§2–6 are
+the original assessment. `ml/jaxport/` holds the models, the two-way converter,
+`embed_everything_jax`, the rollout slice, `train_stage1.py` + `tpu_train.sh`,
+and now `train_stage2.py` + `tpu_train_s2.sh`. Gates so far:
+
+- **G5 PASSED (stage-2), five gates, measured 2026-08-24, CPU, fp32.**
+  **G5a** loss parity — identical converted head weights, identical window
+  batch and the IDENTICAL noise array agree to **4.8e-7** (gate 1e-5) at
+  stencil 1 and 9 with `--input-znoise` off and on, and the window gather is
+  **bit-identical** to `ml/temporal.py:gather_stencil`. The noise is INJECTED
+  as an array rather than drawn: two RNG streams cannot be made to agree, so
+  `apply_znoise` takes the perturbation as an argument and the gate measures
+  the arithmetic instead of two samplers. **G5b** one-step parity — the
+  GRADIENTS agree to **7.5e-8** (gate 1e-6, and this is the line that says the
+  objective matches), plain SGD at lr 1e-2 gives max |Δweight| **1.5e-8** (gate
+  1e-6), AdamW gives **9.3e-5** overall against a gate of **lr** (the exact
+  bound on a first Adam step, since the update is ~sign(g)), **2.4e-7** over
+  the 28,853 entries with |g| > 1e-6, and **2.4e-7** over every tensor except
+  `self_attn.in_proj_bias` — whose two worst entries carry gradients of 7e-10
+  and 4e-10 and are where the entire discrepancy lives. **G5c** 300 toy steps
+  against the REAL `ml/temporal.py` as a subprocess **on the same Z**: torch
+  reads model/persistence 0.0048/0.0067 = **0.7105**, `train_stage2.py` reads
+  0.0059/0.0067 = **0.8798**, ratio **1.238** inside the pre-registered band
+  [0.5, 2.0] — and because both runs share the Z, the pool and the eval draw,
+  the PERSISTENCE baselines are required to agree and do, to **6.9e-8**
+  relative, which is a same-population check no band can make. **G5d** the head
+  round trip — a perturbed JAX head exported with `convert.export_temporal_pt`
+  loads into the torch `TemporalTransformer` with `strict=True` under the same
+  reconstruction `rollout_spatial` makes (k_max off `pos.weight`, n_heads 4)
+  and forward-matches to **1.9e-6**; `--grad-clip` at 10× the norm is
+  **bit-identical** to unclipped and at norm/4 equals scaling by CLIP/norm to
+  2.3e-10; `--input-znoise` leaves dead slots at **exact zeros** and moves live
+  ones by exactly σ·noise. **G5e** the block-z axis adoption returns the same
+  labels, the same fused `t_hold` and the same remapped RAPID rows as
+  `ml/temporal.py`'s block branch. Reproduce:
+  `python3 tests/test_jaxport_train_s2.py`.
+
+  **G5c FAILED FIRST, AND THE FAILURE WAS A REAL FINDING ABOUT THE PORT.** At
+  ratio 2.057 it sat outside the band, and three seeds showed it was not noise:
+  the JAX head read 1.46 / 1.87 / 1.68 against the torch trainer's 0.71 / 0.87
+  / 0.77 on an identical Z, pool and schedule. The cause was INITIALISATION —
+  flax's defaults are not `nn.Module`'s, and the one that matters is the
+  positional table (`nn.Embedding` N(0,1) vs `nnx.Embed` std ≈ 1/√d_model,
+  5.7× smaller at d_model 32) in a causal transformer whose only sense of
+  where-in-the-window it is comes from `pos`. On a cross-framework twin that
+  gap would have been attributed to the framework: **the box effect of
+  `ml/CLAUDE.md` §3b, manufactured by a default nobody chose.** The fix removes
+  the variable rather than compensating for it — a fresh head is initialised by
+  constructing the torch module under `torch.manual_seed(seed)` and converting
+  it, so a JAX run and a torch run at the same seed begin from bit-identical
+  weights. The band was not widened.
+
+  **What tier 3b does NOT cover.** `--input-quant` REFUSES and is the known
+  gap: the quantizer rides the checkpoint args and `ml/rollout_spatial.py`
+  re-applies it at roll time, so A-arm parity on quantized inputs waits. So do
+  `--unroll`>1, `--unroll-wide`, `--unroll-probs`, `--direct`,
+  `--target-bins-argo` and `--season-dropout`. The full probe ladder
+  (`probe_kfold`/`probe_head`) and the ROLL are not ported at all — they run
+  unchanged under torch on the exported head, which is §1b's cheap validation
+  direction. No TPU run has been made: these gates are CPU, and the first
+  TPU-trained stage-2 number is a NEW TIER under `ml/CLAUDE.md` §3b that buys
+  its own replication.
 
 - **G4 PASSED (stage-1 only), and it is five gates rather than the one §5
   pre-registered** — a from-scratch toy run tracking the torch curve is the
@@ -236,7 +295,23 @@ the number the port must reproduce and the tolerance it inherits:
   `tests/test_jaxport_train.py`, CPU, no network. **PASSED 2026-08-23** —
   numbers at the top of this file.
 
+- **G5 (tier 3b, the stage-2 trainer):** the same five shapes as G4, moved onto
+  the head — **G5a** loss parity on one identical window batch with an
+  INJECTED noise array (1e-5), **G5b** one-step update parity (gradients 1e-6;
+  SGD 1e-6; Adam bounded by lr overall, 1e-6 where |g| > 1e-6 and 1e-6 off the
+  attention input-projection biases), **G5c** 300 toy steps against the REAL
+  `ml/temporal.py` **on the same Z**, banded [0.5, 2.0] on the
+  model/persistence ratio with the PERSISTENCE baselines required to agree to
+  1e-4 relative, **G5d** the `jax → .pt → torch` head round trip (1e-5) plus
+  grad-clip and znoise semantics each pinned by a targeted check, and **G5e**
+  the block-z axis adoption against `ml/temporal.py`'s own block branch. All
+  five are `tests/test_jaxport_train_s2.py`, CPU, no network.
+  **PASSED 2026-08-24** — numbers at the top of this file.
+
 A gate that fails is a finding about the port, never something to widen.
+G5c is the worked example: it failed, three seeds showed the failure was
+systematic rather than noise, and the fix was to the port (torch's own
+initialisation) rather than to the band.
 
 ## 6 · Decisions to make before dispatch
 
