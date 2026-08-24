@@ -77,6 +77,16 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+**18:00Z 08-24 — A10: THE ALPHABET WIN DOES NOT TRAVEL.** **E-045-A10 (#458, A7's
+half-month configuration + `--input-quant 8`): final 20k ratio 0.1692** (z_mse 4.5391 /
+persistence 26.8270) against A7's 0.1620 — +0.007, parity-to-slightly-worse, where the
+same lattice bought −0.014 at the 5-day rung (A9's 0.4916 vs 0.5056/0.50447). READING:
+input quantization helps exactly and only where the z is noise-dominated — consistent
+with the white-innovation-floor account of the 5-day regime (denoising the input matters
+when the input is mostly noise), and it sharpens E-046: the FSQ codec's case rests on the
+pentad rung, and a coarser-cadence FSQ codec has no measured support. n=1 (§3b). The
+in-training pooled probe read 0.567 at 20k, in band.
+
 **14:30Z 08-24 — E-045.x, THE SPAN-FIXED LADDER (Chris's design, 14:15Z).** The original
 ladder held K=24 frames and let context span shrink with the stride (720 d at 30 d steps
 → 120 d at 5 d steps) — step size and span were CONFOUNDED, which Chris caught. The new
