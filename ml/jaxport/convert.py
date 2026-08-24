@@ -334,16 +334,36 @@ def codec_from_ckpt_jax(ck, n_chan):
     TOP-LEVEL key of the blob, not one of `args`.
     """
     a = ck.get("args", {})
-    # E-046: the NNX PixelMAE has NO FSQ bottleneck. A quantized codec would
-    # load here parameter-for-parameter and embed a different function of the
-    # input, and the whole point of this port is bit-comparability with the
-    # torch backend. Refuse rather than certify an equivalence that is not one.
-    if str(a.get("fsq_levels", "") or ""):
+    # E-046/E-048: THE BOTTLENECK IS PART OF THE ARCHITECTURE and it carries
+    # no parameters, so a loader that ignored it would build a model whose
+    # `load_pixelmae` succeeds, whose leaf count matches to the byte, and
+    # whose every z is a different function of the input. This used to REFUSE
+    # any quantized checkpoint, because the NNX PixelMAE had no bottleneck;
+    # E-048 gives it the same one (levels AND ladders, off the same
+    # `ml/fsq_ladder.py` definitions), so the refusal narrows to what this
+    # revision genuinely cannot rebuild — the same unknown-`fsq_*` contract
+    # ml/model.py:codec_from_ckpt states, in the same words, because a
+    # checkpoint written by a later revision must not load here as something
+    # simpler and be scored as one.
+    fsq = str(a.get("fsq_levels", "") or "")
+    fsq_ladder = str(a.get("fsq_ladder", "uniform") or "uniform")
+    fsq_fit = str(a.get("fsq_ladder_fit", "") or "")
+    known = {"fsq_levels", "fsq_ladder", "fsq_exp_base", "fsq_ladder_fit",
+             "fsq_auto_n", "fsq_auto_step"}
+    unknown = sorted(k for k in a if str(k).startswith("fsq_")
+                     and k not in known)
+    if unknown:
         raise SystemExit(
-            f"codec_from_ckpt_jax: this checkpoint was trained with "
-            f"--fsq-levels {a['fsq_levels']!r} (E-046), and the JAX PixelMAE "
-            f"has no FSQ bottleneck. Loading it would produce a codec that "
-            f"matches parameter-for-parameter and embeds something else.")
+            f"codec_from_ckpt_jax: this checkpoint carries FSQ argument(s) "
+            f"{unknown} that this revision of ml/jaxport/models.py does not "
+            f"implement. Refusing rather than rebuilding a codec whose "
+            f"bottleneck is not the one that was trained.")
+    if fsq and fsq_ladder == "auto" and not fsq_fit:
+        raise SystemExit(
+            "codec_from_ckpt_jax: this checkpoint says --fsq-ladder auto but "
+            "carries no `fsq_ladder_fit`, so the per-dimension ladder it "
+            "trained with is not recorded. Refusing rather than guessing a "
+            "lattice.")
     model = PixelMAE(n_chan=n_chan, d_z=ck["d_z"],
                      k_time=int(a.get("k_time", 1) or 1),
                      patch=a.get("patch", 1),
@@ -351,5 +371,8 @@ def codec_from_ckpt_jax(ck, n_chan):
                      n_layers=a.get("n_layers", 4),
                      n_heads=a.get("n_heads", 4),
                      d_dec=a.get("d_dec", 256),
-                     dec_layers=a.get("dec_layers", 2))
+                     dec_layers=a.get("dec_layers", 2),
+                     fsq_levels=fsq, fsq_ladder=fsq_ladder,
+                     fsq_exp_base=float(a.get("fsq_exp_base", 2.0) or 2.0),
+                     fsq_ladder_fit=fsq_fit)
     return load_pixelmae(ck["model"], model)

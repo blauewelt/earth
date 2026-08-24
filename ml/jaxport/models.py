@@ -28,9 +28,27 @@ running the tests rather than by reading:
     numbers.
   * **LayerNorm eps is 1e-5 in torch, 1e-6 in Flax.** Set explicitly.
 """
+import os
+import sys
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 from flax import nnx
+
+# `ml/` on the path, the way ml/jaxport/train_stage1.py does it: the FSQ
+# LADDER's arithmetic (`ml/fsq_ladder.py`) is numpy-only and is IMPORTED here
+# rather than mirrored. Everything else in this file is a mirror with a parity
+# gate behind it; the ladder is not, because a quantizer whose level positions
+# differed between backends by one boundary would make a TPU-trained codec a
+# different model from the one the torch eval ladder scores — and the level
+# geometry is pure arithmetic with no framework in it. What each backend still
+# owns is the APPLICATION, so the straight-through gradient is native.
+_ML = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ML not in sys.path:
+    sys.path.insert(0, _ML)
+
+import fsq_ladder as fql                                       # noqa: E402
 
 # flax 0.11 made a plain container attribute STATIC (its parameters vanish
 # from the pytree) and introduced _nnx_data() to mark containers as data;
@@ -149,6 +167,33 @@ class TransformerEncoder(nnx.Module):
         return x
 
 
+def fsq_quantize(v, half, off, shift, scale, is_exp, exp_a, exp_logc,
+                 exp_n1, exp_jmin, any_exp):
+    """`ml/model.py:InputQuant.__call__`, in JAX. [.., d_z] -> [.., d_z].
+
+    Same two ladders, same straight-through estimator, same order of
+    operations — `jax.lax.stop_gradient` where torch writes `.detach()`. The
+    constants come in as arrays built from `ml/fsq_ladder.py`, so the LEVEL
+    POSITIONS are the shared definition and only the elementwise application
+    is written twice (tests/test_e048_fsq_ladders.py gates the two at 1e-5 for
+    both ladders).
+    """
+    g = half * jnp.tanh(v / scale + shift) - off
+    q = g + jax.lax.stop_gradient(jnp.round(g) - g)
+    out = (q + off) * scale / half
+    if any_exp:
+        m = jnp.maximum(jnp.abs(v), 1e-30)
+        ge = jnp.log(m / exp_a) / exp_logc
+        gq = jnp.minimum(jnp.maximum(jnp.round(ge), exp_jmin), exp_n1)
+        qe = ge + jax.lax.stop_gradient(gq - ge)
+        s = jnp.where(v < 0, -jnp.ones_like(v), jnp.ones_like(v))
+        oe = s * exp_a * jnp.exp(qe * exp_logc)
+        # The zero level of an odd L: value 0, gradient 1 (`v - sg(v)`).
+        oe = jnp.where(gq < -0.5, v - jax.lax.stop_gradient(v), oe)
+        out = jnp.where(is_exp, oe, out)
+    return out
+
+
 def causal_mask(k, dtype=jnp.float32):
     """`nn.Transformer.generate_square_subsequent_mask(K)` — an ADDITIVE
     float mask: 0 on and below the diagonal, -inf strictly above."""
@@ -168,11 +213,41 @@ class PixelMAE(nnx.Module):
 
     def __init__(self, n_chan, d_model=128, n_heads=4, n_layers=4,
                  d_z=32, d_dec=256, max_abs_offset=3, patch=1, dec_layers=2,
-                 k_time=1, *, rngs=None):
+                 k_time=1, fsq_levels="", fsq_ladder="uniform",
+                 fsq_exp_base=fql.DEFAULT_EXP_BASE, fsq_ladder_fit="",
+                 *, rngs=None):
         rngs = rngs if rngs is not None else nnx.Rngs(0)
         self.n_chan = n_chan
         self.d_z = d_z
         self.max_off = max_abs_offset
+        # E-046/E-048 FSQ BOTTLENECK, mirroring ml/model.py: "" is None, and
+        # None is the continuous bottleneck — `_bottleneck` then returns its
+        # argument, so a model that does not name the flag is untouched and
+        # tier-1 forward parity is unaffected.
+        #
+        # THE CONSTANTS ARE PLAIN TUPLES, not arrays. flax 0.11 treats a
+        # non-Variable attribute as STATIC, so it lands in the graphdef, which
+        # `nnx.split`/`nnx.merge` require to be HASHABLE — a numpy or jnp array
+        # there is either unhashable or a silently-retracing constant. Tuples
+        # are hashable, carry no parameters (FSQ has none, in either backend),
+        # and are rebuilt into arrays inside the forward, where XLA folds them.
+        self.fsq_levels = str(fsq_levels or "")
+        self.fsq_ladder = str(fsq_ladder or "uniform")
+        self.fsq_exp_base = float(fsq_exp_base)
+        self.fsq_ladder_fit = str(fsq_ladder_fit or "")
+        self.fsq = None
+        self.fsq_needs_fit = False
+        if self.fsq_levels:
+            lv = fql.parse_levels(self.fsq_levels, d_z, "--fsq-levels")
+            is_exp, base, _fitted = fql.resolve(
+                self.fsq_ladder, lv, d_z, self.fsq_exp_base,
+                self.fsq_ladder_fit)
+            self.fsq_needs_fit = not _fitted
+            self.set_fsq_ladder(is_exp, base, self.fsq_ladder_fit)
+        elif self.fsq_ladder != "uniform" or self.fsq_ladder_fit:
+            raise SystemExit(
+                f"--fsq-ladder {self.fsq_ladder!r} without --fsq-levels: "
+                f"there is no bottleneck to put a ladder on.")
         # E-047 TIME BLOCKS, mirroring ml/model.py exactly: k_time == 1 adds NO
         # parameter and NO branch that runs, so a k_time=1 model's pytree is
         # key-for-key what it has always been and tier 1's forward parity is
@@ -234,10 +309,69 @@ class PixelMAE(nnx.Module):
         cls = jnp.broadcast_to(self.cls_tok.value, (B, 1, vt.shape[-1]))
         return jnp.concatenate([cls, self.ctx_proj(ctx)[:, None, :], vt], axis=1)
 
+    def set_fsq_ladder(self, is_exp, base, fit=""):
+        """Install a per-dimension ladder — the constructor's path, and the
+        one the E-048 `auto` fit takes mid-run.
+
+        THE CALLER MUST RE-SPLIT AFTER THIS. `self.fsq` is a STATIC attribute,
+        so it lives in the graphdef and a `jax.jit`-ed closure over the OLD
+        graphdef would go on quantizing with the old lattice without retracing
+        — jit caches on argument shapes, not on closed-over Python values.
+        `ml/jaxport/train_stage1.py` re-splits and rebuilds its step function
+        in the same breath as calling this, and says so there.
+        """
+        lv = fql.parse_levels(self.fsq_levels, self.d_z, "--fsq-levels")
+        half, off, shift = fql.uniform_params(lv)
+        n, a_rel, logc, has_zero = fql.exp_params(lv, base,
+                                                  flag="--fsq-levels exp")
+        # sigma = 1 on the codec side (there is no Z to measure), so the
+        # saturation radius is 2 — ml/model.py:fsq_from_levels' choice, not a
+        # second one.
+        scale = 2.0
+        self.fsq_ladder_fit = str(fit or "")
+        self.fsq = (tuple(float(x) for x in half),
+                    tuple(float(x) for x in off),
+                    tuple(float(x) for x in shift),
+                    float(scale),
+                    tuple(bool(x) for x in is_exp),
+                    tuple(float(x) for x in a_rel * scale),
+                    tuple(float(x) for x in logc),
+                    tuple(float(x) - 1.0 for x in n),
+                    tuple(-1.0 if bool(z) else 0.0 for z in has_zero),
+                    bool(np.asarray(is_exp).any()))
+        return self
+
+    def _bottleneck(self, z):
+        """`to_z`'s output, quantized when the FSQ flags are on — the mirror
+        of ml/model.py's one-line bottleneck. With the flag off this returns
+        its ARGUMENT: no cast, no branch, nothing added to the graph."""
+        if self.fsq is None:
+            return z
+        (half, off, shift, scale, is_exp, exp_a, exp_logc, exp_n1, exp_jmin,
+         any_exp) = self.fsq
+        dt = z.dtype
+        A = (lambda t: jnp.asarray(t, dt))
+        shp = z.shape
+        v = z.reshape(-1, self.d_z)
+        out = fsq_quantize(v, A(half), A(off), A(shift),
+                           jnp.asarray(scale, dt), jnp.asarray(is_exp),
+                           A(exp_a), A(exp_logc), A(exp_n1), A(exp_jmin),
+                           any_exp)
+        return out.reshape(shp)
+
     def encode(self, x, obs, mask, ctx):
         """patch=1: x, obs [B,C] · patch>1: x, obs [B,C,patch²] ·
         k_time>1: x, obs, mask [B,k_time,C]
-        mask [B,C] bool · ctx [B,4] → z [B,d_z]."""
+        mask [B,C] bool · ctx [B,4] → z [B,d_z].
+
+        ONE LINE over `encode_pre`, exactly as ml/model.py splits it: the E-048
+        `auto` fit measures the PRE-quantization distribution through the real
+        encoder, and under jit a capture hook into the forward pass would not
+        work at all."""
+        return self._bottleneck(self.encode_pre(x, obs, mask, ctx))
+
+    def encode_pre(self, x, obs, mask, ctx):
+        """`encode` WITHOUT the bottleneck: `to_z`'s raw output."""
         # WIDEN THE INPUT TO THE WEIGHTS' DTYPE, at the top of encode, for the
         # same reason ml/model.py does it here rather than at the six call
         # sites: family 4 is float16 STORAGE and every reader hands the codec

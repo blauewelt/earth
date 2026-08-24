@@ -96,6 +96,7 @@ from flax import nnx                                            # noqa: E402
 from jaxport.models import PixelMAE                             # noqa: E402
 from jaxport.convert import export_pt, load_pixelmae            # noqa: E402
 from timeblocks import BlockAxis                                # noqa: E402
+import fsq_ladder as fql                                        # noqa: E402
 
 # The numpy plumbing, imported rather than copied — see the module docstring
 # for why these pull torch in and why that is the right trade.
@@ -108,8 +109,15 @@ from tensor_io import load_tensor, writable_copy               # noqa: E402
 # way so a reader comparing the two files sees one list, not two.
 NEI = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
 
+# `fsq_levels` and the E-048 ladder fields are ARCHITECTURE here for the
+# reason ml/train.py gives: they decide what a `z` IS, every downstream
+# consumer reads them back out of the checkpoint, and a resume that
+# contradicted one would continue a quantized codec as a continuous one (or a
+# geometric lattice as an even one) while every leaf loaded cleanly.
+# `fsq_ladder_fit` is NOT here — it is a MEASUREMENT the run made rather than a
+# setting a dispatch states, so it is adopted unconditionally.
 ARCH = ("d_z", "patch", "d_model", "n_layers", "n_heads", "d_dec",
-        "dec_layers")
+        "dec_layers", "fsq_levels", "fsq_ladder", "fsq_exp_base")
 
 
 # --------------------------------------------------------------------------
@@ -361,6 +369,32 @@ def parse(argv=None):
                         "archived checkpoint is. The axis arithmetic is "
                         "ml/timeblocks.py's, imported, so a block boundary "
                         "cannot drift between backends.")
+    # E-046/E-048: the FSQ bottleneck and its ladder. Same spellings, same
+    # defaults and the same refusals as ml/train.py, because the TPU is the
+    # SWEEP VEHICLE for E-048 and a knob that existed on one backend only
+    # would make the sweep un-runnable where it is meant to run.
+    p.add_argument("--fsq-levels", default="",
+                   help="E-046: quantize the codec's bottleneck with FSQ. '' "
+                        "(default) is the continuous bottleneck, bit-"
+                        "identical. A single integer puts that many levels on "
+                        "every dimension; a comma list must be exactly --d-z "
+                        "long. L=2 is refused.")
+    p.add_argument("--fsq-ladder", default="uniform",
+                   choices=["uniform", "exp", "auto"],
+                   help="E-048: WHERE those levels sit. 'uniform' is E-046's "
+                        "evenly spaced lattice; 'exp' a symmetric geometric "
+                        "ladder inside the same +/-2*sigma bound; 'auto' "
+                        "measures the choice per z-dimension at "
+                        "--fsq-auto-step and records the fitted lattice in "
+                        "the checkpoint (both artefacts), which every loader "
+                        "rebuilds from and none re-fits.")
+    p.add_argument("--fsq-exp-base", type=float, default=2.0)
+    p.add_argument("--fsq-auto-n", type=int, default=4096)
+    p.add_argument("--fsq-auto-step", type=int, default=2000)
+    p.add_argument("--fsq-ladder-fit", default="",
+                   help="the per-dimension ladder 'u,e2,...' — normally "
+                        "WRITTEN BY the run; pass it to reproduce an exact "
+                        "lattice, or let --resume adopt it.")
     p.add_argument("--anomaly", action="store_true")
     p.add_argument("--light-probe-every", type=int, default=0,
                    help="steps between LIGHT probes (linear 26.5N section "
@@ -615,6 +649,17 @@ def main(argv=None):
             print(f"  architecture ADOPTED from "
                   f"{os.path.basename(a.resume)}: " + " ".join(adopted),
                   flush=True)
+        # THE FITTED LADDER IS ALWAYS ADOPTED (E-048), never contradicted: a
+        # resumed `auto` run must continue with the lattice it already
+        # measured rather than measure a second one against a half-trained
+        # encoder and change what its own earlier steps meant.
+        _fit = str(RESUME_ARGS.get("fsq_ladder_fit", "") or "")
+        if _fit and _fit != a.fsq_ladder_fit:
+            a.fsq_ladder_fit = _fit
+            print(f"  FSQ ladder fit ADOPTED from "
+                  f"{os.path.basename(a.resume)} ({_fit.count('e')} of "
+                  f"{_fit.count(',') + 1} dimensions exponential) — a resume "
+                  f"never re-fits", flush=True)
         # CROSS-TENSOR TRAINING IS REFUSED, cross-tensor EVAL is not
         # (ml/train.py has the identical guard for the identical reason).
         # Continuing a codec on a tensor it was not trained on writes a
@@ -662,10 +707,33 @@ def main(argv=None):
     model = PixelMAE(n_chan=C, d_z=a.d_z, patch=a.patch, d_model=a.d_model,
                      n_layers=a.n_layers, n_heads=a.n_heads, d_dec=a.d_dec,
                      dec_layers=a.dec_layers, k_time=a.k_time,
+                     fsq_levels=a.fsq_levels, fsq_ladder=a.fsq_ladder,
+                     fsq_exp_base=a.fsq_exp_base,
+                     fsq_ladder_fit=a.fsq_ladder_fit,
                      rngs=nnx.Rngs(a.seed))
     graphdef, state = nnx.split(model)
     n_params = sum(int(np.prod(v.shape)) for v in _leaves(state))
     print(f"codec parameters: {n_params / 1e6:.2f}M", flush=True)
+    # THE BOTTLENECK ADDS NO PARAMETERS, so the line above cannot tell a
+    # quantized codec from a continuous one and this one has to (E-046's
+    # reasoning, E-048's ladder). Nothing prints with the flag off.
+    if a.fsq_levels:
+        _lv = fql.parse_levels(a.fsq_levels, a.d_z, "--fsq-levels")
+        _bits = float(np.mean(np.log2(_lv.astype(float))))
+        print(f"FSQ bottleneck: --fsq-levels {a.fsq_levels} -> "
+              f"{[int(v) for v in _lv[:8]]}{'...' if a.d_z > 8 else ''} · "
+              f"{_bits:.3f} bits/dim x d_z {a.d_z} = "
+              f"{float(np.sum(np.log2(_lv.astype(float)))):.1f} bits · ladder "
+              f"{a.fsq_ladder}"
+              + (f" (base {a.fsq_exp_base:g})" if a.fsq_ladder == "exp"
+                 else "")
+              + (f" · fitted lattice IN HAND: {a.fsq_ladder_fit}"
+                 if a.fsq_ladder_fit else "")
+              + (f" · NOT YET FITTED — quantizing uniformly until step "
+                 f"{min(a.fsq_auto_step, max(1, a.steps // 2))}"
+                 if (a.fsq_ladder == "auto" and not a.fsq_ladder_fit) else "")
+              + " · straight-through gradient, no codebook parameters and no "
+                "commitment loss", flush=True)
 
     # ---- optimiser -------------------------------------------------------
     # AdamW(lr, weight_decay=1e-4) — torch's decoupled decay and optax's are
@@ -689,27 +757,39 @@ def main(argv=None):
             lambda v: v.astype(jnp.bfloat16)
             if v.dtype == jnp.float32 else v, tree)
 
-    def loss_fn(st, enc_v, enc_o, v, o, mask, ctx, qc, off0, offn, vn, on,
-                cwj, tpos):
-        m = nnx.merge(graphdef, _cast(st))
-        l_rec, l_nei = stage1_loss(m, enc_v, enc_o, v, o, mask, ctx, qc,
-                                   off0, offn, vn, on, cwj, a.rec_w_visible,
-                                   tpos)
-        l_rec = l_rec.astype(jnp.float32)
-        l_nei = l_nei.astype(jnp.float32)
-        return l_rec + 0.5 * l_nei, (l_rec, l_nei)
+    # A FACTORY, NOT A PLAIN DEFINITION, and the reason is E-048's `auto`
+    # ladder. `jax.jit` caches on argument shapes and dtypes and does NOT
+    # notice that a closed-over Python value has changed — so a step function
+    # that closed over `graphdef` by name would go on quantizing with the
+    # pre-fit lattice after the fit installed a new one, silently, with every
+    # log line unchanged. Binding the graphdef at CONSTRUCTION and rebuilding
+    # the whole closure when it changes makes that impossible; the cost is one
+    # recompilation, once per run.
+    def _make_train_step(gd):
+        def loss_fn(st, enc_v, enc_o, v, o, mask, ctx, qc, off0, offn, vn, on,
+                    cwj, tpos):
+            m = nnx.merge(gd, _cast(st))
+            l_rec, l_nei = stage1_loss(m, enc_v, enc_o, v, o, mask, ctx, qc,
+                                       off0, offn, vn, on, cwj,
+                                       a.rec_w_visible, tpos)
+            l_rec = l_rec.astype(jnp.float32)
+            l_nei = l_nei.astype(jnp.float32)
+            return l_rec + 0.5 * l_nei, (l_rec, l_nei)
 
-    @jax.jit
-    def train_step(st, ost, lr, enc_v, enc_o, v, o, mask, ctx, qc, off0,
-                   offn, vn, on, cwj, tpos):
-        (loss, (l_rec, l_nei)), grads = jax.value_and_grad(
-            loss_fn, has_aux=True)(st, enc_v, enc_o, v, o, mask, ctx, qc,
-                                   off0, offn, vn, on, cwj, tpos)
-        # The injected hyperparameter, set from the host, is what carries the
-        # schedule — including a schedule whose total was re-fitted mid-run.
-        ost = _set_lr(ost, lr)
-        upd, ost = tx.update(grads, ost, st)
-        return optax.apply_updates(st, upd), ost, loss, l_rec, l_nei
+        @jax.jit
+        def train_step(st, ost, lr, enc_v, enc_o, v, o, mask, ctx, qc, off0,
+                       offn, vn, on, cwj, tpos):
+            (loss, (l_rec, l_nei)), grads = jax.value_and_grad(
+                loss_fn, has_aux=True)(st, enc_v, enc_o, v, o, mask, ctx, qc,
+                                       off0, offn, vn, on, cwj, tpos)
+            # The injected hyperparameter, set from the host, is what carries
+            # the schedule — including one whose total was re-fitted mid-run.
+            ost = _set_lr(ost, lr)
+            upd, ost = tx.update(grads, ost, st)
+            return optax.apply_updates(st, upd), ost, loss, l_rec, l_nei
+        return train_step
+
+    train_step = _make_train_step(graphdef)
 
     def _set_lr(ost, lr):
         """Write `lr` into whichever level of the chain owns hyperparams.
@@ -830,6 +910,11 @@ def main(argv=None):
             # TIER; a config line that did not say which backend produced it
             # would be the one place that fact could go missing.
             "backend": "jax", "k_time": int(a.k_time),
+            # E-046/E-048: the bottleneck adds no parameters, so `params_M`
+            # above cannot distinguish a quantized codec from a continuous
+            # one, or one lattice from another. None = continuous.
+            "fsq_levels": (a.fsq_levels or None),
+            "fsq_ladder": (a.fsq_ladder if a.fsq_levels else None),
         }}) + "\n")
 
     ckpt_tag = os.environ.get("CKPT_TAG", "")
@@ -961,8 +1046,58 @@ def main(argv=None):
     sched_total = (a.lr_decay_steps if (a.lr_floor > 0 and a.lr_decay_steps)
                    else a.steps)
     CAL, t1, next_cal, steps0 = 200, None, None, a.steps
+
+    # ---- E-048: the --fsq-ladder auto FIT ---------------------------------
+    # The mirror of ml/train.py's, driven from the loop for the same reason:
+    # what the fit measured is then a function of the run's own seed and step
+    # schedule and of nothing else. One deliberate eager `encode_pre` over a
+    # fresh TRAIN-pool draw, the shared per-dimension fit out of
+    # ml/fsq_ladder.py, then the new lattice is installed on the model, the
+    # graphdef is re-split and the jitted step is REBUILT (see
+    # `_make_train_step` for why rebuilding is not optional).
+    FSQ_FIT_AT = (min(a.fsq_auto_step, max(1, a.steps // 2))
+                  if (a.fsq_levels and a.fsq_ladder == "auto"
+                      and not a.fsq_ladder_fit) else None)
+
+    def fsq_auto_fit(step, gd, st):
+        n = max(2, int(a.fsq_auto_n))
+        t, y, x, ctx = draw(tt, yy, xx, n)
+        if BLK is not None:
+            ev, eo = gather_block(t, y, x)
+            mk = np.zeros_like(eo)
+        elif a.patch > 1:
+            from jaxport.embed import gather_px_np
+            ev, eo = gather_px_np(Xt, OBS, t, y, x, a.patch)
+            ev = ev.astype(np.float32)
+            mk = np.zeros((n, C), bool)
+        else:
+            ev, eo = gather(t, y, x)
+            mk = np.zeros_like(eo)
+        m = nnx.merge(gd, st)
+        pre = np.asarray(m.encode_pre(jnp.asarray(ev), jnp.asarray(eo),
+                                      jnp.asarray(mk), jnp.asarray(ctx)))
+        lv = fql.parse_levels(a.fsq_levels, a.d_z, "--fsq-levels")
+        is_exp, base, mse_u, mse_b = fql.fit_auto(pre.astype(np.float64), lv,
+                                                  2.0)
+        spec = fql.format_fit(is_exp, base)
+        a.fsq_ladder_fit = spec
+        m.set_fsq_ladder(is_exp, base, spec)
+        gd2, st2 = nnx.split(m)
+        print(f"  step {step}: --fsq-levels auto fitted on {len(pre):,} "
+              f"pre-quantization vectors: "
+              f"{fql.describe_fit(is_exp, base, mse_u, mse_b)}", flush=True)
+        with open(metrics_path, "a") as f:
+            f.write(json.dumps({"step": int(step), "fsq_ladder_fit": {
+                "spec": spec, "n": int(len(pre)),
+                "n_exp": int(np.asarray(is_exp).sum()),
+                "d_z": int(a.d_z)}}) + "\n")
+        return gd2, st2
+
     while s < a.steps:
         s += 1
+        if FSQ_FIT_AT is not None and s == FSQ_FIT_AT:
+            graphdef, state = fsq_auto_fit(s, graphdef, state)
+            train_step = _make_train_step(graphdef)
         bt = make_batch(tt, yy, xx, a.batch)
         (enc_v, enc_o, v, o, mask, ctx, offn, vn, on) = bt
         lr = a.lr * lr_factor(s - 1, a.lr_floor, sched_total, a.warmup_steps)

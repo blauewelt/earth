@@ -77,11 +77,22 @@ POINTS. So `exp` is defined on the pre-tanh activation and carries its own
 bound — the clamp at j = n-1, which saturates at exactly the same +/-R the tanh
 does. One statement per ladder, both in z-units, both bounded identically.
 
-THE STRAIGHT-THROUGH GRADIENT IS THE IDENTITY IN THE INTERIOR, and that is an
-identity rather than a convention: `c^log_c(|v|/a) = |v|/a`, so with the round
-detached the exp map is exactly `v` and d v_q/d v = 1. In saturation it decays
-as R/|v| (the uniform ladder's tanh decays faster, as sech²), and on the zero
-level of an odd L it is the plain straight-through `v + (0 - v).detach()`.
+THE STRAIGHT-THROUGH GRADIENT IS `|v_q| / |v|`, MEASURED AND NOT ASSUMED. With
+the round detached the map is `sign(v)·a·c^(g + const)` where `g = log_c(|v|/a)`,
+so d v_q/d v = a·c^q/|v| = |v_q|/|v| — exactly 1 where v already sits ON a level,
+and bounded by [c^-1/2, c^1/2] everywhere in the interior (0.71–1.41 at c = 2,
+0.58–1.73 at c = 3), because that is how far a value can be from its nearest
+level in log space. Under saturation it decays as R/|v| — gently, where the
+uniform ladder's tanh decays as sech² and dies faster. On the zero level of an
+odd L it is the plain straight-through `v + (0 - v).detach()`, i.e. 1.
+
+An earlier draft of this paragraph claimed the gradient was exactly the identity
+in the interior. It is not, and the test that measures it is what said so: the
+identity `c^log_c(|v|/a) = |v|/a` holds for the CONTINUOUS map, and the whole
+point of the straight-through estimator is that the map it differentiates is not
+the one it evaluates. The ratio is the honest statement and it is a better one —
+it says the gradient is largest where the quantizer rounds UP and smallest where
+it rounds down, which is the same self-correcting shape the uniform ladder has.
 
 DEGENERATE CONFIGURATIONS ARE REFUSED, not ranked improbable (ml/CLAUDE.md
 §4.9b): base <= 1 (c = 1 makes every level identical, c < 1 inverts the
@@ -89,6 +100,31 @@ ladder), and a base so large that the innermost level is under 1e-6 of the
 saturation radius — at that point the ladder has a zero level it does not admit
 to having. L = 2 is refused for both ladders, by `parse_levels`, exactly as
 before.
+
+---
+
+MEASURED WHILE BUILDING THIS, AND NOT FIXED HERE: AT EVEN L THE UNIFORM MAP IS
+NOT ANTISYMMETRIC. `shift = atanh(offset/half)` is applied INSIDE the tanh and
+`offset` is subtracted OUTSIDE it, so the two cancel exactly at v = 0 and
+nowhere else, and the whole lattice sits about half a step high. Measured on
+200,000 N(0,1) draws at d_z 1 (tests/test_e048_fsq_ladders.py pins all four
+numbers): L=8 mean z_q **+0.233**, |q(-v) + q(v)| up to **0.571**, one full
+step; L=6 **+0.329**; the exponential ladder **-0.004**, antisymmetric to the
+last bit; and at ODD L, where there is no offset, the uniform map is unbiased
+(**-0.003**) and exactly antisymmetric. A value sitting exactly ON a negative
+level rounds to the next level UP.
+
+Three consequences, and the third is why this paragraph is here rather than in
+a commit that fixes it. (1) It is E-046's shipped map — `7f8dabb`, the codec
+the in-flight arm trains — and `uniform` must stay bit-identical to it, so this
+is a FINDING, not a defect to repair inside E-048. (2) `to_z` is a free linear
+map, so the encoder can and probably does learn a compensating offset; what the
+bias costs is codebook symmetry, not representational power. (3) **It is part
+of why `auto` chooses `exp` on essentially any centred distribution**, and a
+sweep that reported "the exponential ladder wins" without saying so would be
+selling a bias correction as a tail argument. E-048's plan pre-registers the
+split: the ODD-L contrast (L=7, where uniform is unbiased) is what separates
+"exp helps because it is antisymmetric" from "exp helps because it compands".
 
 ---
 

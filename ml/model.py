@@ -212,8 +212,10 @@ class InputQuant:
         m = torch.clamp(v.abs(), min=1e-30)
         g = torch.log(m / a) / logc
         gq = torch.maximum(torch.minimum(torch.round(g), n1), jmin)
-        # Straight-through: the round and the clamp carry no gradient, so in
-        # the interior a*c^g = |v| exactly and d out/d v is the identity.
+        # Straight-through: the round and the clamp carry no gradient, so
+        # d out/d v = |out|/|v| — exactly 1 on a level, within [c^-1/2, c^1/2]
+        # in the interior, decaying as R/|v| under saturation. Measured in
+        # tests/test_e048_fsq_ladders.py rather than asserted here.
         q = g + (gq - g).detach()
         out = s * a * torch.exp(q * logc)
         # The zero level of an odd L, with the plain straight-through
