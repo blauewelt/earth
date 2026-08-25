@@ -183,6 +183,41 @@ directly from provenance under each run**, so the fields that can be generated
 are generated, and the fields a human must choose — what the run DOES, in
 absolute terms — are the ones the `doc` string is for.
 
+## 0f · A status report is a structured summary across experiments, in four fixed sections
+
+Standing rule, Chris 2026-08-25: *"We can make a standing rule to provide a
+structured summary across experiments + ideas (not just shorthands like #481
+but more details in the following sections: 1) Completed experiments: a
+one-line summary for each, and a 1-2 line results summary 2) A summary of new
+results and most promising next steps 3) A summary of already queued up
+experiments (in the format of 1) 4) Changes you would propose in the context
+of 2 + 3 (eg does something in 2 merit being queued sooner than some in 3)."*
+
+Any cross-experiment status — a "how have things been" answer, a scheduled
+check-in's report, a session hand-off, a morning-triage summary posted to chat
+— uses these four sections, in this order:
+
+1. **Completed experiments** (since the last such report): one line naming
+   what each run WAS (§0c/§0d form — ID, absolute description, never a bare
+   `#NNN`), plus 1–2 lines of RESULT — the number against its named control,
+   or the failure and its mechanism. A green run with no verdict artefact is
+   reported as VOID, never as complete.
+2. **New results and most promising next steps**: what the window's landings
+   changed about the picture, and the next experiments they point at — ideas
+   included, not only dispatches.
+3. **Already-queued / in-flight experiments**, each in section 1's one-line
+   form, with where it runs, what it must beat, and when it lands.
+4. **Proposed changes** given 2 + 3: explicit re-prioritizations ("X now
+   merits queueing ahead of Y, because…"), holds, and folds — each with its
+   cost and what evidence would reverse it. Additive, reversible moves may be
+   executed with the report (state that they were); anything that displaces
+   or cancels queued work is a proposal until Chris answers.
+
+The report is a REPORT: every number in it comes from an artefact (§2
+"measurements, not intentions"), and shorthand IDs never travel without their
+summaries (§0c). Where a section is empty, say so in one line rather than
+omitting the section — an absent section reads as an unwritten one.
+
 ## What this programme is building
 
 Standing statement of purpose, Chris 2026-08-19: *"What we're building is a

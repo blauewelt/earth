@@ -198,7 +198,19 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
-**08:00–10:00Z 08-25 — MORNING TRIAGE: THE CLEAN PENTAD Z IS PUBLISHED, TWO HEADS DIE
+**13:20Z 08-25 — #470 (E-047-HEAD, 5th dispatch, the fusion-vs-selection verdict head)
+WENT GREEN AND IS VOID: stage-2 CUDA OOM, and the run's colour lied again.** The
+trainer died at 12:01Z trying to allocate **13.22 GiB on the 24 GB card**
+(`torch.OutOfMemoryError`, run backgrounded → job green; the §7 signature, found by
+the archive's file list — `probes-470.json` carries provenance.json ONLY, no
+temporal.json). Mechanism: the month-block z is **d_z 64**, so the xl144-zn head's
+input doubles against every pentad head that fits this card at d_z 32; #461 already
+measured the same class at K=48 (its fix was the H100). **The silver lining is this
+morning's partial-publish machinery working as designed:** #470's embed pass
+completed and published `Z_8b639abe36_37e146384b` (12 chunks, the e047a-tpu-60k
+block codec × pentad tensor) to `embed-cache-v1` before the trainer died — so the
+6th dispatch pulls Z in minutes and pays only the ~1–2 h head training, on an H100.
+**#483 (E-047-HEAD, 6th dispatch, H100)** queued on `gpu-box-48254133` behind #478.
 IN ONE MORNING (one silently, one loudly), AND ALL THREE ARE BACK ON THE BOARD WITHIN
 AN HOUR — AT PULL-THE-CACHE PRICES, NOT RE-EMBED PRICES.**
 
