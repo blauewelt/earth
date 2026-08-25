@@ -964,9 +964,16 @@ def main(argv=None):
               f"CPU tests)", flush=True)
 
     def put(x, sharded=True):
-        j = jnp.asarray(x)
-        return (jax.device_put(j, shard)
-                if (shard is not None and sharded) else j)
+        # Shard HOST data directly. `jnp.asarray(x)` first would commit the
+        # WHOLE array to device 0 and then re-slice it there — for the fixed
+        # monitoring batch at K=144 that is a 10.95 GB staging copy plus a
+        # 2.55 GiB shard on a 16 GB chip, which is exactly how the first
+        # e051 node died (RESOURCE_EXHAUSTED at 563.88M free, 2026-08-25).
+        # device_put from a numpy array slices on the host and transfers each
+        # shard alone; no full-size device allocation ever exists.
+        if shard is not None and sharded:
+            return jax.device_put(np.asarray(x), shard)
+        return jnp.asarray(x)
 
     # ---- resume -----------------------------------------------------------
     metrics_path = os.path.join(a.out, "metrics.jsonl")
