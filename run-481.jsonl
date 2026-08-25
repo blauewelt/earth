@@ -1,0 +1,18 @@
+{"config": {"steps": 200000, "batch": 512, "d_z": 6, "patch": 1, "d_model": 512, "n_layers": 12, "n_heads": 4, "d_dec": 256, "anomaly": true, "fsq_levels": "8,8,8,5,5,5", "fsq_ladder": "auto", "fsq_bound": "ln", "eval_every": 7500, "light_probe_every": 10000, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 37.956, "data": "family4_na025_pentad_r2.npz", "C": 40, "T": 3142, "resume": null, "recipe": "f4r2-40M-dz6-fsq65k"}}
+{"linear_r_deseas": NaN, "linear_r_raw": NaN, "linear_r_deseas_light": NaN, "light_stride": 7, "z_mse_model": 0.04467357322573662, "z_mse_persistence": 0.10302734375, "chan_mse_model": 0.8958781361579895, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": -0.051, "temporal_r_raw": 0.155, "chan_vs_persistence_pct": -6.3, "z_vs_persistence_pct": 56.6, "probe_seconds": 318.8, "step": 0, "wall_s": 318.8}
+{"step": 50, "fsq_ladder_fit": {"spec": "e2:0.689269,e1.5:1.63057,e1.5:1.22298,e2:1.83633,e3:1.07815,e2:1.54398", "n": 4096, "n_exp": 6, "scale_min": 0.689269, "scale_med": 1.38348, "scale_max": 1.83633, "prequant_absmean": 0.847736, "prequant_std_med": 0.608525, "prequant_rms": 1.0, "d_z": 6}}
+{"step": 200, "fsq_ladder_fit": {"spec": "e1.5:0.867676,e1.5:1.90833,e1.5:0.932335,e1.5:1.49066,e2:0.94944,e4:0.717131", "n": 4096, "n_exp": 6, "scale_min": 0.717131, "scale_med": 0.940888, "scale_max": 1.90833, "prequant_absmean": 0.84759, "prequant_std_med": 0.273089, "prequant_rms": 1.0, "d_z": 6}}
+{"step": 1000, "loss_rec": 0.33073, "loss_nei": 0.33099}
+{"step": 2000, "fsq_ladder_fit": {"spec": "e2:0.867676,e2:3.04241,e2:3.29724,e3:0.615868,e3:0.777219,e3:0.394957", "n": 4096, "n_exp": 6, "scale_min": 0.394957, "scale_med": 0.822448, "scale_max": 3.29724, "prequant_absmean": 0.796214, "prequant_std_med": 0.355009, "prequant_rms": 1.0, "d_z": 6}}
+{"step": 2000, "loss_rec": 0.39442, "loss_nei": 0.32534}
+{"step": 3000, "loss_rec": 0.31911, "loss_nei": 0.32976}
+{"step": 4000, "loss_rec": 0.36202, "loss_nei": 0.35435}
+{"step": 5000, "loss_rec": 0.3159, "loss_nei": 0.30075}
+{"step": 6000, "loss_rec": 0.3316, "loss_nei": 0.30857}
+{"step": 7000, "loss_rec": 0.33272, "loss_nei": 0.33708}
+{"linear_r_deseas": -0.024, "linear_r_raw": 0.037, "linear_r_deseas_light": -0.19, "light_stride": 7, "z_mse_model": 0.0015209761913865805, "z_mse_persistence": 0.0026950836181640625, "chan_mse_model": 0.9043419361114502, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.021, "temporal_r_raw": 0.198, "chan_vs_persistence_pct": -7.3, "z_vs_persistence_pct": 43.6, "probe_seconds": 315.1, "step": 7500, "wall_s": 2044.9}
+{"step": 8000, "loss_rec": 0.34192, "loss_nei": 0.32522}
+{"step": 9000, "loss_rec": 0.35108, "loss_nei": 0.37432}
+{"step": 10000, "loss_rec": 0.35267, "loss_nei": 0.34163}
+{"linear_r_deseas": -0.0, "linear_r_raw": 0.0, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.4, "step": 10000, "wall_s": 2521.4}
+{"step": 10000, "collapsed": {"linear_r_deseas": -0.0, "threshold": 0.05, "strikes": 2}}
