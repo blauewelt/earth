@@ -774,10 +774,13 @@ plt.close(fig)
 #      (120,5,.50560,#427) (120,5,.50447,#432) (120,30,.5274,#464 A11)
 #      (240,10,.3377,#452 A8) (360,15,.1620,#441 A7)
 #      (720,30,.0713,#435 A2a) (720,30,.0729,#439 A2b)
-#      (720,10,.0804,#462 E-045.2). In flight: E-045.1 (720,5,#463),
-#      E-045.3 (720,15,#474).
+#      (720,10,.0804,#462 E-045.2) (720,5,.0820,#478 E-045.1 — the decisive
+#      rung, landed 2026-08-25 in its pre-registered 0.07–0.15 band).
+#      E-045.3 (720,15) BLOCKED: strided stage-2 fell to CPU pace on both
+#      copies (#476, #484); parked pending the strided-Z fix.
 fpts = [(120,5,.50560),(120,5,.50447),(120,30,.5274),(240,10,.3377),
-        (360,15,.1620),(720,30,.0713),(720,30,.0729),(720,10,.0804)]
+        (360,15,.1620),(720,30,.0713),(720,30,.0729),(720,10,.0804),
+        (720,5,.0820)]
 scol = {5: C1, 10: C3, 15: INK2, 30: C2}
 fig, (b1, b2) = plt.subplots(1, 2, figsize=(7.4, 3.0), sharey=True)
 for sp, st, r in fpts:
@@ -796,8 +799,8 @@ b2.set_title("step size does not", loc="left", fontsize=8.5)
 for st, lab in [(5,"5 d step"),(10,"10 d"),(15,"15 d"),(30,"30 d")]:
     b2.plot([],[],"o",color=scol[st],ms=5,label=lab)
 b2.legend(fontsize=6.5, frameon=False, loc="upper left")
-b1.annotate("E-045.1 lands here\n(in flight)", xy=(720,.10),
-            xytext=(340,.24), fontsize=7, color=INK2,
+b1.annotate("E-045.1: 0.082 at the\nhardest step (pre-reg.\nband 0.07–0.15)", xy=(720,.082),
+            xytext=(300,.22), fontsize=7, color=INK2,
             arrowprops=dict(arrowstyle="-", color=INK2, lw=.8))
 fig.suptitle("The step x span factorial: the cadence ladder was measuring "
              "context, not step size",

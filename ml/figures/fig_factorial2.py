@@ -13,9 +13,9 @@ rows = [
  ("E-045-A7 · #441", "stride 3 · K=24 · span 360 d · +15 d", 3, 24, 15, "0.162", INK, "…not at 15 d (A10 #458 +quant: 0.169)", False),
  ("E-045-A2a/b · #435/#439", "stride 6 · K=24 · span 720 d · +30 d — reaches the year-back frame", 6, 24, 30, "0.071 / 0.073", INK, "", False),
  ("E-045-A11 · #464",    "stride 6 · K=4 · span 120 d · +30 d — year-back frame cut off", 6, 4, 30, "0.527", C2, "jumped to the 5-day class", False),
- ("E-045.2 · #462 · NEW TONIGHT", "stride 2 · K=72 · span 720 d · +10 d — year-back frame back in reach", 2, 72, 10, "0.080", C2, "10-day steps drop 0.338 → 0.080", True),
- ("E-045.3 · #467",      "stride 3 · K=48 · span 720 d · +15 d",          3, 48, 15, "queued", MUT, "3rd in the H100 line (first try OOMed a 24 GB card)", False),
- ("E-045.1 · #463 · THE DECISIVE RUNG", "stride 1 · K=144 · span 720 d · +5 d — full two years at 5-day steps", 1, 144, 5, "RUNNING — embed 70%", MUT, "head trains from ~08Z · pre-registered: ~0.07–0.15 vs ~0.5", False),
+ ("E-045.2 · #462", "stride 2 · K=72 · span 720 d · +10 d — year-back frame back in reach", 2, 72, 10, "0.080", INK, "", False),
+ ("E-045.3 · #476/#484", "stride 3 · K=48 · span 720 d · +15 d",          3, 48, 15, "BLOCKED", MUT, "strided stage-2 falls to CPU pace, 2 of 2 copies — parked pending the strided-Z fix", False),
+ ("E-045.1 · #478 · DECISIVE", "stride 1 · K=144 · span 720 d · +5 d — full two years at 5-day steps", 1, 144, 5, "0.082", C2, "pre-registered ~0.07–0.15 vs ~0.5 — lands in the context band", True),
 ]
 
 H = 1.32
@@ -23,7 +23,7 @@ fig, ax = plt.subplots(figsize=(12.2, 2.4 + 0.86*len(rows)), dpi=130)
 fig.patch.set_facecolor(BG); ax.set_facecolor(BG)
 ax.set_xlim(-770, 620); ax.set_ylim(-H*len(rows)-1.5, 1.75); ax.axis("off")
 
-ax.text(-770, 1.55, "THE FACTORIAL, updated 06:20Z — E-045.2 confirms it: span moves skill, step size barely does",
+ax.text(-770, 1.55, "THE FACTORIAL, closed at the decisive rung (23:33Z 08-25) — context span is the story at every step size",
         fontsize=15.5, color=INK, fontweight="bold", va="top")
 ax.text(-770, 1.12, "blue tick = one z snapshot fed to the head · orange = predicted frame · ratio: lower is better · t−1 year outlined where the context reaches it",
         fontsize=11.3, color=MUT, va="top")
@@ -51,12 +51,14 @@ for i,(lab,sub,stride,K,step,res,rcol,note,new) in enumerate(rows):
 
 yf = -H*len(rows)-0.75
 ax.text(-770, yf+0.30,
- "Same step, only the span moved:  10 d steps 0.338 → 0.080 (A8 → E-045.2) · 30 d steps 0.527 → 0.071 (A11 → A2a) · 5 d steps 0.506 → #463 (in flight).",
+ "Same step, only the span moved:  5 d steps 0.506 → 0.082 (E-044b → #478, 6.2×) · 10 d 0.338 → 0.080 (A8 → #462) · 30 d 0.527 → 0.071 (A11 → A2a).",
  fontsize=11.2, color=INK, va="top")
 ax.text(-770, yf-0.06,
- "Same span, only the step moved:  at 120 d, 0.506 ≈ 0.527 · at 720 d, 0.071 ≈ 0.080. Mechanism on record: the seasonal analog — a 720 d window\n"
- "contains last year's same-calendar frame (outlined); a 120 d window cannot. E-045.1 is on the H100 now; E-045.3 follows in its queue.",
+ "Same span, only the step moved:  at 120 d, 0.506 ≈ 0.527 · at 720 d, 0.071 ≈ 0.080 ≈ 0.082 — a flat line against the K-fixed cliff. Mechanism on\n"
+ "record: the seasonal analog — a 720 d window contains last year's same-calendar frame (outlined); a 120 d window cannot.",
  fontsize=11.2, color=MUT, va="top")
 plt.tight_layout(pad=0.6)
-plt.savefig("/home/claude/fig_factorial2.png", facecolor=BG, bbox_inches="tight")
+import os
+out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fig_factorial2.png")
+plt.savefig(out, facecolor=BG, bbox_inches="tight")
 print("saved")

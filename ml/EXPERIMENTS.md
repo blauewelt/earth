@@ -385,6 +385,42 @@ warmup window then 0, nonfinite 0, grad_norm_max 320.8 absorbed by clip 128.
 the pre-registered decision threshold; the run is GO. 200k ETA ≈08:30Z
 08-26.** First rolling checkpoint (2.4G) confirmed on the bucket.
 
+**00:05Z 08-26 — LADDER CLOSE-OUT: #484 CANCELLED ON THE SAME CPU SIGNATURE AS
+#476 — E-045.3 IS BLOCKED, AND THE MECHANISM IS NOW A/B-CONFIRMED AS
+CONFIG-TIED, NOT BOX-TIED.**
+
+TL;DR — the K=48 rung's trainer fell off the GPU twice in a row, once on
+either side of a full box stop/start, so the fault travels with the strided
+configuration, not with the machine; the rung is parked until the
+slice-the-published-Z fix exists, and the factorial's verdict stands complete
+without it. *(a)* **#484 (E-045.3 3rd copy) CANCELLED 23:53Z** at ~57 min into
+stage 2 with ZERO `stage2_step` records and the box frame reading gpu 0% /
+cpu 96% on two samples eight minutes apart — the exact #476 signature
+(11.3–12.5 s/step, gpu 0/temp 0/cpu 104). Its embed leg was HEALTHY (1,047
+strided bins at 7.755→9.8 s/bin, ≈$5.5, GPU pace throughout) — same shape as
+#476: GPU embed, CPU trainer. **The A/B the re-dispatch was designed for is
+answered: box 48632885 was stop/started between the two copies, so a wedged
+CUDA state is excluded; the strided stage-2 path itself loses the device.**
+Cost of #484: ≈$7.5. *(b)* **E-045.3 is recorded BLOCKED** — 2 copies, ~$18,
+zero step records; do not dispatch a 3rd copy of the same configuration
+(§4.13 in advance). The unblocking affordance is the registered
+**slice-the-published-Z** proposal: read the complete published
+`Z_8b639abe36_37e146384b` (3142,P,d_z), take rows `ts`, write a NORMAL cached
+Z the trainer memmaps — no strided embed, no RAM-held Z, ≈$4.5-per-rung embed
+tax also deleted. Chris's call to build or park (E-051's host-starved node 3
+is an independent second instance of a host-bound trainer beside a healthy
+device — the shape is real on two tiers). *(c)* **The factorial is CLOSED
+without the 15-day interpolating rung**: span-restored 30 d 0.0713 · 10 d
+0.0804 · 5 d 0.0820 (#478) — flat, against the K-fixed 0.07→0.51 cliff.
+Figure `ml/figures/fig_factorial2.png` regenerated; paper updated (abstract's
+"intrinsic to the step size" reading retired in favour of the factorial's
+span story, sec:factorial completed with the landed 0.0820, fig_factorial
+re-made with the decisive point, tab:ablations rows resolved). *(d)* Box
+48632885 queue-checked and released after cancel (no queued run pinned to
+it). #483 confirmed IN PROGRESS on the H100 since #478's 23:33:26Z drain
+(codec-probes phase; its month-block re-embed and the header_t-516 §5.26
+publish watch belong to the overnight checks).
+
 **23:10Z 08-25 — EVENING HARVEST: THE DECISIVE RUNG LANDS AT 0.0820 — THE
 CONTEXT STORY IS CONFIRMED AT THE HARDEST STEP SIZE.**
 

@@ -154,11 +154,16 @@ measured, and it is expensive: at 5-day steps the one-step error ratio is
 $0.5056$/$0.5045$ (a seed pair) where the \emph{same} embeddings stepped
 monthly give $0.0721$/$0.0729$, the 15-day rung sits between at $0.1620$,
 and the day-matched 73-step roll scores corridor AUC $\mathbf{-0.499}$ ---
-\emph{below climatology} --- against $+0.939$ monthly. The ladder is smooth,
-so the difficulty is intrinsic to the step size rather than a defect
-(\S\ref{sec:cadence}); the mechanism is that the 5-day embedding sequence
-substantially decorrelates over one step (lag-1 $\rho\approx0.60$). Two
-repairs follow and are in flight: restricting the head's inputs to an
+\emph{below climatology} --- against $+0.939$ monthly. That ladder,
+however, turned out to be measuring the wrong axis: a step $\times$ span
+factorial (\S\ref{sec:factorial}) shows the difficulty tracks \emph{context
+span}, not step size --- at a fixed two-year span the one-step ratio is
+$0.071$--$0.082$ whether the steps are 30, 10, or 5 days (the 5-day
+decisive rung landed at $\mathbf{0.0820}$, inside its pre-registered band),
+while cutting the monthly cadence's span to 120 days sends it to $0.527$.
+The registered mechanism is the seasonal analog: a 720-day window contains
+last year's same-calendar frame. Two further repairs preceded that
+resolution: restricting the head's inputs to an
 8-level-per-dimension alphabet is the first intervention to beat the pentad
 baseline ($0.4916$), and a \emph{month-block} codec --- one embedding per
 calendar month, built from a grid of pentad cells --- cures the per-bin
@@ -2728,6 +2733,7 @@ A11 & step only, vs the pair & \textbf{30 d} & 120 d & 0.5274 \\
 A2a/b & (the ladder's far rung) & 30 d & 720 d & 0.0713 / 0.0729 \\
 E-045.2 & span only, vs the A8 rung & 10 d & \textbf{720 d} & 0.0804 \\
 A8 & (the ladder's 10-day rung) & 10 d & 240 d & 0.3377 \\
+E-045.1 & span only, vs the control pair & 5 d & \textbf{720 d} & 0.0820 \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -2751,26 +2757,33 @@ The mechanism candidate was registered before the remaining rungs ran:
 same-calendar frame; a 120- or 240-day window cannot. That is
 \S\ref{sec:replay}'s calendar-replay machinery in one-step form ---
 the head reads the analog rather than integrating dynamics --- and it
-makes a sharp prediction for the rung still in flight as this revision is
-built: E-045.1 (5-day steps, $K{=}144$, the full 720-day span, so the
-analog is in reach at the hardest step size) lands near the $0.07$--$0.15$
-band if the context story is right, and stays near $0.5$ if the step story
-is. E-045.3 ($K{=}48$, 15-day steps) interpolates. Both predictions are on
-record in the experiment log ahead of their results; A11 additionally moved
-span and frame count together (120 d $\wedge$ 4 frames), which the
-$K$-fixed-span rungs unbundle. Every cell here is $n{=}1$
-(\S\ref{sec:metrics}); the finding is the \emph{pattern across five cells},
-not any single level, and the two contrasts quoted are $4$--$7\times$
-against a control-pair spread of $0.001$.
+made a sharp prediction for the decisive rung, on record in the experiment
+log ahead of the result: E-045.1 (5-day steps, $K{=}144$, the full 720-day
+span, so the analog is in reach at the hardest step size) would land near
+the $0.07$--$0.15$ band if the context story is right, and near $0.5$ if
+the step story is. \textbf{It landed at $0.0820$} --- inside the band,
+$6.2\times$ below the control pair at the identical step size and the
+identical held-out persistence denominator. The context account is thereby
+confirmed at the finest cadence the data supports: with the span held at
+two years, the one-step ratio is $0.071$--$0.082$ whether the step is 30,
+10, or 5 days --- a flat line against the $K$-fixed ladder's
+$0.07\to0.51$ cliff. (E-045.3, the 15-day interpolating rung, is
+unresolved for an infrastructure reason --- its strided variant trains at
+CPU pace on both attempts --- and its absence does not bear on the two
+completed contrasts.) A11 additionally moved span and frame count together
+(120 d $\wedge$ 4 frames), which the $K$-fixed-span rungs unbundle. Every
+cell here is $n{=}1$ (\S\ref{sec:metrics}); the finding is the
+\emph{pattern across six cells}, not any single level. The span contrasts
+are $4$--$7\times$ against a control-pair spread of $0.001$.
 
 \begin{figure}[t]
 \centering\includegraphics[width=.98\linewidth]{fig_factorial.pdf}
 \caption{\textbf{The step $\times$ span factorial.} Every measured arm of
 E-044b/E-045, plotted twice: against context span (left) and against step
 size (right). Same points, same colors (step size). Span collapses the
-ratios onto one monotone family; step size scatters them. The in-flight
-decisive rung (E-045.1: 5-day steps at the full 720-day span) is marked
-with its pre-registered prediction band.}
+ratios onto one monotone family; step size scatters them. The decisive
+rung (E-045.1: 5-day steps at the full 720-day span) landed at $0.082$,
+inside its pre-registered $0.07$--$0.15$ band.}
 \label{fig:factorial}
 \end{figure}
 
@@ -3602,9 +3615,10 @@ A11 & A2a & span cut to 120 d at 30-d steps & 0.5274 &
 \textbf{step size exonerated} \\
 E-045.2 & A8 & span restored to 720 d at 10-d steps & 0.0804 &
 \textbf{span convicted} \\
-E-045.3 & A7 & span restored to 720 d at 15-d steps & in flight & \\
-E-045.1 & pair & span restored to 720 d at 5-d steps & in flight &
-the decisive rung; predictions pre-registered \\
+E-045.3 & A7 & span restored to 720 d at 15-d steps & blocked &
+strided trainer runs at CPU pace, both copies \\
+E-045.1 & pair & span restored to 720 d at 5-d steps & 0.0820 &
+\textbf{the decisive rung: in its pre-registered band} \\
 \midrule
 \multicolumn{5}{l}{\emph{Training composition (\S\ref{sec:components})}}\\
 A4 & pair & input noise at the monthly \emph{relative} dose & 0.8145 &
