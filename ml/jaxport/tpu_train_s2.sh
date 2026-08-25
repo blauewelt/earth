@@ -106,6 +106,17 @@ TAG="${TAG:-}"
 CKPT_EVERY="${CKPT_EVERY:-2000}"
 EXTRA_ARGS="${EXTRA_ARGS:-}"
 
+# The input pipeline (2026-08-25, E-051's third node): at K=144 the DEFAULT
+# host pipeline is ~15 s/step of numpy RNG plus ~2 s of gather+cast against
+# ~0.3 s of TPU step — the chips idle 98% of the wall clock. These four move
+# the noise on-device, ship fp16, thread the gather and overlap it with the
+# device step. Values are unchanged (fp16→fp32 is exact; the noise stream is
+# jax.random instead of numpy — a fresh-run fact the config line records).
+NOISE_BACKEND="${NOISE_BACKEND:-device}"
+GATHER_FP16="${GATHER_FP16:-1}"
+GATHER_WORKERS="${GATHER_WORKERS:-8}"
+PREFETCH="${PREFETCH:-2}"
+
 # Lifecycle.
 SHIP_EVERY_MIN="${SHIP_EVERY_MIN:-10}"   # upload cadence
 STALL_MIN="${STALL_MIN:-90}"             # progress watchdog
@@ -251,7 +262,9 @@ echo "resolved knobs: K ${K} · steps ${STEPS} · batch ${BATCH} · lr ${LR} ·"
      "milestones '${MILESTONE_STEPS}' · train_lon_hold ${TRAIN_LON_HOLD} ·" \
      "seed ${SEED} · tag '${TAG}' · tensor ${TENSOR_NAME} (${TENSOR_SHA:0:10})" \
      "· codec ${CODEC_ASSET} · Z '${Z_ASSET:-<embed on node>}' ·" \
-     "ckpt_every ${CKPT_EVERY} · extra '${EXTRA_ARGS}'"
+     "ckpt_every ${CKPT_EVERY} · extra '${EXTRA_ARGS}' ·" \
+     "pipeline: noise ${NOISE_BACKEND} · fp16 ${GATHER_FP16} ·" \
+     "gather_workers ${GATHER_WORKERS} · prefetch ${PREFETCH}"
 
 # --------------------------------------------------------------------------
 # 1 · what this host actually is
@@ -266,6 +279,24 @@ echo "measured: ${AVAIL_GB} GB free on ${WORK}"
 # tensor archive is ~11 GB, decompressed ~34 GB, the anomaly scratch copy the
 # same again, and the published pentad Z is 16.24 GiB on top.
 NEED_GB=120
+if [ "${AVAIL_GB}" -lt "${NEED_GB}" ]; then
+  # The v5e boot disk serves ~90 GB free — short of the pentad allocation —
+  # but the host carries 189 GB of RAM (measured, E-051 2026-08-25), so
+  # before refusing, try tmpfs: remount /dev/shm large enough and move WORK
+  # there. RAM-backed staging is also what removed the memmap-read cost from
+  # the gather. Only then refuse.
+  RAM_GB="$(awk '/MemTotal/{printf "%.0f", $2/1048576}' /proc/meminfo)"
+  if [ "${RAM_GB}" -ge 160 ]; then
+    echo "boot disk short (${AVAIL_GB} GB < ${NEED_GB}) but host has" \
+         "${RAM_GB} GB RAM — falling back to tmpfs"
+    mount -o remount,size=170G /dev/shm || true
+    WORK=/dev/shm/earth-train
+    OUT="${WORK}/run"
+    mkdir -p "${WORK}" "${OUT}" "${WORK}/cache"
+    AVAIL_GB="$(df -BG --output=avail "${WORK}" | tail -1 | tr -dc '0-9')"
+    echo "measured: ${AVAIL_GB} GB free on ${WORK} (tmpfs)"
+  fi
+fi
 if [ "${AVAIL_GB}" -lt "${NEED_GB}" ]; then
   echo "REFUSING: ${AVAIL_GB} GB free on ${WORK}, need ~${NEED_GB}. The pentad" \
        "tensor archive is ~11 GB, decompressed ~34 GB, the anomaly scratch copy" \
@@ -506,6 +537,10 @@ export CKPT_TAG="${NODE}"
   --lr-cooldown-frac "${LR_COOLDOWN_FRAC}" \
   --lr-warmup "${LR_WARMUP}" \
   --input-znoise "${INPUT_ZNOISE}" \
+  --noise-backend "${NOISE_BACKEND}" \
+  $( [ "${GATHER_FP16:-0}" != "0" ] && echo "--gather-fp16" ) \
+  --gather-workers "${GATHER_WORKERS}" \
+  --prefetch "${PREFETCH}" \
   --grad-clip "${GRAD_CLIP}" \
   ${MILESTONE_STEPS:+--milestone-steps "${MILESTONE_STEPS}"} \
   --train-lon-hold="${TRAIN_LON_HOLD}" \

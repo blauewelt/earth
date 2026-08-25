@@ -143,7 +143,7 @@ from tensor_io import load_tensor, writable_copy                # noqa: E402
 # --------------------------------------------------------------------------
 # the batch gather — `ml/temporal.py:gather_stencil` (:395) in numpy
 # --------------------------------------------------------------------------
-def gather_stencil_np(Z, base, p, NBR, K):
+def gather_stencil_np(Z, base, p, NBR, K, cast32=True, workers=0):
     """The ONE window-input gather, mirroring `temporal.gather_stencil`.
 
     NOT a copy of shared plumbing: the original is written in torch against a
@@ -155,8 +155,17 @@ def gather_stencil_np(Z, base, p, NBR, K):
 
     Z [T,P,d_z] (float16 memmap or array) · base [n] window-start rows · p [n]
     centre pixels · NBR None (stencil 1 → the exact legacy gather) or [P,S]
-    int64 with -1 = missing. Returns [n,K,d_z] or [n,K,S*d_z] float32; missing
+    int64 with -1 = missing. Returns [n,K,d_z] or [n,K,S*d_z]; missing
     neighbours are zero-filled, and slot 0 is the centre.
+
+    `cast32=True` (the default, and what every existing caller gets) returns
+    float32. `cast32=False` returns Z's OWN dtype uncast — at K=144 the fp32
+    cast alone was measured at ~1 s/step of host time (2026-08-25, the E-051
+    launch), and a device-side cast is free; the VALUES are identical because
+    fp16→fp32 is exact. `workers>0` splits the K loop across a thread pool —
+    same arithmetic, same output, measured ~1.9x at 8 threads (the GIL keeps
+    the rest). Both knobs exist for the TPU input pipeline; the parity gates
+    pin the default path.
     """
     base = np.asarray(base)
     p = np.asarray(p)
@@ -167,11 +176,25 @@ def gather_stencil_np(Z, base, p, NBR, K):
     miss = nbr < 0
     safe = np.maximum(nbr, 0)
     n = len(base)
-    cols = []
-    for j in range(K):
-        zj = np.asarray(Z[(base + j)[:, None], safe], np.float32)  # [n,S,d_z]
-        zj[miss] = 0.0
-        cols.append(zj.reshape(n, -1))
+
+    def _cols(jlo, jhi):
+        cols = []
+        for j in range(jlo, jhi):
+            zj = Z[(base + j)[:, None], safe]           # [n,S,d_z] copy
+            zj = np.asarray(zj, np.float32) if cast32 else np.asarray(zj)
+            zj[miss] = 0.0
+            cols.append(zj.reshape(n, -1))
+        return cols
+
+    if workers and workers > 1 and K > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        W = min(int(workers), K)
+        bounds = [(i * K // W, (i + 1) * K // W) for i in range(W)]
+        with ThreadPoolExecutor(W) as ex:
+            parts = list(ex.map(lambda b: _cols(*b), bounds))
+        cols = [c for part in parts for c in part]
+    else:
+        cols = _cols(0, K)
     return np.stack(cols, 1)
 
 
@@ -198,6 +221,34 @@ def apply_znoise(zseq, noise, sigma, d_z):
     z4 = zseq.reshape(n, K, -1, d_z)                    # [n,K,S,d_z]
     live = (z4 != 0).any(axis=-1, keepdims=True)
     return (z4 + noise.reshape(z4.shape) * sigma * live).reshape(zseq.shape)
+
+
+def apply_znoise_jax(zseq, key, sigma, d_z):
+    """`apply_znoise` with the draw ON DEVICE — the TPU input-pipeline fix.
+
+    The host draw was measured at ~15 s/step at K=144 (256x144x145x32
+    standard-normals through numpy's single-threaded PCG64, 2026-08-25 —
+    the number that killed the first E-051 training node's schedule); the
+    same draw inside the jitted step is microseconds of TPU time. The
+    SEMANTICS are apply_znoise's exactly — iid N(0,1) times sigma on live
+    slots, dead slots kept at exact zeros — but the STREAM is jax.random's
+    threefry, not numpy's PCG64, so a device-noise run is a different sample
+    path from a host-noise run at the same seed. That is a fresh-run fact to
+    record, never a parity bug: G5a compares the two frameworks on an
+    INJECTED noise array precisely so no gate depends on any sampler.
+
+    Traceable end to end (shapes static under jit). zseq may arrive fp16
+    (see gather_stencil_np cast32=False); it is cast to fp32 HERE, which is
+    exact, so the fp16 transfer changes no value anywhere.
+    """
+    zseq = zseq.astype(jnp.float32)
+    if sigma <= 0:
+        return zseq
+    n, K = zseq.shape[0], zseq.shape[1]
+    z4 = zseq.reshape(n, K, -1, d_z)
+    live = (z4 != 0).any(axis=-1, keepdims=True)
+    noise = jax.random.normal(key, z4.shape, jnp.float32)
+    return (z4 + noise * sigma * live).reshape(zseq.shape)
 
 
 def stage2_loss(model, zseq, mseq, sctx, ztgt):
@@ -441,6 +492,31 @@ def parse(argv=None):
                         "OFF, and OFF ADDS NO OPTAX TRANSFORM AT ALL — the "
                         "unclipped chain exactly, so an arm that does not opt "
                         "in is the pre-clip code path.")
+    p.add_argument("--noise-backend", default="host",
+                   choices=["host", "device"],
+                   help="Where the --input-znoise draw happens. 'host' "
+                        "(DEFAULT) is the original numpy path — bit-stable "
+                        "with every run before 2026-08-25. 'device' draws "
+                        "inside the jitted step (apply_znoise_jax): same "
+                        "semantics, different RNG stream, and it removes a "
+                        "measured ~15 s/step of single-threaded host RNG at "
+                        "K=144. The TPU launcher sets 'device'.")
+    p.add_argument("--gather-fp16", action="store_true",
+                   help="Ship the window gather in Z's own fp16 and cast to "
+                        "fp32 on device (exact) instead of casting on the "
+                        "host — halves both the host memcpy and the "
+                        "host-to-device transfer. Values identical.")
+    p.add_argument("--gather-workers", type=int, default=0,
+                   help="Thread-pool width for the window gather's K loop. "
+                        "0 (DEFAULT) = the original single-thread code path. "
+                        "Same arithmetic, same output.")
+    p.add_argument("--prefetch", type=int, default=0,
+                   help="Depth of the host-side batch prefetch queue. 0 "
+                        "(DEFAULT) = batches are built inline, the original "
+                        "path. N>0 builds them in a producer thread so host "
+                        "gather time overlaps device step time. The batch "
+                        "SEQUENCE is unchanged (one RNG, drawn in step "
+                        "order); only the wall clock moves.")
     p.add_argument("--milestone-steps", default="",
                    help="E-031/E-032: comma list of steps at which to save a "
                         "WEIGHTS-ONLY milestone head (temporal_ms<step>.pt). "
@@ -924,6 +1000,9 @@ def main(argv=None):
 
     @jax.jit
     def train_step(st, ost, lr, zseq, mseq, sctx, ztgt):
+        # Exact no-op for the fp32 path; makes --gather-fp16 safe here too
+        # (fp16→fp32 is exact, and the model must never run in fp16).
+        zseq = zseq.astype(jnp.float32)
         loss, grads = jax.value_and_grad(loss_fn)(st, zseq, mseq, sctx, ztgt)
         # THE PRE-CLIP GLOBAL NORM, on EVERY step. Clipping computes it
         # anyway, and the unclipped path pays one extra reduction — cheap
@@ -932,6 +1011,22 @@ def main(argv=None):
         # statistic (§4.10: instrument the quantity that distinguishes the
         # stories). #423's excursion could have begun anywhere inside a
         # 2,000-step window and no record could say where.
+        gnorm = optax.global_norm(grads)
+        ost = _set_lr(ost, lr)
+        upd, ost = tx.update(grads, ost, st)
+        return optax.apply_updates(st, upd), ost, loss, gnorm
+
+    # The device-noise twin (--noise-backend device): identical to train_step
+    # except the input perturbation is drawn and applied INSIDE the jit —
+    # see apply_znoise_jax for both the measurement that motivates it and the
+    # RNG-stream caveat. zseq may arrive fp16 (--gather-fp16); the cast to
+    # fp32 happens in apply_znoise_jax and is exact.
+    _NZ_SIGMA = float(a.input_znoise)
+
+    @jax.jit
+    def train_step_dn(st, ost, lr, key, zseq, mseq, sctx, ztgt):
+        zn = apply_znoise_jax(zseq, key, _NZ_SIGMA, d_z)
+        loss, grads = jax.value_and_grad(loss_fn)(st, zn, mseq, sctx, ztgt)
         gnorm = optax.global_norm(grads)
         ost = _set_lr(ost, lr)
         upd, ost = tx.update(grads, ost, st)
@@ -1052,6 +1147,8 @@ def main(argv=None):
         # TIER; a config line that did not say which backend produced it
         # would be the one place that fact could go missing.
         "backend": "jax", "k_time": k_time,
+        "noise_backend": a.noise_backend, "gather_fp16": bool(a.gather_fp16),
+        "gather_workers": int(a.gather_workers), "prefetch": int(a.prefetch),
         "lr": a.lr, "lr_schedule": a.lr_schedule,
         "lr_halflife": a.lr_halflife, "lr_cooldown_frac": a.lr_cooldown_frac,
         "lr_warmup": a.lr_warmup,
@@ -1209,21 +1306,73 @@ def main(argv=None):
     S = a.stencil
     gn = float("nan")
 
-    for s in range(start_step + 1, a.steps + 1):
-        k = rng.integers(0, len(pool_t), a.batch)
-        t_i, p_i = pool_t[k], pool_p[k]
-        base = t_i - K + 1
-        zseq = gather_stencil_np(Z, base, p_i, NBR, K)
-        if a.input_znoise > 0:
-            noise = rng.standard_normal((a.batch, K, S, d_z)).astype(np.float32)
-            zseq = apply_znoise(zseq, noise, a.input_znoise, d_z)
-        mseq = np.stack([Mt[base + j] for j in range(K)], 1)
-        ztgt = np.asarray(Z[base[:, None] + np.arange(1, K + 1)[None, :], p_i[:, None]],
-                          np.float32)
-        state, opt_state, loss, gnorm = train_step(
-            state, opt_state, jnp.asarray(a.lr * lr_factor(s - 1, a),
-                                          jnp.float32),
-            put(zseq), put(mseq), put(static_ctx[p_i]), put(ztgt))
+    host_noise = a.input_znoise > 0 and a.noise_backend == "host"
+    device_noise = a.input_znoise > 0 and a.noise_backend == "device"
+    _nz_root = jax.random.PRNGKey(a.seed) if device_noise else None
+
+    def make_batches():
+        """One generator, one RNG, drawn in step order — the SEQUENCE of
+        batches is identical whether it runs inline (--prefetch 0) or in the
+        producer thread, because this function is the only thing that touches
+        `rng` once training starts."""
+        for s_ in range(start_step + 1, a.steps + 1):
+            k = rng.integers(0, len(pool_t), a.batch)
+            t_i, p_i = pool_t[k], pool_p[k]
+            base = t_i - K + 1
+            zseq = gather_stencil_np(Z, base, p_i, NBR, K,
+                                     cast32=not a.gather_fp16,
+                                     workers=a.gather_workers)
+            if host_noise:
+                noise = rng.standard_normal(
+                    (a.batch, K, S, d_z)).astype(np.float32)
+                zseq = apply_znoise(zseq, noise, a.input_znoise, d_z)
+            mseq = np.stack([Mt[base + j] for j in range(K)], 1)
+            ztgt = np.asarray(
+                Z[base[:, None] + np.arange(1, K + 1)[None, :], p_i[:, None]],
+                np.float32)
+            yield s_, zseq, mseq, static_ctx[p_i], ztgt
+
+    if a.prefetch > 0:
+        import queue as _queue
+        import threading as _threading
+        _q = _queue.Queue(maxsize=a.prefetch)
+        _DONE = object()
+
+        def _produce():
+            try:
+                for item in make_batches():
+                    _q.put(item)
+                _q.put(_DONE)
+            except BaseException as e:       # surface, never deadlock
+                _q.put(e)
+
+        _threading.Thread(target=_produce, daemon=True).start()
+        print(f"batch prefetch ON: depth {a.prefetch}, gather workers "
+              f"{a.gather_workers or 1}, noise on {a.noise_backend}, "
+              f"transfer {'fp16' if a.gather_fp16 else 'fp32'}", flush=True)
+
+        def _stream():
+            while True:
+                item = _q.get()
+                if item is _DONE:
+                    return
+                if isinstance(item, BaseException):
+                    raise item
+                yield item
+        batch_iter = _stream()
+    else:
+        batch_iter = make_batches()
+
+    for s, zseq, mseq, sctx_b, ztgt in batch_iter:
+        lr_now = jnp.asarray(a.lr * lr_factor(s - 1, a), jnp.float32)
+        if device_noise:
+            state, opt_state, loss, gnorm = train_step_dn(
+                state, opt_state, lr_now, jax.random.fold_in(_nz_root, s),
+                put(zseq), put(mseq), put(sctx_b), put(ztgt))
+        else:
+            state, opt_state, loss, gnorm = train_step(
+                state, opt_state, lr_now,
+                put(zseq), put(mseq), put(sctx_b), put(ztgt))
         gv = float(gnorm)
         lv = float(loss)
         if not np.isfinite(lv):
