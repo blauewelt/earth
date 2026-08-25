@@ -364,6 +364,45 @@ sqrt(val_persistence) (vs the monthly anchor's 0.398× — pentad regime,
 matches the E-045 line). Milestone head ships at step 600; first curve point
 at step 2000 (log_every); watchdogs armed (90 min stall / 40 h cap).
 
+**23:10Z 08-25 — EVENING HARVEST: THE DECISIVE RUNG LANDS AT 0.0820 — THE
+CONTEXT STORY IS CONFIRMED AT THE HARDEST STEP SIZE.**
+
+*(a) #478 (E-045.1, 5-day steps, K=144 = 720-d span — the decisive rung) FINAL
+20k one-step ratio **1.7418 / 21.2544 = 0.0820**, deep inside the pre-registered
+context band (~0.07–0.15; the step story predicted ~0.5).* The E-045 factorial
+is now closed at its hardest cell: with span fixed at two years, 5-day steps
+score 0.0820 where the K-fixed ladder scored the SAME step size at 0.505 —
+span-restored rungs read 30 d 0.072 (A2a) · 10 d 0.0804 (#462) · **5 d 0.0820
+(#478)**, a flat line against the K-fixed ladder's 0.072 → 0.505 cliff. Step
+size does almost nothing; context span does almost everything, all the way
+down. Secondary read-outs, noted not registered: `rapid_r_kfold` 0.679
+[0.62, 0.729], deseas 0.585 at 20k (the pooled light-probe's contrary drift
+recorded at 19:00Z stayed contrary and stays excluded by protocol). Scale
+block source-written (206,658,592 params · batch 256 · 20,000 steps ·
+240,933,742 windows). n=1 per rung (§3b) — the RUNG PATTERN is the finding.
+This also hands **E-051** (the JAX full-budget run at this exact geometry) its
+torch 20k certificate: E-051's registered comparator is now a measured 0.0820,
+not an in-flight number. Job still `in_progress` at 22:55Z (probe ladder +
+publish); **#483 (E-047-HEAD, 6th) remains queued behind it** on the H100 and
+should pick up on drain — verify it pulls `Z_8b639abe36` from the cache.
+
+*(b) #484 (E-045.3, K=48, 3rd copy) is past the first-minutes check that
+killed #476: embed ran at GPU pace (~9.3 s/bin, 1047 bins ≈ 2.6 h, vs #476's
+11.27 s/STEP CPU signature), stage-2 config written (K=48, 206.56M,
+80,282,348 windows), monitor line healthy (val_persistence 26.804, znoise
+rel 0.135 — pentad regime). First curve point at step 2000 pending; 20k lands
+~early morning 08-26. Completes the span-fixed ladder's last rung.*
+
+*(c) #480 (E-049a continuous d_z-6 control, E-050's warm-start parent) is
+healthy at step 123,000/200,000 — 0.239 s/step, loss_rec 0.237, in-training
+probes steady (temporal_r_deseas ~0.55, chan_mse 0.677 vs persistence 0.843).
+Lands ~04–06Z 08-26 plus finals. E-050's first dispatch stays GATED on it;
+recipe + plan doc still owed before that dispatch.*
+
+*(d) Owed, unchanged: #472/#473 Tier-1 recon vs their TPU siblings (the
+cross-framework certificates); #482's corpse diagnosis on box 48478309
+(pre-LN vs post-LN constancy decides E-050's bound); E-046's seed-0 pair.*
+
 **19:00–19:20Z 08-25 — EVENING STEP: THE K=48 RUNG'S TRAINER RAN ON CPU AND WAS
 KILLED AT STEP 600; THE DECISIVE RUNG IS DEEP IN ITS PREDICTED BAND.**
 
