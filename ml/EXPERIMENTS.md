@@ -234,6 +234,37 @@ run here has now either collapsed (e048a, #481/#482) or degenerated (run-455's s
 code). *(iii)* The cheap alternative if diagnosis blames the centering: an RMS-only
 bound (no mean subtraction). Cost of #482: ~1.1 h ≈ $0.3.
 
+**19:00–19:20Z 08-25 — EVENING STEP: THE K=48 RUNG'S TRAINER RAN ON CPU AND WAS
+KILLED AT STEP 600; THE DECISIVE RUNG IS DEEP IN ITS PREDICTED BAND.**
+
+*(a) #476 (E-045.3, K=48 half-month rung, 2nd copy) CANCELLED at step 600/20,000 —
+11.27 s/step, the CPU signature.* Its strided embed ran at GPU pace (7.4 s/bin, ~2 h,
+correct-by-design re-embed: a strided rung's cache is disabled on purpose since #462's
+poisoning), then stage-2 crawled at 9× the SLOWER-than-K=144 pace with the box frame
+reading gpu 0%/temp 0/cpu 104% — the trainer lost the device between phases, or the
+GPU died after #473 drained. At that pace 20k = ~63 h against the 900-min timeout: the
+run could not answer its question (§4.13). Box 48632885 stop/started to clear any
+wedged CUDA state; **#484 (E-045.3, 3rd copy, same H100)** dispatched with the
+first-minutes check written into its doc: embed at ~7–8 s/bin = healthy, CPU-class bin
+times = a dead GPU, destroy and re-rent, never debug a lemon. Cost of #476: ~$10 for
+an embed a strided run cannot keep.
+
+*(b) #478 (E-045.1, K=144 — the decisive rung) at step 15,400: in-flight ratio
+0.0905, DEEP in the registered 0.07–0.15 context band and still falling*, clip_frac 0
+throughout, pace holding 1.21 s/step; 20k ≈21:55Z. The pooled light-probe series
+(0.55–0.63, drifting down while val falls) disagrees in direction — recorded, and
+excluded by protocol; the registered verdict is the one-step ratio.
+
+*(c) #472 (E-047b, the 126.9M Chinchilla-anchored month-block codec) finals, from the
+archive: 200,000 steps reached, final heavy probe z_mse 10.625/19.891 = pooled-legacy
+0.534, linear_r_deseas 0.309.* Its probe bundle carries THREE files, not eight — the
+month-block probe gap (probe_kfold/dip_check/probe_head never pass the block map,
+probe_sequence dies on a 3-vs-2 unpack) now confirmed on a second run after #473;
+mechanism and line numbers in `claude/expectations.md`. The codec itself survives as
+the 30-day artifact `pixelmae-472` (expires 2026-09-24 — publish to the release or
+write off before then). Its box was stopped on idle burn at 15:21Z by the hourly
+watch.
+
 **14:30–15:00Z 08-25 — THE E-046 VERDICT LANDS ON ITS STRONGEST BRANCH: THE FSQ
 CODEC'S HEAD READS 0.4394, BELOW BOTH CONTROLS — AND THE SEED PAIR AGREES TO 1e-4
 WHILE DISAGREEING COMPLETELY ABOUT SURVIVING THE TRAINING.**
