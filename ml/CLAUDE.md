@@ -218,6 +218,17 @@ The report is a REPORT: every number in it comes from an artefact (§2
 summaries (§0c). Where a section is empty, say so in one line rather than
 omitting the section — an absent section reads as an unwritten one.
 
+**Every experiment entry opens with a plain-English TL;DR, in sections 1 AND
+3** (amendment, Chris 2026-08-25: *"Can you add TL'DR / summaries, not just
+numbers, next to each experiment (also in the queued section?)"*). One
+sentence a reader with no context can follow: WHAT QUESTION the experiment
+asks and WHAT ITS ANSWER MEANS for the programme — before any config
+shorthand or number. "Does compressing each pixel's state onto a coarse grid
+of allowed values help or hurt the forecast?" is a TL;DR; "the FSQ verdict
+head" is a shorthand wearing one's clothes. The numbers then follow the
+TL;DR, never replace it — a queued entry that has no number yet still has a
+question, which is exactly why the queued section needs the TL;DR most.
+
 ## What this programme is building
 
 Standing statement of purpose, Chris 2026-08-19: *"What we're building is a
