@@ -364,6 +364,27 @@ sqrt(val_persistence) (vs the monthly anchor's 0.398× — pentad regime,
 matches the E-045 line). Milestone head ships at step 600; first curve point
 at step 2000 (log_every); watchdogs armed (90 min stall / 40 h cap).
 
+*(iv — 23:20Z)* **Node 3 was itself host-starved and was deleted at ~$9; node
+4 carries the fixed input pipeline and is FAST.** Node 3 shipped four
+10-minute cycles without reaching step 600 — >4.2 s/step, the chips idle
+~95%: measured on equivalent shapes, the host pipeline at K=144 costs ~15
+s/step of single-threaded numpy `standard_normal` (428M draws) plus ~2.2 s of
+gather+cast against ~0.3 s of TPU step. Fix (commit
+[c4ce2da](https://github.com/blauewelt/earth/commit/c4ce2da36), all
+flag-gated, default-off, bit-stability proven by the new
+`tests/test_jaxport_pipeline.py` P1–P3 + all 5 G5 gates green): noise drawn
+ON DEVICE in the jitted step (`apply_znoise_jax` — same semantics, jax RNG
+stream, recorded in the config line), fp16 transfer with exact on-device
+cast, 8-thread gather, depth-2 prefetch; the launcher defaults all four on
+and folds in the tmpfs disk-guard fallback. **Node 4 (boot 22:35Z, training
+≈22:57Z): step 2,000 at wall 367.5 s and 2,000→4,000 in 338.1 s =**
+**0.169 s/step — 25× node 3, 7.2× #478's H100 torch pace.** Health textbook:
+zmse 3.92→2.65, val_zmse 4.82→3.31, amp 0.89→0.94, clip_frac 0.024 in the
+warmup window then 0, nonfinite 0, grad_norm_max 320.8 absorbed by clip 128.
+**Projection: 200k ≈ 9.4 h ≈ $90 train leg (+~$14 of dead nodes) — inside
+the pre-registered decision threshold; the run is GO. 200k ETA ≈08:30Z
+08-26.** First rolling checkpoint (2.4G) confirmed on the bucket.
+
 **23:10Z 08-25 — EVENING HARVEST: THE DECISIVE RUNG LANDS AT 0.0820 — THE
 CONTEXT STORY IS CONFIRMED AT THE HARDEST STEP SIZE.**
 
