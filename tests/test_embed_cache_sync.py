@@ -655,6 +655,26 @@ def test_a_partial_can_never_satisfy_a_consumer_THAT_WANTS_A_WHOLE_Z():
         print("partial != complete: no .done, push refuses, verify refuses ✓")
 
 
+def test_the_pull_loop_covers_the_whole_suffix_space():
+    """A daily d_z-64 Z is ~117 GB ≈ 78 chunks at 1.5 GiB; the pull loop used
+    to stop at 64 ("far past need", sized when every Z was a monthly 5 GiB),
+    which would have truncated exactly such a Z into the chimera verify()
+    rejects — a silent rebuild-after-download on every run. The loop's bound
+    must be the NAMING's own ceiling (`aa`..`zz` = 676), so the only thing
+    that can end a pull early is a 404, never an arithmetic guess about how
+    big an embedding is allowed to get. chunk_suffix must be injective over
+    that whole range or two chunks would overwrite each other on the release.
+    """
+    import inspect
+    suffixes = [sync.chunk_suffix(i) for i in range(676)]
+    assert len(set(suffixes)) == 676, "chunk_suffix collides inside aa..zz"
+    assert suffixes[0] == "aa" and suffixes[-1] == "zz"
+    src = inspect.getsource(sync.pull)
+    assert "for i in range(676)" in src and "for i in range(64)" not in src, \
+        "pull's chunk loop must span the full suffix space, not a size guess"
+    print("pull loop  : spans aa..zz (676), no 64-chunk truncation      ✓")
+
+
 if __name__ == "__main__":
     test_the_asset_name_comes_from_the_codec_not_the_run()
     test_two_runs_of_the_same_codec_share_one_cache()
@@ -675,6 +695,7 @@ if __name__ == "__main__":
     test_a_partial_push_with_no_progress_marker_publishes_nothing()
     test_pull_of_a_partial_seeds_the_cache_and_its_progress_marker()
     test_a_partial_can_never_satisfy_a_consumer_THAT_WANTS_A_WHOLE_Z()
+    test_the_pull_loop_covers_the_whole_suffix_space()
     # LAST, because it replaces sync.cache_name permanently.
     test_push_with_no_cache_says_so_instead_of_succeeding_quietly()
     print("\nOK — the cache is published under its codec's identity and its "

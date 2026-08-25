@@ -872,6 +872,47 @@ failures.
     carrying `in_progress` as partial: those numbers are real, but the roll
     they belong to has not finished, and nothing published may quote them
     without saying so.
+26. **Any long computation saves partial progress to a SAFE location — safe
+    meaning the data survives the job completing, crashing, or the box being
+    destroyed.** Standing rule from Chris, 2026-08-25: *"Any long computation
+    needs to save partial progress backups in a safe location (safe in the
+    sense that the data is not deleted after the job completes or crashes)."*
+    This is §5.25's sibling and it is about DATA, not display: §5.25 ships
+    the result file so a reader can see it; this rule ships the EXPENSIVE
+    INTERMEDIATE so the next job never recomputes it. A box's disk is not
+    safe (jobs end, hygiene frees, boxes get destroyed); the releases are —
+    `embed-cache-v1`, `model-checkpoints-v1`, `data-cache-v1`, the `ml-metrics`
+    branch. The embed cache is the model implementation: publish finished
+    chunks DURING the pass (`embed_cache_sync.py push --partial`, the sidecar
+    retry ladder in `scripts/probes_run.sh`, every ~10 min until durable),
+    with a manifest that says exactly how much is real, and a consumer that
+    resumes at the first missing row (`pull_partial`). The trigger: a corrupt
+    embed-cache key meant the same ~4 h H100 embedding was computed three
+    times in one week (#463/#465/#466), because the only publish sat at the
+    END of the job and no-op'd. Chris: *"I'm trying to avoid spending money
+    on things that we computed several times."* When writing a new long step,
+    the design question is not "does it checkpoint?" but "if this box
+    vanishes at any minute, what does the next box NOT have to redo?" —
+    §5.21 (flush THEN mark) and §5.20 (publish when it EXISTS) govern the
+    mechanics.
+27. **Keep STANDING EXPECTATIONS, and check reality against them at every ML
+    check-in.** Standing rule from Chris, 2026-08-25: *"Keep a set of standing
+    expectations (what data should already exist, what should be computed).
+    When checking in on ML jobs (eg 1h after they started) make sure your
+    expectations are met."* The document is `claude/expectations.md` in the
+    claude.ai project (it must live OFF the boxes and OFF this repo's boxes'
+    disks, per §6): a short list of (a) durable artefacts that should already
+    exist, BY NAME — which releases hold which tensors, codecs, heads and
+    embed caches — and (b) what is being computed right now, with the run
+    number (§0c form), what it will produce, and roughly when. Every
+    monitoring wake-up — the hourly fleet check, a scheduled step, a "how is
+    #NNN doing" — DIFFS the world against that list before reporting: an
+    expected artefact that is missing, an in-flight job recomputing something
+    the list says exists, or a box embedding what another box already
+    published is the exact failure this catches, and it is cheaper to catch
+    at the 1-hour check than at the invoice. Update the doc in the same
+    breath as dispatching or harvesting — an expectations list that lags the
+    fleet is a second thing to be wrong about.
 
 ---
 

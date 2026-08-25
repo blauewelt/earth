@@ -537,8 +537,15 @@ def pull(run, a_data, expect_t):
     if os.path.exists(tmp):
         os.remove(tmp)
     got = 0
-    for i in range(64):                       # 64 x 1.5 GiB is far past need
-        suffix = f"{chr(97 + i // 26)}{chr(97 + i % 26)}"
+    # 676 = the whole `aa`..`zz` suffix space — the naming's own ceiling, so
+    # the loop can never stop short of a chunk the push loop could have
+    # written. The old bound was `range(64)` ("far past need"), sized when
+    # every Z was a monthly 5 GiB; a DAILY d_z-64 Z is ~117 GB ≈ 78 chunks,
+    # which that bound would have silently truncated into exactly the
+    # short-array-vs-header chimera verify() exists to catch — a rebuild-
+    # after-download, every run, forever, with no line saying why.
+    for i in range(676):
+        suffix = chunk_suffix(i)
         url = f"{base}/{asset}.{suffix}"
         r = sh(f'curl -fsSL --max-time 1800 --retry 3 --retry-delay 5 '
                f'-o "{tmp}.part" "{url}"')
