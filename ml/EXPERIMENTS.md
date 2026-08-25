@@ -339,6 +339,31 @@ served in-maintenance hosts twice); hard cap 40 h; stall watchdog 90 min;
 checkpoints + torch-loadable .pt ship to the bucket every 10 min, so a
 preemption or cap costs a relaunch under the same node name, never the run.
 
+**21:35Z 08-25 — E-051 LAUNCH ADDENDUM: TWO NODES DIED IN SETUP (BOTH
+SELF-REAPED CORRECTLY), THE THIRD IS TRAINING.** TL;DR — the big TPU run is
+live on its third node; the first two deaths were a disk guard doing its job
+and a real JAX trainer bug at K=144, now fixed on main. *(i)* Node 1
+(~20:19Z): the launcher's disk guard refused 90 GB free vs the 120 the pentad
+allocation needs, shipped its log, self-deleted (~$0.20). Fix: `WORK` on
+tmpfs, remounted to 170G (189 GB RAM host). *(ii)* Node 2 (20:30–20:58Z,
+~$4.50): HBM OOM at the fixed monitoring batch — `put()` staged the FULL
+4096×144×145×32 fp32 array (10.95 GB) onto device 0 via `jnp.asarray` and
+then re-sharded it, so device 0 needed the whole array PLUS its own 2.55 GiB
+shard beside the replicated head + Adam state on a 16 GB v5e chip; XLA's
+"563.88M free" is 16 GB minus exactly those terms. Invisible at gate-tier K
+(the staged array is small) — a genuinely new K=144 failure. Fix on main
+([0f04c3e](https://github.com/blauewelt/earth/commit/0f04c3ee0346f132720ec3a0a99fa178f1344197)):
+`jax.device_put(numpy, NamedSharding)` slices on the HOST, no full-size
+device allocation ever exists; dtype canonicalization measured identical; all
+5 G5 gates re-run green. *(iii)* Node 3 (boot 21:07Z, training ~21:30Z):
+staging clean — Z assembled from 12 chunks header-bounded and VERIFIED
+(3142, 86698, 32) float16 16.24 GiB with monitor z_rms 5.17825 (the
+continuous run-415 identity, checked by VALUE per the ledger rule), fresh-run
+resume line on the record, val_persistence 21.446, znoise 0.7 = 0.151×
+sqrt(val_persistence) (vs the monthly anchor's 0.398× — pentad regime,
+matches the E-045 line). Milestone head ships at step 600; first curve point
+at step 2000 (log_every); watchdogs armed (90 min stall / 40 h cap).
+
 **19:00–19:20Z 08-25 — EVENING STEP: THE K=48 RUNG'S TRAINER RAN ON CPU AND WAS
 KILLED AT STEP 600; THE DECISIVE RUNG IS DEEP IN ITS PREDICTED BAND.**
 
