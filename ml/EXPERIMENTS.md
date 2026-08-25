@@ -256,7 +256,19 @@ ONE nonzero clip in 200k steps. So #468's death was draw-luck inside a regime bo
 seeds share, the E-044b clip-as-mechanism claim gains its hardest instances yet,
 and the FSQ forecast win is priced: an optimization landscape that can kill a run.
 Folded into the paper (sec:quant + tab:ablations E-046 row + tab:inflight). The
-pooled probe series (~0.44–0.52) stays excluded by protocol. This lands ON TOP of
+pooled probe series (~0.44–0.52) stays excluded by protocol. **FOLLOW-UPS EXECUTED
+on Chris's approval (~15:30Z, "Proposal sounds good, let's do it!"):** (i) #468
+(E-046-HEAD seed 0)'s box-local ~15,600-step head is WRITTEN OFF — its 20k twin's
+full ladder is archived as `probes-477.json`, so the partial adds nothing; Vast
+48520137 (gpu-box-32966687) leaves the STOP-ONLY / NEVER-DESTROY list (it currently
+runs #480, the E-049a d_z-6 control). (ii) Warm-start quantization is PROMOTED ahead
+of any further cold-start FSQ arm, and its affordance is landed as **E-050 /
+`--fsq-warmstart`** (6c83ed3): resume a CONTINUOUS checkpoint with the lattice
+switched on — a four-key hole in the resume guard, parameter-free so every weight
+loads exactly, `--fsq-auto-step` rebased onto the resume step, provenance recorded
+as `fsq_warmstart_from`, recipe-only workflow key, 7 new guard tests. The first
+warm-start dispatch is gated on #480 (E-049a, the continuous d_z-6 parent) finishing
+~tomorrow noon. This lands ON TOP of
 E-049's cold-start collapses (#481/#482) and sharpens the fork: run-455's z — a
 DEGENERATED sign code — still forecasts better than the continuous codec, so the
 lattice is worth stabilizing, which is what E-049b's intrinsic bound and the
