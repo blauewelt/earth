@@ -758,10 +758,51 @@ a2.set_xlabel("one-step ratio at 5-day cadence")
 a2.set_title("one variable each, vs the pair", loc="left", fontsize=8.5)
 for a in (a1, a2):
     strip(a)
-fig.suptitle("The five-day step is intrinsically harder, and only input "
-             "quantization has moved it",
+fig.suptitle("The K-fixed ladder, as first read \u2014 \u00a7the factorial shows its "
+             "axis was really context span",
              fontsize=9, x=0.02, y=1.07, ha="left")
 fig.savefig(os.path.join(FIGS, "fig_cadence.pdf"))
+plt.close(fig)
+
+
+# ---- Fig: the step x span factorial --------------------------------------
+# src: EXPERIMENTS.md E-045 (A-arms + span-fixed rungs, 2026-08-22..25).
+#      Every point is #427's exact 206.5M stage-2 configuration over the
+#      frozen run-415 pentad codec at 20k steps, scored by its own
+#      persistence baseline; only the sampling of the embedding sequence
+#      (stride, K) differs. (span, step, ratio, run):
+#      (120,5,.50560,#427) (120,5,.50447,#432) (120,30,.5274,#464 A11)
+#      (240,10,.3377,#452 A8) (360,15,.1620,#441 A7)
+#      (720,30,.0713,#435 A2a) (720,30,.0729,#439 A2b)
+#      (720,10,.0804,#462 E-045.2). In flight: E-045.1 (720,5,#463),
+#      E-045.3 (720,15,#474).
+fpts = [(120,5,.50560),(120,5,.50447),(120,30,.5274),(240,10,.3377),
+        (360,15,.1620),(720,30,.0713),(720,30,.0729),(720,10,.0804)]
+scol = {5: C1, 10: C3, 15: INK2, 30: C2}
+fig, (b1, b2) = plt.subplots(1, 2, figsize=(7.4, 3.0), sharey=True)
+for sp, st, r in fpts:
+    b1.plot(sp, r, "o", color=scol[st], ms=5)
+    b2.plot(st, r, "o", color=scol[st], ms=5)
+b1.set_xscale("log"); b1.set_xticks([120,240,360,720])
+b1.set_xticklabels(["120 d","240","360","720 d"], fontsize=7.5)
+b2.set_xscale("log"); b2.set_xticks([5,10,15,30])
+b2.set_xticklabels(["5 d","10","15","30 d"], fontsize=7.5)
+for b in (b1, b2): b.minorticks_off(); strip(b)
+b1.set_xlabel("context span (same points)")
+b2.set_xlabel("step size (same points)")
+b1.set_ylabel("one-step ratio (lower = better)")
+b1.set_title("span organizes the ratio", loc="left", fontsize=8.5)
+b2.set_title("step size does not", loc="left", fontsize=8.5)
+for st, lab in [(5,"5 d step"),(10,"10 d"),(15,"15 d"),(30,"30 d")]:
+    b2.plot([],[],"o",color=scol[st],ms=5,label=lab)
+b2.legend(fontsize=6.5, frameon=False, loc="upper left")
+b1.annotate("E-045.1 lands here\n(in flight)", xy=(720,.10),
+            xytext=(340,.24), fontsize=7, color=INK2,
+            arrowprops=dict(arrowstyle="-", color=INK2, lw=.8))
+fig.suptitle("The step x span factorial: the cadence ladder was measuring "
+             "context, not step size",
+             fontsize=9, x=0.02, y=1.05, ha="left")
+fig.savefig(os.path.join(FIGS, "fig_factorial.pdf"))
 plt.close(fig)
 
 

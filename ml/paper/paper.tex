@@ -2641,8 +2641,8 @@ Nothing about it is a statement on the codec's job in
 \S\ref{sec:cadence}, which is to make the state \emph{attendable} so it
 can be rolled forward; that scoreboard has no raw-pixel entrant.
 
-\subsection{The cadence ladder: intrinsic difficulty, not a
-bug}\label{sec:ladder-cadence}
+\subsection{The cadence ladder, and the confound it
+carried}\label{sec:ladder-cadence}
 
 A factor of sixteen in a one-step error ratio is the size of effect that is
 usually a defect --- some code path still assuming a monthly axis. The
@@ -2666,19 +2666,25 @@ step size & one-step ratio & how the states were selected \\
 
 Two things follow. First, \textbf{the ladder is smooth and monotone through
 three rungs}: no cliff, no non-monotonicity, and therefore no rung at which
-a hidden monthly assumption breaks. The five-day difficulty is
-\emph{intrinsic} --- it is the signal-to-noise of the step, not a defect of
-the implementation. Second, and more usefully, \textbf{the pentad embedding
+a hidden monthly assumption breaks. Second, \textbf{the pentad embedding
 is a sound monthly substrate}. Stepped at 30 days it lands squarely in the
 monthly class, and it does so whether the states are drawn from the $8\%$ of
 bins that carry Argo or from the $92\%$ that do not. The pipeline, the
 anomaly transform, the published embeddings and the head architecture are
-all exonerated at once; what is left is the step.
+all exonerated at once.
 
-That is also the repair the result points at, and it is hierarchical rather
-than a retreat: roll at monthly stride \emph{through} the pentad stack and
-keep the five-day steps for within-month detail. \S\ref{sec:block} is the
-architectural form of the same idea.
+What does \emph{not} follow --- though this report's first reading said it
+did --- is that the five-day difficulty is intrinsic to the step. The ladder
+above holds $K{=}24$ frames fixed while the stride varies, so \textbf{the
+context span co-varies with the step size}: the 30-day arm sees 720 days of
+history and the 5-day arm sees 120. ``The step is harder'' and ``the head is
+starved of history'' produce the identical monotone curve. The reader who
+caught the confound designed the factorial that separates them, and
+\S\ref{sec:factorial} reports it: the ladder was measuring the context axis
+almost entirely. The hierarchical repair the first reading pointed at ---
+roll at monthly stride \emph{through} the pentad stack
+(\S\ref{sec:block}) --- survives, but for a different reason than the one
+first given.
 
 \begin{figure}[t]
 \centering\includegraphics[width=.98\linewidth]{fig_cadence.pdf}
@@ -2687,7 +2693,8 @@ step size, holding everything else fixed --- same frozen pentad codec, same
 embeddings, same $1024\times16$ head with input noise, same pixels, 20{,}000
 steps, each arm scored against its own persistence baseline. The two points
 at 30 days are the Argo-carrying and Argo-free bin selections. Smooth and
-monotone: the 5-day difficulty is intrinsic to the step size.
+monotone --- but $K{=}24$ is fixed, so context span co-varies with the step,
+and \S\ref{sec:factorial} shows the span is what this curve is measuring.
 \textbf{Right: the component ladder at 5 days}, one variable per arm against
 the two-seed control (dotted). Rescaling the exposure-bias noise to the
 pentad embedding scale is catastrophic, removing the Argo targets makes
@@ -2696,6 +2703,71 @@ restricting the head's inputs to an 8-level-per-dimension alphabet beats the
 control. Every arm is $n{=}1$ except the control, so these are directions;
 the control pair's own $|\Delta|$ is $0.0011$.}
 \label{fig:cadence}
+\end{figure}
+
+\subsection{The factorial: the ladder was measuring context, not step
+size}\label{sec:factorial}
+
+The confound is broken by completing the step $\times$ span factorial: hold
+one axis and move the other, in both directions, with everything else ---
+codec, head, pixels, step budget, per-arm persistence baseline --- exactly
+as in the ladder. Two cells were bought first because they were cheap, and
+each is a one-variable move from a cell already measured:
+
+\begin{center}\small
+\begin{tabular}{llrrl}
+\toprule
+arm & moves & step & span & one-step ratio \\
+\midrule
+control pair & --- & 5 d & 120 d & 0.50560 / 0.50447 \\
+A11 & step only, vs the pair & \textbf{30 d} & 120 d & 0.5274 \\
+A2a/b & (the ladder's far rung) & 30 d & 720 d & 0.0713 / 0.0729 \\
+E-045.2 & span only, vs the A8 rung & 10 d & \textbf{720 d} & 0.0804 \\
+A8 & (the ladder's 10-day rung) & 10 d & 240 d & 0.3377 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Read the contrasts, not the rows. \textbf{Moving only the step size does
+almost nothing}: at a fixed 120-day span, 30-day steps score $0.527$ against
+the 5-day pair's $0.506$ --- the ``easy'' monthly cadence lands in the
+5-day difficulty class the moment it is stripped of its long context.
+\textbf{Moving only the span does almost everything}: at a fixed 10-day
+step, restoring the span from 240 to 720 days takes $0.338$ to $0.080$,
+A2a-class. Figure~\ref{fig:factorial} plots every arm against both axes:
+span organizes the ratio into one monotone family; step size organizes
+nothing. The white-innovation-floor account of the five-day regime is
+thereby weakened exactly where it was strongest --- A2a's model error is
+$2.0$ on the same 30-day targets where A11's is $15.1$, so the content the
+first reading called irreducible is largely predictable \emph{given long
+context}.
+
+The mechanism candidate was registered before the remaining rungs ran:
+\textbf{the seasonal analog}. A 720-day window contains last year's
+same-calendar frame; a 120- or 240-day window cannot. That is
+\S\ref{sec:replay}'s calendar-replay machinery in one-step form ---
+the head reads the analog rather than integrating dynamics --- and it
+makes a sharp prediction for the rung still in flight as this revision is
+built: E-045.1 (5-day steps, $K{=}144$, the full 720-day span, so the
+analog is in reach at the hardest step size) lands near the $0.07$--$0.15$
+band if the context story is right, and stays near $0.5$ if the step story
+is. E-045.3 ($K{=}48$, 15-day steps) interpolates. Both predictions are on
+record in the experiment log ahead of their results; A11 additionally moved
+span and frame count together (120 d $\wedge$ 4 frames), which the
+$K$-fixed-span rungs unbundle. Every cell here is $n{=}1$
+(\S\ref{sec:metrics}); the finding is the \emph{pattern across five cells},
+not any single level, and the two contrasts quoted are $4$--$7\times$
+against a control-pair spread of $0.001$.
+
+\begin{figure}[t]
+\centering\includegraphics[width=.98\linewidth]{fig_factorial.pdf}
+\caption{\textbf{The step $\times$ span factorial.} Every measured arm of
+E-044b/E-045, plotted twice: against context span (left) and against step
+size (right). Same points, same colors (step size). Span collapses the
+ratios onto one monotone family; step size scatters them. The in-flight
+decisive rung (E-045.1: 5-day steps at the full 720-day span) is marked
+with its pre-registered prediction band.}
+\label{fig:factorial}
 \end{figure}
 
 \subsection{The component ladder: what breaks, one variable at a
@@ -2951,35 +3023,35 @@ calendar month, $7\times40$ cells & $d_z$ 64, continuous &
 \addlinespace
 \texttt{f4r2-40M-}\newline\texttt{monthblock-b512} & 38.0M &
 the same & the same & 60k $\times$ 512 & torch &
-in flight --- the cross-framework twin \\
+finishing --- from its rescued 45k milestone \\
 \addlinespace
 \texttt{f4r2-40M-}\newline\texttt{monthblock} & 38.0M &
 the same & the same & 200k $\times$ 128 & torch &
-in flight --- the long form \\
+timed out at ${\sim}$190k; curves archived \\
 \addlinespace
 \texttt{f4r2-126M-}\newline\texttt{monthblock-b256} & 126.9M &
 calendar month, $7\times40$ cells & $d_z$ 128, continuous &
-60k $\times$ 256 & JAX/TPU & in flight \\
+60k $\times$ 256 & JAX/TPU & \textbf{finished} \\
 \addlinespace
 \texttt{f4r2-126M-}\newline\texttt{monthblock} & 126.9M &
 the same & the same & 200k $\times$ 64 & torch &
-in flight --- the long form \\
+finishing --- rescued at 120k, resuming to 200k \\
 \midrule
 \multicolumn{7}{l}{\emph{E-046 --- the same alphabet, moved into the
 bottleneck (\S\ref{sec:quant})}}\\
 \texttt{f4r2-40M-fsq8} & 38.0M &
 5-day bin & $d_z$ 32, FSQ $[8]^{32}$ & 200k $\times$ 512 & torch &
-in flight \\
+\textbf{finished}; verdict head in flight \\
 \midrule
 \multicolumn{7}{l}{\emph{E-048 --- windows instead of months, and the level
 placement itself under test}}\\
 \texttt{f4r2-70M-}\newline\texttt{fsqblock-w6s6} & 71.3M &
 30-day window, advancing 30 days & $d_z$ 64, FSQ $L{=}8$,
-ladder fitted & 60k $\times$ 512 & TPU & \emph{planned} \\
+ladder fitted & 60k $\times$ 512 & TPU & run twice --- see text \\
 \addlinespace
 \texttt{f4r2-70M-}\newline\texttt{fsqblock-w6s3} & 71.3M &
 30-day window, advancing \textbf{15 days} & the same &
-60k $\times$ 512 & TPU & \emph{planned} \\
+60k $\times$ 512 & TPU & held pending the w6s6 reading \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Codecs in flight and planned} --- configurations, not
@@ -3033,9 +3105,50 @@ would choose the geometric form on almost any centred distribution. So the
 contrast that separates the two stories is registered in advance: at odd $L$
 the evenly-spaced map is unbiased, and if the geometric ladder still wins
 there the win is about companding, while if the margin collapses the win was
-a bias correction and the cheaper fix is a symmetric uniform map. Nothing has
-been trained at either configuration; the arithmetic behind the table's step
-budget puts a pair at about nine hours of one TPU.
+a bias correction and the cheaper fix is a symmetric uniform map.
+
+\paragraph{What the first two E-048 runs measured.} The non-overlapping arm
+has now trained twice, and the pair of runs is a result about the
+\emph{bottleneck}, not the window. The first run collapsed: by step
+${\sim}300$ its encoder had become a constant function of its input --- one
+distinct $z$ vector across a thousand probe inputs, pre-quantization
+activations at $|v|\approx 87$ against a saturation radius of $2$ --- and
+the training-time probe correlation read exactly zero until the collapse
+guard killed the run at step 10k, its first live kill. Reconstruction loss
+was structurally blind to the death, exactly as in the earlier latent
+collapse it was built against: a bottleneck that emits one vector still
+reconstructs at the decoder-side floor. The diagnosis exposed something
+about the \emph{healthy} FSQ codec of \S\ref{sec:quant} as well: its own
+pre-quantization activations measure $|v|\sim 3{\times}10^{4}$ --- fully
+saturated, four orders of magnitude past the bound --- and its information
+travels as \emph{sign flips}, about one bit per dimension on a synthetic
+probe. The eight-level lattice is worn as a two-level code, because the
+codec-side bottleneck fixes its scale at $\sigma{=}1$ by design (``let the
+encoder learn the scale in'') and the straight-through estimator gives the
+encoder no gradient, and therefore no incentive, to comply.
+
+The fitted ladder was therefore completed to fit the \textbf{scale} as well
+as the form: the per-dimension fit now measures the saturation radius on
+the run's own activations, the fit string records it, and archived
+checkpoints rebuild bit-identically from their legacy strings. A detail
+worth recording against the pre-registered even-$L$ contrast above: at the
+\emph{default} radius the fit chose the evenly-spaced form on all 64
+dimensions with zero measured gain --- both ladders were equally wrong
+about where the mass was --- while with the radius itself fitted the
+geometric form won nearly every dimension, on a distribution whose heavy
+tail was partly the drift itself. The rerun with fits at steps 50, 200 and
+2{,}000 settles the two diseases separately: the collapse mode is
+\emph{closed} (probe correlation alive from the first fit onward, the
+guard never fired, the encoder input-dependent to the end), but the drift
+is not --- the pre-quantization scale ran from $0.7$ to $114$ over 60k
+steps with no restoring force, each fitted lattice outgrown within a few
+thousand steps, and reconstruction never left ${\sim}0.30$ where the
+\emph{continuous} month-block codec of \S\ref{sec:block} reaches $0.098$
+on nearly the same windowing. The open design choice, stated rather than
+decided here: give the latent an intrinsic bound (a normalization in front
+of the lattice, so the fit has a stationary target), or accept the sign
+code as what tanh-bounded FSQ converges to at this scale and size the
+lattice for it. The overlapping arm waits on that choice.
 
 \section{A second implementation, and a new tier of
 hardware}\label{sec:jax}
@@ -3434,5 +3547,71 @@ Raw source data is mirrored in the repository's \texttt{data-cache-v1}
 release (RG Argo, cite Roemmich \& Gilson 2009; NCEP R1, public
 domain); a DOI-carrying archive (Zenodo) is planned once the in-flight
 results settle.}
+
+\section{Every one-variable ablation at pentad cadence}\label{app:ablations}
+
+This appendix collects, in one place, every arm of the E-044/E-045 programme
+that changes \emph{exactly one thing} against a measured control --- the
+component ladder of \S\ref{sec:components}, the cadence and factorial arms of
+\S\ref{sec:ladder-cadence}--\ref{sec:factorial}, and the quantization arms of
+\S\ref{sec:quant}. Every row is #427's stage-2 configuration (206.5M
+$1024\times16$ head, stencil 145, input noise $\sigma{=}0.7$, gradient clip
+128, seed 0, 20{,}000 steps) over the frozen 38.0M run-415 pentad codec,
+scored against its own persistence baseline; only the named variable moves.
+Every row is $n{=}1$ except the control pair; the pair's own $|\Delta|$ of
+$0.0011$ is the only replicate-backed spread at this cadence, so per
+\S\ref{sec:metrics} these are directions and contrasts, never levels.
+
+\begin{table}[h]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{llR{4.6cm}rl}
+\toprule
+arm & vs & the one variable & ratio & reading \\
+\midrule
+\multicolumn{5}{l}{\emph{The control}}\\
+E-044b pair & --- & (nothing --- the two-seed control) & 0.5056 / 0.5045 &
+the only pair \\
+\midrule
+\multicolumn{5}{l}{\emph{Sampling geometry (the step $\times$ span factorial,
+\S\ref{sec:factorial})}}\\
+A2a & pair & stride 6: 30-d steps, 720-d span, Argo bins & 0.0713 &
+the ladder's far rung \\
+A2b & A2a & Argo-free bins & 0.0729 & bin regime is not the driver \\
+A7 & pair & stride 3: 15-d steps, 360-d span & 0.1620 & \\
+A8 & pair & stride 2: 10-d steps, 240-d span & 0.3377 & \\
+A11 & A2a & span cut to 120 d at 30-d steps & 0.5274 &
+\textbf{step size exonerated} \\
+E-045.2 & A8 & span restored to 720 d at 10-d steps & 0.0804 &
+\textbf{span convicted} \\
+E-045.3 & A7 & span restored to 720 d at 15-d steps & in flight & \\
+E-045.1 & pair & span restored to 720 d at 5-d steps & in flight &
+the decisive rung; predictions pre-registered \\
+\midrule
+\multicolumn{5}{l}{\emph{Training composition (\S\ref{sec:components})}}\\
+A4 & pair & input noise at the monthly \emph{relative} dose & 0.8145 &
+the transferable-constant reading refuted \\
+A3 & pair & Argo-carrying target bins excluded & 0.5665 &
+hypothesis inverted: Argo targets stabilize \\
+A6 & pair & continuous fraction-of-year season phase & 0.5077 &
+the token staircase is not the problem \\
+\midrule
+\multicolumn{5}{l}{\emph{Quantization (\S\ref{sec:quant})}}\\
+A9 & pair & head inputs on an 8-level lattice & 0.4916 &
+the first arm to beat the pair \\
+A10 & A7 & the same lattice at 15-d cadence & 0.1692 &
+the win is pentad-specific \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Every one-variable arm at pentad cadence}, one row each.
+``vs'' names the measured cell the arm differs from by exactly the stated
+variable. Ratios are one-step $z$-space MSE over each arm's own persistence
+baseline at 20k steps; lower is better. The factorial block's reading is
+\S\ref{sec:factorial}'s: contrasts that move only the step change the ratio
+by ${\sim}4\%$, contrasts that move only the span change it by
+$4$--$7\times$. Run keys, curves and dispatch configurations for every row
+are in the public experiment log under E-044/E-045.}
+\label{tab:ablations}
+\end{table}
 
 \end{document}
