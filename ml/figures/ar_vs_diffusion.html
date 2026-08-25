@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  One Step Forward: Autoregressive vs Diffusion - six slides on the design
+  question for next-timestep prediction. Slide 1 states what "autoregressive"
+  concretely means in this system today (the per-pixel stencil head, space as
+  a fixed concat, attention over time only); slide 2 untangles the three
+  independent design axes the AR-vs-diffusion framing conflates; slides 3-4
+  are the case for and against a diffusion head, each point tied to a measured
+  programme fact where one exists; slide 5 sketches a concrete latent-field
+  DiT with cost arithmetic; slide 6 is a staged decision path with falsifiers.
+  Made 2026-08-26 at Chris's request ("comparing the two approaches ... I
+  guess a DiT comes to mind"). All cost numbers and the slide-5 arithmetic
+  are DESIGN REASONING, not measurements; measured numbers cite their
+  experiment (E-036/E-037 noise, E-044b/E-045 cadence and span, E-046 fsq8,
+  sec:replay). Current truth is always ml/EXPERIMENTS.md.
+-->
+<title>One Step Forward: AR vs Diffusion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;600&display=swap">
+<style>
+  :root {
+    --paper: #F6F9FB;
+    --card: #FFFFFF;
+    --ink: #16222C;
+    --muted: #5C6C79;
+    --line: #C7D3DC;
+    --accent: #0A6EA8;      /* Atlantic blue: the current AR stencil head */
+    --quant: #B7761C;       /* amber: the diffusion / generative candidate */
+    --good: #2E7D46;
+    --bad: #B3453A;
+    --wash: #E8F0F6;
+    --qwash: #F6EDDD;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0E151B;
+      --card: #151E26;
+      --ink: #DCE6EE;
+      --muted: #8FA1AF;
+      --line: #33434F;
+      --accent: #57A9DC;
+      --quant: #DFA84E;
+      --good: #6FBF8A;
+      --bad: #E08379;
+      --wash: #17242E;
+      --qwash: #2A2318;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0E151B;
+    --card: #151E26;
+    --ink: #DCE6EE;
+    --muted: #8FA1AF;
+    --line: #33434F;
+    --accent: #57A9DC;
+    --quant: #DFA84E;
+    --good: #6FBF8A;
+    --bad: #E08379;
+    --wash: #17242E;
+    --qwash: #2A2318;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Public Sans", system-ui, sans-serif;
+    margin: 0;
+    padding: 36px 20px 70px;
+  }
+  main { max-width: 1080px; margin: 0 auto; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 22px;
+  }
+  .slide {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 26px 28px 20px;
+    margin: 0 0 34px;
+  }
+  .slide h2 {
+    font-family: "Archivo", sans-serif;
+    font-size: 21px; font-weight: 650;
+    margin: 0 0 2px;
+  }
+  .slide .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 10px;
+  }
+  .slide .lede {
+    font-size: 14px; color: var(--muted); margin: 6px 0 16px; max-width: 900px;
+  }
+  svg { max-width: 100%; height: auto; display: block; }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .pt {
+    border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 12px 14px; margin: 0 0 12px;
+  }
+  .pt.q { border-left-color: var(--quant); }
+  .pt.g { border-left-color: var(--good); }
+  .pt.b { border-left-color: var(--bad); }
+  .pt h3 {
+    font-family: "Archivo", sans-serif; font-size: 14.5px; font-weight: 650;
+    margin: 0 0 5px;
+  }
+  .pt p { font-size: 13px; line-height: 1.5; margin: 0 0 6px; }
+  .pt p:last-child { margin-bottom: 0; }
+  .fact {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    color: var(--muted); background: var(--wash);
+    border-radius: 5px; padding: 3px 7px; display: inline-block; margin-top: 2px;
+  }
+  .pt.q .fact { background: var(--qwash); }
+  code, .mono { font-family: "IBM Plex Mono", monospace; font-size: 0.93em; }
+  .tblwrap { overflow-x: auto; }
+  table.cmp { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.cmp th, table.cmp td {
+    text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.cmp th {
+    font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+    font-weight: 500;
+  }
+  table.cmp td.ar { color: var(--accent); font-weight: 600; }
+  table.cmp td.df { color: var(--quant); font-weight: 600; }
+  .foot {
+    font-size: 11.5px; color: var(--muted); margin: 14px 0 0;
+    border-top: 1px dashed var(--line); padding-top: 10px;
+  }
+  .stagenum {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    color: var(--card); background: var(--accent); border-radius: 10px;
+    padding: 2px 9px; display: inline-block; margin-right: 8px;
+  }
+  .pt.q .stagenum { background: var(--quant); }
+</style>
+</head>
+<body>
+<main>
+<p class="eyebrow">earth stage 2 &middot; next-timestep prediction &middot; design deck &middot; 2026-08-26</p>
+
+<!-- ================= SLIDE 1: WHAT AR MEANS HERE TODAY ================= -->
+<section class="slide">
+  <p class="kicker">slide 1 / 6 &middot; the incumbent, precisely</p>
+  <h2>What &ldquo;autoregressive&rdquo; concretely means here today</h2>
+  <p class="lede">One head, run once per pixel per step: it reads the centre pixel&rsquo;s
+  embedding history plus a 144-point sunflower stencil of neighbours, and regresses the
+  centre&rsquo;s next embedding. Space is a <b>fixed linear concat</b>
+  (<code>Linear(145&middot;d_z+2 &rarr; d_model)</code> per frame); attention runs over
+  <b>time only</b> (K frames). The field at t+1 is assembled from 84,405 independent
+  point predictions, then fed back.</p>
+  <svg viewBox="0 0 1280 560" role="img" aria-label="Left: the ocean field with a sunflower stencil of 144 neighbour points around one centre pixel; the 145 embedding sequences are concatenated per frame into K time tokens, passed through a temporal transformer, producing one deterministic next embedding for the centre pixel only. This repeats 84,405 times per rolled step. Right: key numbers.">
+    <g fill="none" stroke="currentColor" stroke-width="1.3" font-family="IBM Plex Mono, monospace" font-size="12">
+
+      <!-- field panel -->
+      <rect x="40" y="40" width="360" height="300" rx="8" fill="var(--wash)" stroke="var(--line)"/>
+      <text x="52" y="64" fill="var(--muted)" font-size="10.5">z-field at t (0.25&deg;, 280&times;481 window)</text>
+      <!-- sunflower stencil dots: golden-angle spiral around centre (220,200) -->
+      <g fill="var(--accent)" stroke="none">
+        <circle cx="220" cy="200" r="6"/>
+        <circle cx="232" cy="196" r="2.5" opacity=".85"/><circle cx="214" cy="184" r="2.5" opacity=".85"/><circle cx="202" cy="209" r="2.5" opacity=".85"/><circle cx="226" cy="220" r="2.5" opacity=".85"/><circle cx="243" cy="203" r="2.5" opacity=".85"/><circle cx="221" cy="172" r="2.5" opacity=".8"/><circle cx="190" cy="192" r="2.5" opacity=".8"/><circle cx="205" cy="231" r="2.5" opacity=".8"/><circle cx="248" cy="226" r="2.5" opacity=".8"/><circle cx="256" cy="184" r="2.5" opacity=".8"/><circle cx="234" cy="157" r="2.5" opacity=".75"/><circle cx="184" cy="167" r="2.5" opacity=".75"/><circle cx="172" cy="214" r="2.5" opacity=".75"/><circle cx="212" cy="253" r="2.5" opacity=".75"/><circle cx="264" cy="247" r="2.5" opacity=".75"/><circle cx="279" cy="196" r="2.5" opacity=".7"/><circle cx="251" cy="144" r="2.5" opacity=".7"/><circle cx="196" cy="140" r="2.5" opacity=".7"/><circle cx="152" cy="180" r="2.5" opacity=".7"/><circle cx="151" cy="238" r="2.5" opacity=".7"/><circle cx="192" cy="273" r="2.5" opacity=".7"/><circle cx="246" cy="277" r="2.5" opacity=".65"/><circle cx="292" cy="238" r="2.5" opacity=".65"/><circle cx="298" cy="168" r="2.5" opacity=".65"/><circle cx="262" cy="120" r="2.5" opacity=".65"/><circle cx="203" cy="112" r="2.5" opacity=".65"/><circle cx="140" cy="140" r="2.5" opacity=".6"/><circle cx="112" cy="205" r="2.5" opacity=".6"/><circle cx="130" cy="270" r="2.5" opacity=".6"/><circle cx="190" cy="308" r="2.5" opacity=".6"/><circle cx="268" cy="308" r="2.5" opacity=".6"/><circle cx="326" cy="262" r="2.5" opacity=".6"/><circle cx="340" cy="182" r="2.5" opacity=".6"/><circle cx="304" cy="112" r="2.5" opacity=".6"/><circle cx="230" cy="76" r="2.5" opacity=".6"/><circle cx="146" cy="86" r="2.5" opacity=".6"/><circle cx="76" cy="160" r="2.5" opacity=".55"/><circle cx="66" cy="250" r="2.5" opacity=".55"/><circle cx="118" cy="316" r="2.5" opacity=".55"/><circle cx="330" cy="318" r="2.5" opacity=".55"/><circle cx="380" cy="220" r="2.5" opacity=".55"/><circle cx="366" cy="120" r="2.5" opacity=".55"/><circle cx="300" cy="62" r="2.5" opacity=".55"/><circle cx="100" cy="70" r="2.5" opacity=".55"/>
+      </g>
+      <text x="52" y="326" fill="var(--muted)" font-size="10.5">144 sunflower slots, reach 111&ndash;4,444 km &middot; land/off-window = dead slot (zeros)</text>
+
+      <!-- arrow to concat -->
+      <path d="M 408 190 L 448 190" stroke="var(--muted)" marker-end="url(#arr)"/>
+      <defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="var(--muted)" stroke="none"/></marker></defs>
+
+      <!-- concat + temporal transformer -->
+      <rect x="452" y="70" width="300" height="250" rx="8" fill="none" stroke="var(--line)"/>
+      <text x="466" y="94" fill="var(--muted)" font-size="10.5">per frame k = 1..K: concat 145 slots</text>
+      <g fill="var(--accent)" stroke="none" opacity=".9">
+        <rect x="466" y="106" width="252" height="14" rx="3" opacity=".35"/>
+        <rect x="466" y="124" width="252" height="14" rx="3" opacity=".5"/>
+        <rect x="466" y="142" width="252" height="14" rx="3" opacity=".65"/>
+        <rect x="466" y="160" width="252" height="14" rx="3" opacity=".8"/>
+      </g>
+      <text x="466" y="192" fill="var(--muted)" font-size="10.5">K time tokens (K=24 today)</text>
+      <rect x="466" y="204" width="252" height="58" rx="6" fill="var(--wash)" stroke="var(--accent)"/>
+      <text x="482" y="228" fill="currentColor" font-size="11.5">temporal transformer</text>
+      <text x="482" y="246" fill="var(--muted)" font-size="10.5">1024&times;16 &middot; 205&ndash;217M &middot; attn over TIME only</text>
+      <text x="466" y="296" fill="var(--muted)" font-size="10.5">spatial mixing = one fixed Linear, no attention</text>
+
+      <!-- arrow to output -->
+      <path d="M 760 190 L 800 190" stroke="var(--muted)" marker-end="url(#arr)"/>
+
+      <!-- output -->
+      <rect x="804" y="150" width="180" height="80" rx="8" fill="var(--wash)" stroke="var(--accent)"/>
+      <text x="820" y="182" fill="currentColor" font-size="12.5" font-weight="500">&#7825;&#8348;&#8330;&#8321; centre pixel</text>
+      <text x="820" y="202" fill="var(--muted)" font-size="10.5">one point estimate, MSE in z</text>
+      <text x="804" y="252" fill="var(--muted)" font-size="10.5">&times; 84,405 pixels = the field at t+1</text>
+      <text x="804" y="268" fill="var(--muted)" font-size="10.5">&rarr; fed back (autoregressive in time)</text>
+
+      <!-- numbers strip -->
+      <rect x="40" y="370" width="1200" height="150" rx="8" fill="none" stroke="var(--line)"/>
+      <text x="60" y="398" fill="currentColor" font-size="12" font-weight="500">the numbers that will matter on later slides</text>
+      <g fill="var(--muted)" font-size="11">
+        <text x="60" y="424">&middot; context per forward: 145 seq &times; 24 frames &times; d_z 32 = 111,360 floats &mdash; and every pixel&rsquo;s z is re-read by ~144 other stencils</text>
+        <text x="60" y="444">&middot; conditionally independent outputs: given the context, pixel i and pixel j at t+1 share NOTHING &mdash; no joint law is ever produced</text>
+        <text x="60" y="464">&middot; deterministic: the trained optimum of MSE is the conditional MEAN &mdash; at broad conditionals the answer is a blur by construction</text>
+        <text x="60" y="484">&middot; measured cadence: one-step ratio 0.072 monthly &rarr; 0.506 pentad (seed pair) &mdash; E-045: the CONTEXT SPAN, not the step size, is the axis</text>
+        <text x="60" y="504">&middot; measured rollout medicine: Gaussian input noise at the model&rsquo;s own error scale = +0.05&ndash;0.06 corridor AUC (E-036/E-037), largest stage-2 gain</text>
+      </g>
+    </g>
+  </svg>
+</section>
+
+<!-- ================= SLIDE 2: THE THREE AXES ================= -->
+<section class="slide">
+  <p class="kicker">slide 2 / 6 &middot; untangling the question</p>
+  <h2>&ldquo;AR vs diffusion&rdquo; conflates three independent axes</h2>
+  <p class="lede">Both candidates are autoregressive <i>in time</i> &mdash; GenCast rolls
+  12-hour steps exactly as we roll months; diffusion replaces the <b>per-step transition
+  map</b>, not the recursion. The real choice decomposes into three axes that can be
+  bought (and tested) separately:</p>
+  <div class="tblwrap">
+  <table class="cmp">
+    <tr><th>axis</th><th>today&rsquo;s head</th><th>diffusion DiT</th><th>what the axis alone changes</th></tr>
+    <tr>
+      <td><b>A &middot; output scope</b></td>
+      <td class="ar">per-pixel, factorized</td>
+      <td class="df">joint field, all points at once</td>
+      <td>whether pixel-pixel structure at t+1 is modelled at all; whether 145&times; redundant context re-reads are amortized by attention over the field</td>
+    </tr>
+    <tr>
+      <td><b>B &middot; output type</b></td>
+      <td class="ar">deterministic conditional mean</td>
+      <td class="df">sample from the conditional distribution</td>
+      <td>sharpness at broad conditionals; ensembles &rarr; event probabilities; but per-sample MSE is <i>higher</i> by exactly the conditional variance</td>
+    </tr>
+    <tr>
+      <td><b>C &middot; computation</b></td>
+      <td class="ar">one-shot map</td>
+      <td class="df">iterative refinement (NFE 20&ndash;50, distillable to 1&ndash;4)</td>
+      <td>compute per step; a knob trading compute for sample quality that the one-shot map does not have</td>
+    </tr>
+  </table>
+  </div>
+  <div class="cols" style="margin-top:16px">
+    <div class="pt">
+      <h3>The two useful intermediates</h3>
+      <p><b>Joint deterministic one-shot</b> (a DiT backbone doing plain field regression, no sampling) buys axis A alone &mdash; it is the controlled ablation that says whether full-field attention beats stencil-concat at matched parameters.</p>
+      <p><b>Joint generative few-step</b> (flow matching / consistency on the same backbone) buys B at a small C, once A is settled.</p>
+    </div>
+    <div class="pt q">
+      <h3>Why the decomposition matters here</h3>
+      <p>This repo decides by ablation and falsifier, one variable per arm (<span class="mono">ml/CLAUDE.md</span> &sect;1). &ldquo;Switch to diffusion&rdquo; moves all three axes in one dispatch &mdash; whatever the result, it would not say <i>which</i> axis paid, and a three-axis move is exactly the E-005 shape the log has had to retract before.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SLIDE 3: WHAT DIFFUSION BUYS ================= -->
+<section class="slide">
+  <p class="kicker">slide 3 / 6 &middot; the case for</p>
+  <h2>What a diffusion head would buy &mdash; each point tied to something measured</h2>
+  <div class="cols">
+    <div>
+      <div class="pt q">
+        <h3>1 &middot; Sharp answers where the conditional is broad &mdash; i.e. exactly at pentad/daily</h3>
+        <p>The pentad embedding substantially decorrelates in one step (lag-1 &rho; &asymp; 0.60), so the one-step conditional distribution is wide, and a conditional-mean regressor must answer with a blur &mdash; part of what the 0.506 pentad ratio <i>is</i>. A sampler answers with a plausible member instead, and stays on the data manifold when rolled.</p>
+        <span class="fact">measured: ratio 0.072 monthly vs 0.506 pentad &middot; lag-1 &rho;&asymp;0.60 (&sect;cadence)</span>
+      </div>
+      <div class="pt q">
+        <h3>2 &middot; Ensembles &mdash; and the programme&rsquo;s real deliverable is an event probability</h3>
+        <p>&ldquo;Will the AMOC weaken?&rdquo; is P(dip below threshold in a window). A deterministic head &mdash; measured to <i>replay the calendar</i> in long rolls (&sect;replay) &mdash; cannot state that honestly. M samples give dip probabilities, CRPS, and spread&ndash;error diagnostics; a collapsed or non-growing spread would have flagged replay by itself, without the six-context experiment it took to find it.</p>
+        <span class="fact">measured: tracking r flat in lead time 0.70/0.68/0.70/0.71 &rarr; replay verdict (&sect;replay)</span>
+      </div>
+      <div class="pt q">
+        <h3>3 &middot; The +0.057 noise result is one denoising step, found empirically</h3>
+        <p>Training the head on inputs noised at its own error scale is the largest single stage-2 gain the programme has (it made a noised 88M beat a clean 205M). That is precisely the mechanism diffusion training formalizes &mdash; learn to map corrupted states back to the manifold, at <i>every</i> corruption level, on inputs <i>and</i> outputs. The measured gain is direct evidence the mechanism pays in this system.</p>
+        <span class="fact">measured: +0.057 @88M (E-036), +0.045/+0.050 @205M (E-037), seed-paired</span>
+      </div>
+    </div>
+    <div>
+      <div class="pt q">
+        <h3>4 &middot; A joint law over multiple points &mdash; which no factorized head can supply</h3>
+        <p>Today pixel i and pixel j at t+1 are conditionally independent: coherent structures (an eddy, a front, a dip event spanning the section) are never modelled as units. Any read-out nonlinear <i>across pixels</i> &mdash; event detection, extremes, &ldquo;does the front reach X&rdquo; &mdash; needs the joint law. Marginal means cannot answer it; samples can. This is the precise sense in which the colleague intuition &ldquo;diffusion predicts multiple points at once&rdquo; is right.</p>
+        <span class="fact">structural: factorized marginals vs joint samples &mdash; not fixable by capacity</span>
+      </div>
+      <div class="pt q">
+        <h3>5 &middot; The recipe is proven at this exact shape, and we own the hard half</h3>
+        <p>GenCast: latent-free diffusion at 0.25&deg;, 12-h steps, 30-member ensembles, beat ECMWF ENS on ~97% of targets. Stable-Diffusion-style latent DiT: codec = VAE, denoiser attends the latent field. Our codec programme <i>is</i> that VAE, already trained, audited (Tier-1 recon), and published &mdash; a diffusion head is stage 2 only, the expensive half already exists.</p>
+        <span class="fact">precedent: GenCast (Nature 2025) &middot; DiT (Peebles &amp; Xie) &middot; latent diffusion</span>
+      </div>
+      <div class="pt q">
+        <h3>6 &middot; Attendability doctrine, completed</h3>
+        <p>&ldquo;The embedding&rsquo;s job is to make the state attendable&rdquo; &mdash; yet stage 2 never attends spatially: space is one frozen Linear. A field DiT is the first stage-2 design that actually attends over the tokens the codec was built to provide, with no dead slots and no hand-chosen stencil geometry.</p>
+        <span class="fact">today: attention over K=24 time tokens only; stencil = fixed concat</span>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ================= SLIDE 4: WHAT IT COSTS ================= -->
+<section class="slide">
+  <p class="kicker">slide 4 / 6 &middot; the case against</p>
+  <h2>What it costs &mdash; and the two measured pathologies it does <i>not</i> fix</h2>
+  <div class="cols">
+    <div>
+      <div class="pt b">
+        <h3>1 &middot; The scoreboard would decide the experiment before the model runs</h3>
+        <p>Forecast ratio and corridor AUC are squared-error scores; their optimum is the conditional mean. For an independent sample, <span class="mono">E&#8214;x&minus;&#7825;&#8214;&sup2; = E&#8214;x&minus;&mu;&#8214;&sup2; + Var</span> &mdash; a single diffusion sample scores <i>worse by exactly the conditional variance</i>, i.e. worst at pentad/daily, precisely where its advantage lives. Fair readings are ensemble-mean MSE (costs M passes) and CRPS &mdash; neither exists in the eval today. Scoreboard first, or the metric picks the winner.</p>
+        <span class="fact">structural: MSE_sample = MSE_mean + Var &mdash; largest where &rho; is lowest</span>
+      </div>
+      <div class="pt b">
+        <h3>2 &middot; Compute: &times;NFE &times;M on a fleet where probes already dominate</h3>
+        <p>Each rolled step becomes NFE full-field passes, times M ensemble members. Slide 5&rsquo;s arithmetic says one 30-NFE member is roughly one per-pixel sweep &mdash; tolerable &mdash; but M=8 members &asymp; 8&times; today&rsquo;s roll, on a programme where probe cadence was already 65% of daily-arm wall clock and a pentad roll was a ~13 h job (#433).</p>
+        <span class="fact">measured: probes 65% of #400&rsquo;s wall clock &middot; first pentad AUC roll ~13 h</span>
+      </div>
+      <div class="pt b">
+        <h3>3 &middot; Determinism is load-bearing here</h3>
+        <p>The gate head reproducing 0.643 eighteen times is the integrity certificate that makes an eval wave readable at all (&sect;3b). A sampler turns &ldquo;reproduces bit-for-bit&rdquo; into &ldquo;reproduces in distribution&rdquo; unless sampling is seeded and versioned as carefully as the checkpoints &mdash; and it adds a genuinely new variance source on top of seed variance, on a programme whose n=1 discipline is calibrated from measured seed pairs.</p>
+        <span class="fact">measured: gate 0.643 &times;18 &middot; &sect;3b: replication is bought where variance lives</span>
+      </div>
+    </div>
+    <div>
+      <div class="pt b">
+        <h3>4 &middot; It does not fix context-span &mdash; the axis that actually explained the cadence regression</h3>
+        <p>E-045: at fixed 120-d span, moving the step 5 d &rarr; 30 d does almost nothing (0.506 &rarr; 0.527); at fixed step, restoring span 240 d &rarr; 720 d does almost everything (0.338 &rarr; 0.080). That binds the <b>conditioner</b>, whatever the head: a diffusion model conditioned on 120 days of history is starved identically. The 720-day span must be carried into the conditioning &mdash; and at K=144 pentad frames that is where the real engineering cost lands (slide 5).</p>
+        <span class="fact">measured: step-only &Delta;&asymp;0.02 vs span-only &Delta;&asymp;0.26 (E-045 factorial)</span>
+      </div>
+      <div class="pt b">
+        <h3>5 &middot; Nor does it abolish replay</h3>
+        <p>Replay is a property of what the data supports plus the objective &mdash; a generative head can learn the seasonal analog too, and sample crisp, confident replays. What diffusion adds is the instrument that <i>reveals</i> it (spread that fails to grow), not immunity. The claim must be stated as honesty, not skill.</p>
+        <span class="fact">&sect;replay: long rolls are trajectory replay &mdash; the finding survives the head swap</span>
+      </div>
+      <div class="pt b">
+        <h3>6 &middot; A real new engineering surface, under a 25-input workflow ceiling</h3>
+        <p>Noise schedule, parameterization (&epsilon;/v/x&#8320;), sampler and NFE, CFG scale, M, distillation &mdash; each a knob that must survive recipe discipline, the input ceiling, and the collapse-guard story (today&rsquo;s guard reads a pooled probe correlation; a sampling head needs its own health instrument before it can be watched at all). None of temporal.py&rsquo;s training loop is reusable for the sampling path.</p>
+        <span class="fact">house rules: 25-input hard ceiling &middot; recipes-not-hand-assembly &middot; guards need calibrated instruments</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SLIDE 5: A CONCRETE DiT ================= -->
+<section class="slide">
+  <p class="kicker">slide 5 / 6 &middot; the concrete design</p>
+  <h2>A latent-field DiT for this system &mdash; and the cost arithmetic</h2>
+  <p class="lede">This is textbook latent diffusion with our codec as the (already trained,
+  already audited) VAE: denoise the <b>whole next latent field</b>, conditioned on a
+  temporal summary of the history. Factorize time first &mdash; the per-pixel temporal
+  machinery we already have is the right conditioner shape &mdash; and let the denoiser
+  attend over <b>space</b>, which stage 2 has never done.</p>
+  <svg viewBox="0 0 1280 430" role="img" aria-label="Pipeline: K history frames pass through a per-pixel temporal encoder producing a conditioning field; the noisy next field is patchified into about 5,300 ocean tokens which flow through N DiT blocks with adaLN conditioning on noise level and the conditioning field, iterated NFE times, producing a denoised field sample which is decoded or fed back.">
+    <g fill="none" stroke="currentColor" stroke-width="1.3" font-family="IBM Plex Mono, monospace" font-size="11.5">
+      <defs><marker id="arr2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="var(--muted)" stroke="none"/></marker></defs>
+
+      <!-- history -->
+      <g>
+        <rect x="40" y="60" width="66" height="88" rx="6" fill="var(--wash)" stroke="var(--line)"/>
+        <rect x="52" y="50" width="66" height="88" rx="6" fill="var(--wash)" stroke="var(--line)"/>
+        <rect x="64" y="40" width="66" height="88" rx="6" fill="var(--wash)" stroke="var(--accent)"/>
+        <text x="40" y="160" fill="var(--muted)" font-size="10.5">history z-fields</text>
+        <text x="40" y="176" fill="var(--muted)" font-size="10.5">K frames &middot; 720-d span</text>
+        <text x="40" y="192" fill="var(--muted)" font-size="10.5">(the E-045 lesson)</text>
+      </g>
+      <path d="M 140 94 L 180 94" stroke="var(--muted)" marker-end="url(#arr2)"/>
+
+      <!-- temporal encoder -->
+      <rect x="184" y="56" width="200" height="76" rx="8" fill="none" stroke="var(--accent)"/>
+      <text x="200" y="84" fill="currentColor" font-size="11.5">temporal encoder</text>
+      <text x="200" y="102" fill="var(--muted)" font-size="10">per pixel/patch, over K frames</text>
+      <text x="200" y="118" fill="var(--muted)" font-size="10">= today&rsquo;s machinery, reused</text>
+      <path d="M 388 94 L 428 94" stroke="var(--muted)" marker-end="url(#arr2)"/>
+      <rect x="432" y="64" width="150" height="60" rx="8" fill="var(--wash)" stroke="var(--line)"/>
+      <text x="448" y="90" fill="currentColor" font-size="11.5">conditioning c</text>
+      <text x="448" y="107" fill="var(--muted)" font-size="10">one vector per token</text>
+      <path d="M 507 128 L 507 190 L 700 190" stroke="var(--muted)" stroke-dasharray="4 3" marker-end="url(#arr2)"/>
+
+      <!-- noisy field path -->
+      <rect x="40" y="240" width="150" height="70" rx="8" fill="var(--qwash)" stroke="var(--quant)"/>
+      <text x="56" y="268" fill="currentColor" font-size="11.5">noisy z&#8348;&#8330;&#8321; field</text>
+      <text x="56" y="285" fill="var(--muted)" font-size="10">&sigma; from schedule</text>
+      <path d="M 194 275 L 234 275" stroke="var(--muted)" marker-end="url(#arr2)"/>
+      <rect x="238" y="240" width="190" height="70" rx="8" fill="none" stroke="var(--quant)"/>
+      <text x="254" y="266" fill="currentColor" font-size="11.5">patchify 4&times;4</text>
+      <text x="254" y="284" fill="var(--muted)" font-size="10">&rarr; ~5,300 ocean tokens</text>
+      <text x="254" y="299" fill="var(--muted)" font-size="10">(84,405 px / 16, land dropped)</text>
+      <path d="M 432 275 L 472 275" stroke="var(--muted)" marker-end="url(#arr2)"/>
+
+      <!-- DiT blocks -->
+      <rect x="476" y="226" width="330" height="98" rx="8" fill="var(--qwash)" stroke="var(--quant)" stroke-width="1.6"/>
+      <text x="494" y="254" fill="currentColor" font-size="12" font-weight="500">N &times; DiT blocks</text>
+      <text x="494" y="272" fill="var(--muted)" font-size="10">full attention over SPACE (5.3k tokens)</text>
+      <text x="494" y="288" fill="var(--muted)" font-size="10">adaLN-zero on (&sigma;, c)</text>
+      <text x="494" y="304" fill="var(--muted)" font-size="10">DiT-L 458M / DiT-XL 675M &mdash; one tier above xl</text>
+      <path d="M 810 275 L 850 275" stroke="var(--muted)" marker-end="url(#arr2)"/>
+
+      <!-- NFE loop -->
+      <path d="M 640 324 C 640 356, 300 356, 300 314" stroke="var(--quant)" stroke-dasharray="4 3" marker-end="url(#arr2)"/>
+      <text x="400" y="375" fill="var(--quant)" font-size="10.5">&times; NFE (20&ndash;50; distill to 1&ndash;4)</text>
+
+      <!-- output -->
+      <rect x="854" y="240" width="180" height="70" rx="8" fill="var(--wash)" stroke="var(--accent)"/>
+      <text x="870" y="266" fill="currentColor" font-size="11.5">z&#8348;&#8330;&#8321; sample (joint)</text>
+      <text x="870" y="284" fill="var(--muted)" font-size="10">&times;M members &rarr; ensemble</text>
+      <path d="M 1038 275 L 1078 275" stroke="var(--muted)" marker-end="url(#arr2)"/>
+      <text x="1084" y="270" fill="var(--muted)" font-size="10.5">decode / read out /</text>
+      <text x="1084" y="286" fill="var(--muted)" font-size="10.5">feed back in time</text>
+    </g>
+  </svg>
+  <div class="cols" style="margin-top:6px">
+    <div class="pt q">
+      <h3>Cost arithmetic &mdash; design reasoning, not a measurement</h3>
+      <p>Today&rsquo;s rolled step: 84,405 forwards &times; ~10&sup1;&#8304; FLOPs (24-token seq, 1024&times;16) &asymp; <b>8&times;10&sup1;&#8308;</b> &mdash; because every pixel re-encodes its 145-slot neighbourhood, each z is touched ~145 times.</p>
+      <p>DiT pass over 5.3k tokens at d 1024, 24 blocks &asymp; 6&times;10&sup1;&sup2; &rarr; 30-NFE member &asymp; <b>2&times;10&sup1;&#8308;</b> per step. One member is <i>cheaper</i> than today&rsquo;s sweep; the ensemble (M=8) is ~2&times; it; a 4-step distilled sampler makes even the ensemble cheaper than today.</p>
+    </div>
+    <div class="pt">
+      <h3>Where the real design risk sits</h3>
+      <p><b>The conditioner, not the denoiser.</b> E-045 says skill lives in the 720-day span; at pentad that is K=144 frames per token column. Full spatiotemporal attention (144 &times; 5.3k tokens) is out of reach &mdash; so time must be factorized into c first (per-patch temporal encoder, exactly the shape of today&rsquo;s head), and that component inherits the entire context-span question unchanged. The denoiser is standard; the conditioner is ours.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SLIDE 6: DECISION PATH ================= -->
+<section class="slide">
+  <p class="kicker">slide 6 / 6 &middot; recommendation</p>
+  <h2>Buy the axes separately: a staged path, with falsifiers</h2>
+  <div class="pt g">
+    <h3><span class="stagenum">0</span>Scoreboard first &mdash; code only, no GPU</h3>
+    <p>Add to the eval before any new head runs: <b>ensemble-mean forecast ratio</b> (comparability with every archived number), <b>CRPS</b>, <b>spread&ndash;error ratio</b>, and a <b>dip-event Brier score</b> on the transport read-out. Without these the comparison is decided by the metric, not the model (slide 4.1).</p>
+  </div>
+  <div class="pt g">
+    <h3><span class="stagenum">1</span>The clean ablation: joint deterministic field transformer (axis A alone)</h3>
+    <p>Same DiT backbone, one-shot regression of the whole next field, no sampling &mdash; scored on today&rsquo;s scoreboard against the stencil head at matched parameters, pentad cadence, 720-d-span conditioner. <b>Falsifier:</b> if joint spatial attention &asymp; per-pixel stencil-concat, then axis A buys nothing here, the 145-slot concat was never the bottleneck, and the diffusion case must rest on axis B alone. Either answer is cheap and reshapes the question.</p>
+  </div>
+  <div class="pt g">
+    <h3><span class="stagenum">2</span>Generative head on the winning backbone (axis B, small C)</h3>
+    <p>Flow matching or EDM on the stage-1 backbone, few-step sampler, M&asymp;8, seeded sampling. <b>Read:</b> ensemble-mean ratio must &asymp; stage 1 (sanity: no MSE tax after averaging), CRPS and dip Brier must <i>beat</i> stage 1&rsquo;s degenerate distribution, spread&ndash;error &asymp; 1. <b>Falsifier:</b> if the ensemble mean matches but CRPS/Brier do not improve on the deterministic head + a trivial noise ensemble, the distribution head is not earning its NFE.</p>
+  </div>
+  <div class="cols" style="margin-top:14px">
+    <div class="pt">
+      <h3>The one-line verdict</h3>
+      <p>Diffusion is <b>preferable when the deliverable is a distribution over futures</b> &mdash; dip probabilities, extremes, multi-point coherence &mdash; and a <b>tax when the deliverable is one-step conditional-mean MSE</b>. The colleague intuition is right about the destination; the way to make it survive this repo&rsquo;s discipline is to buy the three axes separately and let stage 1 tell us whether the joint field or the distribution is doing the work.</p>
+    </div>
+    <div class="pt q">
+      <h3>Cheapest immediate probe (zero new architecture)</h3>
+      <p>The +0.057 noise result already trains the head at ONE corruption level. Conditioning today&rsquo;s head on a <i>noise-level embedding</i> and training across a &sigma;-ladder is a two-line change that tests the core diffusion mechanism (multi-level denoising) inside the existing head, on the existing scoreboard, before any DiT is built.</p>
+    </div>
+  </div>
+  <p class="foot">All cost figures are design arithmetic; measured numbers cite their experiment (E-036/E-037 noise; E-044b/E-045 cadence &amp; span; &sect;replay; &sect;3b replication). Current truth: <span class="mono">ml/EXPERIMENTS.md</span>.</p>
+</section>
+</main>
+</body>
+</html>
