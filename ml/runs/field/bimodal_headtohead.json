@@ -1,0 +1,34 @@
+{
+ "det_final": {
+  "step": 2000,
+  "loss": 1.08883798122406,
+  "wall_s": 232.69,
+  "mse": 0.9938859510957525,
+  "mse_pers": 1.000077472643906,
+  "ratio": 0.9938089580882321,
+  "steps": 2000
+ },
+ "diff_final": {
+  "step": 16000,
+  "loss": 0.11817832291126251,
+  "wall_s": 1253.04,
+  "nfe_spent": 29,
+  "members": 16,
+  "sample_ratio": 2.021245630373665,
+  "ens_ratio": 1.1463617074784545,
+  "mse_pers": 1.000057429075241,
+  "sign_coherence": 0.9955596923828125,
+  "mode_corr": 0.9954080581665039,
+  "spread": 0.9957871507499451,
+  "spread_error": 0.9300219794494584,
+  "crps": 0.4963844288104914,
+  "steps": 16000
+ },
+ "crps_det_degenerate": 0.8854223329407269,
+ "analytic_targets": {
+  "sample_ratio": 2.0,
+  "ens_ratio_M16": 1.0625,
+  "crps_ratio_perfect": 0.5,
+  "sign_coherence": 1.0
+ }
+}

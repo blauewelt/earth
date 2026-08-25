@@ -44,6 +44,76 @@ low-pass).
 
 ---
 
+<a id="e-051"></a>
+## E-051 · The field head: joint next-field prediction, deterministic then generative — BUILT AND CPU-VERIFIED 2026-08-25/26 overnight (no GPU arm dispatched)
+
+**E-051 · build + CPU verification of the joint field head (axis-A deterministic
+regression AND axis-B EDM diffusion) plus the probabilistic scoreboard · params:
+toy configs 0.13–1.1M (real arms not yet sized) · stage: build / toy-eval only —
+NOTHING trains on real data yet · data: synthetic laws `shift`/`bimodal`/`gauss`
+(generative law documented in each generator's docstring) · arch:
+OceanTokenizer(patch) + per-token TemporalCond (time only) + FieldDiT
+(adaLN-zero, attention over space only) · steps×batch: toys 1.2k–16k × 8, CPU ·
+resume: none.**
+
+Chris approved the AR-vs-diffusion staged path (2026-08-25: *"Sounds good,
+let's try this. Take things step by step ... please continue and thoroughly
+test the diffusion implementation"*). Design argument:
+[the deck](https://blauewelt.github.io/earth/ml/figures/ar_vs_diffusion.html);
+experiment form and falsifiers:
+[the E-051 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E051_field_diffusion.md).
+New files, nothing existing touched: `ml/probscore.py`, `ml/field_model.py`,
+`ml/train_field.py`, `tests/test_probscore.py`, `tests/test_field_diffusion.py`.
+Implementation by two Opus subagents to a main-session spec (§0b); every test
+and number below re-run and read by the main session.
+
+**(a) The test suites hold, mostly as EXACT identities (16/16 green, ~104 s
+CPU).** probscore 7/7: ensemble CRPS against the Gaussian closed form (and a
+longhand O(M²) reference pinning the sorted-member estimator), CRPS(M=1) == MAE
+exactly, mse_sample == mse_mean + mean_var to 1e-10, spread–error calibration,
+hand-computed Brier, NaN-holes == deleted-elements. field head 9/9, the
+load-bearing ones bitwise: det mode at init IS persistence (`z_hat == z_t`,
+`torch.equal` — the E-051 twin of "r_fore reads exactly 1.000000 at step 1");
+diff mode at init has `D(x;σ) == c_skip(σ)·x` at six σs; tokenizer round-trip
+identity with land holes; land values AND land output slots inert in both
+losses; same-seed samples `torch.equal`, member m of an M=4 call == the M=1
+call at the derived seed; 5-steps+resume+3 == 8 uninterrupted bitwise on all
+parameters; result files atomic with `in_progress` (§5.25); NaN refused, never
+written.
+
+**(b) The bimodal head-to-head — axis B's microcosm, measured against analytic
+targets** (`ml/runs/field/bimodal_headtohead.json`; law: x_{t+1} = x_t ±
+PATTERN, one fair coin for the WHOLE field, so the conditional mean is
+persistence and the two futures are field-coherent):
+
+| read-out | det head (2k steps) | diffusion head (16k steps, M=16, NFE 29) | analytic perfect sampler |
+|---|---|---|---|
+| one-step ratio, per member | **0.9939** (the blur) | 2.0212 | 2.0 |
+| one-step ratio, ensemble mean | — | 1.1464 | 1.0625 (= 1 + 1/M) |
+| fair CRPS | 0.8854 (degenerate ensemble) | **0.4964** | 0.4427 (= half the det head's) |
+| sign coherence (joint-law detector) | — | **0.9956** | 1.0 (factorized floor ≈ 0.031) |
+| spread–error | — | 0.930 | 1.0 |
+
+Reading: every slide-4 claim reproduces quantitatively. The deterministic head
+is pinned at ~1.0 by construction; the sampler pays EXACTLY the conditional
+variance per member (2.02 vs 2.0) yet wins CRPS by ~1.8× over the same head
+scored as a degenerate ensemble; and the samples are JOINT — one field-wide
+mode per member (coherence 0.996 against a factorized floor of 0.031), which
+is the property no per-pixel head can have at any capacity. **(c) The shift
+toy — axis A's microcosm** (`ml/runs/field/shift_det.json`; x_{t+1} = one-cell
+eastward roll, a purely spatial law a neighbourless per-pixel head cannot beat
+persistence on): field head ratio **0.0081** at 1.2k steps. **(d) The gauss
+toy** (known conditional N(0.7·x_t, 0.5²)): sampled conditional mean slope
+0.7343 vs 0.7, pooled sd 0.4670 vs 0.5 (test 8, M=64).
+
+Toy numbers are CPU, n = 1, on synthetic laws — they verify MECHANISMS
+(the estimators, the joint sampler, the exact identities), and are directions
+for nothing beyond that. Real-data arms (E-051.1 then E-051.2, falsifiers
+pre-registered in the plan) are NOT dispatched: `ml-train.yml` sits at the
+25-input ceiling and the new trainer needs its own reviewed dispatch step —
+the one piece deliberately left for a daytime decision. Cost of tonight:
+$0 GPU; ~40 min CPU in-session.
+
 <a id="e-049"></a>
 ## E-049 · Road B: one 16-bit token per pixel-bin, judged by a non-linear decoder — DISPATCHING 2026-08-25 (Chris: *"continue with road B and do that very diligently, and test it very well with a decoder (a non-linear decoder)"*)
 

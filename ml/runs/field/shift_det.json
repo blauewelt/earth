@@ -1,0 +1,89 @@
+{
+ "config": {
+  "toy": "shift",
+  "z_cache": null,
+  "data": null,
+  "pixels": null,
+  "holdout_years": "",
+  "val_frac": 0.15,
+  "mode": "det",
+  "K": 8,
+  "patch": 4,
+  "d_model": 128,
+  "layers": 4,
+  "heads": 4,
+  "d_cond": 128,
+  "cond_layers": 2,
+  "cond_heads": 4,
+  "steps": 1200,
+  "batch": 8,
+  "lr": 0.0003,
+  "weight_decay": 0.0,
+  "seed": 0,
+  "grad_clip": 1.0,
+  "nfe": 18,
+  "members": 8,
+  "eval_every": 300,
+  "eval_windows": 16,
+  "out": "ml/runs/field/shift_det.json",
+  "ckpt": null,
+  "resume": false,
+  "smoke": false,
+  "quiet": true,
+  "law": "shift",
+  "T": 400,
+  "P": 576,
+  "d_z": 4,
+  "ntok": 36,
+  "H": 24,
+  "W": 24,
+  "sigma_data": 0.5735237002372742,
+  "params": 1683520,
+  "n_train": 333,
+  "n_val": 59,
+  "have_crps": true
+ },
+ "history": [
+  {
+   "step": 300,
+   "loss": 0.004259795416146517,
+   "wall_s": 31.41,
+   "mse": 0.008158522922889436,
+   "mse_pers": 0.368913927096207,
+   "ratio": 0.022114976756520823
+  },
+  {
+   "step": 600,
+   "loss": 0.001589992200024426,
+   "wall_s": 62.71,
+   "mse": 0.004513536806160448,
+   "mse_pers": 0.368913927096207,
+   "ratio": 0.012234660918570816
+  },
+  {
+   "step": 900,
+   "loss": 0.0011919202515855432,
+   "wall_s": 95.16,
+   "mse": 0.003512455189070908,
+   "mse_pers": 0.368913927096207,
+   "ratio": 0.009521069634638418
+  },
+  {
+   "step": 1200,
+   "loss": 0.0011053780326619744,
+   "wall_s": 127.35,
+   "mse": 0.002992680068294432,
+   "mse_pers": 0.368913927096207,
+   "ratio": 0.008112136323641658
+  }
+ ],
+ "final": {
+  "step": 1200,
+  "loss": 0.0011053780326619744,
+  "wall_s": 127.52,
+  "mse": 0.002992680068294432,
+  "mse_pers": 0.368913927096207,
+  "ratio": 0.008112136323641658,
+  "steps": 1200
+ }
+}

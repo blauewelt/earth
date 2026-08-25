@@ -1,0 +1,89 @@
+{
+ "config": {
+  "toy": "bimodal",
+  "z_cache": null,
+  "data": null,
+  "pixels": null,
+  "holdout_years": "",
+  "val_frac": 0.15,
+  "mode": "det",
+  "K": 8,
+  "patch": 4,
+  "d_model": 128,
+  "layers": 4,
+  "heads": 4,
+  "d_cond": 128,
+  "cond_layers": 2,
+  "cond_heads": 4,
+  "steps": 2000,
+  "batch": 8,
+  "lr": 0.0003,
+  "weight_decay": 0.0,
+  "seed": 0,
+  "grad_clip": 1.0,
+  "nfe": 18,
+  "members": 8,
+  "eval_every": 500,
+  "eval_windows": 16,
+  "out": "ml/runs/field/bimodal_det.json",
+  "ckpt": null,
+  "resume": false,
+  "smoke": false,
+  "quiet": true,
+  "law": "bimodal",
+  "T": 600,
+  "P": 256,
+  "d_z": 4,
+  "ntok": 16,
+  "H": 16,
+  "W": 16,
+  "sigma_data": 1.0000511407852173,
+  "params": 1683264,
+  "n_train": 503,
+  "n_val": 89,
+  "have_crps": true
+ },
+ "history": [
+  {
+   "step": 500,
+   "loss": 1.1274644136428833,
+   "wall_s": 122.09,
+   "mse": 1.0321224619833271,
+   "mse_pers": 1.000077472643906,
+   "ratio": 1.0320425069216927
+  },
+  {
+   "step": 1000,
+   "loss": 1.0404436588287354,
+   "wall_s": 155.27,
+   "mse": 1.012828816188855,
+   "mse_pers": 1.000077472643906,
+   "ratio": 1.0127503557411792
+  },
+  {
+   "step": 1500,
+   "loss": 0.9978643655776978,
+   "wall_s": 193.8,
+   "mse": 1.0015348798773263,
+   "mse_pers": 1.000077472643906,
+   "ratio": 1.0014572943329754
+  },
+  {
+   "step": 2000,
+   "loss": 1.08883798122406,
+   "wall_s": 232.52,
+   "mse": 0.9938859510957525,
+   "mse_pers": 1.000077472643906,
+   "ratio": 0.9938089580882321
+  }
+ ],
+ "final": {
+  "step": 2000,
+  "loss": 1.08883798122406,
+  "wall_s": 232.69,
+  "mse": 0.9938859510957525,
+  "mse_pers": 1.000077472643906,
+  "ratio": 0.9938089580882321,
+  "steps": 2000
+ }
+}
