@@ -2915,13 +2915,27 @@ costs nothing and helps. If that is right, the same alphabet belongs
 \emph{inside} the codec's bottleneck rather than bolted onto the head, which
 is finite scalar quantization. That retrain --- the same $L=8$ lattice on
 all 32 dimensions of the pentad codec, one variable against the existing
-baseline --- is dispatched and in flight as this revision is written, with
-its falsifier registered: if its 20{,}000-step stage-2 ratio does not land
-clearly below the existing head's, continuity was not the binding
-constraint. Two further questions ride on the same arm and are also
-dispatched: whether the quantization win survives off the pentad grid (the
-same flag at half-month cadence, against that rung's $0.1620$), and the
-$\sigma$ sweep the pentad noise result now requires.
+baseline --- has now run to completion, and its pre-registered verdict
+landed on the strongest branch: the stage-2 head over the FSQ-trained
+codec's $z$ reads a 20{,}000-step ratio of $\mathbf{0.4394}$, below the
+read-time-quantization arm's $0.4916$ and well below the continuous pair's
+$0.5056$/$0.5045$. Training \emph{through} the lattice beats rounding at
+read time, which beats not rounding at all --- the resolution story survives
+its strongest test. Two caveats travel with the number. It is effectively a
+seed pair by accident: the seed-0 attempt was cancelled when its trainer
+diverged fatally at step 15{,}800, and its last healthy reading ($0.4395$ at
+15{,}600) matches the seed-1 completion to $10^{-4}$. And the same two
+attempts measure a real cost: stage-2 training on this codec's $z$ is
+violently spiky --- fifteen gradient-norm excursions above $10^4$ across the
+two seeds, one above $7\times10^5$, against \emph{one} nonzero clipping
+event in 200{,}000 steps for each continuous control --- and one of the two
+seeds died of it. The clipping mechanism of \S\ref{sec:ladder-cadence}
+absorbs these excursions when it can, but the lattice buys its forecast
+gain at the price of an optimization landscape that can kill a run. The
+off-pentad check also landed: the same lattice at half-month cadence reads
+$0.1692$ against that rung's $0.1620$ (Table~\ref{tab:ablations}, A10) ---
+the win is pentad-specific, consistent with the resolution reading, since
+coarser cadences have already averaged the excess precision away.
 
 \subsection{The month-block codec}\label{sec:block}
 
@@ -3045,7 +3059,7 @@ finishing --- rescued at 120k, resuming to 200k \\
 bottleneck (\S\ref{sec:quant})}}\\
 \texttt{f4r2-40M-fsq8} & 38.0M &
 5-day bin & $d_z$ 32, FSQ $[8]^{32}$ & 200k $\times$ 512 & torch &
-\textbf{finished}; verdict head in flight \\
+\textbf{finished}; verdict landed --- \S\ref{sec:quant} \\
 \midrule
 \multicolumn{7}{l}{\emph{E-048 --- windows instead of months, and the level
 placement itself under test}}\\
@@ -3558,7 +3572,7 @@ This appendix collects, in one place, every arm of the E-044/E-045 programme
 that changes \emph{exactly one thing} against a measured control --- the
 component ladder of \S\ref{sec:components}, the cadence and factorial arms of
 \S\ref{sec:ladder-cadence}--\ref{sec:factorial}, and the quantization arms of
-\S\ref{sec:quant}. Every row is #427's stage-2 configuration (206.5M
+\S\ref{sec:quant}. Every row is \#427's stage-2 configuration (206.5M
 $1024\times16$ head, stencil 145, input noise $\sigma{=}0.7$, gradient clip
 128, seed 0, 20{,}000 steps) over the frozen 38.0M run-415 pentad codec,
 scored against its own persistence baseline; only the named variable moves.
@@ -3605,6 +3619,8 @@ A9 & pair & head inputs on an 8-level lattice & 0.4916 &
 the first arm to beat the pair \\
 A10 & A7 & the same lattice at 15-d cadence & 0.1692 &
 the win is pentad-specific \\
+E-046 & pair & the lattice moved inside the codec (retrained) & 0.4394 &
+below A9: training through the lattice beats read-time rounding \\
 \bottomrule
 \end{tabular}
 \caption{\textbf{Every one-variable arm at pentad cadence}, one row each.

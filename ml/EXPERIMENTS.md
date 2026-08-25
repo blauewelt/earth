@@ -234,6 +234,41 @@ run here has now either collapsed (e048a, #481/#482) or degenerated (run-455's s
 code). *(iii)* The cheap alternative if diagnosis blames the centering: an RMS-only
 bound (no mean subtraction). Cost of #482: ~1.1 h ≈ $0.3.
 
+**14:30–15:00Z 08-25 — THE E-046 VERDICT LANDS ON ITS STRONGEST BRANCH: THE FSQ
+CODEC'S HEAD READS 0.4394, BELOW BOTH CONTROLS — AND THE SEED PAIR AGREES TO 1e-4
+WHILE DISAGREEING COMPLETELY ABOUT SURVIVING THE TRAINING.**
+
+*(a) #477 (E-046-HEAD seed 1, the FSQ verdict head on run-455's lattice z) GREEN at
+14:26Z, full ladder archived (`probes-477.json`).* **The registered verdict: 20k
+one-step ratio 0.6497/1.4788 = 0.4394 — below A9 (#446, read-time 8-level quant) at
+0.4916 and well below the continuous pair #427/#432 at 0.5056/0.5045.** That is the
+pre-registered "at-or-below A9" branch: training THROUGH the lattice beats
+quantizing at read time, which beats not quantizing — the FSQ codec earns its place
+at pentad, and the resolution story (A9's discovery) survives its strongest test.
+Two riders, both measured. (1) The number is accidentally a seed pair: #468 (seed
+0)'s last healthy reading was 0.4395 at step 15,600, matching #477's 20k 0.4394 to
+1e-4 — though at a different step, so it corroborates rather than replicates. (2)
+The z-space is violently spiky to train on: seed 1 logged EIGHT gmax>10,000
+excursions (20,077 · 39,200 · 101,323 · **788,370** — larger than seed 0's worst —
+· 15,278 · 75,473 · 183,661 · 52,612), every one absorbed by grad-clip 128 and the
+run completed, where seed 0 died of its seventh and each continuous control logged
+ONE nonzero clip in 200k steps. So #468's death was draw-luck inside a regime both
+seeds share, the E-044b clip-as-mechanism claim gains its hardest instances yet,
+and the FSQ forecast win is priced: an optimization landscape that can kill a run.
+Folded into the paper (sec:quant + tab:ablations E-046 row + tab:inflight). The
+pooled probe series (~0.44–0.52) stays excluded by protocol. This lands ON TOP of
+E-049's cold-start collapses (#481/#482) and sharpens the fork: run-455's z — a
+DEGENERATED sign code — still forecasts better than the continuous codec, so the
+lattice is worth stabilizing, which is what E-049b's intrinsic bound and the
+warm-start-quantization repair both aim at.
+
+*(b) Codec finishes: #473 (E-047a-fast, the torch twin of e047a-tpu, 45k→60k)
+GREEN ~14:10Z, probes archived (`probes-473.json`) — the cross-framework Tier-1
+audit (e047a-tpu vs #473, same recipe, two frameworks) is now RUNNABLE; named next
+step, not started unprompted. #472 (E-047b, the 126.9M month-block codec) reached
+200k and is in its final probe set (heavy probe: pooled-legacy z_vs_persistence
+10.625/19.891 = 0.534); harvest on drain, then its box frees.*
+
 **13:20Z 08-25 — #470 (E-047-HEAD, 5th dispatch, the fusion-vs-selection verdict head)
 WENT GREEN AND IS VOID: stage-2 CUDA OOM, and the run's colour lied again.** The
 trainer died at 12:01Z trying to allocate **13.22 GiB on the 24 GB card**
@@ -247,6 +282,8 @@ completed and published `Z_8b639abe36_37e146384b` (12 chunks, the e047a-tpu-60k
 block codec × pentad tensor) to `embed-cache-v1` before the trainer died — so the
 6th dispatch pulls Z in minutes and pays only the ~1–2 h head training, on an H100.
 **#483 (E-047-HEAD, 6th dispatch, H100)** queued on `gpu-box-48254133` behind #478.
+
+**08:00–10:00Z 08-25 — MORNING TRIAGE: THE CLEAN PENTAD Z IS PUBLISHED, TWO HEADS DIE
 IN ONE MORNING (one silently, one loudly), AND ALL THREE ARE BACK ON THE BOARD WITHIN
 AN HOUR — AT PULL-THE-CACHE PRICES, NOT RE-EMBED PRICES.**
 
