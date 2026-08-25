@@ -127,6 +127,42 @@ config record verifies the recipe end to end — d_z 6, fsq_levels 8,8,8,5,5,5,
 fsq_ladder auto, **fsq_bound ln**, params_M 37.956, family4_na025_pentad_r2.
 Step-50 fit line (`prequant_rms` = 1) checked at the next wake-up.
 
+**#481 · 12:48–13:10Z — THE BOUND WORKS, AND THE COLLAPSE GUARD FALSE-FIRED ON THE
+FIRST INSTRUMENT THAT COULD SEE LATTICE Z.** Two findings, one per direction:
+
+*(a) The intrinsic bound's first production reading is exactly its spec.* All three
+early fits ran (50/200/2000; 6/6 dims fitted, all exponential):
+**`prequant_rms` 1.0 at every fit** — the invariant, to the digit — and fitted
+saturation radii **O(1)** (0.39–3.3), where run-455 sat at |v|~3e4 and e048a2's
+unbounded std_med ran 0.73→20. The drift disease is closed by construction, on the
+real tensor, at batch 512. Loss_rec ~0.33 at 9k steps; the encoder was
+INPUT-DEPENDENT at step 2000 by the fit's own sample (per-dim std 0.355 across
+4,096 vectors; e048a's true collapse read one distinct vector per 1,024).
+
+*(b) The guard then killed the run at step 10,000/200,000* — strikes
+`r_des −0.024 @ 7500, −0.000 @ 10000` against the 0.05 threshold. This is the
+**false-positive twin of #455's all-NaN blindness**: no FSQ codec has ever been
+under this guard (the pooled probe read NaN on unbounded lattice z all of #455),
+so the bound is what made the instrument read numbers at all — and its 0.05
+threshold, calibrated on continuous pooled z, has an UNMEASURED healthy range on
+16-bit lattice z. §3's own rule ("arming a guard on a new instrument requires
+measuring its healthy range first") applied in reverse: the guard is disabled for
+this arm (`collapse_r "0"`, new recipe-only key, wired + guarded by
+test_workflow_config 5/5), with the REPLACEMENT monitor named in the recipe: the
+fit schedule extended to 50/200/2k/20k/60k/120k/180k so `prequant_std_med`/`rms`
+publish across the whole run (late fits are near-no-ops — the incumbent lattice
+wins ties and only strict MSE gain moves a dimension), and a constant encoder
+reads std_med ~0 there. Note r ~ 0 at 5% of training says nothing the falsifier
+cares about: run-455's pooled instruments read garbage all run while its verdict
+head was trending BELOW controls at cut-off. Cost of the lesson: ~1.6 h ≈ $0.5.
+**Re-dispatch = #482 (E-049b, 3rd copy)**, same box (healthy, tensor warm), with
+`job_timeout` 1800 — #481 also measured the pace, ~0.49 s/step ⇒ 200k ≈ 27.2 h,
+OVER the 1500-min timeout it was dispatched with (the #456 class, caught before
+it spent 25 h this time). #480 (the continuous d_z-6 control) keeps its guard
+armed: continuous pooled z is the instrument the 0.05 was calibrated on, and if
+d_z 6 continuous ALSO probes under it early, that is a measurement about d_z 6
+worth having rather than a config to pre-empt.
+
 ---
 
 <a id="e-047"></a>

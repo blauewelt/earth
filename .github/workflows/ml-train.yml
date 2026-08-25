@@ -198,6 +198,18 @@ on:
 #       Measure what it bought with ml/fsq_usage.py (effective bits per token
 #       from the per-dimension digit entropy). See
 #       ml/plans/E049_roadB_token.md §3.
+#   recipe-only: collapse_r       -> ml/train.py --collapse-r     (Train step)
+#       The collapse guard's threshold (default 0.05 on the light probe's
+#       pooled linear_r_deseas). Exists because #481 (E-049b) measured the
+#       guard's FALSE-POSITIVE mode: on a bounded FSQ codec the light probe
+#       finally reads numbers instead of NaN (#455 read NaN all run, so no
+#       FSQ codec had ever been under this guard), and its 0.05 threshold —
+#       calibrated on continuous d_z-32/64 pooled z, a threshold ml/CLAUDE.md
+#       §3 already says "does not transfer" across instruments — killed a
+#       demonstrably input-dependent encoder at step 10,000/200,000 (fit
+#       records: per-dim std 0.355 across 4,096 real vectors; a constant
+#       encoder reads ~0). A recipe that sets 0 must name its REPLACEMENT
+#       monitor in its _description; unset keeps the calibrated default.
 #   recipe-only: train_lon_hold   -> ml/temporal.py --train-lon-hold
 #       "inherit" | "none" | "lo,hi". Which longitudes are excluded from the
 #       STAGE-2 training pool, read in scripts/probes_run.sh. "inherit" is the
@@ -1057,6 +1069,7 @@ jobs:
             $([ -n "${RECIPE_FSQ_LADDER:-}" ] && echo "--fsq-ladder=${RECIPE_FSQ_LADDER}") \
             $([ -n "${RECIPE_FSQ_AUTO_STEP:-}" ] && echo "--fsq-auto-step=${RECIPE_FSQ_AUTO_STEP}") \
             $([ -n "${RECIPE_FSQ_BOUND:-}" ] && echo "--fsq-bound=${RECIPE_FSQ_BOUND}") \
+            $([ -n "${RECIPE_COLLAPSE_R:-}" ] && echo "--collapse-r=${RECIPE_COLLAPSE_R}") \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && echo --anomaly) \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && [ "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}" != "0" ] \
               && echo --eval-every "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}") \
