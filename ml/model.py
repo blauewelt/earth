@@ -865,8 +865,22 @@ def codec_from_ckpt(ck, n_chan):
     # bargain `fsq_auto_n`/`fsq_auto_step` already struck: the key's PRESENCE
     # is the signal, because an old loader cannot know that a value it has
     # never heard of is the inert one.
+    #
+    # E-050 adds `fsq_warmstart` and `fsq_warmstart_from` as INFORMATIONAL.
+    # Neither says anything about what a `z` IS — `fsq_warmstart` is a
+    # permission granted to the resume guard at dispatch time, and
+    # `fsq_warmstart_from` is provenance ("run-480.pt@200000", which continuous
+    # codec this lattice grew out of). The bottleneck they produced is already
+    # fully described by fsq_levels/fsq_ladder/fsq_exp_base/fsq_ladder_fit/
+    # fsq_bound, so this loader rebuilds a warm-started checkpoint EXACTLY as
+    # it rebuilds a cold-started one with the same lattice — which is the
+    # point: they are the same model, arrived at differently. They are listed
+    # here rather than ignored by prefix because the refusal below is
+    # deliberately keyed on a key's PRESENCE, and a loader cannot know that a
+    # key it has never heard of is the inert one.
     known = {"fsq_levels", "fsq_ladder", "fsq_exp_base", "fsq_ladder_fit",
-             "fsq_auto_n", "fsq_auto_step", "fsq_bound"}
+             "fsq_auto_n", "fsq_auto_step", "fsq_bound",
+             "fsq_warmstart", "fsq_warmstart_from"}
     unknown = sorted(k for k in a if str(k).startswith("fsq_")
                      and k not in known)
     if unknown:

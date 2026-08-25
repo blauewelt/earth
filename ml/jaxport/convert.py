@@ -415,8 +415,14 @@ def codec_from_ckpt_jax(ck, n_chan):
     # PixelMAE has no intrinsic bound, and a bounded checkpoint rebuilt here
     # would load every leaf, match every shape, and compute a different z from
     # the same weights.
+    # E-050's `fsq_warmstart` / `fsq_warmstart_from` are INFORMATIONAL here for
+    # the same reason they are in ml/model.py:codec_from_ckpt — a permission
+    # granted to the torch resume guard, and the provenance string naming the
+    # continuous codec a lattice grew out of. Neither changes what a `z` IS, so
+    # neither may cost a checkpoint its loader.
     known = {"fsq_levels", "fsq_ladder", "fsq_exp_base", "fsq_ladder_fit",
-             "fsq_auto_n", "fsq_auto_step", "fsq_bound"}
+             "fsq_auto_n", "fsq_auto_step", "fsq_bound",
+             "fsq_warmstart", "fsq_warmstart_from"}
     fsq_bound = str(a.get("fsq_bound", "") or "")
     if fsq_bound:
         raise SystemExit(

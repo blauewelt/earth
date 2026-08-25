@@ -113,6 +113,24 @@ def main():
     valid |= recipe_only
     consumers = raw + "".join(
         open(f).read() for f in sorted(glob.glob(os.path.join(ROOT, "scripts", "*.sh"))))
+    # EVERY DECLARED RECIPE-ONLY KEY IS READ, whether or not a recipe uses it
+    # yet. scripts/resolve_recipe.sh's own guard can only ask about the keys a
+    # recipe actually sets, so a key declared in the doc block and never wired
+    # into the Train step sits there looking available and does nothing — and
+    # the first recipe to name it is REFUSED at dispatch by that guard, which
+    # is a runtime failure for a static mistake. `fsq_warmstart` (E-050) is
+    # declared and wired in the same commit; this is what pins the pair.
+    unwired = sorted(k for k in recipe_only
+                     if f"RECIPE_{k.upper()}" not in consumers)
+    if unwired:
+        raise SystemExit(
+            f"case 3 FAILED: ml-train.yml declares recipe-only key(s) "
+            f"{unwired} that nothing reads as $RECIPE_<KEY>. Declaring a key "
+            f"is half the wiring; the other half is the Train step (or a "
+            f"script it calls) actually passing it to the trainer. As it "
+            f"stands the key looks available and does nothing, and the first "
+            f"recipe to name it is refused at dispatch by "
+            f"scripts/resolve_recipe.sh's unread-key guard.")
     recipes = sorted(glob.glob(os.path.join(ROOT, "ml", "recipes", "*.json")))
     if not recipes:
         raise SystemExit("case 3 FAILED: no recipes found")

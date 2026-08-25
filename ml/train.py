@@ -313,6 +313,40 @@ def parse():
                         "WRITTEN BY the run rather than passed. Pass it to "
                         "reproduce an exact lattice without re-measuring, or "
                         "let --resume adopt it from the checkpoint.")
+    p.add_argument("--fsq-warmstart", action="store_true",
+                   help="permit EXACTLY ONE transition the resume guard "
+                        "otherwise refuses: a CONTINUOUS checkpoint resumed "
+                        "with the FSQ lattice switched ON. Approved by Chris "
+                        "2026-08-25. WHY THE HOLE EXISTS: --fsq-levels and "
+                        "friends are ARCHITECTURE (they decide what a `z` IS), "
+                        "so --resume refuses a dispatch that contradicts the "
+                        "checkpoint — correct as a default, and it also blocks "
+                        "the one transition that is now worth running. E-046 "
+                        "says a lattice z FORECASTS BETTER (ratio 0.4394 vs "
+                        "0.5056 continuous), and every COLD-START codec-side "
+                        "FSQ run so far has collapsed or degenerated (e048a "
+                        "and #481/#482 to a constant encoder, run-455 to a "
+                        "one-bit sign code). WHY IT IS SAFE HERE AND NOWHERE "
+                        "ELSE: the lattice and --fsq-bound ln (LayerNorm, no "
+                        "affine) are PARAMETER-FREE — the continuous and the "
+                        "FSQ model have identical state_dicts (E-049 measured "
+                        "37,956,471 parameters on both arms), so the warm "
+                        "start loads every weight exactly and only the "
+                        "bottleneck's function changes. It applies to the four "
+                        "fsq architecture keys ONLY (fsq_levels, fsq_ladder, "
+                        "fsq_exp_base, fsq_bound); every other architecture "
+                        "field keeps its adopt-or-refuse behaviour unchanged. "
+                        "REFUSED without --resume, without an explicit "
+                        "--fsq-levels, when the named checkpoint is not on "
+                        "this box, and when that checkpoint ALREADY carries "
+                        "fsq_levels — FSQ->FSQ is not a warm start, it is a "
+                        "changed lattice reinterpreting every z the run has "
+                        "ever written. It also REBASES --fsq-auto-step onto "
+                        "the resumed step, because a warm start begins past "
+                        "every absolute fit step and an auto lattice that "
+                        "never fits is the collapse this flag exists to "
+                        "avoid. Recorded in the checkpoint as "
+                        "`fsq_warmstart_from` ('run-480.pt@200000').")
     p.add_argument("--anomaly", action="store_true",
                    help="train dynamic channels as departures from their own "
                         "per-pixel monthly climatology (train years only)")
@@ -639,6 +673,80 @@ def main():
         return (first if os.path.sep in first
                 else os.path.join(CKPT_DIR, first + ".pt")), cands
 
+    # "Did the DISPATCH ask for this?" is not the same question as "is the
+    # value non-None", and both the adopt-or-refuse loop below and
+    # --fsq-warmstart's own guards need the same answer, so it is computed in
+    # one place. --dec-layers still carries a real default of 2 (every
+    # pre-E-019b codec), so a resume from one of E-019b's 3-hidden-layer
+    # decoders would read have=2, want=3 and refuse a dispatch that never
+    # expressed an opinion — the false-refusal twin of the bug the loop exists
+    # to kill. Ask argv instead.
+    # BOTH SPELLINGS. argparse accepts `--flag value` and `--flag=value`, and
+    # the workflow writes the =form for any value that could open with a minus
+    # (--holdout-lon) and now for --fsq-levels too. Matching only the bare
+    # token would read an explicit `--fsq-levels=8` as "the dispatch said
+    # nothing", adopt the checkpoint's value over it, and run a different
+    # experiment in silence — the precise failure that loop exists to remove.
+    def _dispatch_states(k):
+        _fl = "--" + k.replace("_", "-")
+        return any(t == _fl or t.startswith(_fl + "=") for t in sys.argv)
+
+    def fsq_fit_schedule():
+        """The steps an `--fsq-ladder auto` run fits at, warm start included.
+
+        E-050. `--fsq-auto-step` is ABSOLUTE on an ordinary run: "50,200,2000"
+        means steps 50, 200 and 2000 of the run. A warm start resumes at (say)
+        200,000, which is past every one of them, so the unchanged comparison
+        `s in FSQ_FIT_AT` would never be true and the run would quantize
+        UNIFORMLY, into an unfitted lattice, for its entire length — the
+        collapse machine --fsq-warmstart exists to avoid, arriving through the
+        feature meant to prevent it.
+
+        So under a warm start the list is read as OFFSETS FROM THE RESUME
+        STEP: the run fits at S+50, S+200, S+2000, exactly as a fresh run fits
+        at 50, 200, 2000. `fql.fit_steps` is handed the REMAINING steps for
+        the same reason — its "first entry is clamped to steps//2 so an auto
+        run always fits" rule is about how much training is left, and half of
+        a warm start's remaining budget is the honest reading of it. One
+        rebase, in one function, read by the startup log, by the warm-start
+        line and by the loop's own FSQ_FIT_AT, so those three cannot disagree
+        about when this run fits.
+        """
+        base = WARMSTART_AT or 0
+        return [base + v for v in
+                fql.fit_steps(a.fsq_auto_step, max(1, a.steps - base))]
+
+    # E-050 · --fsq-warmstart: THE TWO REFUSALS THAT COST ONLY THE INPUTS.
+    # Both are answerable from argv alone, so they fire before the checkpoint
+    # is read off disk rather than after a 2.5 GB torch.load (§0.3 — the same
+    # guard at dispatch is correct and free). The third refusal (the resumed
+    # checkpoint already carries fsq_levels) needs the file and lives below.
+    if a.fsq_warmstart and not a.resume:
+        raise SystemExit(
+            "--fsq-warmstart without --resume: there is nothing to warm-start "
+            "FROM. The flag opens exactly one hole in the resume "
+            "adopt-or-refuse guard — a CONTINUOUS checkpoint resumed with the "
+            "FSQ lattice switched on — and with no checkpoint that hole is "
+            "not a warm start at all, it is an ordinary COLD-START FSQ run "
+            "wearing a warm start's name. Every cold-start codec-side FSQ run "
+            "so far has collapsed or degenerated (e048a and #481/#482 to a "
+            "constant encoder, run-455 to a one-bit sign code), which is the "
+            "outcome this flag exists to route around. Drop --fsq-warmstart "
+            "to cold-start on purpose, or name the continuous checkpoint with "
+            "--resume.")
+    if a.fsq_warmstart and not _dispatch_states("fsq_levels"):
+        raise SystemExit(
+            "--fsq-warmstart without an explicit --fsq-levels: a warm start "
+            "that does not state its lattice has no lattice. The flag's whole "
+            "job is to take the fsq keys from the DISPATCH instead of from "
+            "the checkpoint, and the checkpoint being warm-started is "
+            "CONTINUOUS by definition — so an unstated --fsq-levels would "
+            "train continuous for the whole run under a flag that claims "
+            "otherwise, and the log, the metrics config record and the saved "
+            "args would all agree with each other and be wrong. State the "
+            "lattice: --fsq-levels=8,8,8,5,5,5 (the =form; see the argv note "
+            "in the architecture block).")
+
     RESUME_PATH, RESUME_CANDS, RESUME_CK = None, [], None
     if a.resume:
         RESUME_PATH, RESUME_CANDS = _resume_candidates(a.resume)
@@ -661,6 +769,22 @@ def main():
             f"Exiting in seconds rather than retraining from scratch for "
             f"hours under a doc string that claims to be a continuation.")
 
+    # …and --fsq-warmstart implies --require-resume, for a reason of its own.
+    # A missing checkpoint is ordinarily not an error (the block below prints
+    # "starting from scratch" and trains a fresh run), but a warm start that
+    # starts from scratch IS the cold-start FSQ run every one of e048a,
+    # #481/#482 and run-455 died as — and it would be indistinguishable from a
+    # successful warm start in every line of the log except one.
+    if a.fsq_warmstart and RESUME_CK is None:
+        raise SystemExit(
+            f"--fsq-warmstart: no checkpoint at {RESUME_PATH} "
+            f"(--resume {a.resume!r}; checkpoint mirrors are box-local, so "
+            f"this box is not the one that wrote it). A warm start with "
+            f"nothing to start from is a COLD-START FSQ run, which is the "
+            f"failure mode the flag exists to route around — refusing in "
+            f"seconds rather than spending the run to discover it. Re-dispatch "
+            f"onto a box that holds the checkpoint, or list more candidates.")
+
     # `fsq_levels` is an ARCHITECTURE field, not a training knob: it decides
     # what a `z` IS, every downstream consumer reads it back out of the
     # checkpoint, and a resume that contradicted it would continue a
@@ -680,11 +804,53 @@ def main():
     ARCH = ("d_z", "patch", "d_model", "n_layers", "n_heads", "d_dec",
             "dec_layers", "fsq_levels", "fsq_ladder", "fsq_exp_base",
             "fsq_bound")
+    # The four keys --fsq-warmstart is allowed to take from the DISPATCH, and
+    # the only four. Everything else in ARCH keeps adopt-or-refuse exactly as
+    # it is: a warm start changes the BOTTLENECK, and a dispatch that also
+    # contradicted d_model is still #395.
+    ARCH_FSQ = ("fsq_levels", "fsq_ladder", "fsq_exp_base", "fsq_bound")
+    # Set below when the transition is permitted; read by the fit-schedule
+    # rebase and the provenance record. `None` means "no warm start", which is
+    # every run that does not pass the flag.
+    WARMSTART_AT = None
     if RESUME_CK is not None:
         ca = RESUME_CK.get("args", {}) or {}
         ca = ca if isinstance(ca, dict) else vars(ca)
+        # E-050 · THE THIRD REFUSAL, the one that needs the file. A warm start
+        # is CONTINUOUS -> FSQ and nothing else. FSQ -> FSQ is not a warm
+        # start: changing a lattice reinterprets every z the run has ever
+        # written, so the checkpoint's own earlier steps would come to mean
+        # something they did not mean when they were taken — which is the
+        # exact damage the adopt-or-refuse block was built to prevent, and it
+        # is not made safe by a flag that says the word "warmstart".
+        if a.fsq_warmstart and str(ca.get("fsq_levels", "") or ""):
+            raise SystemExit(
+                f"--fsq-warmstart: the checkpoint ALREADY carries "
+                f"--fsq-levels {ca.get('fsq_levels')!r}, so this is not a "
+                f"warm start.\n"
+                f"  checkpoint: {RESUME_PATH}\n"
+                f"  A warm start is the CONTINUOUS -> FSQ transition and only "
+                f"that one: the lattice and --fsq-bound ln are parameter-free, "
+                f"so the weights load exactly and only the bottleneck's "
+                f"function changes. FSQ -> FSQ is a CHANGED LATTICE, which "
+                f"reinterprets every z this run has already written and makes "
+                f"its own earlier steps mean something they did not mean when "
+                f"they were taken. Resume it without --fsq-warmstart to "
+                f"continue the lattice it has, or start a fresh run to train "
+                f"a different one.")
+        if a.fsq_warmstart:
+            WARMSTART_AT = int(RESUME_CK.get("step", 0) or 0)
         adopted, clash = [], []
         for k in ARCH:
+            # E-050: the hole, and it is exactly four keys wide. Under
+            # --fsq-warmstart the fsq family is neither adopted nor allowed to
+            # clash — the dispatch's value stands, because "the checkpoint is
+            # continuous and this run is not" is the POINT rather than the
+            # contradiction. Approved by Chris 2026-08-25 on E-046's verdict
+            # (lattice z forecasts better, ratio 0.4394 vs 0.5056) against
+            # five cold-start FSQ collapses.
+            if WARMSTART_AT is not None and k in ARCH_FSQ:
+                continue
             # d_z is also a top-level key on every checkpoint ever written;
             # args is the newer home. Prefer args, fall back to the old key.
             want = ca.get(k)
@@ -693,22 +859,10 @@ def main():
             if want is None:
                 continue
             have = getattr(a, k)
-            # "Did the dispatch ASK for this?" is not the same question as "is
-            # it non-None". --dec-layers still carries a real default of 2
-            # (every pre-E-019b codec), so a resume from one of E-019b's
-            # 3-hidden-layer decoders would read have=2, want=3 and refuse a
-            # dispatch that never expressed an opinion — the false-refusal
-            # twin of the bug this block exists to kill. Ask argv instead.
-            # BOTH SPELLINGS. argparse accepts `--flag value` and
-            # `--flag=value`, and the workflow writes the =form for any value
-            # that could open with a minus (--holdout-lon) and now for
-            # --fsq-levels too. Matching only the bare token would read an
-            # explicit `--fsq-levels=8` as "the dispatch said nothing", adopt
-            # the checkpoint's value over it, and run a different experiment
-            # in silence — the precise failure this block exists to remove.
-            _fl = "--" + k.replace("_", "-")
-            explicit = any(t == _fl or t.startswith(_fl + "=")
-                           for t in sys.argv)
+            # Whether the DISPATCH stated this flag — argv, both spellings.
+            # The reasoning is at `_dispatch_states`, which is shared with
+            # --fsq-warmstart's guards so the two cannot drift apart.
+            explicit = _dispatch_states(k)
             if have is None or not explicit:
                 if have != want:
                     setattr(a, k, want)
@@ -732,12 +886,61 @@ def main():
         # second one against a half-trained encoder and change what its own
         # earlier steps meant. The only way to re-fit is to start a fresh run.
         _fit = str(ca.get("fsq_ladder_fit", "") or "")
+        # E-050 · VERIFY THE ARTEFACT, DO NOT ASSUME IT (§0.1). The
+        # never-re-fit path above is what would stop a warm start from ever
+        # fitting its brand-new lattice, and it is inert here only because a
+        # CONTINUOUS checkpoint carries no `fsq_ladder_fit` — a property of
+        # the file, not of this code. `str(None or "")` is "" and `if _fit`
+        # is False, so an absent or empty key cannot be adopted as "fitted";
+        # a NON-empty one on a checkpoint that carries no fsq_levels is a
+        # contradiction in the file itself, and it is refused rather than
+        # silently installing a lattice measured against some other
+        # bottleneck.
+        if WARMSTART_AT is not None and _fit:
+            raise SystemExit(
+                f"--fsq-warmstart: {os.path.basename(RESUME_PATH)} carries no "
+                f"`fsq_levels` (which is why it qualifies as a warm start) and "
+                f"yet carries `fsq_ladder_fit` {_fit!r}. Those two cannot both "
+                f"be true of one checkpoint: a fitted per-dimension ladder is "
+                f"a MEASUREMENT a quantized run made against its own "
+                f"pre-quantization activations, and a continuous run has no "
+                f"quantizer to make it. Adopting it would install a lattice "
+                f"fitted to a bottleneck that is not this one, and then never "
+                f"re-fit. Refusing rather than guessing which half of the "
+                f"file to believe.")
         if _fit and _fit != a.fsq_ladder_fit:
             a.fsq_ladder_fit = _fit
             print(f"  FSQ ladder fit ADOPTED from "
                   f"{os.path.basename(RESUME_PATH)} ({_fit.count('e')} of "
                   f"{_fit.count(',') + 1} dimensions exponential) — a resume "
                   f"never re-fits", flush=True)
+        if WARMSTART_AT is not None:
+            # PROVENANCE, into the saved args (save_ckpt writes vars(a)), so
+            # the artefact says which continuous codec it grew out of and at
+            # which step — a warm-started FSQ checkpoint is otherwise
+            # indistinguishable from a cold-started one, and those two have
+            # very different histories to read a result against.
+            a.fsq_warmstart_from = (f"{os.path.basename(RESUME_PATH)}"
+                                    f"@{WARMSTART_AT}")
+            print(f"  FSQ WARM START (--fsq-warmstart): the CONTINUOUS "
+                  f"checkpoint {os.path.basename(RESUME_PATH)} at step "
+                  f"{WARMSTART_AT} is resumed with the lattice switched ON — "
+                  f"--fsq-levels {a.fsq_levels} --fsq-ladder {a.fsq_ladder}"
+                  + (f" --fsq-exp-base {a.fsq_exp_base:g}"
+                     if a.fsq_ladder in ("exp", "auto") else "")
+                  + (f" --fsq-bound {a.fsq_bound}" if a.fsq_bound else
+                     " (no --fsq-bound)")
+                  + f" — taken from the DISPATCH, not adopted from the file "
+                  f"(which carries no fsq_levels). The lattice and the bound "
+                  f"are PARAMETER-FREE, so every weight loads exactly and only "
+                  f"the bottleneck's function changes; recorded as "
+                  f"fsq_warmstart_from={a.fsq_warmstart_from}."
+                  + (f" --fsq-auto-step {a.fsq_auto_step} is REBASED onto this "
+                     f"step — fitting at {fsq_fit_schedule()} — because an "
+                     f"absolute schedule is already past on a warm start, and "
+                     f"an `auto` lattice that never fits is the collapse this "
+                     f"flag exists to avoid."
+                     if a.fsq_ladder == "auto" else ""), flush=True)
 
     missing = [k for k in ARCH if getattr(a, k) is None]
     if missing:
@@ -789,10 +992,15 @@ def main():
                      else "")
                   + (f" · fitted lattice IN HAND from the dispatch/resume: "
                      f"{_q.fit}" if _q.fit else "")
+                  # E-050: through fsq_fit_schedule(), so this line and the
+                  # loop's own FSQ_FIT_AT cannot disagree about when the run
+                  # fits. On a warm start both are rebased onto the resumed
+                  # step; on every other run the function is the identity over
+                  # fql.fit_steps and this line is unchanged.
                   + (f" · NOT YET FITTED — quantizing uniformly until step "
-                     f"{fql.fit_steps(a.fsq_auto_step, a.steps)[0]}, "
+                     f"{fsq_fit_schedule()[0]}, "
                      f"re-fitting at "
-                     f"{fql.fit_steps(a.fsq_auto_step, a.steps)}"
+                     f"{fsq_fit_schedule()}"
                      if _q.needs_fit else ""), flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     # Cosine annealing whose TOTAL can be re-fitted mid-run (--max-minutes):
@@ -962,6 +1170,13 @@ def main():
             # FSQ codec differ in nothing a parameter count or a loss curve
             # can show.
             "fsq_bound": (a.fsq_bound or None),
+            # E-050: and whether this lattice was WARM-STARTED off a
+            # continuous codec rather than cold-started. Same reason a fourth
+            # time — a warm-started and a cold-started FSQ run differ in
+            # nothing a parameter count, a loss curve or the levels string can
+            # show, and every cold start so far collapsed, so which one a
+            # curve came from is the first thing its reader needs.
+            "fsq_warmstart_from": getattr(a, "fsq_warmstart_from", "") or None,
             "eval_every": a.eval_every, "light_probe_every": a.light_probe_every,
             "lr_floor": a.lr_floor, "lr_decay_steps": a.lr_decay_steps,
             "params_M": round(sum(p_.numel() for p_ in model.parameters()) / 1e6, 3),
@@ -1356,7 +1571,12 @@ def main():
     # while the encoder trains: a single early fit bounds an encoder that no
     # longer exists, and a single late one leaves the run quantizing into a
     # constant bound for most of its steps.
-    FSQ_FIT_AT = (set(fql.fit_steps(a.fsq_auto_step, a.steps))
+    # E-050 rebases this onto the resumed step under --fsq-warmstart — see
+    # fsq_fit_schedule(). `s` is already the resumed step here (the resume
+    # block above sets it), and WARMSTART_AT is the same number read out of
+    # the checkpoint before the model was built, which is what lets the
+    # startup log promise a schedule the loop then keeps.
+    FSQ_FIT_AT = (set(fsq_fit_schedule())
                   if (model.fsq is not None and model.fsq.needs_fit) else set())
 
     def fsq_auto_fit(step):

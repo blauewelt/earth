@@ -198,6 +198,33 @@ on:
 #       Measure what it bought with ml/fsq_usage.py (effective bits per token
 #       from the per-dimension digit entropy). See
 #       ml/plans/E049_roadB_token.md §3.
+#   recipe-only: fsq_warmstart    -> ml/train.py --fsq-warmstart  (Train step)
+#       Any non-empty value (true) passes the bare flag; unset passes nothing
+#       and is bit-identical to before it existed. E-050, approved by Chris
+#       2026-08-25: it permits EXACTLY ONE transition the resume guard
+#       otherwise refuses — a CONTINUOUS checkpoint resumed with the FSQ
+#       lattice switched ON. The guard is right in general (fsq_levels decides
+#       what a `z` IS, so a resume that contradicts it would continue a
+#       quantized codec as a continuous one with every tensor loading
+#       cleanly), and it also blocks the one transition now worth running:
+#       E-046 measured a lattice z FORECASTING BETTER (ratio 0.4394 vs 0.5056
+#       continuous), while every COLD-START codec-side FSQ run has collapsed
+#       or degenerated (e048a and #481/#482 to a constant encoder, run-455 to
+#       a one-bit sign code). It is safe because the lattice and --fsq-bound
+#       ln are PARAMETER-FREE — E-049 measured 37,956,471 parameters on both
+#       arms, identical state_dicts — so the warm start loads every weight
+#       exactly and only the bottleneck's function changes. A recipe that
+#       sets it MUST also set resume and fsq_levels: ml/train.py refuses the
+#       flag without --resume, without an explicit --fsq-levels, when the
+#       named checkpoint is not on the box, and when that checkpoint already
+#       carries fsq_levels (FSQ->FSQ is a changed lattice, not a warm start).
+#       It also rebases fsq_auto_step onto the resumed step, because a warm
+#       start begins past every absolute fit step. Recipe-only for the same
+#       two reasons fsq_levels is: the 25-input list is full, AND the
+#       transition is a property of the CODEC being built rather than of a
+#       dispatch. Recorded in the checkpoint as `fsq_warmstart_from`
+#       ("run-480.pt@200000"), which ml/model.py:codec_from_ckpt reads as
+#       informational and never refuses on.
 #   recipe-only: collapse_r       -> ml/train.py --collapse-r     (Train step)
 #       The collapse guard's threshold (default 0.05 on the light probe's
 #       pooled linear_r_deseas). Exists because #481 (E-049b) measured the
@@ -1069,6 +1096,7 @@ jobs:
             $([ -n "${RECIPE_FSQ_LADDER:-}" ] && echo "--fsq-ladder=${RECIPE_FSQ_LADDER}") \
             $([ -n "${RECIPE_FSQ_AUTO_STEP:-}" ] && echo "--fsq-auto-step=${RECIPE_FSQ_AUTO_STEP}") \
             $([ -n "${RECIPE_FSQ_BOUND:-}" ] && echo "--fsq-bound=${RECIPE_FSQ_BOUND}") \
+            $([ -n "${RECIPE_FSQ_WARMSTART:-}" ] && echo "--fsq-warmstart") \
             $([ -n "${RECIPE_COLLAPSE_R:-}" ] && echo "--collapse-r=${RECIPE_COLLAPSE_R}") \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && echo --anomaly) \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && [ "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}" != "0" ] \
