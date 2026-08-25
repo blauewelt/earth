@@ -198,6 +198,42 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+**14:25–14:40Z 08-25 — #482 (E-049b, 3rd copy) CANCELLED AT STEP ~15k: THE ARM-B
+CONFIGURATION COLLAPSES TO A CONSTANT ENCODER, AND #481'S GUARD KILL IS RE-READ AS A
+TRUE POSITIVE.** The correction first, because the log said otherwise this morning:
+**the "false positive" reading of #481 is WITHDRAWN.** What stands from that block is
+only that the guard's instrument was uncalibrated on lattice z; the kill itself was
+right. The evidence, three instruments agreeing on #482 (collapse_r 0, so it ran on
+past where #481 died and showed the whole trajectory): the step-0 probe is healthy
+(r 0.15, z persistence MSE 0.141); by step 7500 persistence MSE is **0.000915**
+(~150× down) and r reads exactly −0.000; the step-2000 fit's `prequant_std_med`
+drops to **0.005** (0.638 → 0.371 → 0.005 across the three fits — the replacement
+monitor doing precisely what it was armed for, with the fit's R_min 0.10 showing
+the lattice chasing a collapsing distribution); and the step-15000 full probe dies
+of **ZeroDivisionError — persistence MSE exactly 0, i.e. z constant over time**.
+The bound itself held throughout (`prequant_rms` 1.0 at every fit): this is a
+DIRECTION collapse under an intact scale, e048a's disease in a new coat — and
+run-455 (d_z 32, unbounded) did NOT collapse to constant, so the new variables are
+d_z 6, the LN bound's mean-centering (2 of 6 DoF), the 5-level dims, and the early
+refits. Also measured, a correction to this morning's timeout arithmetic: **0.252
+s/step** (wall_s 3781.4 at step 15,000) — the 0.49 estimate had conflated the
+standardization pre-pass; 200k is ~14 h and fit even the original 1500.
+
+**Next, per §4.13 (fix the class, no 4th blind copy):** *(i)* #482's 15k checkpoint
+survives on gpu-box-42005419's disk (box STOPPED, disk kept; the rescue step
+publishes it on the box's next job) — the e048a diagnosis playbook applies: distinct-z
+count, where between to_z and the lattice the constancy is born (pre-LN constant =
+encoder's doing; post-LN constant only = the centering's). *(ii)* The candidate
+repair with the best mechanism story: **WARM-START quantization** — train the
+continuous d_z-6 codec first (exactly arm A / #480, already queued), then enable the
+lattice on resume from its checkpoint; needs a small guarded train.py affordance
+(fsq keys are arch-defining, so --resume currently refuses the change — correctly;
+an explicit opt-in flag, its own commit). This is A9's own shape moved codec-side:
+head-side quantization worked ON AN EXISTING Z, and every cold-start codec-side FSQ
+run here has now either collapsed (e048a, #481/#482) or degenerated (run-455's sign
+code). *(iii)* The cheap alternative if diagnosis blames the centering: an RMS-only
+bound (no mean subtraction). Cost of #482: ~1.1 h ≈ $0.3.
+
 **13:20Z 08-25 — #470 (E-047-HEAD, 5th dispatch, the fusion-vs-selection verdict head)
 WENT GREEN AND IS VOID: stage-2 CUDA OOM, and the run's colour lied again.** The
 trainer died at 12:01Z trying to allocate **13.22 GiB on the 24 GB card**
