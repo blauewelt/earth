@@ -404,8 +404,33 @@ def codec_from_ckpt_jax(ck, n_chan):
     fsq = str(a.get("fsq_levels", "") or "")
     fsq_ladder = str(a.get("fsq_ladder", "uniform") or "uniform")
     fsq_fit = str(a.get("fsq_ladder_fit", "") or "")
+    # E-049's `fsq_bound` is KNOWN here and REFUSED BY VALUE, which is not the
+    # same thing as being unknown. `ml/train.py` saves `vars(a)`, so every
+    # torch checkpoint written from that commit on carries the key — with the
+    # inert "" on the overwhelming majority of them. Treating its mere
+    # PRESENCE as unknown would refuse every new continuous and every new
+    # unbounded-FSQ checkpoint too, i.e. it would take the TPU path out of
+    # service for codecs this port rebuilds exactly. So the key is admitted
+    # and the VALUE is refused, one branch down: `ml/jaxport/models.py`'s
+    # PixelMAE has no intrinsic bound, and a bounded checkpoint rebuilt here
+    # would load every leaf, match every shape, and compute a different z from
+    # the same weights.
     known = {"fsq_levels", "fsq_ladder", "fsq_exp_base", "fsq_ladder_fit",
-             "fsq_auto_n", "fsq_auto_step"}
+             "fsq_auto_n", "fsq_auto_step", "fsq_bound"}
+    fsq_bound = str(a.get("fsq_bound", "") or "")
+    if fsq_bound:
+        raise SystemExit(
+            f"codec_from_ckpt_jax: this checkpoint was trained with "
+            f"--fsq-bound {fsq_bound!r} — E-049's intrinsic bound (LayerNorm "
+            f"without affine on the pre-quantization activation), which "
+            f"ml/jaxport/models.py does not implement. Rebuilding it here "
+            f"would produce a codec whose every z is a different function of "
+            f"the same weights, with nothing in the output saying so. This "
+            f"port refuses rather than running a reduced version of itself: "
+            f"score this checkpoint with the torch loader "
+            f"(ml/model.py:codec_from_ckpt), or implement the bound and gate "
+            f"it with the torch/JAX parity check in "
+            f"tests/test_e048_fsq_ladders.py.")
     unknown = sorted(k for k in a if str(k).startswith("fsq_")
                      and k not in known)
     if unknown:

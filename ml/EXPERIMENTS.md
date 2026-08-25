@@ -44,6 +44,71 @@ low-pass).
 
 ---
 
+<a id="e-049"></a>
+## E-049 · Road B: one 16-bit token per pixel-bin, judged by a non-linear decoder — DISPATCHING 2026-08-25 (Chris: *"continue with road B and do that very diligently, and test it very well with a decoder (a non-linear decoder)"*)
+
+**E-049a** · continuous d_z-6 width-tax control, fresh per-bin pentad codec · params
+37.956M (measured) · stage encoder · data family4_na025_pentad_r2 · arch 512×12 d_z 6
+patch 1 · steps 200k×512 · resume none · recipe `f4r2-40M-dz6`.
+**E-049b** · ROAD B — the paper-faithful token: d_z 6, FSQ [8,8,8,5,5,5] (2^16 = 64,000
+implicit codebook, ONE 16-bit token per pixel per 5 days), fitted ladder
+(`auto`, refits at steps 50/200/2000/20000) behind a NEW intrinsic bound
+(`--fsq-bound ln`, LayerNorm no-affine on the pre-quantization activation) · params
+37.956M (identical to a — the lattice and bound add zero parameters) · stage encoder ·
+data family4_na025_pentad_r2 · arch 512×12 d_z 6 patch 1 · steps 200k×512 · resume
+none · recipe `f4r2-40M-dz6-fsq65k`.
+
+**Hypothesis** (ml/plans/E049_roadB_token.md): a typical Argo-free pixel-bin's live
+state (~8 fast channels, ~128 stored bits) fits in ONE 16-bit token well enough that
+the DECODER CEILING — the E-019b1-style decoder-only retrain against the frozen
+tokens, the strongest non-linear decoder we run — reconstructs the fast channels on
+Argo-free bins at FVU within the month-block codec's accepted 9–19% band (E-047
+Tier-1, the programme's reference price for a real big squeeze). **Falsifier,
+registered now:** any fast channel at ~100% FVU at that ceiling = 16 bits cannot
+carry a bin, the configuration is dead, and the pre-registered next rung is TWO
+tokens per bin (d_z 12, 32 bits) — not a larger vocabulary. The Argo-carrying 8% of
+bins are EXPECTED to reconstruct badly (they already collapse at d_z 32: cur_speed
+112%, ssh 86%) and are reported, never scored against the hypothesis. **Attribution
+by construction:** (a − run-415) = the width tax, (b − a) = the quantization tax;
+without cell a, neither a good nor a bad b could name its disease.
+
+**Why the bound is part of the dispatch and not a refinement:** run-455 measured what
+an unbounded per-bin FSQ codec does (pre-quantization |v| ~ 3e4 vs R = 2 — the
+8-level lattice worn as a ONE-BIT sign code), and e048a2 measured that the fitted
+ladder alone closes the collapse but not the drift (std_med 0.73→20 across 28k
+steps). At 16 nominal bits a sign-code degeneration leaves 6, and the run would
+re-measure a known disease. This takes the first branch of the 08-25 design fork
+(intrinsic bound), for the road-B line ONLY — E-048's w6s3 arm stays held on its own
+fork. First-minutes health signal: **`prequant_rms` = 1 and FLAT at every fit** (not
+std_med — LayerNorm fixes the vector's rms; measured 0.9998/0.38 on the CPU toy).
+Effective bits are MEASURED, never inferred: `ml/fsq_usage.py` (new) recovers the
+digits from any z cache and reports per-dim entropy — the instrument the run-455
+lesson demands (nominal 96 bits, worn ~32).
+
+**Code at this dispatch** (all CPU-validated; tests/test_e049_fsq_bound.py 7/7,
+config guards 5/5, workflow guards 5/5 with the two new recipe-only keys, E-048
+ladder tests green on the non-JAX checks): `fsq_bound` in ml/model.py + ml/train.py +
+codec_from_ckpt's known set (old loaders REFUSE a bounded checkpoint rather than
+dropping the bound; the JAX trainer refuses the flag, convert.py refuses by value);
+workflow wiring for `fsq_auto_step`/`fsq_bound`; ml/fsq_usage.py. **Known instrument
+gaps, stated before dispatch:** the collapse guard reads NaN on lattice z (the E-046
+gap — arm b is monitored by prequant_rms + probe instead), and the recon audit
+scripts need the pre-audit adaptation listed in plan §4 before Tier-1 runs (the
+float16-accumulator overflow in recon_eval.py is silent and fatal at family-4 shape;
+the Argo-bin split scorer does not exist yet). That adaptation is the named work item
+for the ~20 h training window. **This wave trains NO stage-2 head** — token-input and
+token-output heads are separate dispatches gated on the audit. §3b applies in its
+harder form: new codec, new width, new bound = a tier with no replicate band; first
+results are directions.
+
+**Scale numbers** (rule 6): 37,956,471 params · batch 512 · 200,000 steps · the
+pentad tensor's train pool (~everything outside holdout years at patch 1). Cost:
+~20 h / ~$6 per arm, two arms.
+
+*(Run numbers and boxes appended at dispatch.)*
+
+---
+
 <a id="e-047"></a>
 ## E-047 · The month-block codec — fusion vs selection, DISPATCHED 2026-08-23 ~12:00Z (Chris's direction: combine multiple 5-day points into one embedding, with the time labelled properly)
 

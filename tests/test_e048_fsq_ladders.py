@@ -407,9 +407,14 @@ def main():
         refuses(lambda: codec_from_ckpt(
             {"d_z": DZ, "args": {"fsq_levels": "8", "fsq_ladder": "auto"}}, C),
             "carries no `fsq_ladder_fit`", "an auto checkpoint with no fit")
+        # The sentinel for "an fsq_* argument this revision does not
+        # implement" used to be `fsq_bound`; E-049 implemented that one (it is
+        # now a KNOWN key with its own value refusal, pinned in
+        # tests/test_e049_fsq_bound.py), so the sentinel has to be a key
+        # nothing implements or this line would measure the wrong refusal.
         refuses(lambda: codec_from_ckpt(
-            {"d_z": DZ, "args": {"fsq_levels": "8", "fsq_bound": "sigmoid"}}, C),
-            "fsq_bound", "an unknown fsq_* argument")
+            {"d_z": DZ, "args": {"fsq_levels": "8", "fsq_groups": "4"}}, C),
+            "fsq_groups", "an unknown fsq_* argument")
         print("6. refused, every one at the cost of the inputs alone: base 1 "
               "(every level identical), base < 1 (an inverted ladder), a base "
               "so large the innermost level underflows the saturation radius, "

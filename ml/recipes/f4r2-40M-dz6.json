@@ -1,0 +1,15 @@
+{
+  "_description": "E-049a: the WIDTH-TAX CONTROL for road B — ml/recipes/f4r2-40M-nolonhold.json with ONE field changed, d_z 32 -> 6, bottleneck CONTINUOUS. MEASURED PARAMS 37,956,471 (37.956M) from the model (`PixelMAE(n_chan=40,d_model=512,n_heads=4,n_layers=12,d_z=6,d_dec=256,patch=1)`), against run-415's 37,976,465 — the 20k-parameter difference is to_z and the decoder's z input, i.e. exactly the variable. \n\nWHY THIS ARM EXISTS. E-049b (f4r2-40M-dz6-fsq65k) quantizes a 6-dimensional bottleneck to one 16-bit token, and its FVU will carry TWO taxes at once: the width squeeze (32 -> 6 dims for 40 channels) and the lattice (continuous -> [8,8,8,5,5,5]). This arm pays only the first. The subtraction is the attribution: (a − run-415) = what 6 dimensions cost, (b − a) = what 16 bits cost GIVEN 6 dimensions. Without this cell a bad E-049b number could not name its disease and a good one could not name its margin. \n\nVERDICT INSTRUMENT (plan §4): the non-linear decoder audit — E-019a copy-reconstruction at full visibility (per-channel FVU, train / held-out months / Argo-free vs Argo bins) plus the E-019b1 decoder-only retrain ceiling against the frozen z. Reference row it is read against: run-415's recorded 0.4–0.6% FVU on Argo-free bins and its Argo-bin collapse (cur_speed 112%, ssh 86%). The d_z sweep of the coarse-tensor era (Fig. dz) found field reconstruction saturating by d_z 16–32 at C=12; nobody has measured d_z 6 at C=40, which is precisely the point — the FSQ paper's regime is <10 dims and the question 'how much state does a bin carry' starts with how much 6 continuous dims carry. \n\nDISPATCH with resume EMPTY (fresh codec), codec_steps 200000, batch 512 — the run-415/455 class, ~20 h on a 4090-class box. Design, falsifiers and the pre-registered readings: ml/plans/E049_roadB_token.md.",
+  "_provenance": "Copied field for field from ml/recipes/f4r2-40M-nolonhold.json (the recipe #415 ran; its checkpoint run-415 is the frozen codec of the whole E-044/E-045 pentad programme) changing exactly one key: d_z 32 -> 6. That recipe's provenance carries the architecture lineage (f4r2-40M -> f4-40M), the 2026-08-19 holdout decision and the '0,0'-not-'none' reasoning. NOTHING HAS BEEN RUN AT THIS CONFIGURATION; this recipe is the dispatch surface, and its _description becomes a measurement when the audit lands. Dispatched as one half of the E-049 pair per Chris's 2026-08-25 directive: \"continue with road B and do that very diligently, and test it very well with a decoder (a non-linear decoder)\".",
+  "tensor": "family4_na025_pentad_r2",
+  "d_z": 6,
+  "patch": 1,
+  "codec_d_model": 512,
+  "codec_layers": 12,
+  "codec_heads": 4,
+  "codec_d_dec": 256,
+  "anomaly": "true",
+  "batch": 512,
+  "holdout_lon": "0,0",
+  "head_probe": "true"
+}

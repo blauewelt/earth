@@ -297,14 +297,20 @@ def main():
         assert torch.equal(z_tr, z_ld), float((z_tr - z_ld).abs().max())
         drop_gap = float((z_tr - z_dr).abs().max())
         assert drop_gap > 1e-3, drop_gap
-        # an fsq_* argument this revision does not implement is REFUSED
+        # an fsq_* argument this revision does not implement is REFUSED.
+        # The sentinel used to be `fsq_bound`; E-049 IMPLEMENTED that one, so
+        # it is now a known key with a value refusal of its own
+        # (tests/test_e049_fsq_bound.py check 4 covers it, including an old
+        # ml/model.py refusing a checkpoint that carries it). The sentinel
+        # here has to be a key nothing implements, or this check would be
+        # measuring the wrong refusal.
         ck_bad = dict(ck)
-        ck_bad["args"] = dict(ck["args"], fsq_bound="sigmoid")
+        ck_bad["args"] = dict(ck["args"], fsq_groups="4")
         try:
             codec_from_ckpt(ck_bad, C)
             raise AssertionError("an unknown fsq_* arg was ignored")
         except SystemExit as e:
-            assert "fsq_bound" in str(e), e
+            assert "fsq_groups" in str(e), e
         # resume ADOPTS the levels, and a contradiction REFUSES
         o_ad = run([sys.executable, "-u", os.path.join(ML, "train.py"),
                     "--data", npz, "--out", run_dir, "--steps", "8",

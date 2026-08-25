@@ -162,6 +162,42 @@ on:
 #       of ml/fsq_ladder.py:AUTO_BASES, and a deliberate 'exp' arm gets the
 #       default 2.0 until an experiment needs otherwise. See
 #       ml/plans/E048_fsq_block_sweep.md.
+#   recipe-only: fsq_auto_step    -> ml/train.py --fsq-auto-step  (Train step)
+#       "<N>" | "<N1,N2,...>". The step(s) at which fsq_ladder "auto" MEASURES
+#       and re-installs the per-dimension ladder and saturation radius. Unset
+#       = train.py's own default "2000", unchanged for every dispatch that
+#       does not name a recipe carrying this key. A LIST because the fit now
+#       measures the radius as well, and where to_z's output sits is exactly
+#       what moves while the encoder trains: one early fit bounds an encoder
+#       that no longer exists, one late fit leaves most of the run quantizing
+#       into a constant bound (e048a2: std_med 0.73 -> 20 across 28k steps,
+#       each fitted lattice outgrown within ~10k). The LAST fit is what the
+#       checkpoint carries. Recipe-only for the same two reasons fsq_ladder
+#       is: the 25-input list is full, and the schedule is a property of the
+#       CODEC that produced the recorded lattice. It existed in ml/train.py
+#       since a1de68f with no torch dispatch able to set it, which is exactly
+#       the "a setting that cannot be reached" gap E-049 closes.
+#   recipe-only: fsq_bound        -> ml/train.py --fsq-bound      (Train step)
+#       "" | "ln". E-049: an INTRINSIC BOUND on the pre-quantization
+#       activation — LayerNorm without affine (zero-mean, unit-RMS per vector,
+#       no parameter added) on to_z's output BEFORE the lattice. Unset = "" =
+#       today's behaviour, bit-identical, no branch runs. It is load-bearing
+#       rather than cosmetic: the straight-through estimator gives to_z no
+#       gradient toward the bound, so nothing pushes a free linear map's
+#       output inside it — e048a collapsed to a constant encoder at |v| ~ 87
+#       against R = 2, and run-455, a HEALTHY codec, sits at |v| ~ 3e4, an
+#       eight-level ladder worn as a one-bit SIGN CODE while its log claimed
+#       3 bits/dim. The bound makes the fitted ladder's target stationary.
+#       Refused without fsq_levels (there would be no lattice to bound the
+#       activation for). Recipe-only for the same two reasons fsq_levels is:
+#       the 25-input list is full, AND it is a property of a CODEC rather
+#       than of a dispatch — ml/model.py:codec_from_ckpt reads it back out of
+#       the checkpoint for every eval and refuses a checkpoint whose fsq_*
+#       args it does not implement, and the JAX trainer refuses it outright
+#       rather than running the unbounded codec under the bound's name.
+#       Measure what it bought with ml/fsq_usage.py (effective bits per token
+#       from the per-dimension digit entropy). See
+#       ml/plans/E049_roadB_token.md §3.
 #   recipe-only: train_lon_hold   -> ml/temporal.py --train-lon-hold
 #       "inherit" | "none" | "lo,hi". Which longitudes are excluded from the
 #       STAGE-2 training pool, read in scripts/probes_run.sh. "inherit" is the
@@ -1019,6 +1055,8 @@ jobs:
             $([ -n "${RECIPE_TIME_BLOCK:-}" ] && echo "--time-block=${RECIPE_TIME_BLOCK}") \
             $([ -n "${RECIPE_FSQ_LEVELS:-}" ] && echo "--fsq-levels=${RECIPE_FSQ_LEVELS}") \
             $([ -n "${RECIPE_FSQ_LADDER:-}" ] && echo "--fsq-ladder=${RECIPE_FSQ_LADDER}") \
+            $([ -n "${RECIPE_FSQ_AUTO_STEP:-}" ] && echo "--fsq-auto-step=${RECIPE_FSQ_AUTO_STEP}") \
+            $([ -n "${RECIPE_FSQ_BOUND:-}" ] && echo "--fsq-bound=${RECIPE_FSQ_BOUND}") \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && echo --anomaly) \
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && [ "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}" != "0" ] \
               && echo --eval-every "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}") \

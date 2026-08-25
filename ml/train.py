@@ -273,6 +273,41 @@ def parse():
                         "state a checkpoint can be in; later entries are "
                         "clamped to --steps and not pulled inward, because a "
                         "schedule that silently moves is worse than none.")
+    p.add_argument("--fsq-bound", default="", choices=["", "ln"],
+                   help="E-049: an INTRINSIC BOUND on the pre-quantization "
+                        "activation, i.e. on to_z's output before the "
+                        "--fsq-levels lattice. '' (the default) is today's "
+                        "behaviour and is BIT-IDENTICAL — no branch runs, the "
+                        "activation is returned unchanged. 'ln' is LayerNorm "
+                        "over the d_z dimensions WITHOUT affine: zero-mean, "
+                        "unit-RMS per vector, no learned scale, no learned "
+                        "shift, no parameter added. WHY IT IS LOAD-BEARING "
+                        "RATHER THAN A REFINEMENT: the FSQ paper's 'bound with "
+                        "tanh and let the encoder learn the scale in' is an "
+                        "incentive that does not exist — the straight-through "
+                        "estimator gives to_z no gradient toward the bound, "
+                        "and to_z is a free linear map. Measured, three ways: "
+                        "e048a (JAX window codec) collapsed to a CONSTANT "
+                        "encoder at pre-quantization |v| ~ 87 against R = 2; "
+                        "run-455, a HEALTHY torch FSQ codec, sits at |v| ~ 3e4 "
+                        "against the same R = 2 — saturated by a factor 15,000, "
+                        "wearing an eight-level ladder as a ONE-BIT SIGN CODE "
+                        "while the log claimed 3 bits/dim; and e048a2 showed "
+                        "the fitted ladder closes the collapse but NOT the "
+                        "DRIFT (std_med 0.73 -> 20 across 28k steps, each "
+                        "fitted lattice outgrown within ~10k). A fit is a "
+                        "snapshot of a moving target; this makes the target "
+                        "stationary, so --fsq-ladder auto finally fits "
+                        "something that stays fitted. Refused without "
+                        "--fsq-levels: there would be no lattice to bound the "
+                        "activation FOR, and it would silently normalize a "
+                        "continuous z instead. The bound is recorded in the "
+                        "checkpoint (`fsq_bound`) and rebuilt by every loader; "
+                        "a loader that does not implement it REFUSES (see "
+                        "ml/model.py:codec_from_ckpt). Measure the effect with "
+                        "ml/fsq_usage.py — effective bits per token from the "
+                        "per-dimension digit entropy, never inferred from the "
+                        "levels argument. See ml/plans/E049_roadB_token.md §3.")
     p.add_argument("--fsq-ladder-fit", default="",
                    help="the per-dimension ladder, 'u,e2,e2,...' — normally "
                         "WRITTEN BY the run rather than passed. Pass it to "
@@ -637,8 +672,14 @@ def main():
     # it is a MEASUREMENT the run made rather than a setting a dispatch
     # states, so it is adopted unconditionally below instead of being
     # contradicted.
+    # E-049 adds `fsq_bound` for the third time and the same reason: it
+    # normalizes to_z's output before the lattice, so a resume that dropped it
+    # (or added it) would continue a BOUNDED codec as an unbounded one while
+    # every tensor in the state_dict loaded cleanly — and the drift the bound
+    # exists to remove would restart mid-run under the checkpoint's name.
     ARCH = ("d_z", "patch", "d_model", "n_layers", "n_heads", "d_dec",
-            "dec_layers", "fsq_levels", "fsq_ladder", "fsq_exp_base")
+            "dec_layers", "fsq_levels", "fsq_ladder", "fsq_exp_base",
+            "fsq_bound")
     if RESUME_CK is not None:
         ca = RESUME_CK.get("args", {}) or {}
         ca = ca if isinstance(ca, dict) else vars(ca)
@@ -714,7 +755,8 @@ def main():
                      n_layers=a.n_layers, n_heads=a.n_heads, d_dec=a.d_dec,
                      dec_layers=a.dec_layers, fsq_levels=a.fsq_levels,
                      fsq_ladder=a.fsq_ladder, fsq_exp_base=a.fsq_exp_base,
-                     fsq_ladder_fit=a.fsq_ladder_fit).to(dev)
+                     fsq_ladder_fit=a.fsq_ladder_fit,
+                     fsq_bound=a.fsq_bound).to(dev)
     print(f"codec parameters: {sum(p_.numel() for p_ in model.parameters())/1e6:.2f}M")
     # E-046: the codebook, logged ONCE at startup, from the object that will
     # actually do the rounding rather than from the flag string. A bits/dim
@@ -728,7 +770,13 @@ def main():
               f"{'...' if a.d_z > 8 else ''} · {_q.bits_per_dim:.3f} bits/dim "
               f"x d_z {a.d_z} = {_q.codebook_log2:.1f} bits "
               f"(codebook 2^{_q.codebook_log2:.1f}) · bound tanh, sigma 1 "
-              f"(the scale is learned into to_z) · straight-through gradient, "
+              + ("(the scale is learned into to_z)" if not a.fsq_bound else
+                 f"· INTRINSIC BOUND --fsq-bound {a.fsq_bound} on the "
+                 f"pre-quantization activation (LayerNorm, no affine, over "
+                 f"d_z: zero-mean unit-RMS per vector), so the lattice has a "
+                 f"stationary target instead of a free linear map's drifting "
+                 f"output")
+              + f" · straight-through gradient, "
               f"no codebook parameters and no commitment loss", flush=True)
         # E-048: WHICH LADDER, and — for `auto` — that it has not measured
         # anything yet. A run whose ladder is not the default says so in the
@@ -908,6 +956,12 @@ def main():
             # the setting, and it is here for the same reason fsq_levels is —
             # this record is sometimes the only surviving account of what ran.
             "fsq_ladder": (a.fsq_ladder if a.fsq_levels else None),
+            # E-049: and whether the activation those levels quantize was
+            # BOUNDED. Same reason again — this record is sometimes the only
+            # surviving account of what ran, and a bounded and an unbounded
+            # FSQ codec differ in nothing a parameter count or a loss curve
+            # can show.
+            "fsq_bound": (a.fsq_bound or None),
             "eval_every": a.eval_every, "light_probe_every": a.light_probe_every,
             "lr_floor": a.lr_floor, "lr_decay_steps": a.lr_decay_steps,
             "params_M": round(sum(p_.numel() for p_ in model.parameters()) / 1e6, 3),
@@ -1330,7 +1384,14 @@ def main():
         sample = pre.detach().to("cpu", torch.float32).numpy()
         line = q.fit_auto(sample)
         a.fsq_ladder_fit = q.fit
-        print(f"  step {step}: {line}", flush=True)
+        _s64 = np.asarray(sample, np.float64)
+        std_med = float(np.median(_s64.std(0)))
+        pq_rms = float(np.sqrt(np.mean(_s64 ** 2)))
+        print(f"  step {step}: {line} · pre-quantization rms {pq_rms:.4g}, "
+              f"std per dim (median) {std_med:.4g}"
+              + (f" — --fsq-bound {a.fsq_bound}, so the rms is 1 BY "
+                 f"CONSTRUCTION at every fit and the lattice has a "
+                 f"stationary target" if a.fsq_bound else ""), flush=True)
         R = q._scale.detach().cpu().numpy().astype(float)
         with open(metrics_path, "a") as f:
             f.write(json.dumps({"step": int(step), "fsq_ladder_fit": {
@@ -1340,6 +1401,34 @@ def main():
                 "scale_med": round(float(np.median(R)), 6),
                 "scale_max": round(float(R.max()), 6),
                 "prequant_absmean": round(float(np.abs(sample).mean()), 6),
+                # E-049: the BOUND's own health signal, at the one place the
+                # pre-quantization sample already exists, so it costs nothing.
+                # An unbounded run is where e048a2 measured std_med 0.73 -> 20
+                # across 28k steps and run-455 sat at |v| ~ 3e4; one number
+                # tells that apart from a stationary distribution in the first
+                # minutes, which is what ml/plans/E049_roadB_token.md §6 asks
+                # a first-minutes check to do.
+                #
+                # TWO NUMBERS, BECAUSE ONLY ONE OF THEM IS AN INVARIANT.
+                # `prequant_std_med` is the median PER-DIMENSION spread — the
+                # same definition ml/jaxport/train_stage1.py's
+                # `fsq_prequant_stats` writes, kept identical so the two
+                # backends' curves are the same curve. It is NOT exactly 1
+                # under `--fsq-bound ln`: LayerNorm fixes each VECTOR's RMS,
+                # and a dimension with a large constant offset then carries
+                # its energy in the mean rather than in the spread (measured
+                # on the CPU toy at step 1, an untrained encoder: rms 1.000,
+                # std_med 0.257). `prequant_rms` is the invariant — root mean
+                # square over the whole sample, 1 under the bound at every
+                # step to within LayerNorm's own eps (1e-5), whatever the
+                # encoder is doing — so a run whose
+                # rms drifts off 1 has a broken bound, and one whose std_med
+                # drifts has a moving encoder inside an intact one.
+                "prequant_std_med": round(
+                    float(np.median(np.asarray(sample, np.float64).std(0))), 6),
+                "prequant_rms": round(
+                    float(np.sqrt(np.mean(
+                        np.asarray(sample, np.float64) ** 2))), 6),
                 "d_z": int(a.d_z)}}) + "\n")
 
     while s < a.steps:

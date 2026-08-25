@@ -403,6 +403,17 @@ def parse(argv=None):
                    help="the per-dimension ladder 'u,e2,...' — normally "
                         "WRITTEN BY the run; pass it to reproduce an exact "
                         "lattice, or let --resume adopt it.")
+    # E-049. DECLARED HERE SO IT CAN BE REFUSED BY NAME. The flag exists on
+    # the torch side (`ml/train.py --fsq-bound ln`: LayerNorm without affine
+    # on the pre-quantization activation) and is NOT implemented here. Left
+    # undeclared, a dispatch that named it would die on argparse's
+    # "unrecognized arguments" — which reads as a typo rather than as a
+    # backend that does not have the feature, and would send the operator
+    # looking for the wrong problem. Declared and refused in main(), the
+    # message says which backend to use and why.
+    p.add_argument("--fsq-bound", default="",
+                   help="REFUSED above '' by the JAX stage-1 trainer — see "
+                        "main(). Implemented in ml/train.py (torch) only.")
     p.add_argument("--anomaly", action="store_true")
     p.add_argument("--light-probe-every", type=int, default=0,
                    help="steps between LIGHT probes (linear 26.5N section "
@@ -478,6 +489,23 @@ def main(argv=None):
             "full probe's flag would put a different estimator into the "
             "archive under a name that already means something. Use "
             "--light-probe-every.")
+    if str(a.fsq_bound or ""):
+        raise SystemExit(
+            f"--fsq-bound {a.fsq_bound!r} is REFUSED by the JAX stage-1 "
+            f"trainer. E-049's intrinsic bound (LayerNorm without affine on "
+            f"the pre-quantization activation, ml/model.py:fsq_bound_apply) "
+            f"is implemented on the torch side only; this port has not "
+            f"reached it. Running WITHOUT the bound under the bound's own "
+            f"flag would train exactly the codec the flag exists to prevent "
+            f"— run-455 measured what an unbounded per-bin FSQ codec does "
+            f"(pre-quantization |v| ~ 3e4 against R = 2, an eight-level "
+            f"ladder worn as a one-bit sign code), and nothing in the "
+            f"metrics would say which of the two had run. This port refuses "
+            f"rather than running a reduced version of itself. Train the "
+            f"bounded arm with ml/train.py, or implement the bound in "
+            f"ml/jaxport/models.py:PixelMAE (the arithmetic is one "
+            f"`nnx`-free normalization over the d_z axis) and delete this "
+            f"refusal in the same commit as the parity check that gates it.")
     if a.light_probe_every and not a.anomaly:
         raise SystemExit("--light-probe-every requires --anomaly (the probe "
                          "measures anomaly-space embeddings; state space is "

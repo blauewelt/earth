@@ -300,6 +300,71 @@ class InputQuant:
                 f"constructor's)")
 
 
+FSQ_BOUNDS = ("", "ln")
+
+
+def fsq_bound_apply(v, bound, d_z):
+    """E-049: the INTRINSIC BOUND on the pre-quantization activation, or `v`.
+
+    `""` (the default, and every archived checkpoint) returns its ARGUMENT —
+    the same object, no cast, no clone, no branch that touches the graph — so
+    a run that does not name `--fsq-bound` is bit-identical to before this
+    existed. `"ln"` is LayerNorm over the d_z dimensions WITHOUT affine:
+    zero-mean, unit-RMS per vector, no learned scale and no learned shift.
+
+    WHY A BOUND AT ALL, AND WHY IT IS NOT A REFINEMENT. The FSQ paper's own
+    story — bound with `tanh`, let the encoder learn the scale into `to_z` —
+    is a claim about an incentive that does not exist. The straight-through
+    estimator hands `to_z` no gradient toward the lattice's extent, and `to_z`
+    is a free linear map, so nothing pushes its output INSIDE the bound. The
+    record, three measurements deep (E-048):
+
+      · e048a (JAX window codec)  collapsed to a CONSTANT encoder at
+        pre-quantization |v| ~ 87 against R = 2 — every dimension pinned to
+        its outermost level.
+      · run-455 (healthy torch FSQ codec) sits at |v| ~ 3e4 against R = 2:
+        not collapsed, but saturated by a factor 15,000, which wears an
+        EIGHT-level ladder as a ONE-BIT SIGN CODE. The log said 3 bits/dim;
+        the codec used 1.
+      · e048a2 (fitted ladder, no bound) showed the fit CLOSES the collapse
+        and does NOT close the DRIFT: std_med 0.73 -> 20 across 28k steps,
+        each fitted lattice outgrown within ~10k steps. A fit is a snapshot
+        of a moving target.
+
+    LayerNorm removes the cause instead of guarding against it
+    (ml/CLAUDE.md §4.1): the quantity handed to the lattice has unit RMS BY
+    CONSTRUCTION, at every step, so the fit finally has a stationary target
+    and `R ~ 2` means what it says. It adds no parameter (no affine — an
+    affine would hand the scale straight back to the free-parameter regime
+    this exists to leave) and the gradient of the normalization is exact and
+    native, unlike the round it sits in front of.
+
+    AT 16 NOMINAL BITS THIS IS THE EXPERIMENT, NOT A POLISH. E-049b spends
+    d_z 6 x [8,8,8,5,5,5]; a sign-code degeneration leaves 6 effective bits
+    of 16 and the run would be re-measuring a known disease rather than
+    testing whether a bin fits in a token. `ml/fsq_usage.py` is the
+    instrument that says which of the two happened, from the digits.
+
+    The `d_z` argument is passed rather than read off `v.shape[-1]` so a
+    caller that flattened slots into the last axis cannot silently normalize
+    across several vectors at once.
+    """
+    b = str(bound or "")
+    if b == "":
+        return v
+    if b == "ln":
+        # F.layer_norm(v, (d_z,)) with no weight and no bias: subtract the
+        # per-vector mean over the last axis, divide by its RMS. `eps` is
+        # torch's default 1e-5, and it is a guard against a genuinely
+        # constant vector, not a tuning knob.
+        return nn.functional.layer_norm(v, (int(d_z),))
+    raise SystemExit(
+        f"--fsq-bound {b!r}: expected one of {list(FSQ_BOUNDS)} "
+        f"('' = no intrinsic bound, today's behaviour and every archived "
+        f"checkpoint's; 'ln' = LayerNorm without affine over the d_z "
+        f"dimensions, applied to to_z's output before the lattice).")
+
+
 def fsq_from_levels(spec, d_z, ladder="uniform",
                     exp_base=fql.DEFAULT_EXP_BASE, fit=""):
     """E-046: the CODEC-side FSQ bottleneck (`--fsq-levels`), or None.
@@ -356,7 +421,8 @@ class PixelMAE(nn.Module):
     def __init__(self, n_chan, d_model=128, n_heads=4, n_layers=4,
                  d_z=32, d_dec=256, max_abs_offset=3, patch=1, dec_layers=2,
                  k_time=1, fsq_levels="", fsq_ladder="uniform",
-                 fsq_exp_base=fql.DEFAULT_EXP_BASE, fsq_ladder_fit=""):
+                 fsq_exp_base=fql.DEFAULT_EXP_BASE, fsq_ladder_fit="",
+                 fsq_bound=""):
         super().__init__()
         self.n_chan = n_chan
         self.d_z = d_z
@@ -413,6 +479,29 @@ class PixelMAE(nn.Module):
                 f"--fsq-ladder {self.fsq_ladder!r} without --fsq-levels: "
                 f"there is no bottleneck to put a ladder on. Name the levels "
                 f"(e.g. --fsq-levels 8) or leave the ladder at 'uniform'.")
+        # E-049: the INTRINSIC BOUND is the third field of the same
+        # architecture — it changes what `to_z`'s output IS before the lattice
+        # sees it, so `codec_from_ckpt` reads it back for every eval exactly as
+        # it reads the levels and the ladder. Validated HERE (not only at the
+        # first forward) so a wrong spelling costs the inputs alone (§0.3).
+        self.fsq_bound = str(fsq_bound or "")
+        fsq_bound_apply(torch.zeros(1, int(d_z)), self.fsq_bound, d_z)
+        if self.fsq is None and self.fsq_bound:
+            # Same refusal as the ladder's, and for the same reason: a bound
+            # in front of a bottleneck that does not quantize is a normalizer
+            # on a free linear map's output — it would CHANGE a continuous
+            # codec (z is no longer to_z's output) while the flag's whole
+            # meaning is "give the LATTICE a stationary target". A setting
+            # that means something else than it says is worse than one that
+            # does nothing.
+            raise SystemExit(
+                f"--fsq-bound {self.fsq_bound!r} without --fsq-levels: there "
+                f"is no lattice to bound the activation for. The bound exists "
+                f"so a FITTED ladder has a stationary target (run-455 sat at "
+                f"pre-quantization |v| ~ 3e4 against R = 2, an 8-level ladder "
+                f"worn as a sign code); on a continuous bottleneck it would "
+                f"silently normalize z instead. Name the levels (e.g. "
+                f"--fsq-levels 8,8,8,5,5,5) or drop --fsq-bound.")
         self.max_off = max_abs_offset
         # E-047 TIME BLOCKS. k_time = 1 is the per-bin codec every archived
         # checkpoint is, and it adds NO parameter and NO branch that runs:
@@ -484,6 +573,17 @@ class PixelMAE(nn.Module):
         for p in (self.mask_tok, self.miss_tok, self.cls_tok):
             nn.init.normal_(p, std=0.02)
 
+    def _bound(self, v):
+        """E-049's intrinsic bound on the pre-quantization activation.
+
+        One line, at the one place the activation is born, for the same
+        reason `_bottleneck` is one line: every `encode_pre` branch —
+        patch > 1, k_time > 1, per-bin — returns through here, so the block
+        codec and the bound compose without either knob learning about the
+        other. With `--fsq-bound ""` this returns its ARGUMENT (see
+        `fsq_bound_apply`), which is what makes the default bit-identical."""
+        return fsq_bound_apply(v, self.fsq_bound, self.d_z)
+
     def _bottleneck(self, z):
         """`to_z`'s output, quantized when E-046's flag is on.
 
@@ -513,7 +613,24 @@ class PixelMAE(nn.Module):
         return self._bottleneck(self.encode_pre(x, obs, mask, ctx))
 
     def encode_pre(self, x, obs, mask, ctx):
-        """`encode` WITHOUT the bottleneck: `to_z`'s raw output."""
+        """`encode` WITHOUT the quantizer: THE PRE-QUANTIZATION ACTIVATION.
+
+        `to_z`'s raw output with `--fsq-bound ""` (the default, and every
+        archived checkpoint — the same object, unchanged). With
+        `--fsq-bound ln` it is `to_z`'s output NORMALIZED, because that is
+        what the lattice is handed.
+
+        THE BOUND BELONGS ON THIS SIDE OF THE SPLIT, and putting it in
+        `_bottleneck` instead would have been a silent measurement bug rather
+        than a style preference. Two callers read `encode_pre` precisely
+        because it is "what the quantizer will see": `ml/train.py`'s
+        `fsq_auto_fit`, which FITS the per-dimension ladder and saturation
+        radius on this sample, and the same function's `prequant_absmean`
+        health line. With the bound applied after them, the fit would measure
+        an unbounded distribution and install a lattice for values the
+        quantizer never receives — the fitted radius would track the drift the
+        bound exists to remove, and the log would report the disease as
+        cured."""
         # WIDEN THE INPUT TO THE WEIGHTS' DTYPE. Family 4 is the project's
         # first float16 tensor, and every reader hands the codec a batch whose
         # dtype follows the tensor — `torch.from_numpy(np.nan_to_num(X))` did,
@@ -551,7 +668,7 @@ class PixelMAE(nn.Module):
             toks = torch.cat([self.cls_tok.expand(B, 1, -1),
                               self.ctx_proj(ctx).unsqueeze(1), vt], dim=1)
             h = self.encoder(toks)
-            return self.to_z(h[:, 0])
+            return self._bound(self.to_z(h[:, 0]))
         if self.k_time > 1:
             # x, obs, mask [B, k_time, C] -> [B, k_time*C] tokens, cell (j, c)
             # carrying chan_emb[c] + time_emb[j]. Flattened j-major so a
@@ -575,7 +692,7 @@ class PixelMAE(nn.Module):
                                   torch.zeros_like(vt))
             toks = torch.cat([self.cls_tok.expand(B, 1, -1),
                               self.ctx_proj(ctx).unsqueeze(1), vt], dim=1)
-            return self.to_z(self.encoder(toks)[:, 0])
+            return self._bound(self.to_z(self.encoder(toks)[:, 0]))
         B, C = x.shape
         ce = self.chan_emb.weight[None, :, :].expand(B, -1, -1)
         vt = self.val_proj(x.unsqueeze(-1)) + ce
@@ -587,7 +704,7 @@ class PixelMAE(nn.Module):
         toks = torch.cat([self.cls_tok.expand(B, 1, -1),
                           self.ctx_proj(ctx).unsqueeze(1), vt], dim=1)
         h = self.encoder(toks)
-        return self.to_z(h[:, 0])
+        return self._bound(self.to_z(h[:, 0]))
 
     def query(self, z, chan_idx, off, tpos=None):
         """z [B,d_z] · chan_idx [B,Q] · off [B,Q,3] ints in [-max,max] → [B,Q].
@@ -714,6 +831,14 @@ def codec_from_ckpt(ck, n_chan):
     fsq_fit = str(a.get("fsq_ladder_fit", "") or "")
     fsq_base = float(a.get("fsq_exp_base", fql.DEFAULT_EXP_BASE) or
                      fql.DEFAULT_EXP_BASE)
+    # E-049: and the INTRINSIC BOUND travels with both, for the third time and
+    # the same reason. `fsq_bound ln` normalizes `to_z`'s output before the
+    # lattice, so a loader that dropped it would hand the SAME weights a
+    # different activation and read a different z out of an identical
+    # state_dict — the exact silent-drop failure the levels and the ladder are
+    # read back for. The default "" is every archived checkpoint, and rebuilds
+    # them unchanged.
+    fsq_bound = str(a.get("fsq_bound", "") or "")
     if fsq and fsq_ladder == "auto" and not fsq_fit:
         raise SystemExit(
             "codec_from_ckpt: this checkpoint says --fsq-ladder auto but "
@@ -723,12 +848,25 @@ def codec_from_ckpt(ck, n_chan):
             "measure this tensor's activations, not the ones that trained), "
             "and quantizing uniformly would score a different model.")
     # And REFUSE what this code does not understand, rather than ignoring it.
-    # A checkpoint written by a later revision that adds (say) `fsq_bound` or
-    # `fsq_groups` would otherwise load here as a plain FSQ codec and be
-    # scored as one. Unknown-key refusal is cheap, fires at load, and costs
-    # the inputs alone (§0.3).
+    # A checkpoint written by a later revision that adds (say) `fsq_groups`
+    # would otherwise load here as a plain FSQ codec and be scored as one.
+    # Unknown-key refusal is cheap, fires at load, and costs the inputs alone
+    # (§0.3).
+    #
+    # E-049 IS THE FIRST TIME THIS CLAUSE HAS BEEN CASHED, and it works in
+    # both directions by construction. `fsq_bound` joins `known` here, so a
+    # checkpoint carrying it is rebuilt WITH it; and because `ml/train.py`
+    # saves `vars(a)`, every checkpoint written from this commit on carries
+    # the key — so a loader at any EARLIER revision, whose `known` set does
+    # not hold it, refuses with the message below instead of silently
+    # rebuilding a codec whose activation is not normalized. That refusal is
+    # wider than the feature (it fires on `fsq_bound ""` too, i.e. on
+    # continuous and unbounded-FSQ checkpoints alike), which is the same
+    # bargain `fsq_auto_n`/`fsq_auto_step` already struck: the key's PRESENCE
+    # is the signal, because an old loader cannot know that a value it has
+    # never heard of is the inert one.
     known = {"fsq_levels", "fsq_ladder", "fsq_exp_base", "fsq_ladder_fit",
-             "fsq_auto_n", "fsq_auto_step"}
+             "fsq_auto_n", "fsq_auto_step", "fsq_bound"}
     unknown = sorted(k for k in a if str(k).startswith("fsq_")
                      and k not in known)
     if unknown:
@@ -748,7 +886,8 @@ def codec_from_ckpt(ck, n_chan):
                     d_dec=a.get("d_dec", 256),
                     dec_layers=a.get("dec_layers", 2),
                     fsq_levels=fsq, fsq_ladder=fsq_ladder,
-                    fsq_exp_base=fsq_base, fsq_ladder_fit=fsq_fit)
+                    fsq_exp_base=fsq_base, fsq_ladder_fit=fsq_fit,
+                    fsq_bound=fsq_bound)
 
 
 def obs_any_chunked(X, min_chan=2, chunk=64):
