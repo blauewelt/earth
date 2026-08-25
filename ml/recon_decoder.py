@@ -28,6 +28,34 @@ Protocol guards:
   · Scored by the exact E-019a section audit (same splits, same metrics),
     so numbers are directly comparable to the production decoder's row.
 
+E-049. This is the DECODER CEILING rung (plan §4c) and therefore the rung the
+falsifier is evaluated at, so the pre-audit adaptation reaches it too. Almost
+all of it is INHERITED rather than duplicated: `stream_stats` (the float16
+accumulator and the uint16 climatology counter), `check_stats` (the refusal),
+`open_x` (the npz input path), `argo_split_block` (the per-(bin, pixel) Argo
+split) and `bottleneck_spec` all live in `ml/recon_eval.py` and are imported
+from there — ONE copy, because two copies of a silent-overflow fix is one copy
+that will be missed. What is local to this file:
+
+  · the cached-stats path now carries the tensor's identity and the guard's
+    version (see `stats_cache_key`). The old caches were named `std_stats.npz`
+    and `ocean_mask.npy` FLAT, so pointing this script at a second tensor
+    silently reused the first one's climatology — harmless while there was one
+    tensor, wrong the moment there are two, and it would have re-admitted the
+    exact statistics the fix above refuses.
+  · the training pool is expressed in TRAIN BINS, not train months. The logic
+    was already index-based and generalises unchanged at pentad cadence; the
+    naming did not, and `per_t = pairs // len(train_t)` silently becomes 0 for
+    a long axis and a small `--pairs`, which is now a refusal.
+  · the deep-channel summary no longer prints `nan` off an empty selection.
+
+The ANOMALY TRANSFORM IS NOT TOUCHED. It is a 12-bin climatology keyed on
+`int(m[5:7]) - 1` from `%Y-%m` labels, which is exactly what `ml/train.py:496`
+does for a per-bin pentad codec — the pentad label is the bin's START MONTH
+(`ml/build_family4.py:897`), so ~6 bins share each key and the climatology is
+a month-of-year climatology at both cadences. `tests/test_e049_recon_audit.py`
+check 6 pins the agreement against `trainprobe.anomaly_transform` itself.
+
 Usage:
   python3 ml/recon_decoder.py --x ml/cache/family3_X.npy \
       --npz-small ml/cache/f3_small.npz --z ml/cache/Z.npy \
@@ -36,6 +64,7 @@ Usage:
       --out ml/runs/recon_decoder/L.json
 """
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -51,8 +80,33 @@ sys.path.insert(0, HERE)
 
 from model import codec_from_ckpt                              # noqa: E402
 from recon_eval import (stream_stats, build_slab, score,       # noqa: E402
+                        check_stats, open_x, argo_split_block,
+                        bottleneck_spec, bottleneck_line,
+                        print_argo_summary,
                         RAPID_LAT, RAPID_LON)
 from temporal import section_of, embed_everything              # noqa: E402
+
+# Bumped whenever the meaning of a cached statistic changes. E-049 is the
+# first bump: caches written before the float16 accumulator fix hold a
+# climatology divided by a wrapped uint8 count and a `dyn` list missing every
+# overflowed channel, and nothing in the file would say so.
+STATS_CACHE_VERSION = "e049"
+
+
+def stats_cache_key(x_path, shape, dtype):
+    """A cache name that cannot collide across tensors or across revisions.
+
+    `std_stats.npz` and `ocean_mask.npy` were flat names in `--cache-dir`.
+    That was correct while family 3 was the only tensor this script had ever
+    been pointed at, and it becomes a silent wrong-answer generator the moment
+    a pentad tensor lands in the same cache directory: the shapes differ, so
+    `clim` would fail loudly — but a family4 r1 (39ch) and r2 (40ch) pair, or
+    two revisions of the same tensor, can share a shape and not a climatology.
+    """
+    h = hashlib.sha256(
+        f"{os.path.basename(x_path)}|{tuple(shape)}|{np.dtype(dtype)}"
+        f"|{STATS_CACHE_VERSION}".encode()).hexdigest()[:10]
+    return h
 
 
 class MultiDec(nn.Module):
@@ -71,9 +125,13 @@ class MultiDec(nn.Module):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--x", required=True)
-    ap.add_argument("--npz-small", required=True,
-                    help="npz with months/lats/lons/chan (small members only)")
+    ap.add_argument("--x", required=True,
+                    help="extracted X.npy (memmapped) OR the tensor .npz "
+                         "(sidecar / uncompressed member) — see "
+                         "recon_eval.open_x")
+    ap.add_argument("--npz-small",
+                    help="npz with months/lats/lons/chan (small members only); "
+                         "defaults to --x when that is itself an npz")
     ap.add_argument("--z", required=True, help="assembled Z cache .npy (f16)")
     ap.add_argument("--ckpt", required=True)
     ap.add_argument("--hidden", type=int, required=True)
@@ -91,12 +149,20 @@ def main():
     rng = np.random.default_rng(a.seed)
 
     ck = torch.load(a.ckpt, map_location="cpu", weights_only=False)
-    d = np.load(a.npz_small, allow_pickle=False)
+    Xm, meta = open_x(a.x)
+    if a.npz_small:
+        d = np.load(a.npz_small, allow_pickle=False)
+    elif meta is not None:
+        d = meta
+    else:
+        ap.error("--npz-small is required when --x is a bare .npy")
     months = [str(m) for m in d["months"]]
     lats, lons = d["lats"], d["lons"]
     chan = [str(c) for c in d["chan"]]
-    Xm = np.load(a.x, mmap_mode="r")
     T, H, W, C = Xm.shape
+    bspec = bottleneck_spec(ck)
+    print(f"X [T={T} H={H} W={W} C={C}] {Xm.dtype}", flush=True)
+    print(bottleneck_line(bspec), flush=True)
     moy = np.array([int(m[5:7]) - 1 for m in months])
     hold_years = set(ck["args"]["holdout_years"].split(","))
     t_hold = np.array([m[:4] in hold_years for m in months])
@@ -104,7 +170,8 @@ def main():
     x_hold = (lons >= lo) & (lons < hi)
 
     # ---- ocean mask & pixel ordering (must match temporal.py exactly) -----
-    om_path = os.path.join(a.cache_dir, "ocean_mask.npy")
+    tag = stats_cache_key(a.x, Xm.shape, Xm.dtype)
+    om_path = os.path.join(a.cache_dir, f"ocean_mask_{tag}.npy")
     if os.path.exists(om_path):
         ocean = np.load(om_path)
     else:
@@ -123,15 +190,31 @@ def main():
     assert Zm.dtype == np.float16, Zm.dtype
 
     # ---- standardization stats (streaming; verified impl from E-019a) ----
-    st_path = os.path.join(a.cache_dir, "std_stats.npz")
+    st_path = os.path.join(a.cache_dir, f"std_stats_{tag}.npz")
     if os.path.exists(st_path):
         s = np.load(st_path)
-        clim, dyn = s["clim"], list(s["dyn"])
+        clim, dyn = s["clim"], [int(c) for c in s["dyn"]]
         mean_c, std_c = s["mean_c"], s["std_c"]
+        obs_n, bad_mean_n = s["obs_n"], s["bad_mean_n"]
     else:
-        clim, dyn, mean_c, std_c = stream_stats(Xm, moy, t_hold, x_hold)
-        np.savez(st_path, clim=clim, dyn=np.array(dyn),
-                 mean_c=mean_c, std_c=std_c)
+        clim, dyn, mean_c, std_c = stream_stats(Xm, moy, t_hold, x_hold,
+                                                chan=chan)
+        # The observed count per channel, so the cached path can run the same
+        # refusal the streaming path ran. Cheap: one pass of the finite mask
+        # per chunk, and the alternative is a cache that skips the guard.
+        obs_n = np.zeros(C, np.int64)
+        for t0 in range(0, T, 16):
+            obs_n += np.isfinite(np.asarray(Xm[t0:t0 + 16])).sum(axis=(0, 1, 2))
+        # zero BY CONSTRUCTION: stream_stats RAISES before returning if any
+        # channel had observations and a non-finite spatial mean, so a cache
+        # that exists at all is a cache whose statistics passed the guard.
+        bad_mean_n = np.zeros(C, np.int64)
+        np.savez(st_path, clim=clim, dyn=np.array(dyn, dtype=np.int64),
+                 mean_c=mean_c, std_c=std_c, obs_n=obs_n,
+                 bad_mean_n=bad_mean_n)
+    # A cache is an artefact like any other, and §0.1 says verify the artefact.
+    check_stats(chan, dyn, mean_c, std_c, obs_n, bad_mean_n,
+                where=f"stream_stats (cache {os.path.basename(st_path)})")
     print(f"stats ready: {len(dyn)}/{C} dynamic", flush=True)
 
     # ---- section frame (identical to E-019a) ------------------------------
@@ -177,10 +260,21 @@ def main():
               flush=True)
         del codec
 
-    # ---- training pairs: train months × non-holdout-lon ocean pixels ------
-    # Cached to disk keyed by (pairs, seed): every size in the sweep then
-    # trains on IDENTICAL pairs, and the 10.9 GB gather runs once.
-    pc = os.path.join(a.cache_dir, f"pairs_{a.pairs}_{a.seed}.npz")
+    # ---- training pairs: train BINS × non-holdout-lon ocean pixels ---------
+    # Cached to disk keyed by (tensor, pairs, seed): every size in the sweep
+    # then trains on IDENTICAL pairs, and the 10.9 GB gather runs once.
+    #
+    # "BINS", not "months". The selection was always index-based — `train_t`
+    # is `np.where(~t_hold)[0]` over whatever the time axis is — and it
+    # generalises to pentad cadence unchanged: `t_hold` comes from the label's
+    # YEAR (`m[:4] in hold_years`), which is the same blocked-year holdout at
+    # both cadences, and every downstream use indexes `Zm[t]` / `Xm[t]` by
+    # position. Only the arithmetic below has a cadence-dependent failure mode:
+    # at family 3 `len(train_t)` is ~430 and `--pairs 6,000,000` gives 13,900
+    # pixels per bin; at pentad it is ~2,700 and gives 2,222; on a longer axis
+    # with a small `--pairs` it reaches 0 and the gather silently produces an
+    # EMPTY pair set, which then trains a decoder on nothing.
+    pc = os.path.join(a.cache_dir, f"pairs_{tag}_{a.pairs}_{a.seed}.npz")
     if os.path.exists(pc):
         pcd = np.load(pc)
         ZT, XT = pcd["ZT"], pcd["XT"]
@@ -189,7 +283,20 @@ def main():
     else:
         keep_p = ~x_hold[xs]                   # per-P pixel eligibility
         train_t = np.where(~t_hold)[0]
+        if len(train_t) == 0:
+            raise SystemExit(
+                f"no train bins: every one of {T} timesteps is in the "
+                f"holdout years {sorted(hold_years)}. Refusing.")
         per_t = a.pairs // len(train_t)
+        if per_t < 1:
+            raise SystemExit(
+                f"--pairs {a.pairs:,} over {len(train_t):,} train bins is "
+                f"{a.pairs / len(train_t):.3f} pixels per bin, which floors to "
+                f"0 and would gather an EMPTY training set. Raise --pairs to "
+                f"at least {len(train_t):,} (one pixel per bin); the pentad "
+                f"axis has ~6x family 3's bin count for the same years.")
+        print(f"pairs: {len(train_t):,} train bins x {per_t:,} pixels",
+              flush=True)
         zs_l, tr_l = [], []
         t0 = time.time()
         elig = np.where(keep_p)[0]
@@ -286,6 +393,7 @@ def main():
         "steps": a.steps, "batch": a.batch, "pairs": N,
         "best_val_mse": round(best_val, 5),
         "chan": chan,
+        "bottleneck": bspec, "x_dtype": str(Xm.dtype),
         "splits": {
             "train": score(truth_sec, pred_sec, obs_sec,
                            sel_train_t, sel_train_x, "train"),
@@ -295,17 +403,38 @@ def main():
                                   np.arange(T), sel_hold_x, "hold-x"),
         },
     }
-    os.makedirs(os.path.dirname(a.out), exist_ok=True)
+    # The E-049 falsifier's axis, ADDITIVE (`splits` above is unchanged). This
+    # is the DECODER-CEILING rung, so this block is the one the verdict is
+    # read from.
+    res["argo_split"] = argo_split_block(
+        truth_sec, pred_sec, obs_sec, chan,
+        {"train": (sel_train_t, sel_train_x),
+         "heldout_months": (sel_hold_t, sel_train_x),
+         "heldout_lons": (np.arange(T), sel_hold_x)})
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
     with open(a.out, "w") as f:
         json.dump(res, f, indent=1)
     tr = res["splits"]["train"]
     rs = [v["r"] for v in tr.values() if np.isfinite(v["r"])]
+    # The deep-channel filter, CHECKED against family-4-r2 rather than assumed
+    # (§0.1). `ml/build_family4.py` imports `build_family3.CHANS` rather than
+    # restating it, so both tensors spell these `rg_t900`..`rg_t1900` /
+    # `rg_s900`..`rg_s1900`; `nm[4:]` is the pressure in dbar because `rg_t`
+    # and `rg_s` are both four characters. Twelve channels match at r1 and at
+    # r2 (r2 appends `sst`, which is not one). What DID need fixing is the
+    # summary line: `np.mean([])` is nan with a RuntimeWarning, so a tensor
+    # whose deep channels were all too sparse to score printed `nan` as if it
+    # were a measurement (§5.22).
     deep = [i for i, nm in enumerate(chan)
             if nm.startswith(("rg_t", "rg_s")) and nm[4:].isdigit()
             and int(nm[4:]) >= 900]
     dr = [tr[c]["r"] for c in deep if c in tr]
-    print(f"\n== {a.hidden}x{a.layers} ({n_par/1e6:.1f}M) ==  mean r "
-          f"{np.mean(rs):.4f} · deep-channel mean r {np.mean(dr):.4f}")
+    mr = f"{np.mean(rs):.4f}" if rs else "n/a (no scoreable channel)"
+    md = (f"{np.mean(dr):.4f} over {len(dr)}/{len(deep)}" if dr else
+          f"n/a ({len(deep)} deep channels, none scoreable)")
+    print(f"\n== {a.hidden}x{a.layers} ({n_par/1e6:.1f}M) ==  {bottleneck_line(bspec)}")
+    print(f"mean r {mr} · deep-channel mean r {md}")
+    print_argo_summary(res["argo_split"], chan)
     print(f"wrote {a.out}")
 
 

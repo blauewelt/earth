@@ -140,7 +140,20 @@ before the audit: the per-(t,pixel) Argo-bin split (the falsifier's own
 axis — today's scorer can only express month × longitude products), a
 uint8→uint16 climatology counter (244 of 255 used at pentad cadence), and
 an .npz-tensor input path. None of this was patched blind into the monthly
-scripts at this commit; it is the first work item after dispatch.
+scripts at the dispatch commit; it landed as the first work item after
+dispatch (same day), and the disease turned out to have THREE modes, not
+one: 26 of 40 channels OVERFLOW to inf, 2 more SATURATE to an exactly
+constant spatial-mean series (float16 spacing 32 near 32,768 — no inf, no
+warning, indistinguishable from a static channel by any finiteness guard),
+and one more survives with its dynamic-test statistic at 0.161 against a
+true 1.057. The old script kept 12 of 40 channels dynamic at family-4
+shape. All closed by float64 accumulation (float32 inputs bit-identical,
+pinned); the Argo-bin split scorer, uint16 counter, .npz path (33.9 GB
+one-time sidecar extraction — savez_compressed members cannot be
+memmapped), per-run stats-cache keying, and d_z-6/FSQ/bound compatibility
+landed with it (tests/test_e049_recon_audit.py, 9 checks). Still open at
+that commit: wiring ml/fsq_usage.py into the audit output (run it beside
+the audit until then).
 
 ## 5 · Pre-registered readings
 
