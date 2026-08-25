@@ -1,4 +1,4 @@
-# E-051 · The field head: joint next-field prediction, deterministic then generative
+# E-052 · The field head: joint next-field prediction, deterministic then generative
 
 **Status: BUILT AND CPU-TESTED (2026-08-25/26 overnight session) — no GPU arm
 dispatched yet.** Chris approved the staged path in the AR-vs-diffusion deck
@@ -20,13 +20,13 @@ estimates. "Move to diffusion" conflates three separable axes:
 | B · output type | deterministic conditional mean | sample from the conditional distribution |
 | C · computation | one-shot map | iterative refinement (NFE) |
 
-E-051 buys them separately, in order, each with its own falsifier — because a
+E-052 buys them separately, in order, each with its own falsifier — because a
 three-axis move in one dispatch would not say which axis paid, whatever it
 returned.
 
 ## The arms
 
-**E-051.0 · the probabilistic scoreboard (code only, no GPU).**
+**E-052.0 · the probabilistic scoreboard (code only, no GPU).**
 `ml/probscore.py`: fair-CRPS ensemble estimator (+ Gaussian closed form as its
 own test), ensemble-mean MSE/ratio, spread–error ratio with the (M+1)/M
 correction, and a dip-event Brier/BSS on threshold events. NEW keys beside the
@@ -36,7 +36,7 @@ E‖x−x̂‖² for a single sample exceeds the conditional-mean error by exact
 conditional variance, i.e. a sampling head is penalized most at pentad/daily,
 precisely where its advantage would live.
 
-**E-051.1 · the clean axis-A ablation: joint deterministic field head.**
+**E-052.1 · the clean axis-A ablation: joint deterministic field head.**
 `ml/field_model.py` in `det` mode: ocean-patch tokens (4×4 default over the
 0.25° window; ~5.3k tokens), per-token temporal conditioner over K frames,
 DiT-style blocks attending over SPACE, one-shot regression of the next-field
@@ -47,17 +47,17 @@ against the stencil head at matched cadence, span and (approximately) params.
 matched conditions, axis A buys nothing here — the 145-slot concat was never
 the bottleneck — and the diffusion case must rest on axis B alone.
 
-**E-051.2 · the generative head on the same backbone (axis B, small C).**
+**E-052.2 · the generative head on the same backbone (axis B, small C).**
 Same tokenizer/conditioner/backbone in `diff` mode: EDM parameterization
 (c_skip/c_out/c_in on the residual, σ ~ lognormal, λ(σ) weighting), seeded
 deterministic Heun sampler on a Karras σ-ladder, M-member ensembles.
-**Read:** ensemble-mean ratio must ≈ E-051.1 (no MSE tax after averaging);
-CRPS, dip Brier and spread–error must beat E-051.1 treated as a degenerate
+**Read:** ensemble-mean ratio must ≈ E-052.1 (no MSE tax after averaging);
+CRPS, dip Brier and spread–error must beat E-052.1 treated as a degenerate
 (M=1, zero-spread) ensemble. **Falsifier:** if the ensemble mean matches but
 CRPS/Brier do not improve on the deterministic head + trivial noise ensemble,
 the distribution head is not earning its NFE.
 
-**E-051.p · the cheapest mechanism probe (zero new architecture, listed for
+**E-052.p · the cheapest mechanism probe (zero new architecture, listed for
 completeness).** Condition the EXISTING stencil head on a noise-level
 embedding and train across a σ-ladder (the +0.057 result trains at ONE level).
 Not built tonight; it touches temporal.py and deserves its own small diff.
@@ -86,11 +86,11 @@ holds EXACT identities where possible (§4.9), not thresholds:
 1. CRPS of a large Gaussian ensemble ↔ the closed form; fair-estimator
    M-invariance; CRPS at M=1 = MAE exactly.
 2. MSE_sample = MSE_mean + Var, measured on synthetic ensembles to float
-   precision — the slide-4 identity that motivates E-051.0.
+   precision — the slide-4 identity that motivates E-052.0.
 3. Tokenizer round-trip is the identity on ocean pixels; land cells never
    leak into the loss (masked-loss invariance to land values).
 4. **Deterministic mode at init IS persistence: ratio 1.000000 at step 0** —
-   the E-051.1 twin of "r_fore must read exactly 1.0 at step 1".
+   the E-052.1 twin of "r_fore must read exactly 1.0 at step 1".
 5. **Diffusion mode at init: x̂₀ = c_skip(σ)·x_noisy exactly** (zero-init
    final layer through the EDM skip), and the σ→0 limit returns the input.
 6. Sampler determinism: same seed ⇒ bitwise-identical samples; different
@@ -117,7 +117,7 @@ Two synthetic laws, chosen so each axis has a microcosm:
   give ≈ 0 — this statistic is the joint-law detector), wins CRPS, and its
   ensemble mean recovers ≈ the deterministic optimum. Axis B's microcosm.
 
-## What E-051 does NOT claim or change
+## What E-052 does NOT claim or change
 
 - No workflow wiring yet: `ml-train.yml` sits at the 25-input ceiling and a
   new trainer needs its own dispatch step — a reviewed change, with the

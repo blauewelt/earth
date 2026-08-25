@@ -44,10 +44,10 @@ low-pass).
 
 ---
 
-<a id="e-051"></a>
-## E-051 · The field head: joint next-field prediction, deterministic then generative — BUILT AND CPU-VERIFIED 2026-08-25/26 overnight (no GPU arm dispatched)
+<a id="e-052"></a>
+## E-052 · The field head: joint next-field prediction, deterministic then generative — BUILT AND CPU-VERIFIED 2026-08-25/26 overnight (no GPU arm dispatched)
 
-**E-051 · build + CPU verification of the joint field head (axis-A deterministic
+**E-052 · build + CPU verification of the joint field head (axis-A deterministic
 regression AND axis-B EDM diffusion) plus the probabilistic scoreboard · params:
 toy configs 0.13–1.1M (real arms not yet sized) · stage: build / toy-eval only —
 NOTHING trains on real data yet · data: synthetic laws `shift`/`bimodal`/`gauss`
@@ -61,7 +61,7 @@ let's try this. Take things step by step ... please continue and thoroughly
 test the diffusion implementation"*). Design argument:
 [the deck](https://blauewelt.github.io/earth/ml/figures/ar_vs_diffusion.html);
 experiment form and falsifiers:
-[the E-051 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E051_field_diffusion.md).
+[the E-052 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E052_field_diffusion.md).
 New files, nothing existing touched: `ml/probscore.py`, `ml/field_model.py`,
 `ml/train_field.py`, `tests/test_probscore.py`, `tests/test_field_diffusion.py`.
 Implementation by two Opus subagents to a main-session spec (§0b); every test
@@ -73,7 +73,7 @@ longhand O(M²) reference pinning the sorted-member estimator), CRPS(M=1) == MAE
 exactly, mse_sample == mse_mean + mean_var to 1e-10, spread–error calibration,
 hand-computed Brier, NaN-holes == deleted-elements. field head 9/9, the
 load-bearing ones bitwise: det mode at init IS persistence (`z_hat == z_t`,
-`torch.equal` — the E-051 twin of "r_fore reads exactly 1.000000 at step 1");
+`torch.equal` — the E-052 twin of "r_fore reads exactly 1.000000 at step 1");
 diff mode at init has `D(x;σ) == c_skip(σ)·x` at six σs; tokenizer round-trip
 identity with land holes; land values AND land output slots inert in both
 losses; same-seed samples `torch.equal`, member m of an M=4 call == the M=1
@@ -108,7 +108,7 @@ toy** (known conditional N(0.7·x_t, 0.5²)): sampled conditional mean slope
 
 Toy numbers are CPU, n = 1, on synthetic laws — they verify MECHANISMS
 (the estimators, the joint sampler, the exact identities), and are directions
-for nothing beyond that. Real-data arms (E-051.1 then E-051.2, falsifiers
+for nothing beyond that. Real-data arms (E-052.1 then E-052.2, falsifiers
 pre-registered in the plan) are NOT dispatched: `ml-train.yml` sits at the
 25-input ceiling and the new trainer needs its own reviewed dispatch step —
 the one piece deliberately left for a daytime decision. Cost of tonight:

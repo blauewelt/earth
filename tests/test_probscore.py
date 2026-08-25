@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""ml/probscore.py — the E-051.0 probabilistic scoreboard, pinned by identities.
+"""ml/probscore.py — the E-052.0 probabilistic scoreboard, pinned by identities.
 
 The module exists because squared error alone cannot score a sampling head
-fairly (`ml/plans/E051_field_diffusion.md`), and it will be quoted beside
+fairly (`ml/plans/E052_field_diffusion.md`), and it will be quoted beside
 `val_zmse` and the corridor AUC in an experiment log. A scoreboard that is
 itself unvalidated is a number that looks like a result — so these tests
 prefer EXACT expected values to threshold checks wherever an exact one exists

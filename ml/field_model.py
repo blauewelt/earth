@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""E-051 · the field head: joint next-latent-field prediction, det and diffusion.
+"""E-052 · the field head: joint next-latent-field prediction, det and diffusion.
 
-`ml/plans/E051_field_diffusion.md` is the spec; this file is E-051.1's and
-E-051.2's shared implementation. Stage 2 today (`ml/temporal.py`) predicts each
+`ml/plans/E052_field_diffusion.md` is the spec; this file is E-052.1's and
+E-052.2's shared implementation. Stage 2 today (`ml/temporal.py`) predicts each
 ocean pixel's next embedding from K past frames of ITSELF plus a 144-slot
 stencil, concatenated per frame by one fixed `Linear`, with attention over time
 only — so the t+1 field is P conditionally-independent point estimates. This

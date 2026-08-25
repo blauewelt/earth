@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E-051's field head, held to EXACT identities wherever one exists.
+"""E-052's field head, held to EXACT identities wherever one exists.
 
     python3 tests/test_field_diffusion.py
 
@@ -7,7 +7,7 @@ Plain python, no pytest — same convention as tests/test_train_config_guards.py
 Every `test_*` below runs in-process on CPU; the whole file is a couple of
 minutes.
 
-`ml/plans/E051_field_diffusion.md` §"What is built, and how it is tested" lists
+`ml/plans/E052_field_diffusion.md` §"What is built, and how it is tested" lists
 what this suite must hold. The reason so many of these are `torch.equal` rather
 than `allclose` is ml/CLAUDE.md §4.9: *"Build an invariant with an EXACT
 expected value and make the job refuse if it fails. Prefer exact identities to
@@ -556,7 +556,7 @@ def main():
         msg = fn()
         print(f"case {i} ok ({time.time() - t0:6.1f}s) — {msg}", flush=True)
         ok += 1
-    print(f"\nall {ok}/{len(TESTS)} E-051 field-head identities hold "
+    print(f"\nall {ok}/{len(TESTS)} E-052 field-head identities hold "
           f"({time.time() - t_all:.1f}s)")
 
 

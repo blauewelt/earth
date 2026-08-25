@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""E-051 · trainer for the joint field head, deterministic and generative.
+"""E-052 · trainer for the joint field head, deterministic and generative.
 
-`ml/plans/E051_field_diffusion.md` is the spec; `ml/field_model.py` is the
+`ml/plans/E052_field_diffusion.md` is the spec; `ml/field_model.py` is the
 model. This file trains it in either mode, on synthetic laws for CPU science or
 on the real `[T, P, d_z]` embed-cache artefact stage 2 already publishes.
 
@@ -39,14 +39,14 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from field_model import FieldHead, OceanTokenizer, count_params, nfe_to_steps
 
-# ml/probscore.py is E-051.0 and lands in its own diff. Guard the import so
+# ml/probscore.py is E-052.0 and lands in its own diff. Guard the import so
 # this module still LOADS without it (a trainer that cannot be imported cannot
 # be tested), and skip CRPS with a WARNING rather than inventing a number — a
 # missing scoreboard must read as missing, never as zero.
 try:
     from probscore import crps_ensemble       # noqa: F401
     HAVE_CRPS = True
-except Exception:                             # pragma: no cover - E-051.0 gap
+except Exception:                             # pragma: no cover - E-052.0 gap
     crps_ensemble = None
     HAVE_CRPS = False
 
@@ -368,9 +368,9 @@ def eval_diff(model, win, ts, nfe, members, seed, batch=8):
     Keys:
       * `sample_ratio`   — per-MEMBER MSE / persistence. Expected to be WORSE
         than the deterministic head by exactly the conditional variance; that
-        is the slide-4 identity E-051.0 exists to keep out of the verdict.
+        is the slide-4 identity E-052.0 exists to keep out of the verdict.
       * `ens_ratio`      — ensemble-mean MSE / persistence. This is the one
-        that must ~match E-051.1: no MSE tax after averaging.
+        that must ~match E-052.1: no MSE tax after averaging.
       * `crps`           — fair-CRPS, when ml/probscore.py is present.
       * `spread_error`   — sqrt(mean[(M+1)/M · Var_ddof1]) / rmse(ens mean),
         `ml/probscore.py`'s convention EXACTLY (its `spread_error`): 1 is
@@ -493,7 +493,7 @@ def load_ckpt(path, model, opt, gen):
 # ---------------------------------------------------------------------------
 def build_argparser():
     p = argparse.ArgumentParser(
-        description="E-051 field head trainer (det and EDM-diffusion modes)")
+        description="E-052 field head trainer (det and EDM-diffusion modes)")
     p.add_argument("--toy", choices=sorted(TOYS))
     p.add_argument("--z-cache", help="[T, P, d_z] embed-cache .npy")
     p.add_argument("--data", help="tensor .npz (lats/lons/months[/ys/xs])")
@@ -610,7 +610,7 @@ def main(argv=None):
                n_train=int(len(tr_ts)), n_val=int(len(va_ts)),
                have_crps=HAVE_CRPS)
     if not a.quiet:
-        print(f"[E-051] {name} · params {cfg['params']:,} · ntok {tok.ntok} "
+        print(f"[E-052] {name} · params {cfg['params']:,} · ntok {tok.ntok} "
               f"· P {cfg['P']} · d_z {cfg['d_z']} · sigma_data {sd:.4f} · "
               f"train/val {len(tr_ts)}/{len(va_ts)} · out {out_path}",
               flush=True)
@@ -629,7 +629,7 @@ def main(argv=None):
         return r
 
     # ---- train -----------------------------------------------------------
-    # Constant LR on purpose: E-051's question is about the ARCHITECTURE
+    # Constant LR on purpose: E-052's question is about the ARCHITECTURE
     # (joint vs factorized, sample vs point estimate), and a schedule is one
     # more thing that differs between arms. `CosineAnnealingLR` also has the
     # documented resume trap (ml/CLAUDE.md §7 / docs/ML_BASICS.md §9) where a
@@ -704,7 +704,7 @@ def main(argv=None):
     if a.ckpt:
         save_ckpt(a.ckpt, model, opt, a.steps, gen, history, cfg)
     if not a.quiet:
-        print(f"[E-051] done · {out_path}", flush=True)
+        print(f"[E-052] done · {out_path}", flush=True)
     return {"out": out_path, "config": cfg, "history": history, "final": final,
             "model": model}
 

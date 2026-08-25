@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Probabilistic scores for stage-2 forecast heads — the E-051.0 scoreboard.
+"""Probabilistic scores for stage-2 forecast heads — the E-052.0 scoreboard.
 
-Plan: `ml/plans/E051_field_diffusion.md`. Everything here writes NEW keys
+Plan: `ml/plans/E052_field_diffusion.md`. Everything here writes NEW keys
 BESIDE the existing read-outs. Nothing in this module replaces, reweights or
 re-derives `val_zmse`, `val_persistence`, `msss_clim`, the corridor AUC,
 `read_sv`, the eval gate or any archived number — an additional key can be
@@ -20,7 +20,7 @@ the conditional variance. A generative head that has learned the predictive
 distribution perfectly still loses on MSE to a blurred point forecast, and
 loses by more the more genuinely uncertain the future is — i.e. most at pentad
 and daily cadence, which is precisely where the sampling head's advantage
-would live. Squared error alone therefore decides the E-051 question before
+would live. Squared error alone therefore decides the E-052 question before
 the experiment is run. CRPS, the spread-error ratio and a dip-event Brier
 score are the instruments that do not.
 
@@ -114,7 +114,7 @@ def crps_ensemble(ens, obs, fair=True, axis=0):
     **Why fair by default.** The biased estimator's spread term is short by a
     factor (M-1)/M, so a biased CRPS improves as M grows for a fixed, correct
     predictive distribution — it rewards buying members. That makes it useless
-    for the E-051 comparison, whose whole point is to put an M-member
+    for the E-052 comparison, whose whole point is to put an M-member
     generative head beside a deterministic one (M=1) on the same axis. The
     fair estimator's expectation does not depend on M, so the number compares
     across arms with different ensemble sizes and against a degenerate M=1
@@ -225,7 +225,7 @@ def ensemble_decomposition(ens, obs, axis=0):
         └── mse_sample ──┘        └ mse_mean ┘   └ mean_var ┘
 
     So **mse_sample = mse_mean + mean_var**, to float error. This is the whole
-    argument for E-051.0 in one line: a sample is penalised by the ensemble
+    argument for E-052.0 in one line: a sample is penalised by the ensemble
     variance relative to the ensemble mean, always, regardless of how good the
     distribution is. Reporting the three terms together makes the tax legible
     instead of leaving it inside a single ratio — a generative arm whose
@@ -315,7 +315,7 @@ def brier_dip(ens_series, obs_series, thresh, below=True):
     """Brier score and skill score for a threshold ("dip") event on a series.
 
     The event at time t is `obs_t < thresh` (or `>` when `below=False`) — for
-    E-051 the archetype is an AMOC transport dip below a stated Sv level. The
+    E-052 the archetype is an AMOC transport dip below a stated Sv level. The
     forecast probability is the fraction of members that produce the event:
 
         p_t = #{i : event(x_it)} / M_t
@@ -397,9 +397,9 @@ def ratio_vs_persistence(pred, obs, prev, mask=None):
 
     This mirrors the repo's existing stage-2 convention — `val_zmse` over
     `val_persistence`, where the persistence forecast is simply the previous
-    state — so an E-051 field head's number is directly comparable with the
+    state — so an E-052 field head's number is directly comparable with the
     stencil head's: **lower is better, and persistence is 1.0 by
-    construction**. It is a convenience for the E-051 trainer, not a new
+    construction**. It is a convenience for the E-052 trainer, not a new
     instrument; nothing about the archived stage-2 column changes.
 
     The two MSEs are averaged over the SAME elements: `mask` (True = include)
