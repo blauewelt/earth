@@ -1,0 +1,21 @@
+{"config": {"steps": 60000, "batch": 512, "d_z": 64, "patch": 1, "d_model": 512, "n_layers": 12, "n_heads": 4, "d_dec": 256, "anomaly": true, "fsq_levels": null, "fsq_ladder": null, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 38.009, "data": "family4_na025_pentad_r2.npz", "C": 40, "T": 3142, "resume": "e047a-tpu-60k", "recipe": "xl144-zn-monthblock"}}
+{"embedding": {"pct": 0.2, "month": 1, "months": 516, "elapsed_s": 0, "eta_s": 0, "where": "disk"}}
+{"embedding": {"pct": 5.2, "month": 27, "months": 516, "elapsed_s": 1910, "eta_s": 34590, "where": "disk"}}
+{"embedding": {"pct": 10.3, "month": 53, "months": 516, "elapsed_s": 4005, "eta_s": 34985, "where": "disk"}}
+{"embedding": {"pct": 15.3, "month": 79, "months": 516, "elapsed_s": 5891, "eta_s": 32589, "where": "disk"}}
+{"embedding": {"pct": 20.3, "month": 105, "months": 516, "elapsed_s": 7841, "eta_s": 30692, "where": "disk"}}
+{"embedding": {"pct": 25.4, "month": 131, "months": 516, "elapsed_s": 9767, "eta_s": 28703, "where": "disk"}}
+{"embedding": {"pct": 30.4, "month": 157, "months": 516, "elapsed_s": 11715, "eta_s": 26787, "where": "disk"}}
+{"embedding": {"pct": 35.5, "month": 183, "months": 516, "elapsed_s": 13666, "eta_s": 24868, "where": "disk"}}
+{"embedding": {"pct": 40.5, "month": 209, "months": 516, "elapsed_s": 16117, "eta_s": 23674, "where": "disk"}}
+{"embedding": {"pct": 45.5, "month": 235, "months": 516, "elapsed_s": 18372, "eta_s": 21969, "where": "disk"}}
+{"embedding": {"pct": 50.6, "month": 261, "months": 516, "elapsed_s": 20598, "eta_s": 20124, "where": "disk"}}
+{"embedding": {"pct": 55.6, "month": 287, "months": 516, "elapsed_s": 22682, "eta_s": 18098, "where": "disk"}}
+{"embedding": {"pct": 60.7, "month": 313, "months": 516, "elapsed_s": 24799, "eta_s": 16084, "where": "disk"}}
+{"embedding": {"pct": 65.7, "month": 339, "months": 516, "elapsed_s": 26899, "eta_s": 14045, "where": "disk"}}
+{"embedding": {"pct": 70.7, "month": 365, "months": 516, "elapsed_s": 29103, "eta_s": 12040, "where": "disk"}}
+{"embedding": {"pct": 75.8, "month": 391, "months": 516, "elapsed_s": 31362, "eta_s": 10026, "where": "disk"}}
+{"embedding": {"pct": 80.8, "month": 417, "months": 516, "elapsed_s": 33627, "eta_s": 7983, "where": "disk"}}
+{"embedding": {"pct": 85.9, "month": 443, "months": 516, "elapsed_s": 35875, "eta_s": 5912, "where": "disk"}}
+{"embedding": {"pct": 90.9, "month": 469, "months": 516, "elapsed_s": 38045, "eta_s": 3813, "where": "disk"}}
+{"embedding": {"pct": 95.9, "month": 495, "months": 516, "elapsed_s": 40143, "eta_s": 1703, "where": "disk"}}
