@@ -49,7 +49,12 @@ TENSOR = "family4_na025_pentad_r2"
 
 def sandbox(push_rc=0):
     """A repo-shaped temp dir with a `python` that records argv instead of
-    running anything, and answers `embed_cache_sync.py push` with `push_rc`."""
+    running anything, and answers `embed_cache_sync.py push` with `push_rc`.
+
+    `tensor-t` is answered with a number, because it is answered with a number
+    on a box: it is the same script reading ~128 bytes of the tensor's own
+    .npy header, and what the mode does with it — pass it to push as
+    --expect-t — is the thing under test."""
     tmp = tempfile.mkdtemp()
     os.symlink(os.path.join(ROOT, "scripts"), os.path.join(tmp, "scripts"))
     os.makedirs(os.path.join(tmp, "ml"))
@@ -66,6 +71,8 @@ def sandbox(push_rc=0):
     with open(os.path.join(bin_, "python"), "w") as f:
         f.write("#!/bin/sh\n"
                 f'echo "$@" >> {log}\n'
+                'for a in "$@"; do case "$a" in tensor-t)\n'
+                '  echo 3142\n  exit 0;; esac; done\n'
                 'for a in "$@"; do case "$a" in *embed_cache_sync.py)\n'
                 '  echo "embed cache for codec deadbeef01 is now durable"\n'
                 f'  exit {push_rc};; esac; done\nexit 0\n')
@@ -95,22 +102,32 @@ def main():
         r = run(tmp, bin_, "publishembed")
         assert r.returncode == 0, (r.returncode, r.stdout[-2000:])
         calls = [ln.split() for ln in open(log).read().splitlines()]
-        push = [c for c in calls if "ml/embed_cache_sync.py" in c]
-        assert len(push) == 1, calls
-        c = push[0]
+        sync = [c for c in calls if "ml/embed_cache_sync.py" in c]
+        assert len(sync) == 2, calls
+        # ASK THE TENSOR ITS SHAPE, THEN PUBLISH AGAINST IT. Run #462
+        # published a strided Z under the unstrided key from this very mode's
+        # sibling loop; the mode that exists to publish a single-copy Z is the
+        # last place that should be allowed to publish the wrong one.
+        assert sync[0][sync[0].index("ml/embed_cache_sync.py") + 1] == "tensor-t"
+        assert sync[0][sync[0].index("--data") + 1] == f"ml/cache/{TENSOR}.npz"
+        c = sync[1]
         assert c[c.index("ml/embed_cache_sync.py") + 1] == "push", c
         assert c[c.index("--run") + 1] == "actions", c
         assert c[c.index("--data") + 1] == f"ml/cache/{TENSOR}.npz", c
-        assert len(calls) == 1, ("publishembed ran something else too", calls)
+        assert c[c.index("--expect-t") + 1] == "3142", c
+        assert len(calls) == 2, ("publishembed ran something else too", calls)
         for forbidden in ("temporal.py", "probe_kfold.py", "probe_sequence.py",
                           "probe_head.py", "dip_check.py"):
             assert forbidden not in open(log).read(), forbidden
-        print("1. publishembed calls exactly `python -u ml/embed_cache_sync.py "
-              "push --run actions --data ml/cache/%s.npz` — the tensor is part "
-              "of the cache's identity, so the mode cannot publish under a "
-              "name that means less than it claims" % TENSOR)
+        print("1. publishembed reads the tensor's T (`tensor-t --data "
+              "ml/cache/%s.npz` -> 3142) and then calls exactly `push --run "
+              "actions --data ml/cache/%s.npz --expect-t 3142` — the tensor "
+              "is part of the cache's identity AND of its shape, so the mode "
+              "can publish neither under a name nor at a size that means "
+              "less than it claims" % (TENSOR, TENSOR))
         print("2. and NOTHING else runs: no temporal.py, no probe ladder, "
-              "one subprocess in the whole step (rc %d)" % r.returncode)
+              "two subprocesses in the whole step, both the sync script "
+              "(rc %d)" % r.returncode)
 
         # ---- 3/4. a failed push is loud, and does not kill the step ------
         tmp2, bin2, log2 = sandbox(push_rc=1)

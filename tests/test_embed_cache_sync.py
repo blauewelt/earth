@@ -118,11 +118,214 @@ def test_push_with_no_cache_says_so_instead_of_succeeding_quietly():
                                              "Z_absent.npy", "absent")
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            rc = sync.push("actions", "irrelevant.npz")
+            rc = sync.push("actions", "irrelevant.npz", 3142)
         out = buf.getvalue()
         assert rc == 0 and "nothing to publish" in out, out
         assert "built Z in RAM" in out
         print("no cache   : reports it, does not fake success ✓")
+
+
+def test_a_shorter_republish_names_exactly_the_orphaned_tail():
+    """#462, in one function.
+
+    The release held twelve chunks of a 16.7 GB full Z. A six-chunk publish
+    replaced the first six and deleted nothing, so `pull` — which concatenates
+    suffixes until one 404s — glued six fresh chunks to six stale ones and
+    handed back a chimera with a header claiming 8,716,963,840 bytes. The
+    deletion set is the whole fix, and it is arithmetic, so it is tested
+    without a network."""
+    asset = "Z_b40f5b0b_adcbe700.npy"
+    on_release = [f"{asset}.{sync.chunk_suffix(i)}" for i in range(12)]
+    stale = sync.stale_chunk_assets(on_release, asset, 6)
+    assert stale == [f"{asset}.{s}" for s in
+                     ("ag", "ah", "ai", "aj", "ak", "al")], stale
+    # The chunks the new publish DID write are never in the sweep — deleting
+    # one would turn "a stale tail" into "a hole", which is worse.
+    assert not any(s.endswith((".aa", ".af")) for s in stale)
+    # A publish that is not shorter orphans nothing.
+    assert sync.stale_chunk_assets(on_release, asset, 12) == []
+    assert sync.stale_chunk_assets(on_release, asset, 20) == []
+    # AND IT EATS NOTHING ELSE. The release carries 32 other assets under
+    # other schemes; a prefix match alone would be a sweep with no edge.
+    others = [f"{asset}.done", f"{asset}.sha256", f"{asset}.AB", "Z_other.npy.al",
+              f"{asset}.aaa", asset]
+    assert sync.stale_chunk_assets(on_release + others, asset, 6) == stale
+    print(f"stale tail : 12 published, 6 now -> deletes "
+          f"{[s[-2:] for s in stale]}, touches nothing else  ✓")
+
+
+def test_T_comes_out_of_the_header_not_the_array():
+    """The check has to be affordable enough to run on every push: ~128 bytes
+    off the front of a file that can be 16 GiB, and off a TENSOR that can be
+    165.6 GB and cannot be decompressed on any box we can rent."""
+    with tempfile.TemporaryDirectory() as d:
+        z = os.path.join(d, "Z_deadbeef04.npy")
+        np.save(z, np.zeros((7, 5, 8), dtype=temporal.CACHE_DTYPE))
+        assert int(sync.npy_shape(z)[0]) == 7
+        # Family 2-4 layout: X inside the .npz. Read from the zip member's
+        # own header — `np.load(...)["X"]` would decompress the lot.
+        npz = os.path.join(d, "family3_na025.npz")
+        np.savez(npz, X=np.zeros((11, 4, 3, 2), dtype=np.float16),
+                 months=np.arange(11))
+        assert sync.tensor_t(npz) == 11
+        # Family 5 layout: X beside it as a bare memmappable .npy, and the
+        # sidecar WINS — it is the tensor the readers actually open.
+        side = os.path.join(d, "family5_na025_daily.npz")
+        np.savez(side, months=np.arange(3))
+        np.save(side[:-4] + "_X.npy", np.zeros((3, 4, 3, 2), dtype=np.float16))
+        assert sync.tensor_t(side) == 3
+        print("header T   : Z=7, npz X=11, sidecar X=3          ✓")
+
+
+def _z(path, T, mark=True):
+    """A cache file of T bins, with (or without) its completeness marker."""
+    np.save(path, np.zeros((T, 5, 8), dtype=temporal.CACHE_DTYPE))
+    if mark:
+        sync.write_done(path)
+    return path
+
+
+def test_push_refuses_a_Z_of_the_wrong_shape():
+    """A strided Z is not a damaged file — it is a whole, self-consistent,
+    correctly-typed array of the wrong months, and every check this file had
+    before 2026-08-25 passed it. It reached the release because the sidecar
+    publishes whatever /opt/earth-cache/Z_*.npy holds."""
+    import io
+    import contextlib
+    with tempfile.TemporaryDirectory() as d:
+        p = _z(os.path.join(d, "Z_strided.npy"), 1571)     # one bin in two
+        keep = sync.cache_name
+        sync.cache_name = lambda run, data: (p, "Z_w_d.npy", "w")
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = sync.push("actions", "irrelevant.npz", 3142)
+            out = buf.getvalue()
+        finally:
+            sync.cache_name = keep
+        assert rc == 1, "a strided Z must not be published"
+        assert "1571" in out and "3142" in out, out   # BOTH numbers, named
+        assert "unstrided key" in out, out
+        print("wrong shape: refused, T=1571 vs T=3142 named   ✓")
+
+
+def test_push_refuses_a_cache_nothing_attested_to():
+    """T cannot see this one. `open_memmap` claims the full (T, P, d_z) shape
+    before the first month is written, so a pass killed at 900 of 3142 leaves
+    a file of the right length, the right dtype and the right T with zeros in
+    the tail — and publishing it would be worse than publishing nothing,
+    because it maps cleanly and reads as real numbers."""
+    import io
+    import contextlib
+    def run_push(p):
+        keep = kt = sync.cache_name
+        sync.cache_name = lambda run, data: (p, "Z_w_d.npy", "w")
+        tok = os.environ.pop("GITHUB_TOKEN", None)
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = sync.push("actions", "irrelevant.npz", 9)
+            return rc, buf.getvalue()
+        finally:
+            sync.cache_name = kt
+            if tok is not None:
+                os.environ["GITHUB_TOKEN"] = tok
+    with tempfile.TemporaryDirectory() as d:
+        p = _z(os.path.join(d, "Z_unmarked.npy"), 9, mark=False)
+        rc, out = run_push(p)
+        assert rc == 1 and "unattested" in out, out
+        assert "completeness marker" in out, out
+        # A marker that belongs to a DIFFERENT file does not vouch for this
+        # one: the size is in it precisely so it cannot be reused by accident.
+        with open(sync.done_path(p), "w") as f:
+            f.write("123456\n")
+        rc, out = run_push(p)
+        assert rc == 1 and "different file" in out, out
+        # Marked properly, the shape gate and the marker gate both pass and
+        # push gets all the way to the thing it actually needs from the job.
+        sync.write_done(p)
+        rc, out = run_push(p)
+        assert "no GITHUB_TOKEN" in out, out
+        print("no marker  : refused; wrong marker refused; "
+              "marked passes  ✓")
+
+
+def test_pull_discards_a_published_Z_of_the_wrong_shape():
+    """The other end of the same rule. A pulled Z is trusted by a run that
+    then spends sixteen hours on it, so the discard has to happen before the
+    run sees it — and a wrong-AXIS Z is invisible to the length check, which
+    is what verify() had."""
+    import io
+    import contextlib
+    import types
+    with tempfile.TemporaryDirectory() as d:
+        # What the release holds: a single chunk that IS a complete, valid,
+        # correctly-typed .npy — of 5 bins, where the tensor has 9.
+        src = _z(os.path.join(d, "published.npy"), 5, mark=False)
+        blob = open(src, "rb").read()
+        path = os.path.join(d, "cache", "Z_run_w_d.npy")
+        keep, calls = sync.sh, []
+
+        def fake_sh(cmd, **kw):
+            """One chunk, then a 404 — the shape of every finished pull."""
+            calls.append(cmd)
+            out = cmd.split('-o "')[1].split('"')[0]
+            if len(calls) == 1:
+                with open(out, "wb") as f:
+                    f.write(blob)
+                return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+            return types.SimpleNamespace(returncode=22, stdout="", stderr="404")
+
+        sync.cache_name = lambda run, data: (path, "Z_w_d.npy", "w")
+        sync.sh = fake_sh
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = sync.pull("actions", "irrelevant.npz", 9)
+            out = buf.getvalue()
+        finally:
+            sync.sh = keep
+        assert rc == 1, "a Z of the wrong axis must not be handed to a run"
+        assert not os.path.exists(path), "and it must not be left on disk"
+        assert "T=5" in out and "T=9" in out, out
+        assert not os.path.exists(sync.done_path(path)), (
+            "a discarded cache must not be left attested as complete")
+        print("pull       : T=5 against a T=9 tensor — discarded ✓")
+
+
+def test_a_pull_that_verifies_marks_the_cache_complete():
+    """So the box that pulled can publish, and the box that built can too:
+    the marker is what push requires, and a pulled cache is one this process
+    watched arrive byte by byte."""
+    import io
+    import contextlib
+    import types
+    with tempfile.TemporaryDirectory() as d:
+        src = _z(os.path.join(d, "published.npy"), 9, mark=False)
+        blob = open(src, "rb").read()
+        path = os.path.join(d, "cache", "Z_run_w_d.npy")
+        keep, calls = sync.sh, []
+
+        def fake_sh(cmd, **kw):
+            calls.append(cmd)
+            out = cmd.split('-o "')[1].split('"')[0]
+            if len(calls) == 1:
+                with open(out, "wb") as f:
+                    f.write(blob)
+                return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+            return types.SimpleNamespace(returncode=22, stdout="", stderr="404")
+
+        sync.cache_name = lambda run, data: (path, "Z_w_d.npy", "w")
+        sync.sh = fake_sh
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = sync.pull("actions", "irrelevant.npz", 9)
+        finally:
+            sync.sh = keep
+        assert rc == 0
+        ok, why = sync.check_done(path)
+        assert ok, why
+        print(f"pull marks : {why}          ✓")
 
 
 if __name__ == "__main__":
@@ -132,6 +335,14 @@ if __name__ == "__main__":
     test_a_truncated_cache_is_rejected()
     test_a_cache_with_a_DUPLICATED_chunk_is_rejected()
     test_the_wrong_dtype_is_rejected()
+    test_a_shorter_republish_names_exactly_the_orphaned_tail()
+    test_T_comes_out_of_the_header_not_the_array()
+    test_push_refuses_a_Z_of_the_wrong_shape()
+    test_push_refuses_a_cache_nothing_attested_to()
+    test_pull_discards_a_published_Z_of_the_wrong_shape()
+    test_a_pull_that_verifies_marks_the_cache_complete()
+    # LAST, because it replaces sync.cache_name permanently.
     test_push_with_no_cache_says_so_instead_of_succeeding_quietly()
-    print("\nOK — the cache is published under its codec's identity, and a "
-          "damaged one is discarded rather than trusted.")
+    print("\nOK — the cache is published under its codec's identity and its "
+          "own shape, a shorter republish leaves no tail behind, and a "
+          "damaged or strided one is discarded rather than trusted.")

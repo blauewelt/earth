@@ -306,11 +306,19 @@ if [ -z "$ZPATH" ]; then
 fi
 # ASSERT THE EFFECT: a Z whose file length disagrees with its own .npy header
 # maps cleanly and returns real numbers belonging to the wrong rows.
-python - "$ZPATH" <<'PYEOF'
+#
+# AND THE AXIS, against the tensor this roll is about to read. The loop above
+# concatenates suffixes until one 404s, which is exactly how run #462's
+# chimera was assembled — six chunks of a strided Z followed by the tail of a
+# longer publish nobody deleted. The length check caught that one by luck:
+# two publishes whose lengths differ by a whole number of chunks would agree,
+# and a strided Z that is the ONLY thing on the release agrees with itself.
+# T is the tensor's own first dimension, read from ~128 bytes of header.
+python - "$ZPATH" "$TENSOR" <<'PYEOF'
 import sys
 sys.path.insert(0, "ml")
-from embed_cache_sync import verify
-ok, why = verify(sys.argv[1])
+from embed_cache_sync import tensor_t, verify
+ok, why = verify(sys.argv[1], tensor_t(sys.argv[2]))
 print(f"Z: {sys.argv[1]} — {why}")
 if not ok:
     raise SystemExit(f"::error::embed cache rejected: {why}")

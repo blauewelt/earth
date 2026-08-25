@@ -653,6 +653,28 @@ def _progress_path(tmp):
     return tmp + ".progress"
 
 
+def _mark_done(cache_path):
+    """`<cache>.done`, holding the cache's byte size: THIS embedding pass
+    finished.
+
+    Read by ml/embed_cache_sync.py:push, which refuses to publish a cache
+    without one. The size is in the file rather than the file being empty so
+    the attestation is about these bytes and not about this path — a marker
+    left behind by a different array fails the comparison instead of vouching
+    for a stranger.
+
+    Instrumentation never breaks the run: a cache that cannot be marked is
+    still a cache this run can use, it just cannot be published until
+    something marks it.
+    """
+    try:
+        with open(cache_path + ".done", "w") as f:
+            f.write(str(os.path.getsize(cache_path)) + "\n")
+    except OSError as e:
+        print(f"  could not mark the embed cache complete ({e}) — it will not "
+              f"be publishable until a run marks it")
+
+
 def _resume_partial(tmp, T, P, d_z):
     """(memmap, months_already_done) for a half-built cache, or (None, 0).
 
@@ -804,6 +826,12 @@ def _prune_stale(cache_path, want):
         try:
             n = os.path.getsize(p)
             os.remove(p)
+            # …and the completeness marker with it. A marker that outlives its
+            # cache is an attestation with nothing to attest to; it fails safe
+            # (it records the byte size, so it cannot vouch for a different
+            # file) but leaving it turns a full-disk sweep into litter.
+            if os.path.exists(p + ".done"):
+                os.remove(p + ".done")
             free = shutil.disk_usage(d).free
             print(f"  pruned stale embed cache {os.path.basename(p)} "
                   f"({gb(n):.1f} GiB) — {gb(free):.1f} GiB free")
@@ -885,6 +913,16 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
         out = np.load(cache_path, mmap_mode="r+")
         if out.shape == (T_out, P, d_z):
             print(f"  (cached: {cache_path})")
+            # ATTEST TO IT, so this box can publish what it just decided to
+            # train on. The marker says "a full-shape cache stood here and
+            # something checked it"; this branch has checked the one thing
+            # that can be checked without re-embedding — that its shape is
+            # the shape THIS run wants, T included. Writing it here is what
+            # lets a cache built before the marker existed (E-044's 16.24 GiB
+            # pentad Z, single-copy on one rented disk) ever reach the
+            # release, and a strided rebuild would fail this shape test and
+            # take the branch below instead.
+            _mark_done(cache_path)
             return out, coords
     start_t = 0
     if cache_path and _cache_plan(cache_path,
@@ -981,6 +1019,17 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
         out.flush()
         del out
         os.replace(tmp, cache_path)
+        # FLUSH, THEN MARK (CLAUDE.md §5.21) — one line further than before.
+        # The atomic rename already made "a file at cache_path" mean "a
+        # finished embedding" to THIS file; it means nothing to the publisher,
+        # which sees only bytes on a disk and cannot tell a finished pass from
+        # an abandoned one: open_memmap allocates the full (T, P, d_z) shape
+        # up front, so a run killed at month 900 of 3142 leaves a cache of
+        # exactly the right length, dtype and T with zeros in the tail. Every
+        # check embed_cache_sync.py can make would pass it. This mark is the
+        # only thing that says the last month was written, and it is written
+        # after the flush and after the rename so it can only under-claim.
+        _mark_done(cache_path)
         # The marker describes a .partial that no longer exists; leaving it
         # would make the next run try to resume a file it cannot find.
         try:
@@ -1700,6 +1749,25 @@ def main():
     dhash = data_fingerprint(a.data)
     print(f"  codec {whash} · tensor {dhash} ({os.path.basename(a.data)})", flush=True)
     cache = (embed_cache_path(a.run, whash, dhash) if not a.max_pixels else None)
+    # …AND NOT AT ALL WHEN THE AXIS WAS SUBSAMPLED. The --time-stride block
+    # above prints "the embed cache is DISABLED for this run (a strided Z must
+    # never be published under an unstrided name)", and the comment beside it
+    # says a strided run "re-embeds its own kept bins and writes nothing".
+    # NEITHER WAS TRUE: the stride is applied by slicing X itself, so
+    # embed_everything is reached with t_sel=None — its own refusal of
+    # t_sel-with-cache_path never fires — and a [T/N, P, d_z] array was
+    # written to, and read back from, the name every unstrided run pulls.
+    # That is the file run #462 published: 8.72 GB of one-bin-in-two under the
+    # 16.7 GB key. The check the message promised belongs here, where the
+    # cache name is chosen; embed_cache_sync's --expect-t is the net under it,
+    # for a Z that reaches the release by some other route.
+    if cache and a.time_stride:
+        print(f"  embed cache DISABLED: --time-stride {a.time_stride} keeps "
+              f"{T} of the tensor's bins, and a Z of those bins is "
+              f"indistinguishable by shape from a complete one for a smaller "
+              f"tensor. This run embeds its own kept bins (1/{a.time_stride} "
+              f"of the pass) and writes nothing.", flush=True)
+        cache = None
     # A block codec's Z has a different SHAPE and a different axis from a
     # per-bin one. The weight hash already separates them (a block codec is a
     # different codec), so this is belt and braces — but a name that says

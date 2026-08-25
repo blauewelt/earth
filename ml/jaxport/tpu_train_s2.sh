@@ -428,13 +428,19 @@ print(b.tell() + int(np.prod(shape)) * dt.itemsize, *shape, dt, sep=" ")' "${ZF}
   fi
   # VERIFY BEFORE TRUSTING, with embed_cache_sync's own function rather than a
   # second copy of the rule.
+  # …and against the TENSOR'S OWN AXIS, not only against its own header. The
+  # truncate above bounds an assembled Z by what its header claims, which is
+  # the right answer to a stale chunk tail and no answer at all to a Z that
+  # was strided before it was published (#462): that file is internally
+  # consistent and simply covers one bin in two. `tensor_t` reads ~128 bytes
+  # off ${TF} — the same tensor this run pinned by sha above.
   (cd "${WORK}/earth" && "${PY}" -c '
 import sys
 sys.path.insert(0, "ml")
-from embed_cache_sync import verify
-ok, why = verify(sys.argv[1])
+from embed_cache_sync import tensor_t, verify
+ok, why = verify(sys.argv[1], tensor_t(sys.argv[2]))
 print(("Z VERIFIED: " if ok else "Z REJECTED: ") + why)
-sys.exit(0 if ok else 1)' "${ZF}") || {
+sys.exit(0 if ok else 1)' "${ZF}" "${TF}") || {
     echo "REFUSING: the assembled Z does not verify. Unset Z_ASSET to embed" \
          "on-node instead of training on an embedding of unknown provenance."
     exit 1; }

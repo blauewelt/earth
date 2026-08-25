@@ -449,13 +449,23 @@ def test_g5c():
             tail = "\n".join((p.stdout + p.stderr).strip().splitlines()[-20:])
             fail(f"G5c: ml/temporal.py exited {p.returncode}:\n{tail}")
             return
+        # The cache AND its completeness marker: `<cache>.done` holds the byte
+        # size and is written only after the final flush, because a memmap is
+        # allocated at its full (T, P, d_z) shape before the first month is
+        # written and nothing else can tell a finished pass from an abandoned
+        # one. embed_cache_sync.py:push refuses to publish a cache without it.
         made = [f for f in os.listdir(cache_dir)
                 if f not in before_cache and f.startswith("Z_")]
-        if len(made) != 1:
-            fail(f"G5c: expected exactly one new embed cache in ml/cache, "
-                 f"found {made}")
+        z = [f for f in made if f.endswith(".npy")]
+        if len(z) != 1 or sorted(made) != sorted([z[0], z[0] + ".done"]):
+            fail(f"G5c: expected exactly one new embed cache in ml/cache and "
+                 f"its .done marker, found {made}")
             return
-        zpath = os.path.join(cache_dir, made[0])
+        zpath = os.path.join(cache_dir, z[0])
+        if open(zpath + ".done").read().strip() != str(os.path.getsize(zpath)):
+            fail(f"G5c: the completeness marker does not match the cache it "
+                 f"marks — it must record these bytes, not this path")
+            return
         torch_res = json.load(open(os.path.join(run_dir, "temporal.json")))
 
         jout = os.path.join(tmp, "jax")

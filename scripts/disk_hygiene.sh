@@ -88,7 +88,12 @@ for f in "$CACHE"/Z_*.npy; do
     continue
   fi
   if published embed-cache-v1 "Z_${hash}.npy.aa"; then
-    rm -f "$f" && echo "    freed $b ($sz) — published as Z_${hash}.npy.*, re-pullable"
+    # …and the completeness marker with it (`<cache>.done`, written by
+    # ml/temporal.py after the final flush and required by
+    # embed_cache_sync.py:push). It is ~20 bytes, so this is tidiness rather
+    # than space: a marker that outlives its cache attests to nothing, and the
+    # next thing to occupy that path deserves its own.
+    rm -f "$f" "$f.done" && echo "    freed $b ($sz) — published as Z_${hash}.npy.*, re-pullable"
   else
     echo "    KEEP $b ($sz) — NOT in embed-cache-v1. This is ~95 min of GPU and"
     echo "         the only copy; it is never deleted to make room."

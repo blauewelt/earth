@@ -62,6 +62,46 @@ if [ -z "${WINDOW+x}" ]; then
   exit 1
 fi
 
+# THE SHAPE THE EMBEDDING CACHE MUST HAVE, for every push and pull below.
+#
+# WHY THE SIDECAR HAS TO CARRY THIS. The publish loop further down ships
+# whatever /opt/earth-cache/Z_*.npy holds, and it cannot see how that file was
+# made. Run #462 made it with --time-stride: 8.72 GB of one bin in two,
+# written under the name every unstrided run pulls, and published from here.
+# The tail of the previous 16.7 GB publish stayed on the release beside it, so
+# what came back down was a chimera and `verify()` refused it — every run
+# since paid a four-hour rebuild. ml/temporal.py now refuses to write a
+# strided Z under the shared name at all; this is the second line of defence,
+# and it is the one that also catches a Z that arrived by some other route.
+#
+# T comes from the tensor's OWN .npy header — ~128 bytes, whether X is inside
+# the .npz (families 2-4) or beside it as family 5's 165.6 GB sidecar. Never
+# `np.load(...)["X"].shape`, which would decompress 33 GB to learn one integer.
+#
+# The fallback is `auto`, NOT "skip the check": embed_cache_sync reads T from
+# --data with the same function when it is handed that word. So a broken
+# helper here costs a log line, never the guard.
+#
+# A FUNCTION, called from the two branches that touch the cache, rather than a
+# line at the top: the modes above (disktriage, rolleval, project…) neither
+# push nor pull, and paying a torch import — or warning about a tensor a
+# triage run never needed — in all of them would be noise in the one place a
+# reader goes looking for signal.
+embed_expect_t() {
+  EXPECT_T="$(python -u ml/embed_cache_sync.py tensor-t --data "$TENSOR" \
+              2>/dev/null | tail -1)"
+  case "$EXPECT_T" in
+    ''|*[!0-9]*)
+      echo "::warning::could not read T from ${TENSOR} here — passing"\
+           "--expect-t auto, which reads it inside embed_cache_sync"
+      EXPECT_T=auto;;
+    *)
+      echo "embed cache shape gate: the tensor has T=${EXPECT_T} bins; a Z"\
+           "whose header disagrees is refused at the push and discarded at"\
+           "the pull";;
+  esac
+}
+
 # ROLLOUT EVALUATION MODE — window carries `rolleval:<tag>,<tag>,…`
 # (the 25-input cap again). Fetches published temporal heads from
 # the model-checkpoints release (public, curl, no gh/node — the
@@ -152,7 +192,9 @@ case "${WINDOW}" in
     echo "  (no-op). Anything else — 'no embed cache on disk', 'refusing',"
     echo "  'chunk ... failed' — means the release did NOT gain the cache."
     ls -l /opt/earth-cache/Z_*.npy 2>/dev/null || echo "  (no /opt/earth-cache/Z_*.npy on this box)"
+    embed_expect_t
     python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
+      --expect-t "$EXPECT_T" \
       || echo "::warning::embed cache publish failed — the Z remains single-copy on this box's disk"
     exit 0
     ;;
@@ -376,7 +418,9 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
   # about failure, with the caller left intolerant. The push below
   # was the second. Both call sites are guarded now, and the rule is
   # in ml/CLAUDE.md — best-effort is the CALLER's decision.
+  embed_expect_t
   python -u ml/embed_cache_sync.py pull --run actions --data "$TENSOR" \
+    --expect-t "$EXPECT_T" \
     || echo "::warning::no embed cache to pull — stage 2 will build it"
   # BACKGROUNDED, with the same 5-minute publisher the Train and
   # joint steps use. Called inline, the publish below only ran
@@ -490,7 +534,8 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
         fi
       else
         echo "embed cache push: STARTING in-training at tick ${TICK} (~$((TICK / 2)) min in) — $(du -h /opt/earth-cache/Z_*.npy 2>/dev/null | tr '\n' ' ')"
-        if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR"; then
+        if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
+             --expect-t "$EXPECT_T"; then
           touch "$EMBED_MARK"
           echo "embed cache push: DONE in-training — the release has it now, hours before this job ends"
           EMBED_STATE=published
@@ -533,7 +578,8 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
   # chunk name is present in the release AND their sizes sum to the file on
   # disk, printing "already published and complete" and returning 0.
   echo 'embed cache push: STARTING post-training (unconditional, after wait $S2_PID)'
-  if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR"; then
+  if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
+       --expect-t "$EXPECT_T"; then
     echo "embed cache push: DONE post-training — the line above says which it was: uploaded here, or already complete from the in-training push"
   else
     echo "::warning::embed cache push: FAILED post-training — the probe ladder continues"
