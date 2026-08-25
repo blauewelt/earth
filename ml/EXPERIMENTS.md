@@ -77,6 +77,46 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+**00:30–01:00Z 08-25 — NIGHT STEP: THE SECOND SPAN-FIXED RUNG CONFIRMS THE CONTEXT
+STORY, #456 IS RESCUED PRE-EMPTIVELY, AND THE SCALE FIT CLOSES THE COLLAPSE MODE BUT
+NOT THE DRIFT.**
+
+*(g) E-045.2 LANDS AT 0.0804 — the context story's second confirmation.* **#462 (E-045.2,
+10-day steps, K=72, span fixed at 720 d) final 20k ratio 2.1109/26.2455 = 0.0804.** The
+K-fixed ladder scored 10-day steps at 0.3377 (A8, #452 — K=24, span 240 d); with the SAME
+step size and the span restored to two years the task drops to 0.080 — A2a-class
+(0.0713), a 4.2× change from context alone. The factorial now reads: step size does
+almost nothing (0.506→0.527 at 120 d span; 0.071→0.080 at 720 d span), span does almost
+everything. **#463 (E-045.1, 5-day steps, K=144 — the decisive rung, prediction on
+record: ~0.07–0.15 context story / ~0.5 step story)** is next on the H100. n=1 per rung
+(§3b); the RUNG PATTERN is the finding, not any single level.
+
+*(h) #456 (E-047b, the 126.943M Chinchilla-anchored month-block codec) RESCUED BEFORE its
+timeout, not after.* Cancelled deliberately at 00:33Z at step ~124k — its 1400-min
+job_timeout could never hold 200k steps at ~100 steps/min, the fourth of the timeout-kill
+class (#438/#450/#453) but the first pre-empted: cancelling on a fresh token guarantees
+the milestone artifact uploads (the #419 24-h-token lesson). Milestone verified OFF THE
+FILE (tag run-456, step 120000, opt+sched PRESENT — a true resume, cosine schedule
+restores at the same T_max) and published as `run-456__pixelmae.pt`; **#472 (E-047b
+FINISH, remaining 80k steps, same box)** dispatched — after #471, its first copy, sat
+11 min queued against an online idle runner (the known queue-stall; cancel + re-dispatch
+cleared it in 60 s). ~40 min of training (120k→124k) is the rescue's total cost.
+
+*(i) e048a2 AT MID-RUN: the scale fit CLOSED the constant-collapse mode and EXPOSED the
+drift as the remaining disease.* At step ~28k of 60k: probe r alive (0.262 at 5k — where
+the collapsed run read exactly 0.000 — then 0.06–0.15 noisy), collapse guard quiet,
+sat_frac 0.10–0.50, encoder input-dependent. But `fsq_prequant.std_med` runs
+0.73 → 3.6 → 5.0 → 8.4 → 20 across the run — the pre-quant scale still has NO restoring
+force, the step-2000 lattice is outgrown by step 15k (sat_frac climbing again), and
+loss_rec sits at ~0.327, the ctx-floor, where the CONTINUOUS month-block codec (e047a,
+near-identical windowing) reached 0.098. READING: the windowing is fine (e047a proves
+it); the lattice + unbounded to_z is what costs reconstruction. Arm B (w6s3) stays HELD —
+same recipe, same disease. THE DESIGN FORK FOR THE MORNING, stated before the run ends:
+either give the latent an intrinsic bound (normalization before the lattice / weight
+decay on to_z) so the fit has a stationary target, or read E-046's #468 verdict first —
+if lattice z forecasts no better than continuous even at pentad, the FSQ codec line
+closes on its own. e048a2 runs to 60k for the complete trace (~$5, self-reaps ~03:30Z).
+
 **20:30–22:00Z 08-24 — EVENING TRIAGE: two dispatch failures re-dispatched, the E-046
 verdict run launched, AND E-048a's COLLAPSE DIAGNOSED — with a discovery about the
 "healthy" FSQ codec on the way.**
