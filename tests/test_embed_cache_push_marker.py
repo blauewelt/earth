@@ -111,12 +111,20 @@ def sandbox():
     return box
 
 
-def job(box, ticks, run_id="1000", z_at=1, fail_first=0):
+def job(box, ticks, run_id="1000", z_at=1, fail_first=0,
+        partial_at=None, done_at=None):
     """Run ONE job's worth of the lifted shell in the container `box`.
 
     `z_at` is the tick at which /opt/earth-cache/Z_*.npy appears (the embedding
     finishing); the surrounding for-loop is harness, everything indented under
     it is the shipped script.
+
+    `partial_at` instead puts the box in the state ml/temporal.py leaves it in
+    WHILE the embedding runs — `Z_*.npy.partial` holding the bytes and
+    `Z_*.npy.progress` saying how many rows of it are real — and `done_at` is
+    the tick at which that pass finishes: the final name appears with its
+    `.done` beside it and both progress files go. Pass `z_at=0` to keep the
+    finished-cache-with-no-markers state out of a partial scenario.
     """
     cache, tmp = os.path.join(box, "cache"), os.path.join(box, "tmp")
 
@@ -129,10 +137,13 @@ def job(box, ticks, run_id="1000", z_at=1, fail_first=0):
             LEGACY, os.path.join(tmp, "embed-cache-pushed"))
 
     s, lp, po = here(SETUP), here(LOOP), POST.replace(CACHE, cache)
+    z = f"{cache}/Z_run_deadbeef01.npy"
     prog = f"""set -e
 {s}
 for TICK in $(seq 1 {ticks}); do
-  if [ "$TICK" = "{z_at}" ]; then : > "{cache}/Z_run_deadbeef01.npy"; fi
+  if [ "$TICK" = "{z_at}" ]; then : > "{z}"; fi
+  if [ "$TICK" = "{partial_at}" ]; then : > "{z}.partial"; : > "{z}.progress"; fi
+  if [ "$TICK" = "{done_at}" ]; then rm -f "{z}.partial" "{z}.progress"; : > "{z}"; : > "{z}.done"; fi
 {lp}
 done
 {po}
@@ -267,7 +278,51 @@ def main():
           "pid, so the worst case is one extra idempotent push")
     ok += 1
 
-    for b in (box, box2, box3, box4):
+    # ---- 7. THE PARTIAL CADENCE: publish DURING the embedding -------------
+    # Chris, 2026-08-25: "Publishing should happen 'during' the embedding
+    # computation ... A new job that needs the same embedding can choose to
+    # continue the computation (if 32/100 are already complete it will start
+    # with chunk 33)." So while `.progress` is the only marker on the box,
+    # every ~10-min window ships the finished chunks and NOTHING writes the
+    # job marker: the loop must keep going until the cache is complete and a
+    # full push has verified it durable.
+    box5 = sandbox()
+    out6 = job(box5, ticks=60, run_id="500", z_at=0, partial_at=1)
+    assert out6.count("STARTING PARTIAL in-training") == 3, out6
+    assert out6.count("PARTIAL done") == 3, out6
+    assert "STARTING in-training" not in out6.replace("STARTING PARTIAL "
+                                                      "in-training", ""), out6
+    calls = pushes(box5)
+    assert len(calls) == 4, calls               # 20, 40, 60, and the post one
+    assert all("--partial" in c for c in calls[:3]), calls
+    assert not os.path.exists(os.path.join(box5, "tmp",
+                                           "embed-cache-pushed.500")), (
+        "a PARTIAL publish must never write the marker that stops the loop — "
+        "the cache is not complete and the release must not be left claiming "
+        "it is")
+    print("7. ok — while only .progress is on the box the loop pushes "
+          "--partial every window and writes no marker")
+    ok += 1
+
+    # ---- 8. …and it STOPS the moment the full push verifies durable -------
+    box6 = sandbox()
+    out7 = job(box6, ticks=100, run_id="501", z_at=0, partial_at=1, done_at=45)
+    assert out7.count("STARTING PARTIAL in-training") == 2, out7   # 20, 40
+    assert "the embedding is COMPLETE (.done)" in out7, out7
+    assert out7.count("VERIFIED durable") == 1, out7
+    # ticks 80 and 100 are SILENT, not repetitive: EMBED_STATE is already
+    # `published` from the DONE line at tick 60, and one line per STATE is the
+    # rule this loop has kept since 2026-08-21.
+    assert out7.count("already published by this job") == 0, out7
+    calls = pushes(box6)
+    assert len(calls) == 4, calls               # 20, 40 partial; 60 full; post
+    assert "--partial" not in calls[2], calls   # the full push at tick 60
+    assert os.path.exists(os.path.join(box6, "tmp", "embed-cache-pushed.501"))
+    print("8. ok — .done switches the loop to the full push, whose success "
+          "writes the marker and silences the rest of the run")
+    ok += 1
+
+    for b in (box, box2, box3, box4, box5, box6):
         shutil.rmtree(b, ignore_errors=True)
     print(f"\nall {ok} embed-cache push guards hold")
 

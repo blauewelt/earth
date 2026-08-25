@@ -20,6 +20,8 @@ import os
 import sys
 import tempfile
 
+import json
+
 import numpy as np
 import torch
 
@@ -267,10 +269,11 @@ def test_pull_discards_a_published_Z_of_the_wrong_shape():
         keep, calls = sync.sh, []
 
         def fake_sh(cmd, **kw):
-            """One chunk, then a 404 — the shape of every finished pull."""
+            """No manifest, one chunk, then a 404 — the shape of every
+            finished pull of a key published before manifests existed."""
             calls.append(cmd)
             out = cmd.split('-o "')[1].split('"')[0]
-            if len(calls) == 1:
+            if cmd.endswith('.aa"'):
                 with open(out, "wb") as f:
                     f.write(blob)
                 return types.SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -309,7 +312,7 @@ def test_a_pull_that_verifies_marks_the_cache_complete():
         def fake_sh(cmd, **kw):
             calls.append(cmd)
             out = cmd.split('-o "')[1].split('"')[0]
-            if len(calls) == 1:
+            if cmd.endswith('.aa"'):
                 with open(out, "wb") as f:
                     f.write(blob)
                 return types.SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -328,6 +331,330 @@ def test_a_pull_that_verifies_marks_the_cache_complete():
         print(f"pull marks : {why}          ✓")
 
 
+# --------------------------------------------------------------------------
+# PUBLISHING DURING THE EMBEDDING (2026-08-25)
+#
+# Chris: *"Publishing should happen 'during' the embedding computation, for
+# example, after each 1/100th of the data. A new job that needs the same
+# embedding can choose to continue the computation (if 32/100 are already
+# complete it will start with chunk 33)."*
+#
+# The unit is the 1.5 GiB release chunk, not a hundredth — it is the smallest
+# thing that can be published at all, and chunk-aligned partials leave the
+# format, the naming and the complete-pull path untouched. What the tests
+# below pin is the arithmetic and the ORDERING, because those are what decide
+# whether a partial can ever be mistaken for a complete Z.
+# --------------------------------------------------------------------------
+class FakeRelease:
+    """A GitHub release, in a dict. Speaks the four curl calls this module
+    makes: read the release, DELETE an asset, POST one (`-T file`), and the
+    public download of an asset by name.
+
+    Real enough to be worth having: the chunking, the skip-what-is-already-up
+    rule, the post-upload re-listing and the manifest all go through it, so a
+    round trip really does assemble the same bytes a box would.
+    """
+
+    def __init__(self):
+        self.assets, self._next = {}, 1        # name -> (id, bytes)
+        self.log = []
+
+    def sh(self, cmd, **kw):
+        import types
+        ok = lambda out="": types.SimpleNamespace(returncode=0, stdout=out,
+                                                  stderr="")
+        no = types.SimpleNamespace(returncode=22, stdout="", stderr="404")
+        self.log.append(cmd)
+        if "-X DELETE" in cmd:
+            aid = int(cmd.rsplit("/", 1)[1].strip('"'))
+            for n, (i, _b) in list(self.assets.items()):
+                if i == aid:
+                    del self.assets[n]
+            return ok()
+        if "uploads.github.com" in cmd:
+            name = cmd.rsplit("name=", 1)[1].rstrip('"')
+            src = cmd.split('-T "')[1].split('"')[0]
+            with open(src, "rb") as f:
+                self.assets[name] = (self._next, f.read())
+            self._next += 1
+            return ok()
+        if "releases/tags/" in cmd:
+            return ok(json.dumps({"id": 4242, "assets": [
+                {"name": n, "id": i, "size": len(b)}
+                for n, (i, b) in self.assets.items()]}))
+        if "releases/download/" in cmd:         # the public pull
+            name = cmd.rsplit("/", 1)[1].rstrip('"')
+            if name not in self.assets:
+                return no
+            dest = cmd.split('-o "')[1].split('"')[0]
+            with open(dest, "wb") as f:
+                f.write(self.assets[name][1])
+            return ok()
+        return no
+
+    def chunks(self, asset):
+        return sorted(n for n in self.assets
+                      if n.startswith(asset + ".") and len(n) == len(asset) + 3)
+
+    def manifest(self, asset):
+        blob = self.assets.get(sync.manifest_name(asset))
+        return json.loads(blob[1]) if blob else None
+
+
+def a_growing_cache(d, T=40, rows=24, P=3, dz=8, name="Z_run_w_d.npy"):
+    """A cache mid-embed: full-shape memmap, `rows` of it real, and the
+    `.progress` marker ml/temporal.py writes after each flush."""
+    path = os.path.join(d, name)
+    z = np.lib.format.open_memmap(path + ".partial", mode="w+",
+                                  dtype=temporal.CACHE_DTYPE, shape=(T, P, dz))
+    z[:rows] = np.arange(rows * P * dz).reshape(rows, P, dz)
+    z.flush()
+    del z
+    temporal._mark_progress(path + ".partial", None, rows, T, P, dz)
+    return path
+
+
+def with_release(rel, path, asset="Z_w_d.npy"):
+    """Point the module at this fake release and this cache. Returns a
+    restore() the caller must run."""
+    keep_sh, keep_name, keep_chunk = sync.sh, sync.cache_name, sync.CHUNK
+    sync.sh = rel.sh
+    sync.cache_name = lambda run, data: (path, asset, "w")
+    os.environ["GITHUB_TOKEN"] = "test-token"
+
+    def restore():
+        sync.sh, sync.cache_name, sync.CHUNK = keep_sh, keep_name, keep_chunk
+        os.environ.pop("GITHUB_TOKEN", None)
+    return restore
+
+
+def quiet(fn, *a, **kw):
+    """Run it, keep stdout, hand back (rc, output)."""
+    import io
+    import contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = fn(*a, **kw)
+    return rc, buf.getvalue()
+
+
+def test_a_partial_push_ships_exactly_the_WHOLE_chunks_that_are_finished():
+    """The arithmetic, and the under-claim.
+
+    40 rows x 3 x 8 fp16 = 48 bytes a row, 128 bytes of header, 2048 total. At
+    CHUNK=512 that is four chunks. 24 rows flushed = 1280 bytes = TWO whole
+    chunks and a bit; the bit is not published, because half a chunk is not a
+    chunk. And the manifest says 18 rows, not 24: rows 18-23 sit inside the
+    third chunk, which is not up there, so claiming them would tell a puller
+    to resume from months it cannot have.
+    """
+    rel = FakeRelease()
+    with tempfile.TemporaryDirectory() as d:
+        path = a_growing_cache(d, T=40, rows=24)
+        restore = with_release(rel, path)
+        try:
+            sync.CHUNK = 512
+            rc, out = quiet(sync.push, "actions", "irrelevant.npz", 40,
+                            partial=True)
+        finally:
+            restore()
+        assert rc == 0, out
+        assert rel.chunks("Z_w_d.npy") == ["Z_w_d.npy.aa", "Z_w_d.npy.ab"], (
+            rel.chunks("Z_w_d.npy"), out)
+        man = rel.manifest("Z_w_d.npy")
+        assert man["complete"] is False, man
+        assert man["chunks_done"] == 2 and man["header_t"] == 40, man
+        assert man["rows_flushed"] == 18, (man, "18 = (2*512 - 128) // 48")
+        assert man["total_bytes_expected"] == 2048, man
+        # THE CHUNKS ARE THE PREFIX OF THE FINISHED FILE, byte for byte —
+        # that is what lets the complete push simply add the rest later.
+        blob = b"".join(rel.assets[c][1] for c in rel.chunks("Z_w_d.npy"))
+        assert blob == open(path + ".partial", "rb").read()[:1024]
+        # ORDER: every chunk upload precedes the manifest upload. A manifest
+        # that lands first names bytes that are not there yet.
+        posts = [c.rsplit("name=", 1)[1].rstrip('"') for c in rel.log
+                 if "uploads.github.com" in c]
+        assert posts == ["Z_w_d.npy.aa", "Z_w_d.npy.ab",
+                         "Z_w_d.manifest.json"], posts
+        print(f"partial    : 24/40 rows -> chunks aa,ab; manifest says 18 "
+              f"rows, complete=False  ✓")
+
+
+def test_a_second_partial_push_skips_what_is_already_up_and_adds_the_rest():
+    """Ten minutes later. The embedding has moved on; the release must gain
+    the new chunks and must not re-send the old ones — 1.5 GiB every ten
+    minutes for a whole run is a flood, not a cadence. Skipping is safe
+    because the key is a hash of the codec AND the tensor and the embedding
+    is a deterministic function of both: same name, same bytes."""
+    rel = FakeRelease()
+    with tempfile.TemporaryDirectory() as d:
+        path = a_growing_cache(d, T=40, rows=24)
+        restore = with_release(rel, path)
+        try:
+            sync.CHUNK = 512
+            quiet(sync.push, "actions", "irrelevant.npz", 40, partial=True)
+            temporal._mark_progress(path + ".partial", None, 39, 40, 3, 8)
+            rel.log.clear()
+            rc, out = quiet(sync.push, "actions", "irrelevant.npz", 40,
+                            partial=True)
+        finally:
+            restore()
+        assert rc == 0, out
+        sent = [c.rsplit("name=", 1)[1].rstrip('"') for c in rel.log
+                if "uploads.github.com" in c]
+        assert sent == ["Z_w_d.npy.ac", "Z_w_d.manifest.json"], (sent, out)
+        assert "already on the release" in out, out
+        man = rel.manifest("Z_w_d.npy")
+        assert man["chunks_done"] == 3 and man["complete"] is False, man
+        print("cadence    : second window sends only chunk ac             ✓")
+
+
+def test_the_complete_push_finishes_the_job_and_flips_the_manifest():
+    """The end of the same story: the pass finishes, `.done` is written, and
+    the full push adds the last chunk, sweeps, and rewrites the manifest as
+    complete — which is the only thing that lets a pull take the fast path."""
+    rel = FakeRelease()
+    with tempfile.TemporaryDirectory() as d:
+        path = a_growing_cache(d, T=40, rows=24)
+        restore = with_release(rel, path)
+        try:
+            sync.CHUNK = 512
+            quiet(sync.push, "actions", "irrelevant.npz", 40, partial=True)
+            os.replace(path + ".partial", path)         # the pass finished
+            sync.write_done(path)
+            rel.log.clear()
+            rc, out = quiet(sync.push, "actions", "irrelevant.npz", 40)
+        finally:
+            restore()
+        assert rc == 0, out
+        assert "VERIFIED" in out, out
+        sent = [c.rsplit("name=", 1)[1].rstrip('"') for c in rel.log
+                if "uploads.github.com" in c]
+        assert sent == ["Z_w_d.npy.ac", "Z_w_d.npy.ad",
+                        "Z_w_d.manifest.json"], (sent, out)
+        man = rel.manifest("Z_w_d.npy")
+        assert man["complete"] is True and man["rows_flushed"] == 40, man
+        assert (b"".join(rel.assets[c][1] for c in rel.chunks("Z_w_d.npy"))
+                == open(path, "rb").read())
+        print("complete   : adds ac,ad, VERIFIED, manifest complete=True  ✓")
+
+
+def test_a_partial_push_refuses_a_strided_Z_exactly_as_a_full_one_does():
+    """The #462 guard must not have a hole in it. A strided Z cannot publish
+    nine percent of itself either — and the partial path reaches the release
+    from the same sidecar loop that published the strided one."""
+    rel = FakeRelease()
+    with tempfile.TemporaryDirectory() as d:
+        path = a_growing_cache(d, T=1571, rows=24)      # one bin in two
+        restore = with_release(rel, path)
+        try:
+            sync.CHUNK = 512
+            rc, out = quiet(sync.push, "actions", "irrelevant.npz", 3142,
+                            partial=True)
+        finally:
+            restore()
+        assert rc == 1, out
+        assert "1571" in out and "3142" in out and "unstrided key" in out, out
+        assert rel.assets == {}, rel.assets
+        print("strided    : partial refused too, nothing uploaded         ✓")
+
+
+def test_a_partial_push_with_no_progress_marker_publishes_nothing():
+    """The marker IS the partial's completeness attestation. Without it the
+    file on disk is a full-shape memmap whose tail is zeros and nothing at all
+    says which rows are real — the very thing `.done` exists to refuse, with
+    the zeros shipped to every box in the fleet."""
+    rel = FakeRelease()
+    with tempfile.TemporaryDirectory() as d:
+        path = a_growing_cache(d, T=40, rows=24)
+        os.remove(sync.progress_path(path))
+        restore = with_release(rel, path)
+        try:
+            sync.CHUNK = 512
+            rc, out = quiet(sync.push, "actions", "irrelevant.npz", 40,
+                            partial=True)
+        finally:
+            restore()
+        assert rc == 0 and "nothing to publish partially" in out, out
+        assert rel.assets == {}, rel.assets
+        print("no marker  : partial publishes nothing, says why          ✓")
+
+
+def test_pull_of_a_partial_seeds_the_cache_and_its_progress_marker():
+    """The resume side. What lands is a full-length .npy whose tail is zeros
+    plus a `.progress` saying how much is real — which is exactly the state
+    ml/temporal.py knows how to continue from."""
+    rel = FakeRelease()
+    with tempfile.TemporaryDirectory() as d:
+        src = a_growing_cache(d, T=40, rows=24)
+        restore = with_release(rel, src)
+        try:
+            sync.CHUNK = 512
+            quiet(sync.push, "actions", "irrelevant.npz", 40, partial=True)
+            dest = os.path.join(d, "boxB", "Z_run_w_d.npy")
+            os.makedirs(os.path.dirname(dest))
+            sync.cache_name = lambda run, data: (dest, "Z_w_d.npy", "w")
+            rc, out = quiet(sync.pull, "actions", "irrelevant.npz", 40)
+        finally:
+            restore()
+        assert rc == 0, out
+        assert "PARTIAL" in out, out
+        ok, why = sync.verify(dest, 40)
+        assert ok, why                          # full length, right T, right dtype
+        mark = sync.read_progress(dest)
+        assert mark["rows_flushed"] == 18 and mark["T"] == 40, mark
+        # The rows that came down are the SOURCE's rows, bit for bit.
+        got = np.load(dest, mmap_mode="r")
+        want = np.load(src + ".partial", mmap_mode="r")
+        assert np.array_equal(got[:18], want[:18])
+        # Row 18 STRADDLES the chunk boundary — half of it came down and half
+        # is zero, which is precisely why the manifest claims 18 rows and not
+        # 19, and why the resume recomputes from row 18. Everything past it is
+        # untouched zeros.
+        assert not np.asarray(got[19:]).any(), "the tail must be zeros"
+        print("pull       : 2 chunks -> 18/40 rows + .progress            ✓")
+
+
+def test_a_partial_can_never_satisfy_a_consumer_THAT_WANTS_A_WHOLE_Z():
+    """The property everything else rests on. A partial is the PREFIX of the
+    complete file, so nothing about the bytes distinguishes them — and three
+    separate readers must still refuse it:
+
+      1. `check_done` — the pull writes no `.done`, so a box that pulled a
+         partial cannot republish it as a finished cache;
+      2. `push` — which refuses an unattested cache by name;
+      3. `verify` — which is what scripts/sroll_run.sh and
+         ml/jaxport/tpu_train_s2.sh use after assembling chunks themselves.
+         Those two do not read the manifest; they concatenate until a 404 and
+         get a SHORT file, and the length check is what stops them.
+    """
+    rel = FakeRelease()
+    with tempfile.TemporaryDirectory() as d:
+        src = a_growing_cache(d, T=40, rows=24)
+        restore = with_release(rel, src)
+        try:
+            sync.CHUNK = 512
+            quiet(sync.push, "actions", "irrelevant.npz", 40, partial=True)
+            dest = os.path.join(d, "boxB", "Z_run_w_d.npy")
+            os.makedirs(os.path.dirname(dest))
+            sync.cache_name = lambda run, data: (dest, "Z_w_d.npy", "w")
+            quiet(sync.pull, "actions", "irrelevant.npz", 40)
+            ok_done, why_done = sync.check_done(dest)
+            rc, out = quiet(sync.push, "actions", "irrelevant.npz", 40)
+        finally:
+            restore()
+        assert not ok_done and "no completeness marker" in why_done, why_done
+        assert rc == 1 and "unattested" in out, out
+        # 3. the naive assembler: chunks until a 404, then verify()
+        blind = os.path.join(d, "blind.npy")
+        with open(blind, "wb") as f:
+            for c in rel.chunks("Z_w_d.npy"):
+                f.write(rel.assets[c][1])
+        ok, why = sync.verify(blind, 40)
+        assert not ok and "truncated" in why, why
+        print("partial != complete: no .done, push refuses, verify refuses ✓")
+
+
 if __name__ == "__main__":
     test_the_asset_name_comes_from_the_codec_not_the_run()
     test_two_runs_of_the_same_codec_share_one_cache()
@@ -341,6 +668,13 @@ if __name__ == "__main__":
     test_push_refuses_a_cache_nothing_attested_to()
     test_pull_discards_a_published_Z_of_the_wrong_shape()
     test_a_pull_that_verifies_marks_the_cache_complete()
+    test_a_partial_push_ships_exactly_the_WHOLE_chunks_that_are_finished()
+    test_a_second_partial_push_skips_what_is_already_up_and_adds_the_rest()
+    test_the_complete_push_finishes_the_job_and_flips_the_manifest()
+    test_a_partial_push_refuses_a_strided_Z_exactly_as_a_full_one_does()
+    test_a_partial_push_with_no_progress_marker_publishes_nothing()
+    test_pull_of_a_partial_seeds_the_cache_and_its_progress_marker()
+    test_a_partial_can_never_satisfy_a_consumer_THAT_WANTS_A_WHOLE_Z()
     # LAST, because it replaces sync.cache_name permanently.
     test_push_with_no_cache_says_so_instead_of_succeeding_quietly()
     print("\nOK — the cache is published under its codec's identity and its "

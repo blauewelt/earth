@@ -675,6 +675,161 @@ def _mark_done(cache_path):
               f"be publishable until a run marks it")
 
 
+def _publish_progress_path(cache_path):
+    """`<cache>.progress` — the marker a PUBLISHER reads.
+
+    Deliberately NOT the same file as `<cache>.partial.progress`, which is
+    this module's own resume marker and is keyed to the temp file that holds
+    the bytes. This one is keyed to the CACHE's published name, because
+    everything that reads it — ml/embed_cache_sync.py's `push --partial`, and
+    its `pull` on the box that resumes someone else's work — knows the cache
+    by that name and nothing at all about our `.partial`.
+    """
+    return cache_path + ".progress"
+
+
+def _cache_of_partial(tmp):
+    """`<cache>` from `<cache>.partial`. One place, because the publisher's
+    marker and the resume marker must agree about which cache they describe."""
+    return tmp[:-len(".partial")] if tmp.endswith(".partial") else tmp
+
+
+def _npy_header_bytes(path):
+    """The offset of the array's FIRST byte — 64 to 128 bytes of .npy header.
+
+    The publisher needs an ABSOLUTE byte offset for the end of the last
+    complete row, because it slices the file into 1.5 GiB release chunks from
+    byte zero. Counting rows and forgetting the header would put every chunk
+    boundary 128 bytes late, which is a shift no length check can see.
+    """
+    with open(path, "rb") as f:
+        major, minor = np.lib.format.read_magic(f)
+        {(1, 0): np.lib.format.read_array_header_1_0,
+         (2, 0): np.lib.format.read_array_header_2_0}[(major, minor)](f)
+        return f.tell()
+
+
+def _mark_publish_progress(cache_path, src, rows_flushed, T, P, d_z):
+    """`<cache>.progress`: how many ROWS are real, and where they end in bytes.
+
+    Chris, 2026-08-25: *"Publishing should happen 'during' the embedding
+    computation, for example, after each 1/100th of the data. A new job that
+    needs the same embedding can choose to continue the computation (if 32/100
+    are already complete it will start with chunk 33)."* This marker is what
+    makes that possible. It is the ONLY statement anybody can make about a
+    memmap that `open_memmap` allocated at its full (T, P, d_z) shape before
+    the first month was written: the file's length, dtype and T are right from
+    the first second and say nothing whatever about how much of it is real.
+
+    Written after the flush that produced those rows and atomically (temp
+    sibling + `os.replace`, so a publisher polling every ten minutes can never
+    read a half-written marker), so it can only ever UNDER-claim
+    (ml/CLAUDE.md §5.21). Under-claiming costs a chunk that could have been
+    published ten minutes earlier. Over-claiming publishes zeros as
+    embeddings — real numbers, wrong months, no symptom.
+    """
+    try:
+        row = int(P) * int(d_z) * CACHE_DTYPE(0).itemsize
+        mark = {"rows_flushed": int(rows_flushed), "T": int(T), "P": int(P),
+                "d_z": int(d_z),
+                "bytes_flushed": _npy_header_bytes(src) + int(rows_flushed) * row,
+                "dtype": str(np.dtype(CACHE_DTYPE)),
+                "updated_iso": time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                             time.gmtime())}
+        p = _publish_progress_path(cache_path)
+        with open(p + ".part", "w") as f:
+            json.dump(mark, f)
+        os.replace(p + ".part", p)
+    except (OSError, ValueError, KeyError) as e:
+        # Instrumentation never breaks the run: an unpublishable cache is
+        # still a cache THIS run can use.
+        print(f"  (publish progress marker failed: {e})", flush=True)
+
+
+def _clear_publish_progress(cache_path):
+    """Remove `<cache>.progress`. Called where `.done` is written: a cache
+    that is COMPLETE must not also advertise itself as a work in progress, or
+    a puller would fetch the prefix of a file that is entirely there."""
+    try:
+        os.remove(_publish_progress_path(cache_path))
+    except OSError:
+        pass
+
+
+def _read_publish_progress(cache_path, T, P, d_z):
+    """rows_flushed for a cache that a PULL seeded with a published partial,
+    or None if there is no usable marker beside it.
+
+    This is the other half of Chris's sentence: the box that pulls chunks
+    1..32 has a full-length, correctly-typed, correctly-shaped cache whose
+    tail is zeros, and nothing in the file says so. The marker does, and
+    because the publisher's marker under-claims and the pull clamps it to the
+    bytes it actually received, this can only ever ask for MORE recomputation
+    than strictly necessary.
+    """
+    p = _publish_progress_path(cache_path)
+    if not os.path.exists(p):
+        return None
+    try:
+        with open(p) as f:
+            mark = json.load(f)
+        if (int(mark["T"]), int(mark["P"]), int(mark["d_z"])) != (T, P, d_z):
+            print(f"  ignoring a published partial for a different shape "
+                  f"({mark.get('T')}, {mark.get('P')}, {mark.get('d_z')}) — "
+                  f"this run wants ({T}, {P}, {d_z})")
+            return None
+        if mark.get("dtype") != str(np.dtype(CACHE_DTYPE)):
+            print(f"  ignoring a published partial of dtype "
+                  f"{mark.get('dtype')}")
+            return None
+        rows = int(mark["rows_flushed"])
+        return rows if 0 < rows < T else None
+    except Exception as e:                                    # noqa: BLE001
+        print(f"  published partial marker unusable "
+              f"({type(e).__name__}: {e}) — embedding from scratch")
+        return None
+
+
+def _adopt_published_partial(cache_path, rows):
+    """Turn a pulled prefix into this run's own resumable `.partial`.
+
+    The pull writes the cache under its FINAL name — that is the name every
+    reader knows — so without this the branch below would find a full-length
+    file of the right shape and hand back an array whose tail is zeros. The
+    rename is what makes the two markers say the same thing: from here on the
+    ordinary resume path owns the file, and the ordinary completion path
+    publishes it.
+    """
+    tmp = cache_path + ".partial"
+    if os.path.exists(tmp):
+        # This box was already embedding this cache itself. Its own partial is
+        # at least as trustworthy as a stranger's and may be further along, so
+        # it wins — and the pulled prefix is DELETED rather than left lying
+        # under the final name, where the branch below would read it as a
+        # finished cache the moment this marker went away.
+        print(f"  a local partial embedding is already on this disk — keeping "
+              f"it and discarding the pulled prefix")
+        try:
+            os.remove(cache_path)
+            _clear_publish_progress(cache_path)
+        except OSError as e:
+            print(f"  (could not remove the pulled prefix: {e})")
+        return
+    os.replace(cache_path, tmp)
+    _mark_progress(tmp, None, rows, *_shape_of(tmp))
+    print(f"  RESUMING A PUBLISHED PARTIAL: {rows} row(s) came down from the "
+          f"release, the rest will be computed here", flush=True)
+
+
+def _shape_of(path):
+    """(T, P, d_z) from a .npy header."""
+    with open(path, "rb") as f:
+        major, minor = np.lib.format.read_magic(f)
+        shape = {(1, 0): np.lib.format.read_array_header_1_0,
+                 (2, 0): np.lib.format.read_array_header_2_0}[(major, minor)](f)[0]
+    return tuple(int(x) for x in shape)
+
+
 def _resume_partial(tmp, T, P, d_z):
     """(memmap, months_already_done) for a half-built cache, or (None, 0).
 
@@ -711,9 +866,21 @@ def _resume_partial(tmp, T, P, d_z):
 
 
 def _mark_progress(tmp, out, months_done, T, P, d_z):
-    """Flush the DATA, then record how far it got. Order is the whole point."""
+    """Flush the DATA, then record how far it got. Order is the whole point.
+
+    TWO markers, one flush, and they are for two different readers. The local
+    one (`<cache>.partial.progress`) lets THIS box resume its own interrupted
+    pass; the published one (`<cache>.progress`) lets a publisher ship the
+    finished prefix and another box resume from it. Writing them from one
+    place is what stops them disagreeing about which months are real, and
+    both are written after the flush, so both can only under-claim.
+
+    `out` may be None — the pulled-partial adoption above has no memmap open
+    and nothing to flush; the bytes arrived through `os.replace`.
+    """
     try:
-        out.flush()
+        if out is not None:
+            out.flush()
         p = _progress_path(tmp)
         with open(p + ".part", "w") as f:
             json.dump({"months_done": int(months_done), "shape": [T, P, d_z],
@@ -721,6 +888,7 @@ def _mark_progress(tmp, out, months_done, T, P, d_z):
         os.replace(p + ".part", p)
     except OSError as e:
         print(f"  (progress marker failed: {e})", flush=True)
+    _mark_publish_progress(_cache_of_partial(tmp), tmp, months_done, T, P, d_z)
 
 
 def _free_ram_bytes():
@@ -818,9 +986,15 @@ def _prune_stale(cache_path, want):
     gb = lambda b: b / (1 << 30)
     if free >= want:
         return
+    # OUR OWN .partial IS NOT STALE. It is the file this pass is about to
+    # resume from — either its own interrupted work or a prefix that came down
+    # from the release — and sweeping it away turns a resume into a rebuild at
+    # exactly the moment (a tight disk) when the hour it costs is dearest.
+    # The exclusion used to name only `cache_path`, which does not match it.
+    mine = {os.path.abspath(cache_path), os.path.abspath(cache_path + ".partial")}
     stale = sorted((p for p in glob.glob(os.path.join(d, "Z_*.npy")) +
                     glob.glob(os.path.join(d, "Z_*.npy.partial"))
-                    if os.path.abspath(p) != os.path.abspath(cache_path)),
+                    if os.path.abspath(p) not in mine),
                    key=lambda p: os.path.getmtime(p))
     for p in stale:
         try:
@@ -830,8 +1004,9 @@ def _prune_stale(cache_path, want):
             # cache is an attestation with nothing to attest to; it fails safe
             # (it records the byte size, so it cannot vouch for a different
             # file) but leaving it turns a full-disk sweep into litter.
-            if os.path.exists(p + ".done"):
-                os.remove(p + ".done")
+            for side in (".done", ".progress"):
+                if os.path.exists(p + side):
+                    os.remove(p + side)
             free = shutil.disk_usage(d).free
             print(f"  pruned stale embed cache {os.path.basename(p)} "
                   f"({gb(n):.1f} GiB) — {gb(free):.1f} GiB free")
@@ -909,6 +1084,17 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
     # written as they are filled and the kernel may evict them, which turns a
     # hard 4.6 GB allocation into page-cache pressure. Reads go the same way.
     # Without a cache path (the --max-pixels smoke) it stays an ordinary array.
+    # A CACHE WITH A `.progress` BESIDE IT IS A PREFIX, NOT A CACHE. `pull`
+    # writes a published partial under the cache's final name (that is the
+    # name every reader knows), so without this check the branch below would
+    # find a full-length array of exactly the right shape and hand back one
+    # whose tail is zeros — the #462 family of failure, arriving through the
+    # feature that was meant to save the four hours. With no marker at all and
+    # no `.done`, nothing has changed: a full-shape cache is taken as before.
+    if cache_path and os.path.exists(cache_path):
+        rows = _read_publish_progress(cache_path, T_out, P, d_z)
+        if rows is not None:
+            _adopt_published_partial(cache_path, rows)
     if cache_path and os.path.exists(cache_path):
         out = np.load(cache_path, mmap_mode="r+")
         if out.shape == (T_out, P, d_z):
@@ -1030,12 +1216,18 @@ def embed_everything(model, X, OBS, ctx_all, lats, lons, ys, xs, d_z,
         # only thing that says the last month was written, and it is written
         # after the flush and after the rename so it can only under-claim.
         _mark_done(cache_path)
-        # The marker describes a .partial that no longer exists; leaving it
-        # would make the next run try to resume a file it cannot find.
+        # …AND THE PROGRESS MARKERS GO. Both of them describe a state that has
+        # just stopped being true: the local one names a `.partial` that no
+        # longer exists (the next run would try to resume a missing file), and
+        # the published one would tell a puller to fetch a PREFIX of a cache
+        # that is complete on the release. `.done` and `.progress` are
+        # mutually exclusive statements about the same file and must never be
+        # readable at the same time.
         try:
             os.remove(_progress_path(tmp))
         except OSError:
             pass
+        _clear_publish_progress(cache_path)
         out = np.load(cache_path, mmap_mode="r+")
     return out, coords
 

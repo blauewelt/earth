@@ -35,6 +35,22 @@ published() {   # published <release-tag> <asset-name>  -> 0 if it exists
     "https://github.com/${REPO}/releases/download/$1/$2" 2>/dev/null
 }
 
+# …AND SINCE 2026-08-25, THE FIRST CHUNK IS NO LONGER PROOF OF A BACKUP.
+# `embed_cache_sync.py push --partial` publishes the finished PREFIX of a
+# cache while it is still being computed, so `Z_<hash>.npy.aa` can exist on
+# the release while nine tenths of the embedding exists only on this disk.
+# The manifest is the thing that knows the difference, and it says so in one
+# word. No manifest at all means a key published before manifests existed —
+# for those the chunk check is still the best evidence there is, and it was
+# always a complete publish.
+complete_on_release() {   # complete_on_release <hash> -> 0 if COMPLETE
+  local man
+  man=$(curl -fsSL --max-time 60 \
+    "https://github.com/${REPO}/releases/download/embed-cache-v1/Z_$1.manifest.json" \
+    2>/dev/null) || return 0
+  printf '%s' "$man" | grep -q '"complete"[[:space:]]*:[[:space:]]*true'
+}
+
 echo "disk hygiene: $(free_gb) GB free, want ${MIN_FREE_GB} GB"
 [ "$(free_gb)" -ge "$MIN_FREE_GB" ] && { echo "  nothing to do"; exit 0; }
 
@@ -87,7 +103,16 @@ for f in "$CACHE"/Z_*.npy; do
     echo "    KEEP $b ($sz) — cannot parse a codec hash, so cannot confirm a backup"
     continue
   fi
-  if published embed-cache-v1 "Z_${hash}.npy.aa"; then
+  if [ -e "$f.progress" ]; then
+    # A cache with a progress marker is a PREFIX — either this box's own
+    # in-flight work under its final name, or one pulled from a partial
+    # publish. Either way the rows past the marker exist nowhere, and the
+    # release cannot be a second copy of what has not been computed.
+    echo "    KEEP $b ($sz) — a partial embedding ($(grep -o '"rows_flushed": *[0-9]*' "$f.progress" | tr -dc 0-9) rows), resumable"
+    continue
+  fi
+  if published embed-cache-v1 "Z_${hash}.npy.aa" \
+     && complete_on_release "${hash}"; then
     # …and the completeness marker with it (`<cache>.done`, written by
     # ml/temporal.py after the final flush and required by
     # embed_cache_sync.py:push). It is ~20 bytes, so this is tidiness rather

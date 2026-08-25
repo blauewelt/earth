@@ -18,17 +18,26 @@ minutes of recomputation, which is the cheap side of that trade.
 
     python3 tests/test_embed_resume.py
 """
+import json
 import os
+import shutil
 import sys
 import tempfile
 
 import numpy as np
 import torch
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "..", "ml"))
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "ml"))
+sys.path.insert(0, HERE)
+import embed_cache_sync as sync                           # noqa: E402
 import temporal                                           # noqa: E402
 from temporal import embed_everything                     # noqa: E402
+# The fake release lives beside the tests that exercise it most; importing it
+# is cheaper than a second copy, and a second copy of a publishing rule is two
+# chances to disagree about what the release holds.
+from test_embed_cache_sync import (FakeRelease, quiet,     # noqa: E402
+                                   with_release)
 
 T, H, W, C, DZ = 40, 4, 6, 3, 8
 CRASH_AT = 24
@@ -142,10 +151,134 @@ def test_no_marker_means_no_resume():
         print("no marker       : refuses to guess, recomputes          ✓")
 
 
+def test_the_publish_marker_can_only_UNDER_claim():
+    """ml/CLAUDE.md §5.21, checked against the array rather than against the
+    code that wrote it.
+
+    `<cache>.progress` is what a publisher slices into release chunks, so a
+    marker that over-claims by one row publishes a row of zeros as
+    embeddings — real numbers, wrong months, no symptom, and now spread to
+    every box that pulls the key instead of to one disk. Every marker written
+    during a real pass is checked here: every row it claims must already hold
+    computed values, and the byte offset it names must lie inside them.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        cp = os.path.join(d, "Z_actions_eeeeeeeeee.npy")
+        seen, real = [], temporal._mark_progress
+
+        def watched(tmp, out, done, T, P, dz, *a):
+            real(tmp, out, done, T, P, dz, *a)
+            mark = json.load(open(cp + ".progress"))
+            z = np.load(tmp, mmap_mode="r")
+            rows = mark["rows_flushed"]
+            # 1. every row the marker claims has been computed. The stub
+            #    embedding is nowhere zero, so an all-zero row is one nobody
+            #    has written.
+            assert rows <= done, (rows, done)
+            assert np.asarray(z[:rows]).all(), (
+                f"the marker claims {rows} rows and one of them is still the "
+                f"memmap's zero fill")
+            # 2. and the byte offset it names lies inside those rows.
+            row_bytes = P * dz * np.dtype(temporal.CACHE_DTYPE).itemsize
+            head = temporal._npy_header_bytes(tmp)
+            assert mark["bytes_flushed"] == head + rows * row_bytes, mark
+            assert mark["bytes_flushed"] <= head + done * row_bytes, mark
+            assert (mark["T"], mark["P"], mark["d_z"]) == (T, P, dz), mark
+            seen.append(rows)
+
+        temporal._mark_progress = watched
+        try:
+            run(cp)
+        finally:
+            temporal._mark_progress = real
+        assert seen == [8, 16, 24, 32, 40], seen
+        # AND IT IS GONE AT THE END. `.done` and `.progress` are mutually
+        # exclusive statements about the same file: one says every row is
+        # real, the other says the first N are. A leftover `.progress` would
+        # make the next pull fetch a prefix of a cache that is complete.
+        assert not os.path.exists(cp + ".progress"), (
+            "a finished cache must not advertise itself as a work in progress")
+        assert os.path.exists(cp + ".done")
+        print(f"under-claim: markers at {seen}, cleared on completion   ✓")
+
+
+def test_a_crash_leaves_a_PUBLISHABLE_prefix_beside_the_partial():
+    """The publisher reads `<cache>.progress`, not `<cache>.partial.progress`
+    — it knows the cache by its published name and nothing about our temp
+    file. Both are written by the same flush, so they cannot disagree."""
+    with tempfile.TemporaryDirectory() as d:
+        cp = os.path.join(d, "Z_actions_ffffffffff.npy")
+        try:
+            run(cp, crash=CRASH_AT)
+        except KeyboardInterrupt:
+            pass
+        pub = json.load(open(cp + ".progress"))
+        loc = json.load(open(cp + ".partial.progress"))
+        assert pub["rows_flushed"] == loc["months_done"] == CRASH_AT
+        assert not os.path.exists(cp + ".done"), (
+            "an interrupted pass must never look complete")
+        # And the publisher finds the bytes without being told where they are.
+        assert sync.partial_source(cp) == cp + ".partial"
+        assert sync.read_progress(cp)["rows_flushed"] == CRASH_AT
+        print(f"publishable: {CRASH_AT}/{T} rows, both markers agree      ✓")
+
+
+def test_a_published_partial_is_resumed_and_lands_bit_identical():
+    """THE WHOLE FEATURE, end to end, on two boxes.
+
+    Chris, 2026-08-25: *"A new job that needs the same embedding can choose to
+    continue the computation (if 32/100 are already complete it will start
+    with chunk 33)."* Box A dies at month 24 and publishes the whole chunks it
+    finished. Box B has never seen this codec: it pulls the prefix, embeds the
+    rest, and must end up with THE SAME ARRAY a box that did the whole thing
+    itself would have — not merely a finished file. A resume that is only
+    approximately right is a subtle corruption of every run that pulls it.
+    """
+    rel = FakeRelease()
+    with tempfile.TemporaryDirectory() as d:
+        ref = run(None)                                   # RAM, uninterrupted
+        a = os.path.join(d, "boxA", "Z_actions_1111111111.npy")
+        b = os.path.join(d, "boxB", "Z_actions_1111111111.npy")
+        os.makedirs(os.path.dirname(a))
+        os.makedirs(os.path.dirname(b))
+        try:
+            run(a, crash=CRASH_AT)
+        except KeyboardInterrupt:
+            pass
+        restore = with_release(rel, a)
+        try:
+            # 40 rows x 3 x 8 fp16 = 48 B/row + 128 B header = 2048 B, so
+            # CHUNK 512 makes four chunks and 24 flushed rows fill two.
+            sync.CHUNK = 512
+            rc, out = quiet(sync.push, "actions", "irrelevant.npz", T,
+                            partial=True)
+            assert rc == 0, out
+            assert rel.manifest("Z_w_d.npy")["complete"] is False
+            sync.cache_name = lambda run_, data: (b, "Z_w_d.npy", "w")
+            rc, out = quiet(sync.pull, "actions", "irrelevant.npz", T)
+            assert rc == 0, out
+        finally:
+            restore()
+        rows = sync.read_progress(b)["rows_flushed"]
+        assert 0 < rows < CRASH_AT, (rows, "18 whole rows of the 24 flushed")
+        got = run(b)                                      # box B finishes it
+        assert np.array_equal(got, ref.astype(got.dtype)), (
+            "a resumed embedding must be bit-identical to one built in one go")
+        assert os.path.exists(b + ".done"), "and it is publishable now"
+        assert not os.path.exists(b + ".progress")
+        assert not os.path.exists(b + ".partial")
+        print(f"two boxes  : pulled {rows}/{T} rows, finished, "
+              f"bit-identical  ✓")
+
+
 if __name__ == "__main__":
     test_a_crash_leaves_a_resumable_partial_and_no_published_cache()
     test_the_resume_lands_bit_identical_to_an_uninterrupted_run()
     test_a_marker_for_a_different_shape_is_ignored()
     test_no_marker_means_no_resume()
-    print("\nOK — an interrupted embedding resumes where it stopped, and the "
-          "marker can only ever under-claim.")
+    test_the_publish_marker_can_only_UNDER_claim()
+    test_a_crash_leaves_a_PUBLISHABLE_prefix_beside_the_partial()
+    test_a_published_partial_is_resumed_and_lands_bit_identical()
+    print("\nOK — an interrupted embedding resumes where it stopped, the "
+          "marker can only ever under-claim, and a prefix published mid-pass "
+          "is resumed on another box to a bit-identical array.")

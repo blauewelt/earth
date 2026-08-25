@@ -513,7 +513,22 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
     # nothing to wait FOR until the first run ended.
     # Retry every ~10 min until it actually lands. The marker is
     # written only on a REAL success — an early version marked it done
-    # whatever happened, because the script exited 0 on failure.
+    # whatever happened, because the script exited 0 on failure — and
+    # "real" now means VERIFIED: the full push re-lists the release
+    # after uploading and returns 0 only if every chunk is there at its
+    # right size. Nothing else stops this loop.
+    #
+    # AND IT NO LONGER WAITS FOR THE EMBEDDING TO FINISH. Chris,
+    # 2026-08-25: "Publishing should happen 'during' the embedding
+    # computation... A new job that needs the same embedding can choose
+    # to continue the computation (if 32/100 are already complete it
+    # will start with chunk 33)." So the branches below are a ladder on
+    # what is actually on the disk: `.done` (the pass finished) takes
+    # the full push, `.progress` (still running) takes `push --partial`
+    # and ships the whole 1.5 GiB chunks that are finished, and neither
+    # is a reason to stop looking. This also closes the failure of
+    # 2026-08-24, where a single mid-job shot no-op'd against a
+    # poisoned key and the artefact then waited for the job to end.
     #
     # AND SAY WHICH BRANCH RAN (ml/CLAUDE.md §4.6/§4.7). The silent skip is
     # what made the bug above cost three runs' logs to find: a log with no
@@ -527,12 +542,50 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
           echo "embed cache push: already published by this job ($EMBED_MARK) — not re-pushing"
           EMBED_STATE=published
         fi
+      elif ls /opt/earth-cache/Z_*.npy.done >/dev/null 2>&1; then
+        # THE EMBEDDING HAS FINISHED. A full push: it verifies the release
+        # after uploading and only then returns 0, and only that writes the
+        # marker that stops this loop.
+        echo "embed cache push: STARTING in-training at tick ${TICK} (~$((TICK / 2)) min in) — the embedding is COMPLETE (.done) — $(du -h /opt/earth-cache/Z_*.npy 2>/dev/null | tr '\n' ' ')"
+        if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
+             --expect-t "$EXPECT_T"; then
+          touch "$EMBED_MARK"
+          echo "embed cache push: DONE in-training — VERIFIED durable on the release, hours before this job ends"
+          EMBED_STATE=published
+        else
+          echo "::warning::embed cache push: FAILED in-training at tick ${TICK} — no marker written, retrying in ~10 min"
+          EMBED_STATE=failed
+        fi
+      elif ls /opt/earth-cache/Z_*.npy.progress >/dev/null 2>&1; then
+        # …AND WHILE IT IS STILL RUNNING, SHIP WHAT IS FINISHED. Chris,
+        # 2026-08-25: "Publishing should happen 'during' the embedding
+        # computation … A new job that needs the same embedding can choose to
+        # continue the computation (if 32/100 are already complete it will
+        # start with chunk 33)." The unit is the 1.5 GiB release chunk (~9% of
+        # a pentad Z); embed_cache_sync skips the chunks the release already
+        # holds at their right size, so a repeat costs one API call, and it
+        # writes the manifest AFTER the chunks so the release can only
+        # under-claim. It prints every ten minutes on purpose: the silent skip
+        # is what made the 2026-08-21 bug cost three runs' logs to find.
+        echo "embed cache push: STARTING PARTIAL in-training at tick ${TICK} (~$((TICK / 2)) min in) — the embedding is still running — $(du -h /opt/earth-cache/Z_*.npy* 2>/dev/null | tr '\n' ' ')"
+        if python -u ml/embed_cache_sync.py push --partial --run actions \
+             --data "$TENSOR" --expect-t "$EXPECT_T"; then
+          echo "embed cache push: PARTIAL done at tick ${TICK} — the finished chunks are on the release; no marker, because the cache is not complete yet"
+          EMBED_STATE=partial
+        else
+          echo "::warning::embed cache push: PARTIAL FAILED at tick ${TICK} — retrying in ~10 min"
+          EMBED_STATE=failed
+        fi
       elif ! ls /opt/earth-cache/Z_*.npy >/dev/null 2>&1; then
         if [ "$EMBED_STATE" != waiting ]; then
           echo "embed cache push: no /opt/earth-cache/Z_*.npy yet at tick ${TICK} (~$((TICK / 2)) min in) — nothing to publish; checking again every ~10 min"
           EMBED_STATE=waiting
         fi
       else
+        # A cache with NEITHER marker: pulled by an older build, or written
+        # before the markers existed. Try the full push — it refuses an
+        # unattested cache by name, which is a line in the log rather than a
+        # silence.
         echo "embed cache push: STARTING in-training at tick ${TICK} (~$((TICK / 2)) min in) — $(du -h /opt/earth-cache/Z_*.npy 2>/dev/null | tr '\n' ' ')"
         if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
              --expect-t "$EXPECT_T"; then
@@ -574,9 +627,11 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
   # above. If the in-training push failed (no room, no token, a 500 from
   # uploads.github.com) the marker was never written and this is the only
   # thing left that publishes the cache. It costs nothing when the loop
-  # already succeeded: ml/embed_cache_sync.py:210-216 no-ops when every
-  # chunk name is present in the release AND their sizes sum to the file on
-  # disk, printing "already published and complete" and returning 0.
+  # already succeeded: embed_cache_sync's "already published and complete"
+  # branch no-ops when every chunk name is present in the release AND their
+  # sizes sum to the file on disk, and returns 0. After a run of partial
+  # pushes it is also the step that turns the last chunks and the manifest
+  # complete — the partial path deliberately never writes `complete: true`.
   echo 'embed cache push: STARTING post-training (unconditional, after wait $S2_PID)'
   if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
        --expect-t "$EXPECT_T"; then
