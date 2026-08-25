@@ -611,6 +611,32 @@ or masking before more parameters at this rung. All n=1 at a new tier (JAX/TPU, 
   #456 (torch b64 200k, Japan box) continues as the torch-tier long form.
 
 <a id="e-046"></a>
+**15:50Z 08-25 — E-046 RESOLVED AT ITS REGISTERED INSTRUMENT: THE FSQ CODEC EARNS ITS
+PLACE AT PENTAD.** **#477 (E-046-HEAD seed 1 · #427's exact 206.5M xl144+znoise 20k
+stage-2 window on run-455's lattice z · stage stage-2 · data family4_na025_pentad_r2 ·
+resume z of run-455 · steps 20,000 × 256)** — final one-step ratio
+**0.6497 / 1.4788 = 0.4394**, against the two registered bars: **A9 (read-time
+input-quant) 0.4916** and **#427's own 20k point 0.5036**. Clearly below both — the
+margin to A9 is ~46× the #427/#432 pair spread (0.00113). The at-or-below-A9 branch of
+the registered reading fires: discretizing in the CODEC reproduces and exceeds the
+head-side win, and is free downstream. Corroboration with its caveat: seed 0 (#468)
+diverged fatally at 15.8k, but its cut-off reading at 15,600 was 0.4395 — near-identical,
+though at a different step and unregistered. Nothing traded away on the instruments that
+can see it: `rapid_r_kfold` 0.515 (pooled legacy), in-training probe 0.464. TWO CAVEATS
+THAT TRAVEL WITH THE NUMBER: the ratio is dimensionless but lives in lattice-z space
+(persistence hardness need not equal continuous-space hardness — pre-noted at #455's
+finish), and the registered result is n=1 on a new codec tier (§3b: the winner buys its
+pair; a seed-0 refinish must survive the gradient cliff that killed #468 — grad-clip or
+seed luck). **The compound reading with the rest of the record is the striking part:**
+run-455's z is measurably a ~32-bit SIGN CODE (the E-048 finding), and it still beats
+the 1,024-bit continuous substrate by 0.065 as a forecasting substrate — the strongest
+evidence yet for the capacity story, and for road B's premise that the restriction
+itself helps. Road B's own d_z-6 arm fails at COLD-START OPTIMIZATION (#482, constant
+encoder), not at information restriction: #480 (continuous d_z 6, same everything minus
+the lattice+bound) is healthy past step 15k (loss_rec 0.249, step-0 probe persistence
+z-MSE 0.4668 vs #482's collapsed 0.0009) — the natural experiment that convicts the
+lattice-at-cold-start, and the reason the warm-start-quantization repair is next.
+
 **02:30Z 08-24 — E-046 DISPATCHED (Chris's cost nod, 02:00Z: "the costs are acceptable").**
 The FSQ bottleneck landed at 7f8dabb (`--fsq-levels`, default-off bit-identity pinned to
 0e10253; InputQuant moved to model.py as the ONE quantizer; every codec loader rebuilds
