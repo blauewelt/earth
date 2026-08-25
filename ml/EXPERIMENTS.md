@@ -105,7 +105,14 @@ results are directions.
 pentad tensor's train pool (~everything outside holdout years at patch 1). Cost:
 ~20 h / ~$6 per arm, two arms.
 
-*(Run numbers and boxes appended at dispatch.)*
+**DISPATCHED 2026-08-25, code 72a0921 (both arms):** **#479 (E-049b road-B token
+codec)** picked up immediately by `gpu-box-40623952` (the idle 100 GB experiments
+box); **#480 (E-049a d_z-6 continuous control)** queued on `gpu-box-32966687`
+behind #477 (E-046-HEAD seed 1, lands ~14:00–14:30Z) — that box holds the pentad
+tensor warm from the E-046 work. Plans published (`plan-479/480.json`, 200k at
+the trainer's 3e-4 default). First-minutes checks owed on #479 when its Train
+step opens: LR 3e-4, the FSQ startup line naming the bound, and
+`prequant_rms` = 1 at the step-50 fit.
 
 ---
 
