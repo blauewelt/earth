@@ -234,6 +234,41 @@ run here has now either collapsed (e048a, #481/#482) or degenerated (run-455's s
 code). *(iii)* The cheap alternative if diagnosis blames the centering: an RMS-only
 bound (no mean subtraction). Cost of #482: ~1.1 h ≈ $0.3.
 
+**20:35Z 08-25 — E-051 DISPATCHED (Chris: "yes, let's go straight to the big tpu
+run"): THE FIRST FULL-BUDGET 2-YEAR-CONTEXT PENTAD HEAD, ON THE TPU TIER.**
+
+<a id="e-051"></a>
+**E-051 · the span-fixed K=144 pentad head at full budget · params 206.5M head +
+fresh k_max-144 table · stage stage-2 · data family4_na025_pentad_r2 (sha-pinned
+37e14638…) · arch 1024×16 over the frozen 38.0M run-415 pentad codec (d_z 32) ·
+steps 200,000×256 · resume run-415 (stage 1 trains nothing) · framework
+JAX/v5litepod-4 (tier 3b, G5-certified — NEVER pooled with torch numbers, §3b) ·
+window stencil:145 ring spiral:111-4444-0.71-0.5 znoise 0.7 grad-clip 128 seed 0
+sched expdecay(halflife 40k, warmup 2k, cooldown 0) · Z PULLED from the published
+clean `Z_8b639abe36_37e146384b` (header-bounded assembly — the launcher's own fix
+for the chimera class) · node `e051-k144-full`, bucket-keyed resume, on-demand.**
+
+HYPOTHESIS: the E-045 factorial's context story holds at full budget and at
+horizon — a 2-year-span pentad head trained to 200k is the programme's best
+stage-2 substrate, beating the monthly champion line on the roll. REGISTERED
+READINGS, in order of authority: (1) the 12-month ROLL (corridor AUC, on GPU
+via sroll over the exported .pt head — a follow-up dispatch, not part of this
+run) against the monthly pair's +0.939 trainlon and E-044b's pentad −0.499;
+(2) the one-step ratio vs #478's 20k number (in-flight 0.0860 at 17.2k as this
+dispatches; #427's 20k→200k flatline at K=24 predicts little one-step gain, so
+a flat ratio here is EXPECTED, not a failure). FALSIFIER: if the 200k head's
+roll still reads E-044b-class negative, 2-year context did not repair the
+pentad roll and the missing ingredient is elsewhere (the fusion axis, E-047).
+CAVEATS ON THE RECORD AT DISPATCH: #478 (the torch 20k twin at this exact
+geometry) had not finished when this launched — its final lands ≈22:00Z and is
+the config's certificate; the JAX tier is n=1 with no replicate band (§3b — a
+first result here is a direction); and the roll-first staging was offered and
+DECLINED by Chris in favour of going straight to the full run. COST: ~8–15 h
+at v5e-4 on-demand ≈ $40–72 (spot declined — the 08-23 us-west1-c spot pool
+served in-maintenance hosts twice); hard cap 40 h; stall watchdog 90 min;
+checkpoints + torch-loadable .pt ship to the bucket every 10 min, so a
+preemption or cap costs a relaunch under the same node name, never the run.
+
 **19:00–19:20Z 08-25 — EVENING STEP: THE K=48 RUNG'S TRAINER RAN ON CPU AND WAS
 KILLED AT STEP 600; THE DECISIVE RUNG IS DEEP IN ITS PREDICTED BAND.**
 
