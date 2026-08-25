@@ -106,13 +106,26 @@ pentad tensor's train pool (~everything outside holdout years at patch 1). Cost:
 ~20 h / ~$6 per arm, two arms.
 
 **DISPATCHED 2026-08-25, code 72a0921 (both arms):** **#479 (E-049b road-B token
-codec)** picked up immediately by `gpu-box-40623952` (the idle 100 GB experiments
-box); **#480 (E-049a d_z-6 continuous control)** queued on `gpu-box-32966687`
-behind #477 (E-046-HEAD seed 1, lands ~14:00–14:30Z) — that box holds the pentad
-tensor warm from the E-046 work. Plans published (`plan-479/480.json`, 200k at
-the trainer's 3e-4 default). First-minutes checks owed on #479 when its Train
-step opens: LR 3e-4, the FSQ startup line naming the bound, and
-`prequant_rms` = 1 at the step-50 fit.
+codec)** picked up immediately by `gpu-box-40623952`; **#480 (E-049a d_z-6
+continuous control)** queued on `gpu-box-32966687` behind #477 (E-046-HEAD seed 1)
+— that box holds the pentad tensor warm from the E-046 work. Plans published
+(`plan-479/480/481.json`, 200k at the trainer's 3e-4 default).
+
+**#479 DIED IN 2.5 MINUTES ON A DEAD GPU, AND THE GUARD PAID FOR ITSELF** (caught
+by the scheduled 50-min first-minutes check): `nvidia-smi` on gpu-box-40623952
+read "Unable to determine the device handle for GPU0 … No devices were found" and
+the wrong-hardware guard refused to train on CPU — exactly its job, cost ~$0.01.
+The trap worth recording: **the runner reported online + idle to GitHub while its
+GPU was already dead** — runner liveness says nothing about the device, and the
+install-step guard is the only honest hardware check we have; a dispatch IS the
+health probe. Vast 48478310 now shows offline/stopped (a lemon; left stopped —
+nothing sole-copy on it, #472 runs elsewhere on gpu-box-48383989). Recovery:
+started 48478309 (`gpu-box-42005419`, the E-047a box, pentad tensor warm — the
+build step was a cache hit) and re-dispatched as **#481 (E-049b re-dispatch, road-B
+token codec)**: GPU guard PASSED, training phase opened 11:36Z, and the live
+config record verifies the recipe end to end — d_z 6, fsq_levels 8,8,8,5,5,5,
+fsq_ladder auto, **fsq_bound ln**, params_M 37.956, family4_na025_pentad_r2.
+Step-50 fit line (`prequant_rms` = 1) checked at the next wake-up.
 
 ---
 
