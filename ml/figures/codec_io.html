@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  Codec I/O overview: what enters a stage-1 codec (kind and amount), what it emits,
+  what an FSQ bottleneck changes, the E-048 fitted ladder, Voxtral TTS as reference.
+  Made 2026-08-25 for the road-A/road-B token discussion; also published as a
+  claude.ai artifact in the originating session. Numbers as of that morning —
+  the current truth is ml/EXPERIMENTS.md.
+-->
+<title>Earth Codec I/O</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --paper: #F6F9FB;
+    --card: #FFFFFF;
+    --ink: #16222C;
+    --muted: #5C6C79;
+    --line: #C7D3DC;
+    --accent: #0A6EA8;      /* Atlantic blue: the continuous z path */
+    --quant: #B7761C;       /* amber: everything quantized */
+    --bad: #A83E32;         /* the pathology */
+    --wash: #E8F0F6;        /* accent wash for panels */
+    --qwash: #F6EDDD;       /* quant wash */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0E151B;
+      --card: #151E26;
+      --ink: #DCE6EE;
+      --muted: #8FA1AF;
+      --line: #33434F;
+      --accent: #57A9DC;
+      --quant: #DFA84E;
+      --bad: #E07A6B;
+      --wash: #17242E;
+      --qwash: #2A2318;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0E151B;
+    --card: #151E26;
+    --ink: #DCE6EE;
+    --muted: #8FA1AF;
+    --line: #33434F;
+    --accent: #57A9DC;
+    --quant: #DFA84E;
+    --bad: #E07A6B;
+    --wash: #17242E;
+    --qwash: #2A2318;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Public Sans", system-ui, sans-serif;
+    font-size: 15.5px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 40px 20px 80px;
+  }
+  main { max-width: 900px; margin: 0 auto; }
+  h1, h2, h3 {
+    font-family: "Archivo", "Public Sans", sans-serif;
+    line-height: 1.2;
+    text-wrap: balance;
+  }
+  h1 { font-size: 34px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 22px; font-weight: 650; margin: 52px 0 10px; }
+  h3 { font-size: 16.5px; font-weight: 650; margin: 28px 0 6px; }
+  p { margin: 10px 0; max-width: 72ch; }
+  .lede { color: var(--muted); font-size: 16.5px; max-width: 70ch; margin-bottom: 4px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 10px;
+  }
+  code, .mono {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.92em;
+  }
+  code {
+    background: var(--wash);
+    border-radius: 4px;
+    padding: 0.08em 0.35em;
+  }
+  figure { margin: 22px 0; }
+  figure svg { max-width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: 13.5px; margin-top: 8px; max-width: 78ch; }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin: 18px 0;
+  }
+  .panel.q { background: var(--qwash); border-color: color-mix(in srgb, var(--quant) 45%, var(--line)); }
+  .panel h3 { margin-top: 0; }
+  .scroller { overflow-x: auto; }
+  table {
+    border-collapse: collapse;
+    font-size: 13.5px;
+    min-width: 640px;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 14px 8px 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500;
+  }
+  td.mono { white-space: nowrap; }
+  .qk { color: var(--quant); font-weight: 600; }
+  .ak { color: var(--accent); font-weight: 600; }
+  .bk { color: var(--bad); font-weight: 600; }
+  ul { max-width: 74ch; }
+  li { margin: 6px 0; }
+  a { color: var(--accent); }
+  .src { font-size: 13px; color: var(--muted); }
+  .src a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<p class="eyebrow">blauewelt/earth · stage-1 codecs · 2026-08-25</p>
+<h1>What goes into the codec, and what comes out</h1>
+<p class="lede">One overview of the input a stage-1 codec reads, the embedding it emits, what an
+FSQ bottleneck changes about that output — and the fitted ladder (E-048) built on top of plain FSQ.</p>
+
+<h2>The pipeline, with amounts</h2>
+<figure>
+<svg viewBox="0 0 960 500" role="img" aria-label="Flow diagram: pentad tensor to per-sample tokens to encoder to bottleneck, which is either continuous z or an FSQ lattice, consumed by the decoder and the stage-2 forecaster.">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+    <marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+    </marker>
+    <marker id="arrQ" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--quant)"/>
+    </marker>
+  </defs>
+  <g fill="none" stroke="currentColor" stroke-width="1.3" font-family="IBM Plex Mono, monospace" font-size="12">
+
+    <!-- INPUT TENSOR slab -->
+    <g>
+      <rect x="22" y="60" width="120" height="150" rx="4"/>
+      <rect x="30" y="52" width="120" height="150" rx="4" fill="var(--paper)"/>
+      <rect x="38" y="44" width="120" height="150" rx="4" fill="var(--paper)"/>
+      <text x="98" y="30" fill="currentColor" text-anchor="middle" font-weight="500">pentad tensor (f4 r2)</text>
+      <text x="98" y="86" fill="currentColor" text-anchor="middle" font-size="11">[3142, 281, 481, 40]</text>
+      <text x="98" y="104" fill="var(--muted)" text-anchor="middle" font-size="11">T x lat x lon x C</text>
+      <text x="98" y="130" fill="var(--muted)" text-anchor="middle" font-size="11">float16, z-scored</text>
+      <text x="98" y="148" fill="var(--muted)" text-anchor="middle" font-size="11">anomalies, ~34 GB</text>
+      <text x="98" y="174" fill="var(--muted)" text-anchor="middle" font-size="11">~83% of Argo cells</text>
+      <text x="98" y="190" fill="var(--muted)" text-anchor="middle" font-size="11">= missing token</text>
+    </g>
+
+    <line x1="162" y1="120" x2="212" y2="120" marker-end="url(#arr)"/>
+    <text x="187" y="108" fill="var(--muted)" text-anchor="middle" font-size="10.5">1 pixel,</text>
+    <text x="187" y="140" fill="var(--muted)" text-anchor="middle" font-size="10.5">1 bin</text>
+
+    <!-- SAMPLE tokens -->
+    <g>
+      <text x="292" y="30" fill="currentColor" text-anchor="middle" font-weight="500">one sample = 42 tokens</text>
+      <rect x="222" y="44" width="140" height="118" rx="4"/>
+      <!-- token rows -->
+      <rect x="232" y="54" width="120" height="20" rx="3" fill="var(--wash)"/>
+      <text x="292" y="68" fill="currentColor" text-anchor="middle" font-size="10.5">40 channel tokens</text>
+      <rect x="232" y="80" width="120" height="20" rx="3" fill="var(--wash)"/>
+      <text x="292" y="94" fill="currentColor" text-anchor="middle" font-size="10.5">1 context token</text>
+      <rect x="232" y="106" width="120" height="20" rx="3" fill="var(--wash)"/>
+      <text x="292" y="120" fill="currentColor" text-anchor="middle" font-size="10.5">1 CLS token</text>
+      <text x="292" y="148" fill="var(--muted)" text-anchor="middle" font-size="10">value | mask | missing</text>
+      <text x="292" y="180" fill="var(--muted)" text-anchor="middle" font-size="10.5">~8 channels live in 92%</text>
+      <text x="292" y="196" fill="var(--muted)" text-anchor="middle" font-size="10.5">of bins; 40 on Argo bins</text>
+    </g>
+
+    <line x1="362" y1="103" x2="412" y2="103" marker-end="url(#arr)"/>
+
+    <!-- ENCODER -->
+    <g>
+      <rect x="412" y="60" width="126" height="86" rx="6"/>
+      <text x="475" y="90" fill="currentColor" text-anchor="middle" font-weight="500">encoder</text>
+      <text x="475" y="110" fill="var(--muted)" text-anchor="middle" font-size="10.5">transformer 512x12</text>
+      <text x="475" y="126" fill="var(--muted)" text-anchor="middle" font-size="10.5">38.0M · masked AE</text>
+    </g>
+
+    <line x1="538" y1="103" x2="588" y2="103" marker-end="url(#arr)"/>
+    <text x="563" y="92" fill="var(--muted)" text-anchor="middle" font-size="10">CLS</text>
+
+    <!-- BOTTLENECK -->
+    <g>
+      <rect x="588" y="44" width="180" height="196" rx="6"/>
+      <text x="678" y="30" fill="currentColor" text-anchor="middle" font-weight="500">bottleneck</text>
+      <!-- continuous -->
+      <text x="678" y="70" fill="var(--accent)" text-anchor="middle" font-size="11" font-weight="500">baseline: z &#8712; R^32</text>
+      <text x="678" y="86" fill="var(--muted)" text-anchor="middle" font-size="10.5">32 x float32 = 1024 bits</text>
+      <line x1="604" y1="98" x2="752" y2="98" stroke="var(--line)"/>
+      <!-- FSQ -->
+      <text x="678" y="118" fill="var(--quant)" text-anchor="middle" font-size="11" font-weight="500">fsq8: z_q on a lattice</text>
+      <!-- lattice: 4 dims x 8 dots -->
+      <g fill="var(--quant)" stroke="none">
+        <g>
+          <circle cx="618" cy="136" r="2.6"/><circle cx="635" cy="136" r="2.6"/><circle cx="652" cy="136" r="2.6"/><circle cx="669" cy="136" r="2.6"/><circle cx="686" cy="136" r="2.6"/><circle cx="703" cy="136" r="2.6"/><circle cx="720" cy="136" r="2.6"/><circle cx="737" cy="136" r="2.6"/>
+        </g>
+        <g>
+          <circle cx="618" cy="152" r="2.6"/><circle cx="635" cy="152" r="2.6"/><circle cx="652" cy="152" r="2.6"/><circle cx="669" cy="152" r="2.6"/><circle cx="686" cy="152" r="2.6"/><circle cx="703" cy="152" r="2.6"/><circle cx="720" cy="152" r="2.6"/><circle cx="737" cy="152" r="2.6"/>
+        </g>
+        <g>
+          <circle cx="618" cy="168" r="2.6"/><circle cx="635" cy="168" r="2.6"/><circle cx="652" cy="168" r="2.6"/><circle cx="669" cy="168" r="2.6"/><circle cx="686" cy="168" r="2.6"/><circle cx="703" cy="168" r="2.6"/><circle cx="720" cy="168" r="2.6"/><circle cx="737" cy="168" r="2.6"/>
+        </g>
+      </g>
+      <text x="678" y="192" fill="var(--muted)" text-anchor="middle" font-size="10.5">32 dims x 8 levels</text>
+      <text x="678" y="208" fill="var(--muted)" text-anchor="middle" font-size="10.5">3 bits/dim = 96 bits</text>
+      <text x="678" y="224" fill="var(--muted)" text-anchor="middle" font-size="10.5">codebook 8^32 = 2^96</text>
+    </g>
+
+    <!-- consumers -->
+    <line x1="768" y1="90" x2="828" y2="70" stroke="var(--accent)" marker-end="url(#arrA)"/>
+    <line x1="768" y1="170" x2="828" y2="190" stroke="var(--accent)" marker-end="url(#arrA)"/>
+
+    <g>
+      <rect x="828" y="40" width="120" height="62" rx="6" stroke="var(--accent)"/>
+      <text x="888" y="64" fill="currentColor" text-anchor="middle" font-size="11.5" font-weight="500">stage-2 head</text>
+      <text x="888" y="82" fill="var(--muted)" text-anchor="middle" font-size="10">attends z sequence,</text>
+      <text x="888" y="94" fill="var(--muted)" text-anchor="middle" font-size="10">predicts z_{t+1}</text>
+    </g>
+    <g>
+      <rect x="828" y="160" width="120" height="62" rx="6" stroke="var(--accent)"/>
+      <text x="888" y="184" fill="currentColor" text-anchor="middle" font-size="11.5" font-weight="500">decoder</text>
+      <text x="888" y="202" fill="var(--muted)" text-anchor="middle" font-size="10">queries (ch, dlon,</text>
+      <text x="888" y="214" fill="var(--muted)" text-anchor="middle" font-size="10">dlat, dt) from z only</text>
+    </g>
+
+    <!-- shape note -->
+    <text x="678" y="262" fill="currentColor" text-anchor="middle" font-size="10.5">downstream sees [T, P, d_z] floats either way -</text>
+    <text x="678" y="277" fill="var(--muted)" text-anchor="middle" font-size="10.5">with FSQ the values just happen to sit on the lattice</text>
+
+    <!-- variants strip -->
+    <line x1="22" y1="308" x2="948" y2="308" stroke="var(--line)"/>
+    <text x="22" y="332" fill="currentColor" font-weight="500" font-size="12">the same codec family, three input geometries:</text>
+
+    <g font-size="10.5">
+      <rect x="22" y="348" width="284" height="118" rx="6"/>
+      <text x="34" y="370" fill="currentColor" font-weight="500" font-size="11.5">per-bin (run-415 / run-455-fsq8)</text>
+      <text x="34" y="390" fill="var(--muted)">in: 1 pentad bin = 42 tokens</text>
+      <text x="34" y="406" fill="var(--muted)">out: one z per 5 days, d_z 32</text>
+      <text x="34" y="422" fill="var(--muted)">Argo bins: 40 ch into 32 dims</text>
+      <text x="34" y="438" fill="var(--bad)">-&gt; regime switch every 6th step</text>
+      <text x="34" y="454" fill="var(--muted)">fsq8 = same, on the 8-level lattice</text>
+
+      <rect x="338" y="348" width="284" height="118" rx="6"/>
+      <text x="350" y="370" fill="currentColor" font-weight="500" font-size="11.5">month-block (E-047)</text>
+      <text x="350" y="390" fill="var(--muted)">in: 7 bins x 40 ch = 282 tokens</text>
+      <text x="350" y="406" fill="var(--muted)">out: one z per month, d_z 64/128</text>
+      <text x="350" y="422" fill="var(--muted)">~280 cells -&gt; 64 dims: real 4:1</text>
+      <text x="350" y="438" fill="var(--muted)">squeeze in time; Argo anchor</text>
+      <text x="350" y="454" fill="var(--muted)">fuses instead of switching</text>
+
+      <rect x="654" y="348" width="294" height="118" rx="6" stroke="var(--quant)"/>
+      <text x="666" y="370" fill="var(--quant)" font-weight="500" font-size="11.5">fsq window w6s6 (E-048)</text>
+      <text x="666" y="390" fill="var(--muted)">in: 6 bins x 40 ch = 242 tokens</text>
+      <text x="666" y="406" fill="var(--muted)">out: one z_q per 30 days, d_z 64</text>
+      <text x="666" y="422" fill="var(--muted)">FSQ L=8 with the FITTED ladder:</text>
+      <text x="666" y="438" fill="var(--muted)">form + scale per dimension,</text>
+      <text x="666" y="454" fill="var(--muted)">measured on the run's own |v|</text>
+    </g>
+  </g>
+</svg>
+<figcaption>Input and output of the stage-1 codecs on the pentad tensor. The whole tensor is
+~17&thinsp;G observed-or-missing values; one training sample is a single pixel-bin (42 tokens, of
+which typically ~8 carry data). The bottleneck is the entire output contract: everything
+downstream — decoder and forecaster alike — sees only <code>z</code>.</figcaption>
+</figure>
+
+<h2>What an FSQ codec outputs — exactly</h2>
+<p>Your memory is right in spirit: FSQ makes the output <em>discrete</em>. But in the FSQ paper
+(<a href="https://arxiv.org/abs/2309.15505">Mentzer et al. 2023</a>) the bottleneck's literal output is
+still a <strong>vector</strong>, not an integer: each of <code>d</code> dimensions is bounded
+(&#8968;L/2&#8969;&#183;tanh(z)) and rounded to one of <code>L</code> fixed values, giving the quantized
+vector <code>&#7825;</code>. The "tokens" are an <em>enumeration view</em> of that vector: because each
+dimension takes one of L values, <code>&#7825;</code> is equivalently a tuple of d small integers, and
+the paper notes a bijection from the tuple to a single index in {1,&#8201;&#8230;,&#8201;&#8719;L&#7522;} —
+<em>that</em> index is what a downstream token model (MaskGIT, autoregressive LM) consumes. The
+paper keeps the product small on purpose: d&nbsp;&lt;&nbsp;10, every L&#7522;&nbsp;&#8805;&nbsp;5, codebook
+2&#185;&#8304;–2&#185;&#8310; (their recommended sets: [8,6,5] for 2&#8312;, [8,5,5,5] for 2&#185;&#8304;,
+[8,8,8,5,5,5] for 2&#185;&#8310;).</p>
+
+<div class="panel">
+<h3>Our implementation, and the three equivalent readings of its output</h3>
+<p>The E-046 codec (<code>--fsq-levels 8</code>, d_z&nbsp;32) applies exactly the paper's map inside
+<code>to_z</code>'s output and emits the <strong>quantized continuous vector</strong> — the
+<code>[T,&#8201;P,&#8201;32]</code> float array keeps its shape and dtype, the values just sit on the
+lattice. Integer codes are never materialized. Three readings of the same output:</p>
+<ul>
+  <li><span class="qk">As a vector:</span> z_q &#8712; lattice &#8834; R&#179;&#178;, bounded at &#177;R per dimension.</li>
+  <li><span class="qk">As digits:</span> 32 base-8 digits per pixel-bin — 3 bits &#215; 32 = <strong>96 bits</strong>. If you ever want literal tokens for an AR model, this is the token unit: 32 tokens of vocab 8 (or group 4 dims &#8594; 8 tokens of vocab 4096). </li>
+  <li><span class="qk">As one codebook index:</span> 8&#179;&#178; &#8776; 7.9&#8201;&#215;&#8201;10&#178;&#8312; — <em>not</em> usable as a vocabulary. Our config is deliberately far off the paper's regime (32 dims vs their &lt;10): we use FSQ as a bounded, discretized <em>substrate</em> for a continuous-input head, not to build a token vocabulary.</li>
+</ul>
+<p>One distinction worth keeping crisp because the paper (ours) leans on it: <strong>where the
+lattice sits decides what it is.</strong> The same <code>InputQuant</code> map bolted onto the
+<em>head's inputs</em> (A9, ratio 0.4916 — the first arm to beat the pentad control) is "input
+quantization"; moved <em>inside the codec's bottleneck</em> it is FSQ proper (E-046/E-048), and only
+there does it change what the codec's output <em>is</em>.</p>
+</div>
+
+<h2>What we built on top of plain FSQ: the fitted ladder</h2>
+<p>Plain FSQ fixes the lattice by decree: uniform spacing, saturation radius R&nbsp;=&nbsp;2
+("let the encoder learn the scale in"). E-048 measured what that costs and replaced both decisions
+with a fit against the <strong>observed distribution</strong> of each z-dimension's pre-quantization
+activations:</p>
+
+<figure>
+<svg viewBox="0 0 940 330" role="img" aria-label="Three number lines: the default uniform 8-level lattice at radius 2; the measured pathology where activations at 30,000 saturate it into a sign code; and the fitted ladder choosing per-dimension scale and geometric spacing.">
+  <g fill="none" stroke="currentColor" stroke-width="1.2" font-family="IBM Plex Mono, monospace" font-size="11">
+
+    <!-- Row 1: default -->
+    <text x="20" y="34" fill="currentColor" font-weight="500" font-size="12">1 · the decree (E-046 as shipped)</text>
+    <line x1="120" y1="66" x2="820" y2="66"/>
+    <g fill="var(--quant)" stroke="none">
+      <circle cx="190" cy="66" r="4"/><circle cx="290" cy="66" r="4"/><circle cx="390" cy="66" r="4"/><circle cx="490" cy="66" r="4"/><circle cx="590" cy="66" r="4"/><circle cx="690" cy="66" r="4"/><circle cx="790" cy="66" r="4"/><circle cx="90" cy="66" r="0.1"/>
+      <circle cx="90" cy="66" r="4"/>
+    </g>
+    <text x="90" y="92" fill="var(--muted)" text-anchor="middle" font-size="10">-R = -2</text>
+    <text x="790" y="92" fill="var(--muted)" text-anchor="middle" font-size="10">+R = +2</text>
+    <text x="440" y="110" fill="var(--muted)" text-anchor="middle" font-size="10.5">8 evenly spaced levels inside a FIXED &#177;2 bound; tanh compands the bins</text>
+
+    <!-- Row 2: pathology -->
+    <text x="20" y="146" fill="currentColor" font-weight="500" font-size="12">2 · the measured reality (run-455)</text>
+    <line x1="120" y1="180" x2="820" y2="180"/>
+    <!-- tiny lattice in the middle -->
+    <g fill="var(--quant)" stroke="none">
+      <circle cx="462" cy="180" r="2"/><circle cx="466" cy="180" r="2"/><circle cx="470" cy="180" r="2"/><circle cx="474" cy="180" r="2"/><circle cx="478" cy="180" r="2"/><circle cx="482" cy="180" r="2"/>
+    </g>
+    <!-- activation cloud far outside -->
+    <g fill="var(--bad)" stroke="none" opacity="0.85">
+      <circle cx="150" cy="174" r="3"/><circle cx="168" cy="184" r="3"/><circle cx="185" cy="177" r="3"/><circle cx="205" cy="185" r="3"/><circle cx="222" cy="176" r="3"/>
+      <circle cx="722" cy="176" r="3"/><circle cx="740" cy="185" r="3"/><circle cx="758" cy="177" r="3"/><circle cx="775" cy="184" r="3"/><circle cx="792" cy="176" r="3"/>
+    </g>
+    <text x="186" y="205" fill="var(--bad)" text-anchor="middle" font-size="10">|v| ~ 3x10^4</text>
+    <text x="757" y="205" fill="var(--bad)" text-anchor="middle" font-size="10">|v| ~ 3x10^4</text>
+    <text x="472" y="205" fill="var(--muted)" text-anchor="middle" font-size="10">lattice at &#177;2</text>
+    <text x="440" y="226" fill="var(--muted)" text-anchor="middle" font-size="10.5">saturated 15,000x over: every value lands on the outermost level -&gt; a 1-bit SIGN code per dim</text>
+    <text x="440" y="241" fill="var(--muted)" text-anchor="middle" font-size="10.5">(the "8-level" codec effectively carries 2^32, not 2^96; e048a's collapse was the same bug, harder)</text>
+
+    <!-- Row 3: fitted -->
+    <text x="20" y="277" fill="var(--quant)" font-weight="500" font-size="12">3 · the fitted ladder (E-048, on top of FSQ)</text>
+    <line x1="120" y1="308" x2="820" y2="308"/>
+    <!-- geometric levels: magnitudes a, ac, ac^2, ac^3 both sides, R_d fitted -->
+    <g fill="var(--quant)" stroke="none">
+      <circle cx="120" cy="308" r="4"/><circle cx="295" cy="308" r="4"/><circle cx="382" cy="308" r="4"/><circle cx="426" cy="308" r="4"/>
+      <circle cx="514" cy="308" r="4"/><circle cx="558" cy="308" r="4"/><circle cx="645" cy="308" r="4"/><circle cx="820" cy="308" r="4"/>
+    </g>
+    <text x="120" y="330" fill="var(--muted)" text-anchor="middle" font-size="10">-R_d (fitted)</text>
+    <text x="820" y="330" fill="var(--muted)" text-anchor="middle" font-size="10">+R_d (fitted)</text>
+    <text x="470" y="330" fill="var(--muted)" text-anchor="middle" font-size="10">a · c&#183;a · c&#178;&#183;a ...</text>
+  </g>
+</svg>
+<figcaption>Why the fit exists. The straight-through estimator gives <code>to_z</code> no gradient
+toward the bound, so nothing ever pushes the activations inside a fixed lattice — the "healthy" FSQ
+codec was wearing its 8 levels as a 2-level sign code. The fit sizes the lattice from the
+distribution instead of asserting one.</figcaption>
+</figure>
+
+<div class="panel q">
+<h3>The fit, per z-dimension (<code>ml/fsq_ladder.py</code>, <code>--fsq-ladder auto</code>)</h3>
+<ul>
+  <li><strong>Sample the distribution.</strong> Capture the run's own pre-quantization activations at scheduled steps (<code>--fsq-auto-step 50,200,2000</code> — refit because the scale drifts; the last fit is what the checkpoint carries).</li>
+  <li><strong>Fit the form.</strong> Uniform ladder (levels evenly spaced, bins companded by tanh) vs geometric ladder (magnitudes a, ca, c&#178;a, &#8230; — bins uniform in log|v|), bases c &#8712; {1.5, 2, 3, 4}.</li>
+  <li><strong>Fit the scale too</strong> (the part that was missing): saturation radius R_d searched over candidates derived from the sample — 2&#963;_d, and p90 / p99 / max of |v_d| at &#215;&#189; and &#215;1.</li>
+  <li><strong>Ties go to the default.</strong> The fit only moves a dimension where it measures a strict quantization-MSE gain, so <code>auto</code> can never silently differ from the shipped behaviour.</li>
+  <li><strong>The fit is part of the model.</strong> Recorded in the checkpoint as one string (<code>u:&lt;R&gt;</code> / <code>e&lt;base&gt;:&lt;R&gt;</code> per dim); loaders rebuild from it and never refit. Legacy strings without <code>:&lt;R&gt;</code> reproduce archived codecs bit-identically.</li>
+  <li><strong>One pre-registered caveat:</strong> at even L the uniform map is biased (+0.233 mean at L=8), which by itself favours the geometric form — the odd-L (L=7) contrast is registered to separate "exp wins because it compands" from "exp wins because it's unbiased".</li>
+</ul>
+</div>
+
+<h2>Voxtral TTS, as the reference point</h2>
+<p>Close — the <strong>37 is right, the 16 levels isn't</strong>. Per 12.5&#8201;Hz frame the Voxtral
+codec emits 37 tokens: <strong>1 semantic token</strong> from an ordinary VQ codebook of 8,192
+(13 bits) plus <strong>36 acoustic dimensions, each FSQ-quantized to 21 uniform levels</strong>
+through a tanh bound (~4.4 bits/dim, not 4) — &#8776;2.14 kbps in total. Notably its AR model
+generates only the semantic token stream; the 36 FSQ dims are filled in by a flow-matching model.
+So Voxtral treats the FSQ dims exactly the way our stage-2 head does: as a discretized vector to
+condition on, not as a flattened vocabulary.</p>
+
+<figure>
+<svg viewBox="0 0 940 120" role="img" aria-label="One Voxtral codec frame: one semantic VQ token of 13 bits plus 36 FSQ acoustic dimensions of 21 levels each.">
+  <g fill="none" stroke="currentColor" stroke-width="1.2" font-family="IBM Plex Mono, monospace" font-size="11">
+    <text x="20" y="24" fill="currentColor" font-weight="500" font-size="12">one frame (80 ms):</text>
+    <rect x="20" y="40" width="86" height="34" rx="4" stroke="var(--accent)" fill="var(--wash)"/>
+    <text x="63" y="61" fill="var(--accent)" text-anchor="middle" font-size="10.5">VQ 8192</text>
+    <g fill="var(--qwash)" stroke="var(--quant)">
+      <rect x="122" y="40" width="18" height="34" rx="3"/><rect x="144" y="40" width="18" height="34" rx="3"/><rect x="166" y="40" width="18" height="34" rx="3"/><rect x="188" y="40" width="18" height="34" rx="3"/><rect x="210" y="40" width="18" height="34" rx="3"/><rect x="232" y="40" width="18" height="34" rx="3"/><rect x="254" y="40" width="18" height="34" rx="3"/><rect x="276" y="40" width="18" height="34" rx="3"/><rect x="298" y="40" width="18" height="34" rx="3"/><rect x="320" y="40" width="18" height="34" rx="3"/><rect x="342" y="40" width="18" height="34" rx="3"/><rect x="364" y="40" width="18" height="34" rx="3"/><rect x="386" y="40" width="18" height="34" rx="3"/><rect x="408" y="40" width="18" height="34" rx="3"/><rect x="430" y="40" width="18" height="34" rx="3"/><rect x="452" y="40" width="18" height="34" rx="3"/><rect x="474" y="40" width="18" height="34" rx="3"/><rect x="496" y="40" width="18" height="34" rx="3"/><rect x="518" y="40" width="18" height="34" rx="3"/><rect x="540" y="40" width="18" height="34" rx="3"/><rect x="562" y="40" width="18" height="34" rx="3"/><rect x="584" y="40" width="18" height="34" rx="3"/><rect x="606" y="40" width="18" height="34" rx="3"/><rect x="628" y="40" width="18" height="34" rx="3"/><rect x="650" y="40" width="18" height="34" rx="3"/><rect x="672" y="40" width="18" height="34" rx="3"/><rect x="694" y="40" width="18" height="34" rx="3"/><rect x="716" y="40" width="18" height="34" rx="3"/><rect x="738" y="40" width="18" height="34" rx="3"/><rect x="760" y="40" width="18" height="34" rx="3"/><rect x="782" y="40" width="18" height="34" rx="3"/><rect x="804" y="40" width="18" height="34" rx="3"/><rect x="826" y="40" width="18" height="34" rx="3"/><rect x="848" y="40" width="18" height="34" rx="3"/><rect x="870" y="40" width="18" height="34" rx="3"/><rect x="892" y="40" width="18" height="34" rx="3"/>
+    </g>
+    <text x="63" y="94" fill="var(--muted)" text-anchor="middle" font-size="10">semantic · 13 bits · AR-generated</text>
+    <text x="520" y="94" fill="var(--muted)" text-anchor="middle" font-size="10">36 acoustic dims · FSQ, 21 levels each (~4.4 bits) · flow-matching fills these in</text>
+  </g>
+</svg>
+<figcaption>Voxtral Codec: 12.5 frames/s &#215; (13 + 36&#8201;&#215;&#8201;log&#8322;21) bits &#8776; 2.14 kbps.</figcaption>
+</figure>
+
+<h2>Side by side</h2>
+<div class="scroller">
+<table>
+  <tr><th>system</th><th>unit</th><th>FSQ dims &#215; levels</th><th>bits / unit</th><th>output consumed as</th></tr>
+  <tr>
+    <td>FSQ paper (recommended)</td>
+    <td>image patch</td>
+    <td class="mono">&#8804;10 &#215; [5&#8230;8], e.g. [8,5,5,5]</td>
+    <td class="mono">10&#8211;16</td>
+    <td>single token index (vocab 2&#185;&#8304;&#8211;2&#185;&#8310;)</td>
+  </tr>
+  <tr>
+    <td>Voxtral TTS codec</td>
+    <td>80 ms audio frame</td>
+    <td class="mono">36 &#215; 21 (+1 VQ token)</td>
+    <td class="mono">&#8776;171</td>
+    <td>1 AR token + 36-dim discretized vector</td>
+  </tr>
+  <tr>
+    <td><span class="qk">earth f4r2-40M-fsq8</span> (run-455)</td>
+    <td>pixel &#183; 5-day bin</td>
+    <td class="mono">32 &#215; 8</td>
+    <td class="mono">96 nominal / <span class="bk">~32 worn</span></td>
+    <td>[T,P,32] floats on the lattice</td>
+  </tr>
+  <tr>
+    <td><span class="qk">earth fsqblock-w6s6</span> (e048a2, fitted ladder)</td>
+    <td>pixel &#183; 30-day window</td>
+    <td class="mono">64 &#215; 8, form+scale fitted per dim</td>
+    <td class="mono">192 nominal</td>
+    <td>[T,P,64] floats on the fitted lattice</td>
+  </tr>
+  <tr>
+    <td><span class="ak">earth continuous baselines</span> (run-415 / month-block)</td>
+    <td>pixel &#183; bin / month</td>
+    <td class="mono">&#8212; (d_z 32 / 64 continuous)</td>
+    <td class="mono">1024 / 2048 (float32)</td>
+    <td>[T,P,d_z] floats</td>
+  </tr>
+</table>
+</div>
+
+<h2>So what <em>should</em> the output be?</h2>
+<p>Three defensible answers, in increasing distance from what is running now:</p>
+<ul>
+  <li><strong>Keep the quantized vector</strong> (current design): the head stays a continuous-input transformer, FSQ is purely an information restriction. Then the open E-048 question is the one that matters — give the latent an intrinsic bound (normalize before the lattice so the fit has a stationary target), or accept the sign code and size the lattice for it. The fitted ladder is the instrument either way.</li>
+  <li><strong>Emit per-dimension digits as tokens</strong> (the Voxtral shape): 32 tokens of vocab 8 per pixel-bin. Buys an AR/masked-token training objective over the state; costs 32&#215; the sequence length unless dims are grouped (4 dims &#8594; vocab 4096, 8 tokens).</li>
+  <li><strong>The paper-faithful token</strong>: shrink to d&#8776;6&#8211;8 dims at L&#8712;[5,8] so one pixel-bin is <em>one</em> token from a 2&#185;&#178;&#8211;2&#185;&#8310; vocabulary. That is a much harsher bottleneck than d_z 32 &#8212; a different experiment about how much state a bin really carries, not a drop-in variant.</li>
+</ul>
+
+<p class="src">Sources:
+<a href="https://arxiv.org/abs/2309.15505">FSQ: VQ-VAE Made Simple (arXiv 2309.15505)</a> ·
+<a href="https://arxiv.org/pdf/2603.25551">Voxtral TTS (arXiv 2603.25551)</a> ·
+<a href="https://github.com/blauewelt/earth/blob/main/ml/fsq_ladder.py">ml/fsq_ladder.py</a> ·
+<a href="https://github.com/blauewelt/earth/blob/main/ml/model.py">ml/model.py (InputQuant / fsq_from_levels)</a> ·
+<a href="https://github.com/blauewelt/earth/blob/main/ml/paper/paper.tex">paper &#167;cadence, &#167;quant, &#167;block, Table 5</a>
+</p>
+</main>
+</body>
+</html>

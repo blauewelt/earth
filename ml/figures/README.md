@@ -23,6 +23,8 @@ ink `#1a1a19`, series `#2a78d6` / `#eb6834`.
 
 | figure | what it shows | made |
 |---|---|---|
+| `token_roads.html` | **Two Roads to a Token** — five slides: what the codecs emit today (zero tokens anywhere), compression vs stored AND live input per variant, the bits × AR-steps plane (with the E-045 context-span correction), and road A (grouped digits, 8 × vocab 4096) vs road B (one 2^16 token). HTML with inline SVG — open via the Pages URL, not the blob. Road B's cold-start arm later collapsed (#482, e-049) and E-050 warm-start replaced it; the deck records the design reasoning | 08-25 |
+| `codec_io.html` | **Earth Codec I/O** — the pipeline with amounts (pentad tensor → 42-token sample → encoder → bottleneck → decoder/stage-2), the three input geometries (per-bin / month-block / w6s6), what an FSQ bottleneck outputs exactly, the fitted ladder, and Voxtral TTS (1×VQ-8192 + 36×FSQ-21 @ 12.5 Hz) as the reference point. HTML with inline SVG — open via the Pages URL | 08-25 |
 | `fig_factorial2.png` (+ `.py`) | The E-045 span × step factorial: one-step ratio per rung, K-fixed row vs span-fixed row — the "span moves skill 4–7×, step size ~4%" picture. Extend as #476/#478 land | 08-25 |
 | `fig_factorial_a11.png` | Earlier factorial state, after A11 (#464, the cheap 30-day-step corner) landed | 08-24 |
 | `fig_experiment_map3.png` | The experiment map: how the E-043…E-048 lines relate — codecs, heads, verdicts (3rd revision; `_map.png` and `_map2.png` are the earlier passes, kept for the record) | 08-24 |

@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  Two Roads to a Token — five slides: what the codecs emit today (zero tokens),
+  compression vs stored and LIVE input per variant, the bits x AR-steps plane
+  (with the E-045 context-span correction), and the grouped-digits (road A) vs
+  paper-faithful-token (road B) designs. Made 2026-08-25; road B's cold-start arm
+  later collapsed (#482) and E-050 warm-start replaced it — see EXPERIMENTS e-049.
+  Slide-3 target corner and slide-5 costs are design reasoning, not measurements.
+-->
+<title>Two Roads to a Token</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;600&display=swap">
+<style>
+  :root {
+    --paper: #F6F9FB;
+    --card: #FFFFFF;
+    --ink: #16222C;
+    --muted: #5C6C79;
+    --line: #C7D3DC;
+    --accent: #0A6EA8;      /* Atlantic blue: continuous outputs / option B */
+    --quant: #B7761C;       /* amber: quantized outputs / option A */
+    --wash: #E8F0F6;
+    --qwash: #F6EDDD;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0E151B;
+      --card: #151E26;
+      --ink: #DCE6EE;
+      --muted: #8FA1AF;
+      --line: #33434F;
+      --accent: #57A9DC;
+      --quant: #DFA84E;
+      --wash: #17242E;
+      --qwash: #2A2318;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0E151B;
+    --card: #151E26;
+    --ink: #DCE6EE;
+    --muted: #8FA1AF;
+    --line: #33434F;
+    --accent: #57A9DC;
+    --quant: #DFA84E;
+    --wash: #17242E;
+    --qwash: #2A2318;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Public Sans", system-ui, sans-serif;
+    margin: 0;
+    padding: 36px 20px 70px;
+  }
+  main { max-width: 1080px; margin: 0 auto; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 22px;
+  }
+  .slide {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 26px 28px 18px;
+    margin: 0 0 34px;
+  }
+  .slide h2 {
+    font-family: "Archivo", sans-serif;
+    font-size: 21px; font-weight: 650;
+    margin: 0 0 2px;
+  }
+  .slide .kicker {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 10px;
+  }
+  svg { max-width: 100%; height: auto; display: block; }
+</style>
+</head>
+<body>
+<main>
+<p class="eyebrow">earth codecs · fsq token designs · slide deck</p>
+
+<!-- ============================ SLIDE 1: CURRENT STATE ============================ -->
+<section class="slide">
+  <p class="kicker">slide 1 / 5 · current state</p>
+  <h2>What the codecs emit today: floats, not tokens</h2>
+  <svg viewBox="0 0 1280 640" role="img" aria-label="The four current codecs each emit a float vector per time unit: the per-bin codec 32 floats per 5 days, the FSQ codec 32 lattice floats per 5 days, the month-block codec 64 floats per month, the window codec 64 lattice floats per 30 days. No tokens exist anywhere; downstream reads continuous vectors.">
+    <g fill="none" stroke="currentColor" stroke-width="1.3" font-family="IBM Plex Mono, monospace" font-size="12">
+
+      <!-- banner -->
+      <rect x="40" y="30" width="1200" height="64" rx="8" fill="var(--wash)" stroke="none"/>
+      <text x="66" y="70" fill="currentColor" font-family="Archivo, sans-serif" font-size="22" font-weight="650">tokens emitted anywhere in the system: 0</text>
+      <text x="720" y="62" fill="var(--muted)" font-size="11.5">every consumer reads [T, P, d_z] float32 —</text>
+      <text x="720" y="79" fill="var(--muted)" font-size="11.5">with FSQ the floats just happen to sit on a lattice</text>
+
+      <!-- column heads -->
+      <g fill="var(--muted)" font-size="10.5" letter-spacing="0.08em">
+        <text x="40" y="136">CODEC</text>
+        <text x="420" y="136">ONE z COVERS</text>
+        <text x="660" y="136">EMITS, PER PIXEL</text>
+        <text x="1000" y="136">BITS / z</text>
+      </g>
+      <line x1="40" y1="146" x2="1240" y2="146" stroke="var(--line)"/>
+
+      <!-- row 1: run-415 -->
+      <g>
+        <text x="40" y="182" fill="var(--accent)" font-weight="500" font-size="12.5">f4r2-40M · run-415</text>
+        <text x="40" y="200" fill="var(--muted)" font-size="10.5">the production pentad substrate</text>
+        <rect x="420" y="168" width="26" height="22" rx="3" fill="var(--accent)" stroke="none"/>
+        <text x="456" y="184" fill="var(--muted)" font-size="10.5">1 bin = 5 d</text>
+        <text x="660" y="184" fill="currentColor">z &#8712; R&#179;&#178; · 32 continuous floats</text>
+        <text x="1000" y="184" fill="currentColor">1,024</text>
+      </g>
+      <line x1="40" y1="216" x2="1240" y2="216" stroke="var(--line)" opacity="0.5"/>
+
+      <!-- row 2: run-455 fsq8 -->
+      <g>
+        <text x="40" y="252" fill="var(--quant)" font-weight="500" font-size="12.5">f4r2-40M-fsq8 · run-455</text>
+        <text x="40" y="270" fill="var(--muted)" font-size="10.5">finished · verdict head #468 in flight</text>
+        <rect x="420" y="238" width="26" height="22" rx="3" fill="var(--quant)" stroke="none"/>
+        <text x="456" y="254" fill="var(--muted)" font-size="10.5">1 bin = 5 d</text>
+        <text x="660" y="254" fill="currentColor">32 lattice floats, 8 levels each</text>
+        <text x="1000" y="254" fill="currentColor">96 nominal</text>
+        <text x="1000" y="271" fill="var(--muted)" font-size="10.5">~32 as worn (sign code)</text>
+      </g>
+      <line x1="40" y1="286" x2="1240" y2="286" stroke="var(--line)" opacity="0.5"/>
+
+      <!-- row 3: month-block -->
+      <g>
+        <text x="40" y="322" fill="var(--accent)" font-weight="500" font-size="12.5">monthblock 38M / 126.9M · E-047</text>
+        <text x="40" y="340" fill="var(--muted)" font-size="10.5">TPU codec finished + audited · torch twins finishing</text>
+        <g fill="var(--accent)" stroke="none">
+          <rect x="420" y="308" width="14" height="22" rx="2"/><rect x="437" y="308" width="14" height="22" rx="2"/><rect x="454" y="308" width="14" height="22" rx="2"/><rect x="471" y="308" width="14" height="22" rx="2"/><rect x="488" y="308" width="14" height="22" rx="2"/><rect x="505" y="308" width="14" height="22" rx="2"/><rect x="522" y="308" width="14" height="22" rx="2" opacity="0.45"/>
+        </g>
+        <text x="548" y="324" fill="var(--muted)" font-size="10.5">6&#8211;7 bins = 1 month</text>
+        <text x="660" y="324" fill="currentColor">z &#8712; R&#8310;&#8308; (126.9M: R&#185;&#178;&#8312;) · continuous</text>
+        <text x="1000" y="324" fill="currentColor">2,048 / month</text>
+        <text x="1000" y="341" fill="var(--muted)" font-size="10.5">&#8776;336 per bin</text>
+      </g>
+      <line x1="40" y1="356" x2="1240" y2="356" stroke="var(--line)" opacity="0.5"/>
+
+      <!-- row 4: w6s6 -->
+      <g>
+        <text x="40" y="392" fill="var(--quant)" font-weight="500" font-size="12.5">fsqblock-w6s6 71.3M · e048a2</text>
+        <text x="40" y="410" fill="var(--muted)" font-size="10.5">relaunched with the fitted-scale ladder</text>
+        <g fill="var(--qwash)" stroke="var(--quant)">
+          <rect x="420" y="378" width="14" height="22" rx="2"/><rect x="437" y="378" width="14" height="22" rx="2"/><rect x="454" y="378" width="14" height="22" rx="2"/><rect x="471" y="378" width="14" height="22" rx="2"/><rect x="488" y="378" width="14" height="22" rx="2"/><rect x="505" y="378" width="14" height="22" rx="2"/>
+        </g>
+        <text x="532" y="394" fill="var(--muted)" font-size="10.5">6 bins = 30 d</text>
+        <text x="660" y="394" fill="currentColor">64 lattice floats, fitted ladder</text>
+        <text x="1000" y="394" fill="currentColor">192 / window</text>
+        <text x="1000" y="411" fill="var(--muted)" font-size="10.5">= 32 per bin</text>
+      </g>
+      <line x1="40" y1="430" x2="1240" y2="430" stroke="var(--line)"/>
+
+      <!-- context strip -->
+      <text x="40" y="474" fill="currentColor" font-size="12" font-weight="500">what one stage-2 forward reads today (K=24 &#215; 145 slots, pentad):</text>
+      <rect x="40" y="492" width="700" height="30" rx="6" fill="var(--wash)" stroke="var(--accent)"/>
+      <text x="60" y="512" fill="currentColor" font-size="11.5">111,360 continuous floats = 3.56 Mbit of context per forward</text>
+      <text x="760" y="512" fill="var(--muted)" font-size="11">the capacity hypothesis behind A9 / E-046:</text>
+      <text x="760" y="528" fill="var(--muted)" font-size="11">that is more precision than the signal supports</text>
+
+      <text x="40" y="576" fill="var(--muted)" font-size="11.5">The digits of roads A and B (next slides) exist only implicitly today — nothing materializes an integer code anywhere in the pipeline.</text>
+    </g>
+  </svg>
+</section>
+
+<!-- ============================ SLIDE 2: COMPRESSION ============================ -->
+<section class="slide">
+  <p class="kicker">slide 2 / 5 · compression</p>
+  <h2>Compression from the encoder&rsquo;s input, per variant</h2>
+  <svg viewBox="0 0 1280 620" role="img" aria-label="Log-scale bar ladder of bits per pixel per 5-day bin: the encoder input is 640 bits; the continuous codec emits 1024 bits, an expansion; the month-block 336; fsq8 and road A 96; the window codec 32; road B 16 — a 40 to 1 compression.">
+    <g fill="none" stroke="currentColor" stroke-width="1.3" font-family="IBM Plex Mono, monospace" font-size="12">
+
+      <!-- axis: log2, gridlines at 8..1024 ; x = 320 + (log2(v)-3)*92 -->
+      <g stroke="var(--line)">
+        <line x1="320" y1="88" x2="320" y2="472"/>
+        <line x1="412" y1="88" x2="412" y2="472" stroke-dasharray="2 4"/>
+        <line x1="504" y1="88" x2="504" y2="472" stroke-dasharray="2 4"/>
+        <line x1="596" y1="88" x2="596" y2="472" stroke-dasharray="2 4"/>
+        <line x1="688" y1="88" x2="688" y2="472" stroke-dasharray="2 4"/>
+        <line x1="780" y1="88" x2="780" y2="472" stroke-dasharray="2 4"/>
+        <line x1="872" y1="88" x2="872" y2="472" stroke-dasharray="2 4"/>
+        <line x1="964" y1="88" x2="964" y2="472" stroke-dasharray="2 4"/>
+      </g>
+      <g fill="var(--muted)" font-size="10" text-anchor="middle">
+        <text x="320" y="82">8</text><text x="412" y="82">16</text><text x="504" y="82">32</text>
+        <text x="596" y="82">64</text><text x="688" y="82">128</text><text x="780" y="82">256</text>
+        <text x="872" y="82">512</text><text x="964" y="82">1024</text>
+      </g>
+      <text x="1050" y="82" fill="var(--muted)" font-size="10">bits / pixel / 5 d (log scale, each line &#215;2)</text>
+
+      <!-- input reference lines: stored 640 bits (x=902), live 128 bits (x=688) -->
+      <line x1="902" y1="88" x2="902" y2="472" stroke="currentColor" stroke-dasharray="6 4"/>
+      <text x="910" y="500" fill="currentColor" font-size="11" font-weight="500">stored input: 640 bits</text>
+      <text x="910" y="516" fill="var(--muted)" font-size="10">(40 ch &#215; f16, missing slots incl.)</text>
+      <line x1="688" y1="88" x2="688" y2="472" stroke="currentColor" stroke-width="2" stroke-dasharray="6 4"/>
+      <text x="680" y="500" fill="currentColor" text-anchor="end" font-size="11" font-weight="500">live info, typical bin: 128 bits</text>
+      <text x="680" y="516" fill="var(--muted)" text-anchor="end" font-size="10">(8 of 40 channels observed — 92% of bins)</text>
+
+      <!-- bars: y pitch 62 -->
+      <!-- run-415 continuous: 1024 -> w 644 -->
+      <text x="300" y="122" fill="currentColor" text-anchor="end" font-size="11.5">continuous z · run-415</text>
+      <rect x="320" y="106" width="644" height="24" rx="4" fill="var(--accent)" stroke="none"/>
+      <text x="952" y="123" fill="var(--paper)" text-anchor="end" font-size="11">1,024 · stored 0.6:1 · live 0.13:1 — &#215;8 expander</text>
+
+      <!-- month-block: 336 -> w 496 -->
+      <text x="300" y="184" fill="currentColor" text-anchor="end" font-size="11.5">month-block · E-047</text>
+      <rect x="320" y="168" width="496" height="24" rx="4" fill="var(--accent)" stroke="none"/>
+      <text x="828" y="185" fill="currentColor" font-size="11">336 · stored 1.9:1 · live 0.6:1 (expands)</text>
+
+      <!-- fsq8 nominal: 96 -> w 330, worn ghost 32 -> 184 -->
+      <text x="300" y="246" fill="currentColor" text-anchor="end" font-size="11.5">fsq8 · run-455</text>
+      <rect x="320" y="230" width="330" height="24" rx="4" fill="var(--quant)" stroke="none"/>
+      <rect x="320" y="234" width="184" height="16" rx="3" fill="none" stroke="var(--paper)" stroke-dasharray="3 3"/>
+      <text x="662" y="247" fill="currentColor" font-size="11">96 · stored 6.7:1 · live 1.3:1 — worn ~32: live 4:1</text>
+
+      <!-- road A: 96 -->
+      <text x="300" y="308" fill="currentColor" text-anchor="end" font-size="11.5">road A · 8 grouped tokens</text>
+      <rect x="320" y="292" width="330" height="24" rx="4" fill="var(--quant)" stroke="none"/>
+      <text x="662" y="309" fill="currentColor" font-size="11">96 · = fsq8, re-spelled: live 1.3:1</text>
+
+      <!-- w6s6: 32 -->
+      <text x="300" y="370" fill="currentColor" text-anchor="end" font-size="11.5">w6s6 fitted FSQ · e048a2</text>
+      <rect x="320" y="354" width="184" height="24" rx="4" fill="var(--quant)" stroke="none"/>
+      <text x="516" y="371" fill="currentColor" font-size="11">32 · stored 20:1 · live 6.7:1 (192 / 30-d window)</text>
+
+      <!-- road B: 16 -->
+      <text x="300" y="432" fill="currentColor" text-anchor="end" font-size="11.5">road B · one paper token</text>
+      <rect x="320" y="416" width="92" height="24" rx="4" fill="var(--accent)" stroke="none"/>
+      <text x="424" y="433" fill="currentColor" font-size="11">16 · stored 40:1 · live 8:1</text>
+
+      <line x1="40" y1="540" x2="1240" y2="540" stroke="var(--line)"/>
+      <text x="40" y="570" fill="currentColor" font-size="11.5" font-weight="500">Against live information, only w6s6 (6.7:1) and road B (8:1) compress meaningfully — fsq8 / road A sit near parity, the continuous codecs expand.</text>
+      <text x="40" y="588" fill="var(--muted)" font-size="11.5">Live = the ~8 observed channels of an Argo-free bin; the month/window rows&rsquo; own live input adds the monthly Argo stamp (&#8776;1.3 kbit/month). The continuous codecs&rsquo; product is attendability, not bit-rate.</text>
+    </g>
+  </svg>
+</section>
+
+<!-- ============================ SLIDE 3: THE ROLL AXIS ============================ -->
+<section class="slide">
+  <p class="kicker">slide 3 / 5 · the roll axis</p>
+  <h2>The other dimension: how many times you must predict</h2>
+  <svg viewBox="0 0 1280 660" role="img" aria-label="Scatter of the codec variants on two axes: bits per pixel per 5 days horizontally, autoregressive steps per 365-day roll vertically. Pentad variants need 73 steps per year and rolled below climatology; monthly-unit variants need 12 and roll well. The open target corner is a road-B token on the 30-day window: 12 steps of 16 bits.">
+    <g fill="none" stroke="currentColor" stroke-width="1.3" font-family="IBM Plex Mono, monospace" font-size="12">
+
+      <!-- grid: x = 120 + (log2(bits)-3)*100 ; y = 480 - (log2(steps)-3)*80 -->
+      <g stroke="var(--line)" stroke-dasharray="2 4">
+        <line x1="220" y1="40" x2="220" y2="480"/><line x1="320" y1="40" x2="320" y2="480"/>
+        <line x1="420" y1="40" x2="420" y2="480"/><line x1="520" y1="40" x2="520" y2="480"/>
+        <line x1="620" y1="40" x2="620" y2="480"/><line x1="720" y1="40" x2="720" y2="480"/>
+        <line x1="820" y1="40" x2="820" y2="480"/><line x1="920" y1="40" x2="920" y2="480"/>
+        <line x1="1020" y1="40" x2="1020" y2="480"/>
+      </g>
+      <g stroke="var(--line)">
+        <line x1="120" y1="433" x2="1140" y2="433"/>
+        <line x1="120" y1="225" x2="1140" y2="225"/>
+        <line x1="120" y1="48" x2="1140" y2="48"/>
+      </g>
+      <line x1="120" y1="40" x2="120" y2="480" stroke="currentColor"/>
+      <line x1="120" y1="480" x2="1140" y2="480" stroke="currentColor"/>
+
+      <g fill="var(--muted)" font-size="10" text-anchor="middle">
+        <text x="220" y="498">16</text><text x="320" y="498">32</text><text x="420" y="498">64</text>
+        <text x="520" y="498">128</text><text x="620" y="498">256</text><text x="720" y="498">512</text>
+        <text x="820" y="498">1024</text><text x="920" y="498">2048</text><text x="1020" y="498">4096</text>
+      </g>
+      <text x="1140" y="516" fill="var(--muted)" font-size="10.5" text-anchor="end">bits / pixel / 5 d (log)</text>
+
+      <g fill="var(--muted)" font-size="10.5" text-anchor="end">
+        <text x="112" y="52">365 /yr · daily</text>
+        <text x="112" y="229">73 /yr · pentad</text>
+        <text x="112" y="437">12 /yr · monthly</text>
+      </g>
+      <text x="112" y="30" fill="var(--muted)" font-size="10.5" text-anchor="end">AR steps to +365 d (log)</text>
+
+      <!-- evidence chips -->
+      <text x="1132" y="212" fill="currentColor" font-size="10.5" text-anchor="end">73-step year, rolled: corridor &#8722;0.499 (head was context-starved: K=24 &#8658; 120 d of history)</text>
+      <text x="1132" y="420" fill="currentColor" font-size="10.5" text-anchor="end">12-step year, rolled: +0.64 &#8230; +0.94 (same K=24 &#8658; 720 d of history)</text>
+
+      <!-- points -->
+      <!-- daily ghost (5120 bits/5d, 365 steps) -->
+      <circle cx="1052" cy="48" r="8" stroke="var(--muted)" stroke-dasharray="3 3"/>
+      <text x="1032" y="76" fill="var(--muted)" font-size="10.5" text-anchor="end">daily f5-40M · the bad corner</text>
+
+      <!-- pentad row -->
+      <circle cx="820" cy="225" r="9" fill="var(--accent)" stroke="none"/>
+      <text x="820" y="200" fill="currentColor" font-size="10.5" text-anchor="middle">run-415 · 1,024 b</text>
+      <circle cx="478" cy="225" r="9" fill="var(--quant)" stroke="none"/>
+      <text x="478" y="200" fill="currentColor" font-size="10.5" text-anchor="middle">fsq8 = road A · 96 b</text>
+      <circle cx="220" cy="225" r="9" fill="var(--wash)" stroke="var(--accent)" stroke-dasharray="4 3"/>
+      <text x="220" y="200" fill="currentColor" font-size="10.5" text-anchor="middle">road B · 16 b</text>
+
+      <!-- monthly row -->
+      <circle cx="659" cy="433" r="9" fill="var(--accent)" stroke="none"/>
+      <text x="659" y="408" fill="currentColor" font-size="10.5" text-anchor="middle">month-block · 336 b</text>
+      <circle cx="320" cy="433" r="9" fill="var(--quant)" stroke="none"/>
+      <text x="320" y="408" fill="currentColor" font-size="10.5" text-anchor="middle">w6s6 · 32 b</text>
+
+      <!-- target corner -->
+      <circle cx="220" cy="433" r="12" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4"/>
+      <circle cx="220" cy="433" r="4" fill="currentColor" stroke="none"/>
+      <text x="244" y="456" fill="currentColor" font-size="11" font-weight="500">target: road-B token on the 30-d window</text>
+      <text x="244" y="472" fill="var(--muted)" font-size="10.5">12 steps &#215; ~16 bits per year</text>
+
+      <!-- direction arrow -->
+      <line x1="700" y1="290" x2="330" y2="405" stroke="currentColor" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+      <text x="560" y="330" fill="currentColor" font-size="11" font-weight="500">carry less per step, afford more span</text>
+
+      <!-- footnotes -->
+      <line x1="40" y1="548" x2="1240" y2="548" stroke="var(--line)"/>
+      <text x="40" y="578" fill="currentColor" font-size="11.5" font-weight="500">The &#8722;0.499 is real, but per-step error is NOT the cause — the E-045 factorial refuted it: at a fixed 120-d span a 30-d step scores 0.527 &#8776; the pentad&rsquo;s 0.505,</text>
+      <text x="40" y="596" fill="currentColor" font-size="11.5" font-weight="500">and at a fixed 10-d step restoring 720-d span gives 0.080. Context span drives the ladder; the y-axis matters because at fixed K, a bigger unit buys 6&#215; the span in days.</text>
+      <text x="40" y="618" fill="var(--muted)" font-size="11.5">Token-level AR still multiplies this axis: road A emits 8 tokens per state step (584 emissions/yr at pentad, 96/yr on the window); road B emits 1.</text>
+    </g>
+  </svg>
+</section>
+
+<!-- ============================ SLIDE 4 ============================ -->
+<section class="slide">
+  <p class="kicker">slide 4 / 5 · the two roads</p>
+  <h2>Two roads from one bottleneck to tokens</h2>
+  <svg viewBox="0 0 1280 660" role="img" aria-label="One encoder forks into two token designs: grouped digits keeps the 32-dimension FSQ lattice and regroups its digits into 8 tokens of vocabulary 4096; the paper-faithful road shrinks the bottleneck to 6 dimensions and emits one token from a vocabulary of 64000.">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+      </marker>
+      <marker id="arQ" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--quant)"/>
+      </marker>
+      <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+      </marker>
+    </defs>
+    <g fill="none" stroke="currentColor" stroke-width="1.3" font-family="IBM Plex Mono, monospace" font-size="12">
+
+      <!-- shared encoder -->
+      <text x="96" y="284" fill="var(--muted)" text-anchor="middle" font-size="11">one pixel-bin</text>
+      <text x="96" y="300" fill="var(--muted)" text-anchor="middle" font-size="11">(42 tokens in)</text>
+      <line x1="96" y1="312" x2="96" y2="330" marker-end="url(#ar)"/>
+      <rect x="36" y="330" width="120" height="56" rx="6"/>
+      <text x="96" y="356" fill="currentColor" text-anchor="middle" font-weight="500">encoder</text>
+      <text x="96" y="374" fill="var(--muted)" text-anchor="middle" font-size="10.5">unchanged</text>
+
+      <!-- fork -->
+      <line x1="156" y1="358" x2="200" y2="358"/>
+      <circle cx="204" cy="358" r="3.5" fill="currentColor" stroke="none"/>
+      <path d="M204,358 C240,358 240,150 276,150" stroke="var(--quant)" marker-end="url(#arQ)"/>
+      <path d="M204,358 C240,358 240,520 276,520" stroke="var(--accent)" marker-end="url(#arA)"/>
+
+      <!-- ======== ROAD A ======== -->
+      <text x="276" y="64" fill="var(--quant)" font-family="Archivo, sans-serif" font-size="17" font-weight="600">A · grouped digits</text>
+      <text x="500" y="64" fill="var(--muted)" font-size="11">same codec, no retrain — grouping is base-conversion</text>
+
+      <text x="276" y="112" fill="currentColor" font-size="11.5">z_q &#8712; lattice &#8834; R&#179;&#178; · FSQ [8]&#179;&#178;</text>
+
+      <!-- 32 digit cells -->
+      <g font-size="11">
+        <rect x="276" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="287" y="146" fill="currentColor" text-anchor="middle">3</text>
+        <rect x="302" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="313" y="146" fill="currentColor" text-anchor="middle">7</text>
+        <rect x="328" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="339" y="146" fill="currentColor" text-anchor="middle">0</text>
+        <rect x="354" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="365" y="146" fill="currentColor" text-anchor="middle">5</text>
+        <rect x="382" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="393" y="146" fill="currentColor" text-anchor="middle">2</text>
+        <rect x="408" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="419" y="146" fill="currentColor" text-anchor="middle">6</text>
+        <rect x="434" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="445" y="146" fill="currentColor" text-anchor="middle">1</text>
+        <rect x="460" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="471" y="146" fill="currentColor" text-anchor="middle">4</text>
+        <rect x="488" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="499" y="146" fill="currentColor" text-anchor="middle">7</text>
+        <rect x="514" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="525" y="146" fill="currentColor" text-anchor="middle">2</text>
+        <rect x="540" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="551" y="146" fill="currentColor" text-anchor="middle">5</text>
+        <rect x="566" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="577" y="146" fill="currentColor" text-anchor="middle">0</text>
+        <rect x="594" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="605" y="146" fill="currentColor" text-anchor="middle">3</text>
+        <rect x="620" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="631" y="146" fill="currentColor" text-anchor="middle">6</text>
+        <rect x="646" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="657" y="146" fill="currentColor" text-anchor="middle">4</text>
+        <rect x="672" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="683" y="146" fill="currentColor" text-anchor="middle">1</text>
+        <rect x="700" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="711" y="146" fill="currentColor" text-anchor="middle">2</text>
+        <rect x="726" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="737" y="146" fill="currentColor" text-anchor="middle">7</text>
+        <rect x="752" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="763" y="146" fill="currentColor" text-anchor="middle">5</text>
+        <rect x="778" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="789" y="146" fill="currentColor" text-anchor="middle">3</text>
+        <rect x="806" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="817" y="146" fill="currentColor" text-anchor="middle">0</text>
+        <rect x="832" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="843" y="146" fill="currentColor" text-anchor="middle">4</text>
+        <rect x="858" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="869" y="146" fill="currentColor" text-anchor="middle">6</text>
+        <rect x="884" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="895" y="146" fill="currentColor" text-anchor="middle">2</text>
+        <rect x="912" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="923" y="146" fill="currentColor" text-anchor="middle">1</text>
+        <rect x="938" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="949" y="146" fill="currentColor" text-anchor="middle">5</text>
+        <rect x="964" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="975" y="146" fill="currentColor" text-anchor="middle">3</text>
+        <rect x="990" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="1001" y="146" fill="currentColor" text-anchor="middle">7</text>
+        <rect x="1018" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="1029" y="146" fill="currentColor" text-anchor="middle">4</text>
+        <rect x="1044" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="1055" y="146" fill="currentColor" text-anchor="middle">0</text>
+        <rect x="1070" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="1081" y="146" fill="currentColor" text-anchor="middle">6</text>
+        <rect x="1096" y="128" width="22" height="26" rx="3" fill="var(--qwash)" stroke="var(--quant)"/><text x="1107" y="146" fill="currentColor" text-anchor="middle">2</text>
+      </g>
+      <text x="1130" y="146" fill="var(--muted)" font-size="10.5">32 digits,</text>
+      <text x="1130" y="160" fill="var(--muted)" font-size="10.5">base 8</text>
+
+      <!-- group brackets -->
+      <g stroke="var(--quant)">
+        <path d="M278,166 v8 h102 v-8"/>
+        <path d="M384,166 v8 h102 v-8"/>
+        <path d="M490,166 v8 h102 v-8"/>
+        <path d="M596,166 v8 h102 v-8"/>
+        <path d="M702,166 v8 h102 v-8"/>
+        <path d="M808,166 v8 h102 v-8"/>
+        <path d="M914,166 v8 h102 v-8"/>
+        <path d="M1020,166 v8 h102 v-8"/>
+      </g>
+      <text x="240" y="180" fill="var(--muted)" text-anchor="end" font-size="10.5">group 4 dims</text>
+
+      <!-- 8 token chips -->
+      <g font-size="11.5">
+        <rect x="285" y="192" width="88" height="30" rx="15" fill="var(--quant)" stroke="none"/><text x="329" y="212" fill="var(--paper)" text-anchor="middle">3705</text>
+        <rect x="391" y="192" width="88" height="30" rx="15" fill="var(--quant)" stroke="none"/><text x="435" y="212" fill="var(--paper)" text-anchor="middle">2614</text>
+        <rect x="497" y="192" width="88" height="30" rx="15" fill="var(--quant)" stroke="none"/><text x="541" y="212" fill="var(--paper)" text-anchor="middle">7250</text>
+        <rect x="603" y="192" width="88" height="30" rx="15" fill="var(--quant)" stroke="none"/><text x="647" y="212" fill="var(--paper)" text-anchor="middle">3641</text>
+        <rect x="709" y="192" width="88" height="30" rx="15" fill="var(--quant)" stroke="none"/><text x="753" y="212" fill="var(--paper)" text-anchor="middle">2753</text>
+        <rect x="815" y="192" width="88" height="30" rx="15" fill="var(--quant)" stroke="none"/><text x="859" y="212" fill="var(--paper)" text-anchor="middle">0462</text>
+        <rect x="921" y="192" width="88" height="30" rx="15" fill="var(--quant)" stroke="none"/><text x="965" y="212" fill="var(--paper)" text-anchor="middle">1537</text>
+        <rect x="1027" y="192" width="88" height="30" rx="15" fill="var(--quant)" stroke="none"/><text x="1071" y="212" fill="var(--paper)" text-anchor="middle">4062</text>
+      </g>
+
+      <text x="276" y="256" fill="currentColor" font-size="12.5" font-weight="500">8 tokens / bin · vocab 8&#8308; = 4,096</text>
+      <text x="276" y="276" fill="var(--muted)" font-size="11.5">96 bits kept — the representation is untouched, only re-spelled</text>
+
+      <!-- divider -->
+      <line x1="36" y1="416" x2="1244" y2="416" stroke="var(--line)"/>
+
+      <!-- ======== ROAD B ======== -->
+      <text x="276" y="452" fill="var(--accent)" font-family="Archivo, sans-serif" font-size="17" font-weight="600">B · paper-faithful token</text>
+      <text x="560" y="452" fill="var(--muted)" font-size="11">new bottleneck — a new codec, retrained</text>
+
+      <text x="276" y="486" fill="currentColor" font-size="11.5">to_z shrinks: d_z 32 &#8594; 6 · FSQ [8,8,8,5,5,5]</text>
+
+      <!-- 6 digit cells -->
+      <g font-size="13">
+        <rect x="276" y="500" width="48" height="34" rx="4" fill="var(--wash)" stroke="var(--accent)"/><text x="300" y="523" fill="currentColor" text-anchor="middle">6</text>
+        <rect x="330" y="500" width="48" height="34" rx="4" fill="var(--wash)" stroke="var(--accent)"/><text x="354" y="523" fill="currentColor" text-anchor="middle">1</text>
+        <rect x="384" y="500" width="48" height="34" rx="4" fill="var(--wash)" stroke="var(--accent)"/><text x="408" y="523" fill="currentColor" text-anchor="middle">7</text>
+        <rect x="438" y="500" width="48" height="34" rx="4" fill="var(--wash)" stroke="var(--accent)"/><text x="462" y="523" fill="currentColor" text-anchor="middle">3</text>
+        <rect x="492" y="500" width="48" height="34" rx="4" fill="var(--wash)" stroke="var(--accent)"/><text x="516" y="523" fill="currentColor" text-anchor="middle">0</text>
+        <rect x="546" y="500" width="48" height="34" rx="4" fill="var(--wash)" stroke="var(--accent)"/><text x="570" y="523" fill="currentColor" text-anchor="middle">4</text>
+      </g>
+      <g fill="var(--muted)" font-size="10" text-anchor="middle">
+        <text x="300" y="548">L=8</text><text x="354" y="548">L=8</text><text x="408" y="548">L=8</text>
+        <text x="462" y="548">L=5</text><text x="516" y="548">L=5</text><text x="570" y="548">L=5</text>
+      </g>
+
+      <path d="M278,558 v8 h314 v-8" stroke="var(--accent)"/>
+      <rect x="640" y="500" width="180" height="34" rx="17" fill="var(--accent)" stroke="none"/>
+      <text x="730" y="523" fill="var(--paper)" text-anchor="middle" font-size="12.5">token #46,187</text>
+      <line x1="598" y1="517" x2="634" y2="517" stroke="var(--accent)" marker-end="url(#arA)"/>
+
+      <text x="850" y="514" fill="currentColor" font-size="12.5" font-weight="500">1 token / bin · vocab 64,000 (2&#185;&#8310;)</text>
+      <text x="850" y="534" fill="var(--muted)" font-size="11.5">16 bits kept — a 6&#215; harsher squeeze than fsq8</text>
+
+      <text x="276" y="612" fill="var(--muted)" font-size="11.5">B changes what the codec KNOWS; A only changes how stage-2 reads it.</text>
+    </g>
+  </svg>
+</section>
+
+<!-- ============================ SLIDE 5 ============================ -->
+<section class="slide">
+  <p class="kicker">slide 5 / 5 · the two roads</p>
+  <h2>What each road costs downstream</h2>
+  <svg viewBox="0 0 1280 560" role="img" aria-label="Left: sequence length into the stage-2 head — 27,840 tokens per forward for grouped digits versus 3,480 for the paper-faithful token. Right: information kept per bin — 96 bits versus 16 bits, with the continuous 1024-bit baseline off scale.">
+    <g fill="none" stroke="currentColor" stroke-width="1.3" font-family="IBM Plex Mono, monospace" font-size="12">
+
+      <!-- LEFT: sequence length -->
+      <text x="60" y="52" fill="currentColor" font-family="Archivo, sans-serif" font-size="16" font-weight="600">sequence into stage-2</text>
+      <text x="60" y="72" fill="var(--muted)" font-size="11">context K=24 &#215; stencil 145 slots = 3,480 positions</text>
+
+      <text x="60" y="122" fill="var(--quant)" font-weight="500" font-size="12">A</text>
+      <g fill="var(--quant)" stroke="none">
+        <rect x="90" y="106" width="46" height="24" rx="12"/><rect x="142" y="106" width="46" height="24" rx="12"/><rect x="194" y="106" width="46" height="24" rx="12"/><rect x="246" y="106" width="46" height="24" rx="12"/><rect x="298" y="106" width="46" height="24" rx="12"/><rect x="350" y="106" width="46" height="24" rx="12"/><rect x="402" y="106" width="46" height="24" rx="12"/><rect x="454" y="106" width="46" height="24" rx="12"/>
+      </g>
+      <text x="516" y="122" fill="var(--muted)" font-size="11">&#215; 3,480 positions</text>
+
+      <text x="60" y="170" fill="var(--accent)" font-weight="500" font-size="12">B</text>
+      <rect x="90" y="154" width="46" height="24" rx="12" fill="var(--accent)" stroke="none"/>
+      <text x="150" y="170" fill="var(--muted)" font-size="11">&#215; 3,480 positions</text>
+
+      <text x="60" y="228" fill="var(--muted)" font-size="11">tokens per forward:</text>
+      <rect x="60" y="244" width="560" height="26" rx="4" fill="var(--quant)" stroke="none"/>
+      <text x="632" y="262" fill="currentColor" font-size="12">A · 27,840</text>
+      <rect x="60" y="284" width="70" height="26" rx="4" fill="var(--accent)" stroke="none"/>
+      <text x="142" y="302" fill="currentColor" font-size="12">B · 3,480</text>
+      <text x="60" y="342" fill="var(--muted)" font-size="11">attention is quadratic in this: A pays ~64&#215; unless dims-within-position</text>
+      <text x="60" y="358" fill="var(--muted)" font-size="11">are factored (per-dim heads / parallel prediction)</text>
+
+      <line x1="700" y1="40" x2="700" y2="380" stroke="var(--line)"/>
+
+      <!-- RIGHT: information kept -->
+      <text x="740" y="52" fill="currentColor" font-family="Archivo, sans-serif" font-size="16" font-weight="600">information kept, per bin</text>
+
+      <text x="740" y="102" fill="var(--quant)" font-weight="500" font-size="12">A</text>
+      <rect x="770" y="86" width="420" height="26" rx="4" fill="var(--quant)" stroke="none"/>
+      <text x="1200" y="104" fill="currentColor" font-size="12">96 bits</text>
+
+      <text x="740" y="150" fill="var(--accent)" font-weight="500" font-size="12">B</text>
+      <rect x="770" y="134" width="70" height="26" rx="4" fill="var(--accent)" stroke="none"/>
+      <text x="852" y="152" fill="currentColor" font-size="12">16 bits</text>
+
+      <rect x="770" y="188" width="140" height="18" rx="4" fill="none" stroke="var(--muted)" stroke-dasharray="4 3"/>
+      <text x="922" y="202" fill="var(--muted)" font-size="11">run-455 as worn: ~32 bits (sign code)</text>
+      <line x1="770" y1="238" x2="1230" y2="238" stroke="var(--muted)" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+      <text x="770" y="258" fill="var(--muted)" font-size="11">continuous z (float32): 1,024 bits — off this scale</text>
+
+      <text x="740" y="322" fill="var(--muted)" font-size="11">A keeps everything fsq8 keeps; predicting a bin becomes</text>
+      <text x="740" y="338" fill="var(--muted)" font-size="11">8 classifications over 4,096. B must first prove 16 bits</text>
+      <text x="740" y="354" fill="var(--muted)" font-size="11">can reconstruct a bin at all (Tier-1 FVU before any head).</text>
+
+      <!-- takeaways -->
+      <line x1="60" y1="404" x2="1230" y2="404" stroke="var(--line)"/>
+      <g font-family="Public Sans, sans-serif" font-size="15">
+        <text x="60" y="444" fill="var(--quant)" font-weight="600">A is an objective change.</text>
+        <text x="60" y="468" fill="currentColor">Same codec, same information — stage-2 becomes trainable</text>
+        <text x="60" y="488" fill="currentColor">as a token model (AR / masked, cross-entropy, samplable).</text>
+
+        <text x="700" y="444" fill="var(--accent)" font-weight="600">B is a representation change.</text>
+        <text x="700" y="468" fill="currentColor">A new, 6&#215; harsher codec — it asks how much state a bin</text>
+        <text x="700" y="488" fill="currentColor">really carries. Answer arrives in reconstruction, not the head.</text>
+      </g>
+    </g>
+  </svg>
+</section>
+</main>
+</body>
+</html>
