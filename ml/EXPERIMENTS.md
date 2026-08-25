@@ -77,6 +77,61 @@ probe_now, plus a probe row-keying fix, 6bd0ca4). Batches cut 512→128 (a) / 25
 a 24 GB measurement, recipes updated in place with the arithmetic. Both healthy at 23k/9k
 by 19:30Z: 0.412 s/step (a, →200k ≈ Mon 15:20Z) and 0.683 s/step (b, →200k ≈ Tue 08:30Z).
 
+**08:00–10:00Z 08-25 — MORNING TRIAGE: THE CLEAN PENTAD Z IS PUBLISHED, TWO HEADS DIE
+IN ONE MORNING (one silently, one loudly), AND ALL THREE ARE BACK ON THE BOARD WITHIN
+AN HOUR — AT PULL-THE-CACHE PRICES, NOT RE-EMBED PRICES.**
+
+*(a) The clean full pentad Z is DURABLE: `Z_071ef7e181_37e146384b` (run-415 codec ×
+family4_na025_pentad_r2), 12 chunks (11 × 1.46 GiB + 0.12), landed on `embed-cache-v1`
+06:27–06:37Z from #463 (E-045.1 K=144 rung)'s embed pass* — onto the key the poisoned
+chimera was deleted from the day before. Every remaining E-045 rung now pulls it in
+minutes; the three-times-embedded week is over. In the same window the partial-publish
+machinery shipped (2ab7e83: chunks publish DURING the embed every ~10 min with a
+manifest, an interrupted pass resumes at the first missing row on any box; 0af27a2: the
+pull loop's 64-chunk cap — which a daily-cadence Z at ~78 chunks would have silently
+truncated into the exact chimera `verify()` rejects — raised to the naming's own 676
+ceiling), and two standing rules were written into `ml/CLAUDE.md` §5.26/§5.27 (partial
+progress to a SAFE location; a standing-expectations ledger, now live as the project doc
+`claude/expectations.md`, diffed at every check-in).
+
+*(b) #463 (E-045.1, the DECISIVE span rung) — its trainer died SILENTLY at step
+4,000/20,000.* Metrics froze at ~08:10Z (step 4000, val 3.409, grads healthy — 6.03,
+clip_frac 0), GPU idle at 4% for 75+ min while the live publisher kept force-pushing the
+unchanged file: the #196 backgrounded-trainer signature, caught by the §5.27-style diff
+rather than by any run colour. Cancelled 09:37Z. Nothing scientific lost — the embed had
+already published (a). **#475 (E-045.1 re-dispatch, first copy)** was cancelled while
+still queued for carrying the inherited `job_timeout` 900 into a job the fleet check had
+just priced at ~810–830 min + ladder (the #438/#450/#453 kill bracket);
+**#478 (E-045.1 re-run, K=144, `job_timeout` 1400, gpu-box-48254133)** replaces it —
+which then sat 9 min queued against the online+idle runner (the known post-cancel queue
+stall; cancel + rerun cleared it in 90 s, the remedy's third confirmation). Pulls the
+published Z, trains the same head from step 0 on the intact expdecay schedule; 20k
+≈22:00Z, drain ≈23:30Z–00:00Z.
+
+*(c) #468 (E-046-HEAD, the FSQ verdict head on run-455's lattice z) DIVERGED FATALLY at
+step 15,800/20,000 and was cancelled at 08:30Z on its own registered falsifier* — the
+SEVENTH gmax>10,000 excursion (323,120 against clip 128), loss 0.559 → 1,950 in one
+logging interval, amp 0.92 → 20.8, and the trainer died with it. Against the continuous
+controls #427/#432 (ONE nonzero clip_frac in 200k steps each), the FSQ z-space is a
+different training regime — that fact is itself E-046/E-048 evidence. **The cut-off
+reading, stated with its caveat: at step 15,600 the head read val 0.65525 / persistence
+1.49105 = ratio 0.4395 — BELOW both pre-registered controls (#427 continuous 0.5036 at
+20k in-flight; A9 read-time-quant 0.4916 final), i.e. trending toward "FSQ codec earns
+its place at pentad" — but it is a step-15,600 number from a run that never finished,
+and the registered verdict is the 20k one.** (The pooled in-training probe read the
+OPPOSITE direction — ~0.45 flat vs the continuous 0.53–0.60 band — and stays excluded
+by protocol; two instruments disagreeing is one more reason to finish the registered
+one.) **#477 (E-046-HEAD re-run, SEED 1, gpu-box-32966687 restarted)** now runs it:
+seed 0 would replay the same batch order into the same cliff, seed 1 changes only the
+draw. Box-local Z reused; 20k ≈14:00–14:30Z. #468's ~15,600-step head survives on that
+box's disk (rescue step ran on #477's start — verify the upload before striking the
+sole-copy line in `claude/expectations.md`).
+
+*(d) #476 (E-045.3, K=48 half-month rung — held by Chris pending a clean Z) RE-QUEUED*
+behind #473 (E-047a-fast torch twin finish) on the second H100; starts ≈13:00–13:30Z,
+pulls the published Z. The span-fixed ladder is whole again: #462 (K=72) 0.0804 landed,
+#478 (K=144) and #476 (K=48) in flight, A8/A11 anchor the K-fixed row.
+
 **00:30–01:00Z 08-25 — NIGHT STEP: THE SECOND SPAN-FIXED RUNG CONFIRMS THE CONTEXT
 STORY, #456 IS RESCUED PRE-EMPTIVELY, AND THE SCALE FIT CLOSES THE COLLAPSE MODE BUT
 NOT THE DRIFT.**
