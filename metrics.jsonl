@@ -1,0 +1,24 @@
+{"config": {"steps": 197428, "batch": 512, "d_z": 32, "patch": 1, "d_model": 512, "n_layers": 12, "n_heads": 4, "d_dec": 256, "anomaly": true, "fsq_levels": null, "fsq_ladder": null, "fsq_bound": null, "fsq_warmstart_from": null, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 37.976, "data": "family4_na025_pentad_r2.npz", "C": 40, "T": 3142, "resume": "run-415", "recipe": "xl144-zn-pentad-nolonhold"}}
+{"resumed": {"from": "run-415.pt", "parent_tag": "run-415", "at_step": 197428}}
+{"embedding": {"pct": 0.1, "month": 1, "months": 1047, "elapsed_s": 0, "eta_s": 0, "where": "ram"}}
+{"embedding": {"pct": 5.2, "month": 54, "months": 1047, "elapsed_s": 411, "eta_s": 7550, "where": "ram"}}
+{"embedding": {"pct": 10.2, "month": 107, "months": 1047, "elapsed_s": 776, "eta_s": 6813, "where": "ram"}}
+{"embedding": {"pct": 15.3, "month": 160, "months": 1047, "elapsed_s": 1151, "eta_s": 6378, "where": "ram"}}
+{"embedding": {"pct": 20.3, "month": 213, "months": 1047, "elapsed_s": 1621, "eta_s": 6349, "where": "ram"}}
+{"embedding": {"pct": 25.4, "month": 266, "months": 1047, "elapsed_s": 2138, "eta_s": 6277, "where": "ram"}}
+{"embedding": {"pct": 30.5, "month": 319, "months": 1047, "elapsed_s": 2656, "eta_s": 6062, "where": "ram"}}
+{"embedding": {"pct": 35.5, "month": 372, "months": 1047, "elapsed_s": 3178, "eta_s": 5767, "where": "ram"}}
+{"embedding": {"pct": 40.6, "month": 425, "months": 1047, "elapsed_s": 3700, "eta_s": 5415, "where": "ram"}}
+{"embedding": {"pct": 45.7, "month": 478, "months": 1047, "elapsed_s": 4220, "eta_s": 5024, "where": "ram"}}
+{"embedding": {"pct": 50.7, "month": 531, "months": 1047, "elapsed_s": 4742, "eta_s": 4608, "where": "ram"}}
+{"embedding": {"pct": 55.8, "month": 584, "months": 1047, "elapsed_s": 5263, "eta_s": 4172, "where": "ram"}}
+{"embedding": {"pct": 60.8, "month": 637, "months": 1047, "elapsed_s": 5784, "eta_s": 3723, "where": "ram"}}
+{"embedding": {"pct": 65.9, "month": 690, "months": 1047, "elapsed_s": 6304, "eta_s": 3261, "where": "ram"}}
+{"embedding": {"pct": 71.0, "month": 743, "months": 1047, "elapsed_s": 6822, "eta_s": 2791, "where": "ram"}}
+{"embedding": {"pct": 76.0, "month": 796, "months": 1047, "elapsed_s": 7343, "eta_s": 2315, "where": "ram"}}
+{"embedding": {"pct": 81.1, "month": 849, "months": 1047, "elapsed_s": 7863, "eta_s": 1834, "where": "ram"}}
+{"embedding": {"pct": 86.2, "month": 902, "months": 1047, "elapsed_s": 8379, "eta_s": 1347, "where": "ram"}}
+{"embedding": {"pct": 91.2, "month": 955, "months": 1047, "elapsed_s": 8899, "eta_s": 857, "where": "ram"}}
+{"embedding": {"pct": 96.3, "month": 1008, "months": 1047, "elapsed_s": 9419, "eta_s": 364, "where": "ram"}}
+{"stage2_config": {"d_model": 1024, "layers": 16, "K": 48, "steps": 20000, "params_M": 206.56, "batch": 256, "train_windows": 80282348, "d_z": 32, "seed": 0, "unroll": 1, "stencil": 145, "ring_km": "spiral:111,4444,0.71,0.5", "unroll_probs": "", "direct": "", "input_znoise": 0.7, "grad_clip": 128.0, "train_lon_hold": "none", "codec_holdout_lon": "0,0", "tag": ""}}
+{"stage2_monitor": {"n_windows": 4096, "val_persistence": 26.80414, "z_rms": 5.26021, "input_znoise_sigma": 0.7, "input_znoise_rel_pers": 0.13521, "input_znoise_rel_zrms": 0.13307}}
