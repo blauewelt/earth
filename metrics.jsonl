@@ -1,0 +1,25 @@
+{"config": {"steps": 200000, "batch": 512, "d_z": 6, "patch": 1, "d_model": 512, "n_layers": 12, "n_heads": 4, "d_dec": 256, "anomaly": true, "fsq_levels": "8,8,8,5,5,5", "fsq_ladder": "auto", "fsq_bound": "ln", "eval_every": 7500, "light_probe_every": 10000, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 37.956, "data": "family4_na025_pentad_r2.npz", "C": 40, "T": 3142, "resume": null, "recipe": "f4r2-40M-dz6-fsq65k"}}
+{"linear_r_deseas": 0.15, "linear_r_raw": 0.166, "linear_r_deseas_light": 0.091, "light_stride": 7, "z_mse_model": 0.0781656801700592, "z_mse_persistence": 0.1412353515625, "chan_mse_model": 0.8850432634353638, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.336, "temporal_r_raw": 0.365, "chan_vs_persistence_pct": -5.0, "z_vs_persistence_pct": 44.7, "probe_seconds": 316.7, "step": 0, "wall_s": 316.7}
+{"step": 50, "fsq_ladder_fit": {"spec": "e1.5:1.87287,e2:1.2016,e1.5:0.820784,e3:1.09367,e2:1.30121,e3:1.2383", "n": 4096, "n_exp": 6, "scale_min": 0.820784, "scale_med": 1.21995, "scale_max": 1.87287, "prequant_absmean": 0.84026, "prequant_std_med": 0.638476, "prequant_rms": 1.0, "d_z": 6}}
+{"step": 200, "fsq_ladder_fit": {"spec": "e1.5:1.54728,e1.5:1.2016,e1.5:1.31573,e2:0.919762,e1.5:1.30005,e2:0.778877", "n": 4096, "n_exp": 6, "scale_min": 0.778877, "scale_med": 1.250825, "scale_max": 1.54728, "prequant_absmean": 0.906027, "prequant_std_med": 0.371148, "prequant_rms": 1.0, "d_z": 6}}
+{"step": 1000, "loss_rec": 0.35264, "loss_nei": 0.34125}
+{"step": 2000, "fsq_ladder_fit": {"spec": "e4:0.292631,e1.5:0.211037,e4:1.76644,u:1.26021,e1.5:0.102642,e1.5:1.09059", "n": 4096, "n_exp": 5, "scale_min": 0.102642, "scale_med": 0.691611, "scale_max": 1.76644, "prequant_absmean": 0.782, "prequant_std_med": 0.004986, "prequant_rms": 1.0, "d_z": 6}}
+{"step": 2000, "loss_rec": 0.33811, "loss_nei": 0.3404}
+{"step": 3000, "loss_rec": 0.34142, "loss_nei": 0.3345}
+{"step": 4000, "loss_rec": 0.35758, "loss_nei": 0.35084}
+{"step": 5000, "loss_rec": 0.37869, "loss_nei": 0.377}
+{"step": 6000, "loss_rec": 0.31545, "loss_nei": 0.29056}
+{"step": 7000, "loss_rec": 0.33016, "loss_nei": 0.34879}
+{"linear_r_deseas": -0.0, "linear_r_raw": -0.0, "linear_r_deseas_light": -0.0, "light_stride": 7, "z_mse_model": 0.00046755251241847873, "z_mse_persistence": 0.0009145736694335938, "chan_mse_model": 0.9030090570449829, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.033, "temporal_r_raw": 0.191, "chan_vs_persistence_pct": -7.1, "z_vs_persistence_pct": 48.9, "probe_seconds": 319.1, "step": 7500, "wall_s": 2046.5}
+{"step": 8000, "loss_rec": 0.35193, "loss_nei": 0.33244}
+{"step": 9000, "loss_rec": 0.29277, "loss_nei": 0.31612}
+{"step": 10000, "loss_rec": 0.31305, "loss_nei": 0.33409}
+{"linear_r_deseas": -0.024, "linear_r_raw": 0.009, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.4, "step": 10000, "wall_s": 2523.3}
+{"step": 11000, "loss_rec": 0.34265, "loss_nei": 0.32288}
+{"step": 12000, "loss_rec": 0.33228, "loss_nei": 0.32485}
+{"step": 13000, "loss_rec": 0.33708, "loss_nei": 0.34322}
+{"step": 14000, "loss_rec": 0.34025, "loss_nei": 0.347}
+{"step": 15000, "loss_rec": 0.31443, "loss_nei": 0.32757}
+{"step": 15000, "wall_s": 3781.4, "probe_error": "ZeroDivisionError: float division by zero"}
+{"step": 16000, "loss_rec": 0.32146, "loss_nei": 0.33897}
+{"step": 17000, "loss_rec": 0.30869, "loss_nei": 0.3314}
