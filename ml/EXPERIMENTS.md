@@ -421,6 +421,34 @@ it). #483 confirmed IN PROGRESS on the H100 since #478's 23:33:26Z drain
 (codec-probes phase; its month-block re-embed and the header_t-516 §5.26
 publish watch belong to the overnight checks).
 
+**00:50Z 08-26 — NIGHT CHECK: #478'S ARCHIVE IS REAL (NOT GREEN-AND-VOID),
+AND #483 IS RE-EMBEDDING BECAUSE THE BLOCK Z WAS NEVER ON THE CACHE — THE
+"~$2 RE-RUN" EXPECTATION RESTED ON A MISATTRIBUTED CACHE KEY.**
+
+*(a) #478 (E-045.1, the decisive span rung) drained GREEN with a real verdict
+bundle* — `probes-478.json` (384 KB), `run-478.jsonl` and `plan-478.json` all
+on `ml-metrics`; the 0.0820 harvest below stands on an archived artefact, not
+a live branch. *(b) #483 (E-047-HEAD 6th, fusion-vs-selection) picked up on
+the H100 at 23:33Z — but it is RE-EMBEDDING the month-block z from scratch*
+(516 blocks at ~47 s/block, embed ends ≈06:15Z, head after; verdict ≈midday)
+*rather than pulling a cache, and the measured reason is that NO
+embed-cache-v1 asset exists under the block codec's key.* Both complete
+12-chunk Zs on the release — `Z_071ef7e181_37e146384b` (published 06:27Z from
+#463's pass) and `Z_8b639abe36_37e146384b` (published 10:37–11:07Z during
+#470's window) — are byte-identical in shape: 17,433,927,552 bytes =
+(3142 × 86698 × 32) float16 + npy header, i.e. per-bin d_z-32 CONTINUOUS Zs
+(and E-051's launcher verified 8b639abe36 against the run-415 identity by
+VALUE, z_rms 5.17825). The 13:20Z 08-25 block's claim that 8b639abe36 was
+"the e047a-tpu-60k block codec × pentad tensor" is therefore WITHDRAWN — two
+keys, one substrate; the second key most plausibly reflects a re-uploaded
+run-415 checkpoint hashing differently — and with it the "the 6th dispatch
+pulls Z in minutes … ~$2" estimate: #483 pays its own block embed (~$15 on
+the H100). The run still answers its question; nothing needs cancelling.
+Watch its own `job_timeout` at the morning check — embed+head ≈ 12–13 h.
+*(c) #480 (E-049a continuous d_z-6 control) healthy at step 150,000/200,000*
+(probe temporal_r_deseas 0.55, chan_mse 0.683 vs persistence 0.843); lands
+≈04:30Z + finals. E-050 stays gated on it.
+
 **23:10Z 08-25 — EVENING HARVEST: THE DECISIVE RUNG LANDS AT 0.0820 — THE
 CONTEXT STORY IS CONFIRMED AT THE HARDEST STEP SIZE.**
 
