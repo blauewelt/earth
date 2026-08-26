@@ -2993,7 +2993,22 @@ recorded numbers on the same blocks, is the reason it was accepted:
 \end{itemize}
 
 The stage-2 verdict --- the number that answers fusion-versus-selection ---
-is dispatched and not in. \textbf{Every number in this subsection is $n=1$
+landed against the hypothesis. The 20k head on the month-block $z$ (the
+same head configuration and the same two-year span as the cadence ladder's
+arms) reads a one-step ratio of $0.2127$ against its own space's
+persistence --- not below the selection arm's $0.0721$ but $2.9\times$
+above it. One qualification is structural: each ratio is scored against
+its own $z$-space's persistence, and a fused month is a much stronger
+persistence baseline ($2.75$ block-units against ${\sim}21$ in the per-bin
+spaces) precisely because fusion averages away the fast variance a per-bin
+head gets credit for predicting --- the instrument was chosen at dispatch
+knowing this, so the caveat qualifies the size of the gap, not its
+direction. The transport read-out agrees in direction: the year-blocked
+k-fold through the head's features reads $0.394$ $[0.31, 0.48]$, under
+every per-bin head at this geometry and under the same run's raw-pixel
+control ($0.693$). At this codec, bottleneck and budget, fusing a month of
+pentads does not beat selecting one bin per month.
+\textbf{Every number in this subsection is $n=1$
 at a tier with no measured pair}, and the codec was moreover trained on the
 JAX/TPU stack of \S\ref{sec:jax}, which is itself a new tier: a
 same-recipe PyTorch twin is training as the cross-framework check. Nothing
@@ -3374,8 +3389,9 @@ for this tensor), which is what the 10M-parameter codecs of that era, and
 in the end the 40.7M anchor of \S\ref{sec:qd}, were built to answer.
 Next levers, in expected-value order, and (9)--(11) have reordered them:
 the dispersion test that would say how much of the twelve-month roll is
-replay; the fusion-versus-selection verdict and the quantized-bottleneck
-retrain of \S\ref{sec:cadence}, both dispatched; then the pentad noise
+replay; the quantized-bottleneck
+retrain of \S\ref{sec:cadence}, dispatched (the fusion-versus-selection
+verdict has since landed against fusion --- \S\ref{sec:block}); then the pentad noise
 dose, re-derived from the pentad model's own one-step error rather than
 carried across from monthly. Behind those, and unchanged: paired
 significance for the head results; the head

@@ -357,6 +357,61 @@ against its own bin, cell-level persistence baselines, dumps stay z-states) foll
 timeblocks module + wiring at 2e03913/41086a3, smoke-tested end to end on CPU;
 `time_block` is a recipe-only key (`f4r2-40M-monthblock`, d_z 64).
 
+**12:50Z 08-26 — THE FUSION-VS-SELECTION VERDICT LANDS: #483 (E-047-HEAD, 6th
+dispatch) GREEN 09:52Z — THE MONTH-BLOCK HEAD READS 0.2127 WHERE SELECTION READ
+0.0721. FUSION DOES NOT BEAT SELECTION AT THE REGISTERED INSTRUMENT.**
+
+*(a) The registered verdict.* 20k one-step z ratio on the month-block z
+(e047a-tpu-60k codec, d_z 64, K=24 blocks = the same 720-d span as A2a):
+`z_mse_model 0.58485 / z_mse_persistence 2.74977` = **0.2127**
+(`probes-483.json`, archived; sha `fc5f62d`). The dispatch registered two
+branches — "clearly below E-045-A2a's 0.0721 = fusing a month of pentads beats
+selecting one bin per month; parity = selection suffices" — and the measurement
+took the unregistered third: **2.9× ABOVE the selection arm.** By the
+pre-registered reading, fusion does not beat selection; at this codec and
+budget the fused month is the substantially harder one-step substrate.
+
+*(b) The caveat that keeps (a) honest, recorded not used.* The ratio scores
+each head against ITS OWN z-space's persistence, and month-block persistence
+is a far stronger baseline (2.75 block-units vs ~21.3–21.4 in the per-bin
+spaces) precisely because fusing a month of pentads averages away the fast
+variance a per-bin head gets credit for predicting. The instrument was chosen
+at dispatch knowing the spaces differ; the caveat qualifies the size of the
+gap, not the direction of the verdict.
+
+*(c) Secondary read-outs agree in direction.* The head-features transport
+k-fold reads **0.394 [0.306, 0.475]** (n=1459, RMSE 3.7 Sv) — far under every
+per-bin stage-2 head at this geometry (#427 0.583, #478 0.679) and under the
+same bundle's codec-independent controls: raw-3×3 head 0.693 [0.633, 0.746],
+wind head 0.690 [0.62, 0.751]. `chan_t+1` skipped by design (which cell stands
+for the block is undecided); pooled probes excluded by protocol; bundle is the
+known 4-file month-block set.
+
+*(d) Scale block* (rule 6, source-written): 211,352,640 params · batch 256 ·
+20,000 steps · 39,534,288 windows · K 24 · stencil 145. Training itself was
+textbook: grad-clip 128 with clip_frac 0 throughout, val_zmse 0.597 at 20k and
+flattening, LR 7.3e-4 at cut-off.
+
+*(e) Ops.* Job 23:33→09:52Z ≈ 10.3 h H100 ≈ $21, ~6.7 h of it the block
+re-embed (516 blocks at ~47 s) — the 00:50Z finding priced in. **The §5.26
+publish watch resolves NEGATIVE: no `header_t-516` chunks landed on
+embed-cache-v1** (all steps green; the partial-publish path simply never
+covered the block key), so the month-block Z's only copy is gpu-box-48254133's
+disk (Vast 48632885, stopped after drain, queue checked). At a negative
+verdict that is priced as a ~$15 re-embed if the fusion axis is revisited, not
+a rescue item.
+
+*(f) What it means for the programme.* With the E-045 factorial closed (span
+is the axis, 0.0820 at 5-d steps), E-047's fusion was the named candidate for
+"the missing ingredient" should E-051's full-budget 2-year-context roll still
+read E-044b-class negative. This verdict removes month-block fusion — at this
+codec, d_z and budget — from that list; E-051's roll reading now stands alone.
+The block-decode roll (Tier-2 machinery at aacb014) is NOT dispatched on a
+negative one-step verdict. Whether to spend on a fusion variant (block codec
+at d_z 32; the 126.9M block codec's z, pixelmae-472; fusion at the head rather
+than the codec) returns to Chris. n = 1 at a tier with no pair (§3b): the
+direction is measured, no number here is a level.
+
 **RE-DISPATCH, 16:29Z: E-047a = #450, E-047b = #451.** #448/#449 both died of CUDA OOM
 mid-training on their 24 GB cards — a month block is 282 encoder tokens against a per-bin
 sample's 42 and attention is quadratic in that — and #448's probe path additionally
