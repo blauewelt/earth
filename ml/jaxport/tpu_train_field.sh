@@ -314,12 +314,23 @@ gcs_get() {   # gcs_get <object name> <local file>  — 0 on success, 1 if absen
 # line is the one that explains the branch (ml/CLAUDE.md §4.6 — `2>/dev/null`
 # on a command whose failure you are branching on hides exactly this).
 gcs_size() {  # gcs_size <object name>
-  local T BODY
-  T="$(token)" || return 1
-  BODY="$(curl -sS -H "Authorization: Bearer ${T}" \
-    "https://storage.googleapis.com/storage/v1/b/${BUCKET}/o/$(
-       python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${1}")?fields=size")" \
-    || return 1
+  # TRANSPORT failures are retried; only a metadata answer decides. On
+  # 2026-08-26 a one-shot "curl: (6) Could not resolve host" ~19 s after
+  # boot — with the two checks a second earlier both fine — took the
+  # "|| return 1" path, and the caller's refusal branch read that as
+  # "object absent" and reaped a healthy node. DNS on a fresh node is not
+  # settled the first minute; a 404 is an answer, a resolver hiccup is not.
+  local T BODY tries
+  for tries in 1 2 3 4; do
+    T="$(token)" && \
+    BODY="$(curl -sS -H "Authorization: Bearer ${T}" \
+      "https://storage.googleapis.com/storage/v1/b/${BUCKET}/o/$(
+         python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${1}")?fields=size")" \
+      && break
+    if [ "${tries}" = 4 ]; then return 1; fi
+    echo "gcs_size: transport failure for ${1} (attempt ${tries}) — retrying in 10 s" >&2
+    sleep 10
+  done
   printf '%s' "${BODY}" | python3 -c '
 import json, sys
 try:
