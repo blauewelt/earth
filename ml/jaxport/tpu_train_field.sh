@@ -487,6 +487,22 @@ trap 'code=$?; echo "exit ${code} — shipping final state, then the node self-d
 
 echo "=== tpu_train_field ${STAMP} · node ${NODE_NAME} · bucket ${BUCKET} · MODE ${MODE} ==="
 
+# BOOT BEACON — the first bucket object must land within ~3 minutes of the
+# script starting, unconditionally. Before this existed, verify mode's first
+# object was the published tensor at ~26–46 min, so from the outside a node
+# whose startup script never ran (the us-west1-c maintenance-event zombies,
+# 2026-08-26) and a node quietly mid-assembly were the SAME OBSERVATION for
+# three quarters of an hour — and on 2026-08-26 a possibly-healthy node was
+# reaped at minute 16 on that ambiguity, while a genuine zombie had earlier
+# been left to bill for 53. One early log upload plus a 3-minute shipper
+# (section 8's 10-minute shipper takes over the same object name; a double
+# PUT of the same log is idempotent) turns "no object in 5 min" into a
+# certain zombie verdict.
+upload_log
+( while true; do sleep 180; upload_log; done ) &
+disown
+echo "measured: boot beacon shipped and 3-min early log shipper armed"
+
 # EVERY KNOB, RESOLVED, in one place. A startup script inherits no
 # environment, so "I set STEPS=200000 when I launched it" is a claim about the
 # launching shell and not about this node; this is the line that settles it.

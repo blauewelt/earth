@@ -1123,27 +1123,39 @@ archive.
   (measured 2026-08-26), so a spot node can run alongside an on-demand one;
   spot is the default for verify/short jobs and, with bucket resume, for
   training — the honest price is the day's, on-demand list is $1.20/chip-h.
-- **A node can pass the birth check and STILL be a zombie: a maintenance
-  event minutes after creation means the startup script (and therefore the
-  on-node stall watchdog) never ran.** Measured 2026-08-26: e052-verify
-  created 16:16:23Z on spot, accepted READY/HEALTHY, took "a maintenance
-  event" at 16:18:58Z, and shipped ZERO bucket objects for 53 minutes —
-  when the script runs, the first log object lands under `runs/<exp>/logs/`
-  within ~3 minutes (measured on e047a, e051). **The check is the bucket,
-  not the health field**: no object under `runs/<exp>/` within 10 minutes
-  of READY ⇒ the script never ran ⇒ delete and recreate. Do NOT wait for
-  the STALL_MIN watchdog — it lives inside the script that didn't run.
-- **Deleting a node does NOT promptly free its quota, and the counter can
-  read exhausted with ZERO nodes in the project.** Measured 2026-08-26:
-  both v5e serving quotas ('TPUV5s[Preemptible]LitepodServingPerProjectPer
-  ZoneForTPUAPI', limit 4) answered 429 for 35+ minutes after the delete
-  op finished and `list` showed nothing billing, on-demand AND spot alike.
-  The SA cannot read the counters (serviceusage 403), so the only move is
-  a create-retry loop (~5 min apart, alternating kinds) — today's
-  successful creates all came ≥2.5 h after the previous delete of the same
-  kind, so budget for a wait that long before escalating. A 429 here is
-  NOT the "ask for more quota" story the console click-path solves; the
-  limit was granted and the usage is phantom.
+- **A node can pass the birth check and STILL be a zombie — but the boot
+  verdict must be calibrated to the LAUNCHER, and the health field's
+  "maintenance event" note decides nothing.** 2026-08-26, both mistakes in
+  one day: e052-verify (spot, 16:16Z) took "a maintenance event" 2.5 min
+  after birth and shipped nothing for 53 min — billed as a zombie the
+  whole time; then a fresh node was reaped at minute 16 for silence that
+  was EXPECTED, because `tpu_train_field.sh`'s first bucket object was the
+  published tensor at ~26–46 min (the "first log in ~3 min" calibration
+  belongs to `tpu_train_s2.sh`), and an on-demand node then showed the
+  same maintenance-event note WHILE creating and may be perfectly fine.
+  Both field-launcher ambiguities are now closed by construction: the
+  launcher ships a BOOT BEACON (the log, within ~3 min of the script
+  starting, then every 3 min until the main shipper takes over). The
+  standing rule: **no object under `runs/<exp>/` within ~6 min of READY ⇒
+  the startup script never ran ⇒ delete and recreate** — valid for any
+  launcher only BECAUSE of the beacon; a new launcher must ship one before
+  this rule may be applied to it. Do NOT wait for the STALL_MIN watchdog
+  on a silent node — it lives inside the script that didn't run.
+- **A quota 429 with ZERO nodes billing means the REQUEST is too big, not
+  that the counter is stuck.** Measured 2026-08-26, the expensive way:
+  `tpu_box.py create` without `--accelerator-type` asked for the then-
+  default v5litepod-8 — 8 cores against the granted 4 — and GCP's answer,
+  "Quota limit ... exceeded. Limit: 4", is INDISTINGUISHABLE from a full
+  counter: it 429s in every zone, for spot and on-demand alike, while
+  `list` shows nothing billing and queuedResources is empty. Two hours
+  went into retry loops, a cross-zone sweep and a phantom-stuck-counter
+  theory before the request size was compared with the limit. The default
+  is now v5litepod-4 (= the grant) and the 429 hint in tpu_box says to
+  check request-vs-limit first. The SA cannot read the usage counters
+  (serviceusage 403), so this comparison is the ONLY local diagnostic.
+  Every "quota lag after delete" observation from that hunt was really
+  this bug — no release lag has actually been measured beyond the known
+  "a DELETING node still holds quota until fully gone".
 
 ### Failure signatures worth recognising instantly
 

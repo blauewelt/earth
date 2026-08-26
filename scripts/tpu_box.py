@@ -99,9 +99,18 @@ JWT_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer"
 GCS_UPLOAD = "https://storage.googleapis.com/upload/storage/v1"
 
 # TPU_ACCESS.md §3: ask for v5e, not v6e — on-demand v5e auto-approves to 64
-# cores, both v6e metrics auto-approve at 0 and go to a human. A v5litepod-8 is
-# one host with 8 chips, which is the right first slice anyway (§6).
-DEFAULT_ACCEL = "v5litepod-8"
+# cores, both v6e metrics auto-approve at 0 and go to a human.
+#
+# The default is what the project's quota actually GRANTS — 4 cores per zone,
+# both kinds — because a default larger than the grant produces the nastiest
+# 429 in the API: "Quota limit ... exceeded. Limit: 4" reads as "the counter
+# is full", not "your request is too big", and on 2026-08-26 that cost ~2 h of
+# create-retry loops, a zone sweep, and a wrong lore entry hunting a phantom
+# stuck counter — with zero nodes billing the whole time — when every create
+# had simply been asking for a v5litepod-8 against a 4-core limit. If the
+# grant is ever raised, raise this WITH it, and remember the 429 ambiguity:
+# on "Limit: N", first compare N against the cores you just asked for.
+DEFAULT_ACCEL = "v5litepod-4"
 DEFAULT_RUNTIME = "v2-alpha-tpuv5-lite"
 
 # Hosts this project has MEASURED as lemons, which must never be used again
@@ -362,7 +371,12 @@ def quota_hint(err):
     """
     body = (err.body or "").lower()
     if err.status in (429, 403) or "resource_exhausted" in body or "quota" in body:
-        return ("\nThis reads as a QUOTA refusal. ml/plans/TPU_ACCESS.md §3 "
+        return ("\nThis reads as a QUOTA refusal. FIRST compare 'Limit: N' "
+                "against the CORES YOU JUST ASKED FOR — a v5litepod-8 against "
+                "a 4-core grant 429s identically to a full counter, in every "
+                "zone, with nothing billing (measured 2026-08-26; ~2 h lost "
+                "to a phantom-quota hunt). If the request fits the limit, "
+                "ml/plans/TPU_ACCESS.md §3 "
                 "has the click-path and the exact metric names:\n"
                 "  spot v5e      -> 'Preemptible TPU v5 lite pod cores per "
                 "project per zone'\n"
