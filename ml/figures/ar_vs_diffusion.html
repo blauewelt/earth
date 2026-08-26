@@ -7,8 +7,8 @@
   One Step Forward: Autoregressive vs Diffusion - six slides on the design
   question for next-timestep prediction. Slide 1 states what "autoregressive"
   concretely means in this system today (the per-pixel stencil head, space as
-  a fixed concat, attention over time only); slide 2 untangles the three
-  independent design axes the AR-vs-diffusion framing conflates; slides 3-4
+  a fixed concat, attention over time only); slide 2 maps which parts of the
+  pipeline can move to diffusion, with each move's advantages and costs; slides 3-4
   are the case for and against a diffusion head, each point tied to a measured
   programme fact where one exists; slide 5 sketches a concrete latent-field
   DiT with cost arithmetic; slide 6 is a staged decision path with falsifiers.
@@ -216,46 +216,52 @@
   </svg>
 </section>
 
-<!-- ================= SLIDE 2: THE THREE AXES ================= -->
+<!-- ================= SLIDE 2: WHERE DIFFUSION CAN ENTER ================= -->
 <section class="slide">
-  <p class="kicker">slide 2 / 6 &middot; untangling the question</p>
-  <h2>&ldquo;AR vs diffusion&rdquo; conflates three independent axes</h2>
-  <p class="lede">Both candidates are autoregressive <i>in time</i> &mdash; GenCast rolls
-  12-hour steps exactly as we roll months; diffusion replaces the <b>per-step transition
-  map</b>, not the recursion. The real choice decomposes into three axes that can be
-  bought (and tested) separately:</p>
+  <p class="kicker">slide 2 / 6 &middot; the moves, concretely</p>
+  <h2>Which parts of our model can move to diffusion &mdash; and what each move buys and costs</h2>
+  <p class="lede">The time recursion itself is not on the table: rollout stays
+  autoregressive under any head (GenCast rolls 12-hour steps as we roll months) &mdash;
+  diffusion can only replace the <b>per-step transition map</b>, and our pipeline offers
+  four distinct places to do it. Each row is one candidate move; the advantages and the
+  costs in that row are <b>the move&rsquo;s</b>, relative to what we run today.</p>
   <div class="tblwrap">
   <table class="cmp">
-    <tr><th>axis</th><th>today&rsquo;s head</th><th>diffusion DiT</th><th>what the axis alone changes</th></tr>
+    <tr><th>component, as it runs today</th><th>the diffusion move</th><th>advantages of the move</th><th>costs &amp; risks of the move</th></tr>
     <tr>
-      <td><b>A &middot; output scope</b></td>
-      <td class="ar">per-pixel, factorized</td>
-      <td class="df">joint field, all points at once</td>
-      <td>whether pixel-pixel structure at t+1 is modelled at all; whether 145&times; redundant context re-reads are amortized by attention over the field</td>
+      <td><b>1 &middot; stage-2 head, full move</b><br><span style="color:var(--muted)">per-pixel stencil regression of &#7825;&#8348;&#8330;&#8321;, deterministic</span></td>
+      <td class="df">a field denoiser: sample the WHOLE next latent field jointly, conditioned on history (the DiT of slide 5)</td>
+      <td>sharp members where the conditional is broad (pentad/daily, &rho;&asymp;0.60) instead of the conditional-mean blur; ensembles &rarr; dip probabilities, CRPS, spread diagnostics; joint pixel&ndash;pixel structure at t+1, which no per-pixel head has at any capacity; the measured +0.057 noise gain becomes training at every corruption level</td>
+      <td>NFE &times; M full-field passes at eval; a single sample scores WORSE than today's head on the current MSE scoreboard by exactly the conditional variance, so the E-052.0 keys (ensemble-mean ratio, CRPS, Brier) must land first; seeded sampling replaces the gate's bit-reproducibility; new knobs (schedule, sampler, M)</td>
     </tr>
     <tr>
-      <td><b>B &middot; output type</b></td>
-      <td class="ar">deterministic conditional mean</td>
-      <td class="df">sample from the conditional distribution</td>
-      <td>sharpness at broad conditionals; ensembles &rarr; event probabilities; but per-sample MSE is <i>higher</i> by exactly the conditional variance</td>
+      <td><b>2 &middot; stage-2 head, geometry only first</b><br><span style="color:var(--muted)">same per-pixel head</span></td>
+      <td class="df">the SAME field architecture run deterministically &mdash; joint spatial attention, one-shot regression, no sampling (= E-052.1)</td>
+      <td>directly comparable on today's scoreboard at matched parameters; isolates &ldquo;does full-field attention beat the 145-slot concat&rdquo; from everything probabilistic; amortizes the ~145&times; redundant context re-reads; cheap, and every later move reuses its backbone</td>
+      <td>still a conditional mean &mdash; the pentad blur and the replay-honesty problem remain untouched; it tests the geometry, not the distribution, so a null here does not close the diffusion question (and a win does not need it)</td>
     </tr>
     <tr>
-      <td><b>C &middot; computation</b></td>
-      <td class="ar">one-shot map</td>
-      <td class="df">iterative refinement (NFE 20&ndash;50, distillable to 1&ndash;4)</td>
-      <td>compute per step; a knob trading compute for sample quality that the one-shot map does not have</td>
+      <td><b>3 &middot; existing stencil head, minimal move</b><br><span style="color:var(--muted)">trained at ONE noise level (znoise 0.7)</span></td>
+      <td class="df">condition it on a noise-level embedding and train across a &sigma;-ladder; a few denoising steps at roll time (= E-052.p)</td>
+      <td>two-line change, no new architecture, scored on the existing scoreboard; the most direct test of the mechanism behind the programme's largest stage-2 gain (+0.057)</td>
+      <td>stays factorized per-pixel: no joint fields, no coherent ensembles &mdash; it can validate the denoising mechanism but can never deliver move 1's outputs</td>
+    </tr>
+    <tr>
+      <td><b>4 &middot; codec decoder (stage 1)</b><br><span style="color:var(--muted)">deterministic query decoder z &rarr; pixels</span></td>
+      <td class="df">a diffusion decoder: sample pixel fields given z (the latent-diffusion decoder recipe)</td>
+      <td>sharper decoded fields; could recover fine structure the MSE decoder blurs away</td>
+      <td>parked, deliberately: the decoder is the cheap, replaceable end of the system; every probe, audit and read-out assumes deterministic decoding; nothing upstream (the forecast itself) improves</td>
     </tr>
   </table>
   </div>
   <div class="cols" style="margin-top:16px">
     <div class="pt">
-      <h3>The two useful intermediates</h3>
-      <p><b>Joint deterministic one-shot</b> (a DiT backbone doing plain field regression, no sampling) buys axis A alone &mdash; it is the controlled ablation that says whether full-field attention beats stencil-concat at matched parameters.</p>
-      <p><b>Joint generative few-step</b> (flow matching / consistency on the same backbone) buys B at a small C, once A is settled.</p>
+      <h3>What stays fixed under every move</h3>
+      <p>The conditioner and the roll. History conditioning on a 720-day span is what E-045 showed the skill lives in, and it feeds moves 1&ndash;3 identically; the rollout loop remains autoregressive in time whichever per-step map sits inside it. Neither is a diffusion candidate &mdash; there is nothing to sample over history we already observed.</p>
     </div>
     <div class="pt q">
-      <h3>Why the decomposition matters here</h3>
-      <p>This repo decides by ablation and falsifier, one variable per arm (<span class="mono">ml/CLAUDE.md</span> &sect;1). &ldquo;Switch to diffusion&rdquo; moves all three axes in one dispatch &mdash; whatever the result, it would not say <i>which</i> axis paid, and a three-axis move is exactly the E-005 shape the log has had to retract before.</p>
+      <h3>The order we&rsquo;d take them</h3>
+      <p><b>2 &rarr; 1</b>, with <b>3</b> as an optional cheap probe in parallel and <b>4</b> parked. Move 2 first because it is readable on today&rsquo;s scoreboard and its backbone is move 1&rsquo;s backbone; move 1 once the probabilistic keys exist, so its value is measured rather than penalized. One variable per arm (<span class="mono">ml/CLAUDE.md</span> &sect;1).</p>
     </div>
   </div>
 </section>
@@ -432,11 +438,11 @@
     <p>Add to the eval before any new head runs: <b>ensemble-mean forecast ratio</b> (comparability with every archived number), <b>CRPS</b>, <b>spread&ndash;error ratio</b>, and a <b>dip-event Brier score</b> on the transport read-out. Without these the comparison is decided by the metric, not the model (slide 4.1).</p>
   </div>
   <div class="pt g">
-    <h3><span class="stagenum">1</span>The clean ablation: joint deterministic field transformer (axis A alone)</h3>
-    <p>Same DiT backbone, one-shot regression of the whole next field, no sampling &mdash; scored on today&rsquo;s scoreboard against the stencil head at matched parameters, pentad cadence, 720-d-span conditioner. <b>Falsifier:</b> if joint spatial attention &asymp; per-pixel stencil-concat, then axis A buys nothing here, the 145-slot concat was never the bottleneck, and the diffusion case must rest on axis B alone. Either answer is cheap and reshapes the question.</p>
+    <h3><span class="stagenum">1</span>The clean ablation: joint deterministic field transformer (slide 2&rsquo;s move 2)</h3>
+    <p>Same DiT backbone, one-shot regression of the whole next field, no sampling &mdash; scored on today&rsquo;s scoreboard against the stencil head at matched parameters, pentad cadence, 720-d-span conditioner. <b>Falsifier:</b> if joint spatial attention &asymp; per-pixel stencil-concat, the geometry move buys nothing here, the 145-slot concat was never the bottleneck, and the diffusion case must rest on the sampling move alone. Either answer is cheap and reshapes the question.</p>
   </div>
   <div class="pt g">
-    <h3><span class="stagenum">2</span>Generative head on the winning backbone (axis B, small C)</h3>
+    <h3><span class="stagenum">2</span>Generative head on the winning backbone (slide 2&rsquo;s move 1)</h3>
     <p>Flow matching or EDM on the stage-1 backbone, few-step sampler, M&asymp;8, seeded sampling. <b>Read:</b> ensemble-mean ratio must &asymp; stage 1 (sanity: no MSE tax after averaging), CRPS and dip Brier must <i>beat</i> stage 1&rsquo;s degenerate distribution, spread&ndash;error &asymp; 1. <b>Falsifier:</b> if the ensemble mean matches but CRPS/Brier do not improve on the deterministic head + a trivial noise ensemble, the distribution head is not earning its NFE.</p>
   </div>
   <div class="cols" style="margin-top:14px">
