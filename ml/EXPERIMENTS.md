@@ -115,7 +115,23 @@ the one piece deliberately left for a daytime decision. Cost of tonight:
 $0 GPU; ~40 min CPU in-session.
 
 <a id="e-050"></a>
-## E-050 · Warm-start quantization: the trained continuous codec, lattice switched on — DISPATCHING 2026-08-26 ~06:45Z (approved by Chris 2026-08-25 ~15:30Z, b3ee36a)
+## E-050 · Warm-start quantization: the trained continuous codec, lattice switched on — #485 DISPATCHED 06:32Z 2026-08-26 (approved by Chris 2026-08-25 ~15:30Z, b3ee36a)
+
+**07:25Z — FIRST-MINUTES VERIFICATION PASSED ON ALL FOUR CHECKS** (#485,
+gpu-box-32966687, ml-live-485): *(1)* the warm start is real — config carries
+`fsq_warmstart_from: "run-480.pt@200000"` and the resumed record reads
+`at_step 200000`; *(2)* the rebased fits at +50/+200/+2000 are the ANTI-#482:
+`prequant_rms` exactly 1.0 and `prequant_std_med` **0.971 / 0.995 / 0.963** —
+richly input-dependent where the cold start slid 0.638 → 0.005 by 7.5k — with
+fitted scales O(1.5–1.7) and the spec nearly unchanged between refits (the
+settled-distribution premise, observed); *(3)* loss_rec jumped to 0.310 at
+lattice-on (the quantization tax, expected) and is recovering — 0.281 by step
+206,700 against the parent's 0.229; *(4)* the step-202,500 probe reads
+NUMBERS through the lattice (z_vs_persistence 37.8%, linear_r_deseas 0.44,
+temporal_r_deseas 0.43) — no NaN, no collapse signature. Pace ~0.2 s/step →
+60k warm steps land ≈10:30Z + the probe ladder. Falsifier A has not fired at
+the point where #481/#482 were already dying; the registered verdict remains
+the decoder-ceiling audit (Falsifier B).
 
 **E-050 · resume the finished E-049a continuous d_z-6 pentad codec with the FSQ
 lattice + ln bound switched ON at resume (`--fsq-warmstart`, 6c83ed3) · params
