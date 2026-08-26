@@ -73,8 +73,24 @@ for (const r of RUNS.workflow_runs) {
 }
 data.docs = await txt(`https://raw.githubusercontent.com/${REPO}/main/ml/run_docs.json`) ?? "{}";
 data.fleet = await txt(`https://raw.githubusercontent.com/${REPO}/ml-metrics/fleet.json`);
+// The TPU section reads the ml-live-tpu mirror branch. This instrument's
+// whole point (ml/CLAUDE.md §2) is that the screenshot shows what Chris
+// sees — the day the section shipped, the shot showed "no TPU telemetry
+// mirrored yet" while his phone showed E-051's live curve, because THIS
+// allowlist did not know the branch. Pre-fetch the index and every node's
+// metrics so the fiction cannot recur.
+data.tpuIndex = await txt(`https://raw.githubusercontent.com/${REPO}/ml-live-tpu/index.json`);
+data.tpu = {};
+if (data.tpuIndex) {
+  try {
+    for (const run of JSON.parse(data.tpuIndex).runs || []) {
+      data.tpu[run.node] = await txt(`https://raw.githubusercontent.com/${REPO}/ml-live-tpu/${run.node}/metrics.jsonl`);
+    }
+  } catch { /* an unparsable index screenshots as the page would show it */ }
+}
 const have = Object.entries(data.live).filter(([, v]) => v).map(([k]) => "#" + k);
-console.log(`captured ${RUNS.workflow_runs.length} runs; metrics for ${have.join(", ") || "none"}`);
+console.log(`captured ${RUNS.workflow_runs.length} runs; metrics for ${have.join(", ") || "none"}; ` +
+            `tpu: ${data.tpuIndex ? Object.keys(data.tpu).join(", ") || "index only" : "no mirror"}`);
 
 const dir = mkdtempSync(join(tmpdir(), "shot-"));
 writeFileSync(join(dir, "data.json"), JSON.stringify(data));
@@ -103,6 +119,8 @@ await p.route(/https:\\/\\/raw\\.githubusercontent\\.com\\/.*/, (r) => {
   let m;
   if (/run_docs\\.json/.test(u)) return ok(D.docs);
   if (/fleet\\.json/.test(u)) return D.fleet ? ok(D.fleet) : r.fulfill({ status: 404, body: "" });
+  if (/ml-live-tpu\\/index\\.json/.test(u)) return D.tpuIndex ? ok(D.tpuIndex) : r.fulfill({ status: 404, body: "" });
+  if ((m = u.match(/ml-live-tpu\\/([^/]+)\\/metrics\\.jsonl/))) return D.tpu[m[1]] ? ok(D.tpu[m[1]]) : r.fulfill({ status: 404, body: "" });
   if ((m = u.match(/ml-live-(\\d+)\\/metrics/))) return D.live[m[1]] ? ok(D.live[m[1]]) : r.fulfill({ status: 404, body: "" });
   if ((m = u.match(/ml-live-(\\d+)\\/phase/))) return D.phase[m[1]] ? ok(D.phase[m[1]]) : r.fulfill({ status: 404, body: "" });
   if ((m = u.match(/plan-(\\d+)\\.json/))) return D.plan[m[1]] ? ok(D.plan[m[1]]) : r.fulfill({ status: 404, body: "" });
