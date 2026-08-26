@@ -114,6 +114,38 @@ pre-registered in the plan) are NOT dispatched: `ml-train.yml` sits at the
 the one piece deliberately left for a daytime decision. Cost of tonight:
 $0 GPU; ~40 min CPU in-session.
 
+**(e) UPDATE 2026-08-26 ~08:30Z — the JAX port, its parity certificates, and
+the TPU launcher (Chris: *"go ahead with next steps (2) autonomously. Likely,
+Jax compatibility will be required"* / *"Feel free to launch TPU jobs to
+verify compatibility"*).** Three more files, all additive:
+`ml/jaxport/field_model.py` (NNX mirror + two-way converter),
+`ml/jaxport/train_field.py` (the TPU trainer: sharded batch via
+`jax.device_put(NamedSharding)` per the 0f04c3e lesson, threaded host gather
+with prefetch, token-chunked conditioner with REMAT — measured design
+arithmetic in its docstring: without remat the conditioner's retained
+activations are ~124 GB/chip at the train config and FLAT in chunk size,
+because a reverse-mode `lax.map` stacks every chunk's residuals; with remat
+~25 MB), and `ml/jaxport/tpu_train_field.sh` (verify/train modes; stages
+tensor+Z from `gs://earth-tpu-staging`, and when absent ASSEMBLES them from
+the releases exactly as `tpu_train_s2.sh` does and publishes the verified
+bytes back to the bucket — §5.26). Parity gates
+(`tests/test_jaxport_field.py`, F1–F9, CPU): det forward max|Δ| **7.15e-07**;
+D(x;σ) **4.40e-07** over six σs; `edm_loss_given` rel **6.5e-08** with
+injected (σ, noise); 8-step Heun `sample_from` **1.43e-06** with injected
+x_init; gradient parity worst per-tensor rel **2.1e-07** over 64 tensors;
+export round-trip all 68 tensors `torch.equal`; JAX resume bit-identical;
+`--input-znoise 0` and remat-on/off both bit-identical on the update (the
+remat gradient differs by ≤4 ulp, localized to exactly the 25 rematerialized
+`cond.*` tensors, asserted as such). The parity surfaces
+(`edm_loss_given`, `sample_from`) were added to `ml/field_model.py` with the
+9/9 torch suite re-run bitwise-green. **E-052.1's config is fixed and
+param-matched to the stencil tier: d_model 1024 × 10 blocks, heads 16,
+d_cond 512 × 2, patch 4, K 144 (720-d span) = 200.4M** vs the 206.5M
+pentad stencil head. Dispatch waits on the v5e quota (one v5litepod-4;
+`e051-k144-full` holds it until ~14:00Z): first a VERIFY node (F-gates +
+300-step real-data smoke on device, ~$5), then the E-052.1 train node — its
+§0d dispatch entry will be written at dispatch.
+
 <a id="e-050"></a>
 ## E-050 · Warm-start quantization: the trained continuous codec, lattice switched on — #485 DISPATCHED 06:32Z 2026-08-26 (approved by Chris 2026-08-25 ~15:30Z, b3ee36a)
 

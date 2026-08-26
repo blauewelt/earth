@@ -424,7 +424,10 @@ class FieldHead(nn.Module):
         the data's scale differs from EDM's.
 
         Every random draw comes from `generator`; nothing here touches the
-        global RNG.
+        global RNG. The arithmetic lives in `edm_loss_given`, which takes the
+        draws as ARGUMENTS — that split exists for the JAX parity gates, which
+        must run both frameworks on IDENTICAL (sigma, noise) to isolate the
+        model from the RNG (a stream no two frameworks share).
         """
         B = z_t.shape[0]
         sd = float(self.sigma_data)
@@ -436,6 +439,13 @@ class FieldHead(nn.Module):
         r = z_tp1 - z_t
         noise = torch.randn(r.shape, generator=generator, device=r.device,
                             dtype=r.dtype)
+        return self.edm_loss_given(cond_tokens, z_t, z_tp1, sigma, noise)
+
+    def edm_loss_given(self, cond_tokens, z_t, z_tp1, sigma, noise):
+        """The EDM loss with (sigma [B], noise [B,P,d_z]) supplied — the
+        deterministic half of `edm_loss`, and the parity surface."""
+        sd = float(self.sigma_data)
+        r = z_tp1 - z_t
         b = (slice(None),) + (None,) * (r.dim() - 1)
         d = self.D(r + sigma[b] * noise, sigma, cond_tokens)
         lam = (sigma ** 2 + sd ** 2) / (sigma * sd) ** 2
@@ -501,7 +511,6 @@ class FieldHead(nn.Module):
         if generator is not None and M != 1:
             raise ValueError("pass a seed (not a generator) for M > 1, so each "
                              "member's generator can be derived reproducibly")
-        B = z_t.shape[0]
         dev, dt_ = z_t.device, z_t.dtype
         sig = self.sigma_ladder(n_steps, sigma_min, sigma_max, rho,
                                 device=dev, dtype=dt_)
@@ -510,18 +519,29 @@ class FieldHead(nn.Module):
             g = generator if generator is not None else \
                 self.member_generator(seed, m, device=dev.type)
             x = torch.randn(z_t.shape, generator=g, device=dev, dtype=dt_) * sig[0]
-            for i in range(len(sig) - 1):
-                s_i, s_n = sig[i], sig[i + 1]
-                sv = s_i.expand(B)
-                d = (x - self.D(x, sv, cond_tokens)) / s_i
-                x_next = x + (s_n - s_i) * d
-                if float(s_n) > 0.0:
-                    sv2 = s_n.expand(B)
-                    d2 = (x_next - self.D(x_next, sv2, cond_tokens)) / s_n
-                    x_next = x + (s_n - s_i) * 0.5 * (d + d2)
-                x = x_next
-            outs.append(z_t + x)
+            outs.append(self.sample_from(cond_tokens, z_t, x, sig))
         return torch.stack(outs, dim=0)
+
+    @torch.no_grad()
+    def sample_from(self, cond_tokens, z_t, x_init, sig):
+        """One Heun integration from a SUPPLIED initial state, down a SUPPLIED
+        ladder — the deterministic core of `sample`, split out as the parity
+        surface: the JAX gates hand both frameworks the identical `x_init`
+        (already scaled by sig[0]) so the comparison isolates the integrator
+        and the model from the RNG. Returns z_t + r, shape [B, P, d_z]."""
+        B = z_t.shape[0]
+        x = x_init
+        for i in range(len(sig) - 1):
+            s_i, s_n = sig[i], sig[i + 1]
+            sv = s_i.expand(B)
+            d = (x - self.D(x, sv, cond_tokens)) / s_i
+            x_next = x + (s_n - s_i) * d
+            if float(s_n) > 0.0:
+                sv2 = s_n.expand(B)
+                d2 = (x_next - self.D(x_next, sv2, cond_tokens)) / s_n
+                x_next = x + (s_n - s_i) * 0.5 * (d + d2)
+            x = x_next
+        return z_t + x
 
 
 def nfe_to_steps(nfe):
