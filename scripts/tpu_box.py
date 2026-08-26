@@ -83,6 +83,7 @@ import base64
 import http.client
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -715,6 +716,24 @@ def cmd_create(a):
     if a.startup_file:
         with open(a.startup_file) as fh:
             startup = fh.read()
+        # REFUSE UNSUBSTITUTED PLACEHOLDERS. tpu_train_field.sh ships with
+        # __BUCKET__/__NODE__/__TPUZONE__ tokens the bake's sed must fill.
+        # On 2026-08-26 a rebake regenerated from an INCOMPLETE sed (the
+        # knob overrides, not the placeholders), and three consecutive nodes
+        # ran the whole launcher blind: staging fell back to the releases
+        # and worked, but every upload went to a bucket literally named
+        # "__BUCKET__" and self-delete targeted zone "__TPUZONE__" — nodes
+        # that could neither report nor reap, misread as zombies for hours.
+        # Assignments only: the launchers' comment headers legitimately
+        # mention the tokens when documenting the sed itself.
+        ph = sorted(set(re.findall(r'^\s*\w+="(__[A-Z]+__)"', startup,
+                                   re.MULTILINE)))
+        if ph:
+            raise SystemExit(
+                f"{a.startup_file} still assigns unsubstituted placeholder(s) "
+                f"{', '.join(ph)} — the bake's sed must fill every __TOKEN__ "
+                f"before a node may run it (see the launcher's header for the "
+                f"full sed).")
     method, url, body = create_request(project, zone, a.name, a.accelerator_type,
                                        a.runtime_version, a.spot, startup)
     if a.dry_run:
