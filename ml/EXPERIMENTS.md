@@ -72,6 +72,49 @@ falsifiers and cost arithmetic:
 [the E-053 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E053_spacetime_stencil.md)
 · [the two-slide deck](https://blauewelt.github.io/earth/ml/figures/spacetime_stencil.html).
 
+**E-053.0 MEASURED, 2026-08-26 ~15:30Z ($0 GPU, `ml/spacetime_corr.py`): THE
+CONE IS REFUTED AT ITS OWN INSTRUMENT — THE BALL FORM WINS — AND THE ANALOG
+IS VISIBLE IN THE SUBSTRATE.** Over 7,308 deseasonalized pixel pairs
+(55–4,400 km, ±180-day lags, ordering asserted against the 86,698-pixel
+inventory), the cross-correlation ridge sits at **lag 0 at every
+separation's median** (p75 moves only in the far tail: 5 d at ~2,000 km,
+30 d at ~4,400 km) — no single advective c exists at this instrument, so
+each slot's Δt is placed by the agnostic ball/ramp, not an advective cone
+(Chris's "equally distributes also in the time dimension", measured right).
+And the centres' own deseasonalized autocorrelation falls to **0.100 at
+180 d then RISES to 0.143 at 1 y and 0.113 at 2 y** — the seasonal analog
+carries real beyond-climatology information, directly motivating A1's pins.
+Numbers + caveats (argmax-lag blindness to sub-dominant advection; wind
+channels inflate lag-0): plan §4 and `ml/runs/e053_cone.json`.
+
+**E-053.1 DISPATCHED, 2026-08-26 ~15:5xZ — three arms, sequential on
+gpu-box-39184683 (Vast 47724565, 504 GB RAM, tensor + Z warm from
+#423/#427/#432).** All three: **#427's exact configuration (206.5M-class
+xl144+znoise head, stencil 145, ring spiral, znoise 0.7, grad-clip 128,
+seed 0) · stage stage-2 · data family4_na025_pentad_r2 · resume run-415
+(steps 197,428 — read off the artefact, nothing trains in stage 1) ·
+temporal_steps 20,000 × 256 · recipe xl144-zn-pentad-nolonhold + the
+`--frame-offsets` tail (instrument commit 5734328, bit-identical off).**
+Params shift only with the pos table: 206,527,520 (K_eff 16) / 206,535,712
+(24) / 206,543,904 (32). Controls, already measured: uniform K=24 (115-d
+span) 0.5056/0.5045; uniform K=144 (715-d span) 0.0820 (#478). Read-out:
+the one-step z ratio vs each arm's own persistence (unchanged target ⇒
+unchanged denominator); pooled probes emitted, excluded. n=1 directions
+(§3b). NO ROLL from these heads without the E-043b-PHASE battery — and
+rollout_spatial refuses offset heads outright until offset-aware assembly
+exists.
+
+| run | arm | K_eff · span | offsets | registered reading |
+|---|---|---|---|---|
+| #486 | **A1 analog-only** | 16 · 735 d | dense 0…−6, −8,−10,−12, pins −73±1, −146±1 | ratio ≲0.12 ⇒ span's value IS the analog (sparsifies ~10×); ≳0.3 ⇒ dense slow-mode context matters |
+| #487 | **A2 log-ramp-24** | 24 · 715 d | log-spaced 0…−143 (incl. −73) | ≈0.08 at 1/6 the frames ⇒ span decoupled from K; ≈0.5 ⇒ the slab was load-bearing |
+| #488 | **A3 decade-32** | 32 · 3,650 d | log ramp 0…−730 + pins at −1…−10 y | first >2-y span at any cadence; ratio < 0.0820 ⇒ span still paying (decadal territory); ≈0.082 ⇒ 2 y saturates |
+
+Cost ≈ $1.1–1.5/arm on the $0.308/h HK box (0.35 s/step × 20k ≈ 2 h + warm
+preamble), job_timeout 600 min each (the E-045 HK lesson). A3's pool
+shrinks by construction (t ≥ 730: ~77% of anchors remain) — printed count
+checked at first minutes, not a bug.
+
 ---
 
 <a id="e-052"></a>

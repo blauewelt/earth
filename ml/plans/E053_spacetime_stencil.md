@@ -83,13 +83,30 @@ the existing dead-slot/missing-token path.
 
 ## 4 · Staged execution, cheap first
 
-**E-053.0 — measure c, $0 GPU.** Space-time cross-correlation of the
-published pentad Z (`Z_8b639abe36_37e146384b`, 16.24 GiB, CPU job): for
-pixel pairs at separation r, the lag Δt* maximizing corr(z(x,t),
-z(x+r,t+Δt)). The ridge Δt*(r) *is* the measured cone; its slope is c (or
-shows there is no single c, which decides BALL over CONE). Also yields the
-marginal value-of-information curve in Δt at r=0 — the empirical basis for
-the log ramp. One afternoon, one script, publishable as a figure.
+**E-053.0 — measure c, $0 GPU. RUN 2026-08-26 (`ml/spacetime_corr.py`,
+`ml/runs/e053_cone.json`, `ml/figures/fig_e053_cone.png`), and the datum
+DECIDED: BALL, not CONE.** Over 7,308 pixel pairs at separations 55–4,400 km
+(400 centres, E/W/N/S partners, deseasonalized, ±180-day lags), the
+cross-correlation ridge sits at **lag 0 days at every separation's median**
+out to 2,500 km — only the far tail moves (p75 = 5 d at ~2,000 km, 30 d at
+~4,400 km). At this instrument the z field's spatial covariance is
+instantaneous large-scale structure, not resolvable advection, so **no
+single c exists and the agnostic ball form ("equally distributes also in
+the time dimension") wins over the advective cone** — the pre-registered
+tie-breaker, resolved in one CPU afternoon. Caveats on the record: the
+argmax-lag instrument cannot see an advective signal that is small beside
+the standing covariance, and z mixes 40 channels including wind (fast,
+large-scale, atmospheric), which inflates lag-0 covariance — so "the cone
+is not the dominant structure" is measured; "there is no advection in the
+field" is not claimed. The instrument also measured the log-ramp's basis
+and the analog directly: the centres' own deseasonalized autocorrelation
+falls 0.44 (5 d) → 0.26 (15 d) → 0.18 (60 d) → **0.100 (180 d), then RISES
+to 0.143 at one year and 0.113 at two** — last year's same-calendar state
+carries real anomaly information beyond climatology, the seasonal-analog
+mechanism visible in the substrate itself (the raw curve adds a further
+~0.09 of calendar share at both lags, conflated with the Argo observing
+pattern per §6). Spatial context: lag-0 correlation 0.90 at 55 km, 0.63 at
+330 km, 0.10 at 4,400 km.
 
 **E-053.1 — the time-sunflower on FRAMES (no architecture change).** Keep
 the per-frame 145-slot concat exactly as-is; make the frame *times*
