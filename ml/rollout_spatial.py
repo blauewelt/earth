@@ -2036,6 +2036,24 @@ def main():
         t_head = time.time()
         tk = torch.load(hp, map_location="cpu", weights_only=False)
         ta = tk["args"]
+        # E-053.1 · REFUSE A NON-CONTIGUOUS HEAD, at the point the file is
+        # opened and before any geometry, embedding or roll is built (§0.3,
+        # §5.16). A head trained with --frame-offsets read frame j at
+        # t+offsets[j]; this roller assembles a CONTIGUOUS [t-K+1 .. t] slab
+        # and self-feeds one bin at a time, so it would hand such a head a
+        # window it has never seen — and produce a corridor AUC that looks
+        # exactly like every other one. Offset-aware context assembly is
+        # E-053.1's own follow-up; until it exists the honest answer is to
+        # stop.
+        _foff = str(ta.get("frame_offsets", "") or "")
+        if _foff:
+            sys.exit(
+                f"{os.path.basename(hp)} was trained with --frame-offsets "
+                f"{_foff!r} (E-053.1): its context frames are NOT contiguous, "
+                f"and this roller builds a contiguous window and feeds its "
+                f"own prediction into the next bin. Rolling it here would "
+                f"score a head on inputs it never saw and report the number "
+                f"as comparable. Refusing.")
         K = ta["K"]
         if K_seen is None:
             K_seen = K

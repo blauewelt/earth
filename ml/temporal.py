@@ -392,7 +392,26 @@ def build_stencil(H, W, ys, xs, stencil, ring_km=0.0, lats=None,
     return NBR
 
 
-def gather_stencil(Zt, base, p, NBR_t, K):
+def frame_ref(t, K, offsets=None):
+    """The index every window gather is written against, given the window's
+    ANCHOR t (the frame whose teacher-forced target is the headline t+1).
+
+    Contiguous frames: the window START t-K+1, because frame j sits at ref+j.
+    E-053.1 offsets: the anchor t ITSELF, because frame j sits at
+    ref+offsets[j] and offsets[-1] == 0. Accepts an int or a tensor."""
+    return (t - K + 1) if offsets is None else t
+
+
+def frame_steps(K, offsets=None):
+    """The per-frame step from `frame_ref`: `range(K)` for the contiguous
+    stencil, the offset list for E-053.1. The frame arithmetic exists ONCE —
+    gather_stencil, the season gather and the per-frame target gather all
+    iterate this, so a new sampling pattern cannot reach one of them and miss
+    the other two."""
+    return range(K) if offsets is None else offsets
+
+
+def gather_stencil(Zt, base, p, NBR_t, K, offsets=None):
     """The ONE window-input gather (plan §3.4): every consumer of model
     inputs — train batch, monitor, light probe, eval — goes through here,
     so the stencil logic exists exactly once. Targets stay centre-only
@@ -401,14 +420,23 @@ def gather_stencil(Zt, base, p, NBR_t, K):
     Zt [T, P, d_z] · base [n] window-start month indices · p [n] centre
     pixels · NBR_t None (stencil 1 → the exact legacy gather) or [P, S]
     int64 with -1 = missing. Returns zseq [n, K, d_z] or [n, K, S*d_z]
-    float32; missing neighbours are zero-filled."""
+    float32; missing neighbours are zero-filled.
+
+    E-053.1 · `offsets`: None (default) keeps the contiguous stencil, where
+    `base` is the window START and frame j sits at base+j — literally
+    `range(K)`, so the off path is the arithmetic that produced every
+    archived number and not a special case of the new one. A non-None
+    `offsets` is a strictly increasing tuple ending in 0, `base` becomes the
+    window ANCHOR t, and frame j sits at t+offsets[j]: the sunflower taken
+    into the time dimension (ml/plans/E053_spacetime_stencil.md §4)."""
+    steps = frame_steps(K, offsets)
     if NBR_t is None:
-        return torch.stack([Zt[base + j, p] for j in range(K)], 1).float()
+        return torch.stack([Zt[base + j, p] for j in steps], 1).float()
     nbr = NBR_t[p]                                        # [n, S]
     miss = nbr < 0
     safe = nbr.clamp(min=0)
     cols = []
-    for j in range(K):
+    for j in steps:
         zj = Zt[(base + j).unsqueeze(1), safe].float()    # [n, S, d_z]
         zj[miss] = 0.0
         cols.append(zj.flatten(1))
@@ -1467,6 +1495,44 @@ def main():
                          "6.15x below the smallest pentad excursion (787.2). "
                          "Reaches temporal.py through the window's sched: "
                          "tail, which the workflow hands over verbatim.")
+    ap.add_argument("--frame-offsets", default="",
+                    help="E-053.1: give each CONTEXT FRAME its own time "
+                         "offset, in bins, relative to the window anchor t "
+                         "(the frame whose target is the headline t+1). "
+                         "EMPTY (default) = the implicit contiguous stencil "
+                         "[-(K-1) .. -1, 0] and the literal pre-2026-08-26 "
+                         "code path, so every archived number stays "
+                         "bit-reproducible. Set it to a comma list — "
+                         "'-146,-145,-73,-72,-6,-5,-4,-3,-2,-1,0' — that is "
+                         "STRICTLY INCREASING, all <= 0, and ENDS AT 0. K is "
+                         "then DERIVED as len(offsets) and overrides --K, "
+                         "because the number of frames is no longer free once "
+                         "their times are named; the printed 'frame offsets:' "
+                         "line states the derived K and the span. WHY THE "
+                         "LAST MUST BE 0: the head reads hidden(-1) and its "
+                         "headline target is t+1, so a last frame before t "
+                         "would move the forecast step and silently change "
+                         "the persistence denominator every archived ratio is "
+                         "quoted against — E-053's whole point is that only "
+                         "the CONTEXT sampling moves. Each frame's own "
+                         "teacher-forced target is the bin after ITS OWN "
+                         "time, and its season token comes from its own time. "
+                         "Pool bound generalises t >= K-1 to t >= -offsets[0], "
+                         "so a long span buys fewer windows; that is correct. "
+                         "The learned position embedding IS the delta-t "
+                         "encoding here — position <-> offset is a bijection "
+                         "at a FIXED pattern per run — so no new parameters "
+                         "exist. Refuses in combination with --unroll>1, "
+                         "--unroll-wide, --time-stride>1 and --direct (all of "
+                         "them reach past the window along a contiguous axis "
+                         "this list no longer has). Reaches temporal.py "
+                         "through the window's sched: tail, which the "
+                         "workflow hands over verbatim — no workflow edit. "
+                         "PASS IT AS ONE WORD, --frame-offsets=-5,-2,0: the "
+                         "list starts with a minus, and a bare '-5,-2,0' in "
+                         "the next argv slot is read by argparse as an option "
+                         "string, not a value (the --train-lon-hold trap). "
+                         "Plan: ml/plans/E053_spacetime_stencil.md 4.")
     ap.add_argument("--unroll-wide", type=int, default=0,
                     help="E-030: unrolled training for WIDE stencils via "
                          "one-hop self-generated context (Chris, 2026-08-15: "
@@ -1644,6 +1710,79 @@ def main():
     if a.grad_clip < 0:
         sys.exit(f"--grad-clip {a.grad_clip} must be >= 0 (0 = off, and off "
                  f"makes no clip_grad_norm_ call at all).")
+
+    # ---- E-053.1: --frame-offsets, the sunflower taken into TIME ----------
+    # Same placement rule as the clip above: the whole block depends only on
+    # argv, so it runs before the tensor is opened and before one second of
+    # GPU is rented (ml/CLAUDE.md §0.3, §5.16).
+    FOFF = None
+    if a.frame_offsets.strip():
+        try:
+            FOFF = tuple(int(x) for x in a.frame_offsets.split(",")
+                         if x.strip())
+        except ValueError:
+            sys.exit(f"--frame-offsets {a.frame_offsets!r}: every entry must "
+                     f"be an integer number of bins.")
+        if len(FOFF) < 2:
+            sys.exit(f"--frame-offsets {a.frame_offsets!r}: needs at least 2 "
+                     f"frames (got {len(FOFF)}). A one-frame context is not a "
+                     f"sequence and the causal attention has nothing to do.")
+        if any(o > 0 for o in FOFF):
+            sys.exit(f"--frame-offsets {a.frame_offsets!r}: every offset must "
+                     f"be <= 0. A positive offset reads the future — the one "
+                     f"thing the whole protocol is built to make impossible.")
+        if any(nxt <= cur for cur, nxt in zip(FOFF, FOFF[1:])):
+            sys.exit(f"--frame-offsets {a.frame_offsets!r}: must be STRICTLY "
+                     f"INCREASING — oldest first, no duplicates. The causal "
+                     f"mask and the position embedding both read the frame "
+                     f"order as time order, so an unsorted list trains a head "
+                     f"whose attention is wrong in a way nothing reports.")
+        if FOFF[-1] != 0:
+            sys.exit(f"--frame-offsets {a.frame_offsets!r}: the LAST offset "
+                     f"must be 0 (got {FOFF[-1]}). The head reads hidden(-1) "
+                     f"and its headline target is t+1; a last frame before t "
+                     f"moves the forecast step and silently changes the "
+                     f"persistence denominator every archived ratio is quoted "
+                     f"against. E-053 moves the CONTEXT, never the target.")
+        # THE COMBINATION REFUSALS. Each of these reaches PAST the window
+        # along an axis that a contiguous stencil supplies and an offset list
+        # does not — and each would run, and produce a number, if it were
+        # merely left alone. Refuse at argument time instead.
+        if max(1, a.unroll) > 1:
+            sys.exit(f"--frame-offsets is incompatible with --unroll "
+                     f"{a.unroll}: the unroll feeds its own prediction back "
+                     f"as the NEXT CONTIGUOUS BIN's input, and a "
+                     f"non-contiguous frame list has no such slot to feed. "
+                     f"Train offset arms at U=1 (E-010/E-020 closed the "
+                     f"unroll axis anyway).")
+        if a.unroll_wide:
+            sys.exit(f"--frame-offsets is incompatible with --unroll-wide "
+                     f"{a.unroll_wide}: the wide unroll re-gathers each "
+                     f"neighbour's OWN contiguous window to generate its "
+                     f"one-hop prediction, which is a window shape this flag "
+                     f"has just redefined. One mechanism per arm.")
+        if a.time_stride > 1:
+            sys.exit(f"--frame-offsets is incompatible with --time-stride "
+                     f"{a.time_stride}: the stride resamples the time axis "
+                     f"under the offsets, so '-73' would mean 73 KEPT bins "
+                     f"and not 73 bins of the tensor the list was written "
+                     f"against. Two time surgeries at once is one too many.")
+        if a.direct.strip():
+            sys.exit(f"--frame-offsets is incompatible with --direct "
+                     f"{a.direct!r}: the direct heads score horizons past the "
+                     f"window's END, and the pool guard that keeps those bins "
+                     f"train-months is written against a contiguous reach. "
+                     f"Run the offset arms at t+1 only.")
+        # DERIVED K, and it OVERRIDES --K rather than being checked against
+        # it: once the frame TIMES are named the frame COUNT is no longer a
+        # free parameter, and a dispatch that carries both (recipes always
+        # set --K) would otherwise have to keep the two in sync by hand —
+        # the copying exercise that produced #395 and #387.
+        if a.K != len(FOFF):
+            print(f"--frame-offsets overrides --K {a.K} -> {len(FOFF)}")
+        a.K = len(FOFF)
+        print(f"frame offsets: K={len(FOFF)} {list(FOFF)} "
+              f"span={-FOFF[0]} bins", flush=True)
 
     torch.manual_seed(a.seed)
     np.random.seed(a.seed)
@@ -2141,7 +2280,33 @@ def main():
         leaves it does. Identity (the same object) when the knob is off."""
         return z if QIN is None else QIN(z)
 
-    K = a.K
+    K = a.K              # E-053.1: already len(FOFF) when --frame-offsets set
+    # ---- E-053.1 · the window's own geometry, in ONE place ----------------
+    # CTX_BACK is how far the EARLIEST frame reaches behind the anchor: K-1
+    # under the contiguous stencil, -offsets[0] under a list. Every pool
+    # bound and every valid-t range below is written against this single
+    # number, so the two paths cannot drift apart the way a second guard
+    # written for one of them would.
+    CTX_BACK = (K - 1) if FOFF is None else -FOFF[0]
+
+    def win_ref(t):
+        """What the three window gathers key off — see frame_ref()."""
+        return frame_ref(t, K, FOFF)
+
+    def win_mseq(ref):
+        """Season features PER FRAME, from that frame's own time — a frame at
+        t-73 is a different month from the anchor, and pretending otherwise
+        would hand the head a calendar that contradicts its own z."""
+        return torch.stack([Mt[ref + j] for j in frame_steps(K, FOFF)], 1)
+
+    def win_ztgt(ref, p):
+        """Teacher-forced target per frame: the embedding ONE BIN AFTER that
+        frame's own time. Every token keeps predicting its own next step (the
+        objective is unchanged in form); only the times the tokens sit at
+        move. The last frame's target is t+1 exactly, as before."""
+        return torch.stack([Zt[ref + j + 1, p]
+                            for j in frame_steps(K, FOFF)], 1).float()
+
     # With --unroll U the loss reaches U months past the window, so the pool
     # must guarantee those months EXIST and are TRAIN months. Without this the
     # unrolled steps would either index off the end of the array or be scored
@@ -2198,7 +2363,13 @@ def main():
     # UF, not U: --unroll-wide 2 scores the centre pixel at t+2, so t+2 must
     # exist and be a train month exactly as a plain U=2 would require.
     reach = sorted(set(range(1, UF + 1)) | set(D))
-    ok_t = np.array([t + reach[-1] < T and t + 1 >= K
+    # `t >= CTX_BACK` IS the old `t + 1 >= K` when FOFF is None (CTX_BACK is
+    # K-1 there); with offsets it is `t + offsets[0] >= 0`, i.e. the earliest
+    # frame must exist. It sits ON TOP of every existing condition — the
+    # target-month holdout, the reach guard, the Argo filter below — so a
+    # long span shrinks the printed train-window count and changes nothing
+    # else about who is eligible.
+    ok_t = np.array([t + reach[-1] < T and t >= CTX_BACK
                      and not any(t_hold[t + r] for r in reach)
                      for t in range(T)])
     # --target-bins-argo: the SAME reach, filtered by what the scored bins
@@ -2241,6 +2412,16 @@ def main():
     pool_p = torch.as_tensor(pool_p, dtype=torch.long)
     print(f"train windows: {len(pool_t):,}")
 
+    # E-053.1 · WHY THIS NEEDS NO NEW PARAMETERS. `k_max=K` sizes the learned
+    # position embedding, and with a FIXED offset pattern per run the map
+    # position <-> offset is a bijection: slot j is ALWAYS the frame at
+    # t+offsets[j], in every window of every step. So `pos` already IS the
+    # delta-t encoding the plan asks for, learned rather than prescribed, and
+    # no separate Δt table is added. What DOES change is the table's height —
+    # a derived K of 16 gives a 16-row `pos` where K=24 gives 24 — so the
+    # head's parameter count SHIFTS with the offset list's length. Read the
+    # count off the run's own `stage2_config.params_M`; never carry one over
+    # from an arm at a different K.
     model = TemporalTransformer(d_z=ck["d_z"], d_model=a.d_model,
                                 n_layers=a.layers, k_max=K, direct=D,
                                 stencil=a.stencil)
@@ -2419,10 +2600,10 @@ def main():
     def batch_windows(idx_t, idx_p, n):
         k = torch.randint(0, len(idx_t), (n,))
         t, p = idx_t[k], idx_p[k]
-        base = t - K + 1
-        zseq = gather_stencil(Zt, base, p, NBR_t, K)
-        mseq = torch.stack([Mt[base + j] for j in range(K)], 1)
-        ztgt = torch.stack([Zt[base + j + 1, p] for j in range(K)], 1).float()
+        base = win_ref(t)          # window start, or the anchor under offsets
+        zseq = gather_stencil(Zt, base, p, NBR_t, K, FOFF)
+        mseq = win_mseq(base)
+        ztgt = win_ztgt(base, p)
         # True embeddings BEYOND the window, for the autoregressive unroll:
         # zfut[:, u] = Z[t+1+u] is the truth the model must hit after u
         # SELF-FED steps — u, not u+1. Column 0 is therefore the ordinary
@@ -2517,6 +2698,12 @@ def main():
                           # dispatch inputs, so both belong on the live branch.
                           "input_znoise": a.input_znoise,
                           "grad_clip": a.grad_clip,
+                          # E-053.1: the frame TIMES, for the same reason —
+                          # an arm whose only difference is where in the past
+                          # its context sits must be readable from the live
+                          # branch, not inferred from K and params_M.
+                          "frame_offsets": a.frame_offsets,
+                          "frame_span": int(CTX_BACK),
                           # WHICH LONGITUDES TRAINED. Named here for the same
                           # reason `stencil` is: an arm whose only difference
                           # is its training pool must be readable from the
@@ -2533,16 +2720,21 @@ def main():
     # selected on it. And the light transport probe every 10% of the run:
     # E-008's question ("z improves — does transport?") deserved a curve,
     # not two endpoints.
-    ev_m = np.array([t + 1 < T and t_hold[t + 1] and t + 1 >= K
+    # E-053.1: the monitor's POPULATION is unchanged in kind — windows whose
+    # t+1 is a holdout bin — and `mon_ztrue`/`mon_pers` below still key on
+    # t+1 and t alone, so `val_zmse`, `val_persistence` and every ratio read
+    # off them keep their exact meaning. Only how far back a window must
+    # reach moves, and that is CTX_BACK.
+    ev_m = np.array([t + 1 < T and t_hold[t + 1] and t >= CTX_BACK
                      for t in range(T)])
     emt, emp = np.where(ev_m[:, None] & np.ones(P, bool)[None, :])
     _mr = np.random.default_rng(12345)
     msel = _mr.choice(len(emt), min(4096, len(emt)), replace=False)
     emt = torch.as_tensor(emt[msel], dtype=torch.long)
     emp = torch.as_tensor(emp[msel], dtype=torch.long)
-    _mb = emt - K + 1
-    mon_zseq = qz(gather_stencil(Zt, _mb, emp, NBR_t, K).to(TDEV))
-    mon_mseq = torch.stack([Mt[_mb + j] for j in range(K)], 1).to(TDEV)
+    _mb = win_ref(emt)
+    mon_zseq = qz(gather_stencil(Zt, _mb, emp, NBR_t, K, FOFF).to(TDEV))
+    mon_mseq = win_mseq(_mb).to(TDEV)
     mon_sctx = static_ctx[emp].to(TDEV)
     mon_ztrue = Zt[emt + 1, emp].float().to(TDEV)
     mon_pers = float((Zt[emt, emp].float().to(TDEV) - mon_ztrue).pow(2).mean())
@@ -2607,7 +2799,7 @@ def main():
         _prv_des = _prv - _pclim[_prmoy]
         _, _psec = rapid_section(lats, lons, ys, xs)
         _psec_t = torch.as_tensor(np.asarray(_psec), dtype=torch.long)
-        _pok = _pridx >= K - 1
+        _pok = _pridx >= CTX_BACK
         _psec_ctx = static_ctx[_psec_t].to(TDEV)
     except Exception as _e:                     # monitoring never breaks a run
         print(f"  (in-training probe disabled: {_e})")
@@ -2878,14 +3070,17 @@ def main():
                 try:
                     with torch.no_grad():
                         F_ = np.zeros((T, a.d_model), np.float32)
-                        for t_ in range(K - 1, T):
-                            b_ = t_ - K + 1
+                        # E-053.1: the valid-t range is the pool bound again
+                        # (CTX_BACK, = K-1 with contiguous frames), and the
+                        # window is assembled through the same two helpers.
+                        for t_ in range(CTX_BACK, T):
+                            b_ = win_ref(t_)
                             zs_ = gather_stencil(
                                 Zt, torch.full_like(_psec_t, b_), _psec_t,
-                                NBR_t, K)
+                                NBR_t, K, FOFF)
                             ms_ = torch.stack(
                                 [Mt[b_ + j].expand(len(_psec), -1)
-                                 for j in range(K)], 1)
+                                 for j in frame_steps(K, FOFF)], 1)
                             _, hd_ = model(qz(zs_.to(TDEV)), ms_.to(TDEV),
                                            _psec_ctx)
                             F_[t_] = hd_[:, -1].mean(0).cpu().numpy()
@@ -2962,19 +3157,21 @@ def main():
         "n_train_months": int((~t_hold).sum()),
         "stencil": int(a.stencil),         # E-022: part of the arm's identity
         "ring_km": a.ring_km,              # E-023/E-026: radius, or radii
+        "frame_offsets": a.frame_offsets,  # E-053.1: and so are the frame times
+        "frame_span": int(CTX_BACK),
     }
 
     # ---- eval 1: z-space t+1 on held-out target months --------------------
     with torch.no_grad():
-        ev_t = np.array([t + 1 < T and t_hold[t + 1] and t + 1 >= K
+        ev_t = np.array([t + 1 < T and t_hold[t + 1] and t >= CTX_BACK
                          for t in range(T)])
         et, ep = np.where(ev_t[:, None] & np.ones(P, bool)[None, :])
         sel = np.random.default_rng(a.seed).choice(len(et), min(20000, len(et)), replace=False)
         et = torch.as_tensor(et[sel], dtype=torch.long)
         ep = torch.as_tensor(ep[sel], dtype=torch.long)
-        base = et - K + 1
-        zseq = gather_stencil(Zt, base, ep, NBR_t, K)
-        mseq = torch.stack([Mt[base + j] for j in range(K)], 1)
+        base = win_ref(et)
+        zseq = gather_stencil(Zt, base, ep, NBR_t, K, FOFF)
+        mseq = win_mseq(base)
         pred, hid = _chunked_forward(model, qz(zseq), mseq,
                                      static_ctx[ep], TDEV)
         # already on CPU: everything
@@ -3033,8 +3230,8 @@ def main():
         results["z_direct"] = {}
         with torch.no_grad():
             for h_ in D:
-                evh = np.array([t + h_ < T and t_hold[t + h_] and t + 1 >= K
-                                for t in range(T)])
+                evh = np.array([t + h_ < T and t_hold[t + h_]
+                                and t >= CTX_BACK for t in range(T)])
                 eth, eph = np.where(evh[:, None] & np.ones(P, bool)[None, :])
                 if not len(eth):
                     continue
@@ -3042,9 +3239,9 @@ def main():
                     len(eth), min(20000, len(eth)), replace=False)
                 et_ = torch.as_tensor(eth[sel], dtype=torch.long)
                 ep_ = torch.as_tensor(eph[sel], dtype=torch.long)
-                base = et_ - K + 1
-                zsq = gather_stencil(Zt, base, ep_, NBR_t, K)
-                msq = torch.stack([Mt[base + j] for j in range(K)], 1)
+                base = win_ref(et_)
+                zsq = gather_stencil(Zt, base, ep_, NBR_t, K, FOFF)
+                msq = win_mseq(base)
                 _, hd = _chunked_forward(model, qz(zsq), msq,
                                          static_ctx[ep_], TDEV)
                 zh = model.heads_direct[str(h_)](hd[:, -1].to(TDEV)).cpu()
@@ -3066,12 +3263,12 @@ def main():
     sec_pix = torch.as_tensor(sec_after, dtype=torch.long)
     with torch.no_grad():
         F = np.zeros((T, a.d_model), dtype=np.float32)
-        for t in range(K - 1, T):
-            base = t - K + 1
+        for t in range(CTX_BACK, T):
+            base = win_ref(t)
             zseq = gather_stencil(Zt, torch.full_like(sec_pix, base),
-                                  sec_pix, NBR_t, K)
+                                  sec_pix, NBR_t, K, FOFF)
             mseq = torch.stack([Mt[base + j].expand(len(sec_pix), -1)
-                                for j in range(K)], 1)
+                                for j in frame_steps(K, FOFF)], 1)
             _, hid = model(qz(zseq.to(TDEV)), mseq.to(TDEV),
                            static_ctx[sec_pix].to(TDEV))
             F[t] = hid[:, -1].mean(0).cpu().numpy()   # pool along the section
@@ -3081,7 +3278,7 @@ def main():
     tr_all = ~t_hold[ridx]
     rclim = np.array([rv_raw[tr_all & (rmoy == m)].mean() for m in range(12)])
     rv_des = rv_raw - rclim[rmoy]
-    ok = ridx >= K - 1
+    ok = ridx >= CTX_BACK
     ri = ridx[ok]
     tr, te = ~t_hold[ri], t_hold[ri]
     r_raw, _ = ridge_r(F[ri], rv_raw[ok], tr, te)
