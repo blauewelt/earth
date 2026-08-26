@@ -385,6 +385,29 @@ warmup window then 0, nonfinite 0, grad_norm_max 320.8 absorbed by clip 128.
 the pre-registered decision threshold; the run is GO. 200k ETA ≈08:30Z
 08-26.** First rolling checkpoint (2.4G) confirmed on the bucket.
 
+**05:55Z 08-26 — E-051 MID-RUN: OPERATOR APPROVES ROLL-FIRST; ETA CORRECTED
+FOR THE PROBE/EVAL TAX.** TL;DR — the run is healthy and still learning at
+40% of budget; the plan for the finished head is now fixed: roll first, then
+decide about more steps. *(i)* Step 80,000/200,000, val_zmse **0.97119**
+(ratio-equivalent 0.0453 on its monitor persistence 21.446) and still
+falling: 1.181 @50k → 0.971 @80k. Train 0.753, amp healthy, clean pace
+holding **0.166 s/step**. *(ii)* ETA CORRECTION, on the record: the $90/8:30Z
+projection priced CLEAN steps only; the measured ALL-IN pace is **0.275
+s/step** (monitor evals every 2k + the in-training probe every 20k are the
+difference — 22,025 s of wall at step 80k, not 13,520). **200k now lands
+≈13:50–14:15Z, train leg ≈$155** — still inside the pre-registered ≤$250 GO
+band. *(iii)* **OPERATOR APPROVAL (Chris, 08-26: "Agreed, please go
+ahead.")**: on the 200k head, run the **ROLL FIRST** (E-044b-roll protocol:
+stage `sroll`, horizon 73, 3 starts/holdout-year, ONLY `horizon_auc_daymatched`
+on `corridor_trainlon` comparable, vs the monthly pair's 0.939 and pentad
+−0.499; gate uncertified at pentad by construction — first reading), THEN
+bring the continuation decision (resume from the bucket npz is a true
+continuation, ≈$50/100k steps; LR will be ≈3e-5 at 200k, so a long-halflife
+fresh dispatch is the cleaner instrument if the curve demands a bigger run).
+Continuation itself is NOT pre-approved — it returns to Chris with the
+final curve slope. The head's torch export ships with the finals; publish it
+to model-checkpoints-v1 before the sroll dispatch names it.
+
 **00:05Z 08-26 — LADDER CLOSE-OUT: #484 CANCELLED ON THE SAME CPU SIGNATURE AS
 #476 — E-045.3 IS BLOCKED, AND THE MECHANISM IS NOW A/B-CONFIRMED AS
 CONFIG-TIED, NOT BOX-TIED.**
