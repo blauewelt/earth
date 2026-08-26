@@ -335,8 +335,18 @@ def measure_sigma_data(win, train_ts, cap=256):
     """
     ts = train_ts if len(train_ts) <= cap else train_ts[
         np.linspace(0, len(train_ts) - 1, cap).astype(np.int64)]
-    _, z_t, z_n, _ = win.batch(ts)
-    return float((z_n - z_t).pow(2).mean().sqrt())
+    # ROW PAIRS ONLY — never win.batch(ts): batch() also builds the ctx
+    # stack [B, K, P, d_z] this measurement throws away, which at the real
+    # substrate is ~409 GB and OOM-killed both TPU smoke legs on 2026-08-26
+    # (the jaxport twin has the full story). Same arithmetic: every window
+    # has the same P × d_z count, so the mean of per-window means is the
+    # pooled mean.
+    acc = 0.0
+    for t in np.asarray(ts, np.int64):
+        z_t = win._rows(np.array([int(t)]))[0].float()
+        z_n = win._rows(np.array([int(t) + 1]))[0].float()
+        acc += float((z_n - z_t).pow(2).mean())
+    return float(np.sqrt(acc / len(ts)))
 
 
 # ---------------------------------------------------------------------------

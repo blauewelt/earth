@@ -1013,7 +1013,17 @@ if [ "${MODE}" = "verify" ]; then
     # three gates, and aborting at the first failure would ship a report that
     # cannot say whether the other two pass. The exit status of this script
     # carries the verdict (step 6c).
-    if "${PY}" -u "${G}"; then RC=0; else RC=$?; fi
+    #
+    # JAX_PLATFORMS=cpu: the parity gates certify the PORT — torch and JAX
+    # computing the same numbers from the same code — and that comparison is
+    # only defined with both frameworks on the same device. Left to itself on
+    # this host, JAX takes the TPU and its default-precision (bf16-multiply)
+    # matmuls, and F1's perturbed forward reads max|Δ| 9.2e-03 against a
+    # 1e-05 gate while the zero-init variants stay bitwise — device numerics
+    # presented as a port failure, which cost two verify verdicts on
+    # 2026-08-26. The TPU is exercised where it is the subject: the smoke
+    # legs below.
+    if JAX_PLATFORMS=cpu "${PY}" -u "${G}"; then RC=0; else RC=$?; fi
     T1="$(date +%s)"
     GATE_RC+=("${RC}")
     GATE_WALL+=("$(( T1 - T0 ))")

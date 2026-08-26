@@ -389,8 +389,20 @@ def measure_sigma_data(win, train_ts, cap=256):
     """
     ts = train_ts if len(train_ts) <= cap else train_ts[
         np.linspace(0, len(train_ts) - 1, cap).astype(np.int64)]
-    _, z_t, z_n, _ = win.batch(ts)
-    return float(np.sqrt(np.mean((z_n - z_t) ** 2)))
+    # ROW PAIRS ONLY — never win.batch(ts). The residual needs z_t and z_n;
+    # batch() also builds ctx [B, K, P, d_z], which at the real substrate
+    # (cap 256 × K 144 × P 86,698 × d_z 32, f32) is ~409 GB, and on
+    # 2026-08-26 the kernel OOM-killed BOTH e052-verify smoke legs at that
+    # line on a 189 GB host — rc 137 at ~123 s, no traceback, in det and
+    # diff alike. Identical arithmetic, ~1600× smaller: the mean over
+    # windows of per-window squared-residual means IS the pooled mean,
+    # because every window has the same P × d_z element count.
+    acc = 0.0
+    for t in np.asarray(ts, np.int64):
+        z_t = win._rows(np.array([t]))[0]
+        z_n = win._rows(np.array([t + 1]))[0]
+        acc += float(np.mean((z_n - z_t) ** 2))
+    return float(np.sqrt(acc / len(ts)))
 
 
 # ---------------------------------------------------------------------------
