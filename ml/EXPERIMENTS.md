@@ -270,8 +270,12 @@ becomes the whole next field) · params 200,406,016 (param-matched to the
 (`Z_8b639abe36_37e146384b`, [3142, 86698, 32] f16) · data:
 family4_na025_pentad_r2 (37e14638…) + the derived pixels index · arch:
 OceanTokenizer patch 4 → 5,875 ocean tokens · TemporalCond K=144 (720-d span,
-the E-045 lesson) × d_cond 512 × 2 · FieldDiT d_model 1024 × 10 × 16 heads,
-adaLN-zero, residual prediction (zero-init ⇒ exact persistence at step 0) ·
+the E-045 lesson) × d_cond 512 × 2 · FieldDiT d_model 1024 × 10 × **8 heads**
+(the first launch tried 16 to mirror the stencil tier and OOMed the chip —
+attention scores are [B, H, 5875, 5875] and doubling H is +2.2 GB the 16 GB
+HBM does not have; heads don't change the param count, and 8 is the exact
+configuration the verify measured training at 3.13 s/step) · adaLN-zero,
+residual prediction (zero-init ⇒ exact persistence at step 0) ·
 det mode · steps×batch 24,000 × 8 windows, lr 3e-4 expdecay halflife 4,800
 warmup 2,000, input-znoise 0.7 (context only), seed 0 · holdout: target-bin
 years 2009/2017/2023 (train_stage2's rule) · resume: ckpt_latest.npz on
