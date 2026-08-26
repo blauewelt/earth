@@ -1123,6 +1123,27 @@ archive.
   (measured 2026-08-26), so a spot node can run alongside an on-demand one;
   spot is the default for verify/short jobs and, with bucket resume, for
   training — the honest price is the day's, on-demand list is $1.20/chip-h.
+- **A node can pass the birth check and STILL be a zombie: a maintenance
+  event minutes after creation means the startup script (and therefore the
+  on-node stall watchdog) never ran.** Measured 2026-08-26: e052-verify
+  created 16:16:23Z on spot, accepted READY/HEALTHY, took "a maintenance
+  event" at 16:18:58Z, and shipped ZERO bucket objects for 53 minutes —
+  when the script runs, the first log object lands under `runs/<exp>/logs/`
+  within ~3 minutes (measured on e047a, e051). **The check is the bucket,
+  not the health field**: no object under `runs/<exp>/` within 10 minutes
+  of READY ⇒ the script never ran ⇒ delete and recreate. Do NOT wait for
+  the STALL_MIN watchdog — it lives inside the script that didn't run.
+- **Deleting a node does NOT promptly free its quota, and the counter can
+  read exhausted with ZERO nodes in the project.** Measured 2026-08-26:
+  both v5e serving quotas ('TPUV5s[Preemptible]LitepodServingPerProjectPer
+  ZoneForTPUAPI', limit 4) answered 429 for 35+ minutes after the delete
+  op finished and `list` showed nothing billing, on-demand AND spot alike.
+  The SA cannot read the counters (serviceusage 403), so the only move is
+  a create-retry loop (~5 min apart, alternating kinds) — today's
+  successful creates all came ≥2.5 h after the previous delete of the same
+  kind, so budget for a wait that long before escalating. A 429 here is
+  NOT the "ask for more quota" story the console click-path solves; the
+  limit was granted and the usage is phantom.
 
 ### Failure signatures worth recognising instantly
 
