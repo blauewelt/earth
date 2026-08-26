@@ -160,11 +160,19 @@ GIT_SHA="${GIT_SHA:-}"
 
 # THE DATA, by GCS object name (bucket-relative, no gs:// prefix). Defaults
 # and their provenance: see "THE OBJECTS THIS EXPECTS" above. GCS_PIXELS is
-# optional — train_field.py only needs `--pixels` when the tensor npz does not
-# carry the (ys, xs) pixel index itself.
+# optional in principle — train_field.py only needs `--pixels` when the
+# tensor npz does not carry the (ys, xs) pixel index itself — but MEASURED
+# 2026-08-26 (the first e052-verify that actually reported): the family4
+# pentad r2 npz carries lats/lons/months and NO ys/xs, so both real-data
+# smoke legs refused at step 0. The pixels object below was derived in the
+# sandbox by streaming X.npy channel 0 out of the npz and reproducing
+# temporal.py's own enumeration (`ocean = any-finite over all T; ys, xs =
+# np.where(ocean)`, row-major) — 86,698 pixels, exactly Z's P, and
+# rapid_section() finds 26.5°N with 266 pixels on it. Default it, matched to
+# the default tensor; override BOTH together for any other tensor.
 GCS_TENSOR="${GCS_TENSOR:-tensors/family4_na025_pentad_r2_37e146384b.npz}"
 GCS_Z="${GCS_Z:-tensors/Z_8b639abe36_37e146384b.npy}"
-GCS_PIXELS="${GCS_PIXELS:-}"
+GCS_PIXELS="${GCS_PIXELS:-tensors/pixels_family4_na025_pentad_r2_37e146384b.npy}"
 
 # THE RELEASE-SIDE IDENTITY OF THE SAME TWO ARTEFACTS — the fallback route
 # when the bucket object is absent, transcribed from tpu_train_s2.sh (§4)
