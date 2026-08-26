@@ -176,6 +176,79 @@ const DOCS = {
   102: "f3_anchor41M continued from #101 with the GPU-probe fix.",
 };
 
+// ---- TPU runs -------------------------------------------------------------
+// The mirror's index.json, cut down from the real ml-live-tpu branch of
+// 2026-08-26 (four runs of the six it carried, keys and values verbatim).
+// A TPU run has no workflow run and no ml-live-<n> branch, so nothing else in
+// this file can stand in for it: the whole section is driven by this one file.
+//
+//   e051-k144-full  TRAINING, stage-2 fields          — the live case
+//   e052-k48-warm   TRAINING (UNHEALTHY), mid-embedding — flag + no curve yet
+//   e047a-tpu-60k   FINISHED, finals + a probe's last line
+//   e049-hold       REAPED, i.e. the box went away leaving no checkpoint
+const TPU_INDEX = {
+  runs: [
+    {
+      node: "e047a-tpu-60k", exp: "E-047", state: "FINISHED",
+      metrics_updated: iso(600),
+      finals: ["pixelmae.pt", "pixelmae_jax.npz"],
+      last: {
+        linear_r_deseas: 0.242, linear_r_raw: 0.236, light: true,
+        light_stride: 1, light_n: 1459, light_n_test: 219,
+        probe_seconds: 26.9, step: 60000, wall_s: 10103.5,
+      },
+    },
+    {
+      node: "e049-hold", exp: "E-049", state: "REAPED",
+      metrics_updated: iso(320), finals: [],
+      last: { step: 4000, loss_rec: 1.23 },
+    },
+    {
+      node: "e051-k144-full", exp: "E-051", state: "TRAINING",
+      metrics_updated: iso(3),
+      finals: ["temporal_e051.pt", "temporal_e051_jax.npz", "temporal_ms600.pt"],
+      last: {
+        stage2_step: 172000, stage2_zmse: 0.58916, stage2_loss_base: 0.58916,
+        stage2_val_zmse: 0.73365, stage2_amp: 0.9846, stage2_grad_norm: 1.3991,
+        stage2_lr: 5.2556025953357156e-05, stage2_wall_s: 51713.5,
+        stage2_grad_clip: 128.0, stage2_grad_norm_max: 1.7641,
+        stage2_grad_clip_frac: 0.0, stage2_grad_nonfinite: 0,
+      },
+      verify_report: true,
+    },
+    {
+      node: "e052-k48-warm", exp: "E-052", state: "TRAINING (UNHEALTHY)",
+      metrics_updated: iso(9), finals: [],
+      last: { embedding: { pct: 41.0, month: 214, months: 516,
+                           elapsed_s: 2300, eta_s: 3300, where: "ram" } },
+    },
+  ],
+  updated: iso(2),
+};
+
+// e051's own metrics.jsonl, same shape as the fleet's — which is the point:
+// the card's curve is drawn by parseJsonl + stage2Chart, unchanged.
+const TPU_E051 = jsonl([
+  { stage2_config: { d_model: 1024, layers: 16, K: 144, steps: 200000,
+                     params_M: 206.659, batch: 256, train_windows: 240933742,
+                     d_z: 32, seed: 0, tag: "e051", lr: 0.001 } },
+  { stage2_step: 2000, stage2_zmse: 3.9196, stage2_val_zmse: 4.81991,
+    stage2_lr: 0.001, stage2_wall_s: 367.5 },
+  { stage2_step: 86000, stage2_zmse: 0.9105, stage2_val_zmse: 1.0421,
+    stage2_lr: 2.2e-4, stage2_wall_s: 25800.0 },
+  { stage2_step: 170000, stage2_zmse: 0.55764, stage2_val_zmse: 0.73683,
+    stage2_lr: 5.44e-5, stage2_wall_s: 51382.7 },
+  { stage2_step: 172000, stage2_zmse: 0.58916, stage2_val_zmse: 0.73365,
+    stage2_lr: 5.25e-5, stage2_wall_s: 51713.5 },
+]);
+
+// e052 is still embedding: records, but no stage-2 point to draw yet.
+const TPU_E052 = jsonl([
+  { stage2_config: { d_model: 768, layers: 12, K: 48, steps: 120000, d_z: 32 } },
+  { embedding: { pct: 41.0, month: 214, months: 516, elapsed_s: 2300,
+                 eta_s: 3300, where: "ram" } },
+]);
+
 test.beforeEach(async ({ page }) => {
   await page.route(/https:\/\/api\.github\.com\/.*/, async (route) => {
     const url = route.request().url();
@@ -201,6 +274,13 @@ test.beforeEach(async ({ page }) => {
       steps: 140000, lr: 1e-4, warm: true,
       parent_run: 112, parent_steps: 60000, parent_lr: 1e-3,
     }));
+    // The TPU mirror. Stubbed HERE, for every test, and not only in the tests
+    // that assert on it: the page fetches it once per cycle, so leaving it to
+    // the 404 at the bottom of this handler would make every other test in the
+    // file exercise the "no telemetry" path by accident.
+    if (/ml-live-tpu\/index\.json/.test(url)) return fulfill(JSON.stringify(TPU_INDEX));
+    if (/ml-live-tpu\/e051-k144-full\/metrics\.jsonl/.test(url)) return fulfill(TPU_E051);
+    if (/ml-live-tpu\/e052-k48-warm\/metrics\.jsonl/.test(url)) return fulfill(TPU_E052);
     if (/ml-metrics\/fleet\.json/.test(url)) {
       // $20 credit, $1/h burn, snapshot 2 h old -> $18 left, 18 h runway.
       return fulfill(JSON.stringify({
@@ -447,6 +527,141 @@ test("the fleet panel warns when runway is short", async ({ page }) => {
   await page.goto("/status.html");
   // 3 / 0.9 = 3.3 h — well under the 12 h threshold.
   await expect(page.locator("#fleet")).toContainText("under 12 h of runway");
+});
+
+// ---- TPU runs -------------------------------------------------------------
+// E-051 ran for fourteen hours on a Cloud TPU and this page did not know it
+// existed: no workflow run, no ml-live-<n> branch, so the runs list, the
+// phase file and run-<n>.jsonl all had nothing to say. The section under test
+// is fed by exactly one file — ml-live-tpu/index.json, written by
+// scripts/tpu_status_mirror.py — and these tests pin the four things a reader
+// needs from it: which state each run is in, where its experiment is written
+// down, that an unhealthy box says so, and that a missing mirror is a quiet
+// line rather than a broken page.
+
+const tpuCard = (page, node) =>
+  page.locator("#tpu .card").filter({ has: page.locator("h3", { hasText: node }) });
+
+test("the TPU section renders a run in each state, with a distinct badge",
+  async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/status.html");
+  await expect(page.locator("#tpu .card")).toHaveCount(4);
+
+  // The state pill, one class per state, so TRAINING / FINISHED / REAPED are
+  // told apart by colour and not only by reading the word.
+  await expect(tpuCard(page, "e051-k144-full").locator(".st.training")).toHaveText("TRAINING");
+  await expect(tpuCard(page, "e047a-tpu-60k").locator(".st.finished")).toHaveText("FINISHED");
+  await expect(tpuCard(page, "e049-hold").locator(".st.reaped")).toHaveText("REAPED");
+
+  // The live run leads. The mirror's own order is alphabetical by node, which
+  // buried the only running job under three finished ones.
+  await expect(page.locator("#tpu .card").first().locator("h3"))
+    .toContainText("e051-k144-full");
+  expect(errors).toEqual([]);
+});
+
+test("a TPU run links to its experiment definition", async ({ page }) => {
+  await page.goto("/status.html");
+  // Same target as a workflow run's badge: docs.html on the serving origin,
+  // and the EXPLICIT #e-051 anchor rather than a heading-derived one.
+  await expect(tpuCard(page, "e051-k144-full").locator("a.exp")).toHaveAttribute(
+    "href", "http://localhost:8080/docs.html?f=ml/EXPERIMENTS.md#e-051");
+  await expect(tpuCard(page, "e051-k144-full").locator("a.exp")).toHaveText("E-051");
+});
+
+test("an unhealthy box is flagged beside the state it is still in",
+  async ({ page }) => {
+  await page.goto("/status.html");
+  const card = tpuCard(page, "e052-k48-warm");
+  // The mirror writes "TRAINING (UNHEALTHY)": two independent facts, and the
+  // box is still stepping. The badge must not read "TRAINING (UNHEALTHY)" as
+  // if it were a fourth state, and the flag must not be swallowed.
+  await expect(card.locator(".st.training")).toHaveText("TRAINING");
+  await expect(card.locator(".unhealthy")).toBeVisible();
+  // ...and a healthy run carries no flag.
+  await expect(tpuCard(page, "e051-k144-full").locator(".unhealthy")).toHaveCount(0);
+});
+
+test("a TPU card shows the numbers from its own last metrics line",
+  async ({ page }) => {
+  await page.goto("/status.html");
+  // Stage-2 shape: the four that matter, in a fixed order, seconds rendered
+  // as hours (51,713.5 s = 14.4 h).
+  const live = tpuCard(page, "e051-k144-full");
+  await expect(live).toContainText("step 172,000");
+  await expect(live).toContainText("val zmse 0.7337");
+  await expect(live).toContainText("zmse 0.5892");
+  await expect(live).toContainText("wall 14.4 h");
+  await expect(live).toContainText("min ago");
+
+  // Stage-1 shape.
+  await expect(tpuCard(page, "e049-hold")).toContainText("step 4,000");
+  await expect(tpuCard(page, "e049-hold")).toContainText("loss_rec 1.23");
+
+  // A shape with no labelled fields beyond `step`: the unlabelled numbers are
+  // printed by name rather than dropped, so the probe's actual result is on
+  // the card and not just the step it stopped at.
+  await expect(tpuCard(page, "e047a-tpu-60k")).toContainText("step 60,000");
+  await expect(tpuCard(page, "e047a-tpu-60k")).toContainText("linear_r_deseas 0.242");
+
+  // The embedding pass has no step counter at all — a progress bar is the
+  // only thing that separates it from a wedged box.
+  await expect(tpuCard(page, "e052-k48-warm")).toContainText("embedding 41%");
+});
+
+test("a FINISHED TPU run lists what it shipped; a REAPED one has nothing to list",
+  async ({ page }) => {
+  await page.goto("/status.html");
+  await expect(tpuCard(page, "e047a-tpu-60k")).toContainText("pixelmae.pt");
+  await expect(tpuCard(page, "e047a-tpu-60k")).toContainText("pixelmae_jax.npz");
+  // REAPED means the box went away WITHOUT finals — that is what makes it
+  // reaped rather than finished — so there is no finals line to print.
+  await expect(tpuCard(page, "e049-hold").locator(".probe")).toHaveCount(0);
+});
+
+test("a TRAINING TPU run gets the page's own stage-2 curve, not a new one",
+  async ({ page }) => {
+  await page.goto("/status.html");
+  const live = tpuCard(page, "e051-k144-full");
+  await expect(live.locator("svg.chart")).toHaveCount(1);
+  // Drawn by stage2Chart from the run's own metrics.jsonl: four points, and
+  // the held-out line beside the training one.
+  const pts = await live.locator("svg.chart polyline").first().getAttribute("points");
+  expect(pts.trim().split(/\s+/).length).toBe(4);
+  await expect(live).toContainText("HELD-OUT z-MSE — latest 0.7337");
+  // ...and everything else that chart carries comes free with the reuse: the
+  // logged learning rate and an ETA off the run's own wall clock.
+  await expect(live).toContainText("172,000 of 200,000 steps");
+  // A run still building its embedding has no stage-2 point to draw, and a
+  // finished one is not worth a second fetch.
+  await expect(tpuCard(page, "e052-k48-warm").locator("svg.chart")).toHaveCount(0);
+  await expect(tpuCard(page, "e047a-tpu-60k").locator("svg.chart")).toHaveCount(0);
+});
+
+test("no mirrored TPU telemetry is one muted line, not an error", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  // 404 = the branch has not been created yet, which is the ordinary state of
+  // the world before the mirror's first run.
+  await page.route(/ml-live-tpu\/index\.json/, (route) =>
+    route.fulfill({ status: 404, body: "" }));
+  await page.goto("/status.html");
+  await expect(page.locator("#tpu")).toContainText("no TPU telemetry mirrored yet");
+  await expect(page.locator("#tpu .card")).toHaveCount(0);
+  // And the rest of the page is untouched: the section fails on its own.
+  await expect(page.locator("#fleet")).toContainText("credit left");
+  await expect(page.locator("#live .card").first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("a mirror that cannot be reached at all reads the same as an empty one",
+  async ({ page }) => {
+  await page.route(/ml-live-tpu\/index\.json/, (route) => route.abort());
+  await page.goto("/status.html");
+  await expect(page.locator("#tpu")).toContainText("no TPU telemetry mirrored yet");
+  await expect(page.locator("#fleet")).toContainText("credit left");
 });
 
 test("a run's doc links to its experiment definition", async ({ page }) => {

@@ -119,6 +119,23 @@
   .exp { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
          border: 1px solid var(--border); background: #21262d; color: var(--accent);
          font-size: 12px; font-weight: 600; white-space: nowrap; }
+  /* TPU run state. Same pill geometry as .exp so the two read as one family;
+     only the COLOUR carries the state, and it carries the same colours
+     statusColor() gives a workflow run — amber running, green succeeded, red
+     died — so "green means it finished" means the same thing in both
+     sections. REAPED is red on purpose: a box that went away without leaving
+     a checkpoint lost the run. */
+  .st { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+        border: 1px solid var(--border); background: #21262d; color: var(--text-dim);
+        font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .st.training { color: var(--warn); border-color: rgba(210,153,34,.5); }
+  .st.finished { color: var(--ok);   border-color: rgba(63,185,80,.5); }
+  .st.reaped   { color: var(--bad);  border-color: rgba(248,81,73,.5); }
+  .st.setup    { color: var(--muted); }
+  /* the health flag the mirror appends to a state, kept OUT of the pill: it is
+     a second, independent fact about a box that is otherwise training fine. */
+  .unhealthy { display: inline-block; margin-left: 6px; font-size: 12px;
+               font-weight: 600; color: var(--bad); white-space: nowrap; }
   footer { margin-top: 36px; color: var(--muted); font-size: 12px; }
 </style>
 </head>
@@ -138,6 +155,9 @@
 
   <h2>Fleet &amp; budget</h2>
   <div id="fleet"><div class="empty">loading…</div></div>
+
+  <h2>TPU runs</h2>
+  <div id="tpu"><div class="empty">loading…</div></div>
 
   <h2>Training curves</h2>
   <div id="live"><div class="empty">loading…</div></div>
@@ -586,6 +606,237 @@
                  "/ml-metrics/fleet.json?cb=" + Date.now())
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; });
+  }
+
+  // ---- TPU runs -------------------------------------------------------------
+  // A TPU run is not a workflow run. E-051 was the first: a process on a Cloud
+  // TPU VM, started by scripts/tpu_box.py, with NO GitHub Actions run and no
+  // ml-live-<n> branch — so every mechanism on this page (the runs list, the
+  // phase file, run-<n>.jsonl, the plan) had nothing to say about it, and a
+  // 200,000-step job running for fourteen hours was invisible here while the
+  // dashboard cheerfully reported on the GPU fleet beside it.
+  //
+  // scripts/tpu_status_mirror.py closes that hole from the other end: it reads
+  // the TPU nodes API and the GCS bucket the runs write to, and force-pushes
+  // the orphan branch ml-live-tpu (the ml-live-* convention, one branch for
+  // all TPU runs rather than one per run) carrying index.json plus each run's
+  // own metrics.jsonl. This section is that file, rendered.
+  //
+  // ONE fetch per cycle, plus at most TPU_CHARTS metrics files — and all of it
+  // to raw.githubusercontent.com, which is CDN-served and NOT counted against
+  // the 60/h unauthenticated api.github.com budget. That is the same reasoning
+  // fetchFleet and fetchMetrics are built on and the reason this section adds
+  // no api.github.com call at all: there is no api.github.com resource that
+  // knows about these runs anyway.
+  var TPU_BRANCH = "ml-live-tpu";
+  var TPU_CHARTS = 2;   // curves drawn for TRAINING runs; each costs one fetch
+
+  function tpuRaw(pathInBranch) {
+    return "https://raw.githubusercontent.com/" + REPO + "/" + TPU_BRANCH +
+           "/" + pathInBranch + "?cb=" + Date.now();
+  }
+
+  function fetchTpu() {
+    // A 404 is the ordinary answer before the mirror has ever run, not an
+    // error: the branch is created by the first push. Same shape as every
+    // other raw read here — null means "nothing to show", never a throw.
+    return fetch(tpuRaw("index.json"))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+
+  // The mirror appends " (UNHEALTHY)" to a state rather than replacing it,
+  // because the two facts are independent: a box can be flagged unhealthy by
+  // the nodes API and still be stepping. Split them so the badge says what the
+  // run is DOING and the flag says what the box is.
+  function tpuState(state) {
+    var s = String(state === null || state === undefined ? "" : state);
+    var unhealthy = /\(\s*UNHEALTHY[^)]*\)/i.test(s);
+    var base = s.replace(/\(\s*UNHEALTHY[^)]*\)/ig, "").replace(/\s+/g, " ").trim();
+    var kind = base.toUpperCase();
+    var cls = kind === "TRAINING" ? "training"
+            : kind === "FINISHED" ? "finished"
+            : kind === "REAPED" ? "reaped"
+            : kind === "SETUP" ? "setup" : "";
+    return { base: base || "unknown", kind: kind, cls: cls, unhealthy: unhealthy };
+  }
+
+  // ago() on a value that is not a date at all. metrics_updated is null for a
+  // run that has not written a line yet, and this section's whole contract is
+  // that no shape from the mirror can break it.
+  function agoSafe(iso) {
+    if (!iso) return null;
+    var t = new Date(iso).getTime();
+    return isFinite(t) ? ago(iso) : null;
+  }
+
+  function tpuDur(s) {
+    if (!(s > 0)) return "0 s";
+    if (s >= 3600) return (s / 3600).toFixed(1) + " h";
+    if (s >= 60) return Math.round(s / 60) + " min";
+    return Math.round(s) + " s";
+  }
+  function tpuNum(n) {
+    if (n === Math.round(n)) return fmtInt(n);
+    return String(Number(n.toPrecision(4)));
+  }
+
+  // The most informative numbers from `last` — the run's final jsonl line,
+  // copied verbatim by the mirror, whose keys are whatever the trainer wrote.
+  // Known shapes get a fixed order and real labels; anything else falls back
+  // to four numeric fields by name, which is worth more than nothing and
+  // cannot be wrong. It must never throw: a trainer adds a record shape long
+  // before this page learns about it, and an exception here would blank the
+  // section for every run in it.
+  function tpuFacts(last) {
+    var f = [];
+    if (!last || typeof last !== "object") return f;
+    try {
+      // The embedding pass is ~95 minutes with no curve and no step counter —
+      // the same "wedged or working?" gap the GPU cards close (see parseJsonl).
+      var emb = last.embedding;
+      if (emb && typeof emb === "object" && recNum(emb.pct) !== null) {
+        f.push(["embedding", Math.round(recNum(emb.pct)) + "%"]);
+      }
+      var used = {};
+      var pick = function (spec) {
+        var out = [];
+        spec.forEach(function (kv) {
+          var v = last[kv[0]];
+          if (typeof v !== "number" || !isFinite(v)) return;
+          used[kv[0]] = true;
+          out.push([kv[1], (kv[2] || tpuNum)(v)]);
+        });
+        return out;
+      };
+      var known = pick([["stage2_step", "step", fmtInt],
+                        ["stage2_val_zmse", "val zmse"],
+                        ["stage2_zmse", "zmse"],
+                        ["stage2_wall_s", "wall", tpuDur]]);
+      if (!known.length) {
+        known = pick([["step", "step", fmtInt], ["loss_rec", "loss_rec"]]);
+      }
+      f = f.concat(known);
+      // Top up by NAME. A finished probe run's last line is `step` plus half a
+      // dozen fields nobody wrote a label for (linear_r_deseas, probe_seconds,
+      // …); recognising `step` and stopping would print a card whose only
+      // number is the one that says the run ended, and drop the measurement it
+      // ended WITH. Four is the cap because the strip is one line on a phone.
+      Object.keys(last).forEach(function (k) {
+        if (f.length >= 4 || used[k]) return;
+        var v = last[k];
+        if (typeof v !== "number" || !isFinite(v)) return;
+        f.push([k, tpuNum(v)]);
+      });
+    } catch (e) { /* whatever we got before the surprise is still true */ }
+    return f;
+  }
+
+  // The experiment link. Same target and same anchor rule as expTag(): the
+  // explicit <a id="e-051"> in EXPERIMENTS.md, rendered by docs.html rather
+  // than by GitHub's blob view. The exp field is derived from the node name by
+  // the mirror (e051-k144-full -> E-051) and falls back to the node name for a
+  // node outside that convention, so it can be any string — escape it.
+  function tpuExpTag(exp) {
+    var id = String(exp === null || exp === undefined ? "" : exp).trim();
+    if (!id) return "";
+    return '<a class="exp" href="' + esc(DOCS_BASE) + "?f=ml/EXPERIMENTS.md#" +
+           esc(id.toLowerCase()) + '">' + esc(id) + "</a>";
+  }
+
+  // An id for the chart host. Node names are already [a-z0-9-], but the id is
+  // derived rather than trusted: this string goes into markup.
+  function tpuChartId(node) {
+    return "tpu-" + String(node).replace(/[^A-Za-z0-9_-]/g, "-");
+  }
+
+  function tpuCard(r) {
+    var st = tpuState(r.state);
+    var node = String(r.node === null || r.node === undefined ? "?" : r.node);
+    var facts = tpuFacts(r.last);
+    var age = agoSafe(r.metrics_updated);
+    var finals = st.kind === "FINISHED" && r.finals && r.finals.length
+      ? r.finals.slice(0, 6).map(function (x) { return "<b>" + esc(x) + "</b>"; }).join(" · ")
+      : "";
+    return '<div class="card">' +
+      "<h3>" + esc(node) +
+      tpuExpTag(r.exp) +
+      '<span class="st ' + st.cls + '">' + esc(st.base) + "</span>" +
+      (st.unhealthy ? '<span class="unhealthy">unhealthy</span>' : "") +
+      "</h3>" +
+      (facts.length
+        ? '<div class="cfg">' + facts.map(function (kv) {
+            return '<span class="k">' + esc(kv[0]) + "</span> <b>" + esc(kv[1]) + "</b>";
+          }).join('<span class="sep">·</span>') + "</div>"
+        : "") +
+      '<div class="meta">' +
+      (age ? "metrics " + esc(age)
+           : st.kind === "SETUP" ? "no metrics written yet"
+           : "no metrics recorded") + "</div>" +
+      (finals ? '<div class="probe">finals ' + finals + "</div>" : "") +
+      '<div id="' + esc(tpuChartId(node)) + '"></div>' +
+      "</div>";
+  }
+
+  // TRAINING first, then the rest newest-first: the same ordering the curves
+  // section uses (in-progress before finished), for the same reason — the run
+  // still burning a box is the one being looked for. The mirror's own order is
+  // alphabetical by node, which put the only live run at the bottom.
+  function tpuOrder(runs) {
+    return runs.map(function (r, i) { return [r, i]; }).sort(function (a, b) {
+      var ka = tpuState(a[0].state).kind, kb = tpuState(b[0].state).kind;
+      var live = function (k) { return k === "TRAINING" ? 0 : k === "SETUP" ? 1 : 2; };
+      if (live(ka) !== live(kb)) return live(ka) - live(kb);
+      var ta = new Date(a[0].metrics_updated || 0).getTime() || 0;
+      var tb = new Date(b[0].metrics_updated || 0).getTime() || 0;
+      if (ta !== tb) return tb - ta;
+      return a[1] - b[1];
+    }).map(function (p) { return p[0]; });
+  }
+
+  // Returns the runs whose curves are worth a second fetch — nothing else on
+  // this page renders asynchronously in two passes, so the list comes back
+  // rather than the fetches being started from in here.
+  function renderTpu(idx) {
+    var el = $("tpu");
+    if (!el) return [];
+    var runs = (idx && Array.isArray(idx.runs)) ? idx.runs.filter(function (r) {
+      return r && typeof r === "object";
+    }) : [];
+    if (!runs.length) {
+      // The one line for every "nothing here": no branch yet, mirror down,
+      // network gone, or a branch with an empty list. A reader needs to know
+      // the page is not showing TPU runs; which of the four it is belongs in
+      // the mirror's log, not on the dashboard.
+      el.innerHTML = '<div class="empty">no TPU telemetry mirrored yet</div>';
+      return [];
+    }
+    var ordered = tpuOrder(runs);
+    var mirrored = agoSafe(idx.updated);
+    el.innerHTML = ordered.map(tpuCard).join("") +
+      (mirrored ? '<div class="budget">mirror updated ' + esc(mirrored) +
+                  " · scripts/tpu_status_mirror.py</div>" : "");
+    return ordered.filter(function (r) {
+      return tpuState(r.state).kind === "TRAINING";
+    }).slice(0, TPU_CHARTS);
+  }
+
+  // The curve, drawn with the SAME code the GPU cards use. A TPU run's
+  // metrics.jsonl is written by the same trainer, so parseJsonl + stage2Chart
+  // read it unchanged — held-out line, learning-rate overlay, ETA and all.
+  // Nothing new is built here; if a shape ever arrives that stage2Chart cannot
+  // draw it returns "", which is the correct answer.
+  function tpuCharts(picks) {
+    return Promise.all((picks || []).map(function (r) {
+      return fetch(tpuRaw(encodeURIComponent(r.node) + "/metrics.jsonl"))
+        .then(function (res) { return res.ok ? res.text() : null; })
+        .then(function (text) {
+          if (text === null) return;
+          var host = $(tpuChartId(r.node));
+          if (host) host.innerHTML = stage2Chart(parseJsonl(text));
+        })
+        .catch(function () { /* the card stands without its curve */ });
+    })).then(function () {});
   }
 
   // ---- workflow runs table --------------------------------------------------
@@ -2226,8 +2477,19 @@
     // fetched, from a host with no rate limit at all — was thrown away with
     // it, along with every curve. That is why a spent budget blanked the page
     // instead of degrading it: not a render bug, an all-or-nothing await.
-    return Promise.all([loadRunDocs(), fetchFleet()]).then(function (res) {
+    return Promise.all([loadRunDocs(), fetchFleet(), fetchTpu()]).then(function (res) {
       renderFleet(res[1]);
+      // The TPU section, in its own try/catch for the same reason the raw half
+      // is awaited separately from the API half: one section's bad day must
+      // not take the others down with it. fetchTpu() never rejects, so what is
+      // guarded here is the RENDER — an index.json shape nobody has written
+      // yet. The catch degrades to the same muted line an empty mirror gets.
+      try {
+        tpuCharts(renderTpu(res[2]));
+      } catch (e) {
+        var tel = $("tpu");
+        if (tel) tel.innerHTML = '<div class="empty">no TPU telemetry mirrored yet</div>';
+      }
       if (!manual && pollBlocked()) {
         // Do not spend a call we do not have. A 403 costs a request too.
         showBanner("GitHub API budget spent (" + rate.remaining + " of " +

@@ -1,0 +1,37 @@
+# Mirror TPU-run telemetry (gs://earth-tpu-staging/runs/*) into the
+# ml-live-tpu branch every 15 minutes, so status.html can render TPU runs —
+# they have no Actions run and no ml-live-<n> branch of their own, which is
+# why E-051 was invisible (Chris, 2026-08-26). scripts/tpu_status_mirror.py
+# is the whole logic and skips the push when nothing but the clock moved.
+#
+# Security posture (ml/CLAUDE.md §6): schedule + workflow_dispatch ONLY, on
+# ubuntu-latest — never on the self-hosted gpu runners; permissions stay at
+# contents: write (the ml-live-* push) and nothing else. The SA key is
+# written under RUNNER_TEMP, outside the checkout — scripts/tpu_box.py
+# refuses a key file inside the repo tree, deliberately.
+name: tpu-status-mirror
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+concurrency:
+  group: tpu-status-mirror
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mirror bucket telemetry to ml-live-tpu
+        env:
+          GCP_TPU_SA_KEY: ${{ secrets.GCP_TPU_SA_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          KEY="${RUNNER_TEMP}/sa.json"
+          printf '%s' "${GCP_TPU_SA_KEY}" > "${KEY}"
+          GCP_SA_KEY="${KEY}" python3 scripts/tpu_status_mirror.py
+          rm -f "${KEY}"
