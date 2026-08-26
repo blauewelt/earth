@@ -1,0 +1,6 @@
+{
+ "steps": 260000,
+ "lr": 0.0003,
+ "note": "E-050 warm-start FSQ; resumes run-480@200000, 60k warm steps",
+ "published_at": "2026-08-26T06:34:10.379Z"
+}
