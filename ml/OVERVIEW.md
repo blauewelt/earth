@@ -1,7 +1,7 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-26 ~13:15 UTC** (by the paper-update/#483-harvest
-session). *Every ML session updates this stamp and the sections it touches in
+**Last updated: 2026-08-26 ~16:20 UTC** (by the E-053 session: cone
+measured, three arms in flight). *Every ML session updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
 "in flight" section and check the
@@ -31,7 +31,8 @@ attendability, never information beyond the pixels.
 |---|---|---|---|
 | **E-051** full-budget K=144 pentad head (206.5M, 200k, JAX/TPU) | does two years of context at full budget repair the pentad roll? | roll first (day-matched corridor, vs monthly +0.939 / pentad −0.499); one-step vs its 20k twin's 0.0820 (flat expected) | TPU `e051-k144-full` · 200k ~14:00Z 08-26, own session harvests |
 | **#485** E-050 warm-start FSQ (lattice on at resume from #480@200k, +60k) | does a trained encoder survive quantization where every cold start collapsed? | decoder-ceiling audit (Falsifier B): fast channels inside the 9–19% FVU band on Argo-free bins | gpu-box-32966687 · 260k reached 10:54Z, finals in progress |
-| **E-052** field head, deterministic then diffusion (separate session) | can one model predict the whole field jointly — and, later, sample futures instead of blurring them? | E-052.1 det arm vs 0.0820 (#478) and E-051's final | TPU verify node ~13:30Z, then E-052.1 |
+| **E-052** field head, deterministic then diffusion (separate session) | can one model predict the whole field jointly — and, later, sample futures instead of blurring them? | E-052.1 det arm vs 0.0820 (#478) and E-051's final | TPU verify node, then E-052.1 |
+| **#486/#487/#488** E-053.1 arms A1/A2/A3 (sequential, gpu-box-32966687) | where in spacetime does the span effect live — analog pins, log ramp, or the dense slab? | two-sided readings vs 0.5056 (K=24) and 0.0820 (K=144); A3 = first 10-y span ever | ~2–3 h each, ~$4 total; verdicts this evening |
 
 ## 2 · Most promising next steps, ranked
 
@@ -41,12 +42,13 @@ attendability, never information beyond the pixels.
    one warm 16-bit token carries a pixel-bin; a pass opens token-input /
    token-output heads on the best forecasting substrate found so far
    (lattice z, E-046).
-3. **E-053 space-time stencil** (scoped 2026-08-26, Chris's direction):
-   give each stencil slot its own (Δx, Δy, Δt) — the sunflower in
-   spacetime — to decouple context span from K. E-053.0 (measure the
-   advective cone from the published Z, $0) + three ~$4 arms; either E-051
-   outcome makes it next-in-line (cost reducer if positive, mechanism probe
-   if negative). Replay battery mandatory.
+3. **E-053 space-time stencil** (Chris's direction, now RUNNING):
+   E-053.0 measured — the advective cone is refuted (ridge lag 0 at every
+   separation's median; the agnostic ball/ramp wins) and the seasonal
+   analog is visible in the substrate (deseas. self-corr 0.100 @180 d →
+   0.143 @1 y). The three E-053.1 arms are in flight (§1). Replay battery
+   mandatory before any offset head is rolled; rollout_spatial refuses
+   them until offset-aware assembly exists.
    [Plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E053_spacetime_stencil.md) ·
    [slides](https://blauewelt.github.io/earth/ml/figures/spacetime_stencil.html).
 4. **E-052.1 deterministic field head** (diffusion session, after clean
@@ -92,6 +94,7 @@ attendability, never information beyond the pixels.
 | E-044b-roll | does the pentad head roll? | **−0.499, below climatology** (n=1) — the wound the frontier addresses |
 | E-045 factorial | which component breaks at pentad? | **span, not step**: span-fixed 0.0721 · 0.0804 · 0.0820 flat vs K-fixed 0.07→0.51 cliff; mechanism registered = seasonal analog. Side: Argo targets stabilize (A3), monthly noise dose fatal (A4 0.81), season staircase null (A6) |
 | E-045.3 | the K=48 rung | BLOCKED — config-tied CPU-fall ×2; unblock = slice-the-published-Z |
+| E-053.0 | is there an advective cone in the z field? | NO at the argmax instrument (ridge lag 0 to 2,500 km) — ball form wins; analog bump measured (0.143 @1 y vs 0.100 @180 d deseas.) |
 | E-047 | fusion vs selection (month-block codec) | Tier-1: Argo-anchor collapse cured at a 9–19% everywhere-cost; **stage 2: fusion LOSES, 0.2127 vs 0.0721** (#483, 08-26) — block-decode roll not dispatched |
 | E-051 | span at full budget | in flight — see §1 |
 
