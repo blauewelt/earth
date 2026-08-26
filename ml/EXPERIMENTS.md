@@ -146,6 +146,18 @@ pentad stencil head. Dispatch waits on the v5e quota (one v5litepod-4;
 300-step real-data smoke on device, ~$5), then the E-052.1 train node — its
 §0d dispatch entry will be written at dispatch.
 
+**(f) 09:20–10:20Z — the spot shortcut was tried and the pool is still the
+lemon it was on 08-23.** Preemptible v5e quota turns out to EXIST alongside
+the on-demand 4 cores (useful permanently: a spot node can run beside an
+on-demand one when the pool is healthy). But two `e052-verify` spot creates
+in a row returned the SAME host (identical external IP) flagged
+`UNHEALTHY_MAINTENANCE` at creation, and it never ran its startup script —
+zero bucket writes in 32 minutes where the launcher's first publish lands at
+~20–25. Deleted both; cost ~$1–2. Verdict: the us-west1-c spot pool is still
+serving in-maintenance hosts (third and fourth sightings after E-051's two on
+08-23) — do not re-try it today; the verify node waits for the on-demand slot
+when `e051-k144-full` self-deletes.
+
 <a id="e-050"></a>
 ## E-050 · Warm-start quantization: the trained continuous codec, lattice switched on — #485 DISPATCHED 06:32Z 2026-08-26 (approved by Chris 2026-08-25 ~15:30Z, b3ee36a)
 
