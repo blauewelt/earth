@@ -44,6 +44,36 @@ low-pass).
 
 ---
 
+<a id="e-053"></a>
+## E-053 · The space-time stencil — SCOPED 2026-08-26, plan written, nothing dispatched (Chris's direction: "take the sunflower to the 4th dimension")
+
+TL;DR — today's stencil samples a dense K×145 slab of spacetime (every slot at
+every frame, attention over time only); E-045 says span is the axis and the
+seasonal analog is its registered mechanism, so most of the slab is plausibly
+redundant. E-053 gives each slot its own (Δx, Δy, Δt) — the sunflower
+generalized to spacetime under an advective metric — to decouple span from K.
+
+**E-053 · plan only · params n/a (arms would run #427's exact 206.5M stage-2
+configuration) · stage: design + a $0 CPU measurement · data
+family4_na025_pentad_r2 via the published Z · arch unchanged for stage .1
+(non-uniform frame times + Δt encoding), point-cloud attention deferred to a
+gated stage .2 · steps×batch: 20k×256 per arm when dispatched · resume
+run-415 (frozen).** Staging: **E-053.0** measures the advective cone c from
+the published Z's space-time cross-correlation (never hand-pick it);
+**E-053.1** is three ~$3–5 arms on the existing trainer — A1 analog-only
+(K_eff 16, 2-y span: is span's value the analog?), A2 log-ramp (K_eff 24 ≈
+K=144's 0.0820 at 1/6 the frames?), A3 decade (K_eff 32, first 10-y span
+ever); controls are the measured 0.5056/0.5045 (K=24) and 0.0820 (K=144).
+**E-053.2** (true spacetime point cloud, unifies with the field-head line and
+later with a depth/height coordinate) is gated on .1. **Registered danger:
+analog pins are a lookup mechanism by construction — the E-043b-PHASE replay
+battery is mandatory before any E-053 roll number is quoted.** Full design,
+falsifiers and cost arithmetic:
+[the E-053 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E053_spacetime_stencil.md)
+· [the two-slide deck](https://blauewelt.github.io/earth/ml/figures/spacetime_stencil.html).
+
+---
+
 <a id="e-052"></a>
 ## E-052 · The field head: joint next-field prediction, deterministic then generative — BUILT AND CPU-VERIFIED 2026-08-25/26 overnight (no GPU arm dispatched)
 

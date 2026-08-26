@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  The Space-Time Stencil: two slides on taking the sunflower into the time
+  dimension, made 2026-08-26 at Chris's request ("Let the stencil go back two
+  steps in time ... take the sunflower to the 4th dimension ... maybe there's
+  a way to unify with the 3rd dimension (water depth / later: above sea
+  height)"). Slide 1 states what the stencil samples today (a dense KxS slab
+  of spacetime) and where the measured record says the information actually
+  sits; slide 2 is the staged test with costs, the depth/height unification,
+  and the replay danger named in advance. Measured numbers cite their
+  experiment (E-045 span factorial, E-044b pair, E-051 pace, E-043b-PHASE
+  replay); everything else is design arithmetic. Current truth is always
+  ml/EXPERIMENTS.md; the full design is ml/plans/E053_spacetime_stencil.md.
+  Style matches ar_vs_diffusion.html (the house design-deck language).
+-->
+<title>The Space-Time Stencil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;600&display=swap">
+<style>
+  :root {
+    --paper: #F6F9FB;
+    --card: #FFFFFF;
+    --ink: #16222C;
+    --muted: #5C6C79;
+    --line: #C7D3DC;
+    --accent: #0A6EA8;      /* Atlantic blue: today's dense slab */
+    --quant: #B7761C;       /* amber: the spacetime sunflower */
+    --good: #2E7D46;
+    --bad: #B3453A;
+    --wash: #E8F0F6;
+    --qwash: #F6EDDD;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0E151B; --card: #151E26; --ink: #DCE6EE; --muted: #8FA1AF;
+      --line: #33434F; --accent: #57A9DC; --quant: #DFA84E; --good: #6FBF8A;
+      --bad: #E08379; --wash: #17242E; --qwash: #2A2318;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0E151B; --card: #151E26; --ink: #DCE6EE; --muted: #8FA1AF;
+    --line: #33434F; --accent: #57A9DC; --quant: #DFA84E; --good: #6FBF8A;
+    --bad: #E08379; --wash: #17242E; --qwash: #2A2318;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink);
+    font-family: "Public Sans", system-ui, sans-serif; margin: 0;
+    padding: 36px 20px 70px; }
+  main { max-width: 1080px; margin: 0 auto; }
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: 11.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+    margin: 0 0 22px; }
+  .slide { background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 26px 28px 20px; margin: 0 0 34px; }
+  .slide h2 { font-family: "Archivo", sans-serif; font-size: 21px;
+    font-weight: 650; margin: 0 0 2px; }
+  .slide .kicker { font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+    margin: 0 0 10px; }
+  .slide .lede { font-size: 14px; color: var(--muted); margin: 6px 0 16px;
+    max-width: 900px; }
+  svg { max-width: 100%; height: auto; display: block; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .pt { border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 12px 14px; margin: 0 0 12px; }
+  .pt.q { border-left-color: var(--quant); }
+  .pt.g { border-left-color: var(--good); }
+  .pt.b { border-left-color: var(--bad); }
+  .pt h3 { font-family: "Archivo", sans-serif; font-size: 14.5px;
+    font-weight: 650; margin: 0 0 5px; }
+  .pt p { font-size: 13px; line-height: 1.5; margin: 0 0 6px; }
+  .pt p:last-child { margin-bottom: 0; }
+  .fact { font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    color: var(--muted); background: var(--wash); border-radius: 5px;
+    padding: 3px 7px; display: inline-block; margin-top: 2px; }
+  .pt.q .fact { background: var(--qwash); }
+  code, .mono { font-family: "IBM Plex Mono", monospace; font-size: 0.93em; }
+  .tblwrap { overflow-x: auto; }
+  table.cmp { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.cmp th, table.cmp td { text-align: left; padding: 8px 12px;
+    border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.cmp th { font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+    font-weight: 500; }
+  table.cmp td.ar { color: var(--accent); font-weight: 600; }
+  table.cmp td.df { color: var(--quant); font-weight: 600; }
+  .foot { font-size: 11.5px; color: var(--muted); margin: 14px 0 0;
+    border-top: 1px dashed var(--line); padding-top: 10px; }
+  .stagenum { font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    color: var(--card); background: var(--accent); border-radius: 10px;
+    padding: 2px 9px; display: inline-block; margin-right: 8px; }
+  .pt.q .stagenum { background: var(--quant); }
+</style>
+</head>
+<body>
+<main>
+<p class="eyebrow">earth stage 2 &middot; input geometry &middot; design deck &middot; 2026-08-26</p>
+
+<!-- ============ SLIDE 1: THE SLAB, AND WHERE THE INFORMATION SITS ============ -->
+<section class="slide">
+  <p class="kicker">slide 1 / 2 &middot; the idea</p>
+  <h2>The stencil samples a slab; the ocean fills a cone</h2>
+  <p class="lede">Today every stencil slot is read at <b>every</b> past frame &mdash; a dense
+  K&times;145 rectangle in spacetime. E-045 measured that <b>context span</b> is the axis that
+  matters and registered the <b>seasonal analog</b> as its mechanism &mdash; so most of that
+  rectangle is plausibly redundant, and span can only be bought by raising K. The proposal:
+  give each slot its own (&Delta;x,&nbsp;&Delta;y,&nbsp;&Delta;t) &mdash; the sunflower taken
+  into the time dimension &mdash; so span and cost decouple.</p>
+
+  <svg viewBox="0 0 1280 420" role="img" aria-label="Two panels in space-time coordinates, space horizontal and past time downward on a log scale. Left: today's dense slab, a uniform grid of sample points, K frames by 145 slots, span equals K times the step. Right: the spacetime sunflower - a full spatial disc at time zero, a dense-then-log-spaced column of the centre pixel's own history, points concentrated along the advective cone where distance equals speed times lag, and analog pin clusters at one and two years back. Same span, a fraction of the samples.">
+    <g fill="none" stroke="currentColor" stroke-width="1.2" font-family="IBM Plex Mono, monospace" font-size="11">
+      <!-- LEFT PANEL: the slab -->
+      <rect x="40" y="40" width="380" height="330" rx="8" fill="var(--wash)" stroke="var(--line)"/>
+      <text x="52" y="60" fill="var(--muted)" font-size="10.5">TODAY &middot; dense slab: 145 slots &times; K frames</text>
+      <g transform="translate(0,26)" fill="var(--accent)" stroke="none" opacity=".8">
+        <circle cx="70.0" cy="70.0" r="2.1"/><circle cx="95.0" cy="70.0" r="2.1"/><circle cx="120.0" cy="70.0" r="2.1"/><circle cx="145.0" cy="70.0" r="2.1"/><circle cx="170.0" cy="70.0" r="2.1"/><circle cx="195.0" cy="70.0" r="2.1"/><circle cx="220.0" cy="70.0" r="2.1"/><circle cx="245.0" cy="70.0" r="2.1"/><circle cx="270.0" cy="70.0" r="2.1"/><circle cx="295.0" cy="70.0" r="2.1"/><circle cx="320.0" cy="70.0" r="2.1"/><circle cx="345.0" cy="70.0" r="2.1"/><circle cx="370.0" cy="70.0" r="2.1"/>
+        <circle cx="70.0" cy="98.9" r="2.1"/><circle cx="95.0" cy="98.9" r="2.1"/><circle cx="120.0" cy="98.9" r="2.1"/><circle cx="145.0" cy="98.9" r="2.1"/><circle cx="170.0" cy="98.9" r="2.1"/><circle cx="195.0" cy="98.9" r="2.1"/><circle cx="220.0" cy="98.9" r="2.1"/><circle cx="245.0" cy="98.9" r="2.1"/><circle cx="270.0" cy="98.9" r="2.1"/><circle cx="295.0" cy="98.9" r="2.1"/><circle cx="320.0" cy="98.9" r="2.1"/><circle cx="345.0" cy="98.9" r="2.1"/><circle cx="370.0" cy="98.9" r="2.1"/>
+        <circle cx="70.0" cy="127.8" r="2.1"/><circle cx="95.0" cy="127.8" r="2.1"/><circle cx="120.0" cy="127.8" r="2.1"/><circle cx="145.0" cy="127.8" r="2.1"/><circle cx="170.0" cy="127.8" r="2.1"/><circle cx="195.0" cy="127.8" r="2.1"/><circle cx="220.0" cy="127.8" r="2.1"/><circle cx="245.0" cy="127.8" r="2.1"/><circle cx="270.0" cy="127.8" r="2.1"/><circle cx="295.0" cy="127.8" r="2.1"/><circle cx="320.0" cy="127.8" r="2.1"/><circle cx="345.0" cy="127.8" r="2.1"/><circle cx="370.0" cy="127.8" r="2.1"/>
+        <circle cx="70.0" cy="156.7" r="2.1"/><circle cx="95.0" cy="156.7" r="2.1"/><circle cx="120.0" cy="156.7" r="2.1"/><circle cx="145.0" cy="156.7" r="2.1"/><circle cx="170.0" cy="156.7" r="2.1"/><circle cx="195.0" cy="156.7" r="2.1"/><circle cx="220.0" cy="156.7" r="2.1"/><circle cx="245.0" cy="156.7" r="2.1"/><circle cx="270.0" cy="156.7" r="2.1"/><circle cx="295.0" cy="156.7" r="2.1"/><circle cx="320.0" cy="156.7" r="2.1"/><circle cx="345.0" cy="156.7" r="2.1"/><circle cx="370.0" cy="156.7" r="2.1"/>
+        <circle cx="70.0" cy="185.6" r="2.1"/><circle cx="95.0" cy="185.6" r="2.1"/><circle cx="120.0" cy="185.6" r="2.1"/><circle cx="145.0" cy="185.6" r="2.1"/><circle cx="170.0" cy="185.6" r="2.1"/><circle cx="195.0" cy="185.6" r="2.1"/><circle cx="220.0" cy="185.6" r="2.1"/><circle cx="245.0" cy="185.6" r="2.1"/><circle cx="270.0" cy="185.6" r="2.1"/><circle cx="295.0" cy="185.6" r="2.1"/><circle cx="320.0" cy="185.6" r="2.1"/><circle cx="345.0" cy="185.6" r="2.1"/><circle cx="370.0" cy="185.6" r="2.1"/>
+        <circle cx="70.0" cy="214.4" r="2.1"/><circle cx="95.0" cy="214.4" r="2.1"/><circle cx="120.0" cy="214.4" r="2.1"/><circle cx="145.0" cy="214.4" r="2.1"/><circle cx="170.0" cy="214.4" r="2.1"/><circle cx="195.0" cy="214.4" r="2.1"/><circle cx="220.0" cy="214.4" r="2.1"/><circle cx="245.0" cy="214.4" r="2.1"/><circle cx="270.0" cy="214.4" r="2.1"/><circle cx="295.0" cy="214.4" r="2.1"/><circle cx="320.0" cy="214.4" r="2.1"/><circle cx="345.0" cy="214.4" r="2.1"/><circle cx="370.0" cy="214.4" r="2.1"/>
+        <circle cx="70.0" cy="243.3" r="2.1"/><circle cx="95.0" cy="243.3" r="2.1"/><circle cx="120.0" cy="243.3" r="2.1"/><circle cx="145.0" cy="243.3" r="2.1"/><circle cx="170.0" cy="243.3" r="2.1"/><circle cx="195.0" cy="243.3" r="2.1"/><circle cx="220.0" cy="243.3" r="2.1"/><circle cx="245.0" cy="243.3" r="2.1"/><circle cx="270.0" cy="243.3" r="2.1"/><circle cx="295.0" cy="243.3" r="2.1"/><circle cx="320.0" cy="243.3" r="2.1"/><circle cx="345.0" cy="243.3" r="2.1"/><circle cx="370.0" cy="243.3" r="2.1"/>
+        <circle cx="70.0" cy="272.2" r="2.1"/><circle cx="95.0" cy="272.2" r="2.1"/><circle cx="120.0" cy="272.2" r="2.1"/><circle cx="145.0" cy="272.2" r="2.1"/><circle cx="170.0" cy="272.2" r="2.1"/><circle cx="195.0" cy="272.2" r="2.1"/><circle cx="220.0" cy="272.2" r="2.1"/><circle cx="245.0" cy="272.2" r="2.1"/><circle cx="270.0" cy="272.2" r="2.1"/><circle cx="295.0" cy="272.2" r="2.1"/><circle cx="320.0" cy="272.2" r="2.1"/><circle cx="345.0" cy="272.2" r="2.1"/><circle cx="370.0" cy="272.2" r="2.1"/>
+        <circle cx="70.0" cy="301.1" r="2.1"/><circle cx="95.0" cy="301.1" r="2.1"/><circle cx="120.0" cy="301.1" r="2.1"/><circle cx="145.0" cy="301.1" r="2.1"/><circle cx="170.0" cy="301.1" r="2.1"/><circle cx="195.0" cy="301.1" r="2.1"/><circle cx="220.0" cy="301.1" r="2.1"/><circle cx="245.0" cy="301.1" r="2.1"/><circle cx="270.0" cy="301.1" r="2.1"/><circle cx="295.0" cy="301.1" r="2.1"/><circle cx="320.0" cy="301.1" r="2.1"/><circle cx="345.0" cy="301.1" r="2.1"/><circle cx="370.0" cy="301.1" r="2.1"/>
+      </g>
+      <text x="52" y="358" fill="var(--muted)" font-size="10.5">every slot, every frame &middot; span = K&middot;step &middot; cost &prop; K&sup2;</text>
+
+      <!-- axis labels between panels -->
+      <text x="447" y="100" fill="var(--muted)" font-size="10.5">&Delta;t = 0</text>
+      <text x="447" y="212" fill="var(--muted)" font-size="10.5">&minus;30 d</text>
+      <text x="447" y="326" fill="var(--muted)" font-size="10.5">&minus;1 y</text>
+      <text x="447" y="360" fill="var(--muted)" font-size="10.5">&minus;2 y</text>
+      <path d="M 505 60 L 505 380" stroke="var(--line)" stroke-dasharray="3 4"/>
+      <text x="465" y="52" fill="var(--muted)" font-size="10.5">past &darr; (log)</text>
+
+      <!-- RIGHT PANEL: the spacetime sunflower -->
+      <rect x="560" y="40" width="380" height="330" rx="8" fill="var(--qwash)" stroke="var(--line)"/>
+      <text x="572" y="60" fill="var(--muted)" font-size="10.5">E-053 &middot; spacetime sunflower: each slot its own (&Delta;x, &Delta;t)</text>
+      <!-- advective cone guide lines from centre-top -->
+      <g transform="translate(520,26)">
+        <path d="M 220 44 L 60 306" stroke="var(--quant)" stroke-width="1" stroke-dasharray="2 5" opacity=".7"/>
+        <path d="M 220 44 L 380 306" stroke="var(--quant)" stroke-width="1" stroke-dasharray="2 5" opacity=".7"/>
+        <!-- t=0 disc -->
+        <g fill="var(--quant)" stroke="none">
+          <circle cx="190.4" cy="70.0" r="2.4"/><circle cx="225.0" cy="70.0" r="2.4"/><circle cx="262.2" cy="73.0" r="2.4"/><circle cx="141.0" cy="70.0" r="2.4"/><circle cx="295.6" cy="70.0" r="2.4"/><circle cx="194.5" cy="73.0" r="2.4"/><circle cx="171.1" cy="70.0" r="2.4"/><circle cx="326.5" cy="70.0" r="2.4"/><circle cx="108.8" cy="73.0" r="2.4"/><circle cx="273.7" cy="70.0" r="2.4"/><circle cx="259.8" cy="70.0" r="2.4"/><circle cx="99.8" cy="73.0" r="2.4"/><circle cx="361.2" cy="70.0" r="2.4"/><circle cx="133.7" cy="70.0" r="2.4"/>
+        </g>
+        <!-- own history column -->
+        <g fill="var(--accent)" stroke="none">
+          <circle cx="218.6" cy="116.4" r="2.4"/><circle cx="217.2" cy="139.3" r="2.4"/><circle cx="221.2" cy="154.7" r="2.4"/><circle cx="216.6" cy="166.3" r="2.4"/><circle cx="220.3" cy="183.4" r="2.4"/><circle cx="218.9" cy="201.1" r="2.4"/><circle cx="216.5" cy="217.6" r="2.4"/><circle cx="220.1" cy="234.9" r="2.4"/><circle cx="216.3" cy="252.7" r="2.4"/><circle cx="219.5" cy="270.4" r="2.4"/><circle cx="216.6" cy="288.2" r="2.4"/><circle cx="216.7" cy="306.2" r="2.4"/><circle cx="219.4" cy="323.8" r="2.4"/>
+        </g>
+        <!-- cone points -->
+        <g fill="var(--quant)" stroke="none" opacity=".9">
+          <circle cx="216.6" cy="131.1" r="2.4"/><circle cx="222.9" cy="135.1" r="2.4"/><circle cx="211.0" cy="178.2" r="2.4"/><circle cx="227.8" cy="181.4" r="2.4"/><circle cx="207.9" cy="208.8" r="2.4"/><circle cx="233.1" cy="203.1" r="2.4"/><circle cx="201.7" cy="225.1" r="2.4"/><circle cx="242.4" cy="224.1" r="2.4"/><circle cx="191.5" cy="244.2" r="2.4"/><circle cx="246.9" cy="243.4" r="2.4"/><circle cx="188.7" cy="253.0" r="2.4"/><circle cx="252.7" cy="258.0" r="2.4"/><circle cx="176.8" cy="266.5" r="2.4"/><circle cx="265.1" cy="267.6" r="2.4"/><circle cx="170.2" cy="280.3" r="2.4"/><circle cx="275.8" cy="275.9" r="2.4"/><circle cx="156.7" cy="287.0" r="2.4"/><circle cx="288.7" cy="288.6" r="2.4"/><circle cx="152.8" cy="298.5" r="2.4"/><circle cx="283.8" cy="294.0" r="2.4"/><circle cx="132.5" cy="299.0" r="2.4"/><circle cx="301.2" cy="298.1" r="2.4"/><circle cx="123.9" cy="310.5" r="2.4"/><circle cx="313.6" cy="311.4" r="2.4"/><circle cx="123.2" cy="315.9" r="2.4"/><circle cx="325.0" cy="315.0" r="2.4"/><circle cx="108.3" cy="322.7" r="2.4"/><circle cx="347.5" cy="319.7" r="2.4"/><circle cx="89.9" cy="321.6" r="2.4"/><circle cx="351.4" cy="326.3" r="2.4"/>
+        </g>
+        <!-- analog pins -->
+        <g fill="var(--good)" stroke="none">
+          <circle cx="228.8" cy="292.6" r="2.6"/><circle cx="218.0" cy="294.1" r="2.6"/><circle cx="200.1" cy="293.0" r="2.6"/><circle cx="233.9" cy="293.7" r="2.6"/><circle cx="206.9" cy="296.3" r="2.6"/><circle cx="239.3" cy="325.8" r="2.6"/><circle cx="217.4" cy="330.5" r="2.6"/><circle cx="239.9" cy="333.2" r="2.6"/><circle cx="238.9" cy="327.8" r="2.6"/><circle cx="215.6" cy="328.6" r="2.6"/>
+        </g>
+      </g>
+      <text x="572" y="358" fill="var(--muted)" font-size="10.5">disc at &Delta;t=0 &middot; dense own history &middot; advective cone &Delta;t &asymp; &minus;r/c &middot; <tspan fill="var(--good)">analog pins &minus;1y, &minus;2y</tspan></text>
+    </g>
+  </svg>
+
+  <div class="cols" style="margin-top:16px">
+    <div>
+      <div class="pt">
+        <h3>Span is the axis; K is how we pay for it</h3>
+        <p>With span fixed at two years the one-step ratio is flat in step size
+        (0.0721 &middot; 0.0804 &middot; 0.0820 at 30/10/5-day steps); cut the span to 120 d
+        and even 30-day steps read 0.53. Under the slab, two years at pentad means
+        K=144 &mdash; 20,880 samples per window, attention 36&times; the K=24 head, a
+        10.95&nbsp;GB monitor batch that OOMed a v5e chip.</p>
+        <p><span class="fact">E-045 factorial &middot; E-051 launch log</span></p>
+      </div>
+      <div class="pt g">
+        <h3>The mechanism is the analog &mdash; make it explicit</h3>
+        <p>E-045's registered mechanism for span is the <b>seasonal analog</b>: a
+        720-day window contains last year's same-calendar frame. If that is what span
+        buys, ~20 pinned samples at &minus;1y/&minus;2y carry the value of ~120 frames
+        of slab &mdash; testable for about $4 (arm A1, slide 2).</p>
+        <p><span class="fact">paper &sect;factorial &middot; registered before E-045.1 landed</span></p>
+      </div>
+    </div>
+    <div>
+      <div class="pt q">
+        <h3>Information travels; the slab pretends it doesn't</h3>
+        <p>A neighbour at distance r is informative about the centre's future mostly
+        near lag &Delta;t &asymp; &minus;r/c (advection: boundary cores ~100&ndash;200 km/day,
+        interior Rossby waves ~3&ndash;5 km/day at 26&deg;N). The slab samples the whole
+        rectangle; the cone form samples the inflow trajectories. c is <b>measured, not
+        picked</b>: the space-time cross-correlation ridge of the published Z (E-053.0, $0,
+        CPU) &mdash; and if no single c exists, that datum chooses the agnostic ball form
+        (&ldquo;equally distributed in time&rdquo;) over the cone.</p>
+        <p><span class="fact">E-053.0 &middot; hand-picked thresholds are banned (CLAUDE.md)</span></p>
+      </div>
+      <div class="pt">
+        <h3>What stays fixed</h3>
+        <p>Target step, persistence baseline, holdout discipline, the frozen codec:
+        only the <em>context sampling</em> moves, so every number stays comparable to the
+        pentad archive (unlike overlapping windows, which change the question). All
+        &Delta;t &le; 0 &mdash; causality untouched.</p>
+      </div>
+    </div>
+  </div>
+  <p class="foot">Left panel: today's input &mdash; per frame, 145 slots concatenated to one token, attention over K time tokens. Right: the same budget of points placed where the physics and the measured record say the information sits. Time axis is log &mdash; the ramp in &Delta;t mirrors the sunflower's far-heavy ramp in radius.</p>
+</section>
+
+<!-- ============ SLIDE 2: STAGING, COST, THE 4TH DIMENSION ============ -->
+<section class="slide">
+  <p class="kicker">slide 2 / 2 &middot; the staged test, and the unification</p>
+  <h2>Three cheap arms first, the point cloud second, depth when it earns it</h2>
+  <p class="lede">Stage .1 needs <b>no architecture change</b>: keep the per-frame concat, make the
+  frame <em>times</em> non-uniform, add a &Delta;t encoding per frame (the month-block codec's
+  time-offset embedding, head-side), slice frames from the published Z &mdash; the same
+  affordance that unblocks E-045.3. Controls already exist: K=24 uniform = 0.5056/0.5045,
+  K=144 uniform = 0.0820.</p>
+
+  <div class="tblwrap">
+  <table class="cmp">
+    <tr><th>arm</th><th>frames (K<sub>eff</sub>)</th><th>span</th><th>question</th><th>registered reading</th><th>~cost</th></tr>
+    <tr><td class="df">A1 analog-only</td><td>16: dense 0&hellip;&minus;6 + pins &minus;73&plusmn;1, &minus;146&plusmn;1</td><td>2 y</td>
+        <td>is span's value the analog?</td>
+        <td>ratio &#8818; 0.12 &rArr; mechanism confirmed, span sparsifies ~10&times;; &#8819; 0.3 &rArr; dense slow-mode context matters</td><td>$4</td></tr>
+    <tr><td class="df">A2 log-ramp-24</td><td>24 log-spaced 0&hellip;&minus;146</td><td>2 y</td>
+        <td>does log spacing match uniform K=144?</td>
+        <td>&asymp; 0.08 at 1/6 the frames = span decoupled from K; &asymp; 0.5 = the slab was load-bearing</td><td>$4</td></tr>
+    <tr><td class="df">A3 decade-32</td><td>32 log-spaced 0&hellip;&minus;730 + pins &minus;1&hellip;&minus;9 y</td><td><b>10 y</b></td>
+        <td>does span keep paying past 2 y?</td>
+        <td>first reach beyond 2 y at any cadence &mdash; monotone gain = the axis is still open (decadal territory)</td><td>$5</td></tr>
+    <tr><td class="ar">E-053.2 point cloud</td><td>N points, each (&Delta;x,&Delta;y,&Delta;t)</td><td>free</td>
+        <td>true spacetime attention</td>
+        <td>gated on .1; replaces the fixed Linear spatial mixing; converges with the field-head line &mdash; build once, there</td><td>later</td></tr>
+  </table>
+  </div>
+
+  <div class="cols" style="margin-top:16px">
+    <div>
+      <div class="pt q">
+        <h3><span class="stagenum">cost</span>Span decoupled from K</h3>
+        <p>Samples per window = 145&middot;K<sub>eff</sub>; attention &prop; K<sub>eff</sub>&sup2;.
+        Uniform K=24 &rarr; 120 d at 1&times;. Uniform K=144 &rarr; 720 d at 36&times;.
+        <b>A2 &rarr; 720 d at 1&times;. A3 &rarr; 3,650 d at 1.8&times;</b> &mdash; a ten-year
+        context for a twentieth of E-051's attention cost, which is what makes decadal span
+        affordable at all.</p>
+      </div>
+      <div class="pt b">
+        <h3><span class="stagenum">danger</span>Analog pins are a lookup machine</h3>
+        <p>Handing the head last year's frame is replay <em>by construction</em>. The
+        E-043b-PHASE battery (six context-end rolls; flat within-record tracking = replay)
+        is <b>mandatory</b> before any E-053 roll number is quoted. A one-step win with a
+        flat lead-time profile is memorisation sharpened, not forecasting &mdash; and is
+        reported as such.</p>
+        <p><span class="fact">E-043b-PHASE &middot; sec:replay</span></p>
+      </div>
+    </div>
+    <div>
+      <div class="pt g">
+        <h3><span class="stagenum">4th dim</span>Depth (and height) join as coordinates</h3>
+        <p>At the head, unification is just coordinates: E-053.2's tokens carry an encoding
+        of (&Delta;x, &Delta;y, &Delta;t); a fourth <em>signed vertical</em> slot
+        (&minus;depth below the surface, log-spaced like the Argo levels; +height for a
+        future atmospheric tier) costs nothing to reserve now. The codec's decoder already
+        answers coordinate queries (channel, &Delta;lon, &Delta;lat, &Delta;month) &mdash;
+        the system is closer to coordinate-native than it looks.</p>
+        <p>But depth is today a <b>channel</b> axis compressed into one z per pixel-bin:
+        per-depth tokens are an E-047-class codec redesign (token count &times; levels, the
+        d<sub>z</sub> economics redone) &mdash; a separate decision, never a head knob.</p>
+      </div>
+      <div class="pt">
+        <h3><span class="stagenum">timing</span>Either E-051 outcome makes this next</h3>
+        <p>Roll positive &rarr; E-053.1 is the <b>cost reducer</b> (same span at 1/36 the
+        attention; the route to 10-year context). Roll negative &rarr; A1 says whether the
+        span effect was ever more than analog lookup, <em>before</em> the next full-budget
+        spend. Fusion (E-047) is already eliminated; this is the remaining registered
+        candidate on the input-geometry axis.</p>
+      </div>
+    </div>
+  </div>
+  <p class="foot">Full design, falsifiers and the measured-c pre-step: <a href="https://blauewelt.github.io/earth/docs.html?f=ml/plans/E053_spacetime_stencil.md">ml/plans/E053_spacetime_stencil.md</a>. Cost numbers are design arithmetic; measured numbers cite E-044b, E-045, E-051. Current truth: ml/EXPERIMENTS.md.</p>
+</section>
+
+</main>
+</body>
+</html>

@@ -229,6 +229,34 @@ head" is a shorthand wearing one's clothes. The numbers then follow the
 TL;DR, never replace it — a queued entry that has no number yet still has a
 question, which is exactly why the queued section needs the TL;DR most.
 
+## 0g · `ml/OVERVIEW.md` is the standing overview — read it first, keep it current
+
+Standing rule, Chris 2026-08-26: a webpage with *"a structured summary of
+ongoing experiments (incl one-line summaries) and most promising next steps
+(and the last update time)"*, plus a standing instruction to read it. The
+page is **`ml/OVERVIEW.md`**, served to a phone as
+<https://blauewelt.github.io/earth/docs.html?f=ml/OVERVIEW.md>.
+
+- **Read it at the start of any ML session**, before designing or
+  dispatching anything — it is the two-minute map of where every axis
+  stands and where the next GPU-hour should go. It complements, and does
+  not replace, `claude/expectations.md` (§5.27): the overview is the
+  SCIENCE map (questions, verdicts, ranked next steps, for Chris and any
+  reader); expectations is the OPS ledger (which artefacts exist by name,
+  which boxes hold what). Read both; update each for its own half.
+- **Update it in the same breath as harvesting or dispatching** — the same
+  discipline §5.27 sets for expectations. A verdict that lands goes into
+  its one-line row; a dispatch goes into "in flight"; a re-prioritization
+  moves the ranked list. Sessions that only monitor update the stamp only
+  if they changed something.
+- **The `Last updated` stamp is mandatory** and is the page's honesty
+  device: a reader who finds it stale knows to distrust the in-flight
+  section and check the status page instead. Never edit the page without
+  moving the stamp.
+- **Forms carry over**: §0c (a run number never travels alone), §0d
+  (structured, absolute descriptions), §0f (TL;DR before shorthand). One
+  line per settled experiment; the log keeps the detail.
+
 ## What this programme is building
 
 Standing statement of purpose, Chris 2026-08-19: *"What we're building is a
