@@ -231,6 +231,72 @@ serving in-maintenance hosts (third and fourth sightings after E-051's two on
 08-23) — do not re-try it today; the verify node waits for the on-demand slot
 when `e051-k144-full` self-deletes.
 
+**(g) UPDATE 2026-08-26 ~23:15Z — VERIFY PASSED (fourth node, 22:09Z boot),
+and what the four rounds each caught.** Round 1 (16:16Z–20:00Z, three nodes):
+all self-inflicted tooling — an incomplete rebake left `__BUCKET__` literal
+in the startup script (nodes ran blind; placeholder guard now in tpu_box),
+and a v5litepod-8 default against the 4-core grant read as a stuck quota.
+Round 2 (21:18Z): the REAL defects begin — the pentad npz carries no ys/xs
+(pixels object derived in-sandbox from X.npy's own ocean mask, 86,698 = Z's P,
+RAPID at 26.5°N/266 px, now bucket-staged and defaulted); `measure_sigma_data`
+built a ~409 GB ctx stack (host OOM-killed both legs; row-pair fix in both
+trainers); the parity gates ran JAX-on-TPU against torch-on-CPU (device
+numerics as port failure; gates now CPU-pinned). Round 3 (21:41Z): device OOM
+— the f32 ctx is 6.4 GB/chip at the real geometry; ctx now ships at SOURCE
+precision (f16, exact) with the upcast chunk-by-chunk inside `chunked_cond`.
+Round 4: **PASS — gates 3/3, det leg rc 0 (300 steps, final ratio 0.9152,
+loss falling), diff leg rc 0 (sampled eval runs end to end), params
+200,406,016, sigma_data 4.4712, train/val 2779/219 windows, and the node
+self-deleted on success — the full lifecycle is now proven.** Cost of the
+day's verification: ≈$25–30 TPU across seven nodes.
+
+**THE PACE RESETS THE BUDGET.** Steady state measured from the metrics tail:
+15 steps in 46.9 s = **3.13 s/step** (batch 8 windows = 693,584 pixel-targets
+per step). The planned "200k steps like the stencil tier" would be 7.2 days
+and ≈$835 — and it was never the matched comparison: a field-head step sees
+~1,350× more pixel-targets than a stencil step, and 200k steps is 576 epochs
+of the 2,779 train windows. Step counts do not transfer across the two
+architectures; matched WALL/COST on the same hardware does. E-052.1 therefore
+trains **24,000 steps ≈ 21 h ≈ E-051's wall-clock** (≈63 epochs), halflife
+rescaled to the steps/5 convention.
+
+<a id="e-052-1"></a>
+**(h) E-052.1 DISPATCHED 2026-08-26 ~23:20Z — `e052-1-train`, v5litepod-4.**
+
+**E-052.1 · joint deterministic field head on the real pentad substrate — the
+clean axis-A ablation (space moves into the head's attention; the predictand
+becomes the whole next field) · params 200,406,016 (param-matched to the
+206.5M K=144 stencil head) · stage: field head on the frozen run-415 pentad Z
+(`Z_8b639abe36_37e146384b`, [3142, 86698, 32] f16) · data:
+family4_na025_pentad_r2 (37e14638…) + the derived pixels index · arch:
+OceanTokenizer patch 4 → 5,875 ocean tokens · TemporalCond K=144 (720-d span,
+the E-045 lesson) × d_cond 512 × 2 · FieldDiT d_model 1024 × 10 × 16 heads,
+adaLN-zero, residual prediction (zero-init ⇒ exact persistence at step 0) ·
+det mode · steps×batch 24,000 × 8 windows, lr 3e-4 expdecay halflife 4,800
+warmup 2,000, input-znoise 0.7 (context only), seed 0 · holdout: target-bin
+years 2009/2017/2023 (train_stage2's rule) · resume: ckpt_latest.npz on
+gs://earth-tpu-staging/runs/e052-1-train/, ship every 10 min, ckpt_every
+1,000, stall watchdog 120 min (first ship ≈78 min at 3.2 s/step) · code
+88cad0b · cost: ≈22 h ≈ **$106 on-demand** (spot if the pool stops serving
+lemons: ≈$40).**
+
+TL;DR — the stencil head asks "what happens at THIS pixel given its 145
+concatenated neighbours"; the field head asks "what does the whole window do
+next", attending over 5,875 ocean-patch tokens. CONTROLS at K=144/720-d span
+on the same Z: #478's one-step ratio **0.0820** (20k stencil steps) and
+E-051's full-budget **0.0330** — read against this run at matched WALL-CLOCK
+(this run ≈ E-051's), never at matched step count (see (g)). **Falsifier
+(pre-registered in
+[the E-052 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E052_field_diffusion.md)):
+if joint spatial attention ≈ per-pixel stencil-concat at matched conditions,
+axis A buys nothing here — the 145-slot concat was never the bottleneck — and
+the diffusion case must rest on axis B (E-052.2, same backbone in diff mode,
+follows this run's read-out).** Chris's order (2026-08-26): *"Let's implement
+the stage-2 head first, then the full move."* Overfitting watch: 63 epochs of
+2,779 windows under znoise 0.7 — the val curve at eval_every 2,000 is the
+read; a rising val ratio with falling train loss ends the run early via the
+resume machinery, not by letting it ride.
+
 <a id="e-050"></a>
 ## E-050 · Warm-start quantization: the trained continuous codec, lattice switched on — #485 DISPATCHED 06:32Z 2026-08-26 (approved by Chris 2026-08-25 ~15:30Z, b3ee36a)
 
