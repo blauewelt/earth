@@ -1080,6 +1080,22 @@ archive.
   state change — it may come up minutes later, so check before renting more.
 - **Nothing that outlives a job may be stored on a box** (§6).
 
+### The TPU pool
+
+- **The us-west1-c v5e SPOT pool can serve a LEMON host repeatedly** — same
+  external IP, born `UNHEALTHY_MAINTENANCE`, never executes its startup
+  script (four sightings 2026-08-23..26: E-051's nodes 2–3 and e052-verify
+  twice). `scripts/tpu_box.py` now HARDCODES the refusal (Chris, 2026-08-26:
+  *"hardcode somewhere that the buggy node will never get used again"*):
+  `LEMON_HOSTS` pins the measured IP, and `lemon_reason` also refuses ANY
+  node born UNHEALTHY; `create` deletes the refused node before exiting
+  non-zero, so the meter never outlives the refusal, and re-running create
+  is a fresh host draw. `--allow-unhealthy` is the investigation-only
+  override. Preemptible v5e quota EXISTS beside the on-demand 4 cores
+  (measured 2026-08-26), so a spot node can run alongside an on-demand one;
+  spot is the default for verify/short jobs and, with bucket resume, for
+  training — the honest price is the day's, on-demand list is $1.20/chip-h.
+
 ### Failure signatures worth recognising instantly
 
 - **A GREEN run with no `temporal.json` in its probe archive = the trainer

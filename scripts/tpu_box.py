@@ -104,6 +104,43 @@ GCS_UPLOAD = "https://storage.googleapis.com/upload/storage/v1"
 DEFAULT_ACCEL = "v5litepod-8"
 DEFAULT_RUNTIME = "v2-alpha-tpuv5-lite"
 
+# Hosts this project has MEASURED as lemons, which must never be used again
+# (Chris, 2026-08-26: "hardcode somewhere that the buggy node will never get
+# used again"). Keyed by EXTERNAL IP — the only identifier for the underlying
+# machine the v2 API exposes to us; the same IP came back on every one of the
+# four sightings, so it is the right key in practice. Stated caveat so a
+# future reader can weigh a false positive: ephemeral IPs can in principle be
+# recycled onto an innocent machine later, and then this list costs one
+# re-create — against the four dead launches (two E-051, two e052-verify)
+# that trusting this host cost. `--allow-unhealthy` is the deliberate escape
+# hatch (investigation only), and `lemon_reason` is the single decision point
+# create/list/status all share.
+LEMON_HOSTS = {
+    "35.252.240.169": "us-west1-c SPOT host, four in-maintenance sightings "
+                      "2026-08-23..26 (E-051 nodes 2 and 3's pool, then "
+                      "e052-verify twice); never executed a startup script",
+}
+
+
+def lemon_reason(node):
+    """Why this node must not be used, or None if it may be.
+
+    Two independent conditions, either is disqualifying:
+      * its external IP is on the measured-lemon list above;
+      * it was born UNHEALTHY (health starts with 'UNHEALTHY' right after
+        create) — a node that begins life in maintenance is the exact
+        signature all four lemon sightings shared, whatever its IP.
+    """
+    _, external = node_ips(node)
+    if external in LEMON_HOSTS:
+        return f"external IP {external} is a KNOWN LEMON: {LEMON_HOSTS[external]}"
+    health = str(node.get("health") or "")
+    if health.startswith("UNHEALTHY"):
+        return (f"health reads {health!r} at creation "
+                f"({node.get('healthDescription') or 'no description'}) — "
+                f"born-in-maintenance is the lemon signature of 2026-08-23..26")
+    return None
+
 # 15 minutes. A v5e-8 create is typically well under 5; the ceiling exists so a
 # wedged operation surfaces as a refusal rather than as a session that walks
 # away from a node it believes did not come up. Note the node may EXIST and
@@ -485,6 +522,8 @@ def is_spot(node):
 
 def print_node(node):
     internal, external = node_ips(node)
+    if external in LEMON_HOSTS:
+        print(f"  LEMON:   {LEMON_HOSTS[external]}")
     print(f"  state:   {node.get('state', '?')}")
     print(f"  health:  {node.get('health', '-')}  "
           f"{node.get('healthDescription', '') or ''}".rstrip())
@@ -693,6 +732,34 @@ def cmd_create(a):
             f"({node.get('healthDescription') or 'no healthDescription'}). "
             f"The node exists and is BILLING — `delete {a.name}` if this is "
             f"not recoverable.")
+    reason = lemon_reason(node)
+    if reason and not a.allow_unhealthy:
+        # NEVER hand a measured lemon back to the caller (Chris, 2026-08-26).
+        # The node exists and is billing, so the refusal DELETES it first —
+        # a guard that exits leaving the meter running would convert a lemon
+        # into a bill. Only then does it exit non-zero, so an automation loop
+        # can re-create for a fresh host draw without ever touching this one.
+        print(f"  REFUSING this node: {reason}")
+        print(f"  deleting it before exiting — the meter must not outlive "
+              f"the refusal (--allow-unhealthy overrides, for deliberate "
+              f"investigation only)")
+        d_method, d_url, _ = delete_request(project, zone, a.name)
+        d_op = api(d_method, d_url, token)
+        poll_operation(token, d_op.get("name"))
+        try:
+            api("GET", get_url, token)
+            raise SystemExit(
+                f"refused {a.name} as a lemon but the delete did not stick — "
+                f"the node still answers and is BILLING. Delete it by hand.")
+        except HttpError as e:
+            if e.status != 404:
+                die_http(e)
+        raise SystemExit(
+            f"refused and deleted {a.name}: {reason}. Re-run create for a "
+            f"fresh host draw.")
+    if reason:
+        print(f"  WARNING (--allow-unhealthy): using a node the guard would "
+              f"refuse — {reason}")
     print(f"{a.name} is READY. Delete it when the measurement is done — that "
           f"is what stops the meter.")
 
@@ -794,6 +861,11 @@ def build_parser():
     c.add_argument("--startup-file", help="file whose contents become the "
                                           "metadata startup-script")
     c.add_argument("--dry-run", action="store_true")
+    c.add_argument("--allow-unhealthy", action="store_true",
+                   help="accept a node lemon_reason would refuse (a known-"
+                        "lemon IP or born-UNHEALTHY health). Investigation "
+                        "only — the refusal exists because four launches "
+                        "died on exactly such a host (2026-08-23..26)")
     c.set_defaults(fn=cmd_create)
 
     l = sub.add_parser("list", help="nodes in the zone")
