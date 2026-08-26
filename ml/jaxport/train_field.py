@@ -357,22 +357,35 @@ class Windows:
         self.Z, self.K, self.season = Z, int(K), season
         self.rowmap = rowmap
         self.dtype = dtype
+        # THE CONTEXT SHIPS IN THE SOURCE PRECISION. The published cache is
+        # float16, so a float16 ctx carries exactly the same values as the
+        # float32 upcast — and at the real geometry the f32 ctx alone is
+        # 6.4 GB per chip (batch 2 × K 144 × P 86,698 × d_z 32), which with
+        # params+optimizer is what blew the v5e's 16 GB HBM on 2026-08-26
+        # ("Attempting to reserve 9.50G ... 8.25G free", both smoke legs).
+        # The conditioner upcasts CHUNK BY CHUNK on device (chunked_cond),
+        # so no f32 copy of the whole ctx ever exists anywhere. A float32
+        # source (the toys) keeps a float32 ctx: shipping narrower than the
+        # source would LOSE values, and the parity gates run on that path.
+        self.ctx_dtype = (np.float16 if np.dtype(Z.dtype) == np.float16
+                          else np.dtype(dtype))
 
-    def _rows(self, idx):
+    def _rows(self, idx, dtype=None):
         r = idx if self.rowmap is None else self.rowmap[idx]
-        return np.asarray(self.Z[r], self.dtype)
+        return np.asarray(self.Z[r], self.dtype if dtype is None else dtype)
 
     def batch(self, ts):
-        """-> ctx [B,K,P,d_z], z_t [B,P,d_z], z_n [B,P,d_z], season [B,K,2].
+        """-> ctx [B,K,P,d_z] (ctx_dtype), z_t/z_n [B,P,d_z] (dtype), season.
 
-        CAST ON THE HOST (`self.dtype`), before the transfer: the published
-        cache is float16 and fp16 -> fp32 is exact, so the values do not move,
-        but a device-side cast would double the wire traffic.
+        z_t and z_n stay `self.dtype` (f32): they are small ([B, P, d_z]) and
+        feed the loss/residual arithmetic directly. Only ctx — the [B, K, …]
+        axis that dominates memory — ships at source precision.
         """
         ts = np.asarray(ts, np.int64)
         K = self.K
-        ctx = np.stack([self._rows(np.arange(t - K + 1, t + 1)) for t in ts])
-        z_t = np.ascontiguousarray(ctx[:, -1])
+        ctx = np.stack([self._rows(np.arange(t - K + 1, t + 1),
+                                   self.ctx_dtype) for t in ts])
+        z_t = np.asarray(ctx[:, -1], self.dtype)
         z_n = np.stack([self._rows(np.array([t + 1]))[0] for t in ts])
         sea = (np.zeros((len(ts), K, 2), self.dtype) if self.season is None
                else np.stack([self.season[t - K + 1:t + 1] for t in ts]))
@@ -589,7 +602,10 @@ def cond_from_pixels(model, ctx_px, season, chunk, remat=True):
     B, K, P, d_z = ctx_px.shape
     N, P2 = tok.ntok, tok.P2
     if chunk is None or chunk <= 0 or chunk >= N:
-        return model.make_cond(tok.to_tokens(ctx_px), season)
+        # The unchunked path is the toy/CI path — full upcast is affordable
+        # there, and f16 -> f32 is exact so the values are the f32 path's.
+        return model.make_cond(tok.to_tokens(ctx_px.astype(jnp.float32)),
+                               season)
     nc = -(-N // chunk)
     pad = nc * chunk - N
     # A 2-D index PER CHUNK, [chunk, P2] — the same shape discipline
@@ -601,13 +617,17 @@ def cond_from_pixels(model, ctx_px, season, chunk, remat=True):
                           np.full(pad * P2, -1, np.int64)]).reshape(
                               nc, chunk, P2)
     idx = jnp.asarray(pxf)
-    zero = jnp.zeros((), ctx_px.dtype)
-    one = jnp.ones((), ctx_px.dtype)
+    zero = jnp.zeros((), jnp.float32)
+    one = jnp.ones((), jnp.float32)
 
     def _one(ix):
         safe = jnp.maximum(ix, 0)
         ok = ix >= 0
-        v = jnp.take(ctx_px, safe, axis=2)              # [B,K,chunk,P2,d_z]
+        # The upcast lives HERE, on the gathered chunk, so a float16 ctx
+        # (real runs — see Windows.ctx_dtype) never exists as float32 in
+        # full: only [B, K, chunk, P2, d_z] at a time does. f16 -> f32 is
+        # exact, so every number downstream is the f32 path's.
+        v = jnp.take(ctx_px, safe, axis=2).astype(jnp.float32)
         v = jnp.where(ok[None, None, :, :, None], v, zero)
         flag = jnp.broadcast_to(
             jnp.where(ok, one, zero)[None, None, :, :, None],
