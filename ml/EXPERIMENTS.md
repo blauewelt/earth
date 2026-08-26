@@ -114,6 +114,43 @@ pre-registered in the plan) are NOT dispatched: `ml-train.yml` sits at the
 the one piece deliberately left for a daytime decision. Cost of tonight:
 $0 GPU; ~40 min CPU in-session.
 
+<a id="e-050"></a>
+## E-050 · Warm-start quantization: the trained continuous codec, lattice switched on — DISPATCHING 2026-08-26 ~06:45Z (approved by Chris 2026-08-25 ~15:30Z, b3ee36a)
+
+**E-050 · resume the finished E-049a continuous d_z-6 pentad codec with the FSQ
+lattice + ln bound switched ON at resume (`--fsq-warmstart`, 6c83ed3) · params
+37.956M (measured identical both arms — lattice and bound are parameter-free) ·
+stage encoder (resume + 60k warm steps) · data family4_na025_pentad_r2 · arch
+512×12 d_z 6 patch 1, FSQ [8,8,8,5,5,5] = one 2¹⁶ token per pixel-bin, ladder
+auto REBASED to +50/+200/+2000/+20000/+60000, bound ln · steps×batch
+260,000×512 (200k resumed + 60k warm) · resume run-480 (required; promoted to
+`run-480__pixelmae.pt` on model-checkpoints-v1 this morning from Actions
+artifact pixelmae-480 — the workflow's own release publish never ran, only the
+artifact upload; §0.2 again) · recipe `f4r2-40M-dz6-fsq65k-warm`.**
+
+TL;DR — every cold-start codec-side FSQ run collapsed or degenerated (e048a,
+#481/#482 constant encoder; run-455 sign code) while quantization on an
+EXISTING z works (A9 0.4916) and lattice z out-forecasts continuous z at the
+registered instrument (E-046/#477: 0.4394 vs 0.5036). Does giving the lattice
+a TRAINED encoder — directions already spread — produce the road-B token
+without the collapse? HYPOTHESIS + FALSIFIERS registered in
+[the E-050 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E050_warmstart_fsq.md):
+(A) the #482 signature reappearing in the warm fits (std_med → ~0) kills the
+warm-start repair and points at the bound (RMS-only, gated on the corpse
+diagnosis — #481's ~10k corpse is already published as
+`rescued-orphan-latest-482.pt`, #482's ~15k corpse publishes on
+gpu-box-42005419's next job); (B) any fast channel at ~100% FVU at the
+decoder ceiling on Argo-free bins = 16 bits cannot carry a bin even warm, and
+the pre-registered next rung is TWO tokens (d_z 12), never a bigger vocab.
+Declared confound: 260k total vs #480's 200k — the falsifier is absolute (the
+9–19% FVU band); a PASS near the band edge buys a 260k continuous control.
+First-minutes health: the FSQ WARM START banner (`run-480.pt@200000`), fit
+prequant_rms 1.0 with INPUT-DEPENDENT std_med, effective bits ≫ the ~6-bit
+sign-code floor. Runs pinned to gpu-box-32966687 (the parent's own box,
+running idle at dispatch — tensor warm). COST ~4.5 h train + probes ≈ $2–3.
+n = 1 at a new configuration (§3b): the first result buys its pair before any
+number is a level.
+
 <a id="e-049"></a>
 ## E-049 · Road B: one 16-bit token per pixel-bin, judged by a non-linear decoder — DISPATCHING 2026-08-25 (Chris: *"continue with road B and do that very diligently, and test it very well with a decoder (a non-linear decoder)"*)
 
