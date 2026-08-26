@@ -39,7 +39,7 @@
 \large self-supervised representations of the observed ocean,\\
 probed against the Atlantic overturning circulation}
 \author{blauewelt/earth --- technical report, v7}
-\date{24 August 2026}
+\date{26 August 2026}
 
 \begin{document}
 \maketitle
@@ -163,13 +163,23 @@ decisive rung landed at $\mathbf{0.0820}$, inside its pre-registered band),
 while cutting the monthly cadence's span to 120 days sends it to $0.527$.
 The registered mechanism is the seasonal analog: a 720-day window contains
 last year's same-calendar frame. Two further repairs preceded that
-resolution: restricting the head's inputs to an
-8-level-per-dimension alphabet is the first intervention to beat the pentad
-baseline ($0.4916$), and a \emph{month-block} codec --- one embedding per
-calendar month, built from a grid of pentad cells --- cures the per-bin
-reconstruction collapse at the Argo anchor (fast channels $7.6\%$/$17.4\%$
-of variance lost, against $25$--$112\%$) at a flat structural price paid
-everywhere else ($9$--$19\%$ against $<$$1\%$). Finally, the models now have
+resolution, and both now have verdicts. Quantization helps, and helps most
+inside the model: restricting the head's inputs to an
+8-level-per-dimension alphabet was the first intervention to beat the pentad
+baseline ($0.4916$), and retraining the codec \emph{through} the same
+lattice beats that ($0.4394$) --- at the price of an optimization landscape
+whose gradient spikes killed one of two seeds. A \emph{month-block} codec
+--- one embedding per calendar month, built from a grid of pentad cells ---
+cures the per-bin reconstruction collapse at the Argo anchor (fast channels
+$7.6\%$/$17.4\%$ of variance lost, against $25$--$112\%$) at a flat
+structural price paid everywhere else ($9$--$19\%$ against $<$$1\%$) ---
+but as a forecast substrate the fused month \emph{loses} to simply
+selecting one bin per month ($0.2127$ against $0.0721$ at the same
+instrument), so the reconstruction cure buys no forecast and the context
+account carries the pentad programme alone: its full-budget test --- a
+206.5M head with the complete two-year context at five-day steps, whose
+12-month roll is the pre-registered decisive reading --- is training as
+this revision is dated. Finally, the models now have
 a second, framework-independent implementation in JAX, gated against the
 PyTorch stack at $10^{-7}$--$10^{-5}$ and against an eighteen-times-reproduced
 archived roll, on which a TPU v5litepod-4 trains the 38.0M block codec at
@@ -430,8 +440,7 @@ Terms are used throughout in the following precise senses.
   per-dimension alphabet ($L$ levels, straight-through gradients, targets
   left continuous). At $L=8$ this is three bits per dimension. The same
   lattice applied \emph{inside} the codec's bottleneck is finite scalar
-  quantization (FSQ); \S\ref{sec:quant} measures the first and dispatches
-  the second.
+  quantization (FSQ); \S\ref{sec:quant} measures both.
 \end{description}
 
 \section{Data}\label{sec:data}
@@ -595,8 +604,8 @@ no codec had been trained on it; every codec in \S\ref{sec:cadence} now is,
 so the cadence results differ from the monthly ones in the channel set as
 well as in the time axis, and the two are never compared across that seam.
 What \emph{that} channel is worth on its own is still unmeasured: the
-matched pair that would answer it was dispatched and has returned no
-verdict. It is
+matched pair that would answer it was dispatched, cancelled fourteen hours
+short in a fleet-wide credit triage, and has not been re-run. It is
 listed here because the two revisions are one specification with one
 difference, and because a channel addition is not a variation of a tensor
 but a new one: it changes $C$, so it changes the encoder's input projection
@@ -736,11 +745,15 @@ OISST posts at cell centres $0.125^\circ + k\cdot0.25^\circ$, the window
 samples \emph{on} the multiples --- the channel is bilinearly
 interpolated rather than nearest-sampled; nearest-indexing would displace
 the entire field by half a cell, consistently, and would look like an
-ordinary SST map. The planned test is a matched pair against the r1 codec
+ordinary SST map. The clean test is a matched pair against the r1 codec
 in which the tensor is the only difference, so what SST is worth can be
-read off directly. It was dispatched and has not returned a verdict, and
+read off directly. It was dispatched, cancelled mid-run in a credit
+triage, and has not been re-run --- a money decision, not a scientific
+one, recorded here so the gap is not mistaken for an answer --- and
 nothing in \S\ref{sec:cadence} substitutes for it: those codecs are all r2,
-so SST is present in every one of them and varied in none.
+so SST is present in every one of them and varied in none. Every pentad
+result in this report therefore carries the channel as an untested
+assumption.
 
 Three things remain deliberately absent. There is \textbf{no air--sea heat
 or freshwater flux}: the ocean's thermal forcing enters only through the
@@ -2787,6 +2800,41 @@ inside its pre-registered $0.07$--$0.15$ band.}
 \label{fig:factorial}
 \end{figure}
 
+\paragraph{What the factorial predicts for the roll, and the arm that
+tests it.} The $-0.499$ of \S\ref{sec:cadence} was rolled from a
+$K{=}24$ head --- five-day steps, so a \emph{120-day} context span,
+which is precisely the configuration the factorial convicts: at that
+span even 30-day steps score $0.527$. The context account therefore
+makes a sharp, falsifiable prediction about the roll itself: a pentad
+head with the full 720-day span ($K{=}144$) should roll materially
+better, and if its day-matched corridor AUC still reads
+E-044b-class negative, two years of context did not repair the pentad
+roll. That arm exists and is training as this revision is dated: the
+same 206.5M configuration at $K{=}144$ and the full 200{,}000-step
+budget, on the TPU tier of \S\ref{sec:jax}, its configuration
+certified by a same-geometry PyTorch twin at 20k steps (the $0.0820$
+decisive rung above, which is that twin). The reading order is
+pre-registered: the 12-month roll first --- day-matched, on the
+trained-longitude corridor scope, against the monthly pair's $+0.939$
+and the pentad $-0.499$ --- then the one-step ratio against the twin's
+$0.0820$, where a \emph{flat} value is expected rather than
+disappointing ($K{=}24$'s own $20\mathrm{k}\to200\mathrm{k}$ curve
+was flat one-step). Two qualifications are on record before the
+number. The roll is uncertified at pentad by construction --- the
+frozen gate's pinned reference exists only at monthly cadence, so the
+evaluator marks every pentad roll \texttt{certified: false} rather than
+inventing a reference --- and the result
+will be $n{=}1$ on a training tier with no replicate band. And the
+named alternative if it fails has since been measured and eliminated:
+the fusion axis (\S\ref{sec:block}) was the registered ``missing
+ingredient elsewhere'', and its stage-2 verdict landed against fusion,
+so a negative roll here would leave the pentad-cadence programme
+without a registered repair candidate beyond the hierarchical
+fallback --- roll at \emph{monthly} stride through the pentad stack,
+for which the $0.0721$ A2a head is already the trained object, keeping
+pentad steps for within-month detail rather than for the year-scale
+roll.
+
 \subsection{The component ladder: what breaks, one variable at a
 time}\label{sec:components}
 
@@ -2992,16 +3040,34 @@ recorded numbers on the same blocks, is the reason it was accepted:
   these residuals is that the decoder and the bottleneck, not the encoder,
   are what limit the round trip --- so the next rung is more data or more
   masking before more parameters. A Chinchilla-anchored sibling at 126.9M
-  ($1.006\times$ the tensor's own value-count anchor, $d_z{=}128$) is
-  training as a direct test of that reading.
+  ($1.006\times$ the tensor's own value-count anchor, $d_z{=}128$) has
+  since finished training as a direct test of that reading; its paired
+  reconstruction audit is owed and the reading stands untested until it
+  runs.
 \end{itemize}
 
 The stage-2 verdict --- the number that answers fusion-versus-selection ---
-is dispatched and not in. \textbf{Every number in this subsection is $n=1$
+landed against the hypothesis. The 20k head on the month-block $z$ (the
+same head configuration and the same two-year span as the cadence ladder's
+arms) reads a one-step ratio of $0.2127$ against its own space's
+persistence --- not below the selection arm's $0.0721$ but $2.9\times$
+above it. One qualification is structural: each ratio is scored against
+its own $z$-space's persistence, and a fused month is a much stronger
+persistence baseline ($2.75$ block-units against ${\sim}21$ in the per-bin
+spaces) precisely because fusion averages away the fast variance a per-bin
+head gets credit for predicting --- the instrument was chosen at dispatch
+knowing this, so the caveat qualifies the size of the gap, not its
+direction. The transport read-out agrees in direction: the year-blocked
+k-fold through the head's features reads $0.394$ $[0.31, 0.48]$, under
+every per-bin head at this geometry and under the same run's raw-pixel
+control ($0.693$). At this codec, bottleneck and budget, fusing a month of
+pentads does not beat selecting one bin per month.
+\textbf{Every number in this subsection is $n=1$
 at a tier with no measured pair}, and the codec was moreover trained on the
 JAX/TPU stack of \S\ref{sec:jax}, which is itself a new tier: a
-same-recipe PyTorch twin is training as the cross-framework check. Nothing
-here is a level.
+same-recipe PyTorch twin has finished training as the cross-framework
+check, and the paired Tier-1 audit that would certify the pair is owed.
+Nothing here is a level.
 
 \subsection{The codecs in flight, and the hillclimb behind
 them}\label{sec:inflight}
@@ -3054,7 +3120,7 @@ calendar month, $7\times40$ cells & $d_z$ 64, continuous &
 \addlinespace
 \texttt{f4r2-40M-}\newline\texttt{monthblock-b512} & 38.0M &
 the same & the same & 60k $\times$ 512 & torch &
-finishing --- from its rescued 45k milestone \\
+\textbf{finished} --- the cross-framework twin; paired audit owed \\
 \addlinespace
 \texttt{f4r2-40M-}\newline\texttt{monthblock} & 38.0M &
 the same & the same & 200k $\times$ 128 & torch &
@@ -3066,13 +3132,27 @@ calendar month, $7\times40$ cells & $d_z$ 128, continuous &
 \addlinespace
 \texttt{f4r2-126M-}\newline\texttt{monthblock} & 126.9M &
 the same & the same & 200k $\times$ 64 & torch &
-finishing --- rescued at 120k, resuming to 200k \\
+\textbf{finished}; reconstruction audit owed \\
 \midrule
 \multicolumn{7}{l}{\emph{E-046 --- the same alphabet, moved into the
 bottleneck (\S\ref{sec:quant})}}\\
 \texttt{f4r2-40M-fsq8} & 38.0M &
 5-day bin & $d_z$ 32, FSQ $[8]^{32}$ & 200k $\times$ 512 & torch &
 \textbf{finished}; verdict landed --- \S\ref{sec:quant} \\
+\midrule
+\multicolumn{7}{l}{\emph{E-049/E-050 --- one 16-bit token per pixel-bin,
+and the warm-start repair (see text)}}\\
+\texttt{f4r2-40M-dz6} & 38.0M &
+5-day bin & $d_z$ 6, continuous & 200k $\times$ 512 & torch &
+\textbf{finished} --- the width-tax control and warm-start parent \\
+\addlinespace
+\texttt{f4r2-40M-}\newline\texttt{dz6-fsq65k} & 38.0M &
+5-day bin & $d_z$ 6, FSQ $[8,8,8,5,5,5]$, ln bound & 200k $\times$ 512 &
+torch & \textbf{dead}: constant-encoder collapse, twice \\
+\addlinespace
+\texttt{f4r2-40M-}\newline\texttt{dz6-fsq65k-warm} & 38.0M &
+5-day bin & the same, enabled \emph{at resume} & $+$60k $\times$ 512 &
+torch & training --- warm fits healthy at every check \\
 \midrule
 \multicolumn{7}{l}{\emph{E-048 --- windows instead of months, and the level
 placement itself under test}}\\
@@ -3088,15 +3168,19 @@ ladder fitted & 60k $\times$ 512 & TPU & run twice --- see text \\
 \caption{\textbf{Codecs in flight and planned} --- configurations, not
 results. Parameters are measured from the model rather than taken from the
 recipe's name, which is why the ``40M'' and ``70M'' families read 38.0M and
-71.3M here. All eight are on the pentad r2 tensor
+71.3M here. All eleven are on the pentad r2 tensor
 (\texttt{family4\_na025\_pentad\_r2}, $C{=}40$, $T{=}3142$) with the
 longitude holdout retired (\S\ref{sec:nolonhold}) and \texttt{patch} 1; the
 month-block rows are $512\times12$ / $d_{\mathrm{dec}}$ 256 at 38.0M and
-$1024\times10$ with 8 heads / $d_{\mathrm{dec}}$ 768 at 126.9M, and the E-048
+$1024\times10$ with 8 heads / $d_{\mathrm{dec}}$ 768 at 126.9M, the
+E-046/E-049/E-050 rows share the $512\times12$ / $d_{\mathrm{dec}}$ 256
+geometry at their stated $d_z$, and the E-048
 rows are $768\times10$ with 8 heads / $d_{\mathrm{dec}}$ 512. \emph{One $z$
 per} is the unit the codec emits and therefore the step the forecaster takes,
-which is the whole argument of \S\ref{sec:cadence}: only the last row emits
-faster than monthly. \emph{Tier} matters because a JAX-trained number and a
+which is the whole argument of \S\ref{sec:cadence}: the 5-day-bin rows keep
+the pentad step, the month-block and 30-day-window rows re-coarsen it to
+monthly, and only the final row emits faster than monthly while carrying a
+month of context. \emph{Tier} matters because a JAX-trained number and a
 PyTorch-trained one are not pooled (\S\ref{sec:jax}). No number from any of
 these rows may be written as a level --- each is a new codec, and several are
 a new codec, a new axis and a new bottleneck at once, which puts every one of
@@ -3175,11 +3259,43 @@ is not --- the pre-quantization scale ran from $0.7$ to $114$ over 60k
 steps with no restoring force, each fitted lattice outgrown within a few
 thousand steps, and reconstruction never left ${\sim}0.30$ where the
 \emph{continuous} month-block codec of \S\ref{sec:block} reaches $0.098$
-on nearly the same windowing. The open design choice, stated rather than
-decided here: give the latent an intrinsic bound (a normalization in front
-of the lattice, so the fit has a stationary target), or accept the sign
-code as what tanh-bounded FSQ converges to at this scale and size the
-lattice for it. The overlapping arm waits on that choice.
+on nearly the same windowing. The design choice that paragraph left open
+--- give the latent an intrinsic bound, or accept the sign code and size
+the lattice for it --- has since been taken and measured, on the E-049
+rows of the table; the overlapping arm still waits on its outcome.
+
+\paragraph{The bound branch, taken --- and a second, distinct collapse
+under it.} E-049 is the sharpest form of the quantization line: one
+16-bit token per pixel-bin --- $d_z$ 6 under an FSQ ladder of
+$[8,8,8,5,5,5]$ levels, a $2^{16}$ implicit codebook --- judged not by a
+probe but by the strongest non-linear decoder we run, with the falsifier
+registered at dispatch (any fast channel at ${\sim}100\%$ FVU at that
+decoder ceiling kills the configuration, and the pre-registered next rung
+is two tokens, never a larger vocabulary). Its design takes the intrinsic
+bound: a parameter-free LayerNorm in front of the lattice, so the fit has
+a stationary target. The bound does exactly what it was specified to do
+--- pre-quantization rms reads $1.0$ at every fit, with fitted saturation
+radii $O(1)$ where the unbounded codec sat at $|v|\sim3\times10^4$ ---
+and the run then died anyway, of a disease the bound cannot see:
+\emph{direction} collapse under an intact scale. By step 7{,}500 the
+encoder's output was constant over time (persistence MSE $9\times10^{-4}$,
+${\sim}150\times$ down from a healthy start; by 15k, exactly zero), on
+both of two independent copies. The attribution experiment ran itself:
+the same width \emph{without} the lattice --- a continuous $d_z$ 6
+control, identical in every other respect --- trained to 200k in perfect
+health. Cold-start codec-side quantization is convicted, not the width
+and not the bound; and this is consistent with the one place quantization
+has worked, which is on an \emph{existing} representation (read-time
+input quantization, \S\ref{sec:quant}, and the FSQ retrain whose
+directions were spread before the lattice mattered). The repair under
+test as this revision is dated is exactly that observation made into a
+method --- \emph{warm-start quantization}: train the continuous codec
+first, switch the lattice on at resume, give it another 60k steps. Its
+early fits are the anti-collapse signature (input-dependent
+pre-quantization spread at every check where the cold start had slid to
+$0.005$), and its registered verdict is the decoder-ceiling audit, not
+the training curve. Whether one warm 16-bit token can carry a pixel-bin
+is, at this writing, the open question of the quantization road.
 
 \section{A second implementation, and a new tier of
 hardware}\label{sec:jax}
@@ -3257,8 +3373,20 @@ same-recipe PyTorch twin of that codec is training precisely so the pair
 exists. Nothing about the port licenses pooling a JAX-trained number with a
 PyTorch-trained one.
 
-\paragraph{What is not ported.} The stage-2 trainer, and with it the
-schedules that live there; the multi-output reconstruction decoder; the
+\paragraph{The stage-2 trainer followed.} Since the paragraph above was
+first written, the stage-2 stencil trainer has been ported and gated the
+same way (loss, gradient and update parity against the PyTorch trainer;
+input noise drawn on-device in the jitted step with the RNG stream
+recorded; sharded host-to-device transfer that never materializes the
+full batch on one chip --- each of these fixes was forced by a measured
+failure at $K{=}144$, not written speculatively). It is what trains the
+full-budget two-year-context pentad head of \S\ref{sec:factorial}, at
+$0.166$\,s/step clean --- about $7\times$ its own 20k PyTorch twin's
+H100 pace --- and its head exports to an ordinary PyTorch checkpoint
+whose roll runs on the unchanged GPU eval ladder, keeping the one-eval
+rule intact.
+
+\paragraph{What is not ported.} The multi-output reconstruction decoder; the
 head's fold-fitting and the transport read-out. The full probe deliberately
 \emph{refuses} in the JAX trainer rather than running a reduced version of
 itself, because its second half trains a small temporal model inside the
@@ -3339,20 +3467,30 @@ measurement in this report separates ``rolled twelve months well'' from
 cleanest available test is the one \S\ref{sec:replay} declines to buy on
 cost grounds --- ensemble dispersion under context perturbation --- and it
 should be bought before any twelve-month number is quoted as a forecast.
-\textbf{(10) The finer time axis does not work yet, and its failure is
-measured rather than mysterious.} At 5-day steps the one-step ratio is
-$\approx0.505$ against $\approx0.032$ monthly, the year-long roll is
-\emph{below climatology}, and the cadence ladder is smooth --- so this is
-the step size, not a defect (\S\ref{sec:cadence}). The repairs under test
-are structural (a month-block representation, \S\ref{sec:block}) and
-informational (input quantization, \S\ref{sec:quant}); neither has a
-stage-2 verdict. Every pentad number except the one-step control pair is
-$n=1$ at a cadence with no measured replicate band, and none of them is a
-level. \textbf{(11) A second training tier now exists and is unreplicated.}
-The month-block codec was trained in JAX on a TPU (\S\ref{sec:jax}); the
+\textbf{(10) The finer time axis does not work yet, but what is broken is
+now localized.} At 5-day steps the $K{=}24$ one-step ratio is
+$\approx0.505$ against $\approx0.032$ monthly and the year-long roll is
+\emph{below climatology} --- and the factorial of \S\ref{sec:factorial}
+shows the difficulty tracks \emph{context span}, not step size: restore
+the two-year span and the ratio returns to $0.082$ at the same step. The
+two repairs this item once listed as unjudged have since returned
+stage-2 verdicts, one each way --- input quantization helps ($0.4394$,
+\S\ref{sec:quant}); month-block fusion does not ($0.2127$ against the
+selection arm's $0.0721$, \S\ref{sec:block}) --- so the pentad roll's
+repair now rides on one arm: the full-budget two-year-context head in
+training, whose day-matched roll is the registered decisive number
+(\S\ref{sec:factorial}), with the monthly-stride hierarchical roll as
+the remaining fallback. Every pentad number except the one-step control
+pair is $n=1$ at a cadence with no measured replicate band, and none of
+them is a level. \textbf{(11) A second training tier now exists and is
+unreplicated.} The month-block codec was trained in JAX on a TPU
+(\S\ref{sec:jax}), and the same tier now trains stage-2 heads; the
 port is gated hard against the PyTorch stack and its products are evaluated
 by the unchanged PyTorch eval ladder, but a first result at a new tier buys
-its own replication and that twin is still training.
+its own replication. The codec's same-recipe PyTorch twin has finished
+training and the paired audit that would turn the two into a
+cross-framework certificate is owed; the stage-2 side has no twin at all
+beyond its 20k-step configuration certificate.
 
 For the rolled-forecast programme of \S\ref{sec:roll}, the mechanical
 follow-ups of v6 have landed --- the width, step-budget and exposure-bias
@@ -3378,8 +3516,9 @@ for this tensor), which is what the 10M-parameter codecs of that era, and
 in the end the 40.7M anchor of \S\ref{sec:qd}, were built to answer.
 Next levers, in expected-value order, and (9)--(11) have reordered them:
 the dispersion test that would say how much of the twelve-month roll is
-replay; the fusion-versus-selection verdict and the quantized-bottleneck
-retrain of \S\ref{sec:cadence}, both dispatched; then the pentad noise
+replay; the quantized-bottleneck
+retrain of \S\ref{sec:cadence}, dispatched (the fusion-versus-selection
+verdict has since landed against fusion --- \S\ref{sec:block}); then the pentad noise
 dose, re-derived from the pentad model's own one-step error rather than
 carried across from monthly. Behind those, and unchanged: paired
 significance for the head results; the head
@@ -3564,7 +3703,7 @@ generated by scripts in \texttt{ml/} of
 The stage-2 experiments of \S\ref{sec:roll} are logged
 hypothesis-first in \texttt{ml/EXPERIMENTS.md} (entries E-022 through
 E-032), and \S\ref{sec:measuring}--\S\ref{sec:cadence} in the same file's
-E-043 through E-048 (the E-048 sweep design, including the pre-registered
+E-043 through E-051 (the E-048 sweep design, including the pre-registered
 odd-$L$ ladder contrast, is \texttt{ml/plans/E048\_fsq\_block\_sweep.md}, and
 every configuration in Table~\ref{tab:inflight} is a checked-in recipe under
 \texttt{ml/recipes/}); the JAX port's tiering and acceptance gates are
