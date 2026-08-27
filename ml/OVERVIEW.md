@@ -1,27 +1,21 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-27 ~19:35 UTC** (FGN session). FGN half:
-**E-057.1 pair RE-dispatched — #500 (seed 0) TRAINING on gpu-box-42005419;
-#501 (seed 1) queued on gpu-box-32966687 behind the E-056 re-runs #494
-(training) / #495**. #496 (seed 0, second attempt) OOM-died at ~step 6000
-and went GREEN (the §7 no-temporal.json signature, on a HEALTHY box): the
-M=8 monitor validation ran the full 4096-window batch once per member —
-a ~3.65 GB input cat each — and fragmented the 24 GB card; fixed by
-chunking the FGN monitor eval to 512-window slices (commit 14bb379,
-EXPERIMENTS E-057 (h3)); #499 was pinned to the pre-fix sha and was
-cancelled, re-queued as #501. #496's first-minutes readings validate the
-config: crps2 objective, LR on plan, member_var 0.871 (ε not collapsed).
-Earlier path: #492 died on gpu-box-40623952's dead GPU (lemon, confirmed
-by probe #498; box stopped/offline, destroy-candidate); #493 cancelled at
-~1 h to yield the box-local E-056 slot back; #497 died on
-gpu-box-30257785's full disk (stopped, needs disk triage). **The FGN ensemble roll is BUILT + CPU-verified** (rollout_spatial
-+779, tests/test_fgn_roll.py, deterministic path proven byte-identical).
-Stencil-session half (17:55): **E-053 wave RESOLVED — A4 0.14116;
-synthesis: frames, not placement, are the binding resource**; E-056
-#490/#491 died on the fsq-warmstart resume guard (guard correct;
-re-dispatched as #494/#495 on the base fsq65k recipe; free finding: the
-260k FSQ final is confirmed present box-locally); E-054a mid-check 320k @
-ratio ≈0.0312, finish ~22:30Z.
+**Last updated: 2026-08-27 ~21:10 UTC** (merged: FGN session 19:35Z +
+stencil session 21:05Z). Stencil half, on Chris's parallelization
+directive: **two fresh Vast boxes rented; #501 (FGN seed 1, queued ~17 h
+behind E-056 on the shared box) re-dispatched as #502 on its own box
+(gpu-box-46292015, fixed sha) — the E-057.1 pair now trains in PARALLEL,
+landing ~24Z 08-28; second box (gpu-box-38116559) reserved for tonight's
+E-051 400k roll; E-054b (~400M capacity rung) config frozen — all 7 spot
+zones dry/quota-full at 20:44Z (SPOT_LEDGER), launches ~22:35Z on the
+quota E-054a frees, on-demand fallback.** E-053 wave RESOLVED (A4
+0.14116 — frames, not placement, bind); E-054a 320k @ ratio ≈0.0312,
+finish ~22:30Z. FGN half (19:35Z): #496 OOM-died at ~step 6000 and went
+green (M=8 monitor val fragmented the card; FIXED by chunking, 14bb379);
+#500 (seed 0) training healthy on gpu-box-42005419; #492's box confirmed
+lemon (destroy-candidate), #497's box full-disk (triage); **the FGN
+ensemble roll is BUILT + CPU-verified** (rollout_spatial +779,
+deterministic path proven byte-identical).
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
 "in flight" section and check the
@@ -49,9 +43,11 @@ attendability, never information beyond the pixels.
 
 | what | TL;DR question | must beat / registered reading | where · ETA |
 |---|---|---|---|
-| **#494/#495** E-056a/b token substrate, RE-DISPATCH (#494 TRAINING on gpu-box-32966687 since ~18:1xZ after #493's cancel freed the box; #495 queued) | is the E-050 warm-FSQ 16-bit-per-pixel-bin alphabet a competitive forecasting substrate — and what does K=144 cost on it? First try #490/#491 died on the fsq-warmstart resume guard (recipe carried the flag; guard correct); free finding: the 260k FSQ final is confirmed present box-locally | a: ≲0.44 ⇒ token road opens at ~5% state size; ≳0.50 ⇒ quantization lost the forecastable signal. b: ≈0.08 + faster steps ⇒ next full-budget head trains on tokens | results likely late 08-27/early 08-28; gates the next $100-class pentad spend |
-| **#500/#501** E-057.1 FGN pair (500 seed 0 TRAINING on gpu-box-42005419; 501 seed 1 queued behind #494/#495; #496 OOM-died at step ~6000 — monitor-eval chunking fixed in 14bb379) | does a LEARNED perturbation + fair CRPS (eps^32 conditional LN, N=2, znoise OFF) replace the hand-dosed znoise and un-damp the roll? | ensemble-mean corridor AUC vs znoise pair 0.7235 (F1); stage2_val_member_var -> 0 = eps collapse (F2, live branch); ensemble-roll evaluator BUILT and ready | ~30 h each (2x forwards); >24 h token expiry = HAND-HARVEST both (registered) |
-| **E-054a** continue E-051 → 400k (stencil session, TPU **spot**, node `e051-k144-full`) | does the unsaturated budget curve keep paying past 200k (LR re-armed: 4e-4, halflife 100k)? | vs 0.0330: ≈0.026 ⇒ budget still paying, queue the ~400M capacity rung (E-054b); ≈0.033 flat ⇒ capacity is the axis | **mid-check 17:39Z: step 320k, val ratio ≈0.0312 and falling** — trending between the registered poles; pace ⇒ 400k finishes **~22:30Z tonight**; frozen-200k copy safe in the bucket |
+| **#494/#495** E-056a/b token substrate, RE-DISPATCH (#494 TRAINING on gpu-box-32966687 since ~18:1xZ; #495 queued behind it) | is the E-050 warm-FSQ 16-bit-per-pixel-bin alphabet a competitive forecasting substrate — and what does K=144 cost on it? First try #490/#491 died on the fsq-warmstart resume guard (guard correct); free finding: the 260k FSQ final is confirmed present box-locally | a: ≲0.44 ⇒ token road opens at ~5% state size; ≳0.50 ⇒ quantization lost the forecastable signal. b: ≈0.08 + faster steps ⇒ next full-budget head trains on tokens | #494 result ~late tonight; #495 ~mid-day 08-28; gates the next $100-class pentad spend |
+| **#500/#502** E-057.1 FGN pair, NOW PARALLEL (seed 0 on gpu-box-42005419 since 19:21Z; seed 1 re-dispatched by the stencil session as #502 on fresh gpu-box-46292015, fixed sha) | does a LEARNED perturbation + fair CRPS (eps^32 conditional LN, N=2, znoise OFF) replace the hand-dosed znoise and un-damp the roll? | ensemble-mean corridor AUC vs znoise pair 0.7235 (F1); stage2_val_member_var -> 0 = eps collapse (F2 — #500 reads 0.5–0.77 at 8k, healthy); ensemble-roll evaluator BUILT and ready | both ~27 h ⇒ pair lands ~24Z 08-28 (was ~2 days sequential); >24 h token expiry = HAND-HARVEST both; cross-box caveat in e-057(j) |
+| **E-054a** continue E-051 → 400k (stencil session, TPU **spot**, node `e051-k144-full`) | does the unsaturated budget curve keep paying past 200k (LR re-armed: 4e-4, halflife 100k)? | vs 0.0330: ≈0.026 ⇒ budget still paying, queue E-054b; ≈0.033 flat ⇒ capacity is the axis | **mid-check 17:39Z: step 320k, val ratio ≈0.0312, falling** — between the poles; 400k finishes **~22:30Z tonight**; frozen-200k copy safe in the bucket |
+| **E-054b** ~400M capacity rung (1280×20, K 144, 200k fresh, TPU spot) | does capacity, not steps, buy the next factor at full pentad span? | vs E-054a's 400k final; HBM fit at 1280×20 unverified — first-minutes OOM check | config frozen; all 7 spot zones dry/quota-full at 20:44Z ⇒ **launches ~22:35Z** on the quota E-054a frees (on-demand fallback); ≈32 h, ≈$55–75 spot |
+| **E-051 400k roll** (day-matched, replay battery, unpooled read-out) | does the best pentad one-step ever survive a 12-month roll? | vs monthly +0.939 and pentad K=24's −0.499; replay battery mandatory | dispatches at the 22:35Z wake onto reserved fresh box gpu-box-38116559; ~13–20 h, ≈$5–7 |
 | **#485** E-050 warm-start FSQ | does a trained encoder survive quantization where every cold start collapsed? | decoder-ceiling audit (Falsifier B): fast channels inside the 9–19% FVU band on Argo-free bins | **finals ARCHIVED** (run-485.jsonl + probes-485.json on ml-metrics) — read-out pending its own session's harvest |
 | **E-052.1** det field head (diffusion session's run) | can one model predict the whole field jointly? | died at its first ckpt save (torch-less train venv); **RELAUNCHED 05:44Z by its session, resumes from step 1000**, holds the on-demand v5litepod-4 | its session harvests; finish ≈04Z 08-28 if pace holds |
 

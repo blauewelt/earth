@@ -314,6 +314,21 @@ except three that diff against pinned historic shas (impossible in a
 shallow sandbox checkout, verified pre-broken on the pristine tree) and two
 verified pre-existing failures unrelated to this diff.
 
+**(j) Fleet note by the E-053/E-054/E-056 session, 2026-08-27 ~20:40Z —
+seed 1 moved off the shared box as #502, pair now parallel.** #501
+(E-057.1b seed 1, fifth dispatch) was queued on `gpu-box-32966687` behind
+#494/#495 — ~17 h of E-056 work before it could even start its own ~27 h.
+Under Chris's parallelization directive ("Any additional boxes and
+parallelization is welcome"), #501 (queued, nothing spent) was cancelled
+and re-dispatched as **#502 (E-057.1b seed 1, identical config: #496's
+INPUTS_JSON with `seed:1`, ref main ⊇ the 14bb379 OOM fix — same sha
+class as #500)** pinned to the freshly rented `gpu-box-46292015` (Vast
+48937793). Both seeds now train in parallel; the pair lands ~24Z 08-28
+instead of ~2 days out. CAVEAT on the record: the pair is now CROSS-BOX —
+tensor and Z are release-pulled so the measured box-effect cause is
+removed, but the pair spread conflates box with seed (§3b's cross-box
+caution); read the pair with that in mind.
+
 **Verification: `tests/test_fgn_head.py` (new, 8 suites) green; existing
 `test_resume_temporal` / `test_direct_heads` / `test_e022_stencil` (24
 pytest cases) green; `test_probscore`, `test_e044c_knobs`, `test_e029_znoise`
@@ -677,6 +692,28 @@ fresh at ~400M (1280×20, K 144, 200k) — ≈32 h train, ≈$155 on-demand /
 ≈$55–75 spot; HBM fit at 1280 wide × K=144 unverified (E-051 fit 1024×16
 with ~2 GB headroom at chunk 256 — first-minutes OOM check mandatory).
 Waits on E-054a's reading per the two-sided registration above.
+
+**E-054b · LAUNCH DECISION 2026-08-27 ~20:55Z (Chris: "If more TPU
+resources ... speed things up, let's start them"):** the wait-on-E-054a
+gate is DROPPED — both branches of E-054a's two-sided registration point
+at the capacity rung (a falling curve queues it; a flat one names capacity
+the open axis), so no reading can cancel it and holding it bought nothing.
+Config frozen in /tmp/e054b_startup.sh (fresh 1280×20, K 144, 200k×256,
+LR 4e-4 halflife 100k, znoise 0.7, grad-clip 128, seed 0, run-415 codec +
+published Z, node/prefix `e054b-400m`, TAG e054b). The launch itself is
+HELD ~2 h by supply, not by choice: the full 7-zone spot ladder returned
+nothing at 20:44–20:51Z — us-west1-c and us-west4-a quota-full with OUR
+OWN spot nodes (the 4-core/zone preemptible grant = one v5litepod-4 per
+zone), everything else capacity-dry (SPOT_LEDGER 08-27 20:44Z). Paying
+the ≈$100 on-demand premium to start a 32 h run 2 h early fails the
+programme's own arithmetic, so E-054b launches at the 22:35Z wake on the
+us-west1-c spot quota E-054a frees at ~22:30Z — with on-demand as that
+wake's EXPLICIT fallback if the fresh spot draw refuses (capacity there
+is proven only for the node we already hold). First-minutes checks:
+the HBM/OOM verdict at 1280×20×K144 chunk 256 (registered risk), LR
+4e-4 nonzero, fresh start at step 0 (an accidental resume from a stale
+prefix would mean the name `e054b-400m` was not fresh — it is, verified
+empty).
 
 **E-054a first-minutes verified + one loss recorded (11:45Z):** resume at
 step 200,000 confirmed from the shipped log; the warm-restart val transient
