@@ -1,13 +1,20 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-27 ~19:05 UTC** (merged: FGN session + stencil
-session). FGN half: **E-057.1 pair in flight — #496 (seed 0) TRAINING on
-gpu-box-42005419; #499 (seed 1) queued on gpu-box-32966687 behind the
-E-056 re-runs #494 (training) / #495**. Path: #492 died on
-gpu-box-40623952's dead GPU (lemon, confirmed by probe #498; box stopped,
-destroy-candidate); #493 cancelled at ~1 h to yield the box-local E-056
-slot back; #497 died on gpu-box-30257785's full disk (stopped, needs disk
-triage). **The FGN ensemble roll is BUILT + CPU-verified** (rollout_spatial
+**Last updated: 2026-08-27 ~19:35 UTC** (FGN session). FGN half:
+**E-057.1 pair RE-dispatched — #500 (seed 0) TRAINING on gpu-box-42005419;
+#501 (seed 1) queued on gpu-box-32966687 behind the E-056 re-runs #494
+(training) / #495**. #496 (seed 0, second attempt) OOM-died at ~step 6000
+and went GREEN (the §7 no-temporal.json signature, on a HEALTHY box): the
+M=8 monitor validation ran the full 4096-window batch once per member —
+a ~3.65 GB input cat each — and fragmented the 24 GB card; fixed by
+chunking the FGN monitor eval to 512-window slices (commit 14bb379,
+EXPERIMENTS E-057 (h3)); #499 was pinned to the pre-fix sha and was
+cancelled, re-queued as #501. #496's first-minutes readings validate the
+config: crps2 objective, LR on plan, member_var 0.871 (ε not collapsed).
+Earlier path: #492 died on gpu-box-40623952's dead GPU (lemon, confirmed
+by probe #498; box stopped/offline, destroy-candidate); #493 cancelled at
+~1 h to yield the box-local E-056 slot back; #497 died on
+gpu-box-30257785's full disk (stopped, needs disk triage). **The FGN ensemble roll is BUILT + CPU-verified** (rollout_spatial
 +779, tests/test_fgn_roll.py, deterministic path proven byte-identical).
 Stencil-session half (17:55): **E-053 wave RESOLVED — A4 0.14116;
 synthesis: frames, not placement, are the binding resource**; E-056
@@ -43,7 +50,7 @@ attendability, never information beyond the pixels.
 | what | TL;DR question | must beat / registered reading | where · ETA |
 |---|---|---|---|
 | **#494/#495** E-056a/b token substrate, RE-DISPATCH (#494 TRAINING on gpu-box-32966687 since ~18:1xZ after #493's cancel freed the box; #495 queued) | is the E-050 warm-FSQ 16-bit-per-pixel-bin alphabet a competitive forecasting substrate — and what does K=144 cost on it? First try #490/#491 died on the fsq-warmstart resume guard (recipe carried the flag; guard correct); free finding: the 260k FSQ final is confirmed present box-locally | a: ≲0.44 ⇒ token road opens at ~5% state size; ≳0.50 ⇒ quantization lost the forecastable signal. b: ≈0.08 + faster steps ⇒ next full-budget head trains on tokens | results likely late 08-27/early 08-28; gates the next $100-class pentad spend |
-| **#496/#499** E-057.1 FGN pair (496 seed 0 TRAINING on gpu-box-42005419; 499 seed 1 queued behind #494/#495) | does a LEARNED perturbation + fair CRPS (eps^32 conditional LN, N=2, znoise OFF) replace the hand-dosed znoise and un-damp the roll? | ensemble-mean corridor AUC vs znoise pair 0.7235 (F1); stage2_val_member_var -> 0 = eps collapse (F2, live branch); ensemble-roll evaluator BUILT and ready | ~30 h each (2x forwards); >24 h token expiry = HAND-HARVEST both (registered) |
+| **#500/#501** E-057.1 FGN pair (500 seed 0 TRAINING on gpu-box-42005419; 501 seed 1 queued behind #494/#495; #496 OOM-died at step ~6000 — monitor-eval chunking fixed in 14bb379) | does a LEARNED perturbation + fair CRPS (eps^32 conditional LN, N=2, znoise OFF) replace the hand-dosed znoise and un-damp the roll? | ensemble-mean corridor AUC vs znoise pair 0.7235 (F1); stage2_val_member_var -> 0 = eps collapse (F2, live branch); ensemble-roll evaluator BUILT and ready | ~30 h each (2x forwards); >24 h token expiry = HAND-HARVEST both (registered) |
 | **E-054a** continue E-051 → 400k (stencil session, TPU **spot**, node `e051-k144-full`) | does the unsaturated budget curve keep paying past 200k (LR re-armed: 4e-4, halflife 100k)? | vs 0.0330: ≈0.026 ⇒ budget still paying, queue the ~400M capacity rung (E-054b); ≈0.033 flat ⇒ capacity is the axis | **mid-check 17:39Z: step 320k, val ratio ≈0.0312 and falling** — trending between the registered poles; pace ⇒ 400k finishes **~22:30Z tonight**; frozen-200k copy safe in the bucket |
 | **#485** E-050 warm-start FSQ | does a trained encoder survive quantization where every cold start collapsed? | decoder-ceiling audit (Falsifier B): fast channels inside the 9–19% FVU band on Argo-free bins | **finals ARCHIVED** (run-485.jsonl + probes-485.json on ml-metrics) — read-out pending its own session's harvest |
 | **E-052.1** det field head (diffusion session's run) | can one model predict the whole field jointly? | died at its first ckpt save (torch-less train venv); **RELAUNCHED 05:44Z by its session, resumes from step 1000**, holds the on-demand v5litepod-4 | its session harvests; finish ≈04Z 08-28 if pace holds |
@@ -63,9 +70,9 @@ attendability, never information beyond the pixels.
    zero-init identity bitwise; loss pinned to probscore; shared-coin toy:
    coherence 0.99 shared-ε vs 0.15 independent). E-057.1 = two seeds at
    monthly xl144, znoise OFF, vs clean 0.6781 and znoise 0.7235 (both
-   two-seed controls); falsifiers F1–F3 pre-registered, the ensemble-roll
-   diff (M members, ε per step) is the remaining build item before its
-   corridor read.
+   two-seed controls); falsifiers F1–F3 pre-registered; the ensemble roll
+   (M members, ε per step) is BUILT + CPU-verified — the corridor read
+   runs when the pair lands.
    [Plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E057_fgn_head.md) ·
    [FGN addendum](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E052_FGN_addendum.md) ·
    [log entry](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-057).

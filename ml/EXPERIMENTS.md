@@ -274,9 +274,11 @@ rescuing at 4,000/200,000 steps; and the healthy first-minutes readings
 ε NOT collapsed, F2 negative so far) validate the config itself. #499
 (E-057.1b seed 1, queued) was pinned to the pre-fix sha and would have died
 identically at its own step-6000 val — cancelled and re-dispatched behind
-#494/#495. Both seeds re-dispatched on this sha (run numbers recorded in
-the dispatch commit that follows). Cost of the OOM: ~1.2 h of one box,
-≈$0.35.
+#494/#495. Re-dispatches, both on the fixed sha (14bb379): **#500
+(E-057.1a seed 0, third dispatch) TRAINING on gpu-box-42005419** (verified
+in_progress on the right runner within a minute) and **#501 (E-057.1b
+seed 1, fifth dispatch) queued on gpu-box-32966687 behind #494/#495**
+(E-056's box-local pair). Cost of the OOM: ~1.2 h of one box, ≈$0.35.
 
 **(i) The ENSEMBLE ROLL is BUILT and CPU-VERIFIED** — `ml/rollout_spatial.py`
 +779/−13, spec `ml/plans/E057_roll_spec.md`, tests
