@@ -3648,11 +3648,28 @@ def main():
                     # monitoring batch, one fixed eps member each, broadcast
                     # across every window — eps is global, so all windows in a
                     # member share it exactly as all pixels of a field would.
+                    # CHUNKED, since #496 (E-057.1a seed 0, 2026-08-27): one
+                    # full-batch forward here is a ~3.65 GB input cat at
+                    # stencil 145 x 4096 windows, and M of them per log step
+                    # interleaved with the two-forward CRPS training steps
+                    # fragmented a 24 GB card to death (OOM at the step-6000
+                    # val; 13.4 GiB reserved-but-unallocated). Same class as
+                    # E-027 #285/#286 — see _chunked_forward. Concatenation
+                    # over disjoint slices is exact for a row-wise forward;
+                    # eps is broadcast per member either way, so chunking
+                    # cannot change which noise a window sees.
                     _ens = []
+                    _CH = 512
                     for _mi in range(eps_val.shape[0]):
-                        _e = eps_val[_mi].expand(mon_zseq.shape[0], -1)
-                        _pm, _ = model(mon_zseq, mon_mseq, mon_sctx, eps=_e)
-                        _ens.append(_pm[:, -1])
+                        _outs = []
+                        for _c0 in range(0, mon_zseq.shape[0], _CH):
+                            _sl = slice(_c0, _c0 + _CH)
+                            _e = eps_val[_mi].expand(
+                                mon_zseq[_sl].shape[0], -1)
+                            _pm, _ = model(mon_zseq[_sl], mon_mseq[_sl],
+                                           mon_sctx[_sl], eps=_e)
+                            _outs.append(_pm[:, -1])
+                        _ens.append(torch.cat(_outs, 0))
                     ens = torch.stack(_ens)              # [M, n, d_z]
                     # THE ENSEMBLE MEAN is the best point estimate, so it is
                     # what goes into the two EXISTING keys: `stage2_val_zmse`

@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-057"></a>
-## E-057 · FGN-mode stage-2: noise-conditioned stencil head trained with fair CRPS — E-057.0 BUILT + CPU-VERIFIED; **E-057.1 pair IN FLIGHT (#496 seed 0 training · #499 seed 1 queued behind E-056)**; ensemble roll BUILT; cross-verified against DeepMind's open-source FGN (google-deepmind/weathernext)
+## E-057 · FGN-mode stage-2: noise-conditioned stencil head trained with fair CRPS — E-057.0 BUILT + CPU-VERIFIED; **E-057.1 pair RE-DISPATCHED after #496's step-6000 OOM (see (h3))**; ensemble roll BUILT; cross-verified against DeepMind's open-source FGN (google-deepmind/weathernext)
 
 TL;DR — can the stencil head stop emitting the conditional mean (the blur
 that damps every roll toward climatology) and instead SAMPLE a member of the
@@ -241,6 +241,42 @@ needs disk triage). **#499 (E-057.1b seed 1, fourth dispatch)** is queued on
 `gpu-box-32966687` behind #494/#495. Wasted spend across the three failures:
 ≈$1–2 (all died in minutes). Fleet now: #496 training (gpu-box-42005419),
 #494 training + #495 + #499 queued (gpu-box-32966687).
+
+**(h3) #496 (E-057.1a seed 0, re-dispatch of #492) DIED at ~step 6000 —
+OOM in the M=8 monitor validation — and went GREEN anyway (the §7
+green-but-void signature, on a healthy box this time).** The run showed
+"completed success" after ~100 minutes of a ~27 h job; the tell was the
+archive: `run-496.jsonl` ends at `stage2_step` 4000 and `probes-496.json`
+lists **no `temporal.json`** — temporal.py is backgrounded behind
+best-effort guards, so its death does not colour the run, and the K-sweep
+probes ran on and archived normally. The log has the mechanism exactly:
+the FGN monitor block pushed the FULL 4096-window monitor batch through the
+head once per eval member (M=8), and at stencil 145 the input
+`torch.cat` at temporal.py:287 is 4096×24×~9292 fp32 ≈ **3.65 GB per
+forward** — the OOM's 3,651,141,632 bytes to the byte. Interleaved with the
+two-forward CRPS training steps this fragmented the 24 GB card (13.41 GiB
+reserved-but-unallocated at death); the step-2000 val already OOM-retried
+(18:22:30Z warning), the step-6000 val died (18:55:04Z,
+`torch.OutOfMemoryError: tried to allocate 3.40 GiB`). Same failure class
+as E-027 #285/#286, which is why `_chunked_forward` exists — the new FGN
+monitor loop just didn't use it. **Fix (this commit): the FGN monitor eval
+is chunked to 512-window slices per member** (peak input cat 3.65 GB →
+0.46 GB; concatenation over disjoint slices is exact for a row-wise
+forward; the legacy deterministic branch is untouched, so archived-path
+purity holds by construction; `tests/test_fgn_head.py` +
+`tests/test_fgn_roll.py` green, toy batches < 512 ⇒ bitwise-identical).
+Two side-findings from the same log: the ~30-min head snapshot upload
+422'd (`run-496-temporal-latest.pt` "the head is only on this box" — a
+partial/conflicting release asset; snapshot_head.sh should delete-then-
+upload, open follow-up), so nothing of #496 survives — nothing worth
+rescuing at 4,000/200,000 steps; and the healthy first-minutes readings
+(crps2 config, LR 9.66e-4 on plan, member_var 0.871 falling from 1.394 —
+ε NOT collapsed, F2 negative so far) validate the config itself. #499
+(E-057.1b seed 1, queued) was pinned to the pre-fix sha and would have died
+identically at its own step-6000 val — cancelled and re-dispatched behind
+#494/#495. Both seeds re-dispatched on this sha (run numbers recorded in
+the dispatch commit that follows). Cost of the OOM: ~1.2 h of one box,
+≈$0.35.
 
 **(i) The ENSEMBLE ROLL is BUILT and CPU-VERIFIED** — `ml/rollout_spatial.py`
 +779/−13, spec `ml/plans/E057_roll_spec.md`, tests
