@@ -111,10 +111,22 @@ the full resumable file split as `<tag>__temporal.full.partNN` +
 `<tag>__temporal.full.sha256` (per-part and whole-file hashes; reassemble
 with `cat <tag>__temporal.full.part* > temporal.pt`). The E-028 xl heads
 (seeds 0–2, step 60000, opt+sched+RNG verified before upload) are stored
-this way. `snapshot_head.sh` still fails silently over the cap for LIVE
-runs — a known gap; until it splits, a >2 GiB run's insurance is the box
-mirror plus same-box resume, and its completed artifact must be backed up
-within 30 days.
+this way. **The LIVE-run half of the gap is closed since 2026-08-27**:
+`snapshot_head.sh` now splits any mirror over ~1.9 GB into
+`run-<n>-temporal-latest.pt.partNN` + a `run-<n>-temporal-latest.manifest`
+(uploaded LAST — the manifest is the flush-then-mark marker that every part
+is durable; size, whole-file sha256, step and part order inside; reassemble
+with `cat …part* > temporal.pt`). Files at or under the cap keep the
+single-asset name, and the two representations never coexist. The gap was
+rediscovered the expensive way on #496 (E-057.1a seed 0, its OOM
+post-mortem) — instant curl 422 at headers, `"size must be less than
+2147483648"`, re-measured from the sandbox — after a week in which no run
+since #423 had mirrored: the duplicate-name check also now pages the
+/assets endpoint, because the release object's embedded assets array is
+measured-incomplete (572 of 577). No consumer auto-reassembles the parts
+yet — an xl resume from the mirror is a manual `cat` until one is written.
+Runs pinned to earlier shas (#500/#502) still run the old script; their
+insurance remains the box mirror plus hand-harvest.
 
 ### 2c · Limits treated as physics
 
