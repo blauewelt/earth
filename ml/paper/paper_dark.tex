@@ -2794,6 +2794,37 @@ calendar-replay battery of \S\ref{sec:roll} is mandatory before a roll
 number is quoted, and the evaluator refuses offset heads outright until
 an offset-aware assembly exists.
 
+\begin{figure}[t]
+\centering\includegraphics[width=.98\linewidth]{fig_pentad_budget.pdf}
+\caption{\textbf{Pentad one-step against training budget}, every curve the
+in-training validation ratio against the shared persistence baseline
+(21.44621). The full-budget $K{=}144$ head (E-051) is a clean power law
+to 200k with \emph{no saturation} --- and its terminal flattening is
+partly the LR schedule (half-life 40k, so the rate is $1/32$ of peak by
+200k), not the model. The same budget bought $K{=}24$ nothing
+($0.506\to0.494$ over $10\times$ the steps: span-starved), which is the
+budget$\times$span interaction in one picture. The sparse-time arms (A1,
+A2) track between. This figure is why the continuation and capacity arms
+(\S\ref{sec:factorial}) are worth their price.}
+\label{fig:pentadbudget}
+\end{figure}
+
+\begin{figure}[t]
+\centering\includegraphics[width=.92\linewidth]{fig_amoc_roll_pentad.pdf}
+\caption{\textbf{The transport read-out of the only pentad head ever
+rolled} --- E-044b's $K{=}24$, 115-day-span head, whose day-matched
+corridor AUC is $-0.499$, below climatology. Its within-record tracking
+is $0.256$ and its held-out-year tracking $0.016$ --- effectively
+decoupled from the observed series, the transport view of the pentad
+wound. The model curve is smoothed over the concatenated record+future
+series, so the prediction continues seamlessly across the end of the
+measurements. No frontier pentad head has a roll yet: E-051's
+($0.0330$ one-step) is the registered decisive reading and the E-053
+offset heads are refused by the evaluator until the replay battery and
+offset-aware assembly exist.}
+\label{fig:pentadroll}
+\end{figure}
+
 \subsection{The component ladder: what breaks, one variable at a
 time}\label{sec:components}
 

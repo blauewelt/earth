@@ -423,7 +423,13 @@ def _sm(v, w=18):
 
 
 def _yr(yms):
-    return np.array([int(s[:4]) + (int(s[5:7]) - 1) / 12.0 for s in yms])
+    # "YYYY-MM" -> mid-month-ish; "YYYY-MM-DD" -> day-resolved decimal year
+    out = []
+    for s in yms:
+        y, m = int(s[:4]), int(s[5:7])
+        d = int(s[8:10]) if len(s) >= 10 else 15
+        out.append(y + ((m - 1) * 30.44 + (d - 1)) / 365.25)
+    return np.array(out)
 
 
 try:
@@ -440,7 +446,15 @@ try:
     a1.text(ty[-1], _sm(tv)[~np.isnan(_sm(tv))][-1], "  observed",
             color=INK, fontsize=7, va="center", fontweight="bold")
     for arm in arms:
-        a1.plot(_yr(arm["long"]["roll_ym"]), _sm(arm["long"]["sv_des"]),
+        # one concatenated series per arm: the 18-mo running mean then spans
+        # the record/future seam, so the curve continues seamlessly instead
+        # of both edges going NaN and opening a visual gap at 2025.
+        arm["t_all"] = np.concatenate([_yr(arm["long"]["roll_ym"]),
+                                       _yr(arm["future"]["roll_ym"])])
+        arm["v_all"] = _sm(np.concatenate([arm["long"]["sv_des"],
+                                           arm["future"]["sv_des"]]))
+        left = arm["t_all"] < 2025.02
+        a1.plot(arm["t_all"][left], arm["v_all"][left],
                 color=arm["c"], lw=1.5 if arm["gate"] else 1.1,
                 ls="--" if arm["gate"] else "-", alpha=0.95)
     a1.set_ylim(-8.5, 8.5)
@@ -455,7 +469,8 @@ try:
     a2.plot(ty, _sm(tv), color=INK, lw=2.4, zorder=5)
     a2.axvline(2025, color=INK2, lw=0.9, ls=":")
     for arm in arms:
-        a2.plot(_yr(arm["future"]["roll_ym"]), _sm(arm["future"]["sv_des"]),
+        right = arm["t_all"] >= 2023.0   # two years of record tail, so the
+        a2.plot(arm["t_all"][right], arm["v_all"][right],   # seam is visible
                 color=arm["c"], lw=1.5 if arm["gate"] else 1.1,
                 ls="--" if arm["gate"] else "-", alpha=0.95)
     a2.set_ylim(-8.5, 8.5)
@@ -485,6 +500,104 @@ try:
     plt.close(fig)
 except FileNotFoundError as e:
     print("fig_amoc_roll skipped:", e)
+
+
+# ---- Fig 9b: the SAME read-out from the best ROLLED pentad head ------------
+# src: run #433 (E-044b-roll — the K=24, 115-day-span pentad head, the ONLY
+#      pentad head ever rolled; its day-matched corridor AUC is -0.499, below
+#      climatology, and this figure is the transport view of that failure).
+#      Staged as roll_433.json. The frontier pentad heads (E-051 one-step
+#      0.0330; the E-053 arms) have NO roll — the replay battery gates them.
+# The model curve is smoothed over the CONCATENATED record+future series
+# (110 pentad steps = 18 months), so the prediction continues seamlessly
+# across the end of the record instead of opening a running-mean edge gap.
+try:
+    R = json.load(open(os.path.join(HERE, "roll_433.json")))
+    h = R["heads"]["s145rspiral:111-4444-0.71-0.5_s0"]
+    truth = json.load(open(os.path.join(HERE, "truth_rapid.json")))
+    ty, tv = _yr(truth["ym"]), np.asarray(truth["sv_des"], float)
+    t_all = np.concatenate([_yr(h["long"]["roll_ym"]), _yr(h["future"]["roll_ym"])])
+    v_all = _sm(np.concatenate([h["long"]["sv_des"], h["future"]["sv_des"]]), w=110)
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.6, 3.1),
+                                 gridspec_kw={"width_ratios": [1.25, 1]})
+    for yr in (2009, 2017, 2023):
+        a1.axvspan(yr, yr + 1, color=INK2, alpha=0.13, lw=0)
+        a1.text(yr + 0.5, 7.0, str(yr), color=INK2, fontsize=6.5, ha="center")
+    a1.plot(ty, _sm(tv), color=INK, lw=2.4, zorder=5)
+    a1.text(ty[-1], _sm(tv)[~np.isnan(_sm(tv))][-1], "  observed",
+            color=INK, fontsize=7, va="center", fontweight="bold")
+    left = t_all < 2025.02
+    a1.plot(t_all[left], v_all[left], color=C1, lw=1.1, alpha=0.95)
+    a1.set_ylim(-8.5, 8.5)
+    a1.set_ylabel("deseasonalised anomaly (Sv)")
+    a1.set_xlabel("18-month running mean; shaded = held out")
+    a1.set_title("hindcast, rolled from a 2004 context", loc="left", fontsize=9)
+    lo, hi = np.percentile(tv, [5, 95])
+    a2.axhspan(lo, hi, color=INK2, alpha=0.13, lw=0)
+    a2.text(2043, hi - 0.4, "observed 90% range", color=INK2, fontsize=6.5,
+            ha="right", va="top")
+    a2.plot(ty, _sm(tv), color=INK, lw=2.4, zorder=5)
+    a2.axvline(2025, color=INK2, lw=0.9, ls=":")
+    right = t_all >= 2023.0
+    a2.plot(t_all[right], v_all[right], color=C1, lw=1.1, alpha=0.95)
+    a2.set_ylim(-8.5, 8.5)
+    a2.set_xlabel("no forcing arrives after the dotted seam")
+    a2.set_title("unforced roll, 20 years past the record", loc="left",
+                 fontsize=9)
+    for a in (a1, a2):
+        strip(a)
+    hand = [matplotlib.lines.Line2D([], [], color=C1, lw=1.4,
+            label="pentad K=24 head, s0  (within-record tracking r=%s; "
+                  "held-out r=%s)" % (h["long"]["r_trained"],
+                                      h["long"]["r_heldout"]))]
+    fig.legend(handles=hand, frameon=False, fontsize=6.5,
+               loc="lower center", bbox_to_anchor=(0.5, -0.10))
+    fig.suptitle("The only pentad head ever rolled (E-044b, corridor "
+                 "$-$0.499): held-out tracking $\\approx$0 — the wound the "
+                 "span programme addresses", fontsize=9, x=0.02, ha="left")
+    fig.savefig(os.path.join(FIGS, "fig_amoc_roll_pentad.pdf"))
+    plt.close(fig)
+except FileNotFoundError as e:
+    print("fig_amoc_roll_pentad skipped:", e)
+
+
+# ---- Fig 9c: the pentad budget curves — is the best run saturated? ---------
+# src: curves_pentad.json, staged from ml-live-tpu (E-051) and ml-metrics
+#      (#478, #427, #486, #487): stage-2 val_zmse / 21.44621 vs step.
+try:
+    CV = json.load(open(os.path.join(HERE, "curves_pentad.json")))
+    fig, ax = plt.subplots(figsize=(7.2, 3.2))
+    style = {
+        "e051_k144_200k": dict(c=C1, lw=1.8),
+        "478_k144_20k":   dict(c=C1, lw=1.0, ls="--"),
+        "427_k24_20k":    dict(c=INK2, lw=1.4),
+        "486_a1_20k":     dict(c=C3, lw=1.0, ls=":"),
+        "487_a2_20k":     dict(c=C3, lw=1.0, ls="--"),
+    }
+    for k, v in CV.items():
+        pts = np.asarray(v["pts"], float)
+        st = style.get(k, dict(c=INK2, lw=1.0))
+        ax.plot(pts[:, 0], pts[:, 1], label=v["label"],
+                color=st.get("c"), lw=st.get("lw", 1.0), ls=st.get("ls", "-"),
+                alpha=0.95)
+    ax.set_xscale("log"); ax.set_yscale("log")
+    ax.set_xlabel("training step (log)")
+    ax.set_ylabel("one-step val ratio vs persistence (log)")
+    ax.annotate("0.0330 — still falling at 200k\n(LR nearly decayed: the "
+                "flattening is partly the schedule)",
+                xy=(1.9e5, 0.034), xytext=(2.5e3, 0.038), fontsize=7,
+                color=C1, arrowprops=dict(arrowstyle="-", color=C1, lw=0.7))
+    ax.axhline(0.0820, color=INK2, lw=0.6, ls=":")
+    ax.text(300, 0.086, "0.0820 (K=144 at 20k)", fontsize=6.5, color=INK2)
+    strip(ax)
+    ax.legend(frameon=False, fontsize=6.5, loc="upper right")
+    ax.set_title("Pentad one-step vs training budget: the full-budget K=144 "
+                 "curve is NOT saturated; K=24 is span-starved flat",
+                 loc="left", fontsize=9)
+    fig.savefig(os.path.join(FIGS, "fig_pentad_budget.pdf"))
+    plt.close(fig)
+except FileNotFoundError as e:
+    print("fig_pentad_budget skipped:", e)
 
 
 # ---- Fig 10: the spatial generalisation gap ------------------------------
