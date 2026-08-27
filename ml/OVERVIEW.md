@@ -1,10 +1,13 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-27 ~13:15 UTC** (E-053/E-054/E-056 session:
-unpooled read-outs now DEFAULT-ON everywhere (Chris's ruling — the tests
-pin themselves, not the default); E-056 token-substrate gate dispatched
-(#490 K=24 / #491 K=144 over the E-050 warm-FSQ codec, queued behind A4);
-A3 0.1400 harvested; E-054a mid-continuation, healthy). *Every ML session updates this stamp and the sections it touches in
+**Last updated: 2026-08-27 ~15:45 UTC** (FGN session: **E-057 registered
+and E-057.0 BUILT + CPU-VERIFIED** — the noise-conditioned stage-2 head
+with fair-CRPS objective (`--fgn-eps`), flag-off path artefact-identical,
+shared-coin toy reproduces FGN's coherence claim; E-057.1 is the next GPU
+dispatch after #489–#491, per Chris's prioritization. Carried from the
+~13:15 update by the E-053/E-054/E-056 session: unpooled read-outs
+DEFAULT-ON everywhere; E-056 gate dispatched (#490/#491, queued behind
+A4); A3 0.1400 harvested; E-054a mid-continuation, healthy). *Every ML session updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
 "in flight" section and check the
@@ -46,11 +49,25 @@ attendability, never information beyond the pixels.
    2.5× at K=144, the best pentad one-step ever. With fusion eliminated, the
    span hypothesis carries the pentad-roll question alone; the roll (replay
    battery first) is the remaining read-out.
-2. **E-050 decoder-ceiling audit** once #485's finals land — decides whether
+2. **E-057.1 · the FGN pair** (Chris: *"let's prioritize an experiment
+   with: 1. Noise-conditioned stage-2 head trained with fair CRPS"* —
+   2026-08-27). TL;DR: does a LEARNED perturbation + a proper score replace
+   the hand-dosed znoise and un-damp the roll, at one forward pass per
+   member? E-057.0 is BUILT and CPU-verified (`--fgn-eps` in temporal.py;
+   zero-init identity bitwise; loss pinned to probscore; shared-coin toy:
+   coherence 0.99 shared-ε vs 0.15 independent). E-057.1 = two seeds at
+   monthly xl144, znoise OFF, vs clean 0.6781 and znoise 0.7235 (both
+   two-seed controls); falsifiers F1–F3 pre-registered, the ensemble-roll
+   diff (M members, ε per step) is the remaining build item before its
+   corridor read.
+   [Plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E057_fgn_head.md) ·
+   [FGN addendum](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E052_FGN_addendum.md) ·
+   [log entry](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-057).
+3. **E-050 decoder-ceiling audit** once #485's finals land — decides whether
    one warm 16-bit token carries a pixel-bin; a pass opens token-input /
    token-output heads on the best forecasting substrate found so far
    (lattice z, E-046).
-3. **E-053 space-time stencil** (Chris's direction, RUNNING): E-053.0
+4. **E-053 space-time stencil** (Chris's direction, RUNNING): E-053.0
    measured — the advective cone is refuted (ridge lag 0 everywhere; the
    agnostic ball/ramp wins) and the analog is visible in the substrate.
    **A1 (#486): 0.1858. A2 (#487): 0.1561. Both between the registered
@@ -64,15 +81,15 @@ attendability, never information beyond the pixels.
    assembly exists.
    [Plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E053_spacetime_stencil.md) ·
    [slides](https://blauewelt.github.io/earth/ml/figures/spacetime_stencil.html).
-4. **E-052.1 deterministic field head** (diffusion session) — the
+5. **E-052.1 deterministic field head** (diffusion session) — the
    architecture-level alternative; param-matched 200.4M. **Currently
    stalled at step 960 (§1) — its session's first task is diagnosis and
    resume before any new spend.**
-5. **If E-051's roll is negative:** the hierarchical fallback — roll at
+6. **If E-051's roll is negative:** the hierarchical fallback — roll at
    monthly stride *through* the pentad stack (A2a's 0.0721 head is that
    object) — plus a pentad-calibrated znoise dose sized from the pentad
    one-step error (A4's lesson), before new architecture spend.
-6. **Housekeeping by expiry:** publish-or-write-off pixelmae-472/-473/-477
+7. **Housekeeping by expiry:** publish-or-write-off pixelmae-472/-473/-477
    (30-day clock, 2026-09-24); slice-the-published-Z (unblocks E-045.3 and
    is E-053.1's own code path); the #472/#473-vs-TPU cross-framework Tier-1
    certificates; E-046's owed seed-0 refinish.

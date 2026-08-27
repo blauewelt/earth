@@ -25,6 +25,7 @@ held-out years and the same mid-Atlantic longitude block, never random.
 Usage:  python3 ml/temporal.py --run pilot4_anom --steps 4000
 """
 import argparse
+import copy
 import datetime as dt
 import json
 import math
@@ -55,6 +56,145 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CKPT_DIR = os.environ.get("CKPT_DIR_OVERRIDE", "/opt/earth-cache/ckpt")
 
 
+class _CondLayer(nn.TransformerEncoderLayer):
+    """E-057: a stock norm_first encoder layer whose two LayerNorms are
+    FiLM-modulated by a per-sample conditioning vector c (adaLN-zero, FGN
+    arXiv:2506.10772 §3).
+
+    Two properties are load-bearing and neither is a matter of taste:
+
+    * **The state-dict keys are the stock layer's.** This class ADDS `film`
+      and changes nothing else, so a legacy deterministic checkpoint's
+      `encoder.layers.N.self_attn.*` / `norm1` / `linear1` … drop straight in
+      under `load_state_dict(..., strict=False)` and the only missing keys are
+      the ε path's. That is what lets an FGN arm warm-start a trunk that cost
+      a day of GPU rather than re-learning it.
+    * **`film` is ZERO-INITIALISED, weight and bias.** So at init s1=b1=s2=b2=0
+      and the arithmetic below reduces to `norm1(x) * 1 + 0`, i.e. the stock
+      norm_first forward EXACTLY — multiplying a float by 1.0 and adding 0.0
+      are both exact. At step 0 the ε-conditioned model IS the deterministic
+      incumbent, bitwise, whatever ε it is handed (the E-057 twin of "r_fore
+      reads exactly 1.000000 at step 1"), and `tests/test_fgn_head.py` asserts
+      it with `torch.equal` rather than a tolerance.
+
+    The explicit math also means this layer never takes the fused
+    `torch._transformer_encoder_layer_fwd` path the stock layer takes in
+    eval() under `no_grad`. That is a deliberate, measured cost, not an
+    oversight — see the eval-mode measurement in tests/test_fgn_head.py.
+    """
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        d = self.linear1.in_features
+        self.film = nn.Linear(d, 4 * d)
+        nn.init.zeros_(self.film.weight)
+        nn.init.zeros_(self.film.bias)
+
+    def forward(self, src, c, src_mask=None, is_causal=False):
+        """src [B,K,d_model] · c [B,d_model] -> [B,K,d_model]."""
+        s1, b1, s2, b2 = self.film(c).chunk(4, -1)     # each [B, d_model]
+        x = src
+        x = x + self._sa_block(self.norm1(x) * (1 + s1[:, None]) + b1[:, None],
+                               src_mask, None, is_causal=is_causal)
+        x = x + self._ff_block(self.norm2(x) * (1 + s2[:, None]) + b2[:, None])
+        return x
+
+
+class _CondEncoder(nn.Module):
+    """The thin container that gives `_CondLayer` the stock encoder's key
+    layout (`encoder.layers.N.*`). Deliberately NOT a subclass of
+    nn.TransformerEncoder: that class's forward owns a nested-tensor fast path
+    and a mask-canonicalisation dance whose contract is `layer(src, src_mask,
+    src_key_padding_mask, is_causal)`, and the conditioning vector has nowhere
+    to ride in it. Cloning by deepcopy is what nn.TransformerEncoder itself
+    does (`_get_clones`), so the two construct the same initial weights.
+    """
+
+    def __init__(self, layer, n_layers):
+        super().__init__()
+        self.layers = nn.ModuleList(
+            [copy.deepcopy(layer) for _ in range(n_layers)])
+
+    def forward(self, x, c, mask=None, is_causal=False):
+        for mod in self.layers:
+            x = mod(x, c, src_mask=mask, is_causal=is_causal)
+        return x
+
+
+def fair_crps2(x1, x2, y):
+    """The FAIR CRPS estimator at M=2, in torch, elementwise then meaned.
+
+        fair_crps2 = mean[ 0.5(|x1-y| + |x2-y|) - 0.5|x1-x2| ]
+
+    The second term's divisor in the general estimator is 2*M*(M-1) = 4 over
+    the two ordered pairs (i,j) and (j,i), each contributing |x1-x2| — hence
+    |x1-x2|/2. This is a torch MIRROR of `ml/probscore.crps_ensemble(fair=True)`
+    at M=2 and is pinned against it numerically in tests/test_fgn_head.py; the
+    scoreboard is the definition and this is the transcription, never the other
+    way round.
+
+    Why the training objective must be this and not MSE: under a squared-error
+    loss the conditional MEAN is optimal, so a noise-conditioned head learns to
+    IGNORE ε. Noise conditioning and the proper score are one change, not two
+    (ml/plans/E057_fgn_head.md, "two technical facts").
+    """
+    return (0.5 * ((x1 - y).abs() + (x2 - y).abs())
+            - 0.5 * (x1 - x2).abs()).mean()
+
+
+def fair_crps_ens(ens, obs):
+    """Fair CRPS of an M-member ensemble `ens` [M, ...] against `obs` [...].
+
+    The same estimator as `fair_crps2`, generalised, and computed through the
+    sorted-member identity probscore uses
+
+        Σ_{i,j} |x_i - x_j| = 2 Σ_k (2k - M + 1) x_(k)      (x_(k) ascending)
+
+    so the read-out cost is O(M log M) rather than the O(M²) pairwise tensor —
+    at M=64 over 4,096 monitoring windows the pairwise form is 4 GB.
+
+    **M = 1 is MAE, exactly**, not approximately: the fair divisor M(M-1) is
+    zero there, so the pair term is dropped and only mean|x-y| remains. That is
+    the property that lets a deterministic head enter the same scoreboard as a
+    degenerate one-member ensemble with no special case anywhere.
+
+    No NaN handling — this scores dense z-space monitoring tensors, where a
+    non-finite value is an event to report, not a cell to skip. `probscore` is
+    the NaN-aware version and is what the offline scoreboard calls.
+    """
+    M = ens.shape[0]
+    term1 = (ens - obs).abs().mean(0)
+    if M < 2:
+        return term1.mean()
+    xs, _ = torch.sort(ens, dim=0)
+    k = torch.arange(M, dtype=ens.dtype, device=ens.device).reshape(
+        (-1,) + (1,) * (ens.dim() - 1))
+    w = 2.0 * k - M + 1.0
+    pair_sum = 2.0 * (w * xs).sum(0)
+    return (term1 - 0.5 * pair_sum / (M * (M - 1.0))).mean()
+
+
+def fgn_eval_eps(n, eps_dim, device=None):
+    """THE representative member, in ONE place (E-057 §1f).
+
+    Every read-out that predates E-057 — eval 1's z_t+1, the channel decode,
+    the light in-training transport probe, the RAPID section forward — is a
+    POINT instrument: it was written for a head with one output per input and
+    it feeds pooled legacy trend columns. An FGN head has no single output, so
+    something has to choose which member those instruments see, and the choice
+    must live in one place or two call sites will quietly disagree.
+
+    The choice is ε = 0, the centre of the noise distribution: at init (zero
+    film) it is exactly the legacy computation, and after training it is the
+    distribution's centre member. It is recorded as `fgn_eval_eps: "zeros"` in
+    the run's `stage2_config` so no reader has to infer it. The HONEST
+    ensemble read-outs are the new `stage2_val_*` keys, never these.
+    """
+    if not eps_dim:
+        return None
+    return torch.zeros(n, eps_dim, device=device)
+
+
 class TemporalTransformer(nn.Module):
     """Causal transformer over one pixel's embedding sequence.
 
@@ -67,7 +207,7 @@ class TemporalTransformer(nn.Module):
     """
 
     def __init__(self, d_z=32, d_model=96, n_heads=4, n_layers=3, k_max=36,
-                 direct=(), stencil=1):
+                 direct=(), stencil=1, eps_dim=0):
         super().__init__()
         # E-022: stencil>1 widens the per-step input to the neighbourhood's
         # z (S*d_z, missing cells zero-filled) and appends the S static
@@ -84,10 +224,25 @@ class TemporalTransformer(nn.Module):
             self.inp = nn.Linear(stencil * d_z + 2, d_model)
             self.static = nn.Linear(d_z + 2 + stencil, d_model)
         self.pos = nn.Embedding(k_max, d_model)
-        layer = nn.TransformerEncoderLayer(
-            d_model, n_heads, dim_feedforward=4 * d_model,
-            batch_first=True, norm_first=True, dropout=0.0)
-        self.encoder = nn.TransformerEncoder(layer, n_layers)
+        # E-057: eps_dim == 0 is EXACTLY the pre-2026-08-27 constructor — the
+        # stock nn.TransformerEncoder, no eps_embed, no film — so every
+        # published checkpoint still loads strict=True and the no-flag path
+        # builds the identical module tree. eps_dim > 0 swaps in the FiLM
+        # container whose keys match it one for one (see _CondLayer).
+        self.eps_dim = int(eps_dim)
+        if self.eps_dim:
+            layer = _CondLayer(
+                d_model, n_heads, dim_feedforward=4 * d_model,
+                batch_first=True, norm_first=True, dropout=0.0)
+            self.encoder = _CondEncoder(layer, n_layers)
+            self.eps_embed = nn.Sequential(
+                nn.Linear(self.eps_dim, d_model), nn.SiLU(),
+                nn.Linear(d_model, d_model))
+        else:
+            layer = nn.TransformerEncoderLayer(
+                d_model, n_heads, dim_feedforward=4 * d_model,
+                batch_first=True, norm_first=True, dropout=0.0)
+            self.encoder = nn.TransformerEncoder(layer, n_layers)
         self.head = nn.Linear(d_model, d_z)
         # DIRECT multi-horizon heads (E-014): one linear readout per horizon,
         # predicting z_{t+h} from the hidden state at t in a single forward —
@@ -100,15 +255,43 @@ class TemporalTransformer(nn.Module):
                 {str(h): nn.Linear(d_model, d_z) for h in self.direct})
         self.d_model = d_model
 
-    def forward(self, z_seq, month_seq, static_ctx):
+    def forward(self, z_seq, month_seq, static_ctx, eps=None):
         """z_seq [B,K,d_z] · month_seq [B,K,2] · static_ctx [B,d_z+2]
-        → pred [B,K,d_z] (ẑ at t+1 for every step), h [B,K,d_model]."""
+        → pred [B,K,d_z] (ẑ at t+1 for every step), h [B,K,d_model].
+
+        `eps` [B, eps_dim] is E-057's global noise vector and is REQUIRED
+        exactly when the head was built with one. The three-positional-argument
+        call every existing caller makes is unchanged."""
         B, K, _ = z_seq.shape
+        # THE GUARD IS THE POINT, in both directions (E-057 §1b).
+        # rollout_spatial.py builds a head from its checkpoint's args and calls
+        # it with three arguments; without this an FGN head would roll CLEAN —
+        # a deterministic trajectory produced by a model whose whole content is
+        # that it is not deterministic, with nothing in any artefact saying so.
+        # Refuse loudly instead.
+        if self.eps_dim == 0 and eps is not None:
+            raise ValueError(
+                "TemporalTransformer was built with eps_dim=0 (a "
+                "deterministic head) and was handed an eps vector. The noise "
+                "has nowhere to enter; refusing rather than silently "
+                "ignoring it.")
+        if self.eps_dim and eps is None:
+            raise ValueError(
+                f"this is an FGN head (eps_dim={self.eps_dim}) and it cannot "
+                f"be run without its noise vector: every forward is a SAMPLE "
+                f"from the predictive distribution, conditioned on "
+                f"eps ~ N(0,1)^{self.eps_dim}. A caller that has no eps must "
+                f"choose a member deliberately — temporal.fgn_eval_eps() is "
+                f"the representative (zeros) one — never fall into a default. "
+                f"Plan: ml/plans/E057_fgn_head.md")
         h = (self.inp(torch.cat([z_seq, month_seq], -1))
              + self.static(static_ctx).unsqueeze(1)
              + self.pos.weight[None, :K])
         causal = nn.Transformer.generate_square_subsequent_mask(K, device=z_seq.device)
-        h = self.encoder(h, mask=causal, is_causal=True)
+        if self.eps_dim:
+            h = self.encoder(h, self.eps_embed(eps), mask=causal, is_causal=True)
+        else:
+            h = self.encoder(h, mask=causal, is_causal=True)
         return self.head(h), h
 
 
@@ -1542,7 +1725,17 @@ def season_feat_of(start, span_days):
     return math.sin(2 * math.pi * frac), math.cos(2 * math.pi * frac)
 
 
-def _chunked_forward(model, zseq, mseq, sctx, dev, chunk=4096):
+def eval_forward(model, zseq, mseq, sctx, eps_dim=0):
+    """A read-out forward: the legacy 3-argument call when the head is
+    deterministic, the REPRESENTATIVE member when it is an FGN head. One
+    function so the member choice lives in one place (fgn_eval_eps)."""
+    if not eps_dim:
+        return model(zseq, mseq, sctx)
+    return model(zseq, mseq, sctx,
+                 eps=fgn_eval_eps(zseq.shape[0], eps_dim, zseq.device))
+
+
+def _chunked_forward(model, zseq, mseq, sctx, dev, chunk=4096, eps_dim=0):
     """The eval forwards used to push 20,000 windows through the model in ONE
     call. That fit every 576x8 head ever trained and OOM-killed the first
     768x12 within seconds of finishing 60k healthy training steps (E-027
@@ -1553,7 +1746,8 @@ def _chunked_forward(model, zseq, mseq, sctx, dev, chunk=4096):
     preds, hids = [], []
     for i in range(0, len(zseq), chunk):
         sl = slice(i, i + chunk)
-        p_, h_ = model(zseq[sl].to(dev), mseq[sl].to(dev), sctx[sl].to(dev))
+        p_, h_ = eval_forward(model, zseq[sl].to(dev), mseq[sl].to(dev),
+                              sctx[sl].to(dev), eps_dim)
         preds.append(p_.cpu()); hids.append(h_.cpu())
     return torch.cat(preds), torch.cat(hids)
 
@@ -1675,6 +1869,45 @@ def main():
                          "the roll never produces. Reaches temporal.py "
                          "through the window's sched: tail, which the "
                          "workflow hands over verbatim — no workflow edit.")
+    ap.add_argument("--fgn-eps", type=int, default=0,
+                    help="E-057: dimension k of the GLOBAL noise vector "
+                         "eps ~ N(0,1)^k that conditions every layer's "
+                         "LayerNorm (FGN, arXiv:2506.10772; adaLN-zero, so "
+                         "the eps path is the identity at init and the head "
+                         "IS the deterministic incumbent bitwise at step 0). "
+                         "0 (DEFAULT) = OFF = the exact legacy code path: no "
+                         "module is constructed, no RNG draw is made and no "
+                         "record grows a key, so every archived stage-2 "
+                         "number stays bit-reproducible. "
+                         "WHEN k > 0 THE TRAINING OBJECTIVE SWITCHES from MSE "
+                         "to the FAIR CRPS AT N=2 (two forwards per batch on "
+                         "identical context with eps1 != eps2). That is one "
+                         "change, not two, and it is not optional: under a "
+                         "squared-error loss the conditional MEAN is optimal, "
+                         "so a noise-conditioned head trained on MSE learns to "
+                         "IGNORE eps and the whole arm silently becomes its "
+                         "own control. FGN's own default is k=32. Refuses in "
+                         "combination with --direct, --unroll>1 and "
+                         "--unroll-wide (each feeds a prediction back, and "
+                         "which member is fed back is an unmade decision); "
+                         "--milestone-steps is fine. Reaches temporal.py "
+                         "through the window's sched: tail, which the workflow "
+                         "hands over verbatim — no workflow edit. Plan: "
+                         "ml/plans/E057_fgn_head.md")
+    ap.add_argument("--fgn-val-members", type=int, default=8,
+                    help="E-057: ensemble size M for the IN-TRAINING "
+                         "monitoring reads (stage2_val_crps, "
+                         "stage2_val_member_var, stage2_val_spread_ratio, and "
+                         "the ensemble mean behind stage2_val_zmse/stage2_amp). "
+                         "Only read when --fgn-eps > 0. The eval eps bank is "
+                         "drawn ONCE from its own generator, seeded seed*"
+                         "1000003+58, so the training eps stream cannot depend "
+                         "on how often the monitor runs. Must be >= 2: a "
+                         "one-member 'ensemble' has no member variance and no "
+                         "spread, which are the two numbers this monitor "
+                         "exists to make visible (eps collapse is E-057's F2 "
+                         "falsifier and must be readable on the live branch, "
+                         "not discovered post hoc).")
     ap.add_argument("--grad-clip", type=float, default=0.0,
                     help="E-044: max global gradient 2-norm, applied with "
                          "torch.nn.utils.clip_grad_norm_ between backward() "
@@ -1927,6 +2160,48 @@ def main():
         sys.exit(f"--grad-clip {a.grad_clip} must be >= 0 (0 = off, and off "
                  f"makes no clip_grad_norm_ call at all).")
 
+    # ---- E-057 · the FGN refusals, at argv time ---------------------------
+    # Same placement rule as the clip above and for the same reason: all of
+    # these depend only on argv, so they cost nothing here and cost a rented
+    # box's whole embedding pass anywhere later (ml/CLAUDE.md §0.3, §5.16).
+    if a.fgn_eps < 0:
+        sys.exit(f"--fgn-eps {a.fgn_eps} must be >= 0 (0 = off, and off is "
+                 f"the legacy code path exactly).")
+    if a.fgn_eps > 0:
+        # --fgn-val-members is read ONLY in fgn mode, so it is checked only
+        # there: refusing a legacy dispatch over a knob it never consults
+        # would be a behaviour change with the flag off, which is the one
+        # thing this whole diff may not do.
+        if a.fgn_val_members < 2:
+            sys.exit(f"--fgn-val-members {a.fgn_val_members} must be >= 2: "
+                     f"member variance and spread are undefined at M=1, and "
+                     f"they are the two numbers the fgn monitor exists to "
+                     f"show (eps collapse is E-057's F2 falsifier).")
+        # Each of the three below feeds a PREDICTION back into the model's own
+        # input, and under an ensemble head "the prediction" is not one object
+        # — which member is fed back is a design decision E-057.0 has not made.
+        # A run that merely left them alone would train, produce numbers, and
+        # answer a question nobody asked (ml/CLAUDE.md §4.11).
+        if a.direct.strip():
+            sys.exit(f"--fgn-eps {a.fgn_eps} is incompatible with --direct "
+                     f"{a.direct!r}: a direct head reads hidden(-1) of ONE "
+                     f"member and is scored by MSE, which is exactly the "
+                     f"objective the fgn arm exists to replace. One mechanism "
+                     f"per arm.")
+        if a.unroll != 1:
+            sys.exit(f"--fgn-eps {a.fgn_eps} is incompatible with --unroll "
+                     f"{a.unroll}: the unroll feeds the model's own prediction "
+                     f"back as the next step's input, and WHICH MEMBER gets "
+                     f"fed back (and whether eps is resampled per step, as "
+                     f"FGN's rolls do) is a decision E-057.0 does not make. "
+                     f"Train fgn arms at U=1.")
+        if a.unroll_wide > 0:
+            sys.exit(f"--fgn-eps {a.fgn_eps} is incompatible with "
+                     f"--unroll-wide {a.unroll_wide}: same reason as --unroll "
+                     f"— the one-hop pass assembles a t+1 input window out of "
+                     f"S neighbour PREDICTIONS, and an ensemble head has no "
+                     f"single prediction to assemble from.")
+
     # ---- E-053.1: --frame-offsets, the sunflower taken into TIME ----------
     # Same placement rule as the clip above: the whole block depends only on
     # argv, so it runs before the tensor is opened and before one second of
@@ -2002,6 +2277,32 @@ def main():
 
     torch.manual_seed(a.seed)
     np.random.seed(a.seed)
+    # ---- E-057 · the eps streams ------------------------------------------
+    # TWO generators, neither of them the global RNG, and they are separate on
+    # purpose. `eps_gen` feeds TRAINING draws; it is a CPU generator and every
+    # draw is made on the CPU and then moved, so the eps stream is
+    # device-independent and a run resumed on a different box sees the same
+    # noise. It is saved into every checkpoint and restored by
+    # --resume-temporal, exactly as `torch_rng` is, because an eps stream that
+    # restarts on resume is a different experiment wearing a continuation's
+    # name (tests/test_resume_temporal.py's whole argument, one stream over).
+    # The eval bank has its OWN generator (…+58) so that how often the monitor
+    # runs cannot perturb the training stream.
+    # With --fgn-eps 0 nothing is created and no draw is ever made: the global
+    # RNG sequence, and therefore every archived number, is untouched.
+    FGN = a.fgn_eps > 0
+    eps_gen = None
+    if FGN:
+        eps_gen = torch.Generator()
+        eps_gen.manual_seed(a.seed * 1000003 + 57)
+
+    def _eps_state():
+        """The eps stream's state for a checkpoint dict — {} when fgn is off,
+        so a legacy artefact is byte-for-byte what it always was."""
+        if eps_gen is None:
+            return {}
+        return {"eps_gen": eps_gen.get_state().numpy().tolist()}
+
     run_dir = os.path.join(HERE, "runs", a.run)
     ck = torch.load(os.path.join(run_dir, "pixelmae.pt"),
                     map_location="cpu", weights_only=False)
@@ -2638,9 +2939,22 @@ def main():
     # head's parameter count SHIFTS with the offset list's length. Read the
     # count off the run's own `stage2_config.params_M`; never carry one over
     # from an arm at a different K.
-    model = TemporalTransformer(d_z=ck["d_z"], d_model=a.d_model,
-                                n_layers=a.layers, k_max=K, direct=D,
-                                stencil=a.stencil)
+    # E-057: the constructor argument is passed ONLY when the flag is on, so
+    # the no-flag path is the literal pre-2026-08-27 call.
+    model = (TemporalTransformer(d_z=ck["d_z"], d_model=a.d_model,
+                                 n_layers=a.layers, k_max=K, direct=D,
+                                 stencil=a.stencil, eps_dim=a.fgn_eps)
+             if FGN else
+             TemporalTransformer(d_z=ck["d_z"], d_model=a.d_model,
+                                 n_layers=a.layers, k_max=K, direct=D,
+                                 stencil=a.stencil))
+    if FGN:
+        print(f"FGN head: eps ~ N(0,1)^{a.fgn_eps} -> per-layer FiLM "
+              f"(zero-init, so this model is the deterministic incumbent at "
+              f"step 0), objective = fair CRPS at N=2, monitor ensemble M="
+              f"{a.fgn_val_members}. eps stream seed {a.seed * 1000003 + 57} "
+              f"(CPU, device-independent, saved in every checkpoint).",
+              flush=True)
     # STAGE-2 TRAINING RUNS ON THE ACCELERATOR TOO.
     # The comment above this block used to say stage-2 training is "a small
     # transformer for a few thousand steps" and therefore not worth a GPU.
@@ -2692,7 +3006,28 @@ def main():
                 f"fresh head under a doc string that says the weights came "
                 f"from somewhere.")
         tk = torch.load(ip, map_location="cpu", weights_only=False)
-        model.load_state_dict(tk["model"])
+        if FGN:
+            # E-057: THE WARM START THE KEY LAYOUT WAS DESIGNED FOR. An FGN
+            # head's trunk keys are the stock encoder's, so a legacy
+            # deterministic checkpoint drops straight in and only the eps path
+            # is fresh — which is worth a day of GPU. strict=False is scoped to
+            # this branch and its missing keys are CHECKED rather than
+            # trusted: anything outside eps_embed/film means the two
+            # architectures genuinely disagree and the load must refuse.
+            _miss, _unexp = model.load_state_dict(tk["model"], strict=False)
+            _bad = [k for k in _miss
+                    if not (k.startswith("eps_embed.") or ".film." in k)]
+            if _bad or _unexp:
+                raise SystemExit(
+                    f"--init-temporal {ip}: state dict does not match this "
+                    f"head. missing (beyond the eps path): {_bad}; "
+                    f"unexpected: {list(_unexp)}. Refusing a partial load.")
+            if _miss:
+                print(f"  eps path is fresh ({len(_miss)} tensors: "
+                      f"eps_embed + per-layer film, zero-init), trunk warm "
+                      f"from {os.path.basename(ip)}", flush=True)
+        else:
+            model.load_state_dict(tk["model"])
         parent_steps = int(tk.get("args", {}).get("steps", 0))
         parent_lr = tk.get("args", {}).get("lr")
         init_from = {"from": os.path.basename(ip),
@@ -2796,6 +3131,20 @@ def main():
                   "state restored verbatim", flush=True)
         if tk.get("torch_rng") is not None:
             torch.set_rng_state(torch.as_tensor(tk["torch_rng"], dtype=torch.uint8))
+        # E-057: the eps stream is part of the trajectory, exactly as
+        # `torch_rng` is. Restoring the weights and the optimiser while the
+        # noise restarts from draw 0 is a continuation in name only.
+        if eps_gen is not None:
+            if tk.get("eps_gen") is not None:
+                eps_gen.set_state(torch.as_tensor(tk["eps_gen"],
+                                                  dtype=torch.uint8))
+                print("  eps stream restored from the checkpoint", flush=True)
+            else:
+                print("::warning::--resume-temporal: this checkpoint carries "
+                      "no eps_gen state, so the eps stream restarts at draw 0 "
+                      "— the weights continue but the noise does not. Report "
+                      "this run as a warm restart of the noise stream.",
+                      flush=True)
         if start_step >= a.steps:
             raise SystemExit(
                 f"--resume-temporal: checkpoint is at step {start_step:,} and "
@@ -2926,7 +3275,19 @@ def main():
                           # live branch, not inferred from train_windows.
                           "train_lon_hold": a.train_lon_hold,
                           "codec_holdout_lon": ck["args"].get("holdout_lon", ""),
-                          "tag": a.tag or ""}})
+                          "tag": a.tag or "",
+                          # E-057: NEW KEYS, AND ONLY WHEN THE ARM IS ONE.
+                          # Adding `fgn_eps: 0` to every legacy record would
+                          # be a changed record with the flag off, which §1 of
+                          # the spec forbids; a reader that predates E-057
+                          # ignores an extra key, and a reader that postdates
+                          # it reads absence as "not an fgn run".
+                          **({"stage2_loss_kind": "crps2",
+                              "fgn_eps": a.fgn_eps,
+                              "fgn_val_members": a.fgn_val_members,
+                              # WHICH MEMBER the legacy point read-outs saw —
+                              # recorded, never inferred (fgn_eval_eps()).
+                              "fgn_eval_eps": "zeros"} if FGN else {})}})
 
     # ---- in-training monitoring (Chris, 2026-08-11: "it would be nice to
     # track more metrics during training") -----------------------------------
@@ -2954,6 +3315,23 @@ def main():
     mon_sctx = static_ctx[emp].to(TDEV)
     mon_ztrue = Zt[emt + 1, emp].float().to(TDEV)
     mon_pers = float((Zt[emt, emp].float().to(TDEV) - mon_ztrue).pow(2).mean())
+    # ---- E-057 · the FIXED eval eps bank ----------------------------------
+    # Drawn ONCE, from its OWN generator (seed*1000003 + 58, not eps_gen), so
+    # the monitoring ensemble is the same M members at every log point — a
+    # member-variance curve is only readable if the members do not change
+    # underneath it — and so the number of monitor calls cannot perturb the
+    # training noise stream. Moved to TDEV once; each forward broadcasts one
+    # member across the whole monitoring batch, which is FGN's convention: eps
+    # is GLOBAL, one draw for the whole field, not one per pixel.
+    eps_val = None
+    if FGN:
+        _eg = torch.Generator()
+        _eg.manual_seed(a.seed * 1000003 + 58)
+        eps_val = torch.randn(a.fgn_val_members, a.fgn_eps,
+                              generator=_eg).to(TDEV)
+        print(f"fgn monitor: {a.fgn_val_members} fixed eval members from seed "
+              f"{a.seed * 1000003 + 58}", flush=True)
+
     # E-044: REPORT THE SCALE THE INPUT NOISE IS ACTUALLY BEING APPLIED AT.
     # Nothing here changes behaviour — `--input-znoise` is used verbatim, as
     # it always was. This exists because the flag is an ABSOLUTE sigma in
@@ -3120,8 +3498,31 @@ def main():
             zseq = (z4 + torch.randn_like(z4) * a.input_znoise
                     * live).view(zseq.shape)
         zseq = qz(zseq)
-        pred, hid1 = model(zseq, mseq, sctx)
-        l_base = (pred - ztgt).pow(2).mean()
+        if FGN:
+            # E-057 · TWO FORWARDS ON THE IDENTICAL CONTEXT, TWO eps. The
+            # context is built ONCE above — including the --input-znoise
+            # corruption and the quantizer — so the ONLY thing that differs
+            # between the two members is eps. If the corruption were drawn per
+            # forward, the pair would differ by input noise as well and the
+            # CRPS spread term would be measuring the wrong perturbation.
+            # Both draws come from eps_gen on the CPU and are then moved: the
+            # stream is device-independent by construction.
+            _b = zseq.shape[0]
+            eps1 = torch.randn(_b, a.fgn_eps, generator=eps_gen).to(TDEV)
+            eps2 = torch.randn(_b, a.fgn_eps, generator=eps_gen).to(TDEV)
+            p1, hid1 = model(zseq, mseq, sctx, eps=eps1)
+            p2, _ = model(zseq, mseq, sctx, eps=eps2)
+            # THE FAIR CRPS AT N=2 IS THE OBJECTIVE, not an extra term: under
+            # MSE the conditional mean is optimal and the head would learn to
+            # ignore eps. `stage2_loss_base` keeps its name and its place on
+            # the curve; `stage2_loss_kind` in stage2_config says what it is.
+            l_base = fair_crps2(p1, p2, ztgt)
+            # member 1 stands where the deterministic forward stood, for the
+            # unroll/direct paths' shapes only — both are refused in fgn mode.
+            pred = p1
+        else:
+            pred, hid1 = model(zseq, mseq, sctx)
+            l_base = (pred - ztgt).pow(2).mean()
         loss = l_base
         l_dir = None
         if D:
@@ -3240,11 +3641,55 @@ def main():
             # val curve beside the train curve, and the SMOOTHING diagnostic
             # (std(pred)/std(true) — E-014's conditional-mean collapse was
             # invisible during training precisely because nothing logged it)
+            _fgn_val = {}
             with torch.no_grad():
-                mp_, _ = model(mon_zseq, mon_mseq, mon_sctx)
-                mlast = mp_[:, -1]
-                val_mse = float((mlast - mon_ztrue).pow(2).mean())
-                amp = float(mlast.std() / (mon_ztrue.std() + 1e-9))
+                if FGN:
+                    # E-057 · THE ENSEMBLE READ. M forwards of the SAME
+                    # monitoring batch, one fixed eps member each, broadcast
+                    # across every window — eps is global, so all windows in a
+                    # member share it exactly as all pixels of a field would.
+                    _ens = []
+                    for _mi in range(eps_val.shape[0]):
+                        _e = eps_val[_mi].expand(mon_zseq.shape[0], -1)
+                        _pm, _ = model(mon_zseq, mon_mseq, mon_sctx, eps=_e)
+                        _ens.append(_pm[:, -1])
+                    ens = torch.stack(_ens)              # [M, n, d_z]
+                    # THE ENSEMBLE MEAN is the best point estimate, so it is
+                    # what goes into the two EXISTING keys: `stage2_val_zmse`
+                    # and `stage2_amp` keep their names and their curves, and
+                    # in fgn mode they mean "of the ensemble mean". The legacy
+                    # meaning is untouched when fgn is off — this branch does
+                    # not run at all there.
+                    mlast = ens.mean(0)
+                    val_mse = float((mlast - mon_ztrue).pow(2).mean())
+                    amp = float(mlast.std() / (mon_ztrue.std() + 1e-9))
+                    _M = float(ens.shape[0])
+                    # spread/error with the (M+1)/M correction — the mirror of
+                    # ml/probscore.spread_error: the ensemble MEAN carries its
+                    # own sigma^2/M of sampling error on top of the truth's, so
+                    # an uncorrected ratio reports under-dispersion at every
+                    # finite M even for a perfect ensemble. 1.0 is calibration.
+                    _msp = float(((_M + 1.0) / _M
+                                  * ens.var(0, unbiased=True)).mean())
+                    _fgn_val = {
+                        "stage2_val_crps": float(fair_crps_ens(ens, mon_ztrue)),
+                        # THE eps-COLLAPSE TELEMETRY (E-057 F2). A member
+                        # variance sliding to 0 is the signature of a head that
+                        # has learned to ignore its noise, and it must be
+                        # visible on the live branch while the run is alive,
+                        # not reconstructed afterwards.
+                        "stage2_val_member_var":
+                            float(ens.var(0, unbiased=False).mean()),
+                        "stage2_val_spread_ratio":
+                            (math.sqrt(_msp) / math.sqrt(val_mse)
+                             if _msp >= 0.0 and val_mse > 0.0
+                             else float("nan")),
+                    }
+                else:
+                    mp_, _ = model(mon_zseq, mon_mseq, mon_sctx)
+                    mlast = mp_[:, -1]
+                    val_mse = float((mlast - mon_ztrue).pow(2).mean())
+                    amp = float(mlast.std() / (mon_ztrue.std() + 1e-9))
             rec = {"stage2_step": s, "stage2_zmse": round(float(loss.item()), 5),
                    "stage2_loss_base": round(float(l_base.item()), 5),
                    "stage2_val_zmse": round(val_mse, 5),
@@ -3257,6 +3702,21 @@ def main():
                    # "not learning because the LR is zero".
                    "stage2_lr": float(sched.get_last_lr()[0]),
                    "stage2_wall_s": round(time.time() - t0, 1)}
+            # E-057 · the ensemble keys, BESIDE the existing ones and never
+            # instead of them. §5.22: NEVER WRITE NaN INTO A RESULTS RECORD —
+            # a non-finite value omits its key and says so on stderr, because
+            # an absent key cannot be mistaken for a measurement and a NaN can.
+            for _k, _v in _fgn_val.items():
+                if _v == _v and abs(_v) != float("inf"):
+                    # SIGNIFICANT digits, not decimal places: the collapse
+                    # telemetry is read near ZERO, and `round(v, 6)` prints a
+                    # member variance of 1e-8 as exactly 0.0 — i.e. it destroys
+                    # the resolution precisely where the failure mode lives.
+                    rec[_k] = float(f"{float(_v):.6g}")
+                else:
+                    print(f"::warning::{_k} was non-finite at step {s} "
+                          f"({_v}) — key omitted from this record rather than "
+                          f"written as NaN", flush=True)
             if CLIP > 0:
                 # WINDOW statistics, not point statistics: the max PRE-clip
                 # norm seen since the last log point, and the fraction of
@@ -3321,8 +3781,9 @@ def main():
                             ms_ = torch.stack(
                                 [Mt[b_ + j].expand(len(_psec), -1)
                                  for j in frame_steps(K, FOFF)], 1)
-                            _, hd_ = model(qz(zs_.to(TDEV)), ms_.to(TDEV),
-                                           _psec_ctx)
+                            _, hd_ = eval_forward(
+                                model, qz(zs_.to(TDEV)), ms_.to(TDEV),
+                                _psec_ctx, a.fgn_eps)
                             F_[t_] = hd_[:, -1].mean(0).cpu().numpy()
                     ri_ = _pridx[_pok]
                     r_, _ = ridge_r(F_[ri_], _prv_des[_pok],
@@ -3354,7 +3815,11 @@ def main():
                             "opt": opt.state_dict(),
                             "sched": sched.state_dict(),
                             "run_number": os.environ.get("GITHUB_RUN_NUMBER"),
-                            "torch_rng": torch.get_rng_state().numpy().tolist()},
+                            "torch_rng": torch.get_rng_state().numpy().tolist(),
+                            # E-057: the eps stream, on the same footing as
+                            # torch_rng. {} when fgn is off, so a legacy
+                            # mirror is byte-for-byte what it always was.
+                            **_eps_state()},
                            tmp_path + ".part")
                 os.replace(tmp_path + ".part", tmp_path)
             except Exception as e:                       # never fatal
@@ -3368,7 +3833,8 @@ def main():
                 mp = os.path.join(run_dir, f"temporal_ms{s}.pt")
                 torch.save({"model": model.state_dict(), "args": vars(a),
                             "step": s,
-                            "run_number": os.environ.get("GITHUB_RUN_NUMBER")},
+                            "run_number": os.environ.get("GITHUB_RUN_NUMBER"),
+                            **_eps_state()},
                            mp + ".part")
                 os.replace(mp + ".part", mp)
                 print(f"  milestone checkpoint saved: temporal_ms{s}.pt",
@@ -3413,7 +3879,7 @@ def main():
         zseq = gather_stencil(Zt, base, ep, NBR_t, K, FOFF)
         mseq = win_mseq(base)
         pred, hid = _chunked_forward(model, qz(zseq), mseq,
-                                     static_ctx[ep], TDEV)
+                                     static_ctx[ep], TDEV, eps_dim=a.fgn_eps)
         # already on CPU: everything
         zhat = pred[:, -1]                       # below here is numpy-bound
         ztrue = Zt[et + 1, ep].float()
@@ -3483,7 +3949,8 @@ def main():
                 zsq = gather_stencil(Zt, base, ep_, NBR_t, K, FOFF)
                 msq = win_mseq(base)
                 _, hd = _chunked_forward(model, qz(zsq), msq,
-                                         static_ctx[ep_], TDEV)
+                                         static_ctx[ep_], TDEV,
+                                         eps_dim=a.fgn_eps)
                 zh = model.heads_direct[str(h_)](hd[:, -1].to(TDEV)).cpu()
                 zt_ = Zt[et_ + h_, ep_].float()
                 zp_ = Zt[et_, ep_].float()
@@ -3525,8 +3992,8 @@ def main():
                                   sec_pix, NBR_t, K, FOFF)
             mseq = torch.stack([Mt[base + j].expand(len(sec_pix), -1)
                                 for j in frame_steps(K, FOFF)], 1)
-            _, hid = model(qz(zseq.to(TDEV)), mseq.to(TDEV),
-                           static_ctx[sec_pix].to(TDEV))
+            _, hid = eval_forward(model, qz(zseq.to(TDEV)), mseq.to(TDEV),
+                                  static_ctx[sec_pix].to(TDEV), a.fgn_eps)
             F[t] = hid[:, -1].mean(0).cpu().numpy()   # pool along the section
             if FP is not None and t in _u_pos:        # E-055: the same states,
                 FP[_u_pos[t]] = hid[:, -1].cpu().numpy()      # unpooled
@@ -3730,6 +4197,10 @@ def main():
                             for h, v in results.get("z_direct", {}).items()}
                            or None),
         "scale": results.get("scale"),
+        # E-057, and ONLY when the arm is one — see the stage2_config comment:
+        # a `fgn_eps: 0` on every legacy record would be a changed record with
+        # the flag off, and absence already reads as "not an fgn run".
+        **({"fgn_eps": a.fgn_eps} if FGN else {}),
     }})
     suffix = f"_{a.tag}" if a.tag else ""
     results["seed"] = a.seed
@@ -3737,7 +4208,8 @@ def main():
                 "step": a.steps, "opt": opt.state_dict(),
                 "sched": sched.state_dict(),
                 "run_number": os.environ.get("GITHUB_RUN_NUMBER"),
-                "torch_rng": torch.get_rng_state().numpy().tolist()},
+                "torch_rng": torch.get_rng_state().numpy().tolist(),
+                **_eps_state()},
                os.path.join(run_dir, f"temporal{suffix}.pt"))
     json.dump(results, open(os.path.join(run_dir, f"temporal{suffix}.json"), "w"), indent=2)
     print(f"saved {run_dir}/temporal{suffix}.pt")

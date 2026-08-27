@@ -44,6 +44,117 @@ low-pass).
 
 ---
 
+<a id="e-057"></a>
+## E-057 · FGN-mode stage-2: noise-conditioned stencil head trained with fair CRPS — E-057.0 BUILT AND CPU-VERIFIED 2026-08-27 (no GPU arm dispatched; approved by Chris: "let's prioritize an experiment with: 1. Noise-conditioned stage-2 head trained with fair CRPS")
+
+TL;DR — can the stencil head stop emitting the conditional mean (the blur
+that damps every roll toward climatology) and instead SAMPLE a member of the
+predictive distribution, at one forward pass per member, with the noise dose
+LEARNED instead of hand-tuned? The FGN move (arXiv:2506.10772): a global
+ε ~ N(0,1)^k through zero-init FiLM on every layer's LayerNorm + the fair
+CRPS at N=2 as the objective — one change, not two, because under MSE a
+noise-conditioned head learns to ignore ε. In the E-052 decomposition this
+is the {factorized, ε-sampling} cell; it supersedes E-052.p. Plan with
+pre-registered falsifiers:
+[E-057](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E057_fgn_head.md);
+design argument:
+[the FGN addendum](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E052_FGN_addendum.md).
+
+**E-057.0 · implementation + CPU verification of the ε-conditioned head and
+the CRPS objective · params: toy configs only (the registered E-057.1 arm is
+the monthly xl144 configuration, ~205M + film/eps params) · stage: build /
+toy-eval only — NOTHING trains on real data yet · data: synthetic toys ·
+arch: `--fgn-eps k` swaps the stock nn.TransformerEncoder for a key-compatible
+FiLM container (`_CondLayer`/`_CondEncoder`, adaLN-zero); `--fgn-eps 0`
+(default) constructs the LITERAL legacy module tree · steps×batch: toys only,
+CPU · resume: n/a.** Spec: `ml/plans/E057_impl_spec.md` (main session);
+implementation by an Opus subagent to that spec (§0b); every test re-run and
+the full diff read by the main session before commit.
+
+**(a) The flag-off path is verified unchanged at the ARTEFACT level, not
+asserted.** A no-flag toy run on the pristine tree vs the patched tree:
+`temporal.json` identical in full, every `metrics.jsonl` record identical
+(modulo wall-clock), sha256 of every weight tensor in both checkpoints
+identical, checkpoint key sets identical (no `eps_gen` key anywhere), stdout
+line for line. With `--fgn-eps 0` no module is constructed and no RNG draw is
+made, so every archived stage-2 number stays bit-reproducible.
+
+**(b) The zero-init identity holds bitwise, and the one non-identity is
+named.** Legacy weights loaded into an `eps_dim=8` twin (strict=False; the
+only missing keys are `eps_embed.*`/`*.film.*`): outputs `torch.equal` the
+legacy model's in train() and in eval()-with-grad, for ANY ε. In eval() under
+`no_grad` the stock layer dispatches to the fused
+`torch._transformer_encoder_layer_fwd` and differs by max|Δ| 4.8e-07; with
+the fastpath disabled it is `torch.equal` again — the fused kernel is the
+whole difference, measured, and no path in temporal.py is affected. So at
+step 0 an FGN head IS the deterministic incumbent (the E-057 twin of "r_fore
+reads exactly 1.000000 at step 1"), and a legacy checkpoint can warm-start
+the trunk (`--init-temporal` wires it, missing-key set checked).
+
+**(c) The torch loss IS the scoreboard.** `fair_crps2` (N=2) and
+`fair_crps_ens` (M members, sorted-member identity) pin against
+`ml/probscore.crps_ensemble(fair=True)` to 1e-16 on shared arrays; M=1 == MAE
+exactly; identical members == MAE exactly. The ε stream is its own seeded CPU
+generator (device-independent), saved in every checkpoint beside `torch_rng`
+and restored on resume — 6+6 == 12 straight-through, bit-identical over all
+tensors INCLUDING the next ε draw; dropping only the ε state diverges, so the
+noise stream is load-bearing exactly as the data order is.
+
+**(d) The shared-coin toy reproduces FGN's existence claim in our own
+harness.** Law: z_{t+1,p} = z_{t,p} + s_t·pattern_p, ONE coin per time shared
+by 32 pixels (conditional mean = persistence; the futures are field-coherent).
+A tiny fgn head, trained per-pixel (factorized, zero cross-pixel coupling),
+sampled with one ε SHARED across pixels per member: field sign coherence
+**0.991** (dev seeds 0–5 worst: 0.952) against **0.149** with independent
+per-pixel ε (factorized floor 1/√32 ≈ 0.18), and fair CRPS **39.8% better**
+than the same architecture trained on MSE, scored as a degenerate M=1
+ensemble. A factorized head with a shared ε emits coherent fields; with
+independent ε it cannot.
+
+**(e) A finding worth its own sentence: the fair CRPS does NOT select
+coherence — the shared dynamics do.** The toy's first variant gave every
+pixel an independent random pattern direction, and the trained head reached
+near-optimal MARGINAL CRPS (0.51 vs the 0.50 optimum) with shared-ε coherence
+indistinguishable from its independent-ε control (0.10–0.23 vs 0.15–0.20,
+three seeds). That is what the objective says it should do: a field-mean
+fair CRPS decomposes into per-pixel terms, so nothing in the loss prefers a
+member that commits to one coin everywhere. Coherence comes from the
+ARCHITECTURE — one global ε modulating one shared trunk, so pixels with
+SHARED dynamics respond alike — which the real ocean has and that toy variant
+deliberately deleted. Consequence for reading E-057.1 when it runs: the
+coherence of real members is an empirical outcome to MEASURE (the pooled-CRPS
+instrumentation), never a property the training objective guarantees.
+
+**(f) What is in the diff, and what is refused.** `ml/temporal.py` +502/−30
+(all additive, flag-gated): `--fgn-eps` / `--fgn-val-members` (both ride the
+`sched:` tail — no workflow edit, the 25-input ceiling is untouched); the
+FiLM encoder; fair-CRPS training (two forwards per step on IDENTICAL context,
+ε1 ≠ ε2 — any `--input-znoise` corruption is drawn once and shared, so the
+CRPS spread term measures only ε); the fixed-bank monitoring ensemble with
+NEW record keys `stage2_val_crps` / `stage2_val_member_var` (the ε-collapse
+telemetry, F2's live-branch instrument) / `stage2_val_spread_ratio`
+(with the (M+1)/M correction); in fgn mode `stage2_val_zmse`/`stage2_amp`
+carry the ENSEMBLE MEAN (documented in `stage2_config`, which also records
+`stage2_loss_kind: crps2` and `fgn_eval_eps: "zeros"` — the representative
+member every pooled legacy point instrument sees, chosen in ONE place,
+`fgn_eval_eps()`). Refusals at argv time: fgn × `--direct`, × `--unroll>1`,
+× `--unroll-wide` (each feeds back "the prediction", which an ensemble head
+does not have — an unmade design decision, not a merge). `forward(eps=None)`
+on an FGN head raises — which is the guard that makes `rollout_spatial.py`
+REFUSE an E-057 head loudly instead of rolling it clean; the ensemble roll
+(M members, ε resampled per step per member — FGN's convention) is its own
+follow-up diff and its own experiment entry.
+
+**Verification: `tests/test_fgn_head.py` (new, 8 suites) green; existing
+`test_resume_temporal` / `test_direct_heads` / `test_e022_stencil` (24
+pytest cases) green; `test_probscore`, `test_e044c_knobs`, `test_e029_znoise`
+green.** (Three unrelated suites that diff temporal.py against pinned
+HISTORIC shas cannot run in a depth-1 sandbox checkout and were verified
+pre-broken on the pristine tree.) Cost: $0 GPU, ~45 min CPU. **Next:
+E-057.1 (the two-seed monthly xl144 pair, znoise OFF, controls clean 0.6781 /
+znoise 0.7235) is the next GPU dispatch after the #489–#491 queue clears —
+its §0d entry is written at dispatch, per the plan's falsifiers F1–F3.**
+
 <a id="e-053"></a>
 ## E-053 · The space-time stencil — E-053.0 measured, E-053.1 arms in flight; A1's verdict landed 2026-08-27 (Chris's direction: "take the sunflower to the 4th dimension")
 
