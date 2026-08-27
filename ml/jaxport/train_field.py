@@ -1200,9 +1200,23 @@ def main(argv=None):
         os.makedirs(a.ckpt_dir, exist_ok=True)
         save_state_npz(ck_npz, state, opt_state, step, head_args(step),
                        rng.bit_generator.state, history)
-        export_field_pt(nnx.merge(graphdef, state), head_args(step),
-                        path=ck_pt, step=int(step),
-                        run_number=os.environ.get("GITHUB_RUN_NUMBER"))
+        # The .pt twin is a CONVENIENCE EXPORT, and a convenience must never
+        # take the run with it: on 2026-08-27 ~00:23Z the first save_ckpt of
+        # the E-052.1 train run raised ModuleNotFoundError('torch') here —
+        # the train venv is JAX-only; verify's venv has torch only because
+        # the PARITY GATES need it, which is why four verify rounds never
+        # saw this — and the trap reaped a healthy node at step 1000 of
+        # 24,000. The .npz above is the artefact resume needs; the .pt can
+        # always be produced after the fact by export_field_pt on any
+        # machine with both stacks (the sandbox has them).
+        try:
+            export_field_pt(nnx.merge(graphdef, state), head_args(step),
+                            path=ck_pt, step=int(step),
+                            run_number=os.environ.get("GITHUB_RUN_NUMBER"))
+        except ImportError as e:
+            print(f"WARN: .pt export skipped ({e}) — the .npz checkpoint is "
+                  f"complete; produce the .pt at harvest with "
+                  f"export_field_pt on a machine that has torch", flush=True)
 
     # ---- train ------------------------------------------------------------
     t0 = time.time()
