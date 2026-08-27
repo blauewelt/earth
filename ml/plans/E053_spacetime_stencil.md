@@ -125,6 +125,7 @@ rung 0.0820 are the already-measured controls):
 | **A1 analog-only** | 16: dense 0…−6, pins −73±1, −146±1 | 2 y | is span's value the analog? | ratio ≲ 0.12 ⇒ mechanism confirmed, span sparsifies ~10×; ≳ 0.3 ⇒ dense slow-mode context matters, analog insufficient |
 | **A2 log-ramp-24** | 24 log-spaced 0…−146 | 2 y | does log spacing match uniform K=144? | ≈ 0.08 at 1/6 the frames = span decoupled from K; ≈ 0.5 = the slab was load-bearing |
 | **A3 decade-32** | 32 log-spaced 0…−730, pins at −1…−9 y | **10 y** | does span keep paying beyond 2 y? | first reach past 2 y at any cadence; monotone gain ⇒ the axis is still open (decadal-predictability territory) |
+| **A4 uniform-24** *(added 08-27 after A1+A2 landed)* | 24 uniform 0,−6,…,−138 | 690 d | is it the SPACING or the sparse K that loses to the slab? | ≈0.15 (A2-like) ⇒ spacing irrelevant, slab density load-bearing; ≲0.10 ⇒ uniform beats log — and E-045's span-fixed flatness was partly a spacing artefact |
 
 **E-053.2 — the true spacetime point cloud (architecture change, gated on
 E-053.1).** Per-slot Δt breaks the per-frame concat; the honest version is

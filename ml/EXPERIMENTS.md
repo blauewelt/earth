@@ -110,6 +110,7 @@ exists.
 | #486 | **A1 analog-only** | 16 · 735 d | dense 0…−6, −8,−10,−12, pins −73±1, −146±1 | ratio ≲0.12 ⇒ span's value IS the analog (sparsifies ~10×); ≳0.3 ⇒ dense slow-mode context matters |
 | #487 | **A2 log-ramp-24** | 24 · 715 d | log-spaced 0…−143 (incl. −73) | ≈0.08 at 1/6 the frames ⇒ span decoupled from K; ≈0.5 ⇒ the slab was load-bearing |
 | #488 | **A3 decade-32** | 32 · 3,650 d | log ramp 0…−730 + pins at −1…−10 y | first >2-y span at any cadence; ratio < 0.0820 ⇒ span still paying (decadal territory); ≈0.082 ⇒ 2 y saturates |
+| #489 | **A4 uniform-24** | 24 · 690 d | uniform 0,−6,…,−138 (registered 05:50Z 08-27, after A1+A2) | ≈0.15 ⇒ spacing irrelevant, slab density load-bearing; ≲0.10 ⇒ uniform beats log — spacing artefact in E-045's flatness |
 
 Cost ≈ $1.1–1.5/arm (measured 0.264 s/step × 20k ≈ 97 min stage-2 + probe
 tail), job_timeout 600 min each (the E-045 HK lesson). A3's pool shrinks by
@@ -144,6 +145,41 @@ matters too. Secondary read-outs, not the verdict: rapid_r_kfold 0.647
 [0.594, 0.696], deseas 0.548, raw 0.583 — the probe does not distinguish
 the arms at n=1. n=1 direction per §3b; NO ROLL without the E-043b-PHASE
 battery (the pins are a lookup mechanism by construction).
+
+**05:45Z 08-27 — A2's VERDICT: 0.1561 — LOG SPACING DOES NOT SUBSTITUTE FOR
+THE SLAB; SPAN IS NOT DECOUPLED FROM K BY SPARSE SAMPLING.** #487 (A2
+log-ramp-24, span 715 d) final: z_mse_model 3.3183 / z_mse_persistence
+21.2544 ⇒ **one-step ratio 0.1561** (offsets echoed; params 206,535,712).
+Registered reading was ≈0.08 "span decoupled from K" vs ≈0.5 "slab
+load-bearing" — 0.1561 lands between again, but the direction is
+unambiguous: 24 log-spaced frames over the full span recover **65% of the
+span effect in log terms** (A1's pins: 55%) yet remain **1.9× short of
+uniform K=144's 0.0820**. Together A1+A2 localize the effect: it is
+GENUINELY DISTRIBUTED — a long span helps under any sampling (0.5056 →
+0.156–0.186), but the dense slab's remaining 1.9× is carried by the many
+intermediate frames sparse patterns skip, and no 16–24-frame skeleton
+found it. The 4-D sunflower's premise ("most of the slab is redundant") is
+half-right at best at this budget. Secondary: kfold 0.661 [0.612, 0.708]
+vs A1's 0.647 — indistinguishable at n=1. **A correction to A1's block
+above:** its appeal to E-045-A2a's 0.0721 as "distributed coverage matches
+the slab" was cross-instrument — A2a's ratio lives at a 30-day target and
+its own 30-day persistence denominator, not comparable to these 5-day-target
+ratios. A2 was the like-for-like test, and it says the slab is (partially)
+load-bearing. What A2 does NOT separate is spacing from target-step: it
+differs from A2a in BOTH. A4 (registered below, dispatched behind #488)
+isolates spacing.
+
+**A4 REGISTERED 2026-08-27 ~05:50Z (before dispatch): uniform-24 at
+stride 6 — 5-day target.** Offsets `0,−6,−12,…,−138` (24 uniform frames,
+span 690 d), everything else bit-identical to A2 (same K_eff 24, same
+206,535,712 params, same target t+1 at 5 d, same denominator). Registered
+two-sided reading: **≈0.15 (A2-like) ⇒ spacing is irrelevant — sparse K is
+the binding limit and the slab's density is load-bearing, full stop;
+≲0.10 ⇒ UNIFORM spacing specifically beats log** (log's clustering near
+Δt=0 wastes frames on the fast-decaying own-history the head barely
+needs) — which would also mean E-045's span-fixed "flatness" was partly a
+spacing artefact and cheap uniform-sparse heads reopen. Queued as #489
+behind #488 (A3); ~$1.5.
 
 ---
 

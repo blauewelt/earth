@@ -1,7 +1,9 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-27 ~01:40 UTC** (by the E-053 session: A1's verdict
-landed — 0.1858, between the registered thresholds; A2 is next in queue). *Every ML session updates this stamp and the sections it touches in
+**Last updated: 2026-08-27 ~05:55 UTC** (by the E-053 session, at Chris's
+check-in: A1 0.1858 and A2 0.1561 harvested; A4 registered + dispatched
+(#489); E-051's final 0.0330 entered; E-052.1 found stalled at step 960 —
+flagged, its own session owns it). *Every ML session updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
 "in flight" section and check the
@@ -29,15 +31,18 @@ attendability, never information beyond the pixels.
 
 | what | TL;DR question | must beat / registered reading | where · ETA |
 |---|---|---|---|
-| **E-051** full-budget K=144 pentad head (206.5M, 200k, JAX/TPU) | does two years of context at full budget repair the pentad roll? | roll first (day-matched corridor, vs monthly +0.939 / pentad −0.499); one-step vs its 20k twin's 0.0820 (flat expected) | TPU `e051-k144-full` · 200k ~14:00Z 08-26, own session harvests |
-| **#485** E-050 warm-start FSQ (lattice on at resume from #480@200k, +60k) | does a trained encoder survive quantization where every cold start collapsed? | decoder-ceiling audit (Falsifier B): fast channels inside the 9–19% FVU band on Argo-free bins | gpu-box-32966687 · 260k reached 10:54Z, finals in progress |
-| **E-052** field head, deterministic then diffusion (separate session) | can one model predict the whole field jointly — and, later, sample futures instead of blurring them? | E-052.1 det arm vs 0.0820 (#478) and E-051's final | TPU verify node, then E-052.1 |
-| **#487/#488** E-053.1 arms A2/A3 (queued behind #486's archive tail, gpu-box-32966687) | A2: does log spacing over 2 y match uniform K=144 at 1/6 the frames? A3: does span keep paying to 10 y? | A2: ≈0.08 ⇒ span decoupled from K; A3: <0.0820 ⇒ decadal territory | ~2 h + probe tail each; A2 verdict expected ~05Z |
+| **#488** E-053.1 A3 decade-32 (next on gpu-box-32966687, behind #487's probe tail) | does span keep paying beyond 2 y — the first 10-y context ever? | <0.0820 ⇒ decadal territory; ≈0.082 ⇒ 2 y saturates. Anchor pool shrinks ~23% by construction | result ~10Z 08-27 |
+| **#489** E-053.1 A4 uniform-24 (queued behind #488; registered 05:50Z after A1+A2) | is it the SPACING or the sparse K that loses to the dense slab? | ≈0.15 (A2-like) ⇒ spacing irrelevant, slab density load-bearing; ≲0.10 ⇒ uniform beats log — E-045's flatness partly a spacing artefact | result ~14–15Z 08-27 |
+| **#485** E-050 warm-start FSQ | does a trained encoder survive quantization where every cold start collapsed? | decoder-ceiling audit (Falsifier B): fast channels inside the 9–19% FVU band on Argo-free bins | **finals ARCHIVED** (run-485.jsonl + probes-485.json on ml-metrics) — read-out pending its own session's harvest |
+| **E-052.1** det field head (diffusion session's run) | can one model predict the whole field jointly? | **⚠ STALLED — metrics stopped at step 960/24,000 (00:22Z 08-27, loss 14.6); mirror re-run 05:10Z confirms no progress; finals show only ckpt_latest.npz.** Needs its session's diagnosis + resume/redispatch — do not assume the ≈20:45Z finish | flagged 05:15Z; own session owns it |
 
 ## 2 · Most promising next steps, ranked
 
-1. **Read E-051's roll** (its own session; lands today). With fusion
-   eliminated, the span hypothesis carries the pentad-roll question alone.
+1. **E-051's roll decision** (its own session). One-step landed at
+   **0.0330** (0.70869/21.44621) vs its 20k twin's 0.0820 — full budget pays
+   2.5× at K=144, the best pentad one-step ever. With fusion eliminated, the
+   span hypothesis carries the pentad-roll question alone; the roll (replay
+   battery first) is the remaining read-out.
 2. **E-050 decoder-ceiling audit** once #485's finals land — decides whether
    one warm 16-bit token carries a pixel-bin; a pass opens token-input /
    token-output heads on the best forecasting substrate found so far
@@ -45,18 +50,21 @@ attendability, never information beyond the pixels.
 3. **E-053 space-time stencil** (Chris's direction, RUNNING): E-053.0
    measured — the advective cone is refuted (ridge lag 0 everywhere; the
    agnostic ball/ramp wins) and the analog is visible in the substrate.
-   **A1's verdict (#486, 01:35Z 08-27): one-step ratio 0.1858 — between
-   the registered thresholds.** The analog pins are real (2.7× over
-   uniform K=24 at the same frame budget, ~55% of the span effect in log
-   terms) but NOT the whole of span: the missing half plausibly lives in
-   the intermediate times (−12…−72) where A1 has no frames. A2 (log-ramp,
-   in queue) is now the decisive arm. Replay battery mandatory before any
+   **A1 (#486): 0.1858. A2 (#487): 0.1561. Both between the registered
+   thresholds — the span effect is genuinely DISTRIBUTED.** A long span
+   helps under any sampling (0.5056 → 0.156–0.186; pins alone 55%, log
+   ramp 65% of the effect in log terms), but the dense slab keeps a 1.9×
+   edge (0.0820) that no 16–24-frame skeleton found. Still open: A3
+   (10-y span, running next) and A4 (uniform spacing, registered 05:50Z —
+   isolates spacing from sparse K). Replay battery mandatory before any
    offset head is rolled; rollout_spatial refuses them until offset-aware
    assembly exists.
    [Plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E053_spacetime_stencil.md) ·
    [slides](https://blauewelt.github.io/earth/ml/figures/spacetime_stencil.html).
-4. **E-052.1 deterministic field head** (diffusion session, after clean
-   verify) — the architecture-level alternative; param-matched 200.4M.
+4. **E-052.1 deterministic field head** (diffusion session) — the
+   architecture-level alternative; param-matched 200.4M. **Currently
+   stalled at step 960 (§1) — its session's first task is diagnosis and
+   resume before any new spend.**
 5. **If E-051's roll is negative:** the hierarchical fallback — roll at
    monthly stride *through* the pentad stack (A2a's 0.0721 head is that
    object) — plus a pentad-calibrated znoise dose sized from the pentad
@@ -99,9 +107,10 @@ attendability, never information beyond the pixels.
 | E-045 factorial | which component breaks at pentad? | **span, not step**: span-fixed 0.0721 · 0.0804 · 0.0820 flat vs K-fixed 0.07→0.51 cliff; mechanism registered = seasonal analog. Side: Argo targets stabilize (A3), monthly noise dose fatal (A4 0.81), season staircase null (A6) |
 | E-045.3 | the K=48 rung | BLOCKED — config-tied CPU-fall ×2; unblock = slice-the-published-Z |
 | E-053.0 | is there an advective cone in the z field? | NO at the argmax instrument (ridge lag 0 to 2,500 km) — ball form wins; analog bump measured (0.143 @1 y vs 0.100 @180 d deseas.) |
-| E-053.1-A1 | is span's value the seasonal analog? | **0.1858 — between the registered thresholds** (≲0.12 / ≳0.3): pins buy 2.7× over uniform K=24, but the intermediate times (−12…−72) carry the rest; A2 decides (n=1) |
+| E-053.1-A1 | is span's value the seasonal analog? | **0.1858 — between the registered thresholds** (≲0.12 / ≳0.3): pins buy 2.7× over uniform K=24 at the same frame budget, ~55% of the span effect (n=1) |
+| E-053.1-A2 | does log spacing match the dense slab at 1/6 the frames? | **0.1561 — no**: 65% of the span effect, still 1.9× short of K=144's 0.0820. With A1: the effect is distributed across the slab; sparse skeletons don't find it. A4 isolates spacing (n=1) |
 | E-047 | fusion vs selection (month-block codec) | Tier-1: Argo-anchor collapse cured at a 9–19% everywhere-cost; **stage 2: fusion LOSES, 0.2127 vs 0.0721** (#483, 08-26) — block-decode roll not dispatched |
-| E-051 | span at full budget | in flight — see §1 |
+| E-051 | span at full budget | **one-step 0.0330** vs the 20k twin's 0.0820 — budget pays 2.5× at K=144, best pentad one-step ever; roll decision pending (its own session) |
 
 ### The quantization road (E-046, E-048, E-049, E-050)
 
@@ -110,7 +119,7 @@ attendability, never information beyond the pixels.
 | E-046 | lattice z vs continuous z as forecast substrate | **0.4394 < A9's 0.4916 < 0.5056** — training through the lattice wins; priced: gradient spikes killed one of two seeds |
 | E-048 | window blocks + fitted FSQ ladders | fitted ladder closes collapse, not drift; unbounded FSQ wears 8 levels as a sign code |
 | E-049a/b | one 16-bit token per pixel-bin | (a) continuous d_z-6 control healthy to 200k; (b) cold-start FSQ = constant-encoder collapse ×2 — the lattice-at-cold-start is convicted |
-| E-050 | warm-start quantization | in flight — see §1 |
+| E-050 | warm-start quantization | #485 finals archived (run-485.jsonl on ml-metrics); decoder-ceiling audit read-out pending its own session's harvest — see §1 |
 
 ### Data & infrastructure experiments
 
