@@ -39,7 +39,7 @@
 \large self-supervised representations of the observed ocean,\\
 probed against the Atlantic overturning circulation}
 \author{blauewelt/earth --- technical report, v7}
-\date{26 August 2026}
+\date{27 August 2026}
 
 \begin{document}
 \maketitle
@@ -176,10 +176,20 @@ structural price paid everywhere else ($9$--$19\%$ against $<$$1\%$) ---
 but as a forecast substrate the fused month \emph{loses} to simply
 selecting one bin per month ($0.2127$ against $0.0721$ at the same
 instrument), so the reconstruction cure buys no forecast and the context
-account carries the pentad programme alone: its full-budget test --- a
-206.5M head with the complete two-year context at five-day steps, whose
-12-month roll is the pre-registered decisive reading --- is training as
-this revision is dated. Finally, the models now have
+account carries the pentad programme alone. Its full-budget test --- a
+206.5M head with the complete two-year context at five-day steps --- has
+now finished training, and its one-step ratio, $\mathbf{0.0330}$ against
+the 20k twin's $0.0820$, is the best pentad one-step on record and
+\emph{refutes} the pre-registered expectation of a flat
+budget curve at this context; the 12-month roll remains the registered
+decisive reading and is still owed. And the span effect itself has been
+probed from inside: giving the stencil's context frames non-uniform
+\emph{times} (the sunflower taken into the time dimension) shows the
+effect is genuinely distributed --- a dense recent month plus
+seasonal-analog pins recovers about half of it ($0.1858$), a 24-frame
+log ramp over the full span about two thirds ($0.1561$), and neither
+sparse skeleton reaches the dense slab's $0.0820$
+(\S\ref{sec:factorial}). Finally, the models now have
 a second, framework-independent implementation in JAX, gated against the
 PyTorch stack at $10^{-7}$--$10^{-5}$ and against an eighteen-times-reproduced
 archived roll, on which a TPU v5litepod-4 trains the 38.0M block codec at
@@ -2809,17 +2819,24 @@ makes a sharp, falsifiable prediction about the roll itself: a pentad
 head with the full 720-day span ($K{=}144$) should roll materially
 better, and if its day-matched corridor AUC still reads
 E-044b-class negative, two years of context did not repair the pentad
-roll. That arm exists and is training as this revision is dated: the
+roll. That arm exists and has now finished training: the
 same 206.5M configuration at $K{=}144$ and the full 200{,}000-step
 budget, on the TPU tier of \S\ref{sec:jax}, its configuration
 certified by a same-geometry PyTorch twin at 20k steps (the $0.0820$
-decisive rung above, which is that twin). The reading order is
+decisive rung above, which is that twin). The reading order was
 pre-registered: the 12-month roll first --- day-matched, on the
 trained-longitude corridor scope, against the monthly pair's $+0.939$
 and the pentad $-0.499$ --- then the one-step ratio against the twin's
-$0.0820$, where a \emph{flat} value is expected rather than
+$0.0820$, where a \emph{flat} value was expected rather than
 disappointing ($K{=}24$'s own $20\mathrm{k}\to200\mathrm{k}$ curve
-was flat one-step). Two qualifications are on record before the
+was flat one-step). The one-step number has landed and the flat
+expectation is \textbf{refuted}: $\mathbf{0.0330}$
+($0.709/21.446$), $2.5\times$ better than the twin --- at $K{=}144$
+the full budget buys what it never bought at $K{=}24$, making this
+the best pentad one-step on record and the first evidence that budget
+and span \emph{interact}. The roll --- the decisive reading --- is
+still owed and nothing here pre-judges it.
+Two qualifications are on record before that
 number. The roll is uncertified at pentad by construction --- the
 frozen gate's pinned reference exists only at monthly cadence, so the
 evaluator marks every pentad roll \texttt{certified: false} rather than
@@ -2834,6 +2851,53 @@ fallback --- roll at \emph{monthly} stride through the pentad stack,
 for which the $0.0721$ A2a head is already the trained object, keeping
 pentad steps for within-month detail rather than for the year-scale
 roll.
+
+\paragraph{Where in the span the information lives: the stencil taken
+into the time dimension.} The factorial says \emph{that} span matters;
+it does not say \emph{where} in the two years the information sits. The
+registered mechanism (the seasonal analog) makes a sharp prediction: if
+a 720-day window helps because it contains last year's same-calendar
+frame, then a handful of frames pinned at $\Delta t \approx -1, -2$
+years should recover the effect and most of the $K{=}144$ slab is
+redundancy. The stencil admits the test directly --- its per-frame
+assembly takes the frame \emph{times} as a parameter, so context frames
+can be placed non-uniformly in the past (the spatial sunflower's
+far-heavy ramp, applied to the time axis) with the target step, the
+persistence denominator, and every parameter but the position table's
+row count unchanged. Two $\$0$ measurements on the embedding field
+itself set the geometry first: the space--time cross-correlation ridge
+of the pentad $z$ field sits at lag zero at every separation's median
+out to 2{,}500\,km --- no single advection speed exists at that
+instrument, so the frames are placed by an agnostic ramp rather than an
+advective cone --- and the centres' own deseasonalized autocorrelation
+falls to $0.100$ at 180 days then \emph{rises} to $0.143$ at one year
+and $0.113$ at two: the analog is visible in the substrate itself,
+carrying anomaly information beyond climatology.
+
+The first two arms have returned, each $n{=}1$ at 20k steps against the
+measured controls ($0.5056/0.5045$ at the uniform 120-day $K{=}24$;
+$0.0820$ at the uniform 720-day $K{=}144$). \textbf{Sixteen frames ---
+a dense recent month plus pins at one and two years --- score
+$0.1858$}: $2.7\times$ better than uniform $K{=}24$ at essentially the
+same frame budget, so the pins carry real span value, but well short of
+the pre-registered $\lesssim 0.12$ that would have confirmed the analog
+as the mechanism. \textbf{Twenty-four log-spaced frames over the full
+span score $0.1561$}: coverage of the intermediate times helps, but at
+$1/6$ the frames it does not approach the slab's $0.0820$ either. Read
+together, the span effect is \emph{distributed}: sparse skeletons
+recover $55$--$65\%$ of it (in log-ratio terms) and the dense slab's
+remaining $1.9\times$ is carried by the many intermediate frames that
+every sparse pattern skips. The redundancy hypothesis is at best
+half-right at this budget --- and the mechanism story sharpens rather
+than closes, because two further arms are in flight as this revision is
+dated: a ten-year span (the first context beyond two years at any
+cadence in the programme) and a uniform 24-frame arm, registered before
+dispatch, that separates the \emph{spacing} pattern from the sparse
+frame count. One danger is registered ahead of any roll from these
+heads: an analog pin is a lookup mechanism by construction, so the
+calendar-replay battery of \S\ref{sec:roll} is mandatory before a roll
+number is quoted, and the evaluator refuses offset heads outright until
+an offset-aware assembly exists.
 
 \subsection{The component ladder: what breaks, one variable at a
 time}\label{sec:components}
@@ -3152,7 +3216,10 @@ torch & \textbf{dead}: constant-encoder collapse, twice \\
 \addlinespace
 \texttt{f4r2-40M-}\newline\texttt{dz6-fsq65k-warm} & 38.0M &
 5-day bin & the same, enabled \emph{at resume} & $+$60k $\times$ 512 &
-torch & training --- warm fits healthy at every check \\
+torch & \textbf{finished} --- trained $200\mathrm{k}\!\to\!260\mathrm{k}$
+through the lattice with \emph{no collapse} (reconstruction still
+improving, $0.310\!\to\!0.270$); the decoder-ceiling audit that turns
+survival into a verdict is owed \\
 \midrule
 \multicolumn{7}{l}{\emph{E-048 --- windows instead of months, and the level
 placement itself under test}}\\
@@ -3477,10 +3544,14 @@ two repairs this item once listed as unjudged have since returned
 stage-2 verdicts, one each way --- input quantization helps ($0.4394$,
 \S\ref{sec:quant}); month-block fusion does not ($0.2127$ against the
 selection arm's $0.0721$, \S\ref{sec:block}) --- so the pentad roll's
-repair now rides on one arm: the full-budget two-year-context head in
-training, whose day-matched roll is the registered decisive number
+repair now rides on one arm: the full-budget two-year-context head,
+now trained to a record one-step of $0.0330$, whose day-matched roll
+is the registered decisive number and is still owed
 (\S\ref{sec:factorial}), with the monthly-stride hierarchical roll as
-the remaining fallback. Every pentad number except the one-step control
+the remaining fallback. The span effect that head banks on has
+meanwhile been localized as \emph{distributed} rather than analog-only:
+sparse time-skeletons recover $55$--$65\%$ of it and none of them reach
+the dense slab (\S\ref{sec:factorial}), all of it $n{=}1$. Every pentad number except the one-step control
 pair is $n=1$ at a cadence with no measured replicate band, and none of
 them is a level. \textbf{(11) A second training tier now exists and is
 unreplicated.} The month-block codec was trained in JAX on a TPU
