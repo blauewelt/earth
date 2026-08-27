@@ -41,161 +41,53 @@ probed against the Atlantic overturning circulation}
 \maketitle
 
 \begin{abstract}
-We train a small self-supervised model to compress everything the
-observing system knows about each point of the ocean, each month, into a
-single vector --- an \emph{embedding} --- and then ask whether those
-vectors, which never see any transport measurement, carry the Atlantic
-Meridional Overturning Circulation (AMOC). They do: a linear read-out
-from the embeddings along $26.5^\circ$N attains a year-blocked
-cross-validated correlation of $r=0.60$ with the monthly, deseasonalized
-RAPID transport series --- to our knowledge the first cross-validated
-monthly-scale figure against real RAPID data from inputs that never
-include RAPID. A temporal model over the frozen embeddings predicts the
-ocean's anomaly field beyond a year ahead (anomaly correlation $0.62$ at
-one month, crossing the conventional $0.5$ useful-skill line near four
-months), while the transport read-out loses skill after about one
-season, consistent with its wind-driven monthly variance. This revision adds a
-\emph{probe ladder} --- ridge, small MLP, and a supervised attention head
-over the \emph{unpooled} section --- and it rewrites the story of the
-week. Pointwise nonlinearity recovers nothing anywhere: the MLP trails
-the ridge on every target, for every codec. But the attention head, which
-sees the $\sim$67 section pixels individually instead of their mean,
-raises every codec --- and the codec whose channel tokens carry $3\times3$
-spatial patches reaches $\mathbf{r=0.672}$ across two independently
-trained seeds ($0.690$ and $0.654$), RMSE $\approx$2.1\,Sv against a
-2.79\,Sv target, the best transport figure of the
-programme. The mechanism is thermal wind: geostrophic transport is the
-east-minus-west density difference across the section, and mean-pooling
-computes exactly the statistic in which that difference cancels. An
-end-to-end control then decomposes the headline: the same head over
-\emph{raw} section data reaches $0.659$ at matched receptive field, so
-pretraining's own margin on this task is $+0.013$ --- indistinguishable
-from zero, and a directional $+0.031$ reported from the first seed alone
-is withdrawn here
---- the codec's demonstrated value lies in field prediction and
-transfer, not in the monthly RAPID probe. An
-apparent finding that expanding the input from 14 to 24--25 channels had
-\emph{cost} monthly RAPID skill is retracted as a representation claim
---- the pooled probes were billing relocated information as lost --- while
-the genuine gain those channels brought at the deep MOVE array at
-$16^\circ$N ($r=0.206$ [$0.044$, $0.346$], our first multi-target
-confidence interval excluding zero) stands.
+We compress everything the observing system knows about each point of the
+North Atlantic into one vector per pixel per time step (a self-supervised
+\emph{embedding}), train a temporal transformer to predict those vectors
+forward, and read out anything --- AMOC transport at $26.5^\circ$N
+against RAPID is the headline read-out. This abstract carries only the
+main results; the sections carry their caveats and costs.
 
-This revision (v6) reports the programme's move to the \emph{rolled
-forecast at scale} (\S\ref{sec:roll}), and its central finding is about
-capacity. The temporal model now reads a \emph{stencil} of distant
-neighbour embeddings alongside the pixel's own history; skill is scored
-both one step ahead (forecast ratio against persistence) and rolled
-twelve months over the AMOC corridor (corridor AUC), with a frozen gate
-head that must reproduce its pinned score before any evaluation counts.
-At the original stage-2 size ($576\times8$, 34M parameters) the two
-scores \emph{anti-correlated} across input geometries --- the best
-one-step arms rolled worst --- and a systematic audit cleared the
-instrument and localized the effect in the model-under-iteration. The
-resolution is capacity: at $768\times12$ (88M) the same wide-input
-geometry that lost at 34M gains $+0.050$ corridor AUC paired by seed,
-and at $1024\times16$ (205M) the corridor AUC reaches
-$\mathbf{0.664}$/$0.663$/$0.664$ across three seeds --- against
-$0.589$ for the no-neighbour baseline and $0.604$ for the best
-small-model geometry --- with no sign of saturation. On the one-step
-forecast, parameters beat every other axis measured: input width
-(Fibonacci sunflower layouts, 34$\to$89 points, $\approx-0.002$ per
-rung, then \emph{saturating} at 89 --- 144 points buy nothing) and step
-budget ($60\mathrm{k}\to200\mathrm{k}$, decelerating toward an
-asymptote) both pay, and both pay less. \textbf{On the rolled forecast,
-scale is not the largest effect, and neither axis behaves as the
-forecast ratio said it would}: the step budget that bought the most
-one-step skill buys \emph{exactly nothing} rolled, while the width that
-had visibly saturated at 89 points keeps paying to 144
-($0.6637\to0.6725\to0.6781$ at 205M, same sign at every seed) and then
-stops, a paired 233-point stencil returning $0.6739$. Adding Gaussian
-noise to the model's own inputs at its measured one-step error scale is worth $+0.057$
-corridor AUC at fixed capacity --- enough that a noised 88M model beats
-the clean 205M one --- and a near-field 8-point stencil is worth
-$+0.035$ over wide-and-far inputs at equal parameters, reversing the
-forecast-axis ranking. A geometric measurement plausibly explains both:
-at 4444\,km reach a head's dependency cone covers the entire model
-domain by horizon three and about half its input slots fall outside it,
-so every rolled number here rests on holding the world beyond the
-window at climatology. A second structural caveat is newly located and
-quantified: $45^\circ$W--$25^\circ$W is withheld from training in both
-stages and scored anyway, it is a quarter of the evaluation area, and
-roughly half of the stencil's measured rolled advantage is earned inside
-it --- so \emph{spatial coupling helps forecasting} and \emph{spatial
-coupling helps a model extrapolate into a hole in its own coordinate
-input} are not separated by any number in this report
-(\S\ref{sec:stencil}). The small-model geometry ranking that occupied a
-week of experiments is preserved in Appendix~\ref{app:base} as a
-capacity-starvation artifact.
-
-This revision (v7) is mostly about what the rolled numbers were
-\emph{measuring}, and it retires a reading. Two structural questions were
-settled first. The held-out longitude block is gone from stage 2: a head
-trained on all 481 columns closes the trained-minus-held-out corridor gap
-from $\approx$$0.65$ to $\mathbf{0.0065}$, on both seeds
-(\S\ref{sec:nolonhold}) --- but its headline level is \emph{not} readable
-as forecast skill, because its skill does not decay with lead time
-($0.940\to0.936$ over twelve months where every other head in the archive
-falls by $0.12$--$0.19$), the gain is spread over channels the model cannot
-forecast, and no transport read-out moves at all. A dedicated experiment
-then explains that shape: rolled from six different context ends spanning a
-decade, the same head's unforced future peaks land in the \emph{same
-calendar months} every time, and its within-record tracking correlation is
-\emph{flat} in lead time ($0.70/0.68/0.70/0.71$ from contexts 15 months to
-ten years back). \textbf{Long rolls in this system are trajectory replay,
-not forecast} (\S\ref{sec:replay}); every long-hindcast correlation in the
-archive, this report's included, is withdrawn as a skill number and
-re-labelled as replay tracking. Second, the move to a finer time axis is
-measured, and it is expensive: at 5-day steps the one-step error ratio is
-$0.5056$/$0.5045$ (a seed pair) where the \emph{same} embeddings stepped
-monthly give $0.0721$/$0.0729$, the 15-day rung sits between at $0.1620$,
-and the day-matched 73-step roll scores corridor AUC $\mathbf{-0.499}$ ---
-\emph{below climatology} --- against $+0.939$ monthly. That ladder,
-however, turned out to be measuring the wrong axis: a step $\times$ span
-factorial (\S\ref{sec:factorial}) shows the difficulty tracks \emph{context
-span}, not step size --- at a fixed two-year span the one-step ratio is
-$0.071$--$0.082$ whether the steps are 30, 10, or 5 days (the 5-day
-decisive rung landed at $\mathbf{0.0820}$, inside its pre-registered band),
-while cutting the monthly cadence's span to 120 days sends it to $0.527$.
-The registered mechanism is the seasonal analog: a 720-day window contains
-last year's same-calendar frame. Two further repairs preceded that
-resolution, and both now have verdicts. Quantization helps, and helps most
-inside the model: restricting the head's inputs to an
-8-level-per-dimension alphabet was the first intervention to beat the pentad
-baseline ($0.4916$), and retraining the codec \emph{through} the same
-lattice beats that ($0.4394$) --- at the price of an optimization landscape
-whose gradient spikes killed one of two seeds. A \emph{month-block} codec
---- one embedding per calendar month, built from a grid of pentad cells ---
-cures the per-bin reconstruction collapse at the Argo anchor (fast channels
-$7.6\%$/$17.4\%$ of variance lost, against $25$--$112\%$) at a flat
-structural price paid everywhere else ($9$--$19\%$ against $<$$1\%$) ---
-but as a forecast substrate the fused month \emph{loses} to simply
-selecting one bin per month ($0.2127$ against $0.0721$ at the same
-instrument), so the reconstruction cure buys no forecast and the context
-account carries the pentad programme alone. Its full-budget test --- a
-206.5M head with the complete two-year context at five-day steps --- has
-now finished training, and its one-step ratio, $\mathbf{0.0330}$ against
-the 20k twin's $0.0820$, is the best pentad one-step on record and
-\emph{refutes} the pre-registered expectation of a flat
-budget curve at this context; the 12-month roll remains the registered
-decisive reading and is still owed. And the span effect itself has been
-probed from inside: giving the stencil's context frames non-uniform
-\emph{times} (the sunflower taken into the time dimension) shows the
-effect is genuinely distributed --- a dense recent month plus
-seasonal-analog pins recovers about half of it ($0.1858$), a 24-frame
-log ramp over the full span about two thirds ($0.1561$), and neither
-sparse skeleton reaches the dense slab's $0.0820$
-(\S\ref{sec:factorial}). Finally, the models now have
-a second, framework-independent implementation in JAX, gated against the
-PyTorch stack at $10^{-7}$--$10^{-5}$ and against an eighteen-times-reproduced
-archived roll, on which a TPU v5litepod-4 trains the 38.0M block codec at
-$0.167$\,s/step against $0.93$ on a rented H100 (\S\ref{sec:jax}). One
-piece of bookkeeping in the same revision is load-bearing rather than
-cosmetic: Table~\ref{tab:master} now carries the \emph{unpooled} head
-read-out beside the pooled ridge and labels which is the verdict, because
-a section mean annihilates the east--west contrast the transport is made
-of --- and the column is mostly dashes, because the flag that produces it
-was off by default until late in the programme.
+\textbf{Probing today's state:} an attention head over the unpooled
+section reads transport at $\mathbf{r=0.672}$ across two seeds
+(RMSE ${\approx}2.1$\,Sv against a 2.79\,Sv target) --- but a matched
+raw-pixel head reaches $0.659$, so the embedding's demonstrated value is
+as a \emph{forecasting substrate}, not a probe.
+\textbf{Forecasting, monthly:} field anomaly correlation $0.62$ at one
+month, crossing $0.5$ near four months; rolled twelve months, the best
+configuration on record --- a 211M stencil head, trained on all
+longitudes, with input noise at the model's own error scale --- scores
+corridor AUC $\mathbf{0.93733/0.93758}$ (a seed pair). The largest
+measured effects on the rolled score: capacity $+0.042$, input noise
+$+0.045$/$+0.050$, retiring the longitude holdout $+0.071$.
+\textbf{The governing caveat:} long rolls in this system are
+\emph{trajectory replay}, not forecast --- tracking correlation flat in
+lead time, unforced future peaks pinned to calendar months --- so every
+long-hindcast $r$ in the archive, ours included, is withdrawn as a skill
+number (\S\ref{sec:replay}).
+\textbf{The pentad frontier:} at 5-day steps the year-long roll broke
+($-0.499$, below climatology); a step$\times$span factorial localizes
+the difficulty in \emph{context span}, not step size
+(\S\ref{sec:factorial}). At the full 200k budget the two-year-context
+head reaches one-step $\mathbf{0.0330}$ --- the best pentad number on
+record, $2.5\times$ its 20k twin, refuting the pre-registered flat-budget
+expectation --- and its 12-month roll is the registered decisive reading,
+still owed. The span effect is \emph{distributed}: sparse time-sampled
+skeletons (seasonal-analog pins $0.1858$; a 24-frame log ramp $0.1561$)
+recover 55--65\% of it and none reach the dense slab's $0.0820$.
+\textbf{Quantization:} retraining the codec \emph{through} an 8-level
+lattice gives the best forecasting substrate measured
+($\mathbf{0.4394}$ against the continuous $0.5056$); cold-start
+quantization collapses, and quantization switched on \emph{after}
+training survives. Fusing a month of 5-day bins into one embedding cures
+a reconstruction pathology but \emph{loses} as a substrate ($0.2127$
+against $0.0721$) and is not pursued (\S\ref{sec:block}).
+\textbf{Infrastructure:} the stack has a second, framework-independent
+JAX implementation gated against PyTorch at $10^{-7}$--$10^{-5}$, on
+which a TPU v5litepod-4 trains ${\approx}5.6\times$ faster per step than
+a rented H100 (\S\ref{sec:jax}). Replication discipline is priced per
+metric and scale (\S\ref{sec:roll}); every pentad number except the
+one-step control pair is $n{=}1$.
 \end{abstract}
 
 \section{Introduction}
@@ -2041,18 +1933,21 @@ and the roll prices them accordingly.
 
 \begin{figure}[t]
 \centering\includegraphics[width=.92\linewidth]{fig_amoc_roll.pdf}
-\caption{The AMOC read-out of the two widest 205M arms, rolled. Left:
-hindcast from a 2004 context, with the three never-trained years shaded
---- those columns were described in v6 as ``the honest test, because
-outside them the roll replays months the codec saw in pretraining''.
-\textbf{They are not a test at all, and the legend's $r$ is not a skill
-number}: \S\ref{sec:replay} rolls these same heads from six context ends
-spanning a decade and finds the tracking correlation \emph{flat} in lead
-time and the post-record peaks pinned to fixed calendar months whatever
-the starting state. The whole left panel --- shaded columns included ---
-is trajectory replay, and its $r$ is relabelled here as replay tracking:
-it measures how completely the head has memorized the record, not how
-well it forecasts. Right: twenty years of unforced roll past the end of
+\caption{The AMOC read-out of the \emph{champion} heads --- the E-043b
+no-longitude-holdout pair, the best rolled configuration on record
+(corridor AUC $0.93733$/$0.93758$, both seeds shown) --- against the
+frozen no-neighbour gate. (The frontier pentad head of
+\S\ref{sec:factorial}, one-step $0.0330$, has no roll yet; this figure
+shows the best heads that \emph{have} been rolled.) Left: hindcast from
+a 2004 context, with the three never-trained years shaded.
+\textbf{Those columns are not a test, and the legend's $r$ is not a
+skill number}: \S\ref{sec:replay} rolls this configuration from six
+context ends spanning a decade and finds the tracking correlation
+\emph{flat} in lead time and the post-record peaks pinned to fixed
+calendar months whatever the starting state. The whole left panel ---
+shaded columns included --- is trajectory replay, and its $r$ is
+relabelled here as replay tracking: it measures how completely the head
+has memorized the record, not how well it forecasts. Right: twenty years of unforced roll past the end of
 the record. The flatness on the right is the finding, not a forecast:
 with no wind or heat-flux forcing after the seam, the learned dynamics
 relaxes toward climatology and stops moving, which is a damped attractor

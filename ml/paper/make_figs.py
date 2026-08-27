@@ -377,18 +377,23 @@ plt.close(fig)
 print("figures written to", FIGS)
 
 
-# ---- Fig 9: the AMOC read-out of the two widest 205M arms, rolled ---------
-# src: run #355 (xl89) and #356 (xl144) rollout_spatial.json, staged here as
-#      roll_355.json / roll_356.json; truth from
-#      `rollout_spatial.py --dump-truth` (the evaluator's own train-month
-#      climatology rule, so the deseasonalisation matches the roll's).
+# ---- Fig 9: the AMOC read-out of the CHAMPION heads, rolled ----------------
+# src: run #422 (E-043b xl144-nolonhold seed 0) and #429 (its seed-1 twin)
+#      rollout_spatial.json, staged here as roll_422.json / roll_429.json —
+#      the best rolled configuration on record (corridor 0.93733/0.93758;
+#      the earlier fig used #355/#356, the pre-nolonhold 205M arms). Truth
+#      from `rollout_spatial.py --dump-truth` (the evaluator's own
+#      train-month climatology rule, so the deseasonalisation matches).
+#      NOTE the frontier pentad head (E-051, one-step 0.0330) has NO roll
+#      yet — its roll is the owed decisive reading; this figure shows the
+#      best heads that HAVE been rolled.
 # The interactive version with the per-arm table is
 #      ml/paper/figs/amoc_roll.html -> blauewelt.github.io/earth/...
 # Heads are DEDUPLICATED BY CHECKPOINT: both runs re-roll the frozen gate,
 # and drawing it twice would misstate how many arms are on the page.
 def _amoc_arms():
     seen, arms = set(), []
-    for src, colour in (("roll_355.json", C1), ("roll_356.json", C3)):
+    for src, colour in (("roll_422.json", C1), ("roll_429.json", C3)):
         d = json.load(open(os.path.join(HERE, src)))
         for key, h in d["heads"].items():
             ident = h.get("meta", {}).get("file", key)
@@ -473,8 +478,8 @@ try:
             for a in arms]
     fig.legend(handles=hand, frameon=False, fontsize=6.5, ncol=3,
                loc="lower center", bbox_to_anchor=(0.5, -0.13))
-    fig.suptitle("The corridor's best arms, read out as transport: the gain "
-                 "does not transfer — and the tracking r is REPLAY, not skill",
+    fig.suptitle("The champion heads (E-043b pair), read out as transport: "
+                 "the gain does not transfer — and the tracking r is REPLAY, not skill",
                  fontsize=9, x=0.02, ha="left")
     fig.savefig(os.path.join(FIGS, "fig_amoc_roll.pdf"))
     plt.close(fig)
