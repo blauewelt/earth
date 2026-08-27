@@ -1,9 +1,10 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-27 ~12:10 UTC** (E-053/E-054 session: A3 harvested
-0.1400 — the decade is not empty; E-054a healthy through its registered
-warm-restart transient; E-055 (unpooled stage-2 transport read-out) built
-and tested; the E-051-final roll planned for after E-054a lands). *Every ML session updates this stamp and the sections it touches in
+**Last updated: 2026-08-27 ~13:15 UTC** (E-053/E-054/E-056 session:
+unpooled read-outs now DEFAULT-ON everywhere (Chris's ruling — the tests
+pin themselves, not the default); E-056 token-substrate gate dispatched
+(#490 K=24 / #491 K=144 over the E-050 warm-FSQ codec, queued behind A4);
+A3 0.1400 harvested; E-054a mid-continuation, healthy). *Every ML session updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
 "in flight" section and check the
@@ -32,7 +33,8 @@ attendability, never information beyond the pixels.
 | what | TL;DR question | must beat / registered reading | where · ETA |
 |---|---|---|---|
 | **#488** E-053.1 A3 decade-32 (next on gpu-box-32966687, behind #487's probe tail) | does span keep paying beyond 2 y — the first 10-y context ever? | <0.0820 ⇒ decadal territory; ≈0.082 ⇒ 2 y saturates. Anchor pool shrinks ~23% by construction | result ~10Z 08-27 |
-| **#489** E-053.1 A4 uniform-24 (queued behind #488; registered 05:50Z after A1+A2) | is it the SPACING or the sparse K that loses to the dense slab? | ≈0.15 (A2-like) ⇒ spacing irrelevant, slab density load-bearing; ≲0.10 ⇒ uniform beats log — E-045's flatness partly a spacing artefact | result ~14–15Z 08-27 |
+| **#489** E-053.1 A4 uniform-24 (running, gpu-box-32966687) | is it the SPACING or the sparse K that loses to the dense slab? | ≈0.15 (A2-like) ⇒ spacing irrelevant, slab density load-bearing; ≲0.10 ⇒ uniform beats log — E-045's flatness partly a spacing artefact | result ~15–17Z 08-27 |
+| **#490/#491** E-056a/b token substrate (queued behind #489) | is the E-050 warm-FSQ 16-bit-per-pixel-bin alphabet a competitive forecasting substrate — and what does K=144 cost on it? | a: ≲0.44 ⇒ token road opens at ~5% state size; ≳0.50 ⇒ quantization lost the forecastable signal. b: ≈0.08 + faster steps ⇒ next full-budget head trains on tokens. Risks registered: 260k final is box-local only; znoise dose re-read on the d_z-6 scale | ~18Z and ~21Z 08-27; gates the next $100-class pentad spend |
 | **E-054a** continue E-051 → 400k (this session, TPU **spot**, node `e051-k144-full`) | does the unsaturated budget curve keep paying past 200k (LR re-armed: 4e-4, halflife 100k)? | vs 0.0330: ≈0.026 (power-law extrapolation) ⇒ budget still paying, queue the ~400M capacity rung (E-054b); ≈0.033 flat ⇒ capacity is the open axis. Schedule confound registered | dispatched ~10Z 08-27; ~17 h un-preempted, spot ≈$30–41 |
 | **#485** E-050 warm-start FSQ | does a trained encoder survive quantization where every cold start collapsed? | decoder-ceiling audit (Falsifier B): fast channels inside the 9–19% FVU band on Argo-free bins | **finals ARCHIVED** (run-485.jsonl + probes-485.json on ml-metrics) — read-out pending its own session's harvest |
 | **E-052.1** det field head (diffusion session's run) | can one model predict the whole field jointly? | died at its first ckpt save (torch-less train venv); **RELAUNCHED 05:44Z by its session, resumes from step 1000**, holds the on-demand v5litepod-4 | its session harvests; finish ≈04Z 08-28 if pace holds |
