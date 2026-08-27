@@ -1,21 +1,18 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-27 ~21:10 UTC** (merged: FGN session 19:35Z +
-stencil session 21:05Z). Stencil half, on Chris's parallelization
-directive: **two fresh Vast boxes rented; #501 (FGN seed 1, queued ~17 h
-behind E-056 on the shared box) re-dispatched as #502 on its own box
-(gpu-box-46292015, fixed sha) — the E-057.1 pair now trains in PARALLEL,
-landing ~24Z 08-28; second box (gpu-box-38116559) reserved for tonight's
-E-051 400k roll; E-054b (~400M capacity rung) config frozen — all 7 spot
-zones dry/quota-full at 20:44Z (SPOT_LEDGER), launches ~22:35Z on the
-quota E-054a frees, on-demand fallback.** E-053 wave RESOLVED (A4
-0.14116 — frames, not placement, bind); E-054a 320k @ ratio ≈0.0312,
-finish ~22:30Z. FGN half (19:35Z): #496 OOM-died at ~step 6000 and went
-green (M=8 monitor val fragmented the card; FIXED by chunking, 14bb379);
-#500 (seed 0) training healthy on gpu-box-42005419; #492's box confirmed
-lemon (destroy-candidate), #497's box full-disk (triage); **the FGN
-ensemble roll is BUILT + CPU-verified** (rollout_spatial +779,
-deterministic path proven byte-identical).
+**Last updated: 2026-08-27 ~23:58 UTC** (stencil session, the harvest
+wake): **E-054a RESOLVED — 400k one-step ratio 0.02981** (0.0330@200k →
+0.0298@400k, still falling, decelerating: steps still pay, capacity is
+the cheaper axis) ⇒ **E-054b LAUNCHED** (~400M rung, us-west1-c spot
+first try on the freed quota, node `e054b-400m`, ~32 h; OOM verdict at
+first metrics) and **#503 (E-051 roll) DISPATCHED 23:52Z** on the
+reserved fresh box — rolling the 398k final artefact (the TPU trainer
+has no post-loop save; lesson in EXPERIMENTS e-054), day-matched +
+replay battery + the FIRST roll carrying E-055's unpooled keys. #494
+token embed 50%, result ~06Z. #500/#502 FGN pair healthy. Earlier
+tonight: FGN JAX port phase 1 certified (d9ae181); E-053 wave resolved;
+the 21:10Z merged stamp's detail lives in git history. *Every ML session
+updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
 "in flight" section and check the
@@ -45,9 +42,8 @@ attendability, never information beyond the pixels.
 |---|---|---|---|
 | **#494/#495** E-056a/b token substrate, RE-DISPATCH (#494 TRAINING on gpu-box-32966687 since ~18:1xZ; #495 queued behind it) | is the E-050 warm-FSQ 16-bit-per-pixel-bin alphabet a competitive forecasting substrate — and what does K=144 cost on it? First try #490/#491 died on the fsq-warmstart resume guard (guard correct); free finding: the 260k FSQ final is confirmed present box-locally | a: ≲0.44 ⇒ token road opens at ~5% state size; ≳0.50 ⇒ quantization lost the forecastable signal. b: ≈0.08 + faster steps ⇒ next full-budget head trains on tokens | #494 result ~late tonight; #495 ~mid-day 08-28; gates the next $100-class pentad spend |
 | **#500/#502** E-057.1 FGN pair, NOW PARALLEL (seed 0 on gpu-box-42005419 since 19:21Z; seed 1 re-dispatched by the stencil session as #502 on fresh gpu-box-46292015, fixed sha) | does a LEARNED perturbation + fair CRPS (eps^32 conditional LN, N=2, znoise OFF) replace the hand-dosed znoise and un-damp the roll? | ensemble-mean corridor AUC vs znoise pair 0.7235 (F1); stage2_val_member_var -> 0 = eps collapse (F2 — #500 reads 0.5–0.77 at 8k, healthy); ensemble-roll evaluator BUILT and ready | both ~27 h ⇒ pair lands ~24Z 08-28 (was ~2 days sequential); >24 h token expiry = HAND-HARVEST both; cross-box caveat in e-057(j) |
-| **E-054a** continue E-051 → 400k (stencil session, TPU **spot**, node `e051-k144-full`) | does the unsaturated budget curve keep paying past 200k (LR re-armed: 4e-4, halflife 100k)? | vs 0.0330: ≈0.026 ⇒ budget still paying, queue E-054b; ≈0.033 flat ⇒ capacity is the axis | **mid-check 17:39Z: step 320k, val ratio ≈0.0312, falling** — between the poles; 400k finishes **~22:30Z tonight**; frozen-200k copy safe in the bucket |
-| **E-054b** ~400M capacity rung (1280×20, K 144, 200k fresh, TPU spot) | does capacity, not steps, buy the next factor at full pentad span? | vs E-054a's 400k final; HBM fit at 1280×20 unverified — first-minutes OOM check | config frozen; all 7 spot zones dry/quota-full at 20:44Z ⇒ **launches ~22:35Z** on the quota E-054a frees (on-demand fallback); ≈32 h, ≈$55–75 spot |
-| **E-051 400k roll** (day-matched, replay battery, unpooled read-out) | does the best pentad one-step ever survive a 12-month roll? | vs monthly +0.939 and pentad K=24's −0.499; replay battery mandatory | dispatches at the 22:35Z wake onto reserved fresh box gpu-box-38116559; ~13–20 h, ≈$5–7 |
+| **E-054b** ~400M capacity rung (1280×20, K 144, 200k fresh, TPU spot) | does capacity, not steps, buy the next factor at full pentad span? | vs E-054a's 400k 0.02981; HBM fit at 1280×20 unverified — OOM verdict at first metrics | **LAUNCHED 23:47Z**, us-west1-c spot first try, node `e054b-400m`; ≈32 h ⇒ ~08Z 08-29; ≈$55–75 |
+| **#503** E-051 roll (398k K=144 head, day-matched, replay battery, FIRST roll with E-055's unpooled keys) | does the best pentad one-step ever survive a 12-month roll? | vs monthly _trainlon 0.939/0.939 and pentad K=24's −0.499; replay battery mandatory before quoting | **RUNNING since 23:52Z** on gpu-box-38116559; K=144 roll cost unmeasured (K=24 took ~13 h) — hand-harvest registered if >24 h |
 | **#485** E-050 warm-start FSQ | does a trained encoder survive quantization where every cold start collapsed? | decoder-ceiling audit (Falsifier B): fast channels inside the 9–19% FVU band on Argo-free bins | **finals ARCHIVED** (run-485.jsonl + probes-485.json on ml-metrics) — read-out pending its own session's harvest |
 | **E-052.1** det field head (diffusion session's run) | can one model predict the whole field jointly? | died at its first ckpt save (torch-less train venv); **RELAUNCHED 05:44Z by its session, resumes from step 1000**, holds the on-demand v5litepod-4 | its session harvests; finish ≈04Z 08-28 if pace holds |
 
@@ -142,6 +138,7 @@ attendability, never information beyond the pixels.
 | E-053.1-A4 | is it the SPACING or the sparse K that loses to the dense slab? | **0.14116 — spacing is irrelevant** (#489, 17Z 08-27): uniform ≈ log ≈ decade-pins (0.141/0.156/0.140) at K 24–32, all 1.7–1.9× short of dense K=144's 0.0820. **Wave verdict: frames, not placement, are the binding resource** — the span effect is distributed, sparse skeletons recover 55–65%, and the cheap road to span is more frames cheaper (E-056's case). E-053.2 point-cloud build demoted to the field-head unification (n=1, all arms) |
 | E-047 | fusion vs selection (month-block codec) | Tier-1: Argo-anchor collapse cured at a 9–19% everywhere-cost; **stage 2: fusion LOSES, 0.2127 vs 0.0721** (#483, 08-26) — block-decode roll not dispatched |
 | E-051 | span at full budget | **one-step 0.0330** vs the 20k twin's 0.0820 — budget pays 2.5× at K=144, best pentad one-step ever; roll decision pending (its own session) |
+| E-054a | does doubling the training budget (200k→400k, re-armed LR) keep paying at K=144? | **0.02981 @400k** (from 0.0330) — still falling, decelerating: steps pay with diminishing returns, capacity is the indicated axis (E-054b launched). Artefact note: durable final is 398k (no post-loop save) |
 
 ### The quantization road (E-046, E-048, E-049, E-050)
 

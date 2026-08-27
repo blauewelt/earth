@@ -726,6 +726,40 @@ supersedes it as the roll target — but the rule for every future
 continue-in-place is: COPY the finals to a versioned name BEFORE the first
 resume ship).
 
+**E-054a VERDICT, 2026-08-27 23:50Z — 400k one-step ratio 0.02981: THE
+BUDGET IS STILL PAYING, WITH DIMINISHING RETURNS — E-054b CONFIRMED.**
+Final metrics (bucket, 169 records): step 400,000, val_zmse 0.63926 /
+monitor persistence 21.44621 ⇒ **0.029808**, vs 0.0330@200k (−9.7% over
+the doubled budget; trajectory 0.0330 → 0.0312@320k → 0.0300@388k →
+0.0298@400k, decelerating). Against the two-sided registration: between
+the poles, unambiguous in direction — more steps kept buying, at a rate
+that says steps alone are no longer the cheap axis. The capacity rung is
+the indicated move, and E-054b (launched 23:47Z on the freed us-west1-c
+spot quota, node `e054b-400m`, first try) is its test. Schedule confound
+carried from registration: "more steps" and "fresh LR" remain
+unattributed. **Artefact lesson (§0.15, recorded the honest way): the
+durable final is step 398,000, not 400,000** — tpu_train_s2's trainer
+saves at CKPT_EVERY multiples DURING the loop and has NO post-loop final
+save, so the exact-400k state existed only in device memory and died
+with the node; the 55-min-idle node was manually deleted after the
+shipper confirmed no further objects (self-reap had not fired — the
+script sat in its ship loop after the trainer exited; a second launcher
+gap to fix alongside the missing final save). The published roll target
+is honestly named `head-weights-e051-398k-xl144zn-pentad-s0.pt`
+(model-checkpoints-v1, 826.7 MB, opened and verified: step 398000,
+K 144, 1024×16, seed 0, znoise 0.7); Δval between 398k and 400k is
+~0.0001 in z-mse — immaterial for the roll, named anyway. Spot cost of
+the whole continuation ≈ $23–27 incl. the idle tail.
+
+**THE ROLL IS DISPATCHED: #503 (E-051-roll — 365-day day-matched roll of
+the 398k K=144 head, 3 starts/holdout year, dumproll, long/future rolls
+for the replay battery, UNPOOLED transport keys default-ON — the first
+roll ever to write E-055's new keys)** on the reserved fresh box
+gpu-box-38116559, 23:52Z. K=144 roll cost unmeasured (#433's K=24 took
+~13 h); >24 h token expiry ⇒ hand-harvest registered, §5.25 partials
+ship as it goes. Controls: monthly _trainlon 0.939/0.939, pentad-K24
+−0.499.
+
 **THE E-051/E-054a ROLL (the decisive reading, next after E-054a lands):**
 roll the **400k final** through `rollout_spatial` at pentad — the 12-month
 day-matched corridor AUC on the trained-longitude corridor scope, against
