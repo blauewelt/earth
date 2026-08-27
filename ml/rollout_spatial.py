@@ -1346,6 +1346,27 @@ def main():
                     help="the same, past the end of the record; 0 skips it")
     ap.add_argument("--no-gate", action="store_true",
                     help="score without the e017_u1_s0 gate — smoke/toy ONLY")
+    ap.add_argument("--unpooled-readout", action="store_true",
+                    help="ALSO read transport off the rolled section WITHOUT "
+                         "pooling it (E-055): a learned softmax attention over "
+                         "the section's pixels, fitted on the TRAIN months of "
+                         "the RAPID truth only, written to NEW keys "
+                         "(`amoc_bands_unpooled`, `sv_des_unpooled`, "
+                         "`probe_unpooled`) beside the pooled ones. `read_sv` "
+                         "(:1811), GATE_REF, GATE_TOL and every existing key "
+                         "are untouched either way — three of the four gate "
+                         "criteria come through the pooled path and a moved "
+                         "number there makes every eval wave exit before it "
+                         "scores anything (ml/CLAUDE.md §3 exception 1). "
+                         "OFF BY DEFAULT, and that default is load-bearing: "
+                         "tests/test_roll_monthly_identity.py demands a "
+                         "MONTHLY roll.json be byte-identical to the "
+                         "archive's, which a new key would break. Turn it on "
+                         "deliberately, per roll.")
+    ap.add_argument("--unpooled-seed", type=int, default=0,
+                    help="seed for the unpooled read-out's fit; recorded in "
+                         "`probe_unpooled.seed` so the weights behind a "
+                         "series can be reproduced from the artefact alone")
     ap.add_argument("--amp", action="store_true",
                     help="fp16 autocast for the roll/decode forwards — the "
                          "gate decides whether the numbers survive it")
@@ -1812,6 +1833,94 @@ def main():
         fr = zhat[sec_t].mean(0).cpu().numpy()
         return float(np.dot(np.r_[(fr - mu_p) / sd_p, 1.0], w_probe))
 
+    # ---- E-055: the SAME rolled states, read WITHOUT pooling the section ---
+    # `read_sv` above is exception 1 of ml/CLAUDE.md §3 and does not move: the
+    # e017_u1_s0 gate's three band criteria are computed from it against a
+    # hardcoded GATE_REF at GATE_TOL 0.0101, so a changed transport read-out
+    # ends every eval wave in `sys.exit("VALIDATION GATE FAILED")` before it
+    # scores anything. The follow-up §8.1 asks for is an ADDITIONAL function
+    # writing NEW keys, which is this one.
+    #
+    # Its weights are FITTED, and what they are fitted on is the whole
+    # question. `tr_all` is `~t_hold[ridx]` — the RAPID months outside the
+    # held-out years, the identical mask the pooled ridge above is fitted on.
+    # No held-out year, and no rolled state, enters the fit: the head sees only
+    # TRUE section latents from train months, exactly as `fit_ridge` does, so
+    # the two read-outs differ in their pooling and in nothing else. The fit
+    # window travels with the output (`results["probe_unpooled"]`) so a reader
+    # of the artefact alone can say what was fitted on what.
+    read_sv_unpooled = None
+    unpooled_meta = None
+    if a.unpooled_readout:
+        try:
+            from temporal import (UNPOOLED_HEAD_DIM, UNPOOLED_STEPS,
+                                  attn_pool_predict, fit_attn_pool,
+                                  lon_fraction, section_tokens,
+                                  unpooled_device)
+            _sec_ix = np.asarray(sec_sel)
+            _lonf = lon_fraction(lons[xs[_sec_ix]])
+            _tok_true = section_tokens(Zsec, _lonf)          # [T, S, dz+2]
+            _tr_rows = ridx[tr_all]
+            _mu_u = float(rv_des[tr_all].mean())
+            _sd_u = float(rv_des[tr_all].std() + 1e-9)
+            _udev = unpooled_device()
+            _t_u0 = time.time()
+            _net_u, _val_mse = fit_attn_pool(
+                _tok_true[_tr_rows], (rv_des[tr_all] - _mu_u) / _sd_u,
+                seed=a.unpooled_seed, device=_udev)
+            # in-sample-on-train r, reported as such: it is a "did the fit
+            # take" reading, NOT a skill number, and every skill number this
+            # read-out produces is scored on rolled states below.
+            _p_tr = attn_pool_predict(_net_u, _tok_true[_tr_rows],
+                                      _udev) * _sd_u + _mu_u
+            _r_tr = corr_or_none(_p_tr, rv_des[tr_all])
+
+            def read_sv_unpooled(zhat):
+                tok = section_tokens(
+                    zhat[sec_t].detach().to(torch.float32).cpu().numpy()[None],
+                    _lonf)
+                return float(attn_pool_predict(_net_u, tok, _udev)[0]
+                             * _sd_u + _mu_u)
+
+            unpooled_meta = {
+                "readout": "learned softmax attention over the section's "
+                           "pixels (probe_head.SectionHead), in place of "
+                           "`read_sv`'s `zhat[sec].mean(0)`",
+                "head": "probe_head.SectionHead", "d": UNPOOLED_HEAD_DIM,
+                "steps_max": UNPOOLED_STEPS, "seed": int(a.unpooled_seed),
+                "device": _udev.type,
+                "section_pixels": int(len(_sec_ix)),
+                "fit_on": "TRAIN months of the RAPID truth only "
+                          "(~t_hold[rapid rows]); no held-out year and no "
+                          "rolled state enters the fit",
+                "fit_rows": int(tr_all.sum()),
+                "fit_first": ax.label_of_row(int(_tr_rows.min())),
+                "fit_last": ax.label_of_row(int(_tr_rows.max())),
+                "fit_holdout_years_excluded": list(hold_years),
+                "target": "rv_des (train-month climatology removed, the same "
+                          "`deseason_truth` the pooled probe uses)",
+                "target_mu": round(_mu_u, 4), "target_sd": round(_sd_u, 4),
+                "inner_tail_mse": round(float(_val_mse), 5),
+                "fit_r_train_insample": _r_tr,
+                "fit_wall_s": round(time.time() - _t_u0, 1),
+                "note": ("ADDITIONAL read-out. `read_sv`, GATE_REF, GATE_TOL "
+                         "and every pooled key are unchanged; the gate is "
+                         "still decided by the pooled path. These keys have "
+                         "no reference of their own yet and are not gated."),
+            }
+            print(f"unpooled probe fit: {int(tr_all.sum())} train labels "
+                  f"({unpooled_meta['fit_first']}..{unpooled_meta['fit_last']}"
+                  f"), in-sample r {_r_tr}, {_udev.type}, "
+                  f"{unpooled_meta['fit_wall_s']}s", flush=True)
+        except Exception as _e:                               # noqa: BLE001
+            # Never fatal and never a NaN: the keys are simply absent, which a
+            # reader cannot mistake for a measurement (ml/CLAUDE.md §5.22).
+            read_sv_unpooled = None
+            unpooled_meta = None
+            print(f"::warning::unpooled read-out unavailable "
+                  f"({type(_e).__name__}: {_e}) — the pooled read-out and the "
+                  f"gate are unaffected", flush=True)
+
     def zwin_from_true(s_end, K):
         arr = np.asarray(Zm[s_end - K + 1: s_end + 1])         # [K,P,dz] f16
         return (torch.from_numpy(np.ascontiguousarray(
@@ -1857,6 +1966,13 @@ def main():
                "probe": {"val_tail_r": round(float(probe_val_r), 3)},
                "gate": {"pass": None, "skipped": True},   # overwritten below
                "heads": {}}
+    # E-055: the unpooled read-out's PROVENANCE, once, at the top of the file
+    # rather than repeated per head — what was fitted, on which months, at
+    # which seed. Written ONLY when --unpooled-readout asked for it, so a
+    # default monthly artefact gains nothing (see the flag's help, and
+    # tests/test_roll_monthly_identity.py).
+    if unpooled_meta is not None:
+        results["probe_unpooled"] = unpooled_meta
     # ALMOST NOTHING IS ADDED TO A MONTHLY ARTEFACT. Every published corridor
     # AUC was written by this code on the monthly axis, and a roll json that
     # gains a key is a roll json that no longer diffs byte-for-byte against
@@ -2150,6 +2266,12 @@ def main():
         aud = {"ch_m": np.zeros((Hh + 1, C)), "ch_c": np.zeros((Hh + 1, C)),
                "px_m": np.zeros(P), "px_c": np.zeros(P)}
         probe_pts = {h: [] for h in range(1, Hh + 1)}
+        # E-055: the unpooled read-out's points, in a SEPARATE dict rather
+        # than a fourth element of `probe_pts`'s tuples — the band loop below
+        # unpacks those as `(s_, pr, y)` and the gate reads what that loop
+        # writes, so widening the tuple would put the gate's own input through
+        # an edit. Empty and never read when the flag is off.
+        probe_pts_u = {h: [] for h in range(1, Hh + 1)}
         # THE GATE HEAD IS NEVER DUMPED (see RollDump): it is the run's
         # certificate, it is re-rolled in every eval wave, and nobody
         # animates it.
@@ -2243,6 +2365,10 @@ def main():
                         if t_tgt in r_of_row:
                             probe_pts[h].append(
                                 (s, read_sv(zhat), rv_des[r_of_row[t_tgt]]))
+                            if read_sv_unpooled is not None:
+                                probe_pts_u[h].append(
+                                    (s, read_sv_unpooled(zhat),
+                                     rv_des[r_of_row[t_tgt]]))
                     print(f"  {label} start {start_m}: rolled", flush=True)
                     if traj is not None:
                         dump.write(label, os.path.basename(hp),
@@ -2310,6 +2436,37 @@ def main():
                                    "its %d points; omitted rather than "
                                    "written as NaN (ml/CLAUDE.md §5.22)"
                                    % len(pts))})
+        # E-055: THE SAME BANDS, THE SAME POINTS, THE UNPOOLED READ-OUT.
+        # Identical arithmetic to the block above — same `bands`, same key
+        # rule, same >=8-point floor, same refusal to write a NaN — over
+        # `probe_pts_u`, whose entries were produced from the SAME `zhat` at
+        # the SAME (start, h) as `probe_pts`'. So `amoc_bands_unpooled[k]` and
+        # `amoc_bands[k]` are a PAIRED pair: same rolled states, same targets,
+        # differing only in whether the section was averaged before the
+        # read-out. The gate above still reads `amoc_bands` and only that.
+        if read_sv_unpooled is not None:
+            entry["amoc_bands_unpooled"] = {}
+            for bn, hs in bands:
+                key = ax.band_key(bn, hs)
+                pts = [(h, s_, pr, y) for h in hs if h <= Hh
+                       for (s_, pr, y) in probe_pts_u.get(h, [])]
+                if len(pts) >= 8:
+                    pr = np.array([p[2] for p in pts])
+                    tv = np.array([p[3] for p in pts])
+                    r_ = corr_or_none(pr, tv)
+                    entry["amoc_bands_unpooled"][key] = (
+                        {"r": r_, "n": len(pts)} if r_ is not None else
+                        {"n": len(pts),
+                         "undefined": ("r is not defined for this band — one "
+                                       "of the two series has zero variance "
+                                       "over its %d points; omitted rather "
+                                       "than written as NaN (ml/CLAUDE.md "
+                                       "§5.22)" % len(pts))})
+            print(f"  {label} amoc UNPOOLED: " + " ".join(
+                (f"{bn} {v['r']:+.3f}(n={v['n']})" if v.get("r") is not None
+                 else f"{bn} UNDEFINED(n={v['n']})")
+                for bn, v in entry["amoc_bands_unpooled"].items())
+                + "   [not gated — see results.probe_unpooled]", flush=True)
         if not ax.monthly:
             entry["amoc_bands_def"] = {
                 ax.band_key(bn, hs): {
@@ -2370,7 +2527,7 @@ def main():
               flush=True)
 
         # ---- long hindcast + future roll (median trajectory only) --------
-        def long_roll(s_end, n_steps, phase="long"):
+        def long_roll(s_end, n_steps, phase="long", sv_u_out=None):
             """Roll `n_steps` AXIS STEPS past row `s_end`.
 
             The old body advanced a calendar month and a month-of-year token
@@ -2380,6 +2537,13 @@ def main():
             corrupted INPUT, not merely a mislabelled output. Both now come
             from the ROW: one step is one row, and the season token is that
             row's true month.
+
+            E-055: `sv_u_out`, when handed a list, receives the UNPOOLED
+            transport of the same `zhat` at every step. It is an
+            out-parameter rather than a third return value because both call
+            sites unpack `sv, roll_rows` and one of them feeds
+            `entry["long"]` — the block the archive reads. Default None, so
+            with the flag off the roll is the roll it was.
             """
             Zwin = zwin_from_true(s_end, K)
             cur = list(range(s_end - K + 1, s_end + 1))
@@ -2394,6 +2558,8 @@ def main():
                     cur = cur[1:] + [r_next]
                     prog.step(phase)
                     sv.append(read_sv(zhat))
+                    if sv_u_out is not None:
+                        sv_u_out.append(read_sv_unpooled(zhat))
                     roll_rows.append(r_next)
             return np.array(sv), roll_rows
 
@@ -2407,7 +2573,8 @@ def main():
             `t_hold` on that row's RAPID index, the lowpass is the same
             `smooth`, and the dict is built key for key in the same order, so
             a single-start run is byte-identical to before the list existed."""
-            sv, roll_rows = long_roll(row, a.long_months)
+            sv_u = [] if read_sv_unpooled is not None else None
+            sv, roll_rows = long_roll(row, a.long_months, sv_u_out=sv_u)
             roll_ym = [ax.label_of_row(r) for r in roll_rows]
             truth = np.full(len(sv), np.nan)
             trained = np.zeros(len(sv), bool)
@@ -2437,6 +2604,13 @@ def main():
                    "r_trained": r_tr, "n_trained": n_tr,
                    "r_heldout": r_ho, "n_heldout": n_ho,
                    "r_lp18": r_lp, "amp_lp18": amp_lp}
+            # E-055: the unpooled series of the SAME roll, on the same rows,
+            # appended AFTER every archived key so the block reads as it did
+            # with one key more. Only the series — r_trained/r_heldout/lp18
+            # stay the pooled read-out's, because those are the numbers the
+            # archive quotes and nothing here may reinterpret them.
+            if sv_u is not None:
+                blk["sv_des_unpooled"] = [round(float(v), 3) for v in sv_u]
             print(f"  {label} long({spec}+{a.long_months}m): "
                   f"r_trained {r_tr} (n={n_tr}) · r_heldout {r_ho} "
                   f"(n={n_ho}) · lp18 r {r_lp} amp {amp_lp}", flush=True)
@@ -2481,11 +2655,16 @@ def main():
                   f"(partial, stage=long)", flush=True)
 
         if a.future_months > 0:
-            sv, roll_rows = long_roll(T - 1, a.future_months, "future")
+            sv_u = [] if read_sv_unpooled is not None else None
+            sv, roll_rows = long_roll(T - 1, a.future_months, "future",
+                                      sv_u_out=sv_u)
             roll_ym = [ax.label_of_row(r) for r in roll_rows]
             entry["future"] = {"context_end": ax.label_of_row(T - 1),
                                "roll_ym": roll_ym,
                                "sv_des": [round(v, 3) for v in sv.tolist()]}
+            if sv_u is not None:                              # E-055
+                entry["future"]["sv_des_unpooled"] = [
+                    round(float(v), 3) for v in sv_u]
             write_results(a.out, results,
                           partial=mark("future", label, head_i))
             print(f"  {label} future → {a.out} (partial, stage=future)",

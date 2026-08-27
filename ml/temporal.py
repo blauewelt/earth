@@ -467,6 +467,222 @@ def rapid_section(lats, lons, ys, xs):
     return section_of(lats, lons, ys, xs, 26.5, RAPID_LON[0], RAPID_LON[1])
 
 
+# ---------------------------------------------------------------------------
+# E-055 · THE UNPOOLED TRANSPORT READ-OUT
+#
+# Every stage-2 transport number this programme has published came through
+# `hid[:, -1].mean(0)` — a spatial mean over the 26.5N section — and geostrophic
+# transport IS the east-minus-west contrast across that section, which a mean
+# annihilates (ml/CLAUDE.md 3; ml/project_amoc.py measures z along the section
+# at r 0.99 one cell apart and 0.35 eighty cells apart, i.e. ~2.5 effective
+# independent pixels of 265). ml/probe_head.py's SectionHead is the proven
+# mechanism for reading the section without pooling it; these helpers port it
+# to the stage-2 hidden states and to ml/rollout_spatial.py's rolled latents,
+# so ONE definition of "unpooled section read-out" serves both.
+#
+# Three properties this code must keep, because everything around it depends
+# on them:
+#
+#  1. IT IS ADDITIVE. Nothing here writes, renames or reorders a pooled key.
+#     98 archived stage-2 runs read `rapid_r_kfold`; the eval gate reads
+#     `amoc_bands` against a hardcoded GATE_REF at GATE_TOL 0.0101.
+#  2. IT DOES NOT MOVE THE GLOBAL RNG. Fitting a head draws from torch's
+#     global generator (init + dropout). A pooled number computed after it
+#     would then depend on whether this ran — which is exactly the kind of
+#     silent drift that makes an archive incomparable. `_keep_rng` saves and
+#     restores CPU, CUDA and numpy legacy state around every public entry
+#     point, the way probe_head._usable_device does around its self-test.
+#  3. IT IS A FUNCTION OF THE DATA AND THE SEED ONLY. Per-fold seeds are
+#     derived from the run seed by index, and the batch draw uses its own
+#     Generator, so two invocations at one seed are bit-identical.
+#
+# The head import is LAZY: probe_head imports this module at load time, so a
+# module-level `from probe_head import SectionHead` would be a cycle. At the
+# point of use temporal is fully initialised (the same argument the
+# `from probe_kfold import kfold_r` in main() rests on).
+# ---------------------------------------------------------------------------
+
+UNPOOLED_STEPS = 800        # hard cap on optimiser steps per fit
+UNPOOLED_PATIENCE = 6       # inner-tail evals (every 50 steps) without gain
+UNPOOLED_EVERY = 50
+UNPOOLED_HEAD_DIM = 64      # probe_head's original ~23k head
+
+
+class _keep_rng:
+    """Save and restore every global RNG this fit touches (see property 2)."""
+
+    def __enter__(self):
+        self._t = torch.get_rng_state()
+        self._c = (torch.cuda.get_rng_state_all()
+                   if torch.cuda.is_available() else None)
+        self._n = np.random.get_state()
+        return self
+
+    def __exit__(self, *exc):
+        torch.set_rng_state(self._t)
+        if self._c is not None:
+            torch.cuda.set_rng_state_all(self._c)
+        np.random.set_state(self._n)
+        return False
+
+
+def lon_fraction(sec_lons):
+    """Section pixels' east-west position in [0, 1] — probe_head:508 verbatim.
+
+    This is the ONE feature that makes 'east' and 'west' distinguishable to a
+    permutation-invariant attention pool. Without it the head could learn a
+    weighting but not which end of the section it was weighting."""
+    v = np.asarray(sec_lons, dtype=np.float64)
+    return ((v - v.min()) / max(1e-6, np.ptp(v))).astype(np.float32)
+
+
+def section_tokens(Zsec, lon_frac):
+    """[n, P, d] per-pixel section states -> [n, P, d+2] attention tokens.
+
+    Layout is probe_head's exactly (features, lon position, month offset), so
+    the two read-outs are the same estimator on different features rather than
+    two similar-looking ones. The month-offset column is 0.0 because both call
+    sites hand over one time step per sample (probe_head's K=1 case)."""
+    Z = np.asarray(Zsec, dtype=np.float32)
+    if Z.ndim != 3:
+        raise ValueError(f"section states must be [n, P, d], got {Z.shape}")
+    n, P, dd = Z.shape
+    lf = np.asarray(lon_frac, dtype=np.float32)
+    if lf.shape != (P,):
+        raise ValueError(f"lon_frac {lf.shape} does not match {P} section px")
+    tok = np.zeros((n, P, dd + 2), dtype=np.float32)
+    tok[..., :dd] = Z
+    tok[..., dd] = lf[None, :]
+    return tok
+
+
+def unpooled_device(pref=None):
+    """Where the read-out may TRAIN, decided by a real forward+backward.
+
+    Delegates to probe_head._usable_device, which exists because run #397
+    burned two 13-minute embedding passes discovering that the
+    cross-attention BACKWARD dispatches to a Triton-JIT kernel and that box
+    had no C compiler. Any failure means CPU: a slower read-out is a result,
+    a fallen-over one is not."""
+    from probe_head import _usable_device          # lazy: see the cycle note
+    if pref is None:
+        pref = "cuda" if torch.cuda.is_available() else "cpu"
+    return _usable_device(torch.device(pref) if not isinstance(
+        pref, torch.device) else pref)
+
+
+def fit_attn_pool(tok, y, seed=0, steps=UNPOOLED_STEPS,
+                  head_dim=UNPOOLED_HEAD_DIM, device=None,
+                  patience=UNPOOLED_PATIENCE, every=UNPOOLED_EVERY):
+    """Fit ONE SectionHead on `tok` (already restricted to fit rows) against a
+    standardized target. Returns (net in eval mode, best inner-tail MSE).
+
+    probe_head.fold_fit's protocol, with the step budget capped: AdamW
+    lr 1e-3 / weight-decay 1e-2, batch 32 drawn from a seeded Generator, the
+    last 20% of the rows held back as an inner tail, early stopping on it,
+    best state restored. It is a separate function rather than a call into
+    fold_fit because both call sites need the NET (rollout_spatial evaluates
+    it once per rolled step), and fold_fit returns predictions."""
+    from probe_head import SectionHead              # lazy: see the cycle note
+    with _keep_rng():
+        dev = torch.device(device or "cpu")
+        X = torch.as_tensor(np.asarray(tok, dtype=np.float32)).to(dev)
+        Y = torch.as_tensor(np.asarray(y, dtype=np.float32)).to(dev)
+        if len(X) < 2:
+            raise ValueError(f"attention pool needs >= 2 rows, got {len(X)}")
+        torch.manual_seed(int(seed))
+        net = SectionHead(X.shape[-1], d=head_dim).to(dev)
+        opt = torch.optim.AdamW(net.parameters(), lr=1e-3, weight_decay=1e-2)
+        g = torch.Generator().manual_seed(int(seed))
+        cut = max(1, int(0.8 * len(X)))
+        Xf, Yf = X[:cut], Y[:cut]
+        Xv, Yv = (X[cut:], Y[cut:]) if cut < len(X) else (Xf, Yf)
+        best, best_state, bad = np.inf, None, 0
+        for s in range(int(steps)):
+            k = torch.randint(0, len(Xf), (min(32, len(Xf)),), generator=g)
+            loss = (net(Xf[k]) - Yf[k]).pow(2).mean()
+            opt.zero_grad(); loss.backward(); opt.step()
+            if s % every == 0:
+                net.eval()
+                with torch.no_grad():
+                    v = float((net(Xv) - Yv).pow(2).mean())
+                net.train()
+                if v < best - 1e-6:
+                    best, bad = v, 0
+                    best_state = {n_: p_.detach().clone()
+                                  for n_, p_ in net.state_dict().items()}
+                else:
+                    bad += 1
+                    if bad >= patience:
+                        break
+        if best_state:
+            net.load_state_dict(best_state)
+        net.eval()
+        return net, float(best)
+
+
+def attn_pool_predict(net, tok, device=None):
+    """Out-of-sample predictions in the STANDARDIZED target space."""
+    dev = torch.device(device or "cpu")
+    with torch.no_grad():
+        X = torch.as_tensor(np.asarray(tok, dtype=np.float32)).to(dev)
+        return net(X).cpu().numpy().astype(np.float64)
+
+
+def attn_pool_kfold(tok, y, years, seed=0, steps=UNPOOLED_STEPS,
+                    head_dim=UNPOOLED_HEAD_DIM, device=None, boot=2000):
+    """probe_kfold.kfold_r's PROTOCOL with an attention pool as the read-out.
+
+    Same year-blocked folds, same train-only target standardization, same
+    block bootstrap over whole years for the CI — so the unpooled number sits
+    on the same footing as the pooled one it is written beside, and the two
+    differ only in whether the section was averaged away before the fit.
+
+    Returns a dict; `pred`/`target`/`years` ride along so
+    scripts/paired_probe.py can settle pooled-vs-unpooled with a PAIRED test
+    rather than two overlapping intervals (ml/CLAUDE.md 3, 8)."""
+    y = np.asarray(y, dtype=np.float64)
+    years = np.asarray(years)
+    tok = np.asarray(tok, dtype=np.float32)
+    pred = np.full(len(y), np.nan)
+    uy = np.unique(years)
+    with _keep_rng():
+        for i, yy in enumerate(uy):
+            te = years == yy
+            tr = ~te
+            if tr.sum() < 2 or not te.any():
+                continue
+            mu, sd = float(y[tr].mean()), float(y[tr].std() + 1e-9)
+            # PER-FOLD SEED DERIVED FROM THE RUN SEED BY FOLD INDEX. One seed
+            # for every fold would fit every fold from the same initialisation,
+            # which is defensible but hides a whole axis of the estimator's
+            # variance; `seed + i` is a fixed function of the run seed either
+            # way, which is what reproducibility needs.
+            net, _ = fit_attn_pool(tok[tr], (y[tr] - mu) / sd,
+                                   seed=int(seed) + i, steps=steps,
+                                   head_dim=head_dim, device=device)
+            pred[te] = attn_pool_predict(net, tok[te], device) * sd + mu
+        ok = np.isfinite(pred)
+        if ok.sum() < 8 or np.std(y[ok]) == 0:
+            raise ValueError(f"unpooled k-fold has only {int(ok.sum())} usable "
+                             f"out-of-fold months — refusing to report an r")
+        r = float(np.corrcoef(pred[ok], y[ok])[0, 1])
+        rmse = float(np.sqrt(np.mean((pred[ok] - y[ok]) ** 2)))
+        sigma = float(np.std(y[ok]))
+        rng = np.random.default_rng(int(seed))
+        rs = []
+        for _ in range(int(boot)):
+            pick = rng.choice(uy, len(uy), replace=True)
+            sel = np.concatenate([np.where(years == p_)[0] for p_ in pick])
+            if np.isfinite(pred[sel]).sum() > 8 and np.std(y[sel]) > 0:
+                rs.append(np.corrcoef(pred[sel], y[sel])[0, 1])
+        lo, hi = ((float(v) for v in np.percentile(rs, [2.5, 97.5]))
+                  if rs else (float("nan"), float("nan")))
+    return {"r": r, "lo": lo, "hi": hi, "n": int(ok.sum()), "rmse": rmse,
+            "sigma": sigma, "pred": pred, "target": y,
+            "years": np.asarray(years), "folds": int(len(uy))}
+
+
 RESERVE_BYTES = 3 << 30      # runner logs, checkpoints, pip, room to breathe
 RAM_HEADROOM_BYTES = 8 << 30  # the tensor and mask are already resident
 
@@ -3066,6 +3282,30 @@ def main():
             # the light transport probe, ten times per run: hidden(-1)
             # pooled over the section, 36-month-split ridge — the NOISY
             # instrument, quoted for its TREND only
+            #
+            # E-055 DELIBERATELY DID NOT ADD AN UNPOOLED PARTNER HERE. The
+            # k-fold site at the end of the run got one; this one did not, for
+            # three reasons that are about this call site and not about the
+            # read-out:
+            #  · it runs INSIDE the training loop, and the attention pool is
+            #    fitted by gradient descent — an optimiser and a ~25k-parameter
+            #    graph on the same GPU as a live stage-2 training step, ten
+            #    times a run. #392 and #388 were OOM-killed by allocations
+            #    smaller than that gap; the failure mode here is losing the
+            #    RUN, not losing a number.
+            #  · the fit draws from the global RNG, and this loop's window
+            #    draw is downstream of it. `_keep_rng` restores CPU/CUDA state,
+            #    but restoring state the training loop is concurrently
+            #    consuming is a much stronger claim than restoring it around a
+            #    read-out that runs after training has stopped, and a wrong
+            #    claim here changes the TRAINING RUN, not a probe.
+            #  · the number would be the 36-month single split, which this
+            #    programme already refuses to treat as a verdict — the
+            #    unpooled ruling is about what is QUOTED, and nothing quotes
+            #    this key except as a trend line.
+            # `rapid_r_deseas_unpooled` in the final record is the unpooled
+            # partner for the single-split protocol; it is fitted once, after
+            # `model.eval()`, where none of the above applies.
             if _psec is not None and (s % probe_every == 0 or s == a.steps):
                 try:
                     with torch.no_grad():
@@ -3261,6 +3501,22 @@ def main():
     rapid = rapid_arr
     _, sec_after = rapid_section(lats, lons, ys, xs)   # ys/xs possibly subsampled
     sec_pix = torch.as_tensor(sec_after, dtype=torch.long)
+    # E-055: the UNPOOLED read-out needs hidden(-1) BEFORE the section mean.
+    # The same forward that fills `F` keeps the per-pixel states for the rows
+    # the RAPID probe actually scores (~240 of T, not all of T — at daily
+    # cadence the full [T, P, d_model] block is gigabytes and is 92% rows no
+    # probe ever reads). `F` itself is untouched: `hid[:, -1].mean(0)` below is
+    # the byte-for-byte pooled path 98 archived runs read.
+    _u_rows = sorted({int(t) for t in rapid[:, 0].astype(int)
+                      if CTX_BACK <= int(t) < T})
+    _u_pos = {t: i for i, t in enumerate(_u_rows)}
+    try:
+        FP = np.zeros((len(_u_rows), len(sec_after), a.d_model), np.float32)
+    except (MemoryError, ValueError) as _e:                   # noqa: BLE001
+        FP = None
+        print(f"::warning::unpooled section states not collected "
+              f"({type(_e).__name__}: {_e}) — the pooled probe below is "
+              f"unaffected", flush=True)
     with torch.no_grad():
         F = np.zeros((T, a.d_model), dtype=np.float32)
         for t in range(CTX_BACK, T):
@@ -3272,6 +3528,8 @@ def main():
             _, hid = model(qz(zseq.to(TDEV)), mseq.to(TDEV),
                            static_ctx[sec_pix].to(TDEV))
             F[t] = hid[:, -1].mean(0).cpu().numpy()   # pool along the section
+            if FP is not None and t in _u_pos:        # E-055: the same states,
+                FP[_u_pos[t]] = hid[:, -1].cpu().numpy()      # unpooled
     ridx = rapid[:, 0].astype(int)
     rv_raw = rapid[:, 1].copy()
     rmoy = moy[ridx]
@@ -3344,6 +3602,99 @@ def main():
         print(f"::warning::head-level k-fold failed: {type(e).__name__}: {e}",
               flush=True)
 
+    # ---- eval 3c: THE SAME FORWARD, UNPOOLED (E-055) ----------------------
+    # ml/CLAUDE.md §3 / §8.3: the stage-2 transport read-out was the last
+    # pooled instrument still quoted as a verdict, and the one comparison
+    # "still mismatched by construction" — the sweep table's stage-2 column is
+    # labelled `legacy_pooled_stage2` because there was no unpooled
+    # counterpart to compare it against. This is that counterpart. It reads
+    # the SAME hidden states through probe_head's learned attention pool
+    # instead of a mean, on the SAME year-blocked folds, the SAME
+    # deseasonalised target and the SAME block bootstrap, so the only thing
+    # that differs between `rapid_r_kfold` and `rapid_r_kfold_unpooled` is
+    # whether the section was averaged away before the fit.
+    #
+    # NEW KEYS ONLY. `rapid_probe`, `rapid_probe_kfold` and every field in
+    # them are written above and are not touched here; 98 archived runs read
+    # them. The fit restores every global RNG it perturbs (temporal._keep_rng),
+    # so the checkpoint's `torch_rng` and anything else downstream is what it
+    # would have been had this block not run.
+    try:
+        if FP is None:
+            raise RuntimeError("per-pixel section states were not collected")
+        _u_ri = np.array([int(t) in _u_pos for t in ri])
+        if not _u_ri.all():
+            raise RuntimeError(f"{int((~_u_ri).sum())} scored RAPID rows have "
+                               f"no collected section state")
+        _tok = section_tokens(FP[[_u_pos[int(t)] for t in ri]],
+                              lon_fraction(lons[xs[sec_after]]))
+        _uy = np.array([int(months[i][:4]) for i in ri])
+        _udev = unpooled_device()
+        _t_u = time.time()
+        _kf = attn_pool_kfold(_tok, rv_des[ok], _uy, seed=a.seed,
+                              device=_udev)
+        # ...and the single 36-month split too, so `rapid_r_deseas` has an
+        # unpooled partner on ITS protocol as well as the k-fold having one.
+        # Same holdout mask, same target, same head — the noisy instrument
+        # measured with the read-out §3 trusts.
+        _tr_u, _te_u = ~t_hold[ri], t_hold[ri]
+        _r_des_u = None
+        if _tr_u.sum() >= 8 and _te_u.sum() >= 8:
+            _mu, _sd = float(rv_des[ok][_tr_u].mean()), \
+                float(rv_des[ok][_tr_u].std() + 1e-9)
+            _net, _ = fit_attn_pool(_tok[_tr_u],
+                                    (rv_des[ok][_tr_u] - _mu) / _sd,
+                                    seed=a.seed, device=_udev)
+            _p_u = attn_pool_predict(_net, _tok[_te_u], _udev) * _sd + _mu
+            if np.std(rv_des[ok][_te_u]) > 0:
+                _r_des_u = float(np.corrcoef(_p_u, rv_des[ok][_te_u])[0, 1])
+        results["rapid_probe_kfold_unpooled"] = {
+            "rapid_r_kfold_unpooled": round(_kf["r"], 3),
+            "rapid_r_kfold_unpooled_ci": [round(_kf["lo"], 3),
+                                          round(_kf["hi"], 3)],
+            "rapid_r_deseas_unpooled": (None if _r_des_u is None
+                                        else round(_r_des_u, 4)),
+            "n": _kf["n"], "folds": _kf["folds"],
+            "rmse_sv": round(_kf["rmse"], 2),
+            "sigma_sv": round(_kf["sigma"], 2),
+            "pooled": False,
+            "features": "hidden(-1) per section pixel, learned attention pool",
+            "readout": {"head": "probe_head.SectionHead", "d": UNPOOLED_HEAD_DIM,
+                        "steps_max": UNPOOLED_STEPS,
+                        "patience": UNPOOLED_PATIENCE,
+                        "seed_base": int(a.seed),
+                        "fold_seed": "seed + fold index (sorted unique years)",
+                        "device": _udev.type,
+                        "section_pixels": int(len(sec_after)),
+                        "wall_s": round(time.time() - _t_u, 1)},
+            # The out-of-fold arrays, for the same reason probe_head writes
+            # them: pooled-vs-unpooled is a PAIRED comparison over shared
+            # folds and months, and without these it can only ever be two
+            # overlapping intervals (ml/CLAUDE.md §3, §8).
+            "pred": [round(float(v), 4) for v in _kf["pred"]],
+            "target_sv": [round(float(v), 4) for v in _kf["target"]],
+            "years": [int(v) for v in _kf["years"]],
+            "note": ("UNPOOLED stage-2 transport read-out (E-055). Same "
+                     "hidden states, same year-blocked folds, same "
+                     "deseasonalised target and same block bootstrap as "
+                     "`rapid_probe_kfold` above — one learned softmax "
+                     "attention over the section's pixels in place of "
+                     "`hid[:, -1].mean(0)`. Compare the two with "
+                     "scripts/paired_probe.py, never as two intervals."),
+        }
+        print(f"  head k-fold RAPID UNPOOLED: {_kf['r']:.3f} "
+              f"[{_kf['lo']:.3f}, {_kf['hi']:.3f}] over {_kf['n']} months, "
+              f"{_kf['folds']} folds on {_udev.type} "
+              f"({time.time() - _t_u:.0f}s) — pooled was "
+              f"{results.get('rapid_probe_kfold', {}).get('r_kfold_deseas')}",
+              flush=True)
+    except Exception as e:                                    # noqa: BLE001
+        # Same posture as the pooled k-fold above: never fatal, never a NaN,
+        # the key simply absent. This one runs LAST, so a failure here cannot
+        # cost anything that was already computed.
+        print(f"::warning::unpooled stage-2 read-out failed: "
+              f"{type(e).__name__}: {e}", flush=True)
+
     print(json.dumps(results, indent=2))
     # The verdict, next to the curve, for the same reason.
     m2({"stage2_result": {
@@ -3361,6 +3712,17 @@ def main():
         # actually move with what stage 2 varies.
         "rapid_r_kfold": results.get("rapid_probe_kfold", {}).get("r_kfold_deseas"),
         "rapid_r_kfold_ci": results.get("rapid_probe_kfold", {}).get("ci95"),
+        # E-055: the UNPOOLED partners, BESIDE the pooled keys above and never
+        # instead of them — the pooled column bridges 98 archived runs and a
+        # dash is honest where a run predates this read-out (ml/CLAUDE.md §3).
+        # `.get` on a missing block yields None, which a reader cannot mistake
+        # for a measurement.
+        "rapid_r_kfold_unpooled": results.get(
+            "rapid_probe_kfold_unpooled", {}).get("rapid_r_kfold_unpooled"),
+        "rapid_r_kfold_unpooled_ci": results.get(
+            "rapid_probe_kfold_unpooled", {}).get("rapid_r_kfold_unpooled_ci"),
+        "rapid_r_deseas_unpooled": results.get(
+            "rapid_probe_kfold_unpooled", {}).get("rapid_r_deseas_unpooled"),
         # Direct-horizon downstream numbers ride along (2026-08-11) so the
         # status page can show them without a second fetch: per-horizon
         # model/persistence z-MSE ratios, lower is better.

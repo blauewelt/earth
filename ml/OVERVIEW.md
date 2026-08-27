@@ -1,9 +1,9 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-27 ~10:00 UTC** (E-053 session: E-054a — the E-051
-continuation to 400k, Chris's direction — dispatching on TPU spot;
-E-052.1 relaunched by its session 05:44Z and holds the on-demand quota;
-A3 mid-train ~14k, A4 queued). *Every ML session updates this stamp and the sections it touches in
+**Last updated: 2026-08-27 ~12:10 UTC** (E-053/E-054 session: A3 harvested
+0.1400 — the decade is not empty; E-054a healthy through its registered
+warm-restart transient; E-055 (unpooled stage-2 transport read-out) built
+and tested; the E-051-final roll planned for after E-054a lands). *Every ML session updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
 "in flight" section and check the
@@ -110,6 +110,7 @@ attendability, never information beyond the pixels.
 | E-053.0 | is there an advective cone in the z field? | NO at the argmax instrument (ridge lag 0 to 2,500 km) — ball form wins; analog bump measured (0.143 @1 y vs 0.100 @180 d deseas.) |
 | E-053.1-A1 | is span's value the seasonal analog? | **0.1858 — between the registered thresholds** (≲0.12 / ≳0.3): pins buy 2.7× over uniform K=24 at the same frame budget, ~55% of the span effect (n=1) |
 | E-053.1-A2 | does log spacing match the dense slab at 1/6 the frames? | **0.1561 — no**: 65% of the span effect, still 1.9× short of K=144's 0.0820. With A1: the effect is distributed across the slab; sparse skeletons don't find it. A4 isolates spacing (n=1) |
+| E-053.1-A3 | does context beyond 2 years carry information — the first 10-y span ever? | **0.1400 — the decade is NOT empty**: +10.3% over A2 at the same construction (frames confounded with span; A4 calibrates). Best sparse arm; does not beat the dense 2-y slab's 0.0820 (n=1) |
 | E-047 | fusion vs selection (month-block codec) | Tier-1: Argo-anchor collapse cured at a 9–19% everywhere-cost; **stage 2: fusion LOSES, 0.2127 vs 0.0721** (#483, 08-26) — block-decode roll not dispatched |
 | E-051 | span at full budget | **one-step 0.0330** vs the 20k twin's 0.0820 — budget pays 2.5× at K=144, best pentad one-step ever; roll decision pending (its own session) |
 

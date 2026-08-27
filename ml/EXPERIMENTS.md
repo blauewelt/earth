@@ -112,6 +112,23 @@ exists.
 | #488 | **A3 decade-32** | 32 · 3,650 d | log ramp 0…−730 + pins at −1…−10 y | first >2-y span at any cadence; ratio < 0.0820 ⇒ span still paying (decadal territory); ≈0.082 ⇒ 2 y saturates |
 | #489 | **A4 uniform-24** | 24 · 690 d | uniform 0,−6,…,−138 (registered 05:50Z 08-27, after A1+A2) | ≈0.15 ⇒ spacing irrelevant, slab density load-bearing; ≲0.10 ⇒ uniform beats log — spacing artefact in E-045's flatness |
 
+**11:45Z 08-27 — A3's VERDICT: 0.1400 — THE FIRST EVIDENCE THAT CONTEXT
+BEYOND TWO YEARS CARRIES INFORMATION.** #488 (A3 decade-32, span 3,650 d)
+final: z 2.9761 / 21.2544 ⇒ **one-step ratio 0.14002** (offsets echoed,
+integer-year pins −365…−730 present; kfold 0.654 [0.599, 0.703],
+indistinguishable from A1/A2's). Against the registered two-sided reading
+(< 0.0820 ⇒ decadal territory at any price; ≈0.082 ⇒ 2 y saturates): 0.140
+does NOT beat the dense 2-y slab — but within the sparse family, at the
+same log-ramp-plus-pins construction, extending the span 2 y → 10 y with
+eight extra frames improves the one-step **10.3%** over A2 (0.1561 →
+0.1400), making A3 the best sparse arm of the wave. Registered caveat on
+the comparison: A3 has more frames (32 vs 24) AND more span — the two are
+confounded within this pair; A4 (uniform-24, running next) calibrates the
+frame-count axis. Direction (n=1): the decade is not empty — years 2–10
+carry real one-step information, which is the first positive result at any
+span beyond 730 d in the programme and the motivation to fold long-span
+pins into the next full-budget design rather than treat 2 y as a ceiling.
+
 Cost ≈ $1.1–1.5/arm (measured 0.264 s/step × 20k ≈ 97 min stage-2 + probe
 tail), job_timeout 600 min each (the E-045 HK lesson). A3's pool shrinks by
 construction (t ≥ 730: ~77% of anchors remain) — printed count checked at
@@ -183,6 +200,38 @@ behind #488 (A3); ~$1.5.
 
 ---
 
+<a id="e-055"></a>
+## E-055 · The unpooled stage-2 transport read-out — BUILD STARTED 2026-08-27 (Chris: "let's take 4 first")
+
+TL;DR — geostrophic transport at 26.5°N is the east-minus-west contrast
+across the section, and a spatial mean annihilates exactly that contrast;
+the 2026-08-21 standing rule ("unpooled is the verdict, everywhere")
+converted every codec-side probe, but the STAGE-2 transport read-out —
+`hid[:, -1].mean(0)` at ml/temporal.py:2349 and :2181 — was deliberately
+deferred (§3/§8: no unpooled counterpart existed, 98 archived runs read the
+pooled key, and the roll evaluator's pooled `read_sv` feeds the frozen
+gate's pinned reference). This experiment is that deferred change, done as
+its own experiment, never silently.
+
+**E-055 · add learned-pool (probe_head-mechanism) transport read-outs as
+NEW KEYS beside the pooled legacy ones · params: a tiny attention-pool head
+(probe-scale, not a model change) · stage: instrumentation · touches
+ml/temporal.py (probe tail: `rapid_r_kfold_unpooled`,
+`rapid_r_deseas_unpooled` beside the old keys) and ml/rollout_spatial.py
+(an ADDITIONAL `read_sv_unpooled` writing `amoc_bands_unpooled` +
+unpooled sv series beside `amoc_bands` — `read_sv`, `GATE_REF`, the
+collapse guard and the JAX certificate are UNTOUCHED, per §3's three
+exceptions) · no new workflow inputs (the 25-input ceiling) · tests: the
+archived-roll identity test must still pass bit-identically, new keys
+finite + seed-reproducible on a fixture.** Registered readings: the paired
+pooled-vs-unpooled contrast on the SAME predicted states is the number
+(§8's never-run paired test, now on stage-2); expectation from the codec
+side is a +0.03-class probe gain, and §3b prices probe noise at 0.036–0.245
+— so the contrast is read paired, never as two levels. Implementation by
+an Opus subagent to this spec; verified by the session before commit.
+
+---
+
 <a id="e-054"></a>
 ## E-054 · Budget and capacity at the pentad frontier — E-054a (continue E-051) DISPATCHED 2026-08-27 ~10:0xZ at Chris's direction ("let's continue E-51")
 
@@ -219,6 +268,30 @@ fresh at ~400M (1280×20, K 144, 200k) — ≈32 h train, ≈$155 on-demand /
 ≈$55–75 spot; HBM fit at 1280 wide × K=144 unverified (E-051 fit 1024×16
 with ~2 GB headroom at chunk 256 — first-minutes OOM check mandatory).
 Waits on E-054a's reading per the two-sided registration above.
+
+**E-054a first-minutes verified + one loss recorded (11:45Z):** resume at
+step 200,000 confirmed from the shipped log; the warm-restart val transient
+arrived exactly as registered (0.03304 → 0.03471 @208k → 0.03409 @224k,
+recovering, lr ≈9e-5). **The loss: continuing IN PLACE overwrites the 200k
+finals** — by 224k the bucket's `temporal_e051.pt` already held the 224k
+state, so the exact artefact that measured 0.0330 no longer exists anywhere
+(§5.26 violated by this session's own design; impact small — the 400k final
+supersedes it as the roll target — but the rule for every future
+continue-in-place is: COPY the finals to a versioned name BEFORE the first
+resume ship).
+
+**THE E-051/E-054a ROLL (the decisive reading, next after E-054a lands):**
+roll the **400k final** through `rollout_spatial` at pentad — the 12-month
+day-matched corridor AUC on the trained-longitude corridor scope, against
+monthly's +0.939 and pentad K=24's −0.499 — WITH the E-043b-PHASE context-end
+battery (rolls from several different start years; a flat tracking-r-vs-lead
+profile or calendar-pinned future peaks = memorised replay, and the number
+is then reported as replay tracking, not skill). Head published to
+`model-checkpoints-v1` from the bucket final via the sandbox; sroll dispatch
+cloned from #433's shape (which proved the pentad roll path); `certified:
+false` at pentad by construction. ~13–20 h on the 4090, ≈$4–7. Where
+possible it reads transport through E-055's unpooled read-out (below) as
+NEW keys beside the pooled legacy ones.
 
 ---
 
