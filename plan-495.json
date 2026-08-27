@@ -1,0 +1,7 @@
+{
+ "exp": "E-056b",
+ "what": "stage-2 K=144 head over E-050 warm-FSQ d_z-6 tokens (re-dispatch of #491)",
+ "steps": 20000,
+ "eta_h": 13,
+ "published_at": "2026-08-27T17:45:17.866Z"
+}
