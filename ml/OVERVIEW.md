@@ -1,9 +1,9 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-27 ~05:55 UTC** (by the E-053 session, at Chris's
-check-in: A1 0.1858 and A2 0.1561 harvested; A4 registered + dispatched
-(#489); E-051's final 0.0330 entered; E-052.1 found stalled at step 960 —
-flagged, its own session owns it). *Every ML session updates this stamp and the sections it touches in
+**Last updated: 2026-08-27 ~10:00 UTC** (E-053 session: E-054a — the E-051
+continuation to 400k, Chris's direction — dispatching on TPU spot;
+E-052.1 relaunched by its session 05:44Z and holds the on-demand quota;
+A3 mid-train ~14k, A4 queued). *Every ML session updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
 "in flight" section and check the
@@ -33,8 +33,9 @@ attendability, never information beyond the pixels.
 |---|---|---|---|
 | **#488** E-053.1 A3 decade-32 (next on gpu-box-32966687, behind #487's probe tail) | does span keep paying beyond 2 y — the first 10-y context ever? | <0.0820 ⇒ decadal territory; ≈0.082 ⇒ 2 y saturates. Anchor pool shrinks ~23% by construction | result ~10Z 08-27 |
 | **#489** E-053.1 A4 uniform-24 (queued behind #488; registered 05:50Z after A1+A2) | is it the SPACING or the sparse K that loses to the dense slab? | ≈0.15 (A2-like) ⇒ spacing irrelevant, slab density load-bearing; ≲0.10 ⇒ uniform beats log — E-045's flatness partly a spacing artefact | result ~14–15Z 08-27 |
+| **E-054a** continue E-051 → 400k (this session, TPU **spot**, node `e051-k144-full`) | does the unsaturated budget curve keep paying past 200k (LR re-armed: 4e-4, halflife 100k)? | vs 0.0330: ≈0.026 (power-law extrapolation) ⇒ budget still paying, queue the ~400M capacity rung (E-054b); ≈0.033 flat ⇒ capacity is the open axis. Schedule confound registered | dispatched ~10Z 08-27; ~17 h un-preempted, spot ≈$30–41 |
 | **#485** E-050 warm-start FSQ | does a trained encoder survive quantization where every cold start collapsed? | decoder-ceiling audit (Falsifier B): fast channels inside the 9–19% FVU band on Argo-free bins | **finals ARCHIVED** (run-485.jsonl + probes-485.json on ml-metrics) — read-out pending its own session's harvest |
-| **E-052.1** det field head (diffusion session's run) | can one model predict the whole field jointly? | **⚠ STALLED — metrics stopped at step 960/24,000 (00:22Z 08-27, loss 14.6); mirror re-run 05:10Z confirms no progress; finals show only ckpt_latest.npz.** Needs its session's diagnosis + resume/redispatch — do not assume the ≈20:45Z finish | flagged 05:15Z; own session owns it |
+| **E-052.1** det field head (diffusion session's run) | can one model predict the whole field jointly? | died at its first ckpt save (torch-less train venv); **RELAUNCHED 05:44Z by its session, resumes from step 1000**, holds the on-demand v5litepod-4 | its session harvests; finish ≈04Z 08-28 if pace holds |
 
 ## 2 · Most promising next steps, ranked
 

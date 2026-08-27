@@ -183,6 +183,45 @@ behind #488 (A3); ~$1.5.
 
 ---
 
+<a id="e-054"></a>
+## E-054 · Budget and capacity at the pentad frontier — E-054a (continue E-051) DISPATCHED 2026-08-27 ~10:0xZ at Chris's direction ("let's continue E-51")
+
+TL;DR — E-051's val curve is a clean power law to 200k with no saturation
+(0.0812@20k → 0.0414@100k → 0.0330@200k, α≈0.33 in the last doubling) and
+its LR had decayed to 1/32 of peak — so the flattening is partly the
+schedule, and the cheapest test of "does budget keep paying" is to continue
+the run. Fig.~fig_pentad_budget in the paper is the picture.
+
+**E-054a · CONTINUE the full-budget K=144 pentad head from its own 200k
+checkpoint to 400k, with a re-armed LR (4e-4, halflife 100k ⇒ lr(200k)=1e-4
+≈3× the old terminal rate, lr(400k)=2.5e-5) · params 206.66M (unchanged) ·
+stage stage-2 · data family4_na025_pentad_r2 via the published Z · arch
+1024×16, K 144, stencil 145 ring spiral, znoise 0.7, grad-clip 128, seed 0 ·
+steps×batch: +200k × 256 (400k total) · resume
+runs/e051-k144-full/temporal_e051_jax.npz@200k (2.37 GB, WITH optimizer
+state — verified on the bucket before dispatch).** TPU v5litepod-4 **SPOT**
+(the on-demand quota is held by the relaunched E-052.1 node; preemption is
+covered by ckpt_every 2000 + 10-min shipping, resume-by-node-name).
+Registered two-sided reading at 400k, vs 0.0330: **≈0.026 (the power law's
+own extrapolation) ⇒ budget still paying at K=144 — queue the capacity rung
+(E-054b, ~400M) next; ≈0.033 flat ⇒ 200k was effectively converged and
+capacity, not steps, is the open axis.** Confound stated at registration:
+any continuation re-arms the schedule, so "more steps" and "fresh LR" are
+not separable here — a flat result convicts both at once, a falling result
+does not attribute between them. Expect a brief val REGRESSION just after
+202k (warm-restart transient) — a first-minutes check that panics on it is
+misreading the design. Cost ≈ 17 h wall un-preempted; spot ≈ $30–41 at the
+day's rate ($82 if it had gone on-demand). NO ROLL from the result without
+the E-043b-PHASE battery.
+
+**E-054b · the capacity rung (registered, NOT dispatched):** same recipe
+fresh at ~400M (1280×20, K 144, 200k) — ≈32 h train, ≈$155 on-demand /
+≈$55–75 spot; HBM fit at 1280 wide × K=144 unverified (E-051 fit 1024×16
+with ~2 GB headroom at chunk 256 — first-minutes OOM check mandatory).
+Waits on E-054a's reading per the two-sided registration above.
+
+---
+
 <a id="e-052"></a>
 ## E-052 · The field head: joint next-field prediction, deterministic then generative — BUILT AND CPU-VERIFIED 2026-08-25/26 overnight (no GPU arm dispatched)
 
