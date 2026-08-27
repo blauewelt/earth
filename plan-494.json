@@ -1,0 +1,7 @@
+{
+ "exp": "E-056a",
+ "what": "stage-2 K=24 head over E-050 warm-FSQ d_z-6 tokens (re-dispatch of #490: warm recipe fsq_warmstart refused on already-FSQ checkpoint)",
+ "steps": 20000,
+ "eta_h": 3.5,
+ "published_at": "2026-08-27T17:45:16.723Z"
+}
