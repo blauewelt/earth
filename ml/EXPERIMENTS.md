@@ -479,6 +479,27 @@ the stage-2 head first, then the full move."* Overfitting watch: 63 epochs of
 read; a rising val ratio with falling train loss ends the run early via the
 resume machinery, not by letting it ride.
 
+<a id="e-052-1b"></a>
+**(i) E-052.1b DISPATCHED 2026-08-27 ~12:30Z — the low-LR parallel arm
+(`e052-1b-lr1e4`, v5litepod-4, us-central1-a).** Chris, reading the live
+curve at step ~7k: *"The curve looks as if a smaller learning rate (from the
+start) would help. Would you mind trying a parallel run?"* The curve supports
+it: train loss is jagged rather than descending smoothly, grad_norm has RISEN
+under a decaying schedule (2.0 at step 240 → 5.0 at 6,720; the toy runs sat
+near 2 throughout), and the val ratio near-flatlined 0.580 → 0.578 across
+evals 2 and 3 — all consistent with a too-hot start for this optimisation
+surface (which is NOT the stencil head's: 3e-4 was inherited from that tier).
+**One knob moves: lr 3e-4 → 1e-4.** Same warmup 2,000, same halflife 4,800
+(the schedule keeps its shape), same seed 0, same 24,000 × batch 8, same
+geometry, same code (dc37494). Same falsifier and controls as (h) — whichever
+arm's VAL curve is better at matched step becomes E-052.1's reported number,
+and the loser is the LR ablation. Zone note: both us-west1-c slots are
+occupied (this experiment on-demand; the E-051 continuation on spot), so this
+arm uses us-central1-a's grant — yesterday's cross-zone 429s were the
+v5litepod-8 request bug, and GCP's own error text ("Limit: 4 in zone
+us-central1-a") is the evidence the grant exists. Cost: ≈$106 on-demand /
+≈$40 spot, ≈22 h.
+
 <a id="e-050"></a>
 ## E-050 · Warm-start quantization: the trained continuous codec, lattice switched on — #485 DISPATCHED 06:32Z 2026-08-26 (approved by Chris 2026-08-25 ~15:30Z, b3ee36a)
 
