@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-057"></a>
-## E-057 · FGN-mode stage-2: noise-conditioned stencil head trained with fair CRPS — E-057.0 BUILT + CPU-VERIFIED; **E-057.1 pair DISPATCHED 2026-08-27 ~17:5xZ (#492 seed 0 · #493 seed 1)**; cross-verified against DeepMind's open-source FGN (google-deepmind/weathernext)
+## E-057 · FGN-mode stage-2: noise-conditioned stencil head trained with fair CRPS — E-057.0 BUILT + CPU-VERIFIED; **E-057.1 pair IN FLIGHT (#496 seed 0 training · #499 seed 1 queued behind E-056)**; ensemble roll BUILT; cross-verified against DeepMind's open-source FGN (google-deepmind/weathernext)
 
 TL;DR — can the stencil head stop emitting the conditional mean (the blur
 that damps every roll toward climatology) and instead SAMPLE a member of the
@@ -217,6 +217,64 @@ finish, never trust a green archive step. (ii) The FGN-mode
 spirit but not in mechanism to the deterministic curves; the config record
 says so. (iii) Cost: ~2 × 30 h-class box-time, ≈$15–20 total at $0.24/h —
 recorded at dispatch per §3's cost rule.
+
+**(h2) The dispatch afternoon, as it actually went — four runs, two sick
+boxes, one queue-priority call.** All caught by first-minutes verification
+(§2), none by luck. **#492 (E-057.1a seed 0, first attempt)** died at the
+GPU check on `gpu-box-40623952` — "GPU present but no torch wheel can reach
+it", the dead-GPU-handle signature; the host then dropped offline. Re-issued
+as **#496 (E-057.1a seed 0, re-dispatch)** on the restarted
+`gpu-box-42005419`, which passed every check and is TRAINING (config
+therefore validated end-to-end). Meanwhile the E-056 session's #490/#491 had
+failed on their own and were re-dispatched as #494/#495 — which are
+BOX-LOCAL to `gpu-box-32966687` (run-485.pt) — while my #493 (seed 1) held
+that box for a 30 h run. **#493 was cancelled at ~1 h by this session to
+hand the box back**: two short gate runs that can run nowhere else outrank
+one long run that can run anywhere, and E-056 was queued first. #494 picked
+the box up (E-056 restored, #495 behind it). Seed 1 then took two more
+attempts: **#497** died before setup on `gpu-box-30257785`'s FULL DISK, and
+**#498** was a deliberate ~4-minute probe of the recovered
+`gpu-box-40623952`, which reproduced the identical GPU failure — the box is
+a lemon, not a transient. Both sick boxes are STOPPED (no idle burn;
+40623952 = Vast 48478310 is a destroy-candidate, 30257785 = Vast 47726876
+needs disk triage). **#499 (E-057.1b seed 1, fourth dispatch)** is queued on
+`gpu-box-32966687` behind #494/#495. Wasted spend across the three failures:
+≈$1–2 (all died in minutes). Fleet now: #496 training (gpu-box-42005419),
+#494 training + #495 + #499 queued (gpu-box-32966687).
+
+**(i) The ENSEMBLE ROLL is BUILT and CPU-VERIFIED** — `ml/rollout_spatial.py`
++779/−13, spec `ml/plans/E057_roll_spec.md`, tests
+`tests/test_fgn_roll.py` (new, 759 lines, 7 checks). A head whose checkpoint
+carries `fgn_eps > 0` rolls as **M member trajectories per start**
+(`--ens-members`, default 8; per-member CPU generators at
+`ens_seed·1000003+59+m`, continuing temporal.py's +57/+58 family; ONE ε per
+(member, step) shared across all pixels — FGN's convention, verified against
+weathernext). The ENSEMBLE-MEAN field goes through the UNCHANGED
+`accumulate`/`skill_block`/audit lines — F1's corridor comparison against
+the znoise pair is mechanical, and `meta.fgn` marks the entry. Beside it,
+NEW keys only: per-scope `ens_prob` (fair CRPS / spread–error with (M+1)/M /
+the mse_mean+mean_var=mse_sample decomposition, all via ml/probscore, under
+the weathernext NaN rule), `amoc_bands_ens`(+`_unpooled`) with a recorded
+dip-Brier threshold, and the **dispersion battery** on the long/future
+rolls (`long_dispersion`/`future_dispersion`: per-step member spread of the
+transport read + corridor field variance, WITH `field_var_floor` — the
+float32 one-pass-variance cancellation bound, derived not guessed — so a
+collapsed head reads as "at the floor", never as a small number). Member 0
+only is dumped. **Deterministic-path purity is the acceptance bar and is
+tested three ways**: `roll_step(eps=None)` bitwise vs an inline pre-patch
+copy AND the pristine module (6 stencil×chunk cases); the whole evaluator
+deep-equal (108 keys) against the pristine tree on a deterministic toy;
+zero E-057 keys and provably inert `--ens-members` flags for deterministic
+heads. Two defects found in review and fixed: the float32 variance floor
+above, and `%.6g` serialisation (fixed-decimal rounding wrote a collapsed
+head's 1e-8 member variance as 0.0). One measured deviation from the spec:
+bitwise chunk-invariance does not exist even on the DETERMINISTIC path
+(5.96e-08 float-dispatch floor), so the shared-ε test asserts the exact
+property instead — every chunk of a member-step received the identical ε —
+plus ε adding nothing beyond that floor. All rollout CPU suites green
+except three that diff against pinned historic shas (impossible in a
+shallow sandbox checkout, verified pre-broken on the pristine tree) and two
+verified pre-existing failures unrelated to this diff.
 
 **Verification: `tests/test_fgn_head.py` (new, 8 suites) green; existing
 `test_resume_temporal` / `test_direct_heads` / `test_e022_stencil` (24

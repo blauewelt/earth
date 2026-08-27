@@ -100,6 +100,7 @@ import torch
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+import probscore                                                # noqa: E402
 from model import codec_from_ckpt, gather_px                    # noqa: E402
 from recon_eval import stream_stats, build_slab                 # noqa: E402
 from temporal import (TemporalTransformer, build_stencil,       # noqa: E402
@@ -745,7 +746,7 @@ def row_feats(ax, rows, dev, mode="month"):
 
 
 def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False,
-              quant=None):
+              quant=None, eps=None):
     """One autoregressive step over ALL pixels. Zwin [P, K, d_z] on the
     device; NBR_t None (stencil 1) or [P, S]; mfeat [K, 2]. → ẑ [P, d_z]
     float32. The gather mirrors temporal.gather_stencil's layout exactly
@@ -767,7 +768,18 @@ def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False,
     trainer's version of this fix). So the row count is derived from a byte
     target and the caller's `--chunk` becomes an upper bound, which makes the
     guard automatic for any future width instead of a number someone has to
-    remember to lower."""
+    remember to lower.
+
+    E-057: `eps` is the FGN noise vector, [1, k] or [k], on any device. It is
+    the SAME DRAW for every pixel of this step — FGN's convention is one
+    global ε per (member, step), so it is expanded to the chunk's rows here
+    rather than drawn per chunk, which is what makes the answer independent of
+    `--chunk` (tests/test_fgn_roll.py pins chunk=P against chunk=P//3
+    bitwise). `eps=None` is the pre-E-057 call EXACTLY — `model(...)` is
+    invoked with the same three positional arguments it always was, so a
+    deterministic head's forward is untouched; and a head built with
+    eps_dim>0 that reaches this line with eps None is refused by the model
+    itself (ml/temporal.py's forward guard), which is deliberate."""
     # A head trained with --input-quant reads a QUANTIZED state, and that is
     # part of its contract rather than a training trick: rolling it on
     # continuous z would feed it an alphabet it has never seen. Applied to
@@ -797,9 +809,16 @@ def roll_step(model, Zwin, NBR_t, static_ctx, mfeat, chunk, amp=False,
                 zj.shape[0], Zwin.shape[1], -1)               # [n, K, S*dz]
         with torch.autocast(device_type="cuda", dtype=torch.float16,
                             enabled=amp):
-            pred, _ = model(zin,
-                            mfeat[None].expand(zin.shape[0], -1, -1),
-                            static_ctx[sl])
+            if eps is None:
+                pred, _ = model(zin,
+                                mfeat[None].expand(zin.shape[0], -1, -1),
+                                static_ctx[sl])
+            else:
+                pred, _ = model(zin,
+                                mfeat[None].expand(zin.shape[0], -1, -1),
+                                static_ctx[sl],
+                                eps=eps.reshape(1, -1).expand(zin.shape[0],
+                                                              -1))
         outs.append(pred[:, -1].float())
     return torch.cat(outs, 0)
 
@@ -1174,6 +1193,262 @@ def skill_block(su, H, n_px=None, leads=None):
     return out
 
 
+# ---- E-057: the ENSEMBLE read-outs, beside the deterministic ones --------
+# Everything below is reached only for a head whose checkpoint carries
+# `fgn_eps > 0`. The scoring functions themselves are ml/probscore.py's and
+# are never re-derived here (E-057 roll spec §"The read-outs"); this file only
+# accumulates their per-element / per-window answers over starts, the way
+# `accumulate` accumulates the deterministic sums.
+def member_seed(ens_seed, m):
+    """Member m's noise-stream seed. ONE documented formula, in ONE place.
+
+    `ens_seed * 1000003 + 59 + m` continues ml/temporal.py's own family (+57
+    is the trainer's eps stream, +58 the fixed monitor bank), so a member seed
+    can never collide with a training stream at the same base seed. The
+    generator is a CPU one and the draws are moved to the device afterwards —
+    device-independent streams, the same reason temporal.py's `eps_gen` is on
+    the CPU."""
+    return int(ens_seed) * 1000003 + 59 + int(m)
+
+
+def member_gen(ens_seed, m):
+    g = torch.Generator()
+    g.manual_seed(member_seed(ens_seed, m))
+    return g
+
+
+def head_fgn_eps(path):
+    """`fgn_eps` out of a head checkpoint's args, without paying for its
+    weights where torch will let us skip them.
+
+    This runs at ARGV TIME over every `--heads` entry, because "an fgn
+    checkpoint with --ens-members < 2" is a property of the inputs alone and a
+    guard that depends only on the inputs belongs where the inputs are all it
+    has cost (ml/CLAUDE.md §0.3/§5.16) — not eleven hours in, after the gate
+    head has rolled. `mmap=True` reads the zip directory and the pickled args
+    without materialising the tensors; where the file predates that format the
+    plain load is the fallback, which is what the head loop does anyway."""
+    try:
+        tk = torch.load(path, map_location="cpu", weights_only=False,
+                        mmap=True)
+    except Exception:                                          # noqa: BLE001
+        tk = torch.load(path, map_location="cpu", weights_only=False)
+    return int((tk.get("args") or {}).get("fgn_eps", 0) or 0)
+
+
+ENS_STATS = ("crps", "n_crps",              # fair CRPS, summed over elements
+             "msp", "mse_sp", "n_sp",       # spread_error's two mean terms
+             "mse_mean", "mean_var", "mse_sample", "n_dec")
+
+
+def new_ens_sums(H):
+    return {k: np.zeros(H + 1) for k in ENS_STATS}
+
+
+def accumulate_ens(su, h, crps_sum, n_crps, sp, dec, n_ok):
+    """One (start, horizon, scope) contribution to the ensemble sums.
+
+    `sp` is `probscore.spread_error`'s dict and `dec` is
+    `probscore.ensemble_decomposition`'s, both computed on THIS scope's masked
+    members and truth; `n_ok` is the number of elements they averaged over.
+    They are re-multiplied by `n_ok` here so the aggregate over starts is a
+    mean over the same element population the deterministic sums use — a mean
+    of per-start means would weight a start with 600 scored pixels like one
+    with 84,405.
+
+    `spread` and `rmse` are square ROOTS of means, so their squares are what
+    accumulates; the ratio is formed from the aggregated roots at the end,
+    never averaged. A NaN term (nothing scored) contributes nothing rather
+    than poisoning the sum — the same discipline `accumulate`'s `n == 0`
+    early return has (ml/CLAUDE.md §5.22)."""
+    if n_ok <= 0:
+        return
+    if np.isfinite(crps_sum) and n_crps > 0:
+        su["crps"][h] += crps_sum
+        su["n_crps"][h] += n_crps
+    if np.isfinite(sp["spread"]) and np.isfinite(sp["rmse"]):
+        su["msp"][h] += sp["spread"] ** 2 * n_ok
+        su["mse_sp"][h] += sp["rmse"] ** 2 * n_ok
+        su["n_sp"][h] += n_ok
+    if all(np.isfinite(dec[k]) for k in ("mse_mean", "mean_var",
+                                         "mse_sample")):
+        su["mse_mean"][h] += dec["mse_mean"] * n_ok
+        su["mean_var"][h] += dec["mean_var"] * n_ok
+        su["mse_sample"][h] += dec["mse_sample"] * n_ok
+        su["n_dec"][h] += n_ok
+
+
+def ens_block(su, H, members, n_px=None):
+    """The `ens_prob` block for one scope: per-horizon rows plus `crps_mean`.
+
+    NO REFERENCE IS INVENTED. The spec considered a `crps_auc` against a
+    climatological ensemble and struck it: a skill score needs a REGISTERED
+    reference, and choosing one here would smuggle an analysis decision into
+    the evaluator. What is written is the raw fair CRPS, the spread and its
+    ratio, the three decomposition terms and a plain unweighted mean of the
+    per-horizon CRPS — the same shape `horizon_auc` has, with none of its
+    implied baseline.
+
+    A horizon that scored nothing is OMITTED rather than written as NaN."""
+    rows = []
+    for h in range(1, H + 1):
+        if su["n_crps"][h] <= 0 and su["n_dec"][h] <= 0:
+            continue
+        r = {"h": h}
+        if su["n_crps"][h] > 0:
+            r["n"] = int(su["n_crps"][h])
+            r["crps"] = round(float(su["crps"][h] / su["n_crps"][h]), 5)
+        if su["n_sp"][h] > 0:
+            spread = math.sqrt(su["msp"][h] / su["n_sp"][h])
+            rmse = math.sqrt(su["mse_sp"][h] / su["n_sp"][h])
+            r["spread"] = round(spread, 5)
+            r["rmse"] = round(rmse, 5)
+            if rmse > 0:
+                r["spread_ratio"] = round(spread / rmse, 5)
+        if su["n_dec"][h] > 0:
+            nd = su["n_dec"][h]
+            r["mse_mean"] = round(float(su["mse_mean"][h] / nd), 5)
+            r["mean_var"] = round(float(su["mean_var"][h] / nd), 5)
+            r["mse_sample"] = round(float(su["mse_sample"][h] / nd), 5)
+        rows.append(r)
+    out = {"members": int(members), "rows": rows}
+    if n_px is not None:
+        out["n_px"] = int(n_px)
+    got = [r["crps"] for r in rows if "crps" in r]
+    if got:
+        out["crps_mean"] = round(float(np.mean(got)), 5)
+    return out
+
+
+def ens_series_block(ens, obs, thresh, members, extra=None):
+    """The ensemble read-out of one TRANSPORT band: [M, n] members vs [n]
+    truth, through ml/probscore.
+
+    Three instruments, all of them the module's own: the fair CRPS of the
+    member transports, the spread-error ratio, and `brier_dip` on the DIP
+    event (`obs < thresh`) — the one score a deterministic head cannot fake,
+    since its probability is 0 or 1 and it is scored on being wrong outright.
+    The threshold TRAVELS WITH THE NUMBER (`dip_threshold`) because a Brier
+    score against an unrecorded event is unreadable.
+
+    EVERY float here is written only if it is finite. probscore returns NaN
+    rather than raising when nothing scored (its own NaN-probe rule), and a
+    NaN that reaches `json.dump` is the literal `NaN` token ml/CLAUDE.md §5.22
+    forbids in a results file — so an unscored instrument is an ABSENT key,
+    which no reader can mistake for a measurement."""
+    ens = np.asarray(ens, dtype=np.float64)
+    obs = np.asarray(obs, dtype=np.float64)
+    out = {"members": int(members), "n": int(ens.shape[1])}
+    c = probscore.crps_ensemble(ens, obs)
+    if np.isfinite(c["crps"]):
+        out["crps"] = round(float(c["crps"]), 4)
+    sp = probscore.spread_error(ens, obs)
+    for k in ("spread", "rmse", "ratio"):
+        if np.isfinite(sp[k]):
+            out[{"ratio": "spread_ratio"}.get(k, k)] = round(float(sp[k]), 4)
+    br = probscore.brier_dip(ens, obs, thresh, below=True)
+    if br["n"]:
+        out["dip"] = {
+            "threshold": round(float(thresh), 4),
+            "brier": round(float(br["brier"]), 5),
+            "brier_clim": round(float(br["brier_clim"]), 5),
+            "bss": (None if not np.isfinite(br["bss"])
+                    else round(float(br["bss"]), 5)),
+            "event_rate": round(float(br["event_rate"]), 4),
+            "n": int(br["n"])}
+    if extra:
+        out.update(extra)
+    return out
+
+
+def dispersion_block(sv_mem, s1, s2, n_px, n_ch, members, phase, roll_ym):
+    """E-057 §4: the DISPERSION CURVE of one long / future roll.
+
+    Two scalars per step and nothing else — the spec is explicit that M full
+    trajectories must NOT be stored, and at monthly xl144 with M=8 they would
+    be 8 x 240 x 84,405 x 39 floats. What is kept instead is the question the
+    battery actually asks: **does the spread grow with lead?** Genuine
+    dynamics disperse; a head that has learned to replay the calendar returns
+    the same trajectory whatever ε it is handed, and its curve is flat at
+    zero. That collapse signature is the instrument's whole point, so the
+    arrays must be able to show it exactly rather than approximately.
+
+      * `sv_spread[i]` — the sample sd (ddof 1) over the M members of
+        `read_sv` at step i. The transport dispersion.
+      * `field_var[i]` — the mean over the corridor's (pixel, channel) cells
+        of the per-cell sample variance (ddof 1) over the members, in the same
+        standardized-anomaly space the scope blocks score.
+
+    `s1` is [n_steps, n_px*n_ch] holding Σ_m x per cell and `s2` is [n_steps]
+    holding Σ_m Σ_cells x², both accumulated while the members roll
+    SEQUENTIALLY — which is what lets the member loop keep one Zwin on the
+    device. The variance is then the textbook identity
+
+        Σ_cells Σ_m (x - x̄_cell)²  =  Σ_cells [ Σ_m x²  -  (Σ_m x)² / M ]
+
+    divided by (M-1)·n_cells. Clamped at 0: the identity is exact in exact
+    arithmetic and can go a few ulp negative in float when the members are
+    IDENTICAL, which is precisely the zero-film case this must report as 0.
+
+    **THE PRECISION FLOOR IS COMPUTED AND SHIPPED, not left implicit.** That
+    identity is the textbook one-pass form and it CANCELS: `s1` is a float32
+    accumulator (it must be — at pentad, [1461 steps, 29,627 px x 40 ch] is
+    6.9 GB at float32 and 13.9 at float64, and this array exists only so a
+    two-scalar curve can be produced without keeping M trajectories), so
+    `s1²/M` carries a relative error of order the float32 epsilon and the
+    difference against `s2` cannot resolve a variance below it. Bounding
+    δ(s1) ≤ (M-1)·eps32·|s1| and s1²/M ≤ s2 (Cauchy-Schwarz) gives
+
+        δ(field_var[i])  ≤  2·eps32·s2[i] / n_cells
+
+    which is reported as `field_var_floor` — the max over steps. A curve whose
+    values sit AT that number is a collapsed head, not a dispersed one, and a
+    reader who is not told the floor cannot tell those apart. For a trained
+    head with a member spread of even 1% of the field scale the true variance
+    is ~1e-4 against a floor of ~1e-7, i.e. three orders of margin; the floor
+    binds only where the answer is "no dispersion", which is the one answer it
+    is honest about.
+
+    Returns None if anything came out non-finite — an absent curve rather
+    than a NaN in a results file (ml/CLAUDE.md §5.22).
+    """
+    M = int(members)
+    sv_mem = np.asarray(sv_mem, dtype=np.float64)              # [M, n]
+    n = int(sv_mem.shape[1])
+    ncell = int(n_px) * int(n_ch)
+    sv_sd = sv_mem.std(axis=0, ddof=1)
+    s2 = np.asarray(s2, dtype=np.float64)
+    ss = s2 - (np.asarray(s1, dtype=np.float64) ** 2).sum(axis=1) / M
+    fvar = np.maximum(ss, 0.0) / ((M - 1) * ncell)
+    floor = float(2.0 * np.finfo(np.float32).eps * s2.max() / ncell) \
+        if n else 0.0
+    if not (np.isfinite(sv_sd).all() and np.isfinite(fvar).all()
+            and math.isfinite(floor)):
+        return None
+    # %.6g, not a fixed number of decimals: a collapsed head's variance is
+    # ~1e-8 and `round(v, 6)` writes it as 0.0, which is the right answer for
+    # the wrong reason and hides the floor above from the reader entirely.
+    return {
+        "members": M, "phase": phase, "steps": n,
+        "roll_ym": list(roll_ym),
+        "n_corridor_px": int(n_px), "n_cells": ncell, "ddof": 1,
+        "field_var_floor": float("%.3g" % floor),
+        "sv_spread": [float("%.6g" % v) for v in sv_sd],
+        "field_var": [float("%.6g" % v) for v in fvar],
+        "note": ("member dispersion of THIS roll, two scalars per step: the "
+                 "sample sd over the M members of the pooled transport "
+                 "(`read_sv`, the same function `sv_des` is read with) and "
+                 "the corridor mean of the per-cell member variance of the "
+                 "decoded field. No truth enters either — this is a spread "
+                 "curve, not a skill score. Dispersion growing with lead is "
+                 "the genuine-dynamics signature; a flat curve at ~0 is the "
+                 "collapse signature (E-057.3). `field_var_floor` is the "
+                 "float32 cancellation bound of the one-pass variance "
+                 "identity — a field_var at or below it is NO DISPERSION "
+                 "MEASURED, not a measured small dispersion."),
+    }
+
+
 def deseason_truth(rv, rmoy, tr_all, what):
     """Train-month climatology, REFUSING rather than returning NaN.
 
@@ -1356,6 +1631,28 @@ def main():
                     help="seed for the unpooled read-out's fit; recorded in "
                          "`probe_unpooled.seed` so the weights behind a "
                          "series can be reproduced from the artefact alone")
+    ap.add_argument("--ens-members", type=int, default=8,
+                    help="E-057: how many MEMBER TRAJECTORIES to roll per "
+                         "start for a head whose checkpoint carries "
+                         "`fgn_eps > 0`. READ ONLY FOR SUCH HEADS — a "
+                         "deterministic head has no noise to resample and "
+                         "this flag is a no-op for it, at any value. Members "
+                         "roll SEQUENTIALLY (one Zwin at a time); each draws "
+                         "ONE eps per step, shared across every pixel, which "
+                         "is FGN's own rollout convention. Minimum 2: a "
+                         "one-member 'ensemble' has no spread, and every "
+                         "read-out this flag turns on is a statement about "
+                         "spread")
+    ap.add_argument("--ens-seed", type=int, default=0,
+                    help="E-057: base seed of the member noise streams. "
+                         "Member m rolls under a CPU torch.Generator seeded "
+                         "`ens_seed * 1000003 + 59 + m` (the same family as "
+                         "ml/temporal.py's +57 training stream and +58 "
+                         "monitor bank), re-seeded at the start of every "
+                         "trajectory — so a member's eps stream is a function "
+                         "of (ens_seed, m, step) alone and any single "
+                         "trajectory can be re-rolled in isolation and "
+                         "reproduce bitwise")
     ap.add_argument("--amp", action="store_true",
                     help="fp16 autocast for the roll/decode forwards — the "
                          "gate decides whether the numbers survive it")
@@ -1513,6 +1810,55 @@ def main():
                  f"--no-gate (smoke only)")
     heads = gate_paths + [h for h in (a.heads or [])
                           if h not in gate_paths]
+    # ---- E-057: which of these heads are FGN heads, decided NOW ----------
+    # The whole ensemble path below is gated on ONE fact — the head's own
+    # checkpoint carrying `fgn_eps > 0` — and it is read here, before any
+    # tensor, mask, codec or roll step has been paid for, so the M<2 refusal
+    # and the cost banner both land at argv time. A run with no fgn head
+    # prints NOTHING here and takes no new branch anywhere: `head_eps` is all
+    # zeros, `FGN` is False in every head, and the artefact is the artefact it
+    # has always been.
+    # `--export-mask-only` and `--dump-truth` exit below without ever building
+    # a head; they must not start paying to open one now either, so the read is
+    # skipped in exactly the modes that have no head loop.
+    head_eps = ({} if (a.export_mask_only or a.dump_truth)
+                else {h: head_fgn_eps(h) for h in heads})
+    fgn_heads = [h for h in heads if head_eps.get(h, 0) > 0]
+    if fgn_heads:
+        if a.ens_members < 2:
+            sys.exit(
+                f"--ens-members {a.ens_members} but "
+                f"{len(fgn_heads)} of these heads carry fgn_eps > 0 "
+                f"({', '.join(os.path.basename(h) for h in fgn_heads)}). An "
+                f"FGN head has no single output — every forward is a SAMPLE "
+                f"from its predictive distribution — and every read-out this "
+                f"unlocks (fair CRPS, spread-error, the dip Brier, the "
+                f"dispersion curve) is a statement about SPREAD, which one "
+                f"member does not have. Roll it with --ens-members >= 2 "
+                f"(default 8), or roll a deterministic head. Refusing at "
+                f"argv time rather than after the first head "
+                f"(ml/CLAUDE.md §0.3). Plan: ml/plans/E057_fgn_head.md")
+        _k = sorted({head_eps[h] for h in fgn_heads})
+        print(f"E-057 FGN MODE for {len(fgn_heads)} of {len(heads)} head(s): "
+              f"M = {a.ens_members} member trajectories per start, eps ~ "
+              f"N(0,1)^{_k if len(_k) > 1 else _k[0]}, ens_seed "
+              f"{a.ens_seed} (member m draws from a CPU generator seeded "
+              f"{a.ens_seed}*1000003+59+m = "
+              f"{member_seed(a.ens_seed, 0)}.."
+              f"{member_seed(a.ens_seed, a.ens_members - 1)}"
+              f"). ONE eps per (member, step), SHARED ACROSS EVERY PIXEL of "
+              f"that step — FGN's own convention (arXiv:2506.10772; noise is "
+              f"drawn inside every predictor call, so an AR roll resamples it "
+              f"each step). Members roll SEQUENTIALLY. The scope blocks are "
+              f"scored on the ENSEMBLE MEAN field through the unchanged "
+              f"accumulate/skill_block path; the member spread is reported "
+              f"beside them under `ens_prob`. Deterministic heads in this "
+              f"same run are untouched.", flush=True)
+        if a.ens_members < 4:
+            print(f"::warning::--ens-members {a.ens_members} is the minimum "
+                  f"this refusal allows, not a recommended ensemble size: "
+                  f"the fair CRPS is M-independent in expectation but its "
+                  f"variance is not, and E-057.1 rolls at M=16", flush=True)
     ck = torch.load(a.ckpt, map_location="cpu", weights_only=False)
     C = len(ck["chan"])
     d_z = ck["d_z"]
@@ -2190,9 +2536,30 @@ def main():
             print(f"  {label}: rolling with the head's own input quantizer "
                   f"({iq_spec}, {iq.bits_per_dim:.3f} bits/dim)", flush=True)
         unroll = ta.get("unroll", 1)
+        # E-057: the head's own `fgn_eps`, read back exactly the way stencil,
+        # ring_km, season_phase and input_quant are — from the args
+        # ml/temporal.py saved. A head that predates the flag carries nothing,
+        # which is 0, which is the deterministic path, byte for byte.
+        eps_dim = int(ta.get("fgn_eps", 0) or 0)
+        FGN = eps_dim > 0
+        M_ens = int(a.ens_members) if FGN else 0
+        if FGN and BLKR is not None:
+            sys.exit(
+                f"{os.path.basename(hp)} is an FGN head (fgn_eps={eps_dim}) "
+                f"and this roll is on a BLOCK codec's axis "
+                f"(time_block {str(ck['args'].get('time_block', ''))!r}). The "
+                f"member reduction below decodes one field per (member, "
+                f"horizon) and a block roll decodes k_time cells per horizon; "
+                f"combining the two has never been designed, let alone "
+                f"tested, and guessing would score an experiment nobody ran. "
+                f"Refusing.")
+        # THE LABEL SAYS WHICH KIND OF NUMBER THIS IS. An fgn entry's scope
+        # blocks are the ENSEMBLE MEAN's, not a single forward's, and the two
+        # must never be confused in a table keyed by label alone.
         label = (f"s{stencil}"
                  + (f"r{str(ring_km).replace(',', '-')}" if _ring_on(ring_km) else "")
                  + (f"u{unroll}" if unroll != 1 else "")
+                 + (f"fgnM{M_ens}" if FGN else "")
                  + f"_s{ta.get('seed', 0)}")
         if label in results["heads"]:
             label += "_" + os.path.basename(hp).replace(".pt", "")
@@ -2201,7 +2568,8 @@ def main():
                      str(ta.get("direct") or "").split(",") if x.strip())
         model = TemporalTransformer(d_z=d_z, d_model=ta["d_model"],
                                     n_heads=4, n_layers=ta["layers"],
-                                    k_max=k_tbl, direct=dir_, stencil=stencil)
+                                    k_max=k_tbl, direct=dir_, stencil=stencil,
+                                    eps_dim=eps_dim)
         model.load_state_dict(tk["model"])
         model.eval().to(dev)
         NBR_t, static_ctx = geometry(stencil, ring_km)
@@ -2232,12 +2600,34 @@ def main():
             ax.row_of_label(s.strip()) is not None
             for s in str(a.long_start or "").split(",") if s.strip())
         head_i = list(heads).index(hp) + 1
+        # E-057: THE MULTIPLIER IS STATED, NOT SILENT. Every roll step below
+        # is run once per member, so the head's step budget — and the progress
+        # bar's total, which is what an ETA is computed from — is M times what
+        # a deterministic head of the same shape would cost.
+        mult = M_ens if FGN else 1
         prog.start_head(head_i, label,
-                        n_skill + n_long + a.future_months)
+                        (n_skill + n_long + a.future_months) * mult)
         print(f"  {label}: {n_skill} scored roll steps + {n_long} hindcast + "
               f"{a.future_months} future = "
               f"{n_skill + n_long + a.future_months} steps over {P:,} pixels",
               flush=True)
+        if FGN:
+            _hmax = max([scored_horizon(ax, s_, Hh, T, Y)
+                         for Y in hold_years
+                         for s_ in ax.starts_for_year(Y, a.starts_per_year)
+                         if s_ - K + 1 >= 0 and s_ + 1 < T] or [0])
+            _mem_gb = M_ens * _hmax * P * C * 2 / 1e9
+            _disp_gb = (max(a.long_months, a.future_months)
+                        * int(corridor.sum()) * C * 4 / 1e9)
+            print(f"  {label}: FGN head, eps_dim {eps_dim} — x{M_ens} "
+                  f"members = "
+                  f"{(n_skill + n_long + a.future_months) * M_ens:,} roll "
+                  f"steps in total, plus one full-field decode per (member, "
+                  f"scored step) and one CORRIDOR decode per (member, "
+                  f"long/future step). Member field buffer "
+                  f"{M_ens}x{_hmax}x{P:,}x{C} float16 = {_mem_gb:.2f} GB per "
+                  f"start; dispersion accumulator <= {_disp_gb:.2f} GB per "
+                  f"long/future roll.", flush=True)
         sums = {name: new_sums(Hh) for name, _ in scopes}
         # E-026b AUDIT instrumentation (2026-08-15, Chris: "investigate
         # thoroughly and not hypothesize — there could still be an issue in
@@ -2261,12 +2651,146 @@ def main():
         # writes, so widening the tuple would put the gate's own input through
         # an edit. Empty and never read when the flag is off.
         probe_pts_u = {h: [] for h in range(1, Hh + 1)}
+        # E-057: the MEMBER read-outs. `probe_pts_e[h]` holds one [M] array
+        # per (start, h) — the same rolled states `probe_pts[h]` was reduced
+        # from, before the reduction — and `ens_sums` accumulates the
+        # probscore answers per scope exactly the way `sums` accumulates the
+        # deterministic ones. All three stay empty for a deterministic head.
+        probe_pts_e = {h: [] for h in range(1, Hh + 1)}
+        probe_pts_eu = {h: [] for h in range(1, Hh + 1)}
+        ens_sums = ({name: new_ens_sums(Hh) for name, _ in scopes}
+                    if FGN else None)
         # THE GATE HEAD IS NEVER DUMPED (see RollDump): it is the run's
         # certificate, it is re-rolled in every eval wave, and nobody
         # animates it.
         dump_head = dump is not None and GATE_HEAD not in os.path.basename(hp)
         if dump is not None and not dump_head:
             print(f"  {label}: --dump-roll skips the gate head", flush=True)
+
+        def fgn_start(Y, s, traj):
+            """E-057: ONE start, rolled M times, then reduced.
+
+            The deterministic path below this function is untouched — it is
+            not called for a head whose `fgn_eps` is 0, and nothing it writes
+            changes. What happens here is the same protocol with the member
+            dimension put in:
+
+              * M trajectories, rolled SEQUENTIALLY so only one [P, K, d_z]
+                window is ever on the device. Member m draws from its own CPU
+                generator (`member_seed`), re-seeded at this start, and each
+                step's eps is ONE vector shared by every pixel — which is
+                what makes the result independent of `--chunk`.
+              * Each member's decoded field is kept per horizon as float16
+                [M, n_h, P, C]; at monthly xl144 with M=8 that is 8 x 79 MB =
+                0.63 GB for a 12-step start, freed before the next one.
+              * The ENSEMBLE MEAN field then goes through the identical
+                `accumulate` / audit lines the deterministic roll uses, so
+                every scope block, the corridor AUC and the E-026b audit are
+                computed by the code that computed every archived number —
+                just fed the mean. That is what makes E-057 F1's comparison
+                against the znoise pair mechanical rather than argued.
+              * The MEMBERS are scored beside it through ml/probscore, never
+                re-derived here, under the weathernext NaN rule: a member is
+                NaN'd wherever the truth is unobserved, so spread cannot hide
+                in cells nobody can score.
+            """
+            n_h = scored_horizon(ax, s, Hh, T, Y)
+            if n_h == 0:
+                return
+            v_pers, obs_s = std_m.get(s)
+            mem = np.empty((M_ens, n_h, P, C), np.float16)
+            sv_m = np.zeros((M_ens, n_h))
+            sv_mu = (np.zeros((M_ens, n_h)) if read_sv_unpooled is not None
+                     else None)
+            for m in range(M_ens):
+                gen = member_gen(a.ens_seed, m)
+                Zwin = zwin_from_true(s, K)
+                cur = list(range(s - K + 1, s + 1))
+                for h in range(1, n_h + 1):
+                    t_tgt = s + h
+                    # DRAWN ON THE CPU, THEN MOVED (temporal.py's eps_gen
+                    # rule): a device-side generator would make the member
+                    # stream a function of which box rolled it.
+                    eps = torch.randn(1, eps_dim, generator=gen).to(dev)
+                    zhat = roll_step(model, Zwin, NBR_t, static_ctx,
+                                     row_feats(ax, cur, dev, sphase),
+                                     a.chunk, a.amp, quant=iq, eps=eps)
+                    if traj is not None and m == 0:
+                        # MEMBER 0 ONLY (spec §5): the animation is one
+                        # trajectory and M x the bytes buys nothing for it.
+                        traj[h] = zhat.detach().to(torch.float16) \
+                                      .cpu().numpy()
+                    Zwin = torch.cat([Zwin[:, 1:], zhat[:, None]], 1)
+                    cur = cur[1:] + [t_tgt]
+                    mem[m, h - 1] = decode_all(codec, zhat, C, a.chunk, a.amp)
+                    sv_m[m, h - 1] = read_sv(zhat)
+                    if sv_mu is not None:
+                        sv_mu[m, h - 1] = read_sv_unpooled(zhat)
+                    prog.step("skill")
+            for h in range(1, n_h + 1):
+                t_tgt = s + h
+                v_true, obs_tt = std_m.get(t_tgt)
+                op = obs_tt & obs_s
+                v_damp = v_pers * r1 ** h
+                ens = mem[:, h - 1].astype(np.float32)          # [M, P, C]
+                xhat = ens.mean(0)
+                for name, m_ in scopes:
+                    accumulate(sums[name], h, xhat[m_], v_true[m_],
+                               v_pers[m_], v_damp[m_], op[m_])
+                of_ = op.astype(np.float64)
+                err_ = ((xhat - v_true) ** 2) * of_
+                tru_ = (v_true ** 2) * of_
+                aud["ch_m"][h] += err_[corridor].sum(axis=0)
+                aud["ch_c"][h] += tru_[corridor].sum(axis=0)
+                if h == a.map_h:
+                    aud["px_m"] += err_.sum(axis=1)
+                    aud["px_c"] += tru_.sum(axis=1)
+                # The NaN rule, in both arrays: an unobserved cell is not a
+                # cell the ensemble may be confident or dispersed in.
+                obs_n = np.where(op, v_true, np.nan)
+                ens_n = np.where(op[None], ens, np.nan)
+                # CRPS is PER ELEMENT, so it is computed ONCE over all P and
+                # then masked per scope — identical to calling it on each
+                # scope's subset, and nine times cheaper than doing so.
+                cf = probscore.crps_ensemble(ens_n, obs_n)["crps_field"]
+                for name, m_ in scopes:
+                    n_ok = int(op[m_].sum())
+                    if n_ok == 0:
+                        continue
+                    sub, ob = ens_n[:, m_], obs_n[m_]
+                    accumulate_ens(
+                        ens_sums[name], h,
+                        float(np.nansum(cf[m_])),
+                        int(np.isfinite(cf[m_]).sum()),
+                        probscore.spread_error(sub, ob),
+                        probscore.ensemble_decomposition(sub, ob), n_ok)
+                if t_tgt in r_of_row:
+                    y_ = rv_des[r_of_row[t_tgt]]
+                    # `read_sv` is AFFINE in the section mean — it is
+                    # `dot((zhat[sec].mean(0) - mu)/sd ++ 1, w)` — so the mean
+                    # of the member reads IS the read of the ensemble-mean
+                    # state, exactly. That is why `amoc_bands` keeps its
+                    # meaning ("bands of the point forecast") with the point
+                    # forecast now being the ensemble mean, and why no second
+                    # [n_h, P, d_z] buffer is needed to produce it.
+                    # tests/test_fgn_roll.py pins the identity.
+                    probe_pts[h].append((s, float(sv_m[:, h - 1].mean()), y_))
+                    probe_pts_e[h].append((s, sv_m[:, h - 1].copy(), y_))
+                    if sv_mu is not None:
+                        # THE UNPOOLED READ IS NOT AFFINE (a learned softmax
+                        # attention pool), so this is the ENSEMBLE MEAN OF THE
+                        # READ, not the read of the ensemble-mean state — the
+                        # exact mean of the [M] array beside it in
+                        # `probe_pts_eu`, which is the invariant a paired
+                        # comparison needs. `amoc_bands_unpooled` is itself a
+                        # new, ungated E-055 key, so no archived number
+                        # depends on the choice; it is recorded in
+                        # meta.fgn.amoc_bands_unpooled_are.
+                        probe_pts_u[h].append(
+                            (s, float(sv_mu[:, h - 1].mean()), y_))
+                        probe_pts_eu[h].append(
+                            (s, sv_mu[:, h - 1].copy(), y_))
+
         with torch.no_grad():
             for Y in hold_years:
                 for s in ax.starts_for_year(Y, a.starts_per_year):
@@ -2288,6 +2812,30 @@ def main():
                             if n_dump else None)
                     if traj is not None:
                         traj[0] = np.asarray(Zm[s])
+                    if FGN:
+                        # E-057. The deterministic loop below is left exactly
+                        # as it is — not wrapped, not re-indented — so that a
+                        # reader (and a diff) can see that an fgn head takes a
+                        # DIFFERENT path rather than the same path with
+                        # conditionals sprinkled through it. The eight lines
+                        # after the call are the ones this `continue` skips.
+                        fgn_start(Y, s, traj)
+                        print(f"  {label} start {start_m}: rolled "
+                              f"({M_ens} members)", flush=True)
+                        if traj is not None:
+                            dump.write(label, os.path.basename(hp),
+                                       {"stencil": stencil,
+                                        "ring_km": ring_km,
+                                        "seed": ta.get("seed", 0),
+                                        "unroll": unroll, "K": K,
+                                        "d_model": ta["d_model"],
+                                        "layers": ta["layers"],
+                                        "fgn_eps": eps_dim,
+                                        "members": M_ens,
+                                        "ens_seed": int(a.ens_seed),
+                                        "member": 0}, Y, s, traj)
+                            traj = None
+                        continue
                     for h in range(1, Hh + 1):
                         t_tgt = s + h
                         if t_tgt >= T or ax.year[t_tgt] != int(Y):
@@ -2372,9 +2920,62 @@ def main():
         entry = {"meta": {"file": os.path.basename(hp), "stencil": stencil,
                           "ring_km": ring_km, "seed": ta.get("seed", 0),
                           "unroll": unroll}}
+        if FGN:
+            # SO NO READER CAN MISTAKE THIS FOR A SINGLE-FORWARD NUMBER. Every
+            # scope block in this entry was computed from the ENSEMBLE MEAN
+            # field; the deterministic archive's blocks were computed from the
+            # one field a deterministic head emits. The two are comparable on
+            # purpose (that is E-057 F1) and they are not the same object.
+            entry["meta"]["fgn"] = {
+                "members": M_ens,
+                "mode": "ensemble_mean",
+                "eps_dim": eps_dim,
+                "ens_seed": int(a.ens_seed),
+                "member_seed_rule": "ens_seed*1000003 + 59 + m, re-seeded at "
+                                    "the start of every trajectory",
+                "eps_convention": "one eps ~ N(0,1)^k per (member, roll "
+                                  "step), SHARED across every pixel of that "
+                                  "step and resampled at each step — FGN's "
+                                  "own rollout convention "
+                                  "(arXiv:2506.10772)",
+                "scope_blocks_are": "the ensemble MEAN field, through the "
+                                    "unchanged accumulate/skill_block path",
+                "amoc_bands_are": "the ensemble-mean transport (read_sv is "
+                                  "affine in the section mean, so the mean "
+                                  "of the member reads is the read of the "
+                                  "mean state)",
+                "amoc_bands_unpooled_are": "the ensemble MEAN OF THE READ — "
+                                           "the learned attention pool is "
+                                           "not affine, so this is not the "
+                                           "read of the ensemble-mean state; "
+                                           "it is the exact mean of the "
+                                           "member array in "
+                                           "amoc_bands_ens_unpooled",
+                "member_readouts": "ens_prob (per scope), amoc_bands_ens, "
+                                   "long_dispersion / future_dispersion",
+            }
         for name, m_ in scopes:
             entry[name] = skill_block(sums[name], Hh, n_px=int(m_.sum()),
                                       leads=leads)
+        if FGN:
+            entry["ens_prob"] = {
+                name: ens_block(ens_sums[name], Hh, M_ens,
+                                n_px=int(m_.sum()))
+                for name, m_ in scopes}
+            entry["ens_prob"]["note"] = (
+                "fair CRPS (probscore.crps_ensemble), spread/rmse/"
+                "spread_ratio (probscore.spread_error, with its (M+1)/M "
+                "finite-ensemble correction) and the three decomposition "
+                "terms (probscore.ensemble_decomposition, mse_sample = "
+                "mse_mean + mean_var) of the M member FIELDS against truth, "
+                "in the same standardized-anomaly space the scope blocks "
+                "score, over the same pixel scopes and the same observed "
+                "cells. Members are NaN where truth is unobserved, so spread "
+                "cannot hide in cells nobody can score. `crps_mean` is the "
+                "unweighted mean over the horizons that scored — NOT a skill "
+                "score: no reference ensemble is defined for it here, and "
+                "choosing one is an analysis decision with its own "
+                "registration, not this evaluator's.")
         # --- E-026b audit block + exact-identity check -------------------
         ch_rows, max_dev = [], 0.0
         cor_rows = {r["h"]: r["msss_clim"]
@@ -2456,6 +3057,56 @@ def main():
                  else f"{bn} UNDEFINED(n={v['n']})")
                 for bn, v in entry["amoc_bands_unpooled"].items())
                 + "   [not gated — see results.probe_unpooled]", flush=True)
+        if FGN:
+            # E-057 §3: THE SAME BANDS, THE SAME POINTS, THE M MEMBERS. Each
+            # entry of `probe_pts_e` is the [M] array the corresponding
+            # `probe_pts` scalar was the mean of, so `amoc_bands_ens[k]` and
+            # `amoc_bands[k]` are a paired pair: same rolled states, same
+            # targets, differing only in whether the members were reduced.
+            #
+            # THE DIP THRESHOLD IS DERIVED AND RECORDED. -1 sigma of the
+            # deseasonalised TRAINING-year target series — the same series the
+            # bands correlate against, deseasonalised by the same
+            # `deseason_truth` — because a Brier score against an unrecorded
+            # event is unreadable, and because a hand-picked Sv level would be
+            # a threshold wearing a definition's clothes (ml/CLAUDE.md §4.9).
+            _dip_sigma = float(np.std(rv_des[tr_all]))
+            _dip_thr = -_dip_sigma
+            entry["meta"]["fgn"]["dip"] = {
+                "threshold": round(_dip_thr, 4),
+                "sigma": round(_dip_sigma, 4),
+                "rule": "deseasonalised transport below -1 sigma, sigma = "
+                        "std of rv_des over the TRAIN rows of the RAPID "
+                        "series (~t_hold), the same series and the same "
+                        "climatology the bands are correlated against",
+                "n_sigma_rows": int(tr_all.sum())}
+
+            def _band_ens(pts_by_h):
+                out = {}
+                for bn, hs in bands:
+                    pts = [p for h in hs if h <= Hh
+                           for p in pts_by_h.get(h, [])]
+                    if len(pts) < 8:
+                        continue
+                    ensm = np.stack([np.asarray(p[1], dtype=np.float64)
+                                     for p in pts], 1)          # [M, n]
+                    tv_ = np.array([p[2] for p in pts], dtype=np.float64)
+                    out[ax.band_key(bn, hs)] = ens_series_block(
+                        ensm, tv_, _dip_thr, M_ens)
+                return out
+
+            entry["amoc_bands_ens"] = _band_ens(probe_pts_e)
+            print(f"  {label} amoc ENSEMBLE (M={M_ens}): " + " ".join(
+                f"{bn} crps "
+                + ("%.3f" % v["crps"] if "crps" in v else "n/a")
+                + " spread/rmse "
+                + ("%.3f" % v["spread_ratio"] if "spread_ratio" in v
+                   else "n/a")
+                + f" dip-bss {v.get('dip', {}).get('bss')}"
+                for bn, v in entry["amoc_bands_ens"].items())
+                + f"   [dip < {_dip_thr:+.3f} Sv-anomaly]", flush=True)
+            if read_sv_unpooled is not None:
+                entry["amoc_bands_ens_unpooled"] = _band_ens(probe_pts_eu)
         if not ax.monthly:
             entry["amoc_bands_def"] = {
                 ax.band_key(bn, hs): {
@@ -2552,6 +3203,81 @@ def main():
                     roll_rows.append(r_next)
             return np.array(sv), roll_rows
 
+        # ---- E-057 §4: the SAME roll, M members, two scalars per step -----
+        # A SEPARATE function rather than a member argument on `long_roll`:
+        # `long_roll` produces `entry["long"]`/`entry["future"]`, the blocks
+        # the archive reads and the E-055 series hangs off, and a head with no
+        # `fgn_eps` must reach it through code no conditional has entered.
+        # The two share their arithmetic line for line (same `zwin_from_true`,
+        # same `row_feats`, same window shift, same `prog.step(phase)` per roll
+        # step) and differ in exactly two things: the ε handed to `roll_step`,
+        # and the corridor decode that feeds the dispersion accumulators.
+        _corr_ix = (torch.as_tensor(np.where(corridor)[0], device=dev)
+                    if FGN else None)
+        _n_corr = int(corridor.sum())
+
+        def long_roll_ens(s_end, n_steps, phase="long", sv_u_out=None):
+            """M member trajectories past row `s_end` → (mean sv, rows, disp).
+
+            Members roll SEQUENTIALLY, so only one [P, K, d_z] window is ever
+            on the device — the same memory posture the scored starts have.
+            What cannot be kept is the M decoded trajectories (8 x 240 x
+            84,405 x 39 at monthly xl144), so the corridor field is reduced
+            INTO the two running accumulators `dispersion_block` needs the
+            moment it is decoded, and thrown away:
+
+              `s1[i]` = Σ_m x over that step's corridor cells (per cell), and
+              `s2[i]` = Σ_m Σ_cells x²             (one number per step).
+
+            The returned `sv` is the ensemble MEAN transport, which is what
+            `entry["long"]["sv_des"]` and every correlation in `long_block`
+            are then computed from — the same "the point forecast is the
+            ensemble mean" convention the scored starts use, and exact for
+            `read_sv` because it is affine.
+            """
+            ncell = _n_corr * C
+            s1 = np.zeros((n_steps, ncell), np.float32)
+            s2 = np.zeros(n_steps, np.float64)
+            sv_mem = np.zeros((M_ens, n_steps))
+            svu_mem = (np.zeros((M_ens, n_steps))
+                       if sv_u_out is not None else None)
+            roll_rows = [s_end + 1 + i for i in range(n_steps)]
+            with torch.no_grad():
+                for m in range(M_ens):
+                    gen = member_gen(a.ens_seed, m)
+                    Zwin = zwin_from_true(s_end, K)
+                    cur = list(range(s_end - K + 1, s_end + 1))
+                    for i in range(n_steps):
+                        r_next = s_end + 1 + i
+                        # CPU generator, moved to the device — the member
+                        # stream must not be a function of which box rolled it
+                        # (temporal.py's eps_gen rule).
+                        eps = torch.randn(1, eps_dim, generator=gen).to(dev)
+                        zhat = roll_step(model, Zwin, NBR_t, static_ctx,
+                                         row_feats(ax, cur, dev, sphase),
+                                         a.chunk, a.amp, quant=iq, eps=eps)
+                        Zwin = torch.cat([Zwin[:, 1:], zhat[:, None]], 1)
+                        cur = cur[1:] + [r_next]
+                        prog.step(phase)
+                        sv_mem[m, i] = read_sv(zhat)
+                        if svu_mem is not None:
+                            svu_mem[m, i] = read_sv_unpooled(zhat)
+                        xc = decode_all(codec, zhat[_corr_ix], C,
+                                        a.chunk, a.amp).reshape(-1)
+                        s1[i] += xc
+                        s2[i] += float(np.dot(xc.astype(np.float64),
+                                              xc.astype(np.float64)))
+            if sv_u_out is not None:
+                sv_u_out.extend(svu_mem.mean(0).tolist())
+            disp = dispersion_block(
+                sv_mem, s1, s2, _n_corr, C, M_ens, phase,
+                [ax.label_of_row(r) for r in roll_rows])
+            if disp is None:
+                print(f"::warning::{label} {phase} dispersion is not finite "
+                      f"— the curve is OMITTED rather than written as NaN",
+                      flush=True)
+            return sv_mem.mean(0), roll_rows, disp
+
         _long_specs = [s.strip() for s in str(a.long_start or "").split(",")
                        if s.strip()]
 
@@ -2561,9 +3287,19 @@ def main():
             truth attaches on the AXIS ROW through `r_of_row`, `trained` is
             `t_hold` on that row's RAPID index, the lowpass is the same
             `smooth`, and the dict is built key for key in the same order, so
-            a single-start run is byte-identical to before the list existed."""
+            a single-start run is byte-identical to before the list existed.
+
+            E-057: an fgn head rolls the SAME hindcast M times and `sv` below
+            is the ensemble mean of the M transports; the dispersion curve is
+            returned BESIDE the block rather than inside it, so the block a
+            deterministic head writes gains no key."""
             sv_u = [] if read_sv_unpooled is not None else None
-            sv, roll_rows = long_roll(row, a.long_months, sv_u_out=sv_u)
+            disp = None
+            if FGN:
+                sv, roll_rows, disp = long_roll_ens(row, a.long_months,
+                                                    sv_u_out=sv_u)
+            else:
+                sv, roll_rows = long_roll(row, a.long_months, sv_u_out=sv_u)
             roll_ym = [ax.label_of_row(r) for r in roll_rows]
             truth = np.full(len(sv), np.nan)
             trained = np.zeros(len(sv), bool)
@@ -2603,7 +3339,14 @@ def main():
             print(f"  {label} long({spec}+{a.long_months}m): "
                   f"r_trained {r_tr} (n={n_tr}) · r_heldout {r_ho} "
                   f"(n={n_ho}) · lp18 r {r_lp} amp {amp_lp}", flush=True)
-            return blk
+            if disp is not None:
+                print(f"  {label} long({spec}) dispersion (M={M_ens}): "
+                      f"sv_spread {disp['sv_spread'][0]:.4f} → "
+                      f"{disp['sv_spread'][-1]:.4f} · field_var "
+                      f"{disp['field_var'][0]:.5f} → "
+                      f"{disp['field_var'][-1]:.5f} over {disp['steps']} "
+                      f"steps", flush=True)
+            return blk, disp
 
         # THE FIRST SPEC IS TODAY'S ROLL, under today's key, with today's
         # arithmetic. The rest (2026-08-22) are the PHASE DISCRIMINATOR: every
@@ -2628,10 +3371,20 @@ def main():
                       f"only {_row + 1} rows of history and this head needs "
                       f"K={K} for its context window", flush=True)
                 continue
-            blk = long_block(_row, _spec)
+            blk, _disp = long_block(_row, _spec)
             if "long" not in entry:
                 entry["long"] = blk
+                # E-057 §4. The PRIMARY hindcast's dispersion curve gets the
+                # spec's own top-level name, beside `entry["long"]` rather
+                # than inside it, so no archived key changes shape. The extra
+                # `--long-start` ends carry theirs inside their own
+                # `long_multi` block — dispersion always travels beside the
+                # series it describes.
+                if _disp is not None:
+                    entry["long_dispersion"] = _disp
             else:
+                if _disp is not None:
+                    blk["dispersion"] = _disp
                 multi.append(blk)
             # `long_multi` is attached HERE rather than after the loop (where
             # it used to live) so a partial write carries it too. Same key in
@@ -2645,8 +3398,13 @@ def main():
 
         if a.future_months > 0:
             sv_u = [] if read_sv_unpooled is not None else None
-            sv, roll_rows = long_roll(T - 1, a.future_months, "future",
-                                      sv_u_out=sv_u)
+            _fdisp = None
+            if FGN:
+                sv, roll_rows, _fdisp = long_roll_ens(
+                    T - 1, a.future_months, "future", sv_u_out=sv_u)
+            else:
+                sv, roll_rows = long_roll(T - 1, a.future_months, "future",
+                                          sv_u_out=sv_u)
             roll_ym = [ax.label_of_row(r) for r in roll_rows]
             entry["future"] = {"context_end": ax.label_of_row(T - 1),
                                "roll_ym": roll_ym,
@@ -2654,6 +3412,14 @@ def main():
             if sv_u is not None:                              # E-055
                 entry["future"]["sv_des_unpooled"] = [
                     round(float(v), 3) for v in sv_u]
+            if _fdisp is not None:                            # E-057 §4
+                entry["future_dispersion"] = _fdisp
+                print(f"  {label} future dispersion (M={M_ens}): sv_spread "
+                      f"{_fdisp['sv_spread'][0]:.4f} → "
+                      f"{_fdisp['sv_spread'][-1]:.4f} · field_var "
+                      f"{_fdisp['field_var'][0]:.5f} → "
+                      f"{_fdisp['field_var'][-1]:.5f} over "
+                      f"{_fdisp['steps']} steps", flush=True)
             write_results(a.out, results,
                           partial=mark("future", label, head_i))
             print(f"  {label} future → {a.out} (partial, stage=future)",
