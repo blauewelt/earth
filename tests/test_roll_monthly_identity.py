@@ -95,7 +95,12 @@ def base_copy(tmp):
     return p
 
 
-def run(script, f, out, cache):
+def run(script, f, out, cache, extra=()):
+    # The CURRENT evaluator defaults --unpooled-readout ON (Chris, 2026-08-27);
+    # this certificate pins the LEGACY pooled artefact byte-for-byte, so the
+    # modern script is invoked with the explicit opt-out. BASE_SHA's evaluator
+    # predates the flag and gets no extra args. Pinning the test, not the
+    # production default.
     os.makedirs(cache, exist_ok=True)
     env = dict(os.environ, PYTHONPATH=ML + os.pathsep
                + os.environ.get("PYTHONPATH", ""))
@@ -104,7 +109,7 @@ def run(script, f, out, cache):
            "--ckpt", f["ckpt"], "--out", out, "--horizon", "3",
            "--long-start", "1991-12", "--long-months", "16",
            "--future-months", "5", "--cache-dir", cache,
-           "--no-gate", "--heads", *f["heads"]]
+           "--no-gate", "--heads", *f["heads"], *extra]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800,
                        env=env, cwd=ROOT)
     if r.returncode != 0:
@@ -166,7 +171,8 @@ def main():
         base = base_copy(tmp)
         raw_new, log_new = run(os.path.join(ML, "rollout_spatial.py"), f,
                                os.path.join(tmp, "new.json"),
-                               os.path.join(tmp, "cache_new"))
+                               os.path.join(tmp, "cache_new"),
+                               extra=("--no-unpooled-readout",))
         raw_old, _ = run(base, f, os.path.join(tmp, "old.json"),
                          os.path.join(tmp, "cache_old"))
         print(f"1. ran both evaluators on one {f['P']}-pixel monthly ocean: "

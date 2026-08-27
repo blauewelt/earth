@@ -1346,23 +1346,12 @@ def main():
                     help="the same, past the end of the record; 0 skips it")
     ap.add_argument("--no-gate", action="store_true",
                     help="score without the e017_u1_s0 gate — smoke/toy ONLY")
-    ap.add_argument("--unpooled-readout", action="store_true",
-                    help="ALSO read transport off the rolled section WITHOUT "
-                         "pooling it (E-055): a learned softmax attention over "
-                         "the section's pixels, fitted on the TRAIN months of "
-                         "the RAPID truth only, written to NEW keys "
-                         "(`amoc_bands_unpooled`, `sv_des_unpooled`, "
-                         "`probe_unpooled`) beside the pooled ones. `read_sv` "
-                         "(:1811), GATE_REF, GATE_TOL and every existing key "
-                         "are untouched either way — three of the four gate "
-                         "criteria come through the pooled path and a moved "
-                         "number there makes every eval wave exit before it "
-                         "scores anything (ml/CLAUDE.md §3 exception 1). "
-                         "OFF BY DEFAULT, and that default is load-bearing: "
-                         "tests/test_roll_monthly_identity.py demands a "
-                         "MONTHLY roll.json be byte-identical to the "
-                         "archive's, which a new key would break. Turn it on "
-                         "deliberately, per roll.")
+    ap.add_argument("--unpooled-readout", action=argparse.BooleanOptionalAction,
+                    default=True, help="fit and write the UNPOOLED transport "
+                    "read-out (new keys beside the pooled legacy ones). ON BY "
+                    "DEFAULT (Chris, 2026-08-27: 'by default we should run "
+                    "unpooled'); --no-unpooled-readout restores the legacy-only "
+                    "artefact — the byte-identity test pins THAT path.")
     ap.add_argument("--unpooled-seed", type=int, default=0,
                     help="seed for the unpooled read-out's fit; recorded in "
                          "`probe_unpooled.seed` so the weights behind a "

@@ -457,7 +457,7 @@ def check_rollout(tmp):
     os.makedirs(rolldir, exist_ok=True)
     fx = build_fixture(rolldir)
     off, _ = roll(fx, os.path.join(tmp, "off.json"),
-                  os.path.join(tmp, "c_off"), [])
+                  os.path.join(tmp, "c_off"), ["--no-unpooled-readout"])
     on, log = roll(fx, os.path.join(tmp, "on.json"),
                    os.path.join(tmp, "c_on"), ["--unpooled-readout"])
 
