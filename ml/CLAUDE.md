@@ -1134,9 +1134,21 @@ archive.
   non-zero, so the meter never outlives the refusal, and re-running create
   is a fresh host draw. `--allow-unhealthy` is the investigation-only
   override. Preemptible v5e quota EXISTS beside the on-demand 4 cores
-  (measured 2026-08-26), so a spot node can run alongside an on-demand one;
-  spot is the default for verify/short jobs and, with bucket resume, for
-  training — the honest price is the day's, on-demand list is $1.20/chip-h.
+  (measured 2026-08-26), so a spot node can run alongside an on-demand one.
+- **STANDING RULE (Chris, 2026-08-27): every TPU dispatch tries SPOT FIRST**
+  — in the launch zone, then across the zone ladder (us-west1-c ·
+  us-west4-a/b · us-central1-a · us-east5-a/b/c) — and falls back to
+  on-demand only when no zone has spot capacity. This is safe because the
+  full preemption kit is in place and exercised: bucket checkpoints every
+  `CKPT_EVERY` steps, exact resume under the same node name, the boot
+  beacon's ~6-minute zombie verdict, and the lemon guard. **Every
+  spot-specific incident and its cost — a preemption, a lemon redraw, a
+  zone with no capacity, an on-demand fallback — is APPENDED to
+  [`ml/SPOT_LEDGER.md`](../ml/SPOT_LEDGER.md) in the same session that hits
+  it** (Chris asked for the running record explicitly); the ledger also
+  decodes GCP's misleading error spellings (`Reservation not found` = spot
+  capacity, `Limit: N` = check your own request size first). On-demand list
+  is $1.20/chip-h; the only honest spot price is the console's on the day.
 - **A node can pass the birth check and STILL be a zombie — but the boot
   verdict must be calibrated to the LAUNCHER, and the health field's
   "maintenance event" note decides nothing.** 2026-08-26, both mistakes in
