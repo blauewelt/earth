@@ -821,11 +821,17 @@
     }).slice(0, TPU_CHARTS);
   }
 
-  // The curve, drawn with the SAME code the GPU cards use. A TPU run's
-  // metrics.jsonl is written by the same trainer, so parseJsonl + stage2Chart
-  // read it unchanged — held-out line, learning-rate overlay, ETA and all.
-  // Nothing new is built here; if a shape ever arrives that stage2Chart cannot
-  // draw it returns "", which is the correct answer.
+  // The curve, drawn with the SAME code the GPU cards use where the format
+  // matches: a stencil-tier TPU run writes stage2_* records and parseJsonl +
+  // stage2Chart read it unchanged — held-out line, LR overlay, ETA and all.
+  // A FIELD-tier run (E-052, ml/jaxport/train_field.py) writes its own
+  // record family, which stage2Chart correctly refuses — before 2026-08-27
+  // that refusal meant a live field run's card had numbers and no curve, and
+  // Chris had to ask whether curves existed at all. fieldChart is that
+  // format's renderer (loss + val-ratio panels + ETA); whichever of the two
+  // recognises the file draws, and both returning "" — a shape neither
+  // knows — leaves the card standing without a curve, which is the correct
+  // answer.
   function tpuCharts(picks) {
     return Promise.all((picks || []).map(function (r) {
       return fetch(tpuRaw(encodeURIComponent(r.node) + "/metrics.jsonl"))
@@ -833,7 +839,9 @@
         .then(function (text) {
           if (text === null) return;
           var host = $(tpuChartId(r.node));
-          if (host) host.innerHTML = stage2Chart(parseJsonl(text));
+          if (!host) return;
+          var m = parseJsonl(text);
+          host.innerHTML = fieldChart(m) || stage2Chart(m);
         })
         .catch(function () { /* the card stands without its curve */ });
     })).then(function () {});
@@ -879,6 +887,13 @@
     var loss = [], probes = [], cfg = null, resumed = null, emb = null;
     var s2 = [], s2probe = [], s2cfg = null, s2res = null, s2res_from = null, s2warm = null;
     var jt = [], jcfg = null, sroll = null;
+    // The FIELD trainer (ml/jaxport/train_field.py, E-052) writes its own
+    // record family: a `field_config` header, plain {step, loss, wall_s}
+    // training records, and `field_eval` blocks every eval_every steps. None
+    // of those carry stage2_* keys, so before 2026-08-27 a field run's card
+    // showed its last line's numbers and NO curve — Chris: "Do TPU
+    // experiments have a curve on our status page?" They do now.
+    var fcfg = null, fsteps = [], fevals = [];
     text.split("\n").forEach(function (line) {
       line = line.trim();
       if (!line) return;
@@ -905,6 +920,12 @@
       if (o && o.embedding) { emb = o.embedding; return; }
       if (o && o.joint_config) { jcfg = o.joint_config; return; }
       if (o && typeof o.joint_step === "number") { jt.push(o); return; }
+      // Reset-on-config, same discipline as `config` above — but the field
+      // trainer's `resumed` record precedes its `field_config` in the file
+      // (the trainer announces the continuation before its header), so the
+      // reset must NOT clear `resumed` or the seam is lost.
+      if (o && o.field_config) { fcfg = o.field_config; fsteps = []; fevals = []; return; }
+      if (o && o.field_eval && typeof o.field_eval === "object") { fevals.push(o.field_eval); return; }
       if (o && o.stage2_config) { s2cfg = o.stage2_config; return; }
       if (o && o.stage2_resumed) { s2res_from = o.stage2_resumed; return; }
       // A WARM RESTART is not a continuation and must not be drawn as one:
@@ -924,13 +945,17 @@
       if (o && typeof o.step === "number" && typeof o.loss_rec === "number" && typeof o.loss_nei === "number") {
         loss.push(o);
       } else if (o && typeof o.step === "number") {
-        probes.push(o);
+        // Inside a field file (a field_config has been seen) a bare
+        // {step, loss} record is a training point, not a probe.
+        if (fcfg && typeof o.loss === "number") fsteps.push(o);
+        else probes.push(o);
       }
     });
     return { loss: loss, probes: probes, cfg: cfg, resumed: resumed, sroll: sroll,
              s2: s2, s2probe: s2probe, s2cfg: s2cfg, s2res: s2res, s2from: s2res_from,
              s2warm: s2warm,
-             jt: jt, jcfg: jcfg, emb: emb };
+             jt: jt, jcfg: jcfg, emb: emb,
+             fld: fcfg ? { cfg: fcfg, steps: fsteps, evals: fevals } : null };
   }
 
   // ---- continuations: one trajectory, two jobs ------------------------------
@@ -1333,6 +1358,108 @@
                    fmtInt(m.s2cfg.steps) + " steps · " + esc(e) + "</div>" : "";
       })() +
       stage2Verdict(m);
+  }
+
+  // The FIELD head's curves (E-052 tier, ml/jaxport/train_field.py). Two
+  // panels, deliberately, instead of stage2Chart's shared axis: the train
+  // loss (EDM-weighted, ~10-18) and the val ratio-vs-persistence (0-1) are
+  // different quantities on different scales, and one axis would flatten
+  // whichever matters less. The ratio panel carries the persistence bar at
+  // exactly 1.0 — same affordance as stage2Chart's persistence line — and
+  // the eval points are few (one per eval_every), so they get dots. A diff-
+  // mode run's evals carry ens_ratio instead of ratio; chart whichever the
+  // trainer wrote, and say which in the label.
+  function fieldChart(m) {
+    var f = m.fld;
+    if (!f || !f.steps || f.steps.length < 2) return "";
+    var W = 600, H = 110, padL = 46, padR = 10, padT = 10, padB = 22;
+    var cfg = f.cfg || {};
+    var xmax0 = Math.max.apply(null, f.steps.map(function (p) { return p.step; }));
+    var xmax = (cfg.steps && cfg.steps > xmax0) ? cfg.steps : xmax0;
+    var xmin = 0, xspan = xmax - xmin || 1;
+    var seam = (m.resumed && typeof m.resumed.at_step === "number" && m.resumed.at_step > 0)
+      ? m.resumed.at_step : null;
+    var seamLine = function (yTop, yBot) {
+      if (seam === null) return "";
+      var x = (padL + (W - padL - padR) * (seam - xmin) / xspan).toFixed(1);
+      return '<line x1="' + x + '" y1="' + yTop + '" x2="' + x + '" y2="' + yBot +
+             '" stroke="#6e7681" stroke-width="1" stroke-dasharray="3 3"/>';
+    };
+    var frame = function (label) {
+      return '<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+             '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+             '<text x="' + (W - padR) + '" y="' + (H - 6) + '" text-anchor="end" font-size="11" fill="#8b949e">' + fmtInt(xmax) + "</text>";
+    };
+    // ---- panel 1: train loss ----
+    var ls = f.steps;
+    var lmin = Math.min.apply(null, ls.map(function (p) { return p.loss; }));
+    var lmax = Math.max.apply(null, ls.map(function (p) { return p.loss; }));
+    var lspan = (lmax - lmin) || 1;
+    var lline = polyline(ls.map(function (p) { return [p.step, p.loss]; }),
+                         xmin, xspan, lmin, lspan, W, H, padL, padR, padT, padB);
+    var cfgTxt = (cfg.mode ? esc(String(cfg.mode)) + " · " : "") +
+      (cfg.d_model ? cfg.d_model + "&times;" + cfg.layers : "") +
+      (cfg.K ? " · K=" + cfg.K : "") + (cfg.patch ? " · patch " + cfg.patch : "") +
+      (cfg.params ? " · " + (cfg.params / 1e6).toFixed(1) + "M params" : "") +
+      (cfg.batch ? " · batch " + cfg.batch : "") +
+      (cfg.steps ? " · " + fmtInt(cfg.steps) + " steps" : "");
+    var out = '<div class="probe" style="margin-top:12px"><b>field head</b> — joint next-field prediction over the frozen embeddings' +
+      (cfgTxt ? ' <span class="meta">(' + cfgTxt + ")</span>" : "") + "</div>" +
+      '<svg class="chart" viewBox="0 0 ' + W + " " + H +
+      '" role="img" aria-label="field head training loss">' + frame() +
+      '<text x="' + (padL - 6) + '" y="' + (padT + 5) + '" text-anchor="end" font-size="11" fill="#8b949e">' + lmax.toFixed(2) + "</text>" +
+      '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">' + lmin.toFixed(2) + "</text>" +
+      '<polyline points="' + lline + '" fill="none" stroke="#a371f7" stroke-width="2" stroke-linejoin="round"/>' +
+      seamLine(padT, H - padB) +
+      "</svg>" +
+      '<div class="legend"><span><span class="sw" style="background:#a371f7"></span>train loss</span>' +
+      (seam !== null ? "<span>seam: resumed at " + fmtInt(seam) + "</span>" : "") + "</div>";
+    // ---- panel 2: val ratio vs persistence ----
+    var rkey = null;
+    (f.evals || []).some(function (e) {
+      if (typeof e.ratio === "number") { rkey = "ratio"; return true; }
+      if (typeof e.ens_ratio === "number") { rkey = "ens_ratio"; return true; }
+      return false;
+    });
+    var evs = (f.evals || []).filter(function (e) {
+      return typeof e.step === "number" && typeof e[rkey] === "number";
+    });
+    if (rkey && evs.length >= 2) {
+      var rmax = Math.max(1, Math.max.apply(null, evs.map(function (e) { return e[rkey]; })));
+      var rmin = 0, rspan = rmax - rmin || 1;
+      var yOf = function (v) { return padT + (H - padT - padB) * (1 - (v - rmin) / rspan); };
+      var rline = polyline(evs.map(function (e) { return [e.step, e[rkey]]; }),
+                           xmin, xspan, rmin, rspan, W, H, padL, padR, padT, padB);
+      var dots = evs.map(function (e) {
+        var x = padL + (W - padL - padR) * (e.step - xmin) / xspan;
+        return '<circle cx="' + x.toFixed(1) + '" cy="' + yOf(e[rkey]).toFixed(1) +
+               '" r="3" fill="#58a6ff"/>';
+      }).join("");
+      out += '<svg class="chart" viewBox="0 0 ' + W + " " + H +
+        '" role="img" aria-label="field head validation ratio vs persistence">' + frame() +
+        '<text x="' + (padL - 6) + '" y="' + (padT + 5) + '" text-anchor="end" font-size="11" fill="#8b949e">' + rmax.toFixed(2) + "</text>" +
+        '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">0</text>' +
+        '<line x1="' + padL + '" y1="' + yOf(1).toFixed(1) + '" x2="' + (W - padR) +
+        '" y2="' + yOf(1).toFixed(1) + '" stroke="#8b949e" stroke-width="1" stroke-dasharray="4 3"/>' +
+        '<text x="' + (W - padR) + '" y="' + (yOf(1) - 4).toFixed(1) +
+        '" text-anchor="end" font-size="10" fill="#8b949e">persistence 1.0</text>' +
+        '<polyline points="' + rline + '" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-linejoin="round"/>' +
+        dots + seamLine(padT, H - padB) + "</svg>" +
+        '<div class="legend"><span><span class="sw" style="background:#58a6ff"></span>val ' +
+        (rkey === "ens_ratio" ? "ensemble-mean ratio" : "one-step ratio") +
+        " vs persistence · latest <b>" + evs[evs.length - 1][rkey].toFixed(4) + "</b></span></div>";
+    }
+    // ---- ETA — the same arithmetic as stage2Chart's and the GPU cards',
+    // from the job's OWN wall clock. The base is the resume seam: wall_s
+    // restarts at 0 on a new node, so pace must be measured over the steps
+    // THIS job actually took, or a resumed run reads ~5x too fast.
+    var last = ls[ls.length - 1];
+    if (cfg.steps && typeof last.wall_s === "number") {
+      var e = etaText(secLeftFrom(last.step, last.wall_s, cfg.steps, seam || 0));
+      if (e) out += '<div class="meta">' + fmtInt(last.step) + " of " +
+                    fmtInt(cfg.steps) + " steps · " + esc(e) + "</div>";
+    }
+    return out;
   }
 
   function stage2Verdict(m) {

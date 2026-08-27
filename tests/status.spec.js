@@ -222,6 +222,16 @@ const TPU_INDEX = {
       last: { embedding: { pct: 41.0, month: 214, months: 516,
                            elapsed_s: 2300, eta_s: 3300, where: "ram" } },
     },
+    // The FIELD trainer's format (E-052.1, ml/jaxport/train_field.py):
+    // field_config + plain {step, loss} records + field_eval blocks, and a
+    // `resumed` record BEFORE the config (the real file order — the trainer
+    // announces the continuation, then writes its header). Cut down from the
+    // real e052-1-train of 2026-08-27.
+    {
+      node: "e052-1-train", exp: "E-052", state: "TRAINING",
+      metrics_updated: iso(1), finals: [],
+      last: { step: 7000, loss: 10.82, grad_norm: 4.2, wall_s: 18000.0 },
+    },
   ],
   updated: iso(2),
 };
@@ -247,6 +257,26 @@ const TPU_E052 = jsonl([
   { stage2_config: { d_model: 768, layers: 12, K: 48, steps: 120000, d_z: 32 } },
   { embedding: { pct: 41.0, month: 214, months: 516, elapsed_s: 2300,
                  eta_s: 3300, where: "ram" } },
+]);
+
+// The field trainer's own metrics.jsonl. The arithmetic the ETA test pins:
+// this job resumed at step 1000 with its OWN wall clock at 0, so pace is
+// wall_s / (step - 1000) = 18000 / 6000 = 3 s/step, and 17,000 steps remain
+// -> 51,000 s = "~14.2 h left". Measured base-less, the same numbers would
+// read 18000/7000 = 2.57 s/step — the seam is load-bearing.
+const TPU_FIELD = jsonl([
+  { resumed: { from: "ckpt_latest.npz", at_step: 1000, to_step: 24000, backend: "jax" } },
+  { field_config: { mode: "det", d_model: 1024, layers: 10, heads: 8, K: 144,
+                    patch: 4, batch: 8, steps: 24000, params: 200406016,
+                    d_z: 32, ntok: 5875, sigma_data: 4.4712 } },
+  { step: 1200, loss: 14.04, grad_norm: 1.88, lr: 2.9e-4, wall_s: 730.1 },
+  { step: 2000, loss: 13.29, grad_norm: 2.0, lr: 2.8e-4, wall_s: 3100.0 },
+  { field_eval: { step: 2000, loss: 13.28553, mse: 13.48322, mse_pers: 19.71783,
+                  ratio: 0.68381, lr: 2.8e-4, grad_nonfinite: 0 } },
+  { step: 4000, loss: 12.37, grad_norm: 2.1, lr: 2.4e-4, wall_s: 9100.0 },
+  { field_eval: { step: 4000, loss: 12.37066, mse: 11.43384, mse_pers: 19.71783,
+                  ratio: 0.57987, lr: 2.4e-4, grad_nonfinite: 0 } },
+  { step: 7000, loss: 10.82, grad_norm: 4.2, lr: 1.9e-4, wall_s: 18000.0 },
 ]);
 
 test.beforeEach(async ({ page }) => {
@@ -281,6 +311,7 @@ test.beforeEach(async ({ page }) => {
     if (/ml-live-tpu\/index\.json/.test(url)) return fulfill(JSON.stringify(TPU_INDEX));
     if (/ml-live-tpu\/e051-k144-full\/metrics\.jsonl/.test(url)) return fulfill(TPU_E051);
     if (/ml-live-tpu\/e052-k48-warm\/metrics\.jsonl/.test(url)) return fulfill(TPU_E052);
+    if (/ml-live-tpu\/e052-1-train\/metrics\.jsonl/.test(url)) return fulfill(TPU_FIELD);
     if (/ml-metrics\/fleet\.json/.test(url)) {
       // $20 credit, $1/h burn, snapshot 2 h old -> $18 left, 18 h runway.
       return fulfill(JSON.stringify({
@@ -547,7 +578,7 @@ test("the TPU section renders a run in each state, with a distinct badge",
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/status.html");
-  await expect(page.locator("#tpu .card")).toHaveCount(4);
+  await expect(page.locator("#tpu .card")).toHaveCount(5);
 
   // The state pill, one class per state, so TRAINING / FINISHED / REAPED are
   // told apart by colour and not only by reading the word.
@@ -556,10 +587,35 @@ test("the TPU section renders a run in each state, with a distinct badge",
   await expect(tpuCard(page, "e049-hold").locator(".st.reaped")).toHaveText("REAPED");
 
   // The live run leads. The mirror's own order is alphabetical by node, which
-  // buried the only running job under three finished ones.
+  // buried the only running job under three finished ones. Among the live
+  // runs, freshest metrics first — the field run (iso(1)) over e051 (iso(3)).
   await expect(page.locator("#tpu .card").first().locator("h3"))
-    .toContainText("e051-k144-full");
+    .toContainText("e052-1-train");
   expect(errors).toEqual([]);
+});
+
+test("a field-format TPU run gets curves and an ETA; a stage-2 one keeps its ETA too",
+  async ({ page }) => {
+  await page.goto("/status.html");
+  const card = tpuCard(page, "e052-1-train");
+  // Two panels: the train loss and the val ratio with the persistence bar.
+  await expect(card.locator("svg.chart")).toHaveCount(2);
+  await expect(card).toContainText("field head");
+  await expect(card).toContainText("persistence 1.0");
+  await expect(card).toContainText("val one-step ratio");
+  await expect(card).toContainText("0.5799");   // latest eval, 4 dp
+  // The ETA is arithmetic, not a guess: the fixture's pace is exactly
+  // 3 s/step measured from the RESUME SEAM (wall 18,000 s over steps
+  // 1,000 -> 7,000), so 17,000 remaining steps read 51,000 s = ~14.2 h.
+  // Base-less arithmetic would say 12.1 h — the assertion pins the seam.
+  await expect(card).toContainText("7,000 of 24,000 steps");
+  await expect(card).toContainText("~14.2 h left");
+  await expect(card).toContainText("ends ≈");
+  // The stage-2-format live run keeps the ETA stage2Chart always carried:
+  // 28,000 steps left at 51,713.5 s / 172,000 steps = ~2.3 h.
+  const live = tpuCard(page, "e051-k144-full");
+  await expect(live).toContainText("172,000 of 200,000 steps");
+  await expect(live).toContainText("~2.3 h left");
 });
 
 test("a TPU run links to its experiment definition", async ({ page }) => {
