@@ -495,10 +495,13 @@ geometry, same code (dc37494). Same falsifier and controls as (h) — whichever
 arm's VAL curve is better at matched step becomes E-052.1's reported number,
 and the loser is the LR ablation. Zone note: both us-west1-c slots are
 occupied (this experiment on-demand; the E-051 continuation on spot), so this
-arm uses us-central1-a's grant — yesterday's cross-zone 429s were the
-v5litepod-8 request bug, and GCP's own error text ("Limit: 4 in zone
-us-central1-a") is the evidence the grant exists. Cost: ≈$106 on-demand /
-≈$40 spot, ≈22 h.
+arm went zone-shopping — yesterday's cross-zone 429s were the v5litepod-8
+request bug, and GCP's own error text ("Limit: 4 in zone us-central1-a") was
+the evidence per-zone grants exist. Measured 12:25Z: us-central1-a has NO
+capacity (code 8, spot AND on-demand — a capacity error, not quota);
+**us-west4-a spot served a healthy node first try** (boot beacon at +4 min).
+Runs on `us-west4-a` spot: ≈$40, ≈22 h, preemption covered by the
+ckpt-every-1,000 resume machinery.
 
 <a id="e-050"></a>
 ## E-050 · Warm-start quantization: the trained continuous codec, lattice switched on — #485 DISPATCHED 06:32Z 2026-08-26 (approved by Chris 2026-08-25 ~15:30Z, b3ee36a)
