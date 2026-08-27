@@ -200,6 +200,67 @@ behind #488 (A3); ~$1.5.
 
 ---
 
+<a id="e-056"></a>
+## E-056 · Tokens as the forecasting substrate — the "true FSQ" gate, DISPATCHED 2026-08-27 ~13:0xZ (Chris: "let's continue with FSQ then")
+
+TL;DR — E-050's warm-start codec compresses each pixel-timestep to a
+16-bit alphabet (d_z 6 through FSQ [8,8,8,5,5,5] ≈ 64k codes) — a ~30×
+smaller state than d_z 32. This week's span results say long dense history
+is what wins, and long dense history is expensive in exactly the currency
+tokens are cheap (input volume, gather bandwidth, host pipeline). E-056
+gates the token road: do stage-2 heads trained ON the warm-quantized z
+forecast competitively — and what does K=144 actually cost on it?
+
+**E-056a · stage-2 head at the standard pentad configuration over the
+E-050 warm-FSQ codec's z (d_z 6, quantized) · params ~206.5M-class head
+(input proj shrinks: d_z 6) · stage stage-2 · data family4_na025_pentad_r2
+· arch head 1024×16 K 24 stencil 145 ring spiral znoise 0.7 grad-clip 128
+seed 0 · steps×batch 20k×256 · resume run-485@260k (fsq-warm final;
+recipe f4r2-40M-dz6-fsq65k-warm; stage 1 trains nothing).** Registered
+readings, controls E-046's lattice-d_z-32 0.4394 and continuous 0.5056
+(both K=24 20k): **≲0.44 ⇒ the 16-bit token matches/beats the d_z-32
+lattice as a substrate — the token road opens at 5% of the state size;
+≳0.50 ⇒ warm quantization survived training but lost the forecastable
+information — the audit's question answered from the stage-2 side.**
+**E-056b · the SAME over K=144** (`--K 144` window tail): controls #478's
+0.0820 and E-051's step time; the run's measured s/step IS the efficiency
+datapoint (d_z-6 gather is ~5.3× less data than d_z-32). Registered:
+≈0.08 at materially faster steps ⇒ dense long context becomes cheap —
+the next full-budget head should train on tokens; ≳0.15 ⇒ the token
+substrate degrades under long context and the road needs the audit's
+diagnosis first.
+
+Known risks registered at dispatch: (1) **the 260k warm-FSQ final exists
+box-locally on 48520137 ONLY** — `model-checkpoints-v1` carries
+`rescued-orphan-latest-485.pt` which this session OPENED and found to be
+the step-200,000 PRE-FSQ parent (fsq args empty), so the canonical
+`run-485__pixelmae.pt` fallback is deliberately left absent (fail-fast
+beats silently resuming the wrong codec); the first-minutes check MUST
+read the `resumed` record's `at_step: 260000` and the config's
+`fsq_levels: 8,8,8,5,5,5`, and the job's own publish step is what makes
+the 260k final durable at last (E-050's §5.26 gap, flagged to its
+session via expectations). (2) znoise σ=0.7 is an absolute dose calibrated
+on d_z-32 z; on the quantized d_z-6 scale the RELATIVE dose differs —
+read `input_znoise_rel_pers` in the monitor and record it beside the
+verdict (E-045-A4's lesson: noise dose does not transfer as a constant).
+(3) The embed pass writes the FIRST token-Z cache (≈3 GB vs 16.24 GB) —
+publish it; it is the efficiency artefact. n=1 directions per §3b.
+~$1.5 (a) + ~$2–3 (b incl. embed), sequential behind #489 (E-053.1-A4).
+
+**The prioritization rule this wave instantiates (Chris: "think of the
+best way to prioritize such efficiency-inducing experiments"):** an
+efficiency experiment is scheduled BEFORE the next big spend on the axis
+it cheapens, and never blocks spends on other resource pools. Concretely:
+E-056 gates the next full-budget pentad head (a ~$100-class spend that
+would train on tokens if E-056 passes) but does NOT gate E-054a/b (TPU
+pool, already priced) or the E-051 roll (eval, different question). The
+general form: price the gate (~$5–8 here) against (expected saving ×
+planned spend on that axis) — tokens at ~30× input reduction against a
+$100+/run axis clears it by an order of magnitude; run such gates on idle
+box time the moment they clear the bar.
+
+---
+
 <a id="e-055"></a>
 ## E-055 · The unpooled stage-2 transport read-out — BUILD STARTED 2026-08-27 (Chris: "let's take 4 first")
 
