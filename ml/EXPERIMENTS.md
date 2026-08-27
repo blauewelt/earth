@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-057"></a>
-## E-057 · FGN-mode stage-2: noise-conditioned stencil head trained with fair CRPS — E-057.0 BUILT AND CPU-VERIFIED 2026-08-27 (no GPU arm dispatched; approved by Chris: "let's prioritize an experiment with: 1. Noise-conditioned stage-2 head trained with fair CRPS")
+## E-057 · FGN-mode stage-2: noise-conditioned stencil head trained with fair CRPS — E-057.0 BUILT + CPU-VERIFIED; **E-057.1 pair DISPATCHED 2026-08-27 ~17:5xZ (#492 seed 0 · #493 seed 1)**; cross-verified against DeepMind's open-source FGN (google-deepmind/weathernext)
 
 TL;DR — can the stencil head stop emitting the conditional mean (the blur
 that damps every roll toward climatology) and instead SAMPLE a member of the
@@ -144,6 +144,79 @@ on an FGN head raises — which is the guard that makes `rollout_spatial.py`
 REFUSE an E-057 head loudly instead of rolling it clean; the ensemble roll
 (M members, ε resampled per step per member — FGN's convention) is its own
 follow-up diff and its own experiment entry.
+
+**(g) Cross-verification against the OFFICIAL FGN implementation.** DeepMind
+open-sourced FGN as WeatherNext 2
+([google-deepmind/weathernext](https://github.com/google-deepmind/weathernext),
+Apache-2.0; `weathernext/weathernext2/fgn.py` + `utils/dense.py`), and
+E-057.0 was checked against it line by line rather than against the paper's
+prose alone. **Matches, exactly:** the CRPS loss — their `crps_loss` at
+`unbiased=True` is mean|xᵢ−y| − Σ_{j<i}|xᵢ−xⱼ|/(M(M−1)), which at M=2 is our
+`fair_crps2` term for term; the conditional-norm arithmetic — their
+`LinearNormConditioning` is `inputs·(1+scale_minus_one)+offset` from a linear
+of the conditioning vector, our FiLM exactly; noise as a global vector
+entering every block's norms; and the rollout convention — noise is drawn
+inside every predictor call, so an AR roll resamples ε each step with the
+model seed fixed per trajectory, which is what the E-057 plan registered.
+**Three deliberate deviations, each strictly safe:** (i) our film layers are
+EXACT-zero-init where theirs are TruncatedNormal(1e-8) — ours makes the
+init-identity bitwise instead of 1e-8-close; (ii) we keep the stock
+LayerNorm's own affine and modulate on top, where they disable it
+(`create_scale=False`) — required for legacy-checkpoint key compatibility,
+same function class; (iii) we produce separate (scale, shift) per sub-layer
+norm (film → 4·d) where they share one conditioning layer per block — ours
+is a superset. **Two of their details imported as registered cautions for
+LATER arms, not code changes now:** their loss NaN-masks predictions
+wherever targets are NaN so the spread term cannot be inflated at
+unobserved points — irrelevant for our dense z-space targets, MANDATORY if
+E-057 ever trains a decoded-channel-space CRPS (targets there carry missing
+tokens); and their residual-target shift (subtract the per-sample target
+deviation) exists for AR-rollout training where targets vary per member —
+irrelevant at U=1, mandatory if an fgn head is ever rollout-fine-tuned.
+
+<a id="e-057-1"></a>
+**(h) E-057.1 DISPATCHED 2026-08-27 ~17:5xZ — the two-seed pair.**
+
+**#492 (E-057.1a FGN pair seed 0) · eps~N(0,1)^32 through zero-init
+conditional LayerNorms + fair CRPS at N=2 replaces MSE, input-znoise OFF ·
+params ~211M-class (xl144 + eps path; read the true count off
+stage2_config.params_M) · stage stage-2 · data family3_na025 · arch temporal
+1024×16 K24 stencil 145 sunflower-144 (the E-036 geometry verbatim) ·
+steps×batch 200,000×256 (~2× step cost — two forwards per step) · resume
+run-62,run-63 (frozen f3 anchor codec).** On `gpu-box-40623952`
+(online-idle at dispatch → starts immediately). **#493 (E-057.1b, seed 1)**:
+identical but `seed:1`, queued on `gpu-box-32966687` BEHIND #490/#491 —
+the E-056 queue is untouched and ahead of it. Dispatch blocks are the
+verbatim #359/#360 INPUTS_JSON (recovered from their logs) with exactly
+four changes, each recorded: `seed`, `--input-znoise 0.7 → 0` plus
+`--fgn-eps 32 --fgn-val-members 8` on the sched: tail, `head_probe
+false → "true"` (the §3 unpooled ruling postdates E-036; copying the old
+default verbatim would repeat the #414–#419 missing-head-number failure),
+and `job_timeout 1800 → 2100` (~2× #359's measured 15.9 h + margin).
+Plans: `ml-metrics/plan-492.json` / `plan-493.json` (expdecay, peak 1e-3,
+cooldown 0, milestones 600/60k/120k — plan-359's values).
+
+Hypothesis and controls (pre-registered,
+[the plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E057_fgn_head.md)):
+the LEARNED perturbation + proper score replaces the hand-dosed input noise
+— ensemble-mean corridor AUC read against the znoise pair (**0.7235/0.7240**)
+and the clean pair (0.6781), both two-seed controls at this exact geometry.
+**F1**: below the znoise band ⇒ the FGN move fails to replace znoise on the
+incumbent scoreboard. **F2**: `stage2_val_member_var` sliding to 0 ⇒ ε
+ignored (collapse); it is on the live branch precisely so this is visible
+DURING the run. **F3** (at roll time): the dispersion battery before any
+rolled number is quoted as forecast. The corridor read needs the ensemble
+roll (E-057 roll diff — in progress as this is written); the roll is scored
+AFTER training from the published heads, so the training pair does not wait
+on it. **Registered hazards:** (i) at ~2× of 15.9 h both runs likely exceed
+the 24 h job-token expiry — the archive steps will 401-and-report-success
+(§8, the #419 mechanism), so **both runs are hand-harvest jobs**: pull
+`run-49{2,3}.jsonl` + `temporal*.pt` from the box/live branch when they
+finish, never trust a green archive step. (ii) The FGN-mode
+`stage2_val_zmse` is the ENSEMBLE-MEAN MSE (M=8 fixed bank) — comparable in
+spirit but not in mechanism to the deterministic curves; the config record
+says so. (iii) Cost: ~2 × 30 h-class box-time, ≈$15–20 total at $0.24/h —
+recorded at dispatch per §3's cost rule.
 
 **Verification: `tests/test_fgn_head.py` (new, 8 suites) green; existing
 `test_resume_temporal` / `test_direct_heads` / `test_e022_stencil` (24
