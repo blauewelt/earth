@@ -183,6 +183,20 @@ directly from provenance under each run**, so the fields that can be generated
 are generated, and the fields a human must choose — what the run DOES, in
 absolute terms — are the ones the `doc` string is for.
 
+**A NEW TRAINER FORMAT MUST TEACH THE STATUS PAGE ITS RECORDS, in the same
+change that ships the trainer.** status.html's `parseJsonl` routes by record
+key, and a family it does not know is silently dropped — the card still
+renders (the mirror's `last`-line fallback), so nothing LOOKS broken, and the
+gap surfaces as a question from Chris instead of a test failure (2026-08-27:
+E-052.1 trained for hours with numbers but no curve and no ETA — *"Do TPU
+experiments have a curve (during their run) on our status page?"*). The
+field family (`field_config` / plain `{step, loss}` / `field_eval`, plus a
+`resumed` record that PRECEDES its config and must survive the
+reset-on-config) is handled by `fieldChart`; every live TPU card now carries
+an ETA computed from the job's own wall clock with the RESUME SEAM as the
+step base — wall_s restarts at 0 on a new node, so base-less pace reads too
+fast. tests/status.spec.js pins the seam arithmetic by construction.
+
 ## 0f · A status report is a structured summary across experiments, in four fixed sections
 
 Standing rule, Chris 2026-08-25: *"We can make a standing rule to provide a
