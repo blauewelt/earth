@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-053"></a>
-## E-053 · The space-time stencil — SCOPED 2026-08-26, plan written, nothing dispatched (Chris's direction: "take the sunflower to the 4th dimension")
+## E-053 · The space-time stencil — E-053.0 measured, E-053.1 arms in flight; A1's verdict landed 2026-08-27 (Chris's direction: "take the sunflower to the 4th dimension")
 
 TL;DR — today's stencil samples a dense K×145 slab of spacetime (every slot at
 every frame, attention over time only); E-045 says span is the axis and the
@@ -87,9 +87,10 @@ carries real beyond-climatology information, directly motivating A1's pins.
 Numbers + caveats (argmax-lag blindness to sub-dominant advection; wind
 channels inflate lag-0): plan §4 and `ml/runs/e053_cone.json`.
 
-**E-053.1 DISPATCHED, 2026-08-26 ~15:5xZ — three arms, sequential on
-gpu-box-39184683 (Vast 47724565, 504 GB RAM, tensor + Z warm from
-#423/#427/#432).** All three: **#427's exact configuration (206.5M-class
+**E-053.1 DISPATCHED, 2026-08-26 ~22:09Z — three arms, sequential on
+gpu-box-32966687 (Vast 48520137; the HK box 47724565 answered
+`resources_unavailable` with a queued state change — the idle-burn risk is
+logged in `claude/expectations.md`).** All three: **#427's exact configuration (206.5M-class
 xl144+znoise head, stencil 145, ring spiral, znoise 0.7, grad-clip 128,
 seed 0) · stage stage-2 · data family4_na025_pentad_r2 · resume run-415
 (steps 197,428 — read off the artefact, nothing trains in stage 1) ·
@@ -110,10 +111,39 @@ exists.
 | #487 | **A2 log-ramp-24** | 24 · 715 d | log-spaced 0…−143 (incl. −73) | ≈0.08 at 1/6 the frames ⇒ span decoupled from K; ≈0.5 ⇒ the slab was load-bearing |
 | #488 | **A3 decade-32** | 32 · 3,650 d | log ramp 0…−730 + pins at −1…−10 y | first >2-y span at any cadence; ratio < 0.0820 ⇒ span still paying (decadal territory); ≈0.082 ⇒ 2 y saturates |
 
-Cost ≈ $1.1–1.5/arm on the $0.308/h HK box (0.35 s/step × 20k ≈ 2 h + warm
-preamble), job_timeout 600 min each (the E-045 HK lesson). A3's pool
-shrinks by construction (t ≥ 730: ~77% of anchors remain) — printed count
-checked at first minutes, not a bug.
+Cost ≈ $1.1–1.5/arm (measured 0.264 s/step × 20k ≈ 97 min stage-2 + probe
+tail), job_timeout 600 min each (the E-045 HK lesson). A3's pool shrinks by
+construction (t ≥ 730: ~77% of anchors remain) — printed count checked at
+first minutes, not a bug. First-minutes checks on #486 all passed:
+`frame_offsets` echoed in the config record, K 16, params_M 206.528,
+monitor val_persistence **21.44621 — bit-identical to #427's**, the
+denominator-invariance the instrument promised.
+
+**01:35Z 08-27 — A1's VERDICT: 0.1858, BETWEEN THE REGISTERED THRESHOLDS —
+THE ANALOG IS REAL BUT IT IS NOT THE WHOLE OF SPAN.** #486 (A1 analog-only,
+K_eff 16, span 735 d) finished stage-2 and probes; the final eval record:
+z_mse_model 3.9495 / z_mse_persistence 21.2544 ⇒ **one-step ratio 0.1858**
+(`frame_offsets` echoed in the result's scale block:
+`-147,-146,-145,-74,-73,-72,-12,-10,-8,-6,-5,-4,-3,-2,-1,0`). The
+pre-registered reading was two-sided — ≲0.12 "span's value IS the analog"
+vs ≳0.3 "dense slow-mode context matters" — and 0.1858 lands between, so
+neither clean claim is licensed. What IS licensed: (a) 16 frames whose only
+reach into the past is a dense recent month plus six analog-pin frames buy
+**2.7× over the uniform K=24 head at the same frame budget** (0.5056/0.5045,
+115-d span) — the pins carry real span value, ~55% of the full span effect
+in log terms; (b) they do NOT reach uniform K=144's 0.0820 (2.27× short),
+and E-045's A2a control (24 uniform frames at 30-d stride over the same 720-d
+span, ratio 0.0721) already showed distributed coverage of the INTERMEDIATE
+times matching the dense slab — so the missing half of the effect plausibly
+lives between −12 and −72, exactly where A1 has no frames. **#487 (A2
+log-ramp-24, queued behind #486's archive tail) is now the decisive arm:**
+log-spaced frames cover those intermediate times at the same K_eff as A2a —
+≈0.08 would say span is fully decoupled from K with the analog as one
+ingredient among several; ≳0.15 would say the SPACING (log vs uniform)
+matters too. Secondary read-outs, not the verdict: rapid_r_kfold 0.647
+[0.594, 0.696], deseas 0.548, raw 0.583 — the probe does not distinguish
+the arms at n=1. n=1 direction per §3b; NO ROLL without the E-043b-PHASE
+battery (the pins are a lookup mechanism by construction).
 
 ---
 
