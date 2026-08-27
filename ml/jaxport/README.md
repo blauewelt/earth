@@ -94,6 +94,7 @@ Stage-1 features `ml/train.py` has and this deliberately does not:
 | `train_stage2.py` | `ml/temporal.py`'s stage-2 path: the train/val window pools (`ok_t` ∧ `ok_p`, and the two-masks rule), the whole-window MSE objective, `--input-znoise`, `--grad-clip`, the four schedules out of `make_sched`, `--K` with `k_max = K`, `--time-stride`/`--time-offset`, the block-z axis adoption, milestone checkpoints, resume, the in-training pooled rapid probe, and `metrics.jsonl` with THE SAME KEYS |
 | `convert.export_temporal` / `export_temporal_pt` | the head's half of the two-way converter — a `.pt` the UNCHANGED torch eval scripts roll |
 | `tpu_train_s2.sh` | `tpu_train.sh`'s lifecycle (self-reap, progress watchdog, bucket resume, apt-lock fix) plus the staging stage 1 does not need: the tensor AND the Z |
+| `models.py` `film=`/`eps_dim=` + `train_stage2.py` `--fgn-eps`/`--fgn-val-members` | E-057's FGN mode (`ml/temporal.py`'s `_CondLayer` FiLM on norm1/norm2 + `fair_crps2`, two forwards/step, chunked M-member monitor, same telemetry keys); certified against torch by `tests/test_fgn_jax.py` (forward parity ≤3.5e-7 rel with injected ε, CRPS parity ≤1e-6, flag-off bitwise); spec + phase 2 (ensemble roll) gating: `ml/plans/FGN_JAX_PORT.md` |
 
 **Why it exists.** Chris's span-fixed ladder (E-045.x) holds the context span
 at two years and grows the frame count as the step shrinks — `--K` 48, 72, 144.

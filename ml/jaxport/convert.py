@@ -129,7 +129,18 @@ def _packed_attention(dst, c, prefix):
 
 def _encoder(dst, c, prefix):
     """`nn.TransformerEncoder` — `layers.N.{self_attn,linear1,linear2,
-    norm1,norm2}`. No final norm: torch's `norm` is None (see models.py)."""
+    norm1,norm2}`. No final norm: torch's `norm` is None (see models.py).
+
+    E-057: a FiLM layer (`ml/temporal.py:_CondLayer`) ADDS `layers.N.film`
+    and changes nothing else, so the key set of a deterministic checkpoint is
+    a strict subset of an FGN one. The film weights are asked for on exactly
+    the condition the module was built with, and the refusal contract then
+    works in both directions for free — a deterministic model handed an FGN
+    checkpoint refuses on the unconsumed `film.weight`, and an FGN model
+    handed a deterministic one refuses on the missing one. Which is right:
+    warm-starting a trunk is a DELIBERATE `strict=False` act on the torch
+    side, never something a converter should do silently.
+    """
     for i, lyr in enumerate(dst.layers):
         # prefix="" addresses a BARE nn.TransformerEncoder's own state_dict
         # (`layers.0....`), which is what a single-layer parity check loads.
@@ -139,6 +150,8 @@ def _encoder(dst, c, prefix):
         _linear(lyr.linear2, c, p + ".linear2")
         _layernorm(lyr.norm1, c, p + ".norm1")
         _layernorm(lyr.norm2, c, p + ".norm2")
+        if getattr(lyr, "film", None) is not None:
+            _linear(lyr.film, c, p + ".film")
 
 
 # --------------------------------------------------------------------------
@@ -179,6 +192,13 @@ def load_temporal(state_dict, model):
     _linear(model.static, c, "static")
     _embed(model.pos, c, "pos.weight")
     _encoder(model.encoder, c, "encoder")
+    # E-057: nn.Sequential(Linear, SiLU, Linear) — the LINEARS are at indices
+    # 0 and 2, the SiLU (parameterless) at 1, exactly as PixelMAE's decoder
+    # puts its Linears at even indices. Asked for only when the model has an
+    # ε path, so the refusal contract catches the mismatch either way.
+    if getattr(model, "eps_dim", 0):
+        _linear(model.eps_embed[0], c, "eps_embed.0")
+        _linear(model.eps_embed[1], c, "eps_embed.2")
     _linear(model.head, c, "head")
     if model.heads_direct is not None:
         for k, lin in model.heads_direct.items():
@@ -266,6 +286,11 @@ def _emit_encoder(src, e, prefix):
         _emit_linear(lyr.linear2, e, p + ".linear2")
         _emit_layernorm(lyr.norm1, e, p + ".norm1")
         _emit_layernorm(lyr.norm2, e, p + ".norm2")
+        # E-057: emitted at the END of the layer, which is where
+        # `_CondLayer.__init__` registers it, so the two state_dicts have the
+        # same key ORDER as well as the same key SET.
+        if getattr(lyr, "film", None) is not None:
+            _emit_linear(lyr.film, e, p + ".film")
 
 
 def export_pixelmae(model):
@@ -314,6 +339,9 @@ def export_temporal(model):
     _emit_linear(model.static, e, "static")
     e.put("pos.weight", model.pos.embedding.value)
     _emit_encoder(model.encoder, e, "encoder")
+    if getattr(model, "eps_dim", 0):
+        _emit_linear(model.eps_embed[0], e, "eps_embed.0")
+        _emit_linear(model.eps_embed[1], e, "eps_embed.2")
     _emit_linear(model.head, e, "head")
     if model.heads_direct is not None:
         for k, lin in model.heads_direct.items():

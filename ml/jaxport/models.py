@@ -66,6 +66,17 @@ def gelu_exact(x):
     return jax.nn.gelu(x, approximate=False)
 
 
+def _zero_linear(d_in, d_out, rngs):
+    """A Linear with weight AND bias at EXACT zeros — `nn.init.zeros_` on
+    both, which is E-057's adaLN-zero (`ml/temporal.py:90-91`). The zeros are
+    what make a fresh FiLM layer compute the stock forward exactly, so this
+    is arithmetic rather than a convention."""
+    lin = nnx.Linear(d_in, d_out, rngs=rngs)
+    lin.kernel.value = jnp.zeros_like(lin.kernel.value)
+    lin.bias.value = jnp.zeros_like(lin.bias.value)
+    return lin
+
+
 # --------------------------------------------------------------------------
 # Attention and the torch-semantics transformer encoder
 # --------------------------------------------------------------------------
@@ -129,41 +140,106 @@ class EncoderLayer(nnx.Module):
         x = x + linear2(relu(linear1(norm2(x))))
     Activation is RELU because that is torch's default and neither caller
     overrides it.
+
+    **`film=True` is E-057's `ml/temporal.py:_CondLayer`**, and nothing else
+    about the layer changes. The two LayerNorms become FiLM-modulated by a
+    per-sample conditioning vector c (adaLN-zero, FGN arXiv:2506.10772 §3):
+
+        s1, b1, s2, b2 = film(c).chunk(4, -1)        # each [B, d_model]
+        x = x + sa(norm1(x) * (1 + s1[:,None]) + b1[:,None])
+        x = x + ff(norm2(x) * (1 + s2[:,None]) + b2[:,None])
+
+    THE THREE PROPERTIES THAT ARE LOAD-BEARING, all of them mirrored from the
+    torch side rather than chosen here (`ml/plans/FGN_JAX_PORT.md` §0 keeps
+    torch and JAX twins of EACH OTHER, not two children of weathernext):
+
+    * **`film=False` builds NO film parameter and takes the ORIGINAL code
+      path**, statement for statement — the flag-off model is bitwise the
+      pre-E-057 one and every existing parity certificate stands untouched.
+    * **`film` is ONE Linear(d, 4*d) per block**, whose output is split
+      s1, b1, s2, b2 IN THAT ORDER — torch's `chunk(4, -1)` layout, so
+      `convert.py` maps `encoder.layers.N.film.{weight,bias}` 1:1.
+    * **`film` is ZERO-INITIALISED, kernel and bias.** At init s1=b1=s2=b2=0
+      and the arithmetic reduces to `norm1(x) * 1.0 + 0.0`, which is the stock
+      forward EXACTLY (multiplying a float by 1.0 and adding 0.0 are both
+      exact operations). So an ε-conditioned head at step 0 IS the
+      deterministic incumbent whatever ε it is handed.
+
+    THE STOCK LayerNorm KEEPS ITS AFFINE and the modulation sits ON TOP of it
+    — registered deviation (ii) of `ml/plans/FGN_JAX_PORT.md` §0, kept
+    identical to torch so the two backends stay twins.
     """
 
-    def __init__(self, d_model, n_heads, dim_feedforward, *, rngs):
+    def __init__(self, d_model, n_heads, dim_feedforward, *, rngs, film=False):
         self.self_attn = MultiHeadAttention(d_model, n_heads, rngs=rngs)
         self.linear1 = nnx.Linear(d_model, dim_feedforward, rngs=rngs)
         self.linear2 = nnx.Linear(dim_feedforward, d_model, rngs=rngs)
         # eps 1e-5 is torch's LayerNorm default; Flax's is 1e-6.
         self.norm1 = nnx.LayerNorm(d_model, epsilon=1e-5, rngs=rngs)
         self.norm2 = nnx.LayerNorm(d_model, epsilon=1e-5, rngs=rngs)
+        # Created LAST and only when asked for, so the rng draws of every
+        # pre-existing parameter are in their original order and a flag-off
+        # layer's pytree is key-for-key what it has always been.
+        # ONE assignment, not `= None` then `= lin`: flax >= 0.11 decides an
+        # attribute's data/static status on FIRST assignment, so seeding it
+        # with None would make the module refuse the Linear that follows.
+        self.film = _nnx_data(_zero_linear(d_model, 4 * d_model, rngs)) \
+            if film else None
 
-    def __call__(self, x, mask=None):
-        h = self.norm1(x)
+    def __call__(self, x, mask=None, c=None):
+        if self.film is None:
+            # THE ORIGINAL PATH, byte for byte. A film-less layer handed a
+            # conditioning vector has nowhere to put it; refuse rather than
+            # ignore it (the JAX twin of ml/temporal.py's eps guard).
+            if c is not None:
+                raise ValueError(
+                    "EncoderLayer was built with film=False and was handed a "
+                    "conditioning vector. The noise has nowhere to enter; "
+                    "refusing rather than silently ignoring it.")
+            h = self.norm1(x)
+            x = x + self.self_attn(h, h, h, mask=mask)
+            h = self.norm2(x)
+            x = x + self.linear2(jax.nn.relu(self.linear1(h)))
+            return x
+        if c is None:
+            raise ValueError(
+                "this is a FiLM-conditioned EncoderLayer (film=True) and it "
+                "cannot be run without its conditioning vector.")
+        # `chunk(4, -1)` — s1, b1, s2, b2 IN THAT ORDER (ml/temporal.py:95).
+        d = self.norm1.scale.value.shape[-1]
+        f = self.film(c)
+        s1, b1, s2, b2 = (f[..., 0 * d:1 * d], f[..., 1 * d:2 * d],
+                          f[..., 2 * d:3 * d], f[..., 3 * d:4 * d])
+        h = self.norm1(x) * (1.0 + s1[:, None, :]) + b1[:, None, :]
         x = x + self.self_attn(h, h, h, mask=mask)
-        h = self.norm2(x)
+        h = self.norm2(x) * (1.0 + s2[:, None, :]) + b2[:, None, :]
         x = x + self.linear2(jax.nn.relu(self.linear1(h)))
         return x
 
 
 class TransformerEncoder(nnx.Module):
     """`nn.TransformerEncoder(layer, n_layers)` — NO final norm (torch's
-    `norm` argument defaults to None and neither caller passes one)."""
+    `norm` argument defaults to None and neither caller passes one).
+
+    `film=True` makes every layer a `_CondLayer` and the container a
+    `_CondEncoder` (`ml/temporal.py:103`): the layer KEYS are unchanged, which
+    is what lets a legacy deterministic checkpoint warm-start the trunk of an
+    FGN head.
+    """
 
     def __init__(self, d_model, n_heads, n_layers, dim_feedforward=None, *,
-                 rngs):
+                 rngs, film=False):
         if dim_feedforward is None:
             dim_feedforward = 4 * d_model
         # nnx.data: a plain list of submodules is treated as a STATIC
         # attribute otherwise, and the parameters vanish from the pytree.
         self.layers = _nnx_data([EncoderLayer(d_model, n_heads, dim_feedforward,
-                                             rngs=rngs)
+                                             rngs=rngs, film=film)
                                 for _ in range(n_layers)])
 
-    def __call__(self, x, mask=None):
+    def __call__(self, x, mask=None, c=None):
         for lyr in self.layers:
-            x = lyr(x, mask=mask)
+            x = lyr(x, mask=mask) if c is None else lyr(x, mask=mask, c=c)
         return x
 
 
@@ -470,10 +546,34 @@ class TemporalTransformer(nnx.Module):
     first, is what every published head's weights assume); stencil>1 widens
     the per-step input to the neighbourhood's z and appends the S static
     observed-flags to the static context.
+
+    **`eps_dim > 0` is E-057's FGN head** (`ml/plans/FGN_JAX_PORT.md` §1),
+    mirroring `ml/temporal.py` site for site:
+
+      · `eps_embed = Sequential(Linear(eps_dim, d_model), SiLU,
+        Linear(d_model, d_model))` maps ε ~ N(0,1)^k to the conditioning
+        vector c [B, d_model]. It is kept as a two-element list so the torch
+        keys `eps_embed.0.*` / `eps_embed.2.*` map 1:1 (the SiLU at index 1 is
+        parameterless), the same convention PixelMAE's decoder uses.
+      · the encoder's every layer FiLM-modulates `norm1` and `norm2` from c.
+        **THOSE ARE THE ONLY TWO SITES.** `ml/temporal.py` conditions nothing
+        else: `nn.TransformerEncoder(layer, n_layers)` is constructed with
+        `norm=None`, so this model has no trailing LayerNorm to condition, and
+        `head` / `inp` / `static` / `pos` are untouched on both sides. (The
+        `out_norm` site that exists in `ml/probe_head.py:SectionHead` belongs
+        to a different model and is not part of the stage-2 head at all.)
+      · `eps_dim == 0` builds NO eps_embed and NO film, and the forward is the
+        pre-E-057 one statement for statement.
+
+    The guard runs in BOTH directions, exactly as `ml/temporal.py:272-286`
+    does, and for the same reason: a caller that builds a head from a
+    checkpoint's args and forgets ε would roll an FGN head CLEAN — a
+    deterministic trajectory from a model whose whole content is that it is
+    not deterministic.
     """
 
     def __init__(self, d_z=32, d_model=96, n_heads=4, n_layers=3, k_max=36,
-                 direct=(), stencil=1, *, rngs=None):
+                 direct=(), stencil=1, eps_dim=0, *, rngs=None):
         rngs = rngs if rngs is not None else nnx.Rngs(0)
         self.stencil = stencil
         self.d_z = d_z
@@ -484,8 +584,15 @@ class TemporalTransformer(nnx.Module):
             self.inp = nnx.Linear(stencil * d_z + 2, d_model, rngs=rngs)
             self.static = nnx.Linear(d_z + 2 + stencil, d_model, rngs=rngs)
         self.pos = nnx.Embed(k_max, d_model, rngs=rngs)
+        self.eps_dim = int(eps_dim)
         self.encoder = TransformerEncoder(d_model, n_heads, n_layers,
-                                          4 * d_model, rngs=rngs)
+                                          4 * d_model, rngs=rngs,
+                                          film=bool(self.eps_dim))
+        # torch: nn.Sequential(Linear(eps_dim, d_model), nn.SiLU(),
+        #                      Linear(d_model, d_model)) -> keys 0 and 2.
+        self.eps_embed = _nnx_data(
+            [nnx.Linear(self.eps_dim, d_model, rngs=rngs),
+             nnx.Linear(d_model, d_model, rngs=rngs)]) if self.eps_dim else None
         self.head = nnx.Linear(d_model, d_z, rngs=rngs)
         self.direct = tuple(int(h) for h in direct)
         # A dict keyed by str(h), the same way nn.ModuleDict exposes it — the
@@ -495,16 +602,46 @@ class TemporalTransformer(nnx.Module):
              for h in self.direct}) if self.direct else None
         self.d_model = d_model
 
-    def __call__(self, z_seq, month_seq, static_ctx):
+    def embed_eps(self, eps):
+        """ε [B, eps_dim] → c [B, d_model] — `self.eps_embed(eps)` of
+        `ml/temporal.py:292`. `jax.nn.silu` is torch's `nn.SiLU` exactly
+        (x · sigmoid(x)); there is no approximate variant to fall into."""
+        return self.eps_embed[1](jax.nn.silu(self.eps_embed[0](eps)))
+
+    def __call__(self, z_seq, month_seq, static_ctx, eps=None):
         """z_seq [B,K,·] · month_seq [B,K,2] · static_ctx [B,·]
-        → pred [B,K,d_z], h [B,K,d_model]."""
+        → pred [B,K,d_z], h [B,K,d_model].
+
+        `eps` [B, eps_dim] is E-057's global noise vector and is REQUIRED
+        exactly when the head was built with one. The three-positional-argument
+        call every existing caller makes is unchanged.
+        """
         B, K = z_seq.shape[0], z_seq.shape[1]
+        if self.eps_dim == 0 and eps is not None:
+            raise ValueError(
+                "TemporalTransformer was built with eps_dim=0 (a "
+                "deterministic head) and was handed an eps vector. The noise "
+                "has nowhere to enter; refusing rather than silently "
+                "ignoring it.")
+        if self.eps_dim and eps is None:
+            raise ValueError(
+                f"this is an FGN head (eps_dim={self.eps_dim}) and it cannot "
+                f"be run without its noise vector: every forward is a SAMPLE "
+                f"from the predictive distribution, conditioned on "
+                f"eps ~ N(0,1)^{self.eps_dim}. A caller that has no eps must "
+                f"choose a member deliberately — jaxport.train_stage2."
+                f"fgn_eval_eps() is the representative (zeros) one — never "
+                f"fall into a default. Plan: ml/plans/FGN_JAX_PORT.md")
         h = (self.inp(jnp.concatenate([z_seq, month_seq], axis=-1))
              + self.static(static_ctx)[:, None, :]
              # The learned positional embedding is added over the FIRST K
              # positions of the table, not over a slice chosen by index.
              + self.pos.embedding.value[None, :K])
-        h = self.encoder(h, mask=causal_mask(K, h.dtype))
+        mask = causal_mask(K, h.dtype)
+        if self.eps_dim:
+            h = self.encoder(h, mask=mask, c=self.embed_eps(eps))
+        else:
+            h = self.encoder(h, mask=mask)
         return self.head(h), h
 
     def direct_pred(self, h, horizon):

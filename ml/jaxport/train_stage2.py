@@ -56,7 +56,20 @@ WHAT IS MIRRORED, TERM FOR TERM
     the status page and every existing reader work on a JAX run unchanged;
   · the in-training pooled rapid probe (`stage2_probe.rapid_r_deseas`,
     `ml/temporal.py:2181-class`) — the monitor Chris reads — through the same
-    imported `ridge_r`.
+    imported `ridge_r`;
+  · **E-057's FGN head** — `--fgn-eps k` builds the ε-conditioned FiLM head
+    (`jaxport.models`) and SWITCHES the objective to the fair CRPS at N=2
+    (two forwards per step on the identical context, two independent ε);
+    `--fgn-val-members M` drives the CHUNKED M-member monitor read that
+    writes `stage2_val_crps` / `stage2_val_member_var` /
+    `stage2_val_spread_ratio` under the names `ml/temporal.py` uses, so
+    status.html needs no new record family. `--fgn-eps 0` is the exact legacy
+    path — no film parameter, no extra draw, MSE — and the flags REFUSE under
+    it. The ε stream is a pure fold of (seed, step, forward index): JAX's
+    PRNG is counter-based, so resume-exactness is the fold arithmetic and NO
+    RNG state is checkpointed (see `fgn_eps_at`). What is NOT claimed:
+    cross-backend ε-stream equality — different RNG families
+    (`ml/plans/FGN_JAX_PORT.md` §1).
 
 WHAT IS NOT, each named here so nothing is silently missing:
   · **`--input-quant` REFUSES.** This is the KNOWN GAP. The A-arm parity
@@ -251,6 +264,252 @@ def apply_znoise_jax(zseq, key, sigma, d_z):
     return (z4 + noise * sigma * live).reshape(zseq.shape)
 
 
+# --------------------------------------------------------------------------
+# E-057 · the FGN objective, the ε stream and the ensemble read-out
+# --------------------------------------------------------------------------
+FGN_VAL_MEMBERS_DEFAULT = 8       # the argparse default, named so the
+                                  # refuse-under-MSE guard can tell "the user
+                                  # asked for an ensemble" from "nobody did".
+
+
+def fair_crps2(x1, x2, y):
+    """The FAIR CRPS estimator at M=2 — the JAX twin of
+    `ml/temporal.py:fair_crps2` (:124-142).
+
+        fair_crps2 = mean[ 0.5(|x1-y| + |x2-y|) - 0.5|x1-x2| ]
+
+    THE ARITHMETIC IS TORCH'S, TERM FOR TERM, and the association matters.
+    `ml/temporal.py:141-142` reads
+
+        return (0.5 * ((x1 - y).abs() + (x2 - y).abs())
+                - 0.5 * (x1 - x2).abs()).mean()
+
+    i.e. the three terms are combined ELEMENTWISE and reduced ONCE. Writing it
+    as `mean|x1-y|/2 + mean|x2-y|/2 - mean|x1-x2|/2` is the same number in
+    exact arithmetic and a DIFFERENT one in float32 (three reductions instead
+    of one, over three different summands), which is precisely the kind of
+    silent 1e-6 that a parity gate at 1e-6 would then have to be widened for.
+    So the transcription keeps torch's shape.
+
+    The second term's divisor in the general fair estimator is
+    2·M·(M-1) = 4 over the two ordered pairs (i,j) and (j,i), each
+    contributing |x1-x2| — hence |x1-x2|/2.
+
+    Why the objective must be this and not MSE: under a squared-error loss the
+    conditional MEAN is optimal, so a noise-conditioned head learns to IGNORE
+    ε. Noise conditioning and the proper score are ONE change, not two.
+    """
+    return (0.5 * (jnp.abs(x1 - y) + jnp.abs(x2 - y))
+            - 0.5 * jnp.abs(x1 - x2)).mean()
+
+
+def fair_crps_ens(ens, obs):
+    """Fair CRPS of an M-member ensemble `ens` [M, ...] against `obs` [...] —
+    the JAX twin of `ml/temporal.py:fair_crps_ens` (:145-174), including its
+    sorted-member identity
+
+        Σ_{i,j} |x_i - x_j| = 2 Σ_k (2k - M + 1) x_(k)      (x_(k) ascending)
+
+    so the read-out is O(M log M) rather than the O(M²) pairwise tensor.
+
+    **M = 1 is MAE, exactly** — the fair divisor M(M-1) is zero there, so the
+    pair term is dropped and only mean|x-y| remains. That is what lets a
+    deterministic head enter the same scoreboard as a degenerate one-member
+    ensemble with no special case anywhere.
+    """
+    M = ens.shape[0]
+    term1 = jnp.abs(ens - obs).mean(0)
+    if M < 2:
+        return term1.mean()
+    xs = jnp.sort(ens, axis=0)
+    k = jnp.arange(M, dtype=ens.dtype).reshape((-1,) + (1,) * (ens.ndim - 1))
+    w = 2.0 * k - M + 1.0
+    pair_sum = 2.0 * (w * xs).sum(0)
+    return (term1 - 0.5 * pair_sum / (M * (M - 1.0))).mean()
+
+
+def fgn_eval_eps(n, eps_dim):
+    """THE representative member, in ONE place — `ml/temporal.py:fgn_eval_eps`
+    (:177-195). ε = 0, the centre of the noise distribution: at init (zero
+    film) it is exactly the legacy computation, and after training it is the
+    distribution's centre member. Recorded as `fgn_eval_eps: "zeros"` in the
+    run's `stage2_config` so no reader has to infer it. The HONEST ensemble
+    read-outs are the `stage2_val_*` keys, never these."""
+    if not eps_dim:
+        return None
+    return jnp.zeros((n, eps_dim), jnp.float32)
+
+
+def fgn_train_key(seed):
+    """The root of the TRAINING ε stream. The seed arithmetic is torch's own
+    (`ml/temporal.py:2296-2297`, `seed * 1000003 + 57`) so the two backends'
+    streams are at least NAMED the same; the bits are not and are not claimed
+    to be — `ml/plans/FGN_JAX_PORT.md` §1 says cross-backend ε-stream equality
+    is NOT required and NOT claimed (different RNG families)."""
+    return jax.random.PRNGKey(int(seed) * 1000003 + 57)
+
+
+def fgn_eps_at(root, step, forward_index, batch, eps_dim):
+    """ε for (step, forward_index), as a PURE FUNCTION of (seed, step, i).
+
+    WHY THIS IS EXACT ON RESUME, AND WHY NO RNG STATE IS CHECKPOINTED.
+    JAX's default PRNG (threefry2x32) is COUNTER-BASED: a key is not a
+    mutable generator that advances as it is used — it is a 2×uint32 value,
+    and `fold_in(key, data)` and `normal(key, shape)` are pure functions of
+    their arguments alone. So the ε of step s is a function of (seed, s, i)
+    and of nothing else: no draw ever consumed, no ordering, no count of how
+    many times the monitor ran. A resumed run reconstructs the root from
+    `--seed` and the step from the checkpoint's step counter, and folds again
+    — bit-identical by construction, on any device, in any order.
+
+    That is strictly simpler than the torch side, which must SAVE
+    `eps_gen.get_state()` into every checkpoint because a
+    `torch.Generator` IS mutable state that the number of draws advances.
+    Nothing here is saved, because there is nothing to save; the step counter
+    already in the `.npz` is the whole of the ε stream's state.
+
+    `forward_index` separates the two members of a CRPS pair (0 and 1) — two
+    independent draws on the same context, which is what the spread term
+    measures.
+    """
+    k = jax.random.fold_in(jax.random.fold_in(root, int(step)),
+                           int(forward_index))
+    return jax.random.normal(k, (int(batch), int(eps_dim)), jnp.float32)
+
+
+def fgn_val_bank(seed, members, eps_dim):
+    """The FIXED eval ε bank, drawn ONCE from its OWN root
+    (`seed * 1000003 + 58`, NOT the training root — `ml/temporal.py:3328-3331`)
+    so the monitoring ensemble is the same M members at every log point (a
+    member-variance curve is only readable if the members do not change
+    underneath it) and so the number of monitor calls cannot perturb the
+    training stream. Being counter-based, this needs no separate generator
+    OBJECT — a different root key is the whole of the separation."""
+    return jax.random.normal(jax.random.PRNGKey(int(seed) * 1000003 + 58),
+                             (int(members), int(eps_dim)), jnp.float32)
+
+
+FGN_MONITOR_CHUNK = 512           # ml/temporal.py:3662 `_CH`
+
+
+def fgn_monitor_ens(fwd, zseq, mseq, sctx, eps_val, chunk=FGN_MONITOR_CHUNK):
+    """The M-member ensemble read of the fixed monitoring batch — [M, n, d_z]
+    of LAST-POSITION predictions. `ml/temporal.py:3661-3673`.
+
+    **CHUNKED FROM BIRTH**, in 512-window slices, and that is part of the
+    spec rather than a later patch. #496 (E-057.1a seed 0, 2026-08-27) died
+    OOM at the step-6000 val: one full-batch forward here is a ~3.65 GB input
+    concatenation at stencil 145 × 4096 windows, and M of them per log step
+    interleaved with the two-forward CRPS training steps fragmented a 24 GB
+    card to death (13.4 GiB reserved-but-unallocated). Same class as E-027
+    #285/#286.
+
+    THE CHUNKING CANNOT CHANGE THE ANSWER, and the test says so rather than
+    the comment: the forward is row-wise, so concatenation over disjoint
+    slices is exact, and ε is BROADCAST per member either way — every window
+    of a member sees the identical ε, so no window can see different noise
+    because of where a slice boundary fell.
+
+    `fwd(zseq, mseq, sctx, eps) -> (pred, hid)`. `chunk=0` (or any value at
+    least n) is the single-slice path, which is what the identity test holds
+    the chunked one against.
+    """
+    n = zseq.shape[0]
+    step = int(chunk) if chunk and int(chunk) > 0 else n
+    ens = []
+    for mi in range(eps_val.shape[0]):
+        outs = []
+        for c0 in range(0, n, step):
+            sl = slice(c0, min(c0 + step, n))
+            nb = sl.stop - sl.start
+            e = jnp.broadcast_to(eps_val[mi], (nb, eps_val.shape[1]))
+            pm, _ = fwd(zseq[sl], mseq[sl], sctx[sl], e)
+            outs.append(pm[:, -1])
+        ens.append(jnp.concatenate(outs, 0) if len(outs) > 1 else outs[0])
+    return jnp.stack(ens)
+
+
+def fgn_val_metrics(ens, ztrue):
+    """The four numbers the fgn monitor produces — `ml/temporal.py:3674-3704`.
+
+    Returns `(val_mse, amp, extra)` where `extra` carries the THREE NEW KEYS
+    under the names the torch trainer writes, so status.html needs no new
+    record family.
+
+    · `stage2_val_zmse` / `stage2_amp` keep their names, their curves and
+      their places; in fgn mode they mean "OF THE ENSEMBLE MEAN", which is
+      the best point estimate. The legacy meaning is untouched when fgn is
+      off, because this function does not run at all there.
+    · `stage2_val_crps` — the fair CRPS of the M members.
+    · `stage2_val_member_var` — mean per-element member variance (ddof 0),
+      THE ε-COLLAPSE TELEMETRY. A slide toward 0 is the signature of a head
+      that has learned to ignore its noise, and it must be visible on the
+      live branch while the run is alive, not reconstructed afterwards.
+    · `stage2_val_spread_ratio` — spread/error with the (M+1)/M correction,
+      mirroring `ml/probscore.spread_error`: the ensemble MEAN carries its own
+      σ²/M of sampling error on top of the truth's, so an uncorrected ratio
+      reports under-dispersion at every finite M even for a perfect ensemble.
+      1.0 is calibration.
+    """
+    M = float(ens.shape[0])
+    mlast = ens.mean(0)
+    val_mse = float(jnp.mean((mlast - ztrue) ** 2))
+    amp = float(jnp.std(mlast) / (jnp.std(ztrue) + 1e-9))
+    # var(ddof=1) is torch's `unbiased=True`; jnp.var's ddof argument.
+    msp = float(jnp.mean((M + 1.0) / M * jnp.var(ens, axis=0, ddof=1)))
+    extra = {
+        "stage2_val_crps": float(fair_crps_ens(ens, ztrue)),
+        "stage2_val_member_var": float(jnp.mean(jnp.var(ens, axis=0, ddof=0))),
+        "stage2_val_spread_ratio": (math.sqrt(msp) / math.sqrt(val_mse)
+                                    if msp >= 0.0 and val_mse > 0.0
+                                    else float("nan")),
+    }
+    return val_mse, amp, extra
+
+
+def fgn_refusals(a, val_members_default=FGN_VAL_MEMBERS_DEFAULT):
+    """Every FGN precondition that depends ONLY on the inputs, checked while
+    the inputs are all it has cost (`ml/CLAUDE.md` §0.3). Returns the loss kind
+    — `"mse"` or `"crps2"` — so the caller never has to re-derive it.
+
+    THE REFUSE-UNDER-MSE GUARD is the one worth reading twice
+    (`ml/plans/FGN_JAX_PORT.md` §1: *"under MSE the flags REFUSE ... an
+    ε-conditioned head under MSE is a meaningless arm"*). `--fgn-eps` is ONE
+    flag because the objective is not separable from the conditioning: under a
+    squared-error loss the conditional mean is optimal, so a head with an ε
+    input learns to ignore it and the run measures a deterministic head under
+    an FGN arm's name. Setting `--fgn-val-members` with `--fgn-eps 0` asks for
+    an M-member ensemble read of a head that HAS no members — every member is
+    the same forward — so it refuses rather than logging M identical numbers
+    and a member variance of exactly zero, which is also the signature of the
+    collapse the telemetry exists to detect.
+    """
+    if int(a.fgn_eps) < 0:
+        raise SystemExit(
+            f"--fgn-eps {a.fgn_eps} must be >= 0 (0 = off, and off is the "
+            f"exact legacy MSE code path).")
+    if int(a.fgn_eps) == 0:
+        if int(a.fgn_val_members) != int(val_members_default):
+            raise SystemExit(
+                f"REFUSED: --fgn-val-members {a.fgn_val_members} with "
+                f"--fgn-eps 0. This run trains under PLAIN MSE, where the "
+                f"head is deterministic: an M-member ensemble read is M "
+                f"copies of one forward, its member variance is exactly zero "
+                f"by construction, and zero member variance is ALSO the "
+                f"signature of the ε-collapse this telemetry exists to "
+                f"detect. An ε-conditioned head under MSE is a meaningless "
+                f"arm (ml/plans/FGN_JAX_PORT.md §1) — pass --fgn-eps k > 0, "
+                f"which switches the objective to the fair CRPS at N=2, or "
+                f"drop --fgn-val-members.")
+        return "mse"
+    if int(a.fgn_val_members) < 2:
+        raise SystemExit(
+            f"--fgn-val-members {a.fgn_val_members} must be >= 2: the spread "
+            f"and the member variance need at least two members, and they are "
+            f"the two numbers the fgn monitor exists to produce.")
+    return "crps2"
+
+
 def stage2_loss(model, zseq, mseq, sctx, ztgt):
     """`l_base` — the WHOLE stage-2 objective at unroll 1 with no direct heads.
 
@@ -265,6 +524,25 @@ def stage2_loss(model, zseq, mseq, sctx, ztgt):
     """
     pred, hid = model(zseq, mseq, sctx)
     return ((pred - ztgt) ** 2).mean(), (pred, hid)
+
+
+def stage2_loss_fgn(model, zseq, mseq, sctx, ztgt, eps1, eps2):
+    """`l_base` in FGN mode — `ml/temporal.py:3501-3522`, term for term.
+
+    TWO FORWARDS ON THE IDENTICAL CONTEXT, TWO ε. The context (including the
+    `--input-znoise` corruption, applied ONCE, before both) is built by the
+    caller and passed in unchanged, so the ONLY thing that differs between the
+    two members is ε. If the corruption were drawn per forward the pair would
+    differ by input noise as well and the CRPS spread term would be measuring
+    the wrong perturbation.
+
+    Member 1's hidden state stands where the deterministic forward's stood —
+    for shapes only; the direct/unroll paths that consumed it are refused in
+    this port anyway.
+    """
+    p1, hid1 = model(zseq, mseq, sctx, eps=eps1)
+    p2, _ = model(zseq, mseq, sctx, eps=eps2)
+    return fair_crps2(p1, p2, ztgt), (p1, hid1)
 
 
 # --------------------------------------------------------------------------
@@ -517,6 +795,29 @@ def parse(argv=None):
                         "gather time overlaps device step time. The batch "
                         "SEQUENCE is unchanged (one RNG, drawn in step "
                         "order); only the wall clock moves.")
+    # ---- E-057 · FGN, mirroring ml/temporal.py's two flags exactly ---------
+    p.add_argument("--fgn-eps", type=int, default=0,
+                   help="E-057: k = dimension of the global noise vector "
+                        "eps ~ N(0,1)^k conditioning every encoder layer's "
+                        "two LayerNorms through a zero-init FiLM (FGN, "
+                        "arXiv:2506.10772; adaLN-zero, so the head at step 0 "
+                        "IS the deterministic incumbent). 0 (DEFAULT) = OFF = "
+                        "the exact legacy code path: no eps_embed, no film, "
+                        "no extra draw, and the MSE objective. When > 0 the "
+                        "training objective SWITCHES to the FAIR CRPS AT N=2 "
+                        "(two forwards per batch on the identical context, "
+                        "two independent eps) — ONE flag, because under plain "
+                        "MSE the conditional mean is optimal and a "
+                        "noise-conditioned head learns to IGNORE eps. FGN's "
+                        "own default is k=32. Plan: ml/plans/FGN_JAX_PORT.md")
+    p.add_argument("--fgn-val-members", type=int, default=FGN_VAL_MEMBERS_DEFAULT,
+                   help="E-057: M, the ensemble size for the in-training "
+                        "monitoring reads (stage2_val_crps, "
+                        "stage2_val_member_var, stage2_val_spread_ratio). The "
+                        "eval eps bank is FIXED at setup from its own root "
+                        "key, so the members do not change under the curve. "
+                        "Read ONLY when --fgn-eps > 0, and REFUSED when it is "
+                        "0 (see fgn_refusals).")
     p.add_argument("--milestone-steps", default="",
                    help="E-031/E-032: comma list of steps at which to save a "
                         "WEIGHTS-ONLY milestone head (temporal_ms<step>.pt). "
@@ -618,6 +919,10 @@ def main(argv=None):
     if a.grad_clip < 0:
         raise SystemExit(f"--grad-clip {a.grad_clip} must be >= 0 (0 = off, "
                          f"and off adds no optax transform at all).")
+    # E-057, at argv time and before anything expensive: the fgn preconditions
+    # (including the refuse-under-MSE guard) and the loss kind they decide.
+    LOSS_KIND = fgn_refusals(a)
+    FGN = LOSS_KIND == "crps2"
     if a.n_heads != 4:
         raise SystemExit(
             f"--n-heads {a.n_heads}: ml/temporal.py hard-codes 4 and "
@@ -920,7 +1225,8 @@ def main(argv=None):
     # ---- the model --------------------------------------------------------
     model = TemporalTransformer(d_z=d_z, d_model=a.d_model, n_heads=4,
                                 n_layers=a.layers, k_max=K, direct=(),
-                                stencil=a.stencil, rngs=nnx.Rngs(a.seed))
+                                stencil=a.stencil, eps_dim=a.fgn_eps,
+                                rngs=nnx.Rngs(a.seed))
     # THE INITIALISATION IS TORCH'S OWN, AND IT IS NOT A STYLE CHOICE.
     #
     # Flax's defaults are not `nn.Module`'s. The one that matters most here is
@@ -951,12 +1257,24 @@ def main(argv=None):
     torch.manual_seed(a.seed)
     _tmod = _TorchTemporal(d_z=d_z, d_model=a.d_model, n_heads=4,
                            n_layers=a.layers, k_max=K, direct=(),
-                           stencil=a.stencil)
+                           stencil=a.stencil, eps_dim=a.fgn_eps)
     load_temporal(_tmod.state_dict(), model)
     del _tmod
     print(f"  init: torch's own (constructed under torch.manual_seed"
           f"({a.seed}) and converted, so a same-seed torch run starts from "
           f"bit-identical weights) — {time.time() - _t0i:.1f}s", flush=True)
+    if FGN:
+        # The film weights arrive from the torch module ALREADY at exact
+        # zeros (nn.init.zeros_ on both weight and bias), so the converted
+        # head is the deterministic incumbent at step 0 in both backends —
+        # the "r_fore reads exactly 1.000000 at step 1" twin, for free.
+        print(f"FGN head: eps ~ N(0,1)^{a.fgn_eps} -> eps_embed -> per-layer "
+              f"FiLM on norm1/norm2 (zero-init, so this IS the deterministic "
+              f"head at step 0), objective = fair CRPS at N=2, monitor "
+              f"ensemble M={a.fgn_val_members}. eps stream: "
+              f"jax.random.PRNGKey({a.seed} * 1000003 + 57) folded by (step, "
+              f"forward) — counter-based, so resume needs no saved RNG state; "
+              f"eval bank from PRNGKey({a.seed} * 1000003 + 58).", flush=True)
     graphdef, state = nnx.split(model)
     n_par2 = sum(int(np.prod(v.shape)) for v in _leaves(state))
     print(f"stage-2 head: {n_par2 / 1e6:.3f}M parameters "
@@ -993,10 +1311,47 @@ def main(argv=None):
         return ost._replace(hyperparams={**ost.hyperparams,
                                          "learning_rate": lr})
 
+    # The --input-znoise sigma, closed over by both device-noise steps.
+    _NZ_SIGMA = float(a.input_znoise)
+
     def loss_fn(st, zseq, mseq, sctx, ztgt):
         m = nnx.merge(graphdef, st)
         loss, _ = stage2_loss(m, zseq, mseq, sctx, ztgt)
         return loss
+
+    def loss_fn_fgn(st, zseq, mseq, sctx, ztgt, eps1, eps2):
+        m = nnx.merge(graphdef, st)
+        loss, _ = stage2_loss_fgn(m, zseq, mseq, sctx, ztgt, eps1, eps2)
+        return loss
+
+    @jax.jit
+    def train_step_fgn(st, ost, lr, zseq, mseq, sctx, ztgt, eps1, eps2):
+        """`train_step` with the fair-CRPS objective. Identical in every other
+        respect — same pre-clip global norm on every step, same `_set_lr`,
+        same optax chain — so an FGN arm and an MSE arm differ in the
+        objective and in nothing else."""
+        zseq = zseq.astype(jnp.float32)
+        loss, grads = jax.value_and_grad(loss_fn_fgn)(
+            st, zseq, mseq, sctx, ztgt, eps1, eps2)
+        gnorm = optax.global_norm(grads)
+        ost = _set_lr(ost, lr)
+        upd, ost = tx.update(grads, ost, st)
+        return optax.apply_updates(st, upd), ost, loss, gnorm
+
+    @jax.jit
+    def train_step_fgn_dn(st, ost, lr, key, zseq, mseq, sctx, ztgt,
+                          eps1, eps2):
+        """The device-noise twin. THE CORRUPTION IS APPLIED ONCE, BEFORE BOTH
+        FORWARDS (`ml/temporal.py:3502-3507`): `apply_znoise_jax` runs here,
+        outside `stage2_loss_fgn`, so the two members see the identical
+        perturbed context and the CRPS spread term measures ε alone."""
+        zn = apply_znoise_jax(zseq, key, _NZ_SIGMA, d_z)
+        loss, grads = jax.value_and_grad(loss_fn_fgn)(
+            st, zn, mseq, sctx, ztgt, eps1, eps2)
+        gnorm = optax.global_norm(grads)
+        ost = _set_lr(ost, lr)
+        upd, ost = tx.update(grads, ost, st)
+        return optax.apply_updates(st, upd), ost, loss, gnorm
 
     @jax.jit
     def train_step(st, ost, lr, zseq, mseq, sctx, ztgt):
@@ -1021,7 +1376,6 @@ def main(argv=None):
     # see apply_znoise_jax for both the measurement that motivates it and the
     # RNG-stream caveat. zseq may arrive fp16 (--gather-fp16); the cast to
     # fp32 happens in apply_znoise_jax and is exact.
-    _NZ_SIGMA = float(a.input_znoise)
 
     @jax.jit
     def train_step_dn(st, ost, lr, key, zseq, mseq, sctx, ztgt):
@@ -1033,9 +1387,32 @@ def main(argv=None):
         return optax.apply_updates(st, upd), ost, loss, gnorm
 
     @jax.jit
-    def eval_forward(st, zseq, mseq, sctx):
+    def _eval_forward_det(st, zseq, mseq, sctx):
         m = nnx.merge(graphdef, st)
         return m(zseq, mseq, sctx)
+
+    @jax.jit
+    def eval_forward_eps(st, zseq, mseq, sctx, eps):
+        m = nnx.merge(graphdef, st)
+        return m(zseq, mseq, sctx, eps=eps)
+
+    def eval_forward(st, zseq, mseq, sctx):
+        """The POINT read-out, deterministic when the head is and the
+        REPRESENTATIVE member when it is an FGN head — `ml/temporal.py:
+        eval_forward` (:1728-1735). One function so the member choice lives in
+        one place (`fgn_eval_eps`), which is what stops two call sites quietly
+        disagreeing about which member the legacy pooled instruments saw.
+
+        Every pre-E-057 read-out downstream of this — the val curve's point
+        forward, eval 1's z_t+1, eval 2's channel decode, the in-training
+        section probe — is a POINT instrument written for a head with one
+        output per input. An FGN head has no single output, so ε = 0 (the
+        distribution's centre, and at init exactly the legacy computation) is
+        chosen once, here, and recorded as `fgn_eval_eps: "zeros"`."""
+        if not FGN:
+            return _eval_forward_det(st, zseq, mseq, sctx)
+        return eval_forward_eps(st, zseq, mseq, sctx,
+                                fgn_eval_eps(zseq.shape[0], a.fgn_eps))
 
     # ---- device sharding --------------------------------------------------
     # Data parallelism and nothing cleverer: the batch axis is sharded across
@@ -1156,7 +1533,18 @@ def main(argv=None):
         "season_phase": a.season_phase,
         "codec": os.path.basename(a.ckpt),
         "z": os.path.basename(a.z) if a.z else None,
-        "data": os.path.basename(a.data)}})
+        "data": os.path.basename(a.data),
+        # E-057 · NEW KEYS, AND ONLY WHEN THE ARM IS ONE, with the SAME NAMES
+        # ml/temporal.py:3285-3290 writes. Adding `fgn_eps: 0` to every
+        # legacy record would be a changed record with the flag off; a reader
+        # that predates E-057 ignores an extra key, and one that postdates it
+        # reads absence as "not an fgn run".
+        **({"stage2_loss_kind": "crps2",
+            "fgn_eps": a.fgn_eps,
+            "fgn_val_members": a.fgn_val_members,
+            # WHICH MEMBER the legacy point read-outs saw — recorded, never
+            # inferred (fgn_eval_eps()).
+            "fgn_eval_eps": "zeros"} if FGN else {})}})
 
     # ---- the fixed monitoring batch --------------------------------------
     # Windows whose t+1 target is a HELD-OUT bin — the same population the
@@ -1181,6 +1569,19 @@ def main(argv=None):
     mon_pers = float(np.mean((np.asarray(Z[emt, emp], np.float32)
                               - mon_ztrue) ** 2))
     mon_ztrue_j = put(mon_ztrue)
+
+    # ---- E-057 · the FIXED eval eps bank ---------------------------------
+    # M members, drawn ONCE from their OWN root key (seed*1000003 + 58, not
+    # the training root), so the monitoring ensemble is the same M members at
+    # every log point and the number of monitor calls cannot perturb the
+    # training stream. Each forward BROADCASTS one member across the whole
+    # monitoring batch, which is FGN's convention: eps is GLOBAL — one draw
+    # for the whole field, never one per pixel.
+    eps_val = None
+    if FGN:
+        eps_val = fgn_val_bank(a.seed, a.fgn_val_members, a.fgn_eps)
+        print(f"fgn monitor: {a.fgn_val_members} fixed eval members from "
+              f"PRNGKey({a.seed} * 1000003 + 58)", flush=True)
 
     # REPORT THE SCALE THE INPUT NOISE IS ACTUALLY BEING APPLIED AT.
     # `--input-znoise` is an ABSOLUTE sigma in whatever units the frozen
@@ -1309,6 +1710,10 @@ def main(argv=None):
     host_noise = a.input_znoise > 0 and a.noise_backend == "host"
     device_noise = a.input_znoise > 0 and a.noise_backend == "device"
     _nz_root = jax.random.PRNGKey(a.seed) if device_noise else None
+    # E-057 · the TRAINING eps stream's root. Nothing else is kept: eps at
+    # (step, forward) is a pure fold of this root, so the step counter already
+    # in the .npz is the whole of the stream's state (see fgn_eps_at).
+    _fgn_root = fgn_train_key(a.seed) if FGN else None
 
     def make_batches():
         """One generator, one RNG, drawn in step order — the SEQUENCE of
@@ -1365,7 +1770,24 @@ def main(argv=None):
 
     for s, zseq, mseq, sctx_b, ztgt in batch_iter:
         lr_now = jnp.asarray(a.lr * lr_factor(s - 1, a), jnp.float32)
-        if device_noise:
+        if FGN:
+            # TWO INDEPENDENT eps ON THE IDENTICAL CONTEXT. Folded from
+            # (seed, step, forward_index) and from nothing else, so a resumed
+            # run at step s draws the same pair the original did — no RNG
+            # state in the checkpoint (fgn_eps_at explains why that is exact
+            # for a counter-based PRNG and not merely likely).
+            _nb = zseq.shape[0]
+            _e1 = fgn_eps_at(_fgn_root, s, 0, _nb, a.fgn_eps)
+            _e2 = fgn_eps_at(_fgn_root, s, 1, _nb, a.fgn_eps)
+            if device_noise:
+                state, opt_state, loss, gnorm = train_step_fgn_dn(
+                    state, opt_state, lr_now, jax.random.fold_in(_nz_root, s),
+                    put(zseq), put(mseq), put(sctx_b), put(ztgt), _e1, _e2)
+            else:
+                state, opt_state, loss, gnorm = train_step_fgn(
+                    state, opt_state, lr_now,
+                    put(zseq), put(mseq), put(sctx_b), put(ztgt), _e1, _e2)
+        elif device_noise:
             state, opt_state, loss, gnorm = train_step_dn(
                 state, opt_state, lr_now, jax.random.fold_in(_nz_root, s),
                 put(zseq), put(mseq), put(sctx_b), put(ztgt))
@@ -1395,10 +1817,19 @@ def main(argv=None):
         gn = gv
 
         if s % log_every == 0 or s == a.steps:
-            mp_, _ = eval_forward(state, mon_zseq, mon_mseq, mon_sctx)
-            mlast = mp_[:, -1]
-            val_mse = float(jnp.mean((mlast - mon_ztrue_j) ** 2))
-            amp = float(jnp.std(mlast) / (jnp.std(mon_ztrue_j) + 1e-9))
+            _fgn_val = {}
+            if FGN:
+                # E-057 · THE ENSEMBLE READ, chunked (see fgn_monitor_ens).
+                ens = fgn_monitor_ens(
+                    lambda z_, m_, c_, e_: eval_forward_eps(state, z_, m_,
+                                                            c_, e_),
+                    mon_zseq, mon_mseq, mon_sctx, eps_val)
+                val_mse, amp, _fgn_val = fgn_val_metrics(ens, mon_ztrue_j)
+            else:
+                mp_, _ = eval_forward(state, mon_zseq, mon_mseq, mon_sctx)
+                mlast = mp_[:, -1]
+                val_mse = float(jnp.mean((mlast - mon_ztrue_j) ** 2))
+                amp = float(jnp.std(mlast) / (jnp.std(mon_ztrue_j) + 1e-9))
             rec = {"stage2_step": s, "stage2_zmse": round(lv, 5),
                    "stage2_loss_base": round(lv, 5),
                    "stage2_val_zmse": round(val_mse, 5),
@@ -1406,6 +1837,22 @@ def main(argv=None):
                    "stage2_grad_norm": round(gn, 4),
                    "stage2_lr": float(a.lr * lr_factor(s - 1, a)),
                    "stage2_wall_s": round(time.time() - t0, 1)}
+            # E-057 · the ensemble keys, BESIDE the existing ones and never
+            # instead of them. §5.22: NEVER WRITE NaN INTO A RESULTS RECORD —
+            # a non-finite value omits its key and says so on stderr, because
+            # an absent key cannot be mistaken for a measurement and a NaN can.
+            for _k, _v in _fgn_val.items():
+                if _v == _v and abs(_v) != float("inf"):
+                    # SIGNIFICANT digits, not decimal places: the collapse
+                    # telemetry is read near ZERO, and `round(v, 6)` prints a
+                    # member variance of 1e-8 as exactly 0.0 — i.e. it
+                    # destroys the resolution precisely where the failure mode
+                    # lives.
+                    rec[_k] = float(f"{float(_v):.6g}")
+                else:
+                    print(f"::warning::{_k} was non-finite at step {s} "
+                          f"({_v}) — key omitted from this record rather than "
+                          f"written as NaN", flush=True)
             if CLIP > 0:
                 rec["stage2_grad_clip"] = CLIP
                 rec["stage2_grad_norm_max"] = round(cl_max, 4)
@@ -1443,6 +1890,10 @@ def main(argv=None):
     # ---- eval 1: z-space t+1 on held-out target bins ---------------------
     results = {"run": os.path.basename(a.out), "K": K, "d_model": a.d_model,
                "layers": a.layers, "steps": a.steps, "backend": "jax"}
+    if FGN:
+        # `stage2_result` gains `fgn_eps` and nothing else changes in it —
+        # ml/temporal.py:4220, same key, same condition.
+        results["fgn_eps"] = a.fgn_eps
     results["scale"] = {"params": int(n_par2), "batch": int(a.batch),
                         "steps": int(a.steps),
                         "data_points": int(len(pool_t)), "n_pixels": int(P),
@@ -1548,7 +1999,8 @@ def main(argv=None):
         # ABSENT, not null-with-a-number: the k-fold is not computed here and
         # a key carrying None is what a reader can mistake for a measurement.
         "z_direct_ratio": None,
-        "scale": results.get("scale")}})
+        "scale": results.get("scale"),
+        **({"fgn_eps": a.fgn_eps} if FGN else {})}})
     save_ckpt(a.steps)
     json.dump(results, open(os.path.join(a.out, f"temporal{suffix}.json"),
                             "w"), indent=2)
