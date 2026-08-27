@@ -1,0 +1,7 @@
+{
+ "exp": "E-057.1b",
+ "what": "FGN stage-2 seed 1 (eps-FiLM + fair CRPS, znoise OFF) — re-dispatch of queued #501 onto dedicated box gpu-box-46292015 for pair parallelism",
+ "steps": 200000,
+ "eta_h": 28,
+ "published_at": "2026-08-27T20:48:18.098Z"
+}
