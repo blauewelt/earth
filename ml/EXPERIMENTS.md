@@ -229,7 +229,7 @@ znoise 0.7235) is the next GPU dispatch after the #489–#491 queue clears —
 its §0d entry is written at dispatch, per the plan's falsifiers F1–F3.**
 
 <a id="e-053"></a>
-## E-053 · The space-time stencil — E-053.0 measured, E-053.1 arms in flight; A1's verdict landed 2026-08-27 (Chris's direction: "take the sunflower to the 4th dimension")
+## E-053 · The space-time stencil — RESOLVED 2026-08-27: all four E-053.1 arms in, wave synthesized (frames, not placement, are the binding resource) (Chris's direction: "take the sunflower to the 4th dimension")
 
 TL;DR — today's stencil samples a dense K×145 slab of spacetime (every slot at
 every frame, attention over time only); E-045 says span is the axis and the
@@ -382,6 +382,49 @@ needs) — which would also mean E-045's span-fixed "flatness" was partly a
 spacing artefact and cheap uniform-sparse heads reopen. Queued as #489
 behind #488 (A3); ~$1.5.
 
+**17:4xZ 08-27 — A4's VERDICT: 0.14116 — SPACING IS IRRELEVANT AT K=24;
+THE SLAB'S DENSITY, NOT ITS PATTERN, IS WHAT SPARSE SKELETONS MISS.**
+#489 (A4 uniform-24, span 690 d) final: z_mse_model 3.0002 /
+z_mse_persistence 21.2544 ⇒ **one-step ratio 0.14116** (uniform offsets
+0,−6,…,−138 echoed in the config; kfold 0.663 [0.61, 0.712]). The
+registered two-sided reading resolves cleanly to the first branch:
+0.141 is A2-like (0.156), nowhere near ≲0.10 — uniform does not beat
+log by any margin that matters (Δ 0.015 at n=1, and §3b has no measured
+pair at this tier). Note #489 carries NO unpooled keys — it was
+dispatched 05:41Z, before E-055 landed at 12:15Z; refs pin at dispatch.
+
+**THE FOUR-ARM WAVE, SYNTHESIZED (A1 0.1858 · A2 0.1561 · A3 0.14002 ·
+A4 0.14116, against controls K=24-uniform-115d 0.5056 and K=144-dense-2y
+0.0820, all n=1 at 20k steps):**
+
+1. **The span effect is DISTRIBUTED, not an analog lookup.** A1's pins
+   alone (dense own-history + −1 y/−2 y sunflowers) recover 55% of the
+   span effect in log terms; every 24-frame pattern that also covers the
+   intermediate times recovers ~65%. The E-045 mechanism story ("span
+   buys the seasonal analog") is at best half the effect.
+2. **Spacing does not matter at K≈24–32.** Log (0.156), uniform (0.141)
+   and decade-log-with-pins (0.140) sit within 0.016 of each other —
+   inside anything plausible for this tier's unmeasured noise. What all
+   three share is K_eff ≈ 24–32; what separates them from 0.0820 is
+   K=144. **Frames, not placement, are the binding resource.**
+3. **The dense slab keeps a real 1.7–1.9× edge** over every sparse
+   skeleton at 1/6 the frames — the 4-D sunflower's premise ("most of
+   the slab is redundant") is refuted at this budget. E-053.2's
+   point-cloud architecture loses its cheap-span motivation; it survives
+   only as the field-head unification (E-052's FieldDiT), not as a
+   stand-alone build.
+4. **A3's decade pins are ≈ free span extension**: 10-year span at K=32
+   matches 690-day at K=24 (0.140 vs 0.141) — going long costs nothing
+   but also *bought* nothing measurable beyond 2 y at this K. The
+   beyond-2-y axis stays open only at high K — which is exactly what
+   E-054a (400k K=144) and, if it passes, E-056b (K=144 on tokens)
+   price out.
+5. **Practical consequence for the programme:** the cheap road to more
+   span is MORE FRAMES CHEAPER, not cleverer placement — which is the
+   token substrate's (E-056) case in one line, and why it was
+   prioritized as the efficiency gate before the next full-budget
+   pentad head.
+
 ---
 
 <a id="e-056"></a>
@@ -442,6 +485,31 @@ general form: price the gate (~$5–8 here) against (expected saving ×
 planned spend on that axis) — tokens at ~30× input reduction against a
 $100+/run axis clears it by an order of magnitude; run such gates on idle
 box time the moment they clear the bar.
+
+**17:2xZ 08-27 — #490 (E-056a) AND #491 (E-056b) BOTH FAILED in ~11 min
+each, and the failure is GOOD NEWS twice over.** The Train step died on
+train.py's warm-start guard: *"--fsq-warmstart: the checkpoint ALREADY
+carries --fsq-levels '8,8,8,5,5,5', so this is not a warm start"* — the
+dispatch reused recipe `f4r2-40M-dz6-fsq65k-warm`, whose
+`fsq_warmstart: true` is correct for CREATING E-050 from the continuous
+parent and wrong for RESUMING its product. The guard behaved exactly as
+designed (FSQ→FSQ with the flag would reinterpret the lattice). The two
+findings that came free: **(1) risk (1) above is RETIRED — the box-local
+`/opt/earth-cache/ckpt/run-485.pt` on gpu-box-32966687 (= Vast 48520137)
+EXISTS and carries the FSQ lattice** (the guard read its args), so the
+runner names in my registration and the "48520137" in E-050's notes are
+the same physical box; the fail-fast never had to fire. (2) The refusal
+came at minute ~11, after the anomaly transform — a §0.16 note for the
+workflow: this guard depends only on checkpoint args + flags and could
+run before the tensor work. **RE-DISPATCHED 2026-08-27 17:44Z as #494
+(E-056a, K=24) and #495 (E-056b, K=144)** with the base recipe
+`f4r2-40M-dz6-fsq65k` — verified field-identical minus `fsq_warmstart` —
+which is precisely the guard's own prescribed path ("resume it without
+--fsq-warmstart to continue the lattice it has"). Queued behind #493
+(E-057.1b, another session's FGN seed-1 head) on the same box.
+First-minutes checks unchanged: `resumed at_step 260000`,
+`fsq_levels 8,8,8,5,5,5`, and `input_znoise_rel_pers` recorded. Cost of
+the false start: ~$0.25 of box time, two run numbers.
 
 ---
 
