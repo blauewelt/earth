@@ -659,6 +659,50 @@ in_progress on the right runner within a minute) and **#501 (E-057.1b
 seed 1, fifth dispatch) queued on gpu-box-32966687 behind #494/#495**
 (E-056's box-local pair). Cost of the OOM: ~1.2 h of one box, ≈$0.35.
 
+**(k) #502 (E-057.1b FGN seed 1) is DEAD at ~step 163,000/200,000 — its
+box's HOST dropped offline.** The job failed 19:20:24Z 08-28 with the probes
+step in `null` conclusion (runner-lost-communication signature); Vast
+48937793 (gpu-box-46292015) reads `offline` at the host level, like the
+lemon 48478310 before it. The only copies of seed 1's head — the box-local
+mirror at ~step 162k and the in-RAM 163k state — are on that unreachable
+disk (pre-fix sha ⇒ no release mirrors; the 2 GiB cliff). ml-live-502
+survived to step 160,000 (crps 0.309 at 158k, member_var ~0.08,
+spread_ratio ~0.48 — same trend as seed 0) and is snapshotted in the FGN
+session's sandbox. DECISION DEFERRED, not taken: under §3b(b) as amended,
+a corridor number at this tier is readable at n=1 with the tier record
+quoted (sd 0.0020, 8 dof), and if FGN wins F1 the seed-1 twin is owed as
+the winner-replicate anyway — so seed 1 is re-run only after seed 0's roll
+reads out, or resumed from the 162k mirror if 48937793 ever comes back.
+Cost of the loss: ~22.5 h of one box, ≈$7.50, no data (the metrics to 160k
+survive).
+
+**(l) THE SEED-0 HARVEST CHAIN IS DISPATCHED — #511 (E-057.1a-headpub) and
+#512 (E-057.2, the first ensemble roll), queued in order on
+gpu-box-42005419 behind #500's still-running job** (#500's token expired
+19:21Z, so its own archive steps will 401; the live branch froze at step
+172,000; the trainer runs blind to ~200k ≈ 23:15Z). #511 strips the
+finished head to weights-only `e057fgn_s0__temporal.pt` (~1.12 GB, inside
+the 2 GiB cap) via `headpub:e057fgn_s0@temporal` — the run completed, so
+temporal.pt IS the head; the printed step/geometry line must read
+step 200000 / 1024×16 / stencil 145 / seed 0 / fgn_eps 32 (the 08-17
+stale-orphan trap) — and its rescue step harvests #500's complete metrics.
+#512 = `sroll:e057fgn_s0,e017_u1_s0,longm:36,futm:36`: rollout_spatial
+detects `fgn_eps 32` in the checkpoint args and rolls **M=8 member
+trajectories per start** (the E-057.0/roll build, first GPU use), scoring
+the ensemble-MEAN field through the identical corridor machinery plus the
+new ens_prob / amoc_bands_ens[_unpooled] / dispersion keys; the long +
+future battery is shortened to 36 months each way for the E-057.3
+dispersion-vs-lead read (growing = dynamics, flat = replay). **F1 read:
+ensemble-mean corridor AUC vs the znoise pair 0.7235 and the clean pair
+0.6781.** Three caveats registered before the number exists: (1) all three
+sides trained on the same pre-c25f6ff `endpoint_contaminated` pool — the
+CONTRAST is internally consistent, the absolute levels carry the E-059
+holdout caveat like every archived head; (2) the FGN head is 279.6M vs the
+211M controls (FiLM capacity, not trunk capacity — but not param-matched);
+(3) n=1 at the xl tier — quote beside the tier record (sd 0.0020, 8 dof).
+M=8 ⇒ ~8× roll cost, est. ~34–40 h: §5.25 partials ship to ml-live-512,
+the 24 h token expires mid-run ⇒ HAND-HARVEST the final artefact.
+
 **(i) The ENSEMBLE ROLL is BUILT and CPU-VERIFIED** — `ml/rollout_spatial.py`
 +779/−13, spec `ml/plans/E057_roll_spec.md`, tests
 `tests/test_fgn_roll.py` (new, 759 lines, 7 checks). A head whose checkpoint
