@@ -1,0 +1,10 @@
+{
+ "eval": true,
+ "heads": [
+  "e057fgn_s0 (headpub from #500's box)"
+ ],
+ "exp": "E-057.1a-headpub",
+ "what": "strip + publish the finished FGN seed-0 head as a weights-only asset; rescue step harvests #500's metrics (its token expired)",
+ "eta_h": 0.5,
+ "published_at": "2026-08-28T21:27:22.130Z"
+}
