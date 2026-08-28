@@ -259,6 +259,28 @@ disown
 disown
 
 echo "=== tpu_train_s2 ${STAMP} · node ${NODE} · bucket ${BUCKET} ==="
+
+# BOOT BEACON — the first bucket object must land within ~3 minutes of the
+# script starting, unconditionally. Before this existed, the first object on
+# the healthy path was whatever section 6's shipper uploaded, and that
+# shipper SLEEPS FIRST for SHIP_EVERY_MIN and is armed only behind the
+# clone, the 4.3 G tensor pull and the 17 G Z pull: measured on E-054b's
+# node, READY 08:10:33Z, first object 08:27:34Z — seventeen minutes of
+# silence from an entirely healthy node, which from the outside is the SAME
+# OBSERVATION as a node whose startup script never ran (the us-west1-c
+# maintenance-event zombies, 2026-08-26). It fires HERE, at the banner,
+# because the trap and both watchdogs are already armed above it: a log in
+# the bucket therefore proves this script is genuinely executing and that
+# the machinery which reaps the node exists, not merely that the node
+# booted. One early log upload plus a 3-minute shipper turns "no object
+# under runs/<exp>/ in ~6 min" into a certain zombie verdict
+# (ml/CLAUDE.md §7). upload_log swallows its own failures, so a beacon
+# whose PUT 500s costs a cycle and never the run.
+upload_log
+( while true; do sleep 180; upload_log; done ) &
+BEACON_PID=$!
+disown
+echo "measured: boot beacon shipped and 3-min early log shipper armed"
 echo "lifecycle: ship every ${SHIP_EVERY_MIN} min · stall watchdog ${STALL_MIN} min · hard cap ${HARD_CAP_HOURS} h"
 # EVERY KNOB, RESOLVED, in one place. A startup script inherits no environment,
 # so "I set K=144 when I launched it" is a claim about the launching shell and
@@ -520,6 +542,14 @@ fi
 ( while true; do sleep $(( SHIP_EVERY_MIN * 60 )); ship_state; upload_log; done ) &
 disown
 echo "measured: shipper armed, every ${SHIP_EVERY_MIN} min to gs://${BUCKET}/${RUNS_PREFIX}/"
+# RETIRE THE BOOT BEACON: the shipper above writes the SAME log object, and
+# two uploaders racing on one object name make the newest log the loser of a
+# coin toss. Killing the subshell is the whole retirement — it was disowned,
+# not detached from this process tree. `|| true` because a kill that finds
+# nothing (the beacon already gone) must not take a healthy run down under
+# `set -e`.
+kill "${BEACON_PID}" 2>/dev/null || true
+echo "measured: boot beacon retired — the shipper owns the log object now"
 
 # --------------------------------------------------------------------------
 # 7 · train

@@ -1167,10 +1167,18 @@ archive.
   armed only after the clone, the 4.3 G tensor pull and a 17 G Z pull.
   Measured on E-054b's node: READY 08:10:33Z, first bucket object
   **08:27:34Z — 17 minutes**, on a node that was entirely healthy.
-  Reaping at 6 min would have destroyed it. Until a beacon ships from
-  this launcher (three lines, next to the placeholder guard — build item),
-  a silent `tpu_train_s2.sh` node is judged by the ~25-minute setup it is
-  actually doing, not by the field launcher's clock.
+  Reaping at 6 min would have destroyed it. **CLOSED the same day**:
+  `tpu_train_s2.sh` now ships the field launcher's beacon — one
+  `upload_log` at the banner (chosen because the EXIT trap and BOTH
+  watchdogs are armed above that line, so a shipped log proves the
+  reaping machinery exists and not merely that the node booted), then a
+  3-minute shipper, RETIRED by `kill "${BEACON_PID}"` when section 6 arms
+  the 10-minute one, so two uploaders never race on the same object name.
+  The 6-minute rule is valid for this launcher **from the commit that
+  added the beacon onward, and not for any node launched before it** —
+  which is the general form of the rule's own precondition: a launcher
+  earns the verdict by shipping a beacon, and the verdict is only as old
+  as the beacon.
   Both field-launcher ambiguities are now closed by construction: the
   launcher ships a BOOT BEACON (the log, within ~3 min of the script
   starting, then every 3 min until the main shipper takes over). The
