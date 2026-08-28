@@ -1030,6 +1030,14 @@ lost the forecastable signal", and 0.50986 is ≳0.50.**
   codec's tokens. **≲0.44 was the bar for opening the token road; 0.51 does
   not clear it.**
 
+**#507's archived bundle (landed ~16:4xZ) completes the record.** Its
+final-eval one-step reads `z_t+1` 0.31280 / 0.62375 = **0.50148** against
+#504's 0.53373 on the identical denominator — the dose-matched gap on the
+final eval is −0.032, agreeing with the training-curve read. Its
+`probe_head` is 0.588 [0.534, 0.641] — IDENTICAL to #504's, as it must be
+(same frozen codec), which is the §3b protocol-determinism certificate for
+the pair. Both readings confirm the verdict above; nothing moves.
+
 **The codec probes need no second look, by construction.** `probe_kfold` and
 `probe_head` score the FROZEN codec, and #504 and #507 share it (run-485), so
 those rows are identical in both bundles — the codec verdict already recorded
