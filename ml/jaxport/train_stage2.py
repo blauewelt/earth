@@ -27,16 +27,29 @@ WHAT IS MIRRORED, TERM FOR TERM
     the two-masks rule that goes with it: `stat_x_hold` (the codec's own
     `holdout_lon`) chooses the anomaly transform's statistics and
     `--train-lon-hold` chooses the POOL, never the other way round;
-  · the WINDOW POOL'S HOLDOUT SCOPE — `--holdout-scope endpoint|window`,
-    through `ml/temporal.py:build_window_pool` ITSELF rather than a
-    transcription. `endpoint` (the default) is the rule above, unchanged, and
-    the array it returns is asserted equal to this file's own literal
-    expression so the shared call cannot silently move a legacy pool.
-    `window` additionally drops any window that TOUCHES a held-out bin — the
-    K frames, each frame's teacher-forced target (the objective below is
-    dense over the window) and t+1 — and prints the same runtime certificate
+  · the WINDOW POOL'S HOLDOUT SCOPE — `--holdout-scope
+    endpoint_contaminated|target|window`, through
+    `ml/temporal.py:build_window_pool` ITSELF rather than a transcription.
+    `endpoint_contaminated` is the legacy rule above, unchanged, and the
+    array it returns is asserted equal to this file's own literal expression
+    so the shared call cannot silently move a legacy pool; it is NOT the
+    default, because it leaks held-out years into training through
+    straddling windows and is kept only to reproduce the archive. `window`
+    (the default) additionally drops any window that TOUCHES a held-out bin
+    — the K frames, each frame's teacher-forced target (the objective below
+    is dense over the window) and t+1. `target` keeps the legacy pool bin
+    for bin and instead MASKS every per-frame loss term whose target bin is
+    held out (`ml/temporal.py:frame_target_keep`, imported, not restated):
+    no held-out bin is ever a target, held-out bins may still be read as
+    context. Every one of them prints the same runtime certificate
     `ml/temporal.py` prints;
-  · the objective — `((pred - ztgt)**2).mean()` over the whole window, which
+  · the objective — `((pred - ztgt)**2).mean()` over the whole window, and
+    at `--holdout-scope target` its masked form
+    `((pred - ztgt)**2 * keep).sum() / (keep.sum() * d_z)`, term for term
+    with the torch trainer's two SEPARATE branches (they are separate there
+    and separate here for the same reason: the two forms are not bitwise
+    equal even where the mask is all ones, and the archive's objective must
+    not move); which
     is `ml/temporal.py:2437`'s `l_base` and, at unroll 1 with no direct heads,
     its entire loss;
   · `--input-znoise` — an ABSOLUTE sigma added to LIVE slots only (a slot is
@@ -175,8 +188,9 @@ from jaxport.embed import embed_everything_jax, gather_px_np     # noqa: E402
 
 # The numpy plumbing, imported rather than copied — see the module docstring.
 from model import LazyPixels                                    # noqa: E402
-from temporal import (CACHE_DTYPE, STENCILS, _ring_on, build_stencil,  # noqa: E402,E501
-                      build_window_pool, rapid_section, season_ctx)
+from temporal import (CACHE_DTYPE, HOLDOUT_SCOPES, STENCILS,  # noqa: E402,E501
+                      _ring_on, build_stencil, build_window_pool,
+                      frame_target_keep, rapid_section, season_ctx)
 from timeblocks import BlockAxis                                # noqa: E402
 from train import lon_holdout_mask                              # noqa: E402
 from probe_sequence import ridge_r                              # noqa: E402
@@ -329,8 +343,22 @@ def fair_crps2(x1, x2, y):
     conditional MEAN is optimal, so a noise-conditioned head learns to IGNORE
     ε. Noise conditioning and the proper score are ONE change, not two.
     """
+    return fair_crps2_elem(x1, x2, y).mean()
+
+
+def fair_crps2_elem(x1, x2, y):
+    """`fair_crps2` BEFORE its reduction — the JAX twin of
+    `ml/temporal.py:fair_crps2_elem`, and the same split for the same reason.
+
+    `--holdout-scope target` masks the objective per (window, frame). The
+    estimator is three terms combined ELEMENTWISE and reduced ONCE, so the
+    score over a subset of elements is the mean of this tensor over that
+    subset: masking here is exact, masking a scalar that has already been
+    reduced would not be. `fair_crps2` is this followed by `.mean()`, so the
+    unmasked number is bit-identical to the expression it replaced.
+    """
     return (0.5 * (jnp.abs(x1 - y) + jnp.abs(x2 - y))
-            - 0.5 * jnp.abs(x1 - x2)).mean()
+            - 0.5 * jnp.abs(x1 - x2))
 
 
 def fair_crps_ens(ens, obs):
@@ -560,7 +588,21 @@ def fgn_refusals(a, val_members_default=FGN_VAL_MEMBERS_DEFAULT):
     return "crps2"
 
 
-def stage2_loss(model, zseq, mseq, sctx, ztgt):
+def masked_mean(se, keep, d_z):
+    """The `--holdout-scope target` reduction, in ONE place: the mean of the
+    per-element term `se` [B, K, d_z] over the (window, frame) entries `keep`
+    [B, K, 1] marks as TRAIN targets.
+
+    `keep.sum() * d_z` is the number of elements actually summed, so this is
+    the mean of exactly the terms the legacy statement means, taken over the
+    kept subset. It is NEVER used when the mask is absent: the legacy scopes
+    execute `.mean()` itself, byte for byte, because `(se * m).sum() /
+    (m.sum() * d_z)` is not bitwise equal to `se.mean()` even at m == 1.
+    """
+    return (se * keep).sum() / (keep.sum() * d_z)
+
+
+def stage2_loss(model, zseq, mseq, sctx, ztgt, keep=None):
     """`l_base` — the WHOLE stage-2 objective at unroll 1 with no direct heads.
 
     `ml/temporal.py:2436-2438`: one forward, mean squared error between the
@@ -573,10 +615,18 @@ def stage2_loss(model, zseq, mseq, sctx, ztgt):
     identical inputs, two frameworks, one number.
     """
     pred, hid = model(zseq, mseq, sctx)
-    return ((pred - ztgt) ** 2).mean(), (pred, hid)
+    # TWO STATEMENTS, NOT ONE UNIFIED FORM — `ml/temporal.py`'s two branches,
+    # term for term, and separate for its reason: `endpoint_contaminated`
+    # (98 archived runs) and `window` (E-059, in flight) must keep executing
+    # the legacy reduction exactly. `keep is None` is a PYTHON branch, so the
+    # unmasked graph is traced with no mask operation in it at all.
+    if keep is None:
+        return ((pred - ztgt) ** 2).mean(), (pred, hid)
+    return (masked_mean((pred - ztgt) ** 2, keep, ztgt.shape[-1]),
+            (pred, hid))
 
 
-def stage2_loss_fgn(model, zseq, mseq, sctx, ztgt, eps1, eps2):
+def stage2_loss_fgn(model, zseq, mseq, sctx, ztgt, eps1, eps2, keep=None):
     """`l_base` in FGN mode — `ml/temporal.py:3501-3522`, term for term.
 
     TWO FORWARDS ON THE IDENTICAL CONTEXT, TWO ε. The context (including the
@@ -592,7 +642,13 @@ def stage2_loss_fgn(model, zseq, mseq, sctx, ztgt, eps1, eps2):
     """
     p1, hid1 = model(zseq, mseq, sctx, eps=eps1)
     p2, _ = model(zseq, mseq, sctx, eps=eps2)
-    return fair_crps2(p1, p2, ztgt), (p1, hid1)
+    if keep is None:
+        return fair_crps2(p1, p2, ztgt), (p1, hid1)
+    # EXACT: the fair-CRPS-at-2 estimator is elementwise then reduced once,
+    # so masking before that single reduction scores precisely the kept
+    # (window, frame) entries (`fair_crps2_elem`).
+    return (masked_mean(fair_crps2_elem(p1, p2, ztgt), keep, ztgt.shape[-1]),
+            (p1, hid1))
 
 
 # --------------------------------------------------------------------------
@@ -726,25 +782,32 @@ def build_train_steps(graphdef, tx, set_lr, d_z, nz_sigma, accum=1):
     """
     accum = int(accum)
 
-    def loss_fn(st, zseq, mseq, sctx, ztgt):
+    # `keep` — the `--holdout-scope target` per-(window, frame) loss mask —
+    # rides through every one of these as a TRAILING OPTIONAL argument, None
+    # at every other scope. None is an empty pytree to `jax.jit`, so the
+    # unmasked run traces, compiles and executes the identical graph it did
+    # before this argument existed: the mask costs a legacy arm nothing, and
+    # `stage2_loss`'s Python branch keeps its legacy statement.
+    def loss_fn(st, zseq, mseq, sctx, ztgt, keep=None):
         m = nnx.merge(graphdef, st)
-        loss, _ = stage2_loss(m, zseq, mseq, sctx, ztgt)
+        loss, _ = stage2_loss(m, zseq, mseq, sctx, ztgt, keep)
         return loss
 
-    def loss_fn_fgn(st, zseq, mseq, sctx, ztgt, eps1, eps2):
+    def loss_fn_fgn(st, zseq, mseq, sctx, ztgt, eps1, eps2, keep=None):
         m = nnx.merge(graphdef, st)
-        loss, _ = stage2_loss_fgn(m, zseq, mseq, sctx, ztgt, eps1, eps2)
+        loss, _ = stage2_loss_fgn(m, zseq, mseq, sctx, ztgt, eps1, eps2, keep)
         return loss
 
     @jax.jit
-    def train_step_fgn(st, ost, lr, zseq, mseq, sctx, ztgt, eps1, eps2):
+    def train_step_fgn(st, ost, lr, zseq, mseq, sctx, ztgt, eps1, eps2,
+                       keep=None):
         """`train_step` with the fair-CRPS objective. Identical in every other
         respect — same pre-clip global norm on every step, same `_set_lr`,
         same optax chain — so an FGN arm and an MSE arm differ in the
         objective and in nothing else."""
         zseq = zseq.astype(jnp.float32)
         loss, grads = jax.value_and_grad(loss_fn_fgn)(
-            st, zseq, mseq, sctx, ztgt, eps1, eps2)
+            st, zseq, mseq, sctx, ztgt, eps1, eps2, keep)
         gnorm = optax.global_norm(grads)
         ost = set_lr(ost, lr)
         upd, ost = tx.update(grads, ost, st)
@@ -752,25 +815,26 @@ def build_train_steps(graphdef, tx, set_lr, d_z, nz_sigma, accum=1):
 
     @jax.jit
     def train_step_fgn_dn(st, ost, lr, key, zseq, mseq, sctx, ztgt,
-                          eps1, eps2):
+                          eps1, eps2, keep=None):
         """The device-noise twin. THE CORRUPTION IS APPLIED ONCE, BEFORE BOTH
         FORWARDS (`ml/temporal.py:3502-3507`): `apply_znoise_jax` runs here,
         outside `stage2_loss_fgn`, so the two members see the identical
         perturbed context and the CRPS spread term measures ε alone."""
         zn = apply_znoise_jax(zseq, key, nz_sigma, d_z)
         loss, grads = jax.value_and_grad(loss_fn_fgn)(
-            st, zn, mseq, sctx, ztgt, eps1, eps2)
+            st, zn, mseq, sctx, ztgt, eps1, eps2, keep)
         gnorm = optax.global_norm(grads)
         ost = set_lr(ost, lr)
         upd, ost = tx.update(grads, ost, st)
         return optax.apply_updates(st, upd), ost, loss, gnorm
 
     @jax.jit
-    def train_step(st, ost, lr, zseq, mseq, sctx, ztgt):
+    def train_step(st, ost, lr, zseq, mseq, sctx, ztgt, keep=None):
         # Exact no-op for the fp32 path; makes --gather-fp16 safe here too
         # (fp16→fp32 is exact, and the model must never run in fp16).
         zseq = zseq.astype(jnp.float32)
-        loss, grads = jax.value_and_grad(loss_fn)(st, zseq, mseq, sctx, ztgt)
+        loss, grads = jax.value_and_grad(loss_fn)(st, zseq, mseq, sctx, ztgt,
+                                                  keep)
         # THE PRE-CLIP GLOBAL NORM, on EVERY step. Clipping computes it
         # anyway, and the unclipped path pays one extra reduction — cheap
         # beside a forward and backward over a 200M head, and it is what
@@ -790,9 +854,10 @@ def build_train_steps(graphdef, tx, set_lr, d_z, nz_sigma, accum=1):
     # fp32 happens in apply_znoise_jax and is exact.
 
     @jax.jit
-    def train_step_dn(st, ost, lr, key, zseq, mseq, sctx, ztgt):
+    def train_step_dn(st, ost, lr, key, zseq, mseq, sctx, ztgt, keep=None):
         zn = apply_znoise_jax(zseq, key, nz_sigma, d_z)
-        loss, grads = jax.value_and_grad(loss_fn)(st, zn, mseq, sctx, ztgt)
+        loss, grads = jax.value_and_grad(loss_fn)(st, zn, mseq, sctx, ztgt,
+                                                  keep)
         gnorm = optax.global_norm(grads)
         ost = set_lr(ost, lr)
         upd, ost = tx.update(grads, ost, st)
@@ -831,29 +896,33 @@ def build_train_steps(graphdef, tx, set_lr, d_z, nz_sigma, accum=1):
     _jit_acc = functools.partial(jax.jit, donate_argnums=(1, 2))
 
     @_jit_acc
-    def micro(st, gacc, lacc, zseq, mseq, sctx, ztgt):
+    def micro(st, gacc, lacc, zseq, mseq, sctx, ztgt, keep=None):
         zseq = zseq.astype(jnp.float32)
-        loss, grads = jax.value_and_grad(loss_fn)(st, zseq, mseq, sctx, ztgt)
+        loss, grads = jax.value_and_grad(loss_fn)(st, zseq, mseq, sctx, ztgt,
+                                                  keep)
         return jax.tree.map(jnp.add, gacc, grads), lacc + loss
 
     @_jit_acc
-    def micro_dn(st, gacc, lacc, key, zseq, mseq, sctx, ztgt):
+    def micro_dn(st, gacc, lacc, key, zseq, mseq, sctx, ztgt, keep=None):
         zn = apply_znoise_jax(zseq, key, nz_sigma, d_z)
-        loss, grads = jax.value_and_grad(loss_fn)(st, zn, mseq, sctx, ztgt)
+        loss, grads = jax.value_and_grad(loss_fn)(st, zn, mseq, sctx, ztgt,
+                                                  keep)
         return jax.tree.map(jnp.add, gacc, grads), lacc + loss
 
     @_jit_acc
-    def micro_fgn(st, gacc, lacc, zseq, mseq, sctx, ztgt, eps1, eps2):
+    def micro_fgn(st, gacc, lacc, zseq, mseq, sctx, ztgt, eps1, eps2,
+                  keep=None):
         zseq = zseq.astype(jnp.float32)
         loss, grads = jax.value_and_grad(loss_fn_fgn)(
-            st, zseq, mseq, sctx, ztgt, eps1, eps2)
+            st, zseq, mseq, sctx, ztgt, eps1, eps2, keep)
         return jax.tree.map(jnp.add, gacc, grads), lacc + loss
 
     @_jit_acc
-    def micro_fgn_dn(st, gacc, lacc, key, zseq, mseq, sctx, ztgt, eps1, eps2):
+    def micro_fgn_dn(st, gacc, lacc, key, zseq, mseq, sctx, ztgt, eps1, eps2,
+                     keep=None):
         zn = apply_znoise_jax(zseq, key, nz_sigma, d_z)
         loss, grads = jax.value_and_grad(loss_fn_fgn)(
-            st, zn, mseq, sctx, ztgt, eps1, eps2)
+            st, zn, mseq, sctx, ztgt, eps1, eps2, keep)
         return jax.tree.map(jnp.add, gacc, grads), lacc + loss
 
     @jax.jit
@@ -882,7 +951,8 @@ def build_train_steps(graphdef, tx, set_lr, d_z, nz_sigma, accum=1):
 
 
 def accum_step(steps, state, opt_state, lr, s, zseq, mseq, sctx, ztgt, micro,
-               put=jnp.asarray, fgn_root=None, fgn_eps=0, nz_root=None):
+               put=jnp.asarray, fgn_root=None, fgn_eps=0, nz_root=None,
+               keep=None):
     """ONE optimiser update over `steps.accum` micro-batches — E-054b.
 
     Returns exactly what the un-accumulated `train_step` returns —
@@ -900,6 +970,11 @@ def accum_step(steps, state, opt_state, lr, s, zseq, mseq, sctx, ztgt, micro,
     to prevent), and why the buffer lifetimes below bound the peak at one
     micro-batch of activations.
 
+    `keep=None` means no `--holdout-scope target` mask; when there is one it
+    is sliced with the SAME `sl` as every other per-row array, so a micro
+    batch's rows carry their own windows' mask and the accumulated objective
+    is the un-accumulated one over the same kept terms.
+
     `fgn_root=None` means MSE, `nz_root=None` means the corruption is not
     drawn on device: the two selectors are the loop's own `FGN` and
     `device_noise` flags, passed rather than re-derived so this function and
@@ -911,6 +986,7 @@ def accum_step(steps, state, opt_state, lr, s, zseq, mseq, sctx, ztgt, micro,
         sl = slice(mi * micro, (mi + 1) * micro)
         zs_, ms_, cs_, ts_ = (put(zseq[sl]), put(mseq[sl]),
                               put(sctx[sl]), put(ztgt[sl]))
+        ks_ = None if keep is None else put(keep[sl])
         # The input corruption, when it is drawn on device, is a FRESH draw
         # per micro-batch folded from (seed, step, micro) — at N = 1 this
         # function is not called at all, so the legacy `fold_in(root, s)` is
@@ -927,19 +1003,21 @@ def accum_step(steps, state, opt_state, lr, s, zseq, mseq, sctx, ztgt, micro,
             e2 = fgn_eps_at(fgn_root, s, 1, micro, fgn_eps, micro_index=mi)
             if key is None:
                 gacc, lacc = steps.micro_fgn(state, gacc, lacc,
-                                             zs_, ms_, cs_, ts_, e1, e2)
+                                             zs_, ms_, cs_, ts_, e1, e2, ks_)
             else:
                 gacc, lacc = steps.micro_fgn_dn(state, gacc, lacc, key,
-                                                zs_, ms_, cs_, ts_, e1, e2)
+                                                zs_, ms_, cs_, ts_, e1, e2,
+                                                ks_)
         elif key is None:
-            gacc, lacc = steps.micro(state, gacc, lacc, zs_, ms_, cs_, ts_)
+            gacc, lacc = steps.micro(state, gacc, lacc, zs_, ms_, cs_, ts_,
+                                     ks_)
         else:
             gacc, lacc = steps.micro_dn(state, gacc, lacc, key,
-                                        zs_, ms_, cs_, ts_)
+                                        zs_, ms_, cs_, ts_, ks_)
         # The micro-batch's device buffers lose their last host reference
         # HERE, before the next one is made — the lifetime the memory argument
         # in `build_train_steps` depends on.
-        del zs_, ms_, cs_, ts_
+        del zs_, ms_, cs_, ts_, ks_
     return steps.apply_accum(state, opt_state, lr, gacc, lacc)
 
 
@@ -1246,22 +1324,29 @@ def parse(argv=None):
                         "ONLY — the anomaly statistics always follow the "
                         "codec. Pass an explicit block as one word: "
                         "--train-lon-hold=-45,-25.")
-    p.add_argument("--holdout-scope", default="endpoint",
-                   choices=("endpoint", "window"),
+    p.add_argument("--holdout-scope", default="window",
+                   choices=HOLDOUT_SCOPES,
                    help="WHAT THE YEAR HOLDOUT ACTUALLY EXCLUDES from the "
                         "training pool, term for term with ml/temporal.py. "
-                        "'endpoint' (default) is the legacy rule and every "
-                        "archived run: a window is dropped only when its "
-                        "SCORED bin t+1 falls in a holdout year. But the "
-                        "objective is DENSE over the window — every token "
-                        "predicts its own next step — so a window ending in "
-                        "the K bins after a holdout year teacher-forces that "
-                        "year's transitions into the weights, and reads its "
-                        "bins as context besides. 'window' is the honest "
-                        "rule: eligible only if NONE of the bins the forward "
-                        "pass touches is held out. An ADDITIONAL mask on top "
-                        "of the legacy expression, so 'endpoint' is the pool "
-                        "every archived run trained on.")
+                        "'endpoint_contaminated' IS THE LEGACY POOL AND IT "
+                        "LEAKS: a window is dropped only when its SCORED bin "
+                        "t+1 falls in a holdout year, but the objective is "
+                        "DENSE over the window — every token predicts its "
+                        "own next step — so every window straddling the edge "
+                        "of a holdout year teacher-forces that year's "
+                        "measured transitions into the weights and reads its "
+                        "bins as context besides. It is kept for ONE reason, "
+                        "to reproduce the 98 archived stage-2 runs that "
+                        "trained under it, and it is never the default "
+                        "again. 'window' (DEFAULT) is the strict rule: "
+                        "eligible only if NONE of the bins the forward pass "
+                        "touches is held out — 13.03%% of the frame-targets "
+                        "on the pentad axis. 'target' is the minimal correct "
+                        "fix: the legacy pool bin for bin, with every "
+                        "per-frame loss term whose TARGET bin is held out "
+                        "masked out of the mean — no held-out bin is ever a "
+                        "target, held-out bins MAY still be read as context, "
+                        "5.25%% of the frame-targets.")
     p.add_argument("--max-pixels", type=int, default=0,
                    help="subsample ocean pixels (code-path smoke only; the "
                         "26.5N section is always kept)")
@@ -1628,9 +1713,11 @@ def main(argv=None):
     # Windows [t-K+1 .. t] whose TARGET bin t+1 is a train bin and whose pixel
     # is outside the pool's longitude holdout. Windows may LOOK at held-out
     # bins (persistence can too); they may never be SCORED on them.
-    # --holdout-scope: `endpoint` (default) is the rule stated above, and
-    # `window` drops any window that TOUCHES a held-out bin — the frames, each
-    # frame's teacher-forced target, t+1. The rule and its certificate are
+    # --holdout-scope: `endpoint_contaminated` is the rule stated above (the
+    # legacy pool, never the default again), `window` (the default) drops any
+    # window that TOUCHES a held-out bin — the frames, each frame's
+    # teacher-forced target, t+1 — and `target` keeps the legacy pool and
+    # masks the loss instead. The rule and its certificate are
     # `ml/temporal.py:build_window_pool` itself, IMPORTED not transcribed
     # (this file's own standing rule for shared numpy plumbing), called at the
     # torch trainer's parameters: no --frame-offsets here, and --unroll /
@@ -1640,15 +1727,16 @@ def main(argv=None):
                              scope=a.holdout_scope)
     # THE LEGACY ARRAY, ASSERTED RATHER THAN TRUSTED (§0.2 / §4.9). `t >= K-1`
     # is `t + 1 >= K`, so the shared call must reproduce this file's own
-    # expression element for element at the default scope; a refactor that
-    # moved a single archived window would stop here, in milliseconds, rather
-    # than in a TPU-hours result nobody could reconcile.
-    if a.holdout_scope == "endpoint":
+    # expression element for element at `endpoint_contaminated` (which is no
+    # longer the default, and is the only scope this equality can be asserted
+    # at); a refactor that moved a single archived window would stop here, in
+    # milliseconds, rather than in a TPU-hours result nobody could reconcile.
+    if a.holdout_scope == "endpoint_contaminated":
         _legacy = np.array([t + 1 < T and t + 1 >= K and not t_hold[t + 1]
                             for t in range(T)])
         assert np.array_equal(ok_t, _legacy), (
-            "build_window_pool(endpoint) != the legacy ok_t expression: "
-            f"{int((ok_t != _legacy).sum())} of {T} bins differ")
+            "build_window_pool(endpoint_contaminated) != the legacy ok_t "
+            f"expression: {int((ok_t != _legacy).sum())} of {T} bins differ")
     ok_p = ~pool_x_hold[xs]
     pool_t, pool_p = np.where(ok_t[:, None] & ok_p[None, :])
     if not len(pool_t):
@@ -1658,6 +1746,25 @@ def main(argv=None):
             f"survive --train-lon-hold {a.train_lon_hold!r}. A K longer than "
             f"the record's train stretch is the usual cause.")
     print(f"train windows: {len(pool_t):,}", flush=True)
+
+    # --holdout-scope target · THE PER-(WINDOW, FRAME) LOSS MASK, built once
+    # from `ml/temporal.py:frame_target_keep` — imported, not transcribed, so
+    # the two trainers cannot disagree about which targets a head may learn
+    # from any more than they can disagree about the pool. Indexed by ANCHOR
+    # t; rows outside the pool are never read and stay True.
+    HOLD_MASK = (a.holdout_scope == "target")
+    KEEP_T, HOLD_MASKED_FRAC = None, 0.0
+    if HOLD_MASK:
+        _kidx = np.where(ok_t)[0]
+        _kk = frame_target_keep(_kidx, K, None, t_hold)
+        HOLD_MASKED_FRAC = float((~_kk).sum()) / float(max(1, _kk.size))
+        _kfull = np.ones((T, int(_kk.shape[1])), bool)
+        _kfull[_kidx] = _kk
+        KEEP_T = _kfull
+        print(f"  loss mask: {int((~_kk).sum()):,} of {int(_kk.size):,} "
+              f"(window, frame) targets in the TRAIN pool are held out and "
+              f"contribute nothing to l_base "
+              f"(holdout_masked_frac {HOLD_MASKED_FRAC:.6f}).", flush=True)
 
     MILESTONES = {int(x) for x in a.milestone_steps.split(",") if x.strip()}
     dead = {m for m in MILESTONES if not (0 < m < a.steps)}
@@ -1905,11 +2012,16 @@ def main(argv=None):
         "grad_accum": ACCUM, "micro_batch": MICRO,
         "train_lon_hold": a.train_lon_hold,
         # WHAT THE YEAR HOLDOUT EXCLUDED — the same key, unconditionally, that
-        # ml/temporal.py writes. Every run before 2026-08-28 was `endpoint`,
-        # and the difference between the two is whether held-out years were
-        # teacher-forced into the weights; a reader must not have to infer
-        # that from `train_windows`.
+        # ml/temporal.py writes. Every run before 2026-08-28 was the legacy
+        # `endpoint_contaminated`, and the difference between the scopes is
+        # whether held-out years were teacher-forced into the weights; a
+        # reader must not have to infer that from `train_windows`.
         "holdout_scope": a.holdout_scope,
+        # ...and HOW MUCH OF THE OBJECTIVE the scope removed, so an artefact
+        # self-describes the objective it trained under. 0.0 at
+        # `endpoint_contaminated` and at `window`, where every pooled
+        # window's every frame is scored.
+        "holdout_masked_frac": round(HOLD_MASKED_FRAC, 6),
         "codec_holdout_lon": ck["args"].get("holdout_lon", ""),
         "tag": a.tag or "",
         # The three fields a reader of a JAX curve needs and a torch curve
@@ -2136,7 +2248,38 @@ def main(argv=None):
             ztgt = np.asarray(
                 Z[base[:, None] + np.arange(1, K + 1)[None, :], p_i[:, None]],
                 np.float32)
-            yield s_, zseq, mseq, static_ctx[p_i], ztgt
+            # --holdout-scope target: [n, K, 1] float32, 1 where this
+            # window's frame target is a TRAIN bin, gathered by the same `t`
+            # the window was drawn at. None at every other scope, which is
+            # what keeps the legacy loss statement reachable.
+            keep = (KEEP_T[t_i][:, :, None].astype(np.float32)
+                    if HOLD_MASK else None)
+            if HOLD_MASK and s_ == start_step + 1:
+                # THE FIRST BATCH ONLY (§4.7: assert the EFFECT), here
+                # because this is the one place the batch's own window refs
+                # exist. Rebuild, from `base` and `t_hold`, which frame
+                # targets are held out and require the mask the loss is
+                # about to use to be zero in exactly those places. Under
+                # --prefetch this runs on the producer thread and the
+                # SystemExit is re-raised on the main thread by `_stream`,
+                # so the refusal cannot be swallowed.
+                _w = np.stack([t_hold[base + j + 1] for j in range(K)], 1)
+                _got = (keep[:, :, 0] == 0.0)
+                if not np.array_equal(_got, _w):
+                    sys.exit(
+                        f"--holdout-scope target: THE LOSS MASK DOES NOT "
+                        f"MATCH t_hold on the first batch — "
+                        f"{int((_got != _w).sum())} of {_w.size} "
+                        f"(window, frame) entries disagree ({int(_w.sum())} "
+                        f"targets are held out, the mask masks "
+                        f"{int(_got.sum())}). Refusing to train on an "
+                        f"objective nobody can describe.")
+                print(f"--holdout-scope target: first-batch check — the "
+                      f"loss mask is False on exactly the {int(_w.sum()):,} "
+                      f"of {_w.size:,} (window, frame) targets t_hold marks "
+                      f"held out, rebuilt from this batch's own window "
+                      f"refs.", flush=True)
+            yield s_, zseq, mseq, static_ctx[p_i], ztgt, keep
 
     if a.prefetch > 0:
         import queue as _queue
@@ -2169,13 +2312,18 @@ def main(argv=None):
     else:
         batch_iter = make_batches()
 
-    for s, zseq, mseq, sctx_b, ztgt in batch_iter:
+    for s, zseq, mseq, sctx_b, ztgt, wkeep in batch_iter:
         lr_now = jnp.asarray(a.lr * lr_factor(s - 1, a), jnp.float32)
+        # None (no mask) stays None all the way into the jit, where it is an
+        # empty pytree: an unmasked arm traces the identical graph it traced
+        # before `--holdout-scope target` existed.
+        _keep = None if wkeep is None else put(wkeep)
         if ACCUM > 1:
             state, opt_state, loss, gnorm = accum_step(
                 _steps, state, opt_state, lr_now, s,
                 zseq, mseq, sctx_b, ztgt, MICRO, put=put,
-                fgn_root=_fgn_root, fgn_eps=a.fgn_eps, nz_root=_nz_root)
+                fgn_root=_fgn_root, fgn_eps=a.fgn_eps, nz_root=_nz_root,
+                keep=wkeep)
         elif FGN:
             # TWO INDEPENDENT eps ON THE IDENTICAL CONTEXT. Folded from
             # (seed, step, forward_index) and from nothing else, so a resumed
@@ -2188,19 +2336,21 @@ def main(argv=None):
             if device_noise:
                 state, opt_state, loss, gnorm = train_step_fgn_dn(
                     state, opt_state, lr_now, jax.random.fold_in(_nz_root, s),
-                    put(zseq), put(mseq), put(sctx_b), put(ztgt), _e1, _e2)
+                    put(zseq), put(mseq), put(sctx_b), put(ztgt), _e1, _e2,
+                    _keep)
             else:
                 state, opt_state, loss, gnorm = train_step_fgn(
                     state, opt_state, lr_now,
-                    put(zseq), put(mseq), put(sctx_b), put(ztgt), _e1, _e2)
+                    put(zseq), put(mseq), put(sctx_b), put(ztgt), _e1, _e2,
+                    _keep)
         elif device_noise:
             state, opt_state, loss, gnorm = train_step_dn(
                 state, opt_state, lr_now, jax.random.fold_in(_nz_root, s),
-                put(zseq), put(mseq), put(sctx_b), put(ztgt))
+                put(zseq), put(mseq), put(sctx_b), put(ztgt), _keep)
         else:
             state, opt_state, loss, gnorm = train_step(
                 state, opt_state, lr_now,
-                put(zseq), put(mseq), put(sctx_b), put(ztgt))
+                put(zseq), put(mseq), put(sctx_b), put(ztgt), _keep)
         gv = float(gnorm)
         lv = float(loss)
         if not np.isfinite(lv):

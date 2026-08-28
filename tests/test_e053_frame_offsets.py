@@ -155,8 +155,20 @@ def main():
         # siblings by module name, so a copy in /tmp cannot run.
         base = os.path.join(ML, "_temporal_e053_base.py")
         open(base, "w").write(prev.stdout)
+        # --holdout-scope endpoint_contaminated ON THE NEW RUN: 2026-08-28
+        # flipped that flag's DEFAULT from the legacy (leaking) pool to
+        # `window`, so an unflagged working tree trains on a different pool
+        # by design. Naming the legacy scope keeps this check asking whether
+        # --frame-offsets adds a code path, which is its own question; the
+        # default change has its own no-op proof and its own test file.
+        # EVERY working-tree run in this file carries it, so each
+        # check's own arithmetic (pool counts, closed forms) keeps
+        # describing the pool it was written against. The BASE
+        # revision never gets the flag: it predates the rename.
+        LEGACY_SCOPE = ["--holdout-scope", "endpoint_contaminated"]
         try:
-            r_new, tj_new, ck_new, out_new = train(cur, npz, run, tmp, [], "new")
+            r_new, tj_new, ck_new, out_new = train(cur, npz, run, tmp,
+                                                   LEGACY_SCOPE, "new")
             r_old, tj_old, ck_old, out_old = train(base, npz, run, tmp, [], "base")
         finally:
             os.remove(base)
@@ -180,7 +192,8 @@ def main():
         # The contiguous list IS the default stencil written out. If the two
         # ever disagree, 'off' has become a second implementation.
         r_c, tj_c, ck_c, out_c = train(cur, npz, run, tmp,
-                                       [f"--frame-offsets={CONTIG}"], "contig")
+                                       [f"--frame-offsets={CONTIG}",
+                                        *LEGACY_SCOPE], "contig")
         bad = params_equal(ck_new, ck_c)
         assert not bad, \
             (f"--frame-offsets={CONTIG} moved {len(bad)} tensors against the "
@@ -278,7 +291,8 @@ def main():
 
         # ==================== 4 · THE POOL BOUND =========================
         r_s, tj_s, ck_s, out_s = train(cur, npz, run, tmp,
-                                       [f"--frame-offsets={SPARSE}"], "sparse")
+                                       [f"--frame-offsets={SPARSE}",
+                                        *LEGACY_SCOPE], "sparse")
         n_px = pool_of(out_new) // n_anchors(K - 1)
         assert pool_of(out_new) == n_anchors(K - 1) * n_px, \
             ("the toy's default pool is not anchors x pixels — the "

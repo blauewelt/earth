@@ -138,8 +138,26 @@ def fair_crps2(x1, x2, y):
     IGNORE ε. Noise conditioning and the proper score are one change, not two
     (ml/plans/E057_fgn_head.md, "two technical facts").
     """
+    return fair_crps2_elem(x1, x2, y).mean()
+
+
+def fair_crps2_elem(x1, x2, y):
+    """`fair_crps2` BEFORE its reduction: the estimator's elementwise value,
+    same shape as its arguments.
+
+    The split exists so `--holdout-scope target` can mask the FGN objective
+    EXACTLY. The fair-CRPS-at-2 estimator is a sum of three elementwise terms
+    reduced ONCE at the end, so the score of a subset of elements is the mean
+    of this tensor over that subset — masking here is the same arithmetic the
+    unmasked call makes, not an approximation of it. Masking a term that had
+    already been reduced (e.g. scaling `fair_crps2`'s scalar) would not be.
+
+    `fair_crps2` is this expression followed by `.mean()`, so the legacy
+    number is bit-identical: one elementwise combination, one reduction, in
+    the association `ml/jaxport/train_stage2.py:fair_crps2` transcribes.
+    """
     return (0.5 * ((x1 - y).abs() + (x2 - y).abs())
-            - 0.5 * (x1 - x2).abs()).mean()
+            - 0.5 * (x1 - x2).abs())
 
 
 def fair_crps_ens(ens, obs):
@@ -616,32 +634,141 @@ def window_touch_offsets(K, offsets, reach):
                   | {int(r) for r in reach})
 
 
+def frame_target_keep(t_idx, K, offsets, t_hold):
+    """WHICH OF A WINDOW'S K DENSE TARGETS ARE TRAIN BINS — `[len(t_idx), K]`
+    bool, True where that frame's teacher-forced target is NOT held out.
+
+    `t_idx` is the windows' ANCHOR bins t (what the pool holds). Frame j of the
+    window at t sits at `frame_ref(t) + j` and its target — the bin `win_ztgt`
+    reads — is one bin later, `frame_ref(t) + j + 1`. That arithmetic is taken
+    from `frame_ref`/`frame_steps` themselves, exactly as `window_touch_offsets`
+    takes it, so the mask, the pool rule and the batch gather are three
+    expressions over ONE definition of where a frame's target lives; a new
+    sampling pattern cannot reach one of them and miss another.
+
+    This is the whole of `--holdout-scope target`: the pool is the legacy one,
+    and every per-frame loss contribution whose target bin is held out is
+    dropped from the mean. Because the pool's reach condition already
+    guarantees the LAST frame's target (t+1) is a train bin, at least one
+    column is always True — no window is ever fully masked, so the masked mean
+    can never divide by zero.
+    """
+    t_idx = np.asarray(t_idx, dtype=np.int64).reshape(-1)
+    th = np.asarray(t_hold, dtype=bool)
+    ref = np.asarray(frame_ref(t_idx, K, offsets), dtype=np.int64)
+    steps = [int(j) for j in frame_steps(K, offsets)]
+    keep = np.empty((len(t_idx), len(steps)), bool)
+    for c, j in enumerate(steps):
+        keep[:, c] = ~th[ref + j + 1]
+    return keep
+
+
+def _target_scope_certificate(T, t_hold, K, FOFF, ok_t, quiet):
+    """The `--holdout-scope target` print and its EXACT identity check.
+
+    Runs at POOL-BUILD time — the inputs are all it has cost you (§5.16) —
+    and never touches `ok_t`: this scope's pool IS the legacy array, and the
+    only thing that changes is which per-frame terms enter the loss.
+    """
+    idx = np.where(ok_t)[0]
+    keep = frame_target_keep(idx, K, FOFF, t_hold)
+    n_tot = int(keep.size)
+    n_mask = int((~keep).sum())
+    # ---- the certificate, by a DIFFERENT expression than the mask --------
+    # `frame_target_keep` is a vectorised gather per frame column. This walks
+    # every pooled window and every frame in a plain loop, rebuilding the
+    # target bin from `frame_ref`/`frame_steps` the way `win_ztgt` does, and
+    # counts the held-out ones. Two expressions, one definition: a bug in the
+    # vectorised form cannot hide in both. Exact equality, not a threshold.
+    n_mask2 = 0
+    for t in idx:
+        ref = int(frame_ref(int(t), K, FOFF))
+        for j in frame_steps(K, FOFF):
+            if bool(t_hold[ref + int(j) + 1]):
+                n_mask2 += 1
+    if n_mask2 != n_mask:
+        sys.exit(
+            f"--holdout-scope target FAILED ITS OWN CERTIFICATE: the mask "
+            f"says {n_mask:,} of {n_tot:,} frame-targets are held out, the "
+            f"brute-force recount over frame_ref/frame_steps says "
+            f"{n_mask2:,}. The two disagree, so the objective cannot be "
+            f"trusted — refusing to train.")
+    # The other exact identity: the reach condition guarantees the LAST
+    # frame's target t+1 is a train bin, so every pooled window keeps at
+    # least one term and the masked mean's denominator is never zero.
+    if not bool(keep.any(1).all()):
+        sys.exit(
+            f"--holdout-scope target FAILED ITS OWN CERTIFICATE: "
+            f"{int((~keep.any(1)).sum()):,} pooled windows have EVERY frame "
+            f"target held out, which the reach condition is supposed to make "
+            f"impossible — refusing to train on a zero denominator.")
+    if not quiet:
+        print(f"--holdout-scope target: the pool is the legacy one, bin for "
+              f"bin — held-out bins may still be read as CONTEXT — and the "
+              f"loss drops every per-frame term whose TARGET bin "
+              f"(frame_ref+j+1, what win_ztgt reads) is held out.", flush=True)
+        print(f"  {n_mask:,} of {n_tot:,} frame-targets are held out and "
+              f"will be masked ({100.0 * n_mask / max(1, n_tot):.2f}%); all "
+              f"{int(ok_t.sum()):,} end-bins are kept.", flush=True)
+        print(f"  certificate: an independent brute-force recount over "
+              f"frame_ref/frame_steps agrees exactly ({n_mask2:,}), and "
+              f"every pooled window keeps at least one target (the reach "
+              f"guarantees t+1 is a train bin).", flush=True)
+    return n_mask, n_tot
+
+
+HOLDOUT_SCOPES = ("endpoint_contaminated", "target", "window")
+
+
 def build_window_pool(T, t_hold, K, FOFF, reach, CTX_BACK,
-                      scope="endpoint", quiet=False):
+                      scope="window", quiet=False):
     """The stage-2 TRAIN-WINDOW END-BIN mask, in ONE place: `ml/temporal.py`
     and `ml/jaxport/train_stage2.py` both call this, so the two trainers
     cannot drift on which bins a head is allowed to learn from.
 
-    `scope="endpoint"` (default) is the LEGACY rule, in the legacy statement:
-    a window ending at t is eligible iff the whole scored reach exists, the
-    earliest frame exists, and no SCORED bin t+r is held out. That is what
-    every archived run trained under, and it is what this function must keep
-    returning bit-for-bit when the flag is not set.
+    `scope="endpoint_contaminated"` is the LEGACY rule, in the legacy
+    statement: a window ending at t is eligible iff the whole scored reach
+    exists, the earliest frame exists, and no SCORED bin t+r is held out.
+    That is what every archived run trained under, and it is what this
+    function must keep returning bit-for-bit when it is asked for. It is
+    NOT the default and never will be again: it leaks held-out years into
+    training through straddling windows (the loss is dense; see below), and
+    it is kept only so the 98 archived stage-2 runs stay reproducible.
 
-    `scope="window"` adds a mask ON TOP of that array — the legacy expression
-    still runs first and unchanged — keeping only windows NONE of whose
-    touched bins (`window_touch_offsets`: frames, per-frame targets, reach)
-    is held out. That closes the leak the endpoint rule leaves: the loss is
-    dense over the window (`win_ztgt`), so a window ending shortly after a
-    holdout year teacher-forces that year's transitions into the weights, and
-    feeds its bins in as context besides.
+    `scope="target"` returns THE SAME ARRAY — the legacy expression,
+    unmodified — and is the minimal correct fix: no held-out bin is ever a
+    TARGET, because the per-frame loss terms whose target is held out are
+    masked out of the mean (`frame_target_keep`), while held-out bins MAY
+    still be read as CONTEXT. Less exclusion than `window`, no pool change at
+    all; the certificate below prints exactly how much of the objective it
+    removes.
+
+    `scope="window"` (the DEFAULT) adds a mask ON TOP of that array — the
+    legacy expression still runs first and unchanged — keeping only windows
+    NONE of whose touched bins (`window_touch_offsets`: frames, per-frame
+    targets, reach) is held out. That closes the leak the legacy rule leaves:
+    the loss is dense over the window (`win_ztgt`), so a window ending shortly
+    after a holdout year teacher-forces that year's transitions into the
+    weights, and feeds its bins in as context besides.
 
     Prints a certificate (§4.9: an exact identity, not a threshold) and
-    `sys.exit`s if it fails, whenever the window scope is in force."""
+    `sys.exit`s if it fails, at `window` and at `target` alike — the only
+    scope that certifies nothing is the legacy one, which has nothing to
+    certify."""
+    if scope not in HOLDOUT_SCOPES:
+        sys.exit(f"--holdout-scope {scope!r} is not one of "
+                 f"{HOLDOUT_SCOPES} — refusing to guess which pool a run "
+                 f"was meant to train on.")
     ok_t = np.array([t + reach[-1] < T and t >= CTX_BACK
                      and not any(t_hold[t + r] for r in reach)
                      for t in range(T)])
     if scope != "window":
+        # BOTH non-window scopes return THE LEGACY ARRAY ITSELF, unread and
+        # unmodified — `target` differs from `endpoint_contaminated` in the
+        # LOSS, never in the pool, so nothing about this array can drift
+        # between them. The target certificate only counts.
+        if scope == "target":
+            _target_scope_certificate(T, t_hold, K, FOFF, ok_t, quiet)
         return ok_t
     touch = window_touch_offsets(K, FOFF, reach)
     # The bound that makes the vectorised gather below in-range for every t
@@ -2186,25 +2313,32 @@ def main():
                          "offset 2 is the mid-month bin, which is the one "
                          "carrying Argo (n_rg_live 252/3142, measured "
                          "2026-08-22)")
-    ap.add_argument("--holdout-scope", default="endpoint",
-                    choices=("endpoint", "window"),
+    ap.add_argument("--holdout-scope", default="window",
+                    choices=HOLDOUT_SCOPES,
                     help="WHAT THE YEAR HOLDOUT ACTUALLY EXCLUDES from the "
-                         "training pool. 'endpoint' (default) is the legacy "
-                         "rule and every archived run: a window is dropped "
-                         "only when a SCORED bin (t+1, the unroll fan, each "
-                         "--direct horizon) falls in a holdout year. But the "
+                         "training pool. 'endpoint_contaminated' IS THE "
+                         "LEGACY POOL AND IT LEAKS: a window is dropped only "
+                         "when a SCORED bin (t+1, the unroll fan, each "
+                         "--direct horizon) falls in a holdout year, but the "
                          "loss is DENSE over the window — win_ztgt scores the "
-                         "bin after EVERY frame — so a window ending in the "
-                         "K bins after a holdout year teacher-forces that "
-                         "year's transitions into the weights, and reads its "
-                         "bins as context besides. 'window' is the honest "
-                         "rule: a window is eligible only if NONE of the bins "
-                         "its forward pass touches — frames, per-frame "
-                         "targets, scored reach — is held out. It is an "
-                         "ADDITIONAL mask on top of the legacy expression, so "
-                         "'endpoint' runs the identical statements and the "
-                         "archive stays reproducible. The monitor batch and "
-                         "both z-space evals are UNTOUCHED at either setting")
+                         "bin after EVERY frame — so every window straddling "
+                         "the edge of a holdout year teacher-forces that "
+                         "year's measured transitions into the weights and "
+                         "reads its bins as context besides. It is kept for "
+                         "ONE reason, to reproduce the 98 archived stage-2 "
+                         "runs that trained under it, and it is never the "
+                         "default again. 'window' (DEFAULT) is the strict "
+                         "rule: eligible only if NONE of the bins the forward "
+                         "pass touches — frames, per-frame targets, scored "
+                         "reach — is held out; it costs 13.03%% of the "
+                         "frame-targets on the pentad axis. 'target' is the "
+                         "minimal correct fix: the legacy pool bin for bin, "
+                         "with every per-frame loss term whose TARGET bin is "
+                         "held out masked out of the mean — no held-out bin "
+                         "is ever a target, held-out bins MAY still be read "
+                         "as context, and it costs 5.25%% of the "
+                         "frame-targets. The monitor batch and both z-space "
+                         "evals are UNTOUCHED at every setting")
     ap.add_argument("--target-bins-argo", default="all",
                     choices=("all", "exclude", "only"),
                     help="filter the TRAINING POOL by whether a window's "
@@ -3009,10 +3143,11 @@ def main():
     # target-month holdout, the reach guard, the Argo filter below — so a
     # long span shrinks the printed train-window count and changes nothing
     # else about who is eligible.
-    # `build_window_pool` runs THAT EXACT EXPRESSION at the default scope and
-    # returns it unmodified; `--holdout-scope window` masks the result. It
-    # lives in one function because ml/jaxport/train_stage2.py calls it too —
-    # two trainers, one definition of what a head may learn from.
+    # `build_window_pool` runs THAT EXACT EXPRESSION and returns it
+    # unmodified at `endpoint_contaminated` and at `target`; only
+    # `--holdout-scope window` masks the result. It lives in one function
+    # because ml/jaxport/train_stage2.py calls it too — two trainers, one
+    # definition of what a head may learn from.
     ok_t = build_window_pool(T, t_hold, K, FOFF, reach, CTX_BACK,
                              scope=a.holdout_scope)
     # --target-bins-argo: the SAME reach, filtered by what the scored bins
@@ -3054,6 +3189,27 @@ def main():
     pool_t = torch.as_tensor(pool_t, dtype=torch.long)
     pool_p = torch.as_tensor(pool_p, dtype=torch.long)
     print(f"train windows: {len(pool_t):,}")
+
+    # --holdout-scope target · THE PER-(WINDOW, FRAME) LOSS MASK, built once
+    # from `frame_target_keep` and from nothing else. The pool above is the
+    # legacy one at this scope; what makes the scope correct is that every
+    # per-frame term whose TARGET bin is held out is dropped from the mean
+    # below. Indexed by ANCHOR t so `batch_windows` gathers rows with the very
+    # `t` it drew the window from — no second layout to keep in step. Rows
+    # outside the pool are never read and stay True.
+    HOLD_MASK = (a.holdout_scope == "target")
+    KEEP_T, HOLD_MASKED_FRAC = None, 0.0
+    if HOLD_MASK:
+        _kidx = np.where(ok_t)[0]
+        _kk = frame_target_keep(_kidx, K, FOFF, t_hold)
+        HOLD_MASKED_FRAC = float((~_kk).sum()) / float(max(1, _kk.size))
+        _kfull = np.ones((T, int(_kk.shape[1])), bool)
+        _kfull[_kidx] = _kk
+        KEEP_T = torch.as_tensor(_kfull)
+        print(f"  loss mask: {int((~_kk).sum()):,} of {int(_kk.size):,} "
+              f"(window, frame) targets in the TRAIN pool are held out and "
+              f"contribute nothing to l_base "
+              f"(holdout_masked_frac {HOLD_MASKED_FRAC:.6f}).", flush=True)
 
     # E-053.1 · WHY THIS NEEDS NO NEW PARAMETERS. `k_max=K` sizes the learned
     # position embedding, and with a FIXED offset pattern per run the map
@@ -3324,11 +3480,19 @@ def main():
             keep_m = (torch.rand(len(t), 1, 1) >= a.season_dropout).float()
             mseq = mseq * keep_m
             mfut = mfut * keep_m
+        # --holdout-scope target: [n, K, 1] float, 1 where this window's
+        # frame target is a TRAIN bin. Gathered by the same `t` the window
+        # was drawn at, from the table `frame_target_keep` filled — the mask
+        # is never restated from a hand-written layout. None at every other
+        # scope, which is what keeps the legacy loss statement reachable.
+        wkeep = (KEEP_T[t].to(TDEV).to(ztgt.dtype).unsqueeze(-1)
+                 if HOLD_MASK else None)
         # base and p stay on the CPU: --unroll-wide re-gathers the slot
         # pixels' own windows from the memmap, which is CPU work by design
         # (the 5.2 GiB of Z lives where the pages are).
         return (zseq.to(TDEV), mseq.to(TDEV), static_ctx[p].to(TDEV),
-                ztgt.to(TDEV), zfut.to(TDEV), mfut.to(TDEV), zdir, base, p)
+                ztgt.to(TDEV), zfut.to(TDEV), mfut.to(TDEV), zdir, base, p,
+                wkeep)
 
     # Stage 2 goes into the RUN'S OWN metrics.jsonl, not just temporal.json.
     # temporal.json is uploaded as a build artifact, and artifacts need an
@@ -3408,6 +3572,14 @@ def main():
                           # reader comparing two curves must not have to infer
                           # that from `train_windows`.
                           "holdout_scope": a.holdout_scope,
+                          # ...AND HOW MUCH OF THE OBJECTIVE IT REMOVED. The
+                          # scope name says which rule; this says what the
+                          # rule cost, so an artefact self-describes the
+                          # objective it trained under instead of leaving a
+                          # reader to rebuild the axis and recount. 0.0 at
+                          # `endpoint_contaminated` and at `window`, where
+                          # every pooled window's every frame is scored.
+                          "holdout_masked_frac": round(HOLD_MASKED_FRAC, 6),
                           "codec_holdout_lon": ck["args"].get("holdout_lon", ""),
                           "tag": a.tag or "",
                           # E-057: NEW KEYS, AND ONLY WHEN THE ARM IS ONE.
@@ -3630,7 +3802,32 @@ def main():
     probe_every = max(1, a.steps // 10)    # the transport curve, 10 points
     for s in range(start_step + 1, a.steps + 1):
         (zseq, mseq, sctx, ztgt, zfut, mfut, zdir,
-         wbase, wp) = batch_windows(pool_t, pool_p, a.batch)
+         wbase, wp, wkeep) = batch_windows(pool_t, pool_p, a.batch)
+        if HOLD_MASK and s == start_step + 1:
+            # FIRST BATCH ONLY (§4.7: assert the EFFECT). Recompute, from
+            # this batch's OWN window refs and `t_hold`, which frame targets
+            # are held out, and require the mask the loss is about to use to
+            # be False in exactly those places. One batch, so it costs a
+            # millisecond; a table filled at the wrong rows or an off-by-one
+            # in the target bin dies here rather than in a head that quietly
+            # learned the holdout.
+            _w = np.zeros_like(wkeep.detach().cpu().numpy()[..., 0], bool)
+            for _c, _j in enumerate(frame_steps(K, FOFF)):
+                _w[:, _c] = t_hold[wbase.numpy() + int(_j) + 1]
+            _got = (wkeep.detach().cpu().numpy()[..., 0] == 0.0)
+            if not np.array_equal(_got, _w):
+                sys.exit(
+                    f"--holdout-scope target: THE LOSS MASK DOES NOT MATCH "
+                    f"t_hold on the first batch — {int((_got != _w).sum())} "
+                    f"of {_w.size} (window, frame) entries disagree "
+                    f"({int(_w.sum())} targets are held out, the mask masks "
+                    f"{int(_got.sum())}). Refusing to train on an objective "
+                    f"nobody can describe.")
+            print(f"--holdout-scope target: first-batch check — the loss "
+                  f"mask is False on exactly the {int(_w.sum()):,} of "
+                  f"{_w.size:,} (window, frame) targets t_hold marks held "
+                  f"out, rebuilt from this batch's own window refs.",
+                  flush=True)
         if a.input_znoise > 0:
             # E-029b: perturb only LIVE slots (see the flag's help). A slot
             # is live iff any of its d_z components is nonzero — zero is the
@@ -3660,13 +3857,41 @@ def main():
             # MSE the conditional mean is optimal and the head would learn to
             # ignore eps. `stage2_loss_base` keeps its name and its place on
             # the curve; `stage2_loss_kind` in stage2_config says what it is.
-            l_base = fair_crps2(p1, p2, ztgt)
+            # WHY THE TWO BRANCHES ARE SEPARATE STATEMENTS AND NOT ONE
+            # "unified" masked form. `(se * m).sum() / (m.sum() * d_z)` is
+            # NOT bitwise equal to `se.mean()` even when m is all ones — a
+            # different reduction order over a different summand — and
+            # `endpoint_contaminated` (98 archived runs) and `window` (E-059,
+            # in flight while this is written) must keep executing the exact
+            # legacy statement, byte for byte. Only `target` takes the masked
+            # form, so the other two scopes' objective cannot move by 1e-7.
+            if HOLD_MASK:
+                # EXACT, not approximate. `fair_crps2` is three elementwise
+                # terms combined ONCE and then reduced, so masking before the
+                # single reduction scores exactly the kept (window, frame)
+                # entries — the same arithmetic the unmasked call makes over
+                # a subset, never a mask applied to an already-reduced term
+                # (`fair_crps2_elem` exists for precisely this).
+                l_base = ((fair_crps2_elem(p1, p2, ztgt) * wkeep).sum()
+                          / (wkeep.sum() * ztgt.shape[-1]))
+            else:
+                l_base = fair_crps2(p1, p2, ztgt)
             # member 1 stands where the deterministic forward stood, for the
             # unroll/direct paths' shapes only — both are refused in fgn mode.
             pred = p1
         else:
             pred, hid1 = model(zseq, mseq, sctx)
-            l_base = (pred - ztgt).pow(2).mean()
+            if HOLD_MASK:
+                # --holdout-scope target: the dense per-frame MSE over the
+                # KEPT targets only. `wkeep` is [B, K, 1] and broadcasts over
+                # d_z; the denominator counts the elements actually summed,
+                # so this is the mean of the same per-element squared errors
+                # the legacy statement means — taken over the subset whose
+                # target bin is a train bin.
+                l_base = (((pred - ztgt).pow(2) * wkeep).sum()
+                          / (wkeep.sum() * ztgt.shape[-1]))
+            else:
+                l_base = (pred - ztgt).pow(2).mean()
         loss = l_base
         l_dir = None
         if D:

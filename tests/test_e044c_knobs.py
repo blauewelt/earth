@@ -111,7 +111,21 @@ def main():
         # imports its siblings by module name, so a copy in /tmp cannot run.
         base = os.path.join(ML, "_temporal_e044c_base.py")
         open(base, "w").write(prev.stdout)
-        r_new, tj_new, ck_new, out_new = train(cur, npz, run, tmp, [], "new")
+        # --holdout-scope endpoint_contaminated ON THE NEW RUN, and it is
+        # not a fudge: 2026-08-28 flipped the flag's DEFAULT from the legacy
+        # (leaking) pool to `window`, so an unflagged working tree trains on
+        # a deliberately different pool. Naming the legacy scope is what
+        # keeps this check asking its own question — "do the four E-044c
+        # knobs add a code path to a run that does not name them?" — instead
+        # of re-measuring a default change that has its own tests
+        # (tests/test_holdout_scope.py) and its own no-op proof.
+        # EVERY working-tree run in this file carries it, so each
+        # check's own arithmetic (pool counts, closed forms) keeps
+        # describing the pool it was written against. The BASE
+        # revision never gets the flag: it predates the rename.
+        LEGACY_SCOPE = ["--holdout-scope", "endpoint_contaminated"]
+        r_new, tj_new, ck_new, out_new = train(cur, npz, run, tmp,
+                                               LEGACY_SCOPE, "new")
         r_old, tj_old, ck_old, out_old = train(base, npz, run, tmp, [], "base")
         bad = params_equal(ck_new, ck_old)
         assert not bad, f"{len(bad)} tensors differ from the parent revision: {bad[:4]}"
@@ -132,7 +146,10 @@ def main():
             cur, npz, run, tmp,
             ["--time-stride", "0", "--time-offset", "0",
              "--target-bins-argo", "all", "--season-dropout", "0",
-             "--season-phase", "month", "--input-quant", ""], "explicit")
+             "--season-phase", "month", "--input-quant", "",
+             # the same scope check 1 ran under, so this check compares the
+             # four knobs and nothing else
+             *LEGACY_SCOPE], "explicit")
         bad = params_equal(ck_new, ck_d)
         assert not bad, bad[:4]
         assert tj_d["z_t+1"] == tj_new["z_t+1"]
@@ -150,7 +167,8 @@ def main():
         N, O = 3, 1
         r_s, tj_s, ck_s, out_s = train(cur, npz, run, tmp,
                                        ["--time-stride", str(N),
-                                        "--time-offset", str(O)], "stride")
+                                        "--time-offset", str(O),
+                                        *LEGACY_SCOPE], "stride")
         keep = list(range(O, T_M, N))
         months = [f"{1990 + i // 12}-{i % 12 + 1:02d}" for i in range(T_M)]
         kept_lab = [months[i] for i in keep]
@@ -188,7 +206,8 @@ def main():
         outs, mons = {}, {}
         for mode in ("all", "exclude", "only"):
             rr, tjj, ckk, oo = train(cur, anpz, run, tmp,
-                                     ["--target-bins-argo", mode], f"argo_{mode}")
+                                     ["--target-bins-argo", mode,
+                                      *LEGACY_SCOPE], f"argo_{mode}")
             outs[mode] = pool_of(oo)
             mons[mode] = [x for x in rr if "stage2_monitor" in x][:1]
             assert f"Argo-carrying bins: {int(live.sum())}/{T_M}" in oo, oo[:900]
@@ -208,7 +227,8 @@ def main():
         # ---- 5. --season-dropout ------------------------------------------
         torch.save(ckd, os.path.join(run_dir, "pixelmae.pt"))
         r_dr, tj_dr, ck_dr, out_dr = train(cur, npz, run, tmp,
-                                           ["--season-dropout", "1.0"], "drop")
+                                           ["--season-dropout", "1.0",
+                                            *LEGACY_SCOPE], "drop")
         c_dr = [(x["stage2_step"], x["stage2_zmse"]) for x in r_dr
                 if "stage2_step" in x]
         assert c_dr != cn, "P=1.0 changed nothing in training"
@@ -315,7 +335,8 @@ def main():
         # z_t+1 block still exists (the target stayed continuous, so the
         # number is in the same units the archive quotes)
         r_q, tj_q, ck_q, out_q = train(cur, npz, run, tmp,
-                                       ["--input-quant", "8"], "quant")
+                                       ["--input-quant", "8",
+                                        *LEGACY_SCOPE], "quant")
         assert ck_q["args"]["input_quant"] == "8"
         assert len(ck_q["args"]["input_quant_sigma"]) == d_z, \
             ck_q["args"].get("input_quant_sigma")

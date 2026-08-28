@@ -133,20 +133,34 @@ is not.
 - **Blocked holdouts, never random.** Held-out YEARS plus a held-out
   mid-Atlantic LONGITUDE block, both inherited from the codec checkpoint so
   stage 1 and stage 2 cannot disagree about what was held out.
-- **What the YEAR holdout excludes is now a choice, `--holdout-scope`, and
-  the legacy answer was narrower than it read.** Until 2026-08-28 a stage-2
-  window was dropped only when its FINAL scored bin — t+1, plus each unroll
-  and `--direct` offset — fell in a held-out year (`endpoint`, still the
-  default, and what every archived run trained under). But the stage-2 loss
-  is dense over the window: every frame predicts the bin after itself, so a
-  window ENDING in the K bins after a held-out year still carried that year's
-  bins as context AND as teacher-forced targets. `window` is the strict rule
-  — a window is eligible only if none of the bins its forward pass touches
-  (the frames, each frame's target, the scored reach) is held out — and the
-  trainer prints a runtime certificate that no pooled window violates it.
-  Numbers from the two scopes are not interchangeable: `endpoint` runs are
-  reproducible and comparable with the archive, `window` runs are the ones
-  whose held-out years were never learned from.
+- **What the YEAR holdout excludes is a choice, `--holdout-scope`, with
+  THREE settings — and the legacy answer was narrower than it read.** Until
+  2026-08-28 a stage-2 window was dropped only when its FINAL scored bin —
+  t+1, plus each unroll and `--direct` offset — fell in a held-out year. But
+  the stage-2 loss is dense over the window: every frame predicts the bin
+  after itself, so a window ENDING in the K bins after a held-out year still
+  carried that year's bins as context AND as teacher-forced targets. Measured
+  on the pentad axis (T = 3,142, K = 144, holdout years 2009/2017/2023, 219
+  held-out bins, 86,698 pixels):
+  - `endpoint_contaminated` — the legacy pool, 2,779 end-bins and all 400,176
+    frame-targets. It LEAKS, and it is kept for one reason: the 98 stage-2
+    runs archived before c25f6ff trained under it.
+  - `target` — the minimal correct fix and the cheapest: the pool is the
+    legacy one bin for bin, and the loss simply drops every per-frame term
+    whose TARGET bin is held out. **5.25%** of the frame-targets (21,018 of
+    400,176), no end-bin lost. No held-out bin is ever a target; held-out
+    bins MAY still be read as context.
+  - `window` — **the default.** A window is eligible only if none of the bins
+    its forward pass touches (the frames, each frame's target, the scored
+    reach) is held out: 2,417 end-bins, **13.03%** of the frame-targets gone.
+    The held-out year is invisible to training, context included.
+  Each setting prints a runtime certificate — an exact recount by a second
+  expression — and the run's `stage2_config` records both `holdout_scope` and
+  `holdout_masked_frac`, so an artefact says which objective it trained under.
+  Numbers from the three scopes are not interchangeable.
+- **Reproducing any stage-2 run archived before c25f6ff requires passing
+  `--holdout-scope endpoint_contaminated` explicitly** — it is no longer the
+  default, and the default (`window`) trains on a different pool.
 - **The target is deseasonalised** with a climatology computed from train years
   only. The embedding receives month-of-year as an input, so any seasonal
   signal left in the target is free points.

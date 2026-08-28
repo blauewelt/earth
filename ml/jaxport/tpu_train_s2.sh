@@ -109,13 +109,14 @@ GRAD_CLIP="${GRAD_CLIP:-0}"
 GRAD_ACCUM="${GRAD_ACCUM:-1}"
 MILESTONE_STEPS="${MILESTONE_STEPS:-}"
 TRAIN_LON_HOLD="${TRAIN_LON_HOLD:-inherit}"
-# What the YEAR holdout excludes from the window pool. `endpoint` (default) is
-# every archived run: only a window whose SCORED bin t+1 is held out is
-# dropped, so a window ending just after a holdout year still teacher-forces
-# that year's transitions. `window` drops any window that TOUCHES a held-out
-# bin. Left at the legacy value on purpose — this is an ARM, not a fix to
-# apply silently to a comparison series.
-HOLDOUT_SCOPE="${HOLDOUT_SCOPE:-endpoint}"
+# What the YEAR holdout excludes from the window pool. `window` (default)
+# drops any window that TOUCHES a held-out bin. `target` keeps the legacy
+# pool and masks every per-frame loss term whose TARGET bin is held out.
+# `endpoint_contaminated` is the legacy pool and it LEAKS: only a window
+# whose SCORED bin t+1 is held out is dropped, so a window ending just after
+# a holdout year still teacher-forces that year's transitions. Pass it
+# explicitly, and only to reproduce a run archived before c25f6ff.
+HOLDOUT_SCOPE="${HOLDOUT_SCOPE:-window}"
 SEED="${SEED:-0}"
 TAG="${TAG:-}"
 CKPT_EVERY="${CKPT_EVERY:-2000}"
