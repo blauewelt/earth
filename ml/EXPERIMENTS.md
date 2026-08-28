@@ -831,7 +831,33 @@ job`.**
   shape as #478 against its K=24 twin on d_z-32. The dose-matched LEVEL comes
   from #505's re-dispatch. Read the three together, never any one alone.
 
-**#504 IN FLIGHT, step 12,000/20,000 at 08:47Z: ratio 0.5555** (val_zmse
+**#504's TRAINING CURVE IS COMPLETE, 09:42Z — final one-step ratio
+0.53873** (val_zmse 0.34183 / the token-scale denominator 0.63451) at step
+20,000, having come down 0.600@2800 · 0.574@6000 · 0.556@10000 · 0.548@16000
+· 0.537@18000 · **0.539@20000** — a curve that stopped improving around step
+16k. Against the registered controls that is **worse than the continuous
+d_z-32 arm (0.5056) and far from the lattice d_z-32 bar (0.4394)**, i.e. on
+the wrong side of the pre-registered ">=0.50 means quantization lost the
+forecastable signal" line. **It is not yet a verdict**, for the reason
+registered before dispatch: at znoise 0.7 this arm carries `rel_pers 0.879`
+on the token scale where the d_z-32 controls carried 0.151 — ~5.8x the
+intended relative dose. #507 is the arm that decides it. (The probe ladder's
+tail was still running at 10:00Z; the head numbers land with it.)
+
+**#507 (E-056a-CLEAN) RE-DISPATCHED 10:19Z, QUEUED BEHIND #504 ON THE SAME
+BOX** — deliberately, and it is worth saying why rather than taking the next
+free host. #505 died on a full disk; two other hosts were tried in the gap
+(47913006 and 48524831 returned `resources_unavailable, state change queued`;
+47724559 accepted the start, reported `cur_state: running`, and never
+registered its runner across 18 minutes, so it was stopped). Queuing on
+gpu-box-32966687 instead means #504 and #507 run **the same configuration on
+the same box with the same warm token-Z cache, differing in the dose and in
+nothing else** — which is what a dose-matched arm is for, and is strictly
+better than the cross-box pair the free-host route would have produced (the
+box effect, §7, is 0.041 on the head k-fold). It starts the moment #504
+releases the runner.
+
+**#504 as of 08:47Z, step 12,000/20,000: ratio 0.5555** (val_zmse
 0.35245 / the token-scale denominator 0.63451), from 0.600 at 2,800 and 0.574
 at 6,000 — descending but flattening, and currently WORSE than the continuous
 d_z-32 control (0.5056), let alone the 0.4394 lattice bar. Taken alone that
