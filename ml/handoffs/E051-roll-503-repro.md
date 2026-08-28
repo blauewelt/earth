@@ -372,14 +372,24 @@ Transport bands (pooled / unpooled): 0.511/0.481, 0.591/0.568, 0.565/0.580.
    steps and only write on completion).
 2. **The profile is flat, which is the replay signature.** Skill at 365 days
    equals skill at 30, and `msss_pers` at 365 d is 0.966 on a z-scored
-   anomaly field — no physical forecast does that. The suspected mechanism:
-   a 365-day roll from a start in held-out 2009 walks into 2010, which is
-   training data; holding out a year holds out its bins, not the future the
-   roll travels into. The battery is the designed test of exactly this, so
-   until a battery run completes, **0.944 is a corridor AUC awaiting
-   certification whose own profile predicts it will not survive as forecast
-   skill** — and if the battery confirms replay, the monthly 0.939 sits
-   under the same question.
+   anomaly field — no physical forecast does that. NOTE the roll itself is
+   clean: it breaks at the year boundary (`rollout_spatial.py:880`), so no
+   scored target is a training bin, and inputs beyond the true context are
+   the model's own predictions. **The mechanism is in TRAINING** (verified
+   2026-08-28): the stage-2 loss is dense over the window — `win_ztgt`
+   (`ml/temporal.py:2819`) supervises the next-step prediction at every one
+   of the K=144 frames — while the pool (`:2889`) excludes a window only if
+   its FINAL target `t+1` is held out (the count proves it: 2,779 end-bins
+   = 3,142 − 219 − 144 exactly). A window ending in the ~2 years after a
+   holdout year therefore carries that year's measured bins as context AND
+   as within-window targets, so every held-out-year transition was
+   teacher-forced into the weights of order tens of times per pixel. The
+   held-out year is held out as an ENDPOINT, not as an experience — which
+   also applies, with K=24 months, to the monthly 0.939 champion. The
+   battery's FUTURE roll (past the record's end, where no bins exist to
+   have been supervised) is the designed test that recall cannot pass, so
+   until it completes, **0.944 is a corridor AUC awaiting certification
+   whose own profile predicts it will not survive as forecast skill**.
 3. **+0.005 over monthly is a consistency, not a beat**: the corridor-AUC
    seed spread at this model tier is 0.0020 (pooled sd, 8 dof) and the
    programme's decision bar is 0.025; and both numbers are single-seed at

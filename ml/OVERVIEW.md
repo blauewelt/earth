@@ -61,8 +61,16 @@ so the ratio lands directly comparable to E-051's 0.0330. **#503's DECISIVE NUMB
 (vs monthly 0.939, pentad-K24 -0.499) — **and its own skill-vs-lead profile
 says REPLAY.** 0.971 at 5 days, 0.949 at 30, 0.942 at 90, 0.946 at 365: FLAT,
 where forward physics decays; and `msss_pers` 0.966 at a one-year lead on a
-z-scored anomaly field has no physical story. Mechanism: a 365-day roll from a
-2009 holdout start walks into 2010, which is training data. Report it as a
+z-scored anomaly field has no physical story. Mechanism CORRECTED ~15Z (Chris's question exposed the first one as wrong —
+the roll breaks at the year boundary, `rollout_spatial.py:880`, so no scored
+target is a training bin): the leak is in TRAINING — the stage-2 loss is
+dense over all K=144 window positions (`win_ztgt`, temporal.py:2819) while
+the pool excludes only windows whose FINAL target is held out (:2889; count
+2,779 = 3,142−219−144 exactly), so windows straddling a holdout year
+teacher-force that year's measured transitions into the weights, of order
+tens of times per pixel. The held-out year is held out as an ENDPOINT, not
+an experience — and the monthly champion (K=24 months, same 2-year span,
+same pool) has the identical structure. Report it as a
 corridor AUC UNCERTIFIED on two counts (no pentad gate reference; battery
 incomplete) whose profile predicts it will not survive; and +0.005 over
 monthly is a CONSISTENCY at a tier sd of 0.0020, never a beat. **The battery

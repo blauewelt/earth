@@ -1349,11 +1349,53 @@ rolled number may be called forecast skill). Worse for the innocent reading:
 persistence's at a one-year lead, on a z-scored ANOMALY field with the
 seasonal cycle already removed. There is no physical story for that.
 
-**The mechanism is ordinary and was anticipated.** The skill phase rolls from
-starts inside the holdout years (2009/2017/2023), but a 365-day roll from a
-2009 start walks into 2010 — which is training data. Holding out a year holds
-out that year's bins, not the future the roll travels into. That is exactly
-the hole the battery's rolls-from-many-start-dates design probes.
+**THE MECHANISM — CORRECTED 2026-08-28 ~15Z after Chris asked exactly the
+right question ("where does actual measured data for 2009 leak in?").** The
+first mechanism written here — "a 365-day roll from a 2009 start walks into
+2010, which is training data" — is **WRONG for the scored numbers and is
+retracted**. `rollout_spatial.py:880` breaks every start at the year boundary
+(`ax.year[s + h] != Y`), so no scored target ever leaves the held-out year;
+the artefact's own per-horizon `n` proves it (n falls 3:2:1 as the later
+starts hit the boundary: 2,171,138 → 1,447,424 → 723,710). Within the roll
+itself nothing leaks either: the first start's context is measured 2007–2008,
+every subsequent input is the model's own prediction, and the two later
+starts merely INITIALISE from measured 2009 (ordinary forecast practice).
+
+**The leak is in TRAINING, and it is now verified in code, not inferred.**
+Stage-2's loss is DENSE over the window: `win_ztgt` (`ml/temporal.py:2819`)
+returns the measured embedding one bin after EVERY one of the K=144 frames,
+and `l_base = (pred − ztgt).pow(2).mean()` (:3525) averages all of them — the
+JAX trainer that trained this head mirrors both, by its own docstring
+("((pred − ztgt)**2).mean() over the whole window"). But the pool
+(`ml/temporal.py:2889`, `reach = [1]` at unroll 1) excludes a window only if
+its FINAL target `t+1` is a held-out bin. The window-count arithmetic proves
+no other exclusion exists: recorded `train_windows` 240,933,742 = 86,698
+pixels × 2,779 end-bins, and 2,779 = 3,142 − 219 (final-target-held-out)
+− 144 (no-context prefix) EXACTLY — no allowance for straddling windows.
+
+Consequence, at K = 144 (a 2-year window): a training window ending anywhere
+in the ~2 years after a holdout year contains that year's measured bins both
+as CONTEXT and as WITHIN-WINDOW TARGETS. Every measured 2009 pentad-to-pentad
+transition sat in the training loss — ~144 straddling end-bins per pixel per
+holdout year (~432 of the 2,779, 15.5% of the pool), and at 102.4M window
+draws over the 400k-step run each specific 2009 transition was supervised of
+order **tens of times per pixel**. "Held out" therefore meant: no window's
+FINAL prediction lands in 2009 — while the year's own dynamics were
+teacher-forced into the weights throughout. A model that has fit the actual
+2009 trajectory does not accumulate dynamics error over 73 self-fed steps,
+which is what a flat profile and `msss_pers` 0.966 at 365 d look like.
+
+Three things follow. (1) **The monthly 0.939 champion has the identical
+structure** — its K is 24 months, also a 2-year window, trained by the same
+pool and the same dense loss — so it stands under the same question, now with
+a named mechanism rather than a suspicion. (2) **The battery remains the
+right test and its future roll is the decisive half**: beyond the record's
+end there are no measured bins to have been supervised on, so flat skill
+there cannot be recall. (3) **The clean fix is a training change, not an eval
+change**: mask the dense loss on `t_hold` targets (and, stricter, exclude
+windows whose span intersects a holdout year), then retrain — a new
+experiment by definition, since every archived stage-2 head monthly and
+pentad alike was trained under the current pool.
 
 **So the number is reported as: a corridor AUC of 0.944, UNCERTIFIED on two
 independent counts** — no pentad validation-gate reference exists
