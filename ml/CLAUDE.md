@@ -1216,6 +1216,29 @@ archive.
   healthy box). Fresh Vast hosts can simply be broken — destroy and re-rent
   on a different machine; do not debug a lemon.
 
+- **A BOX WHOSE CONTAINER CANNOT SEE ITS GPU LOOKS EXACTLY LIKE A SLOW ONE,
+  AND THE ONLY CHEAP TEST IS A CONTROL'S FIRST-RECORD TIME.** Measured
+  2026-08-28 on #506 (E-056b, a rented H100 SXM at $2.028/h): the job ran 3 h
+  55 m, produced a correct `stage2_config` and `stage2_monitor`, and then
+  wrote **zero** `stage2_step` records for fifty minutes. Every `gpu_util`
+  sample across the whole job — ten of them — read 0% while `cpu_util` sat at
+  95–97%, and `fleet_health`'s TELEMETRY check never fired, so these were real
+  readings rather than the Vast all-zero dead-frame bug. What made it
+  DECIDABLE was not a threshold but two comparisons: its own archived control
+  #478, identical geometry (K 144, 1024x16, batch 256), writes its first step
+  record at **`wall_s 240.3`**; and a sibling on the same pipeline and a
+  cheaper card was at that moment running 0.306 s/step with `gpu_util` 99.99%.
+  Fifty minutes against four is not slow, it is not running.
+  **The rule: when a job is suspected of running on the CPU, do not argue from
+  the utilisation percentage — look up the first-step `wall_s` of a run with
+  the same K, width and batch in `run-*.jsonl` on `ml-metrics`, and give the
+  suspect a small multiple of it.** Write the deadline and the threshold DOWN
+  before the evidence closes (§4.13: prefer one clean decision to five
+  improvised ones); #506's was recorded in `ml/OVERVIEW.md` 25 minutes ahead
+  and then simply executed. And do the arithmetic in both directions — the
+  cost of cancelling a healthy run (here ~3 h of setup to redo) against the
+  cost of a wrong run reaching its timeout (here ~$20). A cancel is not free
+  and neither is patience.
 - **`"$TAG__pixelmae.pt"`** expands the variable `$TAG__pixelmae` — underscores
   are legal in a bash identifier. **Always brace a variable followed by `_`, a
   letter or a digit**: `"${TAG}__pixelmae.pt"`.

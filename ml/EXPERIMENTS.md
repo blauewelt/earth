@@ -831,6 +831,47 @@ job`.**
   shape as #478 against its K=24 twin on d_z-32. The dose-matched LEVEL comes
   from #505's re-dispatch. Read the three together, never any one alone.
 
+**#506 CANCELLED 12:30Z — THE H100 NEVER USED ITS GPU. ~$8 AND NO NUMBERS.**
+The arm reached `stage2_config` and `stage2_monitor` at 11:39Z with everything
+correct (`params_M 202.745 · K 144 · d_z 6 · batch 256 · stencil 145 ·
+val_persistence 0.63451` — the token-scale denominator, so it WOULD have been
+directly comparable to #504 — and `input_znoise_rel_pers 0.87878`), and then
+wrote **zero** `stage2_step` records in the following 50 minutes.
+
+**The verdict rests on a CONTROL, not on a threshold.** #478 is this arm's own
+K=144 control at the identical geometry (1024x16, batch 256, K 144) and its
+archived `run-478.jsonl` writes its FIRST step record at **`wall_s 240.3`** —
+four minutes. #506 sat at fifty. In the same window its sibling #507, the same
+pipeline over the same codec on a *cheaper* 4090, was running at **0.306
+s/step with `gpu_util` 99.99%**. And across the job's whole 3 h 55 m — samples
+at 09:56, 10:00, 10:23, 11:40, 11:42, 11:49, 11:59, 12:11, 12:19, 12:29Z —
+**every single `gpu_util` reading was 0% while `cpu_util` sat at 95–97%**, with
+`fleet_health`'s TELEMETRY (dead-frame) check never firing, so those were real
+readings and not the known Vast all-zero bug. The mechanism that fits every
+one of those observations: **torch on that container could not see the card**,
+which also explains the 2 h 45 m "embed" — a CPU embed — that preceded it.
+
+**The decision rule was PRE-REGISTERED before the evidence closed**, and that
+is the part worth keeping: at 12:05Z, with the case still open, the rule
+written into `ml/OVERVIEW.md` was *"if a record appears by ~12:30Z at <=3
+s/step it runs on (input-starved at worst); if not, cancel rather than spend a
+10 h timeout at $2.028/h"*. It was held to at 12:29:35Z rather than improvised
+either way. Cancel accepted 12:30:32Z, job `cancelled` 12:36Z, box stopped
+12:37Z. **Cost: 3 h 55 m x $2.028/h = ~$7.95**, against the ~$20 the remaining
+timeout would have spent. Nothing was lost besides the money — the token-Z
+cache was already durable from #495, so no artefact died with it.
+
+**E-056b is HELD, not re-dispatched, and the sequencing is the reason rather
+than the boxes.** The other 80 GB host (48495564, $1.567/h) answers
+`resources_unavailable` and the default market search returns only 24 GB
+cards, so a re-dispatch means renting a fresh 80 GB box — but the better
+argument is that **E-056b's question only matters if tokens are viable at
+all**. It asks whether the dense K=144 slab helps *within* the token
+substrate; #507 is 2-3 h from saying whether the substrate survives at the
+dose-matched noise. Spending ~$20 and another 3 h of setup on the K contrast
+before that answer is exactly the sequencing §4.4 warns about. Re-dispatch it
+if #507 rehabilitates the substrate; drop it if #507 confirms #504.
+
 **#504's TRAINING CURVE IS COMPLETE, 09:42Z — final one-step ratio
 0.53873** (val_zmse 0.34183 / the token-scale denominator 0.63451) at step
 20,000, having come down 0.600@2800 · 0.574@6000 · 0.556@10000 · 0.548@16000
