@@ -751,6 +751,24 @@ K 144, 1024×16, seed 0, znoise 0.7); Δval between 398k and 400k is
 ~0.0001 in z-mse — immaterial for the roll, named anyway. Spot cost of
 the whole continuation ≈ $23–27 incl. the idle tail.
 
+**E-054b FIRST-MINUTES VERDICT, 2026-08-28 00:15Z — THE REGISTERED HBM
+RISK FIRED: OOM AT THE FIRST TRAINING STEP.** Config echo confirmed the
+build (399.948M params, 1280×20, K 144, batch 256, fresh, znoise
+rel_pers 0.15116 — same relative dose class as E-051), then
+`RESOURCE_EXHAUSTED: Attempting to reserve 5.09G ... 4.03G free` in
+train_step. The 400M rung does NOT fit a v5e-4 chip at chunk/batch 256.
+The exit-1 path worked as designed: final state shipped, node
+SELF-DELETED (~28 min of spot, ≈$0.8). Options for the daytime decision,
+recorded not chosen (the 01:45Z wake's own rule: no 2am improvisation):
+(a) batch/chunk 128 — fits with margin but CONFOUNDS capacity with batch
+(E-051 trained at 256); (b) gradient accumulation 2×128 = effective 256
+— exact for a mean loss with no batch-coupled layers, needs a trainer
+build + test; (c) a smaller rung that fits (~300M, 1152×18) — changes
+the question from "2× params" to "1.5× params"; (d) remat/activation
+checkpointing — same math, ~1.3× step cost, needs a trainer build.
+(b) preserves the comparison exactly and is the principled fix; it and
+(d) are subagent-buildable in a morning.
+
 **THE ROLL IS DISPATCHED: #503 (E-051-roll — 365-day day-matched roll of
 the 398k K=144 head, 3 starts/holdout year, dumproll, long/future rolls
 for the replay battery, UNPOOLED transport keys default-ON — the first
