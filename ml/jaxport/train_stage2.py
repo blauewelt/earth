@@ -27,6 +27,15 @@ WHAT IS MIRRORED, TERM FOR TERM
     the two-masks rule that goes with it: `stat_x_hold` (the codec's own
     `holdout_lon`) chooses the anomaly transform's statistics and
     `--train-lon-hold` chooses the POOL, never the other way round;
+  · the WINDOW POOL'S HOLDOUT SCOPE — `--holdout-scope endpoint|window`,
+    through `ml/temporal.py:build_window_pool` ITSELF rather than a
+    transcription. `endpoint` (the default) is the rule above, unchanged, and
+    the array it returns is asserted equal to this file's own literal
+    expression so the shared call cannot silently move a legacy pool.
+    `window` additionally drops any window that TOUCHES a held-out bin — the
+    K frames, each frame's teacher-forced target (the objective below is
+    dense over the window) and t+1 — and prints the same runtime certificate
+    `ml/temporal.py` prints;
   · the objective — `((pred - ztgt)**2).mean()` over the whole window, which
     is `ml/temporal.py:2437`'s `l_base` and, at unroll 1 with no direct heads,
     its entire loss;
@@ -167,7 +176,7 @@ from jaxport.embed import embed_everything_jax, gather_px_np     # noqa: E402
 # The numpy plumbing, imported rather than copied — see the module docstring.
 from model import LazyPixels                                    # noqa: E402
 from temporal import (CACHE_DTYPE, STENCILS, _ring_on, build_stencil,  # noqa: E402,E501
-                      rapid_section, season_ctx)
+                      build_window_pool, rapid_section, season_ctx)
 from timeblocks import BlockAxis                                # noqa: E402
 from train import lon_holdout_mask                              # noqa: E402
 from probe_sequence import ridge_r                              # noqa: E402
@@ -1237,6 +1246,22 @@ def parse(argv=None):
                         "ONLY — the anomaly statistics always follow the "
                         "codec. Pass an explicit block as one word: "
                         "--train-lon-hold=-45,-25.")
+    p.add_argument("--holdout-scope", default="endpoint",
+                   choices=("endpoint", "window"),
+                   help="WHAT THE YEAR HOLDOUT ACTUALLY EXCLUDES from the "
+                        "training pool, term for term with ml/temporal.py. "
+                        "'endpoint' (default) is the legacy rule and every "
+                        "archived run: a window is dropped only when its "
+                        "SCORED bin t+1 falls in a holdout year. But the "
+                        "objective is DENSE over the window — every token "
+                        "predicts its own next step — so a window ending in "
+                        "the K bins after a holdout year teacher-forces that "
+                        "year's transitions into the weights, and reads its "
+                        "bins as context besides. 'window' is the honest "
+                        "rule: eligible only if NONE of the bins the forward "
+                        "pass touches is held out. An ADDITIONAL mask on top "
+                        "of the legacy expression, so 'endpoint' is the pool "
+                        "every archived run trained on.")
     p.add_argument("--max-pixels", type=int, default=0,
                    help="subsample ocean pixels (code-path smoke only; the "
                         "26.5N section is always kept)")
@@ -1603,9 +1628,27 @@ def main(argv=None):
     # Windows [t-K+1 .. t] whose TARGET bin t+1 is a train bin and whose pixel
     # is outside the pool's longitude holdout. Windows may LOOK at held-out
     # bins (persistence can too); they may never be SCORED on them.
+    # --holdout-scope: `endpoint` (default) is the rule stated above, and
+    # `window` drops any window that TOUCHES a held-out bin — the frames, each
+    # frame's teacher-forced target, t+1. The rule and its certificate are
+    # `ml/temporal.py:build_window_pool` itself, IMPORTED not transcribed
+    # (this file's own standing rule for shared numpy plumbing), called at the
+    # torch trainer's parameters: no --frame-offsets here, and --unroll /
+    # --direct are refused, so reach is exactly [1] and CTX_BACK is K-1.
     K = a.K
-    ok_t = np.array([t + 1 < T and t + 1 >= K and not t_hold[t + 1]
-                     for t in range(T)])
+    ok_t = build_window_pool(T, t_hold, K, None, [1], K - 1,
+                             scope=a.holdout_scope)
+    # THE LEGACY ARRAY, ASSERTED RATHER THAN TRUSTED (§0.2 / §4.9). `t >= K-1`
+    # is `t + 1 >= K`, so the shared call must reproduce this file's own
+    # expression element for element at the default scope; a refactor that
+    # moved a single archived window would stop here, in milliseconds, rather
+    # than in a TPU-hours result nobody could reconcile.
+    if a.holdout_scope == "endpoint":
+        _legacy = np.array([t + 1 < T and t + 1 >= K and not t_hold[t + 1]
+                            for t in range(T)])
+        assert np.array_equal(ok_t, _legacy), (
+            "build_window_pool(endpoint) != the legacy ok_t expression: "
+            f"{int((ok_t != _legacy).sum())} of {T} bins differ")
     ok_p = ~pool_x_hold[xs]
     pool_t, pool_p = np.where(ok_t[:, None] & ok_p[None, :])
     if not len(pool_t):
@@ -1861,6 +1904,12 @@ def main(argv=None):
         # exactly the runs where the question matters.
         "grad_accum": ACCUM, "micro_batch": MICRO,
         "train_lon_hold": a.train_lon_hold,
+        # WHAT THE YEAR HOLDOUT EXCLUDED — the same key, unconditionally, that
+        # ml/temporal.py writes. Every run before 2026-08-28 was `endpoint`,
+        # and the difference between the two is whether held-out years were
+        # teacher-forced into the weights; a reader must not have to infer
+        # that from `train_windows`.
+        "holdout_scope": a.holdout_scope,
         "codec_holdout_lon": ck["args"].get("holdout_lon", ""),
         "tag": a.tag or "",
         # The three fields a reader of a JAX curve needs and a torch curve

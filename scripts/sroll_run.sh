@@ -2,7 +2,8 @@
 # E-022 / E-044 spatial rollout eval — the body of the `sroll:` window token.
 #
 # Spec: sroll:<tag,tag,...>[,ckpt:<asset|path>][,horizon:N][,starts:N]
-#                          [,long:N][,future:N][,longstart:L[+L...]][,dumproll]
+#                          [,long:N][,future:N][,longm:M][,futm:M]
+#                          [,longstart:L[+L...]][,dumproll]
 #   e.g. sroll:e017_u1_s0,e017_u1_s1,e022s9_u1_s0,e022s13_u1_s0
 #        sroll:e044x144zn_u1_s0,ckpt:run-415.pt,starts:3
 #
@@ -51,6 +52,20 @@
 #              explicitly would silently become 3.3 years at pentad, so the
 #              trustworthy thing here is to pass NOTHING. The tokens exist
 #              only so a shortened hindcast is possible and VISIBLE.
+#   longm:M    ) THE SAME TWO KNOBS IN CALENDAR MONTHS. `long:N` says N steps
+#   futm:M     ) and means 3.3 years at pentad; `longm:240` says 240 MONTHS
+#              and is converted HERE, by the same `TimeAxis.steps_for_months`
+#              the roll itself uses, into the axis-step count that is passed
+#              as `--long-months` / `--future-months`. At monthly cadence
+#              steps_for_months(M) == M exactly, so `longm:240` is literally
+#              `--long-months 240` and every archived hindcast is
+#              reproducible; at pentad it is 1,461. This is the `horizon:`
+#              pattern, not a rescaling of a flag (ml/CLAUDE.md §5.24): the
+#              script computes the step count from the tensor and passes it
+#              EXPLICITLY, so the launch log states what will be rolled.
+#              `longm:` and `long:` are two spellings of ONE flag and the
+#              script REFUSES both at once. OMIT ALL FOUR unless the dispatch
+#              deliberately shortens the hindcast.
 #
 #   job_timeout. #417's monthly sroll rolled three heads in 700 min. One
 #   PENTAD head at horizon:73,starts:3 is 3,363 roll steps against a monthly
@@ -111,6 +126,8 @@ HORIZON_TOK=""
 STARTS_TOK=""
 LONG_TOK=""
 FUTURE_TOK=""
+LONGM_TOK=""
+FUTM_TOK=""
 DUMP_TOK=""
 LS_TOK=""
 # A token whose value must be a step count is CHECKED here, where the inputs
@@ -149,6 +166,11 @@ for tok in ${SPEC//,/ }; do
     # and a future `long*:` would silently swallow this one.
     longstart:*) LS_TOK="${tok#longstart:}"; LS_TOK="${LS_TOK//+/,}"
                  want_labels longstart "$LS_TOK" ;;
+    # BEFORE `long:*`/`future:*` for the same reason `longstart:*` is: the
+    # globs do not overlap (a `longm:` token has no `long:` prefix), and a
+    # reader should not have to prove that to be sure which arm fires.
+    longm:*)   LONGM_TOK="${tok#longm:}";     want_int longm   "$LONGM_TOK" ;;
+    futm:*)    FUTM_TOK="${tok#futm:}";       want_int futm    "$FUTM_TOK" ;;
     long:*)    LONG_TOK="${tok#long:}";       want_int long    "$LONG_TOK" ;;
     future:*)  FUTURE_TOK="${tok#future:}";   want_int future  "$FUTURE_TOK" ;;
     # A BARE token, and it must be matched BEFORE the `*)` arm below, which
@@ -162,6 +184,17 @@ for tok in ${SPEC//,/ }; do
   esac
 done
 [ -n "$TAGS" ] || { echo "::error::no head tags in '$WINDOW'"; exit 1; }
+# TWO SPELLINGS OF ONE FLAG. Checked here, where the inputs are all it has
+# cost (§0.3/§5.16): whichever one lost would decide the length of a 20-year
+# hindcast silently, and the dispatcher would read the other in the window.
+if [ -n "$LONG_TOK" ] && [ -n "$LONGM_TOK" ]; then
+  echo "::error::sroll: long:$LONG_TOK and longm:$LONGM_TOK both set —"
+  echo "::error::they are the same flag in two units. Pass one."; exit 1
+fi
+if [ -n "$FUTURE_TOK" ] && [ -n "$FUTM_TOK" ]; then
+  echo "::error::sroll: future:$FUTURE_TOK and futm:$FUTM_TOK both set —"
+  echo "::error::they are the same flag in two units. Pass one."; exit 1
+fi
 echo "sroll: tags=$(echo $TAGS | tr ' ' ',')${CKPT_SPEC:+ ckpt=$CKPT_SPEC}"
 df -h / | tail -1
 
@@ -204,19 +237,25 @@ echo "codec: $CKPT ($(stat -c%s "$CKPT") bytes)"
 # monthly that is the literal 12 and the artefact is bit-identical to every
 # archived one; at pentad it is 73 = 365.0 d. Costs one import before any
 # extraction or GPU (§0.3) and prints what it will spend the day on.
-AXIS="$(python - "$TENSOR" <<'PY_AXIS'
+# `longm:`/`futm:` ride the SAME read, for the same reason and through the
+# same TimeAxis method — a second conversion written in bash would be a second
+# definition of what a month is.
+AXIS="$(python - "$TENSOR" "${LONGM_TOK:--}" "${FUTM_TOK:--}" <<'PY_AXIS'
 import sys
 sys.path.insert(0, "ml")
 import numpy as np
 from rollout_spatial import TimeAxis
 ax = TimeAxis(np.load(sys.argv[1], allow_pickle=False))
 h = ax.steps_for_months(12)
+mo = [("-" if v == "-" else str(ax.steps_for_months(int(v))))
+      for v in sys.argv[2:4]]
 print(f"{ax.cadence} {h} {ax.span_days(h):g} {ax.step_days:g} "
-      f"{len(ax.bands())}")
+      f"{len(ax.bands())} {mo[0]} {mo[1]}")
 PY_AXIS
 )" || { echo "::error::could not read the tensor's time axis — the horizon"
         echo "::error::below would be a guess about what a step means"; exit 1; }
-read -r CADENCE H_DAYMATCH H_SPAN_D STEP_D N_BANDS <<< "$(echo "$AXIS" | tail -1)"
+read -r CADENCE H_DAYMATCH H_SPAN_D STEP_D N_BANDS LONGM_STEPS FUTM_STEPS \
+     <<< "$(echo "$AXIS" | tail -1)"
 [ -n "$H_DAYMATCH" ] || { echo "::error::empty time axis read: '$AXIS'"; exit 1; }
 HORIZON="${HORIZON_TOK:-$H_DAYMATCH}"
 echo "axis: $CADENCE · one step = ${STEP_D} d · 12 months = ${H_DAYMATCH} steps = ${H_SPAN_D} d"
@@ -239,10 +278,19 @@ if [ -n "$LS_TOK" ]; then
 else
   echo "longstart: not set — one hindcast per head from rollout_spatial.py's own default context end (2004-12), exactly as every archived roll"
 fi
-if [ -z "$LONG_TOK" ] && [ -z "$FUTURE_TOK" ]; then
+# The ONE value each flag will carry, whichever spelling asked for it. `-` is
+# the python block's "no token", so it never becomes an argument.
+LONG_ARG="$LONG_TOK"
+FUTURE_ARG="$FUTURE_TOK"
+[ "$LONGM_STEPS" = "-" ] || LONG_ARG="$LONGM_STEPS"
+[ "$FUTM_STEPS" = "-" ] || FUTURE_ARG="$FUTM_STEPS"
+if [ -z "$LONG_ARG" ] && [ -z "$FUTURE_ARG" ]; then
   echo "long/future: rollout_spatial.py's own defaults — round(20 * steps_per_year), i.e. 20 years of THIS axis (240 at monthly, 1461 at pentad)"
 else
   echo "long/future: OVERRIDDEN by the window — long:${LONG_TOK:-<default>} future:${FUTURE_TOK:-<default>}, in AXIS STEPS"
+fi
+if [ -n "$LONGM_TOK" ] || [ -n "$FUTM_TOK" ]; then
+  echo "long/future in MONTHS: longm:${LONGM_TOK:-<unset>} -> ${LONGM_STEPS} steps · futm:${FUTM_TOK:-<unset>} -> ${FUTM_STEPS} steps (TimeAxis.steps_for_months at ${CADENCE} cadence, one step = ${STEP_D} d)"
 fi
 
 # ---- X: the sidecar if the tensor has one, else one extraction -----------
@@ -424,8 +472,8 @@ python -u ml/rollout_spatial.py --x "$XPATH" \
   --horizon "$HORIZON" \
   ${STARTS_TOK:+--starts-per-year $STARTS_TOK} \
   ${LS_TOK:+--long-start $LS_TOK} \
-  ${LONG_TOK:+--long-months $LONG_TOK} \
-  ${FUTURE_TOK:+--future-months $FUTURE_TOK} \
+  ${LONG_ARG:+--long-months $LONG_ARG} \
+  ${FUTURE_ARG:+--future-months $FUTURE_ARG} \
   ${DUMP_TOK:+--dump-roll $DUMPDIR} \
   --heads $HPATHS --out "$OUT" &
 EVAL_PID=$!

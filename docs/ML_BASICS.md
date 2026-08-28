@@ -133,6 +133,20 @@ is not.
 - **Blocked holdouts, never random.** Held-out YEARS plus a held-out
   mid-Atlantic LONGITUDE block, both inherited from the codec checkpoint so
   stage 1 and stage 2 cannot disagree about what was held out.
+- **What the YEAR holdout excludes is now a choice, `--holdout-scope`, and
+  the legacy answer was narrower than it read.** Until 2026-08-28 a stage-2
+  window was dropped only when its FINAL scored bin — t+1, plus each unroll
+  and `--direct` offset — fell in a held-out year (`endpoint`, still the
+  default, and what every archived run trained under). But the stage-2 loss
+  is dense over the window: every frame predicts the bin after itself, so a
+  window ENDING in the K bins after a held-out year still carried that year's
+  bins as context AND as teacher-forced targets. `window` is the strict rule
+  — a window is eligible only if none of the bins its forward pass touches
+  (the frames, each frame's target, the scored reach) is held out — and the
+  trainer prints a runtime certificate that no pooled window violates it.
+  Numbers from the two scopes are not interchangeable: `endpoint` runs are
+  reproducible and comparable with the archive, `window` runs are the ones
+  whose held-out years were never learned from.
 - **The target is deseasonalised** with a climatology computed from train years
   only. The embedding receives month-of-year as an input, so any seasonal
   signal left in the target is free points.

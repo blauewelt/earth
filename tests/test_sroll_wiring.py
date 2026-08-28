@@ -472,7 +472,49 @@ def main():
               "and a malformed label is refused before any hashing (rc %d)"
               % r_lbad.returncode)
 
-        print("\nsroll_run.sh wiring: all 10 checks hold ✓")
+        # ---- 11. `longm:`/`futm:` — the same two knobs in MONTHS ---------
+        # `--long-months` is a count of AXIS STEPS despite its name, so
+        # `long:240` is 20 years at monthly and 3.3 years at pentad. The
+        # month-denominated spelling is converted HERE, by the roll's own
+        # TimeAxis.steps_for_months, and passed explicitly — the `horizon:`
+        # pattern (§5.24: this script does not rescale a flag silently, it
+        # computes the step count and says so). At monthly the conversion is
+        # the identity, which is what keeps every archived hindcast
+        # reproducible; at pentad 240 months is 1,461 steps.
+        av_lm, _ = roll_argv(f"sroll:h1,ckpt:{ck_rel},longm:240,futm:12",
+                             "family3_na025.npz")
+        assert av_lm[av_lm.index("--long-months") + 1] == "240", av_lm
+        assert av_lm[av_lm.index("--future-months") + 1] == "12", av_lm
+        av_lp, r_lp = roll_argv(f"sroll:h1,ckpt:{ck_rel},longm:240,futm:12",
+                                "family4_na025_pentad_r2.npz")
+        assert av_lp[av_lp.index("--long-months") + 1] == "1461", av_lp
+        assert av_lp[av_lp.index("--future-months") + 1] == "73", av_lp
+        assert "long/future in MONTHS" in r_lp.stdout, r_lp.stdout[-800:]
+        # absent tokens change nothing: check 6 already asserts neither flag
+        # is passed without one, and this is the same window at monthly.
+        assert "--long-months" not in av_m and "--future-months" not in av_m
+        _, r_both = roll_argv(f"sroll:h1,ckpt:{ck_rel},long:99,longm:240",
+                              "family3_na025.npz")
+        assert r_both.returncode != 0 and "same flag in two units" in \
+            r_both.stdout, r_both.stdout[-600:]
+        assert "embed cache key" not in r_both.stdout, \
+            "the two-spellings refusal fired after doing work"
+        _, r_mbad = roll_argv(f"sroll:h1,ckpt:{ck_rel},futm:x",
+                              "family3_na025.npz")
+        assert r_mbad.returncode != 0 and "whole number" in r_mbad.stdout, \
+            r_mbad.stdout[-600:]
+        src_m = open(os.path.join(ROOT, SCRIPT)).read()
+        assert src_m.index("longm:*)") < src_m.index("long:*)"), \
+            "`longm:*` must be matched before `long:*`"
+        print("11. `longm:240,futm:12` reaches the roll as --long-months 240 "
+              "--future-months 12 at MONTHLY (steps_for_months is the "
+              "identity there, so archived hindcasts are unchanged) and as "
+              "--long-months 1461 --future-months 73 at PENTAD, with the "
+              "conversion printed; long:+longm: together is refused before "
+              "any hashing (rc %d) and a non-numeric value still is (rc %d)"
+              % (r_both.returncode, r_mbad.returncode))
+
+        print("\nsroll_run.sh wiring: all 11 checks hold ✓")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         shutil.rmtree(tmp2, ignore_errors=True)

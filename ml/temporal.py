@@ -594,6 +594,110 @@ def frame_steps(K, offsets=None):
     return range(K) if offsets is None else offsets
 
 
+def window_touch_offsets(K, offsets, reach):
+    """EVERY axis offset from a window's ANCHOR t that one forward pass and
+    its loss touch, derived from the gather machinery itself and never
+    re-stated by hand:
+
+      · the K FRAME times — `frame_ref(t) + j` for j in `frame_steps` — which
+        is what `gather_stencil` reads as INPUT;
+      · each frame's TEACHER-FORCED TARGET, one bin later, which is what
+        `win_ztgt` reads (the loss is DENSE over the window, not just t+1);
+      · every SCORED reach offset t+r (the unroll fan and each --direct
+        horizon).
+
+    With `offsets=None` and reach [1] this is exactly range(-(K-1), 2), i.e.
+    the contiguous span [t-K+1, t+1]. It is a function of the LAYOUT alone —
+    it never looks at t_hold — so the pool rule and the certificate that
+    checks it are two different expressions over one definition."""
+    ref = int(frame_ref(0, K, offsets))          # anchor-relative window ref
+    frames = [ref + int(j) for j in frame_steps(K, offsets)]
+    return sorted(set(frames) | {f + 1 for f in frames}
+                  | {int(r) for r in reach})
+
+
+def build_window_pool(T, t_hold, K, FOFF, reach, CTX_BACK,
+                      scope="endpoint", quiet=False):
+    """The stage-2 TRAIN-WINDOW END-BIN mask, in ONE place: `ml/temporal.py`
+    and `ml/jaxport/train_stage2.py` both call this, so the two trainers
+    cannot drift on which bins a head is allowed to learn from.
+
+    `scope="endpoint"` (default) is the LEGACY rule, in the legacy statement:
+    a window ending at t is eligible iff the whole scored reach exists, the
+    earliest frame exists, and no SCORED bin t+r is held out. That is what
+    every archived run trained under, and it is what this function must keep
+    returning bit-for-bit when the flag is not set.
+
+    `scope="window"` adds a mask ON TOP of that array — the legacy expression
+    still runs first and unchanged — keeping only windows NONE of whose
+    touched bins (`window_touch_offsets`: frames, per-frame targets, reach)
+    is held out. That closes the leak the endpoint rule leaves: the loss is
+    dense over the window (`win_ztgt`), so a window ending shortly after a
+    holdout year teacher-forces that year's transitions into the weights, and
+    feeds its bins in as context besides.
+
+    Prints a certificate (§4.9: an exact identity, not a threshold) and
+    `sys.exit`s if it fails, whenever the window scope is in force."""
+    ok_t = np.array([t + reach[-1] < T and t >= CTX_BACK
+                     and not any(t_hold[t + r] for r in reach)
+                     for t in range(T)])
+    if scope != "window":
+        return ok_t
+    touch = window_touch_offsets(K, FOFF, reach)
+    # The bound that makes the vectorised gather below in-range for every t
+    # `ok_t` kept: the earliest touched bin is the earliest FRAME (CTX_BACK
+    # behind the anchor, by that constant's own definition) and the latest is
+    # the far end of the reach. An exact identity, so a future layout that
+    # breaks it fails here rather than indexing out of the array.
+    assert touch[0] == -int(CTX_BACK) and touch[-1] <= int(reach[-1]), \
+        (f"window_touch_offsets {touch[0]}..{touch[-1]} escapes the pool's "
+         f"own bounds (-CTX_BACK {-int(CTX_BACK)}, reach {reach[-1]})")
+    idx = np.where(ok_t)[0]
+    hit = np.zeros(len(idx), bool)
+    for o in touch:
+        hit |= t_hold[idx + o]
+    ok_w = np.zeros(T, bool)
+    ok_w[idx[~hit]] = True
+    # ---- the certificate, by a DIFFERENT expression than the mask ---------
+    # The mask above is one vectorised OR over a precomputed offset list. This
+    # walks every SURVIVING t and rebuilds the bins it touches from
+    # `frame_ref`/`frame_steps` directly — the same calls the batch gather and
+    # `win_ztgt` make — so a bug in the offset list cannot hide in both.
+    bad = []
+    for t in np.where(ok_w)[0]:
+        ref = int(frame_ref(int(t), K, FOFF))
+        bins = set()
+        for j in frame_steps(K, FOFF):
+            bins.add(ref + int(j))
+            bins.add(ref + int(j) + 1)
+        for r in reach:
+            bins.add(int(t) + int(r))
+        if any(bool(t_hold[b]) for b in sorted(bins)):
+            bad.append(int(t))
+    n_kept = int(ok_w.sum())
+    if bad:
+        sys.exit(
+            f"--holdout-scope window FAILED ITS OWN CERTIFICATE: {len(bad)} "
+            f"of {n_kept} pooled end-bins still touch a held-out bin "
+            f"(first: {bad[:8]}). The mask and the brute-force recount "
+            f"disagree, so the pool cannot be trusted — refusing to train.")
+    if not quiet:
+        print(f"--holdout-scope window: a window is eligible only if NONE of "
+              f"the bins its forward pass touches is held out — the {K} "
+              f"frames, each frame's teacher-forced target (win_ztgt) and "
+              f"the scored reach {list(reach)}, i.e. anchor offsets "
+              f"{touch[0]}..{touch[-1]}.", flush=True)
+        print(f"  end-bins: {T} total · the endpoint rule excluded "
+              f"{T - int(ok_t.sum()):,} (no-context prefix, reach past the "
+              f"end, scored bin held out) · the window rule excluded "
+              f"{int(ok_t.sum()) - n_kept:,} MORE · {n_kept:,} end-bins "
+              f"remain in the pool.", flush=True)
+        print(f"  certificate: 0 of {n_kept:,} pooled end-bins touch a "
+              f"held-out bin (brute force over frame_ref/frame_steps, "
+              f"{n_kept * (len(touch)):,} bin checks).", flush=True)
+    return ok_w
+
+
 def gather_stencil(Zt, base, p, NBR_t, K, offsets=None):
     """The ONE window-input gather (plan §3.4): every consumer of model
     inputs — train batch, monitor, light probe, eval — goes through here,
@@ -2082,6 +2186,25 @@ def main():
                          "offset 2 is the mid-month bin, which is the one "
                          "carrying Argo (n_rg_live 252/3142, measured "
                          "2026-08-22)")
+    ap.add_argument("--holdout-scope", default="endpoint",
+                    choices=("endpoint", "window"),
+                    help="WHAT THE YEAR HOLDOUT ACTUALLY EXCLUDES from the "
+                         "training pool. 'endpoint' (default) is the legacy "
+                         "rule and every archived run: a window is dropped "
+                         "only when a SCORED bin (t+1, the unroll fan, each "
+                         "--direct horizon) falls in a holdout year. But the "
+                         "loss is DENSE over the window — win_ztgt scores the "
+                         "bin after EVERY frame — so a window ending in the "
+                         "K bins after a holdout year teacher-forces that "
+                         "year's transitions into the weights, and reads its "
+                         "bins as context besides. 'window' is the honest "
+                         "rule: a window is eligible only if NONE of the bins "
+                         "its forward pass touches — frames, per-frame "
+                         "targets, scored reach — is held out. It is an "
+                         "ADDITIONAL mask on top of the legacy expression, so "
+                         "'endpoint' runs the identical statements and the "
+                         "archive stays reproducible. The monitor batch and "
+                         "both z-space evals are UNTOUCHED at either setting")
     ap.add_argument("--target-bins-argo", default="all",
                     choices=("all", "exclude", "only"),
                     help="filter the TRAINING POOL by whether a window's "
@@ -2886,9 +3009,12 @@ def main():
     # target-month holdout, the reach guard, the Argo filter below — so a
     # long span shrinks the printed train-window count and changes nothing
     # else about who is eligible.
-    ok_t = np.array([t + reach[-1] < T and t >= CTX_BACK
-                     and not any(t_hold[t + r] for r in reach)
-                     for t in range(T)])
+    # `build_window_pool` runs THAT EXACT EXPRESSION at the default scope and
+    # returns it unmodified; `--holdout-scope window` masks the result. It
+    # lives in one function because ml/jaxport/train_stage2.py calls it too —
+    # two trainers, one definition of what a head may learn from.
+    ok_t = build_window_pool(T, t_hold, K, FOFF, reach, CTX_BACK,
+                             scope=a.holdout_scope)
     # --target-bins-argo: the SAME reach, filtered by what the scored bins
     # carry. On the pentad axis 92% of bins have no Argo at all (measured:
     # 252/3142 carry it, one per month), so 'exclude' trains a head that
@@ -3274,6 +3400,14 @@ def main():
                           # is its training pool must be readable from the
                           # live branch, not inferred from train_windows.
                           "train_lon_hold": a.train_lon_hold,
+                          # WHAT THE YEAR HOLDOUT EXCLUDED. Recorded
+                          # UNCONDITIONALLY, unlike the fgn keys below: every
+                          # run before 2026-08-28 was `endpoint`, and the
+                          # difference between the two is whether held-out
+                          # years were teacher-forced into the weights. A
+                          # reader comparing two curves must not have to infer
+                          # that from `train_windows`.
+                          "holdout_scope": a.holdout_scope,
                           "codec_holdout_lon": ck["args"].get("holdout_lon", ""),
                           "tag": a.tag or "",
                           # E-057: NEW KEYS, AND ONLY WHEN THE ARM IS ONE.
@@ -3302,6 +3436,16 @@ def main():
     # t+1 and t alone, so `val_zmse`, `val_persistence` and every ratio read
     # off them keep their exact meaning. Only how far back a window must
     # reach moves, and that is CTX_BACK.
+    # --holdout-scope DELIBERATELY DOES NOT REACH HERE. This batch is the
+    # MEASURING INSTRUMENT, not the training pool: it is the fixed-seed 4,096
+    # windows whose t+1 is a HELD-OUT bin, and `val_persistence` /
+    # `val_zmse` and every ratio quoted off them are only comparable across
+    # arms while the population they are read from is identical. Narrowing it
+    # under `window` would change the denominator at the same time as the
+    # training set and make the two arms' numbers incomparable — which is the
+    # one thing this change must not do. (A monitor window CAN read held-out
+    # bins as context; so can persistence, which is exactly what it is scored
+    # against. That is evaluation, not learning: no gradient flows here.)
     ev_m = np.array([t + 1 < T and t_hold[t + 1] and t >= CTX_BACK
                      for t in range(T)])
     emt, emp = np.where(ev_m[:, None] & np.ones(P, bool)[None, :])

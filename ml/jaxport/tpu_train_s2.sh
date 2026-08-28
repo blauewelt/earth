@@ -109,6 +109,13 @@ GRAD_CLIP="${GRAD_CLIP:-0}"
 GRAD_ACCUM="${GRAD_ACCUM:-1}"
 MILESTONE_STEPS="${MILESTONE_STEPS:-}"
 TRAIN_LON_HOLD="${TRAIN_LON_HOLD:-inherit}"
+# What the YEAR holdout excludes from the window pool. `endpoint` (default) is
+# every archived run: only a window whose SCORED bin t+1 is held out is
+# dropped, so a window ending just after a holdout year still teacher-forces
+# that year's transitions. `window` drops any window that TOUCHES a held-out
+# bin. Left at the legacy value on purpose — this is an ARM, not a fix to
+# apply silently to a comparison series.
+HOLDOUT_SCOPE="${HOLDOUT_SCOPE:-endpoint}"
 SEED="${SEED:-0}"
 TAG="${TAG:-}"
 CKPT_EVERY="${CKPT_EVERY:-2000}"
@@ -291,6 +298,7 @@ echo "resolved knobs: K ${K} · steps ${STEPS} · batch ${BATCH} · lr ${LR} ·"
      "warmup ${LR_WARMUP} · znoise ${INPUT_ZNOISE} · grad_clip ${GRAD_CLIP} ·" \
      "grad_accum ${GRAD_ACCUM} (micro $(( BATCH / (GRAD_ACCUM > 0 ? GRAD_ACCUM : 1) ))) ·" \
      "milestones '${MILESTONE_STEPS}' · train_lon_hold ${TRAIN_LON_HOLD} ·" \
+     "holdout_scope ${HOLDOUT_SCOPE} ·" \
      "seed ${SEED} · tag '${TAG}' · tensor ${TENSOR_NAME} (${TENSOR_SHA:0:10})" \
      "· codec ${CODEC_ASSET} · Z '${Z_ASSET:-<embed on node>}' ·" \
      "ckpt_every ${CKPT_EVERY} · extra '${EXTRA_ARGS}' ·" \
@@ -584,6 +592,7 @@ export CKPT_TAG="${NODE}"
   --grad-accum "${GRAD_ACCUM}" \
   ${MILESTONE_STEPS:+--milestone-steps "${MILESTONE_STEPS}"} \
   --train-lon-hold="${TRAIN_LON_HOLD}" \
+  --holdout-scope "${HOLDOUT_SCOPE}" \
   --seed "${SEED}" \
   ${TAG:+--tag "${TAG}"} \
   --ckpt-every "${CKPT_EVERY}" \
