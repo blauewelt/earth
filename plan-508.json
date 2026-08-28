@@ -1,0 +1,10 @@
+{
+ "eval": true,
+ "heads": [
+  "s145rspiral:111-4444-0.71-0.5_s0"
+ ],
+ "exp": "E-051-roll-B",
+ "what": "recall test on the 398k head: re-roll with the battery shortened to 36 months each way (879 steps, ~21.3 h, inside the token) - the future roll past the record's end is the memorization falsifier",
+ "eta_h": 22,
+ "published_at": "2026-08-28T17:11:35.043Z"
+}
