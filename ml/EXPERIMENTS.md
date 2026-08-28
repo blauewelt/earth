@@ -56,9 +56,10 @@ straddling windows. Chris: *"let's fix training."* The fix is
 `--holdout-scope window` (commit c25f6ff): the pool keeps only windows NONE
 of whose touched bins — frames, per-frame targets, scored reach — is held
 out, brute-force recertifies that before training, and records itself in
-`stage2_config.holdout_scope`. Default stays `endpoint`, bit-for-bit, so the
-archive stays reproducible. Full design, predicted pool arithmetic and
-falsifiers:
+`stage2_config.holdout_scope`. The legacy pool survives, bit-for-bit, as
+`endpoint_contaminated` so the archive stays reproducible — but it is no
+longer the default and no longer has a neutral name (58eb286). Full design,
+predicted pool arithmetic and falsifiers:
 [the E-059 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E059_holdout_window.md).
 
 **E-059 · retrain E-051 bit-for-bit except the pool · params 206.659M ·
@@ -109,6 +110,47 @@ number, not a regression. (2) The roll, same protocol as #503 — the SHAPE is
 the headline: decay = forward skill, flat = the E-051 head's signature
 reproduced. (3) The battery.
 
+**FIRST READ AT 24k/200k, 19:35Z — the train curves are twins and the val
+curves are not, which is the leak drawn as a picture.** E-059 and E-051 are
+the same architecture, the same seed, the same codec, the same Z, the same
+validation windows (`val_persistence` 21.44621 in both, to six digits) and
+the same hardware; the ONLY difference is the pool. Read against each
+other at matched step:
+
+| step | E-051 train z-mse | E-059 train z-mse | E-051 val ratio | E-059 val ratio |
+|---|---|---|---|---|
+| 2,000 | 3.9196 | 3.9468 | 0.2247 | **0.6105** |
+| 10,000 | 1.9363 | 1.7381 | 0.1103 | **0.6180** |
+| 20,000 | 1.2714 | 1.3310 | 0.0812 | **0.6411** |
+| 24,000 | 1.2126 | 1.2352 | 0.0748 | **0.6410** |
+
+The training loss is indistinguishable — the 13% supervision cut costs
+nothing visible, which is falsifier 3 cleared. But E-051's val error falls
+monotonically from the first record while **E-059's does not fall at all**:
+it starts at 0.61 of persistence and drifts UP. E-051 was learning to
+predict its validation years because it had been shown them; E-059, at
+24k, has essentially no one-step skill on bins it has never touched.
+
+This is a first read, not a verdict — 176k steps and a full LR decay remain,
+and E-051 itself improved 2.5x over the rest of its run (0.0748 -> 0.0298).
+The level at 400k is the registered reading. But the SHAPE has already
+diverged, and that was not something the plan could assume.
+
+Counter-evidence, recorded because it cuts the other way: the RAPID probe at
+step 20,000 reads **0.616 deseasonalised for E-059 vs 0.612 for E-051** —
+indistinguishable. E-051's RAPID probe was flat at ~0.60 across its whole
+200k, so it is a weak discriminator, but it is not showing the collapse the
+val z-mse shows, and the headline read-out is the one that matters. The
+decisive test remains the roll.
+
+**Pace, corrected.** The dispatch note's "~12.6 h to 200k" was an estimate;
+E-051's own record measures phase 1 at **59,215.5 s = 16.45 h**, and E-059
+is pacing on top of it (wall 3,357.0 s at step 20k vs E-051's 3,376.2 s).
+The ~48-minute pause after every 20,000-step probe is in E-051's record too
+(wall 3,376 -> 6,598 across steps 20k->22k) — normal, not a stall. **Phase 1
+therefore ends ~10:25Z 08-29, not ~06Z**, and the phase-2 relaunch is owed
+then.
+
 **#508 (E-051-roll-B — the recall test on the OLD head) · stage sroll ·
 nothing trains · dispatched 17:1xZ on gpu-box-38116559** (the box #503 held;
 stop/start cleared its wedged runner and kept the warm tensor/Z/codec).
@@ -145,6 +187,30 @@ dump trajectories are the one loss, and they describe an uncertified roll
 #510 regenerates). **#510 runs on a fresh 100 GB box (gpu-box-35586926,
 129 GB RAM, $0.296/h), cold-seeding tensor/Z/codec/head from the releases**
 — ~45–60 min of seeding before Train, scored partial ~05:30Z 08-29.
+
+**#510 verified on the roll, 19:35Z.** Seeding took **1 h 52 min**, not the
+45–60 min estimated (fresh box, everything cold): roll t0 = **19:18:29Z**,
+`in_progress {heads: 1, stage: started}`. Its published
+`rollout_spatial.json` confirms the protocol matches #503 field for field —
+`family4_na025_pentad_r2_X.npy`, horizon 73, hold years 2009/2017/2023,
+3 starts/year at rows 2009:[1972,1996,2020] 2017:[2556,2580,2604]
+2023:[2994,3018,3042], corridor 30,158 of 86,698 px at pctl 75 / threshold
+0.2385 / dilate 2, `holdout_lon` 0 of 481 cols — **and the one intended
+difference is present and correctly converted**: `long_steps` /
+`future_steps` = **219** each, `long_span_days` 1095.0 = 36 months, where
+#503 carried 1,461 steps = 7,305 days = 240 months. The `longm:36,futm:36`
+tokens did go through the axis's own `steps_for_months`; the resolved flag
+reads `--long-months 219 --future-months 219`, which is axis STEPS despite
+the flag's name.
+
+Timing, and it is tighter than planned: 879 steps at the measured 87.1 s/step
+= 21.3 h from 19:18:29Z ⇒ finish **~16:35Z 08-29** against a 24 h token that
+expires ~17:26Z 08-29 — **~50 min of margin**, spent by the seeding overrun.
+The part that matters is safe: the 441 skill steps (the determinism
+certificate against #503's 0.944) land ~**05:58Z 08-29**, ten and a half
+hours inside the token. Only the tail of the future battery — the recall
+falsifier — is exposed if anything slows down, and that is the half that
+would have to be re-rolled.
 
 Costs: E-059 ≈ $60 spot over both phases + ~$4 roll; the recall test ≈ $7
 plus ~$0.15 of failed dispatches and one destroyed box's storage. #503's
