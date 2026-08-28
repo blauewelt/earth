@@ -1,18 +1,22 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-27 ~23:58 UTC** (stencil session, the harvest
-wake): **E-054a RESOLVED — 400k one-step ratio 0.02981** (0.0330@200k →
-0.0298@400k, still falling, decelerating: steps still pay, capacity is
-the cheaper axis) ⇒ **E-054b LAUNCHED** (~400M rung, us-west1-c spot
-first try on the freed quota, node `e054b-400m`, ~32 h; OOM verdict at
-first metrics) and **#503 (E-051 roll) DISPATCHED 23:52Z** on the
-reserved fresh box — rolling the 398k final artefact (the TPU trainer
-has no post-loop save; lesson in EXPERIMENTS e-054), day-matched +
-replay battery + the FIRST roll carrying E-055's unpooled keys. #494
-token embed 50%, result ~06Z. #500/#502 FGN pair healthy. Earlier
-tonight: FGN JAX port phase 1 certified (d9ae181); E-053 wave resolved;
-the 21:10Z merged stamp's detail lives in git history. *Every ML session
-updates this stamp and the sections it touches in
+**Last updated: 2026-08-28 ~07:05 UTC** (Opus, morning triage). **E-050's
+260k FSQ codec is DURABLE at last** — #495's orphan rescue was opened,
+verified (step 260000, d_z 6, fsq 8,8,8,5,5,5) and published as
+`run-485__pixelmae.pt`, so any box can now run the token road. Both E-056
+arms had died overnight: **#494 CANCELLED at step 2800/20000 by an actor
+outside this session**; **#495 VOID (green, no temporal.json) — CUDA OOM
+on its first forward, because K=144 at batch 256 does not fit a 24 GB
+4090 while its control #478 ran that batch on a bigger card**. #495 did
+publish the token-Z cache durably (3.04 GiB), so re-runs skip the
+95-minute embed. **#504 (E-056a-R) re-dispatched 06:52Z** on the
+previously-idle box; a dose-matched twin (znoise 0.12) is registered for
+the next free box. **#503's decisive corridor number lands ~16:50Z today**
+(step 657 of 3363, the `scored` partial) — inside its token; the replay
+battery is a further ~71 h and is a decision for Chris. E-054b is
+re-launching against repeated us-west1-c lemons (grad-accum fix
+certified and on main). #500 (80k) / #502 (68k) FGN pair healthy.
+*Every ML session updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
 "in flight" section and check the

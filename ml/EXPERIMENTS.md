@@ -585,6 +585,53 @@ verdict (E-045-A4's lesson: noise dose does not transfer as a constant).
 publish it; it is the efficiency artefact. n=1 directions per §3b.
 ~$1.5 (a) + ~$2–3 (b incl. embed), sequential behind #489 (E-053.1-A4).
 
+**08-28 06:00–07:00Z — BOTH E-056 ARMS DIED, THE GATE IS RE-DISPATCHED, AND
+THE E-050 CODEC IS DURABLE AT LAST.** Diagnosis of the overnight state:
+
+- **#494 (E-056a, K=24) was CANCELLED at 04:39:52Z by an actor outside this
+  session**, 15 minutes into its stage-2 training (`stage2_step` 2800 of
+  20,000, val_zmse 0.3807 ⇒ ratio 0.600 against the token-scale denominator
+  0.63451 — falling, but far from a verdict). Everything before that was
+  healthy: `resumed at_step 260000`, `fsq_levels 8,8,8,5,5,5`, monitor
+  written. No verdict; no archive (the archive step never ran), but the
+  live branch survived and carries the 39 records.
+- **#495 (E-056b, K=144) is VOID — green with no `temporal.json`** (§7's
+  exact signature: `probes-495.json` lists only `probe_sequence.json` and
+  `provenance.json`; `run-495.jsonl` has four records and zero
+  `stage2_step`). It died of **CUDA OOM on its FIRST forward pass** — the
+  feed-forward block asked for 603,979,776 B with 599,523,328 B free on a
+  25.25 GB card — `temporal.py:294`, `torch/nn/modules/transformer.py:977`.
+  **The mechanism is the box, not the substrate: #478 — the K=144 control
+  this arm must be read against — ran the SAME batch 256 at K=144 on a
+  LARGER card.** So E-056b needs an 80 GB box (the fleet has two H100s,
+  both stopped) to keep batch-256 comparability; halving the batch would
+  buy the fit at the price of confounding the very comparison the arm
+  exists to make. Registered for the re-dispatch, not improvised now.
+- **Two artefacts survived and change the economics.** #495 published the
+  **token-Z embed cache durably before dying** —
+  `Z_867532fe7b_37e146384b.npy`, 3.04 GiB, 3/3 chunks VERIFIED on
+  `embed-cache-v1` — so every future E-056 arm skips the ~95-minute
+  rebuild. And #495's orphan-rescue step captured #494's box-local
+  checkpoint: `rescued-orphan-latest-495.pt` was downloaded and OPENED
+  this morning (§0.15) and reads **step 260000, d_z 6, fsq_levels
+  8,8,8,5,5,5, fsq_bound ln, 512x12 patch 1** — it IS E-050's warm-FSQ
+  final. **It was therefore published as `run-485__pixelmae.pt`
+  (455,676,349 B, 2026-08-28 06:47Z), retiring the two-day-old
+  box-local-only risk**: E-050's 260k codec is now durable on the release
+  and any box can resume it. (The older `rescued-orphan-latest-485.pt`
+  remains the step-200,000 PRE-FSQ parent and must never be published
+  under the canonical name — that distinction is why the name was held
+  empty until a file could be opened and verified.)
+- **RE-DISPATCHED as #504 (E-056a-R, K=24, znoise 0.7)** on
+  gpu-box-32966687 at 06:52Z — the box was idle and billing, the codec
+  and Z are local, so it started immediately; ~2.2 h. A dose-matched twin
+  (**E-056a-CLEAN, `--input-znoise 0.12`**) is registered to run beside it
+  the moment a second box comes up: 0.12 = 0.7 x (0.15116 / 0.87878),
+  which puts the token-scale relative dose where 0.7 put it on d_z-32.
+  Running the pair together makes the token verdict readable in ONE wave
+  rather than a round trip, which is the whole reason the confound was
+  pre-registered rather than discovered.
+
 **The prioritization rule this wave instantiates (Chris: "think of the
 best way to prioritize such efficiency-inducing experiments"):** an
 efficiency experiment is scheduled BEFORE the next big spend on the axis
@@ -777,6 +824,38 @@ gpu-box-38116559, 23:52Z. K=144 roll cost unmeasured (#433's K=24 took
 ~13 h); >24 h token expiry ⇒ hand-harvest registered, §5.25 partials
 ship as it goes. Controls: monthly _trainlon 0.939/0.939, pentad-K24
 −0.499.
+
+**#503 TIMING, MEASURED 2026-08-28 06:50Z — THE DECISIVE NUMBER ARRIVES
+INSIDE THE TOKEN; THE BATTERY DOES NOT.** The roll is healthy and its own
+progress record prices it: `skill` phase 240 of 3363 steps at
+elapsed_s 20915 ⇒ **87.1 s per rolled step**, an ETA of ~75 h for the
+phase as a whole. That total is misleading about WHEN numbers appear,
+because the evaluator writes its partial at four marked points
+(`rollout_spatial.py` 2482/3165/3395/3423-3438, then the single unmarked
+final at 3451), and the one that matters is **line 3165,
+`mark("scored")` — written when a head's SKILL scoring is complete.**
+The step budget splits accordingly: **657 steps of skill** (9 starts =
+3 per holdout year x 2009/2017/2023, x 73 horizon steps) and **2,922
+steps of battery** (long roll 1,461 + future roll 1,461, i.e. 20 years
+each at pentad). So:
+
+- **the day-matched corridor AUC lands at step 657 ≈ 16:50Z 2026-08-28**,
+  ~7 h before the job token expires at 23:52Z — it ships in the partial
+  and is readable without any hand-harvest;
+- **the replay battery needs ~71 further hours**, entirely outside the
+  token: from 23:52Z the box computes blind (live pushes 401) and the
+  artefacts would have to be hand-harvested from the runner on Sunday.
+
+That is the decision to bring Chris rather than take: ride the battery
+(~$23 of box time, lands Monday, blind for its last three days) versus
+cut after `scored` and re-dispatch a battery-only run — the evaluator
+already carries `--long-months` / `--future-months` (default -1 = full),
+so a shortened battery is a flag, not a build, and an 80 GB box would
+also cut the per-step cost. **Neither choice is free of a scientific
+cost: §6 of the E-053 plan and the E-043b-PHASE rule both make the
+battery MANDATORY before any rolled number is called forecast rather
+than replay** — so whatever lands at 16:50Z is a corridor AUC awaiting
+certification, and must be reported in exactly those words.
 
 **THE E-051/E-054a ROLL (the decisive reading, next after E-054a lands):**
 roll the **400k final** through `rollout_spatial` at pentad — the 12-month
