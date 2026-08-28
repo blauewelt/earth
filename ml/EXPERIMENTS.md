@@ -1297,6 +1297,22 @@ an Opus subagent to this spec; verified by the session before commit.
 <a id="e-054"></a>
 ## E-054 · Budget and capacity at the pentad frontier — E-054a (continue E-051) DISPATCHED 2026-08-27 ~10:0xZ at Chris's direction ("let's continue E-51")
 
+> **2026-08-28 20:0xZ — THIS SECTION'S PREMISE IS CONTAMINATED. Read this
+> before spending anything else on it.** The "clean power law" below is
+> measured on a validation set whose transitions were in E-051's training
+> data (see [E-059](#e-059)): the pool admitted any window whose FINAL target
+> was clean while the loss is dense over all 144 frames. So the α≈0.33 decay
+> is not a scaling law for forecast skill — it is the rate at which a
+> 206M-parameter model absorbs 2,417 temporal windows it is being shown.
+> **E-054b is measuring the same thing at 400M and is doing it right now**:
+> at step 40,000 it reads train 0.8880 / val 1.17491 / **ratio 0.05478**
+> against E-051's 0.06057 at the same step — a 10% "capacity keeps paying"
+> signal, on contaminated val, with a train/val gap of 1.32x. E-059 at
+> matched train loss has a gap of **13.7x**. Nothing in E-054 is wrong as
+> arithmetic; it answers a question about memorisation capacity. The capacity
+> question for FORECAST skill is unmeasured, and the ladder that would
+> measure it has to be re-run at `--holdout-scope window`.
+
 TL;DR — E-051's val curve is a clean power law to 200k with no saturation
 (0.0812@20k → 0.0414@100k → 0.0330@200k, α≈0.33 in the last doubling) and
 its LR had decayed to 1/32 of peak — so the flattening is partly the
