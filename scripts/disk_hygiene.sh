@@ -58,6 +58,31 @@ echo "disk hygiene: $(free_gb) GB free, want ${MIN_FREE_GB} GB"
 echo "  tier 0 — scratch"
 rm -rf /opt/runner/_diag/*.log /opt/runner/_work/_temp/* 2>/dev/null
 pip cache purge >/dev/null 2>&1
+# THE ANOMALY-TRANSFORM SCRATCH COPY. train.py/temporal.py write the tensor's
+# writable twin as <tensor>_scratch.npy (31.6 GiB at pentad) and REBUILD it
+# from the pristine .npz at every run — it is never the only copy of
+# anything, and one stale copy is a third of a 100 GB disk. This tier learned
+# it on 2026-08-28 the expensive way: #503 was cancelled (no end-of-job
+# cleanup), its scratch stayed, and #508 on the same box died 90 s in with a
+# Bus error — an mmap write into a disk that filled mid-copy. The failure
+# happened INSIDE the fresh run's own scratch write, so only start-of-job
+# hygiene can prevent it. Newer than this script; hence the gap.
+for f in "$CACHE"/*_scratch.npy; do
+  [ -e "$f" ] || continue
+  sz=$(du -h "$f" | cut -f1)
+  rm -f "$f" && echo "    freed $(basename "$f") ($sz) — anomaly-transform scratch, rebuilt every run"
+done
+# ROLL-FORWARD DUMPS (window token `dumproll`). Written to
+# ml/runs/actions/roll_dump/ and uploaded WITH the probe artifact at run end
+# — so on a COMPLETED run the artifact holds them and the box copy is a
+# duplicate, and on a CANCELLED run the upload never happened but the dumps
+# describe a roll nobody will finish. Either way, scratch by the time the
+# NEXT job starts. ml/runs lives under the persistent checkout workdir, not
+# under $CACHE — hygiene runs from the checkout, so the relative path holds.
+if [ -d ml/runs/actions/roll_dump ]; then
+  sz=$(du -sh ml/runs/actions/roll_dump 2>/dev/null | cut -f1)
+  rm -rf ml/runs/actions/roll_dump && echo "    freed ml/runs/actions/roll_dump ($sz) — a prior run's roll dumps (uploaded with its artifact, or unfinishable)"
+fi
 # A .partial with no .progress marker beside it cannot be resumed, so it is
 # scratch. One WITH a marker is a half-built embedding somebody can continue —
 # that is tier 2, and deleting it would throw away up to 95 minutes of GPU.
