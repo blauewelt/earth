@@ -1,6 +1,6 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-28 ~14:05 UTC** (Opus). **E-054b is now running the
+**Last updated: 2026-08-28 ~17:20 UTC** (Fable). **E-054b is now running the
 RIGHT experiment.** Its 07:08Z relaunch had been rebuilt from the pristine
 launcher template with only the width/steps/tag sed'd in, so it silently
 reverted every E-051 knob (Z_ASSET empty, K 24, lr 1e-3, stencil 1, znoise 0,
@@ -19,7 +19,26 @@ predict SST?" — pooled numbers bit-identical (18,289 bytes), consistency
 strip-count-pin pattern rather than relaxed. **#504 (E-056a-R) is at step
 6000/20000, ratio 0.574** (0.36416/0.63451) — improving from 0.600 at 2800,
 still above the continuous control 0.5056 and well above the 0.4394 lattice
-bar. **E-056 IS RESOLVED (one-step): the token road does NOT open.** #507, the
+bar. **THE HOLDOUT BUG IS FOUND AND FIXED, AND THE CONTROLLED RETRAIN IS
+RUNNING.** Chris's question ("where does measured 2009 leak in?") exposed
+that every archived stage-2 head was teacher-forced on the held-out years'
+transitions: the loss is dense over the window while the pool only checked
+the FINAL target (`win_ztgt` temporal.py:2819 vs `ok_t` :2889; count proof
+2,779 = 3,142−219−144 exactly). Fix: `--holdout-scope window` (c25f6ff) —
+pool keeps only windows touching NO holdout bin, self-certifies by brute
+force before training, default `endpoint` stays bit-identical so the archive
+is reproducible. **E-059** (E-051's exact twin, one change: the pool) is
+training on us-west4-a spot since 17:09Z — predicted pool 2,417 end-bins /
+209,549,066 windows is the first-minutes check; the one-step gap vs
+0.0330/0.0298 IS the h=1 memorization term. **#508** re-rolls the OLD 398k
+head with the battery shortened to 36 months each way (879 steps, ~21.3 h,
+inside the token) — its future roll past the record's end is the direct
+recall falsifier. #503 was cancelled 16:24Z (its 40 h timeout could never
+deliver the 20-year battery); its scored partial is fully harvested. The
+monthly 0.939 champion carries the same question until its own
+scope=window retrain.
+
+**E-056 IS RESOLVED (one-step): the token road does NOT open.** #507, the
 dose-matched twin, finished at **0.50986** against #504's 0.53873 — same box,
 same codec, same 20k steps, only the noise differs, and the dose-matching is
 confirmed exact (`rel_pers` 0.15065 vs the controls' 0.15116). So the

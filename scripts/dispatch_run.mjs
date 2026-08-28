@@ -60,8 +60,15 @@ const n = (v) => (v === undefined || v === null || v === "" ? NaN : Number(v));
 // why an eval run was decaying its learning rate (2026-08-14). The honest
 // plan for an eval is {"eval": true, "heads": [...]}: the page renders a
 // label, not a curve. The curve checks below do not apply to it.
+// `sroll:` is a window TOKEN, not necessarily the first one — every
+// recipe-driven eval since the recipe mechanism landed reads
+// `recipe:<name>,sroll:<head>,...`, so a startsWith test classified those
+// as training dispatches and demanded an LR curve for a run with no LR
+// (found 2026-08-28 dispatching E-051-roll-B; #503 had been dispatched
+// around this check by publishing its plan by hand).
 const isEval = String(inputs.temporal_steps ?? "") === "0"
-  && String(inputs.window ?? "").startsWith("sroll:");
+  && String(inputs.window ?? "").split(",")
+       .some((tok) => tok.startsWith("sroll:"));
 if (isEval) {
   if (!plan.eval) {
     problems.push(

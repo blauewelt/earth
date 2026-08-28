@@ -44,6 +44,68 @@ low-pass).
 
 ---
 
+<a id="e-059"></a>
+## E-059 · The memorization-controlled head: E-051 retrained with the held-out years actually held out — DISPATCHED 2026-08-28 17:09Z (phase 1) + #508 recall test on the old head
+
+TL;DR — #503 rolled the best pentad head to a corridor AUC of 0.944 with a
+FLAT skill-vs-lead profile, and the mechanism is now verified in code: the
+stage-2 loss is dense over the window while the pool only excluded windows
+whose FINAL target was held out, so every archived head — monthly champion
+included — was teacher-forced on the held-out years' transitions through
+straddling windows. Chris: *"let's fix training."* The fix is
+`--holdout-scope window` (commit c25f6ff): the pool keeps only windows NONE
+of whose touched bins — frames, per-frame targets, scored reach — is held
+out, brute-force recertifies that before training, and records itself in
+`stage2_config.holdout_scope`. Default stays `endpoint`, bit-for-bit, so the
+archive stays reproducible. Full design, predicted pool arithmetic and
+falsifiers:
+[the E-059 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E059_holdout_window.md).
+
+**E-059 · retrain E-051 bit-for-bit except the pool · params 206.659M ·
+stage stage-2 · data family4_na025_pentad_r2 (37e146384b) · arch 1024×16,
+K 144, stencil 145 ring spiral:111-4444-0.71-0.5, znoise 0.7, grad-clip 128,
+seed 0, frozen run-415 codec, published Z · steps two phases matching the
+rolled artefact's own records (200k @ lr 1e-3 hl 40k, then →400k @ 4e-4
+hl 100k) · resume none (fresh) · JAX/v5litepod-4, node `e059-window`,
+us-west4-a SPOT (first try, 17:09:15Z; us-west1-c's spot quota is held by
+E-054b) · THE ONE CHANGE: `--holdout-scope window`.**
+
+Registered first-minutes checks (computed in advance, in the plan): resolved
+knobs must read `holdout_scope window`; the pool certificate must print; and
+the pool must be EXACTLY **2,417 end-bins / `train_windows` 209,549,066**
+(endpoint's 2,779 minus 144+144+74 straddling ends; the 74 is 2023's block
+truncated by the axis end). Any other number stops the run.
+
+Registered readings: (1) one-step ratio at 200k/400k vs E-051's
+0.0330/0.02981 on the IDENTICAL `val_persistence` 21.44621 — **the gap IS
+the memorization term at h=1**, since the val targets are holdout bins whose
+transitions the OLD pool trained on; a worse ratio here is the honest
+number, not a regression. (2) The roll, same protocol as #503 — the SHAPE is
+the headline: decay = forward skill, flat = the E-051 head's signature
+reproduced. (3) The battery.
+
+**#508 (E-051-roll-B — the recall test on the OLD head) · stage sroll ·
+nothing trains · dispatched 17:1xZ on gpu-box-38116559** (the box #503 held;
+stop/start cleared its wedged runner and kept the warm tensor/Z/codec).
+Re-rolls `head-weights-e051-398k-xl144zn-pentad-s0` with the battery
+shortened to **36 months each way** via the new `longm:/futm:` window tokens
+(month-denominated, converted through the axis's own `steps_for_months`):
+441 skill + 219 + 219 = 879 steps ≈ 21.3 h at the measured 87.1 s/step —
+**inside the 24 h token**, where #503's 20-year battery could never write.
+Pre-registered falsifier: the FUTURE roll runs past the record's end, where
+nothing existed to memorize — a sharp break there from the in-record
+tracking convicts 0.944 as recall. The 441 skill steps double as the
+protocol-determinism certificate against #503's scored partial (§3b).
+Also in this dispatch wave: `dispatch_run.mjs`'s eval detection fixed
+(`sroll:` is a window token, not necessarily the first — the old
+`startsWith` test demanded an LR curve from a run with no LR).
+
+Costs: E-059 ≈ $60 spot over both phases + ~$4 roll; #508 ≈ $7. #503's cut
+is on this ledger too: cancelled 16:24Z at ~16.5 h (~$5.3), its scored
+partial fully harvested beforehand.
+
+---
+
 <a id="e-058"></a>
 ## E-058 · Per-channel rolled skill, so a roll can be read for SST as well as for AMOC — RUNG 1 BUILT + CERTIFIED (no GPU spent)
 
