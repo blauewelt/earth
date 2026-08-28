@@ -136,6 +136,39 @@ and E-051 itself improved 2.5x over the rest of its run (0.0748 -> 0.0298).
 The level at 400k is the registered reading. But the SHAPE has already
 diverged, and that was not something the plan could assume.
 
+**AT 32k, THE SHARPEST FORM OF THE SAME STATEMENT: matched training loss,
+9.6x different validation loss.** E-059 at step 32,000 has train z-mse
+**1.0056**; E-051 passed through train z-mse **1.0900** at its own step
+32,000. Two runs at effectively the same point on the training curve. Their
+validation z-mse at that point: E-051 **1.4387**, E-059 **13.7437**.
+
+E-051's train/val gap is ~1.2-1.3x for its ENTIRE 200k (1.23x at 2k, 1.32x
+at 32k, 1.29x at 100k, 1.28x at 200k) — its validation error tracked its
+training error because its validation bins were in its training set.
+E-059's gap is **13.7x** and widening. That is the leak stated without
+reference to any baseline or any modelling choice: same architecture, same
+data, same val windows, same train loss, an order of magnitude apart on
+held-out years.
+
+**What E-059 DOES learn on unseen years, which is not nothing.** Persistence
+on the val windows is 21.44621. E-059 reaches **13.0926 at step 2,000**
+(ratio 0.6105) — a **39% reduction in one-step MSE over persistence**, on
+bins whose transitions it has never been shown. So the answer to "can it
+learn anything under a clean pool" is yes. But it gets there in the first
+2,000 steps of a 200,000-step run and **has not improved since** — 13.7437
+at 32k is slightly WORSE than its own step-2,000 value, while train falls
+3.9468 -> 1.0056. Roughly 99% of the training budget is buying memorization.
+
+**The structural reason, and it reframes the whole programme.** The
+`train windows: 209,549,066` figure is **2,417 end-bins x 86,698 ocean
+pixels** (exact: 2417 x 86698 = 209,549,066; likewise 2,779 x 86,698 =
+240,933,742). The temporal diversity of the training set is **2,417 distinct
+windows**, not 209 million. Against 206.66M parameters that is ~85,000
+parameters per distinct temporal pattern. Memorisation is the path of least
+resistance and a clean pool does not remove the incentive — it only removes
+the reward on the val set. This is a small-data regime wearing a large-data
+number.
+
 Counter-evidence, recorded because it cuts the other way: the RAPID probe at
 step 20,000 reads **0.616 deseasonalised for E-059 vs 0.612 for E-051** —
 indistinguishable. E-051's RAPID probe was flat at ~0.60 across its whole
