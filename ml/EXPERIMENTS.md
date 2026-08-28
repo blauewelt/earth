@@ -844,6 +844,48 @@ on the token scale where the d_z-32 controls carried 0.151 — ~5.8x the
 intended relative dose. #507 is the arm that decides it. (The probe ladder's
 tail was still running at 10:00Z; the head numbers land with it.)
 
+**#504 COMPLETE 11:4xZ — THE FULL BUNDLE, AND THE PROBES ARE NOT SUBJECT TO
+THE DOSE CONFOUND.** `probes-504.json` carries all eight files including
+`temporal.json` (so this is not a §7 green-but-void run) and all three head
+probes. Read from the artefact, self-consistently:
+
+| instrument | #504 (tokens, d_z 6) | its own matched control | control's control |
+|---|---|---|---|
+| one-step `z_t+1` ratio | `0.33292 / 0.62375` = **0.53373** | continuous d_z-32 **0.5056** | lattice d_z-32 **0.4394** |
+| unpooled head, RAPID (`probe_head`) | **0.588** [0.534, 0.641] | raw-3x3 **0.693** [0.633, 0.746] | unpooled wind bar **0.690** [0.620, 0.751] |
+| pooled ridge on the codec (`probe_kfold.rapid`, legacy) | 0.553 [0.498, 0.606] | pooled wind bar 0.670 | — |
+| pooled ridge, Florida Current (`probe_kfold.fc`, legacy, free) | **0.051** [-0.015, 0.122], n 2,490 | pooled wind bar 0.199 | — |
+| stage-2 head, pooled (`rapid_probe_kfold`, legacy) | 0.633 [0.582, 0.686] | — | — |
+| stage-2 head, UNPOOLED (`rapid_probe_kfold_unpooled`) | 0.562 [0.500, 0.624] | — | — |
+
+Note the ratio's denominator: `temporal.json`'s own final-eval persistence is
+**0.62375**, where the in-training `stage2_monitor` read 0.63451 on its
+4,096-window draw. The two differ by 1.7%; the table quotes the ratio computed
+**within one file**, which is the only self-consistent way to take it. Against
+the monitor denominator the same numerator gives 0.5247 — the verdict does not
+turn on the choice.
+
+**The part that matters, and it is a distinction nobody had drawn: the
+znoise confound does NOT reach the probe rows.** `--input-znoise` is a
+STAGE-2 training knob; `probe_head` and `probe_kfold` score the **frozen
+codec's** embeddings and never see it. So the forecast row is confounded (5.8x
+the intended relative dose, #507 decides it) and **the probe rows are clean**.
+They say the 16-bit token embedding carries **less** RAPID-relevant signal than
+its own raw-3x3 control (-0.105) and less than wind stress alone (-0.102), and
+essentially nothing about the Florida Current (0.051, a CI containing zero,
+against a 0.199 wind bar) — on E-001's framing, a codec that subtracts.
+
+**How much weight that carries: a direction, not a level, and §3b is
+unambiguous about why.** The head k-fold's measured seed regime is
+**0.036-0.245**, so a -0.105 gap sits INSIDE it, and *"no probe number is
+readable at n = 1, at any scale this programme has run"*. Every pentad arm is
+n = 1. What the rows do have going for them is that they are a **matched
+within-run comparison** — all three are the same unpooled attention head, the
+same 266-pixel section, the same folds, in the same job, which is exactly the
+both-sides-switch-together discipline §3 demands. So: two independent
+instruments point the same way, and only one of them is confounded. That is
+worth saying, and it is not yet a verdict.
+
 **#507 (E-056a-CLEAN) RE-DISPATCHED 10:19Z, QUEUED BEHIND #504 ON THE SAME
 BOX** — deliberately, and it is worth saying why rather than taking the next
 free host. #505 died on a full disk; two other hosts were tried in the gap

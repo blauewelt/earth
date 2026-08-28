@@ -1,6 +1,6 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-28 ~10:25 UTC** (Opus). **E-054b is now running the
+**Last updated: 2026-08-28 ~12:05 UTC** (Opus). **E-054b is now running the
 RIGHT experiment.** Its 07:08Z relaunch had been rebuilt from the pristine
 launcher template with only the width/steps/tag sed'd in, so it silently
 reverted every E-051 knob (Z_ASSET empty, K 24, lr 1e-3, stencil 1, znoise 0,
@@ -19,18 +19,33 @@ predict SST?" — pooled numbers bit-identical (18,289 bytes), consistency
 strip-count-pin pattern rather than relaxed. **#504 (E-056a-R) is at step
 6000/20000, ratio 0.574** (0.36416/0.63451) — improving from 0.600 at 2800,
 still above the continuous control 0.5056 and well above the 0.4394 lattice
-bar. **E-054b's first training step at 08:37Z showed NO OOM** — the registered HBM
-risk is closed by gradient accumulation, and its `val_persistence 21.44621` is
-bit-identical to E-054a's, so the ratio lands directly comparable to E-051's
-0.0330. **Both remaining E-056 arms dispatched 08:40Z**: #506 (K=144) is
-training on an 80 GB H100 — the CARD is the change, because a 24 GB card OOMs
-at batch 256 and halving the batch would confound K with batch; #505
-(dose-matched CLEAN) died in `Set up job` with `No space left on device`
-before step 1 and re-dispatches onto the slot #504 frees. **#503's decisive
+bar. **#504 (token substrate) is COMPLETE, and its probe rows are NOT subject to the
+dose confound.** One-step ratio **0.53373** (0.33292/0.62375, self-consistent
+within `temporal.json`) against continuous d_z-32 0.5056 and lattice 0.4394 —
+worse than both. That row IS confounded (5.8x the intended relative dose;
+#507 decides it). But `--input-znoise` is a STAGE-2 knob and the probes score
+the FROZEN CODEC, so the probe rows are clean, and they point the same way:
+unpooled head on RAPID **0.588** against its own raw-3x3 control **0.693** and
+the unpooled wind bar **0.690**, and Florida Current **0.051** (CI contains
+zero) against a 0.199 wind bar. Two independent instruments, one unconfounded
+— but §3b's head-probe seed regime is 0.036-0.245 and every pentad arm is
+n = 1, so this is a direction, not a level. **#507** (dose-matched, znoise
+0.12) started 11:24Z on the same box and is healthy at **0.237 s/step, gpu
+99.99%** — done ~13:10Z plus its ladder. **#506 (K=144) IS THE WATCH ITEM**:
+gpu 0% / cpu 95% for over two hours, and 20+ minutes past `stage2_monitor`
+with ZERO step records, where its own control #478 (same K=144, 1024x16, batch
+256) wrote its first at **wall_s 240**. Pre-registered rule: if a record
+appears by ~12:30Z at <=3 s/step it runs on (input-starved at worst); if not,
+cancel rather than spend a 10 h timeout at $2.028/h. **E-054b's first training
+step at 08:37Z showed NO OOM** — the registered HBM risk is closed by gradient
+accumulation, and its `val_persistence 21.44621` is bit-identical to E-054a's,
+so the ratio lands directly comparable to E-051's 0.0330. **#503's decisive
 corridor number still lands ~16:50Z today**; the ~71 h replay battery beyond
 its 23:52Z token is the one decision waiting on Chris (recommendation sent:
-cut after the corridor number and re-dispatch the battery shortened on an
-80 GB box). #500 (80k) / #502 (68k) FGN pair healthy.
+cut and re-dispatch the battery shortened on an 80 GB box). Note #503 is
+UNCERTIFIED for a second, independent reason — no validation-gate reference
+exists at pentad cadence — and only its `horizon_auc_daymatched` may be quoted
+against the archived controls. #500 (80k) / #502 (68k) FGN pair healthy.
 *Every ML session updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
