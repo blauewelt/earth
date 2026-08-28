@@ -1142,6 +1142,40 @@ battery MANDATORY before any rolled number is called forecast rather
 than replay** — so whatever lands at 16:50Z is a corridor AUC awaiting
 certification, and must be reported in exactly those words.
 
+**#503 HEALTH AND A SECOND CAVEAT NOBODY HAD NAMED, read from its own partial
+at 10:25Z.** The `rollout_spatial.json` on `ml-live-503` is well-formed and
+progressing (`in_progress {heads 1, stage "started", at 00:50:18Z}`, `heads`
+still `{}` — so the `scored` mark has not fired and the ~16:50Z estimate
+stands), and E-055's new unpooled keys are live in it: `probe_unpooled` is
+fitted on 1,240 train rows with all three holdout years excluded,
+`fit_r_train_insample 0.755`, `fit_wall_s 3.9`, learned softmax attention over
+the section's 266 pixels in place of `read_sv`'s mean — **the first roll ever
+to write them**, and they carry the honest note that they have no reference of
+their own and are not gated.
+
+Two things in that file change how the 16:50Z number must be reported.
+
+- **The roll is UNCERTIFIED, independently of the battery.** `gate` reads
+  `pass null · skipped true · certified false`, because **no validation-gate
+  reference exists at pentad cadence**: `e017_u1_s0`'s reference (auc 0.643,
+  bands 0.47 / 0.375 / 0.492) was measured by `ml/rollout.py` over the MONTHLY
+  family-3 axis in #217, and cannot certify a roll whose steps are a different
+  length, whose starts are a different count and whose horizon bands span
+  different durations. The file says it in its own words: *"Passing it here
+  would be a certificate for an experiment nobody ran."* So whatever lands at
+  16:50Z carries TWO caveats, not one — uncertified by the gate, AND awaiting
+  the replay battery. They are separate, and both must be said. Owed:
+  register a pentad reference in `GATE_REF_BY_CADENCE` once one is measured.
+- **Read `horizon_auc_daymatched`, never `horizon_auc`.** The file's own
+  cadence block is explicit: every `h` is an AXIS STEP, `horizon_auc` averages
+  over h=1..73 and is therefore a function of THIS axis's lead sampling, while
+  `horizon_auc_daymatched` averages the twelve leads (6,12,…,73 = 30…365 days)
+  that ARE the monthly archive's — and is *"the ONLY one of the two that may
+  be compared against an archived corridor AUC"*. The controls this number is
+  read against (monthly _trainlon 0.939, pentad-K24 −0.499) are archived
+  corridor AUCs, so quoting `horizon_auc` against them would be comparing two
+  different lead samplings and calling the difference a result.
+
 **THE E-051/E-054a ROLL (the decisive reading, next after E-054a lands):**
 roll the **400k final** through `rollout_spatial` at pentad — the 12-month
 day-matched corridor AUC on the trained-longitude corridor scope, against
