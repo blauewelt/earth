@@ -90,6 +90,26 @@ WHAT IS NOT, each named here so nothing is silently missing:
     knobs, off in every arm this port targets; they refuse rather than
     silently defaulting to a different pool than the flag names.
 
+**`--grad-accum N` — THE ONE KNOB HERE `ml/temporal.py` DOES NOT HAVE, AND IT
+IS NOT AN EXPERIMENT.** E-054b (2026-08-28 00:15Z) registered the HBM risk and
+it fired: the 400M rung (1280x20, K 144, batch 256, 399.948M params) asked for
+5.09 G with 4.03 G free inside `train_step` on a v5e-4 chip and died at the
+first step. Of the four recorded options only one preserves the comparison
+with E-051 exactly — accumulate the gradient over N micro-batches of
+`batch/N` and take ONE AdamW step on their AVERAGE. That is not an
+approximation of a batch-256 step, it IS a batch-256 step: the objective is a
+MEAN over the window elements, every micro-batch has the same element count,
+so mean-of-means is the batch mean and the average of the micro gradients is
+the batch gradient — exactly, in real arithmetic, with only float ASSOCIATION
+separating the two on a machine (`tests/test_grad_accum_jax.py` measures it).
+Everything a reader sees is therefore unchanged: a "step" is one optimiser
+update over the EFFECTIVE batch, `stage2_zmse` is the mean over the effective
+batch, `stage2_grad_norm` is the pre-clip norm OF THE AVERAGED gradient (so
+`--grad-clip` binds on the same quantity at any N), and `stage2_config` gains
+`grad_accum` so no reader has to infer which one ran. **N = 1 is not a code
+path, it is the ABSENCE of one** — the accumulating graphs are not even built,
+so an unaccumulated run's jaxpr is the pre-E-054b one op for op.
+
 THE Z IT READS. Either a published cache (`--z`: the `[T, P, d_z]` float16
 `.npy` with a 128-byte header that `embed_cache_sync` publishes, named by
 `Z_<codec weight hash>_<tensor sha>.npy`) or, with `--z` absent, an embedding
@@ -120,6 +140,7 @@ top, so this DRIVER needs a CPU torch wheel. `jaxport.models` and
 """
 import argparse
 import datetime as dt
+import functools
 import json
 import math
 import os
@@ -349,7 +370,7 @@ def fgn_train_key(seed):
     return jax.random.PRNGKey(int(seed) * 1000003 + 57)
 
 
-def fgn_eps_at(root, step, forward_index, batch, eps_dim):
+def fgn_eps_at(root, step, forward_index, batch, eps_dim, micro_index=None):
     """ε for (step, forward_index), as a PURE FUNCTION of (seed, step, i).
 
     WHY THIS IS EXACT ON RESUME, AND WHY NO RNG STATE IS CHECKPOINTED.
@@ -371,9 +392,29 @@ def fgn_eps_at(root, step, forward_index, batch, eps_dim):
     `forward_index` separates the two members of a CRPS pair (0 and 1) — two
     independent draws on the same context, which is what the spread term
     measures.
+
+    `micro_index` (E-054b) separates the MICRO-BATCHES of one accumulated
+    optimiser step, so the fold is over (seed, step, forward, micro) and the
+    two members of every micro-batch stay independent of every other
+    micro-batch's. **`None` is not micro 0** — it is the legacy two-level
+    fold, bit for bit, and `--grad-accum 1` passes `None` for exactly that
+    reason: `fold_in(k, 0)` is a DIFFERENT key from `k`, so folding a
+    constant zero in "for uniformity" would silently move the ε stream of
+    every un-accumulated run and of every resume of one.
+
+    Note what is NOT done: drawing ε once at the full batch and slicing it
+    per micro-batch. That would make an accumulated CRPS run reproduce an
+    unaccumulated one's ε exactly, but it materialises a batch-sized draw
+    per forward — the one array the accumulation exists to stop
+    materialising — and the plan (`ml/plans/FGN_JAX_PORT.md` §1) asks only
+    that members be INDEPENDENT, never that they be shared across N. So an
+    FGN run at N > 1 sees a different (equally valid) ε stream than at N = 1,
+    and `stage2_config.grad_accum` is what says which one it was.
     """
     k = jax.random.fold_in(jax.random.fold_in(root, int(step)),
                            int(forward_index))
+    if micro_index is not None:
+        k = jax.random.fold_in(k, int(micro_index))
     return jax.random.normal(k, (int(batch), int(eps_dim)), jnp.float32)
 
 
@@ -543,6 +584,354 @@ def stage2_loss_fgn(model, zseq, mseq, sctx, ztgt, eps1, eps2):
     p1, hid1 = model(zseq, mseq, sctx, eps=eps1)
     p2, _ = model(zseq, mseq, sctx, eps=eps2)
     return fair_crps2(p1, p2, ztgt), (p1, hid1)
+
+
+# --------------------------------------------------------------------------
+# E-054b · the optimiser step, and the gradient accumulation that lets a head
+# too big for one chip's activation budget take exactly the same step
+# --------------------------------------------------------------------------
+def grad_accum_micro(batch, accum):
+    """Refuse an unrepresentable split, and return the micro-batch size.
+
+    A PRECONDITION THAT DEPENDS ONLY ON THE INPUTS IS CHECKED WHILE THE INPUTS
+    ARE ALL IT HAS COST (`ml/CLAUDE.md` §0.3). Both refusals exist because the
+    alternative is a run that trains at a batch size no record names:
+
+    · `N < 1` — there is no "zero micro-batches" step, and a negative N would
+      make `batch // N` negative and the averaging divisor negative with it.
+    · `batch % N != 0` — a ragged last micro-batch is NOT the same
+      optimisation. The averaged gradient would weight every window of the
+      short micro-batch more heavily than every window of the full ones (each
+      micro-loss is a mean over ITS OWN element count), so the step would no
+      longer be the batch-`batch` step it is labelled as. Refusing costs a
+      second; discovering it costs the comparison.
+    """
+    accum, batch = int(accum), int(batch)
+    if accum < 1:
+        raise SystemExit(
+            f"--grad-accum {accum} must be >= 1 (1 = off, and off builds no "
+            f"accumulation graph at all).")
+    if batch % accum:
+        raise SystemExit(
+            f"REFUSED: --batch {batch} is not divisible by --grad-accum "
+            f"{accum} ({batch} % {accum} = {batch % accum}). A ragged final "
+            f"micro-batch would make the averaged gradient weight its windows "
+            f"more heavily than the full micro-batches' — a DIFFERENT "
+            f"optimisation from the batch-{batch} step this run would still "
+            f"be labelled with. Pick an N that divides the batch.")
+    return batch // accum
+
+
+def make_set_lr(clipped):
+    """`_set_lr` as a module-level factory so the step builder and the tests
+    close over the SAME function the trainer does."""
+    def _set_lr(ost, lr):
+        """Write `lr` into whichever level of the chain owns hyperparams.
+
+        `_replace` rather than mutating `ost.hyperparams` in place: the dict
+        is a node of a TRACED pytree, and mutating it under jit would edit an
+        object the tracer also holds."""
+        if clipped:
+            inner = ost[1]
+            return (ost[0],
+                    inner._replace(hyperparams={**inner.hyperparams,
+                                                "learning_rate": lr}))
+        return ost._replace(hyperparams={**ost.hyperparams,
+                                         "learning_rate": lr})
+    return _set_lr
+
+
+class TrainSteps:
+    """The jitted step functions of one run, and nothing else.
+
+    `accum == 1` leaves every `micro_*` and `apply_accum` at None — the
+    accumulating graphs are not built, not traced and not compiled, which is
+    the mechanical form of "flag off is the pre-E-054b path".
+    """
+    __slots__ = ("accum", "loss_fn", "loss_fn_fgn",
+                 "train_step", "train_step_dn",
+                 "train_step_fgn", "train_step_fgn_dn",
+                 "zero_grads", "micro", "micro_dn", "micro_fgn",
+                 "micro_fgn_dn", "apply_accum")
+
+    def __init__(self, **kw):
+        for k in self.__slots__:
+            setattr(self, k, kw.get(k))
+
+
+def build_train_steps(graphdef, tx, set_lr, d_z, nz_sigma, accum=1):
+    """Every jitted training function of a run, built in ONE place.
+
+    WHY THE ACCUMULATION IS SHAPED THE WAY IT IS — this is the whole point of
+    E-054b, so the reasoning is here rather than in a plan nobody re-reads.
+
+    The 400M rung died on an ACTIVATION allocation (5.09 G asked, 4.03 G
+    free), not on a weight one: parameters, Adam's two moments and the
+    gradient are ~1.6 GB each at 399.948M fp32 and were all resident when it
+    failed. Activations scale with the batch and the K² attention; weights do
+    not. So the fix has to cut the per-backward batch and MUST NOT hold the
+    full batch anywhere on device.
+
+    That rules out the obvious `lax.scan` over a stacked `[N, micro, ...]`
+    input: the stacked array IS the full batch, device-resident for the whole
+    scan, and the memory it saves is only the difference between one
+    backward's activations and N's. It also rules out mapping the micro-grad
+    over a device-resident batch. What is left, and what this does:
+
+      · the micro-batches are sliced ON THE HOST (numpy) and transferred one
+        at a time, so no device buffer ever spans the batch;
+      · one jitted graph per (noise, objective) mode takes ONE micro-batch,
+        computes its gradient and ADDS IT INTO the accumulator inside the same
+        jit, so the micro gradient is a transient of that graph and never
+        coexists with the next micro-batch's;
+      · the accumulators are DONATED, so XLA aliases input to output and the
+        add is in place — the accumulator is one buffer for the whole step,
+        not one per micro-batch;
+      · the micro calls are chained through the accumulator, so the DATA
+        DEPENDENCY serialises the backwards: micro i+1's activations cannot
+        be live while micro i's still are, whatever order the host enqueues
+        them in.
+
+    THE BUFFER LIFETIMES, stated so the claim is checkable rather than
+    hopeful. At any instant, on any one device, the resident set is
+
+        params (1P) + Adam m, v (2P) + accumulator (1P)
+        + the micro gradient inside the running graph (1P, transient)
+        + ONE micro-batch's activations (~A/N)
+        + the micro-batch inputs the host has enqueued (bounded above by the
+          whole batch's inputs — which is exactly what the unaccumulated path
+          transfers anyway, so it is not a regression)
+
+    against the unaccumulated path's `params + m + v + grads (4P) + A`. The
+    trade is one extra parameter-sized buffer for an N-fold cut in the
+    activation peak, and it is only a win where A dominates P — which is the
+    measured shape of the E-054b failure and is exactly the case this flag is
+    for. The Python `del` after each micro call is part of that argument: it
+    drops the host's last reference to the micro-batch's device buffers at
+    the point the comment claims they die.
+
+    `--input-znoise` on the HOST backend is applied to the whole batch by the
+    producer before the split, and the noise is per-row, so slicing after it
+    is the same perturbation the unaccumulated path applies. On the DEVICE
+    backend each micro-batch folds its own key from (seed, step, micro).
+    """
+    accum = int(accum)
+
+    def loss_fn(st, zseq, mseq, sctx, ztgt):
+        m = nnx.merge(graphdef, st)
+        loss, _ = stage2_loss(m, zseq, mseq, sctx, ztgt)
+        return loss
+
+    def loss_fn_fgn(st, zseq, mseq, sctx, ztgt, eps1, eps2):
+        m = nnx.merge(graphdef, st)
+        loss, _ = stage2_loss_fgn(m, zseq, mseq, sctx, ztgt, eps1, eps2)
+        return loss
+
+    @jax.jit
+    def train_step_fgn(st, ost, lr, zseq, mseq, sctx, ztgt, eps1, eps2):
+        """`train_step` with the fair-CRPS objective. Identical in every other
+        respect — same pre-clip global norm on every step, same `_set_lr`,
+        same optax chain — so an FGN arm and an MSE arm differ in the
+        objective and in nothing else."""
+        zseq = zseq.astype(jnp.float32)
+        loss, grads = jax.value_and_grad(loss_fn_fgn)(
+            st, zseq, mseq, sctx, ztgt, eps1, eps2)
+        gnorm = optax.global_norm(grads)
+        ost = set_lr(ost, lr)
+        upd, ost = tx.update(grads, ost, st)
+        return optax.apply_updates(st, upd), ost, loss, gnorm
+
+    @jax.jit
+    def train_step_fgn_dn(st, ost, lr, key, zseq, mseq, sctx, ztgt,
+                          eps1, eps2):
+        """The device-noise twin. THE CORRUPTION IS APPLIED ONCE, BEFORE BOTH
+        FORWARDS (`ml/temporal.py:3502-3507`): `apply_znoise_jax` runs here,
+        outside `stage2_loss_fgn`, so the two members see the identical
+        perturbed context and the CRPS spread term measures ε alone."""
+        zn = apply_znoise_jax(zseq, key, nz_sigma, d_z)
+        loss, grads = jax.value_and_grad(loss_fn_fgn)(
+            st, zn, mseq, sctx, ztgt, eps1, eps2)
+        gnorm = optax.global_norm(grads)
+        ost = set_lr(ost, lr)
+        upd, ost = tx.update(grads, ost, st)
+        return optax.apply_updates(st, upd), ost, loss, gnorm
+
+    @jax.jit
+    def train_step(st, ost, lr, zseq, mseq, sctx, ztgt):
+        # Exact no-op for the fp32 path; makes --gather-fp16 safe here too
+        # (fp16→fp32 is exact, and the model must never run in fp16).
+        zseq = zseq.astype(jnp.float32)
+        loss, grads = jax.value_and_grad(loss_fn)(st, zseq, mseq, sctx, ztgt)
+        # THE PRE-CLIP GLOBAL NORM, on EVERY step. Clipping computes it
+        # anyway, and the unclipped path pays one extra reduction — cheap
+        # beside a forward and backward over a 200M head, and it is what
+        # turns `stage2_grad_norm` from "one step in log_every" into a window
+        # statistic (§4.10: instrument the quantity that distinguishes the
+        # stories). #423's excursion could have begun anywhere inside a
+        # 2,000-step window and no record could say where.
+        gnorm = optax.global_norm(grads)
+        ost = set_lr(ost, lr)
+        upd, ost = tx.update(grads, ost, st)
+        return optax.apply_updates(st, upd), ost, loss, gnorm
+
+    # The device-noise twin (--noise-backend device): identical to train_step
+    # except the input perturbation is drawn and applied INSIDE the jit —
+    # see apply_znoise_jax for both the measurement that motivates it and the
+    # RNG-stream caveat. zseq may arrive fp16 (--gather-fp16); the cast to
+    # fp32 happens in apply_znoise_jax and is exact.
+
+    @jax.jit
+    def train_step_dn(st, ost, lr, key, zseq, mseq, sctx, ztgt):
+        zn = apply_znoise_jax(zseq, key, nz_sigma, d_z)
+        loss, grads = jax.value_and_grad(loss_fn)(st, zn, mseq, sctx, ztgt)
+        gnorm = optax.global_norm(grads)
+        ost = set_lr(ost, lr)
+        upd, ost = tx.update(grads, ost, st)
+        return optax.apply_updates(st, upd), ost, loss, gnorm
+
+    steps = TrainSteps(accum=accum, loss_fn=loss_fn, loss_fn_fgn=loss_fn_fgn,
+                       train_step=train_step, train_step_dn=train_step_dn,
+                       train_step_fgn=train_step_fgn,
+                       train_step_fgn_dn=train_step_fgn_dn)
+    if accum == 1:
+        # NOT A BRANCH IN A GRAPH — an absent graph. Nothing below is defined,
+        # so an un-accumulated run traces, compiles and executes exactly the
+        # functions above and the flag costs it not one operation.
+        return steps
+
+    INV = 1.0 / float(accum)          # baked at trace time, never an argument
+
+    @jax.jit
+    def zero_grads(st):
+        """The accumulator, allocated once per optimiser step. One jitted
+        memset rather than a `tree_map` of eager `zeros_like` calls, so the
+        per-step host dispatch is one call and not one per leaf."""
+        return jax.tree.map(jnp.zeros_like, st)
+
+    # THE MICRO GRAPHS. Each is `value_and_grad` over ONE micro-batch plus
+    # the accumulate, fused into a single jit: the micro gradient is born and
+    # consumed inside the graph, so it is never a second live parameter-sized
+    # tree in the host's hands. `donate_argnums=(1, 2)` gives the accumulators
+    # to XLA to overwrite — the add is in place, so N micro-batches cost ONE
+    # accumulator buffer and not N.
+    #
+    # The loss accumulates ON DEVICE beside the gradient. Summing micro losses
+    # on the host would mean one device→host sync per micro-batch, which
+    # would serialise the pipeline the prefetch exists to keep full; one sync
+    # per optimiser step is what the unaccumulated path already pays.
+    _jit_acc = functools.partial(jax.jit, donate_argnums=(1, 2))
+
+    @_jit_acc
+    def micro(st, gacc, lacc, zseq, mseq, sctx, ztgt):
+        zseq = zseq.astype(jnp.float32)
+        loss, grads = jax.value_and_grad(loss_fn)(st, zseq, mseq, sctx, ztgt)
+        return jax.tree.map(jnp.add, gacc, grads), lacc + loss
+
+    @_jit_acc
+    def micro_dn(st, gacc, lacc, key, zseq, mseq, sctx, ztgt):
+        zn = apply_znoise_jax(zseq, key, nz_sigma, d_z)
+        loss, grads = jax.value_and_grad(loss_fn)(st, zn, mseq, sctx, ztgt)
+        return jax.tree.map(jnp.add, gacc, grads), lacc + loss
+
+    @_jit_acc
+    def micro_fgn(st, gacc, lacc, zseq, mseq, sctx, ztgt, eps1, eps2):
+        zseq = zseq.astype(jnp.float32)
+        loss, grads = jax.value_and_grad(loss_fn_fgn)(
+            st, zseq, mseq, sctx, ztgt, eps1, eps2)
+        return jax.tree.map(jnp.add, gacc, grads), lacc + loss
+
+    @_jit_acc
+    def micro_fgn_dn(st, gacc, lacc, key, zseq, mseq, sctx, ztgt, eps1, eps2):
+        zn = apply_znoise_jax(zseq, key, nz_sigma, d_z)
+        loss, grads = jax.value_and_grad(loss_fn_fgn)(
+            st, zn, mseq, sctx, ztgt, eps1, eps2)
+        return jax.tree.map(jnp.add, gacc, grads), lacc + loss
+
+    @jax.jit
+    def apply_accum(st, ost, lr, gacc, lacc):
+        """ONE AdamW update on the AVERAGED gradient.
+
+        The division happens HERE, before the norm and before the optax
+        chain, which is what makes the accumulated step the batch step in
+        every visible respect: `gnorm` is the pre-clip norm OF THE AVERAGE, so
+        `--grad-clip` binds on exactly the quantity it binds on at N = 1 and
+        the clip statistics stay comparable across N. Sum-then-divide rather
+        than divide-each-micro-then-sum: one rounding instead of N, and the
+        accumulator keeps the micro gradients' own scale while it fills.
+        """
+        grads = jax.tree.map(lambda g: g * INV, gacc)
+        gnorm = optax.global_norm(grads)
+        ost = set_lr(ost, lr)
+        upd, ost = tx.update(grads, ost, st)
+        return optax.apply_updates(st, upd), ost, lacc * INV, gnorm
+
+    steps.zero_grads = zero_grads
+    steps.micro, steps.micro_dn = micro, micro_dn
+    steps.micro_fgn, steps.micro_fgn_dn = micro_fgn, micro_fgn_dn
+    steps.apply_accum = apply_accum
+    return steps
+
+
+def accum_step(steps, state, opt_state, lr, s, zseq, mseq, sctx, ztgt, micro,
+               put=jnp.asarray, fgn_root=None, fgn_eps=0, nz_root=None):
+    """ONE optimiser update over `steps.accum` micro-batches — E-054b.
+
+    Returns exactly what the un-accumulated `train_step` returns —
+    `(state, opt_state, loss, gnorm)` — with `loss` the mean over the EFFECTIVE
+    batch and `gnorm` the PRE-clip norm of the AVERAGED gradient, so every
+    metric the loop writes keeps its meaning and a "step" keeps meaning one
+    optimiser update.
+
+    The micro-batches are contiguous HOST slices of the batch the producer
+    already built, so the window pool, the draw order and the host-noise
+    stream are the un-accumulated run's exactly; only where the batch is cut
+    into forwards changes. `build_train_steps` carries the argument for why
+    the slicing happens here rather than in a scan over a stacked device
+    array (the stack IS the full batch, resident — the one thing this exists
+    to prevent), and why the buffer lifetimes below bound the peak at one
+    micro-batch of activations.
+
+    `fgn_root=None` means MSE, `nz_root=None` means the corruption is not
+    drawn on device: the two selectors are the loop's own `FGN` and
+    `device_noise` flags, passed rather than re-derived so this function and
+    the un-accumulated call site cannot disagree about which mode a run is in.
+    """
+    gacc = steps.zero_grads(state)
+    lacc = jnp.zeros((), jnp.float32)
+    for mi in range(int(steps.accum)):
+        sl = slice(mi * micro, (mi + 1) * micro)
+        zs_, ms_, cs_, ts_ = (put(zseq[sl]), put(mseq[sl]),
+                              put(sctx[sl]), put(ztgt[sl]))
+        # The input corruption, when it is drawn on device, is a FRESH draw
+        # per micro-batch folded from (seed, step, micro) — at N = 1 this
+        # function is not called at all, so the legacy `fold_in(root, s)` is
+        # untouched, and at N > 1 no two micro-batches share a perturbation.
+        key = (None if nz_root is None
+               else jax.random.fold_in(jax.random.fold_in(nz_root, s), mi))
+        if fgn_root is not None:
+            # (seed, step, forward, MICRO). The micro index is folded in so
+            # the two members of THIS micro-batch are independent of every
+            # other micro-batch's pair as well as of each other; `fgn_eps_at`
+            # explains why `--grad-accum 1` passes None here instead of 0 and
+            # why that is not a cosmetic difference.
+            e1 = fgn_eps_at(fgn_root, s, 0, micro, fgn_eps, micro_index=mi)
+            e2 = fgn_eps_at(fgn_root, s, 1, micro, fgn_eps, micro_index=mi)
+            if key is None:
+                gacc, lacc = steps.micro_fgn(state, gacc, lacc,
+                                             zs_, ms_, cs_, ts_, e1, e2)
+            else:
+                gacc, lacc = steps.micro_fgn_dn(state, gacc, lacc, key,
+                                                zs_, ms_, cs_, ts_, e1, e2)
+        elif key is None:
+            gacc, lacc = steps.micro(state, gacc, lacc, zs_, ms_, cs_, ts_)
+        else:
+            gacc, lacc = steps.micro_dn(state, gacc, lacc, key,
+                                        zs_, ms_, cs_, ts_)
+        # The micro-batch's device buffers lose their last host reference
+        # HERE, before the next one is made — the lifetime the memory argument
+        # in `build_train_steps` depends on.
+        del zs_, ms_, cs_, ts_
+    return steps.apply_accum(state, opt_state, lr, gacc, lacc)
 
 
 # --------------------------------------------------------------------------
@@ -770,6 +1159,17 @@ def parse(argv=None):
                         "OFF, and OFF ADDS NO OPTAX TRANSFORM AT ALL — the "
                         "unclipped chain exactly, so an arm that does not opt "
                         "in is the pre-clip code path.")
+    p.add_argument("--grad-accum", type=int, default=1,
+                   help="E-054b: split each optimiser step's --batch into N "
+                        "micro-batches of batch/N, accumulate their gradients "
+                        "and take ONE AdamW update on the AVERAGE. 1 "
+                        "(DEFAULT) = OFF, and OFF BUILDS NO ACCUMULATION "
+                        "GRAPH AT ALL. The optimisation is the batch-N one "
+                        "exactly (mean loss, equal micro-batches — only float "
+                        "association differs); what changes is the ACTIVATION "
+                        "peak, which is what put the 400M rung over a v5e-4 "
+                        "chip's HBM. REFUSES unless N >= 1 and N divides "
+                        "--batch.")
     p.add_argument("--noise-backend", default="host",
                    choices=["host", "device"],
                    help="Where the --input-znoise draw happens. 'host' "
@@ -919,6 +1319,11 @@ def main(argv=None):
     if a.grad_clip < 0:
         raise SystemExit(f"--grad-clip {a.grad_clip} must be >= 0 (0 = off, "
                          f"and off adds no optax transform at all).")
+    # E-054b, same rule: the accumulation's two preconditions are functions of
+    # --batch and --grad-accum alone, so they are settled here and not after
+    # an embedding pass.
+    ACCUM = int(a.grad_accum)
+    MICRO = grad_accum_micro(a.batch, ACCUM)
     # E-057, at argv time and before anything expensive: the fgn preconditions
     # (including the refuse-under-MSE guard) and the loss kind they decide.
     LOSS_KIND = fgn_refusals(a)
@@ -1297,94 +1702,16 @@ def main(argv=None):
         tx = optax.chain(optax.clip_by_global_norm(CLIP), tx)
     opt_state = tx.init(state)
 
-    def _set_lr(ost, lr):
-        """Write `lr` into whichever level of the chain owns hyperparams.
-
-        `_replace` rather than mutating `ost.hyperparams` in place: the dict
-        is a node of a TRACED pytree, and mutating it under jit would edit an
-        object the tracer also holds."""
-        if CLIP > 0:
-            inner = ost[1]
-            return (ost[0],
-                    inner._replace(hyperparams={**inner.hyperparams,
-                                                "learning_rate": lr}))
-        return ost._replace(hyperparams={**ost.hyperparams,
-                                         "learning_rate": lr})
-
-    # The --input-znoise sigma, closed over by both device-noise steps.
-    _NZ_SIGMA = float(a.input_znoise)
-
-    def loss_fn(st, zseq, mseq, sctx, ztgt):
-        m = nnx.merge(graphdef, st)
-        loss, _ = stage2_loss(m, zseq, mseq, sctx, ztgt)
-        return loss
-
-    def loss_fn_fgn(st, zseq, mseq, sctx, ztgt, eps1, eps2):
-        m = nnx.merge(graphdef, st)
-        loss, _ = stage2_loss_fgn(m, zseq, mseq, sctx, ztgt, eps1, eps2)
-        return loss
-
-    @jax.jit
-    def train_step_fgn(st, ost, lr, zseq, mseq, sctx, ztgt, eps1, eps2):
-        """`train_step` with the fair-CRPS objective. Identical in every other
-        respect — same pre-clip global norm on every step, same `_set_lr`,
-        same optax chain — so an FGN arm and an MSE arm differ in the
-        objective and in nothing else."""
-        zseq = zseq.astype(jnp.float32)
-        loss, grads = jax.value_and_grad(loss_fn_fgn)(
-            st, zseq, mseq, sctx, ztgt, eps1, eps2)
-        gnorm = optax.global_norm(grads)
-        ost = _set_lr(ost, lr)
-        upd, ost = tx.update(grads, ost, st)
-        return optax.apply_updates(st, upd), ost, loss, gnorm
-
-    @jax.jit
-    def train_step_fgn_dn(st, ost, lr, key, zseq, mseq, sctx, ztgt,
-                          eps1, eps2):
-        """The device-noise twin. THE CORRUPTION IS APPLIED ONCE, BEFORE BOTH
-        FORWARDS (`ml/temporal.py:3502-3507`): `apply_znoise_jax` runs here,
-        outside `stage2_loss_fgn`, so the two members see the identical
-        perturbed context and the CRPS spread term measures ε alone."""
-        zn = apply_znoise_jax(zseq, key, _NZ_SIGMA, d_z)
-        loss, grads = jax.value_and_grad(loss_fn_fgn)(
-            st, zn, mseq, sctx, ztgt, eps1, eps2)
-        gnorm = optax.global_norm(grads)
-        ost = _set_lr(ost, lr)
-        upd, ost = tx.update(grads, ost, st)
-        return optax.apply_updates(st, upd), ost, loss, gnorm
-
-    @jax.jit
-    def train_step(st, ost, lr, zseq, mseq, sctx, ztgt):
-        # Exact no-op for the fp32 path; makes --gather-fp16 safe here too
-        # (fp16→fp32 is exact, and the model must never run in fp16).
-        zseq = zseq.astype(jnp.float32)
-        loss, grads = jax.value_and_grad(loss_fn)(st, zseq, mseq, sctx, ztgt)
-        # THE PRE-CLIP GLOBAL NORM, on EVERY step. Clipping computes it
-        # anyway, and the unclipped path pays one extra reduction — cheap
-        # beside a forward and backward over a 200M head, and it is what
-        # turns `stage2_grad_norm` from "one step in log_every" into a window
-        # statistic (§4.10: instrument the quantity that distinguishes the
-        # stories). #423's excursion could have begun anywhere inside a
-        # 2,000-step window and no record could say where.
-        gnorm = optax.global_norm(grads)
-        ost = _set_lr(ost, lr)
-        upd, ost = tx.update(grads, ost, st)
-        return optax.apply_updates(st, upd), ost, loss, gnorm
-
-    # The device-noise twin (--noise-backend device): identical to train_step
-    # except the input perturbation is drawn and applied INSIDE the jit —
-    # see apply_znoise_jax for both the measurement that motivates it and the
-    # RNG-stream caveat. zseq may arrive fp16 (--gather-fp16); the cast to
-    # fp32 happens in apply_znoise_jax and is exact.
-
-    @jax.jit
-    def train_step_dn(st, ost, lr, key, zseq, mseq, sctx, ztgt):
-        zn = apply_znoise_jax(zseq, key, _NZ_SIGMA, d_z)
-        loss, grads = jax.value_and_grad(loss_fn)(st, zn, mseq, sctx, ztgt)
-        gnorm = optax.global_norm(grads)
-        ost = _set_lr(ost, lr)
-        upd, ost = tx.update(grads, ost, st)
-        return optax.apply_updates(st, upd), ost, loss, gnorm
+    # Every jitted training function of this run, built in ONE place
+    # (`build_train_steps`, which also carries the E-054b accumulation and the
+    # memory argument for it). At ACCUM == 1 it builds exactly the four
+    # functions this block used to define inline and nothing else.
+    _steps = build_train_steps(graphdef, tx, make_set_lr(CLIP > 0), d_z,
+                               float(a.input_znoise), accum=ACCUM)
+    train_step = _steps.train_step
+    train_step_dn = _steps.train_step_dn
+    train_step_fgn = _steps.train_step_fgn
+    train_step_fgn_dn = _steps.train_step_fgn_dn
 
     @jax.jit
     def _eval_forward_det(st, zseq, mseq, sctx):
@@ -1425,6 +1752,16 @@ def main(argv=None):
             raise SystemExit(f"--batch {a.batch} is not divisible by the "
                              f"{len(devices)} local devices; a ragged shard "
                              f"would change the batch each device sees.")
+        # It is the MICRO-batch that is sharded under --grad-accum, so it is
+        # the micro-batch that has to divide. Checking only the full batch
+        # would let batch 256 / accum 2 = 128 pass on a host with 3 devices
+        # and hand each device a different number of windows.
+        if MICRO % len(devices):
+            raise SystemExit(
+                f"--batch {a.batch} / --grad-accum {ACCUM} = {MICRO} windows "
+                f"per micro-batch is not divisible by the {len(devices)} "
+                f"local devices; the micro-batch is what gets sharded, and a "
+                f"ragged shard would change the batch each device sees.")
         mesh = jax.make_mesh((len(devices),), ("b",))
         shard = jax.sharding.NamedSharding(mesh,
                                            jax.sharding.PartitionSpec("b"))
@@ -1516,6 +1853,13 @@ def main(argv=None):
         "unroll": 1, "stencil": a.stencil, "ring_km": a.ring_km,
         "unroll_probs": "", "direct": "",
         "input_znoise": a.input_znoise, "grad_clip": a.grad_clip,
+        # E-054b · UNCONDITIONALLY, unlike the fgn keys below, and the
+        # asymmetry is deliberate. `grad_accum: 1` is a MEASUREMENT — it says
+        # this run's batch went through the device in one piece — and `batch`
+        # is right beside it, so a reader can only interpret one with the
+        # other. Absence would be readable as "before the flag existed" on
+        # exactly the runs where the question matters.
+        "grad_accum": ACCUM, "micro_batch": MICRO,
         "train_lon_hold": a.train_lon_hold,
         "codec_holdout_lon": ck["args"].get("holdout_lon", ""),
         "tag": a.tag or "",
@@ -1699,6 +2043,14 @@ def main(argv=None):
     else:
         print("gradient clipping OFF (--grad-clip 0): no clip transform is "
               "added to the optax chain at all.", flush=True)
+    if ACCUM > 1:
+        print(f"gradient accumulation ON: --grad-accum {ACCUM} · batch "
+              f"{a.batch} = {ACCUM} x {MICRO} windows, ONE AdamW update per "
+              f"reported step on the AVERAGED gradient. The step is the "
+              f"batch-{a.batch} step (equal micro-batches, mean loss); "
+              f"stage2_zmse is the mean over the effective batch and "
+              f"stage2_grad_norm the PRE-clip norm of the average.",
+              flush=True)
     t0 = time.time()
     log_every = max(1, a.steps // 100)     # ~100 curve points, as stage 1 does
     probe_every = max(1, a.steps // 10)    # the transport curve, 10 points
@@ -1770,7 +2122,12 @@ def main(argv=None):
 
     for s, zseq, mseq, sctx_b, ztgt in batch_iter:
         lr_now = jnp.asarray(a.lr * lr_factor(s - 1, a), jnp.float32)
-        if FGN:
+        if ACCUM > 1:
+            state, opt_state, loss, gnorm = accum_step(
+                _steps, state, opt_state, lr_now, s,
+                zseq, mseq, sctx_b, ztgt, MICRO, put=put,
+                fgn_root=_fgn_root, fgn_eps=a.fgn_eps, nz_root=_nz_root)
+        elif FGN:
             # TWO INDEPENDENT eps ON THE IDENTICAL CONTEXT. Folded from
             # (seed, step, forward_index) and from nothing else, so a resumed
             # run at step s draws the same pair the original did — no RNG

@@ -99,6 +99,14 @@ LR_COOLDOWN_FRAC="${LR_COOLDOWN_FRAC:-0}"
 LR_WARMUP="${LR_WARMUP:-2000}"
 INPUT_ZNOISE="${INPUT_ZNOISE:-0}"
 GRAD_CLIP="${GRAD_CLIP:-0}"
+# E-054b · micro-batching for a head whose ACTIVATIONS do not fit the chip.
+# N > 1 splits each step's BATCH into N micro-batches of BATCH/N and takes ONE
+# AdamW update on their averaged gradient — the same optimisation as a single
+# BATCH step, so BATCH stays the number every record and every comparison
+# names. 1 (the default) builds no accumulation graph at all. Must divide
+# BATCH. The 400M rung (1280x20, K 144) needs this: it asked for 5.09 G with
+# 4.03 G free on a v5e-4 chip at BATCH 256 and died at step 1.
+GRAD_ACCUM="${GRAD_ACCUM:-1}"
 MILESTONE_STEPS="${MILESTONE_STEPS:-}"
 TRAIN_LON_HOLD="${TRAIN_LON_HOLD:-inherit}"
 SEED="${SEED:-0}"
@@ -259,6 +267,7 @@ echo "resolved knobs: K ${K} · steps ${STEPS} · batch ${BATCH} · lr ${LR} ·"
      "${D_MODEL}x${LAYERS} · stencil ${STENCIL} ring '${RING_KM}' ·" \
      "sched ${LR_SCHEDULE} halflife ${LR_HALFLIFE} cooldown ${LR_COOLDOWN_FRAC}" \
      "warmup ${LR_WARMUP} · znoise ${INPUT_ZNOISE} · grad_clip ${GRAD_CLIP} ·" \
+     "grad_accum ${GRAD_ACCUM} (micro $(( BATCH / (GRAD_ACCUM > 0 ? GRAD_ACCUM : 1) ))) ·" \
      "milestones '${MILESTONE_STEPS}' · train_lon_hold ${TRAIN_LON_HOLD} ·" \
      "seed ${SEED} · tag '${TAG}' · tensor ${TENSOR_NAME} (${TENSOR_SHA:0:10})" \
      "· codec ${CODEC_ASSET} · Z '${Z_ASSET:-<embed on node>}' ·" \
@@ -542,6 +551,7 @@ export CKPT_TAG="${NODE}"
   --gather-workers "${GATHER_WORKERS}" \
   --prefetch "${PREFETCH}" \
   --grad-clip "${GRAD_CLIP}" \
+  --grad-accum "${GRAD_ACCUM}" \
   ${MILESTONE_STEPS:+--milestone-steps "${MILESTONE_STEPS}"} \
   --train-lon-hold="${TRAIN_LON_HOLD}" \
   --seed "${SEED}" \
