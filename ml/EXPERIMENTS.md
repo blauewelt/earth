@@ -728,6 +728,42 @@ THE E-050 CODEC IS DURABLE AT LAST.** Diagnosis of the overnight state:
   rather than a round trip, which is the whole reason the confound was
   pre-registered rather than discovered.
 
+**BOTH REMAINING ARMS DISPATCHED 08:40Z, and one of them died in `Set up
+job`.**
+
+- **#505 (E-056a-CLEAN, K=24, znoise 0.12)** — FAILED before a single step,
+  and it is worth recording because the failure is a fleet mode rather than
+  a science one: `##[error]No space left on device` while unpacking
+  `actions/upload-artifact` into `/opt/runner/_work/_actions/`, on
+  gpu-box-30257785 (Vast 47726876, a 100 GB box) 4 seconds after the runner
+  picked the job up. The job's own hygiene step never runs, because the
+  failure is upstream of step 1 — so a full-disk box cannot clean itself and
+  is `disktriage` material, not a host. Box stopped immediately (idle burn,
+  §7). Re-dispatch goes on the slot #504 frees, which also carries the token
+  Z warm. Cost: ~4 minutes of a $0.321/h box, no GPU.
+- **#506 (E-056b, K=144, znoise 0.7)** — dispatched to **gpu-box-40024079
+  (Vast 48632885, H100 SXM 80 GB, $2.028/h)**, and the CARD is the change,
+  deliberately. #495 measured that K=144 at batch 256 does not fit a 24 GB
+  4090; its control #478 ran that batch on a bigger card, so halving the
+  batch would have confounded K with batch on the one comparison this arm
+  exists to make. It reached the `Train` step cleanly. The codec comes from
+  the release now, not box-local, which is what made a fresh 80 GB host
+  possible at all.
+  **Its dose is 0.7, and that is on purpose.** The pre-registered token-scale
+  confound makes the token-vs-d_z-32 LEVEL uninterpretable at 0.7 — but it
+  does not touch this arm's question: #504 and #506 share the dose exactly,
+  so K=24 vs K=144 WITHIN tokens is a clean within-dose contrast, the same
+  shape as #478 against its K=24 twin on d_z-32. The dose-matched LEVEL comes
+  from #505's re-dispatch. Read the three together, never any one alone.
+
+**#504 IN FLIGHT, step 12,000/20,000 at 08:47Z: ratio 0.5555** (val_zmse
+0.35245 / the token-scale denominator 0.63451), from 0.600 at 2,800 and 0.574
+at 6,000 — descending but flattening, and currently WORSE than the continuous
+d_z-32 control (0.5056), let alone the 0.4394 lattice bar. Taken alone that
+reads "quantization lost the forecastable signal". It must not be taken alone:
+at znoise 0.7 this arm carries ~5.8x the intended relative dose, which is the
+registered confound. The reading is a direction awaiting #505.
+
 **The prioritization rule this wave instantiates (Chris: "think of the
 best way to prioritize such efficiency-inducing experiments"):** an
 efficiency experiment is scheduled BEFORE the next big spend on the axis
@@ -958,6 +994,20 @@ gpu-box-38116559, 23:52Z. K=144 roll cost unmeasured (#433's K=24 took
 ~13 h); >24 h token expiry ⇒ hand-harvest registered, §5.25 partials
 ship as it goes. Controls: monthly _trainlon 0.939/0.939, pentad-K24
 −0.499.
+
+**E-054b FIRST TRAINING STEP, 08:37Z — NO OOM. THE REGISTERED HBM RISK IS
+CLOSED BY GRADIENT ACCUMULATION.** `stage2_config` reads `params_M 399.948 ·
+d_model 1280 · layers 20 · K 144 · batch 256 · grad_accum 4 · micro_batch 64 ·
+stencil 145 · ring spiral:111-4444-0.71-0.5 · input_znoise 0.7 · grad_clip 128
+· lr 4e-4 expdecay halflife 100000 warmup 2000 · train_lon_hold none · seed 0 ·
+codec run-415__pixelmae.pt · z Z_8b639abe36_37e146384b.npy`, and
+`stage2_monitor` reads `val_persistence 21.44621 · z_rms 5.17825 ·
+input_znoise_rel_pers 0.15116`. Two things worth naming: the denominator is
+**bit-identical to E-054a's**, so E-054b's ratio is directly comparable to
+E-051's 0.0330 at the same 200k without any rescaling; and the relative noise
+dose 0.15116 is the same class E-051 trained under, so the capacity contrast is
+not confounded by the perturbation. Option (b) is vindicated — 400M runs on a
+v5e-4 at the SAME batch-256 step E-051 used.
 
 **#503 TIMING, MEASURED 2026-08-28 06:50Z — THE DECISIVE NUMBER ARRIVES
 INSIDE THE TOKEN; THE BATTERY DOES NOT.** The roll is healthy and its own

@@ -1,6 +1,6 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-28 ~08:35 UTC** (Opus). **E-054b is now running the
+**Last updated: 2026-08-28 ~08:55 UTC** (Opus). **E-054b is now running the
 RIGHT experiment.** Its 07:08Z relaunch had been rebuilt from the pristine
 launcher template with only the width/steps/tag sed'd in, so it silently
 reverted every E-051 knob (Z_ASSET empty, K 24, lr 1e-3, stencil 1, znoise 0,
@@ -19,9 +19,18 @@ predict SST?" — pooled numbers bit-identical (18,289 bytes), consistency
 strip-count-pin pattern rather than relaxed. **#504 (E-056a-R) is at step
 6000/20000, ratio 0.574** (0.36416/0.63451) — improving from 0.600 at 2800,
 still above the continuous control 0.5056 and well above the 0.4394 lattice
-bar. **#503's decisive corridor number still lands ~16:50Z today**; the ~71 h
-replay battery beyond its 23:52Z token remains a decision for Chris. #500
-(80k) / #502 (68k) FGN pair healthy.
+bar. **E-054b's first training step at 08:37Z showed NO OOM** — the registered HBM
+risk is closed by gradient accumulation, and its `val_persistence 21.44621` is
+bit-identical to E-054a's, so the ratio lands directly comparable to E-051's
+0.0330. **Both remaining E-056 arms dispatched 08:40Z**: #506 (K=144) is
+training on an 80 GB H100 — the CARD is the change, because a 24 GB card OOMs
+at batch 256 and halving the batch would confound K with batch; #505
+(dose-matched CLEAN) died in `Set up job` with `No space left on device`
+before step 1 and re-dispatches onto the slot #504 frees. **#503's decisive
+corridor number still lands ~16:50Z today**; the ~71 h replay battery beyond
+its 23:52Z token is the one decision waiting on Chris (recommendation sent:
+cut after the corridor number and re-dispatch the battery shortened on an
+80 GB box). #500 (80k) / #502 (68k) FGN pair healthy.
 *Every ML session updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
@@ -51,8 +60,10 @@ attendability, never information beyond the pixels.
 | what | TL;DR question | must beat / registered reading | where · ETA |
 |---|---|---|---|
 | **#504** E-056a-R token substrate K=24 (+ E-056a-CLEAN twin registered) | is the E-050 warm-FSQ 16-bit-per-pixel-bin alphabet a competitive forecasting substrate? Overnight both arms died: #494 CANCELLED at step 2800/20000 by an actor outside this session; #495 VOID — CUDA OOM on its first forward (K=144 batch 256 does not fit a 24 GB 4090; its control #478 ran that batch on a bigger card, so E-056b needs an 80 GB box, NOT a halved batch). Codec now durable on the release; token-Z cache durable ⇒ embed is free | ≲0.44 ⇒ token road opens at ~5% state size; ≳0.50 ⇒ quantization lost the forecastable signal. Denominator is the TOKEN-scale 0.63451. znoise-dose confound pre-registered (0.879 vs 0.151 rel_pers) — the CLEAN twin at znoise 0.12 settles it in the same wave | #504 dispatched 06:52Z on gpu-box-32966687; **at step 6000/20000 08:29Z, ratio 0.574** (0.36416/0.63451), down from 0.600@2800 — harvest ~09:05Z 08-28 |
+| **#505 re-dispatch** E-056a-CLEAN, K=24, znoise **0.12** | is #504's 0.555 the SUBSTRATE, or the 5.8x noise handicap? Identical to #504 in every other field | the dose-matched level against lattice 0.4394 / continuous 0.5056, denominator 0.63451. If CLEAN materially beats 0.7 the dose was the handicap; if they agree the substrate verdict stands at either dose | first attempt #505 died in `Set up job` — `No space left on device` on gpu-box-30257785 before step 1, box stopped; re-dispatch goes on the slot #504 frees, ~2.2 h after that |
+| **#506** E-056b token substrate at **K=144**, 80 GB H100 | does the dense two-year slab hold up on tokens, and what does it cost? | vs #478's 0.0820. Shares #504's znoise 0.7 EXACTLY, so K=24 vs K=144 within tokens is a clean within-dose contrast even while the token-vs-d_z-32 level is not | dispatched 08:41Z on gpu-box-40024079 (Vast 48632885, $2.028/h) — the CARD is the change, because a 24 GB 4090 OOMs at batch 256 and halving the batch would confound K with batch; reached `Train` cleanly; ~10 h |
 | **#500/#502** E-057.1 FGN pair, NOW PARALLEL (seed 0 on gpu-box-42005419 since 19:21Z; seed 1 re-dispatched by the stencil session as #502 on fresh gpu-box-46292015, fixed sha) | does a LEARNED perturbation + fair CRPS (eps^32 conditional LN, N=2, znoise OFF) replace the hand-dosed znoise and un-damp the roll? | ensemble-mean corridor AUC vs znoise pair 0.7235 (F1); stage2_val_member_var -> 0 = eps collapse (F2 — #500 reads 0.5–0.77 at 8k, healthy); ensemble-roll evaluator BUILT and ready | both ~27 h ⇒ pair lands ~24Z 08-28 (was ~2 days sequential); >24 h token expiry = HAND-HARVEST both; cross-box caveat in e-057(j) |
-| **E-054b** ~400M capacity rung (1280×20, K 144, 200k fresh, TPU spot, grad-accum 4) | does capacity, not steps, buy the next factor at full pentad span? | vs E-051's 0.0330 at 200k/206.6M (the step-matched control — E-054a's 0.02981 is a 400k number); first-minutes verdict **PASSED on knobs** (`K 144 · lr 4e-4 · 1280x20 · stencil 145 · znoise 0.7 · grad_clip 128 · grad_accum 4 (micro 64)`, Z pulled and VERIFIED 16.24 GiB); the OOM verdict itself lands at the first training step | first launch OOMed 00:15Z (registered risk fired) ⇒ grad-accum built + certified exact (2.4e-07) and pushed; a 07:08Z relaunch ran the WRONG config for ~1 h and was killed; **relaunched 08:10:33Z us-west1-c spot, correct** — ≈32 h ⇒ ~16Z 08-29 |
+| **E-054b** ~400M capacity rung (1280×20, K 144, 200k fresh, TPU spot, grad-accum 4) | does capacity, not steps, buy the next factor at full pentad span? | vs E-051's 0.0330 at 200k/206.6M (the step-matched control — E-054a's 0.02981 is a 400k number); first-minutes verdict **PASSED on knobs** (`K 144 · lr 4e-4 · 1280x20 · stencil 145 · znoise 0.7 · grad_clip 128 · grad_accum 4 (micro 64)`, Z pulled and VERIFIED 16.24 GiB); **and the first training step at 08:37Z showed NO OOM** — params_M 399.948, grad_accum 4, micro_batch 64, and val_persistence 21.44621 bit-identical to E-054a's denominator, so the ratio is directly comparable to E-051's 0.0330 | first launch OOMed 00:15Z (registered risk fired) ⇒ grad-accum built + certified exact (2.4e-07) and pushed; a 07:08Z relaunch ran the WRONG config for ~1 h and was killed; **relaunched 08:10:33Z us-west1-c spot, correct** — ≈32 h ⇒ ~16Z 08-29 |
 | **#503** E-051 roll (398k K=144 head, day-matched, replay battery, FIRST roll with E-055's unpooled keys) | does the best pentad one-step ever (0.0298) survive a 12-month roll, where the small pentad head collapsed to −0.499? | vs monthly _trainlon 0.939/0.939 and pentad-K24 −0.499; the battery (tracking-vs-lead profile; flat = calendar replay) is MANDATORY before the number may be called forecast | measured 06:50Z: 87.1 s/step. **Decisive corridor AUC at step 657/3363 ≈ 16:50Z 08-28**, inside the 23:52Z token; the 2,922-step battery needs ~71 h beyond it — ride-vs-cut is a decision for Chris |
 | **#485** E-050 warm-start FSQ | does a trained encoder survive quantization where every cold start collapsed? | decoder-ceiling audit (Falsifier B): fast channels inside the 9–19% FVU band on Argo-free bins | **finals ARCHIVED** (run-485.jsonl + probes-485.json on ml-metrics) — read-out pending its own session's harvest |
 | **E-052.1** det field head (diffusion session's run) | can one model predict the whole field jointly? | died at its first ckpt save (torch-less train venv); **RELAUNCHED 05:44Z by its session, resumes from step 1000**, holds the on-demand v5litepod-4 | its session harvests; finish ≈04Z 08-28 if pace holds |
