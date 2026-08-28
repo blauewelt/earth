@@ -100,8 +100,30 @@ Also in this dispatch wave: `dispatch_run.mjs`'s eval detection fixed
 (`sroll:` is a window token, not necessarily the first — the old
 `startsWith` test demanded an LR curve from a run with no LR).
 
-Costs: E-059 ≈ $60 spot over both phases + ~$4 roll; #508 ≈ $7. #503's cut
-is on this ledger too: cancelled 16:24Z at ~16.5 h (~$5.3), its scored
+**#508 → #509 → #510: the recall test took three dispatches, and the first
+two failures are the same disk, two layers deep.** #508 died 90 s in with a
+Bus error (exit 135) at `writable_copy 1344/3142` — an mmap write into a
+disk that filled mid-copy: #503 was CANCELLED, so its end-of-job cleanup
+never ran, and its 31.6 GiB anomaly-transform scratch copy plus its
+dumproll trajectories were still on the 100 GB disk. Neither artefact was
+in any `disk_hygiene.sh` tier — both are newer than the script — so #508's
+own start-of-job hygiene ran and freed nothing that mattered. **Fixed as a
+class** (commit e661b3f): `*_scratch.npy` and `ml/runs/actions/roll_dump/`
+are now tier 0 (pure scratch — the copy is rebuilt from the pristine .npz
+every run; the dumps are uploaded with a completed run's artifact and
+unfinishable after a cancelled one). #509, dispatched to pick up that fix,
+then hit the trap the hygiene script's own comments describe: at 100% the
+job dies in `Set up job`, BEFORE any step can run the cleanup — the mess
+prevents its own remedy from starting. No shell reaches a running Vast box,
+so 48937792 was DESTROYED (everything on it published or harvested; #503's
+dump trajectories are the one loss, and they describe an uncertified roll
+#510 regenerates). **#510 runs on a fresh 100 GB box (gpu-box-35586926,
+129 GB RAM, $0.296/h), cold-seeding tensor/Z/codec/head from the releases**
+— ~45–60 min of seeding before Train, scored partial ~05:30Z 08-29.
+
+Costs: E-059 ≈ $60 spot over both phases + ~$4 roll; the recall test ≈ $7
+plus ~$0.15 of failed dispatches and one destroyed box's storage. #503's
+cut is on this ledger too: cancelled 16:24Z at ~16.5 h (~$5.3), its scored
 partial fully harvested beforehand.
 
 ---
