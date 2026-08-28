@@ -132,11 +132,86 @@ failing before this diff (verified by `git stash`) and were not touched.
 SST column for free, and no roll needs re-running to get it.
 
 It does **not** make SST a training target, and it does not settle whether the
-embedding is AMOC-tailored — it makes the question askable. Rungs 2 and 3 are
-still owed: **rung 2**, add SST to `head_targets` so the probe ladder scores
-it beside RAPID; **rung 3**, a third target with an independent instrument —
-Florida Current transport is the candidate, because its cable record is long,
-continuous, and not a linear function of the RAPID section.
+embedding is AMOC-tailored — it makes the question askable.
+
+### Rungs 2 and 3, AFTER the readiness audit — and the audit RETRACTS both of the first drafts
+
+The two rungs were first written here as "add SST to `head_targets`" and
+"Florida Current as the independent third target". A read-only audit of what
+is actually plumbed (2026-08-28, 230 archived bundles on `ml-metrics` plus the
+builders) **retracts both**, and the retractions are more useful than the
+proposals were.
+
+**RETRACTED: the Florida Current is not an independent target.** `probe_kfold`
+puts `rapid` at lat 26.5, lon (−80.0, −13.0) and `fc` at lat **26.5**, lon
+(−80.5, −78.5) — the SAME grid row, and `section_of` clips both to it. FC's 9
+grid points contain 7 ocean cells (`EXPERIMENTS.md`'s own earlier note: "the
+Florida Straits lon … 7 cells"; `probe_kfold.py:70` puts it more sharply — "the
+Florida Straits are 5 of RAPID's 265 cells"), and every one of them is inside
+RAPID's 266. Physically the same: `ml/LEADERBOARD.md:327` records **RAPID =
+Florida Current + Ekman + upper-mid-ocean geostrophic** — FC is one of the
+three terms RAPID is a sum of. So an embedding tailored to RAPID's section is
+BY CONSTRUCTION tailored to FC's. FC remains a good LABELS lever (a cable
+record, 2,490 pentads against RAPID's 1,459, and it already reads r 0.375
+[0.286, 0.455] pooled on the r2 pentad tensor against a 0.199 wind bar) and it
+is a poor COMPREHENSIVENESS lever. The earlier sentence in this section, and
+the same claim in the 2026-08-28 handoff, were wrong.
+
+**And the general form, which is the finding worth keeping: no transport
+target can answer whether the embedding is AMOC-tailored, because all five of
+them ARE AMOC.** `fc`, `move` and `osnap` are AMOC arrays at different
+latitudes; `samba` is one too, and is outside the tensor window (34.5°S
+against a 0–70°N grid) at any price. Chris's directive asked for a different
+PHYSICAL QUANTITY, and that is exactly what SST is — which is why rung 1 is
+the substantive answer and the transport targets are not.
+
+**RETRACTED as written: "add SST to `head_targets`".** Two obstacles, one
+mechanical and one fatal. Mechanically, `target_series` needs a `[n, 2]`
+(axis-row, scalar) series under a `truth_*` key with ≥48 samples plus a
+lat/lon section; no `truth_sst` exists anywhere in the repo, so this is a
+DATA BUILD, not a recipe key — and SST has no natural zonal section, so the
+choice of box would drive the answer. Fatally: the k-fold ladder and the head
+are both CONTEMPORANEOUS read-outs, and `sst` is channel 40 — an encoder
+**input** — of the r2 tensor. "Can a ridge read an SST index off an embedding
+of a field that includes SST" is close to asking whether the autoencoder
+autoencodes; a high number would be uninformative and, worse, quotable.
+
+**What replaces them.**
+
+- **Rung 2 (the honest version): the SST probe belongs on an r1 codec, which
+  never saw SST.** Same machinery, one variable moved, and then a high number
+  IS evidence that the representation carries surface thermal structure it was
+  never shown. That is a real experiment; the r2 version is a pipeline check
+  wearing its clothes. Note it is still gated on building `truth_sst`.
+- **Rung 3: a different physical quantity, not a fourth AMOC array.**
+  Upper-700 m ocean heat content from the `rg_t` channels is the leading
+  candidate — a stored, slow quantity where transport is a fast one, and
+  already present in the tensor.
+- **Free, and worth taking first: `head_targets: "rapid,fc"` in the next
+  recipe.** Not for independence — see the retraction — but because **every
+  unpooled head number in this programme's history is RAPID**: 29 of 230
+  archived bundles carry head output and all 29 read `"target": "rapid"`. An
+  unpooled FC number would be the first non-RAPID one ever, on a label series
+  with 1.7× RAPID's sample count. Price it honestly: `head_targets` is
+  recipe-only (the dispatch is AT the 25-input ceiling, so this cannot be
+  flipped from the UI), and each extra name costs THREE `probe_head.py`
+  processes each paying its own ~30-min anomaly transform — order **+1.5–2 h
+  of box wall clock on every run using that recipe**. `probe_kfold`'s
+  multi-target loop, by contrast, is free and has been running all along,
+  which is why 130 bundles already carry FC/MOVE/OSNAP numbers nobody paid
+  for.
+
+**Two measurement traps the audit turned up, recorded so nobody re-finds
+them.** (1) `probe_kfold`'s two skip paths are NOT symmetric: an out-of-window
+section prints `"<target>: section outside window, skipped"` (:408), but a
+MISSING truth key is a bare `continue` (:401) with **no output whatsoever** —
+so on the pentad tensor MOVE and OSNAP vanish without a line. (2) The pentad
+tensor carries only `rapid` and `fc`: `ml/build_truth_pentad.py:210` is
+literally `for name, fn in (("rapid", rapid), ("fc", fc)):`, so MOVE and OSNAP
+have no pentad fetcher at all — their sections ARE inside the window, so this
+is a labels gap, not a geometry one. Naming `move` in `head_targets` on that
+tensor therefore yields three `::warning::` lines and a GREEN run with no
+numbers, which is §0.2's failure mode exactly.
 
 ---
 

@@ -169,18 +169,48 @@ exists). Execute in three rungs, cheapest first:
    what the SAME roll's z-space skill implies ⇒ the embedding is
    AMOC-shaped, not comprehensive.
 2. **SST as a probe target in the standard ladder (hours).**
-   `head_targets` (recipe-only key) already extends probe_head beyond
+   ~~`head_targets` (recipe-only key) already extends probe_head beyond
    RAPID; add an SST-section/region target so every future run reports
-   it alongside rapid_r. One recipe edit + verify output keys appear.
-3. **Third target — Florida Current transport (data task, ~1 day).**
+   it alongside rapid_r. One recipe edit + verify output keys appear.~~
+   **RETRACTED 2026-08-28 by the readiness audit — it is not one recipe
+   edit, and on the r2 tensor it would not measure what it claims.**
+   `target_series` needs a `truth_*` key holding an `[n,2]`
+   (axis-row, scalar) series with >=48 samples PLUS a lat/lon section;
+   no `truth_sst` exists anywhere in the repo, so this is a DATA BUILD,
+   and SST has no natural zonal section. Worse, the k-fold ladder and
+   the head are both CONTEMPORANEOUS read-outs while `sst` is channel 40,
+   an encoder INPUT of r2 — the probe would be asking whether the
+   autoencoder autoencodes. **The honest version puts the SST probe on an
+   r1 codec, which never saw SST**; then a high number is real evidence.
+   See `ml/EXPERIMENTS.md#e-058`.
+3. ~~**Third target — Florida Current transport (data task, ~1 day).**
    Daily cable transport since 1982, public (NOAA/AOML), physically
    distinct from RAPID (western boundary vs basin-wide) yet related —
-   the ideal "is it comprehensive" triangulation point. Bake it as a
-   truth series (scripts/refresh_data.py pattern; catalog entry per
-   root CLAUDE.md §2 if it becomes a globe layer later), add as a
-   head_targets probe + a rolled read-out. Alternatives if AOML access
-   fails: OSNAP (lower cadence), or OHC-700m computed from the rg_t
-   channels (internal, weaker as an external check).
+   the ideal "is it comprehensive" triangulation point.~~
+   **RETRACTED 2026-08-28: FC is NOT physically distinct from RAPID and
+   is already plumbed, so neither half of this item survives.**
+   `probe_kfold.TARGETS` puts `fc` at lat **26.5** — RAPID's own grid row
+   — lon (-80.5,-78.5), whose 7 ocean cells are a strict SUBSET of
+   RAPID's 266; and `ml/LEADERBOARD.md:327` records
+   **RAPID = Florida Current + Ekman + upper-mid-ocean geostrophic**, so
+   FC is a TERM of the sum it was proposed as a check on. It is also not
+   a data task: 22 archived bundles already carry an FC number on the r2
+   pentad tensor (pooled r 0.375 [0.286, 0.455], n 2,490, wind bar
+   0.199). The general finding: **no transport target can answer "is the
+   embedding AMOC-tailored", because all five of them ARE AMOC.** The
+   third target must be a different PHYSICAL QUANTITY — OHC-700m from the
+   `rg_t` channels is the leading candidate, and SST via rung 1's rolled
+   per-channel skill is already delivered.
+3b. **Worth taking anyway, for a different reason: `head_targets:
+   "rapid,fc"` in the next recipe.** Not for independence, but because
+   **every unpooled head number in the programme's history is RAPID** —
+   29 of 230 archived bundles carry head output, all `"target": "rapid"`.
+   An unpooled FC number would be the first non-RAPID one ever, on a
+   label series with 1.7x RAPID's samples. Price it: recipe-only (the
+   dispatch sits AT the 25-input ceiling), and each extra name costs
+   THREE `probe_head.py` processes each paying its own ~30-min anomaly
+   transform -- order **+1.5-2 h of box wall clock on every run using
+   that recipe**.
    Propose the design to Chris in the §0f report before the big eval
    spend; rungs 1–2 need no permission (additive, cheap).
 
