@@ -1,6 +1,6 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-28 ~12:40 UTC** (Opus). **E-054b is now running the
+**Last updated: 2026-08-28 ~13:35 UTC** (Opus). **E-054b is now running the
 RIGHT experiment.** Its 07:08Z relaunch had been rebuilt from the pristine
 launcher template with only the width/steps/tag sed'd in, so it silently
 reverted every E-051 knob (Z_ASSET empty, K 24, lr 1e-3, stencil 1, znoise 0,
@@ -43,13 +43,22 @@ the substrate survives at the dose-matched noise, which it answers in 2-3 h.
 **E-054b's first training
 step at 08:37Z showed NO OOM** — the registered HBM risk is closed by gradient
 accumulation, and its `val_persistence 21.44621` is bit-identical to E-054a's,
-so the ratio lands directly comparable to E-051's 0.0330. **#503's decisive
-corridor number still lands ~16:50Z today**; the ~71 h replay battery beyond
-its 23:52Z token is the one decision waiting on Chris (recommendation sent:
-cut and re-dispatch the battery shortened on an 80 GB box). Note #503 is
-UNCERTIFIED for a second, independent reason — no validation-gate reference
-exists at pentad cadence — and only its `horizon_auc_daymatched` may be quoted
-against the archived controls. #500 (80k) / #502 (68k) FGN pair healthy.
+so the ratio lands directly comparable to E-051's 0.0330. **#503's DECISIVE NUMBER LANDED at 11:30Z — day-matched corridor AUC 0.944**
+(vs monthly 0.939, pentad-K24 -0.499) — **and its own skill-vs-lead profile
+says REPLAY.** 0.971 at 5 days, 0.949 at 30, 0.942 at 90, 0.946 at 365: FLAT,
+where forward physics decays; and `msss_pers` 0.966 at a one-year lead on a
+z-scored anomaly field has no physical story. Mechanism: a 365-day roll from a
+2009 holdout start walks into 2010, which is training data. Report it as a
+corridor AUC UNCERTIFIED on two counts (no pentad gate reference; battery
+incomplete) whose profile predicts it will not survive; and +0.005 over
+monthly is a CONSISTENCY at a tier sd of 0.0020, never a beat. **The battery
+is now the most informative measurement on the board** — if it confirms
+replay, the monthly 0.939 champion is under the same question. **But #503
+cannot deliver it**: `job_timeout` 2400 min kills the job at ~15:52Z 08-29, at
+~48% of the battery, and the long roll writes only on completion. Riding buys
+~$8.4 and no artefact. Cut-and-re-dispatch-sized-to-finish recommended to
+Chris 13:35Z (long/future shortened 20 y -> ~5 y = 730 steps ~17.7 h, a flag
+not a build). #500 (80k) / #502 (68k) FGN pair healthy.
 *Every ML session updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the

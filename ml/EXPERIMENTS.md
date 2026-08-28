@@ -1193,6 +1193,32 @@ dose 0.15116 is the same class E-051 trained under, so the capacity contrast is
 not confounded by the perturbation. Option (b) is vindicated — 400M runs on a
 v5e-4 at the SAME batch-256 step E-051 used.
 
+**RIDE-VS-CUT, RE-ARITHMETIC 13:30Z — THE RIDE CANNOT DELIVER THE BATTERY,
+AND THE 06:50Z ANALYSIS THAT SAID IT COULD WAS WRONG ON TWO COUNTS.** Chris
+answered "go ahead with 503" at 13:29Z, on the arithmetic below. Checking the
+dispatch afterwards showed that arithmetic was wrong:
+
+- **The skill phase is 441 steps, not 657.** 3,363 − 1,461 long − 1,461 future
+  = 441. The `scored` mark therefore fired at **11:30:43Z**, not ~16:50Z.
+- **`job_timeout` is 2400 minutes = 40 h**, from ~23:55Z 08-27, so the job is
+  KILLED at **~15:52Z 08-29**. From 13:30Z that is 26.4 h; at the measured
+  87.1 s/step (re-confirmed: 45,276 s / 520 steps) the run reaches step
+  ~1,611 of 3,363 — **48% of the battery**. The long roll spans steps
+  441→1,902 and its partial mark fires only on COMPLETION, so the job dies 291
+  steps short of writing anything. `eta_all_s` in the run's own record is
+  247,529 s = **68.8 h**, i.e. completion ~10:20Z Monday, 42 h past the
+  timeout.
+
+So riding buys **26 more hours at $0.320/h ≈ $8.4 and produces no artefact
+beyond what was in hand at 11:30Z**. This was reported to Chris at 13:35Z as a
+correction to the question he had already answered, with the recommendation to
+cut and re-dispatch a battery sized to finish: the long and future rolls
+shortened from 20 years to ~5 each (365 + 365 = 730 steps ≈ 17.7 h at the
+measured pace) via `--long-months` / `--future-months`, which is a flag and
+not a build. **The battery is no longer a formality** — the flat profile above
+makes it the most informative measurement on the board, because if it confirms
+replay it puts the MONTHLY 0.939 champion under the same question.
+
 **#503 TIMING, MEASURED 2026-08-28 06:50Z — THE DECISIVE NUMBER ARRIVES
 INSIDE THE TOKEN; THE BATTERY DOES NOT.** The roll is healthy and its own
 progress record prices it: `skill` phase 240 of 3363 steps at
@@ -1224,6 +1250,62 @@ cost: §6 of the E-053 plan and the E-043b-PHASE rule both make the
 battery MANDATORY before any rolled number is called forecast rather
 than replay** — so whatever lands at 16:50Z is a corridor AUC awaiting
 certification, and must be reported in exactly those words.
+
+<a id="e-051-roll-read"></a>
+### #503's DECISIVE NUMBER LANDED 11:30:43Z — 0.944, AND THE PROFILE SAYS REPLAY
+
+The `scored` mark fired at **11:30:43Z**, five hours before the 16:50Z
+estimate (the skill phase is **441** steps, not the 657 the earlier arithmetic
+assumed: 3,363 total − 1,461 long − 1,461 future). Read from the partial, the
+day-matched corridor AUC — the ONLY one comparable to an archived number — is:
+
+| scope | `horizon_auc_daymatched` | `horizon_auc` (pentad axis) | n_px |
+|---|---|---|---|
+| corridor / corridor_trainlon | **0.944** | 0.888 | 30,158 |
+| gate / gate_trainlon | 0.943 | 0.864 | 864 |
+| window / window_trainlon | 0.950 | 0.887 | 86,698 |
+
+`*_trainlon` equals its parent exactly, as the file's own `holdout_lon` note
+predicts (`'0,0'` is the empty interval). Controls: monthly `_trainlon`
+**0.939**, pentad K=24 **−0.499**. Transport bands, pooled / E-055 unpooled:
+0.511/0.481 (5–90 d), 0.591/0.568 (95–180 d), 0.565/0.580 (185–365 d).
+
+**Taken at face value this is the headline the pentad programme was built for**
+— full-budget K=144 at pentad matching the monthly champion and erasing the
+K=24 head's −0.499 collapse. **It should not be taken at face value, and the
+run's own rows say why.**
+
+| lead (days) | 5 | 10 | 15 | 30 | 60 | 90 | 150 | 245 | 305 | **365** |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `msss_clim` | 0.971 | 0.960 | 0.736 | 0.949 | 0.948 | 0.942 | 0.938 | 0.946 | 0.945 | **0.946** |
+| `acc` | 0.985 | 0.980 | 0.880 | 0.974 | 0.973 | 0.970 | 0.968 | 0.972 | 0.972 | 0.973 |
+
+**The profile is FLAT.** Skill at a 365-day lead equals skill at a 30-day
+lead. Forward physics decays with lead — that is what makes it forward
+physics — and a flat accuracy-vs-lead curve is precisely the calendar-recall
+signature the replay battery exists to detect (`docs/ML_BASICS.md`; the
+E-043b-PHASE rule and E-053 plan §6 both make the battery MANDATORY before any
+rolled number may be called forecast skill). Worse for the innocent reading:
+`msss_pers` at h=73 is **0.966**, i.e. the model's MSE is 3.4% of
+persistence's at a one-year lead, on a z-scored ANOMALY field with the
+seasonal cycle already removed. There is no physical story for that.
+
+**The mechanism is ordinary and was anticipated.** The skill phase rolls from
+starts inside the holdout years (2009/2017/2023), but a 365-day roll from a
+2009 start walks into 2010 — which is training data. Holding out a year holds
+out that year's bins, not the future the roll travels into. That is exactly
+the hole the battery's rolls-from-many-start-dates design probes.
+
+**So the number is reported as: a corridor AUC of 0.944, UNCERTIFIED on two
+independent counts** — no pentad validation-gate reference exists
+(`gate {pass null, skipped true, certified false}`), and the replay battery has
+not completed — **with a directly-visible flat profile that predicts it will
+not survive certification.** And even the comparison to monthly is not a
+"beat": +0.005 against a tier corridor sd of 0.0020 and a decision bar of
+0.025 is a CONSISTENCY, not a level (§3b's ✅ forms).
+
+**This roll carries no `per_channel`** — #503 was dispatched before E-058
+landed. The SST column arrives with the next roll.
 
 **#503 HEALTH AND A SECOND CAVEAT NOBODY HAD NAMED, read from its own partial
 at 10:25Z.** The `rollout_spatial.json` on `ml-live-503` is well-formed and
