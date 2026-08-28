@@ -1,6 +1,6 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-28 ~17:20 UTC** (Fable). **E-054b is now running the
+**Last updated: 2026-08-28 ~18:20 UTC** (Opus). **E-054b is now running the
 RIGHT experiment.** Its 07:08Z relaunch had been rebuilt from the pristine
 launcher template with only the width/steps/tag sed'd in, so it silently
 reverted every E-051 knob (Z_ASSET empty, K 24, lr 1e-3, stencil 1, znoise 0,
@@ -28,9 +28,16 @@ the FINAL target (`win_ztgt` temporal.py:2819 vs `ok_t` :2889; count proof
 pool keeps only windows touching NO holdout bin, self-certifies by brute
 force before training, default `endpoint` stays bit-identical so the archive
 is reproducible. **E-059** (E-051's exact twin, one change: the pool) is
-training on us-west4-a spot since 17:09Z — predicted pool 2,417 end-bins /
-209,549,066 windows is the first-minutes check; the one-step gap vs
-0.0330/0.0298 IS the h=1 memorization term. **#508** re-rolls the OLD 398k
+training on us-west4-a spot since 17:09Z and its **first-minutes checks
+PASSED to the digit** — 2,417 end-bins, 209,549,066 windows, certificate 0
+violations, val_persistence 21.44621, all registered in the plan beforehand;
+the one-step gap vs 0.0330/0.0298 IS the h=1 memorization term. **Scopes
+amended (58eb286, Chris): the leaky pool is renamed
+`endpoint_contaminated`, the DEFAULT is now `window`, and a third scope
+`target` masks held-out targets while still admitting held-out context.
+Measured cost: contaminated scores 400,176 frame-targets of which 21,018 are
+held out; `target` 379,158 (−5.25%, 0 held out); `window` 348,048 (−13.03%,
+0 held out) — strictness costs 7.8 points, not a factor.** **#508** re-rolls the OLD 398k
 head with the battery shortened to 36 months each way (879 steps, ~21.3 h,
 inside the token) — its future roll past the record's end is the direct
 recall falsifier. #503 was cancelled 16:24Z (its 40 h timeout could never

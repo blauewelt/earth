@@ -70,11 +70,36 @@ hl 100k) · resume none (fresh) · JAX/v5litepod-4, node `e059-window`,
 us-west4-a SPOT (first try, 17:09:15Z; us-west1-c's spot quota is held by
 E-054b) · THE ONE CHANGE: `--holdout-scope window`.**
 
-Registered first-minutes checks (computed in advance, in the plan): resolved
-knobs must read `holdout_scope window`; the pool certificate must print; and
-the pool must be EXACTLY **2,417 end-bins / `train_windows` 209,549,066**
-(endpoint's 2,779 minus 144+144+74 straddling ends; the 74 is 2023's block
-truncated by the axis end). Any other number stops the run.
+**FIRST-MINUTES CHECKS PASSED, 17:5xZ — every registered number to the
+digit.** The node printed `2,417 end-bins remain in the pool`,
+`certificate: 0 of 2,417 pooled end-bins touch a held-out bin (350,465 bin
+checks)`, `train windows: 209,549,066`, `stage2_config.holdout_scope =
+window`, `stage2_monitor.val_persistence = 21.44621`. The prediction was
+2,417 / 209,549,066 / 21.44621, written into the plan before the node
+launched. Training proceeds.
+
+**THE SCOPE SET, AMENDED SAME DAY (Chris).** *"`endpoint` should not be
+default — you don't want training data contamination to be the default. Maybe
+even rename it to `endpoint_contaminated`."* And: add `target`, *"the correct
+implementation but less strongly excluding."* Commit 58eb286: the legacy value
+is renamed **`endpoint_contaminated`**, the default is now **`window`**, and
+`target` masks held-out TARGETS while still admitting held-out bins as
+CONTEXT. Measured on this experiment's own axis, by the code:
+
+| scope | end-bins | windows | scored frame-targets | HELD OUT among them |
+|---|---|---|---|---|
+| `endpoint_contaminated` | 2,779 | 240,933,742 | 400,176 | **21,018** |
+| `target` | 2,779 | 240,933,742 | 379,158 (−5.25%) | 0 |
+| `window` | 2,417 | 209,549,066 | 348,048 (−13.03%) | 0 |
+
+The 21,018 is the bug as a number: that many per-frame targets in E-051's own
+training were bins its evaluation then scored. Strictness costs **7.8
+percentage points** of supervision, and `target` keeps every end-bin. E-059
+stays at `window` — the claim under test is forecast skill on those years, and
+`target`'s residual context channel would have to be argued rather than shown.
+An arm at `target` sits exactly between E-051 and E-059 and would split the
+memorization term into its teacher-forcing and context halves; one dispatch
+away if the headline warrants it.
 
 Registered readings: (1) one-step ratio at 200k/400k vs E-051's
 0.0330/0.02981 on the IDENTICAL `val_persistence` 21.44621 — **the gap IS
