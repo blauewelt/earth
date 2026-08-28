@@ -1,21 +1,27 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-28 ~07:05 UTC** (Opus, morning triage). **E-050's
-260k FSQ codec is DURABLE at last** — #495's orphan rescue was opened,
-verified (step 260000, d_z 6, fsq 8,8,8,5,5,5) and published as
-`run-485__pixelmae.pt`, so any box can now run the token road. Both E-056
-arms had died overnight: **#494 CANCELLED at step 2800/20000 by an actor
-outside this session**; **#495 VOID (green, no temporal.json) — CUDA OOM
-on its first forward, because K=144 at batch 256 does not fit a 24 GB
-4090 while its control #478 ran that batch on a bigger card**. #495 did
-publish the token-Z cache durably (3.04 GiB), so re-runs skip the
-95-minute embed. **#504 (E-056a-R) re-dispatched 06:52Z** on the
-previously-idle box; a dose-matched twin (znoise 0.12) is registered for
-the next free box. **#503's decisive corridor number lands ~16:50Z today**
-(step 657 of 3363, the `scored` partial) — inside its token; the replay
-battery is a further ~71 h and is a decision for Chris. E-054b is
-re-launching against repeated us-west1-c lemons (grad-accum fix
-certified and on main). #500 (80k) / #502 (68k) FGN pair healthy.
+**Last updated: 2026-08-28 ~08:35 UTC** (Opus). **E-054b is now running the
+RIGHT experiment.** Its 07:08Z relaunch had been rebuilt from the pristine
+launcher template with only the width/steps/tag sed'd in, so it silently
+reverted every E-051 knob (Z_ASSET empty, K 24, lr 1e-3, stencil 1, znoise 0,
+grad_clip 0) and spent an hour re-embedding an already-published Z; caught by
+reading the `resolved knobs` line, killed 08:07:55Z, and relaunched 08:10:33Z
+on us-west1-c spot first try with the full E-054a knob block `diff`-verified
+against E-054a's own startup file. It now reads `K 144 · lr 4e-4 · 1280x20 ·
+stencil 145 · znoise 0.7 · grad_clip 128 · grad_accum 4 (micro 64)` and
+**pulled** the 16.24 GiB Z instead of rebuilding it. Gradient accumulation is
+certified exact (max rel 2.4e-07), so this is a memory decomposition of the
+same batch-256 step, not a batch change. **E-058 rung 1 of Chris's
+multi-target directive is BUILT and certified with no GPU spent**: rolled
+skill is now decomposed per channel, so the next roll answers "does this
+predict SST?" — pooled numbers bit-identical (18,289 bytes), consistency
+1.11e-16, and the two byte-identity tripwires widened under their own
+strip-count-pin pattern rather than relaxed. **#504 (E-056a-R) is at step
+6000/20000, ratio 0.574** (0.36416/0.63451) — improving from 0.600 at 2800,
+still above the continuous control 0.5056 and well above the 0.4394 lattice
+bar. **#503's decisive corridor number still lands ~16:50Z today**; the ~71 h
+replay battery beyond its 23:52Z token remains a decision for Chris. #500
+(80k) / #502 (68k) FGN pair healthy.
 *Every ML session updates this stamp and the sections it touches in
 the same breath as harvesting or dispatching — the standing instruction is
 `ml/CLAUDE.md` §0g. If the stamp is more than a day old, distrust the
@@ -44,9 +50,9 @@ attendability, never information beyond the pixels.
 
 | what | TL;DR question | must beat / registered reading | where · ETA |
 |---|---|---|---|
-| **#504** E-056a-R token substrate K=24 (+ E-056a-CLEAN twin registered) | is the E-050 warm-FSQ 16-bit-per-pixel-bin alphabet a competitive forecasting substrate? Overnight both arms died: #494 CANCELLED at step 2800/20000 by an actor outside this session; #495 VOID — CUDA OOM on its first forward (K=144 batch 256 does not fit a 24 GB 4090; its control #478 ran that batch on a bigger card, so E-056b needs an 80 GB box, NOT a halved batch). Codec now durable on the release; token-Z cache durable ⇒ embed is free | ≲0.44 ⇒ token road opens at ~5% state size; ≳0.50 ⇒ quantization lost the forecastable signal. Denominator is the TOKEN-scale 0.63451. znoise-dose confound pre-registered (0.879 vs 0.151 rel_pers) — the CLEAN twin at znoise 0.12 settles it in the same wave | #504 dispatched 06:52Z on gpu-box-32966687, ~2.2 h ⇒ ~09:05Z 08-28 |
+| **#504** E-056a-R token substrate K=24 (+ E-056a-CLEAN twin registered) | is the E-050 warm-FSQ 16-bit-per-pixel-bin alphabet a competitive forecasting substrate? Overnight both arms died: #494 CANCELLED at step 2800/20000 by an actor outside this session; #495 VOID — CUDA OOM on its first forward (K=144 batch 256 does not fit a 24 GB 4090; its control #478 ran that batch on a bigger card, so E-056b needs an 80 GB box, NOT a halved batch). Codec now durable on the release; token-Z cache durable ⇒ embed is free | ≲0.44 ⇒ token road opens at ~5% state size; ≳0.50 ⇒ quantization lost the forecastable signal. Denominator is the TOKEN-scale 0.63451. znoise-dose confound pre-registered (0.879 vs 0.151 rel_pers) — the CLEAN twin at znoise 0.12 settles it in the same wave | #504 dispatched 06:52Z on gpu-box-32966687; **at step 6000/20000 08:29Z, ratio 0.574** (0.36416/0.63451), down from 0.600@2800 — harvest ~09:05Z 08-28 |
 | **#500/#502** E-057.1 FGN pair, NOW PARALLEL (seed 0 on gpu-box-42005419 since 19:21Z; seed 1 re-dispatched by the stencil session as #502 on fresh gpu-box-46292015, fixed sha) | does a LEARNED perturbation + fair CRPS (eps^32 conditional LN, N=2, znoise OFF) replace the hand-dosed znoise and un-damp the roll? | ensemble-mean corridor AUC vs znoise pair 0.7235 (F1); stage2_val_member_var -> 0 = eps collapse (F2 — #500 reads 0.5–0.77 at 8k, healthy); ensemble-roll evaluator BUILT and ready | both ~27 h ⇒ pair lands ~24Z 08-28 (was ~2 days sequential); >24 h token expiry = HAND-HARVEST both; cross-box caveat in e-057(j) |
-| **E-054b** ~400M capacity rung (1280×20, K 144, 200k fresh, TPU spot, grad-accum 4) | does capacity, not steps, buy the next factor at full pentad span? | vs E-051's 0.0330 at 200k/206.6M (the step-matched control — E-054a's 0.02981 is a 400k number); first-minutes must show `grad_accum: 4, micro_batch: 64` and NO OOM | first launch OOMed 00:15Z (registered risk fired) ⇒ gradient accumulation built + certified (exact to 1e-7) and pushed; RE-LAUNCHING 06:41Z against repeated us-west1-c lemons; ≈32 h once it holds |
+| **E-054b** ~400M capacity rung (1280×20, K 144, 200k fresh, TPU spot, grad-accum 4) | does capacity, not steps, buy the next factor at full pentad span? | vs E-051's 0.0330 at 200k/206.6M (the step-matched control — E-054a's 0.02981 is a 400k number); first-minutes verdict **PASSED on knobs** (`K 144 · lr 4e-4 · 1280x20 · stencil 145 · znoise 0.7 · grad_clip 128 · grad_accum 4 (micro 64)`, Z pulled and VERIFIED 16.24 GiB); the OOM verdict itself lands at the first training step | first launch OOMed 00:15Z (registered risk fired) ⇒ grad-accum built + certified exact (2.4e-07) and pushed; a 07:08Z relaunch ran the WRONG config for ~1 h and was killed; **relaunched 08:10:33Z us-west1-c spot, correct** — ≈32 h ⇒ ~16Z 08-29 |
 | **#503** E-051 roll (398k K=144 head, day-matched, replay battery, FIRST roll with E-055's unpooled keys) | does the best pentad one-step ever (0.0298) survive a 12-month roll, where the small pentad head collapsed to −0.499? | vs monthly _trainlon 0.939/0.939 and pentad-K24 −0.499; the battery (tracking-vs-lead profile; flat = calendar replay) is MANDATORY before the number may be called forecast | measured 06:50Z: 87.1 s/step. **Decisive corridor AUC at step 657/3363 ≈ 16:50Z 08-28**, inside the 23:52Z token; the 2,922-step battery needs ~71 h beyond it — ride-vs-cut is a decision for Chris |
 | **#485** E-050 warm-start FSQ | does a trained encoder survive quantization where every cold start collapsed? | decoder-ceiling audit (Falsifier B): fast channels inside the 9–19% FVU band on Argo-free bins | **finals ARCHIVED** (run-485.jsonl + probes-485.json on ml-metrics) — read-out pending its own session's harvest |
 | **E-052.1** det field head (diffusion session's run) | can one model predict the whole field jointly? | died at its first ckpt save (torch-less train venv); **RELAUNCHED 05:44Z by its session, resumes from step 1000**, holds the on-demand v5litepod-4 | its session harvests; finish ≈04Z 08-28 if pace holds |
@@ -160,6 +166,7 @@ attendability, never information beyond the pixels.
 | E-033/E-034, E-039/E-040 | data programme: tensors, daily SST plumbing | pentad/daily tensors built; r2 adds SST as channel 40 |
 | E-042 | what is SST worth alone? | **unanswered** — the matched pair was cancelled in triage and never re-run; every r2 codec carries the channel as an untested assumption |
 | JAX port / TPU tier | a second implementation | gated at 1e-7…1e-5; stage-1 AND stage-2 trainers ported; TPU ≈4.5× H100 per sample; tier never pooled with torch |
+| **E-058** rung 1 | can a roll be read for SST, not just for the 40-channel pool? | **BUILT + CERTIFIED, no GPU.** `chan_skill` was per-HORIZON and pooled over all 40 channels, so `sst` was 1/40 of an undecomposable number. `rollout_spatial.py` now emits `per_channel` beside it from the SAME `_skill_rows`: pooled bytes identical (18,289), consistency 1.11e-16, known-answer +1.000 / −1.025 where the pool says +0.310. Rungs 2–3 owed: SST in `head_targets`, then Florida Current as a third, instrument-independent target |
 
 ## 4 · Standing cautions (the short list a new reader needs)
 

@@ -1159,6 +1159,18 @@ archive.
   published tensor at ~26–46 min (the "first log in ~3 min" calibration
   belongs to `tpu_train_s2.sh`), and an on-demand node then showed the
   same maintenance-event note WHILE creating and may be perfectly fine.
+  **CORRECTION, measured 2026-08-28: `tpu_train_s2.sh` has NO boot beacon,
+  so the 6-minute rule does NOT apply to it.** The parenthetical above
+  assigned the "first log in ~3 min" calibration to that launcher; reading
+  the file shows its only `upload_log` on the healthy path is inside the
+  shipper loop, which SLEEPS FIRST for `SHIP_EVERY_MIN` (10 min) and is
+  armed only after the clone, the 4.3 G tensor pull and a 17 G Z pull.
+  Measured on E-054b's node: READY 08:10:33Z, first bucket object
+  **08:27:34Z — 17 minutes**, on a node that was entirely healthy.
+  Reaping at 6 min would have destroyed it. Until a beacon ships from
+  this launcher (three lines, next to the placeholder guard — build item),
+  a silent `tpu_train_s2.sh` node is judged by the ~25-minute setup it is
+  actually doing, not by the field launcher's clock.
   Both field-launcher ambiguities are now closed by construction: the
   launcher ships a BOOT BEACON (the log, within ~3 min of the script
   starting, then every 3 min until the main shipper takes over). The

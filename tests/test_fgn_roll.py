@@ -20,7 +20,12 @@ The seven checks, in the spec's order:
      DEEP-EQUAL to the one the pristine `ml/rollout_spatial.py` produces from
      the same inputs — the pristine file being recovered from git history as
      the newest blob of that path with no `E-057` in it, so the check survives
-     the main session committing this diff. (c) not one E-057 key appears
+     the main session committing this diff. ONE key is excluded from that
+     compare and it is not a clock: E-058's `per_channel`, which the pristine
+     evaluator does not write at all. It is removed by its own named strip,
+     COUNTED against the scored scopes and PINNED against the pooled rows and
+     the E-026b audit block before it is believed — `pin_per_channel`.
+     (c) not one E-057 key appears
      anywhere in a deterministic head's entry, and no label carries the token.
   2. **Member determinism** — same `--ens-seed` twice ⇒ deep-equal results;
      a different `--ens-seed` ⇒ different members, and (the control) a head
@@ -180,6 +185,106 @@ def strip_clocks(o):
     return o
 
 
+# E-058's `per_channel` — a channel-by-channel skill read-out, `sst` finally
+# visible instead of pooled into a 40-channel average — is the one key the
+# purity compare at 1b must ignore, because the PRISTINE evaluator predates it
+# and does not write it at all. It gets its own named strip rather than a line
+# in CLOCKS: CLOCKS is a promise that everything it drops is a reading of the
+# wall clock, and `per_channel` is a RESULT. A result may only be dropped from
+# a purity compare once someone has said what it must contain — which is what
+# `pin_per_channel` says, and why the two functions arrive together.
+E058_KEY = "per_channel"
+
+
+def strip_per_channel(o, found=None):
+    """(tree without `per_channel`, the blocks that were removed).
+
+    Recursive for `strip_clocks`' reason: the key sits at
+    `heads.<label>.<scope>`, and a strip that hardcoded that depth would stop
+    policing on the day the depth changed."""
+    found = [] if found is None else found
+    if isinstance(o, dict):
+        out = {}
+        for k, v in o.items():
+            if k == E058_KEY:
+                found.append(v)
+                continue
+            out[k] = strip_per_channel(v, found)[0]
+        return out, found
+    if isinstance(o, list):
+        return [strip_per_channel(v, found)[0] for v in o], found
+    return o, found
+
+
+def pin_per_channel(res):
+    """The three statements that make the strip above a removal of an ADDITION
+    rather than a hole in the compare. Returns (scored scopes, channel rows
+    checked, max |delta| against the audit block).
+
+    (i) COVERAGE — every scope with pooled rows carries the key, so a harvest
+        can never find a scope where only the 40-channel pool exists.
+    (ii) THE SAME CELLS — a pooled row's `n` is its channels' `n` added up.
+        `accumulate` fills the pooled sums and the per-channel sums from the
+        same [n_pixels, C] arrays on the same early-exit branch, so counts
+        that do not add up mean the two were accumulated over different cells.
+    (iii) THE SAME NUMBERS — tests/test_per_channel_skill.py check 2 proves
+        the pooled msss_clim IS the climatology-mass-weighted mean of the
+        per-channel ones, to 1.11e-16. Those weights (`mse_c` per channel) are
+        not published, so this file checks the two consequences of that same
+        relation a reader of the ARTEFACT can also check: the pooled value
+        never leaves its own channels' [min, max] (a mean with positive
+        weights cannot leave the convex hull of its terms), and on the
+        corridor scope it agrees with the E-026b audit block — a per-channel
+        decomposition of the SAME quantity that predates E-058 and is
+        accumulated independently in `aud["ch_m"]/["ch_c"]`. The two divide by
+        `n` at different points (`1 - (m/n)/(c/n)` against `1 - m/c`), so they
+        can differ by at most one unit in the last PUBLISHED place; anything
+        larger is a different accumulation, not a rounding step.
+    """
+    n_scope = n_row = 0
+    dev = 0.0
+    for lab, e in res["heads"].items():
+        au = e["audit"]
+        for name, blk in e.items():
+            if not (isinstance(blk, dict) and blk.get("chan_skill")):
+                continue
+            per = blk.get(E058_KEY)
+            assert per, (f"{lab}/{name} has pooled rows but no `{E058_KEY}` — "
+                         f"a scope whose sst read-out no harvest can ask for")
+            assert list(per) == au["channels"], (
+                f"{lab}/{name}: `{E058_KEY}` is keyed {list(per)} but the "
+                f"artefact's own channel list is {au['channels']} — the names "
+                f"must be the TENSOR's, or the rows below are pinned against "
+                f"the wrong channel")
+            n_scope += 1
+            for r in blk["chan_skill"]:
+                mine = [p for c in per.values() for p in c if p["h"] == r["h"]]
+                n_row += len(mine)
+                tot = sum(p["n"] for p in mine)
+                assert tot == r["n"], (
+                    f"{lab}/{name} h{r['h']}: pooled n {r['n']} but the "
+                    f"channels count {tot} — the two sum sets were "
+                    f"accumulated over different cells")
+                v = [p["msss_clim"] for p in mine]
+                assert min(v) <= r["msss_clim"] <= max(v), (
+                    f"{lab}/{name} h{r['h']}: pooled msss_clim "
+                    f"{r['msss_clim']} lies outside its own channels' "
+                    f"[{min(v)}, {max(v)}] — it is then not a pooling of them")
+            if name != "corridor":
+                continue
+            for ci, c in enumerate(per):
+                for p in per[c]:
+                    a_ = au["per_channel_msss_clim_corridor"][p["h"] - 1][ci]
+                    assert a_ is not None \
+                        and abs(a_ - p["msss_clim"]) <= 1e-3, (
+                            f"{lab}/corridor {c} h{p['h']}: `{E058_KEY}` says "
+                            f"{p['msss_clim']} where the E-026b audit block's "
+                            f"independent decomposition of the same quantity "
+                            f"says {a_}")
+                    dev = max(dev, abs(a_ - p["msss_clim"]))
+    return n_scope, n_row, dev
+
+
 def all_keys(o, acc=None):
     acc = set() if acc is None else acc
     if isinstance(o, dict):
@@ -317,12 +422,33 @@ def test_purity_end_to_end(f, tmp, pristine):
     ppath, sha = pristine
     old, _ = run(ppath, f, os.path.join(tmp, "det_old.json"), f["heads"])
     a, b = strip_clocks(new), strip_clocks(old)
+    # E-058: `per_channel` exists on the patched side only, so it is removed
+    # from the compare — but only after it has been COUNTED against the scored
+    # scopes and PINNED against the pooled rows it was computed beside. A
+    # silent key skip here would leave one key in the artefact that nothing
+    # compares and nothing checks, which is exactly where a real divergence
+    # would sit unnoticed.
+    a, blocks = strip_per_channel(a)
+    base_pc = strip_per_channel(b)[1]
+    assert not base_pc, (
+        f"the pristine evaluator at {sha[:8]} already writes `{E058_KEY}` — "
+        f"the strip would then be hiding a DIFFERENCE, not a new key")
+    n_scope, n_row, dev = pin_per_channel(new)
+    assert len(blocks) == n_scope > 0, (
+        f"{len(blocks)} `{E058_KEY}` blocks for {n_scope} scored scopes — the "
+        f"key must be on every scope that has rows")
     d = first_diff(a, b)
     assert d is None, f"patched vs pristine ({sha[:8]}) differ at {d}"
     assert a == b
     print(f"1b. patched evaluator == pristine {sha[:8]} on the deterministic "
           f"toy, deep-equal over {len(all_keys(a))} distinct keys "
           f"(clock readings {CLOCKS} stripped) OK")
+    print(f"1b. the one non-clock exclusion: {len(blocks)} `{E058_KEY}` "
+          f"blocks (one per scored scope, {n_scope} of them) holding {n_row} "
+          f"channel rows, removed and PINNED — the channel `n`s sum to the "
+          f"pooled `n`, the pooled msss_clim sits inside its channels' "
+          f"[min, max], and the corridor values equal the E-026b audit "
+          f"block's own per-channel decomposition (max |Δ| {dev:.1e}) OK")
     return new
 
 

@@ -44,6 +44,102 @@ low-pass).
 
 ---
 
+<a id="e-058"></a>
+## E-058 · Per-channel rolled skill, so a roll can be read for SST as well as for AMOC — RUNG 1 BUILT + CERTIFIED (no GPU spent)
+
+TL;DR — every skill number this programme has ever published from a roll was
+pooled over all 40 channels at once, so "does the predicted embedding get
+sea-surface temperature right?" was a question the artefacts could not answer.
+This adds the per-channel decomposition beside the pooled rows, changing no
+pooled number by a single byte. It is rung 1 of Chris's multi-target
+directive (2026-08-28): *"I'd love to predict ocean surface temperature as a
+secondary downstream target (next to AMOC). It's important to have multiple
+such targets (maybe even a third one) to ensure the embedding representation
+is comprehensive and not just AMOC tailored."*
+
+**E-058 rung 1 · per-channel rolled skill · params n/a · stage tooling ·
+data family4_na025_pentad_r2 (and every tensor a roll reads) · arch n/a ·
+steps×batch none (nothing trains) · resume n/a**
+
+### Why the existing artefacts could not answer it
+
+Two facts, both measured rather than assumed:
+
+- **`chan_skill` is per-HORIZON, not per-channel.** The name is a legacy from
+  `rollout.py`, where a "chan" row WAS a horizon. Every row in it is pooled
+  over all 84,405 window pixels AND all 40 channels, so `sst` — appended by
+  E-042 and last in the tensor — contributed one fortieth of a number nobody
+  could decompose.
+- **The tensor is z-scored anomalies**, so `mse_c` is `(v_true**2)` and the
+  climatology reference IS the zero forecast. `msss_clim` per channel is
+  therefore readable directly, with no extra baseline to compute.
+
+### What was built
+
+`ml/rollout_spatial.py`, additive only:
+
+- `new_sums(H, C=None)` optionally allocates a parallel `su["per_chan"]`,
+  `{key: [H+1, C]}`, over the same ten sum keys (`SUM_KEYS`).
+- `accumulate(...)` fills it **on the same early-exit branch, from the same
+  masked `[n_pixels, C]` arrays**, with `.sum(axis=0)` where the pooled body
+  takes a scalar sum. The pooled body is byte-for-byte what it was. A mask
+  that is not `[n_pixels, C]` raises rather than broadcasting into a wrong
+  answer.
+- `_skill_rows(su, H)` is the original loop lifted **verbatim**, and is now
+  the ONLY arithmetic path — pooled rows and per-channel rows are produced by
+  the same code, so the two cannot drift.
+- `skill_block(..., chan_names=None)` emits `per_channel` **between `n_px`
+  and `horizon_auc`**, deliberately not appended, so that
+  `horizon_auc_daymatched`'s "written LAST" invariant — which the day-matched
+  byte strip's comma removal depends on — stays true.
+
+### The certificate
+
+`tests/test_per_channel_skill.py` (5 checks, all pass):
+
+- **Pooled purity is BIT-IDENTICAL** — 18,289 bytes identical after removing
+  the 18 `per_channel` blocks.
+- **Consistency**: the pooled `msss_clim` IS the climatology-mass-weighted
+  mean of the per-channel ones, deviation **1.11e-16**.
+- **Known-answer**: a channel predicted perfectly reads `msss_clim` **+1.000**
+  and a pure-noise channel **−1.025**, while the pooled row containing both
+  says **+0.310** — which is the whole point: the pool hides both.
+
+Two pre-existing byte-identity tripwires — `tests/test_roll_monthly_identity.py`
+and `tests/test_fgn_roll.py` — failed on the new key, **correctly**: they exist
+to force a human decision when the roll payload changes. Both were widened
+under their own documented pattern (strip → COUNT → PIN), never relaxed. The
+pin is stronger than key-identity in three independent ways, and the third is
+the one worth keeping:
+
+1. the channels' `n` sum to the pooled `n` EXACTLY at every horizon (same
+   cells, or the two sum sets were accumulated over different pixels);
+2. the pooled `msss_clim` lies inside its own channels' `[min, max]` at every
+   horizon (a positive-weight mean cannot leave the convex hull of its terms
+   — the checkable consequence of the 1.11e-16 relation, whose weights the
+   artefact does not publish);
+3. on the **corridor** scope every value equals the **E-026b audit block's**
+   per-channel decomposition of the same quantity — a decomposition that
+   predates E-058 and is accumulated by different code in `aud["ch_m"]` /
+   `aud["ch_c"]`. Measured deviation **0.0**.
+
+`tests/test_roll_ring_identity.py` and `tests/test_roll_dump.py` were ALREADY
+failing before this diff (verified by `git stash`) and were not touched.
+
+### Cost, and what it does NOT yet do
+
+**No GPU was spent.** Rung 1 is a read-out: the next roll that runs writes the
+SST column for free, and no roll needs re-running to get it.
+
+It does **not** make SST a training target, and it does not settle whether the
+embedding is AMOC-tailored — it makes the question askable. Rungs 2 and 3 are
+still owed: **rung 2**, add SST to `head_targets` so the probe ladder scores
+it beside RAPID; **rung 3**, a third target with an independent instrument —
+Florida Current transport is the candidate, because its cable record is long,
+continuous, and not a linear function of the RAPID section.
+
+---
+
 <a id="e-057"></a>
 ## E-057 · FGN-mode stage-2: noise-conditioned stencil head trained with fair CRPS — E-057.0 BUILT + CPU-VERIFIED; **E-057.1 pair RE-DISPATCHED after #496's step-6000 OOM (see (h3))**; ensemble roll BUILT; cross-verified against DeepMind's open-source FGN (google-deepmind/weathernext)
 
@@ -815,6 +911,44 @@ the question from "2× params" to "1.5× params"; (d) remat/activation
 checkpointing — same math, ~1.3× step cost, needs a trainer build.
 (b) preserves the comparison exactly and is the principled fix; it and
 (d) are subagent-buildable in a morning.
+
+**E-054b RELAUNCH, 2026-08-28: OPTION (b) BUILT AND CERTIFIED, THEN LAUNCHED
+TWICE — THE FIRST RELAUNCH WAS THE WRONG EXPERIMENT.** Gradient accumulation
+(`--grad-accum N`, commit 6ec09b9) is exact for a mean loss with no
+batch-coupled layers, and the certificate says so numerically:
+averaged-micro-gradient vs whole-batch max rel **2.419e-07**, params after 3
+steps agreeing to **8.693e-08**, `grad_norm` rel **0.0**, and the flag OFF is
+bitwise the old path (1581 ops vs 1581) — `tests/test_grad_accum_jax.py`.
+So `grad_accum 4 (micro 64)` is a memory decomposition of the SAME batch-256
+step, not a batch change, and the E-051 comparison survives intact.
+
+The first relaunch (07:08:38Z) then ran for an hour on a configuration that
+was not this experiment. Its startup file had been rebuilt from the pristine
+`ml/jaxport/tpu_train_s2.sh` with only D_MODEL/LAYERS/STEPS/TAG/GRAD_ACCUM
+sed'd in, which reverted every other knob to the template's defaults —
+`Z_ASSET` empty, K 24, lr 1e-3, stencil 1, ring '0', znoise 0, grad_clip 0,
+halflife 40000 — so it was re-embedding an already-published Z (272,405,116
+encoder forwards, ~3 h) to train a K=24 head with no noise and no clip. It was
+caught by reading the `resolved knobs` line the launcher prints for exactly
+this purpose, killed at 08:07:55Z, and relaunched at 08:10:33Z from a v3 file
+sed'd out of the pristine template with the **full** E-054a knob block, whose
+knob assignments were then `diff`'d against `/tmp/e054a_startup.sh` down to the
+five intended differences (NODE, STEPS 400k→200k, D_MODEL 1024→1280, LAYERS
+16→20, GRAD_ACCUM 4, TAG). Ledger row and the general lesson —
+*sed the previous run's own file, never the template; `diff` the knob blocks
+before launching* — in
+[SPOT_LEDGER](https://blauewelt.github.io/earth/docs.html?f=ml/SPOT_LEDGER.md).
+
+**E-054b FIRST-MINUTES VERDICT (relaunch), 08:29Z — CONFIGURATION CORRECT,
+Z PULLED NOT REBUILT.** `resolved knobs: K 144 · steps 200000 · batch 256 ·
+lr 4e-4 · 1280x20 · stencil 145 ring 'spiral:111-4444-0.71-0.5' · sched
+expdecay halflife 100000 cooldown 0 warmup 2000 · znoise 0.7 · grad_clip 128 ·
+grad_accum 4 (micro 64) · train_lon_hold none · seed 0 · tag 'e054b' · tensor
+family4_na025_pentad_r2 (37e146384b) · codec run-415__pixelmae.pt · Z
+'Z_8b639abe36_37e146384b.npy'`, and `Z VERIFIED: (3142, 86698, 32) float16,
+16.24 GiB` assembled from 12 header-bounded chunks. Fresh run, step 0, no
+resume. The OOM verdict itself is still owed — it lands at the first training
+step, after the anomaly transform.
 
 **THE ROLL IS DISPATCHED: #503 (E-051-roll — 365-day day-matched roll of
 the 398k K=144 head, 3 starts/holdout year, dumproll, long/future rolls

@@ -1101,10 +1101,46 @@ class Progress:
             pass          # instrumentation never breaks the run
 
 
-def new_sums(H):
-    return {k: np.zeros(H + 1) for k in
-            ("mse_m", "mse_p", "mse_c", "mse_d", "n",
-             "sxy", "sxx", "syy", "sx", "sy")}
+# The ten quantities every skill row is built from. Named once so the pooled
+# arrays and the E-058 per-channel arrays below cannot drift apart.
+SUM_KEYS = ("mse_m", "mse_p", "mse_c", "mse_d", "n",
+            "sxy", "sxx", "syy", "sx", "sy")
+
+
+def new_sums(H, C=None):
+    """The pooled skill sums, plus — when `C` is given — a PARALLEL
+    per-channel set (E-058).
+
+    WHY PER CHANNEL AT ALL. Chris, 2026-08-28: *"ocean surface temperature as
+    a secondary downstream target (next to AMOC) ... to ensure the embedding
+    representation is comprehensive and not just AMOC tailored"*. Until this
+    change every row `skill_block` emitted was pooled over all pixels AND all
+    channels, so `sst` — one of 40 channels, appended by E-042 — was
+    invisible: no archived roll could say whether the rolled embedding
+    predicts sea-surface temperature at all, only that it predicts "the
+    field". The name `chan_skill` is LEGACY from rollout.py, where a "chan"
+    row was a horizon; it is not, and never was, a per-channel read-out.
+
+    WHY A PARALLEL SET RATHER THAN A DECOMPOSITION. The pooled scalars are
+    algebraically the channel sums added up, so the pooled row COULD be
+    recomposed from `per_chan`. It deliberately is not. Every archived roll
+    number comes out of the pooled arrays, and the acceptance bar for this
+    change is that they stay BIT-IDENTICAL (tests/test_per_channel_skill.py
+    check 1); the cheapest way to guarantee that is never to touch the code
+    path that produces them. `per_chan` is therefore additive in the strictest
+    sense — new arrays, filled by new lines, appended after the pooled lines
+    have already run. The two are still guaranteed to describe the same roll:
+    `accumulate` fills both from the same masked arrays on the same early-exit
+    branch, so no contribution can reach one and miss the other (check 2
+    measures the recomposition deviation at 1.1e-16, one ulp).
+
+    `C` is None for a caller that wants the old object exactly — the pooled
+    path then has no `per_chan` key to find and behaves as it always did.
+    """
+    su = {k: np.zeros(H + 1) for k in SUM_KEYS}
+    if C is not None:
+        su["per_chan"] = {k: np.zeros((H + 1, int(C))) for k in SUM_KEYS}
+    return su
 
 
 def accumulate(su, h, xhat, v_true, v_pers, v_damp, op):
@@ -1124,9 +1160,71 @@ def accumulate(su, h, xhat, v_true, v_pers, v_damp, op):
     su["syy"][h] += (ym * ym).sum()
     su["sx"][h] += xm.sum()
     su["sy"][h] += ym.sum()
+    # ---- E-058: the same ten sums again, held open along the channel axis.
+    # NOTHING ABOVE THIS LINE MOVED. Both call sites pass arrays already
+    # sliced by a boolean PIXEL mask, so every argument here is [n_pixels, C]
+    # and `op` is the [n_pixels, C] observation mask (truth-observed at the
+    # target AND at the persistence source). Axis 0 is therefore the pixel
+    # axis and `.sum(axis=0)` is "pool the pixels, keep the channels" — the
+    # exact per-channel analogue of the unqualified `.sum()`s above. The
+    # E-026b audit block in main() already reduces the same products this way
+    # (`aud["ch_m"][h] += err_[corridor].sum(axis=0)` -> [C]), on the corridor
+    # scope only and for msss_clim only; this generalises it to every scope,
+    # every baseline and every horizon, and gives the channels their names.
+    pc = su.get("per_chan")
+    if pc is None:
+        return
+    if opf.ndim != 2 or opf.shape[1] != pc["n"].shape[1]:
+        # A 1-D or mis-shaped mask would silently pool the wrong axis and
+        # produce plausible nonsense, which is worse than a crash.
+        raise ValueError(
+            "accumulate: per-channel sums need [n_pixels, C] arrays with C=%d,"
+            " got op%r" % (pc["n"].shape[1], tuple(opf.shape)))
+    pc["mse_m"][h] += (((xhat - v_true) ** 2) * opf).sum(axis=0)
+    pc["mse_p"][h] += (((v_pers - v_true) ** 2) * opf).sum(axis=0)
+    pc["mse_d"][h] += (((v_damp - v_true) ** 2) * opf).sum(axis=0)
+    pc["mse_c"][h] += ((v_true ** 2) * opf).sum(axis=0)
+    pc["n"][h] += opf.sum(axis=0)
+    pc["sxy"][h] += (xm * ym).sum(axis=0)
+    pc["sxx"][h] += (xm * xm).sum(axis=0)
+    pc["syy"][h] += (ym * ym).sum(axis=0)
+    pc["sx"][h] += xm.sum(axis=0)
+    pc["sy"][h] += ym.sum(axis=0)
 
 
-def skill_block(su, H, n_px=None, leads=None):
+def _skill_rows(su, H):
+    """The chan_skill row list, from ONE set of 1-D [H+1] sums.
+
+    THE ONLY ARITHMETIC PATH (E-058). This is `skill_block`'s original loop,
+    moved out verbatim — not re-derived, not re-ordered — so that the pooled
+    rows and the new per-channel rows are produced by literally the same
+    float operations in the same order. Given the pooled sums it returns,
+    element for element, what the pre-E-058 file returned; given one column
+    of `su["per_chan"]` (a view, not a copy) it returns that channel's own
+    rows. tests/test_per_channel_skill.py check 1 pins the first half of that
+    claim against the pristine module recovered from git.
+    """
+    rows = []
+    for h in range(1, H + 1):
+        if su["n"][h] == 0:
+            continue
+        n_ = su["n"][h]
+        mm, mp = su["mse_m"][h] / n_, su["mse_p"][h] / n_
+        md, mc = su["mse_d"][h] / n_, su["mse_c"][h] / n_
+        vx = su["sxx"][h] / n_ - (su["sx"][h] / n_) ** 2
+        vy = su["syy"][h] / n_ - (su["sy"][h] / n_) ** 2
+        cov = su["sxy"][h] / n_ - su["sx"][h] * su["sy"][h] / n_ ** 2
+        acc = cov / (np.sqrt(vx * vy) + 1e-12)
+        rows.append({"h": h, "n": int(n_),
+                     "msss_clim": round(1 - mm / mc, 3),
+                     "msss_pers": round(1 - mm / mp, 3),
+                     "msss_damped": round(1 - mm / md, 3),
+                     "acc": round(float(acc), 3),
+                     "amp_ratio": round(float(np.sqrt(vx / (vy + 1e-12))), 3)})
+    return rows
+
+
+def skill_block(su, H, n_px=None, leads=None, chan_names=None):
     """rollout.py's chan_skill rows + horizon_auc (mean MSSS-vs-climatology
     — the #217 'AUC'), plus the damped mean for completeness.
 
@@ -1154,24 +1252,38 @@ def skill_block(su, H, n_px=None, leads=None):
     integer separates the two, so it is written down: `n_px 0` means "there
     was nothing to score", `n_px > 0` with no rows means "something is
     wrong". `n_px` is None only for a caller that did not pass it, and the
-    key is then omitted, so old readers are unaffected."""
-    rows = []
-    for h in range(1, H + 1):
-        if su["n"][h] == 0:
-            continue
-        n_ = su["n"][h]
-        mm, mp = su["mse_m"][h] / n_, su["mse_p"][h] / n_
-        md, mc = su["mse_d"][h] / n_, su["mse_c"][h] / n_
-        vx = su["sxx"][h] / n_ - (su["sx"][h] / n_) ** 2
-        vy = su["syy"][h] / n_ - (su["sy"][h] / n_) ** 2
-        cov = su["sxy"][h] / n_ - su["sx"][h] * su["sy"][h] / n_ ** 2
-        acc = cov / (np.sqrt(vx * vy) + 1e-12)
-        rows.append({"h": h, "n": int(n_),
-                     "msss_clim": round(1 - mm / mc, 3),
-                     "msss_pers": round(1 - mm / mp, 3),
-                     "msss_damped": round(1 - mm / md, 3),
-                     "acc": round(float(acc), 3),
-                     "amp_ratio": round(float(np.sqrt(vx / (vy + 1e-12))), 3)})
+    key is then omitted, so old readers are unaffected.
+
+    `chan_names` (E-058) turns the sums' channel axis into the NEW
+    `per_channel` key: channel NAME -> that channel's own row list, the same
+    seven fields (`h`, `n`, `msss_clim`, `msss_pers`, `msss_damped`, `acc`,
+    `amp_ratio`) computed from that channel's own sums by `_skill_rows`. It is
+    written ALONGSIDE every existing key, never instead of one: `chan_skill`,
+    `horizon_auc`, `auc_damped`, `horizon_auc_daymatched`, `n_px` and `empty`
+    are byte-for-byte what they were. This is what makes "how well does the
+    rolled embedding predict SST?" — Chris, 2026-08-28, ocean surface
+    temperature as a secondary downstream target beside AMOC — a question the
+    artefact can answer, instead of one hidden inside a 40-channel pool.
+
+    THE NAMES ARE THE TENSOR'S OWN. They come from the codec checkpoint's
+    `ck["chan"]` at the call site and are never hardcoded here or there; a
+    list whose length does not match the sums' channel axis is REFUSED rather
+    than zipped short, because a silently truncated list would mislabel every
+    channel after the first mismatch (and `sst` is the LAST of the 40).
+
+    NO SIZE GUARD, DELIBERATELY. The block is C x H rows of seven small
+    numbers — 40 x 12 x 7 at the production monthly shape, a few hundred kB of
+    JSON across all nine scopes — which is the same order as the E-026b audit
+    block already written beside it and nowhere near a reason to gate, sample
+    or truncate. Every write point in `main()` (the partial writes at the
+    scored/long/future/head_done stages and the final unmarked one) picks this
+    up for free, because `entry` is built once and mutated in place.
+
+    Empty scopes follow §5.22 as everything else here does: a channel that
+    scored nothing contributes no key, and if NO channel scored, `per_channel`
+    itself is omitted rather than written as an empty husk or a NaN — the same
+    rule that omits `horizon_auc` for a zero-pixel `_holdlon` scope."""
+    rows = _skill_rows(su, H)
     out = {"chan_skill": rows}
     if n_px is not None:
         out["n_px"] = int(n_px)
@@ -1180,6 +1292,35 @@ def skill_block(su, H, n_px=None, leads=None):
                             if int(n_px) == 0 else
                             "scope has pixels but no horizon scored any of "
                             "them — investigate")
+    # ---- E-058: the per-channel rows, additive and never in the way.
+    # EMITTED HERE, BEFORE the aggregates, for one non-obvious reason:
+    # tests/test_roll_monthly_identity.py asserts that
+    # `horizon_auc_daymatched` is the LAST key of every scope block, because
+    # its byte-strip also removes the comma that key's insertion added to the
+    # line above it. Appending `per_channel` after it would break an invariant
+    # that has nothing to do with this change; inserting before it leaves that
+    # invariant exactly true. (That test still needs its counted exclusion
+    # list widened by one for the new key — a deliberate decision it is
+    # designed to force, not something this file can do for it.)
+    pc = su.get("per_chan")
+    if pc is not None and chan_names is not None:
+        n_c = pc["n"].shape[1]
+        if len(chan_names) != n_c:
+            raise ValueError(
+                "skill_block: chan_names has %d entries but the sums carry "
+                "%d channels — refusing to zip short and mislabel the tail "
+                "(sst is the LAST channel, so a short list loses exactly the "
+                "read-out this key exists for)" % (len(chan_names), n_c))
+        # A VIEW per channel, not a copy: `pc[k][:, c]` is the [H+1] column
+        # `_skill_rows` expects, so the per-channel rows go through the pooled
+        # rows' own code and no arithmetic is written twice.
+        per = {}
+        for c, nm in enumerate(chan_names):
+            r = _skill_rows({k: pc[k][:, c] for k in SUM_KEYS}, H)
+            if r:
+                per[str(nm)] = r
+        if per:
+            out["per_channel"] = per
     if rows:
         out["horizon_auc"] = round(
             float(np.mean([r["msss_clim"] for r in rows])), 3)
@@ -1861,6 +2002,12 @@ def main():
                   f"variance is not, and E-057.1 rolls at M=16", flush=True)
     ck = torch.load(a.ckpt, map_location="cpu", weights_only=False)
     C = len(ck["chan"])
+    # E-058: THE CHANNEL NAMES ARE THE TENSOR'S, and this is the only place
+    # they are read. `C` on the line above is `len` of this same list, so the
+    # names and the channel axis cannot disagree; nothing downstream hardcodes
+    # a channel list or an index (least of all `sst`'s, which is merely the
+    # last entry today and would move the moment a channel is inserted).
+    chan_names = [str(c) for c in ck["chan"]]
     d_z = ck["d_z"]
     hold_years = sorted(ck["args"]["holdout_years"].split(","))
     t_hold = np.array([m[:4] in set(hold_years) for m in months])
@@ -2628,7 +2775,12 @@ def main():
                   f"{M_ens}x{_hmax}x{P:,}x{C} float16 = {_mem_gb:.2f} GB per "
                   f"start; dispersion accumulator <= {_disp_gb:.2f} GB per "
                   f"long/future roll.", flush=True)
-        sums = {name: new_sums(Hh) for name, _ in scopes}
+        # E-058: `C` opens the parallel per-channel arrays beside the pooled
+        # ones. Both `accumulate` call sites below (the skill/start loop and
+        # the FGN ensemble-mean loop) feed them from the same [n_pixels, C]
+        # arrays they already feed the pooled sums from, so no call site
+        # changed shape or order.
+        sums = {name: new_sums(Hh, C) for name, _ in scopes}
         # E-026b AUDIT instrumentation (2026-08-15, Chris: "investigate
         # thoroughly and not hypothesize — there could still be an issue in
         # how we compute auc"). Two decompositions ride along with EVERY
@@ -2956,7 +3108,7 @@ def main():
             }
         for name, m_ in scopes:
             entry[name] = skill_block(sums[name], Hh, n_px=int(m_.sum()),
-                                      leads=leads)
+                                      leads=leads, chan_names=chan_names)
         if FGN:
             entry["ens_prob"] = {
                 name: ens_block(ens_sums[name], Hh, M_ens,
