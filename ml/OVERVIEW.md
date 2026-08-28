@@ -1,6 +1,6 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-28 ~18:20 UTC** (Opus). **E-054b is now running the
+**Last updated: 2026-08-28 ~19:45 UTC** (Opus). **E-054b is now running the
 RIGHT experiment.** Its 07:08Z relaunch had been rebuilt from the pristine
 launcher template with only the width/steps/tag sed'd in, so it silently
 reverted every E-051 knob (Z_ASSET empty, K 24, lr 1e-3, stencil 1, znoise 0,
@@ -26,12 +26,27 @@ transitions: the loss is dense over the window while the pool only checked
 the FINAL target (`win_ztgt` temporal.py:2819 vs `ok_t` :2889; count proof
 2,779 = 3,142−219−144 exactly). Fix: `--holdout-scope window` (c25f6ff) —
 pool keeps only windows touching NO holdout bin, self-certifies by brute
-force before training, default `endpoint` stays bit-identical so the archive
-is reproducible. **E-059** (E-051's exact twin, one change: the pool) is
+force before training, and the legacy pool survives bit-identically as
+`endpoint_contaminated` so the archive is reproducible. **E-059** (E-051's exact twin, one change: the pool) is
 training on us-west4-a spot since 17:09Z and its **first-minutes checks
 PASSED to the digit** — 2,417 end-bins, 209,549,066 windows, certificate 0
 violations, val_persistence 21.44621, all registered in the plan beforehand;
-the one-step gap vs 0.0330/0.0298 IS the h=1 memorization term. **Scopes
+the one-step gap vs 0.0330/0.0298 IS the h=1 memorization term. **FIRST READ
+AT 24k/200k: the train curves are twins and the val curves are not.** Same
+architecture, seed, codec, Z, validation windows (val_persistence 21.44621 in
+both, six digits) and hardware — only the pool differs — and E-059's train
+z-mse tracks E-051's (1.2352 vs 1.2126 at 24k, so the 13% supervision cut
+costs nothing visible) while E-051's val ratio falls monotonically
+0.2247→0.0748 and **E-059's does not fall at all**: 0.6105 at 2k, 0.6410 at
+24k, drifting up. A first read, not a verdict — 176k steps and the whole LR
+decay remain, and the RAPID probe is meanwhile indistinguishable (0.616 vs
+0.612 at 20k), which is the counter-evidence. Pace corrected from the
+estimated 12.6 h to E-051's measured 16.45 h for 200k, so **phase 2 is owed
+~10:25Z 08-29**, wake scheduled; the ~48-min post-probe pause is in E-051's
+record too and is normal.
+**The E-059 plan file was committed EMPTY twice** (fc83585, 2d1b20a) — the
+write never landed and neither commit noticed, because docs.html registers
+the path, not its size; reconstructed and pushed in 53cb723. **Scopes
 amended (58eb286, Chris): the leaky pool is renamed
 `endpoint_contaminated`, the DEFAULT is now `window`, and a third scope
 `target` masks held-out targets while still admitting held-out context.
@@ -40,7 +55,12 @@ held out; `target` 379,158 (−5.25%, 0 held out); `window` 348,048 (−13.03%,
 0 held out) — strictness costs 7.8 points, not a factor.** **#508** re-rolls the OLD 398k
 head with the battery shortened to 36 months each way (879 steps, ~21.3 h,
 inside the token) — its future roll past the record's end is the direct
-recall falsifier. #503 was cancelled 16:24Z (its 40 h timeout could never
+recall falsifier — dispatched as **#510** after #508 and #509 died on the
+same full disk two layers deep; verified on the roll at t0 19:18:29Z with the
+protocol matching #503 field for field and `longm:36,futm:36` correctly
+converted to 219+219 axis steps. Its seeding overran by an hour, leaving only
+~50 min of token margin on the future battery, while the 441-step determinism
+certificate lands ~05:58Z, safely inside. #503 was cancelled 16:24Z (its 40 h timeout could never
 deliver the 20-year battery); its scored partial is fully harvested. The
 monthly 0.939 champion carries the same question until its own
 scope=window retrain.
