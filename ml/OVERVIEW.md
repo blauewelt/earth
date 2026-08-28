@@ -1,6 +1,6 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-28 ~13:35 UTC** (Opus). **E-054b is now running the
+**Last updated: 2026-08-28 ~14:05 UTC** (Opus). **E-054b is now running the
 RIGHT experiment.** Its 07:08Z relaunch had been rebuilt from the pristine
 launcher template with only the width/steps/tag sed'd in, so it silently
 reverted every E-051 knob (Z_ASSET empty, K 24, lr 1e-3, stencil 1, znoise 0,
@@ -19,7 +19,21 @@ predict SST?" — pooled numbers bit-identical (18,289 bytes), consistency
 strip-count-pin pattern rather than relaxed. **#504 (E-056a-R) is at step
 6000/20000, ratio 0.574** (0.36416/0.63451) — improving from 0.600 at 2800,
 still above the continuous control 0.5056 and well above the 0.4394 lattice
-bar. **#504 (token substrate) is COMPLETE, and its probe rows are NOT subject to the
+bar. **E-056 IS RESOLVED (one-step): the token road does NOT open.** #507, the
+dose-matched twin, finished at **0.50986** against #504's 0.53873 — same box,
+same codec, same 20k steps, only the noise differs, and the dose-matching is
+confirmed exact (`rel_pers` 0.15065 vs the controls' 0.15116). So the
+pre-registered confound was real and worth an arm: it bought **-0.029**, an
+order of magnitude above the 0.00113 pair spread at this tier. But 0.51 is
+still on the wrong side of the registered ">=0.50 lost the signal" line: it is
+at PARITY with the continuous d_z-32 control (0.5056, +0.0043 — a consistency,
+not a gap) and **0.070 behind the lattice d_z-32 bar (0.4394)** that the wave
+was registered on. A 16-bit alphabet at d_z 6 carries what continuous d_z-32
+carries at ~5% of the size — a real efficiency finding — but ≲0.44 was the bar
+and 0.51 does not clear it. **E-056b is DROPPED**, not re-dispatched: refining
+a denser slab within a substrate that failed at K=24 would spend ~$20 on a
+closed road. The next full-budget pentad head stays on continuous z; E-046's
+train-THROUGH-the-lattice result is the survivor worth pursuing. **#504 (token substrate) is COMPLETE, and its probe rows are NOT subject to the
 dose confound.** One-step ratio **0.53373** (0.33292/0.62375, self-consistent
 within `temporal.json`) against continuous d_z-32 0.5056 and lattice 0.4394 —
 worse than both. That row IS confounded (5.8x the intended relative dose;

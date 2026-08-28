@@ -927,6 +927,65 @@ both-sides-switch-together discipline §3 demands. So: two independent
 instruments point the same way, and only one of them is confounded. That is
 worth saying, and it is not yet a verdict.
 
+<a id="e-056-verdict"></a>
+### E-056 VERDICT (one-step), 14:01Z — THE DOSE WAS REAL, AND THE TOKEN ROAD STILL DOES NOT OPEN
+
+#507's training curve completed at step 20,000. The pair is as clean as this
+programme gets: **same box, same warm token-Z cache, same frozen codec, same
+20,000 steps, same everything except `--input-znoise`.**
+
+| arm | znoise | `rel_pers` | final one-step ratio |
+|---|---|---|---|
+| #504 (E-056a-R) | 0.7 | 0.87878 | **0.53873** |
+| #507 (E-056a-CLEAN) | **0.12** | **0.15065** | **0.50986** |
+| control: continuous d_z-32 | 0.7 | 0.15116 | 0.5056 |
+| control: lattice d_z-32 (E-046) | — | — | 0.4394 |
+
+**The dose-matching worked, arithmetically.** 0.12 was chosen as
+0.7 x (0.15116 / 0.87878) = 0.1204 to put the token-scale RELATIVE dose where
+0.7 put it on d_z-32; the run reports `input_znoise_rel_pers` **0.15065**
+against the controls' **0.15116** — a match to 0.3%. The pre-registered
+confound was not hypothetical.
+
+**And it was worth an arm: dose-matching bought −0.029** (0.53873 → 0.50986).
+Read against the forecast-ratio spread measured at the pentad 200k tier — the
+E-044b pair's |Δ| **0.00113** — that is an order of magnitude above noise. So
+#504's number really was carrying a handicap, and it would have been wrong to
+convict the substrate on it.
+
+**But the verdict does not change: ≳0.50 was pre-registered as "quantization
+lost the forecastable signal", and 0.50986 is ≳0.50.**
+
+- **Against the continuous d_z-32 control (0.5056), tokens are at PARITY**:
+  +0.0043, about 4x the E-044b pair spread but far below any decision bar this
+  programme uses. Written as §3b requires: *consistent with the continuous
+  d_z-32 arm*. That is a real efficiency finding — a 16-bit-per-pixel-bin
+  alphabet at d_z 6 carries what continuous d_z-32 carries, at ~5% of the
+  state size.
+- **Against the number that mattered (lattice d_z-32, 0.4394) it is 0.070
+  behind**, and that gap is the one the wave was registered on. Training
+  THROUGH the lattice (E-046) remains far better than reading a quantized
+  codec's tokens. **≲0.44 was the bar for opening the token road; 0.51 does
+  not clear it.**
+
+**The codec probes need no second look, by construction.** `probe_kfold` and
+`probe_head` score the FROZEN codec, and #504 and #507 share it (run-485), so
+those rows are identical in both bundles — the codec verdict already recorded
+from #504 stands unchanged: unpooled head 0.588 against its own raw-3x3
+control 0.693 and wind bar 0.690, Florida Current 0.051 with a CI containing
+zero. Two instruments, the probe one unconfounded by dose, agreeing that this
+codec subtracts.
+
+**Consequences.** E-056b (#506, the K=144 token arm) was cancelled when its
+H100 turned out not to be using its GPU; it is now **dropped rather than
+re-dispatched** — its question was whether a denser slab helps WITHIN the
+token substrate, and the substrate did not clear its bar at K=24, so ~$20 and
+a fresh 80 GB box would be spent refining a road the wave has closed. The
+efficiency lever the token road was meant to buy does not arrive; the next
+full-budget pentad head stays on continuous z. What survives is E-046's
+finding that training through a lattice helps — a different mechanism from
+reading a warm-started FSQ codec's tokens, and the one worth pursuing.
+
 **#507 (E-056a-CLEAN) RE-DISPATCHED 10:19Z, QUEUED BEHIND #504 ON THE SAME
 BOX** — deliberately, and it is worth saying why rather than taking the next
 free host. #505 died on a full disk; two other hosts were tried in the gap
