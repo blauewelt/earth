@@ -1001,7 +1001,49 @@ capacity (code 8, spot AND on-demand — a capacity error, not quota);
 Runs on `us-west4-a` spot: ≈$40, ≈22 h, preemption covered by the
 ckpt-every-1,000 resume machinery.
 
-<a id="e-050"></a>
+**(j) HARVESTED 2026-08-28 ~03:45Z — THE AXIS-A FALSIFIER FIRED, both arms.**
+
+**Arm A (lr 3e-4), complete at 24,000 steps.** Val one-step ratio trajectory
+(eval every 2,000): 0.684 → 0.580 → 0.578 → 0.560 → **0.5525 best at step
+10,000** → then monotone worsening to **0.5808 final at 24,000** while train
+loss fell 13.3 → 7.18 — the textbook overfitting scissors, on schedule for
+2,779 train windows under a 200.4M-param head; input-znoise 0.7 slowed it,
+did not stop it. Cost ≈$108 on-demand. Finals on
+`gs://earth-tpu-staging/runs/e052-1-train/` incl. the torch export
+`field_e052_1.pt` (produced at harvest in the sandbox — the on-node export
+is best-effort-skipped in the JAX-only venv; note the bucket retains only
+`ckpt_latest`, so the best-val step-10k weights are NOT retained — a
+periodic named-checkpoint option is the follow-up if best-val weights ever
+matter).
+
+**Arm B (lr 1e-4), STOPPED EARLY at step ~15,600 of 24,000** (≈$36 spot,
+≈$18 saved): its question — does a cooler start fix the optimisation? — was
+answered by eval 7: best **0.6413 at step 4,000**, then monotone worsening
+(0.676, 0.656, 0.680, 0.687, **0.6995 at 14,000**). The lower LR overfits
+EARLIER and from a WORSE bottom; the jagged arm-A loss was a symptom of the
+data/capacity ratio, not of step size. Resumable from its shipped ckpt if
+ever wanted.
+
+**VERDICT against the pre-registered falsifier
+([plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E052_field_diffusion.md)):
+joint spatial attention does NOT match per-pixel stencil-concat at matched
+conditions — it is ~7× worse (best 0.5525 vs #478's 0.0820 at comparable
+budget, vs E-051's 0.0330 at matched wall-clock), and the binding constraint
+is DATA, not optimisation: a field head sees 2,779 training examples where
+the stencil tier's per-pixel framing sees 2,779 × 86,698. The 145-slot
+concat was never the bottleneck.** Consequence, per the plan's own branch:
+the case for the generative move (E-052.2) can no longer ride on geometry —
+running EDM diffusion on THIS backbone would measure distributional quality
+around a mean that is 7× off, so E-052.2 in its planned form is NOT
+dispatched pending Chris. The constructive options, in this session's
+preference order: (1) **E-052.p** — σ-conditioned STENCIL head, axis B on
+the geometry that works, cheap and the cleanest remaining test of "does a
+distribution head earn its NFE"; (2) shrink/regularise the field head
+toward the data (fewer params, patch 8, stronger augmentation) — only worth
+it if the joint-field property is wanted for its own sake (multi-step
+coherence), which the one-step scoreboard cannot show; (3) E-052.2 as
+planned, accepting the mean gap, to read CRPS/spread mechanics on real data
+anyway. Total E-052 real-data spend: ≈$144 across both arms + $17 verify.
 ## E-050 · Warm-start quantization: the trained continuous codec, lattice switched on — #485 DISPATCHED 06:32Z 2026-08-26 (approved by Chris 2026-08-25 ~15:30Z, b3ee36a)
 
 **07:25Z — FIRST-MINUTES VERIFICATION PASSED ON ALL FOUR CHECKS** (#485,
