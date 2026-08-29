@@ -1,0 +1,2 @@
+{"config": {"steps": 197428, "batch": 512, "d_z": 32, "patch": 1, "d_model": 512, "n_layers": 12, "n_heads": 4, "d_dec": 256, "anomaly": true, "fsq_levels": null, "fsq_ladder": null, "fsq_bound": null, "fsq_warmstart_from": null, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 37.976, "data": "family4_na025_pentad_r2.npz", "C": 40, "T": 3142, "resume": "run-415", "recipe": "xl144-zn-pentad-nolonhold"}}
+{"resumed": {"from": "run-415.pt", "parent_tag": "run-415", "at_step": 197428}}
