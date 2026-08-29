@@ -479,6 +479,33 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    // The globe draws surface currents and MLD from ONE reanalysis. These two
+    // draw what three of them cannot agree on. GREP estimates the same
+    // 1993-2024 ocean three times — CGLORS (CMCC), GLORYS2V4 (Mercator),
+    // ORAS5 (ECMWF) — from the same satellites and the same Argo floats, with
+    // different models and different assimilation. The spread is therefore not
+    // noise: it is the part of the ocean the observations do not pin down, and
+    // no forecast of a cell can be more certain than its own inputs are.
+    // Native 0.25 deg on the family-3/4 NA grid (the amoc-eval geometry), so
+    // nothing here is regridded.
+    id: "grep-spread-cur",
+    grid: true, gridFile: "data/grep_spread_cur.json", snapshotGrid: true,
+    ramp: "speed", vmin: 0, vmax: 0.5, units: "m/s", maxLevel: 7,
+    doc: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_ENS_001_031/description",
+    title: "Reanalysis disagreement: current speed",
+    meta: "How far apart three reanalyses of the SAME years are — median 0.077 m/s, over 1 m/s in the Gulf Stream",
+    on: false,
+  },
+  {
+    id: "grep-spread-mld",
+    grid: true, gridFile: "data/grep_spread_mld.json", snapshotGrid: true,
+    ramp: "speed", vmin: 0, vmax: 200, units: "m", maxLevel: 7,
+    doc: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_ENS_001_031/description",
+    title: "Reanalysis disagreement: mixed-layer depth",
+    meta: "Median 14 m, but 716 m at the subpolar convection sites — where the AMOC is made is where we know least",
+    on: false,
+  },
+  {
     id: "drivers",
     // CATEGORICAL grid: the cell carries a driver CLASS, not a number, so it
     // paints from the file's own `classes` palette (WRI's, so the globe matches
@@ -4246,6 +4273,21 @@ const LAYER_FACTS = {
          "GFS. Step the date forward to watch atmospheric rivers, monsoon " +
          "bursts and cyclones arrive days ahead — then flip to the IMERG " +
          "layer on past dates to see how the forecast did." },
+  "grep-spread-cur": { rec: "1993–2024 — one fixed field, the time mean of the member spread, not a dated measurement", int: "mean over 384 monthly fields of (max − min) across the three members", sp: "0.25° native (the family-3/4 NA grid), 84,405 ocean cells",
+    sum: "How much three reanalyses DISAGREE about the same ocean. GREP " +
+         "estimates 1993–2024 three times — CGLORS, GLORYS2V4, ORAS5 — from " +
+         "the same satellites and the same Argo floats, with different models " +
+         "and different assimilation. Typical disagreement is 0.077 m/s, but " +
+         "in the Gulf Stream and its rings it passes 1 m/s, comparable to the " +
+         "current itself. This is the part of the ocean the observations do " +
+         "not pin down, and nothing downstream can know a cell better than " +
+         "its own inputs do." },
+  "grep-spread-mld": { rec: "1993–2024 — one fixed field, the time mean of the member spread, not a dated measurement", int: "mean over 384 monthly fields of (max − min) across the three members", sp: "0.25° native (the family-3/4 NA grid), 84,405 ocean cells",
+    sum: "The same three reanalyses on mixed-layer depth, where they agree " +
+         "far less. The median cell differs by 14 m, but the Labrador and " +
+         "Irminger Seas reach 716 m — the deep-convection sites that set the " +
+         "dense water the overturning carries south. Where the AMOC is made " +
+         "is precisely where the observing system constrains us least." },
   "argo-t300": { rec: "one recent month (see legend) vs the 2004–2018 mean for that same calendar month — not one date", int: "monthly snapshot, refreshed by the data pipeline", sp: "1° (Argo objective mapping)",
     sum: "Where the ocean is unusually warm or cool 300 m DOWN — measured by the " +
          "Argo float fleet, invisible to every satellite surface map. Subsurface " +
