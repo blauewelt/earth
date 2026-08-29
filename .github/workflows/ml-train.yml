@@ -57,7 +57,7 @@ on:
         description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum, optionally mode@ref or mode@twin), on a stage-2 run unroll:N for the autoregressive unroll, resume2:<tag>[@lr] to CONTINUE an existing stage-2 head (needs optimiser state: only heads written after 2026-08-10 have it), or warm2:<tag>[@lr] for a WARM RESTART from its weights alone with a fresh cosine, where temporal_steps is the EXTRA steps rather than the total (both seeded from the model-checkpoints release if the box lacks the file) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
         default: "global"
       tensor:
-        description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA monthly) | family4_na025_pentad (0.25° NA 5-day, E-034/E-038) | family5_na025_daily (0.25° NA 1-day, E-038 Phase B; sidecar layout, needs a 400+ GB disk) | family4_na025_pentad_r2 and family5_na025_daily_r2 (E-042: the same tensors plus an appended 40th channel, daily OISST SST — recipes f4r2/f5r2, their own file names, so an r1 build in flight is never overwritten). A VALUE on an existing input, never a 26th input — this file sits at the 25-input ceiling and a 26th makes the WHOLE workflow unparseable."
+        description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA monthly) | family4_na025_pentad (0.25° NA 5-day, E-034/E-038) | family5_na025_daily (0.25° NA 1-day, E-038 Phase B; sidecar layout, needs a 400+ GB disk) | family4_na025_pentad_r2 and family5_na025_daily_r2 (E-042: the same tensors plus an appended 40th channel, daily OISST SST — recipes f4r2/f5r2, their own file names, so an r1 build in flight is never overwritten). family6_na025_cmip6 (E-061: CMIP6 piControl ocean output regridded onto the family-3 axes — an UNLABELLED pretraining corpus of 800 model-years, recipe f6r1, SPARSE sidecar with 3 live channels of 40; it trains nothing by itself and the Train and Probes steps skip it). A VALUE on an existing input, never a 26th input — this file sits at the 25-input ceiling and a 26th makes the WHOLE workflow unparseable."
         default: "family2"
       sst_channel:
         description: "append monthly OISST as channel 15 (true | false)"
@@ -616,7 +616,8 @@ jobs:
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad" ] || \
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r2" ] || \
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily" ] || \
-             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily_r2" ]; then
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily_r2" ] || \
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family6_na025_cmip6" ]; then
             [ -f /opt/earth-cache/base025_na.npz ] || curl -sL \
               --max-time 900 --retry 3 --retry-delay 10 \
               -o /opt/earth-cache/base025_na.npz \
@@ -646,6 +647,13 @@ jobs:
         run: bash scripts/publish_phase.sh "ml-live-${{ github.run_number }}" "building the tensor" "assembling channels into the pixel tensor"
 
       - name: Build dataset (repo channels + RG-Argo depth + NCEP wind stress)
+        env:
+          # Only the family-6 branch reads this, and only to decide whether it
+          # can publish the corpus it just built. Absent (the secret is not
+          # set) the builder says so and leaves the artefact on the box's disk,
+          # which is a warning and not a failure — but a rented box is not an
+          # archive, so setting the secret is what makes the corpus durable.
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           # E-042 recipe r2 = the same tensor plus an appended `sst` channel,
           # from the DAILY OISST artifact ml/fetch_sst_na.py bakes onto this
@@ -822,6 +830,24 @@ jobs:
             # REFUSES a mismatch before writing any of the 33 GB.
             python -u ml/build_family4.py --pentad-dir "$PD" $REV
             fi
+          elif [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family6_na025_cmip6" ]; then
+            # E-061. NOT a training tensor: an UNLABELLED pretraining corpus of
+            # CMIP6 piControl ocean output, 800 model-years against the 43 the
+            # reanalysis gives us. It seeds NOTHING from the GLORYS/truth/SST
+            # path above — a free-running control run has no real calendar, so
+            # there is no truth to attach and attaching one would be a lie.
+            # base025_na.npz is the one seed it wants, and only so
+            # build_family6.py can verify the grid against family 3 before
+            # writing (ml/CLAUDE.md 0.3).
+            #
+            # Reads the public Google Cloud CMIP6 zarr store over anonymous
+            # HTTPS — no credential reaches this box for the source. The HF
+            # token comes from the repo's Actions secret, never this file.
+            # SPARSE sidecar: 3 live channels of 40, 7.8 GB rather than the
+            # naive 103.8 GB, with channel_index recording where each belongs.
+            python -u ml/build_family6.py --layout sparse \
+              --out /opt/earth-cache/family6_na025_cmip6.npz \
+              ${HF_TOKEN:+--hf-repo chfrank/earth-tensors}
           elif [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily" ] || \
                [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily_r2" ]; then
             # E-038 Phase B. Same shape as the family-4 branch, daily inputs:
@@ -1025,6 +1051,11 @@ jobs:
           esac
 
       - name: Train
+        # family 6 is a pretraining CORPUS, not a training run: it carries no
+        # truth series, so every probe below would die on KeyError:'rapid' and
+        # the trainer has nothing to be trained against. The build step IS the
+        # whole job.
+        if: inputs.tensor != 'family6_na025_cmip6'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           # Every N-step checkpoint is mirrored to /opt/earth-cache/ckpt
@@ -1238,7 +1269,7 @@ jobs:
         # reached it — it would have governed the trainer and not whether this
         # phase ran, which is precisely the half-applied setting that recipes
         # exist to abolish.
-        if: always()
+        if: always() && inputs.tensor != 'family6_na025_cmip6'
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}

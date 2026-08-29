@@ -21,3 +21,4 @@ ml/paper/*.synctex.gz
 # session tooling: agent worktrees land here when a sandbox session uses
 # worktree-isolated subagents; never repo content
 .claude/
+ml/cache/pangeo-cmip6.csv
