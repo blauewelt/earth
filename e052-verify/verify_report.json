@@ -1,0 +1,460 @@
+{
+  "bucket": "earth-tpu-staging",
+  "code_sha": "88cad0b967c0c28612e2e89cacb54b4c0272d532",
+  "gates": [
+    {
+      "pass": true,
+      "rc": 0,
+      "test": "tests/test_jaxport_field.py",
+      "wall_s": 108.0
+    },
+    {
+      "pass": true,
+      "rc": 0,
+      "test": "tests/test_field_diffusion.py",
+      "wall_s": 68.0
+    },
+    {
+      "pass": true,
+      "rc": 0,
+      "test": "tests/test_probscore.py",
+      "wall_s": 0.0
+    }
+  ],
+  "gates_pass": true,
+  "geometry": {
+    "K": 144,
+    "batch": 8,
+    "d_model": 1024,
+    "heads": 8,
+    "layers": 10,
+    "patch": 4
+  },
+  "kind": "tpu_train_field verify report",
+  "node": "e052-verify",
+  "note": "Smoke legs are CODE-PATH assertions on real data, not skill measurements: 300 steps measures that the stack runs and how fast, and nothing about the field head's forecast. s_per_step_all_in includes setup, XLA compile and one eval.",
+  "smoke_det": {
+    "final_eval_records": [
+      {
+        "field_eval": {
+          "grad_nonfinite": 0,
+          "grad_norm_max": 2.6023,
+          "loss": 15.644292831420898,
+          "lr": 1.6349021371744813e-05,
+          "mse": 20.94636696553818,
+          "mse_pers": 22.887168677478144,
+          "ratio": 0.9152013191631786,
+          "step": 300,
+          "wall_s": 963.19
+        }
+      }
+    ],
+    "metrics_tail": [
+      {
+        "grad_norm": 2.058392,
+        "loss": 15.761356,
+        "lr": 1.4781732433163146e-05,
+        "step": 285,
+        "wall_s": 916.27
+      },
+      {
+        "grad_norm": 2.004523,
+        "loss": 18.346176,
+        "lr": 1.5089212265044336e-05,
+        "step": 288,
+        "wall_s": 925.56
+      },
+      {
+        "grad_norm": 1.955168,
+        "loss": 18.236069,
+        "lr": 1.5399688002616324e-05,
+        "step": 291,
+        "wall_s": 934.69
+      },
+      {
+        "grad_norm": 1.943333,
+        "loss": 17.270618,
+        "lr": 1.5713152751278247e-05,
+        "step": 294,
+        "wall_s": 944.05
+      },
+      {
+        "grad_norm": 1.962208,
+        "loss": 17.934374,
+        "lr": 1.602959955005361e-05,
+        "step": 297,
+        "wall_s": 953.19
+      },
+      {
+        "grad_norm": 1.890538,
+        "loss": 15.644293,
+        "lr": 1.6349021371744813e-05,
+        "step": 300,
+        "wall_s": 963.19
+      },
+      {
+        "field_eval": {
+          "grad_nonfinite": 0,
+          "grad_norm_max": 2.6023,
+          "loss": 15.644292831420898,
+          "lr": 1.6349021371744813e-05,
+          "mse": 20.94636696553818,
+          "mse_pers": 22.887168677478144,
+          "ratio": 0.9152013191631786,
+          "step": 300,
+          "wall_s": 963.19
+        }
+      },
+      {
+        "field_result": {
+          "backend": "jax",
+          "grad_nonfinite": 0,
+          "grad_norm_max": 2.6023,
+          "loss": 15.644292831420898,
+          "lr": 1.6349021371744813e-05,
+          "mode": "det",
+          "mse": 20.94636696553818,
+          "mse_pers": 22.887168677478144,
+          "params": 200406016,
+          "ratio": 0.9152013191631786,
+          "seed": 0,
+          "sigma_data": 4.471163456016997,
+          "step": 300,
+          "steps": 300,
+          "wall_s": 988.49
+        }
+      }
+    ],
+    "pass": true,
+    "rc": 0,
+    "results_json": {
+      "config": {
+        "H": 281,
+        "K": 144,
+        "P": 86698,
+        "T": 3142,
+        "W": 481,
+        "backend": "jax",
+        "batch": 8,
+        "ckpt_dir": "/dev/shm/earth-field/run/verify_det/ckpt",
+        "ckpt_every": 300,
+        "cond_chunk": 256,
+        "cond_heads": 4,
+        "cond_layers": 2,
+        "cond_remat": true,
+        "d_cond": 512,
+        "d_model": 1024,
+        "d_z": 32,
+        "data": "/dev/shm/earth-field/cache/family4_na025_pentad_r2_37e146384b.npz",
+        "devices": [
+          "TPU_0(process=0,(0,0,0,0))",
+          "TPU_1(process=0,(1,0,0,0))",
+          "TPU_2(process=0,(0,1,0,0))",
+          "TPU_3(process=0,(1,1,0,0))"
+        ],
+        "eval_batch": 0,
+        "eval_every": 300,
+        "eval_windows": 8,
+        "grad_clip": 128.0,
+        "have_crps": true,
+        "heads": 8,
+        "holdout_years": "2009,2017,2023",
+        "input_znoise": 0.7,
+        "law": "real",
+        "layers": 10,
+        "lr": 0.0003,
+        "lr_halflife": 40000.0,
+        "lr_schedule": "expdecay",
+        "lr_warmup": 2000,
+        "members": 8,
+        "metrics": "/dev/shm/earth-field/run/verify_det/metrics.jsonl",
+        "mode": "det",
+        "n_eval": 8,
+        "n_train": 2779,
+        "n_val": 219,
+        "nfe": 18,
+        "ntok": 5875,
+        "out": "/dev/shm/earth-field/run/verify_det/results.json",
+        "params": 200406016,
+        "patch": 4,
+        "pixels": "/dev/shm/earth-field/cache/pixels_family4_na025_pentad_r2_37e146384b.npy",
+        "prefetch": 2,
+        "quiet": false,
+        "resume": false,
+        "seed": 0,
+        "sigma_data": 4.471163456016997,
+        "smoke": false,
+        "steps": 300,
+        "time_offset": 0,
+        "time_stride": 0,
+        "toy": null,
+        "val_frac": 0.15,
+        "weight_decay": 0.0,
+        "z_cache": "/dev/shm/earth-field/cache/Z_8b639abe36_37e146384b.npy"
+      },
+      "final": {
+        "backend": "jax",
+        "grad_nonfinite": 0,
+        "grad_norm_max": 2.6023,
+        "loss": 15.644292831420898,
+        "lr": 1.6349021371744813e-05,
+        "mse": 20.94636696553818,
+        "mse_pers": 22.887168677478144,
+        "ratio": 0.9152013191631786,
+        "step": 300,
+        "steps": 300,
+        "wall_s": 988.49
+      },
+      "history": [
+        {
+          "grad_nonfinite": 0,
+          "grad_norm_max": 2.6023,
+          "loss": 15.644292831420898,
+          "lr": 1.6349021371744813e-05,
+          "mse": 20.94636696553818,
+          "mse_pers": 22.887168677478144,
+          "ratio": 0.9152013191631786,
+          "step": 300,
+          "wall_s": 963.19
+        }
+      ]
+    },
+    "s_per_step_all_in": 3.3833,
+    "steps": 300,
+    "wall_s": 1015.0
+  },
+  "smoke_diff": {
+    "final_eval_records": [
+      {
+        "field_eval": {
+          "crps": 2.7327044875249467,
+          "ens_ratio": 1.5233911592273526,
+          "grad_nonfinite": 0,
+          "grad_norm_max": 0.3007,
+          "loss": 0.9028733968734741,
+          "lr": 1.6349021371744813e-05,
+          "members": 4,
+          "mode_corr": 0.06090820424900456,
+          "mse_pers": 22.887163344320463,
+          "nfe_spent": 11,
+          "sample_ratio": 3.4985611157636773,
+          "sign_coherence": 0.019263190363387854,
+          "spread": 8.6800573565733,
+          "spread_error": 1.4700120504881586,
+          "step": 300,
+          "wall_s": 983.5
+        }
+      }
+    ],
+    "members": 4,
+    "metrics_tail": [
+      {
+        "grad_norm": 0.151754,
+        "loss": 0.869784,
+        "lr": 1.4781732433163146e-05,
+        "step": 285,
+        "wall_s": 935.47
+      },
+      {
+        "grad_norm": 0.119197,
+        "loss": 0.943279,
+        "lr": 1.5089212265044336e-05,
+        "step": 288,
+        "wall_s": 945.05
+      },
+      {
+        "grad_norm": 0.153606,
+        "loss": 0.880117,
+        "lr": 1.5399688002616324e-05,
+        "step": 291,
+        "wall_s": 954.56
+      },
+      {
+        "grad_norm": 0.065571,
+        "loss": 0.957842,
+        "lr": 1.5713152751278247e-05,
+        "step": 294,
+        "wall_s": 964.16
+      },
+      {
+        "grad_norm": 0.081665,
+        "loss": 0.889154,
+        "lr": 1.602959955005361e-05,
+        "step": 297,
+        "wall_s": 973.67
+      },
+      {
+        "grad_norm": 0.07241,
+        "loss": 0.902873,
+        "lr": 1.6349021371744813e-05,
+        "step": 300,
+        "wall_s": 983.5
+      },
+      {
+        "field_eval": {
+          "crps": 2.7327044875249467,
+          "ens_ratio": 1.5233911592273526,
+          "grad_nonfinite": 0,
+          "grad_norm_max": 0.3007,
+          "loss": 0.9028733968734741,
+          "lr": 1.6349021371744813e-05,
+          "members": 4,
+          "mode_corr": 0.06090820424900456,
+          "mse_pers": 22.887163344320463,
+          "nfe_spent": 11,
+          "sample_ratio": 3.4985611157636773,
+          "sign_coherence": 0.019263190363387854,
+          "spread": 8.6800573565733,
+          "spread_error": 1.4700120504881586,
+          "step": 300,
+          "wall_s": 983.5
+        }
+      },
+      {
+        "field_result": {
+          "backend": "jax",
+          "crps": 2.7327044875249467,
+          "ens_ratio": 1.5233911592273526,
+          "grad_nonfinite": 0,
+          "grad_norm_max": 0.3007,
+          "loss": 0.9028733968734741,
+          "lr": 1.6349021371744813e-05,
+          "members": 4,
+          "mode": "diff",
+          "mode_corr": 0.06090820424900456,
+          "mse_pers": 22.887163344320463,
+          "nfe_spent": 11,
+          "params": 200406016,
+          "sample_ratio": 3.4985611157636773,
+          "seed": 0,
+          "sigma_data": 4.471163456016997,
+          "sign_coherence": 0.019263190363387854,
+          "spread": 8.6800573565733,
+          "spread_error": 1.4700120504881586,
+          "step": 300,
+          "steps": 300,
+          "wall_s": 1179.46
+        }
+      }
+    ],
+    "nfe": 12,
+    "pass": true,
+    "rc": 0,
+    "results_json": {
+      "config": {
+        "H": 281,
+        "K": 144,
+        "P": 86698,
+        "T": 3142,
+        "W": 481,
+        "backend": "jax",
+        "batch": 8,
+        "ckpt_dir": "/dev/shm/earth-field/run/verify_diff/ckpt",
+        "ckpt_every": 300,
+        "cond_chunk": 256,
+        "cond_heads": 4,
+        "cond_layers": 2,
+        "cond_remat": true,
+        "d_cond": 512,
+        "d_model": 1024,
+        "d_z": 32,
+        "data": "/dev/shm/earth-field/cache/family4_na025_pentad_r2_37e146384b.npz",
+        "devices": [
+          "TPU_0(process=0,(0,0,0,0))",
+          "TPU_1(process=0,(1,0,0,0))",
+          "TPU_2(process=0,(0,1,0,0))",
+          "TPU_3(process=0,(1,1,0,0))"
+        ],
+        "eval_batch": 0,
+        "eval_every": 300,
+        "eval_windows": 8,
+        "grad_clip": 128.0,
+        "have_crps": true,
+        "heads": 8,
+        "holdout_years": "2009,2017,2023",
+        "input_znoise": 0.7,
+        "law": "real",
+        "layers": 10,
+        "lr": 0.0003,
+        "lr_halflife": 40000.0,
+        "lr_schedule": "expdecay",
+        "lr_warmup": 2000,
+        "members": 4,
+        "metrics": "/dev/shm/earth-field/run/verify_diff/metrics.jsonl",
+        "mode": "diff",
+        "n_eval": 8,
+        "n_train": 2779,
+        "n_val": 219,
+        "nfe": 12,
+        "ntok": 5875,
+        "out": "/dev/shm/earth-field/run/verify_diff/results.json",
+        "params": 200406016,
+        "patch": 4,
+        "pixels": "/dev/shm/earth-field/cache/pixels_family4_na025_pentad_r2_37e146384b.npy",
+        "prefetch": 2,
+        "quiet": false,
+        "resume": false,
+        "seed": 0,
+        "sigma_data": 4.471163456016997,
+        "smoke": false,
+        "steps": 300,
+        "time_offset": 0,
+        "time_stride": 0,
+        "toy": null,
+        "val_frac": 0.15,
+        "weight_decay": 0.0,
+        "z_cache": "/dev/shm/earth-field/cache/Z_8b639abe36_37e146384b.npy"
+      },
+      "final": {
+        "backend": "jax",
+        "crps": 2.7327044875249467,
+        "ens_ratio": 1.5233911592273526,
+        "grad_nonfinite": 0,
+        "grad_norm_max": 0.3007,
+        "loss": 0.9028733968734741,
+        "lr": 1.6349021371744813e-05,
+        "members": 4,
+        "mode_corr": 0.06090820424900456,
+        "mse_pers": 22.887163344320463,
+        "nfe_spent": 11,
+        "sample_ratio": 3.4985611157636773,
+        "sign_coherence": 0.019263190363387854,
+        "spread": 8.6800573565733,
+        "spread_error": 1.4700120504881586,
+        "step": 300,
+        "steps": 300,
+        "wall_s": 1179.46
+      },
+      "history": [
+        {
+          "crps": 2.7327044875249467,
+          "ens_ratio": 1.5233911592273526,
+          "grad_nonfinite": 0,
+          "grad_norm_max": 0.3007,
+          "loss": 0.9028733968734741,
+          "lr": 1.6349021371744813e-05,
+          "members": 4,
+          "mode_corr": 0.06090820424900456,
+          "mse_pers": 22.887163344320463,
+          "nfe_spent": 11,
+          "sample_ratio": 3.4985611157636773,
+          "sign_coherence": 0.019263190363387854,
+          "spread": 8.6800573565733,
+          "spread_error": 1.4700120504881586,
+          "step": 300,
+          "wall_s": 983.5
+        }
+      ]
+    },
+    "s_per_step_all_in": 4.0267,
+    "steps": 300,
+    "wall_s": 1208.0
+  },
+  "staged": {
+    "pixels": "tensors/pixels_family4_na025_pentad_r2_37e146384b.npy",
+    "tensor": "gs://earth-tpu-staging/tensors/family4_na025_pentad_r2_37e146384b.npz",
+    "z": "gs://earth-tpu-staging/tensors/Z_8b639abe36_37e146384b.npy"
+  },
+  "stamp": "20260826T220949Z",
+  "verdict": "PASS"
+}

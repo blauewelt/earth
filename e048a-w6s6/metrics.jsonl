@@ -1,0 +1,39 @@
+{"config": {"steps": 60000, "batch": 512, "d_z": 64, "patch": 1, "d_model": 768, "n_layers": 10, "n_heads": 8, "d_dec": 512, "anomaly": true, "eval_every": 0, "light_probe_every": 5000, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 71.336, "data": "family3_na025.npz", "C": 40, "T": 3142, "resume": null, "recipe": null, "backend": "jax", "k_time": 6, "fsq_levels": "8", "fsq_ladder": "auto"}}
+{"linear_r_deseas": 0.006, "linear_r_raw": -0.013, "light": true, "light_stride": 1, "light_n": 1459, "light_n_test": 234, "probe_seconds": 161.2, "step": 0, "wall_s": 161.2}
+{"step": 300, "loss_rec": 0.33689, "loss_nei": 0.33718}
+{"step": 600, "loss_rec": 0.3273, "loss_nei": 0.32403}
+{"step": 900, "loss_rec": 0.34069, "loss_nei": 0.34386}
+{"step": 1200, "loss_rec": 0.33536, "loss_nei": 0.34516}
+{"step": 1500, "loss_rec": 0.32414, "loss_nei": 0.33773}
+{"step": 1800, "loss_rec": 0.33993, "loss_nei": 0.34329}
+{"step": 2000, "fsq_ladder_fit": {"spec": "u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u,u", "n": 4096, "n_exp": 0, "d_z": 64}}
+{"step": 2100, "loss_rec": 0.38089, "loss_nei": 0.36838}
+{"step": 2400, "loss_rec": 0.34205, "loss_nei": 0.33907}
+{"step": 2700, "loss_rec": 0.33193, "loss_nei": 0.33306}
+{"step": 3000, "loss_rec": 0.33088, "loss_nei": 0.32621}
+{"step": 3300, "loss_rec": 0.32772, "loss_nei": 0.32741}
+{"step": 3600, "loss_rec": 0.35041, "loss_nei": 0.34694}
+{"step": 3900, "loss_rec": 0.32014, "loss_nei": 0.3221}
+{"step": 4200, "loss_rec": 0.33514, "loss_nei": 0.33077}
+{"step": 4500, "loss_rec": 0.3067, "loss_nei": 0.3103}
+{"step": 4800, "loss_rec": 0.32101, "loss_nei": 0.32189}
+{"linear_r_deseas": 0.0, "linear_r_raw": NaN, "light": true, "light_stride": 1, "light_n": 1459, "light_n_test": 234, "probe_seconds": 160.9, "step": 5000, "wall_s": 1328.9}
+{"step": 5100, "loss_rec": 0.34864, "loss_nei": 0.35011}
+{"step": 5400, "loss_rec": 0.3266, "loss_nei": 0.3221}
+{"step": 5700, "loss_rec": 0.34291, "loss_nei": 0.34013}
+{"step": 6000, "loss_rec": 0.31816, "loss_nei": 0.3266}
+{"step": 6300, "loss_rec": 0.33709, "loss_nei": 0.33028}
+{"step": 6600, "loss_rec": 0.31828, "loss_nei": 0.31252}
+{"step": 6900, "loss_rec": 0.33736, "loss_nei": 0.33302}
+{"step": 7200, "loss_rec": 0.33918, "loss_nei": 0.32961}
+{"step": 7500, "loss_rec": 0.33186, "loss_nei": 0.32717}
+{"step": 7800, "loss_rec": 0.32471, "loss_nei": 0.32255}
+{"step": 8100, "loss_rec": 0.33513, "loss_nei": 0.33475}
+{"step": 8400, "loss_rec": 0.3423, "loss_nei": 0.34118}
+{"step": 8700, "loss_rec": 0.34743, "loss_nei": 0.34908}
+{"step": 9000, "loss_rec": 0.34017, "loss_nei": 0.32862}
+{"step": 9300, "loss_rec": 0.3588, "loss_nei": 0.35436}
+{"step": 9600, "loss_rec": 0.32115, "loss_nei": 0.31748}
+{"step": 9900, "loss_rec": 0.34312, "loss_nei": 0.34879}
+{"linear_r_deseas": 0.0, "linear_r_raw": NaN, "light": true, "light_stride": 1, "light_n": 1459, "light_n_test": 234, "probe_seconds": 159.8, "step": 10000, "wall_s": 2436.1}
+{"step": 10000, "collapsed": {"linear_r_deseas": 0.0, "threshold": 0.05, "strikes": 2}}
