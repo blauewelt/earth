@@ -1,0 +1,32 @@
+{
+ "build": true,
+ "title": "E-061 · CMIP6 piControl pretraining corpus (800 model-years)",
+ "tensor": "family6_na025_cmip6",
+ "recipe": "f6r1",
+ "sources": [
+  "HadGEM3-GC31-MM piControl r1i1p1f1 Omon — 6000 months = 500 model-years, eORCA025, 360_day calendar",
+  "CNRM-CM6-1-HR piControl r1i1p1f2 Omon — 3600 months = 300 model-years, eORCA025, gregorian"
+ ],
+ "variables": [
+  "mlotst -> log_mld (ch 1)",
+  "zos -> ssh (ch 2)",
+  "tos -> sst (ch 39)"
+ ],
+ "expected": {
+  "rows": 9600,
+  "shape": "[9600, 281, 481, 3] float16 sparse",
+  "gb": 7.8,
+  "max_nn_km": 15.02,
+  "live_channels": 3,
+  "n_channels_full": 40,
+  "labelled": false
+ },
+ "checks": [
+  "the regrid map refuses a max nearest-neighbour distance over 40 km; measured 15.02",
+  "check_grid verifies the axes against base025_na.npz before any bytes are written",
+  "preflight_write allocates and round-trips the sidecar before a single CMIP6 byte is fetched",
+  "no truth keys in the index, labelled=False"
+ ],
+ "not_settled": "This builds the corpus. It does not pretrain anything, and it says nothing about whether pretraining on coarse-forced model dynamics transfers to the reanalysis — that is a separate experiment with its own control, in which the reanalysis is masked to the same 3 channels so transfer can be told apart from distribution shift.",
+ "published_at": "2026-08-29T10:46:20.019Z"
+}
