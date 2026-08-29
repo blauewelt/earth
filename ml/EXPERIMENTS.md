@@ -44,6 +44,94 @@ low-pass).
 
 ---
 
+<a id="e-061"></a>
+## E-061 · The pretraining corpus: 800 model-years against the 43 we have — DISPATCHED #514, 2026-08-29 ~11:0xZ
+
+TL;DR — E-059 and E-060a between them said the same thing twice: the best
+held-out one-step loss arrives at step 2,000 and everything after is
+memorisation, at 206.66M parameters and again at 7.6M. That is a DATA result,
+not a capacity one. The pool's `209,549,066` train windows is exactly **2,417
+end-bins x 86,698 pixels** — 2,417 distinct temporal windows against 206.66M
+parameters. Daily cadence does not help: 5x the values inside the SAME 43
+years, and at fixed K=144 the context window shrinks from 1.97 years to 0.39.
+The one source of ocean not capped by 43 years is model output. Chris:
+*"go ahead and add hindcast data to our training data"*, then *"yes, please
+start the Actions job."* Full design:
+[the E-061 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E061_cmip6_pretraining.md).
+
+**#514 · stage BUILD ONLY, nothing trains · tensor `family6_na025_cmip6`
+(recipe f6r1) · runner gpu (box 49102182, 300 GB, rented for this) ·
+`ml/build_family6.py`.** CMIP6 `piControl`/`Omon` from the public Google Cloud
+zarr store over ANONYMOUS HTTPS — no credential reaches the box for the
+source. **HadGEM3-GC31-MM** r1i1p1f1 (6,000 months = 500 model-years,
+360_day) + **CNRM-CM6-1-HR** r1i1p1f2 (3,600 = 300, gregorian), both NEMO
+eORCA025 at the same nominal 25 km as the target so nothing is upsampled.
+Variables `mlotst`/`zos`/`tos` -> `log_mld`/`ssh`/`sst`, **all scalars,
+deliberately**: `uo`/`vo` on a tripolar C-grid carry a local rotation angle
+and regridding them unrotated gives a systematically wrong subpolar gyre
+inside our own window. Currents wait for the ESGF OPeNDAP surface-hyperslab
+route (~5 MB per model-year vs 196 MB per MONTH through the zarr store,
+which chunks all 75 depth levels globally).
+
+**The regrid is validated, not asserted.** A fixed 1-NN map on 3-D unit
+vectors (not raw degrees — that is what makes the dateline and poles
+correct), refusing any mapping whose max nearest-neighbour distance exceeds
+40 km. Measured, identically for both models: mean **5.91 km**, p99 12.96,
+max **15.02**. Byte-identical statistics across the two is the expected
+answer — in the North Atlantic they are literally the same eORCA025 points.
+Checked against GREP on the same axes (HadGEM3 `tos` vs the ORAS5 January
+climatology): spatial correlation **0.9927**, RMSE 1.37 C, ocean cells 84,745
+vs 84,405, **mask disagreement 0.46%** — and those cells are almost entirely
+the **Great Lakes**, which HadGEM3's ocean carries and a reanalysis does not.
+A model-vs-reanalysis difference, not a geometry error. CNRM cross-check
+(July): corr 0.9833, 0.12%.
+
+**Stored SPARSE, and that is a decision worth naming.** Dense
+`[9600, 281, 481, 40]` float16 is **103.8 GB**, of which **92.5% is the
+literal absence of Argo and NCEP over a model run that never had them**. The
+sidecar carries only the live channels — `[9600, 281, 481, 3]` = **7.8 GB** —
+with `channel_index [1, 2, 39]` and `n_channels_full 40` in the index and
+`expand_to_full()` scattering it back; both directions are in the module's
+self-test. This programme already carries one 165.6 GB millstone.
+
+**No truth series, by design** (`labelled=False`): a free-running control run
+has no real calendar, so attaching transport labels would be a lie. The Train
+and Probes steps SKIP this tensor rather than dying on `KeyError: 'rapid'`,
+and `dispatch_run.mjs` learned a third run kind — a BUILD, whose honest plan
+is `{"build": true, ...}` and which must not be made to produce an LR curve
+(the same lesson as the `isEval` fix one day earlier).
+
+**Pre-registered:** 9,600 rows, `[9600, 281, 481, 3]` float16, 7.8 GB,
+`max_nn_km` 15.02 both models, `labelled` False with no truth keys,
+`check_grid` VERIFIED against `base025_na.npz` rather than warned (the box
+seeds it; this sandbox could not).
+
+**The confound the follow-up must control for, registered now rather than
+discovered later:** a 3-of-40-channel corpus fed to a 40-channel codec is a
+DISTRIBUTION SHIFT as well as a transfer. The control is to embed the
+REANALYSIS with the same 37 channels masked, so "pretraining helped" can be
+told apart from "the fine-tune adapted to a channel set it had been
+pretrained on". Without it the result is uninterpretable in either direction.
+Second open question: a non-eddying model teaches large-scale structure and
+not the mesoscale, and whether the memorisation problem is about large-scale
+structure is exactly what is unknown.
+
+**One thing Chris has to click.** The HF publish is wired
+(`HF_TOKEN: ${{ secrets.HF_TOKEN }}` on the build step, upload +
+download-back + sha256 compare per `ml/CLAUDE.md` 0.2) but the repo has **no
+Actions secrets at all** and the PAT returned **403** writing one, contrary
+to the 2026-08-16 note in `claude/huggingface-access.md`. So #514 leaves the
+corpus on the box's disk and says so as a warning. Adding `HF_TOKEN` in
+Settings -> Secrets makes the next build publish with no code change.
+
+**Licence:** CMIP6 output is CC BY-SA 4.0 per file; the terms require a table
+naming every model and institution, the WCRP acknowledgement and the Data
+Citation Guidelines. `paper/paper.tex` has neither an acknowledgements nor a
+data-availability section today, and that gap has to close before submission
+regardless of this corpus.
+
+---
+
 <a id="e-059"></a>
 ## E-059 · The memorization-controlled head: E-051 retrained with the held-out years actually held out — DISPATCHED 2026-08-28 17:09Z (phase 1) + #508 recall test on the old head
 
