@@ -703,6 +703,29 @@ holdout caveat like every archived head; (2) the FGN head is 279.6M vs the
 M=8 ⇒ ~8× roll cost, est. ~34–40 h: §5.25 partials ship to ml-live-512,
 the 24 h token expires mid-run ⇒ HAND-HARVEST the final artefact.
 
+**(l2) The harvest chain LANDED, with one 8-minute refusal in the middle.**
+#500 (E-057.1a seed 0) finished ALL 200,000 steps training blind past its
+expired token (final monitor: val_crps 0.296, member_var 0.078 — ε alive to
+the end; in-training pooled probe rapid_r_deseas 0.274 at 200k, telemetry
+only). #511 (E-057.1a-headpub) published the head as
+**`head-weights-e057fgn_s0.pt`** (1,118,528,441 B = 279.6M × 4 exactly) with
+the identity line verified in its log — `step=200000 d_model=1024 layers=16
+stencil=145 seed=0 znoise=0.0 params=279.6M` — and its rescue step carried
+#500's complete 114-record metrics off the box; `run-500.jsonl` is
+hand-archived to ml-metrics (the run's own archive step had 401'd at token
+expiry). **#512 (E-057.2, first attempt) REFUSED after 8 minutes, exactly as
+the sroll guard is built to do**: the window token carried the bare tag
+`e057fgn_s0` while headpub publishes `head-weights-<arm>.pt`, and sroll
+refuses to roll a subset rather than answer a different question than
+dispatched (its error text names the fix). Gate head fetched fine; cost
+≈$0.04. **RE-DISPATCHED as #513 (E-057.2, the M=8 ensemble roll proper,
+window `sroll:head-weights-e057fgn_s0,e017_u1_s0,longm:36,futm:36`)** —
+queued against a box the hourly fleet-watch had correctly stopped as idle,
+restarted 01:1xZ (warm caches intact), in_progress 01:15Z. Everything in
+(l) — F1 vs 0.7235/0.6781, the three registered caveats, ~34–40 h at 8×
+roll cost, §5.25 partials, hand-harvest at token expiry — now attaches to
+#513.
+
 **(i) The ENSEMBLE ROLL is BUILT and CPU-VERIFIED** — `ml/rollout_spatial.py`
 +779/−13, spec `ml/plans/E057_roll_spec.md`, tests
 `tests/test_fgn_roll.py` (new, 759 lines, 7 checks). A head whose checkpoint
