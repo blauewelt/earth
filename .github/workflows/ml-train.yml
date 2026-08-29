@@ -467,6 +467,38 @@ jobs:
             echo "::warning::no C compiler and none could be installed — any triton JIT kernel (e.g. probe_head's backward) will fail"
           fi
           pip install --quiet numpy netCDF4 matplotlib
+          # FAMILY 6 ONLY (E-061). The CMIP6 corpus is the first build to read
+          # the Pangeo catalogue and the public zarr stores, and that path
+          # imports six modules nothing else in this workflow does. #514 died
+          # six minutes in on `ModuleNotFoundError: No module named 'pandas'`
+          # (build_family6.py:276, resolve_stores) — and pandas is only the
+          # FIRST of them: fixing it alone would have bought one more box start
+          # and the same death at `import fsspec` on line 312, then zarr, then
+          # scipy.spatial in build_regrid_map, then huggingface_hub in
+          # preflight_hf. Same shape as #402, which died on `import yaml`.
+          #
+          # Gated on the recipe so that NO training run's environment changes:
+          # a dependency added for one build must not silently move a number in
+          # a run that never asked for it. RECIPE_TENSOR is set by the "Resolve
+          # recipe" step, which runs before this one.
+          #
+          # Then ASSERT the imports (ml/CLAUDE.md 0.3): a precondition checked
+          # where the inputs are all it has cost, rather than an hour into the
+          # download it guards.
+          if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family6_na025_cmip6" ]; then
+            pip install --quiet pandas fsspec aiohttp xarray zarr scipy huggingface_hub
+            for m in pandas fsspec aiohttp xarray zarr scipy huggingface_hub; do
+              python -c "import $m" || {
+                echo "::error::family-6 build dep still missing after install: $m"
+                exit 1
+              }
+            done
+            python -c "import scipy.spatial" || {
+              echo "::error::scipy.spatial unavailable — build_regrid_map cannot run"
+              exit 1
+            }
+            echo "family 6 deps present: pandas fsspec aiohttp xarray zarr scipy huggingface_hub"
+          fi
           # CUDA wheel when the runner has a GPU, CPU wheel otherwise —
           # train.py auto-selects the device, so the same dispatch works on both.
           #
