@@ -1,6 +1,56 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-28 ~21:35 UTC** (FGN session: E-057 harvest chain dispatched, seed-1 death recorded; 19:45Z Opus content below unchanged). **E-054b is now running the
+**Last updated: 2026-08-29 ~18:00 UTC** (FGN session: the protocol reset, E-057 landed and F1 withdrawn; everything below the reset block is the earlier text, unchanged).
+
+---
+
+## THE PROTOCOL RESET — read this before anything below it
+
+Chris, 2026-08-29: *"No need to compare models on the contaminated data.
+Let's do a proper comparison. Also: I feel we need to reboot the programme as
+until now we just evaluated how much for the training data the stage 2 can
+learn by heart. It feels we need smaller models, and we need to re-evaluate
+all dimensions as the previous eval results could not be trusted."*
+
+The standing answer is
+**[the protocol reset](https://blauewelt.github.io/earth/docs.html?f=ml/plans/PROTOCOL_RESET.md)**.
+Four memorisation signatures, each from an artefact on `ml-metrics`: the pool
+bug (21,018 supervised held-out targets, c25f6ff); **#510's band correlations
+0.511 / 0.591 / 0.565 across 5–90 d / 95–180 d / 185–365 d — skill that does
+not decay with lead is a recall curve**; **#513's corridor 0.838 on trained
+longitudes against 0.176 on held-out ones** (gate head 0.804 against 0.058 —
+below 0.5 is anti-skill, and every headline aggregate this programme has
+quoted is a ~24 %-untrained blend); and **#513's dispersion — eight
+independently-noised trajectories stay pinned together over years the model
+has seen (0.1060 → 0.1015 across 36 months inside the record) and fan out over
+years it has not (0.1974 → 0.4197 past its end)**, a memorisation test with no
+labels in it.
+
+**One correction to the framing:** smaller models are right for cost and not
+for cause. E-060a reproduced E-059's plateau at 7,597,856 parameters against
+206,658,592 — best held-out one-step loss at step 2,000 in both, 27× apart.
+The constraint is 2,417 end-bins, as the E-061 plan says.
+
+**Frozen protocol (proposal, §3):** terminal holdout with a context-window gap
+instead of interspersed years · `_trainlon`/`_holdlon` split as the headline,
+never the blend · lead-decay as a falsifier · a null ladder on every number,
+with a nearest-analogue retrieval baseline · early-stop at the held-out
+minimum · rolled skill as the verdict, never a probe.
+
+**Re-ranking programme (proposal, §4):** R0 — nothing rolled so far used a
+clean-pool head, so the first honest rolled number does not exist yet; roll
+`temporal_e059.pt` (206.66M) and `temporal_e060a.pt` (7.6M) through the #510/
+#513 ladder, two heads one job. R1 — re-rank cadence → stencil → unroll →
+znoise → FGN → width at the 7.6M tier. R2 — E-061 keeps going; it is the only
+work aimed at the 43-year constraint.
+
+**Retired (§5):** every rolled number from a pre-c25f6ff head as evidence of
+forecast skill · E-057's F1 · the capacity ladder as a skill question ·
+E-057 seed 1.
+
+---
+
+**E-054b is now running the
 RIGHT experiment.** Its 07:08Z relaunch had been rebuilt from the pristine
 launcher template with only the width/steps/tag sed'd in, so it silently
 reverted every E-051 knob (Z_ASSET empty, K 24, lr 1e-3, stencil 1, znoise 0,
