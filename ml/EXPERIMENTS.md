@@ -102,6 +102,34 @@ An arm at `target` sits exactly between E-051 and E-059 and would split the
 memorization term into its teacher-forcing and context halves; one dispatch
 away if the headline warrants it.
 
+**E-060 DISPATCHED (arm a), 2026-08-29 05:53Z — the width ladder under a
+clean pool.** Chris: *"Sounds good, let's do this."* Four points spanning
+53x — 7,597,856 (256x8) / 40,388,128 (512x12) / 206,658,592 (E-059's own,
+free) / 399,947,552 (1280x20) — all at step 20,000, everything but `d_model`
+and `n_layers` held at E-059's values, and the LR schedule is
+step-total-independent so each arm's first 20k traces a bit-identical LR
+trajectory to E-059's. Plan pre-registered BEFORE dispatch:
+[E-060](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E060_width_ladder.md).
+
+**Capacity, measured 2026-08-28 20:4xZ and again 05:5xZ:** spot v5e quota is
+**4 cores per zone**, so one node per zone, and of the five zones this
+project can reach only two ever have capacity. us-central1-a returns *"no
+more capacity"*, europe-west4-a *"insufficient capacity"*, us-east5-a
+*"Reservation not found"*; us-west4-a and us-west1-c refuse a second node on
+quota. The ladder therefore runs SEQUENTIALLY, not in parallel. E-054b's node
+self-terminated at step 60,000 and freed us-west1-c, which arm a took at
+05:53Z. Raising the quota would fix this permanently — preemptible v5e
+auto-approves to 800+ cores — but the **Cloud Quotas API is not enabled on
+the project**, so the request needs one console visit and cannot be made
+programmatically.
+
+**E-054b's own last word, for the record:** it stopped at step 60,000 with
+train 0.7987 / val 0.98762 / **ratio 0.04605** and a RAPID probe of 0.619 —
+a train/val gap of 1.24x, still the contaminated signature, and its probe
+rising while E-059's falls. It will not be relaunched. Its 4.8 GB checkpoint
+with optimizer state is in the bucket, so it stays resumable by node name if
+that decision is ever revisited.
+
 Registered readings: (1) one-step ratio at 200k/400k vs E-051's
 0.0330/0.02981 on the IDENTICAL `val_persistence` 21.44621 — **the gap IS
 the memorization term at h=1**, since the val targets are holdout bins whose
@@ -158,6 +186,30 @@ learn anything under a clean pool" is yes. But it gets there in the first
 2,000 steps of a 200,000-step run and **has not improved since** — 13.7437
 at 32k is slightly WORSE than its own step-2,000 value, while train falls
 3.9468 -> 1.0056. Roughly 99% of the training budget is buying memorization.
+
+**AT 142k/200k THE COUNTER-EVIDENCE IS GONE, AND THE HEADLINE READ-OUT IS
+DEGRADING.** The RAPID probe was the one thing pointing the other way — E-059
+and E-051 were indistinguishable at step 20,000 (0.616 vs 0.612), and that
+was recorded as the reason not to over-read the z-mse. With seven probes on
+the record the picture reverses:
+
+| step | 20k | 40k | 60k | 80k | 100k | 120k | 140k |
+|---|---|---|---|---|---|---|---|
+| **E-059** `rapid_r_deseas` (clean) | 0.616 | 0.578 | 0.551 | 0.524 | **0.515** | 0.524 | **0.527** |
+| E-051 (contaminated) | 0.612 | 0.588 | 0.601 | 0.599 | 0.599 | 0.606 | 0.602 |
+| E-054b 400M (contaminated) | 0.615 | 0.618 | — | 0.619 | — | — | — |
+
+Under a clean pool the AMOC read-out gets **worse** as training proceeds —
+0.616 down to ~0.52 — while both contaminated runs hold flat near 0.60-0.62.
+The z-mse says the same thing: E-059's val ratio is **0.67673 at 142k**
+against its own **0.6105 at 2,000**, i.e. its best clean validation loss was
+reached in the first 1% of the run and everything since has made it worse,
+with the train/val gap now **26.9x** (train 0.5396, val 14.51331).
+
+So the honest summary of E-059 so far: a clean pool leaves ~39% of one-step
+variance reduction over persistence, all of it acquired by step 2,000, and
+190,000 further steps of optimisation actively damage the quantity the
+programme exists to predict.
 
 **The structural reason, and it reframes the whole programme.** The
 `train windows: 209,549,066` figure is **2,417 end-bins x 86,698 ocean
@@ -244,6 +296,37 @@ certificate against #503's 0.944) land ~**05:58Z 08-29**, ten and a half
 hours inside the token. Only the tail of the future battery — the recall
 falsifier — is exposed if anything slows down, and that is the half that
 would have to be re-rolled.
+
+**THE DETERMINISM CERTIFICATE PASSED, 05:48:46Z — and it certified E-058 as a
+free by-product.** #510's skill phase scored, and every block of its head
+record was compared field-for-field against #503's harvested partial:
+
+| block | #510 | #503 |
+|---|---|---|
+| `corridor` `horizon_auc_daymatched` | **0.944** | 0.944 |
+| `corridor` `horizon_auc` | 0.888 | 0.888 |
+| `gate` day-matched / raw | 0.943 / 0.864 | 0.943 / 0.864 |
+| `window` day-matched / raw | 0.95 / 0.887 | 0.95 / 0.887 |
+| `n_px` corridor / gate / window | 30,158 / 864 / 86,698 | identical |
+| `amoc_bands`, `amoc_bands_def`, `amoc_bands_unpooled`, `audit`, `meta`, all three `*_holdlon` | **byte-identical** | — |
+
+**The ONLY difference anywhere is `per_channel`**, `null` in #503 and
+populated in #510 — E-058's per-channel decomposition, which landed after
+#503 ran. E-058 was certified bit-identical on a fixture; this is that same
+claim confirmed on a real roll, with every pooled number unmoved to the
+digit. So the roll protocol is deterministic, and 0.944 is a real property
+of that head under that protocol rather than an artefact of one run.
+
+**And the flat profile is confirmed at full length.** The corridor
+skill-vs-lead reads `msss_clim` **0.971 at h=1 and 0.946 at h=73** — a
+365-day-ahead prediction as skilful as a 5-day one, across the whole year —
+with the per-horizon `n` falling 2,171,138 / 1,447,424 / 723,710 exactly as
+the year-boundary break requires. Genuine forward physics decays. This does
+not.
+
+Next: the long battery (219 steps, ~11:07Z) then the FUTURE roll (219 steps,
+~16:25Z) — the falsifier that runs past the end of the record, where nothing
+existed to memorise.
 
 Costs: E-059 ≈ $60 spot over both phases + ~$4 roll; the recall test ≈ $7
 plus ~$0.15 of failed dispatches and one destroyed box's storage. #503's
