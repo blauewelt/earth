@@ -1,0 +1,11 @@
+{
+ "eval": true,
+ "heads": [
+  "head-weights-e057fgn_s0",
+  "e017_u1_s0"
+ ],
+ "exp": "E-057.2",
+ "what": "re-dispatch of #512 (refused on the head-asset token name): first M=8 ensemble roll of the FGN seed-0 head - ensemble-mean corridor AUC vs znoise pair 0.7235 (F1) + CRPS/spread keys + 36+36-month dispersion battery (F3); gate re-rolled for wave validity",
+ "eta_h": 38,
+ "published_at": "2026-08-29T01:04:17.920Z"
+}
