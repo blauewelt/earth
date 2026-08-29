@@ -1,0 +1,10 @@
+{
+ "eval": true,
+ "heads": [
+  "head-weights-e059-200k-window-s0"
+ ],
+ "exp": "E-059-roll",
+ "what": "the decisive memorization test: roll the clean-pool (holdout-scope window) 200k head through the exact #503/#510 protocol - decay = forward skill, flat = E-051's signature reproduced under a clean pool. Battery 36 months each way (879 steps, ~21.3 h).",
+ "eta_h": 22,
+ "published_at": "2026-08-29T11:05:04.400Z"
+}
