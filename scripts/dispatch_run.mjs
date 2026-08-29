@@ -69,7 +69,25 @@ const n = (v) => (v === undefined || v === null || v === "" ? NaN : Number(v));
 const isEval = String(inputs.temporal_steps ?? "") === "0"
   && String(inputs.window ?? "").split(",")
        .some((tok) => tok.startsWith("sroll:"));
-if (isEval) {
+// A DATA BUILD is a third kind, and the same lesson one level along: family 6
+// is an unlabelled pretraining corpus, so the job builds a tensor and stops —
+// the Train and Probes steps skip it. Demanding an LR curve from a run with
+// no LR is what the isEval fix above was about; a build has no LR either, and
+// no heads to name, so its honest plan is {"build": true, ...}.
+const isBuild = String(inputs.tensor ?? "").startsWith("family6_");
+if (isBuild) {
+  if (!plan.build) {
+    problems.push(
+      "this is a BUILD dispatch (tensor family6_*) — its plan must be " +
+      "{\"build\": true, ...}, not a training curve the status page would " +
+      "draw as a schedule the run does not have");
+  }
+  if (plan.eval) {
+    problems.push("plan.eval is set but this dispatch builds a tensor");
+  }
+} else if (plan.build) {
+  problems.push("plan.build is set but this dispatch is not a tensor build");
+} else if (isEval) {
   if (!plan.eval) {
     problems.push(
       "this is an EVAL dispatch (sroll:, temporal_steps 0) — its plan must " +
@@ -80,13 +98,13 @@ if (isEval) {
   problems.push("plan.eval is set but this dispatch trains — wrong plan file");
 }
 
-if (!isEval && !(n(plan.steps) > 0)) problems.push("plan.steps must be a positive number");
-if (!isEval && !(n(plan.lr) > 0)) problems.push("plan.lr must be a positive number");
+if (!isEval && !isBuild && !(n(plan.steps) > 0)) problems.push("plan.steps must be a positive number");
+if (!isEval && !isBuild && !(n(plan.lr) > 0)) problems.push("plan.lr must be a positive number");
 // THE CURVE MUST COME FROM THE TRAINER. A plan without `points` would be
 // re-derived by the status page, which is a second implementation of the
 // schedule and would happily draw a cosine for a wsd run — certifying a
 // schedule the run does not use. Generate it with ml/plan_schedule.py.
-if (!isEval && (!Array.isArray(plan.points) || plan.points.length < 2)) {
+if (!isEval && !isBuild && (!Array.isArray(plan.points) || plan.points.length < 2)) {
   problems.push(
     "plan.points is missing: the curve must be computed from the trainer's " +
     "own scheduler, not re-derived by the page. Generate the plan with\n" +
@@ -152,9 +170,20 @@ if (problems.length) {
   process.exit(1);
 }
 console.log("precertified: plan and inputs describe the same run");
-console.log(`  ${plan.warm ? "warm restart" : "fresh run"} · ` +
-            `${Number(plan.steps).toLocaleString()} steps · peak ${plan.lr}` +
-            (plan.parent_steps ? ` · parent ${Number(plan.parent_steps).toLocaleString()}` : ""));
+// Say what THIS run is. The training summary printed "NaN steps · peak
+// undefined" for a build, which is a log line asserting something false about
+// a run that is fine — the same class of error as a plan that disagrees with
+// its dispatch.
+console.log(isBuild
+  ? `  tensor build · ${plan.tensor ?? inputs.tensor} · ` +
+    `${plan.expected?.rows?.toLocaleString() ?? "?"} rows · ` +
+    `${plan.expected?.gb ?? "?"} GB · nothing trains`
+  : isEval
+    ? `  eval · ${(plan.heads ?? []).length} head(s) · no LR schedule`
+    : `  ${plan.warm ? "warm restart" : "fresh run"} · ` +
+      `${Number(plan.steps).toLocaleString()} steps · peak ${plan.lr}` +
+      (plan.parent_steps
+        ? ` · parent ${Number(plan.parent_steps).toLocaleString()}` : ""));
 if (DRY) { console.log("--dry-run: stopping before dispatch"); process.exit(0); }
 
 // ---- dispatch, then publish the plan under the run number it got -----------
