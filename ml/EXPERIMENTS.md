@@ -922,6 +922,52 @@ restarted 01:1xZ (warm caches intact), in_progress 01:15Z. Everything in
 roll cost, §5.25 partials, hand-harvest at token expiry — now attaches to
 #513.
 
+**(m) #513 LANDED 14:32:50Z 2026-08-29 — and F1 is WITHDRAWN, not reported.**
+The M=8 roll finished clean in 13 h 0 m (2,448 FGN steps = 8 × the gate's 306,
+the ensemble multiplier confirmed by construction; ~19 s/step throughout,
+`probes-513.json` 4,003,050 B). Chris, the same day, on the whole comparison:
+*"No need to compare models on the contaminated data."* F1 asked for the
+ensemble-mean corridor AUC against the znoise pair 0.7235 and the clean pair
+0.6781; all three sides sit on the `endpoint_contaminated` pool, so the
+contrast is internally consistent and externally meaningless. **For the record
+FGN did not win — corridor 0.648 — and that number is withdrawn rather than
+reported.** What E-057 actually established is MACHINERY, and it holds:
+
+- **F2 PASSES.** ε does not collapse: `member_var` 0.078 at step 200,000, and
+  the eight member trajectories are genuinely distinct in the roll.
+- **F3 PASSES, and says something nobody asked it.** `future_dispersion`
+  (36 months past the record's end, 2025-01→2027-12) grows — transport spread
+  0.1974 → 0.4197 over the first-vs-last twelve months, corridor field
+  variance 0.0443 → 0.3242 (×7.3). `long_dispersion` over 2005–2007, INSIDE
+  the record, is flat: 0.1060 → 0.1015, field variance 0.0092 → 0.0269. Eight
+  independently-noised trajectories stay pinned together over years the model
+  has seen and fan out over years it has not. **That is a memorisation
+  signature read off the ensemble alone, with no labels anywhere in it** — the
+  cheapest such test this programme has, and it costs no truth series.
+- **The ensemble is badly UNDERDISPERSED, which is a finding about FGN and not
+  about the pool.** spread/RMSE (with `probscore.spread_error`'s (M+1)/M
+  correction) reads **0.253 / 0.281 / 0.273** at h=1 / 6 / 12 on the corridor
+  and 0.441 / 0.370 / 0.364 on trained longitudes, against ~1.0 for a
+  calibrated ensemble. Fair-CRPS training at N=2 produced a live noise channel
+  whose spread is 2–4× too small to be usable uncertainty. Registered as the
+  open FGN question; no dispatch attached to it.
+- **The spatial split is the loudest number in the file** and belongs to the
+  system, not to FGN: corridor `_trainlon` **0.838** against `_holdlon`
+  **0.176**, and the deterministic gate head `e017_u1_s0` on the same roll
+  0.804 against **0.058**. Below 0.5 is anti-skill, not weak skill. The
+  published aggregates are ~24%-untrained blends and are lower bounds on their
+  own memorised halves.
+
+**Seed 1 is NOT re-run.** §3b owed it only under the winner-replicate clause;
+FGN did not win and the comparison is withdrawn regardless. Vast `48937793`
+(offline since 19:20Z 08-28) holds its only head copy and nothing depends on
+it. Total E-057 spend across #492…#513: the two trainings, one headpub, one
+8-minute refusal (~$0.04) and one 13 h roll.
+
+**Everything in (m) is read through
+[the protocol reset](https://blauewelt.github.io/earth/docs.html?f=ml/plans/PROTOCOL_RESET.md),
+which was written from these numbers plus E-059's and E-060a's.**
+
 **(i) The ENSEMBLE ROLL is BUILT and CPU-VERIFIED** — `ml/rollout_spatial.py`
 +779/−13, spec `ml/plans/E057_roll_spec.md`, tests
 `tests/test_fgn_roll.py` (new, 759 lines, 7 checks). A head whose checkpoint
