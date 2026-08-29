@@ -204,7 +204,9 @@ Under a clean pool the AMOC read-out gets **worse** as training proceeds —
 The z-mse says the same thing: E-059's val ratio is **0.67673 at 142k**
 against its own **0.6105 at 2,000**, i.e. its best clean validation loss was
 reached in the first 1% of the run and everything since has made it worse,
-with the train/val gap now **26.9x** (train 0.5396, val 14.51331).
+with the train/val gap now **26.9x** (train 0.5396, val 14.51331). At 150k
+(mirror read, 06:11Z): train 0.53364, val 14.55734, ratio **0.67879** —
+unchanged picture; phase 1 ends ~10:25Z.
 
 So the honest summary of E-059 so far: a clean pool leaves ~39% of one-step
 variance reduction over persistence, all of it acquired by step 2,000, and
@@ -323,6 +325,29 @@ skill-vs-lead reads `msss_clim` **0.971 at h=1 and 0.946 at h=73** — a
 with the per-horizon `n` falling 2,171,138 / 1,447,424 / 723,710 exactly as
 the year-boundary break requires. Genuine forward physics decays. This does
 not.
+
+**Independently re-verified from a fresh container, 06:2xZ** — a second
+session with no inherited state re-fetched `ml-live-503` and `ml-live-510`
+and re-ran the comparison from the branch artefacts alone: a recursive
+field-for-field diff of the entire head record returns **zero value
+differences**. The only deltas anywhere in the two files are the six added
+`per_channel` blocks (E-058's, absent in #503's partial) and the intended
+cadence change (`long_steps`/`future_steps` 1461 → 219, spans 7305 → 1095 d).
+All 73 per-horizon rows are identical in all three scopes, and the pooled
+headline numbers match to the digit. Measured pace: 441 skill steps in
+10 h 30 m from roll t0 (**85.7 s/step**, slightly ahead of the 87.1 planning
+number), so the future roll's finish projects ~16:15Z against the ~17:26Z
+token expiry — **~70 min of margin**, a little better than the ~50 planned.
+
+**Status-page caveat found while reading E-059's telemetry, fixed in this
+commit:** `tpu_status_mirror.py` listed nodes in `$GCP_ZONE` ONLY
+(us-west1-c), so `e059-window` — alive in us-west4-a — read as "gone", and
+with checkpoints in the bucket the index labeled it **FINISHED** mid-run.
+The mirror now asks every zone on the spot ladder. (Also measured: the */15
+cron is registered and `schedule` runs do fire, but at 2–12 h gaps — GitHub
+throttles busy-repo crons — so between fires the mirror is hours stale; when
+a current reading matters, `workflow_dispatch` the mirror first, which
+refreshes `ml-live-tpu` in ~25 s.)
 
 Next: the long battery (219 steps, ~11:07Z) then the FUTURE roll (219 steps,
 ~16:25Z) — the falsifier that runs past the end of the record, where nothing

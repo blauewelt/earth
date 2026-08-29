@@ -58,6 +58,18 @@ REPO = os.environ.get("REPO", "blauewelt/earth")
 BUCKET = os.environ.get("BUCKET", "earth-tpu-staging")
 PROJECT = os.environ.get("GCP_PROJECT", "earth-tpu-blauewelt")
 ZONE = os.environ.get("GCP_ZONE", "us-west1-c")
+# Nodes live in whichever zone had capacity (the spot ladder spans five
+# zones), but this mirror used to ask ONLY $GCP_ZONE — so a node in any
+# other zone read as "gone" and, with *.pt checkpoints in the bucket, was
+# labeled FINISHED mid-run. Measured 2026-08-29: e059-window TRAINING at
+# step 150k in us-west4-a while index.json said FINISHED. Ask every zone
+# the launcher can use; a zone that errors is skipped with a warning
+# rather than killing the mirror.
+ZONES = [z.strip() for z in os.environ.get(
+    "GCP_ZONES",
+    ",".join(dict.fromkeys([ZONE, "us-west1-c", "us-west4-a", "us-west4-b",
+                            "us-central1-a", "us-east5-a", "us-east5-b",
+                            "us-east5-c"]))).split(",") if z.strip()]
 BRANCH = "ml-live-tpu"
 GS = "https://storage.googleapis.com/storage/v1/b/%s" % BUCKET
 # metrics.jsonl is copied verbatim up to this cap; past it, the TAIL is kept
@@ -96,9 +108,19 @@ def gcs_read(tok, name):
 
 
 def live_nodes(tok):
-    d = json.loads(http("GET", nodes_url(PROJECT, ZONE),
-                        {"Authorization": "Bearer " + tok}) or b"{}")
-    return {n["name"].rsplit("/", 1)[-1]: n for n in d.get("nodes", [])}
+    out = {}
+    for zone in ZONES:
+        try:
+            d = json.loads(http("GET", nodes_url(PROJECT, zone),
+                                {"Authorization": "Bearer " + tok},
+                                ok404=True) or b"{}")
+        except SystemExit as e:
+            print(f"warning: node list failed for {zone}: {e}",
+                  file=sys.stderr)
+            continue
+        for n in d.get("nodes", []):
+            out[n["name"].rsplit("/", 1)[-1]] = n
+    return out
 
 
 def gh_token():
