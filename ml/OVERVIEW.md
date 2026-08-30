@@ -1,6 +1,6 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-29 ~18:00 UTC** (FGN session: the protocol reset, E-057 landed and F1 withdrawn; everything below the reset block is the earlier text, unchanged).
+**Last updated: 2026-08-30 ~22:30 UTC** (E-062-R0 landed: the first honest rolled number in this programme's history, and a metric correction that changes how every "corridor AUC" in this file reads; everything below the reset block is the earlier text, unchanged).
 
 ---
 
@@ -19,30 +19,94 @@ bug (21,018 supervised held-out targets, c25f6ff); **#510's band correlations
 0.511 / 0.591 / 0.565 across 5–90 d / 95–180 d / 185–365 d — skill that does
 not decay with lead is a recall curve**; **#513's corridor 0.838 on trained
 longitudes against 0.176 on held-out ones** (gate head 0.804 against 0.058 —
-below 0.5 is anti-skill, and every headline aggregate this programme has
-quoted is a ~24 %-untrained blend); and **#513's dispersion — eight
+on ocean it never saw, the head removes ~6 % of the anomaly variance, i.e.
+essentially nothing, and every headline aggregate this programme has quoted is
+a ~24 %-untrained blend); and **#513's dispersion — eight
 independently-noised trajectories stay pinned together over years the model
 has seen (0.1060 → 0.1015 across 36 months inside the record) and fan out over
 years it has not (0.1974 → 0.4197 past its end)**, a memorisation test with no
 labels in it.
 
 **One correction to the framing:** smaller models are right for cost and not
-for cause. E-060a reproduced E-059's plateau at 7,597,856 parameters against
-206,658,592 — best held-out one-step loss at step 2,000 in both, 27× apart.
-The constraint is 2,417 end-bins, as the E-061 plan says.
+for cause. E-060a's BEST held-out one-step loss is 0.60951 (7,597,856 params,
+step 1,200) against E-059's 0.61049 (206,658,592, step 2,000) — 0.001 apart
+across a 27× span, both peaking inside 2,000 steps and worsening for the next
+198,000. (Restated 2026-08-30: the E-060 read-out falsified the stronger claim
+that the arms match at a fixed later step — at 20,000 the small arm is 0.051
+worse. Width buys how fast an arm gets there and how badly it then degrades,
+not the level; and the degradation runs against the large arm, which collapses
+RAPID 0.616 → 0.515 while 7.6M holds 0.598–0.611.) The constraint is 2,417
+end-bins, as the E-061 plan says.
 
-**Frozen protocol (proposal, §3):** terminal holdout with a context-window gap
-instead of interspersed years · `_trainlon`/`_holdlon` split as the headline,
+**Frozen protocol (§3), DECIDED by Chris 2026-08-30:** terminal holdout
+**train ≤ 2020, test 2021–2024, NO GAP** (the gap was over-caution and is
+withdrawn; 2025 does not exist — the tensor ends 2024-12-31) · `_trainlon`/`_holdlon` split as the headline,
 never the blend · lead-decay as a falsifier · a null ladder on every number,
 with a nearest-analogue retrieval baseline · early-stop at the held-out
 minimum · rolled skill as the verdict, never a probe.
 
-**Re-ranking programme (proposal, §4):** R0 — nothing rolled so far used a
-clean-pool head, so the first honest rolled number does not exist yet; roll
-`temporal_e059.pt` (206.66M) and `temporal_e060a.pt` (7.6M) through the #510/
-#513 ladder, two heads one job. R1 — re-rank cadence → stencil → unroll →
-znoise → FGN → width at the 7.6M tier. R2 — E-061 keeps going; it is the only
-work aimed at the 43-year constraint.
+**Re-ranking programme (§4): R0 HAS LANDED — #516, 2026-08-30 21:42Z, and it
+is the first honest rolled number this programme has ever had.** Verdict below.
+R1 — re-rank cadence → stencil → unroll → znoise → FGN → width at the 7.6M
+tier. R2 — E-061 keeps going; it is the only work aimed at the 43-year
+constraint. Still blocked: the 7.6M arm of R0 (`temporal_e060a.pt` is in the
+TPU bucket, not on `model-checkpoints-v1`; mirroring it needs the GCS read
+credential this session could not obtain).
+
+### E-062-R0 (#516) · the verdict, 2026-08-30
+
+**A METRIC CORRECTION FIRST, because it changes how every number above reads.**
+What this programme calls "corridor AUC" is not an AUC. It is `horizon_auc` =
+mean **`msss_clim` = 1 − MSE_model / MSE_climatology**, and the fields are
+already anomalies, so "climatology" = predicting zero anomaly. **1.0 perfect,
+0.0 exactly as good as predicting nothing, negative = error exceeds the anomaly
+variance.** Negative is NOT "below chance" and does not mean the ranking
+inverts. `ml/rollout_spatial.py:117` has said so since E-017.
+
+**The headline: the clean-pool head PASSES the lead-decay falsifier its
+contaminated twin FAILS.** Field anomaly correlation `acc`, corridor scope,
+same battery, one variable (the training pool):
+
+| | h=1 (5 d) | h=73 (365 d) | mean |
+|---|---|---|---|
+| #516 · E-059, clean pool | **0.606** | **−0.031** | 0.105 |
+| #510 · E-051, contaminated | **0.985** | **0.973** | 0.946 |
+
+A near-unity field correlation twelve months out, flat across the year, is a
+memorised trajectory being replayed. The clean head decays like a forecast.
+Corridor `horizon_auc` goes +0.888 → **−0.439**; gate −0.395; window −0.401;
+unpooled bands 0.107 / −0.242 / 0.163 (all inside noise of zero at ~9 effective
+starts — read them as "no measurable transport skill", never as inversion).
+
+**The negative score is a CALIBRATION failure and the arithmetic closes.** Mean
+`acc` 0.105 against mean `amp_ratio` 0.780 — the head keeps emitting anomalies
+at 78 % amplitude long after it stops knowing their sign. The identity
+`msss = 1 − (1 + a² − 2a·ACC)` reproduces all 73 corridor leads to a mean
+absolute error of **0.0135**. Amplitude-calibrated (`a = ACC`), the same rolled
+states would score **+0.019** instead of −0.439. The head also **beats
+persistence at every lead but the last** (mean msss_pers +0.204).
+
+**Where the residual skill is:** SST is the only channel beating climatology
+past one step, out to 90 days (+0.069); SSH is best at 5 d (+0.717). And **only
+8 of 40 channels are scored at all** — the 32 `rg_*` Argo channels are null at
+every lead, the evaluator's own confirmation of the data ladder's §2 finding
+that they are 80 % of the tensor's bytes carrying ~0.28 GB.
+
+**Caveats that must travel with these numbers:** n = 1 at a cadence with no
+replicate pair (§3b) · the head is the 200k memorised end state, past its
+held-out minimum at step 2,000, so this is a floor (§3.5) · it still scores
+against the OLD interspersed holdout · E-059's own probe was 0.522, below both
+wind-stress ridge bars · the pentad r2 tensor has no longitude hole, so
+`_trainlon` equals the parent and the spatial split was not measured here.
+
+**Next, in order:** (1) roll the step-2,000 checkpoint — cheapest untried thing
+in the programme; (2) fix the amplitude calibration, a decoding change worth
+~+0.46 msss on states we already have; (3) drop or thin the 32 upsampled Argo
+channels; (4) the terminal-holdout retrains at 7.6M, unchanged and no longer
+needing to rescue anything.
+
+Full reading:
+[E-062 in the experiment log](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-062).
 
 **Retired (§5):** every rolled number from a pre-c25f6ff head as evidence of
 forecast skill · E-057's F1 · the capacity ladder as a skill question ·

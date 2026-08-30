@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-062"></a>
-## E-062 · The first honest roll, and the terminal holdout — R0 DISPATCHED #516, 2026-08-30 ~19:0xZ
+## E-062 · The first honest roll, and the terminal holdout — R0 SKILL BATTERY LANDED #516, 2026-08-30 ~21:42Z
 
 TL;DR — **nothing this programme has ever rolled used a clean-pool head.** #503,
 #510 and #513 all rolled heads trained under `endpoint_contaminated`, so no
@@ -122,11 +122,213 @@ the design:
 
 **SMALL TIER IS NOW THE DEFAULT** (Chris, 2026-08-30: *"Yes, small tier should
 be the default"*). Arms at 206M+ need a specific argument; E-060a's 7.6M rung
-is the working default, on the evidence that it reproduces the 206.66M
-plateau exactly (E-060, and the E-061 plan's §1).
+is the working default. **The evidence for that was restated on 2026-08-30 by
+the E-060 read-out below, which falsified the prediction it was originally
+quoted from, so state it precisely:** the two arms' BEST held-out one-step
+losses are **0.60951 (7.6M, step 1,200)** against **0.61049 (206.66M, step
+2,000)** — a difference of 0.001 across a 27× span, and every arm's best sits
+in 0.58–0.62 across a 53× span. What is NOT true, and was claimed here before
+that read-out landed, is that the arms match at a fixed later step: at step
+20,000 the 7.6M arm is **0.051 worse**. The small tier's real case is the best
+value plus the read-out stability — 7.6M holds RAPID at 0.598–0.611 across all
+ten probes while 206.66M collapses 0.616 → 0.515 over 200k. See
+[the E-060 read-out](#e-060-read).
 
 Full design and the retirements it implies:
 [the protocol reset](https://blauewelt.github.io/earth/docs.html?f=ml/plans/PROTOCOL_RESET.md).
+
+---
+
+### E-062-R0 · THE RESULT — read 2026-08-30 22:1xZ, from a PARTIAL artefact
+
+**Every number in this block is from `rollout_spatial.json` on `ml-live-516`
+carrying a top-level `in_progress` marker** (`{"head": "s145rspiral:111-4444-0.71-0.5_s0",
+"head_i": 1, "heads": 1, "stage": "scored", "at": "2026-08-30T21:42:40Z"}`).
+Per `ml/CLAUDE.md` §5.25 the skill phase is COMPLETE and its scored block was
+written at the phase boundary, so these numbers are final for the skill
+battery; the roll itself is still running the long/future dispersion phases
+(460/879 at read time, ending ~07:58Z Aug 31). Nothing here will change; the
+`long_dispersion`/`future_dispersion` blocks are still owed.
+
+Head identity verified from `meta`: `file: head-weights-e059-200k-window-s0.pt`,
+stencil 145, ring `spiral:111-4444-0.71-0.5`, seed 0, unroll 1 — the clean-pool
+E-059 head, and the battery is protocol-identical to #510's.
+
+#### (a) FIRST, A METRIC CORRECTION THAT CHANGES HOW EVERY ONE OF THESE NUMBERS READS
+
+The quantity this programme calls **"corridor AUC" is not an AUC.** It is
+`horizon_auc` = the unweighted mean of **`msss_clim` = 1 − MSE_model /
+MSE_climatology** over the leads. `ml/rollout_spatial.py:117` says so in as many
+words ("NOTE the metric's name: the 0.643–0.645 'AUC' band quoted everywhere for
+E-017 is rollout.py's `horizon_auc` = mean MSSS vs CLIMATOLOGY"), and the
+climatology reference is `mse_c += (v_true**2)` (:1154) — the fields are already
+anomalies against the **train-month** climatology, so "climatology" is the
+forecast *zero anomaly*.
+
+Therefore: **1.0 is perfect, 0.0 is exactly as good as predicting no anomaly,
+and negative means the model's squared error exceeds the anomaly variance
+itself.** A negative value is NOT "below chance", and it does NOT mean the
+ranking inverts. That reading was wrong where it appeared, and
+`ml/plans/PROTOCOL_RESET.md` §2c has been corrected in the same commit as this
+entry. The name is left alone — 183 archived bundles use the key — but no
+future entry may reason about it as an area under a curve.
+
+#### (b) The headline: the clean-pool head PASSES the §3.3 falsifier that the contaminated head FAILS
+
+§3.3 pre-registered lead-decay as the falsifier. The instrument that answers it
+directly is **`acc`** — the anomaly correlation between rolled and true fields,
+per lead, in each scope's `chan_skill` rows. It is in both artefacts and had
+never been read.
+
+| corridor, `acc` | h=1 (5 d) | h=6 (30 d) | h=18 (90 d) | h=73 (365 d) | mean |
+|---|---|---|---|---|---|
+| **#516 · E-059, clean pool** | **0.606** | 0.204 | 0.132 | **−0.031** | 0.105 |
+| #510 · E-051, contaminated pool | **0.985** | — | — | **0.973** | 0.946 |
+
+That is the whole reset in two rows. **The contaminated head correlates with the
+truth at r = 0.97 twelve months out, and its curve is FLAT** (0.985 → 0.973
+across a full year). Nothing in ocean physics forecasts a field anomaly at 365
+days with r = 0.97; a flat near-unity correlation over a year is a memorised
+trajectory being replayed, and it is §2b's signature stated on the FIELD instead
+of on the transport, far more starkly than the transport ever stated it. **The
+clean-pool head decays monotonically from 0.606 to zero**, which is the shape a
+forecast has. Same battery, same starts, same holdout years, same codec family,
+one variable: the training pool.
+
+So of the two branches registered at dispatch — "decays" or "flat too" — the
+answer is **DECAYS**, and the leak was the pool. The terminal-holdout change is
+still worth making for the reasons in the entry above (extrapolation vs
+interpolation; it is the use case), but R0 does not force it as a rescue.
+
+#### (c) The scored numbers, all three scopes
+
+| scope | n_px | `horizon_auc` (mean msss_clim) | daymatched | mean msss_**pers** | mean `acc` | mean `amp_ratio` |
+|---|---|---|---|---|---|---|
+| gate | 864 | −0.395 | −0.431 | **+0.238** | 0.131 | 0.777 |
+| corridor | 30,158 | −0.439 | −0.480 | **+0.204** | 0.105 | 0.780 |
+| window | 86,698 | −0.401 | −0.436 | **+0.264** | 0.121 | 0.766 |
+
+Control, #510 on the contaminated twin: corridor +0.888, gate +0.864, window
++0.887.
+
+`amoc_bands` (pooled): **0.147** / **−0.187** / **0.154** for h1-18 (5–90 d) /
+h19-36 (95–180 d) / h37-73 (185–365 d).
+`amoc_bands_unpooled` (the §3 verdict instrument): **0.107** / **−0.242** /
+**0.163**, n = 162 / 129 / 150.
+Control #510 unpooled: 0.481 / 0.568 / 0.580.
+
+**Do not read the −0.242 as an inversion.** The band n's count (start, lead)
+pairs, not independent samples: 9 starts (3 holdout years × 3) and leads inside
+a band are strongly autocorrelated, so the effective n is closer to ~9 than to
+129 and the sampling sd of r is order 0.4. All three band correlations are
+inside noise of zero, and §3b's standing rule already says a band r is a
+direction and never a level at any n this programme has. **The honest statement
+is that the clean-pool head has no measurable transport skill in any band**, not
+that it has negative skill in one.
+
+#### (d) WHY the msss numbers are negative: it is a CALIBRATION failure, and the arithmetic closes
+
+A forecast with anomaly correlation `ACC` emitting anomalies at amplitude ratio
+`a` relative to truth has, identically,
+
+    msss_clim = 1 − (1 + a² − 2·a·ACC)
+
+Evaluated on the 73 corridor leads against the head's own `acc` and `amp_ratio`
+columns, this reproduces the observed `msss_clim` curve with **mean absolute
+error 0.0135 and worst-lead error 0.036**. The negative score is therefore fully
+explained by two measured quantities and needs no further mechanism.
+
+The mechanism it names: **the head does not damp as its correlation decays.**
+Mean `acc` is 0.105 while mean `amp_ratio` is 0.780 — it keeps emitting anomalies
+at ~78 % of full amplitude long after it has stopped knowing their sign. A
+variance-calibrated forecast sets `a = ACC` and scores `ACC²`; the same rolled
+states, optimally damped, would score **+0.019** instead of −0.439. So:
+
+- The −0.439 is **not** evidence of anti-skill or of a broken forecast.
+- The usable skill is the `acc` curve, and it is **small but real at short
+  lead** (0.606 at 5 d, ~0.2 out to 30 d).
+- The head loses to climatology and **beats persistence at every lead but the
+  last** (mean msss_pers +0.204, positive h=1..~60, −0.101 at h=73).
+- This is the same family as E-057's underdispersion finding (§2d: ensemble
+  spread/RMSE 0.25–0.28, 2–4× too small): the system is systematically
+  over-confident about the magnitude of what it predicts. FGN was
+  under-dispersed across members; the deterministic roll is over-amplitudinal
+  across leads. One calibration axis, two symptoms.
+
+#### (e) Per-channel: where the residual skill actually is (corridor msss_clim)
+
+| channel | h=1 (5 d) | h=6 (30 d) | h=18 (90 d) | h=73 (365 d) |
+|---|---|---|---|---|
+| ssh | **+0.717** | −0.154 | −0.460 | −1.059 |
+| sst | **+0.621** | **+0.038** | **+0.069** | −0.747 |
+| cur_speed | +0.345 | −0.354 | −0.461 | −0.776 |
+| log_mld | +0.320 | −0.190 | −0.506 | −0.696 |
+| tau_x | +0.230 | −0.120 | −0.436 | −0.495 |
+| tau_y | +0.018 | −0.129 | −0.223 | −0.369 |
+| tau_x_std | −0.046 | −0.069 | −0.149 | −0.825 |
+| tau_y_std | −0.008 | −0.146 | −0.295 | −0.594 |
+
+**SST is the only channel that beats climatology past one step**, and it does so
+out to 90 days (+0.069). That is a small but genuine result and the first one in
+this programme not standing on a contaminated pool.
+
+**Only 8 of the 40 channels are scored at all.** The 32 `rg_t*`/`rg_s*` Argo
+channels are `null` at every lead — the independent confirmation, from the
+evaluator this time, of `ml/plans/DATA_LADDER.md` §2: those channels are 1°
+Argo living one pentad in six, stored upsampled, 80 % of the tensor's bytes
+carrying ~0.28 GB of information. The forecaster is being scored on 8 channels
+and paying to carry 40.
+
+#### (f) The spatial split is UNINFORMATIVE here, and the file says so itself
+
+Every `*_trainlon` block equals its parent exactly (corridor −0.439 / −0.439)
+and every `*_holdlon` block is empty (`n_px` 0). This is not a finding; it is
+`holdout_lon: {"arg": "0,0", ...}` — the pentad r2 tensor has **no longitude
+hole**, so §3.2's trained/untrained split cannot be read from this roll. The
+artefact carries its own note to that effect. #513's 0.838-vs-0.176 contrast
+remains the only spatial-generalisation measurement in the record, and it is on
+a different (monthly, family3) tensor and a different head.
+
+#### (g) What R0 does and does not license
+
+**Licensed.** The pool bug was the dominant artefact in every rolled number this
+programme has published: removing it takes the corridor from +0.888 to −0.439
+and the 365-day field correlation from 0.973 to −0.031, one variable changed.
+§5's retirement of every pre-c25f6ff rolled number is confirmed by measurement,
+not merely by argument. The clean-pool head produces a lead-decaying forecast
+with short-lead skill concentrated in SST and SSH.
+
+**Not licensed.** (i) This is **n = 1**, at a tier and cadence with no replicate
+pair — §3b puts every pentad arm in the mandatory-replicate class, so no level
+here may be quoted as a level. (ii) The head is **past its held-out minimum**:
+E-059 bottoms out at step 2,000 and this is the 200k end state, so per §3.5 this
+is a FLOOR, not the arm's best case — the early-stopped checkpoint has never
+been rolled. (iii) The roll still scores against the **old interspersed**
+`hold_years` 2009/2017/2023, because the terminal-holdout retrain has not
+happened; every reason §3.1 gives for preferring a terminal block applies to
+these numbers too. (iv) E-059's own in-training probe was **0.522**, below both
+wind-stress ridge baselines (0.531 at 1°, 0.568 at quarter-degree), so the null
+ladder was already unbeaten before the roll. (v) The 7.6M arm did not run
+(GCS credential, §6 of the reset), so R0 answers "what does a clean-pool head
+forecast" and not "does 27× less capacity forecast worse".
+
+#### (h) What this points at next, in order
+
+1. **Roll the step-2,000 checkpoint** (§3.5). It is the cheapest untried thing
+   in the programme and R0 measured only the memorised end state.
+2. **Fix the amplitude calibration.** §(d) says the loss in msss is arithmetic,
+   not representational: a lead-dependent variance calibration, or a
+   CRPS/spread-aware objective, converts −0.439 to ~+0.019 on the SAME rolled
+   states. Cheap, and it is a decoding change rather than a capacity one — which
+   is consistent with §1's correction that capacity was never the axis.
+3. **Drop or thin the 32 upsampled Argo channels** (DATA_LADDER §2), now
+   confirmed unscoreable by the evaluator itself. 80 % of the tensor's bytes for
+   channels no skill number can see.
+4. The terminal-holdout retrains at the 7.6M tier remain the queued programme;
+   R0 does not displace them, and no longer has to rescue them.
+
+Snapshot of the partial artefact read for this entry:
+`/home/claude/work/harvest/516-rollout_partial.json` (1,763,912 bytes).
 
 ---
 

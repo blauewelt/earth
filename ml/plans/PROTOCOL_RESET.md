@@ -18,11 +18,19 @@ artefacts already on `ml-metrics` and stand on their own.
 ## 1. The one correction to the framing
 
 **"Smaller models" is right for cost and wrong for cause.** The width ladder
-already tested it. E-060a at **7,597,856** parameters reproduces E-059's
-plateau at **206,658,592** — the best held-out one-step loss arrives at
-**step 2,000** in both, 27× apart in capacity, and everything after is
-memorisation. Shrinking the head does not remove the failure; it makes the
-failure cheap to observe.
+already tested it. **AMENDED 2026-08-30**, when the E-060 read-out landed and
+falsified its own pre-registered prediction — the claim survives in a narrower
+and better-stated form. E-060a at **7,597,856** parameters reaches a best
+held-out one-step loss of **0.60951** (step 1,200) against E-059's **0.61049**
+(step 2,000) at **206,658,592** — 0.001 apart across a 27× span, and every arm
+on the ladder bests in 0.58–0.62 across a 53× span. **Both peak in the first
+~2,000 steps and get worse for the next 198,000.** What is NOT true is that
+they match at a fixed later step: at 20,000 the small arm is 0.051 worse, and
+the ordering is not even monotone (40.4M beats 206.7M there). So width buys how
+fast an arm reaches the level and how badly it then degrades, not the level.
+Shrinking the head does not remove the failure; it makes the failure cheap to
+observe — and the read-out damage runs the other way, with 7.6M holding RAPID
+at 0.598–0.611 across ten probes while 206.66M collapses 0.616 → 0.515.
 
 The binding constraint is named in the E-061 plan and it is not capacity:
 the pool's `209,549,066` train windows is **2,417 end-bins × 86,698 ocean
@@ -38,6 +46,19 @@ affordable (§4), not because size is the disease.
 ## 2. Four independent memorisation signatures, each from an artefact
 
 Every number below is from `ml-metrics`, harvested 2026-08-29.
+
+**READ THIS BEFORE THE NUMBERS. The quantity called "corridor AUC" throughout
+this programme is NOT an area under a curve.** It is `horizon_auc` = the mean of
+**`msss_clim` = 1 − MSE_model / MSE_climatology** over the leads, and because the
+fields are already anomalies against the train-month climatology
+(`mse_c += (v_true**2)`, `ml/rollout_spatial.py:1154`), "climatology" is the
+forecast *zero anomaly*. So **1.0 is perfect, 0.0 is exactly as good as
+predicting no anomaly, and a negative value means the model's squared error
+exceeds the anomaly variance.** `ml/rollout_spatial.py:117` has said this since
+E-017 ("NOTE the metric's name..."). A value below 0.5 is not "below chance";
+a negative value is not "the ranking inverts". The key name is left alone —
+183 archived bundles use it — but nothing may reason about it as an AUC again.
+This paragraph was added 2026-08-30 because §2c below had done exactly that.
 
 ### 2a · The pool bug (known, fixed, retired-with-caveat)
 
@@ -58,8 +79,18 @@ rolled 2026-08-28→29, 22 h 47 m, `probes-510.json`:
 | h37–73 | 185–365 d | **0.565** |
 
 Genuine forecast skill decays with lead. A profile that is flat — or that
-*rises* from 90 d to 180 d — is a recall curve. Corridor AUC 0.888 on the
-same roll. #503 said the same thing at 0.944 before it was cancelled.
+*rises* from 90 d to 180 d — is a recall curve. Corridor `horizon_auc` 0.888 on
+the same roll. #503 said the same thing at 0.944 before it was cancelled.
+
+**AMENDED 2026-08-30, and this is the sharper form of the same signature.**
+The `acc` column of `chan_skill` — the anomaly correlation between the rolled
+and the true FIELD, per lead — was in the artefact all along and had never been
+read. On #510 it is **0.985 at h=1 (5 d) and 0.973 at h=73 (365 d)**, mean
+0.946: a near-unity field correlation twelve months out, flat across the whole
+year. Nothing in ocean physics forecasts a field anomaly at 365 days with
+r = 0.97. The transport bands were a muffled version of this; the field
+correlation states it without ambiguity. The clean-pool control is E-062-R0
+(#516), which on the identical battery decays **0.606 → −0.031**.
 
 ### 2c · No spatial generalisation at all — #513
 
@@ -75,9 +106,13 @@ read:
 | window | 0.834 | **0.266** |
 
 And the deterministic gate head `e017_u1_s0` on the same roll: corridor
-**0.804 → 0.058**. Below 0.5 is not "weaker skill", it is anti-skill: the
-ranking inverts. On ocean it was never trained on, the system does not
-degrade gracefully — it fails.
+**0.804 → 0.058**. Under the metric's true definition (above) that reads: on
+trained longitudes the head removes ~80 % of the anomaly variance; on the
+held-out block it removes ~6 %, i.e. it is **barely distinguishable from
+predicting no anomaly at all**. An earlier version of this paragraph called
+0.058 "anti-skill, the ranking inverts" — that was an AUC reading of an MSSS
+and is withdrawn. The FINDING is unchanged and is arguably cleaner: on ocean it
+was never trained on, the system retains essentially nothing.
 
 The published aggregates (corridor 0.648 for FGN, 0.589 for the gate) are
 **blends** of these two populations, ~24 % untrained pixels. The blend is
@@ -176,7 +211,15 @@ all rolled heads trained under `endpoint_contaminated`. The first honest
 rolled number in this programme's history does not exist yet. That is the gap
 to close first, and it is one dispatch.
 
-**R0 · The first honest roll (do this first).** `temporal_e059.pt` (206.66M,
+**R0 · The first honest roll — RAN as #516; skill battery landed 2026-08-30
+21:42Z. VERDICT: the clean-pool head DECAYS with lead (field `acc` 0.606 at 5 d
+→ −0.031 at 365 d) where its contaminated twin is FLAT AT 0.97, so the
+pre-registered falsifier separates them and the pool was the dominant artefact.
+Corridor `horizon_auc` +0.888 → −0.439; the negative value is a CALIBRATION
+failure, not anti-skill — mean `acc` 0.105 against mean `amp_ratio` 0.780, and
+the identity msss = 1 − (1 + a² − 2a·ACC) reproduces all 73 leads to 0.0135, so
+the same rolled states amplitude-calibrated would score +0.019. Full reading:
+`ml/EXPERIMENTS.md#e-062` §(a)–(h).** `temporal_e059.pt` (206.66M,
 `window` scope, 200k) and `temporal_e060a.pt` (7.6M, `window` scope, 20k)
 through the same `sroll` ladder that produced #510 and #513 — two heads, one
 job, `longm:36,futm:36`. Cost ≈ one #510 (~22 h, ~$6). It answers two
@@ -247,3 +290,47 @@ could not be dispatched from here). E-059's head was rollable only because
 another session had already published it. Until E-060a is mirrored, the
 small-vs-large half of R0 cannot run, and neither can any new TPU training
 under the terminal holdout, since node creation needs the same credential.
+
+---
+
+## 7. R0's verdict, and what it changes in this document (2026-08-30)
+
+The first honest rolled number in this programme's history exists. It is
+E-062-R0 / #516, and its skill battery is scored and final (the roll is still
+running its dispersion phases; `ml/CLAUDE.md` §5.25's `in_progress` caveat
+applies to nothing quoted here).
+
+**What it confirms.** §5's retirement of every pre-c25f6ff rolled number is now
+a measurement rather than an argument: one variable — the training pool —
+moves the corridor from +0.888 to −0.439 and the 365-day field correlation from
+0.973 to −0.031. §3.3's lead-decay falsifier does the job it was registered to
+do, and does it on `acc`, which is the instrument to quote for it from now on.
+
+**What it changes.**
+
+- **§3.3 gets a named instrument.** "Register the expected decay before the
+  roll" now means: register it on `chan_skill[*].acc`, per scope, and report
+  the h=1 and h=H values with the mean. `horizon_auc` cannot serve as the
+  decay instrument because it confounds correlation with amplitude (§(d) of the
+  E-062 entry).
+- **§3.4's null ladder gains a member that costs nothing: the
+  variance-calibrated version of the arm itself**, `ACC²`. Any arm scoring
+  below its own `ACC²` is losing to arithmetic, not to a baseline, and the fix
+  is calibration rather than capacity or data.
+- **§3.2 is unreadable on the pentad r2 tensor.** It has no longitude hole
+  (`holdout_lon "0,0"`), so `_trainlon` equals the parent and `_holdlon` is
+  empty by construction. The split stays the headline rule wherever a hole
+  exists; on this tensor the honest report is that the split was not measured.
+- **A new item joins §4 ahead of R1: roll the step-2,000 checkpoint** (§3.5).
+  R0 measured the 200k memorised end state, which §3.5 already says is the
+  wrong checkpoint to roll. It is the cheapest untried thing in the programme.
+- **§1's correction is reinforced from a new direction.** The gap between
+  −0.439 and the +0.019 the same states would score if amplitude-calibrated is
+  not a capacity gap and not a data gap. It is a decoding gap, and it is
+  available at any tier.
+
+**What it does not change.** The terminal-holdout retrains (§3.1) still stand,
+for the reasons given there — extrapolation rather than interpolation, the
+multi-year slow state, and matching the use case. R0 does not rescue them and
+does not displace them. The GCS blocker in §6 is untouched: the 7.6M arm still
+cannot be rolled, so the small-vs-large half of R0 is still owed.
