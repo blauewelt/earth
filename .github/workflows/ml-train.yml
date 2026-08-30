@@ -877,6 +877,18 @@ jobs:
             # token comes from the repo's Actions secret, never this file.
             # SPARSE sidecar: 3 live channels of 40, 7.8 GB rather than the
             # naive 103.8 GB, with channel_index recording where each belongs.
+            # DEPS. #514 died here with ModuleNotFoundError: pandas, after
+            # verifying the grid and fetching the 80.8 MB catalogue — a
+            # dependency gap, not a design fault, but it cost a whole
+            # dispatch. The training path never needed any of these: the
+            # catalogue is a CSV (pandas), the source is a remote zarr store
+            # (xarray + zarr + fsspec + aiohttp for its HTTP filesystem), the
+            # regrid map is a KD-tree (scipy), and h5netcdf is what reads a
+            # NetCDF without the netCDF4 C library. Pinned nowhere on purpose:
+            # this is a read-only ingest and a newer reader is fine.
+            python -m pip install -q pandas xarray zarr fsspec aiohttp \
+              scipy h5netcdf
+            python -c "import pandas, xarray, zarr, fsspec, aiohttp, scipy, h5netcdf; print('family6 deps ok')"
             python -u ml/build_family6.py --layout sparse \
               --out /opt/earth-cache/family6_na025_cmip6.npz \
               ${HF_TOKEN:+--hf-repo chfrank/earth-tensors}
