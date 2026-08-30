@@ -130,6 +130,54 @@ Full design and the retirements it implies:
 
 ---
 
+<a id="e-060-read"></a>
+## E-060 READ-OUT · the ladder at step 20,000 — MY PREDICTION FAILED, and the honest picture is more interesting
+
+**Pre-registered (ml/plans/E060_width_ladder.md §4):** *"7.598M reaches within
+0.02 of 206.659M's 0.641"* and *"399.948M is no better than 0.63"*. The first
+half is **WRONG** and is recorded as wrong. On 2026-08-29 ~11:00Z it was
+reported to Chris as "the prediction is landing", on the strength of arm a's
+early best — that reading was premature and this entry supersedes it.
+
+At the registered step, `stage2_val_zmse / 21.44621`:
+
+| params | train @20k | **val @20k** | best val | at step | RAPID @20k |
+|---|---|---|---|---|---|
+| 7,597,856 | 3.1258 | **0.69218** | 0.60951 | 1,200 | 0.603 |
+| 40,388,128 | 1.8470 | **0.63628** | 0.62121 | 1,200 | 0.589 |
+| 206,658,592 (E-059) | 1.3310 | **0.64106** | 0.61049 | 2,000 | 0.616 |
+| 399,947,552 | — | pending | 0.57793 | 800 (at 2k of 20k) | — |
+
+**The sanity condition PASSES**: train loss orders strictly by capacity
+(3.1258 > 1.8470 > 1.3310), so the widths are doing what widths do and the
+val comparison means something.
+
+**What the ladder actually says.** 7.598M is **0.051 worse** than 206.659M at
+step 20,000, not within 0.02 — capacity is not free. But the ordering is not
+monotone either: 40.388M (0.63628) is marginally BETTER than 206.659M
+(0.64106) at a fifth of the size, so the curve is flat-to-slightly-humped
+between 40M and 207M rather than rising. And every arm's BEST value sits in
+**0.58–0.62 across a 53x span** — the level a head reaches is nearly
+independent of its width; what width buys is how long it takes to get there
+and how fast it then degrades.
+
+**The degradation is the finding, and it is width-dependent.** Every arm
+peaks early (steps 800-2,000) and gets worse. But the RAPID probe separates
+them: 7.598M **holds at 0.598-0.611 across all ten probes**, 40.388M drifts
+gently to 0.589, and 206.659M **collapses 0.616 -> 0.515** over 200k. Small
+models plateau and stay; the large one plateaus and then damages the
+read-out the programme exists to produce.
+
+**Not settled, and it must not be over-read.** 20,000 steps is where E-059 was
+still at 0.641 on its way to 0.686 at 200k — the arms are compared at a
+matched EARLY step, not at convergence, and a longer run could reorder them.
+399.947M has only 2,000 steps and its 0.57793 is a minimum over ten records,
+a statistic biased low by however few records exist; it is the most
+interesting number on the table and the least trustworthy. The decisive test
+was always the roll, not the one-step loss.
+
+---
+
 <a id="e-061"></a>
 ## E-061 · The pretraining corpus: 800 model-years against the 43 we have — DISPATCHED #514, 2026-08-29 ~11:0xZ
 
