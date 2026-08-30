@@ -44,6 +44,92 @@ low-pass).
 
 ---
 
+<a id="e-062"></a>
+## E-062 · The first honest roll, and the terminal holdout — R0 DISPATCHED #516, 2026-08-30 ~19:0xZ
+
+TL;DR — **nothing this programme has ever rolled used a clean-pool head.** #503,
+#510 and #513 all rolled heads trained under `endpoint_contaminated`, so no
+rolled number in the archive is evidence about forecast skill. Chris,
+2026-08-29: *"No need to compare models on the contaminated data. Let's do a
+proper comparison."* R0 is that comparison, and it is a one-variable one.
+
+**#516 (E-062-R0, the first honest roll) · rolls
+`head-weights-e059-200k-window-s0` through the PROTOCOL-IDENTICAL battery #510
+ran on its contaminated twin `head-weights-e051-398k-xl144zn-pentad-s0` ·
+params 206.66M head over the frozen 37.976M run-415 codec (both frozen,
+nothing trains) · stage sroll · data `family4_na025_pentad_r2` · arch head
+1024×16 K 144 stencil 145 ring spiral, codec 512×12 d_z 32 patch 1 · steps
+197428 (= run-415's count, zero training) · resume run-415 · runner
+gpu-box-47898003 (Vast 49242934, fresh 100 GB / 129 GB RAM) · job_timeout
+2400.** Window: `recipe:xl144-zn-pentad-nolonhold,sroll:head-weights-e059-200k-window-s0,ckpt:run-415__pixelmae.pt,horizon:73,starts:3,longm:36,futm:36`
+— #510's window with the head token swapped and `dumproll` dropped. 879 steps
+at ~87 s/step ≈ 21.3 h, inside the 24 h token.
+
+**THE READING IS THE SHAPE, NOT THE LEVEL — pre-registered.** #510's band
+correlations are **0.511** (h1–18, 5–90 d) / **0.591** (h19–36, 95–180 d) /
+**0.565** (h37–73, 185–365 d): flat, and *rising* from 90 d to 180 d, which no
+forecast does and every recall curve does. So:
+
+- **If E-059's profile DECAYS with lead**, the clean pool bought genuine
+  forecast skill and its level becomes readable (against persistence,
+  climatology, damped persistence and the wind-stress ridge — 0.531 at 1°,
+  0.568 at quarter-degree).
+- **If it is flat too**, the leak was never only the pool, and the
+  terminal-holdout change below stops being optional.
+- `_trainlon` and `_holdlon` are reported separately either way, never the
+  blend (#513: corridor **0.838** trained vs **0.176** held-out).
+
+**Not in R0, and why:** the 7.6M arm. `temporal_e060a.pt` is in the TPU
+bucket and not on `model-checkpoints-v1`, and moving it needs the GCS
+read credential, which this session could not obtain (see the note in
+`ml/plans/PROTOCOL_RESET.md` §6). E-059's head was already published by
+another session, which is the only reason R0 could run at all. The
+small-vs-large half of R0 is owed as soon as E-060a is mirrored.
+
+**THE TERMINAL HOLDOUT IS DECIDED (Chris, 2026-08-30): train ≤ 2020, test
+2021–2024, NO GAP.** Two questions he asked, answered here because they are
+the design:
+
+- *Why is a multi-year block more honest than individual years?* Three
+  reasons, none of which is about leakage. **Interpolation vs extrapolation:**
+  with `hold_years` 2009/2017/2023 the test year is bracketed by training
+  years on both sides, so predicting 2009 from a memorised 2008 and 2010 is
+  interpolation between two anchors; a terminal block has no future anchor,
+  which is what forecasting actually is. **Low-frequency signal:** AMOC
+  variability is multi-year to decadal, so the neighbours of a single held-out
+  year carry nearly the same slow state — the answer is largely present in the
+  training data, and only a contiguous block removes a whole chunk of it.
+  **It is the use case:** the thing we want is a forecast forward from now,
+  and the last four years of the record are the only test whose structure
+  matches deployment.
+- *Why skip 2019?* **We should not, and the proposed gap is withdrawn.** It
+  was over-caution on my part. Under `--holdout-scope window` no training
+  window touches a held-out bin, so with 2021–2024 held out the last training
+  target is 2020-12 and no training target lies in the test period at all —
+  there is no target leak for a gap to close. What a gap would remove is the
+  advantage of *starting* from a state the model has memorised, and that is
+  not an artefact: operationally a forecast always starts from a well-observed
+  recent past. The residual worry — that a memorised initial state makes the
+  first leads easy — is exactly what the persistence baseline in the null
+  ladder measures, so it is handled by a control rather than by throwing away
+  a year of training data.
+- *Why not 2022–2025?* **The record ends 2024-12-31** (`build_family4.END`),
+  so 2025 does not exist in the tensor and 2022–2025 would be a 3-year test
+  block plus a year of nothing. 2021–2024 is the last four years available.
+  Extending the axis to 2026-06 is a data-import task, not a holdout choice —
+  GLORYS12 and the RG-Argo extensions both run that far, and it is worth
+  ~+4.5% of end-bins.
+
+**SMALL TIER IS NOW THE DEFAULT** (Chris, 2026-08-30: *"Yes, small tier should
+be the default"*). Arms at 206M+ need a specific argument; E-060a's 7.6M rung
+is the working default, on the evidence that it reproduces the 206.66M
+plateau exactly (E-060, and the E-061 plan's §1).
+
+Full design and the retirements it implies:
+[the protocol reset](https://blauewelt.github.io/earth/docs.html?f=ml/plans/PROTOCOL_RESET.md).
+
+---
+
 <a id="e-061"></a>
 ## E-061 · The pretraining corpus: 800 model-years against the 43 we have — DISPATCHED #514, 2026-08-29 ~11:0xZ
 

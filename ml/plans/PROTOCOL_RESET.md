@@ -116,15 +116,32 @@ uncertainty.
 Fix these once, before any arm runs, and do not re-litigate them per
 experiment. A number produced outside this protocol is not a result.
 
-**3.1 · Terminal holdout, not interspersed years.** Today's `hold_years`
-(2009, 2017, 2023) are single years surrounded by training years. Under
-`window` scope no training window *touches* them — that part is now correct —
-but the evaluation still asks the model to predict 2009 given a perfectly
-memorised 2008. For a quantity with multi-year memory that is close to
-free. **Train on a contiguous prefix, test on a contiguous terminal block,
-with a gap of at least one context window (K=144 pentads ≈ 1.97 y) between
-them.** It is the harder test and it is the actual use case: forecasting
+**3.1 · Terminal holdout, not interspersed years. DECIDED 2026-08-30
+(Chris): train ≤ 2020, test 2021–2024, NO GAP.** Today's `hold_years`
+(2009, 2017, 2023) are single years surrounded by training years. Three
+things are wrong with that, and none of them is leakage: predicting 2009 from
+a memorised 2008 *and* 2010 is **interpolation between two anchors**, where a
+terminal block has no future anchor and forecasting is extrapolation; AMOC
+variability is **multi-year to decadal**, so a single held-out year's answer
+is largely present in its neighbours and only a contiguous block removes a
+chunk of the slow state; and a terminal block is **the use case** — a forecast
 forward from now.
+
+**The gap this section originally asked for is WITHDRAWN.** It was
+over-caution. Under `--holdout-scope window` no training window touches a
+held-out bin, so with 2021–2024 held out the last training target is 2020-12
+and no training target lies in the test period — there is no target leak for a
+gap to close. What a gap would remove is the advantage of *starting* from a
+memorised state, and that is not an artefact: operationally a forecast always
+starts from a well-observed recent past. The residual worry, that memorised
+initial conditions make the first leads easy, is what the persistence baseline
+in §3.4 measures — a control, not a reason to discard a year of data.
+
+**Why not 2022–2025:** the tensor ends **2024-12-31** (`build_family4.END`),
+so 2025 does not exist and 2022–2025 would be three test years plus a year of
+nothing. 2021–2024 is the last four years the record has. Extending the axis
+to 2026 is a data-import task (§4-R2 and the data ladder), worth ~+4.5% of
+end-bins.
 
 **3.2 · The trained/untrained split is the headline, never the blend.**
 Every scope reports `_trainlon` and `_holdlon`. The parent aggregate stays in
@@ -208,14 +225,25 @@ start, or the result is uninterpretable either way.
 
 ---
 
-## 6. Open decisions for Chris
+## 6. Decisions taken, and the one open blocker
 
-1. **The terminal-holdout split** (§3.1): where to cut. Train ≤2018 / gap
-   2019 / test 2020–2024 costs ~5 years of training data and buys the only
-   honest forward test. A shorter test block keeps more training years.
-2. **Whether R0 runs before or after the protocol change.** R0 as written
-   uses today's interspersed holdout, because those two heads already exist
-   and rolling them costs one job. Under §3.1 they would both need retraining
-   first (~1 h each at the small tier, ~13 h at 206M).
-3. **Whether the small tier becomes the default for everything**, with 206M+
-   arms requiring a specific argument rather than being the norm.
+All three questions this section originally asked were answered by Chris on
+2026-08-30:
+
+1. **Terminal holdout: train ≤ 2020, test 2021–2024, no gap** (§3.1, rewritten
+   above with the reasoning).
+2. **R0 runs now**, on today's holdout, because the heads already exist —
+   dispatched as **#516**, see `ml/EXPERIMENTS.md#e-062`. The retrains under
+   the new split follow at the small tier.
+3. **Small tier is the default.** 206M+ arms now need a specific argument.
+   E-060a's 7.6M rung is the working default.
+
+**The one blocker.** R0 rolls only the 206.66M arm. The 7.6M arm
+(`temporal_e060a.pt`) lives in the TPU results bucket and the roll evaluator
+reads heads from the `model-checkpoints-v1` release, so the head must be
+mirrored across — a sandbox-side step needing the GCS read credential, which
+this session was unable to obtain (the repo's own `secret-handoff` workflow
+could not be dispatched from here). E-059's head was rollable only because
+another session had already published it. Until E-060a is mirrored, the
+small-vs-large half of R0 cannot run, and neither can any new TPU training
+under the terminal holdout, since node creation needs the same credential.
