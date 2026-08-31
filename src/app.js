@@ -526,7 +526,7 @@ const GIBS_LAYERS = [
     title: "SWISSIMAGE time travel (swisstopo, by year)",
     ext: "jpg", maxLevel: 20, fine: 1500,
     start: "1926-01-01", timed: true, on: false,
-    meta: "A century of Swiss aerial photographs, 1926–2025 — the date's YEAR picks the flight · Switzerland only · loads below 1,500 km",
+    meta: "A century of Swiss aerial photographs, 1926–2025 — the date's YEAR picks the flight; white = no flight there that year, try another · Switzerland only · loads below 1,500 km",
   },
   {
     id: "swissrelief",
@@ -3473,6 +3473,7 @@ function refreshTimedLayers({ hold = false, keepPreload = false } = {}) {
   }
   if (hold) scheduleSweep();
   updateSplitUI();
+  updateFineGates();       // the row hints name the window (a mosaic's "union of…")
 }
 
 /* ------------------------------------------------- the date scrub coalescer
@@ -4876,7 +4877,7 @@ const LAYER_FACTS = {
          "is a line. Zoom all the way in over any Swiss town; outside the " +
          "country's bounding box the service serves nothing, so the layer " +
          "simply ends at the border. Open government data, © swisstopo." },
-  "swissimage-history": { rec: "1926 → 2025, one flight year per map (every year but 1928 is served); type a date — the steppers stop at 2000", int: "yearly — the date's YEAR picks the aerial survey; coverage per year is partial, so blank means no flight that year there", sp: "10 cm to ~1 m by year — Switzerland only",
+  "swissimage-history": { rec: "1926 → 2025, one flight year per map (every year but 1928 is served); type a date — the steppers stop at 2000", int: "yearly — the date's YEAR picks the aerial survey; each year's flights covered only part of the country, and swisstopo serves WHITE (not transparent) where a year has no photo — so a white view means try another year, not a broken layer", sp: "10 cm to ~1 m by year — Switzerland only",
     sum: "A century of Switzerland from the air. swisstopo's time-travel " +
          "service serves the aerial surveys by flight year: black-and-white " +
          "before the late 1990s, colour since. Set the date's year to 1946 " +
