@@ -584,11 +584,15 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/AMSR_Wind_Speed_H.svg",
     doc: "https://nsidc.org/data/au_ocean",
     layer: "AMSRU_L3_Ocean_Wind_Speed_Daily",
-    endTime: "2025-09-01",
+    /* GIBS lists this layer through 2025-09-01 and refuses every tile on that
+     * date with HTTP 400, while 2025-08-31 serves normally (measured
+     * 2026-08-31, every zoom). See trimDomainEnd: the published domain is one
+     * day longer than the rendered archive. */
+    endTime: "2025-08-31", domainOverdeclares: 1,
     title: "Ocean wind speed (AMSR-E/AMSR2, 25 km, daily)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2002-06-01", timed: true, on: false,
-    meta: "Measured wind over the ocean from passive microwave, daily — storms as they happen · tiles end 2025-09",
+    meta: "Measured wind over the ocean from passive microwave, daily — storms as they happen · tiles end 2025-08-31",
   },
   {
     id: "oscar",
@@ -1028,6 +1032,43 @@ function snapToDomain(intervals, want) {
   return best ?? intervals[0].s;
 }
 
+/* A published domain can run PAST what the tile service will serve, and the
+ * two are different measurements: the domain says which dates GIBS lists,
+ * a tile request says which it renders. `AMSRU_L3_Ocean_Wind_Speed_Daily`
+ * lists 2012-07-02/2025-09-01/P1D and answers HTTP 400 — not 404 — for every
+ * tile on 2025-09-01, at every zoom, while 2025-08-31 serves normally
+ * (measured 2026-08-31; 400 means "in my domain, cannot serve", 404 means
+ * "outside it", so the two answers are GIBS disagreeing with itself). The app
+ * clamped faithfully to the advertised end and showed an empty globe under a
+ * toast naming a date that has no tiles — reported as an off-by-one, and the
+ * off-by-one is upstream.
+ *
+ * A layer with `domainOverdeclares: <days>` has its measured domain SHORTENED
+ * by that many days on arrival, so every consumer downstream — the end clamp,
+ * the snap, both toasts, the hover card, a mosaic's date list — is right with
+ * no special case anywhere. It is a property of the layer, not a date, so it
+ * keeps tracking if the archive later grows. Do NOT apply it on a hunch: a
+ * partial final day is normal for a swath product (AMSR2 soil moisture's
+ * 2025-09-01 is sparse but real, and is left alone). Measure a tile first. */
+function trimDomainEnd(intervals, days) {
+  if (!intervals?.length || !(days > 0)) return intervals;
+  const out = intervals.slice();
+  const iv = out[out.length - 1];
+  const e = domainMs(iv.e) - days * 864e5;
+  if (e >= domainMs(iv.s)) {
+    out[out.length - 1] = { ...iv, e: domainFormat(iv.s, e) };
+    return out;
+  }
+  /* The cut swallows the whole last interval — GIBS listed a trailing instant
+   * it cannot serve at all — so drop it and STOP. Cascading the same cut into
+   * the interval before would take a day off a stretch that was never in
+   * question; an over-declaration longer than its own last interval is not a
+   * shape anything here has produced, and guessing at it would be worse than
+   * leaving the rest alone. */
+  out.pop();
+  return out.length ? out : null;
+}
+
 const gibsDomains = new Map();          // layer id → intervals, or null = asked and got nothing
 const gibsDomainPending = new Map();    // layer id → in-flight promise
 
@@ -1038,6 +1079,7 @@ function loadGibsDomain(cfg) {
   const p = fetch(gibsDomainUrl(cfg))
     .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`))))
     .then(parseGibsDomain)
+    .then((v) => (cfg.domainOverdeclares ? trimDomainEnd(v, cfg.domainOverdeclares) : v))
     .catch(() => null)
     .then((v) => {
       // Cache failures too. If GIBS won't tell us, re-asking on every toggle
@@ -5422,7 +5464,7 @@ const LAYER_FACTS = {
          "Antarctica, the monsoon reversing between summer and winter. Wind is " +
          "also what drives the ocean's surface current, so compare it with the " +
          "current layers below." },
-  "wind-ocean": { rec: "this map: 2002-06 → 2025-09 (AMSR-E to 2011, AMSR2 from 2012; tiles end 2025-09)", int: "daily composite of the ascending and descending passes", sp: "~25 km, ocean only",
+  "wind-ocean": { rec: "this map: 2002-06 → 2025-08-31 (AMSR-E to 2011, AMSR2 from 2012; GIBS lists one day more than it serves — the last day with tiles is 2025-08-31)", int: "daily composite of the ascending and descending passes", sp: "~25 km, ocean only",
     sum: "The wind as actually measured over the sea, not modelled: passive " +
          "microwave radiometers read the roughness the wind puts on the water " +
          "and invert it to a speed. Daily, so a storm is a storm and not a " +
@@ -10648,6 +10690,7 @@ window.__earth = {
   MagnitudeProvider, magnitudeAt,
   // the scale bar
   updateScaleBar, groundMetresPerPixel, viewGroundWidth, niceScaleMetres, fmtDistance,
+  trimDomainEnd,
   // place names: the collections themselves, plus the pick-through helper, so a
   // test can prove a click on "Paris" still reaches the globe
   ensureCities,

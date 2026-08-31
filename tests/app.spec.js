@@ -3485,6 +3485,64 @@ test("winds and currents: a magnitude layer combines two component rasters", asy
   await expect(item.locator(".legend-range")).toContainText("m/s");
 });
 
+test("a published domain that runs past the served archive is trimmed to what renders", async ({ page }) => {
+  test.setTimeout(120000);
+  // GIBS lists AMSRU_L3_Ocean_Wind_Speed_Daily through 2025-09-01 and answers
+  // HTTP 400 for every tile on that date; 2025-08-31 serves normally. The app
+  // clamped to the advertised end and showed an empty globe under a toast
+  // naming a date with no tiles. `domainOverdeclares` shortens the measured
+  // domain so every consumer downstream is right.
+  const arith = await page.evaluate(() => {
+    const E = window.__earth;
+    const one = [{ s: "2012-07-02", e: "2025-09-01", ms: 864e5, months: 0 }];
+    const two = [{ s: "2002-06-01", e: "2011-10-04", ms: 864e5, months: 0 },
+                 { s: "2025-09-01", e: "2025-09-01", ms: 864e5, months: 0 }];
+    return {
+      trimmed: E.trimDomainEnd(one, 1)[0].e,
+      untouched: E.trimDomainEnd(one, 0)[0].e,
+      // an interval entirely inside the over-declaration is dropped, and the
+      // previous one becomes the end
+      collapsed: E.trimDomainEnd(two, 1).map((i) => i.e),
+      empty: E.trimDomainEnd([{ s: "2025-09-01", e: "2025-09-01", ms: 864e5, months: 0 }], 1),
+      snap: E.snapToDomain(E.trimDomainEnd(one, 1), "2026-08-31"),
+    };
+  });
+  expect(arith.trimmed).toBe("2025-08-31");
+  expect(arith.untouched).toBe("2025-09-01");
+  expect(arith.collapsed).toEqual(["2011-10-04"]);
+  expect(arith.empty).toBeNull();
+  expect(arith.snap).toBe("2025-08-31");
+
+  // declared on the layer, and only on the layer that was measured to need it
+  const flags = await page.evaluate(() => Object.fromEntries(
+    ["wind-ocean", "soilmoisture", "seaice"].map((id) => [id,
+      window.__earth.GIBS_LAYERS.find((l) => l.id === id).domainOverdeclares ?? 0])));
+  expect(flags["wind-ocean"]).toBe(1);
+  expect(flags["soilmoisture"]).toBe(0);   // its last day is sparse but real
+  expect(flags["seaice"]).toBe(0);
+
+  // end to end: enabling it on today's date lands on 2025-08-31, and the
+  // toast names that date rather than the one GIBS advertises
+  const toasts = await recordToasts(page);
+  await page.evaluate(() => {
+    const d = document.getElementById("layer-date");
+    d.value = "2026-08-31"; d.dispatchEvent(new Event("change"));
+    const el = document.querySelector('#layer-list input[data-id="wind-ocean"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await page.waitForFunction(() => window.__earth.gibsDomains.get("wind-ocean"), null, { timeout: 30000 });
+  const shown = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "wind-ocean");
+    const dom = E.gibsDomains.get("wind-ocean");
+    return { t: E.gibsTime(cfg, "2026-08-31"), last: dom[dom.length - 1].e, endTime: cfg.endTime };
+  });
+  expect(shown.t).toBe("2025-08-31");
+  expect(shown.last).toBe("2025-08-31");
+  expect(shown.endTime).toBe("2025-08-31");
+  await expect.poll(toasts).toContain("2025-08-31");
+});
+
 test("the scale bar measures the ground, and follows the camera down", async ({ page }) => {
   const read = () => page.evaluate(() => {
     const E = window.__earth;

@@ -1163,6 +1163,24 @@ worth keeping in front of a frontend reader:
   tug-of-war below ~20 km of view width, reported 2026-08-31 as "weird stutter
   when zooming in too far". It is 100 m now (the fine tier has 10 cm imagery);
   a test pins it ≤ 500 m and checks a 5 km view holds across 40 frames.
+- **A published time domain can run PAST the served archive, and the two are
+  different measurements.** The domain says which dates GIBS *lists*; a tile
+  request says which it *renders*. `AMSRU_L3_Ocean_Wind_Speed_Daily` lists
+  through 2025-09-01 and answers **HTTP 400 — not 404 — for every tile on that
+  date at every zoom**, while 2025-08-31 serves normally (measured
+  2026-08-31). The two status codes are the tell: 400 is "in my domain, cannot
+  serve", 404 is "outside it", so the service is disagreeing with itself. The
+  app clamped faithfully to the advertised end and showed an empty globe under
+  a toast naming a date with no tiles — reported as an off-by-one, and the
+  off-by-one is upstream. `domainOverdeclares: <days>` on a layer shortens its
+  measured domain on arrival (`trimDomainEnd`), so the clamp, the snap, both
+  toasts, the hover card and a mosaic's date list are all right with no
+  special case. It encodes a property of the layer rather than a date, so it
+  keeps tracking if the archive later grows. **Do not apply it on a hunch: a
+  sparse final day is normal for a swath product** — AMSR2 soil moisture's
+  2025-09-01 is partial but real and is left alone, and the sea-ice layer
+  serves its last declared day in full. Fetch a tile before believing an
+  archive is one day shorter than it says.
 - **GIBS tiling quirk.** The EPSG:4326 pyramid starts at 2×1 tiles (level 0),
   3×2 (level 1); resolution is 0.5625/2^L °/px, 512 px tiles. Edge tiles must
   declare their **full nominal span**, not the clamped visible part — clamping
