@@ -24,8 +24,75 @@ restated because they are what the reboot is for):
 - A single-seed number inside its tier's spread is a consistency, not a level.
 - Assume the evaluation stack is still wrong somewhere. It has been wrong
   twice (the pool; "corridor AUC"). Verifying a metric is ordinary work.
-- Update `ml/OVERVIEW.md` (move the stamp) and the project's
-  `claude/expectations.md` in the same breath as dispatching or harvesting.
+- Update `ml/OVERVIEW.md` (move the stamp) in the same breath as
+  dispatching or harvesting. (The operator keeps a private expectations
+  ledger beside it; a public session only needs OVERVIEW.)
+
+---
+
+## A. Everything this plan needs is public — where it is
+
+This plan is self-contained for a reader with PUBLIC access to the repository
+and nothing else. Nothing below requires the operator's chat history, the
+claude.ai project, credentials, or a login.
+
+| what | where (public) |
+|---|---|
+| The repository | <https://github.com/blauewelt/earth> |
+| Any repo markdown, phone-readable | `https://blauewelt.github.io/earth/docs.html?f=<path>` |
+| The status page (runs, curves, plans) | <https://blauewelt.github.io/earth/status.html> |
+| Archived result bundles, one JSON per run | branch `ml-metrics`: `https://raw.githubusercontent.com/blauewelt/earth/ml-metrics/probes-<n>.json` (e.g. [`probes-516.json`](https://raw.githubusercontent.com/blauewelt/earth/ml-metrics/probes-516.json), the first honest roll) and `run-<n>.jsonl` (the live metrics), `plan-<n>.json` |
+| Codecs and stage-2 heads (weights) | GitHub release `model-checkpoints-v1` — [assets](https://github.com/blauewelt/earth/releases/tag/model-checkpoints-v1); download as `https://github.com/blauewelt/earth/releases/download/model-checkpoints-v1/<asset>` |
+| The tensors (chunked) | release `data-cache-v1`, and the Hugging Face dataset [`chfrank/earth-tensors`](https://huggingface.co/datasets/chfrank/earth-tensors) (pentad means, truth series, SST bake, the CMIP6 corpus) |
+| The embedding caches `Z` (1.5 GiB chunks + manifest) | release `embed-cache-v1` |
+| The experiment log | [`ml/EXPERIMENTS.md`](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md) |
+| The standing map and the reset | [`ml/OVERVIEW.md`](https://blauewelt.github.io/earth/docs.html?f=ml/OVERVIEW.md) · [`ml/plans/PROTOCOL_RESET.md`](https://blauewelt.github.io/earth/docs.html?f=ml/plans/PROTOCOL_RESET.md) |
+| The two handovers this plan builds on | [session handover](https://blauewelt.github.io/earth/docs.html?f=ml/handoffs/SESSION_HANDOVER_2026-08-31.md) · [reboot handover](https://blauewelt.github.io/earth/docs.html?f=ml/handoffs/REBOOT_HANDOVER_2026-08-31.md) |
+| What the system is and what its numbers mean | [`docs/ML_BASICS.md`](https://blauewelt.github.io/earth/docs.html?f=docs/ML_BASICS.md) · [`docs/INFRASTRUCTURE.md`](https://blauewelt.github.io/earth/docs.html?f=docs/INFRASTRUCTURE.md) |
+| The working rules | [`ml/CLAUDE.md`](https://blauewelt.github.io/earth/docs.html?f=ml/CLAUDE.md) |
+
+Names you will meet, so no one has to guess them:
+
+- **Tensor** `family4_na025_pentad_r2`: pentad (5-day) cadence, T = 3,142 bins
+  from 1982-01 to 2024-12, grid 281 × 481 at 0.25° over 0–70°N / 100°W–20°E,
+  86,698 ocean pixels, C = 40 channels in this order: `cur_speed, log_mld,
+  ssh, rg_t10 … rg_t1900 (16), rg_s10 … rg_s1900 (16), tau_x, tau_y,
+  tau_x_std, tau_y_std, sst`. Sha prefix `37e146384b`. Its 40-channel `X`
+  sidecar is 34 GB; the meta `.npz` is 4.5 GB.
+- **Codec** `run-415__pixelmae.pt` (37.976M params, 512×12, 4 heads, d_dec
+  256, d_z 32, patch 1; `--holdout-years 2009,2017,2023`, `--holdout-lon 0,0`).
+  Its embedding of the tensor is `Z_8b639abe36_37e146384b.npy` — `[3142,
+  86698, 32]` float16, 16.24 GiB — on `embed-cache-v1`.
+- **Clean-pool stage-2 heads** on `model-checkpoints-v1`:
+  `head-weights-e059-200k-window-s0.pt` (206.66M, 1024×16),
+  `head-weights-e060a-20k-window-s0.pt` (7.60M, 256×8),
+  `head-weights-e060b-20k-window-s0.pt` (40.39M, 512×12). All: K 144,
+  stencil 145, ring `spiral:111-4444-0.71-0.5`, znoise 0.7, seed 0,
+  `holdout_scope window`, codec run-415. A head file is `{args, model, step,
+  tag, run_number}`; `args` carries every knob.
+- **Evaluator** `ml/rollout_spatial.py` — the "roll": from a true context of
+  K = 144 pentads it advances every ocean pixel one pentad at a time for
+  `horizon` steps, decodes to standardised physical channels and scores
+  against truth. Scopes: `gate` (600 random pixels ∪ the RAPID section),
+  `corridor` (the fastest quarter of the window by current speed, dilated 2
+  cells, ∪ the section — 30,158 pixels), `window` (all 86,698). Starts: 3 per
+  holdout year. Metrics per lead `h`: `msss_clim = 1 − MSE/MSE_climatology`
+  (climatology = zero anomaly), `msss_pers` (vs raw persistence),
+  `msss_damped` (vs per-pixel AR(1) decay to climatology), `acc` (anomaly
+  correlation), `amp_ratio` (forecast std / truth std). `horizon_auc` is the
+  mean `msss_clim` over leads — it is NOT an AUC. `per_channel` carries the
+  same rows per channel.
+- **The interspersed holdout** is years 2009 / 2017 / 2023 (the codec's
+  default). **The terminal holdout** (decided 2026-08-30) is train ≤ 2020,
+  test 2021–2024, no gap. No codec trained under the terminal holdout exists
+  yet (WP3).
+
+What is NOT public and is the operator's side only: the accelerators (GPU
+boxes and TPU nodes), the credentials, the cloud bucket the TPU trainers
+ship to, and the operator's monitoring ledger. A work package that needs
+compute says so; the operator dispatches it. Everything else here — the
+nulls, the instrument, the analysis of archived artefacts, the recipes, the
+docs — can be done from a clone and the public artefacts.
 
 ---
 
@@ -59,6 +126,42 @@ restated because they are what the reboot is for):
   with positive `msss_clim` past a few pentads), SSH at 5 days (`acc` 0.838
   at h=1). Only 8 of 40 channels are scored at all — the 32 `rg_*` Argo
   channels are null at every lead and are 80 % of the tensor's bytes.
+
+  The corridor numbers from `probes-516.json` (`files.rollout_spatial.json
+  .heads["s145rspiral:111-4444-0.71-0.5_s0"].corridor`), so WP1 has its
+  comparison row without parsing anything:
+
+| h (×5 d) | msss_clim | msss_pers | msss_damped | acc | amp_ratio |
+|---|---|---|---|---|---|
+| 1 | +0.365 | +0.194 | -0.011 | +0.606 | 0.692 |
+| 2 | +0.109 | +0.252 | -0.131 | +0.412 | 0.673 |
+| 3 | -0.172 | +0.178 | -0.354 | +0.265 | 0.761 |
+| 6 | -0.168 | +0.252 | -0.244 | +0.204 | 0.672 |
+| 12 | -0.320 | +0.201 | -0.342 | +0.107 | 0.690 |
+| 18 | -0.322 | +0.211 | -0.333 | +0.132 | 0.725 |
+| 36 | -0.354 | +0.337 | -0.357 | +0.153 | 0.778 |
+| 54 | -0.479 | +0.227 | -0.479 | +0.009 | 0.720 |
+| 73 | -0.719 | -0.101 | -0.719 | -0.031 | 0.822 |
+| **mean of 73** | **-0.439** | **+0.204** | **-0.461** | **+0.105** | **0.780** |
+
+  Per channel (same block, `per_channel`; the 32 `rg_*` channels have
+  `n = 0` at every lead and are omitted):
+
+| channel | acc h=1 | acc h=6 | acc h=18 | mean msss_clim | mean msss_damped | last h with msss_clim > 0 |
+|---|---|---|---|---|---|---|
+| `cur_speed` | +0.604 | +0.131 | +0.052 | -0.591 | -0.606 | 1 |
+| `log_mld` | +0.572 | +0.178 | -0.009 | -0.464 | -0.469 | 1 |
+| `ssh` | +0.838 | +0.252 | +0.113 | -0.499 | -0.562 | 4 |
+| `tau_x` | +0.490 | +0.097 | +0.022 | -0.383 | -0.386 | 47 |
+| `tau_y` | +0.235 | +0.039 | -0.017 | -0.426 | -0.428 | 47 |
+| `tau_x_std` | +0.222 | +0.134 | +0.104 | -0.409 | -0.410 | 68 |
+| `tau_y_std` | +0.207 | +0.070 | +0.057 | -0.465 | -0.466 | 28 |
+| `sst` | +0.759 | +0.343 | +0.337 | -0.165 | -0.191 | 57 |
+
+  Unpooled transport bands (`amoc_bands_unpooled`, r against RAPID at ~9
+  effective starts — read as "no measurable transport skill", never as
+  inversion): 5–90 d **+0.107** (n 162) · 95–180 d **−0.242** (n 129) ·
+  185–365 d **+0.163** (n 150).
 - **The holdout.** Every archived number uses the INTERSPERSED holdout years
   2009 / 2017 / 2023 (the codec's `--holdout-years` default; the stage-2
   pool inherits `hold_years` from the codec checkpoint's `args`). The
@@ -106,12 +209,15 @@ Record.** Packages marked ★ need no accelerator at all. Dependencies are in
   `head-weights-e060a-20k-window-s0.pt` (7.6M) and
   `head-weights-e060b-20k-window-s0.pt` (40.4M), verified against their own
   `args`. Done 08-31.
-- **E-062-R0b**: re-dispatch #518's inputs unchanged once Vast 49242934's
-  disk is cleared (`/opt/earth-cache/family4_na025_pentad_r2_scratch.npy`,
-  34 GB, a rebuilt-every-run scratch copy; `scripts/disk_hygiene.sh` now
-  frees it unconditionally at job start, commit `6b73c22`). Reading is
-  pre-registered in `ml/EXPERIMENTS.md#e-062` §(j): shape first (lead-decay
-  must pass), then level against #516. Done when `probes-<n>.json` is on
+- **E-062-R0b** (operator dispatch): #518 died three minutes in on a full
+  disk (a prior run's 34 GB scratch copy; `scripts/disk_hygiene.sh` now frees
+  it unconditionally at job start, commit `6b73c22`). Re-dispatch with #518's
+  inputs unchanged — window
+  `recipe:xl144-zn-pentad-nolonhold,sroll:head-weights-e060a-20k-window-s0,ckpt:run-415__pixelmae.pt,horizon:73,starts:3,longm:36,futm:36`,
+  `temporal_steps 0`, plan `{"eval": true, "heads":
+  ["head-weights-e060a-20k-window-s0"]}`. The reading is pre-registered in
+  `ml/EXPERIMENTS.md#e-062` §(j): shape first (lead-decay must pass), then
+  level against the #516 table above. Done when `probes-<n>.json` is on
   `ml-metrics` and §(j) carries the table.
 - **The 36-month dispersion test** (PROTOCOL_RESET §2d) is UNANSWERED for a
   clean head because E-059/E-060 are deterministic. Do not claim it either
@@ -178,11 +284,15 @@ The three nulls:
 Also add `--calibrate` support to the table (see WP5) so calibrated and
 uncalibrated numbers sit side by side for nulls and heads alike.
 
-**Inputs.** `family4_na025_pentad_r2` (the r2 tensor, `X` sidecar 34 GB),
-`Z_8b639abe36_37e146384b.npy` (16.2 GiB, for the z-space LIM), the frozen
-codec `run-415__pixelmae.pt`, `probes-516.json` (the head block to place the
-nulls beside). All on the releases / `ml-metrics`; a 128 GB-RAM box or a
-memmap is enough — this is CPU work.
+**Inputs** (all public, see §A): `family4_na025_pentad_r2` (release
+`data-cache-v1` chunks or the Hub; the `X` sidecar is 34 GB — memmap it),
+`Z_8b639abe36_37e146384b.npy` (release `embed-cache-v1`, 16.2 GiB, for the
+z-space LIM), the frozen codec `run-415__pixelmae.pt` (release
+`model-checkpoints-v1`), `probes-516.json` (branch `ml-metrics`; the head
+block to place the nulls beside). CPU work; a machine with ≥ 64 GB RAM or a
+memmap-friendly disk is enough. The workflow's "Build dataset" step
+(`.github/workflows/ml-train.yml`) shows exactly how the tensor is assembled
+from the Hub if you prefer to rebuild it.
 
 **Done when.** One table, in `ml/EXPERIMENTS.md` under a new entry
 **E-064 · the null ladder**, with rows {damped persistence, retrieval k∈{1,5,20},
@@ -285,8 +395,8 @@ reconstruction on 2021–24 should be no worse than run-415's on 2009/2017/2023
 by more than the seed spread of codecs (unknown; this is the first pair —
 budget a second seed if the number will be quoted).
 
-**Cost.** One codec training (~19 h on the class of hardware run-415 used) +
-one embed pass.
+**Cost.** One codec training (run-415 took ~19 h on one consumer GPU) + one
+embed pass. Operator dispatch.
 
 ### WP4 · The cost reform: short budgets, checkpoint selection, seeds ★ (a policy, then a recipe)
 
@@ -329,9 +439,9 @@ where the held-out minimum actually is").
 All on the INTERSPERSED split, so they compare directly to #516 and to WP1's
 nulls; all pre-registered in one E-065 entry.
 
-1. **The step-2,000 roll (Q3).** There is no early checkpoint in the bucket
-   for E-059 or E-060a (verified 08-31: each prefix holds only the final
-   `.pt`, its `_jax.npz`, `metrics.jsonl` and one log). So: train the 7.6M
+1. **The step-2,000 roll (Q3).** No early-step checkpoint of E-059 or
+   E-060a survives anywhere — the trainers kept only the final state
+   (verified 08-31). So: train the 7.6M
    recipe of WP4 to 5,000 steps with `CKPT_EVERY` 500, select per the rule,
    roll BOTH the selected checkpoint and the step-5,000 one through #516's
    battery. Expectation: the selected checkpoint's `acc` at leads 2–18 is
@@ -362,7 +472,7 @@ nulls; all pre-registered in one E-065 entry.
    Expectation: no loss of rolled skill; falsified if `acc` at h ≤ 6 drops by
    more than the seed range.
 
-**Cost.** ~6 short trainings (~1.5 h each) + ~6 rolls (~20 h each on a 4090,
+**Cost.** ~6 short trainings (~1.5 h each) + ~6 rolls (~20 h each on one consumer GPU,
 less for a 7.6M head — measure the first one and re-price; consider a
 shorter battery, `longm:0,futm:0`, for development rolls since the 36-month
 blocks answer nothing for a deterministic head).
