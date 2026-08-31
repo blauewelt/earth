@@ -286,6 +286,12 @@ A new layer is not done until it has **all** of:
      error is a few % OF the value, a small constant in log space.
    - `aggregable: true` alone — averaging is sound, no comparison of either
      kind (currently unused; every aggregable layer so far is also ratio-able).
+   - `annual: true` layers are NEVER suppressed by a window, whatever their
+     other flags: a whole-year composite is already a long-period aggregate
+     and does not change as the window slides (every day in it resolves to
+     the same year), exactly like the untimed composites and the climatology
+     grids. Suppressing them read as a broken layer — the EOX mosaic went
+     blank under the 12-day window left over from the swath work.
    - `mosaic: true` — a daily SWATH product (HLS, the radars, DSWx): the
      Aggregate window is a LOOKBACK and the layer renders the UNION of every
      day in it (`MosaicProvider`, newest pass on top, capped at
@@ -523,6 +529,31 @@ stops two copies sharing the screen; it is not a memory of what has been said.
 
 - Labels terse ("Base globe", not a sentence). Explanations live in hover
   cards and hints, not in control labels.
+- **The aggregation window has FOUR controls and ONE number.** Slider, ±1d
+  nudges, a typed field and the presets (1d/7d/12d/30d/365d) all funnel
+  through the slider's own `change` event — `setWindowDays` writes the slider
+  and fires it — so only one handler touches `state.windowDays` and the four
+  can never disagree. A 730-stop slider cannot be aimed; a day at a time is
+  what a swath layer needs (one step = one satellite pass in or out of the
+  union), and 12d is not a round number but a full repeat cycle, the window at
+  which the union closes over the whole planet. The typed field commits on
+  `change` (Enter, blur, spinner) and never per keystroke — writing back there
+  is safe precisely because `<input type="number">` fires `change` at a
+  COMMIT, unlike the date field's per-segment change (§4b, the half-typed
+  year). Junk or an empty field restores the truth; out of range is clamped.
+- **A scale bar ("Massstab") sits bottom-left**, mirroring the legend's
+  bottom-right and clear of the Cesium credit line. Its length is MEASURED —
+  two ellipsoid picks 100 px apart at the centre of the canvas and the
+  geodesic between them — not derived from camera height and fov, which
+  over-reads under tilt and near the limb; the fov formula (`islMetresPerPixel`)
+  is only the fallback for a centre that misses the globe. The line under it
+  answers the question that prompted it ("how large is the displayed
+  surface"): the ground arc across what is actually on screen, found by
+  walking each canvas edge inward to the last pixel with ground under it, so
+  from orbit it reports the visible disc rather than counting the pixels that
+  show space. Recomputed on `postRender` behind a guard on camera height and
+  canvas width (nothing happens on a frame where neither moved), plus the
+  camera events for a tilt at constant height.
 - Every active layer has a labeled opacity row (`.alpha-row`: slider + live %
   readout + a `½` button toggling 50%↔100%). The ½ button exists for field
   correlation by overlay — e.g. SST at 50% over ocean currents to see whether
@@ -1384,6 +1415,14 @@ the day's swaths as coarse strips from orbit so a reader knows where to zoom
 a `legendKey` (Worldview's own reading of the false colour); and
 `minimumZoomDistance` dropped from 20 km to 100 m (Part 2: the collision
 floor that read as a zoom stutter).
+
+**The aggregation window's four controls and the scale bar (2026-08-31):**
+±1d nudges, a typed field and a 12d preset join the slider on one funnel
+(`setWindowDays`, §5); the scale bar reports both the ruler and the arc across
+the visible ground (`updateScaleBar` / `viewGroundWidth`, §5). Two fixes rode
+along: `annual` layers are no longer suppressed by a window (§2.5), and EOX's
+2016 mosaic is the unsuffixed `s2cloudless_3857` — the `-2016-` form 404s, so
+the layer config carries a `yearName` map.
 
 **The third backend (2026-08-31, same day, Chris's go):** six more layers
 from four keyless tile hosts beyond GIBS (§3, the tile-host bar) —

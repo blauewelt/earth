@@ -102,6 +102,31 @@ nav { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--b
 }
 .date-steps button:hover { border-color: var(--accent, #3987e5); color: var(--accent, #3987e5); }
 #window-presets { margin-top: -4px; }
+/* The ±1d nudges and the typed field. The buttons do NOT flex (unlike the
+   preset row's): the field takes the slack, because it is the control you
+   aim at, and a hit target either side of it is what makes the arrows
+   thumb-usable on a phone. */
+.window-nudge { gap: 6px; margin-top: -2px; }
+.window-nudge button {
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 11px; font-size: 12px; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.window-nudge button:hover { border-color: var(--accent, #3987e5); color: var(--accent, #3987e5); }
+#window-input {
+  flex: 1; min-width: 0; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 8px; font-size: 12px; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+#window-input:focus { outline: none; border-color: var(--accent, #3987e5); }
+/* No native spinners: the ±1d buttons either side ARE the spinner, at a size
+   a thumb can hit, and two sets of arrows for one number is one too many. */
+#window-input::-webkit-inner-spin-button, #window-input::-webkit-outer-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+#window-input { -moz-appearance: textfield; appearance: textfield; }
+.window-unit { font-size: 11px; color: var(--fg-dim); }
 #window-presets button.active, #eei-smooth button.active {
   border-color: var(--accent, #3987e5); color: var(--accent, #3987e5);
 }
@@ -228,6 +253,29 @@ footer a { color: var(--fg-dim); }
    that nobody reads it who isn't looking for it. */
 .build-line { font-size: 11px; color: var(--fg-dim); }
 .build-line code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* ---- scale bar ----
+   Bottom-left, at the legend's height so the two read as a pair, and above
+   the Cesium credit line (.cesium-viewer-bottom) rather than over it. The
+   bar is a bracket, not a box: it measures the ground, so it should look
+   like a ruler laid on it. */
+#scalebar {
+  position: absolute; left: 12px; bottom: 34px; z-index: 20;
+  pointer-events: none; user-select: none;
+  font-size: 11px; color: var(--fg);
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.95), 0 0 6px rgba(0, 0, 0, 0.8);
+}
+#scalebar .sb-row { display: flex; align-items: flex-end; gap: 6px; }
+#sb-label { font-variant-numeric: tabular-nums; line-height: 1; }
+#sb-bar {
+  height: 6px; width: 80px;
+  border: 2px solid rgba(255, 255, 255, 0.92); border-top: none;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+}
+#sb-view {
+  margin-top: 3px; font-size: 10px; color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
 
 /* Cesium widget tweaks */
 .cesium-viewer-bottom { left: 8px !important; }

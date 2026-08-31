@@ -484,7 +484,11 @@ const GIBS_LAYERS = [
     // date's year picks the mosaic exactly as it picks DIST-ANN's map. No
     // posture flags (a photograph); a split comparison (2016 vs 2025) works
     // through the ordinary `timed` path.
-    xyz: "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-{year}_3857/default/g/{z}/{y}/{x}.jpg",
+    xyz: "https://tiles.maps.eox.at/wmts/1.0.0/{year}/default/g/{z}/{y}/{x}.jpg",
+    // verified against the capabilities document and by fetching a tile per
+    // year: 2017–2025 are `s2cloudless-YYYY_3857`, 2016 is `s2cloudless_3857`.
+    yearName: Object.fromEntries([...Array(9)].map((_, i) => [String(2017 + i), `s2cloudless-${2017 + i}_3857`])
+      .concat([["2016", "s2cloudless_3857"]])),
     doc: "https://s2maps.eu/",
     credit: "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data)",
     annual: true,
@@ -1275,7 +1279,15 @@ function gibsProvider(cfg, dateStr) {
  * Cesium would spam errors worldwide. */
 function xyzUrlTemplate(cfg, dateStr) {
   let url = cfg.xyz;
-  if (url.includes("{year}")) url = url.replace("{year}", gibsTime(cfg, dateStr).slice(0, 4));
+  if (url.includes("{year}")) {
+    const y = gibsTime(cfg, dateStr).slice(0, 4);
+    // `yearName` exists for one measured reason: EOX's earliest mosaic is not
+    // `s2cloudless-2016_3857` (that 404s) but the UNSUFFIXED `s2cloudless_3857`
+    // — the year they shipped before the naming convention existed. A host
+    // whose own capabilities document names one year differently gets a map
+    // here rather than a special case at the call site.
+    url = url.replace("{year}", cfg.yearName?.[y] ?? y);
+  }
   return url;
 }
 
@@ -1536,6 +1548,125 @@ viewer.camera.changed.addEventListener(descend);
 viewer.camera.moveEnd.addEventListener(descend);
 viewer.camera.changed.addEventListener(updateFineGates);
 viewer.camera.moveEnd.addEventListener(updateFineGates);
+
+/* ---------------------------------------------------------- the scale bar
+ * "Massstab", the way a paper map has one: a bracket of known ground length,
+ * plus — because that was the actual question (Chris, 2026-08-31: "so when I
+ * zoom in, I can have a notion of how large the displayed surface is") — the
+ * width of the whole view under it. A globe has no fixed scale, which is
+ * exactly why it needs to say what its scale is right now.
+ *
+ * The length is MEASURED, not derived from the camera height: two ellipsoid
+ * picks a fixed number of pixels apart at the centre of the canvas, and the
+ * geodesic between them. That is the only way it stays honest under tilt and
+ * near the limb, where a height-and-fov formula quietly over-reads. When a
+ * pick misses the globe (looking past the edge into space) it falls back to
+ * the fov formula the island tier already uses, which is right at nadir and
+ * approximate elsewhere — better than a bar that blinks out. */
+const SB_MAX_PX = 120;          // the bar never grows past this
+const SB_PROBE_PX = 100;        // pick separation for the measurement
+
+/* 1, 2 or 5 × 10ⁿ — the only lengths a reader converts in their head. */
+function niceScaleMetres(maxM) {
+  if (!(maxM > 0)) return 1;
+  const pow = 10 ** Math.floor(Math.log10(maxM));
+  for (const k of [5, 2]) if (k * pow <= maxM) return k * pow;
+  return pow;                   // 1 × 10ⁿ always fits: pow ≤ maxM by construction
+}
+
+function fmtDistance(m) {
+  if (m >= 1000) return `${Math.round(m / 1000).toLocaleString("en-US")} km`;
+  if (m >= 1) return `${Math.round(m)} m`;
+  return `${m.toFixed(1)} m`;
+}
+
+/* Metres of ground per screen pixel at the centre of the view. */
+function groundMetresPerPixel() {
+  const scene = viewer.scene;
+  const canvas = scene.canvas;
+  const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
+  const pick = (x, y) => scene.camera.pickEllipsoid(
+    new Cesium.Cartesian2(x, y), scene.globe.ellipsoid);
+  const a = pick(w / 2 - SB_PROBE_PX / 2, h / 2);
+  const b = pick(w / 2 + SB_PROBE_PX / 2, h / 2);
+  if (a && b) {
+    const ell = scene.globe.ellipsoid;
+    const g = new Cesium.EllipsoidGeodesic(
+      ell.cartesianToCartographic(a), ell.cartesianToCartographic(b), ell);
+    const d = g.surfaceDistance;
+    if (Number.isFinite(d) && d > 0) return d / SB_PROBE_PX;
+  }
+  return islMetresPerPixel(cameraHeight()).mpp;    // looking past the limb
+}
+
+/* The ground distance across what is ACTUALLY on screen — the other half of
+ * the question ("how large is the displayed surface"). Close up, both canvas
+ * edges have ground under them and it is simply the geodesic between them.
+ * From orbit the edges are space, and multiplying the centre's metres-per-
+ * pixel by the canvas width would answer for a flat plane that isn't there:
+ * at the home view it counts the pixels showing SPACE either side of the disc
+ * and reads 17,473 km against a real visible arc of 15,557 km. So each end
+ * walks inward to the last pixel that still picks the globe — ten steps of
+ * bisection — and the answer is the arc across the visible ground. Null when
+ * there is no ground under the centre line at all. */
+function viewGroundWidth() {
+  const scene = viewer.scene;
+  const canvas = scene.canvas;
+  const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
+  const ell = scene.globe.ellipsoid;
+  const at = (x) => scene.camera.pickEllipsoid(new Cesium.Cartesian2(x, h / 2), ell);
+  const edge = (from, to) => {
+    if (at(from)) return from;                 // the edge itself has ground
+    if (!at(to)) return null;                  // no ground anywhere on this half
+    let dry = from, wet = to;
+    for (let i = 0; i < 10; i++) {
+      const mid = (dry + wet) / 2;
+      if (at(mid)) wet = mid; else dry = mid;
+    }
+    return wet;
+  };
+  const l = edge(1, w / 2), r = edge(w - 1, w / 2);
+  if (l == null || r == null) return null;
+  const a = at(l), b = at(r);
+  if (!a || !b) return null;
+  const g = new Cesium.EllipsoidGeodesic(
+    ell.cartesianToCartographic(a), ell.cartesianToCartographic(b), ell);
+  return Number.isFinite(g.surfaceDistance) ? g.surfaceDistance : null;
+}
+
+function updateScaleBar() {
+  const label = document.getElementById("sb-label");
+  const bar = document.getElementById("sb-bar");
+  const view = document.getElementById("sb-view");
+  if (!label || !bar) return;
+  const mpp = groundMetresPerPixel();
+  if (!Number.isFinite(mpp) || mpp <= 0) return;
+  const metres = niceScaleMetres(mpp * SB_MAX_PX);
+  label.textContent = fmtDistance(metres);
+  bar.style.width = `${Math.round(metres / mpp)}px`;
+  // The answer to the question that prompted this: how much ground is on
+  // screen, edge to edge (or limb to limb from orbit).
+  if (view) {
+    const across = viewGroundWidth();
+    view.textContent = across ? `view ≈ ${fmtDistance(across)} across` : "";
+  }
+}
+
+/* Recomputed whenever the view could have changed scale. postRender runs every
+ * frame, so it is guarded on the two numbers the scale actually depends on —
+ * camera height and canvas width — and does nothing on the frames where
+ * neither moved. The camera events catch a tilt or a rotation at constant
+ * height, which the guard alone would miss. */
+let sbLastH = -1, sbLastW = -1;
+viewer.scene.postRender.addEventListener(() => {
+  const h = cameraHeight(), w = viewer.scene.canvas.clientWidth;
+  if (w === sbLastW && Math.abs(h - sbLastH) < Math.abs(sbLastH) * 0.004) return;
+  sbLastH = h; sbLastW = w;
+  updateScaleBar();
+});
+viewer.camera.changed.addEventListener(updateScaleBar);
+viewer.camera.moveEnd.addEventListener(updateScaleBar);
+window.addEventListener("resize", updateScaleBar);
 
 let bordersLayer = null;
 function placesMode() {
@@ -3101,7 +3232,15 @@ function providersFor(cfg, dateStr) {
   // data under a "past N days" label — so it displays NOTHING instead, and
   // the panel hint explains why. (Untimed composites and the climatology
   // grids stay: they already are long-period averages.)
-  if (win > 1 && cfg.timed && !canWindow && !mosaicable) {
+  /* …with one exception the rule always implied: an ANNUAL layer (the EOX
+   * yearly mosaics, WELD, DIST-ANN, the swisstopo time travel) is ALREADY a
+   * long-period composite and does not change as the window slides — every
+   * day in it resolves to the same year. Suppressing those was the same
+   * over-strictness the untimed composites and climatology grids are exempt
+   * from, and it read as a broken layer: Chris, 2026-08-31, "I don't see
+   * anything from the Sentinel-2 cloudless mosaic" — with the Aggregate
+   * slider left at 12 days from the swath work, the layer was hidden. */
+  if (win > 1 && cfg.timed && !canWindow && !mosaicable && !cfg.annual) {
     out.suppressed = true;
     return out;
   }
@@ -3696,29 +3835,83 @@ document.getElementById("compare-mode").addEventListener("change", (e) => {
   refreshTimedLayers({ hold: true });
 });
 
-// Aggregation window slider (1..730 days) — orthogonal to the display mode.
+/* ------------------------------------------------- the aggregation window
+ * FOUR controls, ONE number (1..730 days), orthogonal to the display mode:
+ * the slider, ±1d nudges, a typed field, and the presets. They all funnel
+ * through the slider's own `change` event — `setWindowDays` writes the slider
+ * and fires it — so only ONE handler touches `state.windowDays` and the four
+ * can never disagree about what is on screen. (The presets already worked
+ * this way; the nudges and the field join the same path rather than each
+ * growing their own copy of "update label, mark preset, refresh, ensemble".)
+ *
+ * Why three more controls for one number: a 730-stop slider cannot be aimed.
+ * A day at a time is exactly what a SWATH layer needs — one step is one more
+ * satellite pass in or out of the union (§2.5 `mosaic`) — and typing is the
+ * only way to ask for 137 days without a fight. */
+const WINDOW_MIN = 1, WINDOW_MAX = 730;
 const windowSlider = document.getElementById("window-days");
 const windowValue = document.getElementById("window-value");
-function syncWindowLabel() {
-  windowValue.textContent = windowLabel(Number(windowSlider.value));
+const windowInput = document.getElementById("window-input");
+
+/* Push the committed number into every read-out. Writing the typed field here
+ * is safe, unlike the Date field's write-back (§4b, "a half-typed year"): a
+ * `<input type="number">` fires `change` only on Enter, blur or a spinner —
+ * a COMMIT — whereas `<input type="date">` fires one per completed segment,
+ * i.e. mid-typing, which is what reset the caret there. Keystrokes here reach
+ * `input`, and nothing listens to it. */
+function syncWindowControls() {
+  const n = Number(windowSlider.value);
+  windowValue.textContent = windowLabel(n);
+  windowInput.value = String(n);
+  markWindowPreset();
 }
-windowSlider.addEventListener("input", syncWindowLabel);
+
+/* The single entry point for every control but the slider itself. Junk or an
+ * empty field restores the truth instead of guessing at it; a no-op (+1d at
+ * 730, or a preset already active) re-syncs and returns rather than
+ * rebuilding every layer for a number that did not change. */
+function setWindowDays(days) {
+  const n = Math.round(Number(days));
+  if (!Number.isFinite(n)) { syncWindowControls(); return; }
+  const clamped = Math.min(WINDOW_MAX, Math.max(WINDOW_MIN, n));
+  if (clamped === state.windowDays && clamped === Number(windowSlider.value)) {
+    syncWindowControls();
+    return;
+  }
+  windowSlider.value = String(clamped);
+  windowSlider.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+windowSlider.addEventListener("input", syncWindowControls);   // live drag, no commit
 windowSlider.addEventListener("change", () => {
   state.windowDays = Number(windowSlider.value);
-  syncWindowLabel();
-  markWindowPreset();
+  syncWindowControls();
   refreshTimedLayers({ hold: true });
   if (sstEnsembleLayer) updateEnsembleLayer();
 });
 
-// One-click window presets (1d/7d/30d/365d): drive the slider and fire its own
-// change event so every consumer (label, presets, layers, ensemble) follows
-// the exact same path as dragging it by hand.
+// ±1d: one satellite pass in or out for a swath layer, one day of samples for
+// an averaged one. Clamped at both ends by setWindowDays.
+document.getElementById("window-nudge").addEventListener("click", (e) => {
+  const step = Number(e.target.getAttribute?.("data-wstep"));
+  if (!step) return;
+  setWindowDays(state.windowDays + step);
+});
+
+// The typed field commits on Enter or blur (its `change`), never per
+// keystroke. Blur re-syncs as well, so a field left holding junk or nothing
+// shows the window that is actually on screen the moment it loses focus.
+windowInput.addEventListener("change", () => setWindowDays(windowInput.value));
+windowInput.addEventListener("blur", syncWindowControls);
+
+// One-click window presets (1d/7d/12d/30d/365d). 12d is not a round number:
+// it is a full satellite repeat cycle, the window at which the swath layers'
+// union (§2.5 `mosaic`) closes over the whole planet — NISAR's cycle exactly,
+// and past Sentinel-1's 6–12 days, Landsat's 8 and Sentinel-2's 2–5.
 document.getElementById("window-presets").addEventListener("click", (e) => {
   const win = e.target.getAttribute?.("data-win");
   if (!win) return;
-  windowSlider.value = win;
-  windowSlider.dispatchEvent(new Event("change", { bubbles: true }));
+  setWindowDays(win);
 });
 // highlight the preset matching the current window (if any)
 function markWindowPreset() {
@@ -3726,8 +3919,7 @@ function markWindowPreset() {
     b.classList.toggle("active", Number(b.dataset.win) === Number(windowSlider.value));
   }
 }
-syncWindowLabel();
-markWindowPreset();
+syncWindowControls();
 
 // Base-globe mode: persisted; "auto" is the default and needs no storage
 const baseModeSel = document.getElementById("base-mode");
@@ -10072,6 +10264,9 @@ window.__earth = {
   xyzUrlTemplate, xyzProvider, mercTileCoordsAt, probeTileAt, getColormapEntries, INLINE_PALETTES,
   // the mosaic: a swath layer's union over the Aggregate window
   MosaicProvider, mosaicDates, mosaicLabel, MOSAIC_MAX_DAYS, providersFor,
+  setWindowDays, syncWindowControls,
+  // the scale bar
+  updateScaleBar, groundMetresPerPixel, viewGroundWidth, niceScaleMetres, fmtDistance,
   // place names: the collections themselves, plus the pick-through helper, so a
   // test can prove a click on "Paris" still reaches the globe
   ensureCities,

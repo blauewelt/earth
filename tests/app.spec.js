@@ -3109,6 +3109,170 @@ test("the camera may descend to street level: no 20 km collision floor to bounce
   expect(r.h).toBeLessThan(5500);
 });
 
+test("the aggregation window has four controls and one number", async ({ page }) => {
+  test.setTimeout(180000);
+  // Every window change rebuilds the timed layers, so switch the default SST
+  // layer off first: this test is about the CONTROLS agreeing, and a dozen
+  // tile fetches per keystroke on the sandbox's software GL is what made an
+  // earlier version of it time out rather than fail.
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="sst"]');
+    if (el?.checked) { el.checked = false; el.dispatchEvent(new Event("change", { bubbles: true })); }
+  });
+  const days = () => page.evaluate(() => ({
+    state: window.__earth.state.windowDays,
+    slider: Number(document.getElementById("window-days").value),
+    field: document.getElementById("window-input").value,
+    label: document.getElementById("window-value").textContent,
+  }));
+  const commit = async (v) => page.evaluate((v) => {
+    const el = document.getElementById("window-input");
+    el.focus(); el.value = v;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.blur();
+  }, v);
+
+  // the 12d preset: a full satellite repeat cycle, so the swath union closes
+  await page.click('#window-presets button[data-win="12"]');
+  expect(await days()).toEqual({ state: 12, slider: 12, field: "12", label: "past 12 days" });
+  await expect(page.locator('#window-presets button[data-win="12"]')).toHaveClass(/active/);
+
+  // ±1d nudges: one satellite pass in or out, and every read-out follows
+  await page.click('#window-nudge button[data-wstep="1"]');
+  expect(await days()).toEqual({ state: 13, slider: 13, field: "13", label: "past 13 days" });
+  await expect(page.locator("#window-presets button.active")).toHaveCount(0);
+  await page.click('#window-nudge button[data-wstep="-1"]');
+  await page.click('#window-nudge button[data-wstep="-1"]');
+  expect(await days()).toEqual({ state: 11, slider: 11, field: "11", label: "past 11 days" });
+
+  // the typed field commits on change (Enter or blur), and drives everything
+  await commit("137");
+  expect(await days()).toEqual({ state: 137, slider: 137, field: "137", label: "past 137 days" });
+
+  // …and NOT per keystroke: mid-typing, the window on screen is still 137
+  await page.evaluate(() => {
+    const el = document.getElementById("window-input");
+    el.focus(); el.value = "9";
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect((await days()).state).toBe(137);
+
+  // out of range is corrected on commit rather than obeyed
+  await commit("9999");
+  expect(await days()).toEqual({ state: 730, slider: 730, field: "730", label: "past 730 days" });
+  await commit("0");
+  expect((await days()).state).toBe(1);
+  // junk restores the truth instead of guessing at it
+  await commit("");
+  expect(await days()).toEqual({ state: 1, slider: 1, field: "1", label: "single day" });
+
+  // the nudges clamp instead of running off either end
+  await page.click('#window-nudge button[data-wstep="-1"]');
+  expect((await days()).state).toBe(1);
+
+  // an ANNUAL layer is not hidden by a window: it is already a whole-year
+  // composite and does not change as the window slides (the EOX mosaic went
+  // blank under a 12-day window, which read as a broken layer)
+  const ann = await page.evaluate(() => {
+    const E = window.__earth;
+    const sl = document.getElementById("window-days");
+    sl.value = "12"; sl.dispatchEvent(new Event("change", { bubbles: true }));
+    const out = {};
+    for (const id of ["s2cloudless", "weld", "dist-ann", "viirs-truecolor"]) {
+      const cfg = E.GIBS_LAYERS.find((l) => l.id === id);
+      out[id] = E.providersFor(cfg, "2024-07-01").suppressed;
+    }
+    return out;
+  });
+  expect(ann["s2cloudless"]).toBe(false);
+  expect(ann["weld"]).toBe(false);
+  expect(ann["dist-ann"]).toBe(false);
+  expect(ann["viirs-truecolor"]).toBe(true);   // a DAILY photograph still is
+});
+
+test("the scale bar measures the ground, and follows the camera down", async ({ page }) => {
+  const read = () => page.evaluate(() => {
+    const E = window.__earth;
+    E.updateScaleBar();
+    const lab = document.getElementById("sb-label").textContent;
+    const [n, unit] = lab.split(" ");
+    return {
+      label: lab,
+      metres: Number(n.replace(/,/g, "")) * (unit === "km" ? 1000 : 1),
+      barPx: parseFloat(document.getElementById("sb-bar").style.width),
+      view: document.getElementById("sb-view").textContent,
+      mpp: E.groundMetresPerPixel(),
+      canvasPx: E.viewer.scene.canvas.clientWidth,
+    };
+  });
+  const at = async (h) => {
+    await page.evaluate((h) => window.__earth.viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(8.5, 47.4, h) }), h);
+    return read();
+  };
+
+  // 1,2,5 × 10ⁿ only — the lengths a reader converts in their head
+  const nice = await page.evaluate(() => [1e6, 4e5, 999, 3, 0.4]
+    .map((m) => window.__earth.niceScaleMetres(m)));
+  expect(nice).toEqual([1000000, 200000, 500, 2, 0.2]);
+
+  // the drawn bar is the labelled distance, at the view's own scale
+  const far = await at(3e6);
+  expect(far.barPx).toBeGreaterThan(20);
+  expect(far.barPx).toBeLessThanOrEqual(121);            // SB_MAX_PX, plus rounding
+  expect(far.barPx * far.mpp).toBeCloseTo(far.metres, -Math.floor(Math.log10(far.metres)));
+  expect(far.view).toMatch(/^view ≈ [\d,.]+ (m|km) across$/);
+  // that width is MEASURED across the visible ground, not a flat-plane guess:
+  // from the home view it is the arc across the disc, ~16,000 km, not the
+  // ~13,000 km a tangent-plane estimate gives
+  const home = await page.evaluate(() => {
+    const E = window.__earth;
+    E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(-30, 28, 1.5e7) });
+    return { across: E.viewGroundWidth(), flat: E.groundMetresPerPixel() * E.viewer.scene.canvas.clientWidth };
+  });
+  expect(home.across).toBeGreaterThan(1.2e7);
+  expect(home.across).toBeLessThan(2.005e7);     // ≤ half the circumference
+  // and it is not the flat-plane number: from orbit that one counts the
+  // pixels showing space either side of the disc
+  expect(Math.abs(home.across - home.flat) / home.across).toBeGreaterThan(0.05);
+
+  // zooming in shrinks the ground the bar spans, monotonically
+  const near = await at(3e4);
+  const nearer = await at(2e3);
+  expect(near.metres).toBeLessThan(far.metres);
+  expect(nearer.metres).toBeLessThan(near.metres);
+  expect(nearer.mpp).toBeLessThan(near.mpp);
+  // …and the whole view is a few km across down there, not a few thousand
+  expect(nearer.mpp * nearer.canvasPx).toBeLessThan(2e4);
+  expect(nearer.barPx * nearer.mpp).toBeCloseTo(nearer.metres, -Math.floor(Math.log10(nearer.metres)));
+
+  // the measurement is a real ground distance: at 3,000 km up over Zürich a
+  // screen pixel is hundreds of metres, not millimetres or megametres
+  expect(far.mpp).toBeGreaterThan(100);
+  expect(far.mpp).toBeLessThan(1e5);
+
+  // it is on screen, bottom-left, clear of the legend's bottom-right
+  const box = await page.locator("#scalebar").boundingBox();
+  const canvas = await page.locator("#cesiumContainer").boundingBox();
+  expect(box.x - canvas.x).toBeLessThan(40);
+  expect(canvas.y + canvas.height - (box.y + box.height)).toBeLessThan(60);
+});
+
+test("the EOX mosaic names 2016 differently from every other year", async ({ page }) => {
+  // Its earliest mosaic predates the naming convention: 2017-2025 are
+  // `s2cloudless-YYYY_3857`, 2016 is the unsuffixed `s2cloudless_3857`, and
+  // the -2016- form 404s. Measured against the capabilities document.
+  const u = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "s2cloudless");
+    return ["2016-05-01", "2017-05-01", "2025-05-01"].map((d) => E.xyzUrlTemplate(cfg, d));
+  });
+  expect(u[0]).toContain("/1.0.0/s2cloudless_3857/");
+  expect(u[0]).not.toContain("-2016");
+  expect(u[1]).toContain("/1.0.0/s2cloudless-2017_3857/");
+  expect(u[2]).toContain("/1.0.0/s2cloudless-2025_3857/");
+});
+
 test("swath layers composite the Aggregate window as a union, newest pass on top", async ({ page }) => {
   test.setTimeout(150000);
   const r = await page.evaluate(async () => {
@@ -3229,7 +3393,8 @@ test("third-backend layers: mercator addressing, inline palettes, rectangle, yea
   expect(r.gswTop).toBe(100); expect(r.gswZero).toBe(0);
   expect(r.s2url).toContain("s2cloudless-2019_3857");
   expect(r.s2late).toContain("s2cloudless-2025_3857");    // clamped to the last mosaic
-  expect(r.s2early).toContain("s2cloudless-2016_3857");   // floored at the first
+  // floored at the first mosaic — which EOX names without the year (own test)
+  expect(r.s2early).toContain("s2cloudless_3857");
   expect(r.s2when).toEqual({ kind: "year", t: "2019" });
   expect(r.histUrl).toContain("/default/1946/3857/");
   expect(r.histWhen).toEqual({ kind: "year", t: "1946" });
