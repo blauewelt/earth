@@ -1,6 +1,6 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-31 ~08:55 UTC** (R0's second head DISPATCHED as #518 (E-062-R0b, the 7.6M arm) after the E-060a/E-060b heads were mirrored to the release — the "GCS blocker" is closed; the reboot handover from the chat session is checked in at `ml/handoffs/REBOOT_HANDOVER_2026-08-31.md`; previous stamp 2026-08-31 ~08:35 UTC: #516 COMPLETE — 879/879 in 21 h 26 m, `probes-516.json` archived, box stopped, and the 36-month rolls read; also #485/E-050 training-half harvest folded in — warm start survives, decoder audit still owed; previous stamp 2026-08-30 ~22:30 UTC: E-062-R0 landed: the first honest rolled number in this programme's history, and a metric correction that changes how every "corridor AUC" in this file reads; everything below the reset block is the earlier text, unchanged).
+**Last updated: 2026-08-31 ~09:25 UTC** (the REBOOT PLAN is written and linked from the reset block; #518 died in 3 min on a full disk and its re-dispatch waits on clearing the box; previous stamp ~08:55 UTC: R0's second head DISPATCHED as #518 (E-062-R0b, the 7.6M arm) after the E-060a/E-060b heads were mirrored to the release — the "GCS blocker" is closed; the reboot handover from the chat session is checked in at `ml/handoffs/REBOOT_HANDOVER_2026-08-31.md`; previous stamp 2026-08-31 ~08:35 UTC: #516 COMPLETE — 879/879 in 21 h 26 m, `probes-516.json` archived, box stopped, and the 36-month rolls read; also #485/E-050 training-half harvest folded in — warm start survives, decoder audit still owed; previous stamp 2026-08-30 ~22:30 UTC: E-062-R0 landed: the first honest rolled number in this programme's history, and a metric correction that changes how every "corridor AUC" in this file reads; everything below the reset block is the earlier text, unchanged).
 
 ---
 
@@ -125,7 +125,9 @@ could measure it. Separately the 3-year roll PAST the record stays bounded
 (sd 1.248 against 2.208 in-record, no drift to a rail) — non-divergence is a
 precondition for forecasting forward from now, and it is not automatic.
 
-**Next, in order:** (1) roll the step-2,000 checkpoint — cheapest untried thing
+**THE EXECUTION PLAN FOR ALL OF THIS IS [`ml/plans/REBOOT_PLAN.md`](https://blauewelt.github.io/earth/docs.html?f=ml/plans/REBOOT_PLAN.md)** (2026-08-31): nulls before training — and note its new reading of #516's own artefact: **the clean head loses to DAMPED persistence (`msss_damped`) at every one of the 73 leads**, so the cheapest classical null already wins; LIM and retrieval next, then the blocked-CV/bootstrap instrument, the terminal-holdout codec (E-063), short budgets with checkpoint selection, five seeds, then R1.
+
+**Next, in order (superseded in detail by the plan above):** (1) roll the step-2,000 checkpoint — cheapest untried thing
 in the programme; (2) fix the amplitude calibration, a decoding change worth
 ~+0.46 msss on states we already have; (3) drop or thin the 32 upsampled Argo
 channels; (4) the terminal-holdout retrains at 7.6M — unchanged, no longer
