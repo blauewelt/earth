@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-062"></a>
-## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ
+## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) DISPATCHED #518, ~08:5xZ
 
 TL;DR — **nothing this programme has ever rolled used a clean-pool head.** #503,
 #510 and #513 all rolled heads trained under `endpoint_contaminated`, so no
@@ -407,6 +407,60 @@ consistent with the same damping-toward-the-mean behaviour seen elsewhere.
 **Box 49242934 / gpu-box-47898003 was stopped at 08:2xZ** and verified
 `exited` by a subsequent `gpu_box.mjs list`, not by the stop call's own
 `{"success":true}`.
+
+#### (j) THE BLOCKER IS CLOSED AND R0's SECOND HEAD IS DISPATCHED — 2026-08-31 ~08:5xZ
+
+**The 7.6M and 40.4M heads are on the release.** Mirrored from the TPU bucket
+by a Cowork session holding the SA key (obtained through `secret-handoff` run
+47 in ~40 s — the "could not be dispatched from here" in
+`PROTOCOL_RESET.md` §6 was a property of that session, not of the project):
+
+| asset on `model-checkpoints-v1` | bytes | read from its own `args` |
+|---|---|---|
+| `head-weights-e060a-20k-window-s0.pt` | 30,425,836 (md5 `562adb08…`, identical to `runs/e060a-8m/temporal_e060a.pt`) | 7,597,856 params · 256×8 · K 144 · stencil 145 · ring `spiral:111-4444-0.71-0.5` · znoise 0.7 · `holdout_scope window` · seed 0 · step 20,000 · codec `run-415__pixelmae.pt` · backend jax |
+| `head-weights-e060b-20k-window-s0.pt` | 161,602,140 | 40,388,128 params · 512×12 · otherwise identical |
+
+Both assets read `state: uploaded` and round-trip byte-identical from the
+release URL. The naming follows E-059's (`head-weights-e059-200k-window-s0`):
+arm · steps · holdout scope · seed.
+
+**#518 (E-062-R0b, R0's second head: the 7.6M arm) · rolls
+`head-weights-e060a-20k-window-s0` through the PROTOCOL-IDENTICAL battery #516
+ran on the 206.66M E-059 head · params 7.60M head over the frozen 37.976M
+run-415 codec (nothing trains) · stage sroll · data `family4_na025_pentad_r2` ·
+arch head 256×8 K 144 stencil 145 ring spiral, codec 512×12 d_z 32 patch 1 ·
+steps 197428 (= run-415's count, zero training) · resume run-415 · runner
+gpu-box-47898003 (Vast 49242934, restarted for it, disk 79/100 with Z and the
+tensor cached from #516) · job_timeout 2400.** Window:
+`recipe:xl144-zn-pentad-nolonhold,sroll:head-weights-e060a-20k-window-s0,ckpt:run-415__pixelmae.pt,horizon:73,starts:3,longm:36,futm:36`
+— #516's window with only the head token swapped. **One variable changes
+against #516: head width (206.66M → 7.60M).**
+
+**Pre-registered reading.** Shape first, level second, exactly as for #516:
+
+- The lead-decay falsifier is expected to PASS (this head was trained under
+  the same clean pool as E-059). A flat profile here would say the pool fix
+  is not sufficient at ANY width.
+- **Level against #516:** field `acc` 0.606 @ 5 d → −0.031 @ 365 d, corridor
+  `msss_clim` −0.439, `amp_ratio` 0.780, `msss_pers` +0.204, SST +0.069 out to
+  90 d. **If the 7.6M arm matches or beats these, capacity was never the axis
+  (PROTOCOL_RESET §1) and the small tier is the default for cause, not only for
+  cost.** The E-060 probes predict at least parity on the transport bands —
+  7.6M held 0.598–0.611 across all ten probes while 206.7M collapsed
+  0.616 → 0.515 — but the loss at step 20,000 was 0.051 WORSE for the small
+  arm, so the field-level comparison is genuinely open.
+- Both are 200k/20k END states past their step-~2,000 held-out minimum; this
+  is a floor for both, and the step-2,000 roll (§(h) item 1) is still owed —
+  and note there is NO early checkpoint in the bucket for either run
+  (`runs/e059-window/` and `runs/e060a-8m/` hold only the final `.pt`), so
+  item 1 needs a 2,000-step retrain with early-stop, not a download.
+- n = 1 at pentad cadence, no replicate pair (§3b); `_trainlon` = parent
+  (no longitude hole); scored against the OLD interspersed holdout.
+
+Roll time is expected to be shorter than #516's 21 h 26 m (a 27× smaller
+head per step), but the 24 h token is priced at dispatch regardless: the job
+must archive by DISPATCH+24 h or the bundle is harvested by hand from the
+`probes-518` artifact.
 
 ---
 

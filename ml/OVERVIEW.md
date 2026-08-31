@@ -1,6 +1,6 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-31 ~08:35 UTC** (#516 COMPLETE — 879/879 in 21 h 26 m, `probes-516.json` archived, box stopped, and the 36-month rolls read; also #485/E-050 training-half harvest folded in — warm start survives, decoder audit still owed; previous stamp 2026-08-30 ~22:30 UTC: E-062-R0 landed: the first honest rolled number in this programme's history, and a metric correction that changes how every "corridor AUC" in this file reads; everything below the reset block is the earlier text, unchanged).
+**Last updated: 2026-08-31 ~08:55 UTC** (R0's second head DISPATCHED as #518 (E-062-R0b, the 7.6M arm) after the E-060a/E-060b heads were mirrored to the release — the "GCS blocker" is closed; the reboot handover from the chat session is checked in at `ml/handoffs/REBOOT_HANDOVER_2026-08-31.md`; previous stamp 2026-08-31 ~08:35 UTC: #516 COMPLETE — 879/879 in 21 h 26 m, `probes-516.json` archived, box stopped, and the 36-month rolls read; also #485/E-050 training-half harvest folded in — warm start survives, decoder audit still owed; previous stamp 2026-08-30 ~22:30 UTC: E-062-R0 landed: the first honest rolled number in this programme's history, and a metric correction that changes how every "corridor AUC" in this file reads; everything below the reset block is the earlier text, unchanged).
 
 ---
 
@@ -49,9 +49,14 @@ minimum · rolled skill as the verdict, never a probe.
 is the first honest rolled number this programme has ever had.** Verdict below.
 R1 — re-rank cadence → stencil → unroll → znoise → FGN → width at the 7.6M
 tier. R2 — E-061 keeps going; it is the only work aimed at the 43-year
-constraint. Still blocked: the 7.6M arm of R0 (`temporal_e060a.pt` is in the
-TPU bucket, not on `model-checkpoints-v1`; mirroring it needs the GCS read
-credential this session could not obtain).
+constraint. **The 7.6M arm of R0 is UNBLOCKED and IN FLIGHT (08-31 08:49Z):**
+`temporal_e060a.pt` and `temporal_e060b.pt` were mirrored from the TPU bucket
+to `model-checkpoints-v1` as `head-weights-e060a-20k-window-s0.pt`
+(30,425,836 B) and `head-weights-e060b-20k-window-s0.pt` (161,602,140 B), each
+verified against its own `args` and md5-identical to the bucket object, and
+**#518 (E-062-R0b, the 7.6M arm through #516's identical battery)** is rolling
+on gpu-box-47898003 — token deadline 2026-09-01 08:49Z. The GCS credential
+was never a project blocker: `secret-handoff` round-trips in ~40 s.
 
 ### E-062-R0 (#516) · the verdict, 2026-08-30
 
@@ -288,6 +293,7 @@ attendability, never information beyond the pixels.
 
 | what | TL;DR question | must beat / registered reading | where · ETA |
 |---|---|---|---|
+| **#518** E-062-R0b · the 7.6M head `head-weights-e060a-20k-window-s0` through #516's identical battery | does the small-tier clean-pool head forecast as well as the 206.66M one on the rolled field — was capacity ever the axis? | shape: lead-decay must PASS; level: #516's acc 0.606@5d → −0.031@365d, corridor msss_clim −0.439, amp_ratio 0.780, msss_pers +0.204, SST +0.069 to 90 d. Parity or better ⇒ small tier is default for cause | gpu-box-47898003 (Vast 49242934), started 08:49Z 08-31; token deadline 08:49Z 09-01; expected well under #516's 21 h 26 m |
 | **#504** E-056a-R token substrate K=24 (+ E-056a-CLEAN twin registered) | is the E-050 warm-FSQ 16-bit-per-pixel-bin alphabet a competitive forecasting substrate? Overnight both arms died: #494 CANCELLED at step 2800/20000 by an actor outside this session; #495 VOID — CUDA OOM on its first forward (K=144 batch 256 does not fit a 24 GB 4090; its control #478 ran that batch on a bigger card, so E-056b needs an 80 GB box, NOT a halved batch). Codec now durable on the release; token-Z cache durable ⇒ embed is free | ≲0.44 ⇒ token road opens at ~5% state size; ≳0.50 ⇒ quantization lost the forecastable signal. Denominator is the TOKEN-scale 0.63451. znoise-dose confound pre-registered (0.879 vs 0.151 rel_pers) — the CLEAN twin at znoise 0.12 settles it in the same wave | **TRAINING CURVE DONE 09:42Z: final ratio 0.53873** (0.34183/0.63451) after 0.600@2800 / 0.574@6000 / 0.548@16000 — flat from ~16k, WORSE than the continuous control 0.5056 and far from the 0.4394 lattice bar. Not a verdict: ~5.8x the intended relative dose. Probe ladder tail still running |
 | **#505 re-dispatch** E-056a-CLEAN, K=24, znoise **0.12** | is #504's 0.555 the SUBSTRATE, or the 5.8x noise handicap? Identical to #504 in every other field | the dose-matched level against lattice 0.4394 / continuous 0.5056, denominator 0.63451. If CLEAN materially beats 0.7 the dose was the handicap; if they agree the substrate verdict stands at either dose | **RE-DISPATCHED as #507 at 10:19Z, QUEUED on gpu-box-32966687 behind #504** — deliberately the SAME box as its 0.7-dose twin, so the pair differs in the dose and nothing else (three other hosts were tried and failed: one full disk, two `resources_unavailable`, one that never registered its runner in 18 min). **RUNNING since 11:24Z, healthy at 0.306 s/step, gpu 99.99%** — ratio 0.590 at step 2,800 against #504's 0.600 at the same step, so the dose looks like a small effect so far; done ~13:10Z plus its ladder |
 | **#506** E-056b token substrate at K=144 — **CANCELLED 12:30Z, HELD** | does the dense two-year slab hold up on tokens, and what does it cost? | vs #478's 0.0820 — unanswered | the rented H100 never used its GPU: ten `gpu_util` samples of 0% at `cpu_util` 95-97% across 3 h 55 m (the dead-frame check never fired, so they were real), and zero step records in 50 min where #478 at identical geometry writes its first at `wall_s 240`. Cancelled on a rule written 25 min ahead; ~$7.95. **Re-dispatch only if #507 rehabilitates the substrate** |

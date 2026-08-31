@@ -281,7 +281,17 @@ All three questions this section originally asked were answered by Chris on
 3. **Small tier is the default.** 206M+ arms now need a specific argument.
    E-060a's 7.6M rung is the working default.
 
-**The one blocker.** R0 rolls only the 206.66M arm. The 7.6M arm
+**The one blocker — CLOSED 2026-08-31 ~08:45Z.** A session holding the SA key
+(obtained through `secret-handoff`, run 47, ~40 s round trip) mirrored
+`temporal_e060a.pt` → `head-weights-e060a-20k-window-s0.pt` (30,425,836 B) and
+`temporal_e060b.pt` → `head-weights-e060b-20k-window-s0.pt` (161,602,140 B) to
+`model-checkpoints-v1`, each md5-verified against the bucket and its `args`
+read back (7,597,856 / 40,388,128 params, step 20,000, `holdout_scope window`,
+seed 0, codec `run-415__pixelmae.pt`). **The 7.6M half of R0 is #518
+(E-062-R0b).** The paragraph below is kept as the record of what the blocker
+was; the "could not be dispatched from here" was a property of that session.
+
+*Original text:* R0 rolls only the 206.66M arm. The 7.6M arm
 (`temporal_e060a.pt`) lives in the TPU results bucket and the roll evaluator
 reads heads from the `model-checkpoints-v1` release, so the head must be
 mirrored across — a sandbox-side step needing the GCS read credential, which
@@ -332,5 +342,7 @@ do, and does it on `acc`, which is the instrument to quote for it from now on.
 **What it does not change.** The terminal-holdout retrains (§3.1) still stand,
 for the reasons given there — extrapolation rather than interpolation, the
 multi-year slow state, and matching the use case. R0 does not rescue them and
-does not displace them. The GCS blocker in §6 is untouched: the 7.6M arm still
-cannot be rolled, so the small-vs-large half of R0 is still owed.
+does not displace them. ~~The GCS blocker in §6 is untouched: the 7.6M arm still
+cannot be rolled, so the small-vs-large half of R0 is still owed.~~ *(Closed
+2026-08-31: the head is mirrored and the small-vs-large half is rolling as
+#518 — see §6.)*
