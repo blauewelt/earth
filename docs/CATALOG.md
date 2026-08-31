@@ -257,6 +257,30 @@ Each entry lists: what the dataset is and its key variables · spatial coverage/
 
 ---
 
+## 4.5 The fine tier — 10–30 m, and what serves it as tiles
+
+Added 2026-08-31. Everything at this scale is imagery or static terrain, not
+physical state; the ocean interior has nothing here (SWOT at 250 m–2 km is the
+ceiling). Entries marked **[live]** are globe layers in the app, all via NASA
+GIBS with no key; the rest say why they are not.
+
+- **Harmonized Landsat Sentinel-2 (HLS S30/L30 v2)** [live] [globe] — NASA LP DAAC. Sentinel-2 MSI and Landsat 8/9 OLI surface reflectance on one 30 m grid, BRDF-normalised. L30 2013-03→, S30 2015-11→; 2–3 day combined revisit. GIBS WMTS daily swath tiles; COGs via Earthdata. Public domain. https://lpdaac.usgs.gov/products/hlss30v002/
+- **OPERA RTC-S1** [live] [globe] — NASA JPL. Sentinel-1 C-band VV/VH backscatter, terrain-corrected, 30 m, 2025-01→ as tiles. GIBS; ASF DAAC for granules. https://www.jpl.nasa.gov/go/opera/products/rtc-product/
+- **NISAR L2 GCOV** [live] [globe] — NASA/ISRO. L-band backscatter, ~15 m, 12-day repeat, 2025-10→, provisional. GIBS; ASF DAAC. https://nisar.jpl.nasa.gov/data/data-products/
+- **OPERA DSWx-HLS / DSWx-S1** [live] [globe] — NASA JPL. Surface-water class per 30 m pixel from optical (2016→, gap 2018-08→2023-01) and from radar (2023-12→, with inundated-vegetation class). GIBS; PO.DAAC. https://www.jpl.nasa.gov/go/opera/products/dswx-product-suite/
+- **ASTER GDEM v3** [live] [globe] — NASA/METI. 30 m elevation, 83°N–83°S, static. GIBS colour-index tiles invert to metres. https://lpdaac.usgs.gov/products/astgtmv003/
+- **HBASE / GMIS 2010** [live] [globe] — NASA SEDAC. 30 m built-up extent and percent impervious surface from the 2010 Global Land Survey. CC BY 4.0. https://www.earthdata.nasa.gov/data/catalog/sedac-ciesin-sedac-ulandsat-hbase-v1-1.0
+- **Global WELD v3.1** [live] [globe] — NASA/USGS/SDSU. Annual cloud-free 30 m Landsat mosaics, 1984–86, 1989–91, 1999–2001 (December-anchored). GIBS. https://lpdaac.usgs.gov/products/glweldv003/
+- **Sentinel-2 MSI L2A** [globe] — ESA. 10 m native; no keyless global WMTS at 10 m (Copernicus Data Space needs an account; EOX Sentinel-2 cloudless yearly mosaics are a keyless 10 m WMTS under CC BY-NC-SA). Shown here at 30 m via HLS. https://dataspace.copernicus.eu/
+- **Sentinel-1 C-SAR** [globe] — ESA. 10 m IW GRD; 1C flew 2024-12, 1D data opened 2026-04-17, 6-day repeat being restored. Shown here at 30 m via OPERA RTC-S1. https://dataspace.copernicus.eu/news/2026-4-16-sentinel-1d-user-data-opening-17042026
+- **SWOT KaRIn SSH** [AMOC] [globe] — NASA/CNES. 2 km Expert and 250 m Unsmoothed sea surface height, 120 km swath, 21-day repeat, 2023→. No tile service; PO.DAAC/AVISO with registration. Bake-able as a 2 km grid. https://podaac.jpl.nasa.gov/dataset/SWOT_L2_LR_SSH_UNSMOOTHED_2.0
+- **JRC Global Surface Water** [globe] — JRC/Google. 30 m water occurrence and monthly history 1984–2021. Keyless public tiles exist — a candidate second browser-facing tile host (CLAUDE.md §3). https://global-surface-water.appspot.com/
+- **Copernicus DEM GLO-30** [globe] — ESA/Airbus. The best modern global 30 m DEM; COGs on AWS without a key, but no WMTS. https://dataspace.copernicus.eu/
+- **ESA WorldCover 10 m (Terrascope WMTS)** [globe] — ESA/VITO. 11-class land cover 2020/2021; keyless CORS-open WMTS — the leading candidate second tile host. https://esa-worldcover.org/en/data-access
+- **Google AlphaEarth embeddings** — 64-dimensional annual 10 m embedding of the whole planet, 2017–2024, Earth Engine only. The cheapest route to "10 m everything" as a tensor. https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_SATELLITE_EMBEDDING_V1_ANNUAL
+- **swisstopo WMTS** [globe] — 10 cm SWISSIMAGE, 0.5 m swissALTI3D, keyless, Switzerland only. https://www.geo.admin.ch/en/geo-services/geo-services/portrayal-services-web-services.html
+- **ECOSTRESS LST** — ~70 m thermal from the ISS, 2018→, irregular; no tiles. Landsat TIRS (100 m) likewise. https://ecostress.jpl.nasa.gov/
+
 # 5. Climate Model Output, Projections & Tipping Points
 
 ## 5.1 CMIP

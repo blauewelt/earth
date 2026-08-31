@@ -2848,7 +2848,8 @@ test("OPERA disturbance layers are classifications: swatch legend, class-label p
   const flags = await page.evaluate(() =>
     window.__earth.GIBS_LAYERS.filter((l) => l.classmap)
       .map((l) => [l.id, l.aggregable ?? null, l.deltaRange ?? null]));
-  expect(flags.length).toBe(2);
+  // two OPERA disturbance layers + two DSWx water layers + HBASE + GMIS
+  expect(flags.length).toBe(6);
   for (const [, agg, dr] of flags) { expect(agg).toBeNull(); expect(dr).toBeNull(); }
 });
 
@@ -2882,6 +2883,170 @@ test("DIST-ANN is annual: the date's year picks the map, day and month don't", a
   await expect(toast).toContainText("annual");
   await expect(toast).toContainText("2024");
   await expect(toast).toContainText("year");
+});
+
+/* ---------------------------------------------------------- the fine tier */
+
+test("fine layers are hidden above their gate and request nothing until the camera comes down", async ({ page }) => {
+  test.setTimeout(120000);
+  const toasts = await recordToasts(page);   // see recordToasts: toasts expire
+
+  // Every fine layer is 30 m or finer, GIBS-served, and declares its gate in
+  // km; the daily ones are swath products and ALL carry a gate.
+  const cfgs = await page.evaluate(() => window.__earth.GIBS_LAYERS
+    .filter((l) => l.fine).map((l) => [l.id, l.tms, l.fine, !!l.timed]));
+  expect(cfgs.map((c) => c[0]).sort()).toEqual(
+    ["hls-l30", "hls-s30", "nisar", "sar-s1", "water-hls", "water-s1"]);
+  for (const [, tms, fine, timed] of cfgs) {
+    expect(["31.25m", "15.625m"]).toContain(tms);
+    expect(fine).toBeGreaterThan(0);
+    expect(timed).toBe(true);
+  }
+
+  // From orbit (the default view) enabling Sentinel-2 keeps the layer but
+  // hides it — Cesium builds no tile skeletons for a hidden layer, so the
+  // tile counter must not move — and the row and a toast say why.
+  const tileReqs = [];
+  // TILE requests only: the one-off DescribeDomains metadata fetch also
+  // names the layer, and it is supposed to go out on enable (ensureGibsDomain).
+  page.on("request", (r) => { if (/HLS_S30[^?]*\/31\.25m\/\d+\/\d+\/\d+\.png/.test(r.url())) tileReqs.push(r.url()); });
+  const orbit = await page.evaluate(() => {
+    const E = window.__earth;
+    E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(8.5, 47.4, 1.2e7) });
+    const el = document.querySelector('#layer-list input[data-id="hls-s30"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+    E.updateFineGates();
+    const e = E.state.layers["hls-s30"];
+    return {
+      gated: E.fineGated(e.cfg),
+      show: e.layer ? e.layer.show : null,
+      hint: document.querySelector('[data-finehint="hls-s30"]').textContent,
+      hintHidden: document.querySelector('[data-finehint="hls-s30"]').hidden,
+      height: Math.round(E.cameraHeight() / 1000),
+      probeSees: E.colormapLayersTopDown().some((l) => l.cfg.id === "hls-s30"),
+    };
+  });
+  expect(orbit.gated).toBe(true);
+  expect(orbit.show).toBe(false);
+  expect(orbit.hintHidden).toBe(false);
+  expect(orbit.hint).toMatch(/zoom in/);
+  expect(orbit.hint).toContain("500 km");
+  expect(orbit.hint).toContain(`${orbit.height}`);   // the height it quotes is the real one
+  await expect.poll(toasts).toContain("zoom in below 500 km");
+  await page.waitForTimeout(1500);
+  const before = tileReqs.length;
+  expect(before).toBe(0);                             // nothing was asked for
+
+  // Descend below the gate: shown, hint flips, and tiles start flowing.
+  const low = await page.evaluate(() => {
+    const E = window.__earth;
+    E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(8.5, 47.4, 2e5) });
+    E.updateFineGates();
+    const e = E.state.layers["hls-s30"];
+    return { gated: E.fineGated(e.cfg), show: e.layer.show,
+      hint: document.querySelector('[data-finehint="hls-s30"]').textContent };
+  });
+  expect(low.gated).toBe(false);
+  expect(low.show).toBe(true);
+  expect(low.hint).toMatch(/showing 30 m tiles/);
+  await expect.poll(() => tileReqs.length, { timeout: 30000 }).toBeGreaterThan(0);
+
+  // Switching the layer off hides the hint; the chip and row follow the
+  // ordinary path (the gate adds nothing to remove).
+  const off = await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="hls-s30"]');
+    el.checked = false; el.dispatchEvent(new Event("change", { bubbles: true }));
+    return document.querySelector('[data-finehint="hls-s30"]').hidden;
+  });
+  expect(off).toBe(true);
+});
+
+test("the elevation layer is a continuous field in metres, probed at native 30 m and dateless", async ({ page }) => {
+  const r = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "elevation");
+    const xml = await (await fetch(cfg.colormap)).text();
+    const cont = E.parseColormapEntries(xml);
+    const vlut = await E.getValueLut(cfg.colormap);
+    return {
+      timed: !!cfg.timed, probeNative: !!cfg.probeNative, maxLevel: cfg.maxLevel,
+      entries: cont?.entries?.length ?? 0, units: cont?.units,
+      lo: cont ? Math.min(...cont.entries.map((e) => e.lo)) : null,
+      hi: cont ? Math.max(...cont.entries.filter((e) => Number.isFinite(e.hi)).map((e) => e.hi)) : null,
+      lutSize: vlut?.lut?.size ?? 0,
+      dateless: E.datelessToast("elevation"),
+      when: E.whenOfGibs(cfg),
+      agg: cfg.aggregable ?? null, dr: cfg.deltaRange ?? null,
+    };
+  });
+  expect(r.timed).toBe(false);
+  expect(r.probeNative).toBe(true);
+  expect(r.maxLevel).toBe(11);                 // the 31.25 m matrix set's last level
+  expect(r.entries).toBeGreaterThan(200);      // 5 m bins to 8,400 m
+  expect(r.units).toBe("m");
+  expect(r.lo).toBeGreaterThanOrEqual(0);
+  expect(r.hi).toBeGreaterThan(8000);          // the Himalaya are in the palette
+  expect(r.lutSize).toBeGreaterThan(200);
+  expect(r.dateless).toContain("terrain model");
+  expect(r.dateless).toContain("doesn't change it");
+  expect(r.when).toBeNull();                   // §2.9: terrain carries no observation time
+  expect(r.agg).toBeNull(); expect(r.dr).toBeNull();
+});
+
+test("WELD annual composites are December-anchored: the year you name is the composite you get", async ({ page }) => {
+  const r = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "weld");
+    const t = (d) => E.gibsTimeStatic(cfg, d);
+    return {
+      annual: !!cfg.annual, anchor: cfg.annualAnchor,
+      y1999: t("1999-06-15"), y1999b: t("1999-01-01"),   // same year, any day
+      y2001: t("2001-03-03"),                             // the last composite served
+      late: t("2026-08-31"),                              // after the archive → its last year
+      early: t("1970-01-01"),                             // before → its first
+      yearOf: E.annualYearOf(cfg, "1998-12-01"),
+      when: E.whenOfGibs(cfg, "1999-06-15"),
+      distAnn: E.gibsTimeStatic(E.GIBS_LAYERS.find((l) => l.id === "dist-ann"), "2030-01-01"),
+    };
+  });
+  expect(r.annual).toBe(true);
+  expect(r.anchor).toBe("12-01");
+  expect(r.y1999).toBe("1998-12-01");          // Dec 1998 → Nov 1999 IS 1999
+  expect(r.y1999b).toBe(r.y1999);
+  expect(r.y2001).toBe("2000-12-01");
+  expect(r.late).toBe("2000-12-01");           // clamped on YEARS, so 2001 stays reachable
+  expect(r.early).toBe("1983-12-01");
+  expect(r.yearOf).toBe(1999);
+  expect(r.when).toEqual({ kind: "year", t: "1999" });
+  expect(r.distAnn).toBe("2025-01-01");        // Jan-anchored layers are unchanged by this
+});
+
+test("every fine-tier layer ships complete: doc link, hover card, chip, catalog record", async ({ page }) => {
+  const ids = ["hls-s30", "hls-l30", "sar-s1", "nisar", "water-hls", "water-s1",
+    "elevation", "builtup", "impervious", "weld"];
+  const r = await page.evaluate((ids) => {
+    const E = window.__earth;
+    return ids.map((id) => {
+      const cfg = E.GIBS_LAYERS.find((l) => l.id === id);
+      const item = document.querySelector(`#layer-list input[data-id="${id}"]`)?.closest(".layer-item");
+      const tip = item?.querySelector(".layer-tip");
+      return {
+        id, doc: cfg?.doc, tms: cfg?.tms,
+        link: !!item?.querySelector("a.title-link[href]"),
+        sum: tip?.querySelector(".tip-sum")?.textContent.length ?? 0,
+        tip: tip?.textContent ?? "",
+        legend: cfg?.classmap || cfg?.colormap ? !!cfg.legend : true,
+      };
+    });
+  }, ids);
+  for (const x of r) {
+    expect(x.doc, x.id).toMatch(/^https:\/\//);
+    expect(x.link, x.id).toBe(true);
+    expect(x.sum, x.id).toBeGreaterThan(120);
+    expect(x.tip, x.id).toMatch(/Recorded/);
+    expect(x.tip, x.id).toMatch(/30 m|15 m/);
+    expect(x.legend, x.id).toBe(true);
+  }
 });
 
 test("drivers is a categorical grid: swatch legend, named driver, dateless", async ({ page }) => {

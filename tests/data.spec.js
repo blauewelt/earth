@@ -58,6 +58,36 @@ test.describe("catalog.json", () => {
     }
   });
 
+  test("the fine tier (≤30 m) is catalogued, live-flagged, and keyless", () => {
+    // §2.6: every live layer has a record with the live note. The ten below
+    // are the fine-tier layers; the reference-only rows (Sentinel-1/2 at the
+    // source, SWOT, GSW, Copernicus DEM, WorldCover WMTS, AlphaEarth,
+    // swisstopo, ECOSTRESS) document what is NOT a layer and why.
+    const live = ["hls", "opera-rtc-s1", "nisar-gcov", "opera-dswx-hls", "opera-dswx-s1",
+      "aster-gdem", "sedac-hbase", "sedac-gmis", "landsat-weld"];
+    const ref = ["sentinel-2-msi", "sentinel-1-sar", "swot-karin", "jrc-gsw", "copernicus-dem",
+      "esa-worldcover-wmts", "alphaearth", "swisstopo-wmts", "ecostress"];
+    const byId = new Map(cat.records.map((r) => [r.id, r]));
+    for (const id of live) {
+      const r = byId.get(id);
+      expect(r, id).toBeTruthy();
+      expect(r.globe, id).toBe(true);
+      expect(r.notes, id).toMatch(/Live globe layer in this app\./);
+      expect(r.access, id).toMatch(/GIBS/);          // keyless tiles, CLAUDE.md §3
+      expect(r.spatial, id).toMatch(/\b(10|15|20|30) m\b/);
+    }
+    for (const id of ref) {
+      const r = byId.get(id);
+      expect(r, id).toBeTruthy();
+      expect(r.notes, id).not.toMatch(/Live globe layer/);
+    }
+    expect(cat.record_count).toBeGreaterThanOrEqual(268);
+    expect(cat.record_count).toBe(cat.records.length);
+    const byDomain = {};
+    for (const r of cat.records) byDomain[r.domain] = (byDomain[r.domain] || 0) + 1;
+    expect(cat.records_by_domain).toEqual(byDomain);
+  });
+
   test("ids are unique", () => {
     const ids = cat.records.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);

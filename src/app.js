@@ -271,6 +271,146 @@ const GIBS_LAYERS = [
     start: "2023-01-01", timed: true, on: false,
     meta: "Confirmed vegetation loss for a whole year — the date's YEAR picks it (2023–2025)",
   },
+  /* ------------------------------------------------------------- the fine tier
+   * Everything below is 30 m or finer, served by GIBS in the same tile scheme
+   * as the rest (so CLAUDE.md §3's "GIBS and GBIF only" still holds). The
+   * daily ones are SWATH products: on any one date they cover the strips the
+   * satellite flew, not the world, so a full-globe view of them is mostly
+   * blank and every date step would fetch a fresh set of mostly-blank tiles.
+   * `fine: <km>` is the gate: above that camera height the layer is kept but
+   * HIDDEN (Cesium creates no tile skeletons for a hidden layer, so nothing is
+   * requested at all — see fineGate()), and its row says to zoom in. The
+   * static ones (elevation, built-up) have meaningful overviews and stay
+   * ungated. Posture (§2.5): photographs and classifications take neither
+   * `aggregable` nor `deltaRange`; elevation is untimed, so nothing to average. */
+  {
+    id: "hls-s30",
+    doc: "https://lpdaac.usgs.gov/products/hlss30v002/",
+    layer: "HLS_S30_Nadir_BRDF_Adjusted_Reflectance",
+    title: "Sentinel-2 true colour (HLS, 30 m)",
+    ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
+    start: "2015-11-28", timed: true, on: false,
+    meta: "Sentinel-2 surface reflectance, 30 m — swaths for the chosen day · loads below 500 km",
+  },
+  {
+    id: "hls-l30",
+    doc: "https://lpdaac.usgs.gov/products/hlsl30v002/",
+    layer: "HLS_L30_Nadir_BRDF_Adjusted_Reflectance",
+    title: "Landsat 8/9 true colour (HLS, 30 m)",
+    ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
+    start: "2013-03-22", timed: true, on: false,
+    meta: "Landsat surface reflectance, 30 m — swaths for the chosen day · loads below 500 km",
+  },
+  {
+    id: "sar-s1",
+    doc: "https://www.jpl.nasa.gov/go/opera/products/rtc-product/",
+    layer: "OPERA_L2_Radiometric_Terrain_Corrected_SAR_Sentinel-1",
+    title: "Sentinel-1 radar backscatter (OPERA RTC, 30 m)",
+    ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
+    start: "2025-01-10", timed: true, on: false,
+    meta: "C-band radar, sees through cloud and night — swaths for the chosen day · loads below 500 km",
+  },
+  {
+    id: "nisar",
+    doc: "https://nisar.jpl.nasa.gov/data/data-products/",
+    layer: "NISAR_L2_Geocoded_Polarimetric_Covariance",
+    title: "NISAR L-band radar backscatter (15 m)",
+    ext: "png", tms: "15.625m", maxLevel: 12, fine: 300,
+    start: "2025-10-29", timed: true, on: false,
+    meta: "The finest layer here: NASA–ISRO L-band radar, provisional — swaths for the chosen day · loads below 300 km",
+  },
+  {
+    id: "water-hls",
+    // CLASSIFICATION raster (open water / partial water / snow-ice / cloud):
+    // class codes neither average nor subtract, so no posture flags.
+    classmap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/OPERA_Dynamic_Surface_Water_Extent.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/OPERA_Dynamic_Surface_Water_Extent_H.svg",
+    doc: "https://www.jpl.nasa.gov/go/opera/products/dswx-product-suite/",
+    layer: "OPERA_L3_Dynamic_Surface_Water_Extent-HLS",
+    classNote: "partial = a 30 m pixel that is only part water (a bank, a marsh, a narrow channel) · cloud pixels are unobserved, not dry",
+    title: "Surface water extent (OPERA DSWx from HLS, 30 m)",
+    ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
+    start: "2016-01-07", timed: true, on: false,
+    meta: "Where there is open water on the chosen day, from optical imagery · 2018-08 → 2023-01 gap · loads below 500 km",
+  },
+  {
+    id: "water-s1",
+    classmap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/OPERA_Dynamic_Surface_Water_Extent_S1.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/OPERA_Dynamic_Surface_Water_Extent_S1_H.svg",
+    doc: "https://www.jpl.nasa.gov/go/opera/products/dswx-product-suite/",
+    layer: "OPERA_L3_Dynamic_Surface_Water_Extent-Sentinel-1",
+    classNote: "inundated vegetation = flooded forest or crops the radar sees under the canopy · HAND-masked = too high above the nearest river to flood, not looked at",
+    title: "Surface water extent (OPERA DSWx from Sentinel-1, 30 m)",
+    ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
+    start: "2023-12-15", timed: true, on: false,
+    meta: "Open water and flooded vegetation from radar — works under cloud, so it is the flood layer · loads below 500 km",
+  },
+  {
+    id: "elevation",
+    // Continuous field in metres, but UNTIMED: terrain has no date to average
+    // or difference over, so no posture flags. probeNative: read at 30 m, not
+    // the usual z4 — a 4 km mean of an alpine pixel is not that pixel's height.
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/ASTER_GDEM_Color_Index.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/ASTER_GDEM_Color_Index_H.svg",
+    doc: "https://lpdaac.usgs.gov/products/astgtmv003/",
+    layer: "ASTER_GDEM_Color_Index",
+    probeNative: true,
+    datelessNote: "<strong>Elevation (ASTER GDEM, 30 m)</strong> is a fixed terrain model " +
+      "(stereo imagery 2000–2013, v3), so the <strong>date selector doesn't change it</strong>.",
+    title: "Elevation (ASTER GDEM, 30 m)",
+    ext: "png", tms: "31.25m", maxLevel: 11,
+    timed: false, on: false,
+    meta: "Height above sea level from stereo imagery, 30 m, 83°N–83°S — hover reads metres",
+  },
+  {
+    id: "builtup",
+    classmap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/Landsat_Human_Built-up_And_Settlement_Extent.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/Landsat_Human_Built-up_And_Settlement_Extent_H.svg",
+    doc: "https://www.earthdata.nasa.gov/data/catalog/sedac-ciesin-sedac-ulandsat-hbase-v1-1.0",
+    layer: "Landsat_Human_Built-up_And_Settlement_Extent",
+    classNote: "HBASE = buildings, paved surfaces and other human structures at 30 m, mapped once from 2010 Landsat",
+    datelessNote: "<strong>Built-up extent (HBASE, 30 m)</strong> is one map from " +
+      "<strong>2010</strong> Landsat imagery, so the <strong>date selector doesn't change it</strong>.",
+    title: "Built-up extent (HBASE 2010, 30 m)",
+    ext: "png", tms: "31.25m", maxLevel: 11,
+    timed: false, on: false,
+    meta: "Every building, road and paved surface the 2010 Landsat record could see, 30 m",
+  },
+  {
+    id: "impervious",
+    // Mixed palette: three classes (no data / not built / cloud) plus ten
+    // percentage bins. Every bin carries a class-style legend entry, so the
+    // classification path reads it whole — the probe answers "31 – 40" (a
+    // bin label), which is the product's own precision.
+    classmap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/Landsat_Global_Man-made_Impervious_Surface.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/Landsat_Global_Man-made_Impervious_Surface_H.svg",
+    doc: "https://www.earthdata.nasa.gov/data/catalog/sedac-ciesin-sedac-ulandsat-gmis-v1-1.0",
+    layer: "Landsat_Global_Man-made_Impervious_Surface",
+    classNote: "percent of each 30 m pixel that is sealed (roofs, asphalt, concrete) — rain runs off it instead of soaking in",
+    datelessNote: "<strong>Impervious surface (GMIS, 30 m)</strong> is one map from " +
+      "<strong>2010</strong> Landsat imagery, so the <strong>date selector doesn't change it</strong>.",
+    title: "Impervious surface % (GMIS 2010, 30 m)",
+    ext: "png", tms: "31.25m", maxLevel: 11,
+    timed: false, on: false,
+    meta: "How sealed the ground is, 30 m, 2010 — the urban-heat and flash-flood map",
+  },
+  {
+    id: "weld",
+    doc: "https://lpdaac.usgs.gov/products/glweldv003/",
+    layer: "Landsat_WELD_CorrectedReflectance_TrueColor_Global_Annual",
+    // Annual composites anchored on DECEMBER 1 (1998-12-01 = Dec 1998 → Nov
+    // 1999). `annual` snaps to Jan 1 and the measured domain then floors that
+    // to the newest Dec 1 at or before it — i.e. asking for 1999 lands on
+    // 1998-12-01, which IS the composite that covers 1999. Three separate
+    // spans only (1984–86, 1989–91, 1999–2001); the domain snapping fills the
+    // holes with the nearest earlier composite and the toast says so.
+    annual: true, annualAnchor: "12-01",
+    endTime: "2000-12-01",
+    title: "Landsat true colour, historic (WELD annual, 30 m)",
+    ext: "jpg", tms: "31.25m", maxLevel: 11,
+    start: "1983-12-01", timed: true, on: false,
+    meta: "Cloud-free yearly mosaics of 1980s–90s Landsat, 30 m — the date's YEAR picks it (1984–86, 1989–91, 1999–2001)",
+  },
   {
     id: "grace",
     colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/GRACE_Tellus_Liquid_Water_Equivalent_Thickness_Mascon_CRI.xml",
@@ -763,14 +903,21 @@ function gibsTimeStatic(cfg, dateStr, { clampEnd = true } = {}) {
   // CERES 2018-10, SSH anomalies 2019-01, AMSR2 soil moisture 2025-09): any
   // later date clamps to the last served one, so the layer shows its final
   // state instead of silently blanking. The hover card states the end date.
-  if (clampEnd && cfg.endTime && dateStr > cfg.endTime) dateStr = cfg.endTime;
-  // Annual products (OPERA DIST-ANN) are served at one date per year: snap to
-  // Jan 1 of the date's year, floored at the first year served.
+  // Annual products (OPERA DIST-ANN, Landsat WELD) are served at one date per
+  // year: snap to the date's year, floored at the first year served and — the
+  // archive-end clamp, applied to YEARS rather than dates, so that a
+  // December-anchored product's last composite is still reachable — capped at
+  // the last.
   if (cfg.annual) {
-    let y = dateStr.slice(0, 4);
-    if (cfg.start && y < cfg.start.slice(0, 4)) y = cfg.start.slice(0, 4);
-    return `${y}-01-01`;
+    let y = Number(dateStr.slice(0, 4));
+    if (cfg.start && y < annualYearOf(cfg, cfg.start)) y = annualYearOf(cfg, cfg.start);
+    if (clampEnd && cfg.endTime && y > annualYearOf(cfg, cfg.endTime)) y = annualYearOf(cfg, cfg.endTime);
+    // A December-anchored product (Landsat WELD: 1998-12-01 = Dec 1998 → Nov
+    // 1999) is asked for at the anchor of the PREVIOUS calendar year, which is
+    // the composite that covers the year the user named.
+    return cfg.annualAnchor ? `${y - 1}-${cfg.annualAnchor}` : `${y}-01-01`;
   }
+  if (clampEnd && cfg.endTime && dateStr > cfg.endTime) dateStr = cfg.endTime;
   if (cfg.monthly) {
     let d = dateStr.slice(0, 8) + "01";
     const currentMonth = defaultDate().slice(0, 8) + "01";
@@ -806,6 +953,15 @@ function gibsTimeStatic(cfg, dateStr, { clampEnd = true } = {}) {
  * session) this behaves exactly as it always did; afterwards every call site —
  * tiles, the pixel card, the hover stamp, the comparison hints — is corrected
  * at once, and they can never disagree about what a click just read. */
+/* The calendar year an annual product's tile date stands for. Jan-1 products
+ * name their own year; a December-anchored one (`annualAnchor: "12-01"`) names
+ * the year that FOLLOWS its anchor. Every read-out — the provenance stamp, the
+ * annual toast, the availability span — goes through this so they agree. */
+function annualYearOf(cfg, t) {
+  const y = Number(String(t).slice(0, 4));
+  return cfg.annualAnchor ? y + 1 : y;
+}
+
 function gibsTime(cfg, dateStr) {
   const want = gibsTimeStatic(cfg, dateStr);
   if (!cfg.timed) return want;
@@ -840,7 +996,7 @@ function whenAt(kind, t) { return t ? { kind, t } : null; }
 function whenOfGibs(cfg, dateStr = state.date) {
   const t = gibsTime(cfg, dateStr);
   if (!t || t === "default") return null;      // untimed and undated: say nothing
-  if (cfg.annual) return whenAt("year", t.slice(0, 4));
+  if (cfg.annual) return whenAt("year", String(annualYearOf(cfg, t)));
   if (cfg.monthly) return whenAt("month", t.slice(0, 7));
   if (t.includes("T")) return whenAt("halfhour", t.slice(0, 16));
   return whenAt("day", t);
@@ -1180,6 +1336,8 @@ const descend = () => {
 };
 viewer.camera.changed.addEventListener(descend);
 viewer.camera.moveEnd.addEventListener(descend);
+viewer.camera.changed.addEventListener(updateFineGates);
+viewer.camera.moveEnd.addEventListener(updateFineGates);
 
 let bordersLayer = null;
 function placesMode() {
@@ -2742,6 +2900,7 @@ function addLayer(cfg) {
   entry.isDelta = built.isDelta;
   entry.isRatio = built.isRatio;
   entry.isAggregate = built.isAggregate;
+  applyFineGate(entry);          // a 30 m layer above its gate is kept, hidden, unrequested
 
   if (cfg.grid) {
     state.layers[cfg.id] = entry;
@@ -2771,6 +2930,64 @@ function addLayer(cfg) {
   // all — loading here is what lets a saturated pixel read its real departure
   // the moment it is hovered, instead of "≥ 3".
   if (cfg.id === "sst-anom") ensureSstNormals(state.date);
+}
+
+/* ------------------------------------------------------- the fine tier's gate
+ * A layer with `fine: <km>` is a 30 m (or 15 m) product whose tiles only make
+ * sense close up: the daily ones are satellite SWATHS, so a full-globe view is
+ * mostly blank, and every date step would re-fetch a fresh set of blank tiles
+ * for the whole visible globe. Above that camera height the layer stays in
+ * `state.layers` — its chip, legend, opacity row and hover card all persist —
+ * but its ImageryLayer is HIDDEN. That is the whole mechanism: Cesium creates
+ * tile skeletons only for shown layers (`layer.show &&
+ * _createTileImagerySkeletons`, the same fact the retirement queue rests on),
+ * so a hidden layer requests nothing at all. Crossing the gate flips `show`
+ * and the tiles for the area in view — a few dozen at 500 km — arrive then.
+ * The playback ring honours the gate too (`playbackPreloadAdd`), so a fine
+ * layer in a playing set costs nothing until the camera is low enough to see
+ * it, and is then fetched for the current frame like any other. */
+function fineGated(cfg) {
+  return !!cfg?.fine && cameraHeight() > cfg.fine * 1000;
+}
+function applyFineGate(entry) {
+  if (!entry?.cfg?.fine) return;
+  const show = !fineGated(entry.cfg);
+  if (entry.layer) entry.layer.show = show;
+  if (entry.cmpLayer) entry.cmpLayer.show = show;
+}
+function fmtKm(m) {
+  const km = m / 1000;
+  return km >= 100 ? String(Math.round(km)) : km >= 10 ? km.toFixed(1) : km.toFixed(2);
+}
+/* The row's one-line status under a fine layer: what it is doing right now
+ * and, when hidden, what would change that. Updated on every camera move so
+ * the number a user reads is the height they are actually at. */
+function updateFineGates() {
+  for (const entry of Object.values(state.layers)) {
+    const cfg = entry.cfg;
+    if (!cfg.fine) continue;
+    applyFineGate(entry);
+    const hint = document.querySelector(`[data-finehint="${cfg.id}"]`);
+    if (!hint) continue;
+    const on = !!(entry.layer || entry.suppressed);
+    hint.hidden = !on;
+    if (!on) continue;
+    const gated = fineGated(cfg);
+    hint.classList.toggle("fine-gated", gated);
+    hint.textContent = gated
+      ? `⤵ zoom in — hidden above ${cfg.fine} km (you're at ${fmtKm(cameraHeight())} km)`
+      : `showing ${cfg.tms === "15.625m" ? "15" : "30"} m tiles for the area in view`;
+  }
+}
+/* Said once, on enable, when the layer will not appear until the camera comes
+ * down — otherwise a checked box and an unchanged globe read as a broken layer. */
+function maybeFineToast(cfg) {
+  if (!cfg?.fine || !fineGated(cfg)) return;
+  showToast(`<strong>${cfg.title}</strong> is a fine-resolution layer, so its tiles are ` +
+    `fetched only for the area in view: <strong>zoom in below ${cfg.fine} km</strong> to load ` +
+    `it (you're at ${fmtKm(cameraHeight())} km). ` +
+    (cfg.timed ? `It shows the satellite's <strong>swaths for the chosen day</strong> — blank ` +
+      `means no pass that day, not no data.` : ``), { key: `fine-${cfg.id}` });
 }
 
 function removeLayer(id) {
@@ -4000,6 +4217,7 @@ function datelessToast(id) {
         : `<strong>${cfg.title}</strong> is a long-term climatology (a multi-decade ` +
           `average), so it has no per-date data — the <strong>date selector doesn't change it</strong>.`;
     }
+    if (cfg.datelessNote) return cfg.datelessNote;   // says WHICH kind of fixed thing it is
     return `<strong>${cfg.title}</strong> is a fixed composite, so the ` +
       `<strong>date selector doesn't change it</strong>.`;
   }
@@ -4063,9 +4281,9 @@ function maybeMonthlyGridToast(cfg) {
  * the span of years it quotes ends up being the archive's rather than a guess. */
 function maybeAnnualToast(cfg, { replace = false } = {}) {
   if (!cfg?.annual) return;
-  const shown = gibsTime(cfg, state.date).slice(0, 4);
-  const lo = cfg.start.slice(0, 4);
-  const hi = (cfg.lastServed || cfg.endTime || defaultDate()).slice(0, 4);
+  const shown = String(annualYearOf(cfg, gibsTime(cfg, state.date)));
+  const lo = String(annualYearOf(cfg, cfg.start));
+  const hi = String(annualYearOf(cfg, cfg.lastServed || cfg.endTime || defaultDate()));
   const want = state.date.slice(0, 4);
   const note = want !== shown
     ? ` (nearest available to your ${want}; the product covers ${lo}–${hi})`
@@ -4192,7 +4410,7 @@ const LAYER_FACTS = {
          "biosphere. Season swings it; climate shifts it — comparing the same " +
          "month across years (Compare → computed change) reveals greening, " +
          "browning, deforestation and drought stress directly." },
-  "dist-alert": { rec: "this map: 2023-01 → present (2024 has a few gap dates near the start of the year — blank means no tile, not no disturbance)", int: "updated every few days as Landsat/Sentinel-2 pass over; each map is the running status of the CURRENT year", sp: "30 m — the finest layer in this app",
+  "dist-alert": { rec: "this map: 2023-01 → present (2024 has a few gap dates near the start of the year — blank means no tile, not no disturbance)", int: "updated every few days as Landsat/Sentinel-2 pass over; each map is the running status of the CURRENT year", sp: "30 m — one of the fine-tier layers",
     sum: "Where vegetation has been lost, at the scale of a single clearing. " +
          "OPERA compares every new Landsat/Sentinel-2 image against that " +
          "pixel's own recent history, and flags the drop: first detection, " +
@@ -4207,6 +4425,78 @@ const LAYER_FACTS = {
          "resolved. Use this to compare whole years — how much of the Amazon " +
          "arc, the Congo basin or Southeast Asia changed in 2023 versus 2024 — " +
          "and the alert layer to watch the current year as it happens." },
+  "hls-s30": { rec: "this map: 2015-11 → present (Sentinel-2A launched 2015-06; tiles run ~1 week behind)", int: "daily — the swaths flown that day; each place is revisited every 2–5 days, and clouds hide most passes", sp: "30 m (Sentinel-2's native 10 m resampled by HLS to Landsat's grid)",
+    sum: "What Sentinel-2 saw on the chosen day, at the scale of a field or a " +
+         "city block. HLS (Harmonized Landsat–Sentinel) corrects the raw image " +
+         "for the atmosphere and view angle so that it can be compared, pixel " +
+         "for pixel, with Landsat's. It is a SWATH product: on any one date only " +
+         "the strips the satellite flew are painted, and a cloudy pass is a " +
+         "cloudy image — blank means no pass, not no data. Loads only below " +
+         "500 km; step the date to find a clear day." },
+  "hls-l30": { rec: "this map: 2013-03 → present (Landsat 8 launched 2013-02, Landsat 9 2021-09)", int: "daily — the swaths flown that day; each place every 8 days with the two satellites", sp: "30 m (Landsat's native resolution)",
+    sum: "The same Harmonized product built from Landsat 8 and 9 instead of " +
+         "Sentinel-2: fewer passes, but the sensor lineage that reaches back to " +
+         "1984 (the historic WELD layer below is its ancestor). Swaths for the " +
+         "chosen day, blank where nothing flew; loads only below 500 km." },
+  "sar-s1": { rec: "this map: 2025-01 → present (Sentinel-1 has flown since 2014, but only OPERA's terrain-corrected version is served as tiles)", int: "daily — the swaths flown that day; each place every 6–12 days", sp: "30 m",
+    sum: "Radar instead of light: Sentinel-1 sends a C-band microwave pulse and " +
+         "maps how much comes back. Water is smooth and returns nothing (dark), " +
+         "cities and rough ground return a lot (bright), vegetation sits between " +
+         "— and it works through cloud and at night, which optical imagery " +
+         "cannot. This is the sensor behind flood maps, sea-ice edges, ship " +
+         "detection and deformation monitoring. False colour: the two " +
+         "polarisations are painted as separate channels. Swaths for the chosen " +
+         "day; loads only below 500 km." },
+  nisar: { rec: "this map: 2025-10 → present (launched 2025-07; PROVISIONAL products while calibration continues)", int: "daily — the swaths flown that day; each place every 12 days", sp: "15 m — the finest layer in this app",
+    sum: "The NASA–ISRO radar: L-band, a wavelength four times longer than " +
+         "Sentinel-1's, so it penetrates canopy and sees the ground under " +
+         "forests, soil moisture, and the slow deformation of ice sheets and " +
+         "fault lines. Launched July 2025 and now in public release; treat the " +
+         "colours as provisional while the calibration settles. Swaths for the " +
+         "chosen day; loads only below 300 km." },
+  "water-hls": { rec: "this map: 2016-01 → 2018-08, then 2023-01 → present (the gap is the product's own reprocessing history)", int: "daily — from each clear Landsat/Sentinel-2 pass", sp: "30 m",
+    sum: "Where water stands on the surface on the chosen day, pixel by pixel: " +
+         "open water, partial water (a bank, a marsh, a channel narrower than " +
+         "30 m), snow and ice, and cloud — which is unobserved, not dry. Step " +
+         "through a flood and watch a river's footprint spread and recede; " +
+         "compare a reservoir's outline in a wet year and a dry one. Optical, " +
+         "so blind under cloud — that is what the Sentinel-1 version is for." },
+  "water-s1": { rec: "this map: 2023-12 → present", int: "daily — from each Sentinel-1 pass, every 6–12 days per place", sp: "30 m",
+    sum: "The flood layer: surface water from radar, which sees through the " +
+         "very clouds that bring the flood. Open water, and inundated vegetation " +
+         "— flooded forest or crops the radar picks out beneath the canopy. Two " +
+         "masks are honest about what the method cannot judge: ground too high " +
+         "above the nearest river to flood (HAND), and mountain slopes hidden in " +
+         "radar shadow." },
+  elevation: { rec: "fixed — one model from stereo images taken 2000–2013 (ASTER GDEM v3), ignores the date selector", int: "single model, no time axis", sp: "30 m, 83°N–83°S",
+    sum: "Height above sea level, from a million stereo image pairs taken by " +
+         "the ASTER instrument on Terra. The palette runs blue-green lowlands " +
+         "through browns to white peaks; hover to read the height in metres at " +
+         "30 m resolution. Terrain is the boundary condition under half the " +
+         "other layers — where rain falls, where rivers go, where cities sit, " +
+         "how far a rising sea reaches. Sea level itself is transparent, so the " +
+         "ocean shows the base map." },
+  builtup: { rec: "fixed — one map from 2010 Landsat imagery (HBASE v1), ignores the date selector", int: "single map", sp: "30 m",
+    sum: "Every human structure the 2010 Landsat record could see: buildings, " +
+         "roads, paved and built ground, mapped at 30 m over the whole planet " +
+         "by NASA's SEDAC. It is a footprint, not a population count — a " +
+         "sprawling suburb and a dense city block both read as built-up. Zoom " +
+         "in on any city to see its shape; compare with night lights for " +
+         "where that footprint is actually lit." },
+  impervious: { rec: "fixed — one map from 2010 Landsat imagery (GMIS v1), ignores the date selector", int: "single map", sp: "30 m, in 10-percent bins",
+    sum: "How sealed the ground is: the share of each 30 m pixel covered by " +
+         "roofs, asphalt and concrete. Sealed ground shed rain instead of " +
+         "absorbing it (flash floods) and stores heat instead of evaporating " +
+         "water (urban heat islands), so this is the map that turns a built-up " +
+         "footprint into a physical property. The probe reads the bin, e.g. " +
+         "31–40 %." },
+  weld: { rec: "three spans only: 1984–86, 1989–91 and 1999–2001 (one cloud-free mosaic per year); type a date — the steppers stop at 2000", int: "yearly — the date's YEAR picks the mosaic; other years show the nearest earlier one", sp: "30 m",
+    sum: "The 1980s and 1990s at 30 m: the Landsat 4–7 record composited into " +
+         "one cloud-free mosaic per year by the WELD project. Put it beside the " +
+         "Sentinel-2 layer on today's date and forty years of change sit under " +
+         "the cursor — a reservoir filled, a city grown, a forest gone. Only " +
+         "three spans were produced, so the annual toast names the year " +
+         "actually showing." },
   drivers: { rec: "2001–2025, attributed in one map (v1.3)", int: "not dated — re-baked when WRI publishes a new version", sp: "1 km source, binned here to 0.25° by dominant class",
     sum: "Why the forest went. WRI and Google DeepMind trained a classifier on " +
          "tens of thousands of hand-labelled sites to name the dominant cause " +
@@ -4389,6 +4679,7 @@ function buildLayerPanel() {
         ${title}
       </div>
       <div class="meta">${cfg.meta}</div>
+      ${cfg.fine ? `<div class="fine-hint" data-finehint="${cfg.id}" hidden></div>` : ""}
       <div class="alpha-row" data-alpharow="${cfg.id}" ${cfg.on ? "" : "style='display:none'"}>
         <span class="alpha-label">opacity</span>
         <input type="range" min="0" max="100" value="100" data-alpha="${cfg.id}"
@@ -4415,9 +4706,12 @@ function buildLayerPanel() {
       maybeMonthlyGridToast(cfg);
       maybeArchiveToast(cfg);
       maybeAnnualToast(cfg);
+      maybeFineToast(cfg);
+      updateFineGates();
     } else {
       removeLayer(id);
       row.style.display = "none";
+      updateFineGates();
       if (cfg?.forecastGrid) syncDateMax();   // may pull the date back to today
     }
     updateSplitUI();
@@ -5132,7 +5426,10 @@ function kelvinToC(res) {
 
 function colormapLayersTopDown() {
   return Object.values(state.layers)
-    .filter((e) => e.layer && (e.cfg.colormap || e.cfg.classmap || e.cfg.grid))
+    // a fine layer above its gate is hidden and must not answer for what is
+    // not on screen
+    .filter((e) => e.layer && e.layer.show !== false &&
+      (e.cfg.colormap || e.cfg.classmap || e.cfg.grid))
     .map((e) => [viewer.imageryLayers.indexOf(e.layer), e])
     .sort((a, b) => b[0] - a[0])
     .map(([, e]) => e);
@@ -5641,7 +5938,7 @@ const PIXEL_DEADLINE_MS = 2000;
  * short enough that no row is visibly late to its own section. */
 const PIXEL_REDRAW_MS = 250;
 const PIXEL_RASTERS = ["sst", "sst-anom", "ssh-anom", "precip", "seaice", "snow", "aod", "lst",
-  "soilmoisture", "ndvi", "grace", "ceres", "chlor", "salinity", "dist-alert"];
+  "soilmoisture", "ndvi", "grace", "ceres", "chlor", "salinity", "dist-alert", "elevation"];
 const PIXEL_GRIDS = ["oisst", "gpcp", "eobs", "meteoswiss", "tides"];
 // The two CMIP6 windows, declared once: the rows are stamped with the same
 // spans that were requested, so the label can never drift from the query.
@@ -5681,7 +5978,9 @@ async function pixelRasterValue(cfg, lon, lat) {
   }
   const vlut = await getValueLut(cfg.colormap);
   if (!vlut) return null;
-  const z = Math.min(cfg.maxLevel, 4);
+  // probeNative (elevation): a 4 km mean of alpine terrain is not the height
+  // of the point that was tapped; read the 30 m tile.
+  const z = cfg.probeNative ? cfg.maxLevel : Math.min(cfg.maxLevel, 4);
   const t = tileCoordsAt(lon, lat, z);
   const v = await probePixel(cfg, state.date, z, t.x, t.y, t.px, t.py, vlut.lut);
   if (v == null) return null;
@@ -6125,7 +6424,7 @@ async function showPixelState(carto) {
     if (top && !top.cfg.grid && (top.cfg.colormap || top.cfg.classmap)) {
       // the cell the CARD reads: classification rasters at native resolution,
       // continuous ones capped at level 4 (see pixelRasterValue)
-      const z = top.cfg.classmap ? top.cfg.maxLevel : Math.min(top.cfg.maxLevel, 4);
+      const z = (top.cfg.classmap || top.cfg.probeNative) ? top.cfg.maxLevel : Math.min(top.cfg.maxLevel, 4);
       const t = tileCoordsAt(lon, lat, z);
       cell = probeCellBounds(z, t.x, t.y, t.px, t.py);
     }
@@ -8787,9 +9086,13 @@ function playbackPreloadDepth() {
 }
 
 // alpha 0, NOT show:false. That one line is the entire mechanism — see FACT 2.
-function playbackPreloadAdd(p) {
+function playbackPreloadAdd(p, cfg) {
   const layer = viewer.imageryLayers.addImageryProvider(p.provider);
   layer.alpha = 0;
+  // …except a fine layer above its gate, which must not warm at all: hidden,
+  // it holds no tiles and requests none, and is shown on promote if the
+  // camera has come down by then (applyFineGate in playbackPromote).
+  if (cfg?.fine) layer.show = !fineGated(cfg);
   if (p.splitDirection !== undefined) layer.splitDirection = p.splitDirection;
   return layer;
 }
@@ -8861,8 +9164,8 @@ function playbackEnsurePreload(i) {
       if (r.suppressed || !r.providers.length) continue;
       const rec = { id: cfg.id, layer: null, cmpLayer: null,
         isDelta: r.isDelta, isRatio: r.isRatio, isAggregate: r.isAggregate };
-      rec.layer = playbackPreloadAdd(r.providers[0]);
-      if (r.providers[1]) rec.cmpLayer = playbackPreloadAdd(r.providers[1]);
+      rec.layer = playbackPreloadAdd(r.providers[0], cfg);
+      if (r.providers[1]) rec.cmpLayer = playbackPreloadAdd(r.providers[1], cfg);
       built.push(rec);
     }
     /* A PARTIAL frame is not stored. If any layer failed to build, promoting
@@ -8924,6 +9227,7 @@ function playbackPromote(dateStr) {
     entry.isRatio = rec.isRatio;
     entry.isAggregate = rec.isAggregate;
     entry.suppressed = false;
+    applyFineGate(entry);
     promoted = true;
   }
   if (!promoted) return false;
@@ -9365,6 +9669,8 @@ window.__earth = {
   snapToDomain,
   loadGibsDomain,
   gibsDomains,
+  // the fine tier: the gate and the December-anchored annual arithmetic
+  fineGated, updateFineGates, applyFineGate, annualYearOf, cameraHeight,
   // place names: the collections themselves, plus the pick-through helper, so a
   // test can prove a click on "Paris" still reaches the globe
   ensureCities,
