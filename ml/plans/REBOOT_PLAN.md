@@ -1,602 +1,495 @@
-# The reboot plan · what to do next, in what order, and how to know it worked
+# Rebooting the research programme · a handover for whoever continues it
 
-**Written 2026-08-31 ~09:30Z.** This is the execution plan for rebooting the
-research programme after the protocol reset. It is written so that a session
-with none of this project's chat history can pick up any work package below
-and run it: every package says what it is for, what to build, where the
-inputs are, what "done" looks like, and what result would falsify the
-expectation behind it.
-
-Read first, in this order: `ml/OVERVIEW.md` (top block), `ml/plans/PROTOCOL_RESET.md`,
-`ml/handoffs/SESSION_HANDOVER_2026-08-31.md`, `ml/handoffs/REBOOT_HANDOVER_2026-08-31.md`,
-`ml/CLAUDE.md`. Everything renders at `https://blauewelt.github.io/earth/docs.html?f=<path>`.
-
-**Rules that apply to every package here** (they are `ml/CLAUDE.md`'s rules,
-restated because they are what the reboot is for):
-
-- Write the `ml/EXPERIMENTS.md` entry — hypothesis, control, falsifier —
-  BEFORE the run is dispatched, never after. Use the structured header of
-  `ml/CLAUDE.md` §0d. A run number never appears without its summary (§0c).
-- One variable per comparison. If two things changed, the number is not a
-  result.
-- Every number comes from an artefact on `ml-metrics` or in the repo, never
-  from a log line or a memory of one.
-- A single-seed number inside its tier's spread is a consistency, not a level.
-- Assume the evaluation stack is still wrong somewhere. It has been wrong
-  twice (the pool; "corridor AUC"). Verifying a metric is ordinary work.
-- Update `ml/OVERVIEW.md` (move the stamp) in the same breath as
-  dispatching or harvesting. (The operator keeps a private expectations
-  ledger beside it; a public session only needs OVERVIEW.)
+**Written 2026-08-31.** This document is for a researcher — human or agent —
+who is picking up the North Atlantic forecasting programme fresh, with read
+access to the public repository and its artefacts, and their own compute.
+It says what the programme has established, what it has got wrong, what the
+open questions are, and how to continue the research so that the next
+numbers can be trusted. It is about the science and its method. Where it
+names a file, that is for reading: the definition of a protocol lives in
+code, and reading the code is the reliable way to reproduce it.
 
 ---
 
-## A. Everything this plan needs is public — where it is
+## 1. What the programme is trying to do
 
-This plan is self-contained for a reader with PUBLIC access to the repository
-and nothing else. Nothing below requires the operator's chat history, the
-claude.ai project, credentials, or a login.
-
-| what | where (public) |
-|---|---|
-| The repository | <https://github.com/blauewelt/earth> |
-| Any repo markdown, phone-readable | `https://blauewelt.github.io/earth/docs.html?f=<path>` |
-| The status page (runs, curves, plans) | <https://blauewelt.github.io/earth/status.html> |
-| Archived result bundles, one JSON per run | branch `ml-metrics`: `https://raw.githubusercontent.com/blauewelt/earth/ml-metrics/probes-<n>.json` (e.g. [`probes-516.json`](https://raw.githubusercontent.com/blauewelt/earth/ml-metrics/probes-516.json), the first honest roll) and `run-<n>.jsonl` (the live metrics), `plan-<n>.json` |
-| Codecs and stage-2 heads (weights) | GitHub release `model-checkpoints-v1` — [assets](https://github.com/blauewelt/earth/releases/tag/model-checkpoints-v1); download as `https://github.com/blauewelt/earth/releases/download/model-checkpoints-v1/<asset>` |
-| The tensors (chunked) | release `data-cache-v1`, and the Hugging Face dataset [`chfrank/earth-tensors`](https://huggingface.co/datasets/chfrank/earth-tensors) (pentad means, truth series, SST bake, the CMIP6 corpus) |
-| The embedding caches `Z` (1.5 GiB chunks + manifest) | release `embed-cache-v1` |
-| The experiment log | [`ml/EXPERIMENTS.md`](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md) |
-| The standing map and the reset | [`ml/OVERVIEW.md`](https://blauewelt.github.io/earth/docs.html?f=ml/OVERVIEW.md) · [`ml/plans/PROTOCOL_RESET.md`](https://blauewelt.github.io/earth/docs.html?f=ml/plans/PROTOCOL_RESET.md) |
-| The two handovers this plan builds on | [session handover](https://blauewelt.github.io/earth/docs.html?f=ml/handoffs/SESSION_HANDOVER_2026-08-31.md) · [reboot handover](https://blauewelt.github.io/earth/docs.html?f=ml/handoffs/REBOOT_HANDOVER_2026-08-31.md) |
-| What the system is and what its numbers mean | [`docs/ML_BASICS.md`](https://blauewelt.github.io/earth/docs.html?f=docs/ML_BASICS.md) · [`docs/INFRASTRUCTURE.md`](https://blauewelt.github.io/earth/docs.html?f=docs/INFRASTRUCTURE.md) |
-| The working rules | [`ml/CLAUDE.md`](https://blauewelt.github.io/earth/docs.html?f=ml/CLAUDE.md) |
-
-Names you will meet, so no one has to guess them:
-
-- **Tensor** `family4_na025_pentad_r2`: pentad (5-day) cadence, T = 3,142 bins
-  from 1982-01 to 2024-12, grid 281 × 481 at 0.25° over 0–70°N / 100°W–20°E,
-  86,698 ocean pixels, C = 40 channels in this order: `cur_speed, log_mld,
-  ssh, rg_t10 … rg_t1900 (16), rg_s10 … rg_s1900 (16), tau_x, tau_y,
-  tau_x_std, tau_y_std, sst`. Sha prefix `37e146384b`. Its 40-channel `X`
-  sidecar is 34 GB; the meta `.npz` is 4.5 GB.
-- **Codec** `run-415__pixelmae.pt` (37.976M params, 512×12, 4 heads, d_dec
-  256, d_z 32, patch 1; `--holdout-years 2009,2017,2023`, `--holdout-lon 0,0`).
-  Its embedding of the tensor is `Z_8b639abe36_37e146384b.npy` — `[3142,
-  86698, 32]` float16, 16.24 GiB — on `embed-cache-v1`.
-- **Clean-pool stage-2 heads** on `model-checkpoints-v1`:
-  `head-weights-e059-200k-window-s0.pt` (206.66M, 1024×16),
-  `head-weights-e060a-20k-window-s0.pt` (7.60M, 256×8),
-  `head-weights-e060b-20k-window-s0.pt` (40.39M, 512×12). All: K 144,
-  stencil 145, ring `spiral:111-4444-0.71-0.5`, znoise 0.7, seed 0,
-  `holdout_scope window`, codec run-415. A head file is `{args, model, step,
-  tag, run_number}`; `args` carries every knob.
-- **Evaluator** `ml/rollout_spatial.py` — the "roll": from a true context of
-  K = 144 pentads it advances every ocean pixel one pentad at a time for
-  `horizon` steps, decodes to standardised physical channels and scores
-  against truth. Scopes: `gate` (600 random pixels ∪ the RAPID section),
-  `corridor` (the fastest quarter of the window by current speed, dilated 2
-  cells, ∪ the section — 30,158 pixels), `window` (all 86,698). Starts: 3 per
-  holdout year. Metrics per lead `h`: `msss_clim = 1 − MSE/MSE_climatology`
-  (climatology = zero anomaly), `msss_pers` (vs raw persistence),
-  `msss_damped` (vs per-pixel AR(1) decay to climatology), `acc` (anomaly
-  correlation), `amp_ratio` (forecast std / truth std). `horizon_auc` is the
-  mean `msss_clim` over leads — it is NOT an AUC. `per_channel` carries the
-  same rows per channel.
-- **The interspersed holdout** is years 2009 / 2017 / 2023 (the codec's
-  default). **The terminal holdout** (decided 2026-08-30) is train ≤ 2020,
-  test 2021–2024, no gap. No codec trained under the terminal holdout exists
-  yet (WP3).
-
-What is NOT public and is the operator's side only: the accelerators (GPU
-boxes and TPU nodes), the credentials, the cloud bucket the TPU trainers
-ship to, and the operator's monitoring ledger. A work package that needs
-compute says so; the operator dispatches it. Everything else here — the
-nulls, the instrument, the analysis of archived artefacts, the recipes, the
-docs — can be done from a clone and the public artefacts.
+Learn a forward model of the North Atlantic ocean state from 43 years of
+reanalysis (1982–2024), at 0.25° and five-day cadence, and use it to
+forecast. The architecture is two-stage: a self-supervised per-pixel codec
+compresses each pixel's 40 physical channels into a 32-dimensional embedding
+`z`; a causal transformer over a two-year window of embeddings (K = 144
+pentads) plus a 145-point spatial stencil predicts the next embedding; a
+"roll" advances every pixel forward step by step from a true context and
+scores the decoded fields against truth. The headline read-out has been AMOC
+transport at 26.5°N (the RAPID array), because it is the best-instrumented
+truth series available — not because transport is the only target. The
+stated ambition is a predictor of the whole state, from which any quantity
+can be read out.
 
 ---
 
-## 0. Where the programme stands, in numbers
+## 2. What is known, with the numbers that carry it
 
-- **The wall.** The stage-2 pool is `2,417 end-bins × 86,698 pixels`. There
-  are 2,417 distinct temporal patterns in 43 years of pentads; every pixel is
-  a correlated view of them. For the AMOC target there are **~9 effective
-  starts**. No architecture, resolution or CMIP6 corpus changes either
-  number.
-- **Every clean arm peaks early.** Under `--holdout-scope window`, heads from
-  7.6M to 400M reach their best held-out one-step loss inside ~2,000 of
-  200,000 steps and worsen for the rest (E-060). ~99 % of every training
-  budget to date was spent past the point where anything generalisable was
-  learned.
-- **The first honest roll (E-062-R0, #516) decays like a forecast** — field
-  anomaly correlation `acc` 0.606 at 5 d → −0.031 at 365 d (its contaminated
-  twin #510 read 0.985 → 0.973, flat). Corridor `msss_clim` −0.439, a
-  calibration failure (mean `amp_ratio` 0.780 at mean `acc` 0.105).
-- **New reading, 2026-08-31, from the same artefact:** the clean head beats
-  RAW persistence at every lead but the last (mean `msss_pers` +0.204) — and
-  **loses to DAMPED persistence at every one of the 73 leads** (corridor
-  `msss_damped` −0.011 at h=1, −0.131 at h=2, mean −0.461; `auc_damped`
-  negative in all three scopes). The evaluator already computes a per-pixel,
-  per-channel AR(1) decay-to-climatology baseline (`ar1_train`,
-  `ml/rollout_spatial.py` ~line 2094) and the clean transformer does not
-  clear it once. **This is the single most important fact for the reboot:
-  the cheapest classical null already wins.** Everything in §2 is designed
-  to find out whether anything learned can beat it.
-- **Where residual skill lives:** SST (`acc` 0.759 at h=1, the only channel
-  with positive `msss_clim` past a few pentads), SSH at 5 days (`acc` 0.838
-  at h=1). Only 8 of 40 channels are scored at all — the 32 `rg_*` Argo
-  channels are null at every lead and are 80 % of the tensor's bytes.
+**The information bound.** The stage-2 training pool has exactly
+2,417 distinct end-times (43 years of pentads minus the held-out years and
+the context window), multiplied by 86,698 ocean pixels that are correlated
+views of the same 2,417 temporal patterns. For field-level prediction the
+effective sample count is in the thousands; for the AMOC target it is about
+nine effective independent starts (RAPID is ~20 years, AMOC anomalies
+decorrelate over months to years). No architecture, resolution increase or
+synthetic corpus changes these numbers. Keep them in front of you.
 
-  The corridor numbers from `probes-516.json` (`files.rollout_spatial.json
-  .heads["s145rspiral:111-4444-0.71-0.5_s0"].corridor`), so WP1 has its
-  comparison row without parsing anything:
+**Everything before 2026-08-29 was contaminated, and the wreckage is nearly
+total.** The stage-2 loss is dense over the 144-frame window, but the pool
+only checked that the *final* target was not held out; windows straddling a
+holdout year teacher-forced that year's transitions into the weights
+(21,018 of 400,176 scored frame-targets were held-out bins). Four
+independent signatures confirmed memorisation: field anomaly correlation
+0.985 at 5 days and 0.973 at 365 days on the old head (a forecast decays;
+a replay does not); corridor skill 0.838 on trained longitudes against 0.176
+on held-out ones; an eight-member ensemble that stays pinned together inside
+the training record and fans out past it. Every rolled number from before
+the fix is retired as evidence of skill. The fix is a window-scope pool: no
+frame the forward pass touches may be held out (−13 % supervision).
 
-| h (×5 d) | msss_clim | msss_pers | msss_damped | acc | amp_ratio |
+**The first clean roll (head E-059, 206.66M parameters, evaluated as run
+#516) decays like a forecast, and that is nearly all it does.** On the
+corridor scope, three starts per held-out year (2009, 2017, 2023), horizon
+73 pentads:
+
+| lead h (×5 d) | msss_clim | msss_pers | msss_damped | acc | amp_ratio |
 |---|---|---|---|---|---|
-| 1 | +0.365 | +0.194 | -0.011 | +0.606 | 0.692 |
-| 2 | +0.109 | +0.252 | -0.131 | +0.412 | 0.673 |
-| 3 | -0.172 | +0.178 | -0.354 | +0.265 | 0.761 |
-| 6 | -0.168 | +0.252 | -0.244 | +0.204 | 0.672 |
-| 12 | -0.320 | +0.201 | -0.342 | +0.107 | 0.690 |
-| 18 | -0.322 | +0.211 | -0.333 | +0.132 | 0.725 |
-| 36 | -0.354 | +0.337 | -0.357 | +0.153 | 0.778 |
-| 54 | -0.479 | +0.227 | -0.479 | +0.009 | 0.720 |
-| 73 | -0.719 | -0.101 | -0.719 | -0.031 | 0.822 |
-| **mean of 73** | **-0.439** | **+0.204** | **-0.461** | **+0.105** | **0.780** |
+| 1 | +0.365 | +0.194 | −0.011 | +0.606 | 0.692 |
+| 2 | +0.109 | +0.252 | −0.131 | +0.412 | 0.673 |
+| 3 | −0.172 | +0.178 | −0.354 | +0.265 | 0.761 |
+| 6 | −0.168 | +0.252 | −0.244 | +0.204 | 0.672 |
+| 12 | −0.320 | +0.201 | −0.342 | +0.107 | 0.690 |
+| 18 | −0.322 | +0.211 | −0.333 | +0.132 | 0.725 |
+| 36 | −0.354 | +0.337 | −0.357 | +0.153 | 0.778 |
+| 54 | −0.479 | +0.227 | −0.479 | +0.009 | 0.720 |
+| 73 | −0.719 | −0.101 | −0.719 | −0.031 | 0.822 |
+| **mean of 73 leads** | **−0.439** | **+0.204** | **−0.461** | **+0.105** | **0.780** |
 
-  Per channel (same block, `per_channel`; the 32 `rg_*` channels have
-  `n = 0` at every lead and are omitted):
+Definitions (standardised anomaly space, per pixel and channel, pooled over
+the scope): `msss_x = 1 − MSE_model / MSE_x` where `clim` predicts zero
+anomaly, `pers` repeats the last observed anomaly, `damped` decays it with a
+per-pixel AR(1) coefficient fitted on training years; `acc` is the anomaly
+correlation; `amp_ratio` is forecast std / truth std. The quantity the
+programme used to call "corridor AUC" is the mean `msss_clim` over leads. It
+is not an AUC; negative means the squared error exceeds the anomaly
+variance, not "below chance".
 
-| channel | acc h=1 | acc h=6 | acc h=18 | mean msss_clim | mean msss_damped | last h with msss_clim > 0 |
-|---|---|---|---|---|---|---|
-| `cur_speed` | +0.604 | +0.131 | +0.052 | -0.591 | -0.606 | 1 |
-| `log_mld` | +0.572 | +0.178 | -0.009 | -0.464 | -0.469 | 1 |
-| `ssh` | +0.838 | +0.252 | +0.113 | -0.499 | -0.562 | 4 |
-| `tau_x` | +0.490 | +0.097 | +0.022 | -0.383 | -0.386 | 47 |
-| `tau_y` | +0.235 | +0.039 | -0.017 | -0.426 | -0.428 | 47 |
-| `tau_x_std` | +0.222 | +0.134 | +0.104 | -0.409 | -0.410 | 68 |
-| `tau_y_std` | +0.207 | +0.070 | +0.057 | -0.465 | -0.466 | 28 |
-| `sst` | +0.759 | +0.343 | +0.337 | -0.165 | -0.191 | 57 |
+Per channel (only 8 of the 40 are scoreable — the 32 Argo `rg_*` channels
+have no scored samples at any lead):
 
-  Unpooled transport bands (`amoc_bands_unpooled`, r against RAPID at ~9
-  effective starts — read as "no measurable transport skill", never as
-  inversion): 5–90 d **+0.107** (n 162) · 95–180 d **−0.242** (n 129) ·
-  185–365 d **+0.163** (n 150).
-- **The holdout.** Every archived number uses the INTERSPERSED holdout years
-  2009 / 2017 / 2023 (the codec's `--holdout-years` default; the stage-2
-  pool inherits `hold_years` from the codec checkpoint's `args`). The
-  frozen protocol (Chris, 2026-08-30) is a TERMINAL holdout: train ≤ 2020,
-  test 2021–2024, no gap. **No codec trained under the terminal holdout
-  exists yet** — see WP3.
-- **In flight:** E-062-R0b (#518 died in 3 min on a full disk; re-dispatch
-  pending) — the 7.6M head through #516's identical battery. Its result is
-  the width axis at two points under a clean pool.
+| channel | acc h=1 | acc h=6 | acc h=18 | mean msss_clim | mean msss_damped |
+|---|---|---|---|---|---|
+| `sst` | +0.759 | +0.343 | +0.337 | −0.165 | −0.191 |
+| `ssh` | +0.838 | +0.252 | +0.113 | −0.499 | −0.562 |
+| `cur_speed` | +0.604 | +0.131 | +0.052 | −0.591 | −0.606 |
+| `log_mld` | +0.572 | +0.178 | −0.009 | −0.464 | −0.469 |
+| `tau_x` / `tau_y` | +0.490 / +0.235 | +0.097 / +0.039 | +0.022 / −0.017 | −0.383 / −0.426 | −0.386 / −0.428 |
+| `tau_x_std` / `tau_y_std` | +0.222 / +0.207 | +0.134 / +0.070 | +0.104 / +0.057 | −0.409 / −0.465 | −0.410 / −0.466 |
 
----
+Transport (unpooled read-out of the rolled section states against RAPID):
+r = +0.107 over 5–90 d, −0.242 over 95–180 d, +0.163 over 185–365 d — all
+inside the noise of zero at nine effective starts.
 
-## 1. The four ideas behind the ordering
+Three readings of this table matter more than any other fact in this
+document:
 
-1. **Nulls before training.** Nothing new is trained until the transformer
-   has been placed beside damped persistence, nearest-analogue retrieval and
-   a Linear Inverse Model on the identical protocol. The programme's history
-   is that evaluation errors outran modelling gains by a wide margin, and
-   the newest evaluation fact (above) says the bar is already above the head.
-2. **An instrument with error bars before a terminal exam.** The terminal
-   holdout can be opened once. Development decisions need a blocked
-   cross-validation over several held-out years and block-bootstrap
-   intervals, or every comparison is n = 1.
-3. **Stop paying for step 2,001 onwards.** Cap stage-2 budgets at ~5,000
-   steps with checkpoint selection at the held-out minimum. A 7.6M arm then
-   costs ~1.5 h instead of ~8 h, and five seeds cost an afternoon. This is
-   what makes replication and the whole R1 programme affordable.
-4. **Pivot the headline to what the data can decide.** At ~9 effective
-   starts, "can this predict AMOC at 26.5°N" is not resolvable. "Where does
-   learned skill beat classical nulls, and out to what lead" is — and R0
-   already localises it. AMOC stays as a bounded secondary read-out with
-   intervals. (This decision is Chris's; §2 does not depend on it.)
+1. **The clean head loses to damped persistence at every one of the 73
+   leads.** "Beats persistence" was true only of raw persistence. The
+   cheapest classical null already wins, everywhere.
+2. **The negative `msss` is largely a calibration failure, not absent
+   correlation.** The identity `msss_clim = 1 − (1 + a² − 2a·ACC)`, with
+   `a = amp_ratio`, reproduces all 73 corridor leads to a mean absolute error
+   of 0.0135. The head emits anomalies at 78 % amplitude while its
+   correlation is 10 %. Rescaled to `a = ACC` the same rolled states would
+   score about +0.02 — small, but positive. This is a decoding question, not
+   a capacity one.
+3. **Where correlation survives is specific:** SST and SSH at one step;
+   SST alone beyond a few pentads. The subsurface is unscored, the winds are
+   essentially noise past one step.
 
----
+**Capacity was not the axis.** Under the clean pool, heads of 7.6M, 40.4M,
+206.7M and 400M parameters all reach their best held-out one-step loss
+inside roughly the first 2,000 of 200,000 steps and get worse for the rest
+(best levels 0.58–0.62 across a 53× parameter span). At the pre-registered
+comparison step (20,000) the 7.6M arm was 0.051 *worse* than 206.7M — a
+prediction that it would be within 0.02 failed and is recorded as failed. On
+the RAPID probe the ordering reverses: 7.6M holds 0.598–0.611 across ten
+probes while 206.7M collapses 0.616 → 0.515. Small models are the right
+default for cost and probe stability; they are not proven right for loss.
+About 99 % of every training budget so far was spent past the point where
+anything generalisable was learned.
 
-## 2. Work packages
+**The evaluation stack has been wrong twice and survived months each
+time** — once structurally (the pool), once semantically (the "AUC").
+Assume it is wrong somewhere else; verifying a metric is ordinary work here.
 
-Each package: **Goal · Why · Build · Inputs · Done when · Falsifier · Cost ·
-Record.** Packages marked ★ need no accelerator at all. Dependencies are in
-§3.
-
-### WP0 · Finish what is bought ★ (mostly done)
-
-- The E-060 heads are on `model-checkpoints-v1` as
-  `head-weights-e060a-20k-window-s0.pt` (7.6M) and
-  `head-weights-e060b-20k-window-s0.pt` (40.4M), verified against their own
-  `args`. Done 08-31.
-- **E-062-R0b** (operator dispatch): #518 died three minutes in on a full
-  disk (a prior run's 34 GB scratch copy; `scripts/disk_hygiene.sh` now frees
-  it unconditionally at job start, commit `6b73c22`). Re-dispatch with #518's
-  inputs unchanged — window
-  `recipe:xl144-zn-pentad-nolonhold,sroll:head-weights-e060a-20k-window-s0,ckpt:run-415__pixelmae.pt,horizon:73,starts:3,longm:36,futm:36`,
-  `temporal_steps 0`, plan `{"eval": true, "heads":
-  ["head-weights-e060a-20k-window-s0"]}`. The reading is pre-registered in
-  `ml/EXPERIMENTS.md#e-062` §(j): shape first (lead-decay must pass), then
-  level against the #516 table above. Done when `probes-<n>.json` is on
-  `ml-metrics` and §(j) carries the table.
-- **The 36-month dispersion test** (PROTOCOL_RESET §2d) is UNANSWERED for a
-  clean head because E-059/E-060 are deterministic. Do not claim it either
-  way; it needs a clean-pool head with an ensemble mechanism (WP6, later).
-
-### WP1 · The null ladder on the exact R0 protocol ★
-
-**Goal.** Score three classical predictors through the SAME battery, starts,
-scopes, hold years and metric definitions as #516, so that every
-transformer number has a null beside it.
-
-**Why.** Damped persistence already beats the clean head at every lead. If a
-linear model on ~10³ parameters matches or beats the transformer at every
-lead, that is the programme's central result and it redirects everything
-downstream. If the transformer wins at short leads, there is finally a
-defensible gap to explain.
-
-**Build.** One new script, `ml/null_ladder.py`, that reuses the roller's own
-functions rather than re-deriving them (the evaluator has been wrong twice;
-re-implementing it is how a third error enters). Concretely, import from
-`ml/rollout_spatial.py`: the anomaly/standardisation machinery
-(`stream_stats`, `StdMonths` — statistics from TRAINING years only), the
-scopes (`corridor_pixels`, the `gate` subset with `np.random.default_rng(0)`,
-`window` = all pixels), the start rule (`starts` block: `per_year` 3, "every
-k-th start of the holdout year's list"), and the `chan_skill` row arithmetic
-(the function documented at ~line 1196: `msss_clim`, `msss_pers`,
-`msss_damped`, `acc`, `amp_ratio` from one set of `[H+1]` sums, plus the
-`per_channel` rows). Produce a JSON with the same shape as a head's block in
-`rollout_spatial.json` (`corridor`, `gate`, `window`, each with `chan_skill`,
-`per_channel`, `horizon_auc`, `auc_damped`), one block per null, so
-`scripts/sweep_table.mjs`-style tooling and a human can read nulls and heads
-in one table. Score in the same space the heads are scored in
-(standardised physical channels, the 8 scoreable ones), at horizon 73,
-starts 3 per holdout year, hold years 2009/2017/2023 (the interspersed
-protocol — this package compares against #516, so it uses #516's split).
-
-The three nulls:
-
-1. **Damped persistence** — already computed inside every roll as
-   `msss_damped`. Read it OUT as its own block (its `msss_clim`, `acc`,
-   `amp_ratio` per lead) so it appears as a row in the table, not only as a
-   denominator. Definition: per pixel, per channel, AR(1) toward zero
-   anomaly with the coefficient fitted on training years (`ar1_train`).
-2. **Nearest-analogue retrieval.** Library = all TRAINING-year states
-   (exclude the holdout years and ±1 year around each start). State vector =
-   the standardised anomaly field of the 8 scoreable channels on the
-   corridor pixels (or the leading ~50 EOFs of it — see 3; use the same
-   basis for both so the comparison is clean). For each start, find the k
-   nearest library states (cosine or Euclidean in the reduced space; report
-   k = 1, 5, 20), and the forecast at lead h is the mean of what followed
-   each analogue h pentads later. Score exactly like a head.
-3. **Linear Inverse Model.** Fit on training years only: EOFs of the
-   standardised anomaly field (corridor pixels × 8 channels; also a z-space
-   variant on the frozen codec's embeddings — the difference between the
-   two tells whether the codec discards predictable signal), truncate to m
-   modes, estimate the one-pentad propagator `G(1) = C(1) C(0)⁻¹` in PC
-   space, forecast `x(h) = G(1)^h x(0)`, project back, score. Choose m by
-   cross-validation INSIDE the training years (try 10 / 20 / 50 / 100);
-   report all four, with the CV-chosen one as the headline. Check the
-   Nyquist/tau test (fit `G` at τ₀ = 1 and 2 pentads; a proper LIM gives
-   consistent `L = log(G)/τ₀`) and report it — it is the standard sanity
-   check on the linear assumption.
-
-Also add `--calibrate` support to the table (see WP5) so calibrated and
-uncalibrated numbers sit side by side for nulls and heads alike.
-
-**Inputs** (all public, see §A): `family4_na025_pentad_r2` (release
-`data-cache-v1` chunks or the Hub; the `X` sidecar is 34 GB — memmap it),
-`Z_8b639abe36_37e146384b.npy` (release `embed-cache-v1`, 16.2 GiB, for the
-z-space LIM), the frozen codec `run-415__pixelmae.pt` (release
-`model-checkpoints-v1`), `probes-516.json` (branch `ml-metrics`; the head
-block to place the nulls beside). CPU work; a machine with ≥ 64 GB RAM or a
-memmap-friendly disk is enough. The workflow's "Build dataset" step
-(`.github/workflows/ml-train.yml`) shows exactly how the tensor is assembled
-from the Hub if you prefer to rebuild it.
-
-**Done when.** One table, in `ml/EXPERIMENTS.md` under a new entry
-**E-064 · the null ladder**, with rows {damped persistence, retrieval k∈{1,5,20},
-LIM m∈{10,20,50,100} (field) and LIM (z-space), #516's head, #R0b's head} and
-columns {corridor `horizon_auc`, `auc_damped`, mean `acc`, `acc` at h=1/6/18/73,
-`amp_ratio`, SST-only `msss_clim` at h=1/6/18}, plus the per-lead curves as a
-figure, plus intervals from WP2 once it exists.
-
-**Falsifier (pre-registered).** Expectation: the CV-chosen LIM matches or
-beats both transformer heads on `acc` at every lead ≥ 2 and on `horizon_auc`
-in every scope. The expectation is FALSE if a head beats the LIM by more than
-the WP2 interval at any lead ≤ 6 on SST or SSH — that would be the first
-evidence of learned nonlinear skill in the programme, and it should be the
-headline of the next paper draft.
-
-**Cost.** Code: 1–2 sessions. Compute: CPU, hours.
-
-**Record.** E-064 entry; `ml/OVERVIEW.md` "most promising next steps" gets
-re-ranked from its result.
-
-### WP2 · The instrument: blocked CV, block-bootstrap intervals, minimum detectable effect ★
-
-**Goal.** Replace "inside noise of zero, by argument" with intervals, and
-replace the single-holdout n = 1 with a development protocol that has n.
-
-**Build.**
-
-- **Block bootstrap over the skill sums.** The roller accumulates per-lead
-  sums (`n, mse_m, mse_p, mse_d, mse_c, sx, sy, sxx, syy, sxy`) for the
-  whole battery. Change it (additively — new keys, never altered ones; the
-  byte-identity tests in `tests/test_per_channel_skill.py` and
-  `tests/test_roll_monthly_identity.py` must keep passing) to ALSO dump the
-  sums per (holdout year, start), so a scorer can resample blocks. Blocks =
-  (year, start) pairs; resample with replacement 2,000 times; report the 5–95
-  % interval on every `chan_skill` field and on the differences between two
-  named blocks (head vs null, head vs head). Store under a new
-  `intervals` key. Do it for the transport bands too (block = year).
-- **Rolling-origin blocked CV for development.** Add `--holdout-years` as
-  an override to the stage-2 pool AND to the roller's start selection, so a
-  head can be trained with e.g. {2005, 2011, 2017, 2023} held out and rolled
-  from those years, under `window` scope. Define the DEVELOPMENT split as
-  four folds of one held-out year each, spaced ≥ 5 years apart, all ≤ 2020,
-  so the terminal years are never touched during development. (This needs
-  the codec question in WP3 answered first: the codec's `holdout_years`
-  currently decides the pool's.)
-- **Minimum detectable effect.** From the bootstrap spread of a head-vs-null
-  difference, compute and publish, per lead and per scope, the smallest
-  difference the battery can distinguish from zero at 90 %. Put the table in
-  `docs/ML_BASICS.md` §"Metrics and their statistical power" (the paper's
-  §metrics is the same text). Several open questions may be formally
-  unresolvable at this sample count; that table is how one says so.
-
-**Done when.** #516's artefact re-scored with intervals; the E-064 table
-carries them; the MDE table exists; `tests/` pins that intervals are
-additive (old keys byte-identical).
-
-**Falsifier.** If the bootstrap interval on the corridor `acc` at h=18 is
-wider than ±0.15, the interspersed three-year battery cannot rank heads at
-the month-plus horizon at all, and R1 must be re-planned around the terminal
-holdout with more starts per year (up to 73) rather than more arms.
-
-**Cost.** Code: 1–2 sessions. Compute: none beyond re-scoring.
-
-### WP3 · The codec ruling, and the terminal-holdout codec (E-063)
-
-**Goal.** Decide, and then make true, that nothing in the stack has seen the
-test years.
-
-**Ruling, stated now so nobody re-derives it.** `run-415__pixelmae.pt` was
-trained by `ml/train.py` with its default `--holdout-years 2009,2017,2023`
-(verified in `probes-415.json`'s provenance and `train.py:151`), which
-excludes those years from the codec's self-supervised training and from the
-anomaly statistics. **So for the INTERSPERSED protocol the codec is clean.**
-For the TERMINAL protocol (test 2021–2024) it is not: it reconstructed 2021–
-2024 during training, and the stage-2 pool inherits `hold_years` from the
-codec checkpoint, so a terminal-holdout stage-2 head CANNOT be trained on
-this codec at all without an override that would itself be a leak.
-
-**Build.** E-063 — a fresh codec at run-415's exact architecture and data
-(`family4_na025_pentad_r2`, 512×12, 4 heads, d_dec 256, d_z 32, patch 1,
-`--holdout-lon 0,0`), with `--holdout-years 2021,2022,2023,2024`. The
-anomaly/standardisation statistics must come from ≤ 2020 as well (they
-follow `t_hold`, so they will). `ml/jaxport/train_stage1.py` exists and takes
-`--holdout-years`; the torch path is `ml/train.py`. Budget as run-415 was
-budgeted (200k × 512, cosine), because the codec is not where the early-peak
-problem lives — but DO record its held-out reconstruction curve and check
-whether it, too, plateaus early; if it does, WP4's cap applies to codecs as
-well. Publish as `run-<n>__pixelmae.pt`; embed the tensor with it and publish
-the Z (`embed-cache-v1`), since every terminal-holdout head will need it.
-While it trains, run WP1–WP2 on the interspersed split; nothing there waits
-for it.
-
-**Done when.** A published codec whose `args.holdout_years` is
-`2021,2022,2023,2024`, its Z on the release, and a one-line E-063 entry with
-its held-out reconstruction and its `probe_head` on RAPID (for the record;
-not a verdict).
-
-**Falsifier.** None needed — this is infrastructure. But pre-register: its
-reconstruction on 2021–24 should be no worse than run-415's on 2009/2017/2023
-by more than the seed spread of codecs (unknown; this is the first pair —
-budget a second seed if the number will be quoted).
-
-**Cost.** One codec training (run-415 took ~19 h on one consumer GPU) + one
-embed pass. Operator dispatch.
-
-### WP4 · The cost reform: short budgets, checkpoint selection, seeds ★ (a policy, then a recipe)
-
-**Goal.** Make every stage-2 arm cost ~1.5 h at 7.6M so that five seeds are
-the default and the R1 programme runs in days.
-
-**Build.**
-
-- New stage-2 recipe(s) in `ml/recipes/` derived from E-060a's knob block
-  (7.6M: 256×8, K 144, stencil 145, ring `spiral:111-4444-0.71-0.5`, batch
-  256, lr 1e-3, `expdecay` halflife 40,000, warmup 2,000, znoise 0.7,
-  grad-clip 128, `--train-lon-hold none`, `holdout_scope window`) with
-  **`STEPS` 5,000 and `CKPT_EVERY` 500**. Keep the LR schedule's halflife at
-  40,000 so the first 5,000 steps trace a bit-identical LR trajectory to
-  E-059/E-060 — that keeps every archived early curve comparable.
-- **Checkpoint selection rule, written down once:** the head that gets
-  rolled is the checkpoint with the minimum held-out one-step ratio over
-  steps ≥ 500, ties to the earlier step. The trainer must save every
-  `CKPT_EVERY` checkpoint (not only the latest) and the selection must be
-  done by a script from `metrics.jsonl`, not by eye. Publish the selected
-  head as `head-weights-<exp>-best<step>-<scope>-s<seed>.pt` and ALSO the
-  step-5,000 end state, so "does early stopping matter for the ROLL" is
-  answerable per arm at no extra cost.
-- **Seeds.** Five seeds per configuration is the default at the 7.6M tier
-  (§3b's mandatory-replicate clause applies: pentad cadence has no measured
-  pair for rolled skill). Report mean and range; a claim needs the range of
-  one configuration to clear the range of the other.
-- The 200k-step budget is retired for stage 2 unless an arm's held-out curve
-  is still falling at 5,000 — pre-register that check and extend only then.
-
-**Done when.** Recipe committed and pinned by `tests/test_train_config_guards.py`;
-the selection script exists with a test; the policy line is in
-`ml/CLAUDE.md` §1 ("size the job against its own timeout" gains "and against
-where the held-out minimum actually is").
-
-**Cost.** Code only.
-
-### WP5 · The cheap evaluation quartet, now affordable
-
-All on the INTERSPERSED split, so they compare directly to #516 and to WP1's
-nulls; all pre-registered in one E-065 entry.
-
-1. **The step-2,000 roll (Q3).** No early-step checkpoint of E-059 or
-   E-060a survives anywhere — the trainers kept only the final state
-   (verified 08-31). So: train the 7.6M
-   recipe of WP4 to 5,000 steps with `CKPT_EVERY` 500, select per the rule,
-   roll BOTH the selected checkpoint and the step-5,000 one through #516's
-   battery. Expectation: the selected checkpoint's `acc` at leads 2–18 is
-   higher than the 20k head's (#R0b) by more than the WP2 interval; falsified
-   if they agree. Either answer matters: agreement says the 20k/200k end
-   states did not lose rolled skill by over-training, and the early-peak
-   story is about the one-step loss only.
-2. **Five seeds of that arm.** The first replicate set at pentad cadence
-   for rolled skill. Deliverable: the tier's spread on `horizon_auc`, `acc`
-   per lead and the transport bands — the number §3b needs before any 7.6M
-   comparison can be called a level.
-3. **Amplitude calibration as a decoding option.** Add `--calibrate` to the
-   roller: per lead h (and per channel), multiply the rolled anomaly by a
-   factor `a*(h)` fitted on TRAINING-year starts only (the `acc`-optimal
-   scaling is `a* = ACC_train(h)`; also try the MSE-optimal regression slope
-   `cov(x,y)/var(x)` on training years). Write the calibrated rows as new
-   fields (`msss_clim_cal`, `amp_ratio_cal`) beside the existing ones, never
-   instead. The identity `msss = 1 − (1 + a² − 2a·ACC)` predicts #516's
-   corridor mean goes −0.439 → about +0.02; falsified if the calibrated
-   number, fitted on training years and applied to the holdout, is not
-   within the WP2 interval of that. Apply it to the nulls too — a calibrated
-   LIM is the fair comparison for a calibrated head.
-4. **Drop the 32 `rg_*` channels from the INPUT** (a modelling experiment,
-   separate from the storage change in WP7): train the same 7.6M arm on the
-   8 scoreable channels only (codec unchanged for now — mask the channels as
-   missing tokens at stage-2 time if the code path allows; otherwise this
-   waits for a re-embed with an 8-channel codec and moves behind WP3).
-   Expectation: no loss of rolled skill; falsified if `acc` at h ≤ 6 drops by
-   more than the seed range.
-
-**Cost.** ~6 short trainings (~1.5 h each) + ~6 rolls (~20 h each on one consumer GPU,
-less for a 7.6M head — measure the first one and re-price; consider a
-shorter battery, `longm:0,futm:0`, for development rolls since the 36-month
-blocks answer nothing for a deterministic head).
-
-### WP6 · The R1 re-ranking, under the new harness — only after WP1–WP5 read out
-
-Cadence → stencil → unroll → znoise → FGN → width, at 7.6M, five seeds,
-short budgets, each rung asked "does it beat the CV-chosen LIM by more than
-the interval, at which leads, on which channels" — never "does it beat last
-week's arm". The FGN/ensemble thread is where the dispersion test (WP0) and
-the calibration-versus-sharpness question live; it re-enters here, not
-before. Anything at 206M+ needs a specific argument written in its entry.
-
-### WP7 · Data — clean before adding, add only what touches the wall
-
-In this order, each as its own small entry with a measured before/after:
-
-1. **`rg_*` to a 1° sidecar** (storage): frees ~27 GB, more than every
-   proposed import combined. Loader upsamples on read. Verify the tensor
-   round-trips byte-identically for the 8 kept channels.
-2. **2025–2026 continuation** of the pentad tensor (+4.5 % end-bins, nearly
-   free; lets the terminal test run to 2026 later).
-3. **Backward extension toward 1958** (EN4.2.2 or IAPv4 as a 1° T/S-only
-   tensor, ~3 GB). Run AS A MEASUREMENT: train the WP4 arm with and without
-   the extra years and ask whether the held-out minimum and the rolled
-   `acc` move. It is the only item on the ladder aimed at the 2,417-bin
-   constraint; whichever way it answers is worth having.
-4. **ERA5 surface heat/freshwater flux** (needs a CDS account): missing
-   physics, not more samples. Worth doing; will not move the wall; say so.
-5. **GREP 3-member** as low-bias augmentation, again as a measurement.
-6. **CMIP6 (family 6): codec pretraining ONLY, never the forecaster**, with
-   the mandatory control (embed the reanalysis with the same 37 channels
-   masked). Last in the queue. The corpus exists (see the #517 record);
-   publishing it needs the `HF_TOKEN` Actions secret, a human step.
-
-Declined, and the reason to quote at anyone who proposes them: 1/12°, MUR
-1 km, ARMOR3D native — more pixels of the same 2,417 bins.
-
-### WP8 · The paper ★
-
-- Put an explicit invalidation note at the top of every results section
-  that quotes a pre-`c25f6ff` rolled number ("corridor AUC" values are
-  `msss_clim` from contaminated heads; retired). Do it now, before WP1 lands,
-  so no reader takes them as current.
-- Add Acknowledgements and Data Availability (CMEMS/GLORYS/GREP licence
-  terms, Argo, NCEP R1, OISST, GPCP; CMIP6's required model/institution table
-  if family 6 is ever used in a reported number).
-- Once WP1–WP2 read out, the paper's centre of gravity is likely "the limits
-  of learned subseasonal-to-seasonal prediction from a 43-year reanalysis:
-  where a transformer beats classical nulls, where it does not, and what
-  the sample count can resolve". Draft that outline when E-064's table
-  exists, not before.
+**What has never been done:** a Linear Inverse Model or a nearest-analogue
+baseline on this protocol; any confidence interval on a rolled number; a
+roll of an early-stopped checkpoint (every rolled head is an end state,
+far past its held-out minimum); a clean-pool head with an ensemble (so the
+dispersion test is unanswered for clean heads, not failed); any roll on a
+tensor with a longitude hole (so nothing can be said about spatial
+generalisation of a clean head); a codec trained under the terminal holdout.
 
 ---
 
-## 3. Sequence and dependencies
+## 3. The frozen protocol, and one thing it needs before it can be used
 
-```
-now ──► WP0 (R0b re-dispatch) ──────────────────────────────┐
-        WP1 nulls ★ ──┐                                      │
-        WP2 harness ★ ─┼─► E-064 table with intervals ──► DECISION GATE 1
-        WP8 quarantine ★                                      │
-        WP4 recipe/policy ★ ──► WP5 quartet (interspersed) ──┘
-        WP3 codec E-063 (long; start early, nothing waits on it)
-DECISION GATE 1 ──► headline decision (§4) ──► WP6 R1 + WP7 data, on the
-                    terminal-holdout codec once E-063 is published
-```
+Decided 2026-08-30 and to be kept:
 
-WP1, WP2, WP4, WP8 are pure code and can run in parallel in separate
-sessions. WP3 is the long pole and should be started first. WP5 needs WP4's
-recipe and is the first accelerator spend after the reboot. WP6/WP7 wait for
-Gate 1.
+- **Terminal holdout for the final test: train ≤ 2020, test 2021–2024, no
+  gap.** The tensor ends 2024-12.
+- **Trained-longitude and held-out-longitude scores reported separately;
+  never the blend.**
+- **Lead-decay is a standing falsifier** on every rolled result: a profile
+  that does not decay with lead is a replay, whatever its level.
+- **A null ladder beside every number** (§4, step 1).
+- **Early stopping at the held-out minimum.**
+- **Rolled skill is the verdict; a probe is never a verdict.**
+- **Small tier (7.6M) is the default; anything larger needs a written
+  argument.**
 
-**Decision gate 1 (after E-064 with intervals):**
-
-- If the LIM ≥ transformer at every lead ≥ 2: R1 is re-scoped to "what does
-  the transformer add at h = 1–2 on SST/SSH, and does any change let it beat
-  the LIM at h ≥ 3". The LIM becomes the reference model of the paper.
-- If the transformer beats the LIM at short leads by more than the interval:
-  R1 proceeds as listed, with the LIM as the standing bar.
-- If the MDE table says the interspersed battery cannot resolve ±0.1 in `acc`
-  at h ≥ 12: development moves to the terminal codec with more starts per
-  year before any further ranking.
+**The dependency people miss:** the held-out years are a property of the
+*codec*. The codec was trained with 2009, 2017 and 2023 held out (from both
+its self-supervised training and the anomaly statistics), and the stage-2
+pool inherits the codec's holdout years. So every archived number lives on
+the *interspersed* split, and the codec is clean for it. For the terminal
+split the existing codec is not usable: it reconstructed 2021–2024 during
+training, and a stage-2 head cannot be trained on a holdout its codec did
+not respect without leaking. **A terminal-holdout programme therefore
+begins with a codec trained on ≤ 2020** (same architecture and data as the
+current one: 37.976M parameters, 512×12, four heads, decoder width 256,
+d_z 32, patch 1, all longitudes; ~19 h on one consumer GPU last time), its
+anomaly statistics from ≤ 2020, and a re-embedding of the tensor with it.
+Everything in §4 that is evaluation of *existing* heads runs on the
+interspersed split and does not wait for this; start the codec early and
+develop on the interspersed split meanwhile, keeping 2021–2024 untouched by
+any development decision.
 
 ---
 
-## 4. The open headline decision (Chris's)
+## 4. How to continue — the programme, in the order it should run
 
-Recommendation, with the reasoning in one paragraph: pivot the headline from
-AMOC transport at 26.5°N to field-level subseasonal-to-seasonal skill
-(SST / SSH / MLD) against classical nulls, with AMOC kept as a bounded,
+The ordering rests on one principle: **nothing new is trained until the
+nulls and the instrument exist.** The programme's history is that
+evaluation errors outran modelling gains by a wide margin, and the newest
+evaluation fact (damped persistence wins at every lead) says the bar is
+already above the model. Steps 1–3 need no accelerator. Step 4 is the
+codec. Steps 5 onward spend compute, cheaply.
+
+### Step 1 · Put the classical nulls through the identical battery
+
+Score three predictors with exactly the protocol of the clean roll — same
+tensor, same anomaly standardisation from training years, same three scopes
+(gate: 600 random pixels ∪ the RAPID section; corridor: the fastest quarter
+of the window by current speed, dilated two cells, ∪ the section, 30,158
+pixels; window: all pixels), same start rule (3 per held-out year, spread
+round the seasonal cycle), same horizon (73), same metric definitions —
+and place them in one table beside the clean heads. The evaluator code is
+the specification; reuse its functions for the statistics, the scopes, the
+start selection and the per-lead arithmetic rather than re-deriving them,
+because re-implementation is how a third evaluation error would enter.
+Score in the standardised physical-channel space the heads are scored in.
+
+The three nulls, in increasing informativeness:
+
+1. **Damped persistence.** Already computed inside every roll as the
+   `damped` denominator; read it out as its own row (its `msss_clim`, `acc`,
+   `amp_ratio` per lead) so it stands in the table rather than hiding in a
+   ratio. Per pixel and channel, AR(1) decay toward zero anomaly, coefficient
+   fitted on training years.
+2. **Nearest-analogue retrieval.** Library = training-year states only,
+   excluding a ±1-year buffer around each start. State = the standardised
+   anomaly field of the 8 scoreable channels on the corridor (or its leading
+   EOFs — use the same basis as the LIM so the two are comparable). For each
+   start take the k nearest library states (k = 1, 5, 20; Euclidean in the
+   reduced space) and forecast lead h as the mean of what followed each
+   analogue h pentads later. If retrieval matches the transformer, the
+   transformer is an expensive lookup table.
+3. **A Linear Inverse Model.** EOFs of the training-year anomaly fields on
+   the corridor; truncate to m modes; one-pentad propagator
+   `G(1) = C(1)·C(0)⁻¹` in PC space; forecast `x(h) = G(1)^h · x(0)`; project
+   back; score. Choose m by cross-validation inside the training years (try
+   10, 20, 50, 100 and report all four). Run the standard τ-test (fit at
+   τ₀ = 1 and 2 pentads; a valid LIM gives a consistent `L = log G / τ₀`).
+   Do it twice: on the raw anomaly fields, and on the frozen codec's
+   embeddings `z`. The difference between the two is the first measurement
+   of whether the codec discards predictable signal — a question about the
+   two-stage architecture nobody has been able to ask.
+
+**Pre-registered expectation:** the cross-validated LIM matches or beats
+both clean heads on `acc` at every lead ≥ 2 and on mean `msss_clim` in every
+scope. It is falsified if a head beats the LIM at any lead ≤ 6 on SST or SSH
+by more than the interval from step 2. Either outcome is a headline. If the
+LIM wins, the programme's central result is that 43 years of reanalysis
+support a linear predictable component and nothing the transformer has
+found beyond it, and the modelling question becomes "what does a learned
+model add at leads 1–2, and can any change make it beat the LIM at lead 3".
+If the transformer wins at short leads, there is finally a defensible gap
+to explain, with the LIM as the standing bar.
+
+### Step 2 · Build the instrument: intervals, a development split, and the smallest detectable effect
+
+Every comparison so far is n = 1 with "inside the noise of zero" argued
+rather than measured. Before any development decision:
+
+- **Block-bootstrap confidence intervals** on every per-lead metric and on
+  every *difference* between two rows (head vs null, head vs head). The
+  roll accumulates per-lead sums; keep them per (held-out year, start) and
+  resample those blocks with replacement (2,000 draws; report 5–95 %). For
+  the transport bands the block is the year. Report intervals beside every
+  number from now on.
+- **A rolling-origin blocked cross-validation for development.** Four
+  folds of one held-out year each, spaced at least five years apart, all
+  ≤ 2020, each under the window-scope exclusion, each rolled from its own
+  year. This gives development decisions an n. It requires the pool and the
+  start selection to accept an explicit list of held-out years, and —
+  because the holdout is a codec property — either a codec per fold or a
+  codec that held out all four fold-years at once (the latter is cheaper and
+  is the right choice: one codec, four folds).
+- **The minimum detectable effect table.** From the bootstrap spread of a
+  head-vs-null difference, publish per lead and per scope the smallest
+  difference distinguishable from zero at 90 %. Several open questions may
+  be formally unanswerable at this sample count; that table is how one
+  says so, and it is a result.
+
+**Falsifier for the instrument itself:** if the interval on corridor `acc`
+at lead 18 is wider than ±0.15, the three-year interspersed battery cannot
+rank heads at month-plus horizons at all, and the programme should move to
+the terminal codec with more starts per year (up to 73 are available)
+before ranking anything.
+
+### Step 3 · Change the cost structure, so replication is the default
+
+Cap stage-2 training at about 5,000 steps with a checkpoint every 500, and
+roll the checkpoint with the minimum held-out one-step loss (ties to the
+earlier step; selection by script from the metrics, never by eye). Keep the
+learning-rate schedule exactly as before (exponential decay, half-life
+40,000 steps, warm-up 2,000, peak 1e-3), so the first 5,000 steps trace the
+same trajectory as every archived early curve and remain comparable. Keep
+the selected checkpoint *and* the step-5,000 end state, so "does early
+stopping matter for the roll" is answered per arm at no extra cost. At the
+7.6M tier this makes an arm roughly a 1.5-hour job instead of eight; five
+seeds per configuration then cost an afternoon and become the default. A
+claim needs the range of one configuration to clear the range of the other.
+The 200,000-step budget is retired for stage 2 unless a held-out curve is
+still falling at 5,000 — check that, and extend only then.
+
+### Step 4 · The terminal-holdout codec
+
+As §3 describes. One codec, holdout 2021–2024 (or, to serve step 2 as well,
+2021–2024 plus the four development fold-years). Record its held-out
+reconstruction curve and check whether it, too, plateaus early; if so the
+step-3 cap applies to codecs as well. Embed the tensor with it. This is the
+long pole; start it first and let steps 1–3 run beside it.
+
+### Step 5 · The cheap evaluation quartet, on the interspersed split
+
+All four compare directly to the clean roll in §2 and to the step-1 nulls;
+write the expectation for each down before it runs.
+
+1. **Roll an early-stopped checkpoint.** No early checkpoint of E-059 or
+   E-060a survives — only final states — so train the 7.6M configuration
+   (256×8, K 144, stencil 145, spiral ring `111-4444-0.71-0.5`, input
+   z-noise 0.7, gradient clip 128, batch 256, all longitudes, window scope)
+   to 5,000 steps, select per step 3, and roll both the selected and the
+   end checkpoint through the same battery. Expectation: the selected
+   checkpoint's `acc` at leads 2–18 exceeds the 20k head's by more than the
+   interval; falsified if they agree — which would say the end states did
+   not lose rolled skill by over-training, and the early-peak story is about
+   the one-step loss only. Both answers matter.
+2. **Five seeds of that arm.** The first replicate set at pentad cadence for
+   rolled skill: the spread on mean `msss_clim`, per-lead `acc` and the
+   transport bands. Until it exists no two 7.6M numbers can be called
+   different.
+3. **Amplitude calibration as a decoding option.** Per lead and channel,
+   multiply the rolled anomaly by a factor fitted on *training-year* starts
+   only — the correlation-optimal `a* = ACC_train(h)` and the MSE-optimal
+   regression slope — and re-score the held-out starts. Report calibrated
+   numbers beside uncalibrated ones, for nulls and heads alike (a calibrated
+   LIM is the fair comparison for a calibrated head). Expectation: the
+   corridor mean goes from −0.439 to within the interval of +0.02; falsified
+   otherwise, in which case the identity in §2 is wrong somewhere and that is
+   worth knowing.
+4. **Drop the 32 `rg_*` channels from the model's input.** They are 80 % of
+   the tensor's bytes and of the input dimensions, null at every lead, 1°
+   native, monthly, and absent before 2004. Train the same 7.6M arm on the 8
+   scoreable channels (masking them at stage-2 time if the code path allows;
+   otherwise this waits for an 8-channel codec and joins step 4).
+   Expectation: no loss of rolled skill; falsified if `acc` at leads ≤ 6
+   drops by more than the seed range.
+
+### Step 6 · Decision gate, and the headline question
+
+When the step-1 table exists with step-2 intervals:
+
+- LIM ≥ transformer at every lead ≥ 2 → the LIM is the programme's reference
+  model; further modelling asks only what a learned model adds at leads
+  1–2 and whether any change beats the LIM at lead 3.
+- Transformer beats the LIM at short leads by more than the interval → the
+  re-ranking programme proceeds (cadence → stencil → unroll → z-noise →
+  ensemble/FGN → width, at 7.6M, five seeds, short budgets), each rung asked
+  "does it beat the LIM by more than the interval, at which leads, on which
+  channels", never "does it beat last week's arm".
+- The minimum-detectable-effect table says ±0.1 in `acc` at lead ≥ 12 is
+  unresolvable on the interspersed battery → move development to the
+  terminal codec with more starts per year before ranking anything.
+
+**The headline decision, which is the operator's:** whether AMOC transport
+stays the headline or the headline becomes field-level subseasonal-to-
+seasonal skill against classical nulls, with AMOC kept as a bounded,
 interval-carrying secondary read-out and the predictability/power bound
-written up as a result in its own right. The AMOC question has ~9 effective
-starts and cannot be resolved by this data with any model; the field
-question has thousands, and R0 already localises where the signal is.
-Nothing in WP0–WP5 depends on this decision; WP6–WP8 do.
+written up as a result in itself. The recommendation of this handover is to
+pivot: at nine effective starts the AMOC question is not resolvable with
+this data by any model, the field question has thousands of effective
+samples, and the clean roll already localises where the signal is (SST and
+SSH, days to weeks). Nothing in steps 1–5 depends on the decision.
+
+### Step 7 · Data — clean before adding, and add only what touches the bound
+
+Only new *temporal* samples touch the 2,417-end-bin constraint; more pixels
+of the same 43 years (finer grids) do not, and are declined. In order, each
+as a measured before/after on the step-3 arm:
+
+1. Move the 32 `rg_*` channels to a coarse sidecar (frees ~27 GB, more than
+   every proposed import combined; the loader upsamples on read).
+2. Extend the tensor through 2025–2026 (+4.5 % end-bins; lets a later
+   terminal test run to 2026).
+3. Extend backward toward 1958 with a coarse (1°) temperature/salinity
+   product (EN4 or IAP, ~3 GB), run *as a measurement*: does the held-out
+   minimum move, does rolled `acc` move. It is the only candidate aimed at
+   the bound.
+4. Surface heat and freshwater flux forcing (ERA5; needs an account).
+   Missing physics rather than more samples — worth adding, will not move
+   the bound.
+5. The three-member observationally-constrained reanalysis ensemble as
+   low-bias augmentation, again as a measurement.
+6. The CMIP6 pre-industrial-control corpus (800 model-years, already built,
+   three channels): only ever for pretraining the *codec*, never the
+   forecaster — CMIP6 AMOC strength spans ~10–30 Sv against RAPID's ~17 and
+   its variability is among the most model-dependent quantities in the
+   archive, so a forecaster trained on it would distil the one thing these
+   models are least trustworthy about. The mandatory control: embed the
+   reanalysis with the same 37 channels masked, or "pretraining helped"
+   cannot be told from "the fine-tune adapted to its pretraining channel
+   set".
+
+### Step 8 · The paper
+
+Every "corridor AUC" in the current draft is a mean `msss_clim` from a
+contaminated head; mark those sections as retired now, before the step-1
+table exists, so no reader takes them as current. Add acknowledgements and
+data availability for the sources already used (CMEMS/GLORYS/GREP licence
+terms, Argo, NCEP R1, OISST, GPCP). Once steps 1–2 read out, the paper's
+centre of gravity is likely "the limits of learned subseasonal-to-seasonal
+prediction from a 43-year reanalysis: where a transformer beats classical
+nulls, where it does not, and what the sample count can resolve".
 
 ---
 
-## 5. How to report
+## 5. Working rules that the reboot exists to enforce
 
-Every status report uses `ml/CLAUDE.md` §0f's four sections (completed ·
-new results and next steps · queued · proposed changes), each experiment
-with a plain-English TL;DR before any number, and every link as a markdown
-link on its own line pointing at `docs.html?f=…` or the status page, never a
-bare Actions URL.
+- **Write the hypothesis, the control and the falsifier down before the run
+  starts.** If you cannot say what result would falsify the expectation, the
+  configuration cannot test it. A result that arrives without a
+  pre-registered reading is exploratory, and is labelled so.
+- **One variable per comparison.** Two things changed means no result.
+- **Every number comes from an artefact** — a results file you can re-open —
+  never from a log line or a memory of one. Read the artefact's file list
+  and its contents; a run's success colour is not an inventory in either
+  direction.
+- **A single-seed number inside its tier's spread is a consistency, never a
+  level.** Say "consistent with X at n = 1 against a spread of ±s", not
+  "rolls at X".
+- **Quote the null beside the number, and say which null.** Raw persistence
+  and damped persistence give opposite verdicts on the same head.
+- **Check the same-class control before registering an expectation**, not
+  only before calling one violated. An expectation written for one kind of
+  run and applied to another is the most productive source of false alarms
+  this programme has had.
+- **Size a guard from the allocation it guards**, and put preconditions
+  where the inputs are all that has been spent.
+- **Verify the artefact, not the intention** — open the checkpoint, read its
+  own configuration, before building anything on it.
+- **Record failed predictions as failed**, in the same place the prediction
+  was made. A future reader should not find a softened version anywhere.
+- **Report in four sections:** completed work (what it was, what it
+  returned against its named control); what changed in the picture and the
+  most promising next steps; what is queued or in flight (with what it must
+  beat and when it lands); and proposed re-prioritisations with their cost
+  and what evidence would reverse them. Every experiment gets a one-sentence
+  plain-English statement of the question it asks before any number.
 
 ---
 
-## 6. Pitfalls a new session should expect
+## 6. What to keep a record of, and how
 
-- `horizon_auc` is `msss_clim`, not an AUC; negative means the error exceeds
-  the anomaly variance, not "below chance".
-- `msss_pers` is RAW persistence; `msss_damped` is the AR(1) null. Quote
-  both, and say which. The clean head beats the first and loses to the
-  second.
-- The evaluator's `chan_skill` is pooled over channels; `per_channel` has
-  the decomposition. Only 8 of 40 channels ever score.
-- The stage-2 pool's hold years come from the CODEC checkpoint's `args`; the
-  terminal protocol needs a terminal codec (WP3).
-- `_trainlon` equals the parent on the pentad r2 tensor (no longitude hole);
-  no spatial-generalisation claim can be made from it.
-- A green run with an empty bundle, a red run with all its goods, a scratch
-  copy that fills a disk: read the artefact list and the log, not the
-  colour.
-- Write the entry at dispatch. If the entry does not exist, the run is not
-  dispatched.
+Keep one research log, append-only, that a stranger can read six weeks from
+now without you. For each experiment, before it runs: an identifier; one
+sentence saying what question it asks; the configuration in absolute terms
+(parameter count, stage, tensor by name, architecture, steps × batch, what
+it seeds from, holdout years and scope, seed); the named control; the
+pre-registered expectation and its falsifier; the cost estimate. After it
+runs: the numbers with intervals and the null beside them; whether the
+falsifier fired; the actual cost; and one line on what it changes. Never
+edit the "before" half after the fact — append a correction instead.
+
+Keep one standing summary page, short, re-stamped with a date every time it
+changes: what the programme currently believes (one line per settled
+result, with its interval and its null), what is in flight, and the ranked
+list of next steps with the reason for the ranking. A reader who finds the
+stamp old should distrust the in-flight section.
+
+Keep one results table for the null ladder and every clean head, all on
+the same protocol: rows are predictors, columns are mean `msss_clim` and
+`auc_damped` per scope, mean `acc`, `acc` at leads 1/6/18/73, `amp_ratio`,
+SST-only `msss_clim` at leads 1/6/18, each with its interval. This table is
+the programme's state; everything else is commentary on it.
+
+Keep a plain list of corrections to the evaluation stack as they are found,
+each with the date and what number it changed. There will be more.
+
+---
+
+## 7. Where the public material is
+
+Everything below is readable without a login.
+
+| what | where |
+|---|---|
+| Repository (the code is the protocol's definition) | <https://github.com/blauewelt/earth> |
+| Any repo markdown, phone-readable | `https://blauewelt.github.io/earth/docs.html?f=<path>` |
+| The evaluator (scopes, starts, metrics, baselines) | `ml/rollout_spatial.py` |
+| The stage-2 trainer and pool (holdout scope, window rule) | `ml/temporal.py`, `ml/jaxport/train_stage2.py` |
+| The codec trainer | `ml/train.py`, `ml/jaxport/train_stage1.py` |
+| Result bundles, one JSON per run | `https://raw.githubusercontent.com/blauewelt/earth/ml-metrics/probes-<n>.json` — the clean roll is `probes-516.json`; its head block is under `files.rollout_spatial.json.heads` |
+| Codecs and stage-2 heads (weights, with their own configuration inside) | GitHub release `model-checkpoints-v1`: `run-415__pixelmae.pt` (the codec), `head-weights-e059-200k-window-s0.pt` (206.66M), `head-weights-e060a-20k-window-s0.pt` (7.60M), `head-weights-e060b-20k-window-s0.pt` (40.39M) |
+| The tensor `family4_na025_pentad_r2` (T 3,142 × 281 × 481 × 40; channel order `cur_speed, log_mld, ssh, 16 × rg_t*, 16 × rg_s*, tau_x, tau_y, tau_x_std, tau_y_std, sst`) | release `data-cache-v1` (chunked) and the Hugging Face dataset `chfrank/earth-tensors` (also the truth series, the SST bake and the CMIP6 corpus) |
+| The codec's embedding of the tensor, `Z_8b639abe36_37e146384b.npy` ([3142, 86698, 32] float16) | release `embed-cache-v1`, 1.5 GiB chunks plus a manifest |
+| The experiment log, the standing overview, the protocol reset | `ml/EXPERIMENTS.md`, `ml/OVERVIEW.md`, `ml/plans/PROTOCOL_RESET.md` |
+| Background: what the system is and what its numbers mean | `docs/ML_BASICS.md` |
+| The two handovers this document condenses | `ml/handoffs/SESSION_HANDOVER_2026-08-31.md`, `ml/handoffs/REBOOT_HANDOVER_2026-08-31.md` |
+
+---
+
+## 8. Things that will look like results and are not
+
+- A rolled score that does not decay with lead. It is a replay.
+- A skill number with no null beside it, or with the wrong null (raw
+  persistence flatters; damped persistence is the honest bar).
+- A negative `msss` read as "worse than chance". It means the error exceeds
+  the anomaly variance — usually miscalibration, as §2 shows.
+- A difference between two single-seed arms smaller than the seed spread.
+- A trained/held-out longitude comparison on the current tensor. It has no
+  longitude hole; the two scopes are identical.
+- A probe number as a verdict. The probe is a read-out of the current state;
+  the programme's question is what the state does next.
+- An improvement measured on the interspersed years and reported as if it
+  were the terminal test. The terminal years are opened once.
+- A green run with an empty results bundle, or a failed run whose
+  deliverable is complete. Read the artefact, not the colour.
