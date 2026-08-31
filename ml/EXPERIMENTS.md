@@ -2587,6 +2587,37 @@ planned, accepting the mean gap, to read CRPS/spread mechanics on real data
 anyway. Total E-052 real-data spend: ≈$144 across both arms + $17 verify.
 ## E-050 · Warm-start quantization: the trained continuous codec, lattice switched on — #485 DISPATCHED 06:32Z 2026-08-26 (approved by Chris 2026-08-25 ~15:30Z, b3ee36a)
 
+**HARVEST, 2026-08-31 08:20Z (the dispatching session's check-in arrived five
+days late; another session had already promoted `run-485__pixelmae.pt` on
+08-28 and E-056a-R has since scored the token substrate — this block records
+only the training-half read-out the log did not yet carry).** *(a) Falsifier
+A did NOT fire.* The rebased fits stayed input-dependent through the whole
+warm phase — `prequant_std_med` 0.971 / 0.995 / 0.963 / **0.847 / 0.797** at
++50/+200/+2000/+20000/+60000, `prequant_rms` 1.0 throughout, fitted scales
+O(1.3–1.8), exp-base-2 ladders on 5–6 of 6 dims at every fit. The cold-start
+disease (#481/#482: 0.638 → 0.005 by 7.5k) is a cold-start disease; a
+settled encoder holds its directions under the lattice. The mild downward
+drift (0.97 → 0.80) is noted, not diagnosed — 60k steps is too short to call
+it a trend or a floor. *(b) The quantization tax, measured:* final `loss_rec`
+**0.270** vs the parent #480's 0.229 (+18%); heavy-probe `chan_mse_model`
+**0.742** vs #480's 0.681 vs persistence 0.843 (chan_vs_persistence 12% vs
+19%); `z_vs_persistence` ~37% flat across all nine warm probes. *(c) Probe
+bundle REAL (7 files on ml-metrics):* `probe_head` r_kfold_deseas **0.588
+[0.534, 0.641]** vs #480's 0.579 [0.525, 0.627] — consistent at n=1;
+legacy pooled kfold 0.553 vs 0.571. Both d_z-6 codecs sit BELOW their
+matched raw-3×3 control (0.693 both) and the unpooled wind bar (0.690): a
+read-out finding on current-state probes, not a substrate verdict (§3). *(d)
+Cost:* 260k reached in the 60k budget, job green, checkpoint promoted by hand
+(the release publish did not run — the same #480 gap). *(e) STILL OWED:
+Falsifier B, the decoder-ceiling audit (`recon_eval` + `recon_decoder` on the
+Argo-bin split) over #480 and #485 — the registered verdict on whether one
+warm 16-bit token carries a pixel-bin. Not dispatched by this session: the
+programme is inside the 2026-08-29 protocol reset and the audit's priority
+is for the reset's ranking, not this check-in's.* E-056a-R (#504) has since
+read the token substrate's one-step ratio at 0.539 against the continuous
+0.5056 — under a pre-registered ~5.8× znoise-dose confound; see its own
+entry.
+
 **07:25Z — FIRST-MINUTES VERIFICATION PASSED ON ALL FOUR CHECKS** (#485,
 gpu-box-32966687, ml-live-485): *(1)* the warm start is real — config carries
 `fsq_warmstart_from: "run-480.pt@200000"` and the resumed record reads
