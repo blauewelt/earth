@@ -380,6 +380,9 @@ A new layer is not done until it has **all** of:
    | SWISSIMAGE, SWISSIMAGE time travel, swissALTI3D hillshade | ✗ | ✗ | photographs / a shaded model; time travel is `annual` 1926–2025; all `rect`-bounded to Switzerland · third backend · `fine: 1500` |
    | True colour, night lights | ✗ | ✗ | photographs, no colormap to invert |
    | Tide height (live) | ✗ | ✗ | animated harmonic reconstruction on its own clock — there is no date axis to average or difference; the Tides tab is its control room |
+   | Surface wind speed (MERRA-2, monthly) | ✓ | ✓ | continuous linear m/s, a complete reanalysis field — the same posture as SST |
+   | Ocean wind speed (AMSR-E/AMSR2, daily) | ✓ | ✗ | swathy like soil moisture: averaging fills the orbit gaps, a day delta compares coverage rather than wind |
+   | Ocean surface current speed (OSCAR) | ✗ | ✗ | a MAGNITUDE built from two component rasters — each sample would have to invert two palettes, and the field is already 5-day |
    | Grid climatologies | ✗ | ✗ | already multi-decade averages, not timed |
    | Drivers of forest loss (grid) | ✗ | ✗ | categorical AND untimed — one 2001–2025 attribution, and "logging" plus "wildfire" is not a quantity |
    | AMOC eval mask (grid) | ✗ | ✗ | categorical AND untimed — a cell carries the ROLE it plays in an experiment, and an experiment's geometry has no date to average over |
@@ -1460,6 +1463,22 @@ the day's swaths as coarse strips from orbit so a reader knows where to zoom
 a `legendKey` (Worldview's own reading of the false colour); and
 `minimumZoomDistance` dropped from 20 km to 100 m (Part 2: the collision
 floor that read as a zoom stutter).
+
+**Winds and currents (2026-08-31):** the globe had the ocean's current speed
+from GLORYS and no wind at all. It now carries **MERRA-2 surface wind speed**
+(monthly, 1980 → present, land and ocean), **AMSR-E/AMSR2 ocean wind speed**
+(daily, measured, 2002 → 2025-09) and **OSCAR surface current speed** — the
+observed counterpart to the modelled GLORYS field, on the same ramp and scale
+so the two compare by eye. OSCAR publishes signed ZONAL and MERIDIONAL
+components and neither is readable alone, so `magnitude: true` layers combine
+two component rasters client-side: `MagnitudeProvider` inverts both palettes
+per pixel and renders √(u²+v²) on the layer's ramp (`magnitudeAt` does the
+same for one point, so the probe and the pixel card read exactly what the tile
+painted). A pixel with either component missing stays empty rather than
+treating the absent one as zero. Catalogued alongside: CCMP (the better wind
+vector record, but its GIBS tiles stop in 2011) and JPL's **DopplerScatt**,
+which measures surface winds and currents in one look — airborne swaths, not a
+global grid, which is why the globe shows the two from separate sensors.
 
 **Unions look through cloud (2026-08-31):** `unobserved` on the two DSWx
 layers, a see-through compositor in `MosaicProvider`, the same rule in the

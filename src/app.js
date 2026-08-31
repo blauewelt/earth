@@ -555,6 +555,62 @@ const GIBS_LAYERS = [
     timed: false, on: false,
     meta: "Shaded relief from swisstopo's 0.5 m lidar terrain model · Switzerland only · loads below 1,500 km",
   },
+  /* ---------------------------------------------------- winds and currents
+   * The two halves of the surface momentum exchange, and they belong on the
+   * globe together: the wind drives the current, the current sets the stress
+   * the wind feels. Doppler scatterometry measures both in one instrument
+   * (DopplerScatt, JPL) for exactly that reason. */
+  {
+    id: "wind",
+    // Continuous linear m/s: averaging and per-pixel differencing are both
+    // sound, so it takes deltaRange like SST.
+    deltaRange: 4,
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/MERRA2_Surface_Wind_Speed_Monthly.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/MERRA2_Surface_Wind_Speed_Monthly_H.svg",
+    doc: "https://gmao.gsfc.nasa.gov/reanalysis/MERRA-2/",
+    layer: "MERRA2_Surface_Wind_Speed_Monthly",
+    title: "Surface wind speed (MERRA-2, 0.5°, monthly)",
+    ext: "png", tms: "2km", maxLevel: 5,
+    start: "1980-01-01", timed: true, monthly: true, on: false,
+    meta: "Monthly mean wind at 10 m, land and ocean, 1980 → present — the trade winds, the westerlies, the monsoon",
+  },
+  {
+    id: "wind-ocean",
+    // Swathy like soil moisture: a daily L3 is a composite of orbit passes,
+    // so averaging fills the gaps but a day-vs-day difference would mostly
+    // compare coverage. Aggregable only (posture matrix §2.5).
+    aggregable: true,
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/AMSR_Wind_Speed.xml",
+    legend: "https://gibs.earthdata.nasa.gov/legends/AMSR_Wind_Speed_H.svg",
+    doc: "https://nsidc.org/data/au_ocean",
+    layer: "AMSRU_L3_Ocean_Wind_Speed_Daily",
+    endTime: "2025-09-01",
+    title: "Ocean wind speed (AMSR-E/AMSR2, 25 km, daily)",
+    ext: "png", tms: "2km", maxLevel: 5,
+    start: "2002-06-01", timed: true, on: false,
+    meta: "Measured wind over the ocean from passive microwave, daily — storms as they happen · tiles end 2025-09",
+  },
+  {
+    id: "oscar",
+    /* The OBSERVED surface current, against the GLORYS layer's modelled one.
+     * OSCAR publishes it as two signed components; `magnitude` combines them
+     * into a speed client-side (MagnitudeProvider). `layer` is the zonal
+     * component — it is also what the domain probe reads, and the two
+     * components share a domain. */
+    magnitude: true,
+    layer: "OSCAR_Sea_Surface_Currents_Zonal",
+    layerV: "OSCAR_Sea_Surface_Currents_Meridional",
+    colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/OSCAR_Sea_Surface_Currents_Zonal.xml",
+    // the same scale as the GLORYS layer, so the modelled and the measured
+    // current can be compared by eye instead of by colour arithmetic
+    ramp: "speed", vmin: 0, vmax: 1.5, units: "m/s",
+    doc: "https://podaac.jpl.nasa.gov/dataset/OSCAR_L4_OC_INTERIM_V2.0",
+    endTime: "2024-07-17",
+    title: "Ocean surface current speed (OSCAR, 0.25°, 5-day)",
+    ext: "png", tms: "2km", maxLevel: 5,
+    start: "2014-10-22", timed: true, on: false,
+    meta: "Measured currents: √(east² + north²) from OSCAR's two components — the Gulf Stream, Kuroshio and the equatorial jets · tiles end 2024-07",
+  },
   {
     id: "grace",
     colormap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/GRACE_Tellus_Liquid_Water_Equivalent_Thickness_Mascon_CRI.xml",
@@ -2911,6 +2967,88 @@ class MosaicProvider {
   }
 }
 
+/* ------------------------------------------------------- the vector magnitude
+ * Some fields are published as two signed COMPONENTS — OSCAR ships the ocean
+ * surface current as a zonal (east) and a meridional (north) raster — and
+ * neither is readable on its own: a map of "how much of the flow is eastward"
+ * is not a map of the current. The speed is, and it is one line of arithmetic
+ * away, so this provider fetches both components for the same instant,
+ * inverts each colormap back to m/s (the same inversion the delta and probe
+ * paths use), and renders √(u²+v²) on the layer's own ramp.
+ *
+ * The honest caveats, both inherited from the inversion: the components are
+ * palette-quantised (OSCAR's bins are 5 mm/s wide, so a speed carries about
+ * that much error), and where either component's tile is missing or
+ * transparent there is no speed to show — the pixel stays empty rather than
+ * treating a missing component as zero, which would paint a strong meridional
+ * current as a weak one. */
+class MagnitudeProvider {
+  constructor(cfg, dateStr) {
+    this._cfg = cfg;
+    this._date = dateStr;
+    this.tilingScheme = new GIBSGeographicTilingScheme();
+    this.rectangle = this.tilingScheme.rectangle;
+    this.tileWidth = 512;
+    this.tileHeight = 512;
+    this.maximumLevel = cfg.maxLevel;
+    this.minimumLevel = 0;
+    this.errorEvent = new Cesium.Event();
+    this.credit = new Cesium.Credit(
+      `${cfg.title}, computed from its two components, from NASA GIBS`);
+    this.hasAlphaChannel = true;
+    this.ready = true;
+  }
+  get layerId() { return this._cfg.id; }
+  getTileCredits() { return undefined; }
+  pickFeatures() { return undefined; }
+  async requestImage(x, y, level) {
+    const cfg = this._cfg;
+    const canvas = document.createElement("canvas");
+    canvas.width = 512; canvas.height = 512;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const [vlut, uImg, vImg] = await Promise.all([
+      getValueLut(cfg.colormap),
+      sstFetchBitmap(sstFetchUrl(cfg, this._date, x, y, level)),
+      sstFetchBitmap(sstFetchUrl({ ...cfg, layer: cfg.layerV }, this._date, x, y, level)),
+    ]);
+    if (!vlut || !uImg || !vImg) return canvas;
+    const read = (img) => {
+      ctx.clearRect(0, 0, 512, 512);
+      ctx.drawImage(img, 0, 0, 512, 512);
+      return ctx.getImageData(0, 0, 512, 512).data;
+    };
+    const du = read(uImg), dv = read(vImg);
+    const out = ctx.createImageData(512, 512);
+    const o = out.data;
+    for (let p = 0, k = 0; p < 512 * 512; p++, k += 4) {
+      if (du[k + 3] === 0 || dv[k + 3] === 0) continue;
+      const u = vlut.lut.get((du[k] << 16) | (du[k + 1] << 8) | du[k + 2]);
+      const v = vlut.lut.get((dv[k] << 16) | (dv[k + 1] << 8) | dv[k + 2]);
+      if (u === undefined || v === undefined) continue;
+      const c = rampColor(cfg.ramp, Math.hypot(u, v) / cfg.vmax);
+      o[k] = c[0]; o[k + 1] = c[1]; o[k + 2] = c[2]; o[k + 3] = 235;
+    }
+    ctx.clearRect(0, 0, 512, 512);
+    ctx.putImageData(out, 0, 0);
+    return canvas;
+  }
+}
+
+/* The same arithmetic for one point, so the probe and the pixel card read
+ * exactly what the tile painted. */
+async function magnitudeAt(cfg, lon, lat, z, dateStr = state.date) {
+  const vlut = await getValueLut(cfg.colormap);
+  if (!vlut) return null;
+  const t = tileCoordsAt(lon, lat, z);
+  const [u, v] = await Promise.all([
+    probePixel(cfg, dateStr, z, t.x, t.y, t.px, t.py, vlut.lut),
+    probePixel({ ...cfg, layer: cfg.layerV, id: `${cfg.id}__v` },
+      dateStr, z, t.x, t.y, t.px, t.py, vlut.lut),
+  ]);
+  if (u == null || v == null) return null;
+  return { v: Math.hypot(u, v), u, north: v, units: cfg.units, cell: probeCellBounds(z, t.x, t.y, t.px, t.py) };
+}
+
 /* Per-pixel difference of two rolling-window means for ANY continuous
  * colormapped layer (SST, SST anomalies, sea ice, …): value(now) − value(past),
  * with the layer's own colormap inverted to physical units and a ±deltaRange
@@ -3309,6 +3447,14 @@ function providersFor(cfg, dateStr) {
    * for them, so nothing says "mean" over them. */
   if (win > 1 && cfg.timed && !canWindow && !mosaicable && !cfg.annual && !cfg.cumulative) {
     out.suppressed = true;
+    return out;
+  }
+
+  if (cfg.magnitude) {
+    // Two components in, one speed out. No comparison and no window: the
+    // posture matrix (§2.5) gives it neither, because each would have to
+    // invert two palettes per sample and the field is 5-day already.
+    out.providers.push({ provider: new MagnitudeProvider(cfg, dateStr) });
     return out;
   }
 
@@ -4160,7 +4306,9 @@ function updateLegends() {
     } else if (e.isRatio) {
       panel.appendChild(ratioLegendEl(e.cfg));
       any = true;
-    } else if (e.cfg.grid) {
+    } else if (e.cfg.grid || e.cfg.magnitude) {
+      // A magnitude raster carries the same four legend fields a grid does
+      // (ramp, vmin, vmax, units) and no GIBS legend image to fall back on.
       panel.appendChild(gridLegendEl(e.cfg));
       any = true;
     } else if (e.cfg.classmap || e.cfg.colormap || e.cfg.legend || e.cfg.legendKey) {
@@ -5264,6 +5412,33 @@ const LAYER_FACTS = {
          "rockfall scar, terrace and river braid reads as relief. Put it at " +
          "half opacity under the orthophoto or the land-cover map to see why " +
          "things are where they are. Open government data, © swisstopo." },
+  wind: { rec: "1980-01 → present (MERRA-2 runs a month or two behind)", int: "monthly mean — the day doesn't matter, the month does", sp: "0.5° × 0.625° (~55 km)",
+    sum: "How hard the wind blows at 10 m above the surface, averaged over a " +
+         "month, everywhere — land and ocean. MERRA-2 is NASA's satellite-era " +
+         "reanalysis: a weather model held to every observation ever made, so " +
+         "the field is complete where measurements are not. The planet's " +
+         "circulation is right there — the trade winds either side of the " +
+         "equator, the Southern Ocean westerlies roaring unbroken round " +
+         "Antarctica, the monsoon reversing between summer and winter. Wind is " +
+         "also what drives the ocean's surface current, so compare it with the " +
+         "current layers below." },
+  "wind-ocean": { rec: "this map: 2002-06 → 2025-09 (AMSR-E to 2011, AMSR2 from 2012; tiles end 2025-09)", int: "daily composite of the ascending and descending passes", sp: "~25 km, ocean only",
+    sum: "The wind as actually measured over the sea, not modelled: passive " +
+         "microwave radiometers read the roughness the wind puts on the water " +
+         "and invert it to a speed. Daily, so a storm is a storm and not a " +
+         "monthly smear — track a hurricane's wind field across the Atlantic " +
+         "day by day. Blind over land and inside heavy rain, and stitched from " +
+         "orbit passes, so single days have gaps; the Aggregate slider fills " +
+         "them." },
+  oscar: { rec: "this map: 2014-10 → 2024-07 (the OSCAR record itself starts 1992-10; GIBS serves tiles from 2014)", int: "5-day, on OSCAR's own pentad calendar", sp: "0.25° (~28 km)",
+    sum: "The ocean's surface current as MEASURED, against the GLORYS layer's " +
+         "modelled one: OSCAR combines satellite altimetry, winds and " +
+         "temperature into the near-surface flow. It is published as two " +
+         "signed components — how much of the flow is eastward, how much " +
+         "northward — and neither is readable alone, so this layer computes " +
+         "the speed √(east² + north²) from both in your browser. The Gulf " +
+         "Stream, the Kuroshio and the equatorial jets draw themselves. Same " +
+         "colour scale as the GLORYS layer, so the two can be compared by eye." },
   drivers: { rec: "2001–2025, attributed in one map (v1.3)", int: "not dated — re-baked when WRI publishes a new version", sp: "1 km source, binned here to 0.25° by dominant class",
     sum: "Why the forest went. WRI and Google DeepMind trained a classifier on " +
          "tens of thousands of hand-labelled sites to name the dominant cause " +
@@ -6278,6 +6453,14 @@ async function probeEntryValue(entry, carto) {
     }
     return { ...base, value: v };
   }
+  if (cfg.magnitude) {
+    // Two components → one speed, the same arithmetic the tile painted.
+    const z = cfg.maxLevel;
+    const base = { title: cfg.title, units: cfg.units, lon, lat, when: whenOfGibs(cfg),
+                   cell: probeTileAt(cfg, lon, lat, z).cell };
+    const m = await magnitudeAt(cfg, lon, lat, z);
+    return m == null ? { ...base, noData: true } : { ...base, value: m.v, cell: m.cell };
+  }
   if (cfg.classmap) {
     // Classification raster: read the class NAME under the cursor. No
     // delta/aggregate variants exist — class codes don't average or subtract.
@@ -6748,6 +6931,10 @@ function tileCoordsAt(lon, lat, z) {
 // One raster channel: value at the pixel on the app's current date (z capped
 // at 4 — inspector reads don't need street-level tiles, and 9 layers fetch).
 async function pixelRasterValue(cfg, lon, lat) {
+  if (cfg.magnitude) {
+    const m = await magnitudeAt(cfg, lon, lat, cfg.maxLevel);
+    return m == null ? null : { v: m.v, units: cfg.units };
+  }
   if (cfg.classmap) {
     // Classification channel: read at native resolution — a 30 m disturbance
     // alert averaged down to level 4 would vanish, and the inspector's whole
@@ -10458,6 +10645,7 @@ window.__earth = {
   MosaicProvider, mosaicDates, mosaicLabel, MOSAIC_MAX_DAYS, providersFor,
   setWindowDays, syncWindowControls, updateSuppressedNotes, LAYER_FACTS,
   getUnobservedSet, seeingThrough,
+  MagnitudeProvider, magnitudeAt,
   // the scale bar
   updateScaleBar, groundMetresPerPixel, viewGroundWidth, niceScaleMetres, fmtDistance,
   // place names: the collections themselves, plus the pick-through helper, so a

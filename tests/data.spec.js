@@ -91,7 +91,7 @@ test.describe("catalog.json", () => {
       expect(r, id).toBeTruthy();
       expect(r.notes, id).not.toMatch(/Live globe layer/);
     }
-    expect(cat.record_count).toBeGreaterThanOrEqual(269);
+    expect(cat.record_count).toBeGreaterThanOrEqual(274);
     expect(cat.record_count).toBe(cat.records.length);
     const byDomain = {};
     for (const r of cat.records) byDomain[r.domain] = (byDomain[r.domain] || 0) + 1;

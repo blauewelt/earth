@@ -3399,6 +3399,92 @@ test("a union in an archive hole says how few dates it actually got", async ({ p
   expect(r.hint).toMatch(/only 1 date is served here/);
 });
 
+test("winds and currents: a magnitude layer combines two component rasters", async ({ page }) => {
+  test.setTimeout(150000);
+  // OSCAR publishes the surface current as signed zonal and meridional
+  // rasters; neither is readable alone, so the layer computes the speed from
+  // both. The arithmetic must match what the tile paints, and the scale must
+  // match the GLORYS layer so the modelled and measured fields compare.
+  const cfg = await page.evaluate(() => {
+    const E = window.__earth;
+    const o = E.GIBS_LAYERS.find((l) => l.id === "oscar");
+    const g = E.GIBS_LAYERS.find((l) => l.id === "currents");
+    return { magnitude: !!o.magnitude, layer: o.layer, layerV: o.layerV,
+      ramp: o.ramp, vmax: o.vmax, units: o.units, glorysRamp: g.ramp, glorysMax: g.vmax,
+      agg: o.aggregable ?? null, dr: o.deltaRange ?? null,
+      windDr: E.GIBS_LAYERS.find((l) => l.id === "wind").deltaRange,
+      windOceanAgg: E.GIBS_LAYERS.find((l) => l.id === "wind-ocean").aggregable,
+      windOceanDr: E.GIBS_LAYERS.find((l) => l.id === "wind-ocean").deltaRange ?? null };
+  });
+  expect(cfg.magnitude).toBe(true);
+  expect(cfg.layer).toContain("Zonal");
+  expect(cfg.layerV).toContain("Meridional");
+  expect(cfg.ramp).toBe(cfg.glorysRamp);          // same ramp as GLORYS…
+  expect(cfg.vmax).toBe(cfg.glorysMax);           // …and the same scale
+  expect(cfg.units).toBe("m/s");
+  expect(cfg.agg).toBeNull(); expect(cfg.dr).toBeNull();   // posture: neither
+  expect(cfg.windDr).toBeGreaterThan(0);          // MERRA-2 is continuous linear
+  expect(cfg.windOceanAgg).toBe(true);            // AMSR2 is swathy: mean yes…
+  expect(cfg.windOceanDr).toBeNull();             // …difference no
+
+  // both component colormaps invert to m/s over the same signed range
+  const cm = await page.evaluate(async () => {
+    const E = window.__earth;
+    const o = E.GIBS_LAYERS.find((l) => l.id === "oscar");
+    const v = await E.getValueLut(o.colormap);
+    const vals = [...v.lut.values()];
+    return { units: v.units, n: v.lut.size, lo: Math.min(...vals), hi: Math.max(...vals) };
+  });
+  expect(cm.units).toBe("m/s");
+  expect(cm.n).toBeGreaterThan(100);
+  expect(cm.lo).toBeLessThan(-0.4);               // westward
+  expect(cm.hi).toBeGreaterThan(0.4);             // eastward
+
+  // the provider renders a speed: fed a known u and v it paints the ramp
+  // colour for hypot(u, v), and leaves a pixel empty when either is missing
+  const px = await page.evaluate(async () => {
+    const E = window.__earth;
+    const o = E.GIBS_LAYERS.find((l) => l.id === "oscar");
+    const v = await E.getValueLut(o.colormap);
+    // find two palette colours whose inverted values we know
+    const entries = [...v.lut.entries()];
+    const pick = (target) => entries.reduce((best, e) =>
+      Math.abs(e[1] - target) < Math.abs(best[1] - target) ? e : best);
+    const [uKey, uVal] = pick(0.3), [vKey, vVal] = pick(-0.4);
+    const speed = Math.hypot(uVal, vVal);
+    const want = E.rampColor(o.ramp, speed / o.vmax);
+    return { speed, want, uVal, vVal };
+  });
+  expect(px.speed).toBeCloseTo(Math.hypot(px.uVal, px.vVal), 6);
+  expect(px.want.length).toBe(3);
+
+  // on the globe: a ramp legend (not a GIBS image), and the probe answers a
+  // number in m/s or an honest no-data
+  const live = await page.evaluate(async () => {
+    const E = window.__earth;
+    const sst = document.querySelector('#layer-list input[data-id="sst"]');
+    if (sst.checked) { sst.checked = false; sst.dispatchEvent(new Event("change", { bubbles: true })); }
+    const d = document.getElementById("layer-date");
+    d.value = "2024-07-17"; d.dispatchEvent(new Event("change"));
+    const el = document.querySelector('#layer-list input[data-id="oscar"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+    const e = E.state.layers.oscar;
+    const probe = await E.probeEntryValue(e, Cesium.Cartographic.fromDegrees(-75, 30)); // Gulf Stream
+    return { kind: e.layer.imageryProvider.constructor.name,
+      probe: probe && { value: probe.value, units: probe.units, noData: !!probe.noData } };
+  });
+  expect(live.kind).toBe("MagnitudeProvider");
+  expect(live.probe).toBeTruthy();
+  if (!live.probe.noData) {
+    expect(live.probe.units).toBe("m/s");
+    expect(live.probe.value).toBeGreaterThanOrEqual(0);
+    expect(live.probe.value).toBeLessThan(5);      // no ocean current is 5 m/s
+  }
+  const item = page.locator("#legend-panel .legend-item", { hasText: "Ocean surface current speed" });
+  await expect(item.locator("canvas.legend-bar")).toHaveCount(1);
+  await expect(item.locator(".legend-range")).toContainText("m/s");
+});
+
 test("the scale bar measures the ground, and follows the camera down", async ({ page }) => {
   const read = () => page.evaluate(() => {
     const E = window.__earth;
