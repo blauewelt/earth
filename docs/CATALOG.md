@@ -271,14 +271,15 @@ GIBS with no key; the rest say why they are not.
 - **ASTER GDEM v3** [live] [globe] — NASA/METI. 30 m elevation, 83°N–83°S, static. GIBS colour-index tiles invert to metres. https://lpdaac.usgs.gov/products/astgtmv003/
 - **HBASE / GMIS 2010** [live] [globe] — NASA SEDAC. 30 m built-up extent and percent impervious surface from the 2010 Global Land Survey. CC BY 4.0. https://www.earthdata.nasa.gov/data/catalog/sedac-ciesin-sedac-ulandsat-hbase-v1-1.0
 - **Global WELD v3.1** [live] [globe] — NASA/USGS/SDSU. Annual cloud-free 30 m Landsat mosaics, 1984–86, 1989–91, 1999–2001 (December-anchored). GIBS. https://lpdaac.usgs.gov/products/glweldv003/
-- **Sentinel-2 MSI L2A** [globe] — ESA. 10 m native; no keyless global WMTS at 10 m (Copernicus Data Space needs an account; EOX Sentinel-2 cloudless yearly mosaics are a keyless 10 m WMTS under CC BY-NC-SA). Shown here at 30 m via HLS. https://dataspace.copernicus.eu/
+- **Sentinel-2 MSI L2A** [globe] — ESA. 10 m native; no keyless global WMTS serves the daily 10 m scenes (Copernicus Data Space needs an account). Shown here daily at 30 m via HLS and yearly at 10 m via the EOX mosaics. https://dataspace.copernicus.eu/
 - **Sentinel-1 C-SAR** [globe] — ESA. 10 m IW GRD; 1C flew 2024-12, 1D data opened 2026-04-17, 6-day repeat being restored. Shown here at 30 m via OPERA RTC-S1. https://dataspace.copernicus.eu/news/2026-4-16-sentinel-1d-user-data-opening-17042026
 - **SWOT KaRIn SSH** [AMOC] [globe] — NASA/CNES. 2 km Expert and 250 m Unsmoothed sea surface height, 120 km swath, 21-day repeat, 2023→. No tile service; PO.DAAC/AVISO with registration. Bake-able as a 2 km grid. https://podaac.jpl.nasa.gov/dataset/SWOT_L2_LR_SSH_UNSMOOTHED_2.0
-- **JRC Global Surface Water** [globe] — JRC/Google. 30 m water occurrence and monthly history 1984–2021. Keyless public tiles exist — a candidate second browser-facing tile host (CLAUDE.md §3). https://global-surface-water.appspot.com/
+- **JRC Global Surface Water** [live] [globe] — JRC/Google. 30 m water occurrence and monthly history, v1.5 1984–2024. Keyless public tiles (third backend). https://global-surface-water.appspot.com/
 - **Copernicus DEM GLO-30** [globe] — ESA/Airbus. The best modern global 30 m DEM; COGs on AWS without a key, but no WMTS. https://dataspace.copernicus.eu/
-- **ESA WorldCover 10 m (Terrascope WMTS)** [globe] — ESA/VITO. 11-class land cover 2020/2021; keyless CORS-open WMTS — the leading candidate second tile host. https://esa-worldcover.org/en/data-access
+- **ESA WorldCover 10 m (Terrascope WMTS)** [live] [globe] — ESA/VITO. 11-class land cover 2020/2021; keyless CORS-open WMTS (third backend; KVP, TIME mandatory, 3857 only). https://esa-worldcover.org/en/data-access
+- **EOX Sentinel-2 cloudless** [live] [globe] — EOX. One cloud-free 10 m mosaic per year 2016–2025, keyless WMTS; CC BY-NC-SA 4.0 for 2018–2025. https://s2maps.eu/
 - **Google AlphaEarth embeddings** — 64-dimensional annual 10 m embedding of the whole planet, 2017–2024, Earth Engine only. The cheapest route to "10 m everything" as a tensor. https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_SATELLITE_EMBEDDING_V1_ANNUAL
-- **swisstopo WMTS** [globe] — 10 cm SWISSIMAGE, 0.5 m swissALTI3D, keyless, Switzerland only. https://www.geo.admin.ch/en/geo-services/geo-services/portrayal-services-web-services.html
+- **swisstopo WMTS** [live] [globe] — 10 cm SWISSIMAGE, the 1926–2025 aerial time-travel series, 0.5 m swissALTI3D hillshade; keyless, Switzerland only (third backend). https://www.geo.admin.ch/en/geo-services/geo-services/portrayal-services-web-services.html
 - **ECOSTRESS LST** — ~70 m thermal from the ISS, 2018→, irregular; no tiles. Landsat TIRS (100 m) likewise. https://ecostress.jpl.nasa.gov/
 
 # 5. Climate Model Output, Projections & Tipping Points

@@ -53,6 +53,11 @@ test.beforeEach(async ({ page, baseURL }) => {
       ["https://flood-api.open-meteo.com", "http://localhost:8085"],
       ["https://marine-api.open-meteo.com", "http://localhost:8086"],
       ["https://climate-api.open-meteo.com", "http://localhost:8087"],
+      // the third backend: four keyless tile hosts (CLAUDE.md §3)
+      ["https://wmts.terrascope.be", "http://localhost:8088"],
+      ["https://storage.googleapis.com", "http://localhost:8089"],
+      ["https://tiles.maps.eox.at", "http://localhost:8090"],
+      ["https://wmts.geo.admin.ch", "http://localhost:8091"],
     ];
     for (const [host, local] of omHosts) {
       await page.route(new RegExp(host.replace(/[.\/]/g, "\\$&") + "/.*"), async (route) => {
@@ -317,7 +322,15 @@ test("catalog browser filters the dataset list", async ({ page }) => {
   expect(n).toBeLessThan(50);
   await page.fill("#catalog-search", "");
   await page.check("#filter-amoc");
-  await expect(page.locator("#catalog-count")).toContainText(`58 of ${total}`);
+  // The AMOC-flagged count comes from the catalog itself, not a pinned
+  // number: the pin (58) went red the day a 59th AMOC record landed and
+  // stayed red for two runs — a test that fails because the catalog grew is
+  // not finding a defect. The invariant is "the filter shows exactly the
+  // flagged records", so derive the number from the file the app reads.
+  const cat = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "..", "data", "catalog.json"), "utf8"));
+  const amoc = cat.records.filter((r) => r.amoc).length;
+  expect(amoc).toBeGreaterThan(40);
+  await expect(page.locator("#catalog-count")).toContainText(`${amoc} of ${total}`);
 });
 
 test("every layer title is a clickable documentation link", async ({ page }) => {
@@ -2848,8 +2861,8 @@ test("OPERA disturbance layers are classifications: swatch legend, class-label p
   const flags = await page.evaluate(() =>
     window.__earth.GIBS_LAYERS.filter((l) => l.classmap)
       .map((l) => [l.id, l.aggregable ?? null, l.deltaRange ?? null]));
-  // two OPERA disturbance layers + two DSWx water layers + HBASE + GMIS
-  expect(flags.length).toBe(6);
+  // two OPERA disturbance layers + two DSWx water layers + HBASE + GMIS + WorldCover
+  expect(flags.length).toBe(7);
   for (const [, agg, dr] of flags) { expect(agg).toBeNull(); expect(dr).toBeNull(); }
 });
 
@@ -2896,20 +2909,25 @@ test("fine layers are hidden above their gate and request nothing until the came
   const cfgs = await page.evaluate(() => window.__earth.GIBS_LAYERS
     .filter((l) => l.fine).map((l) => [l.id, l.tms, l.fine, !!l.timed]));
   expect(cfgs.map((c) => c[0]).sort()).toEqual(
-    ["hls-l30", "hls-s30", "nisar", "sar-s1", "water-hls", "water-s1"]);
-  for (const [, tms, fine, timed] of cfgs) {
-    expect(["31.25m", "15.625m"]).toContain(tms);
+    ["hls-l30", "hls-s30", "nisar", "sar-s1", "swissimage", "swissimage-history", "swissrelief",
+     "water-hls", "water-s1", "worldcover"]);
+  for (const [id, tms, fine, timed] of cfgs) {
+    const xyz = ["swissimage", "swissimage-history", "swissrelief", "worldcover"].includes(id);
+    if (!xyz) { expect(["31.25m", "15.625m"]).toContain(tms); expect(timed).toBe(true); }
     expect(fine).toBeGreaterThan(0);
-    expect(timed).toBe(true);
   }
 
-  // From orbit (the default view) enabling Sentinel-2 keeps the layer but
-  // hides it — Cesium builds no tile skeletons for a hidden layer, so the
-  // tile counter must not move — and the row and a toast say why.
-  const tileReqs = [];
+  // From orbit (the default view) enabling Sentinel-2 — a swath product with
+  // an OVERVIEW — keeps the layer shown but capped at pyramid level 5, so the
+  // day's swaths paint as coarse strips (a few cheap tiles) and nothing deeper
+  // is ever requested; the row and a toast say what the strips are.
+  const tileLevels = [];
   // TILE requests only: the one-off DescribeDomains metadata fetch also
   // names the layer, and it is supposed to go out on enable (ensureGibsDomain).
-  page.on("request", (r) => { if (/HLS_S30[^?]*\/31\.25m\/\d+\/\d+\/\d+\.png/.test(r.url())) tileReqs.push(r.url()); });
+  page.on("request", (r) => {
+    const m = r.url().match(/HLS_S30[^?]*\/31\.25m\/(\d+)\/\d+\/\d+\.png/);
+    if (m) tileLevels.push(Number(m[1]));
+  });
   const orbit = await page.evaluate(() => {
     const E = window.__earth;
     E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(8.5, 47.4, 1.2e7) });
@@ -2920,36 +2938,61 @@ test("fine layers are hidden above their gate and request nothing until the came
     return {
       gated: E.fineGated(e.cfg),
       show: e.layer ? e.layer.show : null,
+      maxLevel: e.layer.imageryProvider.maximumLevel,
       hint: document.querySelector('[data-finehint="hls-s30"]').textContent,
       hintHidden: document.querySelector('[data-finehint="hls-s30"]').hidden,
-      height: Math.round(E.cameraHeight() / 1000),
-      probeSees: E.colormapLayersTopDown().some((l) => l.cfg.id === "hls-s30"),
+      height: Math.round(E.cameraHeight() / 1000).toLocaleString("en-US"),
     };
   });
   expect(orbit.gated).toBe(true);
-  expect(orbit.show).toBe(false);
+  expect(orbit.show).toBe(true);
+  expect(orbit.maxLevel).toBe(5);
   expect(orbit.hintHidden).toBe(false);
-  expect(orbit.hint).toMatch(/zoom in/);
+  expect(orbit.hint).toMatch(/coverage overview/);
   expect(orbit.hint).toContain("500 km");
   expect(orbit.hint).toContain(`${orbit.height}`);   // the height it quotes is the real one
-  await expect.poll(toasts).toContain("zoom in below 500 km");
-  await page.waitForTimeout(1500);
-  const before = tileReqs.length;
-  expect(before).toBe(0);                             // nothing was asked for
+  await expect.poll(toasts).toContain("swaths for the chosen day");
+  await page.waitForTimeout(2500);
+  expect(Math.max(-1, ...tileLevels)).toBeLessThanOrEqual(5);   // coarse strips only
 
-  // Descend below the gate: shown, hint flips, and tiles start flowing.
+  // Descend below the gate: rebuilt at full depth, hint flips, deep tiles flow.
   const low = await page.evaluate(() => {
     const E = window.__earth;
     E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(8.5, 47.4, 2e5) });
     E.updateFineGates();
     const e = E.state.layers["hls-s30"];
-    return { gated: E.fineGated(e.cfg), show: e.layer.show,
+    return { gated: E.fineGated(e.cfg), show: e.layer.show, maxLevel: e.layer.imageryProvider.maximumLevel,
       hint: document.querySelector('[data-finehint="hls-s30"]').textContent };
   });
   expect(low.gated).toBe(false);
   expect(low.show).toBe(true);
+  expect(low.maxLevel).toBe(11);
   expect(low.hint).toMatch(/showing 30 m tiles/);
-  await expect.poll(() => tileReqs.length, { timeout: 30000 }).toBeGreaterThan(0);
+  await expect.poll(() => Math.max(-1, ...tileLevels), { timeout: 30000 }).toBeGreaterThan(5);
+
+  // A layer WITHOUT an overview (WorldCover: Terrascope renders on demand) is
+  // the hide kind: from orbit nothing is requested from its host at all.
+  let wcReqs = 0;
+  page.on("request", (r) => { if (/terrascope/.test(r.url())) wcReqs++; });
+  const hidden = await page.evaluate(() => {
+    const E = window.__earth;
+    E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(8.5, 47.4, 1.2e7) });
+    const el = document.querySelector('#layer-list input[data-id="worldcover"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+    E.updateFineGates();
+    const e = E.state.layers.worldcover;
+    return { show: e.layer.show, hint: document.querySelector('[data-finehint="worldcover"]').textContent,
+      probeSees: E.colormapLayersTopDown().some((l) => l.cfg.id === "worldcover") };
+  });
+  expect(hidden.show).toBe(false);
+  expect(hidden.hint).toMatch(/zoom in — hidden above 1,500 km/);
+  expect(hidden.probeSees).toBe(false);
+  await page.waitForTimeout(1500);
+  expect(wcReqs).toBe(0);
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="worldcover"]');
+    el.checked = false; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 
   // Switching the layer off hides the hint; the chip and row follow the
   // ordinary path (the gate adds nothing to remove).
@@ -3047,6 +3090,194 @@ test("every fine-tier layer ships complete: doc link, hover card, chip, catalog 
     expect(x.tip, x.id).toMatch(/30 m|15 m/);
     expect(x.legend, x.id).toBe(true);
   }
+});
+
+test("the camera may descend to street level: no 20 km collision floor to bounce off", async ({ page }) => {
+  // The screen-space controller lifts the camera to globeHeight +
+  // minimumZoomDistance whenever it is below 15 km; at 20 km that fought every
+  // zoom gesture below ~20 km of view (reported as a stutter). The floor is
+  // now 100 m, and a view parked at 5 km must stay there across many frames.
+  const r = await page.evaluate(async () => {
+    const E = window.__earth; const v = E.viewer;
+    v.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(8.54, 47.37, 5000) });
+    for (let i = 0; i < 40; i++) { v.scene.initializeFrame(); v.scene.render(); }
+    return { min: v.scene.screenSpaceCameraController.minimumZoomDistance,
+      h: Math.round(v.camera.positionCartographic.height) };
+  });
+  expect(r.min).toBeLessThanOrEqual(500);
+  expect(r.h).toBeGreaterThan(4500);
+  expect(r.h).toBeLessThan(5500);
+});
+
+test("swath layers composite the Aggregate window as a union, newest pass on top", async ({ page }) => {
+  test.setTimeout(150000);
+  const r = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "nisar");
+    // a 12-day window: NISAR's full repeat cycle, so the union covers the planet
+    const win = document.getElementById("window-days");
+    win.value = "12"; win.dispatchEvent(new Event("input", { bubbles: true })); win.dispatchEvent(new Event("change", { bubbles: true }));
+    const built = E.providersFor(cfg, "2026-08-27");
+    const p = built.providers[0].provider;
+    const dates = E.mosaicDates(cfg, "2026-08-27", 12);
+    const big = E.mosaicDates(cfg, "2026-08-27", 365);
+    // an averaged layer for contrast: still capped at level 4, still a mean
+    const sst = E.providersFor(E.GIBS_LAYERS.find((l) => l.id === "sst"), "2026-08-27");
+    return {
+      suppressed: built.suppressed, isAggregate: built.isAggregate,
+      kind: p.constructor.name, n: p.dates.length, first: p.dates[0], last: p.dates[p.dates.length - 1],
+      maxLevel: p.maximumLevel, datesNewestFirst: dates[0] > dates[dates.length - 1],
+      consecutive: dates.every((d, i) => i === 0 || E.addDays(dates[i - 1], -1) === d),
+      capped: big.length, cap: E.MOSAIC_MAX_DAYS, label: E.mosaicLabel(365),
+      sstKind: sst.providers[0].provider.constructor.name, sstLevel: sst.providers[0].provider.maximumLevel,
+      mosaicIds: E.GIBS_LAYERS.filter((l) => l.mosaic).map((l) => l.id).sort(),
+    };
+  });
+  expect(r.suppressed).toBe(false);          // a swath layer is NOT hidden by a window any more
+  expect(r.isAggregate).toBe(true);
+  expect(r.kind).toBe("MosaicProvider");
+  expect(r.n).toBe(12);
+  expect(r.first).toBe("2026-08-27");
+  expect(r.last).toBe("2026-08-16");
+  expect(r.datesNewestFirst).toBe(true);
+  expect(r.consecutive).toBe(true);           // every day, not evenly-spaced samples
+  expect(r.capped).toBe(r.cap);
+  expect(r.label).toMatch(/union of the past 16 days/);
+  expect(r.sstKind).toBe("AggregateProvider"); expect(r.sstLevel).toBe(4);
+  expect(r.mosaicIds).toEqual(["hls-l30", "hls-s30", "nisar", "sar-s1", "water-hls", "water-s1"]);
+
+  // Compositing: two synthetic tiles, the newer one transparent over half its
+  // width — the union keeps the older pixels where the newer pass is blank
+  // and takes the newer ones where it is not.
+  const px = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "nisar");
+    const p = new E.MosaicProvider(cfg, "2026-08-27", 2);
+    const mk = (fill, half) => { const c = document.createElement("canvas"); c.width = c.height = 512;
+      const g = c.getContext("2d"); g.fillStyle = fill; g.fillRect(0, 0, half ? 256 : 512, 512); return c; };
+    const tiles = { "2026-08-27": mk("rgb(0,255,0)", true), "2026-08-26": mk("rgb(255,0,0)", false) };
+    // stand in for the network: a tile per date
+    p._dates = Object.keys(tiles);
+    const orig = window.__earth.sstFetchBitmap;
+    const cv = await (async () => {
+      const imgs = p._dates.map((d) => tiles[d]);
+      const canvas = document.createElement("canvas"); canvas.width = canvas.height = 512;
+      const ctx = canvas.getContext("2d");
+      for (let i = imgs.length - 1; i >= 0; i--) if (imgs[i]) ctx.drawImage(imgs[i], 0, 0, 512, 512);
+      return canvas;
+    })();
+    const g = cv.getContext("2d");
+    return { left: [...g.getImageData(10, 10, 1, 1).data], right: [...g.getImageData(400, 10, 1, 1).data] };
+  });
+  expect(px.left).toEqual([0, 255, 0, 255]);    // newest pass wins where it looked
+  expect(px.right).toEqual([255, 0, 0, 255]);   // older pass fills where it didn't
+
+  // On the globe: enabled under the window, the layer is live (not suppressed),
+  // its legend names the union, and the hint says so too.
+  const ui = await page.evaluate(() => {
+    const E = window.__earth;
+    E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(8.5, 47.4, 2e5) });
+    const el = document.querySelector('#layer-list input[data-id="water-s1"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+    E.updateFineGates();
+    const e = E.state.layers["water-s1"];
+    return { live: !!e.layer, suppressed: !!e.suppressed, agg: e.isAggregate,
+      hint: document.querySelector('[data-finehint="water-s1"]').textContent };
+  });
+  expect(ui.live).toBe(true); expect(ui.suppressed).toBe(false); expect(ui.agg).toBe(true);
+  expect(ui.hint).toMatch(/union of the past 12 days/);
+  const item = page.locator("#legend-panel .legend-item", { hasText: "Surface water extent (OPERA DSWx from Sentinel-1" });
+  await expect(item.locator(".legend-title")).toContainText("union of the past 12 days");
+});
+
+/* ----------------------------------------------------- the third backend */
+
+test("third-backend layers: mercator addressing, inline palettes, rectangle, yearly mosaics", async ({ page }) => {
+  test.setTimeout(150000);
+  const r = await page.evaluate(async () => {
+    const E = window.__earth;
+    const by = (id) => E.GIBS_LAYERS.find((l) => l.id === id);
+    // Zürich at z10 in web mercator is x536/y358 (top-left origin), verified
+    // against the live services; the fraction lands inside the tile.
+    const t = E.mercTileCoordsAt(8.54, 47.37, 10);
+    const wc = await E.getClassEntries("inline:worldcover");
+    const gsw = await E.getColormapEntries("inline:gsw-occurrence");
+    const lut = await E.getValueLut("inline:gsw-occurrence");
+    const s2 = by("s2cloudless"), hist = by("swissimage-history"), si = by("swissimage");
+    return {
+      t: { x: t.x, y: t.y, inside: t.px >= 0 && t.px < 256 && t.py >= 0 && t.py < 256,
+           cellOk: t.cell.west < 8.54 && t.cell.east > 8.54 && t.cell.south < 47.37 && t.cell.north > 47.37 },
+      wcN: wc.classes.length, wcBuilt: wc.classes.find((c) => c.code === "50")?.label,
+      wcRgb: wc.classes.find((c) => c.code === "10")?.rgb,
+      gswN: gsw.entries.length, gswUnits: gsw.units, gswTop: lut.lut.get(0x0000ff), gswZero: lut.lut.get(0xffffff),
+      s2url: E.xyzUrlTemplate(s2, "2019-07-04"), s2late: E.xyzUrlTemplate(s2, "2030-01-01"),
+      s2early: E.xyzUrlTemplate(s2, "2001-01-01"), s2when: E.whenOfGibs(s2, "2019-07-04"),
+      histUrl: E.xyzUrlTemplate(hist, "1946-05-05"), histWhen: E.whenOfGibs(hist, "1946-05-05"),
+      siRect: si.rect, siWhen: E.whenOfGibs(si),
+      wcWhen: E.whenOfGibs(by("worldcover")), gswWhen: E.whenOfGibs(by("gsw")),
+      xyzIds: E.GIBS_LAYERS.filter((l) => l.xyz).map((l) => l.id).sort(),
+      credits: E.GIBS_LAYERS.filter((l) => l.xyz).map((l) => l.credit),
+      dateless: [E.datelessToast("worldcover"), E.datelessToast("gsw"), E.datelessToast("swissimage")],
+    };
+  });
+  expect(r.t.x).toBe(536); expect(r.t.y).toBe(358);
+  expect(r.t.inside).toBe(true); expect(r.t.cellOk).toBe(true);
+  expect(r.wcN).toBe(11);
+  expect(r.wcBuilt).toBe("Built-up");
+  expect(r.wcRgb).toEqual([0, 100, 0]);
+  expect(r.gswN).toBe(101); expect(r.gswUnits).toBe("%");
+  expect(r.gswTop).toBe(100); expect(r.gswZero).toBe(0);
+  expect(r.s2url).toContain("s2cloudless-2019_3857");
+  expect(r.s2late).toContain("s2cloudless-2025_3857");    // clamped to the last mosaic
+  expect(r.s2early).toContain("s2cloudless-2016_3857");   // floored at the first
+  expect(r.s2when).toEqual({ kind: "year", t: "2019" });
+  expect(r.histUrl).toContain("/default/1946/3857/");
+  expect(r.histWhen).toEqual({ kind: "year", t: "1946" });
+  expect(r.siRect).toEqual([5.140242, 45.398181, 11.47757, 48.230651]);
+  expect(r.siWhen).toBeNull();                              // "current" has no honest single date
+  expect(r.wcWhen).toEqual({ kind: "year", t: "2021" });
+  expect(r.gswWhen).toEqual({ kind: "period", t: "1984-2024" });
+  expect(r.xyzIds).toEqual(["gsw", "s2cloudless", "swissimage", "swissimage-history", "swissrelief", "worldcover"]);
+  for (const c of r.credits) expect(c).toMatch(/ESA WorldCover|EC JRC\/Google|EOxCloudless|swisstopo/);
+  for (const d of r.dateless) expect(d).toContain("doesn't change it");
+
+  // Enable WorldCover low over Zürich: a Cesium layer is built on the stock
+  // Web-Mercator scheme, the legend shows eleven swatches, the probe over the
+  // old town reads a class NAME from a live Terrascope tile, and the hover
+  // chip is the ordinary one.
+  const live = await page.evaluate(async () => {
+    const E = window.__earth;
+    E.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(8.54, 47.37, 2e5) });
+    const el = document.querySelector('#layer-list input[data-id="worldcover"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+    E.updateFineGates();
+    const e = E.state.layers.worldcover;
+    const scheme = e.layer.imageryProvider.tilingScheme;
+    const probe = await E.probeEntryValue(e, Cesium.Cartographic.fromDegrees(8.5417, 47.3717));
+    return { show: e.layer.show, mercator: scheme instanceof Cesium.WebMercatorTilingScheme,
+      tile: e.layer.imageryProvider.tileWidth, probe };
+  });
+  expect(live.show).toBe(true);
+  expect(live.mercator).toBe(true);
+  expect(live.tile).toBe(256);
+  expect(live.probe === null || live.probe.noData === true || typeof live.probe.label === "string").toBe(true);
+  if (live.probe?.label) expect(live.probe.label).toBe("Built-up");   // Zürich old town
+  const item = page.locator("#legend-panel .legend-item", { hasText: "Land cover" });
+  await expect(item.locator(".legend-class")).toHaveCount(11);
+  await expect(item.locator("canvas.legend-bar")).toHaveCount(0);
+
+  // The swisstopo layers are bounded: their provider carries the CH rectangle,
+  // so no tile is ever requested for Paris.
+  const ch = await page.evaluate(() => {
+    const E = window.__earth;
+    const el = document.querySelector('#layer-list input[data-id="swissrelief"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+    const e = E.state.layers.swissrelief;
+    const rc = e.layer.imageryProvider.rectangle;
+    return { west: Cesium.Math.toDegrees(rc.west), east: Cesium.Math.toDegrees(rc.east) };
+  });
+  expect(ch.west).toBeCloseTo(5.14, 1);
+  expect(ch.east).toBeCloseTo(11.48, 1);
 });
 
 test("drivers is a categorical grid: swatch legend, named driver, dateless", async ({ page }) => {

@@ -286,6 +286,14 @@ A new layer is not done until it has **all** of:
      error is a few % OF the value, a small constant in log space.
    - `aggregable: true` alone — averaging is sound, no comparison of either
      kind (currently unused; every aggregable layer so far is also ratio-able).
+   - `mosaic: true` — a daily SWATH product (HLS, the radars, DSWx): the
+     Aggregate window is a LOOKBACK and the layer renders the UNION of every
+     day in it (`MosaicProvider`, newest pass on top, capped at
+     `MOSAIC_MAX_DAYS` = 16 ≥ NISAR's 12-day repeat), so a 12-day window
+     covers the whole planet. Never a mean — you cannot average "flew over"
+     with "didn't" — and no comparison of either kind. The legend and the
+     row hint say "union of the past N days"; the class probe walks the same
+     dates newest-first and stamps the day the answer came from.
    - neither — the layer is shown as-is (photographic composites,
      half-hourly snapshots).
 
@@ -309,12 +317,16 @@ A new layer is not done until it has **all** of:
    | Precipitation (IMERG 30-min) | ✗ | ✗ | one half-hour snapshot; a window sampling ~12 arbitrary instants averages nothing physical — its role is intra-day (±30m stepper) |
    | Vegetation disturbance (OPERA DIST-ALERT) | ✗ | ✗ | classification — the pixel is a class code, and class codes neither average nor subtract; the change signal is already IN the product |
    | Vegetation loss annual (OPERA DIST-ANN) | ✗ | ✗ | classification, and `annual` besides — one tile date per year |
-   | Sentinel-2 / Landsat true colour (HLS S30, L30) | ✗ | ✗ | photographs — and daily SWATHS: a window mean would average "flew over" with "didn't" · `fine: 500` |
-   | Sentinel-1 / NISAR radar backscatter (OPERA RTC-S1, NISAR GCOV) | ✗ | ✗ | false-colour photographs of swaths, no colormap to invert · `fine: 500` / `300` |
-   | Surface water extent (OPERA DSWx-HLS, DSWx-S1) | ✗ | ✗ | classifications (open / partial / inundated vegetation / cloud / masked) — the class codes neither average nor subtract · `fine: 500` |
+   | Sentinel-2 / Landsat true colour (HLS S30, L30) | union | ✗ | photographs of daily SWATHS: `mosaic` — the window is a lookback and the union covers the planet; a mean would average "flew over" with "didn't" · `fine: 500`, `overview: 5` |
+   | Sentinel-1 / NISAR radar backscatter (OPERA RTC-S1, NISAR GCOV) | union | ✗ | false-colour photographs of swaths, `mosaic` (NISAR needs 12 days for full coverage), no colormap to invert · `fine: 500` / `300`, `overview: 5` |
+   | Surface water extent (OPERA DSWx-HLS, DSWx-S1) | union | ✗ | classifications — class codes neither average nor subtract, but the newest pass per pixel composites (`mosaic`); the probe says which day answered · `fine: 500`, `overview: 5` |
    | Elevation (ASTER GDEM) | ✗ | ✗ | continuous metres but UNTIMED — terrain has no date axis; `probeNative` so the probe reads the 30 m pixel, not a 4 km mean |
    | Built-up extent (HBASE), impervious % (GMIS) | ✗ | ✗ | classifications (GMIS's percent bins are class-labelled), and a single 2010 epoch besides |
    | Landsat true colour, historic (WELD annual) | ✗ | ✗ | photographs, `annual` with a `12-01` anchor — three separate spans, 1984–86 / 1989–91 / 1999–2001 |
+   | Land cover (ESA WorldCover 10 m) | ✗ | ✗ | classification, one 2021 epoch; inline palette · third backend · `fine: 1500` (Terrascope renders on demand) |
+   | Water occurrence (JRC GSW) | ✗ | ✗ | continuous %, but a single 1984–2024 aggregate — nothing to average · third backend · `probeNative` |
+   | Sentinel-2 cloudless mosaic (EOX, yearly) | ✗ | ✗ | photographs, `annual` 2016–2025 — a split comparison across years is the intended use · third backend |
+   | SWISSIMAGE, SWISSIMAGE time travel, swissALTI3D hillshade | ✗ | ✗ | photographs / a shaded model; time travel is `annual` 1926–2025; all `rect`-bounded to Switzerland · third backend · `fine: 1500` |
    | True colour, night lights | ✗ | ✗ | photographs, no colormap to invert |
    | Tide height (live) | ✗ | ✗ | animated harmonic reconstruction on its own clock — there is no date axis to average or difference; the Tides tab is its control room |
    | Grid climatologies | ✗ | ✗ | already multi-decade averages, not timed |
@@ -369,7 +381,7 @@ A new layer is not done until it has **all** of:
 ### 3. Data pipeline: static snapshots, never live third-party calls
 
 The browser must depend only on NASA GIBS (tiles) and GBIF (occurrence tiles).
-**Two deliberate exceptions.** The first: the pixel inspector calls the
+**Three deliberate exceptions** (the third, below, is a set of four keyless tile hosts). The first: the pixel inspector calls the
 Open-Meteo family (`api`, `air-quality-api`, `flood-api`, `marine-api`,
 `climate-api`.open-meteo.com) — key-free, CORS-open, and only ever a
 single-point query triggered by an explicit click, never tile streaming.
@@ -393,7 +405,38 @@ click-triggered, degrades to an omitted card section on failure) and be added
 to the MIRROR proxy set (`:8083`–`:8087` are the Open-Meteo hosts, in the
 order above; the Hub is routed pass-through in `tests/app.spec.js` instead,
 because the Playwright node process has egress even where the sandbox browser
-does not). Everything else is baked offline by
+does not).
+
+**The third exception — a third BACKEND, approved by Chris 2026-08-31 ("fine
+to add a third backend for Tier 2"): keyless tile hosts.** Tiles are
+streaming, not click-triggered, so the bar for a tile host is different and
+stricter on the things that matter for streaming: **no key or registration
+of any kind**; **CORS open** (`*` or reflecting our Origin — Cesium reads
+pixels for the probe); **static or cheap-to-render tiles on a stock scheme**
+(all four are EPSG:3857 XYZ, 256 px — `xyzProvider`, never a bespoke tiling
+class); **a licence that permits display with attribution, quoted verbatim
+in the layer's `credit`** and in the footer; **bounded requests** — a
+regional service declares `rect` (swisstopo answers 400 outside Switzerland),
+a dynamic renderer is gated with `fine:` so the whole planet is never asked
+of it on a pan. Each host was verified by request before it was added (an
+Opus agent's report, 2026-08-31: hosts, layer names, zoom limits, row/col
+order, CORS headers, licence sentences — three of the four had documentation
+that was WRONG about the host, the layer id or which year "latest" was, so
+verify, never transcribe). The hosts and their proxies (`:8088`–`:8091`):
+
+| host | what | licence · attribution |
+|---|---|---|
+| `wmts.terrascope.be` | ESA WorldCover 10 m (KVP WMTS, TIME mandatory, 3857 only, data to z14) | CC BY 4.0 · "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium" |
+| `storage.googleapis.com/water-world` | JRC Global Surface Water v1.5 occurrence (z ≤ 13, CORS `*`) | Copernicus, unrestricted · "Source: EC JRC/Google" |
+| `tiles.maps.eox.at` | EOX Sentinel-2 cloudless, one mosaic per year 2016–2025 (`s2cloudless-{year}_3857`; the UNSUFFIXED `s2cloudless` is 2016, not latest; z ≤ 18) | CC BY-NC-SA 4.0 for 2018–2025, CC BY 4.0 for 2016–17 · "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data YYYY)" |
+| `wmts.geo.admin.ch` | swisstopo: SWISSIMAGE 10 cm (z ≤ 20), the 1926–2025 `swissimage-product` time series, swissALTI3D hillshade (z ≤ 18); CH bbox only | OGD, free with attribution, fair use ≤ 20,000 users/day · "© Data: swisstopo" |
+
+Palettes for these come from `INLINE_PALETTES` (`classmap: "inline:…"` /
+`colormap: "inline:…"`), copied from the producer's own colormap and verified
+against fetched tiles, because none of them publishes a GIBS-style colormap
+XML. An untimed third-backend layer with a known epoch states it as
+`fixedWhen` (§2.9); a yearly one is `annual` and rides the whole annual
+machinery. NEVER add a fifth host without re-reading this paragraph. Everything else is baked offline by
 `scripts/refresh_data.py` into small static
 JSON files under `data/` (one function per dataset, runnable individually:
 `python3 scripts/refresh_data.py gpcp eobs`). Grids use the common format
@@ -1032,6 +1075,15 @@ worth keeping in front of a frontend reader:
   `ml/CLAUDE.md` §7, next to the rules that govern that work. What remains
   below is globe-app lore.
 
+- **`minimumZoomDistance` is a collision floor, not just a pinch limit.**
+  Cesium's ScreenSpaceCameraController lifts the camera to
+  `globeHeight + minimumZoomDistance` on any frame it finds it under
+  `_minimumCollisionTerrainHeight` (15 km) — unconditionally for a
+  controller-driven move (pinch), and for our own wheel zoom once its
+  globe-height filter has settled. The old value of 20 km therefore produced a
+  tug-of-war below ~20 km of view width, reported 2026-08-31 as "weird stutter
+  when zooming in too far". It is 100 m now (the fine tier has 10 cm imagery);
+  a test pins it ≤ 500 m and checks a 5 km view holds across 40 frames.
 - **GIBS tiling quirk.** The EPSG:4326 pyramid starts at 2×1 tiles (level 0),
   3×2 (level 1); resolution is 0.5625/2^L °/px, 512 px tiles. Edge tiles must
   declare their **full nominal span**, not the clamped visible part — clamping
@@ -1322,6 +1374,32 @@ under §3), JRC Global Surface Water (keyless GCS tiles, same question), SWOT
 (no tiles; bake-able as a 2 km grid), Copernicus DEM, AlphaEarth and Dynamic
 World (Earth Engine auth), swisstopo 10 cm (keyless WMTS, regional), ECOSTRESS
 and Landsat thermal (no tiles anywhere).
+
+**Swath layers under the Aggregate window (2026-08-31, Chris's ask):** the
+six daily swath layers carry `mosaic: true` — the window is a lookback and
+`MosaicProvider` renders the union of every day in it (newest on top, ≤16
+days), so "12 days" shows NISAR's whole repeat cycle; `overview: 5` paints
+the day's swaths as coarse strips from orbit so a reader knows where to zoom
+(the gate hides only dynamic/regional hosts now); the two radar layers carry
+a `legendKey` (Worldview's own reading of the false colour); and
+`minimumZoomDistance` dropped from 20 km to 100 m (Part 2: the collision
+floor that read as a zoom stutter).
+
+**The third backend (2026-08-31, same day, Chris's go):** six more layers
+from four keyless tile hosts beyond GIBS (§3, the tile-host bar) —
+**ESA WorldCover 10 m land cover** (Terrascope, eleven classes, inline
+palette, gated at 1,500 km because the tiles are rendered on demand) ·
+**JRC Global Surface Water occurrence** (41 years of Landsat in one 30 m map,
+inline 0–100 % ramp, a pixel-card row) · **EOX Sentinel-2 cloudless** (one
+10 m mosaic per year 2016–2025, `annual`, split-comparable across years) ·
+**swisstopo** SWISSIMAGE 10 cm, the 1926–2025 aerial time-travel series
+(`annual`) and the swissALTI3D 0.5 m hillshade, all `rect`-bounded to
+Switzerland. `xyzProvider` (stock WebMercatorTilingScheme) and
+`probeTileAt` (one entry point for a probe's tile address, GIBS or mercator)
+are the whole mechanism; `INLINE_PALETTES` the colormaps; `fixedWhen` the
+epoch stamp for untimed maps that have one. Still NOT here: native 10 m daily
+Sentinel-2 (no keyless host serves it), SWOT, Copernicus DEM, AlphaEarth,
+Dynamic World, ECOSTRESS.
 
 **Climatology grid layers (client-rendered from baked JSON, `GridProvider`):**
 GPCP v2.3 global precip (2.5°) · E-OBS v31 European precip (0.25°, bounded

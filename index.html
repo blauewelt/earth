@@ -236,6 +236,10 @@
           precipitation) are hidden rather than shown as a misleading single day — a note appears
           below when that happens. Averaged views cap zoom to stay responsive and sample up to 12
           days from the window.</p>
+        <p class="hint"><strong>Swath layers</strong> (Sentinel-2, Landsat, Sentinel-1, NISAR, the two
+          surface-water maps) treat the window as a <em>lookback</em> instead: they show the
+          <strong>union</strong> of every pass in it, newest on top — 12 days covers the whole planet
+          for NISAR — at full zoom depth. A pixel no pass reached stays blank.</p>
       </details>
       <!-- populated by updateDeltaHint(); static text is never shown -->
       <p class="hint hidden" id="delta-hint"></p>
@@ -868,7 +872,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">64f51e06</code></p>
+      <p class="build-line">Build <code id="build-id">c3786706</code></p>
     </section>
 
     <footer>
@@ -877,7 +881,11 @@
       <a href="https://argo.ucsd.edu">Argo</a> ·
       <a href="https://rapid.ac.uk">RAPID</a> ·
       <a href="https://www.geonames.org/export/">GeoNames</a> (CC&nbsp;BY&nbsp;4.0) ·
-      <a href="https://www.naturalearthdata.com">Natural Earth</a> (public domain)
+      <a href="https://www.naturalearthdata.com">Natural Earth</a> (public domain) ·
+      <a href="https://esa-worldcover.org">© ESA WorldCover project 2021</a> (contains modified Copernicus Sentinel data 2021, processed by the ESA WorldCover consortium; CC&nbsp;BY&nbsp;4.0) ·
+      <a href="https://global-surface-water.appspot.com/">Source: EC JRC/Google</a> ·
+      <a href="https://cloudless.eox.at">EOxCloudless</a> by EOX IT Services GmbH (contains modified Copernicus Sentinel data; CC&nbsp;BY-NC-SA&nbsp;4.0 for 2018–2025) ·
+      <a href="https://www.geo.admin.ch">© Data: swisstopo</a>
     </footer>
   </div>
 
@@ -913,6 +921,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=64f51e06"></script>
+  <script src="src/app.js?v=c3786706"></script>
 </body>
 </html>

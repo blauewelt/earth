@@ -65,8 +65,10 @@ test.describe("catalog.json", () => {
     // swisstopo, ECOSTRESS) document what is NOT a layer and why.
     const live = ["hls", "opera-rtc-s1", "nisar-gcov", "opera-dswx-hls", "opera-dswx-s1",
       "aster-gdem", "sedac-hbase", "sedac-gmis", "landsat-weld"];
-    const ref = ["sentinel-2-msi", "sentinel-1-sar", "swot-karin", "jrc-gsw", "copernicus-dem",
-      "esa-worldcover-wmts", "alphaearth", "swisstopo-wmts", "ecostress"];
+    // the third backend: live too, but keyless tile hosts other than GIBS
+    const liveXyz = ["esa-worldcover-wmts", "jrc-gsw", "eox-s2cloudless", "swisstopo-wmts"];
+    const ref = ["sentinel-2-msi", "sentinel-1-sar", "swot-karin", "copernicus-dem",
+      "alphaearth", "ecostress"];
     const byId = new Map(cat.records.map((r) => [r.id, r]));
     for (const id of live) {
       const r = byId.get(id);
@@ -76,12 +78,20 @@ test.describe("catalog.json", () => {
       expect(r.access, id).toMatch(/GIBS/);          // keyless tiles, CLAUDE.md §3
       expect(r.spatial, id).toMatch(/\b(10|15|20|30) m\b/);
     }
+    for (const id of liveXyz) {
+      const r = byId.get(id);
+      expect(r, id).toBeTruthy();
+      expect(r.globe, id).toBe(true);
+      expect(r.notes, id).toMatch(/Live globe layer in this app\./);
+      expect(r.access, id).toMatch(/no key/);
+      expect(r.license, id).toBeTruthy();
+    }
     for (const id of ref) {
       const r = byId.get(id);
       expect(r, id).toBeTruthy();
       expect(r.notes, id).not.toMatch(/Live globe layer/);
     }
-    expect(cat.record_count).toBeGreaterThanOrEqual(268);
+    expect(cat.record_count).toBeGreaterThanOrEqual(269);
     expect(cat.record_count).toBe(cat.records.length);
     const byDomain = {};
     for (const r of cat.records) byDomain[r.domain] = (byDomain[r.domain] || 0) + 1;

@@ -285,42 +285,62 @@ const GIBS_LAYERS = [
    * `aggregable` nor `deltaRange`; elevation is untimed, so nothing to average. */
   {
     id: "hls-s30",
+    overview: 5,
+    mosaic: true,
     doc: "https://lpdaac.usgs.gov/products/hlss30v002/",
     layer: "HLS_S30_Nadir_BRDF_Adjusted_Reflectance",
     title: "Sentinel-2 true colour (HLS, 30 m)",
     ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
     start: "2015-11-28", timed: true, on: false,
-    meta: "Sentinel-2 surface reflectance, 30 m — swaths for the chosen day · loads below 500 km",
+    meta: "Sentinel-2 surface reflectance, 30 m — the day's swaths (coarse from orbit, full detail below 500 km)",
   },
   {
     id: "hls-l30",
+    overview: 5,
+    mosaic: true,
     doc: "https://lpdaac.usgs.gov/products/hlsl30v002/",
     layer: "HLS_L30_Nadir_BRDF_Adjusted_Reflectance",
     title: "Landsat 8/9 true colour (HLS, 30 m)",
     ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
     start: "2013-03-22", timed: true, on: false,
-    meta: "Landsat surface reflectance, 30 m — swaths for the chosen day · loads below 500 km",
+    meta: "Landsat surface reflectance, 30 m — the day's swaths (coarse from orbit, full detail below 500 km)",
   },
   {
     id: "sar-s1",
+    overview: 5,
+    mosaic: true,
     doc: "https://www.jpl.nasa.gov/go/opera/products/rtc-product/",
     layer: "OPERA_L2_Radiometric_Terrain_Corrected_SAR_Sentinel-1",
+    // False colour: red and blue carry the co-polarised return (VV), green the
+    // cross-polarised one (VH) — Worldview's composite, and its own reading of it.
+    legendKey: [["vegetation (strong cross-pol)", [70, 190, 70]], ["urban, bare, sparse cover", [235, 210, 225]],
+      ["calm water · dry sand · frozen ground", [12, 12, 12]], ["rough water", [170, 60, 190]]],
+    classNote: "red + blue = VV (co-polarised), green = VH (cross-polarised) · brightness = how much of the pulse came back",
     title: "Sentinel-1 radar backscatter (OPERA RTC, 30 m)",
     ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
     start: "2025-01-10", timed: true, on: false,
-    meta: "C-band radar, sees through cloud and night — swaths for the chosen day · loads below 500 km",
+    meta: "C-band radar, sees through cloud and night — the day's swaths (coarse from orbit, full detail below 500 km)",
   },
   {
     id: "nisar",
+    overview: 5,
+    mosaic: true,
     doc: "https://nisar.jpl.nasa.gov/data/data-products/",
     layer: "NISAR_L2_Geocoded_Polarimetric_Covariance",
+    // Same composite rule as RTC-S1 (co-pol in red+blue, cross-pol in green)
+    // but NISAR's stretch reads differently — Worldview's own key.
+    legendKey: [["vegetation", [60, 200, 60]], ["urban, sparse vegetation", [240, 170, 40]],
+      ["calm water · dry sand · frozen ground", [40, 60, 200]], ["rough water", [220, 40, 40]]],
+    classNote: "red + blue = HH (co-polarised), green = HV (cross-polarised) · single-pol scenes (ocean, poles) run blue → green → orange → yellow with backscatter",
     title: "NISAR L-band radar backscatter (15 m)",
     ext: "png", tms: "15.625m", maxLevel: 12, fine: 300,
     start: "2025-10-29", timed: true, on: false,
-    meta: "The finest layer here: NASA–ISRO L-band radar, provisional — swaths for the chosen day · loads below 300 km",
+    meta: "NASA–ISRO L-band radar, provisional — the day's swaths (coarse from orbit, 15 m detail below 300 km)",
   },
   {
     id: "water-hls",
+    overview: 5,
+    mosaic: true,
     // CLASSIFICATION raster (open water / partial water / snow-ice / cloud):
     // class codes neither average nor subtract, so no posture flags.
     classmap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/OPERA_Dynamic_Surface_Water_Extent.xml",
@@ -331,10 +351,12 @@ const GIBS_LAYERS = [
     title: "Surface water extent (OPERA DSWx from HLS, 30 m)",
     ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
     start: "2016-01-07", timed: true, on: false,
-    meta: "Where there is open water on the chosen day, from optical imagery · 2018-08 → 2023-01 gap · loads below 500 km",
+    meta: "Open water on the chosen day, from optical imagery — the day's swaths (coarse from orbit, 30 m below 500 km) · 2018-08 → 2023-01 gap",
   },
   {
     id: "water-s1",
+    overview: 5,
+    mosaic: true,
     classmap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/OPERA_Dynamic_Surface_Water_Extent_S1.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/OPERA_Dynamic_Surface_Water_Extent_S1_H.svg",
     doc: "https://www.jpl.nasa.gov/go/opera/products/dswx-product-suite/",
@@ -343,7 +365,7 @@ const GIBS_LAYERS = [
     title: "Surface water extent (OPERA DSWx from Sentinel-1, 30 m)",
     ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
     start: "2023-12-15", timed: true, on: false,
-    meta: "Open water and flooded vegetation from radar — works under cloud, so it is the flood layer · loads below 500 km",
+    meta: "Open water and flooded vegetation from radar, works under cloud — the day's swaths (coarse from orbit, 30 m below 500 km)",
   },
   {
     id: "elevation",
@@ -410,6 +432,115 @@ const GIBS_LAYERS = [
     ext: "jpg", tms: "31.25m", maxLevel: 11,
     start: "1983-12-01", timed: true, on: false,
     meta: "Cloud-free yearly mosaics of 1980s–90s Landsat, 30 m — the date's YEAR picks it (1984–86, 1989–91, 1999–2001)",
+  },
+  /* ------------------------------------------------------ the third backend
+   * Keyless Web-Mercator tile hosts beyond GIBS (CLAUDE.md §3, tile-host bar;
+   * xyzProvider above). Each carries the attribution its licence requires. */
+  {
+    id: "worldcover",
+    res: "10 m",
+    // CLASSIFICATION: eleven land-cover classes, palette inline (the tile
+    // server publishes no colormap XML; INLINE_PALETTES.worldcover is its own
+    // colormap, verified pixel for pixel). Class codes neither average nor
+    // subtract — no posture flags. Terrascope renders tiles on demand from
+    // 10 m COGs, so above 1,500 km the layer is gated rather than asking a
+    // dynamic renderer for the whole planet on every pan.
+    xyz: "https://wmts.terrascope.be/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0" +
+      "&LAYER=esa-worldcover-map-10m-2021-v2_map&STYLE=default&TILEMATRIXSET=EPSG:3857" +
+      "&FORMAT=image/png&TIME=2021-01-01&TILEMATRIX={z}&TILECOL={x}&TILEROW={y}",
+    classmap: "inline:worldcover",
+    doc: "https://esa-worldcover.org/en/data-access",
+    credit: "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium",
+    classNote: "one class per 10 m pixel, mapped from a whole year of Sentinel-1 and Sentinel-2 — tiles are rendered live by Terrascope",
+    fixedWhen: { kind: "year", t: "2021" },
+    datelessNote: "<strong>Land cover (ESA WorldCover, 10 m)</strong> is one map for " +
+      "<strong>2021</strong> (v200), so the <strong>date selector doesn't change it</strong>.",
+    title: "Land cover (ESA WorldCover, 10 m)",
+    ext: "png", maxLevel: 14, fine: 1500,
+    timed: false, on: false,
+    meta: "Eleven classes at 10 m for 2021 — the finest global land-cover map · loads below 1,500 km",
+  },
+  {
+    id: "gsw",
+    // CONTINUOUS percent (0–100) via an inline ramp; UNTIMED — a 41-year
+    // aggregate has no date to average over, so no posture flags. probeNative:
+    // the tiles are exact ramp colours only at their native z13.
+    xyz: "https://storage.googleapis.com/water-world/tiles2024/occurrence/{z}/{x}/{y}.png",
+    colormap: "inline:gsw-occurrence",
+    probeNative: true,
+    doc: "https://global-surface-water.appspot.com/",
+    credit: "Source: EC JRC/Google",
+    fixedWhen: { kind: "period", t: "1984-2024" },
+    datelessNote: "<strong>Water occurrence (JRC GSW, 30 m)</strong> sums <strong>41 years</strong> " +
+      "of Landsat (1984–2024) into one map, so the <strong>date selector doesn't change it</strong>.",
+    title: "Water occurrence 1984–2024 (JRC GSW, 30 m)",
+    ext: "png", maxLevel: 13,
+    timed: false, on: false,
+    meta: "How often each 30 m pixel was water across 41 years of Landsat — permanent lakes to once-a-decade floods",
+  },
+  {
+    id: "s2cloudless",
+    // Photographic yearly mosaics, one per year 2016–2025: `annual` so the
+    // date's year picks the mosaic exactly as it picks DIST-ANN's map. No
+    // posture flags (a photograph); a split comparison (2016 vs 2025) works
+    // through the ordinary `timed` path.
+    xyz: "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-{year}_3857/default/g/{z}/{y}/{x}.jpg",
+    doc: "https://s2maps.eu/",
+    credit: "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data)",
+    annual: true,
+    endTime: "2025-01-01",
+    title: "Sentinel-2 cloudless mosaic (EOX, 10 m, yearly)",
+    ext: "jpg", maxLevel: 18,
+    start: "2016-01-01", timed: true, on: false,
+    meta: "The whole planet at 10 m with the clouds removed — one mosaic per year 2016–2025, the date's YEAR picks it",
+  },
+  {
+    id: "swissimage",
+    res: "10 cm",
+    // Regional: `rect` is Switzerland + Liechtenstein, the service's own
+    // bounding box — outside it geo.admin.ch answers 400, not a blank tile.
+    xyz: "https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg",
+    rect: [5.140242, 45.398181, 11.47757, 48.230651],
+    doc: "https://www.swisstopo.admin.ch/en/orthoimage-swissimage-10",
+    credit: "© Data: swisstopo",
+    datelessNote: "<strong>SWISSIMAGE (10 cm)</strong> is swisstopo's current orthophoto mosaic " +
+      "(each region re-flown every three years), so the <strong>date selector doesn't change " +
+      "it</strong> — for past years use the SWISSIMAGE time travel layer.",
+    title: "SWISSIMAGE orthophoto (swisstopo, 10 cm)",
+    ext: "jpg", maxLevel: 20, fine: 1500,
+    timed: false, on: false,
+    meta: "Switzerland at 10 cm — the finest imagery on this globe · Switzerland only · loads below 1,500 km",
+  },
+  {
+    id: "swissimage-history",
+    res: "10 cm – 1 m",
+    // Aerial surveys by year, 1926 → 2025 (every year but 1928 is served):
+    // `annual`, the date's year picks the flight year. Pre-2000 years need a
+    // typed date — the steppers stop at 2000. Black-and-white before ~1998.
+    xyz: "https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage-product/default/{year}/3857/{z}/{x}/{y}.jpeg",
+    rect: [5.140242, 45.398181, 11.47757, 48.230651],
+    doc: "https://www.swisstopo.admin.ch/en/timetravel-aerial-images",
+    credit: "© Data: swisstopo",
+    annual: true,
+    endTime: "2025-01-01",
+    title: "SWISSIMAGE time travel (swisstopo, by year)",
+    ext: "jpg", maxLevel: 20, fine: 1500,
+    start: "1926-01-01", timed: true, on: false,
+    meta: "A century of Swiss aerial photographs, 1926–2025 — the date's YEAR picks the flight · Switzerland only · loads below 1,500 km",
+  },
+  {
+    id: "swissrelief",
+    res: "0.5 m",
+    xyz: "https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissalti3d-reliefschattierung/default/current/3857/{z}/{x}/{y}.png",
+    rect: [5.140242, 45.398181, 11.47757, 48.230651],
+    doc: "https://www.swisstopo.admin.ch/en/height-model-swissalti3d",
+    credit: "© Data: swisstopo",
+    datelessNote: "<strong>Hillshade (swissALTI3D)</strong> is a fixed terrain model (0.5 m lidar), " +
+      "so the <strong>date selector doesn't change it</strong>.",
+    title: "Hillshade (swissALTI3D, 0.5 m)",
+    ext: "png", maxLevel: 18, fine: 1500,
+    timed: false, on: false,
+    meta: "Shaded relief from swisstopo's 0.5 m lidar terrain model · Switzerland only · loads below 1,500 km",
   },
   {
     id: "grace",
@@ -994,6 +1125,10 @@ function whenAt(kind, t) { return t ? { kind, t } : null; }
 // sea ice) and every snap (monthly, annual, 5-day, sub-daily) lands in the
 // stamp for free — and stays right if the layer's config later changes.
 function whenOfGibs(cfg, dateStr = state.date) {
+  // An untimed raster with a KNOWN epoch (WorldCover 2021, the 2010 Landsat
+  // maps, GSW's 1984–2024 aggregate) states it here — derived from the
+  // product's own metadata, typed once in its config, never invented.
+  if (!cfg.timed && cfg.fixedWhen) return cfg.fixedWhen;
   const t = gibsTime(cfg, dateStr);
   if (!t || t === "default") return null;      // untimed and undated: say nothing
   if (cfg.annual) return whenAt("year", String(annualYearOf(cfg, t)));
@@ -1117,12 +1252,75 @@ function gibsProvider(cfg, dateStr) {
     style: "default",
     format: cfg.ext === "jpg" ? "image/jpeg" : "image/png",
     tileMatrixSetID: cfg.tms,
-    maximumLevel: cfg.maxLevel,
+    maximumLevel: fineMaxLevel(cfg),   // == cfg.maxLevel unless gated with an overview
     tileWidth: 512,
     tileHeight: 512,
     tilingScheme: new GIBSGeographicTilingScheme(),
     credit: new Cesium.Credit("NASA GIBS / Worldview"),
   });
+}
+
+/* ------------------------------------------------------ the third backend
+ * Four keyless tile hosts beyond GIBS and GBIF (CLAUDE.md §3, the tile-host
+ * bar; every one measured 2026-08-31): ESA WorldCover via Terrascope, JRC
+ * Global Surface Water on Google Cloud Storage, EOX Sentinel-2 cloudless, and
+ * swisstopo's geo.admin.ch. All are Web Mercator (EPSG:3857), 256 px, XYZ
+ * (top-left origin) — Cesium's stock WebMercatorTilingScheme, not the GIBS
+ * one. A layer declares `xyz: "<template>"` with {z}/{x}/{y} and, for the
+ * yearly mosaics, {year}. `annual: true` + `start`/`endTime` reuse the whole
+ * GIBS annual machinery (gibsTimeStatic snaps and clamps on years; the annual
+ * toast names the year showing), so a date on the selector picks the mosaic
+ * year exactly as it picks DIST-ANN's. `rect` bounds a regional service —
+ * swisstopo answers 400, not a blank tile, outside Switzerland, so without it
+ * Cesium would spam errors worldwide. */
+function xyzUrlTemplate(cfg, dateStr) {
+  let url = cfg.xyz;
+  if (url.includes("{year}")) url = url.replace("{year}", gibsTime(cfg, dateStr).slice(0, 4));
+  return url;
+}
+
+function xyzProvider(cfg, dateStr) {
+  const opts = {
+    url: xyzUrlTemplate(cfg, dateStr),
+    tilingScheme: new Cesium.WebMercatorTilingScheme(),
+    tileWidth: 256, tileHeight: 256,
+    minimumLevel: cfg.minLevel || 0,
+    maximumLevel: cfg.maxLevel,
+    hasAlphaChannel: cfg.ext !== "jpg",
+    credit: new Cesium.Credit(cfg.credit || cfg.title),
+  };
+  if (cfg.rect) opts.rectangle = Cesium.Rectangle.fromDegrees(...cfg.rect);
+  return new Cesium.UrlTemplateImageryProvider(opts);
+}
+
+// One raster, one provider: GIBS for a `layer`, the third backend for an `xyz`.
+function rasterProvider(cfg, dateStr) {
+  return cfg.xyz ? xyzProvider(cfg, dateStr) : gibsProvider(cfg, dateStr);
+}
+
+/* Web-Mercator tile address of a lon/lat at level z (256 px tiles), plus the
+ * geographic footprint of that source pixel — the XYZ twin of tileCoordsAt /
+ * probeCellBounds. `probeTileAt` is the one entry point the probes use, so a
+ * layer's scheme is decided in exactly one place. */
+function mercTileCoordsAt(lon, lat, z) {
+  const n = 2 ** z;
+  const latR = Cesium.Math.toRadians(Math.max(-85.0511, Math.min(85.0511, lat)));
+  const fx = (lon + 180) / 360 * n;
+  const fy = (1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n;
+  const x = Math.min(n - 1, Math.max(0, Math.floor(fx)));
+  const y = Math.min(n - 1, Math.max(0, Math.floor(fy)));
+  const px = Math.min(255, Math.max(0, Math.floor((fx - x) * 256)));
+  const py = Math.min(255, Math.max(0, Math.floor((fy - y) * 256)));
+  const lonOf = (X) => X / n * 360 - 180;
+  const latOf = (Y) => Cesium.Math.toDegrees(Math.atan(Math.sinh(Math.PI * (1 - 2 * Y / n))));
+  const cell = { west: lonOf(x + px / 256), east: lonOf(x + (px + 1) / 256),
+                 north: latOf(y + py / 256), south: latOf(y + (py + 1) / 256) };
+  return { x, y, px, py, cell };
+}
+function probeTileAt(cfg, lon, lat, z) {
+  if (cfg.xyz) return mercTileCoordsAt(lon, lat, z);
+  const t = tileCoordsAt(lon, lat, z);
+  return { ...t, cell: probeCellBounds(z, t.x, t.y, t.px, t.py) };
 }
 
 /* ------------------------------------------------------------------- viewer */
@@ -1859,7 +2057,17 @@ function flyToPlace(p) {
  * Browsers report a MacBook-style trackpad pinch as a wheel event with
  * ctrlKey set, which Cesium ignores unless registered explicitly. */
 const sscc = viewer.scene.screenSpaceCameraController;
-sscc.minimumZoomDistance = 20000;  // allow getting closer (20 km)
+/* 100 m, not 20 km. This number is not only the pinch limit: with collision
+ * detection on (the default) the controller's per-frame height adjustment
+ * lifts the camera back to `globeHeight + minimumZoomDistance` whenever it
+ * finds it below `_minimumCollisionTerrainHeight` (15 km) — for a pinch on
+ * every frame, for our wheel zoom once the globe-height filter settles. At
+ * 20 km that was a tug-of-war between the gesture pushing down and Cesium
+ * snapping back up: Chris, 2026-08-31 — "weird stutter when zooming in too
+ * far (when it hits some zoom boundary?) e.g. if the displayed area is below
+ * 20 km or so". The fine tier has 10 cm imagery to look at, so the floor is
+ * a hundred metres above the ellipsoid and the stutter is gone. */
+sscc.minimumZoomDistance = 100;
 // Keep native touch-pinch zoom; drive wheel/trackpad zoom ourselves (below) so
 // one gesture covers far more distance than Cesium's default.
 sscc.zoomEventTypes = [Cesium.CameraEventType.PINCH];
@@ -2449,6 +2657,67 @@ class AggregateProvider {
 }
 const SSTAggregateProvider = AggregateProvider;   // back-compat alias
 
+/* ------------------------------------------------------------ the mosaic
+ * A swath product covers, on any one day, only the strips its satellite flew:
+ * NISAR needs 12 days to see the whole planet, Sentinel-1 6–12, Landsat 8,
+ * Sentinel-2 2–5. Averaging such days is meaningless (you would average
+ * "flew over" with "didn't"), but a UNION is exactly what the reader wants —
+ * Chris, 2026-08-31: "re-use the aggregation UX controls to compute a
+ * 'union' across a set of days, such that the whole earth is covered".
+ *
+ * So `mosaic: true` layers take the Aggregate window as a LOOKBACK: every day
+ * of it (consecutive, not the 12 evenly-spaced samples a mean uses — a swath
+ * missed on day 7 is not recovered by sampling days 6 and 8), capped at
+ * MOSAIC_MAX_DAYS, drawn oldest first so the NEWEST observation of each pixel
+ * wins. Transparent stays transparent: a pixel no pass reached in the window
+ * is still honestly blank. The provider keeps the layer's full pyramid (an
+ * averaged window caps at level 4 because its arithmetic needs the pixels;
+ * this is compositing, and Cesium only asks for the tiles in view) and
+ * honours the fine gate's overview cap like the single-day provider. */
+const MOSAIC_MAX_DAYS = 16;   // ≥ the longest repeat cycle here (NISAR, 12 d)
+function mosaicDates(cfg, endDate, windowDays) {
+  const n = Math.min(MOSAIC_MAX_DAYS, Math.max(1, Math.round(windowDays)));
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(gibsTime(cfg, addDays(endDate, -i)));
+  return [...new Set(out)];      // newest first; a clamped archive dedupes
+}
+function mosaicLabel(windowDays) {
+  const n = Math.min(MOSAIC_MAX_DAYS, Math.max(1, Math.round(windowDays)));
+  return `union of the past ${n} days` + (Math.round(windowDays) > n ? ` (the most this layer composites)` : ``);
+}
+class MosaicProvider {
+  constructor(cfg, endDate, windowDays) {
+    this._cfg = cfg;
+    this._dates = mosaicDates(cfg, endDate, windowDays);
+    this._window = windowDays;
+    this.tilingScheme = new GIBSGeographicTilingScheme();
+    this.rectangle = this.tilingScheme.rectangle;
+    this.tileWidth = 512;
+    this.tileHeight = 512;
+    this.maximumLevel = fineMaxLevel(cfg);
+    this.minimumLevel = 0;
+    this.errorEvent = new Cesium.Event();
+    this.credit = new Cesium.Credit(`${cfg.title}, ${mosaicLabel(windowDays)}, from NASA GIBS`);
+    this.hasAlphaChannel = true;
+    this.ready = true;
+  }
+  get window() { return this._window; }
+  get layerId() { return this._cfg.id; }
+  get dates() { return this._dates; }
+  getTileCredits() { return undefined; }
+  pickFeatures() { return undefined; }
+  async requestImage(x, y, level) {
+    const imgs = await Promise.all(this._dates.map((d) =>
+      sstFetchBitmap(sstFetchUrl(this._cfg, d, x, y, level))));
+    const canvas = document.createElement("canvas");
+    canvas.width = 512; canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+    // oldest first, newest last: the newest pass paints over the older ones
+    for (let i = imgs.length - 1; i >= 0; i--) if (imgs[i]) ctx.drawImage(imgs[i], 0, 0, 512, 512);
+    return canvas;
+  }
+}
+
 /* Per-pixel difference of two rolling-window means for ANY continuous
  * colormapped layer (SST, SST anomalies, sea ice, …): value(now) − value(past),
  * with the layer's own colormap inverted to physical units and a ±deltaRange
@@ -2819,7 +3088,11 @@ function providersFor(cfg, dateStr) {
   // day-vs-day differencing would be unsound). Essential for clear-sky
   // products where any single day is mostly gaps.
   const canWindow = (deltaable || cfg.aggregable) && !!cfg.colormap;
-  const windowed = win > 1 && canWindow && cfg.timed;
+  // A swath product composites its window instead of averaging it (MosaicProvider).
+  const mosaicable = !!cfg.mosaic && cfg.timed;
+  const windowed = win > 1 && (canWindow || mosaicable) && cfg.timed;
+  const windowProvider = (d) => mosaicable ? new MosaicProvider(cfg, d, win)
+                                           : new SSTAggregateProvider(cfg, d, win);
   const out = { suppressed: false, providers: [], isDelta: false, isRatio: false, isAggregate: false };
 
   // While an aggregation window is active, everything on screen must actually
@@ -2828,7 +3101,7 @@ function providersFor(cfg, dateStr) {
   // data under a "past N days" label — so it displays NOTHING instead, and
   // the panel hint explains why. (Untimed composites and the climatology
   // grids stay: they already are long-period averages.)
-  if (win > 1 && cfg.timed && !canWindow) {
+  if (win > 1 && cfg.timed && !canWindow && !mosaicable) {
     out.suppressed = true;
     return out;
   }
@@ -2853,18 +3126,18 @@ function providersFor(cfg, dateStr) {
   } else if (comparing && state.compareMode === "split") {
     // Side-by-side: right = current, left = past. Windowed means for SST, raw tiles otherwise.
     out.providers.push({
-      provider: windowed ? new SSTAggregateProvider(cfg, dateStr, win) : gibsProvider(cfg, dateStr),
+      provider: windowed ? windowProvider(dateStr) : rasterProvider(cfg, dateStr),
       splitDirection: Cesium.SplitDirection.RIGHT,
     });
     out.providers.push({
-      provider: windowed ? new SSTAggregateProvider(cfg, cmp, win) : gibsProvider(cfg, cmp),
+      provider: windowed ? windowProvider(cmp) : rasterProvider(cfg, cmp),
       splitDirection: Cesium.SplitDirection.LEFT,
     });
     out.isAggregate = windowed;
   } else {
-    // Not comparing: single layer — windowed mean for SST, raw tile otherwise
+    // Not comparing: single layer — windowed mean (or mosaic) or the raw tile
     out.providers.push({
-      provider: windowed ? new SSTAggregateProvider(cfg, dateStr, win) : gibsProvider(cfg, dateStr),
+      provider: windowed ? windowProvider(dateStr) : rasterProvider(cfg, dateStr),
     });
     out.isAggregate = windowed;
   }
@@ -2949,15 +3222,32 @@ function addLayer(cfg) {
 function fineGated(cfg) {
   return !!cfg?.fine && cameraHeight() > cfg.fine * 1000;
 }
+/* Two gate behaviours. A layer with `overview: <level>` — every GIBS swath
+ * product — stays SHOWN above its gate but capped at that pyramid level, so
+ * from orbit it paints the day's swaths as coarse strips (a few dozen cheap
+ * tiles) and answers "where did the satellite fly today, where should I
+ * zoom": Chris, 2026-08-31, on a blank Landsat view — "indicate the partial
+ * area covered already in the zoomed out version, such that one knows where
+ * to look". Descending past the gate rebuilds the layer at full depth. A
+ * layer without `overview` (a dynamic renderer, a regional service) is hidden
+ * above the gate instead: nothing requested at all. */
+function fineMaxLevel(cfg) {
+  return cfg.fine && cfg.overview != null && fineGated(cfg) ? cfg.overview : cfg.maxLevel;
+}
 function applyFineGate(entry) {
   if (!entry?.cfg?.fine) return;
-  const show = !fineGated(entry.cfg);
+  const show = entry.cfg.overview != null || !fineGated(entry.cfg);
   if (entry.layer) entry.layer.show = show;
   if (entry.cmpLayer) entry.cmpLayer.show = show;
 }
+// The pixel size a fine layer's row quotes: declared (`res`) for the third
+// backend, derived from the matrix set for GIBS.
+function fineResLabel(cfg) {
+  return cfg.res || (cfg.tms === "15.625m" ? "15 m" : "30 m");
+}
 function fmtKm(m) {
   const km = m / 1000;
-  return km >= 100 ? String(Math.round(km)) : km >= 10 ? km.toFixed(1) : km.toFixed(2);
+  return km >= 100 ? Math.round(km).toLocaleString("en-US") : km >= 10 ? km.toFixed(1) : km.toFixed(2);
 }
 /* The row's one-line status under a fine layer: what it is doing right now
  * and, when hidden, what would change that. Updated on every camera move so
@@ -2973,21 +3263,40 @@ function updateFineGates() {
     hint.hidden = !on;
     if (!on) continue;
     const gated = fineGated(cfg);
+    // An overview layer whose depth no longer matches the camera's side of
+    // the gate is rebuilt through the ordinary held refresh — once per
+    // crossing, never per frame.
+    if (cfg.overview != null && entry.layer &&
+        entry.layer.imageryProvider?.maximumLevel !== fineMaxLevel(cfg)) {
+      retireLayer(cfg.id);
+      addLayer(cfg);
+      scheduleSweep();
+    }
     hint.classList.toggle("fine-gated", gated);
-    hint.textContent = gated
-      ? `⤵ zoom in — hidden above ${cfg.fine} km (you're at ${fmtKm(cameraHeight())} km)`
-      : `showing ${cfg.tms === "15.625m" ? "15" : "30"} m tiles for the area in view`;
+    const mos = entry.isAggregate && cfg.mosaic ? ` · ${mosaicLabel(state.windowDays)}` : ``;
+    hint.textContent = (gated
+      ? (cfg.overview != null
+        ? `coverage overview — the day's swaths as coarse strips · zoom in below ${fmtKm(cfg.fine * 1000)} km for ${fineResLabel(cfg)} detail (you're at ${fmtKm(cameraHeight())} km)`
+        : `⤵ zoom in — hidden above ${fmtKm(cfg.fine * 1000)} km (you're at ${fmtKm(cameraHeight())} km)`)
+      : `showing ${fineResLabel(cfg)} tiles for the area in view`) + mos;
   }
 }
 /* Said once, on enable, when the layer will not appear until the camera comes
  * down — otherwise a checked box and an unchanged globe read as a broken layer. */
 function maybeFineToast(cfg) {
   if (!cfg?.fine || !fineGated(cfg)) return;
+  if (cfg.overview != null) {
+    showToast(`<strong>${cfg.title}</strong> shows the satellite's <strong>swaths for the chosen ` +
+      `day</strong> — from up here as coarse strips, so you can see where it flew. Blank means ` +
+      `no pass that day there, not no data: <strong>step the date</strong> or move to a strip. ` +
+      `Zoom in below <strong>${fmtKm(cfg.fine * 1000)} km</strong> for the ${fineResLabel(cfg)} ` +
+      `detail (you're at ${fmtKm(cameraHeight())} km).`, { key: `fine-${cfg.id}` });
+    return;
+  }
   showToast(`<strong>${cfg.title}</strong> is a fine-resolution layer, so its tiles are ` +
-    `fetched only for the area in view: <strong>zoom in below ${cfg.fine} km</strong> to load ` +
-    `it (you're at ${fmtKm(cameraHeight())} km). ` +
-    (cfg.timed ? `It shows the satellite's <strong>swaths for the chosen day</strong> — blank ` +
-      `means no pass that day, not no data.` : ``), { key: `fine-${cfg.id}` });
+    `fetched only for the area in view: <strong>zoom in below ${fmtKm(cfg.fine * 1000)} km</strong> ` +
+    `to load it (you're at ${fmtKm(cameraHeight())} km). ` +
+    (cfg.rect ? `It covers <strong>Switzerland only</strong>. ` : ``), { key: `fine-${cfg.id}` });
 }
 
 function removeLayer(id) {
@@ -3564,8 +3873,9 @@ function updateLegends() {
     } else if (e.cfg.grid) {
       panel.appendChild(gridLegendEl(e.cfg));
       any = true;
-    } else if (e.cfg.classmap || e.cfg.colormap || e.cfg.legend) {
-      panel.appendChild(layerLegendEl(e.cfg, e.isAggregate ? `${e.cfg.title} · ${windowLabel(state.windowDays)} mean` : null));
+    } else if (e.cfg.classmap || e.cfg.colormap || e.cfg.legend || e.cfg.legendKey) {
+      panel.appendChild(layerLegendEl(e.cfg, e.isAggregate
+        ? `${e.cfg.title} · ${e.cfg.mosaic ? mosaicLabel(state.windowDays) : `${windowLabel(state.windowDays)} mean`}` : null));
       any = true;
     }
   }
@@ -3719,6 +4029,8 @@ document.addEventListener("change", updateActiveChips);
 
 const colormapCache = new Map();
 function getColormapEntries(url) {
+  const inl = inlinePalette(url);
+  if (inl !== undefined) return Promise.resolve(inl);
   if (!colormapCache.has(url)) {
     colormapCache.set(
       url,
@@ -3769,7 +4081,39 @@ function parseColormapEntries(xml) {
  * own probe read-out (a label, not a formatted float). Layers declare them as
  * `classmap:` instead of `colormap:`. */
 const classCache = new Map();
+/* Palettes that live in THIS file rather than at a GIBS colormap URL, for the
+ * third-backend layers whose producers publish no colormap XML. Same shapes
+ * as the parsers produce, so everything downstream — legend, LUT, probe, the
+ * pixel card — is unchanged. "inline:<name>" in a `classmap`/`colormap` field
+ * resolves here. Sources: WorldCover from the tile server's own colormap
+ * (titiler.terrascope.be/colorMaps/worldcover, verified against fetched
+ * tiles pixel for pixel); GSW occurrence from JRC's occurrence.qml. */
+const INLINE_PALETTES = {
+  worldcover: { classes: [
+    [10, "Tree cover", [0, 100, 0]], [20, "Shrubland", [255, 187, 34]],
+    [30, "Grassland", [255, 255, 76]], [40, "Cropland", [240, 150, 255]],
+    [50, "Built-up", [250, 0, 0]], [60, "Bare / sparse vegetation", [180, 180, 180]],
+    [70, "Snow and ice", [240, 240, 240]], [80, "Permanent water", [0, 100, 200]],
+    [90, "Herbaceous wetland", [0, 150, 160]], [95, "Mangroves", [0, 207, 117]],
+    [100, "Moss and lichen", [250, 230, 160]],
+  ].map(([code, label, rgb]) => ({ code: String(code), label, rgb })) },
+  // 0 → 100 % water occurrence, white → pink → purple → blue, one entry per
+  // percent; the tiles carry the ramp colour in RGB with a proportional alpha.
+  "gsw-occurrence": (() => {
+    const hex = "ffffff fefcfc fef9fa fef7f7 fef4f5 fef1f2 feeff0 feeced feeaeb fee7e8 fce5e8 fbe3e7 fae0e5 f9dee4 f8dce3 f7d9e1 f6d7e0 f5d5df f4d2dd f3d0dc f2cedb f1cbd9 f0c9d8 efc7d7 eec4d5 efbfcf ecbdcf eabbcf e8b9cf e6b7cf e4b5cf e2b3cf e0b1cf deafcf dcadcf daabcf d8a9cf d6a7cf d4a5cf d2a3cf d0a1cf ce9fcf cc9dcf ca9bcf c899cf c697cf c495cf c293cf c091cf be8fcf bf7fbf bd7bc0 bb77c1 b973c2 b76fc3 b56bc4 b367c5 b163c6 af5fc7 ad5bc8 ab57c9 a953ca a74fcb a54bcc a347cd a143ce 9f3fcf 9d3bd0 9b37d1 9935d2 9731d3 952dd4 9329d5 9125d6 8f21d7 6f3fcf 6b3bd1 6737d3 6333d5 5f2fd7 5b2bd9 5727db 5323dd 4f1fdf 4b1be1 4717e3 4313e5 3f0fe7 3b0be9 3707eb 3019e8 2b16ea 2613ec 2110ee 1c0df0 170af2 1207f4 0d04f6 0a05fa 0502fc 0000ff".split(" ");
+    const entries = hex.map((h, i) => ({
+      rgb: [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)],
+      lo: i - 0.5, hi: i + 0.5 }));
+    return { units: "%", entries };
+  })(),
+};
+function inlinePalette(url) {
+  return url?.startsWith("inline:") ? INLINE_PALETTES[url.slice(7)] || null : undefined;
+}
+
 function getClassEntries(url) {
+  const inl = inlinePalette(url);
+  if (inl !== undefined) return Promise.resolve(inl);
   if (!classCache.has(url)) {
     classCache.set(url, fetch(url).then((r) => r.text()).then(parseClassEntries).catch(() => null));
   }
@@ -3874,7 +4218,13 @@ function layerLegendEl(cfg, titleOverride) {
       );
     }
   };
-  if (cfg.classmap) {
+  if (cfg.legendKey) {
+    // A false-colour COMPOSITE has no colormap to invert — each pixel is three
+    // measurements painted as RGB — but it still needs a key, or the picture
+    // is a pattern rather than a reading. Same swatch rows as a classification
+    // legend, deliberately: "green = vegetation" is a class, not a value.
+    buildClassLegend(div, { classes: cfg.legendKey.map(([label, rgb]) => ({ label, rgb })) }, cfg);
+  } else if (cfg.classmap) {
     getClassEntries(cfg.classmap).then((cm) => {
       if (cm) buildClassLegend(div, cm, cfg);
       else fallback();
@@ -4497,6 +4847,48 @@ const LAYER_FACTS = {
          "the cursor — a reservoir filled, a city grown, a forest gone. Only " +
          "three spans were produced, so the annual toast names the year " +
          "actually showing." },
+  worldcover: { rec: "fixed — one map for 2021 (v200; a 2020 v100 map also exists), ignores the date selector", int: "single map, built from a full year of Sentinel-1 and Sentinel-2", sp: "10 m — the finest global thematic map",
+    sum: "What covers the ground, everywhere, at 10 m: trees, shrubs, grass, " +
+         "crops, built-up, bare, snow, water, wetland, mangrove, moss. ESA's " +
+         "WorldCover classifies a year of Sentinel-1 radar and Sentinel-2 " +
+         "optical imagery per pixel; it is the base layer under most land " +
+         "questions — where the forest edge is, how far a city sprawls, which " +
+         "valley floor is cropland. Tiles come live from Terrascope (ESA/VITO), " +
+         "the first tile host here beyond NASA, keyless and CC BY 4.0." },
+  gsw: { rec: "1984–2024 in one map (v1.5, updated 2026-08) — an aggregate, ignores the date selector", int: "single map: the fraction of valid Landsat observations in which the pixel was water", sp: "30 m",
+    sum: "Where water has been, over forty-one years: the share of clear " +
+         "Landsat looks in which each 30 m pixel was water. Deep blue is a " +
+         "permanent lake; pale pink is a floodplain that was wet once. The " +
+         "Joint Research Centre's Global Surface Water is the standard record " +
+         "of reservoirs filling, lakes vanishing and rivers migrating; hover " +
+         "reads the percentage. Tiles from JRC's public bucket; " +
+         "Source: EC JRC/Google." },
+  s2cloudless: { rec: "2016 → 2025, one cloud-free mosaic per year", int: "yearly — the date's YEAR picks the mosaic; day and month are ignored", sp: "10 m (Sentinel-2's native resolution, to zoom 18)",
+    sum: "The clearest picture of the planet: EOX's Sentinel-2 cloudless " +
+         "mosaics pick, for every 10 m pixel, the least cloudy view of the " +
+         "year and stitch them into one seamless image. Pair it with the daily " +
+         "HLS layer to see one pass against the year's composite, or split " +
+         "2016 against 2025 to see a decade of change. CC BY-NC-SA for " +
+         "2018–2025, CC BY for 2016–2017; attribution: EOxCloudless by EOX." },
+  swissimage: { rec: "current — each region re-flown on a three-year cycle, ignores the date selector", int: "single mosaic", sp: "10 cm (25 cm in the high Alps) — Switzerland and Liechtenstein only",
+    sum: "The finest imagery on this globe: swisstopo's national orthophoto at " +
+         "ten centimetres, where a car is forty pixels long and a vineyard row " +
+         "is a line. Zoom all the way in over any Swiss town; outside the " +
+         "country's bounding box the service serves nothing, so the layer " +
+         "simply ends at the border. Open government data, © swisstopo." },
+  "swissimage-history": { rec: "1926 → 2025, one flight year per map (every year but 1928 is served); type a date — the steppers stop at 2000", int: "yearly — the date's YEAR picks the aerial survey; coverage per year is partial, so blank means no flight that year there", sp: "10 cm to ~1 m by year — Switzerland only",
+    sum: "A century of Switzerland from the air. swisstopo's time-travel " +
+         "service serves the aerial surveys by flight year: black-and-white " +
+         "before the late 1990s, colour since. Set the date's year to 1946 " +
+         "over a glacier tongue, then to 2025, and the retreat needs no " +
+         "explanation; or watch a village become a suburb decade by decade. " +
+         "Open government data, © swisstopo." },
+  swissrelief: { rec: "fixed — swissALTI3D, lidar flown 2017–2023, ignores the date selector", int: "single model", sp: "0.5 m terrain, shaded — Switzerland only",
+    sum: "The shape of the Alps at half a metre: hillshade computed from " +
+         "swissALTI3D, the national lidar terrain model. Every moraine, " +
+         "rockfall scar, terrace and river braid reads as relief. Put it at " +
+         "half opacity under the orthophoto or the land-cover map to see why " +
+         "things are where they are. Open government data, © swisstopo." },
   drivers: { rec: "2001–2025, attributed in one map (v1.3)", int: "not dated — re-baked when WRI publishes a new version", sp: "1 km source, binned here to 0.25° by dominant class",
     sum: "Why the forest went. WRI and Google DeepMind trained a classifier on " +
          "tens of thousands of hand-labelled sites to name the dominant cause " +
@@ -5323,12 +5715,14 @@ function getInvLut(url) {
 
 const probeTileCache = new Map();   // "layer|date|z|x|y" → Promise<ImageBitmap|null>
 function fetchProbeTile(cfg, date, z, x, y) {
-  const key = `${cfg.layer}|${date}|${z}|${x}|${y}`;
+  const key = `${cfg.id}|${date}|${z}|${x}|${y}`;
   const time = gibsTime(cfg, date);
-  const url = GIBS_URL
-    .replace("{layer}", cfg.layer).replace("{time}", time)
-    .replace("{tms}", cfg.tms).replace("{ext}", cfg.ext)
-    .replace("{TileMatrix}", z).replace("{TileRow}", y).replace("{TileCol}", x);
+  const url = cfg.xyz
+    ? xyzUrlTemplate(cfg, date).replace("{z}", z).replace("{x}", x).replace("{y}", y)
+    : GIBS_URL
+      .replace("{layer}", cfg.layer).replace("{time}", time)
+      .replace("{tms}", cfg.tms).replace("{ext}", cfg.ext)
+      .replace("{TileMatrix}", z).replace("{TileRow}", y).replace("{TileCol}", x);
   if (!probeTileCache.has(key)) {
     probeTileCache.set(key, sstFetchBitmap(url));
     if (probeTileCache.size > 48) probeTileCache.delete(probeTileCache.keys().next().value);
@@ -5514,9 +5908,17 @@ async function probeEntryValue(entry, carto) {
     const lut = await getClassLut(cfg.classmap);
     if (!lut) return null;
     const z = cfg.maxLevel;
-    const t = tileCoordsAt(lon, lat, z);
-    const base = { title: cfg.title, lon, lat, when: whenOfGibs(cfg),
-                   cell: probeCellBounds(z, t.x, t.y, t.px, t.py) };
+    const t = probeTileAt(cfg, lon, lat, z);
+    const base = { title: cfg.title, lon, lat, when: whenOfGibs(cfg), cell: t.cell };
+    if (entry.isAggregate && cfg.mosaic) {
+      // The mosaic paints the newest pass on top, so the probe walks the same
+      // dates newest-first and stamps the answer with the day it came from.
+      for (const d of mosaicDates(cfg, state.date, state.windowDays)) {
+        const label = await probeClassPixel(cfg, d, z, t.x, t.y, t.px, t.py, lut);
+        if (label != null) return { ...base, label, when: whenAt("day", d) };
+      }
+      return { ...base, noData: true };
+    }
     const label = await probeClassPixel(cfg, state.date, z, t.x, t.y, t.px, t.py, lut);
     return label == null ? { ...base, noData: true } : { ...base, label };
   }
@@ -5524,12 +5926,7 @@ async function probeEntryValue(entry, carto) {
   const win = computed ? state.windowDays : 1;
   // match the rendered resolution (delta/ratio/aggregate cap the level)
   const z = computed ? windowMaxLevel(cfg, win) : cfg.maxLevel;
-  const span = (0.5625 / 2 ** z) * 512;               // degrees per tile at level z
-  const x = Math.floor((lon + 180) / span);
-  const y = Math.floor((90 - lat) / span);
-  const tileWest = -180 + x * span, tileNorth = 90 - y * span;
-  const px = Math.min(511, Math.max(0, Math.floor((lon - tileWest) / span * 512)));
-  const py = Math.min(511, Math.max(0, Math.floor((tileNorth - lat) / span * 512)));
+  const { x, y, px, py, cell } = probeTileAt(cfg, lon, lat, z);
   const vlut = await getValueLut(cfg.colormap);
   if (!vlut) return null;
   // For a window mean or a delta the stamp is the window's END: the sample list
@@ -5539,8 +5936,7 @@ async function probeEntryValue(entry, carto) {
   // for a layer whose tiles stop at an endTime both ends clamp to the same date
   // and the difference is identically zero. Printing the requested date there
   // would present that zero as a real "no change".
-  const base = { title: cfg.title, units: vlut.units, lon, lat, when: whenOfGibs(cfg),
-                 cell: probeCellBounds(z, x, y, px, py) };
+  const base = { title: cfg.title, units: vlut.units, lon, lat, when: whenOfGibs(cfg), cell };
 
   if (entry.isDelta) {
     // Δ = window-mean(now) − window-mean(past), matching the rendered delta
@@ -5938,7 +6334,8 @@ const PIXEL_DEADLINE_MS = 2000;
  * short enough that no row is visibly late to its own section. */
 const PIXEL_REDRAW_MS = 250;
 const PIXEL_RASTERS = ["sst", "sst-anom", "ssh-anom", "precip", "seaice", "snow", "aod", "lst",
-  "soilmoisture", "ndvi", "grace", "ceres", "chlor", "salinity", "dist-alert", "elevation"];
+  "soilmoisture", "ndvi", "grace", "ceres", "chlor", "salinity", "dist-alert", "elevation",
+  "worldcover", "gsw"];
 const PIXEL_GRIDS = ["oisst", "gpcp", "eobs", "meteoswiss", "tides"];
 // The two CMIP6 windows, declared once: the rows are stamped with the same
 // spans that were requested, so the label can never drift from the query.
@@ -5972,7 +6369,7 @@ async function pixelRasterValue(cfg, lon, lat) {
     // job is "what is true AT this point".
     const lut = await getClassLut(cfg.classmap);
     if (!lut) return null;
-    const t = tileCoordsAt(lon, lat, cfg.maxLevel);
+    const t = probeTileAt(cfg, lon, lat, cfg.maxLevel);
     const label = await probeClassPixel(cfg, state.date, cfg.maxLevel, t.x, t.y, t.px, t.py, lut);
     return label == null ? null : { label };
   }
@@ -5981,7 +6378,7 @@ async function pixelRasterValue(cfg, lon, lat) {
   // probeNative (elevation): a 4 km mean of alpine terrain is not the height
   // of the point that was tapped; read the 30 m tile.
   const z = cfg.probeNative ? cfg.maxLevel : Math.min(cfg.maxLevel, 4);
-  const t = tileCoordsAt(lon, lat, z);
+  const t = probeTileAt(cfg, lon, lat, z);
   const v = await probePixel(cfg, state.date, z, t.x, t.y, t.px, t.py, vlut.lut);
   if (v == null) return null;
   const cap = vlut.caps?.get(v);
@@ -6425,8 +6822,7 @@ async function showPixelState(carto) {
       // the cell the CARD reads: classification rasters at native resolution,
       // continuous ones capped at level 4 (see pixelRasterValue)
       const z = (top.cfg.classmap || top.cfg.probeNative) ? top.cfg.maxLevel : Math.min(top.cfg.maxLevel, 4);
-      const t = tileCoordsAt(lon, lat, z);
-      cell = probeCellBounds(z, t.x, t.y, t.px, t.py);
+      cell = probeTileAt(top.cfg, lon, lat, z).cell;
     }
     showProbeMark({ lon, lat, cell });
     if (top?.cfg.grid) {
@@ -9092,7 +9488,7 @@ function playbackPreloadAdd(p, cfg) {
   // …except a fine layer above its gate, which must not warm at all: hidden,
   // it holds no tiles and requests none, and is shown on promote if the
   // camera has come down by then (applyFineGate in playbackPromote).
-  if (cfg?.fine) layer.show = !fineGated(cfg);
+  if (cfg?.fine) layer.show = cfg.overview != null || !fineGated(cfg);
   if (p.splitDirection !== undefined) layer.splitDirection = p.splitDirection;
   return layer;
 }
@@ -9671,6 +10067,10 @@ window.__earth = {
   gibsDomains,
   // the fine tier: the gate and the December-anchored annual arithmetic
   fineGated, updateFineGates, applyFineGate, annualYearOf, cameraHeight,
+  // the third backend
+  xyzUrlTemplate, xyzProvider, mercTileCoordsAt, probeTileAt, getColormapEntries, INLINE_PALETTES,
+  // the mosaic: a swath layer's union over the Aggregate window
+  MosaicProvider, mosaicDates, mosaicLabel, MOSAIC_MAX_DAYS, providersFor,
   // place names: the collections themselves, plus the pick-through helper, so a
   // test can prove a click on "Paris" still reaches the globe
   ensureCities,
