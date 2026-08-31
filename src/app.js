@@ -86,7 +86,7 @@ const GIBS_LAYERS = [
     id: "viirs-truecolor",
     doc: "https://www.earthdata.nasa.gov/data/instruments/viirs",
     layer: "VIIRS_SNPP_CorrectedReflectance_TrueColor",
-    title: "True color (VIIRS, daily)",
+    title: "True color (VIIRS, 250 m, daily)",
     ext: "jpg", tms: "250m", maxLevel: 8,
     start: "2015-11-24", timed: true, on: false,
     meta: "Daily global mosaic, ~3 h latency",
@@ -132,7 +132,7 @@ const GIBS_LAYERS = [
     // saturating at ×8 — rather than an absolute difference, which would be
     // dominated by the log palette's value-proportional quantization.
     aggregable: true, transparentZero: true, ratioRange: 8,
-    title: "Precipitation rate (GPM IMERG V07)",
+    title: "Precipitation rate (GPM IMERG V07, 10 km)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2000-06-01", timed: true, on: false,
     meta: "GPM IMERG V07 daily merged precipitation (mm/hr)",
@@ -148,7 +148,7 @@ const GIBS_LAYERS = [
     // an average of anything physical. Its role is intra-day: step through a
     // single day's storms with the ±30m time stepper (state.timeMin). For
     // multi-day rain, the daily layer above aggregates soundly.
-    title: "Precipitation rate (IMERG V07, 30-min)",
+    title: "Precipitation rate (IMERG V07, 10 km, 30-min)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2000-06-01", timed: true, subDaily: true, on: false,
     meta: "GPM IMERG V07 half-hourly rate — step through the day with ±30m",
@@ -164,7 +164,7 @@ const GIBS_LAYERS = [
     // instrument family as the soil-moisture layer). endTime clamps later
     // dates to the last served one; clampToast explains on enable.
     endTime: "2025-09-01",
-    title: "Sea ice concentration (AMSR2)",
+    title: "Sea ice concentration (AMSR2, 12 km)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2012-07-02", timed: true, on: false,
     meta: "Passive-microwave, both poles · tiles end 2025-09",
@@ -176,7 +176,7 @@ const GIBS_LAYERS = [
     doc: "https://nsidc.org/data/mod10a1",
     layer: "MODIS_Terra_NDSI_Snow_Cover",
     deltaRange: 50,  // NDSI %, snow-line advance/retreat between dates
-    title: "Snow cover (MODIS NDSI)",
+    title: "Snow cover (MODIS NDSI, 500 m)",
     ext: "png", tms: "500m", maxLevel: 7,
     start: "2000-02-24", timed: true, on: false,
     meta: "Daily NDSI snow cover",
@@ -189,7 +189,7 @@ const GIBS_LAYERS = [
     layer: "MODIS_Combined_Value_Added_AOD",
     aggregable: true,  // mean AOD over a window is standard; day-vs-day differencing is noise
     ratioRange: 4,     // log-ish field → computed comparison is a ×-fold ratio of window means
-    title: "Aerosol optical depth (MODIS)",
+    title: "Aerosol optical depth (MODIS, 10 km)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2017-04-19", timed: true, on: false,
     meta: "Smoke, dust and haze",
@@ -201,7 +201,7 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/MODIS_Land_Surface_Temp_H.svg",
     doc: "https://lpdaac.usgs.gov/products/mod11a1v061/",
     layer: "MODIS_Terra_Land_Surface_Temp_Day",
-    title: "Land surface temperature (MODIS)",
+    title: "Land surface temperature (MODIS, 1 km)",
     ext: "png", tms: "1km", maxLevel: 6,
     start: "2022-10-23", timed: true, on: false,
     meta: "Daytime land skin temperature — probe reads °C (GIBS legend image is in K)",
@@ -217,7 +217,7 @@ const GIBS_LAYERS = [
     // tiles at 2025-09 (endTime clamp) — the hover card says so.
     aggregable: true,
     endTime: "2025-09-01",
-    title: "Soil moisture (AMSR2)",
+    title: "Soil moisture (AMSR2, 25 km)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2012-07-24", timed: true, on: false,
     meta: "Top-centimetre soil water from passive microwave · tiles end 2025-09",
@@ -229,7 +229,7 @@ const GIBS_LAYERS = [
     doc: "https://lpdaac.usgs.gov/products/mod13a3v061/",
     layer: "MODIS_Terra_L3_NDVI_Monthly",
     deltaRange: 0.3,  // greening/browning between months or years is THE standard NDVI use
-    title: "Vegetation index (MODIS NDVI, monthly)",
+    title: "Vegetation index (MODIS NDVI, 1 km, monthly)",
     ext: "png", tms: "1km", maxLevel: 6,
     start: "2000-03-01", timed: true, monthly: true, on: false,
     meta: "Monthly vegetation greenness (0–1)",
@@ -243,13 +243,17 @@ const GIBS_LAYERS = [
     // `aggregable` nor `deltaRange` (posture matrix, CLAUDE.md §2.5). The
     // change signal is already IN the product: it only paints where
     // vegetation was lost since the year began.
+    // CUMULATIVE, not an instant: the map is the running total of the current
+    // year's disturbance, so an aggregation window neither averages it nor
+    // misrepresents it — hence exempt from the suppression in providersFor.
+    cumulative: true,
     classmap: "https://gibs.earthdata.nasa.gov/colormaps/v1.3/OPERA_Vegetation_Disturbance_Status.xml",
     legend: "https://gibs.earthdata.nasa.gov/legends/OPERA_Vegetation_Disturbance_Status_H.svg",
     doc: "https://www.jpl.nasa.gov/go/opera/products/dist-product-suite/",
     layer: "OPERA_L3_DIST-ALERT-HLS_Color_Index",
     classNote: "&lt;50% / &ge;50% is how much of the vegetation cover went · " +
       "confirmed = a second clear image agreed · finished = the loss stopped progressing",
-    title: "Vegetation disturbance alerts (OPERA DIST-ALERT)",
+    title: "Vegetation disturbance alerts (OPERA DIST-ALERT, 30 m)",
     ext: "png", tms: "31.25m", maxLevel: 11,
     start: "2023-01-01", timed: true, on: false,
     meta: "30 m near-real-time vegetation loss — zoom in to see individual clearings",
@@ -266,7 +270,7 @@ const GIBS_LAYERS = [
     annual: true,
     endTime: "2025-01-01",
     classNote: "the year's settled tally — everything provisional has been resolved",
-    title: "Vegetation loss, annual summary (OPERA DIST-ANN)",
+    title: "Vegetation loss, annual summary (OPERA DIST-ANN, 30 m)",
     ext: "png", tms: "31.25m", maxLevel: 11,
     start: "2023-01-01", timed: true, on: false,
     meta: "Confirmed vegetation loss for a whole year — the date's YEAR picks it (2023–2025)",
@@ -527,7 +531,7 @@ const GIBS_LAYERS = [
     credit: "© Data: swisstopo",
     annual: true,
     endTime: "2025-01-01",
-    title: "SWISSIMAGE time travel (swisstopo, by year)",
+    title: "SWISSIMAGE time travel (swisstopo, 10 cm–1 m, by year)",
     ext: "jpg", maxLevel: 20, fine: 1500,
     start: "1926-01-01", timed: true, on: false,
     meta: "A century of Swiss aerial photographs, 1926–2025 — the date's YEAR picks the flight; white = no flight there that year, try another · Switzerland only · loads below 1,500 km",
@@ -558,7 +562,7 @@ const GIBS_LAYERS = [
     // GRACE→GRACE-FO mission gap (blank months).
     deltaRange: 15,
     endTime: "2022-07-01",
-    title: "Water storage anomaly (GRACE)",
+    title: "Water storage anomaly (GRACE, ~300 km)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2002-08-01", timed: true, monthly: true, on: false,
     meta: "Total water mass vs 2004–09 baseline, ~300 km blur · tiles end 2022-07",
@@ -571,7 +575,7 @@ const GIBS_LAYERS = [
     layer: "OCI_PACE_Chlorophyll_a",
     aggregable: true,  // time-averaging fills swath/cloud gaps
     ratioRange: 4,     // log-normal-ish field → compare as ×-fold ratio of window means, not absolute Δ
-    title: "Chlorophyll-a (NASA Ocean Color, PACE)",
+    title: "Chlorophyll-a (NASA Ocean Color, PACE, 1.2 km)",
     ext: "png", tms: "1km", maxLevel: 6,
     start: "2024-02-25", timed: true, on: false,
     meta: "PACE/OCI ocean-colour chlorophyll — phytoplankton, log mg/m³",
@@ -583,7 +587,7 @@ const GIBS_LAYERS = [
     doc: "https://www.catds.fr/",
     layer: "SMAP_L3_Sea_Surface_Salinity_CAP_Monthly",
     deltaRange: 1.5,  // PSU, freshening/salinification between dates
-    title: "Sea surface salinity (SMAP, monthly)",
+    title: "Sea surface salinity (SMAP, 60 km, monthly)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2015-04-01", timed: true, monthly: true, on: false,
     // The blank areas are the PRODUCT's own mask, not a bug: an L-band
@@ -613,7 +617,7 @@ const GIBS_LAYERS = [
     // GIBS ever extends or trims the record the app follows without an edit.
     endTime: "2019-01-22",
     snap5d: ["1992-09-30", "2017-10-29"],
-    title: "Sea surface height anomaly (altimetry)",
+    title: "Sea surface height anomaly (altimetry, ~17 km)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "1992-09-30", timed: true, on: false,
     meta: "Sea level vs the mean sea surface, 5-day · tiles end 2019-01",
@@ -629,7 +633,7 @@ const GIBS_LAYERS = [
     // year-over-year differencing is sound. GIBS tiles end 2018-10.
     deltaRange: 50,
     endTime: "2018-10-01",
-    title: "Energy balance (CERES net flux, monthly)",
+    title: "Energy balance (CERES net flux, 1°, monthly)",
     ext: "png", tms: "2km", maxLevel: 5,
     start: "2000-03-01", timed: true, monthly: true, on: false,
     meta: "Net radiation in minus out at top of atmosphere · tiles end 2018-10",
@@ -639,7 +643,7 @@ const GIBS_LAYERS = [
     grid: true, gridFile: "data/gpcp.json",
     ramp: "precip", vmin: 0, vmax: 3000, units: "mm/yr", maxLevel: 6,
     doc: "https://psl.noaa.gov/data/gridded/data.gpcp.html",
-    title: "Precipitation climatology (GPCP v2.3)",
+    title: "Precipitation climatology (GPCP v2.3, 2.5°)",
     meta: "Global mean-annual precipitation, 2.5° (NOAA GPCP)",
     on: false,
   },
@@ -648,7 +652,7 @@ const GIBS_LAYERS = [
     grid: true, gridFile: "data/oisst.json",
     ramp: "sst", vmin: -2, vmax: 32, units: "°C", maxLevel: 6,
     doc: "https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html",
-    title: "SST climatology (OISST v2.1)",
+    title: "SST climatology (OISST v2.1, 1°)",
     meta: "NOAA OI SST 1991–2020 mean, 0.25° → 1°",
     on: false,
   },
@@ -657,7 +661,7 @@ const GIBS_LAYERS = [
     grid: true, gridFile: "data/eobs.json", bounds: [-40.375, 25.375, 75.375, 75.375],
     ramp: "precip", vmin: 0, vmax: 2500, units: "mm/yr", maxLevel: 7,
     doc: "https://surfobs.climate.copernicus.eu/dataaccess/access_eobs.php",
-    title: "Precipitation climatology (E-OBS v31, Europe)",
+    title: "Precipitation climatology (E-OBS v31, 0.25°, Europe)",
     meta: "European 0.25° gridded observations — regional (land only)",
     on: false,
   },
@@ -666,7 +670,7 @@ const GIBS_LAYERS = [
     grid: true, gridFile: "data/meteoswiss.json", bounds: [5.761, 45.689, 10.692, 47.882],
     ramp: "precip", vmin: 0, vmax: 2500, units: "mm/yr", maxLevel: 9,
     doc: "https://opendatadocs.meteoswiss.ch/",
-    title: "Precipitation normal (MeteoSwiss, Switzerland)",
+    title: "Precipitation normal (MeteoSwiss, 2 km, Switzerland)",
     meta: "Swiss 1991–2020 precipitation normal, ~2 km — regional",
     on: false,
   },
@@ -675,7 +679,7 @@ const GIBS_LAYERS = [
     grid: true, gridFile: "data/currents.json", monthlyGrid: true,
     ramp: "speed", vmin: 0, vmax: 1.5, units: "m/s", maxLevel: 6,
     doc: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_001_030/description",
-    title: "Surface current speed (GLORYS)",
+    title: "Surface current speed (GLORYS, 1°)",
     meta: "Monthly-mean ocean current speed — the date's month picks the map",
     on: false,
   },
@@ -684,7 +688,7 @@ const GIBS_LAYERS = [
     grid: true, gridFile: "data/mld.json", monthlyGrid: true,
     ramp: "precip", vmin: 0, vmax: 500, units: "m", maxLevel: 6,
     doc: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_001_030/description",
-    title: "Mixed-layer depth (GLORYS)",
+    title: "Mixed-layer depth (GLORYS, 1°)",
     meta: "How deep the surface ocean is stirred — deep winter mixing is where AMOC water forms",
     on: false,
   },
@@ -706,13 +710,13 @@ const GIBS_LAYERS = [
     grid: true, classGrid: true, gridFile: "data/amoc_eval_mask.json",
     classNote: "the roles are NESTED — the section lies inside the corridor, which lies " +
       "inside the rolled window &mdash; and each cell shows its most specific one",
-    datelessNote: "<strong>AMOC forecast: pixels rolled forward</strong> is the fixed " +
+    datelessNote: "<strong>AMOC forecast: pixels rolled forward (0.25°)</strong> is the fixed " +
       "geometry of an experiment — the tensor window and the corridor recipe — so the " +
       "<strong>date selector doesn't change it</strong>. What changes with time is the " +
       "forecast itself, which lives in the <strong>AMOC tab</strong>.",
     maxLevel: 7,
     doc: "https://github.com/blauewelt/earth/blob/main/ml/plans/E022_spatial_coupling.md",
-    title: "AMOC forecast: pixels rolled forward",
+    title: "AMOC forecast: pixels rolled forward (0.25°)",
     meta: "Where the model actually computes — and which of those pixels its AMOC score is read from",
     on: false,
   },
@@ -726,7 +730,7 @@ const GIBS_LAYERS = [
     // Tides tab, which reconstructs h(t) from the same constituents.
     ramp: "speed", vmin: 0, vmax: 8, units: "m", maxLevel: 6,
     doc: "https://www.seanoe.org/data/00683/79489/",
-    title: "Tidal range (EOT20)",
+    title: "Tidal range (EOT20, 1°)",
     meta: "How far the sea rises and falls when the main constituents align — the moving tide is animated in the Tides tab",
     on: false,
   },
@@ -740,7 +744,7 @@ const GIBS_LAYERS = [
     // aggregable nor delta-able through the raster machinery.
     ramp: "sst", vmin: -2, vmax: 36, units: "°C", maxLevel: 6,
     doc: "https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html",
-    title: "Sea surface temperature (OISST monthly, to 36°)",
+    title: "Sea surface temperature (OISST monthly, 1°, to 36 °C)",
     meta: "Monthly-mean SST from the numbers, 1981-09 → now — the scale reaches 36 °C, so the hottest seas actually show",
     on: false,
   },
@@ -749,7 +753,7 @@ const GIBS_LAYERS = [
     grid: true, gridFile: "data/argo_t300.json", snapshotGrid: true,
     ramp: "anom", vmin: -2, vmax: 2, units: "°C", maxLevel: 6,
     doc: "https://sio-argo.ucsd.edu/RG_Climatology.html",
-    title: "Subsurface temp anomaly (300 m, Argo)",
+    title: "Subsurface temp anomaly (300 m depth, Argo, 1°)",
     meta: "Latest month vs 2004–18 same-month mean — subsurface marine heatwaves",
     on: false,
   },
@@ -767,7 +771,7 @@ const GIBS_LAYERS = [
     grid: true, gridFile: "data/grep_spread_cur.json", snapshotGrid: true,
     ramp: "speed", vmin: 0, vmax: 0.5, units: "m/s", maxLevel: 7,
     doc: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_ENS_001_031/description",
-    title: "Reanalysis disagreement: current speed",
+    title: "Reanalysis disagreement: current speed (0.25°)",
     meta: "How far apart three reanalyses of the SAME years are — median 0.077 m/s, over 1 m/s in the Gulf Stream",
     on: false,
   },
@@ -776,7 +780,7 @@ const GIBS_LAYERS = [
     grid: true, gridFile: "data/grep_spread_mld.json", snapshotGrid: true,
     ramp: "speed", vmin: 0, vmax: 200, units: "m", maxLevel: 7,
     doc: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_ENS_001_031/description",
-    title: "Reanalysis disagreement: mixed-layer depth",
+    title: "Reanalysis disagreement: mixed-layer depth (0.25°)",
     meta: "Median 14 m, but 716 m at the subpolar convection sites — where the AMOC is made is where we know least",
     on: false,
   },
@@ -792,7 +796,7 @@ const GIBS_LAYERS = [
       "blank means no mapped forest loss, not no forest",
     maxLevel: 7,
     doc: "https://datasets.wri.org/datasets/dominant-drivers-of-tree-cover-loss-at-1km",
-    title: "Drivers of forest loss (WRI/DeepMind)",
+    title: "Drivers of forest loss (WRI/DeepMind, 0.25°)",
     meta: "WHY forest was lost, 2001–2025 — the companion to the 30 m alerts, which only see THAT it was",
     on: false,
   },
@@ -801,7 +805,7 @@ const GIBS_LAYERS = [
     grid: true, gridFile: "data/gfs_temp.json", monthlyGrid: true, forecastGrid: true,
     ramp: "t2m", vmin: -30, vmax: 40, units: "°C", maxLevel: 6,
     doc: "https://www.emc.ncep.noaa.gov/emc/pages/numerical_forecast_systems/gfs.php",
-    title: "Temperature forecast (GFS, 2 m)",
+    title: "Temperature forecast (GFS 2 m air, 1°)",
     meta: "The next 10 days — with this on, the date selector runs into the future",
     on: false,
   },
@@ -810,7 +814,7 @@ const GIBS_LAYERS = [
     grid: true, gridFile: "data/gfs_precip.json", monthlyGrid: true, forecastGrid: true,
     ramp: "rain", vmin: 0, vmax: 50, units: "mm/day", maxLevel: 6,
     doc: "https://www.emc.ncep.noaa.gov/emc/pages/numerical_forecast_systems/gfs.php",
-    title: "Precipitation forecast (GFS, daily)",
+    title: "Precipitation forecast (GFS, 1°, daily)",
     meta: "Forecast 24-h rain totals per day; dry (<0.5 mm) is transparent",
     on: false,
   },
@@ -818,7 +822,7 @@ const GIBS_LAYERS = [
     id: "nightlights",
     doc: "https://blackmarble.gsfc.nasa.gov/",
     layer: "VIIRS_Black_Marble",
-    title: "Night lights (Black Marble)",
+    title: "Night lights (Black Marble, 500 m)",
     ext: "png", tms: "500m", maxLevel: 7,
     start: "2016-01-01", timed: false, fixedTime: "2016-01-01", on: false,
     meta: "VIIRS annual composite",
@@ -3239,8 +3243,13 @@ function providersFor(cfg, dateStr) {
    * over-strictness the untimed composites and climatology grids are exempt
    * from, and it read as a broken layer: Chris, 2026-08-31, "I don't see
    * anything from the Sentinel-2 cloudless mosaic" — with the Aggregate
-   * slider left at 12 days from the swath work, the layer was hidden. */
-  if (win > 1 && cfg.timed && !canWindow && !mosaicable && !cfg.annual) {
+   * slider left at 12 days from the swath work, the layer was hidden. The
+   * same argument covers `cumulative: true` — a map that ACCUMULATES rather
+   * than snapshots (DIST-ALERT is the year's disturbance so far, not the
+   * day's), which cost the same report a second time on the same slider
+   * setting. Neither kind is claimed to BE an average: `windowed` stays false
+   * for them, so nothing says "mean" over them. */
+  if (win > 1 && cfg.timed && !canWindow && !mosaicable && !cfg.annual && !cfg.cumulative) {
     out.suppressed = true;
     return out;
   }
@@ -4073,10 +4082,31 @@ function updateLegends() {
     }
   }
   panel.classList.toggle("hidden", !any);
+  updateSuppressedNotes();
   updateDeltaHint();
   updateBaseAppearance();
   updateActiveChips();
   updateTimeRow();
+}
+
+/* A layer hidden by the aggregation window says so ON ITS OWN ROW. The
+ * delta-hint panel has explained it since the window existed, but that is
+ * elsewhere on the page, and the row is where you look when you tick the box
+ * and nothing appears. It cost two "the layer is empty" reports in one day
+ * (the EOX mosaic, then the 30 m disturbance alerts) before it was written —
+ * both of them layers that should never have been suppressed at all, but a
+ * hidden layer must say so on the row whatever the reason it is hidden. */
+function updateSuppressedNotes() {
+  for (const cfg of GIBS_LAYERS) {
+    const el = document.querySelector(`[data-suppressed="${cfg.id}"]`);
+    if (!el) continue;
+    const on = !!state.layers[cfg.id]?.suppressed;
+    el.hidden = !on;
+    if (on) {
+      el.textContent = `⚠ hidden while Aggregate is “${windowLabel(state.windowDays)}” — ` +
+        `this layer shows an instant, not an average. Set Aggregate back to 1 day.`;
+    }
+  }
 }
 
 /* The ±30m time stepper only appears while a sub-daily layer is on (also while
@@ -5265,6 +5295,7 @@ function buildLayerPanel() {
       </div>
       <div class="meta">${cfg.meta}</div>
       ${cfg.fine ? `<div class="fine-hint" data-finehint="${cfg.id}" hidden></div>` : ""}
+      <div class="sup-note" data-suppressed="${cfg.id}" hidden></div>
       <div class="alpha-row" data-alpharow="${cfg.id}" ${cfg.on ? "" : "style='display:none'"}>
         <span class="alpha-label">opacity</span>
         <input type="range" min="0" max="100" value="100" data-alpha="${cfg.id}"
@@ -10264,7 +10295,7 @@ window.__earth = {
   xyzUrlTemplate, xyzProvider, mercTileCoordsAt, probeTileAt, getColormapEntries, INLINE_PALETTES,
   // the mosaic: a swath layer's union over the Aggregate window
   MosaicProvider, mosaicDates, mosaicLabel, MOSAIC_MAX_DAYS, providersFor,
-  setWindowDays, syncWindowControls,
+  setWindowDays, syncWindowControls, updateSuppressedNotes, LAYER_FACTS,
   // the scale bar
   updateScaleBar, groundMetresPerPixel, viewGroundWidth, niceScaleMetres, fmtDistance,
   // place names: the collections themselves, plus the pick-through helper, so a

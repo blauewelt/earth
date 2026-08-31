@@ -208,6 +208,8 @@ nav { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--b
  * height. Amber while gated (hidden, nothing requested), dim when showing. */
 .layer-item .fine-hint { font-size: 11px; color: var(--fg-dim); margin: 3px 0 0 24px; font-variant-numeric: tabular-nums; }
 .layer-item .fine-hint.fine-gated { color: #e0a94a; }
+/* A layer the aggregation window is hiding, said on the row itself. */
+.layer-item .sup-note { font-size: 11px; color: #e0a94a; margin: 3px 0 0 24px; line-height: 1.4; }
 .layer-item input[type="range"] { width: 100%; margin-top: 6px; accent-color: var(--accent); }
 .alpha-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 0 24px; }
 .alpha-row input[type="range"] { flex: 1; width: auto; margin-top: 0; }

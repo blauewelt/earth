@@ -3190,6 +3190,79 @@ test("the aggregation window has four controls and one number", async ({ page })
   expect(ann["viirs-truecolor"]).toBe(true);   // a DAILY photograph still is
 });
 
+test("every layer title states its pixel size, and it agrees with the hover card", async ({ page }) => {
+  // "Can you also make sure that the pixel size (eg 30m) is always displayed
+  // in the layer title" (2026-08-31). The size in the title is not a second,
+  // hand-typed copy of the truth: it must appear in that layer's own Spatial
+  // fact, which is what the hover card shows and what §2.2 requires.
+  const rows = await page.evaluate(() => window.__earth.GIBS_LAYERS.map((l) => ({
+    id: l.id, title: l.title, sp: window.__earth.LAYER_FACTS[l.id]?.sp ?? null,
+  })));
+  expect(rows.length).toBeGreaterThan(45);
+  const RE = /(~?\d+(?:\.\d+)?)\s*(cm|km|m|°)(?![a-zA-Z])/g;
+  const norm = (t) => t.replace(/~/g, "").replace(/\s+/g, " ").trim();
+  for (const r of rows) {
+    expect(r.sp, `${r.id} has no Spatial fact`).toBeTruthy();
+    const toks = r.title.match(RE);
+    expect(toks, `${r.id}: "${r.title}" states no pixel size`).toBeTruthy();
+    // at least one size in the title must be the layer's own — "300 m depth"
+    // and "2 m air" are legitimately in a title WITHOUT being pixel sizes,
+    // so the rule is "one of them agrees", not "the first one does"
+    const agrees = toks.some((t) => norm(r.sp).includes(norm(t)));
+    expect(agrees, `${r.id}: "${r.title}" vs Spatial "${r.sp}"`).toBe(true);
+  }
+
+  // and the panel renders those titles, so the size is on screen unhovered
+  const shown = await page.locator("#layer-list .layer-head").allTextContents();
+  expect(shown.length).toBe(rows.length);
+  for (const t of shown) expect(t).toMatch(RE);
+});
+
+test("a layer the window hides says so on its own row — and cumulative maps are not hidden", async ({ page }) => {
+  // DIST-ALERT went blank under the 12-day window left over from the swath
+  // work: it is the running total of the current year's disturbance, not a
+  // day's snapshot, so a window neither averages nor misrepresents it.
+  const suppressed = await page.evaluate(() => {
+    const E = window.__earth;
+    const sl = document.getElementById("window-days");
+    sl.value = "12"; sl.dispatchEvent(new Event("change", { bubbles: true }));
+    const out = {};
+    for (const id of ["dist-alert", "dist-ann", "s2cloudless", "viirs-truecolor", "precip-30min"]) {
+      out[id] = E.providersFor(E.GIBS_LAYERS.find((l) => l.id === id), "2026-08-20").suppressed;
+    }
+    return out;
+  });
+  expect(suppressed["dist-alert"]).toBe(false);      // cumulative
+  expect(suppressed["dist-ann"]).toBe(false);        // annual
+  expect(suppressed["s2cloudless"]).toBe(false);     // annual
+  expect(suppressed["viirs-truecolor"]).toBe(true);  // a daily photograph still is
+  expect(suppressed["precip-30min"]).toBe(true);     // a half-hour instant too
+
+  // …and when a layer IS hidden, its own row says so, not just the hint panel
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="viirs-truecolor"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const note = page.locator('[data-suppressed="viirs-truecolor"]');
+  await expect(note).toBeVisible();
+  await expect(note).toContainText("hidden while Aggregate");
+  await expect(note).toContainText("past 12 days");
+  // the disturbance layer, on the same window, has no such note and IS live
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="dist-alert"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.locator('[data-suppressed="dist-alert"]')).toBeHidden();
+  expect(await page.evaluate(() => !!window.__earth.state.layers["dist-alert"].layer)).toBe(true);
+
+  // back to a single day and the note goes with it
+  await page.evaluate(() => {
+    const sl = document.getElementById("window-days");
+    sl.value = "1"; sl.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.locator('[data-suppressed="viirs-truecolor"]')).toBeHidden();
+});
+
 test("the scale bar measures the ground, and follows the camera down", async ({ page }) => {
   const read = () => page.evaluate(() => {
     const E = window.__earth;

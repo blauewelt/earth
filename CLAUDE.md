@@ -178,7 +178,17 @@ worker, no cache — just the missing button.
 A new layer is not done until it has **all** of:
 
 1. **A clickable documentation link** — the layer title links to the dataset's
-   public docs (`doc` field / `title-link`).
+   public docs (`doc` field / `title-link`) — **and the title states the
+   layer's PIXEL SIZE** ("…, 30 m", "…, 0.25°"), because that is the first
+   thing a reader needs about a measurement and the panel is where they
+   choose between layers (Chris, 2026-08-31: "make sure that the pixel size
+   is always displayed in the layer title… go over all the layers"). The size
+   is not a second hand-typed copy of the truth: `tests/app.spec.js` requires
+   every title to carry one AND that it appear in that layer's own `sp` fact
+   (item 2). Where a title carries a number that is NOT a pixel size —
+   "300 m depth" for the Argo layer, "2 m air" for GFS — the rule is that ONE
+   of the title's sizes agrees, and those two now say what they are so the
+   reader is not misled either.
 2. **A hover card** (`.layer-tip`) with four elements:
    - **Gist paragraph** (`sum` in `LAYER_FACTS`, or a `<p class="tip-sum">` for
      static layers): 2–4 sentences giving the dataset's essence — what is
@@ -286,12 +296,21 @@ A new layer is not done until it has **all** of:
      error is a few % OF the value, a small constant in log space.
    - `aggregable: true` alone — averaging is sound, no comparison of either
      kind (currently unused; every aggregable layer so far is also ratio-able).
-   - `annual: true` layers are NEVER suppressed by a window, whatever their
-     other flags: a whole-year composite is already a long-period aggregate
-     and does not change as the window slides (every day in it resolves to
-     the same year), exactly like the untimed composites and the climatology
-     grids. Suppressing them read as a broken layer — the EOX mosaic went
-     blank under the 12-day window left over from the swath work.
+   - `annual: true` and `cumulative: true` layers are NEVER suppressed by a
+     window, whatever their other flags. A whole-year composite is already a
+     long-period aggregate and does not change as the window slides (every
+     day in it resolves to the same year); a cumulative map — DIST-ALERT is
+     the year's disturbance SO FAR, not the day's — is an accumulation
+     already. Both are the case the rule always exempted for untimed
+     composites and climatology grids, and suppressing them read as a broken
+     layer twice in one day: the EOX mosaic, then the 30 m disturbance
+     alerts, both under the 12-day window left over from the swath work.
+     Neither is claimed to BE an average — `windowed` stays false, so no
+     legend says "mean" over one. **And whatever the reason a layer is
+     hidden, its own ROW says so now** (`updateSuppressedNotes`,
+     `[data-suppressed]`): the delta-hint panel had explained it since the
+     window existed, but the row is where you look when you tick the box and
+     nothing appears.
    - `mosaic: true` — a daily SWATH product (HLS, the radars, DSWx): the
      Aggregate window is a LOOKBACK and the layer renders the UNION of every
      day in it (`MosaicProvider`, newest pass on top, capped at
