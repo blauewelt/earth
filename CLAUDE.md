@@ -233,6 +233,11 @@ A new layer is not done until it has **all** of:
    classification rasters read at their NATIVE level, not the usual z4 cap —
    a 30 m alert averaged down to level 4 vanishes, and the inspector's job is
    "what is true AT this point".
+   A palette's transparent FILL is not a class: `parseClassEntries` reads
+   which `<ColorMapEntry>` carries `transparent="true"` and drops the
+   `<LegendEntry>` with the matching `ref`, rather than matching the label
+   "No Data" — DSWx-S1 spells it "Fill value (no data)" and used to get a
+   black swatch in the legend for a colour the tile never paints.
    **Categorical GRIDS are the same idea one layer in** — a baked grid whose
    cell holds a class code rather than a number declares `classGrid: true`
    (currently `drivers`). It paints from a palette lookup instead of
@@ -317,8 +322,29 @@ A new layer is not done until it has **all** of:
      `MOSAIC_MAX_DAYS` = 16 ≥ NISAR's 12-day repeat), so a 12-day window
      covers the whole planet. Never a mean — you cannot average "flew over"
      with "didn't" — and no comparison of either kind. The legend and the
-     row hint say "union of the past N days"; the class probe walks the same
-     dates newest-first and stamps the day the answer came from.
+     row hint say "union of the past N days", and the hint adds how many
+     dates were ACTUALLY served when the window lands in an archive hole
+     (DSWx-S1 has none from 2023-12-25 to 2024-08-20: every day of a 12-day
+     window there snaps to 2023-12-24, and a "12-day union" is one date).
+     The class probe walks the same dates newest-first and stamps the day
+     the answer came from.
+   - **`unobserved: /regex/` — the classes that are not a measurement.**
+     DSWx paints CLOUD where the optical sensor could not see the ground, and
+     the radar version paints two MASKS where the method does not apply. Those
+     are opaque colours, so a plain newest-on-top union let a cloudy Tuesday
+     bury a clear Saturday — which defeats the point of a union (Chris,
+     2026-08-31, comparing water extent across years). A layer names those
+     classes as a regex over the PALETTE'S OWN LABELS, so the judgement comes
+     from the producer's vocabulary rather than a hard-coded colour, and the
+     compositor walks newest-first taking each pixel from the first day that
+     actually observed it. What no day observed keeps the newest day's cloud:
+     "we looked and could not see" is information, and a blank pixel would
+     claim we never looked. **This is a modelling choice, so it is visible and
+     reversible**: while a union is active the legend strikes those classes
+     through and offers a switch (`state.seeThrough`, `[data-seethrough]` —
+     the one control that lives on the legend, because that is where the
+     classes it affects are). The probe applies the identical rule, so the
+     read-out and the pixel under it are never from different days.
    - neither — the layer is shown as-is (photographic composites,
      half-hourly snapshots).
 
@@ -1434,6 +1460,13 @@ the day's swaths as coarse strips from orbit so a reader knows where to zoom
 a `legendKey` (Worldview's own reading of the false colour); and
 `minimumZoomDistance` dropped from 20 km to 100 m (Part 2: the collision
 floor that read as a zoom stutter).
+
+**Unions look through cloud (2026-08-31):** `unobserved` on the two DSWx
+layers, a see-through compositor in `MosaicProvider`, the same rule in the
+class probe, struck-through legend classes and the `[data-seethrough]` switch
+(§2.5). The row hint also reports how many dates a union actually got, which
+is how an archive hole (DSWx-S1, 2023-12-25 → 2024-08-20) stops looking like
+a broken layer.
 
 **The aggregation window's four controls and the scale bar (2026-08-31):**
 ±1d nudges, a typed field and a 12d preset join the slider on one funnel

@@ -3263,6 +3263,142 @@ test("a layer the window hides says so on its own row — and cumulative maps ar
   await expect(page.locator('[data-suppressed="viirs-truecolor"]')).toBeHidden();
 });
 
+test("a union looks through cloud: an earlier clear day wins, and the legend says so", async ({ page }) => {
+  test.setTimeout(180000);
+  // "Any chance you can change the aggregation such that 'no data' (eg cloud
+  // cover) is overridden by a pixel with data when aggregating over multiple
+  // days?" (2026-08-31). Which classes count as "not seen" comes from the
+  // palette's own labels, not from a hard-coded colour.
+  const decl = await page.evaluate(async () => {
+    const E = window.__earth;
+    const hls = E.GIBS_LAYERS.find((l) => l.id === "water-hls");
+    const s1 = E.GIBS_LAYERS.find((l) => l.id === "water-s1");
+    const set = await E.getUnobservedSet(hls);
+    const setS1 = await E.getUnobservedSet(s1);
+    const cm = await E.getClassEntries(s1.classmap);
+    return {
+      hlsN: set?.size ?? 0, cloud: set?.has((175 << 16) | (175 << 8) | 175) ?? false,
+      water: set?.has(255) ?? false,                       // 0,0,255 open water
+      s1N: setS1?.size ?? 0,
+      s1Labels: cm.classes.map((c) => c.label),
+      // the transparent fill is not a class: "Fill value (no data)" is gone
+      fill: cm.classes.some((c) => /fill value/i.test(c.label)),
+      noUnobserved: await E.getUnobservedSet(E.GIBS_LAYERS.find((l) => l.id === "dist-alert")),
+    };
+  });
+  expect(decl.hlsN).toBe(1);                 // Cloud
+  expect(decl.cloud).toBe(true);
+  expect(decl.water).toBe(false);            // a real class is never looked through
+  expect(decl.s1N).toBe(2);                  // HAND masked + layover/shadow masked
+  expect(decl.fill).toBe(false);
+  expect(decl.s1Labels).toContain("Open Water");
+  expect(decl.noUnobserved).toBeNull();      // a layer that declares none gets none
+
+  // The composite: newest first, skipping cloud, so an older clear look wins.
+  const px = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "water-hls");
+    const unobs = await E.getUnobservedSet(cfg);
+    const mk = (rgb, half) => {
+      const c = document.createElement("canvas"); c.width = c.height = 512;
+      const g = c.getContext("2d");
+      g.fillStyle = `rgb(${rgb})`; g.fillRect(0, 0, half ? 256 : 512, 512);
+      return c;
+    };
+    // newest: cloud over the left half, nothing over the right
+    // older:  open water everywhere
+    const imgs = [mk("175,175,175", true), mk("0,0,255", false)];
+    const N = 512 * 512;
+    const canvas = document.createElement("canvas"); canvas.width = canvas.height = 512;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const out = ctx.createImageData(512, 512), o = out.data;
+    const done = new Uint8Array(N); let filled = 0, top = null;
+    const sc = document.createElement("canvas"); sc.width = sc.height = 512;
+    const sctx = sc.getContext("2d", { willReadFrequently: true });
+    const read = (img) => { sctx.clearRect(0, 0, 512, 512); sctx.drawImage(img, 0, 0, 512, 512);
+      return sctx.getImageData(0, 0, 512, 512).data; };
+    for (let i = 0; i < imgs.length && filled < N; i++) {
+      const d = read(imgs[i]); if (!top) top = d;
+      for (let p = 0, k = 0; p < N; p++, k += 4) {
+        if (done[p] || d[k + 3] === 0) continue;
+        if (unobs.has((d[k] << 16) | (d[k + 1] << 8) | d[k + 2])) continue;
+        o[k] = d[k]; o[k + 1] = d[k + 1]; o[k + 2] = d[k + 2]; o[k + 3] = d[k + 3];
+        done[p] = 1; filled++;
+      }
+    }
+    ctx.putImageData(out, 0, 0);
+    const g = canvas.getContext("2d");
+    return { underCloud: [...g.getImageData(10, 10, 1, 1).data],
+             elsewhere: [...g.getImageData(400, 10, 1, 1).data] };
+  });
+  expect(px.underCloud).toEqual([0, 0, 255, 255]);   // the clear day showed through
+  expect(px.elsewhere).toEqual([0, 0, 255, 255]);
+
+  // On the globe: with a union active the legend strikes the class through
+  // and offers the switch; clicking it puts the cloud back.
+  await page.evaluate(() => {
+    const E = window.__earth;
+    const sst = document.querySelector('#layer-list input[data-id="sst"]');
+    if (sst.checked) { sst.checked = false; sst.dispatchEvent(new Event("change", { bubbles: true })); }
+    const sl = document.getElementById("window-days");
+    sl.value = "12"; sl.dispatchEvent(new Event("change", { bubbles: true }));
+    const el = document.querySelector('#layer-list input[data-id="water-hls"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const item = page.locator("#legend-panel .legend-item", { hasText: "OPERA DSWx from HLS" });
+  await expect(item.locator(".legend-class.seen-through")).toHaveCount(1);
+  await expect(item.locator(".legend-class.seen-through")).toContainText("Cloud");
+  const toggle = item.locator("[data-seethrough]");
+  await expect(toggle).toContainText("see through cloud");
+  expect(await toggle.getAttribute("aria-pressed")).toBe("true");
+
+  await toggle.click();
+  expect(await page.evaluate(() => window.__earth.state.seeThrough)).toBe(false);
+  await expect(item.locator(".legend-class.seen-through")).toHaveCount(0);
+  expect(await item.locator("[data-seethrough]").getAttribute("aria-pressed")).toBe("false");
+  await item.locator("[data-seethrough]").click();
+  expect(await page.evaluate(() => window.__earth.state.seeThrough)).toBe(true);
+
+  // At a single day there is nothing to composite, so no switch is offered.
+  await page.evaluate(() => {
+    const sl = document.getElementById("window-days");
+    sl.value = "1"; sl.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.locator("#legend-panel [data-seethrough]")).toHaveCount(0);
+  await expect(page.locator("#legend-panel .legend-class.seen-through")).toHaveCount(0);
+});
+
+test("a union in an archive hole says how few dates it actually got", async ({ page }) => {
+  // DSWx-S1 has no tiles between 2023-12-25 and 2024-08-20, so a 12-day
+  // window in that hole snaps every day to the same served date: the row says
+  // the union is one date, rather than implying twelve.
+  await page.evaluate(() => {
+    const E = window.__earth;
+    const sst = document.querySelector('#layer-list input[data-id="sst"]');
+    if (sst.checked) { sst.checked = false; sst.dispatchEvent(new Event("change", { bubbles: true })); }
+    const el = document.querySelector('#layer-list input[data-id="water-s1"]');
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  // wait for the measured domain, then put the date inside the hole
+  await page.waitForFunction(() => window.__earth.gibsDomains.get("water-s1"), null, { timeout: 30000 });
+  const r = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "water-s1");
+    const d = document.getElementById("layer-date");
+    d.value = "2024-08-15"; d.dispatchEvent(new Event("change"));
+    const sl = document.getElementById("window-days");
+    sl.value = "12"; sl.dispatchEvent(new Event("change", { bubbles: true }));
+    E.updateFineGates();
+    return { dates: E.mosaicDates(cfg, "2024-08-15", 12),
+             served: E.gibsTime(cfg, "2024-08-15"),
+             hint: document.querySelector('[data-finehint="water-s1"]').textContent };
+  });
+  expect(r.served).toBe("2023-12-24");        // the newest date at or before the hole
+  expect(r.dates).toEqual(["2023-12-24"]);    // …and all twelve days snap to it
+  expect(r.hint).toContain("union of the past 12 days");
+  expect(r.hint).toMatch(/only 1 date is served here/);
+});
+
 test("the scale bar measures the ground, and follows the camera down", async ({ page }) => {
   const read = () => page.evaluate(() => {
     const E = window.__earth;

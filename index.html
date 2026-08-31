@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=123fe76e" />
+  <link rel="stylesheet" href="src/style.css?v=ab73b538" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -256,7 +256,10 @@
         <p class="hint"><strong>Swath layers</strong> (Sentinel-2, Landsat, Sentinel-1, NISAR, the two
           surface-water maps) treat the window as a <em>lookback</em> instead: they show the
           <strong>union</strong> of every pass in it, newest on top — 12 days covers the whole planet
-          for NISAR — at full zoom depth. A pixel no pass reached stays blank.</p>
+          for NISAR — at full zoom depth. A pixel no pass reached stays blank. For the two
+          surface-water maps the union also <strong>looks through cloud</strong> (and the radar
+          masks): those classes are not a measurement, so an earlier clear day shows through them.
+          The legend strikes those classes through and lets you switch it off.</p>
       </details>
       <!-- populated by updateDeltaHint(); static text is never shown -->
       <p class="hint hidden" id="delta-hint"></p>
@@ -889,7 +892,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">9d1c1b70</code></p>
+      <p class="build-line">Build <code id="build-id">158baa40</code></p>
     </section>
 
     <footer>
@@ -945,6 +948,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=9d1c1b70"></script>
+  <script src="src/app.js?v=158baa40"></script>
 </body>
 </html>

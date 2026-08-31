@@ -553,6 +553,20 @@ footer a { color: var(--fg-dim); }
   font-size: 9.5px; color: var(--fg-dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* A class the union is looking through: the swatch goes hollow (it is not
+   being painted) and the label is struck, so "absent from the map" is a
+   state you can SEE rather than infer. */
+.legend-class.seen-through .legend-swatch { opacity: 0.35; }
+.legend-class.seen-through .legend-class-label {
+  text-decoration: line-through; opacity: 0.7;
+}
+.legend-toggle {
+  display: block; width: 100%; margin-top: 5px; text-align: left;
+  background: var(--bg); color: var(--fg-dim); border: 1px solid var(--border);
+  border-radius: 6px; padding: 3px 6px; font-size: 9.5px; cursor: pointer;
+  font-family: inherit;
+}
+.legend-toggle:hover { border-color: var(--accent, #3987e5); color: var(--accent, #3987e5); }
 
 /* ---- clickable layer titles ---- */
 .layer-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }

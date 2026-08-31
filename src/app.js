@@ -351,6 +351,9 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/OPERA_Dynamic_Surface_Water_Extent_H.svg",
     doc: "https://www.jpl.nasa.gov/go/opera/products/dswx-product-suite/",
     layer: "OPERA_L3_Dynamic_Surface_Water_Extent-HLS",
+    // CLOUD is not a measurement — it is the sensor failing to see the ground.
+    // In a multi-day union an earlier clear look wins over it (getUnobservedSet).
+    unobserved: /cloud/i,
     classNote: "partial = a 30 m pixel that is only part water (a bank, a marsh, a narrow channel) · cloud pixels are unobserved, not dry",
     title: "Surface water extent (OPERA DSWx from HLS, 30 m)",
     ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
@@ -365,6 +368,8 @@ const GIBS_LAYERS = [
     legend: "https://gibs.earthdata.nasa.gov/legends/OPERA_Dynamic_Surface_Water_Extent_S1_H.svg",
     doc: "https://www.jpl.nasa.gov/go/opera/products/dswx-product-suite/",
     layer: "OPERA_L3_Dynamic_Surface_Water_Extent-Sentinel-1",
+    // The two masks are "the method does not apply here", not an observation.
+    unobserved: /masked/i,
     classNote: "inundated vegetation = flooded forest or crops the radar sees under the canopy · HAND-masked = too high above the nearest river to flood, not looked at",
     title: "Surface water extent (OPERA DSWx from Sentinel-1, 30 m)",
     ext: "png", tms: "31.25m", maxLevel: 11, fine: 500,
@@ -2407,6 +2412,11 @@ const state = {
   compareFixed: null,    // pinned comparison date; overrides the offset when set
   compareMode: "split",  // "split" | "delta" — display mode, orthogonal to the window
   windowDays: 1,         // rolling aggregation window ending at `date` (1 = single day)
+  /* Mosaic compositing: let an earlier day's real observation show through a
+   * later day's "not observed" class (cloud, radar mask). On by default —
+   * it is what makes a multi-day union worth having — and switchable from
+   * the legend, because the cloud itself is sometimes the thing you want. */
+  seeThrough: true,
   timeMin: 0,            // time of day (UTC minutes) for sub-daily layers, stepped ±30m
   layers: {},
 };
@@ -2842,13 +2852,61 @@ class MosaicProvider {
   getTileCredits() { return undefined; }
   pickFeatures() { return undefined; }
   async requestImage(x, y, level) {
-    const imgs = await Promise.all(this._dates.map((d) =>
-      sstFetchBitmap(sstFetchUrl(this._cfg, d, x, y, level))));
+    const [imgs, unobs] = await Promise.all([
+      Promise.all(this._dates.map((d) => sstFetchBitmap(sstFetchUrl(this._cfg, d, x, y, level)))),
+      seeingThrough(this._cfg) ? getUnobservedSet(this._cfg) : null,
+    ]);
     const canvas = document.createElement("canvas");
     canvas.width = 512; canvas.height = 512;
-    const ctx = canvas.getContext("2d");
-    // oldest first, newest last: the newest pass paints over the older ones
-    for (let i = imgs.length - 1; i >= 0; i--) if (imgs[i]) ctx.drawImage(imgs[i], 0, 0, 512, 512);
+    const ctx = canvas.getContext("2d", { willReadFrequently: !!unobs });
+    if (!unobs) {
+      // Photographs and radar: "not observed" is already transparent, so the
+      // union is a stack — oldest first, newest painting over it.
+      for (let i = imgs.length - 1; i >= 0; i--) if (imgs[i]) ctx.drawImage(imgs[i], 0, 0, 512, 512);
+      return canvas;
+    }
+    /* A classification with classes that mean "not seen": walk NEWEST FIRST
+     * and take each pixel from the first day that actually observed it, so a
+     * cloud on Tuesday cannot bury a clear look from Saturday. The result is
+     * "the most recent OBSERVED class per pixel in the window" — which is
+     * what a cloud-free composite is. Pixels no day observed keep the newest
+     * day's cloud/mask colour rather than going blank: "we looked and could
+     * not see" is information, and an empty pixel would claim we never
+     * looked. */
+    const N = 512 * 512;
+    const out = ctx.createImageData(512, 512);
+    const o = out.data;
+    const done = new Uint8Array(N);
+    let filled = 0, top = null;
+    const scratch = document.createElement("canvas");
+    scratch.width = scratch.height = 512;
+    const sctx = scratch.getContext("2d", { willReadFrequently: true });
+    const read = (img) => {
+      sctx.clearRect(0, 0, 512, 512);
+      sctx.drawImage(img, 0, 0, 512, 512);
+      return sctx.getImageData(0, 0, 512, 512).data;
+    };
+    for (let i = 0; i < imgs.length && filled < N; i++) {
+      if (!imgs[i]) continue;
+      const d = read(imgs[i]);
+      if (!top) top = d;                         // the newest day that has a tile
+      for (let p = 0, k = 0; p < N; p++, k += 4) {
+        if (done[p] || d[k + 3] === 0) continue;
+        if (unobs.has((d[k] << 16) | (d[k + 1] << 8) | d[k + 2])) continue;
+        o[k] = d[k]; o[k + 1] = d[k + 1]; o[k + 2] = d[k + 2]; o[k + 3] = d[k + 3];
+        done[p] = 1; filled++;
+      }
+    }
+    // Whatever no day observed keeps the NEWEST day's cloud or mask: "we
+    // looked and could not see" is information, and a blank pixel would
+    // claim we never looked.
+    if (top && filled < N) {
+      for (let p = 0, k = 0; p < N; p++, k += 4) {
+        if (done[p] || top[k + 3] === 0) continue;
+        o[k] = top[k]; o[k + 1] = top[k + 1]; o[k + 2] = top[k + 2]; o[k + 3] = top[k + 3];
+      }
+    }
+    ctx.putImageData(out, 0, 0);
     return canvas;
   }
 }
@@ -3421,7 +3479,17 @@ function updateFineGates() {
       scheduleSweep();
     }
     hint.classList.toggle("fine-gated", gated);
-    const mos = entry.isAggregate && cfg.mosaic ? ` · ${mosaicLabel(state.windowDays)}` : ``;
+    /* …and how many days the union actually GOT. A window that lands in an
+     * archive hole (DSWx-S1 has none from 2023-12-25 to 2024-08-20) snaps
+     * every day of it to the same served date, so a "12-day union" can be
+     * one day's tiles — visible here rather than only in the toast. */
+    let mos = ``;
+    if (entry.isAggregate && cfg.mosaic) {
+      const n = mosaicDates(cfg, state.date, state.windowDays).length;
+      const asked = Math.min(MOSAIC_MAX_DAYS, Math.max(1, Math.round(state.windowDays)));
+      mos = ` · ${mosaicLabel(state.windowDays)}` +
+        (n < asked ? ` — only ${n} ${n === 1 ? "date is" : "dates are"} served here` : ``);
+    }
     hint.textContent = (gated
       ? (cfg.overview != null
         ? `coverage overview — the day's swaths as coarse strips · zoom in below ${fmtKm(cfg.fine * 1000)} km for ${fineResLabel(cfg)} detail (you're at ${fmtKm(cameraHeight())} km)`
@@ -4051,9 +4119,29 @@ function updateDeltaHint() {
 
 /* --------------------------------------------------------------- legends */
 
+/* The legend is normally a read-out, and this is the one control on it: the
+ * union's treatment of "not seen" classes is a modelling choice, not a fact,
+ * so it belongs where the choice is visible — beside the classes it affects.
+ * Delegated once, at the panel, because the legend is rebuilt constantly. */
+let legendToggleWired = false;
+function wireLegendToggle() {
+  if (legendToggleWired) return;
+  const panel = document.getElementById("legend-panel");
+  if (!panel) return;
+  legendToggleWired = true;
+  panel.addEventListener("click", (e) => {
+    const id = e.target.closest?.("[data-seethrough]")?.getAttribute("data-seethrough");
+    if (!id) return;
+    state.seeThrough = !state.seeThrough;
+    refreshTimedLayers({ hold: true });      // the composite itself changes
+    updateLegends();
+  });
+}
+
 function updateLegends() {
   const panel = document.getElementById("legend-panel");
   if (!panel) return;
+  wireLegendToggle();
   panel.innerHTML = "";
   let any = false;
   if (sstEnsembleLayer) {
@@ -4345,12 +4433,23 @@ function getClassEntries(url) {
 
 function parseClassEntries(xml) {
   const classes = [];
+  /* Which entries are the transparent FILL rather than a class, read from the
+   * palette's own structure: a <ColorMapEntry transparent="true"> whose `ref`
+   * matches the <LegendEntry id>. Label-matching alone missed DSWx-S1's "Fill
+   * value (no data)" — it is not spelled "No Data" — and put a black swatch
+   * in the legend for a colour the tile never paints. The label test stays as
+   * the fallback for a palette whose refs don't line up. */
+  const fill = new Set();
+  for (const e of xml.match(/<ColorMapEntry[^>]*>/g) || []) {
+    if (!/transparent="true"/.test(e)) continue;
+    const ref = e.match(/\bref="([^"]+)"/);
+    if (ref) fill.add(ref[1]);
+  }
   const re = /<LegendEntry\s+rgb="(\d+),(\d+),(\d+)"\s+tooltip="([^"]*)"\s+id="([^"]+)"/g;
   let m;
   while ((m = re.exec(xml))) {
     const label = m[4].replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-    // "No Data" is the transparent fill, not a class the user can click on.
-    if (/^no data$/i.test(label)) continue;
+    if (fill.has(m[5]) || /^no data$/i.test(label)) continue;
     classes.push({ rgb: [+m[1], +m[2], +m[3]], label, code: m[5] });
   }
   return classes.length ? { classes } : null;
@@ -4370,6 +4469,41 @@ function getClassLut(url) {
     }).catch(() => null));
   }
   return classLutCache.get(url);
+}
+
+/* ------------------------------------------------- classes that mean "not seen"
+ * In a classification some classes are not a measurement at all: DSWx paints
+ * CLOUD where the optical sensor could not see the ground, and the radar
+ * version paints two MASKS where the method does not apply. They are opaque
+ * colours, so in a plain newest-on-top mosaic a cloudy pass covers a clear
+ * one from three days earlier — which is exactly what a multi-day union is
+ * for. Chris, 2026-08-31: "any chance you can change the aggregation such
+ * that 'no data' (eg cloud cover in this case) is overridden by a pixel with
+ * data (no clouds) when aggregating over multiple days?"
+ *
+ * A layer declares WHICH classes those are as a regex over the palette's own
+ * labels (`unobserved`), so the answer comes from the producer's vocabulary
+ * rather than from a hard-coded colour. `state.seeThrough` turns the whole
+ * behaviour off from the legend, because "cloud on the newest day" is a real
+ * thing to want to see. */
+const unobservedCache = new Map();
+function getUnobservedSet(cfg) {
+  if (!cfg?.classmap || !cfg.unobserved) return Promise.resolve(null);
+  if (!unobservedCache.has(cfg.id)) {
+    unobservedCache.set(cfg.id, getClassEntries(cfg.classmap).then((cm) => {
+      if (!cm) return null;
+      const set = new Set();
+      for (const c of cm.classes) {
+        if (cfg.unobserved.test(c.label)) set.add((c.rgb[0] << 16) | (c.rgb[1] << 8) | c.rgb[2]);
+      }
+      return set.size ? set : null;
+    }).catch(() => null));
+  }
+  return unobservedCache.get(cfg.id);
+}
+/* Is the see-through composite in force for this layer right now? */
+function seeingThrough(cfg) {
+  return !!(cfg?.unobserved && cfg.classmap && state.seeThrough);
 }
 
 async function probeClassPixel(cfg, date, z, x, y, px, py, lut) {
@@ -4468,9 +4602,15 @@ function layerLegendEl(cfg, titleOverride) {
 function buildClassLegend(container, cm, cfg) {
   const list = document.createElement("div");
   list.className = "legend-classes";
+  // While a union is compositing, the classes it looks through are marked in
+  // the legend rather than silently absent from the map: the reader can see
+  // WHICH classes were treated as "not seen", and switch it off below.
+  const through = seeingThrough(cfg) && state.layers[cfg.id]?.isAggregate ? cfg.unobserved : null;
   for (const c of cm.classes) {
     const row = document.createElement("div");
-    row.className = "legend-class";
+    const seen = through && through.test(c.label);
+    row.className = seen ? "legend-class seen-through" : "legend-class";
+    if (seen) row.title = "treated as “not observed” while aggregating — an earlier clear day shows through";
     row.innerHTML =
       `<span class="legend-swatch" style="background:rgb(${c.rgb.join(",")})"></span>` +
       `<span class="legend-class-label">${c.label}</span>`;
@@ -4479,6 +4619,18 @@ function buildClassLegend(container, cm, cfg) {
   container.appendChild(list);
   if (cfg?.classNote) {
     container.insertAdjacentHTML("beforeend", `<div class="legend-note">${cfg.classNote}</div>`);
+  }
+  // The switch itself, only where it can do anything: a classification with
+  // "not seen" classes, currently compositing a multi-day union.
+  if (cfg?.unobserved && cfg.classmap && state.layers[cfg.id]?.isAggregate) {
+    const on = state.seeThrough;
+    const names = cm.classes.filter((c) => cfg.unobserved.test(c.label))
+      .map((c) => c.label.toLowerCase()).join(" and ") || "unobserved";
+    container.insertAdjacentHTML("beforeend",
+      `<button class="legend-toggle" data-seethrough="${cfg.id}" aria-pressed="${on}" ` +
+      `title="${on ? "Show these classes where the newest pass has them"
+                   : "Let an earlier clear day show through these classes"}">` +
+      `${on ? "☑" : "☐"} see through ${names}</button>`);
   }
 }
 
@@ -6135,12 +6287,21 @@ async function probeEntryValue(entry, carto) {
     const t = probeTileAt(cfg, lon, lat, z);
     const base = { title: cfg.title, lon, lat, when: whenOfGibs(cfg), cell: t.cell };
     if (entry.isAggregate && cfg.mosaic) {
-      // The mosaic paints the newest pass on top, so the probe walks the same
-      // dates newest-first and stamps the answer with the day it came from.
-      for (const d of mosaicDates(cfg, state.date, state.windowDays)) {
+      /* The mosaic paints the newest OBSERVED pass on top, so the probe walks
+       * the same dates newest-first, skips the same "not seen" classes, and
+       * stamps the answer with the day it actually came from — the read-out
+       * and the pixel under it can never be from different days. A pixel no
+       * day observed falls back to the newest cloud/mask, as the tile does. */
+      const dates = mosaicDates(cfg, state.date, state.windowDays);
+      const skip = seeingThrough(cfg) ? cfg.unobserved : null;
+      let fallback = null;
+      for (const d of dates) {
         const label = await probeClassPixel(cfg, d, z, t.x, t.y, t.px, t.py, lut);
-        if (label != null) return { ...base, label, when: whenAt("day", d) };
+        if (label == null) continue;
+        if (skip && skip.test(label)) { fallback = fallback || { label, d }; continue; }
+        return { ...base, label, when: whenAt("day", d) };
       }
+      if (fallback) return { ...base, label: fallback.label, when: whenAt("day", fallback.d) };
       return { ...base, noData: true };
     }
     const label = await probeClassPixel(cfg, state.date, z, t.x, t.y, t.px, t.py, lut);
@@ -10296,6 +10457,7 @@ window.__earth = {
   // the mosaic: a swath layer's union over the Aggregate window
   MosaicProvider, mosaicDates, mosaicLabel, MOSAIC_MAX_DAYS, providersFor,
   setWindowDays, syncWindowControls, updateSuppressedNotes, LAYER_FACTS,
+  getUnobservedSet, seeingThrough,
   // the scale bar
   updateScaleBar, groundMetresPerPixel, viewGroundWidth, niceScaleMetres, fmtDistance,
   // place names: the collections themselves, plus the pick-through helper, so a
