@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-062"></a>
-## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) DISPATCHED #518, ~08:5xZ
+## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) DISPATCHED #518 (died on a full disk, 3 min) → #RUNNUM2
 
 TL;DR — **nothing this programme has ever rolled used a clean-pool head.** #503,
 #510 and #513 all rolled heads trained under `endpoint_contaminated`, so no
@@ -460,7 +460,24 @@ against #516: head width (206.66M → 7.60M).**
 Roll time is expected to be shorter than #516's 21 h 26 m (a 27× smaller
 head per step), but the 24 h token is priced at dispatch regardless: the job
 must archive by DISPATCH+24 h or the bundle is harvested by hand from the
-`probes-518` artifact.
+`probes-<n>` artifact.
+
+**#518 DIED AT 08:52:42Z, THREE MINUTES IN, ON A FULL DISK — AND IT IS #508's
+DEATH AGAIN, ONE THRESHOLD AWAY FROM THE RULE THAT WAS WRITTEN FOR IT.** The
+box was 79/100 after #516 because #516's 31.6 GiB anomaly-transform scratch
+copy (`family4_na025_pentad_r2_scratch.npy`) was still on it. Start-of-job
+hygiene read `23 GB free, want 16 GB` and exited "nothing to do"; the Train
+step then began writing a NEW scratch copy of the same tensor, filled the disk
+at `writable_copy 1344/3142`, and died with `Bus error` (exit 135); the sroll
+step that followed could not even `mkdir ml/runs/heads` (`overlay 100G 100G
+256K 100% /`). The tier-0 "free stale scratch" rule in `scripts/disk_hygiene.sh`
+was added on 08-28 for exactly this, and it sat BEHIND a 16 GB free-space
+early-exit sized for the Z pull, not the 31.6 GiB scratch (§5.18: size a guard
+from the allocation it guards). **Fixed by moving the scratch and roll-dump
+removal ahead of the early exit, unconditionally — a rebuilt-every-run file
+has no free-space level at which keeping it is right.** Cost: ~4 minutes of
+box time and no artefact. **RE-DISPATCHED AS #RUNNUM2 with identical inputs
+once the fix was on `main`** (the job checks out `main` at dispatch).
 
 ---
 

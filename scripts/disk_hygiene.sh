@@ -52,21 +52,25 @@ complete_on_release() {   # complete_on_release <hash> -> 0 if COMPLETE
 }
 
 echo "disk hygiene: $(free_gb) GB free, want ${MIN_FREE_GB} GB"
-[ "$(free_gb)" -ge "$MIN_FREE_GB" ] && { echo "  nothing to do"; exit 0; }
 
-# ---- tier 0: pure scratch, never the only copy of anything -------------------
-echo "  tier 0 — scratch"
-rm -rf /opt/runner/_diag/*.log /opt/runner/_work/_temp/* 2>/dev/null
-pip cache purge >/dev/null 2>&1
-# THE ANOMALY-TRANSFORM SCRATCH COPY. train.py/temporal.py write the tensor's
-# writable twin as <tensor>_scratch.npy (31.6 GiB at pentad) and REBUILD it
-# from the pristine .npz at every run — it is never the only copy of
-# anything, and one stale copy is a third of a 100 GB disk. This tier learned
-# it on 2026-08-28 the expensive way: #503 was cancelled (no end-of-job
-# cleanup), its scratch stayed, and #508 on the same box died 90 s in with a
-# Bus error — an mmap write into a disk that filled mid-copy. The failure
-# happened INSIDE the fresh run's own scratch write, so only start-of-job
-# hygiene can prevent it. Newer than this script; hence the gap.
+# ---- tier −1: a PRIOR RUN'S REBUILT-EVERY-RUN SCRATCH, removed UNCONDITIONALLY
+# — BEFORE the free-space early exit, not behind it.
+#
+# Measured 2026-08-31 on #518 (E-062-R0b, an sroll on the box #516 had just
+# drained on): this script read "23 GB free, want 16 GB" and exited "nothing
+# to do", leaving #516's 31.6 GiB `family4_na025_pentad_r2_scratch.npy` in
+# place. train.py then began writing a NEW scratch copy of the same tensor,
+# filled the disk at writable_copy 1344/3142, and died with a Bus error —
+# the identical death #508 had on 2026-08-28, which is the incident the tier-0
+# scratch rule below was written for. The rule existed and could not fire,
+# because the threshold in front of it was sized for the WRONG allocation:
+# 16 GB is the Z pull, and the scratch copy is twice that (ml/CLAUDE.md
+# §5.18 — size a guard from the allocation it guards). A stale scratch copy
+# is never the only copy of anything and is rebuilt from the pristine .npz
+# on every run, so there is no free-space level at which keeping it is
+# right. Same for a prior run's roll dumps. Free them first, then ask
+# whether anything else is needed.
+echo "  tier -1 — a prior run's rebuilt-every-run scratch (always)"
 for f in "$CACHE"/*_scratch.npy; do
   [ -e "$f" ] || continue
   sz=$(du -h "$f" | cut -f1)
@@ -83,6 +87,28 @@ if [ -d ml/runs/actions/roll_dump ]; then
   sz=$(du -sh ml/runs/actions/roll_dump 2>/dev/null | cut -f1)
   rm -rf ml/runs/actions/roll_dump && echo "    freed ml/runs/actions/roll_dump ($sz) — a prior run's roll dumps (uploaded with its artifact, or unfinishable)"
 fi
+echo "  after tier -1: $(free_gb) GB free"
+[ "$(free_gb)" -ge "$MIN_FREE_GB" ] && { echo "  nothing more to do"; exit 0; }
+
+# ---- tier 0: pure scratch, never the only copy of anything -------------------
+echo "  tier 0 — scratch"
+rm -rf /opt/runner/_diag/*.log /opt/runner/_work/_temp/* 2>/dev/null
+pip cache purge >/dev/null 2>&1
+# THE ANOMALY-TRANSFORM SCRATCH COPY (now handled in tier −1 above, kept here
+# as a no-op second pass so the two tiers cannot drift apart). train.py/temporal.py write the tensor's
+# writable twin as <tensor>_scratch.npy (31.6 GiB at pentad) and REBUILD it
+# from the pristine .npz at every run — it is never the only copy of
+# anything, and one stale copy is a third of a 100 GB disk. This tier learned
+# it on 2026-08-28 the expensive way: #503 was cancelled (no end-of-job
+# cleanup), its scratch stayed, and #508 on the same box died 90 s in with a
+# Bus error — an mmap write into a disk that filled mid-copy. The failure
+# happened INSIDE the fresh run's own scratch write, so only start-of-job
+# hygiene can prevent it. Newer than this script; hence the gap.
+for f in "$CACHE"/*_scratch.npy; do
+  [ -e "$f" ] || continue
+  sz=$(du -h "$f" | cut -f1)
+  rm -f "$f" && echo "    freed $(basename "$f") ($sz) — anomaly-transform scratch, rebuilt every run"
+done
 # A .partial with no .progress marker beside it cannot be resumed, so it is
 # scratch. One WITH a marker is a half-built embedding somebody can continue —
 # that is tier 2, and deleting it would throw away up to 95 minutes of GPU.
