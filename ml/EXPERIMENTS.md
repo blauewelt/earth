@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-062"></a>
-## E-062 · The first honest roll, and the terminal holdout — R0 SKILL BATTERY LANDED #516, 2026-08-30 ~21:42Z
+## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ
 
 TL;DR — **nothing this programme has ever rolled used a clean-pool head.** #503,
 #510 and #513 all rolled heads trained under `endpoint_contaminated`, so no
@@ -329,6 +329,84 @@ forecast" and not "does 27× less capacity forecast worse".
 
 Snapshot of the partial artefact read for this entry:
 `/home/claude/work/harvest/516-rollout_partial.json` (1,763,912 bytes).
+
+#### (i) THE RUN ENDED CLEANLY, AND THE PARTIAL READ ABOVE IS VINDICATED — 2026-08-31 08:2xZ
+
+#516 completed. `run-516.jsonl` on `ml-metrics` carries **44 records, final
+`{"phase": "future", "done": 879, "total": 879, "pct": 100.0, "elapsed_s":
+77146}`** — 21 h 26 m, and 44 records is #510's count exactly.
+**`probes-516.json` is archived at 2,041,999 bytes** (#510's was 1,988,684; the
+difference is the two extra blocks below), and its `rollout_spatial.json`
+carries **no `in_progress` key** — which per §5.25 is the run script's own
+certificate that the job reached its end rather than being cut off.
+
+**The §5.25 partial was honest, and this is the check that says so.** Every
+number published in §(a)–(h) was read from the in-flight file; against the
+final archived artefact all of them are **bit-identical** — `gate`, `corridor`,
+`window` and their three `_trainlon` children agree on `horizon_auc`,
+`horizon_auc_daymatched` and every one of the 73 `chan_skill` rows, and
+`amoc_bands` / `amoc_bands_unpooled` compare equal as whole objects. Nothing
+above needs amending. That is the property §5.25 was written to give — a phase
+boundary writes final numbers — and it has now been verified rather than
+assumed.
+
+**The dispersion comparison this entry owed CANNOT BE MADE, and the reason is
+structural rather than a missing number.** The blocks that arrived are `long`
+and `future`, not `long_dispersion` and `future_dispersion`. #513's dispersion
+numbers are the **spread across eight FGN ensemble members**; E-059 is a
+deterministic head at unroll 1, so its 36-month rolls produce **one
+trajectory** and there is no spread to measure. Putting 0.1060 → 0.1015 beside
+anything here would be comparing an ensemble statistic with a single path.
+**So §2d's memorisation-by-dispersion test is not answered for the clean-pool
+head, and cannot be until a clean-pool head is trained with an ensemble
+mechanism.** That is a real gap, not a null result.
+
+**What the two blocks DO carry is a number the skill battery could not
+produce, and it is the sharpest one in the file for the programme's actual
+question.**
+
+| `long` — 219 pentads free-run from context_end 2004-12-01 | value |
+|---|---|
+| `r_trained` — transport correlation, all frequencies, n = 219 | **0.636** |
+| `r_lp18` — the same rollout, 18-month low-pass | **−0.13** |
+| `amp_lp18` — its amplitude ratio on that low-pass | 0.606 |
+| `r_heldout` | None (`n_heldout` 0) |
+
+Read it carefully in both directions. **2004-12 → 2007-12 are all TRAINING
+years** (the holdout is 2009/2017/2023), so 0.636 is a recall number over
+years the model has seen, not a forecast number — and `n_heldout` 0 says the
+evaluator agrees there was nothing held out in this window to score. Against
+that, the **18-month low-pass component of the same rollout carries no
+positive skill at all**, while still being emitted at 61 % of full amplitude —
+the same over-confidence §(d) measured on the lead axis, now visible on the
+frequency axis.
+
+**But −0.13 is not a level and must never be quoted as one.** An 18-month
+low-pass over a 36-month window leaves roughly two independent cycles; the
+sampling sd of a correlation at ~2 effective degrees of freedom is close to
+1. The honest statement is the CONTRAST and its direction: **whatever skill
+the 0.636 represents lives at high frequency, and the multi-year band — which
+is the AMOC question this programme exists to answer — is unmeasured by this
+roll rather than measured and found negative.** Getting a real number there
+needs a longer free-run window inside held-out data, which the terminal
+holdout (§3.1, train ≤ 2020 / test 2021–2024) supplies for the first time:
+four contiguous held-out years is enough for two clean 18-month cycles with
+truth to score against. That is a new and concrete argument for the terminal
+block, arrived at from the data rather than from first principles.
+
+**The `future` roll is a free stability check and it passes.** 219 pentads
+past the record's end (2025-01-05 → 2027-12-31, no truth anywhere), the
+transport read-out stays **bounded and roughly centred**: sd 1.248 against the
+in-record roll's 2.208, yearly means −0.219 / −0.331 / +0.407, no drift to a
+rail and no oscillatory blow-up. Non-divergence over three years is a
+precondition for the thing the programme is ultimately for — a forecast run
+forward from now — and it is not automatic for an autoregressive head. It says
+nothing about whether the trajectory is RIGHT, and the halved amplitude is
+consistent with the same damping-toward-the-mean behaviour seen elsewhere.
+
+**Box 49242934 / gpu-box-47898003 was stopped at 08:2xZ** and verified
+`exited` by a subsequent `gpu_box.mjs list`, not by the stop call's own
+`{"success":true}`.
 
 ---
 

@@ -1,6 +1,6 @@
 # The standing overview — every experiment, one line each, and what's next
 
-**Last updated: 2026-08-31 ~08:30 UTC** (#485/E-050 training-half harvest folded in — warm start survives, decoder audit still owed; previous stamp 2026-08-30 ~22:30 UTC: E-062-R0 landed: the first honest rolled number in this programme's history, and a metric correction that changes how every "corridor AUC" in this file reads; everything below the reset block is the earlier text, unchanged).
+**Last updated: 2026-08-31 ~08:35 UTC** (#516 COMPLETE — 879/879 in 21 h 26 m, `probes-516.json` archived, box stopped, and the 36-month rolls read; also #485/E-050 training-half harvest folded in — warm start survives, decoder audit still owed; previous stamp 2026-08-30 ~22:30 UTC: E-062-R0 landed: the first honest rolled number in this programme's history, and a metric correction that changes how every "corridor AUC" in this file reads; everything below the reset block is the earlier text, unchanged).
 
 ---
 
@@ -99,11 +99,30 @@ against the OLD interspersed holdout · E-059's own probe was 0.522, below both
 wind-stress ridge bars · the pentad r2 tensor has no longitude hole, so
 `_trainlon` equals the parent and the spatial split was not measured here.
 
+**THE RUN IS COMPLETE (08-31): 879/879 in 21 h 26 m, `probes-516.json`
+archived at 2,041,999 B with NO `in_progress` marker, and every number above —
+published from the §5.25 partial — is BIT-IDENTICAL in the final artefact.**
+The box is stopped and verified `exited`.
+
+**The 36-month rolls added one more thing.** They are NOT dispersion blocks —
+E-059 is deterministic, so one trajectory and no spread, which means §2d's
+memorisation-by-dispersion test is simply UNANSWERED for a clean-pool head
+rather than answered negatively. What they do carry: a 3-year free run from
+2004-12 correlates **0.636** with the true transport at pentad resolution but
+**−0.13 on an 18-month low-pass**, at 61 % amplitude — so the skill lives at
+high frequency and the multi-year band, which is the AMOC question, is
+unmeasured by this roll (two effective cycles; −0.13 is not a level, and
+2004–2007 are training years anyway). That is a new, data-driven argument for
+the terminal holdout: four contiguous held-out years is the first window that
+could measure it. Separately the 3-year roll PAST the record stays bounded
+(sd 1.248 against 2.208 in-record, no drift to a rail) — non-divergence is a
+precondition for forecasting forward from now, and it is not automatic.
+
 **Next, in order:** (1) roll the step-2,000 checkpoint — cheapest untried thing
 in the programme; (2) fix the amplitude calibration, a decoding change worth
 ~+0.46 msss on states we already have; (3) drop or thin the 32 upsampled Argo
-channels; (4) the terminal-holdout retrains at 7.6M, unchanged and no longer
-needing to rescue anything.
+channels; (4) the terminal-holdout retrains at 7.6M — unchanged, no longer
+needing to rescue anything, and now the only route to a low-frequency number.
 
 Full reading:
 [E-062 in the experiment log](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-062).
