@@ -985,7 +985,14 @@ jobs:
           sys.path.insert(0, "ml")
           from tensor_io import load_tensor, sidecar_path
           d = load_tensor(os.environ["TENSOR"], allow_pickle=False)
-          months = [str(m) for m in d["months"]]
+          # A corpus with no real calendar has no `months`, and family 6 does
+          # not write one ON PURPOSE — a reader must not be able to mistake a
+          # model-year of a free-running control run for a calendar year.
+          # #517 built the whole 7.79 GB artefact and then died HERE, which is
+          # a bookkeeping step failing after the thing it describes already
+          # exists. Report what the tensor actually carries instead.
+          months = ([str(m) for m in d["months"]] if "months" in d
+                    else [str(b) for b in d["bins"]] if "bins" in d else [])
           # For the sidecar layout the meta npz alone would fingerprint 1% of
           # the artefact; hash the X file too so cross-box divergence in the
           # DATA cannot hide behind identical metadata.
@@ -1023,7 +1030,8 @@ jobs:
                   "X_shape": list(d["X"].shape),
                   "C": int(d["X"].shape[-1]),
                   "chan": [str(c) for c in d["chan"]],
-                  "months": [months[0], months[-1]],
+                  "months": ([months[0], months[-1]] if months else None),
+                  "months_are_calendar": bool("months" in d),
                   "T": len(months),
               },
               "torch": tv, "device": cuda,
