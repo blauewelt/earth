@@ -1,6 +1,6 @@
 # Geospatial representation-model survey (stencil level) — 31 Aug 2026
 
-Deck delivered in session: `geospatial-representation-models.pptx` (v8, 34 slides + notes; build script `build.js`, pptxgenjs).
+Deck delivered in session: `geospatial-representation-models.pptx` (v9, 34 slides + notes, fact-checked; build script `build.js`, pptxgenjs).
 Purpose: compare AlphaEarth, TESSERA, OlmoEarth, TerraMind, Prithvi-EO 2.0 and IBM's Prithvi-based ocean model at the level of
 *what area in space and what span of time feeds one embedding*, plus what each project actually releases.
 
@@ -81,3 +81,18 @@ Drive: the deck (2.8 MB) is too large for the connector's inline upload; convert
 - Speaker notes: `deck/notes.js` holds one plain-English note per slide (terms and symbols explained: embedding, stencil, token, frozen probe vs fine-tune, mIoU/F1/RMSE, Δt, ℓ, τ, v, Ekman, thermal wind, Rossby/Kelvin, RAPID, corridor AUC…). `build.js` replaces the old technical notes with these in the PPTX notes pane and writes `titles.json`.
 - PDF with notes: `notes_deck.js` renders a landscape notes page per slide (two balanced columns) → `notes-pages.pdf`; `qpdf --empty --collate --pages slides.pdf notes.pdf -- out.pdf` interleaves slide N / notes N → `geospatial-representation-models-with-notes.pdf` (68 pages). Plain `geospatial-representation-models.pdf` (34 pages) also delivered.
 - Rebuild recipe: `node build.js && node notes_deck.js && soffice → pdf (both) && qpdf --collate`.
+
+## Published on GitHub (1 Sep 2026, commit e1188b20 on blauewelt/earth main)
+- Explorer (live): https://blauewelt.github.io/earth/ml/figures/dependency_cone_explorer.html
+- Deck folder: https://github.com/blauewelt/earth/tree/main/ml/figures/geofm_survey (PDF with notes, PPTX, build.js, notes.js, notes_deck.js, SURVEY_NOTES.md = this note)
+- Rows added to ml/figures/README.md. gh-pages fast-forwarded (force:false). Deploy job green; Playwright test job pending at time of writing (previous commit's test job had failed before this change).
+
+## v9 — fact-check pass (1 Sep 2026, commit 1ffc3cc on blauewelt/earth)
+Six parallel checks against primary sources; ~360 benchmark cells re-read from page images, 0 table mismatches, 1 summary-line slip. Corrections applied to deck + notes:
+- **AlphaEarth frame size IS published** (supplement S2.1/S8.2): 128 × 128 px = 1.28 km frames for training and inference (960 m tiles + 160 m buffer, outer 80 m trimmed); 15 STP blocks, widths D_S 1024 / D_T 512 / D_P 128 (S2.4); vMF κ = 8e3. Receptive field ≤ ~640 m from any pixel. Earlier statements "L and N not stated" were wrong (main text only). Slide 14 point moved to 1.28 km; summary table updated.
+- Removed unprintable numbers: AlphaEarth LCMAP 92.4 %, Prithvi GEO-Bench 75.6 %.
+- Granite: RMSE loss; 6-day window centred (~±3 d); IBM Research Europe; 512k vs 470k+50k inconsistency shown; chl-a spread 0.03–0.10.
+- TerraMind: tiny/small Jun–Jul 2025; Large 1024-D; Univ. of Iceland; no DeCUR in PANGAEA claim. OlmoEarth: token merging v1.1, RoPE v1.2.
+- Physics: Rossby at 10° ~0.3 m/s; own-history τ = Eulerian decorrelation (eddies live 4+ months); additive reach rule for air T stated on slide 28; Earth 2 stencil ~7× (not 10×) wider than Granite's tile.
+- Head-to-head wording: Prithvi 8–13 pp behind on PASTIS/MADOS; OceanSAR wind-speed error −30–45 %.
+- Verified as correct (no change): all OlmoEarth/TerraMind/TESSERA/Granite/OceanSAR/GEO-Bench-2/LCZ table cells; TESSERA CC0 weights; Aurora 1.5 exists (MSR, 2026); heat-capacity 2.5 m; Ekman/thermal-wind/geostrophy formulas and signs; slot arithmetic 851 vs 12,816.
