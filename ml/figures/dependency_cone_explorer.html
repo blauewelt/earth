@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  Dependency-Cone Explorer — interactive companion to the "velocity-specific dependency cone"
+  slides of the geospatial representation-model survey (ml/figures/geofm_survey/), made
+  2026-09-01 at Yannick's request ("can you write an animation for it? ... if I chose wind, air,
+  and ocean temperature among other driving forces for the current, how would it work?").
+
+  The idea: an input observed l steps before now can matter for a forecast dt ahead only if
+  |dx| <= v * (dt + l) (the domain-of-dependence / CFL argument) and dt + l <= tau (the process is
+  still predictable). A channel's dependency region is the UNION of its drivers' wedges. A fixed
+  stencil is a cylinder (same reach at every lag); a per-channel, lag-dependent stencil follows
+  the union. Slot arithmetic uses the production sunflower-89 @ 4444 km over 24 monthly lags
+  (89 x 24 = 2,136 slot-lags per channel) with slots(r) = clamp(round(89 * (r/4444)^2), 9, 89).
+
+  Every speed, memory and correlation length is an order-of-magnitude illustration and is a
+  slider; nothing here is a measured result. The four predictions it motivates are ablations
+  to run (see the survey deck, slides 27-31). Vanilla JS + inline SVG, no external resources;
+  the same file (minus this wrapper) is published as a claude.ai artifact.
+-->
+<title>Dependency-Cone Explorer</title>
+<style>
+:root{
+  --bg:#F2F5F7; --surface:#FFFFFF; --surface-2:#E9EEF2; --ink:#17242F; --muted:#5C6B78;
+  --line:#D3DBE2; --grid:#E3E9EE; --accent:#1D5C8F; --accent-ink:#FFFFFF; --cyl:#7F8D99;
+  --wind:#C48606; --air:#D14D27; --sst:#2867C9; --int:#147A82; --ssh:#7043BF; --own:#587B64;
+  --shadow:0 1px 2px rgba(23,36,47,.05),0 8px 20px rgba(23,36,47,.05);
+  --flag-bg:#FBF1DA; --flag-ink:#6B4E00;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D141A; --surface:#151E26; --surface-2:#1C2731; --ink:#E4EBF1; --muted:#95A3AF;
+    --line:#2A3743; --grid:#212D38; --accent:#6FB0E6; --accent-ink:#0D141A; --cyl:#7E8B97;
+    --wind:#EFB33A; --air:#F2805A; --sst:#6BA2F0; --int:#3FB8C0; --ssh:#AE94EA; --own:#93B79F;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 20px rgba(0,0,0,.25);
+    --flag-bg:#3A2E10; --flag-ink:#F0CB6B;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D141A; --surface:#151E26; --surface-2:#1C2731; --ink:#E4EBF1; --muted:#95A3AF;
+  --line:#2A3743; --grid:#212D38; --accent:#6FB0E6; --accent-ink:#0D141A; --cyl:#7E8B97;
+  --wind:#EFB33A; --air:#F2805A; --sst:#6BA2F0; --int:#3FB8C0; --ssh:#AE94EA; --own:#93B79F;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 20px rgba(0,0,0,.25);
+  --flag-bg:#3A2E10; --flag-ink:#F0CB6B;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;overflow-x:hidden}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.page{max-width:1480px;margin:0 auto;padding:22px 24px 40px}
+header{display:grid;grid-template-columns:1fr auto;gap:8px 32px;align-items:end;margin-bottom:18px}
+header h1{font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;font-weight:500;font-size:30px;letter-spacing:-.01em;margin:0 0 6px;text-wrap:balance}
+header p{margin:0;max-width:66ch;color:var(--muted)}
+.formula{grid-column:1/-1;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:8px}
+.formula b{color:var(--ink);font-weight:500}
+.layout{display:grid;grid-template-columns:318px minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:1000px){.layout{grid-template-columns:272px minmax(0,1fr)}}
+.rail{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow)}
+.rail .card{padding:12px 14px}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.seg button{background:var(--surface);color:var(--ink);border:0;padding:5px 10px;font:inherit;font-size:12.5px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg button:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.row2{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.driver{border-top:1px solid var(--line);padding:9px 0 8px}
+.driver:first-of-type{border-top:0;padding-top:2px}
+.driver .head{display:grid;grid-template-columns:12px 16px 1fr;gap:8px;align-items:center}
+.sw{width:12px;height:12px;border-radius:3px}
+.driver .name{font-weight:600;font-size:13px;cursor:help;text-decoration:underline dotted;text-decoration-color:var(--line);text-underline-offset:3px}
+.driver .mech{grid-column:3;font-size:11.5px;color:var(--muted);line-height:1.35;margin-top:1px}
+.flag{grid-column:3;margin-top:5px;font-size:11px;line-height:1.35;background:var(--flag-bg);color:var(--flag-ink);border-radius:4px;padding:3px 7px}
+.sl{display:grid;grid-template-columns:52px 1fr 78px;gap:6px;align-items:center;margin-top:5px;font-size:11.5px}
+.sl label{color:var(--muted)}
+.sl .val{text-align:right;font-size:11.5px}
+input[type=range]{width:100%;margin:0;accent-color:var(--accent);height:18px}
+input[type=checkbox]{margin:0;accent-color:var(--accent);width:15px;height:15px}
+.driver.off .mech,.driver.off .sl,.driver.off .flag{opacity:.45}
+.btn{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:6px 12px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:hover{filter:brightness(1.05)}
+.lagbox{display:flex;flex-direction:column;gap:8px}
+.lagbox .readout{display:flex;justify-content:space-between;font-size:12.5px}
+.rollinfo{font-size:12px;color:var(--muted);min-height:1.3em}
+.kv{display:grid;grid-template-columns:1fr auto;gap:3px 12px;font-size:12.5px}
+.kv dt{color:var(--muted)}.kv dd{margin:0;text-align:right}
+.main{display:flex;flex-direction:column;gap:18px;min-width:0}
+.panel{padding:14px 16px 12px;position:relative}
+#svgA{min-width:720px}
+.panel h2{margin:0;font-size:15px;font-weight:600;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.panel h2 .l{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.panel .sub{color:var(--muted);font-size:12.5px;margin:2px 0 10px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin:0 0 6px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.legend i.dash{width:16px;height:0;border-top:2px dashed var(--cyl);border-radius:0}
+.svgwrap{position:relative;overflow-x:auto}
+svg{display:block;max-width:100%;height:auto}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:6px 9px;border-radius:5px;box-shadow:var(--shadow);white-space:nowrap;display:none;z-index:2;line-height:1.4}
+.tip b{font-weight:600}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:1100px){.two{grid-template-columns:1fr}}
+.stat{display:flex;gap:18px;flex-wrap:wrap;margin:0 0 6px}
+.stat div{display:flex;flex-direction:column}
+.stat .big{font-size:22px;font-weight:600;line-height:1.1}
+.stat .lab{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.notes{padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px 32px}
+@media (max-width:1100px){.notes{grid-template-columns:1fr}}
+.notes h3{margin:0 0 6px;font-size:13px;font-weight:600}
+.notes p,.notes li{font-size:13px;color:var(--muted);margin:0}
+.notes ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.notes b{color:var(--ink);font-weight:600}
+.axis text{fill:var(--muted);font-size:11px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.axis line,.axis path{stroke:var(--grid)}
+.axlabel{fill:var(--muted);font-size:11px}
+.annot{fill:var(--muted);font-size:10.5px}
+.maptxt{fill:var(--muted);font-size:10.5px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.bartxt{fill:var(--ink);font-size:11.5px}
+.barnum{fill:var(--ink);font-size:11.5px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.barmut{fill:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="page">
+<header>
+  <div>
+    <h1>Dependency-Cone Explorer</h1>
+    <p>Which past inputs can matter for a forecast at one ocean pixel? Every driver reaches only as far as its signal speed carries it and only as far back as its memory lasts — so the region a network should look at is a <em>union of wedges</em>, not a fixed cylinder.</p>
+  </div>
+  <div class="seg" role="group" aria-label="Theme is inherited from the viewer; this group selects the forecast step">
+    <button id="dt30" aria-pressed="true">Δt = 1 month</button><button id="dt5" aria-pressed="false">Δt = 5 days</button>
+  </div>
+  <div class="formula mono">
+    <b>reach<sub>p</sub>(ℓ)</b> = min( max( v<sub>p</sub>·(Δt+ℓ), L<sub>corr,p</sub> ), 10 000 km ) &nbsp;·&nbsp;
+    <b>lag ℓ useful</b> iff Δt+ℓ ≤ τ<sub>p</sub> (lag 0 always kept) &nbsp;·&nbsp;
+    <b>slots(r)</b> = clamp( round( 89·(r / 4444 km)² ), 9, 89 )<span style="display:block;margin-top:3px"><b>Notation:</b> t = now (the last observed step) · Δt = forecast step, target at t+Δt · <b>ℓ = lag of an input</b>: observed at t−ℓ, so it sits Δt+ℓ before the target; ℓ = 0 is the newest input, ℓ = 1 the step before, … · 1 month ≡ 30 d here. All parameters are order-of-magnitude illustrations, not fitted values.</span>
+  </div>
+</header>
+
+<div class="layout">
+<aside class="rail">
+  <div class="card">
+    <p class="eyebrow">Target at pixel P</p>
+    <div class="seg" id="presets" role="group" aria-label="Target preset">
+      <button data-p="cur" aria-pressed="true">Surface current</button><button data-p="sst" aria-pressed="false">SST</button><button data-p="int" aria-pressed="false">Interior T</button>
+    </div>
+    <dl class="kv" style="margin:10px 0 0">
+      <dt>Pixel / 3×3 patch</dt><dd class="mono">28 km / 84 km</dd>
+      <dt>Lags in stack</dt><dd class="mono" id="kvLags"></dd>
+      <dt>Cylinder per channel</dt><dd class="mono" id="kvCyl"></dd>
+      <dt>Union reach at this lag</dt><dd class="mono" id="kvReach"></dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <p class="eyebrow">Lag &amp; animation</p>
+    <div class="lagbox">
+      <div class="readout"><span>lag ℓ</span><span class="mono" id="lagRead"></span></div>
+      <input type="range" id="lag" min="0" max="23" step="1" value="0" aria-label="Lag">
+      <div class="row2">
+        <button class="btn primary" id="play">▶ Play lag</button>
+        <button class="btn" id="roll">↻ Roll 1…12</button>
+      </div>
+      <div class="rollinfo" id="rollInfo">Play sweeps the lag 0 → 24 months; Roll composes the one-step cone h times (h = 1…12).</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row2" style="margin-bottom:6px">
+      <p class="eyebrow" style="margin:0">Drivers</p>
+      <label style="font-size:12px;display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="aniso"> anisotropy sketch</label>
+    </div>
+    <div id="drivers"></div>
+  </div>
+</aside>
+
+<main class="main">
+  <section class="card panel">
+    <h2><span class="l">A</span> Wedge chart <span style="font-weight:400;color:var(--muted);font-size:12.5px">distance from P vs input lag</span></h2>
+    <p class="sub">Filled: each active driver's dependency wedge. Bold line: their union — what a cone-shaped stencil should follow. Hover for numbers.</p>
+    <div class="legend" id="legendA"></div>
+    <div class="svgwrap" id="wrapA"><svg id="svgA" viewBox="0 0 860 340" role="img" aria-label="Dependency wedges in the lag–distance plane"></svg></div><div class="tip" id="tipA"></div>
+  </section>
+
+  <div class="two">
+    <section class="card panel">
+      <h2><span class="l">B</span> Map view <span style="font-weight:400;color:var(--muted);font-size:12.5px">stencil at the current lag</span></h2>
+      <div class="row2" style="margin:2px 0 8px">
+        <span class="sub" style="margin:0" id="slotCount"></span>
+        <div class="seg" id="zoom" role="group" aria-label="Map extent"><button data-z="6000" aria-pressed="true">±6 000 km</button><button data-z="2000" aria-pressed="false">±2 000</button><button data-z="600" aria-pressed="false">±600</button></div>
+      </div>
+      <div class="svgwrap" id="wrapB"><svg id="svgB" viewBox="0 0 440 440" role="img" aria-label="Map of sunflower stencil slots with driver reach rings"></svg></div>
+    </section>
+    <section class="card panel">
+      <h2><span class="l">C</span> Slot budget <span style="font-weight:400;color:var(--muted);font-size:12.5px">cone-shaped vs cylinder</span></h2>
+      <div class="stat">
+        <div><span class="big mono" id="stCone"></span><span class="lab">cone slot-lags</span></div>
+        <div><span class="big mono" id="stCyl"></span><span class="lab">cylinder slot-lags</span></div>
+        <div><span class="big mono" id="stSave"></span><span class="lab">saving</span></div>
+      </div>
+      <p class="sub" id="budgetSub"></p>
+      <div class="svgwrap"><svg id="svgC" viewBox="0 0 440 300" role="img" aria-label="Slot budget per driver, cone-shaped versus cylinder"></svg></div>
+    </section>
+  </div>
+
+  <section class="card notes">
+    <div>
+      <h3>How to read this</h3>
+      <p>Pick a target and a forecast step Δt. Each driver p is a wedge in the (lag, distance) plane: an input observed ℓ before now sits Δt+ℓ before the target, so it can matter only inside <b>|Δx| ≤ v<sub>p</sub>·(Δt+ℓ)</b> and only while <b>Δt+ℓ ≤ τ<sub>p</sub></b>. Reach never falls below the driver's spatial correlation length L<sub>corr</sub>. The <b>cylinder</b> gives every lag the same 89-slot disc of radius 4 444 km; the <b>cone</b> gives each lag only the slots its union reach needs — panel C counts the difference. <b>Roll</b> shows why a one-step model still sees far: composing the stencil h times widens the effective cone by one Δt per step.</p>
+    </div>
+    <div>
+      <h3>Caveats</h3>
+      <ul>
+        <li><b>v</b> is the fastest relevant signal speed (waves, adjustment), not the mean flow.</li>
+        <li><b>τ</b> is predictability, not causality — the driver may still act, its state is just no longer inferable.</li>
+        <li>Real cones are tilted: upstream, westward (Rossby), along boundaries (Kelvin). The anisotropy toggle is a sketch, not a model.</li>
+        <li>Monthly averaging turns anything with τ &lt; Δt into <b>forcing</b>: it enters at lag 0 and is not itself predictable.</li>
+        <li>A fast driver acting through a slow medium (air T → heat flux → mixed layer) inherits the medium's memory and, at old lags, its advection speed.</li>
+        <li>These are <b>ablations to run</b>, not results. Parameters are order-of-magnitude illustrations.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+</div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const DAY=86400, KM=1000, CAP=10000, R_DISC=4444, N_SLOTS=89, PATCH=84, PIXEL=28, MONTH=30, HORIZON=720;
+const GOLD=Math.PI*(3-Math.sqrt(5));
+
+const DRIVERS=[
+ {id:'wind',name:'Wind stress',short:'Wind stress',cv:'--wind',v:10,tau:10,L:1500,mode:'max',
+  mech:'Ekman transport / drift. Responds within ~1 day, local.'},
+ {id:'air',name:'Air temperature / heat flux',short:'Air T / heat flux',cv:'--air',v:0.15,tau:180,L:1500,mode:'add',vLabel:'v ocean',
+  mech:'Net heat flux → mixed-layer T → density gradient → geostrophic current (thermal wind).',
+  note:'Fast driver (v 10 m/s, τ<sub>atm</sub> 10 d) integrated by the mixed layer: inherits its memory (τ ≈ 6 mo) and, for old lags, its advection speed. reach = L<sub>corr</sub> + v<sub>ocean</sub>·(Δt+ℓ).'},
+ {id:'sst',name:'Ocean surface T (mixed layer)',short:'Surface T',cv:'--sst',v:0.15,tau:240,L:0,mode:'max',
+  mech:'Horizontal density gradient → thermal wind; needs neighbours (≥ 3×3).'},
+ {id:'int',name:'Interior T, S (below mixed layer)',short:'Interior T, S',cv:'--int',v:0.03,tau:1825,L:0,mode:'max',
+  mech:'Thermal wind integrated from depth; Rossby adjustment.'},
+ {id:'ssh',name:'SSH',short:'SSH',cv:'--ssh',v:0.03,tau:360,L:0,mode:'max',kelvin:2.5,
+  mech:'Pressure gradient → geostrophic current. Westward Rossby drift; Kelvin / coastal waves 2.5 m/s along coasts and the equator (anisotropy).'},
+ {id:'own',name:'Own history (u, v at P)',short:'Own history',cv:'--own',v:0.15,tau:90,L:0,mode:'max',drift:0.03,
+  mech:'Momentum persistence and mesoscale eddies; eddies drift westward ~0.03 m/s (anisotropy).'},
+];
+const PRESETS={cur:['wind','air','sst','int','ssh','own'],sst:['wind','air','own','sst'],int:['int','ssh','own']};
+
+const S={dt:MONTH,lag:0,lagPos:0,mode:null,h:1,aniso:false,zoom:6000,preset:'cur',active:{}};
+PRESETS.cur.forEach(id=>S.active[id]=true);
+
+// ---------- physics ----------
+const nLags=()=>Math.round(HORIZON/S.dt);
+function reach(d,T){ // T = Δt+ℓ in days
+  const base=d.v*T*DAY/KM;
+  const r=d.mode==='add'?d.L+base:Math.max(base,d.L);
+  return Math.min(r,CAP);
+}
+const useful=(d,T,k)=>k===0||T<=d.tau+1e-9;
+const slots=r=>Math.max(9,Math.min(N_SLOTS,Math.round(N_SLOTS*(r/R_DISC)**2)));
+function budget(d){ let s=0; const n=nLags(); for(let k=0;k<n;k++){const T=S.dt*(k+1); if(useful(d,T,k)) s+=slots(reach(d,T));} return s; }
+const activeDrivers=()=>DRIVERS.filter(d=>S.active[d.id]);
+const dtEff=()=>S.mode==='roll'?S.h*S.dt:S.dt;
+
+// ---------- formatting ----------
+const fmtKm=r=>{ if(r>=1000) return Math.round(r/10)*10; if(r>=100) return Math.round(r); return Math.round(r*10)/10; };
+const nf=n=>n.toLocaleString('en-US').replace(/,/g,' ');
+const km=r=>nf(fmtKm(r))+' km';
+function fmtDays(x){ if(x<MONTH) return (Math.round(x*10)/10)+' d'; if(x<730) return (Math.round(x/MONTH*10)/10)+' mo'; return (Math.round(x/365*10)/10)+' yr'; }
+function fmtV(v){ return v>=1?v.toFixed(v>=10?0:1)+' m/s':v.toFixed(v>=0.1?2:3)+' m/s'; }
+const lagDays=()=>S.lagPos*S.dt;
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+// ---------- controls ----------
+const $=id=>document.getElementById(id);
+function buildDrivers(){
+  const host=$('drivers'); host.innerHTML='';
+  DRIVERS.forEach(d=>{
+    const el=document.createElement('div'); el.className='driver'; el.id='drv-'+d.id;
+    const vS=Math.round(1000*Math.log(d.v/0.01)/Math.log(2000));
+    const tS=Math.round(1000*Math.log10(d.tau)/Math.log10(3650));
+    el.innerHTML=`<div class="head"><span class="sw" style="background:var(${d.cv})"></span>
+      <input type="checkbox" data-id="${d.id}" ${S.active[d.id]?'checked':''} aria-label="Enable ${d.name}">
+      <span class="name" title="${d.mech.replace(/<[^>]+>/g,'')}">${d.name}</span>
+      <div class="mech">${d.mech}</div>
+      <div class="flag" id="flag-${d.id}" hidden></div>
+      ${d.note?`<div class="flag" style="background:var(--surface-2);color:var(--muted)">${d.note}</div>`:''}
+    </div>
+    <div class="sl"><label>${d.vLabel||'v'}</label><input type="range" min="0" max="1000" value="${vS}" data-id="${d.id}" data-k="v" aria-label="Signal speed of ${d.name}"><span class="val mono" id="v-${d.id}"></span></div>
+    <div class="sl"><label>τ</label><input type="range" min="0" max="1000" value="${tS}" data-id="${d.id}" data-k="tau" aria-label="Memory of ${d.name}"><span class="val mono" id="t-${d.id}"></span></div>
+    <div class="sl"><label>L<sub>corr</sub></label><input type="range" min="0" max="3000" step="50" value="${d.L}" data-id="${d.id}" data-k="L" aria-label="Correlation length of ${d.name}"><span class="val mono" id="L-${d.id}"></span></div>`;
+    host.appendChild(el);
+  });
+  host.addEventListener('input',e=>{
+    const t=e.target, d=DRIVERS.find(x=>x.id===t.dataset.id); if(!d) return;
+    if(t.type==='checkbox'){ S.active[d.id]=t.checked; }
+    else if(t.dataset.k==='v'){ d.v=0.01*Math.pow(2000,t.value/1000); }
+    else if(t.dataset.k==='tau'){ d.tau=Math.pow(3650,t.value/1000); }
+    else if(t.dataset.k==='L'){ d.L=+t.value; }
+    renderAll();
+  });
+}
+function updateDriverRows(){
+  DRIVERS.forEach(d=>{
+    $('v-'+d.id).textContent=fmtV(d.v);
+    $('t-'+d.id).textContent=fmtDays(d.tau);
+    $('L-'+d.id).textContent=nf(d.L)+' km';
+    $('drv-'+d.id).classList.toggle('off',!S.active[d.id]);
+    const f=$('flag-'+d.id);
+    if(d.tau<S.dt){ f.hidden=false; f.innerHTML=`τ &lt; Δt → <b>forcing only</b>: lag 0 kept, later lags carry nothing predictable`; }
+    else f.hidden=true;
+  });
+}
+function setPreset(p){
+  S.preset=p; DRIVERS.forEach(d=>S.active[d.id]=PRESETS[p].includes(d.id));
+  document.querySelectorAll('#presets button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.p===p));
+  document.querySelectorAll('#drivers input[type=checkbox]').forEach(c=>c.checked=!!S.active[c.dataset.id]);
+  renderAll();
+}
+function setDt(dt){
+  S.dt=dt; $('dt30').setAttribute('aria-pressed',dt===MONTH); $('dt5').setAttribute('aria-pressed',dt!==MONTH);
+  const n=nLags(); $('lag').max=n-1; S.lagPos=Math.min(S.lagPos,n-1); S.lag=Math.floor(S.lagPos); $('lag').value=S.lag;
+  renderAll();
+}
+$('dt30').onclick=()=>setDt(MONTH); $('dt5').onclick=()=>setDt(5);
+$('presets').addEventListener('click',e=>{const b=e.target.closest('button'); if(b) setPreset(b.dataset.p);});
+$('zoom').addEventListener('click',e=>{const b=e.target.closest('button'); if(!b) return; S.zoom=+b.dataset.z; document.querySelectorAll('#zoom button').forEach(x=>x.setAttribute('aria-pressed',x===b)); renderMap();});
+$('aniso').onchange=e=>{S.aniso=e.target.checked; renderAll();};
+$('lag').addEventListener('input',e=>{ if(S.mode==='play') stopAnim(); S.lag=+e.target.value; S.lagPos=S.lag; renderDynamic(); });
+
+// ---------- animation ----------
+let raf=null,t0=0,startPos=0;
+function stopAnim(){ if(raf) cancelAnimationFrame(raf); raf=null; S.mode=null; S.h=1; $('play').textContent='▶ Play lag'; $('roll').textContent='↻ Roll 1…12'; $('play').classList.add('primary'); $('roll').classList.remove('primary'); $('rollInfo').textContent='Play sweeps the lag 0 → 24 months; Roll composes the one-step cone h times (h = 1…12).'; renderAll(); }
+function startPlay(){
+  stopAnim(); S.mode='play'; $('play').textContent='❚❚ Pause'; t0=performance.now(); startPos=S.lagPos>=nLags()-1?0:S.lagPos;
+  const n=nLags(); const dur=8000;
+  const step=now=>{ const f=((now-t0)/dur+startPos/n)%1; S.lagPos=f*n; S.lag=Math.floor(S.lagPos); $('lag').value=S.lag; renderDynamic(); raf=requestAnimationFrame(step); };
+  raf=requestAnimationFrame(step);
+}
+function startRoll(){
+  stopAnim(); S.mode='roll'; S.h=1; $('roll').textContent='❚❚ Pause roll'; $('roll').classList.add('primary'); $('play').classList.remove('primary'); t0=performance.now();
+  const per=700; let last=-1;
+  const step=now=>{ const i=Math.floor((now-t0)/per)%12; if(i!==last){ last=i; S.h=i+1; $('rollInfo').innerHTML=`Roll step <b>h = ${S.h}</b> of 12 — effective horizon ${fmtDays(S.h*S.dt)}: the one-step cone composed ${S.h}×; every lag's reach grows by v·Δt per step and the useful window shrinks.`; renderAll(); } raf=requestAnimationFrame(step); };
+  raf=requestAnimationFrame(step);
+}
+$('play').onclick=()=>S.mode==='play'?stopAnim():startPlay();
+$('roll').onclick=()=>S.mode==='roll'?stopAnim():startRoll();
+
+// ---------- panel A ----------
+const A={W:860,H:340,ml:58,mr:18,mt:14,mb:36};
+const ax=x=>A.ml+(x/HORIZON)*(A.W-A.ml-A.mr);
+const ay=y=>{const y0=Math.log10(10),y1=Math.log10(CAP); return A.mt+(1-(Math.log10(Math.max(y,10))-y0)/(y1-y0))*(A.H-A.mt-A.mb);};
+function wedgePath(d,de){
+  const n=nLags(); let K=-1; for(let k=0;k<n;k++){ if(useful(d,de+k*S.dt,k)) K=k; else break; }
+  if(K<0) return null;
+  const xs=[]; const xEnd=(K+1)*S.dt; const steps=Math.max(2,Math.round(xEnd/HORIZON*120));
+  for(let i=0;i<=steps;i++){ const x=xEnd*i/steps; xs.push([ax(x),ay(reach(d,de+x))]); }
+  let p=`M${ax(0)},${ay(10)} `+xs.map(q=>`L${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(' ')+` L${ax(xEnd).toFixed(1)},${ay(10)} Z`;
+  return {path:p,K,xEnd};
+}
+function unionPoints(de,acts){
+  const pts=[]; const n=nLags(); const N=240;
+  for(let i=0;i<=N;i++){ const x=HORIZON*i/N; const k=Math.min(n-1,Math.floor(x/S.dt-1e-9)); let m=0;
+    acts.forEach(d=>{ if(useful(d,de+k*S.dt,k)) m=Math.max(m,reach(d,de+x)); });
+    pts.push([x,m]); }
+  return pts;
+}
+function unionReach(de,lagD){ const k=Math.min(nLags()-1,Math.floor(lagD/S.dt+1e-9)); let m=0; activeDrivers().forEach(d=>{ if(useful(d,de+k*S.dt,k)) m=Math.max(m,reach(d,de+lagD)); }); return m; }
+function renderWedge(){
+  const acts=activeDrivers(), de=dtEff(), n=nLags();
+  let s='';
+  // grid + axes
+  [10,30,100,300,1000,3000,10000].forEach(v=>{ s+=`<line class="g" x1="${A.ml}" x2="${A.W-A.mr}" y1="${ay(v)}" y2="${ay(v)}" stroke="var(--grid)"/><text x="${A.ml-6}" y="${ay(v)+3.5}" text-anchor="end" class="maptxt">${nf(v)}</text>`; });
+  for(let m=0;m<=24;m+=3){ const x=ax(m*MONTH); s+=`<line x1="${x}" x2="${x}" y1="${A.mt}" y2="${A.H-A.mb}" stroke="var(--grid)"/><text x="${x}" y="${A.H-A.mb+15}" text-anchor="middle" class="maptxt">${m}</text>`; }
+  s+=`<text x="${(A.ml+A.W-A.mr)/2}" y="${A.H-4}" text-anchor="middle" class="axlabel">lag ℓ (months before now)</text>`;
+  s+=`<text transform="translate(12,${(A.mt+A.H-A.mb)/2}) rotate(-90)" text-anchor="middle" class="axlabel">distance from P (km, log)</text>`;
+  // cylinder + patch + cap
+  s+=`<rect x="${ax(0)}" y="${ay(R_DISC)}" width="${ax(HORIZON)-ax(0)}" height="${ay(10)-ay(R_DISC)}" fill="none" stroke="var(--cyl)" stroke-dasharray="6 4" stroke-width="1.4"/>`;
+  s+=`<text x="${ax(HORIZON)-4}" y="${ay(R_DISC)-5}" text-anchor="end" class="annot">cylinder: 89 slots to ${nf(R_DISC)} km at all ${n} lags</text>`;
+  s+=`<line x1="${ax(0)}" x2="${ax(HORIZON)}" y1="${ay(PATCH)}" y2="${ay(PATCH)}" stroke="var(--muted)" stroke-dasharray="2 4" stroke-width="1"/><text x="${ax(HORIZON)-4}" y="${ay(PATCH)-4}" text-anchor="end" class="annot">3×3 patch, ${PATCH} km</text>`;
+  s+=`<text x="${ax(HORIZON)-4}" y="${ay(CAP)+11}" text-anchor="end" class="annot">10 000 km cap</text>`;
+  // wedges (largest area first so small ones stay on top)
+  const wp=acts.map(d=>({d,w:wedgePath(d,de)})).filter(o=>o.w);
+  wp.sort((a,b)=>(reach(b.d,de+b.w.xEnd)*b.w.xEnd)-(reach(a.d,de+a.w.xEnd)*a.w.xEnd));
+  wp.forEach(o=>{ s+=`<path d="${o.w.path}" fill="var(${o.d.cv})" fill-opacity="0.22" stroke="var(${o.d.cv})" stroke-width="1.3" stroke-linejoin="round"/>`; });
+  // kelvin arm sketch
+  if(S.aniso&&S.active.ssh){ const d=DRIVERS[4]; const pts=[]; let K=-1; for(let k=0;k<n;k++){ if(useful(d,de+k*S.dt,k)) K=k; else break; }
+    if(K>=0){ for(let i=0;i<=40;i++){ const x=(K+1)*S.dt*i/40; pts.push(`${ax(x).toFixed(1)},${ay(Math.min(CAP,d.kelvin*(de+x)*DAY/KM)).toFixed(1)}`);} s+=`<polyline points="${pts.join(' ')}" fill="none" stroke="var(--ssh)" stroke-width="1.2" stroke-dasharray="3 3"/><text x="${ax((K+1)*S.dt)+(K+1>18*MONTH/S.dt?-5:5)}" y="${ay(Math.min(CAP,d.kelvin*(de+(K+1)*S.dt)*DAY/KM))+12}" text-anchor="${K+1>18*MONTH/S.dt?'end':'start'}" class="annot" fill="var(--ssh)">SSH Kelvin / coastal arm (along-coast only)</text>`; } }
+  // reference union for h=1 in roll mode
+  if(de!==S.dt){ const up=unionPoints(S.dt,acts); s+=`<polyline points="${up.map(p=>`${ax(p[0]).toFixed(1)},${ay(p[1]).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--ink)" stroke-width="1" stroke-dasharray="4 3" opacity=".6"/>`; }
+  // union bold
+  const up=unionPoints(de,acts);
+  s+=`<polyline points="${up.map(p=>`${ax(p[0]).toFixed(1)},${ay(p[1]).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--ink)" stroke-width="2.4" stroke-linejoin="round"/>`;
+  // dynamic layer
+  s+=`<g id="lagMarker"></g><rect id="hitA" x="${A.ml}" y="${A.mt}" width="${A.W-A.ml-A.mr}" height="${A.H-A.mt-A.mb}" fill="transparent"/>`;
+  $('svgA').innerHTML=s;
+  $('legendA').innerHTML=acts.map(d=>`<span><i style="background:var(${d.cv})"></i>${d.name}</span>`).join('')+`<span><i style="background:var(--ink);height:3px;border-radius:0;width:16px"></i>union</span><span><i class="dash"></i>cylinder</span>`;
+  renderMarker();
+}
+function renderMarker(){
+  const g=$('lagMarker'); if(!g) return; const x0=ax(S.lag*S.dt), x1=ax((S.lag+1)*S.dt), xm=ax(lagDays());
+  g.innerHTML=`<rect x="${x0}" y="${A.mt}" width="${Math.max(1,x1-x0)}" height="${A.H-A.mt-A.mb}" fill="var(--accent)" fill-opacity=".10"/><line x1="${xm}" x2="${xm}" y1="${A.mt}" y2="${A.H-A.mb}" stroke="var(--accent)" stroke-width="1.6"/><text x="${xm+5}" y="${A.mt+11}" class="annot" fill="var(--accent)">ℓ = ${fmtDays(lagDays())}${S.mode==='roll'?` · h=${S.h}`:''}</text>`;
+}
+// hover
+(function(){
+  const svg=$('svgA'), tip=$('tipA'), wrap=svg.closest('.panel');
+  svg.addEventListener('mousemove',e=>{
+    const r=svg.getBoundingClientRect(); const sx=A.W/r.width, sy=A.H/r.height; const px=(e.clientX-r.left)*sx, py=(e.clientY-r.top)*sy;
+    if(px<A.ml||px>A.W-A.mr||py<A.mt||py>A.H-A.mb){ tip.style.display='none'; return; }
+    const xd=(px-A.ml)/(A.W-A.ml-A.mr)*HORIZON; const yk=Math.pow(10,1+(1-(py-A.mt)/(A.H-A.mt-A.mb))*3);
+    const k=Math.min(nLags()-1,Math.floor(xd/S.dt)); const de=dtEff(); const T=de+k*S.dt;
+    const acts=activeDrivers(); if(!acts.length){ tip.style.display='none'; return; }
+    const info=acts.map(d=>({d,r:reach(d,T),u:useful(d,T,k)}));
+    const inside=info.filter(o=>o.u&&yk<=o.r).sort((a,b)=>a.r-b.r);
+    const pick=inside[0]||info.sort((a,b)=>Math.abs(Math.log(a.r/yk))-Math.abs(Math.log(b.r/yk)))[0];
+    tip.innerHTML=`<b style="color:var(${pick.d.cv})">${pick.d.name}</b><br>lag ${fmtDays(k*S.dt)} → Δt+ℓ = ${fmtDays(T)}<br>reach ${km(pick.r)} · slots ${slots(pick.r)}<br>${pick.u?'inside τ = '+fmtDays(pick.d.tau):'<span style="opacity:.8">outside τ = '+fmtDays(pick.d.tau)+' — no signal</span>'}${inside.length>1?`<br><span style="opacity:.8">also inside: ${inside.slice(1).map(o=>o.d.short).join(', ')}</span>`:''}`;
+    tip.style.display='block';
+    const wr=wrap.getBoundingClientRect(); let lx=e.clientX-wr.left+14, ly=e.clientY-wr.top+14;
+    if(lx+tip.offsetWidth>wr.width-6) lx=e.clientX-wr.left-tip.offsetWidth-14; if(ly+tip.offsetHeight>wr.height-6) ly=e.clientY-wr.top-tip.offsetHeight-10;
+    tip.style.left=lx+'px'; tip.style.top=ly+'px';
+  });
+  svg.addEventListener('mouseleave',()=>tip.style.display='none');
+})();
+
+// ---------- panel B ----------
+const B={W:440,H:440,c:220,r:200};
+const sun=[]; for(let k=0;k<N_SLOTS;k++){ const rr=Math.sqrt(k/N_SLOTS)*R_DISC, th=k*GOLD; sun.push([rr*Math.cos(th),-rr*Math.sin(th)]); }
+function shapes(T){ // km-space shapes for active drivers
+  return activeDrivers().map(d=>{
+    const r=reach(d,T); const k=S.lag; const u=useful(d,T,k);
+    if(!u) return {d,r,u,kind:'none'};
+    if(S.aniso&&d.id==='ssh'){ const e=Math.max(d.L,0.35*r,PATCH/2); return {d,r,u,kind:'ellipse',cx:-(r-e)/2,cy:0,rx:(r+e)/2,ry:e,armHalf:Math.min(CAP,d.kelvin*T*DAY/KM),armW:100}; }
+    if(S.aniso&&d.drift){ return {d,r,u,kind:'circle',cx:-d.drift*T*DAY/KM,cy:0}; }
+    return {d,r,u,kind:'circle',cx:0,cy:0};
+  });
+}
+function inside(sh,x,y){
+  if(sh.kind==='circle') return Math.hypot(x-sh.cx,y-sh.cy)<=sh.r;
+  if(sh.kind==='ellipse'){ const ex=(x-sh.cx)/sh.rx, ey=(y-sh.cy)/sh.ry; return ex*ex+ey*ey<=1||(Math.abs(x)<=sh.armW&&Math.abs(y)<=sh.armHalf); }
+  return false;
+}
+function renderMap(){
+  const T=dtEff()+lagDays(); const sc=B.r/S.zoom; const X=x=>B.c+x*sc, Y=y=>B.c+y*sc;
+  const sh=shapes(T); let s='';
+  s+=`<defs><clipPath id="mclip"><rect x="0" y="0" width="${B.W}" height="${B.H}"/></clipPath></defs><g clip-path="url(#mclip)">`;
+  s+=`<rect x="0" y="0" width="${B.W}" height="${B.H}" fill="var(--surface-2)" opacity=".5"/>`;
+  s+=`<line x1="${B.c}" x2="${B.c}" y1="0" y2="${B.H}" stroke="var(--grid)"/><line x1="0" x2="${B.W}" y1="${B.c}" y2="${B.c}" stroke="var(--grid)"/>`;
+  // cylinder disc
+  s+=`<circle cx="${B.c}" cy="${B.c}" r="${R_DISC*sc}" fill="none" stroke="var(--cyl)" stroke-dasharray="6 4" stroke-width="1.4"/>`;
+  // rings, largest first
+  const drawn=sh.filter(o=>o.u).sort((a,b)=>b.r-a.r);
+  drawn.forEach(o=>{ const col=`var(${o.d.cv})`;
+    if(o.kind==='circle') s+=`<circle cx="${X(o.cx)}" cy="${Y(o.cy)}" r="${o.r*sc}" fill="${col}" fill-opacity=".10" stroke="${col}" stroke-width="1.6"/>`;
+    else { s+=`<ellipse cx="${X(o.cx)}" cy="${Y(o.cy)}" rx="${o.rx*sc}" ry="${o.ry*sc}" fill="${col}" fill-opacity=".10" stroke="${col}" stroke-width="1.6"/>`;
+      s+=`<rect x="${X(-o.armW)}" y="${Y(-o.armHalf)}" width="${2*o.armW*sc}" height="${2*o.armHalf*sc}" fill="${col}" fill-opacity=".14" stroke="${col}" stroke-width="1" stroke-dasharray="3 3"/>`; }
+  });
+  // sunflower dots
+  let nIn=0;
+  sun.forEach(p=>{ const isIn=drawn.some(o=>inside(o,p[0],p[1])); if(isIn) nIn++;
+    s+=`<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="${S.zoom>3000?2.6:3.4}" fill="${isIn?'var(--ink)':'none'}" stroke="var(--ink)" stroke-width="1" opacity="${isIn?1:.55}"/>`; });
+  // P pixel + patch
+  const hp=PATCH/2*sc, hx=PIXEL/2*sc;
+  s+=`<rect x="${B.c-hp}" y="${B.c-hp}" width="${2*hp}" height="${2*hp}" fill="none" stroke="var(--accent)" stroke-width="1"/><rect x="${B.c-Math.max(hx,1.5)}" y="${B.c-Math.max(hx,1.5)}" width="${2*Math.max(hx,1.5)}" height="${2*Math.max(hx,1.5)}" fill="var(--accent)"/>`;
+  // scale bar
+  const bar=S.zoom>3000?1000:S.zoom>1000?500:100; const bl=bar*sc;
+  s+=`<line x1="14" x2="${14+bl}" y1="${B.H-16}" y2="${B.H-16}" stroke="var(--ink)" stroke-width="2"/><text x="${14+bl/2}" y="${B.H-22}" text-anchor="middle" class="maptxt">${nf(bar)} km</text>`;
+  s+=`<text x="10" y="${B.c-6}" class="maptxt">W</text><text x="${B.W-10}" y="${B.c-6}" text-anchor="end" class="maptxt">E</text>`;
+  s+=`<text x="${B.W-10}" y="16" text-anchor="end" class="maptxt">P · ℓ = ${fmtDays(lagDays())} · Δt+ℓ = ${fmtDays(T)}</text>`;
+  s+=`<text x="10" y="16" class="maptxt" fill="var(--cyl)">disc ${nf(R_DISC)} km · ${N_SLOTS} slots</text>`;
+  // ring labels
+  const used=[]; drawn.forEach(o=>{ const rr=o.kind==='circle'?o.r:o.rx; let yy=Y(o.cy)-rr*sc-3; if(rr*sc<14||yy<30) return;
+    while(used.some(u=>Math.abs(u-yy)<12)) yy+=12; used.push(yy); if(yy>B.H-34) return;
+    s+=`<text x="${X(o.cx)+5}" y="${yy}" class="maptxt" fill="var(${o.d.cv})">${o.d.short} ${km(o.r)}</text>`; });
+  s+='</g>';
+  $('svgB').innerHTML=s;
+  const ur=unionReach(dtEff(),lagDays());
+  $('slotCount').innerHTML=`slots needed at this lag: <b class="mono">${Math.max(nIn,drawn.length?9:0)} / ${N_SLOTS}</b> <span style="opacity:.8">(${nIn} dots inside union; formula slots(${km(ur)}) = ${drawn.length?slots(ur):0})</span>`;
+  $('kvReach').textContent=drawn.length?km(ur):'—';
+}
+
+// ---------- panel C ----------
+function renderBudget(){
+  const acts=activeDrivers(); const n=nLags(); const cyl=N_SLOTS*n;
+  const rows=acts.map(d=>({d,cone:budget(d)}));
+  const totCone=rows.reduce((a,r)=>a+r.cone,0), totCyl=cyl*acts.length;
+  $('stCone').textContent=nf(totCone); $('stCyl').textContent=nf(totCyl);
+  $('stSave').textContent=totCyl?(100*(1-totCone/totCyl)).toFixed(1)+' %':'—';
+  $('budgetSub').textContent=`Cylinder = ${N_SLOTS} slots × ${n} lags = ${nf(cyl)} slot-lags per channel. Cone = Σ over useful lags of slots(reach(ℓ)), 9-slot floor.`;
+  $('kvLags').textContent=`${n} × ${fmtDays(S.dt)}`; $('kvCyl').textContent=`${nf(cyl)} slot-lags`;
+  const rh=34, top=10, lx=118, bw=440-lx-62; const H=top+rh*(rows.length+1)+8;
+  const svg=$('svgC'); svg.setAttribute('viewBox',`0 0 440 ${H}`);
+  let s='';
+  rows.forEach((r,i)=>{ const y=top+i*rh; const cw=bw*r.cone/cyl;
+    s+=`<text x="${lx-8}" y="${y+14}" text-anchor="end" class="bartxt">${r.d.short}</text>`;
+    s+=`<rect x="${lx}" y="${y+4}" width="${bw}" height="16" fill="none" stroke="var(--cyl)" stroke-dasharray="4 3"/>`;
+    s+=`<rect x="${lx}" y="${y+4}" width="${Math.max(cw,1)}" height="16" fill="var(${r.d.cv})" opacity=".9"/>`;
+    s+=`<text x="${lx+bw+6}" y="${y+16}" class="barnum">${nf(r.cone)}</text>`;
+    s+=`<text x="${lx-8}" y="${y+27}" text-anchor="end" class="barnum barmut" style="font-size:10px">${(100*(1-r.cone/cyl)).toFixed(0)} % saved</text>`; });
+  const y=top+rows.length*rh; const cw=totCyl?bw*totCone/totCyl:0;
+  s+=`<line x1="0" x2="440" y1="${y-2}" y2="${y-2}" stroke="var(--line)"/>`;
+  s+=`<text x="${lx-8}" y="${y+16}" text-anchor="end" class="bartxt" font-weight="600">Total (${acts.length} ch.)</text>`;
+  s+=`<rect x="${lx}" y="${y+6}" width="${bw}" height="16" fill="none" stroke="var(--cyl)" stroke-dasharray="4 3"/>`;
+  s+=`<rect x="${lx}" y="${y+6}" width="${Math.max(cw,1)}" height="16" fill="var(--ink)"/>`;
+  s+=`<text x="${lx+bw+6}" y="${y+18}" class="barnum" font-weight="600">${nf(totCone)}</text>`;
+  s+=`<text x="${lx+bw}" y="${y+34}" text-anchor="end" class="barnum barmut" style="font-size:10px">dashed = cylinder ${nf(cyl)} per channel</text>`;
+  svg.innerHTML=s;
+}
+
+// ---------- orchestration ----------
+function renderDynamic(){ $('lagRead').textContent=`${fmtDays(lagDays())} (lag ${S.lag} of ${nLags()-1})`; renderMarker(); renderMap(); }
+function renderAll(){ updateDriverRows(); renderWedge(); renderBudget(); renderDynamic(); }
+buildDrivers(); setDt(MONTH);
+window.__cone={S,DRIVERS,budget,reach,slots,nLags};
+})();
+</script>
+</body>
+</html>
