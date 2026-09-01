@@ -28,18 +28,18 @@ The four questions on the right are the ones we ask of every model. "Per-pixel o
 
 Inputs: a very wide mix — optical imagery (Sentinel-2, Landsat), radar (Sentinel-1, PALSAR-2), laser altimetry (GEDI), climate reanalysis (ERA5-Land), gravity (GRACE), elevation, land cover and even text descriptions. Over three billion individual observations went in.
 
-Architecture: the encoder is called Space-Time-Precision, STP. The next four slides walk through it. The training uses several losses at once: reconstructing masked-out inputs, keeping the embeddings spread evenly over a sphere ("batch uniformity"), consistency between a teacher and a student network, and matching to text. The deployed network has about 480 million parameters.
+Architecture: the encoder is called Space-Time-Precision, STP, and has 15 blocks. The next four slides walk through it. The training uses several losses at once: reconstructing masked-out inputs, keeping the embeddings spread evenly over a sphere ("batch uniformity"), consistency between a teacher and a student network, and matching to text. The deployed network has about 480 million parameters.
 
-The stencil is the key point for us. Output pixel: 10 m. Spatial context: the model uses attention over the whole input frame at coarse resolution, so a pixel's embedding is influenced by everything in its frame — but the paper does not state how large that frame is in metres, so we cannot give a receptive field in kilometres. Time: the model takes a "valid period" — a start and end date — and produces a summary of everything observed in it. In principle any window; in practice the published product uses calendar years.
+The stencil is the key point for us. Output pixel: 10 m. Spatial context: the model uses attention over the whole input frame at coarse resolution, so a pixel's embedding is influenced by everything in its frame — and the supplement tells us how large the frame is: 1.28 km by 1.28 km, 128 pixels a side, for both training and the global inference run (which tiles the world in 960-m squares padded by 160 m on each side). So an AlphaEarth pixel never sees further than about 640 m in any direction. Time: the model takes a "valid period" — a start and end date — and produces a summary of everything observed in it. In principle any window; in practice the published product uses calendar years.
 
 Output: 64 dimensions, normalised to length one (a "unit vector"), stored as 64 bytes. Coverage is land plus coastal and inland water; no open ocean.
 
 Availability is the big caveat: only the dataset is released. The trained network is not, so nobody can run it on new data, new time windows, or the ocean.
 
-"Error reduction ~24 %" means: across their 15 evaluation tasks, using AlphaEarth embeddings instead of the next-best method cut the error by about a quarter on average.`,
+"Error reduction ~23.9 %" means: across their 15 evaluation tasks, using AlphaEarth embeddings instead of the next-best method cut the error by about a quarter on average (about 10 % when only ten labels per class are available, about 4 % with one). The per-task numbers are published only as charts, so we do not quote them.`,
 
 // 4 — inside the STP encoder
-`This slide opens up the encoder. First the symbol: L is the side length of the square input frame, measured in pixels. The paper says "given a square input of L pixels a side" but never says what L is, so all the fractions here are relative.
+`This slide opens up the encoder. First the symbol: L is the side length of the square input frame, measured in pixels. The main text keeps it symbolic — "given a square input of L pixels a side" — but the supplement fixes it: frames are 128 by 128 pixels, 1.28 km at 10 m, so the three grids below are 8 by 8, 16 by 16 and 64 by 64 cells.
 
 There are three "operators" — three different kinds of neural-network layer — that run in parallel inside every block:
 
@@ -49,16 +49,16 @@ The TIME operator works on an L/8 grid and uses "time-axial" attention: each loc
 
 The PRECISION operator works on the finest grid, L/2, with ordinary 3-by-3 convolutions to keep sharp spatial detail.
 
-A "block" is one round of all three operators. After each block, a learned "Laplacian pyramid" rescaling step lets every operator hand its result to every operator of the next block: coarse results are up-sampled, fine results are down-sampled, so that information flows between scales. Repeat for N blocks — N is also not stated.
+A "block" is one round of all three operators. After each block, a learned "Laplacian pyramid" rescaling step lets every operator hand its result to every operator of the next block: coarse results are up-sampled, fine results are down-sampled, so that information flows between scales. Repeat for 15 blocks (supplement S2.4, which also gives the widths: 1024 numbers per cell on the space path, 512 on the time path, 128 on the precision path).
 
 Input projectors bring each source's frames down to the L/2 grid first. The output head resamples back up to the precision resolution, then to 10 m, and produces the 64-number vector per pixel.
 
 "Teacher/student" refers to the training recipe: one network (teacher) produces targets that a second, identical network (student) learns to match; a third model aligns embeddings with text descriptions in the style of CLIP.
 
-Bottom line: because the space operator uses attention over the whole frame, the effective receptive field is the frame — but its size in metres is not published.`,
+Bottom line: because the space operator uses attention over the whole frame, the effective receptive field is the frame — 1.28 km, so at most about 640 m from the pixel in any direction. What the paper still does not spell out is the exact form of the pyramid resampling and how the three states are merged.`,
 
 // 5 — STP step 1
-`Steps 1 to 4 animate the previous slide with made-up but plausible numbers. We chose L = 128 pixels at 10 m, so the frame is 1.28 km across; the paper does not give L, and every slide says so in its footer.
+`Steps 1 to 4 animate the previous slide with the paper's own frame: L = 128 pixels at 10 m, so the frame is 1.28 km across (supplement S2.1 and S8.2). Two things in these slides are simplified and the footers say so: we draw 4 blocks where the real network has 15, and the per-year frame counts are typical values rather than the paper's.
 
 Step 1 is about the input projectors. Each data source arrives at its own native resolution over the same 1.28-km footprint: Sentinel-2 at 10 m gives a 128 by 128 grid (drawn coarser here); Landsat at 30 m gives about 43 by 43; ERA5-Land, a weather reanalysis at 9 km, gives just one value for the whole frame. Each source also arrives many times a year — Sentinel-2 roughly every five days, Landsat every 16.
 
@@ -71,7 +71,7 @@ The yellow pixel is our 10-m output pixel; after this step it lives inside a 20-
 // 6 — STP step 2
 `Step 2 shows what one cell can "see" inside each of the three operators, on the same 1.28-km footprint.
 
-SPACE (left): the grid has 8 by 8 cells of 160 m (that is L/16 with our illustrative L). The highlighted cell attends to every other cell — the dashed lines. So the space operator gives every cell a view of the whole frame, but only at coarse grain.
+SPACE (left): the grid has 8 by 8 cells of 160 m (that is L/16 with L = 128). The highlighted cell attends to every other cell — the dashed lines. So the space operator gives every cell a view of the whole frame, but only at coarse grain.
 
 TIME (middle): 16 by 16 cells of 80 m. The stacked sheets are the dated frames. The highlighted cell attends only to itself across all the sheets — this is "time-axial" attention. It knows the whole history of one spot, but nothing about the neighbours.
 
@@ -86,7 +86,7 @@ On the left are the three outputs of block k — the coarse space map, the mediu
 
 On the right are the three inputs of block k+1. Each now contains all three colours: the blue space feature arrived in the fine map as an 8-by-8 block of 20-m cells, the green precision patch arrived in the coarse map as a fraction of one 160-m cell, the orange time cell landed as 2-by-2 or 4-by-4 blocks. Nine paths in total (three sources times three destinations), then a sum per level — the sum is our reading; the paper says "pass its state to each of the operators" without spelling out the merge.
 
-Repeat N times (we draw N = 4). The consequence for our stencil question: after a few blocks, even the fine 20-m path has a receptive field that spans the whole frame, because it has received the space operator's global view several times — while keeping its own fine grain.`,
+Repeat 15 times (we draw 4). The consequence for our stencil question: after a few blocks, even the fine 20-m path has a receptive field that spans the whole frame, because it has received the space operator's global view several times — while keeping its own fine grain.`,
 
 // 8 — STP step 4
 `Step 4 closes the loop. After the last block, the three maps are merged and a final learned spatial resampling takes the result from the L/2 grid (64 by 64 at 20 m) back to L (128 by 128 at 10 m).
@@ -97,7 +97,7 @@ Each output pixel becomes a 64-number vector. "Unit vector on S⁶³" is the mat
 
 "Per valid period": the pair of dates (t_s, t_e) — start and end of the window — was fed into the time operators in every block as timecodes, so the whole frame of vectors is a summary of that window. In the public product the window is one calendar year.
 
-So what is AlphaEarth's stencil? Spatially, the entire input frame coarsely plus a fine local neighbourhood; temporally, every dated observation in the window. That is why the authors call it an embedding field, and why no single receptive-field number is quoted.`,
+So what is AlphaEarth's stencil? Spatially, the whole 1.28-km frame coarsely (8 by 8 cells of 160 m through the space path) plus a fine local neighbourhood (20-m cells through the precision path); temporally, every dated observation in the window. The number to remember: an AlphaEarth pixel never sees further than about 640 m.`,
 
 // 9 — TESSERA
 `TESSERA comes from the University of Cambridge (published June 2025, accepted at CVPR 2026) and is the most radical design in the deck: it uses no spatial context at all.
@@ -115,7 +115,7 @@ Results quoted are with the embeddings frozen and only a small head trained on t
 Why it matters for us: TESSERA proves that a per-pixel temporal encoder with zero spatial context is competitive on land. That is the opposite extreme from our 3-by-3 patch, and a useful reference point.`,
 
 // 10 — OlmoEarth
-`OlmoEarth is the Allen Institute for AI's family of open models, first released November 2025 with updates in 2026. It is a "space-time ViT": a Vision Transformer that tokenises not just space but also time and sensor band groups.
+`OlmoEarth is the Allen Institute for AI's family of open models, first released November 2025; version 1.1 (May 2026) merged Sentinel-2's band groups into a single token to cut compute, and version 1.2 added rotary position encodings. It is a "space-time ViT": a Vision Transformer that tokenises not just space but also time and sensor band groups.
 
 Inputs: Sentinel-1, Sentinel-2 and Landsat-8 monthly time series, all resampled to 10 m, plus static map layers (OpenStreetMap, land cover, crop data, elevation, canopy height) used as extra inputs and as prediction targets.
 
@@ -138,7 +138,7 @@ Architecture: each modality has its own "tokenizer" — a small network that tur
 
 Stencil: tile 2.24 km (224 pixels at 10 m); token 16 pixels = 160 m, so 14 by 14 tokens per modality. One co-registered timestamp per sample — every modality comes from the same date and place; there is no multi-temporal fusion in pretraining.
 
-Output: 196 tokens of 768 dimensions per modality, or one merged 768-vector per tile, plus generated rasters. No precomputed embedding archive; weights are Apache 2.0 (fully open) on Hugging Face.
+Output: 196 tokens per modality, 768 dimensions for the Base model and 1024 for Large, or one merged vector per tile, plus generated rasters. No precomputed embedding archive; weights are Apache 2.0 (fully open) on Hugging Face.
 
 Results: on the PANGAEA benchmark (a standard suite of segmentation tasks) TerraMind Large scores 59.6 mean IoU, the only foundation model to beat U-Nets trained from scratch on that suite.
 
@@ -155,16 +155,16 @@ Stencil: tile 224 pixels at 30 m = 6.72 km. Token 16 pixels = 480 m for the 300 
 
 Output: one vector per token per frame; no precomputed product. The typical way to use it is full fine-tuning — retraining the encoder together with a small decoder for your task — through IBM's TerraTorch toolkit.
 
-Results: on GEO-Bench (a 12-task standard benchmark) the 600 M-TL model averages about 75.6 %, roughly 8 points above version 1.0. In May 2026 the model was deployed on a satellite for onboard flood and cloud detection.`,
+Results: on GEO-Bench (a 12-task standard benchmark) the 600 M-TL model is the best on average, about 8 % above version 1.0 and ahead of six other foundation models; the per-dataset scores are published as charts, so we quote no single number. In May 2026 the model was deployed on a satellite for onboard flood and cloud detection.`,
 
 // 13 — Granite-Geospatial-Ocean
 `This is IBM's Prithvi-based ocean model, developed with the UK's STFC Hartree Centre, Plymouth Marine Laboratory and the University of Exeter, released October 2025. The code lives in the ibm-granite GitHub organisation; we read its configuration files directly to get the numbers below.
 
-Inputs: Sentinel-3 OLCI, the ocean-colour instrument, 16 spectral bands at 300 m, plus sea-surface temperature from the SLSTR instrument — 17 channels in total. 512,000 tiles from 2017–2021, sampled evenly across 83 "Longhurst provinces" (a standard division of the ocean into biogeochemical regions) and across months.
+Inputs: Sentinel-3 OLCI, the ocean-colour instrument, 16 spectral bands at 300 m, plus sea-surface temperature from the SLSTR instrument — 17 channels in total. About 512,000 tiles from 2017–2021 (the paper also quotes 470,000 for training plus 50,000 for validation), sampled evenly across 83 "Longhurst provinces" (a standard division of the ocean into biogeochemical regions) and across months.
 
-Architecture: the Prithvi masked-autoencoder recipe with the network shrunk to fit the coarser sensor: embedding size 512, 12 layers, about 50 million parameters. The authors report that larger networks gave no gain.
+Architecture: the Prithvi masked-autoencoder recipe with the network shrunk to fit the coarser sensor: embedding size 512, 12 layers, about 50 million parameters, trained to reconstruct masked patches under a root-mean-square-error loss. The authors report that larger networks gave no gain.
 
-Stencil: tile 42 by 42 pixels at 300 m = 12.6 km square. Token 2 by 2 pixels = 600 m, so 21 by 21 = 441 tokens. num_frames = 1: a single acquisition, no temporal stacking — the four-frame option of Prithvi is switched off. For fine-tuning, satellite imagery within six days of a ship measurement is paired with it.
+Stencil: tile 42 by 42 pixels at 300 m = 12.6 km square. Token 2 by 2 pixels = 600 m, so 21 by 21 = 441 tokens. num_frames = 1: a single acquisition, no temporal stacking — the four-frame option of Prithvi is switched off. For fine-tuning, each ship measurement is paired with cloud-free imagery from a six-day window centred on it.
 
 Output: 441 vectors of 512 dimensions per tile. Downstream, a small regression head is trained to predict chlorophyll-a (a proxy for phytoplankton) and primary production (how much carbon the phytoplankton fix).
 
@@ -177,9 +177,9 @@ Caveats: surface-only, optical (so cloud-limited), one snapshot in time. It is a
 
 Horizontal axis (logarithmic): the spatial extent of the input that shapes one embedding, from 10 m to 1000 km. Vertical axis (categorical): how much time one embedding summarises, from a single snapshot at the bottom to a full year of all sources at the top.
 
-Reading the points: TESSERA and AlphaEarth sit at 10 m on the left — both are per-pixel outputs — but at the top, because both fold a whole year into one vector. AlphaEarth's dashed arrow says its spatial context extends to the right by an unknown amount. TerraMind and Granite are single snapshots at 2–13 km tile scale. Prithvi stacks four dates; OlmoEarth stacks twelve monthly steps.
+Reading the points: TESSERA sits at 10 m on the far left — a per-pixel output with no spatial context at all — and AlphaEarth at 1.28 km, the frame each of its 10-m pixels is computed from; both sit at the top because both fold a whole year into one vector. TerraMind and Granite are single snapshots at 2–13 km tile scale. Prithvi stacks four dates; OlmoEarth stacks twelve monthly steps.
 
-Earth 2, our codec, is the purple dot at about 84 km: each channel token sees a 3-by-3 neighbourhood of quarter-degree cells (a quarter degree is about 28 km) at one monthly or five-day mean. It is a snapshot stencil roughly ten times wider than any Earth observation model here. The hollow dot is the proposed "pixel-year" experiment from a later slide, which would move us up to the "one year folded" row.
+Earth 2, our codec, is the purple dot at about 84 km: each channel token sees a 3-by-3 neighbourhood of quarter-degree cells (a quarter degree is about 28 km) at one monthly or five-day mean. It is a snapshot stencil roughly seven times wider than the widest Earth-observation tile here (Granite, 12.6 km). The hollow dot is the proposed "pixel-year" experiment from a later slide, which would move us up to the "one year folded" row.
 
 Two design axes separate all these models: per-pixel versus patch, and snapshot versus period summary. Every later recommendation in the deck comes back to these two axes.`,
 
@@ -251,7 +251,7 @@ Caveat, which applies to every table in this section: it was authored by one of 
 // 20 — head-to-head II
 `Two more tables. The top one is OlmoEarth's Table 3: the same models, now fully fine-tuned — the whole network is retrained for each task (the encoder is unfrozen after the first 20 % of training). The bottom one is TerraMind's Table 6 on the PANGAEA benchmark, a community suite of about eleven segmentation, change-detection and regression tasks, evaluated with a frozen encoder plus a standard segmentation decoder (UPerNet).
 
-Top table: once fine-tuned, the gap between models closes. TerraMind Large and OlmoEarth Large split the columns roughly evenly, and Prithvi-EO 2.0 (600 M) sits one to three points behind on most. The last row is the same OlmoEarth architecture trained from random initialisation — no pretraining at all. The distance between that row and the others (10 to 37 points) is the value of pretraining itself.
+Top table: once fine-tuned, the gap between models closes. TerraMind Large and OlmoEarth Large split the columns roughly evenly, and Prithvi-EO 2.0 (600 M) sits one to three points behind on the classification columns but eight to thirteen points behind on the PASTIS and MADOS segmentation columns. The last row is the same OlmoEarth architecture trained from random initialisation — no pretraining at all. The distance between that row and the others (10 to 37 points) is the value of pretraining itself.
 
 Bottom table: mIoU per dataset plus an average and an average rank. TerraMind Large is the only foundation model whose average (59.6) beats a U-Net trained from scratch (57.6). Prithvi appears only as version 1.0 and comes last. HLS Burn Scars, FiveBillionPixels, DynamicEarthNet, SpaceNet 7 and AI4SmallFarms are the other PANGAEA datasets.
 
@@ -273,7 +273,7 @@ AlphaEarth's own paper reports a 23.9 % average error reduction versus the next-
 
 Left: Granite-Geospatial-Ocean, Table 1. Five-fold cross-validated RMSE in log10 units for chlorophyll-a and primary production, comparing the fine-tuned foundation model with the same network trained from scratch and with a random forest on raw pixel values. The foundation model is best in both columns, but the margins (0.02 and 0.03) are smaller than the spread between folds. The authors' stronger claims are label efficiency (the advantage grows as training labels shrink) and better spatial pattern (SSIM — structural similarity — of 0.88 versus 0.82 against the operational product).
 
-Right: OceanSAR-1, kNN on frozen features against other SAR foundation models. TenGeoP is a ten-class geophysical-phenomena dataset (accuracy, higher is better); wave height and wind speed are RMSE in metres and metres per second (lower is better). Ocean-only pretraining beats land-trained SAR models by 10 to 20 points on classification and roughly halves wind-speed error.
+Right: OceanSAR-1, kNN on frozen features against other SAR foundation models. TenGeoP is a ten-class geophysical-phenomena dataset (accuracy, higher is better); wave height and wind speed are RMSE in metres and metres per second (lower is better). Ocean-only pretraining beats land-trained SAR models by 9 to 23 points on classification and cuts wind-speed error by 30 to 45 %.
 
 Bottom box: the only thing the ocean and land models share is the protocol — frozen features plus a small head, and "foundation model versus same network from scratch" as the control for the value of pretraining. That is also exactly what our attribution matrix does: our pixel and patch codecs versus raw data at matched receptive field. Our pretraining margin (0.617 vs 0.613 correlation for a single pixel; 0.672 vs 0.659 for the 3-by-3 patch) is the same kind of statement as Granite's 0.14 versus 0.16 — a small one.`,
 
@@ -349,9 +349,9 @@ Interior temperature and salinity: same mechanism, integrated from depth; at 0.0
 
 Sea-surface height sets the pressure gradient; slow Rossby waves in the interior plus a fast Kelvin arm along coasts.
 
-Own history: momentum persistence and eddies with a 3-month lifetime.
+Own history: momentum persistence and eddies. Individual eddies live four months and longer and drift westward at a few centimetres per second, but at a fixed pixel the current decorrelates in weeks to a few months because they pass through — that decorrelation time, about three months, is the memory that matters here.
 
-The "two rules" box states the arithmetic used throughout: reach at lag ℓ is the larger of v·(Δt+ℓ) and the correlation length, capped at 10,000 km; a lag is useful if Δt+ℓ ≤ τ. The notation panel defines ℓ with a timeline. All parameter values are order-of-magnitude illustrations and can be changed live in the Dependency-Cone Explorer page.`,
+The "two rules" box states the arithmetic used throughout: reach at lag ℓ is the larger of v·(Δt+ℓ) and the correlation length, capped at 10,000 km; a lag is useful if Δt+ℓ ≤ τ. There is one deliberate exception, stated in the box: for a fast driver acting through a slow medium (air temperature → heat flux → mixed layer) the two lengths add rather than compete — the flux pattern is laid down over the atmospheric correlation length and then carried away by the ocean — which is why the air-temperature row reads 1,889 to 3,833 km. The notation panel defines ℓ with a timeline. All parameter values are order-of-magnitude illustrations and can be changed live in the Dependency-Cone Explorer page.`,
 
 // 29 — step 1: wedges
 `Each driver from the previous slide becomes a wedge on this chart. Horizontal axis: lag ℓ, how many months before now the input was observed (0 to 24). Vertical axis (logarithmic): how far from the pixel the input may sit and still matter, 10 km to 10,000 km.
@@ -380,7 +380,7 @@ Thermal wind: the vertical shear of the geostrophic current is proportional to t
 
 Pressure gradient: the surface geostrophic current is u = −(g/f) ∂η/∂y, where η is sea-surface height. SSH anomalies arrive slowly as westward Rossby waves in the interior and fast as Kelvin or coastal waves along boundaries.
 
-Advection and eddies: momentum persists and mesoscale eddies drift westward for one to three months; upstream cells carry what will arrive.
+Advection and eddies: momentum persists and mesoscale eddies drift westward at a few centimetres per second. The eddies themselves live four months and more, but at a fixed pixel the current decorrelates in weeks to a few months as they pass through — that is the memory used for "own history". Upstream cells carry what will arrive.
 
 What the stencil fixes versus what attention learns: the cone is the support — which (cell, lag, channel) tokens may enter at all. It encodes only speed and memory per driver. Everything else — which upstream cell matters this month, how strongly an SSH gradient projects onto the current — is learned by the attention weights inside the support. A support too small cannot be learned around; one too large costs slots and admits noise.
 

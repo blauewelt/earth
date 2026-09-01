@@ -248,7 +248,7 @@ const DRIVERS=[
  {id:'ssh',name:'SSH',short:'SSH',cv:'--ssh',v:0.03,tau:360,L:0,mode:'max',kelvin:2.5,
   mech:'Pressure gradient → geostrophic current. Westward Rossby drift; Kelvin / coastal waves 2.5 m/s along coasts and the equator (anisotropy).'},
  {id:'own',name:'Own history (u, v at P)',short:'Own history',cv:'--own',v:0.15,tau:90,L:0,mode:'max',drift:0.03,
-  mech:'Momentum persistence and mesoscale eddies; eddies drift westward ~0.03 m/s (anisotropy).'},
+  mech:'Momentum persistence and mesoscale eddies. Eddies live 4+ months and drift westward ~0.03 m/s (anisotropy), but at a fixed pixel the current decorrelates in weeks–months as they pass through — that is the memory used here.'},
 ];
 const PRESETS={cur:['wind','air','sst','int','ssh','own'],sst:['wind','air','own','sst'],int:['int','ssh','own']};
 

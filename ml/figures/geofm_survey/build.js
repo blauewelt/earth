@@ -258,15 +258,15 @@ modelSlide(3, "AlphaEarth Foundations (Google DeepMind)", "An 'embedding field':
   [
     ["Who / when", "DeepMind + Google Earth Engine; arXiv 2507.22291 (Jul 2025, v2 Sep 2025)."],
     ["Inputs", "Sentinel-2, Landsat 8/9, Sentinel-1, PALSAR-2, GEDI lidar, ERA5-Land, GRACE, GLO-30 DEM, NLCD, plus text (Wikipedia, GBIF) — >3 B observations."],
-    ["Architecture", "Space-Time-Precision (STP) encoder — three operators at three resolutions (spatial attention @ 1/16 L, time-axial attention @ 1/8 L, 3×3 convs @ 1/2 L) exchanging state through a learned Laplacian pyramid (next slide). Teacher/student video embedders + text alignment; ~480 M deployed (1 B trained). Losses: reconstruction, batch-uniformity on S⁶³, consistency, text-contrastive."],
-    ["Stencil", "Output 10 m pixel; multi-scale spatial context (extent not disclosed). Continuous 'valid period' [t₀, t₁) — arbitrary windows in principle; released product = calendar-year summaries."],
+    ["Architecture", "Space-Time-Precision (STP) encoder — 15 blocks, each with three operators at three resolutions (spatial attention @ L/16, time-axial attention @ L/8, 3×3 convs @ L/2; widths 1024 / 512 / 128) exchanging state through a learned Laplacian pyramid (next slide). Teacher/student video embedders + text alignment; ~480 M deployed (1 B trained). Losses: reconstruction, batch-uniformity on S⁶³, consistency, text-contrastive."],
+    ["Stencil", "Output 10 m pixel. Input frame 1.28 km × 1.28 km (128 × 128 px; supplement S2.1/S8.2): inference runs on 960 m tiles buffered by 160 m, so a pixel's context is at most the 1.28 km frame, with spatial attention global inside it. Continuous 'valid period' [t₀, t₁) — arbitrary windows in principle; released product = calendar-year summaries."],
     ["Output", "64-D, unit-norm, int8 in the public dataset; ~1.4 T footprints / yr. Land + coastal/inland water; no open ocean."],
     ["Availability", "Dataset only (CC-BY 4.0) in Earth Engine / GCS. Weights and code not released."],
-    ["Results", "~24 % avg error reduction vs. prior featurizations; LCMAP land cover 92.4 %, ET regression R² 0.58."],
+    ["Results", "~23.9 % average error reduction vs. prior featurizations over 15 evaluations (10.4 % at 10-shot, 4.2 % at 1-shot); evapotranspiration regression R² 0.58. Per-dataset scores are charts only."],
   ],
   {
-    space: { n: 15, outPx: [7, 7], dashed: [3, 7, 13], notes: [{ text: "multi-scale context\n(extent undisclosed)", x: 0.08, y: 2.1, w: 1.45, h: 0.42, fill: true }], layers: 3,
-      lines: ["Output pixel: 10 m × 10 m.", "Context: spatial self-attention is global across the input frame at 1/16 L, so the receptive field is the frame; frame size L is not stated.", "≈10 co-registered sources at 10 m … 300 km native resolution."] },
+    space: { n: 16, tileOutline: true, token: [7, 7, 2], outPx: [8, 8], layers: 3, notes: [{ text: "frame 128 px = 1.28 km", x: 0.05, y: 0.02, w: 1.6 }, { text: "space-attention cell 160 m", x: 1.35, y: 1.42, w: 1.3, h: 0.25 }],
+      lines: ["Output pixel: 10 m × 10 m (drawn 8× too large).", "Context: the 1.28 km frame. Spatial attention is global inside it on an 8 × 8 grid of 160 m cells; the outer 80 m is trimmed at inference, so no pixel sees further than ~640 m.", "≈10 co-registered sources at 10 m … 300 km native resolution."] },
     time: { window: [0.1, 0.9], windowLabel: "valid period — arbitrary; product = 1 calendar year", axisTicks: seq(12, 0.1, 0.9),
       rows: [
         { label: "S-2 (~5 d), S-1 (6–12 d)", ticks: seq(28, 0.1, 0.9), size: 0.05 },
@@ -276,7 +276,8 @@ modelSlide(3, "AlphaEarth Foundations (Google DeepMind)", "An 'embedding field':
       lines: ["All observations in the window are summarised — a period embedding, not a snapshot.", "Model supports interpolation/extrapolation in time; only annual layers are public."] },
     out: { dim: "64-D", lines: ["per 10 m pixel per year", "int8, unit sphere"] }
   },
-  "AlphaEarth is the clearest statement of the 'embedding field' idea we are transplanting to the ocean — same 64-D width. Key caveat for us: it is a dataset, not a model. You cannot request a custom time window or run it over ocean pixels."
+  "AlphaEarth is the clearest statement of the 'embedding field' idea we are transplanting to the ocean — same 64-D width. Key caveat for us: it is a dataset, not a model. You cannot request a custom time window or run it over ocean pixels. Frame size and block count come from the supplement (S2.1, S2.4, S8.2), which the main text does not repeat.",
+  11
 );
 
 
@@ -284,7 +285,7 @@ modelSlide(3, "AlphaEarth Foundations (Google DeepMind)", "An 'embedding field':
 {
   const s = pres.addSlide();
   s.background = { color: WHITE };
-  title(s, "AlphaEarth — inside the STP encoder", "L = side length of the square input frame, in pixels (the paper: 'a square input of L pixels a side'; its value is not given). Three operators at ⅟₁₆ L, ⅛ L and ½ L exchange state through a learned Laplacian pyramid after every block.");
+  title(s, "AlphaEarth — inside the STP encoder", "L = side length of the square input frame, in pixels — L = 128 (1.28 km at 10 m) for training and inference (supplement S2.1, S8.2). Three operators at L/16, L/8 and L/2 exchange state through a learned Laplacian pyramid after every one of 15 blocks.");
   const laneY = [1.95, 3.25, 4.55], laneH = 1.0;
   const lanes = [
     ["SPACE operator", "grid of L/16 × L/16 cells", "ViT-like spatial self-attention over the whole (down-scaled) frame — global context, coarse grid", SPACE],
@@ -309,7 +310,7 @@ modelSlide(3, "AlphaEarth Foundations (Google DeepMind)", "An 'embedding field':
   for (let b = 0; b < nB; b++) {
     const bx = bx0 + b * (bw + gap);
     const ghost = b === nB - 1;
-    s.addText(ghost ? "block N" : `block ${b + 1}`, { x: bx, y: 1.6, w: bw, h: 0.25, fontFace: FONT_B, fontSize: 9, bold: true, color: MUTED, align: "center", isTextBox: true, margin: 0 });
+    s.addText(ghost ? "block 15" : `block ${b + 1}`, { x: bx, y: 1.6, w: bw, h: 0.25, fontFace: FONT_B, fontSize: 9, bold: true, color: MUTED, align: "center", isTextBox: true, margin: 0 });
     lanes.forEach((_, i) => {
       s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: bx, y: laneY[i] + (laneH - boxH) / 2, w: bw, h: boxH, fill: { color: cols[i], transparency: ghost ? 70 : 15 }, line: { color: cols[i], width: 1, dashType: ghost ? "dash" : "solid" }, rectRadius: 0.05 });
       s.addText(["space", "time", "precision"][i], { x: bx, y: laneY[i] + (laneH - boxH) / 2, w: bw, h: boxH, fontFace: FONT_B, fontSize: 9, bold: true, color: ghost ? cols[i] : WHITE, align: "center", valign: "middle", isTextBox: true, margin: 0 });
@@ -348,8 +349,10 @@ modelSlide(3, "AlphaEarth Foundations (Google DeepMind)", "An 'embedding field':
   s.addText([
     { text: "Training trio  ", options: { bold: true, color: TEAL } },
     { text: "teacher video embedder with implicit decoders · student with identical architecture (consistency + batch-uniformity on the sphere) · text-alignment model with a frozen language model (CLIP-style). ~1 B and ~480 M variants trained; the 480 M one is deployed.   ", options: {} },
-    { text: "Not stated in the paper:  ", options: { bold: true, color: "A23B3B" } },
-    { text: "number of STP blocks, number of pyramid levels, frame size L, patchification, exact upsampling — so the spatial receptive field in metres cannot be quoted.", options: {} },
+    { text: "In the supplement (S2.4, S8.2):  ", options: { bold: true, color: "1F7A4D" } },
+    { text: "15 STP blocks; widths D_S = 1024 (space), D_T = 512 (time), D_P = 128 (precision); implicit decoders = 2-hidden-layer MLPs of width 512; vMF bottleneck κ = 8·10³; inference on 960 m tiles buffered to 1.28 km, outer 80 m trimmed. So the spatial receptive field is at most 1.28 km — the whole frame.   ", options: {} },
+    { text: "Still not stated:  ", options: { bold: true, color: "A23B3B" } },
+    { text: "the exact pyramid up/down-sampling kernels and how the three states are merged.", options: {} },
   ], { x: 0.75, y: 6.1, w: 11.8, h: 0.75, fontFace: FONT_B, fontSize: 9.5, color: INK, valign: "middle", isTextBox: true, margin: 0 });
   footer(s);
   s.addNotes("STP = Space, Time, Precision. The three operators run on the same signal at different resolutions and are re-synchronised after each block by learned Laplacian-pyramid up/down-sampling, so information moves between coarse global attention and fine convolutional detail every block. The time operator is where the 'valid period' timestamps enter (sinusoidal timecodes). Relevance for us: it is a genuinely different way of buying spatial context — attention at 1/16 of the frame plus convolutions near full resolution — compared with our fixed 3×3 patch, and it is the mechanism behind 'continuous time' summaries.");
@@ -357,7 +360,7 @@ modelSlide(3, "AlphaEarth Foundations (Google DeepMind)", "An 'embedding field':
 
 
 // 3c–3f. STP walk-through (4 build slides — click through as an animation)
-// Illustrative values: L = 128 px @ 10 m (1.28 km frame); 1/2 L = 64 px (20 m); 1/8 L = 16 px (80 m); 1/16 L = 8 px (160 m); N = 4 blocks.
+// L = 128 px @ 10 m (1.28 km frame) is the paper's frame (suppl. S2.1/S8.2): 1/2 L = 64 px (20 m); 1/8 L = 16 px (80 m); 1/16 L = 8 px (160 m). 15 blocks in the paper; 4 drawn.
 function gridLite(slide, x, y, size, n, o) {
   o = o || {};
   const cs = size / n;
@@ -395,7 +398,7 @@ function stpStrip(slide, active) {
       { x: x + 0.1, y, w: w - 0.2, h, fontFace: FONT_B, valign: "middle", isTextBox: true, margin: 0 });
     if (i < 4) slide.addShape(pres.shapes.RIGHT_ARROW, { x: x + w + 0.04, y: y + h / 2 - 0.1, w: gap - 0.08, h: 0.2, fill: { color: GRIDLINE }, line: { width: 0 } });
   });
-  slide.addText("L = side length of the square input frame in pixels. Illustrative numbers — the paper gives the ratios (⅟₁₆, ⅛, ½ L) but not L or N; we draw L = 128 px @ 10 m (1.28 km) and N = 4.", { x: 0.6, y: 6.75, w: 12.1, h: 0.28, fontFace: FONT_B, fontSize: 9, italic: true, color: MUTED, isTextBox: true, margin: 0 });
+  slide.addText("L = side length of the square input frame in pixels. L = 128 px @ 10 m (1.28 km) is the paper's own frame (supplement S2.1, S8.2); the real depth is N = 15 blocks, we draw 4. Frame counts per year are typical values, not from the paper.", { x: 0.6, y: 6.75, w: 12.1, h: 0.28, fontFace: FONT_B, fontSize: 9, italic: true, color: MUTED, isTextBox: true, margin: 0 });
 }
 const STP_SUB = "STP walk-through";
 
@@ -420,7 +423,7 @@ const STP_SUB = "STP walk-through";
     { text: "Every frame keeps its acquisition timestamp as a sinusoidal timecode, so the block that follows knows when each map was observed. The yellow 10 m pixel is now a 20 m feature cell — the first (and only) fixed loss of resolution before the output head restores it.", options: {} },
   ], { x: ox - 0.2, y: gy + os - 0.05, w: 4.1, h: 1.3, fontFace: FONT_B, fontSize: 9.5, color: INK, valign: "top", isTextBox: true, margin: 0 });
   footer(s);
-  s.addNotes("Step 1 of the STP walk-through. Illustrative frame: L = 128 px at 10 m. Each source has its own learned input projector; whatever the native resolution, the output is a 1/2 L map (here 64×64 at 20 m) per input frame, with the timestamp carried alongside. Frame counts per year are typical values, not from the paper.");
+  s.addNotes("Step 1 of the STP walk-through. Frame: L = 128 px at 10 m — the paper's own training and inference frame (supplement S2.1, S8.2). Each source has its own learned input projector; whatever the native resolution, the output is a 1/2 L map (here 64×64 at 20 m) per input frame, with the timestamp carried alongside. Frame counts per year are typical values, not from the paper.");
 }
 
 // ---- step 2: one block, three operators
@@ -452,7 +455,7 @@ const STP_SUB = "STP walk-through";
   s.addText([{ text: "Three views of one place, computed simultaneously. ", options: { bold: true, color: NAVY } }, { text: "Space knows the whole frame coarsely, time knows the whole year at one spot, precision knows the fine local texture — none of them alone is the stencil; the exchange in step 3 is.", options: {} }],
     { x: 0.6, y: 6.05, w: 12.1, h: 0.6, fontFace: FONT_B, fontSize: 10, color: INK, valign: "top", isTextBox: true, margin: 0 });
   footer(s);
-  s.addNotes("Step 2. The three operators of one STP block. Ratios (1/16, 1/8, 1/2 of L) are from the paper; the absolute cell sizes follow from our illustrative L. Attention in the space operator is over the whole down-scaled frame; time attention is axial (one location, all frames); precision is a 3×3 convolution at 1/2 L.");
+  s.addNotes("Step 2. The three operators of one STP block. Ratios (1/16, 1/8, 1/2 of L) and L = 128 px are from the paper (main text + supplement S2.1), so the cell sizes 160 / 80 / 20 m are real, not illustrative. Attention in the space operator is over the whole down-scaled frame; time attention is axial (one location, all frames); precision is a 3×3 convolution at 1/2 L.");
 }
 
 // ---- step 3: pyramid exchange
@@ -488,7 +491,7 @@ const STP_SUB = "STP walk-through";
     { text: "Follow the colours. ", options: { bold: true, color: NAVY } },
     { text: "The blue 160 m space cell arrives in the fine map as an 8 × 8 block of 20 m cells; the green 3 × 3 precision patch (60 m) arrives in the coarse map as a fraction of one 160 m cell; the orange time cell lands as 2 × 2 / 4 × 4. After the sum, every operator in block k+1 starts from all three views. Repeat N times — the receptive field of the fine path grows to the whole frame while it keeps 20 m grain.", options: {} },
   ], { x: 0.6, y: 6.12, w: 12.1, h: 0.62, fontFace: FONT_B, fontSize: 9.5, color: INK, valign: "top", isTextBox: true, margin: 0 });
-  s.addText("× N blocks (we draw N = 4)", { x: xr + gs + 0.1, y: 5.35 - 0.12, w: 1.6, h: 0.25, fontFace: FONT_B, fontSize: 9, bold: true, color: MUTED, align: "center", isTextBox: true, margin: 0 });
+  s.addText("× 15 blocks (we draw 4)", { x: xr + gs + 0.1, y: 5.35 - 0.12, w: 1.6, h: 0.25, fontFace: FONT_B, fontSize: 9, bold: true, color: MUTED, align: "center", isTextBox: true, margin: 0 });
   footer(s);
   s.addNotes("Step 3. This is the sentence being animated: 'after each block, learned Laplacian-pyramid rescaling lets every operator feed every operator of the next block.' Nine paths (3 sources × 3 destinations); same-level paths are identity-like, cross-level paths are learned up/down-sampling. The sum per level is our reading of how the states are combined — the paper says 'pass its state to each of the operators in the subsequent block' without specifying the merge.");
 }
@@ -521,7 +524,7 @@ const STP_SUB = "STP walk-through";
     { text: " ", options: { fontSize: 5, breakLine: true } },
     { text: "Per valid period: ", options: { bold: true, color: TIME } }, { text: "the pair (t_s, t_e) entered the time operators as timecodes in every block, so this whole frame of vectors is a summary of that window — one calendar year in the public product.", options: { breakLine: true } },
     { text: " ", options: { fontSize: 5, breakLine: true } },
-    { text: "So what is the stencil? ", options: { bold: true, color: NAVY } }, { text: "Spatially the entire input frame (coarsely) plus a fine local neighbourhood; temporally every dated frame in the window. That is why the paper can call it an embedding field and why no single receptive-field number is quoted.", options: {} },
+    { text: "So what is the stencil? ", options: { bold: true, color: NAVY } }, { text: "Spatially the whole 1.28 km frame, coarsely (8 × 8 cells of 160 m through the space path) plus a fine local neighbourhood (20 m cells through the precision path); temporally every dated frame in the valid period. The number to remember: an AlphaEarth pixel never sees further than ~640 m in any direction.", options: {} },
   ], { x: 9.7, y: gy - 0.1, w: 3.0, h: 3.9, fontFace: FONT_B, fontSize: 9.5, color: INK, valign: "top", isTextBox: true, margin: 0 });
   footer(s);
   s.addNotes("Step 4. The paper: 'STP itself terminates with a final learned spatial resampling to the resolution of the precision operator', and embeddings are then produced at 10 m. We draw the up-sampling to L explicitly. The receptive-field picture on the output frame is the consequence of steps 2–3: coarse-global through the space path, fine-local through precision, all frames in the window through time.");
@@ -557,7 +560,7 @@ modelSlide(5, "OlmoEarth (Ai2)", "Open multimodal space-time ViT family (Nano→
   [
     ["Who / when", "Allen Institute for AI (+ UW, ASU, UBC). v1 Nov 2025 (arXiv 2511.13655), v1.1 May 2026, v1.2 later 2026. Weights on Hugging Face; custom 'OlmoEarth Artifact License' (no military/extractive use)."],
     ["Inputs", "Sentinel-1, Sentinel-2, Landsat-8 monthly time series, all resampled to 10 m; static layers (OSM, WorldCover, CDL, SRTM, canopy height, WorldCereal) as inputs/targets."],
-    ["Architecture", "ViT over space × time × band-group tokens (FlexiViT patches 1–8 px in v1; single-bandset tokens + RoPE in v1.2). 'Latent MIM Lite': masked modelling with patch-discrimination + instance-contrastive losses. Sizes: Nano 1.4 M · Tiny 6.2 M · Base 89 M · Large 308 M (encoder)."],
+    ["Architecture", "ViT over space × time × band-group tokens (FlexiViT patches 1–8 px in v1; single-bandset token merging in v1.1, RoPE in v1.2). 'Latent MIM Lite': masked modelling with patch-discrimination + instance-contrastive losses. Sizes: Nano 1.4 M · Tiny 6.2 M · Base 89 M · Large 308 M (encoder)."],
     ["Stencil", "Tile 2.56 km × 2.56 km = 256 × 256 px @ 10 m; token = 1–8 px patch (≤ 80 m). Up to 12 monthly steps over one year, missing months masked."],
     ["Output", "Per-patch, per-timestep tokens (Base 768-D, Large 1024-D) + pooled vector. No standing global product; Studio exports embeddings for any AOI at 10–80 m, 1–12 monthly steps (int8 COGs)."],
     ["Results", "Best on 15/24 tasks (kNN/linear) and 19/29 (fine-tuned) vs. Prithvi v2, TerraMind, Galileo, DINOv3; matches/exceeds AlphaEarth after fine-tuning on 5 tasks."],
@@ -580,12 +583,12 @@ modelSlide(5, "OlmoEarth (Ai2)", "Open multimodal space-time ViT family (Nano→
 // 6. TerraMind
 modelSlide(6, "TerraMind (IBM Research + ESA Φ-lab)", "Any-to-any generative multimodal EO model; 'Thinking in Modalities' — ICCV 2025",
   [
-    ["Who / when", "IBM Research Europe, ESA Φ-lab, ETH Zürich, FZ Jülich, NASA IMPACT. arXiv 2504.11171 (Apr 2025); TerraMesh dataset 2504.11172. Apache 2.0, weights on Hugging Face (ibm-esa-geospatial), TerraTorch integration. Tiny/Small edge variants Oct 2025."],
+    ["Who / when", "IBM Research Europe, ESA Φ-lab, ETH Zürich, FZ Jülich, NASA IMPACT, Univ. of Iceland. arXiv 2504.11171 (Apr 2025); TerraMesh dataset 2504.11172. Apache 2.0, weights on Hugging Face (ibm-esa-geospatial), TerraTorch integration. Tiny/Small edge variants Jun–Jul 2025."],
     ["Inputs", "Pixel-level: S-2 L2A & L1C, S-1 GRD & RTC, DEM, RGB, NDVI. Token-level: LULC classes, captions, geolocation. All co-registered at 10 m in 224 px tiles."],
     ["Architecture", "Dual-scale encoder–decoder: token path (cross-modal correlation) + pixel path (fine detail). Per-modality FSQ-VAE tokenizers (16 k codebook). Objective: masked cross-modal token reconstruction over 500 B tokens from ~9 M TerraMesh samples. Base: 6 d, Large: 10 d on 32 A100s."],
     ["Stencil", "Tile 224 × 224 px @ 10 m = 2.24 km; token 16 × 16 px = 160 m → 14 × 14 = 196 tokens per modality. Single co-registered timestamp per sample — no multi-temporal fusion."],
-    ["Output", "196 × 768-D tokens per modality, mergeable to one 768-D; plus generated rasters of missing modalities (TiM). No precomputed embedding archive."],
-    ["Results", "PANGAEA avg mIoU: Large 59.6, Base 58.4 (≥3 pp over CROMA/DeCUR); only GeoFM beating task-specific U-Nets across the benchmark."],
+    ["Output", "196 tokens per modality of 768-D (Base) / 1024-D (Large), mergeable to one vector; plus generated rasters of missing modalities (TiM). No precomputed embedding archive."],
+    ["Results", "PANGAEA avg mIoU: Large 59.6, Base 58.4 (≥3 pp over CROMA, DOFA and the other GeoFMs in that table); only GeoFM beating task-specific U-Nets across the benchmark."],
     ["Ocean", "TerraMesh is land/ecoregion-stratified; no marine modalities. Open-ocean behaviour untested."],
   ],
   {
@@ -593,7 +596,7 @@ modelSlide(6, "TerraMind (IBM Research + ESA Φ-lab)", "Any-to-any generative mu
       lines: ["Tile: 224 × 224 px @ 10 m = 2.24 km × 2.24 km.", "Token: 16 × 16 px = 160 m; 14 × 14 grid per modality.", "Up to ~9 modality sheets, each with its own tokenizer."] },
     time: { snapshot: 0.5, snapshotLabel: "one co-registered timestamp", axisTicks: seq(12), rows: [],
       lines: ["All modalities come from the same date and place.", "A sample is a snapshot: every modality is aligned to one acquisition.", "Temporal change is not part of the pretraining stencil."] },
-    out: { dim: "768-D", lines: ["per 160 m token, per modality", "or merged per tile"] }
+    out: { dim: "768-D", lines: ["per 160 m token, per modality (Base; Large 1024-D)", "or merged per tile"] }
   },
   "TerraMind's distinguishing trick is generative: it can synthesise a missing modality (e.g. LULC from S-2) and feed it back in. Ocean translation: generate missing altimetry from SST+wind? But it is single-snapshot, so dynamics are absent."
 );
@@ -606,7 +609,7 @@ modelSlide(7, "Prithvi-EO 2.0 (IBM + NASA)", "Multi-temporal HLS masked autoenco
     ["Architecture", "ViT-L (300 M: 1024-D, 24 layers) / ViT-H (600 M: 1280-D, 32 layers) masked autoencoder, mask ratio 0.75, 3D sin-cos positions. TL variants add lat/lon + date encodings with metadata dropout."],
     ["Stencil", "Tile 224 × 224 px @ 30 m = 6.72 km. Token 16 px = 480 m (300 M) or 14 px = 420 m (600 M); tubelet depth 1, so each of 4 timestamps gets its own token grid. Frames 1–6 months apart (seasonal), not a fixed window; single-frame inference supported."],
     ["Output", "4 × 196 (or 4 × 256) tokens of 1024/1280-D. No precomputed embedding product; typical use is full fine-tuning of encoder + light decoder."],
-    ["Results", "GEO-Bench average ~75.6 % (600 M-TL), ~8 % over v1.0, ahead of DOFA, Scale-MAE etc.; tasks: floods, burn scars, crops, landslides, PASTIS, Sen4Map."],
+    ["Results", "GEO-Bench: 600 M-TL best on average, ~8 % over v1.0 and ahead of six other GFMs incl. DOFA and Scale-MAE (per-set numbers are charts); tasks: floods, burn scars, crops, landslides, PASTIS, Sen4Map."],
     ["In orbit", "May 2026: deployed on Kanyini satellite and ISS IMAGIN-e for onboard flood/cloud detection (still the 2.0 architecture)."],
   ],
   {
@@ -623,10 +626,10 @@ modelSlide(7, "Prithvi-EO 2.0 (IBM + NASA)", "Multi-temporal HLS masked autoenco
 // 8. Granite-Geospatial-Ocean
 modelSlide(8, "Granite-Geospatial-Ocean (IBM · STFC · PML · Exeter)", "The Prithvi-EO recipe moved onto Sentinel-3 ocean colour + SST — github.com/ibm-granite/geospatial",
   [
-    ["Who / when", "IBM Research UK, STFC Hartree Centre, Plymouth Marine Lab, Univ. of Exeter (UK HNCDI). Released 6 Oct 2025; arXiv 2509.21273 'A Sentinel-3 foundation model for ocean colour'. Apache 2.0; weights on Hugging Face, code + TerraTorch notebook at github.com/ibm-granite/geospatial."],
-    ["Inputs", "Sentinel-3 OLCI Level-2 reflectance, 16 bands (Oa01–Oa12, Oa16–18, Oa21) + SLSTR sea-surface temperature = 17 channels at 300 m. 512 k tiles (470 k train / 50 k val), 2017–2021, balanced over 83 Longhurst provinces and months."],
-    ["Architecture", "Prithvi-EO ViT-MAE with the tile shrunk for the coarser sensor: embed 512-D, 12 layers, 8 heads, decoder 256-D × 4; ~50 M params (larger gave no gain). MSE reconstruction of masked patches."],
-    ["Stencil", "Tile 42 × 42 px @ 300 m = 12.6 km × 12.6 km; token 2 × 2 px = 600 m → 21 × 21 = 441 tokens. num_frames = 1: a single acquisition, no temporal stacking (fine-tuning pairs in-situ samples with imagery from a ±6-day window)."],
+    ["Who / when", "IBM Research Europe (UK), STFC Hartree Centre, Plymouth Marine Lab, Univ. of Exeter (UK HNCDI). Released 6 Oct 2025; arXiv 2509.21273 'A Sentinel-3 foundation model for ocean colour'. Apache 2.0; weights on Hugging Face, code + TerraTorch notebook at github.com/ibm-granite/geospatial."],
+    ["Inputs", "Sentinel-3 OLCI Level-2 reflectance, 16 bands (Oa01–Oa12, Oa16–18, Oa21) + SLSTR sea-surface temperature = 17 channels at 300 m. ~512 k tiles (the paper also gives 470 k train + 50 k val), 2017–2021, balanced over 83 Longhurst provinces and months."],
+    ["Architecture", "Prithvi-EO ViT-MAE with the tile shrunk for the coarser sensor: embed 512-D, 12 layers, 8 heads, decoder 256-D × 4; ~50 M params (larger gave no gain). RMSE reconstruction loss on masked patches."],
+    ["Stencil", "Tile 42 × 42 px @ 300 m = 12.6 km × 12.6 km; token 2 × 2 px = 600 m → 21 × 21 = 441 tokens. num_frames = 1: a single acquisition, no temporal stacking (fine-tuning pairs each in-situ sample with cloud-free imagery from a 6-day window centred on it)."],
     ["Output", "441 × 512-D tokens per tile; downstream pixel-wise regression heads (TerraTorch) for chlorophyll-a and primary production."],
     ["Results", "Chl-a (188 in-situ points): RMSE 0.14 ± 0.05 vs 0.16 ± 0.10 log₁₀ mg m⁻³ from scratch; primary production (103 points): 0.39 ± 0.04 vs 0.42 ± 0.07 log₁₀ mgC m⁻² d⁻¹. Gains grow as labels shrink (useful at 25 % of labels)."],
     ["Caveats", "Surface-only, cloud-limited optical; single snapshot; authors say not yet competitive with operational algorithms; under-predicts bloom-level chl-a."],
@@ -635,7 +638,7 @@ modelSlide(8, "Granite-Geospatial-Ocean (IBM · STFC · PML · Exeter)", "The Pr
     space: { n: 21, tileOutline: true, token: [10, 10, 1], layers: 2, notes: [{ text: "42 px = 12.6 km", x: 0.05, y: 0.02, w: 1.3 }, { text: "token 2 px = 600 m", x: 1.45, y: 1.55, w: 1.3, h: 0.25 }],
       lines: ["Tile: 42 × 42 px @ 300 m = 12.6 km × 12.6 km (21 × 21 tokens drawn to scale).", "Token: 2 × 2 px = 600 m.", "Two sheets: 16 OLCI bands + 1 SST band."] },
     time: { snapshot: 0.5, snapshotLabel: "one Sentinel-3 pass", axisTicks: seq(12), rows: [],
-      lines: ["num_frames = 1 — no temporal stacking.", "Single-timestep stencil: the 4-frame Prithvi option is switched off.", "Fine-tuning pairs imagery within ±6 days of an in-situ measurement."] },
+      lines: ["num_frames = 1 — no temporal stacking.", "Single-timestep stencil: the 4-frame Prithvi option is switched off.", "Fine-tuning pairs each in-situ measurement with imagery from a 6-day window centred on it."] },
     out: { dim: "512-D", lines: ["per 600 m token", "per single acquisition"] }
   },
   "This is the one model of the six trained on sea pixels — but it is an ocean-colour (biology) model, not an ocean-state model: optical surface only, one snapshot, 12.6 km tiles. Nothing here sees the interior, altimetry or transport. Repo: github.com/ibm-granite/geospatial → granite-geospatial-ocean (config confirms 42 px, 17 channels, embed 512, depth 12, patch [1,2,2]).",
@@ -670,7 +673,7 @@ modelSlide(8, "Granite-Geospatial-Ocean (IBM · STFC · PML · Exeter)", "The Pr
   // points: [metres, rowIndex, label, colour, sublabel]
   const pts = [
     [10, 3, "TESSERA", SPACE, "10 m px · 128-D"],
-    [10, 4, "AlphaEarth", SPACE, "10 m px · 64-D · spatial context extent undisclosed"],
+    [1280, 4, "AlphaEarth", SPACE, "1.28 km frame · 10 m px · 64-D"],
     [2240, 0, "TerraMind", SPACE, "2.24 km tile · 160 m token · 768-D"],
     [2560, 2, "OlmoEarth", SPACE, "2.56 km tile · ≤80 m token · 768-D"],
     [6720, 1, "Prithvi-EO 2.0", SPACE, "6.72 km tile · 480 m token · 1024-D"],
@@ -692,9 +695,7 @@ modelSlide(8, "Granite-Geospatial-Ocean (IBM · STFC · PML · Exeter)", "The Pr
     s.addText([{ text: lab, options: { bold: true, color: col, breakLine: true } }, { text: sub, options: { color: INK, fontSize: 8.5 } }],
       { x: lx, y: ly, w: lw, h: 0.5, fontFace: FONT_B, fontSize: 10.5, align, isTextBox: true, margin: 0, valign: "top" });
   });
-  // AlphaEarth arrow for undisclosed context
-  s.addShape(pres.shapes.LINE, { x: X(10) + 0.15, y: Y(4) + 0.18, w: X(3000) - X(10) - 0.15, h: 0, line: { color: SPACE, width: 1.25, dashType: "dash", endArrowType: "triangle" } });
-  s.addText("Earth 2 shown for reference: the codec's channel token sees a 3 × 3 neighbourhood of ¼° (or 1°) cells at one monthly or 5-day mean — a snapshot stencil ~10× wider than any EO model here.", { x: 0.6, y: 6.7, w: 12.1, h: 0.35, fontFace: FONT_B, fontSize: 10, italic: true, color: MUTED, isTextBox: true, margin: 0 });
+  s.addText("Earth 2 shown for reference: the codec's channel token sees a 3 × 3 neighbourhood of ¼° (or 1°) cells at one monthly or 5-day mean — a snapshot stencil ~7× wider than the widest EO tile here (Granite, 12.6 km).", { x: 0.6, y: 6.7, w: 12.1, h: 0.35, fontFace: FONT_B, fontSize: 10, italic: true, color: MUTED, isTextBox: true, margin: 0 });
   footer(s);
   s.addNotes("Reading: the six EO models cluster at 10 m–13 km footprints. Two axes separate them — pixel vs patch, and snapshot vs period summary. AlphaEarth and TESSERA are period summaries over a year; TerraMind and Granite are single snapshots; Prithvi and OlmoEarth stack dated frames. Our codec is a snapshot of a time-mean field at a footprint two orders of magnitude larger.");
 }
@@ -710,7 +711,7 @@ modelSlide(8, "Granite-Geospatial-Ocean (IBM · STFC · PML · Exeter)", "The Pr
   const nm = (t) => ({ text: t, options: { bold: true, color: NAVY, fontSize: 10, valign: "top" } });
   const rows = [
     [hdr("Model"), hdr("Inputs (sensors / modalities)"), hdr("Spatial stencil"), hdr("Temporal stencil"), hdr("Output per embedding")],
-    [nm("AlphaEarth (DeepMind)"), c("S-2, Landsat 8/9, S-1, PALSAR-2, GEDI, ERA5-Land, GRACE, DEM, NLCD, text"), c("10 m output pixel; multi-scale attention context (extent not disclosed)"), c("Period summary; arbitrary valid window in the model, calendar year in the product"), c("64-D unit vector, int8; per pixel per year")],
+    [nm("AlphaEarth (DeepMind)"), c("S-2, Landsat 8/9, S-1, PALSAR-2, GEDI, ERA5-Land, GRACE, DEM, NLCD, text"), c("10 m output pixel inside a 1.28 km (128 px) frame; attention global within the frame"), c("Period summary; arbitrary valid window in the model, calendar year in the product"), c("64-D unit vector, int8; per pixel per year")],
     [nm("TESSERA (Cambridge)"), c("S-2 L2A (10 bands) + S-1 RTC (VV, VH)"), c("Single 10 m pixel — no spatial context"), c("1 calendar year; 40 sampled dates per modality, day-of-year encoded"), c("128-D int8; per pixel per year")],
     [nm("OlmoEarth (Ai2)"), c("S-1, S-2, Landsat-8 monthly + static maps (OSM, WorldCover, CDL, SRTM, canopy, WorldCereal)"), c("2.56 km tile (256 px @ 10 m); 1–8 px tokens (10–80 m)"), c("≤12 monthly steps over 1 year, each step tokenised; temporal masking"), c("768-D (Base) / 1024-D (Large) per patch per step + pooled vector")],
     [nm("TerraMind (IBM/ESA)"), c("S-2 L2A/L1C, S-1 GRD/RTC, DEM, RGB, NDVI, LULC, captions, geolocation"), c("2.24 km tile (224 px @ 10 m); 16 px = 160 m tokens, 14×14 grid"), c("Single co-registered timestamp"), c("196 × 768-D tokens per modality; merged 768-D; generated modalities")],
@@ -897,7 +898,7 @@ function tableTitle(slide, text, x, y, w) {
   scoreTable(s, 0.6, 4.25, 12.1, [2.1, 1.0, 0.85, 0.9, 1.0, 1.0, 1.1, 1.05, 0.9, 1.0, 0.8, 0.4], h2, r2, { rowH: 0.23, fs: 8, lowerBetter: [11], fmt: (v, c) => v.toFixed(2) });
   s.addText([
     { text: "Reading.  ", options: { bold: true, color: TEAL } },
-    { text: "Once fine-tuned, the gap closes: TerraMind Large and OlmoEarth Large split the columns (TerraMind: BigEarthNet, cashew, SA-crop; OlmoEarth: So2Sat, EuroSAT, PASTIS, MADOS) and Prithvi-EO 2.0 600M sits 1–3 pp behind on most. The random-init row is the size of the pretraining effect itself (+10 to +37 pp). On PANGAEA, TerraMind is the only foundation model that beats a U-Net trained from scratch on average (59.6 vs 57.6); Prithvi-EO 1.0 loses to it. Prithvi-EO 2.0's own GEO-Bench table (600M-TL best on 6 of 12 sets vs DOFA / Scale-MAE / DeCUR / Satlas) contains none of the other models here.", options: {} },
+    { text: "Once fine-tuned, the gap closes: TerraMind Large and OlmoEarth Large split the columns (TerraMind: BigEarthNet, cashew, SA-crop; OlmoEarth: So2Sat, EuroSAT, PASTIS, MADOS) and Prithvi-EO 2.0 600M sits 1–3 pp behind on the classification columns but 8–13 pp behind on PASTIS and MADOS. The random-init row is the size of the pretraining effect itself (+10 to +37 pp). On PANGAEA, TerraMind is the only foundation model that beats a U-Net trained from scratch on average (59.6 vs 57.6); Prithvi-EO 1.0 loses to it. Prithvi-EO 2.0's own GEO-Bench table (600M-TL best on 6 of 12 sets vs DOFA / Scale-MAE / DeCUR / Satlas) contains none of the other models here.", options: {} },
   ], { x: 0.6, y: 6.32, w: 12.1, h: 0.65, fontFace: FONT_B, fontSize: 8.5, color: INK, valign: "top", isTextBox: true, margin: 0 });
   footer(s);
   s.addNotes("Sources: OlmoEarth arXiv 2511.13655 Table 3; TerraMind arXiv 2504.11171 Table 6 (PANGAEA; xView2 and BioMassters excluded by the PANGAEA authors' advice). Prithvi-EO 2.0 GEO-Bench numbers (arXiv 2412.02732 Tables A1–A4) are not shown because none of the other models in this deck appear in them.");
@@ -962,7 +963,7 @@ function tableTitle(slide, text, x, y, w) {
     { n: "Random forest on pixel values", v: [0.16, 0.40] },
   ];
   scoreTable(s, 0.6, 1.82, 5.9, [2.7, 1.5, 1.7], h1, r1, { rowH: 0.3, fs: 8.5, lowerBetter: [1, 2], fmt: v => v.toFixed(2) });
-  s.addText("± spreads: chl-a 0.05–0.10, PP 0.04–0.07 across folds — the FM gain (0.02 / 0.03–0.04) is inside the fold spread; the authors' stronger claim is label-efficiency (gain grows as labels shrink to 25 %) and spatial pattern (SSIM vs the operational L2 product: FM 0.88, scratch 0.82, decision tree 0.68). No comparison to OC4Me-type algorithms is given.", { x: 0.6, y: 3.7, w: 5.9, h: 1.2, fontFace: FONT_B, fontSize: 9, color: INK, valign: "top", isTextBox: true, margin: 0 });
+  s.addText("± spreads: chl-a 0.03–0.10, PP 0.04–0.07 across folds — the FM gain (0.02 / 0.03–0.04) is inside the fold spread; the authors' stronger claim is label-efficiency (gain grows as labels shrink to 25 %) and spatial pattern (SSIM vs the operational L2 product: FM 0.88, scratch 0.82, decision tree 0.68). No comparison to OC4Me-type algorithms is given.", { x: 0.6, y: 3.7, w: 5.9, h: 1.2, fontFace: FONT_B, fontSize: 9, color: INK, valign: "top", isTextBox: true, margin: 0 });
   tableTitle(s, "OceanSAR-1 — kNN on frozen features vs other SAR FMs (acc ↑, RMSE ↓)", 6.8, 1.5, 6.0);
   const h2 = ["Model", "TenGeoP acc %", "Wave height RMSE (m)", "Wind speed RMSE (m s⁻¹)"];
   const r2 = [
@@ -975,7 +976,7 @@ function tableTitle(slide, text, x, y, w) {
     { n: "MoCo ResNet50", v: [60.9, 0.83, 1.98] },
   ];
   scoreTable(s, 6.8, 1.82, 5.9, [2.1, 1.1, 1.3, 1.4], h2, r2, { rowH: 0.27, fs: 8.5, lowerBetter: [2, 3], fmt: (v, c) => c === 0 ? v.toFixed(1) : v.toFixed(2) });
-  s.addText("With linear-probe / LoRA fine-tuning OceanSAR-1 ViT-B/8 reaches 88.3 % / 0.54 m / 1.29 m s⁻¹ (MoCo-FT 86.5 / 0.77 / 1.80). Ocean-only pretraining beats land-trained SAR FMs by 10–20 pp on sea-state classification and roughly halves wind-speed error.", { x: 6.8, y: 4.05, w: 5.9, h: 0.9, fontFace: FONT_B, fontSize: 9, color: INK, valign: "top", isTextBox: true, margin: 0 });
+  s.addText("With linear-probe / LoRA fine-tuning OceanSAR-1 ViT-B/8 reaches 88.3 % / 0.54 m / 1.29 m s⁻¹ (MoCo-FT 86.5 / 0.77 / 1.80). Ocean-only pretraining beats land-trained SAR FMs by 9–23 pp on sea-state classification and cuts wind-speed error by 30–45 %.", { x: 6.8, y: 4.05, w: 5.9, h: 0.9, fontFace: FONT_B, fontSize: 9, color: INK, valign: "top", isTextBox: true, margin: 0 });
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 0.6, y: 5.25, w: 12.1, h: 1.2, fill: { color: PALE }, line: { width: 0 }, rectRadius: 0.08 });
   s.addText([
     { text: "Why no cross-model ocean table.  ", options: { bold: true, color: TEAL } },
@@ -996,7 +997,7 @@ function tableTitle(slide, text, x, y, w) {
     [hdr("Protocol · metric family"), hdr("Ranking among our models"), hdr("Margin / evidence"), hdr("Source & caveat")],
     [nm("Frozen features · classification accuracy / µF1"), c("OlmoEarth > TerraMind > Prithvi-EO 2.0"), c("So2Sat 68 vs 47 vs 35; EuroSAT 96 vs 90 vs 82; BigEarthNet TerraMind 63.9 edges OlmoEarth 62.4"), c("OlmoEarth Table 2 (own paper)")],
     [nm("Frozen features · segmentation mIoU"), c("split: TerraMind (cashew 50.4, SA-crop 31.2) · OlmoEarth (PASTIS 51.8, MADOS 67.2, floods 79.8) · Prithvi last"), c("Prithvi-EO 2.0 competitive only on m-cashew (46.8)"), c("OlmoEarth Table 2")],
-    [nm("Fine-tuned · accuracy / mIoU"), c("TerraMind-L ≈ OlmoEarth-L > Prithvi-EO 2.0 600M"), c("columns split 3/4 between the two leaders; Prithvi 1–3 pp behind; pretraining itself worth +10 to +37 pp (random-init row)"), c("OlmoEarth Table 3")],
+    [nm("Fine-tuned · accuracy / mIoU"), c("TerraMind-L ≈ OlmoEarth-L > Prithvi-EO 2.0 600M"), c("columns split 3/4 between the two leaders; Prithvi 1–3 pp behind on classification, 8–13 pp on PASTIS/MADOS; pretraining itself worth +10 to +37 pp (random-init row)"), c("OlmoEarth Table 3")],
     [nm("PANGAEA · mIoU, frozen + UPerNet"), c("TerraMind-L 59.6 > TerraMind-B 58.4 > U-Net scratch 57.6 > … > Prithvi-EO 1.0 51.0"), c("only GFM above the from-scratch U-Net; Prithvi 2.0 not evaluated"), c("TerraMind Table 6")],
     [nm("GEO-Bench-2 · capability ranks (of 14)"), c("Prithvi 600M-TL core rank 5 · TerraMind-L 6 · Prithvi 300M-TL 9 · TerraMind-B 11; TerraMind-L rank 1 on multi-temporal and multi-spectral"), c("ranks only, no raw scores"), c("GEO-Bench-2, arXiv 2511.15658 (independent); no AlphaEarth / TESSERA / OlmoEarth / Granite")],
     [nm("Precomputed products · frozen + head"), c("TESSERA > AlphaEarth on 5/6 TESSERA tasks; ≈ tie on Bern LCZ (0.82 vs 0.81 IoU); both ≫ frozen Prithvi"), c("Austrian crop F1 82 vs 56; canopy RMSE 12.2 vs 16.1 m; PASTIS AlphaEarth +0.4"), c("TESSERA Table 1 (own) · LCZ study (independent)")],
@@ -1177,7 +1178,7 @@ function drawLagTimeline(slide, x, y, w, opts) {
     [nm("10 m wind, SLP, fluxes"), c("synoptic advection 10 m/s, τ ≈ 5–10 d; planetary modes (NAO, ENSO teleconnections) τ ≈ months, forced by SST"), c("causal reach in one month = the globe, but τ < Δt: monthly wind is not predictable from its own history — only via slow ocean modes"), c("1 step (its own); the ocean's history through SST"), c("treat as wide, shallow forcing: large stencil, no depth. At pentad Δt ≈ τ the wind becomes partly self-predictable — a pentad-only gain to look for")],
     [nm("SST, mixed-layer T"), c("surface currents 0.1–0.3 m/s (260–800 km/mo); air–sea forcing (atmospheric cone); mixed-layer memory τ ≈ 3–12 mo"), c("advective 300–800 km, plus the atmospheric cone via forcing ≈ synoptic correlation length 1,000–3,000 km"), c("several months (re-emergence up to a year)"), c("union: needs BOTH the wide wind stencil and months of history — the one group that justifies the full cylinder")],
     [nm("Interior T, S (below ML)"), c("gyre advection 0.02–0.1 m/s (50–260 km/mo); midlatitude Rossby 0.02–0.05 m/s; τ ≈ years–decades"), c("50–300 km — a 3 × 3 patch at ¼° already covers it; 4444 km is 15–90× too wide for one step"), c("24 months and more; skill should keep rising with history"), c("narrow, deep: small reach, long history. Reach can be cut with no loss — the concrete answer to the open question in the cone note (§5)")],
-    [nm("SSH"), c("baroclinic Rossby 0.03 m/s (mid-lat) → 0.5 m/s (10°); Kelvin / coastal waves 1–3 m/s along waveguides; barotropic adjustment in hours (averaged out at monthly Δt)"), c("interior: hundreds of km; along coasts and the equator: thousands of km in one step"), c("months"), c("anisotropic: an along-boundary / along-equator arm on the stencil, narrow elsewhere — a shape the sunflower approximates by brute force")],
+    [nm("SSH"), c("baroclinic Rossby 0.03 m/s (mid-lat) → ~0.3 m/s (10°); Kelvin / coastal waves 1–3 m/s along waveguides; barotropic adjustment in hours (averaged out at monthly Δt)"), c("interior: hundreds of km; along coasts and the equator: thousands of km in one step"), c("months"), c("anisotropic: an along-boundary / along-equator arm on the stencil, narrow elsewhere — a shape the sunflower approximates by brute force")],
     [nm("Transport target (RAPID 26°N)"), c("thermal wind = east–west density difference across the basin; set by interior Rossby adjustment (yrs) and by fast boundary waves (weeks)"), c("the whole section, both boundaries"), c("years for the interior arm; the current step for the boundary arm"), c("why the pooled ridge failed and the unpooled attention head worked (paper §ladder): the target's cone is the section, not its mean")],
   ];
   s.addTable(rows, { x: 0.6, y: 1.5, w: 12.1, colW: [1.6, 3.0, 2.6, 1.7, 3.2], fontFace: FONT_B, border: { type: "solid", color: GRIDLINE, pt: 0.5 }, rowH: [0.32, 0.75, 0.7, 0.7, 0.7, 0.62], margin: 0.05, autoPage: false });
@@ -1209,7 +1210,7 @@ const DRV = [
   { k: "sst", n: "Ocean surface T (mixed layer)", col: "3B6FD4", v: 0.15, tau: 240, L: 0, mech: "horizontal density gradient → thermal wind", enter: "via the gradient ⇒ neighbours needed (≥ 3 × 3); advected at 0.15 m/s" },
   { k: "int", n: "Interior T, S (below ML)", col: "1C7C7C", v: 0.03, tau: 1825, L: 0, mech: "thermal wind integrated from depth; Rossby adjustment", enter: "via the gradient; 0.03 m/s ⇒ 78 km per month — the 3 × 3 patch covers lag 0" },
   { k: "ssh", n: "SSH", col: "6A4C93", v: 0.03, tau: 365, L: 0, mech: "pressure gradient → barotropic geostrophic current", enter: "via the gradient; Rossby 0.03 m/s westward + Kelvin arm 2.5 m/s along coasts (anisotropic)" },
-  { k: "own", n: "Own history (u, v at P)", col: "6E8B5E", v: 0.15, tau: 90, L: 0, mech: "momentum persistence, mesoscale eddies (westward drift ~0.03 m/s)", enter: "direct; eddy memory ≈ 3 months" },
+  { k: "own", n: "Own history (u, v at P)", col: "6E8B5E", v: 0.15, tau: 90, L: 0, mech: "momentum persistence, mesoscale eddies (westward drift ~0.03 m/s; eddies live 4+ months but pass through a fixed pixel in weeks–months)", enter: "direct; eddy memory ≈ 3 months" },
 ];
 const MONTH_D = 30, DT_M = 1, NLAG = 24, RCAP = 10000, SUN_R = 4444, SUN_N = 89;
 const kmPerMonth = v => v * 86400 * MONTH_D / 1000;
@@ -1241,7 +1242,7 @@ const fmtKm = r => r >= 10000 ? "10,000 (cap)" : Math.round(r).toLocaleString("e
   s.addTable(rows, { x: 0.6, y: 1.5, w: 12.1, colW: [1.6, 2.6, 2.75, 0.85, 0.6, 0.7, 1.2, 1.8], fontFace: FONT_B, border: { type: "solid", color: GRIDLINE, pt: 0.5 }, rowH: [0.35, 0.62, 0.72, 0.6, 0.6, 0.62, 0.55], margin: 0.05, autoPage: false });
   s.addText([
     { text: "Two rules do all the work.  ", options: { bold: true, color: TEAL } },
-    { text: "reach(ℓ) = min( max( v·(Δt+ℓ), L_corr ), 10,000 km ) — a signal observed ℓ before now has Δt+ℓ to travel; a field is never less coherent than its own correlation length. A lag is useful iff Δt+ℓ ≤ τ (lag 0 is always kept). Wind is the extreme case: at monthly cadence its memory is shorter than the step, so it enters as one wide sheet of forcing at lag 0 and nothing older carries information about next month's wind. Air temperature is the subtle case: the atmosphere forgets in 10 days, but the mixed layer remembers the heat it delivered for months and carries it along at 0.15 m/s — so the channel inherits the ocean's τ and v.", options: {} },
+    { text: "reach(ℓ) = min( max( v·(Δt+ℓ), L_corr ), 10,000 km ) — a signal observed ℓ before now has Δt+ℓ to travel; a field is never less coherent than its own correlation length. A lag is useful iff Δt+ℓ ≤ τ (lag 0 is always kept). One exception: a fast driver acting through a slow medium (air temperature → heat flux → mixed layer) adds instead of maxing — reach = L_corr + v_ocean·(Δt+ℓ) — because the flux pattern is laid down over L_corr and then carried away. Wind is the extreme case: at monthly cadence its memory is shorter than the step, so it enters as one wide sheet of forcing at lag 0 and nothing older carries information about next month's wind. Air temperature is the subtle case: the atmosphere forgets in 10 days, but the mixed layer remembers the heat it delivered for months and carries it along at 0.15 m/s — so the channel inherits the ocean's τ and v.", options: {} },
   ], { x: 0.6, y: 5.75, w: 8.3, h: 1.2, fontFace: FONT_B, fontSize: 9.5, color: INK, valign: "top", isTextBox: true, margin: 0 });
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 9.1, y: 5.7, w: 3.6, h: 1.3, fill: { color: PALE }, line: { width: 0 }, rectRadius: 0.06 });
   s.addText("Notation: the lag ℓ", { x: 9.2, y: 5.73, w: 3.4, h: 0.22, fontFace: FONT_B, fontSize: 9, bold: true, color: NAVY, isTextBox: true, margin: 0 });
@@ -1344,7 +1345,7 @@ const fmtKm = r => r >= 10000 ? "10,000 (cap)" : Math.round(r).toLocaleString("e
     ["Ekman — wind → drift", "C9922A", "Surface stress τ drives a transport ≈ τ/(ρ f) at 90° to the wind within ~1 inertial period (≈ 1 day at 30°). Local, fast, shallow (tens of m). At monthly cadence this is same-step forcing: the wind of month t+1 is unknown, the wind of month t is already in the ocean state."],
     ["Thermal wind — T, S gradients → shear", "3B6FD4", "∂u/∂z = (g/(f ρ₀)) ∂ρ/∂y: horizontal density gradients set the vertical shear of the geostrophic current, integrated from depth. A gradient does not exist inside one pixel — this is why the 3 × 3 patch is the floor for T/S channels and why heat flux matters through its spatial pattern, not its local value."],
     ["Pressure gradient — SSH → surface geostrophy", "6A4C93", "u_g = −(g/f) ∂η/∂y. SSH anomalies arrive as slow westward Rossby waves in the interior (0.03 m/s) and as fast Kelvin/coastal waves along boundaries (2.5 m/s): a thin column with one long arm — the one wedge the isotropic count under-states."],
-    ["Advection & eddies — own history", "6E8B5E", "Momentum persists and mesoscale eddies drift westward at ~0.03 m/s with a 1–3-month lifetime; upstream cells at 0.15 m/s × (Δt+ℓ) carry the anomaly that will arrive. Short cone, tilted upstream."],
+    ["Advection & eddies — own history", "6E8B5E", "Momentum persists and mesoscale eddies drift westward at ~0.03 m/s. Individual eddies live 4 months and more (Chelton et al. 2011), but at a fixed pixel the velocity decorrelates in weeks to a few months because they pass through — hence τ ≈ 3 months for own history. Upstream cells at 0.15 m/s × (Δt+ℓ) carry what will arrive. Short cone, tilted upstream."],
   ];
   cards.forEach(([h, col, body], i) => {
     const x = 0.6 + i * 3.05;
