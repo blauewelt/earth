@@ -180,6 +180,32 @@ designed); **#525 (E-065a, d_z 8 parent) on `gpu-box-48397639` (Vast
 rented for it (49633410, Hong Kong, and 49634118, Krasnodar) never
 registered a runner and were destroyed unused.
 
+**#525 CANCELLED at 15:02Z and RE-DISPATCHED as #530 (E-065a, the d_z-8
+parent, identical inputs) on the Germany box `gpu-box-48647862` (Vast
+49632487, 52 GB, $0.288/h — restarted from `stopped`, tensor cached from
+#527).** The Poland box was slow at every I/O stage: install 38 min,
+`data-cache-v1` pull 1 h 52 m, `Build dataset` 1 h 30 m (#526: 105 s), step-0
+probe 397 s (#526: 328 s). The cancel was made on a pace reading of "≥ 0.45
+s/step" (step 5,000 pushed at 14:58Z from a 14:13Z Train start), which would
+have carried the 200k run past its 24 h job token (§8: archive and release
+steps 401 while reporting success). **That reading was WRONG IN DIRECTION and
+is recorded as such**: the 45 minutes between Train start and the step-5,000
+push also contain the 397 s probe and the scratch-copy decode (a 31 GiB
+write, slow on this box, of unknown length), so 0.46 s/step is an UPPER
+bound on the training pace, not a floor — the true pace may have been near
+#526's 0.26. A parallel fleet-watch session had, at 14:34Z, withdrawn the
+15:15Z deadline in `ml/OVERVIEW.md` on exactly the "uniformly slow I/O, not
+stalled" reading (commit `1211df2`, "Do NOT cancel or re-rent it"), which
+this session did not see before acting (it pulled `main` only at the
+push). So this is a §4.13 violation — a relaunch of a probably-healthy run
+— and its cost is ~5 h of a $0.268/h box (~$1.3) plus ~1.5 h of lead on the
+parent. #530 is not relaunched a third time: it runs on a box that was
+through `Persistent data cache` 1 min 40 s after pickup, with the tensor
+cached, and overtakes where #525 was within ~3 h at #526's pace. The Poland
+box 49633425 was STOPPED (not destroyed — its tensor cache is worth the
+storage fee if a third parent is ever needed). E-065a's clock restarts at
+15:03Z; ~14 h at #526's pace ⇒ ~05:30Z 09-03 plus the probe ladder.
+
 <a id="e-064"></a>
 ## E-064 · The 16-bit token as a forecasting substrate, under the clean pool — DISPATCHED #521 (E-064a, token) and #522 (E-064b, continuous twin), 2026-09-02 09:46Z (Chris: "can you run FSQ and add those results?")
 
@@ -243,6 +269,24 @@ host class the earlier K 144 arms ran on (#478's box had 126 GB). #522 was
 cancelled before it started. RE-DISPATCHED 11:0xZ as #528 (E-064a) and #529
 (E-064b) on a 126 GB box, Vast 49638088 / `gpu-box-48580527`, Norway,
 $0.401/h.** Cost of the death: ~1 h of a $0.288/h box and the Z pulls.
+
+**#528 (E-064a, the token arm) — TRAINING CURVE DONE, read 2026-09-02 15:0xZ
+from `ml-live-528` (100 val records; the probe ladder was still running and
+the bundle is not yet on `ml-metrics`).** Certificate: `holdout_scope window`,
+209,549,066 windows, K 144, 256×8, d_z 6, params 6.619M (the d_z-6 input
+projection is smaller than the 7.598M continuous head's); monitor
+`input_znoise_rel_pers` **0.15065** (the #507 dose, as pre-registered),
+val_persistence 0.63451. Held-out one-step ratio: **minimum 0.5640 at step
+3,200**, then rising — 0.62 by 5,200, 0.659 at 16,000, **0.6685 at 20,000**.
+Against E-060a's JAX continuous curve (0.6095 at 1,200 / 0.692 at 20k) the
+token reads 0.045 LOWER at its minimum and 0.024 lower at 20k — but the
+comparison across trainers is exactly what E-064b (#529, the torch twin, now
+queued on the same box) is for, so nothing is read from it yet. Final
+`stage2_result` (a different val draw): z_mse_model 0.4100 / persistence
+0.6238 = 0.657; `rapid_r_kfold` 0.602 [0.556, 0.652], unpooled 0.547
+[0.487, 0.606] (pooled/unpooled, n = 1, unreadable per §3b). The early
+minimum at ~3k steps is the same shape every clean-pool head has shown
+(E-059/E-060: inside ~2,000 steps at every width).
 
 <a id="e-062"></a>
 ## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) COMPLETE #520, 2026-09-02 13:5xZ (after #518/#519 died on a full disk) — width null: mean acc 0.103 vs 0.105 · R0c (the 40.4M arm) DISPATCHED #523, 2026-09-02 10:1xZ
