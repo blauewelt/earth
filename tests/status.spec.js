@@ -232,6 +232,16 @@ const TPU_INDEX = {
       metrics_updated: iso(1), finals: [],
       last: { step: 7000, loss: 10.82, grad_norm: 4.2, wall_s: 18000.0 },
     },
+    // The CONE codec (E-069, ml/jaxport/train_cone.py + tpu_train_cone.sh).
+    // It writes ml/train.py's record family — `config`, {step, loss_rec,
+    // loss_nei}, held-out evals — which neither fieldChart nor stage2Chart
+    // keys on, so before coneChart this card had numbers and no curve.
+    {
+      node: "e069-cone-s0", exp: "E-069", state: "TRAINING",
+      metrics_updated: iso(4), finals: [],
+      last: { step: 10000, held_out_nll: -1.2044, held_out_mse: 0.3712,
+              held_out_targets: 184320, wall_s: 18000.0 },
+    },
   ],
   updated: iso(2),
 };
@@ -279,6 +289,51 @@ const TPU_FIELD = jsonl([
   { step: 7000, loss: 10.82, grad_norm: 4.2, lr: 1.9e-4, wall_s: 18000.0 },
 ]);
 
+// The cone codec's own metrics.jsonl — ml/train.py's record family, which is
+// exactly what the Vast path already charts on the run page and what the TPU
+// card path could not draw. Note the ORDER: the `resumed` record comes BEFORE
+// the `config`, because train_cone.py announces the continuation and then
+// writes its header, so parseJsonl's reset-on-config must not clear it.
+//
+// The arithmetic the ETA test pins: this job resumed at step 4,000 with its
+// own wall clock at 0, and wall_s lives on the HELD-OUT records (the
+// {step, loss_rec, loss_nei} lines carry none), so pace is
+// wall_s / (step - 4000) = 18000 / 6000 = 3 s/step, 10,000 steps remain ->
+// 30,000 s = "~8.3 h left". Measured base-less, the same numbers would read
+// 18000/10000 = 1.8 s/step -> "~5.0 h left". The seam is load-bearing.
+const TPU_CONE = jsonl([
+  { resumed: { at_step: 4000, from: "ckpt_latest.npz", to_step: 20000,
+               arm: "cone", backend: "jax" } },
+  { config: { steps: 20000, batch: 256, d_z: 32, patch: 3, d_model: 256,
+              n_layers: 6, n_heads: 8, d_dec: 256, anomaly: true,
+              eval_every: 1000, light_probe_every: 0, params_M: 7.05,
+              data: "family4_na025_pentad_r3.npz", C: 42, T: 3142,
+              resume: "ckpt_latest.npz", recipe: null, trainer: "cone",
+              arm: "cone", L_in: 6, n_latents: 64, n_dot_tokens: 706,
+              future_lags: [1, 2], aux_latent_w: 0.25,
+              holdout_scope: "window", holdout_years: "2009,2017,2023",
+              lr: 0.0003, seed: 0, backend: "jax" } },
+  { step: 4000, held_out_nll: -0.90211, held_out_mse: 0.51204,
+    held_out_targets: 184320, wall_s: 0.4 },
+  { step: 4100, loss_rec: -0.88412, loss_nei: 0.53017 },
+  { step: 4600, loss_rec: -0.91055, loss_nei: 0.50882 },
+  { step: 5100, loss_rec: -0.94318, loss_nei: 0.48744 },
+  { step: 5600, loss_rec: -0.97201, loss_nei: 0.46903 },
+  { step: 6100, loss_rec: -1.00477, loss_nei: 0.45118 },
+  { step: 6600, loss_rec: -1.03260, loss_nei: 0.43655 },
+  { step: 7000, held_out_nll: -1.05933, held_out_mse: 0.42871,
+    held_out_targets: 184320, wall_s: 9000.0 },
+  { step: 7100, loss_rec: -1.06014, loss_nei: 0.42502 },
+  { step: 7600, loss_rec: -1.08770, loss_nei: 0.41377 },
+  { step: 8100, loss_rec: -1.11002, loss_nei: 0.40488 },
+  { step: 8600, loss_rec: -1.13455, loss_nei: 0.39702 },
+  { step: 9100, loss_rec: -1.15318, loss_nei: 0.39011 },
+  { step: 9600, loss_rec: -1.17206, loss_nei: 0.38402 },
+  { step: 10000, loss_rec: -1.18944, loss_nei: 0.37905 },
+  { step: 10000, held_out_nll: -1.20440, held_out_mse: 0.37120,
+    held_out_targets: 184320, wall_s: 18000.0 },
+]);
+
 test.beforeEach(async ({ page }) => {
   await page.route(/https:\/\/api\.github\.com\/.*/, async (route) => {
     const url = route.request().url();
@@ -312,6 +367,7 @@ test.beforeEach(async ({ page }) => {
     if (/ml-live-tpu\/e051-k144-full\/metrics\.jsonl/.test(url)) return fulfill(TPU_E051);
     if (/ml-live-tpu\/e052-k48-warm\/metrics\.jsonl/.test(url)) return fulfill(TPU_E052);
     if (/ml-live-tpu\/e052-1-train\/metrics\.jsonl/.test(url)) return fulfill(TPU_FIELD);
+    if (/ml-live-tpu\/e069-cone-s0\/metrics\.jsonl/.test(url)) return fulfill(TPU_CONE);
     if (/ml-metrics\/fleet\.json/.test(url)) {
       // $20 credit, $1/h burn, snapshot 2 h old -> $18 left, 18 h runway.
       return fulfill(JSON.stringify({
@@ -578,7 +634,7 @@ test("the TPU section renders a run in each state, with a distinct badge",
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/status.html");
-  await expect(page.locator("#tpu .card")).toHaveCount(5);
+  await expect(page.locator("#tpu .card")).toHaveCount(6);
 
   // The state pill, one class per state, so TRAINING / FINISHED / REAPED are
   // told apart by colour and not only by reading the word.
@@ -616,6 +672,61 @@ test("a field-format TPU run gets curves and an ETA; a stage-2 one keeps its ETA
   const live = tpuCard(page, "e051-k144-full");
   await expect(live).toContainText("172,000 of 200,000 steps");
   await expect(live).toContainText("~2.3 h left");
+});
+
+// E-069's cone codec writes ml/train.py's record family on a TPU, and the
+// card path only knew the stage-2 and field families: a live node's card had
+// its numbers and no curve, which is the §0d failure the field launcher hit
+// in August. These two pin the fix.
+test("a cone-format TPU run gets its two panels and names the arm and the backend",
+  async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/status.html");
+  const card = tpuCard(page, "e069-cone-s0");
+  // Two panels: train nll with the held-out nll over it, and held-out MSE.
+  await expect(card.locator("svg.chart")).toHaveCount(2);
+  // The header is read off the run's OWN config record, not off the node
+  // name — including `backend jax`, the one mark a TPU-trained number
+  // carries (ml/CLAUDE.md §3b), which is what a reader comparing this
+  // against its torch twin needs to see on the card.
+  await expect(card).toContainText("cone codec");
+  await expect(card).toContainText("cone · L_in 6 · 706 dots · 7.05M · backend jax");
+  await expect(card).toContainText("20,000 steps");
+  // Both curves, with the latest value of each, to 4 dp.
+  await expect(card).toContainText("train nll (loss_rec) — latest -1.1894");
+  await expect(card).toContainText("HELD-OUT nll — latest -1.2044");
+  await expect(card).toContainText("HELD-OUT mse — latest 0.3712");
+  // The train curve is the thirteen {step, loss_rec, loss_nei} records —
+  // drawn from those, not from the three eval points, which are the other
+  // line: the two series share a panel and must not be mixed into one.
+  const pts = await card.locator("svg.chart polyline").first().getAttribute("points");
+  expect(pts.trim().split(/\s+/).length).toBe(13);
+  expect(errors).toEqual([]);
+});
+
+test("a resumed cone run draws its seam and dates its ETA from it",
+  async ({ page }) => {
+  await page.goto("/status.html");
+  const card = tpuCard(page, "e069-cone-s0");
+  await expect(card).toContainText("seam: resumed at 4,000");
+  // The seam's x is arithmetic, so pin it by construction: the panel is
+  // 600 wide with padL 46 / padR 10, the axis runs 0 -> the config's 20,000
+  // steps, so step 4,000 sits at 46 + 544 * 4000/20000 = 154.8. Both panels
+  // carry it, and it is the same line in both.
+  const seams = card.locator('svg.chart line[stroke-dasharray="3 3"]');
+  await expect(seams).toHaveCount(2);
+  await expect(seams.first()).toHaveAttribute("x1", "154.8");
+  await expect(seams.last()).toHaveAttribute("x1", "154.8");
+  // The ETA's step base is that seam. wall_s restarts at 0 on a new node, so
+  // the pace is 18,000 s over the 6,000 steps SINCE the seam = 3 s/step and
+  // the remaining 10,000 steps read ~8.3 h. Measured from step 0 the same
+  // numbers would say 1.8 s/step and "~5.0 h left" — the wrong answer, and
+  // the plausible one.
+  await expect(card).toContainText("10,000 of 20,000 steps");
+  await expect(card).toContainText("~8.3 h left");
+  await expect(card).not.toContainText("~5.0 h left");
+  await expect(card).toContainText("ends ≈");
 });
 
 test("a TPU run links to its experiment definition", async ({ page }) => {

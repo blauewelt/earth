@@ -629,7 +629,13 @@
   // no api.github.com call at all: there is no api.github.com resource that
   // knows about these runs anyway.
   var TPU_BRANCH = "ml-live-tpu";
-  var TPU_CHARTS = 2;   // curves drawn for TRAINING runs; each costs one fetch
+  // Curves drawn for TRAINING runs; each costs one raw.githubusercontent
+  // fetch (CDN-served, not against the api.github.com budget). Three, not
+  // two, since E-069: the pool can hold three live nodes at once — one spot
+  // v5litepod-4 per zone — and there are now three chartable TPU record
+  // families (stage-2, field, cone), so a two-slot budget silently left the
+  // newest live run as a card with numbers and no curve.
+  var TPU_CHARTS = 3;
 
   function tpuRaw(pathInBranch) {
     return "https://raw.githubusercontent.com/" + REPO + "/" + TPU_BRANCH +
@@ -828,10 +834,12 @@
   // record family, which stage2Chart correctly refuses — before 2026-08-27
   // that refusal meant a live field run's card had numbers and no curve, and
   // Chris had to ask whether curves existed at all. fieldChart is that
-  // format's renderer (loss + val-ratio panels + ETA); whichever of the two
-  // recognises the file draws, and both returning "" — a shape neither
-  // knows — leaves the card standing without a curve, which is the correct
-  // answer.
+  // format's renderer (loss + val-ratio panels + ETA); a CONE-tier run
+  // (E-069, ml/jaxport/train_cone.py) writes ml/train.py's family, which
+  // neither of the other two keys on, and coneChart is its renderer.
+  // Whichever of the three recognises the file draws, and all three
+  // returning "" — a shape none of them knows — leaves the card standing
+  // without a curve, which is the correct answer.
   function tpuCharts(picks) {
     return Promise.all((picks || []).map(function (r) {
       return fetch(tpuRaw(encodeURIComponent(r.node) + "/metrics.jsonl"))
@@ -841,7 +849,7 @@
           var host = $(tpuChartId(r.node));
           if (!host) return;
           var m = parseJsonl(text);
-          host.innerHTML = fieldChart(m) || stage2Chart(m);
+          host.innerHTML = fieldChart(m) || coneChart(m) || stage2Chart(m);
         })
         .catch(function () { /* the card stands without its curve */ });
     })).then(function () {});
@@ -885,6 +893,14 @@
   // ---- live metrics charts --------------------------------------------------
   function parseJsonl(text) {
     var loss = [], probes = [], cfg = null, resumed = null, emb = null;
+    // The CONE codec's held-out evals (ml/jaxport/train_cone.py, E-069).
+    // They are ml/train.py's record family — {step, held_out_nll,
+    // held_out_mse, held_out_targets, wall_s} — so they already reach
+    // `probes`, where the run page ignores them (probeChart keys on
+    // linear_r_deseas). coneChart needs them as a SERIES, and they are also
+    // the only records in a cone file that carry wall_s, i.e. the only
+    // source of an ETA. Own array, and `probes` is left exactly as it was.
+    var held = [];
     var s2 = [], s2probe = [], s2cfg = null, s2res = null, s2res_from = null, s2warm = null;
     var jt = [], jcfg = null, sroll = null;
     // The FIELD trainer (ml/jaxport/train_field.py, E-052) writes its own
@@ -907,7 +923,17 @@
       // attribute one run's numbers to another even if the file is dirty.
       if (o && o.config) {
         cfg = o.config;
-        loss = []; probes = []; resumed = null; emb = null;
+        loss = []; probes = []; emb = null; held = [];
+        // …but NOT `resumed` for a CONE file. train_cone.py writes its
+        // {"resumed": {...}} record BEFORE the config record (the field
+        // trainer's convention — the trainer announces the continuation,
+        // then writes its header), so clearing it here would throw away the
+        // seam of every resumed cone leg and, with it, the step base its ETA
+        // is computed from. Every other config keeps the reset: for train.py
+        // the resumed record FOLLOWS its config, and the reset is what stops
+        // a dirty workspace file attributing one run's continuation to
+        // another (the 2026-08-10 #120/#123 mix-up).
+        if (!(cfg && cfg.trainer === "cone")) resumed = null;
         s2 = []; s2probe = []; s2cfg = null; s2res = null; s2res_from = null; s2warm = null;
         jt = []; jcfg = null; sroll = null;
         return;
@@ -948,10 +974,23 @@
         // Inside a field file (a field_config has been seen) a bare
         // {step, loss} record is a training point, not a probe.
         if (fcfg && typeof o.loss === "number") fsteps.push(o);
-        else probes.push(o);
+        else {
+          // A held-out eval is ALSO a probe record — it keeps going to
+          // `probes` so nothing downstream changes — but coneChart reads it
+          // as a series, so it is collected here too.
+          if (typeof o.held_out_nll === "number") held.push(o);
+          probes.push(o);
+        }
       }
     });
     return { loss: loss, probes: probes, cfg: cfg, resumed: resumed, sroll: sroll,
+             held: held,
+             // The one mark that says which chart draws this file. The cone
+             // trainer writes train.py's family with `trainer: "cone"` in its
+             // config, so the config slot is reused rather than duplicated —
+             // m.cone IS m.cfg when the file is a cone file, and null when it
+             // is not.
+             cone: (cfg && cfg.trainer === "cone") ? cfg : null,
              s2: s2, s2probe: s2probe, s2cfg: s2cfg, s2res: s2res, s2from: s2res_from,
              s2warm: s2warm,
              jt: jt, jcfg: jcfg, emb: emb,
@@ -1457,6 +1496,134 @@
     if (cfg.steps && typeof last.wall_s === "number") {
       var e = etaText(secLeftFrom(last.step, last.wall_s, cfg.steps, seam || 0));
       if (e) out += '<div class="meta">' + fmtInt(last.step) + " of " +
+                    fmtInt(cfg.steps) + " steps · " + esc(e) + "</div>";
+    }
+    return out;
+  }
+
+  // The CONE codec's curves (E-069 tier, ml/jaxport/train_cone.py). This
+  // trainer writes ml/train.py's record family — a `config` header, {step,
+  // loss_rec, loss_nei} training points, {step, held_out_nll, held_out_mse,
+  // …} evals — which the RUN-page code path has charted for a year. The TPU
+  // card path had not: it tried fieldChart then stage2Chart, both of which
+  // correctly return "" for this shape, so a live cone node's card showed
+  // its last line's numbers and NO curve. That is the same failure the field
+  // launcher hit on 2026-08-27, and the fix is the same shape: the format's
+  // own renderer, tried before the two that do not know it.
+  //
+  // Two panels rather than stage2Chart's shared axis, for fieldChart's
+  // reason: the nlls (a Gaussian NLL, negative and slowly falling) and the
+  // held-out MSE (positive, in normalised units) are different quantities on
+  // different scales, and one axis would flatten whichever matters less. The
+  // train and held-out nll DO share panel 1 — they are the same quantity, and
+  // the gap between them is the thing worth seeing.
+  function coneChart(m) {
+    var cfg = m.cone;
+    if (!cfg) return "";                       // not a cone file
+    var ls = (m.loss || []).filter(function (p) {
+      return typeof p.step === "number" && typeof p.loss_rec === "number";
+    });
+    if (ls.length < 2) return "";              // nothing to draw a line with
+    var hs = (m.held || []).filter(function (p) {
+      return typeof p.step === "number" && typeof p.held_out_nll === "number";
+    });
+    var W = 600, H = 110, padL = 46, padR = 10, padT = 10, padB = 22;
+    var xmax0 = Math.max.apply(null, ls.map(function (p) { return p.step; }));
+    var xmax = (cfg.steps && cfg.steps > xmax0) ? cfg.steps : xmax0;
+    // The axis starts at 0, not at the seam: a continuation is one
+    // trajectory in two jobs, and the point of the chart is the whole run.
+    var xmin = 0, xspan = xmax - xmin || 1;
+    var seam = (m.resumed && typeof m.resumed.at_step === "number" && m.resumed.at_step > 0)
+      ? m.resumed.at_step : null;
+    var seamLine = function (yTop, yBot) {
+      if (seam === null) return "";
+      var x = (padL + (W - padL - padR) * (seam - xmin) / xspan).toFixed(1);
+      return '<line x1="' + x + '" y1="' + yTop + '" x2="' + x + '" y2="' + yBot +
+             '" stroke="#6e7681" stroke-width="1" stroke-dasharray="3 3"/>';
+    };
+    var frame = function () {
+      return '<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+             '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (H - padB) + '" stroke="#30363d" stroke-width="1"/>' +
+             '<text x="' + (W - padR) + '" y="' + (H - 6) + '" text-anchor="end" font-size="11" fill="#8b949e">' + fmtInt(xmax) + "</text>";
+    };
+    // ---- the header line: what this run IS, from its own config record ----
+    // n_dot_tokens is the number the whole experiment turns on (748 tokens
+    // per anchor = 42 patch + 706 dots), params_M is its size, and `backend`
+    // is the one mark a TPU-trained number carries (ml/CLAUDE.md §3b) — a
+    // reader comparing this card against a GPU twin needs to see it here.
+    var cfgTxt = "cone" +
+      (typeof cfg.L_in === "number" ? " · L_in " + cfg.L_in : "") +
+      (typeof cfg.n_dot_tokens === "number" ? " · " + fmtInt(cfg.n_dot_tokens) + " dots" : "") +
+      (typeof cfg.params_M === "number" ? " · " + cfg.params_M + "M" : "") +
+      (cfg.backend ? " · backend " + esc(String(cfg.backend)) : "") +
+      (cfg.batch ? " · batch " + cfg.batch : "") +
+      (cfg.steps ? " · " + fmtInt(cfg.steps) + " steps" : "");
+    // ---- panel 1: train nll, with the held-out nll over it ----
+    var ys = ls.map(function (p) { return p.loss_rec; });
+    hs.forEach(function (p) { ys.push(p.held_out_nll); });
+    var ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
+    var yspan = (ymax - ymin) || 1;
+    var tline = polyline(ls.map(function (p) { return [p.step, p.loss_rec]; }),
+                         xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB);
+    var hline = hs.length >= 2
+      ? polyline(hs.map(function (p) { return [p.step, p.held_out_nll]; }),
+                 xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB)
+      : null;
+    var yOf = function (v) { return padT + (H - padT - padB) * (1 - (v - ymin) / yspan); };
+    var hdots = hs.map(function (p) {
+      var x = padL + (W - padL - padR) * (p.step - xmin) / xspan;
+      return '<circle cx="' + x.toFixed(1) + '" cy="' + yOf(p.held_out_nll).toFixed(1) +
+             '" r="3" fill="#58a6ff"/>';
+    }).join("");
+    var out = '<div class="probe" style="margin-top:12px"><b>cone codec</b> — one embedding per anchor over the inner dependency cone' +
+      ' <span class="meta">(' + cfgTxt + ")</span></div>" +
+      '<svg class="chart" viewBox="0 0 ' + W + " " + H +
+      '" role="img" aria-label="cone codec training and held-out NLL">' + frame() +
+      '<text x="' + (padL - 6) + '" y="' + (padT + 5) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymax.toFixed(3) + "</text>" +
+      '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymin.toFixed(3) + "</text>" +
+      '<polyline points="' + tline + '" fill="none" stroke="#a371f7" stroke-width="2" stroke-linejoin="round"/>' +
+      (hline ? '<polyline points="' + hline + '" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="5 3"/>' : "") +
+      hdots + seamLine(padT, H - padB) + "</svg>" +
+      '<div class="legend"><span><span class="sw" style="background:#a371f7"></span>train nll (loss_rec) — latest <b>' +
+      ls[ls.length - 1].loss_rec.toFixed(4) + "</b></span>" +
+      (hs.length ? '<span><span class="sw" style="background:#58a6ff"></span>HELD-OUT nll — latest <b>' +
+        hs[hs.length - 1].held_out_nll.toFixed(4) + "</b></span>" : "") +
+      (seam !== null ? "<span>seam: resumed at " + fmtInt(seam) + "</span>" : "") +
+      "</div>";
+    // ---- panel 2: held-out MSE ----
+    var ms = hs.filter(function (p) { return typeof p.held_out_mse === "number"; });
+    if (ms.length >= 2) {
+      var mmin = Math.min.apply(null, ms.map(function (p) { return p.held_out_mse; }));
+      var mmax = Math.max.apply(null, ms.map(function (p) { return p.held_out_mse; }));
+      var mspan = (mmax - mmin) || 1;
+      var mOf = function (v) { return padT + (H - padT - padB) * (1 - (v - mmin) / mspan); };
+      var mline = polyline(ms.map(function (p) { return [p.step, p.held_out_mse]; }),
+                           xmin, xspan, mmin, mspan, W, H, padL, padR, padT, padB);
+      var mdots = ms.map(function (p) {
+        var x = padL + (W - padL - padR) * (p.step - xmin) / xspan;
+        return '<circle cx="' + x.toFixed(1) + '" cy="' + mOf(p.held_out_mse).toFixed(1) +
+               '" r="3" fill="#3fb950"/>';
+      }).join("");
+      out += '<svg class="chart" viewBox="0 0 ' + W + " " + H +
+        '" role="img" aria-label="cone codec held-out MSE">' + frame() +
+        '<text x="' + (padL - 6) + '" y="' + (padT + 5) + '" text-anchor="end" font-size="11" fill="#8b949e">' + mmax.toFixed(3) + "</text>" +
+        '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">' + mmin.toFixed(3) + "</text>" +
+        '<polyline points="' + mline + '" fill="none" stroke="#3fb950" stroke-width="1.5" stroke-linejoin="round"/>' +
+        mdots + seamLine(padT, H - padB) + "</svg>" +
+        '<div class="legend"><span><span class="sw" style="background:#3fb950"></span>HELD-OUT mse — latest <b>' +
+        ms[ms.length - 1].held_out_mse.toFixed(4) + "</b></span></div>";
+    }
+    // ---- ETA — fieldChart's arithmetic, and for the same reason. The base
+    // is the resume seam: wall_s restarts at 0 on a new node, so the pace has
+    // to be measured over the steps THIS job took or a resumed run reads far
+    // too fast. The wall clock lives on the HELD-OUT records — the cone's
+    // {step, loss_rec, loss_nei} lines carry no wall_s — so the ETA is only
+    // as fresh as the last eval, which is what `X of Y steps` states.
+    var lastW = null;
+    hs.forEach(function (p) { if (typeof p.wall_s === "number") lastW = p; });
+    if (cfg.steps && lastW) {
+      var e = etaText(secLeftFrom(lastW.step, lastW.wall_s, cfg.steps, seam || 0));
+      if (e) out += '<div class="meta">' + fmtInt(lastW.step) + " of " +
                     fmtInt(cfg.steps) + " steps · " + esc(e) + "</div>";
     }
     return out;
