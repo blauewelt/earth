@@ -105,6 +105,11 @@ sha once built), and `train_cone.py`'s flags have no `$RECIPE_<KEY>` yet; the
 annulus arm (H3) needs a lag-dependent stencil in `temporal.py`. Cost estimate
 ≈ 40–50 box-hours, $15–25. Plan:
 [E-069](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_cone_codec.md).
+**Handover (2 Sep, after the build):** the procedure for steps 5–8 and the JAX/TPU
+port — every file and API, the ten-minute local check, the r3 build/pin/publish route
+(`window: publishtensor`, the r2 precedent), the workflow edit sites, the dispatch
+header, the stage-2 arms, gates C1–C9 and the launcher — is
+[the E-069 handover](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_HANDOVER.md).
 
 ---
 
@@ -376,7 +381,7 @@ ladder — and PAST the box's 24 h token by nothing, but the probe ladder tail
 sits near the edge: harvest by hand if the archive step is silent.
 
 <a id="e-064"></a>
-## E-064 · The 16-bit token as a forecasting substrate, under the clean pool — #528 (E-064a, token) DONE: min 0.564@3,200, 0.6685@20k · #529 (E-064b, twin) DIED at its first monitor (OOM) → #534, 2026-09-02 18:2xZ (Chris: "can you run FSQ and add those results?")
+## E-064 · The 16-bit token as a forecasting substrate, under the clean pool — DISPATCHED #521 (E-064a, token) and #522 (E-064b, continuous twin), 2026-09-02 09:46Z (Chris: "can you run FSQ and add those results?")
 
 TL;DR — does a pixel-bin compressed to one 16-bit code (E-050's warm-started
 FSQ codec, d_z 6 through [8,8,8,5,5,5]) forecast as well as the continuous
@@ -455,27 +460,7 @@ queued on the same box) is for, so nothing is read from it yet. Final
 0.6238 = 0.657; `rapid_r_kfold` 0.602 [0.556, 0.652], unpooled 0.547
 [0.487, 0.606] (pooled/unpooled, n = 1, unreadable per §3b). The early
 minimum at ~3k steps is the same shape every clean-pool head has shown
-(E-059/E-060: inside ~2,000 steps at every width). **#528's bundle landed
-on `ml-metrics` (8 files incl. `temporal.json`): `rapid_r_kfold` 0.602
-[0.556, 0.652], unpooled 0.547 [0.487, 0.606], z-space one-step 0.4100 /
-0.6238 on the final val draw.**
-
-**#529 (E-064b, the torch twin) went GREEN WITH NO `temporal.json` — §7's
-signature, the trainer died and nothing noticed.** Picked up 15:44Z after
-#528, resumed run-415 at 197,428, pulled the 16.24 GiB continuous Z, printed
-the pool certificate (2,417 end-bins, 0 touching a held-out bin, 209,549,066
-windows — identical to #528's) and the scale line (RMS |z| 5.178, sqrt
-val_persistence 4.631, so z-noise 0.7 = 0.15116 × sqrt(val_persistence), the
-#507 arithmetic), then died at its FIRST held-out monitor: the deterministic
-monitor ran all 4,096 windows in one forward, a single 10.2 GiB allocation
-at d_z 32 × K 144 × stencil 145 on a 24 GB card (`torch.OutOfMemoryError`,
-16:41:45Z). The d_z-6 token arm survived the same pass because its input is
-5× smaller — so the pair was never going to be comparable on this card as
-written. **Fixed (`3069d91`): the monitor is chunked at 512 windows exactly
-as the fgn branch already was (row-wise forward ⇒ bit-identical result).
-RE-DISPATCHED as #534 (E-064b, identical inputs) on the restarted Norway box at 18:2xZ.** Cost of
-#529: 57 min of the $0.401/h box, ~$0.4, and the certificate lines above,
-which are its only measurement.
+(E-059/E-060: inside ~2,000 steps at every width).
 
 <a id="e-062"></a>
 ## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) COMPLETE #520, 2026-09-02 13:5xZ (after #518/#519 died on a full disk) — width null: mean acc 0.103 vs 0.105 · R0c (the 40.4M arm) COMPLETE #523, 2026-09-02 16:27Z — ladder flat: mean acc 0.103 / 0.104 / 0.105 across 27×

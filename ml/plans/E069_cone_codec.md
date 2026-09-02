@@ -7,7 +7,11 @@ and then a stencil for stage 2. Them together will provide the best result
 (and together they will implement the full dependency cone)"*). The survey
 deck's slides 34–46 and
 [`ml/figures/geofm_survey/GENERIC_EMBEDDING_INPUTS.md`](https://blauewelt.github.io/earth/docs.html?f=ml/figures/geofm_survey/GENERIC_EMBEDDING_INPUTS.md)
-carry the full argument; this plan is the executable half.
+carry the full argument; this plan is the executable half. **The step-by-step
+procedure for every unfinished step below — data, workflow, dispatch, stage-2
+arms, and the JAX/TPU port with its parity gates — is
+[`ml/plans/E069_HANDOVER.md`](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_HANDOVER.md)
+(2 Sep 2026), written so that a less capable agent can execute it.**
 
 > **TL;DR.** Today the codec sees one pixel-bin (3 × 3, one pentad) and stage 2
 > sees a cylinder of embeddings (145-point spiral × 144 pentads). Nothing that
