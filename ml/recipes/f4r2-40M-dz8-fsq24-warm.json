@@ -1,0 +1,21 @@
+{
+  "_description": "E-065: WARM-START QUANTIZATION at 24 bits \u2014 the finished continuous d_z-8 codec (ml/recipes/f4r2-40M-dz8.json) resumed with the FSQ lattice [8]*8 (= 2^24 codes per pixel-bin, 16.8M states) and the LayerNorm bound switched on, exactly the E-050 mechanism (ml/recipes/f4r2-40M-dz6-fsq65k-warm.json) at a wider bottleneck: the lattice and bound are parameter-free, every weight of the trained continuous encoder loads, and --fsq-warmstart opens the CONTINUOUS -> FSQ hole in the resume guard and rebases fsq_auto_step onto the resumed step (+50/+200/+2000/+20000/+60000). The dispatch MUST set resume '!run-<parent>' (the finished d_z-8 continuous run, promoted to model-checkpoints-v1) and codec_steps 260000 (= 200k resumed + 60k warm). First-minutes health as E-050: the FSQ WARM START banner naming the parent, prequant_rms 1.0 with INPUT-DEPENDENT std_med at +50/+200 (not -> 0.005), effective bits from ml/fsq_usage.py well above a sign code. collapse_r stays '0' (uncalibrated on lattice z). Verdict instrument for the lattice AS A SUBSTRATE: the E-064 stage-2 gate (7.6M head, K 144, --holdout-scope window, dose-matched z-noise) against the continuous twin. Chris, 2026-09-02: \"Try the following FSQ: 24-Bit FSQ (Levels [8 x 8], dz = 8). And then 30bits (Levels [8 x 10]).\"",
+  "_provenance": "Copied field for field from ml/recipes/f4r2-40M-dz6-fsq65k-warm.json (E-050 / run-485: Falsifier A did not fire, loss_rec 0.270 vs parent 0.229, probe_head 0.588 vs 0.579) changing d_z 6 -> 8 and fsq_levels 8,8,8,5,5,5 -> 8,8,8,8,8,8,8,8. NOTHING HAS RUN AT THIS CONFIGURATION (2026-09-02). Plan: ml/plans/E065_fsq_ladder.md.",
+  "tensor": "family4_na025_pentad_r2",
+  "d_z": 8,
+  "patch": 1,
+  "codec_d_model": 512,
+  "codec_layers": 12,
+  "codec_heads": 4,
+  "codec_d_dec": 256,
+  "anomaly": "true",
+  "batch": 512,
+  "holdout_lon": "0,0",
+  "head_probe": "true",
+  "fsq_levels": "8,8,8,8,8,8,8,8",
+  "fsq_ladder": "auto",
+  "fsq_auto_step": "50,200,2000,20000,60000,120000,180000",
+  "fsq_bound": "ln",
+  "collapse_r": "0",
+  "fsq_warmstart": "true"
+}

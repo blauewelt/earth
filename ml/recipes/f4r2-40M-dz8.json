@@ -1,0 +1,15 @@
+{
+  "_description": "E-065: the continuous d_z-8 pentad codec \u2014 the warm-start PARENT for the 24-bit FSQ lattice (levels [8]*8 = 2^24 codes per pixel-bin), exactly as run-480 (d_z 6) was the parent of E-050's 16-bit lattice. Field for field ml/recipes/f4r2-40M-dz6.json with d_z 6 -> 8: 512x12 patch 1, decoder 256, batch 512, 200k steps, anomaly space, no longitude hole ('0,0'), head_probe true. Its own read-outs (loss_rec, probe ladder) are the width-tax control for the lattice that follows; the lattice is switched on at resume with --fsq-warmstart per ml/recipes/f4r2-40M-dz8-fsq24-warm.json. Chris, 2026-09-02: \"Try the following FSQ: 24-Bit FSQ (Levels [8 x 8], dz = 8). And then 30bits (Levels [8 x 10]).\"",
+  "_provenance": "Copied field for field from ml/recipes/f4r2-40M-dz6.json (run-480, E-049a, healthy through 200k: loss_rec 0.229, probe_head 0.579) changing exactly one key: d_z 6 -> 8. NOTHING HAS RUN AT THIS CONFIGURATION (2026-09-02); a fresh d_z-8 continuous codec has no measured pair, so its numbers are directions until replicated. Plan: ml/plans/E065_fsq_ladder.md.",
+  "tensor": "family4_na025_pentad_r2",
+  "d_z": 8,
+  "patch": 1,
+  "codec_d_model": 512,
+  "codec_layers": 12,
+  "codec_heads": 4,
+  "codec_d_dec": 256,
+  "anomaly": "true",
+  "batch": 512,
+  "holdout_lon": "0,0",
+  "head_probe": "true"
+}

@@ -44,6 +44,48 @@ low-pass).
 
 ---
 
+<a id="e-065"></a>
+## E-065 · The lattice ladder, 16 → 24 → 30 bits — parents DISPATCHED 2026-09-02 ~10:3xZ (Chris: "Try the following FSQ: 24-Bit FSQ (Levels [8 x 8], dz = 8). And then 30bits (Levels [8 x 10]).")
+
+TL;DR — how much of the continuous embedding's forecasting value survives
+quantization, as a function of the bits per pixel-bin? E-050's 16-bit
+lattice is gated by E-064; this builds a 24-bit (d_z 8, [8]×8 = 16.8M codes)
+and a 30-bit (d_z 10, [8]×10 = 1.07G codes) codec the same way — a
+continuous parent at the target d_z trained to 200k, then 60k warm steps
+with the lattice and LayerNorm bound switched on — and gates each as a
+stage-2 substrate under the clean pool. Cold-start lattices collapsed
+(E-049b) or degenerated (E-046); the warm start is the only lattice that has
+survived on this tensor, and it needs a parent at each width.
+Plan: [E-065](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E065_fsq_ladder.md).
+
+**E-065a · continuous d_z-8 pentad codec, the 24-bit lattice's parent ·
+params ~37.96M · stage encoder · data family4_na025_pentad_r2 · arch 512×12
+d_z 8 patch 1 · steps 200k×512 · resume none · recipe `f4r2-40M-dz8`.**
+**E-065a2 · continuous d_z-10 pentad codec, the 30-bit lattice's parent ·
+same, d_z 10 · recipe `f4r2-40M-dz10`.** Controls: run-480 (d_z 6,
+`loss_rec` 0.229, `probe_head` 0.579) and run-415 (d_z 32). A parent worse
+than run-480 at a wider bottleneck has a training fault and its lattice is
+not built.
+
+**E-065b / E-065b2 · the warm lattices** — `resume !run-<parent>`, steps
+260000, recipes `f4r2-40M-dz8-fsq24-warm` / `f4r2-40M-dz10-fsq30-warm`
+(E-050's recipe with d_z and `fsq_levels` changed). Falsifier A as E-050:
+input-dependent fits at +50/+200/+2000 with `prequant_rms` 1.0; effective
+bits well above a sign code. Dispatched when each parent is promoted to the
+release.
+
+**The gates** — the E-064 protocol per lattice (7.6M head, K 144,
+`--holdout-scope window`, dose-matched z-noise read off each lattice's own
+monitor, 20k steps), read at the curve minimum and at 20k against E-064b.
+Pre-registered: monotone improvement with bits and the 30-bit arm within
+0.02 of the continuous twin ⇒ the token road is open and the bit count is
+the knob; all three lattices at one fixed distance below the twin ⇒ the loss
+is in the bound or geometry, not the vocabulary. One seed per arm.
+
+**Cost:** two parents ≈ 14 h each on fresh 4090s in parallel (~$5 each),
+warm runs ~4.5 h each, gates ~3 h each; ≈ $15 and ~2 days end to end.
+**Dispatched:** RUNS_E065.
+
 <a id="e-064"></a>
 ## E-064 · The 16-bit token as a forecasting substrate, under the clean pool — DISPATCHED #521 (E-064a, token) and #522 (E-064b, continuous twin), 2026-09-02 09:46Z (Chris: "can you run FSQ and add those results?")
 
@@ -103,7 +145,7 @@ Michigan box that holds the token Z locally would not start
 Z from `embed-cache-v1` (3 GB and 16 GB).
 
 <a id="e-062"></a>
-## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) DISPATCHED #518 (died on a full disk, 3 min) → #519 (died in `Set up job` on the same disk) → #520 (fresh box, 2026-09-02 09:45Z)
+## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) DISPATCHED #518 (died on a full disk, 3 min) → #519 (died in `Set up job` on the same disk) → #520 (fresh box, 2026-09-02 09:45Z) · R0c (the 40.4M arm) DISPATCHED #523, 2026-09-02 10:1xZ
 
 TL;DR — **nothing this programme has ever rolled used a clean-pool head.** #503,
 #510 and #513 all rolled heads trained under `endpoint_contaminated`, so no
@@ -543,7 +585,13 @@ go-ahead), but the box's GPU was rented out and `start` queued on
 `resources_unavailable` for over an hour on that box and three others, so
 **R0b runs as #520 (E-062-R0b, the 7.6M arm through #516's identical
 battery) on a FRESH box — Vast 49632479 / `gpu-box-41298070`, Taiwan, 110 GB
-RAM, $0.348/h — dispatched 2026-09-02 09:45Z.** A fresh box pulls the tensor,
+RAM, $0.348/h — dispatched 2026-09-02 09:45Z.** **And on Chris's "Yes"
+(2026-09-02), the width ladder's middle rung rolls too: #523 (E-062-R0c, the
+40.4M `head-weights-e060b-20k-window-s0` through the identical battery) on
+a second fresh box, Vast 49633408 / `gpu-box-49401037`, Virginia, dispatched
+10:1xZ. With #516 that gives the ladder three points on the rolled field;
+the pre-registered reading is the same as R0b's — lead-decay shape first,
+level second.** A fresh box pulls the tensor,
 decodes its scratch copy and pulls the published Z (12 chunks) before the
 roll, ~1 h; #516's 21 h 26 m roll on a 27× larger head is the only pace
 reference and is not a law for this head.
