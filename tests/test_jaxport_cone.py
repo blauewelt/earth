@@ -2,7 +2,7 @@
 """E-069 · parity gates for the JAX cone codec (`ml/plans/E069_HANDOVER.md` §8.7).
 
 One PAIR on identical weights — a torch `ConeMAE` at the smoke geometry under
-`torch.manual_seed(0)`, converted with `cone_from_torch` — and one REAL batch
+`torch.manual_seed(0)`, and (C10) a second pair at the DISPATCH geometry, converted with `cone_from_torch` — and one REAL batch
 from `train_cone.smoke_tensor` through `ConeSampler`, 16 anchors including one
 at the western edge of the basin so a slice of its cone is genuinely invalid.
 Every measured difference is PRINTED; a gate fails only against the tolerance
@@ -55,8 +55,9 @@ and the losses to ~5e-7 — because the attention and the pool average it away.
 `ml/jaxport/cone_models.py`'s module docstring carries the same note next to
 the code.
 
-FINDING 1 (2026-09-02, found by C3, NOT fixed here — the fix belongs in
-`ml/jaxport/convert.py` and that file is out of this change's scope).
+FINDING 1 (2026-09-02, found by C3; FIXED the same day in
+`ml/jaxport/convert.py::_Consumer.get`, which now copies — the note stays
+because the defence below it is what caught it and is worth keeping).
 **`cone_from_torch` returns a JAX model that SHARES MEMORY with the torch
 module it converted.** `convert._Consumer.get` returns
 `np.asarray(t.detach().cpu().numpy())`, which is a VIEW of the torch tensor's
@@ -81,10 +82,11 @@ torch module, `export_cone` copies (`convert._np`), and
 again (its `optax` updates are functional, so they allocate rather than write
 through). What it breaks is any caller that keeps TRAINING the torch module
 after converting it — which is precisely C3 — and it would break silently, by
-making the two backends agree perfectly. The fix is one word in
-`convert._Consumer.get` (`.numpy().copy()`, or `np.array(..., copy=True)`).
-Until it lands, C3 converts from `{k: v.detach().clone()}` and ASSERTS the
-decoupling before it measures anything.
+making the two backends agree perfectly. `convert._Consumer.get` now does
+`np.array(..., copy=True)`, and the whole jaxport suite (parity, train,
+train_s2, field, cone) was re-run green against the copy. C3 keeps converting
+from `{k: v.detach().clone()}` and keeps ASSERTING the decoupling before it
+measures anything — the belt is cheap and it is what found this.
 
 WHAT C3's TWO TOLERANCES ARE FOR, since one of them is 20x the other. At
 `count = 0` the AdamW update is `-lr * g / (|g| + eps)` with `eps = 1e-8`
@@ -115,6 +117,14 @@ always been drawn, while `forward_given` takes them from
 `draw_dot_queries` — so the two agree only if `encode` consumes no RNG, which
 is true (every dropout in `ConeMAE` is 0.0) and is asserted here rather than
 argued in a comment.
+  C10 production  the pair REBUILT at the dispatch geometry — 42 real r3
+               channels, d_model 256, 64 latents x 6, 7,048,994 parameters,
+               706 dots: parameter identity both sides, the sampler's dot
+               count against `cone.budget()`, forward and loss at the
+               tolerances above, GRADIENT parity over every element, the
+               depth axis proven live, and the L_in=0 snapshot arm
+                                        identity / 1e-4 / 1e-5 / 1e-6 (grads)
+
 """
 import contextlib
 import io
@@ -137,6 +147,7 @@ ML = os.path.join(os.path.dirname(HERE), "ml")
 if ML not in sys.path:
     sys.path.insert(0, ML)
 
+import jax                                                     # noqa: E402
 import jax.numpy as jnp                                        # noqa: E402
 import optax                                                   # noqa: E402
 from flax import nnx                                           # noqa: E402
@@ -905,7 +916,8 @@ def main():
           "ml/jaxport, CPU, fp32, eval mode\n")
     for fn in (test_c1_forward, test_c2_loss, test_c3_one_step,
                test_c5_round_trip, test_c6_refusal, test_c7_invalid_dot,
-               test_c9_forward_unchanged, test_c8_resume, test_c4_band):
+               test_c9_forward_unchanged, test_c10_production_geometry,
+               test_c8_resume, test_c4_band):
         fn()
     if FAILURES:
         print("\nFAILED:")
@@ -913,9 +925,209 @@ def main():
             print("  -", x)
         return 1
     print("\ntests/test_jaxport_cone.py: gates C1, C2, C3, C4, C5, C6, C7, "
-          "C8, C9 passed")
+          "C8, C9, C10 passed")
     return 0
 
+
+
+# ---- C10: the PRODUCTION geometry ------------------------------------------
+# Everything above runs at the smoke geometry — 8 invented channels, d_model
+# 32, 66,090 parameters, no depth channel and no family-A/C mix. That is the
+# right size for a gate that has to run in seconds, and it is the wrong size
+# to certify a port with: the model E-069 dispatches is 42 REAL channels at
+# d_model 256 with 64 latents over 6 blocks, 7,048,994 parameters and 748
+# tokens per anchor, 35 of whose channels are `rg_*` at depths from 10 to
+# 1,900 dbar and whose dot offsets reach 907 km. Three things can only be
+# wrong at that size — a parameter the converter never sees because the smoke
+# geometry collapses two dimensions to the same number, a coordinate encoding
+# whose conditioning changes with the real reaches and depths, and the
+# GRADIENT, which no gate here has compared at all (C3 compares one optimiser
+# STEP, at the smoke size, which is a weaker statement about a smaller model).
+#
+# So C10 rebuilds the pair at the dispatch geometry on a synthetic tensor
+# carrying `build_family4.CHANS_R3` — the real names, hence the real family
+# map, the real depth ladder and the real per-family reaches out of
+# `ml/cone.py` — and checks:
+#
+#   (a) both sides hold EXACTLY 7,048,994 parameters, the number
+#       `ml/plans/E069_cone_codec.md` §0 dispatches under. An identity, not a
+#       tolerance: a converter that dropped a tensor would still pass every
+#       forward gate if the tensor were multiplied by something near zero.
+#   (b) the sampler's dot count is `cone.budget()`'s 706, so the model gate
+#       and the geometry module are pinned to each other rather than each to
+#       its own idea of the cone.
+#   (c) forward and loss parity at the tolerances §8.7 pre-registered for the
+#       smoke geometry — held, not widened.
+#   (d) GRADIENT parity over all 7.05M elements, at the 1e-6 the existing
+#       suite already pre-registered for grads (`tests/test_jaxport_train_s2.py`
+#       G5b), plus the global gradient norm relatively. This is the check that
+#       decides whether a TPU run trains the same model: a forward can agree
+#       while a backward disagrees, and only the backward moves weights.
+#   (e) the depth axis is LIVE — the encoding of an `rg_*` channel at 1,900
+#       dbar differs from the same channel's at 10 dbar. Without it every
+#       other check here passes on a port that silently drops depth, because
+#       depth enters as one of four coordinates and the other three carry the
+#       signal.
+#   (f) the `L_in = 0` snapshot arm — H1's control — builds and runs at this
+#       geometry on BOTH sides, where the dot arrays are genuinely empty.
+#
+# It costs about a minute of the file's runtime, and it is the only gate here
+# that is about the model that will actually be dispatched.
+_PROD = {}
+
+PROD_PARAMS = 7_048_994          # ml/plans/E069_cone_codec.md §0
+PROD_DOTS = 706                  # cone.budget(lat, CHANS_R3)["dot_tokens"]
+
+
+def prod_fixture(l_in=6):
+    key = f"L{l_in}"
+    if key in _PROD:
+        return _PROD[key]
+    from build_family4 import CHANS_R3
+    T, H, W = 24, 12, 18
+    chan = list(CHANS_R3)
+    C = len(chan)
+    rng = np.random.default_rng(0)
+    X = rng.standard_normal((T, H, W, C)).astype(np.float32)
+    X[:, :, :2, 3] = np.nan               # a genuinely unobserved rg_* patch
+    lats = 30.0 + 0.25 * np.arange(H)
+    lons = -40.0 + 0.25 * np.arange(W)
+    sampler = ConeSampler(X, np.isfinite(X), lats, lons, chan,
+                          L_in=l_in, future_lags=(1, 2))
+    anchors = np.array([[10, 5, 9], [12, 3, 8], [15, 8, 10], [11, 5, 0]],
+                       np.int64)
+    s = sampler.sample(anchors)
+    depth = torch.as_tensor([channel_depth_dbar(n) for n in chan],
+                            dtype=torch.float32)
+    b = to_torch(s, depth, "cpu")
+    torch.manual_seed(0)
+    tm = ConeMAE(C).eval()                # the DISPATCH defaults, no overrides
+    jm = jcc.cone_from_torch(tm, rngs=nnx.Rngs(0))
+    _PROD[key] = dict(chan=chan, sampler=sampler, sample=s, tm=tm, jm=jm,
+                      b=b, jb=as_jax(b), depth=depth, anchors=anchors)
+    return _PROD[key]
+
+
+def test_c10_production_geometry():
+    from cone import budget
+    f = prod_fixture()
+    tm, jm, b, jb, chan = f["tm"], f["jm"], f["b"], f["jb"], f["chan"]
+
+    # (a) parameter identity, both sides, against the dispatched number
+    t_n = tm.param_count()
+    j_n = sum(int(x.size) for x in
+              jax.tree_util.tree_leaves(nnx.state(jm, nnx.Param)))
+    if t_n != PROD_PARAMS:
+        FAILURES.append(f"C10: torch ConeMAE(42) holds {t_n:,} parameters, "
+                        f"not the {PROD_PARAMS:,} E-069 §0 dispatches under")
+    if j_n != t_n:
+        FAILURES.append(f"C10: ConeMAEJax holds {j_n:,} parameters against "
+                        f"torch's {t_n:,} — the converter is not total")
+
+    # (b) the sampler agrees with cone.budget() about the cone
+    n_dots = f["sampler"].n_dots(5)
+    want = budget(30.0 + 0.25 * 5, chan)["dot_tokens"]
+    if not (n_dots == want == PROD_DOTS):
+        FAILURES.append(f"C10: {n_dots} dots sampled, budget() says {want}, "
+                        f"the plan says {PROD_DOTS}")
+    if not (~f["sample"]["valid"]).any():
+        FAILURES.append("C10: no invalid dot at production geometry")
+
+    # (c) forward and loss, at C1/C2's own pre-registered tolerances
+    with torch.no_grad():
+        t_toks, t_kpm = tm.tokens(b)
+        t_z, t_lat = tm.encode(b)
+    j_toks, j_kpm = jm.tokens(jb)
+    j_z, j_lat = jm.encode(jb)
+    d_tok = check("C10 tokens", t_toks, j_toks, 1e-4)
+    if not np.array_equal(t_kpm.numpy(), np.asarray(j_kpm)):
+        FAILURES.append("C10: key-padding masks differ")
+    d_z = check("C10 encode z", t_z, j_z, 1e-4)
+    d_lat = check("C10 encode latents", t_lat, j_lat, 1e-4)
+
+    plan = default_plan(chan, n_dot_queries=64, aux_latent_w=0.25,
+                        future_lags=(1, 2))
+    plan["generator"] = torch.Generator().manual_seed(7)
+    cm, dm = tm._masks(b, plan)
+    di = tm.draw_dot_queries(b, plan, dm)
+    with torch.no_grad():
+        out = tm.forward_given(b, plan, cm, dm, di)
+    jplan = jcm.plan_to_jax(plan)
+    jmasks = jax_masks(cm, dm, di)
+    j_loss, j_z2, j_terms = jm.loss_given(jb, jplan, *jmasks)
+    d_loss = check("C10 loss", out["loss"].detach(), j_loss, 1e-5)
+    d_term = 0.0
+    for k, v in out["terms"].items():
+        d_term = max(d_term, check(f"C10 term {k}", torch.tensor(float(v)),
+                                   jnp.asarray(j_terms[k]), 1e-5))
+
+    # (d) GRADIENTS over every one of the 7.05M elements
+    tm2 = ConeMAE(len(chan))
+    tm2.load_state_dict(tm.state_dict())
+    tm2.train()
+    tm2.forward_given(b, plan, cm, dm, di)["loss"].backward()
+    tg = {k: v.grad.detach().numpy().copy()
+          for k, v in tm2.named_parameters() if v.grad is not None}
+
+    def _loss_of(model):
+        return model.loss_given(jb, jplan, *jmasks)[0]
+
+    shell = jcc.cone_from_torch(tm, rngs=nnx.Rngs(1))
+    nnx.update(shell, nnx.grad(_loss_of)(jm))
+    jg = jcc.export_cone(shell)
+    d_g, d_g_big, n_big, worst_k = 0.0, 0.0, 0, ""
+    sq_t = sq_j = 0.0
+    for k, v in tg.items():
+        v64 = v.astype(np.float64)
+        j64 = np.asarray(jg[k], np.float64)
+        diff = np.abs(v64 - j64)
+        if diff.max() > d_g:
+            d_g, worst_k = float(diff.max()), k
+        m = np.abs(v64) > 1e-6
+        n_big += int(m.sum())
+        if m.any():
+            d_g_big = max(d_g_big, float(diff[m].max()))
+        sq_t += float((v64 ** 2).sum())
+        sq_j += float((j64 ** 2).sum())
+    if not (d_g < 1e-6):
+        FAILURES.append(f"C10 gradient: max|Δ| {d_g:.3e} >= 1e-6 at {worst_k}")
+    gn_t, gn_j = np.sqrt(sq_t), np.sqrt(sq_j)
+    rel = abs(gn_t - gn_j) / max(gn_t, 1e-12)
+    if not (rel < 1e-5):
+        FAILURES.append(f"C10 gradient norm: {gn_t:.6f} vs {gn_j:.6f} "
+                        f"(rel {rel:.3e}) >= 1e-5")
+    if n_big < len(tg):
+        FAILURES.append("C10 gradient: almost nothing has a gradient — the "
+                        "restricted tolerance would be vacuous")
+
+    # (e) the depth axis is live
+    zero = torch.zeros(1, 1)
+    with torch.no_grad():
+        e_shallow = tm.coord(zero, zero, zero, torch.full((1, 1), 10.0))
+        e_deep = tm.coord(zero, zero, zero, torch.full((1, 1), 1900.0))
+    d_depth = float((e_shallow - e_deep).abs().max())
+    if not (d_depth > 1e-3):
+        FAILURES.append(f"C10: the depth coordinate is inert (max|Δ| between "
+                        f"10 and 1900 dbar is {d_depth:.3e}) — 35 of the 42 "
+                        f"channels are rg_* and would be indistinguishable")
+
+    # (f) the L_in = 0 snapshot arm, where the dot arrays are empty
+    g0 = prod_fixture(l_in=0)
+    if g0["sampler"].n_dots(5) != 0:
+        FAILURES.append("C10: the L_in=0 arm still samples dots")
+    with torch.no_grad():
+        t_z0, _ = g0["tm"].encode(g0["b"])
+    j_z0, _ = g0["jm"].encode(g0["jb"])
+    d_snap = check("C10 snapshot arm (L_in=0) z", t_z0, j_z0, 1e-4)
+
+    print(f"  C10 production geometry · {t_n:,} params both sides (the "
+          f"dispatched number) · {n_dots} dots = budget() · tokens {d_tok:.2e},"
+          f" z {d_z:.2e}, latents {d_lat:.2e} (tol 1e-4) · loss {d_loss:.2e}, "
+          f"worst term {d_term:.2e} (tol 1e-5) · GRADIENT max|Δ| {d_g:.2e} "
+          f"over {n_big:,} elements with |g|>1e-6 (tol 1e-6, the suite's own "
+          f"G5b number, not one fitted here), global grad norm {gn_t:.4f} vs "
+          f"{gn_j:.4f} rel {rel:.2e} · depth 10 vs 1900 dbar moves the "
+          f"encoding by {d_depth:.2f} · L_in=0 snapshot arm z {d_snap:.2e}")
 
 if __name__ == "__main__":
     sys.exit(main())

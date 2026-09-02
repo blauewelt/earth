@@ -662,9 +662,39 @@ difference; fail only against the tolerance.
 | C7 existence | perturb an invalid dot's value in the JAX batch → z bitwise equal (`np.array_equal`) — the torch smoke test's check, on the port | exact |
 | C8 resume | train 20 steps, checkpoint, train 20 more; vs 40 straight | bitwise on the state |
 | C9 `forward` unchanged | torch `forward(b, plan)` with `generator` seeded g equals `forward_given` fed the masks drawn from the same seeded g | exact |
+| C10 production geometry | the pair REBUILT at the dispatch geometry (42 real r3 channels, d_model 256, 64 latents × 6, 706 dots): parameter identity on both sides against §0's number, the sampler's dot count against `cone.budget()`, forward and loss at C1/C2's tolerances, **gradient** parity over every element, the depth axis proven live, and the `L_in = 0` snapshot arm | identity · 1e-4 · 1e-5 · 1e-6 (grads) |
 
-Run time target: under 3 minutes on CPU. If any gate fails, the diff is
-the finding; write it into the test's docstring like `models.py` does.
+**Why C10 exists, and why it is the one that matters.** C1–C9 all run at the
+smoke geometry — 8 invented channels, 66,090 parameters, no depth channel, no
+family mix. Three things can only be wrong at the dispatch size: a parameter
+the converter never sees because the small geometry collapses two dimensions
+onto the same number; a coordinate encoding whose conditioning changes with
+the real reaches (to 907 km) and the real depth ladder (to 1,900 dbar); and
+the GRADIENT, which C3 only ever probes through one optimiser step on a model
+2% the size. A forward can agree while a backward disagrees, and only the
+backward moves weights — so C10 is the gate that actually says a TPU run
+trains the same model.
+
+Run time: ~5 minutes on CPU (C4's two subprocesses and C10's 7.05M-parameter
+gradient dominate). If any gate fails, the diff is the finding; write it into
+the test's docstring like `models.py` does.
+
+**MEASURED 2026-09-02**, all ten green (`python3 tests/test_jaxport_cone.py`):
+C1 tokens 1.26e-05, z 2.09e-07; C2 loss 9.54e-07; C3 SGD 1.19e-07, AdamW
+1.17e-05 / 2.38e-07 where |g| > 1e-6; C4 torch 2.0367 → 1.7528 against jax
+2.0452 → 1.7527, ratio 1.0000; C5 99/99 keys `torch.equal`; C6 both refusals
+name the offender; C7 exact; C8 373 leaves bitwise across the seam; C9 exact;
+**C10 at the dispatch geometry — 7,048,994 parameters on both sides, 706 dots
+= `budget()`, tokens 2.03e-05, z 4.47e-07, loss 2.38e-07, gradient max|Δ|
+6.56e-07 over 5,219,652 elements with |g| > 1e-6, global gradient norm
+12.4837 both sides (rel 4.9e-07), depth 10 vs 1,900 dbar moves the encoding
+by 0.82, snapshot arm z 3.05e-07.** C1's 1e-5 on tokens is `CoordEnc`'s own
+condition number (the top Fourier band multiplies a one-ULP `log1p`
+difference by 128) and does not propagate; the reasoning is in the test's
+docstring. Two findings came out of writing them: the converter aliased 68 of
+99 tensors to torch storage (fixed, `convert._Consumer.get` copies), and
+`export_cone` returns numpy that `load_state_dict` refuses — `export_cone_pt`
+is what makes the loadable artefact (its docstring now says so).
 
 ### 8.8 The launcher `ml/jaxport/tpu_train_cone.sh`
 

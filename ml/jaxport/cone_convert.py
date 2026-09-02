@@ -101,7 +101,14 @@ def load_cone(state_dict, model):
 
 
 def export_cone(model):
-    """`ConeMAEJax` → a dict of numpy arrays `ConeMAE` loads with strict=True.
+    """`ConeMAEJax` → a dict of NUMPY arrays keyed like `ConeMAE`'s state_dict.
+
+    NOT directly loadable: `Module.load_state_dict` wants tensors and raises
+    "expected torch.Tensor" on a numpy value. `export_cone_pt` is what makes
+    the loadable artefact — it wraps every value with `torch.from_numpy` — and
+    a caller holding this dict must do the same. Said explicitly because the
+    sentence that used to sit here claimed the opposite, and the cost of
+    believing it is a checkpoint that refuses to open at the end of a run.
 
     The reverse of `load_cone`, one list read backwards, emitted in the torch
     module's own construction order — `_Emitter` refuses to write a key twice,
