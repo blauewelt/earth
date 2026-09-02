@@ -1,25 +1,25 @@
 {
- "at": "2026-08-21T12:09:42.168Z",
- "credit_usd": 31.34,
+ "at": "2026-09-02T11:55:06.455Z",
+ "credit_usd": 12.23,
  "balance_usd": 0,
- "boxes_total": 4,
- "boxes_running": 2,
- "burn_usd_per_h": 0.643,
+ "boxes_total": 20,
+ "boxes_running": 6,
+ "burn_usd_per_h": 2.3972,
  "boxes": [
   {
    "id": 47724559,
-   "status": "running",
+   "status": "offline",
    "dph": 0.2944,
    "storage_dph": 0.0278,
-   "disk_used_gb": 61,
+   "disk_used_gb": 74,
    "disk_gb": 100
   },
   {
    "id": 47724565,
-   "status": "running",
+   "status": "exited",
    "dph": 0.3078,
    "storage_dph": 0.0278,
-   "disk_used_gb": 71,
+   "disk_used_gb": 76,
    "disk_gb": 100
   },
   {
@@ -27,7 +27,7 @@
    "status": "exited",
    "dph": 0.3211,
    "storage_dph": 0.0278,
-   "disk_used_gb": 58,
+   "disk_used_gb": 100,
    "disk_gb": 100
   },
   {
@@ -35,8 +35,136 @@
    "status": "exited",
    "dph": 0.333,
    "storage_dph": 0.013,
-   "disk_used_gb": 213,
+   "disk_used_gb": 269,
    "disk_gb": 700
+  },
+  {
+   "id": 48478309,
+   "status": "exited",
+   "dph": 0.2852,
+   "storage_dph": 0.0185,
+   "disk_used_gb": 68,
+   "disk_gb": 100
+  },
+  {
+   "id": 48478310,
+   "status": "exited",
+   "dph": 0.277,
+   "storage_dph": 0.037,
+   "disk_used_gb": 31,
+   "disk_gb": 100
+  },
+  {
+   "id": 48495564,
+   "status": "exited",
+   "dph": 1.5674,
+   "storage_dph": 0.0741,
+   "disk_used_gb": 61,
+   "disk_gb": 100
+  },
+  {
+   "id": 48520137,
+   "status": "exited",
+   "dph": 0.3211,
+   "storage_dph": 0.0278,
+   "disk_used_gb": 88,
+   "disk_gb": 100
+  },
+  {
+   "id": 48524831,
+   "status": "exited",
+   "dph": 0.3785,
+   "storage_dph": 0.0185,
+   "disk_used_gb": 34,
+   "disk_gb": 100
+  },
+  {
+   "id": 48632885,
+   "status": "exited",
+   "dph": 2.0278,
+   "storage_dph": 0.0278,
+   "disk_used_gb": 54,
+   "disk_gb": 100
+  },
+  {
+   "id": 48937793,
+   "status": "exited",
+   "dph": 0.3344,
+   "storage_dph": 0.0278,
+   "disk_used_gb": 40,
+   "disk_gb": 100
+  },
+  {
+   "id": 49035333,
+   "status": "exited",
+   "dph": 0.2956,
+   "storage_dph": 0.0556,
+   "disk_used_gb": 86,
+   "disk_gb": 100
+  },
+  {
+   "id": 49102182,
+   "status": "exited",
+   "dph": 0.3311,
+   "storage_dph": 0.0111,
+   "disk_used_gb": 23,
+   "disk_gb": 300
+  },
+  {
+   "id": 49242934,
+   "status": "exited",
+   "dph": 0.2956,
+   "storage_dph": 0.0556,
+   "disk_used_gb": 100,
+   "disk_gb": 100
+  },
+  {
+   "id": 49632479,
+   "status": "running",
+   "dph": 0.3481,
+   "storage_dph": 0.0148,
+   "disk_used_gb": 78,
+   "disk_gb": 100
+  },
+  {
+   "id": 49632487,
+   "status": "running",
+   "dph": 0.2878,
+   "storage_dph": 0.0278,
+   "disk_used_gb": 38,
+   "disk_gb": 100
+  },
+  {
+   "id": 49633408,
+   "status": "running",
+   "dph": 0.3211,
+   "storage_dph": 0.0278,
+   "disk_used_gb": 79,
+   "disk_gb": 100
+  },
+  {
+   "id": 49633425,
+   "status": "running",
+   "dph": 0.2678,
+   "storage_dph": 0.0278,
+   "disk_used_gb": 13,
+   "disk_gb": 100
+  },
+  {
+   "id": 49635004,
+   "status": "running",
+   "dph": 0.3211,
+   "storage_dph": 0.0278,
+   "disk_used_gb": 29,
+   "disk_gb": 100
+  },
+  {
+   "id": 49638088,
+   "status": "running",
+   "dph": 0.4011,
+   "storage_dph": 0.0278,
+   "disk_used_gb": 33,
+   "disk_gb": 100
   }
  ]
 }
