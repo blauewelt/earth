@@ -437,7 +437,36 @@ class ConeMAE(nn.Module):
         return chan_mask, dot_mask
 
     # -------------------------------------------------------------- queries --
-    def _query_sets(self, b, plan, dot_mask):
+    def draw_dot_queries(self, b, plan, dot_mask):
+        """`(idx [B, k] long, sel [B, k] bool)` — the hidden-dot query DRAW.
+
+        Factored out of `_query_sets` so the randomness can be handed to a
+        second framework (`ml/plans/E069_HANDOVER.md` §8.3): two RNGs cannot be
+        made to agree, so the JAX port's parity gate passes the DRAW rather
+        than the seed. The arithmetic is unchanged and the generator is
+        consumed in exactly the same way — one `torch.rand(B, N)` — so
+        `forward`, which still reaches this through `_query_sets`, keeps its
+        numbers bit for bit (gate C9 asserts it).
+
+        `k = min(n_dot_queries, N)`; an empty draw (`k == 0` or `N == 0`)
+        returns EMPTY tensors rather than None, so the caller's gather path is
+        one branch on a width instead of two on a type.
+        """
+        dev = b["vals"].device
+        B, N = b["vals"].shape
+        k = min(int(plan.get("n_dot_queries", 0)), int(N))
+        if k <= 0 or N == 0:
+            return (torch.zeros(B, 0, dtype=torch.long, device=dev),
+                    torch.zeros(B, 0, dtype=torch.bool, device=dev))
+        score = torch.where(dot_mask & b["obs"] & b["valid"],
+                            torch.rand(B, N, device=dev,
+                                       generator=plan.get("generator")),
+                            torch.full((B, N), -1.0, device=dev))
+        idx = score.topk(k, dim=1).indices                        # [B, k]
+        sel = score.gather(1, idx) >= 0.0
+        return idx, sel
+
+    def _query_sets(self, b, plan, dot_mask, dot_idx=None):
         """Assemble (chan, dy, dx, lag, depth, target, weight) for every query.
 
         Three families of query, concatenated along Q so the decoder runs once:
@@ -453,6 +482,12 @@ class ConeMAE(nn.Module):
         Weights are the product of (is this a real target) and the channel's
         family weight. A target that was never observed has weight exactly 0
         and its `target` value is a zero that nothing is scored against.
+
+        `dot_idx`, when given, is `draw_dot_queries`' `(idx, sel)` pair and is
+        used INSTEAD of drawing — the deterministic path `forward_given` and
+        the JAX twin both take. Left None (what `forward` passes) the draw
+        happens here, at the same point in the generator's stream as it always
+        has.
         """
         dev = b["vals"].device
         dt = b["vals"].dtype
@@ -493,14 +528,9 @@ class ConeMAE(nn.Module):
                        * cw[None, :, None]).reshape(B, C * F))
 
         # ---- C. hidden dots ------------------------------------------------
-        k = int(plan.get("n_dot_queries", 0))
-        if k > 0 and N > 0:
-            score = torch.where(dot_mask & b["obs"] & b["valid"],
-                                torch.rand(B, N, device=dev,
-                                           generator=plan.get("generator")),
-                                torch.full((B, N), -1.0, device=dev))
-            idx = score.topk(min(k, N), dim=1).indices              # [B, k]
-            sel = score.gather(1, idx) >= 0.0
+        idx, sel = (self.draw_dot_queries(b, plan, dot_mask)
+                    if dot_idx is None else dot_idx)
+        if idx.shape[1] > 0:
             chans.append(b["chan"].long().gather(1, idx))
             dys.append(b["dy_km"].gather(1, idx).to(dt))
             dxs.append(b["dx_km"].gather(1, idx).to(dt))
@@ -520,13 +550,45 @@ class ConeMAE(nn.Module):
         `b` is the sampler's batch as tensors; `plan` is `default_plan()`'s
         dict (probabilities, per-channel weights, query budget, aux weight,
         and an optional torch.Generator so an EVAL pass can be reproducible).
+
+        UNCHANGED by the E-069 JAX port, deliberately and checkably: the masks
+        are drawn here and the hidden-dot queries are drawn where they always
+        were — INSIDE `_query_sets`, after `encode` — so this method's
+        generator consumption is byte for byte what every archived cone number
+        was produced under. `forward_given` shares the body below rather than
+        this method calling it, because a refactor that moved the draw would
+        be a silent change to every seeded eval
+        (`tests/test_jaxport_cone.py` gate C9 asserts the two agree).
         """
         chan_mask, dot_mask = self._masks(b, plan)
+        return self._loss_from(b, plan, chan_mask, dot_mask, None)
+
+    def forward_given(self, b, plan, chan_mask, dot_mask, dot_idx):
+        """`forward`, with the randomness handed IN. Uses no RNG at all.
+
+        `chan_mask` [B, C] and `dot_mask` [B, N] are `_masks`' output;
+        `dot_idx` is `draw_dot_queries`' `(idx, sel)` pair. This is the entry
+        point the JAX port mirrors (`ConeMAEJax.loss_given`) and the one a
+        cross-framework gate can compare at all — two RNGs cannot be made to
+        agree, so the draw is the thing that is shared, not the seed.
+
+        Returns the same `dict(loss=..., z=..., terms={...})` `forward` does.
+        """
+        return self._loss_from(b, plan, chan_mask, dot_mask, dot_idx)
+
+    def _loss_from(self, b, plan, chan_mask, dot_mask, dot_idx):
+        """The shared body of `forward` and `forward_given`.
+
+        `dot_idx=None` means "draw the hidden-dot queries inside
+        `_query_sets`", which is `forward`'s original control flow; a given
+        `(idx, sel)` pair makes the whole method deterministic.
+        """
         bb = dict(b)
         bb["chan_mask"], bb["dot_mask"] = chan_mask, dot_mask
         z, lat = self.encode(bb)
 
-        chan, dy, dx, lag, dep, tgt, w = self._query_sets(b, plan, dot_mask)
+        chan, dy, dx, lag, dep, tgt, w = self._query_sets(b, plan, dot_mask,
+                                                          dot_idx)
         q = self.query_tokens(chan, dy, dx, lag, dep)
         mu, logvar = self.decode_from_z(z, q)
 
