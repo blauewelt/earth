@@ -2205,6 +2205,20 @@ def main():
 
     # ---- anomaly stats + per-month standardized fields --------------------
     st_path = os.path.join(a.cache_dir, "std_stats.npz")
+    # …AND KEYED ON THE CODEC'S OWN YEARS TOO (2026-09-02, the terminal
+    # codec): the flat name was written by every run on the 2009/2017/2023
+    # codecs, and a box that rolled one of those (Virginia, #523) still holds
+    # that file when the first roll on a codec holding out 2021-2024 starts.
+    # Reusing it would standardise the terminal years with statistics that
+    # include them. So the flat name is reserved for the legacy year set that
+    # wrote it, bit for bit; any other codec gets the blocks in the name,
+    # whether the years come from an override or from the checkpoint itself.
+    if not a.hold_years and set(hold_years) != {"2009", "2017", "2023"}:
+        st_path = os.path.join(a.cache_dir, "std_stats__hold-%s.npz"
+                               % "-".join(block_label(b) for b in blocks))
+        print(f"anomaly stats: this codec's holdout years are not the legacy "
+              f"2009/2017/2023 that wrote the shared std_stats.npz — using "
+              f"{os.path.basename(st_path)}", flush=True)
     if a.hold_years:
         # E-067 · THE STATS CACHE IS NOT KEYED ON THE HOLDOUT YEARS. A warm
         # box that wrote `std_stats.npz` under the codec's own years would
