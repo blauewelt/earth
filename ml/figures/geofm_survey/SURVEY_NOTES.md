@@ -133,3 +133,11 @@ Twelve slides added before Sources (34–45; 46 slides, 92-page with-notes PDF),
   the RAPID-cone note no longer cites the pooled-vs-unpooled gap as evidence (a two-interval comparison, `ml/CLAUDE.md` §3), and the
   "pentad stage-2 shows one-step wind skill" line is now a prediction marked untested (the pentad rolls were withdrawn). The one Earth 2
   result the deck still quotes is the retained probe contrast (0.672 vs 0.659), always with its caveat.
+
+## v12 — sources on every slide (2 Sep 2026)
+
+- Chris asked whether the paper links were in the slide notes; they were not (prose only; the Sources slide had plain-text short URLs).
+  Now `sources.js` holds 161 verified full URLs mapped to the 46 slides; every speaker note ends with a "Sources for this slide" block
+  (plain text in the PPTX notes pane), every notes page in the with-notes PDF carries the same links as clickable labels (355 link
+  annotations), and every URL / DOI on the Sources slide is clickable (70 links). A subagent resolved all 161 URLs by fetch before use;
+  four were corrected (Copernicus carbon product id, MOD16A2GF page, Black Marble, RGI user guide).

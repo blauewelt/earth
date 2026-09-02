@@ -13,6 +13,7 @@ transcribed from the papers, and related work; since 2 Sep also the *generic-emb
 | `GENERIC_EMBEDDING_INPUTS.md` | The in-depth proposal behind slides 34–45: input ladder with plain-English descriptions, cone parameters per input, the cone-native codec, the zero-sum analysis, phased plan, and a dataset spec sheet verified against agency pages on 2 Sep 2026 |
 | `SURVEY_NOTES.md` | The running research note: verified stencil table, transcribed benchmark numbers, the cone model, the proposed pixel-year arm, related work — with sources |
 | `build.js` | pptxgenjs generator for the deck (`node build.js`; needs `notes.js` beside it, writes `titles.json`) |
+| `sources.js` | 161 verified URLs mapped to the 46 slides — appended to every note, clickable on the notes pages and the Sources slide |
 | `slides_inputs.js`, `notes_inputs.js` | Slides 34–45 and their notes, required by `build.js` / `notes.js` |
 | `notes.js` | One plain-English note per slide, in deck order |
 | `notes_deck.js` | Renders one landscape notes page per slide → `notes-pages.pptx` |

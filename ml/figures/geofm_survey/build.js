@@ -1444,20 +1444,39 @@ require("./slides_inputs.js")({ pres, title, footer, NAVY, INK, MUTED, TEAL, SPA
     ["Related work", "OceanNet arxiv.org/abs/2310.00813 · PARADIS arxiv.org/abs/2601.21151 · ClimODE arxiv.org/abs/2404.10024 · Neural-LAM arxiv.org/abs/2309.17370 · stretched grid arxiv.org/abs/2409.02891 · Keisler arxiv.org/abs/2202.07575 · GraphCast arxiv.org/abs/2212.12794 · Pangu arxiv.org/abs/2211.02556 · FuXi arxiv.org/abs/2306.12873 · Samudra arxiv.org/abs/2412.03795 · SamudrACE doi 10.1029/2025GL119340 · ACE2-SOM arxiv.org/abs/2412.04418 · ACE2-NEMO arxiv.org/abs/2603.28704 · AIFS surface ocean arxiv.org/abs/2604.25559 · Aurora doi 10.1038/s41586-025-09005-y · Aardvark doi 10.1038/s41586-025-08897-0 · GraphDOP arxiv.org/abs/2412.15687 · 4DVarNet doi 10.1029/2023MS003609 · ESFM arxiv.org/abs/2605.00850 · Penny & Hamill 2017 BAMS · CSIR-ML6 doi 10.5194/gmd-12-5113-2019 · CANYON-B doi 10.3389/fmars.2017.00128"],
     ["Also checked", "Prithvi WxC (arxiv.org/abs/2409.13598) — atmosphere-only, no ocean downstream tasks found; NASA marine-debris work — not Prithvi-based. Earth 2 numbers quoted from paper/paper.tex (attribution matrix, probe ladder)."],
   ];
+  // every URL-looking substring (known TLDs only, so "config.json" and "paper.tex" stay text) and every "doi 10.…" becomes a clickable link
+  const linkRuns = (text, last) => {
+    const out = [];
+    const re = /((?:[a-z0-9-]+\.)+(?:org|com|int|gov|eu|uk|co|io|google|net)(?:\/[^\s(),;·]*[^\s(),;·.])?)|doi (10\.[^\s(),;·]*[^\s(),;·.])/g;
+    let pos = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > pos) out.push({ text: text.slice(pos, m.index), options: { color: INK, fontSize: 9.5 } });
+      if (m[1]) out.push({ text: m[1], options: { color: TEAL, fontSize: 9.5, hyperlink: { url: "https://" + m[1] } } });
+      else out.push({ text: m[0], options: { color: TEAL, fontSize: 9.5, hyperlink: { url: "https://doi.org/" + m[2] } } });
+      pos = m.index + m[0].length;
+    }
+    if (pos < text.length) out.push({ text: text.slice(pos), options: { color: INK, fontSize: 9.5 } });
+    out[out.length - 1].options.breakLine = !last;
+    out[out.length - 1].options.paraSpaceAfter = 6;
+    return out;
+  };
   const runs = [];
   src.forEach((r, i) => {
-    runs.push({ text: r[0] + "  ", options: { bold: true, color: TEAL, fontSize: 10.5 } });
-    runs.push({ text: r[1], options: { color: INK, fontSize: 9.5, breakLine: i < src.length - 1, paraSpaceAfter: 6 } });
+    runs.push({ text: r[0] + "  ", options: { bold: true, color: NAVY, fontSize: 10.5 } });
+    runs.push(...linkRuns(r[1], i === src.length - 1));
   });
   s.addText(runs, { x: 0.6, y: 1.55, w: 12.1, h: 5.3, fontFace: FONT_B, valign: "top", isTextBox: true, margin: 2 });
   footer(s);
 }
 
 const NOTES = require("./notes.js");
+const SOURCES = require("./sources.js");
 if (NOTES.length !== MADE.length) throw new Error(`notes.js has ${NOTES.length} entries but the deck has ${MADE.length} slides`);
+if (SOURCES.length !== MADE.length) throw new Error(`sources.js has ${SOURCES.length} entries but the deck has ${MADE.length} slides`);
 MADE.forEach((sl, i) => {
   sl._slideObjects = sl._slideObjects.filter(o => o._type !== "notes");   // drop the short technical notes
-  sl.addNotes(NOTES[i]);
+  // every note ends with its own sources, as full URLs (plain text in the notes pane; clickable on the notes pages and the Sources slide)
+  sl.addNotes(NOTES[i] + "\n\nSources for this slide:\n" + SOURCES[i].map(x => `• ${x.t} — ${x.u}`).join("\n"));
 });
 require("fs").writeFileSync("/home/claude/deck/titles.json", JSON.stringify(MADE.map(sl => ({ title: sl._deckTitle || "Geospatial representation models", sub: sl._deckSub || "" })), null, 1));
 pres.writeFile({ fileName: "/home/claude/deck/geospatial-representation-models.pptx" }).then(f => console.log("wrote", f, MADE.length, "slides"));
