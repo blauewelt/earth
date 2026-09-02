@@ -325,10 +325,10 @@ module.exports = function (ctx) {
     footer(s);
   }
 
-  // ---------------------------------------------------------------- 44b. two stencils, one cone (E-067, built 2 Sep)
+  // ---------------------------------------------------------------- 44b. two stencils, one cone (E-069, built 2 Sep)
   {
     const s = pres.addSlide(); s.background = { color: WHITE };
-    title(s, "Two stencils, one cone — the E-067 design, built", "The codec reads the inner cone of raw channels; stage 2 reads the outer cone of embeddings. Union = the dependency space; overlap = the anchor column.");
+    title(s, "Two stencils, one cone — the E-069 design, built", "The codec reads the inner cone of raw channels; stage 2 reads the outer cone of embeddings. Union = the dependency space; overlap = the anchor column.");
     // left: (lag, distance) map on log axes — inner region (codec) and outer region (stage 2)
     const px = 0.6, py = 1.6, pw = 5.6, ph = 3.9;
     s.addShape(pres.shapes.RECTANGLE, { x: px, y: py, w: pw, h: ph, fill: { color: "FBFCFD" }, line: { color: GRIDLINE, width: 0.5 } });
@@ -367,7 +367,7 @@ module.exports = function (ctx) {
       { text: "Trainer  ", options: { bold: true, color: TEAL, fontSize: 9.5 } }, { text: "window-scope pool with the E-059 self-certificate (0 violations in 4,096 anchors), train.py's metrics family (status page unchanged), a velocity probe with cur_* dropped at encode. CPU smoke on a planted shear flow unreadable from one frame: cur_u R² +0.073 (cone) vs −0.015 (snapshot) — a pipeline check, not a result.", options: { fontSize: 9.5, breakLine: true, paraSpaceAfter: 4 } },
       { text: "Not dispatched. Next: workflow wiring for r3 and the cone flags → codec run + H1 (cheap) → five-seed stage-2 arms for H2/H3 under the #516 battery with the LIM null in both embedding spaces.", options: { fontSize: 9.5, italic: true, color: MUTED } },
     ], 6.6, 1.68, 5.95, 3.75);
-    reading(s, "How much velocity goes into the embedding — the choice, and why. A displacement is resolvable once it exceeds one cell (28 km; 21 km zonally at 40° N): at pentad cadence that is 0.06 m/s per lag, so eddy advection (0.1–0.3 m/s) is resolved at lag 1 and Rossby propagation (0.03 m/s) within 6 lags; the atmosphere decorrelates in 1–2 pentads; SST memory (3–6 months) is longer than the window and is deliberately left to stage 2. Thirty days at 0.3 m/s is the shortest inner window in which every fast process has moved by a cell and the slow ones by three, without paying for a 4,000 km inner reach. The hypotheses (E-067): H1 a ridge from frozen cone-z to cur_u, cur_v with the current channels hidden beats the snapshot codec; H2 the head over cone-z beats the E-064b control at 5–30 d by more than the five-seed interval and ties at ≥ 90 d; H3 the annulus stencil matches the full cylinder. Falsifiers and predictions are written in the plan before anything runs.", 5.65);
+    reading(s, "How much velocity goes into the embedding — the choice, and why. A displacement is resolvable once it exceeds one cell (28 km; 21 km zonally at 40° N): at pentad cadence that is 0.06 m/s per lag, so eddy advection (0.1–0.3 m/s) is resolved at lag 1 and Rossby propagation (0.03 m/s) within 6 lags; the atmosphere decorrelates in 1–2 pentads; SST memory (3–6 months) is longer than the window and is deliberately left to stage 2. Thirty days at 0.3 m/s is the shortest inner window in which every fast process has moved by a cell and the slow ones by three, without paying for a 4,000 km inner reach. The hypotheses (E-069): H1 a ridge from frozen cone-z to cur_u, cur_v with the current channels hidden beats the snapshot codec; H2 the head over cone-z beats the E-064b control at 5–30 d by more than the five-seed interval and ties at ≥ 90 d; H3 the annulus stencil matches the full cylinder. Falsifiers and predictions are written in the plan before anything runs.", 5.65);
     footer(s);
   }
 

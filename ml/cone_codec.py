@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E-067 · ConeMAE — the cone-native codec (inner cone of raw channels).
+"""E-069 · ConeMAE — the cone-native codec (inner cone of raw channels).
 
 A sibling of `ml/model.py::PixelMAE`, NOT a modification of it: every archived
 checkpoint must stay bit-identical (ml/CLAUDE.md §1, the recipe rule), and the
@@ -52,7 +52,7 @@ padding, and its contents can therefore never reach `z`. One mechanism, and
 `torch.equal` on z — a test that would be vacuous if the token construction
 also zeroed it (two mechanisms, either one masking a bug in the other).
 
-Plan: ml/plans/E067_cone_codec.md §3.
+Plan: ml/plans/E069_cone_codec.md §3.
 """
 import math
 import os
@@ -377,7 +377,7 @@ class ConeMAE(nn.Module):
         decoder could read everything it needs from the latents and let the
         bottleneck carry nothing, and H1's velocity probe (a ridge from `z`
         alone) would then measure noise while every loss curve looked healthy.
-        That is the E-067 experiment voiding itself silently.
+        That is the E-069 experiment voiding itself silently.
 
         So the training loss is `nll(decode_from_z) + aux_w * nll(decode)`:
         the gradient that MUST be satisfied goes through the bottleneck, and

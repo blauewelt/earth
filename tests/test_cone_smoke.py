@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E-067 · the cone codec and its trainer, exercised end to end on a toy.
+"""E-069 · the cone codec and its trainer, exercised end to end on a toy.
 
 Three checks, in the order ml/CLAUDE.md §4.8 puts them: the model runs, the
 model's INVARIANTS hold with exact expected values (§4.9 — prefer an exact

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E-067 · gather the inner cone's raw values for a batch of anchors.
+"""E-069 · gather the inner cone's raw values for a batch of anchors.
 
 `ml/cone.py` says WHICH (lag, dy, dx) each channel reads; this file reads them
 out of the tensor. It is the loader half of the cone codec, and it is the part
@@ -26,7 +26,7 @@ Pool discipline (`admissible` / `certify`) generalises c25f6ff's
 anchor is a training anchor only if every bin its cone touches — L_in pentads
 back and every future target forward — is a training bin.
 
-Pure numpy; no torch. Plan: ml/plans/E067_cone_codec.md section 3.
+Pure numpy; no torch. Plan: ml/plans/E069_cone_codec.md section 3.
 """
 import os
 import sys

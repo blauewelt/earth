@@ -1063,12 +1063,12 @@ modelSlide(0, "Proposed arm: a TESSERA-style pixel-year codec", "Fold the year, 
   "The honest framing: the 1×1 spatial control I suggested in the first draft already exists in the paper (attribution matrix). What TESSERA genuinely adds is the temporal fold — a year of one pixel into one vector — plus a non-reconstructive objective and int8 quantisation-aware training (the paper's own 8-level input-alphabet finding points the same way). Arm A is cheap because the token budget matches the month-block codec; Arm B reuses the encoder. Both are ablations of the stage-1 codec and leave stage 2 untouched.",
   10.5
 );
-{ // 2 Sep: superseded by the cone-native codec (E-067) — the banner says so on the slide itself
+{ // 2 Sep: superseded by the cone-native codec (E-069) — the banner says so on the slide itself
   const s = MADE[MADE.length - 1];
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 5.75, y: 6.2, w: 6.95, h: 0.78, fill: { color: "FFF1F1" }, line: { color: "A23B3B", width: 1.5 }, rectRadius: 0.08 });
   s.addText([
     { text: "SUPERSEDED (2 Sep 2026).  ", options: { bold: true, color: "A23B3B", fontSize: 10 } },
-    { text: "The pixel-year arm is the special case of the cone-native codec with zero spatial reach and a 72-pentad inner window (r_in = 0, L_in = 72). Slides 40–44 and E-067 replace it: the inner cone carries the temporal fold AND the near field, and the '28 km' here is only the ¼° cell (27.8 km at the equator, 21 km at 40° N), not a physical scale.", options: { color: INK, fontSize: 9 } },
+    { text: "The pixel-year arm is the special case of the cone-native codec with zero spatial reach and a 72-pentad inner window (r_in = 0, L_in = 72). Slides 40–44 and E-069 replace it: the inner cone carries the temporal fold AND the near field, and the '28 km' here is only the ¼° cell (27.8 km at the equator, 21 km at 40° N), not a physical scale.", options: { color: INK, fontSize: 9 } },
   ], { x: 5.9, y: 6.24, w: 6.65, h: 0.7, fontFace: FONT_B, valign: "top", isTextBox: true, margin: 0 });
 }
 

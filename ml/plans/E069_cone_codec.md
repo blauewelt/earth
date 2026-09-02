@@ -1,4 +1,4 @@
-# E-067 · Two stencils, one cone: the cone-native codec (ocean physics first)
+# E-069 · Two stencils, one cone: the cone-native codec (ocean physics first)
 
 **Status: BUILT (code + tests, 2 Sep 2026 — 42 tests green, CPU smoke end-to-end), NOT DISPATCHED.** Registered by
 Chris's ask of 2 Sep 2026 (*"implement the first version of this. Start by
@@ -12,7 +12,7 @@ carry the full argument; this plan is the executable half.
 > **TL;DR.** Today the codec sees one pixel-bin (3 × 3, one pentad) and stage 2
 > sees a cylinder of embeddings (145-point spiral × 144 pentads). Nothing that
 > needs *two snapshots* — velocity, tendency, convergence — can be encoded by
-> the codec, so stage 2 has to rebuild it from compressed codes. E-067 splits
+> the codec, so stage 2 has to rebuild it from compressed codes. E-069 splits
 > the dependency cone in two by physics: an **inner cone** of raw channels
 > (lags 0–6 pentads, reach set per channel family) goes *into* the codec, so
 > the embedding carries local motion; an **outer cone** (lags 0–144, reach
@@ -26,7 +26,7 @@ carry the full argument; this plan is the executable half.
 
 ## 0 · Structured header (§0d)
 
-`E-067 · cone-native codec (inner cone of raw channels, lags 0–6 pentads) +
+`E-069 · cone-native codec (inner cone of raw channels, lags 0–6 pentads) +
 stage-2 head on the outer cone · params codec 7.05M at 42 channels (Perceiver,
 64 latents × 256 wide × 6 blocks; `ConeMAE.param_count()`) + head 7.6M (256×8, K 144) · stage encoder then stage-2
 · data family4_na025_pentad_r3 (r2 + cur_u, cur_v) · arch inner cone A/B/C

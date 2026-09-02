@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""E-067 · the dependency cone as geometry: which (lag, dy, dx) an anchor reads.
+"""E-069 · the dependency cone as geometry: which (lag, dy, dx) an anchor reads.
 
 A pixel's future depends on a CONE in space-time: a driver moving at speed v
 reaches the anchor from within dx <= v*(dt + l) after l pentads, and only lags
 inside that driver's memory tau are worth reading. Reach is floored by a
 correlation length L_corr — below it the field is one number, not a gradient.
 
-E-067 splits that cone in two by physics. The INNER cone (lags 0..6, reach per
+E-069 splits that cone in two by physics. The INNER cone (lags 0..6, reach per
 channel family) goes into the CODEC as raw values, so the embedding can carry
 local motion — velocity needs two snapshots and a 3x3 patch of one pentad
 cannot hold it. The OUTER cone (lags 0..143, reach growing with lag, minus the
@@ -16,7 +16,7 @@ union is the whole family-B cone, their overlap is the anchor column, and
 
 The speeds are the survey deck's ORDER-OF-MAGNITUDE values, deliberately
 generous, not fitted: 10 m/s for wind stress, 0.3 m/s for the eddy and
-boundary-current field. Pure numpy. Plan: ml/plans/E067_cone_codec.md.
+boundary-current field. Pure numpy. Plan: ml/plans/E069_cone_codec.md.
 """
 import ast
 import math

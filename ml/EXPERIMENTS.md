@@ -44,12 +44,12 @@ low-pass).
 
 ---
 
-<a id="e-067"></a>
-## E-067 · Two stencils, one cone — the cone-native codec, ocean physics first — BUILT 2026-09-02, NOT DISPATCHED (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")
+<a id="e-069"></a>
+## E-069 · Two stencils, one cone — the cone-native codec, ocean physics first — BUILT 2026-09-02, NOT DISPATCHED (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")
 
 TL;DR — the codec sees one pixel-bin and stage 2 a cylinder of embeddings, so
 nothing that needs two snapshots (velocity, tendency, convergence) can live in
-the embedding; stage 2 rebuilds it from compressed codes. E-067 splits the
+the embedding; stage 2 rebuilds it from compressed codes. E-069 splits the
 dependency cone by physics: an INNER cone of raw channels (lags 0–6 pentads,
 reach per channel family — B: 129.6 … 907.2 km at 0.3 m/s; A: 500 km at lags
 0–1 only; C: the L-shape) goes into the codec; the OUTER cone (lags 7–143, the
@@ -59,7 +59,7 @@ spiral is empty for k ≤ 6 by construction. The question is whether velocity in
 the embedding buys rolled skill at 5–30 days — the leads where the learned head
 still beats the LIM (E-066) — beyond the seed interval.
 
-**E-067 · cone-native codec + 7.6M stage-2 head on the outer cone · params codec
+**E-069 · cone-native codec + 7.6M stage-2 head on the outer cone · params codec
 7.05M at 42 channels (Perceiver: 64 latents × 256 × 6 blocks, d_z 32) + head 7.6M
 (256×8, K 144) · stage encoder then stage-2 · data family4_na025_pentad_r3 (r2 +
 `cur_u`, `cur_v` at indices 40, 41 — the binned GLORYS components `cur_speed` is
@@ -104,7 +104,7 @@ Before a box can run it: `ml-train.yml` does not know `family4_na025_pentad_r3`
 sha once built), and `train_cone.py`'s flags have no `$RECIPE_<KEY>` yet; the
 annulus arm (H3) needs a lag-dependent stencil in `temporal.py`. Cost estimate
 ≈ 40–50 box-hours, $15–25. Plan:
-[E-067](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E067_cone_codec.md).
+[E-069](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_cone_codec.md).
 
 ---
 

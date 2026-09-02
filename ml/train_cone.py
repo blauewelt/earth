@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E-067 · train the cone-native codec (ml/cone_codec.py::ConeMAE).
+"""E-069 · train the cone-native codec (ml/cone_codec.py::ConeMAE).
 
 `ml/train.py` trains PixelMAE over one pixel-bin; this trains ConeMAE over the
 INNER CONE — the anchor's 3x3 patch at lag 0 plus, per channel, a sunflower of
@@ -37,7 +37,7 @@ it checks proves only that the expression is self-consistent.
     python3 ml/train_cone.py --tensor ml/cache/family4_na025_pentad_r3.npz \\
         --steps 20000 --batch 256 --velocity-probe --out ml/runs/cone
 
-Plan: ml/plans/E067_cone_codec.md §§3, 5.
+Plan: ml/plans/E069_cone_codec.md §§3, 5.
 """
 import argparse
 import json
@@ -440,7 +440,7 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
             f"[{tag}] POOL VIOLATION: {bad} of {len(cert)} training anchors "
             f"read a bin outside the training set. Refusing to train — a "
             f"codec trained on a leaked holdout cannot be evaluated on it "
-            f"(ml/plans/E067_cone_codec.md §3, 'pool discipline').")
+            f"(ml/plans/E069_cone_codec.md §3, 'pool discipline').")
 
     model = ConeMAE(C, d_model=a.d_model, n_heads=a.n_heads,
                     n_latents=a.n_latents, n_layers=a.n_layers, d_z=a.d_z,

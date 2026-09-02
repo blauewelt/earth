@@ -1,6 +1,6 @@
-# E-067 · the cone's geometry and its sampler, pinned to exact numbers.
+# E-069 · the cone's geometry and its sampler, pinned to exact numbers.
 #
-# ml/plans/E067_cone_codec.md section 2 defines two stencils whose UNION is the
+# ml/plans/E069_cone_codec.md section 2 defines two stencils whose UNION is the
 # family-B dependency cone and whose OVERLAP is the anchor column. Both are
 # arithmetic, so both are testable without a GPU, a tensor or a checkpoint —
 # and they have to be, because a stencil that quietly stops covering a driver

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""E-067 step 2: recipe r3 of build_family4.py — r2 plus `cur_u`, `cur_v`.
+"""E-069 step 2: recipe r3 of build_family4.py — r2 plus `cur_u`, `cur_v`.
 
 E-042 appended `sst` as channel 40 and made its safety argument in one
 sentence: channels 0..38 keep the indices every published result was measured
 at, so an r1 result and an r2 result stay comparable. r3 appends the two
-GLORYS12 current COMPONENTS after it (E-067 §4, the cone codec needs the
+GLORYS12 current COMPONENTS after it (E-069 §4, the cone codec needs the
 DIRECTION of local advection, and a magnitude cannot supply one), and it owes
 the same argument one rung up. So this file checks exactly three things, and
 they are the three the plan can be wrong about:
@@ -29,7 +29,7 @@ they are the three the plan can be wrong about:
      channels 0..39 equal the r2 tensor's float16 for float16, NaN pattern
      included, and so do `norm[:40]`, the axis, the months and the labels.
      Appending cannot perturb an existing channel; that is the whole reason
-     the E-067 arm can be read against an r2 control at all.
+     the E-069 arm can be read against an r2 control at all.
 
 Plus two guards that cost nothing: an r2 cache is REFUSED for an r3 build (a
 recipe string is a claim about the CODE, and a 40-channel tensor under r3's
@@ -42,7 +42,7 @@ one synthetic pentad aggregation, one RG pair, one wind year, one SST
 artifact. A second copy of them would be a second definition of what the
 builder reads.
 
-    python3 -m pytest -q tests/test_e067_family4_r3.py
+    python3 -m pytest -q tests/test_e069_family4_r3.py
 """
 import contextlib
 import io
@@ -297,8 +297,8 @@ def test_the_recipe_file_names_the_builder_s_own_stem():
         f"recipe says {d['tensor']!r}, builder writes {stem}.npz"
     assert d["head_probe"] == "true"          # ml/CLAUDE.md §3
     assert d["_description"].startswith(
-        "E-067 cone-native codec on family4 r3 (r2 + cur_u, cur_v)")
-    assert d["_provenance"].startswith("E-067 plan, 2026-09-02, not yet measured")
+        "E-069 cone-native codec on family4 r3 (r2 + cur_u, cur_v)")
+    assert d["_provenance"].startswith("E-069 plan, 2026-09-02, not yet measured")
     # every key is a real ml-train.yml input or a declared recipe-only key,
     # and is consumed as $RECIPE_<KEY> — the resolver is the authority, so
     # run it rather than restating its rules.
