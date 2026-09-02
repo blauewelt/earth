@@ -522,6 +522,42 @@ def corridor_pixels(Xm, ocean, ys, xs, t_hold, sec_sel, pctl, dilate):
     return cp, thr
 
 
+def gate_subset(P, n_pixels, sec_sel):
+    """Bool [P]: rollout.py's EXACT gate subset — `default_rng(0).choice(P, n)`
+    unioned with the RAPID section.
+
+    Lifted verbatim out of `main()` (2026-09-02) so a second scorer can build
+    the same scope without copying the seed, the union or the `min(n, P)`
+    clamp. Two spellings of "the #217 subset" would be two chances to disagree
+    about which pixels the gate compares, and the gate is the certificate that
+    makes every other number in this file readable (§3, exception 1).
+    """
+    rng = np.random.default_rng(0)
+    keep = np.union1d(rng.choice(P, min(int(n_pixels), P), replace=False),
+                      sec_sel)
+    m = np.zeros(P, bool)
+    m[keep] = True
+    return m
+
+
+def nested_scopes(base_scopes, px_hold):
+    """The nine `(name, mask)` pairs a roll is scored over: every base scope
+    plus its `_trainlon` / `_holdlon` children.
+
+    Lifted verbatim out of `main()` (2026-09-02) for the same reason as
+    `gate_subset` above: `ml/lim_baseline.py` scores the classical baseline
+    through this file's own battery, and a scope list assembled twice is a
+    scope list that can drift. `px_hold` is `x_hold[xs]` — the [P] boolean
+    saying which window pixels sit in the never-trained longitude block.
+    """
+    sel_train_x = ~px_hold
+    sel_hold_x = px_hold
+    return tuple(sc for name, m_ in base_scopes
+                 for sc in ((name, m_),
+                            (name + "_trainlon", m_ & sel_train_x),
+                            (name + "_holdlon", m_ & sel_hold_x)))
+
+
 def export_mask(path, lats, lons, ocean, ys, xs, corridor, gate_mask,
                 sec_sel, sec_y, corridor_def, months, x_name, holdout_lon):
     """Write the eval's OWN pixel sets as a baked categorical grid the globe
@@ -2097,11 +2133,7 @@ def main():
     # ---- the three scopes -------------------------------------------------
     corridor, cor_thr = corridor_pixels(Xm, ocean, ys, xs, t_hold, sec_sel,
                                         a.corridor_pctl, a.corridor_dilate)
-    rng = np.random.default_rng(0)               # rollout.py's exact subset
-    keep = np.union1d(rng.choice(P, min(a.pixels_gate, P), replace=False),
-                      sec_sel)
-    gate_mask = np.zeros(P, bool)
-    gate_mask[keep] = True
+    gate_mask = gate_subset(P, a.pixels_gate, sec_sel)
     sec_mask = np.zeros(P, bool)
     sec_mask[sec_sel] = True
     base_scopes = (("gate", gate_mask), ("corridor", corridor),
@@ -2126,15 +2158,10 @@ def main():
     # a [T,P,C] block; accumulate() here takes a boolean mask over P, so the
     # same partition is carried as booleans. Same rule, same names.
     px_hold = x_hold[xs]                          # [P]
-    sel_train_x = ~px_hold
-    sel_hold_x = px_hold
     # Scoring cost: the two children PARTITION their parent, so the masked
     # pixel work per horizon doubles (parent + its two halves), it does not
     # triple. Cheap next to a roll step.
-    scopes = tuple(sc for name, m_ in base_scopes
-                   for sc in ((name, m_),
-                              (name + "_trainlon", m_ & sel_train_x),
-                              (name + "_holdlon", m_ & sel_hold_x)))
+    scopes = nested_scopes(base_scopes, px_hold)
     corridor_def = {"pctl": a.corridor_pctl, "threshold": round(cor_thr, 4),
                     "dilate_cells": a.corridor_dilate,
                     "structuring": "3x3 square",

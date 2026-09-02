@@ -251,6 +251,21 @@ case "${WINDOW}" in
     bash scripts/sroll_run.sh "${WINDOW}"
     exit 0
     ;;
+  lim:*)
+    # THE CLASSICAL BASELINE — a Linear Inverse Model fitted on the
+    # tensor's own training bins and scored through the IDENTICAL
+    # battery sroll scores the heads with, so the paper can put a
+    # LIM row beside a head's per-lead numbers. Writes the same
+    # ml/runs/actions/rollout_spatial.json archive_probes.py already
+    # picks up, with one `heads` entry per K named `lim_k<K>`.
+    #
+    # CPU only: no embedding, no Z pull, no head weights, no GPU.
+    # It needs the tensor and a codec .pt for its ARGS alone
+    # (holdout_years / holdout_lon / chan). Body in
+    # scripts/lim_run.sh — same 21,000-char ceiling as above.
+    bash scripts/lim_run.sh "${WINDOW}"
+    exit 0
+    ;;
 esac
 # GUARDED, like every probe below it. These are independent
 # measurements: one failing is a missing number, not a reason to

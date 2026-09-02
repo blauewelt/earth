@@ -68,7 +68,10 @@ const n = (v) => (v === undefined || v === null || v === "" ? NaN : Number(v));
 // around this check by publishing its plan by hand).
 const isEval = String(inputs.temporal_steps ?? "") === "0"
   && String(inputs.window ?? "").split(",")
-       .some((tok) => tok.startsWith("sroll:"));
+       .some((tok) => tok.startsWith("sroll:") || tok.startsWith("lim:"));
+// `lim:` (2026-09-02) is the same kind of run as `sroll:` — an eval that
+// trains nothing, scored through the identical battery — so it takes the
+// same {"eval": true} plan. `plan.heads` names the LIM entries (`lim_k<K>`).
 // A DATA BUILD is a third kind, and the same lesson one level along: family 6
 // is an unlabelled pretraining corpus, so the job builds a tensor and stops —
 // the Train and Probes steps skip it. Demanding an LR curve from a run with
