@@ -203,8 +203,34 @@ parent. #530 is not relaunched a third time: it runs on a box that was
 through `Persistent data cache` 1 min 40 s after pickup, with the tensor
 cached, and overtakes where #525 was within ~3 h at #526's pace. The Poland
 box 49633425 was STOPPED (not destroyed — its tensor cache is worth the
-storage fee if a third parent is ever needed). E-065a's clock restarts at
-15:03Z; ~14 h at #526's pace ⇒ ~05:30Z 09-03 plus the probe ladder.
+storage fee if a third parent is ever needed).
+
+**#530 DIED AT 15:06:28Z, ONE MINUTE INTO `Train`, ON A FULL DISK — #518's
+death, one box over.** Hygiene read `30 GB free, want 16 GB` and exited
+"nothing more to do"; the Train step then wrote the 31.6 GiB anomaly-transform
+scratch copy of the tensor, filled the disk at `writable_copy 2624/3142`, and
+died with `Bus error` (exit 135; the runner itself then failed to write its
+own log: `No space left on device`). The 16 GB early-exit is sized for the Z
+pull, not for the scratch copy — the same §5.18 mis-sizing the #518 fix
+addressed only for a STALE scratch (tier −1 frees a prior run's copy; it does
+nothing when the box simply has 30 GB and the run needs 34). The Germany
+box's 57 GB persistent cache held the token Z (3.3 GB), `run-415.pt`, the
+4.5 GB tensor chunks, five checkpoint mirrors (2.3 GB) and ~12 GB of build
+inputs (`rg/`, `wind_daily/`, `truth/`) that are skipped entirely when the
+pinned tensor is present — all re-pullable, none needed. They were removed
+from outside a job (Vast execute API on the stopped box, one `rm` per call —
+the API refuses compound commands and `df`), leaving `X.npy` (34.0 GB),
+`base025_na.npz`, `std_stats.npz` and two checkpoint mirrors ⇒ ~51 GB free,
+34 GB for the scratch after the 4.5 GB chunk re-pull. **RE-DISPATCHED AS #531
+(E-065a, identical inputs) at 15:1xZ on the same box.** Fix owed to
+`scripts/disk_hygiene.sh`: when the run will write a scratch copy, `want` must
+be the tensor's own size plus headroom, not 16 GB (§5.18: size a guard from
+the allocation it guards) — and the 12 GB of build inputs should be tier 0
+whenever the pinned tensor is present. Cost of #530: 3 min of box time, plus
+the relaunch it now is (the third dispatch of this parent). E-065a's clock
+restarts at ~15:20Z; ~14 h at #526's pace ⇒ ~06:00Z 09-03 plus the probe
+ladder — and PAST the box's 24 h token by nothing, but the probe ladder tail
+sits near the edge: harvest by hand if the archive step is silent.
 
 <a id="e-064"></a>
 ## E-064 · The 16-bit token as a forecasting substrate, under the clean pool — DISPATCHED #521 (E-064a, token) and #522 (E-064b, continuous twin), 2026-09-02 09:46Z (Chris: "can you run FSQ and add those results?")
