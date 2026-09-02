@@ -1,0 +1,138 @@
+{
+ "run_number": 521,
+ "files": {
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.428,
+     "r_deseasonalised": 0.484,
+     "n_test": 219
+    },
+    {
+     "K": 3,
+     "r_raw": 0.45,
+     "r_deseasonalised": 0.479,
+     "n_test": 219
+    },
+    {
+     "K": 6,
+     "r_raw": 0.411,
+     "r_deseasonalised": 0.423,
+     "n_test": 219
+    },
+    {
+     "K": 12,
+     "r_raw": 0.364,
+     "r_deseasonalised": 0.416,
+     "n_test": 219
+    },
+    {
+     "K": 24,
+     "r_raw": 0.364,
+     "r_deseasonalised": 0.37,
+     "n_test": 219
+    }
+   ],
+   "seasonal_floor_raw": 0.19,
+   "seasonal_floor_deseas": -0.043
+  },
+  "provenance.json": {
+   "run_number": 521,
+   "sha": "6c155803524318aad0b15f8decb509516ad8aac8",
+   "code": "https://github.com/blauewelt/earth/tree/6c155803524318aad0b15f8decb509516ad8aac8",
+   "inputs": {
+    "doc": "E-064a \u00b7 stage-2 head on the 16-bit FSQ token under the CLEAN pool (--holdout-scope window): the 7.6M small-tier head trained on the E-050 warm-quantized codec's token Z, dose-matched z-noise 0.12 (= 0.7 x 0.15116/0.87878, the #507 arithmetic; the monitor must read input_znoise_rel_pers ~0.15). Pre-registered reading: held-out one-step z-MSE/persistence, its MINIMUM over the curve (and step) and the value at 20k, against E-064b (same head on the continuous d_z-32 z, next on this box) and E-060a (JAX: 0.6095@1200, 0.692@20k). Within 0.02 of the continuous twin = the token is a competitive substrate at 5% of the state size; worse by more = quantization lost forecastable signal. Milestones 1000-3000 keep the early held-out minimum as a rollable torch checkpoint. First token arm since the pool fix; E-056a's 0.539/0.510 were endpoint-pool and are retired. \u00b7 params 7.598M head (256x8) over frozen run-485 (37.956M, nothing trains) \u00b7 stage stage-2 \u00b7 data family4_na025_pentad_r2 \u00b7 arch 256x8 K 144 stencil 145 ring spiral:111-4444-0.71-0.5, d_z 6 FSQ [8,8,8,5,5,5] ln-bound, znoise 0.12, grad-clip 128, seed 0 \u00b7 steps x batch 20k x 256 \u00b7 resume run-485@260k (release); Z Z_867532fe7b_37e146384b from embed-cache-v1. Plan ml/plans/E064_token_substrate_clean.md.",
+    "steps": "260000",
+    "batch": "512",
+    "d_z": "6",
+    "anomaly": "true",
+    "temporal_steps": "20000",
+    "temporal_d_model": "256",
+    "temporal_layers": "8",
+    "eval_every": "0",
+    "resume": "!run-485",
+    "head_probe": "false",
+    "light_probe_every": "0",
+    "window": "recipe:f4r2-40M-dz6-fsq65k,stencil:145,ring:spiral:111-4444-0.71-0.5,seed:0,sched:expdecay --lr-cooldown-frac 0 --milestone-steps 1000,1200,1400,1600,2000,3000 --input-znoise 0.12 --grad-clip 128 --K 144 --holdout-scope window",
+    "tensor": "family4_na025_pentad_r2",
+    "sst_channel": "false",
+    "patch": "1",
+    "max_minutes": "0",
+    "runner": "gpu-box-48647862",
+    "job_timeout": "600",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "512",
+    "codec_layers": "12",
+    "codec_heads": "4",
+    "codec_d_dec": "256"
+   },
+   "tensor": {
+    "file": "ml/cache/family4_na025_pentad_r2.npz",
+    "sha256": "37e146384b6f622fefe3c7e18ad9bab0389c9538be79536899fe8729bb2d0826",
+    "bytes": 4515270439,
+    "X_shape": [
+     3142,
+     281,
+     481,
+     40
+    ],
+    "C": 40,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std",
+     "sst"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "months_are_calendar": true,
+    "T": 3142
+   },
+   "torch": "2.14.0+cu126",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-48647862"
+  }
+ }
+}
