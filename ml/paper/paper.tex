@@ -50,7 +50,11 @@ $-0.44$ against climatology) because it emits anomalies at 78\% amplitude at
 10\% correlation --- an identity reproduces all 73 leads to $0.0135$, and the
 same states rescaled would score $\approx +0.02$. Skill that survives past a
 few pentads lives in sea-surface temperature; 32 of 40 channels score nothing
-at any lead. Transport at $26.5^\circ$N shows no measurable skill at roughly
+at any lead. A 200-mode linear inverse model fitted to the same field and
+rolled from the same starts is less correlated than the head at five and ten
+days and more correlated at every lead from fifteen days to a year ($0.26$
+at 90 days, $0.18$ at 365), with a squared-error score that stays positive
+throughout. Transport at $26.5^\circ$N shows no measurable skill at roughly
 nine effective starts. Every rolled number is a single seed.
 \end{abstract}
 
@@ -261,27 +265,32 @@ per-pixel AR(1) decay toward climatology, fitted on training years, is a
 better forecast of this field than the transformer at every horizon.
 
 \begin{table}[t]
-\centering\small
-\begin{tabular}{rrrrrr}
+\centering\small\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{r rrrrr rrr}
 \toprule
-lead (days) & $\mathrm{MSSS}_{\text{clim}}$ & $\mathrm{MSSS}_{\text{pers}}$ & $\mathrm{MSSS}_{\text{damped}}$ & ACC & $a$ \\
+ & \multicolumn{5}{c}{206.659M head} & \multicolumn{3}{c}{LIM, 200 modes} \\
+\cmidrule(lr){2-6}\cmidrule(lr){7-9}
+lead (days) & $\mathrm{MSSS}_{\text{clim}}$ & $\mathrm{MSSS}_{\text{pers}}$ & $\mathrm{MSSS}_{\text{damped}}$ & ACC & $a$ & $\mathrm{MSSS}_{\text{clim}}$ & $\mathrm{MSSS}_{\text{damped}}$ & ACC \\
 \midrule
-5 & $+0.365$ & $+0.194$ & $-0.011$ & $0.606$ & $0.692$ \\
-10 & $+0.109$ & $+0.252$ & $-0.131$ & $0.412$ & $0.673$ \\
-15 & $-0.172$ & $+0.178$ & $-0.354$ & $0.265$ & $0.761$ \\
-30 & $-0.168$ & $+0.252$ & $-0.244$ & $0.204$ & $0.672$ \\
-60 & $-0.320$ & $+0.201$ & $-0.342$ & $0.107$ & $0.690$ \\
-90 & $-0.322$ & $+0.211$ & $-0.333$ & $0.132$ & $0.725$ \\
-180 & $-0.354$ & $+0.337$ & $-0.357$ & $0.153$ & $0.778$ \\
-270 & $-0.479$ & $+0.227$ & $-0.479$ & $0.009$ & $0.720$ \\
-365 & $-0.719$ & $-0.101$ & $-0.719$ & $-0.031$ & $0.822$ \\
+5 & $+0.365$ & $+0.194$ & $-0.011$ & $0.606$ & $0.692$ & $+0.169$ & $-0.323$ & $0.406$ \\
+10 & $+0.109$ & $+0.252$ & $-0.131$ & $0.412$ & $0.673$ & $+0.135$ & $-0.097$ & $0.361$ \\
+15 & $-0.172$ & $+0.178$ & $-0.354$ & $0.265$ & $0.761$ & $+0.106$ & $-0.034$ & $0.324$ \\
+30 & $-0.168$ & $+0.252$ & $-0.244$ & $0.204$ & $0.672$ & $+0.069$ & $+0.008$ & $0.258$ \\
+60 & $-0.320$ & $+0.201$ & $-0.342$ & $0.107$ & $0.690$ & $+0.056$ & $+0.040$ & $0.227$ \\
+90 & $-0.322$ & $+0.211$ & $-0.333$ & $0.132$ & $0.725$ & $+0.075$ & $+0.067$ & $0.261$ \\
+180 & $-0.354$ & $+0.337$ & $-0.357$ & $0.153$ & $0.778$ & $+0.053$ & $+0.051$ & $0.223$ \\
+270 & $-0.479$ & $+0.227$ & $-0.479$ & $0.009$ & $0.720$ & $+0.034$ & $+0.034$ & $0.191$ \\
+365 & $-0.719$ & $-0.101$ & $-0.719$ & $-0.031$ & $0.822$ & $+0.019$ & $+0.019$ & $0.177$ \\
 \midrule
-mean of 73 leads & $-0.439$ & $+0.204$ & $-0.461$ & $0.105$ & $0.780$ \\
+mean of 73 leads & $-0.439$ & $+0.204$ & $-0.461$ & $0.105$ & $0.780$ & $+0.054$ & $+0.034$ & $0.225$ \\
 \bottomrule
 \end{tabular}
-\caption{The 206.659M head rolled from nine held-out starts, corridor scope.
-Gate and window scopes: mean $\mathrm{MSSS}_{\text{clim}}$ $-0.395$ and
-$-0.401$, mean ACC $0.131$ and $0.121$. Single seed.\label{tab:roll}}
+\caption{The 206.659M head and the 200-mode linear inverse model, rolled
+from the same nine held-out starts, corridor scope. Head, gate and window
+scopes: mean $\mathrm{MSSS}_{\text{clim}}$ $-0.395$ and $-0.401$, mean ACC
+$0.131$ and $0.121$; LIM: $+0.061$ and $+0.053$, $0.253$ and $0.233$. The
+LIM's amplitude ratio falls from $0.48$ at five days to $0.06$ at a year.
+Single seed for the head.\label{tab:roll}}
 \end{table}
 
 \begin{figure}[t]
@@ -295,18 +304,45 @@ Argo channels have no scored samples at any lead.\label{fig:roll}}
 correlation ACC and amplitude ratio $a$ against a zero-anomaly reference,
 $\mathrm{MSSS}_{\text{clim}} = 1 - (1 + a^2 - 2a\,\mathrm{ACC})$ identically.
 From the head's own per-lead ACC and $a$ this reproduces the 73 measured
-values to a mean absolute error of $0.0135$ (Figure~\ref{fig:calibration}).
+values to a mean absolute error of $0.0135$ (Figure~\ref{fig:lim}).
 The head emits anomalies at $a\approx0.78$ while its correlation is $0.1$;
 rescaled to $a=\mathrm{ACC}$ the same states would score $\mathrm{ACC}^2$ per
 lead, a corridor mean of about $+0.02$. Whether a calibration fitted on
 training-year starts transfers to held-out starts is untested.
 
 \begin{figure}[t]
-\centering\includegraphics[width=0.68\linewidth]{fig_calibration.pdf}
-\caption{Measured corridor $\mathrm{MSSS}_{\text{clim}}$ per lead, the value
-the identity predicts from the head's own ACC and $a$, and the value the same
-states would score at $a=\mathrm{ACC}$.\label{fig:calibration}}
+\centering\includegraphics[width=\linewidth]{fig_lim.pdf}
+\caption{Left: corridor anomaly correlation per lead for the 206.659M head
+and linear inverse models with 50, 100 and 200 modes, from the same starts.
+Right: the head's measured $\mathrm{MSSS}_{\text{clim}}$, the value the
+identity predicts from its own ACC and $a$, the value the same states would
+score at $a=\mathrm{ACC}$, and the 200-mode LIM.\label{fig:lim}}
 \end{figure}
+
+\paragraph{A linear inverse model.} A linear inverse model fitted to the
+same standardised anomaly field --- the eight scoreable channels over the
+window's 86{,}698 ocean pixels, reduced by PCA to $K$ modes, with the
+propagator $\mathbf{G}(\tau)=\mathbf{C}(\tau)\mathbf{C}(0)^{-1}$ estimated at
+$\tau$ of one pentad from consecutive training bins only --- is rolled from
+the same nine starts and scored through the same battery
+(Table~\ref{tab:roll}, Figure~\ref{fig:lim}). At 200 modes (76\% of the
+training variance; spectral radius $0.986$, leading e-folding time 360 days)
+its corridor correlation is $0.41$ at five days, $0.26$ at 90 and $0.18$ at
+365; its amplitude falls with lead in step with its correlation, so
+$\mathrm{MSSS}_{\text{clim}}$ stays positive at every lead ($+0.17$ at five
+days, mean $+0.054$). The head's correlation exceeds the LIM's at five and ten
+days only; from fifteen days on the LIM is more correlated with the truth at
+every lead, and its mean squared-error score is above both the head's
+measured value and the head's amplitude-calibrated value ($+0.019$). Against
+damped persistence the LIM loses at leads up to 15 days and wins by
+$0.01$--$0.07$ from 30 days out; the head loses at every lead. Fifty and 100
+modes score below 200 at every lead (mean correlation $0.200$, $0.209$,
+$0.225$). Per channel, the LIM holds sea-surface temperature at $0.48$,
+$0.41$, $0.33$ and $0.28$ at 5, 30, 90 and 365 days against the head's
+$0.76$, $0.34$, $0.34$ and $0.10$, and sea-surface height at $0.57$, $0.36$,
+$0.30$, $0.30$ against $0.84$, $0.25$, $0.11$, $-0.06$. The LIM's training
+set is every bin outside a held-out year (2{,}923 bins, 2{,}919 pairs),
+which is slightly larger than the pool the head's 144-bin windows admit.
 
 \paragraph{Per channel.} Only eight of the forty channels are scoreable.
 Sea-surface temperature holds correlation longest ($0.76$ at five days,
@@ -363,14 +399,18 @@ For the current-state transport read-out the codec is at parity with the raw
 fields it compresses; its value, if any, is as a substrate that a
 transformer can attend over and roll forward, and on that use the transformer
 has learned what it learns inside two thousand steps at any width, forecasts
-sea-surface temperature and height for days to weeks, and does not beat a
-damped-persistence null at any lead. The next measurements are the ones
-that bound this from both sides: classical predictors (retrieval, a linear
-inverse model on the leading EOFs, in field space and in embedding space)
-through the identical battery, with block-bootstrap intervals; the
-early-stopped checkpoint and the 7.6M head rolled against the end state
-shown here; amplitude calibration fitted on training-year starts; and a codec
-trained on $\le 2020$ so that a terminal 2021--2024 test can be run once.
+sea-surface temperature and height for days to weeks, does not beat a
+damped-persistence null at any lead, and is out-forecast beyond ten days by
+a linear inverse model with 200 modes fitted to the same field. The linear
+model is therefore the reference against which any further change to the
+forecaster is scored: what a learned model adds at leads of one to two
+pentads, and whether any change beats the linear model at three. The next
+measurements are the ones that bound this further: a retrieval baseline and
+a linear inverse model in embedding space through the identical battery,
+with block-bootstrap intervals; the early-stopped checkpoint and the 7.6M
+and 40.4M heads rolled against the end state shown here; amplitude
+calibration fitted on training-year starts; and a codec trained on
+$\le 2020$ so that a terminal 2021--2024 test can be run once.
 
 \appendix
 \section{Data and code availability}\label{app:avail}
@@ -380,7 +420,7 @@ Code: \url{https://github.com/blauewelt/earth} (codec trainer
 \path{ml/train.py}, stage-2 trainer \path{ml/temporal.py} and its JAX
 port \path{ml/jaxport/}, evaluator \path{ml/rollout_spatial.py}). Result
 bundles are on the repository's \path{ml-metrics} branch
-(\path{probes-<n>.json}; the roll here is \path{probes-516.json}, the
+(\path{probes-<n>.json}; the roll here is \path{probes-516.json}, the linear inverse model \path{probes-527.json} (\path{ml/lim_baseline.py}), the
 codec probe ladder is in the bundles named in \path{ml/EXPERIMENTS.md}).
 Weights are on the \path{model-checkpoints-v1} release
 (\path{run-415__pixelmae.pt}; \path{head-weights-e059-200k-window-s0.pt}

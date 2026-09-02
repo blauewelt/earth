@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-066"></a>
-## E-066 · The LIM baseline — a linear inverse model through the head battery, DISPATCHED #527, 2026-09-02 11:0xZ (Chris: "How about LIM as a baseline, can we add it to the paper as well?")
+## E-066 · The LIM baseline — a linear inverse model through the head battery — LANDED #527, 2026-09-02 12:4xZ: THE LIM IS THE REFERENCE MODEL FROM 15 DAYS OUT (Chris: "How about LIM as a baseline, can we add it to the paper as well?")
 
 TL;DR — how much of the transformer's rolled skill does a single linear
 operator fitted to the field's own lag-1 covariance already have? Persistence,
@@ -82,6 +82,55 @@ favour, and is stated with the number. No transport read-out (field only);
 an unpooled section read-out on the LIM's predicted field is a follow-up.
 
 **Cost:** one CPU-bound job, ≈ 1 h setup + well under 1 h of compute.
+
+**HARVEST, 12:4xZ 09-02 (`probes-527.json`, 2,379,523 B, `gate` recorded as
+not-taken, starts identical to #516's — rows 1972/1996/2020, 2556/2580/2604,
+2994/3018/3042).** Three LIMs, 2,923 training bins, 2,919 lag-1 pairs, state
+dim 693,584, every propagator stable (spectral radius 0.984–0.986, leading
+e-folding 297–360 days). Corridor scope, K = 200 (76 % of training
+variance):
+
+| lead | head #516 acc | **LIM acc** | head msss_clim | **LIM msss_clim** | head msss_damped | **LIM msss_damped** |
+|---|---|---|---|---|---|---|
+| 5 d | 0.606 | 0.406 | +0.365 | +0.169 | −0.011 | −0.323 |
+| 10 d | 0.412 | 0.361 | +0.109 | +0.135 | −0.131 | −0.097 |
+| 15 d | 0.265 | **0.324** | −0.172 | +0.106 | −0.354 | −0.034 |
+| 30 d | 0.204 | 0.258 | −0.168 | +0.069 | −0.244 | +0.008 |
+| 90 d | 0.132 | 0.261 | −0.322 | +0.075 | −0.333 | +0.067 |
+| 180 d | 0.153 | 0.223 | −0.354 | +0.053 | −0.357 | +0.051 |
+| 365 d | −0.031 | 0.177 | −0.719 | +0.019 | −0.719 | +0.019 |
+| mean of 73 | 0.105 | **0.225** | −0.439 | **+0.054** | −0.461 | +0.034 |
+
+**Reading, against the pre-registration: branch (ii).** The head's
+correlation exceeds the LIM's at leads 1–2 only (5 and 10 days); from lead 3
+(15 d) the LIM is more correlated with the truth at EVERY lead to a year,
+and holds ~0.18–0.26 where the head decays to zero. On squared error the LIM
+is positive against climatology at every lead (its amplitude falls with its
+correlation, 0.48 → 0.06 — a calibrated forecast), against the head's −0.44
+and even the head's amplitude-calibrated +0.019. Against damped persistence
+the LIM loses at 5–15 d and wins by 0.01–0.07 from 30 d out; the head loses
+everywhere. K = 50 / 100 / 200 read mean acc 0.200 / 0.209 / 0.225 — more
+modes, better, not yet saturated. Per channel the LIM keeps SST at
+0.48/0.41/0.33/0.28 (5/30/90/365 d) vs the head's 0.76/0.34/0.34/0.10 and
+SSH at 0.57/0.36/0.30/0.30 vs 0.84/0.25/0.11/−0.06. Gate and window scopes
+agree (mean msss_clim +0.061 / +0.053, acc 0.253 / 0.233).
+
+**What follows (REBOOT_PLAN step 6, first branch):** the LIM is the
+programme's reference model at leads ≥ 3; further modelling asks what a
+learned model adds at leads 1–2 and whether any change beats the LIM at lead
+3. #520 (7.6M) and #523 (40.4M) are read against it when they land. Owed:
+the K-ladder above 200 (the curve is still rising), a LIM in EMBEDDING space
+(the same fit on the codec's z — the fair question for the substrate), the
+retrieval null, and block-bootstrap intervals on the per-lead differences.
+The one caveat that travels with the number: the LIM's 2,923 training bins
+are a slightly larger pool than the head's 144-bin windows admit
+(209,549,066 windows over 2,417 end-bins), in the baseline's favour.
+
+**In the paper** (2026-09-02): Table 2 gains the LIM's three columns, Figure 5
+is the head-vs-LIM correlation and MSSS per lead, §3 gains the paragraph,
+the abstract and §4 state the reference. Cost: one 52 GB box for ~1.7 h
+(≈ $0.50) — the cheapest experiment in the programme's record and the one
+that re-orders it.
 
 <a id="e-065"></a>
 ## E-065 · The lattice ladder, 16 → 24 → 30 bits — parents DISPATCHED 2026-09-02 ~10:3xZ (Chris: "Try the following FSQ: 24-Bit FSQ (Levels [8 x 8], dz = 8). And then 30bits (Levels [8 x 10]).")

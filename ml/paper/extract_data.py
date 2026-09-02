@@ -10,6 +10,8 @@ public artefacts, and nothing is typed in by hand:
                      e017 gate head), source of the spatial split and the
                      ensemble-dispersion curves
     all three:  https://raw.githubusercontent.com/blauewelt/earth/ml-metrics/<name>
+  probes-527.json  — E-066, the linear inverse model (K = 50/100/200) scored
+                     through the identical battery from the identical starts
   metrics.jsonl    — the stage-2 training records of E-051, E-059, E-060a/b/c
                      (the TPU trainers' own logs; mirrored here because the
                      bucket they were written to is not public)
@@ -99,6 +101,22 @@ def curve(name):
 
 
 out["curves"] = {k: curve(k) for k in ("e051", "e059", "e060a", "e060b", "e060c")}
+
+# E-066 · the LIM baseline, one entry per K, same rows as the head
+p527 = os.path.join(a.probes, "probes-527.json")
+if os.path.exists(p527):
+    d527, h527 = head(p527)
+    out["lim_527"] = {}
+    for name, b in h527.items():
+        out["lim_527"][name] = {
+            "meta": {k: v for k, v in b["meta"].items() if k != "eigen"},
+            "eigen": b["meta"].get("eigen"),
+            "corridor": rows(b, "corridor"), "gate": rows(b, "gate"), "window": rows(b, "window"),
+            "corridor_per_channel": ({
+                ch: [{k: r[k] for k in ("h", "n", "msss_clim", "msss_damped", "acc", "amp_ratio")} for r in rr]
+                for ch, rr in b["corridor"]["per_channel"].items() if rr and rr[0]["n"] > 0}
+                if name == "lim_k200" else None),
+        }
 os.makedirs(os.path.join(HERE, "data"), exist_ok=True)
 dst = os.path.join(HERE, "data", "report_data.json")
 json.dump(out, open(dst, "w"), separators=(",", ":"))

@@ -176,21 +176,36 @@ strip(ax)
 fig.tight_layout()
 save(fig, "fig_roll.pdf")
 
-# ---- Fig 5: the calibration identity -----------------------------------------
+# ---- Fig 5: the head against a linear inverse model, and the calibration identity
+lim = D["lim_527"]
 acc = np.array([r["acc"] for r in r0])
 amp = np.array([r["amp_ratio"] for r in r0])
 msss = np.array([r["msss_clim"] for r in r0])
 ident = 1 - (1 + amp**2 - 2 * amp * acc)
 calib = acc**2
-fig, ax = plt.subplots(figsize=(6.2, 3.0))
-ax.plot(lead, msss, color=C[0], label="measured MSSS vs climatology")
-ax.plot(lead, ident, color=C[1], ls="--", label=r"$1-(1+a^2-2a\,\mathrm{ACC})$ from the head's own $a$, ACC")
-ax.plot(lead, calib, color=C[2], label=r"same states rescaled to $a=\mathrm{ACC}$")
+fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.1))
+ax = axes[0]
+ax.plot(lead, acc, color=C[0], label="206.7M head")
+for key, col, lab in (("lim_k50", C[5], "LIM, 50 modes"), ("lim_k100", C[4], "LIM, 100 modes"), ("lim_k200", C[1], "LIM, 200 modes")):
+    rr = lim[key]["corridor"]
+    ax.plot([r["h"] * STEP_DAYS for r in rr], [r["acc"] for r in rr], color=col, lw=1.2, label=lab)
 ax.axhline(0, color=INK2, lw=0.8)
 ax.set_xlabel("lead (days)")
-ax.set_ylabel("MSSS, corridor")
+ax.set_ylabel("anomaly correlation, corridor")
+ax.set_ylim(-0.1, 0.7)
+ax.legend(fontsize=7.5, loc="upper right")
+strip(ax)
+ax = axes[1]
+ax.plot(lead, msss, color=C[0], label="206.7M head, measured")
+ax.plot(lead, ident, color=C[0], ls=":", lw=1.0, label=r"head, $1-(1+a^2-2a\,\mathrm{ACC})$")
+ax.plot(lead, calib, color=C[2], label=r"head rescaled to $a=\mathrm{ACC}$")
+rr = lim["lim_k200"]["corridor"]
+ax.plot([r["h"] * STEP_DAYS for r in rr], [r["msss_clim"] for r in rr], color=C[1], label="LIM, 200 modes")
+ax.axhline(0, color=INK2, lw=0.8)
+ax.set_xlabel("lead (days)")
+ax.set_ylabel("MSSS vs climatology, corridor")
 ax.set_ylim(-0.8, 0.45)
 ax.legend(fontsize=7.5, loc="lower left")
 strip(ax)
 fig.tight_layout()
-save(fig, "fig_calibration.pdf")
+save(fig, "fig_lim.pdf")
