@@ -141,3 +141,15 @@ Twelve slides added before Sources (34–45; 46 slides, 92-page with-notes PDF),
   (plain text in the PPTX notes pane), every notes page in the with-notes PDF carries the same links as clickable labels (355 link
   annotations), and every URL / DOI on the Sources slide is clickable (70 links). A subagent resolved all 161 URLs by fetch before use;
   four were corrected (Copernicus carbon product id, MOD16A2GF page, Black Marble, RGI user guide).
+
+## v13 — slide 44 "Two stencils, one cone" and the E-069 build (2 Sep 2026, commits 7a7de57 + d1dbd2d)
+
+- Chris: implement the first version (data first, then the cones), and add the two-stencil idea — a stencil for the codec and a
+  stencil for stage 2 that together implement the full dependency cone — to the deck first. Slide 44 does that with the
+  (lag, distance) map of the two regions; slide 25 (the pixel-year arm) now carries a SUPERSEDED banner (it is the r_in = 0,
+  L_in = 72 special case; its "28 km" was only the ¼° cell).
+- Built on `main` as **E-069** (renumbered from E-067, which the operator session had taken for the block rolls the same
+  afternoon): `build_family4.py --rev r3` (+ cur_u, cur_v), `ml/cone.py`, `ml/cone_sampler.py`, `ml/cone_codec.py` (ConeMAE,
+  7.05M), `ml/train_cone.py`, 42 tests, CPU smoke (velocity probe +0.073 cone vs −0.015 snapshot on a planted flow). Not
+  dispatched; workflow wiring for the r3 tensor and the cone flags is the next step (plan §6.7).
+- The velocity-in-the-embedding choice: inner window 6 pentads at 0.3 m/s (resolvability: one cell per lag = 0.06 m/s).
