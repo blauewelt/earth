@@ -4,7 +4,7 @@ A 46-slide deck comparing AlphaEarth, TESSERA, OlmoEarth, TerraMind, Prithvi-EO 
 IBM's Granite-Geospatial-Ocean at the level of *what area in space and what span of time feeds
 one embedding*, then applying that lens to Earth 2: the velocity-specific dependency cone, a
 worked example for the surface current, the four-sphere plan, head-to-head benchmark tables
-transcribed from the papers, and related work; since 2 Sep also the *generic-embedding input proposal* (slides 34–45): the 13-rung input ladder, observed-vs-derived rule and leakage trap, cone families per input, the cone-native codec ("dots in, embedding out"), where velocity comes from, the zero-sum question, phases, 2026–27 data continuity. Made at Yannick's request across two sessions.
+transcribed from the papers, and related work; since 2 Sep also the *generic-embedding input proposal* (slides 34–45): the 13-rung input ladder, observed-vs-derived rule and leakage trap, cone families per input, the cone-native codec ("dots in, embedding out"), where velocity comes from, the zero-sum question, phases, 2026–27 data continuity. Made at Chris's request across two sessions.
 
 | file | what |
 |---|---|

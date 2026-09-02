@@ -221,7 +221,7 @@ Copernicus-FM (TU Munich) covers "the whole land surface and near-land ocean" on
 Verdict: nothing else embeds the ocean interior through time. Forecast systems such as GLONET or Samudra learn ocean dynamics but publish forecasts, not reusable embeddings.`,
 
 // 18 — four interacting spheres
-`Yannick's framing of the long-term goal: the Earth system has four interacting "spheres", and eventually we want one representation that spans them all. This slide maps who covers which today and proposes an order for joining them.
+`Chris's framing of the long-term goal: the Earth system has four interacting "spheres", and eventually we want one representation that spans them all. This slide maps who covers which today and proposes an order for joining them.
 
 a) Atmospheric weather: covered by forecast models (Prithvi WxC, Aurora, GraphCast and others) that produce states, not reusable embeddings. Native timescale hours to days; the atmosphere is predictable for about ten days.
 
@@ -287,7 +287,7 @@ The two structural caveats at the bottom are the honest summary. First, no bench
 // 24 — what this means for our ocean work
 `Four takeaways for Earth 2, each tied to something measured.
 
-Axis 1, pixel versus patch. TESSERA shows a per-pixel encoder with no spatial context is competitive on land; every other model buys context with a patch grid. We have already priced this axis in our attribution matrix: reading the RAPID transport with a single-pixel codec gives a correlation of 0.617 (raw data 0.613); with the 3-by-3 patch, 0.672 averaged over two seeds (raw 0.659). So the neighbourhood is worth about +0.05, and pretraining about +0.01. (RAPID is the mooring array at 26.5°N that measures the Atlantic overturning circulation; "correlation" is how well our read-out tracks it.) Two cautions that arrived on 2 September: these are probe numbers, whose seed-to-seed spread in our own record runs from 0.04 to 0.25, so the +0.01 for pretraining cannot be resolved and "consistent with parity" is the honest reading. And the paper was reset the same day, because its rolled forecast numbers came from second-stage heads that had seen the held-out years; the probe numbers quoted here are unaffected, but no forecast number from before 2 September may be quoted.
+Axis 1, pixel versus patch. TESSERA shows a per-pixel encoder with no spatial context is competitive on land; every other model buys context with a patch grid. We have already priced this axis in our attribution matrix: reading the RAPID transport with a single-pixel codec gives a correlation of 0.617 (raw data 0.613); with the 3-by-3 patch, 0.672 averaged over two seeds (raw 0.659). Taken at face value that would make the neighbourhood worth about +0.05 and pretraining about +0.01. (RAPID is the mooring array at 26.5°N that measures the Atlantic overturning circulation; "correlation" is how well our read-out tracks it.) Two cautions. These are probe numbers, whose seed-to-seed spread in our own record runs from 0.04 to 0.25, so the +0.05 sits at the edge of the noise band and the +0.01 inside it — the honest reading is "the neighbourhood probably matters; pretraining is unresolved". And on 2 September the paper was reset, because its rolled forecast numbers came from second-stage heads that had seen the held-out years; these probe numbers are unaffected by that (the reset paper keeps them in its appendix), but no forecast number from before 2 September may be quoted anywhere.
 
 Axis 2, snapshot versus period. TerraMind and Granite are snapshots; Prithvi and OlmoEarth stack dated frames; AlphaEarth and TESSERA fold a full year into one vector. Our first-stage codec is a snapshot of a monthly (or five-day) mean, and the month-block codec folds only about six five-day bins. The year-folded design is the axis we have not tested — hence the proposed experiment on the next slide.
 
@@ -296,7 +296,7 @@ Product versus model. AlphaEarth is a dataset you cannot re-run; TESSERA and Olm
 The gap. Only two published encoders are trained on sea pixels — Granite and OceanSAR — and both are surface, single-instant models. To our knowledge no published model embeds the gridded ocean state through time. That is the territory our codec occupies.`,
 
 // 25 — proposed arm
-`A concrete experiment proposal, framed honestly. An earlier draft of this deck suggested a "1-by-1 pixel-only control"; it turned out our paper already contains it (the attribution matrix has both single-pixel and 3-by-3 versions of raw and codec inputs). So the spatial question is settled; what TESSERA adds that we have not tried is the temporal fold.
+`A concrete experiment proposal, framed honestly. An earlier draft of this deck suggested a "1-by-1 pixel-only control"; it turned out our paper already contains it (the attribution matrix has both single-pixel and 3-by-3 versions of raw and codec inputs). So the spatial question has been measured, at the resolution probe numbers allow; what TESSERA adds that we have not tried is the temporal fold.
 
 What TESSERA does that we don't: it produces one embedding per pixel-YEAR from about 40 dated observations of one pixel, using a temporal transformer and day-of-year encodings, trained with Barlow Twins (no reconstruction) and quantised to int8 during training. Our first-stage vector z describes one pixel-MONTH; a second-stage model then runs over the sequence of monthly vectors.
 
@@ -309,7 +309,7 @@ Controls: the average of the 12 monthly vectors (does folding beat pooling?), th
 Read-outs: our probe ladder to the RAPID transport (correlation and RMSE in Sverdrups), the fraction of variance lost on the round trip, and rolled skill under the corrected protocol — the mean skill against climatology and against damped persistence at each lead, with trained and held-out longitudes reported separately; the old "corridor AUC" name was retired on 2 September 2026 when the paper was reset. Success means the folded vector beats the control beyond block-bootstrap intervals, with at least three seeds.`,
 
 // 26 — dependency cone
-`This slide introduces the physical idea Yannick proposed: what can influence a pixel Δt ahead is bounded by how fast each process propagates and how long it remembers.
+`This slide introduces the physical idea Chris proposed: what can influence a pixel Δt ahead is bounded by how fast each process propagates and how long it remembers.
 
 Notation first. t is "now", the last observed step. Δt is the forecast step — we predict the target at t+Δt. ℓ (a script L) is the lag of an input: it was observed at t−ℓ, so it sits Δt+ℓ before the target; ℓ = 0 is the newest input. v is a process's signal speed; τ (tau) is its memory — how long it stays predictable.
 
@@ -324,7 +324,7 @@ Where our stencils sit: a fixed stencil is a cylinder — same reach at every la
 // 27 — what the cone predicts
 `The cone model applied channel group by channel group, with the useful reach per monthly step, the useful history, and a design consequence for each.
 
-Wind, pressure and fluxes: the atmosphere moves at 10 m/s and forgets in 5–10 days. Its causal reach in one month is the whole globe, but because its memory is shorter than our step, monthly wind is not predictable from its own history — only through slow ocean modes that force it. So treat it as a wide, shallow forcing: large stencil, no depth. At the five-day step the memory and the step are similar, so wind becomes partly self-predictable — a gain only the pentad model could show.
+Wind, pressure and fluxes: the atmosphere moves at 10 m/s and forgets in 5–10 days. Its causal reach in one month is the whole globe, but because its memory is shorter than our step, monthly wind is not predictable from its own history — only through slow ocean modes that force it. So treat it as a wide, shallow forcing: large stencil, no depth. At the five-day step the memory and the step are similar, so wind becomes partly self-predictable — a gain only a pentad model could show, and one that has not been shown: the earlier pentad rolls were withdrawn with the paper reset.
 
 Sea-surface and mixed-layer temperature: advected at 0.1–0.3 m/s (260–800 km per month), forced by the atmosphere, remembered for 3–12 months (including "re-emergence" — anomalies that sink in autumn and reappear next spring). It needs both the wide wind stencil and months of history: the one group that justifies the full cylinder.
 
@@ -332,9 +332,9 @@ Interior temperature and salinity: 0.02–0.1 m/s, memory of years to decades. P
 
 Sea-surface height: slow Rossby waves in the interior (0.03 m/s at mid-latitudes), fast Kelvin and coastal waves along boundaries (1–3 m/s). An anisotropic stencil — an arm along coasts, narrow elsewhere.
 
-The transport target (RAPID): the overturning transport is set by the east-west density difference across the basin ("thermal wind"), which means its cone is the whole section — the reason our pooled read-out failed and the unpooled attention head worked.
+The transport target (RAPID): the overturning transport is set by the east-west density difference across the basin ("thermal wind"), which means its cone is the whole section — and why a read-out must see the whole section rather than a spatial mean, which would average away exactly that east–west contrast (an argument from the mechanism; the measured pooled-versus-unpooled gap is a two-interval comparison our own rules do not allow as evidence).
 
-Bottom left: four falsifiable predictions, each an ablation we can run with the existing evaluator. Bottom right: where the simple picture needs care — v is the fastest signal speed, not the mean flow; τ is predictability, not causality; cones are tilted, not symmetric; monthly averaging turns anything faster than the step into forcing.`,
+Bottom left: four falsifiable predictions, each an ablation to run under the corrected roll protocol of the reset paper (none has been run; the earlier rolled numbers were withdrawn). Bottom right: where the simple picture needs care — v is the fastest signal speed, not the mean flow; τ is predictability, not causality; cones are tilted, not symmetric; monthly averaging turns anything faster than the step into forcing.`,
 
 // 28 — worked example
 `A concrete walk-through of the cone idea for one target: the surface current (u, v) at a quarter-degree pixel, one month ahead. Each row is a driver — something that pushes the current around — with its mechanism and its two numbers, speed and memory, plus a correlation length.
