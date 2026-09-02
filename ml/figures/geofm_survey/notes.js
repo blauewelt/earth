@@ -287,7 +287,7 @@ The two structural caveats at the bottom are the honest summary. First, no bench
 // 24 — what this means for our ocean work
 `Four takeaways for Earth 2, each tied to something measured.
 
-Axis 1, pixel versus patch. TESSERA shows a per-pixel encoder with no spatial context is competitive on land; every other model buys context with a patch grid. We have already priced this axis in our attribution matrix: reading the RAPID transport with a single-pixel codec gives a correlation of 0.617 (raw data 0.613); with the 3-by-3 patch, 0.672 averaged over two seeds (raw 0.659). So the neighbourhood is worth about +0.05, and pretraining about +0.01. (RAPID is the mooring array at 26.5°N that measures the Atlantic overturning circulation; "correlation" is how well our read-out tracks it.)
+Axis 1, pixel versus patch. TESSERA shows a per-pixel encoder with no spatial context is competitive on land; every other model buys context with a patch grid. We have already priced this axis in our attribution matrix: reading the RAPID transport with a single-pixel codec gives a correlation of 0.617 (raw data 0.613); with the 3-by-3 patch, 0.672 averaged over two seeds (raw 0.659). So the neighbourhood is worth about +0.05, and pretraining about +0.01. (RAPID is the mooring array at 26.5°N that measures the Atlantic overturning circulation; "correlation" is how well our read-out tracks it.) Two cautions that arrived on 2 September: these are probe numbers, whose seed-to-seed spread in our own record runs from 0.04 to 0.25, so the +0.01 for pretraining cannot be resolved and "consistent with parity" is the honest reading. And the paper was reset the same day, because its rolled forecast numbers came from second-stage heads that had seen the held-out years; the probe numbers quoted here are unaffected, but no forecast number from before 2 September may be quoted.
 
 Axis 2, snapshot versus period. TerraMind and Granite are snapshots; Prithvi and OlmoEarth stack dated frames; AlphaEarth and TESSERA fold a full year into one vector. Our first-stage codec is a snapshot of a monthly (or five-day) mean, and the month-block codec folds only about six five-day bins. The year-folded design is the axis we have not tested — hence the proposed experiment on the next slide.
 
@@ -306,7 +306,7 @@ Arm B — swap the training objective: same encoder, but Barlow Twins on two ran
 
 Controls: the average of the 12 monthly vectors (does folding beat pooling?), the current stage-2 pathway, and the raw 12-month stack fed to the same attention head (the end-to-end control from the attribution matrix). At least two codec seeds, because head numbers from one seed have proven noisy.
 
-Read-outs: our probe ladder to the RAPID transport (correlation and RMSE in Sverdrups), the fraction of variance lost on the round trip, and the 12-month rolled corridor AUC — our standard forecast skill score. Success means the folded vector beats the pooled control by more than the seed spread.`,
+Read-outs: our probe ladder to the RAPID transport (correlation and RMSE in Sverdrups), the fraction of variance lost on the round trip, and rolled skill under the corrected protocol — the mean skill against climatology and against damped persistence at each lead, with trained and held-out longitudes reported separately; the old "corridor AUC" name was retired on 2 September 2026 when the paper was reset. Success means the folded vector beats the control beyond block-bootstrap intervals, with at least three seeds.`,
 
 // 26 — dependency cone
 `This slide introduces the physical idea Yannick proposed: what can influence a pixel Δt ahead is bounded by how fast each process propagates and how long it remembers.
@@ -426,3 +426,6 @@ For the ocean-including models and related work, sources were checked in August 
 Items listed as "also checked" are things we looked at and excluded, with the reason, so that nobody re-chases them.`
 
 ];
+
+// slides 35–46: the generic-embedding input proposal, spliced in before the Sources entry
+module.exports.splice(module.exports.length - 1, 0, ...require("./notes_inputs.js"));

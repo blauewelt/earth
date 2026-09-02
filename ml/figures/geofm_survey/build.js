@@ -37,7 +37,7 @@ function title(slide, text, sub) {
 let pageNo = 1;
 function footer(slide) {
   pageNo++;
-  slide.addText(`Representation-model survey · Aug 2026 · ${pageNo}`, { x: 0.6, y: 7.05, w: 8, h: 0.3, fontFace: FONT_B, fontSize: 9, color: MUTED, isTextBox: true, margin: 0 });
+  slide.addText(`Representation-model survey · Aug–Sep 2026 · ${pageNo}`, { x: 0.6, y: 7.05, w: 8, h: 0.3, fontFace: FONT_B, fontSize: 9, color: MUTED, isTextBox: true, margin: 0 });
 }
 function bullets(slide, items, opts) {
   const arr = items.map((t, i) => {
@@ -209,7 +209,7 @@ function modelSlide(n, name, tagline, rows, stencil, notes, fs) {
   s.addText("Geospatial representation models", { x: 0.8, y: 2.15, w: TW, h: 0.8, fontFace: FONT_H, fontSize: 32, bold: true, color: WHITE, valign: "middle", isTextBox: true, margin: 0 });
   s.addText("A stencil-level overview of AlphaEarth, TESSERA, OlmoEarth, TerraMind, Prithvi-EO 2.0 and IBM's Prithvi-based ocean model (Granite-Geospatial-Ocean)", { x: 0.8, y: 3.1, w: TW, h: 0.95, fontFace: FONT_B, fontSize: 17, color: "CADCFC", isTextBox: true, margin: 0 });
   s.addText("What area in space and what span of time goes into each embedding — and what each model actually hands you", { x: 0.8, y: 4.35, w: TW, h: 0.7, fontFace: FONT_B, fontSize: 13.5, italic: true, color: "9FB3C8", isTextBox: true, margin: 0 });
-  s.addText("Earth 2 representation-model research · 31 Aug 2026", { x: 0.8, y: 6.6, w: 8, h: 0.4, fontFace: FONT_B, fontSize: 12, color: "9FB3C8", isTextBox: true, margin: 0 });
+  s.addText("Earth 2 representation-model research · 31 Aug – 2 Sep 2026", { x: 0.8, y: 6.6, w: 8, h: 0.4, fontFace: FONT_B, fontSize: 12, color: "9FB3C8", isTextBox: true, margin: 0 });
   // decorative stencil motif on the right
   const gx = 9.75, gy = 1.95, size = 2.6, n = 8, cs = size / n;
   s.addShape(pres.shapes.RECTANGLE, { x: gx + 0.12, y: gy - 0.12, w: size, h: size, fill: { color: "16305A" }, line: { color: "3A5A8C", width: 0.75 } });
@@ -1042,12 +1042,12 @@ function tableTitle(slide, text, x, y, w) {
 // 12b. Proposed arm — TESSERA-style pixel-year codec
 modelSlide(0, "Proposed arm: a TESSERA-style pixel-year codec", "Fold the year, not the neighbourhood — the one TESSERA ingredient the programme has not yet tested",
   [
-    ["Why not a 1×1 spatial ablation", "Already done. The attribution matrix has p = 1 and 3×3 at both raw and codec: 0.613 / 0.617 vs 0.659 / 0.672. The spatial axis is priced; the temporal axis is not."],
+    ["Why not a 1×1 spatial ablation", "Already done. The attribution matrix has p = 1 and 3×3 at both raw and codec: 0.613 / 0.617 vs 0.659 / 0.672 — single seed, inside the probe noise band (ml/CLAUDE.md §3b): read as parity. The temporal axis is unmeasured."],
     ["What TESSERA does that we don't", "One embedding per pixel-YEAR: a 4-layer temporal transformer + GRU pooling over ~40 dated observations of a single pixel, day-of-year embeddings, Barlow Twins objective (no reconstruction), int8 QAT. Our stage-1 z is one pixel-MONTH; stage 2 then runs over the monthly z's."],
     ["Arm A — pixel-year codec", "Encoder over the 12 (or 24) pixel-months of one ¼° pixel: channel tokens carry month-of-year; p = 1 to isolate the temporal fold; emit one z ∈ ℝ⁶⁴ per pixel-year (or rolling 12-month window ending at t). Decoder queries (channel, Δmonth) up to ±12. Token count ≈ 12 × (C+2) ≈ 310 at 24 channels — same order as the 282-token month-block codec, so it fits the existing recipe."],
     ["Arm B — objective swap", "Same encoder, Barlow Twins on two random date-subsamples of the same pixel-year (TESSERA's augmentation) instead of masked reconstruction. Tests whether a non-reconstructive objective keeps the deep-density detail the decoder had to be re-taught to read."],
     ["Controls (matched)", "Mean of the 12 monthly z's (pooling control) · stage-2 over monthly z's (current path) · raw 12-month stack into the same attention head (end-to-end control, as in the attribution matrix). Two codec seeds minimum — head numbers are never quoted from one."],
-    ["Read-outs", "Probe ladder → RAPID r and RMSE (Sv); round-trip variance lost per channel; rolled corridor AUC at h = 12 with a year-folded z as the state. Success = the folded z beats the pooled control by more than the two-seed spread."],
+    ["Read-outs", "Probe ladder → RAPID r and RMSE (Sv); round-trip variance lost per channel; rolled skill under the corrected pool (MSSS per lead vs climatology and damped persistence; paper v8, 2 Sep 2026) with a year-folded z as the state. Success = beats the control beyond bootstrap intervals, n ≥ 3 seeds."],
   ],
   {
     space: { n: 9, outPx: [4, 4], layers: 2, notes: [{ text: "p = 1 — no neighbours", x: 0.75, y: 0.95, w: 1.6, h: 0.25, color: "B58900", align: "center" }],
@@ -1186,7 +1186,7 @@ function drawLagTimeline(slide, x, y, w, opts) {
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 0.6, y: 5.45, w: 6.0, h: 1.5, fill: { color: PALE }, line: { width: 0 }, rectRadius: 0.08 });
   s.addText([
     { text: "Four falsifiable predictions (each an ablation we can run)", options: { bold: true, color: NAVY, fontSize: 10, breakLine: true } },
-    { text: "1  Group-specific reach: cutting reach to ~500 km for interior T/S slots costs no corridor AUC; cutting it for wind/SST slots does.", options: { breakLine: true } },
+    { text: "1  Group-specific reach: cutting reach to ~500 km for interior T/S slots costs no rolled skill (MSSS per lead); cutting it for wind/SST slots does.", options: { breakLine: true } },
     { text: "2  Group-specific history: wind slots beyond lag 1 add nothing; interior slots gain from 24 → 48 months.", options: { breakLine: true } },
     { text: "3  A cone-shaped stencil (reach ∝ Δt + lag) matches the 4444 km cylinder at a fraction of the slots.", options: { breakLine: true } },
     { text: "4  The pentad stage-2 shows one-step wind skill the monthly one cannot, because Δt ≈ τ_atm.", options: {} },
@@ -1197,7 +1197,7 @@ function drawLagTimeline(slide, x, y, w, opts) {
     { text: "v is the fastest relevant signal speed, not the mean flow — waves (Rossby, Kelvin, barotropic) outrun advection. τ is predictability, not causality: the cone is truncated by memory, so wind's 'large area' is bounded by v·τ (~4,000–8,000 km), not by v·horizon. Cones are tilted, not symmetric: upstream along the flow, westward for Rossby waves, along boundaries for coastal waves. Time-averaging to monthly means turns anything with τ < Δt into spatially-correlated forcing — the atmosphere is a stochastic boundary condition at our cadence, not a dynamical state. Eddy diffusion adds only √(K·t) ≈ 50 km/month at K ≈ 10³ m² s⁻¹ — negligible at ¼°.", options: {} },
   ], { x: 6.95, y: 5.5, w: 5.6, h: 1.4, fontFace: FONT_B, fontSize: 8.5, color: INK, valign: "top", isTextBox: true, margin: 0 });
   footer(s);
-  s.addNotes("The table applies the cone model channel group by channel group. Its sharpest consequence is that a single stencil shape for all channels is wrong by construction: wind wants width without depth, the interior wants depth without width, SST wants both. The four predictions are phrased so that the existing evaluator (12-month rolled corridor AUC, frozen gate head) can decide them; prediction 1 is the direct answer to the open 'can reach come down?' question in the dependency-cone note, and it says: for the interior channels yes, for the forced surface channels no. Predictions are hypotheses, not results — nothing here has been run.");
+  s.addNotes("The table applies the cone model channel group by channel group. Its sharpest consequence is that a single stencil shape for all channels is wrong by construction: wind wants width without depth, the interior wants depth without width, SST wants both. The four predictions are phrased so that the roll battery under the corrected window-scope pool (paper v8, 2 Sep 2026) can decide them — the old 12-month 'corridor AUC' of the contaminated heads is retired; prediction 1 is the direct answer to the open 'can reach come down?' question in the dependency-cone note, and it says: for the interior channels yes, for the forced surface channels no. Predictions are hypotheses, not results — nothing here has been run.");
 }
 
 
@@ -1356,14 +1356,14 @@ const fmtKm = r => r >= 10000 ? "10,000 (cap)" : Math.round(r).toLocaleString("e
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 0.6, y: 4.3, w: 5.95, h: 2.55, fill: { color: "F4F6F9" }, line: { width: 0 }, rectRadius: 0.08 });
   s.addText([
     { text: "What the stencil fixes vs what attention learns", options: { bold: true, color: NAVY, fontSize: 11, breakLine: true } },
-    { text: "The cone is the support — which (cell, lag, channel) tokens may enter at all. It encodes only two physical facts per driver: how fast its signal travels and how long it is predictable. Everything else — which upstream cell matters this month, how strongly the SSH gradient projects onto u, whether the heat-flux pattern is the one that tilts the density field — is left to the attention weights inside the support. A support that is too small cannot be learned around; one that is too large costs slots and lets noise in. The four ablations to the right test whether the support is right, run with the existing 12-month rolled corridor-AUC evaluator and the frozen gate head.", options: { fontSize: 10.5, color: INK } },
+    { text: "The cone is the support — which (cell, lag, channel) tokens may enter at all. It encodes only two physical facts per driver: how fast its signal travels and how long it is predictable. Everything else — which upstream cell matters this month, how strongly the SSH gradient projects onto u, whether the heat-flux pattern is the one that tilts the density field — is left to the attention weights inside the support. A support that is too small cannot be learned around; one that is too large costs slots and lets noise in. The four ablations to the right test whether the support is right, run with the roll battery under the corrected window-scope pool (paper v8, 2 Sep 2026) — never with the retired 'corridor AUC' of the contaminated heads.", options: { fontSize: 10.5, color: INK } },
   ], { x: 0.75, y: 4.38, w: 5.65, h: 2.4, fontFace: FONT_B, valign: "top", isTextBox: true, margin: 0 });
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 6.75, y: 4.3, w: 5.95, h: 2.55, fill: { color: PALE }, line: { width: 0 }, rectRadius: 0.08 });
   s.addText([
     { text: "The four ablations, specialised to this target", options: { bold: true, color: NAVY, fontSize: 11, breakLine: true } },
     { text: "1  Interior T/S slots at 500 km reach instead of 4,444 km: predicted no loss (their wedge never exceeds 1,900 km).", options: { fontSize: 10, breakLine: true } },
     { text: "2  Wind and heat-flux slots restricted to lags 0–1: predicted no loss (τ_atm < Δt); the same cut on surface T: predicted loss (its wedge runs to lag 7).", options: { fontSize: 10, breakLine: true } },
-    { text: "3  Cone-shaped stencil (851 slot-lags) vs cylinder (12,816): predicted equal corridor AUC at 7 % of the slots — and headroom for 48-month interior history.", options: { fontSize: 10, breakLine: true } },
+    { text: "3  Cone-shaped stencil (851 slot-lags) vs cylinder (12,816): predicted equal rolled skill at 7 % of the slots — and headroom for 48-month interior history.", options: { fontSize: 10, breakLine: true } },
     { text: "4  Pentad codec (Δt = 5 d ≈ τ_atm): predicted one-step wind skill that the monthly model cannot show, because wind's own wedge now has lags > 0.", options: { fontSize: 10, breakLine: true } },
     { text: "Two codec seeds minimum; head numbers are never quoted from one. Explore the parameters live in the Dependency-Cone Explorer artifact (same formulas, editable v, τ, L_corr, Δt, anisotropy).", options: { fontSize: 9.5, italic: true, color: MUTED } },
   ], { x: 6.9, y: 4.38, w: 5.65, h: 2.4, fontFace: FONT_B, color: INK, valign: "top", isTextBox: true, margin: 0 });
@@ -1423,12 +1423,16 @@ const fmtKm = r => r >= 10000 ? "10,000 (cap)" : Math.round(r).toLocaleString("e
   s.addNotes("Verified directly: AIFS surface-ocean paper (authors, joint model quote, loss-scaling quote). Others from abstracts and the agents' search; ACE2-NEMO author list and FuXi ocean naming were not verifiable and are cited by arXiv id / lineage only.");
 }
 
+// 12g–12r. What a generic Earth embedding should see (input ladder, cones per input, cone-native codec, zero-sum)
+require("./slides_inputs.js")({ pres, title, footer, NAVY, INK, MUTED, TEAL, SPACE, TIME, EMB, OUTPX, PALE, WHITE, GRIDLINE, FONT_H, FONT_B });
+
 // 13. Sources
 {
   const s = pres.addSlide();
   s.background = { color: WHITE };
-  title(s, "Sources", "Papers, model cards and repositories consulted (accessed 31 Aug 2026)");
+  title(s, "Sources", "Papers, model cards and repositories consulted (accessed 31 Aug – 2 Sep 2026)");
   const src = [
+    ["Input ladder & dataset specs (2 Sep 2026)", "Verified against agency product pages (Copernicus Data Space / Sentinel Online, USGS, NASA Earthdata / LP DAAC / PO.DAAC / NSIDC, NOAA NESDIS / NCEI, WMO OSCAR, OSI SAF, EUMETNET, ECMWF / CDS, Copernicus Marine, Argo + OceanOPS API, AVISO, ESA CCI, SOCAT, GEBCO, Met Office, ISRIC, Copernicus Land, FLUXNET / ICOS / AmeriFlux, GRDC, GloFAS, Hydroweb, WorldPop, GHSL) — full spec sheet with URLs in generic-earth-embedding-inputs-proposal.md. Method refs: Emery et al. 1986 (JGR 91, 12865) · Perceiver IO arxiv.org/abs/2107.14795 · PARADIS arxiv.org/abs/2601.21151."],
     ["AlphaEarth", "arxiv.org/abs/2507.22291 · deepmind.google/blog/alphaearth-foundations-helps-map-our-planet-in-unprecedented-detail · developers.google.com/earth-engine/datasets/catalog/GOOGLE_SATELLITE_EMBEDDING_V1_ANNUAL"],
     ["TESSERA", "arxiv.org/abs/2506.20380 · github.com/ucam-eo/tessera · github.com/ucam-eo/geotessera · geotessera.org · CVPR 2026 open-access page"],
     ["OlmoEarth", "arxiv.org/abs/2511.13655 · allenai.org/blog/olmoearth-models · github.com/allenai/olmoearth_pretrain · huggingface.co/blog/allenai/olmoearth-v1-1 · allenai.org/papers/olmoearth-v1-2"],
@@ -1442,8 +1446,8 @@ const fmtKm = r => r >= 10000 ? "10,000 (cap)" : Math.round(r).toLocaleString("e
   ];
   const runs = [];
   src.forEach((r, i) => {
-    runs.push({ text: r[0] + "  ", options: { bold: true, color: TEAL, fontSize: 11 } });
-    runs.push({ text: r[1], options: { color: INK, fontSize: 10, breakLine: i < src.length - 1, paraSpaceAfter: 8 } });
+    runs.push({ text: r[0] + "  ", options: { bold: true, color: TEAL, fontSize: 10.5 } });
+    runs.push({ text: r[1], options: { color: INK, fontSize: 9.5, breakLine: i < src.length - 1, paraSpaceAfter: 6 } });
   });
   s.addText(runs, { x: 0.6, y: 1.55, w: 12.1, h: 5.3, fontFace: FONT_B, valign: "top", isTextBox: true, margin: 2 });
   footer(s);

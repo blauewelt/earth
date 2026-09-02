@@ -39,7 +39,7 @@ NOTES.forEach((note, i) => {
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 0.6, y: 1.45, w: 12.1, h: 5.45, fill: { color: PALE }, line: { width: 0 }, rectRadius: 0.08 });
   s.addText(runs(L, fs), { x: 0.85, y: 1.6, w: 5.7, h: 5.15, fontFace: FONT_B, valign: "top", isTextBox: true, margin: 0 });
   if (R.length) s.addText(runs(R, fs), { x: 6.8, y: 1.6, w: 5.7, h: 5.15, fontFace: FONT_B, valign: "top", isTextBox: true, margin: 0 });
-  s.addText(`Representation-model survey · Aug 2026 · notes for slide ${n}`, { x: 0.6, y: 7.05, w: 8, h: 0.3, fontFace: FONT_B, fontSize: 9, color: MUTED, isTextBox: true, margin: 0 });
+  s.addText(`Representation-model survey · Aug–Sep 2026 · notes for slide ${n}`, { x: 0.6, y: 7.05, w: 8, h: 0.3, fontFace: FONT_B, fontSize: 9, color: MUTED, isTextBox: true, margin: 0 });
 });
 
 pres.writeFile({ fileName: "/home/claude/deck/notes-pages.pptx" }).then(() => console.log("wrote notes-pages.pptx", NOTES.length));
