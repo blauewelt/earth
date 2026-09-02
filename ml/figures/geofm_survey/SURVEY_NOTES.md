@@ -96,3 +96,30 @@ Six parallel checks against primary sources; ~360 benchmark cells re-read from p
 - Physics: Rossby at 10° ~0.3 m/s; own-history τ = Eulerian decorrelation (eddies live 4+ months); additive reach rule for air T stated on slide 28; Earth 2 stencil ~7× (not 10×) wider than Granite's tile.
 - Head-to-head wording: Prithvi 8–13 pp behind on PASTIS/MADOS; OceanSAR wind-speed error −30–45 %.
 - Verified as correct (no change): all OlmoEarth/TerraMind/TESSERA/Granite/OceanSAR/GEO-Bench-2/LCZ table cells; TESSERA CC0 weights; Aurora 1.5 exists (MSR, 2026); heat-capacity 2.5 m; Ekman/thermal-wind/geostrophy formulas and signs; slot arithmetic 851 vs 12,816.
+
+## v10 — the generic-embedding input proposal (2 Sep 2026, commit a68f364 on blauewelt/earth)
+
+Twelve slides added before Sources (34–45; 46 slides, 92-page with-notes PDF), backed by the in-depth note
+`ml/figures/geofm_survey/GENERIC_EMBEDDING_INPUTS.md` (project copy: `claude/generic-earth-embedding-inputs-2026-09-02.md`):
+
+- 34 the question + ladder at a glance and the three tests for a derived product · 35–37 the 13-rung input ladder in three tables
+  (plain-English content, O/D, "adds") · 38 observed / derived / derivable and the leakage trap (DUACS delayed-time ±6-week window, NRT past 7
+  weeks; GLORYS 7-day cycle; ERA5 12 h; → time-shift derived dots, train the forecasting objective on NRT streams, two embeddings per anchor
+  like ERA5T/ERA5) · 39 five cone families with glyphs (A fast-wide-short, B slow-narrow-long, C L-shaped, D column-only land, E static) + depth
+  axis · 40 the cone-native codec (dot sampler → tokens → Perceiver-style encoder → e_dyn; masked dots incl. future) · 41 where velocity comes
+  from (Emery et al. 1986 MCC; flow as maskable channels; advected-sampling prior; velocity probe) · 42 zero-sum pros/cons table · 43 the
+  asymmetry (B contains A; data-processing inequality), the physics-vs-task split, the local-codec → cone-codec → thin-stage-2 hybrid ·
+  44 Phase 0 + phases 1–5 + ablations · 45 data continuity 2026–27.
+- Dataset specs verified 2 Sep 2026 against agency pages (four parallel passes; spec sheet = Appendix A of the note). Notable: S1A terminated
+  29 Jun 2026 (S1C+S1D); S2 three-satellite until end-2026; MODIS retiring late 2026/27, SNPP data end 1 Nov 2026; SSMIS→AMSR2/AMSR3
+  hand-over; DUACS L4 now 0.125°; OceanOPS 2 Sep: 4,372 Argo (219 deep, 989 BGC), 1,317 drifters; ERA5 SST/sea ice are prescribed inputs;
+  ERA5-Land has no DA; Copernicus waves are MFWAM; Copernicus carbon is 0.25°; OPERA CIRRUS 1 km/5 min.
+- Fact-check of 15 method/physics claims: 13 verified, 2 corrected (DUACS window; SST anomaly memory 3–6 months per F&H 1977 / Deser 2003).
+- **Aligned with the paper reset of the same day (v8, commit a17b189):** every rolled number from heads trained under the endpoint pool is
+  withdrawn and "corridor AUC" is retired. The deck no longer quotes any of them (slides 25, 27, 31 reworded; new slides never did); Phase 0
+  is scored under the corrected window-scope protocol (MSSS per lead vs climatology and damped persistence, trained/held-out longitudes
+  separately, block-bootstrap intervals, LIM null in pixel and embedding space, n ≥ 3 seeds; probes are diagnostics, not verdicts); the
+  attribution-matrix contrast 0.672 vs 0.659 is stated as a single-seed probe number inside the §3b noise band (parity is the honest reading).
+- Links: deck README https://blauewelt.github.io/earth/docs.html?f=ml/figures/geofm_survey/README.md · proposal
+  https://blauewelt.github.io/earth/docs.html?f=ml/figures/geofm_survey/GENERIC_EMBEDDING_INPUTS.md · with-notes PDF
+  https://github.com/blauewelt/earth/blob/main/ml/figures/geofm_survey/geospatial-representation-models-with-notes.pdf
