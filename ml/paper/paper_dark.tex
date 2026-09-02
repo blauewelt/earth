@@ -397,6 +397,93 @@ correlation of $\pm0.2$ cannot be. Every rolled number here is one seed;
 rolled skill at this cadence has not been replicated, and no two rolled
 numbers can yet be called different.
 
+\section{Related work}\label{sec:related}
+
+\paragraph{Observing the overturning.} Continuous measurement of the
+Atlantic meridional overturning is two decades old. The RAPID-MOCHA-WBTS
+array at $26.5^\circ$N has measured the transport since April 2004 as the
+sum of the Florida Current cable, the Ekman transport from wind stress and
+the geostrophic interior from boundary density moorings \cite{mccarthy2015};
+the record reads $17.0\pm2.8$\,Sv with a trend of $-1.0$ [$-0.4$, $-1.6$]
+Sv per decade that is marginally significant and dominated by a 2004--2010
+drop and a 2010s pause \cite{mccarthy2025,lee2024}, with the climate signal
+carried by the deep and thermocline components rather than by the Gulf
+Stream or Ekman terms \cite{mccarthy2025}. The Florida Current itself shows
+four decades of steady state once the cable is corrected for geomagnetic
+secular variation \cite{volkov2024}. MOVE at $16^\circ$N monitors the deep
+western boundary since 2000 \cite{send}; OSNAP measures the subpolar
+overturning since 2014 and places most of it east of Greenland
+\cite{osnap,fu2025}; a 2026 synthesis of four western-boundary arrays reads a
+meridionally consistent decline in deep western transport between
+$16.5^\circ$ and $42.5^\circ$N, partly compensated at the eastern boundary
+\cite{xing2026}. Whether the overturning weakened before 2004 is contested
+between sea-surface-temperature fingerprints \cite{caesar}, which read a
+$\sim$15\% decline, and air--sea heat-flux fingerprints, which read none
+since the 1960s \cite{terhaar2025}. Our transport target is the RAPID series
+deseasonalised at monthly and pentad resolution, with MOVE as a second
+target, and our inputs carry no transport measurement.
+
+\paragraph{Reconstructing transport from observables.} The classical line
+regresses the $26.5^\circ$N transport on physically chosen observables:
+satellite sea level with the cable and Ekman terms \cite{fw2015}, sea level
+through a thermal-wind argument \cite{sf2021}, or boundary densities
+\cite{worthington}; these reach $r$ of $0.8$--$0.95$ on 18-month low-passed
+series with in-sample calibration, and the one out-of-sample case holds out
+a single year. The machine-learning line trains on simulations: a
+convolutional network reading bottom pressure, sea level, temperature and
+wind strips reaches $r\approx0.98$ inside a laminar $1^\circ$ state estimate
+\cite{solodoch}, the same task in eddy-resolving models explains
+$0.44$--$0.74$ of the variance \cite{meng,woelker}, and a graph network on
+Argo profiles, wind stress and the boundary currents trained on VIKING20X
+recovers about 80\% of the seasonal variance at $26.5^\circ$N with monthly
+errors under 1\,Sv \cite{woelker}; deep-learning reconstructions from surface
+fields trained on climate models extend an index back to 1900
+\cite{michel2025}. Our read-out differs from all of these in protocol
+rather than in method: real RAPID data, monthly or pentad resolution with no
+low-pass filter, no transport among the inputs, and a year-blocked k-fold in
+which every year is held out in turn. On those terms a frozen embedding
+reads transport at $r=0.67$ and a raw-pixel head at $0.66$
+(\S\ref{sec:codec}), which is where the eddying-model results place the
+difficulty of the task; the same read-outs low-passed at 18 months score
+$0.33$--$0.75$ across codec seeds on nine effective points, which is why
+the report quotes unfiltered numbers.
+
+\paragraph{Forecasting the overturning.} Initialised decadal prediction
+systems show positive skill for subpolar ocean heat content at lead years
+2--10 and for coastal sea level along the North American east coast at
+3--5 years \cite{yeager2018,carmocosta2025}, but the direct transport record
+is too short for the overturning itself to be verified at those leads; at
+$26.5^\circ$N the signal-to-noise ratio of the trend is not expected to
+exceed 2 before about 2040 \cite{mccarthy2025}. The verification framework
+used here --- mean-squared skill scores against climatology and persistence,
+anomaly correlation per lead, a damped-persistence reference --- is the one
+established for interannual-to-decadal prediction \cite{goddard}. The
+linear inverse model \cite{penland} is the standard empirical forecast
+against which such systems are judged, including as a benchmark for
+decadal forecasts of surface temperature \cite{newman2013}; the version in
+\S\ref{sec:stage2} fits it in the same standardised field the transformer is
+scored on. Statistical early-warning analyses of sea-surface-temperature
+fingerprints have placed a tipping of the overturning in the mid-21st
+century \cite{ditlevsen2023}, but the estimate moves by a century or more
+with the choice of dataset and fingerprint \cite{benyami2024}, and
+physics-based indicators such as the freshwater transport at $34^\circ$S
+\cite{vanwesten2024} are the alternative; none of this is a forecast at
+the pentad-to-seasonal leads measured here, where the question is whether
+any learned model adds to a linear operator.
+
+\paragraph{Learned ocean and climate forecasting.} Neural ocean forecasters
+at $1/4^\circ$ to $1/12^\circ$ and the global weather models they descend
+from \cite{pangu,graphcast} operate at daily leads on full reanalysis fields
+and are cited for orientation; at monthly cadence, convolutional ENSO
+forecasts hold Ni\~no3.4 correlation above $0.5$ to about 17 months
+\cite{ham} and sea-surface-temperature anomaly fields are forecast to 18
+months with recurrent networks \cite{taylorfeng}. Architecturally the codec
+is a masked autoencoder \cite{mae} over channel tokens, and the
+frozen-representation evaluation used throughout follows the argument that
+frozen backbones with shallow read-outs are the honest measure of a
+foundation model's representation \cite{lehmann}; the closest statement of
+the per-pixel embedding-field idea is terrestrial \cite{alphaearth}.
+
 \section{What the results support}
 
 For the current-state transport read-out the codec is at parity with the raw
@@ -415,6 +502,96 @@ with block-bootstrap intervals; the early-stopped checkpoint and the 7.6M
 and 40.4M heads rolled against the end state shown here; amplitude
 calibration fitted on training-year starts; and a codec trained on
 $\le 2020$ so that a terminal 2021--2024 test can be run once.
+
+\begin{thebibliography}{99}\small
+\bibitem{mccarthy2015} G. McCarthy et al.\ (2015). Measuring the Atlantic
+meridional overturning circulation at 26$^\circ$N. \emph{Progress in
+Oceanography} 130.
+\bibitem{mccarthy2025} G. McCarthy et al.\ (2025). Signal and noise in the
+AMOC at 26$^\circ$N. \emph{Geophysical Research Letters} 52.
+\bibitem{lee2024} S.-K. Lee et al.\ (2024). A pause in the weakening of the
+Atlantic meridional overturning circulation since the early 2010s.
+\emph{Nature Communications} 15.
+\bibitem{volkov2024} D. Volkov et al.\ (2024). Florida Current transport
+observations reveal four decades of steady state. \emph{Nature
+Communications} 15.
+\bibitem{send} U. Send, M. Lankhorst, T. Kanzow (2011). Observation of
+decadal change in the Atlantic meridional overturning circulation using 10
+years of continuous transport data. \emph{Geophysical Research Letters} 38.
+\bibitem{osnap} M. S. Lozier et al.\ (2019). A sea change in our view of
+overturning in the subpolar North Atlantic. \emph{Science} 363.
+\bibitem{fu2025} Y. Fu, M. S. Lozier et al.\ (2025). Characterizing the
+interannual variability of North Atlantic subpolar overturning.
+\emph{Geophysical Research Letters} 52.
+\bibitem{xing2026} X. Xing, S. Elipot, W. Johns, D. Smeed, B. Moat,
+J. Loder (2026). Meridionally consistent decline in the observed western
+boundary contribution to the AMOC. \emph{Science Advances} 12.
+\bibitem{caesar} L. Caesar et al.\ (2018). Observed fingerprint of a
+weakening Atlantic Ocean overturning circulation. \emph{Nature} 556.
+\bibitem{terhaar2025} J. Terhaar, L. Vogt, N. Foukal (2025). Atlantic
+overturning inferred from air--sea heat fluxes indicates no decline since
+the 1960s. \emph{Nature Communications} 16.
+\bibitem{fw2015} E. Frajka-Williams (2015). Estimating the Atlantic
+overturning at 26$^\circ$N using satellite altimetry and cable measurements.
+\emph{Geophysical Research Letters} 42.
+\bibitem{sf2021} A. Sanchez-Franks et al.\ (2021). A dynamically based
+method for estimating the AMOC at 26$^\circ$N from satellite altimetry.
+\emph{Ocean Science} 17.
+\bibitem{worthington} E. Worthington et al.\ (2021). A 30-year
+reconstruction of the Atlantic meridional overturning circulation shows no
+decline. \emph{Ocean Science} 17.
+\bibitem{solodoch} A. Solodoch et al.\ (2023). Machine learning-derived
+inference of the meridional overturning circulation from satellite-observable
+variables. \emph{JAMES} 15.
+\bibitem{meng} Y. Meng et al.\ (2024). Circumpolar transport and overturning
+strength inferred from satellite observables using deep learning.
+\emph{JAMES} 16.
+\bibitem{woelker} E. W\"olker, W. Rath, M. Renz, A. Biastoch (2025).
+Estimating the AMOC from Argo profiles with machine learning trained on
+ocean simulations. \emph{Ocean Science} 21.
+\bibitem{michel2025} S. Michel et al.\ (2025). Deep-learning reconstructions
+of the Atlantic meridional overturning circulation since 1900.
+\emph{Environmental Research Letters} 20.
+\bibitem{yeager2018} S. Yeager et al.\ (2018). Predicting near-term changes
+in the Earth system: a large ensemble of initialized decadal prediction
+simulations using the Community Earth System Model. \emph{BAMS} 99.
+\bibitem{carmocosta2025} T. Carmo-Costa et al.\ (2025). Decadal prediction
+skill of North Atlantic ocean heat content in CMIP6 systems. \emph{Earth
+System Dynamics} 16.
+\bibitem{goddard} L. Goddard et al.\ (2013). A verification framework for
+interannual-to-decadal predictions experiments. \emph{Climate Dynamics} 40.
+\bibitem{penland} C. Penland, P. Sardeshmukh (1995). The optimal growth of
+tropical sea surface temperature anomalies. \emph{Journal of Climate} 8.
+\bibitem{newman2013} M. Newman (2013). An empirical benchmark for decadal
+forecasts of global surface temperature anomalies. \emph{Journal of Climate}
+26.
+\bibitem{ditlevsen2023} P. Ditlevsen, S. Ditlevsen (2023). Warning of a
+forthcoming collapse of the Atlantic meridional overturning circulation.
+\emph{Nature Communications} 14.
+\bibitem{benyami2024} M. Ben-Yami et al.\ (2024). Uncertainties too large to
+predict tipping times of major Earth system components from historical data.
+\emph{Science Advances} 10.
+\bibitem{vanwesten2024} R. van Westen, M. Kliphuis, H. Dijkstra (2024).
+Physics-based early warning signal shows that AMOC is on tipping course.
+\emph{Science Advances} 10.
+\bibitem{pangu} K. Bi et al.\ (2023). Accurate medium-range global weather
+forecasting with 3D neural networks. \emph{Nature} 619.
+\bibitem{graphcast} R. Lam et al.\ (2023). Learning skillful medium-range
+global weather forecasting. \emph{Science} 382.
+\bibitem{ham} Y.-G. Ham, J.-H. Kim, J.-J. Luo (2019). Deep learning for
+multi-year ENSO forecasts. \emph{Nature} 573.
+\bibitem{taylorfeng} J. Taylor, M. Feng (2022). A deep learning model for
+forecasting global monthly mean sea surface temperature anomalies.
+\emph{Frontiers in Climate} 4.
+\bibitem{mae} K. He et al.\ (2022). Masked autoencoders are scalable vision
+learners. \emph{CVPR}.
+\bibitem{lehmann} F. Lehmann et al.\ (2026). Frozen foundation-model
+backbones with shallow decoders as an evaluation standard. \emph{JGR
+Machine Learning and Computation}.
+\bibitem{alphaearth} C. Brown, M. Kazmierski, V. Pasquarella et al.\ (2025).
+AlphaEarth Foundations: an embedding field model for accurate and efficient
+global mapping from sparse label data. arXiv:2507.22291.
+\end{thebibliography}
 
 \appendix
 \section{Data and code availability}\label{app:avail}
