@@ -44,6 +44,59 @@ low-pass).
 
 ---
 
+<a id="e-064"></a>
+## E-064 · The 16-bit token as a forecasting substrate, under the clean pool — REGISTERED 2026-09-02 ~10:4xZ, dispatch waits on a Vast box (Chris: "can you run FSQ and add those results?")
+
+TL;DR — does a pixel-bin compressed to one 16-bit code (E-050's warm-started
+FSQ codec, d_z 6 through [8,8,8,5,5,5]) forecast as well as the continuous
+32-dimensional embedding, when the head is trained with the held-out years
+actually held out? Every earlier token number (E-056a, one-step 0.539 / 0.510
+vs 0.506) was trained under the endpoint pool and is retired with it; this is
+the first token arm under `--holdout-scope window`. If the token matches, the
+state shrinks ~5× for the whole re-ranking programme; if not, quantization
+removed forecastable information and the token road closes at this lattice.
+
+**E-064a · stage-2 head on the 16-bit token, clean pool · params 7.598M
+head (256×8) over frozen run-485 (37.956M, nothing trains) · stage stage-2 ·
+data family4_na025_pentad_r2 · arch 256×8 K 144 stencil 145 ring
+`spiral:111-4444-0.71-0.5`, d_z 6, znoise 0.12 (dose-matched: 0.7 ×
+0.15116/0.87878, the #507 arithmetic), grad-clip 128, seed 0 · steps×batch
+20k×256 · resume run-485@260k (release); Z from `embed-cache-v1`
+`Z_867532fe7b_37e146384b`.**
+
+**E-064b · the same head on the continuous d_z-32 z — E-060a's torch twin ·
+params 7.598M over frozen run-415 (37.976M, nothing trains) · stage stage-2 ·
+data family4_na025_pentad_r2 · arch 256×8 K 144 stencil 145 ring spiral,
+d_z 32, znoise 0.7, grad-clip 128, seed 0 · steps×batch 20k×256 · resume
+run-415@197428 (release); Z `Z_8b639abe36_37e146384b`.** Milestones at
+1,000 / 1,200 / 1,400 / 1,600 / 2,000 / 3,000 on both arms, so the early
+held-out minimum is kept as a rollable torch checkpoint (the TPU run kept
+only step 20,000).
+
+**Controls and pre-registered readings** (plan:
+[E-064](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E064_token_substrate_clean.md)):
+the instrument is held-out one-step z-MSE / persistence, read as the curve
+minimum (with its step) and the value at 20,000; E-060a (JAX) reads 0.6095 at
+1,200 and 0.692 at 20k. E-064b within 0.02 of E-060a on both → the trainers
+agree and the JAX ladder is comparable with torch arms; outside → a backend
+term exists and must travel with every cross-trainer comparison. E-064a's
+minimum within 0.02 of E-064b's → the token is a competitive substrate;
+worse by more → quantization lost forecastable signal (a level only after a
+second seed). Both arms must print the pool certificate (2,417 end-bins, 0
+touching a held-out bin, 209,549,066 windows), and E-064a's monitor must read
+`input_znoise_rel_pers` ≈ 0.15 or the arm is re-run before it is read. One
+seed each; the 7.6M pentad tier has no measured pair, so a sub-0.02
+difference is written as a consistency.
+
+**Not asked here:** lead decay and the roll. A roll of E-064a's early-stop
+milestone through #516's battery follows only if it passes the one-step gate.
+The "30-bit" lattice another agent reported is not described anywhere in
+this repository; once its levels are known it is one E-050-shaped warm start
+(`fsq_warmstart` on run-480) through the same two-arm gate.
+
+**Cost:** ≈ 5 h of one 4090, under $2, sequential on one box so the pair
+shares its environment.
+
 <a id="e-062"></a>
 ## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) DISPATCHED #518 (died on a full disk, 3 min) → #RUNNUM2
 

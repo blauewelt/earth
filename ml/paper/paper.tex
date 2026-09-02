@@ -101,7 +101,7 @@ training length is what stands between this codec and a better transport
 number.
 
 \begin{figure}[t]
-\centering\includegraphics[width=0.8\linewidth]{fig_kfold.pdf}
+\centering\includegraphics[width=0.72\linewidth]{fig_kfold.pdf}
 \caption{Pooled k-fold correlation with monthly deseasonalised RAPID
 transport by codec generation. Blue: the 12-channel width sweep; orange: with
 wind stress; green: 24--25 channels with 8 Argo levels; violet: the
@@ -143,7 +143,7 @@ For the current-state transport read-out, read-out design and not
 representation learning is what moved the number.
 
 \begin{figure}[t]
-\centering\includegraphics[width=0.78\linewidth]{fig_ladder.pdf}
+\centering\includegraphics[width=0.7\linewidth]{fig_ladder.pdf}
 \caption{Same frozen embeddings, same folds, three read-outs. Head bars carry
 95\% intervals.\label{fig:ladder}}
 \end{figure}
@@ -163,6 +163,24 @@ without wind channels, 50\% with them, 59\% by the 25-channel codec and 51\%
 by the 40.7M $0.25^\circ$ codec. Average correlation and event capture are
 different capabilities; the 25-channel codec has the best dip and the second
 worst monthly $r$.
+
+\paragraph{Quantizing the embedding.} A finite-scalar-quantized bottleneck
+(FSQ: each of $d_z{=}6$ dimensions rounded to 8, 8, 8, 5, 5 or 5 levels, one
+$2^{16}$-way code per pixel and bin, a LayerNorm bound on the pre-quantization
+activation) trained from a random initialisation collapses on the pentad
+tensor: the encoder becomes input-independent within a few thousand steps
+(fitted level-spread $0.638 \to 0.005$ by step 7{,}500, twice), and an
+unbounded 8-level lattice on $d_z{=}32$ drifts to pre-quantization
+magnitudes $\sim\!10^4$ against a lattice radius of 2, wearing its eight
+levels as a one-bit sign code. Switching the same lattice on at step 200k of a
+finished continuous $d_z{=}6$ codec and training 60k further steps keeps the
+activations input-dependent throughout (level-spread $0.97 \to 0.80$), at an
+18\% reconstruction tax ($0.270$ against $0.229$) and a per-channel
+one-step error of $0.742$ against $0.681$ (persistence $0.843$). The
+quantized codec reads RAPID at $0.588$ [$0.534$, $0.641$] against the
+continuous $0.579$ [$0.525$, $0.627$] through the unpooled head, one seed
+each --- indistinguishable, and both below the raw $3\times3$ control at this
+width ($0.693$).
 
 \section{The forecaster}\label{sec:stage2}
 
@@ -267,7 +285,7 @@ $-0.401$, mean ACC $0.131$ and $0.121$. Single seed.\label{tab:roll}}
 \end{table}
 
 \begin{figure}[t]
-\centering\includegraphics[width=\linewidth]{fig_roll.pdf}
+\centering\includegraphics[width=0.94\linewidth]{fig_roll.pdf}
 \caption{Left: the rolled head against its three references, corridor
 scope. Right: anomaly correlation against lead per scoreable channel; the 32
 Argo channels have no scored samples at any lead.\label{fig:roll}}
@@ -284,7 +302,7 @@ lead, a corridor mean of about $+0.02$. Whether a calibration fitted on
 training-year starts transfers to held-out starts is untested.
 
 \begin{figure}[t]
-\centering\includegraphics[width=0.78\linewidth]{fig_calibration.pdf}
+\centering\includegraphics[width=0.68\linewidth]{fig_calibration.pdf}
 \caption{Measured corridor $\mathrm{MSSS}_{\text{clim}}$ per lead, the value
 the identity predicts from the head's own ACC and $a$, and the value the same
 states would score at $a=\mathrm{ACC}$.\label{fig:calibration}}
