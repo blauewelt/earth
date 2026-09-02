@@ -44,6 +44,45 @@ low-pass).
 
 ---
 
+<a id="e-066"></a>
+## E-066 · The LIM baseline — a linear inverse model through the head battery, DISPATCHED #527, 2026-09-02 11:0xZ (Chris: "How about LIM as a baseline, can we add it to the paper as well?")
+
+TL;DR — how much of the transformer's rolled skill does a single linear
+operator fitted to the field's own lag-1 covariance already have? Persistence,
+damped persistence and climatology carry no spatial structure and no
+cross-channel coupling; a Linear Inverse Model (Penland & Sardeshmukh 1995) is
+the classical instrument for exactly this forecast, and without its row a
+reader cannot tell "the head forecasts the North Atlantic" from "the North
+Atlantic is largely linear at these leads". The reboot plan's step 1 asked for
+it before any further training.
+
+**E-066 · LIM on the standardised-anomaly field (eight scoreable channels ×
+86,698 window pixels), PCA to K = 50 / 100 / 200 via the Gram matrix, G(τ) =
+C(τ)C(0)⁻¹ at τ = one pentad over consecutive training pairs, rolled from
+#516's identical starts at the identical horizon and scored by
+`ml/rollout_spatial.py`'s own functions (`ml/lim_baseline.py`, `scripts/lim_run.sh`,
+`tests/test_lim_baseline.py`) · params none (nothing trains) · stage eval-only ·
+data family4_na025_pentad_r2 · arch LIM K 50/100/200, τ 5 d · steps 197428
+(= run-415's count, read for its args only) · resume run-415.** Runs on
+`gpu-box-48647862` (Vast 49632487, Germany, 52 GB — the LIM peaks at ~9 GB);
+CPU only.
+
+**Pre-registered:** the comparison is per lead, per scope, per channel, on
+exactly the head's rows. (i) If the head (#516, and #520/#523 when they land)
+beats the LIM at leads ≥ 2 by more than the head's tier spread, the
+re-ranking programme proceeds against the LIM as reference; (ii) if the LIM
+is at or above the head at every lead ≥ 2, the LIM is the programme's
+reference model and further modelling asks only what a learned model adds at
+leads 1–2 (REBOOT_PLAN step 6). Also read: the LIM's own decay shape, its
+spectral radius and leading e-folding time, and whether it beats damped
+persistence — the head does not. Training bins for the LIM are every bin not
+in a held-out year (lag-1 pairs never cross a held-out year); that is a
+slightly larger pool than the head's 144-bin windows admit, in the baseline's
+favour, and is stated with the number. No transport read-out (field only);
+an unpooled section read-out on the LIM's predicted field is a follow-up.
+
+**Cost:** one CPU-bound job, ≈ 1 h setup + well under 1 h of compute.
+
 <a id="e-065"></a>
 ## E-065 · The lattice ladder, 16 → 24 → 30 bits — parents DISPATCHED 2026-09-02 ~10:3xZ (Chris: "Try the following FSQ: 24-Bit FSQ (Levels [8 x 8], dz = 8). And then 30bits (Levels [8 x 10]).")
 
@@ -84,7 +123,13 @@ is in the bound or geometry, not the vocabulary. One seed per arm.
 
 **Cost:** two parents ≈ 14 h each on fresh 4090s in parallel (~$5 each),
 warm runs ~4.5 h each, gates ~3 h each; ≈ $15 and ~2 days end to end.
-**Dispatched:** RUNS_E065.
+**Dispatched:** #524 (E-065a, first copy) refused in a minute — the recipes
+were not yet on `main` when it was dispatched (the resolver's refusal, as
+designed); **#525 (E-065a, d_z 8 parent) on `gpu-box-48397639` (Vast
+49633425, Poland) at 10:3xZ, and #526 (E-065a2, d_z 10 parent) on
+`gpu-box-46054607` (Vast 49635004, Virginia) at 10:5xZ** — two fresh boxes
+rented for it (49633410, Hong Kong, and 49634118, Krasnodar) never
+registered a runner and were destroyed unused.
 
 <a id="e-064"></a>
 ## E-064 · The 16-bit token as a forecasting substrate, under the clean pool — DISPATCHED #521 (E-064a, token) and #522 (E-064b, continuous twin), 2026-09-02 09:46Z (Chris: "can you run FSQ and add those results?")
@@ -142,7 +187,13 @@ and #522 (E-064b, the continuous twin), queued in that order on a fresh box —
 Vast 49632487 / `gpu-box-48647862`, Germany, 52 GB RAM, $0.288/h.** The
 Michigan box that holds the token Z locally would not start
 (`resources_unavailable`, queued for over an hour), so both arms pull their
-Z from `embed-cache-v1` (3 GB and 16 GB).
+Z from `embed-cache-v1` (3 GB and 16 GB). **#521 died at 10:43Z: `temporal.py`
+was SIGKILLed (exit 137, the host OOM killer) seconds after the model was
+built, on a 52 GB box — a K 144 × stencil 145 torch head needs the 126 GB
+host class the earlier K 144 arms ran on (#478's box had 126 GB). #522 was
+cancelled before it started. RE-DISPATCHED 11:0xZ as #528 (E-064a) and #529
+(E-064b) on a 126 GB box, Vast 49638088 / `gpu-box-48580527`, Norway,
+$0.401/h.** Cost of the death: ~1 h of a $0.288/h box and the Z pulls.
 
 <a id="e-062"></a>
 ## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) DISPATCHED #518 (died on a full disk, 3 min) → #519 (died in `Set up job` on the same disk) → #520 (fresh box, 2026-09-02 09:45Z) · R0c (the 40.4M arm) DISPATCHED #523, 2026-09-02 10:1xZ
