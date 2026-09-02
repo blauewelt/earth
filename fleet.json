@@ -1,6 +1,6 @@
 {
- "at": "2026-09-02T17:19:16.197Z",
- "credit_usd": 51.77,
+ "at": "2026-09-02T18:12:08.002Z",
+ "credit_usd": 50.4,
  "balance_usd": 0,
  "boxes_total": 20,
  "boxes_running": 4,
@@ -139,7 +139,7 @@
    "status": "running",
    "dph": 0.3211,
    "storage_dph": 0.0278,
-   "disk_used_gb": 100,
+   "disk_used_gb": 93,
    "disk_gb": 100
   },
   {
