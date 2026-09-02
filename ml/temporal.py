@@ -4271,8 +4271,25 @@ def main():
                              else float("nan")),
                     }
                 else:
-                    mp_, _ = model(mon_zseq, mon_mseq, mon_sctx)
-                    mlast = mp_[:, -1]
+                    # CHUNKED, like the fgn branch above, and for the same
+                    # reason it is exact there: the forward is row-wise, so
+                    # concatenating disjoint slices reproduces the one-shot
+                    # result bit for bit (E-027 #285/#286, _chunked_forward).
+                    # Measured 2026-09-02 on #529 (E-064b, d_z 32, K 144,
+                    # stencil 145): the one-shot pass over 4,096 held-out
+                    # windows asked the 24 GB card for a single 10.2 GiB
+                    # allocation at the FIRST monitor and died — the run
+                    # went green with no temporal.json (§7's signature). The
+                    # d_z-6 token arm (#528) survived only because its input
+                    # is 5x smaller.
+                    _CH = 512
+                    _outs = []
+                    for _c0 in range(0, mon_zseq.shape[0], _CH):
+                        _sl = slice(_c0, _c0 + _CH)
+                        _pm, _ = model(mon_zseq[_sl], mon_mseq[_sl],
+                                       mon_sctx[_sl])
+                        _outs.append(_pm[:, -1])
+                    mlast = torch.cat(_outs, 0)
                     val_mse = float((mlast - mon_ztrue).pow(2).mean())
                     amp = float(mlast.std() / (mon_ztrue.std() + 1e-9))
             rec = {"stage2_step": s, "stage2_zmse": round(float(loss.item()), 5),

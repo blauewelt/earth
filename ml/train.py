@@ -1188,6 +1188,13 @@ def main():
             # because force-cancel had destroyed the job log — the config line
             # in metrics.jsonl was the only surviving account of what ran.
             "recipe": os.environ.get("RECIPE_NAME") or None,
+            # THE HOLDOUT, so a first-minutes check can certify it from the
+            # live branch instead of from a job log GitHub will not serve
+            # while the job runs (#533, the terminal codec, 2026-09-02: the
+            # one field that decided whether the run was the experiment was
+            # the one field this record did not carry).
+            "holdout_years": a.holdout_years,
+            "holdout_lon": a.holdout_lon,
         }}) + "\n")
 
     # Where a checkpoint can outlive its job. /opt/earth-cache is the box's
