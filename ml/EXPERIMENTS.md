@@ -159,6 +159,23 @@ steps 200k×512 · resume none · recipe `f4r2-40M-terminal` (holdout_years
 runner gpu-box-49401037 (Vast 49633408, Virginia, 63 GB, $0.321/h — #523's
 box, restarted with the tensor cached) · dispatched 17:1xZ as #532.**
 
+**#532 DIED AT 17:09:36Z, 30 s INTO `Train`, ON A FULL DISK (100/100 — the
+#530 class, third time in one day), and its runner went offline with it
+(a full disk takes a runner offline; the job's log never uploaded).** The
+box held #523's Z (16.7 GB), the tensor, ~12 GB of build inputs and the
+mirrors; hygiene read its 16 GB want as met. **Fixed at the root
+(`4dab012`): `scripts/disk_hygiene.sh` now sizes its want from the largest
+`*_X.npy` in the cache + 4 GB (the scratch it will write), frees the build
+inputs as a tier, and exits 2 when the want cannot be met — which the
+workflow turns into a refusal BEFORE the Train step (§5.16).** The Virginia
+box was stopped, cleared by hand (scratch, Z, `run-415__pixelmae.pt`,
+rg/wind_daily/truth) and restarted; **RE-DISPATCHED AS #533 at 17:2xZ,
+picked up 17:29Z.** Also closed on the way (`7d9bd95`): the shared
+`std_stats.npz` a warm box carries was written under 2009/2017/2023, and a
+roll on this codec would have reused it — the flat name is now reserved
+for that legacy year set and every other codec's rolls get
+`std_stats__hold-<blocks>.npz`.
+
 **Hypothesis and controls.** The codec's own read-outs (`loss_rec`, the
 unpooled RAPID head) against run-415's are a DATA-tax control: eight of 43
 years held out (~19 % of bins) should cost little on reconstruction and
