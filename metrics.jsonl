@@ -1,0 +1,9 @@
+{"config": {"steps": 200000, "batch": 512, "d_z": 8, "patch": 1, "d_model": 512, "n_layers": 12, "n_heads": 4, "d_dec": 256, "anomaly": true, "fsq_levels": null, "fsq_ladder": null, "fsq_bound": null, "fsq_warmstart_from": null, "eval_every": 7500, "light_probe_every": 10000, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 37.958, "data": "family4_na025_pentad_r2.npz", "C": 40, "T": 3142, "resume": null, "recipe": "f4r2-40M-dz8"}}
+{"linear_r_deseas": 0.491, "linear_r_raw": 0.467, "linear_r_deseas_light": 0.414, "light_stride": 7, "z_mse_model": 0.11009380966424942, "z_mse_persistence": 0.91748046875, "chan_mse_model": 0.9232972264289856, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.418, "temporal_r_raw": 0.416, "chan_vs_persistence_pct": -9.6, "z_vs_persistence_pct": 88.0, "probe_seconds": 397.2, "step": 0, "wall_s": 397.2}
+{"step": 1000, "loss_rec": 0.26715, "loss_nei": 0.22676}
+{"step": 2000, "loss_rec": 0.2571, "loss_nei": 0.21663}
+{"step": 3000, "loss_rec": 0.23759, "loss_nei": 0.209}
+{"step": 4000, "loss_rec": 0.26501, "loss_nei": 0.20163}
+{"step": 5000, "loss_rec": 0.28278, "loss_nei": 0.25002}
+{"step": 6000, "loss_rec": 0.25936, "loss_nei": 0.20645}
+{"step": 7000, "loss_rec": 0.28204, "loss_nei": 0.2192}
