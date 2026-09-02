@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-064"></a>
-## E-064 · The 16-bit token as a forecasting substrate, under the clean pool — REGISTERED 2026-09-02 ~10:4xZ, dispatch waits on a Vast box (Chris: "can you run FSQ and add those results?")
+## E-064 · The 16-bit token as a forecasting substrate, under the clean pool — DISPATCHED #521 (E-064a, token) and #522 (E-064b, continuous twin), 2026-09-02 09:46Z (Chris: "can you run FSQ and add those results?")
 
 TL;DR — does a pixel-bin compressed to one 16-bit code (E-050's warm-started
 FSQ codec, d_z 6 through [8,8,8,5,5,5]) forecast as well as the continuous
@@ -95,10 +95,15 @@ this repository; once its levels are known it is one E-050-shaped warm start
 (`fsq_warmstart` on run-480) through the same two-arm gate.
 
 **Cost:** ≈ 5 h of one 4090, under $2, sequential on one box so the pair
-shares its environment.
+shares its environment. **Dispatched 09:46Z as #521 (E-064a, the token arm)
+and #522 (E-064b, the continuous twin), queued in that order on a fresh box —
+Vast 49632487 / `gpu-box-48647862`, Germany, 52 GB RAM, $0.288/h.** The
+Michigan box that holds the token Z locally would not start
+(`resources_unavailable`, queued for over an hour), so both arms pull their
+Z from `embed-cache-v1` (3 GB and 16 GB).
 
 <a id="e-062"></a>
-## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) DISPATCHED #518 (died on a full disk, 3 min) → #RUNNUM2
+## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) DISPATCHED #518 (died on a full disk, 3 min) → #519 (died in `Set up job` on the same disk) → #520 (fresh box, 2026-09-02 09:45Z)
 
 TL;DR — **nothing this programme has ever rolled used a clean-pool head.** #503,
 #510 and #513 all rolled heads trained under `endpoint_contaminated`, so no
@@ -529,8 +534,19 @@ early-exit sized for the Z pull, not the 31.6 GiB scratch (§5.18: size a guard
 from the allocation it guards). **Fixed by moving the scratch and roll-dump
 removal ahead of the early exit, unconditionally — a rebuilt-every-run file
 has no free-space level at which keeping it is right.** Cost: ~4 minutes of
-box time and no artefact. **RE-DISPATCHED AS #RUNNUM2 with identical inputs
-once the fix was on `main`** (the job checks out `main` at dispatch).
+box time and no artefact. **RE-DISPATCHED AS #519 with identical inputs once the fix was on `main`
+— and #519 died in six seconds in `Set up job` on `No space left on device`,
+before step 1: a workflow-step fix cannot free the disk a job needs to
+stage itself.** The stale 34 GB scratch was then removed from outside a job
+(Vast execute API on the stopped box, 2026-09-02 09:2xZ, on Chris's
+go-ahead), but the box's GPU was rented out and `start` queued on
+`resources_unavailable` for over an hour on that box and three others, so
+**R0b runs as #520 (E-062-R0b, the 7.6M arm through #516's identical
+battery) on a FRESH box — Vast 49632479 / `gpu-box-41298070`, Taiwan, 110 GB
+RAM, $0.348/h — dispatched 2026-09-02 09:45Z.** A fresh box pulls the tensor,
+decodes its scratch copy and pulls the published Z (12 chunks) before the
+roll, ~1 h; #516's 21 h 26 m roll on a 27× larger head is the only pace
+reference and is not a law for this head.
 
 ---
 
