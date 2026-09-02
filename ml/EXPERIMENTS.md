@@ -44,6 +44,70 @@ low-pass).
 
 ---
 
+<a id="e-067"></a>
+## E-067 · Two stencils, one cone — the cone-native codec, ocean physics first — BUILT 2026-09-02, NOT DISPATCHED (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")
+
+TL;DR — the codec sees one pixel-bin and stage 2 a cylinder of embeddings, so
+nothing that needs two snapshots (velocity, tendency, convergence) can live in
+the embedding; stage 2 rebuilds it from compressed codes. E-067 splits the
+dependency cone by physics: an INNER cone of raw channels (lags 0–6 pentads,
+reach per channel family — B: 129.6 … 907.2 km at 0.3 m/s; A: 500 km at lags
+0–1 only; C: the L-shape) goes into the codec; the OUTER cone (lags 7–143, the
+spiral between the inner reach and min(4444, 0.3 m/s × 5 d × (1+k)) km) stays in
+stage 2. Union = the whole cone; overlap = the anchor column only; the outer
+spiral is empty for k ≤ 6 by construction. The question is whether velocity in
+the embedding buys rolled skill at 5–30 days — the leads where the learned head
+still beats the LIM (E-066) — beyond the seed interval.
+
+**E-067 · cone-native codec + 7.6M stage-2 head on the outer cone · params codec
+7.05M at 42 channels (Perceiver: 64 latents × 256 × 6 blocks, d_z 32) + head 7.6M
+(256×8, K 144) · stage encoder then stage-2 · data family4_na025_pentad_r3 (r2 +
+`cur_u`, `cur_v` at indices 40, 41 — the binned GLORYS components `cur_speed` is
+the hypotenuse of; no new download) · arch inner cone A/B/C, 748 tokens per
+anchor · steps 20k×256 codec, ≤ 5k×256 head with held-out-minimum selection ·
+resume none.** Control: E-064b's configuration (run-415 z, full cylinder,
+window scope, z-noise 0.7), five seeds. Nulls: the E-066 LIM in pixel space
+and the same LIM in each embedding space.
+
+Hypotheses and falsifiers, registered before anything runs: **H1** a ridge from
+the frozen cone-z to `cur_u`/`cur_v` at the anchor with the `cur_*` channels
+dropped at encode reaches an R² the snapshot codec cannot (falsified if the two
+agree within the n ≥ 3 interval); **H2** the head over cone-z beats the control
+at leads 1–6 on `cur_*`/`ssh` by more than the five-seed interval and stays
+within it at ≥ 90 d (falsified if leads 1–6 agree — the inner cone bought
+nothing stage 2 could not rebuild); **H3** the head on the annulus stencil
+matches the head on the full cylinder (falsified if worse by more than the
+interval). Predictions: H1 holds (0.3–0.6 vs < 0.1); H2 at leads 1–3 for
+`cur_*` and `ssh`, not `sst`; H3 holds.
+
+What exists (all new files, 42 tests green, nothing archived touched):
+`ml/build_family4.py --rev r3` + `ml/recipes/f4r3-cone-5M.json`; `ml/cone.py`
+(families, reach, slots, inner dots, outer spiral, coverage report, budget);
+`ml/cone_sampler.py` (dot gather, window-scope admissibility, brute-force
+certificate; 256 anchors in 0.1–0.2 s off a 4.5 GB memmap); `ml/cone_codec.py`
+(`ConeMAE`: patch + dot tokens with Fourier coordinates, `mask`/`miss` tokens,
+Perceiver encoder, queryable Gaussian decoder whose headline loss reads z ALONE
+— the [z + latents] memory of the first spec would have let the bottleneck
+carry nothing, a nameable degeneracy closed rather than ranked improbable; it
+survives as a 0.25-weight auxiliary); `ml/train_cone.py` (window-scope pool
+with the E-059 self-certificate, train.py's metrics record family so the status
+page needs no change, `--velocity-probe` via `probe_kfold.kfold_r`, `--smoke`);
+`tests/test_cone_geometry.py`, `tests/test_cone_smoke.py`,
+`tests/test_e067_family4_r3.py`. CPU smoke (a pipeline check, not a result):
+planted shear flow unreadable from one frame (R² | lag 0 = 0.0002), 200 steps,
+certificate 0 violations in 4,096 anchors, held-out NLL 2.037 → 1.753,
+velocity probe cur_u R² +0.073 (cone) vs −0.015 (snapshot), same sign at three
+seeds.
+
+Before a box can run it: `ml-train.yml` does not know `family4_na025_pentad_r3`
+(tensor input, build branch, `--rev r3` + `seed_sst`, seed lists, and a pinned
+sha once built), and `train_cone.py`'s flags have no `$RECIPE_<KEY>` yet; the
+annulus arm (H3) needs a lag-dependent stencil in `temporal.py`. Cost estimate
+≈ 40–50 box-hours, $15–25. Plan:
+[E-067](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E067_cone_codec.md).
+
+---
+
 <a id="e-066"></a>
 ## E-066 · The LIM baseline — a linear inverse model through the head battery — LANDED #527, 2026-09-02 12:4xZ: THE LIM IS THE REFERENCE MODEL FROM 15 DAYS OUT (Chris: "How about LIM as a baseline, can we add it to the paper as well?")
 

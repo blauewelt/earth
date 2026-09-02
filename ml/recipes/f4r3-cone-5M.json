@@ -1,0 +1,14 @@
+{
+  "_description": "E-067 cone-native codec on family4 r3 (r2 + cur_u, cur_v). Modelled key-for-key on f4r2-40M.json — 512x12, 4 heads, d_dec 256, d_z 32, patch 1 — so the ONLY difference from that recipe is the tensor, and an r2/r3 pair is an A/B on the two current components and nothing else. The name says cone-5M because this is the recipe E-067's codec arm will be dispatched under; the codec-side flags of the cone codec itself (inner-cone lags and reach, the sunflower slot budget, the Perceiver's 64 latents x 256 x 6, the mixed masking schedule) are NOT here, because ml-train.yml has no $RECIPE_<KEY> for any of them yet. They are carried by ml/train_cone.py's own arguments, and wiring them into the workflow as recipe-only keys is a separate change — a key this file could not be read for would be refused at dispatch by scripts/resolve_recipe.sh, and rightly: a setting that appears to apply and does nothing is worse than no setting at all. Until then this recipe selects the r3 tensor and the 40M-class codec settings, which is exactly what the Train step can honour. HEAD_PROBE IS 'true' EXPLICITLY, as every recipe states it (ml/CLAUDE.md §3: unpooled is the verdict).",
+  "_provenance": "E-067 plan, 2026-09-02, not yet measured. Nothing has been trained on family4_na025_pentad_r3 — the tensor is built by ml/build_family4.py --rev r3 (recipe string f4r3) and its stem is not yet a branch in .github/workflows/ml-train.yml, so a dispatch naming this recipe cannot build or pull the tensor until it is registered there. The architecture numbers are f4r2-40M's measured ones (#386: 37,975,889 params on the r1 tensor; 37,976,465 on r2 after chan_emb/q_chan grew one row for channel 40), and r3 adds two more rows again — a params claim for this configuration is owed to its first run, not to this file.",
+  "tensor": "family4_na025_pentad_r3",
+  "d_z": 32,
+  "patch": 1,
+  "codec_d_model": 512,
+  "codec_layers": 12,
+  "codec_heads": 4,
+  "codec_d_dec": 256,
+  "anomaly": "true",
+  "batch": 512,
+  "head_probe": "true"
+}

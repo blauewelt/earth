@@ -70,6 +70,8 @@ const P = {
   explorer: { t: "Dependency-Cone Explorer", u: "https://blauewelt.github.io/earth/ml/figures/dependency_cone_explorer.html" },
   proposal: { t: "Generic-embedding input proposal (full note)", u: "https://blauewelt.github.io/earth/docs.html?f=ml/figures/geofm_survey/GENERIC_EMBEDDING_INPUTS.md" },
   surveyNotes: { t: "Survey notes", u: "https://blauewelt.github.io/earth/docs.html?f=ml/figures/geofm_survey/SURVEY_NOTES.md" },
+  e067: { t: "E-067 plan — two stencils, one cone", u: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E067_cone_codec.md" },
+  e067log: { t: "E-067 in the experiment log", u: "https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-067" },
   // datasets — imagery and radar
   s2: { t: "Sentinel-2", u: "https://sentinels.copernicus.eu/copernicus/sentinel-2" },
   s2ext: { t: "Sentinel-2A extension to end-2026", u: "https://sentinels.copernicus.eu/-/sentinel-2a-extension-campaign-prolonged-until-the-end-of-2026" },
@@ -197,7 +199,7 @@ module.exports = [
   /* 22 */ S("granite", "oceansar1", "oceansar2"),
   /* 23 */ S("olmo", "terramind", "prithvi", "tessera", "geobench", "geobench2", "lcz", "granite", "oceansar1"),
   /* 24 */ S("paper", "mlclaude", "tessera", "alphaearth"),
-  /* 25 */ S("tessera", "paper", "mlclaude"),
+  /* 25 */ S("tessera", "paper", "mlclaude", "e067"),
   /* 26 */ S("explorer", "chelton", "cfl"),
   /* 27 */ S("explorer", "chelton", "paper", "mlclaude"),
   /* 28 */ S("explorer", "chelton"),
@@ -216,7 +218,8 @@ module.exports = [
   /* 41 */ S("proposal", "emery", "paradis", "drifters", "glorys"),
   /* 42 */ S("proposal", "paper", "mlclaude"),
   /* 43 */ S("proposal", "paper", "mlclaude", "prithvi"),
-  /* 44 */ S("proposal", "paper", "mlclaude", "cmemsFc"),
+  /* 44 */ S("e067", "e067log", "proposal", "chelton", "deser", "emery", "perceiver", "glorys", "mlclaude"),
+  /* 45 */ S("proposal", "paper", "mlclaude", "cmemsFc"),
   /* 45 */ S("proposal", "s1reconf", "s1d", "s2ext", "modisviirs", "snpp", "ssmis", "amsr3", "s6", "occci", "ccism", "en4", "grdc", "opera", "gleam", "ecmwfOpen"),
   /* 46 */ S("surveyNotes", "proposal", "paper"),
 ];

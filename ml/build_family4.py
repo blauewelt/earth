@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Family-4 tensor: the 0.25-degree North Atlantic at PENTAD cadence.
 
-E-034 step 4. Output `ml/cache/family4_na025_pentad.npz` (recipe f4r1), or
-`family4_na025_pentad_r2.npz` at `--rev r2` (f4r2, E-042: + the sst channel).
+E-034 step 4. Output `ml/cache/family4_na025_pentad.npz` (recipe f4r1),
+`family4_na025_pentad_r2.npz` at `--rev r2` (f4r2, E-042: + the sst channel),
+or `family4_na025_pentad_r3.npz` at `--rev r3` (f4r3, E-067: r2 + cur_u,
+cur_v).
 
 WHY A NEW FAMILY AND NOT AN EDIT TO build_family3.py (E-034 §5). A pentad
 tensor and a monthly tensor must never be silently mixed: every result in
@@ -34,9 +36,9 @@ definitions quietly describing different pixels than they name, and it would
 be invisible in every plot.
 
 CHANNELS are family-3's 39, in family-3's order, imported from that module so
-there is ONE definition — plus, at recipe r2 (E-042), an APPENDED 40th. Per
-E-034 §2 the cadence policy differs per channel group, and that is the whole
-substance of this file:
+there is ONE definition — plus, at recipe r2 (E-042), an APPENDED 40th, and at
+recipe r3 (E-067) two more appended after it. Per E-034 §2 the cadence policy
+differs per channel group, and that is the whole substance of this file:
 
   base (3)  cur_speed, log_mld, ssh — from the pentad GLORYS12 aggregation.
             cur_speed = hypot(mean_uo, mean_vo), built from the BINNED
@@ -78,6 +80,21 @@ substance of this file:
             era it is one live bin per month. SST is live in ~100% of bins
             over the whole axis.
 
+  cur (2)   cur_u, cur_v — the binned mean GLORYS12 surface-current
+            components. RECIPE r3 ONLY (E-067). They are not a new source and
+            not a new download: they are the SAME `mean_uo`/`mean_vo` bins
+            that channel 0 is already the hypotenuse of, written out
+            unreduced, in the same loop, from the same arrays — so
+            hypot(cur_u, cur_v) == cur_speed by construction rather than by
+            re-derivation, and `missing` lands on exactly the cells where the
+            aggregation has no current. WHY (E-067 §4): the cone codec's
+            inner stencil needs the DIRECTION of local advection — an
+            upstream tilt is a vector fact — and H1 supervises a velocity
+            probe against these two channels. A magnitude cannot supply
+            either. APPENDED after `sst`, so channels 0..39 keep the indices
+            r1 and r2 published and an r2/r3 pair is diffable channel by
+            channel.
+
 The time axis starts at 1982-01-01 like family-3's, not at GLORYS12's 1993:
 wind covers the gap, the Florida cable's 1982-92 decade becomes usable truth,
 and pre-1993 base channels are simply missing tokens.
@@ -94,6 +111,7 @@ Run:
   python3 ml/build_family4.py --pentad-dir ml/cache/glorys_pentad
   python3 ml/build_family4.py --pentad-dir ... --max-bins 40   # smoke
   python3 ml/build_family4.py --rev r2 --pentad-dir ...        # E-042, +sst
+  python3 ml/build_family4.py --rev r3 --pentad-dir ...        # E-067, +cur_u/v
 """
 import argparse
 import datetime as dt
@@ -131,14 +149,24 @@ END = dt.date(2024, 12, 31)
 # one box without either overwriting the other — and `ml-train.yml` derives
 # $TENSOR from the `tensor` input verbatim, so these file stems ARE the
 # dispatch values (family4_na025_pentad_r2 -> ml/cache/family4_na025_pentad_r2.npz).
+#
+# E-067: r3 is r2 plus the two current COMPONENTS (below), on the same terms —
+# strictly additive, its own recipe string, its own file name, r1 and r2 left
+# byte-identical. The table stays rectangular (both cadences carry every rev)
+# because `--days 1 --rev r3` must fail on the workflow having no branch for
+# it, not on a KeyError in this dict; the daily r3 tensor has never been
+# built and, like every entry here, becomes reachable only once ml-train.yml
+# names its stem (see the r3 registration note in E-067's plan §4).
 CADENCE = {
     5: dict(name="pentad", truth="truth_pentad.npz", revs={
         "r1": dict(recipe="f4r1", out="family4_na025_pentad.npz"),
         "r2": dict(recipe="f4r2", out="family4_na025_pentad_r2.npz"),
+        "r3": dict(recipe="f4r3", out="family4_na025_pentad_r3.npz"),
     }),
     1: dict(name="daily", truth="truth_daily.npz", revs={
         "r1": dict(recipe="f5r1", out="family5_na025_daily.npz"),
         "r2": dict(recipe="f5r2", out="family5_na025_daily_r2.npz"),
+        "r3": dict(recipe="f5r3", out="family5_na025_daily_r3.npz"),
     }),
 }
 
@@ -157,10 +185,23 @@ C_BASE, C_RG, C_WIND, NC = f3.C_BASE, f3.C_RG, f3.C_WIND, f3.NC
 # `rg_t`, which starts in 2004 and is live in one bin per month. 1982-2003 —
 # 22 of the 43 years — carries no temperature at all. OISST is on the tensor's
 # own grid, daily, and live in 100% of the bins across the whole axis.
+#
+# E-067. r3 appends `cur_u`, `cur_v` AFTER `sst`, by the identical argument:
+# channels 0..39 keep the indices r1 and r2 published, `build_family3.py` is
+# still untouched, and an r2/r3 pair is diffable channel by channel. The two
+# are the binned mean GLORYS12 components `cur_speed` (channel 0) is already
+# the hypotenuse of — the same `mean_uo`/`mean_vo` arrays, in the same loop,
+# so there is no second read of the aggregation and no second definition of
+# what "the current in this bin" is. The cone codec needs the DIRECTION
+# (E-067 §4): the inner stencil's whole claim is that local advection is
+# encodable, and advection is a vector.
 CHANS_R1 = list(CHANS)
 CHANS_R2 = list(CHANS) + ["sst"]
-C_SST = NC                            # channel 40 (index 39), r2 only
-CHANS_BY_REV = {"r1": CHANS_R1, "r2": CHANS_R2}
+CHANS_R3 = CHANS_R2 + ["cur_u", "cur_v"]
+C_SST = NC                            # channel 40 (index 39), r2 and up
+C_CUR_U = NC + 1                      # channel 41 (index 40), r3 only
+C_CUR_V = NC + 2                      # channel 42 (index 41), r3 only
+CHANS_BY_REV = {"r1": CHANS_R1, "r2": CHANS_R2, "r3": CHANS_R3}
 
 SST_NAME = "sst_na025"       # ml/fetch_sst_na.py's output dir, under CACHE
 
@@ -689,11 +730,14 @@ def main():
                     help="bin width: 5 = family 4 (pentad), 1 = family 5 "
                          "(daily). Everything family-specific — recipe, "
                          "output name, truth file, storage layout — follows.")
-    ap.add_argument("--rev", default="r1", choices=("r1", "r2"),
+    ap.add_argument("--rev", default="r1", choices=("r1", "r2", "r3"),
                     help="recipe revision: r1 = the 39 family-3 channels "
                          "(f4r1/f5r1, what #386/#387 train on); r2 = those 39 "
                          "plus appended `sst` from ml/fetch_sst_na.py's "
-                         "artifact (f4r2/f5r2). It is a FLAG and never "
+                         "artifact (f4r2/f5r2); r3 = r2 plus appended `cur_u`, "
+                         "`cur_v`, the binned mean GLORYS12 components channel "
+                         "0 is the hypotenuse of (f4r3/f5r3, E-067 — no new "
+                         "source and no new fetch). It is a FLAG and never "
                          "inferred from what happens to be on disk — a recipe "
                          "the filesystem decides is not a recipe.")
     ap.add_argument("--sst-dir", default=None,
@@ -806,7 +850,18 @@ def main():
         X[t] = np.nan
 
     # ---- base ------------------------------------------------------------
-    print("base channels (cur_speed, log_mld, ssh) …", flush=True)
+    # E-067: at r3 the two current COMPONENTS are written from this same loop
+    # iteration, out of the same `uo`/`vo` arrays the hypotenuse is taken of.
+    # That is the whole implementation, and it is deliberately not a
+    # `fill_cur()` beside `fill_sst()`: a second pass would re-read the
+    # aggregation and re-decide what "the current in this bin" is, and the
+    # identity hypot(cur_u, cur_v) == cur_speed would then be a claim to test
+    # rather than a fact of construction. Missingness comes along for free —
+    # `missing` lands exactly where uo/vo are NaN, which is where the
+    # hypotenuse is NaN too.
+    want_cur = nchan > NC + 1
+    print("base channels (cur_speed, log_mld, ssh"
+          + (", cur_u, cur_v" if want_cur else "") + ") …", flush=True)
     nb = 0
     for r, b in enumerate(bins):
         j = src_bins.get(b)
@@ -819,6 +874,9 @@ def main():
         if not np.isfinite(uo).any():
             continue
         X[r, :, :, 0] = np.hypot(uo, vo)
+        if want_cur:
+            X[r, :, :, C_CUR_U] = uo
+            X[r, :, :, C_CUR_V] = vo
         with np.errstate(invalid="ignore", divide="ignore"):
             # log10, matching family 3 (verified against base025_na.npz).
             # mlotst is a depth in metres and is positive by construction;
@@ -830,6 +888,10 @@ def main():
         nb += 1
     print(f"  base: {nb}/{T} pentads carry GLORYS "
           f"({T - nb} missing — pre-1993 and any gap in the pull)")
+    n_cur = nb if want_cur else 0
+    if want_cur:
+        print(f"  cur: {n_cur}/{T} bins carry cur_u/cur_v — the same binned "
+              f"means cur_speed is the hypotenuse of, by construction")
 
     ocean = np.zeros((H, W), bool)
     for r in range(T):
@@ -875,7 +937,8 @@ def main():
     # ---- Chinchilla inventory, from OBSERVED VALUES (E-034 §4) -----------
     groups = (("base", 0, C_BASE), ("rg", C_BASE, C_BASE + C_RG),
               ("wind", C_BASE + C_RG, NC)) \
-        + ((("sst", NC, nchan),) if nchan > NC else ())
+        + ((("sst", NC, NC + 1),) if nchan > NC else ()) \
+        + ((("cur", NC + 1, nchan),) if nchan > NC + 1 else ())
     total = int(cnt.sum())
     print("\nobserved values (the Chinchilla inventory — re-read it, do not "
           "scale the monthly one):")
@@ -909,6 +972,9 @@ def main():
                 window=np.array("na025"), cadence=np.array(cad["name"]),
                 recipe=np.array(recipe), n_rg_live=np.array(n_rg),
                 n_wind=np.array(n_wind), n_sst=np.array(n_sst), **truths)
+    if want_cur:
+        # r3 ONLY, so an r1/r2 npz keeps the exact key set it published.
+        meta["n_cur"] = np.array(n_cur)
     if sidecar:
         # RENAME the build memmap into place — a copy would double 166 GB.
         from tensor_io import save_tensor

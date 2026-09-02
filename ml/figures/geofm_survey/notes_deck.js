@@ -42,7 +42,7 @@ NOTES.forEach((note, i) => {
   const bodyH = 5.45 - stripH - 0.08;
   const len = note.length;
   const shrink = bodyH < 4.9 ? 0.5 : 0;
-  const fs = (len > 2600 ? 12 : len > 2100 ? 12.5 : len > 1500 ? 13.5 : 14.5) - shrink;
+  const fs = (len > 3600 ? 10.5 : len > 3100 ? 11 : len > 2600 ? 12 : len > 2100 ? 12.5 : len > 1500 ? 13.5 : 14.5) - shrink;
   const [L, R] = twoColumns(note);
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 0.6, y: 1.45, w: 12.1, h: bodyH, fill: { color: PALE }, line: { width: 0 }, rectRadius: 0.08 });
   s.addText(runs(L, fs), { x: 0.85, y: 1.6, w: 5.7, h: bodyH - 0.3, fontFace: FONT_B, valign: "top", isTextBox: true, margin: 0 });

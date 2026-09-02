@@ -325,6 +325,52 @@ module.exports = function (ctx) {
     footer(s);
   }
 
+  // ---------------------------------------------------------------- 44b. two stencils, one cone (E-067, built 2 Sep)
+  {
+    const s = pres.addSlide(); s.background = { color: WHITE };
+    title(s, "Two stencils, one cone — the E-067 design, built", "The codec reads the inner cone of raw channels; stage 2 reads the outer cone of embeddings. Union = the dependency space; overlap = the anchor column.");
+    // left: (lag, distance) map on log axes — inner region (codec) and outer region (stage 2)
+    const px = 0.6, py = 1.6, pw = 5.6, ph = 3.9;
+    s.addShape(pres.shapes.RECTANGLE, { x: px, y: py, w: pw, h: ph, fill: { color: "FBFCFD" }, line: { color: GRIDLINE, width: 0.5 } });
+    const ax = px + 0.7, ay = py + ph - 0.55, aw = pw - 0.95, ah = ph - 1.4;
+    const LAGMIN = 1, LAGMAX = 144, RMIN = 28, RMAX = 4444;
+    const fx = k => Math.log(Math.max(k, LAGMIN) / LAGMIN) / Math.log(LAGMAX / LAGMIN);
+    const fy = r => Math.log(Math.max(r, RMIN) / RMIN) / Math.log(RMAX / RMIN);
+    const reachB = k => Math.max(100, 0.3 * 86400 * 5 * (1 + k) / 1000);
+    const outer = k => Math.min(4444, Math.max(111, 0.3 * 86400 * 5 * (1 + k) / 1000));
+    const poly = (pts, col, tr, line) => s.addShape(pres.shapes.CUSTOM_GEOMETRY, { x: ax, y: ay - ah, w: aw, h: ah, fill: { color: col, transparency: tr }, line: { color: line || col, width: 0.75 }, points: pts.map(p => ({ x: p[0] * aw, y: (1 - p[1]) * ah })).concat([{ x: pts[0][0] * aw, y: (1 - pts[0][1]) * ah, close: true }]) });
+    // inner: lags 1..6, radius up to reachB(k) — step polygon
+    const inner = [[fx(1), 0]];
+    for (let k = 1; k <= 6; k++) { inner.push([fx(k), fy(reachB(k))]); inner.push([fx(k + 1) - 0.002, fy(reachB(k))]); }
+    inner.push([fx(7) - 0.002, 0]);
+    poly(inner, EMB, 55);
+    // outer: lags 7..143, radius from 111 km up to outer(k)
+    const out = [];
+    for (let k = 7; k <= 143; k += 4) out.push([fx(k), fy(outer(k))]);
+    out.push([fx(143), fy(outer(143))]); out.push([fx(143), fy(111)]); out.push([fx(7), fy(111)]);
+    poly(out, TIME, 55);
+    // anchor column (both stages) — a bar along the bottom
+    s.addShape(pres.shapes.RECTANGLE, { x: ax, y: ay - 0.05, w: aw, h: 0.05, fill: { color: OUTPX }, line: { width: 0 } });
+    // axes + ticks
+    arrow(s, ax, ay, ax + aw, ay, INK, 1); arrow(s, ax, ay, ax, ay - ah, INK, 1);
+    [[1, "1"], [6, "6"], [7, "7"], [36, "36"], [144, "144"]].forEach(([k, t]) => s.addText(t, { x: ax + fx(k) * aw - 0.2, y: ay + 0.02, w: 0.4, h: 0.2, fontFace: FONT_B, fontSize: 7.5, color: MUTED, align: "center", isTextBox: true, margin: 0 }));
+    s.addText("lag k (pentads, log) — 1 pentad = 5 days; 144 = 2 years", { x: ax, y: ay + 0.24, w: aw, h: 0.22, fontFace: FONT_B, fontSize: 7.5, color: MUTED, align: "center", isTextBox: true, margin: 0 });
+    [[100, "100"], [907, "907"], [4444, "4444"]].forEach(([r, t]) => s.addText(t + " km", { x: px + 0.02, y: ay - fy(r) * ah - 0.1, w: 0.62, h: 0.2, fontFace: FONT_B, fontSize: 7.5, color: MUTED, align: "right", isTextBox: true, margin: 0 }));
+    s.addText([{ text: "codec — inner cone: raw channels, lags 1–6, reach 130 → 907 km", options: { color: EMB, bold: true, breakLine: true } }, { text: "stage 2 — outer cone: embeddings, lags 7–143, 111 km → 4,444 km (empty for k ≤ 6 by construction)", options: { color: TIME, bold: true, breakLine: true } }, { text: "anchor column: the only overlap — lag 0 is the codec's 3 × 3 patch", options: { color: "9A7B1E", bold: true } }], { x: px + 0.1, y: py + 0.05, w: pw - 0.2, h: 0.7, fontFace: FONT_B, fontSize: 7.5, isTextBox: true, margin: 0 });
+    // right: what was built
+    box(s, 6.45, 1.6, 6.25, 3.9, NAVY, "F4F6F9");
+    txt(s, [
+      { text: "What exists (2 Sep, 42 tests green, nothing archived touched)", options: { bold: true, color: NAVY, fontSize: 10.5, breakLine: true, paraSpaceAfter: 4 } },
+      { text: "Data  ", options: { bold: true, color: TEAL, fontSize: 9.5 } }, { text: "family4 r3 = r2 + cur_u, cur_v (the GLORYS components cur_speed is the hypotenuse of; no new download). Direction is what the cone needs and what H1 supervises.", options: { fontSize: 9.5, breakLine: true, paraSpaceAfter: 4 } },
+      { text: "Cone  ", options: { bold: true, color: TEAL, fontSize: 9.5 } }, { text: "ml/cone.py — families A (τ ≈ 10 d: wind stress, lags 0–1, 500 km), B (0.3 m/s: currents, SSH, Argo depth column), C (SST, MLD: the L-shape); sunflower dots per lag; slots(r) = clamp(24·(r/900 km)², 6, 24). Budget per anchor: 42 patch + 706 dot tokens = 748. Outer spiral: 3,432 cells over 144 lags vs 20,880 for the cylinder.", options: { fontSize: 9.5, breakLine: true, paraSpaceAfter: 4 } },
+      { text: "Codec  ", options: { bold: true, color: TEAL, fontSize: 9.5 } }, { text: "ConeMAE, 7.05M params: Perceiver (64 latents × 256 × 6 blocks) over patch + dot tokens with Fourier coordinates and mask / miss tokens; queryable Gaussian decoder that reads z alone (a [z + latents] memory would let the bottleneck carry nothing — closed, not ranked improbable); masks: channel drop (cur_* at 50 %), lag-band drop, sector drop, future queries, anchor reconstruction.", options: { fontSize: 9.5, breakLine: true, paraSpaceAfter: 4 } },
+      { text: "Trainer  ", options: { bold: true, color: TEAL, fontSize: 9.5 } }, { text: "window-scope pool with the E-059 self-certificate (0 violations in 4,096 anchors), train.py's metrics family (status page unchanged), a velocity probe with cur_* dropped at encode. CPU smoke on a planted shear flow unreadable from one frame: cur_u R² +0.073 (cone) vs −0.015 (snapshot) — a pipeline check, not a result.", options: { fontSize: 9.5, breakLine: true, paraSpaceAfter: 4 } },
+      { text: "Not dispatched. Next: workflow wiring for r3 and the cone flags → codec run + H1 (cheap) → five-seed stage-2 arms for H2/H3 under the #516 battery with the LIM null in both embedding spaces.", options: { fontSize: 9.5, italic: true, color: MUTED } },
+    ], 6.6, 1.68, 5.95, 3.75);
+    reading(s, "How much velocity goes into the embedding — the choice, and why. A displacement is resolvable once it exceeds one cell (28 km; 21 km zonally at 40° N): at pentad cadence that is 0.06 m/s per lag, so eddy advection (0.1–0.3 m/s) is resolved at lag 1 and Rossby propagation (0.03 m/s) within 6 lags; the atmosphere decorrelates in 1–2 pentads; SST memory (3–6 months) is longer than the window and is deliberately left to stage 2. Thirty days at 0.3 m/s is the shortest inner window in which every fast process has moved by a cell and the slow ones by three, without paying for a 4,000 km inner reach. The hypotheses (E-067): H1 a ridge from frozen cone-z to cur_u, cur_v with the current channels hidden beats the snapshot codec; H2 the head over cone-z beats the E-064b control at 5–30 d by more than the five-seed interval and ties at ≥ 90 d; H3 the annulus stencil matches the full cylinder. Falsifiers and predictions are written in the plan before anything runs.", 5.65);
+    footer(s);
+  }
+
   // ---------------------------------------------------------------- 45. phases and the decisive experiment
   {
     const s = pres.addSlide(); s.background = { color: WHITE };
