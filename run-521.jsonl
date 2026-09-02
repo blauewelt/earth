@@ -1,0 +1,2 @@
+{"config": {"steps": 260000, "batch": 512, "d_z": 6, "patch": 1, "d_model": 512, "n_layers": 12, "n_heads": 4, "d_dec": 256, "anomaly": true, "fsq_levels": "8,8,8,5,5,5", "fsq_ladder": "auto", "fsq_bound": "ln", "fsq_warmstart_from": null, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 37.956, "data": "family4_na025_pentad_r2.npz", "C": 40, "T": 3142, "resume": "run-485", "recipe": "f4r2-40M-dz6-fsq65k"}}
+{"resumed": {"from": "run-485.pt", "parent_tag": "run-494", "at_step": 260000}}
