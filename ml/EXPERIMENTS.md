@@ -245,7 +245,7 @@ cancelled before it started. RE-DISPATCHED 11:0xZ as #528 (E-064a) and #529
 $0.401/h.** Cost of the death: ~1 h of a $0.288/h box and the Z pulls.
 
 <a id="e-062"></a>
-## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) DISPATCHED #518 (died on a full disk, 3 min) → #519 (died in `Set up job` on the same disk) → #520 (fresh box, 2026-09-02 09:45Z) · R0c (the 40.4M arm) DISPATCHED #523, 2026-09-02 10:1xZ
+## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) COMPLETE #520, 2026-09-02 13:5xZ (after #518/#519 died on a full disk) — width null: mean acc 0.103 vs 0.105 · R0c (the 40.4M arm) DISPATCHED #523, 2026-09-02 10:1xZ
 
 TL;DR — **nothing this programme has ever rolled used a clean-pool head.** #503,
 #510 and #513 all rolled heads trained under `endpoint_contaminated`, so no
@@ -695,6 +695,93 @@ level second.** A fresh box pulls the tensor,
 decodes its scratch copy and pulls the published Z (12 chunks) before the
 roll, ~1 h; #516's 21 h 26 m roll on a 27× larger head is the only pace
 reference and is not a law for this head.
+
+#### (k) R0b LANDED — #520 (E-062-R0b, the 7.6M arm through #516's battery) · read 2026-09-02 13:5xZ from `probes-520.json` (2,044,557 B on `ml-metrics`, no `in_progress` marker)
+
+**TL;DR — at one twenty-seventh of the parameters the small head rolls the
+same field as the large one: the same mean anomaly correlation (0.103 vs
+0.105 over 73 pentads, corridor), the same rescaled ceiling (mean acc²
+0.0185 vs 0.0188), and a BETTER raw MSSS (−0.179 vs −0.439) only because
+it damps harder (amplitude 0.54 vs 0.78) and so pays less of the
+calibration penalty. Capacity was not the axis. Both heads lose to the
+200-mode linear inverse model (#527) from 15 days out.**
+
+The battery reproduced #516's protocol exactly: `identity_max_dev` 0.0005
+(#516: 0.0005), 8/40 scoreable channels, n_px 864 / 30,158 / 86,698 at
+gate / corridor / window, the pentad gate skipped for the same stated
+reason (no reference at this cadence — uncertified first reading, as
+#516). Wall 7,660 s against #516's 77,147 s — a tenth of the roll time for
+a 27× smaller head.
+
+| corridor, 3 starts × 3 held-out years | 5 d | 10 d | 15 d | 30 d | 90 d | 180 d | 365 d | mean 73 leads |
+|---|---|---|---|---|---|---|---|---|
+| **#520 7.6M** acc | 0.569 | 0.403 | 0.284 | 0.124 | 0.137 | 0.114 | 0.119 | **0.103** |
+| #516 206.66M acc | 0.606 | 0.412 | 0.265 | 0.204 | 0.132 | 0.153 | −0.031 | 0.105 |
+| #527 LIM K=200 acc | 0.406 | 0.361 | 0.324 | 0.258 | 0.261 | 0.223 | 0.177 | 0.225 |
+| **#520** msss_clim | 0.314 | 0.125 | −0.005 | −0.160 | −0.120 | −0.139 | −0.181 | **−0.179** |
+| #516 msss_clim | 0.365 | 0.109 | −0.172 | −0.168 | −0.322 | −0.354 | −0.719 | −0.439 |
+| #527 msss_clim | 0.169 | 0.135 | 0.106 | 0.069 | 0.075 | 0.053 | 0.019 | +0.054 |
+| **#520** amp_ratio | 0.69 | 0.61 | 0.58 | 0.55 | 0.52 | 0.51 | 0.54 | 0.54 |
+| #516 amp_ratio | 0.69 | 0.67 | 0.76 | 0.67 | 0.72 | 0.78 | 0.82 | 0.78 |
+
+**Shape.** The lead-decay falsifier PASSES again: 0.569 at 5 d falling to
+~0.10–0.14 by 30 d. The difference from #516 is at the FAR end — the 7.6M
+head does not decay through zero; it holds acc 0.10–0.12 from 60 d to 365 d
+where the 206.66M head falls from 0.13 to −0.03. Against #516 lead by lead
+the small head is better at 31 of 73 leads (worse in the first 10 d, better
+past 240 d, interleaved between). Mean msss_damped −0.200 vs −0.461; both
+beat raw persistence at ≥ 71 of 73 leads and neither beats damped
+persistence at any lead. msss_clim > 0 at 2 of 73 leads for both (5 and
+10 d).
+
+**Amplitude is the whole MSSS difference.** The 7.6M head damps to 0.54 of
+the observed anomaly amplitude and stays there; the 206.66M head runs at
+0.78 and drifts UP with lead (0.69 → 0.82). At mean acc ≈ 0.10 the
+MSE-optimal amplitude is ≈ 0.10, so the head that damps more pays less: the
+−0.179 vs −0.439 gap is calibration, not information. The rescaled ceilings
+(mean acc² 0.0185 vs 0.0188) are identical.
+
+**Per channel (corridor).** SST is again the only channel with skill past a
+few pentads: 7.6M acc 0.67 / 0.37 / 0.29 / 0.18 at 5 / 30 / 90 / 365 d
+(206.66M 0.76 / 0.34 / 0.34 / 0.10; LIM 0.48 / 0.41 / 0.33 / 0.28), and its
+mean msss_clim is −0.006 (33 of 73 leads positive) against #516's −0.165
+(11 of 73) and the LIM's +0.181 (73 of 73). SSH: 0.87 at 5 d — the highest
+first-pentad acc of any channel, above #516's 0.84 — then 0.21 / 0.14 / 0.06
+against the LIM's 0.36 / 0.30 / 0.30. Wind-stress channels are noise for
+both heads (acc within ±0.1 of zero past 30 d, means −0.29 to −0.38
+msss_clim). Current speed and mixed-layer depth: 0.67 / 0.46 at 5 d, at zero
+by 90 d.
+
+**Transport bands are noise, and sign-flipped against #516**: unpooled r
+−0.025 / +0.103 / −0.244 (5–90 / 95–180 / 185–365 d) where #516 read
++0.107 / −0.242 / +0.163; pooled −0.046 / +0.072 / −0.243. With §3b's band
+sd 0.041 measured at the xl tier — and no pair at all at this cadence —
+none of the six numbers is a level; the 36-month long roll reads r_lp18
+0.766 at amp 0.363 on TRAINED months only (n 219, held-out n 0), which is
+the in-sample read-out and says nothing about forecast skill.
+
+**Against the LIM (#527, K=200).** The head wins the first two pentads on
+acc (0.569 / 0.403 vs 0.406 / 0.361) and msss_clim (0.314 / 0.125 vs
+0.169 / 0.135 — at 10 d the LIM is already ahead on MSSS), and loses every
+lead from 15 d: the LIM's acc is above the head's at 70 of 73 leads and its
+msss_clim at 72 of 73. Mean acc 0.225 vs 0.103. The LIM's amplitude
+(0.48 → 0.06) is the fitted least-squares decay; the head's (0.54, flat) is
+not fitted to anything.
+
+**What the reading licenses.** (i) The width ladder is flat on the rolled
+field: 7.6M ≈ 206.66M on every information-bearing number (mean acc,
+rescaled ceiling, per-channel ordering), n = 1 each, no measured pair at
+this cadence — a consistency, not a level. (ii) The 20k-step 7.6M
+checkpoint is past its held-out minimum (E-060a: 0.6095 at step 1,200,
+0.692 at 20k) exactly as the 200k 206.66M one is past its (E-059), so both
+are floors; the step-2,000 roll (§(h) item 1) is now cheap — a 7.6M roll
+costs ~2 h — and E-064b's torch milestones (1,000–3,000) are its input.
+(iii) The paper's Table 2 gains the 7.6M column and §3 states the width
+null. (iv) R0c (#523, 40.4M) lands ~16:30Z and fills the middle rung.
+
+**Box 49632479 (Taiwan, `gpu-box-41298070`) STOPPED at 13:55Z** (nothing
+queued there; `{"success":true}`, to be verified `exited` on the next
+`gpu_box.mjs list`).
 
 ---
 

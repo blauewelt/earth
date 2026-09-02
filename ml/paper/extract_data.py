@@ -117,6 +117,26 @@ if os.path.exists(p527):
                 for ch, rr in b["corridor"]["per_channel"].items() if rr and rr[0]["n"] > 0}
                 if name == "lim_k200" else None),
         }
+# E-062-R0b / R0c · the 7.598M (probes-520) and 40.388M (probes-523) heads
+# through #516's identical battery; one entry per run, same rows as the head
+out["width_rolls"] = {}
+for run, params in (("520", 7.598), ("523", 40.388)):
+    pth = os.path.join(a.probes, f"probes-{run}.json")
+    if not os.path.exists(pth):
+        continue
+    dd, hh = head(pth)
+    b = list(hh.values())[0]
+    out["width_rolls"][run] = {
+        "params_M": params, "meta": b["meta"], "wall_s": b.get("wall_s"),
+        "corridor": rows(b, "corridor"), "gate": rows(b, "gate"), "window": rows(b, "window"),
+        "corridor_per_channel": {
+            ch: [{k: r[k] for k in ("h", "n", "msss_clim", "msss_damped", "acc", "amp_ratio")} for r in rr]
+            for ch, rr in b["corridor"]["per_channel"].items() if rr and rr[0]["n"] > 0},
+        "horizon_auc": {s: b[s]["horizon_auc"] for s in ("gate", "corridor", "window")},
+        "auc_damped": {s: b[s]["auc_damped"] for s in ("gate", "corridor", "window")},
+        "amoc_bands_unpooled": b["amoc_bands_unpooled"], "amoc_bands": b["amoc_bands"],
+        "long": {k: v for k, v in b["long"].items() if not isinstance(v, list)},
+    }
 os.makedirs(os.path.join(HERE, "data"), exist_ok=True)
 dst = os.path.join(HERE, "data", "report_data.json")
 json.dump(out, open(dst, "w"), separators=(",", ":"))

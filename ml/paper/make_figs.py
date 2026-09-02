@@ -186,6 +186,10 @@ calib = acc**2
 fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.1))
 ax = axes[0]
 ax.plot(lead, acc, color=C[0], label="206.7M head")
+w520 = D.get("width_rolls", {}).get("520")
+if w520:
+    rr = w520["corridor"]
+    ax.plot([r["h"] * STEP_DAYS for r in rr], [r["acc"] for r in rr], color=C[0], ls="--", lw=1.2, label="7.6M head")
 for key, col, lab in (("lim_k50", C[5], "LIM, 50 modes"), ("lim_k100", C[4], "LIM, 100 modes"), ("lim_k200", C[1], "LIM, 200 modes")):
     rr = lim[key]["corridor"]
     ax.plot([r["h"] * STEP_DAYS for r in rr], [r["acc"] for r in rr], color=col, lw=1.2, label=lab)
