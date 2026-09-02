@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Provenance of ml/paper/data/reset_data.json — how it is (re)built.
+"""Provenance of ml/paper/data/report_data.json — how it is (re)built.
 
 Every number in the report's figures and tables comes from one of these
 public artefacts, and nothing is typed in by hand:
 
   probes-516.json  — E-062-R0, the first clean roll (E-059 head, window pool)
-  probes-510.json  — its contaminated twin (E-051 head, endpoint pool), the
-                     identical battery
+  probes-510.json  — the E-051 head (endpoint pool) on the identical battery
   probes-513.json  — the longitude-holdout roll (E-057 FGN M=8 head and the
                      e017 gate head), source of the spatial split and the
                      ensemble-dispersion curves
@@ -17,7 +16,7 @@ public artefacts, and nothing is typed in by hand:
 
 Usage:  python3 extract_data.py --probes DIR --metrics DIR
 where DIR/probes-{510,513,516}.json and DIR/{e051,e059,e060a,e060b,e060c}_metrics.jsonl
-exist. Writes data/reset_data.json (compact, ~100 KB). The committed copy was
+exist. Writes data/report_data.json (compact, ~100 KB). The committed copy was
 produced on 2026-08-31 from the artefacts as archived on that day.
 """
 import argparse
@@ -92,7 +91,7 @@ def curve(name):
     vp = next(r["stage2_monitor"]["val_persistence"] for r in rs if "stage2_monitor" in r)
     st = [r for r in rs if "stage2_step" in r]
     return {"params_M": cfg["params_M"], "d_model": cfg["d_model"], "layers": cfg["layers"],
-            "steps": cfg["steps"], "holdout_scope": cfg.get("holdout_scope", "endpoint_contaminated"),
+            "steps": cfg["steps"], "holdout_scope": cfg.get("holdout_scope", "endpoint"),
             "train_windows": cfg["train_windows"], "val_persistence": vp,
             "step": [r["stage2_step"] for r in st], "train_zmse": [r["stage2_zmse"] for r in st],
             "val_zmse": [r["stage2_val_zmse"] for r in st],
@@ -101,6 +100,6 @@ def curve(name):
 
 out["curves"] = {k: curve(k) for k in ("e051", "e059", "e060a", "e060b", "e060c")}
 os.makedirs(os.path.join(HERE, "data"), exist_ok=True)
-dst = os.path.join(HERE, "data", "reset_data.json")
+dst = os.path.join(HERE, "data", "report_data.json")
 json.dump(out, open(dst, "w"), separators=(",", ":"))
 print("wrote", dst, os.path.getsize(dst), "bytes")

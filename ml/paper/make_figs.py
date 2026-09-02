@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Figures for the technical report (ml/paper/paper.tex), reset edition.
+"""Figures for the technical report (ml/paper/paper.tex).
 
-Every series is read from data/reset_data.json, which extract_data.py builds
-from the public result bundles (probes-510/513/516 on the ml-metrics branch)
-and the stage-2 training records. Nothing here is typed in by hand.
+Stage-2 series are read from data/report_data.json, which extract_data.py
+builds from the public result bundles (probes-516 on the ml-metrics branch)
+and the stage-2 training records. Codec probe numbers carry a `# src:`
+comment naming the archived result they are transcribed from.
 
 Run from anywhere:  python3 ml/paper/make_figs.py [--dark]
 --dark writes the same figures for the dark page to figs_dark/.
@@ -21,7 +22,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DARK = "--dark" in sys.argv
 FIGS = os.path.join(HERE, "figs_dark" if DARK else "figs")
 os.makedirs(FIGS, exist_ok=True)
-D = json.load(open(os.path.join(HERE, "data", "reset_data.json")))
+D = json.load(open(os.path.join(HERE, "data", "report_data.json")))
 
 if DARK:
     BG = "#14140f"
@@ -55,30 +56,71 @@ def save(fig, name):
 
 
 STEP_DAYS = 5
-cv = D["curves"]
 
-# ---- Fig 1: the pool bug in the training curves, and the width ladder -----
-fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.3))
-ax = axes[0]
-for key, col, lab in (("e051", C[1], "E-051 · endpoint-contaminated pool"),
-                      ("e059", C[0], "E-059 · window pool (clean)")):
-    c = cv[key]
-    vp = c["val_persistence"]
-    st = np.array(c["step"]) / 1000.0
-    ax.plot(st, np.array(c["train_zmse"]) / vp, color=col, ls="--", lw=1.2)
-    ax.plot(st, np.array(c["val_zmse"]) / vp, color=col, label=lab)
-ax.plot([], [], color=INK2, ls="--", lw=1.2, label="train (dashed)")
-ax.plot([], [], color=INK2, label="held-out (solid)")
-ax.set_xlabel("training step (thousands)")
-ax.set_ylabel("one-step z-MSE / persistence z-MSE")
-ax.set_ylim(0, 1.0)
-ax.set_title("206.66M head, identical except for the pool", fontsize=9)
-ax.legend(fontsize=7.5, loc="upper right")
+# ---- Fig 1: the codec's transport read-out, pooled, across generations -----
+# src: LEADERBOARD.md k-fold table + probe_kfold.json wind-only baseline
+runs = [("12-ch, $d_z$=8", 0.111, 0.01, 0.20, C[0]),
+        ("12-ch, $d_z$=16", 0.151, 0.01, 0.28, C[0]),
+        ("12-ch, $d_z$=32", 0.182, 0.05, 0.31, C[0]),
+        ("12-ch, $d_z$=128", 0.166, 0.072, 0.295, C[0]),
+        ("12-ch, $d_z$=64", 0.308, 0.13, 0.46, C[0]),
+        ("25-ch, pixel", 0.536, 0.378, 0.683, C[2]),
+        ("24-ch, 3×3 patch", 0.543, 0.428, 0.659, C[2]),
+        ("14-ch + wind, NA window", 0.604, 0.474, 0.720, C[1]),
+        ("14-ch + wind, global", 0.602, 0.461, 0.728, C[1]),
+        ("39-ch, 0.25°, 0.92M", 0.620, 0.484, 0.741, C[3]),
+        ("39-ch, 0.25°, 40.7M", 0.631, 0.513, 0.732, C[3])]
+fig, ax = plt.subplots(figsize=(6.0, 3.8))
+ys = np.arange(len(runs))
+for i, (name, r, lo, hi, col) in enumerate(runs):
+    ax.barh(i, r, color=col, alpha=0.85, height=0.62)
+    ax.plot([lo, hi], [i, i], color=INK, lw=1.4)
+ax.axvline(0.531, color=INK2, ls="--", lw=1.2)
+ax.text(0.531, -0.45, "wind-only ridge, 1° (0.53) ", color=INK2, fontsize=7.5, va="top", ha="right")
+ax.axvline(0.568, color=INK2, ls=":", lw=1.2)
+ax.text(0.568, len(runs) - 0.3, " wind-only, 0.25° (0.57)", color=INK2, fontsize=7.5, va="top")
+ax.set_yticks(ys)
+ax.set_yticklabels([r[0] for r in runs], fontsize=8)
+ax.set_xlabel("year-blocked k-fold $r$ vs monthly RAPID transport (pooled ridge, 95% CI)")
+ax.set_xlim(0, 0.85)
+ax.set_ylim(-1.3, len(runs) - 0.2)
 strip(ax)
+fig.tight_layout()
+save(fig, "fig_kfold.pdf")
 
-ax = axes[1]
+# ---- Fig 2: the probe ladder — same embeddings, three read-outs -------------
+# src: probe_kfold.json (ridge), probe_kfold_mlp.json, probe_head.json
+codecs = ["14-ch, pixel\n(global)", "25-ch, pixel\n(global)", "24-ch, 3×3 patch\n(global)"]
+ridge = [0.602, 0.536, 0.543]
+mlp = [0.582, 0.514, np.nan]
+head = [0.635, 0.617, 0.690]
+head_lo = [0.528, 0.486, 0.570]
+head_hi = [0.736, 0.729, 0.781]
+x = np.arange(3)
+w = 0.26
+fig, ax = plt.subplots(figsize=(6.0, 3.1))
+ax.bar(x - w, ridge, w, color=C[0], label="ridge on the section mean")
+ax.bar(x, mlp, w, color=C[1], label="MLP on the section mean")
+ax.bar(x + w, head, w, color=C[2], label="attention head over the unpooled section")
+for i in range(3):
+    ax.plot([x[i] + w, x[i] + w], [head_lo[i], head_hi[i]], color=INK, lw=1.4)
+ax.axhline(0.531, color=INK2, ls="--", lw=1.2)
+ax.text(2.45, 0.531, " wind-only\n 0.53", color=INK2, fontsize=7.5, va="center")
+ax.set_xticks(x)
+ax.set_xticklabels(codecs, fontsize=8)
+ax.set_ylabel("RAPID k-fold $r$")
+ax.set_ylim(0.45, 0.82)
+ax.legend(fontsize=7.5, loc="upper left")
+strip(ax)
+fig.tight_layout()
+save(fig, "fig_ladder.pdf")
+
+# ---- Fig 3: stage-2 held-out one-step ratio by width, and the RAPID probe ---
+cv = D["curves"]
+fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.2))
+ax = axes[0]
 for key, col, lab in (("e060a", C[2], "7.6M"), ("e060b", C[3], "40.4M"),
-                      ("e059", C[0], "206.7M"), ("e060c", C[4], "400M (reaped at 2k)")):
+                      ("e059", C[0], "206.7M"), ("e060c", C[4], "400M (stopped at 2k)")):
     c = cv[key]
     vp = c["val_persistence"]
     st = np.array(c["step"])
@@ -86,107 +128,69 @@ for key, col, lab in (("e060a", C[2], "7.6M"), ("e060b", C[3], "40.4M"),
     ax.plot(st[m] / 1000.0, np.array(c["val_zmse"])[m] / vp, color=col, label=lab, marker="o", ms=2.5, lw=1.2)
 ax.set_xscale("log")
 ax.set_xlabel("training step (thousands, log)")
-ax.set_ylabel("held-out one-step ratio")
+ax.set_ylabel("held-out one-step z-MSE / persistence")
 ax.set_ylim(0.55, 0.95)
-ax.set_title("clean pool: every width bottoms out inside ~2,000 steps", fontsize=9)
 ax.legend(fontsize=7.5, loc="upper right", title="parameters", title_fontsize=7.5)
-strip(ax)
-fig.tight_layout()
-save(fig, "fig_curves.pdf")
-
-# ---- Fig 2: lead decay, clean vs contaminated; and the three baselines -----
-r0 = D["r0_clean_516"]["corridor"]
-tw = D["contaminated_twin_510"]["corridor"]
-lead = np.array([r["h"] for r in r0]) * STEP_DAYS
-fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.3))
-ax = axes[0]
-ax.plot(lead, [r["acc"] for r in tw], color=C[1], label="contaminated head (E-051, run #510)")
-ax.plot(lead, [r["acc"] for r in r0], color=C[0], label="clean head (E-059, run #516)")
-ax.axhline(0, color=INK2, lw=0.8)
-ax.set_xlabel("lead (days)")
-ax.set_ylabel("anomaly correlation, corridor")
-ax.set_ylim(-0.1, 1.02)
-ax.set_title("same battery, same starts, one variable: the training pool", fontsize=9)
-ax.legend(fontsize=7.5, loc="center right")
 strip(ax)
 
 ax = axes[1]
+for key, col, lab in (("e060a", C[2], "7.6M"), ("e060b", C[3], "40.4M"), ("e059", C[0], "206.7M")):
+    pr = [p for p in cv[key]["probe"] if p["step"] <= 200000]
+    ax.plot([p["step"] / 1000 for p in pr], [p["rapid_r_deseas"] for p in pr], color=col, label=lab, marker="o", ms=2.5, lw=1.2)
+ax.set_xlabel("training step (thousands)")
+ax.set_ylabel("RAPID probe $r$ (in-training, pooled)")
+ax.set_ylim(0.45, 0.68)
+ax.legend(fontsize=7.5, title="parameters", title_fontsize=7.5)
+strip(ax)
+fig.tight_layout()
+save(fig, "fig_stage2.pdf")
+
+# ---- Fig 4: the roll — the head against its references, and per channel ----
+r0 = D["r0_clean_516"]["corridor"]
+lead = np.array([r["h"] for r in r0]) * STEP_DAYS
+pc = D["r0_clean_516"]["corridor_per_channel"]
+fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.2))
+ax = axes[0]
 ax.plot(lead, [r["msss_pers"] for r in r0], color=C[2], label="vs raw persistence")
 ax.plot(lead, [r["msss_clim"] for r in r0], color=C[0], label="vs climatology (zero anomaly)")
 ax.plot(lead, [r["msss_damped"] for r in r0], color=C[3], label="vs damped persistence (AR(1))")
 ax.axhline(0, color=INK2, lw=0.8)
 ax.set_xlabel("lead (days)")
-ax.set_ylabel("MSSS of the clean head, corridor")
+ax.set_ylabel("MSSS, corridor")
 ax.set_ylim(-0.8, 0.45)
-ax.set_title("the clean head against three nulls", fontsize=9)
 ax.legend(fontsize=7.5, loc="lower left")
 strip(ax)
-fig.tight_layout()
-save(fig, "fig_decay.pdf")
 
-# ---- Fig 3: per channel ----------------------------------------------------
-pc = D["r0_clean_516"]["corridor_per_channel"]
+ax = axes[1]
 order = ["sst", "ssh", "cur_speed", "log_mld", "tau_x", "tau_y", "tau_x_std", "tau_y_std"]
-fig, ax = plt.subplots(figsize=(6.4, 3.4))
 for i, ch in enumerate(order):
     rr = pc[ch]
     ax.plot([r["h"] * STEP_DAYS for r in rr], [r["acc"] for r in rr], color=C[i], label=ch,
-            lw=1.8 if ch in ("sst", "ssh") else 1.1)
+            lw=1.8 if ch in ("sst", "ssh") else 1.0)
 ax.axhline(0, color=INK2, lw=0.8)
 ax.set_xlabel("lead (days)")
 ax.set_ylabel("anomaly correlation, corridor")
 ax.set_ylim(-0.15, 0.9)
-ax.set_title("clean head, per channel (the 32 Argo channels score nothing at any lead)", fontsize=9)
-ax.legend(fontsize=7.5, ncol=2, loc="upper right")
+ax.legend(fontsize=7, ncol=2, loc="upper right")
 strip(ax)
 fig.tight_layout()
-save(fig, "fig_channels.pdf")
+save(fig, "fig_roll.pdf")
 
-# ---- Fig 4: the calibration identity -----------------------------------------
+# ---- Fig 5: the calibration identity -----------------------------------------
 acc = np.array([r["acc"] for r in r0])
 amp = np.array([r["amp_ratio"] for r in r0])
 msss = np.array([r["msss_clim"] for r in r0])
 ident = 1 - (1 + amp**2 - 2 * amp * acc)
-calib = acc**2          # msss at a = ACC
-fig, ax = plt.subplots(figsize=(6.4, 3.3))
+calib = acc**2
+fig, ax = plt.subplots(figsize=(6.2, 3.0))
 ax.plot(lead, msss, color=C[0], label="measured MSSS vs climatology")
-ax.plot(lead, ident, color=C[1], ls="--", label=r"identity $1-(1+a^2-2a\,\mathrm{ACC})$ from the head's own $a$, ACC")
-ax.plot(lead, calib, color=C[2], label=r"same states rescaled to $a=\mathrm{ACC}$ (= ACC$^2$)")
+ax.plot(lead, ident, color=C[1], ls="--", label=r"$1-(1+a^2-2a\,\mathrm{ACC})$ from the head's own $a$, ACC")
+ax.plot(lead, calib, color=C[2], label=r"same states rescaled to $a=\mathrm{ACC}$")
 ax.axhline(0, color=INK2, lw=0.8)
 ax.set_xlabel("lead (days)")
 ax.set_ylabel("MSSS, corridor")
 ax.set_ylim(-0.8, 0.45)
-ax.set_title("the negative score is amplitude, not sign: mean |identity − measured| = %.4f" % np.mean(np.abs(ident - msss)), fontsize=9)
 ax.legend(fontsize=7.5, loc="lower left")
 strip(ax)
 fig.tight_layout()
 save(fig, "fig_calibration.pdf")
-
-# ---- Fig 5: ensemble dispersion inside and past the record (contaminated head)
-disp = D["dispersion_513"]
-fig, ax = plt.subplots(figsize=(6.4, 3.2))
-for ph, col, lab in (("long", C[1], "36 months INSIDE the training record (2005–2007)"),
-                     ("future", C[3], "36 months PAST its end (2025–2027)")):
-    fv = np.sqrt(np.array(disp[ph]["field_var"]))
-    ax.plot(np.arange(1, len(fv) + 1), fv, color=col, label=lab, marker="o", ms=2.5, lw=1.2)
-ax.set_xlabel("months rolled")
-ax.set_ylabel("member spread of the decoded field\n(sd, corridor mean)")
-ax.set_title("8-member ensemble, contaminated head (run #513): confident where it memorised", fontsize=9)
-ax.legend(fontsize=7.5, loc="upper left")
-strip(ax)
-fig.tight_layout()
-save(fig, "fig_dispersion.pdf")
-
-# ---- Fig 6: the RAPID probe along training, by width --------------------------
-fig, ax = plt.subplots(figsize=(6.4, 3.0))
-for key, col, lab in (("e060a", C[2], "7.6M"), ("e060b", C[3], "40.4M"), ("e059", C[0], "206.7M")):
-    pr = [p for p in cv[key]["probe"] if p["step"] <= 200000]
-    ax.plot([p["step"] / 1000 for p in pr], [p["rapid_r_deseas"] for p in pr], color=col, label=lab, marker="o", ms=2.5, lw=1.2)
-ax.set_xlabel("training step (thousands)")
-ax.set_ylabel("RAPID probe r (in-training, pooled)")
-ax.set_ylim(0.45, 0.68)
-ax.set_title("the transport probe drifts down with training in the large arm only", fontsize=9)
-ax.legend(fontsize=7.5, title="parameters", title_fontsize=7.5)
-strip(ax)
-fig.tight_layout()
-save(fig, "fig_probe.pdf")

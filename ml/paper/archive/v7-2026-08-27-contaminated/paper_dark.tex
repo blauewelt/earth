@@ -44,6 +44,14 @@ probed against the Atlantic overturning circulation}
 \begin{document}
 \maketitle
 
+\begin{center}\fbox{\parbox{0.92\textwidth}{\small\textbf{Retired
+version.} Every rolled-forecast number in this report was measured on
+stage-2 heads whose training pool teacher-forced the held-out years
+(\S\ref{sec:contamination}, added 2 September 2026). The statements that
+those years were held out of training are wrong. The current report,
+\texttt{ml/paper/paper.tex} in the repository, carries only measurements
+made under the corrected protocol.}}\end{center}
+
 \begin{abstract}
 We compress everything the observing system knows about each point of the
 North Atlantic into one vector per pixel per time step (a self-supervised
@@ -3526,6 +3534,113 @@ over the 792 non-RAPID truth months. The v6 data ladder is largely spent:
 the time axis reaches 1982, the GLORYS channels are at $0.25^\circ$, and
 the Argo levels are doubled --- what a data step buys now is a finer
 \emph{time} axis, which is exactly what \S\ref{sec:cadence} is about.
+
+\section{Addendum: the training pool leaked the held-out years}\label{sec:contamination}
+
+\emph{Added 2 September 2026, after every section above was written. The
+numbers here are from the public result bundles \texttt{probes-510}, \texttt{-513}
+and \texttt{-516} and the stage-2 training records; the figures are made by
+\texttt{make\_figs\_addendum.py} beside this file.}
+
+\paragraph{Mechanism.} Stage-2 training draws windows of $K=144$ consecutive
+pentads and applies the one-step loss at every position of the window. The
+pool excluded a window only when its \emph{final} target fell in a held-out
+year (2009, 2017, 2023). Every window whose last bin lay in a training year
+but which straddled a held-out year therefore teacher-forced that year's
+transitions into the weights: of the 400{,}176 frame-targets scored inside
+the pool, 21{,}018 were held-out bins. Under this rule the pool holds
+240{,}933{,}742 windows (2{,}779 end-bins $\times$ 86{,}698 pixels); the
+corrected rule, which drops any window touching a held-out bin, holds
+209{,}549{,}066 (2{,}417 end-bins). Every stage-2 head in this report ---
+all 98 archived heads, monthly and pentad, including the 211M pair of
+\S\ref{sec:roll} and the 206.7M pentad head of \S\ref{sec:cadence} --- was
+trained under the leaking rule. The codec (stage 1) is unaffected: it is
+trained per pixel and per bin with the held-out years excluded outright,
+so the probe results of \S\ref{sec:results} stand.
+
+\paragraph{Signature 1: skill that does not decay with lead.} The 206.7M
+pentad head (E-051, 398k steps) rolled from the nine held-out starts
+(\texttt{probes-510}) holds a corridor field anomaly correlation of $0.985$
+at five days and $0.973$ at 365 days, mean $0.946$ over the year; its
+unpooled transport read-out correlates with RAPID at $0.481$ over 5--90
+days, $0.568$ over 95--180 and $0.580$ over 185--365 --- flat or rising with
+lead (Figure~\ref{fig:add:pools}). No forecast of an ocean anomaly field
+holds $r=0.97$ at twelve months; a recall curve does. The identical head
+architecture trained under the corrected pool (E-059, \texttt{probes-516}),
+on the identical battery, decays from $0.606$ at five days to $-0.031$ at a
+year, and its transport bands read $+0.107$, $-0.242$, $+0.163$.
+
+\begin{figure}[t]\centering
+\includegraphics[width=\textwidth]{fig_addendum_pools.pdf}
+\caption{The same rolled battery under the two pools. Left: corridor field
+anomaly correlation against lead. Right: unpooled RAPID transport
+correlation by lead band.}\label{fig:add:pools}
+\end{figure}
+
+\paragraph{Signature 2: no skill on longitudes never trained on.} The
+longitude-holdout roll (\texttt{probes-513}) scores the $-45\ldots-25^\circ$E
+block, which both stages held out, separately from the rest. The 279.6M
+stencil head with an 8-member ensemble mean reads mean MSSS against
+climatology of $0.838$ on trained longitudes and $0.176$ on the held-out
+block (corridor; gate $0.821/0.330$, window $0.834/0.266$); the one-point
+gate head reads $0.804/0.058$ (Figure~\ref{fig:add:split}). On ocean it was
+trained on, the head removes about 80\,\% of the anomaly variance; on ocean
+it was not, 6--18\,\%. The blended aggregates quoted throughout this report
+(corridor 0.648 for the stencil head, 0.589 for the gate) mix the two
+populations at roughly 3:1.
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.8\textwidth]{fig_addendum_split.pdf}
+\caption{Mean MSSS against climatology on trained and held-out longitudes,
+by scope, for two heads of the longitude-holdout roll.}\label{fig:add:split}
+\end{figure}
+
+\paragraph{Signature 3: the ensemble is confident where it has memorised.}
+The same 8-member head rolled 36 months with no truth, once inside the
+record (2005-01 to 2007-12) and once past its end (2025-01 to 2027-12).
+Inside the record the members' transport spread is flat, $0.106$\,Sv over
+the first twelve months and $0.102$ over the last twelve, and the field
+variance across members grows $2.9\times$; past the record the spread grows
+from $0.197$ to $0.420$\,Sv and the field variance $7.3\times$
+(Figure~\ref{fig:add:dispersion}). Independently noised trajectories stay
+pinned together over years the model has seen and fan out over years it
+has not.
+
+\begin{figure}[t]\centering
+\includegraphics[width=\textwidth]{fig_addendum_dispersion.pdf}
+\caption{Ensemble dispersion of the 8-member stencil head over a 36-month
+roll inside and past the training record.}\label{fig:add:dispersion}
+\end{figure}
+
+\paragraph{Signature 4: the held-out loss of a leaking pool.} Under the
+leaking rule the 206.7M head's ``held-out'' one-step z-MSE falls
+monotonically to $0.033$ of the persistence error at 200k steps, within
+a third of its training loss ($0.026$) and far below anything a one-step
+ocean forecast reaches; under the corrected rule the same architecture bottoms at
+$0.611$ at step 2{,}000 and rises to $0.686$ by 200k while its training
+loss falls to $0.023$ (Figure~\ref{fig:add:curves}). The leaking pool's
+validation set was, in effect, training data.
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.8\textwidth]{fig_addendum_curves.pdf}
+\caption{Training and held-out one-step loss of the 206.7M pentad head under
+the two pools, as a fraction of the persistence error.}\label{fig:add:curves}
+\end{figure}
+
+\paragraph{What this retires.} Every rolled number in this report ---
+corridor ``AUC'' at every tier, the capacity, noise and longitude-holdout
+effects, the long-hindcast correlations, the pentad and daily rolled
+skill --- measured recall of training years, and the seed pairs that
+replicated them replicated the recall. The name ``corridor AUC'' is retired
+with them: the quantity is the mean over leads of $1-\mathrm{MSE}_{\rm
+model}/\mathrm{MSE}_{\rm clim}$, where climatology is the zero-anomaly
+forecast, and it was reasoned about as an area under a curve in places. What
+survives: the data description, the codec architecture, its reconstruction
+curves and its probe results (\S\ref{sec:data}--\S\ref{sec:results}), the
+JAX port's parity gates, and the replication arithmetic of
+\S\ref{sec:metrics} as a property of the protocol rather than of any skill.
+The measurements made under the corrected pool are reported in the current
+version of this report.
 
 \appendix
 

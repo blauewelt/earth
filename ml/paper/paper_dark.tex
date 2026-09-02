@@ -3,7 +3,6 @@
 \usepackage{graphicx}
 \usepackage{array}
 \usepackage{booktabs}
-\newcolumntype{R}[1]{>{\raggedright\arraybackslash}p{#1}}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage[hidelinks]{hyperref}
@@ -13,7 +12,6 @@
 \AtBeginDocument{\color{darkink}
   \renewcommand{\normalcolor}{\color{darkink}}}
 \definecolor{ink2}{HTML}{A5A396}
-\newcommand{\term}[1]{\textbf{#1}}
 \graphicspath{{figs_dark/}}
 \setlength{\parskip}{2pt}
 \renewcommand{\topfraction}{0.9}
@@ -21,328 +19,232 @@
 \renewcommand{\textfraction}{0.1}
 \renewcommand{\floatpagefraction}{0.7}
 
-\title{Earth-State Embeddings, after the reset:\\
-\large what a clean holdout leaves of a learned North Atlantic forecaster}
-\author{blauewelt/earth --- technical report, v8 (supersedes v1--v7)}
-\date{31 August 2026}
+\title{Earth-State Embeddings:\\
+\large a self-supervised codec of the North Atlantic, its transport read-out,\\
+and what a transformer forecasts from it}
+\author{blauewelt/earth --- technical report}
+\date{2 September 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-This report replaces seven earlier versions. Their headline results ---
-rolled twelve-month forecasts of the North Atlantic scored at ``corridor AUC''
-$0.93$ and above, and every effect measured on them --- were produced by
-models that had been trained on the years they were evaluated on. The
-training pool admitted a window whenever its \emph{final} target fell
-outside the held-out years, while the loss was dense over all 144 frames of
-the window; 21{,}018 of 400{,}176 supervised frame-targets were held-out bins.
-The signatures are unambiguous: field anomaly correlation $0.985$ at five days
-and $0.973$ at a year (a forecast decays, a replay does not); skill $0.84$ on
-trained longitudes against $0.18$ on held-out ones; an ensemble whose members
-stay pinned together inside the training record and fan out past it. All of
-that is withdrawn, and the archived report is kept only as a record.
-
-What survives, measured under a corrected pool that excludes every window
-touching a held-out frame, is small and specific. Heads from 7.6M to 400M
-parameters reach their best held-out one-step loss inside roughly the first
-2{,}000 of 200{,}000 steps and worsen thereafter; the best level sits in
-$0.58$--$0.62$ of the persistence error across a $53\times$ span in capacity.
-The first clean twelve-month roll decays like a forecast --- corridor anomaly
-correlation $0.606$ at five days, $0.41$ at ten, $\approx 0.1$ from two months
-on, $-0.03$ at a year --- and beats raw persistence at every lead but the
-last. It does \emph{not} beat damped persistence at any lead: the cheapest
-classical null wins everywhere. Its squared-error score is negative
-($-0.44$ mean MSSS against climatology) because the head emits anomalies at
-78\% amplitude while its correlation is 10\%; an exact identity reproduces
-all 73 leads to $0.0135$, and the same states rescaled would score about
-$+0.02$. Surviving correlation lives in sea-surface temperature and height at
-short lead; 32 of the 40 input channels score nothing at any lead. Transport
-at $26.5^\circ$N shows no measurable skill at roughly nine effective
-independent starts, and cannot at this sample size. Every clean number is
-$n{=}1$. The report closes with what the data can decide and what it cannot,
-and the order in which the next experiments should run.
+We compress the observed state of each North Atlantic grid cell --- ocean
+reanalysis, Argo climatology, wind stress, sea-surface temperature --- into a
+32-dimensional embedding with a self-supervised per-pixel codec, and train a
+transformer to predict the embedding forward at five-day cadence.
+\textbf{Codec.} Read out by an attention head over the individual pixels of
+the $26.5^\circ$N section, the frozen embeddings predict RAPID overturning
+transport at $r=0.67$ (two codec seeds, year-blocked k-fold); the same head
+fed raw section values reaches $0.66$, so the representation adds nothing
+measurable for the current-state read-out. Wind stress accounts for most
+monthly skill (a wind-only ridge reaches $0.53$); the 16 Argo levels move
+skill to the density-driven MOVE transport at $16^\circ$N; neither codec
+capacity ($0.92$M to $40.7$M) nor training length (50k to 1M steps) moves the
+probe. \textbf{Forecaster.} Under a training pool that excludes every window
+touching a held-out year, stage-2 heads from 7.6M to 400M parameters reach
+their best held-out one-step loss inside the first $\sim$2{,}000 of 200{,}000
+steps and worsen thereafter, the best level lying in $0.58$--$0.62$ of the
+persistence error across a $53\times$ span in capacity. Rolled twelve months
+from held-out starts, the 206.7M head's field anomaly correlation decays from
+$0.61$ at five days to $0.41$ at ten, $\approx 0.1$ from two months on and
+$-0.03$ at a year; it beats raw persistence at every lead but the last and
+damped persistence at none. Its squared-error score is negative (mean MSSS
+$-0.44$ against climatology) because it emits anomalies at 78\% amplitude at
+10\% correlation --- an identity reproduces all 73 leads to $0.0135$, and the
+same states rescaled would score $\approx +0.02$. Skill that survives past a
+few pentads lives in sea-surface temperature; 32 of 40 channels score nothing
+at any lead. Transport at $26.5^\circ$N shows no measurable skill at roughly
+nine effective starts. Every rolled number is a single seed.
 \end{abstract}
-
-\section{Introduction}
-
-The programme documented here set out to learn a forward model of the North
-Atlantic from 43 years of ocean reanalysis: compress the observed state at
-each grid point into an embedding, predict the embedding forward with a
-transformer, decode and score. Seven versions of this report described a
-steady climb in rolled-forecast skill across capacity, spatial coupling,
-input noise and training-pool changes. On 2026-08-28 a question about where a
-held-out year's information could be entering the model exposed that the
-climb was a measurement of memorisation. This version records what happened,
-what is withdrawn, and the results that were obtained after the protocol was
-corrected --- which are few, and which point the programme somewhere
-different from where it was going.
-
-It is written to be read without the earlier versions. Section~\ref{sec:data}
-describes the data and Section~\ref{sec:methods} the models and the
-evaluation, at the level needed to read the numbers. Section~\ref{sec:leak}
-gives the contamination mechanism and the evidence, and
-Section~\ref{sec:protocol} the corrected protocol. Section~\ref{sec:results}
-is the report's substance: everything measured under the corrected pool.
-Section~\ref{sec:power} sets out the statistical power of the data, which
-governs what any of this can mean. Section~\ref{sec:next} says what should
-be done next. Appendix~\ref{app:retired} lists the claims of the previous
-versions and the status of each.
 
 \section{Data}\label{sec:data}
 
-The working tensor is \texttt{family4\_na025\_pentad\_r2}: the North Atlantic
-window $0$--$70^\circ$N, $100^\circ$W--$20^\circ$E on a $0.25^\circ$ grid
-($281 \times 481$ cells, 86{,}698 of them ocean), at five-day (pentad)
-cadence from 1982-01 to 2024-12 --- 3{,}142 time bins --- with 40 channels
-per cell. Three come from the GLORYS ocean reanalysis (surface current speed,
-log mixed-layer depth, sea-surface height); 32 are the Roemmich--Gilson Argo
-temperature and salinity climatology at 16 pressure levels (native $1^\circ$
-and monthly, upsampled, available from 2004); four are NCEP Reanalysis-1 wind
-stress and its within-bin variability; one is OISST sea-surface temperature.
-Channels absent before their record begins enter as missing tokens. The
-truth series for the transport read-out is the RAPID-MOCHA overturning
-transport at $26.5^\circ$N (2004--), deseasonalised.
+The working tensor covers $0$--$70^\circ$N, $100^\circ$W--$20^\circ$E on a
+$0.25^\circ$ grid ($281\times481$ cells, 86{,}698 ocean) at five-day cadence
+from 1982-01 to 2024-12 (3{,}142 bins), with 40 channels per cell: surface
+current speed, log mixed-layer depth and sea-surface height from the GLORYS
+reanalysis; temperature and salinity at 16 pressure levels from the
+Roemmich--Gilson Argo climatology (native $1^\circ$, monthly, from 2004);
+NCEP Reanalysis-1 wind stress and its within-bin variability (four
+channels); OISST sea-surface temperature. Channels absent before their record
+begins enter as missing tokens. Earlier codec generations used $1^\circ$
+monthly tensors with 12--25 channels, on the same window or globally; they
+are identified by channel count below. The transport truth is the RAPID-MOCHA
+overturning at $26.5^\circ$N (2004--), deseasonalised; MOVE at $16^\circ$N is
+a second target. Everything cited here --- tensors, weights, result bundles
+--- is public (Appendix~\ref{app:avail}).
 
-Two facts about this tensor decide more than any modelling choice. There are
-2{,}417 distinct end-times in the training pool once held-out years and the
-two-year context window are removed; every one of the 86{,}698 pixels is a
-correlated view of the same 2{,}417 temporal patterns. And the transport
-target has roughly nine effective independent starts: RAPID is about twenty
-years long and overturning anomalies decorrelate on months-to-years. These
-numbers are returned to in Section~\ref{sec:power}.
+\section{The codec and its read-outs}\label{sec:codec}
 
-The tensor, the truth series and every trained weight cited here are public
-(Appendix~\ref{app:avail}).
+\paragraph{Model.} A masked autoencoder over one pixel's channels at one time
+bin produces a $d_z$-dimensional embedding; a $3\times3$-patch variant sees
+the pixel's neighbours. The working codec on the $0.25^\circ$ pentad tensor
+is 512-wide, 12 layers, decoder width 256, $d_z{=}32$, patch 1, 37.976M
+parameters, trained 200k steps at batch 512 with 2009, 2017 and 2023 held out
+of training and of the anomaly statistics. Embeddings are probed for
+transport with a year-blocked k-fold: a ridge on the section-mean embedding
+(\emph{pooled}), or an attention head over the section's individual pixels
+(\emph{unpooled}). Field reconstruction is scored as the percentage
+improvement over persistence, one bin ahead.
 
-\section{Models and evaluation}\label{sec:methods}
-
-\paragraph{Stage 1, the codec.} A masked autoencoder over the 40 channels of
-one pixel at one time bin (``PixelMAE'': 512-wide, 12 layers, four heads,
-decoder width 256; 37.976M parameters) produces a 32-dimensional embedding
-$z$. It is trained self-supervised on all longitudes with the years 2009,
-2017 and 2023 excluded from both its training and its anomaly statistics,
-then frozen. The codec used for every result here is the checkpoint
-\texttt{run-415\_\_pixelmae.pt}; its embedding of the whole tensor is a
-$3142 \times 86698 \times 32$ float16 array.
-
-\paragraph{Stage 2, the head.} A causal transformer over a window of
-$K{=}144$ consecutive embeddings at one pixel (two years of pentads) plus a
-145-point spatial stencil of neighbouring embeddings on a spiral ring,
-predicting the embedding one bin ahead. The loss is dense: every one of the
-144 window positions is supervised against the embedding one bin after it.
-Input noise at $0.7$ of the persistence scale, gradient clipping at 128,
-batch 256, learning rate $10^{-3}$ with exponential decay (half-life 40{,}000
-steps, warm-up 2{,}000), single-step (non-autoregressive) training. Widths
-used here: $256{\times}8$ (7.598M parameters), $512{\times}12$ (40.388M),
-$1024{\times}16$ (206.659M), $1280{\times}20$ (399.948M). The held-out
-one-step loss is reported as the ratio of the head's $z$-space MSE to the
-persistence MSE on the same held-out windows (denominator $21.44621$ for
-this tensor and codec); a ratio of 1 is ``no better than repeating the last
-embedding''.
-
-\paragraph{The roll.} From a true context of 144 bins the head advances every
-ocean pixel one bin at a time, feeding its own prediction back, for a horizon
-of 73 steps (365 days). The rolled embeddings are decoded through the frozen
-codec and scored against the standardised truth anomalies, per pixel and
-channel, on three nested scopes: \term{gate} (600 random pixels plus the
-RAPID section, 864 cells), \term{corridor} (the fastest quarter of the window
-by mean current speed, dilated two cells, plus the section: 30{,}158 pixels),
-and \term{window} (all 86{,}698). Starts are three per held-out year, spread
-round the seasonal cycle, from the held-out years 2009, 2017 and 2023 ---
-nine starts in all. This ``interspersed'' holdout is the one every number in
-this report uses; a terminal holdout is defined in
-Section~\ref{sec:protocol} and has not yet been spent.
-
-\paragraph{Metrics.} For each lead $h$: $\mathrm{MSSS}_x = 1 -
-\mathrm{MSE}_{\text{model}}/\mathrm{MSE}_x$ against three references ---
-\term{climatology} ($x$ predicts zero anomaly), \term{raw persistence} ($x$
-repeats the last observed anomaly), and \term{damped persistence} ($x$ decays
-it with a per-pixel, per-channel AR(1) coefficient fitted on training years);
-the \term{anomaly correlation} ACC between rolled and true fields; and the
-\term{amplitude ratio} $a$ (rolled std / true std). The quantity earlier
-versions called ``corridor AUC'' is the mean $\mathrm{MSSS}_{\text{clim}}$
-over the 73 leads. It is not an AUC; a negative value means the squared
-error exceeds the anomaly variance, not ``below chance''. The transport
-read-out regresses the rolled section states onto RAPID (an unpooled,
-learned read-out) and reports the correlation in three lead bands.
-
-\paragraph{Replication.} The stage-2 forecast objective is stable across
-seeds (pairs at the 206M tier agree to $0.001$--$0.002$ in the one-step
-ratio), but rolled skill at pentad cadence has never been replicated: every
-clean rolled number below is a single seed, and is written as such.
-
-\section{The contamination}\label{sec:leak}
-
-\subsection{Mechanism}
-
-The training pool built windows of 144 consecutive bins and admitted a window
-if and only if its final scored bin, the one at position 144, was not in a
-held-out year. The loss, however, was dense: all 144 positions were
-supervised. A window ending in January 2010 therefore carried the whole of
-2009 in its supervised positions while passing the check. Measured on the
-real axis, 21{,}018 of the 400{,}176 supervised frame-targets in the pool were
-held-out bins. Every head trained before 2026-08-28 --- monthly and pentad,
-every width, every stencil --- had been teacher-forced on tens of transitions
-per pixel from the years it was then scored on. The authors of the earlier
-reports (Claude sessions) stated in those reports that the held-out years
-were held out of training. That statement was false.
-
-The correction is a pool rule with three scopes. \texttt{endpoint} is the
-legacy rule, kept only so the archive reproduces. \texttt{target} masks
-held-out targets from the loss but still admits them as context ($-5.25\%$
-supervision). \texttt{window}, the default from 2026-08-29, admits no window
-that touches a held-out bin anywhere the forward pass can see it
-($-13.03\%$ supervision: 209{,}549{,}066 training windows against
-240{,}933{,}742). The pool self-certifies by brute force before training and
-refuses to start on a violation.
-
-\subsection{Four signatures, each from an artefact}
-
-\begin{enumerate}
-\item \textbf{Skill that does not decay with lead.} The old 206M head, rolled
-  under the exact battery of Section~\ref{sec:methods}, scores a corridor
-  anomaly correlation of $0.985$ at five days, $0.970$ at 90, $0.969$ at 180
-  and $0.973$ at 365 (Figure~\ref{fig:decay}, left). Its transport
-  correlation \emph{rises} from $0.48$ over 5--90 days to $0.58$ over
-  185--365. No forecast does this; a replayed trajectory does.
-\item \textbf{No spatial generalisation.} On the tensor variant with a
-  longitude block ($45$--$25^\circ$W, 80 columns) held out of training, the
-  same kind of head scores mean $\mathrm{MSSS}_{\text{clim}}$ $0.838$ on
-  trained corridor pixels and $0.176$ on held-out ones (gate scope: $0.821$
-  against $0.330$; the earlier stencil-free gate head: $0.804$ against
-  $0.058$). On ocean it has not seen, the head removes 6--18\% of the anomaly
-  variance. Every blended headline in the earlier versions mixed roughly a
-  quarter of untrained pixels into the rest.
-\item \textbf{Confidence exactly where it memorised.} An eight-member
-  stochastic ensemble from the same head, rolled 36 months from a context
-  ending 2004-12 --- inside the training record --- keeps a member spread
-  (standard deviation of the decoded field, corridor mean) of $0.099$ over
-  the first year and $0.137$ over the third. Rolled 36 months past the end of
-  the record it spreads to $0.360$ and $0.532$
-  (Figure~\ref{fig:dispersion}). No truth enters this measurement.
-\item \textbf{The pool arithmetic itself}, above.
-\end{enumerate}
+\paragraph{What moves the transport read-out.}
+Figure~\ref{fig:kfold} is the pooled ranking across generations. Adding wind
+stress to a 12-channel tensor takes the pooled probe from $0.31$ to $0.60$; a
+wind-only ridge with no embedding reaches $0.531$ on the $1^\circ$ tensors
+and $0.568$ on the $0.25^\circ$ one, so most monthly skill at $26.5^\circ$N
+is Ekman physics. Training on the global ocean instead of the window costs
+the Atlantic read-out nothing ($0.602$ against $0.604$). Bottleneck width
+matters little for reconstruction (saturating by $d_z{=}16$--$32$) and peaks
+at $d_z{=}64$ for the probe, turning over at 128 against $\sim$220 truth months
+per fold. On the $0.25^\circ$ tensor a 0.92M pilot reads $0.620$ and the 40.7M
+codec $0.631$ --- $44\times$ the parameters buys $+0.011$, inside seed noise
+($\pm0.05$ on the pooled probe) --- and a codec trained from 50k to one
+million steps is flat from the first probe to the last. Neither capacity nor
+training length is what stands between this codec and a better transport
+number.
 
 \begin{figure}[t]
-\centering\includegraphics[width=0.82\linewidth]{fig_dispersion.pdf}
-\caption{Member spread of an eight-member ensemble rolled from a head trained
-under the contaminated pool (run \#513), 36 months inside the training
-record and 36 months past its end. The dispersion is a property of the
-rolled states alone; a model that had learned dynamics would spread on both.
-\label{fig:dispersion}}
+\centering\includegraphics[width=0.8\linewidth]{fig_kfold.pdf}
+\caption{Pooled k-fold correlation with monthly deseasonalised RAPID
+transport by codec generation. Blue: the 12-channel width sweep; orange: with
+wind stress; green: 24--25 channels with 8 Argo levels; violet: the
+$0.25^\circ$ tensor with 16 levels and SSH at two capacities.\label{fig:kfold}}
 \end{figure}
 
-\subsection{What is withdrawn}
+\paragraph{Pooling was hiding the signal, and the codec is not what
+recovers it.} The same frozen embeddings read three ways
+(Figure~\ref{fig:ladder}): an MLP on the section mean does no better than the
+ridge, so the ridge was never the limit as a function class; the attention
+head over the unpooled section beats every pooled probe and lifts the
+$3\times3$-patch codec to $0.690$ [$0.570$, $0.781$] (RMSE 2.02\,Sv against a
+2.79\,Sv target). Geostrophic transport is the east--west contrast across the
+section, and a section mean is the statistic in which that contrast cancels.
+The same head fed raw section anomalies instead of embeddings completes the
+attribution:
 
-Every rolled number produced by a head trained under the endpoint rule, as
-evidence of forecast skill: the monthly champion line and its seed pairs, the
-capacity, noise and longitude-holdout effects measured on rolled scores, the
-pentad and daily rolls, the long hindcasts, and the ensemble results.
-Retained, because they do not depend on the stage-2 pool: the data
-description, the codec's architecture and reconstruction behaviour, the
-seed-replication arithmetic on the one-step objective, and the JAX
-reimplementation's parity against the PyTorch code. Appendix~\ref{app:retired}
-lists the earlier claims individually.
+\begin{center}\small
+\begin{tabular}{lcc}
+\toprule
+tokens carry & raw data & codec embedding \\
+\midrule
+single pixel & $0.613$ [$0.48$, $0.73$] & $0.617$ [$0.49$, $0.73$] \\
+$3\times3$ neighbourhood & $0.659$ [$0.55$, $0.75$] & $0.690$ / $0.654$ (two codec seeds) \\
+\bottomrule
+\end{tabular}
+\end{center}
 
-\section{The corrected protocol}\label{sec:protocol}
-
-Fixed on 2026-08-30 and applied to everything that follows:
-
-\begin{itemize}
-\item Window-scope pool, self-certified.
-\item Lead-decay as a standing falsifier: a rolled profile that does not
-  decay with lead is a replay, whatever its level.
-\item Trained- and held-out-longitude scores reported separately, never
-  blended.
-\item A classical null beside every number, with the null named.
-\item Early stopping at the held-out minimum; the small tier (7.6M) as the
-  default, larger widths needing a written argument.
-\item Rolled skill is the verdict; a probe of the current state is not.
-\item A \emph{terminal} holdout for the final test --- train $\le 2020$, test
-  2021--2024, no gap --- to be opened once. Because the held-out years are a
-  property of the codec (the stage-2 pool inherits them from the codec's
-  configuration), the terminal test requires a codec trained on $\le 2020$;
-  none exists yet, and nothing in this report touches 2021--2024 as a test
-  set.
-\end{itemize}
-
-\section{Results under the corrected pool}\label{sec:results}
-
-\subsection{Training dynamics: the held-out minimum is early, at every width}
-
-E-059 is the old 206.66M head retrained with one change, the pool. Its
-training loss tracks the contaminated twin's closely (both reach a ratio of
-$0.02$--$0.03$ at 200k steps), while its held-out ratio does not fall at all
-after the first record: $0.6105$ at step 2{,}000, $0.6411$ at 20{,}000,
-$0.6859$ at 200{,}000, against the contaminated twin's monotone descent
-$0.2247 \to 0.0812 \to 0.0330$ on identical validation windows
-(Figure~\ref{fig:curves}, left). The train/held-out gap of the clean head at
-the end of training is a factor of thirty.
+Unpooling the section is the whole of the improvement (pooled $0.54 \to$
+head $0.65$+); the $3\times3$ receptive field adds $\approx+0.045$ and does so
+on raw data alone; pretraining adds $+0.013$ at two seeds, which is nothing
+against a head seed spread of $0.036$. On the $0.25^\circ$ monthly tensor the
+margin is $+0.034$ ($0.662$ against $0.628$, one seed). At pentad cadence
+($n{=}1{,}459$ transport bins) three unpooled read-outs --- the frozen monthly
+codec ($0.691$), a codec trained on the pentad tensor itself ($0.680$), and
+raw fields with no codec ($0.683$) --- land within $0.011$ of one another,
+while the pooled ridge ($0.660$) sits below the pentad wind bar ($0.670$).
+For the current-state transport read-out, read-out design and not
+representation learning is what moved the number.
 
 \begin{figure}[t]
-\centering\includegraphics[width=\linewidth]{fig_curves.pdf}
-\caption{Left: one-step $z$-space MSE relative to persistence, training
-(dashed) and held-out (solid), for the 206.66M head under the contaminated
-pool (E-051) and the corrected pool (E-059) --- same architecture, seed,
-codec, embedding, validation windows and hardware. Right: the held-out ratio
-over the first 20{,}000 steps for four widths under the corrected pool.
-\label{fig:curves}}
+\centering\includegraphics[width=0.78\linewidth]{fig_ladder.pdf}
+\caption{Same frozen embeddings, same folds, three read-outs. Head bars carry
+95\% intervals.\label{fig:ladder}}
 \end{figure}
 
-The width ladder (E-060) repeats the corrected run at 7.598M, 40.388M and
-399.948M parameters with every other knob identical and a learning-rate
-schedule that traces the same trajectory step for step. All four arms reach
-their best held-out ratio inside 2{,}000 steps and get worse afterwards
-(Table~\ref{tab:ladder}, Figure~\ref{fig:curves}, right). The best levels span
-$0.578$--$0.621$ across a $53\times$ span in parameters. At the
-pre-registered comparison step of 20{,}000, the 7.598M arm reads $0.692$
-against the 206.659M arm's $0.641$: the prediction, made before the arms ran,
-that the small arm would land within $0.02$ of the large one failed by
-$0.051$ and is recorded as failed. Width buys how fast an arm reaches its
-minimum and how badly it then degrades, not the level of the minimum.
+\paragraph{Where the deep channels go.} Extending Argo from 4 to 16 levels
+did not raise the RAPID probe but roughly doubled skill at MOVE --- a deep,
+density-driven transport --- from $0.111$ to $0.206$ [$0.044$, $0.346$], the
+first multi-target result whose interval excludes zero, with the 18-month
+low-passed correlation rising from $0.38$ to $0.62$. At $16^\circ$N the
+wind-only ridge is negative ($-0.376$). One task-blind representation serves
+a wind-dominated and a density-dominated target when the read-out respects
+the structure of the question.
+
+\paragraph{Event anatomy.} Out of fold, the winter 2009--10 collapse --- the
+sharpest event in the RAPID record --- is captured at 16\% of its amplitude
+without wind channels, 50\% with them, 59\% by the 25-channel codec and 51\%
+by the 40.7M $0.25^\circ$ codec. Average correlation and event capture are
+different capabilities; the 25-channel codec has the best dip and the second
+worst monthly $r$.
+
+\section{The forecaster}\label{sec:stage2}
+
+\paragraph{Model and protocol.} A causal transformer over a window of
+$K{=}144$ consecutive embeddings at one pixel (two years) plus a 145-point
+spatial stencil on a spiral ring predicts the embedding one bin ahead, with
+input noise at $0.7$ of the persistence scale, gradient clipping at 128,
+batch 256, learning rate $10^{-3}$ decaying exponentially (half-life 40k
+steps, warm-up 2k). The loss is dense over all 144 window positions, so the
+pool admits only windows that touch no held-out bin anywhere the forward pass
+can see (209{,}549{,}066 windows: 2{,}417 end-times $\times$ 86{,}698 pixels);
+it certifies this by brute force before training. The held-out one-step loss
+is the $z$-space MSE relative to persistence on held-out windows (denominator
+21.44621). Widths: $256\times8$ (7.598M), $512\times12$ (40.388M),
+$1024\times16$ (206.659M), $1280\times20$ (399.948M); all on the frozen
+37.976M codec and its embedding of the tensor.
+
+A \emph{roll} advances every ocean pixel one bin at a time from a true
+144-bin context, feeding predictions back, for 73 steps (365 days), decodes
+through the codec and scores standardised anomalies per pixel and channel on
+three scopes: gate (600 random pixels plus the section), corridor (the
+fastest quarter of the window by current speed, dilated two cells, plus the
+section; 30{,}158 pixels), window (all pixels). Starts are three per
+held-out year, nine in all. Per lead: $\mathrm{MSSS}_x = 1 -
+\mathrm{MSE}/\mathrm{MSE}_x$ against climatology (zero anomaly), raw
+persistence, and damped persistence (per-pixel AR(1) fitted on training
+years); anomaly correlation ACC; amplitude ratio $a$. The transport read-out
+regresses the rolled section states onto RAPID and reports $r$ in three lead
+bands.
+
+\paragraph{The held-out minimum is early at every width.}
+Figure~\ref{fig:stage2} and Table~\ref{tab:ladder}. All four widths reach their
+best held-out ratio inside 2{,}000 steps and get worse afterwards; the best
+levels span $0.578$--$0.621$ across $53\times$ in parameters. At step
+20{,}000 the 7.598M arm ($0.692$) is $0.051$ worse than the 206.659M arm
+($0.641$), and the ordering is not monotone in width (40.388M reads $0.636$).
+Width buys how fast an arm reaches its minimum and how badly it then
+degrades, not the level of the minimum. The in-training
+transport probe separates the arms the other way: 7.598M holds $0.598$--$0.611$
+across ten probes, 40.388M drifts to $0.589$, and 206.659M falls from $0.616$
+at 20k to $0.522$ at 200k. The training loss keeps falling throughout (to a
+ratio of $0.023$ at 200k for the 206.659M head, a $30\times$ train/held-out
+gap): the model memorises the training years long after it has learned
+anything that transfers.
+
+\begin{figure}[t]
+\centering\includegraphics[width=\linewidth]{fig_stage2.pdf}
+\caption{Left: held-out one-step ratio over the first 20{,}000 steps, by
+width. Right: the in-training RAPID probe over the full run.\label{fig:stage2}}
+\end{figure}
 
 \begin{table}[t]
 \centering\small
 \begin{tabular}{lrrrrr}
 \toprule
-head & params & best held-out ratio & at step & ratio at 20k & train ratio at end \\
+params & best held-out ratio & at step & ratio at 20k & ratio at end & train ratio at end \\
 \midrule
-E-060a & 7.598M & \textbf{0.6095} & 1{,}200 & 0.6922 & 0.146 (20k) \\
-E-060b & 40.388M & 0.6212 & 1{,}200 & 0.6363 & 0.086 (20k) \\
-E-059 & 206.659M & 0.6105 & $\le 2{,}000$ & 0.6411 & 0.023 (200k) \\
-E-060c & 399.948M & 0.5779 & 800 & --- (stopped at 2k) & 0.171 (2k) \\
-\midrule
-E-051 (contaminated) & 206.659M & 0.0330 & 200{,}000 & 0.0812 & 0.026 (200k) \\
+7.598M & \textbf{0.6095} & 1{,}200 & 0.692 & 0.692 (20k) & 0.146 \\
+40.388M & 0.6212 & 1{,}200 & 0.636 & 0.636 (20k) & 0.086 \\
+206.659M & 0.6105 & $\le 2{,}000$ & 0.641 & 0.686 (200k) & 0.023 \\
+399.948M & 0.5779 & 800 & --- & 0.602 (2k) & 0.171 \\
 \bottomrule
 \end{tabular}
-\caption{Held-out one-step ratio under the corrected pool by width. E-059's
-first record is at step 2{,}000, so its minimum is at or before it; the
-smaller arms, recorded every 200 steps, bottom out at 1{,}200.
-\label{tab:ladder}}
+\caption{Held-out one-step ratio by width. The 206.659M run is recorded every
+2{,}000 steps, so its minimum is at or before its first record; the others,
+recorded every 200, bottom out at 1{,}200.\label{tab:ladder}}
 \end{table}
 
-The in-training transport probe (a pooled ridge read-out of the last
-position's hidden state against RAPID, computed every 2{,}000 steps) tells the
-capacity story from the other side: the 7.598M arm holds $0.598$--$0.611$
-across ten probes, the 40.388M arm drifts to $0.589$, and the 206.659M arm
-falls from $0.616$ at 20k to $0.522$ at 200k (Figure~\ref{fig:probe}). This is
-a probe and not a verdict, but the direction is the one a memorising model
-would show.
-
-\begin{figure}[t]
-\centering\includegraphics[width=0.75\linewidth]{fig_probe.pdf}
-\caption{The in-training RAPID probe against training step, by width, under
-the corrected pool.\label{fig:probe}}
-\end{figure}
-
-\subsection{The first clean roll}
-
-The E-059 head at its 200k end state was rolled through the battery of
-Section~\ref{sec:methods} (run \#516), protocol-identical to the roll of its
-contaminated twin (run \#510). Table~\ref{tab:roll} gives the corridor
-numbers by lead; Figure~\ref{fig:decay} shows the two heads side by side and
-the clean head against its three references.
+\paragraph{The twelve-month roll.} The 206.659M head at its 200k end state,
+rolled from the nine held-out starts (Table~\ref{tab:roll},
+Figure~\ref{fig:roll}). Corridor anomaly correlation is $0.606$ at five days,
+$0.412$ at ten, $0.265$ at fifteen, $0.20$ at a month, near $0.1$ from two
+months on, $-0.03$ at a year. The head beats raw persistence at 72 of 73
+leads (mean $\mathrm{MSSS}_{\text{pers}}$ $+0.204$) and damped persistence at
+none: $\mathrm{MSSS}_{\text{damped}}$ runs from $-0.011$ at five days to
+$-0.719$ at a year (mean $-0.461$; gate $-0.416$, window $-0.420$). A
+per-pixel AR(1) decay toward climatology, fitted on training years, is a
+better forecast of this field than the transformer at every horizon.
 
 \begin{table}[t]
 \centering\small
@@ -363,75 +265,42 @@ lead (days) & $\mathrm{MSSS}_{\text{clim}}$ & $\mathrm{MSSS}_{\text{pers}}$ & $\
 mean of 73 leads & $-0.439$ & $+0.204$ & $-0.461$ & $0.105$ & $0.780$ \\
 \bottomrule
 \end{tabular}
-\caption{The clean 206.66M head (E-059) rolled from nine starts in 2009,
-2017 and 2023, corridor scope. Gate and window scopes read mean
-$\mathrm{MSSS}_{\text{clim}}$ $-0.395$ and $-0.401$, mean ACC $0.131$ and
-$0.121$. Single seed.\label{tab:roll}}
+\caption{The 206.659M head rolled from nine held-out starts, corridor scope.
+Gate and window scopes: mean $\mathrm{MSSS}_{\text{clim}}$ $-0.395$ and
+$-0.401$, mean ACC $0.131$ and $0.121$. Single seed.\label{tab:roll}}
 \end{table}
 
 \begin{figure}[t]
-\centering\includegraphics[width=\linewidth]{fig_decay.pdf}
-\caption{Left: corridor anomaly correlation against lead for the
-contaminated head (run \#510) and the clean head (run \#516), same battery,
-same nine starts. Right: the clean head's MSSS against climatology, raw
-persistence and damped persistence.\label{fig:decay}}
+\centering\includegraphics[width=\linewidth]{fig_roll.pdf}
+\caption{Left: the rolled head against its three references, corridor
+scope. Right: anomaly correlation against lead per scoreable channel; the 32
+Argo channels have no scored samples at any lead.\label{fig:roll}}
 \end{figure}
 
-Four things are established by this roll, and they are the report's main
-results.
-
-\paragraph{It decays like a forecast.} Anomaly correlation $0.606$ at five
-days, $0.412$ at ten, $0.265$ at fifteen, $0.20$ at a month, near $0.1$ from
-two months on, $-0.03$ at a year --- against the contaminated twin's flat
-$0.97$--$0.99$. The lead-decay falsifier of Section~\ref{sec:protocol} passes.
-The corrected pool removed the replay.
-
-\paragraph{It beats raw persistence, and loses to damped persistence at every
-lead.} $\mathrm{MSSS}_{\text{pers}}$ is positive at 72 of 73 leads (mean
-$+0.204$). $\mathrm{MSSS}_{\text{damped}}$ is negative at all 73, from
-$-0.011$ at five days to $-0.719$ at a year (mean $-0.461$; gate $-0.416$,
-window $-0.420$). A per-pixel AR(1) decay toward climatology, fitted on
-training years and costing nothing, is a better forecast of this field than
-the transformer at every horizon. This is the fact the next experiments are
-designed around.
-
-\paragraph{The negative squared-error score is amplitude, not sign.} For a
-forecast with anomaly correlation ACC and amplitude ratio $a$ against a
-zero-anomaly reference, $\mathrm{MSSS}_{\text{clim}} = 1 - (1 + a^2 -
-2a\,\mathrm{ACC})$ identically. Evaluated from the head's own per-lead ACC
-and $a$, this reproduces the measured 73 corridor values to a mean absolute
-error of $0.0135$ (Figure~\ref{fig:calibration}). The head emits anomalies at
-$a \approx 0.78$ long after its correlation has fallen to $0.1$; the squared
-error of a confidently wrong sign is what the negative score measures. The
-same rolled states rescaled to $a = \mathrm{ACC}$ would score
-$\mathrm{ACC}^2$ at each lead, a corridor mean of about $+0.02$. That is
-small, but it is positive, and it is a decoding change rather than a capacity
-one. Whether a calibration fitted on training-year starts transfers to
-held-out starts has not been tested.
+\paragraph{The negative score is amplitude, not sign.} For a forecast with
+correlation ACC and amplitude ratio $a$ against a zero-anomaly reference,
+$\mathrm{MSSS}_{\text{clim}} = 1 - (1 + a^2 - 2a\,\mathrm{ACC})$ identically.
+From the head's own per-lead ACC and $a$ this reproduces the 73 measured
+values to a mean absolute error of $0.0135$ (Figure~\ref{fig:calibration}).
+The head emits anomalies at $a\approx0.78$ while its correlation is $0.1$;
+rescaled to $a=\mathrm{ACC}$ the same states would score $\mathrm{ACC}^2$ per
+lead, a corridor mean of about $+0.02$. Whether a calibration fitted on
+training-year starts transfers to held-out starts is untested.
 
 \begin{figure}[t]
-\centering\includegraphics[width=0.8\linewidth]{fig_calibration.pdf}
-\caption{Measured corridor $\mathrm{MSSS}_{\text{clim}}$ per lead for the
-clean head, the value the identity predicts from the head's own ACC and
-amplitude ratio, and the value the same states would score rescaled to
-$a=\mathrm{ACC}$.\label{fig:calibration}}
+\centering\includegraphics[width=0.78\linewidth]{fig_calibration.pdf}
+\caption{Measured corridor $\mathrm{MSSS}_{\text{clim}}$ per lead, the value
+the identity predicts from the head's own ACC and $a$, and the value the same
+states would score at $a=\mathrm{ACC}$.\label{fig:calibration}}
 \end{figure}
 
-\paragraph{Where correlation survives is specific.} Only eight of the forty
-channels are scoreable; the 32 Argo channels carry no scored samples at any
-lead. Of the eight, sea-surface temperature holds correlation longest ($0.76$
-at five days, $0.34$ at 30 and at 90) and is the only channel whose
+\paragraph{Per channel.} Only eight of the forty channels are scoreable.
+Sea-surface temperature holds correlation longest ($0.76$ at five days,
+$0.34$ at 30 and at 90) and is the only channel whose
 $\mathrm{MSSS}_{\text{clim}}$ stays positive beyond a few pentads;
-sea-surface height is the sharpest at one step ($0.84$) and falls below
-$0.2$ by a month; current speed and mixed-layer depth are one-step
-quantities; the four wind channels are essentially noise past one step
-(Figure~\ref{fig:channels}, Table~\ref{tab:channels}).
-
-\begin{figure}[t]
-\centering\includegraphics[width=0.8\linewidth]{fig_channels.pdf}
-\caption{Corridor anomaly correlation against lead, per scoreable channel,
-for the clean head.\label{fig:channels}}
-\end{figure}
+sea-surface height is sharpest at one step ($0.84$) and below $0.2$ by a
+month; current speed and mixed-layer depth are one-step quantities; the four
+wind channels are noise past one step (Table~\ref{tab:channels}).
 
 \begin{table}[t]
 \centering\small
@@ -449,159 +318,73 @@ channel & ACC 5\,d & ACC 30\,d & ACC 90\,d & mean $\mathrm{MSSS}_{\text{clim}}$ 
 \texttt{tau\_y\_std} & $0.207$ & $0.070$ & $0.057$ & $-0.465$ & $-0.466$ \\
 \bottomrule
 \end{tabular}
-\caption{Per-channel corridor scores for the clean head. The 32 \texttt{rg\_*}
-channels are omitted: no scored samples at any lead.\label{tab:channels}}
+\caption{Per-channel corridor scores of the rolled head.\label{tab:channels}}
 \end{table}
 
-\subsection{Transport at $26.5^\circ$N}
+\paragraph{Transport.} The unpooled read-out of the rolled section states
+against RAPID gives $r=+0.107$ over 5--90 days ($n{=}162$), $-0.242$ over
+95--180 ($n{=}129$), $+0.163$ over 185--365 ($n{=}150$). With about nine
+effective independent starts these are inside the noise of zero. A separate
+36-month free run from a context ending 2004-12 --- inside the training
+years, so not a skill measurement --- correlates $0.636$ with the true
+transport at pentad resolution and $-0.13$ on an 18-month low-pass at 61\%
+amplitude: what the head tracks lives at high frequency, and the multi-year
+band is not measured by this roll.
 
-The unpooled read-out of the rolled section states against RAPID gives
-$r = +0.107$ over 5--90 days ($n{=}162$), $-0.242$ over 95--180 ($n{=}129$),
-$+0.163$ over 185--365 ($n{=}150$). At nine effective starts these are inside
-the noise of zero and are read as ``no measurable transport skill'', never as
-a sign. The contaminated twin's $0.48$/$0.57$/$0.58$ on the same starts is
-the recall curve of Section~\ref{sec:leak}. A separate 36-month free run from
-a context ending 2004-12 --- entirely inside the training years, so a
-memorisation-free reading is not available from it --- correlates $0.636$
-with the true transport at pentad resolution and $-0.13$ on an 18-month
-low-pass, at 61\% amplitude: whatever the head tracks in the training years
-lives at high frequency, and the multi-year band that is the overturning
-question is not measured by this roll. The head is deterministic, so no
-dispersion test of the kind in Figure~\ref{fig:dispersion} can be made for
-it; that test is unanswered for clean heads, not failed.
+\paragraph{Statistical power.} The pool has 2{,}417 distinct end-times;
+consecutive windows share 143 of 144 frames, and every pixel is a correlated
+view of the same temporal patterns. With 206M parameters that is $\sim$85{,}000
+parameters per pattern, and the training loss falling long after the
+held-out loss has turned is the expected consequence. For field-level scores
+the effective sample count is in the thousands and differences can be
+resolved; for the transport target (RAPID $\sim$20 years, anomalies
+decorrelating over months to years) it is of order ten, and a band
+correlation of $\pm0.2$ cannot be. Every rolled number here is one seed;
+rolled skill at this cadence has not been replicated, and no two rolled
+numbers can yet be called different.
 
-\subsection{What the second clean head will add}
+\section{What the results support}
 
-The 7.598M head (E-060a) has been mirrored to the public release and is
-being rolled through the identical battery as this report is written. It
-will give the width axis at two points under a clean pool on the rolled
-field --- the question Table~\ref{tab:ladder} answers only for the one-step
-loss. Its reading was registered before it ran: the lead-decay falsifier
-must pass; the level is read against Table~\ref{tab:roll}; parity or better
-would mean capacity was never the axis on the rolled field either.
-
-\section{Statistical power}\label{sec:power}
-
-Three numbers govern how much any result above can mean.
-
-\paragraph{2{,}417 end-times.} The pool's 209{,}549{,}066 training windows are
-$2{,}417 \times 86{,}698$. Consecutive windows share 143 of 144 frames. With
-206M parameters there are roughly 85{,}000 parameters per distinct temporal
-pattern; the corrected pool removed the reward for memorising the held-out
-years, not the incentive to memorise the training ones. Early stopping,
-small widths and regularisation are palliative. Only new temporal samples
-change this number; finer grids give more correlated views of the same
-2{,}417 patterns and are declined.
-
-\paragraph{Nine effective starts.} The transport bands above have $n$ of
-129--162 pentads from nine starts; the independent-sample count for a target
-that decorrelates over months-to-years is of order ten. A difference of
-$0.2$ in a band correlation is not resolvable. No architecture, corpus or
-resolution changes this; it is a property of RAPID's length and the
-overturning's timescale.
-
-\paragraph{$n{=}1$.} Every rolled number in this report is a single seed at a
-cadence where rolled skill has never been replicated. The one-step objective
-is stable across seeds; the rolled scores may not be. No two clean rolled
-numbers can yet be called different, including the two heads of the width
-axis.
-
-Together these say that the field-level questions --- where does a learned
-model beat classical nulls, and out to what lead --- are answerable with
-this data, with intervals, and the transport question at $26.5^\circ$N is
-not. The report's recommendation is to make the former the headline and to
-report the latter as a bound.
-
-\section{What should happen next}\label{sec:next}
-
-In order, and with nothing trained before the first two exist.
-
-\begin{enumerate}
-\item \textbf{The null ladder on the identical battery.} Damped persistence
-  as a row of its own; nearest-analogue retrieval from training-year states
-  (if it matches the transformer, the transformer is a lookup table); a
-  Linear Inverse Model on the leading EOFs of the training-year anomaly
-  fields, cross-validated inside the training years, and a second LIM in the
-  codec's embedding space --- the difference between the two is the first
-  measurement of whether the codec discards predictable signal. The
-  pre-registered expectation is that the LIM matches or beats both clean
-  heads at every lead beyond the first; if it does, that is the programme's
-  central result.
-\item \textbf{Intervals.} Block-bootstrap confidence intervals over
-  (year, start) blocks on every per-lead score and every difference; a
-  rolling-origin blocked cross-validation over several held-out years for
-  development, keeping 2021--2024 untouched; a minimum-detectable-effect
-  table so that ``cannot be resolved'' becomes a stated result.
-\item \textbf{Short budgets and replicates.} Stage-2 training capped near
-  5{,}000 steps with checkpoints every 500 and selection at the held-out
-  minimum, which makes a 7.6M arm a ${\sim}1.5$-hour job and five seeds the
-  default.
-\item \textbf{The terminal codec}, trained on $\le 2020$, with its embedding
-  of the tensor; the long pole, started early.
-\item \textbf{Then, cheaply:} roll an early-stopped checkpoint against the
-  end state; five seeds; amplitude calibration fitted on training-year
-  starts and applied to held-out ones, for nulls and heads alike; the head
-  trained on the eight scoreable channels only.
-\item \textbf{Data} that touches the bound and nothing that does not: the
-  Argo channels to a coarse sidecar; the record extended forward to 2026 and,
-  as a measurement, backward toward 1958 at $1^\circ$; surface flux forcing
-  as missing physics; climate-model output, if at all, only to pretrain the
-  codec and with a masked-reanalysis control.
-\end{enumerate}
+For the current-state transport read-out the codec is at parity with the raw
+fields it compresses; its value, if any, is as a substrate that a
+transformer can attend over and roll forward, and on that use the transformer
+has learned what it learns inside two thousand steps at any width, forecasts
+sea-surface temperature and height for days to weeks, and does not beat a
+damped-persistence null at any lead. The next measurements are the ones
+that bound this from both sides: classical predictors (retrieval, a linear
+inverse model on the leading EOFs, in field space and in embedding space)
+through the identical battery, with block-bootstrap intervals; the
+early-stopped checkpoint and the 7.6M head rolled against the end state
+shown here; amplitude calibration fitted on training-year starts; and a codec
+trained on $\le 2020$ so that a terminal 2021--2024 test can be run once.
 
 \appendix
-
-\section{Claims of the earlier versions and their status}\label{app:retired}
-
-\begin{center}\small
-\begin{tabular}{R{6.2cm}R{7.6cm}}
-\toprule
-claim (v1--v7) & status \\
-\midrule
-Rolled twelve-month corridor ``AUC'' $0.93$--$0.94$ for the best monthly heads, with seed pairs agreeing to $0.0003$--$0.005$ & Withdrawn: contaminated pool. The seed agreement was real and measured the replay, not skill. \\
-Capacity $+0.042$, input noise $+0.045$/$+0.050$, all-longitude training $+0.071$ on the rolled score & Withdrawn: effects measured on a contaminated metric. Capacity re-measured clean: no effect on the held-out minimum (Table~\ref{tab:ladder}). \\
-Pentad one-step ratio $0.0330$ at 200k as ``the best pentad number on record'' & Withdrawn as evidence of forecast skill: the one-step gain was largely the held-out-year memorisation term (Figure~\ref{fig:curves}). \\
-Long hindcasts correlating with RAPID over years & Withdrawn: calendar replay, as v7 itself half-acknowledged. \\
-``Corridor AUC'' as a metric name & Retired: the quantity is mean MSSS against climatology. \\
-Quantised (FSQ) codec as the best forecasting substrate ($0.4394$ vs $0.5056$) & Withdrawn as a skill claim: both sides contaminated. The comparison of substrates may be re-run under the corrected pool. \\
-Probe results on the frozen codec (attention head $r{=}0.672$; raw-pixel control $0.659$) & Not affected by the stage-2 pool; not reproduced here because a probe of the current state is not a forecast verdict under the corrected protocol. \\
-The JAX reimplementation's parity gates against PyTorch & Stands. \\
-The data description and the codec architecture & Stand; summarised in Sections~\ref{sec:data}--\ref{sec:methods}. \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-The archived report is at \texttt{ml/paper/archive/v7-2026-08-27-contaminated/}
-with a note explaining its retirement.
-
 \section{Data and code availability}\label{app:avail}
 
-All code is at \url{https://github.com/blauewelt/earth}; the evaluator is
-\texttt{ml/rollout\_spatial.py}, the stage-2 trainer \texttt{ml/temporal.py}
-and its JAX port \texttt{ml/jaxport/}. Result bundles for every run named
-here are on the repository's \texttt{ml-metrics} branch as
-\texttt{probes-<n>.json} (\#510, \#513, \#516); trained weights are on the
-\texttt{model-checkpoints-v1} release (\texttt{run-415\_\_pixelmae.pt},
-\texttt{head-weights-e059-200k-window-s0.pt},
-\texttt{head-weights-e060a-20k-window-s0.pt},
-\texttt{head-weights-e060b-20k-window-s0.pt}); the tensor is on the
-\texttt{data-cache-v1} release and the Hugging Face dataset
-\texttt{chfrank/earth-tensors}; the codec's embedding of it is on the
-\texttt{embed-cache-v1} release. The figures in this report are generated by
-\texttt{ml/paper/make\_figs.py} from \texttt{ml/paper/data/reset\_data.json},
-which \texttt{ml/paper/extract\_data.py} builds from those public bundles and
-the training records; no number in a figure or table is typed in.
+\begin{sloppypar}
+Code: \url{https://github.com/blauewelt/earth} (codec trainer
+\path{ml/train.py}, stage-2 trainer \path{ml/temporal.py} and its JAX
+port \path{ml/jaxport/}, evaluator \path{ml/rollout_spatial.py}). Result
+bundles are on the repository's \path{ml-metrics} branch
+(\path{probes-<n>.json}; the roll here is \path{probes-516.json}, the
+codec probe ladder is in the bundles named in \path{ml/EXPERIMENTS.md}).
+Weights are on the \path{model-checkpoints-v1} release
+(\path{run-415__pixelmae.pt}; \path{head-weights-e059-200k-window-s0.pt}
+and the \path{e060a}/\path{e060b} heads named likewise); the
+tensor on the \path{data-cache-v1} release and the Hugging Face dataset
+\path{chfrank/earth-tensors}; the codec's embedding of it on
+\path{embed-cache-v1}. Stage-2 figures and tables are generated by
+\path{ml/paper/make_figs.py} from \path{ml/paper/data/report_data.json}, built by \path{ml/paper/extract_data.py} from those bundles and the
+training records; codec probe numbers are transcribed from the archived
+per-run bundles, with the source named beside each in the figure script.
+\end{sloppypar}
 
 Sources: GLORYS12 and the GREP ensemble (E.U.\ Copernicus Marine Service
-Information; use is subject to the CMEMS licence and requires crediting the
-service); the Roemmich--Gilson Argo climatology (Scripps Institution of
-Oceanography; Argo data are collected and made freely available by the
-International Argo Program and the national programs that contribute to it);
-NCEP/NCAR Reanalysis-1 (NOAA PSL); OISST v2.1 (NOAA NCEI); the RAPID-MOCHA-WBTS
-transport time series (funded by NERC, NSF and NOAA). The CMIP6
-pre-industrial-control corpus mentioned in Section~\ref{sec:next} is built
-from HadGEM3-GC31-MM (Met Office Hadley Centre) and CNRM-CM6-1-HR (CNRM /
-CERFACS) output via the public CMIP6 archive on Google Cloud; it is not used
-in any result here.
+Information, used under the CMEMS licence with credit to the service); the
+Roemmich--Gilson Argo climatology (Scripps; Argo data are collected and made
+freely available by the International Argo Program and the national programs
+that contribute to it); NCEP/NCAR Reanalysis-1 (NOAA PSL); OISST v2.1 (NOAA
+NCEI); the RAPID-MOCHA-WBTS transport time series (NERC, NSF, NOAA); the MOVE
+transport time series (NOAA).
 
 \end{document}

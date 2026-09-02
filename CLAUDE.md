@@ -1101,6 +1101,24 @@ dark build is generated from paper.tex by the string-replace block in the
 session history / make_figs --dark for figures; never hand-edit
 paper_dark.tex.
 
+**The paper is scientific prose about results, never about the project's
+history.** Standing rule, Chris 2026-09-02: *"For the paper, our prior
+mistakes and our back and forth history don't matter (we can keep those
+somewhere else). Keep it in scientific prose. No 'after the reset' and
+similar things. Negative results (without scientific flaws) are fine."*
+Concretely: no version tracking ("this report replaces…"), no narrative of
+what an earlier draft claimed or which protocol was corrected, no
+"pre-registered prediction that failed", no session or agent names, no
+"now"/"since"/"after the reset" framing. A result is stated with its
+protocol, its baseline and its n, and a negative result is reported exactly
+like a positive one. Where a flawed measurement has to be documented — a
+contaminated pool, a broken metric — that study lives in the archived report
+under `ml/paper/archive/` or in `ml/EXPERIMENTS.md` / `ml/plans/`, and the
+current paper carries only the measurements that survive it. The 2026-09-02
+rewrite (`ml/paper/paper.tex`) is the reference form; the first draft of it
+was rejected for opening its abstract with the contamination and for a
+figure whose caption discussed it.
+
 ### 6c. ML work is governed by `ml/CLAUDE.md`, not by this file
 
 The training and research half of the project moved to its own instruction
