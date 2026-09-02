@@ -1296,14 +1296,106 @@ def data_fingerprint(path, chunk=1 << 24):
     return h.hexdigest()[:10]
 
 
-def embed_cache_path(run, whash, dhash=None):
-    """`Z_<run>_<codec>[_<tensor>].npy`.
+# ---------------------------------------------------------- holdout blocks --
+# E-067, "the two-year roll". A roll is truncated at the end of the held-out
+# stretch it started in (`scored_horizon`), so with SINGLE held-out years —
+# "2009,2017,2023", every archived roll — nothing past 365 d can ever be
+# scored, whatever `--horizon` asks for. Holding out CONSECUTIVE years
+# ("2008,2009,...") buys the leads: the truncation moves to the end of the
+# BLOCK, and 146 pentads (730 d) fit inside a two-year one.
+#
+# The block is derived from the year list, never declared beside it. A second
+# way of saying which years are held out is a second thing that can disagree
+# with `t_hold`, and `t_hold` is what decides the standardisation statistics
+# and the training pool — so the grouping is a FUNCTION of the years and
+# nothing else. A single-year list therefore produces single-year blocks and
+# every downstream call is the call it always was.
+def hold_blocks(hold_years):
+    """The held-out years as maximal runs of CONSECUTIVE years, in order.
+
+    "2009,2017,2023"                  -> [(2009, 2009), (2017, 2017),
+                                          (2023, 2023)]
+    "2008,2009,2016,2017,2022,2023"   -> [(2008, 2009), (2016, 2017),
+                                          (2022, 2023)]
+
+    Takes the list in any order and with duplicates — it sorts and dedupes
+    first, so the blocks are a property of the SET of years and a re-ordered
+    dispatch string cannot produce a different protocol."""
+    ys = sorted({int(str(y).strip()) for y in hold_years if str(y).strip()})
+    out = []
+    for y in ys:
+        if out and y == out[-1][1] + 1:
+            out[-1][1] = y
+        else:
+            out.append([y, y])
+    return [(int(a), int(b)) for a, b in out]
+
+
+def block_bounds(b):
+    """`(y0, y1)` from either a block tuple or a bare year (int or str).
+
+    The bare-year form is what keeps every single-year call site — and every
+    caller outside this file — working unchanged."""
+    if isinstance(b, (tuple, list, np.ndarray)):
+        return int(b[0]), int(b[1])
+    return int(b), int(b)
+
+
+def block_label(b):
+    """The block's key in the result JSON: "2009" for a single-year block,
+    "2008-2009" for a run.
+
+    A one-year block's label is EXACTLY the `str(Y)` every archived artefact
+    is keyed by, which is what lets the blocks replace the year loop without
+    moving a byte of a single-year roll."""
+    y0, y1 = block_bounds(b)
+    return f"{y0:04d}" if y0 == y1 else f"{y0:04d}-{y1:04d}"
+
+
+def hold_key(eff_years, codec_years):
+    """The embed cache's HOLDOUT TOKEN: `""` when the effective holdout years
+    are the codec's own, `_hold-<block labels>` when they are not.
+
+    THIS CLOSES THE HAZARD THE TWO-MASKS COMMENT IN `main` NAMES. The cache is
+    keyed by (codec weight hash, sha256 of the RAW tensor file), and NEITHER
+    TERM SEES THE ANOMALY TRANSFORM — so two runs on the same codec and the
+    same tensor with different z-score statistics share one cache key, and
+    whichever pulls first trains on the other's embeddings while every shape,
+    dtype and length check passes. `--holdout-years` changes exactly those
+    statistics (it moves `t_hold`, which the transform reads), so from E-067 on
+    it changes the NAME too. With no override the token is empty and every
+    existing asset, path and glob is byte-for-byte what it was.
+
+    The token is derived, never declared: `ml/embed_cache_sync.py`'s
+    `cache_name` calls THIS function on the same two lists, so the local path
+    and the release asset cannot disagree about which cache a run means."""
+    eff = _year_set(eff_years)
+    cod = _year_set(codec_years)
+    if not eff or eff == cod:
+        return ""
+    return "_hold-" + "-".join(block_label(b) for b in hold_blocks(eff))
+
+
+def _year_set(y):
+    """A comma string, a sequence or None as a sorted list of year strings."""
+    if y is None:
+        return []
+    items = str(y).split(",") if isinstance(y, str) else list(y)
+    return sorted({str(v).strip() for v in items if str(v).strip()})
+
+
+def embed_cache_path(run, whash, dhash=None, hold=""):
+    """`Z_<run>_<codec>[_<tensor>][_hold-<blocks>].npy`.
 
     dhash is optional ONLY so old callers keep working; every path that
     publishes or pulls must pass it, or the name means less than it claims.
+
+    `hold` is `hold_key`'s token — empty for every run whose holdout years are
+    the codec's, which is every run before E-067 and every run since that does
+    not pass `--holdout-years`.
     """
     tail = f"{whash}_{dhash}" if dhash else whash
-    return os.path.join(HERE, "cache", f"Z_{run}_{tail}.npy")
+    return os.path.join(HERE, "cache", f"Z_{run}_{tail}{hold}.npy")
 
 
 
@@ -2339,6 +2431,33 @@ def main():
                          "as context, and it costs 5.25%% of the "
                          "frame-targets. The monitor batch and both z-space "
                          "evals are UNTOUCHED at every setting")
+    ap.add_argument("--holdout-years", default=None,
+                    help="comma list of years to hold out, OVERRIDING the "
+                         "codec checkpoint's own `args['holdout_years']` for "
+                         "this stage-2 run. E-067, 'the two-year roll': a "
+                         "roll is truncated at the end of the held-out "
+                         "stretch it started in, so with SINGLE held-out "
+                         "years no lead past 365 d can ever be scored. "
+                         "Holding out CONSECUTIVE years — "
+                         "--holdout-years 2008,2009,2016,2017,2022,2023, "
+                         "three two-year blocks — moves the truncation to "
+                         "the end of the block and makes 730 d scoreable. "
+                         "REFUSED unless it is a SUPERSET of the codec's own "
+                         "years: a year the codec trained on may be held out "
+                         "at stage 2, never the reverse. Denying MORE years "
+                         "costs training windows and the certificate prints "
+                         "how many. IT MOVES BOTH MASKS — `t_hold` feeds the "
+                         "training pool AND the anomaly transform's "
+                         "statistics, and the two are one array here (unlike "
+                         "the LONGITUDE holdout, which is deliberately two: "
+                         "see the TWO MASKS note in main). Holding more "
+                         "years out of the z-score statistics is the "
+                         "conservative direction — fewer bins the encoder's "
+                         "normalisation has seen, never more. The EFFECTIVE "
+                         "list (this override, or the codec's) is written "
+                         "into the saved head's own args and into "
+                         "stage2_config, so a roll can read the years the "
+                         "head was actually denied")
     ap.add_argument("--target-bins-argo", default="all",
                     choices=("all", "exclude", "only"),
                     help="filter the TRAINING POOL by whether a window's "
@@ -2591,8 +2710,62 @@ def main():
     lats, lons, chan = d["lats"], d["lons"], [str(c) for c in d["chan"]]
     T, H, W, C = X.shape
     moy = np.array([int(m[5:7]) - 1 for m in months])
-    hold_years = set(ck["args"]["holdout_years"].split(","))
+    # E-067 · WHICH YEARS ARE HELD OUT, AND WHO SAID SO.
+    #
+    # The default is what it has always been: the CODEC checkpoint's own
+    # `args["holdout_years"]`. `--holdout-years` may hold out MORE — the
+    # two-year-block protocol needs consecutive years so a roll's truncation
+    # moves from the year end to the block end — and is REFUSED if it holds
+    # out less, because a year the codec was fitted on that stage 2 then
+    # scores is contamination in the direction nothing downstream can detect.
+    # The guard is here, where the inputs are all it has cost (§5.16), and
+    # not after the anomaly transform's six traversals of X.
+    #
+    # ONE MASK, NOT TWO, and that is deliberate. `t_hold` below feeds BOTH
+    # the anomaly transform's climatology/z-score statistics AND the training
+    # pool (`build_window_pool`), unlike the LONGITUDE holdout, which is
+    # split into `stat_x_hold`/`pool_x_hold` for the reason spelled out in
+    # the next comment. The override moves both, and that is the safe
+    # direction: withholding MORE years from the statistics can only shrink
+    # the set of bins the frozen encoder's normalisation was derived from —
+    # it never lets a held-out year into them, which is what the split
+    # exists to prevent. The print says so rather than leaving it to be
+    # inferred.
+    ck_hold_years = sorted(ck["args"]["holdout_years"].split(","))
+    if a.holdout_years is not None and str(a.holdout_years).strip():
+        eff_hold_years = sorted({y.strip()
+                                 for y in str(a.holdout_years).split(",")
+                                 if y.strip()})
+        missing = [y for y in ck_hold_years if y not in set(eff_hold_years)]
+        if missing:
+            sys.exit(
+                f"--holdout-years {a.holdout_years!r} is not a superset of "
+                f"the codec's own holdout years "
+                f"({ck['args']['holdout_years']!r}): {', '.join(missing)} "
+                f"would re-enter the stage-2 training pool despite the codec "
+                f"having been trained WITHOUT "
+                f"{'it' if len(missing) == 1 else 'them'}. A year the codec "
+                f"trained on may be held out at stage 2; the reverse is "
+                f"contamination. Refusing.")
+        hold_src = f"--holdout-years {a.holdout_years!r}"
+    else:
+        eff_hold_years = ck_hold_years
+        hold_src = f"codec args {ck['args']['holdout_years']!r}"
+    # THE EFFECTIVE LIST TRAVELS WITH THE CHECKPOINT. `args` in every saved
+    # head is `vars(a)`, so writing it back onto the namespace here is what
+    # puts the years a head was actually denied into the head's own file —
+    # where ml/rollout_spatial.py can read them and warn if a roll is scored
+    # on a different set.
+    a.holdout_years = ",".join(eff_hold_years)
+    hold_years = set(eff_hold_years)
     t_hold = np.array([m[:4] in hold_years for m in months])
+    print(f"holdout years: {a.holdout_years} — from {hold_src} · "
+          f"{int(t_hold.sum())} of {T} bins held out. ONE MASK: this drives "
+          f"the training pool AND the anomaly transform's statistics "
+          f"(holding more years out of the statistics is the conservative "
+          f"direction — see the TWO MASKS note, which is about LONGITUDE). "
+          f"The --holdout-scope certificate below counts the windows this "
+          f"leaves.", flush=True)
     # TWO MASKS, AND THEY ARE NOT THE SAME OBJECT (2026-08-19).
     #
     # `x_hold` was one variable doing two jobs: it chose the anomaly
@@ -2852,8 +3025,24 @@ def main():
     # measured 2026-08-11), so a codec-only key lets a box pull embeddings of
     # somebody else's tensor and pass every check it has.
     dhash = data_fingerprint(a.data)
-    print(f"  codec {whash} · tensor {dhash} ({os.path.basename(a.data)})", flush=True)
-    cache = (embed_cache_path(a.run, whash, dhash) if not a.max_pixels else None)
+    # …AND HOLDOUT-AWARE (E-067). Neither hash sees the ANOMALY TRANSFORM, and
+    # `--holdout-years` moves it: `t_hold` chooses the climatology and the
+    # z-score the frozen encoder is then asked to encode. Without this token a
+    # warm box — or a pull of the published Z — would hand an overridden run
+    # the embeddings of the codec's own years, and every shape, dtype and
+    # length check would pass. Empty string with no override, so every
+    # existing asset, path and glob is unchanged. See `hold_key`.
+    hkey = hold_key(a.holdout_years, ck["args"].get("holdout_years", ""))
+    print(f"  codec {whash} · tensor {dhash} ({os.path.basename(a.data)})"
+          + (f" · holdout {hkey}" if hkey else ""), flush=True)
+    if hkey:
+        print(f"embed cache: --holdout-years moved the anomaly statistics, so "
+              f"this run's Z is keyed '{hkey.lstrip('_')}' and is NEITHER "
+              f"read from NOR published under the codec's own key. Pass "
+              f"--hold-years {a.holdout_years} to ml/embed_cache_sync.py to "
+              f"pull or push it.", flush=True)
+    cache = (embed_cache_path(a.run, whash, dhash, hold=hkey)
+             if not a.max_pixels else None)
     # …AND NOT AT ALL WHEN THE AXIS WAS SUBSAMPLED. The --time-stride block
     # above prints "the embed cache is DISABLED for this run (a strided Z must
     # never be published under an unstrided name)", and the comment beside it
@@ -3580,6 +3769,16 @@ def main():
                           # `endpoint_contaminated` and at `window`, where
                           # every pooled window's every frame is scored.
                           "holdout_masked_frac": round(HOLD_MASKED_FRAC, 6),
+                          # E-067 · WHICH YEARS. The scope says which RULE
+                          # excluded them; this says WHICH ONES, so a live
+                          # record self-describes the pool the same way it
+                          # already self-describes the longitude half of it.
+                          # The EFFECTIVE list — --holdout-years when given,
+                          # the codec's otherwise — which is exactly what the
+                          # saved head's own `args["holdout_years"]` carries.
+                          "holdout_years": a.holdout_years,
+                          "codec_holdout_years":
+                              ck["args"].get("holdout_years", ""),
                           "codec_holdout_lon": ck["args"].get("holdout_lon", ""),
                           "tag": a.tag or "",
                           # E-057: NEW KEYS, AND ONLY WHEN THE ARM IS ONE.

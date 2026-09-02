@@ -2,7 +2,17 @@
 # The CLASSICAL BASELINE eval — the body of the `lim:` window token.
 #
 # Spec: lim:K=<k>[,<k>...][,ckpt:<asset|path>][,horizon:N][,starts:N]
-#                         [,scope:window|corridor][,maxgb:G]
+#                         [,scope:window|corridor][,maxgb:G][,hold:Y-Y-...]
+#
+# `hold:` HOLDS OUT THESE YEARS instead of the codec checkpoint's own (E-067,
+# "the two-year roll"), DASH-separated because commas already split tokens:
+# `hold:2008-2009-2016-2017-2022-2023` reaches ml/lim_baseline.py as
+# `--hold-years 2008,2009,2016,2017,2022,2023`. Consecutive years group into
+# BLOCKS and a roll truncates at the block's end, so a horizon past one year
+# is scoreable at all — pair it with `horizon:146` at pentad. The LIM refuses
+# unless the list is a superset of the checkpoint's own years: this baseline
+# may be denied MORE than the head was, never less. Use the SAME `hold:` the
+# head roll used, or the two rows are not comparable.
 #   e.g. lim:K=50,100,200
 #        lim:K=50,100,200,starts:3,ckpt:run-415.pt
 #
@@ -61,12 +71,27 @@ HORIZON_TOK=""
 STARTS_TOK=""
 SCOPE_TOK=""
 MAXGB_TOK=""
+HOLD_TOK=""
 IN_K=0
 want_int() {                       # want_int <token> <value>
   case "$2" in
     ''|*[!0-9]*) echo "::error::lim token '$1' needs a whole number, got '$2'"
                  exit 1 ;;
   esac
+}
+# YEARS, checked where the inputs are all it has cost (ml/CLAUDE.md 0.3):
+# `hold:2008-9` would otherwise reach argparse as the year "9", match no bin,
+# and leave the LIM fitted on one more year than the dispatch asked for.
+want_years() {                     # want_years <token> <dash list>
+  [ -n "$2" ] || { echo "::error::lim token '$1' is empty"; exit 1; }
+  local IFS=-
+  for y in $2; do
+    case "$y" in
+      [12][0-9][0-9][0-9]) ;;
+      *) echo "::error::lim token '$1' wants 4-digit YEARS joined by '-',"
+         echo "::error::got '$y' in '$2'"; exit 1 ;;
+    esac
+  done
 }
 for tok in ${SPEC//,/ }; do
   case "$tok" in
@@ -84,6 +109,9 @@ for tok in ${SPEC//,/ }; do
                     echo "::error::corridor, got '$SCOPE_TOK'"; exit 1 ;;
                esac ;;
     maxgb:*)   MAXGB_TOK="${tok#maxgb:}";     IN_K=0 ;;
+    hold:*)    HOLD_TOK="${tok#hold:}";       IN_K=0
+               want_years hold "$HOLD_TOK"
+               HOLD_TOK="${HOLD_TOK//-/,}" ;;
     *:*|*=*)   echo "::error::unknown lim token '$tok'"; exit 1 ;;
     "")        ;;
     *)         # A BARE token. Only ever a continuation of the K list, and
@@ -168,9 +196,14 @@ if [ -n "$HORIZON_TOK" ] && [ "$HORIZON_TOK" != "$H_DAYMATCH" ]; then
 fi
 echo "horizon: $HORIZON steps"
 if [ -n "$STARTS_TOK" ]; then
-  echo "starts: $STARTS_TOK per holdout year"
+  echo "starts: $STARTS_TOK per holdout block"
 else
-  echo "starts: 3 per holdout year (ml/lim_baseline.py's default — the same count E-044 recommends for a pentad roll, so the LIM and the head are scored from the same rows)"
+  echo "starts: 3 per holdout block (ml/lim_baseline.py's default — the same count E-044 recommends for a pentad roll, so the LIM and the head are scored from the same rows)"
+fi
+if [ -n "$HOLD_TOK" ]; then
+  echo "hold: $HOLD_TOK — OVERRIDES the checkpoint holdout_years (E-067). Consecutive years group into blocks and the roll truncates at the BLOCK end. Pass the SAME hold: the head roll used, or the LIM row is not its baseline"
+else
+  echo "hold: not set — the codec checkpoint's own holdout_years govern, exactly as every archived LIM row"
 fi
 
 # ---- X: the sidecar if the tensor has one, else one extraction -----------
@@ -203,6 +236,7 @@ python -u ml/lim_baseline.py \
   --x "$XPATH" --npz-small "$TENSOR" --ckpt "$CKPT" \
   --K "$KLIST" --horizon "$HORIZON" \
   ${STARTS_TOK:+--starts $STARTS_TOK} \
+  ${HOLD_TOK:+--hold-years $HOLD_TOK} \
   ${SCOPE_TOK:+--scope-fit $SCOPE_TOK} \
   ${MAXGB_TOK:+--max-state-gb $MAXGB_TOK} \
   --out "$OUT" &

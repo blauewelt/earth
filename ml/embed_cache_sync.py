@@ -33,6 +33,18 @@ Two properties matter more than the transfer itself:
      deletes the chunks of the key it did NOT just upload, and does it AFTER
      the upload succeeds, never before: a failed upload must not leave the
      release emptier than it found it.
+  4b. **AND THE HOLDOUT YEARS, when they are not the codec's own** (E-067).
+     The asset name carries the codec weight hash and the tensor sha256, and
+     NEITHER sees the anomaly transform — but `ml/temporal.py --holdout-years`
+     moves it, because `t_hold` chooses the climatology and the z-score the
+     frozen encoder is asked to encode. So an overridden run would pull, and
+     publish under, the key every ordinary run uses, and every shape, dtype
+     and length check would pass: exactly the failure ml/temporal.py's
+     "TWO MASKS" comment describes. `--hold-years` adds a `_hold-<blocks>`
+     token, derived by `temporal.hold_key` — the same function that names the
+     local file the trainer writes — and empty for every run whose holdout
+     years are the codec's, which is every run before E-067.
+
   4. **A push and a pull both know the SHAPE they expect.** `--expect-t` is
      the tensor's own first dimension, and a Z whose header disagrees is
      refused at the push and discarded at the pull. This is the other half of
@@ -68,6 +80,8 @@ Usage:
   python3 ml/embed_cache_sync.py push --partial --run actions --data D \\
       --expect-t 3142                       # the finished chunks, mid-embed
   python3 ml/embed_cache_sync.py tensor-t --data D      # what to pass above
+  python3 ml/embed_cache_sync.py pull --run actions --data D --expect-t 3142 \\
+      --hold-years 2008,2009,2016,2017,2022,2023   # an E-067 blocked holdout
 
 `push` needs GITHUB_TOKEN (the job token is enough: `contents: write`).
 `pull` needs nothing — the repo is public.
@@ -86,7 +100,7 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from temporal import (CACHE_DTYPE, codec_weight_hash, data_fingerprint,
-                      embed_cache_path)
+                      embed_cache_path, hold_key)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.environ.get("GITHUB_REPOSITORY", "blauewelt/earth")
@@ -101,7 +115,7 @@ def sh(cmd, **kw):
     return subprocess.run(cmd, shell=True, text=True, capture_output=True, **kw)
 
 
-def cache_name(run, data):
+def cache_name(run, data, hold_years=None):
     """(local path, asset base name, label) for this run's codec AND tensor.
 
     Both hashes are in the name. A codec-only key was enough while every box
@@ -109,13 +123,24 @@ def cache_name(run, data):
     2026-08-11 — and with a codec-only key a box pulls embeddings of the wrong
     dataset while the shape check, the dtype check and the length check all
     pass. Same failure as #10/#11, with "codec" replaced by "data".
+
+    AND THE HOLDOUT YEARS, when they are not the codec's own (E-067). Neither
+    hash sees the anomaly transform, and `ml/temporal.py --holdout-years`
+    moves it — so a run holding out more years than the codec did would
+    otherwise pull, and publish under, the key every ordinary run uses. The
+    token comes from `temporal.hold_key`, the SAME function that names the
+    local file the trainer writes, so the two cannot disagree about which
+    cache a run means; `hold_years=None` (every caller before E-067) yields
+    the empty token and the exact names this file has always used.
     """
     ck = torch.load(os.path.join(HERE, "runs", run, "pixelmae.pt"),
                     map_location="cpu", weights_only=False)
     whash = codec_weight_hash(ck)
     dhash = data_fingerprint(data)
-    return (embed_cache_path(run, whash, dhash),
-            f"Z_{whash}_{dhash}.npy", f"{whash}/{dhash}")
+    hkey = hold_key(hold_years, ck.get("args", {}).get("holdout_years", ""))
+    return (embed_cache_path(run, whash, dhash, hold=hkey),
+            f"Z_{whash}_{dhash}{hkey}.npy",
+            f"{whash}/{dhash}{hkey}")
 
 
 def chunk_suffix(i):
@@ -493,8 +518,8 @@ def pull_partial(path, asset, base, expect_t, man):
     return 0
 
 
-def pull(run, a_data, expect_t):
-    path, asset, whash = cache_name(run, a_data)
+def pull(run, a_data, expect_t, hold_years=None):
+    path, asset, whash = cache_name(run, a_data, hold_years)
     if os.path.exists(path):
         ok, why = verify(path, expect_t)
         if ok:
@@ -729,7 +754,7 @@ def write_manifest(hdr, api, rid, existing, path, asset, man):
     return ok
 
 
-def push(run, a_data, expect_t, partial=False):
+def push(run, a_data, expect_t, partial=False, hold_years=None):
     """Publish the cache. `partial` ships the finished PREFIX of one still
     being computed.
 
@@ -749,7 +774,7 @@ def push(run, a_data, expect_t, partial=False):
     it is two writers agreeing. That is also why a chunk already on the
     release at its right size is SKIPPED rather than re-uploaded.
     """
-    path, asset, whash = cache_name(run, a_data)
+    path, asset, whash = cache_name(run, a_data, hold_years)
     # While the embedding runs the bytes are in `<cache>.partial`; after a
     # partial pull they are under the final name. Both are full-length .npy
     # files, so only the path differs.
@@ -1021,6 +1046,23 @@ def main():
                     help="time bins the tensor has — a Z whose header "
                          "disagrees is refused (push) or discarded (pull). "
                          "'auto' reads it from --data's own header.")
+    # E-067. NOT a filter and not a computation — it is part of the cache's
+    # IDENTITY, exactly as --data is. An embedding is a function of (codec
+    # weights, tensor, anomaly statistics) and the statistics follow the
+    # holdout years; the first two are hashed into the name and the third was
+    # not, which is the hazard ml/temporal.py's two-masks comment names. Pass
+    # the SAME list the run was trained with, or this pushes the run's Z under
+    # a key that means something else.
+    ap.add_argument("--hold-years", default=None,
+                    help="the run's EFFECTIVE holdout years (the comma list "
+                         "passed to ml/temporal.py --holdout-years). When "
+                         "they differ from the codec checkpoint's own "
+                         "`args['holdout_years']` the cache is named "
+                         "`..._hold-<blocks>`, because the holdout years "
+                         "choose the anomaly statistics the embedding was "
+                         "computed under and neither hash in the name sees "
+                         "them. Omit it (every caller before E-067) and the "
+                         "names are exactly what they have always been.")
     a = ap.parse_args()
     if a.mode == "tensor-t":
         # The one-liner the shell callers use to learn T without loading a
@@ -1052,8 +1094,10 @@ def main():
         ap.error("--partial is a push mode; pull reads the manifest and takes "
                  "whichever it finds")
     try:
-        rc = (pull(a.run, a.data, expect_t) if a.mode == "pull"
-              else push(a.run, a.data, expect_t, partial=a.partial))
+        rc = (pull(a.run, a.data, expect_t, hold_years=a.hold_years)
+              if a.mode == "pull"
+              else push(a.run, a.data, expect_t, partial=a.partial,
+                        hold_years=a.hold_years))
     except Exception as e:                    # noqa: BLE001
         print(f"::warning::embed cache {a.mode} failed: {type(e).__name__}: {e}")
         rc = 1

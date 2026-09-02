@@ -116,8 +116,13 @@ def test_push_with_no_cache_says_so_instead_of_succeeding_quietly():
         # keyed by codec AND data, because two boxes hold family3_na025.npz
         # files with different sha256s and a codec-only key let one pull the
         # other's embeddings while every check passed.
-        sync.cache_name = lambda run, data: (os.path.join(d, "absent.npy"),
-                                             "Z_absent.npy", "absent")
+        # `*_a, **_k`: this double stands in for a real function whose
+        # signature grows (E-067 added `hold_years`, which names the cache
+        # when a run holds out more years than its codec did). A double that
+        # pins the old arity fails on the NEXT argument too, and the failure
+        # reads as a bug in the code under test rather than in the stub.
+        sync.cache_name = lambda run, data, *_a, **_k: (
+            os.path.join(d, "absent.npy"), "Z_absent.npy", "absent")
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rc = sync.push("actions", "irrelevant.npz", 3142)
@@ -197,7 +202,7 @@ def test_push_refuses_a_Z_of_the_wrong_shape():
     with tempfile.TemporaryDirectory() as d:
         p = _z(os.path.join(d, "Z_strided.npy"), 1571)     # one bin in two
         keep = sync.cache_name
-        sync.cache_name = lambda run, data: (p, "Z_w_d.npy", "w")
+        sync.cache_name = lambda run, data, *_a, **_k: (p, "Z_w_d.npy", "w")
         try:
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
@@ -221,7 +226,7 @@ def test_push_refuses_a_cache_nothing_attested_to():
     import contextlib
     def run_push(p):
         keep = kt = sync.cache_name
-        sync.cache_name = lambda run, data: (p, "Z_w_d.npy", "w")
+        sync.cache_name = lambda run, data, *_a, **_k: (p, "Z_w_d.npy", "w")
         tok = os.environ.pop("GITHUB_TOKEN", None)
         try:
             buf = io.StringIO()
@@ -279,7 +284,7 @@ def test_pull_discards_a_published_Z_of_the_wrong_shape():
                 return types.SimpleNamespace(returncode=0, stdout="", stderr="")
             return types.SimpleNamespace(returncode=22, stdout="", stderr="404")
 
-        sync.cache_name = lambda run, data: (path, "Z_w_d.npy", "w")
+        sync.cache_name = lambda run, data, *_a, **_k: (path, "Z_w_d.npy", "w")
         sync.sh = fake_sh
         try:
             buf = io.StringIO()
@@ -318,7 +323,7 @@ def test_a_pull_that_verifies_marks_the_cache_complete():
                 return types.SimpleNamespace(returncode=0, stdout="", stderr="")
             return types.SimpleNamespace(returncode=22, stdout="", stderr="404")
 
-        sync.cache_name = lambda run, data: (path, "Z_w_d.npy", "w")
+        sync.cache_name = lambda run, data, *_a, **_k: (path, "Z_w_d.npy", "w")
         sync.sh = fake_sh
         try:
             with contextlib.redirect_stdout(io.StringIO()):
@@ -419,7 +424,7 @@ def with_release(rel, path, asset="Z_w_d.npy"):
     restore() the caller must run."""
     keep_sh, keep_name, keep_chunk = sync.sh, sync.cache_name, sync.CHUNK
     sync.sh = rel.sh
-    sync.cache_name = lambda run, data: (path, asset, "w")
+    sync.cache_name = lambda run, data, *_a, **_k: (path, asset, "w")
     os.environ["GITHUB_TOKEN"] = "test-token"
 
     def restore():
@@ -593,7 +598,8 @@ def test_pull_of_a_partial_seeds_the_cache_and_its_progress_marker():
             quiet(sync.push, "actions", "irrelevant.npz", 40, partial=True)
             dest = os.path.join(d, "boxB", "Z_run_w_d.npy")
             os.makedirs(os.path.dirname(dest))
-            sync.cache_name = lambda run, data: (dest, "Z_w_d.npy", "w")
+            sync.cache_name = (
+                lambda run, data, *_a, **_k: (dest, "Z_w_d.npy", "w"))
             rc, out = quiet(sync.pull, "actions", "irrelevant.npz", 40)
         finally:
             restore()
@@ -637,7 +643,8 @@ def test_a_partial_can_never_satisfy_a_consumer_THAT_WANTS_A_WHOLE_Z():
             quiet(sync.push, "actions", "irrelevant.npz", 40, partial=True)
             dest = os.path.join(d, "boxB", "Z_run_w_d.npy")
             os.makedirs(os.path.dirname(dest))
-            sync.cache_name = lambda run, data: (dest, "Z_w_d.npy", "w")
+            sync.cache_name = (
+                lambda run, data, *_a, **_k: (dest, "Z_w_d.npy", "w"))
             quiet(sync.pull, "actions", "irrelevant.npz", 40)
             ok_done, why_done = sync.check_done(dest)
             rc, out = quiet(sync.push, "actions", "irrelevant.npz", 40)

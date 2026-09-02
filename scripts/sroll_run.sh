@@ -3,7 +3,7 @@
 #
 # Spec: sroll:<tag,tag,...>[,ckpt:<asset|path>][,horizon:N][,starts:N]
 #                          [,long:N][,future:N][,longm:M][,futm:M]
-#                          [,longstart:L[+L...]][,dumproll]
+#                          [,longstart:L[+L...]][,dumproll][,hold:Y-Y-...]
 #   e.g. sroll:e017_u1_s0,e017_u1_s1,e022s9_u1_s0,e022s13_u1_s0
 #        sroll:e044x144zn_u1_s0,ckpt:run-415.pt,starts:3
 #
@@ -24,7 +24,20 @@
 #              archive's twelve months; rollout_spatial.py then warns, in the
 #              artefact's log, that the resulting `horizon_auc` is not
 #              comparable with anything published.
-#   starts:N   staggered starts per holdout year: every k-th of the year's
+#   hold:Y-Y-...  HOLD OUT THESE YEARS instead of the codec checkpoint's own
+#              (E-067, "the two-year roll"), DASH-separated because commas
+#              already split tokens: `hold:2008-2009-2016-2017-2022-2023`
+#              reaches rollout_spatial.py as
+#              `--hold-years 2008,2009,2016,2017,2022,2023`. CONSECUTIVE
+#              years group into blocks and a roll is truncated at the end of
+#              its BLOCK rather than of its year, which is the only way a
+#              lead past 365 d is ever scored: three single years cap every
+#              roll at one year whatever `horizon:` asks for, three two-year
+#              blocks make 146 pentads (730 d) reachable. Pair it with
+#              `horizon:146` — the day-matched default is 12 MONTHS and this
+#              script will (correctly) warn that 146 is not it. REFUSED by
+#              the roll unless it is a superset of the codec's own years.
+#   starts:N   staggered starts per holdout BLOCK: every k-th of the block's
 #              list, k = len(list)//N, first N. OMITTED = all of them, which
 #              is the monthly protocol's 12 and pentad's 73. E-044 RECOMMENDS
 #              starts:3 at pentad — stride 24 pentads, phases near
@@ -130,6 +143,7 @@ LONGM_TOK=""
 FUTM_TOK=""
 DUMP_TOK=""
 LS_TOK=""
+HOLD_TOK=""
 # A token whose value must be a step count is CHECKED here, where the inputs
 # are all it has cost (ml/CLAUDE.md §0.3/§5.16). `horizon:x` would otherwise
 # reach argparse as a string, die there, and take the whole dispatch with it
@@ -145,6 +159,21 @@ want_int() {                       # want_int <token> <value>
 # answers it by SKIPPING with a reason. `2004_12` would otherwise reach the
 # roll, resolve to None, be skipped, and leave a dispatch that asked for six
 # hindcasts quietly producing five.
+# YEARS, checked where the inputs are all it has cost (§0.3). `hold:2008-9`
+# would otherwise reach argparse as the year "9", be held out (matching
+# nothing), and leave a roll silently scoring one year fewer than the
+# dispatch asked for.
+want_years() {                     # want_years <token> <dash list>
+  [ -n "$2" ] || { echo "::error::sroll token '$1' is empty"; exit 1; }
+  local IFS=-
+  for y in $2; do
+    case "$y" in
+      [12][0-9][0-9][0-9]) ;;
+      *) echo "::error::sroll token '$1' wants 4-digit YEARS joined by '-',"
+         echo "::error::got '$y' in '$2'"; exit 1 ;;
+    esac
+  done
+}
 want_labels() {                    # want_labels <token> <comma list>
   [ -n "$2" ] || { echo "::error::sroll token '$1' is empty"; exit 1; }
   local IFS=,
@@ -161,6 +190,8 @@ for tok in ${SPEC//,/ }; do
     ckpt:*)    CKPT_SPEC="${tok#ckpt:}" ;;
     horizon:*) HORIZON_TOK="${tok#horizon:}"; want_int horizon "$HORIZON_TOK" ;;
     starts:*)  STARTS_TOK="${tok#starts:}";   want_int starts  "$STARTS_TOK" ;;
+    hold:*)    HOLD_TOK="${tok#hold:}";       want_years hold "$HOLD_TOK"
+               HOLD_TOK="${HOLD_TOK//-/,}" ;;
     # BEFORE `long:*` — the two are distinguishable to the glob (`longstart:`
     # does not start with `long:`), but a reader should not have to prove that,
     # and a future `long*:` would silently swallow this one.
@@ -267,9 +298,14 @@ else
   echo "horizon: $HORIZON steps = ${H_SPAN_D} d (day-matched to the monthly archive's 12 months; no horizon: token given)"
 fi
 if [ -n "$STARTS_TOK" ]; then
-  echo "starts: $STARTS_TOK per holdout year (window token starts:$STARTS_TOK)"
+  echo "starts: $STARTS_TOK per holdout block (window token starts:$STARTS_TOK)"
 else
-  echo "::warning::no starts: token — EVERY start of every holdout year is scored (12 at monthly, 73 at pentad). At pentad that is ~34.6x the monthly scored-step count; E-044 recommends starts:3"
+  echo "::warning::no starts: token — EVERY start of every holdout block is scored (12 at monthly, 73 at pentad for a one-year block). At pentad that is ~34.6x the monthly scored-step count; E-044 recommends starts:3"
+fi
+if [ -n "$HOLD_TOK" ]; then
+  echo "hold: $HOLD_TOK — OVERRIDES the codec checkpoint's holdout_years for the whole roll (E-067). Consecutive years group into blocks and the roll truncates at the BLOCK end, so a horizon past one year is scoreable. rollout_spatial.py refuses if this is not a superset of the codec's own years"
+else
+  echo "hold: not set — the codec checkpoint's own holdout_years govern, exactly as every archived roll"
 fi
 # `[ ... ] && [ ... ] && echo` would EXIT HERE under `set -e` the moment a
 # token was set — a false condition is a non-zero status (ml/CLAUDE.md §7).
@@ -318,24 +354,36 @@ fi
 # imported rather than reimplemented — two copies of a hash rule are two
 # chances to disagree, and the disagreement is silent (ml/temporal.py's own
 # docstring for codec_weight_hash).
+#
+# E-067 adds a THIRD term when `hold:` overrode the codec's holdout years:
+# neither hash sees the ANOMALY TRANSFORM, and the holdout years choose it, so
+# a Z embedded under the codec's years is the wrong cache for this roll and
+# would pass every shape, dtype and length check. `hold_key` is the same
+# function ml/temporal.py names the file with and ml/embed_cache_sync.py
+# publishes it under; the token is empty with no `hold:` token, so every
+# existing glob, asset and pull below is byte-for-byte unchanged.
 cat > /tmp/sroll_zkey.py <<'PY_ZKEY'
 import sys, torch
 sys.path.insert(0, "ml")
-from temporal import codec_weight_hash, data_fingerprint
+from temporal import codec_weight_hash, data_fingerprint, hold_key
 ck = torch.load(sys.argv[1], map_location="cpu", weights_only=False)
-print(codec_weight_hash(ck), data_fingerprint(sys.argv[2]))
+hk = hold_key(sys.argv[3] or None, ck.get("args", {}).get("holdout_years", ""))
+print(codec_weight_hash(ck), data_fingerprint(sys.argv[2]), hk or "-")
 PY_ZKEY
-HASHES="$(python /tmp/sroll_zkey.py "$CKPT" "$TENSOR" | tail -1)"
-WHASH="${HASHES%% *}"
-DHASH="${HASHES##* }"
+HASHES="$(python /tmp/sroll_zkey.py "$CKPT" "$TENSOR" "${HOLD_TOK}" | tail -1)"
+read -r WHASH DHASH HKEY <<< "$HASHES"
 [ -n "$WHASH" ] && [ -n "$DHASH" ] && [ "$WHASH" != "$DHASH" ] \
   || { echo "::error::could not key the embed cache (got '$HASHES')"; exit 1; }
-echo "embed cache key: codec $WHASH · tensor $DHASH"
+[ "$HKEY" = "-" ] && HKEY=""
+echo "embed cache key: codec $WHASH · tensor $DHASH${HKEY:+ · holdout $HKEY}"
+if [ -n "$HKEY" ]; then
+  echo "hold: the override moved the anomaly statistics, so this roll reads the Z named '${HKEY#_}' — NOT the codec's own. If it is not on the release, the head that trained under these years published it (scripts/probes_run.sh's sidecar ladder passes the same --hold-years)."
+fi
 
-ZPATH="$(ls ml/cache/Z_*_${WHASH}_${DHASH}.npy 2>/dev/null | head -1 || true)"
+ZPATH="$(ls ml/cache/Z_*_${WHASH}_${DHASH}${HKEY}.npy 2>/dev/null | head -1 || true)"
 if [ -z "$ZPATH" ]; then
-  echo "::warning::no local Z for ${WHASH}/${DHASH} — pulling chunks from embed-cache-v1"
-  ZPATH="ml/cache/Z_sroll_${WHASH}_${DHASH}.npy"
+  echo "::warning::no local Z for ${WHASH}/${DHASH}${HKEY} — pulling chunks from embed-cache-v1"
+  ZPATH="ml/cache/Z_sroll_${WHASH}_${DHASH}${HKEY}.npy"
   rm -f "$ZPATH"
   N=0
   # publish splits at 1.5 GiB, so the chunk count scales with the tensor (4
@@ -344,12 +392,12 @@ if [ -z "$ZPATH" ]; then
   for a in a b c d; do
     for b in a b c d e f g h i j k l m n o p q r s t u v w x y z; do
       curl -fsSL \
-        "https://github.com/${GITHUB_REPOSITORY}/releases/download/embed-cache-v1/Z_${WHASH}_${DHASH}.npy.${a}${b}" \
+        "https://github.com/${GITHUB_REPOSITORY}/releases/download/embed-cache-v1/Z_${WHASH}_${DHASH}${HKEY}.npy.${a}${b}" \
         >> "$ZPATH" || break 2
       N=$((N + 1))
     done
   done
-  [ "$N" -gt 0 ] || { echo "::error::no embed cache published for ${WHASH}/${DHASH} — run the embed pass first"; exit 1; }
+  [ "$N" -gt 0 ] || { echo "::error::no embed cache published for ${WHASH}/${DHASH}${HKEY} — run the embed pass first"; exit 1; }
   echo "pulled $N chunk(s)"
 fi
 # ASSERT THE EFFECT: a Z whose file length disagrees with its own .npy header
@@ -471,6 +519,7 @@ python -u ml/rollout_spatial.py --x "$XPATH" \
   --npz-small "$TENSOR" --z "$ZPATH" --ckpt "$CKPT" \
   --horizon "$HORIZON" \
   ${STARTS_TOK:+--starts-per-year $STARTS_TOK} \
+  ${HOLD_TOK:+--hold-years $HOLD_TOK} \
   ${LS_TOK:+--long-start $LS_TOK} \
   ${LONG_ARG:+--long-months $LONG_ARG} \
   ${FUTURE_ARG:+--future-months $FUTURE_ARG} \

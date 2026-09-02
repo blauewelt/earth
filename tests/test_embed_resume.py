@@ -254,7 +254,8 @@ def test_a_published_partial_is_resumed_and_lands_bit_identical():
                             partial=True)
             assert rc == 0, out
             assert rel.manifest("Z_w_d.npy")["complete"] is False
-            sync.cache_name = lambda run_, data: (b, "Z_w_d.npy", "w")
+            sync.cache_name = (
+                lambda run_, data, *_a, **_k: (b, "Z_w_d.npy", "w"))
             rc, out = quiet(sync.pull, "actions", "irrelevant.npz", T)
             assert rc == 0, out
         finally:

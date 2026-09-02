@@ -17,8 +17,9 @@ THE BASELINE IS ONLY A BASELINE IF IT IS SCORED IDENTICALLY. So nothing about
 the protocol is re-implemented here. The anomaly transform (`StdMonths`), the
 damped-persistence AR(1) reference (`ar1_train`), the corridor definition
 (`corridor_pixels`), the #217 gate subset (`gate_subset`), the nine scopes
-(`nested_scopes`), the staggered starts (`TimeAxis.starts_for_year`), the
-year-boundary break (`scored_horizon`'s condition), the ten sums
+(`nested_scopes`), the holdout blocks (`hold_blocks`) and the staggered
+starts they carry (`TimeAxis.starts_for_block`), the block-boundary break
+(`scored_horizon`'s condition), the ten sums
 (`new_sums`/`accumulate`), the skill arithmetic (`skill_block`) and the
 atomic artefact writer (`write_results`) are all IMPORTED from
 `ml/rollout_spatial.py` and called on the same arrays the head path calls them
@@ -36,7 +37,11 @@ WHAT THE MODEL IS.
   2. TRAINING SET. Every axis row NOT in a held-out year, where the held-out
      years come from the codec checkpoint's own `args["holdout_years"]` — read
      the way `rollout_spatial.main()` reads them, so the LIM cannot be fitted
-     on a bin the head was not allowed to see.
+     on a bin the head was not allowed to see. `--hold-years` may hold out
+     MORE (E-067: consecutive years group into blocks and a roll is truncated
+     at the block's end, which is what makes a 730-day lead scoreable); it is
+     refused unless it is a superset of the checkpoint's own list, because the
+     direction that would contaminate is the other one.
   3. REDUCTION. PCA to K modes via the T x T Gram matrix (`pca_gram`). With
      T_train ~2,900 and D ~694,000 the Gram is the cheap exact route: one
      [T,D]x[D,T] sgemm (~1.2e13 flops, a couple of minutes of CPU) and a
@@ -120,6 +125,7 @@ from rollout_spatial import (TimeAxis, StdMonths, ar1_train,     # noqa: E402
                              corridor_pixels, gate_subset, nested_scopes,
                              new_sums, accumulate, skill_block,
                              scored_horizon, write_results, Progress,
+                             hold_blocks, block_label,
                              GATE_HEAD, GATE_REF, GATE_TOL, BAND_EDGE_DAYS,
                              _utc_now)
 from recon_eval import stream_stats                              # noqa: E402
@@ -349,8 +355,9 @@ def score_battery(std_m, ax, hold_years, starts_per_year, Hh, T, r1, scopes,
     battery's own sums. Returns `(sums, info)`.
 
     THIS IS `rollout_spatial.main()`'s SCORING LOOP, structurally line for
-    line: the same start list (`TimeAxis.starts_for_year`), the same break
-    (`t_tgt >= T or ax.year[t_tgt] != Y` — the condition `scored_horizon`
+    line: the same holdout BLOCKS (`hold_blocks`, E-067), the same start list
+    (`TimeAxis.starts_for_block`), the same break (`t_tgt >= T or
+    ax.year[t_tgt]` outside the block — the condition `scored_horizon`
     encodes, which is why that function is imported and used to plan the
     progress total from the identical expression), the same persistence
     (`std_m.get(s)`), the same damped persistence (`v_pers * r1 ** h`), the
@@ -368,8 +375,8 @@ def score_battery(std_m, ax, hold_years, starts_per_year, Hh, T, r1, scopes,
     unmod = None if unmodelled is None else np.asarray(unmodelled)
     if unmod is not None and unmod.size == 0:
         unmod = None
-    for Y in hold_years:
-        for s in ax.starts_for_year(Y, starts_per_year):
+    for B in hold_blocks(hold_years):
+        for s in ax.starts_for_block(B, starts_per_year):
             # The head path additionally requires `s - K + 1 >= 0` for its K
             # context rows. A LIM's context is ONE row (tau = 1 bin), so the
             # condition degenerates to the second half of the same guard.
@@ -381,7 +388,10 @@ def score_battery(std_m, ax, hold_years, starts_per_year, Hh, T, r1, scopes,
             try:
                 for h in range(1, Hh + 1):
                     t_tgt = s + h
-                    if t_tgt >= T or ax.year[t_tgt] != int(Y):
+                    # `scored_horizon`'s own break, written out — at the end
+                    # of the BLOCK (E-067), which for a single held-out year
+                    # is the year boundary it always was.
+                    if t_tgt >= T or not (B[0] <= ax.year[t_tgt] <= B[1]):
                         break
                     xhat = next(gen)
                     v_true, obs_tt = std_m.get(t_tgt)
@@ -576,10 +586,21 @@ def build_parser():
                          "No weights are loaded, no embedding is computed and "
                          "no GPU is used; the LIM works on pixels.")
     ap.add_argument("--hold-years", default="",
-                    help="comma-separated override for the checkpoint's "
-                         "`holdout_years`. FOR TESTS. A production run takes "
-                         "the years from the checkpoint, so the LIM cannot be "
-                         "fitted on a bin the head was denied.")
+                    help="comma list of years to hold out, OVERRIDING the "
+                         "checkpoint's `holdout_years` for the whole run — "
+                         "the t_hold mask behind the anomaly statistics and "
+                         "the LIM's own training pairs, the start list, the "
+                         "roll's truncation and the `hold_years` written into "
+                         "the artefact. E-067: CONSECUTIVE years group into "
+                         "blocks (`hold_blocks`) and a roll is truncated at "
+                         "the end of its BLOCK, so "
+                         "--hold-years 2008,2009,2016,2017,2022,2023 is three "
+                         "two-year blocks and 146 pentads (730 d) of lead are "
+                         "scoreable where three single years cap every roll "
+                         "at 365 d. REFUSED unless it is a SUPERSET of the "
+                         "checkpoint's own years: the LIM may be denied more "
+                         "than the head was, never less. Empty (the default) "
+                         "takes the checkpoint's list unchanged.")
     ap.add_argument("--K", default="50,100,200",
                     help="comma-separated PC counts. EVERY K in the list is "
                          "fitted and scored — the decomposition is computed "
@@ -592,7 +613,8 @@ def build_parser():
                          "pentad, the day-matched value; 12 at monthly)")
     ap.add_argument("--starts", type=int, default=3,
                     help="staggered starts per holdout year — "
-                         "TimeAxis.starts_for_year's `per_year`. 0 = all")
+                         "TimeAxis.starts_for_block's `per_year`, counted "
+                         "PER BLOCK. 0 = all")
     ap.add_argument("--scope-fit", choices=("window", "corridor"),
                     default="window",
                     help="which pixel set the state vector covers. `window` "
@@ -674,18 +696,35 @@ def main(argv=None):
     ck = torch.load(a.ckpt, map_location="cpu", weights_only=False)
     C = len(ck["chan"])
     chan_names = [str(c) for c in ck["chan"]]
+    ck_hold_years = sorted(ck["args"]["holdout_years"].split(","))
     if a.hold_years:
-        hold_years = sorted(str(y).strip() for y in a.hold_years.split(",")
-                            if str(y).strip())
-        hold_src = f"--hold-years {a.hold_years!r} (TEST OVERRIDE)"
+        hold_years = sorted({str(y).strip() for y in a.hold_years.split(",")
+                             if str(y).strip()})
+        missing = [y for y in ck_hold_years if y not in set(hold_years)]
+        if missing:
+            # THE DIRECTION MATTERS, and the guard sits where the inputs are
+            # all it has cost (ml/CLAUDE.md 0.3). Dropping a checkpoint
+            # holdout year would fit the LIM on bins the head it is a
+            # baseline for was denied — the one thing this override must
+            # never be able to do.
+            sys.exit(
+                f"--hold-years {a.hold_years!r} is not a superset of "
+                f"{os.path.basename(a.ckpt)} args['holdout_years'] = "
+                f"{ck['args']['holdout_years']!r}: {', '.join(missing)} "
+                f"would re-enter the LIM's training pairs. The LIM may be "
+                f"denied MORE than the head was, never less. Refusing.")
+        hold_src = f"--hold-years {a.hold_years!r} (override)"
     else:
-        hold_years = sorted(ck["args"]["holdout_years"].split(","))
+        hold_years = ck_hold_years
         hold_src = (f"{os.path.basename(a.ckpt)} args['holdout_years'] = "
                     f"{ck['args']['holdout_years']!r}")
+    # E-067: the years, grouped into the runs a roll is truncated at.
+    blocks = hold_blocks(hold_years)
     t_hold = np.array([m[:4] in set(hold_years) for m in months])
     lo, hi = (float(v) for v in ck["args"]["holdout_lon"].split(","))
     x_hold = (lons >= lo) & (lons < hi)
     print(f"holdout years: {','.join(hold_years)} — from {hold_src} · "
+          f"blocks {', '.join(block_label(b) for b in blocks)} · "
           f"{int(t_hold.sum())} of {T} bins held out", flush=True)
     if not t_hold.any():
         sys.exit("no bin is in a holdout year: this LIM would be scored on "
@@ -719,6 +758,20 @@ def main(argv=None):
 
     # ---- the anomaly transform, from the SAME cache the roll writes -------
     st_path = os.path.join(a.cache_dir, "std_stats.npz")
+    if a.hold_years:
+        # E-067 · THE STATS CACHE IS NOT KEYED ON THE HOLDOUT YEARS, and this
+        # directory is SHARED with ml/rollout_spatial.py precisely so a LIM
+        # row and a head row rest on the same bytes. A warm box would
+        # therefore hand a --hold-years run the climatology of the codec's
+        # years — the same numbers, a different meaning. The override reads
+        # and writes its own file, named for the blocks; the shared one is
+        # neither read nor overwritten. Absent the flag, unchanged.
+        st_path = os.path.join(a.cache_dir, "std_stats__hold-%s.npz"
+                               % "-".join(block_label(b) for b in blocks))
+        print(f"anomaly stats: --hold-years gets its own cache "
+              f"{os.path.basename(st_path)} — the shared std_stats.npz was "
+              f"written under the checkpoint's years and is left alone",
+              flush=True)
     if os.path.exists(st_path):
         s_ = np.load(st_path)
         clim, dyn = s_["clim"], list(s_["dyn"])
@@ -775,8 +828,8 @@ def main(argv=None):
     fit_idx = np.where(fit_px)[0]
 
     # ---- the starts, and the channels they make scoreable -----------------
-    start_rows = [int(s) for Y in hold_years
-                  for s in ax.starts_for_year(Y, a.starts)
+    start_rows = [int(s) for B in blocks
+                  for s in ax.starts_for_block(B, a.starts)
                   if int(s) + 1 < T]
     if not start_rows:
         sys.exit(f"no usable starts for holdout years {hold_years} on a "
@@ -959,13 +1012,13 @@ def main(argv=None):
             "rule": ("every k-th start of the holdout year's list, "
                      "k = len(list)//N, first N — TimeAxis.starts_for_year, "
                      "the roll's own"),
-            "available": {str(Y): len(ax.starts_for_year(Y))
-                          for Y in hold_years},
-            "rows": {str(Y): ax.starts_for_year(Y, a.starts)
-                     for Y in hold_years},
-            "labels": {str(Y): [ax.label_of_row(s)
-                                for s in ax.starts_for_year(Y, a.starts)]
-                       for Y in hold_years},
+            "available": {block_label(b): len(ax.starts_for_block(b))
+                          for b in blocks},
+            "rows": {block_label(b): ax.starts_for_block(b, a.starts)
+                     for b in blocks},
+            "labels": {block_label(b): [
+                ax.label_of_row(s)
+                for s in ax.starts_for_block(b, a.starts)] for b in blocks},
         }
     if not ax.monthly:
         results["cadence"] = {
@@ -979,10 +1032,10 @@ def main(argv=None):
             "horizon_is_daymatched": Hh == h_match,
             "starts_per_year": a.starts or "all",
             "starts_per_holdout_year": {
-                str(Y): len(ax.starts_for_year(Y, a.starts))
-                for Y in hold_years},
+                block_label(b): len(ax.starts_for_block(b, a.starts))
+                for b in blocks},
             "starts_available_per_holdout_year": {
-                str(Y): len(ax.starts_for_year(Y)) for Y in hold_years},
+                block_label(b): len(ax.starts_for_block(b)) for b in blocks},
             "band_edge_days": list(BAND_EDGE_DAYS),
             "daymatched_leads": list(leads),
             "daymatched_lead_days": [ax.span_days(h) for h in leads],
@@ -996,8 +1049,8 @@ def main(argv=None):
 
     # The step PLAN comes from `scored_horizon` — the roll's own expression
     # for how many of the Hh leads a start actually contributes.
-    plan = sum(scored_horizon(ax, s, Hh, T, Y) for Y in hold_years
-               for s in ax.starts_for_year(Y, a.starts) if s + 1 < T)
+    plan = sum(scored_horizon(ax, s, Hh, T, B) for B in blocks
+               for s in ax.starts_for_block(B, a.starts) if s + 1 < T)
     prog = Progress(a.metrics, len(Ks), every=a.progress_every)
     print(f"plan: {len(Ks)} K value(s) x {plan} scored steps "
           f"({len(start_rows)} starts, horizon {Hh})", flush=True)

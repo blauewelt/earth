@@ -102,6 +102,37 @@ embed_expect_t() {
   esac
 }
 
+# hold:2008-2009-2016-2017-2022-2023 — E-067, "the two-year roll": hold
+# these years out of the STAGE-2 pool instead of the codec checkpoint's own.
+# DASHES because commas separate window fields, same as ring:/direct:.
+# Consecutive years group into BLOCKS and a later roll truncates at the
+# block end rather than the year end, which is the only way a lead past
+# 365 d is ever scored. temporal.py REFUSES a list that is not a superset
+# of the codec's own years.
+#
+# IT ALSO NAMES THE EMBED CACHE, and that is not optional. The cache key is
+# (codec weight hash, tensor sha256) and neither term sees the anomaly
+# transform, which --holdout-years moves — so without the token below this
+# box would pull the codec's-years Z, train on it, and pass every shape,
+# dtype and length check (ml/temporal.py's TWO MASKS comment; §5.25). ONE
+# variable feeds both flags, so the trainer and the sidecar cannot name two
+# different caches.
+HOLD2=""; HOLD_ARG=""; HOLD_SYNC=""
+case "${WINDOW}" in
+  *hold:*) HOLD2="${WINDOW}"; HOLD2="${HOLD2##*hold:}"; HOLD2="${HOLD2%%,*}"
+           HOLD2="${HOLD2//-/,}"
+           for y in ${HOLD2//,/ }; do
+             case "$y" in
+               [12][0-9][0-9][0-9]) ;;
+               *) echo "::error::window token 'hold' wants 4-digit YEARS"
+                  echo "::error::joined by '-', got '$y' in '$HOLD2'"
+                  exit 1 ;;
+             esac
+           done
+           HOLD_ARG="--holdout-years ${HOLD2}"
+           HOLD_SYNC="--hold-years ${HOLD2}";;
+esac
+
 # ROLLOUT EVALUATION MODE — window carries `rolleval:<tag>,<tag>,…`
 # (the 25-input cap again). Fetches published temporal heads from
 # the model-checkpoints release (public, curl, no gh/node — the
@@ -194,7 +225,7 @@ case "${WINDOW}" in
     ls -l /opt/earth-cache/Z_*.npy 2>/dev/null || echo "  (no /opt/earth-cache/Z_*.npy on this box)"
     embed_expect_t
     python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
-      --expect-t "$EXPECT_T" \
+      --expect-t "$EXPECT_T" $HOLD_SYNC \
       || echo "::warning::embed cache publish failed — the Z remains single-copy on this box's disk"
     exit 0
     ;;
@@ -248,6 +279,11 @@ case "${WINDOW}" in
     # E-022 spatial rollout eval — full-window roll of stencil
     # heads against the e017 baseline, gated on reproducing #217.
     # Body in scripts/sroll_run.sh (21,000-char ceiling here).
+    # Token grammar lives there; note `hold:<Y-Y-...>` (E-067) —
+    # DASH-separated years, because commas split the window's own
+    # tokens — which overrides the codec's holdout_years and lets
+    # consecutive years form BLOCKS a roll can cross, i.e. the
+    # only way a lead past 365 d is scored at all.
     bash scripts/sroll_run.sh "${WINDOW}"
     exit 0
     ;;
@@ -261,8 +297,11 @@ case "${WINDOW}" in
     #
     # CPU only: no embedding, no Z pull, no head weights, no GPU.
     # It needs the tensor and a codec .pt for its ARGS alone
-    # (holdout_years / holdout_lon / chan). Body in
-    # scripts/lim_run.sh — same 21,000-char ceiling as above.
+    # (holdout_years / holdout_lon / chan). `hold:<Y-Y-...>`
+    # overrides those years with a DASH-separated list (E-067,
+    # the same token sroll: takes) — pass the SAME one both
+    # modes used, or the LIM row is not the head's baseline.
+    # Body in scripts/lim_run.sh — same 21,000-char ceiling.
     bash scripts/lim_run.sh "${WINDOW}"
     exit 0
     ;;
@@ -343,7 +382,10 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
     *ring:*) RING="${WINDOW}"; RING="${RING##*ring:}"; RING="${RING%%,*}"
              RING="${RING//-/,}";;
   esac
-  echo "stage 2: unroll=$UNROLL seed=$SEED stencil=$STENCIL ring=$RING ${DIRECT:-} ${UPROBS:-}"
+  echo "stage 2: unroll=$UNROLL seed=$SEED stencil=$STENCIL ring=$RING ${DIRECT:-} ${UPROBS:-} ${HOLD_ARG:-}"
+  if [ -n "$HOLD2" ]; then
+    echo "hold: ${HOLD2} — E-067 stage-2 holdout override. It moves the anomaly statistics, so this run's embed cache is keyed _hold-<blocks> and is neither read from nor published under the codec's own key; every embed_cache_sync call below carries ${HOLD_SYNC}"
+  fi
   # `window` also carries resume2:<tag> — CONTINUE a stage-2 head
   # rather than train a fresh one. Packed into an existing input
   # because workflow_dispatch caps at 25 and this file is at the
@@ -435,7 +477,7 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
   # in ml/CLAUDE.md — best-effort is the CALLER's decision.
   embed_expect_t
   python -u ml/embed_cache_sync.py pull --run actions --data "$TENSOR" \
-    --expect-t "$EXPECT_T" \
+    --expect-t "$EXPECT_T" $HOLD_SYNC \
     || echo "::warning::no embed cache to pull — stage 2 will build it"
   # BACKGROUNDED, with the same 5-minute publisher the Train and
   # joint steps use. Called inline, the publish below only ran
@@ -461,6 +503,7 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
     --ring-km "$RING" \
     $R2 $SCHED $DIRECT $UPROBS \
     "--train-lon-hold=${RECIPE_TRAIN_LON_HOLD:-inherit}" \
+    $HOLD_ARG \
     --d-model "${RECIPE_TEMPORAL_D_MODEL:-$IN_TEMPORAL_D_MODEL}" \
     --layers "${RECIPE_TEMPORAL_LAYERS:-$IN_TEMPORAL_LAYERS}" &
   S2_PID=$!
@@ -563,7 +606,7 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
         # marker that stops this loop.
         echo "embed cache push: STARTING in-training at tick ${TICK} (~$((TICK / 2)) min in) — the embedding is COMPLETE (.done) — $(du -h /opt/earth-cache/Z_*.npy 2>/dev/null | tr '\n' ' ')"
         if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
-             --expect-t "$EXPECT_T"; then
+             --expect-t "$EXPECT_T" $HOLD_SYNC; then
           touch "$EMBED_MARK"
           echo "embed cache push: DONE in-training — VERIFIED durable on the release, hours before this job ends"
           EMBED_STATE=published
@@ -584,7 +627,7 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
         # is what made the 2026-08-21 bug cost three runs' logs to find.
         echo "embed cache push: STARTING PARTIAL in-training at tick ${TICK} (~$((TICK / 2)) min in) — the embedding is still running — $(du -h /opt/earth-cache/Z_*.npy* 2>/dev/null | tr '\n' ' ')"
         if python -u ml/embed_cache_sync.py push --partial --run actions \
-             --data "$TENSOR" --expect-t "$EXPECT_T"; then
+             --data "$TENSOR" --expect-t "$EXPECT_T" $HOLD_SYNC; then
           echo "embed cache push: PARTIAL done at tick ${TICK} — the finished chunks are on the release; no marker, because the cache is not complete yet"
           EMBED_STATE=partial
         else
@@ -603,7 +646,7 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
         # silence.
         echo "embed cache push: STARTING in-training at tick ${TICK} (~$((TICK / 2)) min in) — $(du -h /opt/earth-cache/Z_*.npy 2>/dev/null | tr '\n' ' ')"
         if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
-             --expect-t "$EXPECT_T"; then
+             --expect-t "$EXPECT_T" $HOLD_SYNC; then
           touch "$EMBED_MARK"
           echo "embed cache push: DONE in-training — the release has it now, hours before this job ends"
           EMBED_STATE=published
@@ -649,7 +692,7 @@ if [ "${RECIPE_TEMPORAL_STEPS:-$IN_TEMPORAL_STEPS}" != "0" ] && [ "$SKIP_S2" = "
   # complete — the partial path deliberately never writes `complete: true`.
   echo 'embed cache push: STARTING post-training (unconditional, after wait $S2_PID)'
   if python -u ml/embed_cache_sync.py push --run actions --data "$TENSOR" \
-       --expect-t "$EXPECT_T"; then
+       --expect-t "$EXPECT_T" $HOLD_SYNC; then
     echo "embed cache push: DONE post-training — the line above says which it was: uploaded here, or already complete from the in-training push"
   else
     echo "::warning::embed cache push: FAILED post-training — the probe ladder continues"

@@ -379,11 +379,55 @@ def main():
         _, r_unk = roll_argv(f"sroll:h1,ckpt:{ck_rel},starts_per_year:3",
                              "family4_na025_pentad_r2.npz")
         assert r_unk.returncode != 0 and "unknown sroll token" in r_unk.stdout
+        # E-067 `hold:` — DASH-separated years, because commas already split
+        # the window's tokens. The dashes must become commas by the time the
+        # roll sees them, or argparse gets one year named "2008-2009-..." and
+        # holds out nothing at all.
+        HOLDW = "hold:2008-2009-2016-2017-2022-2023"
+        HOLDK = "_hold-2008-2009-2016-2017-2022-2023"
+        # ...AND THE Z IT READS MOVES WITH IT. The holdout years choose the
+        # anomaly statistics; the cache key is (codec weight hash, tensor
+        # sha256) and sees neither. So with no Z under the holdout-keyed name
+        # the script must REFUSE — using the codec's-years Z here would roll
+        # beautiful numbers off the wrong normalisation and pass every shape,
+        # dtype and length check there is.
+        _, r_hz = roll_argv(f"sroll:h1,ckpt:{ck_rel},{HOLDW}",
+                            "family4_na025_pentad_r2.npz")
+        assert r_hz.returncode != 0, r_hz.stdout[-800:]
+        assert HOLDK in r_hz.stdout and "no embed cache published" \
+            in r_hz.stdout, r_hz.stdout[-1200:]
+        np.save(os.path.join(cache3, f"Z_actions_{wh3}_{dhp}{HOLDK}.npy"),
+                np.zeros((8, 4, 4), np.float16))
+        av_h, r_h = roll_argv(
+            f"sroll:h1,ckpt:{ck_rel},horizon:146,starts:3,{HOLDW}",
+            "family4_na025_pentad_r2.npz")
+        assert f"holdout {HOLDK}" in r_h.stdout, r_h.stdout[-1200:]
+        assert "--hold-years" in av_h, (av_h, r_h.stdout[-1200:])
+        assert av_h[av_h.index("--z") + 1].endswith(HOLDK + ".npy"), av_h
+        assert av_h[av_h.index("--hold-years") + 1] == \
+            "2008,2009,2016,2017,2022,2023", av_h
+        assert "--hold-years" not in av_m + av_p, \
+            "the holdout years must NOT be defaulted — absent the token the " \
+            "codec checkpoint's own list governs, as in every archived roll"
+        _, r_hbad = roll_argv(f"sroll:h1,ckpt:{ck_rel},hold:2008-9",
+                              "family4_na025_pentad_r2.npz")
+        assert r_hbad.returncode != 0 and "4-digit YEARS" in r_hbad.stdout, \
+            r_hbad.stdout[-600:]
+        assert "embed cache key" not in r_hbad.stdout, \
+            "the bad-year refusal fired after doing work"
         print("7. `horizon:`/`starts:`/`long:`/`future:` reach the roll as "
               "--horizon 36 --starts-per-year 3 --long-months 99 "
               "--future-months 0; a non-numeric value is refused before any "
               "hashing or extraction (rc %d) and an unknown token is still "
-              "refused (rc %d)" % (r_bad.returncode, r_unk.returncode))
+              "refused (rc %d). `hold:2008-2009-...` arrives as "
+              "--hold-years 2008,2009,... (dashes turned back into commas) "
+              "AND moves the embed cache the roll reads to "
+              "Z_..%s.npy — with no such Z the run refuses (rc %d) rather "
+              "than rolling the codec's-years embeddings; the token is absent "
+              "when the window does not carry it, and `hold:2008-9` is "
+              "refused before any hashing (rc %d)"
+              % (r_bad.returncode, r_unk.returncode, HOLDK,
+                 r_hz.returncode, r_hbad.returncode))
 
         # ---- 8. the dispatch numbers live in the header (item 5) --------
         src = open(os.path.join(ROOT, SCRIPT)).read()

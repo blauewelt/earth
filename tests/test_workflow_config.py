@@ -131,6 +131,36 @@ def main():
             f"stands the key looks available and does nothing, and the first "
             f"recipe to name it is refused at dispatch by "
             f"scripts/resolve_recipe.sh's unread-key guard.")
+    # E-067 · THE HOLDOUT-YEAR KEY, BY NAME. The generic checks above would
+    # pass with `holdout_years` declared and never wired (they only ask about
+    # keys some recipe already sets) right up until the first recipe named it
+    # — and that failure would land at DISPATCH time, on a run, for a static
+    # mistake. So the pair is pinned explicitly, the way `fsq_warmstart` was:
+    # declared as recipe-only, AND reaching ml/train.py's own flag on the
+    # Train step's python line, AND in the =VALUE form a comma list survives.
+    if "holdout_years" not in recipe_only:
+        raise SystemExit(
+            "case 3 FAILED: `holdout_years` is not declared in ml-train.yml's "
+            "RECIPE-ONLY KEYS block. Nothing else can set the codec's own "
+            "held-out years — the input list is full at 25 — and every stage "
+            "downstream reads them back out of the checkpoint's args, so a "
+            "codec trained on the wrong years is invisible from the dispatch.")
+    _train = [st for st in steps if st.get("name") == "Train"]
+    if not _train:
+        raise SystemExit("case 3 FAILED: no Train step to check")
+    _body = _train[0].get("run", "")
+    if "RECIPE_HOLDOUT_YEARS" not in _body:
+        raise SystemExit(
+            "case 3 FAILED: the Train step never reads $RECIPE_HOLDOUT_YEARS. "
+            "The key is declared, so scripts/resolve_recipe.sh will ACCEPT a "
+            "recipe that sets it and the setting will do nothing.")
+    if "--holdout-years=${RECIPE_HOLDOUT_YEARS}" not in _body:
+        raise SystemExit(
+            "case 3 FAILED: $RECIPE_HOLDOUT_YEARS does not reach ml/train.py "
+            "as `--holdout-years=${RECIPE_HOLDOUT_YEARS}`. The =VALUE form is "
+            "not cosmetic: a bare comma list in the NEXT argv slot is fine, "
+            "but the sibling --holdout-lon carries values that open with a "
+            "minus and both are written the same way on purpose.")
     recipes = sorted(glob.glob(os.path.join(ROOT, "ml", "recipes", "*.json")))
     if not recipes:
         raise SystemExit("case 3 FAILED: no recipes found")
@@ -191,7 +221,9 @@ def main():
                              f"a configuration that was RUN; say which run.")
     print(f"case 3 ok — {len(recipes)} recipes, all wired and documented; "
           f"{len(valid) - len(recipe_only)} inputs (cap 25) + "
-          f"{len(recipe_only)} recipe-only keys {sorted(recipe_only)}")
+          f"{len(recipe_only)} recipe-only keys {sorted(recipe_only)}; "
+          f"`holdout_years` is declared AND reaches ml/train.py "
+          f"--holdout-years on the Train step")
     ok += 1
 
     # ---- case 4: the architecture still reaches train.py, unfaked --------

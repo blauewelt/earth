@@ -1,0 +1,16 @@
+{
+  "_description": "E-067: the f4r2-40M configuration (512x12, 4 heads, d_dec 256, d_z 32, patch 1, pentad r2 tensor with SST as channel 40, no longitude holdout) as the TERMINAL-HOLDOUT codec of REBOOT_PLAN section 3 step 4. Differs from f4r2-40M-nolonhold.json in exactly one field, holdout_years '2008,2009,2016,2017,2021,2022,2023,2024', so training ends at 2020 and the four terminal years 2021-2024 are a clean forward test rather than an interpolation between trained years — the only regime in which a forecast score answers the question the programme is actually asked. The two DEVELOPMENT blocks 2008-2009 and 2016-2017 are held out in the same codec and for a different reason: E-067 groups CONSECUTIVE held-out years into blocks and truncates a roll at the end of its block rather than of its year, so a two-year block is the smallest thing a 730-day roll can be scored inside at all, and three single years cap every roll at 365 days whatever --horizon asks for. One codec carries both because a development roll and the terminal test must share a frozen encoder or their numbers are not comparable; splitting them into two codecs would buy nothing and cost a second full stage-1 run. Everything else is f4r2-40M-nolonhold field for field, deliberately: this recipe changes the DATA a codec may see and nothing about the model, so its comparison against run-415 is an isolation of the holdout regime. DISPATCH WITH `resume` EMPTY (a fresh codec; the seed step reads inputs.resume in a YAML `if:` that $RECIPE_RESUME cannot reach). FAMILY-4 WORK GOES ON 126 GB BOXES ONLY (#368 host-OOMed on a 63 GB box). Holding out eight of the axis's 43 years (1982-2024) costs about a fifth of the training bins; size the step budget against the pool, not against run-415's.",
+  "_provenance": "NOTHING HAS BEEN RUN AT THIS CONFIGURATION YET. This recipe is the dispatch surface and no number in it is a measurement. Architecture copied field for field from ml/recipes/f4r2-40M-nolonhold.json (params 37,976,465), which is the configuration run-415 trained under; the single edit is `holdout_years`, reaching ml/train.py --holdout-years through $RECIPE_HOLDOUT_YEARS as a recipe-only key. Its _provenance becomes a measurement when the run lands: what to record then is the codec's own probe ladder against run-415's, the pool size the eight-year holdout leaves, and whether the terminal block 2021-2024 scores like the development blocks or unlike them. A stage-2 head on this codec may hold out MORE years (scripts/probes_run.sh's `hold:` window token) and is refused if it holds out fewer.",
+  "tensor": "family4_na025_pentad_r2",
+  "d_z": 32,
+  "patch": 1,
+  "codec_d_model": 512,
+  "codec_layers": 12,
+  "codec_heads": 4,
+  "codec_d_dec": 256,
+  "anomaly": "true",
+  "batch": 512,
+  "holdout_lon": "0,0",
+  "holdout_years": "2008,2009,2016,2017,2021,2022,2023,2024",
+  "head_probe": "true"
+}

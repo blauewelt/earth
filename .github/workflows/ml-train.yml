@@ -124,6 +124,21 @@ on:
 #       "lo,hi" | "none". The longitude block excluded from STAGE-1 training.
 #       Unset = train.py's own default, -45,-25, unchanged for every dispatch
 #       that does not name a recipe carrying this key.
+#   recipe-only: holdout_years    -> ml/train.py --holdout-years (Train step)
+#       "2009,2017,2023" | any comma list of years. The years excluded from
+#       STAGE-1 training, and therefore from the anomaly statistics and from
+#       every stage that reads the checkpoint's own args. Unset = train.py's
+#       own default, "2009,2017,2023", unchanged for every dispatch that does
+#       not name a recipe carrying this key. E-067: CONSECUTIVE years group
+#       into BLOCKS and a roll is truncated at the end of its block rather
+#       than of its year, so a codec held out on "2008,2009,2016,2017" can be
+#       rolled 730 days where one held out on single years caps every roll at
+#       365 whatever --horizon asks for. It is recipe-only for the usual two
+#       reasons: the 25-input list is full, AND it is a property of a CODEC
+#       rather than of a dispatch — ml/temporal.py and ml/rollout_spatial.py
+#       both read the years back out of the checkpoint's args, never from a
+#       flag of their own (a stage-2 run may hold out MORE, through the
+#       window's `hold:` token, and refuses to hold out less).
 #   recipe-only: time_block       -> ml/train.py --time-block     (Train step)
 #       "" | "month" | "<N>". E-047: embed a BLOCK of consecutive bins as ONE
 #       z instead of one bin as one z. "month" groups the pentad axis by
@@ -1148,9 +1163,10 @@ jobs:
             done
             echo "recw flags: ${RECW[*]}"
           ;; esac
-          # --holdout-lon is passed ONLY when a recipe sets it (recipe-only
-          # key), so a dispatch that names no recipe gets train.py's own
-          # default and is bit-identical to one from before this existed.
+          # --holdout-lon and --holdout-years are passed ONLY when a recipe
+          # sets them (recipe-only keys), so a dispatch that names no recipe
+          # gets train.py's own defaults and is bit-identical to one from
+          # before either existed.
           # WRITTEN AS --holdout-lon=VALUE, one word: argparse reads a bare
           # "-45,-25" in the next argv slot as an OPTION STRING (it starts
           # with "-" and does not match argparse's negative-number pattern)
@@ -1174,6 +1190,7 @@ jobs:
             --d-dec "${RECIPE_CODEC_D_DEC:-${{ inputs.codec_d_dec }}}" \
             "${RECW[@]}" \
             $([ -n "${RECIPE_HOLDOUT_LON:-}" ] && echo "--holdout-lon=${RECIPE_HOLDOUT_LON}") \
+            $([ -n "${RECIPE_HOLDOUT_YEARS:-}" ] && echo "--holdout-years=${RECIPE_HOLDOUT_YEARS}") \
             $([ -n "${RECIPE_TIME_BLOCK:-}" ] && echo "--time-block=${RECIPE_TIME_BLOCK}") \
             $([ -n "${RECIPE_FSQ_LEVELS:-}" ] && echo "--fsq-levels=${RECIPE_FSQ_LEVELS}") \
             $([ -n "${RECIPE_FSQ_LADDER:-}" ] && echo "--fsq-ladder=${RECIPE_FSQ_LADDER}") \

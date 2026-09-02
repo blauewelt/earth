@@ -103,6 +103,13 @@ sys.path.insert(0, HERE)
 import probscore                                                # noqa: E402
 from model import codec_from_ckpt, gather_px                    # noqa: E402
 from recon_eval import stream_stats, build_slab                 # noqa: E402
+# E-067's holdout BLOCKS live in ml/temporal.py, not here, and are re-exported
+# under their old names so every importer (ml/lim_baseline.py, the tests) is
+# unchanged. They moved because ml/embed_cache_sync.py needs the same grouping
+# to name a cache and cannot import this module — rollout_spatial imports
+# temporal, never the reverse. ONE definition, three consumers, the same
+# arrangement `build_window_pool` has for the two trainers.
+from temporal import hold_blocks, block_bounds, block_label  # noqa: E402,F401
 from temporal import (TemporalTransformer, build_stencil,       # noqa: E402
                       embed_everything, rapid_section, _ring_on,
                       codec_weight_hash, season_feat_of,
@@ -367,29 +374,53 @@ class TimeAxis:
     def rows_in_year(self, Y):
         return np.where(self.year == int(Y))[0]
 
-    def starts_for_year(self, Y, per_year=0):
-        """Staggered roll starts for holdout year Y, spanning the axis's
-        REAL steps-per-year: the last row before Y (so h=1 lands on Y's
-        first row) plus every row inside Y except its last.
+    def rows_in_block(self, block):
+        """The rows of every year in `block`, in axis order. For a
+        single-year block this IS `rows_in_year` — the years of a block are
+        consecutive by construction (`hold_blocks`), so the union of their
+        rows is the contiguous run between the block's ends."""
+        y0, y1 = block_bounds(block)
+        return np.where((self.year >= y0) & (self.year <= y1))[0]
 
-        At monthly this is exactly the old `for s_off in range(12)` list —
-        Dec(Y-1), Jan … Nov — in the same order. At pentad it is 73 starts,
-        not 12.
+    def starts_for_year(self, Y, per_year=0):
+        """Staggered roll starts for holdout year Y — `starts_for_block`
+        applied to the one-year block `(Y, Y)`, which is the whole
+        implementation. ONE definition, two spellings: a second copy of the
+        start rule is a second chance for the block path and the year path to
+        disagree about which rows a roll was scored from."""
+        return self.starts_for_block((Y, Y), per_year)
+
+    def starts_for_block(self, block, per_year=0):
+        """Staggered roll starts for a holdout BLOCK — one year, or a run of
+        consecutive years (`hold_blocks`) — spanning the axis's REAL
+        steps-per-year: the last row before the block (so h=1 lands on its
+        first row) plus every row inside it except its last.
+
+        At monthly a one-year block is exactly the old `for s_off in
+        range(12)` list — Dec(Y-1), Jan … Nov — in the same order. At pentad
+        it is 73 starts, not 12; a two-year block is 146.
 
         `per_year` (0 = all, and the default, i.e. everything above unchanged)
         SUBSAMPLES that list: every k-th start, k = len(list) // N, first N.
+        THE NAME IS A COMPATIBILITY SPELLING AND THE COUNT IS PER BLOCK: N is
+        how many starts this block contributes, whether the block is one year
+        or three. `--starts-per-year 3` on a two-year block is therefore 3
+        starts spread over 730 days, not 6 — which is what keeps the cost of a
+        roll a function of the number of BLOCKS rather than of how they were
+        grouped, and what makes a single-year run's start list unchanged.
         The starts are a COST, not a protocol constant — at pentad the roll
         pays 73 of them for 73 leads each — and the count is the free
         parameter of the E-044 horizon decision. The rule is a fixed stride
         rather than a random or an edge-weighted choice for three reasons:
         it is deterministic (a re-roll of the same head scores the same rows),
         it keeps the FIRST start, which is the one whose h=1 lands on the
-        year's first row, and a constant stride spreads the starts evenly
-        round the seasonal cycle — at pentad, N=3 gives k=24 and phases near
-        1 Jan / 1 May / 1 Sep, so lead time is not confounded with season.
+        block's first row, and a constant stride spreads the starts evenly
+        round the seasonal cycle — at pentad, N=3 gives k=24 on a one-year
+        block and phases near 1 Jan / 1 May / 1 Sep, so lead time is not
+        confounded with season.
         N >= len(list) (and N <= 0) return the full list untouched, which is
         what keeps the monthly path — list AND order — bit-identical."""
-        rows = self.rows_in_year(Y)
+        rows = self.rows_in_block(block)
         if len(rows) == 0:
             return []
         out = [int(rows[0]) - 1] if int(rows[0]) - 1 >= 0 else []
@@ -903,17 +934,22 @@ def decode_all(codec, zhat, C, chunk, amp=False):
 
 def scored_horizon(ax, s, Hh, T, Y):
     """How many of the Hh leads from start row `s` are SCORED for holdout
-    year Y.
+    block `Y`.
 
-    The roll breaks at the record's end and at the year boundary
-    (`ax.year[s + h] != Y`), so a start late in Y contributes fewer steps
-    than the horizon asks for — which is why the monthly protocol's twelve
-    starts cost 78 steps a year and not 144. One expression, used by the
-    step PLAN and by `RollDump`, because two copies of a break condition are
-    two chances to disagree about how long a trajectory is."""
+    `Y` is a `(y0, y1)` block (E-067) or a bare year — int or str, the form
+    every call site used before blocks existed and the form a single-year
+    block reduces to exactly.
+
+    The roll breaks at the record's end and at the BLOCK boundary, so a start
+    late in the block contributes fewer steps than the horizon asks for —
+    which is why the monthly protocol's twelve starts cost 78 steps a year
+    and not 144. One expression, used by the step PLAN and by `RollDump`,
+    because two copies of a break condition are two chances to disagree about
+    how long a trajectory is."""
+    y0, y1 = block_bounds(Y)
     n = 0
     for h in range(1, Hh + 1):
-        if s + h >= T or ax.year[s + h] != int(Y):
+        if s + h >= T or not (y0 <= ax.year[s + h] <= y1):
             break
         n += 1
     return n
@@ -1042,7 +1078,11 @@ class RollDump:
               flush=True)
 
     def write(self, head_label, head_file, head_meta, Y, s, z):
-        """One (year, start) trajectory. `z` is [n_states, P, d_z] float16."""
+        """One (block, start) trajectory. `z` is [n_states, P, d_z] float16.
+
+        `Y` is the holdout BLOCK's LABEL (`block_label`) — "2009" for a
+        single held-out year, exactly what this took before E-067, and
+        "2008-2009" for a two-year block."""
         rows = [int(s) + k for k in range(z.shape[0])]
         name = f"roll_{_fs_safe(head_label)}_{Y}_r{int(s)}.npz"
         path = os.path.join(self.dir, name)
@@ -1743,9 +1783,29 @@ def main():
                          "day-matched value is 73 (365.0 d) and "
                          "scripts/sroll_run.sh computes and passes it; a "
                          "non-monthly roll that is NOT day-matched warns here")
+    ap.add_argument("--hold-years", default="",
+                    help="comma list of years to hold out, OVERRIDING the "
+                         "codec checkpoint's own `args['holdout_years']` for "
+                         "the whole run — the t_hold mask behind the "
+                         "standardisation statistics, the start list, the "
+                         "roll's truncation, the `hold_years` written into "
+                         "the artefact and every `fit_holdout_years_excluded` "
+                         "field. E-067: CONSECUTIVE years group into blocks "
+                         "(`hold_blocks`) and a roll is truncated at the end "
+                         "of its BLOCK, so "
+                         "--hold-years 2008,2009,2016,2017,2022,2023 is three "
+                         "two-year blocks and 146 pentads (730 d) of lead are "
+                         "scoreable where three single years cap every roll "
+                         "at 365 d. REFUSED unless it is a SUPERSET of the "
+                         "codec's own years: a year the codec trained on may "
+                         "be held out at stage 2, never the reverse. Empty "
+                         "(the default) takes the codec's list unchanged")
     ap.add_argument("--starts-per-year", type=int, default=0,
                     help="score only N of the staggered starts per holdout "
-                         "year — every k-th, k = len(starts)//N, first N. 0 "
+                         "BLOCK — every k-th, k = len(starts)//N, first N. "
+                         "The name is the compatibility spelling: a block is "
+                         "one year unless --hold-years grouped several, and "
+                         "N is per BLOCK either way. 0 "
                          "(the default) is every start, which is 12 at "
                          "monthly and 73 at pentad. The starts are the free "
                          "parameter of the pentad cost: at --horizon 73 three "
@@ -2045,7 +2105,38 @@ def main():
     # last entry today and would move the moment a channel is inserted).
     chan_names = [str(c) for c in ck["chan"]]
     d_z = ck["d_z"]
-    hold_years = sorted(ck["args"]["holdout_years"].split(","))
+    # WHICH YEARS ARE HELD OUT, AND WHO SAID SO. `ck` here is the CODEC
+    # checkpoint (`--ckpt`, loaded five lines above) — never a stage-2 head —
+    # so this is the authority that matters: a LIM or a head may be denied
+    # more than the codec was, never less.
+    ck_hold_years = sorted(ck["args"]["holdout_years"].split(","))
+    if a.hold_years:
+        hold_years = sorted({str(y).strip() for y in a.hold_years.split(",")
+                             if str(y).strip()})
+        missing = [y for y in ck_hold_years if y not in set(hold_years)]
+        if missing:
+            # THE DIRECTION MATTERS AND IT IS CHECKED WHERE THE INPUTS ARE
+            # ALL IT HAS COST (§0.3). Dropping a codec holdout year would
+            # score the roll on years the codec was FITTED on and report the
+            # number beside the archive's.
+            sys.exit(
+                f"--hold-years {a.hold_years!r} is not a superset of the "
+                f"codec's own holdout years "
+                f"({ck['args']['holdout_years']!r}): "
+                f"{', '.join(missing)} would be scored despite the codec "
+                f"having trained on {'it' if len(missing) == 1 else 'them'}. "
+                f"A year the codec trained on may be held out at stage 2; "
+                f"the reverse is contamination. Refusing.")
+        hold_src = "--hold-years override"
+    else:
+        hold_years = ck_hold_years
+        hold_src = "codec args"
+    # E-067: the years, grouped into the runs a roll is truncated at. Every
+    # loop below iterates BLOCKS, and `block_label` keys the result JSON —
+    # which for single years is `str(Y)`, the key every archived artefact has.
+    blocks = hold_blocks(hold_years)
+    print(f"holdout years: {','.join(hold_years)} — from {hold_src} · "
+          f"blocks {', '.join(block_label(b) for b in blocks)}", flush=True)
     t_hold = np.array([m[:4] in set(hold_years) for m in months])
     # E-047: `months`/`t_hold`/`moy` above are the ROLL's axis, which for a
     # block codec is the BLOCK axis. `stream_stats` and `StdMonths` read rows
@@ -2114,6 +2205,20 @@ def main():
 
     # ---- anomaly stats + per-month standardized fields --------------------
     st_path = os.path.join(a.cache_dir, "std_stats.npz")
+    if a.hold_years:
+        # E-067 · THE STATS CACHE IS NOT KEYED ON THE HOLDOUT YEARS. A warm
+        # box that wrote `std_stats.npz` under the codec's own years would
+        # hand them straight to a run holding out more — a different
+        # climatology and a different z-score behind numbers that look
+        # exactly the same, which is the silent-substitution failure §0.2 is
+        # about. So the override reads and writes its OWN file, named for the
+        # blocks, and the shared one is neither read nor overwritten. Absent
+        # the flag this is the same path and the same bytes it always was.
+        st_path = os.path.join(a.cache_dir, "std_stats__hold-%s.npz"
+                               % "-".join(block_label(b) for b in blocks))
+        print(f"anomaly stats: --hold-years gets its own cache "
+              f"{os.path.basename(st_path)} — the shared std_stats.npz was "
+              f"written under the codec's years and is left alone", flush=True)
     if os.path.exists(st_path):
         s_ = np.load(st_path)
         clim, dyn = s_["clim"], list(s_["dyn"])
@@ -2308,8 +2413,23 @@ def main():
     for tt in (0, T // 2, T - 1):
         dmax = float(np.abs(Zl[tt] - Zsec[tt][kv]).max())
         zscale = float(np.abs(Zl[tt]).max())
-        assert dmax < max(0.02, 0.005 * zscale), \
+        # E-067 · WHEN --hold-years IS ON, NAME THE LIKELY CAUSE. The
+        # standardisation statistics are derived from the holdout years, and
+        # the embed cache's key (codec weight hash, sha256 of the RAW tensor)
+        # sees neither the transform nor the years — so a Z embedded under
+        # the codec's own list will fail here against an overridden one, and
+        # "ordering mismatch" would send a reader looking in the wrong place.
+        # The refusal stays a refusal; only the sentence changes.
+        assert dmax < max(0.02, 0.005 * zscale), (
             f"Z mismatch at t={tt}: {dmax} vs scale {zscale}"
+            + ("" if not a.hold_years else
+               f". --hold-years {a.hold_years!r} moved the anomaly "
+               f"statistics (they are derived from the holdout years), and "
+               f"the embed cache is keyed on the codec weights and the raw "
+               f"tensor only — neither term sees them. This Z was almost "
+               f"certainly embedded under a different holdout list. Re-embed "
+               f"with the same years (ml/temporal.py --holdout-years "
+               f"{','.join(hold_years)}), or roll without the override."))
     print("Z cache verified vs live re-encode ✓", flush=True)
 
     # ---- transport read-out (truefit protocol, rollout.py verbatim) ------
@@ -2514,10 +2634,11 @@ def main():
                 a.horizon == ax.steps_for_months(12),
             "starts_per_year": a.starts_per_year or "all",
             "starts_per_holdout_year": {
-                str(Y): len(ax.starts_for_year(Y, a.starts_per_year))
-                for Y in hold_years},
+                block_label(b): len(ax.starts_for_block(b,
+                                                        a.starts_per_year))
+                for b in blocks},
             "starts_available_per_holdout_year": {
-                str(Y): len(ax.starts_for_year(Y)) for Y in hold_years},
+                block_label(b): len(ax.starts_for_block(b)) for b in blocks},
             "long_steps": a.long_months,
             "long_span_days": ax.span_days(a.long_months),
             "future_steps": a.future_months,
@@ -2603,19 +2724,21 @@ def main():
                      "k = len(list)//N, first N — deterministic, keeps the "
                      "start whose h=1 is the year's first row, and spreads "
                      "the rest evenly round the seasonal cycle"),
-            "available": {str(Y): len(ax.starts_for_year(Y))
-                          for Y in hold_years},
-            "rows": {str(Y): ax.starts_for_year(Y, a.starts_per_year)
-                     for Y in hold_years},
-            "labels": {str(Y): [ax.label_of_row(s) for s in
-                                ax.starts_for_year(Y, a.starts_per_year)]
-                       for Y in hold_years},
+            "available": {block_label(b): len(ax.starts_for_block(b))
+                          for b in blocks},
+            "rows": {block_label(b): ax.starts_for_block(b,
+                                                         a.starts_per_year)
+                     for b in blocks},
+            "labels": {block_label(b): [
+                ax.label_of_row(s) for s in
+                ax.starts_for_block(b, a.starts_per_year)] for b in blocks},
         }
-        print("starts: %d per holdout year — %s" % (
+        print("starts: %d per holdout block — %s" % (
             a.starts_per_year, "; ".join(
-                f"{Y} rows {results['starts']['rows'][str(Y)]} "
-                f"({', '.join(results['starts']['labels'][str(Y)])})"
-                for Y in hold_years)), flush=True)
+                f"{block_label(b)} rows "
+                f"{results['starts']['rows'][block_label(b)]} "
+                f"({', '.join(results['starts']['labels'][block_label(b)])})"
+                for b in blocks)), flush=True)
 
     # ---- the roll-forward sequence dump (opt-in) --------------------------
     # Built here, where the pixel map and the codec identity are both in
@@ -2632,8 +2755,9 @@ def main():
                          "hold_years": hold_years,
                          "gate_head_excluded": GATE_HEAD})
         dump.plan([h for h in heads if GATE_HEAD not in os.path.basename(h)],
-                  {Y: len(ax.starts_for_year(Y, a.starts_per_year))
-                   for Y in hold_years}, a.horizon, P, d_z)
+                  {block_label(b): len(ax.starts_for_block(
+                      b, a.starts_per_year)) for b in blocks},
+                  a.horizon, P, d_z)
     K_seen = None
 
     def mark(stage, label=None, head_i=None):
@@ -2661,6 +2785,25 @@ def main():
         t_head = time.time()
         tk = torch.load(hp, map_location="cpu", weights_only=False)
         ta = tk["args"]
+        # E-067 · THE HEAD'S OWN HOLDOUT YEARS, WHEN IT CARRIES THEM. A
+        # stage-2 head trained with `ml/temporal.py --holdout-years` records
+        # the EFFECTIVE list in its own args, and it can legitimately be a
+        # superset of the codec's. This roll is scored on the codec's list
+        # (or on `--hold-years`), so a head denied MORE years than this roll
+        # holds out is being scored on years it never saw — a fair number,
+        # but not the number the dispatcher probably meant. Say so and change
+        # nothing: guessing which list a roll wanted is exactly the silent
+        # substitution §0.2 is about.
+        _hta = str(ta.get("holdout_years", "") or "")
+        if _hta and not a.hold_years:
+            _hset = sorted({y.strip() for y in _hta.split(",") if y.strip()})
+            if _hset != sorted(set(hold_years)):
+                print(f"::warning::{os.path.basename(hp)} was trained with "
+                      f"holdout years {','.join(_hset)}, this roll is scored "
+                      f"on {','.join(hold_years)} (from {hold_src}). Rolling "
+                      f"it on the codec's list anyway — pass --hold-years "
+                      f"{','.join(_hset)} to score the head on its own.",
+                      flush=True)
         # E-053.1 · REFUSE A NON-CONTIGUOUS HEAD, at the point the file is
         # opened and before any geometry, embedding or roll is built (§0.3,
         # §5.16). A head trained with --frame-offsets read frame j at
@@ -2762,11 +2905,11 @@ def main():
         # 73*12 - 66 = 810; then the long hindcast and the future roll are one
         # step per AXIS STEP each.
         n_skill = 0
-        for Y in hold_years:
-            for s_ in ax.starts_for_year(Y, a.starts_per_year):
+        for B in blocks:
+            for s_ in ax.starts_for_block(B, a.starts_per_year):
                 if s_ - K + 1 < 0 or s_ + 1 >= T:
                     continue
-                n_skill += scored_horizon(ax, s_, Hh, T, Y)
+                n_skill += scored_horizon(ax, s_, Hh, T, B)
         # One hindcast per `--long-start` label that resolves to a row. With
         # the single default this is exactly `a.long_months if the label
         # resolves else 0`, which is what it has always been.
@@ -2786,9 +2929,9 @@ def main():
               f"{n_skill + n_long + a.future_months} steps over {P:,} pixels",
               flush=True)
         if FGN:
-            _hmax = max([scored_horizon(ax, s_, Hh, T, Y)
-                         for Y in hold_years
-                         for s_ in ax.starts_for_year(Y, a.starts_per_year)
+            _hmax = max([scored_horizon(ax, s_, Hh, T, B)
+                         for B in blocks
+                         for s_ in ax.starts_for_block(B, a.starts_per_year)
                          if s_ - K + 1 >= 0 and s_ + 1 < T] or [0])
             _mem_gb = M_ens * _hmax * P * C * 2 / 1e9
             _disp_gb = (max(a.long_months, a.future_months)
@@ -2846,8 +2989,12 @@ def main():
         if dump is not None and not dump_head:
             print(f"  {label}: --dump-roll skips the gate head", flush=True)
 
-        def fgn_start(Y, s, traj):
+        def fgn_start(B, s, traj):
             """E-057: ONE start, rolled M times, then reduced.
+
+            `B` is the holdout BLOCK this start belongs to (E-067) — the
+            thing `scored_horizon` truncates against, one year or a run of
+            consecutive ones.
 
             The deterministic path below this function is untouched — it is
             not called for a head whose `fgn_eps` is 0, and nothing it writes
@@ -2873,7 +3020,7 @@ def main():
                 NaN'd wherever the truth is unobserved, so spread cannot hide
                 in cells nobody can score.
             """
-            n_h = scored_horizon(ax, s, Hh, T, Y)
+            n_h = scored_horizon(ax, s, Hh, T, B)
             if n_h == 0:
                 return
             v_pers, obs_s = std_m.get(s)
@@ -2971,8 +3118,12 @@ def main():
                             (s, sv_mu[:, h - 1].copy(), y_))
 
         with torch.no_grad():
-            for Y in hold_years:
-                for s in ax.starts_for_year(Y, a.starts_per_year):
+            # E-067: BLOCKS, not years. `B` is `(y0, y1)`; `blabel` is the
+            # key/filename token, which is `str(Y)` for a one-year block and
+            # therefore leaves every archived name untouched.
+            for B in blocks:
+                blabel = block_label(B)
+                for s in ax.starts_for_block(B, a.starts_per_year):
                     start_m = ax.label_of_row(s)
                     if s - K + 1 < 0 or s + 1 >= T:
                         continue
@@ -2985,7 +3136,7 @@ def main():
                     # that would animate as a dead ocean. State 0 is the
                     # TRUE embedding of the start row: Zwin's last slot,
                     # read from the cache in its own float16.
-                    n_dump = (scored_horizon(ax, s, Hh, T, Y)
+                    n_dump = (scored_horizon(ax, s, Hh, T, B)
                               if dump_head else 0)
                     traj = (np.empty((n_dump + 1, P, d_z), np.float16)
                             if n_dump else None)
@@ -2998,7 +3149,7 @@ def main():
                         # DIFFERENT path rather than the same path with
                         # conditionals sprinkled through it. The eight lines
                         # after the call are the ones this `continue` skips.
-                        fgn_start(Y, s, traj)
+                        fgn_start(B, s, traj)
                         print(f"  {label} start {start_m}: rolled "
                               f"({M_ens} members)", flush=True)
                         if traj is not None:
@@ -3012,12 +3163,16 @@ def main():
                                         "fgn_eps": eps_dim,
                                         "members": M_ens,
                                         "ens_seed": int(a.ens_seed),
-                                        "member": 0}, Y, s, traj)
+                                        "member": 0}, blabel, s, traj)
                             traj = None
                         continue
                     for h in range(1, Hh + 1):
                         t_tgt = s + h
-                        if t_tgt >= T or ax.year[t_tgt] != int(Y):
+                        # THE BREAK IS `scored_horizon`'S, WRITTEN OUT.
+                        # E-067 made it a BLOCK boundary rather than a year
+                        # boundary; `B` is `(y0, y1)` and reduces to the old
+                        # `!= int(Y)` for a one-year block.
+                        if t_tgt >= T or not (B[0] <= ax.year[t_tgt] <= B[1]):
                             break
                         # month features are the CURRENT window's months —
                         # rollout.py's mseq at step h spans s-K+h .. s+h-1;
@@ -3093,7 +3248,7 @@ def main():
                                     "unroll": unroll, "K": K,
                                     "d_model": ta["d_model"],
                                     "layers": ta["layers"]},
-                                   Y, s, traj)
+                                   blabel, s, traj)
                         traj = None
 
         entry = {"meta": {"file": os.path.basename(hp), "stencil": stencil,
