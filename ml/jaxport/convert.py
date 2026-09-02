@@ -64,8 +64,18 @@ class _Consumer:
             return None
         self.used.add(key)
         v = self.sd[key]
-        return np.asarray(v.detach().cpu().numpy() if hasattr(v, "detach")
-                          else v)
+        # `.copy()` is load-bearing (found 2026-09-02 by the cone port's gate
+        # C3, which failed at 1.7e-2 against 1e-6 on its first run): a torch
+        # tensor's `.numpy()` is a VIEW of torch storage, and `jnp.asarray` of
+        # a contiguous numpy array is zero-copy on the CPU backend, so every
+        # parameter the mapper did not transpose or slice first (68 of the
+        # cone codec's 99) was a JAX array sharing bytes with the torch module.
+        # Train the torch module after converting and the JAX weights move
+        # with it — which makes a cross-framework one-step gate agree
+        # PERFECTLY for the wrong reason. Values are unchanged by the copy;
+        # only the ownership is.
+        return np.array(v.detach().cpu().numpy() if hasattr(v, "detach")
+                        else v, copy=True)
 
     def finish(self):
         extra = sorted(set(self.sd) - self.used)
