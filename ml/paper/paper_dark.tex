@@ -58,11 +58,12 @@ at any lead. A 200-mode linear inverse model fitted to the same field and
 rolled from the same starts is less correlated than the head at five and ten
 days and more correlated at every lead from fifteen days to a year ($0.26$
 at 90 days, $0.18$ at 365), with a squared-error score that stays positive
-throughout. A 7.6M head rolled through the same battery has the same mean
-correlation as the 206.7M head ($0.103$ against $0.105$) and does not decay
-through zero, holding $\approx 0.11$ from two months to a year; its
-squared-error score is less negative ($-0.18$) only because it emits smaller
-anomalies. Transport at $26.5^\circ$N shows no measurable skill at roughly
+throughout. Heads of 7.6M and 40.4M parameters rolled through the same
+battery have the same mean correlation as the 206.7M head ($0.103$, $0.104$,
+$0.105$); their squared-error scores differ ($-0.18$, $-0.26$, $-0.44$) only
+through an emitted amplitude that grows with width, and the smallest head
+does not decay through zero, holding $\approx 0.11$ from two months to a
+year. Transport at $26.5^\circ$N shows no measurable skill at roughly
 nine effective starts. Every rolled number is a single seed.
 \end{abstract}
 
@@ -320,9 +321,9 @@ training-year starts transfers to held-out starts is untested.
 
 \begin{figure}[t]
 \centering\includegraphics[width=\linewidth]{fig_lim.pdf}
-\caption{Left: corridor anomaly correlation per lead for the 206.659M and
-7.598M heads and linear inverse models with 50, 100 and 200 modes, from the
-same starts.
+\caption{Left: corridor anomaly correlation per lead for the 206.659M,
+40.388M and 7.598M heads and linear inverse models with 50, 100 and 200
+modes, from the same starts.
 Right: the head's measured $\mathrm{MSSS}_{\text{clim}}$, the value the
 identity predicts from its own ACC and $a$, the value the same states would
 score at $a=\mathrm{ACC}$, and the 200-mode LIM.\label{fig:lim}}
@@ -353,53 +354,55 @@ $0.30$, $0.30$ against $0.84$, $0.25$, $0.11$, $-0.06$. The LIM's training
 set is every bin outside a held-out year (2{,}923 bins, 2{,}919 pairs),
 which is slightly larger than the pool the head's 144-bin windows admit.
 
-\paragraph{Width on the rolled field.} The 7.598M head ($256\times8$,
-K$=144$, its 20{,}000-step end state) rolled through the identical battery
-scores the same field as the 206.659M head (Table~\ref{tab:width},
-Figure~\ref{fig:lim}): mean corridor correlation $0.103$ against $0.105$,
-and the same amplitude-calibrated ceiling (mean $\mathrm{ACC}^2$ $0.0185$
-against $0.0188$). The two differ at the ends of the lead axis. The larger
-head is more correlated over the first ten days ($0.606$ and $0.412$ against
-$0.569$ and $0.403$); the smaller one does not decay through zero, holding
-$0.10$--$0.14$ from 60 days to a year where the larger falls from $0.13$ to
-$-0.03$. Its $\mathrm{MSSS}_{\text{clim}}$ is less negative at every lead
-past ten days (mean $-0.179$ against $-0.439$) because it emits anomalies at
-$a\approx0.54$ rather than $0.78$, and $a$ does not grow with lead; by the
-identity above, at $\mathrm{ACC}\approx0.1$ the smaller amplitude is the
-cheaper error. Sea-surface temperature is again the channel that carries the
-skill (mean $\mathrm{MSSS}_{\text{clim}}$ $-0.006$, positive at 33 of 73
-leads, against $-0.165$ and 11 of 73 for the large head); sea-surface height
-is the sharpest one-step channel for both ($0.87$ and $0.84$). Both heads
-beat raw persistence at nearly every lead and damped persistence at none,
-and the linear inverse model is more correlated than either from fifteen
-days on. The transport bands of the two heads have opposite signs
-($-0.025$, $+0.103$, $-0.244$ against $+0.107$, $-0.242$, $+0.163$). The
-roll took 7{,}660\,s against 77{,}147\,s. One seed each; the 40.388M rung
-is not yet rolled.
+\paragraph{Width on the rolled field.} The 7.598M ($256\times8$) and
+40.388M ($512\times12$) heads at their 20{,}000-step end states, rolled
+through the identical battery, score the same field as the 206.659M head
+(Table~\ref{tab:width}, Figure~\ref{fig:lim}): mean corridor correlation
+$0.103$, $0.104$ and $0.105$ across a $27\times$ span in parameters, and
+amplitude-calibrated ceilings (mean $\mathrm{ACC}^2$) of $0.018$, $0.022$
+and $0.019$. The three differ in amplitude, which is monotone in width
+($a = 0.54$, $0.63$, $0.78$) and is the whole of the spread in
+$\mathrm{MSSS}_{\text{clim}}$ ($-0.179$, $-0.257$, $-0.439$); the identity
+above reproduces each head's 73 leads to a mean absolute error of $0.006$,
+$0.007$ and $0.014$. They also differ at the ends of the lead axis. The
+40.388M head is the most correlated over the first two pentads ($0.649$ and
+$0.452$) and is the only head with a positive $\mathrm{MSSS}_{\text{damped}}$
+at any lead ($+0.08$ at five days); the 7.598M head does not decay through
+zero, holding $0.10$--$0.14$ from 60 days to a year where the two larger
+heads fall to $-0.12$ and $-0.03$, and its $a$ does not grow with lead.
+Sea-surface temperature carries the skill in all three (mean
+$\mathrm{MSSS}_{\text{clim}}$ $-0.006$, $-0.143$, $-0.165$; positive at 33,
+15 and 11 of 73 leads); sea-surface height is the sharpest one-step channel
+for all three ($0.87$, $0.87$, $0.84$). All three beat raw persistence at 71
+or more of 73 leads, and the linear inverse model is more correlated than
+any of them from fifteen days on. The transport bands of the three heads
+disagree in sign ($-0.025$, $+0.103$, $-0.244$; $-0.099$, $-0.131$,
+$-0.310$; $+0.107$, $-0.242$, $+0.163$). Roll times 7{,}660, 21{,}077 and
+77{,}147\,s. One seed each.
 
 \begin{table}[t]
-\centering\small\setlength{\tabcolsep}{5pt}
-\begin{tabular}{r rr rr rr}
+\centering\small\setlength{\tabcolsep}{3.6pt}
+\begin{tabular}{r rrr rrr rrr}
 \toprule
- & \multicolumn{2}{c}{ACC} & \multicolumn{2}{c}{$\mathrm{MSSS}_{\text{clim}}$} & \multicolumn{2}{c}{$a$} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
-lead (days) & 7.598M & 206.659M & 7.598M & 206.659M & 7.598M & 206.659M \\
+ & \multicolumn{3}{c}{ACC} & \multicolumn{3}{c}{$\mathrm{MSSS}_{\text{clim}}$} & \multicolumn{3}{c}{$a$} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+lead (d) & 7.6M & 40.4M & 206.7M & 7.6M & 40.4M & 206.7M & 7.6M & 40.4M & 206.7M \\
 \midrule
-5 & $0.569$ & $0.606$ & $+0.314$ & $+0.365$ & $0.69$ & $0.69$ \\
-10 & $0.403$ & $0.412$ & $+0.125$ & $+0.109$ & $0.61$ & $0.67$ \\
-15 & $0.284$ & $0.265$ & $-0.005$ & $-0.172$ & $0.58$ & $0.76$ \\
-30 & $0.124$ & $0.204$ & $-0.160$ & $-0.168$ & $0.55$ & $0.67$ \\
-90 & $0.137$ & $0.132$ & $-0.120$ & $-0.322$ & $0.52$ & $0.72$ \\
-180 & $0.114$ & $0.153$ & $-0.139$ & $-0.354$ & $0.51$ & $0.78$ \\
-365 & $0.119$ & $-0.031$ & $-0.181$ & $-0.719$ & $0.54$ & $0.82$ \\
+5 & $0.569$ & $0.649$ & $0.606$ & $+0.314$ & $+0.422$ & $+0.365$ & $0.69$ & $0.69$ & $0.69$ \\
+10 & $0.403$ & $0.452$ & $0.412$ & $+0.125$ & $+0.177$ & $+0.109$ & $0.61$ & $0.63$ & $0.67$ \\
+15 & $0.284$ & $0.276$ & $0.265$ & $-0.005$ & $-0.098$ & $-0.172$ & $0.58$ & $0.69$ & $0.76$ \\
+30 & $0.124$ & $0.181$ & $0.204$ & $-0.160$ & $-0.123$ & $-0.168$ & $0.55$ & $0.58$ & $0.67$ \\
+90 & $0.137$ & $0.150$ & $0.132$ & $-0.120$ & $-0.189$ & $-0.322$ & $0.52$ & $0.62$ & $0.72$ \\
+180 & $0.114$ & $0.140$ & $0.153$ & $-0.139$ & $-0.180$ & $-0.354$ & $0.51$ & $0.59$ & $0.78$ \\
+365 & $0.119$ & $-0.116$ & $-0.031$ & $-0.181$ & $-0.593$ & $-0.719$ & $0.54$ & $0.66$ & $0.82$ \\
 \midrule
-mean of 73 leads & $0.103$ & $0.105$ & $-0.179$ & $-0.439$ & $0.54$ & $0.78$ \\
+mean, 73 leads & $0.103$ & $0.104$ & $0.105$ & $-0.179$ & $-0.257$ & $-0.439$ & $0.54$ & $0.63$ & $0.78$ \\
 \bottomrule
 \end{tabular}
-\caption{The 7.598M and 206.659M heads through the same battery, corridor
-scope. Mean $\mathrm{MSSS}_{\text{damped}}$ $-0.200$ and $-0.461$; gate and
-window mean $\mathrm{MSSS}_{\text{clim}}$ $-0.201$/$-0.213$ and
-$-0.395$/$-0.401$. Single seed each.\label{tab:width}}
+\caption{The 7.598M, 40.388M and 206.659M heads through the same battery,
+corridor scope. Mean $\mathrm{MSSS}_{\text{damped}}$ $-0.200$, $-0.277$ and
+$-0.461$; gate/window mean $\mathrm{MSSS}_{\text{clim}}$ $-0.201/-0.213$,
+$-0.208/-0.227$ and $-0.395/-0.401$. Single seed each.\label{tab:width}}
 \end{table}
 
 \paragraph{Per channel.} Only eight of the forty channels are scoreable.
@@ -544,7 +547,7 @@ For the current-state transport read-out the codec is at parity with the raw
 fields it compresses; its value, if any, is as a substrate that a
 transformer can attend over and roll forward, and on that use the transformer
 has learned what it learns inside two thousand steps at any width, rolls
-the same field at 7.6M parameters as at 206.7M, forecasts sea-surface
+the same field at 7.6M, 40.4M and 206.7M parameters, forecasts sea-surface
 temperature and height for days to weeks, does not beat a damped-persistence
 null at any lead, and is out-forecast beyond ten days by a linear inverse
 model with 200 modes fitted to the same field. The linear
@@ -553,8 +556,8 @@ forecaster is scored: what a learned model adds at leads of one to two
 pentads, and whether any change beats the linear model at three. The next
 measurements are the ones that bound this further: a retrieval baseline and
 a linear inverse model in embedding space through the identical battery,
-with block-bootstrap intervals; the early-stopped checkpoint and the 40.4M
-head rolled against the end states shown here; amplitude
+with block-bootstrap intervals; the early-stopped checkpoints rolled
+against the end states shown here; amplitude
 calibration fitted on training-year starts; and a codec trained on
 $\le 2020$ so that a terminal 2021--2024 test can be run once.
 
@@ -656,7 +659,7 @@ Code: \url{https://github.com/blauewelt/earth} (codec trainer
 \path{ml/train.py}, stage-2 trainer \path{ml/temporal.py} and its JAX
 port \path{ml/jaxport/}, evaluator \path{ml/rollout_spatial.py}). Result
 bundles are on the repository's \path{ml-metrics} branch
-(\path{probes-<n>.json}; the rolls here are \path{probes-516.json} and \path{probes-520.json}, the linear inverse model \path{probes-527.json} (\path{ml/lim_baseline.py}), the
+(\path{probes-<n>.json}; the rolls here are \path{probes-516.json}, \path{probes-520.json} and \path{probes-523.json}, the linear inverse model \path{probes-527.json} (\path{ml/lim_baseline.py}), the
 codec probe ladder is in the bundles named in \path{ml/EXPERIMENTS.md}).
 Weights are on the \path{model-checkpoints-v1} release
 (\path{run-415__pixelmae.pt}; \path{head-weights-e059-200k-window-s0.pt}

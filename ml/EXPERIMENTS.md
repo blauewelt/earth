@@ -133,6 +133,68 @@ the abstract and §4 state the reference. Cost: one 52 GB box for ~1.7 h
 that re-orders it.
 
 <a id="e-065"></a>
+<a id="e-068"></a>
+## E-068 · The terminal-holdout codec (train ≤ 2020, test 2021–2024, plus the 2008–09 / 2016–17 development blocks) — DISPATCHED #532, 2026-09-02 17:1xZ · and E-067 · the 730-day development rolls, gated on it
+
+TL;DR — the frozen protocol decided by Chris on 2026-08-30 (PROTOCOL_RESET
+§3.1, REBOOT_PLAN §3 / step 4) is a TERMINAL holdout: train ≤ 2020, test
+2021–2024, no gap, beginning with a codec trained on ≤ 2020 — "the long
+pole; start it first". It had never been dispatched; every result since is
+on the interspersed single-year split. Chris's question of 2026-09-02
+(*"continue to roll forward the results in Figure 5 … at exactly 365 days
+the transformer heads seem to catch up with LIM"*) cannot be answered on
+that split, because the battery scores a roll only inside its held-out year
+and every target past 365 d is a training year. So: the terminal codec,
+with the two-year development blocks held out in the same codec, so that
+730-day development rolls (E-067) and the one-shot terminal test share one
+encoder. Plan:
+[E-067/E-068](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E067_block_rolls.md).
+
+**E-068 · run-415's architecture trained with 2021–2024 held out, plus the
+two-year development blocks 2008–09 and 2016–17 · params 37.976M · stage
+encoder · data family4_na025_pentad_r2 · arch 512×12 d_z 32 patch 1 ·
+steps 200k×512 · resume none · recipe `f4r2-40M-terminal` (holdout_years
+2008,2009,2016,2017,2021,2022,2023,2024; the recipe-only key
+`holdout_years` → `ml/train.py --holdout-years` landed with `72eade6`) ·
+runner gpu-box-49401037 (Vast 49633408, Virginia, 63 GB, $0.321/h — #523's
+box, restarted with the tensor cached) · dispatched 17:1xZ as #532.**
+
+**Hypothesis and controls.** The codec's own read-outs (`loss_rec`, the
+unpooled RAPID head) against run-415's are a DATA-tax control: eight of 43
+years held out (~19 % of bins) should cost little on reconstruction and
+nothing measurable on the probe (n = 1; the probe's tier sd is 0.036–0.095).
+Falsifier: a collapse or a `loss_rec` far above run-415's 0.22x says the
+smaller pool broke training, and the lattice of experiments on top of it is
+not built.
+
+**E-067, gated on E-068 (not dispatched):** publish the Z; train the 7.6M
+head (E-060a's configuration, torch, K 144, window pool — its pool loses the
+eight years; 20k steps with milestones); refit the LIM with the same eight
+years excluded; roll both 146 pentads from 3 starts per development block
+(`hold:` not needed — the codec's own years carry the blocks), truncated at
+each block's end. Pre-registered: lead-decay passes on both blocks; the
+head's corridor acc over 400–730 d against the LIM's over the same leads
+decides Chris's reading (head ≥ 0.10 with the LIM below it → the head
+carries a slow component the linear model does not; LIM above the head to
+730 d → the 365 d touch was noise); the 0–365 d segment must reproduce the
+single-year battery's shape. Two starts reach 730 d per block — a
+consistency until a second seed agrees. **2021–2024 is rolled only on
+Chris's word**, once, with the programme's then-best head and baseline.
+
+**Groundwork (`72eade6`):** consecutive held-out years form blocks
+(`ml/temporal.hold_blocks`); the evaluator picks starts per block and
+truncates at the block end; single-year behaviour byte-identical; a stage-2
+run may hold out more years than its codec (`--holdout-years`, `hold:`
+token), never fewer; the embed cache name carries `_hold-<blocks>` whenever
+the effective years differ from the codec's. **The two-year interspersed
+design this session first proposed on run-415 (holding out 2008/2016/2022
+at stage 2 only) was WITHDRAWN before dispatch** — the codec had seen those
+years, the Z would have needed an 8 h re-embedding under new statistics
+anyway, and it re-invented the plan's development folds with a worse split.
+
+**Cost:** codec ~19 h (~$6), Z ~8 h, head ~2 h, LIM ~1 h, block rolls ~4 h;
+≈ $12 and ~1.5 days; the terminal roll (~6 h) held.
+
 ## E-065 · The lattice ladder, 16 → 24 → 30 bits — parents DISPATCHED 2026-09-02 ~10:3xZ (Chris: "Try the following FSQ: 24-Bit FSQ (Levels [8 x 8], dz = 8). And then 30bits (Levels [8 x 10]).")
 
 TL;DR — how much of the continuous embedding's forecasting value survives
@@ -315,7 +377,7 @@ minimum at ~3k steps is the same shape every clean-pool head has shown
 (E-059/E-060: inside ~2,000 steps at every width).
 
 <a id="e-062"></a>
-## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) COMPLETE #520, 2026-09-02 13:5xZ (after #518/#519 died on a full disk) — width null: mean acc 0.103 vs 0.105 · R0c (the 40.4M arm) DISPATCHED #523, 2026-09-02 10:1xZ
+## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) COMPLETE #520, 2026-09-02 13:5xZ (after #518/#519 died on a full disk) — width null: mean acc 0.103 vs 0.105 · R0c (the 40.4M arm) COMPLETE #523, 2026-09-02 16:27Z — ladder flat: mean acc 0.103 / 0.104 / 0.105 across 27×
 
 TL;DR — **nothing this programme has ever rolled used a clean-pool head.** #503,
 #510 and #513 all rolled heads trained under `endpoint_contaminated`, so no
@@ -852,6 +914,42 @@ null. (iv) R0c (#523, 40.4M) lands ~16:30Z and fills the middle rung.
 **Box 49632479 (Taiwan, `gpu-box-41298070`) STOPPED at 13:55Z** (nothing
 queued there; `{"success":true}`, to be verified `exited` on the next
 `gpu_box.mjs list`).
+
+#### (l) R0c LANDED — #523 (E-062-R0c, the 40.4M arm through #516's battery) · completed 16:27Z, first read by the fleet-watch session (`e1a7290`), logged here 17:2xZ from `probes-523.json` (2,036,543 B, no `in_progress` marker)
+
+**TL;DR — the width ladder is flat on information across 27×: mean corridor
+acc 0.103 / 0.104 / 0.105 for 7.6M / 40.4M / 206.66M, and the whole spread
+in the raw score (msss_clim −0.179 / −0.257 / −0.439) is emitted amplitude,
+which is monotone in width (0.54 / 0.63 / 0.78).** The calibration identity
+reproduces each head's 73 leads to mean |err| 0.006 / 0.007 / 0.014.
+
+| corridor | 5 d | 10 d | 15 d | 30 d | 90 d | 180 d | 365 d | mean |
+|---|---|---|---|---|---|---|---|---|
+| #523 40.4M acc | **0.649** | **0.452** | 0.276 | 0.181 | 0.150 | 0.140 | −0.116 | 0.104 |
+| #523 msss_clim | +0.422 | +0.177 | −0.098 | −0.123 | −0.189 | −0.180 | −0.593 | −0.257 |
+| #523 msss_damped | **+0.080** | −0.045 | −0.270 | −0.196 | −0.200 | −0.183 | −0.593 | −0.277 |
+| #523 amp_ratio | 0.69 | 0.63 | 0.69 | 0.58 | 0.62 | 0.59 | 0.66 | 0.63 |
+
+The 40.4M head is the sharpest at the first two pentads (0.649 / 0.452
+against 0.606 / 0.412 and 0.569 / 0.403) and is the ONLY head of the three
+with a positive msss_damped at any lead (+0.080 at 5 d; 1 of 73 leads). At
+the far end it decays through zero like the 206.66M head (−0.116 at 365 d,
+n = 3 starts) where the 7.6M head holds ~0.11. Beats raw persistence at
+72/73 leads (mean msss_pers +0.303). SST: acc 0.80 / 0.36 / 0.37 / −0.09 at
+5 / 30 / 90 / 365 d, mean msss_clim −0.143 (15 of 73 leads > 0); SSH 0.87
+at 5 d. Bands (unpooled) −0.099 / −0.131 / −0.310 — a third sign pattern
+against the other two heads; noise. identity_max_dev 0.0005; wall 21,077 s
+(5.9 h). Gate / window mean msss_clim −0.208 / −0.227.
+
+**What the three points license.** (i) Capacity is not the axis on the
+rolled field — a null at n = 1 per rung, consistent across three rungs,
+written as a consistency (§3b: the pentad tier has no measured pair). (ii)
+Amplitude grows with width and is uncalibrated in all three; the 7.6M
+head's smaller, lead-flat amplitude is why it scores best on MSSS. (iii)
+Sharpness at 5–10 d is not monotone (40.4M > 206.66M > 7.6M). The paper's
+Table 3 now carries all three heads; Figure 5 has all three curves. Box
+49633408 was stopped by the fleet-watch at 16:3xZ and restarted at 17:1xZ
+for #532 (E-068).
 
 ---
 
