@@ -51,6 +51,30 @@ complete_on_release() {   # complete_on_release <hash> -> 0 if COMPLETE
   printf '%s' "$man" | grep -q '"complete"[[:space:]]*:[[:space:]]*true'
 }
 
+# SIZE THE WANT FROM THE ALLOCATION IT GUARDS (ml/CLAUDE.md §5.18). The
+# 16 GB the workflow passes is the Z pull. Every Train / sroll / lim job on a
+# memmapped family-4/5 tensor ALSO writes the anomaly-transform scratch — a
+# writable twin of <tensor>_X.npy, 31.6 GiB at pentad — and a box with 30 GB
+# free passes a 16 GB check and then dies 60 s into the write with a Bus
+# error. Measured twice in one afternoon (2026-09-02): #530 on the Germany box
+# (30 GB free, "nothing more to do") and #532 on the Virginia box (disk 100/100
+# at death), both after the tier −1 rule below had correctly found no stale
+# scratch to free. So the want is the LARGER of the caller's figure and the
+# biggest X.npy in the cache plus 4 GB of headroom for checkpoint mirrors and
+# metrics — and when that cannot be met after every tier, the script exits 2
+# so the caller can refuse BEFORE the write instead of dying inside it (§5.16:
+# a precondition that depends only on the inputs is checked while the inputs
+# are all it has cost you).
+SCRATCH_GB=0
+for x in "$CACHE"/*_X.npy; do
+  [ -e "$x" ] || continue
+  g=$(( $(stat -c %s "$x") / 1073741824 + 1 ))
+  [ "$g" -gt "$SCRATCH_GB" ] && SCRATCH_GB=$g
+done
+if [ "$SCRATCH_GB" -gt 0 ] && [ $((SCRATCH_GB + 4)) -gt "$MIN_FREE_GB" ]; then
+  echo "disk hygiene: the run will write a ${SCRATCH_GB} GB anomaly-transform scratch (the largest *_X.npy in the cache) — want raised ${MIN_FREE_GB} -> $((SCRATCH_GB + 4)) GB"
+  MIN_FREE_GB=$((SCRATCH_GB + 4))
+fi
 echo "disk hygiene: $(free_gb) GB free, want ${MIN_FREE_GB} GB"
 
 # ---- tier −1: a PRIOR RUN'S REBUILT-EVERY-RUN SCRATCH, removed UNCONDITIONALLY
@@ -178,6 +202,23 @@ done
 echo "  after embeddings: $(free_gb) GB free"
 [ "$(free_gb)" -ge "$MIN_FREE_GB" ] && exit 0
 
+# NOT the tensor's chunked .npz: it is re-pulled by the very next step of the
+# same job (the family-4 pull keys on the .npz's sha, and ml/temporal.py
+# fingerprints the raw file for the embed-cache key), so freeing it here
+# buys nothing and costs a 4.5 GB download.
+# BUILD INPUTS (RG-Argo depth, NCEP wind, the pentad truth) are read only by
+# the tensor BUILD, which the workflow skips outright when the pinned X.npy is
+# present; every file re-fetches from data-cache-v1 / the Hub. ~12 GB.
+for d in rg wind_daily truth glorys_pentad; do
+  [ -d "$CACHE/$d" ] || continue
+  if ls "$CACHE"/*_X.npy >/dev/null 2>&1; then
+    sz=$(du -sh "$CACHE/$d" 2>/dev/null | cut -f1)
+    rm -rf "$CACHE/$d" && echo "    freed $d/ ($sz) — tensor build inputs, unused while a decoded X.npy is present; re-seeded from the release"
+  fi
+done
+echo "  after tensor chunks and build inputs: $(free_gb) GB free"
+[ "$(free_gb)" -ge "$MIN_FREE_GB" ] && exit 0
+
 # Per-run codec mirrors: run-<n>.pt. THE 2026-08-11 DISK KILLER — measured
 # by Vast-execute du on the stopped box: 47 files x 466 MB = 22 GB, almost
 # all byte-identical copies of the same frozen codec (runs that resume
@@ -216,8 +257,10 @@ done
 
 echo "disk hygiene: finished with $(free_gb) GB free"
 if [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; then
-  echo "::warning::still below ${MIN_FREE_GB} GB. Everything left is either in"
+  echo "::error::still below ${MIN_FREE_GB} GB. Everything left is either in"
   echo "use or has no second copy. Publish it, or rent a box with a bigger disk"
-  echo "(vast cannot resize one — see ml/CLAUDE.md §7)."
+  echo "(vast cannot resize one — see ml/CLAUDE.md §7). Exit 2 so the job"
+  echo "refuses here rather than dying inside the scratch write (#530, #532)."
+  exit 2
 fi
 exit 0

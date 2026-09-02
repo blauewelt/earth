@@ -579,7 +579,15 @@ jobs:
           # scripts/disk_hygiene.sh frees scratch, then frees only what a
           # release CONFIRMS it can re-fetch, and keeps everything else while
           # saying why.
-          bash scripts/disk_hygiene.sh 16 || true
+          # EXIT 2 = the scratch the job is about to write will not fit even
+          # after every reclaimable tier — refuse now, while it has cost
+          # nothing (#530 and #532 both died 30–60 s into that write on
+          # 2026-09-02). Any other failure of the script stays best-effort.
+          bash scripts/disk_hygiene.sh 16; rc=$?
+          if [ "$rc" -eq 2 ]; then
+            echo "::error::disk hygiene could not free enough for this job's scratch copy — rent a box with more disk, or clear it by hand"
+            exit 1
+          fi
           mkdir -p /opt/earth-cache
           rm -rf ml/cache
           ln -s /opt/earth-cache ml/cache
