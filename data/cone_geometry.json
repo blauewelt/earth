@@ -144,7 +144,10 @@
   "OUTER_N_PTS": 24,
   "RAMP_P": 0.5,
   "R_MIN_KM": 28.0,
-  "SEC_PER_DAY": 86400.0
+  "SEC_PER_DAY": 86400.0,
+  "SLOT_MAX": 24,
+  "SLOT_MIN": 6,
+  "SLOT_REF_KM": 900.0
  },
  "counts": {
   "channels_per_family": {

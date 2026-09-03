@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=a76a0bda" />
+  <link rel="stylesheet" href="src/style.css?v=2d03d599" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -747,6 +747,7 @@
         <div class="stat" id="cn-dots"><div class="stat-value">–</div><div class="stat-sub">dots per channel</div></div>
         <div class="stat" id="cn-tokens"><div class="stat-value">748</div><div class="stat-sub">tokens per anchor</div></div>
       </div>
+      <div id="cn-whatif" class="hidden">what-if geometry — not what the codec was trained on</div>
       <div class="control-row">
         <label for="cn-family">family</label>
         <select id="cn-family">
@@ -759,10 +760,49 @@
       <div class="control-row">
         <label for="cn-lag">lag</label>
         <input type="range" id="cn-lag" min="0" max="143" step="1" value="1" />
-        <button id="cn-play" class="td-btn" title="sweep the lag 0 → 143">▶</button>
-        <button id="cn-stop" class="td-btn" title="stop the sweep">■</button>
+        <button id="cn-play" class="td-btn" title="sweep the lag 0 → 143 at one date">▶ sweep lags</button>
+        <button id="cn-stop" class="td-btn" title="stop the lag sweep">■</button>
       </div>
       <div id="cn-lag-read" class="hint">lag 1 · 5 days back</div>
+
+      <!-- The time axis. A lag IS a date: pentad bins are fixed five-day bins
+           counted from 1982-01-01, and the tensor holds bins 0-3141. So the
+           anchor carries a date, every lag is that date minus 5·lag days, and
+           "follow the cone" hands each lag's date to the app's own date
+           selector — which is why any timed layer already on the globe shows
+           the field the model reads at that lag, with no code here. -->
+      <div class="control-row">
+        <label for="cn-date">date</label>
+        <input type="date" id="cn-date" />
+        <button id="cn-time-back" class="td-btn" title="one pentad back">−5d</button>
+        <button id="cn-time-fwd" class="td-btn" title="one pentad forward">+5d</button>
+      </div>
+      <div class="control-row" id="cn-time-row">
+        <button id="cn-time-play" class="td-btn" title="walk the anchor date forward, one pentad at a time">▶ advance time</button>
+        <button id="cn-time-stop" class="td-btn" title="stop">■</button>
+        <input type="range" id="cn-time-speed" min="100" max="2000" step="100" value="500"
+               title="how long one pentad is held" />
+        <span id="cn-time-speed-read" class="hint">0.5 s / pentad</span>
+      </div>
+      <div class="control-row cn-checks">
+        <label><input type="checkbox" id="cn-follow" /> follow the cone — drive the globe's date</label>
+        <label><input type="checkbox" id="cn-loop" checked /> loop</label>
+      </div>
+
+      <!-- What-if geometry. Every knob here is one of ml/cone.py's own
+           constants, read out of data/cone_geometry.json on load; the reset
+           button puts all nine back to the values E-069 was trained on. -->
+      <details id="cn-params" class="hint-details">
+        <summary>Parameters — try a different cone</summary>
+        <div id="cn-param-rows"></div>
+        <button id="cn-reset" class="td-btn">reset to E-069 (as trained)</button>
+        <p class="hint">These are the geometry's own constants. Move one and the dots on the
+          globe, the three tiles above and the cross-section below are all recomputed from it —
+          but the trained codec read the cone at the values the reset button restores, so a
+          changed slider is a question ("what would it read if…"), never a picture of the
+          model. The badge above says when you are in that state.</p>
+      </details>
+
       <div class="control-row" id="cn-presets">
         <button data-lat="36" data-lon="-70" title="36°N 70°W">Gulf Stream</button>
         <button data-lat="26.5" data-lon="-70" title="26.5°N 70°W">RAPID</button>
@@ -773,6 +813,15 @@
         anchor. Red ring: the pixel being predicted. Dashed box: the tensor's own window
         (0–70° N, 100° W–20° E) — dots outside it are drawn hollow, because the model reads
         them as missing rather than wrapping around.</p>
+      <p class="hint"><strong>Two animations, and they move different things.</strong>
+        <em>Sweep lags</em> holds the date still and walks the lag from 0 to 143, so you watch
+        the cone open out from one 3×3 patch to a 4,444 km envelope. <em>Advance time</em> holds
+        the lag still and walks the anchor date forward one pentad (five days) at a time, so you
+        watch the cone travel along the time axis. Switch <em>follow the cone</em> on and the
+        globe's date selector follows each lag's own date — put sea surface temperature or ocean
+        currents on in the Layers tab first, and you are looking at the field the forecaster
+        actually reads there. A lag whose date lands in 2009, 2017 or 2023 is flagged red: those
+        three years are held out of training, so the model has never been shown them.</p>
       <canvas id="cn-section" width="380" height="150"></canvas>
       <p class="hint">Reach (km) against lag, both axes √-scaled so the six inner pentads stay
         readable beside 143 outer ones. Solid: each family's inner reach — A dies with its
@@ -970,7 +1019,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">19bc7aca</code></p>
+      <p class="build-line">Build <code id="build-id">0177cb31</code></p>
     </section>
 
     <footer>
@@ -1026,6 +1075,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=19bc7aca"></script>
+  <script src="src/app.js?v=0177cb31"></script>
 </body>
 </html>

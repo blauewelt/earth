@@ -113,6 +113,10 @@ R_MIN_KM = 28.0           # one cell meridionally at 0.25 deg: nothing closer
                           # than one cell is a DISPLACEMENT the grid resolves
 ASPECT = 0.71             # measured flow anisotropy (ml/measure_flow_anisotropy)
 RAMP_P = 0.5              # Vogel's sunflower: uniform density per unit AREA
+SLOT_MAX = 24             # the E-026 spiral's own point budget, at SLOT_REF_KM
+SLOT_MIN = 6              # BEARING coverage, not density: four quadrants
+SLOT_REF_KM = 900.0       # family B's six-lag reach (907.2 km), where the
+                          # E-026 budget of SLOT_MAX points applies
 
 
 def channel_family(name):
@@ -194,7 +198,8 @@ def reach_km(family, lag_pentads, dt_days=5.0):
 
 
 def slots(r_km):
-    """How many sunflower dots a disc of radius `r_km` gets: clamp(round(24 *
+    """How many sunflower dots a disc of radius `r_km` gets: clamp(round(
+    SLOT_MAX * (r/SLOT_REF_KM)^2), SLOT_MIN, SLOT_MAX) = clamp(round(24 *
     (r/900)^2), 6, 24).
 
     Quadratic because the disc's AREA is what has to be sampled at roughly
@@ -206,8 +211,8 @@ def slots(r_km):
     all four quadrants. Rounding is half-up, so the value is deterministic and
     does not depend on numpy's or Python's banker's rounding.
     """
-    n = int(math.floor(24.0 * (r_km / 900.0) ** 2 + 0.5))
-    return int(min(24, max(6, n)))
+    n = int(math.floor(SLOT_MAX * (r_km / SLOT_REF_KM) ** 2 + 0.5))
+    return int(min(SLOT_MAX, max(SLOT_MIN, n)))
 
 
 # ------------------------------------------------------------- inner stencil --

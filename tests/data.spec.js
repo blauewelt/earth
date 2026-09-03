@@ -1348,6 +1348,11 @@ test.describe("cone_geometry.json (E-069, exported from ml/cone.py)", () => {
     // slots follow the DISC's area: 6 bearings at 130 km, 24 at 907 km
     expect(G.slots.B).toEqual([6, 6, 6, 8, 12, 18, 24]);
     expect(G.slots.C).toEqual([7, 7, 6, 8, 12, 18, 24]);
+    // and the rule's own three numbers are EXPORTED, not retyped in the page:
+    // the Cones tab lets a reader move them, and its reset has to land back on
+    // ml/cone.py::slots rather than on a JS literal that has drifted from it
+    expect([G.constants.SLOT_MAX, G.constants.SLOT_MIN, G.constants.SLOT_REF_KM])
+      .toEqual([24, 6, 900]);
 
     // the tensor window, point-aligned at 0.25°
     const w = G.window;

@@ -3945,6 +3945,24 @@ function applyDateMove() {
   });
 }
 
+/* ONE place moves the app's date, for the same reason the aggregation window
+ * has four controls and one number (§5): the date input, the offset
+ * comparison and every timed layer have to agree, and a second caller that
+ * forgets one of the three is a read-out that lies about what is on screen.
+ * The quick-step buttons and the Cones tab's "follow the cone" both go
+ * through here. Returns whether the date actually moved, so a caller that
+ * animates can skip the work when the clamp has already pinned it. */
+function setGlobeDate(next) {
+  next = clampUiDate(next);
+  if (next === state.date) return false;
+  state.date = next;
+  const input = document.getElementById("layer-date");
+  if (input) input.value = next;
+  syncCompareUi();            // an OFFSET comparison moved with it
+  applyDateMove();            // coalesced onto the paint clock (scrubApply)
+  return true;
+}
+
 /* Forecast layers extend the date selector past today: while one is active,
  * the max selectable date is the last baked forecast day instead of the last
  * observed one. Everything else (GIBS requests, "today" button) stays pinned
@@ -5746,13 +5764,9 @@ function buildLayerPanel() {
   document.getElementById("date-steps").addEventListener("click", (e) => {
     const step = e.target.getAttribute?.("data-step");
     if (!step) return;
-    const next = clampUiDate(step === "today" ? defaultDate()
-                                              : stepCalendar(state.date, step));
-    if (next === state.date) return;
-    state.date = next;
-    dateInput.value = next;
-    syncCompareUi();          // an OFFSET comparison moved with it
-    applyDateMove();          // a held stepper coalesces; one click does not
+    // one funnel (setGlobeDate): input value, comparison and layers together
+    setGlobeDate(step === "today" ? defaultDate()
+                                  : stepCalendar(state.date, step));
   });
 
   // ±30m time-of-day stepping for sub-daily layers. Crossing midnight rolls
@@ -9643,18 +9657,102 @@ let coneGeoPromise = null;
 const cones = {
   lat: 36, lon: -70, fam: "B", lag: 1,
   playing: false, raf: 0, t0: 0,
+  bin: 0,                                 // the anchor's pentad bin (see below)
+  timePlaying: false, timeTimer: 0, timeMs: 500, timeLoop: true, follow: false,
   ents: null, dots: null,
   nDrawn: 0, nOff: 0, nOffInner: 0,
+  dotsPerChannel: 0, dotTokens: 0, totalTokens: 0,
 };
 const CONE_ANCHOR_COLOR = "#f85149";      // ml/draw_stencils.py's anchor red
+
+/* ---- the time axis ------------------------------------------------------
+ * A lag is not a number, it is a DATE. The tensor's frames are fixed five-day
+ * bins counted from 1982-01-01 (bin = floor(days since the epoch / 5)), and
+ * it holds bins 0..3141 — 1982-01-01 to the bin beginning 2024-12-31. So the
+ * anchor carries a bin, every lag k is the bin k earlier, and the panel can
+ * print the calendar date the model actually reads at that lag. */
+const CONE_EPOCH = "1982-01-01";
+const CONE_BIN_DAYS = 5;
+const CONE_BIN_MAX = 3141;                // last bin the r3 tensor holds
+/* The DEVELOPMENT holdout — the three years stage 2 must never have been
+ * trained on. Kept as a constant with this pointer rather than derived,
+ * because it is a property of the EXPERIMENT, not of the geometry:
+ * ml/plans/E059_holdout_window.md (the run that fixed a training pool which
+ * had been teacher-forcing held-out years into the weights). */
+const CONE_HOLDOUT_YEARS = [2009, 2017, 2023];
+
+function coneBinOfDate(d) {
+  // Whole UTC days since the epoch — a date is midnight UTC on both sides, so
+  // the division is exact and no daylight-saving hour can shift a bin.
+  const days = Math.round((Date.parse(d + "T00:00:00Z")
+                           - Date.parse(CONE_EPOCH + "T00:00:00Z")) / 864e5);
+  return Math.floor(days / CONE_BIN_DAYS);
+}
+function coneDateOfBin(b) {
+  return addDays(CONE_EPOCH, b * CONE_BIN_DAYS);
+}
+function coneClampBin(b) {
+  return Math.max(0, Math.min(CONE_BIN_MAX, b | 0));
+}
 
 function loadConeGeometry() {
   if (!coneGeoPromise) {
     coneGeoPromise = fetch("data/cone_geometry.json")
       .then((r) => r.json())
-      .then((j) => (coneGeo = j));
+      .then((j) => {
+        coneGeo = j;
+        coneParams = coneDefaultParams();
+        // The anchor starts where the globe already is, snapped to its bin —
+        // so the first thing the tab shows is the cone over the date the
+        // reader was already looking at, not an arbitrary one.
+        cones.bin = coneClampBin(coneBinOfDate(state.date));
+        return j;
+      });
   }
   return coneGeoPromise;
+}
+
+/* ---- what-if parameters -------------------------------------------------
+ * `coneParams` starts as a COPY of the exported constants — E-069 exactly as
+ * trained — and the Parameters block writes into it. Every function in the
+ * port below reads `coneParams` rather than the file, so moving a slider
+ * moves the drawn cone, the three tiles and the cross-section together.
+ *
+ * Two properties this must keep. The defaults are read from the file and
+ * never retyped, so the reset button lands on ml/cone.py's own numbers and
+ * `tests/data.spec.js`'s certification (which runs at the defaults) keeps
+ * reproducing Python's reference dot sets exactly. And a changed parameter is
+ * ANNOUNCED: a picture of a model that is not the model is the one artefact
+ * whose mistakes look entirely plausible, which is the same argument the AMOC
+ * eval mask's orientation assertion rests on. */
+let coneParams = null;
+function coneDefaultParams() {
+  const K = coneGeo.constants;
+  return {
+    L_IN: K.L_IN, V_MS: coneGeo.families.B.v_ms,
+    SLOT_MAX: K.SLOT_MAX, SLOT_MIN: K.SLOT_MIN, SLOT_REF_KM: K.SLOT_REF_KM,
+    ASPECT: K.ASPECT, OUTER_CAP_KM: K.OUTER_CAP_KM,
+    OUTER_N_PTS: K.OUTER_N_PTS, RAMP_P: K.RAMP_P,
+  };
+}
+/* label · range · step, one row each. The ranges are wide enough to break the
+ * geometry visibly (that is the point of a what-if) and bounded so a slider
+ * cannot ask for a cone with a hundred thousand dots in it. */
+const CONE_KNOBS = [
+  { key: "L_IN", label: "inner window", min: 1, max: 12, step: 1, unit: " pentads" },
+  { key: "V_MS", label: "drift speed", min: 0.05, max: 1.5, step: 0.05, unit: " m/s" },
+  { key: "SLOT_MAX", label: "dots max", min: 4, max: 64, step: 1, unit: " per lag" },
+  { key: "SLOT_MIN", label: "dots floor", min: 1, max: 24, step: 1, unit: " per lag" },
+  { key: "SLOT_REF_KM", label: "slot ref", min: 200, max: 2000, step: 50, unit: " km" },
+  { key: "ASPECT", label: "aspect N–S", min: 0.2, max: 1.5, step: 0.01, unit: "" },
+  { key: "OUTER_CAP_KM", label: "outer cap", min: 500, max: 10000, step: 100, unit: " km" },
+  { key: "OUTER_N_PTS", label: "outer pts", min: 4, max: 64, step: 1, unit: " per lag" },
+  { key: "RAMP_P", label: "ramp p", min: 0.1, max: 1.5, step: 0.05, unit: "" },
+];
+function coneParamsDirty() {
+  if (!coneParams) return false;
+  const d = coneDefaultParams();
+  return CONE_KNOBS.some((k) => coneParams[k.key] !== d[k.key]);
 }
 
 /* ---- cone geometry (port of ml/cone.py; certified by tests/data.spec.js) ----
@@ -9676,14 +9774,14 @@ function coneRound(x) {
 }
 
 function coneSpiral(latDeg, rMin, rMax, nPts) {
-  const K = coneGeo.constants;
+  const K = coneGeo.constants, P = coneParams;
   const coslat = Math.max(Math.cos(latDeg * Math.PI / 180), K.COS_FLOOR);
   const out = [];
   for (let k = 0; k < nPts; k++) {
     const f = k / Math.max(nPts - 1, 1);
-    const rKm = rMin + (rMax - rMin) * Math.pow(f, K.RAMP_P);
+    const rKm = rMin + (rMax - rMin) * Math.pow(f, P.RAMP_P);
     const th = (k * K.GOLDEN_ANGLE) * (Math.PI / 180);
-    const dy = (K.ASPECT * rKm / K.KM_PER_DEG) * Math.cos(th) / K.DLAT;
+    const dy = (P.ASPECT * rKm / K.KM_PER_DEG) * Math.cos(th) / K.DLAT;
     const dx = (rKm / (K.KM_PER_DEG * coslat)) * Math.sin(th) / K.DLAT;
     out.push([coneRound(dy), coneRound(dx)]);
   }
@@ -9693,27 +9791,31 @@ function coneSpiral(latDeg, rMin, rMax, nPts) {
 /* Inner reach in km. `rg` is the depth column: family-B physics, so the same
  * reach — it is the SAMPLING that differs (the column only), not the cone. */
 function coneReachKm(fam, lag) {
-  const K = coneGeo.constants, F = coneGeo.families;
+  const K = coneGeo.constants, F = coneGeo.families, P = coneParams;
   if (fam === "rg") fam = "B";
   if (fam === "A") return lag <= 1 ? F.A.L_corr_km : 0;
   const s = F[fam];
-  let r = s.v_ms * K.SEC_PER_DAY * K.DT_DAYS * (1 + lag) / 1000;
+  let r = P.V_MS * K.SEC_PER_DAY * K.DT_DAYS * (1 + lag) / 1000;
   r = Math.max(s.L_corr_km, r);
   if (fam === "C" && lag <= 1) r = Math.max(r, F.A.L_corr_km);     // the L-shape
   return Math.min(K.CAP_KM, r);
 }
 
 function coneOuterReachKm(k) {
-  const K = coneGeo.constants, B = coneGeo.families.B;
-  return Math.min(K.OUTER_CAP_KM,
-    Math.max(K.OUTER_FLOOR_KM, B.v_ms * K.SEC_PER_DAY * K.DT_DAYS * (1 + k) / 1000));
+  const K = coneGeo.constants, P = coneParams;
+  return Math.min(P.OUTER_CAP_KM,
+    Math.max(K.OUTER_FLOOR_KM, P.V_MS * K.SEC_PER_DAY * K.DT_DAYS * (1 + k) / 1000));
 }
 
 /* clamp(round(24·(r/900)²), 6, 24): quadratic because the DISC's area is what
  * has to be sampled at constant density; the floor of 6 is bearing coverage,
- * not density. Half-up here, exactly as ml/cone.py::slots is. */
+ * not density. Half-up here, exactly as ml/cone.py::slots is. The three
+ * numbers come from the exported constants (SLOT_MAX / SLOT_REF_KM /
+ * SLOT_MIN), so the what-if sliders and Python cannot drift apart. */
 function coneSlots(rKm) {
-  return Math.min(24, Math.max(6, Math.floor(24 * Math.pow(rKm / 900, 2) + 0.5)));
+  const P = coneParams;
+  return Math.min(P.SLOT_MAX, Math.max(P.SLOT_MIN,
+    Math.floor(P.SLOT_MAX * Math.pow(rKm / P.SLOT_REF_KM, 2) + 0.5)));
 }
 
 /* [(lag, dy, dx)] for one family at one latitude, lags 1..L_in. Lag 0 is NOT
@@ -9721,7 +9823,7 @@ function coneSlots(rKm) {
  * archived comparison stays like-for-like and the dots are what is new. */
 function coneInnerDots(latDeg, fam) {
   const K = coneGeo.constants, out = [];
-  for (let lag = 1; lag <= K.L_IN; lag++) {
+  for (let lag = 1; lag <= coneParams.L_IN; lag++) {
     const r = coneReachKm(fam, lag);
     if (r <= 0) continue;                 // family A past its 10-day memory
     out.push([lag, 0, 0]);                // the anchor's own history
@@ -9741,11 +9843,28 @@ function coneInnerDots(latDeg, fam) {
  * For k <= 6 the two radii are the same number by construction, so this is
  * empty — the design, not a degenerate case. First non-empty spiral: k = 7. */
 function coneOuterSpiral(latDeg, k) {
-  const K = coneGeo.constants;
-  const rLo = k <= K.L_IN ? coneReachKm("B", k) : 0;
+  const K = coneGeo.constants, P = coneParams;
+  const rLo = k <= P.L_IN ? coneReachKm("B", k) : 0;
   const rHi = coneOuterReachKm(k);
   if (rHi <= rLo) return [];
-  return coneSpiral(latDeg, Math.max(rLo, K.OUTER_FLOOR_KM), rHi, K.OUTER_N_PTS);
+  return coneSpiral(latDeg, Math.max(rLo, K.OUTER_FLOOR_KM), rHi, P.OUTER_N_PTS);
+}
+
+/* The token budget for the CURRENT parameters, the same arithmetic
+ * ml/cone.py::budget does: one patch token per channel at lag 0, plus one
+ * token per inner dot per channel, with the depth channels taking the anchor
+ * column only. At the defaults this returns the exported 42 / 706 / 748; the
+ * tile is computed rather than read so that moving a slider moves it too. */
+function coneBudget(latDeg) {
+  const perFam = {};
+  let patch = 0, dots = 0;
+  for (const [ch, fam] of Object.entries(coneGeo.channel_family)) {
+    const key = coneGeo.depth_channels.includes(ch) ? "rg" : fam;
+    if (perFam[key] === undefined) perFam[key] = coneInnerDots(latDeg, key).length;
+    patch += 1;
+    dots += perFam[key];
+  }
+  return { patch, dots, total: patch + dots, perFam };
 }
 /* ---- end of the port ---------------------------------------------------- */
 
@@ -9856,7 +9975,7 @@ function coneDot(i, lat, lon, color, size, hollow) {
 
 function conesDraw() {
   if (!coneGeo || !cones.ents) return;
-  const e = cones.ents, K = coneGeo.constants, w = coneGeo.window;
+  const e = cones.ents, K = coneGeo.constants, P = coneParams, w = coneGeo.window;
   const g = coneGridOf(cones.lat, cones.lon);
   const a = coneCellLatLon(g.y, g.x);
   const k = cones.lag;
@@ -9897,13 +10016,13 @@ function conesDraw() {
     if (!inWin(g.y + dy, g.x + dx)) offInner++;
   }
   for (const [lag, dy, dx] of innerAll) {
-    if (lag > Math.min(k, K.L_IN)) continue;
+    if (lag > Math.min(k, P.L_IN)) continue;
     const cur = lag === k;
-    place(dy, dx, coneLagColor(lag / K.L_IN).withAlpha(cur ? 1 : 0.55), cur ? 7 : 4.5);
+    place(dy, dx, coneLagColor(lag / P.L_IN).withAlpha(cur ? 1 : 0.55), cur ? 7 : 4.5);
   }
   // Outer spiral, cumulative from lag 7 — stage 2 reads all of them, so the
   // picture at lag k is the whole history up to k, not one annulus.
-  for (let j = K.L_IN + 1; j <= k; j++) {
+  for (let j = P.L_IN + 1; j <= k; j++) {
     const cur = j === k;
     const col = coneLagColor(1).withAlpha(cur ? 1 : 0.16);
     for (const [dy, dx] of coneOuterSpiral(a.lat, j)) place(dy, dx, col, cur ? 6 : 3);
@@ -9916,10 +10035,10 @@ function conesDraw() {
    * anisotropy the sunflower is built on. The depth column is the exception:
    * it has no disc at all, one cell at six lags, so an ellipse there would
    * assert reading the model does not do. */
-  const r = k <= K.L_IN ? coneReachKm(cones.fam, k) : coneOuterReachKm(k);
-  if (r > 0 && !(cones.fam === "rg" && k <= K.L_IN)) {
+  const r = k <= P.L_IN ? coneReachKm(cones.fam, k) : coneOuterReachKm(k);
+  if (r > 0 && !(cones.fam === "rg" && k <= P.L_IN)) {
     const coslat = Math.max(Math.cos(a.lat * Math.PI / 180), K.COS_FLOOR);
-    const dLat = K.ASPECT * r / K.KM_PER_DEG, dLon = r / (K.KM_PER_DEG * coslat);
+    const dLat = P.ASPECT * r / K.KM_PER_DEG, dLon = r / (K.KM_PER_DEG * coslat);
     const pos = [];
     for (let i = 0; i <= 96; i++) {
       const th = i / 96 * 2 * Math.PI;
@@ -9943,31 +10062,62 @@ function coneFmtKm(r) {
 }
 
 function conesStats() {
-  const K = coneGeo.constants, k = cones.lag, fam = cones.fam;
-  const r = k <= K.L_IN ? coneReachKm(fam, k) : coneOuterReachKm(k);
+  const K = coneGeo.constants, P = coneParams, k = cones.lag, fam = cones.fam;
+  const r = k <= P.L_IN ? coneReachKm(fam, k) : coneOuterReachKm(k);
   const reach = document.getElementById("cn-reach");
   reach.querySelector(".stat-value").textContent = r > 0 ? `${coneFmtKm(r)} km` : "none";
-  reach.querySelector(".stat-sub").textContent = k <= K.L_IN
+  reach.querySelector(".stat-sub").textContent = k <= P.L_IN
     ? (r > 0 ? `family ${fam === "rg" ? "B (depth)" : fam} · inner cone`
              : "past this driver's memory")
     : "stage 2 · outer envelope";
 
+  /* Both counts are COMPUTED at the anchor's latitude rather than read out of
+   * the file's `counts`, because a what-if parameter changes them and a tile
+   * showing the exported number under a changed slider would be the one lie
+   * this tab must not tell. At the defaults they reproduce the export exactly
+   * (80 dots per family-B channel, 706 dot tokens, 748 in total) — the reset
+   * test pins that. */
+  const gg = coneGridOf(cones.lat, cones.lon);
+  const a = coneCellLatLon(gg.y, gg.x);
+  const per = coneInnerDots(a.lat, fam).length;
+  const budget = coneBudget(a.lat);
+  cones.dotsPerChannel = per;
+  cones.dotTokens = budget.dots;
+  cones.totalTokens = budget.total;
+
   const dots = document.getElementById("cn-dots");
-  const per = coneGeo.counts[fam === "rg" ? "inner_dots_rg" : `inner_dots_${fam}`];
   dots.querySelector(".stat-value").textContent = String(per);
   dots.querySelector(".stat-sub").textContent = fam === "rg"
     ? "anchor column only (rg)"
     : `dots per channel${cones.nOffInner ? ` · ${cones.nOffInner} off window` : ""}`;
 
-  const gg = coneGridOf(cones.lat, cones.lon);
-  const a = coneCellLatLon(gg.y, gg.x);
+  const tok = document.getElementById("cn-tokens");
+  tok.querySelector(".stat-value").textContent = String(budget.total);
+  tok.querySelector(".stat-sub").textContent =
+    `tokens per anchor · ${budget.patch} patch + ${budget.dots} dots`;
+
+  // The what-if badge. It says the geometry is not the trained one, in the
+  // words a reader needs, and nothing about which slider moved — the sliders
+  // are right there showing that.
+  const badge = document.getElementById("cn-whatif");
+  if (badge) badge.classList.toggle("hidden", !coneParamsDirty());
+
   const days = k * K.DT_DAYS;
-  document.getElementById("cn-lag-read").innerHTML =
-    `<strong>lag ${k}</strong> · ${days} days back · anchor ` +
+  const lagBin = cones.bin - k;
+  const lagDate = coneDateOfBin(lagBin);
+  const year = Number(lagDate.slice(0, 4));
+  const held = CONE_HOLDOUT_YEARS.includes(year);
+  const read = document.getElementById("cn-lag-read");
+  read.classList.toggle("cn-held", held);
+  read.innerHTML =
+    `<strong>lag ${k}</strong> · ${days} days back · <strong>${lagDate}</strong>` +
+    (held ? ` <span class="cn-held-tag">held-out year</span>` : "") +
+    (lagBin < 0 ? ` <span class="cn-held-tag">before the tensor</span>` : "") +
+    `<br> <span class="cn-anchor-read">anchor ` +
     `${Math.abs(a.lat).toFixed(2)}° ${a.lat >= 0 ? "N" : "S"} ` +
     `${Math.abs(a.lon).toFixed(2)}° ${a.lon >= 0 ? "E" : "W"}` +
     (k === 0 ? " — the 3×3 patch, one token per channel"
-             : ` · ${cones.nDrawn} dots drawn`);
+             : ` · ${cones.nDrawn} dots drawn`) + `</span>`;
 }
 
 /* Reach against lag. BOTH axes are square-rooted, for the same reason: the six
@@ -9979,10 +10129,10 @@ function conesSection() {
   const c = document.getElementById("cn-section");
   if (!c) return;
   const ctx = c.getContext("2d");
-  const W = c.width, H = c.height, K = coneGeo.constants;
+  const W = c.width, H = c.height, K = coneGeo.constants, P = coneParams;
   const PADL = 30, PADB = 15, PADT = 8, PADR = 10;
   ctx.clearRect(0, 0, W, H);
-  const KMAX = K.K_OUTER - 1, RMAX = K.OUTER_CAP_KM * 1.04;
+  const KMAX = K.K_OUTER - 1, RMAX = P.OUTER_CAP_KM * 1.04;
   const X = (k) => PADL + Math.sqrt(k / KMAX) * (W - PADL - PADR);
   const Y = (r) => H - PADB - Math.sqrt(r / RMAX) * (H - PADT - PADB);
 
@@ -9990,7 +10140,8 @@ function conesSection() {
   ctx.beginPath(); ctx.moveTo(PADL, PADT); ctx.lineTo(PADL, H - PADB);
   ctx.lineTo(W - PADR, H - PADB); ctx.stroke();
   ctx.font = "10px sans-serif";
-  for (const r of [500, 1000, 2000, 4444]) {
+  // the last gridline IS the cap, so a moved cap is visible on the axis
+  for (const r of [500, 1000, 2000, P.OUTER_CAP_KM]) {
     ctx.fillStyle = "#8b949e";
     ctx.fillText(String(r), 2, Y(r) + 3);
     ctx.strokeStyle = "rgba(255,255,255,0.07)";
@@ -10002,31 +10153,38 @@ function conesSection() {
   ctx.textAlign = "left";
 
   // the outer envelope: dashed, because stage 2 never reads the whole disc
+  /* Both curves are COMPUTED from the port, not read out of the file's baked
+   * reach tables: at the defaults they are the same numbers (the certification
+   * test asserts the port reproduces `reach_km.inner` exactly), and under a
+   * what-if parameter the drawing and the cross-section must not disagree
+   * about what the cone is. */
   ctx.setLineDash([4, 3]); ctx.strokeStyle = "#f0d861"; ctx.lineWidth = 1.6;
   ctx.beginPath();
   for (let k = 0; k <= KMAX; k++) {
-    const p = coneGeo.reach_km.outer[k];
+    const p = coneOuterReachKm(k);
     if (k === 0) ctx.moveTo(X(k), Y(p)); else ctx.lineTo(X(k), Y(p));
   }
   ctx.stroke(); ctx.setLineDash([]);
 
-  // the three inner families, solid, over their own six lags
+  // the three inner families, solid, over their own inner lags
   const cols = { A: "#f85149", B: "#4493f8", C: "#3fb950" };
   for (const f of ["A", "B", "C"]) {
     const cur = (cones.fam === "rg" ? "B" : cones.fam) === f;
     ctx.strokeStyle = cols[f]; ctx.lineWidth = cur ? 2.6 : 1.4;
     ctx.globalAlpha = cur ? 1 : 0.5;
     ctx.beginPath();
-    let started = false;
-    for (let k = 0; k <= K.L_IN; k++) {
-      const p = coneGeo.reach_km.inner[f][k];
+    let started = false, last = -1;
+    for (let k = 0; k <= P.L_IN; k++) {
+      const p = coneReachKm(f, k);
       if (p <= 0) { started = false; continue; }
+      last = k;
       if (!started) { ctx.moveTo(X(k), Y(p)); started = true; } else ctx.lineTo(X(k), Y(p));
     }
     ctx.stroke();
-    const last = f === "A" ? 1 : K.L_IN;
-    ctx.fillStyle = cols[f];
-    ctx.fillText(f, X(last) + 4, Y(coneGeo.reach_km.inner[f][last]) - 3);
+    if (last >= 0) {
+      ctx.fillStyle = cols[f];
+      ctx.fillText(f, X(last) + 4, Y(coneReachKm(f, last)) - 3);
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -10064,6 +10222,66 @@ function conesSetLag(k) {
   const s = document.getElementById("cn-lag");
   if (s && +s.value !== cones.lag) s.value = String(cones.lag);
   conesDraw();
+  conesFollowDate();
+}
+
+/* ---- time -----------------------------------------------------------------
+ * The lag sweep animates the CONE at one date. This animates the DATE with
+ * the cone held still, which is the other half of the same picture: the
+ * anchor walks forward one pentad at a time and, with "follow the cone" on,
+ * the globe's own date selector walks with it — so whatever timed layer the
+ * reader has on (sea surface temperature, currents, sea ice) shows the field
+ * the model is being asked to read at that lag.
+ *
+ * It drives `setGlobeDate`, the app's one date funnel, and nothing else. That
+ * is deliberate and it is the same argument the Play tab rests on: this is a
+ * clock, not a rendering mode, so the comparison, the aggregation window and
+ * the retirement queue all keep working underneath it with no code here. A
+ * date before a layer's own record gets that layer's ordinary "no data"
+ * behaviour — the honest answer, and not this tab's business to hide. */
+function conesFollowDate() {
+  if (!cones.follow || !coneGeo) return;
+  setGlobeDate(coneDateOfBin(Math.max(0, cones.bin - cones.lag)));
+}
+
+function conesSetBin(b, opts = {}) {
+  if (!coneGeo) return;
+  cones.bin = coneClampBin(b);
+  const input = document.getElementById("cn-date");
+  const iso = coneDateOfBin(cones.bin);
+  if (input && !opts.keepInput && input.value !== iso) input.value = iso;
+  conesDraw();
+  conesFollowDate();
+}
+
+/* A timer, not a rAF loop, because a pentad per half second is a SLOWER clock
+ * than the display's and rAF would spin sixty times for every step it takes.
+ * It stops itself the moment the tab is not visible, exactly as the lag sweep
+ * does — a loop nothing can stop is a loop that runs on a phone in a pocket. */
+function conesTimePlay() {
+  conesTimeStop();
+  cones.timePlaying = true;
+  const tick = () => {
+    if (!cones.timePlaying || !conesTabVisible()) { conesTimeStop(); return; }
+    if (cones.bin >= CONE_BIN_MAX) {
+      if (!cones.timeLoop) { conesTimeStop(); return; }
+      conesSetBin(0);
+    } else {
+      conesSetBin(cones.bin + 1);
+    }
+    cones.timeTimer = setTimeout(tick, cones.timeMs);
+  };
+  conesTimeButtons();
+  cones.timeTimer = setTimeout(tick, cones.timeMs);
+}
+function conesTimeStop() {
+  cones.timePlaying = false;
+  clearTimeout(cones.timeTimer);
+  conesTimeButtons();
+}
+function conesTimeButtons() {
+  const b = document.getElementById("cn-time-play");
+  if (b) b.classList.toggle("playing", cones.timePlaying);
 }
 
 /* The anchor is a CELL of the tensor, so a tap anywhere snaps to the nearest
@@ -10082,6 +10300,8 @@ function conesSetAnchor(lat, lon) {
  * to forget than a per-tab teardown. */
 function conesHide() {
   conesStop();
+  conesTimeStop();          // the time clock drives the app's date: never leave
+                            // it running behind a tab nobody is looking at
   if (!cones.ents) return;
   const e = cones.ents;
   e.anchor.show = false; e.win.show = false; e.ring.show = false;
@@ -10106,6 +10326,50 @@ async function loadCones() {
     });
     document.getElementById("cn-play").addEventListener("click", conesPlay);
     document.getElementById("cn-stop").addEventListener("click", conesStop);
+
+    // ---- the time axis: an anchor date, a follow toggle and a second clock
+    const dateIn = document.getElementById("cn-date");
+    dateIn.min = coneDateOfBin(0);
+    dateIn.max = coneDateOfBin(CONE_BIN_MAX);
+    dateIn.addEventListener("change", () => {
+      if (!dateIn.value) return;
+      conesTimeStop();
+      // `keepInput`: writing a snapped value back mid-edit resets the caret to
+      // the first segment, the same trap the compare-date field documents.
+      conesSetBin(coneBinOfDate(dateIn.value), { keepInput: true });
+    });
+    document.getElementById("cn-follow").addEventListener("change", (ev) => {
+      cones.follow = ev.target.checked;
+      conesFollowDate();
+    });
+    document.getElementById("cn-loop").addEventListener("change", (ev) => {
+      cones.timeLoop = ev.target.checked;
+    });
+    const speed = document.getElementById("cn-time-speed");
+    const speedRead = document.getElementById("cn-time-speed-read");
+    const showSpeed = () => {
+      cones.timeMs = +speed.value;
+      speedRead.textContent = `${(cones.timeMs / 1000).toFixed(1)} s / pentad`;
+    };
+    speed.addEventListener("input", showSpeed);
+    showSpeed();
+    document.getElementById("cn-time-play").addEventListener("click", conesTimePlay);
+    document.getElementById("cn-time-stop").addEventListener("click", conesTimeStop);
+    document.getElementById("cn-time-back").addEventListener("click", () => {
+      conesTimeStop(); conesSetBin(cones.bin - 1);
+    });
+    document.getElementById("cn-time-fwd").addEventListener("click", () => {
+      conesTimeStop(); conesSetBin(cones.bin + 1);
+    });
+
+    // ---- the what-if parameters
+    conesBuildParams();
+    document.getElementById("cn-reset").addEventListener("click", () => {
+      coneParams = coneDefaultParams();
+      conesSyncParams();
+      conesDraw();
+    });
+
     for (const b of document.querySelectorAll("#cn-presets button")) {
       b.addEventListener("click", () => {
         for (const o of document.querySelectorAll("#cn-presets button")) {
@@ -10116,15 +10380,62 @@ async function loadCones() {
         // One height cannot frame both, so the flight follows the lag.
         viewer.camera.flyTo({
           destination: Cesium.Cartesian3.fromDegrees(cones.lon, cones.lat,
-            cones.lag >= coneGeo.constants.L_IN + 1 ? 7.0e6 : 2.5e6),
+            cones.lag >= coneParams.L_IN + 1 ? 7.0e6 : 2.5e6),
           duration: 1.2,
         });
       });
     }
-    document.getElementById("cn-tokens").querySelector(".stat-value").textContent =
-      String(coneGeo.counts.total_tokens);
   }
+  conesSyncParams();
+  const dateIn = document.getElementById("cn-date");
+  if (dateIn) dateIn.value = coneDateOfBin(cones.bin);
+  document.getElementById("cn-follow").checked = cones.follow;
+  document.getElementById("cn-loop").checked = cones.timeLoop;
   conesDraw();
+}
+
+/* One row per knob — label · slider · value — built from CONE_KNOBS rather
+ * than nine copies of the same markup in index.html, so adding a knob is one
+ * line and the row can never disagree with the state it writes. The block is
+ * a <details> collapsed by default: this is a phone-first panel and the
+ * ordinary reader wants the cone, not its constants. */
+function conesBuildParams() {
+  const host = document.getElementById("cn-param-rows");
+  if (!host || host.childElementCount) return;
+  for (const k of CONE_KNOBS) {
+    const row = document.createElement("div");
+    row.className = "cn-param";
+    row.innerHTML =
+      `<label for="cn-p-${k.key}">${k.label}</label>` +
+      `<input type="range" id="cn-p-${k.key}" data-knob="${k.key}" ` +
+      `min="${k.min}" max="${k.max}" step="${k.step}" />` +
+      `<span class="cn-param-val" id="cn-v-${k.key}"></span>`;
+    host.appendChild(row);
+    row.querySelector("input").addEventListener("input", (ev) => {
+      coneParams[k.key] = +ev.target.value;
+      conesStop();                       // the sweep is animating the old cone
+      conesSyncParams();
+      conesDraw();
+    });
+  }
+}
+
+/* Push `coneParams` into the sliders and their read-outs. Called after a
+ * reset and after every edit, so the value beside a slider is the value the
+ * cone was drawn from and never a rounding of it. */
+function conesSyncParams() {
+  for (const k of CONE_KNOBS) {
+    const s = document.getElementById(`cn-p-${k.key}`);
+    const v = document.getElementById(`cn-v-${k.key}`);
+    if (!s || !v) continue;
+    const val = coneParams[k.key];
+    if (+s.value !== val) s.value = String(val);
+    v.textContent = `${val}${k.unit}`;
+  }
+  const badge = document.getElementById("cn-whatif");
+  if (badge) badge.classList.toggle("hidden", !coneParamsDirty());
+  const reset = document.getElementById("cn-reset");
+  if (reset) reset.classList.toggle("active", coneParamsDirty());
 }
 
 /* A tap moves the anchor — but only while this tab is open, so the pixel
@@ -10143,14 +10454,28 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((c) => {
 
 function coneState() {
   const g = coneGeo ? coneGridOf(cones.lat, cones.lon) : { y: -1, x: -1 };
+  const lagBin = cones.bin - cones.lag;
   return {
     lat: cones.lat, lon: cones.lon, fam: cones.fam, lag: cones.lag,
     y: g.y, x: g.x, drawn: cones.nDrawn, offWindow: cones.nOff,
     offWindowInner: cones.nOffInner, playing: cones.playing,
     reachKm: coneGeo
-      ? (cones.lag <= coneGeo.constants.L_IN
+      ? (cones.lag <= coneParams.L_IN
           ? coneReachKm(cones.fam, cones.lag) : coneOuterReachKm(cones.lag))
       : null,
+    // the time axis
+    bin: cones.bin,
+    anchorDate: coneGeo ? coneDateOfBin(cones.bin) : null,
+    lagBin, lagDate: coneGeo ? coneDateOfBin(lagBin) : null,
+    heldOut: coneGeo
+      ? CONE_HOLDOUT_YEARS.includes(Number(coneDateOfBin(lagBin).slice(0, 4)))
+      : false,
+    follow: cones.follow, timePlaying: cones.timePlaying, timeMs: cones.timeMs,
+    // the what-if geometry
+    params: coneParams ? { ...coneParams } : null,
+    paramsDirty: coneParamsDirty(),
+    dotsPerChannel: cones.dotsPerChannel,
+    dotTokens: cones.dotTokens, totalTokens: cones.totalTokens,
   };
 }
 
@@ -11308,9 +11633,15 @@ window.__earth = {
   coneReachKm,
   coneOuterReachKm,
   coneSlots,
+  coneBudget,
   coneState,
   conesSetLag,
   conesSetAnchor,
+  conesSetBin,
+  conesTimePlay,
+  conesTimeStop,
+  coneBinOfDate,
+  coneDateOfBin,
   conesHide,
   get coneGeometry() { return coneGeo; },
   get coneArtefacts() { return cones.ents; },

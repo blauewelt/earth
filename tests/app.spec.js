@@ -5607,6 +5607,11 @@ test("Cones tab draws the E-069 cone and answers its two controls", async ({ pag
   });
   await expect(page.locator("#cn-dots .stat-value")).toHaveText("6");
   await expect(page.locator("#cn-dots .stat-sub")).toContainText("anchor column only");
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-family");
+    s.value = "B";
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 
   // leaving the tab takes the cone off the globe (the switch has no leave hook,
   // so every other tab's click is the leave hook)
@@ -5621,5 +5626,172 @@ test("Cones tab draws the E-069 cone and answers its two controls", async ({ pag
   });
   expect(hidden).toEqual({ anchor: false, win: false, ring: false,
                            patch: false, playing: false });
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* The what-if parameters. What is checked is the LOOP: a knob moves, the
+ * drawn cone and the tiles move with it, the badge says the geometry is no
+ * longer the trained one, and reset lands back on ml/cone.py's own numbers —
+ * 80 dots per family-B channel, 706 dot tokens, 748 in total. That last
+ * assertion is the one that matters: `tests/data.spec.js` certifies the port
+ * against Python's reference sets AT THE DEFAULTS, so a reset that did not
+ * restore them exactly would leave the certification testing a geometry the
+ * page can no longer produce. */
+test("Cones tab: what-if parameters change the cone, and reset restores E-069", async ({ page }) => {
+  test.setTimeout(120000);
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+
+  // as trained: the exported budget, and no badge
+  await expect(page.locator("#cn-dots .stat-value")).toHaveText("80");
+  await expect(page.locator("#cn-tokens .stat-value")).toHaveText("748");
+  await expect(page.locator("#cn-whatif")).toBeHidden();
+  const asTrained = await page.evaluate(() => window.__earth.coneState());
+  expect(asTrained.dotsPerChannel).toBe(80);
+  expect(asTrained.dotTokens).toBe(706);
+  expect(asTrained.totalTokens).toBe(748);
+  expect(asTrained.paramsDirty).toBe(false);
+  expect(asTrained.params.L_IN).toBe(6);
+
+  // one knob: three inner pentads instead of six. Fewer lags, fewer dots per
+  // channel, fewer tokens — and the badge appears.
+  const setKnob = (key, v) => page.evaluate(([k, val]) => {
+    const s = document.getElementById(`cn-p-${k}`);
+    s.value = String(val);
+    s.dispatchEvent(new Event("input", { bubbles: true }));
+  }, [key, v]);
+  await setKnob("L_IN", 3);
+  await expect(page.locator("#cn-whatif")).toBeVisible();
+  await expect(page.locator("#cn-whatif")).toContainText("not what the codec was trained on");
+  const shrunk = await page.evaluate(() => window.__earth.coneState());
+  expect(shrunk.params.L_IN).toBe(3);
+  expect(shrunk.paramsDirty).toBe(true);
+  expect(shrunk.dotsPerChannel).toBeLessThan(80);
+  expect(shrunk.totalTokens).toBeLessThan(748);
+  expect(Number(await page.locator("#cn-dots .stat-value").textContent()))
+    .toBe(shrunk.dotsPerChannel);
+
+  // a second knob, on a different mechanism: more slots per disc means more
+  // dots at the SAME six lags, so this one has to move the count upward
+  await page.evaluate(() => {
+    document.getElementById("cn-reset").click();
+  });
+  await setKnob("SLOT_MAX", 48);
+  const denser = await page.evaluate(() => window.__earth.coneState());
+  expect(denser.dotsPerChannel).toBeGreaterThan(80);
+  expect(denser.dotTokens).toBeGreaterThan(706);
+
+  // reset: exactly back to what E-069 was trained on
+  await page.evaluate(() => document.getElementById("cn-reset").click());
+  await expect(page.locator("#cn-whatif")).toBeHidden();
+  await expect(page.locator("#cn-dots .stat-value")).toHaveText("80");
+  await expect(page.locator("#cn-tokens .stat-value")).toHaveText("748");
+  const back = await page.evaluate(() => window.__earth.coneState());
+  expect(back.dotsPerChannel).toBe(80);
+  expect(back.dotTokens).toBe(706);
+  expect(back.totalTokens).toBe(748);
+  expect(back.paramsDirty).toBe(false);
+  expect(back.params).toEqual(asTrained.params);
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* The time axis. A lag is a DATE — pentad bins counted from 1982-01-01 — so
+ * the read-out names one, the three held-out years are flagged, and the two
+ * clocks move different things: "sweep lags" walks the lag at one date,
+ * "advance time" walks the date at one lag. `follow the cone` is the bit that
+ * makes it worth having: it hands each lag's date to the app's own date
+ * funnel, so whatever timed layer is on shows that lag's field. */
+test("Cones tab: every lag is a date, and the time clock drives the globe", async ({ page }) => {
+  test.setTimeout(120000);
+  // The time clock moves the app's date at up to ten steps a second, and the
+  // default SST layer would answer every one of them with a tile set. What is
+  // under test is the DATE funnel, not the imagery, so take the layer off
+  // in-page (CLAUDE.md §4) and let the clock run against a bare globe.
+  await page.evaluate(() => {
+    const el = document.getElementById("toggle-sst");
+    if (el && el.checked) {
+      el.checked = false;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+
+  // bins are fixed 5-day bins from 1982-01-01; the tensor holds 0..3141
+  const bins = await page.evaluate(() => ({
+    zero: window.__earth.coneDateOfBin(0),
+    last: window.__earth.coneDateOfBin(3141),
+    mid: window.__earth.coneBinOfDate("2015-04-01"),
+  }));
+  expect(bins.zero).toBe("1982-01-01");
+  expect(bins.last).toBe("2024-12-31");
+  expect(await page.evaluate((b) => window.__earth.coneDateOfBin(b), bins.mid))
+    .toBe("2015-03-29");                 // 2015-04-01 snaps back to its bin
+
+  // an anchor date, and the lag read-out names the date the model reads there
+  await page.evaluate((b) => window.__earth.conesSetBin(b), bins.mid);
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-lag");
+    s.value = "3";
+    s.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const read = page.locator("#cn-lag-read");
+  await expect(read).toContainText("lag 3 · 15 days back");
+  await expect(read).toContainText("2015-03-14");     // 2015-03-29 − 15 days
+  const st = await page.evaluate(() => window.__earth.coneState());
+  expect(st.anchorDate).toBe("2015-03-29");
+  expect(st.lagDate).toBe("2015-03-14");
+  expect(st.heldOut).toBe(false);
+  await expect(read).not.toHaveClass(/cn-held/);
+
+  // 2017 is a development holdout year (ml/plans/E059_holdout_window.md), so
+  // a lag landing in it is flagged rather than presented as ordinary
+  await page.evaluate((b) => window.__earth.conesSetBin(b),
+                      await page.evaluate(() => window.__earth.coneBinOfDate("2017-06-10")));
+  expect(await page.evaluate(() => window.__earth.coneState().heldOut)).toBe(true);
+  await expect(read).toHaveClass(/cn-held/);
+  await expect(read).toContainText("held-out year");
+
+  // follow the cone: the lag's own date lands in the app's date selector
+  await page.evaluate((b) => window.__earth.conesSetBin(b),
+                      await page.evaluate(() => window.__earth.coneBinOfDate("2015-04-01")));
+  await page.evaluate(() => {
+    const c = document.getElementById("cn-follow");
+    c.checked = true;
+    c.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const followed = await page.evaluate(() => window.__earth.coneState().lagDate);
+  await expect.poll(() => page.evaluate(() => window.__earth.state.date)).toBe(followed);
+  expect(await page.inputValue("#layer-date")).toBe(followed);
+
+  // advance time: the ANCHOR walks forward one pentad at a time, the lag held
+  const before = await page.evaluate(() => window.__earth.coneState().bin);
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-time-speed");
+    s.value = "100";
+    s.dispatchEvent(new Event("input", { bubbles: true }));
+    window.__earth.conesTimePlay();
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.coneState().bin),
+                    { timeout: 20000 }).toBeGreaterThan(before + 1);
+  const running = await page.evaluate(() => {
+    const s = window.__earth.coneState();
+    window.__earth.conesTimeStop();
+    return s;
+  });
+  expect(running.lag).toBe(3);                       // the lag was held
+  expect(running.timePlaying).toBe(true);
+  // and the globe's date came with it, still one lag behind the anchor
+  await expect.poll(() => page.evaluate(() => window.__earth.state.date))
+    .toBe(await page.evaluate(() => window.__earth.coneState().lagDate));
+  expect(await page.evaluate(() => window.__earth.coneState().timePlaying)).toBe(false);
+
+  // leaving the tab stops the clock — it drives the app's date, so a clock
+  // left running behind another tab would move the globe under the reader
+  await page.evaluate(() => window.__earth.conesTimePlay());
+  await page.evaluate(() => document.querySelector("#tab-layers").click());
+  expect(await page.evaluate(() => window.__earth.coneState().timePlaying)).toBe(false);
+
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });

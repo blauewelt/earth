@@ -1781,6 +1781,58 @@ RAPID, Labrador Sea, Equator) are the whole control surface; a small canvas
 plots reach against lag on a sqrt axis so the six inner pentads stay readable
 beside 143 outer ones.
 
+**Every lag is a DATE, and the tab has two clocks that move different things**
+(2026-09-03, Chris: *"maybe you can find a way to animate time (eg a play
+button or something better)"*). The tensor's frames are fixed five-day bins
+counted from 1982-01-01 — bin = floor(days since the epoch / 5) — and it holds
+bins 0-3141, i.e. 1982-01-01 to the bin beginning 2024-12-31. So the anchor
+carries a DATE (`cones.bin`, defaulting to the globe's own date snapped to its
+bin and clamped into that span), lag k is the bin k earlier, and the read-out
+prints it: "lag 3 · 15 days back · 2015-03-14". **Sweep lags** is the original
+animation, renamed: the date stands still and the lag walks 0 to 143, so the
+cone opens out. **Advance time** is the new one: the LAG stands still and the
+anchor date walks forward one pentad at a time (a `setTimeout` clock, not a
+`requestAnimationFrame` loop — a pentad per half second is slower than the
+display and rAF would spin sixty times per step), speed-controlled, loopable,
+and stopped by `conesHide` like the sweep. The thing that makes it worth
+having is the **follow the cone** toggle: while it is on, each lag's own date
+is handed to `setGlobeDate` — the app's single date funnel, which the quick
+step buttons now also go through — so whatever timed layer is on the globe
+shows the field the forecaster reads at that lag, with no code in this tab
+touching imagery at all. That is the Play tab's argument one tab over: this is
+a clock, not a rendering mode, so the comparison, the aggregation window and
+the retirement queue all keep working underneath it. A lag whose date lands in
+2009, 2017 or 2023 turns the read-out red and says "held-out year" —
+`CONE_HOLDOUT_YEARS`, a constant with a pointer to
+`ml/plans/E059_holdout_window.md` (the run that fixed a training pool which had
+been teacher-forcing those years into the weights), because it is a property of
+the EXPERIMENT rather than of the geometry.
+
+**The parameters are editable, and a changed one is ANNOUNCED.** A collapsed
+"Parameters" block carries nine of `ml/cone.py`'s own constants, one row each
+(label, slider, value): the inner window `L_in`, the drift speed `v` for
+families B and C, the slot rule's three numbers (max dots per lag, the floor,
+and the reference reach the quadratic is anchored to), the ellipse aspect, the
+outer cap, the outer points per lag, and the sunflower's ramp exponent.
+`coneParams` is a state object initialised FROM the exported file and every
+function in the port reads it, so moving a slider recomputes the drawn cone,
+all three stat tiles and the cross-section together. Three things keep this
+honest. The defaults are read out of `data/cone_geometry.json`, never retyped,
+which is why `SLOT_MAX` / `SLOT_MIN` / `SLOT_REF_KM` were promoted from
+literals inside `ml/cone.py::slots` to exported constants in the same change —
+a reset must land on Python's numbers, not on a JS copy that has drifted. The
+tiles are COMPUTED at the anchor's latitude (`coneBudget` does the same
+arithmetic as `ml/cone.py::budget`) rather than read out of the file's baked
+`counts`, because a tile showing 748 under a changed slider would be the one
+lie this tab must not tell — at the defaults it reproduces the export exactly,
+80 dots per family-B channel and 42 patch + 706 dot = 748 tokens, and a test
+pins that a knob moves the count and reset restores all three. And a differing
+parameter raises a badge saying "what-if geometry — not what the codec was
+trained on", because a drawing of a model that is not the model looks entirely
+plausible — the same reason the AMOC eval mask asserts its own orientation
+rather than being eyeballed. The certification in `tests/data.spec.js` runs at
+the defaults and is untouched by any of this.
+
 **The geometry is exported, never restated — and the JS port is CERTIFIED.**
 `ml/cone.py` is the definition and `tests/test_cone_geometry.py` pins it;
 `ml/export_cone_geometry.py` writes `data/cone_geometry.json` from it

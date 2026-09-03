@@ -758,3 +758,42 @@ footer a { color: var(--fg-dim); }
 #cn-presets button:hover { background: #30363d; }
 #cn-presets button.active { border-color: var(--accent); color: var(--accent); }
 #cn-section { display: block; width: 100%; background: #0a0f16; border-radius: 6px; margin-top: 6px; }
+/* The lag read-out is two lines now (lag + date, then the anchor cell), and
+ * it turns red on a HELD-OUT year — 2009, 2017 and 2023 are the three the
+ * model was never trained on, so a cone standing on one of them is a
+ * different claim from a cone standing on a training year. */
+#cn-lag-read .cn-anchor-read { color: var(--fg-dim); font-size: 11.5px; }
+#cn-lag-read.cn-held { color: #ff9a90; }
+.cn-held-tag {
+  display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 4px;
+  background: rgba(248, 81, 73, 0.16); border: 1px solid rgba(248, 81, 73, 0.5);
+  color: #ff9a90; font-size: 10px; vertical-align: 1px;
+}
+/* The what-if badge: the panel's loudest element, deliberately. A drawing of
+ * a model that is not the model looks entirely plausible, so the only defence
+ * is a line that says so. */
+#cn-whatif {
+  margin: 6px 0 2px; padding: 5px 9px; border-radius: 6px; font-size: 11.5px;
+  background: rgba(240, 216, 97, 0.12); border: 1px solid rgba(240, 216, 97, 0.55);
+  color: #f0d861;
+}
+#cn-date { flex: 1 1 0; min-width: 0; }
+#cn-time-speed { flex: 1 1 60px; min-width: 0; accent-color: var(--accent); }
+#cn-time-speed-read { flex: 0 0 auto; white-space: nowrap; }
+#cn-time-play.playing { border-color: var(--accent); color: var(--accent); }
+/* Stacked, not side by side: "follow the cone — drive the globe's date" is a
+ * sentence, and a 320 px sidebar shared with "loop" folds it into a column of
+ * single words. */
+.cn-checks { flex-direction: column; align-items: flex-start; gap: 5px; margin-top: 2px; }
+.cn-checks label { display: flex; align-items: center; gap: 6px; font-size: 11.5px; }
+.cn-checks input[type="checkbox"] { flex: 0 0 auto; margin: 0; }
+/* One row per knob — label · slider · value — so nine constants fit a phone. */
+.cn-param { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 11.5px; }
+.cn-param label { flex: 0 0 82px; color: var(--fg-dim); }
+.cn-param input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.cn-param-val {
+  flex: 0 0 88px; text-align: right; font-variant-numeric: tabular-nums;
+  color: var(--fg); font-size: 11px;
+}
+#cn-reset { width: 100%; margin-top: 6px; padding: 6px 0; }
+#cn-reset.active { border-color: var(--accent); color: var(--accent); }

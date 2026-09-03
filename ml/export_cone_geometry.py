@@ -144,6 +144,13 @@ def build():
             R_MIN_KM=cone.R_MIN_KM,
             ASPECT=cone.ASPECT,
             RAMP_P=cone.RAMP_P,
+            # The slot rule's three numbers, exported rather than restated:
+            # the Cones tab lets a reader move them (a "what-if" geometry) and
+            # its reset must land back on THESE, not on a JS literal that has
+            # drifted from ml/cone.py::slots.
+            SLOT_MAX=cone.SLOT_MAX,
+            SLOT_MIN=cone.SLOT_MIN,
+            SLOT_REF_KM=cone.SLOT_REF_KM,
             COS_FLOOR=0.05,
             L_IN=L_IN,
             K_OUTER=K_OUTER,
