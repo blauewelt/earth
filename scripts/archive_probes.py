@@ -38,10 +38,17 @@ BRANCH = "ml-metrics"
 # and the forecast MSEs against persistence. probe_kfold.json scores the
 # CODEC and is identical for every run freezing the same codec, so for a
 # stage-2 sweep it is the control rather than the result. Both belong here.
+# velocity_probe.json (E-069) is the cone codec's ONLY result. A cone run
+# skips the whole probe phase — there is no Z to embed and no stage-2 head —
+# so none of the names above exist for it, and without this entry the run
+# would archive nothing at all while going green. It is written by
+# ml/train_cone.py into its --out directory, which is the same
+# ml/runs/actions the workflow points --dir at.
 WANT = ["probe_kfold.json", "temporal.json", "rollout_eval.json",
         "probe_sequence.json", "project_amoc.json", "rollout_spatial.json",
         "dip_check.json", "probe_head.json", "probe_head_raw3x3.json",
-        "probe_head_raw.json", "rollout.json", "provenance.json"]
+        "probe_head_raw.json", "rollout.json", "provenance.json",
+        "velocity_probe.json"]
 
 # ...AND EVERY OTHER probe_head*.json. Since 2026-08-21 that family is
 # generated rather than enumerated: --target adds a suffix per transport

@@ -52,6 +52,9 @@ ROOT = os.path.abspath(os.path.join(HERE, ".."))
 WF = os.path.join(ROOT, ".github", "workflows", "ml-train.yml")
 TPIN = "37e146384b6f622fefe3c7e18ad9bab0389c9538be79536899fe8729bb2d0826"
 TENSOR = "family4_na025_pentad_r2"
+# E-069's revision: r2's 40 channels plus cur_u and cur_v, the binned mean
+# GLORYS12 current components. It has no pin because it has never been built.
+R3 = "family4_na025_pentad_r3"
 
 
 def build_step_body(cache_root):
@@ -123,7 +126,7 @@ def run(tmp, bin_, present=False, tensor=TENSOR):
         open(tf, "w").write("already here")
     e = dict(os.environ)
     e["PATH"] = bin_ + os.pathsep + e["PATH"]
-    e.update({"IN_TENSOR": TENSOR, "IN_SST": "false", "RECIPE_TENSOR": TENSOR,
+    e.update({"IN_TENSOR": tensor, "IN_SST": "false", "RECIPE_TENSOR": tensor,
               "GITHUB_REPOSITORY": "blauewelt/earth", "WINDOW": ""})
     p = os.path.join(tmp, "step.sh")
     open(p, "w").write(body)
@@ -230,7 +233,53 @@ def main():
               "still runs build_family3.py — the new branch is beside it, not "
               "in front of it")
 
-        print("\nfamily-4 pinned-tensor pull: all 5 checks hold ✓")
+        # ---- 6. r3 has NO pin yet, so it BUILDS — and says nothing else --
+        # E-069's family4_na025_pentad_r3 (r2 plus the appended cur_u/cur_v
+        # current components the cone codec needs) has never been built or
+        # published, so there is no sha256 to pin and the workflow carries no
+        # r3 pull block — deliberately: an unpinned pull would 404, warn, and
+        # build anyway, which is a step reporting a decision it did not make.
+        # What must hold until Phase A publishes the tensor is that an r3
+        # dispatch reaches the BUILD, with `--rev r3` and the SST directory,
+        # having asked the data-cache release for nothing at all. The r2 pin
+        # is the trap here: `TPIN` is assigned unconditionally at the top of
+        # the family-4 branch, so a mis-scoped `if` would have r3 pulling r2's
+        # bytes and passing its own sha check against them.
+        tmp, bin_, _ = sandbox()
+        tmps.append(tmp)
+        r, calls, tf = run(tmp, bin_, tensor=R3)
+        assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
+        assert "data-cache-v1" not in calls, \
+            "an r3 run asked the data-cache release for a tensor. There is no " \
+            "r3 pin, so whatever it got back is not the r3 tensor:\n" + calls
+        assert f"{R3}_" not in calls, calls
+        assert TPIN[:10] not in calls, \
+            "r3 requested the r2 pin's asset stem — the pull block's `if` is " \
+            "mis-scoped and this box would hold r2 bytes under r3's name"
+        assert "build_family4.py" in calls, calls
+        assert "--rev r3" in calls, \
+            "the r3 build did not pass --rev r3, so build_family4.py would " \
+            "write 40 channels under the 42-channel name:\n" + calls
+        assert "--sst-dir" in calls, \
+            "the r3 build did not pass --sst-dir. r3's channel list CONTAINS " \
+            "r2's, so channel 40 would be built entirely missing and train " \
+            "silently:\n" + calls
+        assert "sst_na025/index.npz" in calls or "sst_na025" in calls, \
+            "seed_sst never ran for r3 — the SST artifact is a build input " \
+            "of r3 exactly as it is of r2:\n" + calls
+        assert "huggingface" in calls, "the r3 build must fetch its inputs"
+        assert "pentad_mean_uo.npy" in calls, calls
+        # And the workflow must SAY where the pull goes when the pin exists,
+        # so the next session does not have to rediscover the shape of it.
+        assert "THE r3 PULL BLOCK GOES HERE" in probe, \
+            "the workflow no longer marks where the r3 pull block belongs; " \
+            "without that marker the pin lands somewhere invented"
+        print("6. an r3 dispatch (no pin exists) asks data-cache-v1 for "
+              "nothing, never touches the r2 pin, and goes straight to "
+              "build_family4.py --rev r3 --sst-dir with seed_sst run — and "
+              "the workflow still marks where the pull block goes")
+
+        print("\nfamily-4 pinned-tensor pull: all 6 checks hold ✓")
     finally:
         for t in tmps:
             shutil.rmtree(t, ignore_errors=True)

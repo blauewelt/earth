@@ -77,11 +77,27 @@ const isEval = String(inputs.temporal_steps ?? "") === "0"
 // the Train and Probes steps skip it. Demanding an LR curve from a run with
 // no LR is what the isEval fix above was about; a build has no LR either, and
 // no heads to name, so its honest plan is {"build": true, ...}.
-const isBuild = String(inputs.tensor ?? "").startsWith("family6_");
+// `publishtensor` (2026-09-03) is the SECOND shape of a build dispatch, and
+// it was unreachable through this gate until now. E-069 Phase A builds the r3
+// tensor and pushes it to the data-cache release with
+// `window: recipe:<name>,publishtensor` and `steps: 1` — the single codec step
+// exists only so the job reaches a green Train step, and the Probes phase's
+// publishtensor mode does the work and exits. That run is neither
+// `family6_*` nor an `sroll:`/`lim:` eval, so it was classified as TRAINING
+// and asked for a curve with at least two points — which a one-step run
+// cannot have (ml/plan_schedule.py samples exactly one). The only ways past
+// were to overstate the step budget or to hand-write a curve, i.e. to publish
+// a plan that is false about the run, which is the precise failure every
+// check in this file exists to stop. A publishtensor dispatch takes the same
+// honest {"build": true, ...} plan family 6 does.
+const winTokens = String(inputs.window ?? "").split(",").map((t) => t.trim());
+const isBuild = String(inputs.tensor ?? "").startsWith("family6_")
+  || winTokens.includes("publishtensor");
 if (isBuild) {
   if (!plan.build) {
     problems.push(
-      "this is a BUILD dispatch (tensor family6_*) — its plan must be " +
+      "this is a BUILD dispatch (tensor family6_*, or a publishtensor " +
+      "window) — its plan must be " +
       "{\"build\": true, ...}, not a training curve the status page would " +
       "draw as a schedule the run does not have");
   }

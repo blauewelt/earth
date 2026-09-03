@@ -57,7 +57,7 @@ on:
         description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum, optionally mode@ref or mode@twin), on a stage-2 run unroll:N for the autoregressive unroll, resume2:<tag>[@lr] to CONTINUE an existing stage-2 head (needs optimiser state: only heads written after 2026-08-10 have it), or warm2:<tag>[@lr] for a WARM RESTART from its weights alone with a fresh cosine, where temporal_steps is the EXTRA steps rather than the total (both seeded from the model-checkpoints release if the box lacks the file) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
         default: "global"
       tensor:
-        description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA monthly) | family4_na025_pentad (0.25° NA 5-day, E-034/E-038) | family5_na025_daily (0.25° NA 1-day, E-038 Phase B; sidecar layout, needs a 400+ GB disk) | family4_na025_pentad_r2 and family5_na025_daily_r2 (E-042: the same tensors plus an appended 40th channel, daily OISST SST — recipes f4r2/f5r2, their own file names, so an r1 build in flight is never overwritten). family6_na025_cmip6 (E-061: CMIP6 piControl ocean output regridded onto the family-3 axes — an UNLABELLED pretraining corpus of 800 model-years, recipe f6r1, SPARSE sidecar with 3 live channels of 40; it trains nothing by itself and the Train and Probes steps skip it). A VALUE on an existing input, never a 26th input — this file sits at the 25-input ceiling and a 26th makes the WHOLE workflow unparseable."
+        description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA monthly) | family4_na025_pentad (0.25° NA 5-day, E-034/E-038) | family5_na025_daily (0.25° NA 1-day, E-038 Phase B; sidecar layout, needs a 400+ GB disk) | family4_na025_pentad_r2 and family5_na025_daily_r2 (E-042: the same tensors plus an appended 40th channel, daily OISST SST — recipes f4r2/f5r2, their own file names, so an r1 build in flight is never overwritten). family4_na025_pentad_r3 (E-069: r2 plus appended cur_u, cur_v — the binned mean GLORYS12 current components cur_speed is the hypotenuse of, which the cone codec needs because advection is a vector — recipe f4r3, its own file name again). family6_na025_cmip6 (E-061: CMIP6 piControl ocean output regridded onto the family-3 axes — an UNLABELLED pretraining corpus of 800 model-years, recipe f6r1, SPARSE sidecar with 3 live channels of 40; it trains nothing by itself and the Train and Probes steps skip it). A VALUE on an existing input, never a 26th input — this file sits at the 25-input ceiling and a 26th makes the WHOLE workflow unparseable."
         default: "family2"
       sst_channel:
         description: "append monthly OISST as channel 15 (true | false)"
@@ -265,6 +265,60 @@ on:
 #       free off one embedding pass, probe_head trains a read-out per target.
 #       A target whose section falls outside the tensor window is skipped by
 #       name, exactly as probe_kfold skips it.
+#
+# ---- E-069, the cone-native codec (ml/train_cone.py) -----------------------
+# ml/train_cone.py is a SECOND trainer, reached by putting the token `cone` on
+# the window input (`window: recipe:<name>,cone[,seed:N]`). Its geometry knobs
+# are recipe-only for the usual reason — the 25-input list is full — and for
+# the sharper one: they describe a CODEC, and every downstream reader
+# (ml/cone_codec.py's loader, the JAX port) takes them back out of
+# cone_codec.pt's own `args`, never from a flag of its own. Each is consumed
+# EXACTLY ONCE, in the Train step's cone branch, as ${RECIPE_<KEY>:-<default>};
+# the defaults below are ml/train_cone.py's own, restated here so a reader can
+# see what a recipe that omits a key gets. `steps`, `batch`, `d_z`, the
+# holdout years and the seed are NOT here — they come from the existing inputs,
+# the holdout_years recipe key and the window's `seed:` token, exactly as
+# stage 1 and stage 2 take them.
+#
+#   recipe-only: cone_l_in            -> ml/train_cone.py --L-in          (6)
+#       Inner-window depth in PENTADS. 0 is the SNAPSHOT ablation (the lag-0
+#       patch only, no dots) — H1's control arm, which is also reachable in
+#       the same job as cone_snapshot_ablation. Do not shorten 6 without
+#       re-deriving it: E-069 §2 fixes it from v_B = 0.3 m/s and the 0.25°
+#       cell, and a shorter window silently changes what the hypothesis says.
+#   recipe-only: cone_n_latents       -> ml/train_cone.py --n-latents     (64)
+#       Perceiver latent count. With cone_d_model and cone_layers this is the
+#       parameter count: 64 x 256 x 6 measures 7,048,994 at 42 channels.
+#   recipe-only: cone_layers          -> ml/train_cone.py --n-layers      (6)
+#   recipe-only: cone_d_model         -> ml/train_cone.py --d-model       (256)
+#   recipe-only: cone_heads           -> ml/train_cone.py --n-heads       (8)
+#       NOT codec_heads: that input reaches ml/train.py's PixelMAE and a
+#       dispatch may legitimately set both in one recipe.
+#   recipe-only: cone_d_dec           -> ml/train_cone.py --d-dec         (256)
+#   recipe-only: cone_dec_layers      -> ml/train_cone.py --dec-layers    (2)
+#   recipe-only: cone_aux_w           -> ml/train_cone.py --aux-latent-w  (0.25)
+#       Weight of the auxiliary loss through the decoder's FULL memory. The
+#       headline term always goes through z alone; ConeMAE.decode's docstring
+#       has the degeneracy this split closes.
+#   recipe-only: cone_dot_queries     -> ml/train_cone.py --n-dot-queries (256)
+#   recipe-only: cone_future_lags     -> ml/train_cone.py --future-lags   ("1,2")
+#       Comma list, passed in the =VALUE form for the same reason
+#       --holdout-years is.
+#   recipe-only: cone_eval_every      -> ml/train_cone.py --eval-every    (1000)
+#       The cone trainer's OWN eval cadence. Deliberately not the eval_every
+#       input: that one means "full trainprobe ladder" and is read by
+#       ml/train.py and by the probes phase, neither of which a cone run uses.
+#   recipe-only: cone_velocity_probe  -> ml/train_cone.py --velocity-probe (true)
+#       H1's read-out, run INSIDE the trainer (there is no Z to probe, so the
+#       Probes step is skipped for a cone run). Any value but "true" omits the
+#       flag; the default is on, because a codec trained with no probe is a
+#       run that answers nothing.
+#   recipe-only: cone_snapshot_ablation -> ml/train_cone.py --snapshot-ablation (false)
+#       Also train the L_in = 0 twin in-process and probe it on the SAME
+#       anchors — the cheap H1 control. Doubles the job's wall clock.
+#   recipe-only: cone_lr              -> ml/train_cone.py --lr            (3e-4)
+#       The cone trainer's peak learning rate. NOT lr_floor, which already
+#       means two different things depending on whether the run is joint.
 
 # contents: write ONLY for the live-metrics side channel — the training
 # step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every
@@ -640,6 +694,7 @@ jobs:
           if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family3_na025" ] || \
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad" ] || \
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r2" ] || \
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r3" ] || \
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily" ] || \
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily_r2" ]; then
             n8292=$(ls /opt/earth-cache/wind_daily/*.sfc.gauss.198[2-9].nc \
@@ -670,6 +725,7 @@ jobs:
           if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family3_na025" ] || \
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad" ] || \
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r2" ] || \
+             [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r3" ] || \
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily" ] || \
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family5_na025_daily_r2" ] || \
              [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family6_na025_cmip6" ]; then
@@ -789,7 +845,8 @@ jobs:
             fi
             python -u ml/build_family3.py
           elif [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad" ] || \
-               [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r2" ]; then
+               [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r2" ] || \
+               [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r3" ]; then
             # E-034 step 4 / E-038. The 5-day fields are published PUBLICLY on
             # the Hub, so this needs no credential on the box — deliberately:
             # the box is a stranger's machine whose host has root (§6), and
@@ -838,6 +895,33 @@ jobs:
                 fi
               fi
             fi
+            # ------------------------------------------------------------ r3
+            # THE r3 PULL BLOCK GOES HERE, AND IT IS DELIBERATELY ABSENT.
+            # E-069's family4_na025_pentad_r3 has not been built or published
+            # yet, so there is no sha256 to pin, and an unpinned pull is a
+            # pull of nothing: it would fetch a 404, warn, and build anyway —
+            # a step that reports a decision it did not make (ml/CLAUDE.md
+            # §0.2). Until Phase A has run, an r3 dispatch BUILDS, which is
+            # what the build case below now does.
+            #
+            # WHEN THE PIN EXISTS (Phase A route A1 prints the full sha256 in
+            # its "Record provenance" output and in provenance.json), paste
+            # the r2 block above verbatim with three substitutions and
+            # nothing else changed:
+            #
+            #   TPIN3=<the full 64-char sha256 of family4_na025_pentad_r3.npz>
+            #   if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r3" ]; then
+            #     ... identical body, with TPIN -> TPIN3 and the asset stem
+            #     family4_na025_pentad_r3_${TPIN3:0:10}.npz.$sfx ...
+            #   fi
+            #
+            # Keep the chunk list `aa ab ac` unless publish_tensor.py reports
+            # a different part count for the r3 file (it chunks at 1.5 GiB, and
+            # r3 is two channels larger than r2's three-part file — a fourth
+            # part would make the `cat` above assemble a truncated tensor whose
+            # sha then fails the verify, loudly, which is the safe failure).
+            # Pin it in the same commit as ml/jaxport/tpu_train_cone.sh's
+            # TENSOR_SHA and claude/expectations.md §2b (handover §4).
             if [ "$PULLED" = 1 ]; then
               # SKIP THE BUILD INPUTS TOO, and say what was skipped. The npz
               # is complete and self-describing: build_family4.py's own skip
@@ -879,6 +963,16 @@ jobs:
             REV=""
             if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r2" ]; then
               REV="--rev r2 --sst-dir $SD"
+              seed_sst
+            fi
+            # E-069 recipe r3 = r2 plus the two appended current components
+            # cur_u/cur_v. It still needs the SST artifact, because r3's
+            # channel list CONTAINS r2's: dropping seed_sst here would build a
+            # 42-channel tensor whose channel 40 is entirely missing tokens
+            # and train on it silently, which is the exact failure the r2
+            # branch's FATAL seed_sst exists to prevent.
+            if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r3" ]; then
+              REV="--rev r3 --sst-dir $SD"
               seed_sst
             fi
             # build_family4.py checks the grid against base025_na.npz and
@@ -1148,6 +1242,36 @@ jobs:
           T="${RECIPE_TENSOR:-$IN_TENSOR}"
           [ "$T" = "family2" ] && T=na_pixels
           export TENSOR="ml/cache/${T}.npz"
+          # E-069 · THE CONE TRAINER. `window: recipe:<name>,cone[,seed:N]`
+          # switches this step to ml/train_cone.py, a SECOND trainer with its
+          # own model (ConeMAE), its own checkpoint (cone_codec.pt) and its own
+          # probe (--velocity-probe, run in-process because there is no Z to
+          # probe afterwards — the Probes phase skips a cone run for exactly
+          # that reason, in scripts/probes_run.sh).
+          #
+          # A TOKEN ON `window`, not a 26th input: the list is at 25 and a 26th
+          # makes the whole file unparseable (§7). `recipe:` must come first —
+          # scripts/resolve_recipe.sh matches recipe:* and hands the rest on as
+          # $WINDOW — so what reaches here is "cone" or "cone,seed:1".
+          #
+          # SEED rides the same window input and is parsed the same way stage
+          # 2's is (scripts/probes_run.sh): anywhere-match on *seed:*, then
+          # first-comma strip, default 0. One grammar, one default.
+          case "${WINDOW}" in
+            cone|cone,*|*,cone|*,cone,*) IS_CONE=1;;
+            *) IS_CONE=0;;
+          esac
+          CONE_SEED=0
+          case "${WINDOW}" in
+            *seed:*) CONE_SEED="${WINDOW}"; CONE_SEED="${CONE_SEED##*seed:}"
+                     CONE_SEED="${CONE_SEED%%,*}";;
+          esac
+          # An `if`, not `[ ... ] && echo`: the job runs under `bash -e {0}`,
+          # where a false test as the LAST command of a && list is the step's
+          # exit status, so the one-liner would kill every non-cone dispatch.
+          if [ "$IS_CONE" = 1 ]; then
+            echo "cone trainer: seed ${CONE_SEED}, tensor ${TENSOR}"
+          fi
           # E-019b: `window` may carry a recw: token with the codec's
           # copy-reconstruction knobs, e.g.
           #   recw:vis=0.3;upw=3;chans=rg_[ts](900|1100|1300|1500|1700|1900);declayers=4
@@ -1181,6 +1305,14 @@ jobs:
           # and exits 2 with "expected one argument" before a line of this
           # trainer runs. The =form is the only one that survives a value
           # that opens with a minus sign.
+          # ONE background launch, ONE live-metrics loop, TWO trainers. The
+          # cone arm is an `else` rather than an early exit so the publisher
+          # loop below is shared: train_cone.py writes ml/train.py's own
+          # record family into the same metrics.jsonl, so the curve and the
+          # ETA appear on status.html mid-run with no page change (§0d, "a
+          # new trainer format must teach the status page its records" — this
+          # one is not a new format, which is why nothing is owed).
+          if [ "$IS_CONE" = 0 ]; then
           python -u ml/train.py \
             --data "$TENSOR" \
             --steps "${RECIPE_STEPS:-${{ inputs.steps }}}" \
@@ -1210,6 +1342,44 @@ jobs:
             $([ "${RECIPE_ANOMALY:-${{ inputs.anomaly }}}" = "true" ] && [ "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}" != "0" ] \
               && echo --eval-every "${RECIPE_EVAL_EVERY:-${{ inputs.eval_every }}}") \
             --out ml/runs/actions &
+          else
+            # THE CONE ARM (E-069). Every geometry flag is a recipe-only key
+            # consumed exactly once, here, as ${RECIPE_<KEY>:-<default>}; the
+            # defaults are ml/train_cone.py's own, restated so a dispatch that
+            # names no recipe still runs the configuration the plan describes.
+            # --holdout-years is passed ONLY when a recipe sets it, exactly as
+            # ml/train.py's branch above does it and in the same =VALUE form.
+            # It is not cosmetic here either: train_cone.py writes the years
+            # into its {"config": ...} record and into cone_codec.pt's `norm`,
+            # and every later stage reads them back out of the checkpoint
+            # rather than from a flag — a codec trained on the wrong years is
+            # invisible from the dispatch.
+            python -u ml/train_cone.py \
+              --tensor "$TENSOR" \
+              --steps "${RECIPE_STEPS:-${{ inputs.steps }}}" \
+              --batch "${RECIPE_BATCH:-${{ inputs.batch }}}" \
+              --d-z "${RECIPE_D_Z:-${{ inputs.d_z }}}" \
+              --seed "$CONE_SEED" \
+              --lr "${RECIPE_CONE_LR:-3e-4}" \
+              --L-in "${RECIPE_CONE_L_IN:-6}" \
+              --n-latents "${RECIPE_CONE_N_LATENTS:-64}" \
+              --n-layers "${RECIPE_CONE_LAYERS:-6}" \
+              --d-model "${RECIPE_CONE_D_MODEL:-256}" \
+              --n-heads "${RECIPE_CONE_HEADS:-8}" \
+              --d-dec "${RECIPE_CONE_D_DEC:-256}" \
+              --dec-layers "${RECIPE_CONE_DEC_LAYERS:-2}" \
+              --aux-latent-w "${RECIPE_CONE_AUX_W:-0.25}" \
+              --n-dot-queries "${RECIPE_CONE_DOT_QUERIES:-256}" \
+              --future-lags="${RECIPE_CONE_FUTURE_LAGS:-1,2}" \
+              --eval-every "${RECIPE_CONE_EVAL_EVERY:-1000}" \
+              $([ "${RECIPE_CONE_VELOCITY_PROBE:-true}" = "true" ] && echo --velocity-probe) \
+              $([ "${RECIPE_CONE_SNAPSHOT_ABLATION:-false}" = "true" ] && echo --snapshot-ablation) \
+              $([ -n "${RECIPE_HOLDOUT_YEARS:-}" ] && echo "--holdout-years=${RECIPE_HOLDOUT_YEARS}") \
+              --out ml/runs/actions &
+          fi
+          # `$!` survives the `fi` — it is the last backgrounded PID of the
+          # shell, not of the compound command — so both arms are waited on
+          # and published by the identical loop below.
           TRAIN_PID=$!
           # Live-metrics side channel: publish curves every ~5 min while
           # training. Poll at 30s and publish every 10th tick rather than
@@ -1226,6 +1396,13 @@ jobs:
             fi
           done
           wait $TRAIN_PID
+          # Say what the run actually left on disk. The cone arm's artefacts
+          # are cone_codec.pt and velocity_probe.json, and neither is named by
+          # any step above this one, so a listing here is the first place a
+          # reader can see whether they exist at all (§0.1: verify the
+          # ARTEFACT). `|| true` because an ordinary run has neither.
+          ls -l ml/runs/actions/cone_codec.pt \
+                ml/runs/actions/velocity_probe.json 2>/dev/null || true
 
       # ALWAYS upload. #62/#63 trained all 60,000 steps, passed every
       # probe, and then died in the final evaluation — and because this step
@@ -1243,6 +1420,12 @@ jobs:
             ml/runs/actions/metrics.jsonl
             ml/runs/actions/curve.png
             ml/runs/actions/provenance.json
+            # E-069: a cone run writes NEITHER pixelmae.pt NOR eval.json, so
+            # without these two lines its artifact would carry the curve and
+            # nothing else. if-no-files-found is `warn` and the list is a set
+            # of names, so naming them costs an ordinary run nothing.
+            ml/runs/actions/cone_codec.pt
+            ml/runs/actions/velocity_probe.json
           retention-days: 30
           if-no-files-found: warn
 
@@ -1438,8 +1621,53 @@ jobs:
           # job went green, and not one probe result was ever archived by it.
           # The sandbox has the opposite constraint (node writes fine, python
           # is blocked by the egress proxy), which is why both versions exist.
+          # --dir IS the cone trainer's --out, so velocity_probe.json (E-069's
+          # only result: H1's ridge from z to cur_u/cur_v) rides this call
+          # with no second invocation — scripts/archive_probes.py names it in
+          # WANT. A cone run produces none of the other names, so this is the
+          # whole of its probe archive.
           python3 scripts/archive_probes.py --run-number "${{ github.run_number }}" \
             --dir ml/runs/actions || \
             echo "::warning::probe archive failed — results are only in the artifact, which expires"
+          # E-069 · THE CONE CODEC, off the box. cone_codec.pt is what a cone
+          # run produces and it is not pixelmae.pt, so no step above ships it:
+          # the orphan-rescue loop at the top of this file names three files by
+          # hand and this is not one of them, and the Actions artifact expires
+          # in 30 days. Published under the same run-<n>__ convention
+          # ml/CLAUDE.md and scripts/fetch_ckpt.mjs already read.
+          #
+          # `-T` STREAMS the body. NEVER --data-binary "@f": it buffers the
+          # whole file and that is the OOM that left #358 publishing nothing
+          # for fifteen hours (the same note stands in the rescue loop above
+          # and in scripts/snapshot_head.sh). The blob is weights + args +
+          # norm and NO optimiser state (ml/train_cone.py::save), so ~28 MB of
+          # fp32 at the 7.05M size — far under the 2 GiB release-asset cap,
+          # and no split path is needed. Re-read this line if the geometry
+          # grows: over 2 GiB the upload 422s at HEADERS time, instantly and
+          # quietly, which is the cliff snapshot_head.sh had to learn.
+          #
+          # BEST EFFORT AND LOUD, and read the RELEASE rather than this step's
+          # colour (§0.2): the `|| echo` keeps a failed upload from taking the
+          # cleanup with it, which also means a green step proves nothing.
+          if [ -f ml/runs/actions/cone_codec.pt ]; then
+            REL_ID=$(curl -s --connect-timeout 15 --max-time 60 \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/model-checkpoints-v1" \
+              | sed -n 's/.*"id": *\([0-9]*\).*/\1/p' | head -1)
+            if [ -n "$REL_ID" ]; then
+              CA="run-${{ github.run_number }}__cone_codec.pt"
+              up=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+                --connect-timeout 15 --max-time 900 \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                -H "Content-Type: application/octet-stream" \
+                -T ml/runs/actions/cone_codec.pt \
+                "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/$REL_ID/assets?name=$CA" \
+                2>/dev/null || echo 000)
+              echo "cone codec upload $CA -> HTTP $up ($(du -h ml/runs/actions/cone_codec.pt | cut -f1))"
+              [ "$up" = "201" ] || echo "::warning::$CA did NOT reach model-checkpoints-v1 (HTTP $up) — list the release before believing this run archived its codec"
+            else
+              echo "::warning::could not resolve the model-checkpoints-v1 release id — cone_codec.pt is only on this box"
+            fi
+          fi
           git push -q "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             ":refs/heads/ml-live-${{ github.run_number }}" 2>/dev/null || true

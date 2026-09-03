@@ -144,6 +144,29 @@ esac
 # the regime an unroll objective de-emphasises by design. Trains
 # nothing; `exit 0` skips the training-run ladder below.
 case "${WINDOW}" in
+  cone|cone,*|*,cone|*,cone,*)
+    # E-069 · A CONE RUN HAS NOTHING FOR THIS PHASE TO DO, and saying so is
+    # cheaper than letting it find out. ml/train_cone.py trains ConeMAE and
+    # writes cone_codec.pt — not pixelmae.pt — so every rung of the ladder
+    # below would open a checkpoint that is not there, or (worse) a stale one
+    # left on the box by an earlier job and score IT while the log said
+    # nothing. The cone codec's own read-out is H1's velocity probe, run
+    # INSIDE the trainer against the anchors both arms share
+    # (--velocity-probe, ml/train_cone.py::velocity_probe); there is no Z, no
+    # embedding pass and no stage-2 head in this run at all.
+    #
+    # The token is matched anywhere in the comma list, the same shape the
+    # Train step's branch uses, so `cone,seed:1` and `seed:1,cone` behave
+    # identically — one grammar, one answer.
+    echo "probes: this is an E-069 cone run (window '${WINDOW}') — the codec"
+    echo "  is ml/runs/actions/cone_codec.pt and its read-out is"
+    echo "  velocity_probe.json, both written by the trainer. Nothing here"
+    echo "  applies; skipping the whole ladder rather than scoring a"
+    echo "  checkpoint this run did not write."
+    ls -l ml/runs/actions/cone_codec.pt ml/runs/actions/velocity_probe.json \
+      2>/dev/null || echo "  (no cone artefacts on disk — read the Train step)"
+    exit 0
+    ;;
   disktriage*)
     # DISK TRIAGE (2026-08-11): the box went 50/50 mid-queue and the
     # failure mode was a treadmill — hygiene freed the published Z

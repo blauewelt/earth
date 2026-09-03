@@ -635,7 +635,14 @@ def main():
     # its own tensor. Read the workflow rather than trusting the comment.
     wf = open(os.path.join(HERE, "..", ".github", "workflows",
                            "ml-train.yml")).read()
+    # E-069 adds the pentad r3 row. The DAILY r3 (family5_na025_daily_r3) is
+    # deliberately NOT here: CADENCE defines it, but ml-train.yml has no
+    # branch for it, and this check is about the workflow being able to select
+    # what the builder writes — asserting a branch nobody has written is a
+    # test failing for a run nobody has asked for. Add the row in the commit
+    # that adds the branch.
     for days, rev, value in ((5, "r2", "family4_na025_pentad_r2"),
+                             (5, "r3", "family4_na025_pentad_r3"),
                              (1, "r2", "family5_na025_daily_r2"),
                              (5, "r1", "family4_na025_pentad"),
                              (1, "r1", "family5_na025_daily")):
@@ -644,8 +651,19 @@ def main():
             f"but ml-train.yml would look for {value}.npz"
         assert f'= "{value}"' in wf, \
             f"ml-train.yml has no branch for tensor={value}"
+    # AND the r3 branch must actually BUILD r3, not fall through to r2's
+    # `REV=""` default. The rev flag and the tensor name are separate strings
+    # in that step, so a branch registered without its build case would fetch
+    # the r3 inputs, run the builder with no --rev, and write a 40-channel
+    # tensor under the 42-channel name — every later stage reading `chan` back
+    # out of it and finding cur_u/cur_v simply absent.
+    assert '--rev r3 --sst-dir' in wf, \
+        "ml-train.yml selects family4_na025_pentad_r3 but never passes " \
+        "--rev r3 to build_family4.py — the build would write r2's channels " \
+        "under r3's name"
     print("  14. every recipe's output name equals the ml-train.yml `tensor` "
-          "value that selects it (r1 and r2, both cadences)")
+          "value that selects it (r1, r2 and the pentad r3), and the r3 "
+          "branch passes --rev r3 --sst-dir to the builder")
 
     print("\ntests/test_e034_family4.py: all 14 checks passed")
 
