@@ -1,0 +1,12 @@
+{
+ "build": true,
+ "tensor": "family4_na025_pentad_r3",
+ "note": "E-069 Phase A — build family4_na025_pentad_r3 (r2's 40 channels plus cur_u and cur_v, the binned mean GLORYS12 current components the cone codec needs because advection is a vector) and publish it to the data-cache-v1 release. NOTHING TRAINS: the single ml/train.py step exists only so the job reaches a green Train step; the work is ml/build_family4.py --rev r3 --sst-dir followed by scripts/publish_tensor.py, run by the Probes step's publishtensor mode. There is no LR schedule to draw, which is why this plan carries no curve. VERIFY THE RELEASE, NOT THE STEP COLOUR: publish_tensor.py is wrapped in `|| echo ::warning::` at the caller, so list the data-cache-v1 assets and confirm three parts whose sizes sum to the file's, then copy the full sha256 out of the Record provenance step and pin it in three places (the workflow's r3 pull block, ml/jaxport/tpu_train_cone.sh TENSOR_SHA, claude/expectations.md section 2b).",
+ "expected": {
+  "channels": 42,
+  "rows": null,
+  "gb": null,
+  "note": "channels 42 is MEASURED (ml/build_family4.py CHANS_BY_REV['r3']). The bin count and the file size are deliberately left null rather than guessed: no r3 tensor exists, and the r2 figure (33 GB at 40 channels) is a different file. The first build's Record provenance step reports both, and they are what goes into claude/expectations.md."
+ },
+ "published_at": "2026-09-03T12:26:03.525Z"
+}
