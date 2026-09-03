@@ -377,6 +377,22 @@ def to_torch(s, chan_depth, device):
 
 
 # ------------------------------------------------------------------ training --
+def eval_generator(device, seed=12345):
+    """A seeded torch.Generator ON THE DEVICE THE MASKS ARE DRAWN ON.
+
+    `torch.rand(..., device=dev, generator=g)` refuses a generator whose
+    device differs from `dev`. The first CUDA run of this trainer (#536,
+    2026-09-03) died at its first eval, 73 minutes in, after the anomaly
+    transform and the pool certificate had both passed, with exactly that
+    refusal — every earlier run was CPU-only, where a CPU generator is
+    trivially the right one. A CUDA generator and a CPU generator seeded
+    alike draw DIFFERENT streams, so a held-out loss is comparable across
+    evals of one run (same device, same seed), never across backends — which
+    §3b already says."""
+    dev = torch.device(device) if not isinstance(device, torch.device) else device
+    return torch.Generator(device=dev.type).manual_seed(int(seed))
+
+
 def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
               seed=12345):
     """Held-out loss on a FIXED anchor set with a FIXED mask draw.
@@ -384,7 +400,7 @@ def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
     The generator is re-seeded at every eval, so two evals differ only in the
     weights — the curve measures the model, not which channels the dice hid.
     """
-    g = torch.Generator(device="cpu").manual_seed(int(seed))
+    g = eval_generator(device, seed)
     p = dict(plan)
     p["generator"] = g
     model.eval()

@@ -326,3 +326,19 @@ def test_train_cone_smoke_end_to_end(tmp_path):
 
 if __name__ == "__main__":                                  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_eval_generator_lives_on_the_mask_device():
+    """#536 (2026-09-03) died at its first eval on CUDA: the eval generator
+    was hard-wired to the CPU while the masks were drawn on the GPU. The
+    generator must follow the device it is asked for, as a string or as a
+    torch.device; CUDA itself cannot be exercised in the sandbox, so this
+    pins the contract on the type that IS here."""
+    import torch
+    import train_cone
+    for dev in ("cpu", torch.device("cpu")):
+        g = train_cone.eval_generator(dev, 3)
+        assert g.device.type == "cpu"
+    a = torch.rand(4, generator=train_cone.eval_generator("cpu", 3))
+    b = torch.rand(4, generator=train_cone.eval_generator("cpu", 3))
+    assert torch.equal(a, b), "same seed, same device, same draw"
