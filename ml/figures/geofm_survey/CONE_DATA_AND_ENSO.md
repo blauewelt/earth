@@ -1,9 +1,9 @@
 # What feeds the cone codec today — and what the catalog could predict El Niño 2026 with
 
-Companion page to slides 45 and 48 of the geospatial representation-model survey deck
+Companion page to slides 45, 46, 47 and 50 of the geospatial representation-model survey deck
 (`ml/figures/geofm_survey/`). Written 3 Sep 2026.
 
-Two questions, answered from the repository rather than from memory:
+Four questions, answered from the repository rather than from memory:
 
 1. **What data actually reaches the cone codec** — the encoder of experiment E-069, which
    reads a cone-shaped neighbourhood in space and time around one ocean point and turns it
@@ -11,6 +11,10 @@ Two questions, answered from the repository rather than from memory:
    biosphere inputs is.
 2. **What the 274-record open-data catalog (`data/catalog.json`) can and cannot say about the
    El Niño now developing in the Pacific**, and what to add.
+3. **What the sampler does at every boundary it meets** — the edge of the window, land, the ends
+   of the time axis, the held-out years, and the calendar month — and which of those edges is
+   handled and which is not.
+4. **Which propagation speeds the cone can and cannot represent**, and what that costs.
 
 Every acronym is spelled out the first time it appears (root `CLAUDE.md` §0c). Numbers with a
 `file:line` reference were checked against that file; numbers marked *general knowledge* were
@@ -537,9 +541,243 @@ and the operational forecast plume. A number without its baseline is not a resul
 
 ---
 
+## Part 5 · Boundaries: how the sampler handles every edge
+
+Four different edges meet the cone codec. Three of them are handled by making the missing thing
+explicitly missing. The fourth is not an edge in the data at all — it is one we introduced — and
+nothing corrects for it.
+
+Two words are needed first, because the whole section turns on the difference.
+
+- An **invalid** token is a position that *does not exist*: the dot fell outside our rectangle.
+  It is deleted from the attention mask, so the transformer never sees it at all.
+- A **miss** token is a real position where the world *was not observed* — land under a
+  sea-surface sensor, a pentad with no Argo profile. It is a token the model learns from, because
+  "nobody measured this" is itself information.
+
+Everything below is one of those two, or neither.
+
+### 5.1 · Space — the window edge (100° W – 20° E, 0–70° N)
+
+**The rule.** A dot that lands outside the rectangle is INVALID, never wrapped. The tensor is a
+basin, not a globe: `ml/cone_sampler.py`'s docstring (lines 19–23) says a longitude wrap "would
+put the Iberian shelf one cell west of Florida". `ml/model.py::gather_px` does wrap, because it
+was written for a global tensor; the cone sampler deliberately does not.
+
+**The mechanism.** The index is clipped to the array bounds, the value that comes back is thrown
+away, and `valid = False` becomes the attention mask:
+`ok = (tt>=0)&(tt<T)&(yy>=0)&(yy<H)&(xx>=0)&(xx<W)` in `ConeSampler.sample`
+(`ml/cone_sampler.py:293`). The lag-0 3×3 patch does the same thing in `_patch`
+(`ml/cone_sampler.py:263`).
+
+**The anchors do not avoid the edge.** They are drawn uniformly over ocean cells with no edge
+margin (`ml/train_cone.py::draw_anchors:358`), so an edge anchor legitimately sees a truncated,
+one-sided cone.
+
+**The measured cost**, over all 84,405 ocean anchors with the real 706-dot stencil:
+
+- **22.0 %** of anchors have at least one off-grid dot.
+- **2.68 %** of all dots are off-grid — invalid, and dropped from attention entirely.
+
+**The asymmetry this creates.** An anchor twenty cells from the eastern edge sees no upstream dots
+from the east at lags 5–6. Nothing tells the model that those dots are missing because of *our*
+rectangle rather than because of the ocean — the two look identical from inside the attention mask.
+
+### 5.2 · Space — land
+
+**The rule.** A dot on land is a real token whose value was never observed: `obs = False` becomes
+the codec's **miss** token — the same `miss_tok` that `PixelMAE` (the pixel-level masked
+auto-encoder this codec inherits from) uses — and *not* an invalid or masked token. The
+distinction is deliberate and it is the one the whole architecture rests on.
+
+**The measured cost.**
+
+- **8.17 %** of all dots land on land: on-grid, unobserved.
+- Combined with the edge, **10.85 %** of the 706 dots at a typical anchor carry no value.
+
+Land dots are still spent from the token budget — they occupy their slot in the stencil and are
+attended to as tokens — so a coastal anchor pays for its geography twice: once in dots it cannot
+read, once in dots that left the rectangle.
+
+### 5.3 · Time — the archive ends, and the holdout blocks
+
+**Rule 1, the ends of the axis.** An anchor whose cone runs off either end of the tensor — it
+needs bins *t−6 … t+2* — is INADMISSIBLE, not silently short (`ConeSampler.admissible`,
+`ml/cone_sampler.py:314`). Nothing is padded and nothing is trained on half a cone.
+
+**Rule 2, the holdout.** `--holdout-scope window` — the only scope implemented, and
+`ml/train_cone.py:116` refuses any other — says that every bin the cone touches, six pentads back
+and both future targets, must be a training bin. A held-out year therefore casts a **shadow of
+eight pentads** around itself (six back and two forward, the exact span of the cone), and no
+training anchor can peek into it by any path. A brute-force `certify()`
+(`ml/cone_sampler.py:337`), written deliberately as a separate loop rather than as a reuse of the
+admissibility test, counts violations; run **#537** (the E-069 cone-codec build) measured
+**0 violations in 4,096 anchors**.
+
+**The measured cost of the shadow.**
+
+- Development split (calendar years 2009, 2017 and 2023 held out): **2,923** training bins →
+  **2,891** admissible anchor bins — **32 bins lost, 1.1 %**.
+- Frozen protocol (2008–09, 2016–17, 2021–24 — train up to 2020, test the terminal years):
+  **2,557 → 2,533** — **24 bins lost, 0.9 %**.
+
+Cheap, and it is what makes the holdout real.
+
+**Held-out EVALUATION anchors are different on purpose.** Their dots MAY come from held-out bins.
+Otherwise the held-out set would be a second training pool rather than a measurement.
+
+### 5.4 · Time — the calendar month, the one edge that is NOT masked
+
+This is the honest weak spot, and it is worth saying so plainly. There are two separate month
+edges, and neither is masked, measured or interpolated away.
+
+**(i) The anomaly baseline.** Every channel is turned into a departure from a per-calendar-month
+climatology built on training years only (`ml/trainprobe.py::anomaly_transform:140`). A pentad's
+month label is the month of the bin's FIRST day (`ml/build_family4.py:960`, via `bin_start`). So:
+
+- **411 of the 3,142 bins (13.1 %)** straddle a calendar-month boundary.
+- **106** of those have only ONE of their five days inside the month whose climatology is
+  subtracted.
+
+The anomaly therefore takes a small step at every month boundary — a sawtooth of order the
+month-to-month climatology difference, which in the seasonal thermocline is not negligible.
+Nothing interpolates. A day-of-year harmonic climatology would remove it.
+
+**(ii) Argo's monthly cadence.** Roemmich–Gilson is written into the single pentad holding the
+15th of each month and is `missing` in the other five (`ml/build_family4.py`); forward-filling was
+explicitly REJECTED in `ml/plans/E034_pentad_tensor.md:88-100`, because it would tell the model the
+subsurface was observed on days it was not. That is **252 live pentads over 2004–2024, one in
+six.** A 35-day inner window (the anchor plus six lags) therefore contains ONE live Argo bin,
+occasionally two — and which one is a property of where the anchor sits inside the month, i.e. a
+phase the model can see through the season token but that nothing corrects for.
+
+**The seasonal context token itself is fine.** It is the bin's opening day-of-year
+(`ml/cone_sampler.py::pentad_doy`), so it crosses month and year boundaries smoothly.
+
+### 5.5 · Reading
+
+Three of the four edges are handled by making the missing thing explicitly missing, which is the
+right pattern: an invalid token is dropped from attention, a miss token says the world was not
+observed, and an inadmissible anchor is not trained on. The fourth is not an edge in the data at
+all but one we introduced by binning the year into twelve boxes. It is the cheapest of the four to
+remove, and the only one currently unmeasured.
+
+---
+
+## Part 6 · The speeds the cone does not have
+
+Chris, 3 September 2026: *"the AMOC has some velocity (4000 km/month?) and this is not reflected
+anywhere"*. It is not — twice over.
+
+Two words, because the section depends on the difference between them:
+
+- **Advection** is transport by the water itself moving: a warm parcel physically carried north.
+- **Wave propagation** is a disturbance travelling *through* the water while the water largely
+  stays put, so a signal can cross a basin far faster than any parcel does. A **Kelvin wave** is
+  the fast kind that runs along a coastline or the equator, trapped against the boundary.
+
+The **Deep Western Boundary Current (DWBC)** is the slow return limb of the overturning: cold
+dense water formed in the north creeping southward along the American continental slope.
+
+**The speed figures below are order-of-magnitude values from standard oceanography plus this
+project's own proposal document. They are not fitted, and no individual number is attributed to a
+particular paper.**
+
+### 6.1 · The speed ladder, slowest to fastest
+
+- **Deep Western Boundary Current advection ≈ 0.02–0.1 m/s** — the multi-year southward advective
+  path.
+- **Baroclinic Rossby waves ≈ 0.03 m/s**, westward. The plan already cites Chelton et al. 2011
+  for this (`ml/plans/E069_cone_codec.md:124`).
+- **Eddies and boundary currents ≈ 0.1–0.3 m/s** — **the only ocean speed the cone implements**
+  (family B, `v_ms = 0.3`, `ml/cone.py:97`).
+- **Chris's number, 4,000 km/month = 1.52 m/s.**
+- **Coastal / boundary Kelvin waves ≈ 2.5 m/s** — a number the project's own proposal already
+  carries. `ml/figures/geofm_survey/GENERIC_EMBEDDING_INPUTS.md:72` describes family B as
+  "currents 0.1–0.2 m/s … Rossby 0.03 m/s (westward); Kelvin/coastal 2.5 m/s along boundaries",
+  with the stencil shape "thin, tall column, tilted upstream (and westward for SSH); **one long
+  arm along coasts**". `ml/cone.py` implements the 0.3 m/s disc and no coastal arm.
+- **Wind stress 10 m/s** (family A) — implemented, but capped at the 500 km correlation length and
+  present only at lags 0–1, so it is not a long-range channel either.
+
+### 6.2 · Half one — the Argo channels have no spatial reach at all
+
+`ml/cone.py::channel_family:122` assigns `rg_t*` and `rg_s*` — the 32 Roemmich–Gilson temperature
+and salinity channels — to family B (0.3 m/s). But `ml/cone.py::channel_dots:261` OVERRIDES that
+for depth channels and returns the ANCHOR COLUMN ONLY: `[(lag, 0, 0) for lag in 1..L_in]`.
+
+So the family assignment is decorative for them. Their effective reach is **0 km at every lag**.
+
+The stated reason is token economy: Argo is live one pentad in six, so a sunflower would be about
+74 tokens of which about 70 are structurally missing.
+
+The consequence is that the subsurface temperature and salinity structure is read only at the
+anchor's own column, so **no propagation of a subsurface anomaly toward the anchor is visible to
+the codec at any speed**. And the 32 depth channels are still **192 of the 706 dots (27.2 %)** — a
+quarter of the token budget spent on one vertical column.
+
+The dot budget in full, for context:
+
+- currents and sea-surface height (family B, 4 channels) — **320 dots, 45.3 %**
+- Argo depth (32 channels) — **192 dots, 27.2 %**
+- SST and mixed-layer depth (family C, 2 channels) — **162 dots, 22.9 %**
+- wind stress (family A, 4 channels) — **32 dots, 4.5 %**
+
+### 6.3 · Half two — the fastest ocean speed in the model is 0.3 m/s
+
+Family B's reach is *v · Δt · (1 + ℓ)*, which at lags 0–6 is:
+
+**129.6 · 259.2 · 388.8 · 518.4 · 648.0 · 777.6 · 907.2 km.**
+
+At Chris's 1.52 m/s a signal covers **657 km per pentad** — 5.07× family B's 129.6 — and
+**4,600 km over the six-lag window, against the cone's 907 km**.
+
+Stage 2's outer cone grows at the same 0.3 m/s and reaches its 4,444 km cap only at **lag 34, about
+170 days**; 1.52 m/s covers 4,444 km in about **34 days**, and 2.5 m/s in about **21**.
+
+**The failure mode is not symmetric, and this is the point.** A cone that is too WIDE only costs
+tokens. A cone that is too NARROW excludes true causes: it is an assumption that the driver cannot
+have arrived, and the model has no way to discover otherwise.
+
+`ml/cone.py`'s own docstring (`:84`) says the speeds were "chosen generous so the stencil is not
+the thing that loses information". 0.3 m/s is generous for eddy advection and a factor of five to
+eight too slow for boundary-wave adjustment.
+
+### 6.4 · Three fixes, ranked — all of them PROPOSALS, none of them measured
+
+1. **A fourth family, "fast boundary adjustment".** v ≈ 2.5 m/s, short memory (days), applied to
+   sea-surface height and the mixed-layer and temperature channels, giving a reach of about
+   1,080 km at lag 0 growing to about 7,500 km at lag 6, capped at the basin. It costs tokens; the
+   cheapest test is whether the velocity probe and the held-out loss move at all. Mechanically it
+   is a one-line change to `FAMILIES` plus a token-budget check.
+2. **The coastal ARM the proposal already specifies.** Instead of an isotropic disc, extend the
+   stencil ALONG the western boundary and the shelf break, which is where the fast waves actually
+   travel. This needs the statics from the data ladder — distance to coast, distance to the
+   1,000 m isobath — which rung 12 already ranks #2 and which are about 3 MB.
+3. **Give the depth channels a real, if sparse, sunflower** at the lags where Argo is live. The
+   token objection is about the DEAD bins, and liveness is knowable at build time.
+
+### 6.5 · The other end of the range
+
+The DWBC advective path from the Labrador Sea to 26.5° N is roughly 5,000 km at 0.02 m/s — about
+**eight years** — which is outside even stage 2's two-year outer window. So the cone brackets the
+eddy field well and misses the mechanism at BOTH ends of the speed range.
+
+### 6.6 · Reading
+
+The cone is currently a one-speed model of a multi-speed ocean. The 0.3 m/s disc is right for the
+eddy field it was calibrated on and wrong for the two mechanisms that actually carry an overturning
+anomaly between latitudes; and for the Argo channels the question does not even arise, because they
+are read at one column. None of the three fixes has been tested; the first is a one-line change to
+`FAMILIES` plus a token-budget check.
+
+---
+
 ## Where this came from
 
 - [E-069 plan — the cone codec](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_cone_codec.md)
+- [ml/cone.py — the cone geometry and the channel families (source)](https://github.com/blauewelt/earth/blob/main/ml/cone.py)
+- [ml/cone_sampler.py — the sampler, its off-grid rule and the holdout certificate (source)](https://github.com/blauewelt/earth/blob/main/ml/cone_sampler.py)
 - [The data ladder — what to import next](https://blauewelt.github.io/earth/docs.html?f=ml/plans/DATA_LADDER.md)
 - [Generic-embedding input proposal](https://blauewelt.github.io/earth/docs.html?f=ml/figures/geofm_survey/GENERIC_EMBEDDING_INPUTS.md)
 - [The survey deck README](https://blauewelt.github.io/earth/docs.html?f=ml/figures/geofm_survey/README.md)

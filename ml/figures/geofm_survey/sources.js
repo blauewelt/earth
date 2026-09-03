@@ -1,4 +1,4 @@
-// Per-slide sources: one array of {t: label, u: full URL} per slide, in deck order (46 entries).
+// Per-slide sources: one array of {t: label, u: full URL} per slide, in deck order (51 entries).
 // Appended to every speaker note by build.js (plain text) and rendered as clickable links on the
 // notes pages (notes_deck.js) and on the Sources slide. Keep URLs full (https://) so they are
 // clickable after a PDF export and survive a Google Slides import.
@@ -180,7 +180,15 @@ const P = {
   floridaCable: { t: "Florida Current cable transport (NOAA AOML)", u: "https://www.aoml.noaa.gov/phod/floridacurrent/" },
   dataLadder: { t: "ml/plans/DATA_LADDER.md (source)", u: "https://github.com/blauewelt/earth/blob/main/ml/plans/DATA_LADDER.md" },
   e069blob: { t: "ml/plans/E069_cone_codec.md (source)", u: "https://github.com/blauewelt/earth/blob/main/ml/plans/E069_cone_codec.md" },
-  // --- El Niño 2026 (slide 48) ---
+  // --- boundaries and speeds (slides 46, 47) ---
+  conePy: { t: "ml/cone.py — the cone geometry and the channel families (source)", u: "https://github.com/blauewelt/earth/blob/main/ml/cone.py" },
+  coneSampler: { t: "ml/cone_sampler.py — the sampler, its off-grid rule and the holdout certificate (source)", u: "https://github.com/blauewelt/earth/blob/main/ml/cone_sampler.py" },
+  trainConePy: { t: "ml/train_cone.py — anchor drawing and --holdout-scope window (source)", u: "https://github.com/blauewelt/earth/blob/main/ml/train_cone.py" },
+  trainprobePy: { t: "ml/trainprobe.py — the anomaly transform (source)", u: "https://github.com/blauewelt/earth/blob/main/ml/trainprobe.py" },
+  buildFamily4: { t: "ml/build_family4.py — the pentad tensor builder (source)", u: "https://github.com/blauewelt/earth/blob/main/ml/build_family4.py" },
+  e034: { t: "E-034 plan — the pentad tensor and the Argo missing-token decision", u: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E034_pentad_tensor.md" },
+  e059: { t: "E-059 plan — --holdout-scope window, why the pool discipline exists", u: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E059_holdout_window.md" },
+  // --- El Niño 2026 (slide 50) ---
   cpcEnso: { t: "CPC ENSO diagnostic discussion, 13 Aug 2026", u: "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_disc_aug2026/ensodisc.shtml" },
   iriPlume: { t: "IRI/CPC ENSO forecast plume", u: "https://iri.columbia.edu/our-expertise/climate/forecasts/enso/current/" },
   pmelWwv: { t: "PMEL Warm Water Volume / 20 °C isotherm", u: "https://www.pmel.noaa.gov/tao/wwv/data/" },
@@ -244,9 +252,11 @@ module.exports = [
   /* 43 */ S("proposal", "paper", "mlclaude", "prithvi"),
   /* 44 */ S("e069", "e069log", "proposal", "chelton", "deser", "emery", "perceiver", "glorys", "mlclaude"),
   /* 45 — what feeds the cone codec today */ S("glorysProduct", "oisstPsl", "rgArgo", "ncepR1", "rapidData", "floridaCable", "dataLadder", "e069blob", "e069", "coneDataEnso", "proposal", "mlclaude"),
-  /* 46 */ S("proposal", "paper", "mlclaude", "cmemsFc"),
-  /* 47 */ S("proposal", "s1reconf", "s1d", "s2ext", "modisviirs", "snpp", "ssmis", "amsr3", "s6", "occci", "ccism", "en4", "grdc", "opera", "gleam", "ecmwfOpen"),
-  /* 48 — El Niño 2026 */ S("cpcEnso", "iriPlume", "pmelWwv", "godas", "interpOlr", "oni", "pslIndices", "mei", "rmm", "ccmp", "oscarFinal", "catalogJson", "catalogDoc", "coneDataEnso"),
-  /* 49 */ S("surveyNotes", "proposal", "paper"),
+  /* 46 — boundaries: every edge the sampler meets */ S("coneSampler", "trainConePy", "trainprobePy", "buildFamily4", "e034", "e059", "e069", "e069blob", "argo", "rgArgo", "coneDataEnso", "mlclaude"),
+  /* 47 — the speeds the cone does not have */ S("conePy", "coneSampler", "e069", "e069blob", "proposal", "chelton", "glorys", "argo", "drifters", "rapidData", "floridaCable", "dataLadder", "coneDataEnso", "mlclaude"),
+  /* 48 */ S("proposal", "paper", "mlclaude", "cmemsFc"),
+  /* 49 */ S("proposal", "s1reconf", "s1d", "s2ext", "modisviirs", "snpp", "ssmis", "amsr3", "s6", "occci", "ccism", "en4", "grdc", "opera", "gleam", "ecmwfOpen"),
+  /* 50 — El Niño 2026 */ S("cpcEnso", "iriPlume", "pmelWwv", "godas", "interpOlr", "oni", "pslIndices", "mei", "rmm", "ccmp", "oscarFinal", "catalogJson", "catalogDoc", "coneDataEnso"),
+  /* 51 */ S("surveyNotes", "proposal", "paper"),
 ];
 module.exports.P = P;

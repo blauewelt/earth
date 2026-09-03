@@ -1,4 +1,4 @@
-// Plain-English speaker notes for slides 34–45 (the generic-embedding input proposal), in deck order.
+// Plain-English speaker notes for slides 34–50 (the generic-embedding input proposal), in deck order.
 // Spliced into notes.js before the Sources entry.
 module.exports = [
 
@@ -147,6 +147,28 @@ Four columns of vocabulary first. A REANALYSIS is a computer model of the ocean 
 The graph reads top to bottom: instruments, then the four products we download, then the channels those products become, then what training computes for itself. Two things in the bottom row are worth stating carefully. An ANOMALY here means a channel with its own average for that calendar month subtracted, and the average is built from the TRAINING years only; a HOLDOUT year — 2009, 2017, 2023 — is a year deliberately withheld so that skill can be measured on data the model never saw. That is exactly why the app's published 1991–2020 normal must not be reused as the baseline: it averages over the held-out years, and using it would quietly leak the answer into the training set. And the RAPID and Florida Current transports are LABELS, not inputs: they sit in the same file, they are what the probes are scored against, and the encoder never reads them. An input is something the model sees; a label is something it is asked about.
 
 The panel on the right is the honest list of what is missing, ranked. The ordering rule is information per byte and non-derivability: heat and freshwater forcing first because there is no forcing of that kind in the tensor at all, then depth, then the observed sea surface the reanalysis was fitted to. The biosphere is last as an input and first as a target — the data ladder rejected chlorophyll as an input for the overturning question because there is no mechanism at these timescales, which leaves it as the ideal held-out thing to predict.`,
+
+// 46 — boundaries: the window edge, the archive ends, the holdout, the month
+`Every model has edges, and this slide is about the four the cone codec actually meets, and what it does at each of them.
+
+Some words first. A PENTAD is a five-day bin — the time step of the tensor, counted from the first of January 1982, so the whole archive is 3,142 of them. An ANOMALY is what is left of a measurement once you subtract the normal value for that time of year; that normal is the CLIMATOLOGY, and ours is built per calendar month from training years only, so the test years cannot leak into it. The ATTENTION MASK is the list of tokens the transformer is allowed to look at at all; a masked-out token contributes nothing. And the codec has two different ways of saying "no value here", which is the distinction the whole left half of the slide turns on. An INVALID token is a position that does not exist — the dot fell outside our rectangle — and it is deleted from attention. A MISS token is a real position where the world simply was not observed, land under a sea-surface sensor for instance, and the model does learn from it, because "nobody measured this" is itself information.
+
+Panel A is the geographic edge. The tensor is a North Atlantic window, not a globe, so a dot that falls off the eastern side must not wrap round to Florida; it is clipped, its value thrown away, and it is masked. Twenty-two per cent of anchors have at least one such dot and 2.68 per cent of all dots are lost this way — and the model is never told that those dots are missing because of our rectangle rather than because of the ocean. Panel B is land: another eight per cent of dots, marked missing rather than invalid.
+
+Panels C and D are time. The HOLDOUT is the set of calendar years withheld from training so that skill can be measured on data the model has never seen. Because a cone reaches six pentads back and two forward, a held-out year blocks eight pentads of anchors around itself; that costs about one per cent of the training bins, and it is what makes the holdout honest. Held-out evaluation anchors are deliberately allowed to read held-out bins — otherwise the test set would just be a second training set.
+
+Panel D is the one edge that is not handled. Both month edges — the step in the anomaly baseline at every calendar-month boundary, and Argo's one-live-bin-in-six cadence — are artefacts of chopping the year into twelve boxes. Neither is masked, measured, or interpolated away. It is the cheapest of the four to remove.`,
+
+// 47 — the speeds the cone does not have
+`Chris asked why the overturning circulation's own speed appears nowhere in the model. It does not, and there are two separate reasons.
+
+Words first. ADVECTION is transport by the water itself moving — a warm parcel physically carried north. WAVE PROPAGATION is a different thing: a disturbance travels through the water while the water largely stays put, so a signal can cross a basin far faster than any parcel does. A KELVIN WAVE is the fast kind that runs along a coastline or the equator, trapped against the boundary, at metres per second. The DEEP WESTERN BOUNDARY CURRENT, or DWBC, is the slow return limb of the overturning: cold dense water formed in the north creeping southward along the American continental slope at a few centimetres per second.
+
+The chart plots those mechanisms on a logarithmic speed axis, from one centimetre per second to ten metres per second. The cone implements exactly one ocean speed, 0.3 metres per second, which is the right number for the eddy field and the surface boundary currents it was calibrated on. Chris's figure, four thousand kilometres a month, is 1.52 metres per second — five times that. Coastal Kelvin waves are faster still, around 2.5 metres per second, and that number is already written down in our own input proposal; it simply never reached the code. The lower chart shows what the difference costs inside the six-pentad window: 907 kilometres of reach against 4,600 and 7,500.
+
+The second reason is stranger. The thirty-two Argo temperature and salinity channels are assigned to the ocean family in one function and then overridden in the next, which returns only the anchor's own vertical column. Their reach is zero at every lag, so a subsurface anomaly moving toward the anchor is invisible to the codec at any speed — and those channels are twenty-seven per cent of the token budget.
+
+The asymmetry matters. A cone that is too wide only wastes tokens; a cone that is too narrow asserts that a real cause cannot have arrived, and the model has no way to discover otherwise. The three fixes on the right are proposals and none has been run. The speed figures themselves are order-of-magnitude values from standard oceanography plus this project's own proposal document — they are not fitted, and no individual number here is attributed to a particular paper.`,
 
 // 45 — phases and the decisive experiment
 `The plan starts with an experiment that needs no new data.
