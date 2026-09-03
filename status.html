@@ -1559,14 +1559,31 @@
       (cfg.batch ? " · batch " + cfg.batch : "") +
       (cfg.steps ? " · " + fmtInt(cfg.steps) + " steps" : "");
     // ---- panel 1: train nll, with the held-out nll over it ----
+    // …and, since 2026-09-03, the ANCHOR family's own held-out nll. The
+    // headline is a weighted mean over three question families whose target
+    // counts differ by an order of magnitude between the cone arm and its
+    // snapshot twin (244,634 vs 42,937 at #537), so the totals are not
+    // comparable across arms while `held_out_nll_anchor` — "reconstruct this
+    // anchor's own channels" — is the same question asked of both.
+    // ml/train_cone.py::fam_record writes it; older files simply lack the key
+    // and this curve is then absent, which is why it is filtered rather than
+    // defaulted.
+    var as_ = hs.filter(function (p) {
+      return typeof p.held_out_nll_anchor === "number";
+    });
     var ys = ls.map(function (p) { return p.loss_rec; });
     hs.forEach(function (p) { ys.push(p.held_out_nll); });
+    as_.forEach(function (p) { ys.push(p.held_out_nll_anchor); });
     var ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
     var yspan = (ymax - ymin) || 1;
     var tline = polyline(ls.map(function (p) { return [p.step, p.loss_rec]; }),
                          xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB);
     var hline = hs.length >= 2
       ? polyline(hs.map(function (p) { return [p.step, p.held_out_nll]; }),
+                 xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB)
+      : null;
+    var aline = as_.length >= 2
+      ? polyline(as_.map(function (p) { return [p.step, p.held_out_nll_anchor]; }),
                  xmin, xspan, ymin, yspan, W, H, padL, padR, padT, padB)
       : null;
     var yOf = function (v) { return padT + (H - padT - padB) * (1 - (v - ymin) / yspan); };
@@ -1583,11 +1600,14 @@
       '<text x="' + (padL - 6) + '" y="' + (H - padB) + '" text-anchor="end" font-size="11" fill="#8b949e">' + ymin.toFixed(3) + "</text>" +
       '<polyline points="' + tline + '" fill="none" stroke="#a371f7" stroke-width="2" stroke-linejoin="round"/>' +
       (hline ? '<polyline points="' + hline + '" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="5 3"/>' : "") +
+      (aline ? '<polyline points="' + aline + '" fill="none" stroke="#3fb950" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="2 3"/>' : "") +
       hdots + seamLine(padT, H - padB) + "</svg>" +
       '<div class="legend"><span><span class="sw" style="background:#a371f7"></span>train nll (loss_rec) — latest <b>' +
       ls[ls.length - 1].loss_rec.toFixed(4) + "</b></span>" +
       (hs.length ? '<span><span class="sw" style="background:#58a6ff"></span>HELD-OUT nll — latest <b>' +
         hs[hs.length - 1].held_out_nll.toFixed(4) + "</b></span>" : "") +
+      (as_.length ? '<span><span class="sw" style="background:#3fb950"></span>held-out nll, anchor family only — latest <b>' +
+        as_[as_.length - 1].held_out_nll_anchor.toFixed(4) + "</b></span>" : "") +
       (seam !== null ? "<span>seam: resumed at " + fmtInt(seam) + "</span>" : "") +
       "</div>";
     // ---- panel 2: held-out MSE ----

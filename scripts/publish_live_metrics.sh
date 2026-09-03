@@ -3,6 +3,14 @@
 #
 # Three files, all optional:
 #   metrics.jsonl        — the curves (loss, probes, stage 2)
+#   metrics_snapshot.jsonl — the SNAPSHOT TWIN's curves on an E-069 cone run
+#                          (ml/train_cone.py --snapshot-ablation trains an
+#                          L_in=0 arm in-process and writes it here). It is
+#                          half the experiment: H1 is a COMPARISON, and until
+#                          2026-09-03 this file existed only on the box and
+#                          in a 30-day artifact while the cone arm's twin
+#                          curve was quoted from a log line. An ordinary run
+#                          never writes it, so shipping it costs nothing.
 #   phase.json           — WHICH WORKFLOW STEP the job is in right now
 #   rollout_spatial.json — the roll's result file, written incrementally at
 #                          every phase boundary, `in_progress` key present
@@ -40,11 +48,13 @@ P=ml/runs/actions/phase.json
 # numbers are readable two and a half minutes after they exist". `cp` of a
 # file replaced by `os.replace` can only ever see a complete version.
 R=ml/runs/actions/rollout_spatial.json
-[ -s "$M" ] || [ -s "$P" ] || [ -s "$R" ] || exit 0
+S=ml/runs/actions/metrics_snapshot.jsonl
+[ -s "$M" ] || [ -s "$P" ] || [ -s "$R" ] || [ -s "$S" ] || exit 0
 DIR=$(mktemp -d)
 [ -s "$M" ] && cp "$M" "$DIR/metrics.jsonl"
 [ -s "$P" ] && cp "$P" "$DIR/phase.json"
 [ -s "$R" ] && cp "$R" "$DIR/rollout_spatial.json"
+[ -s "$S" ] && cp "$S" "$DIR/metrics_snapshot.jsonl"
 cd "$DIR"
 git init -q -b "$BRANCH" 2>/dev/null || { git init -q && git checkout -q -b "$BRANCH"; }
 git config user.email "ml-live@users.noreply.github.com"

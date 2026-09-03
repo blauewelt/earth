@@ -1443,6 +1443,11 @@ jobs:
             # of names, so naming them costs an ordinary run nothing.
             ml/runs/actions/cone_codec.pt
             ml/runs/actions/velocity_probe.json
+            # …and the SNAPSHOT TWIN's curve. --snapshot-ablation trains an
+            # L_in=0 control in-process and writes it to its own jsonl; H1 is
+            # a comparison, so a bundle with the treatment curve and not the
+            # control archives half an experiment.
+            ml/runs/actions/metrics_snapshot.jsonl
           retention-days: 30
           if-no-files-found: warn
 
@@ -1623,6 +1628,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          # BOTH ARMS' curves. archive_run_metrics.sh now also ships
+          # metrics_snapshot.jsonl as run-<n>-snapshot.jsonl when a cone run
+          # trained the L_in=0 snapshot twin — H1 is a comparison and #537
+          # archived only its treatment curve.
           bash scripts/archive_run_metrics.sh "${{ github.run_number }}" || \
             echo "::warning::metrics archive failed — live branch kept for recovery"
           # THE RESULTS, not just the curves. probe_kfold, probe_head, its

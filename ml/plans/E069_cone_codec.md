@@ -257,3 +257,90 @@ Not a claim about the far field (stage 2 keeps it); not a new tensor family
 `PixelMAE`; not a result — nothing here has been trained. The pixel-year arm
 of the survey deck (slide 25) is the special case r_in = 0, L_in = 72 and is
 superseded by this design.
+
+## §H1 diagnostics (2026-09-03)
+
+Run #537 (E-069 seed-0 cone codec plus its snapshot twin — the same codec
+trained with no dots, which is the control H1 is measured against) came back
+with H1 reading the OPPOSITE way from the prediction in §1: the velocity probe
+scored R² 0.118 / 0.003 for the cone arm and 0.731 / 0.738 for the snapshot
+twin. Four stories could produce that, and at the time none of them could be
+told apart from the numbers the run wrote. **(a) capacity split** — the cone's
+32-number code has to carry the whole cone, and the twin's only one snapshot,
+so the twin can spend more of its 32 numbers on the current. **(b) attention
+dilution** — the cone's 42 lag-0 patch tokens sit among 750, so the anchor's
+own column may simply not be attended to. **(c) under-training** — the cone
+objective is much larger and 20,000 steps may be early for it, not for the
+twin. **(d) collapse** — z carries almost nothing at all, and both probes are
+reading noise or a constant.
+
+Nothing about either arm's training changed to answer them. What was added is
+logging: every key below is a measurement of a model that was trained exactly
+as it was before, and `tests/test_cone_smoke.py::check_trajectory` replays a
+pinned smoke trajectory to keep that claim checkable rather than argued.
+
+**Per-query-family held-out loss** (in every eval record of both arms'
+`metrics.jsonl`, written by `ml/train_cone.py::fam_record`). The headline
+`held_out_nll` is a weighted mean over three different questions asked of the
+decoder, and the cone arm answers 244,634 of them while the twin answers
+42,937 — so the two headline numbers were never comparable. These split it:
+
+- `held_out_nll_anchor` — the loss on "reconstruct this anchor's own value in
+  every channel", the one question both arms are asked identically, and
+  therefore the number that decides (c): if the cone arm is merely
+  under-trained, this curve is still falling at the last eval while the twin's
+  has flattened.
+- `held_out_nll_future` — the loss on "what will this anchor's channels be one
+  and two pentads from now", also asked of both arms identically.
+- `held_out_nll_dots` — the loss on the hidden cone dots, which only the cone
+  arm has (the twin's is zeros with a zero weight, never a NaN — §5.22). This
+  is the term that decides (a): a cone arm whose dots loss is falling hard
+  while its anchor loss stalls is spending its 32 numbers on the far field.
+- `held_out_mse_*` — the same three splits in the plain squared error every
+  archived reconstruction number is quoted in.
+- `held_out_targets_*` — how many targets each family actually scored, so a
+  family's loss is never read without its n.
+- `held_out_wsum_*` — the family weight the two means above divide by; it is
+  what lets a reader reassemble the headline exactly, and the tests pin that
+  identity.
+
+**Velocity-probe variants** (all in each arm's slot of `velocity_probe.json`):
+
+- `variants.hidden` — the H1 protocol unchanged: the `cur_*` channels are
+  dropped from the encoder's input, so a code that scores has reconstructed
+  the current from the motion of everything else. It is byte for byte what the
+  top-level `cur_u` / `cur_v` keys have always held, and those keys stay.
+- `variants.visible` — the same ridge with no channel mask at all, asking the
+  strictly easier question "can a 32-number code carry a current it was
+  actually shown". A cone arm that scores low here too has an encoder or
+  bottleneck problem rather than a stencil problem — this is what separates
+  (a) and (b) from a failure of the cone idea itself.
+- `raw_patch` — the BAR, computed once per run and not per arm: a ridge from
+  the raw lag-0 3×3 patch of every non-current channel (39 channels × 9 cells,
+  values and observed flags, 702 numbers) straight to `cur_u` / `cur_v`, on
+  the same anchors and the same folds. Sea-surface height and the surface
+  current are related by geostrophy, so this says how much of the current a
+  linear map of the input recovers with no codec and no training at all. Any
+  arm scoring below it has lost information that was sitting in its own input.
+
+**z statistics** (`z_stats`, per arm — the collapse diagnostic, (d)):
+
+- `var_per_dim` — the variance of each of the 32 code coordinates over the
+  probe anchors; a coordinate at ~0 is one the codec never uses.
+- `eff_rank` — the participation ratio (Σλ)² / Σλ² of the code covariance's
+  eigenvalues, i.e. how many directions the code actually spends variance on;
+  it runs from 1 (every anchor on one line) to 32 (isotropic), and it is what
+  distinguishes "32 numbers" from "one number written 32 ways".
+- `mean_pair_cos` — the mean cosine between the centred codes of randomly
+  paired anchors; near 1 means every anchor points the same way, a collapse a
+  per-dimension variance can miss because a large common offset has variance
+  in no coordinate.
+
+**Archiving.** The twin's curve is now kept: `scripts/archive_run_metrics.sh`
+ships `metrics_snapshot.jsonl` to the `ml-metrics` branch as
+`run-<n>-snapshot.jsonl`, `scripts/publish_live_metrics.sh` ships it to the
+live branch while the run is going, and it is named in the run's artifact.
+#537 archived the treatment curve on a permanent branch and left the control
+curve on a box that no longer exists, which is half a comparison.
+`scripts/archive_probes.py` already carried `velocity_probe.json` and still
+does, so the new probe keys ride the archive with no second call.

@@ -393,18 +393,38 @@ def eval_generator(device, seed=12345):
     return torch.Generator(device=dev.type).manual_seed(int(seed))
 
 
+QUERY_FAMILIES = ("anchor", "future", "dots")
+
+
 def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
               seed=12345):
     """Held-out loss on a FIXED anchor set with a FIXED mask draw.
 
     The generator is re-seeded at every eval, so two evals differ only in the
     weights — the curve measures the model, not which channels the dice hid.
+
+    Returns `(nll, mse, n_targets, families)`. The first three are exactly the
+    numbers this function has always returned — same accumulation, same
+    formula. `families` is the same total split three ways by what the
+    decoder was ASKED (ConeMAE.query_family_spans): `anchor` is the anchor's
+    own value in every channel at lag 0, `future` is the anchor column at t+1
+    and t+2 pentads, `dots` is the subsample of hidden cone dots. Each carries
+    its weighted mean nll and mse, the weight those means divide by, and the
+    number of scored targets, so
+        nll == sum_f nll_f * wsum_f / sum_f wsum_f
+    holds to floating point (tests/test_cone_smoke.py pins it at 1e-6). This
+    is the measurement that decides H1's hypothesis (c): the cone's headline
+    NLL is over 244,634 targets and the twin's over 42,937, so the two are
+    not comparable AS TOTALS — but their `anchor` and `future` families are
+    the same question asked of both arms.
     """
     g = eval_generator(device, seed)
     p = dict(plan)
     p["generator"] = g
     model.eval()
     nll = mse = w = tgt = 0.0
+    fam = {k: {"nll": 0.0, "mse": 0.0, "wsum": 0.0, "n_targets": 0.0}
+           for k in QUERY_FAMILIES}
     with torch.no_grad():
         for i in range(0, len(anchors), batch):
             s = sampler.sample(anchors[i:i + batch])
@@ -415,9 +435,54 @@ def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
             mse += out["terms"]["mse"] * n
             w += n
             tgt += out["terms"]["n_targets"]
+            for k, f in out.get("families", {}).items():
+                if k not in fam:
+                    continue
+                fam[k]["nll"] += f["nll"] * f["wsum"]
+                fam[k]["mse"] += f["mse"] * f["wsum"]
+                fam[k]["wsum"] += f["wsum"]
+                fam[k]["n_targets"] += f["n_targets"]
     model.train()
     w = max(w, 1e-6)
-    return nll / w, mse / w, tgt
+    for f in fam.values():
+        # An EMPTY family (the snapshot twin has no dots) reports zeros and a
+        # zero weight rather than 0/0 — ml/CLAUDE.md §5.22, never write a NaN
+        # into a results file. A reader tells "no targets" from "a loss of
+        # zero" by the weight, which is the honest discriminator.
+        den = f["wsum"] if f["wsum"] > 0.0 else 1.0
+        f["nll"] /= den
+        f["mse"] /= den
+    return nll / w, mse / w, tgt, fam
+
+
+def fam_record(fam):
+    """The per-family eval keys, flat, for one metrics.jsonl record.
+
+    Additive by construction: the headline `held_out_nll` / `held_out_mse` /
+    `held_out_targets` keys are written by the caller and are unchanged, so
+    status.html and every archived reader keep working; these sit beside them
+    (ml/CLAUDE.md §0d — a reader ignores what it does not know). Every value is
+    a finite number, including for a family with no targets (§5.22).
+    """
+    rec = {}
+    for k in QUERY_FAMILIES:
+        f = fam.get(k) or {"nll": 0.0, "mse": 0.0, "wsum": 0.0,
+                           "n_targets": 0.0}
+        rec[f"held_out_nll_{k}"] = round(float(f["nll"]), 5)
+        rec[f"held_out_mse_{k}"] = round(float(f["mse"]), 5)
+        rec[f"held_out_targets_{k}"] = int(f["n_targets"])
+        # The WEIGHT is what the two means above divide by, and it is what
+        # lets a reader put the headline back together (the family weights of
+        # cone_codec.FAMILY_W are inside it, so it is not the target count).
+        rec[f"held_out_wsum_{k}"] = round(float(f["wsum"]), 4)
+    return rec
+
+
+def fam_line(fam):
+    """One human line: `anchor +1.23 (n) · future … · dots …`."""
+    return " · ".join(
+        f"{k} {fam[k]['nll']:+.3f}/{int(fam[k]['n_targets']):,}"
+        for k in QUERY_FAMILIES if k in fam)
 
 
 def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
@@ -524,18 +589,20 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
     loss_every = max(1, a.steps // 200)
     curve = []
     t0 = time.time()
-    nll0, mse0, n0 = eval_loss(model, sampler, eval_anchors, plan, chan_depth,
-                               device, a.batch)
+    nll0, mse0, n0, fam0 = eval_loss(model, sampler, eval_anchors, plan,
+                                     chan_depth, device, a.batch)
     curve.append({"step": 0, "held_out_nll": nll0, "held_out_mse": mse0,
-                  "train_nll": None})
+                  "train_nll": None, "families": fam0})
     print(f"[{tag}] step 0 · held-out nll {nll0:+.4f} mse {mse0:.4f} "
-          f"({int(n0):,} targets)", flush=True)
+          f"({int(n0):,} targets) · {fam_line(fam0)}", flush=True)
     if metrics_path:
         with open(metrics_path, "a") as f:
-            f.write(json.dumps({"step": 0, "held_out_nll": round(nll0, 5),
-                                "held_out_mse": round(mse0, 5),
-                                "held_out_targets": int(n0),
-                                "wall_s": round(time.time() - t0, 1)}) + "\n")
+            rec = {"step": 0, "held_out_nll": round(nll0, 5),
+                   "held_out_mse": round(mse0, 5),
+                   "held_out_targets": int(n0)}
+            rec.update(fam_record(fam0))
+            rec["wall_s"] = round(time.time() - t0, 1)
+            f.write(json.dumps(rec) + "\n")
 
     for s in range(1, a.steps + 1):
         anchors = draw_anchors(rng, ts, ys, xs, a.batch)
@@ -556,21 +623,22 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
                     "loss_rec": round(out["terms"]["nll"], 5),
                     "loss_nei": round(out["terms"]["mse"], 5)}) + "\n")
         if s % a.eval_every == 0 or s == a.steps:
-            nll, mse, n = eval_loss(model, sampler, eval_anchors, plan,
-                                    chan_depth, device, a.batch)
+            nll, mse, n, fam = eval_loss(model, sampler, eval_anchors, plan,
+                                         chan_depth, device, a.batch)
             curve.append({"step": s, "held_out_nll": nll, "held_out_mse": mse,
-                          "train_nll": out["terms"]["nll"]})
+                          "train_nll": out["terms"]["nll"], "families": fam})
             print(f"[{tag}] step {s:>6}/{a.steps} · train nll "
                   f"{out['terms']['nll']:+.4f} mse {out['terms']['mse']:.4f} "
                   f"· held-out nll {nll:+.4f} mse {mse:.4f} "
-                  f"({time.time() - t0:.0f}s)", flush=True)
+                  f"({time.time() - t0:.0f}s) · {fam_line(fam)}", flush=True)
             if metrics_path:
                 with open(metrics_path, "a") as f:
-                    f.write(json.dumps({
-                        "step": s, "held_out_nll": round(nll, 5),
-                        "held_out_mse": round(mse, 5),
-                        "held_out_targets": int(n),
-                        "wall_s": round(time.time() - t0, 1)}) + "\n")
+                    rec = {"step": s, "held_out_nll": round(nll, 5),
+                           "held_out_mse": round(mse, 5),
+                           "held_out_targets": int(n)}
+                    rec.update(fam_record(fam))
+                    rec["wall_s"] = round(time.time() - t0, 1)
+                    f.write(json.dumps(rec) + "\n")
         if s % a.save_every == 0:
             save(s)
     save(a.steps)
@@ -637,14 +705,19 @@ def kfold_r2(F, y, groups):
             "n": int(ok.sum()), "probe": src}
 
 
-def velocity_probe(model, sampler, chan, anchors, months, chan_depth, device,
-                   batch=64):
-    """H1: ridge from z to (cur_u, cur_v) with the cur_* channels DROPPED.
+def encode_anchors(model, sampler, chan, anchors, chan_depth, device,
+                   batch=64, hide_cur=True):
+    """`(Z, TG, OB)` over `anchors`: the codes, the anchor's own channel values
+    and their observed flags.
 
-    "Dropped" = hidden, i.e. `mask_tok` — the same token channel drop uses
-    during training, so the probe's input distribution is one the codec has
-    seen. The target is the anchor's own value in anomaly space (the patch
-    centre), scored only where it was observed.
+    `hide_cur=True` is the H1 protocol — the `cur_*` channels are HIDDEN, i.e.
+    `mask_tok`, the same token channel drop uses during training, so the
+    probe's input distribution is one the codec has seen. `hide_cur=False`
+    applies NO channel mask at all and asks the strictly easier question: can
+    a 32-number code carry a value it was shown? The two numbers bracket the
+    result — a `visible` R² that is also low says the bottleneck (or the
+    encoder) loses the current whether or not it is hidden, which is a
+    different fault from "the cone does not carry motion".
     """
     cur = torch.as_tensor([n.startswith("cur_") for n in chan], device=device)
     zs, tg, ob = [], [], []
@@ -654,32 +727,191 @@ def velocity_probe(model, sampler, chan, anchors, months, chan_depth, device,
             s = sampler.sample(anchors[i:i + batch])
             b = to_torch(s, chan_depth, device)
             B = b["patch_vals"].shape[0]
-            cm = cur[None].expand(B, -1)
             bb = dict(b)
-            bb["chan_mask"] = cm
-            bb["dot_mask"] = (cm.gather(1, b["chan"].long()) if b["chan"].shape[1]
-                              else torch.zeros_like(b["obs"]))
+            if hide_cur:
+                cm = cur[None].expand(B, -1)
+                bb["chan_mask"] = cm
+                bb["dot_mask"] = (cm.gather(1, b["chan"].long())
+                                  if b["chan"].shape[1]
+                                  else torch.zeros_like(b["obs"]))
             z, _ = model.encode(bb)
             zs.append(z.cpu().numpy())
             tg.append(b["patch_vals"][..., 4].cpu().numpy())
             ob.append(b["patch_obs"][..., 4].cpu().numpy())
     model.train()
-    Z = np.concatenate(zs)
-    TG = np.concatenate(tg)
-    OB = np.concatenate(ob)
-    groups, how = fold_labels(anchors, months)
-    out = {"folds": how, "n_anchors": int(len(anchors)), "d_z": int(Z.shape[1])}
+    return (np.concatenate(zs), np.concatenate(tg), np.concatenate(ob))
+
+
+def ridge_to_currents(F, TG, OB, chan, groups):
+    """`{cur_u: {...}, cur_v: {...}}` — the same ridge, whatever the features.
+
+    Factored out so the three bars (`hidden` z, `visible` z, and the raw
+    lag-0 patch) are scored by ONE function with one fold rule: a comparison
+    between probes that differ in their scorer is not a comparison.
+    """
+    out = {}
     for name in ("cur_u", "cur_v"):
         if name not in chan:
             continue
         c = chan.index(name)
         m = OB[:, c] & np.isfinite(TG[:, c])
         if m.sum() < 32:
-            out[name] = {"r2": float("nan"), "n": int(m.sum()),
+            # `null`, NOT NaN. This branch wrote `float("nan")`, which
+            # json.dump emits as the bare token NaN — a file no strict JSON
+            # reader can parse at all, and the exact "loud enough to notice
+            # and quiet enough to misattribute" failure ml/CLAUDE.md §5.22 is
+            # about. It has never fired on a real run (it needs fewer than 32
+            # observed anchors), which is why it survived; `None` says the
+            # same thing in a form the file can carry.
+            out[name] = {"r2": None, "r": None, "n": int(m.sum()),
                          "note": "too few observed targets"}
             continue
-        out[name] = kfold_r2(Z[m], TG[m, c], groups[m])
+        out[name] = kfold_r2(F[m], TG[m, c], groups[m])
     return out
+
+
+def r2_str(d):
+    """`+0.1234`, or `n/a` where the probe declined to score (r2 is None)."""
+    v = (d or {}).get("r2")
+    return "   n/a" if v is None else f"{float(v):+.4f}"
+
+
+def z_stats(Z, seed=0, n_pairs=4096):
+    """The COLLAPSE diagnostic — hypothesis (d), read off the probe's own codes.
+
+    Three numbers, each answering a different way a 32-dimensional code can be
+    empty, and none of them a NaN even for a code that is exactly constant
+    (ml/CLAUDE.md §5.22):
+
+      `var_per_dim`   the variance of each of the d_z coordinates over the
+                      probe anchors. A dimension at ~0 is a dimension the
+                      codec is not using at all.
+      `eff_rank`      the participation ratio (sum L)^2 / sum L^2 of the
+                      covariance eigenvalues — how many directions the code
+                      actually spends its variance on. It runs from 1 (every
+                      anchor on one line) to d_z (an isotropic code), and it
+                      is the quantity that distinguishes "32 numbers" from
+                      "one number written 32 ways".
+      `mean_pair_cos` the mean cosine between the codes of randomly paired
+                      anchors, on CENTRED codes. Near 1 means every anchor
+                      points the same way — a collapsed embedding that a
+                      per-dimension variance can still miss, because a large
+                      common offset has variance in no coordinate.
+    """
+    Z = np.asarray(Z, float)
+    n, d = Z.shape
+    var = Z.var(axis=0)
+    Zc = Z - Z.mean(axis=0, keepdims=True)
+    cov = (Zc.T @ Zc) / max(n - 1, 1)
+    ev = np.clip(np.linalg.eigvalsh(cov), 0.0, None)
+    s1, s2 = float(ev.sum()), float((ev ** 2).sum())
+    eff = (s1 * s1 / s2) if s2 > 0.0 else 0.0
+    rng = np.random.default_rng(seed)
+    if n >= 2:
+        i = rng.integers(0, n, n_pairs)
+        j = (i + 1 + rng.integers(0, n - 1, n_pairs)) % n     # never i == j
+        a, b = Zc[i], Zc[j]
+        den = np.linalg.norm(a, axis=1) * np.linalg.norm(b, axis=1)
+        cos = np.where(den > 0, (a * b).sum(1) / np.maximum(den, 1e-30), 0.0)
+        mpc = float(np.mean(cos))
+    else:
+        mpc = 0.0
+    return {"d_z": int(d), "n_anchors": int(n),
+            "var_per_dim": [round(float(v), 6) for v in var],
+            "var_total": float(var.sum()),
+            "var_min": float(var.min()) if d else 0.0,
+            "var_max": float(var.max()) if d else 0.0,
+            "eff_rank": float(eff),
+            "eff_rank_frac": float(eff / d) if d else 0.0,
+            "mean_pair_cos": mpc, "pairs": int(n_pairs)}
+
+
+def raw_patch_probe(sampler, chan, anchors, months, batch=64):
+    """THE BAR: ridge from the raw lag-0 3x3 patch to cur_u/cur_v, no codec.
+
+    It takes NO model, no device and no channel-depth table, and the signature
+    says so: this bar must not be able to depend on a codec even by accident.
+
+    Features are every NON-`cur_` channel's nine patch cells and their nine
+    observed flags — at the r3 tensor 39 channels x 18 = 702 numbers — laid
+    out exactly the way `ConeMAE.tokens` reads them (`value * observed`, then
+    the flag), so "0.0 because unobserved" and "0.0 because that is the
+    anomaly" stay distinguishable. The `cur_*` channels are excluded because
+    they are the target.
+
+    This is what the H1 comparison was missing. A codec probe's R² answers
+    "can a ridge read the current out of z"; it does not say whether reading
+    the current is HARD. Geostrophy makes the surface current a gradient of
+    sea-surface height, so a linear map from the SSH patch alone recovers much
+    of it with no learning at all — and a codec that scores below this bar has
+    lost information that was sitting in its own input. Computed ONCE per run,
+    on the same anchors and the same folds as both arms, because a bar
+    measured on other anchors is not a bar.
+    """
+    keep = [i for i, n in enumerate(chan) if not n.startswith("cur_")]
+    fs, tg, ob = [], [], []
+    for i in range(0, len(anchors), batch):
+        s = sampler.sample(anchors[i:i + batch])
+        pv = np.asarray(s["patch_vals"], np.float64)          # [B, C, 9]
+        po = np.asarray(s["patch_obs"], np.float64)
+        f = np.concatenate([(pv * po)[:, keep, :], po[:, keep, :]], axis=2)
+        fs.append(f.reshape(len(f), -1))
+        tg.append(np.asarray(s["patch_vals"], np.float64))
+        ob.append(np.asarray(s["patch_obs"], bool))
+    F = np.concatenate(fs)
+    TG = np.concatenate(tg)[..., 4]
+    OB = np.concatenate(ob)[..., 4]
+    groups, how = fold_labels(anchors, months)
+    out = {"folds": how, "n_anchors": int(len(anchors)),
+           "n_features": int(F.shape[1]),
+           "channels": [chan[i] for i in keep],
+           "note": "ridge from the raw lag-0 3x3 of every non-cur channel "
+                   "(values and observed flags) — no codec, no training"}
+    out.update(ridge_to_currents(F, TG, OB, chan, groups))
+    return out
+
+
+def velocity_probe(model, sampler, chan, anchors, months, chan_depth, device,
+                   batch=64):
+    """H1: ridge from z to (cur_u, cur_v), in TWO variants.
+
+    `hidden` is the protocol H1 is stated in — the `cur_*` channels are
+    dropped from the encoder's input, so a code that scores has reconstructed
+    the current from the motion of everything else. `visible` removes the mask
+    entirely and asks whether z can carry a current it was actually shown.
+    The target of both is the anchor's own value in anomaly space (the patch
+    centre), scored only where it was observed.
+
+    FOR CONTINUITY the `hidden` variant's results are ALSO written at the top
+    level as `cur_u` / `cur_v`, byte for byte what this function has always
+    returned there: #537's numbers and every reader of them keep meaning what
+    they meant. `variants` is where a new reader looks.
+    """
+    groups, how = fold_labels(anchors, months)
+    out = {"folds": how, "n_anchors": int(len(anchors)), "variants": {}}
+    for vname, hide in (("hidden", True), ("visible", False)):
+        Z, TG, OB = encode_anchors(model, sampler, chan, anchors, chan_depth,
+                                   device, batch=batch, hide_cur=hide)
+        res = ridge_to_currents(Z, TG, OB, chan, groups)
+        out["variants"][vname] = res
+        if vname == "hidden":
+            out["d_z"] = int(Z.shape[1])
+            out.update(res)                     # the historical top-level keys
+            out["z_stats"] = z_stats(Z)
+    return out
+
+
+def probe_line(arm):
+    """One line per arm: the visible bar beside the hidden one, and the three
+    collapse numbers — so the log says which of H1's stories it supports
+    without anyone opening the JSON."""
+    vis = arm.get("variants", {}).get("visible", {})
+    zs = arm.get("z_stats", {})
+    return (f"visible cur_u R2 {r2_str(vis.get('cur_u'))}"
+            f" · cur_v R2 {r2_str(vis.get('cur_v'))}"
+            f" · z eff-rank {zs.get('eff_rank', 0.0):.2f}/{zs.get('d_z', 0)}"
+            f" · var {zs.get('var_total', 0.0):.3g}"
+            f" · mean pair cos {zs.get('mean_pair_cos', 0.0):+.3f}")
 
 
 # -------------------------------------------------------------------- main --
@@ -719,8 +951,9 @@ def main(argv=None):
         probe = {"cone": velocity_probe(res["model"], res["sampler"],
                                         D["chan"], pa, D["months"],
                                         res["chan_depth"], device)}
-        print(f"[probe] cone   cur_u R2 {probe['cone']['cur_u']['r2']:+.4f} · "
-              f"cur_v R2 {probe['cone']['cur_v']['r2']:+.4f}", flush=True)
+        print(f"[probe] cone   cur_u R2 {r2_str(probe['cone']['cur_u'])} · "
+              f"cur_v R2 {r2_str(probe['cone']['cur_v'])}", flush=True)
+        print(f"[probe] cone   {probe_line(probe['cone'])}", flush=True)
         if a.snapshot_ablation:
             snap = train_one(a, D, 0, a.out, "metrics_snapshot.jsonl",
                              "snapshot_codec.pt", "snapshot", device)
@@ -728,12 +961,27 @@ def main(argv=None):
                                                D["chan"], pa, D["months"],
                                                snap["chan_depth"], device)
             print(f"[probe] snapshot cur_u R2 "
-                  f"{probe['snapshot']['cur_u']['r2']:+.4f} · cur_v R2 "
-                  f"{probe['snapshot']['cur_v']['r2']:+.4f}", flush=True)
-            probe["delta_cur_u"] = (probe["cone"]["cur_u"]["r2"]
-                                    - probe["snapshot"]["cur_u"]["r2"])
-            probe["delta_cur_v"] = (probe["cone"]["cur_v"]["r2"]
-                                    - probe["snapshot"]["cur_v"]["r2"])
+                  f"{r2_str(probe['snapshot']['cur_u'])} · cur_v R2 "
+                  f"{r2_str(probe['snapshot']['cur_v'])}", flush=True)
+            print(f"[probe] snapshot {probe_line(probe['snapshot'])}",
+                  flush=True)
+            for c in ("cur_u", "cur_v"):
+                # `None` where either arm declined to score (fewer than 32
+                # observed targets): a difference of a missing number is a
+                # missing number, not a NaN in the results file (§5.22).
+                r1 = probe["cone"][c]["r2"]
+                r0 = probe["snapshot"][c]["r2"]
+                probe[f"delta_{c}"] = (None if r1 is None or r0 is None
+                                       else r1 - r0)
+        # THE BAR, once per run and not per arm: it does not depend on a
+        # codec, so computing it twice would be two names for one number and
+        # an invitation to quote the wrong one. The cone arm's sampler is used
+        # because the lag-0 patch is identical under either L_in.
+        probe["raw_patch"] = raw_patch_probe(res["sampler"], D["chan"], pa,
+                                             D["months"])
+        print(f"[probe] raw 3x3 ({probe['raw_patch']['n_features']} features, "
+              f"no codec) cur_u R2 {r2_str(probe['raw_patch']['cur_u'])} · "
+              f"cur_v R2 {r2_str(probe['raw_patch']['cur_v'])}", flush=True)
         probe["L_in"] = int(a.L_in)
         probe["steps"] = int(a.steps)
         probe["seed"] = int(a.seed)

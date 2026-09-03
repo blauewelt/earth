@@ -576,12 +576,47 @@ class ConeMAE(nn.Module):
         """
         return self._loss_from(b, plan, chan_mask, dot_mask, dot_idx)
 
+    def query_family_spans(self, b, plan, n_queries):
+        """`{name: (lo, hi)}` — which columns of the query axis each family owns.
+
+        DERIVED, never a second construction: `_query_sets` concatenates A
+        (anchor reconstruction, C columns), then B (future, C*F columns), then
+        C (hidden dots, whatever the draw returned), in that order and only
+        when the plan asks for them. The first two widths are functions of the
+        plan and of the batch's shapes alone, so the third is the remainder —
+        which means this cannot drift from the concatenation above the way a
+        hand-kept index list would. `n_queries` is the width the concatenation
+        actually produced, so a mismatch shows up as a dots span of the wrong
+        size rather than as a silently mislabelled family.
+        """
+        C = self.n_chan
+        n_anchor = C if plan.get("anchor_recon", True) else 0
+        fut = b.get("fut_vals")
+        n_future = (C * int(fut.shape[-1])
+                    if plan.get("future", True) and fut is not None
+                    and fut.shape[-1] else 0)
+        n_dots = max(int(n_queries) - n_anchor - n_future, 0)
+        lo = 0
+        spans = {}
+        for name, width in (("anchor", n_anchor), ("future", n_future),
+                            ("dots", n_dots)):
+            spans[name] = (lo, lo + width)
+            lo += width
+        return spans
+
     def _loss_from(self, b, plan, chan_mask, dot_mask, dot_idx):
         """The shared body of `forward` and `forward_given`.
 
         `dot_idx=None` means "draw the hidden-dot queries inside
         `_query_sets`", which is `forward`'s original control flow; a given
         `(idx, sel)` pair makes the whole method deterministic.
+
+        The returned dict carries a `families` slot beside `terms`: the SAME
+        weighted sums, split by query family (anchor reconstruction / future /
+        hidden dots). It is deliberately NOT inside `terms` — the JAX parity
+        gate C2 (`tests/test_jaxport_cone.py`) asserts the two frameworks'
+        `terms` KEY SETS are equal, and a torch-only diagnostic in there would
+        fail a gate that is about the loss rather than about the logging.
         """
         bb = dict(b)
         bb["chan_mask"], bb["dot_mask"] = chan_mask, dot_mask
@@ -593,11 +628,40 @@ class ConeMAE(nn.Module):
         mu, logvar = self.decode_from_z(z, q)
 
         wsum = w.sum().clamp(min=1e-6)
-        nll = (nll_gauss(mu, logvar, tgt) * w).sum() / wsum
+        # NAMED so the per-family split below sums the very same elements the
+        # headline divides — one elementwise array, two reductions. `nll` and
+        # `mse` are the identical expressions they were before the split
+        # existed, so every archived cone number stands.
+        ell = nll_gauss(mu, logvar, tgt) * w
+        sq = ((mu - tgt) ** 2) * w
+        nll = ell.sum() / wsum
         # The plain MSE, LOGGED not optimised: it is the number every archived
         # reconstruction is quoted in, and a likelihood is not comparable with
         # one (ml/CLAUDE.md §4.3 — keep diagnostics out of the objective).
-        mse = (((mu - tgt) ** 2) * w).sum() / wsum
+        mse = sq.sum() / wsum
+
+        # ---- per-family diagnostics (detached; no gradient path) -----------
+        # Each family reports its own weighted MEAN plus the weight it was
+        # divided by, so a reader can reassemble the headline exactly:
+        #   nll == sum_f nll_f * wsum_f / sum_f wsum_f
+        # A family with no target at all (the snapshot twin has no dots) gets
+        # ZEROS and a zero weight, never a NaN — ml/CLAUDE.md §5.22.
+        families = {}
+        with torch.no_grad():
+            ell_d, sq_d, w_d = ell.detach(), sq.detach(), w.detach()
+            for name, (lo, hi) in self.query_family_spans(
+                    b, plan, w.shape[1]).items():
+                if hi <= lo:
+                    families[name] = {"nll": 0.0, "mse": 0.0, "wsum": 0.0,
+                                      "n_targets": 0.0}
+                    continue
+                ws = float(w_d[:, lo:hi].sum())
+                den = ws if ws > 0.0 else 1.0
+                families[name] = {
+                    "nll": float(ell_d[:, lo:hi].sum()) / den,
+                    "mse": float(sq_d[:, lo:hi].sum()) / den,
+                    "wsum": ws,
+                    "n_targets": float((w_d[:, lo:hi] > 0).sum())}
 
         terms = {"nll": float(nll.detach()), "mse": float(mse.detach()),
                  # `wsum` is the DENOMINATOR of both means, so a caller
@@ -617,7 +681,7 @@ class ConeMAE(nn.Module):
             aux = (nll_gauss(mu2, lv2, tgt) * w).sum() / wsum
             terms["nll_latent"] = float(aux.detach())
             loss = loss + aux_w * aux
-        return {"loss": loss, "z": z, "terms": terms}
+        return {"loss": loss, "z": z, "terms": terms, "families": families}
 
 
 def default_plan(chan_names, cur_drop=0.5, other_drop=0.3, lag_band_p=0.3,
