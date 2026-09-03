@@ -377,9 +377,12 @@ From NOAA's Climate Prediction Center ENSO diagnostic discussion, **13 August 20
 
 Source: [CPC ENSO diagnostic discussion, Aug 2026](https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_disc_aug2026/ensodisc.shtml)
 
-The 0.7 °C gap between our +2.09 and the official +1.4 is the running mean and the different
-sea-surface-temperature dataset, and it is the argument for carrying the official index
-**alongside** our own bake rather than instead of it.
+The 0.7 °C gap between our +2.09 and the official +1.4 is NOT explained here: a different
+sea-surface-temperature dataset (ERSSTv5 vs OISST), a different averaging, and possibly the
+"relative" Niño-3.4 index (the anomaly minus the tropical-mean warming) that CPC has moved
+towards would each account for part of it. Reconciling the two is the first thing a `nino.json`
+bake should do, and the gap is the argument for carrying the official index **alongside** our
+own bake rather than instead of it.
 
 ### 4.4 · Catalog audit — what carries ENSO signal, and its limit
 

@@ -560,7 +560,7 @@ module.exports = function (ctx) {
       { text: "5° S–5° N, 170° W–120° W, 500 one-degree cells", options: { fontSize: 7.5, italic: true, color: MUTED } },
     ], 0.6, 1.5, 3.5, 0.3);
     txt(s, [
-      { text: "Computed here from data/oisst_y (NOAA's daily satellite-and-buoy sea-temperature analysis, block-meaned to 1° monthly) against data/oisst_clim, the app's 1991–2020 normal. The Climate Prediction Center's July value is +1.4 °C, because the official index is computed on a different, coarser sea-temperature reconstruction (ERSSTv5) as a three-month running mean — and that 0.7 °C gap is itself the reason to carry the official index rather than only our own bake.", options: { fontSize: 8, color: INK } },
+      { text: "Computed here from data/oisst_y (NOAA's daily satellite-and-buoy sea-temperature analysis, block-meaned to 1° monthly) against data/oisst_clim, the app's 1991–2020 normal. The Climate Prediction Center's July value is +1.4 °C — a different sea-temperature reconstruction (ERSSTv5), a different averaging and possibly the relative index CPC now favours; the 0.7 °C gap is unexplained here, and is itself the reason to carry the official index beside our own bake.", options: { fontSize: 8, color: INK } },
     ], 0.6, 4.56, 3.5, 1.8);
     // ---------------- middle: what the catalogue already has ----------------
     const MX = 4.25, MW = 3.7;
