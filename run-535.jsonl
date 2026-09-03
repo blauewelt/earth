@@ -1,0 +1,2 @@
+{"config": {"steps": 1, "batch": 512, "d_z": 32, "patch": 1, "d_model": 512, "n_layers": 12, "n_heads": 4, "d_dec": 256, "anomaly": true, "fsq_levels": null, "fsq_ladder": null, "fsq_bound": null, "fsq_warmstart_from": null, "eval_every": 0, "light_probe_every": 0, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 37.978, "data": "family4_na025_pentad_r3.npz", "C": 42, "T": 3142, "resume": null, "recipe": "f4r3-cone-5M", "holdout_years": "2009,2017,2023", "holdout_lon": "-45,-25"}}
+{"step": 1, "loss_rec": 0.32361, "loss_nei": 0.32801}
