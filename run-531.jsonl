@@ -1,0 +1,242 @@
+{"config": {"steps": 200000, "batch": 512, "d_z": 8, "patch": 1, "d_model": 512, "n_layers": 12, "n_heads": 4, "d_dec": 256, "anomaly": true, "fsq_levels": null, "fsq_ladder": null, "fsq_bound": null, "fsq_warmstart_from": null, "eval_every": 7500, "light_probe_every": 10000, "lr_floor": 0.0, "lr_decay_steps": 0, "params_M": 37.958, "data": "family4_na025_pentad_r2.npz", "C": 40, "T": 3142, "resume": null, "recipe": "f4r2-40M-dz8"}}
+{"linear_r_deseas": 0.23, "linear_r_raw": 0.343, "linear_r_deseas_light": 0.15, "light_stride": 7, "z_mse_model": 0.11545751243829727, "z_mse_persistence": 0.87548828125, "chan_mse_model": 0.8889673352241516, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.443, "temporal_r_raw": 0.483, "chan_vs_persistence_pct": -5.5, "z_vs_persistence_pct": 86.8, "probe_seconds": 369.2, "step": 0, "wall_s": 369.2}
+{"step": 1000, "loss_rec": 0.25142, "loss_nei": 0.22184}
+{"step": 2000, "loss_rec": 0.28222, "loss_nei": 0.23544}
+{"step": 3000, "loss_rec": 0.26808, "loss_nei": 0.23813}
+{"step": 4000, "loss_rec": 0.25349, "loss_nei": 0.2065}
+{"step": 5000, "loss_rec": 0.25274, "loss_nei": 0.21177}
+{"step": 6000, "loss_rec": 0.23266, "loss_nei": 0.20649}
+{"step": 7000, "loss_rec": 0.23257, "loss_nei": 0.19375}
+{"linear_r_deseas": 0.495, "linear_r_raw": 0.492, "linear_r_deseas_light": 0.318, "light_stride": 7, "z_mse_model": 33.99309158325195, "z_mse_persistence": 50.625, "chan_mse_model": 0.6385232210159302, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.487, "temporal_r_raw": 0.503, "chan_vs_persistence_pct": 24.2, "z_vs_persistence_pct": 32.9, "probe_seconds": 364.9, "step": 7500, "wall_s": 2147.6}
+{"step": 8000, "loss_rec": 0.22951, "loss_nei": 0.18956}
+{"step": 9000, "loss_rec": 0.25662, "loss_nei": 0.21123}
+{"step": 10000, "loss_rec": 0.25248, "loss_nei": 0.20414}
+{"linear_r_deseas": 0.322, "linear_r_raw": 0.4, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 10000, "wall_s": 2625.4}
+{"step": 11000, "loss_rec": 0.24296, "loss_nei": 0.22066}
+{"step": 12000, "loss_rec": 0.22945, "loss_nei": 0.20664}
+{"step": 13000, "loss_rec": 0.22944, "loss_nei": 0.20625}
+{"step": 14000, "loss_rec": 0.24807, "loss_nei": 0.19617}
+{"step": 15000, "loss_rec": 0.24465, "loss_nei": 0.19265}
+{"linear_r_deseas": 0.484, "linear_r_raw": 0.481, "linear_r_deseas_light": 0.287, "light_stride": 7, "z_mse_model": 42.31461715698242, "z_mse_persistence": 64.9375, "chan_mse_model": 0.6438236236572266, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.489, "temporal_r_raw": 0.501, "chan_vs_persistence_pct": 23.6, "z_vs_persistence_pct": 34.8, "probe_seconds": 363.4, "step": 15000, "wall_s": 3928.9}
+{"step": 16000, "loss_rec": 0.244, "loss_nei": 0.20952}
+{"step": 17000, "loss_rec": 0.21583, "loss_nei": 0.23213}
+{"step": 18000, "loss_rec": 0.23927, "loss_nei": 0.21246}
+{"step": 19000, "loss_rec": 0.22696, "loss_nei": 0.19883}
+{"step": 20000, "loss_rec": 0.23583, "loss_nei": 0.19417}
+{"linear_r_deseas": 0.276, "linear_r_raw": 0.348, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 20000, "wall_s": 4876.8}
+{"step": 21000, "loss_rec": 0.22085, "loss_nei": 0.19688}
+{"step": 22000, "loss_rec": 0.24997, "loss_nei": 0.20078}
+{"linear_r_deseas": 0.477, "linear_r_raw": 0.471, "linear_r_deseas_light": 0.265, "light_stride": 7, "z_mse_model": 53.66338348388672, "z_mse_persistence": 82.8125, "chan_mse_model": 0.6358916759490967, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.505, "temporal_r_raw": 0.509, "chan_vs_persistence_pct": 24.5, "z_vs_persistence_pct": 35.2, "probe_seconds": 363.6, "step": 22500, "wall_s": 5710.5}
+{"step": 23000, "loss_rec": 0.21825, "loss_nei": 0.182}
+{"step": 24000, "loss_rec": 0.23171, "loss_nei": 0.1985}
+{"step": 25000, "loss_rec": 0.23255, "loss_nei": 0.19161}
+{"step": 26000, "loss_rec": 0.25096, "loss_nei": 0.2355}
+{"step": 27000, "loss_rec": 0.24511, "loss_nei": 0.19605}
+{"step": 28000, "loss_rec": 0.24136, "loss_nei": 0.19793}
+{"step": 29000, "loss_rec": 0.22737, "loss_nei": 0.18208}
+{"step": 30000, "loss_rec": 0.2239, "loss_nei": 0.2002}
+{"linear_r_deseas": 0.475, "linear_r_raw": 0.463, "linear_r_deseas_light": 0.244, "light_stride": 7, "z_mse_model": 61.23557662963867, "z_mse_persistence": 95.0625, "chan_mse_model": 0.6304827928543091, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.501, "temporal_r_raw": 0.493, "chan_vs_persistence_pct": 25.2, "z_vs_persistence_pct": 35.6, "probe_seconds": 364.8, "step": 30000, "wall_s": 7487.8}
+{"step": 31000, "loss_rec": 0.22583, "loss_nei": 0.19302}
+{"step": 32000, "loss_rec": 0.22924, "loss_nei": 0.1875}
+{"step": 33000, "loss_rec": 0.21146, "loss_nei": 0.1991}
+{"step": 34000, "loss_rec": 0.21736, "loss_nei": 0.20216}
+{"step": 35000, "loss_rec": 0.24228, "loss_nei": 0.20992}
+{"step": 36000, "loss_rec": 0.21604, "loss_nei": 0.19191}
+{"step": 37000, "loss_rec": 0.23471, "loss_nei": 0.19872}
+{"linear_r_deseas": 0.467, "linear_r_raw": 0.457, "linear_r_deseas_light": 0.211, "light_stride": 7, "z_mse_model": 64.88652038574219, "z_mse_persistence": 102.9375, "chan_mse_model": 0.633321225643158, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.523, "temporal_r_raw": 0.541, "chan_vs_persistence_pct": 24.9, "z_vs_persistence_pct": 37.0, "probe_seconds": 363.9, "step": 37500, "wall_s": 9263.9}
+{"step": 38000, "loss_rec": 0.24109, "loss_nei": 0.20961}
+{"step": 39000, "loss_rec": 0.23051, "loss_nei": 0.19199}
+{"step": 40000, "loss_rec": 0.25411, "loss_nei": 0.22131}
+{"linear_r_deseas": 0.26, "linear_r_raw": 0.293, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 40000, "wall_s": 9741.3}
+{"step": 41000, "loss_rec": 0.24932, "loss_nei": 0.21343}
+{"step": 42000, "loss_rec": 0.23625, "loss_nei": 0.20367}
+{"step": 43000, "loss_rec": 0.21863, "loss_nei": 0.19797}
+{"step": 44000, "loss_rec": 0.21268, "loss_nei": 0.19416}
+{"step": 45000, "loss_rec": 0.24607, "loss_nei": 0.23164}
+{"linear_r_deseas": 0.488, "linear_r_raw": 0.485, "linear_r_deseas_light": 0.251, "light_stride": 7, "z_mse_model": 67.18637084960938, "z_mse_persistence": 108.5, "chan_mse_model": 0.6361369490623474, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.524, "temporal_r_raw": 0.534, "chan_vs_persistence_pct": 24.5, "z_vs_persistence_pct": 38.1, "probe_seconds": 365.8, "step": 45000, "wall_s": 11045.0}
+{"step": 46000, "loss_rec": 0.22386, "loss_nei": 0.19994}
+{"step": 47000, "loss_rec": 0.21673, "loss_nei": 0.20608}
+{"step": 48000, "loss_rec": 0.26161, "loss_nei": 0.24112}
+{"step": 49000, "loss_rec": 0.22735, "loss_nei": 0.20982}
+{"step": 50000, "loss_rec": 0.24339, "loss_nei": 0.22641}
+{"linear_r_deseas": 0.238, "linear_r_raw": 0.235, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 50000, "wall_s": 11991.2}
+{"step": 51000, "loss_rec": 0.23587, "loss_nei": 0.19664}
+{"step": 52000, "loss_rec": 0.21032, "loss_nei": 0.20519}
+{"linear_r_deseas": 0.477, "linear_r_raw": 0.461, "linear_r_deseas_light": 0.234, "light_stride": 7, "z_mse_model": 72.72205352783203, "z_mse_persistence": 118.125, "chan_mse_model": 0.637884795665741, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.521, "temporal_r_raw": 0.534, "chan_vs_persistence_pct": 24.3, "z_vs_persistence_pct": 38.4, "probe_seconds": 366.0, "step": 52500, "wall_s": 12827.1}
+{"step": 53000, "loss_rec": 0.22047, "loss_nei": 0.20029}
+{"step": 54000, "loss_rec": 0.2186, "loss_nei": 0.17981}
+{"step": 55000, "loss_rec": 0.25405, "loss_nei": 0.22939}
+{"step": 56000, "loss_rec": 0.2139, "loss_nei": 0.1915}
+{"step": 57000, "loss_rec": 0.24273, "loss_nei": 0.20121}
+{"step": 58000, "loss_rec": 0.24755, "loss_nei": 0.21757}
+{"step": 59000, "loss_rec": 0.21364, "loss_nei": 0.19922}
+{"step": 60000, "loss_rec": 0.21676, "loss_nei": 0.19984}
+{"linear_r_deseas": 0.481, "linear_r_raw": 0.452, "linear_r_deseas_light": 0.23, "light_stride": 7, "z_mse_model": 77.98596954345703, "z_mse_persistence": 126.125, "chan_mse_model": 0.6267569065093994, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.524, "temporal_r_raw": 0.53, "chan_vs_persistence_pct": 25.6, "z_vs_persistence_pct": 38.2, "probe_seconds": 363.5, "step": 60000, "wall_s": 14601.4}
+{"step": 61000, "loss_rec": 0.22043, "loss_nei": 0.19034}
+{"step": 62000, "loss_rec": 0.21612, "loss_nei": 0.2202}
+{"step": 63000, "loss_rec": 0.22094, "loss_nei": 0.192}
+{"step": 64000, "loss_rec": 0.25346, "loss_nei": 0.20155}
+{"step": 65000, "loss_rec": 0.2349, "loss_nei": 0.18687}
+{"step": 66000, "loss_rec": 0.23021, "loss_nei": 0.19525}
+{"step": 67000, "loss_rec": 0.24158, "loss_nei": 0.20367}
+{"linear_r_deseas": 0.475, "linear_r_raw": 0.45, "linear_r_deseas_light": 0.244, "light_stride": 7, "z_mse_model": 81.91092681884766, "z_mse_persistence": 132.75, "chan_mse_model": 0.625200092792511, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.546, "temporal_r_raw": 0.564, "chan_vs_persistence_pct": 25.8, "z_vs_persistence_pct": 38.3, "probe_seconds": 365.5, "step": 67500, "wall_s": 16376.8}
+{"step": 68000, "loss_rec": 0.22008, "loss_nei": 0.22235}
+{"step": 69000, "loss_rec": 0.24653, "loss_nei": 0.21087}
+{"step": 70000, "loss_rec": 0.22491, "loss_nei": 0.18295}
+{"linear_r_deseas": 0.228, "linear_r_raw": 0.229, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 70000, "wall_s": 16854.4}
+{"step": 71000, "loss_rec": 0.23218, "loss_nei": 0.19347}
+{"step": 72000, "loss_rec": 0.22179, "loss_nei": 0.23585}
+{"step": 73000, "loss_rec": 0.22116, "loss_nei": 0.19817}
+{"step": 74000, "loss_rec": 0.21067, "loss_nei": 0.19608}
+{"step": 75000, "loss_rec": 0.22195, "loss_nei": 0.19294}
+{"linear_r_deseas": 0.472, "linear_r_raw": 0.465, "linear_r_deseas_light": 0.236, "light_stride": 7, "z_mse_model": 81.62223815917969, "z_mse_persistence": 138.125, "chan_mse_model": 0.6314008831977844, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.512, "temporal_r_raw": 0.511, "chan_vs_persistence_pct": 25.1, "z_vs_persistence_pct": 40.9, "probe_seconds": 364.3, "step": 75000, "wall_s": 18159.3}
+{"step": 76000, "loss_rec": 0.23311, "loss_nei": 0.18797}
+{"step": 77000, "loss_rec": 0.22799, "loss_nei": 0.17605}
+{"step": 78000, "loss_rec": 0.23741, "loss_nei": 0.19365}
+{"step": 79000, "loss_rec": 0.23343, "loss_nei": 0.21197}
+{"step": 80000, "loss_rec": 0.25861, "loss_nei": 0.22353}
+{"linear_r_deseas": 0.215, "linear_r_raw": 0.218, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 80000, "wall_s": 19106.9}
+{"step": 81000, "loss_rec": 0.22463, "loss_nei": 0.18607}
+{"step": 82000, "loss_rec": 0.24107, "loss_nei": 0.1924}
+{"linear_r_deseas": 0.481, "linear_r_raw": 0.455, "linear_r_deseas_light": 0.249, "light_stride": 7, "z_mse_model": 81.17344665527344, "z_mse_persistence": 137.75, "chan_mse_model": 0.6451887488365173, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.516, "temporal_r_raw": 0.519, "chan_vs_persistence_pct": 23.4, "z_vs_persistence_pct": 41.1, "probe_seconds": 366.2, "step": 82500, "wall_s": 19943.3}
+{"step": 83000, "loss_rec": 0.22919, "loss_nei": 0.18928}
+{"step": 84000, "loss_rec": 0.21949, "loss_nei": 0.20345}
+{"step": 85000, "loss_rec": 0.20822, "loss_nei": 0.1797}
+{"step": 86000, "loss_rec": 0.20953, "loss_nei": 0.20537}
+{"step": 87000, "loss_rec": 0.22139, "loss_nei": 0.1866}
+{"step": 88000, "loss_rec": 0.22242, "loss_nei": 0.18061}
+{"step": 89000, "loss_rec": 0.23639, "loss_nei": 0.19325}
+{"step": 90000, "loss_rec": 0.20818, "loss_nei": 0.18283}
+{"linear_r_deseas": 0.475, "linear_r_raw": 0.466, "linear_r_deseas_light": 0.228, "light_stride": 7, "z_mse_model": 87.24562072753906, "z_mse_persistence": 141.625, "chan_mse_model": 0.6261032819747925, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.502, "temporal_r_raw": 0.513, "chan_vs_persistence_pct": 25.7, "z_vs_persistence_pct": 38.4, "probe_seconds": 363.7, "step": 90000, "wall_s": 21716.9}
+{"step": 91000, "loss_rec": 0.23586, "loss_nei": 0.20407}
+{"step": 92000, "loss_rec": 0.22354, "loss_nei": 0.19587}
+{"step": 93000, "loss_rec": 0.23674, "loss_nei": 0.21874}
+{"step": 94000, "loss_rec": 0.22932, "loss_nei": 0.19702}
+{"step": 95000, "loss_rec": 0.23483, "loss_nei": 0.20246}
+{"step": 96000, "loss_rec": 0.24092, "loss_nei": 0.19539}
+{"step": 97000, "loss_rec": 0.23714, "loss_nei": 0.20992}
+{"linear_r_deseas": 0.49, "linear_r_raw": 0.471, "linear_r_deseas_light": 0.265, "light_stride": 7, "z_mse_model": 84.4480209350586, "z_mse_persistence": 143.25, "chan_mse_model": 0.6306599974632263, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.522, "temporal_r_raw": 0.524, "chan_vs_persistence_pct": 25.2, "z_vs_persistence_pct": 41.0, "probe_seconds": 365.7, "step": 97500, "wall_s": 23491.2}
+{"step": 98000, "loss_rec": 0.23225, "loss_nei": 0.20327}
+{"step": 99000, "loss_rec": 0.214, "loss_nei": 0.22071}
+{"step": 100000, "loss_rec": 0.20821, "loss_nei": 0.17751}
+{"linear_r_deseas": 0.218, "linear_r_raw": 0.183, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 100000, "wall_s": 23968.6}
+{"step": 101000, "loss_rec": 0.22822, "loss_nei": 0.19534}
+{"step": 102000, "loss_rec": 0.22363, "loss_nei": 0.21478}
+{"step": 103000, "loss_rec": 0.24766, "loss_nei": 0.222}
+{"step": 104000, "loss_rec": 0.24207, "loss_nei": 0.21004}
+{"step": 105000, "loss_rec": 0.20558, "loss_nei": 0.18299}
+{"linear_r_deseas": 0.463, "linear_r_raw": 0.444, "linear_r_deseas_light": 0.232, "light_stride": 7, "z_mse_model": 86.4610595703125, "z_mse_persistence": 144.375, "chan_mse_model": 0.6258508563041687, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.512, "temporal_r_raw": 0.524, "chan_vs_persistence_pct": 25.7, "z_vs_persistence_pct": 40.1, "probe_seconds": 363.9, "step": 105000, "wall_s": 25272.4}
+{"step": 106000, "loss_rec": 0.23543, "loss_nei": 0.21333}
+{"step": 107000, "loss_rec": 0.18706, "loss_nei": 0.18311}
+{"step": 108000, "loss_rec": 0.20652, "loss_nei": 0.16873}
+{"step": 109000, "loss_rec": 0.23429, "loss_nei": 0.18948}
+{"step": 110000, "loss_rec": 0.24269, "loss_nei": 0.20916}
+{"linear_r_deseas": 0.22, "linear_r_raw": 0.163, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 110000, "wall_s": 26220.9}
+{"step": 111000, "loss_rec": 0.23633, "loss_nei": 0.21365}
+{"step": 112000, "loss_rec": 0.23027, "loss_nei": 0.21275}
+{"linear_r_deseas": 0.472, "linear_r_raw": 0.442, "linear_r_deseas_light": 0.213, "light_stride": 7, "z_mse_model": 84.13651275634766, "z_mse_persistence": 143.5, "chan_mse_model": 0.6297875046730042, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.52, "temporal_r_raw": 0.525, "chan_vs_persistence_pct": 25.3, "z_vs_persistence_pct": 41.4, "probe_seconds": 364.4, "step": 112500, "wall_s": 27055.5}
+{"step": 113000, "loss_rec": 0.20885, "loss_nei": 0.17872}
+{"step": 114000, "loss_rec": 0.21319, "loss_nei": 0.17394}
+{"step": 115000, "loss_rec": 0.22014, "loss_nei": 0.19567}
+{"step": 116000, "loss_rec": 0.22712, "loss_nei": 0.21003}
+{"step": 117000, "loss_rec": 0.19527, "loss_nei": 0.18943}
+{"step": 118000, "loss_rec": 0.21251, "loss_nei": 0.19683}
+{"step": 119000, "loss_rec": 0.21377, "loss_nei": 0.20661}
+{"step": 120000, "loss_rec": 0.21711, "loss_nei": 0.19577}
+{"linear_r_deseas": 0.47, "linear_r_raw": 0.457, "linear_r_deseas_light": 0.21, "light_stride": 7, "z_mse_model": 79.9878921508789, "z_mse_persistence": 142.0, "chan_mse_model": 0.6375194787979126, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.492, "temporal_r_raw": 0.503, "chan_vs_persistence_pct": 24.4, "z_vs_persistence_pct": 43.7, "probe_seconds": 365.1, "step": 120000, "wall_s": 28831.5}
+{"step": 121000, "loss_rec": 0.23344, "loss_nei": 0.19539}
+{"step": 122000, "loss_rec": 0.22634, "loss_nei": 0.18512}
+{"step": 123000, "loss_rec": 0.20738, "loss_nei": 0.18788}
+{"step": 124000, "loss_rec": 0.21909, "loss_nei": 0.19773}
+{"step": 125000, "loss_rec": 0.22518, "loss_nei": 0.19738}
+{"step": 126000, "loss_rec": 0.22436, "loss_nei": 0.1907}
+{"step": 127000, "loss_rec": 0.24086, "loss_nei": 0.21148}
+{"linear_r_deseas": 0.47, "linear_r_raw": 0.444, "linear_r_deseas_light": 0.245, "light_stride": 7, "z_mse_model": 81.20248413085938, "z_mse_persistence": 138.5, "chan_mse_model": 0.628427267074585, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.47, "temporal_r_raw": 0.472, "chan_vs_persistence_pct": 25.4, "z_vs_persistence_pct": 41.4, "probe_seconds": 362.7, "step": 127500, "wall_s": 30604.3}
+{"step": 128000, "loss_rec": 0.23662, "loss_nei": 0.22306}
+{"step": 129000, "loss_rec": 0.23187, "loss_nei": 0.20133}
+{"step": 130000, "loss_rec": 0.23685, "loss_nei": 0.22794}
+{"linear_r_deseas": 0.21, "linear_r_raw": 0.172, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 130000, "wall_s": 31082.3}
+{"step": 131000, "loss_rec": 0.21592, "loss_nei": 0.18716}
+{"step": 132000, "loss_rec": 0.22509, "loss_nei": 0.19566}
+{"step": 133000, "loss_rec": 0.2371, "loss_nei": 0.22537}
+{"step": 134000, "loss_rec": 0.22655, "loss_nei": 0.19819}
+{"step": 135000, "loss_rec": 0.21985, "loss_nei": 0.19867}
+{"linear_r_deseas": 0.47, "linear_r_raw": 0.451, "linear_r_deseas_light": 0.227, "light_stride": 7, "z_mse_model": 76.3578109741211, "z_mse_persistence": 137.25, "chan_mse_model": 0.6368638277053833, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.505, "temporal_r_raw": 0.504, "chan_vs_persistence_pct": 24.4, "z_vs_persistence_pct": 44.4, "probe_seconds": 364.3, "step": 135000, "wall_s": 32386.8}
+{"step": 136000, "loss_rec": 0.25741, "loss_nei": 0.21841}
+{"step": 137000, "loss_rec": 0.20602, "loss_nei": 0.19422}
+{"step": 138000, "loss_rec": 0.2344, "loss_nei": 0.21101}
+{"step": 139000, "loss_rec": 0.22777, "loss_nei": 0.21356}
+{"step": 140000, "loss_rec": 0.24593, "loss_nei": 0.20693}
+{"linear_r_deseas": 0.211, "linear_r_raw": 0.169, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 140000, "wall_s": 33335.6}
+{"step": 141000, "loss_rec": 0.22854, "loss_nei": 0.19039}
+{"step": 142000, "loss_rec": 0.22516, "loss_nei": 0.18412}
+{"linear_r_deseas": 0.469, "linear_r_raw": 0.445, "linear_r_deseas_light": 0.219, "light_stride": 7, "z_mse_model": 76.0768051147461, "z_mse_persistence": 137.75, "chan_mse_model": 0.633372962474823, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.483, "temporal_r_raw": 0.483, "chan_vs_persistence_pct": 24.8, "z_vs_persistence_pct": 44.8, "probe_seconds": 365.2, "step": 142500, "wall_s": 34170.8}
+{"step": 143000, "loss_rec": 0.20246, "loss_nei": 0.18119}
+{"step": 144000, "loss_rec": 0.20861, "loss_nei": 0.17748}
+{"step": 145000, "loss_rec": 0.20965, "loss_nei": 0.19143}
+{"step": 146000, "loss_rec": 0.19743, "loss_nei": 0.18085}
+{"step": 147000, "loss_rec": 0.2239, "loss_nei": 0.19074}
+{"step": 148000, "loss_rec": 0.20031, "loss_nei": 0.20143}
+{"step": 149000, "loss_rec": 0.21281, "loss_nei": 0.18964}
+{"step": 150000, "loss_rec": 0.20425, "loss_nei": 0.17899}
+{"linear_r_deseas": 0.474, "linear_r_raw": 0.445, "linear_r_deseas_light": 0.216, "light_stride": 7, "z_mse_model": 71.08440399169922, "z_mse_persistence": 133.5, "chan_mse_model": 0.6424550414085388, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.499, "temporal_r_raw": 0.509, "chan_vs_persistence_pct": 23.8, "z_vs_persistence_pct": 46.8, "probe_seconds": 364.5, "step": 150000, "wall_s": 35946.9}
+{"step": 151000, "loss_rec": 0.20479, "loss_nei": 0.20049}
+{"step": 152000, "loss_rec": 0.21724, "loss_nei": 0.2055}
+{"step": 153000, "loss_rec": 0.19007, "loss_nei": 0.19001}
+{"step": 154000, "loss_rec": 0.22241, "loss_nei": 0.18576}
+{"step": 155000, "loss_rec": 0.21693, "loss_nei": 0.20471}
+{"step": 156000, "loss_rec": 0.22473, "loss_nei": 0.18784}
+{"step": 157000, "loss_rec": 0.22065, "loss_nei": 0.20033}
+{"linear_r_deseas": 0.469, "linear_r_raw": 0.442, "linear_r_deseas_light": 0.24, "light_stride": 7, "z_mse_model": 71.49248504638672, "z_mse_persistence": 133.0, "chan_mse_model": 0.6347193717956543, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.514, "temporal_r_raw": 0.513, "chan_vs_persistence_pct": 24.7, "z_vs_persistence_pct": 46.2, "probe_seconds": 364.9, "step": 157500, "wall_s": 37723.7}
+{"step": 158000, "loss_rec": 0.21113, "loss_nei": 0.18062}
+{"step": 159000, "loss_rec": 0.2182, "loss_nei": 0.18689}
+{"step": 160000, "loss_rec": 0.20647, "loss_nei": 0.20093}
+{"linear_r_deseas": 0.222, "linear_r_raw": 0.147, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 160000, "wall_s": 38201.9}
+{"step": 161000, "loss_rec": 0.21395, "loss_nei": 0.19137}
+{"step": 162000, "loss_rec": 0.22141, "loss_nei": 0.18647}
+{"step": 163000, "loss_rec": 0.22851, "loss_nei": 0.18276}
+{"step": 164000, "loss_rec": 0.20753, "loss_nei": 0.19438}
+{"step": 165000, "loss_rec": 0.22986, "loss_nei": 0.20161}
+{"linear_r_deseas": 0.47, "linear_r_raw": 0.442, "linear_r_deseas_light": 0.23, "light_stride": 7, "z_mse_model": 68.95135498046875, "z_mse_persistence": 130.0, "chan_mse_model": 0.6341410279273987, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.498, "temporal_r_raw": 0.501, "chan_vs_persistence_pct": 24.8, "z_vs_persistence_pct": 47.0, "probe_seconds": 365.3, "step": 165000, "wall_s": 39505.9}
+{"step": 166000, "loss_rec": 0.20383, "loss_nei": 0.19129}
+{"step": 167000, "loss_rec": 0.22528, "loss_nei": 0.20558}
+{"step": 168000, "loss_rec": 0.2229, "loss_nei": 0.20506}
+{"step": 169000, "loss_rec": 0.21709, "loss_nei": 0.19282}
+{"step": 170000, "loss_rec": 0.20471, "loss_nei": 0.17983}
+{"linear_r_deseas": 0.196, "linear_r_raw": 0.133, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 170000, "wall_s": 40454.6}
+{"step": 171000, "loss_rec": 0.22039, "loss_nei": 0.18533}
+{"step": 172000, "loss_rec": 0.23016, "loss_nei": 0.21709}
+{"linear_r_deseas": 0.47, "linear_r_raw": 0.443, "linear_r_deseas_light": 0.201, "light_stride": 7, "z_mse_model": 67.78621673583984, "z_mse_persistence": 129.0, "chan_mse_model": 0.6330435872077942, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.504, "temporal_r_raw": 0.502, "chan_vs_persistence_pct": 24.9, "z_vs_persistence_pct": 47.5, "probe_seconds": 364.0, "step": 172500, "wall_s": 41288.5}
+{"step": 173000, "loss_rec": 0.21988, "loss_nei": 0.18858}
+{"step": 174000, "loss_rec": 0.21473, "loss_nei": 0.20054}
+{"step": 175000, "loss_rec": 0.23582, "loss_nei": 0.20418}
+{"step": 176000, "loss_rec": 0.20333, "loss_nei": 0.17749}
+{"step": 177000, "loss_rec": 0.20612, "loss_nei": 0.18595}
+{"step": 178000, "loss_rec": 0.22782, "loss_nei": 0.19901}
+{"step": 179000, "loss_rec": 0.24358, "loss_nei": 0.20903}
+{"step": 180000, "loss_rec": 0.21941, "loss_nei": 0.20016}
+{"linear_r_deseas": 0.47, "linear_r_raw": 0.445, "linear_r_deseas_light": 0.198, "light_stride": 7, "z_mse_model": 67.97222137451172, "z_mse_persistence": 128.125, "chan_mse_model": 0.6340579986572266, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.498, "temporal_r_raw": 0.497, "chan_vs_persistence_pct": 24.8, "z_vs_persistence_pct": 46.9, "probe_seconds": 364.3, "step": 180000, "wall_s": 43064.7}
+{"step": 181000, "loss_rec": 0.22058, "loss_nei": 0.19369}
+{"step": 182000, "loss_rec": 0.21103, "loss_nei": 0.18275}
+{"step": 183000, "loss_rec": 0.22483, "loss_nei": 0.18365}
+{"step": 184000, "loss_rec": 0.19879, "loss_nei": 0.17875}
+{"step": 185000, "loss_rec": 0.20374, "loss_nei": 0.19753}
+{"step": 186000, "loss_rec": 0.22247, "loss_nei": 0.19367}
+{"step": 187000, "loss_rec": 0.21823, "loss_nei": 0.20017}
+{"linear_r_deseas": 0.468, "linear_r_raw": 0.443, "linear_r_deseas_light": 0.197, "light_stride": 7, "z_mse_model": 66.20610046386719, "z_mse_persistence": 127.5625, "chan_mse_model": 0.6359719634056091, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.487, "temporal_r_raw": 0.49, "chan_vs_persistence_pct": 24.5, "z_vs_persistence_pct": 48.1, "probe_seconds": 365.1, "step": 187500, "wall_s": 44842.2}
+{"step": 188000, "loss_rec": 0.22505, "loss_nei": 0.20434}
+{"step": 189000, "loss_rec": 0.2329, "loss_nei": 0.20161}
+{"step": 190000, "loss_rec": 0.22553, "loss_nei": 0.2052}
+{"linear_r_deseas": 0.197, "linear_r_raw": 0.128, "light": true, "light_stride": 7, "light_n": 209, "light_n_test": 31, "probe_seconds": 6.5, "step": 190000, "wall_s": 45320.1}
+{"step": 191000, "loss_rec": 0.21995, "loss_nei": 0.1876}
+{"step": 192000, "loss_rec": 0.21124, "loss_nei": 0.19001}
+{"step": 193000, "loss_rec": 0.22305, "loss_nei": 0.20236}
+{"step": 194000, "loss_rec": 0.21118, "loss_nei": 0.18084}
+{"step": 195000, "loss_rec": 0.23693, "loss_nei": 0.19588}
+{"linear_r_deseas": 0.468, "linear_r_raw": 0.443, "linear_r_deseas_light": 0.197, "light_stride": 7, "z_mse_model": 65.18966674804688, "z_mse_persistence": 127.5625, "chan_mse_model": 0.6397441625595093, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.49, "temporal_r_raw": 0.495, "chan_vs_persistence_pct": 24.1, "z_vs_persistence_pct": 48.9, "probe_seconds": 363.4, "step": 195000, "wall_s": 46624.2}
+{"step": 196000, "loss_rec": 0.21924, "loss_nei": 0.18687}
+{"step": 197000, "loss_rec": 0.22737, "loss_nei": 0.19665}
+{"step": 198000, "loss_rec": 0.24451, "loss_nei": 0.20851}
+{"step": 199000, "loss_rec": 0.20121, "loss_nei": 0.18042}
+{"step": 200000, "loss_rec": 0.2441, "loss_nei": 0.20303}
+{"linear_r_deseas": 0.468, "linear_r_raw": 0.443, "linear_r_deseas_light": 0.197, "light_stride": 7, "z_mse_model": 67.44386291503906, "z_mse_persistence": 127.625, "chan_mse_model": 0.6336324214935303, "chan_mse_persistence": 0.8427734375, "temporal_r_deseas": 0.484, "temporal_r_raw": 0.485, "chan_vs_persistence_pct": 24.8, "z_vs_persistence_pct": 47.2, "probe_seconds": 365.0, "step": 200000, "wall_s": 47931.3}
