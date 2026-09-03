@@ -234,7 +234,7 @@ class HFSource:
     110 GB footprint the fetcher exists to avoid.
     """
 
-    def __init__(self, repo_name, scratch):
+    def __init__(self, repo_name, scratch, prefix=""):
         tok = os.environ.get("HF_TOKEN") or (
             open("/home/claude/.hf_token").read().strip()
             if os.path.exists("/home/claude/.hf_token") else "")
@@ -246,14 +246,24 @@ class HFSource:
         api = HfApi(token=tok)
         self.repo = (repo_name if "/" in repo_name
                      else f"{api.whoami()['name']}/{repo_name}")
+        # ONE FOLDER, NEVER A MIXTURE. The dataset now holds two families:
+        # E-034's NA chunks at 1/12 degree in the root, and E-070's global
+        # chunks already binned to 0.25 degrees under `daily025_global/`.
+        # Their names both end `_YYYYMM.nc`, so MONTH_RE matches either and a
+        # bare "every .nc in the repo" listing would silently aggregate two
+        # different grids into one output. The default prefix is "" and means
+        # the ROOT ONLY, which is exactly what E-034 has always aggregated.
+        self.prefix = prefix
         self.names = sorted(
             f for f in api.list_repo_files(self.repo, repo_type="dataset")
-            if f.endswith(".nc"))
+            if f.endswith(".nc") and f.startswith(prefix)
+            and "/" not in f[len(prefix):])
         if not self.names:
-            sys.exit(f"no .nc files in "
+            sys.exit(f"no .nc files under {prefix or '(root)'} in "
                      f"https://huggingface.co/datasets/{self.repo}")
         self.cache = os.path.join(scratch, "_hf")
-        print(f"source   https://huggingface.co/datasets/{self.repo} "
+        print(f"source   https://huggingface.co/datasets/{self.repo}"
+              f"{'/' + prefix if prefix else ''} "
               f"({len(self.names)} chunk(s), streamed one at a time)")
 
     def get(self, name):
@@ -304,6 +314,11 @@ def main():
     ap.add_argument("--hf-repo", default=None,
                     help="Hugging Face dataset repo to stream the dailies "
                          "from instead of --in (one chunk of disk at a time)")
+    ap.add_argument("--hf-prefix", default="",
+                    help="folder inside the dataset to read, e.g. "
+                         "'daily025_global/' for E-070's binned global "
+                         "chunks. Default '' = the root only, which is "
+                         "E-034's NA family — never a mixture of the two.")
     ap.add_argument("--out", required=True)
     ap.add_argument("--cadence", default="pentad", choices=sorted(CADENCE_DAYS))
     ap.add_argument("--stats", default="mean", choices=("mean", "std"))
@@ -336,7 +351,8 @@ def main():
     want = [v for v in a.vars.split(",") if v]
     os.makedirs(a.out, exist_ok=True)
 
-    source = (LocalSource(a.src) if a.src else HFSource(a.hf_repo, a.out))
+    source = (LocalSource(a.src) if a.src
+              else HFSource(a.hf_repo, a.out, a.hf_prefix))
     names = source.names
 
     rng = plan_range(names, days)

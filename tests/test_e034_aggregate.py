@@ -326,5 +326,17 @@ def main():
     print("\ntests/test_e034_aggregate.py: all 6 checks passed")
 
 
+def test_e034_aggregate():
+    """So `pytest tests/` actually RUNS the six checks above.
+
+    This file was written to be executed as a script, and pytest collected
+    ZERO items from it — a suite run reported success having asserted nothing
+    here (ml/CLAUDE.md §0.2: a step that reports success is not evidence it
+    did anything). One line fixes it, and the script entry point below is
+    unchanged.
+    """
+    main()
+
+
 if __name__ == "__main__":
     main()

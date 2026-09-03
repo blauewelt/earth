@@ -1,0 +1,225 @@
+# E-070: pull GLORYS12 daily chunks for the WHOLE GLOBE, binned to 0.25
+# degrees at fetch time, in four lanes.
+#
+# WHY GLOBAL. Family 7 is a global 0.25 degree tensor. Everything measured so
+# far lives inside one North Atlantic window (100 W..20 E, 0..70 N), which is
+# the window the AMOC question was asked in — but it is also the window that
+# decides, in advance, that nothing outside it can inform anything inside it.
+# The globe is 7.29x the pixels of that window and it is the same archive, the
+# same variables and the same fetcher.
+#
+# WHY BINNED AT FETCH TIME, AND NOT AFTER. At 1/12 degree the global pull is
+# 2.19 GB a month on the wire and **840 GB** over 1993-01..2024-12 (measured,
+# 2026-09-03). Binned to 0.25 degrees on arrival the same 384 chunks are
+# **99 GB** — 257 MB each, measured on the real 1993-01 chunk. Nothing
+# downstream would ever read the 1/12 degree version: every tensor this
+# programme has built bins to 0.25 degrees first, and `--bin-deg` calls
+# `ml/aggregate_cadence.py`'s own `bin_plan`/`bin_slice`, so the global
+# tensor's North-Atlantic sub-block is computed by the code that made family
+# 4 rather than by a second opinion about what a cell is. E-034's rule still
+# holds and is the reason there is one workflow and not two: **fetch daily,
+# derive every coarser cadence by aggregation** — the binned dailies under
+# `daily025_global/` are the single source of truth for the global family, and
+# the global pentad tensor is a reduction of exactly those bytes
+# (`aggregate_cadence.py --hf-prefix daily025_global/`, with NO --bin-deg:
+# they are already on the grid).
+#
+# WHY FOUR SHARDS, WITH THE ARITHMETIC. One global month measured end to end
+# on 2026-09-03: 411 s of fetch + binning (31 day-sized requests, because a
+# whole month in one `cm.subset` peaked at 5.95 GB and was OOM-killed on a
+# 7 GB box) plus the 257 MB upload and its restore verification — call it
+# ~8 minutes a chunk. 384 chunks is then ~51 hours of runner time. A
+# GitHub-hosted job is capped at 6 hours, so a single lane on the 6-hourly
+# schedule finishes in about **four days**; four lanes over disjoint year
+# ranges finish ~96 chunks each, i.e. ~12.8 h of work, in three firings —
+# about **a day**. Each lane carries its own `concurrency` group so the four
+# never queue behind one another, and `fail-fast: false` so one shard's bad
+# month cannot cancel the other three's progress.
+#
+# WHY A WORKFLOW AND NOT A SANDBOX JOB, AND WHY NOT THE VAST FLEET: unchanged
+# from `.github/workflows/glorys-pull.yml`. The Cowork sandbox kills a
+# backgrounded job while the session is idle (measured twice, 2026-08-16), and
+# `ml/CLAUDE.md` §6 forbids CMEMS credentials on a rented box. A GitHub-hosted
+# runner is disposable and masks its secrets. `runs-on: ubuntu-latest`,
+# deliberately and permanently — §6 forbids giving a `schedule:` trigger to
+# anything on `runs-on: gpu`, and nothing here needs a GPU.
+#
+# THE SCHEDULE IS THE RESUME MECHANISM. The fetcher lists what is already
+# under `daily025_global/` on the Hub and skips it, so a job that hits the
+# 6-hour wall loses only the chunk it was mid-way through. Once a shard is
+# complete its firings are ~1-minute no-ops that say so.
+#
+# E-034's NA chunks are in the dataset ROOT and are not touched by this
+# workflow: different file names, different folder, different concurrency
+# groups. The two pulls can run at the same time.
+name: GLORYS pull (global)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # every 6 hours; each firing continues where the last one stopped
+    - cron: '20 */6 * * *'
+
+permissions:
+  contents: read          # uploads go to Hugging Face, not to this repo
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350          # GitHub-hosted jobs are capped at 6 h
+    strategy:
+      fail-fast: false            # one shard's failure must not cancel three
+      matrix:
+        include:
+          - shard: '1993-2000'
+            start: '1993-01'
+            end: '2000-12'
+          - shard: '2001-2008'
+            start: '2001-01'
+            end: '2008-12'
+          - shard: '2009-2016'
+            start: '2009-01'
+            end: '2016-12'
+          - shard: '2017-2024'
+            start: '2017-01'
+            end: '2024-12'
+    concurrency:
+      # PER SHARD, not per workflow: the four lanes are the whole point, and a
+      # workflow-level group would serialise them back into one. Never cancel
+      # a run in flight — it is doing real work and its progress is only
+      # durable per completed chunk.
+      group: glorys-pull-global-${{ matrix.shard }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Check the preconditions while the inputs are all they have cost
+      # (ml/CLAUDE.md §0.3). A missing secret must fail HERE, in seconds,
+      # not as an auth error after the install and the catalogue query --
+      # which reads like a bad credential rather than an absent one.
+      - name: Preconditions
+        id: preflight
+        env:
+          CM_USER: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          CM_PASS: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          missing=""
+          [ -n "$CM_USER" ] || missing="$missing COPERNICUSMARINE_SERVICE_USERNAME"
+          [ -n "$CM_PASS" ] || missing="$missing COPERNICUSMARINE_SERVICE_PASSWORD"
+          [ -n "$HF_TOKEN" ] || missing="$missing HF_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::error::missing repo Actions secret(s):$missing"
+            echo "Set them at Settings -> Secrets and variables -> Actions."
+            echo "Values live in the claude.ai project docs"
+            echo "claude/copernicus-marine-access.md and claude/huggingface-access.md."
+            exit 1
+          fi
+          echo "all three secrets present; shard ${{ matrix.shard }}"
+          df -h / | tail -1
+          free -g | head -2
+
+      - name: Install
+        run: pip install --quiet copernicusmarine huggingface_hub netCDF4 numpy
+
+      # How much is left, BEFORE spending anything -- and the number that
+      # decides whether this run does any work at all.
+      - name: Count what the Hub already has
+        id: remaining
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SHARD_START: ${{ matrix.start }}
+          SHARD_END: ${{ matrix.end }}
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, "ml")
+          from fetch_glorys_daily import chunk_name, hub_folder, months_between
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo = f"{api.whoami()['name']}/earth-tensors"
+          folder = hub_folder("global", 0.25)
+          have = {f for f in api.list_repo_files(repo, repo_type="dataset")
+                  if f.startswith(folder)}
+          want = [folder + chunk_name("global", 0.25, y, m) for y, m in
+                  months_between(os.environ["SHARD_START"],
+                                 os.environ["SHARD_END"])]
+          left = [w for w in want if w not in have]
+          # The step OUTPUT goes to the file; the human-readable line goes to
+          # the log. Redirecting the whole heredoc into $GITHUB_OUTPUT would
+          # post the notice into the output file, where nobody reads it.
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"left={len(left)}\n")
+          print(f"::notice::shard {os.environ['SHARD_START']}.."
+                f"{os.environ['SHARD_END']}: "
+                f"{len(want)-len(left)}/{len(want)} chunks already on {repo} "
+                f"under {folder}; {len(left)} remaining "
+                f"({len(have)} in the folder in total)")
+          PY
+
+      - name: Fetch
+        if: steps.remaining.outputs.left != '0'
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        # --min-free-gb 5: a GitHub-hosted runner has ~14 GB free, and the
+        # script's default guard of 20 would refuse to start. The real
+        # requirement is ~2.4 GB (one wire chunk plus one binned chunk),
+        # because both are deleted once the binned one is restore-verified.
+        # --subset-days 1 is the default and is named here because it is what
+        # keeps peak RSS at 1.91 GB on a runner with 7 GB (measured).
+        run: |
+          python3 -u ml/fetch_glorys_daily.py \
+              --window global --bin-deg 0.25 --grid-align point \
+              --subset-days 1 \
+              --start "${{ matrix.start }}" --end "${{ matrix.end }}" \
+              --out "$RUNNER_TEMP/glorys_pull_global" \
+              --hf-repo earth-tensors \
+              --min-free-gb 5 \
+              --report-mem
+
+      # always(), so the tally is printed whether the fetch finished, timed
+      # out at the 6-hour wall, or died -- but NOT when the preconditions
+      # failed, because without HF_TOKEN this step can only fail too, and a
+      # second failure buries the one that says which secret is missing.
+      - name: Done for this run
+        if: always() && steps.preflight.outcome == 'success'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SHARD_START: ${{ matrix.start }}
+          SHARD_END: ${{ matrix.end }}
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, "ml")
+          from fetch_glorys_daily import chunk_name, hub_folder, months_between
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo = f"{api.whoami()['name']}/earth-tensors"
+          folder = hub_folder("global", 0.25)
+          have = {f for f in api.list_repo_files(repo, repo_type="dataset")
+                  if f.startswith(folder)}
+          want = [folder + chunk_name("global", 0.25, y, m) for y, m in
+                  months_between(os.environ["SHARD_START"],
+                                 os.environ["SHARD_END"])]
+          left = [w for w in want if w not in have]
+          allw = [folder + chunk_name("global", 0.25, y, m)
+                  for y, m in months_between("1993-01", "2024-12")]
+          print(f"shard {os.environ['SHARD_START']}..{os.environ['SHARD_END']}: "
+                f"{len(want)-len(left)}/{len(want)} chunks on the Hub")
+          print(f"whole pull: {len([w for w in allw if w in have])}/{len(allw)}")
+          if left:
+              print(f"{len(left)} remaining in this shard; the next scheduled "
+                    f"firing continues from here (first missing: {left[0]})")
+          else:
+              print("SHARD COMPLETE. When all four are, the global pentad "
+                    "tensor is: ml/aggregate_cadence.py --hf-repo "
+                    "earth-tensors --hf-prefix daily025_global/ --cadence "
+                    "pentad --out <dir>   (no --bin-deg -- these chunks are "
+                    "already 0.25 deg, point-aligned)")
+          PY

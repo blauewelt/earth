@@ -242,5 +242,58 @@ within-month σ on the fixture (a check that cannot fail is not a check).
 
 ---
 
+## 7 · Global pull (E-070) — the same machinery, the whole globe
+
+The next tensor (**family 7**) is global at 0.25°, so the GLORYS base
+channels have to come from the same archive over GLORYS12's full extent —
+**lat −80..90, lon −180..179.9167 at 1/12°**, confirmed on 2026-09-03 from
+`copernicusmarine.describe(dataset_id=...)` rather than assumed. Two
+decisions carry over unchanged and one is new:
+
+- **Fetch daily, derive by aggregation — never two pipelines** (§3, and the
+  header of the fetcher). The global pentad cadence is
+  `aggregate_cadence.py` over the global dailies, not a second fetch.
+- **One binning definition.** `--bin-deg` in the fetcher *imports*
+  `bin_plan` / `bin_slice` from `ml/aggregate_cadence.py`, so the global
+  tensor's North-Atlantic sub-block is computed by the code that made family
+  4. The grid is point-aligned, and family 3's 281×481 axes are an exact
+  contiguous slice of the global 681×1440 ones — asserted, because a
+  half-cell offset is invisible in every plot.
+- **NEW: the binning happens at FETCH time, not downstream.** At 1/12° the
+  global pull is 2.19 GB a month and **840 GB** over 1993-01..2024-12;
+  binned on arrival the same 384 chunks are **99 GB** (257 MB each, both
+  measured on the real 1993-01 chunk, 2026-09-03). Nothing downstream would
+  read the 1/12° version, so storing it would be 740 GB of Hub quota spent
+  on bytes with no reader.
+
+Two measurements that shaped the runner design. A whole global month in one
+`cm.subset` peaked at **5.95 GB and was OOM-killed** on a 7 GB box, *before*
+any binning — so the request is split day by day (`--subset-days 1`, 70.6 MB
+and ~13 s each) and peak RSS over a real month is **1.91 GB**. And a chunk
+costs 411 s of fetch + 37 s of binning + its 257 MB upload, i.e. ~8 min:
+384 of those is ~51 h of runner time, which is why the workflow runs **four
+lanes over disjoint year ranges** (1993-2000 / 2001-2008 / 2009-2016 /
+2017-2024), each with its own concurrency group — ~13 h a lane, about a day
+instead of four.
+
+The NA chunks stay in the dataset root under `glorys_YYYYMM.nc`; the global
+ones live under `daily025_global/glorys025_global_YYYYMM.nc`. Both names end
+`_YYYYMM.nc`, so `aggregate_cadence.py` gained `--hf-prefix` (default `""` =
+the root only) — without it a "every .nc in the repo" listing would fold two
+different grids into one array.
+
+- [.github/workflows/glorys-pull-global.yml](https://github.com/blauewelt/earth/blob/main/.github/workflows/glorys-pull-global.yml) — the four-lane pull
+- [ml/fetch_glorys_daily.py](https://github.com/blauewelt/earth/blob/main/ml/fetch_glorys_daily.py) — `--window global --bin-deg 0.25`
+- [tests/test_glorys_global.py](https://github.com/blauewelt/earth/blob/main/tests/test_glorys_global.py) — the bit-identity check against `aggregate_cadence.py`, and the sub-block assertion
+
+When all four shards are complete, the global pentad tensor is one command,
+with **no** `--bin-deg` (the chunks are already on the grid):
+
+    python3 ml/aggregate_cadence.py --hf-repo earth-tensors \
+        --hf-prefix daily025_global/ --cadence pentad --out <dir>
+
+---
+
 *Written 2026-08-16. Cadences in §1 measured from the live archives the same
-day, not taken from documentation.*
+day, not taken from documentation. §7 added 2026-09-03 with its own
+measurements.*
