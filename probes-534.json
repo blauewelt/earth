@@ -1,0 +1,138 @@
+{
+ "run_number": 534,
+ "files": {
+  "probe_sequence.json": {
+   "run": "actions",
+   "anomaly_space": true,
+   "sweep": [
+    {
+     "K": 1,
+     "r_raw": 0.6,
+     "r_deseasonalised": 0.575,
+     "n_test": 219
+    },
+    {
+     "K": 3,
+     "r_raw": 0.596,
+     "r_deseasonalised": 0.576,
+     "n_test": 219
+    },
+    {
+     "K": 6,
+     "r_raw": 0.561,
+     "r_deseasonalised": 0.539,
+     "n_test": 219
+    },
+    {
+     "K": 12,
+     "r_raw": 0.56,
+     "r_deseasonalised": 0.542,
+     "n_test": 219
+    },
+    {
+     "K": 24,
+     "r_raw": 0.579,
+     "r_deseasonalised": 0.523,
+     "n_test": 219
+    }
+   ],
+   "seasonal_floor_raw": 0.19,
+   "seasonal_floor_deseas": -0.043
+  },
+  "provenance.json": {
+   "run_number": 534,
+   "sha": "ac41b9700ef48308a0d3f292719b4a617189ce91",
+   "code": "https://github.com/blauewelt/earth/tree/ac41b9700ef48308a0d3f292719b4a617189ce91",
+   "inputs": {
+    "doc": "E-064b \u00b7 the SAME 7.6M head on the CONTINUOUS d_z-32 z under the clean pool \u2014 E-060a's torch twin and the control for E-064a. Identical to E-060a's JAX configuration (256x8, K 144, stencil 145 ring spiral, znoise 0.7, grad-clip 128, expdecay halflife 40k warmup 2k, seed 0, holdout_scope window, 20k steps) run through ml/temporal.py, so that (i) the torch and JAX trainers are compared at this tier for the first time (within 0.02 on the curve minimum and the 20k value = comparable) and (ii) the early held-out minimum (E-060a: 0.6095 at step 1,200) exists as a rollable torch milestone, which the TPU run did not keep. \u00b7 params 7.598M head (256x8) over frozen run-415 (37.976M, nothing trains) \u00b7 stage stage-2 \u00b7 data family4_na025_pentad_r2 \u00b7 arch 256x8 K 144 stencil 145 ring spiral:111-4444-0.71-0.5, d_z 32, znoise 0.7, grad-clip 128, seed 0 \u00b7 steps x batch 20k x 256 \u00b7 resume run-415@197428 (release); Z Z_8b639abe36_37e146384b from embed-cache-v1. Plan ml/plans/E064_token_substrate_clean.md. (Re-dispatch: the first copy, #521, was SIGKILLed by the host OOM killer on a 52 GB box moments after the model was built \u2014 K 144 x stencil 145 host gather needs the 126 GB class; this box has 126 GB.) (re-dispatch of #529, which OOMed the 24 GB card at its first held-out monitor \u2014 a one-shot 10.2 GiB forward over 4,096 windows at d_z 32; the monitor is now chunked, 3069d91.)",
+    "steps": "197428",
+    "batch": "512",
+    "d_z": "32",
+    "anomaly": "true",
+    "temporal_steps": "20000",
+    "temporal_d_model": "256",
+    "temporal_layers": "8",
+    "eval_every": "0",
+    "resume": "!run-415",
+    "head_probe": "false",
+    "light_probe_every": "0",
+    "window": "recipe:f4r2-40M-nolonhold,stencil:145,ring:spiral:111-4444-0.71-0.5,seed:0,sched:expdecay --lr-cooldown-frac 0 --milestone-steps 1000,1200,1400,1600,2000,3000 --input-znoise 0.7 --grad-clip 128 --K 144 --holdout-scope window",
+    "tensor": "family4_na025_pentad_r2",
+    "sst_channel": "false",
+    "patch": "1",
+    "max_minutes": "0",
+    "runner": "gpu-box-48580527",
+    "job_timeout": "600",
+    "lr_floor": "0",
+    "lr_decay_steps": "0",
+    "codec_d_model": "512",
+    "codec_layers": "12",
+    "codec_heads": "4",
+    "codec_d_dec": "256"
+   },
+   "tensor": {
+    "file": "ml/cache/family4_na025_pentad_r2.npz",
+    "sha256": "37e146384b6f622fefe3c7e18ad9bab0389c9538be79536899fe8729bb2d0826",
+    "bytes": 4515270439,
+    "X_shape": [
+     3142,
+     281,
+     481,
+     40
+    ],
+    "C": 40,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std",
+     "sst"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "months_are_calendar": true,
+    "T": 3142
+   },
+   "torch": "2.13.0+cu130",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-48580527"
+  }
+ }
+}
