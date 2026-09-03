@@ -1,0 +1,347 @@
+{
+ "run_number": 540,
+ "files": {
+  "provenance.json": {
+   "run_number": 540,
+   "sha": "40d80f391f2494ad52ba70ee18d19502647d3d52",
+   "code": "https://github.com/blauewelt/earth/tree/40d80f391f2494ad52ba70ee18d19502647d3d52",
+   "inputs": {
+    "doc": "E-069 \u00b7 cone-native codec + snapshot twin, seed 2, UNDER THE FROZEN PROTOCOL (holdout 2008-09, 2016-17, 2021-24 \u2014 train \u2264 2020; recipe f4r3-cone-7M-terminal; the interspersed-split #537 is the development reading) \u00b7 params 7.05M (64\u00d7256\u00d76, d_z 32) \u00b7 stage encoder \u00b7 data family4_na025_pentad_r3 \u00b7 arch inner cone lags 0\u20136, 748 tokens \u00b7 steps 20000\u00d7256 (+ the L_in=0 twin) \u00b7 resume none",
+    "steps": "20000",
+    "batch": "256",
+    "d_z": "32",
+    "anomaly": "true",
+    "temporal_steps": "0",
+    "temporal_d_model": "96",
+    "temporal_layers": "3",
+    "eval_every": "25000",
+    "head_probe": "true",
+    "light_probe_every": "2000",
+    "window": "recipe:f4r3-cone-7M-terminal,cone,seed:2",
+    "tensor": "family4_na025_pentad_r3",
+    "sst_channel": "false",
+    "patch": "1",
+    "max_minutes": "0",
+    "runner": "gpu-box-31299601",
+    "job_timeout": "900",
+    "lr_floor": "0",
+    "lr_decay_steps": "0"
+   },
+   "tensor": {
+    "file": "ml/cache/family4_na025_pentad_r3.npz",
+    "sha256": "fa460837fa172825ee76c8fc6fc4da75fa7b96d64519a2e2186f5c306cf03ea9",
+    "bytes": 5303481823,
+    "X_shape": [
+     3142,
+     281,
+     481,
+     42
+    ],
+    "C": 42,
+    "chan": [
+     "cur_speed",
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std",
+     "sst",
+     "cur_u",
+     "cur_v"
+    ],
+    "months": [
+     "1982-01",
+     "2024-12"
+    ],
+    "months_are_calendar": true,
+    "T": 3142
+   },
+   "torch": "2.13.0+cu130",
+   "device": "NVIDIA GeForce RTX 4090",
+   "runner": "gpu-box-31299601"
+  },
+  "velocity_probe.json": {
+   "cone": {
+    "folds": "calendar-year",
+    "n_anchors": 2048,
+    "variants": {
+     "hidden": {
+      "cur_u": {
+       "r2": 0.6169281233999291,
+       "r": 0.7854696321440631,
+       "n": 1510,
+       "probe": "probe_kfold.kfold_r"
+      },
+      "cur_v": {
+       "r2": -0.00508597226484353,
+       "r": 0.0964126067109947,
+       "n": 1510,
+       "probe": "probe_kfold.kfold_r"
+      }
+     },
+     "visible": {
+      "cur_u": {
+       "r2": 0.8229445432185054,
+       "r": 0.9071646887440008,
+       "n": 1510,
+       "probe": "probe_kfold.kfold_r"
+      },
+      "cur_v": {
+       "r2": 0.020588818256713548,
+       "r": 0.16570845170706244,
+       "n": 1510,
+       "probe": "probe_kfold.kfold_r"
+      }
+     }
+    },
+    "d_z": 32,
+    "cur_u": {
+     "r2": 0.6169281233999291,
+     "r": 0.7854696321440631,
+     "n": 1510,
+     "probe": "probe_kfold.kfold_r"
+    },
+    "cur_v": {
+     "r2": -0.00508597226484353,
+     "r": 0.0964126067109947,
+     "n": 1510,
+     "probe": "probe_kfold.kfold_r"
+    },
+    "z_stats": {
+     "d_z": 32,
+     "n_anchors": 2048,
+     "var_per_dim": [
+      11.579787,
+      4.361048,
+      3.387055,
+      3.844546,
+      7.918882,
+      8.937912,
+      2.894862,
+      5.893917,
+      3.269569,
+      7.798215,
+      6.633146,
+      6.159413,
+      7.377632,
+      4.779662,
+      7.357441,
+      6.884259,
+      5.24764,
+      2.947774,
+      3.760885,
+      3.007041,
+      6.726574,
+      14.753632,
+      6.674775,
+      4.057651,
+      3.732277,
+      4.443761,
+      4.046385,
+      7.324386,
+      9.51838,
+      2.813251,
+      10.557819,
+      18.327961
+     ],
+     "var_total": 207.01753809302255,
+     "var_min": 2.813250569926605,
+     "var_max": 18.32796122788964,
+     "eff_rank": 7.22154040330979,
+     "eff_rank_frac": 0.22567313760343094,
+     "mean_pair_cos": 0.008674682612998565,
+     "pairs": 4096
+    }
+   },
+   "snapshot": {
+    "folds": "calendar-year",
+    "n_anchors": 2048,
+    "variants": {
+     "hidden": {
+      "cur_u": {
+       "r2": 0.7049364967714016,
+       "r": 0.8396135473356033,
+       "n": 1510,
+       "probe": "probe_kfold.kfold_r"
+      },
+      "cur_v": {
+       "r2": 0.6916834660348103,
+       "r": 0.8317038278925966,
+       "n": 1510,
+       "probe": "probe_kfold.kfold_r"
+      }
+     },
+     "visible": {
+      "cur_u": {
+       "r2": 0.8175422680235971,
+       "r": 0.904180991853539,
+       "n": 1510,
+       "probe": "probe_kfold.kfold_r"
+      },
+      "cur_v": {
+       "r2": 0.7770883201567238,
+       "r": 0.8815418581651505,
+       "n": 1510,
+       "probe": "probe_kfold.kfold_r"
+      }
+     }
+    },
+    "d_z": 32,
+    "cur_u": {
+     "r2": 0.7049364967714016,
+     "r": 0.8396135473356033,
+     "n": 1510,
+     "probe": "probe_kfold.kfold_r"
+    },
+    "cur_v": {
+     "r2": 0.6916834660348103,
+     "r": 0.8317038278925966,
+     "n": 1510,
+     "probe": "probe_kfold.kfold_r"
+    },
+    "z_stats": {
+     "d_z": 32,
+     "n_anchors": 2048,
+     "var_per_dim": [
+      3.016247,
+      2.835208,
+      2.976294,
+      1.651581,
+      2.40201,
+      3.371504,
+      2.679921,
+      2.950736,
+      4.312669,
+      3.26973,
+      6.048203,
+      2.087197,
+      1.207186,
+      2.856702,
+      3.744367,
+      1.30607,
+      1.437614,
+      1.129943,
+      2.829805,
+      5.242787,
+      6.312414,
+      3.148646,
+      3.181627,
+      1.93678,
+      2.79212,
+      1.876526,
+      2.813828,
+      3.594967,
+      4.348997,
+      1.639586,
+      3.447027,
+      3.045183
+     ],
+     "var_total": 95.4934753168748,
+     "var_min": 1.129943323005828,
+     "var_max": 6.312414174010582,
+     "eff_rank": 9.156333493217424,
+     "eff_rank_frac": 0.2861354216630445,
+     "mean_pair_cos": 0.006047189645907145,
+     "pairs": 4096
+    }
+   },
+   "delta_cur_u": -0.08800837337147249,
+   "delta_cur_v": -0.6967694382996539,
+   "raw_patch": {
+    "folds": "calendar-year",
+    "n_anchors": 2048,
+    "n_features": 702,
+    "channels": [
+     "log_mld",
+     "ssh",
+     "rg_t10",
+     "rg_t30",
+     "rg_t50",
+     "rg_t100",
+     "rg_t150",
+     "rg_t200",
+     "rg_t300",
+     "rg_t400",
+     "rg_t500",
+     "rg_t700",
+     "rg_t900",
+     "rg_t1100",
+     "rg_t1300",
+     "rg_t1500",
+     "rg_t1700",
+     "rg_t1900",
+     "rg_s10",
+     "rg_s30",
+     "rg_s50",
+     "rg_s100",
+     "rg_s150",
+     "rg_s200",
+     "rg_s300",
+     "rg_s400",
+     "rg_s500",
+     "rg_s700",
+     "rg_s900",
+     "rg_s1100",
+     "rg_s1300",
+     "rg_s1500",
+     "rg_s1700",
+     "rg_s1900",
+     "tau_x",
+     "tau_y",
+     "tau_x_std",
+     "tau_y_std",
+     "sst"
+    ],
+    "note": "ridge from the raw lag-0 3x3 of every non-cur channel (values and observed flags) \u2014 no codec, no training",
+    "cur_u": {
+     "r2": 0.54974407104903,
+     "r": 0.7416615691876535,
+     "n": 1510,
+     "probe": "probe_kfold.kfold_r"
+    },
+    "cur_v": {
+     "r2": 0.6623887654521668,
+     "r": 0.8190769080543975,
+     "n": 1510,
+     "probe": "probe_kfold.kfold_r"
+    }
+   },
+   "L_in": 6,
+   "steps": 20000,
+   "seed": 2
+  }
+ }
+}
