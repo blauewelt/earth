@@ -44,6 +44,40 @@ low-pass).
 
 ---
 
+<a id="e-070"></a>
+## E-070 · The global tensor (family 7) — PLANNED 2026-09-03, Phase A RUNNING (Chris: "expand to the whole globe … proceed with global data preparation and training")
+
+TL;DR — every measured wall is temporal (heads best at ~step 2,000 at any
+width; the LIM wins from 15 d), and the globe adds no temporal sample to the
+Atlantic question. What it adds is 8.1× the anchors from regimes the window
+has never shown the codec; that is a stage-1 (representation) investment and
+it is gated by E-033's Phase-4 question — a globally trained cone codec must
+match or beat the NA codec on the Atlantic tasks (it matched exactly at 1°,
+run #8). Plan, inventory, decisions, gates and the radar/colour/daily
+verdicts: [E070_global_tensor.md](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E070_global_tensor.md).
+
+**E-070 · cone codec on a global 0.25° pentad tensor · params codec 7.05M
+(E-069's `f4r3-cone-7M`, unchanged) · stage encoder, then stage 2 on the NA
+crop only · data `family7_global025_pentad` (r3 layout: 42 channels, point-aligned
+681×1440, lat −80…90 / lon −180…179.75, NA the exact sub-block at (320, 320);
+`rg_*` in a 1° live-bins-only sidecar; GLORYS12 1/12° daily binned to 0.25° at
+fetch time by `aggregate_cadence.bin_plan/bin_slice`; ~61.6 GB dense + 0.84 GB
+sidecar) · steps 20k×256, three seeds · holdout 2009,2017,2023 window scope ·
+resume none.** Controls: E-069's three NA seeds on `family4_na025_pentad_r3`
+(same recipe, same seeds), which must exist first. Falsifiers: G1 — global
+codec worse than NA codec on the NA velocity probe or the #516 battery by more
+than the seed interval; G2 — held-out NA one-step NLL / velocity R² agree
+within the interval (then the globe was more of the same); G3 — velocity R²
+collapses in the Kuroshio / ACC boxes.
+
+**Phase A, RUNNING since 10:59Z 09-03** — `.github/workflows/glorys-pull-global.yml`,
+four year-lanes, 6-hourly resume, target `daily025_global/` on
+`chfrank/earth-tensors` (384 chunks; chunk 1 = the measured smoke test:
+2,188 MB on the wire, 257 MB stored, 411 s, RSS 1.9 GB). Phases B–F (the
+other channels global, the year-split pentad aggregate, the sidecar build on a
+500 GB box, the codec + gates, one capacity rung) are in the plan with their
+stops; nothing else has run.
+
 <a id="e-069"></a>
 ## E-069 · Two stencils, one cone — the cone-native codec, ocean physics first — BUILT 2026-09-02, NOT DISPATCHED (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")
 
