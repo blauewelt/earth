@@ -668,6 +668,16 @@ stops two copies sharing the screen; it is not a memory of what has been said.
   this is the first thing in the app that can issue thousands of requests to a
   public NASA service from one click, and the plan's politeness controls are
   load-bearing, not decorative.
+- **A tab that draws OUR OWN geometry loads it from a Python-exported JSON and
+  certifies any JS port against Python reference sets.** The Cones tab (E-069)
+  is the case: `ml/cone.py` is the definition, `ml/export_cone_geometry.py`
+  writes `data/cone_geometry.json` from it deterministically, and the browser's
+  copy of the sunflower is replayed against that file's reference dot sets in
+  `tests/data.spec.js`. A drawing has no test that fails, so a second
+  definition written in JavaScript drifts silently; an export plus a
+  certification is what makes "the page shows the model" a checkable claim
+  rather than a hope. Port only what MUST be computed in the browser (here: the
+  latitude-dependent offsets); read everything else out of the file.
 - Dark theme; diverging deltas are blue = decrease/cool, red = increase/warm.
 - The header tagline's words are one-click SCENES (`.tag-link`,
   `SCENES` map in app.js) with two hard rules learned from feedback: ONE
@@ -1723,6 +1733,41 @@ after they confused a reader;
 trends; *AMOC* — RAPID 26.5°N overturning transport series + stats;
 *Sea level* — Frederikse 2020 budget components + NOAA altimetry; *Catalog* —
 searchable 248-dataset catalog with domain/AMOC/globe filters.
+
+**Cones (E-069) — the second tab whose subject is our own MODEL rather than a
+published dataset** (the first being the AMOC eval-mask layer above). It draws
+the dependency cone on the globe: pick an anchor cell by tapping, and the tab
+shows what the forecaster reads to predict that pixel — the lag-0 3x3 patch as
+nine real cells, the inner sunflower for lags 1-6 coloured by lag, stage 2's
+outer spirals cumulative to lag 143, a dashed reach ellipse (zonal semi-axis =
+the reach, meridional 0.71 of it), and the tensor's own window as a dashed
+rhumb box. Dots that fall outside that window are drawn HOLLOW and counted,
+because the model reads them as missing and never wraps them. A family select
+(A wind stress / B currents & SSH / C SST & mixed layer / rg depth column), a
+0-143 lag slider with an 8-second sweep, and four preset anchors (Gulf Stream,
+RAPID, Labrador Sea, Equator) are the whole control surface; a small canvas
+plots reach against lag on a sqrt axis so the six inner pentads stay readable
+beside 143 outer ones.
+
+**The geometry is exported, never restated — and the JS port is CERTIFIED.**
+`ml/cone.py` is the definition and `tests/test_cone_geometry.py` pins it;
+`ml/export_cone_geometry.py` writes `data/cone_geometry.json` from it
+(deterministically — `tests/test_cone_geometry_export.py` asserts the committed
+file is byte-identical to a fresh export, so a stale copy fails the suite
+rather than quietly drawing last month's cone). The page takes every constant,
+reach table, slot count and token number from that file. The ONE thing it
+computes is the sunflower itself, because the offsets depend on the anchor's
+latitude (a cell is 27.83 km north-south everywhere and 27.83.cos(phi) km
+east-west) and baking 281 anchor rows would be 281 copies of one formula. That
+port lives in a delimited block in `src/app.js` and is replayed against the
+exported Python reference dot sets — every family at five latitudes, every
+outer lag at three — in `tests/data.spec.js`, one deep-equal per set. Two
+details are load-bearing in the port and are commented as such: Python's
+`round()` is half-EVEN (JS `Math.round` is not), and the radius ramp and
+bearing must be evaluated in the same shape as `temporal.spiral_offsets` or a
+dot rounds onto the next cell. This is the same discipline the JAX port earned
+with its gate tests, and it is the reason the tab cannot become a second,
+drifting definition of the cone.
 
 **Data pipeline** (`scripts/refresh_data.py`): one function per snapshot —
 climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet

@@ -51,7 +51,7 @@ html, body {
 }
 .tag-link:hover { text-decoration-style: solid; }
 
-/* Nine labels do not fit one row of a 320 px sidebar, so the row wraps to two
+/* Ten labels do not fit one row of a 320 px sidebar, so the row wraps
    rather than overflowing — a second row beats a tab you cannot reach. */
 nav { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--border); }
 /* Tabs size to their labels rather than sharing the width equally: with six of
@@ -736,3 +736,25 @@ footer a { color: var(--fg-dim); }
 .chip-play { border-color: var(--accent); }
 .chip-play .chip-label { padding-right: 18px; color: var(--accent); cursor: default; }
 .chip-play .chip-label:hover { color: var(--accent); }
+
+/* ---- Cones tab (E-069). Same primitives as Tides and Play (.stat-row,
+ * .control-row, .td-btn, .hint); the only things this panel needs of its own
+ * are a full-width lag scrub, a preset row that fits four place names in a
+ * 320 px sidebar, and a cross-section canvas that scales like #td-curve. */
+#panel-cones .control-row > label:first-child { flex: 0 0 44px; }
+#cn-family {
+  flex: 1; min-width: 0; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; font-size: 12.5px;
+}
+#cn-lag { flex: 1; min-width: 0; accent-color: var(--accent); }
+#cn-lag-read {
+  font-variant-numeric: tabular-nums; color: var(--fg); font-size: 12.5px; margin: 2px 0 6px;
+}
+#cn-presets { gap: 4px; flex-wrap: wrap; margin-top: -2px; }
+#cn-presets button {
+  flex: 1 1 0; background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
+  border-radius: 6px; padding: 4px 2px; font-size: 11px; white-space: nowrap; cursor: pointer;
+}
+#cn-presets button:hover { background: #30363d; }
+#cn-presets button.active { border-color: var(--accent); color: var(--accent); }
+#cn-section { display: block; width: 100%; background: #0a0f16; border-radius: 6px; margin-top: 6px; }

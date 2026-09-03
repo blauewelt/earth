@@ -5539,3 +5539,87 @@ test("playback in a hidden tab stops asking NASA for tiles", async ({ page }) =>
    * start new ones. */
   expect(whileHidden).toBeLessThan(whileVisible / 2);
 });
+
+/* Cones (E-069). The tab draws our own model's dependency cone on the globe;
+ * the panel is its control room. What is checked here is the WIRING — that the
+ * geometry file reaches the page, that the three read-outs answer the two
+ * controls, and that the artefacts leave the globe when the tab does. The
+ * geometry itself is certified in tests/data.spec.js against ml/cone.py's own
+ * reference dot sets, which is where a drift in the numbers would surface. */
+test("Cones tab draws the E-069 cone and answers its two controls", async ({ page }) => {
+  /* A preset flies the camera, so the globe pulls a fresh tile set on every
+   * one — and on the software GL stack that render loop starves Playwright's
+   * actionability check (CLAUDE.md §4). The FIRST tab click and the FIRST
+   * preset are real clicks, because that is the path a reader takes; the rest
+   * are dispatched in-page, the same way the heavy-layer tests do it. */
+  test.setTimeout(120000);
+  const tap = (sel) => page.evaluate((s) => document.querySelector(s).click(), sel);
+
+  await page.click("#tab-cones");
+  await expect(page.locator("#panel-cones")).toBeVisible();
+  await expect(page.locator("#tab-cones")).toHaveClass(/active/);
+  // the file has to land before anything reads: the tiles say so
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  await expect(page.locator("#cn-tokens .stat-value")).toHaveText("748");
+
+  // a preset moves the anchor: the read-out names the cell it snapped to, and
+  // the tiles describe that anchor's own cone
+  await page.click('#cn-presets button[data-lat="36"]');
+  const read = page.locator("#cn-lag-read");
+  await expect(read).toContainText("36.00° N");
+  await expect(read).toContainText("70.00° W");
+  await expect(read).toContainText("lag 1 · 5 days back");
+  // family B at lag 1 reads 259.2 km, and 80 dots per channel over lags 1–6
+  await expect(page.locator("#cn-reach .stat-value")).toHaveText("259.2 km");
+  await expect(page.locator("#cn-dots .stat-value")).toHaveText("80");
+  // 36° N 70° W sits well inside the tensor, so nothing falls off it
+  await expect(page.locator("#cn-dots .stat-sub")).not.toContainText("off window");
+
+  // the lag slider: past lag 6 the reach is stage 2's envelope, 129.6 × 21 km
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-lag");
+    s.value = "20";
+    s.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await expect(page.locator("#cn-reach .stat-value")).toHaveText("2721.6 km");
+  await expect(read).toContainText("lag 20 · 100 days back");
+  const st = await page.evaluate(() => window.__earth.coneState());
+  expect(st.reachKm).toBeCloseTo(2721.6, 6);
+  expect(st.y).toBe(144);        // 36° N  → 0.25° row 144
+  expect(st.x).toBe(120);        // 70° W  → 0.25° column 120
+  // 80 inner dots (lags 1–6) plus fourteen outer spirals of 24 = the whole
+  // cone the model reads at lag 20
+  expect(st.drawn).toBe(80 + 14 * 24);
+  expect(st.offWindow).toBe(0);
+
+  // the equator anchor pushes part of the cone off the tensor's southern edge —
+  // those dots are drawn hollow and COUNTED, because the model reads them as
+  // missing rather than wrapping around
+  await tap('#cn-presets button[data-lat="0"]');
+  await expect(page.locator("#cn-dots .stat-sub")).toContainText("off window");
+  expect(await page.evaluate(() => window.__earth.coneState().offWindow)).toBeGreaterThan(0);
+
+  // the depth column is the one family with no disc: six tokens, no sunflower
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-family");
+    s.value = "rg";
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.locator("#cn-dots .stat-value")).toHaveText("6");
+  await expect(page.locator("#cn-dots .stat-sub")).toContainText("anchor column only");
+
+  // leaving the tab takes the cone off the globe (the switch has no leave hook,
+  // so every other tab's click is the leave hook)
+  await tap("#tab-layers");
+  const hidden = await page.evaluate(() => {
+    const a = window.__earth.coneArtefacts;
+    return {
+      anchor: a.anchor.show, win: a.win.show, ring: a.ring.show,
+      patch: a.patch.some((p) => p.show),
+      playing: window.__earth.coneState().playing,
+    };
+  });
+  expect(hidden).toEqual({ anchor: false, win: false, ring: false,
+                           patch: false, playing: false });
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});

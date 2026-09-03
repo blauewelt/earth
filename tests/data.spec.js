@@ -1292,3 +1292,153 @@ test.describe("oisst_monthly.json (SST from the numbers, to 36°)", () => {
     expect(Math.min(...finite)).toBeGreaterThan(-3);
   });
 });
+
+/* The dependency cone (E-069). Two tests, and they answer different questions.
+ *
+ * The first reads the file: `data/cone_geometry.json` is a BUILD ARTEFACT of
+ * ml/cone.py, and its shape is what the Cones tab draws from — the token
+ * budget, the reach tables, the fact that stage 2's annulus is empty inside
+ * the codec's own window. (`tests/test_cone_geometry_export.py` is the other
+ * half: it proves the committed file IS a fresh export.)
+ *
+ * The second is a CERTIFICATION, in the sense the JAX port's gate tests use
+ * the word. The tab ports the sunflower to JavaScript because the offsets
+ * depend on the anchor's latitude and baking 281 rows would be 281 copies of
+ * one formula. A port is only a port if it reproduces the original's own
+ * output, so the exported reference sets — every family at five latitudes,
+ * every outer lag at three — are replayed through the browser's functions and
+ * compared whole. One deep-equal per set, never an expect per dot. */
+test.describe("cone_geometry.json (E-069, exported from ml/cone.py)", () => {
+  const G = read("cone_geometry.json");
+
+  test("the file carries the cone's tables, budget and window", () => {
+    for (const f of ["constants", "families", "channel_family", "reach_km",
+                     "slots", "counts", "reference", "window"]) {
+      expect(G[f], `missing ${f}`).not.toBeUndefined();
+    }
+    // the token budget, spelled out: 4 wind × 8 + 4 surface-B × 80
+    // + 32 depth × 6 + 2 C × 81 = 706 dots, plus one patch token per channel
+    const c = G.counts;
+    expect(c.inner_dots_A).toBe(8);
+    expect(c.inner_dots_B).toBe(80);
+    expect(c.inner_dots_rg).toBe(6);
+    expect(c.inner_dots_C).toBe(81);
+    expect(c.dot_tokens).toBe(706);
+    expect(4 * 8 + 4 * 80 + 32 * 6 + 2 * 81).toBe(c.dot_tokens);
+    expect(c.patch_tokens).toBe(42);
+    expect(c.total_tokens).toBe(748);
+    expect(Object.keys(G.channel_family).length).toBe(42);
+
+    // reach: A dies with its 10-day memory, B grows one-and-a-bit cells per
+    // pentad, C is L-shaped and DROPS at lag 2 (the stirring going out of
+    // memory, by design — so this is asserted, not tolerated).
+    expect(G.reach_km.inner.A).toEqual([500, 500, 0, 0, 0, 0, 0]);
+    expect(G.reach_km.inner.B.map((r) => Math.round(r * 10) / 10))
+      .toEqual([129.6, 259.2, 388.8, 518.4, 648, 777.6, 907.2]);
+    expect(G.reach_km.inner.C[1]).toBe(500);
+    expect(G.reach_km.inner.C[2]).toBeLessThan(G.reach_km.inner.C[1]);
+    expect(G.reach_km.inner.B.every((r, i, a) => i === 0 || r > a[i - 1])).toBe(true);
+    const out = G.reach_km.outer;
+    expect(out.length).toBe(144);
+    expect(out.every((r, i, a) => i === 0 || r >= a[i - 1])).toBe(true);
+    expect(out[33]).toBeCloseTo(4406.4, 6);          // last below the cap
+    expect(out[34]).toBe(G.constants.OUTER_CAP_KM);  // the cap binds from k=34
+    expect(out[143]).toBe(G.constants.OUTER_CAP_KM);
+
+    // slots follow the DISC's area: 6 bearings at 130 km, 24 at 907 km
+    expect(G.slots.B).toEqual([6, 6, 6, 8, 12, 18, 24]);
+    expect(G.slots.C).toEqual([7, 7, 6, 8, 12, 18, 24]);
+
+    // the tensor window, point-aligned at 0.25°
+    const w = G.window;
+    expect([w.lat0, w.lat1, w.lon0, w.lon1, w.dlat]).toEqual([0, 70, -100, 20, 0.25]);
+    expect([w.ny, w.nx]).toEqual([281, 481]);
+  });
+
+  test("the outer spiral is empty inside the codec's own window", () => {
+    // For k ≤ 6 the inner and outer reaches are the same number by
+    // construction, so stage 2's annulus has nothing in it — the design, not a
+    // degenerate case. The reference sets start at the first non-empty lag.
+    for (const [lat, ks] of Object.entries(G.reference.outer)) {
+      for (const [k, pts] of Object.entries(ks)) {
+        expect(Number(k), `reference outer lag at ${lat}`).toBeGreaterThan(6);
+        expect(pts.length, `outer spiral size at lat ${lat} k ${k}`).toBe(24);
+      }
+    }
+    // and every dot count is latitude-independent: latitude converts km to
+    // cells, it never changes how many cells the cone reads
+    const per = { A: new Set(), B: new Set(), C: new Set(), rg: new Set() };
+    for (const fams of Object.values(G.reference.inner)) {
+      for (const f of Object.keys(per)) per[f].add(fams[f].length);
+    }
+    expect([...per.A]).toEqual([8]);
+    expect([...per.B]).toEqual([80]);
+    expect([...per.C]).toEqual([81]);
+    expect([...per.rg]).toEqual([6]);
+  });
+
+  /* The port lives in the browser, so this one needs a page. Only the Cesium
+   * CDN has to be mirrored (app.js will not define window.__earth without it);
+   * no tiles are fetched, because no layer is switched on. */
+  test.describe("the JS port certified against ml/cone.py's own output", () => {
+    const CESIUM = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1";
+    test.beforeEach(async ({ page, baseURL }) => {
+      if (process.env.MIRROR) {
+        await page.route(/https:\/\/cdnjs\.cloudflare\.com\/.*/, async (route) => {
+          try {
+            const url = route.request().url()
+              .replace(CESIUM, `${baseURL}/_vendor/cesium`)
+              .replace("widgets.min.css", "widgets.css");
+            await route.fulfill({ response: await page.request.get(url) });
+          } catch { await route.abort().catch(() => {}); }
+        });
+        await page.route(/https:\/\/gibs\.earthdata\.nasa\.gov\/.*/, async (route) => {
+          try {
+            const url = route.request().url()
+              .replace("https://gibs.earthdata.nasa.gov", "http://localhost:8081");
+            await route.fulfill({ response: await page.request.get(url) });
+          } catch { await route.abort().catch(() => {}); }
+        });
+      }
+      await page.goto("/");
+      await page.waitForFunction(() => window.__earth?.viewer, null, { timeout: 30000 });
+    });
+
+    test("every exported reference dot set is reproduced exactly", async ({ page }) => {
+      const got = await page.evaluate(async () => {
+        await window.__earth.loadCones();
+        const g = window.__earth.coneGeometry;
+        const inner = {}, outer = {};
+        for (const [lat, fams] of Object.entries(g.reference.inner)) {
+          inner[lat] = {};
+          for (const f of Object.keys(fams)) {
+            inner[lat][f] = window.__earth.coneInnerDots(Number(lat), f);
+          }
+        }
+        for (const [lat, ks] of Object.entries(g.reference.outer)) {
+          outer[lat] = {};
+          for (const k of Object.keys(ks)) {
+            outer[lat][k] = window.__earth.coneOuterSpiral(Number(lat), Number(k));
+          }
+        }
+        // and the two tables the port derives rather than reads
+        const reach = {}, slots = [];
+        for (const f of ["A", "B", "C"]) {
+          reach[f] = [];
+          for (let l = 0; l <= 6; l++) reach[f].push(window.__earth.coneReachKm(f, l));
+        }
+        for (let l = 0; l <= 6; l++) slots.push(window.__earth.coneSlots(window.__earth.coneReachKm("B", l)));
+        return { inner, outer, reach, slots,
+                 outer143: window.__earth.coneOuterReachKm(143),
+                 emptyInside: [0, 3, 6].map((k) => window.__earth.coneOuterSpiral(40, k).length) };
+      });
+      // whole sets, compared whole — one assertion per set, never one per dot
+      expect(got.inner).toEqual(G.reference.inner);
+      expect(got.outer).toEqual(G.reference.outer);
+      expect(got.reach).toEqual(G.reach_km.inner);
+      expect(got.slots).toEqual(G.slots.B);
+      expect(got.outer143).toBe(G.reach_km.outer[143]);
+      expect(got.emptyInside).toEqual([0, 0, 0]);
+    });
+  });
+});

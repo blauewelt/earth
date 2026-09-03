@@ -9620,6 +9620,540 @@ document.getElementById("tidelive-alpha").addEventListener("input", (e) => {
   viewer.scene.requestRender();
 });
 
+
+/* ============================================================ Cones (E-069)
+ * Every other tab is about a published dataset. This one is about OUR OWN
+ * model: it draws, in kilometres on the earth, which past cells the
+ * forecaster reads when it predicts one pixel — the space-time dependency
+ * cone of ml/cone.py.
+ *
+ * The cone has exactly one definition and it is Python's. `ml/cone.py` is
+ * authoritative, tests/test_cone_geometry.py pins it, and
+ * `ml/export_cone_geometry.py` writes data/cone_geometry.json from it. This
+ * tab reads that file for every constant, reach and slot count; the only
+ * thing it computes is the sunflower itself, because the offsets are
+ * LATITUDE-dependent (a cell is 27.83 km north-south everywhere and
+ * 27.83·cos φ km east-west) and baking 281 anchor rows would be 281 copies
+ * of one formula. That port is a port, not a second definition: it is
+ * certified against the exported reference dot sets in tests/data.spec.js,
+ * the same discipline the JAX port earned with its gate tests. */
+
+let coneGeo = null;                       // the exported geometry (lazy)
+let coneGeoPromise = null;
+const cones = {
+  lat: 36, lon: -70, fam: "B", lag: 1,
+  playing: false, raf: 0, t0: 0,
+  ents: null, dots: null,
+  nDrawn: 0, nOff: 0, nOffInner: 0,
+};
+const CONE_ANCHOR_COLOR = "#f85149";      // ml/draw_stencils.py's anchor red
+
+function loadConeGeometry() {
+  if (!coneGeoPromise) {
+    coneGeoPromise = fetch("data/cone_geometry.json")
+      .then((r) => r.json())
+      .then((j) => (coneGeo = j));
+  }
+  return coneGeoPromise;
+}
+
+/* ---- cone geometry (port of ml/cone.py; certified by tests/data.spec.js) ----
+ * Line for line the same arithmetic, in the same order, off the same
+ * constants — which is why the operations below look pedantic. Two details
+ * are load-bearing:
+ *   · Python's round() is HALF-EVEN (and numpy's rint likewise), so a value
+ *     landing exactly on .5 goes to the even integer, not away from zero.
+ *     JS Math.round does not do that; `coneRound` does.
+ *   · f ** 0.5 and the cos/sin of a bearing must be evaluated in the same
+ *     shape as temporal.spiral_offsets, or a dot can round to the next cell.
+ * If either drifts, the certification test fails on a whole reference set
+ * rather than on a pixel nobody looks at. */
+function coneRound(x) {
+  const f = Math.floor(x), d = x - f;
+  if (d > 0.5) return f + 1;
+  if (d < 0.5) return f;
+  return f % 2 === 0 ? f : f + 1;         // exactly .5 → the even neighbour
+}
+
+function coneSpiral(latDeg, rMin, rMax, nPts) {
+  const K = coneGeo.constants;
+  const coslat = Math.max(Math.cos(latDeg * Math.PI / 180), K.COS_FLOOR);
+  const out = [];
+  for (let k = 0; k < nPts; k++) {
+    const f = k / Math.max(nPts - 1, 1);
+    const rKm = rMin + (rMax - rMin) * Math.pow(f, K.RAMP_P);
+    const th = (k * K.GOLDEN_ANGLE) * (Math.PI / 180);
+    const dy = (K.ASPECT * rKm / K.KM_PER_DEG) * Math.cos(th) / K.DLAT;
+    const dx = (rKm / (K.KM_PER_DEG * coslat)) * Math.sin(th) / K.DLAT;
+    out.push([coneRound(dy), coneRound(dx)]);
+  }
+  return out;
+}
+
+/* Inner reach in km. `rg` is the depth column: family-B physics, so the same
+ * reach — it is the SAMPLING that differs (the column only), not the cone. */
+function coneReachKm(fam, lag) {
+  const K = coneGeo.constants, F = coneGeo.families;
+  if (fam === "rg") fam = "B";
+  if (fam === "A") return lag <= 1 ? F.A.L_corr_km : 0;
+  const s = F[fam];
+  let r = s.v_ms * K.SEC_PER_DAY * K.DT_DAYS * (1 + lag) / 1000;
+  r = Math.max(s.L_corr_km, r);
+  if (fam === "C" && lag <= 1) r = Math.max(r, F.A.L_corr_km);     // the L-shape
+  return Math.min(K.CAP_KM, r);
+}
+
+function coneOuterReachKm(k) {
+  const K = coneGeo.constants, B = coneGeo.families.B;
+  return Math.min(K.OUTER_CAP_KM,
+    Math.max(K.OUTER_FLOOR_KM, B.v_ms * K.SEC_PER_DAY * K.DT_DAYS * (1 + k) / 1000));
+}
+
+/* clamp(round(24·(r/900)²), 6, 24): quadratic because the DISC's area is what
+ * has to be sampled at constant density; the floor of 6 is bearing coverage,
+ * not density. Half-up here, exactly as ml/cone.py::slots is. */
+function coneSlots(rKm) {
+  return Math.min(24, Math.max(6, Math.floor(24 * Math.pow(rKm / 900, 2) + 0.5)));
+}
+
+/* [(lag, dy, dx)] for one family at one latitude, lags 1..L_in. Lag 0 is NOT
+ * here — the codec keeps the 3×3 patch there, one token per channel, so every
+ * archived comparison stays like-for-like and the dots are what is new. */
+function coneInnerDots(latDeg, fam) {
+  const K = coneGeo.constants, out = [];
+  for (let lag = 1; lag <= K.L_IN; lag++) {
+    const r = coneReachKm(fam, lag);
+    if (r <= 0) continue;                 // family A past its 10-day memory
+    out.push([lag, 0, 0]);                // the anchor's own history
+    if (fam === "rg") continue;           // Roemmich-Gilson: the column, only
+    const seen = new Set(["0,0"]);
+    for (const [dy, dx] of coneSpiral(latDeg, K.R_MIN_KM, r, coneSlots(r))) {
+      const key = `${dy},${dx}`;
+      if (seen.has(key)) continue;        // two spiral points on one cell are
+      seen.add(key);                      // one token, never two
+      out.push([lag, dy, dx]);
+    }
+  }
+  return out;
+}
+
+/* Stage 2's annulus at lag k, MINUS the near field the codec already read.
+ * For k <= 6 the two radii are the same number by construction, so this is
+ * empty — the design, not a degenerate case. First non-empty spiral: k = 7. */
+function coneOuterSpiral(latDeg, k) {
+  const K = coneGeo.constants;
+  const rLo = k <= K.L_IN ? coneReachKm("B", k) : 0;
+  const rHi = coneOuterReachKm(k);
+  if (rHi <= rLo) return [];
+  return coneSpiral(latDeg, Math.max(rLo, K.OUTER_FLOOR_KM), rHi, K.OUTER_N_PTS);
+}
+/* ---- end of the port ---------------------------------------------------- */
+
+function conesTabVisible() {
+  return !document.getElementById("panel-cones").classList.contains("hidden");
+}
+
+/* Sequential blue → yellow, so "how far back" reads off the colour without a
+ * legend; the current lag is drawn brightest and largest on top of it. */
+function coneLagColor(t) {
+  const a = [68, 147, 248], b = [240, 216, 97];
+  const u = Math.max(0, Math.min(1, t));
+  return Cesium.Color.fromBytes(
+    Math.round(a[0] + (b[0] - a[0]) * u),
+    Math.round(a[1] + (b[1] - a[1]) * u),
+    Math.round(a[2] + (b[2] - a[2]) * u));
+}
+
+/* The tensor's grid is POINT-aligned at 0.25°, so an anchor is a (y, x) pair
+ * and every offset is a whole number of cells from it. A dot outside the
+ * window is invalid — the model zeroes it, it is never wrapped — which is why
+ * `valid` travels with every position rather than being filtered out here. */
+function coneGridOf(lat, lon) {
+  const w = coneGeo.window;
+  const y = Math.round((lat - w.lat0) / w.dlat);
+  const x = Math.round((lon - w.lon0) / w.dlat);
+  return { y: Math.max(0, Math.min(w.ny - 1, y)),
+           x: Math.max(0, Math.min(w.nx - 1, x)) };
+}
+function coneCellLatLon(y, x) {
+  const w = coneGeo.window;
+  return { lat: w.lat0 + y * w.dlat, lon: w.lon0 + x * w.dlat };
+}
+
+function conesEntities() {
+  if (cones.ents) return cones.ents;
+  const w = coneGeo.window;
+  const anchor = viewer.entities.add({
+    show: false,
+    point: {
+      pixelSize: 11, color: Cesium.Color.TRANSPARENT,
+      outlineColor: Cesium.Color.fromCssColorString(CONE_ANCHOR_COLOR),
+      outlineWidth: 3, disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  });
+  // The tensor's own window, as a rhumb box: its edges follow parallels and
+  // meridians, which is what "0–70° N, 100° W–20° E" actually means.
+  const win = viewer.entities.add({
+    show: false,
+    polyline: {
+      positions: Cesium.Cartesian3.fromDegreesArray([
+        w.lon0, w.lat0, w.lon1, w.lat0, w.lon1, w.lat1, w.lon0, w.lat1, w.lon0, w.lat0,
+      ]),
+      width: 1.5, arcType: Cesium.ArcType.RHUMB,
+      material: new Cesium.PolylineDashMaterialProperty({
+        color: Cesium.Color.fromCssColorString("#8b949e").withAlpha(0.55),
+        dashLength: 14,
+      }),
+    },
+  });
+  const ring = viewer.entities.add({
+    show: false,
+    polyline: {
+      positions: [], width: 1.6, arcType: Cesium.ArcType.RHUMB,
+      material: new Cesium.PolylineDashMaterialProperty({
+        color: Cesium.Color.fromCssColorString("#f0d861").withAlpha(0.85),
+        dashLength: 10,
+      }),
+    },
+  });
+  // Lag 0 is the 3×3 patch — nine real cells, so nine rectangles rather than
+  // one dot: the patch is the only place the codec reads raw neighbours.
+  const patch = [];
+  for (let i = 0; i < 9; i++) {
+    patch.push(viewer.entities.add({
+      show: false,
+      rectangle: {
+        coordinates: Cesium.Rectangle.fromDegrees(0, 0, 1, 1), height: 0,
+        material: Cesium.Color.fromCssColorString(CONE_ANCHOR_COLOR).withAlpha(0.18),
+        outline: true, outlineWidth: 1,
+        outlineColor: Cesium.Color.fromCssColorString(CONE_ANCHOR_COLOR).withAlpha(0.7),
+      },
+    }));
+  }
+  cones.dots = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
+  cones.ents = { anchor, win, ring, patch };
+  return cones.ents;
+}
+
+/* One pool of point primitives, reused every draw: at lag 143 the outer cone
+ * is ~3,300 dots and rebuilding the collection per frame would make the sweep
+ * a garbage-collection benchmark. */
+let conePoolLen = 0;
+function coneDot(i, lat, lon, color, size, hollow) {
+  const col = cones.dots;
+  const p = i < col.length ? col.get(i)
+    : col.add({ position: Cesium.Cartesian3.fromDegrees(0, 0) });
+  p.position = Cesium.Cartesian3.fromDegrees(lon, lat);
+  // Hollow = off the tensor window. The model reads those as missing, so they
+  // are drawn as an outline with nothing inside it — visibly not data.
+  p.color = hollow ? Cesium.Color.TRANSPARENT : color;
+  p.outlineColor = hollow ? color.withAlpha(0.9) : color.withAlpha(0.0);
+  p.outlineWidth = hollow ? 1.6 : 0;
+  p.pixelSize = size;
+  p.show = true;
+  conePoolLen = Math.max(conePoolLen, i + 1);
+}
+
+function conesDraw() {
+  if (!coneGeo || !cones.ents) return;
+  const e = cones.ents, K = coneGeo.constants, w = coneGeo.window;
+  const g = coneGridOf(cones.lat, cones.lon);
+  const a = coneCellLatLon(g.y, g.x);
+  const k = cones.lag;
+  const inWin = (y, x) => y >= 0 && y < w.ny && x >= 0 && x < w.nx;
+
+  e.anchor.position = Cesium.Cartesian3.fromDegrees(a.lon, a.lat);
+  e.anchor.show = true;
+  e.win.show = true;
+  const half = w.dlat / 2;
+  for (let i = 0; i < 9; i++) {
+    const dy = Math.floor(i / 3) - 1, dx = (i % 3) - 1;
+    const c = coneCellLatLon(g.y + dy, g.x + dx);
+    e.patch[i].rectangle.coordinates = Cesium.Rectangle.fromDegrees(
+      c.lon - half, c.lat - half, c.lon + half, c.lat + half);
+    e.patch[i].show = inWin(g.y + dy, g.x + dx);
+  }
+
+  let n = 0, off = 0;
+  /* A dot's cell may lie off the tensor window (drawn hollow, and counted —
+   * the model reads it as missing) and, far enough out at high latitude, off
+   * the SPHERE's coordinate range too: 4,444 km east of 70° N is 117° of
+   * longitude. Those cannot be placed at all without wrapping them round the
+   * globe, which is exactly the thing this tab says the model never does — so
+   * they are counted and not drawn, never drawn somewhere they are not. */
+  const place = (dy, dx, col, size) => {
+    const c = coneCellLatLon(g.y + dy, g.x + dx);
+    const hollow = !inWin(g.y + dy, g.x + dx);
+    if (hollow) off++;
+    if (Math.abs(c.lon) > 180 || Math.abs(c.lat) > 90) return;
+    coneDot(n++, c.lat, c.lon, col, size, hollow);
+  };
+
+  // Inner dots, lags 1..min(k, 6), coloured by lag; the current lag is the
+  // brightest and biggest, so the sweep reads as a cone opening out.
+  const innerAll = coneInnerDots(a.lat, cones.fam);
+  let offInner = 0;
+  for (const [, dy, dx] of innerAll) {
+    if (!inWin(g.y + dy, g.x + dx)) offInner++;
+  }
+  for (const [lag, dy, dx] of innerAll) {
+    if (lag > Math.min(k, K.L_IN)) continue;
+    const cur = lag === k;
+    place(dy, dx, coneLagColor(lag / K.L_IN).withAlpha(cur ? 1 : 0.55), cur ? 7 : 4.5);
+  }
+  // Outer spiral, cumulative from lag 7 — stage 2 reads all of them, so the
+  // picture at lag k is the whole history up to k, not one annulus.
+  for (let j = K.L_IN + 1; j <= k; j++) {
+    const cur = j === k;
+    const col = coneLagColor(1).withAlpha(cur ? 1 : 0.16);
+    for (const [dy, dx] of coneOuterSpiral(a.lat, j)) place(dy, dx, col, cur ? 6 : 3);
+  }
+  for (let i = n; i < conePoolLen; i++) cones.dots.get(i).show = false;
+  cones.nDrawn = n; cones.nOff = off; cones.nOffInner = offInner;
+
+  /* The reach at this lag, as an ellipse on the ground: the zonal semi-axis is
+   * the reach itself, the meridional one 0.71 of it — the measured flow
+   * anisotropy the sunflower is built on. The depth column is the exception:
+   * it has no disc at all, one cell at six lags, so an ellipse there would
+   * assert reading the model does not do. */
+  const r = k <= K.L_IN ? coneReachKm(cones.fam, k) : coneOuterReachKm(k);
+  if (r > 0 && !(cones.fam === "rg" && k <= K.L_IN)) {
+    const coslat = Math.max(Math.cos(a.lat * Math.PI / 180), K.COS_FLOOR);
+    const dLat = K.ASPECT * r / K.KM_PER_DEG, dLon = r / (K.KM_PER_DEG * coslat);
+    const pos = [];
+    for (let i = 0; i <= 96; i++) {
+      const th = i / 96 * 2 * Math.PI;
+      pos.push(a.lon + dLon * Math.sin(th), a.lat + dLat * Math.cos(th));
+    }
+    e.ring.polyline.positions = Cesium.Cartesian3.fromDegreesArray(pos);
+    e.ring.show = true;
+  } else {
+    e.ring.show = false;                  // family A past lag 1: no reach at all
+  }
+  viewer.scene.requestRender();
+  conesStats();
+  conesSection();
+}
+
+/* No thousands grouping: the reach tops out at 4,444 km, so a separator buys
+ * nothing and costs the number its exactness — 2721.6 is the arithmetic
+ * (129.6 x 21), and 2,721.6 reads like a rounded quantity. */
+function coneFmtKm(r) {
+  return String(Math.round(r * 10) / 10);
+}
+
+function conesStats() {
+  const K = coneGeo.constants, k = cones.lag, fam = cones.fam;
+  const r = k <= K.L_IN ? coneReachKm(fam, k) : coneOuterReachKm(k);
+  const reach = document.getElementById("cn-reach");
+  reach.querySelector(".stat-value").textContent = r > 0 ? `${coneFmtKm(r)} km` : "none";
+  reach.querySelector(".stat-sub").textContent = k <= K.L_IN
+    ? (r > 0 ? `family ${fam === "rg" ? "B (depth)" : fam} · inner cone`
+             : "past this driver's memory")
+    : "stage 2 · outer envelope";
+
+  const dots = document.getElementById("cn-dots");
+  const per = coneGeo.counts[fam === "rg" ? "inner_dots_rg" : `inner_dots_${fam}`];
+  dots.querySelector(".stat-value").textContent = String(per);
+  dots.querySelector(".stat-sub").textContent = fam === "rg"
+    ? "anchor column only (rg)"
+    : `dots per channel${cones.nOffInner ? ` · ${cones.nOffInner} off window` : ""}`;
+
+  const gg = coneGridOf(cones.lat, cones.lon);
+  const a = coneCellLatLon(gg.y, gg.x);
+  const days = k * K.DT_DAYS;
+  document.getElementById("cn-lag-read").innerHTML =
+    `<strong>lag ${k}</strong> · ${days} days back · anchor ` +
+    `${Math.abs(a.lat).toFixed(2)}° ${a.lat >= 0 ? "N" : "S"} ` +
+    `${Math.abs(a.lon).toFixed(2)}° ${a.lon >= 0 ? "E" : "W"}` +
+    (k === 0 ? " — the 3×3 patch, one token per channel"
+             : ` · ${cones.nDrawn} dots drawn`);
+}
+
+/* Reach against lag. BOTH axes are square-rooted, for the same reason: the six
+ * inner pentads carry the whole codec argument and would otherwise occupy the
+ * first 4% of the width and the bottom 20% of the height, beside 143 outer
+ * lags reaching to the 4,444 km cap. The axes are labelled with real numbers,
+ * so the compression is visible rather than implied. */
+function conesSection() {
+  const c = document.getElementById("cn-section");
+  if (!c) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height, K = coneGeo.constants;
+  const PADL = 30, PADB = 15, PADT = 8, PADR = 10;
+  ctx.clearRect(0, 0, W, H);
+  const KMAX = K.K_OUTER - 1, RMAX = K.OUTER_CAP_KM * 1.04;
+  const X = (k) => PADL + Math.sqrt(k / KMAX) * (W - PADL - PADR);
+  const Y = (r) => H - PADB - Math.sqrt(r / RMAX) * (H - PADT - PADB);
+
+  ctx.strokeStyle = "#30363d"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PADL, PADT); ctx.lineTo(PADL, H - PADB);
+  ctx.lineTo(W - PADR, H - PADB); ctx.stroke();
+  ctx.font = "10px sans-serif";
+  for (const r of [500, 1000, 2000, 4444]) {
+    ctx.fillStyle = "#8b949e";
+    ctx.fillText(String(r), 2, Y(r) + 3);
+    ctx.strokeStyle = "rgba(255,255,255,0.07)";
+    ctx.beginPath(); ctx.moveTo(PADL, Y(r)); ctx.lineTo(W - PADR, Y(r)); ctx.stroke();
+  }
+  ctx.fillStyle = "#8b949e";
+  ctx.textAlign = "center";
+  for (const k of [0, 6, 24, 60, 143]) ctx.fillText(String(k), X(k), H - 3);
+  ctx.textAlign = "left";
+
+  // the outer envelope: dashed, because stage 2 never reads the whole disc
+  ctx.setLineDash([4, 3]); ctx.strokeStyle = "#f0d861"; ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let k = 0; k <= KMAX; k++) {
+    const p = coneGeo.reach_km.outer[k];
+    if (k === 0) ctx.moveTo(X(k), Y(p)); else ctx.lineTo(X(k), Y(p));
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+
+  // the three inner families, solid, over their own six lags
+  const cols = { A: "#f85149", B: "#4493f8", C: "#3fb950" };
+  for (const f of ["A", "B", "C"]) {
+    const cur = (cones.fam === "rg" ? "B" : cones.fam) === f;
+    ctx.strokeStyle = cols[f]; ctx.lineWidth = cur ? 2.6 : 1.4;
+    ctx.globalAlpha = cur ? 1 : 0.5;
+    ctx.beginPath();
+    let started = false;
+    for (let k = 0; k <= K.L_IN; k++) {
+      const p = coneGeo.reach_km.inner[f][k];
+      if (p <= 0) { started = false; continue; }
+      if (!started) { ctx.moveTo(X(k), Y(p)); started = true; } else ctx.lineTo(X(k), Y(p));
+    }
+    ctx.stroke();
+    const last = f === "A" ? 1 : K.L_IN;
+    ctx.fillStyle = cols[f];
+    ctx.fillText(f, X(last) + 4, Y(coneGeo.reach_km.inner[f][last]) - 3);
+    ctx.globalAlpha = 1;
+  }
+
+  // where you are
+  ctx.strokeStyle = "#e6edf3"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(X(cones.lag), PADT); ctx.lineTo(X(cones.lag), H - PADB);
+  ctx.stroke();
+}
+
+/* The sweep is a rAF loop that cancels its own predecessor and stops itself
+ * the moment nobody is looking (another tab, or Stop) — the same shape the
+ * tide clock uses, for the same reason: a loop nothing can stop is a loop
+ * that runs on a phone in a pocket. */
+const CONE_SWEEP_MS = 8000;
+function conesPlay() {
+  cancelAnimationFrame(cones.raf);
+  cones.playing = true;
+  cones.t0 = performance.now() - (cones.lag / 143) * CONE_SWEEP_MS;
+  const step = (now) => {
+    if (!cones.playing || !conesTabVisible()) { cones.playing = false; return; }
+    const u = (now - cones.t0) / CONE_SWEEP_MS;
+    if (u >= 1) { conesSetLag(143); cones.playing = false; return; }
+    conesSetLag(Math.round(u * 143));
+    cones.raf = requestAnimationFrame(step);
+  };
+  cones.raf = requestAnimationFrame(step);
+}
+function conesStop() {
+  cones.playing = false;
+  cancelAnimationFrame(cones.raf);
+}
+
+function conesSetLag(k) {
+  cones.lag = Math.max(0, Math.min(143, k | 0));
+  const s = document.getElementById("cn-lag");
+  if (s && +s.value !== cones.lag) s.value = String(cones.lag);
+  conesDraw();
+}
+
+/* The anchor is a CELL of the tensor, so a tap anywhere snaps to the nearest
+ * grid point — and one outside the window snaps to its edge rather than being
+ * refused, because "nothing happened" is the one answer a tap must never give.
+ * The dashed box on the globe is what says where the window actually is. */
+function conesSetAnchor(lat, lon) {
+  const g = coneGridOf(lat, lon);
+  const a = coneCellLatLon(g.y, g.x);
+  cones.lat = a.lat; cones.lon = a.lon;
+  conesDraw();
+}
+
+/* Everything this tab drew, off. There is no leave hook in the tab switch, so
+ * this is called on every tab click that is not ours — cheaper and far harder
+ * to forget than a per-tab teardown. */
+function conesHide() {
+  conesStop();
+  if (!cones.ents) return;
+  const e = cones.ents;
+  e.anchor.show = false; e.win.show = false; e.ring.show = false;
+  for (const p of e.patch) p.show = false;
+  for (let i = 0; i < conePoolLen; i++) cones.dots.get(i).show = false;
+  viewer.scene.requestRender();
+}
+
+let conesUiWired = false;
+async function loadCones() {
+  await loadConeGeometry();
+  conesEntities();
+  if (!conesUiWired) {
+    conesUiWired = true;
+    document.getElementById("cn-family").addEventListener("change", (ev) => {
+      cones.fam = ev.target.value;
+      conesDraw();
+    });
+    document.getElementById("cn-lag").addEventListener("input", (ev) => {
+      conesStop();
+      conesSetLag(+ev.target.value);
+    });
+    document.getElementById("cn-play").addEventListener("click", conesPlay);
+    document.getElementById("cn-stop").addEventListener("click", conesStop);
+    for (const b of document.querySelectorAll("#cn-presets button")) {
+      b.addEventListener("click", () => {
+        for (const o of document.querySelectorAll("#cn-presets button")) {
+          o.classList.toggle("active", o === b);
+        }
+        conesSetAnchor(+b.dataset.lat, +b.dataset.lon);
+        // Inner lags are a few hundred km across; the outer cone is thousands.
+        // One height cannot frame both, so the flight follows the lag.
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(cones.lon, cones.lat,
+            cones.lag >= coneGeo.constants.L_IN + 1 ? 7.0e6 : 2.5e6),
+          duration: 1.2,
+        });
+      });
+    }
+    document.getElementById("cn-tokens").querySelector(".stat-value").textContent =
+      String(coneGeo.counts.total_tokens);
+  }
+  conesDraw();
+}
+
+/* A tap moves the anchor — but only while this tab is open, so the pixel
+ * inspector and the value probe keep the globe to themselves everywhere else.
+ * Its own handler rather than a branch inside theirs: this one wants the bare
+ * ellipsoid point and nothing about layers, and the two questions have no
+ * common part worth sharing. */
+new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((c) => {
+  if (!conesTabVisible() || !coneGeo) return;
+  const cart = viewer.camera.pickEllipsoid(c.position, viewer.scene.globe.ellipsoid);
+  if (!cart) return;
+  const g = Cesium.Cartographic.fromCartesian(cart);
+  for (const o of document.querySelectorAll("#cn-presets button")) o.classList.remove("active");
+  conesSetAnchor(Cesium.Math.toDegrees(g.latitude), Cesium.Math.toDegrees(g.longitude));
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+function coneState() {
+  const g = coneGeo ? coneGridOf(cones.lat, cones.lon) : { y: -1, x: -1 };
+  return {
+    lat: cones.lat, lon: cones.lon, fam: cones.fam, lag: cones.lag,
+    y: g.y, x: g.x, drawn: cones.nDrawn, offWindow: cones.nOff,
+    offWindowInner: cones.nOffInner, playing: cones.playing,
+    reachKm: coneGeo
+      ? (cones.lag <= coneGeo.constants.L_IN
+          ? coneReachKm(cones.fam, cones.lag) : coneOuterReachKm(cones.lag))
+      : null,
+  };
+}
+
 /* ---------------------------------------------------- installed-app updates
  * The app is installable and deliberately has NO service worker: a fresh
  * page load always gets the newest build (hash-stamped URLs). The missing
@@ -10551,7 +11085,8 @@ function loadPlayback() {
 
 const tabs = { layers: "panel-layers", temp: "panel-temp", energy: "panel-energy",
   amoc: "panel-amoc", sealevel: "panel-sealevel", tides: "panel-tides",
-  play: "panel-play", catalog: "panel-catalog", about: "panel-about" };
+  cones: "panel-cones", play: "panel-play", catalog: "panel-catalog",
+  about: "panel-about" };
 for (const t of Object.keys(tabs)) {
   document.getElementById(`tab-${t}`)?.addEventListener("click", () => {
     for (const [k, panel] of Object.entries(tabs)) {
@@ -10563,6 +11098,10 @@ for (const t of Object.keys(tabs)) {
     if (t === "temp") loadTemp();
     if (t === "energy") loadEei();
     if (t === "tides") loadTides();
+    // The cone artefacts live on the GLOBE, so leaving the tab has to take
+    // them down — and this loop has no leave hook, so every click that is not
+    // ours is the leave hook.
+    if (t === "cones") loadCones(); else conesHide();
     if (t === "play") loadPlayback();
   });
 }
@@ -10759,4 +11298,20 @@ window.__earth = {
   removeLayer,
   addLayer,
   PLAY_MAX_FRAMES,
+  // the dependency cone (E-069). The three geometry functions are the JS port
+  // of ml/cone.py and are exported so tests/data.spec.js can replay them
+  // against data/cone_geometry.json's Python reference dot sets — a port is
+  // certified against the original's own output, or it is a rewrite.
+  loadCones,
+  coneInnerDots,
+  coneOuterSpiral,
+  coneReachKm,
+  coneOuterReachKm,
+  coneSlots,
+  coneState,
+  conesSetLag,
+  conesSetAnchor,
+  conesHide,
+  get coneGeometry() { return coneGeo; },
+  get coneArtefacts() { return cones.ents; },
 };

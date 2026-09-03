@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=ab73b538" />
+  <link rel="stylesheet" href="src/style.css?v=a76a0bda" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -53,6 +53,7 @@
         <button id="tab-amoc" class="tab">AMOC</button>
         <button id="tab-sealevel" class="tab">Sea level</button>
         <button id="tab-tides" class="tab">Tides</button>
+        <button id="tab-cones" class="tab">Cones</button>
         <button id="tab-play" class="tab">Play</button>
         <button id="tab-catalog" class="tab">Catalog</button>
         <button id="tab-about" class="tab">About</button>
@@ -124,8 +125,9 @@
           <em>Energy</em> — the planet's energy imbalance · <em>AMOC</em> — the overturning
           circulation this app is ultimately about · <em>Sea level</em> — the rise and its
           causes · <em>Tides</em> — the global tide animated live, with the moon ·
-          <em>Catalog</em> — all 249 datasets · <em>About</em> — background &amp;
-          further reading.</p>
+          <em>Cones</em> — the space-time window our own forecaster reads for one pixel,
+          drawn on the globe in kilometres · <em>Catalog</em> — all 249 datasets ·
+          <em>About</em> — background &amp; further reading.</p>
       </details>
       <div class="control-row">
         <label for="layer-date">Date</label>
@@ -732,6 +734,82 @@
         the date selector.</p>
     </section>
 
+    <!-- Cones (E-069). The one tab whose subject is OUR OWN model rather than a
+         published dataset: it draws, in kilometres on the earth, which past
+         cells the forecaster reads for one pixel. The geometry is not written
+         here — data/cone_geometry.json is exported from ml/cone.py and the JS
+         port of its sunflower is certified against that file's reference dot
+         sets in tests/data.spec.js. -->
+    <section id="panel-cones" class="panel hidden">
+      <h2>Dependency cone (E-069)</h2>
+      <div class="stat-row">
+        <div class="stat" id="cn-reach"><div class="stat-value">–</div><div class="stat-sub">km reach at this lag</div></div>
+        <div class="stat" id="cn-dots"><div class="stat-value">–</div><div class="stat-sub">dots per channel</div></div>
+        <div class="stat" id="cn-tokens"><div class="stat-value">748</div><div class="stat-sub">tokens per anchor</div></div>
+      </div>
+      <div class="control-row">
+        <label for="cn-family">family</label>
+        <select id="cn-family">
+          <option value="A">A · wind stress</option>
+          <option value="B" selected>B · currents &amp; SSH</option>
+          <option value="C">C · SST &amp; mixed layer</option>
+          <option value="rg">rg · depth column</option>
+        </select>
+      </div>
+      <div class="control-row">
+        <label for="cn-lag">lag</label>
+        <input type="range" id="cn-lag" min="0" max="143" step="1" value="1" />
+        <button id="cn-play" class="td-btn" title="sweep the lag 0 → 143">▶</button>
+        <button id="cn-stop" class="td-btn" title="stop the sweep">■</button>
+      </div>
+      <div id="cn-lag-read" class="hint">lag 1 · 5 days back</div>
+      <div class="control-row" id="cn-presets">
+        <button data-lat="36" data-lon="-70" title="36°N 70°W">Gulf Stream</button>
+        <button data-lat="26.5" data-lon="-70" title="26.5°N 70°W">RAPID</button>
+        <button data-lat="58" data-lon="-52" title="58°N 52°W">Labrador Sea</button>
+        <button data-lat="0" data-lon="-30" title="0°N 30°W">Equator</button>
+      </div>
+      <p class="hint"><strong>The picture is on the globe</strong> — tap the globe to move the
+        anchor. Red ring: the pixel being predicted. Dashed box: the tensor's own window
+        (0–70° N, 100° W–20° E) — dots outside it are drawn hollow, because the model reads
+        them as missing rather than wrapping around.</p>
+      <canvas id="cn-section" width="380" height="150"></canvas>
+      <p class="hint">Reach (km) against lag, both axes √-scaled so the six inner pentads stay
+        readable beside 143 outer ones. Solid: each family's inner reach — A dies with its
+        10-day memory, C drops at lag 2 as the atmospheric stirring goes out of it. Dashed:
+        stage 2's outer envelope, flat from lag 34 where the 4,444 km cap binds. The vertical
+        rule is the lag you are looking at.</p>
+      <h2>What you are watching</h2>
+      <p>A pixel's future depends on a <strong>cone in space-time</strong>: a driver moving at
+        speed <em>v</em> reaches the anchor from within <em>dx ≤ v·(dt + l)</em> after
+        <em>l</em> pentads, and only lags inside that driver's memory are worth reading. Reach
+        is floored by a correlation length — below it the field is one number, not a gradient.
+        E-069 splits that cone in two: the <strong>inner</strong> cone (lags 0–6) goes into the
+        codec as raw values, so the embedding can carry local motion; the <strong>outer</strong>
+        cone (lags 0–143, minus the near field the codec already read) stays in stage 2 over
+        embeddings.</p>
+      <p>Why six lags, and why these speeds: a displacement is resolvable once it exceeds one
+        cell (0.25° = 28 km meridionally, 21 km zonally at 40° N). At pentad cadence that is
+        0.06 m/s per lag: eddy advection (0.1–0.3 m/s) moves 2–6 cells per pentad and is
+        resolved at lag 1; Rossby propagation (0.03 m/s) needs ~2 pentads per cell, so 6 lags
+        give 3 cells; the atmospheric forcing decorrelates in 1–2 pentads (family A, lags 0–1);
+        SST anomalies persist 3–6 months, longer than the inner window, and are deliberately
+        left to stage 2.</p>
+      <p>Lag 0 is not dots. The codec keeps the 3×3 patch there — one token per channel — so
+        every archived comparison stays like-for-like; the dots are what is new. Each lag then
+        gets the anchor's own column plus a golden-angle sunflower over its disc, elliptic
+        (0.71 north–south) because the flow is, and with as many points as the disc's
+        <em>area</em> warrants: 6 bearings at 130 km, 24 at 907 km. The depth channels get the
+        column only — Roemmich–Gilson is one live pentad a month, so a sunflower there would be
+        ~70 tokens that are structurally missing.</p>
+      <p class="hint">Sources:
+        <a href="https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_cone_codec.md"
+           target="_blank" rel="noopener">the E-069 plan</a> ·
+        <a href="https://github.com/blauewelt/earth/blob/main/ml/cone.py"
+           target="_blank" rel="noopener">ml/cone.py</a>, which is the definition this tab
+        draws — the numbers here are exported from it, never restated.</p>
+    </section>
+
 
     <!-- Playback (E-041 §3). This tab is a control room for a CLOCK: it drives
          the Date selector in the Layers tab and nothing else, so every render
@@ -892,7 +970,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">47150e95</code></p>
+      <p class="build-line">Build <code id="build-id">19bc7aca</code></p>
     </section>
 
     <footer>
@@ -948,6 +1026,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=47150e95"></script>
+  <script src="src/app.js?v=19bc7aca"></script>
 </body>
 </html>
