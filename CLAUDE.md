@@ -86,6 +86,38 @@ appears without a short summary beside it, and it links to the status page's
 the curves, rather than to an Actions log a phone cannot read: `ml/CLAUDE.md`
 §0c.
 
+### 0c. Never leave an acronym or code name standing alone — spell it out in plain English, in one sentence
+
+Standing rule, Chris 2026-09-03: *"make it a standing rule to never just
+mention an acronym but always spell it out in plain English in one sentence.
+Eg E-069 Phase A (the summary of what it is testing)."* And, minutes later,
+on the fix that was offered: *"(E-069 Phase A (the NA r3 build)) was too
+cryptic to me."*
+
+That second quote is the rule. A parenthesis full of more code names is not
+an explanation; it is the same acronym in a longer coat. The reader is on a
+phone, between meetings, and has not read the plan — every experiment ID,
+phase letter, recipe name, tensor family, run number, channel name or
+in-house term must be followed, the FIRST time it appears in a reply or a
+document section, by one plain-English sentence saying what the thing IS or
+what it is FOR, in words that need no other document to decode.
+
+- ❌ `E-069 Phase A (the NA r3 build)`
+- ❌ `family 7` · `r3` · `the terminal codec` · `H1` · `the #516 battery`
+- ✅ `E-069 Phase A — building the input tensor for the North Atlantic that
+  adds the two ocean-current direction channels the new cone codec needs; it
+  has never been built, so nothing in E-069 has trained yet.`
+- ✅ `family 7 — the first tensor covering the whole globe rather than the
+  North Atlantic window, at the same 0.25° grid and 5-day cadence.`
+- ✅ `the LIM (linear inverse model — a plain linear forecast fitted to the
+  same field, our reference baseline)`
+
+The test: cover the code name with a thumb and read the sentence; if it still
+says what is being built or tested and why it matters, it passes. This is the
+sibling of §0b (links) and of `ml/CLAUDE.md` §0c (a run number never travels
+alone): all three exist because a reader who cannot resolve a reference
+cannot act on it.
+
 ### 1. Deploy first
 
 Deploy **before** running the full test suite: commit, deploy (below), then

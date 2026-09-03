@@ -121,6 +121,14 @@ one or neither.
 The two halves are one rule: the summary says what the number means, the link
 says where to go and watch it.
 
+**(c) The same rule for every other code name — root `CLAUDE.md` §0c,
+Chris 2026-09-03.** Experiment IDs, phase letters, recipe names, tensor
+families, hypothesis labels (H1, G2), channel names: the first time one appears
+in a reply or a section it is followed by one plain-English sentence saying
+what it is or what it tests, in words that need no other document. A
+parenthesis of further code names does not count — *"E-069 Phase A (the NA r3
+build)"* was the example Chris called *"too cryptic"*.
+
 ## 0d · An experiment description is a config, not a story
 
 Standing rule, Chris 2026-08-19: *"Make it a standing rule to have all
