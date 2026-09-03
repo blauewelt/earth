@@ -103,7 +103,7 @@ arithmetic from the grid and are meant to be checked against it.
 | D4 | **Dateline wraps** (`wrap_x`) in `cone_sampler`; the window-is-a-basin rule that forbids wrapping is correct for NA and wrong for the globe | a Kamchatka anchor reads the Aleutians | ~10 lines; a test |
 | D5 | **Stage 2 stays Atlantic.** The codec trains globally; `Z` is cropped to the NA sub-block before any head, LIM or roll; the corridor percentile is taken over the NA rectangle; the #217 gate gets a new reference or `--no-gate` | the labels are Atlantic; embedding the globe would cost 85–170 h of 4090 for nothing the probe can read | the E-033 Phase 4 gate becomes runnable at all |
 | D6 | **Cadence = pentad.** Daily is §8 | the daily tensor is 165.6 GB for NA alone; 1.3 TB global | — |
-| D7 | **Protocol unchanged** — train ≤ 2020, terminal 2021–2024 opened once on Chris's word, development on 2009/2017/2023 and the 2008–09 / 2016–17 blocks; `--holdout-scope window` | nothing in the holdout machinery is keyed to the grid (audit §5) | — |
+| D7 | **Protocol = the frozen one** (PROTOCOL_RESET §3.1): train ≤ 2020, test 2021–2024 as one terminal block, opened once on Chris's word; the development blocks 2008–09 and 2016–17 held out in the same codec; `holdout_years = 2008,2009,2016,2017,2021,2022,2023,2024`, `--holdout-scope window`. The interspersed 2009/2017/2023 split is development only (#537) | nothing in the holdout machinery is keyed to the grid (audit §5) | — |
 | D8 | **Transport = the Hub + the bucket, no streaming loader yet.** The 62 GB tensor is memmapped from local NVMe on a 500 GB-disk box; E-033's object-store block-cache reader (Phase 3) stays deferred because D3 made it unnecessary at this size | a 500 GB-disk box class for builds and training (offers exist at the 4090 price) | the loader is owed the day the *daily* global family is attempted |
 
 ---
@@ -195,7 +195,7 @@ normalisation — then something upstream is not the same bytes.
 **Phase E — the codec and the three gates (~$25 all in).**
 Three seeds of `f4r3-cone-7M` on family 7 (GPU via workflow or TPU via
 `tpu_train_cone.sh` — a TPU number is its own §3b tier and buys a torch
-twin), 20k steps, batch 256, `HOLDOUT_YEARS=2009,2017,2023`, the pool
+twin), 20k steps, batch 256, `holdout_years = 2008,2009,2016,2017,2021,2022,2023,2024` (the frozen protocol: train ≤ 2020; recipe `f4r3-cone-7M-terminal`), the pool
 certificate at 0 violations, `velocity_probe` on. Then: embed the **NA crop
 only** (10–20 h of 4090, the existing `embed_cone` estimate), the 7.6 M head
 under E-064b's configuration, the #516 battery, and G1–G3 read against

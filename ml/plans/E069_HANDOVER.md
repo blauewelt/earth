@@ -163,7 +163,7 @@ dbar from `cone.channel_depth_dbar`).
 
 ```
 python3 ml/train_cone.py --tensor <path.npz> [--holdout-scope window]
-    [--holdout-years 2009,2017,2023] [--steps 20000] [--batch 256] [--lr 3e-4]
+    [--holdout-years 2008,2009,2016,2017,2021,2022,2023,2024]   # (default 2009,2017,2023 is the DEVELOPMENT split; every published level uses the frozen protocol's eight years) [--steps 20000] [--batch 256] [--lr 3e-4]
     [--seed 0] [--d-model 256] [--n-heads 8] [--n-latents 64] [--n-layers 6]
     [--d-z 32] [--d-dec 256] [--dec-layers 2] [--n-fourier 8] [--L-in 6]
     [--future-lags 1,2] [--n-dot-queries 256] [--aux-latent-w 0.25]
@@ -758,7 +758,7 @@ EST_TENSOR_BYTES="${EST_TENSOR_BYTES:-11500000000}"
 STEPS=20000 BATCH=256 LR=3e-4 SEED=0 D_Z=32
 D_MODEL=256 HEADS=8 N_LATENTS=64 LAYERS=6 D_DEC=256 DEC_LAYERS=2
 L_IN=6 FUTURE_LAGS="1,2" AUX_W=0.25 DOT_QUERIES=256
-HOLDOUT_YEARS="2009,2017,2023" EVAL_EVERY=1000 CKPT_EVERY=1000
+HOLDOUT_YEARS="2008,2009,2016,2017,2021,2022,2023,2024" EVAL_EVERY=1000 CKPT_EVERY=1000   # frozen protocol; 2009,2017,2023 = development split only
 VELOCITY_PROBE=1 SNAPSHOT_ABLATION=0 TAG=""
 # no Z, no codec asset, no pixels object: the cone codec is stage 1
 ```
