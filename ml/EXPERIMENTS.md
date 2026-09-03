@@ -79,7 +79,7 @@ other channels global, the year-split pentad aggregate, the sidecar build on a
 stops; nothing else has run.
 
 <a id="e-069"></a>
-## E-069 · Two stencils, one cone — the cone-native codec, ocean physics first — Phase A DONE 2026-09-03, Phase B wired, #536 DISPATCHED (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")
+## E-069 · Two stencils, one cone — the cone-native codec, ocean physics first — Phase A DONE 2026-09-03, Phase B wired, #537 DISPATCHED after #536 died at its first CUDA eval (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")
 
 TL;DR — the codec sees one pixel-bin and stage 2 a cylinder of embeddings, so
 nothing that needs two snapshots (velocity, tendency, convergence) can live in
@@ -158,7 +158,9 @@ tensor stem in `ml-train.yml` and makes `train_cone.py`'s flags reachable as
 annulus arm (H3) still needs a lag-dependent stencil in `temporal.py` before
 it can run; H1 and H2 do not.
 
-**#536 (E-069 seed-0 cone codec, with its snapshot twin) is DISPATCHED**,
+**#536 (E-069 seed-0 cone codec, with its snapshot twin) FAILED at 16:33Z after 73 min — not a science result.** It got through the anomaly transform (42/42 channels, three passes) and the pool certificate (**0 violations in 4,096 drawn anchors**, window scope, bins t−6..t+2) and died at its FIRST held-out eval: `torch.rand(device=cuda, generator=<cpu>)` refuses a CPU generator, and every earlier run of `train_cone.py` had been CPU-only. Fixed in `f9070db` (`eval_generator()` follows the device; regression test in `tests/test_cone_smoke.py`). **#537 (the same seed-0 cone codec + snapshot twin, re-dispatched verbatim on the fix) is RUNNING** from 16:49Z on the same box. The lines below were written for #536 and hold for #537 unchanged:
+
+**#536 (E-069 seed-0 cone codec, with its snapshot twin) was DISPATCHED**,
 started 15:12Z 2026-09-03 on the same Ontario box (runner `gpu-box-31299601`,
 workflow run 33770354733): `window: recipe:f4r3-cone-7M,cone`, 20,000 steps
 × batch 256, `d_z` 32 (the codec's compressed embedding width). Its Train
