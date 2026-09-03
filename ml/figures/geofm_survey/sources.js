@@ -171,6 +171,30 @@ const P = {
   blackmarble: { t: "VIIRS Black Marble", u: "https://www.earthdata.nasa.gov/data/projects/black-marble" },
   ethCanopy: { t: "ETH global canopy height", u: "https://langnico.github.io/globalcanopyheight/" },
   metaCanopy: { t: "Meta/WRI 1 m canopy height", u: "https://registry.opendata.aws/dataforgood-fb-forests/" },
+  // --- what feeds the cone codec today (slide 45) ---
+  glorysProduct: { t: "GLORYS12V1 product page (Copernicus Marine)", u: "https://data.marine.copernicus.eu/product/GLOBAL_MULTIYEAR_PHY_001_030/description" },
+  oisstPsl: { t: "NOAA OISST v2.1 (NOAA PSL)", u: "https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html" },
+  rgArgo: { t: "Roemmich–Gilson Argo climatology (Scripps)", u: "https://sio-argo.ucsd.edu/RG_Climatology.html" },
+  ncepR1: { t: "NCEP/NCAR Reanalysis 1 (NOAA PSL)", u: "https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html" },
+  rapidData: { t: "RAPID-MOCHA-WBTS 26.5° N data", u: "https://rapid.ac.uk/data/data-download" },
+  floridaCable: { t: "Florida Current cable transport (NOAA AOML)", u: "https://www.aoml.noaa.gov/phod/floridacurrent/" },
+  dataLadder: { t: "ml/plans/DATA_LADDER.md (source)", u: "https://github.com/blauewelt/earth/blob/main/ml/plans/DATA_LADDER.md" },
+  e069blob: { t: "ml/plans/E069_cone_codec.md (source)", u: "https://github.com/blauewelt/earth/blob/main/ml/plans/E069_cone_codec.md" },
+  // --- El Niño 2026 (slide 48) ---
+  cpcEnso: { t: "CPC ENSO diagnostic discussion, 13 Aug 2026", u: "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_disc_aug2026/ensodisc.shtml" },
+  iriPlume: { t: "IRI/CPC ENSO forecast plume", u: "https://iri.columbia.edu/our-expertise/climate/forecasts/enso/current/" },
+  pmelWwv: { t: "PMEL Warm Water Volume / 20 °C isotherm", u: "https://www.pmel.noaa.gov/tao/wwv/data/" },
+  godas: { t: "GODAS ocean analysis (NOAA PSL)", u: "https://psl.noaa.gov/data/gridded/data.godas.html" },
+  interpOlr: { t: "NOAA interpolated outgoing longwave radiation", u: "https://psl.noaa.gov/data/gridded/data.interp_OLR.html" },
+  oni: { t: "Oceanic Niño Index (NOAA CPC)", u: "https://origin.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php" },
+  pslIndices: { t: "NOAA PSL climate indices", u: "https://psl.noaa.gov/data/climateindices/list/" },
+  mei: { t: "Multivariate ENSO Index v2 (NOAA PSL)", u: "https://psl.noaa.gov/enso/mei/" },
+  rmm: { t: "RMM Madden–Julian Oscillation index (BoM)", u: "https://www.bom.gov.au/climate/mjo/" },
+  ccmp: { t: "CCMP ocean vector winds (REMSS)", u: "https://www.remss.com/measurements/ccmp/" },
+  oscarFinal: { t: "OSCAR L4 final v2.0 (PO.DAAC)", u: "https://podaac.jpl.nasa.gov/dataset/OSCAR_L4_OC_FINAL_V2.0" },
+  catalogJson: { t: "data/catalog.json — the 274-record catalog (source)", u: "https://github.com/blauewelt/earth/blob/main/data/catalog.json" },
+  catalogDoc: { t: "docs/CATALOG.md — the catalog in prose", u: "https://blauewelt.github.io/earth/docs.html?f=docs/CATALOG.md" },
+  coneDataEnso: { t: "CONE_DATA_AND_ENSO.md — the companion page", u: "https://blauewelt.github.io/earth/docs.html?f=ml/figures/geofm_survey/CONE_DATA_AND_ENSO.md" },
 };
 const S = (...k) => k.map(x => P[x]);
 const modelSix = S("alphaearth", "tessera", "olmo", "terramind", "prithvi", "granite");
@@ -219,8 +243,10 @@ module.exports = [
   /* 42 */ S("proposal", "paper", "mlclaude"),
   /* 43 */ S("proposal", "paper", "mlclaude", "prithvi"),
   /* 44 */ S("e069", "e069log", "proposal", "chelton", "deser", "emery", "perceiver", "glorys", "mlclaude"),
-  /* 45 */ S("proposal", "paper", "mlclaude", "cmemsFc"),
-  /* 45 */ S("proposal", "s1reconf", "s1d", "s2ext", "modisviirs", "snpp", "ssmis", "amsr3", "s6", "occci", "ccism", "en4", "grdc", "opera", "gleam", "ecmwfOpen"),
-  /* 46 */ S("surveyNotes", "proposal", "paper"),
+  /* 45 — what feeds the cone codec today */ S("glorysProduct", "oisstPsl", "rgArgo", "ncepR1", "rapidData", "floridaCable", "dataLadder", "e069blob", "e069", "coneDataEnso", "proposal", "mlclaude"),
+  /* 46 */ S("proposal", "paper", "mlclaude", "cmemsFc"),
+  /* 47 */ S("proposal", "s1reconf", "s1d", "s2ext", "modisviirs", "snpp", "ssmis", "amsr3", "s6", "occci", "ccism", "en4", "grdc", "opera", "gleam", "ecmwfOpen"),
+  /* 48 — El Niño 2026 */ S("cpcEnso", "iriPlume", "pmelWwv", "godas", "interpOlr", "oni", "pslIndices", "mei", "rmm", "ccmp", "oscarFinal", "catalogJson", "catalogDoc", "coneDataEnso"),
+  /* 49 */ S("surveyNotes", "proposal", "paper"),
 ];
 module.exports.P = P;

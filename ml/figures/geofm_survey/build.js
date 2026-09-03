@@ -1,5 +1,6 @@
 // Geospatial representation models — stencil-level overview
 const pptxgen = require("pptxgenjs");
+const path = require("path");
 const pres = new pptxgen();
 pres.layout = "LAYOUT_WIDE"; // 13.33 x 7.5
 pres.author = "Earth 2 research";
@@ -1486,5 +1487,5 @@ MADE.forEach((sl, i) => {
   // every note ends with its own sources, as full URLs (plain text in the notes pane; clickable on the notes pages and the Sources slide)
   sl.addNotes(NOTES[i] + "\n\nSources for this slide:\n" + SOURCES[i].map(x => `• ${x.t} — ${x.u}`).join("\n"));
 });
-require("fs").writeFileSync("/home/claude/deck/titles.json", JSON.stringify(MADE.map(sl => ({ title: sl._deckTitle || "Geospatial representation models", sub: sl._deckSub || "" })), null, 1));
-pres.writeFile({ fileName: "/home/claude/deck/geospatial-representation-models.pptx" }).then(f => console.log("wrote", f, MADE.length, "slides"));
+require("fs").writeFileSync(path.join(__dirname, "titles.json"), JSON.stringify(MADE.map(sl => ({ title: sl._deckTitle || "Geospatial representation models", sub: sl._deckSub || "" })), null, 1));
+pres.writeFile({ fileName: path.join(__dirname, "geospatial-representation-models.pptx") }).then(f => console.log("wrote", f, MADE.length, "slides"));

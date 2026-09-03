@@ -371,6 +371,110 @@ module.exports = function (ctx) {
     footer(s);
   }
 
+  // ---------------------------------------------------------------- 44c. what feeds the cone codec today (derivation graph + ranked additions)
+  {
+    const s = pres.addSlide(); s.background = { color: WHITE };
+    title(s, "What feeds the cone codec today — four products, 42 channels, one axis",
+      "family 4 recipe r3 — the tensor the codec eats: North Atlantic 100° W–20° E, 0–70° N · 0.25° · 5-day bins · 1982-01-01 → 2024-12-31 · 84,405 ocean cells · built once and sha-pinned (run #535)");
+    // ---------- left 60 %: the derivation graph, four rows ----------
+    const CX = [0.6, 2.07, 3.54, 5.01, 6.48], CW = 1.35;   // five columns: 4 products + the labels
+    const rowLabel = (t, y, note) => txt(s, [
+      { text: t, options: { bold: true, color: NAVY, fontSize: 8, charSpacing: 1 } },
+      { text: "   " + note, options: { color: MUTED, fontSize: 7.5, italic: true } },
+    ], 0.6, y, 7.25, 0.13);
+    const cell = (i, y, h, col, fill, runs) => { box(s, CX[i], y, CW, h, col, fill); txt(s, runs, CX[i] + 0.07, y + 0.05, CW - 0.14, h - 0.1); };
+    const down = (i, y1, y2) => arrow(s, CX[i] + CW / 2, y1, CX[i] + CW / 2, y2, GRIDLINE, 1);
+
+    // row 0 — observations
+    rowLabel("0 · OBSERVATIONS", 1.5, "what an instrument actually measured");
+    [["satellite altimetry · satellite SST (AVHRR) · Argo floats · ships, buoys, drifters"],
+     ["satellite SST (AVHRR) · ships, buoys, drifters"],
+     ["Argo floats only"],
+     ["radiosondes, aircraft, ships, satellite radiances"],
+     ["moorings at 26.5° N · the Florida Straits cable"]].forEach((o, i) =>
+      cell(i, 1.72, 0.56, GRIDLINE, "F7F9FB", [{ text: o[0], options: { fontSize: 7, color: MUTED } }]));
+    // row 1 — the products we download
+    rowLabel("1 · PRODUCTS WE DOWNLOAD", 2.30, "four inputs + two labels; green = observation-led, red = model-derived");
+    CX.forEach((_, i) => down(i, 2.41, 2.53));
+    const prod = [
+      [DERIV, "GLORYS12", "derived", "Copernicus Marine ocean reanalysis — a model nudged towards observations. 1/12°, daily, 1993→. Assimilates altimetry, SST and Argo on a 7-day cycle."],
+      [OBS, "NOAA OISST v2.1", "analysed", "0.25°, daily, 1981-09→. Optimum interpolation of AVHRR radiances and in-situ measurements — an analysis of observations, no ocean model."],
+      [OBS, "Roemmich–Gilson Argo", "analysed", "Scripps climatology, 1°, monthly, 2004→. Argo floats mapped onto a grid; nothing else enters it."],
+      [DERIV, "NCEP/NCAR R1 momentum flux", "derived", "Atmospheric reanalysis 1, ~1.9°, daily, 1948→. The surface wind stress is model-diagnosed. Archive FROZEN since Mar 2026."],
+      [TIME, "RAPID 26.5° N + Florida Current", "labels, never input", "Overturning transport 12-hourly 2004→; cable transport daily 1982→. Stored beside the tensor as truth; the trainer never reads them."],
+    ];
+    prod.forEach(([col, name, kind, body], i) => {
+      box(s, CX[i], 2.54, CW, 1.06, col, i === 4 ? "FFF6EE" : PALE);
+      txt(s, [
+        { text: name, options: { bold: true, color: col, fontSize: 7.5, breakLine: true } },
+        { text: kind.toUpperCase(), options: { bold: true, color: col, fontSize: 7, charSpacing: 0.5, breakLine: true, paraSpaceAfter: 2 } },
+        { text: body, options: { fontSize: 7, color: INK } },
+      ], CX[i] + 0.07, 2.58, CW - 0.14, 1.0);
+    });
+    // row 2 — the 42 channels
+    rowLabel("2 · CHANNELS IN THE TENSOR", 3.61, "42 of them, plus the two labels; live-bin caveats in italics");
+    CX.forEach((_, i) => down(i, 3.74, 3.87));
+    const chan = [
+      [DERIV, "cur_speed · cur_u · cur_v · log_mld · ssh", "5 channels, 1993+ only. cur_speed = hypot(cur_u, cur_v) by construction, so it is not independent of the two components."],
+      [OBS, "sst", "1 channel, live on the whole axis (1982→). The only channel with no hole in it."],
+      [OBS, "rg_t × 16 · rg_s × 16 (10–1900 dbar)", "32 channels — 80 % of the bytes. 2004+, and ONE live 5-day bin in six; `missing` tokens in the other five."],
+      [DERIV, "tau_x · tau_y · tau_x_std · tau_y_std", "4 channels, whole axis. The two σ channels are computed from the daily fields, never from the pentad mean."],
+      [TIME, "truth_rapid · truth_fc", "Two label series stored in the same file. Read by the probes, never by the encoder."],
+    ];
+    chan.forEach(([col, head, body], i) => {
+      box(s, CX[i], 3.88, CW, 0.94, col, i === 4 ? "FFF6EE" : "FBFCFD");
+      txt(s, [
+        { text: head, options: { bold: true, color: col, fontSize: 7, breakLine: true, paraSpaceAfter: 2 } },
+        { text: body, options: { fontSize: 7, color: INK, italic: true } },
+      ], CX[i] + 0.07, 3.92, CW - 0.14, 0.88);
+    });
+    // row 3 — derived inside training
+    rowLabel("3 · DERIVED INSIDE TRAINING", 4.83, "nothing here is downloaded — it is computed from the tensor itself");
+    [0, 1, 2, 3].forEach(i => down(i, 4.96, 5.09));
+    const DW = 1.72, DX = [0.6, 2.44, 4.28, 6.12];
+    [[TEAL, "Anomaly, then z-score", "Each channel minus a per-calendar-month average built from TRAINING YEARS ONLY, then divided by its own spread. No outside climatology is used."],
+     [TEAL, "Mask · holdout · certificate", "The ocean mask is where channel 0 is finite (84,405 cells). Calendar years 2009, 2017 and 2023 are held out, certified 0 violations in 4,096 anchors."],
+     [TEAL, "Probe target · snapshot twin", "The velocity probe's target is the anchor's own cur_u, cur_v, hidden from the encoder. A second identical codec with no lags (L_in = 0) is the control."],
+     [MUTED, "Pinned for stage 2, unused yet", "The run-415 control embedding on recipe r2, the linear-inverse-model null (8 scoreable channels), and the AMOC evaluation mask."]]
+      .forEach(([col, head, body], i) => {
+        box(s, DX[i], 5.10, DW, 0.82, col, col === MUTED ? "F4F6F9" : "F2F8FA");
+        txt(s, [
+          { text: head, options: { bold: true, color: col, fontSize: 7.5, breakLine: true, paraSpaceAfter: 2 } },
+          { text: body, options: { fontSize: 7, color: INK } },
+        ], DX[i] + 0.07, 5.14, DW - 0.14, 0.76);
+      });
+    // two annotations under the graph
+    txt(s, [
+      { text: "▲ ", options: { color: DERIV, fontSize: 8, bold: true } },
+      { text: "The app's 1991–2020 sea-surface-temperature normal is deliberately NOT the anomaly baseline: it averages over the held-out years, so it would leak the test period into training.", options: { fontSize: 7.5, color: INK, breakLine: true, paraSpaceAfter: 2 } },
+      { text: "▲ ", options: { color: DERIV, fontSize: 8, bold: true } },
+      { text: "Derived products peek forward by half their assimilation window — the observations a reanalysis may look at around each day (GLORYS: 7 days). 5 of the 42 channels; they need a time shift.", options: { fontSize: 7.5, color: INK } },
+    ], 0.6, 5.99, 7.25, 0.5);
+
+    // ---------- right 40 %: what is missing ----------
+    box(s, 7.95, 1.5, 4.75, 4.92, NAVY, "F4F6F9");
+    const add = [
+      ["Buoyancy forcing — ERA5", "net short- and long-wave radiation, sensible and latent heat, evaporation − precipitation, wind-stress curl. The only forcing entirely absent today, and it also replaces the frozen NCEP momentum flux."],
+      ["Ocean interior at 0.25°, in 3-D — GREP", "temperature, salinity and both velocity components at 8 depths, 1993→ (+20 GB). Velocity at depth, and six times as many live subsurface bins. The data ladder's #1."],
+      ["Observed sea level — DUACS altimetry", "sea-level anomaly, absolute dynamic topography and geostrophic velocities, 0.125°, daily, 1993→: the observation GLORYS is fitted to, as its own independent channel."],
+      ["Statics", "bathymetry and its gradient, the Coriolis parameter f and its gradient β, distance to coast and to the 1000 m isobath, mean dynamic topography. ~3 MB; the ladder's #2."],
+      ["Sea-ice concentration — OSTIA / OSI SAF", "the northern boundary condition of the window. Today the model sees ice-covered water as ordinary water."],
+      ["Drifters — Global Drifter Program", "15 m velocity and SST as native dots: the observed velocity the H1 probe (does the embedding know the current?) should really be scored on."],
+      ["Biosphere", "ocean-colour chlorophyll (OC-CCI 4 km 1997→, PACE 2024→), BGC-Argo oxygen / nitrate / chlorophyll profiles as dots, SOCAT surface CO₂. The ladder rejected chlorophyll as an INPUT for the overturning head — “no mechanistic path at these timescales” — so the biosphere enters first as what the embedding must PREDICT, and as a held-out sphere."],
+      ["Sea-surface salinity — SMOS / SMAP", "2010→, short, but it is the freshwater lid. And RAPID's depth-resolved moc_vertical and boundary T/S files are already downloaded and unused."],
+    ];
+    txt(s, [
+      { text: "Missing from “the ocean and its biosphere” — additions, ranked", options: { bold: true, color: NAVY, fontSize: 11, breakLine: true, paraSpaceAfter: 5 } },
+      ...add.flatMap(([h, body], i) => [
+        { text: `${i + 1}  ${h}  `, options: { bold: true, color: TEAL, fontSize: 8.5 } },
+        { text: body, options: { fontSize: 8.5, color: INK, breakLine: true, paraSpaceAfter: 4 } },
+      ]),
+      { text: "Ranked by information per byte and by what the model cannot derive from what it already holds.", options: { fontSize: 8, italic: true, color: MUTED } },
+    ], 8.1, 1.58, 4.45, 4.78);
+    reading(s, "Reading. Today's codec sees the ocean's momentum forcing (wind stress) and its density structure in one column, and nothing else: no heat or freshwater forcing, no observed velocity, no boundaries — no ice, no bathymetry — and nothing living. Two thirds of the channel count is a single monthly Argo product that is live in one 5-day bin out of six. The additions on the right are ordered by information per byte and by what the model cannot derive from what it already has; the first three are also the three the E-069 plan (the cone codec being trained now) would use unchanged.", 6.6);
+    footer(s);
+  }
+
   // ---------------------------------------------------------------- 45. phases and the decisive experiment
   {
     const s = pres.addSlide(); s.background = { color: WHITE };
@@ -419,6 +523,89 @@ module.exports = function (ctx) {
     ];
     s.addTable(rows, { x: 0.6, y: 1.5, w: 12.1, colW: [1.9, 5.3, 4.9], fontFace: FONT_B, border: { type: "solid", color: GRIDLINE, pt: 0.5 }, rowH: [0.28, 0.55, 0.45, 0.55, 0.65, 0.55, 0.65, 0.65], margin: 0.04, autoPage: false });
     reading(s, "Also verified: ERA5's SST and sea ice are prescribed inputs (HadISST2, OSI SAF, OSTIA), so they must never be scored as ocean observations; ERA5-Land has no data assimilation at all — a land model replayed on ERA5 forcing; Copernicus waves are MFWAM, not WAVEWATCH; Copernicus surface carbon is 0.25°, not 1°; the OPERA composite is now 1 km / 5 min (CIRRUS), not the retired 2 km / 15 min ODYSSEY. Float counts are the live OceanOPS figures of 2 Sep 2026 and move daily.", 6.15);
+    footer(s);
+  }
+
+  // ---------------------------------------------------------------- 46b. El Niño 2026 — catalogue audit and additions
+  {
+    const s = pres.addSlide(); s.background = { color: WHITE };
+    title(s, "El Niño 2026 — what the catalog predicts, and what to add",
+      "Our own OISST bake says Niño-3.4 (the central-Pacific sea-temperature anomaly that defines the event) went −0.6 °C in January to +2.1 °C in July 2026; NOAA's Climate Prediction Center, 13 Aug: El Niño Advisory, > 90 % chance of a very strong event, 69 % chance of exceeding +2.5 °C in Oct–Dec — stronger than any event since 1950");
+    const COLD = SPACE, WARM = "C0443A";
+    // ---------------- left: the bar chart ----------------
+    const PX0 = 1.05, PX1 = 4.05, PY0 = 1.78, PY1 = 4.28;   // plot box
+    const VMIN = -1.0, VMAX = 2.6, SC = (PY1 - PY0) / (VMAX - VMIN);
+    const yOf = v => PY1 - (v - VMIN) * SC;
+    s.addShape(pres.shapes.RECTANGLE, { x: PX0, y: PY0, w: PX1 - PX0, h: PY1 - PY0, fill: { color: "FBFCFD" }, line: { color: GRIDLINE, width: 0.5 } });
+    [-1, 0, 1, 2].forEach(v => {
+      s.addShape(pres.shapes.LINE, { x: PX0, y: yOf(v), w: PX1 - PX0, h: 0, line: { color: v === 0 ? MUTED : GRIDLINE, width: v === 0 ? 1 : 0.5 } });
+      s.addText((v > 0 ? "+" : "") + v.toFixed(0), { x: 0.6, y: yOf(v) - 0.09, w: 0.4, h: 0.18, fontFace: FONT_B, fontSize: 7, color: MUTED, align: "right", isTextBox: true, margin: 0 });
+    });
+    // December peaks of the three big events, from the same bake
+    [[2.46, "Dec 2015  +2.46"], [2.18, "Dec 1997  +2.18"], [2.01, "Dec 2023  +2.01"]].forEach(([v, t]) => {
+      s.addShape(pres.shapes.LINE, { x: PX0, y: yOf(v), w: PX1 - PX0, h: 0, line: { color: MUTED, width: 0.75, dashType: "dash" } });
+      s.addText(t, { x: PX0 + 0.05, y: yOf(v) - 0.135, w: 1.5, h: 0.14, fontFace: FONT_B, fontSize: 7, color: MUTED, isTextBox: true, margin: 0 });
+    });
+    const MONTHS = [["Jan", -0.57], ["Feb", -0.19], ["Mar", 0.02], ["Apr", 0.47], ["May", 0.94], ["Jun", 1.60], ["Jul", 2.09]];
+    const slot = (PX1 - PX0) / MONTHS.length, bw = 0.30;
+    MONTHS.forEach(([m, v], i) => {
+      const bx = PX0 + i * slot + (slot - bw) / 2;
+      const y0 = yOf(Math.max(v, 0)), h = Math.abs(yOf(v) - yOf(0));
+      s.addShape(pres.shapes.RECTANGLE, { x: bx, y: y0, w: bw, h: Math.max(h, 0.012), fill: { color: v < 0 ? COLD : WARM }, line: { width: 0 } });
+      s.addText((v > 0 ? "+" : "") + v.toFixed(2), { x: bx - 0.15, y: v < 0 ? yOf(v) + 0.02 : y0 - 0.17, w: bw + 0.3, h: 0.16, fontFace: FONT_B, fontSize: 7, bold: true, color: v < 0 ? COLD : WARM, align: "center", isTextBox: true, margin: 0 });
+      s.addText(m, { x: bx - 0.1, y: PY1 + 0.03, w: bw + 0.2, h: 0.18, fontFace: FONT_B, fontSize: 7.5, color: INK, align: "center", isTextBox: true, margin: 0 });
+    });
+    txt(s, [
+      { text: "Niño-3.4 monthly anomaly, 2026", options: { bold: true, color: NAVY, fontSize: 9, breakLine: true } },
+      { text: "5° S–5° N, 170° W–120° W, 500 one-degree cells", options: { fontSize: 7.5, italic: true, color: MUTED } },
+    ], 0.6, 1.5, 3.5, 0.3);
+    txt(s, [
+      { text: "Computed here from data/oisst_y (NOAA's daily satellite-and-buoy sea-temperature analysis, block-meaned to 1° monthly) against data/oisst_clim, the app's 1991–2020 normal. The Climate Prediction Center's July value is +1.4 °C, because the official index is computed on a different, coarser sea-temperature reconstruction (ERSSTv5) as a three-month running mean — and that 0.7 °C gap is itself the reason to carry the official index rather than only our own bake.", options: { fontSize: 8, color: INK } },
+    ], 0.6, 4.56, 3.5, 1.8);
+    // ---------------- middle: what the catalogue already has ----------------
+    const MX = 4.25, MW = 3.7;
+    box(s, MX, 1.5, MW, 4.86, TEAL, "F2F8FA");
+    const pair = (a, b) => [
+      { text: a + "  ", options: { bold: true, color: TEAL, fontSize: 8 } },
+      { text: b, options: { fontSize: 8, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+    ];
+    txt(s, [
+      { text: "Already in the catalog", options: { bold: true, color: NAVY, fontSize: 10.5, breakLine: true } },
+      { text: "274 records, compiled for the Atlantic overturning circulation — its `amoc` flag mis-sorts for El Niño. what → signal · limit", options: { fontSize: 7.5, italic: true, color: MUTED, breakLine: true, paraSpaceAfter: 4 } },
+      ...pair("OISST v2.1", "→ the label itself, all four Niño boxes. Baked global 1° monthly 1981-09 → 2026-07."),
+      ...pair("GLORYS12 surface currents + mixed-layer depth", "→ equatorial advection. Baked 1993 → 2026-05 · the depth levels are not baked."),
+      ...pair("GPCP 1979→ / IMERG 2000→", "→ the rainfall shift towards the dateline that is El Niño's atmospheric expression · only a climatology is baked from GPCP; IMERG is live."),
+      ...pair("MERRA-2 10 m wind", "→ trade winds · monthly tiles only, so a westerly wind burst (a 5–15 day reversal) is averaged away."),
+      ...pair("NASA sea-surface height", "→ Kelvin and Rossby waves · the app's tiles END 2019-01."),
+      ...pair("OSCAR surface currents", "→ zonal advection · tiles 2014-10 → 2024-07 only."),
+      ...pair("CERES", "→ convection · tiles end 2018-10, and it is monthly NET radiation, not the daily outgoing-longwave field the index needs."),
+      ...pair("TAO/TRITON + PIRATA moorings (`gtmba`)", "→ the single most El-Niño-specific record in the catalog · catalogued only for its Atlantic side, and flagged not-renderable."),
+      ...pair("Catalogued but unused", "ORAS5 1958→ · SODA3 · ERSSTv5 (the substrate of the official index) · HadISST · EN4 1900→ · ERA5 · CFSR · the SEAS5 and NMME seasonal hindcasts 1981/82→."),
+      ...pair("The machine-learning tensors are North-Atlantic-only", "family 7 — the first tensor covering the whole globe at the same 0.25°, 5-day grid (experiment E-070) — is mid-fetch, and its own plan names the equatorial waveguide as a target regime."),
+    ], MX + 0.14, 1.56, MW - 0.28, 4.74);
+    // ---------------- right: ranked additions ----------------
+    const RX = 8.1, RW = 4.6;
+    box(s, RX, 1.5, RW, 4.86, NAVY, "F4F6F9");
+    const adds = [
+      ["Warm Water Volume and 20 °C-isotherm depth", "NOAA PMEL, monthly 1980→. How much warm water is stacked up in the equatorial Pacific — the ~6-month-lead predictor; recharge–discharge theory IS this number."],
+      ["GODAS or ORAS5", "NOAA's operational ocean analysis (1/3° × 1°, 40 levels, 5-day and monthly, 1980→, keyless OPeNDAP), or ECMWF's ORAS5 (1958→, 5 members): the subsurface temperature and thermocline the tensor has nowhere in the Pacific."],
+      ["NOAA interpolated outgoing longwave radiation", "2.5°, daily, 1974→. Cold cloud tops mark deep convection — the Walker-circulation and Madden–Julian-Oscillation diagnostic CERES does not replace."],
+      ["Index series, as labels and as nulls", "the Oceanic Niño Index (the official definition, on ERSSTv5, 1950→), weekly Niño-1+2/3/3.4/4, the Southern Oscillation Index and its equatorial twin, the Multivariate ENSO Index, the RMM Madden–Julian index (the wind-burst trigger), the Pacific Decadal Oscillation and Pacific Meridional Mode (spring precursors)."],
+      ["Daily winds", "ERA5 10 m u and v (0.25°, hourly, 1940→) or CCMP 6-hourly 1987→ — westerly wind bursts and wind-stress curl at the cadence at which they actually happen."],
+      ["TAO/TRITON moorings as native dots on the Pacific side", "temperature and salinity with depth, currents, winds along 137° E–95° W, 1980→. The array is already catalogued, as `gtmba`."],
+      ["DUACS sea level directly", "daily 0.125°, 1993→ — equatorial Kelvin and Rossby waves, and a proxy for warm-water volume."],
+      ["Benchmarks", "the IRI/CPC forecast plume (2002→) and the NMME and SEAS5 hindcasts already in the catalog and unused — what any El Niño head must beat, and the spring-barrier skill curve to beat it on."],
+      ["In the app", "a `nino.json` bake beside eei.json and gistemp.json (~40 lines next to `oisst_monthly()` in scripts/refresh_data.py), and the four Niño boxes drawn on the globe."],
+      ["The cone codec on family 7, with an El Niño head", "sea-surface height, mixed-layer depth, the temperature/salinity column and wind stress are already the classic feature set. What is missing is the rainfall/longwave channel and the label."],
+    ];
+    txt(s, [
+      { text: "Add, ranked", options: { bold: true, color: NAVY, fontSize: 10.5, breakLine: true, paraSpaceAfter: 4 } },
+      ...adds.flatMap(([h, b], i) => [
+        { text: `${i + 1}  ${h}  `, options: { bold: true, color: TEAL, fontSize: 8.4 } },
+        { text: b, options: { fontSize: 8.4, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+      ]),
+    ], RX + 0.14, 1.56, RW - 0.28, 4.74);
+    reading(s, "Reading. Onset is behind us — the event began in March 2026 — so “predict this year's El Niño” now means three different things, and each needs different data. Hindcast the ONSET from the November 2025 state (a −0.6 °C, mildly La-Niña-ish surface with a recharged subsurface): that is a test of whether the subsurface memory was readable. Forecast the PEAK amplitude and month (October–December) and the 2027 exit. And forecast the TELECONNECTIONS — the rainfall, drought and cyclone shifts that are what anyone outside the Pacific actually feels. All three need the subsurface first, the daily winds second, and an honest null beside them: persistence, a linear inverse model, and the operational forecast plume.", 6.48);
     footer(s);
   }
 };

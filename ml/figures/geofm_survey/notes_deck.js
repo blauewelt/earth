@@ -1,6 +1,7 @@
 // Builds a landscape "speaker notes" slide for every slide of the main deck, so that a PDF can
 // interleave slide N with notes N. Same fonts and palette as the main deck.
 const pptxgen = require("pptxgenjs");
+const path = require("path");
 const NOTES = require("./notes.js");
 const SOURCES = require("./sources.js");
 const TITLES = require("./titles.json");
@@ -58,4 +59,4 @@ NOTES.forEach((note, i) => {
   s.addText(`Representation-model survey · Aug–Sep 2026 · notes for slide ${n}`, { x: 0.6, y: 7.05, w: 8, h: 0.3, fontFace: FONT_B, fontSize: 9, color: MUTED, isTextBox: true, margin: 0 });
 });
 
-pres.writeFile({ fileName: "/home/claude/deck/notes-pages.pptx" }).then(() => console.log("wrote notes-pages.pptx", NOTES.length));
+pres.writeFile({ fileName: path.join(__dirname, "notes-pages.pptx") }).then(() => console.log("wrote notes-pages.pptx", NOTES.length));
