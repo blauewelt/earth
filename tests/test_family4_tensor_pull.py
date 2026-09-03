@@ -53,8 +53,11 @@ WF = os.path.join(ROOT, ".github", "workflows", "ml-train.yml")
 TPIN = "37e146384b6f622fefe3c7e18ad9bab0389c9538be79536899fe8729bb2d0826"
 TENSOR = "family4_na025_pentad_r2"
 # E-069's revision: r2's 40 channels plus cur_u and cur_v, the binned mean
-# GLORYS12 current components. It has no pin because it has never been built.
+# GLORYS12 current components. Phase A (#535, 2026-09-03) built and published
+# it — four parts (chunked at 1.5 GiB; r3 is two channels larger than r2's
+# three-part file), sha256 below.
 R3 = "family4_na025_pentad_r3"
+TPIN3 = "fa460837fa172825ee76c8fc6fc4da75fa7b96d64519a2e2186f5c306cf03ea9"
 
 
 def build_step_body(cache_root):
@@ -145,6 +148,9 @@ def main():
     # request is checked below against what the stub curl was actually asked for
     assert f"{TENSOR}_${{TPIN:0:10}}.npz" in probe, \
         "the asset name the release actually holds is not the one requested"
+    assert TPIN3 in probe, "the r3 pin is not in the shipped workflow"
+    assert f"{R3}_${{TPIN3:0:10}}.npz" in probe, \
+        "the r3 asset name the release actually holds is not the one requested"
     try:
         # ---- 1. already present and matching: nothing is fetched ---------
         tmp, bin_, _ = sandbox()
@@ -233,53 +239,56 @@ def main():
               "still runs build_family3.py — the new branch is beside it, not "
               "in front of it")
 
-        # ---- 6. r3 has NO pin yet, so it BUILDS — and says nothing else --
+        # ---- 6. r3 IS pinned now (Phase A, #535) — four chunks pull -------
         # E-069's family4_na025_pentad_r3 (r2 plus the appended cur_u/cur_v
-        # current components the cone codec needs) has never been built or
-        # published, so there is no sha256 to pin and the workflow carries no
-        # r3 pull block — deliberately: an unpinned pull would 404, warn, and
-        # build anyway, which is a step reporting a decision it did not make.
-        # What must hold until Phase A publishes the tensor is that an r3
-        # dispatch reaches the BUILD, with `--rev r3` and the SST directory,
-        # having asked the data-cache release for nothing at all. The r2 pin
-        # is the trap here: `TPIN` is assigned unconditionally at the top of
-        # the family-4 branch, so a mis-scoped `if` would have r3 pulling r2's
-        # bytes and passing its own sha check against them.
-        tmp, bin_, _ = sandbox()
+        # current components the cone codec needs) was built and published
+        # by run #535 (2026-09-03). It is FOUR parts, not three — chunked at
+        # 1.5 GiB and two channels larger than r2's three-part file — so the
+        # r2 pin is the trap here in the other direction: `TPIN` is assigned
+        # unconditionally at the top of the family-4 branch, so a mis-scoped
+        # `if` would have r3 pulling r2's bytes (or the wrong chunk count)
+        # and passing its own sha check against them.
+        tmp, bin_, _ = sandbox(sha_out=TPIN3)
         tmps.append(tmp)
         r, calls, tf = run(tmp, bin_, tensor=R3)
         assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
-        assert "data-cache-v1" not in calls, \
-            "an r3 run asked the data-cache release for a tensor. There is no " \
-            "r3 pin, so whatever it got back is not the r3 tensor:\n" + calls
-        assert f"{R3}_" not in calls, calls
-        assert TPIN[:10] not in calls, \
+        got = [c for c in calls.splitlines() if c.startswith("curl")]
+        assert len(got) == 4, got
+        for sfx in ("aa", "ab", "ac", "ad"):
+            assert any(f"{R3}_{TPIN3[:10]}.npz.{sfx}" in c for c in got), sfx
+        assert "data-cache-v1" in got[0], got[0]
+        assert TPIN[:10] not in "".join(got), \
             "r3 requested the r2 pin's asset stem — the pull block's `if` is " \
             "mis-scoped and this box would hold r2 bytes under r3's name"
+        assert f"sha verified {TPIN3[:10]}" in r.stdout, r.stdout[-1500:]
+        assert os.path.exists(tf) and open(tf).read() == "chunk\n" * 4
+        assert not any(p.endswith(".part") for p in
+                       os.listdir(os.path.join(tmp, "ml", "cache")))
+        assert "build_family4.py" not in calls, calls
+        assert "huggingface" not in calls, "the Hub was hit for a build that " \
+                                           "is not going to happen"
+        assert "skipping the pentad025/truth/SST fetch and the build" in r.stdout
+        print("6. an r3 dispatch pulls FOUR chunks from data-cache-v1 (not "
+              "three — the file is two channels bigger than r2's), verifies "
+              "sha fa460837fa, never touches the r2 pin, and skips the "
+              "pentad025/truth/SST fetch and build_family4.py entirely")
+
+        # ---- 7. r3's pulled sha disagreeing is discarded, same as r2 -----
+        tmp, bin_, _ = sandbox(sha_out="d" * 64)
+        tmps.append(tmp)
+        r, calls, tf = run(tmp, bin_, tensor=R3)
+        assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
+        assert "!= pin — discarded" in r.stdout, r.stdout[-1500:]
+        assert not os.path.exists(tf), \
+            "an r3 tensor whose sha does not match the pin was KEPT"
         assert "build_family4.py" in calls, calls
         assert "--rev r3" in calls, \
-            "the r3 build did not pass --rev r3, so build_family4.py would " \
-            "write 40 channels under the 42-channel name:\n" + calls
-        assert "--sst-dir" in calls, \
-            "the r3 build did not pass --sst-dir. r3's channel list CONTAINS " \
-            "r2's, so channel 40 would be built entirely missing and train " \
-            "silently:\n" + calls
-        assert "sst_na025/index.npz" in calls or "sst_na025" in calls, \
-            "seed_sst never ran for r3 — the SST artifact is a build input " \
-            "of r3 exactly as it is of r2:\n" + calls
-        assert "huggingface" in calls, "the r3 build must fetch its inputs"
-        assert "pentad_mean_uo.npy" in calls, calls
-        # And the workflow must SAY where the pull goes when the pin exists,
-        # so the next session does not have to rediscover the shape of it.
-        assert "THE r3 PULL BLOCK GOES HERE" in probe, \
-            "the workflow no longer marks where the r3 pull block belongs; " \
-            "without that marker the pin lands somewhere invented"
-        print("6. an r3 dispatch (no pin exists) asks data-cache-v1 for "
-              "nothing, never touches the r2 pin, and goes straight to "
-              "build_family4.py --rev r3 --sst-dir with seed_sst run — and "
-              "the workflow still marks where the pull block goes")
+            "the r3 fallback build did not pass --rev r3:\n" + calls
+        print("7. an r3 pull whose sha256 disagrees with the pin fa460837fa "
+              "is discarded, not used: the run falls back to build_family4.py "
+              "--rev r3, same posture as r2")
 
-        print("\nfamily-4 pinned-tensor pull: all 6 checks hold ✓")
+        print("\nfamily-4 pinned-tensor pull: all 7 checks hold ✓")
     finally:
         for t in tmps:
             shutil.rmtree(t, ignore_errors=True)

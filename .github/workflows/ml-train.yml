@@ -896,32 +896,49 @@ jobs:
               fi
             fi
             # ------------------------------------------------------------ r3
-            # THE r3 PULL BLOCK GOES HERE, AND IT IS DELIBERATELY ABSENT.
-            # E-069's family4_na025_pentad_r3 has not been built or published
-            # yet, so there is no sha256 to pin, and an unpinned pull is a
-            # pull of nothing: it would fetch a 404, warn, and build anyway —
-            # a step that reports a decision it did not make (ml/CLAUDE.md
-            # §0.2). Until Phase A has run, an r3 dispatch BUILDS, which is
-            # what the build case below now does.
-            #
-            # WHEN THE PIN EXISTS (Phase A route A1 prints the full sha256 in
-            # its "Record provenance" output and in provenance.json), paste
-            # the r2 block above verbatim with three substitutions and
-            # nothing else changed:
-            #
-            #   TPIN3=<the full 64-char sha256 of family4_na025_pentad_r3.npz>
-            #   if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r3" ]; then
-            #     ... identical body, with TPIN -> TPIN3 and the asset stem
-            #     family4_na025_pentad_r3_${TPIN3:0:10}.npz.$sfx ...
-            #   fi
-            #
-            # Keep the chunk list `aa ab ac` unless publish_tensor.py reports
-            # a different part count for the r3 file (it chunks at 1.5 GiB, and
-            # r3 is two channels larger than r2's three-part file — a fourth
-            # part would make the `cat` above assemble a truncated tensor whose
-            # sha then fails the verify, loudly, which is the safe failure).
-            # Pin it in the same commit as ml/jaxport/tpu_train_cone.sh's
-            # TENSOR_SHA and claude/expectations.md §2b (handover §4).
+            # E-069 Phase A (#535, 2026-09-03) built and published the r3
+            # tensor — the North Atlantic input tensor with the two ocean-
+            # current direction channels the new cone codec needs — to
+            # data-cache-v1, sha256 pinned below. It chunks at 1.5 GiB and r3
+            # is two channels larger than r2, so it is FOUR parts, not three
+            # (measured by listing the release, not assumed): aa/ab/ac at
+            # 1,572,864,000 bytes each + ad at 584,889,823 = 5,303,481,823.
+            # Same rationale as the r2 block above: a rebuilt tensor never
+            # hashes the same as the published one (np.savez zip timestamps),
+            # and the embed cache is keyed on (codec weight hash, tensor
+            # sha256), so a box that builds its own r3 misses every published
+            # cache for it. Pinned in the same commit as
+            # ml/jaxport/tpu_train_cone.sh's TENSOR_SHA.
+            TPIN3=fa460837fa172825ee76c8fc6fc4da75fa7b96d64519a2e2186f5c306cf03ea9
+            if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family4_na025_pentad_r3" ]; then
+              if [ -f "$TF" ] && [ "$(sha256sum "$TF" | cut -d' ' -f1)" = "$TPIN3" ]; then
+                echo "tensor already present and matches pin ${TPIN3:0:10}"
+                PULLED=1
+              else
+                echo "pulling pinned tensor ${TPIN3:0:10} from data-cache-v1 …"
+                ok=1
+                for sfx in aa ab ac ad; do
+                  # --retry 3: see the family-3 pull above (#437's lesson).
+                  curl -fsSL --max-time 1800 --retry 3 --retry-delay 10 -o "$TF.$sfx.part" \
+                    "https://github.com/${GITHUB_REPOSITORY}/releases/download/data-cache-v1/family4_na025_pentad_r3_${TPIN3:0:10}.npz.$sfx" \
+                    || { ok=0; break; }
+                done
+                if [ "$ok" = 1 ]; then
+                  cat "$TF.aa.part" "$TF.ab.part" "$TF.ac.part" "$TF.ad.part" > "$TF.new" && rm -f "$TF".*.part
+                  got=$(sha256sum "$TF.new" | cut -d' ' -f1)
+                  if [ "$got" = "$TPIN3" ]; then
+                    mv "$TF.new" "$TF"; PULLED=1
+                    echo "tensor seeded from the release, sha verified ${TPIN3:0:10}"
+                  else
+                    rm -f "$TF.new"
+                    echo "::warning::pulled tensor sha $got != pin — discarded, will build"
+                  fi
+                else
+                  rm -f "$TF".*.part
+                  echo "::warning::tensor pull failed — this box will BUILD its own, which may not hash ${TPIN3:0:10}. The published embed cache is keyed on that hash, so this run will also re-spend the 8.5 h embed."
+                fi
+              fi
+            fi
             if [ "$PULLED" = 1 ]; then
               # SKIP THE BUILD INPUTS TOO, and say what was skipped. The npz
               # is complete and self-describing: build_family4.py's own skip

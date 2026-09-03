@@ -317,15 +317,40 @@ GCP_SA_KEY=<path outside the repo> python3 scripts/tpu_box.py stage \
 **Artefacts that prove Phase A is done** (write them into
 `claude/expectations.md` §2b the moment they exist):
 
-1. the full sha256 of `family4_na025_pentad_r3.npz`, and its size;
-2. three `data-cache-v1` assets `family4_na025_pentad_r3_<sha10>.npz.{aa,ab,ac}`;
-3. the bucket object `tensors/family4_na025_pentad_r3_<sha10>.npz` with the
-   same size (`gcs_size`, or `tpu_box.py stage` re-run reports "already
-   present").
+1. **DONE 2026-09-03** — the full sha256 of `family4_na025_pentad_r3.npz` and
+   its size: sha256 `fa460837fa172825ee76c8fc6fc4da75fa7b96d64519a2e2186f5c306cf03ea9`
+   (fingerprint `fa460837fa`), size 5,303,481,823 bytes. Built by #535 (E-069
+   Phase A — build and publish the r3 tensor, workflow run 33755174571) on
+   the Ontario box (runner `gpu-box-31299601`), 23 min.
+2. **DONE 2026-09-03** — the `data-cache-v1` assets: **FOUR** parts, not
+   three (it chunks at 1.5 GiB and r3 is two channels larger than r2's
+   three-part file) —
+   `family4_na025_pentad_r3_fa460837fa.npz.{aa,ab,ac,ad}`, sizes
+   1,572,864,000 × 3 + 584,889,823 = 5,303,481,823, matching item 1 exactly.
+   Verified by listing the release.
+3. **NOT DONE** — the bucket object
+   `tensors/family4_na025_pentad_r3_fa460837fa.npz` (`gcs_size`, or
+   `tpu_box.py stage` re-run reporting "already present"). The GCP service-
+   account key was not available to the session that closed items 1–2, so
+   this step was not attempted; the TPU launcher's release fallback
+   (§8.8, now handling four parts) covers a node that starts without it —
+   at the cost of the ~5-minute release-CDN pull plus the re-publish to the
+   bucket instead of the ~1-minute bucket-to-bucket stage.
 
 Then pin the sha in three places in the same commit: the workflow's r3 pull
 block (§5.2), `ml/jaxport/tpu_train_cone.sh`'s `TENSOR_SHA` (§8.8), and the
-expectations ledger.
+expectations ledger. **Done 2026-09-03 for the first two**: the workflow's r3
+pull block now carries `TPIN3=fa460837fa172825ee76c8fc6fc4da75fa7b96d64519a2e2186f5c306cf03ea9`
+verbatim (§5.2). `tpu_train_cone.sh` itself keeps shipping the
+`TENSOR_SHA="${TENSOR_SHA:-<the Phase-A sha256>}"` PLACEHOLDER default — that
+is deliberate (§8.8's own template, `tests/test_tpu_train_cone.py` case 4):
+the checked-in launcher is baked like `__BUCKET__`/`__NODE__`, never with a
+live value, so a future re-build (r4, a re-chunked r3) cannot leave a stale
+sha silently trusted. The real value is sed'd in at launch time, exactly as
+run #536's dispatch did — `-e 's|^TENSOR_SHA=.*|TENSOR_SHA="fa460837fa...
+full 64 hex"|'` alongside `__BUCKET__`/`__NODE__`/`__TPUZONE__` — with the
+sha copied from item 1 above, and `TENSOR_PARTS` now defaults to `aa ab ac ad`
+in the template itself (§8.8) rather than needing a per-launch override.
 
 ---
 
@@ -727,7 +752,7 @@ Change:
 # knobs — the cone codec
 TENSOR_NAME="${TENSOR_NAME:-family4_na025_pentad_r3}"
 TENSOR_SHA="${TENSOR_SHA:-<the Phase-A sha256>}"        # REQUIRED, refuse if empty
-TENSOR_PARTS="${TENSOR_PARTS:-aa ab ac}"
+TENSOR_PARTS="${TENSOR_PARTS:-aa ab ac ad}"              # r3 is FOUR parts, not three
 GCS_TENSOR="${GCS_TENSOR:-tensors/${TENSOR_NAME}_${TENSOR_SHA:0:10}.npz}"
 EST_TENSOR_BYTES="${EST_TENSOR_BYTES:-11500000000}"
 STEPS=20000 BATCH=256 LR=3e-4 SEED=0 D_Z=32

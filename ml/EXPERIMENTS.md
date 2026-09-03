@@ -79,7 +79,7 @@ other channels global, the year-split pentad aggregate, the sidecar build on a
 stops; nothing else has run.
 
 <a id="e-069"></a>
-## E-069 · Two stencils, one cone — the cone-native codec, ocean physics first — BUILT 2026-09-02, NOT DISPATCHED (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")
+## E-069 · Two stencils, one cone — the cone-native codec, ocean physics first — Phase A DONE 2026-09-03, Phase B wired, #536 DISPATCHED (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")
 
 TL;DR — the codec sees one pixel-bin and stage 2 a cylinder of embeddings, so
 nothing that needs two snapshots (velocity, tendency, convergence) can live in
@@ -133,19 +133,51 @@ certificate 0 violations in 4,096 anchors, held-out NLL 2.037 → 1.753,
 velocity probe cur_u R² +0.073 (cone) vs −0.015 (snapshot), same sign at three
 seeds.
 
-Before a box can run it: `ml-train.yml` does not know `family4_na025_pentad_r3`
-(tensor input, build branch, `--rev r3` + `seed_sst`, seed lists, and a pinned
-sha once built), and `train_cone.py`'s flags have no `$RECIPE_<KEY>` yet; the
-annulus arm (H3) needs a lag-dependent stencil in `temporal.py`. Cost estimate
-≈ 40–50 box-hours, $15–25. Plan:
+**Phase A — the r3 tensor build — is DONE, 2026-09-03.** `family4_na025_pentad_r3`
+(the input tensor for this experiment: r2's 40 channels plus two ocean-current
+direction channels the cone codec needs) was built and published by **#535
+(E-069 Phase A — build and publish the r3 North Atlantic tensor, workflow run
+33755174571)**: sha256
+`fa460837fa172825ee76c8fc6fc4da75fa7b96d64519a2e2186f5c306cf03ea9`
+(fingerprint `fa460837fa`), size 5,303,481,823 bytes, built in 23 min on the
+Ontario Vast box (runner `gpu-box-31299601`). It is published to the
+`data-cache-v1` release as **FOUR** parts, not three — it chunks at 1.5 GiB
+and r3 is two channels larger than r2's three-part file —
+`family4_na025_pentad_r3_fa460837fa.npz.{aa,ab,ac,ad}` (1,572,864,000 bytes
+× 3 + 584,889,823 = 5,303,481,823, verified by listing the release). The
+sha is pinned in the workflow's r3 pull block and defaults to a four-part
+`TENSOR_PARTS` in `ml/jaxport/tpu_train_cone.sh`. **Not done**: staging the
+tensor to the GCS bucket the TPU path checks first — the GCP service-account
+key was not available to the session that closed Phase A, so the TPU
+launcher takes its slower release-fallback route (§4 of
+[the E-069 handover](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_HANDOVER.md)).
+
+**Phase B — workflow wiring — is DONE, commit `c2afeea`** (registers the r3
+tensor stem in `ml-train.yml` and makes `train_cone.py`'s flags reachable as
+`$RECIPE_<KEY>`, so a dispatch can name this tensor and this trainer). The
+annulus arm (H3) still needs a lag-dependent stencil in `temporal.py` before
+it can run; H1 and H2 do not.
+
+**#536 (E-069 seed-0 cone codec, with its snapshot twin) is DISPATCHED**,
+started 15:12Z 2026-09-03 on the same Ontario box (runner `gpu-box-31299601`,
+workflow run 33770354733): `window: recipe:f4r3-cone-7M,cone`, 20,000 steps
+× batch 256, `d_z` 32 (the codec's compressed embedding width). Its Train
+step began 15:19Z; expected wall clock 5–6 h. The "snapshot twin" is the
+`L_in=0` ablation trained beside it (`SNAPSHOT_ABLATION=1`) — the same
+architecture with the inner cone's raw-channel context removed, the control
+H2 needs to show whether that context buys anything stage 2 could not
+rebuild from one frame alone.
+
+Plan:
 [E-069](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_cone_codec.md).
-**Handover (2 Sep, after the build):** the procedure for steps 5–8 and the JAX/TPU
-port — every file and API, the ten-minute local check, the r3 build/pin/publish route
-(`window: publishtensor`, the r2 precedent), the workflow edit sites, the dispatch
-header, the stage-2 arms, gates C1–C9 and the launcher — is
+**Handover (2 Sep, updated 3 Sep with Phase A/B status):** the procedure for
+steps 5–8 and the JAX/TPU port — every file and API, the ten-minute local
+check, the r3 build/pin/publish route (`window: publishtensor`, the r2
+precedent), the workflow edit sites, the dispatch header, the stage-2 arms,
+gates C1–C9 and the launcher — is
 [the E-069 handover](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_HANDOVER.md).
 
-**The JAX/TPU port is BUILT and CERTIFIED (2 Sep, not dispatched).** `ml/jaxport/cone_models.py` mirrors `ConeMAE` in Flax NNX, `cone_convert.py` converts both ways under `convert.py`'s refusal contract, `train_cone.py` is the optax trainer emitting `ml/train.py`'s record family, `tpu_train_cone.sh` is the launcher (boot beacon, EXIT trap, progress watchdog, stall-arithmetic refusal, bucket-first staging), and status.html's `coneChart` draws the curve. `tests/test_jaxport_cone.py` gates C1–C10 pass on CPU. **C10 is the one that certifies the port**, because C1–C9 all run at a smoke geometry 2% the size: at the dispatch geometry (42 r3 channels, 64 latents × 256 × 6) both frameworks hold **7,048,994 parameters**, the sampler's 706 dots equal `cone.budget()`'s, the forward agrees to 4.47e-07 on `z` and the loss to 2.38e-07, and the **gradient agrees to 6.56e-07 over 5,219,652 elements** with the global gradient norm matching to 4.9e-07 relative — which is what says a TPU run would train the same model rather than merely evaluate it the same way. Two port bugs were found by the gates and fixed: `convert._Consumer.get` returned numpy VIEWS of torch storage, so 68 of the codec's 99 tensors aliased the torch module (C3 first "agreed" at 1.7e-2 for exactly that reason, and a cross-framework gate would otherwise have agreed perfectly for the wrong reason); and `export_cone` returns numpy arrays that `load_state_dict` refuses, which its docstring denied. Neither touches a published number. **Nothing has trained: the r3 tensor still does not exist** (handover Phase A), and by §3b the first TPU number is a new tier that buys its own torch twin.
+**The JAX/TPU port is BUILT and CERTIFIED (2 Sep), and #536 is its first dispatch (3 Sep).** `ml/jaxport/cone_models.py` mirrors `ConeMAE` in Flax NNX, `cone_convert.py` converts both ways under `convert.py`'s refusal contract, `train_cone.py` is the optax trainer emitting `ml/train.py`'s record family, `tpu_train_cone.sh` is the launcher (boot beacon, EXIT trap, progress watchdog, stall-arithmetic refusal, bucket-first staging), and status.html's `coneChart` draws the curve. `tests/test_jaxport_cone.py` gates C1–C10 pass on CPU. **C10 is the one that certifies the port**, because C1–C9 all run at a smoke geometry 2% the size: at the dispatch geometry (42 r3 channels, 64 latents × 256 × 6) both frameworks hold **7,048,994 parameters**, the sampler's 706 dots equal `cone.budget()`'s, the forward agrees to 4.47e-07 on `z` and the loss to 2.38e-07, and the **gradient agrees to 6.56e-07 over 5,219,652 elements** with the global gradient norm matching to 4.9e-07 relative — which is what says a TPU run would train the same model rather than merely evaluate it the same way. Two port bugs were found by the gates and fixed: `convert._Consumer.get` returned numpy VIEWS of torch storage, so 68 of the codec's 99 tensors aliased the torch module (C3 first "agreed" at 1.7e-2 for exactly that reason, and a cross-framework gate would otherwise have agreed perfectly for the wrong reason); and `export_cone` returns numpy arrays that `load_state_dict` refuses, which its docstring denied. Neither touches a published number. By §3b the first TPU number (#536, still running) is a new tier that buys its own torch twin before any headline is written.
 
 ---
 

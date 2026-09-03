@@ -71,7 +71,10 @@
 #
 # the r3 pentad tensor Phase A builds and publishes (HANDOVER §4). Its name
 # is TENSOR_NAME plus the first ten hex of TENSOR_SHA, i.e. exactly the name
-# the data-cache-v1 chunks carry (`…npz.aa/ab/ac`), un-chunked.
+# the data-cache-v1 chunks carry (`…npz.aa/ab/ac/ad` — FOUR parts for r3,
+# not three: it chunks at 1.5 GiB and r3 is two channels larger than r2's
+# three-part file; TENSOR_PARTS names however many the release actually
+# holds and defaults to r3's own count), un-chunked.
 #
 #   object present in the bucket   → stage it (~1 min: same-cloud bytes)
 #   object absent, release present → ASSEMBLE it from data-cache-v1 with a
@@ -155,7 +158,13 @@ GIT_SHA="${GIT_SHA:-}"
 # knobs — the cone codec
 TENSOR_NAME="${TENSOR_NAME:-family4_na025_pentad_r3}"
 TENSOR_SHA="${TENSOR_SHA:-<the Phase-A sha256>}"        # REQUIRED, refuse if empty
-TENSOR_PARTS="${TENSOR_PARTS:-aa ab ac}"
+# FOUR parts for family4_na025_pentad_r3 (Phase A, #535: it chunks at
+# 1.5 GiB and r3 is two channels larger than r2's three-part file —
+# aa/ab/ac at 1,572,864,000 B each + ad at 584,889,823 B, measured by
+# listing the data-cache-v1 release, not assumed). A future TENSOR_NAME
+# with a different part count overrides this at launch, same as every
+# other knob (see the sed recipe in the header).
+TENSOR_PARTS="${TENSOR_PARTS:-aa ab ac ad}"
 GCS_TENSOR="${GCS_TENSOR:-tensors/${TENSOR_NAME}_${TENSOR_SHA:0:10}.npz}"
 EST_TENSOR_BYTES="${EST_TENSOR_BYTES:-11500000000}"
 # ONE ASSIGNMENT PER LINE, deliberately. HANDOVER §8.8 packs these five to a
