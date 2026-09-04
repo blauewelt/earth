@@ -18,9 +18,11 @@ if ROOT not in sys.path:
 @pytest.fixture(scope="session")
 def fixtures() -> str:
     """The generated fixture directory, built once per test session."""
+    env = dict(os.environ)
+    env.setdefault("EARTH_REPO", os.path.join(os.path.dirname(ROOT), "earth"))
     subprocess.check_call([sys.executable,
                            os.path.join(HERE, "fixtures", "make_fixtures.py"),
-                           GENERATED])
+                           GENERATED], env=env)
     return GENERATED
 
 

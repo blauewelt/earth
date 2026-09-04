@@ -11,7 +11,6 @@ setuptools<70
 wheel
 
 apache-beam==2.68.0
-huggingface_hub==1.30.0
 netCDF4==1.7.4
 numpy==2.2.6
 PyYAML==6.0.3
@@ -19,9 +18,20 @@ requests==2.34.2
 xarray==2026.7.0
 copernicusmarine==2.4.1
 
+# crcmod is already an apache-beam dependency and is what computes the
+# TFRecord checksums. Named here so nobody removes it as "unused".
+crcmod
+
 # Tier 2 only — ERA5 through the Climate Data Store. Harmless to install now;
 # the fetcher refuses politely until CDSAPI_KEY exists.
 cdsapi
+
+# NOT INSTALLED, and not needed: tensorflow. beam_import reads and writes
+# TFRecord and tf.train.Example with its own code (tfrecord.py, example.py),
+# because DESIGN §4 promises a reader with no TensorFlow import at all.
+# `pip install tensorflow-cpu` works and the tests cross-check against it when
+# it is present, but it upgrades protobuf past what apache-beam pins — so it
+# stays out of the default environment. See BUILD_NOTES.
 
 # tests
 pytest==9.1.1

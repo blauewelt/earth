@@ -8,9 +8,9 @@ improvising a fix.
 
 Companion files in this directory:
 
-- [`DESIGN.md`](DESIGN.md) — why the thing is built this way. Read it once.
+- [`DESIGN.md`](DESIGN.md) — why the thing is built this way (revision 2). Read it once.
 - [`sources.yaml`](sources.yaml) — the registry: every dataset, every host budget.
-- [`CREDENTIALS.md`](CREDENTIALS.md) — the passwords and the rules about them.
+- [`CREDENTIALS.md`](CREDENTIALS.md) — the two credentials and the rules about them.
 - `beam_import/` — the code. `tests/` — the tests.
 
 Background in the main repository (all three render on a phone):
@@ -23,57 +23,67 @@ Background in the main repository (all three render on a phone):
 
 ## 0 · What you are doing, and what done looks like
 
-You are going to **copy a set of public climate datasets onto one storage
-location, carefully, without overloading any of the servers you copy them
-from.** That is the whole job. You are not training anything, not building
-anything, and not analysing anything. You download files, you check each one
-arrived intact, you upload it to a shared archive, you check it comes back out
-of that archive unchanged, and you write down what happened.
+You are going to **copy a set of public climate datasets into one place,
+carefully, without overloading any of the servers you copy them from, and
+without ever losing a day of data.** That is the whole job. You are not
+training anything and not analysing anything. You download files, you check
+each one arrived intact, you convert it into a standard machine-learning record
+format, you write it out, you check it reads back unchanged, and you write down
+what happened. Anything that did not work goes into a queue and is tried again
+later — it is never dropped.
 
 The datasets are the inputs a machine-learning model of the ocean is built
-from, and they live on a dozen different public servers run by national weather
-and ocean agencies. Some of them are enormous. Today every rebuild of the model
-downloads them all again from those agencies, which is wasteful and rude, so
-the plan is: **import once, into a mirror; every future build reads the
-mirror.** The mirror is a repository on the **Hugging Face Hub** ("the Hub" —
-a public website that hosts large datasets and model files, like GitHub but
-for data), specifically the dataset repository `chfrank/earth-tensors`. The
-tool that runs the copying is **Apache Beam** (a Python framework for data
-pipelines); **DirectRunner** is Beam's mode for running on one ordinary machine
-and is the mode you will use, and **Dataflow** is Google's paid cloud mode
-which you will almost certainly not need.
+from, and they live on a dozen public servers run by national weather and ocean
+agencies. Today every rebuild of the model downloads them all again, which is
+wasteful and rude, so the plan is: **import once, into a dataset any training
+framework can read; every future build reads that.** The output format is
+**TFRecord** — a file format that is just a sequence of length-prefixed,
+checksummed byte blobs — holding **`tf.train.Example`** records, which are the
+standard key/value record protocol buffer. You do not need TensorFlow to read
+them; this package ships a pure-Python reader. Where the output goes is
+**yours to choose**: `--output /some/directory` or `--output gs://some-bucket/path`.
 
-The names you will see, each spelled out once. **GLORYS12** — a global model
+The tool that runs the copying is **Apache Beam**, a Python framework for data
+pipelines and the open-source form of Google's Flume. **DirectRunner** is
+Beam's mode for running on one ordinary machine and is what you will use;
+**Dataflow** is Google's paid cloud mode, and **Flume** is the internal
+equivalent — §9 maps the concepts across if you are running there.
+
+The names you will meet, each spelled out once. **GLORYS12** — a global model
 reconstruction of ocean currents, sea-surface height and mixed-layer depth from
-Copernicus, at 1/12 of a degree; already on the Hub, so you only check it is
-there. **OISST** — the Optimum Interpolation Sea Surface Temperature record
-from NOAA, daily sea-surface temperature and sea-ice concentration since
-September 1981. **NCEP R1** — the NCEP/NCAR Reanalysis 1, a decades-long
-reconstruction of surface winds, heat fluxes and soil conditions; its archive
-was frozen in March 2026, so this copy is the last chance to take one.
-**Roemmich–Gilson** — a climatology of ocean temperature and salinity with
-depth, built from the Argo float network at the Scripps Institution.
-**DUACS** — the processing system that turns satellite altimeter passes into
-daily maps of sea-surface height; the Tier-1 heavyweight, about 1.1 terabytes
-on the wire. **ERA5** — the European Centre's global atmospheric reanalysis,
-reached through the **CDS** (Climate Data Store, Copernicus's download service
-for atmosphere data), which needs a free account that does not exist yet.
-**CMEMS** — Copernicus Marine Environment Monitoring Service, the download
-service for ocean data, for which we *do* have credentials. **Family 7** — the
-name of the current input data cube the model trains on, the first one covering
-the whole globe rather than just the North Atlantic. A **pentad** is a five-day
-period, the time step that cube uses.
+Copernicus, at 1/12 of a degree. **OISST** — the Optimum Interpolation Sea
+Surface Temperature record from NOAA: daily sea-surface temperature and sea-ice
+concentration since September 1981. **NCEP R1** — the NCEP/NCAR Reanalysis 1, a
+decades-long reconstruction of surface winds, heat fluxes and soil conditions;
+its archive was frozen in March 2026, so this copy is the last chance to take
+one. **Roemmich–Gilson** — a climatology of ocean temperature and salinity with
+depth, built from the Argo float network at Scripps. **DUACS** — the system
+that turns satellite altimeter passes into daily maps of sea-surface height;
+the Tier-1 heavyweight, about 1.1 terabytes on the wire. **ERA5** — the
+European Centre's global atmospheric reanalysis, reached through the **CDS**
+(Climate Data Store), which needs a free account that does not exist yet.
+**CMEMS** — Copernicus Marine Environment Monitoring Service, the ocean
+download service, for which we *do* have credentials. **Family 7** — the name
+of the current input data cube the model trains on, the first one covering the
+whole globe. A **pentad** is a five-day period, the time step that cube uses; a
+**bin** is one pentad, numbered from 1982-01-01.
 
-**Done looks like this.** `python -m beam_import.verify_hub --tiers 0` prints
-`missing: 0`. A file `out/tier0/summary.md` exists and shows, per server, how
-many bytes were fetched, how long it took, how many times we backed off after
-an error, and how many times a lane's circuit breaker tripped. A file
-`sources/MANIFEST_tier0.json` exists on the Hub listing every mirrored file
-with its checksum. And you have sent Chris the status report from §9. If some
-items come back `deferred` (a server got tired and we stopped talking to it),
-that is not failure — re-run the same command later and they get picked up.
-Tier 1 is the same procedure with `--tiers 1`, and Tier 2 is blocked until
-Chris creates a CDS account.
+**Done is DESIGN §6, five checks, in order.**
+
+1. `manifest --tiers 0 --print` lists every work item with its shard path,
+   host, lane and expected size, and the counts per source match §3(b) below.
+2. After `run_until_complete.sh`: **`retry_queue.jsonl` is empty**, every
+   manifest item has a `.done` marker, and `report.jsonl` carries the sha256
+   that the read-back compared for each.
+3. `verify_output --tiers 0` reports **`missing 0`**, plus the list of
+   `absent` items with their two-run evidence — **a human reviews that list
+   before Stage B.**
+4. `summary.md` shows bytes, wall time, backoffs and breaker trips per host —
+   the politeness audit. A host with trips means its budget in `sources.yaml`
+   is too generous and should come DOWN.
+5. Stage B: `coverage.json` shows every bin from 1982-01-01 to 2024-12-31
+   present for `g025` and `g100`, and `rg100` present for every live month.
+   **A missing bin must trace to an `absent` record.**
 
 ---
 
@@ -82,48 +92,49 @@ Chris creates a CDS account.
 These are not style preferences. Each one exists because breaking it has cost
 this project real time or real money.
 
-1. **Never put a credential on a command line, in a Beam pipeline option, or
-   in anything you print.** Pipeline options are logged and shown in job UIs.
-   The code reads credentials from environment variables inside
-   `DoFn.setup()`; keep it that way.
-2. **Never raise a host budget.** `max_lanes` and `min_gap_s` in
-   `sources.yaml` may be lowered, never raised, and never by you on your own
+1. **Never drop data.** Every item ends `written`, `present`, `queued` or
+   `absent`. There is no `failed`, and you may not add one. If something did
+   not work, it belongs in `retry_queue.jsonl`.
+2. **`absent` needs evidence, twice.** A 404 or 410 on two separate runs at
+   least six hours apart, with both responses recorded. One "no" is a bad
+   afternoon, not a fact about the archive.
+3. **Never put a credential on a command line, in a Beam pipeline option, or
+   in anything you print.** Options are logged and shown in job UIs. The code
+   reads credentials from environment variables inside `DoFn.setup()`.
+4. **Never raise a host budget.** `max_lanes` and `min_gap_s` in
+   `sources.yaml` may be lowered, never raised, and never on your own
    initiative. If a run is slow, it is supposed to be slow.
-3. **Never run this on a rented or borrowed machine (a Vast box, a shared CI
-   runner, anyone's GPU box) while CMEMS or CDS credentials are in the
-   environment.** The host has root and can read everything.
-4. **Never re-implement the binning rule.** The 0.25-degree binning is
-   `bin_plan` / `bin_slice`, imported from `ml/aggregate_cadence.py` in the
-   earth checkout. If it will not import, fix the checkout — do not write your
-   own version, not even a small one, not even temporarily.
-5. **Never delete anything on the Hub.** Nothing in this package deletes; do
-   not add anything that does.
-6. **Never schedule this.** Every run is a manual dispatch. No cron, no
-   scheduled task, no "I will kick it off again automatically in an hour".
-7. **If a host's circuit breaker trips twice in one run, stop the run and
-   report.** Once is normal and self-healing. Twice means the budget in
-   `sources.yaml` is too generous and a human has to decide, not you.
-8. **Never edit `beam_import/*.py` to make a failing item pass.** Report the
-   failure with its exact error text instead.
-9. **Run `bash run_smoke.sh` before every real run.** It is offline and takes
-   under a minute.
-10. **Do not retry a host the network refused you.** If a request is blocked
-    by a proxy or a firewall, record it as blocked and move on. Retrying is
-    how a block becomes a ban.
-11. **Anything you did not verify, say you did not verify.** "The URL pattern
-    is marked `unverified_url` and I did not test it" is a complete and useful
-    sentence.
+5. **Never run this on a rented or borrowed machine** (a Vast box, a shared CI
+   runner, anyone's GPU box) while the CMEMS or CDS credentials are in the
+   environment. The host has root and can read everything.
+6. **Never re-implement a rule.** The binning is `bin_plan`/`bin_slice`, the
+   pentad clock is `EPOCH`/`bin_index`, the channel lists and the pentad rules
+   are `build_family7`'s, the regridding is `build_family3`'s — all imported
+   from the earth checkout. If an import fails, fix the checkout; do not write
+   your own version, not even a small one, not even temporarily.
+7. **If a host's circuit breaker trips twice in one run, stop and report.**
+   `run_until_complete.sh` stops by itself in that case and exits 4. Once is
+   normal and self-healing; twice is a decision for a human.
+8. **Never delete anything you did not write.** Nothing in this package
+   deletes anything else; keep it that way.
+9. **Never schedule this.** Every run is a manual dispatch.
+   `run_until_complete.sh` is the only loop there is.
+10. **Never edit `beam_import/*.py` to make a stubborn item pass.** Report the
+    item with its exact error text instead.
+11. **Run `bash run_smoke.sh` before every real run.** It is offline and takes
+    about a minute.
 12. **If you are unsure, stop and write down what you observed.** A stopped
-    run costs an hour. A wrong run costs a week and looks like it worked.
+    run costs an hour; a wrong run costs a week and looks like it worked.
 
 ---
 
 ## 2 · The machine and the environment
 
-**The machine.** One ordinary Linux virtual machine: 4–8 virtual CPUs, 16 GB
-of RAM, 100 GB of free disk. Not a GPU box (rule 3). Tier 1's DUACS run wants
-the disk more than the CPU. The whole pipeline's speed is set by how politely
-it talks to the servers, not by the machine, so a bigger machine buys nothing.
+**The machine.** One ordinary Linux virtual machine: 4–8 virtual CPUs, 16 GB of
+RAM, **200 GB of free disk**. Not a GPU box (rule 5). Throughput is set by how
+politely the pipeline talks to the servers, not by the machine, so a bigger
+machine buys nothing for Stage A. Stage B is the one part that would use a
+distributed runner (§9).
 
 ### 2.1 Get the code
 
@@ -131,13 +142,11 @@ it talks to the servers, not by the machine, so a bigger machine buys nothing.
 cd ~
 git clone https://github.com/blauewelt/earth.git
 export EARTH_REPO=~/earth
-# the handover package (this directory) — copy it to ~/handover if it is not
-# already there, then:
-cd ~/handover
+cd ~/handover           # this directory
 ```
 
-`EARTH_REPO` is how `beam_import/transforms.py` finds the binning rule. If it
-is unset, the code looks for `../earth` next to this directory.
+`EARTH_REPO` is how the code finds the rules it imports. If it is unset, the
+code looks for `../earth` next to this directory.
 
 ### 2.2 Build the virtual environment
 
@@ -147,65 +156,60 @@ source beamenv/bin/activate
 ```
 
 **Why the script and not a bare `pip install`.** `setup_env.sh` installs
-`setuptools<70` **first, on its own**, before anything else. Three of Apache
-Beam's dependencies — `crcmod`, `dill` 0.3.1.1 and `hdfs` — are still shipped
-as source distributions that call setuptools APIs which were removed in
-setuptools 70. With a current setuptools their builds fail part-way through the
-install and leave you with a virtual environment where `import apache_beam`
-works and running a pipeline does not. This was measured, not guessed. If you
-build the environment by hand, pin setuptools first.
+`setuptools<70` **first, on its own**. Three of Apache Beam's dependencies —
+`crcmod`, `dill` 0.3.1.1 and `hdfs` — are still source distributions that call
+setuptools APIs removed in setuptools 70. With a current setuptools their
+builds fail part-way and leave a virtual environment where `import apache_beam`
+works and running a pipeline does not. This was measured, not guessed.
+(`crcmod` is also what computes the TFRecord checksums, so it is not optional.)
 
 Expected tail of the output:
 
 ```
 apache-beam        2.68.0
-huggingface_hub    1.30.0
 netCDF4            1.7.4
 numpy              2.2.6
 xarray             2026.7.0
 copernicusmarine   2.4.1
-cdsapi             present (Tier 2 only)
+crcmod             present (the TFRecord checksums)
 ```
+
+TensorFlow is **not** required and **not** installed by default: the package
+reads and writes TFRecord and `tf.train.Example` with its own code. If you want
+to cross-check with TensorFlow, `pip install tensorflow-cpu` — but be aware it
+upgrades `protobuf` past what apache-beam pins. Beam kept working in testing,
+but the default venv leaves it out on purpose.
 
 ### 2.3 Put the credentials in the environment
 
-Open [`CREDENTIALS.md`](CREDENTIALS.md) and copy the export block from it.
-**The Copernicus Marine password contains a `%` and must be in single
-quotes** — that is the single most common way this setup goes wrong:
+Open [`CREDENTIALS.md`](CREDENTIALS.md) and copy the export block. **The
+Copernicus Marine password contains a `%` and must be in single quotes** — that
+is the single most common way this setup goes wrong:
 
 ```bash
 export COPERNICUSMARINE_SERVICE_USERNAME='cfrank1'
-export COPERNICUSMARINE_SERVICE_PASSWORD='<password from CREDENTIALS.md — has a %>'   # single quotes!
+export COPERNICUSMARINE_SERVICE_PASSWORD='<the Copernicus password from CREDENTIALS.md — it contains a %>'   # single quotes!
 export CDSAPI_URL='https://cds.climate.copernicus.eu/api'
 ```
 
-The Hugging Face token may live in the environment **or** in one file, which is
-the only credential allowed on disk:
+There is **no Hugging Face token and no credential file on disk** in revision 2.
+
+### 2.4 Choose where the output goes
 
 ```bash
-printf '%s' '<token from CREDENTIALS.md>' > ~/.hf_token
-chmod 600 ~/.hf_token
+export OUTPUT=/data/import            # or gs://your-bucket/earth-import
+export STATE_DIR=/var/tmp/beam_import
 ```
 
-Check without printing any of them:
-
-```bash
-for v in COPERNICUSMARINE_SERVICE_USERNAME COPERNICUSMARINE_SERVICE_PASSWORD \
-         HF_TOKEN CDSAPI_URL CDSAPI_KEY; do
-  printf '%-38s %s\n' "$v" "$([ -n "${!v:-}" ] && echo set || echo 'NOT set')"
-done
-```
-
-Expected: the first two `set`, `CDSAPI_URL` `set`, `CDSAPI_KEY` **`NOT set`**
-(that is correct — ERA5 is blocked on purpose), and `HF_TOKEN` either `set` or
-`NOT set` with `~/.hf_token` present instead.
+`--output` accepts anything Beam has a filesystem for. Everything under it is
+written by this package and nothing else lives there.
 
 ---
 
 ## 3 · Preflight
 
-Do all five checks. They take about two minutes together and they are the
-difference between finding a problem now and finding it three hours in.
+Do all five. They take about two minutes together and they are the difference
+between finding a problem now and finding it three hours in.
 
 ### (a) The registry parses and every source names a host
 
@@ -214,22 +218,21 @@ python -m beam_import.registry --check
 ```
 
 Expected — some `warning:` lines about unverified URLs and disabled sources
-(those are correct and expected), then:
+(those are correct), then:
 
 ```
 registry  /home/…/handover/sources.yaml
-hub       chfrank/earth-tensors (60 commits/h)
-hosts     16   total lanes 27
-sources   26
-  tier 0: 12  glorys oisst oisst_psl ncep rg rapid florida_cable osnap move samba etopo natural_earth
+output    <output>/<item_id>.tfrecord  +  <item_id>.done (64 shards per group in Stage B)
+hosts     17   total lanes 29
+sources   27
+  tier 0: 13  glorys glorys_from_mirror oisst oisst_psl ncep rg rapid florida_cable osnap move samba etopo natural_earth
   tier 1: 10  duacs cmems_static rapid_extra en4 pmel_wwv olr godas oni mei rmm
   tier 2: 4  era5 cci_sm ostia grep3d
 OK
 ```
 
-If it prints `REGISTRY INVALID`, read the list of reasons; every one of them
-names a source or a host and what is missing. Do not run anything else until
-this says `OK`.
+If it prints `REGISTRY INVALID`, read the reasons; each names a source or host
+and what is missing. Do not run anything else until it says `OK`.
 
 ### (b) The manifest expands and the counts are right
 
@@ -237,57 +240,43 @@ this says `OK`.
 python -m beam_import.manifest --tiers 0 --print | tail -30
 ```
 
-The last lines are a counts table. **The expected Tier-0 table, measured
-2026-09-04:**
+**The expected Tier-0 table, measured 2026-09-04:**
 
 | source | items | host | what one item is |
 |---|---:|---|---|
-| `glorys` | 384 | cmems | one month, 1993-01 … 2024-12 — **verify only** |
-| `oisst` | 44 | ncei | one year, 1981 … 2024, folded from ~365 daily files |
+| `glorys` | 384 | cmems | one month, fetched **one day per request** and binned to 0.25° |
+| `oisst` | 44 | ncei | one year, ~365 per-day files, one record each |
 | `ncep` | 560 | psl | one (variable, year) file: 13 variables × 43 years + the land mask |
-| `rg` | 93 | scripps | 2 base files + one file per monthly extension (**scraped** — see below) |
+| `rg` | 93 | scripps | 2 base files + one per monthly extension (**scraped**, see below) |
 | `rapid` | 1 | rapid | one file |
 | `florida_cable` | 43 | aoml | one year |
-| `osnap` | 1 | gatech | one file |
-| `move` | 1 | ndbc | one file |
-| `samba` | 1 | aoml | one file |
+| `osnap` · `move` · `samba` | 1 each | gatech · ndbc · aoml | one file each |
 | `etopo` | 1 | ncei_etopo | one file (~450 MB) |
 | `natural_earth` | 2 | github_raw | two GeoJSON files |
-| **TOTAL** | **1131** | | 384 verify-only + **747 to fetch** |
 
-and the last three lines of the output are:
+and the last lines of the output are:
 
 ```
-  already on Hub (verify only): 384 items, 96.4 GB
-  to fetch: 747 items · 104.3 GB wire · 103.5 GB stored
+  to fetch: 1131 items · 925.1 GB wire · 199.9 GB stored
   TOTAL 1131 items · 0 with an unverified URL
 ```
 
-**Read the "to fetch" line, not the total.** The 384 GLORYS months are already
-on the Hub and are only checked for presence — nothing is downloaded for them.
-Counting the 2.2 GB per month they *would* have cost would put Tier 0 at
-~925 GB of wire, which is four times what this run actually transfers. The
-real figures are **747 items, 104.3 GB on the wire, 103.5 GB stored** — which
-is DESIGN §3's "about 110 GB on the wire, about the same stored".
+**925 GB, of which about 840 is GLORYS.** If you enable `glorys_from_mirror`
+instead (§4.6) that drops to about **185 GB**. `glorys_from_mirror` and
+`oisst_psl` are `enabled: false`, so they do not appear in the counts unless
+you ask for them with `--only`.
 
-For all three tiers the same two lines read `already on Hub (verify only):
-384 items, 96.4 GB` and `to fetch: 8483 items · 1.2 TB wire · 273.2 GB
-stored`.
+Two numbers move legitimately and neither is an error:
 
-Two of these numbers move legitimately and neither is an error:
-
-- **`rg` is 93 only if the scrape worked.** The list of Roemmich–Gilson monthly
-  extension files is read off
-  `https://sio-argo.ucsd.edu/RG_Climatology.html`. On 2026-09-04 that gave 91
-  extensions plus the 2 base files = 93. If the page cannot be read the code
-  prints a warning and falls back to the declared range 2019-01 … 2025-12,
-  giving **86**, and months the server does not actually have come back
-  `absent`, which is fine. Add `--offline` to force the fallback.
-- **`ncep` is 560, and `DESIGN.md` §3 says 603 with 14 variables.** The
-  registry is the truth: the repository's own variable table
-  (`ml/build_family7.py`) has **thirteen** variables, so 13 × 43 + 1 = 560.
-  Report the number the manifest prints, do not "fix" it to match the design
-  document.
+- **`rg` is 93 only if the scrape worked.** The Roemmich–Gilson monthly
+  extension list is read off `https://sio-argo.ucsd.edu/RG_Climatology.html`.
+  On 2026-09-04 that gave 91 extensions plus 2 base files = 93. If the page
+  cannot be read, the code warns and falls back to the declared range
+  2019-01 … 2025-12, giving **86** and a Tier-0 total of **1,124 items,
+  920.5 GB**. Add `--offline` to force the fallback.
+- **`ncep` is 560, and older notes say 603 with 14 variables.** The registry is
+  the truth: the repository's own variable table (`ml/build_family7.py`) has
+  **thirteen** stems, so 13 × 43 + 1 = 560. Report what the manifest prints.
 
 For all three tiers:
 
@@ -295,13 +284,11 @@ For all three tiers:
 python -m beam_import.manifest --tiers 0,1,2 --offline | tail -40
 ```
 
-Expected totals: Tier 1 adds **519** items (of which `duacs` is 384 and `en4`
-is 126) and Tier 2 adds **7,224** (ERA5: 14 variables × 516 months). With
-`--offline` — so `rg` falls back to 86 and Tier 0 is 1,124 — the grand total
-is **8,867 items**, of which **8,483 are to fetch (1.2 TB wire, 273.2 GB
-stored)** and **518 carry `unverified_url: true`**. The unverified ones are
-listed on purpose, so a human can see what *would* be attempted; they are not
-ready to run.
+Expected: Tier 1 adds **519** items (`duacs` 384, `en4` 126, the rest small),
+Tier 2 adds **7,224** (ERA5: 14 variables × 516 months), grand total
+**8,867 items · 2.0 TB wire · 369.6 GB stored**, of which **518 carry
+`unverified_url: true`** — listed on purpose so a human can see what *would*
+be attempted; they are not ready to run.
 
 ### (c) The offline smoke test
 
@@ -310,60 +297,55 @@ bash run_smoke.sh
 ```
 
 It generates its own fixtures, uses `file://` URLs instead of the internet and
-a local directory instead of the Hub. It must end with:
+a local directory as the output, and exercises Stage A, the retry queue,
+`run_until_complete` (with the sleep overridden to one second), Stage B and
+`verify_output`. It must end with:
 
 ```
-  ok   three sources published (file:// http, OISST year-fold, NCEP-like)
-  ok   every published item carries the sha256 the restore-verify compared
-  ok   the flaky source failed exactly 5 items (the breaker threshold)
-  ok   the rest of that lane is `deferred`, not `failed`
-  ok   exactly one circuit-breaker trip was recorded
-  ok   the folded OISST year is on the fake Hub
-  ok   the Hub round-trip preflight ran
-  ok   summary.md was written
+  ok   Stage A wrote every good source (opaque, 0.25° ocean, OISST, NCEP, RG)
+  ok   every marker carries the sha256 its read-back compared
+  ok   the OISST year kept its four days and recorded the missing one
+  ok   the shard holds the four days that WERE served
+  ok   there is no `failed` status anywhere
+  ok   the missing day was queued as a day-level item
+  ok   all seven flaky items reached the queue (breaker + ladder), none lost
+  ok   one circuit-breaker trip per round was recorded
+  ok   run_until_complete rotated round 1's queue and re-ran from it
+  ok   Stage B produced all three channel groups for the fixture's one bin
+  ok   the bin is 1573 — floor(day_index/5) from 1982-01-01, imported
+  ok   one g025 record for one bin
+  ok   days_present is per channel and honest: [5, 5, 5, 5, 5, 5, 4]
+  ok   the channel order is build_family7's, imported
 
 SMOKE TEST: PASS
 ```
 
 Anything other than `SMOKE TEST: PASS` means **do not start a real run.** The
-unit tests are the finer-grained version of the same thing:
+finer-grained version is:
 
 ```bash
 python -m pytest tests -q
 ```
 
-Expected: `42 passed`.
+Expected: `90 passed`.
 
-### (d) The Hub round trip, and the dry run
-
-The pipeline does the Hub round trip itself at the start of every real run:
-it uploads a 37-byte file to `sources/_preflight/roundtrip.txt`, downloads it
-back, compares the sha256, and deletes the local copy. You will see
-
-```
-preflight: Hub round trip OK (sha256 0178c24b0dfc)
-```
-
-as the first line of a real run. If instead it raises, the credentials or the
-namespace are wrong — go to §10.
-
-To see the plan without touching a single upstream server:
+### (d) The dry run
 
 ```bash
 python -m beam_import.pipeline --tiers 0 --dry-run \
-    --report-dir out/dryrun --state-dir /var/tmp/beam_import \
-    --runner DirectRunner
-head -3 out/dryrun/report.jsonl
+    --output "$OUTPUT" --state-dir "$STATE_DIR" \
+    --report-dir out/dryrun --runner DirectRunner
+head -2 out/dryrun/report.jsonl
 ```
 
-Every record comes back with `"status": "planned"` and the URL that would have
-been fetched. A dry run makes no Hub calls at all, so it works with no
+Every record comes back with `"status": "present"` and a `reason` saying what
+would have been fetched. A dry run makes no requests of any kind and needs no
 credentials.
 
 ### (e) One HEAD request per host
 
-This is the only network check you make by hand, and you make **exactly one
-request per host**. Do not loop, do not retry a host that refuses.
+The only network check you make by hand, and **exactly one request per host**.
+Do not loop, and do not retry a host that refuses.
 
 ```bash
 python - <<'PY'
@@ -389,8 +371,7 @@ for k, u in URLS.items():
 PY
 ```
 
-Expected, measured 2026-09-04 from this sandbox — **every one of these Tier-0
-hosts answered 200**:
+Expected, measured 2026-09-04 — **every Tier-0 host answered 200**:
 
 ```
 psl          200  len=25213
@@ -398,391 +379,547 @@ ncei         200  len=1714749
 scripps      200  len=695480508
 rapid        200  len=1182284
 aoml         200  len=18607
-ncei_etopo   200  len=-            (this THREDDS server sends no Content-Length on HEAD; that is normal)
+ncei_etopo   200  len=-            (this THREDDS server sends no Content-Length on HEAD; normal)
 github_raw   200  len=1570533
 gatech       200  len=-
 ndbc         200  len=172492
 cmems        200  len=329182
 ```
 
-A `403`, a `404` or a proxy error on one of these is worth reporting; it is
-not worth retrying.
+A 403, a 404 or a proxy error is worth reporting; it is not worth retrying.
 
 ---
 
-## 4 · Running Tier 0
+## 4 · Running Tier 0 (Stage A)
+
+### 4.1 The command
 
 ```bash
-cd ~/handover
-source beamenv/bin/activate
-export EARTH_REPO=~/earth
-bash run_tier0.sh
+cd ~/handover && source beamenv/bin/activate
+export EARTH_REPO=~/earth OUTPUT=/data/import STATE_DIR=/var/tmp/beam_import
+bash run_until_complete.sh --tiers 0
 ```
 
-or, if you want the pipeline directly:
+That is the normal way to run it: one round, then — if anything is still
+queued — a sleep of 1 h, then 2, 4, 8, and another round with the queue as the
+manifest, until the queue is empty. One round on its own is:
 
 ```bash
 python -m beam_import.pipeline \
-    --tiers 0 \
-    --report-dir out/tier0 \
-    --state-dir /var/tmp/beam_import \
-    --runner DirectRunner \
-    --direct_running_mode multi_processing \
+    --tiers 0 --output "$OUTPUT" \
+    --state-dir "$STATE_DIR" --report-dir out/tier0 \
+    --runner DirectRunner --direct_running_mode multi_processing \
     --direct_num_workers 8
 ```
 
-### What to watch
+Exit codes: **0** the queue is empty; **3** the queue is not empty (run again —
+this is normal and not an error); **4** a host's breaker tripped twice, stop
+and report.
 
-**`report.jsonl` is written by Beam only when the whole pipeline finishes.**
-So each lane also appends every result record to its own file under
-`<state-dir>/progress/<host>-<lane>.jsonl` the moment that record exists —
-before it is even handed back to Beam. Read those, in a second terminal:
+### 4.2 The never-drop semantics — the whole point
 
-```bash
-python -m beam_import.report --live /var/tmp/beam_import
+**A throttle changes WHEN an item is fetched, never WHETHER.** Every item ends
+in exactly one of four durable states, and there is no fifth:
+
+```
+                        ┌──────────────────────────────────────┐
+                        │            a work item               │
+                        └──────────────────┬───────────────────┘
+                                           │
+                    ┌──────────────────────┼──────────────────────┐
+                    ▼                      ▼                      ▼
+              .done marker           fetched, written        404 or 410
+              already there          read back, sha256       from the server
+                    │                 matched, marked               │
+                    ▼                      │                        │
+                PRESENT   ◄────────────────┘                        │
+             nothing fetched            WRITTEN                     │
+                                                                    ▼
+                                                        first sighting? ──yes──► QUEUED
+                                                                │                (ask again
+                                                               no                 in ≥ 6 h)
+                                                                ▼
+                                                             ABSENT
+                                                    (two 404s, ≥ 6 h apart,
+                                                     both responses on disk;
+                                                     a human reviews the list)
+
+          anything else — a 504, a timeout, a short transfer, the circuit
+          breaker stopping the lane, a missing credential, even an
+          unclassified bug:                        ────────────────► QUEUED
+                                                   (retry_queue.jsonl;
+                                                    run again, nothing lost)
 ```
 
-or, to keep it on screen:
+Two consequences worth stating plainly.
+
+**A partly-served month or year is written, not rejected.** If OISST 1993 has
+360 of its 365 days upstream, Stage A writes the 360 it got, records the five
+dates in the `.done` marker's `missing_dates` and in the report, and puts those
+five dates on the queue as **day-level items** (`oisst/1993/1993-03-04`). A
+later run fetches each missing day into a **fill shard** beside the parent's
+(`oisst/1993.fill-19930304.tfrecord`) rather than rewriting a shard that may be
+gigabytes; Stage B reads every shard it finds. Only the two-sighting rule ever
+turns one of those days into `absent`.
+
+**`queued` is not a failure and should not be reported as one.** The run is
+finished when the queue is empty, and `run_until_complete.sh` is what gets it
+there.
+
+### 4.3 What to watch
+
+`report.jsonl` is written by Beam only when the pipeline finishes, so each
+lane also appends every result to `<state-dir>/progress/<host>-<lane>.jsonl`
+the moment the record exists — before it is even handed back to Beam. Read
+those, from a second terminal:
 
 ```bash
 watch -n 60 "python -m beam_import.report --live /var/tmp/beam_import"
 ```
 
-Example output (this is the smoke test's, so the names are the fixtures'; a
-real run has `ncep`, `oisst`, `rg` and the rest):
+Example output (from the smoke test, so the names are the fixtures'):
 
 ```
 live progress from /tmp/smk/state/progress
   newest record  2026-09-04T14:48:58+00:00 UTC   (first 2026-09-04T14:48:58+00:00)
-  records        10 item(s), 4 lane(s) done
+  records        14 item(s), 4 lane(s) done
 
   status per source
-    source             deferred     failed  published
-    flaky                     2          5          0
-    ncep                      0          0          1
-    oisst                     0          0          1
-    tiny                      0          0          1
-    TOTAL                     2          5          3
+    source              queued    written
+    flaky                    7          0
+    ncep                     0          3
+    oisst                    0          1
+    …
 
   per host
     host             items       bytes      wall  backoffs  trips
     testflaky            7         0 B     0.00h        20      1
-    testhost             1        38 B     0.00h         0      0
-    testncei             1     90.7 KB     0.00h         0      0
-    testpsl              1     27.6 KB     0.00h         0      0
+    testpsl              3     27.6 KB     0.00h         0      0
 
+  queue          8 item(s)
+  absent         0 item(s) (404/410 twice, >= 6 h apart)
   1 breaker trip(s) so far. Two on one host in one run means STOP and report.
 ```
 
 `newest record` is the honesty check: if it stops advancing for longer than a
-host's slowest expected item, something is wedged. The `backoffs` and `trips`
-columns are live — you do **not** have to wait for a lane to finish to see
-that it is in trouble.
+host's slowest expected item, something is wedged. The pipeline's own stdout is
+the other live signal — one line per lane event, prefixed `[host/lane]`:
+`wrote <shard> (N records, B bytes, sha …)` and `attempt N failed (…); slept Ms`.
 
-The pipeline's own stdout is the other live signal: one line per lane event,
-prefixed `[host/lane]` — `verified <hub path> (<sha prefix>)` for each file
-that passed the upload-and-download-back check, and `attempt N failed (…);
-slept Ms` for each backoff.
-
-When the run ends, `summary.md` is built from the **union** of the progress
-files and `report.jsonl`, deduplicated by item with the final record winning —
-so a run that was killed still summarises correctly from the progress files
-alone:
-
-```bash
-python -m beam_import.report --report out/tier0/report.jsonl \
-    --state-dir /var/tmp/beam_import --out out/tier0/summary.md
-```
-
-### Expected wall time per host
+### 4.4 Expected wall time per host
 
 **These numbers are DERIVED, not measured.** They come from the registry's own
-per-item byte counts and each host's `min_gap_s` and `max_lanes`, plus one
-assumption: 50 MB/s of usable throughput per lane. Nobody has yet run Tier 0
-end to end. Use them to tell "slow because polite" from "wedged", not as a
-promise.
+per-item counts and each host's `min_gap_s` and `max_lanes`, plus one
+assumption per host: 50 MB/s of usable throughput per lane for HTTP, and the
+**measured 411 s per GLORYS month** for CMEMS. Nobody has run Tier 0 end to
+end. Use them to tell "slow because polite" from "wedged".
 
-The derivation is: *pace* = requests × `min_gap_s` ÷ `max_lanes` (two requests,
-a HEAD and a GET, per file — and OISST is ~365 files per item), *transfer* =
-wire bytes ÷ 50 MB/s ÷ `max_lanes`.
+| host | lanes | items | requests | wire | derived total | why |
+|---|---:|---:|---:|---:|---:|---|
+| `cmems` (GLORYS) | 4 | 384 | 11,688 | 881 GB | **~11 h** | 384 months × 411 s ÷ 4 lanes |
+| `psl` (NCEP) | 1 | 560 | 1,120 | 23.5 GB | **6.35 h** | 1 lane, 20 s apart — pace, not bandwidth |
+| `scripps` (Roemmich–Gilson) | 1 | 93 | 186 | 65 GB † | **0.88 h** | |
+| `ncei` (OISST) | 6 | 44 | 31,656 | 22.9 GB | **0.75 h** | ~16,000 daily files over 6 lanes |
+| `aoml` (cable + SAMBA) | 1 | 44 | 88 | ~0 | **0.12 h** | |
+| `ncei_etopo` | 1 | 1 | 2 | 0.5 GB | **0.01 h** | |
+| `rapid`, `gatech`, `ndbc`, `github_raw` | 1–2 | 5 | 10 | ~0 | **minutes** | |
 
-| host | lanes | items | requests | wire | pace | transfer | **derived total** |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| `psl` (NCEP) | 1 | 560 | 1,120 | 23.5 GB | 6.22 h | 0.13 h | **6.35 h** |
-| `scripps` (Roemmich–Gilson) | 1 | 93 | 186 | 65.1 GB † | 0.52 h | 0.36 h | **0.88 h** |
-| `ncei` (OISST) | 6 | 44 | 31,656 | 22.9 GB | 0.73 h | 0.02 h | **0.75 h** |
-| `aoml` (cable + SAMBA) | 1 | 44 | 88 | ~0 | 0.12 h | 0.00 h | **0.12 h** |
-| `ncei_etopo` | 1 | 1 | 2 | 0.5 GB | 0.00 h | 0.00 h | **0.01 h** |
-| `rapid`, `gatech`, `ndbc`, `github_raw` | 1–2 | 5 | 10 | ~0 | — | — | **minutes** |
-| `cmems` (GLORYS) | 4 | 384 | 0 | 0 | — | — | **minutes** (verify only) |
-
-† The registry gives every Roemmich–Gilson item the base files' ~0.7 GB, so
-65 GB is an over-estimate: the monthly extensions are much smaller.
+† over-estimated: the registry gives every Roemmich–Gilson item the base
+files' ~0.7 GB and the monthly extensions are far smaller.
 
 **Lanes run in parallel, so the run's wall clock is the longest lane: about
-6.4 hours, set entirely by PSL.** That is deliberate — PSL is one lane with a
-twenty-second gap because two large files back to back made it answer 504 and
-go silent for a quarter of an hour. If your run takes considerably longer,
-look at the `backoffs` column before assuming anything is broken.
+11 hours, set by GLORYS** — or about 6.5 hours, set by PSL, if you use
+`glorys_from_mirror` (§4.6).
 
-### Re-running after an interruption
+### 4.5 Re-running after an interruption
 
-**Run exactly the same command again.** The pipeline lists the Hub once at the
-start and skips everything already there, and it checks each item's Hub path
-again immediately before fetching it. A second run over a completed tier
-reports every item as `present` and downloads nothing. This is also what you
-do after a crash, a reboot, or a lost connection.
+**Run exactly the same command again.** The `.done` markers are listed once at
+the start and re-checked per item, so everything already written is skipped.
+This is also what you do after a crash, a reboot or a lost connection. If the
+queue is what you want to work through, `run_until_complete.sh` does it for
+you; by hand it is:
 
-### What a breaker trip looks like, and what to do
+```bash
+python -m beam_import.pipeline --output "$OUTPUT" --state-dir "$STATE_DIR" \
+    --report-dir out/tier0 --from-queue "$STATE_DIR/retry_queue.jsonl" \
+    --runner DirectRunner --direct_running_mode multi_processing \
+    --direct_num_workers 8
+```
+
+The old queue file is rotated to `retry_queue.1.jsonl` (then `.2`, `.3` …) and
+a fresh one is written; nothing is deleted, so the rotated files are the record
+of how many rounds it took.
+
+### 4.6 The 840 GB shortcut
+
+GLORYS is 90% of Tier 0's traffic, and a copy of exactly those monthly chunks —
+already binned to 0.25° by the same imported rule — exists as NetCDF and can be
+read anonymously. Converting that copy costs about **96 GB** and about an hour
+instead of 840 GB and eleven hours:
+
+```bash
+# instead of the `glorys` source
+python -m beam_import.pipeline --tiers 0 --only glorys_from_mirror \
+    --output "$OUTPUT" --state-dir "$STATE_DIR" --report-dir out/mirror \
+    --runner DirectRunner --direct_running_mode multi_processing \
+    --direct_num_workers 4
+```
+
+It is `enabled: false` on purpose, because the default has to be the path that
+does not depend on somebody else's storage still being there. The files are
+**not re-binned** — binning them again would be a second decision about the
+same bytes. To read the same chunks from a different filesystem, edit the
+`url:` in the `glorys_from_mirror` block of `sources.yaml`. If you use this
+source, do **not** also run `glorys`, and say in your report which one you ran.
+
+### 4.7 What a breaker trip looks like
 
 ```
 [psl/0] attempt 1 failed (HEAD …: HTTP 504); slept 61s
 [psl/0] attempt 2 failed (HEAD …: HTTP 504); slept 297s
 …
-[psl/0] CIRCUIT BREAKER TRIPPED — the rest of this lane is deferred. Wait at least an hour, then re-run.
+[psl/0] CIRCUIT BREAKER TRIPPED — the rest of this lane is queued for the next run.
 ```
 
-Five items in a row failed, so that lane stopped on purpose. Everything it had
-not reached comes back with status `deferred` — **that is not a failure**, it
-is a note that the work is still to do.
-
-- **First trip on a host:** wait **at least one hour**, then re-run the same
-  command. The deferred items get picked up.
-- **Second trip on the same host in one run, or a trip on the re-run:**
-  **stop.** Do not re-run a third time. Write the report in §9, say which host,
-  how many trips, and paste the exact error text. Chris decides whether the
-  budget in `sources.yaml` comes down.
+Five items in a row failed, so the lane stopped on purpose and everything it
+had not reached went to the queue. `run_until_complete.sh` sleeps and tries
+again. **If a host trips twice in one run the script stops and exits 4** — do
+not re-run it; write the report in §10.
 
 ---
 
-## 5 · Verifying Tier 0 and publishing the manifest
+## 5 · Verifying Stage A
 
 ```bash
-python -m beam_import.verify_hub --tiers 0
+python -m beam_import.verify_output --tiers 0 \
+    --output "$OUTPUT" --state-dir "$STATE_DIR" --deep \
+    --json-out out/tier0/verify.json
 ```
 
 Expected when the tier is complete:
 
 ```
-tier(s) [0]: 1131 file(s) expected, 1131 on the Hub
+tier(s) [0]: 1131 item(s) expected, 1131 written (199.90 GB in 1131 shard(s))
 missing: 0
-extra (on the Hub under a tier prefix, not in the manifest): 0
+short:   0
+deep:    0 shard(s) failed a full re-read
+extra:   0 marker(s) with no manifest item
+queued:  0 item(s) still to do
+absent:  0 item(s) — REVIEW THESE BEFORE STAGE B
 ```
 
-The command exits 0 when `missing` is 0 and 3 otherwise, so it can be used in a
-shell condition. Anything listed as `MISSING` should also appear in
-`report.jsonl` with a status of `failed`, `deferred`, `absent` or `blocked` —
-if a file is missing on the Hub and `published` in the report, say so loudly;
-that would mean the restore-verify is lying and it is the most serious thing
-that can go wrong here.
+`--deep` re-reads every shard and checks every record's CRC; it is slower and
+it is the right thing to do once, before a long training run. The command
+exits 0 only when nothing is missing that is not explained by absent evidence.
 
-Then write the manifest onto the Hub, in one commit:
-
-```bash
-python -m beam_import.verify_hub --tiers 0 \
-    --report out/tier0/report.jsonl --out-dir out/tier0 --publish
-```
-
-Expected:
-
-```
-published sources/MANIFEST_tier0.json (1131 file records)
-```
-
-Each record carries the Hub path, the source, the host, the status, the byte
-count, the sha256 the restore-verify compared, the upstream URL or product id,
-and the transform that was applied.
-
-Finally read the summary:
+Then read the summary:
 
 ```bash
 cat out/tier0/summary.md
 ```
 
-It has three tables: counts by status; **per host — the politeness audit**
-(requests, bytes, wall time, backoffs, breaker trips); and per source. Then a
-table of everything that is not `published` or `present`, with its error text.
-The politeness audit is the part Chris reads first. **A host with many
-backoffs or any trips means its budget is too generous and should come DOWN
-before the next run** — never up.
+It has counts by status, the **per-host politeness audit** (requests, bytes,
+wall time, backoffs, breaker trips), a per-source table, a table of the days
+that were missing upstream and re-queued, and the queue and absent counts. The
+politeness audit is what Chris reads first: **a host with many backoffs or any
+trips means its budget is too generous and should come DOWN before the next
+run** — never up.
 
 ---
 
-## 6 · Running Tier 1
+## 6 · Stage B — assembling the training set
+
+Stage A wrote one record per source-day. Stage B turns those into one record
+per **(pentad bin, channel group)** — the family-7 layout — and that is the
+thing a trainer reads.
+
+```bash
+python -m beam_import.assemble \
+    --output "$OUTPUT" \
+    --pentad-out "$OUTPUT/pentad" \
+    --num-shards 64 \
+    --runner DirectRunner --direct_running_mode multi_processing \
+    --direct_num_workers 8
+```
+
+Expected output — the coverage line is the thing to read:
+
+```
+stage B: 1131 shard(s) -> /data/import/pentad (64 shards per group)
+coverage g025: bins_present=3139 range=[0, 3138] missing_in_range=0
+coverage g100: bins_present=3139 range=[0, 3138] missing_in_range=0
+coverage rg100: bins_present=252 range=[1606, 3138] missing_in_range=1281
+```
+
+(On the smoke test's one-bin fixture the same three lines read
+`bins_present=1 range=[1573, 1573] missing_in_range=0`.)
+
+`missing_in_range` must be **0** for `g025` and `g100` — a missing bin has to
+trace back to an `absent` record, and if it does not, something was dropped and
+that is a stop-and-report. For `rg100` a large `missing_in_range` is **correct
+and expected**: Roemmich–Gilson is monthly, so it is written only on the bin
+holding each month's 15th and is deliberately absent on the other four bins of
+the month.
+
+Beside the shards you get two files:
+
+- **`spec.json`** — the groups, their channel names in order, the shape, and
+  the per-channel mean and standard deviation over what was written. Those
+  numbers are kept OUT of the records on purpose: which years count as "train"
+  is a trainer's decision, not the import's.
+- **`coverage.json`** — the machine-readable form of the lines above.
+
+### 6.1 Reading the shards — pure Python, no TensorFlow
+
+```python
+import numpy as np
+from beam_import import tfrecord
+from beam_import.example import one_int, one_str, parse_example, str_list
+
+ROOT = "/data/import/pentad/g025"
+for uri in tfrecord.list_uris(ROOT, ".tfrecord"):
+    for payload in tfrecord.read_records(uri):     # CRCs checked in here
+        rec = parse_example(payload)
+        shape = [int(x) for x in rec["shape"]]                  # [C, H, W]
+        values = np.frombuffer(rec["values"][0], dtype="<f4").reshape(shape)
+        names = str_list(rec, "chan_names")
+        print("bin", one_int(rec, "bin"), one_str(rec, "date_start"),
+              "shape", shape, "cur_u mean",
+              float(np.nanmean(values[names.index("cur_u")])))
+```
+
+Output on the smoke fixture:
+
+```
+bin 1573 2003-07-15 shape [7, 9, 9] cur_u mean 0.009829164482653141
+```
+
+### 6.2 Reading the shards — `tf.data`
+
+```python
+import numpy as np, tensorflow as tf
+
+FEATURES = {
+    "bin":          tf.io.FixedLenFeature([], tf.int64),
+    "date_start":   tf.io.FixedLenFeature([], tf.string),
+    "chan_names":   tf.io.VarLenFeature(tf.string),
+    "shape":        tf.io.FixedLenFeature([3], tf.int64),
+    "values":       tf.io.FixedLenFeature([], tf.string),
+    "days_present": tf.io.VarLenFeature(tf.int64),
+}
+files = tf.io.gfile.glob("/data/import/pentad/g025/*.tfrecord")
+for raw in tf.data.TFRecordDataset(files):
+    ex = tf.io.parse_single_example(raw, FEATURES)
+    shape = ex["shape"].numpy()
+    values = tf.reshape(tf.io.decode_raw(ex["values"], tf.float32),
+                        shape).numpy()
+    names = [b.decode() for b in tf.sparse.to_dense(ex["chan_names"]).numpy()]
+    print("bin", int(ex["bin"]), ex["date_start"].numpy().decode(),
+          "shape", list(shape), "cur_u mean",
+          float(np.nanmean(values[names.index("cur_u")])))
+```
+
+Output on the same shard:
+
+```
+bin 1573 2003-07-15 shape [7, 9, 9] cur_u mean 0.009829164482653141
+```
+
+**Both snippets above were run and produce that identical number.** The
+`mask` feature is a bit-packed `[C, H, W]` array of "is this finite" —
+`np.unpackbits(np.frombuffer(rec["mask"][0], dtype=np.uint8))[:C*H*W]
+.reshape(shape)` — and `days_present` says, per channel, how many of the five
+days contributed. The `min_days = 3` rule has already been applied: a channel
+below it is all-NaN with its true `days_present`, so you can tell "no data"
+from "not enough data".
+
+---
+
+## 7 · Tier 1
 
 Tier 1 is everything the next model family needs that requires no new account.
 Most of it is small. One source is not.
 
 **Run DUACS on its own.** It is ~1.1 TB on the wire — 384 monthly items, each
-fetched one day at a time from Copernicus Marine and binned down to 0.25° —
-and at four CMEMS lanes it takes **two to three days**:
+fetched one day at a time and binned to 0.25° — and at four CMEMS lanes it
+takes **two to three days**:
 
 ```bash
-python -m beam_import.pipeline \
-    --tiers 1 --only duacs \
-    --report-dir out/duacs --state-dir /var/tmp/beam_import \
-    --runner DirectRunner --direct_running_mode multi_processing \
-    --direct_num_workers 8
+bash run_until_complete.sh --tiers 1 --only duacs
 ```
 
-It may be interrupted and resumed at will: kill it, reboot, run the same
-command again. Finished months are on the Hub and are skipped.
-
-**Before the first DUACS run**, resolve the real dataset identifier. The one in
-`sources.yaml` is marked `unverified_url` because it is a best guess:
+It may be interrupted and resumed at will. **Before the first DUACS run**,
+resolve the real dataset identifier — the one in `sources.yaml` is marked
+`unverified_url` because it is a best guess:
 
 ```bash
 copernicusmarine describe --product-id SEALEVEL_GLO_PHY_L4_MY_008_047
 ```
 
-Find the daily 0.125° delayed-time (`_my_`) dataset in the output, paste its
-`dataset_id` into the `duacs:` block of `sources.yaml`, and remove the
-`unverified_url: true` and `resolve_dataset_id: true` lines from that block. Do
-not hardcode a guess. Note also that delayed-time DUACS is produced with a
-centred ±6-week window, so the last ~6 weeks of the record simply do not exist
-in this product.
+Find the daily 0.125° delayed-time (`_my_`) dataset, paste its `dataset_id`
+into the `duacs:` block, and delete the `unverified_url: true` and
+`resolve_dataset_id: true` lines from that block. Do not hardcode a guess.
+Delayed-time DUACS is produced with a centred ±6-week window, so the last ~6
+weeks of the record do not exist in this product.
 
 Everything else in Tier 1:
 
 ```bash
-python -m beam_import.pipeline --tiers 1 \
-    --report-dir out/tier1 --state-dir /var/tmp/beam_import \
-    --runner DirectRunner --direct_running_mode multi_processing \
-    --direct_num_workers 8
+bash run_until_complete.sh --tiers 1
 ```
 
-**Six Tier-1 sources carry `unverified_url: true` and will probably fail until
-a human checks them.** That is expected and it is why they are flagged. They
-are `en4` (a HEAD on the 2020 file returned **404** on 2026-09-04 — the path
-has moved; open <https://www.metoffice.gov.uk/hadobs/en4/download-en4-2-2.html>
-and copy the real one), `pmel_wwv` (the configured URL is an index page, not a
-file), `godas` (a directory, not a file — it needs rewriting as a `var_year`
-source), `oni` (this sandbox's proxy refused the host, so it is untested),
-`mei`, and `rmm` (a HEAD returned **403** on 2026-09-04). Report what each one
-does; do not invent replacement URLs.
+**Six Tier-1 sources carry `unverified_url: true` and will probably not work
+until a human checks them.** That is expected and it is why they are flagged:
+`en4` (a HEAD on the 2020 file returned **404** on 2026-09-04 — the path has
+moved; open <https://www.metoffice.gov.uk/hadobs/en4/download-en4-2-2.html>),
+`pmel_wwv` (the configured URL is an index page, not a file), `godas` (a
+directory — it needs rewriting as a `var_year` source), `oni` (this sandbox's
+proxy refused the host, so it is untested), `mei`, and `rmm` (a HEAD returned
+**403** on 2026-09-04). Report what each one does; do not invent replacement
+URLs. Note what they will do meanwhile: **`queued`, not lost.**
 
 ---
 
-## 7 · Tier 2
+## 8 · Tier 2
 
 ### ERA5, once Chris provides the CDS key
 
-Today every ERA5 item is reported `blocked` and **nothing is requested**. When
-the key exists:
+Today every ERA5 item is reported `queued` with the reason "no CDS
+credentials", and **nothing is requested**. When the key exists:
 
 ```bash
 export CDSAPI_URL='https://cds.climate.copernicus.eu/api'
 export CDSAPI_KEY='<the key Chris gives you>'
-pip install cdsapi                       # already in requirements.txt
+pip install cdsapi
 
 # start with ONE month of ONE variable and look at the file before
 # committing to 7,224 requests
 python -m beam_import.pipeline --tiers 2 --only era5 --dry-run \
-    --report-dir out/era5dry --state-dir /var/tmp/beam_import \
+    --output "$OUTPUT" --state-dir "$STATE_DIR" --report-dir out/era5dry \
     --runner DirectRunner
 ```
 
-The full source is 14 variables × 516 months = **7,224 requests**, two in
-flight at a time. That is a lot of queueing and it should be discussed with
-Chris before it is started. Check the variable names against the dataset's own
-form on the CDS website first — `sources.yaml` lists ERA5 **short** names
-(`metss`, `u10`, `t2m` …) and some CDS datasets want the long ones.
+14 variables × 516 months = **7,224 requests**, two in flight at a time. That
+is a lot of queueing and it should be discussed with Chris before it starts.
+Check the variable names against the dataset's own form first — `sources.yaml`
+lists ERA5 **short** names (`metss`, `u10`, `t2m` …) and some CDS datasets want
+the long ones.
 
 ### ESA CCI soil moisture
 
-It is `enabled: false` and its path pattern is a guess, because the real
-directory listing can only be read after registering a free account at
-<https://services.ceda.ac.uk>. To enable it: register, browse to the v09.1
-COMBINED daily 0.25° product, put the real URL pattern into the `cci_sm:` block
-of `sources.yaml`, remove `unverified_url: true`, set `enabled: true`, and run
-`--tiers 2 --only cci_sm`.
+`enabled: false`, and its path pattern is a guess, because the real directory
+listing can only be read after registering free at
+<https://services.ceda.ac.uk>. Register, browse to the v09.1 COMBINED daily
+0.25° product, put the real URL pattern into the `cci_sm:` block, remove
+`unverified_url: true`, set `enabled: true`, and run `--tiers 2 --only cci_sm`.
 
 ### Why OSTIA and GREP-3D are off
 
 **OSTIA** is a 0.05° sea-surface-temperature and sea-ice product: roughly
-**3 TB on the wire**, for a sea-ice fraction that OISST already gives us at a
-fraction of the cost. It is off by default and should stay off unless somebody
-has a reason.
-
-**GREP-3D** is the three-dimensional (depth-resolved) ocean ensemble
-reanalysis: about **200 GB stored** globally, and the plan document E-070 §6
-says the streaming data loader that would use it has to be built first. It is
-off by default. If a smaller version is ever wanted, `sources.yaml` carries a
-North-Atlantic window (`bbox_na_option`, longitude −100…20, latitude 0…70) to
-swap into `bbox` deliberately. Its depth levels must be **read from the first
-file the server sends**, never hardcoded.
+**3 TB on the wire**, for a sea-ice fraction OISST already gives us at a
+fraction of the cost. **GREP-3D** is the depth-resolved ocean ensemble
+reanalysis: about **200 GB written** globally, and E-070 §6 says the streaming
+loader that would use it has to be built first. Both are off by default and
+should stay off unless somebody has a reason. `sources.yaml` carries a
+North-Atlantic window for GREP (`bbox_na_option`) to swap into `bbox`
+deliberately, and its depth levels must be **read from the first file the
+server sends**, never hardcoded.
 
 ---
 
-## 8 · Optional: Dataflow, and the GitHub Actions fallback
+## 9 · Beam → Flume, Dataflow, and the zero-cost fallback
 
-You almost certainly do not need either.
+### The mapping, if you are running inside Google
 
-**Dataflow** (Google Cloud's managed Beam runner) is a flag change:
+The pipeline is written in Apache Beam, which is the open-source form of
+Flume. The concepts line up one to one, and **the part that must survive the
+move is the key-count guarantee**, not the API:
+
+| Beam (this code) | Flume | what it must keep doing |
+|---|---|---|
+| `beam.GroupByKey()` on `(host, lane)` | `MakeUnique` / `GroupByKey` on the same key | **THE POLITENESS GUARANTEE.** All the values of one key are iterated by ONE worker, in order. That is why "number of keys per host" *is* "maximum simultaneous connections to that host". Nothing else in the design bounds load. |
+| `beam.DoFn` with `setup()` | `DoFn` with `startBundle` / a lazily-built member | Clients and credentials are created per worker, inside the DoFn — never captured in the constructor, never a pipeline option. |
+| `beam.pvalue.AsList(...)` side input | a side input / broadcast | The `.done` listing, taken once at the start. It is an optimisation; the per-item marker check is the correctness half and must stay. |
+| `beam.io.WriteToTFRecord` | the TFRecord sink | Same file format, same records. `beam_import/tfrecord.py` is a pure-Python fallback that writes the identical bytes, if a sink is easier to avoid than to configure. |
+| `apache_beam.io.filesystems.FileSystems` | the filesystem abstraction | Everything the package writes goes through it, so the output URI is the only thing that changes. |
+| `--direct_num_workers` | the worker count | **Set `workers × threads ≥ 29` and no higher** — 29 is the sum of `max_lanes` over all hosts. More workers cannot make it faster (the lanes are the limit) and only risk someone raising a budget to "use" them. |
+| environment variables in `setup()` | the runner's secret mechanism | Credentials never travel as options or flags, on any runner. |
+
+**Stage B is the only part a distributed runner helps with.** It is a wide
+reduce over the whole Stage-A output and it needs no politeness at all, only
+bandwidth to the output store. Stage A's speed is set by `min_gap_s`, and no
+amount of hardware changes that.
+
+### Dataflow
 
 ```bash
-python -m beam_import.pipeline --tiers 0 \
-    --report-dir gs://<bucket>/tier0 --state-dir /var/tmp/beam_import \
-    --runner DataflowRunner \
-    --project <gcp-project> --region <region> \
-    --temp_location gs://<bucket>/tmp \
-    --max_num_workers 3 --number_of_worker_harness_threads 4
+python -m beam_import.assemble --output gs://bucket/import \
+    --pentad-out gs://bucket/import/pentad \
+    --runner DataflowRunner --project <gcp-project> --region <region> \
+    --temp_location gs://bucket/tmp \
+    --max_num_workers 8 --number_of_worker_harness_threads 4
 ```
 
-It buys nothing here except managed retries, which — per `DESIGN.md` §2 — we
-specifically do not want at the bundle level. **The warning that matters:
-pipeline options are logged and displayed in the Dataflow job UI, so a
-credential passed as an option is a published credential.** On Dataflow the
-credentials must come from Google Secret Manager, read inside `DoFn.setup()`,
-never from `--flags`. Use Dataflow only if the machine, and not the hosts,
-turns out to be the bottleneck.
+**The warning that matters: pipeline options are logged and displayed in the
+Dataflow job UI, so a credential passed as an option is a published
+credential.** On Dataflow, secrets come from Secret Manager, read inside
+`DoFn.setup()`. For Stage A also keep `max_num_workers × threads ≤ 29`, and
+remember that Dataflow retries a failed bundle four times — which is exactly
+why nothing transient is allowed to escape a DoFn.
 
-**The GitHub Actions fallback** is the pattern an earlier phase used: run the
-same command inside a GitHub-hosted runner, several lanes at a time, on
-`workflow_dispatch`. Because the pipeline is resumable from the Hub, the
-350-minute job cap just means more firings — each one picks up where the last
-left off. It costs nothing. If you use it, the Hugging Face token goes in a
-repository secret and is exported into the environment by the workflow step,
-never onto a command line.
+### The GitHub-Actions fallback
+
+Run the same command inside a GitHub-hosted runner, on `workflow_dispatch`.
+Because the pipeline is resumable from the `.done` markers and the retry queue,
+the 350-minute job cap just means more firings — each picks up where the last
+left off. It costs nothing. The output has to be a bucket the runner can write
+to; no credential goes on a command line.
 
 ---
 
-## 9 · What to report back to Chris
+## 10 · What to report back to Chris
 
 Send **one markdown message**. Use this template, filled in with real numbers
-taken from `summary.md` and `report.jsonl` — never from memory, and never a
-number you did not read out of an artefact.
+read out of `summary.md`, `verify.json` and `coverage.json` — never from
+memory, and never a number you did not read out of an artefact.
 
 ```markdown
 ## Import status — Tier <N> — <date, UTC>
 
-**TL;DR:** <one plain sentence: is the tier done, and if not, what is missing.>
+**TL;DR:** <one plain sentence: is the tier done, and if not, what is left.>
 
 ### Counts per tier
-| tier | items | published | present | absent | deferred | failed | blocked |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| 0 | 1131 (747 to fetch + 384 verify-only) | | | | | | |
+| tier | items | written | present | queued | absent |
+|---|---:|---:|---:|---:|---:|
+| 0 | 1131 | | | | |
+
+### Wire GB fetched vs the manifest's estimate
+Fetched <X> GB against the manifest's estimate of <Y> GB (<Z>%).
+<One sentence if they differ by more than ~20%, naming the source.>
+<Say whether `glorys` or `glorys_from_mirror` was used — it is a 9× difference.>
 
 ### Bytes and wall time per host
 | host | lanes | items | requests | bytes | wall | backoffs | breaker trips |
 |---|---:|---:|---:|---:|---:|---:|---:|
+| cmems | 4 | | | | | | |
 | psl | 1 | | | | | | |
-| ncei | 6 | | | | | | |
 | ... | | | | | | | |
 
-### Wire GB fetched vs the manifest's estimate
-Fetched <X> GB against the manifest's "to fetch" estimate of <Y> GB
-(<Z>%). <One sentence if they differ by more than ~20%, saying which source
-accounts for it.>
+### Output
+`--output` was <uri>. <n> shards, <n> `.done` markers, <X> GB.
+`verify_output --tiers <N> --deep` reports missing <n>, short <n>, deep_bad <n>.
 
-### Hub manifest
-`sources/MANIFEST_tier<N>.json` — <n> file records.
-`verify_hub --tiers <N>` reports missing: <n>.
+### Stage B coverage
+coverage g025: bins_present=<n> range=[<a>, <b>] missing_in_range=<n>
+coverage g100: bins_present=<n> range=[<a>, <b>] missing_in_range=<n>
+coverage rg100: bins_present=<n> range=[<a>, <b>] missing_in_range=<n>
+<Every missing g025/g100 bin traced to an `absent` record — or say it did not.>
 
-### Anything absent, deferred, failed or blocked
-| item | status | error text (verbatim) |
+### Still queued, and absent
+| item | status | reason / error text (verbatim) |
 |---|---|---|
 | | | |
+<For each `absent`: both sightings' timestamps and status codes.>
 
 ### What I could not verify
 - <e.g. "the `en4` URL pattern still 404s; I did not look for a replacement">
@@ -791,36 +928,40 @@ accounts for it.>
 - <one or two sentences>
 ```
 
-Rules for the report: **paste error text verbatim**, do not paraphrase it.
-**Never write a bare identifier** — every source name gets a short plain-English
-gloss the first time it appears. **Every number comes from a file**, and say
-which file. And if a breaker tripped twice and you stopped, that goes in the
-TL;DR, not in a footnote.
+Rules for the report: **paste error text verbatim**, do not paraphrase.
+**Never write a bare identifier** — every source name gets a short
+plain-English gloss the first time it appears. **Every number comes from a
+file**, and say which. If a breaker tripped twice and you stopped, that goes in
+the TL;DR, not a footnote. And **`queued` is not "failed"** — report it as
+"still to do", with what the next round will try.
 
 Where the numbers come from: the per-tier and per-host tables are the two
-tables in `summary.md`. The **wire GB fetched** is the sum of that file's
-per-host `bytes` column; the **manifest's estimate** is the `to fetch:` line
-printed by `python -m beam_import.manifest --tiers <N>` — 104.3 GB for Tier 0.
-A large gap between them is worth a sentence: it usually means a source's
-`bytes_wire` in `sources.yaml` is a bad estimate (the Roemmich–Gilson rows are
-known to over-estimate), which is useful for the next run's planning.
+tables in `summary.md`; the wire GB is the sum of that file's per-host `bytes`
+column; the manifest's estimate is the `to fetch:` line from
+`python -m beam_import.manifest --tiers <N>` (925.1 GB for Tier 0 with
+`glorys`, ~185 GB with `glorys_from_mirror`); the coverage lines are printed by
+Stage B and stored in `coverage.json`.
 
 ---
 
-## 10 · Troubleshooting
+## 11 · Troubleshooting
 
 | symptom | cause | what to do |
 |---|---|---|
-| `HTTP 504` from `downloads.psl.noaa.gov`, then nothing at all for ~15 min | PSL throttles after two large files. This is the measured behaviour the whole backoff ladder was built for. | Nothing. The lane sleeps 60 s, 5 min, 15 min, 60 min and carries on. If it trips the breaker, wait an hour and re-run. **Do not raise `max_lanes` for `psl`.** |
-| `NetCDF: HDF error` when something opens a file | The download was **truncated**. A short transfer raises no exception at the socket; it surfaces here, much later. | The size check in `fetchers.py` (HEAD `Content-Length` vs bytes on disk) should have caught it. If it did not, the server sent no `Content-Length` — report the URL. Delete the local state directory and re-run. |
-| `Hub rate limit … hourly quota` / HTTP 429 on a commit | The Hugging Face hourly commit quota. | Nothing. The code honours `Retry-After` and backs off. If it keeps happening, lower `hub.commit_budget_per_hour` in `sources.yaml` (yes, lower) and re-run. |
-| `Hub commit conflict` / HTTP 409 or 412 | Someone or something else committed to the repository while we were preparing our commit. | Nothing. It is retried; our operations are additions at distinct paths. If it repeats, check nobody else is writing to `chfrank/earth-tensors` right now. |
-| `403 You don't have the rights to create a model under the namespace "blauewelt"` | The **namespace trap**: `blauewelt` is the GitHub organisation and does not exist on the Hugging Face Hub. | The Hub account is the user **`chfrank`** and the repository is `chfrank/earth-tensors`. Check `sources.yaml`'s `hub.repo_id`. |
-| `copernicusmarine` authentication error | Almost always the `%` in the password being eaten by the shell. | Re-export it in **single quotes**: `export COPERNICUSMARINE_SERVICE_PASSWORD='<password from CREDENTIALS.md — has a %>'`. Then check with the "set / NOT set" loop in §2.3. |
-| The process is killed; `dmesg` says `Out of memory` | An item is too big for one machine. This means **the registry's `chunk` for that source is wrong** — e.g. a whole month of GLORYS in one request is 5.95 GB. | Fix the chunking (fetch per day), **not** the worker count. Adding workers makes it worse. Report it before changing `sources.yaml`. |
-| `PicklingError` / `Can't pickle …` when the pipeline starts | Beam pickles the DoFn and everything it holds. Something unpicklable got into `LaneWorker.__init__`. | Clients belong in `DoFn.setup()`, configuration in the plain dict passed to `__init__`. Do not add an open file, a session or a client to the constructor. |
-| The DirectRunner hangs forever at start, or spawns endless processes | A missing `if __name__ == '__main__':` guard. In `multi_processing` mode every child re-imports the module, and without the guard each child starts its own pipeline. | `beam_import/pipeline.py` has the guard. If you write a new entry point, it needs one too. |
-| `No space left on device` | Downloads that were not cleaned up — usually because a run was killed between fetching and publishing. | `du -sh /var/tmp/beam_import/*` to see where it went, then delete the per-item subdirectories. Files are removed only after the restore-verify passes, so anything left over is from an interrupted run and is safe to delete: it will be fetched again. |
-| Everything in a tier comes back `blocked` | A gated source with no credentials — ERA5 without `CDSAPI_KEY`, CMEMS without the two `COPERNICUSMARINE_*` variables. | Read the error text; it names the variables. For ERA5 this is the correct behaviour until Chris makes the account. |
-| An item is `absent` | The archive genuinely does not have that file — a Florida-cable year that was never measured, a Roemmich–Gilson month that was never published. | Nothing. `absent` is a fact about the archive, it does not count towards the circuit breaker, and it is reported as such. |
-| `no earth checkout at …` | `EARTH_REPO` is unset or points somewhere without an `ml/` directory. | `git clone https://github.com/blauewelt/earth.git` and `export EARTH_REPO=…`. **Do not** write your own binning function (hard rule 4). |
+| `HTTP 504` from `downloads.psl.noaa.gov`, then silence for ~15 min | PSL throttles after two large files. This is the measured behaviour the whole backoff ladder exists for. | Nothing. The lane sleeps 60 s, 5 min, 15 min, 60 min. If the breaker trips, `run_until_complete.sh` waits an hour and tries again. **Do not raise `max_lanes` for `psl`.** |
+| the run exits **3** | the queue is not empty | Not an error. Run again, or let `run_until_complete.sh` do it. Nothing was lost. |
+| the run exits **4** | a host's breaker tripped twice in one run | **Stop.** Hard rule 7. Read `summary.md`, write the §10 report. Do not re-run. |
+| `NetCDF: HDF error` when something opens a file | the download was **truncated**; a short transfer raises nothing at the socket | The HEAD `Content-Length` vs bytes-on-disk check should have caught it. If it did not, the server sent no `Content-Length` — report the URL. Delete the item's directory under `<state-dir>/work` and run again. |
+| `payload CRC mismatch` / `truncated payload` reading a shard | the shard on disk is corrupt | The write path checks this before the marker is written, so a corrupt shard means storage trouble after the fact. Delete the shard AND its `.done` marker, then re-run: it will be rewritten. |
+| `came back with sha256 …` during a write | the bytes did not survive the round trip | The shard is deleted and the item is queued automatically. If it repeats for the same item, report it — that is a storage problem, not a network one. |
+| an item is `queued` forever | it genuinely cannot be fetched, or its URL is wrong | Read the `reason` in `report.jsonl`. If it is a 404, the two-sighting rule will make it `absent` on the next run six hours later. If the URL is marked `unverified_url`, a human has to fix the registry. |
+| an item is `absent` | the archive said 404/410 twice, ≥ 6 h apart | Nothing automatic. Read `<state-dir>/absent_evidence/<item>.json` — both responses are there — and put it in the report. A missing Stage-B bin must trace to one of these. |
+| `copernicusmarine` authentication error | almost always the `%` in the password being eaten by the shell | Re-export it in **single quotes**, then check with the set/NOT-set loop in §2.3. |
+| everything in a tier is `queued` with "no credentials" | a gated source: ERA5 without `CDSAPI_KEY`, CMEMS without the two `COPERNICUSMARINE_*` variables | Read the reason; it names the variables. For ERA5 this is correct until Chris makes the account. |
+| the process is killed; `dmesg` says `Out of memory` | an item is too big for one machine — a whole GLORYS month in one request is 5.95 GB | Fix the chunking (the registry fetches one DAY per request), **not** the worker count. Adding workers makes it worse. Report it before changing `sources.yaml`. |
+| `PicklingError` / `Can't pickle …` at start-up | Beam pickles the DoFn and everything it holds | Clients belong in `DoFn.setup()`, configuration in the plain dict passed to `__init__`. Do not put an open file, a session or a client in a constructor. |
+| the DirectRunner hangs at start or spawns endless processes | a missing `if __name__ == '__main__':` guard — in `multi_processing` mode every child re-imports the module | Both entry points have the guard. A new one needs it too. |
+| `No space left on device` | raw downloads that were not cleaned up, from a run killed between fetch and write | `du -sh <state-dir>/work/*`, then delete those subdirectories. Raw files are removed only after the shard is written and verified, so anything left over is safe to delete: it will be fetched again. |
+| `no earth checkout at …` | `EARTH_REPO` unset or pointing somewhere without `ml/` | `git clone https://github.com/blauewelt/earth.git` and export it. **Do not** write your own binning or pentad rule (hard rule 6). |
+| Stage B says `missing_in_range` > 0 for `g025` or `g100` | some bin has no source day | Trace each missing bin to an `absent` record. If it does not trace, something was dropped — **stop and report**, do not proceed to training. |
+| Stage B says `missing_in_range` is large for `rg100` | Roemmich–Gilson is monthly | Correct and expected: it is written only on the bin holding each month's 15th. |

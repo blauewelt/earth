@@ -1,8 +1,10 @@
 # Build notes — what was built, what was measured, what was not
 
-Written 2026-09-04 by the session that implemented `DESIGN.md`. This is the
-record for whoever has to trust or repair the package; `README_FOR_GEMINI.md`
-is the howto, this is the audit.
+Written 2026-09-04 by the session that implemented `DESIGN.md`, and rewritten
+the same day for **revision 2** (no Hugging Face Hub; never drop data; a
+sharded `tf.train.Example` output in two stages). This is the record for
+whoever has to trust or repair the package; `README_FOR_GEMINI.md` is the
+howto, this is the audit.
 
 ---
 
@@ -10,57 +12,51 @@ is the howto, this is the audit.
 
 ```
 handover/
-  README_FOR_GEMINI.md   the howto (sections 0-10 as specified)
-  DESIGN.md              unchanged — not one substantive edit, no typo found
-                         worth fixing
-  CREDENTIALS.md         the credentials plus the rules and the namespace trap
-  sources.yaml           the registry: 16 hosts, 26 sources, 3 tiers
-  requirements.txt       pinned to what this was tested against
+  README_FOR_GEMINI.md   the howto, rewritten for revision 2
+  DESIGN.md              revision 2 — unchanged, not one substantive edit
+  CREDENTIALS.md         CMEMS + the CDS placeholder. The HF token is GONE.
+  sources.yaml           the registry: 17 hosts, 27 sources, 3 tiers
+  requirements.txt       pinned; tensorflow deliberately NOT among them
   setup_env.sh           venv with setuptools<70 installed FIRST
-  run_smoke.sh           offline smoke on the DirectRunner, 2 worker processes
-  run_tier0.sh           the real Tier-0 invocation, credentials from env
-  beam_import/           registry, manifest, hosts, fetchers, transforms,
-                         publish, pipeline, verify_hub, report  (1,692 lines
-                         of code excluding comments and docstrings)
-  tests/                 7 test modules + a fixture generator (739 lines);
-                         every fixture is GENERATED, no binary blobs in the
-                         package
+  run_smoke.sh           offline: Stage A + queue + run_until_complete + Stage B
+  run_tier0.sh           one Tier-0 round
+  run_until_complete.sh  the loop: run, sleep 1/2/4/8 h, run from the queue
+  beam_import/
+    registry.py    manifest.py   hosts.py      fetchers.py   transforms.py
+    tfrecord.py    example.py    sinks.py      pipeline.py   assemble.py
+    verify_output.py  report.py
+                         2,583 lines of code (comments and docstrings excluded)
+  tests/                 9 test modules + a fixture generator (1,272 lines);
+                         every fixture is GENERATED, no binary blobs
 ```
 
-The design's §2 rules are implemented where the design puts them: per-host lane
-cap (`sources.yaml` `hosts:` → the GroupByKey key), `min_gap_s` (`LaneState.pace`),
-the 60 s / 5 min / 15 min / 60 min ladder with 0.8–1.2 jitter and `Retry-After`
-(`LaneState.backoff_seconds`), the five-consecutive-failure circuit breaker
-(`LaneState.record_failure`, `deferred` records in `LaneWorker.process`), skip
-before fetch twice (a side-input listing taken once plus a per-item
-`exists()`), one day per CMEMS request, the Hub commit budget
-(`publish.commit_min_interval_s`), restore-verify then delete
-(`BasePublisher.publish_verified`), no credentials in argv or options, and a
-`try/except` around everything transient so only a programming error can
-propagate out of the DoFn.
+### What changed from revision 1
 
-Added after the first review pass (2026-09-04), and reflected in the numbers
-below:
+| revision 1 | revision 2 |
+|---|---|
+| `publish.py` — Hugging Face commits, restore-verify, commit quota | **deleted.** `sinks.py` (write-verify-mark to `--output`) + `tfrecord.py` + `example.py` |
+| `verify_hub.py` | **deleted.** `verify_output.py` — markers, byte counts, deep CRC re-read, the absent list |
+| statuses `published/present/planned/absent/missing/deferred/blocked/failed` | statuses **`written` / `present` / `queued` / `absent`**, and no fifth |
+| a `failed` terminal state | **gone.** Everything not written and not proven absent is appended to `retry_queue.jsonl` |
+| `absent` on one 404 | `absent` needs **two** 404/410s, ≥ 6 h apart, both responses kept in `<state-dir>/absent_evidence/` |
+| a middle gap in an OISST year was fatal | the days that arrived are written, the missing dates go in the marker AND on the queue as day-level items |
+| output = one NetCDF per item on the Hub | output = one TFRecord shard of `tf.train.Example` per item under `--output`, plus a `.done` marker |
+| (no second stage) | **Stage B** — `assemble.py`, pentad × channel group, `spec.json` + `coverage.json` |
+| `hub:` in the registry | `output:` (shapes only); `--output <uri>` on the command line |
+| GLORYS was `mode: verify` | GLORYS is fetched; `glorys_from_mirror` is the optional 9×-cheaper path |
 
-- **Verify-only items no longer count as wire.** `manifest.counts()` returns
-  separate fetch and verify totals and the CLI prints `already on Hub (verify
-  only): …` and `to fetch: …` lines. Counting GLORYS's 2.2 GB-per-month
-  download in a "how much will this fetch" figure had Tier 0 reading 925 GB
-  when the run actually transfers 104 GB.
-- **Live progress** (`ml/CLAUDE.md` §5.25). `LaneWorker.process` appends every
-  result record to `<state-dir>/progress/<host>-<lane>.jsonl` — one file per
-  lane, open-append-fsync-close per record, **written before the record is
-  yielded** — so a run killed at hour six still has everything it did.
-  `python -m beam_import.report --live <state-dir>` summarises them mid-run,
-  and `summary.md` is now built from the union of the progress files and
-  `report.jsonl`, deduped by item with the final record winning. Every record
-  carries `at` (UTC) plus a running `backoffs_so_far` / `trips_so_far`
-  snapshot, so the politeness audit is readable before a lane finishes.
-- **A derived wall-time table** in README §4, computed from the registry's own
-  per-item bytes and each host's `min_gap_s` / `max_lanes`, and labelled as
-  derived rather than measured.
-
-No budget in `sources.yaml` was changed.
+DESIGN §2's rules are implemented where the design puts them: per-host lane cap
+(`sources.yaml` → the GroupByKey key), `min_gap_s` (`LaneState.pace`), the
+60 s / 5 min / 15 min / 60 min ladder with 0.8–1.2 jitter and `Retry-After`
+(`LaneState.backoff_seconds`), the five-consecutive-failure breaker followed by
+the queue (`LaneState.record_failure` + `sinks.enqueue`), run-until-complete
+(`run_until_complete.sh`), absent-needs-evidence-twice
+(`sinks.record_not_found`), gaps masked never skipped (`missing_dates` +
+day-level items + Stage B's `days_present`), skip-before-fetch twice (a
+`.done` side input plus a per-item marker check), one day per CMEMS request,
+write-verify-mark-delete (`sinks.write_verify_mark`), no credentials in argv or
+options, and a `try/except` around everything transient so only a programming
+error can propagate out of the DoFn.
 
 ---
 
@@ -69,91 +65,80 @@ No budget in `sources.yaml` was changed.
 ### `python -m pytest tests -q`
 
 ```
-...............................................                          [100%]
-47 passed in 16.84s
+........................................................................ [ 80%]
+..................                                                       [100%]
+90 passed in 29.01s
 ```
 
 (Environment: `/home/claude/beamenv/bin/python`, `EARTH_REPO=/home/claude/earth`.)
 
+The nine modules: `test_registry`, `test_manifest`, `test_hosts`,
+`test_tfrecord`, `test_example`, `test_sinks`, `test_transforms`,
+`test_pipeline_smoke`, `test_no_raise`, `test_assemble`. What the new ones pin:
+
+- **TFRecord** — the frame round-trips; a flipped payload bit, a flipped length
+  bit and a truncated tail are each caught with a distinct error; TensorFlow
+  reads what we wrote and we read what TensorFlow wrote; `masked_crc32c` is
+  pinned to the format's own constants.
+- **Example** — round trip; the SAME dict always produces the SAME bytes (a
+  shard's sha256 is meaningless otherwise); TensorFlow parses ours and we parse
+  TensorFlow's, field for field; **and both readers see the identical values on
+  a real shard.**
+- **sinks** — a wrong sha256 refuses and leaves NOTHING behind; killing the
+  process between the rename and the marker leaves the item not-done and the
+  next run rewrites it; a fill shard sits beside its parent with its own
+  marker; the queue appends, dedupes and rotates; one 404 is not absent, a
+  second 404 inside six hours is still one sighting, and two 404s seven hours
+  apart are `absent` with both responses on disk.
+- **no_raise** — a transient fetcher yields `queued` and the job still
+  succeeds; a 404 is `queued` then `absent` across two runs; the breaker queues
+  the rest of its lane rather than dropping it; an unclassified `KeyError`
+  becomes a `queued` record carrying its traceback; a short transfer is caught
+  by the size check; a record is durable on disk after the FIRST item even when
+  the generator is thrown away.
+- **assemble** — all three groups in one bin; the bin is the imported rule; the
+  channel names and order are `build_family7`'s; `days_present` is per channel
+  and `min_days` blanks a channel below it; `cur_speed` is the hypot of the
+  pentad means; `log_mld` is log10 of the mean; the stress sign is flipped
+  exactly once; **`tau_x_std` equals the population sigma computed directly
+  from the raw 6-hourly samples** (to 2e-3 after regridding); `rg100` is
+  written on the live-month bin only; `spec.json` carries the norms; opaque and
+  series records never become pentads; `tf.data` reads the pentad shards.
+
 ### `bash run_smoke.sh` — offline, DirectRunner `multi_processing`, 2 workers
 
 ```
-== 3/4  the manifest
---- counts by source ----------------------------------------
-  tiny             tier 0       1 items  host testhost
-  oisst            tier 0       1 items  host testncei
-  ncep             tier 0       1 items  host testpsl
-  flaky            tier 0       7 items  host testflaky
---- counts by host ------------------------------------------
-  testflaky           7 items over 1 lane(s)
-  testhost            1 items over 2 lane(s)
-  testncei            1 items over 2 lane(s)
-  testpsl             1 items over 1 lane(s)
--------------------------------------------------------------
-  to fetch: 10 items · 48.9 KB wire · 48.9 KB stored
-  TOTAL 10 items · 0 with an unverified URL
-
-== 4/4  the pipeline on the DirectRunner, 2 worker processes
-preflight: Hub round trip OK (sha256 0178c24b0dfc)
-manifest: 10 item(s); Hub already holds 1 file(s)
-[testflaky/0] CIRCUIT BREAKER TRIPPED — the rest of this lane is deferred. …
-[testhost/0] verified sources/tiny/hello.dat (8a2537b134ac)
-[testncei/0] verified sources/oisst/oisst_daily_2001.nc (22d298f0a40c)
-[testpsl/0] verified sources/ncep/uflx.sfc.gauss.2001.nc (94beedc94f8b)
-
-== checking what the run produced
-  ok   three sources published (file:// http, OISST year-fold, NCEP-like)
-  ok   every published item carries the sha256 the restore-verify compared
-  ok   the flaky source failed exactly 5 items (the breaker threshold)
-  ok   the rest of that lane is `deferred`, not `failed`
-  ok   exactly one circuit-breaker trip was recorded
-  ok   the folded OISST year is on the fake Hub
-  ok   the Hub round-trip preflight ran
-  ok   summary.md was written
-  ok   live progress: one file per lane (4), 14 records appended during the run
+  ok   Stage A wrote every good source (opaque, 0.25° ocean, OISST, NCEP, RG)
+  ok   every marker carries the sha256 its read-back compared
+  ok   the OISST year kept its four days and recorded the missing one
+  ok   the shard holds the four days that WERE served
+  ok   there is no `failed` status anywhere
+  ok   the missing day was queued as a day-level item
+  ok   all seven flaky items reached the queue (breaker + ladder), none lost
+  ok   one circuit-breaker trip per round was recorded
+  ok   run_until_complete rotated round 1's queue and re-ran from it
+  ok   Stage B produced all three channel groups for the fixture's one bin
+  ok   the bin is 1573 — floor(day_index/5) from 1982-01-01, imported
+  ok   one g025 record for one bin
+  ok   days_present is per channel and honest: [5, 5, 5, 5, 5, 5, 4]
+  ok   the channel order is build_family7's, imported
 
 SMOKE TEST: PASS
 ```
 
-The smoke run's own report, by status: `published 3`, `failed 5`,
-`deferred 2`, plus 4 lane-counter records — 14 records, and all 14 were on
-disk in the per-lane progress files while the run was still going. Re-running
-the identical command against the same fake Hub gave `present 3, failed 5,
-deferred 2` and fetched nothing — the idempotence claim is measured, not
-asserted.
-
-`python -m beam_import.report --live <state-dir>` on that run's state
-directory printed:
+The smoke run's Stage-B coverage line, verbatim:
 
 ```
-live progress from /tmp/smk/state/progress
-  newest record  2026-09-04T14:48:58+00:00 UTC   (first 2026-09-04T14:48:58+00:00)
-  records        10 item(s), 4 lane(s) done
-
-  status per source
-    source             deferred     failed  published
-    flaky                     2          5          0
-    ncep                      0          0          1
-    oisst                     0          0          1
-    tiny                      0          0          1
-    TOTAL                     2          5          3
-
-  per host
-    host             items       bytes      wall  backoffs  trips
-    testflaky            7         0 B     0.00h        20      1
-    testhost             1        38 B     0.00h         0      0
-    testncei             1     90.7 KB     0.00h         0      0
-    testpsl              1     27.6 KB     0.00h         0      0
-
-  1 breaker trip(s) so far. Two on one host in one run means STOP and report.
+stage B: 7 shard(s) -> /tmp/smk/out/pentad (2 shards per group)
+coverage g025: bins_present=1 range=[1573, 1573] missing_in_range=0
+coverage g100: bins_present=1 range=[1573, 1573] missing_in_range=0
+coverage rg100: bins_present=1 range=[1573, 1573] missing_in_range=0
 ```
 
-Three tests pin the live path: a record is on disk after the FIRST item even
-when the generator is thrown away mid-lane (`LaneWorker.process` called
-directly on a 2-item iterable, `next()` once, `close()`); `report.live()`
-reads it; and `summary.md` from the union of a progress file and a
-`report.jsonl` that disagree about one item keeps the final record and counts
-the item once.
+Every fixture covers 2003-07-15 … 2003-07-19 — pentad bin 1573 — on purpose,
+so all three groups land in one bin and the coverage line means something. One
+OISST day (2003-07-17) is deliberately never written, which is what exercises
+the missing-day path end to end.
 
 ### Manifest counts — `--tiers 0 --print`
 
@@ -163,230 +148,251 @@ the item once.
 | oisst | 44 | ncei | 44 |
 | ncep | 560 | psl | 560 |
 | rg | **93** | scripps | scraped (null) |
-| rapid | 1 | rapid | 1 |
+| rapid · osnap · move · samba | 1 each | rapid · gatech · ndbc · aoml | 1 each |
 | florida_cable | 43 | aoml | 43 |
-| osnap | 1 | gatech | 1 |
-| move | 1 | ndbc | 1 |
-| samba | 1 | aoml | 1 |
 | etopo | 1 | ncei_etopo | 1 |
 | natural_earth | 2 | github_raw | 2 |
-| **total** | **1131** | | see the totals lines below |
 
-The totals, as printed:
+The totals line, as printed:
 
 ```
-  already on Hub (verify only): 384 items, 96.4 GB
-  to fetch: 747 items · 104.3 GB wire · 103.5 GB stored
+  to fetch: 1131 items · 925.1 GB wire · 199.9 GB stored
   TOTAL 1131 items · 0 with an unverified URL
 ```
 
-**104.3 GB is what a Tier-0 run actually transfers**, and it matches DESIGN §3's
-"about 110 GB on the wire, about the same stored". The first draft of this
-document quoted 925.1 GB wire / 199.9 GB stored, which counted the 384
-verify-only GLORYS months as though they would be downloaded; they are already
-on the Hub and only their presence is checked. Fixed in `manifest.counts()`,
-printed as two separate lines, and pinned by
-`tests/test_manifest.py::test_verify_only_items_are_not_counted_as_wire`.
+DESIGN §3 says "1,131 items, ~950 GB on the wire (840 of it GLORYS), ~200 GB
+written" — the registry agrees to within 3%. With `--offline` the
+Roemmich–Gilson scrape falls back to its declared range and the total is
+**1,124 items · 920.5 GB**. `glorys_from_mirror` (`enabled: false`) would put
+the same 384 months in for **103.5 GB**, taking Tier 0 to about **185 GB**.
 
-`rg` = 93 came from a live scrape of `https://sio-argo.ucsd.edu/RG_Climatology.html`
-on 2026-09-04: 2 base files + **91** monthly extensions. With `--offline` the
-fallback range 2019-01…2025-12 gives 86 and Tier 0 totals 1,124.
-
-`--tiers 0,1,2 --offline`: **8,867 items**, of which **8,483 to fetch —
-1.2 TB wire, 273.2 GB stored** — plus the same 384 verify-only months
-(96.4 GB), and **518 items flagged `unverified_url: true`**. Tier 1 = 519
-items (duacs 384, en4 126, the rest small); Tier 2 = 7,224 (ERA5 only —
-`cci_sm`, `ostia` and `grep3d` are `enabled: false` and are excluded unless
-named with `--only`).
+`--tiers 0,1,2 --offline`: **8,867 items · 2.0 TB wire · 369.6 GB stored**,
+518 flagged `unverified_url`. Tier 1 = 519 items, Tier 2 = 7,224 (ERA5 only;
+`cci_sm`, `ostia`, `grep3d` are `enabled: false`).
 
 ### Derived Tier-0 wall time — NOT measured
 
-Computed from the registry's per-item byte counts and each host's `min_gap_s`
-and `max_lanes`, assuming 50 MB/s of usable throughput per lane, two requests
-(HEAD + GET) per file, and ~365 files per OISST item. Nobody has run Tier 0
-end to end, so these are planning figures. Reproduced in README §4 with the
-same "derived, not measured" warning.
+From the registry's per-item counts and each host's `min_gap_s`/`max_lanes`,
+with 50 MB/s per lane assumed for HTTP and the **measured 411 s per GLORYS
+month** for CMEMS. Nobody has run Tier 0 end to end.
 
-| host | lanes | items | requests | wire | pace | transfer | total |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| psl | 1 | 560 | 1,120 | 23.5 GB | 6.22 h | 0.13 h | **6.35 h** |
-| scripps | 1 | 93 | 186 | 65.1 GB * | 0.52 h | 0.36 h | **0.88 h** |
-| ncei | 6 | 44 | 31,656 | 22.9 GB | 0.73 h | 0.02 h | **0.75 h** |
-| aoml | 1 | 44 | 88 | ~0 | 0.12 h | 0.00 h | **0.12 h** |
-| ncei_etopo | 1 | 1 | 2 | 0.5 GB | 0.00 h | 0.00 h | **0.01 h** |
-| rapid, gatech, ndbc, github_raw | 1–2 | 5 | 10 | ~0 | — | — | minutes |
-| cmems | 4 | 384 | 0 | 0 | — | — | minutes (verify only) |
+| host | lanes | items | requests | wire | derived total |
+|---|---:|---:|---:|---:|---:|
+| cmems (GLORYS) | 4 | 384 | 11,688 | 881 GB | **~11 h** |
+| psl (NCEP) | 1 | 560 | 1,120 | 23.5 GB | **6.35 h** |
+| scripps | 1 | 93 | 186 | 65 GB * | **0.88 h** |
+| ncei (OISST) | 6 | 44 | 31,656 | 22.9 GB | **0.75 h** |
+| aoml | 1 | 44 | 88 | ~0 | **0.12 h** |
+| ncei_etopo | 1 | 1 | 2 | 0.5 GB | **0.01 h** |
+| rapid, gatech, ndbc, github_raw | 1–2 | 5 | 10 | ~0 | minutes |
 
 \* over-estimated: the registry gives every Roemmich–Gilson item the base
-files' ~0.7 GB and the monthly extensions are far smaller. Lanes run in
-parallel, so the run's wall clock is the longest lane — **about 6.4 h, set
-entirely by PSL's single 20-second-gap lane.**
-
-### `registry --check`
-
-```
-registry  /home/claude/handover/sources.yaml
-hub       chfrank/earth-tensors (60 commits/h)
-hosts     16   total lanes 27
-sources   26
-  tier 0: 12  glorys oisst oisst_psl ncep rg rapid florida_cable osnap move samba etopo natural_earth
-  tier 1: 10  duacs cmems_static rapid_extra en4 pmel_wwv olr godas oni mei rmm
-  tier 2: 4  era5 cci_sm ostia grep3d
-OK
-```
-
-### Binning equality
-
-`tests/test_transforms.py` asserts (a) that `bin_plan`/`bin_slice` come from
-the module `aggregate_cadence` in the earth checkout, (b) that a toy 1/12°
-patch with an injected NaN bins to a bit-identical array through
-`transforms.bin025`'s exact call, and (c) that `bin025` on the CMEMS-shaped
-fixture equals a direct `bin_slice` on the same raw array, element for element,
-on every finite cell. It also asserts that the axes land on multiples of 0.25
-(the `point` alignment) and that `oisst_year_fold` does **not** regrid — the
-folded year's latitudes are still OISST's cell centres.
+files' ~0.7 GB. Lanes run in parallel, so the wall clock is the longest lane:
+**~11 h with `glorys`, ~6.5 h with `glorys_from_mirror`.**
 
 ---
 
-## 3 · Host HEAD results, measured 2026-09-04
+## 3 · Which path was taken for the Example protos
 
-One HEAD per host, from this sandbox, through its egress proxy.
+**The pure-Python path, with TensorFlow used only to certify it.**
 
-| host | URL probed | result |
-|---|---|---|
-| `cmems` | `https://data.marine.copernicus.eu/` | **200**, 329,182 B |
-| `psl` | `…/ncep.reanalysis/surface_gauss/land.sfc.gauss.nc` | **200**, 25,213 B, `application/x-netcdf` |
-| `ncei` | `…/avhrr/198109/oisst-avhrr-v02r01.19810901.nc` | **200**, 1,714,749 B |
-| `scripps` | `…/RG/RG_ArgoClim_Temperature_2019.nc.gz` | **200**, **695,480,508 B** (≈0.7 GB, not the ~2 GB the brief estimated) |
-| `rapid` | `…/rapid_data/moc_transports.nc` | **200**, 1,182,284 B |
-| `aoml` | `…/WBTS/cable/FC_cable_transport_2020_v3.dat` | **200**, 18,607 B |
-| `ncei_etopo` | `…/ETOPO_2022_v1_60s_N90W180_surface.nc` | **200**, **no `Content-Length`** on HEAD |
-| `github_raw` | `…/geojson/ne_10m_lakes.geojson` | **200**, 1,570,533 B |
-| `gatech` (OSNAP) | the bitstream `…/597db471-…/content` | **200**, no `Content-Length` |
-| `ndbc` (MOVE) | `…/MOVE/OS_MOVE_…_VOLUMETRANSPORT.nc` | **200**, 172,492 B |
-| `pmel` | `https://www.pmel.noaa.gov/tao/wwv/data/` | **200**, 799 B — it is an **index page**, not a file |
-| `cds` | `https://cds.climate.copernicus.eu/api` | **202**, JSON (reachable; no key, so nothing else was tried) |
-| `ceda` | `https://dap.ceda.ac.uk/` | **200** |
-| `metoffice` | `…/en4-2-2/EN.4.2.2.analyses.g10.2020.zip` | **404** — the EN4 path pattern is WRONG or has moved |
-| `bom` | `…/mjo/graphics/rmm.74toRealtime.txt` | **403** — the host refuses a plain HEAD |
-| `cpc` | `…/ensostuff/ONI_v5.php` | **blocked by the sandbox proxy** (`ProxyError`); not retried |
-| `hf` | `https://huggingface.co/api/whoami-v2` | **401** without a token — i.e. the endpoint is reachable |
+`pip install tensorflow-cpu` **succeeded** in the venv, in about four minutes
+(tensorflow-cpu 2.21.0). But it **upgraded `protobuf` to 7.36.1**, and
+apache-beam 2.68.0 pins `protobuf<6.0.0.dev0`; pip printed the conflict as an
+error line and installed it anyway. Beam kept working in testing (a
+DirectRunner pipeline ran, and the whole test suite passes with TensorFlow
+present), but shipping a required dependency that breaks another dependency's
+pin is not something to hand to a junior operator.
 
-Every Tier-0 host answered 200. The three problems (`metoffice` 404, `bom` 403,
-`cpc` proxy-blocked) are all Tier 1, all already carry `unverified_url: true`
-in the registry, and each has a note saying exactly what a human must check.
+So `beam_import/example.py` encodes and decodes `tf.train.Example` directly —
+it is three nested messages, all varints and length-delimited blocks, about 130
+lines — and `beam_import/tfrecord.py` writes the frame with `crcmod`, which
+apache-beam already depends on. That was going to be necessary anyway: DESIGN
+§4 promises "the pure-Python reader in `beam_import/tfrecord.py` does the same
+with no TensorFlow import at all", so the reader existed either way and the
+writer is its mirror image.
 
----
+**The certification is the point.** `tests/test_example.py` and
+`tests/test_tfrecord.py` assert, whenever TensorFlow happens to be installed
+(`importorskip`), that TensorFlow parses our bytes field for field, that we
+parse TensorFlow's, that `tf.data.TFRecordDataset` reads our shards and our
+reader reads its shards, and that on a real Stage-B shard both readers produce
+the same numbers. Both README §6 snippets were run: they print
+`bin 1573 2003-07-15 shape [7, 9, 9] cur_u mean 0.009829164482653141` —
+the identical float.
 
-## 4 · What I could not verify
-
-- **The EN4 URL pattern.** A HEAD on the 2020 zip returns 404. I did not hunt
-  for the replacement — that needs a human reading the Met Office download
-  page. Registry note says so.
-- **`cpc` (the ONI index).** The sandbox proxy refused the host. Untested by
-  request, per the one-probe-per-host rule.
-- **`bom` (the RMM index).** 403 on HEAD. The fetchers send a browser-like
-  `User-Agent`, which often fixes this, but I did not spend a second request
-  finding out.
-- **`pmel_wwv` and `godas`.** Both configured URLs are directory/index pages,
-  confirmed for `pmel` by the 799-byte HTML response. They need a human to pick
-  the actual files; the registry rows say so and are flagged.
-- **The DUACS `dataset_id`** and the two other CMEMS ids
-  (`cmems_mod_glo_phy_my_0.083deg_static`, the GREP and OSTIA products). I did
-  not run `copernicusmarine describe` — that is an authenticated call against a
-  production service and the brief limits me to one probe per host. All three
-  are marked `resolve_dataset_id: true` and `unverified_url: true`, and the
-  README tells the operator to resolve them first.
-- **The CMEMS, CDS and Hugging Face credentials themselves.** Nothing in this
-  session authenticated anywhere. The Hub round-trip preflight, the commit
-  path, the download-back path and the 429/409 handling were exercised only
-  against the `local:` publisher.
-- **ERA5's exact CDS request body.** `cds_fetch` builds a
-  `derived-era5-single-levels-daily-statistics` request with what that dataset
-  documents, but with no account it has never been sent. Treat it as a first
-  draft; the README says to try one variable-month before 7,224.
-- **Real upstream throughput.** Every wall-time figure in the README is derived
-  from the design's measured per-item numbers and the registry's item counts,
-  not from a run.
+`tensorflow` is **not** in `requirements.txt`. The tests skip their
+cross-checks when it is absent and everything else still passes.
 
 ---
 
-## 5 · Deviations from DESIGN.md, and why
+## 4 · Host HEAD results, measured 2026-09-04
 
-1. **`ncep` is 13 variables and 560 items, not 14 and 603.** DESIGN §3 says
-   "14 variables × 1982–2024 plus the land mask (603 files)". The repository's
-   own `NCEP_FILES` table in `ml/build_family7.py` has **thirteen** stems, so
-   13 × 43 + 1 = 560. The brief said to make the registry the truth and print
-   the real count; that is what happens, and the discrepancy is written into
-   the registry's own `notes:` and into the README's expected-counts table.
+One HEAD per host, from this sandbox, through its egress proxy. Unchanged from
+revision 1 except that the Hugging Face row is now about the optional
+`glorys_from_mirror` source rather than about a publishing destination.
 
-2. **Two hosts added that DESIGN §2's table does not list:** `gatech`
-   (repository.gatech.edu, the OSNAP series) and `ndbc` (dods.ndbc.noaa.gov,
-   the MOVE series). DESIGN names both sources but gives neither a host row,
-   and every source must name a host. Both were given `max_lanes: 1` — the
-   floor, so nothing is raised — and `min_gap_s: 5`, and both rows say
-   "ADDED (not in DESIGN.md §2)" in their `evidence:` field.
+| host | result |
+|---|---|
+| `cmems` (`data.marine.copernicus.eu`) | **200**, 329,182 B |
+| `psl` (`land.sfc.gauss.nc`) | **200**, 25,213 B, `application/x-netcdf` |
+| `ncei` (an OISST day) | **200**, 1,714,749 B |
+| `scripps` (`RG_ArgoClim_Temperature_2019.nc.gz`) | **200**, **695,480,508 B** (≈0.7 GB, not the ~2 GB earlier notes estimated) |
+| `rapid` (`moc_transports.nc`) | **200**, 1,182,284 B |
+| `aoml` (cable 2020 v3) | **200**, 18,607 B |
+| `ncei_etopo` | **200**, **no `Content-Length` on HEAD** |
+| `github_raw` | **200**, 1,570,533 B |
+| `gatech` (OSNAP bitstream) | **200**, no `Content-Length` |
+| `ndbc` (MOVE) | **200**, 172,492 B |
+| `pmel` | **200**, 799 B — an **index page**, not a file |
+| `cds` | **202**, JSON (reachable; no key, nothing else tried) |
+| `ceda` | **200** |
+| `metoffice` (EN4 2020 zip) | **404** — the pattern is WRONG or has moved |
+| `bom` (RMM) | **403** — the host refuses a plain HEAD |
+| `cpc` (ONI) | **blocked by the sandbox proxy**; not retried |
+| `hf_public` (`huggingface.co`) | reachable (a `whoami` probe returned 401 without a token, i.e. the host answers) |
 
-3. **`cpc` and `bom` are two host rows, not one.** DESIGN's table has a single
-   `cpc / bom` row. They are different domains, so they are two rows of one
-   lane each — which is stricter than sharing one budget, not looser.
-
-4. **Total lanes sum to 27, where DESIGN §2 says "total lanes ≤ ~12".** That
-   is DESIGN's own table summing to 25 before my two additions; I did not
-   change any budget to make the sentence true. In practice concurrency is far
-   below 27 because eleven of the sixteen hosts have one lane and a handful of
-   items. Flagged here rather than silently reconciled.
-
-5. **No automatic NCEI→PSL fallback for OISST.** DESIGN §3 says PSL yearly
-   files are the fallback, and the brief asks for a `psl_fallback` fetcher.
-   Falling back *inside an NCEI lane* would have opened a second concurrent
-   stream to PSL without PSL's one-lane budget agreeing to it — the exact thing
-   §2 says must not happen by accident. So the fallback is a separate source,
-   `oisst_psl`, on the `psl` host, `enabled: false`, run explicitly with
-   `--only oisst_psl`. The `psl_fallback` fetcher exists and is what that
-   source uses. Both the registry note and the fetcher docstring explain it.
-
-6. **A `days:` knob on year-chunked sources.** An optional explicit day list
-   that overrides the computed one. Its honest use is a partial re-fetch; its
-   immediate use is letting the test fixture make a "year" three days long
-   instead of committing 365 synthetic NetCDF files.
-
-7. **`--dry-run` builds no Hub client at all**, so it runs with no credentials.
-   DESIGN does not say either way; this makes the "show me the plan" path
-   usable on a machine that has nothing configured.
-
-8. **Code size.** The brief targeted ~1,500 lines; the package is **1,692
-   lines of code** after the live-progress and byte-accounting additions, plus
-   a comparable volume of comments and docstrings. The
-   comments are deliberate — the reader is a junior operator and several of
-   the rules (the `%` in the password, the OISST middle-gap rule, the
-   `__main__` guard) are only obvious once explained.
+Every Tier-0 host answered 200. The three problems are all Tier 1, all already
+carry `unverified_url: true`, and each has a registry note saying what a human
+must check.
 
 ---
 
-## 6 · Things a future maintainer should know
+## 5 · What I could not verify
 
-- **`report.jsonl` is written by Beam only at the end of the run**, so the
-  live artefact is elsewhere: every lane appends its records to
-  `<state-dir>/progress/<host>-<lane>.jsonl` as it goes — one file per lane so
-  nothing has to be locked, fsynced per record, and **written before the
-  record is yielded to the runner**. `report --live <state-dir>` reads them
-  mid-run; `summary.md` is the union of those files and `report.jsonl`,
-  deduped by item id with the final record winning. This is `ml/CLAUDE.md`
-  §5.25 ("progress is an artefact, not a log line"). A torn last line in a
-  progress file is skipped rather than raising, because the file is read while
-  it is being appended to.
+- **Any credentialed path.** Nothing in this session authenticated anywhere.
+  CMEMS `subset` calls, the CDS request body, and the `glorys_from_mirror` URL
+  pattern have never been executed against the real services.
+- **`rg_months` against a real Roemmich–Gilson file.** It is written against
+  the variable names `ml/fetch_rg_channels.py` uses
+  (`ARGO_TEMPERATURE_ANOMALY` / `_MEAN`, `PRESSURE`) and tested against a
+  synthetic file of that shape. The real base file is 0.7 GB gzipped and was
+  not downloaded.
+- **The `series` reader on the real label files.** RAPID, MOVE and OSNAP are
+  read as NetCDF with a `time` axis; the Florida cable, SAMBA and the indices
+  are read as whitespace-numeric tables (year + day-of-year, or year + month +
+  day). Neither branch has seen a real file. A file neither branch understands
+  is stored **opaque** rather than dropped, so the failure mode is "less
+  useful", never "lost".
+- **The EN4 URL pattern** (404), **`cpc`** (proxy-blocked), **`bom`** (403),
+  **`pmel_wwv`** and **`godas`** (index pages, not files).
+- **The DUACS `dataset_id`** and the other CMEMS ids. `copernicusmarine
+  describe` was not run — it is an authenticated call and the brief allows one
+  probe per host. All are marked `resolve_dataset_id: true`.
+- **ERA5's exact CDS request body.** Never sent; treat it as a first draft.
+- **Real upstream throughput.** Every wall-time figure is derived (§2).
+- **Stage B at full scale.** It was run only on the fixtures — one bin, 9×9
+  cells. The arithmetic is asserted against `build_family7`'s own tables and
+  against directly-computed sigmas, but a 3,139-bin run over ~200 GB has not
+  happened and its memory profile is unmeasured.
+
+---
+
+## 6 · Deviations from DESIGN.md, and why
+
+1. **`lat_values` / `lon_values` on every gridded record.** DESIGN §4 lists
+   `lat0`, `lat_step`, `nlat` (and the same for longitude). Those cannot
+   describe NCEP's gaussian latitudes or Roemmich–Gilson's grid. Both forms are
+   written: the triple as specified, plus the explicit axes. A reader that has
+   to guess is a reader that will guess wrong.
+
+2. **`grid = opaque` for files that are neither a grid nor a series.** DESIGN
+   §4's schema has no place for a GeoJSON coastline, an EN4 zip or ETOPO's
+   relief. Those get `grid: opaque`, an empty `values`, and the file verbatim
+   in a `raw` feature with its own sha256. It exists so Stage A can promise it
+   lost nothing; Stage B ignores them.
+
+3. **NCEP records carry a `<var>_sq` channel for the two stress variables.**
+   `tau_*_std` is the within-pentad population sigma over the 6-HOURLY samples,
+   and a sigma is not aggregable from a mean — but it is exactly recoverable as
+   `sqrt(E[x²] − E[x]²)`, and every day has the same four samples, so the
+   pentad mean of the daily square-means is the pentad `E[x²]` exactly. Stage A
+   therefore stores the daily mean AND the daily mean of squares, and Stage B
+   recovers the sigma. Pinned by
+   `test_assemble.py::test_tau_std_is_the_within_pentad_population_sigma`,
+   which compares against the raw samples directly.
+
+4. **The stress sign flip happens in Stage B, not Stage A.**
+   `build_family7` negates `uflx`/`vflx` per 6-hourly sample before
+   accumulating. Negation is linear, so negating the pentad mean once gives the
+   identical number, and Stage A stays a pure format conversion.
+
+5. **`skin_t` vs `sst`, and g100's 15th channel.** DESIGN §4 calls g025's
+   channel 5 `skin_t`; `build_family7.CHAN_G025` calls it `sst`. DESIGN says
+   g100 has 14 channels; `build_family7.CHAN_G100` has 15, the extra one being
+   `skt` at `C_SKT = 14`. **The imported tables are the truth** (the brief says
+   import the tables rather than restate them), so the code takes the names and
+   the count from `build_family7` and treats DESIGN's names as synonyms. The
+   fill rule is DESIGN's: OISST's sst where OISST has one, NCEP's skt
+   (K → °C) elsewhere.
+
+6. **Fill shards are named by DATE, not by a counter.**
+   `<parent>.fill-<YYYYMMDD>.tfrecord`. A counter would need a read-modify-write
+   across lanes; the date is deterministic and two lanes filling two days of
+   the same month can never collide. The day item keeps its own `.done` marker
+   so it is separately resumable.
+
+7. **Two hosts DESIGN §2's table names but does not budget** (`gatech`,
+   `ndbc`) get `max_lanes: 1` — the floor — and say so in their `evidence`
+   field. A third, `hf_public`, is ADDED for the optional
+   `glorys_from_mirror` source at 2 lanes / 1 s, the same budget `github_raw`
+   gets for the same reason (a CDN-backed anonymous public read).
+
+8. **`cpc` and `bom` are two host rows**, where DESIGN's table has one
+   `cpc / bom` row. They are different domains, so they get one lane each —
+   stricter than sharing, not looser.
+
+9. **Total lanes sum to 29**, which is what DESIGN §5 tells a distributed
+   runner to size against; DESIGN §2's own prose says "the busy hosts are
+   cmems 4 + ncei 6 + psl 1 ≈ 11 streams", which is also true and is the
+   number that matters in practice. No budget was changed.
+
+10. **No automatic NCEI→PSL fallback for OISST.** Falling back inside an NCEI
+    lane would open a second concurrent stream on PSL without PSL's one-lane
+    budget agreeing. The fallback is a separate source, `oisst_psl`, on the
+    `psl` host, `enabled: false`, run explicitly.
+
+11. **A `days:` knob on year-chunked sources** — an explicit day list that
+    overrides the computed one. Its real use is a partial re-fetch; the
+    fixtures use it to make a "year" five days long.
+
+12. **`--dry-run` builds nothing and needs no credentials**, and reports
+    `present` with a `reason` naming what would have been fetched (there is no
+    `planned` status any more — the four statuses are the whole vocabulary).
+
+13. **Code size.** The brief targeted ≤ ~2,500 lines; the package is **2,583**
+    lines of code plus a comparable volume of comments. The overshoot is
+    `assemble.py` (426 lines) — Stage B has three groups with different rules
+    and each needed its own path.
+
+---
+
+## 7 · Things a future maintainer should know
+
+- **The four statuses are load-bearing.** Adding a fifth — especially a
+  `failed` — breaks the promise DESIGN §2 is built on. If something cannot be
+  fetched, it goes on the queue with a reason.
+- **`.done` is written LAST and can only under-claim.** A run killed between
+  the rename and the marker simply rewrites the shard next time. Pinned by
+  `test_sinks.py::test_mark_is_written_after_the_shard_so_it_can_only_underclaim`.
 - **Lane assignment is `sha1(item_id) mod max_lanes`, not `hash()`.** Python's
-  `hash()` is salted per process, so under a multi-process runner the same
-  item would land in different lanes in different workers and the lane cap
-  would stop meaning anything. `tests/test_manifest.py` pins this.
-- **`publish_verified` deletes the local file only after the sha256 of the
-  downloaded-back copy matches.** Anything left in the state directory after a
-  run is from an interrupted one and is safe to delete.
-- **The circuit breaker counts consecutive failed ITEMS, not failed requests.**
-  Each item gets its own five-attempt ladder first. `absent` does not count.
-- **`verify_hub` exits 3 when anything is missing**, so it composes into a
-  shell condition; `--publish` writes `sources/MANIFEST_tier<N>.json` in one
-  commit and nothing else.
-- **Nothing in this package deletes anything on the Hub**, and there is no
-  code path that could. Keep it that way.
+  `hash()` is salted per process, so under a multi-process runner the same item
+  would land in different lanes in different workers and the lane cap would
+  stop meaning anything.
+- **`report.jsonl` is written by Beam only at the end.** The live artefact is
+  `<state-dir>/progress/<host>-<lane>.jsonl` — one file per lane, fsynced per
+  record, written BEFORE the record is yielded. `report --live` reads it, and
+  `summary.md` is the union of those files and `report.jsonl`, deduped by item
+  with the final record winning.
+- **The circuit breaker counts consecutive failed ITEMS**, each of which has
+  already exhausted its own five-attempt ladder. A 404 does not count (it is
+  evidence, not a failure of ours).
+- **Everything reaching the output goes through `tfrecord.py`, which goes
+  through Beam's `FileSystems`.** That is why `--output gs://…` needs no code
+  change. If you add a write path, add it there.
+- **Stage B derives its grids from the records**, using
+  `aggregate_cadence.axis_for` — the same function that defined the 0.25°
+  point grid, one spacing coarser for the 1° grids. Nothing is hardcoded,
+  which is why the tests can run on 9×9 fixtures.
+- **Nothing in this package deletes anything it did not write**, and there is
+  no code path that could. Keep it that way.

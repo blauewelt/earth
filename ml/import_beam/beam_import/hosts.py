@@ -10,8 +10,9 @@ bounds what happens inside a lane:
   backoff ladder   60 s, 5 min, 15 min, 60 min, each multiplied by a random
                    0.8-1.2 jitter, and a server's own Retry-After always wins
   circuit breaker  5 consecutive failed items and the lane stops; everything
-                   it has not reached yet is reported `deferred`, not `failed`,
-                   so a later run picks it up
+                   it has not reached yet is appended to the RETRY QUEUE and
+                   reported `queued`, so a later run picks it up. There is no
+                   `failed` state anywhere in this package (DESIGN §2)
   counters         requests, bytes, backoffs, breaker trips — the politeness
                    audit that ends up in summary.md
 
@@ -40,15 +41,33 @@ class TransientError(Exception):
 
 
 class PermanentError(Exception):
-    """Something that will never work: a 404 on a URL we were sure about, a
-    file that is not the format it claims. Not retried; the item is `failed`
-    immediately (or `absent`, where the registry says a hole is legal)."""
+    """Something no amount of waiting fixes: a 403, a file that is not the
+    format it claims, a wrong password. Not retried inside the run — but the
+    item still goes to the RETRY QUEUE with the reason attached, because
+    DESIGN §2 allows no state in which work is silently dropped."""
 
 
-class AbsentError(Exception):
-    """The server answered honestly that it does not have this. A missing
-    Florida-cable year, an RG month that was never published. Reported
-    `absent`, which is a fact about the archive and not a failure of ours."""
+class NotFound(Exception):
+    """The server answered 404 or 410 for this exact thing.
+
+    This is NOT yet `absent`. DESIGN §2: a source has to say no TWICE, on
+    runs at least six hours apart, before we believe it — one 404 is a bad
+    afternoon, and "a truncated transfer raised no exception" is the reason
+    this project does not take a single answer as evidence. The response is
+    recorded by `sinks.record_not_found` and the item stays `queued` until
+    the second sighting.
+    """
+
+    def __init__(self, message: str, status: int = 404, url: str = "",
+                 headers: Optional[Dict[str, str]] = None) -> None:
+        super().__init__(message)
+        self.status = status
+        self.url = url
+        self.headers = headers or {}
+
+    def evidence(self) -> Dict[str, Any]:
+        return {"status": self.status, "url": self.url,
+                "headers": self.headers, "message": str(self)}
 
 
 class BlockedError(Exception):
@@ -58,7 +77,8 @@ class BlockedError(Exception):
 
 class CircuitOpen(Exception):
     """Raised inside a lane when the breaker has tripped. The LaneWorker
-    catches it and marks everything remaining `deferred`."""
+    catches it and puts everything the lane has not reached on the retry
+    queue — `queued`, never dropped."""
 
 
 class LaneState:
@@ -160,7 +180,7 @@ class LaneState:
     def run_with_backoff(self, fn: Callable[[], Any], on_note=None) -> Any:
         """Call `fn` until it succeeds or the ladder runs out.
 
-        TransientError climbs the ladder. PermanentError, AbsentError and
+        TransientError climbs the ladder. PermanentError, NotFound and
         BlockedError come straight back out — retrying them would be rudeness
         with no possible payoff. Anything else (a bug in our code) also comes
         straight out, because DESIGN §2 says only programming errors may

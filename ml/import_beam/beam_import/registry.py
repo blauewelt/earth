@@ -5,6 +5,10 @@ module's whole job is to refuse a registry that could let a source run without
 one: every source must name a host, and every host must carry both numbers
 (`max_lanes` and `min_gap_s`).
 
+There is no Hub, no account and no destination in here: where the output goes
+is `--output <uri>` on the command line, so the same registry can be run into
+a local directory, a bucket, or a colleague's filesystem (DESIGN, revision 2).
+
 Run the check on its own:
 
     python -m beam_import.registry --check
@@ -23,16 +27,18 @@ DEFAULT_REGISTRY = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sources.yaml")
 
 # Every chunk kind manifest.py knows how to expand.
-CHUNK_KINDS = {"year", "month", "var_year", "var_month", "file", "scrape_month"}
+CHUNK_KINDS = {"year", "month", "var_year", "var_month", "file",
+               "scrape_month", "day"}
 
 # Every fetcher kind fetchers.py knows how to run.
-FETCHERS = {"http", "cmems", "cds", "ncei_oisst_year", "psl_fallback",
+FETCHERS = {"http", "cmems", "cds", "ncei_oisst_days", "psl_fallback",
             "transient_test"}
 
 # Every transform kind transforms.py knows how to apply.
-TRANSFORMS = {"passthrough", "bin025", "oisst_year_fold"}
+TRANSFORMS = {"bin025_days", "nc025_days", "oisst_days", "ncep_var_year",
+              "rg_months", "series", "opaque"}
 
-MODES = {"fetch", "verify"}
+MODES = {"fetch"}   # revision 2 removed `verify`: everything is imported
 
 
 class RegistryError(ValueError):
@@ -43,7 +49,7 @@ class Registry:
     """sources.yaml, parsed and checked.
 
     Attributes:
-        hub:     the `hub:` block (Hub repo id, commit budget)
+        output:  the `output:` block (shard layout, Stage-B shard count)
         hosts:   {host name: {max_lanes, min_gap_s, ...}}
         sources: [source dict], in file order (so the manifest is deterministic)
         path:    where it was loaded from
@@ -51,7 +57,7 @@ class Registry:
 
     def __init__(self, doc: Dict[str, Any], path: str) -> None:
         self.path = path
-        self.hub: Dict[str, Any] = doc.get("hub") or {}
+        self.output: Dict[str, Any] = doc.get("output") or {}
         self.hosts: Dict[str, Dict[str, Any]] = doc.get("hosts") or {}
         self.sources: List[Dict[str, Any]] = doc.get("sources") or []
 
@@ -69,8 +75,9 @@ class Registry:
         """Sum of every host's lane budget — the upper bound on concurrency."""
         return sum(int(h["max_lanes"]) for h in self.hosts.values())
 
-    def commit_budget_per_hour(self) -> int:
-        return int(self.hub.get("commit_budget_per_hour", 60))
+    def num_shards_per_group(self) -> int:
+        """How many shards Stage B writes per channel group."""
+        return int(self.output.get("num_shards_per_group", 64))
 
     # -- validation --------------------------------------------------------
     def validate(self) -> List[str]:
@@ -82,8 +89,6 @@ class Registry:
             errors.append("no `hosts:` block")
         if not self.sources:
             errors.append("no `sources:` block")
-        if not self.hub.get("repo_id"):
-            errors.append("hub.repo_id is missing")
 
         for name, h in self.hosts.items():
             for key in ("max_lanes", "min_gap_s"):
@@ -120,18 +125,7 @@ class Registry:
                               f"{s.get('transform')!r}")
             if "tier" not in s:
                 errors.append(f"source {n!r}: no tier")
-            if int(s.get("batch_files", 0)) < 1:
-                errors.append(f"source {n!r}: batch_files must be >= 1")
 
-            # A big item must not be batched with anything else: one failed
-            # commit should not cost several hundred megabytes of re-upload.
-            big = int(s.get("bytes_stored", 0)) > 200 * 1024 * 1024
-            if big and int(s.get("batch_files", 1)) != 1:
-                errors.append(f"source {n!r}: items are > 200 MB, so "
-                              "batch_files must be 1")
-
-            if not s.get("hub_prefix") and not s.get("hub_path"):
-                errors.append(f"source {n!r}: needs hub_prefix or hub_path")
             if s.get("unverified_url"):
                 warnings.append(f"source {n!r}: URL pattern is UNVERIFIED")
             if s.get("enabled") is False:
@@ -168,8 +162,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
 
     print(f"registry  {reg.path}")
-    print(f"hub       {reg.hub.get('repo_id')} "
-          f"({reg.commit_budget_per_hour()} commits/h)")
+    print(f"output    {reg.output.get('layout', '<source>/<item_id>.tfrecord')} "
+          f"({reg.num_shards_per_group()} shards per group in Stage B)")
     print(f"hosts     {len(reg.hosts)}   total lanes {reg.total_lanes()}")
     print(f"sources   {len(reg.sources)}")
     for tier in sorted({int(s['tier']) for s in reg.sources}):

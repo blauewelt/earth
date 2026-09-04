@@ -3,10 +3,9 @@
 # pipeline can be exercised with no network at all.
 version: 1
 
-hub:
-  repo_id: test/local-hub
-  repo_type: dataset
-  commit_budget_per_hour: 0        # 0 = no commit-rate limiting in tests
+output:
+  layout: "<output>/<item_id>.tfrecord  +  <item_id>.done"
+  num_shards_per_group: 2
 
 hosts:
   testhost:
@@ -25,7 +24,7 @@ hosts:
     max_lanes: 1
     min_gap_s: 0
     backoff_ladder_s: [0, 0, 0, 0]
-    serves: the synthetic NCEP file
+    serves: the synthetic NCEP files
     evidence: local
   testflaky:
     max_lanes: 1
@@ -44,31 +43,49 @@ sources:
     files: [hello.dat]
     url: "file:///home/claude/handover/tests/fixtures/generated/tiny/{file}"
     filename: "{file}"
-    hub_prefix: tiny
-    transform: passthrough
+    transform: opaque
+    grid: opaque
     expected_items: 1
-    batch_files: 1
     bytes_wire: 32
     bytes_stored: 32
     notes: ["an ordinary small file over the http fetcher's file:// path"]
+
+  - name: ocean
+    tier: 0
+    host: testhost
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [ocean_200307.nc]
+    url: "file:///home/claude/handover/tests/fixtures/generated/ocean/{file}"
+    filename: "{file}"
+    variables: [uo, vo, mlotst, zos]
+    transform: nc025_days
+    grid: point025
+    expected_items: 1
+    bytes_wire: 20000
+    bytes_stored: 20000
+    notes: ["a GLORYS stand-in already on the 0.25 degree point grid"]
 
   - name: oisst
     tier: 0
     host: testncei
     mode: fetch
-    fetcher: ncei_oisst_year
+    fetcher: ncei_oisst_days
     chunk: year
-    years: [2001, 2001]
-    days: ['2001-12-29', '2001-12-30', '2001-12-31']
+    years: [2003, 2003]
+    days: ['2003-07-15', '2003-07-16', '2003-07-17', '2003-07-18', '2003-07-19']
     expected_items: 1
     url: "file:///home/claude/handover/tests/fixtures/generated/oisst/oisst-avhrr-v02r01.{ymd}.nc"
     filename: oisst_daily_{year}.nc
-    hub_prefix: oisst
-    transform: oisst_year_fold
-    batch_files: 1
+    transform: oisst_days
+    grid: oisst_center025
     bytes_wire: 30000
     bytes_stored: 30000
-    notes: ["three synthetic days folded into one year file"]
+    notes:
+      - "FIVE days are asked for and FOUR exist: 2003-07-17 is deliberately
+         absent upstream. The item must still be written with the four days it
+         got, and 2003-07-17 must appear in the retry queue as a day-level item."
 
   - name: ncep
     tier: 0
@@ -76,17 +93,33 @@ sources:
     mode: fetch
     fetcher: http
     chunk: var_year
-    vars: [uflx.sfc.gauss]
-    years: [2001, 2001]
-    expected_items: 1
+    vars: [uflx, skt]
+    years: [2003, 2003]
+    extra_files: [land.sfc.gauss.nc]
+    expected_items: 3
     url: "file:///home/claude/handover/tests/fixtures/generated/ncep/{file}"
     filename: "{var}.{year}.nc"
-    hub_prefix: ncep
-    transform: passthrough
-    batch_files: 1
+    transform: ncep_var_year
+    grid: ncep_t62
     bytes_wire: 20000
     bytes_stored: 20000
-    notes: ["an NCEP-shaped 4x-daily gaussian file"]
+    notes: ["4x-daily gaussian files plus the land mask"]
+
+  - name: rg
+    tier: 0
+    host: testhost
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [RG_ArgoClim_200307.nc]
+    url: "file:///home/claude/handover/tests/fixtures/generated/rg/{file}"
+    filename: "{file}"
+    transform: rg_months
+    grid: rg_1deg_center
+    expected_items: 1
+    bytes_wire: 20000
+    bytes_stored: 20000
+    notes: ["one month of T/S at the 16 AMOC pressure levels"]
 
   - name: flaky
     tier: 0
@@ -97,13 +130,12 @@ sources:
     files: [a, b, c, d, e, f, g]
     url: "file:///home/claude/handover/tests/fixtures/generated/nowhere/{file}"
     filename: "{file}"
-    hub_prefix: flaky
-    transform: passthrough
+    transform: opaque
+    grid: opaque
     expected_items: 7
-    batch_files: 1
     bytes_wire: 1
     bytes_stored: 1
     notes:
       - "ALWAYS fails, transiently. Five consecutive failures trip the lane's
-         circuit breaker; the remaining items must come back `deferred` and
-         the pipeline must still finish."
+         circuit breaker; every remaining item must reach the RETRY QUEUE and
+         the pipeline must still finish. Nothing is ever dropped."

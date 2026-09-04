@@ -31,16 +31,14 @@
 
 version: 1
 
-hub:
-  # The Hugging Face dataset repository the mirror lives in. The namespace is
-  # the USER `chfrank` — `blauewelt` is the GitHub organisation and does not
-  # exist on the Hub. publish.py resolves it from whoami() and warns if this
-  # value disagrees.
-  repo_id: chfrank/earth-tensors
-  repo_type: dataset
-  # The Hub enforces an hourly commit quota. The pipeline as a whole stays
-  # under this many commits per hour; each lane gets an equal share.
-  commit_budget_per_hour: 60
+output:
+  # WHERE the output goes is `--output <uri>` on the command line, not a
+  # setting in here: a local directory, a gs:// bucket, anything the runner
+  # has a filesystem for. These are only the shapes.
+  layout: "<output>/<item_id>.tfrecord  +  <item_id>.done"
+  fill_layout: "<output>/<item_id>.fill-<YYYYMMDD>.tfrecord"
+  pentad_layout: "<output>/pentad/<group>/part-SSSSS-of-NNNNN.tfrecord"
+  num_shards_per_group: 64
 
 # ---------------------------------------------------------------------------
 # HOSTS — DESIGN.md §2, copied. Change a number here and nowhere else.
@@ -157,6 +155,16 @@ hosts:
     serves: repository.gatech.edu (the OSNAP overturning time series)
     evidence: "ADDED (not in DESIGN.md §2): one file; one lane is the floor."
 
+  hf_public:
+    max_lanes: 2
+    min_gap_s: 1
+    serves: >-
+      huggingface.co, anonymous GET only - the pre-existing NetCDF copy of the
+      GLORYS monthly chunks, for the optional `glorys_from_mirror` source
+    evidence: >-
+      ADDED (not in DESIGN.md §2): a CDN-backed public read with no account;
+      2 lanes is the same budget github_raw gets for the same reason.
+
   ndbc:
     max_lanes: 1
     min_gap_s: 5
@@ -173,7 +181,7 @@ sources:
   - name: glorys
     tier: 0
     host: cmems
-    mode: verify                 # already on the Hub: only presence is checked
+    mode: fetch
     fetcher: cmems
     chunk: month
     months: ["1993-01", "2024-12"]
@@ -183,25 +191,59 @@ sources:
     bbox: {lon_min: -180, lon_max: 180, lat_min: -80, lat_max: 90}
     depth: {min: 0, max: 1}
     subset_by: day               # ONE DAY per subset request; never a month
-    transform: bin025
-    # NOTE the Hub path for GLORYS is NOT under sources/ - the global daily
-    # chunks are a family-7 input with their own provenance and stay put.
-    hub_path: daily025_global/glorys025_global_{ym}.nc
-    batch_files: 1
+    transform: bin025_days
+    grid: point025
     bytes_wire: 2294968320       # 2188 MB measured per month
     bytes_stored: 269484032      # 257 MB measured per month
     notes:
-      - "VERIFY-ONLY. These 384 files are already on the Hub; the pipeline
-         reports `present` or `missing` and never re-fetches them."
+      - "The default GLORYS path: fetch one day per request from Copernicus
+         Marine and bin it to 0.25 deg on arrival. ~840 GB on the wire, about
+         13 h at four CMEMS lanes."
+      - "If a mirrored NetCDF copy of these chunks is readable, the
+         `glorys_from_mirror` source below converts THAT instead, for ~96 GB
+         and about an hour. Same numbers, one tenth of the traffic."
       - "Measured per month: 2188 MB wire, 257 MB stored, 411 s."
       - "A whole month in ONE subset request needs 5.95 GB of RAM and is
          OOM-killed on a 7 GB machine. One day per request, always."
+
+  - name: glorys_from_mirror
+    tier: 0
+    host: hf_public
+    mode: fetch
+    fetcher: http
+    chunk: month
+    months: ["1993-01", "2024-12"]
+    enabled: false
+    expected_items: 384
+    url: >-
+      https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/daily025_global/glorys025_global_{ym}.nc
+    filename: glorys025_global_{ym}.nc
+    variables: [uo, vo, mlotst, zos]
+    transform: nc025_days
+    grid: point025
+    bytes_wire: 269484032
+    bytes_stored: 269484032
+    notes:
+      - "THE 840 GB SHORTCUT. A copy of the GLORYS monthly chunks, already
+         binned to 0.25 deg by the same imported rule, exists as NetCDF at the
+         URL above and can be read anonymously. Converting that copy into
+         Stage-A records costs ~96 GB of wire instead of ~840 GB and about an
+         hour instead of about thirteen."
+      - "OFF by default, because the default has to be the path that does not
+         depend on somebody else's storage still being there. Turn it on with
+         `--only glorys_from_mirror` and disable `glorys` for that run."
+      - "The files are NOT re-binned: they were binned by
+         `aggregate_cadence.bin_slice` when they were made, and binning them
+         again would be a second decision about the same bytes."
+      - "Point `--glorys-mirror <uri>` at any other filesystem (a bucket, a
+         local directory) to read the same chunks from there instead; the URL
+         pattern above is only the default."
 
   - name: oisst
     tier: 0
     host: ncei
     mode: fetch
-    fetcher: ncei_oisst_year
+    fetcher: ncei_oisst_days
     chunk: year
     years: [1981, 2024]
     start_month: "1981-09"       # the record begins 1981-09-01
@@ -211,9 +253,8 @@ sources:
     url_preliminary: >-
       https://www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/{ym}/oisst-avhrr-v02r01.{ymd}_preliminary.nc
     filename: oisst_daily_{year}.nc
-    hub_prefix: oisst
-    transform: oisst_year_fold
-    batch_files: 1
+    transform: oisst_days
+    grid: oisst_center025
     bytes_wire: 520000000        # ~365 daily files, ~1.4 MB each, sst + ice
     bytes_stored: 500000000      # ~477 MB for sst, ice smaller, one file
     notes:
@@ -249,9 +290,8 @@ sources:
     mirrors:
       - https://psl.noaa.gov/thredds/fileServer/Datasets/noaa.oisst.v2.highres/{var}.{year}.nc
     filename: "{var}.{year}.nc"
-    hub_prefix: oisst_psl
-    transform: passthrough
-    batch_files: 1
+    transform: oisst_days
+    grid: oisst_center025
     bytes_wire: 477350790                   # the measured sst year file
     bytes_stored: 477350790
     notes:
@@ -290,9 +330,8 @@ sources:
     mirrors:
       - https://psl.noaa.gov/thredds/fileServer/Datasets/ncep.reanalysis/surface_gauss/{file}
     filename: "{var}.{year}.nc"
-    hub_prefix: ncep
-    transform: passthrough
-    batch_files: 8
+    transform: ncep_var_year
+    grid: ncep_t62
     bytes_wire: 42000000
     bytes_stored: 42000000
     notes:
@@ -324,10 +363,9 @@ sources:
     month_filename: RG_ArgoClim_{ym}_2019.nc.gz
     url: https://sio-argo.ucsd.edu/pub/www-argo/RG/{file}
     filename: "{file}"
-    hub_prefix: rg
-    transform: passthrough
+    transform: rg_months
+    grid: rg_1deg_center
     expected_items: null                    # scraped; the manifest prints it
-    batch_files: 1
     bytes_wire: 700000000                   # the base files; measured 695 MB
     bytes_stored: 700000000
     notes:
@@ -348,10 +386,9 @@ sources:
     files: [moc_transports.nc]
     url: https://rapid.ac.uk/sites/default/files/rapid_data/{file}
     filename: "{file}"
-    hub_prefix: labels/rapid
-    transform: passthrough
+    transform: series
+    grid: series
     expected_items: 1
-    batch_files: 1
     bytes_wire: 1182284                     # HEAD 2026-09-04
     bytes_stored: 1182284
     notes: ["The headline AMOC label: overturning transport at 26.5 N."]
@@ -369,9 +406,8 @@ sources:
       - https://www.aoml.noaa.gov/ftp/phod/WBTS/cable/FC_cable_transport_{year}_v2.dat
       - https://www.aoml.noaa.gov/ftp/phod/WBTS/cable/FC_cable_transport_{year}.dat
     filename: FC_cable_transport_{year}.dat
-    hub_prefix: labels/florida_cable
-    transform: passthrough
-    batch_files: 8
+    transform: series
+    grid: series
     bytes_wire: 20000
     bytes_stored: 20000
     notes:
@@ -388,10 +424,9 @@ sources:
     url: >-
       https://repository.gatech.edu/server/api/core/bitstreams/597db471-e2ea-4109-b1a1-b94451f1b884/content
     filename: "{file}"
-    hub_prefix: labels/osnap
-    transform: passthrough
+    transform: series
+    grid: series
     expected_items: 1
-    batch_files: 1
     bytes_wire: 30000000
     bytes_stored: 30000000
     notes:
@@ -408,10 +443,9 @@ sources:
     url: >-
       https://dods.ndbc.noaa.gov/thredds/fileServer/oceansites/DATA_GRIDDED/MOVE/{file}
     filename: "{file}"
-    hub_prefix: labels/move
-    transform: passthrough
+    transform: series
+    grid: series
     expected_items: 1
-    batch_files: 1
     bytes_wire: 172492                      # HEAD 2026-09-04
     bytes_stored: 172492
     notes: ["The MOVE array at 16 N, from the OceanSITES gridded archive."]
@@ -425,10 +459,9 @@ sources:
     files: [MOC_TotalAnomaly_and_constituents.asc]
     url: https://www.aoml.noaa.gov/phod/SAMOC_international/documents/{file}
     filename: "{file}"
-    hub_prefix: labels/samba
-    transform: passthrough
+    transform: series
+    grid: series
     expected_items: 1
-    batch_files: 1
     bytes_wire: 400000
     bytes_stored: 400000
     notes: ["The South Atlantic MOC anomaly at 34.5 S."]
@@ -443,10 +476,9 @@ sources:
     url: >-
       https://www.ngdc.noaa.gov/thredds/fileServer/global/ETOPO2022/60s/60s_surface_elev_netcdf/{file}
     filename: "{file}"
-    hub_prefix: statics/etopo
-    transform: passthrough
+    transform: opaque
+    grid: opaque
     expected_items: 1
-    batch_files: 1
     bytes_wire: 470000000
     bytes_stored: 470000000
     notes:
@@ -467,10 +499,9 @@ sources:
     url: >-
       https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/{file}
     filename: "{file}"
-    hub_prefix: statics/natural_earth
-    transform: passthrough
+    transform: opaque
+    grid: opaque
     expected_items: 2
-    batch_files: 2
     bytes_wire: 1600000
     bytes_stored: 1600000
     notes: ["Public domain. The glaciated-areas and lakes masks."]
@@ -492,9 +523,8 @@ sources:
     variables: [sla, adt, ugos, vgos, err_sla]
     bbox: {lon_min: -180, lon_max: 180, lat_min: -90, lat_max: 90}
     subset_by: day
-    transform: bin025
-    hub_path: sources/duacs025/duacs025_global_{ym}.nc
-    batch_files: 1
+    transform: bin025_days
+    grid: point025
     bytes_wire: 2900000000         # ~1.1 TB over 384 months
     bytes_stored: 250000000        # ~95 GB over 384 months
     notes:
@@ -520,10 +550,9 @@ sources:
     unverified_url: true
     variables: [deptho, mask]
     bbox: {lon_min: -180, lon_max: 180, lat_min: -80, lat_max: 90}
-    transform: passthrough
-    hub_prefix: statics/cmems
+    transform: opaque
+    grid: opaque
     expected_items: 1
-    batch_files: 1
     bytes_wire: 200000000
     bytes_stored: 200000000
     notes:
@@ -540,11 +569,10 @@ sources:
     files: [moc_vertical.nc, ts_gridded.nc]
     url: https://rapid.ac.uk/sites/default/files/rapid_data/{file}
     filename: "{file}"
-    hub_prefix: labels/rapid
-    transform: passthrough
+    transform: series
+    grid: series
     unverified_url: true
     expected_items: 2
-    batch_files: 2
     bytes_wire: 20000000
     bytes_stored: 20000000
     notes:
@@ -561,10 +589,9 @@ sources:
     expected_items: 126
     url: https://www.metoffice.gov.uk/hadobs/en4/data/en4-2-2/EN.4.2.2.analyses.g10.{year}.zip
     filename: EN.4.2.2.analyses.g10.{year}.zip
-    hub_prefix: en4
-    transform: passthrough
+    transform: opaque
+    grid: opaque
     unverified_url: true
-    batch_files: 8
     bytes_wire: 30000000
     bytes_stored: 30000000
     notes:
@@ -582,11 +609,10 @@ sources:
     files: [wwv.dat]
     url: https://www.pmel.noaa.gov/tao/wwv/data/{file}
     filename: "{file}"
-    hub_prefix: indices/wwv
-    transform: passthrough
+    transform: series
+    grid: series
     unverified_url: true
     expected_items: 1
-    batch_files: 1
     bytes_wire: 100000
     bytes_stored: 100000
     notes:
@@ -603,10 +629,9 @@ sources:
     files: [olr.day.mean.nc]
     url: https://downloads.psl.noaa.gov/Datasets/interp_OLR/{file}
     filename: "{file}"
-    hub_prefix: olr
-    transform: passthrough
+    transform: nc025_days
+    grid: noaa_olr_25
     expected_items: 1
-    batch_files: 1
     bytes_wire: 400000000
     bytes_stored: 400000000
     notes: ["NOAA interpolated outgoing longwave radiation, one whole-record
@@ -621,11 +646,10 @@ sources:
     files: [godas_pentad_index.html]
     url: https://downloads.psl.noaa.gov/Datasets/godas/pentad/
     filename: "{file}"
-    hub_prefix: godas
-    transform: passthrough
+    transform: opaque
+    grid: opaque
     unverified_url: true
     expected_items: 1
-    batch_files: 1
     bytes_wire: 50000
     bytes_stored: 50000
     notes:
@@ -642,11 +666,10 @@ sources:
     files: [ONI_v5.php]
     url: https://origin.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/{file}
     filename: oni_v5.txt
-    hub_prefix: indices/oni
-    transform: passthrough
+    transform: series
+    grid: series
     unverified_url: true
     expected_items: 1
-    batch_files: 1
     bytes_wire: 20000
     bytes_stored: 20000
     notes:
@@ -662,11 +685,10 @@ sources:
     files: [meiv2.data]
     url: https://psl.noaa.gov/enso/mei/data/{file}
     filename: "{file}"
-    hub_prefix: indices/mei
-    transform: passthrough
+    transform: series
+    grid: series
     unverified_url: true
     expected_items: 1
-    batch_files: 1
     bytes_wire: 20000
     bytes_stored: 20000
     notes: ["The Multivariate ENSO Index version 2. VERIFY the pattern."]
@@ -680,11 +702,10 @@ sources:
     files: [rmm.74toRealtime.txt]
     url: https://www.bom.gov.au/climate/mjo/graphics/{file}
     filename: "{file}"
-    hub_prefix: indices/rmm
-    transform: passthrough
+    transform: series
+    grid: series
     unverified_url: true
     expected_items: 1
-    batch_files: 1
     bytes_wire: 2000000
     bytes_stored: 2000000
     notes:
@@ -707,10 +728,9 @@ sources:
     expected_items: 7224           # 14 variables x 516 months
     dataset_id: derived-era5-single-levels-daily-statistics
     filename: era5_{var}_{ym}.nc
-    hub_prefix: era5
-    transform: passthrough
+    transform: nc025_days
+    grid: era5_025
     requires_env: [CDSAPI_URL, CDSAPI_KEY]
-    batch_files: 8
     bytes_wire: 12000000
     bytes_stored: 12000000
     notes:
@@ -734,10 +754,9 @@ sources:
     unverified_url: true
     url: https://dap.ceda.ac.uk/neodc/esacci/soil_moisture/data/daily_files/COMBINED/v09.1/{year}/
     filename: esacci_sm_v09.1_{year}.tar
-    hub_prefix: cci_sm
-    transform: passthrough
+    transform: opaque
+    grid: opaque
     expected_items: 33
-    batch_files: 1
     bytes_wire: 2000000000
     bytes_stored: 2000000000
     notes:
@@ -760,10 +779,9 @@ sources:
     variables: [analysed_sst, sea_ice_fraction]
     bbox: {lon_min: -180, lon_max: 180, lat_min: -90, lat_max: 90}
     subset_by: day
-    transform: bin025
-    hub_path: sources/ostia025/ostia025_global_{ym}.nc
+    transform: bin025_days
+    grid: point025
     expected_items: 516
-    batch_files: 1
     bytes_wire: 6000000000
     bytes_stored: 250000000
     notes:
@@ -785,10 +803,9 @@ sources:
     bbox: {lon_min: -180, lon_max: 180, lat_min: -90, lat_max: 90}
     bbox_na_option: {lon_min: -100, lon_max: 20, lat_min: 0, lat_max: 70}
     subset_by: day
-    transform: bin025
-    hub_path: sources/grep3d/grep3d_global_{ym}.nc
+    transform: bin025_days
+    grid: point025
     expected_items: 384
-    batch_files: 1
     bytes_wire: 3000000000
     bytes_stored: 520000000
     notes:

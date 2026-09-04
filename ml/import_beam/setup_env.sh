@@ -30,9 +30,8 @@ echo "== step 2/3: the rest of requirements.txt"
 
 echo "== step 3/3: checking the install"
 "$VENV/bin/python" - <<'PY'
-import apache_beam, huggingface_hub, netCDF4, numpy, requests, yaml, xarray
+import apache_beam, crcmod, netCDF4, numpy, requests, yaml, xarray
 print("apache-beam       ", apache_beam.__version__)
-print("huggingface_hub   ", huggingface_hub.__version__)
 print("netCDF4           ", netCDF4.__version__)
 print("numpy             ", numpy.__version__)
 print("xarray            ", xarray.__version__)
@@ -41,11 +40,18 @@ try:
     print("copernicusmarine  ", copernicusmarine.__version__)
 except Exception as exc:
     print("copernicusmarine   MISSING:", exc)
+print("crcmod             present (the TFRecord checksums)")
 try:
     import cdsapi
     print("cdsapi             present (Tier 2 only)")
 except Exception:
     print("cdsapi             missing (fine until Tier 2)")
+try:
+    import tensorflow
+    print("tensorflow         present — optional; the package does not need it")
+except Exception:
+    print("tensorflow         absent — correct: TFRecord is read and written"
+          " by beam_import itself")
 PY
 
 cat <<EOF
@@ -56,5 +62,6 @@ Done. Next:
   source $VENV/bin/activate
   python -m beam_import.registry --check
   bash run_smoke.sh
+  OUTPUT=/data/import bash run_until_complete.sh --tiers 0
 
 EOF

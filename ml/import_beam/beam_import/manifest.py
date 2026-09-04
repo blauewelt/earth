@@ -1,8 +1,8 @@
 """Expand sources.yaml into WORK ITEMS.
 
-A work item is the smallest unit that is fetched, verified and published as
-one: a year of OISST, a (variable, year) file of NCEP, a month of GLORYS, a
-single file for the small series. Every item is a plain dict — it has to be,
+A work item is the smallest unit that is fetched, verified and written as one
+shard: a year of OISST, a (variable, year) file of NCEP, a month of GLORYS, a
+single file for the small series, or — after a partial fetch — a single DAY. Every item is a plain dict — it has to be,
 because Beam pickles it and sends it to a worker process.
 
 The expansion is DETERMINISTIC: run it twice and you get the same list in the
@@ -105,15 +105,9 @@ def _urls(src: Dict[str, Any], **kw: Any) -> List[str]:
     return out
 
 
-def _hub_path(src: Dict[str, Any], filename: str, **kw: Any) -> str:
-    """Where this item lives on the Hub.
-
-    `hub_path` is an explicit full path (GLORYS keeps its historical home
-    outside sources/). Otherwise it is sources/<hub_prefix>/<filename>.
-    """
-    if src.get("hub_path"):
-        return _fmt(src["hub_path"], **kw)
-    return f"sources/{src.get('hub_prefix', src['name'])}/{filename}"
+# The shard an item writes is `<output>/<item_id>.tfrecord`; `item_id` is
+# already `<source>/<key>` and needs no second naming scheme. sinks.py owns
+# the URI, because it is the module that knows about --output.
 
 
 # --------------------------------------------------------------------------
@@ -135,12 +129,12 @@ def _item(reg: Registry, src: Dict[str, Any], key: str, filename: str,
         "fetcher": src["fetcher"],
         "transform": src["transform"],
         "filename": filename,
-        "hub_path": _hub_path(src, filename, **kw),
         "urls": _urls(src, **kw),
-        "batch_files": int(src.get("batch_files", 1)),
         "bytes_wire": int(src.get("bytes_wire", 0)),
         "bytes_stored": int(src.get("bytes_stored", 0)),
+        "grid": src.get("grid", ""),
         "unverified_url": bool(src.get("unverified_url", False)),
+        "host_max_lanes": int(host["max_lanes"]),
     }
     # Everything a fetcher might need, passed through verbatim.
     for key_name in ("dataset_id", "product_id", "variables", "bbox", "depth",
@@ -246,6 +240,51 @@ def expand_source(reg: Registry, src: Dict[str, Any],
     return items
 
 
+def day_item(parent: Dict[str, Any], date: str) -> Dict[str, Any]:
+    """A DAY-level work item for one date the archive did not serve.
+
+    Stage A keeps every day it got and re-queues the rest as these, so a
+    month that arrived 29/31 complete is never rewritten and never lost. The
+    day's records go into a FILL shard beside the parent's
+    (`<parent>.fill-<YYYYMMDD>.tfrecord`) rather than rewriting a shard that
+    can be gigabytes; Stage B reads every shard it finds. The fill token is
+    the date rather than a counter, so two lanes filling two days of the same
+    month can never choose the same name.
+    """
+    item = dict(parent)
+    item.pop("days", None)
+    item["item_id"] = f"{parent['item_id']}/{date}"
+    item["day"] = date
+    item["chunk"] = "day"
+    item["fill_parent"] = parent["item_id"]
+    item["fill_token"] = date.replace("-", "")
+    item["lane"] = lane_of(item["item_id"], _lanes_hint(parent))
+    item["bytes_wire"] = max(1, int(parent.get("bytes_wire", 0)) // 365)
+    item["bytes_stored"] = max(1, int(parent.get("bytes_stored", 0)) // 365)
+    return item
+
+
+def _lanes_hint(parent: Dict[str, Any]) -> int:
+    """A day item keeps its parent's host, so it must keep the same lane
+    count; the registry is not always in scope where a day item is made."""
+    return int(parent.get("host_max_lanes", 0)) or (int(parent["lane"]) + 1)
+
+
+def from_queue(path: str) -> List[Dict[str, Any]]:
+    """The retry queue AS the manifest — what `--from-queue` reads.
+
+    Queue entries are whole work items, so no re-expansion (and no second
+    network scrape) is needed: a re-run picks up exactly the items the last
+    run could not finish.
+    """
+    from .sinks import read_queue
+    items = read_queue(path)
+    for it in items:
+        it.pop("queued_reason", None)
+        it.pop("queued_at", None)
+    return items
+
+
 def build(reg: Registry, tiers: Sequence[int], only: Optional[str] = None,
           include_disabled: bool = False,
           offline: bool = False) -> List[Dict[str, Any]]:
@@ -326,7 +365,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             flag = " UNVERIFIED_URL" if it["unverified_url"] else ""
             print(f"{it['item_id']:52s} {it['host']}/{it['lane']:<2d} "
                   f"{it['mode']:6s} {_human(it['bytes_stored']):>9s}  "
-                  f"{it['hub_path']}{flag}")
+                  f"{it['item_id']}.tfrecord{flag}")
 
     c = counts(items)
     print("\n--- counts by source " + "-" * 40)

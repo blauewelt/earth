@@ -1,4 +1,4 @@
-"""summary.md from report.jsonl.
+"""summary.md from report.jsonl, and the live mid-run view.
 
 One page: what landed, how many bytes each host served, how long it took, and
 — the column that matters — how many backoffs and breaker trips each host
@@ -43,6 +43,22 @@ def read_progress(state_dir: str) -> List[Dict[str, Any]]:
                                               "*.jsonl"))):
         out.extend(read_records(path))
     return out
+
+
+def trips_per_host(records: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Breaker trips per host, taking the largest reading per lane."""
+    per_lane: Dict[tuple, int] = {}
+    for r in records:
+        key = (r.get("host"), r.get("lane"))
+        if r.get("status") == "counters":
+            n = int((r.get("counters") or {}).get("trips", 0))
+        else:
+            n = int(r.get("trips_so_far") or 0)
+        per_lane[key] = max(per_lane.get(key, 0), n)
+    out: Dict[str, int] = {}
+    for (host, _lane), n in per_lane.items():
+        out[host] = out.get(host, 0) + n
+    return {h: n for h, n in out.items() if h and n}
 
 
 def _dedupe_key(rec: Dict[str, Any]) -> str:
@@ -132,8 +148,7 @@ def summarise(records: List[Dict[str, Any]]) -> Dict[str, Any]:
         h["backoffs"] += cur["backoffs"]
         h["trips"] += cur["trips"]
 
-    problems = [r for r in items
-                if r["status"] in ("failed", "absent", "missing", "blocked")]
+    problems = [r for r in items if r["status"] in ("queued", "absent")]
     stamps = sorted(r["at"] for r in records if r.get("at"))
     return {"by_status": by_status, "by_source": by_source,
             "by_host": by_host, "problems": problems,
@@ -165,14 +180,10 @@ def write_summary(report_path: str, out_path: str, reg=None,
     a("| status | items | what it means |")
     a("|---|---:|---|")
     meaning = {
-        "published": "fetched, uploaded, downloaded back, sha256 matched",
-        "present": "already on the Hub; nothing was fetched",
-        "planned": "--dry-run: this is what would be fetched",
-        "absent": "the archive genuinely has no such file",
-        "missing": "a verify-only source that is NOT on the Hub",
-        "deferred": "the lane's breaker tripped before reaching it; re-run",
-        "blocked": "gated source, no credentials; nothing was requested",
-        "failed": "tried and did not work — see the table below",
+        "written": "shard written, read back, CRC + sha256 matched, marked",
+        "present": "a `.done` marker already said so; nothing was fetched",
+        "queued": "in retry_queue.jsonl — run again; NOT lost",
+        "absent": "the archive said 404/410 twice, >= 6 h apart, with evidence",
     }
     for st, n in sorted(s["by_status"].items(), key=lambda kv: -kv[1]):
         a(f"| `{st}` | {n} | {meaning.get(st, '')} |")
@@ -189,6 +200,19 @@ def write_summary(report_path: str, out_path: str, reg=None,
           f"{_human(h['bytes'])} | {h['seconds'] / 3600:.2f} h | "
           f"{int(h['backoffs'])} | {int(h['trips'])} |")
     a("")
+    if state_dir:
+        from .sinks import list_absent, queue_uri, read_queue
+        n_queued = len(read_queue(queue_uri(state_dir)))
+        absent = list_absent(state_dir)
+        a(f"**Queue: {n_queued} item(s)** in `{queue_uri(state_dir)}`. "
+          + ("The tier is complete." if n_queued == 0 else
+             "Run again — nothing is lost, it is deferred."))
+        a("")
+        a(f"**Absent: {len(absent)} item(s)** — the archive said 404/410 "
+          "twice, at least six hours apart, with both responses kept in "
+          f"`{os.path.join(state_dir, 'absent_evidence')}`. A human reviews "
+          "this list before Stage B.")
+        a("")
     trips = sum(h["trips"] for h in s["by_host"].values())
     if trips:
         a(f"**{int(trips)} breaker trip(s).** A host that trips repeatedly is "
@@ -208,13 +232,28 @@ def write_summary(report_path: str, out_path: str, reg=None,
         a(f"| `{src}` | {row} |")
     a("")
 
+    a("## Missing days kept and re-queued")
+    a("")
+    md = [(r["item_id"], r.get("missing_dates") or []) for r in
+          [x for x in records if x.get("status") in ("written", "present")]]
+    md = [(i, d) for i, d in md if d]
+    if md:
+        a("| item | days the archive did not serve |")
+        a("|---|---|")
+        for item_id, dates in md[:100]:
+            shown = ", ".join(dates[:8]) + (" …" if len(dates) > 8 else "")
+            a(f"| `{item_id}` | {len(dates)}: {shown} |")
+    else:
+        a("None. Every day of every item that was written was served.")
+    a("")
+
     if s["problems"]:
-        a("## Everything that is not `published` or `present`")
+        a("## Everything that is not `written` or `present`")
         a("")
-        a("| item | status | error |")
+        a("| item | status | reason |")
         a("|---|---|---|")
         for r in s["problems"][:200]:
-            err = (r.get("error") or "").replace("|", "/").replace("\n", " ")
+            err = (r.get("reason") or "").replace("|", "/").replace("\n", " ")
             a(f"| `{r['item_id']}` | {r['status']} | {err[:180]} |")
         if len(s["problems"]) > 200:
             a(f"| … | | {len(s['problems']) - 200} more, see report.jsonl |")
@@ -261,6 +300,11 @@ def live(state_dir: str, reg=None) -> str:
         a(f"    {host:14s}{int(h['items']):>8d}{_human(h['bytes']):>12s}"
           f"{h['seconds'] / 3600:>9.2f}h{int(h['backoffs']):>10d}"
           f"{int(h['trips']):>7d}")
+    from .sinks import list_absent, queue_uri, read_queue
+    a("")
+    a(f"  queue          {len(read_queue(queue_uri(state_dir)))} item(s)")
+    a(f"  absent         {len(list_absent(state_dir))} item(s) "
+      "(404/410 twice, >= 6 h apart)")
     trips = int(sum(h["trips"] for h in s["by_host"].values()))
     if trips:
         a("")

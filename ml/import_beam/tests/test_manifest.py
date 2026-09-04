@@ -51,21 +51,21 @@ def test_lane_is_inside_the_host_budget(real_registry):
         assert 0 <= it["lane"] < reg.host(it["host"])["max_lanes"]
 
 
-def test_hub_paths_are_unique_and_prefixed(real_registry):
+def test_shard_paths_are_unique_and_derived_from_the_item_id(real_registry):
+    from beam_import import sinks
     _reg, items = _tier0(real_registry)
-    paths = [i["hub_path"] for i in items]
+    paths = [sinks.shard_uri("/out", i["item_id"]) for i in items]
     assert len(paths) == len(set(paths))
-    for it in items:
-        if it["source"] == "glorys":
-            assert it["hub_path"].startswith("daily025_global/")
-        else:
-            assert it["hub_path"].startswith("sources/")
+    assert sinks.shard_uri("/out", "ncep/uflx.sfc.gauss/2001") == \
+        "/out/ncep/uflx.sfc.gauss/2001.tfrecord"
+    assert sinks.done_uri("/out", "oisst/1993") == "/out/oisst/1993.done"
 
 
 def test_disabled_sources_are_skipped_unless_asked_for(real_registry):
     reg = registry.load(real_registry)
     names = {i["source"] for i in manifest.build(reg, [0, 1, 2], offline=True)}
     assert "ostia" not in names and "oisst_psl" not in names
+    assert "glorys_from_mirror" not in names
     explicit = manifest.build(reg, [0], only="oisst_psl", offline=True)
     assert len(explicit) == 88
 
@@ -92,22 +92,40 @@ def test_lane_of_is_stable_across_processes():
     assert 0 <= manifest.lane_of("duacs/2003-07", 4) < 4
 
 
-def test_verify_only_items_are_not_counted_as_wire(real_registry):
-    """GLORYS is already on the Hub. Counting the 2.2 GB per month it WOULD
-    have cost to download overstates Tier 0 by a factor of four."""
+def test_everything_is_fetched_now(real_registry):
+    """Revision 2 removed the `verify` mode: GLORYS is imported like anything
+    else, and `glorys_from_mirror` is the optional cheaper path."""
     reg, items = _tier0(real_registry)
     c = manifest.counts(items)
+    assert c["verify_items"] == 0
+    assert c["fetch_items"] == len(items)
+    assert c["fetch_wire"] == sum(i["bytes_wire"] for i in items)
 
-    verify = [i for i in items if i["mode"] == "verify"]
-    fetch = [i for i in items if i["mode"] != "verify"]
-    assert {i["source"] for i in verify} == {"glorys"}
-    assert c["verify_items"] == len(verify) == 384
-    assert c["fetch_items"] == len(fetch)
-    assert c["fetch_wire"] == sum(i["bytes_wire"] for i in fetch)
-    assert c["fetch_stored"] == sum(i["bytes_stored"] for i in fetch)
-    # the verify items contribute nothing to either fetch total
-    assert c["fetch_wire"] < sum(i["bytes_wire"] for i in items)
-    assert c["verify_stored"] == sum(i["bytes_stored"] for i in verify)
+
+def test_day_items_fill_beside_their_parent(real_registry):
+    from beam_import import sinks
+    _reg, items = _tier0(real_registry)
+    parent = next(i for i in items if i["item_id"] == "oisst/1993")
+    day = manifest.day_item(parent, "1993-03-04")
+    assert day["item_id"] == "oisst/1993/1993-03-04"
+    assert day["day"] == "1993-03-04"
+    assert day["fill_parent"] == "oisst/1993"
+    assert 0 <= day["lane"] < parent["host_max_lanes"]
+    # the fill shard sits BESIDE the parent's, and does not rewrite it
+    assert sinks.shard_uri("/o", day["fill_parent"], day["fill_token"]) == \
+        "/o/oisst/1993.fill-19930304.tfrecord"
+
+
+def test_from_queue_reads_whole_items(tmp_path, real_registry):
+    from beam_import import sinks
+    _reg, items = _tier0(real_registry)
+    sinks.enqueue(str(tmp_path), items[:3], "test")
+    back = manifest.from_queue(sinks.queue_uri(str(tmp_path)))
+    assert sorted(i["item_id"] for i in back) == \
+        sorted(i["item_id"] for i in items[:3])
+    assert all("queued_reason" not in i for i in back)
+    assert back[0]["urls"] == next(
+        i for i in items[:3] if i["item_id"] == back[0]["item_id"])["urls"]
 
 
 def test_counts_still_carry_the_per_source_and_per_host_tables(real_registry):
