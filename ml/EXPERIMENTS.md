@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-070"></a>
-## E-070 · The global tensor (family 7) — Phase A COMPLETE 2026-09-03; the BUILD (recipe `f7l0`: to the poles, shared land/ocean channels) DISPATCHED 2026-09-04 (Chris: "expand to the whole globe … proceed with global data preparation and training"; 09-04: "proceed with building the new global tensor with all the data (including Antarctica, common channels for land and water)")
+## E-070 · The global tensor (family 7) — BUILT AND PUBLISHED 2026-09-04 17:00Z (recipe `f7l0`: to the poles, shared land/ocean channels); Phase A complete 2026-09-03 (Chris: "expand to the whole globe … proceed with global data preparation and training"; 09-04: "proceed with building the new global tensor with all the data (including Antarctica, common channels for land and water)")
 
 TL;DR — every measured wall is temporal (heads best at ~step 2,000 at any
 width; the LIM wins from 15 d), and the globe adds no temporal sample to the
@@ -142,6 +142,44 @@ work directory — resumes past the two finished stages** (each stage now
 records a spec hash and discards only its own state on a mismatch; the
 NCEP stage opens with a repair that NaNs `sst` wherever OISST never
 observed, forged and tested). Expected ~1.5 h.
+
+**LANDED — family7-build #3 (run 33892775827, the resumed build from the
+truth stage after #2 failed on a one-directory path bug in the truth-label
+pull, fixed in `56d07f4`) completed 17:00:53Z.** Published, restore-verified
+by the job, under `tensors/family7_global025_pentad_l0/` on
+`chfrank/earth-tensors`: `g025` 45.67 GB (`[3142, 721, 1440, 7]`,
+10,694,800,178 observed values), `g100` 6.14 GB (`[3142, 181, 360, 15]`,
+2,816,949,312), `rg100` 1.05 GB (`[252, 181, 360, 32]`, 259,532,784), meta
+5.4 MB with the truth series (RAPID 1,459/1,459 pentad labels on the axis,
+Florida cable 2,490/2,553), `manifest.json` with sha256s and the builder's
+git sha. Stage times on the box: GLORYS ~40 min · OISST 75 min · NCEP 50 min
+· Argo 28 s · statics 121 s · norm 634 s · publish + restore-verify 2,759 s.
+Statics: `sphere` = 702,642 ocean · 226,495 land · 107,074 ice-sheet · 2,029
+inland-water cells. Cost across the three runs ≈ $1.9 (~5.6 box-hours).
+**~13.8 B observed values against family 4's 2.5 B** — the E-072 ladder's
+second rung, with the shared channels at 1°.
+
+**The owed measurement — the NA sub-block against family 4 r3, one pentad
+(bin 2411, 2015-01-03), both un-z-scored**
+(`ml/plans/E070_na_subblock_bin2411.json`): currents, SSH and mixed-layer
+depth agree to two float16 quanta on 99.2–99.5 % of the 86,698 common cells
+(r ≥ 0.99995, median |Δ| 1e-5 m/s); the tail is up to 0.19 m/s (`cur_u`),
+0.22 m/s (`cur_speed`) on ~1 % of cells — the global chunks were binned at
+fetch and the NA chunks in the aggregator, so the accumulation order differs
+at partially masked coastal blocks, as §5 anticipated. **Not bit-identical;
+equal to float16 almost everywhere.** `sst` agrees to 0.03 °C (median 0.002,
+r 0.9999999), and family 7 observes 1,756 more coastal cells than family 4
+(the OISST regrid's NaN-aware renormalisation reaches cells the NA bake
+left empty). Six cells carry currents in family 7 only. The G1 gate
+(E-070 §3) may therefore be read on the sub-block, with the 1 % tail stated.
+
+**On the globe the same evening** (`554d474`): `data/family7_index.json`
+(header offsets parsed by range read, CORS measured: 206,
+`access-control-allow-origin: *`), the two statics as grids; a browser-style
+range read of bin 2411 gives the Gulf Stream at 36° N 70° W as 21.1 °C from
+the un-z-scored bytes. The twelve-anchor cone export
+(`family7-export-cones.yml`, run 33899148032) was dispatched on the same box
+at 17:10Z.
 
 <a id="e-069"></a>
 ## E-069 · Two stencils, one cone — the cone-native codec, ocean physics first — Phase A DONE 2026-09-03, Phase B wired, #537 DISPATCHED after #536 died at its first CUDA eval (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")
