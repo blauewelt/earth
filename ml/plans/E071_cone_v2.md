@@ -44,7 +44,7 @@ observed (§3); and every family's reach is set from the fastest measured
 signal of its kind times a 1.5 safety factor, not from a typical speed —
 because a cone that is too narrow is an assertion that the driver cannot have
 arrived, and the model has no way to discover that the assertion was wrong
-(§4). The price is a token budget of roughly 1,200 per anchor instead of 748,
+(§4). The price is the token change of §6.4 and ~170 GB of new channels,
 and a change from uniform-area to log-radial dot placement so that a wider
 cone does not starve the near field (§4.4).
 
@@ -52,12 +52,13 @@ cone does not starve the near field (§4.4).
 
 ## 1 · Global — no geographical boundary anywhere in the sampler
 
-**Decision.** The tensor is family 7: point-aligned 0.25°, latitude −80 … 90
-(681 rows), longitude −180 … 179.75 (1,440 columns). A dot is *never* invalid
-for leaving a rectangle. The only invalid dots are those that fall off the
-time axis (the archive's two ends), and the only unobserved dots are land,
-ice-covered cells the source does not fill, and bins the source did not
-observe (Argo's five dead pentads in six).
+**Decision.** The tensor is family 7 extended to the poles: point-aligned
+0.25°, latitude −90 … 90 (721 rows), longitude −180 … 179.75 (1,440
+columns). A dot is *never* invalid for leaving a rectangle. The only invalid
+dots are those that fall off the time axis (the archive's two ends), and a
+dot is unobserved only where its SOURCE has nothing — an ocean channel over
+land, a land channel over the sea, an Argo channel in a dead pentad — never
+because a sphere was left out of the tensor (§6).
 
 **What changes in `ml/cone_sampler.py`.**
 
@@ -75,20 +76,29 @@ observe (Argo's five dead pentads in six).
   longitude — and rounds that to a cell. The end longitude minus the start
   longitude depends only on the start latitude, so the dot table is still
   cached per row exactly as now; the pole crossing falls out of the formula.
-- *Latitude is clipped, not wrapped.* A destination latitude below −80° is
-  Antarctica in every case that matters and is marked unobserved (not
-  invalid): the source has no cell there, which is a fact about the ocean, not
-  about our window.
+- *Latitude is clipped, not wrapped — and the grid runs to the poles.*
+  E-070 chose −80 … 90° because that is GLORYS12's extent: an ocean product
+  stops where the ocean stops. That was a fact about ONE SOURCE, and the
+  first draft of this section wrongly let it read as "Antarctica is
+  unobserved". It is not (Chris, 4 Sep: *"do we really have absolutely no
+  data about Antarctica?"* — we have plenty, §6). Cone v2's grid is
+  **−90 … 90° (721 rows × 1,440)**; the ocean channels are unobserved south of
+  −80° because there is no ocean there, and the ice-sheet, atmosphere and
+  shared channels of §6 fill those rows. A destination latitude beyond a pole
+  is handled by the destination-point formula; nothing is ever clipped.
 - *Anisotropy is re-measured.* `ASPECT = 0.71` was measured on the North
   Atlantic (`ml/measure_flow_anisotropy.py`). Re-run it on the global tensor
   per latitude band before cone v2 trains; a zonal-to-meridional ratio that
   holds at 40° N need not hold in the Antarctic Circumpolar Current or at the
   equator, and the per-row table can carry a per-band aspect at no cost.
 
-**What does not change.** Land stays a `miss` token, an anchor whose cone runs
-off either end of the time axis stays inadmissible, and the holdout shadow of
-eight pentads stays exactly as it is (`admissible` / `certify`, E-059's
-window-scope pool discipline). Those three rules were right.
+**What does not change.** A channel its source did not observe stays a
+`miss` token (now per channel, inside a per-location token — §6.4), an anchor
+whose cone runs off either end of the time axis stays inadmissible, and the
+holdout shadow of eight pentads stays exactly as it is (`admissible` /
+`certify`, E-059's window-scope pool discipline). Those three rules were
+right; what was wrong was that a land cell had no channel that could be
+observed at all.
 
 **Cost.** None in tokens. The 2.68 % of dots that were off-grid on the North
 Atlantic rectangle become real dots; the 22 % of anchors that saw a truncated
@@ -379,6 +389,119 @@ primitive in the encoder — and is not what v2 measures.
 - The E-069 seeds keep running on the E-069 geometry. Cone v2 starts when
   family 7 is on the Hub (E-070 Phase A, 384 chunks) and the harmonic
   climatology has passed its sawtooth check (§2).
+
+## 6 · Land, ice and air — nothing is dark by design, and the channels every sphere shares
+
+Chris, 4 Sep: *"Why not add some data on land, too? It can be sparse for now,
+but still better than absolute darkness. Eg land surface temperature,
+satellite imagery and radar reflection? Maybe something for the air
+temperature (across heights?)"* and *"Ideally, some of our channels / data
+should be available for both the Oceans and the Land. Please spell this
+out."*
+
+### 6.1 · The principle: a channel is a quantity and an instrument, never a sphere
+
+Today the tensor's 42 channels are ocean channels, and a land cell is a
+`miss` token in every one of them — the codec is told "the world was not
+observed here" 42 times per land cell, which is false. The programme's
+statement of purpose is *a predictor for everything*; the four-sphere plan
+in the survey deck already names land as the fourth sphere. Cone v2
+therefore defines channels by **what is measured and by what**, and lets a
+per-cell **sphere code** (ocean · land · ice sheet · inland water; from the
+static mask of rung 12) say which retrieval filled it. The sphere code is an
+input to the codec's coordinate encoding exactly as depth is, so one channel
+can mean sea-surface temperature at one anchor and land-surface temperature
+at the next without a second channel — the same quantity, the same
+instrument, a different surface underneath.
+
+**Channels that exist on every surface by construction — the shared set.**
+
+| quantity | over ocean | over land / ice | source, as used at 0.25° pentads |
+|---|---|---|---|
+| surface (skin) temperature | SST | land-surface / ice-surface temperature | ERA5 skin temperature (gap-free, 1940→) first; then the observed pair OSTIA SST + MODIS MOD11 LST (1 km daily, clear-sky, 2000→) as the raw-observation channel beside it |
+| near-surface air | 2 m temperature, 2 m dew point, 10 m wind | the same | ERA5 (replaces the FROZEN NCEP R1 momentum flux — the wind family's source problem is solved by this row) |
+| air aloft — "temperature across heights" | temperature, wind, humidity at 850, 500, 250 hPa | the same | ERA5 pressure levels; radiosondes (IGRA, ~800 stations at 00/12 UTC) as native dots later |
+| pressure, precipitation, radiation, turbulent fluxes | surface pressure, precipitation, net short/long-wave, latent + sensible heat | the same | ERA5; IMERG 0.1° for observed precipitation 2000→ |
+| frozen fraction | sea-ice concentration | snow-cover fraction; ice sheet ≡ 1 | OSI SAF / NSIDC sea-ice 25 km 1978→ over ocean; MOD10A1 snow 500 m daily 2000→ over land — ONE channel |
+| albedo | ~constant / ice | MCD43A3 500 m daily 2000→ | one channel; the ocean value is the constant plus the ice |
+| radar cross-section σ⁰ | wind and waves roughen it | soil moisture and vegetation set it | ASCAT 25 km, twice daily, 2007→ — the SAME instrument over both; Sentinel-1 backscatter at rung 1 later. This is the "radar reflection" channel, raw, so the model may derive wind over water and moisture over land from one input |
+| optical reflectance | ocean colour | vegetation, snow, soil | MODIS/VIIRS 500 m surface reflectance (red, near-IR, one short-wave IR band first) 2000→ — the "satellite imagery" channel, raw; chlorophyll and NDVI become TARGETS, per the observed-vs-derived rule |
+| L-band brightness temperature | sea-surface salinity | soil moisture | SMAP 36 km 2015→, one instrument, both retrievals; the raw T_B is the shared channel, the two products are targets |
+| mass / water storage | ocean bottom pressure | terrestrial water storage, ice-sheet mass | GRACE / GRACE-FO mascons, monthly, 2002→ (2017–18 gap) — already one global field |
+| surface height anomaly | sea-level anomaly (DUACS 0.125° 1993→) | ice-sheet elevation change (CryoSat-2 2010→, ICESat-2 2018→); lake and river height (Hydroweb points) | the same radar altimeters; sparse and slow on land, dense on the ocean |
+| surface velocity | currents (GLORYS u, v) | ice velocity (ITS_LIVE / MEaSUREs, annual → monthly) ; land ≡ 0 | one (u, v) pair; on land it is exactly zero, which is information (nothing advects) |
+| the column below | T, S profiles (Argo, 0–2,000 m) | soil temperature and moisture by layer (ERA5-Land 4 layers; SMAP L4 root zone); firn temperature on the ice sheets | the PROFILE TOKEN of §3 with a sphere-specific depth ladder — one token type serves all three columns |
+
+Sphere-specific channels stay sphere-specific and are `miss` elsewhere with
+a clear conscience: mixed-layer depth and sea-surface height are ocean;
+soil moisture as a product (ESA CCI SM, 0.25° daily, **1978→** — it covers
+the whole 1982→ axis), snow water equivalent (GlobSnow / CCI SWE 25 km,
+northern hemisphere), leaf area (MOD15 500 m 8-day) and evapotranspiration
+(GLEAM 0.1° daily 1980→) are land; ice velocity and elevation change are
+ice.
+
+### 6.2 · Antarctica and the ice sheets
+
+The grid goes to −90° (§1). What fills the ice-sheet rows: ERA5 everything
+(skin and 2 m temperature, winds, pressure, precipitation as snowfall,
+radiation — the surface mass balance's inputs), MODIS LST and albedo in
+the clear-sky months, GRACE mass, CryoSat-2 / ICESat-2 elevation change,
+ITS_LIVE velocity, and around the continent the sea-ice concentration and
+drift that the Southern Ocean rows already carry. For the overturning this
+is not decoration: Antarctic meltwater and sea-ice formation set the
+densest water on Earth (Antarctic Bottom Water), the lower limb of the
+global overturning, and the freshwater flux from the ice sheet is the
+single largest uncertainty in it.
+
+### 6.3 · Cone families for the new spheres
+
+A family is now a property of (channel, sphere of the anchor):
+
+- **atmosphere (A′)** — every ERA5 row above, over every surface: "global at
+  once" (§4.3), lags 0–2 (2 m temperature anomalies live ~5–10 days; the
+  upper levels less), the 24-dot log-spaced ring to the antipode.
+- **land surface state (L)** — skin temperature, soil moisture, snow, albedo,
+  reflectance, GRACE over land: the land does not advect, so **v = 0** and
+  the reach is the correlation length alone (~300–500 km for soil moisture
+  and snow, ~300 km for GRACE by construction), with memory of **months** —
+  a column plus a small 12-dot disc at every inner lag, and into the outer
+  window. The SAME channel over an ocean anchor follows family C (advected
+  at 5.4 m/s): this is the one place the family depends on the sphere.
+- **ice sheet (I)** — velocity metres per year, memory years: column only,
+  monthly cadence, the profile token for the firn column.
+
+### 6.4 · The cost, and the token change this forces
+
+One global channel at 0.25° × 5 days × 1982–2024 is 721 × 1,440 × 3,142
+bins × 2 bytes ≈ **6.5 GB** in float16. The shared set above is ~20
+channels (ERA5 surface 8, three pressure levels × 3 variables 9, frozen
+fraction, albedo, σ⁰, three reflectance bands, SMAP T_B, GRACE, height
+anomaly, velocity pair) → **~130 GB**, on top of the 62 GB global ocean
+tensor; the sphere-specific land set adds ~5 channels, ~33 GB. Two sources
+(ERA5, MODIS) supply three quarters of it. ERA5 needs the free CDS account
+the data ladder already lists as the blocker.
+
+The token change is the one §4.4 said to keep out of v2, and land forces
+it: with ~65 channels, per-channel tokens at 37 dots × 6 lags would be
+~14,000 per anchor. Cone v2 therefore makes **a token = one (lag,
+location) carrying the full value vector of every channel there**, with a
+per-channel observed mask inside the token and the sphere code as a
+coordinate — the profile token of §3 generalised to the whole tensor. The
+count is then Σ over lags of (1 + dots) plus the rings ≈ **300 tokens per
+anchor regardless of the channel count**, below E-069's 748. The
+geometry-only comparison of §5 keeps its per-channel arm as the ablation
+that says what the token change alone bought.
+
+### 6.5 · Phase L0 — the "sparse for now" set
+
+Six channels, two sources, all gap-free, all covering 1982→, all global to
+the poles, ~40 GB: ERA5 skin temperature, 2 m temperature, 10 m u and v
+(retiring NCEP R1), surface pressure, precipitation; plus the frozen
+fraction from the sea-ice and snow records and ESA CCI soil moisture over
+land. Everything in 6.1 with a 2000→ start (MODIS, GRACE, SMAP, ASCAT)
+follows as Phase L1 once the harmonic climatology (§2) has shown it handles
+a channel that starts eighteen years into the axis — the same test Argo
+already poses.
 
 ---
 

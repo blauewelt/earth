@@ -671,8 +671,10 @@ turn §5.1 and §5.4 into a specification, written up as E-071:
   the whole globe rather than the North Atlantic window): 681 × 1,440 cells, −80 … 90° N, longitude
   wrapping as `xx = (x + dx) mod W`, and every dot computed as a **destination point on the sphere**
   (start latitude, bearing, distance → end latitude and longitude) so the pole crossing falls out of
-  the formula instead of needing a special case. Latitude is clipped and marked *unobserved* below
-  −80°, never *invalid*. The 2.68 % off-grid dots become real dots and the 22 % truncated anchors see
+  the formula instead of needing a special case. *(Corrected the same day: the grid runs to the poles
+  — **721 × 1,440, −90 … 90°**, not 681 rows to −80°. The −80° figure was GLORYS12's extent, a fact
+  about one ocean product, and it was wrong to let it read as "Antarctica is unobserved" — §5.7.)*
+  The 2.68 % off-grid dots become real dots and the 22 % truncated anchors see
   a full cone; `ASPECT = 0.71`, measured on the North Atlantic, is re-measured per latitude band.
 - **The month edge (§5.4) goes.** The anomaly baseline becomes a **day-of-year harmonic fit**,
   clim(τ) = a₀ + Σₖ₌₁..K [aₖ cos kτ + bₖ sin kτ], with τ taken from each pentad's *mid-day* over a
@@ -685,8 +687,43 @@ The other two rules — land as a `miss` token (§5.2) and the archive ends plus
 (§5.3) — were right and are unchanged. **Nothing in this decision is implemented or measured.**
 
 - [E-071 · cone v2 — the plan these decisions became](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md)
-- [E-071 §1 · global — no geographical boundary anywhere in the sampler](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#1--global--no-geographical-boundary-anywhere-in-the-sampler)
-- [E-071 §2 · a day-of-year harmonic climatology](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#2--a-day-of-year-harmonic-climatology)
+- [E-071 §1 · global — no geographical boundary anywhere in the sampler](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#1-global-no-geographical-boundary-anywhere-in-the-sampler)
+- [E-071 §2 · a day-of-year harmonic climatology](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#2-a-day-of-year-harmonic-climatology)
+
+
+### 5.7 · Land, ice, air — 4 Sep
+
+A fifth edge, and the one nobody had called an edge: **every land cell is a `miss` token in all
+forty-two channels**, so the codec is told forty-two times per pentad that the world was not
+observed there — which is false. Chris, 4 September: *"why not add some data on land, too? It can
+be sparse for now, but still better than absolute darkness"* and *"ideally, some of our channels /
+data should be available for both the Oceans and the Land"*.
+
+The answer is written up as **E-071 §6**, and it is one principle: a channel is **a quantity and an
+instrument, never a sphere**. A per-cell *sphere code* (ocean · land · ice sheet · inland water)
+becomes a coordinate the codec reads, exactly as depth already is, so one skin-temperature channel
+means sea-surface temperature at one anchor and land-surface temperature at the next. Roughly twenty
+channels turn out to cross the coastline unchanged — the same ERA5 surface and upper-air fields, the
+same ASCAT radar cross-section, the same MODIS reflectance, the same altimeters, the same GRACE
+mass, the same profile token for an Argo column, a soil column and a firn column.
+
+Two corrections and two consequences ride with it. **Antarctica was never unobserved — the grid
+was**: the tensor now runs to −90° (721 × 1,440), and the ice-sheet rows are filled by ERA5, MODIS,
+GRACE, CryoSat-2 / ICESat-2 and ITS_LIVE. That matters for the overturning, because Antarctic
+meltwater and sea-ice formation set Antarctic Bottom Water, the lower limb of the global
+overturning. And with ~65 channels a per-channel token budget would reach ~14,000 per anchor, so
+v2 makes **a token = one (lag, location) carrying every channel's value there**, with a per-channel
+observed mask inside — ≈ 300 tokens per anchor whatever the channel count. Phase L0 is the "sparse
+for now" set: six gap-free channels from two sources, all 1982→, all global to the poles, ~40 GB.
+**Nothing in this section is implemented or measured.**
+
+- [E-071 §6 · land, ice and air — nothing is dark by design](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#6-land-ice-and-air-nothing-is-dark-by-design-and-the-channel)
+- [E-071 §6.1 · the shared-channel table — one quantity, one instrument, two surfaces](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#6-1-the-principle-a-channel-is-a-quantity-and-an-instrument-)
+- [E-071 §6.2 · Antarctica and the ice sheets](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#6-2-antarctica-and-the-ice-sheets)
+- [E-071 §6.3 · cone families for the new spheres](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#6-3-cone-families-for-the-new-spheres)
+- [E-071 §6.4 · the cost, and the token change this forces](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#6-4-the-cost-and-the-token-change-this-forces)
+- [E-071 §6.5 · Phase L0 — the "sparse for now" set](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#6-5-phase-l0-the-sparse-for-now-set)
+- [E-071 · the whole cone-v2 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md)
 
 ---
 
@@ -774,7 +811,7 @@ eight too slow for boundary-wave adjustment.
 These three were written as ranked proposals with nothing behind them. They are no longer the state
 of the question: on 4 September Chris decided the rule (**size every family from the maximum measured
 speed of its fastest mechanism, × 1.5**) and it is specified in §6.7 below and in
-[E-071 §4](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#4--reach-from-the-fastest-signal-times-15--for-every-family).
+[E-071 §4](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#4-reach-from-the-fastest-signal-times-1-5-for-every-family).
 Fix 1 is absorbed by that rule (family B simply becomes 5.4 m/s, so no fourth family is needed);
 fix 3 is absorbed and enlarged by the Argo profile-token decision (E-071 §3). Only fix 2, the
 coastal arm, is still an open proposal. They are kept here as the reasoning that led to the
@@ -853,9 +890,9 @@ cone v2's case rests on rolled skill from far-field context and on that persiste
 worth more when it is global, harmonic-anomaly and profile-aware.
 
 - [E-069 in the experiment log — the five seeds and the H1 verdict](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-069)
-- [E-071 §3 · the Argo stencil — placed where Argo is](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#3--the-argo-stencil--placed-where-argo-is-not-where-a-sunflower-falls)
-- [E-071 §4 · reach from the fastest signal, times 1.5](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#4--reach-from-the-fastest-signal-times-15--for-every-family)
-- [E-071 §4.5 · two stencils, one cone under v2 — the split moves from distance to time](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#45--two-stencils-one-cone-under-v2--the-split-moves-from-distance-to-time)
+- [E-071 §3 · the Argo stencil — placed where Argo is](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#3-the-argo-stencil-placed-where-argo-is-not-where-a-sunflowe)
+- [E-071 §4 · reach from the fastest signal, times 1.5](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#4-reach-from-the-fastest-signal-times-1-5-for-every-family)
+- [E-071 §4.5 · two stencils, one cone under v2 — the split moves from distance to time](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#4-5-two-stencils-one-cone-under-v2-the-split-moves-from-dist)
 
 ---
 

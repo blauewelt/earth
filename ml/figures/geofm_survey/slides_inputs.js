@@ -1,6 +1,7 @@
-// Slides 34–50: what a generic Earth embedding should see — input ladder, cones per input,
+// Slides 34–51: what a generic Earth embedding should see — input ladder, cones per input,
 // the cone-native codec ("dots in, embedding out"), the zero-sum question, the four boundaries the
-// sampler meets, the speeds the cone does not have, phases, data continuity, El Niño 2026.
+// sampler meets, the speeds the cone does not have, land/ice/air and the shared-channel set,
+// phases, data continuity, El Niño 2026.
 // Numbers: dataset specs verified 2 Sep 2026 (see generic-earth-embedding-inputs-proposal.md, Appendix A);
 // speeds and memories are the same order-of-magnitude values the cone slides use.
 module.exports = function (ctx) {
@@ -553,7 +554,7 @@ module.exports = function (ctx) {
       ], gx + gw + 0.16, gy - 0.02, PW - gw - 0.46, 0.66);
       txt(s, [
         dec("DECISION → GLOBAL (E-071 §1)"),
-        body("family 7 — the first tensor covering the whole globe rather than the North Atlantic window — is 681 × 1,440 cells, −80…90° N; longitude WRAPS (xx = (x + dx) mod W), dots are placed on the sphere as destination points so the pole falls out of the formula, latitude is clipped and marked unobserved below −80°. The 2.68 % off-grid dots become real dots and the 22 % truncated anchors see a full cone. ASPECT = 0.71 was measured on the North Atlantic and is re-measured per latitude band."),
+        body("family 7 — the first tensor covering the whole globe rather than the North Atlantic window — runs to the POLES: 721 × 1,440 cells, −90…90° N; longitude WRAPS (xx = (x + dx) mod W), and every dot is placed on the sphere as a destination point, so a pole crossing falls out of the formula and nothing is ever clipped. The 2.68 % off-grid dots become real dots and the 22 % truncated anchors see a full cone. ASPECT = 0.71 was measured on the North Atlantic and is re-measured per latitude band."),
       ], PX[0] + 0.13, 3.28, PW - 0.26, 0.58);
     }
 
@@ -765,6 +766,107 @@ module.exports = function (ctx) {
     ], 7.58, 5.06, 4.99, 1.26);
 
     reading(s, "Reading. The cone was a one-speed model of a multi-speed ocean. Cone v2 sizes each family from the fastest thing that actually carries it — the Somali Current’s 3.6 m/s for the ocean, the jet stream for the wind — with the 1.5 buffer spent on the wide side, because a cone that is too narrow excludes true causes silently while one that is too wide only costs tokens. Nothing here is measured. And after E-069’s H1 (slide 44), the case for v2 is rolled skill and persistence context, not velocity: a codec that could not read a displacement at 130 km will not read one at 2,333 km.", 6.46);
+    footer(s);
+  }
+
+  // ---------------------------------------------------------------- 44f. land, ice and air — the shared-channel principle (E-071 §6)
+  {
+    const s = pres.addSlide(); s.background = { color: WHITE };
+    title(s, "Land, ice and air — nothing is dark by design",
+      "Chris, 4 Sep: \u201Cwhy not add some data on land, too? \u2026 sparse for now \u2026 land surface temperature, satellite imagery, radar reflection, air temperature across heights\u201D and \u201Csome of our channels should be available for both the oceans and the land\u201D. E-071 \u00A76: a channel is a quantity and an instrument, never a sphere.");
+    const RED = "A23B3B";
+    const OTINT = "D6E7F5", LTINT = "E1EFD5";      // the two surfaces, tinted so a shared row reads as one row across both
+
+    // ---------- LEFT (~60 %): the shared-channel table ----------
+    const TX = 0.6, TW = 7.25;
+    txt(s, [
+      { text: "THE SHARED SET \u2014 one quantity, one instrument, two surfaces.  ", options: { bold: true, color: NAVY, fontSize: 8, charSpacing: 0.4 } },
+      { text: "A per-cell SPHERE CODE (ocean \u00B7 land \u00B7 ice sheet \u00B7 inland water) says which retrieval filled the cell, so one channel means sea-surface temperature at one anchor and land-surface temperature at the next.", options: { fontSize: 7, color: INK } },
+    ], TX, 1.60, TW, 0.32);
+    {
+      const th = t => ({ text: t, options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 7, valign: "middle" } });
+      const q = t => ({ text: t, options: { bold: true, color: NAVY, fontSize: 7, valign: "top" } });
+      const o = t => ({ text: t, options: { fontSize: 7, color: INK, valign: "top", fill: { color: OTINT } } });
+      const l = t => ({ text: t, options: { fontSize: 7, color: INK, valign: "top", fill: { color: LTINT } } });
+      const src = t => ({ text: t, options: { fontSize: 7, color: MUTED, valign: "top" } });
+      const trows = [
+        [th("quantity"), th("over ocean"), th("over land / ice"), th("source, at 0.25\u00B0 pentads")],
+        [q("surface (skin) temperature"), o("SST"), l("land- / ice-surface temperature"),
+         src("ERA5 skin T, gap-free 1940\u2192; then the observed OSTIA SST + MODIS MOD11 LST, 1 km daily clear-sky 2000\u2192")],
+        [q("near-surface air"), o("2 m T, 2 m dew point, 10 m wind"), l("the same"),
+         src("ERA5 \u2014 this row retires the FROZEN NCEP R1 wind source")],
+        [q("air aloft \u2014 \u201Cacross heights\u201D"), o("T, wind, humidity at 850 / 500 / 250 hPa"), l("the same"),
+         src("ERA5 pressure levels; IGRA radiosondes (~800 stations, 00/12 UTC) as native dots later")],
+        [q("pressure, precipitation, radiation, fluxes"), o("pressure, precip, net SW + LW, latent + sensible heat"), l("the same"),
+         src("ERA5; IMERG 0.1\u00B0 as the observed precipitation channel, 2000\u2192")],
+        [q("frozen fraction"), o("sea-ice concentration"), l("snow-cover fraction; ice sheet \u2261 1"),
+         src("OSI SAF / NSIDC sea ice 25 km 1978\u2192 \u00B7 MOD10A1 snow 500 m daily 2000\u2192 \u2014 ONE channel")],
+        [q("albedo"), o("\u2248 constant, plus the ice"), l("vegetation, snow, soil, ice"),
+         src("MCD43A3 500 m daily 2000\u2192 \u2014 one channel; the ocean value is the constant plus the ice")],
+        [q("radar cross-section \u03C3\u2070"), o("wind and waves roughen it"), l("soil moisture and vegetation set it"),
+         src("ASCAT 25 km twice daily 2007\u2192 \u2014 the SAME instrument over both. The \u201Cradar reflection\u201D channel, raw")],
+        [q("optical reflectance"), o("ocean colour"), l("vegetation, snow, soil"),
+         src("MODIS / VIIRS 500 m \u2014 red, near-IR, one short-wave IR, raw, 2000\u2192. Chlorophyll and NDVI become TARGETS")],
+        [q("L-band brightness temperature"), o("sea-surface salinity"), l("soil moisture"),
+         src("SMAP 36 km 2015\u2192 \u2014 one instrument; the raw T_B is the channel, both retrievals are targets")],
+        [q("mass / water storage"), o("ocean bottom pressure"), l("terrestrial water storage; ice-sheet mass"),
+         src("GRACE / GRACE-FO mascons, monthly 2002\u2192 (2017\u201318 gap) \u2014 already one global field")],
+        [q("surface height anomaly"), o("sea-level anomaly (DUACS 0.125\u00B0, 1993\u2192)"), l("ice-sheet elevation change; lake and river height"),
+         src("The same radar altimeters: DUACS over sea, CryoSat-2 (2010\u2192) / ICESat-2 (2018\u2192) over ice, Hydroweb over lakes")],
+        [q("surface velocity"), o("currents (GLORYS u, v)"), l("ice velocity (ITS_LIVE); land \u2261 0"),
+         src("One (u, v) pair. On land it is exactly zero \u2014 which is information: nothing advects")],
+        [q("the column below"), o("T, S profiles (Argo, 0\u20132,000 m)"), l("soil layers (ERA5-Land, SMAP L4); firn on the ice sheets"),
+         src("ONE profile-token type (E-071 \u00A73) with a sphere-specific depth ladder")],
+      ];
+      s.addTable(trows, { x: TX, y: 1.94, w: TW, colW: [1.30, 1.40, 1.60, 2.95], fontFace: FONT_B,
+        border: { type: "solid", color: GRIDLINE, pt: 0.5 },
+        rowH: [0.20, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30],
+        margin: 0.03, autoPage: false });
+    }
+    txt(s, [
+      { text: "Sphere-specific channels stay sphere-specific, and are ", options: { fontSize: 7, color: INK } },
+      { text: "miss", options: { bold: true, color: LAND, fontSize: 7 } },
+      { text: " elsewhere with a clear conscience: mixed-layer depth and sea-surface height (ocean); ESA CCI soil moisture 0.25\u00B0 daily 1978\u2192 \u2014 it covers the whole axis \u2014 snow water equivalent, leaf area, GLEAM evapotranspiration (land); ice velocity and elevation change (ice).", options: { fontSize: 7, color: INK } },
+    ], TX, 6.04, TW, 0.36);
+
+    // ---------- RIGHT (~40 %): three boxes ----------
+    const BX = 8.05, BW = 4.68, IX = BX + 0.13, IW = BW - 0.26;
+    // 1 · Antarctica
+    box(s, BX, 1.56, BW, 1.52, SPACE, "F7FAFC");
+    txt(s, [{ text: "1 \u00B7 Antarctica was never unobserved \u2014 the GRID was", options: { bold: true, color: SPACE, fontSize: 9 } }], IX, 1.62, IW, 0.20);
+    txt(s, [
+      { text: "E-070 chose \u221280\u202680\u00B0 because that is GLORYS12\u2019s extent \u2014 an ocean product stops where the ocean stops \u2014 and \u00A71 of the plan wrongly let it read as ", options: { fontSize: 7, color: INK } },
+      { text: "no data", options: { bold: true, color: RED, fontSize: 7 } },
+      { text: ". Cone v2\u2019s grid is ", options: { fontSize: 7, color: INK } },
+      { text: "\u221290 \u2026 90\u00B0, 721 \u00D7 1,440", options: { bold: true, color: OBS, fontSize: 7 } },
+      { text: ". The ice-sheet rows are filled by ERA5 (skin and 2 m temperature, winds, pressure, snowfall, radiation \u2014 the surface mass balance\u2019s inputs), MODIS LST and albedo in the clear-sky months, GRACE mass, CryoSat-2 (2010\u2192) and ICESat-2 (2018\u2192) elevation change, ITS_LIVE velocity, and around the continent the sea-ice concentration and drift.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+      { text: "Why it matters for the overturning: ", options: { bold: true, color: SPACE, fontSize: 7 } },
+      { text: "Antarctic meltwater and sea-ice formation set Antarctic Bottom Water, the lower limb of the global overturning \u2014 and the ice sheet\u2019s freshwater flux is its largest uncertainty.", options: { fontSize: 7, color: INK } },
+    ], IX, 1.84, IW, 1.18);
+    // 2 · cone families for the new spheres
+    box(s, BX, 3.13, BW, 1.36, LAND, "F7FBF6");
+    txt(s, [{ text: "2 \u00B7 Cone families for the new spheres (E-071 \u00A76.3)", options: { bold: true, color: LAND, fontSize: 9 } }], IX, 3.19, IW, 0.20);
+    txt(s, [
+      { text: "atmosphere A\u2032 ", options: { bold: true, color: ATMOS, fontSize: 7 } },
+      { text: "\u2014 global at once, lags 0\u20132, the 24-dot log-spaced ring to the antipode.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 2 } },
+      { text: "land surface state L ", options: { bold: true, color: LAND, fontSize: 7 } },
+      { text: "\u2014 v = 0: the land does not advect, so the reach is the correlation length alone (~300\u2013500 km) and the memory is months. A column plus a 12-dot disc at every inner lag and into the outer window. The SAME channel over an OCEAN anchor follows family C at 5.4 m/s \u2014 the one place a family depends on the anchor\u2019s sphere.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 2 } },
+      { text: "ice sheet I ", options: { bold: true, color: SPACE, fontSize: 7 } },
+      { text: "\u2014 column only, monthly cadence, the firn profile token.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 2 } },
+      { text: "The sphere code (ocean \u00B7 land \u00B7 ice \u00B7 inland water, from the rung-12 static mask) is a coordinate the codec reads, exactly as depth is.", options: { fontSize: 7, italic: true, color: MUTED } },
+    ], IX, 3.41, IW, 1.02);
+    // 3 · cost and the token change
+    box(s, BX, 4.54, BW, 1.86, OBS, "F5FBF7");
+    txt(s, [{ text: "3 \u00B7 Cost, and the token change this forces (\u00A76.4\u20136.5)", options: { bold: true, color: OBS, fontSize: 9 } }], IX, 4.60, IW, 0.20);
+    txt(s, [
+      { text: "One global channel at 0.25\u00B0 \u00D7 5 d \u00D7 1982\u20132024 \u2248 6.5 GB float16; the shared set of ~20 channels \u2248 130 GB, plus ~5 land-only \u2248 33 GB, on top of the 62 GB ocean tensor. Two sources \u2014 ERA5 and MODIS \u2014 supply three quarters; ERA5 needs the free CDS account.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 2 } },
+      { text: "With ~65 channels, per-channel tokens would be ~14,000 per anchor. So v2 makes a TOKEN = one (lag, location) carrying the full value vector of EVERY channel there, with a per-channel observed mask inside and the sphere code as a coordinate \u2014 the \u00A73 profile token generalised. ", options: { fontSize: 7, color: INK } },
+      { text: "\u2248 300 tokens per anchor whatever the channel count, below E-069\u2019s 748.", options: { bold: true, color: OBS, fontSize: 7, breakLine: true, paraSpaceAfter: 2 } },
+      { text: "PHASE L0 \u2014 \u201Csparse for now\u201D: ", options: { bold: true, color: NAVY, fontSize: 7 } },
+      { text: "six channels, two sources, all gap-free, all 1982\u2192, all global to the poles, ~40 GB \u2014 ERA5 skin T, 2 m T, 10 m u/v (retiring the frozen NCEP R1), surface pressure, precipitation; plus the frozen fraction and ESA CCI soil moisture. MODIS / GRACE / SMAP / ASCAT (2000\u2192) follow as L1, once the harmonic climatology has shown it handles a channel that starts eighteen years into the axis.", options: { fontSize: 7, color: INK } },
+    ], IX, 4.82, IW, 1.52);
+
+    reading(s, "Reading. Today a land cell is told \u201Cthe world was not observed here\u201D 42 times per pentad, which is false. Cone v2 defines channels by what is measured and by which instrument, lets a sphere code say what surface lies under the cell, and finds that most of the input ladder already crosses the coastline \u2014 the same skin temperature, the same radar, the same reflectance, the same altimeter, the same column token. What stays dark is only what no instrument sees.", 6.48);
     footer(s);
   }
 

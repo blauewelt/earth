@@ -1,4 +1,4 @@
-// Per-slide sources: one array of {t: label, u: full URL} per slide, in deck order (51 entries).
+// Per-slide sources: one array of {t: label, u: full URL} per slide, in deck order (52 entries).
 // Appended to every speaker note by build.js (plain text) and rendered as clickable links on the
 // notes pages (notes_deck.js) and on the Sources slide. Keep URLs full (https://) so they are
 // clickable after a PDF export and survive a Google Slides import.
@@ -195,6 +195,10 @@ const P = {
   trainprobePy: { t: "ml/trainprobe.py — the anomaly transform (source)", u: "https://github.com/blauewelt/earth/blob/main/ml/trainprobe.py" },
   buildFamily4: { t: "ml/build_family4.py — the pentad tensor builder (source)", u: "https://github.com/blauewelt/earth/blob/main/ml/build_family4.py" },
   e034: { t: "E-034 plan — the pentad tensor and the Argo missing-token decision", u: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E034_pentad_tensor.md" },
+  // --- land, ice and air: the shared-channel set (slide 48) ---
+  mcd43: { t: "MODIS BRDF/albedo (MCD43A3, 500 m daily)", u: "https://lpdaac.usgs.gov/products/mcd43a3v061/" },
+  itslive: { t: "ITS_LIVE — glacier and ice-sheet surface velocity", u: "https://its-live.jpl.nasa.gov/" },
+  cryosat: { t: "CryoSat-2 (ESA) — ice-sheet elevation change", u: "https://earth.esa.int/eogateway/missions/cryosat" },
   e059: { t: "E-059 plan — --holdout-scope window, why the pool discipline exists", u: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E059_holdout_window.md" },
   // --- El Niño 2026 (slide 50) ---
   cpcEnso: { t: "CPC ENSO diagnostic discussion, 13 Aug 2026", u: "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_disc_aug2026/ensodisc.shtml" },
@@ -262,9 +266,10 @@ module.exports = [
   /* 45 — what feeds the cone codec today */ S("glorysProduct", "oisstPsl", "rgArgo", "ncepR1", "rapidData", "floridaCable", "dataLadder", "e069blob", "e069", "coneDataEnso", "proposal", "mlclaude"),
   /* 46 — boundaries: every edge the sampler meets */ S("coneSampler", "trainConePy", "trainprobePy", "buildFamily4", "e034", "e059", "e069", "e069blob", "e071", "argo", "rgArgo", "coneDataEnso", "mlclaude"),
   /* 47 — the speeds the cone did not have, and the speeds it will */ S("conePy", "coneSampler", "e069", "e069log", "e069blob", "e071", "somaliWiki", "noaaGulf", "agulhasWiki", "kelvinWiki", "cheltonAtlas", "currentsY", "proposal", "chelton", "glorys", "argo", "drifters", "rapidData", "floridaCable", "dataLadder", "coneDataEnso", "mlclaude"),
-  /* 48 */ S("proposal", "paper", "mlclaude", "cmemsFc"),
-  /* 49 */ S("proposal", "s1reconf", "s1d", "s2ext", "modisviirs", "snpp", "ssmis", "amsr3", "s6", "occci", "ccism", "en4", "grdc", "opera", "gleam", "ecmwfOpen"),
-  /* 50 — El Niño 2026 */ S("cpcEnso", "iriPlume", "pmelWwv", "godas", "interpOlr", "oni", "pslIndices", "mei", "rmm", "ccmp", "oscarFinal", "catalogJson", "catalogDoc", "coneDataEnso"),
-  /* 51 */ S("surveyNotes", "proposal", "paper"),
+  /* 48 — land, ice and air: nothing is dark by design */ S("e071", "proposal", "dataLadder", "era5", "era5doc", "mod11", "mod10", "mcd43", "ascat", "smap", "grace", "icesat2", "cryosat", "itslive", "osisafIce", "ccism", "igra", "imerg", "ostia", "duacs", "hydroweb", "gleam", "glorys", "argo", "coneDataEnso"),
+  /* 49 */ S("proposal", "paper", "mlclaude", "cmemsFc"),
+  /* 50 */ S("proposal", "s1reconf", "s1d", "s2ext", "modisviirs", "snpp", "ssmis", "amsr3", "s6", "occci", "ccism", "en4", "grdc", "opera", "gleam", "ecmwfOpen"),
+  /* 51 — El Niño 2026 */ S("cpcEnso", "iriPlume", "pmelWwv", "godas", "interpOlr", "oni", "pslIndices", "mei", "rmm", "ccmp", "oscarFinal", "catalogJson", "catalogDoc", "coneDataEnso"),
+  /* 52 */ S("surveyNotes", "proposal", "paper"),
 ];
 module.exports.P = P;
