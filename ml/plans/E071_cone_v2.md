@@ -302,10 +302,12 @@ formula says changes character:
 
 - the inner reach is already 9,331 km at lag 3 and 16,330 km at lag 6, i.e.
   the codec's 30-day window sees most of the planet;
-- the outer reach r_out(k) = min(antipode, 5.4 m/s · 5 d · (1 + k)) hits the
-  antipode at **k = 1**, so from lag 7 onward stage 2's stencil is a **global
-  ring at every lag** — the annulus's inner radius is the floor (111 km) and
-  its outer radius is the antipode. The "empty annulus for k ≤ 6" property is
+- the outer reach r_out(k) = min(antipode, 5.4 m/s · 5 d · (1 + k)) is
+  18,664 km at k = 7 (the outer stencil's first lag) and at the antipode from
+  **k = 8** — it passes the old 4,444 km cap already at k = 1 — so from lag 7
+  onward stage 2's stencil is a **global ring at every lag**: the annulus's
+  inner radius is the floor (111 km) and its outer radius is, to within one
+  lag, the antipode. The "empty annulus for k ≤ 6" property is
   unchanged; the outer spiral is simply no longer a cone that grows with lag,
   it is a cylinder of global rings.
 
