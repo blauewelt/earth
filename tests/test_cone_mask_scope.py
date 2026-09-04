@@ -28,7 +28,13 @@ identity before a threshold, and the invariant before the feature):
       whole premise of adding the knob;
   (d) `anchor_hidden_only` zeroes the anchor weights on exactly the
       non-dropped channels and leaves the future and dot families untouched;
-  (e) `msebar` is the weighted mean of target² for each family.
+  (e) `msebar` is the weighted mean of target² for each family;
+  (f) the PER-CHANNEL split of the anchor and dot families is weight-consistent
+      with the family value it splits, reports 0.0 (never NaN) for a channel
+      that carried no weight, and puts its predict-zero bar on the same
+      weights — the measurement #540 (E-069 seed 2, the cone codec) needs to
+      say whether the decoder reconstructs `cur_v` at all, given that a ridge
+      from its embedding recovers `cur_u` at R² 0.82 and `cur_v` at 0.02.
 
     python3 -m pytest -q tests/test_cone_mask_scope.py
 """
@@ -309,6 +315,187 @@ def test_eval_loss_carries_msebar_into_the_metrics_record():
         assert rec[f"held_out_msebar_{k}"] == round(float(fam[k]["msebar"]), 5)
         # the standardised targets put every family's predict-zero bar near 1
         assert 0.2 < fam[k]["msebar"] < 5.0, (k, fam[k]["msebar"])
+
+
+# ------------------------------------------------ (f) the per-channel split --
+def test_per_channel_mse_is_weight_consistent_with_the_family():
+    """The weight-weighted mean of the per-channel MSEs IS the family MSE.
+
+    Not "close to": the split scatters the very same `sq` and `w` elements the
+    family sums, so the identity is exact to floating point. A per-channel
+    number that could not be put back together would be measuring some other
+    set of targets — the same argument
+    `test_per_family_terms_reassemble_the_headline` makes one level up, and
+    the reason that test exists rather than a description of the split.
+    """
+    m = ConeMAE(len(CHANS), **TINY).eval()
+    b = batch_of(tiny_sampler(), ANCHORS)
+    plan = plan_of(seed=23)
+    cm, dm = m._masks(b, plan)
+    idx, sel = m.draw_dot_queries(b, plan, dm)
+    with torch.no_grad():
+        out = m.forward_given(b, plan, cm, dm, (idx, sel))
+
+    assert set(out["families_by_chan"]) == set(QUERY_FAMILIES)
+    for name, fc in out["families_by_chan"].items():
+        f = out["families"][name]
+        for key in ("mse", "msebar", "wsum"):
+            assert len(fc[key]) == len(CHANS), (name, key, len(fc[key]))
+            assert all(np.isfinite(v) for v in fc[key]), (name, key, fc[key])
+        # the per-channel weights partition the family's weight
+        assert abs(sum(fc["wsum"]) - f["wsum"]) < 1e-4, (
+            f"{name}: per-channel weights sum to {sum(fc['wsum'])!r}, family "
+            f"weight {f['wsum']!r}")
+        if f["wsum"] <= 0.0:
+            assert fc["mse"] == [0.0] * len(CHANS)
+            continue
+        for stat in ("mse", "msebar"):
+            got = (sum(v * w for v, w in zip(fc[stat], fc["wsum"]))
+                   / sum(fc["wsum"]))
+            assert abs(got - f[stat]) < 1e-5, (
+                f"{name}.{stat}: per-channel values reassemble to {got!r}, "
+                f"family value {f[stat]!r}")
+
+
+def test_zero_weight_channel_reports_zero_not_nan():
+    """A channel this family never scored reads 0.0 with a 0.0 weight.
+
+    ml/CLAUDE.md §5.22 — never write a NaN into a results file. The weight is
+    the honest discriminator: a reader tells "this channel's MSE is zero" from
+    "this channel was never asked about" by `wsum_by_chan`, exactly as an empty
+    FAMILY is told apart by its `wsum`. The case is constructed rather than
+    hoped for: `anchor_hidden_only` with every drop probability at 0 leaves the
+    anchor family with weight zero on every channel.
+    """
+    m = ConeMAE(len(CHANS), **TINY).eval()
+    b = batch_of(tiny_sampler(), ANCHORS)
+    plan = plan_of(seed=5, cur_drop=0.0, other_drop=0.0, lag_band_p=0.0,
+                   sector_p=0.0, anchor_hidden_only=True)
+    cm, dm = m._masks(b, plan)
+    assert not cm.any(), "no channel may be dropped for this construction"
+    with torch.no_grad():
+        out = m.forward_given(b, plan, cm, dm, m.draw_dot_queries(b, plan, dm))
+    fc = out["families_by_chan"]["anchor"]
+    assert fc["wsum"] == [0.0] * len(CHANS)
+    assert fc["mse"] == [0.0] * len(CHANS)
+    assert fc["msebar"] == [0.0] * len(CHANS)
+    assert not any(np.isnan(v) for v in fc["mse"] + fc["msebar"])
+
+    # and the same through `eval_loss` / `fam_record`, which is where a NaN
+    # would actually reach a file: a channel absent from the DOT family (the
+    # snapshot twin has no dots at all) must still be a number.
+    from train_cone import eval_loss, fam_record
+    s = ConeSampler(*(lambda X: (X, np.isfinite(X)))(
+        np.random.default_rng(0).normal(size=(20, 8, 9, len(CHANS))
+                                        ).astype(np.float32)),
+        30.0 + 0.25 * np.arange(8), -40.0 + 0.25 * np.arange(9), CHANS,
+        L_in=0)
+    depth = torch.as_tensor([channel_depth_dbar(n) for n in CHANS],
+                            dtype=torch.float32)
+    anchors = np.array([[10, 3, 4], [11, 4, 5], [12, 5, 6]], np.int64)
+    _, _, _, fam = eval_loss(m, s, anchors, default_plan(CHANS,
+                                                         n_dot_queries=8),
+                             depth, "cpu", batch=2)
+    assert fam["dots"]["wsum"] == 0.0, "the L_in=0 twin must have no dots"
+    rec = fam_record(fam)
+    for k in ("mse", "msebar"):
+        v = rec[f"held_out_{k}_dots_by_chan"]
+        assert v == [0.0] * len(CHANS), v
+        assert all(np.isfinite(x) for x in v)
+
+
+def test_per_channel_msebar_is_the_weighted_mean_of_squared_target():
+    """`msebar_by_chan[c]` is the predict-zero bar restricted to channel c.
+
+    Recomputed here from the query sets by masking on the query's own channel
+    index — a second expression, deliberately, because the point of the bar is
+    that a channel sitting AT it has learnt nothing beyond its mean, and a bar
+    computed by the same code path as the thing it bounds would certify
+    nothing.
+    """
+    m = ConeMAE(len(CHANS), **TINY).eval()
+    b = batch_of(tiny_sampler(), ANCHORS)
+    plan = plan_of(seed=29)
+    cm, dm = m._masks(b, plan)
+    idx, sel = m.draw_dot_queries(b, plan, dm)
+    with torch.no_grad():
+        out = m.forward_given(b, plan, cm, dm, (idx, sel))
+        chan, *_, tgt, w = m._query_sets(b, plan, dm, (idx, sel), cm)
+
+    spans = m.query_family_spans(b, plan, w.shape[1])
+    scored = 0
+    for name, (lo, hi) in spans.items():
+        if hi <= lo:
+            continue
+        fc = out["families_by_chan"][name]
+        cs, ts, ws = chan[:, lo:hi], tgt[:, lo:hi], w[:, lo:hi]
+        for c in range(len(CHANS)):
+            sel_c = (cs == c)
+            wc = float((ws * sel_c).sum())
+            assert abs(wc - fc["wsum"][c]) < 1e-4, (name, c)
+            if wc <= 0.0:
+                assert fc["msebar"][c] == 0.0
+                continue
+            want = float(((ts ** 2) * ws * sel_c).sum()) / wc
+            assert abs(want - fc["msebar"][c]) < 1e-5, (
+                f"{name}[{CHANS[c]}]: msebar {fc['msebar'][c]!r} != weighted "
+                f"mean of target² {want!r}")
+            scored += 1
+    assert scored > 0, "nothing was scored — the assertions above are vacuous"
+
+
+def test_eval_record_carries_the_two_by_chan_families_and_the_log_line():
+    """`fam_record` writes the four lists, in the tensor's own channel order,
+    and `chan_mse_line` reads the same numbers back for the job log."""
+    from train_cone import (eval_loss, fam_record, chan_mse_line,
+                            BY_CHAN_FAMILIES, LOG_CHANS)
+    torch.manual_seed(0)
+    s = tiny_sampler()
+    rng = np.random.default_rng(3)
+    anchors = np.stack([rng.integers(8, 27, 12), rng.integers(0, 12, 12),
+                        rng.integers(0, 14, 12)], axis=1)
+    m = ConeMAE(len(CHANS), **TINY)
+    depth = torch.as_tensor([channel_depth_dbar(n) for n in CHANS],
+                            dtype=torch.float32)
+    _, _, _, fam = eval_loss(m, s, anchors, default_plan(CHANS,
+                                                         n_dot_queries=16),
+                             depth, "cpu", batch=5)
+    rec = fam_record(fam)
+    assert BY_CHAN_FAMILIES == ("anchor", "dots")
+    for k in BY_CHAN_FAMILIES:
+        for stat in ("mse", "msebar"):
+            key = f"held_out_{stat}_{k}_by_chan"
+            assert key in rec and len(rec[key]) == len(CHANS)
+            assert all(np.isfinite(v) for v in rec[key])
+            assert rec[key] == [round(float(v), 5)
+                                for v in fam[k][f"{stat}_by_chan"]]
+        # weight-consistent with the family value the record also carries
+        den = sum(fam[k]["wsum_by_chan"])
+        got = (sum(v * w for v, w in zip(fam[k]["mse_by_chan"],
+                                         fam[k]["wsum_by_chan"])) / den)
+        assert abs(got - fam[k]["mse"]) < 1e-5
+    # the future family is deliberately NOT written (C more floats per record
+    # for a question nothing asks yet), but IS computed
+    assert "held_out_mse_future_by_chan" not in rec
+    assert len(fam["future"]["mse_by_chan"]) == len(CHANS)
+    # `by_chan=False` is the small-record form and drops exactly those keys
+    lean = fam_record(fam, by_chan=False)
+    assert not [k for k in lean if k.endswith("_by_chan")]
+    assert set(rec) - set(lean) == {
+        f"held_out_{s}_{k}_by_chan"
+        for k in BY_CHAN_FAMILIES for s in ("mse", "msebar")}
+
+    line = chan_mse_line(fam, CHANS)
+    for n in LOG_CHANS:
+        assert n in line
+    # every named channel exists in this tensor and was scored, so none reads
+    # n/a — a line of n/a would pass a weaker assertion
+    assert "n/a" not in line, line
+    i = CHANS.index("cur_v")
+    assert f"cur_v {fam['anchor']['mse_by_chan'][i]:.4f}" in line
+    # a channel the tensor does not carry reads n/a, never 0.0
+    assert "no_such_chan n/a" in chan_mse_line(fam, CHANS,
+                                               names=("no_such_chan",))
 
 
 # ------------------------------------------------- the trainer's own flags --

@@ -672,6 +672,13 @@ class ConeMAE(nn.Module):
         gate C2 (`tests/test_jaxport_cone.py`) asserts the two frameworks'
         `terms` KEY SETS are equal, and a torch-only diagnostic in there would
         fail a gate that is about the loss rather than about the logging.
+
+        `families_by_chan` is that split one level finer — the same weighted
+        means, per CHANNEL, for each family. It is a SIBLING of `families`
+        rather than three more keys inside it, because `families` is a flat
+        dict of scalars that `tests/test_cone_smoke.py` compares by equality
+        and `train_cone.fam_line` prints; a list-valued key in there would make
+        both of those about the diagnostic instead of about the loss.
         """
         bb = dict(b)
         bb["chan_mask"], bb["dot_mask"] = chan_mask, dot_mask
@@ -708,15 +715,31 @@ class ConeMAE(nn.Module):
         # so a family whose mse equals its msebar has learnt nothing beyond
         # the channel mean, which is exactly what #539's hidden-dot 1.001
         # was. It is LOGGED and adds nothing to the loss (ml/CLAUDE.md §4.3).
+        #
+        # PER CHANNEL (`families_by_chan`), same reduction one level finer.
+        # A family's mse is a weighted mean over its whole span; scattering the
+        # very same `sq` and `w` elements by the query's own `chan` index
+        # splits that mean without recomputing anything, so the per-channel
+        # values are weight-consistent with the family value BY CONSTRUCTION
+        # rather than by a second expression that could drift. A channel that
+        # carried no weight in this batch reports 0.0 and a zero weight — never
+        # 0/0 (ml/CLAUDE.md §5.22) — and the weight is what tells "scored zero"
+        # from "scored nothing", exactly as it does for an empty family.
         families = {}
+        by_chan = {}
+        C = self.n_chan
         with torch.no_grad():
             ell_d, sq_d, w_d = ell.detach(), sq.detach(), w.detach()
             sqt_d = (tgt.detach() ** 2) * w_d
+            chan_d = chan.detach().long()
+            zeros_c = torch.zeros(C, dtype=w_d.dtype, device=w_d.device)
             for name, (lo, hi) in self.query_family_spans(
                     b, plan, w.shape[1]).items():
                 if hi <= lo:
                     families[name] = {"nll": 0.0, "mse": 0.0, "msebar": 0.0,
                                       "wsum": 0.0, "n_targets": 0.0}
+                    by_chan[name] = {"mse": [0.0] * C, "msebar": [0.0] * C,
+                                     "wsum": [0.0] * C}
                     continue
                 ws = float(w_d[:, lo:hi].sum())
                 den = ws if ws > 0.0 else 1.0
@@ -726,6 +749,21 @@ class ConeMAE(nn.Module):
                     "msebar": float(sqt_d[:, lo:hi].sum()) / den,
                     "wsum": ws,
                     "n_targets": float((w_d[:, lo:hi] > 0).sum())}
+                ci = chan_d[:, lo:hi].reshape(-1)
+                wc = zeros_c.clone().index_add_(0, ci,
+                                                w_d[:, lo:hi].reshape(-1))
+                sc = zeros_c.clone().index_add_(0, ci,
+                                                sq_d[:, lo:hi].reshape(-1))
+                bc = zeros_c.clone().index_add_(0, ci,
+                                                sqt_d[:, lo:hi].reshape(-1))
+                dc = torch.where(wc > 0, wc, torch.ones_like(wc))
+                # ONE `.tolist()` for the three vectors, not three: on CUDA
+                # each is a device->host sync inside the training step, and
+                # this method already pays ~22 of them for `terms` and
+                # `families`. Stacking makes the per-channel split cost three
+                # syncs per call instead of nine.
+                mb, bb_, wb = torch.stack([sc / dc, bc / dc, wc]).tolist()
+                by_chan[name] = {"mse": mb, "msebar": bb_, "wsum": wb}
 
         terms = {"nll": float(nll.detach()), "mse": float(mse.detach()),
                  # `wsum` is the DENOMINATOR of both means, so a caller
@@ -745,7 +783,8 @@ class ConeMAE(nn.Module):
             aux = (nll_gauss(mu2, lv2, tgt) * w).sum() / wsum
             terms["nll_latent"] = float(aux.detach())
             loss = loss + aux_w * aux
-        return {"loss": loss, "z": z, "terms": terms, "families": families}
+        return {"loss": loss, "z": z, "terms": terms, "families": families,
+                "families_by_chan": by_chan}
 
 
 def default_plan(chan_names, cur_drop=0.5, other_drop=0.3, lag_band_p=0.3,

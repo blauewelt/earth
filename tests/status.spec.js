@@ -330,8 +330,19 @@ const TPU_CONE = jsonl([
   { step: 9100, loss_rec: -1.15318, loss_nei: 0.39011 },
   { step: 9600, loss_rec: -1.17206, loss_nei: 0.38402 },
   { step: 10000, loss_rec: -1.18944, loss_nei: 0.37905 },
+  // The LAST eval carries the per-channel split (ml/train_cone.py::fam_record,
+  // 2026-09-04): four LIST-valued keys the page has no renderer for. They are
+  // here so the suite pins that an unknown list-valued key rides along
+  // harmlessly — every key-iterating renderer on this page (`probeText`, the
+  // TPU config strip's name top-up) guards on `typeof v === "number"`, and a
+  // guard nobody tests is a guard the next refactor drops. Three channels is
+  // enough to be a list; the real record carries C of them.
   { step: 10000, held_out_nll: -1.20440, held_out_mse: 0.37120,
-    held_out_targets: 184320, wall_s: 18000.0 },
+    held_out_targets: 184320, wall_s: 18000.0,
+    held_out_mse_anchor_by_chan: [0.18321, 0.98142, 0.44107],
+    held_out_msebar_anchor_by_chan: [1.00212, 1.00087, 0.99913],
+    held_out_mse_dots_by_chan: [0.51004, 1.00133, 0.72610],
+    held_out_msebar_dots_by_chan: [1.00040, 0.99871, 1.00204] },
 ]);
 
 test.beforeEach(async ({ page }) => {
@@ -727,6 +738,32 @@ test("a resumed cone run draws its seam and dates its ETA from it",
   await expect(card).toContainText("~8.3 h left");
   await expect(card).not.toContainText("~5.0 h left");
   await expect(card).toContainText("ends ≈");
+});
+
+// ml/train_cone.py::fam_record writes the per-channel held-out MSE and its
+// predict-zero bar as four LIST-valued keys per eval record (2026-09-04, for
+// the cur_u/cur_v asymmetry #540 — E-069 seed 2, the cone codec — turned up).
+// Nothing on this page renders a list, and §0d's rule is that a family the
+// page does not know is DROPPED, not crashed on. The guard is real code —
+// `probeText` and the config strip's name top-up both test `typeof v ===
+// "number"` before printing a key — so this pins it rather than trusting it.
+test("an unknown list-valued key in an eval record changes nothing on the card",
+  async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/status.html");
+  const card = tpuCard(page, "e069-cone-s0");
+  // the chart still draws, from the same records, with the same numbers
+  await expect(card.locator("svg.chart")).toHaveCount(2);
+  await expect(card).toContainText("HELD-OUT nll — latest -1.2044");
+  await expect(card).toContainText("HELD-OUT mse — latest 0.3712");
+  // and the lists are neither printed nor stringified into the card — a
+  // rendered "0.18321,0.98142" would be the failure this test is for
+  const txt = await card.innerText();
+  expect(txt).not.toContain("by_chan");
+  expect(txt).not.toContain("0.18321");
+  expect(txt).not.toContain("0.98142");
+  expect(errors).toEqual([]);
 });
 
 test("a TPU run links to its experiment definition", async ({ page }) => {

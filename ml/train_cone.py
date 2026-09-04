@@ -417,6 +417,14 @@ def eval_generator(device, seed=12345):
 
 
 QUERY_FAMILIES = ("anchor", "future", "dots")
+# The families whose per-channel split reaches the metrics record. See
+# `fam_record`; the eval computes all three, only these two are written.
+BY_CHAN_FAMILIES = ("anchor", "dots")
+# The channels the job log prints per arm. `cur_u` / `cur_v` are H1's target
+# pair and the asymmetry #540 (E-069 seed 2, the cone codec) found; `cur_speed`
+# is their magnitude, and `ssh` / `sst` are the two family-B/C channels a
+# reader compares them against.
+LOG_CHANS = ("cur_u", "cur_v", "cur_speed", "ssh", "sst")
 
 
 def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
@@ -440,14 +448,31 @@ def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
     NLL is over 244,634 targets and the twin's over 42,937, so the two are
     not comparable AS TOTALS — but their `anchor` and `future` families are
     the same question asked of both arms.
+
+    Each family additionally carries `mse_by_chan` / `msebar_by_chan` /
+    `wsum_by_chan` — the SAME weighted means, split by the query's own channel
+    index (`ConeMAE._loss_from`'s `families_by_chan`), accumulated over the
+    whole pass exactly the way the family means are. The channel order is the
+    tensor's `chan` list, which the config record already carries. This is
+    what says whether the decoder reconstructs a given channel at all: #540
+    (E-069 seed 2, the cone codec) recovers `cur_u` from the embedding at
+    R² 0.82 and `cur_v` at 0.02 with both channels VISIBLE in the input, and
+    no hypothesis predicted an east/north asymmetry — a per-family mse cannot
+    see it because both channels are inside the same family.
+
+    A channel with zero weight (never scored in this pass) reports 0.0, never
+    0/0 — ml/CLAUDE.md §5.22 — and its `wsum_by_chan` entry is 0.0, which is
+    the honest discriminator between "scored zero" and "scored nothing".
     """
     g = eval_generator(device, seed)
     p = dict(plan)
     p["generator"] = g
+    C = int(model.n_chan)
     model.eval()
     nll = mse = w = tgt = 0.0
     fam = {k: {"nll": 0.0, "mse": 0.0, "msebar": 0.0, "wsum": 0.0,
-               "n_targets": 0.0}
+               "n_targets": 0.0, "mse_by_chan": [0.0] * C,
+               "msebar_by_chan": [0.0] * C, "wsum_by_chan": [0.0] * C}
            for k in QUERY_FAMILIES}
     with torch.no_grad():
         for i in range(0, len(anchors), batch):
@@ -459,6 +484,7 @@ def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
             mse += out["terms"]["mse"] * n
             w += n
             tgt += out["terms"]["n_targets"]
+            bc = out.get("families_by_chan", {})
             for k, f in out.get("families", {}).items():
                 if k not in fam:
                     continue
@@ -467,6 +493,14 @@ def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
                 fam[k]["msebar"] += f.get("msebar", 0.0) * f["wsum"]
                 fam[k]["wsum"] += f["wsum"]
                 fam[k]["n_targets"] += f["n_targets"]
+                fk = bc.get(k)
+                if not fk:
+                    continue
+                for c in range(C):
+                    wc = fk["wsum"][c]
+                    fam[k]["mse_by_chan"][c] += fk["mse"][c] * wc
+                    fam[k]["msebar_by_chan"][c] += fk["msebar"][c] * wc
+                    fam[k]["wsum_by_chan"][c] += wc
     model.train()
     w = max(w, 1e-6)
     for f in fam.values():
@@ -478,10 +512,18 @@ def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
         f["nll"] /= den
         f["mse"] /= den
         f["msebar"] /= den
+        # The same rule per channel, and for the same reason: a channel this
+        # family never scored (family A carries no `cur_*` weight under
+        # `anchor_hidden_only` on an element that dropped nothing) divides by
+        # its own zero weight, and 0/0 is the NaN §5.22 forbids.
+        for c in range(C):
+            dc = f["wsum_by_chan"][c] if f["wsum_by_chan"][c] > 0.0 else 1.0
+            f["mse_by_chan"][c] /= dc
+            f["msebar_by_chan"][c] /= dc
     return nll / w, mse / w, tgt, fam
 
 
-def fam_record(fam):
+def fam_record(fam, by_chan=True):
     """The per-family eval keys, flat, for one metrics.jsonl record.
 
     Additive by construction: the headline `held_out_nll` / `held_out_mse` /
@@ -489,6 +531,20 @@ def fam_record(fam):
     status.html and every archived reader keep working; these sit beside them
     (ml/CLAUDE.md §0d — a reader ignores what it does not know). Every value is
     a finite number, including for a family with no targets (§5.22).
+
+    `by_chan` adds the four LIST-valued keys of the per-channel split —
+    `held_out_mse_{anchor,dots}_by_chan` and the matching `msebar` bars, each C
+    floats in the tensor's own `chan` order (the config record carries that
+    list). Only the ANCHOR and DOT families get them: those are the two that
+    say whether a channel is reconstructed at all, and the future family would
+    be C more floats per record for a question nothing is asking yet. It is a
+    parameter rather than always-on so a caller can keep a live metrics file
+    small. Measured at C = 39 (the r3 tensor) the four lists take a record from
+    612 to 2,128 bytes — inside the ~4 KB the live file can carry — so
+    `train_one` writes them at EVERY eval rather than only at step 0 and the
+    final one: eleven such records is ~23 KB, and a per-channel curve is worth
+    more than the bytes (§0d — a number a reader has to open the archive for is
+    a number nobody reads).
     """
     rec = {}
     for k in QUERY_FAMILIES:
@@ -507,6 +563,15 @@ def fam_record(fam):
         # lets a reader put the headline back together (the family weights of
         # cone_codec.FAMILY_W are inside it, so it is not the target count).
         rec[f"held_out_wsum_{k}"] = round(float(f["wsum"]), 4)
+        if by_chan and k in BY_CHAN_FAMILIES:
+            # 0.0 where the channel carried no weight, never a NaN (§5.22).
+            # The list is positional — the channel ORDER is the tensor's `chan`
+            # list, which the config record already carries, so the record does
+            # not restate 39 names at every eval.
+            for stat in ("mse", "msebar"):
+                v = f.get(f"{stat}_by_chan") or []
+                rec[f"held_out_{stat}_{k}_by_chan"] = [
+                    round(float(x), 5) for x in v]
     return rec
 
 
@@ -515,6 +580,33 @@ def fam_line(fam):
     return " · ".join(
         f"{k} {fam[k]['nll']:+.3f}/{int(fam[k]['n_targets']):,}"
         for k in QUERY_FAMILIES if k in fam)
+
+
+def chan_mse_line(fam, chan, names=LOG_CHANS, family="anchor"):
+    """`cur_u 0.1832 · cur_v 0.9814 · …` — one family's per-channel held-out MSE.
+
+    Read off the FINAL eval record so the job log carries the number without
+    anyone opening the archive: #540 (E-069 seed 2, the cone codec) recovered
+    `cur_u` from the embedding at R² 0.82 and `cur_v` at 0.02, and the question
+    that asymmetry raises — does the decoder reconstruct `cur_v` at all — is
+    answered by this line and by nothing else in the log.
+
+    A channel the tensor does not carry, or one this family never scored,
+    prints `n/a` rather than a zero: 0.0 is a legitimate MSE and would be a
+    lie here (ml/CLAUDE.md §5.22's display half — never print a number where
+    the honest answer is "no reading").
+    """
+    f = (fam or {}).get(family) or {}
+    mse = f.get("mse_by_chan") or []
+    ws = f.get("wsum_by_chan") or []
+    out = []
+    for n in names:
+        i = chan.index(n) if n in chan else -1
+        if i < 0 or i >= len(mse) or (i < len(ws) and ws[i] <= 0.0):
+            out.append(f"{n} n/a")
+        else:
+            out.append(f"{n} {mse[i]:.4f}")
+    return " · ".join(out)
 
 
 def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
@@ -1002,6 +1094,7 @@ def main(argv=None):
         # autocorrelation, picks a lambda far too small and the outer fold
         # blows up (measured: out-of-fold r = -0.38 before this line).
         pa = pa[np.argsort(pa[:, 0], kind="stable")]
+        snap = None
         probe = {"cone": velocity_probe(res["model"], res["sampler"],
                                         D["chan"], pa, D["months"],
                                         res["chan_depth"], device)}
@@ -1036,6 +1129,18 @@ def main(argv=None):
         print(f"[probe] raw 3x3 ({probe['raw_patch']['n_features']} features, "
               f"no codec) cur_u R2 {r2_str(probe['raw_patch']['cur_u'])} · "
               f"cur_v R2 {r2_str(probe['raw_patch']['cur_v'])}", flush=True)
+        # THE RECONSTRUCTION SIDE OF THE SAME QUESTION, one line per arm. The
+        # probe above says what a ridge can READ OUT of z; this says what the
+        # codec's own decoder was asked for and how well it answered, per
+        # channel, from the FINAL eval record. Printed here rather than at the
+        # eval because that is where the reader is already comparing the arms.
+        for tag, arm in (("cone", res), ("snapshot", snap)):
+            if arm is None:
+                continue
+            fam = (arm["curve"][-1] or {}).get("families") or {}
+            print(f"[probe] {tag:<8} anchor-family held-out MSE by channel "
+                  f"(step {arm['curve'][-1]['step']}): "
+                  f"{chan_mse_line(fam, D['chan'])}", flush=True)
         probe["L_in"] = int(a.L_in)
         probe["steps"] = int(a.steps)
         probe["seed"] = int(a.seed)
