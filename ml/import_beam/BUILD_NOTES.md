@@ -25,8 +25,8 @@ handover/
     registry.py    manifest.py   hosts.py      fetchers.py   transforms.py
     tfrecord.py    example.py    sinks.py      pipeline.py   assemble.py
     verify_output.py  report.py
-                         2,583 lines of code (comments and docstrings excluded)
-  tests/                 9 test modules + a fixture generator (1,272 lines);
+                         2,662 lines of code (comments and docstrings excluded)
+  tests/                 10 test modules + a fixture generator (TEST2,662 lines);
                          every fixture is GENERATED, no binary blobs
 ```
 
@@ -44,6 +44,24 @@ handover/
 | (no second stage) | **Stage B** — `assemble.py`, pentad × channel group, `spec.json` + `coverage.json` |
 | `hub:` in the registry | `output:` (shapes only); `--output <uri>` on the command line |
 | GLORYS was `mode: verify` | GLORYS is fetched; `glorys_from_mirror` is the optional 9×-cheaper path |
+
+**Added after the second review pass (same day):** Stage B takes
+`--cadence pentad|daily` (default `pentad`; the Tier-0 flow is unchanged),
+plus `--min-days` and `--groups`. Stage A is the daily archive and Stage B is
+a derived view of it; the two views live in `<output>/pentad/…` and
+`<output>/daily/…`, each with its own `spec.json` and `coverage.json`. At
+daily cadence a bin IS a day (`date_start == date_end`), `min_days` is 1,
+`rg100` is skipped by default (Roemmich-Gilson Argo is monthly, so a daily
+record of it would be mostly invented) and the two stress sigma channels are
+renamed `tau_x_std_day` / `tau_y_std_day`, because a within-DAY sigma over
+four 6-hourly samples is a different quantity from the within-pentad sigma
+over twenty. E-070 §7's centred 5-day sigma is a rolling window over those
+daily records and is deliberately NOT baked in here. DESIGN §1, §4 and §7
+were amended to say all of this, including the one line §7 needed: Stage A
+reduces the 4x-daily NCEP samples to a daily mean plus a daily
+mean-of-squares, so DAILY is the floor for everything downstream — fine for
+the multi-rate cone, cheap to undo for the frozen NCEP archive, and a
+decision to take BEFORE importing hourly ERA5.
 
 DESIGN §2's rules are implemented where the design puts them: per-host lane cap
 (`sources.yaml` → the GroupByKey key), `min_gap_s` (`LaneState.pace`), the
@@ -65,14 +83,14 @@ error can propagate out of the DoFn.
 ### `python -m pytest tests -q`
 
 ```
-........................................................................ [ 80%]
-..................                                                       [100%]
-90 passed in 29.01s
+........................................................................ [ 72%]
+............................                                             [100%]
+100 passed in 41.26s
 ```
 
 (Environment: `/home/claude/beamenv/bin/python`, `EARTH_REPO=/home/claude/earth`.)
 
-The nine modules: `test_registry`, `test_manifest`, `test_hosts`,
+The ten modules: `test_registry`, `test_manifest`, `test_hosts`,
 `test_tfrecord`, `test_example`, `test_sinks`, `test_transforms`,
 `test_pipeline_smoke`, `test_no_raise`, `test_assemble`. What the new ones pin:
 
@@ -96,6 +114,20 @@ The nine modules: `test_registry`, `test_manifest`, `test_hosts`,
   becomes a `queued` record carrying its traceback; a short transfer is caught
   by the size check; a record is durable on disk after the FIRST item even when
   the generator is thrown away.
+- **assemble (cadence)** — the pentad default is unchanged: a run with no
+  flag and a run with `--cadence pentad` produce byte-identical records, and
+  the fixture's `cur_u` pentad mean is still exactly `0.009829164482653141`,
+  the number this package printed and documented BEFORE the flag existed. The
+  only difference from the pre-flag records is two ADDED metadata features,
+  `cadence` and `cadence_days`, which the same change specified. The daily run
+  gives one bin per observed day with `bin == day_index` and
+  `date_start == date_end`; `days_present` is 0 or 1 and a channel at 0 is
+  all-NaN; `rg100` is absent by default and, when forced with `--groups`,
+  appears only on the day containing the 15th with `coverage.json` saying why;
+  `tau_x_std_day` sits at the same index `tau_x_std` sits at in the pentad
+  view and equals the population sigma computed directly from that day's four
+  raw samples; `--min-days 6` blanks a five-day pentad while `days_present`
+  still reports the true 5; and the two cadences never share a directory.
 - **assemble** — all three groups in one bin; the bin is the imported rule; the
   channel names and order are `build_family7`'s; `days_present` is per channel
   and `min_days` blanks a channel below it; `cur_speed` is the hypot of the
@@ -119,6 +151,13 @@ The nine modules: `test_registry`, `test_manifest`, `test_hosts`,
   ok   run_until_complete rotated round 1's queue and re-ran from it
   ok   Stage B produced all three channel groups for the fixture's one bin
   ok   the bin is 1573 — floor(day_index/5) from 1982-01-01, imported
+  ok   the default cadence is pentad, and coverage.json says so
+  ok   the daily sidecar emits g025 and g100 and skips rg100 (Argo is monthly)
+  ok   the daily sidecar has one bin per observed day (5 of them)
+  ok   a daily bin holds one day, so min_days is 1
+  ok   a daily record's date_start equals its date_end
+  ok   the daily stress sigma is named `tau_x_std_day`, never `tau_x_std`
+  ok   daily days_present is 0 or 1 per channel
   ok   one g025 record for one bin
   ok   days_present is per channel and honest: [5, 5, 5, 5, 5, 5, 4]
   ok   the channel order is build_family7's, imported
@@ -130,10 +169,15 @@ The smoke run's Stage-B coverage line, verbatim:
 
 ```
 stage B: 7 shard(s) -> /tmp/smk/out/pentad (2 shards per group)
-coverage g025: bins_present=1 range=[1573, 1573] missing_in_range=0
-coverage g100: bins_present=1 range=[1573, 1573] missing_in_range=0
-coverage rg100: bins_present=1 range=[1573, 1573] missing_in_range=0
+coverage pentad g025: bins_present=1 range=[1573, 1573] missing_in_range=0
+coverage pentad g100: bins_present=1 range=[1573, 1573] missing_in_range=0
+coverage pentad rg100: bins_present=1 range=[1573, 1573] missing_in_range=0
+coverage daily  g025: bins_present=5 range=[7865, 7869] missing_in_range=0
+coverage daily  g100: bins_present=5 range=[7865, 7869] missing_in_range=0
 ```
+
+The smoke test now runs Stage B twice — the pentad default, then the daily
+sidecar over the same Stage-A output — and asserts both.
 
 Every fixture covers 2003-07-15 … 2003-07-19 — pentad bin 1573 — on purpose,
 so all three groups land in one bin and the coverage line means something. One
@@ -281,6 +325,10 @@ must check.
   probe per host. All are marked `resolve_dataset_id: true`.
 - **ERA5's exact CDS request body.** Never sent; treat it as a first draft.
 - **Real upstream throughput.** Every wall-time figure is derived (§2).
+- **The daily cadence at full scale.** Like the pentad view, it has only been
+  run on the fixtures (five bins, 9×9 cells). At Tier-0 scale it is ~15,700
+  bins per group rather than ~3,140, so its shard count and memory profile are
+  unmeasured — start it with `--num-shards` raised in proportion.
 - **Stage B at full scale.** It was run only on the fixtures — one bin, 9×9
   cells. The arithmetic is asserted against `build_family7`'s own tables and
   against directly-computed sigmas, but a 3,139-bin run over ~200 GB has not
@@ -360,10 +408,19 @@ must check.
     `present` with a `reason` naming what would have been fetched (there is no
     `planned` status any more — the four statuses are the whole vocabulary).
 
-13. **Code size.** The brief targeted ≤ ~2,500 lines; the package is **2,583**
-    lines of code plus a comparable volume of comments. The overshoot is
-    `assemble.py` (426 lines) — Stage B has three groups with different rules
-    and each needed its own path.
+13. **The daily cadence adds two features to the PENTAD records too.**
+    `cadence` and `cadence_days` are written at every cadence, so a pentad
+    shard made today is two features larger than one made before the flag
+    existed. That is the one respect in which the default output is not
+    byte-identical to the previous version, it was specified by the same
+    change (DESIGN §4's feature table), and every value, mask, shape, axis,
+    channel name, `days_present` and bin is unchanged — pinned by
+    `test_assemble.py::test_the_pentad_default_is_unchanged`.
+
+14. **Code size.** The brief targeted ≤ ~2,500 lines; the package is
+    **2,662** lines of code plus a comparable volume of comments. The
+    overshoot is `assemble.py` — Stage B has three channel groups with
+    different rules and two cadences, and each needed its own path.
 
 ---
 
@@ -390,6 +447,11 @@ must check.
 - **Everything reaching the output goes through `tfrecord.py`, which goes
   through Beam's `FileSystems`.** That is why `--output gs://…` needs no code
   change. If you add a write path, add it there.
+- **`--cadence` is a Stage-B parameter, never a Stage-A one.** Stage A always
+  writes one record per source-day; changing the cadence re-reads that same
+  archive and costs no upstream traffic. If a third cadence is ever wanted,
+  add it to `CADENCES` and give it a `DEFAULT_GROUPS` and a `DEFAULT_MIN_DAYS`
+  entry — nothing else in the package needs to know.
 - **Stage B derives its grids from the records**, using
   `aggregate_cadence.axis_for` — the same function that defined the 0.25°
   point grid, one spacing coarser for the 1° grids. Nothing is hardcoded,

@@ -67,13 +67,24 @@ sources.yaml ─► manifest (work items) ─► skip items whose shard is DONE
                       ▼
                    result records ─► report.jsonl · retry_queue.jsonl · summary.md
 
-STAGE B · assemble (one Example per pentad × channel group — the training set)
+STAGE B · assemble (one Example per bin × channel group — the training set)
 
 <output>/*/ *.tfrecord ─► Map to (bin, day-record) ─► GroupByKey(bin)
-        ─► per bin: pentad mean / σ / live-month rule per channel, days_present
+        ─► per bin: mean / σ / live-month rule per channel, days_present
            mask ─► Example per (bin, group) ─► WriteToTFRecord, N shards/group
-        ─► spec.json (channels, grid, norms, bins) + coverage.json
+        ─► <cadence>/spec.json (channels, grid, norms, bins) + coverage.json
 ```
+
+**Stage A is the DAILY ARCHIVE; Stage B is a derived view of it at a chosen
+cadence.** `bin = floor(day_index / cadence_days)` from 1982-01-01, and
+`--cadence pentad` (5 days, the default and the Tier-0 flow) or `--cadence
+daily` (1 day) selects it. The two views are written to `<output>/pentad/…`
+and `<output>/daily/…`, each with its own `spec.json` and `coverage.json`, so
+running Stage B twice is the supported way to have both and neither can
+overwrite the other. The daily view is the sidecar the multi-rate inner cone
+of E-070 §7 reads; the harmonic climatology of E-071 §2 works from either,
+because Stage B applies no climatology and no z-scoring and carries `bin`,
+`date_start` and `date_end` on every record.
 
 **A work item** (Stage A) is the smallest unit that is fetched, verified and
 written as one shard: for GLORYS/DUACS a *month* (fetched day by day,
@@ -214,16 +225,23 @@ shard's byte count, sha256 and record count):
 Non-gridded sources (labels, indices, WWV) use the same schema with
 `grid = series`, `nlat = nlon = 1`, and `date` per record.
 
-**Stage B — one Example per (pentad bin, channel group)** — the training set
-in the family-7 layout (`g025` 7 ch at 0.25°, `g100` 14 ch at 1°, `rg100`
-32 ch at 1° on live months only), `<output>/pentad/<group>/part-SSSSS-of-NNNNN.tfrecord`:
+**Stage B — one Example per (bin, channel group)** — the training set in the
+family-7 layout (`g025` 7 ch at 0.25°, `g100` 14 ch at 1°, `rg100` 32 ch at 1°
+on live months only), `<output>/<cadence>/<group>/part-SSSSS-of-NNNNN.tfrecord`.
+At **daily** cadence `rg100` is not written by default — Roemmich-Gilson Argo
+is monthly, and a daily record of it would be mostly invented — and the two
+stress σ channels are named `tau_x_std_day` / `tau_y_std_day`, because a
+within-DAY σ over four 6-hourly samples is a different quantity from the
+within-pentad σ over twenty. E-070 §7's centred 5-day σ is a rolling window
+over those daily records and belongs on the trainer's side:
 
 | feature | meaning |
 |---|---|
-| `bin`, `date_start`, `date_end` | pentad index from 1982-01-01 and its five days |
+| `bin`, `date_start`, `date_end` | bin index from 1982-01-01 and the days it covers |
+| `cadence`, `cadence_days` | `pentad`/5 (the default) or `daily`/1 — `bin = floor(day_index / cadence_days)`, and at daily cadence `date_start == date_end` |
 | `group`, `chan_names` | `g025` / `g100` / `rg100` and the channel order of E-070's build spec |
 | `values`, `mask`, `shape`, axes | as Stage A; values are the pentad mean (σ for `tau_*_std`, `log10`/`log1p` where the spec says, the live-month rule for `rg100`) |
-| `days_present` | int64 list, per channel: how many of the five days contributed — the `min_days = 3` rule is applied here and only here |
+| `days_present` | int64 list, per channel: how many of the bin's days contributed — the `min_days` rule is applied here and only here. `min_days = 3` at pentad cadence (`build_family7.MIN_DAYS`, imported); at daily cadence a bin holds one day, so it is 1 and `days_present` is 0 or 1 |
 | `sources` | bytes list: the Stage-A `item_id`s the bin was built from |
 
 Beside the shards: `spec.json` (groups, channels, transforms, grid, bins,
@@ -284,4 +302,11 @@ outlives a job may be stored there.
 - It does not run on a schedule; every run is a dispatch, every run is
   idempotent, and `run_until_complete.sh` is the only loop.
 - It does not delete anything it did not write, anywhere.
+- It does not keep sub-daily NCEP. Stage A reduces the 4×-daily samples to a
+  daily mean plus a daily mean-of-squares (which is what makes the exact σ
+  recoverable at any cadence), so **DAILY is the floor for everything
+  downstream.** That is fine for the multi-rate cone, which asks for daily;
+  it is cheap to undo for the frozen NCEP archive by re-running Stage A with
+  a sub-daily transform; and it is a decision to take BEFORE importing hourly
+  ERA5, which would otherwise be reduced the same way on arrival.
 - It does not create accounts. ERA5 waits for Chris.

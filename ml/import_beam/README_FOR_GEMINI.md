@@ -645,10 +645,10 @@ python -m beam_import.assemble \
 Expected output — the coverage line is the thing to read:
 
 ```
-stage B: 1131 shard(s) -> /data/import/pentad (64 shards per group)
-coverage g025: bins_present=3139 range=[0, 3138] missing_in_range=0
-coverage g100: bins_present=3139 range=[0, 3138] missing_in_range=0
-coverage rg100: bins_present=252 range=[1606, 3138] missing_in_range=1281
+stage B: 1131 shard(s) -> /data/import/pentad (cadence pentad, 5 day(s) per bin, groups g025,g100,rg100, 64 shards per group)
+coverage pentad g025: bins_present=3139 range=[0, 3138] missing_in_range=0
+coverage pentad g100: bins_present=3139 range=[0, 3138] missing_in_range=0
+coverage pentad rg100: bins_present=252 range=[1606, 3138] missing_in_range=1281
 ```
 
 (On the smoke test's one-bin fixture the same three lines read
@@ -669,7 +669,66 @@ Beside the shards you get two files:
   is a trainer's decision, not the import's.
 - **`coverage.json`** — the machine-readable form of the lines above.
 
-### 6.1 Reading the shards — pure Python, no TensorFlow
+### 6.1 Daily cadence (the multi-rate cone)
+
+**Stage A is the daily archive; Stage B is a derived view of it at a cadence
+you choose.** The default is the pentad view above and the Tier-0 flow does
+not change. The multi-rate inner cone of E-070 §7 needs a **daily** sidecar,
+and that is a second Stage-B run over the SAME Stage-A output — nothing
+upstream is refetched or recomputed:
+
+```bash
+python -m beam_import.assemble \
+    --output "$OUTPUT" --cadence daily \
+    --runner DirectRunner --direct_running_mode multi_processing \
+    --direct_num_workers 8
+```
+
+```
+stage B: 1131 shard(s) -> /data/import/daily (cadence daily, 1 day(s) per bin, groups g025,g100, 64 shards per group)
+coverage daily g025: bins_present=15706 range=[0, 15705] missing_in_range=0
+coverage daily g100: bins_present=15706 range=[0, 15705] missing_in_range=0
+```
+
+(On the smoke fixture: `coverage daily g025: bins_present=5 range=[7865, 7869]
+missing_in_range=0`, and the same for `g100`.)
+
+What it emits, and the four things to know about it:
+
+- **A bin is a day.** `bin = floor(day_index / cadence_days)` with
+  `cadence_days = 1`, so `bin == day_index`, counted from 1982-01-01, and
+  `date_start == date_end`. The epoch is the same one the pentad view uses,
+  so `pentad_bin = daily_bin // 5` relates the two exactly.
+- **It goes to `<output>/daily/…`**, with its own `spec.json` and
+  `coverage.json`. A daily run cannot overwrite a pentad run's spec, and both
+  files carry `cadence` and `cadence_days`.
+- **`min_days` is 1.** A daily bin holds one day, so the pentad rule ("at
+  least three of the five") cannot apply: a channel is present iff it was
+  observed that day, and `days_present` is 0 or 1 per channel. A channel at 0
+  is written all-NaN, exactly as at pentad cadence. Override with
+  `--min-days N` if you ever want something stricter; the effective value is
+  recorded in `spec.json`.
+- **`rg100` is skipped by default**, and only at daily cadence. Roemmich–Gilson
+  Argo is a **monthly** product: it has one value per month, so a daily record
+  of it would be invented on 29 or 30 days out of 31. The pentad view already
+  writes it only on the bin holding each month's 15th, and the daily view
+  takes the same rule to its conclusion by not emitting it at all. If you
+  genuinely want it, `--groups g025,g100,rg100` emits it **only on the day
+  containing the 15th**, and `coverage.json` says so in a `notes.rg100` field.
+- **The stress σ channels are renamed `tau_x_std_day` / `tau_y_std_day`.**
+  The formula is the same — `sqrt(E[x²] − E[x]²)` from the daily mean and the
+  daily mean-of-squares Stage A stored — but at daily cadence it is the
+  **within-DAY** σ over that day's four 6-hourly NCEP samples, not the
+  within-pentad σ over twenty. Those are different quantities and they get
+  different names so nobody can mistake one for the other; `spec.json`'s
+  `notes` says the same thing beside the channel. **E-070 §7's centred 5-day
+  σ is a rolling window over these daily records** — a trainer-side
+  computation over the daily view, not something Stage B bakes in.
+
+`--groups` and `--min-days` work at either cadence; `--cadence pentad` is the
+default and is exactly what you get with no flag at all.
+
+### 6.2 Reading the shards — pure Python, no TensorFlow
 
 ```python
 import numpy as np
@@ -694,7 +753,7 @@ Output on the smoke fixture:
 bin 1573 2003-07-15 shape [7, 9, 9] cur_u mean 0.009829164482653141
 ```
 
-### 6.2 Reading the shards — `tf.data`
+### 6.3 Reading the shards — `tf.data`
 
 ```python
 import numpy as np, tensorflow as tf
@@ -725,7 +784,9 @@ Output on the same shard:
 bin 1573 2003-07-15 shape [7, 9, 9] cur_u mean 0.009829164482653141
 ```
 
-**Both snippets above were run and produce that identical number.** The
+**Both snippets above were run and produce that identical number.** They work
+unchanged on the daily shards — point `ROOT` / the glob at
+`<output>/daily/g025` instead. The
 `mask` feature is a bit-packed `[C, H, W]` array of "is this finite" —
 `np.unpackbits(np.frombuffer(rec["mask"][0], dtype=np.uint8))[:C*H*W]
 .reshape(shape)` — and `days_present` says, per channel, how many of the five
@@ -910,9 +971,10 @@ Fetched <X> GB against the manifest's estimate of <Y> GB (<Z>%).
 `verify_output --tiers <N> --deep` reports missing <n>, short <n>, deep_bad <n>.
 
 ### Stage B coverage
-coverage g025: bins_present=<n> range=[<a>, <b>] missing_in_range=<n>
-coverage g100: bins_present=<n> range=[<a>, <b>] missing_in_range=<n>
-coverage rg100: bins_present=<n> range=[<a>, <b>] missing_in_range=<n>
+coverage pentad g025: bins_present=<n> range=[<a>, <b>] missing_in_range=<n>
+coverage pentad g100: bins_present=<n> range=[<a>, <b>] missing_in_range=<n>
+coverage pentad rg100: bins_present=<n> range=[<a>, <b>] missing_in_range=<n>
+<If the daily sidecar was built, its two lines too.>
 <Every missing g025/g100 bin traced to an `absent` record — or say it did not.>
 
 ### Still queued, and absent

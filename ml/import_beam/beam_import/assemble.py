@@ -6,8 +6,11 @@
         ->  one Example per (bin, group)  ->  WriteToTFRecord, N shards/group
         ->  spec.json + coverage.json
 
-A **bin** is `floor(day_index / 5)` from 1982-01-01 — `aggregate_cadence`'s
-own `bin_index`, imported. The three channel groups, their names and their
+A **bin** is `floor(day_index / cadence_days)` from 1982-01-01 — the same
+clock `aggregate_cadence.bin_index` uses, imported. `--cadence pentad` (the
+default) makes `cadence_days = 5`; `--cadence daily` makes it 1, which is the
+daily sidecar the multi-rate inner cone of E-070 §7 reads, and there a bin IS
+a day and `date_start == date_end`. The three channel groups, their names and their
 order are `build_family7`'s `CHAN_G025` / `CHAN_G100` / `CHAN_RG100`,
 imported. The regridding is `build_family3`'s `lin_weights` / `interp2_nan`,
 imported. The `min_days = 3` rule is `build_family7.MIN_DAYS`, imported, and
@@ -17,8 +20,14 @@ Nothing in this file hardcodes a grid: the target axes are derived from the
 records themselves with `aggregate_cadence.axis_for`, so the same code runs
 on the tiny test fixtures and on the real archive.
 
-    python -m beam_import.assemble --output /data/import \\
-        --pentad-out /data/import/pentad --runner DirectRunner
+Stage A is the DAILY ARCHIVE; Stage B is a derived view of it at a chosen
+cadence. Running Stage B twice, at two cadences, is the supported way to get
+both — nothing is recomputed upstream and the two views never share a
+directory.
+
+    python -m beam_import.assemble --output /data/import --runner DirectRunner
+    python -m beam_import.assemble --output /data/import --cadence daily \\
+        --runner DirectRunner
 """
 from __future__ import annotations
 
@@ -37,8 +46,31 @@ from . import tfrecord
 from .example import (make_example, one_int, one_str, parse_example, str_list)
 from .transforms import _ml_on_path
 
+# The pentad default. `cadence_days` is threaded through everything below;
+# this constant is only the default value of that parameter, so the Tier-0
+# flow is unchanged when `--cadence` is absent.
 PENTAD_DAYS = 5
+CADENCES = {"pentad": 5, "daily": 1}
 GROUPS = ("g025", "g100", "rg100")
+
+# Which groups a cadence emits unless `--groups` says otherwise. At daily
+# cadence rg100 is skipped: Roemmich-Gilson Argo is a MONTHLY product, so a
+# daily record of it would be four fifths invented — the same reason the
+# pentad path writes it only on the live-month bin.
+DEFAULT_GROUPS = {"pentad": ("g025", "g100", "rg100"),
+                  "daily": ("g025", "g100")}
+
+# min_days per cadence. At daily cadence a bin holds ONE day, so the pentad
+# rule (at least three of the five days) cannot apply: a day is present iff it
+# was observed.
+DEFAULT_MIN_DAYS = {"daily": 1}          # pentad takes build_family7.MIN_DAYS
+
+# The two stress sigma channels are renamed at daily cadence, because the
+# quantity is genuinely different: within-PENTAD sigma over ~20 six-hourly
+# samples versus within-DAY sigma over 4. Nobody should be able to mistake one
+# for the other by reading a channel name.
+STD_CHANNELS = ("tau_x_std", "tau_y_std")
+DAILY_STD_SUFFIX = "_day"
 
 # NCEP file stem -> (g100 channel name, how to convert AFTER regridding).
 # The conversions are build_family7's, transcribed from its `flush()` and
@@ -86,8 +118,8 @@ def record_axes(rec) -> Tuple[np.ndarray, np.ndarray]:
             np.asarray(rec.get("lon_values", []), dtype=np.float64))
 
 
-def to_keyed(payload: bytes):
-    """(bin, a light dict) — the shuffle key is the pentad the day falls in."""
+def to_keyed(payload: bytes, cadence_days: int = PENTAD_DAYS):
+    """(bin, a light dict) — the shuffle key is the bin the day falls in."""
     rec = parse_example(payload)
     grid = one_str(rec, "grid")
     if grid in ("opaque", "series"):
@@ -95,7 +127,7 @@ def to_keyed(payload: bytes):
     day_index = one_int(rec, "day_index")
     if day_index < 0:
         return
-    b = day_index // PENTAD_DAYS
+    b = day_index // cadence_days
     yield b, {
         "source": one_str(rec, "source"),
         "item_id": one_str(rec, "item_id"),
@@ -127,10 +159,17 @@ class Assemble(beam.DoFn):
 
     def setup(self) -> None:
         self.f7, self.f3, self.agg = f7(), f3(), agg()
-        self.min_days = int(self.f7.MIN_DAYS)
+        self.cadence_days = int(self.cfg.get("cadence_days", PENTAD_DAYS))
+        self.daily = self.cadence_days == 1
+        self.min_days = int(self.cfg.get("min_days") or self.f7.MIN_DAYS)
+        self.groups = tuple(self.cfg.get("groups") or GROUPS)
         self.chan = {"g025": list(self.f7.CHAN_G025),
                      "g100": list(self.f7.CHAN_G100),
                      "rg100": list(self.f7.CHAN_RG100)}
+        self.std_suffix = DAILY_STD_SUFFIX if self.daily else ""
+        if self.daily:
+            self.chan["g100"] = [n + DAILY_STD_SUFFIX if n in STD_CHANNELS
+                                 else n for n in self.chan["g100"]]
         self.flip = set(self.f7.NCEP_FLIP)
         # DESIGN §4 calls g025's channel 5 `skin_t`; build_family7's own
         # CHAN_G025 calls it `sst`. The IMPORTED table is the truth (the
@@ -186,8 +225,8 @@ class Assemble(beam.DoFn):
         b, days = element
         days = list(days)
         epoch = self.agg.EPOCH
-        d0 = epoch + dt.timedelta(days=int(b) * PENTAD_DAYS)
-        d1 = d0 + dt.timedelta(days=PENTAD_DAYS - 1)
+        d0 = epoch + dt.timedelta(days=int(b) * self.cadence_days)
+        d1 = d0 + dt.timedelta(days=self.cadence_days - 1)
 
         by_grid: Dict[str, List[Dict[str, Any]]] = {}
         for d in days:
@@ -212,7 +251,7 @@ class Assemble(beam.DoFn):
 
         for group, built in (("g025", g025), ("g100", g100),
                              ("rg100", rg100)):
-            if built is None:
+            if built is None or group not in self.groups:
                 continue
             cube, days_present, lat, lon, srcs = built
             cube = np.asarray(cube, dtype=np.float32)
@@ -223,6 +262,8 @@ class Assemble(beam.DoFn):
             feat = {
                 "bin": int(b), "date_start": d0.isoformat(),
                 "date_end": d1.isoformat(), "group": group,
+                "cadence": "daily" if self.daily else "pentad",
+                "cadence_days": int(self.cadence_days),
                 "chan_names": self.chan[group],
                 "values": np.ascontiguousarray(cube).tobytes(),
                 "mask": np.packbits(np.isfinite(cube).ravel()).tobytes(),
@@ -406,16 +447,29 @@ class Assemble(beam.DoFn):
                 g = np.log1p(np.maximum(g, 0.0))
             put(chan, g, n)
 
-            # tau_x_std / tau_y_std: the within-pentad POPULATION sigma over
-            # the 6-hourly samples, recovered exactly from the daily mean and
+            # tau_x_std / tau_y_std: the POPULATION sigma over the 6-hourly
+            # samples IN THIS BIN, recovered exactly from the daily mean and
             # the daily mean of squares (see transforms.ncep_var_year).
+            #
+            # At pentad cadence that is the within-pentad sigma, which is what
+            # family 4 and family 7 mean by `tau_*_std`. At DAILY cadence the
+            # same formula over one day's four samples is the within-DAY
+            # sigma — a different, well-defined quantity — so the channel is
+            # named `tau_x_std_day` / `tau_y_std_day` there and nobody can
+            # confuse the two.
+            #
+            # E-070 §7 wants a CENTRED 5-day sigma for the daily-rate family.
+            # That is a rolling window over these daily records and belongs on
+            # the trainer's side; Stage B does not bake in a window it would
+            # then have to be trusted about.
             sq = per_var.get(f"{stem}_sq")
             if sq is not None and base in self.flip:
                 e_x2, _ = self._mean_stack(sq)
                 e_x = -mean if base in self.flip else mean
                 with np.errstate(invalid="ignore"):
                     var = np.maximum(e_x2 - e_x ** 2, 0.0)
-                put(f"tau_{'x' if base == 'uflx' else 'y'}_std",
+                axis = "x" if base == "uflx" else "y"
+                put(f"tau_{axis}_std{self.std_suffix}",
                     to1(np.sqrt(var), stem), n)
         return cube, present, lat, lon, srcs
 
@@ -424,9 +478,11 @@ class Assemble(beam.DoFn):
         """Roemmich-Gilson temperature and salinity, on the LIVE bin only.
 
         A monthly product has one value per month, so it is written on the
-        single pentad bin that contains that month's 15th and left missing on
-        the others; spreading it over the month would invent four fifths of
-        the data.
+        single bin that contains that month's 15th and left missing on the
+        others; spreading it over the month would invent most of the data.
+        At daily cadence that means one bin per month — which is why rg100 is
+        not in the daily default set at all, and is emitted only if somebody
+        asks for it explicitly with `--groups`.
         """
         if lat is None:
             return None
@@ -455,65 +511,114 @@ class Assemble(beam.DoFn):
 # the pipeline
 # --------------------------------------------------------------------------
 def run(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="Stage B — assemble pentads")
+    ap = argparse.ArgumentParser(
+        description="Stage B — assemble the Stage-A day records at a cadence")
     ap.add_argument("--registry", default=None)
     ap.add_argument("--output", required=True, help="the Stage-A output root")
+    ap.add_argument("--cadence", default="pentad", choices=sorted(CADENCES),
+                    help="pentad (5 days, the default and the Tier-0 flow) "
+                         "or daily (1 day, the multi-rate cone's sidecar)")
     ap.add_argument("--pentad-out", default=None,
-                    help="where the pentad shards go (default <output>/pentad)")
+                    help="where the shards go (default <output>/<cadence>)")
+    ap.add_argument("--min-days", type=int, default=None,
+                    help="override the per-cadence default (pentad 3, daily 1)")
+    ap.add_argument("--groups", default=None,
+                    help="comma-separated subset of g025,g100,rg100 "
+                         "(default: all at pentad, g025,g100 at daily)")
     ap.add_argument("--num-shards", type=int, default=None)
     args, beam_argv = ap.parse_known_args(argv)
 
     from . import registry as reg_mod
     reg = reg_mod.load(args.registry)
+    cadence = args.cadence
+    cadence_days = CADENCES[cadence]
+    groups = tuple(g.strip() for g in args.groups.split(",")
+                   if g.strip()) if args.groups else DEFAULT_GROUPS[cadence]
+    bad = [g for g in groups if g not in GROUPS]
+    if bad:
+        print(f"unknown group(s) {bad}; known: {list(GROUPS)}", file=sys.stderr)
+        return 2
+    min_days = args.min_days
+    if min_days is None:
+        min_days = DEFAULT_MIN_DAYS.get(cadence)      # None -> f7.MIN_DAYS
+
+    # Stage-A shards only: never re-read a cadence's own output.
     shards = tfrecord.list_uris(args.output, ".tfrecord")
-    shards = [s for s in shards if "/pentad/" not in s]
+    shards = [s for s in shards
+              if not any(f"/{c}/" in s for c in CADENCES)]
     if not shards:
         print(f"no Stage-A shards under {args.output}", file=sys.stderr)
         return 1
-    pentad_out = args.pentad_out or tfrecord.join(args.output, "pentad")
+    out_root = args.pentad_out or tfrecord.join(args.output, cadence)
     num_shards = args.num_shards or reg.num_shards_per_group()
-    print(f"stage B: {len(shards)} shard(s) -> {pentad_out} "
-          f"({num_shards} shards per group)")
+    print(f"stage B: {len(shards)} shard(s) -> {out_root} "
+          f"(cadence {cadence}, {cadence_days} day(s) per bin, "
+          f"groups {','.join(groups)}, {num_shards} shards per group)")
 
     from apache_beam.options.pipeline_options import (PipelineOptions,
-                                                       SetupOptions)
+                                                      SetupOptions)
     options = PipelineOptions(beam_argv)
     options.view_as(SetupOptions).save_main_session = True
 
+    cfg = {"cadence_days": cadence_days, "min_days": min_days,
+           "groups": list(groups)}
     with beam.Pipeline(options=options) as p:
         keyed = (p | "Shards" >> beam.Create(shards)
                  | "Read" >> beam.io.ReadAllFromTFRecord()
-                 | "Key" >> beam.FlatMap(to_keyed)
+                 | "Key" >> beam.FlatMap(to_keyed, cadence_days=cadence_days)
                  | "Group" >> beam.GroupByKey()
-                 | "Assemble" >> beam.ParDo(Assemble({})))
-        for group in GROUPS:
+                 | "Assemble" >> beam.ParDo(Assemble(cfg)))
+        for group in groups:
             (keyed
              | f"Pick{group}" >> beam.Filter(lambda kv, g=group: kv[0] == g)
              | f"Drop{group}" >> beam.Map(lambda kv: kv[1])
              | f"Write{group}" >> beam.io.WriteToTFRecord(
-                 tfrecord.join(pentad_out, group, "part"),
+                 tfrecord.join(out_root, group, "part"),
                  file_name_suffix=".tfrecord", num_shards=num_shards))
 
-    write_spec_and_coverage(pentad_out, reg)
+    write_spec_and_coverage(out_root, reg, cadence=cadence,
+                            cadence_days=cadence_days, groups=groups,
+                            min_days=min_days)
     return 0
 
 
-def write_spec_and_coverage(pentad_out: str, reg) -> Dict[str, Any]:
+def write_spec_and_coverage(pentad_out: str, reg, cadence: str = "pentad",
+                            cadence_days: int = PENTAD_DAYS,
+                            groups: Sequence[str] = GROUPS,
+                            min_days: Optional[int] = None) -> Dict[str, Any]:
     """spec.json (what a trainer needs to z-score) and coverage.json.
 
-    The per-channel mean/sd are computed over what was actually written and
-    kept OUT of the records, because which years are "train" is a trainer
-    decision (DESIGN §4).
+    Both are written UNDER THE CADENCE's own directory, so a daily run can
+    never overwrite a pentad run's spec. The per-channel mean/sd are computed
+    over what was actually written and kept OUT of the records, because which
+    years are "train" is a trainer decision (DESIGN §4).
     """
     mod = f7()
+    eff_min_days = int(min_days if min_days is not None else mod.MIN_DAYS)
+    daily = cadence_days == 1
     spec: Dict[str, Any] = {
-        "epoch": "1982-01-01", "pentad_days": PENTAD_DAYS,
+        "epoch": "1982-01-01", "cadence": cadence,
+        "cadence_days": int(cadence_days),
+        "pentad_days": PENTAD_DAYS, "min_days": eff_min_days,
         "groups": {}, "written_at": sinks_utcnow(),
+        "notes": _spec_notes(daily, eff_min_days),
     }
-    coverage: Dict[str, Any] = {"groups": {}}
-    for group in GROUPS:
+    coverage: Dict[str, Any] = {"cadence": cadence,
+                                "cadence_days": int(cadence_days),
+                                "min_days": eff_min_days,
+                                "groups": {}, "notes": {}}
+    for group in groups:
         names = {"g025": list(mod.CHAN_G025), "g100": list(mod.CHAN_G100),
                  "rg100": list(mod.CHAN_RG100)}[group]
+        if daily and group == "g100":
+            names = [n + DAILY_STD_SUFFIX if n in STD_CHANNELS else n
+                     for n in names]
+        if daily and group == "rg100":
+            coverage["notes"]["rg100"] = (
+                "Roemmich-Gilson Argo is a MONTHLY product. At daily cadence "
+                "it is emitted ONLY on the day containing each month's 15th; "
+                "every other day is deliberately absent. It is not in the "
+                "daily default group set for exactly this reason.")
         uris = tfrecord.list_uris(tfrecord.join(pentad_out, group),
                                   ".tfrecord")
         bins, shape, sums, sqs, cnts = [], None, None, None, None
@@ -563,10 +668,30 @@ def write_spec_and_coverage(pentad_out: str, reg) -> Dict[str, Any]:
                          json.dumps(coverage, indent=1,
                                     sort_keys=True).encode("utf-8"))
     for group, cov in coverage["groups"].items():
-        print(f"coverage {group}: bins_present={cov['bins_present']} "
+        print(f"coverage {cadence} {group}: "
+              f"bins_present={cov['bins_present']} "
               f"range=[{cov['bin_min']}, {cov['bin_max']}] "
               f"missing_in_range={cov['bins_missing_in_range']}")
     return coverage
+
+
+def _spec_notes(daily: bool, min_days: int) -> Dict[str, str]:
+    """The two things a reader of these shards has to be told."""
+    notes = {
+        "bin": "bin = floor(day_index / cadence_days) from 1982-01-01",
+        "min_days": (f"a channel with fewer than {min_days} contributing "
+                     "day(s) is written all-NaN; days_present carries the "
+                     "true count either way"),
+        "norm": ("mean/sd over what was written, kept OUT of the records: "
+                 "which years are `train` is a trainer decision"),
+    }
+    if daily:
+        notes["tau_x_std_day"] = notes["tau_y_std_day"] = (
+            "WITHIN-DAY population sigma over the four 6-hourly NCEP samples "
+            "of this day — NOT the within-pentad sigma the pentad shards call "
+            "`tau_x_std`. E-070 §7's centred 5-day sigma is a rolling window "
+            "over these daily records and belongs on the trainer's side.")
+    return notes
 
 
 def _f(x) -> Optional[float]:

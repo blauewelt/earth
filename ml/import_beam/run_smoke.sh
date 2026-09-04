@@ -12,7 +12,8 @@
 #   the queue        — the flaky lane's items and the missing day must be
 #                      `queued`, never dropped
 #   run_until_complete — one extra round, with the sleep overridden to 1 s
-#   Stage B          — the pentad assembly, all three channel groups
+#   Stage B          — the pentad assembly (all three groups), then the
+#                      daily sidecar (g025 + g100, rg100 skipped)
 #   verify_output    — markers, byte counts, the absent list
 #
 # It must end with:  SMOKE TEST: PASS
@@ -30,19 +31,19 @@ echo "== work dir    $WORK"
 cd "$HERE"
 
 echo
-echo "== 1/6  building the fixtures"
+echo "== 1/7  building the fixtures"
 "$PY" tests/fixtures/make_fixtures.py "$WORK/fixtures"
 REG="$WORK/fixtures/sources_test.yaml"
 OUT="$WORK/out"
 STATE="$WORK/state"
 
 echo
-echo "== 2/6  checking the test registry and the manifest"
+echo "== 2/7  checking the test registry and the manifest"
 "$PY" -m beam_import.registry --registry "$REG" --check
 "$PY" -m beam_import.manifest --registry "$REG" --tiers 0 --offline | tail -6
 
 echo
-echo "== 3/6  Stage A on the DirectRunner, 2 worker processes"
+echo "== 3/7  Stage A on the DirectRunner, 2 worker processes"
 set +e
 "$PY" -m beam_import.pipeline \
     --registry "$REG" --tiers 0 \
@@ -54,18 +55,23 @@ set -e
 echo "   (exit $RC — 3 means 'the queue is not empty', which is expected here)"
 
 echo
-echo "== 4/6  run_until_complete, ONE extra round, sleep overridden to 1 s"
+echo "== 4/7  run_until_complete, ONE extra round, sleep overridden to 1 s"
 OUTPUT="$OUT" STATE_DIR="$STATE" REPORT_DIR="$WORK/report" WORKERS=2 \
   SLEEP_S=1 MAX_ROUNDS=2 PY="$PY" \
   bash run_until_complete.sh --registry "$REG" --tiers 0 --offline || true
 
 echo
-echo "== 5/6  Stage B — the pentad assembly"
+echo "== 5/7  Stage B — the pentad assembly (the default: no --cadence flag)"
 "$PY" -m beam_import.assemble --registry "$REG" --output "$OUT" \
     --runner DirectRunner | tee "$WORK/coverage.txt"
 
 echo
-echo "== 6/6  verify_output"
+echo "== 6/7  Stage B again — the DAILY sidecar over the same Stage-A output"
+"$PY" -m beam_import.assemble --registry "$REG" --output "$OUT" \
+    --cadence daily --runner DirectRunner | tee "$WORK/coverage_daily.txt"
+
+echo
+echo "== 7/7  verify_output"
 set +e
 "$PY" -m beam_import.verify_output --registry "$REG" --tiers 0 \
     --output "$OUT" --state-dir "$STATE" --offline --deep
@@ -133,6 +139,25 @@ need(all(cov["groups"][g]["bins_present"] == 1
      "Stage B produced all three channel groups for the fixture's one bin")
 need(cov["groups"]["g025"]["bin_min"] == 1573,
      "the bin is 1573 — floor(day_index/5) from 1982-01-01, imported")
+need(cov["cadence"] == "pentad" and cov["cadence_days"] == 5,
+     "the default cadence is pentad, and coverage.json says so")
+
+dcov = json.load(open(os.path.join(out, "daily", "coverage.json")))
+need(sorted(dcov["groups"]) == ["g025", "g100"],
+     "the daily sidecar emits g025 and g100 and skips rg100 (Argo is monthly)")
+need(all(dcov["groups"][g]["bins_present"] == 5 for g in ("g025", "g100")),
+     "the daily sidecar has one bin per observed day (5 of them)")
+need(dcov["cadence_days"] == 1 and dcov["min_days"] == 1,
+     "a daily bin holds one day, so min_days is 1")
+duris = tfrecord.list_uris(os.path.join(out, "daily", "g100"), ".tfrecord")
+drec = parse_example(tfrecord.read_records(duris[0])[0])
+need(one_str(drec, "date_start") == one_str(drec, "date_end"),
+     "a daily record's date_start equals its date_end")
+need("tau_x_std_day" in str_list(drec, "chan_names")
+     and "tau_x_std" not in str_list(drec, "chan_names"),
+     "the daily stress sigma is named `tau_x_std_day`, never `tau_x_std`")
+need(set(int(x) for x in drec["days_present"]) <= {0, 1},
+     "daily days_present is 0 or 1 per channel")
 
 uris = tfrecord.list_uris(os.path.join(out, "pentad", "g025"), ".tfrecord")
 payloads = [p for u in uris for p in tfrecord.read_records(u)]
@@ -143,8 +168,10 @@ need(dp[:5] == [5, 5, 5, 5, 5] and dp[6] == 4,
      f"days_present is per channel and honest: {dp}")
 need(str_list(rec, "chan_names")[0] == "cur_speed",
      "the channel order is build_family7's, imported")
-print("  --   coverage: " + open(os.path.join(work, "coverage.txt")).read()
-      .strip().replace("\n", " | "))
+for f in ("coverage.txt", "coverage_daily.txt"):
+    for line in open(os.path.join(work, f)).read().strip().splitlines():
+        if line.startswith("coverage "):
+            print("  --   " + line)
 PY
 
 echo
