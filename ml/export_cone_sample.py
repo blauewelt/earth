@@ -34,8 +34,12 @@ already turned into anomalies — departures from a per-calendar-month
 climatology built on TRAINING YEARS ONLY, then z-scored per channel over the
 training pool. So the honest export carries both, and says which is which:
 
-    raw     the tensor's own value, in the channel's own unit
-    anom    what the codec reads: the anomaly, z-scored
+    raw     the tensor's own stored value — which `ml/build_family4.py` has
+            already z-scored per channel, so it is in standard deviations and
+            NOT in the channel's unit; `meta.value_space.tensor_norm` carries
+            the (mean, std) that puts the unit back
+    anom    what the codec reads: that value with its calendar month's
+            climatology removed and re-standardised
 
 `--anomaly trainer` computes the anomaly the trainer's way. It cannot call
 `anomaly_transform` directly on the production tensor here, because that
@@ -96,6 +100,23 @@ UNITS = {
     "tau_x_std": "N/m²", "tau_y_std": "N/m²",
     "sst": "°C",
 }
+
+# WHAT `raw` IS, and it is not what the word suggests on its own.
+# `ml/build_family4.py` stores the tensor Z-SCORED — its last pass writes
+# (x - mu) / sd at float16 and keeps (mu, sd) per channel in the npz's `norm`
+# key. So the number `ConeSampler` hands the codec is in STANDARD DEVIATIONS of
+# that channel over the whole archive, and the value in the channel's own unit
+# (degrees, m/s, metres, N/m^2) is `raw * sd + mu`. Both are carried: `raw` so
+# the export is the tensor's own bytes, `tensor_norm` so anything reading it can
+# put the unit back. The ANOMALY is a further transform ON TOP of `raw` — the
+# calendar-month climatology removed and re-standardised — which is why the two
+# columns differ even though both are dimensionless.
+RAW_NOTE = ("the tensor's own stored value, which ml/build_family4.py z-scored "
+            "per channel: it is in standard deviations, not in the channel's "
+            "unit")
+PHYSICAL_NOTE = ("the value in the channel's own unit is "
+                 "raw * tensor_norm[c][1] + tensor_norm[c][0] "
+                 "(tensor_norm is the npz's `norm` key: mean, std per channel)")
 
 # The development holdout (ml/plans/E059_holdout_window.md — the run that fixed
 # a training pool which had been teacher-forcing those years into the weights)
@@ -407,6 +428,13 @@ def build_sample(*, raw, anom, obs_arr, lats, lons, chan_names, anchor,
     `raw` / `anom` / `obs_arr` are [Tslab, H, W, C] over the SAME local bin
     axis `bins_local` indexes; `bins_abs` are the corresponding bins of the
     real tensor and are what every date in the output is computed from.
+
+    A dot's `row` / `col` are UNCLAMPED cell indices and may fall outside the
+    tensor — that is what `valid = 0` means. Its `lat` / `lon` are then `null`,
+    because those fields answer "where in the tensor is this", and off the
+    tensor there is no answer. Where the dot sits on the EARTH is a different
+    question and the page derives it from (row, col) itself, so it can draw an
+    off-window dot hollow in the right place.
     """
     H, W, C = raw.shape[1], raw.shape[2], raw.shape[3]
     y, x = _grid_of(anchor["lat"], anchor["lon"], win)
@@ -779,7 +807,7 @@ def main(argv=None):
                 np.zeros(W, bool), need_lo, need_hi, chunk=a.chunk,
                 scratch=a.scratch or None)
             value_space = dict(
-                raw="the tensor's own value, in the channel's own unit",
+                raw=RAW_NOTE, physical=PHYSICAL_NOTE,
                 anomaly="trainer",
                 anomaly_note=(
                     "computed the way ml/train_cone.py does: departure from a "
@@ -806,8 +834,8 @@ def main(argv=None):
             anom = raw
             ocean = None
             value_space = dict(
-                raw="the tensor's own value, in the channel's own unit",
-                anomaly="none — `anom` repeats `raw`; standardise in the page "
+                raw=RAW_NOTE, physical=PHYSICAL_NOTE,
+                anomaly="none — `anom` repeats `raw`; the page can standardise "
                         "with tensor_norm (mean, std) per channel",
                 tensor_norm=[[sig(v, 6) for v in row] for row in norm])
         obs = np.isfinite(raw)

@@ -5795,3 +5795,154 @@ test("Cones tab: every lag is a date, and the time clock drives the globe", asyn
 
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
+
+/* ---------------------------------------------------------- Cones · DATA MODE
+ * The tab's other half: the same cone with the tensor's own numbers in it.
+ *
+ * The real anchor files are megabytes on the Hugging Face Hub, so both tests
+ * serve `data/cone_samples/fixture.json` for every `resolve/main/cone_samples/`
+ * request — the in-repo copy `ml/export_cone_sample.py --fixture` writes, whose
+ * SCHEMA `tests/data.spec.js` pins against the index. The route is registered
+ * after the MIRROR beforeEach's Hub pass-through, so this handler wins and the
+ * suite needs no network.
+ *
+ * What is NOT tested here is whether the numbers are right — that is
+ * `tests/test_export_cone_sample.py`'s job, and it asserts the exporter's
+ * flags against a direct `ConeSampler.sample` call bit for bit. These two are
+ * about the PAGE: that a value reaches a dot, and that the stencil toggle
+ * changes which dots there are. */
+async function serveConeFixture(page) {
+  const fixture = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "data", "cone_samples", "fixture.json"),
+    "utf8");
+  await page.route(/resolve\/main\/cone_samples\//, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: fixture }));
+  return JSON.parse(fixture);
+}
+
+test("Cones data mode: the dots carry values and the read-out prints one with its date",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const fx = await serveConeFixture(page);
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  // the block is hidden until the switch is on — the geometry is the default
+  await expect(page.locator("#cn-data-block")).toBeHidden();
+
+  await page.evaluate(() => window.__earth.conesSetDataMode(true));
+  await expect(page.locator("#cn-data-block")).toBeVisible();
+  const st = await page.evaluate(() => window.__earth.coneState());
+  expect(st.data.ready).toBe(true);
+  expect(st.data.error).toBe(null);
+  expect(st.data.stencil).toBe("codec");
+  // the anchor moved to the exported cell, and the date to an exported pentad
+  expect(st.data.date).toBe(fx.meta.dates[0]);
+  expect(st.data.snapped).toBe(false);
+  expect(st.lat).toBeCloseTo(fx.meta.anchor.lat, 6);
+  expect(st.lon).toBeCloseTo(fx.meta.anchor.lon, 6);
+
+  // dots on the globe, and most of them carry a real measurement
+  expect(st.data.nDots).toBeGreaterThan(9);        // the 3×3 patch plus dots
+  expect(st.data.nValued).toBeGreaterThan(5);
+  expect(st.data.hi).toBeGreaterThan(st.data.lo);
+  // the legend states the numeric range rather than only a colour
+  await expect(page.locator("#cn-legend .cn-scale")).toContainText(/\d/);
+  await expect(page.locator("#cn-legend .cn-unit")).toContainText(fx.meta.dates[0]);
+
+  // the read-out: pick the first dot that actually has a value and read it.
+  // Picking through the exported handler rather than a canvas click — a
+  // Cesium point is a few pixels wide on a software GL stack.
+  const picked = await page.evaluate(() => {
+    const dots = window.__earth.coneDataDots;
+    const i = dots.findIndex((d) => d.valid && d.obs && Number.isFinite(d.raw));
+    window.__earth.conesPickDot(i);
+    return { i, d: window.__earth.coneState().data.pick };
+  });
+  expect(picked.i).toBeGreaterThanOrEqual(0);
+  expect(picked.d.obs).toBe(true);
+  expect(Number.isFinite(picked.d.raw)).toBe(true);
+  const ro = page.locator("#cn-readout");
+  await expect(ro).toContainText(`lag ${picked.d.lag}`);
+  await expect(ro).toContainText(picked.d.date);          // §2.9: values carry WHEN
+  await expect(ro).toContainText(`row ${picked.d.row}`);  // §2.4: which pixel answered
+  await expect(ro).toContainText("observed");
+  await expect(ro).toContainText("anomaly");
+
+  // raw vs anomaly are two different numbers on two different scales
+  const anomHi = await page.evaluate(() => window.__earth.coneState().data.hi);
+  await page.evaluate(() => {
+    const c = document.getElementById("cn-anom");
+    c.checked = false;
+    c.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const rawSt = await page.evaluate(() => window.__earth.coneState());
+  expect(rawSt.data.anomaly).toBe(false);
+  expect(rawSt.data.hi).not.toBe(anomHi);
+  await expect(page.locator("#cn-legend .cn-unit")).not.toContainText("z-scored");
+
+  // switching data mode off returns the tab to the geometry it drew before
+  await page.evaluate(() => window.__earth.conesSetDataMode(false));
+  await expect(page.locator("#cn-data-block")).toBeHidden();
+  expect(await page.evaluate(() => window.__earth.coneState().data.ready)).toBe(false);
+  expect(await page.inputValue("#cn-lag")).not.toBe("");
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("Cones data mode: the stencil toggle switches the lag range and the dot set",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const fx = await serveConeFixture(page);
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  await page.evaluate(() => window.__earth.conesSetDataMode(true));
+
+  const lag = page.locator("#cn-lag");
+  // the CODEC stencil is the inner cone: lags 0–6, all 42 channels
+  await expect(lag).toHaveAttribute("min", "0");
+  await expect(lag).toHaveAttribute("max", String(fx.meta.L_in));
+  expect(await page.locator("#cn-channel option").count()).toBe(fx.meta.channels.length);
+  const codec = await page.evaluate(() => window.__earth.coneState());
+  expect(Math.max(...codec.data.lags)).toBeLessThanOrEqual(fx.meta.L_in);
+  expect(codec.data.channel).toBe(fx.meta.channels[0]);
+
+  // STAGE 2 is the outer cone: the exported lags, and only the eight channels
+  // the LIM can be scored on
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-stencil");
+    s.value = "stage2";
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(lag).toHaveAttribute("min", String(fx.outer.lags[0]));
+  await expect(lag).toHaveAttribute("max", String(fx.outer.lags[fx.outer.lags.length - 1]));
+  expect(await page.locator("#cn-channel option").count()).toBe(fx.outer.channels.length);
+  const s2 = await page.evaluate(() => window.__earth.coneState());
+  expect(s2.data.stencil).toBe("stage2");
+  expect(s2.data.channel).toBe(fx.outer.channels[0]);
+  // ONE annulus at a time — every lag is a different date, so a cumulative
+  // draw would put twenty dates under one colour scale
+  expect(s2.data.lags).toEqual([fx.outer.lags[0]]);
+  expect(s2.data.nDots).toBe(fx.outer.n_dots_per_lag);
+  expect(s2.data.nDots).not.toBe(codec.data.nDots);
+  await expect(page.locator("#cn-data-hint")).toContainText("empty for lags 0–6");
+
+  // the slider walks the exported outer lags, and a value between two of them
+  // snaps to one — the ring drawn is the ring the slider says
+  await page.evaluate((k) => {
+    const s = document.getElementById("cn-lag");
+    s.value = String(k);
+    s.dispatchEvent(new Event("input", { bubbles: true }));
+  }, fx.outer.lags[fx.outer.lags.length - 1]);
+  const far = await page.evaluate(() => window.__earth.coneState());
+  expect(far.lag).toBe(fx.outer.lags[fx.outer.lags.length - 1]);
+  expect(far.data.lags).toEqual([far.lag]);
+
+  // back to the codec stencil, and the range comes back with it
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-stencil");
+    s.value = "codec";
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(lag).toHaveAttribute("max", String(fx.meta.L_in));
+  expect(await page.locator("#cn-channel option").count()).toBe(fx.meta.channels.length);
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});

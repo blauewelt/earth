@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=2d03d599" />
+  <link rel="stylesheet" href="src/style.css?v=953cc03c" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -126,7 +126,9 @@
           circulation this app is ultimately about · <em>Sea level</em> — the rise and its
           causes · <em>Tides</em> — the global tide animated live, with the moon ·
           <em>Cones</em> — the space-time window our own forecaster reads for one pixel,
-          drawn on the globe in kilometres · <em>Catalog</em> — all 249 datasets ·
+          drawn on the globe in kilometres, with a <em>Data</em> switch that fills it with
+          the real values out of the training tensor and lets you tap any dot to read it ·
+          <em>Catalog</em> — all 249 datasets ·
           <em>About</em> — background &amp; further reading.</p>
       </details>
       <div class="control-row">
@@ -789,6 +791,58 @@
         <label><input type="checkbox" id="cn-loop" checked /> loop</label>
       </div>
 
+      <!-- DATA MODE. Everything above draws the cone's SHAPE. This block puts
+           the cone's VALUES in it: the numbers ml/cone_sampler.py's own
+           ConeSampler hands the codec, and the numbers ml/cone.py::outer_spiral
+           picks out for stage 2, exported from the production tensor by
+           ml/export_cone_sample.py and read here over the network. The
+           geometry mode is untouched — this is a layer on top of it. -->
+      <div class="control-row cn-checks" id="cn-data-row">
+        <label><input type="checkbox" id="cn-data" /> <strong>Data</strong> — put the real
+          values in the cone</label>
+      </div>
+      <div id="cn-data-block" class="hidden">
+        <div class="control-row">
+          <label for="cn-data-anchor">anchor</label>
+          <select id="cn-data-anchor"></select>
+        </div>
+        <div class="control-row">
+          <label for="cn-stencil">stencil</label>
+          <select id="cn-stencil">
+            <option value="codec">codec — inner cone, lags 0–6</option>
+            <option value="stage2">stage 2 — outer cone, lags 7–143</option>
+          </select>
+        </div>
+        <div class="control-row">
+          <label for="cn-channel">channel</label>
+          <select id="cn-channel"></select>
+        </div>
+        <div class="control-row cn-checks">
+          <label><input type="checkbox" id="cn-anom" checked /> anomaly — what the codec
+            actually reads (off: the raw measurement)</label>
+        </div>
+        <div id="cn-legend"></div>
+        <div id="cn-readout">Tap a dot on the globe to read it.</div>
+        <canvas id="cn-strip" width="380" height="120"></canvas>
+        <p class="hint" id="cn-strip-hint">What the codec reads at lag 0: the 3×3 patch,
+          one row per channel, nine cells across.</p>
+        <p class="hint" id="cn-data-hint"></p>
+        <p class="hint"><strong>In plain words.</strong> A <em>pentad</em> is a fixed
+          five-day bin — the tensor has one frame per pentad, counted from 1982-01-01, so
+          "lag 3" means three bins, fifteen days, earlier. The <em>codec stencil</em> is what
+          the encoder reads to compress one pixel: the 3×3 patch at lag 0 plus a sunflower of
+          dots at lags 1–6. The <em>stage-2 stencil</em> is what the forecaster reads on top
+          of that: a ring of 24 dots per lag from lag 7 out to lag 143, over the compressed
+          codes rather than the raw field. <em>Raw</em> is the measurement in its own unit;
+          <em>anomaly</em> is that value minus its own calendar month's average (computed on
+          training years only) and then divided by the channel's spread — which is the number
+          the model is actually given, and why it is roughly −3…+3 rather than 15 °C. A
+          <em>hollow</em> dot is one the model cannot read: it falls outside the tensor's
+          window, and the model treats it as missing rather than wrapping it around the
+          globe. A <em>dimmed</em> dot is inside the window but was never observed there —
+          cloud, land, or a float that did not profile.</p>
+      </div>
+
       <!-- What-if geometry. Every knob here is one of ml/cone.py's own
            constants, read out of data/cone_geometry.json on load; the reset
            button puts all nine back to the values E-069 was trained on. -->
@@ -1019,7 +1073,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">0177cb31</code></p>
+      <p class="build-line">Build <code id="build-id">995af857</code></p>
     </section>
 
     <footer>
@@ -1075,6 +1129,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=0177cb31"></script>
+  <script src="src/app.js?v=995af857"></script>
 </body>
 </html>

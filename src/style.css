@@ -797,3 +797,33 @@ footer a { color: var(--fg-dim); }
 }
 #cn-reset { width: 100%; margin-top: 6px; padding: 6px 0; }
 #cn-reset.active { border-color: var(--accent); color: var(--accent); }
+
+/* ---- Cones tab · DATA MODE (E-069 samples). The geometry block above draws
+ * the cone's shape; this one puts the tensor's own numbers in it. Three
+ * elements it needs of its own: a legend that states the numeric range (a
+ * colour without a scale is decoration), a read-out panel that names the
+ * pixel and the DATE the value came from — the same "which pixel answered"
+ * discipline as the probe — and a heat strip for the 42 x 9 patch. */
+#cn-data-anchor, #cn-stencil, #cn-channel {
+  flex: 1; min-width: 0; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; font-size: 12.5px;
+}
+#cn-legend { margin: 8px 0 4px; }
+#cn-legend .cn-bar {
+  height: 10px; border-radius: 3px; border: 1px solid var(--border);
+}
+#cn-legend .cn-scale {
+  display: flex; justify-content: space-between; font-size: 10.5px;
+  color: var(--fg-dim); font-variant-numeric: tabular-nums; margin-top: 2px;
+}
+#cn-legend .cn-unit { font-size: 11px; color: var(--fg-dim); margin-top: 1px; }
+#cn-readout {
+  margin: 6px 0; padding: 7px 9px; border-radius: 6px; font-size: 11.5px;
+  line-height: 1.55; background: #0a0f16; border: 1px solid var(--border);
+  color: var(--fg); font-variant-numeric: tabular-nums;
+}
+#cn-readout .cn-ro-k { color: var(--fg-dim); }
+#cn-readout .cn-ro-miss { color: #f0d861; }
+#cn-readout .cn-ro-inval { color: #ff9a90; }
+#cn-strip { display: block; width: 100%; background: #0a0f16; border-radius: 6px; }
+#cn-data-hint strong { color: var(--fg); }

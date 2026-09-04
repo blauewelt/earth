@@ -1853,6 +1853,90 @@ dot rounds onto the next cell. This is the same discipline the JAX port earned
 with its gate tests, and it is the reason the tab cannot become a second,
 drifting definition of the cone.
 
+**DATA mode — the same cone with the tensor's own numbers in it** (2026-09-04,
+Chris: *"create a dataset demo … use the real code … be animated … allow for
+inspecting the actual data of the two kinds of stencils"*). A switch in the
+Cones tab layers values onto the geometry: pick one of five exported anchors,
+choose the **codec** stencil (the inner cone, lags 0–6, all 42 channels) or the
+**stage-2** stencil (the outer cone, lags 7–143, the eight channels the LIM —
+the linear inverse model, our reference baseline — can be scored on), pick a
+channel, and every dot on the globe is coloured by what is actually there: the
+anomaly on the app's diverging blue–red convention, or the raw measurement on
+that channel's own ramp, with a legend that states the numeric range,
+unobserved dots dimmed, off-window dots hollow as the geometry mode already
+draws them, and the lag-0 patch drawn as its nine real cells. Tap or hover a
+dot and the read-out names the lag, **that dot's own date** (the anchor's date
+minus its lag — for stage 2 that is up to two years earlier than the pixel it
+explains), the offset in km east and north, the value in the channel's unit AND
+as the tensor stores it, the anomaly, and whether the cell was observed,
+missing or off the window: the probe's "which pixel answered" discipline (§2.4)
+and its "every value carries when" rule (§2.9), one tab over. A strip below
+shows the whole codec input at once — the 42 × 9 patch as a heat map, the two
+future targets, and the 748-token count. All of it in plain English: what a
+pentad is, what each stencil is for, what raw versus anomaly means, what hollow
+means.
+
+**Two real functions produce it, and a test says so.**
+`ml/export_cone_sample.py` calls `ml/cone_sampler.py::ConeSampler.sample` — the
+object `ml/train_cone.py` trains on — for the inner cone, the lag-0 patch, the
+future targets and the `valid`/`obs` flags, and `ml/cone.py::outer_spiral` per
+latitude row for stage 2's rings. It gathers nothing itself, and
+`tests/test_export_cone_sample.py` is what makes that checkable: the exported
+flags and values are asserted bit-identical to a direct `ConeSampler.sample`
+call, the dot counts equal `data/cone_geometry.json`'s own `counts`
+(706 dots + 42 patch = 748), the exported outer offsets ARE `outer_spiral`'s in
+its order, and the anomaly is bit-identical to
+`ml/trainprobe.py::anomaly_transform`. That last one needed a STREAMING form of
+the transform, because the real function rewrites the 35.7 GB tensor in place
+and this sandbox has 30 GB of disk — same three passes, same float64
+accumulators, same Chan variance combination, same float16 round-trip, over a
+stream decompressed twice instead of stored once; the equality is measured on a
+toy at three chunk sizes rather than argued. `anomaly_transform` is lifted out
+of `ml/trainprobe.py` by `ast`, the trick `ml/cone.py` already uses for the
+spiral, because that module imports torch at scope and the test has to pass on
+a CPU box. **Ran in the SANDBOX, not a job**: the release npz decompresses at
+~480 MB/s, so two passes over the whole tensor cost about an hour on two cores
+and no extra disk at all.
+
+**Where the data lives, and the CORS measurement.** Five anchors (the tab's four
+presets plus one at the window's eastern edge, 36 N 19 E, coastal so it shows
+hollow and missing dots together) × 24 consecutive pentads from 2015-01-03 — a
+training year under BOTH protocols, neither a development holdout year nor past
+the terminal split's 2020 cut — × every second outer lag; 4.4–5.0 MB each, on
+the Hugging Face Hub in the dataset repo `chfrank/earth-tensors` under
+`cone_samples/`, which is §3's second approved live endpoint. Measured
+2026-09-04 with `Origin: https://blauewelt.github.io`: the `resolve/main/…` URL
+answers **HTTP 200** with
+`access-control-allow-origin: https://blauewelt.github.io` — the Hub ECHOES the
+origin rather than answering `*` — plus `vary: Origin, Accept-Encoding` and an
+`access-control-expose-headers` list carrying `ETag, Accept-Ranges,
+Content-Range, X-Repo-Commit, …`; verified from a node `fetch` and from an
+anonymous ranged GET (206), and recorded in `data/cone_samples.json`'s
+`cors_measured` block. `ml/upload_cone_samples.py` writes that index and
+refuses to unless every file downloads BACK with a matching sha256
+(`ml/hf_mirror.py`'s rule) and answers with a CORS header. The full samples are
+NOT in git; one trimmed fixture is — `data/cone_samples/fixture.json`, one
+anchor, three dates, outer lags 7/35/143, the same schema — so
+`tests/app.spec.js` drives the tab under MIRROR with no network at all, and
+`tests/data.spec.js` pins the index and the fixture against each other.
+
+**The animation is a LISTENER, not a second player.** "Advance time" walks the
+anchor through the sample's 24 pentads with the dots re-colouring; and the Play
+tab drives it too, because `notifyGlobeDate()` is now called from every place
+that writes `state.date` (the date input, `setGlobeDate`, the ±30-minute
+midnight cross and the Play tab's frame step) and the cone's
+`conesOnGlobeDate` follows it. The Play tab therefore stays "a clock that
+drives `state.date` and nothing else" (§5) — there is no playback code in this
+tab, and `follow the cone` is the exclusive opposite (while it is on WE drive
+the date, so listening to our own write would be a loop). A date outside the
+exported span shows the nearest exported pentad and the hint says so. One trap
+worth keeping: `raw` in the tensor is NOT in the channel's unit —
+`ml/build_family4.py` z-scores every channel on the way in and keeps the
+(mean, sd) in the npz's `norm` key, so the page multiplies back before it
+prints "°C", and prints the stored σ beside it.
+`docs/CONE_DATA_DEMO.md` explains the whole thing and says how to regenerate
+the samples.
+
 **Data pipeline** (`scripts/refresh_data.py`): one function per snapshot —
 climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet
 join), gistemp, gpcp, eobs, oisst, meteoswiss. Grid snapshots share

@@ -1447,3 +1447,120 @@ test.describe("cone_geometry.json (E-069, exported from ml/cone.py)", () => {
     });
   });
 });
+
+/* The cone SAMPLES (E-069 data mode). `data/cone_geometry.json` above says
+ * which cells the model reads; these two files say what is IN them.
+ *
+ * The index is committed and tiny; the samples themselves are megabytes and
+ * live on the Hugging Face Hub, so what is checkable here is that the index
+ * describes them honestly and that the in-repo FIXTURE — the copy the browser
+ * tests run against with no network — carries the real schema rather than a
+ * convenient one. A fixture with its own shape would let an app test pass
+ * against a format the deployed page never sees.
+ *
+ * The Python side is the other half: `tests/test_export_cone_sample.py`
+ * asserts the exporter's `valid`/`obs` are bit-identical to a direct
+ * `ConeSampler.sample` call, and that its anomaly is bit-identical to
+ * `trainprobe.anomaly_transform`. */
+test.describe("cone_samples.json + the fixture (E-069 data mode)", () => {
+  const idx = read("cone_samples.json");
+  const fx = read("cone_samples/fixture.json");
+  const G = read("cone_geometry.json");
+
+  test("the index names the tensor, the dates and every anchor's URL", () => {
+    // the exact tensor the numbers came out of — a sample from another build
+    // would be a different experiment wearing this one's label
+    expect(idx.tensor.name).toBe("family4_na025_pentad_r3_fa460837fa");
+    expect(idx.tensor.sha256).toBe(
+      "fa460837fa172825ee76c8fc6fc4da75fa7b96d64519a2e2186f5c306cf03ea9");
+    expect(idx.tensor.shape).toEqual([3142, 281, 481, 42]);
+    expect(idx.produced_by).toContain("ConeSampler.sample");
+    expect(idx.produced_by).toContain("outer_spiral");
+    expect(idx.exporter).toBe("ml/export_cone_sample.py");
+    expect(idx.exporter_commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(idx.L_in).toBe(G.constants.L_IN);
+    expect(idx.holdout_years).toEqual([2009, 2017, 2023]);
+    expect(idx.channels).toHaveLength(42);
+    expect(idx.scoreable_channels).toHaveLength(8);
+    // 24 consecutive pentads: every gap is exactly one bin, i.e. five days
+    expect(idx.dates).toHaveLength(24);
+    expect(idx.bins).toHaveLength(24);
+    for (let i = 1; i < idx.bins.length; i++) {
+      expect(idx.bins[i] - idx.bins[i - 1]).toBe(1);
+    }
+    // the outer stencil starts where cone.py says it can: lag 7
+    expect(idx.outer_lags[0]).toBe(7);
+    expect(idx.outer.empty_below).toBe(G.constants.L_IN + 1);
+    expect(Math.max(...idx.outer_lags)).toBeLessThanOrEqual(G.constants.K_OUTER - 1);
+
+    // the anchors, and the CORS measurement that lets a browser read them
+    expect(idx.anchors.length).toBeGreaterThanOrEqual(5);
+    const ids = idx.anchors.map((a) => a.id);
+    for (const want of ["gulf_stream", "rapid", "labrador", "equator"]) {
+      expect(ids).toContain(want);
+    }
+    for (const a of idx.anchors) {
+      expect(a.url).toMatch(
+        /^https:\/\/huggingface\.co\/datasets\/chfrank\/earth-tensors\/resolve\/main\/cone_samples\/.+\.json$/);
+      expect(a.sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(a.bytes).toBeGreaterThan(1e5);
+      expect(a.bytes).toBeLessThan(6.5e6);   // the per-file budget
+      expect(a.row).toBeGreaterThanOrEqual(0);
+      expect(a.col).toBeGreaterThanOrEqual(0);
+    }
+    // The Hub ECHOES our origin rather than answering `*`, which is what makes
+    // it readable from the deployed page (CLAUDE.md §3, second exception). The
+    // probe is a ranged read, so 206 is the healthy answer and 200 is the
+    // whole-file variant — both are the same CORS fact.
+    expect(idx.cors_measured.access_control_allow_origin)
+      .toBe("https://blauewelt.github.io");
+    expect([200, 206]).toContain(idx.cors_measured.status);
+    expect(idx.fixture).toBe("data/cone_samples/fixture.json");
+  });
+
+  test("the fixture is the real schema, trimmed", () => {
+    expect(Object.keys(fx).sort()).toEqual(
+      ["future", "inner", "meta", "outer", "patch"]);
+    expect(fx.meta.produced_by).toBe(idx.produced_by);
+    expect(fx.meta.tensor.sha256).toBe(idx.tensor.sha256);
+    expect(fx.meta.channels).toEqual(idx.channels);
+    expect(fx.meta.fixture).toContain("trimmed copy");
+    expect(fx.meta.dates.length).toBeLessThanOrEqual(3);
+    expect(fx.meta.dates).toEqual(idx.dates.slice(0, fx.meta.dates.length));
+    expect(fx.outer.lags[0]).toBe(7);
+    expect(fx.outer.lags).toHaveLength(3);
+
+    // every declared shape matches the array behind it — one assertion per
+    // array, never one per value
+    const nT = fx.meta.dates.length, nC = fx.meta.channels.length;
+    const nD = fx.inner.n_dots;
+    expect(fx.inner.shape).toEqual([nT, nD]);
+    expect(nD).toBe(G.counts.dot_tokens);          // 706, ml/cone.py::budget
+    expect(fx.inner.raw).toHaveLength(nT);
+    expect(fx.inner.raw.every((r) => r.length === nD)).toBe(true);
+    expect(fx.inner.obs).toHaveLength(nT * nD);
+    expect(fx.inner.valid).toHaveLength(nT * nD);
+    expect(/^[01]+$/.test(fx.inner.obs)).toBe(true);
+    expect(fx.patch.shape).toEqual([nT, nC, 9]);
+    expect(fx.patch.raw).toHaveLength(nT * nC * 9);
+    expect(fx.future.raw).toHaveLength(nT * nC * fx.future.lags.length);
+    const [oT, oK, oD, oC] = fx.outer.shape;
+    expect([oT, oK, oD, oC]).toEqual(
+      [nT, 3, G.constants.OUTER_N_PTS, fx.outer.channels.length]);
+    expect(fx.outer.raw).toHaveLength(oT * oK * oD * oC);
+    expect(fx.outer.obs).toHaveLength(oT * oK * oD * oC);
+    expect(fx.outer.valid).toHaveLength(oK * oD);
+
+    // lag 0 is the PATCH, so no dot carries it; dots stop at L_in
+    expect(Math.min(...fx.inner.lag)).toBe(1);
+    expect(Math.max(...fx.inner.lag)).toBe(G.constants.L_IN);
+
+    // there are real numbers in here, and they are in two spaces — the raw
+    // measurement and the z-scored anomaly the codec is actually given
+    const finite = (a) => a.filter((v) => typeof v === "number");
+    const raw0 = finite(fx.inner.raw[0]), anom0 = finite(fx.inner.anom[0]);
+    expect(raw0.length).toBeGreaterThan(100);
+    expect(anom0.length).toBe(raw0.length);
+    expect(Math.max(...anom0.map(Math.abs))).toBeLessThan(30);
+  });
+});

@@ -3943,6 +3943,16 @@ function applyDateMove() {
     refreshMonthlyGrids();
     if (sstEnsembleLayer) updateEnsembleLayer();
   });
+  notifyGlobeDate();
+}
+
+/* Anything that is not a LAYER but follows the date. One call site per place
+ * that writes `state.date` — the date input, `setGlobeDate`, the ±30m midnight
+ * cross and the Play tab's frame step — so a new follower is one function
+ * rather than five edits. Today the only follower is the Cones tab's data
+ * mode; it is a listener precisely so the Play tab can stay a clock. */
+function notifyGlobeDate() {
+  try { conesOnGlobeDate(); } catch { /* a follower must never break a date move */ }
 }
 
 /* ONE place moves the app's date, for the same reason the aggregation window
@@ -9662,6 +9672,16 @@ const cones = {
   ents: null, dots: null,
   nDrawn: 0, nOff: 0, nOffInner: 0,
   dotsPerChannel: 0, dotTokens: 0, totalTokens: 0,
+  /* DATA MODE (below). `sample` is one anchor's exported file; everything else
+   * is which slice of it is on screen. It lives inside `cones` rather than in
+   * a second module-level object so that `conesHide` and `coneState` cannot
+   * forget about half the tab's state. */
+  data: {
+    on: false, anchorId: null, sample: null, loading: false, error: null,
+    stencil: "codec", chan: 0, outerChan: 0, anomaly: true,
+    dateIdx: 0, lagIdx: 0, snapped: false,
+    dots: [], lo: 0, hi: 1, pick: null, ramp: "anom", diverging: true,
+  },
 };
 const CONE_ANCHOR_COLOR = "#f85149";      // ml/draw_stencils.py's anchor red
 
@@ -9975,6 +9995,11 @@ function coneDot(i, lat, lon, color, size, hollow) {
 
 function conesDraw() {
   if (!coneGeo || !cones.ents) return;
+  // DATA MODE draws the same cone with the tensor's own numbers in it. The
+  // geometry path below is untouched by it — this is one branch, not a second
+  // renderer, so a bug in the data mode cannot change what the geometry mode
+  // draws.
+  if (coneDataOn()) { conesDrawData(); conesStats(); conesSection(); return; }
   const e = cones.ents, K = coneGeo.constants, P = coneParams, w = coneGeo.window;
   const g = coneGridOf(cones.lat, cones.lon);
   const a = coneCellLatLon(g.y, g.x);
@@ -10194,6 +10219,635 @@ function conesSection() {
   ctx.stroke();
 }
 
+/* ======================================================= Cones · DATA MODE
+ * Everything above draws the cone's SHAPE. This puts its VALUES in it.
+ *
+ * The numbers are not computed here and they are not computed in Python for
+ * the drawing's sake either: `ml/export_cone_sample.py` runs the PRODUCTION
+ * code — `ml/cone_sampler.py::ConeSampler.sample` for the codec's inner
+ * stencil (the lag-0 3x3 patch, the lag-1..6 dots, the future targets and the
+ * valid/observed flags) and `ml/cone.py::outer_spiral` for stage 2's outer
+ * stencil — against the real `family4_na025_pentad_r3` tensor, and writes one
+ * JSON per anchor. This page reads those files and colours the dots. Nothing
+ * about which cell is read, or what is in it, is decided in JavaScript.
+ *
+ * `data/cone_samples.json` is the index (anchors, dates, URLs, sizes, the
+ * tensor's sha256, the exporter's commit); the files themselves are on the
+ * Hugging Face Hub, which is CLAUDE.md §3's second approved live endpoint —
+ * keyless, CORS-open (measured, see the note in Part 2), and read once per
+ * anchor rather than streamed. A failure degrades to a hint and the geometry
+ * mode, never to a broken tab. */
+const CONE_SAMPLES_INDEX = "data/cone_samples.json";
+let coneManifest = null, coneManifestPromise = null;
+const coneSampleCache = new Map();      // anchor id -> Promise<sample>
+
+/* Which ramp a RAW value gets. A signed field (sea-surface height, the wind
+ * stress components, the current components) is diverging by nature and reads
+ * on the app's blue = down/cool, red = up/warm convention (§5); an unsigned
+ * one gets its own sequential ramp. The ANOMALY is always diverging and always
+ * centred on zero, because that is what an anomaly means. */
+const CONE_SIGNED_CHANNELS = /^(ssh|tau_x|tau_y|cur_u|cur_v)$/;
+function coneChannelRamp(name) {
+  if (CONE_SIGNED_CHANNELS.test(name)) return { ramp: "anom", diverging: true };
+  if (name === "cur_speed") return { ramp: "speed", diverging: false };
+  if (name === "sst" || name.startsWith("rg_t")) return { ramp: "sst", diverging: false };
+  return { ramp: "precip", diverging: false };
+}
+
+function loadConeManifest() {
+  if (!coneManifestPromise) {
+    coneManifestPromise = fetch(CONE_SAMPLES_INDEX)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (coneManifest = j))
+      .catch(() => null);
+  }
+  return coneManifestPromise;
+}
+
+function loadConeSample(id) {
+  if (coneSampleCache.has(id)) return coneSampleCache.get(id);
+  const p = loadConeManifest().then((m) => {
+    const a = m && (m.anchors || []).find((x) => x.id === id);
+    if (!a) throw new Error(`no exported anchor ${id}`);
+    return fetch(a.url).then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status} for ${a.url}`);
+      return r.json();
+    });
+  });
+  coneSampleCache.set(id, p);
+  p.catch(() => coneSampleCache.delete(id));   // a failure must be retryable
+  return p;
+}
+
+function coneDataOn() {
+  return !!(cones.data.on && cones.data.sample);
+}
+
+/* The channel the read-out and the colours are about. The codec stencil reads
+ * all 42 channels; stage 2's outer stencil carries the eight the LIM can be
+ * scored on (`ml/lim_baseline.py`), so the two selectors index different
+ * lists and are kept as two numbers rather than one that means two things. */
+function coneDataChannelName() {
+  const S = cones.data.sample;
+  if (!S) return "";
+  return cones.data.stencil === "codec"
+    ? S.meta.channels[cones.data.chan]
+    : S.outer.channels[cones.data.outerChan];
+}
+
+/* The exported date nearest the anchor bin on screen. The tab's clock is free
+ * to stand anywhere in the tensor's 3,142 bins; the SAMPLE holds 24 of them,
+ * so `snapped` records that the two differ and the hint says so rather than
+ * showing a neighbouring pentad's numbers as if they were this one's. */
+function coneDataSyncDate() {
+  const S = cones.data.sample;
+  if (!S) return;
+  const bins = S.meta.bins;
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < bins.length; i++) {
+    const d = Math.abs(bins[i] - cones.bin);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  cones.data.dateIdx = best;
+  cones.data.snapped = bins[best] !== cones.bin;
+}
+
+/* The lag slider spans the stencil's own lags: 0..6 for the codec, and the
+ * exported outer lags for stage 2 — which are an arithmetic progression, so
+ * min/max/step express them exactly and the slider's value stays a real lag
+ * rather than an index into a list. */
+function coneDataLagRange() {
+  const S = cones.data.sample;
+  const s = document.getElementById("cn-lag");
+  if (!S || !s) return;
+  if (cones.data.stencil === "codec") {
+    s.min = "0"; s.max = String(S.meta.L_in); s.step = "1";
+  } else {
+    const L = S.outer.lags;
+    s.min = String(L[0]);
+    s.max = String(L[L.length - 1]);
+    s.step = String(L.length > 1 ? L[1] - L[0] : 1);
+  }
+  const lo = +s.min, hi = +s.max, st = +s.step;
+  const snapped = Math.min(hi, Math.max(lo, lo + Math.round((cones.lag - lo) / st) * st));
+  if (snapped !== cones.lag) cones.lag = snapped;
+  s.value = String(cones.lag);
+  if (cones.data.stencil !== "codec") {
+    cones.data.lagIdx = Math.max(0, S.outer.lags.indexOf(cones.lag));
+  }
+}
+
+/* The dots on screen, with everything the read-out needs attached to each.
+ * Positions come from the FILE (`row`/`col` as Python computed them), never
+ * from a second evaluation of the sunflower here — the port above exists to
+ * draw the geometry, and this mode is about the data. */
+function coneDataDots() {
+  const S = cones.data.sample;
+  if (!S) return [];
+  const ti = cones.data.dateIdx;
+  const anchorBin = S.meta.bins[ti];
+  const out = [];
+  const w = coneGeo.window;
+  /* The DRAWING position is derived from the exported (row, col), which is the
+   * cell index Python computed and is unclamped — so an off-window dot still
+   * has a real place on the earth and can be drawn hollow there. The file's
+   * own `lat`/`lon` are null off the window by design (they answer "where in
+   * the tensor", and off the tensor there is no answer); this answers "where
+   * on the globe", which is a different question and the only one the drawing
+   * has. A cell that is off the SPHERE's coordinate range as well — 4,444 km
+   * east of 70 N is 117 degrees of longitude — has no place at all and is
+   * counted rather than drawn somewhere it is not. */
+  const cellLatLon = (r, c) => {
+    const lat = w.lat0 + r * w.dlat, lon = w.lon0 + c * w.dlat;
+    return (Math.abs(lat) > 90 || Math.abs(lon) > 180) ? null : { lat, lon };
+  };
+
+  if (cones.data.stencil === "codec") {
+    const inn = S.inner, p = S.patch, ci = cones.data.chan, nD = inn.n_dots;
+    const nC = S.meta.channels.length;
+    // Lag 0 is the 3x3 patch, not a dot: nine real cells, one token per
+    // channel. It is always drawn — it is what the codec reads at lag 0.
+    for (let c9 = 0; c9 < 9; c9++) {
+      const r = S.meta.anchor.row + p.cell_dy[c9];
+      const cc = S.meta.anchor.col + p.cell_dx[c9];
+      const flat = (ti * nC + ci) * 9 + c9;
+      const pos = cellLatLon(r, cc);
+      out.push({
+        kind: "patch", lag: 0, bin: anchorBin, dy: p.cell_dy[c9], dx: p.cell_dx[c9],
+        row: r, col: cc, lat: pos && pos.lat, lon: pos && pos.lon,
+        plat: pos && pos.lat, plon: pos && pos.lon,
+        dyKm: p.cell_dy[c9] * 27.83, dxKm: null,
+        raw: p.raw[flat], anom: p.anom[flat],
+        obs: p.obs[flat] === "1",
+        valid: r >= 0 && r < w.ny && cc >= 0 && cc < w.nx,
+      });
+    }
+    for (let j = 0; j < nD; j++) {
+      if (inn.chan[j] !== ci) continue;
+      if (inn.lag[j] > cones.lag) continue;      // cumulative, as the tab draws
+      const pos = cellLatLon(inn.row[j], inn.col[j]);
+      out.push({
+        kind: "dot", lag: inn.lag[j], bin: anchorBin - inn.lag[j],
+        dy: inn.dy[j], dx: inn.dx[j], row: inn.row[j], col: inn.col[j],
+        lat: inn.lat[j], lon: inn.lon[j],
+        plat: pos && pos.lat, plon: pos && pos.lon,
+        dyKm: inn.dy_km[j], dxKm: inn.dx_km[j],
+        raw: inn.raw[ti][j], anom: inn.anom[ti][j],
+        obs: inn.obs[ti * nD + j] === "1",
+        valid: inn.valid[ti * nD + j] === "1",
+      });
+    }
+  } else {
+    const o = S.outer, kk = cones.data.lagIdx, cc = cones.data.outerChan;
+    const nK = o.shape[1], nD = o.n_dots_per_lag, nC = o.channels.length;
+    // ONE annulus, not the cumulative cone: every lag is a different DATE, and
+    // painting twenty of them at once would put twenty dates in one colour
+    // scale. The lag slider is how you walk them.
+    for (let d = 0; d < nD; d++) {
+      const idx = kk * nD + d;
+      const flat = ((ti * nK + kk) * nD + d) * nC + cc;
+      const pos = cellLatLon(o.row[idx], o.col[idx]);
+      out.push({
+        kind: "outer", lag: o.lags[kk], bin: anchorBin - o.lags[kk],
+        dy: o.dy[idx], dx: o.dx[idx], row: o.row[idx], col: o.col[idx],
+        lat: o.lat[idx], lon: o.lon[idx],
+        plat: pos && pos.lat, plon: pos && pos.lon,
+        dyKm: o.dy_km[idx], dxKm: o.dx_km[idx],
+        raw: o.raw[flat], anom: o.anom[flat],
+        obs: o.obs[flat] === "1",
+        valid: o.valid[idx] === "1",
+      });
+    }
+  }
+  return out;
+}
+
+/* WHAT `raw` IS. `ml/build_family4.py` stores the tensor Z-SCORED — its last
+ * pass writes (x - mean) / sd per channel — so the number the codec is handed
+ * is in STANDARD DEVIATIONS, not in degrees or metres per second. The file
+ * carries the (mean, sd) it was scored with, so the page can put the unit back
+ * rather than printing "0.31" beside "°C" and being wrong by 18 degrees. The
+ * read-out shows the physical value AND the stored one, because the model reads
+ * the second and the reader thinks in the first. */
+function coneChannelIndex() {
+  const S = cones.data.sample;
+  if (!S) return 0;
+  return cones.data.stencil === "codec"
+    ? cones.data.chan
+    : S.meta.channels.indexOf(S.outer.channels[cones.data.outerChan]);
+}
+function coneDataPhysical(v) {
+  const S = cones.data.sample;
+  const n = S && S.meta.value_space && S.meta.value_space.tensor_norm;
+  if (v === null || !Number.isFinite(v) || !n) return v;
+  const row = n[coneChannelIndex()];
+  return row ? v * row[1] + row[0] : v;
+}
+
+function coneDataValue(d) {
+  return cones.data.anomaly ? d.anom : coneDataPhysical(d.raw);
+}
+
+/* The colour scale, from the values ACTUALLY on screen. An anomaly scale is
+ * forced symmetric about zero — otherwise the colour of "no departure" would
+ * move with the batch, and blue/red would stop meaning cooler/warmer. */
+function coneDataScale(dots) {
+  const name = coneDataChannelName();
+  const spec = cones.data.anomaly ? { ramp: "anom", diverging: true }
+                                  : coneChannelRamp(name);
+  let lo = Infinity, hi = -Infinity;
+  for (const d of dots) {
+    const v = coneDataValue(d);
+    if (v === null || !Number.isFinite(v) || !d.valid || !d.obs) continue;
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  if (!Number.isFinite(lo)) { lo = 0; hi = 1; }
+  if (spec.diverging) {
+    const m = Math.max(Math.abs(lo), Math.abs(hi), 1e-6);
+    lo = -m; hi = m;
+  } else if (hi - lo < 1e-9) { hi = lo + 1e-9; }
+  cones.data.lo = lo; cones.data.hi = hi;
+  cones.data.ramp = spec.ramp; cones.data.diverging = spec.diverging;
+}
+
+function coneDataColor(v) {
+  const { lo, hi, ramp } = cones.data;
+  const t = (v - lo) / (hi - lo || 1);
+  const [r, g, b] = rampColor(ramp, t);
+  return Cesium.Color.fromBytes(r, g, b);
+}
+
+/* Three states, three ways of drawing, and they are different KINDS of fact:
+ *   valid + observed  a measurement — filled with its value's colour
+ *   valid + missing   inside the window, never observed (cloud, land, a float
+ *                     that did not profile) — dimmed, so it reads as a real
+ *                     token carrying no value, which is what `miss_tok` is
+ *   invalid           off the tensor window; the model reads it as missing and
+ *                     never wraps it — hollow, exactly as the geometry mode
+ *                     already draws it */
+function coneDataDot(i, d, size) {
+  const p = i < cones.dots.length ? cones.dots.get(i)
+    : cones.dots.add({ position: Cesium.Cartesian3.fromDegrees(0, 0) });
+  const v = coneDataValue(d);
+  const known = d.valid && d.obs && v !== null && Number.isFinite(v);
+  const col = known ? coneDataColor(v)
+                    : Cesium.Color.fromCssColorString("#8b949e");
+  p.position = Cesium.Cartesian3.fromDegrees(d.plon, d.plat);
+  if (!d.valid) {
+    p.color = Cesium.Color.TRANSPARENT;
+    p.outlineColor = Cesium.Color.fromCssColorString("#ff9a90").withAlpha(0.9);
+    p.outlineWidth = 1.6;
+  } else if (!known) {
+    p.color = col.withAlpha(0.18);
+    p.outlineColor = col.withAlpha(0.55);
+    p.outlineWidth = 1.2;
+  } else {
+    p.color = col;
+    p.outlineColor = Cesium.Color.fromCssColorString("#0d1117").withAlpha(0.85);
+    p.outlineWidth = 1;
+  }
+  p.pixelSize = size;
+  p.show = true;
+  p.id = { coneDot: i };                 // what `scene.pick` hands the read-out
+  conePoolLen = Math.max(conePoolLen, i + 1);
+}
+
+/* The whole data picture: the anchor ring and the window box exactly as the
+ * geometry mode draws them, the reach ellipse for the lag on screen, and one
+ * dot per cell coloured by its value. */
+function conesDrawData() {
+  const S = cones.data.sample, e = cones.ents, w = coneGeo.window;
+  const a = { lat: S.meta.anchor.lat, lon: S.meta.anchor.lon };
+  coneDataSyncDate();
+  const all = coneDataDots();
+  /* `cones.data.dots` is what is ON SCREEN, in pool order: `conesPickDot`
+   * is handed a POOL index by `scene.pick`, so the array it indexes has to be
+   * the drawn set and not a superset of it. Dots with no place on the sphere
+   * are counted here and dropped. */
+  const dots = all.filter((d) => d.plat !== null && d.plat !== undefined);
+  coneDataScale(dots);
+  cones.data.dots = dots;
+
+  e.anchor.position = Cesium.Cartesian3.fromDegrees(a.lon, a.lat);
+  e.anchor.show = true;
+  e.win.show = true;
+  for (const p of e.patch) p.show = false;     // the patch is drawn as dots here
+
+  let n = 0, off = 0;
+  for (const d of all) if (!d.valid) off++;
+  for (const d of dots) {
+    const cur = d.lag === cones.lag;
+    coneDataDot(n++, d, d.kind === "patch" ? 8 : (cur ? 8 : 5));
+  }
+  for (let i = n; i < conePoolLen; i++) cones.dots.get(i).show = false;
+  cones.nDrawn = n; cones.nOff = off; cones.nOffInner = off;
+
+  const K = coneGeo.constants, P = coneParams;
+  const r = cones.lag <= P.L_IN ? coneReachKm("B", cones.lag)
+                                : coneOuterReachKm(cones.lag);
+  if (r > 0) {
+    const coslat = Math.max(Math.cos(a.lat * Math.PI / 180), K.COS_FLOOR);
+    const dLat = P.ASPECT * r / K.KM_PER_DEG, dLon = r / (K.KM_PER_DEG * coslat);
+    const pos = [];
+    for (let i = 0; i <= 96; i++) {
+      const th = i / 96 * 2 * Math.PI;
+      pos.push(a.lon + dLon * Math.sin(th), a.lat + dLat * Math.cos(th));
+    }
+    e.ring.polyline.positions = Cesium.Cartesian3.fromDegreesArray(pos);
+    e.ring.show = true;
+  } else {
+    e.ring.show = false;
+  }
+  viewer.scene.requestRender();
+  conesDataLegend();
+  conesDataReadout();
+  conesDataStrip();
+  conesDataHint();
+}
+
+function coneFmtVal(v, digits = 3) {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "–";
+  const a = Math.abs(v);
+  if (a !== 0 && (a < 1e-3 || a >= 1e5)) return v.toExponential(2);
+  return v.toFixed(a >= 100 ? 1 : digits);
+}
+
+function conesDataLegend() {
+  const host = document.getElementById("cn-legend");
+  if (!host) return;
+  const { lo, hi, ramp } = cones.data;
+  const stops = [];
+  for (let i = 0; i <= 8; i++) {
+    const [r, g, b] = rampColor(ramp, i / 8);
+    stops.push(`rgb(${r},${g},${b}) ${(i / 8 * 100).toFixed(0)}%`);
+  }
+  const S = cones.data.sample;
+  const name = coneDataChannelName();
+  const unit = cones.data.anomaly
+    ? "anomaly, z-scored (0 = the calendar month's own average)"
+    : `${S.meta.units[name] || ""} (the measurement, not the anomaly)`;
+  host.innerHTML =
+    `<div class="cn-bar" style="background:linear-gradient(90deg,${stops.join(",")})"></div>` +
+    `<div class="cn-scale"><span>${coneFmtVal(lo)}</span>` +
+    `<span>${coneFmtVal((lo + hi) / 2)}</span>` +
+    `<span>${coneFmtVal(hi)}</span></div>` +
+    `<div class="cn-unit"><strong>${name}</strong> · ${unit} · ` +
+    `${S.meta.dates[cones.data.dateIdx]}</div>`;
+}
+
+/* The read-out. Every number it prints carries WHEN it was observed (§2.9) and
+ * WHICH cell answered (§2.4) — a dot's own date is the anchor's date minus its
+ * lag, which for stage 2 can be two years earlier than the pixel it explains. */
+function conesDataReadout() {
+  const host = document.getElementById("cn-readout");
+  if (!host) return;
+  const S = cones.data.sample;
+  const d = cones.data.pick;
+  if (!d) {
+    host.innerHTML = `<span class="cn-ro-k">Tap a dot on the globe to read what the ` +
+      `model has there.</span>`;
+    return;
+  }
+  const name = coneDataChannelName();
+  const unit = S.meta.units[name] || "";
+  const date = coneDateOfBin(d.bin);
+  const held = CONE_HOLDOUT_YEARS.includes(Number(date.slice(0, 4)));
+  const ns = (v, suffix) => (v === null ? "–"
+    : `${Math.abs(v).toFixed(0)} km ${v >= 0 ? suffix[0] : suffix[1]}`);
+  const state = !d.valid
+    ? `<span class="cn-ro-inval">off the tensor window — the model reads this as ` +
+      `missing and never wraps it round the globe</span>`
+    : d.obs
+      ? `observed`
+      : `<span class="cn-ro-miss">inside the window but never observed here — ` +
+        `the model gets a "missing" token, not a zero</span>`;
+  host.innerHTML =
+    `<strong>lag ${d.lag}</strong> · ${d.lag * 5} days back · <strong>${date}</strong>` +
+    (held ? ` <span class="cn-held-tag">held-out year</span>` : "") +
+    `<br><span class="cn-ro-k">${name}</span> ` +
+    `<strong>${coneFmtVal(coneDataPhysical(d.raw))}</strong> ${unit}` +
+    ` <span class="cn-ro-k">(${coneFmtVal(d.raw)} σ as stored)</span>` +
+    `<br><span class="cn-ro-k">anomaly the codec reads</span> ` +
+    `<strong>${coneFmtVal(d.anom)}</strong>` +
+    `<br><span class="cn-ro-k">offset</span> ${ns(d.dxKm, ["east", "west"])} · ` +
+    `${ns(d.dyKm, ["north", "south"])}` +
+    `<br><span class="cn-ro-k">cell</span> row ${d.row} col ${d.col}` +
+    (d.plat === null || d.plat === undefined ? "" :
+      ` (${Math.abs(d.plat).toFixed(2)}° ${d.plat >= 0 ? "N" : "S"} ` +
+      `${Math.abs(d.plon).toFixed(2)}° ${d.plon >= 0 ? "E" : "W"})`) +
+    `<br>${state}`;
+}
+
+/* "What the model reads", as one strip: the 42 x 9 patch the codec is given at
+ * lag 0 (one row per channel, nine cells across, on the anomaly ramp), the two
+ * future values it is asked to predict, and the token count. It is the whole
+ * input in one picture, which no list of numbers is. */
+function conesDataStrip() {
+  const c = document.getElementById("cn-strip");
+  const S = cones.data.sample;
+  if (!c || !S) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  const nC = S.meta.channels.length, ti = cones.data.dateIdx;
+  const gridW = 150, gridX = 34, gridY = 8, gridH = H - 26;
+  const cw = gridW / 9, ch = gridH / nC;
+
+  let m = 1e-6;
+  for (let i = 0; i < nC * 9; i++) {
+    const v = S.patch.anom[ti * nC * 9 + i];
+    if (v !== null && Number.isFinite(v)) m = Math.max(m, Math.abs(v));
+  }
+  for (let ci = 0; ci < nC; ci++) {
+    for (let j = 0; j < 9; j++) {
+      const flat = (ti * nC + ci) * 9 + j;
+      const v = S.patch.anom[flat];
+      const obs = S.patch.obs[flat] === "1";
+      if (!obs || v === null || !Number.isFinite(v)) {
+        ctx.fillStyle = "#161b22";
+      } else {
+        const [r, g, b] = rampColor("anom", (v + m) / (2 * m));
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+      }
+      ctx.fillRect(gridX + j * cw, gridY + ci * ch, Math.ceil(cw), Math.ceil(ch));
+    }
+  }
+  // the selected channel's own row, marked — 42 rows is a lot to count down
+  if (cones.data.stencil === "codec") {
+    ctx.strokeStyle = "#e6edf3"; ctx.lineWidth = 1;
+    ctx.strokeRect(gridX - 1, gridY + cones.data.chan * ch - 1,
+                   gridW + 2, Math.max(ch, 2) + 2);
+  }
+  ctx.fillStyle = "#8b949e"; ctx.font = "9.5px sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText("ch 0", gridX - 3, gridY + 7);
+  ctx.fillText(`ch ${nC - 1}`, gridX - 3, gridY + gridH);
+  ctx.textAlign = "center";
+  ctx.fillText("3×3 patch, lag 0", gridX + gridW / 2, H - 12);
+
+  // the two future targets for the channel on screen
+  const fx = gridX + gridW + 26;
+  const ci = cones.data.stencil === "codec"
+    ? cones.data.chan
+    : S.meta.channels.indexOf(S.outer.channels[cones.data.outerChan]);
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#8b949e";
+  ctx.fillText("asked to predict", fx, gridY + 9);
+  const F = S.future.lags.length;
+  for (let f = 0; f < F; f++) {
+    const flat = (ti * nC + ci) * F + f;
+    const v = S.future.anom[flat];
+    const obs = S.future.obs[flat] === "1";
+    if (!obs || v === null || !Number.isFinite(v)) ctx.fillStyle = "#161b22";
+    else {
+      const [r, g, b] = rampColor("anom", (v + m) / (2 * m));
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+    }
+    ctx.fillRect(fx + f * 30, gridY + 16, 26, 20);
+    ctx.fillStyle = "#8b949e";
+    ctx.fillText(`+${S.future.lags[f]}`, fx + f * 30 + 4, gridY + 48);
+    ctx.fillText(coneFmtVal(S.future.raw[flat], 2), fx + f * 30 - 1, gridY + 60);
+  }
+  ctx.fillStyle = "#c9d1d9";
+  ctx.fillText(`${S.meta.geometry.counts.total_tokens} tokens per anchor`,
+               fx, gridY + 78);
+  ctx.fillStyle = "#8b949e";
+  ctx.fillText(`${S.meta.geometry.counts.patch_tokens} patch + ` +
+               `${S.meta.geometry.counts.dot_tokens} dots`, fx, gridY + 90);
+}
+
+function conesDataHint() {
+  const host = document.getElementById("cn-data-hint");
+  const S = cones.data.sample;
+  if (!host || !S) return;
+  const bits = [];
+  const shown = S.meta.dates[cones.data.dateIdx];
+  bits.push(`<strong>${S.meta.anchor.name}</strong> — ${S.meta.dates.length} pentads ` +
+            `from ${S.meta.dates[0]} to ${S.meta.dates[S.meta.dates.length - 1]}, ` +
+            `read out of ${S.meta.tensor.name}.`);
+  if (cones.data.snapped) {
+    bits.push(`The globe's date is <strong>${coneDateOfBin(cones.bin)}</strong>, which is ` +
+              `outside the exported span — showing the nearest exported pentad, ` +
+              `<strong>${shown}</strong>.`);
+  }
+  if (cones.data.stencil === "stage2") {
+    bits.push(`Stage 2's ring is empty for lags 0–${S.meta.outer.empty_below - 1} by ` +
+              `construction: the codec has already read that whole disc. The exported ` +
+              `lags step by ${S.meta.outer.stride} from ${S.meta.outer.first} to ` +
+              `${S.meta.outer.last}; one ring is drawn at a time, because every lag is a ` +
+              `different date.`);
+  }
+  if (!S.meta.admissible[cones.data.dateIdx]) {
+    bits.push(`This date is <strong>not an admissible training anchor</strong>: some bin ` +
+              `its cone touches is held out, so the trainer would refuse it.`);
+  }
+  host.innerHTML = bits.join(" ");
+}
+
+/* A tap picked a dot. Kept as the object itself rather than an index, so a
+ * redraw that reorders the pool cannot make the read-out describe a different
+ * dot than the one under the finger. */
+function conesPickDot(i) {
+  cones.data.pick = cones.data.dots[i] || null;
+  conesDataReadout();
+}
+
+/* Fill the anchor and channel selectors from the loaded sample. */
+function conesDataFillSelectors() {
+  const S = cones.data.sample;
+  const asel = document.getElementById("cn-data-anchor");
+  if (asel && coneManifest) {
+    const want = (coneManifest.anchors || [])
+      .map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
+    if (asel.innerHTML !== want) asel.innerHTML = want;
+    asel.value = cones.data.anchorId;
+  }
+  const csel = document.getElementById("cn-channel");
+  if (csel && S) {
+    const list = cones.data.stencil === "codec" ? S.meta.channels : S.outer.channels;
+    const want = list.map((c, i) => `<option value="${i}">${c}</option>`).join("");
+    if (csel.innerHTML !== want) csel.innerHTML = want;
+    csel.value = String(cones.data.stencil === "codec"
+      ? cones.data.chan : cones.data.outerChan);
+  }
+}
+
+async function conesUseAnchor(id) {
+  cones.data.loading = true;
+  cones.data.error = null;
+  try {
+    const S = await loadConeSample(id);
+    cones.data.anchorId = id;
+    cones.data.sample = S;
+    // The anchor IS the exported cell, so the geometry mode's anchor moves
+    // with it — a data mode standing somewhere else would be two claims.
+    cones.lat = S.meta.anchor.lat;
+    cones.lon = S.meta.anchor.lon;
+    if (!S.meta.bins.includes(cones.bin)) cones.bin = S.meta.bins[0];
+    const input = document.getElementById("cn-date");
+    if (input) input.value = coneDateOfBin(cones.bin);
+    if (cones.data.chan >= S.meta.channels.length) cones.data.chan = 0;
+    if (cones.data.outerChan >= S.outer.channels.length) cones.data.outerChan = 0;
+    conesDataFillSelectors();
+    coneDataLagRange();
+  } catch (err) {
+    cones.data.error = String(err && err.message || err);
+    cones.data.sample = null;
+    const host = document.getElementById("cn-data-hint");
+    if (host) {
+      host.innerHTML = `<strong>The sample could not be loaded</strong> ` +
+        `(${cones.data.error}). The geometry above still works — this block ` +
+        `needs the exported files, which live on the Hugging Face Hub.`;
+    }
+  } finally {
+    cones.data.loading = false;
+  }
+  conesDraw();
+}
+
+async function conesSetDataMode(on) {
+  cones.data.on = !!on;
+  const box = document.getElementById("cn-data");
+  if (box && box.checked !== cones.data.on) box.checked = cones.data.on;
+  document.getElementById("cn-data-block")?.classList.toggle("hidden", !cones.data.on);
+  if (!cones.data.on) {
+    cones.data.pick = null;
+    const s = document.getElementById("cn-lag");     // give the slider its
+    if (s) { s.min = "0"; s.max = "143"; s.step = "1"; }   // full span back
+    conesDraw();
+    return;
+  }
+  const m = await loadConeManifest();
+  if (!m || !(m.anchors || []).length) {
+    cones.data.error = "no sample index";
+    const host = document.getElementById("cn-data-hint");
+    if (host) {
+      host.innerHTML = `<strong>No exported samples are registered</strong> — ` +
+        `data/cone_samples.json is missing or empty. See ` +
+        `<a href="https://blauewelt.github.io/earth/docs.html?f=docs/CONE_DATA_DEMO.md" ` +
+        `target="_blank" rel="noopener">how to regenerate them</a>.`;
+    }
+    conesDraw();
+    return;
+  }
+  // Snap to the exported anchor nearest wherever the reader already is.
+  await conesUseAnchor(cones.data.anchorId || coneNearestAnchor(cones.lat, cones.lon).id);
+}
+
+/* The nearest exported anchor to a point, in plain degrees — the cone is a few
+ * thousand km across and the five anchors are an ocean apart, so a great-circle
+ * distance would not change the answer and would hide the arithmetic. */
+function coneNearestAnchor(lat, lon) {
+  const list = (coneManifest && coneManifest.anchors) || [];
+  let best = list[0], bestD = Infinity;
+  for (const a of list) {
+    const d = (a.lat - lat) ** 2 + ((a.lon - lon) * Math.cos(lat * Math.PI / 180)) ** 2;
+    if (d < bestD) { bestD = d; best = a; }
+  }
+  return best || null;
+}
+
 /* The sweep is a rAF loop that cancels its own predecessor and stops itself
  * the moment nobody is looking (another tab, or Stop) — the same shape the
  * tide clock uses, for the same reason: a loop nothing can stop is a loop
@@ -10219,6 +10873,16 @@ function conesStop() {
 
 function conesSetLag(k) {
   cones.lag = Math.max(0, Math.min(143, k | 0));
+  // In data mode the slider's stops are the stencil's own lags, so a value
+  // between two exported outer lags has to land on one of them or the ring
+  // drawn would not be the ring the slider says.
+  if (coneDataOn() && cones.data.stencil === "stage2") {
+    const L = cones.data.sample.outer.lags;
+    let best = L[0];
+    for (const l of L) if (Math.abs(l - cones.lag) < Math.abs(best - cones.lag)) best = l;
+    cones.lag = best;
+    cones.data.lagIdx = L.indexOf(best);
+  }
   const s = document.getElementById("cn-lag");
   if (s && +s.value !== cones.lag) s.value = String(cones.lag);
   conesDraw();
@@ -10244,6 +10908,20 @@ function conesFollowDate() {
   setGlobeDate(coneDateOfBin(Math.max(0, cones.bin - cones.lag)));
 }
 
+/* The other direction, and it is what makes the Play tab drive this one. The
+ * Play tab is "a clock that drives state.date and nothing else" (§5), so the
+ * cone follows it by LISTENING to the date rather than by growing a second
+ * playback engine: while data mode is on and this tab is open, a moved date
+ * moves the anchor bin and the dots re-colour. `follow` is the exclusive
+ * opposite — while it is on WE are driving the date, so listening to our own
+ * write would be a loop. */
+function conesOnGlobeDate() {
+  if (!coneDataOn() || !conesTabVisible() || cones.follow) return;
+  const b = coneClampBin(coneBinOfDate(state.date));
+  if (b === cones.bin) return;
+  conesSetBin(b);
+}
+
 function conesSetBin(b, opts = {}) {
   if (!coneGeo) return;
   cones.bin = coneClampBin(b);
@@ -10263,11 +10941,17 @@ function conesTimePlay() {
   cones.timePlaying = true;
   const tick = () => {
     if (!cones.timePlaying || !conesTabVisible()) { conesTimeStop(); return; }
-    if (cones.bin >= CONE_BIN_MAX) {
+    /* In DATA MODE the clock walks the 24 exported pentads and nothing else:
+     * stepping past them would show the nearest exported date over and over,
+     * which looks like a stuck animation rather than the end of the sample. */
+    const S = coneDataOn() ? cones.data.sample : null;
+    const last = S ? S.meta.bins[S.meta.bins.length - 1] : CONE_BIN_MAX;
+    const first = S ? S.meta.bins[0] : 0;
+    if (cones.bin >= last) {
       if (!cones.timeLoop) { conesTimeStop(); return; }
-      conesSetBin(0);
+      conesSetBin(first);
     } else {
-      conesSetBin(cones.bin + 1);
+      conesSetBin(Math.max(first, cones.bin + 1));
     }
     cones.timeTimer = setTimeout(tick, cones.timeMs);
   };
@@ -10362,6 +11046,32 @@ async function loadCones() {
       conesTimeStop(); conesSetBin(cones.bin + 1);
     });
 
+    // ---- data mode: the exported samples, in the cone
+    document.getElementById("cn-data").addEventListener("change", (ev) => {
+      conesSetDataMode(ev.target.checked);
+    });
+    document.getElementById("cn-data-anchor").addEventListener("change", (ev) => {
+      conesUseAnchor(ev.target.value);
+    });
+    document.getElementById("cn-stencil").addEventListener("change", (ev) => {
+      cones.data.stencil = ev.target.value;
+      cones.data.pick = null;
+      conesDataFillSelectors();
+      coneDataLagRange();
+      conesDraw();
+    });
+    document.getElementById("cn-channel").addEventListener("change", (ev) => {
+      const i = +ev.target.value;
+      if (cones.data.stencil === "codec") cones.data.chan = i;
+      else cones.data.outerChan = i;
+      cones.data.pick = null;
+      conesDraw();
+    });
+    document.getElementById("cn-anom").addEventListener("change", (ev) => {
+      cones.data.anomaly = ev.target.checked;
+      conesDraw();
+    });
+
     // ---- the what-if parameters
     conesBuildParams();
     document.getElementById("cn-reset").addEventListener("click", () => {
@@ -10391,6 +11101,11 @@ async function loadCones() {
   if (dateIn) dateIn.value = coneDateOfBin(cones.bin);
   document.getElementById("cn-follow").checked = cones.follow;
   document.getElementById("cn-loop").checked = cones.timeLoop;
+  document.getElementById("cn-anom").checked = cones.data.anomaly;
+  // Coming BACK to the tab with data mode already on has to redraw the data,
+  // not the geometry: `conesHide` took the dots off the globe, it did not turn
+  // the mode off.
+  if (cones.data.on) { await conesSetDataMode(true); return; }
   conesDraw();
 }
 
@@ -10443,14 +11158,49 @@ function conesSyncParams() {
  * Its own handler rather than a branch inside theirs: this one wants the bare
  * ellipsoid point and nothing about layers, and the two questions have no
  * common part worth sharing. */
-new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((c) => {
+const conesClickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+conesClickHandler.setInputAction((c) => {
   if (!conesTabVisible() || !coneGeo) return;
+  /* In DATA MODE a tap does one of two things, and which one is decided by
+   * what is under it. On a dot: read that dot. On bare globe: snap to the
+   * NEAREST EXPORTED ANCHOR and say so — the anchors are the five the exporter
+   * ran on, and quietly moving the cone to a cell with no data behind it would
+   * be the tab's one unforgivable lie. */
+  if (coneDataOn()) {
+    const picked = viewer.scene.pick(c.position);
+    const i = picked && picked.id && picked.id.coneDot;
+    if (i !== undefined && i !== null) { conesPickDot(i); return; }
+    const cart0 = viewer.camera.pickEllipsoid(c.position, viewer.scene.globe.ellipsoid);
+    if (!cart0) return;
+    const g0 = Cesium.Cartographic.fromCartesian(cart0);
+    const lat = Cesium.Math.toDegrees(g0.latitude);
+    const lon = Cesium.Math.toDegrees(g0.longitude);
+    const near = coneNearestAnchor(lat, lon);
+    if (!near) return;
+    if (near.id !== cones.data.anchorId) {
+      showToast(`Data mode reads only the exported anchors — snapped to ` +
+                `<strong>${near.name}</strong>, the nearest one.`,
+                { key: "cone-snap", replace: true });
+      conesUseAnchor(near.id);
+    }
+    return;
+  }
   const cart = viewer.camera.pickEllipsoid(c.position, viewer.scene.globe.ellipsoid);
   if (!cart) return;
   const g = Cesium.Cartographic.fromCartesian(cart);
   for (const o of document.querySelectorAll("#cn-presets button")) o.classList.remove("active");
   conesSetAnchor(Cesium.Math.toDegrees(g.latitude), Cesium.Math.toDegrees(g.longitude));
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+/* Hover reads a dot too, on a machine that has a pointer. Gated on the tab
+ * being open AND data mode being on, so `scene.pick` — which renders a 3x3
+ * pick frame — is never run on a globe nobody is asking a question of. */
+conesClickHandler.setInputAction((m) => {
+  if (!coneDataOn() || !conesTabVisible()) return;
+  const picked = viewer.scene.pick(m.endPosition);
+  const i = picked && picked.id && picked.id.coneDot;
+  if (i !== undefined && i !== null) conesPickDot(i);
+}, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
 function coneState() {
   const g = coneGeo ? coneGridOf(cones.lat, cones.lon) : { y: -1, x: -1 };
@@ -10476,6 +11226,29 @@ function coneState() {
     paramsDirty: coneParamsDirty(),
     dotsPerChannel: cones.dotsPerChannel,
     dotTokens: cones.dotTokens, totalTokens: cones.totalTokens,
+    // data mode (the exported samples)
+    data: {
+      on: cones.data.on, ready: coneDataOn(), error: cones.data.error,
+      anchorId: cones.data.anchorId, stencil: cones.data.stencil,
+      channel: coneDataOn() ? coneDataChannelName() : null,
+      anomaly: cones.data.anomaly,
+      dateIdx: cones.data.dateIdx, snapped: cones.data.snapped,
+      date: coneDataOn() ? cones.data.sample.meta.dates[cones.data.dateIdx] : null,
+      nDates: coneDataOn() ? cones.data.sample.meta.dates.length : 0,
+      lo: cones.data.lo, hi: cones.data.hi,
+      nDots: cones.data.dots.length,
+      nValued: cones.data.dots.filter(
+        (d) => d.valid && d.obs && Number.isFinite(coneDataValue(d))).length,
+      nMissing: cones.data.dots.filter((d) => d.valid && !d.obs).length,
+      nInvalid: cones.data.dots.filter((d) => !d.valid).length,
+      lags: coneDataOn() ? [...new Set(cones.data.dots.map((d) => d.lag))] : [],
+      pick: cones.data.pick ? {
+        lag: cones.data.pick.lag, date: coneDateOfBin(cones.data.pick.bin),
+        raw: cones.data.pick.raw, anom: cones.data.pick.anom,
+        obs: cones.data.pick.obs, valid: cones.data.pick.valid,
+        row: cones.data.pick.row, col: cones.data.pick.col,
+      } : null,
+    },
   };
 }
 
@@ -10774,6 +11547,7 @@ async function playbackShowFrame(i) {
   // `keepPreload` on the fallback: this is not a configuration change, and
   // clearing the ring for a frame it merely failed to hold would throw away
   // the lookahead precisely when the player is behind.
+  notifyGlobeDate();                       // the Cones tab's data mode follows
   const promoted = playbackPromote(state.date);
   if (!promoted) refreshTimedLayers({ hold: true, keepPreload: true });
   await refreshMonthlyGrids();
@@ -11645,4 +12419,14 @@ window.__earth = {
   conesHide,
   get coneGeometry() { return coneGeo; },
   get coneArtefacts() { return cones.ents; },
+  // data mode (E-069 samples): the tests drive it through these rather than
+  // through clicks, because a preset flies the camera and the software GL
+  // stack starves Playwright's actionability checks (CLAUDE.md §4).
+  conesSetDataMode,
+  conesUseAnchor,
+  conesPickDot,
+  coneNearestAnchor,
+  get coneSample() { return cones.data.sample; },
+  get coneSampleManifest() { return coneManifest; },
+  get coneDataDots() { return cones.data.dots; },
 };

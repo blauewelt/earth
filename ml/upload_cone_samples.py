@@ -32,6 +32,8 @@ import hashlib
 import json
 import os
 import sys
+import time
+import urllib.error
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -69,24 +71,51 @@ def resolve_url(name):
             f"{PREFIX}/{name}")
 
 
-def measure_cors(url, origin="https://blauewelt.github.io"):
+CORS_PROBE_BYTES = 2048
+
+
+def measure_cors(url, origin="https://blauewelt.github.io", tries=4):
     """What a BROWSER on our origin would actually get back.
 
-    A GET with an `Origin` header, following the redirect the Hub issues to its
-    CDN, and reporting the CORS headers on whatever finally answers — because
-    that response is the one the browser's fetch is subject to.
+    An ANONYMOUS GET with an `Origin` header — anonymous because that is what
+    the page is, and a measurement made with a token would not be a measurement
+    of the thing under test — following the redirect the Hub issues to its CDN,
+    and reporting the CORS headers on whatever finally answers, because that
+    response is the one the browser's fetch is subject to.
+
+    It asks for the first `CORS_PROBE_BYTES` rather than the whole file. The
+    CORS headers do not depend on the range, the restore check above has
+    already compared the WHOLE file's sha256, and five anonymous 5 MB reads in
+    a row is what the Hub answers 429 to (measured 2026-09-04). The returned
+    `head_sha256` is over those bytes, so this still checks that the URL serves
+    OUR file and not a redirect page.
     """
-    req = urllib.request.Request(url, headers={"Origin": origin})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        h = {k.lower(): v for k, v in r.headers.items()}
-        body = r.read()
-        return dict(
-            status=r.status, final_url=r.url, bytes=len(body),
-            access_control_allow_origin=h.get("access-control-allow-origin"),
-            access_control_expose_headers=h.get("access-control-expose-headers"),
-            content_type=h.get("content-type"),
-            sha256=hashlib.sha256(body).hexdigest(),
-        )
+    for attempt in range(tries):
+        try:
+            req = urllib.request.Request(
+                url, headers={"Origin": origin,
+                              "Range": f"bytes=0-{CORS_PROBE_BYTES - 1}"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                h = {k.lower(): v for k, v in r.headers.items()}
+                body = r.read()
+                return dict(
+                    status=r.status, final_url=r.url, bytes=len(body),
+                    access_control_allow_origin=h.get("access-control-allow-origin"),
+                    access_control_expose_headers=h.get("access-control-expose-headers"),
+                    content_type=h.get("content-type"),
+                    accept_ranges=h.get("accept-ranges"),
+                    content_range=h.get("content-range"),
+                    head_sha256=hashlib.sha256(body).hexdigest(),
+                )
+        except urllib.error.HTTPError as e:
+            # 429 is the anonymous read limit and it clears; anything else is
+            # a fact about the URL and must not be retried into silence.
+            if e.code != 429 or attempt == tries - 1:
+                raise
+            wait = 30 * (attempt + 1)
+            print(f"    HTTP 429 from the Hub — waiting {wait}s "
+                  f"(attempt {attempt + 2}/{tries})", flush=True)
+            time.sleep(wait)
 
 
 def main(argv=None):
@@ -131,9 +160,15 @@ def main(argv=None):
                 f"mirror is not trustworthy")
         # (2) CORS, as a browser on our origin would see it
         cors = measure_cors(resolve_url(name))
-        if cors["sha256"] != src:
-            raise SystemExit(f"{name}: the resolve/ URL returned different "
-                             f"bytes ({cors['sha256']} != {src})")
+        head = hashlib.sha256(
+            open(path, "rb").read(CORS_PROBE_BYTES)).hexdigest()
+        if cors["head_sha256"] != head:
+            raise SystemExit(f"{name}: the resolve/ URL served different bytes "
+                             f"({cors['head_sha256']} != {head}) — it is not "
+                             f"this file")
+        if not cors["access_control_allow_origin"]:
+            raise SystemExit(f"{name}: no access-control-allow-origin on the "
+                             f"resolve/ URL — the browser cannot read it")
         print(f"    restored ✓ · HTTP {cors['status']} · "
               f"access-control-allow-origin: "
               f"{cors['access_control_allow_origin']!r}", flush=True)
@@ -155,7 +190,7 @@ def main(argv=None):
                 holdout_years=m["holdout_years"],
                 terminal_train_last_year=m["terminal_train_last_year"],
                 value_space={k: v for k, v in m["value_space"].items()
-                             if k in ("raw", "anomaly", "anomaly_note")},
+                             if k in ("raw", "physical", "anomaly", "anomaly_note")},
                 exporter=m["exporter"], exporter_commit=m["exporter_commit"],
                 produced_by=m["produced_by"], pentad_note=m["pentad_note"],
                 L_in=m["L_in"], future_lags=m["future_lags"])
