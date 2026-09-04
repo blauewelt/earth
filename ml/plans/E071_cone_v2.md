@@ -418,7 +418,7 @@ instrument, a different surface underneath.
 
 | quantity | over ocean | over land / ice | source, as used at 0.25° pentads |
 |---|---|---|---|
-| surface (skin) temperature | SST | land-surface / ice-surface temperature | ERA5 skin temperature (gap-free, 1940→) first; then the observed pair OSTIA SST + MODIS MOD11 LST (1 km daily, clear-sky, 2000→) as the raw-observation channel beside it |
+| surface (skin) temperature | ERA5 skin T (shared); SST stays its own observed channel | ERA5 skin T (shared); LST stays its own observed channel | ERA5 skin temperature is the ONE shared channel (same model field everywhere); OSTIA/OISST SST (a foundation temperature, tiny diurnal range) and MODIS LST (clear-sky radiometric skin at overpass, 10–20 K diurnal swing) measure different things and stay separate — shared only when measurand AND instrument match (Chris, 4 Sep) |
 | near-surface air | 2 m temperature, 2 m dew point, 10 m wind | the same | ERA5 (replaces the FROZEN NCEP R1 momentum flux — the wind family's source problem is solved by this row) |
 | air aloft — "temperature across heights" | temperature, wind, humidity at 850, 500, 250 hPa | the same | ERA5 pressure levels; radiosondes (IGRA, ~800 stations at 00/12 UTC) as native dots later |
 | pressure, precipitation, radiation, turbulent fluxes | surface pressure, precipitation, net short/long-wave, latent + sensible heat | the same | ERA5; IMERG 0.1° for observed precipitation 2000→ |
@@ -431,6 +431,11 @@ instrument, a different surface underneath.
 | surface height anomaly | sea-level anomaly (DUACS 0.125° 1993→) | ice-sheet elevation change (CryoSat-2 2010→, ICESat-2 2018→); lake and river height (Hydroweb points) | the same radar altimeters; sparse and slow on land, dense on the ocean |
 | surface velocity | currents (GLORYS u, v) | ice velocity (ITS_LIVE / MEaSUREs, annual → monthly) ; land ≡ 0 | one (u, v) pair; on land it is exactly zero, which is information (nothing advects) |
 | the column below | T, S profiles (Argo, 0–2,000 m) | soil temperature and moisture by layer (ERA5-Land 4 layers; SMAP L4 root zone); firn temperature on the ice sheets | the PROFILE TOKEN of §3 with a sphere-specific depth ladder — one token type serves all three columns |
+
+Correction, 4 Sep (Chris): a channel is shared only when the measurand and
+the instrument are the same on both sides; the observed sea-surface and
+land-surface temperatures therefore stay separate channels, and ERA5 skin
+temperature is the shared one.
 
 Sphere-specific channels stay sphere-specific and are `miss` elsewhere with
 a clear conscience: mixed-layer depth and sea-surface height are ocean;

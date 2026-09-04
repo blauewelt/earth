@@ -1,4 +1,4 @@
-// Per-slide sources: one array of {t: label, u: full URL} per slide, in deck order (52 entries).
+// Per-slide sources: one array of {t: label, u: full URL} per slide, in deck order (55 entries).
 // Appended to every speaker note by build.js (plain text) and rendered as clickable links on the
 // notes pages (notes_deck.js) and on the Sources slide. Keep URLs full (https://) so they are
 // clickable after a PDF export and survive a Google Slides import.
@@ -73,6 +73,16 @@ const P = {
   e069: { t: "E-069 plan — two stencils, one cone", u: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_cone_codec.md" },
   e069log: { t: "E-069 in the experiment log", u: "https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-069" },
   e071: { t: "E-071 plan — cone v2: global, harmonic, Argo-aware, sized by the fastest thing in the ocean", u: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md" },
+  // --- the Earth foundation model (slides 49–51) ---
+  e070: { t: "E-070 plan — the global tensor (family 7): the globe at 0.25° pentads, gates G1–G3, phases A–F", u: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E070_global_tensor.md" },
+  e072: { t: "E-072 plan — the Earth foundation model: data design first, then the scaling ladder, then the recipe", u: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E072_earth_foundation_model.md" },
+  handoverEfm: { t: "Handover, 4 Sep 2026 — cone v2, the four spheres, the Earth foundation model, and where to fork", u: "https://blauewelt.github.io/earth/docs.html?f=ml/handoffs/HANDOVER_2026-09-04_cone_v2_efm.md" },
+  scalingMd: { t: "ml/SCALING.md — how skill moves with model and data size (the programme's scaling audit)", u: "https://blauewelt.github.io/earth/docs.html?f=ml/SCALING.md" },
+  e062log: { t: "E-062 in the experiment log — the flat width ladder and the Argo information finding", u: "https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-062" },
+  e066log: { t: "E-066 in the experiment log — the 200-mode linear inverse model as the reference forecast", u: "https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-066" },
+  muennighoff: { t: "Muennighoff et al. 2023 — scaling data-constrained language models (the ≤ 4-epoch limit)", u: "https://arxiv.org/abs/2305.16264" },
+  chinchilla: { t: "Hoffmann et al. 2022 — Chinchilla: training compute-optimal large language models (~20 tokens per parameter)", u: "https://arxiv.org/abs/2203.15556" },
+  mup: { t: "Yang et al. 2022 — Tensor Programs V (μP/μTransfer: tuning the learning rate on a small model)", u: "https://arxiv.org/abs/2203.03466" },
   // the measured maxima behind cone v2's design speeds (E-071 §4.1)
   somaliWiki: { t: "Somali Current (Wikipedia) — up to 7 knots ≈ 3.6 m/s", u: "https://en.wikipedia.org/wiki/Somali_Current" },
   noaaGulf: { t: "How fast is the Gulf Stream? (NOAA Ocean Service) — about 9 km/h ≈ 2.5 m/s", u: "https://oceanservice.noaa.gov/facts/gulfstreamspeed.html" },
@@ -267,9 +277,12 @@ module.exports = [
   /* 46 — boundaries: every edge the sampler meets */ S("coneSampler", "trainConePy", "trainprobePy", "buildFamily4", "e034", "e059", "e069", "e069blob", "e071", "argo", "rgArgo", "coneDataEnso", "mlclaude"),
   /* 47 — the speeds the cone did not have, and the speeds it will */ S("conePy", "coneSampler", "e069", "e069log", "e069blob", "e071", "somaliWiki", "noaaGulf", "agulhasWiki", "kelvinWiki", "cheltonAtlas", "currentsY", "proposal", "chelton", "glorys", "argo", "drifters", "rapidData", "floridaCable", "dataLadder", "coneDataEnso", "mlclaude"),
   /* 48 — land, ice and air: nothing is dark by design */ S("e071", "proposal", "dataLadder", "era5", "era5doc", "mod11", "mod10", "mcd43", "ascat", "smap", "grace", "icesat2", "cryosat", "itslive", "osisafIce", "ccism", "igra", "imerg", "ostia", "duacs", "hydroweb", "gleam", "glorys", "argo", "coneDataEnso"),
-  /* 49 */ S("proposal", "paper", "mlclaude", "cmemsFc"),
-  /* 50 */ S("proposal", "s1reconf", "s1d", "s2ext", "modisviirs", "snpp", "ssmis", "amsr3", "s6", "occci", "ccism", "en4", "grdc", "opera", "gleam", "ecmwfOpen"),
-  /* 51 — El Niño 2026 */ S("cpcEnso", "iriPlume", "pmelWwv", "godas", "interpOlr", "oni", "pslIndices", "mei", "rmm", "ccmp", "oscarFinal", "catalogJson", "catalogDoc", "coneDataEnso"),
-  /* 52 */ S("surveyNotes", "proposal", "paper"),
+  /* 49 — the Earth foundation model: the data decides the size */ S("e072", "handoverEfm", "scalingMd", "chinchilla", "muennighoff", "e070", "e071", "dataLadder", "e062log", "e066log", "e069", "proposal", "paper", "mlclaude"),
+  /* 50 — the scaling ladder and the recipe */ S("e072", "handoverEfm", "scalingMd", "chinchilla", "muennighoff", "mup", "perceiver", "e069", "e069log", "e070", "e071", "paper", "mlclaude"),
+  /* 51 — read-outs and what each needs first */ S("e072", "handoverEfm", "e071", "e070", "dataLadder", "coneDataEnso", "iriPlume", "oni", "pmelWwv", "godas", "rapidData", "floridaCable", "occci", "pace", "osisafIce", "grace", "ccism", "era5", "imerg", "ecmwfOpen", "e062log", "e066log", "mlclaude"),
+  /* 52 */ S("proposal", "paper", "mlclaude", "cmemsFc"),
+  /* 53 */ S("proposal", "s1reconf", "s1d", "s2ext", "modisviirs", "snpp", "ssmis", "amsr3", "s6", "occci", "ccism", "en4", "grdc", "opera", "gleam", "ecmwfOpen"),
+  /* 54 — El Niño 2026 */ S("cpcEnso", "iriPlume", "pmelWwv", "godas", "interpOlr", "oni", "pslIndices", "mei", "rmm", "ccmp", "oscarFinal", "catalogJson", "catalogDoc", "coneDataEnso"),
+  /* 55 */ S("surveyNotes", "proposal", "paper"),
 ];
 module.exports.P = P;

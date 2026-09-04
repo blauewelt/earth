@@ -1,4 +1,5 @@
-// Plain-English speaker notes for slides 34–51 (the generic-embedding input proposal), in deck order.
+// Plain-English speaker notes for slides 34–54 (the generic-embedding input proposal and the three
+// Earth foundation-model slides of E-072), in deck order.
 // Spliced into notes.js before the Sources entry.
 module.exports = [
 
@@ -176,6 +177,49 @@ Vocabulary, second half. BRIGHTNESS TEMPERATURE is the natural microwave glow of
 A PROFILE TOKEN carries a whole vertical column in one token instead of one per level, and the same type serves an Argo temperature-and-salinity profile, a stack of soil layers, and the firn \u2014 the compacted old snow on top of an ice sheet. Two design points go with it. LAND DOES NOT ADVECT: soil, snow and vegetation do not travel sideways, so their cone has speed zero and its reach is only the distance over which the field stays correlated, a few hundred kilometres. And ERA5-LAND is a higher-resolution land rerun of ERA5 with no data assimilation of its own; plain ERA5 is the assimilating one, which is why ERA5 is the source in the table.
 
 "Sparse for now" is Phase L0: six gap-free channels from two sources, covering the whole 1982-onwards axis and the whole globe including Antarctica. Everything that only starts in 2000 waits for L1. Nothing on this slide is built or measured. The dataset specifications reused here \u2014 resolutions, cadences and record starts \u2014 come from the proposal's verification pass of 2 September; the ones added for this slide (MODIS albedo, ITS_LIVE, CryoSat-2, ESA CCI soil moisture, IGRA) have NOT been through it and must be verified before anything is fetched.`,
+
+// 48b — the Earth foundation model: the data decides the size
+`Chris asked for an Earth foundation model of one to ten billion parameters, possibly a mixture of experts, with a Chinchilla scaling ladder and a comprehensive study of how to design the training data. This slide answers the last part, because it turns out to decide the first.
+
+CHINCHILLA is the 2022 DeepMind scaling result: for a fixed compute budget a model is best trained at roughly twenty training tokens per parameter, and the models before it were far too big for the data they saw. Turned around, twenty times the parameter count is the amount of data a model of that size can be justified in having. Two words then need separating. A VALUE is one measured number — one channel, at one cell, in one five-day bin. A TOKEN in this design is one place at one time carrying the whole value vector of every channel there, so with sixty-five channels one token is about sixty-five values; that is why the token column is the value column divided by sixty-five. The CEILING column is values divided by twenty: the largest model the data could support if every value were independent.
+
+That last clause is why the column says ceiling and not target, and the orange box is the correction. Neighbouring quarter-degree cells are not independent — they are correlated over roughly three hundred kilometres, and at the surface over two to six months. In the North Atlantic that is about a hundred and fifty cells and fifteen five-day bins per genuinely INDEPENDENT SAMPLE, so two and a half billion raw values are worth of order one to ten million independent ones. Which is exactly the regime in which our measured width ladder is flat: a 7.6-million-parameter head and a 206-million-parameter head roll the same.
+
+Which numbers are MEASURED in this programme and which are the plan's stated ASSUMPTIONS? Measured: the flat width ladder (0.103 / 0.104 / 0.105), the LIM result — a linear inverse model is a plain linear forecast fitted to the same field, and ours beats every learned head from fifteen days out — the held-out minima inside two thousand steps, and Argo being eighty per cent of the bytes for about one per cent of the information. Assumed: every value count in the ladder, the sixty-five-channel token, the divide-by-twenty anchor, the correlation lengths and the ×1.5 discount on daily cadence. Nothing here is dispatched.`,
+
+// 48c — the scaling ladder and the recipe
+`The left half is the ladder of things to train, in order. The right half is how to train them. Six rungs, L0 to L5. L0 is done: the seven-million-parameter cone codec of E-069, which learned persistence from history and did not learn velocity.
+
+Every rung after it is bought only on the previous rung's read-out, under the frozen protocol — train on data up to 2020, test on 2021 to 2024, with longitude holes — and with the NULL LADDER beside it. A null ladder is the set of deliberately dumb forecasts a real one has to beat.
+
+Those are: climatology (the long-term average for this day of the year), persistence (tomorrow equals today), damped persistence (today's anomaly shrunk towards zero), the LIM (the plain linear forecast fitted to the same field, which today beats every learned head from fifteen days out), nearest-analogue retrieval, and the rung below.
+
+Vocabulary for the recipe. PERCEIVER is an architecture that cross-attends a variable, unordered set of inputs into a small fixed set of latent vectors, so cost does not grow with the number of inputs — the right shape when the input is a bag of dots.
+
+A MIXTURE OF EXPERTS replaces one feed-forward block with many and lets a router send each token to two of them, so the model can hold billions of parameters while paying only for the fraction that fires; here the router is told which sphere the token sits on, which makes the specialisation natural.
+
+A GAUSSIAN NEGATIVE LOG-LIKELIHOOD asks the model for a mean AND a spread and scores both, so a confident wrong answer is punished harder than an honestly uncertain one. WARM-UP ramps the learning rate up from zero over the first two thousand steps so early gradients cannot wreck the weights; COSINE then eases it down to a tenth of the peak.
+
+μP is a parametrisation that scales the per-layer learning rates with width, so the best rate found on a small model stays best on a large one — that is what makes a multi-billion run one shot instead of a search. Z-NOISE is deliberately adding noise to the embeddings the forecaster reads, which turns forecasting into denoising.
+
+MEASURED in this programme: the +0.045 and +0.050 that z-noise buys, the 3e-4 and 4e-4 learning rates, the flat width ladder, and the failure of H1 — velocity from displacement — at five seeds. ASSUMED: every hour count and token count in the table, the rung sizes, the four-epoch limit, and the mixture-of-experts design itself. Nothing above L1 is dispatched.`,
+
+// 48d — read-outs and what each needs first
+`A READ-OUT is something we want to know: the strength of the overturning, the state of El Niño, the colour of the sea. A HEAD is the small model that reads it out — a probe of a few hundred thousand parameters trained on top of a frozen embedding.
+
+The band at the top of the slide is the point of the whole programme: because every read-out is a head on ONE representation plus the rolled forecast, adding a read-out costs a probe and not a training run. The read-outs are the cheap, replaceable end of the system; the forward model in embedding space is the programme.
+
+Row by row. EL NIÑO is scored on Niño-3.4 — the sea-surface temperature anomaly averaged over a box in the central-eastern tropical Pacific — and on the ONI, its three-month running mean, the official index the US Climate Prediction Center publishes. Our own bake of the OISST record puts Niño-3.4 at −0.57 in January and +2.09 in July 2026, and that has to be reconciled with CPC's number before it can serve as a label.
+
+Among its nulls is the SPRING BARRIER: forecasts made across the northern spring lose skill much faster than forecasts made at other times of year, because the coupled ocean–atmosphere signal in the tropical Pacific is weakest then. So an honest ENSO forecast is a skill curve by start month, not one number.
+
+And without the subsurface — the warm-water volume, or the depth of the 20 °C isotherm — a head on surface temperature alone is a persistence forecast wearing a name. AMOC is scored against the RAPID array at 26.5° north, then MOVE, OSNAP, SAMBA and the Florida cable; those truth series are already in our tensor.
+
+What AMOC needs is the buoyancy forcing — the heat and fresh water the atmosphere puts into the ocean — and the three-dimensional interior. SURFACE COLOUR needs the reflectance bands as inputs with chlorophyll as the target, never as an input: that is the observed-over-derived rule from earlier in this deck.
+
+Sea ice, land water and the atmosphere are the cheap three: they need only Phase L0, six gap-free channels from two sources, about forty gigabytes — which is why they sit at the top of the to-do list on the right even though they are not the headline.
+
+MEASURED here: the Niño-3.4 values from our own OISST bake, and the fact that the RAPID and Florida-cable series are already in the tensor. ASSUMED: every prerequisite ranking and every null. No head on this slide has been trained.`,
 
 // 45 — phases and the decisive experiment
 `The plan starts with an experiment that needs no new data.

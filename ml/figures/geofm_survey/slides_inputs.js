@@ -1,6 +1,7 @@
-// Slides 34–51: what a generic Earth embedding should see — input ladder, cones per input,
+// Slides 34–54: what a generic Earth embedding should see — input ladder, cones per input,
 // the cone-native codec ("dots in, embedding out"), the zero-sum question, the four boundaries the
 // sampler meets, the speeds the cone does not have, land/ice/air and the shared-channel set,
+// the Earth foundation model (E-072: the data ladder, the scaling ladder and recipe, the read-outs),
 // phases, data continuity, El Niño 2026.
 // Numbers: dataset specs verified 2 Sep 2026 (see generic-earth-embedding-inputs-proposal.md, Appendix A);
 // speeds and memories are the same order-of-magnitude values the cone slides use.
@@ -782,7 +783,7 @@ module.exports = function (ctx) {
     txt(s, [
       { text: "THE SHARED SET \u2014 one quantity, one instrument, two surfaces.  ", options: { bold: true, color: NAVY, fontSize: 8, charSpacing: 0.4 } },
       { text: "A per-cell SPHERE CODE (ocean \u00B7 land \u00B7 ice sheet \u00B7 inland water) says which retrieval filled the cell, so one channel means sea-surface temperature at one anchor and land-surface temperature at the next.", options: { fontSize: 7, color: INK } },
-    ], TX, 1.60, TW, 0.32);
+    ], TX, 1.48, TW, 0.30);
     {
       const th = t => ({ text: t, options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 7, valign: "middle" } });
       const q = t => ({ text: t, options: { bold: true, color: NAVY, fontSize: 7, valign: "top" } });
@@ -791,8 +792,8 @@ module.exports = function (ctx) {
       const src = t => ({ text: t, options: { fontSize: 7, color: MUTED, valign: "top" } });
       const trows = [
         [th("quantity"), th("over ocean"), th("over land / ice"), th("source, at 0.25\u00B0 pentads")],
-        [q("surface (skin) temperature"), o("SST"), l("land- / ice-surface temperature"),
-         src("ERA5 skin T, gap-free 1940\u2192; then the observed OSTIA SST + MODIS MOD11 LST, 1 km daily clear-sky 2000\u2192")],
+        [q("surface (skin) temperature"), o("ERA5 skin T (shared); SST stays its own observed channel"), l("ERA5 skin T (shared); LST stays its own observed channel"),
+         src("ERA5 skin temperature is the ONE shared channel (same model field everywhere); OSTIA/OISST SST (a foundation temperature, tiny diurnal range) and MODIS LST (clear-sky radiometric skin at overpass, 10\u201320 K diurnal swing) measure different things and stay separate \u2014 shared only when measurand AND instrument match (Chris, 4 Sep)")],
         [q("near-surface air"), o("2 m T, 2 m dew point, 10 m wind"), l("the same"),
          src("ERA5 \u2014 this row retires the FROZEN NCEP R1 wind source")],
         [q("air aloft \u2014 \u201Cacross heights\u201D"), o("T, wind, humidity at 850 / 500 / 250 hPa"), l("the same"),
@@ -818,16 +819,16 @@ module.exports = function (ctx) {
         [q("the column below"), o("T, S profiles (Argo, 0\u20132,000 m)"), l("soil layers (ERA5-Land, SMAP L4); firn on the ice sheets"),
          src("ONE profile-token type (E-071 \u00A73) with a sphere-specific depth ladder")],
       ];
-      s.addTable(trows, { x: TX, y: 1.94, w: TW, colW: [1.30, 1.40, 1.60, 2.95], fontFace: FONT_B,
+      s.addTable(trows, { x: TX, y: 1.80, w: TW, colW: [1.20, 1.45, 1.58, 3.02], fontFace: FONT_B,
         border: { type: "solid", color: GRIDLINE, pt: 0.5 },
-        rowH: [0.20, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30, 0.30],
+        rowH: [0.18, 0.60, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28],
         margin: 0.03, autoPage: false });
     }
     txt(s, [
       { text: "Sphere-specific channels stay sphere-specific, and are ", options: { fontSize: 7, color: INK } },
       { text: "miss", options: { bold: true, color: LAND, fontSize: 7 } },
       { text: " elsewhere with a clear conscience: mixed-layer depth and sea-surface height (ocean); ESA CCI soil moisture 0.25\u00B0 daily 1978\u2192 \u2014 it covers the whole axis \u2014 snow water equivalent, leaf area, GLEAM evapotranspiration (land); ice velocity and elevation change (ice).", options: { fontSize: 7, color: INK } },
-    ], TX, 6.04, TW, 0.36);
+    ], TX, 6.20, TW, 0.32);
 
     // ---------- RIGHT (~40 %): three boxes ----------
     const BX = 8.05, BW = 4.68, IX = BX + 0.13, IW = BW - 0.26;
@@ -866,7 +867,260 @@ module.exports = function (ctx) {
       { text: "six channels, two sources, all gap-free, all 1982\u2192, all global to the poles, ~40 GB \u2014 ERA5 skin T, 2 m T, 10 m u/v (retiring the frozen NCEP R1), surface pressure, precipitation; plus the frozen fraction and ESA CCI soil moisture. MODIS / GRACE / SMAP / ASCAT (2000\u2192) follow as L1, once the harmonic climatology has shown it handles a channel that starts eighteen years into the axis.", options: { fontSize: 7, color: INK } },
     ], IX, 4.82, IW, 1.52);
 
-    reading(s, "Reading. Today a land cell is told \u201Cthe world was not observed here\u201D 42 times per pentad, which is false. Cone v2 defines channels by what is measured and by which instrument, lets a sphere code say what surface lies under the cell, and finds that most of the input ladder already crosses the coastline \u2014 the same skin temperature, the same radar, the same reflectance, the same altimeter, the same column token. What stays dark is only what no instrument sees.", 6.48);
+    reading(s, "Reading. Today a land cell is told \u201Cthe world was not observed here\u201D 42 times per pentad, which is false. Cone v2 defines channels by what is measured and by which instrument, and lets a sphere code say what surface lies under the cell \u2014 so most of the input ladder already crosses the coastline: the same radar, the same reflectance, the same altimeter, the same column token. Chris\u2019s correction of 4 Sep sets the bar for \u201Cshared\u201D: the measurand AND the instrument must match. ERA5 skin temperature is therefore the one shared temperature channel, and the observed SST and land-surface temperature stay separate.", 6.52);
+    footer(s);
+  }
+
+  // ---------------------------------------------------------------- 44g. the Earth foundation model — the data decides the size (E-072 §0–2)
+  {
+    const s = pres.addSlide(); s.background = { color: WHITE };
+    title(s, "The Earth foundation model — the data decides the size",
+      "Chris, 4 Sep: a 1–10 B model, maybe MoE, a Chinchilla ladder, and a study of how to design the training data. E-072: at today’s data the size is small and measured; the ladder is a ladder of DATA.");
+    const RED = "A23B3B";
+
+    // ---------- LEFT: the ladder of data, as a table and then as a log-scale bar chart ----------
+    const TX = 0.6, TW = 7.20;
+    txt(s, [
+      { text: "ASSUMPTIONS (E-072 §2.2). ", options: { bold: true, color: NAVY, fontSize: 7, charSpacing: 0.3 } },
+      { text: "0.25° pentads 1982-01 → 2024-12 (3,142 bins); the global grid 721 × 1,440; ~686 k ocean and ~352 k land + ice cells; channel sets as in E-071 §6; a token carries 65 channels. “Ceiling” is values ÷ 20, the programme’s stated Chinchilla anchor — and it IS a ceiling, because 0.25° cells are correlated over hundreds of kilometres.", options: { fontSize: 7, color: INK } },
+    ], TX, 1.50, TW, 0.32);
+    {
+      const th = t => ({ text: t, options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 7, valign: "middle" } });
+      const q = t => ({ text: t, options: { bold: true, color: NAVY, fontSize: 7, valign: "top" } });
+      const v = (t, col) => ({ text: t, options: { bold: true, color: col || INK, fontSize: 7.5, align: "center", valign: "middle" } });
+      const src = t => ({ text: t, options: { fontSize: 7, color: MUTED, valign: "top" } });
+      const rows = [
+        [th("rung of data"), th("observed values"), th("tokens (÷ 65)"), th("ceiling, values / 20"), th("what it takes")],
+        [q("North Atlantic ocean pentads, r3 — today"), v("2.5 B"), v("0.04 B"), v("0.12 B params", OBS), src("exists")],
+        [q("global ocean pentads, family 7"), v("20 B"), v("0.31 B"), v("1.0 B", OBS), src("E-070 Phases B–F (the pull is done; the tensor is not built)")],
+        [q("+ the shared 20 and land-only 5 channels of E-071 §6"), v("91 B"), v("1.4 B"), v("4.5 B", OBS), src("ERA5 (needs the CDS account), MODIS, ASCAT, SMAP, GRACE, OSI SAF, CCI soil moisture: ~170 GB")],
+        [q("daily cadence, all spheres"), v("455 B"), v("7.0 B"), v("23 B", OBS), src("the daily global tensor is 1.3 TB (E-070 §8); the streaming loader E-033 Phase 3 deferred")],
+        [q("1 km daily, all spheres (rung 3 radiometers)"), v("350,000 B"), v("5,400 B"), v("17,000 B", OBS), src("not a tensor: a patch-encoder feed (§2.1); compute-bound for the first time")],
+      ];
+      s.addTable(rows, { x: TX, y: 1.84, w: TW, colW: [2.10, 0.86, 0.78, 0.96, 2.50], fontFace: FONT_B,
+        border: { type: "solid", color: GRIDLINE, pt: 0.5 },
+        rowH: [0.18, 0.30, 0.30, 0.38, 0.34, 0.30], margin: 0.03, autoPage: false });
+    }
+    // the bar chart — observed values on a log axis, with the two parameter ceilings as guides
+    {
+      const CX = 2.42, CW = 5.20, y0 = 4.12, bh = 0.235, dy = 0.40;
+      const LOGMAX = 6;                                  // axis runs 1 B … 1,000,000 B of observed values
+      const L = v => Math.log10(v) / LOGMAX * CW;
+      txt(s, [
+        { text: "The same ladder on a log axis — observed values, in billions. ", options: { bold: true, color: NAVY, fontSize: 7.5 } },
+        { text: "A ceiling of N parameters needs 20·N values, so the 1 B and 10 B targets are the two guides: 20 B and 200 B.", options: { fontSize: 7, color: INK } },
+      ], TX, 3.70, TW, 0.20);
+      // gridlines and ticks at each decade
+      for (let d = 0; d <= LOGMAX; d++) {
+        const x = CX + d / LOGMAX * CW;
+        s.addShape(pres.shapes.LINE, { x, y: y0 - 0.02, w: 0, h: 5 * dy - 0.14, line: { color: GRIDLINE, width: 0.5, dashType: "sysDot" } });
+        s.addText(["1", "10", "100", "1,000", "10,000", "100,000", "1,000,000"][d], { x: x - 0.35, y: y0 + 5 * dy - 0.12, w: 0.7, h: 0.20, fontFace: FONT_B, fontSize: 6.5, color: MUTED, align: "center", isTextBox: true, margin: 0 });
+      }
+      s.addText("observed values (billions, log scale)", { x: CX, y: y0 + 5 * dy + 0.08, w: CW, h: 0.20, fontFace: FONT_B, fontSize: 6.5, italic: true, color: MUTED, align: "center", isTextBox: true, margin: 0 });
+      // the two parameter ceilings
+      [[20, "1 B params →", "right"], [200, "← 10 B params", "left"]].forEach(([val, lab, side]) => {
+        const x = CX + L(val);
+        s.addShape(pres.shapes.LINE, { x, y: y0 - 0.16, w: 0, h: 5 * dy - 0.02, line: { color: RED, width: 1.1 } });
+        s.addText(lab, { x: side === "right" ? x - 0.88 : x + 0.04, y: y0 - 0.32, w: 0.84, h: 0.16, fontFace: FONT_B, fontSize: 6.5, bold: true, color: RED, align: side, valign: "middle", isTextBox: true, margin: 0 });
+      });
+      const bars = [["today · NA ocean", 2.5, OCEAN], ["+ the globe", 20, OCEAN], ["+ all spheres", 91, LAND], ["+ daily cadence", 455, ATMOS], ["+ 1 km patches", 350000, BIO]];
+      bars.forEach(([lab, val, col], i) => {
+        const y = y0 + i * dy;
+        s.addText(lab, { x: TX, y, w: CX - TX - 0.08, h: bh, fontFace: FONT_B, fontSize: 7, bold: true, color: INK, align: "right", valign: "middle", isTextBox: true, margin: 0 });
+        s.addShape(pres.shapes.RECTANGLE, { x: CX, y, w: Math.max(L(val), 0.02), h: bh, fill: { color: col, transparency: 22 }, line: { width: 0 } });
+        s.addText(val >= 1000 ? `${val.toLocaleString("en-US")} B` : `${val} B`, { x: CX + L(val) + 0.06, y, w: 1.0, h: bh, fontFace: FONT_B, fontSize: 7, bold: true, color: col, valign: "middle", isTextBox: true, margin: 0 });
+      });
+    }
+
+    // ---------- RIGHT: what is measured, and the independence correction ----------
+    const BX = 7.95, BW = 4.75, IX = BX + 0.13, IW = BW - 0.26;
+    box(s, BX, 1.50, BW, 1.94, OBS, "F5FBF7");
+    txt(s, [{ text: "What the programme has MEASURED (E-072 §1)", options: { bold: true, color: OBS, fontSize: 9 } }], IX, 1.56, IW, 0.20);
+    txt(s, [
+      { text: "The width ladder is flat. ", options: { bold: true, color: NAVY, fontSize: 7.5 } },
+      { text: "7.6 M → 40.4 M → 206.66 M stage-2 heads roll at corridor accuracy 0.103 / 0.104 / 0.105 (E-062-R0). At today’s data, capacity is not the axis — more parameters buy nothing until the data grows.", options: { fontSize: 7.5, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+      { text: "The LIM beats every head from 15 days. ", options: { bold: true, color: NAVY, fontSize: 7.5 } },
+      { text: "A 200-mode linear inverse model — a plain linear forecast fitted to the same field — out-forecasts the learned head at every lead ≥ 15 d and beats damped persistence from 30 d (E-066). The null ladder is mandatory at every rung.", options: { fontSize: 7.5, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+      { text: "Held-out minima arrive inside 2,000 steps ", options: { bold: true, color: NAVY, fontSize: 7.5 } },
+      { text: "and the next 198,000 make it worse (E-059, E-060) — the regime is data-limited: early stopping, ≤ 4 epochs, never a long schedule.", options: { fontSize: 7.5, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+      { text: "Argo is 80 % of the bytes for ~1 % of the information. ", options: { bold: true, color: NAVY, fontSize: 7.5 } },
+      { text: "The 32 upsampled Argo channels carry ~0.28 GB of information and are null at every lead (E-062). Information per byte decides the data design — never bytes.", options: { fontSize: 7.5, color: INK } },
+    ], IX, 1.78, IW, 1.60);
+    box(s, BX, 3.56, BW, 2.74, TIME, "FFF6EE");
+    txt(s, [{ text: "The independence correction (E-072 §2.3)", options: { bold: true, color: TIME, fontSize: 9 } }], IX, 3.62, IW, 0.20);
+    txt(s, [
+      { text: "A 0.25° cell is correlated with its neighbours over ~300 km and, at the surface, over 2–6 months. In the North Atlantic that is ", options: { fontSize: 7.5, color: INK } },
+      { text: "~150 cells × ~15 pentads per independent sample", options: { bold: true, color: TIME, fontSize: 7.5 } },
+      { text: ", so the 2.5 B raw values are of order 1–10 M INDEPENDENT ones — which is exactly the regime in which a 7.6 M head equals a 206 M one.", options: { fontSize: 7.5, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+      { text: "So the multipliers buy less than they say. The globe adds new REGIMES and the spheres add new PHYSICS (land does not advect; the atmosphere decorrelates in days) — both worth their face value. Daily cadence inside a pentad is mostly the same sample five times and is worth perhaps ×1.5. The kilometre rung adds genuinely new fine-scale variance.", options: { fontSize: 7.5, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+      { text: "The honest reading: globe and spheres first, then resolution, cadence last.", options: { bold: true, color: TIME, fontSize: 7.5 } },
+    ], IX, 3.84, IW, 2.38);
+
+    reading(s, "Reading. At one basin, a quarter degree, five-day bins and 42 ocean channels, the model size is set by the data and it is small — the width ladder is flat from 7.6 M to 206.66 M, the linear model wins from 15 days out, and every held-out minimum arrives inside 2,000 steps. A 1–10 B model is therefore not a training decision but a DATA-DESIGN decision: the globe, the other spheres, daily cadence and the kilometre rungs are what raise the value-count ceiling from ~0.12 B parameters to 1 B, 4.5 B, 23 B and beyond — and the compute stays cheap until the kilometre rung.", 6.44);
+    footer(s);
+  }
+
+  // ---------------------------------------------------------------- 44h. the scaling ladder and the recipe (E-072 §3–4)
+  {
+    const s = pres.addSlide(); s.background = { color: WHITE };
+    title(s, "The scaling ladder and the recipe",
+      "E-072 §3–4. Six rungs, each bought only on the previous rung’s read-out under the frozen protocol; and the training recipe this programme has already paid to learn, plus the two things the new data forces.");
+    const RED = "A23B3B";
+
+    // ---------- LEFT: the L0–L5 ladder ----------
+    const TX = 0.6, TW = 7.05;
+    txt(s, [
+      { text: "COMPUTE PRICING. ", options: { bold: true, color: NAVY, fontSize: 7, charSpacing: 0.3 } },
+      { text: "6·N·T·epochs FLOPs; an RTX 4090 at 165 TFLOP/s bf16 (E-033’s measurement) at 40 % utilisation; a v5e-4 TPU node at 4 × 197 TFLOP/s at the same utilisation. Four epochs — the data-constrained limit (Muennighoff et al. 2023) — except at the top rung.", options: { fontSize: 7, color: INK } },
+    ], TX, 1.50, TW, 0.30);
+    {
+      const th = t => ({ text: t, options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 7, valign: "middle" } });
+      const rn = t => ({ text: t, options: { bold: true, color: EMB, fontSize: 9, align: "center", valign: "middle" } });
+      const n = t => ({ text: t, options: { bold: true, color: NAVY, fontSize: 7, valign: "top" } });
+      const c7 = t => ({ text: t, options: { fontSize: 7, color: INK, valign: "top" } });
+      const num = t => ({ text: t, options: { fontSize: 7, color: INK, align: "center", valign: "middle" } });
+      const rows = [
+        [th("rung"), th("N"), th("data"), th("tokens × epochs"), th("4090-h"), th("v5e-4 h"), th("the question it must answer before the next rung is bought")],
+        [rn("L0"), n("7 M"), c7("NA pentads (E-069’s ConeMAE)"), num("0.15 B"), num("< 1"), num("< 1"), c7("done: persistence yes, velocity no")],
+        [rn("L1"), n("30–125 M"), c7("NA pentads, cone v2 geometry + harmonic anomaly + profile tokens"), num("0.15 B"), num("< 1"), num("< 1"), c7("does the geometry change (E-071) move the per-family held-out loss and the rolled skill at leads 1–3 beyond the LIM?")],
+        [rn("L2"), n("0.3–1 B"), c7("global ocean pentads (family 7)"), num("1.2 B"), num("~30"), num("~7"), c7("G1–G3 of E-070: does the globe transfer (Kuroshio, ACC), and does the North Atlantic number hold at matched steps?")],
+        [rn("L3"), n("1–4.5 B, MoE"), c7("+ all spheres (E-071 §6)"), num("5.6 B"), num("~570"), num("~120"), c7("does a sphere-routed mixture of experts beat a dense model of the same ACTIVE parameters; do land and atmosphere improve the ocean’s rolled skill, and vice versa?")],
+        [rn("L4"), n("4–23 B, MoE"), c7("daily, all spheres"), num("14 B (2 epochs)"), num("~3,500"), num("~740"), c7("the first compute-bound rung; is the daily cadence worth ×5 bytes on the terminal holdout?")],
+        [rn("L5"), n("10 B+"), c7("+ kilometre patches"), num("—"), num("compute-bound"), num("—"), c7("only after L4 has a positive answer")],
+      ];
+      s.addTable(rows, { x: TX, y: 1.82, w: TW, colW: [0.40, 0.78, 1.35, 0.72, 0.60, 0.55, 2.65], fontFace: FONT_B,
+        border: { type: "solid", color: GRIDLINE, pt: 0.5 },
+        rowH: [0.30, 0.24, 0.44, 0.44, 0.52, 0.36, 0.24], margin: 0.03, autoPage: false });
+    }
+    box(s, TX, 4.62, TW, 1.56, EMB, "F7F4FB");
+    txt(s, [{ text: "Rules of the ladder", options: { bold: true, color: EMB, fontSize: 9, breakLine: true, paraSpaceAfter: 3 } }], TX + 0.13, 4.68, TW - 0.26, 0.20);
+    txt(s, [
+      { text: "1  ", options: { bold: true, color: EMB, fontSize: 8 } },
+      { text: "Each rung is bought only on the PREVIOUS rung’s read-out, under the frozen protocol (train ≤ 2020, test 2021–2024, longitude holes), with the null ladder beside it — climatology, persistence, damped persistence, the LIM in pixel space and in the rung’s own embedding space, nearest-analogue retrieval, and the rung below.", options: { fontSize: 8, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+      { text: "2  ", options: { bold: true, color: EMB, fontSize: 8 } },
+      { text: "A rung whose held-out minimum arrives inside 2,000 steps at FULL data is over-parameterised — and the next rung is not bought.", options: { fontSize: 8, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+      { text: "3  ", options: { bold: true, color: EMB, fontSize: 8 } },
+      { text: "The width ladder (flat 7.6 M → 206 M today) is RE-MEASURED at L2 before L3 exists: it is the one measurement that separates a data-limited rung from a compute-limited one.", options: { fontSize: 8, color: INK } },
+    ], TX + 0.13, 4.90, TW - 0.26, 1.22);
+
+    // ---------- RIGHT: the recipe, five boxes ----------
+    const BX = 7.88, BW = 4.82, IX = BX + 0.12, IW = BW - 0.24;
+    const rbox = (y, h, col, fill, head, runs) => {
+      box(s, BX, y, BW, h, col, fill);
+      txt(s, [{ text: head, options: { bold: true, color: col, fontSize: 8.5 } }], IX, y + 0.05, IW, 0.18);
+      txt(s, runs, IX, y + 0.25, IW, h - 0.31);
+    };
+    rbox(1.46, 1.24, SPACE, "F7FAFC", "Architecture (§4.1)", [
+      { text: "Encoder: ", options: { bold: true, color: SPACE, fontSize: 7 } },
+      { text: "a Perceiver-style transformer over LOCATION TOKENS — cross-attention into a fixed latent set, 64 × 256 latents at 7 M, widening with the ladder. At L3 the feed-forward block becomes a ", options: { fontSize: 7, color: INK } },
+      { text: "mixture of experts routed by sphere code and channel group", options: { bold: true, color: SPACE, fontSize: 7 } },
+      { text: " (ocean / land / ice / atmosphere), top-2, with a small load-balancing loss — the router already sees the sphere, so routing is partly deterministic.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 2 } },
+      { text: "Decoder: ", options: { bold: true, color: SPACE, fontSize: 7 } },
+      { text: "the queryable Gaussian decoder reading z ALONE (E-069 closed the degeneracy where a [z + latents] memory lets the bottleneck carry nothing). Stage 2 stays a separate sequence model over embeddings — global rings, K = 144 pentads.", options: { fontSize: 7, color: INK } },
+    ]);
+    rbox(2.76, 0.96, TEAL, "F4F9FB", "Objective (§4.2)", [
+      { text: "Masked reconstruction under the E-069b masking plan (a dropped channel hidden at the present-day patch; hidden dots from the recent-lag band and a bearing wedge) ", options: { fontSize: 7, color: INK } },
+      { text: "plus future targets at +1 and +2 pentads, scored by Gaussian negative log-likelihood", options: { bold: true, color: TEAL, fontSize: 7 } },
+      { text: ", so the model is graded on its stated uncertainty. The per-family predict-the-mean bar is logged at every eval. The fair-CRPS FGN head (E-052 / E-057) is the probabilistic option once a deterministic level exists.", options: { fontSize: 7, color: INK } },
+    ]);
+    rbox(3.78, 1.12, NAVY, "F4F6F9", "Optimiser & schedule (§4.3)", [
+      { text: "AdamW, β₁ 0.9, β₂ 0.95, weight decay 0.1, gradient clip 1.0 on standardised inputs; bf16 with fp32 master weights; ", options: { fontSize: 7, color: INK } },
+      { text: "2,000 warm-up steps, cosine to 10 % of peak", options: { bold: true, color: NAVY, fontSize: 7 } },
+      { text: ". Peak learning rate 3 × 10⁻⁴ at 7 M (E-069) and 4 × 10⁻⁴ at the 1280 × 20 heads (E-054); at L2 a three-point sweep at the smallest width, carried up by μP-style scaling — the per-layer parametrisation that keeps the optimal learning rate fixed across width, and the one thing that makes a 4.5 B run a one-shot rather than a search. ", options: { fontSize: 7, color: INK } },
+      { text: "Early stopping at the held-out minimum, its step recorded; ≤ 4 epochs.", options: { bold: true, color: NAVY, fontSize: 7 } },
+    ]);
+    rbox(4.96, 0.74, OBS, "F5FBF7", "Noise (§4.4)", [
+      { text: "z-noise 0.7 on the forecaster’s input embeddings stays — measured +0.045 / +0.050 on the rolled field (E-036 / E-037). Its mechanism is DENOISING: the forecaster learns the manifold of plausible embeddings rather than the identity. Re-measure the dose at L3+; the optimum moved with the lattice in E-065 and will move with width.", options: { fontSize: 7, color: INK } },
+    ]);
+    rbox(5.76, 0.68, RED, "FBF5F5", "What scale does NOT fix (§4.5)", [
+      { text: "H1 — recovering the anchor’s own velocity from the displacement of tracers across the cone — FAILED at 7 M under two objectives, five seeds, and on a synthetic advection field. A displacement head or a relative-position attention bias is a MODELLING arm, tested at L1 on the synthetic field first; never promised from scale.", options: { fontSize: 7, color: INK } },
+    ]);
+
+    reading(s, "Reading. Every rung reports the same null ladder — climatology, persistence, damped persistence, the LIM at K = 200 in pixel space and in the rung’s embedding space, nearest-analogue retrieval and the rung below — as MSSS per lead, per channel, per scope, with block-bootstrap intervals and amplitude calibration reported separately. And the arithmetic on the left says the rest: compute is cheap until the kilometre rung; the data is the expensive part.", 6.52);
+    footer(s);
+  }
+
+  // ---------------------------------------------------------------- 44i. read-outs and their prerequisites (E-072 §5–6)
+  {
+    const s = pres.addSlide(); s.background = { color: WHITE };
+    title(s, "Read-outs: El Niño, AMOC, colour — and what each needs first",
+      "E-072 §5–6. Six read-outs, one frozen representation. Each row names the label it is scored against, the data that must land before the head is worth training, and the null it must beat.");
+    const RED = "A23B3B";
+
+    // ---------- LEFT: the read-out table ----------
+    const TX = 0.6, TW = 8.25;
+    box(s, TX, 1.48, TW, 0.34, EMB, "F7F4FB");
+    txt(s, [
+      { text: "Every read-out is a head on the frozen representation plus the rolled forecast — never a separate model — so adding one costs a probe, not a run.", options: { bold: true, color: EMB, fontSize: 8 } },
+    ], TX + 0.12, 1.55, TW - 0.24, 0.22);
+    {
+      const th = t => ({ text: t, options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 7, valign: "middle" } });
+      const big = (t, col) => ({ text: t, options: { bold: true, color: col, fontSize: 8.5, valign: "middle", fill: { color: "F2F6FA" } } });
+      const small = (t, col) => ({ text: t, options: { bold: true, color: col, fontSize: 7.5, valign: "middle" } });
+      const c7 = t => ({ text: t, options: { fontSize: 7, color: INK, valign: "top" } });
+      const src = t => ({ text: t, options: { fontSize: 7, color: MUTED, valign: "top" } });
+      const rows = [
+        [th("read-out"), th("the label"), th("the data prerequisite"), th("the null it must beat")],
+        [big("El Niño", TIME),
+         c7("Niño-3.4 / ONI, and the 2026 event’s peak and exit — our own OISST bake (−0.57 Jan → +2.09 Jul 2026) reconciled with CPC’s ONI"),
+         c7("the tropical Pacific is already in family 7 (E-070); the SUBSURFACE (GODAS / ORAS5, or the warm-water volume) and daily winds are the additions ranked in CONE_DATA_AND_ENSO §4.5 — without them the head is an SST-persistence forecast"),
+         src("the IRI/CPC plume; the LIM; the spring-barrier skill curve")],
+        [big("AMOC", SPACE),
+         c7("RAPID at 26.5° N, then MOVE, OSNAP, SAMBA and the Florida cable — the truth series is already in the tensor (truth_rapid, truth_fc)"),
+         c7("E-071’s buoyancy forcing (ERA5 heat and freshwater fluxes) and the 3-D interior (GREP) — the two additions the data ladder ranks first; and the terminal holdout, because the number is low-frequency (E-062’s 3-year roll finding)"),
+         src("damped persistence; the LIM; the wind-stress ridge bar")],
+        [big("surface colour", BIO),
+         c7("chlorophyll — OC-CCI 4 km from 1997, PACE from 2024 — as a TARGET channel: reflectance is the input, colour the target (E-071 §6.1)"),
+         c7("the reflectance bands in the shared set, and BGC-Argo profile tokens"),
+         src("persistence; the seasonal harmonic; a ridge on reflectance")],
+        [small("sea ice", SPACE),
+         c7("concentration, extent, the September minimum — OSI SAF / NSIDC, already the frozen-fraction channel"),
+         c7("nothing new: it is in Phase L0"),
+         src("damped persistence; the LIM")],
+        [small("land water", LAND),
+         c7("GRACE storage, soil moisture, snow"),
+         c7("GRACE, ESA CCI soil moisture, MOD10 snow — Phase L0 / L1 of E-071 §6.5"),
+         src("persistence; the harmonic")],
+        [small("the atmosphere", ATMOS),
+         c7("2 m temperature and precipitation at 5–30 days — ERA5, IMERG"),
+         c7("Phase L0"),
+         src("ECMWF’s own open-data forecast — a strong, free null")],
+      ];
+      s.addTable(rows, { x: TX, y: 1.90, w: TW, colW: [1.06, 2.14, 3.05, 2.00], fontFace: FONT_B,
+        border: { type: "solid", color: GRIDLINE, pt: 0.5 },
+        rowH: [0.22, 0.92, 0.90, 0.70, 0.54, 0.48, 0.48], margin: 0.035, autoPage: false });
+    }
+
+    // ---------- RIGHT: the order of work, and what to do first ----------
+    const BX = 9.10, BW = 3.60, IX = BX + 0.12, IW = BW - 0.24;
+    box(s, BX, 1.48, BW, 1.24, TIME, "FFF6EE");
+    txt(s, [{ text: "The order of work is the order of the prerequisites", options: { bold: true, color: TIME, fontSize: 9 } }], IX, 1.54, IW, 0.30);
+    txt(s, [
+      { text: "Sea ice and land water are FREE the day Phase L0 exists — six gap-free ERA5 / ice / soil channels, ~40 GB. ", options: { fontSize: 7.5, color: INK } },
+      { text: "El Niño", options: { bold: true, color: TIME, fontSize: 7.5 } },
+      { text: " needs the Pacific subsurface. ", options: { fontSize: 7.5, color: INK } },
+      { text: "AMOC", options: { bold: true, color: SPACE, fontSize: 7.5 } },
+      { text: " needs the buoyancy forcing and the interior. ", options: { fontSize: 7.5, color: INK } },
+      { text: "Colour", options: { bold: true, color: BIO, fontSize: 7.5 } },
+      { text: " needs the reflectance bands and the biosphere sphere.", options: { fontSize: 7.5, color: INK } },
+    ], IX, 1.92, IW, 1.02);
+    box(s, BX, 2.80, BW, 3.36, NAVY, "F4F6F9");
+    txt(s, [{ text: "What to do first, in one list (E-072 §6)", options: { bold: true, color: NAVY, fontSize: 9 } }], IX, 2.86, IW, 0.20);
+    txt(s, [
+      ...[
+        ["1", "E-071 on the North Atlantic (rung L1): cone v2 geometry + harmonic anomaly + profile tokens, per-family loss and rolled skill against the LIM — the cheapest measurement that says whether the data half of this plan moves anything."],
+        ["2", "Family 7’s Phases B–F (the global tensor is pulled, not built) and the L2 rung with E-070’s gates G1–G3 — with the width ladder re-measured there."],
+        ["3", "Phase L0 of E-071 §6 (six ERA5 / ice / soil channels, ~40 GB) and the first sea-ice and land-water heads — the cheapest new read-outs."],
+        ["4", "The Pacific subsurface and daily winds → the El Niño head, scored on the 2026 event’s peak and exit against the IRI plume — the read-out with a public benchmark."],
+        ["5", "L3: the sphere-routed mixture of experts at 1–4.5 B on the all-spheres tensor, with the μP learning-rate transfer measured at L2."],
+      ].flatMap(([n, t]) => ([
+        { text: `${n}  `, options: { bold: true, color: EMB, fontSize: 8 } },
+        { text: t, options: { fontSize: 7.5, color: INK, breakLine: true, paraSpaceAfter: 4 } },
+      ])),
+      { text: "Nothing above rung L1 is dispatched by this plan; each rung is bought on the one below it.", options: { fontSize: 7.5, italic: true, color: MUTED } },
+    ], IX, 3.08, IW, 3.00);
+
+    reading(s, "Reading. Every read-out is a head on ONE frozen representation plus the rolled forecast, never a separate model — which is why the list can grow without a new training run each time. The order of work is therefore the order of the prerequisites, not the order of how interesting the read-out is: sea ice and land water the day Phase L0 lands, El Niño once the Pacific subsurface is in, AMOC once the buoyancy forcing and the interior are, colour once the reflectance bands are.", 6.44);
     footer(s);
   }
 
