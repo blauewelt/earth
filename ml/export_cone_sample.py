@@ -717,7 +717,128 @@ def dumps(obj):
                       allow_nan=False) + "\n"
 
 
-def trim_sample(s, n_dates=3, want_lags=(7, 36, 143)):
+def trim_channels(s, keep):
+    """Keep only the channels at indices `keep`, and leave the file SELF-
+    CONSISTENT: every per-channel table, every per-channel array and every
+    declared shape is cut with the same mask, so the result is a smaller
+    sample rather than a broken one.
+
+    This is the family-7 half of the fixture story. Family 4's anchors are 4.6
+    MB with 42 channels and trimming dates and outer lags is enough; family 7's
+    are 5.7 MB with 54, and a browser fixture that keeps all of them is still
+    hundreds of kilobytes of git. Four channels — one per group, plus a second
+    ocean one — carry the whole SCHEMA, which is what a fixture is for.
+
+    The subtle part is the per-GROUP tables. On family 7 the (mean, sd) the
+    builder z-scored with is the npz's own `norm_g025` / `norm_g100` /
+    `norm_rg100`, keyed by group and indexed WITHIN the group — so
+    `meta.groups.channels[g]` and `meta.value_space.tensor_norm[g]` are two
+    halves of one lookup and are filtered by one mask, never separately.
+    """
+    s = json.loads(json.dumps(s))                 # never mutate the caller's
+    m = s["meta"]
+    chans = m["channels"]
+    keep = sorted({int(k) for k in keep})
+    if not keep or keep[-1] >= len(chans):
+        raise SystemExit(f"--fixture-channels out of range for "
+                         f"{len(chans)} channels: {keep}")
+    names = [chans[i] for i in keep]
+    kept = set(names)
+    remap = {old: new for new, old in enumerate(keep)}
+    nC0, nC = len(chans), len(names)
+    nT = len(m["bins"])
+
+    m["channels"] = names
+    for key in ("channel_group", "channel_family", "units"):
+        if isinstance(m.get(key), dict):
+            m[key] = {k: v for k, v in m[key].items() if k in kept}
+    for key in ("depth_channels", "scoreable_channels"):
+        if isinstance(m.get(key), list):
+            m[key] = [c for c in m[key] if c in kept]
+
+    grp = m.get("groups") or {}
+    vs = m.get("value_space") or {}
+    norm = vs.get("tensor_norm")
+    if isinstance(grp.get("channels"), dict):
+        dyn = vs.get("dynamic_channels_by_group")
+        for g, lst in list(grp["channels"].items()):
+            mask = [i for i, c in enumerate(lst) if c in kept]
+            grp["channels"][g] = [lst[i] for i in mask]
+            if isinstance(norm, dict) and g in norm:
+                norm[g] = [norm[g][i] for i in mask]
+            if isinstance(dyn, dict) and g in dyn:
+                pos = {old: new for new, old in enumerate(mask)}
+                dyn[g] = sorted(pos[i] for i in dyn[g] if i in pos)
+        if isinstance(grp.get("names"), list):
+            grp["names"] = [g for g in grp["names"] if grp["channels"].get(g)]
+        if isinstance(grp.get("shape"), dict):
+            for g, sh in grp["shape"].items():
+                if g in grp["channels"]:
+                    sh[-1] = len(grp["channels"][g])
+    elif isinstance(norm, list):
+        vs["tensor_norm"] = [norm[i] for i in keep]
+    for key in ("anomaly_mean", "anomaly_sd"):
+        if isinstance(vs.get(key), list) and len(vs[key]) == nC0:
+            vs[key] = [vs[key][i] for i in keep]
+    if isinstance(vs.get("dynamic_channels"), list):
+        vs["dynamic_channels"] = sorted(
+            remap[i] for i in vs["dynamic_channels"] if i in remap)
+
+    t = m.get("tensor") or {}
+    if isinstance(t.get("shape"), list) and len(t["shape"]) == 4:
+        t["shape"][-1] = nC
+    if isinstance(t.get("groups"), dict):
+        for g, sh in t["groups"].items():
+            if g in (grp.get("channels") or {}):
+                sh[-1] = len(grp["channels"][g])
+
+    # ---- the inner cone: one dot belongs to one channel, so this DROPS dots
+    inn = s["inner"]
+    nD0 = inn["n_dots"]
+    dots = [j for j in range(nD0) if inn["chan"][j] in remap]
+    nD = len(dots)
+    for k in ("chan", "col", "dx", "dx_km", "dy", "dy_km", "lag", "lag_days",
+              "lat", "lon", "row"):
+        if k in inn:
+            inn[k] = [inn[k][j] for j in dots]
+    inn["chan"] = [remap[c] for c in inn["chan"]]
+    inn["n_dots"] = nD
+    inn["shape"] = [nT, nD]
+    for k in ("raw", "anom"):
+        inn[k] = [[row[j] for j in dots] for row in inn[k]]
+    for k in ("obs", "valid"):
+        inn[k] = "".join(inn[k][t_ * nD0 + j] for t_ in range(nT) for j in dots)
+
+    # ---- the patch and the future targets: [T, C, per], channel-major inside
+    for blk, per in ((s["patch"], 9), (s["future"], len(s["future"]["lags"]))):
+        blk["shape"][1] = nC
+        for k in ("raw", "anom"):
+            blk[k] = [blk[k][(t_ * nC0 + c) * per + p]
+                      for t_ in range(nT) for c in keep for p in range(per)]
+        blk["obs"] = "".join(blk["obs"][(t_ * nC0 + c) * per
+                                        : (t_ * nC0 + c + 1) * per]
+                             for t_ in range(nT) for c in keep)
+
+    # ---- stage 2's ring: its own channel list, a subset of the tensor's
+    o = s["outer"]
+    ok = [i for i, c in enumerate(o["channels"]) if c in kept]
+    nCo0, nCo = len(o["channels"]), len(ok)
+    o["channels"] = [o["channels"][i] for i in ok]
+    if isinstance(o.get("chan_index"), list):
+        o["chan_index"] = [remap[o["chan_index"][i]] for i in ok]
+    nK, nDo = len(o["lags"]), o["n_dots_per_lag"]
+    o["shape"] = [nT, nK, nDo, nCo]
+    for k in ("raw", "anom"):
+        o[k] = [o[k][((t_ * nK + i) * nDo + d) * nCo0 + c]
+                for t_ in range(nT) for i in range(nK)
+                for d in range(nDo) for c in ok]
+    o["obs"] = "".join(
+        "".join(o["obs"][((t_ * nK + i) * nDo + d) * nCo0 + c] for c in ok)
+        for t_ in range(nT) for i in range(nK) for d in range(nDo))
+    return s
+
+
+def trim_sample(s, n_dates=3, want_lags=(7, 36, 143), keep_chans=None):
     """A small, in-repo copy of one anchor: the first `n_dates` pentads, the
     whole inner cone, and only the outer lags nearest `want_lags`.
 
@@ -726,7 +847,10 @@ def trim_sample(s, n_dates=3, want_lags=(7, 36, 143)):
     same dims, same flag strings — so a test that passes on the fixture is a
     test about the page, not about a second format.
     """
-    s = json.loads(json.dumps(s))                 # never mutate the caller's
+    # Channels first: everything below counts in nC, so trimming them after
+    # would leave two different channel counts in one function.
+    s = (trim_channels(s, keep_chans) if keep_chans
+         else json.loads(json.dumps(s)))          # never mutate the caller's
     nT0 = len(s["meta"]["bins"])
     nT = min(n_dates, nT0)
     nC = len(s["meta"]["channels"])
@@ -742,7 +866,10 @@ def trim_sample(s, n_dates=3, want_lags=(7, 36, 143)):
     s["meta"]["admissible"] = s["meta"]["admissible"][:nT]
     s["meta"]["fixture"] = (
         f"a trimmed copy for the browser tests: {nT} of {nT0} dates and "
-        f"{len(keep)} of {nK0} outer lags. The schema is the full file's.")
+        f"{len(keep)} of {nK0} outer lags"
+        + (f" and {nC} channels ({', '.join(s['meta']['channels'])})"
+           if keep_chans else "")
+        + ". The schema is the full file's.")
     s["meta"]["outer"]["lags"] = [lags[i] for i in keep]
     s["meta"]["outer"]["stride"] = None
 
@@ -1024,7 +1151,49 @@ def main(argv=None):
                     help="also write a trimmed in-repo copy here "
                          "(data/cone_samples/fixture.json)")
     ap.add_argument("--fixture-anchor", default="gulf_stream")
+    ap.add_argument("--fixture-channels", default="",
+                    help="comma-separated channel INDICES to keep in the "
+                         "fixture; default all. Family 7's fixture is "
+                         "0,5,21,22 — cur_speed, sst, skt, rg_t10: one channel "
+                         "from each of the three groups plus a second ocean "
+                         "one, which is the whole schema in 4 of 54 channels")
+    ap.add_argument("--fixture-dates", type=int, default=3,
+                    help="how many pentads the fixture keeps")
+    ap.add_argument("--trim-file", default="",
+                    help="the FAMILY-7 fixture path: instead of sampling a "
+                         "tensor, read an already-exported anchor .json "
+                         "(downloaded from the Hub) and write --fixture from "
+                         "it. The real family-7 anchors are produced on the "
+                         "GPU box by --tensor and uploaded; this cuts the "
+                         "browser copy out of one of them without a 46 GB "
+                         "tensor in reach. Example:\n"
+                         "  python3 ml/export_cone_sample.py \\\n"
+                         "    --trim-file dateline.json \\\n"
+                         "    --fixture data/cone_samples_f7/fixture.json \\\n"
+                         "    --fixture-channels 0,5,21,22 --fixture-dates 2")
     a = ap.parse_args(argv)
+
+    fixture_chans = ([int(x) for x in a.fixture_channels.split(",") if x.strip()]
+                     if a.fixture_channels else None)
+
+    if a.trim_file:
+        if not a.fixture:
+            raise SystemExit("--trim-file needs --fixture to write to")
+        with open(a.trim_file, encoding="utf-8") as fh:
+            full = json.load(fh)
+        fx = trim_sample(full, n_dates=a.fixture_dates,
+                         keep_chans=fixture_chans)
+        os.makedirs(os.path.dirname(os.path.abspath(a.fixture)), exist_ok=True)
+        text = dumps(fx)
+        with open(a.fixture, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        print(f"  fixture       {len(text) / 1e3:5.1f} kB · "
+              f"{fx['meta']['anchor']['id']} · "
+              f"{len(fx['meta']['dates'])} dates · "
+              f"{len(fx['meta']['channels'])} channels "
+              f"({', '.join(fx['meta']['channels'])}) · outer lags "
+              f"{fx['outer']['lags']} -> {a.fixture}")
+        return []
 
     geo = json.load(open(GEOMETRY, encoding="utf-8"))
     win = geo["window"]
@@ -1194,7 +1363,8 @@ def main(argv=None):
     if a.fixture and written:
         pick = next((w for w in written if w[0]["id"] == a.fixture_anchor),
                     written[0])
-        fx = trim_sample(json.loads(pick[2]))
+        fx = trim_sample(json.loads(pick[2]), n_dates=a.fixture_dates,
+                         keep_chans=fixture_chans)
         os.makedirs(os.path.dirname(os.path.abspath(a.fixture)), exist_ok=True)
         text = dumps(fx)
         with open(a.fixture, "w", encoding="utf-8") as fh:

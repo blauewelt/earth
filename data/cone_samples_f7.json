@@ -346,7 +346,7 @@
  ],
  "exporter": "ml/export_cone_sample.py",
  "exporter_commit": "a228c18fc90acaed9ac08b08af95aacabfc86d1e",
- "fixture": null,
+ "fixture": "data/cone_samples_f7/fixture.json",
  "future_lags": [
   1,
   2

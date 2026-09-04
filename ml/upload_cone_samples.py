@@ -246,8 +246,15 @@ def main(argv=None):
         repo=f"{REPO_TYPE}s/{REPO_ID}",
         base=f"https://huggingface.co/datasets/{REPO_ID}/resolve/main/{prefix}/",
         prefix=prefix,
-        fixture=("data/cone_samples/fixture.json" if prefix == PREFIX
-                 else None),
+        # The in-repo trimmed copy the browser tests run against, one per
+        # prefix: `data/<prefix>/fixture.json`. It exists for both exported
+        # sets — the family-4 one is written by `--fixture` on the export run,
+        # the family-7 one by `--trim-file` on a downloaded anchor (see
+        # `ml/export_cone_sample.py`). `None` when the file is not there, so
+        # the index never points at something a checkout does not have.
+        fixture=(f"data/{prefix}/fixture.json"
+                 if os.path.exists(os.path.join(ROOT, "data", prefix,
+                                                "fixture.json")) else None),
         cors_measured=dict(
             origin="https://blauewelt.github.io",
             status=cors["status"],

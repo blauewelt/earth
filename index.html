@@ -802,19 +802,30 @@
           values in the cone</label>
       </div>
       <div id="cn-data-block" class="hidden">
-        <!-- WHERE THE NUMBERS COME FROM. Two sources, and they are two
-             different claims. "exported anchors" is the original: five
-             pre-exported North Atlantic cells of family 4, sampled in Python by
-             the production ConeSampler and shipped as JSON — every value in it
-             was produced by the code that trains the model. "live from the
-             global tensor" reads family 7 (the whole-globe tensor) directly
-             over the network, one pentad at a time, so ANY cell on the planet
-             can be an anchor — but the gathering is then done here, in the
-             browser, off the same geometry the certification test pins. -->
+        <!-- WHERE THE NUMBERS COME FROM. Three sources, and they are three
+             different claims.
+             (1) "exported anchors (family 4)" is the original: five
+             pre-exported cells of the North Atlantic tensor — the 0.25° window
+             the model was first trained on — sampled in Python by the
+             production ConeSampler and shipped as JSON, so every value in it
+             was produced by the code that trains the model.
+             (2) "exported anchors (family 7)" is the same thing on the tensor
+             that covers the WHOLE GLOBE at the same 0.25° step: twelve cells
+             from the Antarctic Circumpolar Current to the Sahara, 54 channels
+             instead of 42, and columns that wrap round the dateline instead of
+             falling off a window's edge. Both exported sets carry the ANOMALY
+             — the departure-from-climatology number the codec actually reads —
+             because the exporter computed it with the trainer's own function.
+             (3) "live from the global tensor" reads family 7 (that same
+             whole-globe tensor) directly over the network, one pentad at a
+             time, so ANY cell on the planet can be an anchor — but the
+             gathering is then done here, in the browser, off the same geometry
+             the certification test pins, and there is no anomaly. -->
         <div class="control-row">
           <label for="cn-source">source</label>
           <select id="cn-source">
-            <option value="anchors">exported anchors (family 4, North Atlantic)</option>
+            <option value="anchors">exported anchors (family 4, North Atlantic — 5 cells)</option>
+            <option value="anchors_f7">exported anchors (family 7, global — 12 cells)</option>
             <option value="live">live from the global tensor (family 7)</option>
           </select>
         </div>
@@ -857,8 +868,11 @@
           the model is actually given, and why it is roughly −3…+3 rather than 15 °C. A
           <em>hollow</em> dot is one the model cannot read: it falls outside the tensor's
           window, and the model treats it as missing rather than wrapping it around the
-          globe. A <em>dimmed</em> dot is inside the window but was never observed there —
-          cloud, land, or a float that did not profile.</p>
+          globe. On the family-7 anchors there are no hollow dots at all — that tensor
+          covers the whole globe and its columns close, so a dot east of the dateline comes
+          back round at longitude −180° instead of falling off an edge. A <em>dimmed</em>
+          dot is one the model does read, but which was never observed there — cloud, land,
+          or a float that did not profile.</p>
       </div>
 
       <!-- What-if geometry. Every knob here is one of ml/cone.py's own
@@ -1091,7 +1105,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">5ea6da72</code></p>
+      <p class="build-line">Build <code id="build-id">33fd9454</code></p>
     </section>
 
     <footer>
@@ -1147,6 +1161,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=5ea6da72"></script>
+  <script src="src/app.js?v=33fd9454"></script>
 </body>
 </html>

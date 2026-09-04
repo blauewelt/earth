@@ -5820,6 +5820,21 @@ async function serveConeFixture(page) {
   return JSON.parse(fixture);
 }
 
+/* The same trick for the GLOBAL exported set. The two routes cannot collide:
+ * the family-4 pattern needs a slash straight after `cone_samples`, and these
+ * files live under `cone_samples_f7/`. This fixture is one anchor — the
+ * DATELINE, the cell in the tensor's last column — cut down to two dates and
+ * four channels, one from each of family 7's three groups plus a second ocean
+ * one, by `ml/export_cone_sample.py --trim-file`. */
+async function serveConeFixtureF7(page) {
+  const fixture = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "data", "cone_samples_f7", "fixture.json"),
+    "utf8");
+  await page.route(/resolve\/main\/cone_samples_f7\//, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: fixture }));
+  return JSON.parse(fixture);
+}
+
 test("Cones data mode: the dots carry values and the read-out prints one with its date",
      async ({ page }) => {
   test.setTimeout(120000);
@@ -5994,6 +6009,152 @@ test("Cones data mode: the cone's date follows the app's date, and says when it 
   expect(off.data.date).toBe(fx.meta.dates[fx.meta.dates.length - 1]);  // nearest
   await expect(page.locator("#cn-data-hint")).toContainText("nearest exported pentad");
   await expect(page.locator("#cn-data-hint")).toContainText("2019");
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* THE THIRD SOURCE: the anchors exported from FAMILY 7 — the tensor that covers
+ * the whole globe at 0.25° rather than only the North Atlantic window. It is
+ * the same exporter, the same production sampler and the same file schema, so
+ * the tab reuses every control; three things are genuinely different and this
+ * test is about all three.
+ *
+ *   1. TWELVE anchors instead of five, and they are global — the Antarctic
+ *      Circumpolar Current, the Sahara, the dateline.
+ *   2. FIFTY-FOUR channels on three grids instead of 42 on one, so the channel
+ *      select is grouped rather than a flat scroll.
+ *   3. A grid that CLOSES. On the North Atlantic window a cell past the east
+ *      edge is off the tensor and draws hollow; on the globe there is no edge,
+ *      so the dateline anchor's own 3×3 patch straddles ±180° and every cell of
+ *      it is real. That is the assertion the whole feature stands on, and it is
+ *      the one a family-4 fixture can never make.
+ *
+ * The fixture is the dateline anchor cut to two dates and four channels, one
+ * per group plus a second ocean one — `data/cone_samples_f7/fixture.json`,
+ * whose schema `tests/data.spec.js` pins against the index. */
+test("Cones data mode: the family-7 anchors are global, grouped by channel block, and wrap the dateline",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  await serveConeFixture(page);
+  const f7 = await serveConeFixtureF7(page);
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  await page.evaluate(() => window.__earth.conesSetDataMode(true));
+
+  // the North Atlantic set is the default, and it is five anchors in a flat list
+  const naAnchors = await page.locator("#cn-data-anchor option").allTextContents();
+  expect(naAnchors.length).toBe(5);
+  const naChannels = await page.locator("#cn-channel option").count();
+  expect(naChannels).toBe(42);
+  expect(await page.locator("#cn-channel optgroup").count()).toBe(0);
+
+  // ---- switch to the global set
+  await page.evaluate(() => window.__earth.conesSetSource("anchors_f7"));
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.sampleSource)).toBe("anchors_f7");
+
+  // TWELVE anchors, in the index's own order
+  await expect(page.locator("#cn-data-anchor option")).toHaveCount(12);
+  const ids = await page.locator("#cn-data-anchor option")
+    .evaluateAll((os) => os.map((o) => o.value));
+  expect(ids).toContain("dateline");
+  expect(ids).toContain("acc");
+  expect(ids).toContain("sahara");
+  // the switch kept the reader's place: the Gulf Stream anchor of the North
+  // Atlantic set lands on the Gulf Stream anchor of the global one
+  expect(await page.evaluate(() => window.__earth.coneState().data.anchorId))
+    .toBe("gulf_stream");
+
+  // the channel select is GROUPED — 54 channels in one flat list is a scroll,
+  // not a choice, so family 7's three blocks are three optgroups
+  await expect(page.locator("#cn-channel optgroup")).toHaveCount(3);
+  const groups = await page.locator("#cn-channel optgroup")
+    .evaluateAll((os) => os.map((o) => o.label));
+  expect(groups[0]).toContain("0.25°");
+  expect(groups[1]).toContain("1°");
+  expect(groups[2]).toContain("Argo");
+  expect(await page.locator("#cn-channel option").count())
+    .toBe(f7.meta.channels.length);
+
+  // ---- stand on the DATELINE anchor, the cell in the tensor's last column
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-data-anchor");
+    s.value = "dateline";
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.anchorId)).toBe("dateline");
+
+  const st = await page.evaluate(() => window.__earth.coneState());
+  expect(st.data.ready).toBe(true);
+  expect(st.data.error).toBe(null);
+  expect(st.data.source).toBe("anchors_f7");
+  expect(st.data.recipe).toBe("f7l0");
+  expect(st.data.nChannels).toBe(f7.meta.channels.length);
+  expect(st.data.date).toBe(f7.meta.dates[0]);
+  expect(st.lat).toBeCloseTo(f7.meta.anchor.lat, 6);
+  expect(st.lon).toBeCloseTo(f7.meta.anchor.lon, 6);
+
+  // dots are on the globe and carry values, and NONE of them is off the grid:
+  // a global cone has no edge to fall off
+  expect(st.data.nDots).toBeGreaterThan(9);
+  expect(st.data.nValued).toBeGreaterThan(5);
+  expect(st.data.nInvalid).toBe(0);
+
+  // THE DATELINE ITSELF: the drawn dots straddle ±180°, which is only possible
+  // because the column wraps. On the North Atlantic window this is zero.
+  const sides = await page.evaluate(() => {
+    const d = window.__earth.coneDataDots;
+    return {
+      east: d.filter((x) => x.plon > 0).length,
+      west: d.filter((x) => x.plon < 0).length,
+      outOfRange: d.filter((x) => !(x.plon >= -180 && x.plon <= 180)).length,
+      cols: [Math.min(...d.map((x) => x.col)), Math.max(...d.map((x) => x.col))],
+    };
+  });
+  expect(sides.east).toBeGreaterThan(0);
+  expect(sides.west).toBeGreaterThan(0);
+  expect(sides.outOfRange).toBe(0);
+  expect(sides.cols[0]).toBeGreaterThanOrEqual(0);
+  expect(sides.cols[1]).toBeLessThan(f7.meta.grid.nx);
+
+  // the hint names the tensor in plain words and says what the cell stands on
+  const hint = page.locator("#cn-data-hint");
+  await expect(hint).toContainText("family 7");
+  await expect(hint).toContainText("whole globe");
+  await expect(hint).toContainText("ocean");            // sphere_at_anchor = 0
+  await expect(hint).toContainText("below sea level");  // elev_at_anchor < 0
+
+  // the read-out still puts the unit back on a stored value — on family 7 the
+  // (mean, sd) is keyed by GROUP, so a flat lookup would silently be wrong
+  const picked = await page.evaluate(() => {
+    const dots = window.__earth.coneDataDots;
+    const i = dots.findIndex((d) => d.valid && d.obs && Number.isFinite(d.raw));
+    window.__earth.conesPickDot(i);
+    const p = window.__earth.coneState().data.pick;
+    const c = document.getElementById("cn-anom");
+    c.checked = false;
+    c.dispatchEvent(new Event("change", { bubbles: true }));
+    return { i, p, hi: window.__earth.coneState().data.hi };
+  });
+  expect(picked.i).toBeGreaterThanOrEqual(0);
+  // cur_speed's own norm row is g025[0]; the RAW scale is a speed in m/s, not
+  // the −3…+3 of a z-score, so a flat 54-long lookup could not produce it
+  expect(picked.hi).toBeGreaterThan(0);
+  expect(picked.hi).toBeLessThan(10);
+  await expect(page.locator("#cn-readout")).toContainText("row ");
+
+  // ---- and back to the North Atlantic set: its own five anchors return
+  await page.evaluate(() => window.__earth.conesSetSource("anchors"));
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.sampleSource)).toBe("anchors");
+  await expect(page.locator("#cn-data-anchor option")).toHaveCount(5);
+  expect(await page.locator("#cn-data-anchor option").allTextContents())
+    .toEqual(naAnchors);
+  expect(await page.locator("#cn-channel optgroup").count()).toBe(0);
+  expect(await page.locator("#cn-channel option").count()).toBe(naChannels);
+  expect(await page.evaluate(() => window.__earth.coneState().data.nChannels))
+    .toBe(42);
 
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });

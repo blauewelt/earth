@@ -10397,15 +10397,20 @@ const cones = {
    * a second module-level object so that `conesHide` and `coneState` cannot
    * forget about half the tab's state. */
   data: {
-    on: false, anchorId: null, sample: null, loading: false, error: null,
+    on: false, anchorId: null, sample: null, sampleSource: null,
+    loading: false, error: null,
     stencil: "codec", chan: 0, outerChan: 0, anomaly: true,
     dateIdx: 0, lagIdx: 0, snapped: false,
     dots: [], lo: 0, hi: 1, pick: null, ramp: "anom", diverging: true,
-    /* LIVE MODE (family 7, the global tensor). `source` is the switch; the
-     * rest is only meaningful while it reads "live". The anchor is a CELL of
-     * the global grid rather than one of the five exported ones, so it is
-     * kept as (row, col) and the lat/lon are derived — the tensor's index is
-     * what a dot's date and value are looked up by. */
+    /* THE SOURCE. Three values: "anchors" (the five exported North Atlantic
+     * cells of family 4), "anchors_f7" (the twelve exported global cells of
+     * family 7) and "live" (family 7 read out of the Hub by the byte).
+     *
+     * LIVE MODE's own state is the rest of this line and is only meaningful
+     * while `source` reads "live". The anchor is a CELL of the global grid
+     * rather than one of the exported ones, so it is kept as (row, col) and
+     * the lat/lon are derived — the tensor's index is what a dot's date and
+     * value are looked up by. */
     source: "anchors", liveChan: null, liveAnchor: null, liveSeq: 0,
     liveLoading: 0, liveErr: null, liveSphere: null, liveElev: null,
   },
@@ -11002,36 +11007,84 @@ function conesSection() {
  * keyless, CORS-open (measured, see the note in Part 2), and read once per
  * anchor rather than streamed. A failure degrades to a hint and the geometry
  * mode, never to a broken tab. */
-const CONE_SAMPLES_INDEX = "data/cone_samples.json";
-let coneManifest = null, coneManifestPromise = null;
-const coneSampleCache = new Map();      // anchor id -> Promise<sample>
+/* TWO exported sets, and they are two different tensors, so everything below
+ * is keyed by which one is on screen:
+ *   `anchors`     family 4 — the North Atlantic window at 0.25°, 42 channels,
+ *                 five anchors, a grid with EDGES a dot can fall off.
+ *   `anchors_f7`  family 7 — the same 0.25° step over the whole globe, 54
+ *                 channels in three groups, twelve anchors, and a grid that
+ *                 CLOSES: column 1439's neighbour is column 0.
+ * The third source, `live`, is not in this map — it reads family 7 out of the
+ * Hub by the byte and has no index of exported files at all. */
+const CONE_SAMPLES_INDEX = {
+  anchors: "data/cone_samples.json",
+  anchors_f7: "data/cone_samples_f7.json",
+};
+const coneManifests = new Map();        // source -> index object (or null)
+const coneManifestPromises = new Map(); // source -> Promise<index|null>
+const coneSampleCaches = new Map();     // source -> Map(anchor id -> Promise)
+
+/* Which exported set a call is about. `live` has no exported set, so a lookup
+ * made while live mode is on falls back to family 4's — that is the set the
+ * tab returns to, and it is what `coneNearestAnchor` should answer about. */
+function coneSourceKey(src) {
+  const s = src || cones.data.source;
+  return s === "anchors_f7" ? "anchors_f7" : "anchors";
+}
+function coneManifestOf(src) {
+  return coneManifests.get(coneSourceKey(src)) || null;
+}
 
 /* Which ramp a RAW value gets. A signed field (sea-surface height, the wind
- * stress components, the current components) is diverging by nature and reads
- * on the app's blue = down/cool, red = up/warm convention (§5); an unsigned
- * one gets its own sequential ramp. The ANOMALY is always diverging and always
- * centred on zero, because that is what an anomaly means. */
-const CONE_SIGNED_CHANNELS = /^(ssh|tau_x|tau_y|cur_u|cur_v)$/;
+ * stress components, the wind and current components, the two turbulent heat
+ * fluxes) is diverging by nature and reads on the app's blue = down/cool,
+ * red = up/warm convention (§5); an unsigned one gets its own sequential ramp.
+ * The ANOMALY is always diverging and always centred on zero, because that is
+ * what an anomaly means.
+ *
+ * The named map is family 7's land and atmosphere block, and it is the SAME
+ * assignment `ml/publish_family7_index.py` bakes into `data/family7_index.json`
+ * for the globe layer — the cone and the map underneath it must not paint one
+ * channel in two palettes. */
+const CONE_SIGNED_CHANNELS =
+  /^(ssh|tau_x|tau_y|cur_u|cur_v|u10|v10|lhtfl|shtfl)$/;
+const CONE_CHANNEL_RAMP = {
+  t2m: "t2m",              // air temperature at 2 m — its own warm ramp
+  skt: "sst",              // skin temperature, every surface
+  tsoil: "sst",            // soil temperature, 0–10 cm
+  log_prate: "rain",       // precipitation rate
+  log_swe: "precip",       // snow water equivalent
+  soilw: "precip",         // soil moisture
+  sea_ice: "precip",       // sea-ice concentration, 0–1
+  sp: "precip",            // surface pressure
+};
 function coneChannelRamp(name) {
   if (CONE_SIGNED_CHANNELS.test(name)) return { ramp: "anom", diverging: true };
   if (name === "cur_speed") return { ramp: "speed", diverging: false };
+  if (CONE_CHANNEL_RAMP[name]) {
+    return { ramp: CONE_CHANNEL_RAMP[name], diverging: false };
+  }
   if (name === "sst" || name.startsWith("rg_t")) return { ramp: "sst", diverging: false };
   return { ramp: "precip", diverging: false };
 }
 
-function loadConeManifest() {
-  if (!coneManifestPromise) {
-    coneManifestPromise = fetch(CONE_SAMPLES_INDEX)
+function loadConeManifest(src) {
+  const key = coneSourceKey(src);
+  if (!coneManifestPromises.has(key)) {
+    coneManifestPromises.set(key, fetch(CONE_SAMPLES_INDEX[key])
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => (coneManifest = j))
-      .catch(() => null);
+      .then((j) => { coneManifests.set(key, j); return j; })
+      .catch(() => null));
   }
-  return coneManifestPromise;
+  return coneManifestPromises.get(key);
 }
 
-function loadConeSample(id) {
-  if (coneSampleCache.has(id)) return coneSampleCache.get(id);
-  const p = loadConeManifest().then((m) => {
+function loadConeSample(src, id) {
+  const key = coneSourceKey(src);
+  if (!coneSampleCaches.has(key)) coneSampleCaches.set(key, new Map());
+  const cache = coneSampleCaches.get(key);
+  if (cache.has(id)) return cache.get(id);
+  const p = loadConeManifest(key).then((m) => {
     const a = m && (m.anchors || []).find((x) => x.id === id);
     if (!a) throw new Error(`no exported anchor ${id}`);
     return fetch(a.url).then((r) => {
@@ -11039,8 +11092,8 @@ function loadConeSample(id) {
       return r.json();
     });
   });
-  coneSampleCache.set(id, p);
-  p.catch(() => coneSampleCache.delete(id));   // a failure must be retryable
+  cache.set(id, p);
+  p.catch(() => cache.delete(id));   // a failure must be retryable
   return p;
 }
 
@@ -11052,9 +11105,12 @@ function coneDataOn() {
 }
 
 /* The channel the read-out and the colours are about. The codec stencil reads
- * all 42 channels; stage 2's outer stencil carries the eight the LIM can be
- * scored on (`ml/lim_baseline.py`), so the two selectors index different
- * lists and are kept as two numbers rather than one that means two things. */
+ * EVERY channel the sample carries — 42 on family 4 (the North Atlantic
+ * window), 54 on family 7 (the whole globe) — while stage 2's outer stencil
+ * carries only the eight the LIM (linear inverse model, the reference forecast
+ * we score against) can be scored on (`ml/lim_baseline.py`), so the two
+ * selectors index different lists and are kept as two numbers rather than one
+ * that means two things. */
 function coneDataChannelName() {
   const S = cones.data.sample;
   if (!S) return "";
@@ -11118,6 +11174,49 @@ function coneDataLagRange() {
   }
 }
 
+/* WHICH GRID a (row, col) is an index into. A family-7 sample says so itself —
+ * `meta.grid` is the whole-globe grid, 721 × 1440 from the South Pole at
+ * −180°, and `wrap` says its columns close. A family-4 sample carries no such
+ * block: it predates the global tensor and its cells are indices into the
+ * North Atlantic window, which is exactly `coneGeo.window` and has edges. So
+ * the FILE decides, and the window is the fallback rather than the rule. */
+function coneSampleGrid(S) {
+  const g = S && S.meta && S.meta.grid;
+  if (g) {
+    return { lat0: g.lat0, lon0: g.lon0, step: g.step,
+             ny: g.ny, nx: g.nx, wrap: g.wrap !== false };
+  }
+  const w = coneGeo.window;
+  return { lat0: w.lat0, lon0: w.lon0, step: w.dlat,
+           ny: w.ny, nx: w.nx, wrap: false };
+}
+
+/* Which tensor a sample came out of, in words. The RECIPE is the fact the
+ * exporter stamps — `f7l0` is the whole-globe build, `f4…` the North Atlantic
+ * one — and a family number on its own is a code name, so it never travels
+ * without the sentence that says what it covers (CLAUDE.md §0c). */
+function coneSampleFamily(S) {
+  const m = coneManifestOf();
+  const recipe = (S && S.meta && S.meta.recipe) || (m && m.recipe) || "";
+  const name = (S && S.meta && S.meta.tensor && S.meta.tensor.name) || "";
+  if (/^f7/.test(recipe) || /^family7/.test(name)) {
+    return { short: "family 7 (global)",
+             gloss: "family 7 — the tensor that covers the whole globe at " +
+                    "0.25°, every five days" };
+  }
+  if (/^f4/.test(recipe) || /^family4/.test(name)) {
+    return { short: "family 4 (North Atlantic)",
+             gloss: "family 4 — the tensor that covers the North Atlantic " +
+                    "window at 0.25°, every five days" };
+  }
+  return { short: name || "the exported tensor",
+           gloss: name || "the exported tensor" };
+}
+
+/* The sphere codes family 7's static grid uses, as words. Same four classes
+ * `data/family7_sphere.json` names, so the two read-outs agree. */
+const CONE_SPHERE_WORD = ["ocean", "land", "ice sheet", "inland water"];
+
 /* The dots on screen, with everything the read-out needs attached to each.
  * Positions come from the FILE (`row`/`col` as Python computed them), never
  * from a second evaluation of the sunflower here — the port above exists to
@@ -11128,7 +11227,7 @@ function coneDataDots() {
   const ti = cones.data.dateIdx;
   const anchorBin = S.meta.bins[ti];
   const out = [];
-  const w = coneGeo.window;
+  const g = coneSampleGrid(S);
   /* The DRAWING position is derived from the exported (row, col), which is the
    * cell index Python computed and is unclamped — so an off-window dot still
    * has a real place on the earth and can be drawn hollow there. The file's
@@ -11139,7 +11238,9 @@ function coneDataDots() {
    * east of 70 N is 117 degrees of longitude — has no place at all and is
    * counted rather than drawn somewhere it is not. */
   const cellLatLon = (r, c) => {
-    const lat = w.lat0 + r * w.dlat, lon = w.lon0 + c * w.dlat;
+    const lat = g.lat0 + r * g.step;
+    let lon = g.lon0 + coneWrapCol(c, g.nx, g.wrap) * g.step;
+    if (g.wrap) lon = ((lon + 180) % 360 + 360) % 360 - 180;
     return (Math.abs(lat) > 90 || Math.abs(lon) > 180) ? null : { lat, lon };
   };
 
@@ -11150,7 +11251,13 @@ function coneDataDots() {
     // channel. It is always drawn — it is what the codec reads at lag 0.
     for (let c9 = 0; c9 < 9; c9++) {
       const r = S.meta.anchor.row + p.cell_dy[c9];
-      const cc = S.meta.anchor.col + p.cell_dx[c9];
+      const raw9 = S.meta.anchor.col + p.cell_dx[c9];
+      /* The patch's columns are computed HERE (the file ships only the nine
+       * offsets), so this is the one place the dateline has to be handled: on
+       * a closing grid column 1440 IS column 0 and the cell is real, on a
+       * window it is off the edge and the model reads a miss. `coneWrapCol`
+       * is the same one line the live cone uses. */
+      const cc = coneWrapCol(raw9, g.nx, g.wrap);
       const flat = (ti * nC + ci) * 9 + c9;
       const pos = cellLatLon(r, cc);
       out.push({
@@ -11160,7 +11267,8 @@ function coneDataDots() {
         dyKm: p.cell_dy[c9] * 27.83, dxKm: null,
         raw: p.raw[flat], anom: p.anom[flat],
         obs: p.obs[flat] === "1",
-        valid: r >= 0 && r < w.ny && cc >= 0 && cc < w.nx,
+        // rows are never wrapped — past a pole is off the grid, not round it
+        valid: r >= 0 && r < g.ny && (g.wrap || (cc >= 0 && cc < g.nx)),
       });
     }
     for (let j = 0; j < nD; j++) {
@@ -11217,11 +11325,29 @@ function coneChannelIndex() {
     ? cones.data.chan
     : S.meta.channels.indexOf(S.outer.channels[cones.data.outerChan]);
 }
+/* The (mean, sd) row this channel was z-scored with. Family 4 ships one flat
+ * list, one row per channel, indexed by the channel's own position. Family 7
+ * ships the npz's three `norm_*` arrays as they are — keyed by GROUP and
+ * indexed WITHIN the group — because the three groups are three files on three
+ * grids and never shared one axis. `meta.channel_group` names a channel's
+ * group and `meta.groups.channels[group]` is that group's own order, so the
+ * lookup is two hops rather than a second copy of the table. */
+function coneTensorNormRow(S, n) {
+  const i = coneChannelIndex();
+  if (Array.isArray(n)) return n[i] || null;
+  const name = S.meta.channels[i];
+  const grp = S.meta.channel_group && S.meta.channel_group[name];
+  const order = grp && S.meta.groups && S.meta.groups.channels
+    && S.meta.groups.channels[grp];
+  if (!grp || !order || !n[grp]) return null;
+  const j = order.indexOf(name);
+  return j >= 0 ? (n[grp][j] || null) : null;
+}
 function coneDataPhysical(v) {
   const S = cones.data.sample;
   const n = S && S.meta.value_space && S.meta.value_space.tensor_norm;
   if (v === null || !Number.isFinite(v) || !n) return v;
-  const row = n[coneChannelIndex()];
+  const row = coneTensorNormRow(S, n);
   return row ? v * row[1] + row[0] : v;
 }
 
@@ -11298,7 +11424,7 @@ function coneDataDot(i, d, size) {
  * geometry mode draws them, the reach ellipse for the lag on screen, and one
  * dot per cell coloured by its value. */
 function conesDrawData() {
-  const S = cones.data.sample, e = cones.ents, w = coneGeo.window;
+  const S = cones.data.sample, e = cones.ents;
   const a = { lat: S.meta.anchor.lat, lon: S.meta.anchor.lon };
   coneDataSyncDate();
   const all = coneDataDots();
@@ -11312,7 +11438,10 @@ function conesDrawData() {
 
   e.anchor.position = Cesium.Cartesian3.fromDegrees(a.lon, a.lat);
   e.anchor.show = true;
-  e.win.show = true;
+  /* The window box is a fact about the NORTH ATLANTIC tensor. A global sample
+   * has no window — its grid closes — so drawing the box round it would claim
+   * an edge that is not there. `meta.grid` is how the file says which it is. */
+  e.win.show = !S.meta.grid;
   for (const p of e.patch) p.show = false;     // the patch is drawn as dots here
 
   let n = 0, off = 0;
@@ -11420,10 +11549,12 @@ function conesDataReadout() {
     `<br>${state}`;
 }
 
-/* "What the model reads", as one strip: the 42 x 9 patch the codec is given at
- * lag 0 (one row per channel, nine cells across, on the anomaly ramp), the two
- * future values it is asked to predict, and the token count. It is the whole
- * input in one picture, which no list of numbers is. */
+/* "What the model reads", as one strip: the channels × 9 patch the codec is
+ * given at lag 0 (one row per channel, nine cells across, on the anomaly
+ * ramp), the two future values it is asked to predict, and the token count.
+ * The row count is the SAMPLE's — 42 on the North Atlantic tensor, 54 on the
+ * global one — never a number written here. It is the whole input in one
+ * picture, which no list of numbers is. */
 function conesDataStrip() {
   const c = document.getElementById("cn-strip");
   const S = cones.data.sample;
@@ -11433,6 +11564,15 @@ function conesDataStrip() {
   const W = c.width, H = c.height;
   ctx.clearRect(0, 0, W, H);
   const nC = S.meta.channels.length, ti = cones.data.dateIdx;
+  /* The caption counts the rows off the SAMPLE. The two exported sets do not
+   * have the same number of channels (42 on the North Atlantic tensor, 54 on
+   * the global one), so a number written into the page would be wrong for one
+   * of them half the time. */
+  const cap = document.getElementById("cn-strip-hint");
+  if (cap) {
+    cap.textContent = `What the codec reads at lag 0: the 3×3 patch, one row ` +
+      `per channel (${nC} of them), nine cells across.`;
+  }
   const gridW = 150, gridX = 34, gridY = 8, gridH = H - 26;
   const cw = gridW / 9, ch = gridH / nC;
 
@@ -11455,7 +11595,8 @@ function conesDataStrip() {
       ctx.fillRect(gridX + j * cw, gridY + ci * ch, Math.ceil(cw), Math.ceil(ch));
     }
   }
-  // the selected channel's own row, marked — 42 rows is a lot to count down
+  // the selected channel's own row, marked — dozens of rows are a lot to
+  // count down by eye
   if (cones.data.stencil === "codec") {
     ctx.strokeStyle = "#e6edf3"; ctx.lineWidth = 1;
     ctx.strokeRect(gridX - 1, gridY + cones.data.chan * ch - 1,
@@ -11505,9 +11646,30 @@ function conesDataHint() {
   if (!host || !S) return;
   const bits = [];
   const shown = S.meta.dates[cones.data.dateIdx];
-  bits.push(`<strong>${S.meta.anchor.name}</strong> — ${S.meta.dates.length} pentads ` +
-            `from ${S.meta.dates[0]} to ${S.meta.dates[S.meta.dates.length - 1]}, ` +
-            `read out of ${S.meta.tensor.name}.`);
+  const fam = coneSampleFamily(S);
+  /* WHICH TENSOR, in words rather than in a build name. The recipe stamped in
+   * the file is the fact; "family 7" on its own would be a code name standing
+   * alone, which CLAUDE.md §0c forbids. */
+  bits.push(`<strong>${esc(S.meta.anchor.name)}</strong> — ` +
+            `${S.meta.dates.length} pentads from ${S.meta.dates[0]} to ` +
+            `${S.meta.dates[S.meta.dates.length - 1]}, ` +
+            `${S.meta.channels.length} channels, read out of ${fam.gloss} ` +
+            `(<code>${esc(S.meta.tensor.name)}</code>).`);
+  /* The anchor's own statics, when the exporter baked them in: which surface
+   * the cell stands on and how high it is. Family 4's files predate both, so
+   * this sentence simply is not there for them. */
+  const sphere = CONE_SPHERE_WORD[S.meta.sphere_at_anchor];
+  const elev = S.meta.elev_at_anchor;
+  if (sphere || Number.isFinite(elev)) {
+    const where = [];
+    if (sphere) where.push(`stands on <strong>${sphere}</strong>`);
+    if (Number.isFinite(elev)) {
+      where.push(elev < 0
+        ? `lies ${Math.abs(Math.round(elev)).toLocaleString("en-GB")} m below sea level`
+        : `is ${Math.round(elev).toLocaleString("en-GB")} m above sea level`);
+    }
+    bits.push(`The anchor cell ${where.join(" and ")}.`);
+  }
   if (cones.data.snapped) {
     bits.push(`The globe's date is <strong>${coneDateOfBin(cones.bin)}</strong>, which is ` +
               `outside the exported span — showing the nearest exported pentad, ` +
@@ -11556,29 +11718,66 @@ function conesDataFillSelectors() {
     return;
   }
   const asel = document.getElementById("cn-data-anchor");
-  if (asel && coneManifest) {
-    const want = (coneManifest.anchors || [])
-      .map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
+  const man = coneManifestOf();
+  if (asel && man) {
+    // In the index's own order — the exporter lists them the way it ran them
+    const want = (man.anchors || [])
+      .map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("");
     if (asel.innerHTML !== want) asel.innerHTML = want;
     asel.value = cones.data.anchorId;
   }
   const csel = document.getElementById("cn-channel");
   if (csel && S) {
     const list = cones.data.stencil === "codec" ? S.meta.channels : S.outer.channels;
-    const want = list.map((c, i) => `<option value="${i}">${c}</option>`).join("");
+    const want = cones.data.stencil === "codec"
+      ? coneChannelOptions(S, list) : coneChannelOptions(null, list);
     if (csel.innerHTML !== want) csel.innerHTML = want;
     csel.value = String(cones.data.stencil === "codec"
       ? cones.data.chan : cones.data.outerChan);
   }
 }
 
-async function conesUseAnchor(id) {
+/* Fifty-four channels in one flat list is a scroll, not a choice. Family 7
+ * says which of its three blocks each channel belongs to, so the select is
+ * grouped by that: the 0.25° ocean block, the 1° atmosphere-and-land block,
+ * and the 1° Argo depth column (the float profiles, one row per MONTH rather
+ * than per pentad). Family 4 has one block and no `channel_group`, so it stays
+ * the flat list it has always been — the option VALUE is the channel's index
+ * either way, which is what every reader of this select expects. */
+const CONE_GROUP_LABEL = {
+  g025: "0.25° ocean",
+  g100: "1° atmosphere & land",
+  rg100: "1° Argo depth column (monthly)",
+};
+function coneChannelOptions(S, list) {
+  const opt = (c, i) => `<option value="${i}">${esc(c)}</option>`;
+  const byName = S && S.meta && S.meta.channel_group;
+  const names = S && S.meta && S.meta.groups && S.meta.groups.names;
+  if (!byName || !names || !names.length) return list.map(opt).join("");
+  const buckets = new Map();
+  list.forEach((c, i) => {
+    const g = byName[c] || "other";
+    if (!buckets.has(g)) buckets.set(g, []);
+    buckets.get(g).push(opt(c, i));
+  });
+  const order = names.filter((g) => buckets.has(g))
+    .concat([...buckets.keys()].filter((g) => !names.includes(g)));
+  return order.map((g) =>
+    `<optgroup label="${esc(CONE_GROUP_LABEL[g] || g)}">` +
+    `${buckets.get(g).join("")}</optgroup>`).join("");
+}
+
+async function conesUseAnchor(id, src) {
+  const key = coneSourceKey(src);
   cones.data.loading = true;
   cones.data.error = null;
   try {
-    const S = await loadConeSample(id);
+    const S = await loadConeSample(key, id);
     cones.data.anchorId = id;
     cones.data.sample = S;
+    // WHICH set this sample came from, so a source switch can tell whether the
+    // one in hand still belongs to the source the select now reads.
+    cones.data.sampleSource = key;
     // The anchor IS the exported cell, so the geometry mode's anchor moves
     // with it — a data mode standing somewhere else would be two claims.
     cones.lat = S.meta.anchor.lat;
@@ -11618,13 +11817,14 @@ async function conesSetDataMode(on) {
     return;
   }
   if (cones.data.source === "live") { await conesSetSource("live"); return; }
-  const m = await loadConeManifest();
+  const key = coneSourceKey();
+  const m = await loadConeManifest(key);
   if (!m || !(m.anchors || []).length) {
     cones.data.error = "no sample index";
     const host = document.getElementById("cn-data-hint");
     if (host) {
       host.innerHTML = `<strong>No exported samples are registered</strong> — ` +
-        `data/cone_samples.json is missing or empty. See ` +
+        `${esc(CONE_SAMPLES_INDEX[key])} is missing or empty. See ` +
         `<a href="https://blauewelt.github.io/earth/docs.html?f=docs/CONE_DATA_DEMO.md" ` +
         `target="_blank" rel="noopener">how to regenerate them</a>.`;
     }
@@ -11632,14 +11832,19 @@ async function conesSetDataMode(on) {
     return;
   }
   // Snap to the exported anchor nearest wherever the reader already is.
-  await conesUseAnchor(cones.data.anchorId || coneNearestAnchor(cones.lat, cones.lon).id);
+  await conesUseAnchor(
+    cones.data.anchorId || coneNearestAnchor(cones.lat, cones.lon, key).id, key);
 }
 
 /* The nearest exported anchor to a point, in plain degrees — the cone is a few
- * thousand km across and the five anchors are an ocean apart, so a great-circle
- * distance would not change the answer and would hide the arithmetic. */
-function coneNearestAnchor(lat, lon) {
-  const list = (coneManifest && coneManifest.anchors) || [];
+ * thousand km across and the anchors of either set are an ocean apart, so a
+ * great-circle distance would not change the answer and would hide the
+ * arithmetic. Which set is asked is the SOURCE's business, which is why it is
+ * an argument: switching from the North Atlantic set to the global one keeps
+ * the reader's lat/lon and lands on the global anchor at the same place. */
+function coneNearestAnchor(lat, lon, src) {
+  const m = coneManifestOf(src);
+  const list = (m && m.anchors) || [];
   let best = list[0], bestD = Infinity;
   for (const a of list) {
     const d = (a.lat - lat) ** 2 + ((a.lon - lon) * Math.cos(lat * Math.PI / 180)) ** 2;
@@ -11916,9 +12121,11 @@ function conesDrawLive() {
     e.ring.show = false;
   }
   viewer.scene.requestRender();
-  /* The "what the codec reads" strip is family 4's picture — 42 channels of one
-   * exported anchor — and there is no equivalent here: family 7 has 21 surface
-   * channels in two groups and this page holds one of them at a time. Hidden
+  /* The "what the codec reads" strip is an EXPORTED sample's picture — every
+   * channel of one anchor, in one column — and there is no equivalent here:
+   * live mode holds one channel at a time, because each is a separate range
+   * read of a slab on the Hub rather than a column of a file already in hand.
+   * (Either exported source draws the strip; only this one cannot.) Hidden
    * rather than left showing the last anchor's numbers under a different
    * heading, which would be the tab's one unforgivable lie. */
   document.getElementById("cn-strip-wrap")?.classList.add("hidden");
@@ -12084,21 +12291,41 @@ async function coneLiveStatics() {
  * lag slider, the date, both clocks — and differ only in the rows that mean
  * nothing on the other side. */
 async function conesSetSource(src) {
-  cones.data.source = src === "live" ? "live" : "anchors";
+  /* Three values, and anything else is family 4 — a stale URL or a hand-edited
+   * setting must not leave the tab pointing at a source that does not exist. */
+  cones.data.source =
+    src === "live" || src === "anchors_f7" || src === "anchors" ? src : "anchors";
   const live = cones.data.source === "live";
   const sel = document.getElementById("cn-source");
   if (sel && sel.value !== cones.data.source) sel.value = cones.data.source;
+  // Both EXPORTED sets keep the anchor row (there is a list to choose from)
+  // and the anomaly row (the exporter computed the anomaly); only live mode,
+  // which has neither, hides them.
   document.getElementById("cn-anchor-row")?.classList.toggle("hidden", live);
   document.getElementById("cn-anom-row")?.classList.toggle("hidden", live);
   cones.data.pick = null;
   if (!live) {
+    const key = coneSourceKey();
+    /* Switching between the two exported sets is a change of TENSOR: the
+     * anchor ids, the channel list and the grid are all different, so the
+     * sample in hand is dropped rather than reinterpreted. `cones.lat/lon`
+     * are deliberately kept — they are what picks the nearest anchor of the
+     * new set, so RAPID in the North Atlantic set lands on RAPID in the
+     * global one. */
+    if (cones.data.sample && cones.data.sampleSource !== key) {
+      cones.data.sample = null;
+      cones.data.sampleSource = null;
+      cones.data.anchorId = null;
+      cones.data.chan = 0;
+      cones.data.outerChan = 0;
+    }
     // Coming BACK to the exported anchors: load one if this session has never
     // had one, or the tab would fall through to the bare geometry.
     if (cones.data.on && !cones.data.sample) {
-      const m = await loadConeManifest();
+      const m = await loadConeManifest(key);
       if (m && (m.anchors || []).length) {
-        await conesUseAnchor(cones.data.anchorId ||
-                             coneNearestAnchor(cones.lat, cones.lon).id);
+        const near = coneNearestAnchor(cones.lat, cones.lon, key);
+        await conesUseAnchor(cones.data.anchorId || (near && near.id), key);
         return;
       }
     }
@@ -12116,8 +12343,11 @@ async function conesSetSource(src) {
         `<a href="https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY7_GLOBE.md" ` +
         `target="_blank" rel="noopener">what this is</a>.`;
     }
-    cones.data.source = "anchors";
-    if (sel) sel.value = "anchors";
+    // Back to whichever exported set the tab was last reading, not always
+    // family 4 — dropping a reader from the global anchors into the North
+    // Atlantic ones because a THIRD source failed would be a silent move.
+    cones.data.source = cones.data.sampleSource || "anchors";
+    if (sel) sel.value = cones.data.source;
     document.getElementById("cn-anchor-row")?.classList.remove("hidden");
     document.getElementById("cn-anom-row")?.classList.remove("hidden");
     return;
@@ -12585,6 +12815,11 @@ function coneState() {
     data: {
       on: cones.data.on, ready: coneDataOn(), error: cones.data.error,
       source: cones.data.source,
+      // which exported set the sample in hand came out of, and how many
+      // channels it carries — the two differ between family 4 and family 7
+      sampleSource: cones.data.sampleSource,
+      nChannels: cones.data.sample ? cones.data.sample.meta.channels.length : 0,
+      recipe: cones.data.sample ? (cones.data.sample.meta.recipe || null) : null,
       live: coneLiveOn(),
       liveChan: cones.data.liveChan,
       liveAnchor: cones.data.liveAnchor ? { ...cones.data.liveAnchor } : null,
@@ -13808,7 +14043,7 @@ window.__earth = {
   conesPickDot,
   coneNearestAnchor,
   get coneSample() { return cones.data.sample; },
-  get coneSampleManifest() { return coneManifest; },
+  get coneSampleManifest() { return coneManifestOf(); },
   get coneDataDots() { return cones.data.dots; },
   // live mode (family 7): the tests drive the source switch and the anchor
   // through these, because a tap on the globe is a pick the software GL stack

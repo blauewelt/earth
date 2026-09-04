@@ -168,6 +168,73 @@ including the global block's wrapped ones — in `tests/data.spec.js`.
 
 ---
 
+## Exported family-7 anchors
+
+The Cones tab's Data mode has a **third** source, between the two above:
+**exported anchors (family 7, global — 12 cells)**. These are pre-sampled files
+rather than a live read, so they carry everything live mode has to give up —
+above all the **anomaly** — while still covering the whole globe.
+
+The twelve anchors, in the index's order:
+
+| id | what it is |
+| --- | --- |
+| `acc` | Antarctic Circumpolar Current, 55 °S 60 °E |
+| `antarctica_ice` | Antarctic ice sheet, 80 °S 60 °E |
+| `dateline` | the tensor's last column, 0 °N 179.75 °E |
+| `equator` | Equator, 0 °N 30 °W |
+| `greenland` | Greenland ice sheet, 72 °N 40 °W |
+| `gulf_stream` | Gulf Stream, 36 °N 70 °W |
+| `ionian_edge` | Ionian Sea — the North Atlantic window's east edge, 36 °N 19 °E |
+| `kuroshio` | Kuroshio, 35 °N 145 °E |
+| `labrador` | Labrador Sea, 58 °N 52 °W |
+| `nino34` | Niño 3.4, 0 °N 150 °W |
+| `rapid` | the RAPID array's latitude, 26.5 °N 70 °W |
+| `sahara` | Sahara, 23 °N 10 °E |
+
+The index is **`data/cone_samples_f7.json`** (anchors, dates, URLs, sizes, the
+tensor's sha256, the exporter's commit, the grid block and the three channel
+groups); the files themselves are ~5 MB each on the Hugging Face Hub under
+`cone_samples_f7/`, read one anchor at a time. `data/cone_samples_f7/fixture.json`
+is the trimmed in-repo copy the browser tests run against with no network — the
+dateline anchor cut to two dates and four channels (one per group plus a second
+ocean one), rebuilt from a downloaded anchor with:
+
+```bash
+python3 ml/export_cone_sample.py \
+    --trim-file dateline.json \
+    --fixture data/cone_samples_f7/fixture.json \
+    --fixture-channels 0,5,21,22 --fixture-dates 2
+```
+
+**They come out of the production sampler, not out of this page.** Each file is
+written by `ml/export_cone_sample.py --tensor …` — the same script that made
+the North Atlantic set, calling `ml/cone_sampler.py::ConeSampler.sample` for the
+codec's inner stencil and `ml/cone.py::outer_spiral` for stage 2's outer one —
+run on the GPU box by
+[`.github/workflows/family7-export-cones.yml`](https://github.com/blauewelt/earth/blob/main/.github/workflows/family7-export-cones.yml)
+and uploaded with `ml/upload_cone_samples.py`, which also writes the index.
+
+Three things to know when reading this mode:
+
+- **The anomaly IS available here**, unlike live mode. The exporter computed it
+  with the trainer's own function — `ml/trainprobe.py::anomaly_transform`, called
+  on a writable copy of each group: departure from a per-calendar-month
+  climatology built on **training years only**, then z-scored per channel over
+  the training pool. Each group is transformed with its own calendar, because
+  `rg100` holds one row per month and the master's would be the wrong one.
+- **The `rg_*` channels are populated only in month-holding pentads.** The 32
+  Roemmich–Gilson depth channels are written once per month, into the pentad
+  that contains the 15th, so on every other date their dots are dimmed — a
+  *missing* token, which is exactly what the model is handed there.
+- **The raw values are z-scores, per group.** `meta.value_space.tensor_norm` is
+  the npz's own `norm_g025` / `norm_g100` / `norm_rg100`, keyed by group and
+  indexed *within* the group; `meta.channel_group` says which group a channel is
+  in and `meta.groups.channels[g]` is that group's order. The read-out puts the
+  unit back with that two-hop lookup and prints the stored σ beside it.
+
+---
+
 ## What is NOT shown, and why
 
 - **`rg100`, the Argo depth column** (32 channels, 10–1900 dbar). Live bins

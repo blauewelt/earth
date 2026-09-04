@@ -1565,6 +1565,209 @@ test.describe("cone_samples.json + the fixture (E-069 data mode)", () => {
   });
 });
 
+/* The cone samples exported from FAMILY 7 — the tensor that covers the whole
+ * globe at 0.25° rather than only the North Atlantic window. Same exporter,
+ * same production sampler, same file schema; three things differ and each one
+ * is what this block is about:
+ *
+ *   · a `grid` block. Family 4's (row, col) are indices into a window with
+ *     EDGES, so the page maps them through `data/cone_geometry.json`. Family
+ *     7's are indices into a grid that CLOSES at the dateline, and the file
+ *     says so itself — which is what lets one drawing routine serve both.
+ *   · three CHANNEL GROUPS. 54 channels on three different grids (0.25° ocean,
+ *     1° atmosphere and land, 1° Argo depth column), so the (mean, sd) the
+ *     builder z-scored with is keyed by group and indexed within it.
+ *   · twelve anchors instead of five, and they are global: the Antarctic
+ *     Circumpolar Current, the Sahara, the dateline itself.
+ *
+ * The full files are on the Hub; the in-repo fixture is one anchor cut down to
+ * two dates and four channels — one from each group plus a second ocean one,
+ * which is the whole schema in the smallest honest file. */
+test.describe("cone_samples_f7.json + the fixture (family 7, the global anchors)", () => {
+  const idx = read("cone_samples_f7.json");
+  const fx = read("cone_samples_f7/fixture.json");
+  const G = read("cone_geometry.json");
+  const GRID = { lat0: -90, lon0: -180, nx: 1440, ny: 721, step: 0.25, wrap: true };
+
+  test("the index names the global tensor, its groups and every anchor's URL", () => {
+    expect(idx.recipe).toBe("f7l0");
+    expect(idx.tensor.name).toBe("family7_global025_pentad_l0");
+    expect(idx.tensor.recipe).toBe("f7l0");
+    expect(idx.tensor.window).toBe("global025");
+    expect(idx.tensor.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(idx.tensor.shape).toEqual([3142, 721, 1440, 54]);
+    expect(idx.prefix).toBe("cone_samples_f7");
+    expect(idx.produced_by).toContain("ConeSampler.sample");
+    expect(idx.produced_by).toContain("outer_spiral");
+    expect(idx.exporter).toBe("ml/export_cone_sample.py");
+    expect(idx.exporter_commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(idx.L_in).toBe(G.constants.L_IN);
+    expect(idx.holdout_years).toEqual([2009, 2017, 2023]);
+
+    // THE GRID. This is the block the page branches on, and it is the whole
+    // difference between a window with edges and a globe that closes.
+    expect(idx.grid).toEqual(GRID);
+    expect(idx.grid.wrap).toBe(true);
+
+    // THREE GROUPS, in the order the channel list is laid out in
+    expect(idx.groups.names).toEqual(["g025", "g100", "rg100"]);
+    expect(idx.channels).toHaveLength(54);
+    expect(idx.groups.channels.g025).toHaveLength(7);
+    expect(idx.groups.channels.g100).toHaveLength(15);
+    expect(idx.groups.channels.rg100).toHaveLength(32);
+    // the three lists together ARE the channel list, in order — the page
+    // indexes a channel by its position in `channels` and looks its (mean, sd)
+    // up by its position within its GROUP, so the two must not drift
+    expect([...idx.groups.channels.g025, ...idx.groups.channels.g100,
+            ...idx.groups.channels.rg100]).toEqual(idx.channels);
+    for (const c of idx.channels) {
+      expect(idx.groups.names).toContain(idx.channel_group[c]);
+    }
+    expect(idx.scoreable_channels).toHaveLength(8);
+
+    // 24 consecutive pentads, exactly as the North Atlantic set
+    expect(idx.dates).toHaveLength(24);
+    expect(idx.bins).toHaveLength(24);
+    for (let i = 1; i < idx.bins.length; i++) {
+      expect(idx.bins[i] - idx.bins[i - 1]).toBe(1);
+    }
+    expect(idx.outer_lags[0]).toBe(7);
+    expect(idx.outer.empty_below).toBe(G.constants.L_IN + 1);
+    expect(Math.max(...idx.outer_lags)).toBeLessThanOrEqual(G.constants.K_OUTER - 1);
+
+    // TWELVE anchors, and they are global rather than one ocean's
+    expect(idx.anchors).toHaveLength(12);
+    const ids = idx.anchors.map((a) => a.id);
+    for (const want of ["acc", "antarctica_ice", "dateline", "sahara",
+                        "nino34", "kuroshio", "rapid", "greenland"]) {
+      expect(ids).toContain(want);
+    }
+    for (const a of idx.anchors) {
+      expect(a.url).toBe(
+        `https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/` +
+        `cone_samples_f7/${a.id}.json`);
+      expect(a.url).toMatch(
+        /^https:\/\/huggingface\.co\/datasets\/chfrank\/earth-tensors\/resolve\/main\/cone_samples_f7\/[a-z0-9_]+\.json$/);
+      expect(a.file).toBe(`cone_samples_f7/${a.id}.json`);
+      expect(a.sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(a.bytes).toBeGreaterThan(1e5);
+      expect(a.bytes).toBeLessThan(6.5e6);         // the per-file budget
+      // every anchor is a cell of the GLOBAL grid, and its (row, col) and its
+      // (lat, lon) are the same place said twice
+      expect(a.row).toBeGreaterThanOrEqual(0);
+      expect(a.row).toBeLessThan(GRID.ny);
+      expect(a.col).toBeGreaterThanOrEqual(0);
+      expect(a.col).toBeLessThan(GRID.nx);
+      expect(GRID.lat0 + a.row * GRID.step).toBeCloseTo(a.lat, 6);
+      expect(GRID.lon0 + a.col * GRID.step).toBeCloseTo(a.lon, 6);
+    }
+    // the dateline anchor is the last column — the one that has no eastern
+    // neighbour on a window and has one here
+    expect(idx.anchors.find((a) => a.id === "dateline").col).toBe(GRID.nx - 1);
+
+    expect(idx.cors_measured.access_control_allow_origin)
+      .toBe("https://blauewelt.github.io");
+    expect(idx.cors_measured.status).toBe(206);
+    expect(idx.fixture).toBe("data/cone_samples_f7/fixture.json");
+  });
+
+  test("the fixture is the real schema, trimmed in dates AND channels", () => {
+    expect(Object.keys(fx).sort()).toEqual(
+      ["future", "inner", "meta", "outer", "patch"]);
+    expect(fx.meta.produced_by).toBe(idx.produced_by);
+    expect(fx.meta.recipe).toBe("f7l0");
+    expect(fx.meta.tensor.sha256).toBe(idx.tensor.sha256);
+    expect(fx.meta.grid).toEqual(idx.grid);
+    expect(fx.meta.fixture).toContain("trimmed copy");
+    expect(fx.meta.dates.length).toBeLessThanOrEqual(3);
+    expect(fx.meta.dates).toEqual(idx.dates.slice(0, fx.meta.dates.length));
+    expect(fx.outer.lags[0]).toBe(7);
+    expect(fx.outer.lags).toHaveLength(3);
+
+    // the four kept channels are a subset of the real list, one per group
+    expect(fx.meta.channels).toEqual(["cur_speed", "sst", "skt", "rg_t10"]);
+    for (const c of fx.meta.channels) expect(idx.channels).toContain(c);
+    expect(fx.meta.groups.names).toEqual(["g025", "g100", "rg100"]);
+    expect([...fx.meta.groups.channels.g025, ...fx.meta.groups.channels.g100,
+            ...fx.meta.groups.channels.rg100]).toEqual(fx.meta.channels);
+
+    // the (mean, sd) table is keyed by GROUP and indexed within it — the page
+    // puts the unit back on a stored value with exactly this lookup, so a
+    // group whose norm list is a different length from its channel list would
+    // print the wrong number in the right unit
+    const norm = fx.meta.value_space.tensor_norm;
+    expect(Array.isArray(norm)).toBe(false);
+    for (const g of fx.meta.groups.names) {
+      expect(norm[g]).toHaveLength(fx.meta.groups.channels[g].length);
+      for (const row of norm[g]) {
+        expect(row).toHaveLength(2);
+        expect(Number.isFinite(row[0]) && Number.isFinite(row[1])).toBe(true);
+      }
+    }
+    // and every kept channel still has its group, its family and its unit
+    for (const c of fx.meta.channels) {
+      expect(fx.meta.groups.names).toContain(fx.meta.channel_group[c]);
+      expect(fx.meta.channel_family[c]).toBeTruthy();
+      expect(typeof fx.meta.units[c]).toBe("string");
+    }
+
+    // the anchor's own statics — which surface it stands on and how high
+    expect(fx.meta.anchor.id).toBe("dateline");
+    expect(fx.meta.anchor.col).toBe(idx.grid.nx - 1);
+    expect([0, 1, 2, 3]).toContain(fx.meta.sphere_at_anchor);
+    expect(Number.isFinite(fx.meta.elev_at_anchor)).toBe(true);
+
+    // every declared shape matches the array behind it
+    const nT = fx.meta.dates.length, nC = fx.meta.channels.length;
+    const nD = fx.inner.n_dots;
+    expect(fx.inner.shape).toEqual([nT, nD]);
+    expect(fx.inner.raw).toHaveLength(nT);
+    expect(fx.inner.raw.every((r) => r.length === nD)).toBe(true);
+    expect(fx.inner.obs).toHaveLength(nT * nD);
+    expect(fx.inner.valid).toHaveLength(nT * nD);
+    expect(/^[01]+$/.test(fx.inner.obs)).toBe(true);
+    expect([...new Set(fx.inner.chan)].sort((a, b) => a - b))
+      .toEqual([0, 1, 2, 3]);
+    expect(fx.patch.shape).toEqual([nT, nC, 9]);
+    expect(fx.patch.raw).toHaveLength(nT * nC * 9);
+    expect(fx.future.raw).toHaveLength(nT * nC * fx.future.lags.length);
+    const [oT, oK, oD, oC] = fx.outer.shape;
+    expect([oT, oK, oD, oC]).toEqual(
+      [nT, 3, G.constants.OUTER_N_PTS, fx.outer.channels.length]);
+    expect(fx.outer.raw).toHaveLength(oT * oK * oD * oC);
+    expect(fx.outer.obs).toHaveLength(oT * oK * oD * oC);
+    expect(fx.outer.valid).toHaveLength(oK * oD);
+    // stage 2's channel list is a subset of the tensor's, and `chan_index`
+    // points back into it — the read-out follows that pointer
+    for (let i = 0; i < fx.outer.channels.length; i++) {
+      expect(fx.meta.channels[fx.outer.chan_index[i]]).toBe(fx.outer.channels[i]);
+    }
+
+    expect(Math.min(...fx.inner.lag)).toBe(1);
+    expect(Math.max(...fx.inner.lag)).toBe(G.constants.L_IN);
+
+    // THE DATELINE, which is the point of the whole family: the anchor sits in
+    // the last column, so its cone reaches across the join and the columns
+    // come back round rather than falling off an edge
+    expect(Math.min(...fx.inner.col)).toBe(0);
+    expect(Math.max(...fx.inner.col)).toBe(idx.grid.nx - 1);
+    expect(fx.inner.lon.some((v) => v > 170)).toBe(true);
+    expect(fx.inner.lon.some((v) => v < -170)).toBe(true);
+    expect(fx.inner.lon.every((v) => v >= -180 && v < 180)).toBe(true);
+    // nothing is off the grid: a global cone has no invalid cells
+    expect(/^1+$/.test(fx.inner.valid)).toBe(true);
+
+    // there are real numbers in here, and they are in two spaces — the raw
+    // measurement and the z-scored anomaly the codec is actually given. The
+    // ANOMALY is the thing live mode cannot offer and this mode can.
+    const finite = (a) => a.filter((v) => typeof v === "number");
+    const raw0 = finite(fx.inner.raw[0]), anom0 = finite(fx.inner.anom[0]);
+    expect(raw0.length).toBeGreaterThan(50);
+    expect(anom0.length).toBe(raw0.length);
+    expect(Math.max(...anom0.map(Math.abs))).toBeLessThan(30);
+  });
+});
+
 /* ============================ family7_index.json + the in-repo fixture ======
  *
  * FAMILY 7 is the first input tensor covering the whole globe rather than the
