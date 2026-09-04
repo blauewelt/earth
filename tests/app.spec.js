@@ -5946,3 +5946,54 @@ test("Cones data mode: the stencil toggle switches the lag range and the dot set
   expect(await page.locator("#cn-channel option").count()).toBe(fx.meta.channels.length);
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
+
+/* The cone follows the app's DATE, which is what makes the Play tab drive it.
+ *
+ * `notifyGlobeDate()` is called from every place that writes `state.date` — the
+ * date input, `setGlobeDate`, the ±30-minute midnight cross and the Play tab's
+ * frame step — and `conesOnGlobeDate` is the only listener. That is the whole
+ * mechanism: the Play tab stays "a clock that drives state.date and nothing
+ * else" (CLAUDE.md §5) and this tab grows no playback code of its own. Driving
+ * the date INPUT here rather than the Play tab exercises the same funnel and
+ * needs no timed layer to play. */
+test("Cones data mode: the cone's date follows the app's date, and says when it cannot",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const fx = await serveConeFixture(page);
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  await page.evaluate(() => window.__earth.conesSetDataMode(true));
+  const first = await page.evaluate(() => window.__earth.coneState());
+  expect(first.data.date).toBe(fx.meta.dates[0]);
+
+  // a date INSIDE the exported span moves the cone onto that pentad exactly
+  const inside = fx.meta.dates[fx.meta.dates.length - 1];
+  await page.evaluate((d) => {
+    const el = document.getElementById("layer-date");
+    el.value = d;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, inside);
+  await expect.poll(() => page.evaluate(() => window.__earth.coneState().data.date))
+    .toBe(inside);
+  const on = await page.evaluate(() => window.__earth.coneState());
+  expect(on.data.snapped).toBe(false);
+  expect(on.data.dateIdx).toBe(fx.meta.dates.length - 1);
+
+  // a date OUTSIDE it shows the nearest exported pentad and SAYS SO — the one
+  // thing a read-out must never do is present a neighbouring date's numbers as
+  // if they were this date's
+  await page.evaluate(() => {
+    const el = document.getElementById("layer-date");
+    el.value = "2019-06-01";
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.coneState().data.snapped))
+    .toBe(true);
+  const off = await page.evaluate(() => window.__earth.coneState());
+  expect(fx.meta.dates).toContain(off.data.date);
+  expect(off.data.date).toBe(fx.meta.dates[fx.meta.dates.length - 1]);  // nearest
+  await expect(page.locator("#cn-data-hint")).toContainText("nearest exported pentad");
+  await expect(page.locator("#cn-data-hint")).toContainText("2019");
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
