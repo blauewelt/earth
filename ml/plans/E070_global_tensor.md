@@ -139,7 +139,11 @@ the head.
 
 ---
 
-## 4 · Phase A — the pull (RUNNING)
+## 4 · Phase A — the pull (COMPLETE)
+
+**2026-09-04.** Phase A is done: all **384/384** monthly chunks stood under
+`daily025_global/` on the Hub on 2026-09-03, four lanes at 96/96 each, and the
+gate below is met as written.
 
 `ml/fetch_glorys_daily.py --window global --bin-deg 0.25` fetches each month
 day by day (a whole month in one `cm.subset` peaked at 5.95 GB and was
@@ -162,6 +166,16 @@ it is on the Hub's best-effort public tier — check before relying on it.
 (a month that fails five times stops the lane by design).
 
 ## 5 · Phases B–F, with what stops each
+
+**2026-09-04 — Phases B, C and D below are SUPERSEDED.** They are built as one
+resumable job rather than as three, by
+[the family-7 build spec](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E070_family7_build.md)
+(recipe `f7l0`): the other channels, the pentad aggregation and the publish are
+stages of `ml/build_family7.py` on a Vast box, which also takes the grid to
+both poles and adds the shared land/ocean channels E-071 §6 asks for. Read the
+three phases below for what each step must produce and what stops it — that
+part still holds; read the spec for how it is actually run. Phases E and F are
+unchanged.
 
 **Phase B — the other channels, global (runner work, ~$0).**
 `rg_*` and NCEP are already global files (audit §1): only the destination

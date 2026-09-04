@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-070"></a>
-## E-070 · The global tensor (family 7) — PLANNED 2026-09-03, Phase A RUNNING (Chris: "expand to the whole globe … proceed with global data preparation and training")
+## E-070 · The global tensor (family 7) — Phase A COMPLETE 2026-09-03; the BUILD (recipe `f7l0`: to the poles, shared land/ocean channels) DISPATCHED 2026-09-04 (Chris: "expand to the whole globe … proceed with global data preparation and training"; 09-04: "proceed with building the new global tensor with all the data (including Antarctica, common channels for land and water)")
 
 TL;DR — every measured wall is temporal (heads best at ~step 2,000 at any
 width; the LIM wins from 15 d), and the globe adds no temporal sample to the
@@ -77,6 +77,52 @@ four year-lanes, 6-hourly resume, target `daily025_global/` on
 other channels global, the year-split pentad aggregate, the sidecar build on a
 500 GB box, the codec + gates, one capacity rung) are in the plan with their
 stops; nothing else has run.
+
+**Phase A COMPLETE 2026-09-03 ~18:45Z** — 384/384 chunks under
+`daily025_global/` (the four lanes finished in ~5.5 h, not the day
+estimated); axes verified on the real `202006` chunk: `latitude` 681 values
+−80.0 … 90.0, `longitude` 1,440 values −180.0 … 179.75, `uo/vo/mlotst/zos`
+float32.
+
+**THE BUILD, dispatched 2026-09-04 — E-070 build · build and publish the
+first global input tensor, extended to the poles and to land, as ONE resumable
+job · params none (a data build, nothing trains) · stage data · data
+`family7_global025_pentad_l0` (recipe `f7l0`) · arch three channel groups at
+native resolution — `g025` [3142, 721, 1440, 7] float16 (`cur_speed`,
+`log_mld`, `ssh`, `cur_u`, `cur_v`, `skin_t`, `sea_ice`; GLORYS12 + OISST
+v2.1 SST and sea-ice), `g100` [3142, 181, 360, 14] (`tau_x`, `tau_y`,
+`tau_x_std`, `tau_y_std`, `t2m`, `u10`, `v10`, `sp`, `log_prate`, `log_swe`,
+`soilw`, `tsoil`, `lhtfl`, `shtfl`; NCEP/NCAR R1 gaussian, the key-free
+stand-in for ERA5 until the CDS account exists), `rg100` [n_live, 181, 360, 32]
+(the Roemmich–Gilson depth column, live bins only) + statics `sphere`
+(ocean/land/ice-sheet/inland-water from OISST ∪ GLORYS coverage and Natural
+Earth glaciated areas and lakes) and `elev` (ETOPO 2022 surface, block-mean)
+· steps none · resume per stage and per year (`--work` on the box's
+persistent cache).** Plain English: the tensor now covers every 0.25° point
+from pole to pole, and a land or ice-sheet cell carries surface temperature,
+air temperature, wind, pressure, precipitation, snow, soil and heat-flux
+values instead of forty-two "not observed" tokens. Spec, decisions and the
+ten pre-build assertions:
+[E070_family7_build.md](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E070_family7_build.md).
+Workflow `.github/workflows/family7-build.yml` (`workflow_dispatch` only, the
+300 GB Ontario box `gpu-box-31299601`); builder `ml/build_family7.py`;
+`tests/test_build_family7.py` (15 tests, CPU, no network, plus the
+end-to-end `--smoke`) green before dispatch.
+
+What this build is NOT a test of: nothing here is a result. The one
+measurement it owes the log when it lands: the NA sub-block of `cur_u`
+against family 4 r3's `cur_u`, both un-z-scored — max |Δ| and the fraction of
+exactly-equal cells (the global chunks were binned at fetch, the NA chunks in
+the aggregator; the accumulation order differs, so bit-identity is a question,
+not an assumption). Three findings from building it, each pinned by a test:
+NCEP's `surface_gauss` files are 6-hourly, not daily (family 4's `tau_*_std`
+has always been a σ over 6-hourly samples; `min_days` now counts distinct
+days); OISST's `icec` declares `units "percent"` while its `valid_range` is
+0 … 1 (the reader trusts the range); and a coarse channel written straight
+into float16 loses 0.5 hPa of surface pressure before normalisation, so the
+coarse groups are filled in float32 and cast at the z-score pass. Expected
+~5 h and ~$1.5; the run number is in the overview stamp and below when it
+lands.
 
 <a id="e-069"></a>
 ## E-069 · Two stencils, one cone — the cone-native codec, ocean physics first — Phase A DONE 2026-09-03, Phase B wired, #537 DISPATCHED after #536 died at its first CUDA eval (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")

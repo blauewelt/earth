@@ -1,0 +1,263 @@
+# E-070 / E-071: build FAMILY 7 -- the first input tensor that covers the whole
+# globe rather than the North Atlantic window, at 0.25 degrees, five-day bins,
+# 1982-2024, with the shared land/ocean channels.
+#
+# WHAT IT BUILDS. `ml/build_family7.py` streams four sources into three
+# co-registered memmaps and one small npz, recipe `f7l0`, stem
+# `family7_global025_pentad_l0`: `g025` [3142, 721, 1440, 7] float16 (46 GB --
+# currents, mixed-layer depth, SSH, skin temperature, sea ice), `g100`
+# [3142, 181, 360, 14] (5.7 GB -- NCEP/NCAR wind stress, 2 m air, 10 m wind,
+# pressure, precipitation, snow, soil, turbulent fluxes) and `rg100`
+# [n_live, 181, 360, 32] (~1 GB -- the Roemmich-Gilson Argo depth column, live
+# bins only), plus the statics, the norms and the truth series. The three
+# groups are kept at their NATIVE resolution on purpose: a 1.9-degree
+# reanalysis upsampled to 0.25 degrees is sixty copies of every number, and
+# dense would be 425 GB. The whole specification -- every channel, every
+# transform, every assertion -- is
+# ml/plans/E070_family7_build.md, rendered for a phone at
+# https://blauewelt.github.io/earth/docs.html?f=ml/plans/E070_family7_build.md
+#
+# WHY A BOX AND NOT A HOSTED RUNNER. A GitHub-hosted job dies at six hours and
+# has ~14 GB of free disk. This build is ~53 GB of memmaps plus up to ~3 GB of
+# sources in flight plus the verify downloads, and about five hours of wall
+# clock (GLORYS 384 chunks ~40 min, OISST 43 years ~2 h download-bound, NCEP 14
+# variables x 43 years ~40 min, RG minutes, statics minutes, norm ~30 min,
+# publish + verify ~30 min). Splitting that into hosted year-lanes -- E-070
+# Phase C's shape -- would mean four runners each holding a partial memmap that
+# no other lane can see, i.e. four experiments instead of one. The default box
+# `gpu-box-31299601` is the 300 GB Ontario machine; its `/opt/earth-cache` is
+# persistent across jobs, which is also what makes the resume below real.
+#
+# RESUMABILITY IS THE CONTRACT. Every stage flushes its memmap and THEN writes
+# `<work>/<stage>.done` (ml/CLAUDE.md 5.21: a marker may only under-claim), and
+# `sst`, `ncep` and `rg` also keep per-year markers. So a job that hits the
+# timeout, loses its box, or is cancelled is resumed by re-dispatching this
+# workflow WITH THE SAME `work` VALUE: finished stages are skipped and the
+# interrupted one restarts at the year it lost, not at 1982. That is the only
+# thing `work` is for -- pointing it somewhere new starts a fresh build, and
+# two builds are two experiments (E-070 5).
+#
+# WHY THE LAST STEP EXISTS. A dead job must still tell its story (ml/CLAUDE.md
+# 5.25/5.26): the final step runs `if: always()` and uploads `progress.json`,
+# every `*.done` marker and the last 200 lines of the build log as an Actions
+# artifact, so a timeout at hour 23 is diagnosable without the box.
+#
+# SECURITY. `workflow_dispatch` ONLY. ml/CLAUDE.md 6: self-hosted runners on a
+# public repo are safe here for exactly one reason -- dispatch requires repo
+# write access. NEVER add `pull_request`, `issue_comment`, `workflow_run` or
+# `schedule` to this file; any of them would hand code execution on a rented
+# box, plus the job token, to anyone who opens a PR. HF_TOKEN reaches the
+# builder as an ENV VAR and never as a command-line argument (argv is world
+# readable on the box, and the box's host has root).
+name: Family 7 build
+run-name: family7 ${{ github.event.inputs.stage || 'all' }} -> ${{ github.event.inputs.work || 'ml/cache/family7' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "runner label. A Vast box's runner NAME is an implicit label; the default is the 300 GB Ontario box, which is the only one with room for 53 GB of memmaps plus sources"
+        default: "gpu-box-31299601"
+      stage:
+        description: "all | glorys | sst | ncep | rg | static | truth | norm | meta | publish. Order is fixed (ncep needs sst for the skin_t fill; norm needs everything; publish last) -- a single stage is for resuming or re-running one, never for building out of order"
+        default: "all"
+      work:
+        description: "the build directory. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages are skipped by their .done markers. A different path is a different build"
+        default: "ml/cache/family7"
+      extra_args:
+        description: "extra flags for ml/build_family7.py, e.g. --source-dir <dir> or --smoke. Word-split deliberately; leave empty for a real build"
+        default: ""
+
+permissions:
+  contents: read          # the tensor is published to Hugging Face, not here
+
+concurrency:
+  # ONE BUILD AT A TIME, and never cancelled in flight. Two concurrent builds
+  # would write the same memmaps and the same .done markers from two boxes and
+  # produce a tensor neither of them describes -- "two builds are two
+  # experiments" (E-070 5), and this is the degenerate case where they are also
+  # the same files. cancel-in-progress stays false: a running build holds hours
+  # of streamed sources whose only durable record is its own markers.
+  group: family7-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ${{ github.event.inputs.runner }}
+    timeout-minutes: 1440         # 24 h; the build is ~5 h, a resumed stage less
+    steps:
+      - uses: actions/checkout@v4
+
+      # The persistent cache, in ml-train.yml's exact form. /opt/earth-cache
+      # survives a job and a stop/start, which is what makes `work` under
+      # ml/cache/ a resumable location rather than scratch that dies with the
+      # runner's workspace cleanup.
+      - name: Persistent data cache (self-hosted box)
+        run: |
+          mkdir -p /opt/earth-cache
+          rm -rf ml/cache
+          ln -s /opt/earth-cache ml/cache
+
+      # Check the preconditions while the inputs are all they have cost
+      # (ml/CLAUDE.md 0.3). Both of these are DEFINITE answers and therefore
+      # may be fatal (5.17): a build without a token cannot publish what it
+      # spends five hours computing, and a build without disk cannot compute
+      # it. Over 90 % disk is unusable, not a warning (7) -- a full box
+      # computes fine and reports nothing, because every metrics write, every
+      # log append and every checkpoint mirror fails behind its own
+      # best-effort guard.
+      - name: Preflight
+        id: preflight
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family7' }}
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::HF_TOKEN secret is not set. The build publishes to"
+            echo "the Hub and verifies the restore; without it the job would"
+            echo "spend ~5 h and have nowhere to put the result. Set it at"
+            echo "Settings -> Secrets and variables -> Actions; the value is in"
+            echo "the claude.ai project doc claude/huggingface-access.md."
+            exit 1
+          fi
+          mkdir -p "${WORK}"
+          echo "cache mount, as the build will see it:"
+          df -h ml/cache
+          line=$(df -P ml/cache | tail -1)
+          use=$(printf '%s\n' "${line}" | awk '{print $5}' | tr -d '%')
+          free_gb=$(printf '%s\n' "${line}" | awk '{print int($4 / 1048576)}')
+          echo "usage ${use}% · ${free_gb} GB free on $(printf '%s\n' "${line}" | awk '{print $6}')"
+          # 75 GB: the builder's own --dry-run prices the PEAK at 65.0 GB
+          # (45.7 g025 f16 + 11.46 g100 float32 intermediate + 5.73 g100 f16
+          # written beside it + 2.09 rg100 f32) plus 3 GB headroom, and up to
+          # ~3 GB of sources in flight; a guard sized exactly at the
+          # allocation it guards cannot fire in time (ml/CLAUDE.md 5.18).
+          if [ "${use}" -ge 90 ]; then
+            echo "::error::cache mount is ${use}% full (>= 90 %). Over 90 % is"
+            echo "unusable, not a warning (ml/CLAUDE.md 7): the box computes and"
+            echo "silently reports nothing. Free space (scripts/disk_hygiene.sh,"
+            echo "or drop an old build directory) and re-dispatch with the same"
+            echo "work value -- the finished stages will be skipped."
+            exit 1
+          fi
+          if [ "${free_gb}" -lt 75 ]; then
+            echo "::error::only ${free_gb} GB free on the cache mount; this"
+            echo "build peaks at ~68 GB (46 GB g025 + 11.5 GB g100 float32 +"
+            echo "5.7 GB g100 + 2.1 GB rg100 f32 + 3 GB headroom) plus <= 3 GB"
+            echo "of sources in flight + the restore-verify copies."
+            echo "Rent a bigger box or free space, then re-dispatch with the"
+            echo "same work value to resume."
+            exit 1
+          fi
+          echo "preflight ok: token present, ${free_gb} GB free, ${use}% used"
+
+      # The builder is stdlib + these. numpy/netCDF4 read every source; xarray
+      # for the GLORYS chunks; huggingface_hub pulls the chunks and publishes
+      # the result; shapely rasterises the Natural Earth glaciated-areas and
+      # lakes polygons into the `sphere` static, the same way
+      # scripts/refresh_data.py islands does. If the builder grows a
+      # dependency, it is added HERE in the same commit -- a box has no
+      # requirements file and an ImportError four hours in is the expensive
+      # way to learn about one.
+      - name: Install
+        run: pip install --quiet numpy netCDF4 xarray huggingface_hub shapely
+
+      # The truth series (RAPID, OSNAP, MOVE, SAMBA, Florida Current; ~1.2 MB)
+      # are what the `truth` stage writes into the npz, and build_family7.py
+      # refuses without them, as build_family4's missing_truth_keys does. The
+      # box usually has them already -- ml-train.yml seeds truth/ from the
+      # data-cache release -- so this is the fallback for a box that has never
+      # run a training job. NOT fatal on its own: the truth stage fails loudly
+      # and by name if the files really are absent, and that message is more
+      # useful than this step's would be.
+      - name: Truth seed
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib
+          dest = pathlib.Path("ml/cache/truth")
+          have = sorted(p.name for p in dest.glob("*")) if dest.is_dir() else []
+          if len(have) >= 4:
+              print(f"truth/ already on the box: {len(have)} files, {have[:4]} ...")
+              raise SystemExit(0)
+          from huggingface_hub import HfApi, hf_hub_download
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo = f"{api.whoami()['name']}/earth-tensors"
+          try:
+              files = [f for f in api.list_repo_files(repo, repo_type="dataset")
+                       if f.startswith("truth/")]
+          except Exception as e:                       # network, auth, 404
+              print(f"::warning::could not list {repo}: {e}")
+              raise SystemExit(0)
+          if not files:
+              print(f"::warning::no truth/ folder on {repo} and {len(have)} "
+                    f"file(s) in ml/cache/truth -- the truth stage will say "
+                    f"which key it is missing")
+              raise SystemExit(0)
+          dest.mkdir(parents=True, exist_ok=True)
+          for f in files:
+              p = hf_hub_download(repo, f, repo_type="dataset",
+                                  token=os.environ["HF_TOKEN"])
+              out = dest / os.path.basename(f)
+              out.write_bytes(pathlib.Path(p).read_bytes())
+              print(f"  {out} · {out.stat().st_size / 1e3:,.0f} kB")
+          print(f"seeded {len(files)} truth file(s) from {repo}")
+          PY
+
+      # HF_TOKEN in env, never on the command line: argv is readable by every
+      # process on the box and the box's host has root (ml/CLAUDE.md 6).
+      # $EXTRA is deliberately unquoted -- it carries whole flags and has to
+      # word-split. pipefail because the log is teed: without it `tee`'s exit
+      # code (always 0) would become the step's, and a failed build would
+      # report success (ml/CLAUDE.md 0.2, and the `| tail` incident in the root
+      # CLAUDE.md 1).
+      - name: Build
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family7' }}
+          STAGE: ${{ github.event.inputs.stage || 'all' }}
+          EXTRA: ${{ github.event.inputs.extra_args }}
+        run: |
+          set -o pipefail
+          mkdir -p "${WORK}"
+          python3 -u ml/build_family7.py \
+              --work "${WORK}" --stage "${STAGE}" ${EXTRA} \
+              2>&1 | tee "${WORK}/build.log"
+
+      # A dead job still tells its story. Everything here is small; the
+      # memmaps are not collected and never should be.
+      - name: Collect progress and the log tail
+        if: always() && steps.preflight.outcome == 'success'
+        env:
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family7' }}
+        run: |
+          out="${RUNNER_TEMP}/family7-story"
+          rm -rf "${out}"; mkdir -p "${out}"
+          [ -f "${WORK}/progress.json" ] && cp "${WORK}/progress.json" "${out}/" \
+            || echo "::warning::no ${WORK}/progress.json -- the build did not reach its first phase boundary"
+          n=0
+          for f in "${WORK}"/*.done; do
+            [ -e "${f}" ] || break
+            cp "${f}" "${out}/"; n=$((n + 1))
+          done
+          echo "${n} stage marker(s) collected"
+          if [ -f "${WORK}/build.log" ]; then
+            tail -n 200 "${WORK}/build.log" > "${out}/build.log.tail"
+            echo "--- last 200 lines of the build log ---"
+            cat "${out}/build.log.tail"
+          else
+            echo "::warning::no ${WORK}/build.log"
+          fi
+          ls -la "${WORK}" || true
+          echo "--- disk after the build ---"
+          df -h ml/cache
+
+      - name: Upload the story
+        if: always() && steps.preflight.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: family7-progress-${{ github.run_number }}
+          path: ${{ runner.temp }}/family7-story
+          if-no-files-found: warn
+          retention-days: 30

@@ -87,7 +87,30 @@ FAMILIES = {
     # lags 0 and 1 are inside the memory at all; within them the field has
     # already decorrelated to its correlation length, so what sets the reach is
     # L_corr (500 km), not how far 10 m/s could carry something in a pentad.
-    "A": dict(channels=("tau_x", "tau_y", "tau_x_std", "tau_y_std"),
+    #
+    # FAMILY 7's shared land/ocean channels join A (E-070's build spec,
+    # recipe `f7l0`, channels g100 4..13). They are the same NCEP/NCAR
+    # reanalysis fields the wind stress already comes from, on the same T62
+    # grid and with the same physics, so the wind family's numbers describe
+    # them without a new measurement: `t2m`, `u10`, `v10`, `sp`, `log_prate`,
+    # `lhtfl` and `shtfl` are air, moved by the air.
+    #
+    # `log_swe`, `soilw` and `tsoil` are put here TOO, and that is a holding
+    # decision, not a claim. They are LAND state: snow water equivalent, soil
+    # moisture and soil temperature do not blow downwind at 10 m/s -- they sit
+    # still and their reach is a correlation length, not a displacement.
+    # E-071 section 6.3 defines a land family L for exactly them (v = 0, reach
+    # = the correlation length alone). Assigning them to L is PHASE E's
+    # decision -- the phase that converts the consumers to the three-group
+    # tensor -- and not this commit's: this commit only stops
+    # `channel_family` from raising on a name family 7 now writes. Family A
+    # over-reaches for a land channel, which costs tokens and covers the
+    # driver; family L under-reaching would lose it, which is the failure this
+    # function's `raise` exists to prevent.
+    "A": dict(channels=("tau_x", "tau_y", "tau_x_std", "tau_y_std",
+                        "t2m", "u10", "v10", "sp", "log_prate",
+                        "lhtfl", "shtfl",
+                        "log_swe", "soilw", "tsoil"),
               v_ms=10.0, tau_days=10.0, L_corr_km=500.0, inner_lags=(0, 1)),
     # The ocean itself: eddies and the boundary current at 0.3 m/s, memory of
     # months to years, correlation length 100 km. 0.3 m/s x 5 d = 129.6 km per
@@ -100,7 +123,14 @@ FAMILIES = {
     # short lag (family A's 500 km) and advected by the ocean beyond it
     # (family B). Hence max(r_B(l), 500 km) at l <= 1 — wide immediately, then
     # the ocean's slow growth takes over.
-    "C": dict(channels=("sst", "log_mld"),
+    #
+    # Family 7's `skin_t` and `sea_ice` are C. `skin_t` IS this family's `sst`
+    # over the ocean -- E-070's build spec B4 fills it from the same OISST
+    # product family 4's `sst` comes from and only falls back to NCEP skin
+    # temperature where OISST does not observe -- and sea-ice concentration is
+    # the same surface, stirred by the atmosphere at short lag and advected by
+    # the ocean beyond it, which is what the L shape describes.
+    "C": dict(channels=("sst", "log_mld", "skin_t", "sea_ice"),
               v_ms=0.3, tau_days=None, L_corr_km=100.0,
               inner_lags=tuple(range(0, 7))),
 }
@@ -127,6 +157,12 @@ def channel_family(name):
     0.3 m/s the surface currents are. `cur_u`/`cur_v` (family4 --rev r3,
     indices 40 and 41) are B for the same reason `cur_speed` is; the direction
     is what the cone needs, and a magnitude cannot supply it.
+
+    Family 7's shared land/ocean channels (E-070's build spec) are assigned in
+    FAMILIES above: `skin_t`/`sea_ice` to C with `sst`, the NCEP surface fields
+    to A with the wind stress. The three LAND channels among them
+    (`log_swe`, `soilw`, `tsoil`) sit in A provisionally -- E-071 section 6.3's
+    land family L is Phase E's decision; see the comment on FAMILIES["A"].
     """
     for fam, spec in FAMILIES.items():
         if name in spec["channels"]:
