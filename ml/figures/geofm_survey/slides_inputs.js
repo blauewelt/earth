@@ -326,49 +326,77 @@ module.exports = function (ctx) {
     footer(s);
   }
 
-  // ---------------------------------------------------------------- 44b. two stencils, one cone (E-069, built 2 Sep)
+  // ---------------------------------------------------------------- 44b. two stencils, one cone (E-069 built and run; re-cut for v2)
   {
     const s = pres.addSlide(); s.background = { color: WHITE };
-    title(s, "Two stencils, one cone — the E-069 design, built", "The codec reads the inner cone of raw channels; stage 2 reads the outer cone of embeddings. Union = the dependency space; overlap = the anchor column.");
-    // left: (lag, distance) map on log axes — inner region (codec) and outer region (stage 2)
-    const px = 0.6, py = 1.6, pw = 5.6, ph = 3.9;
+    title(s, "Two stencils, one cone — built, run, and re-cut for v2",
+      "E-069 ran five seeds (3 + 2 objectives) on the 0.3 m/s geometry; H1 is refuted, history buys persistence, not velocity. Under cone v2 the split between the stencils moves from distance to time — E-071 §4.5.");
+    const RED = "A23B3B";
+    // ---------- left: the (lag, distance) map, on log axes, with BOTH geometries ----------
+    const px = 0.6, py = 1.6, pw = 5.6, ph = 3.95;
     s.addShape(pres.shapes.RECTANGLE, { x: px, y: py, w: pw, h: ph, fill: { color: "FBFCFD" }, line: { color: GRIDLINE, width: 0.5 } });
-    const ax = px + 0.7, ay = py + ph - 0.55, aw = pw - 0.95, ah = ph - 1.4;
-    const LAGMIN = 1, LAGMAX = 144, RMIN = 28, RMAX = 4444;
+    const ax = px + 0.84, ay = py + ph - 0.46, aw = pw - 1.06, ah = ph - 1.24;
+    const LAGMIN = 1, LAGMAX = 144, RMIN = 28, RMAX = 20015;
     const fx = k => Math.log(Math.max(k, LAGMIN) / LAGMIN) / Math.log(LAGMAX / LAGMIN);
     const fy = r => Math.log(Math.max(r, RMIN) / RMIN) / Math.log(RMAX / RMIN);
-    const reachB = k => Math.max(100, 0.3 * 86400 * 5 * (1 + k) / 1000);
-    const outer = k => Math.min(4444, Math.max(111, 0.3 * 86400 * 5 * (1 + k) / 1000));
-    const poly = (pts, col, tr, line) => s.addShape(pres.shapes.CUSTOM_GEOMETRY, { x: ax, y: ay - ah, w: aw, h: ah, fill: { color: col, transparency: tr }, line: { color: line || col, width: 0.75 }, points: pts.map(p => ({ x: p[0] * aw, y: (1 - p[1]) * ah })).concat([{ x: pts[0][0] * aw, y: (1 - pts[0][1]) * ah, close: true }]) });
-    // inner: lags 1..6, radius up to reachB(k) — step polygon
-    const inner = [[fx(1), 0]];
-    for (let k = 1; k <= 6; k++) { inner.push([fx(k), fy(reachB(k))]); inner.push([fx(k + 1) - 0.002, fy(reachB(k))]); }
-    inner.push([fx(7) - 0.002, 0]);
-    poly(inner, EMB, 55);
-    // outer: lags 7..143, radius from 111 km up to outer(k)
-    const out = [];
-    for (let k = 7; k <= 143; k += 4) out.push([fx(k), fy(outer(k))]);
-    out.push([fx(143), fy(outer(143))]); out.push([fx(143), fy(111)]); out.push([fx(7), fy(111)]);
-    poly(out, TIME, 55);
-    // anchor column (both stages) — a bar along the bottom
+    const KM069 = 0.3 * 86400 * 5 / 1000, KM2 = 5.4 * 86400 * 5 / 1000;   // km per (1 + lag): 129.6 and 2,332.8
+    const in069 = k => KM069 * (1 + k);
+    const out069 = k => Math.min(4444, Math.max(111, KM069 * (1 + k)));
+    const in2 = k => Math.min(20015, KM2 * (1 + k));
+    const out2 = k => Math.min(20015, Math.max(111, KM2 * (1 + k)));
+    const poly = (pts, col, tr, dash) => s.addShape(pres.shapes.CUSTOM_GEOMETRY, { x: ax, y: ay - ah, w: aw, h: ah, fill: { color: col, transparency: tr }, line: { color: col, width: dash ? 1 : 0.75, dashType: dash || "solid" }, points: pts.map(p => ({ x: p[0] * aw, y: (1 - p[1]) * ah })).concat([{ x: pts[0][0] * aw, y: (1 - pts[0][1]) * ah, close: true }]) });
+    const stepPoly = f => { const a = [[fx(1), 0]]; for (let k = 1; k <= 6; k++) { a.push([fx(k), fy(f(k))]); a.push([fx(k + 1) - 0.002, fy(f(k))]); } a.push([fx(7) - 0.002, 0]); return a; };
+    const outPoly = f => { const a = []; for (let k = 7; k <= 143; k += 4) a.push([fx(k), fy(f(k))]); a.push([fx(143), fy(f(143))]); a.push([fx(143), fy(111)]); a.push([fx(7), fy(111)]); return a; };
+    // cone v2 first (the larger, lighter pair), then E-069 as built on top of it
+    poly(outPoly(out2), OBS, 88, "dash");
+    poly(stepPoly(in2), OBS, 78, "dash");
+    poly(outPoly(out069), TIME, 55);
+    poly(stepPoly(in069), EMB, 55);
+    // the two horizontal marks: the old outer cap, and the antipode
+    [[4444, "4,444 km", RED, "E-069's outer cap", 0.45, 0.02], [20015, "20,015 km", RED, "antipode", 0.74, -0.17]].forEach(([r, lab, col, tag, fxt, dy]) => {
+      s.addShape(pres.shapes.LINE, { x: ax, y: ay - fy(r) * ah, w: aw, h: 0, line: { color: col, width: 0.9, dashType: "sysDot" } });
+      txt(s, [{ text: lab, options: { bold: true, color: col, fontSize: 6.5 } }], px + 0.02, ay - fy(r) * ah - 0.09, 0.80, 0.18, { align: "right" });
+      txt(s, [{ text: tag, options: { italic: true, bold: true, color: col, fontSize: 6 } }], ax + fxt * aw, ay - fy(r) * ah + dy, 1.10, 0.15);
+    });
+    // anchor column (both stages, both geometries) — a bar along the bottom
     s.addShape(pres.shapes.RECTANGLE, { x: ax, y: ay - 0.05, w: aw, h: 0.05, fill: { color: OUTPX }, line: { width: 0 } });
     // axes + ticks
     arrow(s, ax, ay, ax + aw, ay, INK, 1); arrow(s, ax, ay, ax, ay - ah, INK, 1);
-    [[1, "1"], [6, "6"], [7, "7"], [36, "36"], [144, "144"]].forEach(([k, t]) => s.addText(t, { x: ax + fx(k) * aw - 0.2, y: ay + 0.02, w: 0.4, h: 0.2, fontFace: FONT_B, fontSize: 7.5, color: MUTED, align: "center", isTextBox: true, margin: 0 }));
-    s.addText("lag k (pentads, log) — 1 pentad = 5 days; 144 = 2 years", { x: ax, y: ay + 0.24, w: aw, h: 0.22, fontFace: FONT_B, fontSize: 7.5, color: MUTED, align: "center", isTextBox: true, margin: 0 });
-    [[100, "100"], [907, "907"], [4444, "4444"]].forEach(([r, t]) => s.addText(t + " km", { x: px + 0.02, y: ay - fy(r) * ah - 0.1, w: 0.62, h: 0.2, fontFace: FONT_B, fontSize: 7.5, color: MUTED, align: "right", isTextBox: true, margin: 0 }));
-    s.addText([{ text: "codec — inner cone: raw channels, lags 1–6, reach 130 → 907 km", options: { color: EMB, bold: true, breakLine: true } }, { text: "stage 2 — outer cone: embeddings, lags 7–143, 111 km → 4,444 km (empty for k ≤ 6 by construction)", options: { color: TIME, bold: true, breakLine: true } }, { text: "anchor column: the only overlap — lag 0 is the codec's 3 × 3 patch", options: { color: "9A7B1E", bold: true } }], { x: px + 0.1, y: py + 0.05, w: pw - 0.2, h: 0.7, fontFace: FONT_B, fontSize: 7.5, isTextBox: true, margin: 0 });
-    // right: what was built
-    box(s, 6.45, 1.6, 6.25, 3.9, NAVY, "F4F6F9");
+    [[1, "1"], [6, "6"], [7, "7"], [36, "36"], [144, "144"]].forEach(([k, t]) => s.addText(t, { x: ax + fx(k) * aw - 0.2, y: ay + 0.02, w: 0.4, h: 0.2, fontFace: FONT_B, fontSize: 7, color: MUTED, align: "center", isTextBox: true, margin: 0 }));
+    s.addText("lag k (pentads, log) — 1 pentad = 5 days; 144 = 2 years. Lag 0 is the 3 × 3 patch.", { x: ax, y: ay + 0.21, w: aw, h: 0.2, fontFace: FONT_B, fontSize: 6.5, color: MUTED, align: "center", isTextBox: true, margin: 0 });
+    [[100, "100 km"], [907, "907 km"]].forEach(([r, t]) => txt(s, [{ text: t, options: { fontSize: 6.5, color: MUTED } }], px + 0.02, ay - fy(r) * ah - 0.09, 0.80, 0.18, { align: "right" }));
+    // the key, at the top of the panel
     txt(s, [
-      { text: "What exists (2 Sep, 42 tests green, nothing archived touched)", options: { bold: true, color: NAVY, fontSize: 10.5, breakLine: true, paraSpaceAfter: 4 } },
-      { text: "Data  ", options: { bold: true, color: TEAL, fontSize: 9.5 } }, { text: "family4 r3 = r2 + cur_u, cur_v (the GLORYS components cur_speed is the hypotenuse of; no new download). Direction is what the cone needs and what H1 supervises.", options: { fontSize: 9.5, breakLine: true, paraSpaceAfter: 4 } },
-      { text: "Cone  ", options: { bold: true, color: TEAL, fontSize: 9.5 } }, { text: "ml/cone.py — families A (τ ≈ 10 d: wind stress, lags 0–1, 500 km), B (0.3 m/s: currents, SSH, Argo depth column), C (SST, MLD: the L-shape); sunflower dots per lag; slots(r) = clamp(24·(r/900 km)², 6, 24). Budget per anchor: 42 patch + 706 dot tokens = 748. Outer spiral: 3,432 cells over 144 lags vs 20,880 for the cylinder.", options: { fontSize: 9.5, breakLine: true, paraSpaceAfter: 4 } },
-      { text: "Codec  ", options: { bold: true, color: TEAL, fontSize: 9.5 } }, { text: "ConeMAE, 7.05M params: Perceiver (64 latents × 256 × 6 blocks) over patch + dot tokens with Fourier coordinates and mask / miss tokens; queryable Gaussian decoder that reads z alone (a [z + latents] memory would let the bottleneck carry nothing — closed, not ranked improbable); masks: channel drop (cur_* at 50 %), lag-band drop, sector drop, future queries, anchor reconstruction.", options: { fontSize: 9.5, breakLine: true, paraSpaceAfter: 4 } },
-      { text: "Trainer  ", options: { bold: true, color: TEAL, fontSize: 9.5 } }, { text: "window-scope pool with the E-059 self-certificate (0 violations in 4,096 anchors), train.py's metrics family (status page unchanged), a velocity probe with cur_* dropped at encode. CPU smoke on a planted shear flow unreadable from one frame: cur_u R² +0.073 (cone) vs −0.015 (snapshot) — a pipeline check, not a result.", options: { fontSize: 9.5, breakLine: true, paraSpaceAfter: 4 } },
-      { text: "Not dispatched. Next: workflow wiring for r3 and the cone flags → codec run + H1 (cheap) → five-seed stage-2 arms for H2/H3 under the #516 battery with the LIM null in both embedding spaces.", options: { fontSize: 9.5, italic: true, color: MUTED } },
-    ], 6.6, 1.68, 5.95, 3.75);
-    reading(s, "How much velocity goes into the embedding — the choice, and why. A displacement is resolvable once it exceeds one cell (28 km; 21 km zonally at 40° N): at pentad cadence that is 0.06 m/s per lag, so eddy advection (0.1–0.3 m/s) is resolved at lag 1 and Rossby propagation (0.03 m/s) within 6 lags; the atmosphere decorrelates in 1–2 pentads; SST memory (3–6 months) is longer than the window and is deliberately left to stage 2. Thirty days at 0.3 m/s is the shortest inner window in which every fast process has moved by a cell and the slow ones by three, without paying for a 4,000 km inner reach. The hypotheses (E-069): H1 a ridge from frozen cone-z to cur_u, cur_v with the current channels hidden beats the snapshot codec; H2 the head over cone-z beats the E-064b control at 5–30 d by more than the five-seed interval and ties at ≥ 90 d; H3 the annulus stencil matches the full cylinder. Falsifiers and predictions are written in the plan before anything runs.", 5.65);
+      { text: "E-069 as built  ", options: { bold: true, color: EMB, fontSize: 6.8 } },
+      { text: "inner (codec): raw channels, lags 1–6, 130 → 907 km · ", options: { color: INK, fontSize: 6.8 } },
+      { text: "outer (stage 2): ", options: { bold: true, color: TIME, fontSize: 6.8 } },
+      { text: "embeddings, lags 7–143, 111 → 4,444 km", options: { color: INK, fontSize: 6.8, breakLine: true } },
+      { text: "cone v2 (E-071 §4.5)  ", options: { bold: true, color: OBS, fontSize: 6.8 } },
+      { text: "inner: 2,333 km already at lag 0, 16,330 km at lag 6 · outer: 18,664 km at lag 7, at the antipode from lag 8 — a global band", options: { color: INK, fontSize: 6.8, breakLine: true } },
+      { text: "anchor column  ", options: { bold: true, color: "9A7B1E", fontSize: 6.8 } },
+      { text: "the only overlap, in both geometries", options: { color: INK, fontSize: 6.8 } },
+    ], px + 0.10, py + 0.05, pw - 0.20, 0.62);
+    // ---------- the legend prose, under the panel ----------
+    txt(s, [
+      { text: "E-069:  ", options: { bold: true, color: EMB, fontSize: 7.5 } },
+      { text: "the codec owns the near field, stage 2 the far field.    ", options: { fontSize: 7.5, color: INK } },
+      { text: "v2:  ", options: { bold: true, color: OBS, fontSize: 7.5 } },
+      { text: "the codec owns the last 30 days planet-wide; stage 2 owns 35 days – 2 years planet-wide. The overlap is still exactly the anchor column, and the empty annulus for k ≤ 6 still holds by construction.", options: { fontSize: 7.5, color: INK } },
+    ], px, py + ph + 0.08, pw, 0.62);
+    // ---------- right: what five seeds said ----------
+    box(s, 6.45, 1.6, 6.25, 4.65, NAVY, "F4F6F9");
+    txt(s, [
+      { text: "What five seeds said (EXPERIMENTS.md § E-069, 3–4 Sep)", options: { bold: true, color: NAVY, fontSize: 11, breakLine: true, paraSpaceAfter: 6 } },
+      { text: "1 · H1 refuted.  ", options: { bold: true, color: RED, fontSize: 8.6 } },
+      { text: "The velocity probe — a ridge from the 32-number embedding to the anchor's own current, with the current channels hidden from the encoder — reads AT OR BELOW the raw-patch bar for the cone on both components at every seed, while the snapshot twin sits at the bar. History buys no velocity beyond geostrophy-from-the-sea-surface-height-patch at 7.05M parameters and 20k steps, under either objective. E-069 masking: cone cur_u 0.60 / 0.10 / 0.62 against a twin at ≈ 0.70; cur_v ≈ 0 at every seed. E-069b lag0-drop objective: cone 0.63 / 0.66 and 0.58 / 0.59 against bars 0.64 / 0.71 and 0.67 / 0.70. A CPU synthetic-advection test finds no displacement primitive at the scales tried — a reading, not a closure: the field's certified ceiling was 0.16.", options: { fontSize: 8.6, color: INK, breakLine: true, paraSpaceAfter: 4 } },
+      { text: "2 · What history DOES buy.  ", options: { bold: true, color: OBS, fontSize: 8.6 } },
+      { text: "A hidden sea-surface-height channel is reconstructed at ≈ 0.36 of its bar against the twin's 0.75–0.90; hidden sea surface temperature 0.53–0.66 against 0.99–1.27; forecasts at +1 and +2 pentads 7–8 % better. Persistence and one-step forecast, not velocity.", options: { fontSize: 8.6, color: INK, breakLine: true, paraSpaceAfter: 4 } },
+      { text: "3 · Consequence for v2.  ", options: { bold: true, color: TEAL, fontSize: 8.6 } },
+      { text: "Widening the reach 18× does not touch the mechanism H1 tested. v2's case rests on rolled skill (H2) from far-field context, and on the persistence signal being worth more when it is global, harmonic-anomaly and profile-aware. The velocity lever is capacity, the objective, or an explicit displacement primitive — not geometry.", options: { fontSize: 8.6, color: INK, breakLine: true, paraSpaceAfter: 4 } },
+      { text: "4 · Two open decisions, deferred.  ", options: { bold: true, color: MUTED, fontSize: 8.6 } },
+      { text: "The outer ring's dot count per lag, on the same per-octave rule as the inner cone; and K = 144 pentads (two years) against a log-spaced eight-year outer window for the deep western boundary current's advective path.", options: { fontSize: 8.6, color: INK } },
+    ], 6.60, 1.70, 5.95, 4.45);
+    reading(s, "Reading. The original split gave the codec the near field and stage 2 the far field. With the reach sized from the fastest mechanism the codec sees the planet within a week, and the honest description of the two stencils becomes thirty days of raw channels against two years of embeddings — both global. The identities the coverage test asserts (union = the whole cone, overlap = the anchor column) survive unchanged; what changed is what they mean.", 6.42);
     footer(s);
   }
 
@@ -479,28 +507,29 @@ module.exports = function (ctx) {
   // ---------------------------------------------------------------- 44d. boundaries — every edge the sampler meets
   {
     const s = pres.addSlide(); s.background = { color: WHITE };
-    title(s, "Boundaries — the window edge, the archive ends, the holdout, the month",
-      "Four different edges, four different rules. Three are handled by masking; the fourth is a modelling choice nobody has revisited.");
+    title(s, "Boundaries — four edges, four rules, and two of them now change",
+      "Findings of 3 Sep; decisions of 4 Sep (Chris): the dataset is global, and the anomaly baseline is a day-of-year harmonic fit — E-071.");
     const RED = "A23B3B";
     const PX = [0.6, 6.75], PW = 5.95;
-    const R1Y = 1.48, R1H = 2.30, R2Y = 3.90, R2H = 2.45;
+    const R1Y = 1.46, R1H = 2.44, R2Y = 3.96, R2H = 2.46;
     const head = (x, y, t, col) => txt(s, [{ text: t, options: { bold: true, color: col, fontSize: 9.5 } }], x + 0.13, y + 0.06, PW - 0.26, 0.24);
     const rule = (t) => ({ text: t + "  ", options: { bold: true, color: TEAL, fontSize: 7, charSpacing: 0.3 } });
     const body = (t, o) => ({ text: t, options: Object.assign({ fontSize: 7, color: INK }, o || {}) });
+    const dec = (t) => ({ text: t + "  ", options: { bold: true, color: OBS, fontSize: 7, charSpacing: 0.4 } });
+    const keep = (x, y) => txt(s, [{ text: "UNCHANGED — these rules were right", options: { bold: true, color: MUTED, fontSize: 6.5, charSpacing: 0.4 } }], x + 0.13, y, PW - 0.26, 0.16);
 
     // ---------- A · the window edge ----------
     box(s, PX[0], R1Y, PW, R1H, SPACE, "F7FAFC");
     head(PX[0], R1Y, "A · SPACE — the window edge (100° W – 20° E, 0–70° N)", SPACE);
     txt(s, [
-      rule("RULE"),
-      body("a dot that lands outside the rectangle is INVALID, never wrapped. The tensor is a basin, not a globe, so a longitude wrap “would put the Iberian shelf one cell west of Florida” (ml/cone_sampler.py, docstring lines 19–23). Mechanically: the index is clipped to the array bounds, the value that is read is thrown away, and valid = False becomes the ATTENTION MASK — ok = (tt≥0)&(tt<T)&(yy≥0)&(yy<H)&(xx≥0)&(xx<W) in ConeSampler.sample (:293); the lag-0 3×3 patch does the same in _patch (:263).", { breakLine: true, paraSpaceAfter: 3 }),
-      body("Anchors are drawn uniformly over ocean cells with NO edge margin (ml/train_cone.py::draw_anchors, :358), so an edge anchor legitimately sees a truncated, one-sided cone.", { breakLine: true, paraSpaceAfter: 3 }),
-      { text: "The asymmetry this creates: ", options: { bold: true, color: RED, fontSize: 7 } },
-      body("an anchor 20 cells from the eastern edge sees no upstream dots from the east at lags 5–6 — and nothing tells the model that the missing dots are missing because of OUR rectangle rather than because of the ocean."),
-    ], PX[0] + 0.13, R1Y + 0.30, PW - 0.26, 1.18);
+      rule("FINDING, 3 SEP"),
+      body("a dot outside the rectangle is INVALID, never wrapped: the tensor is a basin, so a wrap “would put the Iberian shelf one cell west of Florida” (ml/cone_sampler.py:19–23). The index is clipped, the value discarded, and valid = False becomes the ATTENTION MASK (ConeSampler.sample :293; the lag-0 3×3 patch likewise, _patch :263). Anchors are drawn uniformly over ocean cells with NO edge margin (ml/train_cone.py:358), so an edge anchor sees a truncated, one-sided cone.", { breakLine: true, paraSpaceAfter: 3 }),
+      { text: "The asymmetry: ", options: { bold: true, color: RED, fontSize: 7 } },
+      body("nothing tells the model that the missing dots are missing because of OUR rectangle rather than because of the ocean."),
+    ], PX[0] + 0.13, R1Y + 0.32, PW - 0.26, 0.80);
     // sketch: the window rectangle with a cone truncated at the eastern edge
     {
-      const gx = PX[0] + 0.14, gy = 3.02, gw = 2.20, gh = 0.46;
+      const gx = PX[0] + 0.14, gy = 2.62, gw = 2.20, gh = 0.44;
       s.addShape(pres.shapes.RECTANGLE, { x: gx, y: gy, w: gw, h: gh, fill: { color: "FFFFFF" }, line: { color: SPACE, width: 1 } });
       const ax = gx + gw - 0.14, ay = gy + gh / 2;
       [[0.13, 8], [0.26, 10]].forEach(([r, n]) => {
@@ -513,50 +542,56 @@ module.exports = function (ctx) {
         }
       });
       s.addShape(pres.shapes.OVAL, { x: ax - 0.035, y: ay - 0.035, w: 0.07, h: 0.07, fill: { color: OUTPX }, line: { color: NAVY, width: 0.75 } });
-      txt(s, [{ text: "the tensor window — the dots do not wrap", options: { fontSize: 7, italic: true, color: MUTED } }], gx, gy + gh + 0.03, gw + 0.3, 0.2);
+      txt(s, [{ text: "the tensor window — the dots do not wrap", options: { fontSize: 6.5, italic: true, color: MUTED } }], gx, gy + gh + 0.02, gw + 0.3, 0.16);
       txt(s, [
         { text: "Filled ", options: { bold: true, color: SPACE, fontSize: 7 } },
         { text: "= read. ", options: { fontSize: 7, color: INK } },
         { text: "Hollow ", options: { bold: true, color: RED, fontSize: 7 } },
-        { text: "= off the rectangle: clipped, the value discarded, masked out of attention entirely.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 2 } },
+        { text: "= off the rectangle: clipped, discarded, masked out of attention.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 2 } },
         { text: "COST  ", options: { bold: true, color: TEAL, fontSize: 7 } },
         { text: "over all 84,405 ocean anchors with the real 706-dot stencil: 22.0 % of anchors have at least one off-grid dot; 2.68 % of all dots are off-grid.", options: { fontSize: 7, color: INK } },
-      ], gx + gw + 0.16, gy - 0.04, PW - gw - 0.46, 0.72);
+      ], gx + gw + 0.16, gy - 0.02, PW - gw - 0.46, 0.66);
+      txt(s, [
+        dec("DECISION → GLOBAL (E-071 §1)"),
+        body("family 7 — the first tensor covering the whole globe rather than the North Atlantic window — is 681 × 1,440 cells, −80…90° N; longitude WRAPS (xx = (x + dx) mod W), dots are placed on the sphere as destination points so the pole falls out of the formula, latitude is clipped and marked unobserved below −80°. The 2.68 % off-grid dots become real dots and the 22 % truncated anchors see a full cone. ASPECT = 0.71 was measured on the North Atlantic and is re-measured per latitude band."),
+      ], PX[0] + 0.13, 3.28, PW - 0.26, 0.58);
     }
 
     // ---------- B · land ----------
     box(s, PX[1], R1Y, PW, R1H, "4E8A3E", "F7FBF6");
     head(PX[1], R1Y, "B · SPACE — land", "4E8A3E");
+    keep(PX[1], R1Y + 0.30);
     txt(s, [
       rule("RULE"),
       body("a dot on land is a REAL token whose value was never observed: obs = False → the codec’s ", { }),
       { text: "miss", options: { bold: true, color: "4E8A3E", fontSize: 7 } },
       body(" token — the same miss_tok PixelMAE (the pixel-level masked auto-encoder this codec inherits) uses — NOT an invalid/masked token.", { breakLine: true, paraSpaceAfter: 3 }),
-      body("The distinction is deliberate, and it is the same one the whole architecture rests on: “the data never observed this” is information; “this dot does not exist” is not. One is a token the model can learn from, the other is a hole in the attention matrix.", { breakLine: true, paraSpaceAfter: 3 }),
+      body("The distinction is the one the whole architecture rests on: “the data never observed this” is information; “this dot does not exist” is not. One is a token the model can learn from, the other is a hole in the attention matrix.", { breakLine: true, paraSpaceAfter: 3 }),
       rule("COST"),
       body("8.17 % of all dots land on land — on-grid, unobserved. Combined with the edge, ", {}),
       { text: "10.85 % of the 706 dots at a typical anchor carry no value.", options: { bold: true, color: RED, fontSize: 7, breakLine: true, paraSpaceAfter: 3 } },
-      body("Land dots are still spent from the token budget: they occupy their slot in the stencil and are attended to as tokens, so a coastal anchor pays for its geography twice — once in dots it cannot read, once in dots that left the rectangle.", { italic: true, color: MUTED }),
-    ], PX[1] + 0.13, R1Y + 0.30, PW - 0.26, 1.46);
+      body("Land dots are still spent from the budget: they occupy their slot and are attended to, so a coastal anchor pays for its geography twice.", { italic: true, color: MUTED }),
+    ], PX[1] + 0.13, R1Y + 0.50, PW - 0.26, 1.10);
     {
-      const bx0 = PX[1] + 0.14, bw = PW - 0.28, by = 3.03;
+      const bx0 = PX[1] + 0.14, bw = PW - 0.28, by = 3.10;
       let cx = bx0;
       [[89.15, TEAL], [8.17, "4E8A3E"], [2.68, RED]].forEach(([p, col]) => {
         const w = bw * p / 100;
         s.addShape(pres.shapes.RECTANGLE, { x: cx, y: by, w, h: 0.18, fill: { color: col, transparency: 15 }, line: { color: WHITE, width: 0.6 } });
         cx += w;
       });
-      txt(s, [{ text: "the 706 dots at one anchor", options: { fontSize: 7, italic: true, color: MUTED } }], bx0, by + 0.20, bw, 0.18);
+      txt(s, [{ text: "the 706 dots at one anchor", options: { fontSize: 6.5, italic: true, color: MUTED } }], bx0, by + 0.19, bw, 0.16);
       txt(s, [
         { text: "■ ", options: { color: TEAL, fontSize: 8 } }, { text: "89.15 % carry a value    ", options: { fontSize: 7, color: INK } },
         { text: "■ ", options: { color: "4E8A3E", fontSize: 8 } }, { text: "8.17 % land → miss token    ", options: { fontSize: 7, color: INK } },
         { text: "■ ", options: { color: RED, fontSize: 8 } }, { text: "2.68 % off-grid → invalid", options: { fontSize: 7, color: INK } },
-      ], bx0, by + 0.38, bw, 0.20);
+      ], bx0, by + 0.36, bw, 0.20);
     }
 
     // ---------- C · the archive ends, and the holdout blocks ----------
     box(s, PX[0], R2Y, PW, R2H, TIME, "FFF9F3");
     head(PX[0], R2Y, "C · TIME — the archive ends, and the holdout blocks", TIME);
+    keep(PX[0], R2Y + 0.30);
     txt(s, [
       rule("RULE 1 — the ends of the axis"),
       body("an anchor whose cone runs off either end of the tensor — it needs bins t−6 … t+2 — is INADMISSIBLE, not silently short (ConeSampler.admissible, :314). Nothing is padded and nothing is trained on half a cone.", { breakLine: true, paraSpaceAfter: 3 }),
@@ -568,143 +603,168 @@ module.exports = function (ctx) {
       body("development split (calendar years 2009, 2017, 2023 held out): 2,923 training bins → 2,891 admissible anchor bins, 32 bins lost (1.1 %). Frozen protocol (2008–09, 2016–17, 2021–24 — train ≤ 2020, test the terminal years): 2,557 → 2,533, 24 bins lost (0.9 %). Cheap, and it is what makes the holdout real.", { breakLine: true, paraSpaceAfter: 3 }),
       { text: "Held-out EVALUATION anchors are different on purpose: ", options: { bold: true, color: RED, fontSize: 7 } },
       body("their dots MAY come from held-out bins — otherwise the held-out set would be a second training pool, not a measurement."),
-    ], PX[0] + 0.13, R2Y + 0.30, PW - 0.26, 2.09);
+    ], PX[0] + 0.13, R2Y + 0.50, PW - 0.26, 1.90);
 
     // ---------- D · the calendar month ----------
     box(s, PX[1], R2Y, PW, R2H, RED, "FDF6F6");
-    head(PX[1], R2Y, "D · TIME — the calendar month: the one edge that is NOT masked", RED);
+    head(PX[1], R2Y, "D · TIME — the calendar month: the edge we introduced ourselves", RED);
     txt(s, [
-      { text: "This is the honest weak spot, and there are two separate month edges.", options: { bold: true, color: RED, fontSize: 7, breakLine: true, paraSpaceAfter: 3 } },
       { text: "(i) The anomaly baseline.  ", options: { bold: true, color: TEAL, fontSize: 7 } },
-      body("Every channel is turned into a departure from a per-calendar-month climatology built on TRAINING YEARS ONLY (ml/trainprobe.py::anomaly_transform, :140). A pentad’s month label is the month of the bin’s FIRST day (ml/build_family4.py:960, bin_start). So ", {}),
-      { text: "411 of the 3,142 bins (13.1 %) straddle a calendar-month boundary", options: { bold: true, color: RED, fontSize: 7 } },
-      body(", and 106 of those have only ONE of their five days inside the month whose climatology is subtracted. The anomaly therefore takes a small step at every month boundary — a sawtooth of order the month-to-month climatology difference, which in the seasonal thermocline is not negligible. Nothing interpolates; a day-of-year harmonic climatology would remove it.", { breakLine: true, paraSpaceAfter: 3 }),
+      body("Every channel is a departure from a per-calendar-month climatology built on TRAINING YEARS ONLY (ml/trainprobe.py::anomaly_transform :140), and a pentad’s month label is the month of its FIRST day (ml/build_family4.py:960). So ", {}),
+      { text: "411 of the 3,142 bins (13.1 %) straddle a month boundary", options: { bold: true, color: RED, fontSize: 7 } },
+      body(", and 106 of those have only ONE of their five days inside the month whose climatology is subtracted — a sawtooth at every boundary, of order the month-to-month climatology difference, which in the seasonal thermocline is not negligible.", { breakLine: true, paraSpaceAfter: 3 }),
       { text: "(ii) Argo’s monthly cadence.  ", options: { bold: true, color: TEAL, fontSize: 7 } },
-      body("Roemmich–Gilson is written into the single pentad holding the 15th of each month and is missing in the other five (ml/build_family4.py); forward-filling was explicitly REJECTED (ml/plans/E034_pentad_tensor.md:88–100) because it would tell the model the subsurface was observed on days it was not. ", {}),
+      body("Roemmich–Gilson is written into the single pentad holding the 15th of each month and is missing in the other five; forward-filling was REJECTED (E034_pentad_tensor.md:88–100). ", {}),
       { text: "252 live pentads, 2004–2024 — one in six.", options: { bold: true, color: RED, fontSize: 7 } },
-      body(" A 35-day inner window (anchor + 6 lags) therefore contains ONE live Argo bin, occasionally two — and which one is a property of where the anchor sits inside the month, i.e. a phase the model can see through the season token but that nothing corrects for.", { breakLine: true, paraSpaceAfter: 3 }),
+      body(" A 35-day inner window holds ONE live Argo bin, occasionally two, and which one depends on where the anchor sits inside the month.", { breakLine: true, paraSpaceAfter: 3 }),
       body("The seasonal context token itself is the bin’s opening day-of-year (cone_sampler.pentad_doy), so it crosses month and year boundaries smoothly — that one is fine.", { italic: true, color: MUTED }),
-    ], PX[1] + 0.13, R2Y + 0.30, PW - 0.26, 2.09);
+    ], PX[1] + 0.13, R2Y + 0.32, PW - 0.26, 1.26);
+    txt(s, [
+      dec("DECISION → DAY-OF-YEAR HARMONIC CLIMATOLOGY (E-071 §2)"),
+      body("clim(τ) = a₀ + Σₖ₌₁..₃ [aₖ cos kτ + bₖ sin kτ], with τ taken from the pentad’s MID-day over a 365.2422-day year, fitted per cell and per channel on training bins only: 7 coefficients instead of 12 box means, one pass with 35 accumulators instead of 24. K per channel is chosen by held-out variance explained (the mixed-layer depth’s spring step may need K = 4–6). No bin is ever charged for a month it barely touches, and Argo’s 252 live pentads are fitted together instead of ~21 per box. Verification: the last-pentad-of-month minus first-of-next residual, a sawtooth today, should be zero."),
+    ], PX[1] + 0.13, 5.56, PW - 0.26, 0.82);
 
-    reading(s, "Reading. Three of the four edges are handled by making the missing thing explicitly missing, which is the right pattern: an invalid token is dropped from attention, a miss token says the world was not observed, and an inadmissible anchor is not trained on. The fourth is not an edge in the data at all but one we introduced by binning the year into twelve boxes; it is the cheapest of the four to remove and the only one currently unmeasured.", 6.45);
+    reading(s, "Reading. Three of the four edges were handled by making the missing thing explicitly missing — an invalid token is dropped from attention, a miss token says the world was not observed, an inadmissible anchor is not trained on — and those three rules stay. The other two edges do not get handled better; they disappear. The window edge goes with the global tensor (E-071 §1); the month edge goes with the harmonic baseline (E-071 §2). Both are decided and specified, and both are UNIMPLEMENTED — nothing here is measured yet.", 6.46);
     footer(s);
   }
 
-  // ---------------------------------------------------------------- 44e. the speeds the cone does not have
+  // ---------------------------------------------------------------- 44e. the speeds the cone did not have — and the speeds it will
   {
     const s = pres.addSlide(); s.background = { color: WHITE };
-    title(s, "The speeds the cone does not have",
-      "Chris, 3 Sep: “the AMOC has some velocity (4000 km/month?) and this is not reflected anywhere”. It is not — twice over.");
+    title(s, "The speeds the cone did not have — and the speeds it will",
+      "Decision (Chris, 4 Sep): size every family from the MAXIMUM measured speed of its fastest mechanism, × 1.5 — not a typical speed, not an estimate (E-071 §4).");
     const RED = "A23B3B";
-    // ---------- left: the log-scale speed axis ----------
+    const V_TODAY = 0.3, V2 = 5.4;
+    // ---------- left: the log-scale speed ruler ----------
     const X0 = 3.15, PLW = 3.20, DEC = PLW / 3;      // 0.01 m/s -> 10 m/s
     const xv = v => X0 + (Math.log10(v) + 2) * DEC;
-    const RY = 1.94, RH = 0.42, NR = 6;
-    txt(s, [{ text: "WHAT ACTUALLY MOVES AN OVERTURNING ANOMALY BETWEEN LATITUDES — log speed axis, 0.01 to 10 m/s", options: { bold: true, color: NAVY, fontSize: 8, charSpacing: 0.6 } }], 0.6, 1.46, 6.7, 0.2);
+    const RY = 1.70, RH = 0.29, NR = 9;
+    txt(s, [{ text: "MEASURED MAXIMA — what moves an overturning anomaly between latitudes. Log axis, 0.01 → 10 m/s", options: { bold: true, color: NAVY, fontSize: 8, charSpacing: 0.4 } }], 0.6, 1.32, 3.15, 0.34);
     // decade gridlines
-    [0.01, 0.1, 1, 10].forEach(v => s.addShape(pres.shapes.LINE, { x: xv(v), y: RY - 0.02, w: 0, h: NR * RH + 0.04, line: { color: GRIDLINE, width: 0.5, dashType: "sysDot" } }));
-    // the one ocean speed the cone implements
-    s.addShape(pres.shapes.LINE, { x: xv(0.3), y: RY - 0.20, w: 0, h: NR * RH + 0.22, line: { color: TIME, width: 1.25, dashType: "dash" } });
-    txt(s, [{ text: "the cone’s only ocean speed → 0.3 m/s", options: { bold: true, color: TIME, fontSize: 7 } }], xv(0.3) - 1.72, RY - 0.26, 1.68, 0.18, { align: "right" });
-    txt(s, [{ text: "m/s", options: { bold: true, color: MUTED, fontSize: 7 } }], 6.45, RY - 0.20, 0.8, 0.18);
+    [0.01, 0.1, 1, 10].forEach(v => s.addShape(pres.shapes.LINE, { x: xv(v), y: RY - 0.02, w: 0, h: NR * RH + 0.06, line: { color: GRIDLINE, width: 0.5, dashType: "sysDot" } }));
+    // the two dashed design speeds: what the cone has today, and what cone v2 gets
+    s.addShape(pres.shapes.LINE, { x: xv(V_TODAY), y: RY - 0.16, w: 0, h: NR * RH + 0.20, line: { color: TIME, width: 1.1, dashType: "dash" } });
+    s.addShape(pres.shapes.LINE, { x: xv(V2), y: RY - 0.16, w: 0, h: NR * RH + 0.20, line: { color: OBS, width: 1.6, dashType: "dash" } });
+    txt(s, [{ text: "cone TODAY · 0.3 m/s", options: { bold: true, color: TIME, fontSize: 7 } }], xv(V_TODAY) - 0.52, RY - 0.34, 1.04, 0.17, { align: "center" });
+    txt(s, [{ text: "CONE v2 · 5.4 m/s", options: { bold: true, color: OBS, fontSize: 7.5 } }], xv(V2) - 0.60, RY - 0.34, 1.20, 0.17, { align: "center" });
+    txt(s, [{ text: "m/s", options: { bold: true, color: MUTED, fontSize: 7 } }], 6.45, RY - 0.18, 0.8, 0.17);
     const rows = [
-      ["Deep Western Boundary Current", "the multi-year southward advective path — water itself carried south", 0.02, 0.1, TEAL, "0.02–0.1"],
-      ["Baroclinic Rossby waves", "westward propagation; the plan already cites Chelton et al. 2011 (E069_cone_codec.md:124)", 0.03, null, SPACE, "0.03"],
-      ["Eddies & boundary currents", "family B, v_ms = 0.3 in ml/cone.py:97 — THE ONLY OCEAN SPEED THE CONE IMPLEMENTS", 0.1, 0.3, TIME, "0.1–0.3"],
-      ["Chris’s number — 4,000 km/month", "= 1.52 m/s: five times family B, and nothing in the stencil reaches it", 1.52, null, RED, "1.52"],
-      ["Coastal / boundary Kelvin waves", "in our own input proposal (line 72); in no line of ml/cone.py", 2.5, null, EMB, "2.5"],
-      ["Wind stress", "family A, v_ms = 10 — implemented, but capped at the 500 km correlation length and lags 0–1 only", 10, null, TIME, "10"],
+      ["Deep Western Boundary Current", "standard oceanography — the slow return limb", 0.02, 0.1, TEAL, "0.02–0.1"],
+      ["Long baroclinic Rossby wave", "Chelton et al. 2011 — westward, the interior", 0.03, null, SPACE, "0.03"],
+      ["Eddies & boundary currents", "family B TODAY — ml/cone.py:97, v_ms = 0.3", 0.1, 0.3, TIME, "0.1–0.3"],
+      ["Kuroshio off Taiwan", "our GLORYS bake, monthly 1° · data/currents_y", 1.62, null, SPACE, "1.62"],
+      ["Agulhas Current core", "Wikipedia, Agulhas Current", 2.45, null, SPACE, "2.45"],
+      ["Gulf Stream core", "NOAA Ocean Service — about 9 km/h", 2.5, null, SPACE, "~2.5"],
+      ["Somali Current, our own bake", "July 2020, 2.5° N 47.5° E · data/currents_y", 2.79, null, EMB, "2.79"],
+      ["First-baroclinic Kelvin wave", "Wikipedia; Chelton 1998 · Pacific in ~2 months", 2.8, null, EMB, "≈2.8"],
+      ["Somali Current, peak", "Wikipedia — 7 knots, south-west monsoon", 3.6, null, RED, "3.6"],
     ];
     rows.forEach(([nme, gloss, lo, hi, col, tag], i) => {
       const y = RY + i * RH;
       txt(s, [
         { text: nme, options: { bold: true, color: col, fontSize: 7.5, breakLine: true } },
         { text: gloss, options: { fontSize: 7, color: MUTED, italic: true } },
-      ], 0.6, y + 0.02, 2.45, RH - 0.04);
+      ], 0.6, y + 0.01, 2.45, RH - 0.03);
       if (hi) {
-        s.addShape(pres.shapes.RECTANGLE, { x: xv(lo), y: y + RH / 2 - 0.055, w: xv(hi) - xv(lo), h: 0.11, fill: { color: col, transparency: 25 }, line: { width: 0 } });
+        s.addShape(pres.shapes.RECTANGLE, { x: xv(lo), y: y + RH / 2 - 0.05, w: xv(hi) - xv(lo), h: 0.10, fill: { color: col, transparency: 25 }, line: { width: 0 } });
       }
       const mx = xv(hi || lo);
-      s.addShape(pres.shapes.OVAL, { x: mx - 0.06, y: y + RH / 2 - 0.06, w: 0.12, h: 0.12, fill: { color: col }, line: { color: WHITE, width: 0.6 } });
-      txt(s, [{ text: tag, options: { bold: true, color: col, fontSize: 7 } }], 6.45, y + RH / 2 - 0.09, 0.8, 0.2);
+      s.addShape(pres.shapes.OVAL, { x: mx - 0.055, y: y + RH / 2 - 0.055, w: 0.11, h: 0.11, fill: { color: col }, line: { color: WHITE, width: 0.6 } });
+      txt(s, [{ text: tag, options: { bold: true, color: col, fontSize: 7 } }], 6.45, y + RH / 2 - 0.085, 0.8, 0.19);
     });
     // axis
-    s.addShape(pres.shapes.LINE, { x: X0 - 0.05, y: RY + NR * RH + 0.04, w: PLW + 0.1, h: 0, line: { color: GRIDLINE, width: 0.75 } });
-    [0.01, 0.1, 1, 10].forEach(v => txt(s, [{ text: String(v), options: { fontSize: 7, color: MUTED } }], xv(v) - 0.25, RY + NR * RH + 0.06, 0.5, 0.18, { align: "center" }));
+    s.addShape(pres.shapes.LINE, { x: X0 - 0.05, y: RY + NR * RH + 0.06, w: PLW + 0.1, h: 0, line: { color: GRIDLINE, width: 0.75 } });
+    [0.01, 0.1, 1, 10].forEach(v => txt(s, [{ text: String(v), options: { fontSize: 7, color: MUTED } }], xv(v) - 0.25, RY + NR * RH + 0.08, 0.5, 0.17, { align: "center" }));
+    // the two mechanisms that are off the right-hand end of this ruler
+    txt(s, [
+      { text: "OFF THIS RULER, TO THE RIGHT.  ", options: { bold: true, color: NAVY, fontSize: 7, charSpacing: 0.4 } },
+      { text: "Barotropic (surface) gravity wave ≈ 200 m/s and the jet stream ≈ 100 m/s (family A, wind stress). Both cross the planet inside one 5-day bin, so neither is a cone at all: E-071 §4.3 gives those families a RING of 24 dots at log-spaced radii out to the antipode — bearings, not density.", options: { fontSize: 7, color: INK } },
+    ], 0.6, 4.60, 6.70, 0.36);
 
-    // ---------- left bottom: reach vs lag, three speeds ----------
-    const CY0 = 5.06, CY1 = 6.16, CX0 = 1.20, CX1 = 4.00, KMAX = 7600;
-    txt(s, [{ text: "HOW FAR A SIGNAL GETS INSIDE THE SIX-PENTAD WINDOW — reach = v · Δt · (1 + ℓ)", options: { bold: true, color: NAVY, fontSize: 8, charSpacing: 0.6 } }], 0.6, 4.76, 4.6, 0.2);
+    // ---------- left bottom: reach vs lag, three speeds, y to the antipode ----------
+    const CY0 = 5.30, CY1 = 6.08, CX0 = 1.20, CX1 = 4.00, KMAX = 20015;
+    txt(s, [{ text: "HOW FAR A SIGNAL GETS IN SIX PENTADS — reach = v · Δt · (1 + ℓ), capped at the antipode", options: { bold: true, color: NAVY, fontSize: 8, charSpacing: 0.4 } }], 0.6, 5.02, 4.70, 0.20);
     const lx = k => CX0 + k * (CX1 - CX0) / 6, ly = km => CY1 - km / KMAX * (CY1 - CY0);
     s.addShape(pres.shapes.LINE, { x: CX0, y: CY1, w: CX1 - CX0 + 0.1, h: 0, line: { color: GRIDLINE, width: 0.75 } });
     s.addShape(pres.shapes.LINE, { x: CX0, y: CY0 - 0.05, w: 0, h: CY1 - CY0 + 0.05, line: { color: GRIDLINE, width: 0.75 } });
-    [[0, "0"], [4000, "4,000"], [7600, "7,600 km"]].forEach(([km, t]) => {
-      s.addShape(pres.shapes.LINE, { x: CX0, y: ly(km), w: CX1 - CX0 + 0.1, h: 0, line: { color: GRIDLINE, width: 0.4, dashType: "sysDot" } });
-      txt(s, [{ text: t, options: { fontSize: 7, color: MUTED } }], 0.6, ly(km) - 0.09, 0.55, 0.18, { align: "right" });
+    [[0, "0", 0], [4444, "4,444 — E-069 cap", 2], [10000, "10,000", 0], [15000, "15,000", 0], [20015, "20,015 — antipode", 1]].forEach(([km, t, kind]) => {
+      const col = kind ? (kind === 1 ? RED : TIME) : GRIDLINE;
+      s.addShape(pres.shapes.LINE, { x: CX0, y: ly(km), w: CX1 - CX0 + 0.1, h: 0, line: { color: col, width: kind ? 0.9 : 0.4, dashType: "sysDot" } });
+      txt(s, [{ text: t, options: { fontSize: kind ? 6 : 6.5, color: kind ? col : MUTED, bold: !!kind } }], 0.30, ly(km) - 0.08, 0.86, 0.16, { align: "right" });
     });
-    for (let k = 0; k <= 6; k++) txt(s, [{ text: String(k), options: { fontSize: 7, color: MUTED } }], lx(k) - 0.14, CY1 + 0.03, 0.28, 0.18, { align: "center" });
-    txt(s, [{ text: "one pentad = one 5-day bin", options: { fontSize: 7, italic: true, color: MUTED } }], CX0, CY1 + 0.19, 2.2, 0.18);
-    [[0.3, TIME, "0.3 m/s\nwhat the cone has"], [1.52, RED, "1.52 m/s\nChris’s speed"], [2.5, EMB, "2.5 m/s\na Kelvin family"]].forEach(([v, col, lab]) => {
-      const step = v * 86400 * 5 * 1 / 1000;   // km per (1 + lag) unit
+    for (let k = 0; k <= 6; k++) txt(s, [{ text: String(k), options: { fontSize: 7, color: MUTED } }], lx(k) - 0.14, CY1 + 0.02, 0.28, 0.16, { align: "center" });
+    txt(s, [{ text: "lag ℓ, in pentads (one pentad = one 5-day bin)", options: { fontSize: 6.5, italic: true, color: MUTED } }], CX0 + 0.06, CY1 + 0.18, 2.4, 0.16);
+    [[V2, OBS, "5.4 m/s — CONE v2", "2,333 → 16,330 km"], [2.8, EMB, "2.8 m/s — Kelvin", "8,467 km at lag 6"], [V_TODAY, TIME, "0.3 m/s — E-069 today", "907 km at lag 6"]].forEach(([v, col, l1, l2]) => {
+      const step = v * 86400 * 5 / 1000;   // km per (1 + lag) unit
       for (let k = 0; k < 6; k++) {
-        s.addShape(pres.shapes.LINE, { x: lx(k), y: ly(step * (1 + k)), w: lx(k + 1) - lx(k), h: Math.abs(ly(step * (2 + k)) - ly(step * (1 + k))), flipV: true, line: { color: col, width: 1.5 } });
+        const a = Math.min(step * (1 + k), KMAX), b = Math.min(step * (2 + k), KMAX);
+        s.addShape(pres.shapes.LINE, { x: lx(k), y: ly(b), w: lx(k + 1) - lx(k), h: Math.abs(ly(b) - ly(a)), flipV: true, line: { color: col, width: v === V2 ? 2 : 1.4 } });
       }
-      s.addShape(pres.shapes.OVAL, { x: lx(6) - 0.05, y: ly(step * 7) - 0.05, w: 0.1, h: 0.1, fill: { color: col }, line: { width: 0 } });
-      txt(s, [{ text: lab.split("\n")[0], options: { bold: true, color: col, fontSize: 7, breakLine: true } },
-               { text: lab.split("\n")[1], options: { color: col, fontSize: 7, italic: true } }], CX1 + 0.10, ly(step * 7) - 0.10, 1.15, 0.30);
+      const end = Math.min(step * 7, KMAX);
+      s.addShape(pres.shapes.OVAL, { x: lx(6) - 0.05, y: ly(end) - 0.05, w: 0.1, h: 0.1, fill: { color: col }, line: { width: 0 } });
+      txt(s, [{ text: l1, options: { bold: true, color: col, fontSize: 7, breakLine: true } },
+              { text: l2, options: { color: col, fontSize: 6.5, italic: true } }], CX1 + 0.12, ly(end) - 0.12, 1.32, 0.26);
     });
 
-    // ---------- right: the two halves of the answer ----------
-    box(s, 7.45, 1.40, 5.25, 2.12, DERIV, "FDF6F6");
-    txt(s, [{ text: "1 · The Argo channels have NO spatial reach at all", options: { bold: true, color: DERIV, fontSize: 10 } }], 7.58, 1.46, 4.99, 0.22);
+    // ---------- the asymmetry note, beside the reach chart ----------
     txt(s, [
-      { text: "ml/cone.py::channel_family (:122) assigns rg_t* / rg_s* — the 32 Roemmich–Gilson temperature and salinity channels — to family B (0.3 m/s), but channel_dots (:261) OVERRIDES that for depth channels and returns the ANCHOR COLUMN ONLY: [(lag, 0, 0) for lag in 1..L_in]. The family assignment is decorative for them; their effective reach is ", options: { fontSize: 7, color: INK } },
+      { text: "Why the buffer is 1.5, and why it is spent on the WIDE side. ", options: { bold: true, color: RED, fontSize: 7 } },
+      { text: "The tensor is a 5-day mean on a 0.25° grid and under-reads peaks; the maxima above are literature and reanalysis values, not the true extreme; and a warming ocean may run faster. A cone that is too WIDE only costs tokens. A cone that is too NARROW asserts that the driver cannot have arrived, and the model has no way to discover that the assertion was wrong.", options: { fontSize: 7, color: INK } },
+    ], 5.48, 5.02, 1.82, 1.36);
+
+    // ---------- right, box 1: the Argo channels ----------
+    box(s, 7.45, 1.40, 5.25, 2.16, DERIV, "FDF6F6");
+    txt(s, [{ text: "1 · Argo had no spatial reach at all — now it has 26 profile tokens", options: { bold: true, color: DERIV, fontSize: 9.5 } }], 7.58, 1.46, 4.99, 0.22);
+    txt(s, [
+      { text: "ml/cone.py::channel_family (:122) assigns rg_t* / rg_s* — the 32 Roemmich–Gilson temperature and salinity channels — to family B (0.3 m/s), but channel_dots (:261) OVERRIDES that and returns the ANCHOR COLUMN ONLY. Their effective reach is ", options: { fontSize: 7, color: INK } },
       { text: "0 km at every lag", options: { bold: true, color: RED, fontSize: 7 } },
-      { text: ". The stated reason is token economy — Argo is live one pentad in six, so a sunflower would be ~74 tokens of which ~70 are structurally missing. The consequence: the subsurface temperature and salinity structure is read only at the anchor’s own column, so ", options: { fontSize: 7, color: INK } },
-      { text: "no propagation of a subsurface anomaly toward the anchor is visible to the codec at any speed", options: { bold: true, color: RED, fontSize: 7 } },
-      { text: ". The 32 depth channels are still 192 of the 706 dots (27.2 %) — a quarter of the token budget spent on one vertical column.", options: { fontSize: 7, color: INK } },
-    ], 7.58, 1.70, 4.99, 1.16);
+      { text: ", so no propagation of a subsurface anomaly toward the anchor is visible at any speed — and those channels are still ", options: { fontSize: 7, color: INK } },
+      { text: "192 of the 706 dots (27.2 %)", options: { bold: true, color: RED, fontSize: 7 } },
+      { text: ", a quarter of the budget on one vertical column. The stated reason was token economy: Argo is live one pentad in six.", options: { fontSize: 7, color: INK } },
+    ], 7.58, 1.70, 4.99, 0.72);
+    txt(s, [
+      { text: "DECISION → E-071 §3  ", options: { bold: true, color: OBS, fontSize: 7, charSpacing: 0.4 } },
+      { text: "the two most recent LIVE pentads (lags 0…11, known from the calendar, not from the data), 13 locations each — the anchor plus a 12-dot sunflower at the v2 reach — and each location is ONE profile token carrying 16 T + 16 S values with the pressure ladder as an inner axis. That is 26 tokens instead of 192, every one of them observed. Later, with native floats: the k nearest live profiles inside the cone, no sunflower at all.", options: { fontSize: 7, color: INK } },
+    ], 7.58, 2.46, 4.99, 0.60);
     {
-      const bx0 = 7.58, bw = 4.99, by = 2.92;
+      const bx0 = 7.58, bw = 4.99, by = 3.10;
       let cx = bx0;
       [[45.3, SPACE], [27.2, DERIV], [22.9, TIME], [4.5, MUTED]].forEach(([p, col]) => {
         const w = bw * p / 100;
-        s.addShape(pres.shapes.RECTANGLE, { x: cx, y: by, w, h: 0.17, fill: { color: col, transparency: 15 }, line: { color: WHITE, width: 0.6 } });
+        s.addShape(pres.shapes.RECTANGLE, { x: cx, y: by, w, h: 0.15, fill: { color: col, transparency: 15 }, line: { color: WHITE, width: 0.6 } });
         cx += w;
       });
       txt(s, [
-        { text: "■ ", options: { color: SPACE, fontSize: 8 } }, { text: "currents + sea-surface height 320 (45.3 %)   ", options: { fontSize: 7, color: INK } },
-        { text: "■ ", options: { color: DERIV, fontSize: 8 } }, { text: "Argo depth 192 (27.2 %)", options: { fontSize: 7, color: INK, breakLine: true } },
-        { text: "■ ", options: { color: TIME, fontSize: 8 } }, { text: "SST + mixed-layer depth 162 (22.9 %)   ", options: { fontSize: 7, color: INK } },
-        { text: "■ ", options: { color: MUTED, fontSize: 8 } }, { text: "wind stress 32 (4.5 %)", options: { fontSize: 7, color: INK } },
-      ], bx0, by + 0.19, bw, 0.36);
+        { text: "■ ", options: { color: SPACE, fontSize: 8 } }, { text: "currents + SSH 320 (45.3 %)   ", options: { fontSize: 7, color: INK } },
+        { text: "■ ", options: { color: DERIV, fontSize: 8 } }, { text: "Argo depth 192 (27.2 %)   ", options: { fontSize: 7, color: INK } },
+        { text: "■ ", options: { color: TIME, fontSize: 8 } }, { text: "SST + MLD 162 (22.9 %)   ", options: { fontSize: 7, color: INK } },
+        { text: "■ ", options: { color: MUTED, fontSize: 8 } }, { text: "wind 32 (4.5 %)", options: { fontSize: 7, color: INK } },
+      ], bx0, by + 0.17, bw, 0.20);
     }
 
-    box(s, 7.45, 3.64, 5.25, 2.70, TIME, "FFF9F3");
-    txt(s, [{ text: "2 · And the fastest ocean speed in the model is 0.3 m/s", options: { bold: true, color: TIME, fontSize: 10 } }], 7.58, 3.70, 4.99, 0.22);
+    // ---------- right, box 2: the decision table and its two consequences ----------
+    box(s, 7.45, 3.64, 5.25, 2.74, OBS, "F5FBF7");
+    txt(s, [{ text: "2 · The design speeds — one per family, E-071 §4.2", options: { bold: true, color: OBS, fontSize: 9.5 } }], 7.58, 3.70, 4.99, 0.22);
+    {
+      const th = t => ({ text: t, options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 6.5, valign: "middle" } });
+      const td = (t, o) => ({ text: t, options: Object.assign({ fontSize: 6.5, color: INK, valign: "top" }, o || {}) });
+      const trows = [
+        [th("family"), th("fastest mechanism that carries it"), th("max"), th("× 1.5 = v_design"), th("reach / pentad")],
+        [td("B — ocean", { bold: true, color: SPACE }), td("Somali Current (advection) ≥ first-baroclinic Kelvin (adjustment)"), td("3.6 m/s"), td("5.4 m/s", { bold: true, color: OBS }), td("2,333 km")],
+        [td("C — surface", { bold: true, color: TIME }), td("atmosphere at lags 0–1, then the ocean"), td("— / 3.6"), td("global / 5.4 m/s", { bold: true, color: OBS }), td("— / 2,333 km")],
+        [td("A — wind", { bold: true, color: MUTED }), td("the jet stream (storms translate at 10–20 m/s)"), td("~100 m/s"), td("global", { bold: true, color: OBS }), td("within one pentad")],
+      ];
+      s.addTable(trows, { x: 7.58, y: 3.94, w: 4.99, colW: [0.72, 1.86, 0.55, 0.86, 1.00], fontFace: FONT_B, border: { type: "solid", color: GRIDLINE, pt: 0.5 }, rowH: [0.20, 0.30, 0.24, 0.24], margin: 0.03, autoPage: false });
+    }
     txt(s, [
-      { text: "Our own proposal already carries the missing number: GENERIC_EMBEDDING_INPUTS.md:72 describes family B as “currents 0.1–0.2 m/s … Rossby 0.03 m/s (westward); Kelvin/coastal 2.5 m/s along boundaries”, with the stencil shape “thin, tall column … one long arm along coasts”. ml/cone.py implements the 0.3 m/s disc and no coastal arm.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 3 } },
-      { text: "Family B’s reach is v·Δt·(1+ℓ): 129.6 · 259.2 · 388.8 · 518.4 · 648.0 · 777.6 · 907.2 km at lags 0–6. At 1.52 m/s a signal covers 657 km per pentad — 5.07× family B’s 129.6 — and 4,600 km over the six-lag window against the cone’s 907 km. Stage 2’s outer cone grows at the same 0.3 m/s and reaches its 4,444 km cap only at lag 34 ≈ 170 days; 1.52 m/s covers 4,444 km in about 34 days, and 2.5 m/s in about 21. cone.py’s own docstring (:84) says the speeds were “chosen generous so the stencil is not the thing that loses information” — 0.3 m/s is generous for eddy advection and a factor of 5–8 too slow for boundary-wave adjustment.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 3 } },
-      { text: "PROPOSALS — none of the three is measured, and they are ranked, not scheduled.", options: { bold: true, color: TIME, fontSize: 7, charSpacing: 0.3, breakLine: true, paraSpaceAfter: 2 } },
-      { text: "1  A fourth family, “fast boundary adjustment” — ", options: { bold: true, color: NAVY, fontSize: 7 } },
-      { text: "v ≈ 2.5 m/s, short memory (days), applied to sea-surface height and the mixed-layer/temperature channels: reach ~1,080 km at lag 0 growing to ~7,500 km at lag 6, capped at the basin. Costs tokens; the cheapest test is whether the velocity probe and the held-out loss move at all.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 2 } },
-      { text: "2  The coastal ARM the proposal already specifies — ", options: { bold: true, color: NAVY, fontSize: 7 } },
-      { text: "instead of an isotropic disc, extend the stencil ALONG the western boundary and the shelf break, which is where the fast waves actually travel. Needs the statics from the data ladder (distance to coast, distance to the 1,000 m isobath) that rung 12 already ranks #2 and that are ~3 MB.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 2 } },
-      { text: "3  A real, if sparse, sunflower for the depth channels — ", options: { bold: true, color: NAVY, fontSize: 7 } },
-      { text: "at the lags where Argo is live. The token objection is about the DEAD bins, and liveness is knowable at build time.", options: { fontSize: 7, color: INK } },
-    ], 7.58, 3.94, 4.99, 2.34);
+      { text: "(i) Dot placement becomes LOG-RADIAL, 36 dots per lag for the ocean families.  ", options: { bold: true, color: NAVY, fontSize: 7 } },
+      { text: "Uniform-area placement at 24 dots gives 4.8 dots per octave of distance over 907 km but only 2.5 over 16,330 km — the near field, where the eddies live, would be starved by a wider cone at the same budget.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+      { text: "(ii) Token budget 748 → 1,600 per anchor  ", options: { bold: true, color: NAVY, fontSize: 7 } },
+      { text: "(B 888 · C 444 · A 200 · Argo 26 · lag-0 patch 42): about 2.1× the encoder cost, and linear in a Perceiver (64 latents cross-attend to the tokens). The fallback that brings it back to ~500 is one token per (lag, location) carrying all channels as a value vector — kept OUT of v2 so that v2 measures the geometry and nothing else.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 3 } },
+      { text: "E-069 keeps its geometry — its five seeds are done and its H1 verdict stands (slide 44). Cone v2 lands on family 7 — the first tensor covering the whole globe rather than the North Atlantic window.", options: { fontSize: 7, italic: true, color: MUTED } },
+    ], 7.58, 5.06, 4.99, 1.26);
 
-    // ---------- the note beside the reach chart ----------
-    txt(s, [
-      { text: "The other end of the range. ", options: { bold: true, color: TEAL, fontSize: 7 } },
-      { text: "The Deep Western Boundary Current path from the Labrador Sea to 26.5° N is roughly 5,000 km at 0.02 m/s — about ", options: { fontSize: 7, color: INK } },
-      { text: "eight years", options: { bold: true, color: TEAL, fontSize: 7 } },
-      { text: ", outside even stage 2’s two-year outer window. So the cone brackets the eddy field well and misses the mechanism at BOTH ends of the speed range.", options: { fontSize: 7, color: INK, breakLine: true, paraSpaceAfter: 3 } },
-      { text: "The failure mode is not symmetric. ", options: { bold: true, color: RED, fontSize: 7 } },
-      { text: "A cone that is too WIDE only costs tokens. A cone that is too NARROW excludes true causes: it is an assumption that the driver cannot have arrived, and the model has no way to discover otherwise.", options: { fontSize: 7, color: INK } },
-    ], 5.35, 4.90, 1.95, 1.44);
-
-    reading(s, "Reading. The cone is a one-speed model of a multi-speed ocean: the 0.3 m/s disc is right for the eddy field it was calibrated on and wrong for the two mechanisms that actually carry an overturning anomaly between latitudes — fast boundary-wave adjustment above it, slow deep advection below it. For the Argo channels the question does not even arise, because they are read at one column and have no reach at all. None of the three fixes has been tested; the first is a one-line change to FAMILIES plus a token-budget check.", 6.45);
+    reading(s, "Reading. The cone was a one-speed model of a multi-speed ocean. Cone v2 sizes each family from the fastest thing that actually carries it — the Somali Current’s 3.6 m/s for the ocean, the jet stream for the wind — with the 1.5 buffer spent on the wide side, because a cone that is too narrow excludes true causes silently while one that is too wide only costs tokens. Nothing here is measured. And after E-069’s H1 (slide 44), the case for v2 is rolled skill and persistence context, not velocity: a codec that could not read a displacement at 130 km will not read one at 2,333 km.", 6.46);
     footer(s);
   }
 

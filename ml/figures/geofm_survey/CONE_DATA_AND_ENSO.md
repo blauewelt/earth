@@ -662,6 +662,32 @@ observed, and an inadmissible anchor is not trained on. The fourth is not an edg
 all but one we introduced by binning the year into twelve boxes. It is the cheapest of the four to
 remove, and the only one currently unmeasured.
 
+### 5.6 · Decision, 4 Sep 2026
+
+Two of these four edges do not get handled better — they disappear. Chris's decisions of 4 September
+turn §5.1 and §5.4 into a specification, written up as E-071:
+
+- **The window edge (§5.1) goes.** The dataset becomes global (family 7 — the first tensor covering
+  the whole globe rather than the North Atlantic window): 681 × 1,440 cells, −80 … 90° N, longitude
+  wrapping as `xx = (x + dx) mod W`, and every dot computed as a **destination point on the sphere**
+  (start latitude, bearing, distance → end latitude and longitude) so the pole crossing falls out of
+  the formula instead of needing a special case. Latitude is clipped and marked *unobserved* below
+  −80°, never *invalid*. The 2.68 % off-grid dots become real dots and the 22 % truncated anchors see
+  a full cone; `ASPECT = 0.71`, measured on the North Atlantic, is re-measured per latitude band.
+- **The month edge (§5.4) goes.** The anomaly baseline becomes a **day-of-year harmonic fit**,
+  clim(τ) = a₀ + Σₖ₌₁..K [aₖ cos kτ + bₖ sin kτ], with τ taken from each pentad's *mid-day* over a
+  365.2422-day year, fitted per cell and per channel on training bins only: 7 coefficients instead of
+  12 box means, one pass with 35 accumulators instead of 24, K per channel chosen by held-out
+  variance explained. No bin is ever charged for a month it barely touches, and Argo's 252 live
+  pentads are fitted together instead of ~21 per box.
+
+The other two rules — land as a `miss` token (§5.2) and the archive ends plus the holdout shadow
+(§5.3) — were right and are unchanged. **Nothing in this decision is implemented or measured.**
+
+- [E-071 · cone v2 — the plan these decisions became](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md)
+- [E-071 §1 · global — no geographical boundary anywhere in the sampler](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#1--global--no-geographical-boundary-anywhere-in-the-sampler)
+- [E-071 §2 · a day-of-year harmonic climatology](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#2--a-day-of-year-harmonic-climatology)
+
 ---
 
 ## Part 6 · The speeds the cone does not have
@@ -743,7 +769,16 @@ have arrived, and the model has no way to discover otherwise.
 the thing that loses information". 0.3 m/s is generous for eddy advection and a factor of five to
 eight too slow for boundary-wave adjustment.
 
-### 6.4 · Three fixes, ranked — all of them PROPOSALS, none of them measured
+### 6.4 · Three fixes — proposed on 3 Sep, SUPERSEDED by a decision on 4 Sep
+
+These three were written as ranked proposals with nothing behind them. They are no longer the state
+of the question: on 4 September Chris decided the rule (**size every family from the maximum measured
+speed of its fastest mechanism, × 1.5**) and it is specified in §6.7 below and in
+[E-071 §4](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#4--reach-from-the-fastest-signal-times-15--for-every-family).
+Fix 1 is absorbed by that rule (family B simply becomes 5.4 m/s, so no fourth family is needed);
+fix 3 is absorbed and enlarged by the Argo profile-token decision (E-071 §3). Only fix 2, the
+coastal arm, is still an open proposal. They are kept here as the reasoning that led to the
+decision. **None of the three was ever measured, and neither is the decision.**
 
 1. **A fourth family, "fast boundary adjustment".** v ≈ 2.5 m/s, short memory (days), applied to
    sea-surface height and the mixed-layer and temperature channels, giving a reach of about
@@ -771,11 +806,64 @@ anomaly between latitudes; and for the Argo channels the question does not even 
 are read at one column. None of the three fixes has been tested; the first is a one-line change to
 `FAMILIES` plus a token-budget check.
 
+### 6.7 · Decision, 4 Sep 2026
+
+Chris: *"About the ocean velocity: please research the maximal velocity of the ocean and add a bit of
+a buffer (50 %? the ocean could also become faster with climate change? this applies to other
+channels, too)."* The rule that came out of it, and the numbers behind it:
+
+- **A family's design speed is the MAXIMUM measured speed of the fastest mechanism that carries that
+  channel's information, × 1.5.** Not a typical speed, and not an estimate. The buffer covers three
+  things at once: the tensor is a 5-day mean on a 0.25° grid and under-reads peaks; the maxima are
+  literature and reanalysis values rather than true extremes; and a warming ocean may run faster.
+  It is spent on the wide side because a cone that is too wide costs tokens, while a cone that is too
+  narrow asserts that the driver cannot have arrived and the model cannot discover the assertion was
+  wrong.
+- **The maxima, each with its source.** Somali Current up to 7 knots ≈ **3.6 m/s** (Wikipedia); the
+  same current at **2.79 m/s** in *our own* GLORYS bake (monthly 1°, July 2020, 2.5° N 47.5° E,
+  `data/currents_y`); Gulf Stream ≈ **2.5 m/s** (NOAA Ocean Service); Agulhas core **2.45 m/s**
+  (Wikipedia); Kuroshio off Taiwan **1.62 m/s** (our bake); first-baroclinic Kelvin wave ≈ **2.8 m/s**
+  (Wikipedia; the Chelton et al. 1998 atlas); barotropic gravity wave ≈ **200 m/s** and the jet
+  stream ≈ **100 m/s**.
+- **Design speeds.** Family B (ocean: currents, sea-surface height, the profile tokens) 3.6 × 1.5 =
+  **5.4 m/s**, i.e. **2,333 km per pentad**, capped at the antipode (20,015 km) rather than at a
+  quarter-planet. Family C (surface state) is global at lags 0–1 through the atmosphere and 5.4 m/s
+  thereafter. Family A (wind stress) is **global within one pentad** and gets a ring of 24 dots at
+  log-spaced radii to the antipode instead of a cone.
+- **Two consequences.** Dot placement becomes **log-radial at 36 dots per lag** for the ocean
+  families — uniform-area placement at 24 dots gives 4.8 dots per octave of distance over 907 km but
+  only 2.5 over 16,330 km, so a wider cone at the same budget would starve the near field. And the
+  token budget goes **748 → 1,600** per anchor (B 888 · C 444 · A 200 · Argo 26 · lag-0 patch 42),
+  about 2.1× the encoder cost and linear in a Perceiver; the ~500-token fallback (one token per
+  (lag, location) carrying all channels) is kept out of v2 so that v2 measures the geometry alone.
+
+**Nothing here is implemented or measured.**
+
+**Where E-069's H1 leaves this.** E-069 — the cone-native codec that reads a 30-day cone of dots
+around a North Atlantic pixel — has now run five seeds under two objectives, and its first
+hypothesis is **refuted**: a ridge from the frozen 32-number embedding to the anchor's own current,
+with the current channels hidden, reads at or below the raw-patch bar (the same ridge fitted straight
+to today's 3 × 3 sea-surface-height patch, no codec) on both components at every seed, while the
+single-snapshot twin sits at the bar. Thirty days of history buy no velocity beyond
+geostrophy-from-the-patch at 7.05M parameters and 20k steps. What they do buy is persistence — a
+hidden sea-surface-height channel reconstructed at ≈ 0.36 of its bar against the twin's 0.75–0.90,
+hidden sea surface temperature 0.53–0.66 against 0.99–1.27 — and forecasts 7–8 % better at one and
+two pentads. So widening the reach eighteen-fold does **not** address the mechanism H1 tested, and
+cone v2's case rests on rolled skill from far-field context and on that persistence signal being
+worth more when it is global, harmonic-anomaly and profile-aware.
+
+- [E-069 in the experiment log — the five seeds and the H1 verdict](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-069)
+- [E-071 §3 · the Argo stencil — placed where Argo is](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#3--the-argo-stencil--placed-where-argo-is-not-where-a-sunflower-falls)
+- [E-071 §4 · reach from the fastest signal, times 1.5](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#4--reach-from-the-fastest-signal-times-15--for-every-family)
+- [E-071 §4.5 · two stencils, one cone under v2 — the split moves from distance to time](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md#45--two-stencils-one-cone-under-v2--the-split-moves-from-distance-to-time)
+
 ---
 
 ## Where this came from
 
 - [E-069 plan — the cone codec](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_cone_codec.md)
+- [E-069 in the experiment log — five seeds, H1 refuted](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-069)
+- [E-071 plan — cone v2: global, harmonic, Argo-aware, sized by the fastest thing in the ocean](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md)
 - [ml/cone.py — the cone geometry and the channel families (source)](https://github.com/blauewelt/earth/blob/main/ml/cone.py)
 - [ml/cone_sampler.py — the sampler, its off-grid rule and the holdout certificate (source)](https://github.com/blauewelt/earth/blob/main/ml/cone_sampler.py)
 - [The data ladder — what to import next](https://blauewelt.github.io/earth/docs.html?f=ml/plans/DATA_LADDER.md)
