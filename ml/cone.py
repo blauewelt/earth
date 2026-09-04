@@ -95,22 +95,13 @@ FAMILIES = {
     # them without a new measurement: `t2m`, `u10`, `v10`, `sp`, `log_prate`,
     # `lhtfl` and `shtfl` are air, moved by the air.
     #
-    # `log_swe`, `soilw` and `tsoil` are put here TOO, and that is a holding
-    # decision, not a claim. They are LAND state: snow water equivalent, soil
-    # moisture and soil temperature do not blow downwind at 10 m/s -- they sit
-    # still and their reach is a correlation length, not a displacement.
-    # E-071 section 6.3 defines a land family L for exactly them (v = 0, reach
-    # = the correlation length alone). Assigning them to L is PHASE E's
-    # decision -- the phase that converts the consumers to the three-group
-    # tensor -- and not this commit's: this commit only stops
-    # `channel_family` from raising on a name family 7 now writes. Family A
-    # over-reaches for a land channel, which costs tokens and covers the
-    # driver; family L under-reaching would lose it, which is the failure this
-    # function's `raise` exists to prevent.
+    # `log_swe`, `soilw` and `tsoil` are NOT here any more: they are family L
+    # below. The holding decision that parked them in A is discharged by
+    # E-070/E-071 Phase E (the phase that converts the consumers to the
+    # three-group tensor), which is this change.
     "A": dict(channels=("tau_x", "tau_y", "tau_x_std", "tau_y_std",
                         "t2m", "u10", "v10", "sp", "log_prate",
-                        "lhtfl", "shtfl",
-                        "log_swe", "soilw", "tsoil"),
+                        "lhtfl", "shtfl"),
               v_ms=10.0, tau_days=10.0, L_corr_km=500.0, inner_lags=(0, 1)),
     # The ocean itself: eddies and the boundary current at 0.3 m/s, memory of
     # months to years, correlation length 100 km. 0.3 m/s x 5 d = 129.6 km per
@@ -124,14 +115,40 @@ FAMILIES = {
     # (family B). Hence max(r_B(l), 500 km) at l <= 1 — wide immediately, then
     # the ocean's slow growth takes over.
     #
-    # Family 7's `skin_t` and `sea_ice` are C. `skin_t` IS this family's `sst`
-    # over the ocean -- E-070's build spec B4 fills it from the same OISST
-    # product family 4's `sst` comes from and only falls back to NCEP skin
-    # temperature where OISST does not observe -- and sea-ice concentration is
-    # the same surface, stirred by the atmosphere at short lag and advected by
-    # the ocean beyond it, which is what the L shape describes.
-    "C": dict(channels=("sst", "log_mld", "skin_t", "sea_ice"),
+    # Family 7's `skt` and `sea_ice` are C. E-070's build spec B4, as
+    # corrected on 4 Sep (E-071 section 6.1: a channel is shared only when the
+    # measurand AND the instrument match on both sides), keeps the OBSERVED
+    # OISST field as `sst` and moves the reanalysis surface temperature to
+    # `skt` in the coarse group -- so this family holds both, plus sea-ice
+    # concentration, which is the same surface stirred by the atmosphere at
+    # short lag and advected by the ocean beyond it: the L shape.
+    # NOTE for the cone owner: `skt` is C because it is a surface temperature,
+    # which is what `skin_t` was here before the rename. Over LAND it does not
+    # advect and family L (v = 0, 400 km) may fit it better -- that is a
+    # design call, not a rename, and is deliberately left as it stood.
+    "C": dict(channels=("sst", "log_mld", "skt", "sea_ice"),
               v_ms=0.3, tau_days=None, L_corr_km=100.0,
+              inner_lags=tuple(range(0, 7))),
+    # LAND SURFACE STATE (E-071 section 6.3, "land surface state (L)"): snow
+    # water equivalent, soil moisture and soil temperature. The land does not
+    # advect, so **v = 0** and the reach is a CORRELATION LENGTH alone, with a
+    # memory of months -- which is E-071 6.3's own sentence: *"the land does
+    # not advect, so v = 0 and the reach is the correlation length alone
+    # (~300-500 km for soil moisture and snow, ~300 km for GRACE by
+    # construction), with memory of months"*. 400 km is the midpoint of that
+    # stated ~300-500 km band; it is an order-of-magnitude number like every
+    # other constant in this table, not a fit. Memory of MONTHS means the
+    # inner window never exhausts it, so the inner lags are 0..6 exactly as
+    # family C's are -- unlike family A, whose 10-day memory is what cuts its
+    # dots off after lag 1.
+    #
+    # These three channels used to sit in A (10 m/s, 500 km, lags 0-1) as an
+    # explicit holding decision. A was wrong for them in both directions at
+    # once: it over-reached in space (a 500 km disc for a field whose driver
+    # does not move) and under-reached in time (no dots past lag 1 for a field
+    # whose memory is months).
+    "L": dict(channels=("log_swe", "soilw", "tsoil"),
+              v_ms=0.0, tau_days=None, L_corr_km=400.0,
               inner_lags=tuple(range(0, 7))),
 }
 
@@ -159,10 +176,10 @@ def channel_family(name):
     is what the cone needs, and a magnitude cannot supply it.
 
     Family 7's shared land/ocean channels (E-070's build spec) are assigned in
-    FAMILIES above: `skin_t`/`sea_ice` to C with `sst`, the NCEP surface fields
-    to A with the wind stress. The three LAND channels among them
-    (`log_swe`, `soilw`, `tsoil`) sit in A provisionally -- E-071 section 6.3's
-    land family L is Phase E's decision; see the comment on FAMILIES["A"].
+    FAMILIES above: `skt`/`sea_ice` to C with `sst`, the NCEP AIR fields to
+    A with the wind stress, and the three LAND channels (`log_swe`, `soilw`,
+    `tsoil`) to L -- E-071 section 6.3's land family, v = 0 and a correlation
+    length for a reach.
     """
     for fam, spec in FAMILIES.items():
         if name in spec["channels"]:
@@ -219,6 +236,9 @@ def reach_km(family, lag_pentads, dt_days=5.0):
       C  max(r_B(l), 500 km) at l <= 1, r_B(l) beyond — the L-shape. Note the
          reach DROPS from 500 km at l = 1 to 388.8 km at l = 2: that is the
          atmospheric stirring going out of memory, not a bug.
+      L  400 km at EVERY lag. v = 0, so the displacement term is identically
+         zero and the L_corr floor is the whole reach — a flat cone, which is
+         what "the land does not advect" means geometrically (E-071 §6.3).
 
     Arithmetic is exact (m/s x 86400 s x days / 1000), never the table's
     rounded 130/260/.../910.

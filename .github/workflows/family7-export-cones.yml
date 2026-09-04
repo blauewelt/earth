@@ -1,0 +1,218 @@
+# E-070 / E-071 Phase E: export what the cone READS out of family 7 -- the
+# first input tensor that covers the whole globe rather than the North
+# Atlantic window -- and publish those samples for the globe app's Cones tab.
+#
+# WHAT IT PRODUCES. `ml/export_cone_sample.py --tensor <stem>.npz` calls
+# `ml/cone_sampler.py::ConeSampler.sample` (the object `ml/train_cone.py`
+# trains on) for the codec's inner stencil and `ml/cone.py::outer_spiral` for
+# stage 2's outer one, at twelve anchors -- the five North Atlantic ones the
+# family-4 export already used, so the two tensors can be compared at the same
+# points, plus an Antarctic ice-sheet cell, the Sahara, Greenland, the
+# Kuroshio, the Antarctic Circumpolar Current, Nino 3.4 and one ON the
+# dateline, which is the anchor whose cone only exists at all because the
+# sampler now wraps a closed longitude axis. One JSON per anchor, then
+# `ml/upload_cone_samples.py` puts them on the Hugging Face Hub under
+# `cone_samples_f7/` and writes `data/cone_samples_f7.json`, the small in-repo
+# index the page reads before it fetches anything.
+#
+# WHY A BOX AND NOT A HOSTED RUNNER. The tensor is 53 GB of memmaps and lives
+# only on the box that built it (`family7-build.yml`, same runner, same
+# `/opt/earth-cache`). The exporter reads it in place -- no download, no
+# streaming -- and the trainer's anomaly transform needs a WRITABLE copy of
+# each group, which is another ~53 GB of scratch. A GitHub-hosted runner has
+# ~14 GB of disk and no tensor.
+#
+# WHY IT UPLOADS AN ARTIFACT INSTEAD OF COMMITTING. The box cannot push (its
+# `permissions:` is `contents: read`, and ml/CLAUDE.md 6 keeps it that way:
+# the job token on a rented machine is a blast radius, not a convenience). So
+# the index leaves as an Actions artifact and the main session commits it.
+#
+# SECURITY. `workflow_dispatch` ONLY. ml/CLAUDE.md 6: self-hosted runners on a
+# public repo are safe here for exactly one reason -- dispatch requires repo
+# write access. NEVER add `pull_request`, `issue_comment`, `workflow_run` or
+# `schedule` to this file; any of them would hand code execution on a rented
+# box, plus the job token, to anyone who opens a PR. HF_TOKEN reaches the
+# scripts as an ENV VAR and never as a command-line argument (argv is world
+# readable on the box, and the box's host has root).
+name: Family 7 cone samples
+run-name: family7 cone samples <- ${{ github.event.inputs.work || 'ml/cache/family7' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "runner label. A Vast box's runner NAME is an implicit label; the default is the 300 GB Ontario box, which is the box family7-build.yml writes the tensor to"
+        default: "gpu-box-31299601"
+      work:
+        description: "the build directory holding family7_global025_pentad_l0.npz and its _X_<group>.npy sidecars. Must be the same value family7-build.yml was dispatched with"
+        default: "ml/cache/family7"
+
+permissions:
+  contents: read            # the samples go to Hugging Face; the index leaves
+                            # as an artifact and the main session commits it
+
+concurrency:
+  # One export at a time against one tensor: two would write the same ~53 GB
+  # of anomaly scratch beside the same memmaps. Not cancelled in flight -- a
+  # running export holds hours of that scratch.
+  group: family7-export-cones
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ${{ github.event.inputs.runner }}
+    timeout-minutes: 720
+    steps:
+      - uses: actions/checkout@v4
+
+      # The persistent cache, in family7-build.yml's exact form.
+      # /opt/earth-cache survives a job and a stop/start, which is where the
+      # tensor that build wrote actually is.
+      - name: Persistent data cache (self-hosted box)
+        run: |
+          mkdir -p /opt/earth-cache
+          rm -rf ml/cache
+          ln -s /opt/earth-cache ml/cache
+
+      # Check the preconditions while the inputs are all they have cost
+      # (ml/CLAUDE.md 0.3). All three are DEFINITE answers and may therefore
+      # be fatal (5.17): there is no tensor, there is no token, or there is no
+      # room for the anomaly copies -- none of which a later step can fix.
+      - name: Preflight
+        id: preflight
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family7' }}
+        run: |
+          STEM="${WORK}/family7_global025_pentad_l0"
+          if [ ! -f "${STEM}.npz" ]; then
+            echo "::error::${STEM}.npz is not on this box. This workflow"
+            echo "EXPORTS from the family-7 tensor; it does not build it."
+            echo "Run family7-build.yml with the same work value first, on"
+            echo "the same runner, and check its publish stage finished."
+            ls -la "${WORK}" 2>/dev/null || echo "(${WORK} does not exist)"
+            exit 1
+          fi
+          missing=0
+          for g in g025 g100 rg100; do
+            if [ ! -f "${STEM}_X_${g}.npy" ]; then
+              echo "::error::${STEM}_X_${g}.npy is missing -- the npz is the"
+              echo "metadata half of the sidecar layout and the group arrays"
+              echo "are the other half (ml/tensor_io.py). A stem without all"
+              echo "three groups cannot be read."
+              missing=1
+            fi
+          done
+          [ "${missing}" -eq 0 ] || exit 1
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::HF_TOKEN secret is not set. The samples are"
+            echo "published to the Hub and the upload verifies the restore;"
+            echo "without it the job would compute them and have nowhere to"
+            echo "put them. Settings -> Secrets and variables -> Actions; the"
+            echo "value is in claude/huggingface-access.md."
+            exit 1
+          fi
+          echo "tensor:"
+          ls -la "${STEM}".npz "${STEM}"_X_*.npy
+          df -h ml/cache
+          line=$(df -P ml/cache | tail -1)
+          use=$(printf '%s\n' "${line}" | awk '{print $5}' | tr -d '%')
+          free_gb=$(printf '%s\n' "${line}" | awk '{print int($4 / 1048576)}')
+          # 60 GB: `--anomaly trainer` makes a WRITABLE copy of each group
+          # beside the tensor (45.7 + 5.7 + 2.1 = 53.5 GB) because the
+          # transform writes in place and an r+ map on the canonical tensor
+          # would leave anomaly-space data where state-space data is
+          # documented (ml/tensor_io.py::writable_copy). Sized above the
+          # allocation it guards, per ml/CLAUDE.md 5.18.
+          if [ "${use}" -ge 90 ]; then
+            echo "::error::cache mount is ${use}% full (>= 90 %). Over 90 % is"
+            echo "unusable, not a warning (ml/CLAUDE.md 7): the box computes"
+            echo "and silently reports nothing."
+            exit 1
+          fi
+          if [ "${free_gb}" -lt 60 ]; then
+            echo "::error::only ${free_gb} GB free on the cache mount; the"
+            echo "anomaly pass needs a writable copy of each group (~53.5 GB)"
+            echo "beside the tensor. Free space (scripts/disk_hygiene.sh) or"
+            echo "drop an older build directory."
+            exit 1
+          fi
+          echo "preflight ok: tensor present, token present, ${free_gb} GB free"
+
+      # numpy reads the memmaps; huggingface_hub uploads and restore-verifies.
+      # If either script grows a dependency it is added HERE in the same
+      # commit -- a box has no requirements file.
+      - name: Install
+        run: pip install --quiet numpy huggingface_hub
+
+      # --outer-stride 2 keeps every second stage-2 lag (7, 9, ... 143), which
+      # is what the family-4 export publishes and what keeps one anchor file
+      # at a few megabytes rather than ten. --anomaly trainer computes the
+      # value space the codec actually reads, by calling
+      # ml/trainprobe.py::anomaly_transform itself.
+      - name: Export the cone samples
+        env:
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family7' }}
+        run: |
+          set -o pipefail
+          rm -rf "${RUNNER_TEMP}/cone_out"
+          mkdir -p "${RUNNER_TEMP}/cone_out"
+          python3 -u ml/export_cone_sample.py \
+              --tensor "${WORK}/family7_global025_pentad_l0.npz" \
+              --anomaly trainer \
+              --outer-stride 2 \
+              --out "${RUNNER_TEMP}/cone_out" \
+              2>&1 | tee "${RUNNER_TEMP}/export.log"
+          ls -la "${RUNNER_TEMP}/cone_out"
+
+      # --prefix and --index move TOGETHER and the script refuses if only one
+      # of them does: an index at data/cone_samples.json describing files
+      # under cone_samples_f7/ would tell the page family 4's channel list for
+      # family 7's cone, which is the one failure here nobody would see.
+      - name: Publish to the Hub and write the index
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -o pipefail
+          python3 -u ml/upload_cone_samples.py \
+              --dir "${RUNNER_TEMP}/cone_out" \
+              --prefix cone_samples_f7 \
+              --index data/cone_samples_f7.json \
+              2>&1 | tee -a "${RUNNER_TEMP}/export.log"
+          ls -la data/cone_samples_f7.json
+
+      # The index is what the repo needs and the box cannot push it, so it
+      # leaves as an artifact. The log tail rides along so a failed export is
+      # diagnosable without the box (ml/CLAUDE.md 5.25).
+      - name: Collect the index and the log
+        if: always() && steps.preflight.outcome == 'success'
+        run: |
+          out="${RUNNER_TEMP}/family7-cones"
+          rm -rf "${out}"; mkdir -p "${out}"
+          [ -f data/cone_samples_f7.json ] && cp data/cone_samples_f7.json "${out}/" \
+            || echo "::warning::no data/cone_samples_f7.json -- the upload did not finish"
+          if [ -f "${RUNNER_TEMP}/export.log" ]; then
+            tail -n 200 "${RUNNER_TEMP}/export.log" > "${out}/export.log.tail"
+            cat "${out}/export.log.tail"
+          fi
+
+      - name: Upload the index
+        if: always() && steps.preflight.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: family7-cone-index-${{ github.run_number }}
+          path: ${{ runner.temp }}/family7-cones
+          if-no-files-found: warn
+          retention-days: 30
+
+      # ~53.5 GB of anomaly copies, beside a tensor that must stay under 90 %
+      # (ml/CLAUDE.md 7). They are pure functions of the tensor and the
+      # holdout years, so the next run recomputes them; leaving them would
+      # make the NEXT export's preflight refuse.
+      - name: Drop the anomaly scratch
+        if: always() && steps.preflight.outcome == 'success'
+        env:
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family7' }}
+        run: |
+          rm -f "${WORK}"/family7_global025_pentad_l0_cone_anom_*.npy
+          df -h ml/cache

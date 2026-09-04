@@ -19,7 +19,7 @@ here" in every channel.
 THREE GROUPS AT THEIR NATIVE RESOLUTION, not one dense array (plan B2):
 
   g025   [3142, 721, 1440,  7] float16  46 GB   0.25 deg, GLORYS12 + OISST
-  g100   [3142, 181,  360, 14] float16  5.7 GB  1 deg, NCEP/NCAR R1
+  g100   [3142, 181,  360, 15] float16  6.1 GB  1 deg, NCEP/NCAR R1
   rg100  [n_live, 181, 360, 32] float16 ~1 GB   1 deg, Roemmich-Gilson, live bins
 
 The two COARSE groups are filled at float32 and converted to the published
@@ -129,10 +129,22 @@ def coarse_lookup(y, x):
 
 
 # ---- the channels (plan §2) ----------------------------------------------
+# E-071 §6.1, "Correction, 4 Sep": A CHANNEL IS SHARED ONLY WHEN THE MEASURAND
+# AND THE INSTRUMENT MATCH ON BOTH SIDES. The first version of this build
+# merged OISST sea-surface temperature and NCEP skin temperature into one
+# `skin_t` channel — one measurand (the temperature of the surface) but TWO
+# instruments, an infrared/microwave analysis over the sea and a reanalysis
+# everywhere else, spliced at a coastline the model would have had to learn
+# was an instrument boundary rather than a physical one. So they are two
+# channels now: `sst` is the OBSERVED field where OISST observes and missing
+# elsewhere, and the SHARED surface temperature is the reanalysis field over
+# every surface — `skt`, in g100, at the reanalysis's own resolution, which is
+# also where ERA5 will drop in at Phase L1 with no layout change.
 CHAN_G025 = ["cur_speed", "log_mld", "ssh", "cur_u", "cur_v",
-             "skin_t", "sea_ice"]
+             "sst", "sea_ice"]
 CHAN_G100 = ["tau_x", "tau_y", "tau_x_std", "tau_y_std", "t2m", "u10", "v10",
-             "sp", "log_prate", "log_swe", "soilw", "tsoil", "lhtfl", "shtfl"]
+             "sp", "log_prate", "log_swe", "soilw", "tsoil", "lhtfl", "shtfl",
+             "skt"]
 LEVELS = f3.LEVELS                                   # ONE definition, imported
 CHAN_RG100 = ([f"rg_t{int(p)}" for p in LEVELS]
               + [f"rg_s{int(p)}" for p in LEVELS])
@@ -140,7 +152,8 @@ GROUPS = ["g025", "g100", "rg100"]
 NCHAN = {"g025": len(CHAN_G025), "g100": len(CHAN_G100),
          "rg100": len(CHAN_RG100)}
 
-C_CUR_SPEED, C_LOG_MLD, C_SSH, C_CUR_U, C_CUR_V, C_SKIN_T, C_SEA_ICE = range(7)
+C_CUR_SPEED, C_LOG_MLD, C_SSH, C_CUR_U, C_CUR_V, C_SST, C_SEA_ICE = range(7)
+C_SKT = 14                            # g100's shared surface temperature
 
 # ---- the sources ----------------------------------------------------------
 PSL_NCEP = ("https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis/"
@@ -197,7 +210,9 @@ RG_LAT_LO, RG_LAT_HI = -64.5, 79.5        # the band RG actually covers
 STAGES = ["glorys", "sst", "ncep", "rg", "static", "truth", "norm", "meta",
           "publish"]
 DEPS = {
-    "ncep": ["sst"],                       # the skin_t fill needs OISST first
+    # `ncep` no longer writes into g025 at all, but it still runs the `sst`
+    # repair below, which needs `oisst_seen.npy` from the sst stage.
+    "ncep": ["sst"],
     "norm": ["glorys", "sst", "ncep", "rg"],
     "meta": ["norm", "static", "truth"],
     "publish": ["meta"],
@@ -431,8 +446,8 @@ def disk_guard(work, sizes, headroom=3e9):
 #   log_mld                  0.5 .. 3.5        -> 0.00098 (log10 m)
 #   ssh                      |v| <~ 2 m        -> 0.00098 m
 #   sea_ice                  0 .. 1            -> 0.00049
-#   skin_t                   -2 .. 35 degC     -> 0.031 degC   <- the worst
-# `skin_t`'s 0.031 degC is exactly what family 4's `sst` channel already
+#   sst                      -2 .. 35 degC     -> 0.031 degC   <- the worst
+# `sst`'s 0.031 degC is exactly what family 4's `sst` channel already
 # carries (build_family4.fill_sst), so this is precedent, not a new tax; it is
 # still ~3x OISST's own 0.01 degC encoding, which is the honest caveat.
 RAW_F32 = ("g100", "rg100")
@@ -599,6 +614,157 @@ class Carry:
                     os.remove(q)
                 except OSError:
                     pass
+
+
+
+# ------------------------------------------------------- the sst repair ----
+def repair_sst_channel(ctx):
+    """`sst` is NaN wherever OISST never observes — asserted, not hoped.
+
+    THE HISTORY THIS EXISTS FOR. The first version of this build wrote NCEP
+    skin temperature into g025 channel 5 wherever OISST does not observe, as
+    the "one quantity over two surfaces" channel E-070 B4 described. E-071
+    §6.1's correction of 4 Sep retired that: a channel is shared only when the
+    MEASURAND AND THE INSTRUMENT match on both sides, so the observed field
+    keeps the channel and the reanalysis moves to `skt` in g100. A work dir
+    that ran the old code carries that land fill in the bins whose NCEP year
+    completed, and the rename alone would leave it there, silently, as
+    "OISST values" over Siberia.
+
+    So the repair runs AUTOMATICALLY at the head of the ncep stage — no
+    operator flag, because a repair nobody remembers to ask for is not a
+    repair. It is a strided pass over one channel of the 46 GB memmap, chunked
+    over bins, and it PRINTS what it cleared: ~0 on a fresh build, the old
+    fill on a resumed one. Marked when done, so a later ncep resume does not
+    pay for it again.
+    """
+    work = ctx.work
+    if marked(work, "repair_sst"):
+        return 0
+    seen_path = os.path.join(work, "oisst_seen.npy")
+    if not os.path.exists(seen_path):
+        sys.exit(f"{seen_path} absent — the `sst` stage must run before "
+                 f"`ncep` (plan §4: stage order is fixed). The repair below "
+                 f"cannot know which cells OISST observes without it.")
+    oisst_seen = np.load(seen_path)
+    shape = ctx.shapes()["g025"]
+    X = open_fill(work, "g025", shape, create=True)
+    dry = ~oisst_seen
+    cleared = 0
+    chunk = bin_chunk(shape)
+    for i in range(0, shape[0], chunk):
+        j = min(i + chunk, shape[0])
+        slab = np.asarray(X[i:j, :, :, C_SST], np.float32)
+        bad = np.isfinite(slab) & dry[None]
+        n = int(bad.sum())
+        if n:
+            slab[bad] = np.nan
+            X[i:j, :, :, C_SST] = slab
+            cleared += n
+        X.flush()
+    mark(work, "repair_sst")
+    print(f"  repair: cleared {cleared:,} value(s) from g025 `sst` where OISST "
+          f"never observes"
+          + ("" if cleared else " — nothing to undo, as on a fresh build"))
+    return cleared
+
+
+# --------------------------------------------------------- the spec hash ----
+# Bump a stage's number when what it WRITES changes in a way its channel list
+# and shapes do not already express (a transform, a sign, a masking rule). The
+# digest below folds it together with the channel names and the array shapes,
+# so a stage whose recipe moved discards its own half-built state instead of
+# leaving a tensor half in one recipe and half in another.
+SPEC_VERSION = {"glorys": 1, "sst": 1, "ncep": 2, "rg": 1, "static": 1,
+                "truth": 1, "norm": 1, "meta": 1, "publish": 1}
+
+# Which array a stage OWNS — the one it may delete when its spec moves. A
+# stage never touches another stage's files: glorys and sst share g025 and own
+# nothing, so a spec change there rewrites their own channels in place.
+STAGE_OWNS = {"ncep": "g100", "rg": "rg100"}
+
+# What each stage writes, for the digest. Deliberately its OWN channels, not
+# the whole tensor: renaming a g100 channel must not send the OISST stage back
+# to 1982.
+STAGE_CHANNELS = {
+    "glorys": CHAN_G025[:5],
+    "sst": CHAN_G025[5:],
+    "ncep": CHAN_G100,
+    "rg": CHAN_RG100,
+}
+
+
+def stage_spec(ctx, stage, n_live=None):
+    body = {
+        "stage": stage, "version": SPEC_VERSION[stage], "recipe": RECIPE,
+        "channels": STAGE_CHANNELS.get(stage, []),
+        "min_days": MIN_DAYS, "pentad_days": PENTAD_DAYS,
+        "epoch": str(EPOCH), "bins": [ctx.b_lo, ctx.b_hi],
+        "shapes": {k: list(v) for k, v in ctx.shapes(n_live).items()
+                   if k in (STAGE_OWNS.get(stage),
+                            "g025" if stage in ("glorys", "sst") else "")},
+    }
+    if stage == "ncep":
+        body["files"] = NCEP_FILES
+        body["flip"] = list(NCEP_FLIP)
+        body["sigma"] = list(NCEP_SIGMA)
+    if stage == "rg":
+        body["levels"] = list(LEVELS)
+        body["band"] = [RG_LAT_LO, RG_LAT_HI]
+    blob = json.dumps(body, sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest(), body
+
+
+def stage_state_check(ctx, stage, n_live=None):
+    """Discard a stage's OWN half-built state when its recipe has moved.
+
+    Two triggers, because a work dir older than this mechanism has no `.spec`
+    to compare against and its staleness has to be detectable some other way:
+
+      1. `<work>/<stage>.spec` exists and differs from the current digest;
+      2. the array this stage OWNS is on disk with the wrong shape — which is
+         exactly how the 14-channel g100 left by the pre-correction ncep stage
+         announces itself.
+
+    What is discarded is only ever this stage's: its `<stage>.done`, everything
+    under `<work>/<stage>/` (per-item markers and carries) and its own `.f32`
+    fill file. `glorys` and `sst` share g025 and own no file, so a spec change
+    there replays their chunks over the same memmap; `norm` REFUSES instead,
+    because its g025 pass is in place and cannot be replayed.
+    """
+    work = ctx.work
+    digest, body = stage_spec(ctx, stage, n_live)
+    spec_path = os.path.join(work, f"{stage}.spec")
+    old = None
+    if os.path.exists(spec_path):
+        old = read_json(spec_path, {}).get("sha256")
+    why = []
+    if old is not None and old != digest:
+        why.append(f"its recorded spec {old[:12]}… != {digest[:12]}…")
+    owned = STAGE_OWNS.get(stage)
+    if owned and owned in ctx.shapes(n_live):
+        p = fill_file(work, owned)
+        want = tuple(ctx.shapes(n_live)[owned])
+        if os.path.exists(p):
+            got = tuple(np.lib.format.open_memmap(p, mode="r").shape)
+            if got != want:
+                why.append(f"{os.path.basename(p)} is {got}, wants {want}")
+    if why:
+        if stage in ("norm", "publish"):
+            sys.exit(f"stage {stage!r} is stale ({'; '.join(why)}) but cannot "
+                     f"be discarded automatically — its g025 pass is in place. "
+                     f"Rebuild the work dir deliberately.")
+        print(f"  ::warning:: stage {stage!r} is STALE ({'; '.join(why)}) — "
+              f"discarding its own markers, carries and fill file and "
+              f"restarting it. Nothing belonging to another stage is touched.")
+        for q in [marker(work, stage)] + \
+                sorted(glob.glob(os.path.join(work, stage, "*"))):
+            if os.path.isfile(q):
+                os.remove(q)
+        if owned and os.path.exists(fill_file(work, owned)):
+            os.remove(fill_file(work, owned))
+    atomic_json(spec_path, {"sha256": digest, "at": utcnow(), "spec": body})
+    return bool(why)
 
 
 # ============================================================ stage: glorys ==
@@ -898,7 +1064,7 @@ def stage_sst(ctx):
             return
         with np.errstate(invalid="ignore"):
             mu = np.where(c >= MIN_DAYS, s / np.maximum(c, 1), np.nan)
-        X[row, :, :, C_SKIN_T] = mu[0]
+        X[row, :, :, C_SST] = mu[0]
         X[row, :, :, C_SEA_ICE] = np.clip(mu[1], 0.0, 1.0)
         # "finite in ANY bin" — the OISST-observed mask the ncep stage needs
         # to keep OISST precedence ABSOLUTE (plan §2, channel 5).
@@ -1038,7 +1204,7 @@ def ncep_land_mask(ctx):
 
 
 def stage_ncep(ctx):
-    """NCEP/NCAR R1 gaussian dailies -> the 14 g100 channels + the skin_t fill.
+    """NCEP/NCAR R1 gaussian dailies -> the 15 g100 channels.
 
     Bilinear from the T62 gaussian grid (192 x 94, descending latitude,
     0..358.125 longitude) to the 1-degree POINT grid with `wrap_period` 360,
@@ -1047,23 +1213,18 @@ def stage_ncep(ctx):
     sigma of the quantity actually written (a standard deviation is not
     aggregable from a mean).
 
-    THE SKIN_T FILL. NCEP `skt` is bilinear to the 0.25-degree grid, pentad
-    mean, K -> degC, and written ONLY where OISST never observes. OISST
-    precedence is ABSOLUTE (plan §2, B4): a cell OISST ever observes is an
-    OISST cell in EVERY bin, including bins where OISST happens to be missing
-    — otherwise the channel would silently switch instrument mid-series and
-    the G1 gate would be comparing two different measurements.
+    `skt` (channel 14) is the SHARED surface temperature: the reanalysis field
+    K -> degC over EVERY surface, land, sea and ice alike, with no land mask
+    and no splice. It does NOT touch g025 — an earlier version of this build
+    filled g025's temperature channel with NCEP wherever OISST does not
+    observe, and E-071 §6.1's correction of 4 Sep retired that: one measurand
+    read by two instruments is two channels, not one. `repair_sst_channel`
+    below undoes that fill on a work dir that has it.
     """
     import netCDF4 as ncdf
     work = ctx.work
-    Xg = open_group(work, "g100", ctx.shapes()["g100"], create=True)
-    Xd = open_group(work, "g025", ctx.shapes()["g025"], create=True)
-    seen_path = os.path.join(work, "oisst_seen.npy")
-    if not os.path.exists(seen_path):
-        sys.exit(f"{seen_path} absent — the `sst` stage must run before "
-                 f"`ncep`, because the skin_t fill may only write where OISST "
-                 f"never observes (plan §4: stage order is fixed)")
-    oisst_seen = np.load(seen_path)
+    repair_sst_channel(ctx)
+    Xg = open_fill(work, "g100", ctx.shapes()["g100"], create=True)
     land = ncep_land_mask(ctx)
 
     years = list(range(ctx.d_lo.year, ctx.d_hi.year + 1))
@@ -1098,12 +1259,9 @@ def stage_ncep(ctx):
         W["x1"] = f3.lin_weights(g_lon,
                                  np.where(ctx.lon1 < 0, ctx.lon1 + 360.0,
                                           ctx.lon1), wrap_period=360.0)
-        W["y25"] = f3.lin_weights(g_lat, ctx.lats)
-        W["x25"] = f3.lin_weights(g_lon,
-                                  np.where(ctx.lons < 0, ctx.lons + 360.0,
-                                           ctx.lons), wrap_period=360.0)
         print(f"  interp gaussian {len(g_lat)}x{len(g_lon)} -> "
-              f"{NLAT1}x{NLON1} and {NLAT}x{NLON}", flush=True)
+              f"{NLAT1}x{NLON1} (g100 only — nothing here writes g025)",
+              flush=True)
 
     def enough(b, v):
         """>= MIN_DAYS DISTINCT DAYS in the bin — not >= MIN_DAYS samples."""
@@ -1174,15 +1332,11 @@ def stage_ncep(ctx):
             lh, sh = m("lhtfl"), m("shtfl")
             put(12, to1(lh) if lh is not None else None)
             put(13, to1(sh) if sh is not None else None)
-
+            # THE SHARED SURFACE TEMPERATURE. No land mask, no OISST splice:
+            # one instrument over every surface is the whole point of the
+            # channel (E-071 §6.1, corrected 4 Sep).
             sk = m("skt")
-            if sk is not None:
-                g = f3.interp2_nan(sk, W["y25"], W["x25"]) - 273.15
-                fill = (~oisst_seen) & np.isfinite(g)
-                if fill.any():
-                    cur = np.asarray(Xd[row, :, :, C_SKIN_T], np.float32)
-                    cur[fill] = g[fill].astype(np.float32)
-                    Xd[row, :, :, C_SKIN_T] = cur
+            put(C_SKT, to1(sk) - 273.15 if sk is not None else None)
         for v in list(keys):
             acc.pop((b, v), None)
             acc2.pop((b, v), None)
@@ -1242,7 +1396,6 @@ def stage_ncep(ctx):
                     if os.path.exists(p):
                         os.remove(p)
         Xg.flush()                               # flush, THEN mark
-        Xd.flush()
         carry.commit(y, n_days=np.array(n_days),
                      **{f"acc_{b}|{v}": a for (b, v), a in acc.items()},
                      **{f"acc2_{b}|{v}": a for (b, v), a in acc2.items()},
@@ -1254,13 +1407,13 @@ def stage_ncep(ctx):
     for b in sorted({k[0] for k in acc}):
         flush(b)
     Xg.flush()
-    Xd.flush()
     bump_counts(work, n_ncep_days=n_days)
     ctx.note_source("ncep", f"{PSL_NCEP}/<var>.gauss.YYYY.nc "
                             f"(NCEP/NCAR Reanalysis 1, NOAA PSL) + "
                             f"{NCEP_LAND}.nc")
     mark(work, "ncep")
-    print(f"  ncep: {n_days} daily skt fields; 14 g100 channels written")
+    print(f"  ncep: {n_days} daily skt fields; "
+          f"{NCHAN['g100']} g100 channels written")
 
 
 # ================================================================ stage: rg ==
@@ -1893,6 +2046,11 @@ def run_stages(ctx, stages):
             if not marked(work, dep):
                 sys.exit(f"stage {s!r} needs {dep!r} first (plan §4: stage "
                          f"order is fixed) — {marker(work, dep)} is missing")
+        n_live = None
+        lp = os.path.join(work, "rg", "live.npz")
+        if os.path.exists(lp):
+            n_live = len(np.load(lp)["bin_index"])
+        stage_state_check(ctx, s, n_live)
         if marked(work, s) and not ctx.a.force:
             print(f"stage {s}: already done — skipping (--force to redo)")
             continue
@@ -2206,11 +2364,13 @@ def check_smoke(work, ctx):
         got = tuple(d[f"X_{g}"].shape)
         assert got == want[g], f"{g} is {got}, want {want[g]}"
     assert d["X"].shape == d["X_g025"].shape, "X does not alias the dense group"
-    assert len(d["chan_g025"]) == 7 and len(d["chan_g100"]) == 14 \
-        and len(d["chan_rg100"]) == 32
-    fin = int(np.isfinite(np.asarray(d["X_g025"][:, :, :, C_SKIN_T],
+    assert [len(d[f"chan_{g}"]) for g in GROUPS] == \
+        [NCHAN[g] for g in GROUPS]
+    fin = int(np.isfinite(np.asarray(d["X_g025"][:, :, :, C_SST],
                                      np.float32)).sum())
-    assert fin > 0, "skin_t is entirely missing — the sst/ncep stages wrote nothing"
+    assert fin > 0, "sst is entirely missing — the sst stage wrote nothing"
+    skt = np.asarray(d["X_g100"][:, :, :, C_SKT], np.float32)
+    assert np.isfinite(skt).any(), "skt is entirely missing — ncep wrote nothing"
     assert np.isfinite(np.asarray(d["elev"])).any(), "elev is entirely NaN"
     codes = set(int(v) for v in np.unique(np.asarray(d["sphere"])))
     assert codes <= {0, 1, 2, 3}, codes
@@ -2230,7 +2390,7 @@ def main():
     ap.add_argument("--stage", default="all",
                     choices=["all"] + STAGES,
                     help="one stage, or `all`. Order is fixed: ncep needs sst "
-                         "for the skin_t fill, norm needs everything.")
+                         "for the sst repair, norm needs everything.")
     ap.add_argument("--source-dir", default="",
                     help="read every source from local files — no network at "
                          "all. Used by the tests and by --smoke.")

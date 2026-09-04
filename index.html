@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=953cc03c" />
+  <link rel="stylesheet" href="src/style.css?v=00bfea1a" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -802,7 +802,23 @@
           values in the cone</label>
       </div>
       <div id="cn-data-block" class="hidden">
+        <!-- WHERE THE NUMBERS COME FROM. Two sources, and they are two
+             different claims. "exported anchors" is the original: five
+             pre-exported North Atlantic cells of family 4, sampled in Python by
+             the production ConeSampler and shipped as JSON — every value in it
+             was produced by the code that trains the model. "live from the
+             global tensor" reads family 7 (the whole-globe tensor) directly
+             over the network, one pentad at a time, so ANY cell on the planet
+             can be an anchor — but the gathering is then done here, in the
+             browser, off the same geometry the certification test pins. -->
         <div class="control-row">
+          <label for="cn-source">source</label>
+          <select id="cn-source">
+            <option value="anchors">exported anchors (family 4, North Atlantic)</option>
+            <option value="live">live from the global tensor (family 7)</option>
+          </select>
+        </div>
+        <div class="control-row" id="cn-anchor-row">
           <label for="cn-data-anchor">anchor</label>
           <select id="cn-data-anchor"></select>
         </div>
@@ -817,15 +833,17 @@
           <label for="cn-channel">channel</label>
           <select id="cn-channel"></select>
         </div>
-        <div class="control-row cn-checks">
+        <div class="control-row cn-checks" id="cn-anom-row">
           <label><input type="checkbox" id="cn-anom" checked /> anomaly — what the codec
             actually reads (off: the raw measurement)</label>
         </div>
         <div id="cn-legend"></div>
         <div id="cn-readout">Tap a dot on the globe to read it.</div>
-        <canvas id="cn-strip" width="380" height="120"></canvas>
-        <p class="hint" id="cn-strip-hint">What the codec reads at lag 0: the 3×3 patch,
-          one row per channel, nine cells across.</p>
+        <div id="cn-strip-wrap">
+          <canvas id="cn-strip" width="380" height="120"></canvas>
+          <p class="hint" id="cn-strip-hint">What the codec reads at lag 0: the 3×3 patch,
+            one row per channel, nine cells across.</p>
+        </div>
         <p class="hint" id="cn-data-hint"></p>
         <p class="hint"><strong>In plain words.</strong> A <em>pentad</em> is a fixed
           five-day bin — the tensor has one frame per pentad, counted from 1982-01-01, so
@@ -1073,7 +1091,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">995af857</code></p>
+      <p class="build-line">Build <code id="build-id">5ea6da72</code></p>
     </section>
 
     <footer>
@@ -1129,6 +1147,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=995af857"></script>
+  <script src="src/app.js?v=5ea6da72"></script>
 </body>
 </html>

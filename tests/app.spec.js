@@ -5997,3 +5997,536 @@ test("Cones data mode: the cone's date follows the app's date, and says when it 
 
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
+
+/* ================================ the global tensor (family 7) on the globe
+ *
+ * FAMILY 7 is the first input tensor covering the whole globe rather than the
+ * North Atlantic window: every 0.25° grid point, one value per channel per
+ * five-day bin from 1982 to 2024. The layer paints one channel of one bin by a
+ * single HTTP range read of a `.npy` on the Hugging Face Hub.
+ *
+ * The real files are tens of gigabytes, so these tests serve `data/family7/
+ * fixture/` — the same schema over the T=5 tensor `ml/build_family7.py --smoke`
+ * produces, decimated to a 5°/10° grid so it can live in git. TWO routes make
+ * that work, and the second one is the interesting half: the index is swapped
+ * for the fixture's, and the Hub URL is answered with the SLICED bytes and a
+ * real 206, so the offset arithmetic the browser computes is genuinely
+ * exercised rather than hidden behind a whole-file 200. */
+const F7_DIR = require("path").join(__dirname, "..", "data", "family7", "fixture");
+
+function f7Index() {
+  return JSON.parse(require("fs").readFileSync(
+    require("path").join(F7_DIR, "family7_index.json"), "utf8"));
+}
+
+async function serveFamily7(page, opts = {}) {
+  const fs = require("fs"), path = require("path");
+  const index = f7Index();
+  await page.route(/\/data\/family7_index\.json(\?.*)?$/, (route) => {
+    if (opts.noIndex) return route.fulfill({ status: 404, body: "" });
+    return route.fulfill({ status: 200, contentType: "application/json",
+                           body: JSON.stringify(index) });
+  });
+  await page.route(/resolve\/main\/tensors\/.*\.npy$/, (route) => {
+    if (opts.slabFails) return route.fulfill({ status: 500, body: "" });
+    const name = route.request().url().split("/").pop();
+    const buf = fs.readFileSync(path.join(F7_DIR, name));
+    const range = route.request().headers()["range"];
+    const m = range && /bytes=(\d+)-(\d+)/.exec(range);
+    if (!m) return route.fulfill({ status: 200, body: buf });
+    const a = Number(m[1]), b = Number(m[2]);
+    page.__f7Reads = (page.__f7Reads || []).concat([[name, a, b]]);
+    return route.fulfill({
+      status: 206,
+      headers: { "content-range": `bytes ${a}-${b}/${buf.length}`,
+                 "accept-ranges": "bytes",
+                 "content-type": "application/octet-stream" },
+      body: buf.slice(a, b + 1),
+    });
+  });
+  return index;
+}
+
+// The float16 in the file, decoded the way the page decodes it — so the
+// expected value below is the FIXTURE'S OWN BYTES and not a second computation
+// of what they should have been.
+function f7Cell(index, group, bin, chan, iy, ix) {
+  const fs = require("fs"), path = require("path");
+  const grp = index.groups[group];
+  const buf = fs.readFileSync(path.join(F7_DIR, grp.file));
+  const row = bin - index.bin_first;
+  const nC = grp.chans.length, ci = grp.chans.indexOf(chan);
+  const off = grp.header_len + row * grp.slab_bytes +
+              ((iy * grp.grid.nx + ix) * nC + ci) * grp.itemsize;
+  const h = buf.readUInt16LE(off);
+  const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 0x1f, f = h & 0x3ff;
+  const z = e === 0 ? s * 6.103515625e-5 * (f / 1024)
+          : e === 31 ? (f ? NaN : s * Infinity)
+          : s * Math.pow(2, e - 15) * (1 + f / 1024);
+  const [mean, sd] = grp.norm[ci];
+  return { z, raw: z * sd + mean, mean, sd };
+}
+
+async function setAppDate(page, d) {
+  await page.evaluate((v) => {
+    const el = document.getElementById("layer-date");
+    el.value = v;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, d);
+}
+
+async function enableFamily7(page) {
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="family7"]');
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().ready),
+                    { timeout: 20000 }).toBe(true);
+}
+
+test("family 7: one range read paints a pentad, and the probe reads the tensor's own bytes",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const index = await serveFamily7(page);
+  const toasts = await recordToasts(page);
+
+  // the date selector is the layer's clock; put it inside the fixture's span
+  await page.evaluate(() => {
+    const el = document.getElementById("layer-date");
+    el.value = "2010-01-20";
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await enableFamily7(page);
+
+  const st = await page.evaluate(() => window.__earth.tensorLayerState());
+  expect(st.hasIndex).toBe(true);
+  expect(st.error).toBe(null);
+  // 2010-01-19 is bin 2049 (5-day bins from 1982-01-01)
+  expect(st.bin).toBe(2049);
+  expect(st.grid.binStart).toBe("2010-01-19");
+  expect(st.chan).toBe("g025:sst");
+  expect(st.grid.nx).toBe(index.groups.g025.grid.nx);
+  expect(st.grid.ny).toBe(index.groups.g025.grid.ny);
+  expect(st.grid.wrap).toBe(true);
+  expect(st.grid.units).toBe("°C");
+  // a POINT-aligned grid: the cell is the half-step box around its point, so
+  // the west edge is half a step west of −180 and the grid wraps
+  expect(st.grid.west).toBeCloseTo(-180 - index.groups.g025.grid.step / 2, 6);
+  expect(st.grid.south).toBeCloseTo(-90 - index.groups.g025.grid.step / 2, 6);
+
+  // exactly ONE slab was read, and it was the bin's slab, by offset
+  const grp = index.groups.g025;
+  const reads = page.__f7Reads || [];
+  expect(reads.length).toBe(1);
+  const want = grp.header_len + (2049 - index.bin_first) * grp.slab_bytes;
+  expect(reads[0][1]).toBe(want);
+  expect(reads[0][2] - reads[0][1] + 1).toBe(grp.slab_bytes);
+  expect(st.slabs).toEqual(["g025:2049"]);
+
+  // …and the number under a point is the FIXTURE'S OWN BYTE, un-z-scored.
+  // Row 20 / col 40 of the 5° grid is lat −90+5·20 = 10°N, lon −180+5·40 = 20°E.
+  const cell = f7Cell(index, "g025", 2049, "sst", 20, 40);
+  const got = await page.evaluate(() => window.__earth.tensorSampleAt(20, 10));
+  if (Number.isFinite(cell.raw)) {
+    expect(got).toBeCloseTo(cell.raw, 3);
+    // raw = z·sd + mean, and the two are different numbers
+    expect(st.norm[0]).toBeCloseTo(cell.mean, 5);
+    expect(st.norm[1]).toBeCloseTo(cell.sd, 5);
+  } else {
+    expect(got).toBe(null);            // NaN is "never observed", not a zero
+  }
+
+  // the read-out prints the unit AND the stored σ (§2.9 + the z the model reads)
+  const probe = await page.evaluate(async () => {
+    const E = window.__earth;
+    const carto = Cesium.Cartographic.fromDegrees(20, 10);
+    return await E.probeValueAt(carto);
+  });
+  expect(probe).toBeTruthy();
+  expect(probe.title).toContain("Global tensor");
+  if (!probe.noData) {
+    expect(probe.units).toBe("°C");
+    expect(probe.extra).toContain("z =");
+    expect(probe.when.kind).toBe("day");       // the bin's OPENING day
+    expect(probe.when.t).toBe("2010-01-19");
+  }
+
+  // the toast names the pentad the reader is looking at
+  await expect.poll(toasts).toContain("bin 2049");
+  await expect.poll(toasts).toContain("2010-01-19 → 01-23");
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("family 7: a channel switch costs no request, a coarse channel changes grid, statics are local",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const index = await serveFamily7(page);
+  await page.evaluate(() => {
+    const el = document.getElementById("layer-date");
+    el.value = "2010-01-20";
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await enableFamily7(page);
+  expect((page.__f7Reads || []).length).toBe(1);
+
+  // every g025 and g100 channel plus the two statics, each with a label and a unit
+  const opts = await page.locator('select[data-chan="family7"] option').allTextContents();
+  const nChan = index.groups.g025.chans.length + index.groups.g100.chans.length + 2;
+  expect(opts.length).toBe(nChan);
+  expect(opts.join(" | ")).toContain("Surface current speed — m/s");
+  expect(opts.join(" | ")).toContain("Surface sphere");
+  // rg100 (the depth column) is NOT offered: it is written only into the
+  // pentad holding a month's 15th, so most dates would paint nothing
+  expect(opts.join(" | ")).not.toContain("dbar");
+
+  // ANOTHER CHANNEL OF THE SAME BIN: the slab is already in the LRU, so this
+  // is a decode and not a request — that is the whole reason the cache holds
+  // raw slabs rather than decoded planes.
+  await page.evaluate(() => {
+    const s = document.querySelector('select[data-chan="family7"]');
+    s.value = "g025:cur_u";
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().chan),
+                    { timeout: 20000 }).toBe("g025:cur_u");
+  expect((page.__f7Reads || []).length).toBe(1);
+  const signed = await page.evaluate(() => window.__earth.tensorLayerState());
+  expect(signed.vmin).toBe(-signed.vmax);          // a signed channel is diverging
+  expect(signed.ramp).toBe("anom");
+  expect(signed.grid.units).toBe("m/s");
+
+  // a COARSE-group channel is a different file, a different grid and one read
+  await page.evaluate(() => {
+    const s = document.querySelector('select[data-chan="family7"]');
+    s.value = "g100:t2m";
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().chan),
+                    { timeout: 20000 }).toBe("g100:t2m");
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().ready),
+                    { timeout: 20000 }).toBe(true);
+  const coarse = await page.evaluate(() => window.__earth.tensorLayerState());
+  expect(coarse.grid.nx).toBe(index.groups.g100.grid.nx);
+  expect(coarse.grid.dlon).toBe(index.groups.g100.grid.step);
+  expect((page.__f7Reads || []).length).toBe(2);
+  expect((page.__f7Reads || [])[1][0]).toContain("g100");
+
+  // a STATIC reads no slab at all — it is an ordinary baked grid beside the index
+  await page.evaluate(() => {
+    const s = document.querySelector('select[data-chan="family7"]');
+    s.value = "static:sphere";
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().classGrid),
+                    { timeout: 20000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().ready),
+                    { timeout: 20000 }).toBe(true);
+  const stat = await page.evaluate(() => window.__earth.tensorLayerState());
+  expect(stat.classGrid).toBe(true);
+  expect(stat.grid.binStart).toBe(null);           // a static has no observation time
+  expect((page.__f7Reads || []).length).toBe(2);   // still two
+  // …and it answers with a class NAME, never a code
+  const cls = await page.evaluate(async () =>
+    await window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(20, 10)));
+  expect(cls.label || cls.noData).toBeTruthy();
+  if (cls.label) expect(["ocean", "land", "ice sheet or glacier", "inland water"]).toContain(cls.label);
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("family 7: stepping the date to another pentad reads exactly one more slab",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const index = await serveFamily7(page);
+  await page.evaluate(() => {
+    const el = document.getElementById("layer-date");
+    el.value = "2010-01-20";
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await enableFamily7(page);
+  expect((page.__f7Reads || []).length).toBe(1);
+
+  // a day INSIDE the same bin changes nothing — four days in five are free
+  await setAppDate(page, "2010-01-21");
+  await page.waitForTimeout(400);
+  expect((page.__f7Reads || []).length).toBe(1);
+  expect(await page.evaluate(() => window.__earth.tensorLayerState().bin)).toBe(2049);
+
+  // the NEXT bin is one more read, and the LRU now holds both
+  await setAppDate(page, "2010-01-25");
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.tensorLayerState().grid?.binStart),
+    { timeout: 30000 }).toBe("2010-01-24");
+  expect((page.__f7Reads || []).length).toBe(2);
+  const st = await page.evaluate(() => window.__earth.tensorLayerState());
+  expect(st.bin).toBe(2050);
+  expect(st.slabs.sort()).toEqual(["g025:2049", "g025:2050"]);
+  // stepping BACK is free: the bin is still in the LRU
+  await setAppDate(page, "2010-01-20");
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.tensorLayerState().grid?.binStart),
+    { timeout: 30000 }).toBe("2010-01-19");
+  expect((page.__f7Reads || []).length).toBe(2);
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("family 7 degrades to a hint when the index or the archive is missing",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  /* The whole reason huggingface.co could be admitted as a live endpoint
+   * (CLAUDE.md §3) is that every failure path ends in an omitted section, not
+   * in a broken globe. Both halves are exercised: no index at all, and an
+   * index whose archive answers 500. */
+  await serveFamily7(page, { noIndex: true });
+  const toasts = await recordToasts(page);
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="family7"]');
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(toasts, { timeout: 20000 }).toContain("could not be read");
+  const st = await page.evaluate(() => window.__earth.tensorLayerState());
+  expect(st.hasIndex).toBe(false);
+  expect(st.ready).toBe(false);
+  // the layer is still ON — a chip, a row, an opacity slider — it simply paints
+  // nothing, and the globe underneath is untouched
+  expect(await page.evaluate(() => !!window.__earth.state.layers.family7?.layer)).toBe(true);
+  await expect(page.locator("#active-layers")).toContainText("Global tensor");
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("family 7 degrades when the archive itself refuses the range read", async ({ page }) => {
+  test.setTimeout(120000);
+  await serveFamily7(page, { slabFails: true });
+  const toasts = await recordToasts(page);
+  await page.evaluate(() => {
+    const el = document.getElementById("layer-date");
+    el.value = "2010-01-20";
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="family7"]');
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().error),
+                    { timeout: 20000 }).toContain("500");
+  expect(await page.evaluate(() => window.__earth.tensorLayerState().ready)).toBe(false);
+  // the index DID arrive, so the channel picker is still usable and a static
+  // (which needs no archive at all) still works
+  expect(await page.evaluate(() => window.__earth.tensorLayerState().hasIndex)).toBe(true);
+  await page.evaluate(() => {
+    const s = document.querySelector('select[data-chan="family7"]');
+    s.value = "static:elev";
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().ready),
+                    { timeout: 20000 }).toBe(true);
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* ==================================== Cones · DATA mode · LIVE (family 7) ===
+ *
+ * The Cones tab's data mode had one source: five pre-exported North Atlantic
+ * anchors of family 4. LIVE mode is the second — the same cone read straight
+ * out of family 7, the global tensor, so any cell on the planet can be an
+ * anchor. These tests serve the same family-7 fixture the layer tests do, so
+ * the cone and the globe layer share one archive and one LRU, exactly as they
+ * do in production. */
+test("Cones live mode: any cell on Earth is an anchor, and the dots carry values",
+     async ({ page }) => {
+  test.setTimeout(180000);
+  await serveFamily7(page);
+  await setAppDate(page, "2010-01-20");
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  await page.evaluate(() => window.__earth.conesSetDataMode(true));
+  await page.evaluate(() => window.__earth.conesSetSource("live"));
+  await expect.poll(() => page.evaluate(() => window.__earth.coneState().data.live),
+                    { timeout: 20000 }).toBe(true);
+
+  // the rows that mean nothing here are gone: no exported-anchor picker, and
+  // no anomaly toggle (the anomaly is a climatology, not something seven
+  // pentads can produce)
+  await expect(page.locator("#cn-anchor-row")).toBeHidden();
+  await expect(page.locator("#cn-anom-row")).toBeHidden();
+
+  // ANTARCTICA. The whole point of the global tensor: a cell the North
+  // Atlantic window did not contain at all.
+  await page.evaluate(() => window.__earth.conesLiveAnchorAt(-70, -60));
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.liveValued), { timeout: 30000 })
+    .toBeGreaterThan(0);
+  const st = await page.evaluate(() => window.__earth.coneState());
+  expect(st.data.liveAnchor.lat).toBeCloseTo(-70, 3);
+  expect(st.data.liveAnchor.lon).toBeCloseTo(-60, 3);
+  expect(st.drawn).toBeGreaterThan(9);            // the 3×3 patch plus dots
+  // the anchor's two statics — a place, not a row and a column
+  expect(["ocean", "land", "ice sheet or glacier", "inland water"])
+    .toContain(st.data.liveSphere);
+  expect(Number.isFinite(st.data.liveElev)).toBe(true);
+  await expect(page.locator("#cn-readout")).toContainText(st.data.liveSphere);
+
+  // a dot reads back its raw value, its z, and ITS OWN date (anchor − lag)
+  const picked = await page.evaluate(() => {
+    const dots = window.__earth.coneDataDots;
+    const i = dots.findIndex((d) => d.obs && d.lag > 0);
+    window.__earth.conesPickDot(i < 0 ? dots.findIndex((d) => d.obs) : i);
+    return window.__earth.coneState().data.pick;
+  });
+  expect(picked.obs).toBe(true);
+  expect(Number.isFinite(picked.raw)).toBe(true);
+  expect(Number.isFinite(picked.z)).toBe(true);
+  const ro = page.locator("#cn-readout");
+  await expect(ro).toContainText(`lag ${picked.lag}`);
+  await expect(ro).toContainText(picked.date);
+  await expect(ro).toContainText("z =");
+  await expect(ro).toContainText("observed");
+
+  // the hint says what live mode cannot do, rather than leaving it to be found
+  const hint = page.locator("#cn-data-hint");
+  await expect(hint).toContainText("Live from family 7");
+  await expect(hint).toContainText("No anomaly and no depth column");
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("Cones live mode: the dots wrap across the dateline, and the outer stencil is geometry",
+     async ({ page }) => {
+  test.setTimeout(180000);
+  await serveFamily7(page);
+  await setAppDate(page, "2010-01-20");
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  await page.evaluate(() => window.__earth.conesSetDataMode(true));
+  await page.evaluate(() => window.__earth.conesSetSource("live"));
+  await expect.poll(() => page.evaluate(() => window.__earth.coneState().data.live),
+                    { timeout: 20000 }).toBe(true);
+
+  /* THE DATELINE. On the North Atlantic window a dot past the eastern edge is
+   * off the tensor and drawn hollow, because the model reads it as missing. On
+   * the globe there is no edge: a dot 900 km east of 179.75°E is in the
+   * western Pacific. Anchor against the seam and walk the lag out. */
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-lag");
+    s.value = "6"; s.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await page.evaluate(() => window.__earth.conesLiveAnchorAt(36, 179.75));
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.liveWrapped), { timeout: 30000 })
+    .toBeGreaterThan(0);
+  const st = await page.evaluate(() => window.__earth.coneState());
+  // every wrapped dot is still a real place on the globe, west of the seam
+  const cols = await page.evaluate(() =>
+    window.__earth.coneDataDots.map((d) => d.col));
+  const G = await page.evaluate(() => window.__earth.coneGlobalGrid());
+  expect(Math.min(...cols)).toBeGreaterThanOrEqual(0);
+  expect(Math.max(...cols)).toBeLessThan(G.nx);
+  expect(st.offWindow).toBe(0);      // nothing is "off the window": there isn't one
+
+  // the OUTER stencil is drawn, and drawn as SHAPE — 137 slabs would be ~2 GB
+  const readsBefore = (page.__f7Reads || []).length;
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-stencil");
+    s.value = "stage2"; s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.locator("#cn-data-hint")).toContainText("geometry only");
+  const s2 = await page.evaluate(() => window.__earth.coneState());
+  expect(s2.drawn).toBeGreaterThan(0);
+  expect(s2.data.liveValued).toBe(0);            // no values, by design
+  expect((page.__f7Reads || []).length).toBe(readsBefore);   // and no reads
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("Cones live mode: a coarse channel is read at its own coarse cell, and says so",
+     async ({ page }) => {
+  test.setTimeout(180000);
+  const index = await serveFamily7(page);
+  await setAppDate(page, "2010-01-20");
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  await page.evaluate(() => window.__earth.conesSetDataMode(true));
+  await page.evaluate(() => window.__earth.conesSetSource("live"));
+  await expect.poll(() => page.evaluate(() => window.__earth.coneState().data.live),
+                    { timeout: 20000 }).toBe(true);
+
+  // the channel list is the TENSOR'S, and rg100 (the depth column) is not in it
+  const opts = await page.locator("#cn-channel option").allTextContents();
+  expect(opts.length).toBe(index.groups.g025.chans.length +
+                           index.groups.g100.chans.length);
+  expect(opts.join(" | ")).not.toContain("dbar");
+
+  await page.evaluate(() => window.__earth.conesLiveAnchorAt(36, -30));
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-channel");
+    s.value = "g100:t2m"; s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.liveChan), { timeout: 20000 }).toBe("g100:t2m");
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.liveValued), { timeout: 30000 })
+    .toBeGreaterThan(0);
+
+  /* THE NINE CELLS OF THE PATCH SHOW ONE NUMBER, and that is the model's
+   * honest view of a coarse channel rather than a rounding artefact of the
+   * drawing: a 1° channel has one value per 1° cell, and the 3×3 patch of a
+   * 0.25° anchor sits inside it. */
+  const patch = await page.evaluate(() =>
+    window.__earth.coneDataDots.filter((d) => d.kind === "patch")
+      .map((d) => d.raw));
+  expect(patch).toHaveLength(9);
+  expect(new Set(patch.map((v) => (v === null ? "·" : v.toFixed(6)))).size).toBe(1);
+  await expect(page.locator("#cn-data-hint"))
+    .toContainText("all show the same number");
+
+  // the family the channel is read through comes from the exported geometry
+  const fam = await page.evaluate(() => window.__earth.coneState().data.liveFamily);
+  expect(fam.known).toBe(true);
+  expect(["A", "B", "C", "L"]).toContain(fam.fam);
+
+  // …and the LAND family exists now, which the North Atlantic tensor never had
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-channel");
+    s.value = "g100:soilw"; s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.liveFamily?.asked), { timeout: 20000 })
+    .toBe("L");
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("Cones live mode: the source switch leaves the exported anchors untouched",
+     async ({ page }) => {
+  test.setTimeout(180000);
+  const fx = await serveConeFixture(page);
+  await serveFamily7(page);
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  await page.evaluate(() => window.__earth.conesSetDataMode(true));
+
+  // the DEFAULT is still the exported anchors — today's behaviour, untouched
+  const first = await page.evaluate(() => window.__earth.coneState());
+  expect(first.data.source).toBe("anchors");
+  expect(first.data.ready).toBe(true);
+  expect(first.data.date).toBe(fx.meta.dates[0]);
+  await expect(page.locator("#cn-anchor-row")).toBeVisible();
+  await expect(page.locator("#cn-anom-row")).toBeVisible();
+
+  await page.evaluate(() => window.__earth.conesSetSource("live"));
+  await expect.poll(() => page.evaluate(() => window.__earth.coneState().data.live),
+                    { timeout: 20000 }).toBe(true);
+
+  // …and going back restores it, sample and all
+  await page.evaluate(() => window.__earth.conesSetSource("anchors"));
+  await expect.poll(() => page.evaluate(() => window.__earth.coneState().data.source))
+    .toBe("anchors");
+  const back = await page.evaluate(() => window.__earth.coneState());
+  expect(back.data.live).toBe(false);
+  expect(back.data.ready).toBe(true);
+  expect(back.data.anchorId).toBe(first.data.anchorId);
+  await expect(page.locator("#cn-anchor-row")).toBeVisible();
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});

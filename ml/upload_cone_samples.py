@@ -7,6 +7,12 @@ them to the dataset repo `chfrank/earth-tensors` under `cone_samples/` and
 writes `data/cone_samples.json`, the small in-repo index the globe app reads
 before it fetches anything.
 
+`--prefix` / `--index` move BOTH ends together, and the pair is checked: the
+family-7 export publishes to `cone_samples_f7/` with its own
+`data/cone_samples_f7.json`, and mixing one default with one override is
+refused rather than allowed to overwrite the family-4 index with an index
+describing a different tensor's channels.
+
 THE TWO CHECKS THIS DOES AND WILL NOT SKIP, both of them `ml/CLAUDE.md` §0.2
 ("a step that reports success is not evidence it did anything"):
 
@@ -25,6 +31,8 @@ argv (the permission classifier blocks tokens on command lines, correctly).
 Run:
     export HF_TOKEN=$(cat ~/.hf_token)
     python3 ml/upload_cone_samples.py --dir /home/claude/cone_out
+    python3 ml/upload_cone_samples.py --dir "$RUNNER_TEMP/cone_out" \
+        --prefix cone_samples_f7 --index data/cone_samples_f7.json
 """
 import argparse
 import datetime as _dt
@@ -43,6 +51,12 @@ if HERE not in sys.path:
 
 REPO_ID = "chfrank/earth-tensors"
 REPO_TYPE = "dataset"
+# The DEFAULTS are family 4's, so an invocation that names neither publishes
+# exactly where it always did. Family 7's export passes `--prefix
+# cone_samples_f7 --index data/cone_samples_f7.json` and therefore cannot
+# touch the family-4 index: two tensors are two datasets, and an index that
+# silently described the other one would be the worst possible failure here
+# (the page would draw family 7's cone with family 4's channel list).
 PREFIX = "cone_samples"
 INDEX = os.path.join(ROOT, "data", "cone_samples.json")
 TOKEN_FILE = "/home/claude/.hf_token"
@@ -66,9 +80,9 @@ def sha256(path, buf=1 << 22):
     return h.hexdigest()
 
 
-def resolve_url(name):
+def resolve_url(name, prefix=PREFIX):
     return (f"https://huggingface.co/datasets/{REPO_ID}/resolve/main/"
-            f"{PREFIX}/{name}")
+            f"{prefix}/{name}")
 
 
 CORS_PROBE_BYTES = 2048
@@ -122,10 +136,31 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--dir", required=True,
                     help="directory of exported <anchor>.json files")
-    ap.add_argument("--index", default=INDEX)
+    ap.add_argument("--prefix", default=PREFIX,
+                    help="folder in the Hub dataset repo AND the key the "
+                         "index's `base` is built from. Family 7 uses "
+                         "cone_samples_f7; leaving it at the default "
+                         "overwrites family 4's files")
+    ap.add_argument("--index", default=INDEX,
+                    help="where to write the in-repo index. MUST be moved "
+                         "with --prefix: an index at data/cone_samples.json "
+                         "pointing at cone_samples_f7/ would tell the page a "
+                         "channel list the files it names do not have")
     ap.add_argument("--no-upload", action="store_true",
                     help="re-verify and rewrite the index without uploading")
     a = ap.parse_args(argv)
+    prefix = a.prefix.strip("/")
+    if not prefix:
+        raise SystemExit("--prefix may not be empty: the files would land at "
+                         "the repo root")
+    if (prefix == PREFIX) != (os.path.abspath(a.index)
+                              == os.path.abspath(INDEX)):
+        raise SystemExit(
+            f"--prefix {prefix!r} and --index {a.index!r} disagree: the index "
+            f"describes the files under the prefix, so a non-default prefix "
+            f"needs its own index file (family 7: --prefix cone_samples_f7 "
+            f"--index data/cone_samples_f7.json) and the default prefix must "
+            f"keep {INDEX}.")
 
     from huggingface_hub import HfApi, hf_hub_download
     api = HfApi(token=token())
@@ -148,10 +183,10 @@ def main(argv=None):
         if not a.no_upload:
             print(f"  > {name} ({size / 1e6:.2f} MB) uploading …", flush=True)
             api.upload_file(path_or_fileobj=path,
-                            path_in_repo=f"{PREFIX}/{name}",
+                            path_in_repo=f"{prefix}/{name}",
                             repo_id=REPO_ID, repo_type=REPO_TYPE)
         # (1) the restore
-        back = hf_hub_download(REPO_ID, f"{PREFIX}/{name}",
+        back = hf_hub_download(REPO_ID, f"{prefix}/{name}",
                                repo_type=REPO_TYPE, token=token())
         got = sha256(back)
         if got != src:
@@ -159,7 +194,7 @@ def main(argv=None):
                 f"{name}: uploaded sha256 {src} but downloaded {got} — the "
                 f"mirror is not trustworthy")
         # (2) CORS, as a browser on our origin would see it
-        cors = measure_cors(resolve_url(name))
+        cors = measure_cors(resolve_url(name, prefix))
         head = hashlib.sha256(
             open(path, "rb").read(CORS_PROBE_BYTES)).hexdigest()
         if cors["head_sha256"] != head:
@@ -177,7 +212,7 @@ def main(argv=None):
             id=m["anchor"]["id"], name=m["anchor"]["name"],
             lat=m["anchor"]["lat"], lon=m["anchor"]["lon"],
             row=m["anchor"]["row"], col=m["anchor"]["col"],
-            file=f"{PREFIX}/{name}", url=resolve_url(name),
+            file=f"{prefix}/{name}", url=resolve_url(name, prefix),
             bytes=size, sha256=src,
             n_inadmissible=m["n_inadmissible"],
             cors=cors["access_control_allow_origin"],
@@ -193,7 +228,12 @@ def main(argv=None):
                              if k in ("raw", "physical", "anomaly", "anomaly_note")},
                 exporter=m["exporter"], exporter_commit=m["exporter_commit"],
                 produced_by=m["produced_by"], pentad_note=m["pentad_note"],
-                L_in=m["L_in"], future_lags=m["future_lags"])
+                L_in=m["L_in"], future_lags=m["future_lags"],
+                # Family 7 only; `None` on a family-4 index, so the page can
+                # branch on presence rather than on the prefix string.
+                groups=m.get("groups"), grid=m.get("grid"),
+                recipe=m.get("recipe"),
+                channel_group=m.get("channel_group"))
         else:
             if m["dates"] != common["dates"]:
                 raise SystemExit(f"{name}: a different date list from the "
@@ -204,8 +244,10 @@ def main(argv=None):
         generated_utc=_dt.datetime.now(_dt.timezone.utc)
                         .strftime("%Y-%m-%dT%H:%M:%SZ"),
         repo=f"{REPO_TYPE}s/{REPO_ID}",
-        base=f"https://huggingface.co/datasets/{REPO_ID}/resolve/main/{PREFIX}/",
-        fixture="data/cone_samples/fixture.json",
+        base=f"https://huggingface.co/datasets/{REPO_ID}/resolve/main/{prefix}/",
+        prefix=prefix,
+        fixture=("data/cone_samples/fixture.json" if prefix == PREFIX
+                 else None),
         cors_measured=dict(
             origin="https://blauewelt.github.io",
             status=cors["status"],

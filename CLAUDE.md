@@ -418,6 +418,7 @@ A new layer is not done until it has **all** of:
    | Grid climatologies | ✗ | ✗ | already multi-decade averages, not timed |
    | Drivers of forest loss (grid) | ✗ | ✗ | categorical AND untimed — one 2001–2025 attribution, and "logging" plus "wildfire" is not a quantity |
    | AMOC eval mask (grid) | ✗ | ✗ | categorical AND untimed — a cell carries the ROLE it plays in an experiment, and an experiment's geometry has no date to average over |
+   | Global tensor, family 7 (grid) | ✗ | ✗ | the fields are continuous and would average and difference soundly; the reason is the BYTE COUNT — each frame is one 14.5 MB range read of the archive, so a 12-day window would be three of them per paint and a computed difference doubles whatever the window costs. "What does the model read at this pentad" has no window in it. Its two statics (`sphere`, `elev`) are additionally untimed |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set
    `globe: true` and append "Live globe layer in this app." to its notes.
    **Exception, for layers that are not datasets:** a layer describing our OWN
@@ -485,6 +486,16 @@ file is stored pixel-major, so one point-year is 730 contiguous bytes out of a
 archive; and it **degrades to the monthly value** — every failure path returns
 null. The monthly OISST correction remains the fallback, so a Hub outage costs
 precision, not the feature.
+
+The Hub now serves THREE reads, all on the same terms: the daily SST point
+(a 730-byte range read), the E-069 cone samples (one JSON per anchor, tapped),
+and — added 2026-09-04 for E-070 — the **family-7 global tensor**, where the
+"Global tensor" globe layer and the Cones tab's live mode each paint one pentad
+by a single `Range:` read of a `.npy` (14.5 MB at 0.25°, 1.8 MB at 1°), bounded
+by the frame rather than by the archive, addressed from
+`data/family7_index.json`'s measured header offsets, coalesced through
+`scrubApply` so a held date key costs one read per settled date, and degrading
+to a hint toast and an empty layer on any failure (`docs/FAMILY7_GLOBE.md`).
 
 Any further live endpoint must clear the same bar (no key, no quota pain,
 click-triggered, degrades to an omitted card section on failure) and be added
@@ -1937,12 +1948,88 @@ prints "°C", and prints the stored σ beside it.
 `docs/CONE_DATA_DEMO.md` explains the whole thing and says how to regenerate
 the samples.
 
+**The GLOBAL tensor on the globe, read by the byte (2026-09-04, E-070).** The
+third artefact on the map that is our own work rather than an observation
+(after the AMOC eval mask and the Cones tab): a layer, **"Global tensor — what
+the model reads (family 7), 0.25° / 1°"**, that paints one channel of one
+five-day bin of *family 7* — the first input tensor covering the whole globe
+rather than the North Atlantic window, every 0.25° point from pole to pole,
+1982 to 2024, built by `ml/build_family7.py` under recipe `f7l0`
+(`ml/plans/E070_family7_build.md`). Land cells are no longer dark: the shared
+channels (2 m air temperature, 10 m wind, surface pressure, precipitation, snow
+water equivalent, soil moisture and temperature, the two turbulent heat fluxes,
+and `skt`, the reanalysis skin temperature) exist over both spheres. The two
+temperatures are two different measurements and the layer says so (E-071 §6.1,
+corrected 2026-09-04): `sst` is OISST — *observed*, 0.25°, NaN over land, which
+is the honest answer rather than a gap — while `skt` is NCEP at 1° over *every*
+surface, so a land cell reads its temperature from `skt`, `t2m` and `tsoil`,
+never from `sst`. Two statics — `sphere`
+(ocean · land · ice sheet · inland water) and `elev` — describe the grid
+itself.
+
+**One frame is one HTTP range read, and that is the whole design.** The three
+`.npy` files are bin-major in C order, so one pentad of one group is contiguous:
+`offset = header_len + (bin − bin_first)·H·W·C·2`, length the same product —
+14.5 MB at 0.25°, 1.8 MB at 1° — and the response must be 206 (a 200 means the
+host ignored the Range and is sending 46 GB, which is refused rather than
+consumed). Not one number of that arithmetic is written in `src/app.js`:
+`data/family7_index.json`, produced by `ml/publish_family7_index.py`, carries
+the parsed `.npy` header length, shape, dtype and slab size, the grid geometry,
+the channel names with their plain-English labels and units, the (mean, sd) the
+builder z-scored with, and the measured CORS headers. The reader keeps an LRU of
+raw SLABS rather than decoded planes — eight per group, 128 MB total — so a
+channel switch inside a bin is a decode and no request, and the ±1 pentad
+steppers are free; float16 is decoded by hand because `Float16Array` is not
+available, and NaN is preserved as "never observed" rather than becoming a
+maximum. The date scrub goes through `scrubApply`, so a held key is one read per
+settled date (`docs/TILE_BUDGET.md`).
+
+**Three decisions worth keeping.** The values are STORED Z-SCORED, so every
+read-out multiplies back through `norm` and prints both — the value in the
+channel's unit and `z = …` as the tensor stores it; a probe that printed 0.31
+beside "°C" would be wrong by eighteen degrees. The pentad's observation stamp
+is a `day` (the bin's opening date) rather than a new `pentad` granularity: the
+bin's start IS a real calendar day, while a `pentad` kind would have to age in
+a unit no reader has — the five-day span is stated in the Interval fact and in
+the toast instead. And the two statics are ordinary baked grids beside the index
+(`data/family7_sphere.json` as a `classGrid` with its palette in the file,
+`data/family7_elev.json` as int16 metres), because a 14.5 MB range read for a
+constant would be absurd.
+
+**The Cones tab gained a source switch.** "exported anchors (family 4, North
+Atlantic)" is the previous behaviour, untouched; "live from the global tensor
+(family 7)" reads the same slabs through the same LRU, so moving the layer's
+date and moving the cone's anchor pay for each other's fetches. In live mode
+ANY cell is an anchor — Antarctica included — and the dots WRAP across the
+dateline: the JS sunflower port gained `coneWrapCol`, and `tests/data.spec.js`
+replays it against `data/cone_geometry.json`'s new `global` block (its
+`refs`, `outer_refs` and `patch_cells`, five anchors including two against the
+seam), which is also where family **L** — land: snow, soil moisture, soil
+temperature, reach 400 km flat because it does not advect — enters the app; the
+family select and `coneReachKm` read the family table out of the file rather
+than a list of three. What live mode refuses, and says so in the hint: no
+anomaly (that is a harmonic climatology over the whole tensor, not something
+seven pentads can produce), no depth column (`rg100` exists only in the pentad
+holding a month's 15th), the outer stencil as geometry only (137 lags would be
+~2 GB), and a coarse channel read at its own 1° cell so nine patch cells show
+one number — which is the model's honest view, not a rounding artefact.
+
+**No catalog record**, deliberately — §2.6 catalogues open DATASETS and this is
+a picture of our own tensor, the same exception `amoc-eval` takes; the `doc`
+link points at the build spec. Until the real files land the layer degrades to
+a hint toast, and `data/family7/fixture/` holds the same schema over the T=5
+smoke tensor, decimated to 5°/10° so it can live in git — the tests route the
+Hub URL to it and answer with the SLICED bytes and a real 206, which is what
+makes the offset arithmetic tested rather than assumed.
+`docs/FAMILY7_GLOBE.md` explains the whole thing and says how to regenerate the
+index.
+
 **Data pipeline** (`scripts/refresh_data.py`): one function per snapshot —
 climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet
 join), gistemp, gpcp, eobs, oisst, meteoswiss. Grid snapshots share
 `_bin_to_grid`/`_write_grid` (nearest scatter-binning onto regular grids).
 
-**Testing** (137 Playwright specs): app behaviour (`tests/app.spec.js`) + data
+**Testing** (147 Playwright specs): app behaviour (`tests/app.spec.js`) + data
 integrity (`tests/data.spec.js`), the ML status page (`tests/status.spec.js` —
 every GitHub endpoint stubbed by `page.route`, so it needs no network and no
 MIRROR), sandbox MIRROR mode, in-repo proxies, CI on real network.

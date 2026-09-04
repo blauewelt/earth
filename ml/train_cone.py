@@ -68,7 +68,11 @@ def parse(argv=None):
     p.add_argument("--tensor", default="",
                    help="npz with X, months, lats, lons, chan (family4 r3); "
                         "OBS is derived as isfinite(X) exactly as train.py's "
-                        "LazyPixels does. Required unless --smoke.")
+                        "LazyPixels does. A family-7 tensor (a `groups` key "
+                        "and one `_X_<group>.npy` per group) is read as a "
+                        "cone_sampler.GroupSet instead — same channel schema, "
+                        "each group at its native resolution. Required unless "
+                        "--smoke.")
     p.add_argument("--holdout-scope", default="window",
                    help="window is the only scope implemented — see the "
                         "module docstring; any other value is refused.")
@@ -309,11 +313,165 @@ class FiniteView:
         return np.isfinite(self._X[idx])
 
 
+def group_names(d):
+    """The multi-resolution groups of a family-7 tensor, or [] for one array.
+
+    `tensor_io._Tensor` answers `.groups` for BOTH layouts — `["X"]` for the
+    single-array one — so the single name "X" is what says "this is not a
+    multi-group tensor", and a bare `np.load` result answers nothing at all.
+    """
+    return [str(g) for g in getattr(d, "groups", []) if str(g) != "X"]
+
+
+def anchor_mask(gs, chunk=None, verbose=True):
+    """[H, W] over the MASTER grid: was any channel ever observed here?
+
+    This is what replaces `isfinite(X[..., 0]).any(0)` for family 7, and the
+    replacement is not cosmetic. Channel 0 of the dense group is `cur_speed`,
+    an OCEAN channel, so the old expression means "is there ocean here" — the
+    right question for a tensor whose land cells carry nothing, and the wrong
+    one for a tensor built precisely so that land is observed (E-070's own
+    line: *"The `slab[~ocean] = NaN` of family 4 is gone: land is observed
+    now"*). Under the old rule the Sahara, Antarctica and every ice sheet
+    would be excluded from the anchor pool of the first global tensor.
+
+    So: a cell is an anchor if ANY group observes ANY channel there in ANY
+    bin — the dense group at the cell itself, a coarse group at the cell the
+    lookup sends it to. Walked in time chunks, because the dense group is
+    46 GB and `isfinite` of it is 23.
+    """
+    m = gs.master
+    out = np.zeros((m.H, m.W), bool)
+    for g in gs.groups:
+        step = int(chunk or max(1, (1 << 28) // max(1, g.H * g.W * g.C)))
+        hit = np.zeros((g.H, g.W), bool)
+        for i0 in range(0, g.T, step):
+            blk = np.asarray(g.X[i0:i0 + step])
+            hit |= np.isfinite(blk).any(axis=(0, 3))
+            del blk
+        if g.factor == 1:
+            out |= hit
+        else:
+            y1 = np.minimum(
+                np.floor(np.arange(m.H) / g.factor + 0.5).astype(np.int64),
+                g.H - 1)
+            x1 = (np.floor(np.arange(m.W) / g.factor + 0.5).astype(np.int64)
+                  % g.W)
+            out |= hit[y1[:, None], x1[None, :]]
+        if verbose:
+            print(f"  anchor mask: {g.name} contributes "
+                  f"{int(hit.sum()):,} of its {g.H * g.W:,} cells "
+                  f"(mask now {int(out.sum()):,}/{m.H * m.W:,})", flush=True)
+    return out
+
+
+def load_data_family7(a, d, gnames):
+    """`load_data` for the three-group global tensor (E-070 §1-§3).
+
+    Same contract as the single-array path — the returned dict has the same
+    keys and `train_one` does not know which one it got — with three
+    differences that are properties of the tensor and not choices:
+
+      * `X` is a `cone_sampler.GroupSet` rather than an array, so the sampler
+        can read a coarse channel at the coarse cell instead of a 425 GB
+        upsampled copy of it (E-070 B2);
+      * the anomaly transform runs PER GROUP, each with its own months —
+        `rg100`'s rows are one per month, so its `moy`/`t_hold` are the
+        master's indexed by the rows it actually holds, and handing it the
+        master's 3,142-long arrays would charge every profile to the wrong
+        calendar month;
+      * the anchor mask is "any channel ever observed here" (`anchor_mask`),
+        not "channel 0 is finite here".
+    """
+    from tensor_io import anomaly_chunk, anomaly_peak_bytes, writable_copy
+    from cone_sampler import GroupSet, group_time
+    from trainprobe import anomaly_transform
+
+    months = [str(m) for m in d["months"]]
+    lats, lons = np.asarray(d["lats"]), np.asarray(d["lons"])
+    probe = GroupSet.from_tensor(d)
+    T, H, W = probe.master.T, probe.master.H, probe.master.W
+    chan = list(probe.chan)
+    C = len(chan)
+    print(f"family 7: groups {probe.names} · master [T={T} H={H} W={W}] · "
+          f"{C} channels "
+          f"({' + '.join(f'{g.name} {g.C}' for g in probe.groups)})",
+          flush=True)
+
+    hold_years = set(a.holdout_years.split(","))
+    t_hold = np.array([m[:4] in hold_years for m in months])
+    if not t_hold.any():
+        raise SystemExit(
+            f"--holdout-years {a.holdout_years!r} matches no bin in this "
+            f"tensor ({months[0]} .. {months[-1]}) — there would be no "
+            f"held-out loss to read, and a run that cannot answer its own "
+            f"question is not a run (ml/CLAUDE.md §4.11).")
+    moy = np.array([int(m[5:7]) - 1 for m in months])
+
+    # BEFORE the transform, as the single-array path computes its `ocean` at
+    # line 341: the anchor pool is a statement about what the DATA observes,
+    # and the transform turns a cell whose month had no training sample into
+    # NaN — a property of the holdout, not of the world.
+    ocean = anchor_mask(probe)
+
+    arrays, dynamic = {}, {}
+    for g in probe.groups:
+        A = g.X
+        if isinstance(A, np.memmap) and not A.flags.writeable:
+            # train.py's rule, unchanged: the anomaly transform writes in
+            # place, and an r+ map on the canonical tensor would leave
+            # anomaly-space data where state-space data is documented.
+            scratch = f"{a.tensor[:-4]}_cone_scratch_{g.name}.npy"
+            print(f"  {g.name} is a read-only map — writable scratch copy at "
+                  f"{scratch}", flush=True)
+            A = writable_copy(A, scratch)
+        gmoy, ghold = group_time(g, moy, t_hold)
+        ch = anomaly_chunk(A.shape, np.dtype(A.dtype).itemsize)
+        print(f"  {g.name}: anomaly_transform chunk {ch} "
+              f"(peak ~{anomaly_peak_bytes(A.shape, ch, np.dtype(A.dtype).itemsize) / 1e9:.1f} GB, "
+              f"{g.T} rows)", flush=True)
+        A, dyn = anomaly_transform(A, gmoy, ghold, np.zeros(g.W, bool),
+                                   chunk=ch)
+        arrays[g.name] = A
+        dynamic[g.name] = [int(c) for c in dyn]
+        print(f"  {g.name}: anomaly space, {len(dyn)}/{g.C} dynamic "
+              f"({[g.chan[c] for c in dyn]})", flush=True)
+
+    gs = GroupSet.from_tensor(d, arrays=arrays)
+    print(f"held-out bins {int(t_hold.sum())}/{T} · anchor cells "
+          f"{int(ocean.sum()):,}/{H * W:,}", flush=True)
+
+    # The global channel index of each group's dynamic channels, so the
+    # metrics record means the same thing it does on the single-array path.
+    base, flat = 0, []
+    for g in gs.groups:
+        flat += [base + c for c in dynamic[g.name]]
+        base += g.C
+    norm = {"space": "anomaly",
+            "groups": gs.names,
+            "dynamic": flat,
+            "dynamic_by_group": dynamic,
+            "holdout_years": a.holdout_years,
+            "tensor_norm": {g: np.asarray(d[f"norm_{g}"]).tolist()
+                            for g in gs.names if f"norm_{g}" in d}}
+    return dict(X=gs, OBS=None, months=months, lats=lats, lons=lons,
+                chan=chan, t_hold=t_hold, ocean=ocean, norm=norm,
+                T=T, H=H, W=W, C=C)
+
+
 def load_data(a):
     """Load the tensor, take the anomaly transform, and return everything the
-    sampler and the pools need. Mirrors ml/train.py's preamble."""
+    sampler and the pools need. Mirrors ml/train.py's preamble.
+
+    A family-7 tensor (three co-registered groups at two resolutions) goes to
+    `load_data_family7`; everything with one dense array takes the path below,
+    byte for byte as it always did.
+    """
     from tensor_io import load_tensor, writable_copy
     d = load_tensor(a.tensor, allow_pickle=False)
+    gnames = group_names(d)
+    if gnames:
+        return load_data_family7(a, d, gnames)
     X = d["X"]
     months = [str(m) for m in d["months"]]
     lats, lons = np.asarray(d["lats"]), np.asarray(d["lons"])

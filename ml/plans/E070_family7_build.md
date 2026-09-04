@@ -31,9 +31,10 @@ dispatched on Chris's fleet (see the E-070 log entry for the run number).**
 | # | decision | why | reverses E-070's |
 |---|---|---|---|
 | B1 | **Grid 721 × 1440**, lat −90 … 90, lon −180 … 179.75, point-aligned 0.25°, south-first | E-071 §1: the −80° floor was GLORYS12's extent, not the world's; Antarctica is filled by the shared channels | D2 (681 rows) |
-| B2 | **Three channel groups at their native resolution**, not one dense tensor: `g025` (0.25°, 7 ch), `g100` (1°, 14 ch), `rg100` (1°, 32 ch, live bins only) | a 1.9° reanalysis upsampled to 0.25° is 60 copies of every number; E-070 D3 already put the 1° Argo product in a 1° sidecar for exactly this reason, and E-071 §6.4 needs ~65 channels, which at 0.25° dense would be 425 GB. The cone reads dots at 0.25° positions and looks each coarse channel up at the nearest coarse cell ("served as the same cell", D3) | D3 (one sidecar) |
+| B2 | **Three channel groups at their native resolution**, not one dense tensor: `g025` (0.25°, 7 ch), `g100` (1°, 15 ch), `rg100` (1°, 32 ch, live bins only) | a 1.9° reanalysis upsampled to 0.25° is 60 copies of every number; E-070 D3 already put the 1° Argo product in a 1° sidecar for exactly this reason, and E-071 §6.4 needs ~65 channels, which at 0.25° dense would be 425 GB. The cone reads dots at 0.25° positions and looks each coarse channel up at the nearest coarse cell ("served as the same cell", D3) | D3 (one sidecar) |
 | B3 | **Shared-channel source for Phase L0 = NCEP/NCAR Reanalysis 1** (T62 gaussian, daily, 1948→, key-free from NOAA PSL) plus **OISST v2.1 sea-ice concentration** (0.25°, daily, 1981→, same files family 4's SST comes from) | E-071 §6.5 named ERA5, which needs the free CDS account only Chris can create; NCEP R1 is the same physics at 1.9°, is what the tensor's wind stress already comes from, and needs nothing. ERA5 swaps in as Phase L1 by replacing the `g100` fetch — the layout does not change | — |
-| B4 | **One skin-temperature channel** `skin_t`: OISST sea-surface temperature where OISST observes, NCEP skin temperature everywhere else (land, ice sheets) | E-071 §6.1, row 1 — one quantity, two surfaces; over ocean the values are bit-identical to family 4's `sst` channel, which is what the G1 gate compares | — |
+| B4 | **Two temperature channels, split by INSTRUMENT**: `sst` (g025) is OISST sea-surface temperature and is missing wherever OISST does not observe; `skt` (g100) is NCEP skin temperature over every surface — land, sea, ice alike | a channel is shared only when the measurand AND the instrument match on both sides (E-071 §6.1, "Correction, 4 Sep"). `sst` stays bit-identical to family 4's `sst`, which is what the G1 gate compares, and `skt` is the shared field ERA5 replaces at Phase L1 with no layout change | — |
+| B4c | **The correction that produced B4's present form**, recorded because the first build ran under the old rule | The original B4 merged the two into one `skin_t` channel — one measurand, but an infrared/microwave analysis over the sea and a reanalysis everywhere else, spliced at a coastline the model would have had to learn was an instrument boundary rather than a physical one. `ml/build_family7.py` now carries a `repair_sst_channel` pass that runs automatically at the head of the `ncep` stage and clears that fill from any work dir built under the old rule, plus a per-stage `.spec` digest that makes a stale stage discard its own markers, carry and float32 fill file and restart | B4 |
 | B4b | OISST's `icec` file declares `units "percent"` but its `valid_range` is 0 … 1 — the reader trusts the range, not the string (measured on the 2020 file's DAS, 2026-09-04) | a percent-divide would have silently scaled the whole channel by 1/100 | — |
 | B5 | **Sea ice and snow stay two channels** (`sea_ice` from OISST, `log_swe` from NCEP), not the merged "frozen fraction" of E-071 §6.1 | NCEP reports snow as water equivalent, not a cover fraction; merging a fraction with a mass would need an invented constant. The merged channel arrives with MOD10A1 in Phase L1 | — |
 | B6 | **Statics in the tensor**: `sphere` (0 ocean · 1 land · 2 ice sheet · 3 inland water) and `elev` (surface elevation, m; negative = ocean depth) | E-071 §6.1 needs the sphere code as a codec coordinate; elevation is the single most informative static over both spheres (E-070 §6, DATA_LADDER §2) | — |
@@ -78,10 +79,10 @@ The NA sub-block of family 4 (lat 0 … 70, lon −100 … 20) is
 | 2 | `ssh` | GLORYS12 `zos` | pentad mean |
 | 3 | `cur_u` | GLORYS12 `uo` | pentad mean — written in the same pass as ch 0 so `hypot(cur_u, cur_v) == cur_speed` |
 | 4 | `cur_v` | GLORYS12 `vo` | pentad mean |
-| 5 | `skin_t` | OISST v2.1 `sst.day.mean` **then** NCEP R1 `skt.sfc.gauss` | OISST bilinear to the point grid (`fetch_sst_na.weights_for` / `f3.interp2_nan`, `wrap_period` 360), pentad mean; where that is NaN, NCEP skin temperature (K → °C) bilinear to 0.25°, pentad mean. **OISST precedence is absolute**: a cell OISST ever observes is an OISST cell in every bin |
+| 5 | `sst` | OISST v2.1 `sst.day.mean` | OISST bilinear to the point grid (`fetch_sst_na.weights_for` / `f3.interp2_nan`, `wrap_period` 360), pentad mean, ≥ 3 days. **An OBSERVED channel: NaN wherever OISST does not observe** — no reanalysis fill (B4c). Bit-identical to family 4's `sst` |
 | 6 | `sea_ice` | OISST v2.1 `icec.day.mean` | bilinear as above, pentad mean, 0 … 1; NaN wherever OISST has no sea (land, ice shelves) |
 
-### `g100` — 1°, `[3142, 181, 360, 14]` float16, 5.7 GB
+### `g100` — 1°, `[3142, 181, 360, 15]` float16, 6.1 GB
 
 All from NCEP/NCAR R1 daily gaussian files
 (`https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis/surface_gauss/<var>.<year>.nc`,
@@ -106,6 +107,7 @@ pentad mean with ≥ 3 days. Variables with a `level` dimension are squeezed.
 | 11 | `tsoil` | `tmp.0-10cm.gauss` | K → °C, land-masked as `soilw` |
 | 12 | `lhtfl` | `lhtfl.sfc.gauss` | W m⁻², NCEP sign (positive upward), unchanged |
 | 13 | `shtfl` | `shtfl.sfc.gauss` | W m⁻², unchanged |
+| 14 | `skt` | `skt.sfc.gauss` | K → °C. **The shared surface temperature**: every surface, land, sea and ice, no land mask and no OISST splice (B4/B4c). This is the channel ERA5 replaces at Phase L1 |
 
 The four `tau_*` channels move here from the dense tensor: at 0.25° they
 were 60 copies of every T62 number.
@@ -152,7 +154,7 @@ the value at bin `b` looks up `b` in it and gets a miss token otherwise.
 ```
 family7_global025_pentad_l0.npz            meta, statics, norms, truth (small)
 family7_global025_pentad_l0_X_g025.npy     memmap [3142,721,1440,7]  float16
-family7_global025_pentad_l0_X_g100.npy     memmap [3142,181,360,14]  float16
+family7_global025_pentad_l0_X_g100.npy     memmap [3142,181,360,15]  float16
 family7_global025_pentad_l0_X_rg100.npy    memmap [n_live,181,360,32] float16
 ```
 
@@ -171,7 +173,8 @@ python3 ml/build_family7.py --work <dir> --stage all
        [--smoke]              # tiny synthetic sources, whole path, seconds
 ```
 
-Stage order is fixed (`ncep` needs `sst` for the `skin_t` fill; `norm`
+Stage order is fixed (`ncep` needs `sst` for the `repair_sst_channel`
+pass and the `oisst_seen` mask; `norm`
 needs everything; `publish` last). Every stage writes its rows to the
 memmap, **flushes, then** writes `<work>/<stage>.done` (§5.21: a marker may
 only under-claim); `sst`, `ncep` and `rg` also keep per-year / per-cube
@@ -192,9 +195,9 @@ plus the verify downloads streamed through a temp file. The coarse groups
 are filled in **float32** and cast to float16 only at the z-score pass (raw
 surface pressure written straight into float16 would lose 0.5 hPa ≈ 0.08 sd
 before normalisation; `g025` stays float16 because its float32 twin would be
-92 GB — worst case there is `skin_t` at 0.031 °C, family 4's own `sst`
-precedent), so the on-disk **peak is 65 GB** (45.7 g025 + 11.5 g100 f32 +
-5.7 g100 f16 + 2.1 rg100 f32) and **≈ 75 GB free is what the preflight
+92 GB — worst case there is `sst` at 0.031 °C, family 4's own `sst`
+precedent), so the on-disk **peak is 66 GB** (45.7 g025 + 12.3 g100 f32 +
+6.1 g100 f16 + 2.1 rg100 f32; 66.2 GB, printed by `--dry-run`) and **≈ 75 GB free is what the preflight
 demands**, checked before anything is written (over 90 % disk is
 unusable, not a warning: `ml/CLAUDE.md` §7). Expected wall time: GLORYS 384
 chunks ≈ 40 min · OISST 43 years ≈ 2 h (download-bound) · NCEP 14 vars ×
@@ -209,10 +212,12 @@ verify ≈ 30 min — **about 5 h**, $1.5 at the 4090 box rate.
 3. The GLORYS chunk lands at row 40 (its `latitude[0] == -80.0` asserted at
    read time, not assumed).
 4. On a synthetic OISST year the pentad means and the `min_days` rule
-   reproduce `aggregate_cadence`'s arithmetic; `skin_t` takes the OISST
-   value wherever OISST is finite and the NCEP value elsewhere.
+   reproduce `aggregate_cadence`'s arithmetic; `sst` is the OISST value
+   wherever OISST is finite and MISSING everywhere else, and the shared
+   surface temperature `skt` is finite over every surface in `g100`.
 5. NCEP rules: `uflx`/`vflx` flipped, nothing else flipped; K → °C, Pa →
-   hPa, the two `log1p`s; `soilw`/`tsoil` NaN over the gaussian sea mask.
+   hPa, the two `log1p`s; `soilw`/`tsoil` NaN over the gaussian sea mask;
+   `skt` K → °C with no mask and no flip.
 6. RG: NaN outside −64.5 … 79.5, the live bin is the one holding the 15th.
 7. `sphere` priority on toy polygons; `elev` block mean on a toy raster.
 8. `norm` round-trip: un-z-scoring a slab reproduces the source to float16.

@@ -1564,3 +1564,314 @@ test.describe("cone_samples.json + the fixture (E-069 data mode)", () => {
     expect(Math.max(...anom0.map(Math.abs))).toBeLessThan(30);
   });
 });
+
+/* ============================ family7_index.json + the in-repo fixture ======
+ *
+ * FAMILY 7 is the first input tensor covering the whole globe rather than the
+ * North Atlantic window: 721 × 1440 at 0.25°, one value per channel per
+ * five-day bin from 1982 to 2024. The globe's "Global tensor" layer paints one
+ * channel of one bin by a single HTTP range read of a `.npy` on the Hugging
+ * Face Hub, and everything it needs to compute that read — header length,
+ * shape, dtype, slab size, grid geometry, channel vocabulary, the (mean, sd)
+ * the builder z-scored with — lives in an index written by
+ * `ml/publish_family7_index.py`.
+ *
+ * The real index is absent until the build job lands, so what is pinned here
+ * is `data/family7/fixture/` — the same schema over the T=5 tensor
+ * `ml/build_family7.py --smoke` writes, decimated to a 5°/10° grid so it can
+ * live in git. Its `.npy` HEADERS are parsed here from the real bytes, which
+ * is the check that matters: if the index's `header_len` and `slab_bytes` do
+ * not agree with the file, the browser reads the wrong bytes and paints a
+ * plausible-looking wrong map. */
+test.describe("family7 index + fixture (the global tensor's range-read contract)", () => {
+  const F7 = path.join(DATA, "family7", "fixture");
+  const idx = JSON.parse(fs.readFileSync(path.join(F7, "family7_index.json"), "utf8"));
+
+  // The .npy header, parsed the same way ml/publish_family7_index.py parses it.
+  function npyHeader(file) {
+    const buf = fs.readFileSync(file);
+    expect(buf.slice(0, 6).toString("latin1")).toBe("\x93NUMPY");
+    const major = buf[6];
+    const n = major === 1 ? buf.readUInt16LE(8) : buf.readUInt32LE(8);
+    const off = major === 1 ? 10 : 12;
+    const txt = buf.slice(off, off + n).toString("latin1");
+    const shape = /'shape':\s*\(([^)]*)\)/.exec(txt)[1]
+      .split(",").map((x) => x.trim()).filter(Boolean).map(Number);
+    const descr = /'descr':\s*'([^']+)'/.exec(txt)[1];
+    const fortran = /'fortran_order':\s*(True|False)/.exec(txt)[1] === "True";
+    return { headerLen: off + n, shape, descr, fortran, bytes: buf.length };
+  }
+
+  test("the index says what a browser needs to address one pentad", () => {
+    expect(idx._source).toContain("publish_family7_index.py");
+    expect(idx.recipe).toBe("f7l0");
+    expect(idx.epoch).toBe("1982-01-01");
+    expect(idx.pentad_days).toBe(5);
+    expect(idx.bin_last).toBeGreaterThanOrEqual(idx.bin_first);
+    expect(idx.n_bins).toBe(idx.bin_last - idx.bin_first + 1);
+    expect(idx.base).toMatch(
+      /^https:\/\/huggingface\.co\/datasets\/chfrank\/earth-tensors\/resolve\/main\/tensors\//);
+    expect(idx.plan).toContain("E070_family7_build.md");
+    expect(Object.keys(idx.groups).sort()).toEqual(["g025", "g100", "rg100"]);
+    expect(Object.keys(idx.statics).sort()).toEqual(["elev", "sphere"]);
+  });
+
+  test("every group's header, shape and slab size are the file's own", () => {
+    for (const [name, g] of Object.entries(idx.groups)) {
+      const h = npyHeader(path.join(F7, g.file));
+      expect(h.headerLen, `${name} header_len`).toBe(g.header_len);
+      expect(h.shape, `${name} shape`).toEqual(g.shape);
+      expect(h.descr, `${name} dtype`).toBe(g.dtype);
+      // C order is not a detail: the whole range read assumes bin-major.
+      expect(h.fortran, `${name} fortran_order`).toBe(false);
+      expect(g.fortran_order).toBe(false);
+      expect(h.bytes, `${name} bytes`).toBe(g.bytes);
+      expect(g.dtype).toBe("<f2");           // float16, 2 bytes a value
+      expect(g.itemsize).toBe(2);
+      // offset = header_len + row·slab_bytes, length = slab_bytes — and the
+      // arithmetic has to close on the file size exactly
+      const cells = g.shape.slice(1).reduce((a, b) => a * b, 1);
+      expect(g.slab_bytes).toBe(cells * g.itemsize);
+      expect(g.header_len + g.shape[0] * g.slab_bytes).toBe(g.bytes);
+      // the channel vocabulary matches the last axis, with a label and a unit
+      expect(g.chans).toHaveLength(g.shape[3]);
+      expect(g.norm).toHaveLength(g.shape[3]);
+      for (const c of g.chans) {
+        expect(g.labels[c], `${name}/${c} label`).toBeTruthy();
+        expect(g.units[c], `${name}/${c} unit`).not.toBe(undefined);
+        expect(["seq", "div"]).toContain(g.sign[c]);
+        expect(g.ramp[c]).toBeTruthy();
+      }
+      // every sd is positive, or un-z-scoring divides by zero
+      expect(g.norm.every(([, sd]) => sd > 0)).toBe(true);
+    }
+  });
+
+  test("the grids are point-aligned, south-first and closed at the dateline", () => {
+    for (const [name, g] of Object.entries(idx.groups)) {
+      const gr = g.grid;
+      expect(gr.ny, `${name} ny`).toBe(g.shape[1]);
+      expect(gr.nx, `${name} nx`).toBe(g.shape[2]);
+      expect(gr.lat0, `${name} lat0`).toBe(-90);       // SOUTH-first, like every family
+      expect(gr.lon0, `${name} lon0`).toBe(-180);
+      expect(gr.south_first).toBe(true);
+      expect(gr.wrap).toBe(true);
+      // the northmost row is the pole and the eastmost column stops one step
+      // short of it — a point grid, not a cell grid
+      expect(gr.lat0 + (gr.ny - 1) * gr.step).toBeCloseTo(90, 9);
+      expect(gr.lon0 + gr.nx * gr.step).toBeCloseTo(180, 9);
+    }
+    // the coarse group is a whole multiple of the fine one, which is what
+    // makes "every Nth fine point IS a coarse point" true
+    const r = idx.groups.g100.grid.step / idx.groups.g025.grid.step;
+    expect(Number.isInteger(r)).toBe(true);
+    expect(r).toBeGreaterThan(1);
+  });
+
+  test("row 0 is the SOUTH pole — asserted on the bytes, not on a comment", () => {
+    /* The one orientation mistake that looks entirely plausible: the AMOC eval
+     * mask shipped with a `[::-1]` row flip copied from another bake and put
+     * the Gulf Stream in the Norwegian Sea. The tensor is south-first and the
+     * app's grid convention is row-major from the south, so no flip — and the
+     * way to know is to read a known cell. The smoke tensor's `sst` is a
+     * smooth synthetic field of latitude, so the southernmost row must be
+     * colder than the equatorial one. */
+    const g = idx.groups.g025;
+    const buf = fs.readFileSync(path.join(F7, g.file));
+    const ci = g.chans.indexOf("sst"), nC = g.chans.length;
+    const [mean, sd] = g.norm[ci];
+    // The smoke tensor's FIRST bin has no source day behind it and is all NaN,
+    // which is itself the honest answer — read the third, which does.
+    const row0 = 2;
+    const at = (row, col) => {
+      const off = g.header_len + row0 * g.slab_bytes +
+                  ((row * g.grid.nx + col) * nC + ci) * g.itemsize;
+      const h = buf.readUInt16LE(off);
+      const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 0x1f, f = h & 0x3ff;
+      const z = e === 0 ? s * 6.103515625e-5 * (f / 1024)
+              : e === 31 ? (f ? NaN : s * Infinity)
+              : s * Math.pow(2, e - 15) * (1 + f / 1024);
+      return z * sd + mean;
+    };
+    const eqRow = Math.round((0 - g.grid.lat0) / g.grid.step);
+    const southRow = 1;                   // row 0 is the pole itself
+    /* `sst` is OISST and therefore OCEAN ONLY — NaN over land, which is the
+     * honest answer and not a gap. So the column is CHOSEN rather than typed:
+     * the first meridian that is sea at both rows. */
+    let col = -1;
+    for (let c = 0; c < g.grid.nx && col < 0; c++) {
+      if (Number.isFinite(at(southRow, c)) && Number.isFinite(at(eqRow, c))) col = c;
+    }
+    expect(col, "no meridian is sea at both rows").toBeGreaterThanOrEqual(0);
+    const south = at(southRow, col), equator = at(eqRow, col);
+    expect(Number.isFinite(south) && Number.isFinite(equator)).toBe(true);
+    expect(equator, `row ${eqRow} (equator) vs row ${southRow} (south)`)
+      .toBeGreaterThan(south);
+  });
+
+  test("the two statics are ordinary grids, and sphere carries its own palette", () => {
+    const sph = JSON.parse(fs.readFileSync(
+      path.join(F7, "family7_sphere.json"), "utf8"));
+    const elv = JSON.parse(fs.readFileSync(
+      path.join(F7, "family7_elev.json"), "utf8"));
+    const gr = idx.groups.g025.grid;
+    for (const [name, g] of [["sphere", sph], ["elev", elv]]) {
+      expect(g.nx, `${name} nx`).toBe(gr.nx);
+      expect(g.ny, `${name} ny`).toBe(gr.ny);
+      expect(g.dlon).toBeCloseTo(gr.step, 9);
+      expect(g.dlat).toBeCloseTo(gr.step, 9);
+      // point-aligned: the cell is the half-step box around its point
+      expect(g.west).toBeCloseTo(gr.lon0 - gr.step / 2, 9);
+      expect(g.south).toBeCloseTo(gr.lat0 - gr.step / 2, 9);
+    }
+    // sphere is CATEGORICAL and ships the producer's palette in the file
+    // (CLAUDE.md §2.3) — one character per cell, "." for empty
+    expect(sph.packed).toHaveLength(sph.nx * sph.ny);
+    expect(/^[0-9.]+$/.test(sph.packed)).toBe(true);
+    expect(sph.values).toBe(undefined);
+    expect(sph.classes.map((c) => c.code)).toEqual([0, 1, 2, 3]);
+    expect(sph.classes.map((c) => c.label))
+      .toEqual(["ocean", "land", "ice sheet or glacier", "inland water"]);
+    for (const c of sph.classes) expect(c.rgb).toHaveLength(3);
+    // every code actually in the file is a code the palette names
+    const codes = new Set(sph.packed.replace(/\./g, "").split("").map(Number));
+    for (const c of codes) expect(sph.classes.some((k) => k.code === c)).toBe(true);
+    // elev is a plain numeric grid in whole metres, null where unknown
+    expect(elv.values).toHaveLength(elv.nx * elv.ny);
+    expect(elv.units).toBe("m");
+    const nums = elv.values.filter((v) => v !== null);
+    expect(nums.length).toBeGreaterThan(elv.values.length / 2);
+    expect(nums.every((v) => Number.isInteger(v))).toBe(true);
+    // the fixture index points at the fixture's own copies
+    expect(idx.statics.sphere.file).toBe("data/family7/fixture/family7_sphere.json");
+    expect(idx.statics.elev.file).toBe("data/family7/fixture/family7_elev.json");
+    expect(idx.statics.sphere.kind).toBe("classGrid");
+    expect(idx.fixture).toBe(true);
+  });
+});
+
+/* ================= the cone geometry on the GLOBAL grid (the dateline wrap) ==
+ *
+ * The Python side exports a `global` block into data/cone_geometry.json: the
+ * same sunflower, evaluated on the 721 × 1440 global grid, with its columns
+ * WRAPPED — because on a globe there is no eastern edge, and a dot 4,000 km
+ * east of 175°E is a dot in the western Pacific rather than a dot the model
+ * reads as missing. The JS port has to agree, or the Cones tab's live mode is
+ * a second definition of the cone.
+ *
+ * SKIPPED, loudly, until that export lands: guarding on the key rather than on
+ * a date keeps the suite green today and turns red the moment the two could
+ * disagree. */
+test.describe("cone_geometry.json · the global block (E-070 live cones)", () => {
+  const G = read("cone_geometry.json");
+  const CESIUM = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1";
+
+  test.beforeEach(async ({ page, baseURL }) => {
+    if (!G.global) return;
+    if (process.env.MIRROR) {
+      await page.route(/https:\/\/cdnjs\.cloudflare\.com\/.*/, async (route) => {
+        try {
+          const url = route.request().url()
+            .replace(CESIUM, `${baseURL}/_vendor/cesium`)
+            .replace("widgets.min.css", "widgets.css");
+          await route.fulfill({ response: await page.request.get(url) });
+        } catch { await route.abort().catch(() => {}); }
+      });
+      await page.route(/https:\/\/gibs\.earthdata\.nasa\.gov\/.*/, async (route) => {
+        try {
+          const url = route.request().url()
+            .replace("https://gibs.earthdata.nasa.gov", "http://localhost:8081");
+          await route.fulfill({ response: await page.request.get(url) });
+        } catch { await route.abort().catch(() => {}); }
+      });
+    }
+    await page.goto("/");
+    await page.waitForFunction(() => window.__earth?.viewer, null, { timeout: 30000 });
+  });
+
+  test("the global grid's own header is a point-aligned wrapping 0.25° grid", () => {
+    if (!G.global) {
+      console.log("SKIPPED: data/cone_geometry.json has no `global` block yet — " +
+                  "ml/export_cone_geometry.py has not exported one. This test " +
+                  "certifies the JS port against it and will run as soon as it does.");
+      test.skip(true, "no `global` block exported yet");
+      return;
+    }
+    expect(G.global.ny).toBe(721);
+    expect(G.global.nx).toBe(1440);
+    expect(G.global.lat0).toBe(-90);
+    expect(G.global.lon0).toBe(-180);
+    expect(G.global.step).toBe(0.25);
+    expect(G.global.wrap).toBe(true);
+    expect(Array.isArray(G.global.refs)).toBe(true);
+    expect(G.global.refs.length).toBeGreaterThan(0);
+  });
+
+  test("every global reference set is reproduced by the JS port, wrap included",
+       async ({ page }) => {
+    if (!G.global) {
+      console.log("SKIPPED: data/cone_geometry.json has no `global` block yet — " +
+                  "the JS port's dateline wrap is uncertified until it lands.");
+      test.skip(true, "no `global` block exported yet");
+      return;
+    }
+    /* The export's own schema line: `cells` is
+     * `cone.inner_dots(anchor.lat, family)` filtered to that lag, in its own
+     * order — the anchor column (0,0) first, then `spiral_offsets`' points
+     * deduplicated on the rounded cell — with `row = anchor.row + dy` (which
+     * MAY leave the latitude axis: latitude is clipped, never wrapped) and
+     * `col = (anchor.col + dx) mod nx` (which never does: longitude closes).
+     * `outer_refs` is the same four keys over `cone.outer_spiral`. */
+    const inner = G.global.refs, outer = G.global.outer_refs || [];
+    const got = await page.evaluate(async ({ inner, outer }) => {
+      const E = window.__earth;
+      await E.loadCones();
+      const g = E.coneGeometry.global;
+      const wrap = (a, dy, dx) => [a.row + dy, E.coneWrapCol(a.col + dx, g.nx, g.wrap)];
+      const gotInner = inner.map((ref) =>
+        E.coneInnerDots(ref.anchor.lat, ref.family)
+          .filter(([lag]) => lag === ref.lag)
+          .map(([, dy, dx]) => wrap(ref.anchor, dy, dx)));
+      const gotOuter = outer.map((ref) =>
+        E.coneOuterSpiral(ref.anchor.lat, ref.lag)
+          .map(([dy, dx]) => wrap(ref.anchor, dy, dx)));
+      // lag 0 is the 3×3 patch, exported once rather than per family
+      const patch = [];
+      for (let i = 0; i < 9; i++) patch.push([Math.floor(i / 3) - 1, (i % 3) - 1]);
+      return { gotInner, gotOuter, patch };
+    }, { inner, outer });
+    // one assertion per REF, never one per dot (CLAUDE.md §4)
+    for (let i = 0; i < inner.length; i++) {
+      const r = inner[i];
+      expect(got.gotInner[i], `family ${r.family} lag ${r.lag} at row ` +
+             `${r.anchor.row} col ${r.anchor.col}`).toEqual(r.cells);
+    }
+    for (let i = 0; i < outer.length; i++) {
+      const r = outer[i];
+      expect(got.gotOuter[i], `outer lag ${r.lag} at row ${r.anchor.row} ` +
+             `col ${r.anchor.col}`).toEqual(r.cells);
+    }
+    expect(got.patch).toEqual(G.global.patch_cells);
+    // family L (land: snow, soil moisture, soil temperature) is the family the
+    // North Atlantic tensor never had, so its presence here is the test that
+    // the port reads families from the FILE rather than from a list of three
+    expect(inner.some((r) => r.family === "L")).toBe(true);
+    // THE WRAP ITSELF: every column the export names is inside the grid. On the
+    // North Atlantic window an off-edge column stays off the edge and is drawn
+    // hollow; on the globe there is no edge, so a column outside [0, nx) would
+    // mean the export and this port disagree about what "east of the dateline"
+    // is — and both would still draw a perfectly plausible cone.
+    const outside = [...inner, ...outer].flatMap((r) =>
+      r.cells.filter(([, c]) => c < 0 || c >= G.global.nx));
+    expect(outside).toEqual([]);
+    // …and at least one anchor genuinely sits against the dateline, or the
+    // wrap is being certified by a set that never exercises it
+    const nearEdge = [...inner, ...outer].filter((r) =>
+      r.anchor.col < 4 || r.anchor.col > G.global.nx - 5);
+    expect(nearEdge.length).toBeGreaterThan(0);
+    expect(nearEdge.some((r) => {
+      const spread = r.cells.map(([, c]) => c);
+      return spread.length > 1 && Math.max(...spread) - Math.min(...spread) > G.global.nx / 2;
+    })).toBe(true);
+  });
+});

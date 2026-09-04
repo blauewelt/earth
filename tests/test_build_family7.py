@@ -5,8 +5,12 @@
 covering the whole globe rather than the North Atlantic window: every
 0.25-degree grid point from pole to pole, one value per channel per five-day
 bin, 1982-2024, in three groups at their native resolution (`g025` 0.25 deg /
-7 channels, `g100` 1 deg / 14 NCEP channels, `rg100` 1 deg / 32 Argo depth
+7 channels, `g100` 1 deg / 15 NCEP channels, `rg100` 1 deg / 32 Argo depth
 channels on the live bins only).
+
+E-071 §6.1's correction of 4 Sep is asserted here too: `sst` is the OBSERVED
+OISST field and missing where OISST does not observe, and the SHARED surface
+temperature is the reanalysis `skt`, in g100, over every surface.
 
 CPU-only, NO NETWORK. Every source is synthetic and reaches the builder through
 `--source-dir`; the end-to-end check is `build_family7.run_smoke()`, the same
@@ -188,8 +192,8 @@ def test_3_glorys_lands_at_row_40_and_the_axis_is_asserted(build, tmp_path):
 
 
 # ------------------------------------------------------------------- 4 -----
-def test_4_oisst_pentad_mean_min_days_and_skin_t_precedence(build):
-    """The bin mean, the >= 3 day rule, and OISST-before-NCEP in skin_t."""
+def test_4_oisst_pentad_mean_min_days_and_sst_is_observed_only(build):
+    """The bin mean, the >= 3 day rule, and `sst` missing where OISST is."""
     import netCDF4 as ncdf
     d, src = build["d"], build["src"]
     bins = [int(b) for b in np.asarray(d["bin_index"])]
@@ -215,7 +219,7 @@ def test_4_oisst_pentad_mean_min_days_and_skin_t_precedence(build):
 
     # aggregate_cadence's own arithmetic: min_days is 3 at pentad cadence
     assert (3 if 5 == 5 else 1) == b7.MIN_DAYS
-    skin = unz(d, "g025", b7.C_SKIN_T)
+    skin = unz(d, "g025", b7.C_SST)
     oisst_seen = np.load(os.path.join(build["work"], "oisst_seen.npy"))
 
     thin = [b for b in bins if len(per_bin.get(b, [])) < b7.MIN_DAYS]
@@ -231,24 +235,29 @@ def test_4_oisst_pentad_mean_min_days_and_skin_t_precedence(build):
                             np.nansum(np.where(np.isfinite(stack), stack, 0), 0)
                             / np.maximum(cnt, 1), np.nan)
         got = skin[row]
-        model = through_f16(want, d, "g025", b7.C_SKIN_T)
+        model = through_f16(want, d, "g025", b7.C_SST)
         m = np.isfinite(want)
         assert m.any()
-        # OISST wins wherever OISST is finite — the tensor's value IS the mean
+        # the tensor's value IS the OISST mean, and nothing else is in there
         assert np.allclose(got[m], model[m], atol=0.05), \
-            f"bin {b}: skin_t is not the NaN-aware {b7.PENTAD_DAYS}-day OISST mean"
-        # and where OISST never observes, the value came from NCEP instead
-        ncep_only = (~oisst_seen) & np.isfinite(got)
-        assert ncep_only.any(), "the NCEP skin_t fill wrote nothing"
-        assert not (ncep_only & m).any(), \
-            "a cell is both OISST-observed and NCEP-filled"
+            f"bin {b}: sst is not the NaN-aware {b7.PENTAD_DAYS}-day OISST mean"
+        # E-071 §6.1 corrected: NO reanalysis fill. `sst` is an OBSERVED
+        # channel and must be missing wherever the instrument does not look.
+        assert not np.isfinite(got[~oisst_seen]).any(), \
+            "sst is finite where OISST never observes — the retired NCEP fill"
+        assert np.array_equal(np.isfinite(got), m), \
+            "sst's missing pattern is not OISST's own"
 
     for b in thin:
         row = bins.index(b)
-        # the OISST half of the channel is missing; only the NCEP fill may
-        # appear, and only outside the OISST-observed mask
-        assert not np.isfinite(skin[row][oisst_seen]).any(), \
+        assert not np.isfinite(skin[row]).any(), \
             f"bin {b} has fewer than {b7.MIN_DAYS} OISST days but carries a mean"
+
+    # ...and the SHARED surface temperature is `skt`, in g100, everywhere
+    skt = unz(d, "g100", b7.C_SKT)
+    assert np.isfinite(skt).mean() > 0.5, "skt is not the everywhere channel"
+    assert list(d["chan_g100"])[b7.C_SKT] == "skt"
+    assert "skin_t" not in list(d["chan_g025"]) + list(d["chan_g100"])
 
     # sea_ice is NaN wherever OISST has no sea
     ice = unz(d, "g025", b7.C_SEA_ICE)
@@ -338,6 +347,10 @@ def test_5_ncep_transforms(build):
     close(9, np.log1p(np.maximum(to1(native("weasd")), 0)), 1e-3)
     close(12, to1(native("lhtfl")), 5e-2)               # unchanged
     close(13, to1(native("shtfl")), 5e-2)               # unchanged
+    # skt: K -> degC, NO land mask, NO flip — the shared channel
+    got_skt = close(b7.C_SKT, to1(native("skt")) - 273.15, 5e-2)
+    assert np.isfinite(got_skt).all(), \
+        "skt was masked somewhere; the shared channel covers every surface"
 
     # the flip really is a flip, and really is only on those two
     assert np.nanmean(to1(native("uflx"))) * np.nanmean(
@@ -782,3 +795,83 @@ def test_5b_min_days_counts_days_not_six_hourly_samples(tmp_path):
         "the pentad mean is not the mean of the bin's 6-hourly samples"
     assert b7.read_json(os.path.join(work, "counts.json"))["n_ncep_days"] == 6, \
         "n_ncep_days counts 6-hourly steps rather than days"
+
+
+def test_13_resume_over_the_pre_correction_box_state(tmp_path):
+    """The work dir the real build left, repaired without a flag.
+
+    THE STATE ON THE BOX, reproduced exactly: `glorys.done` and `sst.done`
+    correct, then an `ncep` that completed 1982-1984 under the OLD recipe — a
+    14-channel g100 float32, per-year markers and a carry for those three
+    years, and the retired NCEP skin-temperature fill written into g025's
+    temperature channel for their bins.
+
+    What the new code must do, automatically: repair g025 channel 5 back to
+    "OISST or nothing", discard the ncep stage's OWN markers, carry and f32,
+    rebuild g100 with fifteen channels — and leave `glorys.done` and
+    `sst.done` alone, because those bytes are still correct.
+    """
+    import argparse
+    src = str(tmp_path / "src")
+    work = str(tmp_path / "work")
+    d_lo = dt.date(*(int(x) for x in b7.SMOKE_START.split("-")))
+    d_hi = dt.date(*(int(x) for x in b7.SMOKE_END.split("-")))
+    b7.make_smoke_sources(src, d_lo, d_hi)
+    ctx = b7.Ctx(argparse.Namespace(
+        work=work, source_dir=src, start=b7.SMOKE_START, end=b7.SMOKE_END,
+        force=False, stage="all", smoke=True))
+
+    b7.run_stages(ctx, ["glorys", "sst"])
+    glorys_stamp = open(b7.marker(work, "glorys")).read()
+    sst_stamp = open(b7.marker(work, "sst")).read()
+    oisst_seen = np.load(os.path.join(work, "oisst_seen.npy"))
+    assert (~oisst_seen).any(), "the fixture must have cells OISST never sees"
+
+    # ---- forge the pre-correction state -----------------------------------
+    T = ctx.T
+    old_g100 = np.lib.format.open_memmap(
+        b7.raw_file(work, "g100"), mode="w+", dtype=np.float32,
+        shape=(T, 181, 360, 14))                    # FOURTEEN channels
+    old_g100[:] = 1.5
+    old_g100.flush()
+    del old_g100
+    for y in ("1982", "1983", "1984", str(d_lo.year)):
+        b7.mark(work, f"ncep/{y}")
+    np.savez(os.path.join(work, "ncep", f"carry_{d_lo.year}.npz"),
+             n_days=np.array(99))
+    # ...and the retired land fill in g025's temperature channel
+    X = np.lib.format.open_memmap(b7.group_file(work, "g025"), mode="r+")
+    forged = np.asarray(X[:, :, :, b7.C_SST], np.float32)
+    forged[:, ~oisst_seen] = -11.0
+    X[:, :, :, b7.C_SST] = forged
+    X.flush()
+    del X, forged
+    n_forged = int(T * (~oisst_seen).sum())
+
+    # ---- resume, with no operator flag ------------------------------------
+    b7.run_stages(ctx, ["ncep"])
+
+    X = np.load(b7.group_file(work, "g025"), mmap_mode="r")
+    sst = np.asarray(X[:, :, :, b7.C_SST], np.float32)
+    assert not np.isfinite(sst[:, ~oisst_seen]).any(), (
+        f"the repair left {int(np.isfinite(sst[:, ~oisst_seen]).sum())} of "
+        f"{n_forged} reanalysis values in the observed `sst` channel")
+    assert np.isfinite(sst[:, oisst_seen]).any(), \
+        "the repair also erased the real OISST values"
+
+    g100 = np.load(b7.raw_file(work, "g100"), mmap_mode="r")
+    assert g100.shape == (T, 181, 360, 15), \
+        f"g100 is {g100.shape} — the 14-channel array was not discarded"
+    assert not np.allclose(np.asarray(g100[:, :, :, 0], np.float32), 1.5), \
+        "the forged values survived — the stage reused the stale file"
+    assert np.isfinite(np.asarray(g100[:, :, :, b7.C_SKT], np.float32)).any(), \
+        "skt is empty after the rebuild"
+    for y in ("1982", "1983", "1984"):
+        assert not b7.marked(work, f"ncep/{y}"), \
+            f"ncep/{y} survived — the stale per-year markers were not discarded"
+
+    # nothing that belonged to another stage was touched
+    assert open(b7.marker(work, "glorys")).read() == glorys_stamp
+    assert open(b7.marker(work, "sst")).read() == sst_stamp
+    assert b7.marked(work, "repair_sst")
+    assert os.path.exists(os.path.join(work, "ncep.spec"))

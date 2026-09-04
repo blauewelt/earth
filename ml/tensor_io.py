@@ -233,6 +233,71 @@ def writable_copy(X, scratch, chunk=64, verbose=True):
     return out
 
 
+ANOMALY_BUDGET = 8_000_000_000        # bytes; see anomaly_chunk
+
+
+def anomaly_chunk(shape, itemsize=2, budget=ANOMALY_BUDGET, cap=64):
+    """How many timesteps `trainprobe.anomaly_transform` may hold at once.
+
+    The default `chunk=64` was sized on family 4 (H=281, W=481, C=39). Family
+    7's dense group is H=721, W=1440, C=7 — 7,267,680 elements per timestep
+    against family 4's 5,271,279, i.e. 1.38x — and the arithmetic has to be
+    redone rather than inherited, because the transform's peak is LINEAR in
+    chunk and a default that was 4.5 GB becomes 6.2 and then, with the memmap
+    pages it dirties, more than a small box has.
+
+    `ml/trainprobe.py`'s own model (its docstring, "Arithmetic for the daily
+    tensor") prices pass 2 — the peak — at **13 bytes per element per
+    timestep** in ANONYMOUS memory: the float32 climatology gather (4), the
+    float64 working block (8) and the finite mask (1), which coexist in RSS
+    because glibc does not return the arena the gather used. Two terms it does
+    not count, and this does:
+
+      * the STORAGE slice itself. Pass 2 reads `X[i0:i1]` and writes it back,
+        so `chunk * H * W * C * itemsize` bytes of file pages are resident and
+        dirty until writeback. At float16 that is 2 more bytes per element.
+      * the PERSISTENT climatology, `12 * H * W * C * (8 + 4)` bytes — 1.05 GB
+        at family 7's dense shape against 0.76 GB at family 4's.
+
+    So peak ~= (13 + itemsize) * chunk * H * W * C + 12 * H * W * C * 12, and
+    the chunk is the largest POWER OF TWO (a power of two only so the number
+    is stable under a small change in the budget) that keeps it under
+    `budget`, capped at `cap` = the historical default so no existing tensor's
+    chunk can grow.
+
+    Measured against the two shapes that matter:
+
+      family 4 pentad  281 x 481 x 39 f16 -> 64  (peak 5.8 GB)
+      family 7 g025    721 x 1440 x 7 f16 -> 32  (peak 4.5 GB)
+      family 7 g100    181 x 360 x 14 f16 -> 64  (peak 1.0 GB)
+      family 7 rg100   181 x 360 x 32 f16 -> 64  (peak 2.2 GB)
+
+    i.e. family 4 keeps exactly the chunk every archived number was produced
+    with, and only the global dense group moves.
+    """
+    per = 1
+    for v in shape[1:]:
+        per *= int(v)
+    persistent = 12 * per * 12
+    room = budget - persistent
+    if room <= 0:
+        return 1
+    n = int(room // ((13 + int(itemsize)) * per))
+    n = min(int(cap), max(1, n))
+    p = 1
+    while p * 2 <= n:
+        p *= 2
+    return p
+
+
+def anomaly_peak_bytes(shape, chunk, itemsize=2):
+    """The peak `anomaly_chunk` is solving for, so a caller can print it."""
+    per = 1
+    for v in shape[1:]:
+        per *= int(v)
+    return (13 + int(itemsize)) * int(chunk) * per + 12 * per * 12
+
+
 def save_tensor(path, X, **meta):
     """Write the sidecar layout: X as a bare .npy, everything else in the npz.
 

@@ -884,6 +884,44 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    id: "family7",
+    /* OUR OWN artefact, and the second layer on the globe that describes a
+     * MODEL's input rather than an observation of the world (the first is
+     * `amoc-eval`). It paints one channel of one five-day bin of the family-7
+     * tensor — the global input tensor the forecaster reads — by a single HTTP
+     * range read of a `.npy` on the Hugging Face Hub. See the block above
+     * `GridProvider` for the arithmetic, and docs/FAMILY7_GLOBE.md.
+     *
+     * NO catalog record, deliberately: §2.6 catalogues open DATASETS, and this
+     * is a picture of our own tensor — the same exception `amoc-eval` and the
+     * city labels take. Its `doc` points at the build spec instead, which is
+     * what a reader needs in order to know what they are looking at.
+     *
+     * AGGREGATION / DIFFERENCE POSTURE: NEITHER, and the reason is the byte
+     * count rather than the physics. The fields themselves are continuous and
+     * would average and difference perfectly well — but each frame here is ONE
+     * 14.5 MB range read, so a 12-day window would be three of them per paint
+     * and a 365-day one would be the whole archive; a computed difference
+     * doubles whatever the window costs. The layer's job is "what does the
+     * model read at this pentad", and that question has no window in it.
+     * (The Aggregate slider therefore leaves it alone: it is not `timed`, so
+     * `providersFor` never suppresses it either.)
+     *
+     * `grid: true` is what makes the probe, the base desaturation, the pixel
+     * card and the legend treat it like every other client-painted field;
+     * `tensorGrid` is what makes `loadGridMonth` answer from the Hub instead of
+     * from a baked file. `ramp`, `vmin`, `vmax`, `units` and `classGrid` are
+     * REWRITTEN per channel by `tensorApplyChannel` — the seeds here are only
+     * what the row shows before the index has landed. */
+    grid: true, tensorGrid: true, pentadGrid: true,
+    tensorChan: "g025:sst",
+    ramp: "sst", vmin: -2, vmax: 32, units: "°C", maxLevel: 7,
+    doc: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E070_family7_build.md",
+    title: "Global tensor — what the model reads (family 7), 0.25° / 1°",
+    meta: "One five-day frame of the forecaster's own input, straight out of the archive — pick a channel",
+    on: false,
+  },
+  {
     id: "nightlights",
     doc: "https://blackmarble.gsfc.nasa.gov/",
     layer: "VIIRS_Black_Marble",
@@ -1257,6 +1295,15 @@ function whenOfGibs(cfg, dateStr = state.date) {
  * lie this whole helper exists to remove. */
 function whenOfGrid(cfg, g) {
   if (!g) return null;
+  /* A pentad stamped as a DAY — the bin's opening date — rather than as a new
+   * `pentad` granularity. Two reasons, and they point the same way. The bin's
+   * start IS a real calendar day (bin b covers days [5b, 5b+5) from
+   * 1982-01-01), so nothing is invented; and a `pentad` kind would need its
+   * own row in AGE_UNITS and AGE_FLOOR to age at all, which would print
+   * "3 pentads old" — a unit no reader has. The five-day span is stated where
+   * it belongs, in the layer's Interval fact and in its toast. The two statics
+   * have no date at all and correctly return nothing. */
+  if (cfg.tensorGrid) return g.binStart ? whenAt("day", g.binStart) : null;
   if (g.period) return whenAt("period", g.period);
   if (cfg.monthlyGrid) return whenAt(g.keyLen === 10 ? "day" : "month", resolveGridMonth(g));
   if (g.month) return whenAt("month", g.month);
@@ -3248,6 +3295,13 @@ const RAMPS = {
   // the currents "speed" ramp)
   rain: [[0, 130, 200, 205], [0.25, 72, 150, 214], [0.55, 42, 84, 190],
          [0.8, 90, 45, 170], [1, 150, 30, 140]],
+  // Land height on a signed scale that reads as a physical surface: deep sea
+  // navy → shelf → coast green → uplands brown → ice-cap white. Used only by
+  // the family-7 `elev` static, whose zero is sea level and therefore sits in
+  // the middle of the ramp rather than at its foot.
+  terrain: [[0, 8, 26, 60], [0.35, 32, 92, 150], [0.5, 64, 148, 186],
+            [0.52, 96, 140, 84], [0.68, 150, 138, 78], [0.86, 130, 96, 66],
+            [1, 240, 244, 248]],
 };
 
 function rampColor(name, t) {
@@ -3311,20 +3365,41 @@ function ensureGridMonth(cfg, g, month) {
   return Promise.resolve(g.__yearLoads[yr]).then(() => g);
 }
 async function loadGridMonth(cfg) {
+  // The family-7 tensor layer is a grid whose bytes come from a range read of
+  // the Hub rather than from a baked file, so it answers here instead of going
+  // through `loadGrid`. Everything downstream — the painter, the probe, the
+  // pixel card, the legend — is unchanged by that.
+  if (cfg.tensorGrid) return tensorGridFor(cfg);
   const g = await loadGrid(cfg);
   if (g && cfg.monthlyGrid) await ensureGridMonth(cfg, g, resolveGridMonth(g));
   return g;
 }
 
 function sampleGrid(g, lonDeg, latDeg) {
-  if (lonDeg < g.west || lonDeg >= g.east || latDeg < g.south || latDeg >= g.north) return null;
-  const ix = Math.floor((lonDeg - g.west) / g.dlon);
+  if (latDeg < g.south || latDeg >= g.north) return null;
+  let ix;
+  if (g.wrap) {
+    /* A GLOBAL point-aligned grid (the family-7 tensor) has no east or west
+     * edge: the half cell either side of the dateline is ONE cell, whose point
+     * sits at −180°. Rejecting lon ≥ east there would leave a half-cell seam of
+     * "no data" down the Pacific that is not in the data. Every other grid in
+     * the app is a bounded rectangle and keeps the rejection. */
+    ix = Math.floor((lonDeg - g.west) / g.dlon);
+    ix = ((ix % g.nx) + g.nx) % g.nx;
+  } else {
+    if (lonDeg < g.west || lonDeg >= g.east) return null;
+    ix = Math.floor((lonDeg - g.west) / g.dlon);
+  }
   const iy = Math.floor((latDeg - g.south) / g.dlat);
   if (ix < 0 || ix >= g.nx || iy < 0 || iy >= g.ny) return null;
   const vals = gridValues(g);
   if (!vals) return null;                 // month not loaded yet (year file in flight)
   const v = vals[iy * g.nx + ix];
-  return v == null ? null : v;
+  // A baked grid writes `null` for an empty cell; a tensor slab writes NaN
+  // (float16 has one and JSON does not). Both mean "nothing here", and a NaN
+  // that reached rampColor would paint the palette's top colour — an unobserved
+  // cell rendered as a maximum is the one failure this must not have.
+  return v == null || !Number.isFinite(v) ? null : v;
 }
 
 const gridCache = new Map();
@@ -3373,6 +3448,539 @@ function gridClassPalette(g) {
 }
 function gridClassLabel(g, v) {
   return g?.classes?.find((c) => c.code === v)?.label ?? null;
+}
+
+/* ============================ the global tensor (family 7), read by the byte
+ *
+ * FAMILY 7, in one sentence: the first input tensor covering the whole globe
+ * rather than the North Atlantic window — every 0.25° grid point from the
+ * South Pole to the North Pole, one value per channel per five-day bin from
+ * 1982 to 2024. It is what the forecaster actually reads, and this is the
+ * layer that shows it.
+ *
+ * It is 46 GB. Nothing here downloads it. The three `.npy` files are stored
+ * bin-major in C order — `[bin][lat][lon][channel]` — so ONE pentad of ONE
+ * group is a single contiguous slab, and the whole layer is one HTTP range
+ * read per frame:
+ *
+ *     offset = header_len + bin_row * (H * W * C * itemsize)
+ *     length =                        H * W * C * itemsize
+ *
+ * 14.5 MB for the 0.25° group, 1.8 MB for the 1° one. `data/family7_index.json`
+ * (written by `ml/publish_family7_index.py`) carries `header_len`, `shape`,
+ * `dtype`, the grid geometry, the channel names with their plain-English
+ * labels and units, and the (mean, sd) the builder z-scored with — measured
+ * from the published files rather than restated here, which is why this code
+ * has no 721, no 1440 and no 128 in it.
+ *
+ * huggingface.co is CLAUDE.md §3's second approved live endpoint, and this use
+ * clears the same bar it was admitted on: no key, CORS measured with our own
+ * Origin (recorded in the index's `cors_measured`), a BOUNDED read triggered
+ * by enabling the layer or moving the date rather than by streaming, and a
+ * degrade path — every failure ends in a hint toast and an empty layer, never
+ * a broken globe.
+ *
+ * THE VALUES ARE STORED Z-SCORED. `ml/build_family7.py`'s last pass writes
+ * (x − mean) / sd per channel, so the number in the file is in standard
+ * deviations. Everything the reader sees is multiplied back through `norm`;
+ * the probe prints the stored σ beside it, because the model reads the second
+ * and the reader thinks in the first. */
+const TENSOR_INDEX_URL = "data/family7_index.json";
+/* An LRU of raw SLABS, not of decoded planes: the bytes are what the network
+ * paid for, and every channel of a bin lives in the same 14.5 MB. So switching
+ * channel inside one pentad costs a decode and no request, and the ±1 pentad
+ * steppers walk a cache of eight. Bounded by BOTH a count and a byte budget —
+ * eight 0.25° slabs is 116 MB, which is not a thing to hold on a phone. */
+const TENSOR_LRU_SLABS = 8;          // per GROUP, so a coarse read cannot evict a fine one
+/* The byte ceiling is set by the Cones tab's live mode rather than by the
+ * layer: a cone needs SEVEN consecutive pentads of one group at once (lags
+ * 0–6), which at 0.25° is ~100 MB. A tighter cap would evict a slab the cone
+ * still needs and turn a re-anchor into a re-download. */
+const TENSOR_LRU_BYTES = 128 << 20;
+const tensorState = {
+  index: null, indexPromise: null, error: null,
+  slabs: new Map(),        // "<group>:<bin>" -> ArrayBuffer, insertion-ordered
+  bytes: 0,
+  planes: new Map(),       // "<group>:<bin>:<chan>" -> grid object
+  statics: new Map(),      // "sphere" | "elev" -> Promise<grid>
+  inflight: new Map(),     // dedupe concurrent reads of the same slab
+  current: null,           // the grid the layer is painting right now
+  currentKey: null,
+  loading: false,
+  seq: 0,                  // supersedes a resolution nobody is waiting for
+};
+
+function loadTensorIndex() {
+  if (!tensorState.indexPromise) {
+    tensorState.indexPromise = fetch(TENSOR_INDEX_URL)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (tensorState.index = j))
+      .catch(() => null);
+  }
+  return tensorState.indexPromise;
+}
+
+/* IEEE-754 binary16 → a JS number. Written out rather than reached for,
+ * because `Float16Array` is not in the browsers this app supports and the
+ * alternative (a Uint16 → Float32 lookup table of 65,536 entries) costs more
+ * to build than one decode of a slab costs to run. Subnormals and NaN both
+ * matter here: NaN is how the builder says "never observed", and the whole
+ * point of the layer is that land cells and ocean cells are different. */
+function tensorF16(h) {
+  const s = (h & 0x8000) ? -1 : 1;
+  const e = (h >> 10) & 0x1f;
+  const f = h & 0x3ff;
+  if (e === 0) return s * 6.103515625e-5 * (f / 1024);
+  if (e === 31) return f ? NaN : s * Infinity;
+  return s * Math.pow(2, e - 15) * (1 + f / 1024);
+}
+
+/* Which row of the memmap a pentad bin is. The real tensor starts at bin 0, so
+ * this is the identity there; the in-repo fixture is five bins out of the
+ * middle of the record, and reading it at row `bin` would be a 2,000-bin
+ * overrun. Never assume the first row is bin zero. */
+function tensorRowOf(idx, group, bin) {
+  const grp = idx.groups[group];
+  if (grp.bin_index) {                       // rg100: live bins only, listed
+    const i = grp.bin_index.indexOf(bin);
+    return i < 0 ? null : i;
+  }
+  const row = bin - idx.bin_first;
+  return row >= 0 && row < grp.shape[0] ? row : null;
+}
+
+function tensorBinOfDate(idx, dateStr) {
+  const days = Math.round((Date.parse(dateStr + "T00:00:00Z")
+                           - Date.parse(idx.epoch + "T00:00:00Z")) / 864e5);
+  const b = Math.floor(days / idx.pentad_days);
+  return Math.max(idx.bin_first, Math.min(idx.bin_last, b));
+}
+function tensorDateOfBin(idx, bin) {
+  return addDays(idx.epoch, (bin - 0) * idx.pentad_days);
+}
+/* "2015-01-03 → 01-07 · bin 2411" — the five days a bin actually covers.
+ * A pentad's LAST day is its start + 4, not + 5: bin b is days [5b, 5b+5). */
+function tensorPentadLabel(idx, bin) {
+  const a = tensorDateOfBin(idx, bin);
+  const b = addDays(a, idx.pentad_days - 1);
+  return `${a} → ${b.slice(5)} · bin ${bin}`;
+}
+
+/* Evict the OLDEST slab of whichever group is over its own count, or the
+ * oldest overall when only the byte budget is over. Per-group counting matters
+ * because the two groups are two orders of magnitude apart in size: a run of
+ * cheap 1.8 MB coarse reads must not push out the 14.5 MB fine slab the layer
+ * is painting from. */
+function tensorEvict() {
+  for (let guard = 0; guard < 64; guard++) {
+    const per = new Map();
+    for (const k of tensorState.slabs.keys()) {
+      const grp = k.slice(0, k.indexOf(":"));
+      per.set(grp, (per.get(grp) || 0) + 1);
+    }
+    let victim = null;
+    for (const k of tensorState.slabs.keys()) {          // insertion order = oldest first
+      if (per.get(k.slice(0, k.indexOf(":"))) > TENSOR_LRU_SLABS) { victim = k; break; }
+    }
+    if (!victim && tensorState.bytes > TENSOR_LRU_BYTES) {
+      victim = tensorState.slabs.keys().next().value;
+    }
+    if (!victim) return;
+    const buf = tensorState.slabs.get(victim);
+    tensorState.slabs.delete(victim);
+    tensorState.bytes -= buf.byteLength;
+    for (const k of [...tensorState.planes.keys()]) {
+      if (k.startsWith(victim + ":")) tensorState.planes.delete(k);
+    }
+  }
+}
+
+/* One slab = one bin of one group. The ONLY network call in this whole block. */
+function tensorSlab(idx, group, bin) {
+  const key = `${group}:${bin}`;
+  if (tensorState.slabs.has(key)) {
+    const buf = tensorState.slabs.get(key);      // touch: move to the LRU's end
+    tensorState.slabs.delete(key);
+    tensorState.slabs.set(key, buf);
+    return Promise.resolve(buf);
+  }
+  if (tensorState.inflight.has(key)) return tensorState.inflight.get(key);
+  const grp = idx.groups[group];
+  const row = tensorRowOf(idx, group, bin);
+  if (row === null) return Promise.resolve(null);
+  const off = grp.header_len + row * grp.slab_bytes;
+  const end = off + grp.slab_bytes - 1;
+  const p = fetch(grp.url, { headers: { Range: `bytes=${off}-${end}` } })
+    .then((r) => {
+      // 206 is the contract. A 200 means the host ignored the Range and is
+      // sending the whole 46 GB file, which must be refused rather than
+      // consumed — accepting it would be the one request this layer promises
+      // never to make.
+      if (r.status !== 206) throw new Error(`HTTP ${r.status} (expected 206)`);
+      return r.arrayBuffer();
+    })
+    .then((buf) => {
+      if (buf.byteLength !== grp.slab_bytes) {
+        throw new Error(`${buf.byteLength} bytes, expected ${grp.slab_bytes}`);
+      }
+      tensorState.slabs.set(key, buf);
+      tensorState.bytes += buf.byteLength;
+      tensorEvict();
+      return buf;
+    })
+    .finally(() => tensorState.inflight.delete(key));
+  tensorState.inflight.set(key, p);
+  return p;
+}
+
+/* One channel of one slab, un-z-scored, as a grid object the app's existing
+ * sampler and painter already understand. The grid is POINT-aligned: a cell is
+ * the half-step box around its point, so the west edge is lon0 − step/2 and
+ * the grid wraps at the dateline. The tensor's rows run SOUTH-FIRST — the same
+ * order `_write_grid` uses — so there is no flip here, and `tests/data.spec.js`
+ * pins that against the fixture's own bytes rather than trusting this sentence. */
+function tensorPlane(idx, group, bin, chan) {
+  const key = `${group}:${bin}:${chan}`;
+  if (tensorState.planes.has(key)) return Promise.resolve(tensorState.planes.get(key));
+  const grp = idx.groups[group];
+  const ci = grp.chans.indexOf(chan);
+  if (ci < 0) return Promise.resolve(null);
+  return tensorSlab(idx, group, bin).then((buf) => {
+    if (!buf) return null;
+    const { ny, nx, step, lat0, lon0 } = grp.grid;
+    const nC = grp.chans.length;
+    const [mean, sd] = grp.norm[ci];
+    const dv = new DataView(buf);
+    const vals = new Float32Array(ny * nx);
+    for (let p = 0, o = ci * 2; p < vals.length; p++, o += nC * 2) {
+      const z = tensorF16(dv.getUint16(o, true));
+      vals[p] = z === z ? z * sd + mean : NaN;   // raw = z·sd + mean
+    }
+    const g = {
+      west: lon0 - step / 2, east: lon0 + (nx - 0.5) * step,
+      south: lat0 - step / 2, north: lat0 + (ny - 0.5) * step,
+      dlon: step, dlat: step, nx, ny, wrap: !!grp.grid.wrap,
+      values: vals, units: grp.units[chan] || "",
+      tensor: { group, bin, chan, mean, sd, ci, nC },
+      binStart: tensorDateOfBin(idx, bin),
+    };
+    tensorState.planes.set(key, g);
+    while (tensorState.planes.size > 6) {
+      tensorState.planes.delete(tensorState.planes.keys().next().value);
+    }
+    return g;
+  });
+}
+
+/* The two STATICS are not channels and are not read from the Hub: `sphere`
+ * (0 ocean · 1 land · 2 ice sheet · 3 inland water) and `elev` never change
+ * with the date, and a 14.5 MB range read for a constant would be absurd. They
+ * ship as ordinary baked grids beside the index — `sphere` on the `classGrid`
+ * + `packed:` convention with its palette in the file, `elev` as int16 metres. */
+function tensorStatic(idx, name) {
+  if (tensorState.statics.has(name)) return tensorState.statics.get(name);
+  const spec = idx.statics && idx.statics[name];
+  if (!spec) return Promise.resolve(null);
+  const p = fetch(spec.file)
+    .then((r) => (r.ok ? r.json() : null))
+    .then(unpackGrid)
+    .then((g) => {
+      if (g && g.wrap === undefined) g.wrap = true;   // global, point-aligned
+      return g;
+    })
+    .catch(() => null);
+  tensorState.statics.set(name, p);
+  p.then((g) => { if (!g) tensorState.statics.delete(name); });
+  return p;
+}
+
+/* Every channel the selector offers, in one flat list: the g025 group, then
+ * g100, then the two statics. rg100 (the 32 Roemmich–Gilson depth channels) is
+ * deliberately NOT offered — it is written only into the pentad that holds a
+ * month's 15th, so most dates have no row at all and a globe layer that is
+ * blank on four dates in five is a layer that reads as broken. */
+function tensorChannelList(idx) {
+  const out = [];
+  if (!idx) return out;
+  for (const group of ["g025", "g100"]) {
+    const grp = idx.groups[group];
+    if (!grp) continue;
+    for (const c of grp.chans) {
+      out.push({
+        key: `${group}:${c}`, group, chan: c,
+        label: (grp.labels && grp.labels[c]) || c,
+        units: (grp.units && grp.units[c]) || "",
+        sign: (grp.sign && grp.sign[c]) || "seq",
+        ramp: (grp.ramp && grp.ramp[c]) || "precip",
+        step: grp.grid.step,
+      });
+    }
+  }
+  for (const name of ["sphere", "elev"]) {
+    const s = idx.statics && idx.statics[name];
+    if (!s) continue;
+    out.push({
+      key: `static:${name}`, group: "static", chan: name,
+      label: s.label || name, units: s.units || "",
+      sign: "seq", ramp: s.ramp || "precip", step: null, static: true,
+      classGrid: s.kind === "classGrid", vmin: s.vmin, vmax: s.vmax,
+    });
+  }
+  return out;
+}
+
+function tensorChannelSpec(idx, key) {
+  const list = tensorChannelList(idx);
+  return list.find((c) => c.key === key) || list[0] || null;
+}
+
+/* The legend's range: the channel's own mean ± 2.5 sd, rounded to something a
+ * reader can hold. Not the slab's min/max — that would move the colour of a
+ * given value every time the date changed, which is the one thing a legend
+ * must not do. Signed channels are forced symmetric about zero, so blue and
+ * red keep meaning down and up (§5, the app's diverging convention). */
+function tensorNiceRound(v) {
+  const a = Math.abs(v);
+  if (a === 0) return 0;
+  const mag = Math.pow(10, Math.floor(Math.log10(a)));
+  const step = a / mag >= 5 ? mag : a / mag >= 2 ? mag / 2 : mag / 5;
+  return Math.round(v / step) * step;
+}
+function tensorRange(idx, spec) {
+  if (spec.static) return [spec.vmin ?? 0, spec.vmax ?? 1];
+  const grp = idx.groups[spec.group];
+  const [mean, sd] = grp.norm[grp.chans.indexOf(spec.chan)];
+  if (spec.sign === "div") {
+    const m = tensorNiceRound(Math.max(Math.abs(mean) + 2.5 * sd, 1e-9));
+    return [-m, m];
+  }
+  return [tensorNiceRound(mean - 2.5 * sd), tensorNiceRound(mean + 2.5 * sd)];
+}
+
+/* The layer's config carries the CURRENT channel's presentation — ramp, range,
+ * unit, and whether it is categorical — because everything downstream (the
+ * legend, the painter, the probe, the pixel card) reads those off `cfg`. One
+ * mutable config rather than a config per channel: a channel switch must not
+ * be a different LAYER, or the chip, the opacity slider and the hover card
+ * would all be replaced under the reader's hand. */
+function tensorApplyChannel(cfg, idx, spec) {
+  cfg.tensorChan = spec.key;
+  cfg.units = spec.units;
+  cfg.ramp = spec.ramp;
+  cfg.classGrid = !!spec.classGrid;
+  const [lo, hi] = tensorRange(idx, spec);
+  cfg.vmin = lo; cfg.vmax = hi;
+  cfg.maxLevel = spec.group === "g025" ? 7 : 6;
+}
+
+/* Resolve what the layer should be painting NOW — the current channel at the
+ * current date's bin — fetching the slab if it is not in the LRU. Returns the
+ * grid, or null while it is in flight (the provider then paints nothing and is
+ * rebuilt when the bytes land, exactly as a month-keyed grid is). */
+async function ensureTensorGrid(cfg, { toast = false } = {}) {
+  /* A resolution that is no longer wanted must not become what is on screen.
+   * Two channel switches in quick succession are two fetches, and without this
+   * the slower one wins whenever it finishes last — the picture and the picker
+   * would then disagree, silently. Same shape as the pixel card's
+   * `pixelCardSeq` and the probe's `probeSeq`. */
+  const my = ++tensorState.seq;
+  const idx = await loadTensorIndex();
+  if (!idx) {
+    tensorState.error = "no index";
+    tensorState.current = null;
+    if (toast) tensorMissingToast(cfg);
+    return null;
+  }
+  const spec = tensorChannelSpec(idx, cfg.tensorChan);
+  if (!spec) return null;
+  tensorApplyChannel(cfg, idx, spec);
+  const bin = tensorBinOfDate(idx, state.date);
+  const key = spec.static ? `static:${spec.chan}` : `${spec.key}:${bin}`;
+  if (tensorState.currentKey === key && tensorState.current) return tensorState.current;
+  let g = null;
+  try {
+    tensorState.loading = true;
+    g = spec.static ? await tensorStatic(idx, spec.chan)
+                    : await tensorPlane(idx, spec.group, bin, spec.chan);
+    tensorState.error = g ? null : "no data for this bin";
+  } catch (err) {
+    tensorState.error = String((err && err.message) || err);
+    g = null;
+  } finally {
+    tensorState.loading = false;
+  }
+  if (my !== tensorState.seq) return tensorState.current;   // superseded
+  if (!g) {
+    tensorState.current = null;
+    tensorState.currentKey = null;
+    if (toast) tensorMissingToast(cfg);
+    return null;
+  }
+  g.tensorBin = spec.static ? null : bin;
+  g.tensorSpec = spec;
+  tensorState.current = g;
+  tensorState.currentKey = key;
+  gridsLoaded.set(cfg.id, g);
+  return g;
+}
+
+/* Synchronous view of the same thing, for the painter: `GridProvider` asks per
+ * TILE and must never issue a request of its own — the fetch is owned by
+ * enable / date / channel, and a tile drawn before the bytes land is simply
+ * blank until the rebuild. */
+function tensorGridFor(cfg) {
+  const spec = tensorState.index
+    ? tensorChannelSpec(tensorState.index, cfg.tensorChan) : null;
+  if (!spec) return null;
+  const bin = tensorState.index
+    ? tensorBinOfDate(tensorState.index, state.date) : null;
+  const key = spec.static ? `static:${spec.chan}` : `${spec.key}:${bin}`;
+  return tensorState.currentKey === key ? tensorState.current : null;
+}
+
+function tensorMissingToast(cfg) {
+  showToast(`<strong>${cfg.title}</strong> could not be read` +
+    (tensorState.error ? ` (${tensorState.error})` : "") +
+    `. The tensor lives on the Hugging Face Hub and is fetched one pentad at a ` +
+    `time; the rest of the globe is unaffected. ` +
+    `<a href="https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY7_GLOBE.md" ` +
+    `target="_blank" rel="noopener">what this layer is</a>.`,
+    { key: "family7-missing", replace: true });
+}
+
+/* Which pentad is on screen, said out loud on enable and on a bin change —
+ * the `datelessToast` shape one rung finer. Nothing else in the app is keyed
+ * to five days, so "the date selector works but only every fifth day changes
+ * anything" is a fact a reader has to be told rather than discover. */
+function maybeTensorToast(cfg, { replace = false } = {}) {
+  const idx = tensorState.index;
+  if (!idx) return;
+  const spec = tensorChannelSpec(idx, cfg.tensorChan);
+  const bin = tensorBinOfDate(idx, state.date);
+  const at = tensorPentadLabel(idx, bin);
+  const clamped = bin !== Math.floor(
+    (Date.parse(state.date + "T00:00:00Z") - Date.parse(idx.epoch + "T00:00:00Z"))
+    / 864e5 / idx.pentad_days);
+  if (spec && spec.static) {
+    showToast(`<strong>${cfg.title}</strong> is showing the static ` +
+      `<strong>${spec.label}</strong> — it is a property of the grid, not a ` +
+      `measurement, so the <strong>date selector doesn't change it</strong>. ` +
+      `Pick any other channel and the date drives it again.`,
+      { key: "family7-pentad", replace: true });
+    return;
+  }
+  showToast(`<strong>${cfg.title}</strong> is <strong>pentad</strong> data: one ` +
+    `frame per fixed five-day bin. Showing <strong>${at}</strong>` +
+    (clamped ? ` — the nearest bin the tensor holds to your date` : "") +
+    `. Each frame is one range read of the archive on the Hugging Face Hub.`,
+    { key: "family7-pentad", replace });
+}
+
+/* A date move repaints the tensor layer only when it lands in a DIFFERENT bin
+ * — four days in five change nothing, and rebuilding the provider for them
+ * would issue a request per keystroke. Called from `applyDateMove`, which is
+ * already inside `scrubApply` (docs/TILE_BUDGET.md: a held key must cost one
+ * read per settled date, not one per keystroke). */
+async function refreshTensorGrids() {
+  const idx = tensorState.index;
+  for (const [id, entry] of Object.entries(state.layers)) {
+    if (!entry.layer || !entry.cfg.tensorGrid) continue;
+    if (!idx) continue;
+    const spec = tensorChannelSpec(idx, entry.cfg.tensorChan);
+    if (spec && spec.static) continue;             // no date axis at all
+    const bin = tensorBinOfDate(idx, state.date);
+    if (entry.tensorBin === bin) continue;
+    entry.tensorBin = bin;
+    await ensureTensorGrid(entry.cfg);
+    if (!state.layers[id] || !state.layers[id].layer) continue;
+    removeLayer(id);
+    addLayer(entry.cfg);
+    maybeTensorToast(entry.cfg, { replace: true });
+  }
+}
+
+/* The channel picker in the layer's own row. Built from the INDEX, never from
+ * a list here: the tensor's channel names, their plain-English labels and
+ * their units are the builder's vocabulary and travel with the builder's bytes
+ * (the same argument a categorical grid's palette makes in §2.3). */
+function tensorFillChannelSelect(cfg) {
+  const sel = document.querySelector(`select[data-chan="${cfg.id}"]`);
+  if (!sel) return;
+  const list = tensorChannelList(tensorState.index);
+  if (!list.length) {
+    sel.innerHTML = `<option value="">— the index has not landed —</option>`;
+    return;
+  }
+  const want = list.map((c) =>
+    `<option value="${c.key}">${esc(c.label)}` +
+    `${c.units ? ` — ${esc(c.units)}` : ""}` +
+    `${c.step ? ` · ${c.step}°` : " · static"}</option>`).join("");
+  if (sel.innerHTML !== want) sel.innerHTML = want;
+  if (!list.some((c) => c.key === cfg.tensorChan)) cfg.tensorChan = list[0].key;
+  sel.value = cfg.tensorChan;
+}
+
+/* Resolve the layer's bytes and, if they arrived AFTER the provider was built,
+ * rebuild it — Cesium caches rendered tiles, so a repaint needs a fresh
+ * provider (the same rule `refreshMonthlyGrids` follows). Terminates: the
+ * rebuild calls back in here with the grid already resolved. */
+async function tensorEnsureForLayer(cfg) {
+  const had = tensorGridFor(cfg);
+  const g = await ensureTensorGrid(cfg);
+  tensorFillChannelSelect(cfg);
+  const entry = state.layers[cfg.id];
+  if (!entry || !entry.layer) return g;
+  entry.tensorBin = g ? g.tensorBin : null;
+  if (g && !had) { removeLayer(cfg.id); addLayer(cfg); }
+  else updateLegends();
+  return g;
+}
+
+async function tensorSwitchChannel(cfg) {
+  const entry = state.layers[cfg.id];
+  await ensureTensorGrid(cfg, { toast: true });
+  tensorFillChannelSelect(cfg);
+  if (entry && entry.layer) { removeLayer(cfg.id); addLayer(cfg); }
+  updateLegends();
+  maybeTensorToast(cfg, { replace: true });
+  try { conesOnTensorChannel(cfg); } catch { /* the cone is a follower, never a gate */ }
+}
+
+/* What the tests read instead of pixels: which channel, which bin, how many
+ * slabs the LRU is holding, and one sampled value — enough to assert that the
+ * bytes travelled and were un-z-scored, without asserting on a colour. */
+function tensorLayerState() {
+  const cfg = GIBS_LAYERS.find((l) => l.id === "family7");
+  const g = tensorGridFor(cfg);
+  const idx = tensorState.index;
+  return {
+    hasIndex: !!idx,
+    error: tensorState.error,
+    chan: cfg.tensorChan,
+    bin: idx ? tensorBinOfDate(idx, state.date) : null,
+    pentad: idx ? tensorPentadLabel(idx, tensorBinOfDate(idx, state.date)) : null,
+    ready: !!g,
+    slabs: [...tensorState.slabs.keys()],
+    bytes: tensorState.bytes,
+    grid: g ? { nx: g.nx, ny: g.ny, dlon: g.dlon, west: g.west, south: g.south,
+                wrap: !!g.wrap, units: g.units, binStart: g.binStart || null } : null,
+    norm: g && g.tensor ? [g.tensor.mean, g.tensor.sd] : null,
+    vmin: cfg.vmin, vmax: cfg.vmax, ramp: cfg.ramp, classGrid: !!cfg.classGrid,
+  };
+}
+/* One cell of whatever the tensor layer is currently painting, in the
+ * channel's own unit — the value the probe would print, without a click. */
+function tensorSampleAt(lon, lat) {
+  const cfg = GIBS_LAYERS.find((l) => l.id === "family7");
+  const g = tensorGridFor(cfg);
+  return g ? sampleGrid(g, lon, lat) : null;
+}
+
+/* Said on enable: which pentad is on screen, or why nothing is. */
+async function tensorAnnounce(cfg) {
+  const idx = await loadTensorIndex();
+  if (!idx) { tensorState.error = "no index"; tensorMissingToast(cfg); return; }
+  maybeTensorToast(cfg);
 }
 
 class GridProvider {
@@ -3571,6 +4179,7 @@ function addLayer(cfg) {
 
   if (cfg.grid) {
     state.layers[cfg.id] = entry;
+    if (cfg.tensorGrid) tensorEnsureForLayer(cfg);
     if (cfg.monthlyGrid) {
       // remember which month rendered, so a date change knows when to repaint
       loadGrid(cfg).then((g) => {
@@ -3941,6 +4550,7 @@ function applyDateMove() {
     refreshTimedLayers({ hold: true });
     refreshYearlyLayers();
     refreshMonthlyGrids();
+    refreshTensorGrids();     // one 14.5 MB range read per SETTLED date, not per keystroke
     if (sstEnsembleLayer) updateEnsembleLayer();
   });
   notifyGlobeDate();
@@ -3994,6 +4604,7 @@ function syncDateMax() {
     refreshTimedLayers();
     refreshYearlyLayers();
     refreshMonthlyGrids();
+    refreshTensorGrids();
   }
   // The comparison lives on the same axis: when the axis shortens, a pinned
   // date past the new end has to come back with it, or the comparison would
@@ -4911,10 +5522,20 @@ function gridLegendEl(cfg) {
   const div = document.createElement("div");
   div.className = "legend-item";
   div.innerHTML = `<div class="legend-title">${cfg.title}</div>`;
+  if (cfg.tensorGrid) {
+    // The tensor layer's legend names the CHANNEL, because the layer's title
+    // cannot: one layer paints twenty-three different quantities.
+    const spec = tensorState.index
+      ? tensorChannelSpec(tensorState.index, cfg.tensorChan) : null;
+    if (spec) {
+      div.innerHTML = `<div class="legend-title">${esc(spec.label)}` +
+        `${spec.step ? ` · ${spec.step}°` : ""}</div>`;
+    }
+  }
   if (cfg.classGrid) {
     // Same swatch legend as the classification rasters, fed from the grid file
     // instead of a GIBS colormap — one shape for "the value is a category".
-    loadGrid(cfg).then((g) => {
+    loadGridMonth(cfg).then((g) => {
       if (!g?.classes) return;
       buildClassLegend(div, { classes: g.classes }, cfg);
     });
@@ -5131,6 +5752,10 @@ function datelessToast(id) {
   if (cfg) {
     if (cfg.timed) return null;                              // genuinely date-driven
     if (cfg.monthlyGrid) return null;      // month-aware — its own toast (maybeMonthlyGridToast)
+    // Pentad-aware: date-driven every five days, with its own toast naming the
+    // bin (maybeTensorToast). Only its two STATICS ignore the date, and that
+    // toast says so when one is picked.
+    if (cfg.tensorGrid) return null;
     if (cfg.grid) {
       if (cfg.classGrid) {
         // Each categorical grid is dateless for its OWN reason and must say
@@ -5659,6 +6284,25 @@ const LAYER_FACTS = {
          "open-data gridded climatology. The sharpest view in the app of how " +
          "mountains make rain: valley floors receive under 600 mm/yr while nearby " +
          "Alpine crests exceed 3,000 mm/yr." },
+  "family7": {
+    rec: "1982-01-01 → 2024-12-31 · the ocean channels (currents, mixed layer, " +
+         "sea-surface height) start in 1993, where the GLORYS reanalysis does",
+    int: "5-day pentad — one frame per fixed five-day bin counted from 1982-01-01, " +
+         "so four days in five leave the picture unchanged",
+    sp: "0.25° (g025) · 1° (g100) — the two channel groups keep their own native grids",
+    sum: "This is not a measurement of the world, it is the INPUT the forecaster " +
+         "reads: family 7, the first tensor covering the whole globe rather than " +
+         "the North Atlantic window. Every value here is a five-day mean on a " +
+         "point-aligned grid, and land cells are no longer blank — the shared " +
+         "channels exist over land and water alike, which is the whole point of " +
+         "this tensor: the OISST sea-surface temperature is its own observed " +
+         "channel (`sst`, ocean only), and the shared land-and-sea skin " +
+         "temperature is the reanalysis field `skt` at 1° — so a land cell reads " +
+         "its temperature from `skt`, `t2m` and `tsoil`, never from `sst`. " +
+         "The archive stores every channel " +
+         "z-scored; the numbers shown here are multiplied back into their own " +
+         "units, and the probe prints the stored σ beside them.",
+  },
   "nightlights": { rec: "a composite of the whole year 2016 (fixed — ignores the date selector)", int: "one composite of a full year", sp: "500 m grid",
     sum: "Human presence seen from orbit at night: a cloud-free annual composite of " +
          "VIIRS low-light imagery (Black Marble). Cities, highways, gas flares and " +
@@ -5692,6 +6336,12 @@ function buildLayerPanel() {
       </div>
       <div class="meta">${cfg.meta}</div>
       ${cfg.fine ? `<div class="fine-hint" data-finehint="${cfg.id}" hidden></div>` : ""}
+      ${cfg.tensorGrid ? `<div class="chan-row" data-chanrow="${cfg.id}"
+              ${cfg.on ? "" : "style='display:none'"}>
+        <label class="alpha-label" for="chan-${cfg.id}">channel</label>
+        <select id="chan-${cfg.id}" data-chan="${cfg.id}"
+                title="Which channel of the tensor to paint"></select>
+      </div>` : ""}
       <div class="sup-note" data-suppressed="${cfg.id}" hidden></div>
       <div class="alpha-row" data-alpharow="${cfg.id}" ${cfg.on ? "" : "style='display:none'"}>
         <span class="alpha-label">opacity</span>
@@ -5708,15 +6358,28 @@ function buildLayerPanel() {
   updateSplitUI();
 
   list.addEventListener("change", (e) => {
+    // The family-7 channel picker lives in the layer's own row, because the
+    // channel is what the layer IS — a second panel for it would put the
+    // question ("which of the model's inputs?") away from the answer.
+    const chanId = e.target.getAttribute("data-chan");
+    if (chanId) {
+      const ccfg = GIBS_LAYERS.find((l) => l.id === chanId);
+      ccfg.tensorChan = e.target.value;
+      tensorSwitchChannel(ccfg);
+      return;
+    }
     const id = e.target.getAttribute("data-id");
     if (!id) return;
     const cfg = GIBS_LAYERS.find((l) => l.id === id);
     const row = list.querySelector(`[data-alpharow="${id}"]`);
+    const chanRow = list.querySelector(`[data-chanrow="${id}"]`);
     if (e.target.checked) {
       addLayer(cfg);
       row.style.display = "";
+      if (chanRow) chanRow.style.display = "";
       maybeDatelessToast(id);
       maybeMonthlyGridToast(cfg);
+      if (cfg.tensorGrid) tensorAnnounce(cfg);
       maybeArchiveToast(cfg);
       maybeAnnualToast(cfg);
       maybeFineToast(cfg);
@@ -5724,6 +6387,7 @@ function buildLayerPanel() {
     } else {
       removeLayer(id);
       row.style.display = "none";
+      if (chanRow) chanRow.style.display = "none";
       updateFineGates();
       if (cfg?.forecastGrid) syncDateMax();   // may pull the date back to today
     }
@@ -5796,6 +6460,7 @@ function buildLayerPanel() {
       scrubApply(() => {
         refreshTimedLayers({ hold: true }); // date change affects every timed layer
         refreshMonthlyGrids();       // crossing midnight can cross a month
+        refreshTensorGrids();        // …and a pentad boundary
       });
     } else {
       // Same date, new half-hour: only sub-daily layers see a different TIME,
@@ -6516,6 +7181,18 @@ async function probeEntryValue(entry, carto) {
     if (cfg.classGrid) {
       const label = gridClassLabel(g, v);
       return label == null ? { ...base, noData: true } : { ...base, label };
+    }
+    /* The tensor prints BOTH numbers, because they are two different facts and
+     * the reader needs the first while the model is handed the second: the
+     * value in the channel's own unit, and the z-score the archive actually
+     * stores. `raw = z·sd + mean` is inverted here rather than re-read, so the
+     * two can never describe different cells. */
+    if (cfg.tensorGrid && g.tensor) {
+      const z = (v - g.tensor.mean) / g.tensor.sd;
+      const spec = g.tensorSpec;
+      return { ...base, value: v,
+               extra: `${esc(spec ? spec.label : g.tensor.chan)} · ` +
+                      `z = ${fmtVal(z)} as the tensor stores it` };
     }
     return { ...base, value: v };
   }
@@ -7554,6 +8231,18 @@ async function showPixelState(carto) {
     // In the batch, not after it: the card must never serialise a round-trip.
     // Packed, so ~0.8 MB and cached thereafter.
     ["forest-loss drivers", loadGrid(GIBS_LAYERS.find((l) => l.id === "drivers")).catch(() => null)],
+    /* The model's own input at this point — but ONLY while the layer is on.
+     * Every other row in this card is an observation of the world and belongs
+     * here unconditionally; this one is a picture of our tensor, and a card
+     * that volunteered it on every click would be answering a question nobody
+     * asked with a 14.5 MB range read. */
+    ["global tensor", (() => {
+      const e = state.layers.family7;
+      if (!e || !e.layer) return Promise.resolve(null);
+      return loadGridMonth(e.cfg)
+        .then((g) => (g ? { g, cfg: e.cfg, v: sampleGrid(g, lon, lat) } : null))
+        .catch(() => null);
+    })()],
   ];
   const values = jobs.map(([, , empty]) => (empty === undefined ? null : empty));
   const done = new Array(jobs.length).fill(false);
@@ -7629,7 +8318,7 @@ async function showPixelState(carto) {
   await new Promise((r) => setTimeout(r, PIXEL_REDRAW_MS + 20));
 
   function drawPixelCard(values, missing, final) {
-    const [rasters, trueAnomRaw, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid] = values;
+    const [rasters, trueAnomRaw, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid, tensorHit] = values;
     const trueAnom = trueAnomRaw && !trueAnomRaw.none ? trueAnomRaw : null;
     if (pixelCardEl.classList.contains("hidden")) return;   // closed while loading
 
@@ -7805,6 +8494,37 @@ async function showPixelState(carto) {
           pixelRow("Dominant driver", label, whenOfGrid(GIBS_LAYERS.find((l) => l.id === "drivers"), g)) +
           `</div>`);
       }
+    }
+
+    /* -- what the FORECASTER reads here (family 7) --------------------------- */
+    /* Only present while the layer is on — see the job above. Two numbers on
+     * one row, because they are two facts: the value in the channel's own unit,
+     * and the z-score the tensor actually stores. The stamp is the pentad's
+     * opening day; the five-day span is named in the row itself, since a bare
+     * date would read as a daily measurement. */
+    if (tensorHit && tensorHit.v != null) {
+      const { g, cfg, v } = tensorHit;
+      const spec = g.tensorSpec;
+      const idx = tensorState.index;
+      let line;
+      if (cfg.classGrid) {
+        line = gridClassLabel(g, v) || String(v);
+      } else if (g.tensor) {
+        const z = (v - g.tensor.mean) / g.tensor.sd;
+        line = `${fmtVal(v)} ${esc(g.units || "")} · z = ${fmtVal(z)} as stored`;
+      } else {
+        line = `${fmtVal(v)} ${esc(g.units || "")}`;
+      }
+      const span = g.tensorBin != null && idx
+        ? `<div class="px-note">One five-day mean — ${esc(tensorPentadLabel(idx, g.tensorBin))} —
+           on the tensor's own ${spec ? spec.step : "0.25"}° grid, read as a single range
+           request from the published archive. This is the model's INPUT, not an
+           observation added here.</div>`
+        : `<div class="px-note">A static of the grid, not a measurement: it carries no
+           date and the date selector does not change it.</div>`;
+      sec.push(`<div class="px-sec"><div class="px-sec-title">What the model reads ` +
+        `<span class="px-src">family 7</span></div>` +
+        pixelRow(spec ? spec.label : "channel", line, whenOfGrid(cfg, g)) + span + `</div>`);
     }
 
     /* -- long-term normals (the memory channels) ----------------------------- */
@@ -9681,6 +10401,13 @@ const cones = {
     stencil: "codec", chan: 0, outerChan: 0, anomaly: true,
     dateIdx: 0, lagIdx: 0, snapped: false,
     dots: [], lo: 0, hi: 1, pick: null, ramp: "anom", diverging: true,
+    /* LIVE MODE (family 7, the global tensor). `source` is the switch; the
+     * rest is only meaningful while it reads "live". The anchor is a CELL of
+     * the global grid rather than one of the five exported ones, so it is
+     * kept as (row, col) and the lat/lon are derived — the tensor's index is
+     * what a dot's date and value are looked up by. */
+    source: "anchors", liveChan: null, liveAnchor: null, liveSeq: 0,
+    liveLoading: 0, liveErr: null, liveSphere: null, liveElev: null,
   },
 };
 const CONE_ANCHOR_COLOR = "#f85149";      // ml/draw_stencils.py's anchor red
@@ -9793,6 +10520,17 @@ function coneRound(x) {
   return f % 2 === 0 ? f : f + 1;         // exactly .5 → the even neighbour
 }
 
+/* THE DATELINE. On the North Atlantic window a column off the edge is off the
+ * tensor and the model reads it as missing — that is what the hollow dots say.
+ * On the GLOBAL grid there is no edge: column −1 and column 1440 are both
+ * column 1439's and 0's neighbours, because the grid closes. So a global
+ * geometry wraps its columns and a windowed one does not, and this one line is
+ * the whole difference between the two. Rows are NOT wrapped: going past a
+ * pole is leaving the grid, not coming round the other side. */
+function coneWrapCol(col, nx, wrap) {
+  return wrap ? ((col % nx) + nx) % nx : col;
+}
+
 function coneSpiral(latDeg, rMin, rMax, nPts) {
   const K = coneGeo.constants, P = coneParams;
   const coslat = Math.max(Math.cos(latDeg * Math.PI / 180), K.COS_FLOOR);
@@ -9808,14 +10546,33 @@ function coneSpiral(latDeg, rMin, rMax, nPts) {
   return out;
 }
 
+/* Every family the exported geometry defines, from BOTH of its tables. The
+ * North Atlantic block carries A, B and C; the global block adds L — the land
+ * family (snow water equivalent, soil moisture, soil temperature), which the
+ * North Atlantic tensor had no channels for. Merged rather than chosen so the
+ * page never has to know which tensor a family came from, and read from the
+ * file rather than listed here so a family added in Python appears in the UI
+ * with no JS change at all. */
+function coneFamilyTable() {
+  return { ...(coneGeo.families || {}),
+           ...((coneGeo.global && coneGeo.global.families) || {}) };
+}
+
 /* Inner reach in km. `rg` is the depth column: family-B physics, so the same
  * reach — it is the SAMPLING that differs (the column only), not the cone. */
 function coneReachKm(fam, lag) {
   const K = coneGeo.constants, F = coneGeo.families, P = coneParams;
   if (fam === "rg") fam = "B";
   if (fam === "A") return lag <= 1 ? F.A.L_corr_km : 0;
-  const s = F[fam];
-  let r = P.V_MS * K.SEC_PER_DAY * K.DT_DAYS * (1 + lag) / 1000;
+  const s = coneFamilyTable()[fam];
+  if (!s) return 0;                       // a family the export does not define
+  /* The "drift speed" knob edits the families that ADVECT — B and C, which
+   * share the exported v_ms it is initialised from. A family with a different
+   * v_ms of its own keeps it: family L does not advect at all (v_ms 0), so its
+   * reach is its correlation length at every lag, and letting the knob move it
+   * would make the drawn cone disagree with the exported reference set. */
+  const v = (s.v_ms === undefined || s.v_ms === F.B.v_ms) ? P.V_MS : s.v_ms;
+  let r = v * K.SEC_PER_DAY * K.DT_DAYS * (1 + lag) / 1000;
   r = Math.max(s.L_corr_km, r);
   if (fam === "C" && lag <= 1) r = Math.max(r, F.A.L_corr_km);     // the L-shape
   return Math.min(K.CAP_KM, r);
@@ -9999,6 +10756,7 @@ function conesDraw() {
   // geometry path below is untouched by it — this is one branch, not a second
   // renderer, so a bug in the data mode cannot change what the geometry mode
   // draws.
+  if (coneLiveOn()) { conesDrawLive(); conesStats(); conesSection(); return; }
   if (coneDataOn()) { conesDrawData(); conesStats(); conesSection(); return; }
   const e = cones.ents, K = coneGeo.constants, P = coneParams, w = coneGeo.window;
   const g = coneGridOf(cones.lat, cones.lon);
@@ -10087,7 +10845,10 @@ function coneFmtKm(r) {
 }
 
 function conesStats() {
-  const K = coneGeo.constants, P = coneParams, k = cones.lag, fam = cones.fam;
+  const K = coneGeo.constants, P = coneParams, k = cones.lag;
+  // In live mode the family follows the CHANNEL (family 7's channels carry
+  // their family in the exported geometry), not the geometry-mode select.
+  const fam = coneLiveOn() ? coneLiveFamily().fam : cones.fam;
   const r = k <= P.L_IN ? coneReachKm(fam, k) : coneOuterReachKm(k);
   const reach = document.getElementById("cn-reach");
   reach.querySelector(".stat-value").textContent = r > 0 ? `${coneFmtKm(r)} km` : "none";
@@ -10192,10 +10953,14 @@ function conesSection() {
   ctx.stroke(); ctx.setLineDash([]);
 
   // the three inner families, solid, over their own inner lags
-  const cols = { A: "#f85149", B: "#4493f8", C: "#3fb950" };
-  for (const f of ["A", "B", "C"]) {
-    const cur = (cones.fam === "rg" ? "B" : cones.fam) === f;
-    ctx.strokeStyle = cols[f]; ctx.lineWidth = cur ? 2.6 : 1.4;
+  // one colour per family, L included — the land family the global geometry
+  // adds; anything the export invents later falls back to grey rather than
+  // vanishing from the cross-section
+  const cols = { A: "#f85149", B: "#4493f8", C: "#3fb950", L: "#d29922" };
+  const curFam = coneLiveOn() ? coneLiveFamily().fam : cones.fam;
+  for (const f of Object.keys(coneFamilyTable())) {
+    const cur = (curFam === "rg" ? "B" : curFam) === f;
+    ctx.strokeStyle = cols[f] || "#8b949e"; ctx.lineWidth = cur ? 2.6 : 1.4;
     ctx.globalAlpha = cur ? 1 : 0.5;
     ctx.beginPath();
     let started = false, last = -1;
@@ -10207,7 +10972,7 @@ function conesSection() {
     }
     ctx.stroke();
     if (last >= 0) {
-      ctx.fillStyle = cols[f];
+      ctx.fillStyle = cols[f] || "#8b949e";
       ctx.fillText(f, X(last) + 4, Y(coneReachKm(f, last)) - 3);
     }
     ctx.globalAlpha = 1;
@@ -10280,7 +11045,10 @@ function loadConeSample(id) {
 }
 
 function coneDataOn() {
-  return !!(cones.data.on && cones.data.sample);
+  if (!cones.data.on) return false;
+  // Live mode needs no exported sample — its "sample" is the archive itself.
+  if (cones.data.source === "live") return !!tensorState.index;
+  return !!cones.data.sample;
 }
 
 /* The channel the read-out and the colours are about. The codec stencil reads
@@ -10319,6 +11087,19 @@ function coneDataSyncDate() {
 function coneDataLagRange() {
   const S = cones.data.sample;
   const s = document.getElementById("cn-lag");
+  if (cones.data.source === "live") {
+    // Live mode walks the real lag axis: 0..L_in inside the codec's cone, and
+    // every outer lag out to the stage-2 cap for the geometry-only ring.
+    if (!s || !coneGeo) return;
+    const P = coneParams;
+    s.min = cones.data.stencil === "codec" ? "0" : String(P.L_IN + 1);
+    s.max = cones.data.stencil === "codec"
+      ? String(P.L_IN) : String(coneGeo.constants.K_OUTER - 1);
+    s.step = "1";
+    cones.lag = Math.min(+s.max, Math.max(+s.min, cones.lag));
+    s.value = String(cones.lag);
+    return;
+  }
   if (!S || !s) return;
   if (cones.data.stencil === "codec") {
     s.min = "0"; s.max = String(S.meta.L_in); s.step = "1";
@@ -10646,6 +11427,7 @@ function conesDataReadout() {
 function conesDataStrip() {
   const c = document.getElementById("cn-strip");
   const S = cones.data.sample;
+  document.getElementById("cn-strip-wrap")?.classList.remove("hidden");
   if (!c || !S) return;
   const ctx = c.getContext("2d");
   const W = c.width, H = c.height;
@@ -10750,12 +11532,29 @@ function conesDataHint() {
  * dot than the one under the finger. */
 function conesPickDot(i) {
   cones.data.pick = cones.data.dots[i] || null;
-  conesDataReadout();
+  if (coneLiveOn()) conesLiveReadout(); else conesDataReadout();
 }
 
 /* Fill the anchor and channel selectors from the loaded sample. */
 function conesDataFillSelectors() {
   const S = cones.data.sample;
+  if (cones.data.source === "live") {
+    // In live mode the channel list is the TENSOR'S, and there is no anchor
+    // select at all — the anchor is wherever the reader taps.
+    const csel = document.getElementById("cn-channel");
+    const list = coneLiveChannels();
+    if (csel && list.length) {
+      const want = list.map((c) =>
+        `<option value="${c.key}">${esc(c.label)}` +
+        `${c.units ? ` — ${esc(c.units)}` : ""} · ${c.step}°</option>`).join("");
+      if (csel.innerHTML !== want) csel.innerHTML = want;
+      if (!list.some((c) => c.key === cones.data.liveChan)) {
+        cones.data.liveChan = list[0].key;
+      }
+      csel.value = cones.data.liveChan;
+    }
+    return;
+  }
   const asel = document.getElementById("cn-data-anchor");
   if (asel && coneManifest) {
     const want = (coneManifest.anchors || [])
@@ -10818,6 +11617,7 @@ async function conesSetDataMode(on) {
     conesDraw();
     return;
   }
+  if (cones.data.source === "live") { await conesSetSource("live"); return; }
   const m = await loadConeManifest();
   if (!m || !(m.anchors || []).length) {
     cones.data.error = "no sample index";
@@ -10848,6 +11648,513 @@ function coneNearestAnchor(lat, lon) {
   return best || null;
 }
 
+/* ==================================== Cones · DATA mode · LIVE (family 7)
+ *
+ * The block above puts the tensor's numbers in the cone for FIVE pre-exported
+ * North Atlantic anchors: every value there was produced in Python by the
+ * production sampler, which is what makes it a picture of the model rather
+ * than a picture of this page. This is the other half — the same cone read
+ * LIVE out of family 7, the global tensor, so any cell on the planet can be an
+ * anchor: Antarctica, the Sahara, the middle of the Pacific.
+ *
+ * What is gained: the whole globe, and the land channels. What is given up,
+ * and the hint says so out loud:
+ *   · the gathering happens HERE, in JavaScript, off the geometry port above —
+ *     which is exactly why that port is certified against Python's own
+ *     reference dot sets in tests/data.spec.js;
+ *   · no ANOMALY. The anomaly is `ml/trainprobe.py::anomaly_transform`'s
+ *     three-pass harmonic climatology over the whole tensor, and it is not
+ *     something a browser can compute from seven pentads. Raw only.
+ *   · no `rg100` (the 32 Roemmich–Gilson depth channels). They are written
+ *     only into the pentad that holds a month's 15th, so six lags in seven
+ *     would be empty.
+ *   · the OUTER stencil is geometry, not values: 137 lags × one slab each is
+ *     about two gigabytes.
+ *
+ * The slabs come from the SAME LRU the globe layer uses, so moving the layer's
+ * date and moving the cone's anchor pay for each other's fetches. */
+
+/* Which cone family a family-7 channel belongs to. The FILE decides wherever
+ * it can — `data/cone_geometry.json`'s own `channel_family` is the definition,
+ * and family L (land: snow, soil moisture, soil temperature) arrives there
+ * with the next export. This map is the fallback for the family-7 names the
+ * exported file does not yet carry, and it is a fallback rather than a second
+ * definition: anything the file knows, the file wins. */
+const CONE_F7_FAMILY = {
+  cur_speed: "B", cur_u: "B", cur_v: "B", ssh: "B",
+  sst: "C", skt: "C", log_mld: "C", sea_ice: "C", t2m: "C", log_prate: "C",
+  lhtfl: "C", shtfl: "C",
+  tau_x: "A", tau_y: "A", tau_x_std: "A", tau_y_std: "A",
+  u10: "A", v10: "A", sp: "A",
+  log_swe: "L", soilw: "L", tsoil: "L",
+};
+const CONE_FAMILY_LABELS = {
+  A: "A · wind stress", B: "B · currents & SSH", C: "C · SST & mixed layer",
+  L: "L · land: snow, soil", rg: "rg · depth column",
+};
+
+function coneLiveOn() {
+  return !!(cones.data.on && cones.data.source === "live" && tensorState.index);
+}
+
+/* The global grid the live cone is anchored on. Taken from the exported
+ * `global` block when the Python side has published one, and from the tensor
+ * index's own g025 geometry until then — never typed here, because a grid
+ * written twice is a grid that drifts. */
+function coneGlobalGrid() {
+  if (coneGeo && coneGeo.global) {
+    const G = coneGeo.global;
+    return { ny: G.ny, nx: G.nx, lat0: G.lat0, lon0: G.lon0,
+             step: G.step, wrap: G.wrap !== false };
+  }
+  const g = tensorState.index && tensorState.index.groups.g025;
+  if (g) return { ny: g.grid.ny, nx: g.grid.nx, lat0: g.grid.lat0,
+                  lon0: g.grid.lon0, step: g.grid.step, wrap: !!g.grid.wrap };
+  return { ny: 721, nx: 1440, lat0: -90, lon0: -180, step: 0.25, wrap: true };
+}
+
+function coneLiveChannels() {
+  // Every g025 and g100 channel; no statics (they colour nothing — they are
+  // properties of the anchor, and the read-out prints them there) and no
+  // rg100 (see the header).
+  return tensorChannelList(tensorState.index).filter((c) => !c.static);
+}
+function coneLiveChanSpec() {
+  const list = coneLiveChannels();
+  return list.find((c) => c.key === cones.data.liveChan) || list[0] || null;
+}
+
+/* The cone family a live channel is read through, and whether the geometry
+ * file could actually answer. A channel whose family the export does not
+ * define yet (family L before the next export) falls back to C and SAYS so —
+ * a cone drawn at the wrong reach would look entirely plausible. */
+function coneLiveFamily() {
+  const spec = coneLiveChanSpec();
+  if (!spec) return { fam: "B", asked: "B", known: true };
+  const table = coneGeo ? coneFamilyTable() : {};
+  /* The EXPORT decides. `global.families[f].channels` is the definition of
+   * which family-7 channel belongs to which family, so it is consulted first;
+   * `channel_family` is the North Atlantic table under it; and only if neither
+   * knows the channel does the fallback below answer — which is why the
+   * fallback is a fallback and not a second definition. */
+  let asked = null;
+  for (const [f, spc] of Object.entries(table)) {
+    if ((spc.channels || []).includes(spec.chan)) { asked = f; break; }
+  }
+  asked = asked
+    || (coneGeo && coneGeo.channel_family && coneGeo.channel_family[spec.chan])
+    || CONE_F7_FAMILY[spec.chan] || "C";
+  const known = !!table[asked];
+  return { fam: known ? asked : "C", asked, known };
+}
+
+function coneLiveSetAnchor(lat, lon) {
+  const G = coneGlobalGrid();
+  const row = Math.max(0, Math.min(G.ny - 1, Math.round((lat - G.lat0) / G.step)));
+  const col = coneWrapCol(Math.round((lon - G.lon0) / G.step), G.nx, G.wrap);
+  cones.data.liveAnchor = { row, col,
+                            lat: G.lat0 + row * G.step, lon: G.lon0 + col * G.step };
+  cones.lat = cones.data.liveAnchor.lat;
+  cones.lon = cones.data.liveAnchor.lon;
+  cones.data.pick = null;
+}
+
+/* Every cell the live cone draws, before any value is attached. Lag 0 is the
+ * 3×3 patch (the codec's only raw neighbourhood); lags 1..L_in are the
+ * sunflower, from the SAME port the geometry mode draws and the certification
+ * test replays; lags past L_in are the outer spiral, geometry only. */
+function coneLiveCells() {
+  const G = coneGlobalGrid();
+  const a = cones.data.liveAnchor;
+  const P = coneParams;
+  const { fam } = coneLiveFamily();
+  const out = [];
+  const push = (kind, lag, dy, dx) => {
+    const row = a.row + dy;
+    const col = coneWrapCol(a.col + dx, G.nx, G.wrap);
+    // A row off the grid is off the EARTH here, not off a window: the global
+    // grid already covers pole to pole, so there is nowhere else for it to be.
+    out.push({ kind, lag, dy, dx, row, col,
+               valid: row >= 0 && row < G.ny,
+               lat: G.lat0 + row * G.step, lon: G.lon0 + col * G.step });
+  };
+  if (cones.data.stencil === "codec") {
+    for (let i = 0; i < 9; i++) push("patch", 0, Math.floor(i / 3) - 1, (i % 3) - 1);
+    for (const [lag, dy, dx] of coneInnerDots(a.lat, fam)) {
+      if (lag > Math.min(cones.lag, P.L_IN)) continue;
+      push("dot", lag, dy, dx);
+    }
+  } else {
+    for (const [dy, dx] of coneOuterSpiral(a.lat, cones.lag)) {
+      push("outer", cones.lag, dy, dx);
+    }
+  }
+  return out;
+}
+
+/* The coarse lookup, E-070 §1: every fourth 0.25° point IS a 1° point, and the
+ * two points either side of it round to it. Nine cells of a 3×3 patch
+ * therefore show the SAME 1° number — which is not a bug in the drawing, it is
+ * the model's honest view of a coarse channel, and the hint says so. The
+ * ratio is derived from the two grids rather than written as 4, because the
+ * in-repo fixture is a decimated pair whose ratio is 2. */
+function coneCoarseCell(plane, row, col, G) {
+  const ratio = plane.dlat / G.step;
+  const y1 = Math.max(0, Math.min(plane.ny - 1, Math.floor(row / ratio + 0.5)));
+  const x1 = ((Math.floor(col / ratio + 0.5) % plane.nx) + plane.nx) % plane.nx;
+  return { y1, x1 };
+}
+
+function coneLivePlaneValue(plane, d, G) {
+  if (!plane || !d.valid) return { v: null, z: null };
+  let r = d.row, c = d.col;
+  if (plane.dlat !== G.step) ({ y1: r, x1: c } = coneCoarseCell(plane, d.row, d.col, G));
+  const v = plane.values[r * plane.nx + c];
+  if (!Number.isFinite(v)) return { v: null, z: null, cell: [r, c] };
+  return { v, z: (v - plane.tensor.mean) / plane.tensor.sd, cell: [r, c] };
+}
+
+/* Fetch the pentads the cone needs — bin b for lag 0, b−k for lag k — one at a
+ * time, redrawing as each lands, so the picture fills in instead of waiting on
+ * the slowest. Seven slabs of the 0.25° group is about 100 MB; of the 1° group
+ * about 13. Nothing here is a second cache: `tensorPlane` is the layer's. */
+async function coneLiveFetch() {
+  const idx = tensorState.index;
+  const spec = coneLiveChanSpec();
+  if (!idx || !spec) return;
+  const my = ++cones.data.liveSeq;
+  const lags = cones.data.stencil === "codec"
+    ? Array.from({ length: Math.min(cones.lag, coneParams.L_IN) + 1 }, (_, k) => k)
+    : [];                                   // the outer stencil carries no values
+  cones.data.liveLoading = lags.length;
+  cones.data.liveErr = null;
+  for (const k of lags) {
+    const bin = cones.bin - k;
+    if (bin < idx.bin_first || bin > idx.bin_last) { cones.data.liveLoading--; continue; }
+    try {
+      await tensorPlane(idx, spec.group, bin, spec.chan);
+    } catch (err) {
+      cones.data.liveErr = String((err && err.message) || err);
+    }
+    if (my !== cones.data.liveSeq) return;          // a newer anchor/date owns it
+    cones.data.liveLoading--;
+    conesDraw();
+  }
+  cones.data.liveLoading = 0;
+}
+
+function coneLivePlaneFor(k) {
+  const idx = tensorState.index, spec = coneLiveChanSpec();
+  if (!idx || !spec) return null;
+  return tensorState.planes.get(`${spec.group}:${cones.bin - k}:${spec.chan}`) || null;
+}
+
+/* The colour scale for the live cone. RAW only, and fixed to the channel's own
+ * mean ± 2.5 sd exactly as the globe layer's legend is — the two are the same
+ * fetch and must not be two different colour scales, or a reader comparing the
+ * cone with the map underneath it would be comparing two palettes. */
+function coneLiveScale() {
+  const spec = coneLiveChanSpec();
+  if (!spec) return;
+  const [lo, hi] = tensorRange(tensorState.index, spec);
+  cones.data.lo = lo; cones.data.hi = hi;
+  cones.data.ramp = spec.ramp;
+  cones.data.diverging = spec.sign === "div";
+}
+
+function conesDrawLive() {
+  const e = cones.ents, G = coneGlobalGrid(), P = coneParams;
+  if (!cones.data.liveAnchor) coneLiveSetAnchor(cones.lat, cones.lon);
+  const a = cones.data.liveAnchor;
+  coneLiveScale();
+  const cells = coneLiveCells();
+  const outer = cones.data.stencil !== "codec";
+  const dots = [];
+  for (const d of cells) {
+    const plane = outer ? null : coneLivePlaneFor(d.lag);
+    const r = coneLivePlaneValue(plane, d, G);
+    dots.push({ ...d, bin: cones.bin - d.lag, raw: r.v, z: r.z,
+                srcCell: r.cell || null,
+                obs: r.v !== null && Number.isFinite(r.v),
+                plat: d.valid ? d.lat : null, plon: d.valid ? d.lon : null,
+                dyKm: d.dy * 27.83,
+                dxKm: d.dx * 27.83 * Math.cos(a.lat * Math.PI / 180) });
+  }
+  cones.data.dots = dots;
+
+  e.anchor.position = Cesium.Cartesian3.fromDegrees(a.lon, a.lat);
+  e.anchor.show = true;
+  e.win.show = false;                 // there is no window any more — this is the globe
+  for (const p of e.patch) p.show = false;
+
+  let n = 0;
+  for (const d of dots) {
+    if (d.plat === null) continue;
+    const cur = d.lag === cones.lag;
+    coneLiveDot(n++, d, d.kind === "patch" ? 8 : (cur ? 8 : 5), outer);
+  }
+  for (let i = n; i < conePoolLen; i++) cones.dots.get(i).show = false;
+  cones.nDrawn = n;
+  cones.nOff = dots.filter((d) => !d.valid).length;
+  cones.nOffInner = cones.nOff;
+
+  const K = coneGeo.constants;
+  const { fam } = coneLiveFamily();
+  const r = cones.lag <= P.L_IN ? coneReachKm(fam, cones.lag)
+                                : coneOuterReachKm(cones.lag);
+  if (r > 0) {
+    const coslat = Math.max(Math.cos(a.lat * Math.PI / 180), K.COS_FLOOR);
+    const dLat = P.ASPECT * r / K.KM_PER_DEG, dLon = r / (K.KM_PER_DEG * coslat);
+    const pos = [];
+    for (let i = 0; i <= 96; i++) {
+      const th = i / 96 * 2 * Math.PI;
+      pos.push(a.lon + dLon * Math.sin(th), a.lat + dLat * Math.cos(th));
+    }
+    e.ring.polyline.positions = Cesium.Cartesian3.fromDegreesArray(pos);
+    e.ring.show = true;
+  } else {
+    e.ring.show = false;
+  }
+  viewer.scene.requestRender();
+  /* The "what the codec reads" strip is family 4's picture — 42 channels of one
+   * exported anchor — and there is no equivalent here: family 7 has 21 surface
+   * channels in two groups and this page holds one of them at a time. Hidden
+   * rather than left showing the last anchor's numbers under a different
+   * heading, which would be the tab's one unforgivable lie. */
+  document.getElementById("cn-strip-wrap")?.classList.add("hidden");
+  conesLiveLegend();
+  conesLiveReadout();
+  conesLiveHint();
+}
+
+function coneLiveDot(i, d, size, geometryOnly) {
+  const p = i < cones.dots.length ? cones.dots.get(i)
+    : cones.dots.add({ position: Cesium.Cartesian3.fromDegrees(0, 0) });
+  p.position = Cesium.Cartesian3.fromDegrees(d.plon, d.plat);
+  if (geometryOnly) {
+    // The outer stencil carries no values on purpose (137 slabs ≈ 2 GB), so it
+    // is drawn as an outline: visibly a SHAPE, never a measurement.
+    p.color = Cesium.Color.TRANSPARENT;
+    p.outlineColor = Cesium.Color.fromCssColorString("#f0d861").withAlpha(0.8);
+    p.outlineWidth = 1.4;
+  } else if (!d.obs) {
+    const grey = Cesium.Color.fromCssColorString("#8b949e");
+    p.color = grey.withAlpha(0.18);
+    p.outlineColor = grey.withAlpha(0.55);
+    p.outlineWidth = 1.2;
+  } else {
+    const col = coneDataColor(d.raw);
+    p.color = col;
+    p.outlineColor = Cesium.Color.fromCssColorString("#0d1117").withAlpha(0.85);
+    p.outlineWidth = 1;
+  }
+  p.pixelSize = size;
+  p.show = true;
+  p.id = { coneDot: i };
+  conePoolLen = Math.max(conePoolLen, i + 1);
+}
+
+function conesLiveLegend() {
+  const host = document.getElementById("cn-legend");
+  if (!host) return;
+  const spec = coneLiveChanSpec();
+  if (!spec) { host.innerHTML = ""; return; }
+  const { lo, hi, ramp } = cones.data;
+  const stops = [];
+  for (let i = 0; i <= 8; i++) {
+    const [r, g, b] = rampColor(ramp, i / 8);
+    stops.push(`rgb(${r},${g},${b}) ${(i / 8 * 100).toFixed(0)}%`);
+  }
+  host.innerHTML =
+    `<div class="cn-bar" style="background:linear-gradient(90deg,${stops.join(",")})"></div>` +
+    `<div class="cn-scale"><span>${coneFmtVal(lo)}</span>` +
+    `<span>${coneFmtVal((lo + hi) / 2)}</span>` +
+    `<span>${coneFmtVal(hi)}</span></div>` +
+    `<div class="cn-unit"><strong>${esc(spec.label)}</strong> · ` +
+    `${esc(spec.units || "")} (the measurement — no anomaly in live mode) · ` +
+    `${tensorPentadLabel(tensorState.index, cones.bin)}</div>`;
+}
+
+function conesLiveReadout() {
+  const host = document.getElementById("cn-readout");
+  if (!host) return;
+  const spec = coneLiveChanSpec();
+  const a = cones.data.liveAnchor;
+  const d = cones.data.pick;
+  const sphereLbl = cones.data.liveSphere;
+  const elevM = cones.data.liveElev;
+  const where = a
+    ? `<br><span class="cn-ro-k">anchor</span> row ${a.row} col ${a.col} ` +
+      `(${Math.abs(a.lat).toFixed(2)}° ${a.lat >= 0 ? "N" : "S"} ` +
+      `${Math.abs(a.lon).toFixed(2)}° ${a.lon >= 0 ? "E" : "W"})` +
+      (sphereLbl ? ` · <strong>${esc(sphereLbl)}</strong>` : "") +
+      (Number.isFinite(elevM) ? ` · ${Math.round(elevM)} m` : "")
+    : "";
+  if (!d) {
+    host.innerHTML = `<span class="cn-ro-k">Tap anywhere on the globe to move the ` +
+      `anchor — any cell on the planet, Antarctica included — then tap a dot to ` +
+      `read it.</span>${where}`;
+    return;
+  }
+  const date = coneDateOfBin(d.bin);
+  const held = CONE_HOLDOUT_YEARS.includes(Number(date.slice(0, 4)));
+  const coarse = spec && d.srcCell && spec.step !== coneGlobalGrid().step;
+  const state = d.kind === "outer"
+    ? `<span class="cn-ro-miss">the outer stencil is drawn as GEOMETRY in live ` +
+      `mode — 137 lags is 137 slabs, about two gigabytes</span>`
+    : !d.valid
+      ? `<span class="cn-ro-inval">off the grid (past a pole) — there is no cell here</span>`
+      : d.obs ? `observed`
+      : `<span class="cn-ro-miss">no value in this channel here — the model gets a ` +
+        `"missing" token, not a zero</span>`;
+  host.innerHTML =
+    `<strong>lag ${d.lag}</strong> · ${d.lag * 5} days back · <strong>${date}</strong>` +
+    (held ? ` <span class="cn-held-tag">held-out year</span>` : "") +
+    `<br><span class="cn-ro-k">${esc(spec ? spec.label : "")}</span> ` +
+    `<strong>${coneFmtVal(d.raw)}</strong> ${esc(spec ? spec.units : "")}` +
+    ` <span class="cn-ro-k">(z = ${coneFmtVal(d.z)} as the tensor stores it)</span>` +
+    `<br><span class="cn-ro-k">offset</span> ` +
+    `${d.dxKm === null ? "–" : `${Math.abs(d.dxKm).toFixed(0)} km ${d.dxKm >= 0 ? "east" : "west"}`} · ` +
+    `${Math.abs(d.dyKm).toFixed(0)} km ${d.dyKm >= 0 ? "north" : "south"}` +
+    `<br><span class="cn-ro-k">cell</span> row ${d.row} col ${d.col}` +
+    (coarse ? ` <span class="cn-ro-k">→ 1° cell ${d.srcCell[0]}, ${d.srcCell[1]}</span>` : "") +
+    `<br>${state}${where}`;
+}
+
+function conesLiveHint() {
+  const host = document.getElementById("cn-data-hint");
+  if (!host) return;
+  const spec = coneLiveChanSpec();
+  const fam = coneLiveFamily();
+  const G = coneGlobalGrid();
+  const bits = [];
+  bits.push(`<strong>Live from family 7</strong> — the global tensor, ` +
+    `${G.ny} × ${G.nx} at ${G.step}°, read one pentad at a time straight off the ` +
+    `published archive. The anchor is any cell on the planet; the dots are the ` +
+    `cone geometry this page draws, filled with what the tensor holds at ` +
+    `<strong>${tensorPentadLabel(tensorState.index, cones.bin)}</strong> and the six ` +
+    `pentads before it.`);
+  if (spec && spec.step !== G.step) {
+    bits.push(`<strong>${esc(spec.label)}</strong> is a ${spec.step}° channel, so every ` +
+      `dot is looked up at its nearest ${spec.step}° cell — which is why the nine ` +
+      `cells of the 3×3 patch all show the same number. That is not the drawing ` +
+      `rounding: it is the model's own view of a coarse channel.`);
+  }
+  if (!fam.known) {
+    bits.push(`The exported geometry does not define family <strong>${fam.asked}</strong> ` +
+      `yet, so this channel is drawn with family C's reach. It will pick up its own ` +
+      `the moment <code>data/cone_geometry.json</code> carries it.`);
+  }
+  if (cones.data.stencil !== "codec") {
+    bits.push(`The outer stencil is <strong>geometry only</strong> here: one ring per ` +
+      `lag out to 143 would be 137 slab reads, about two gigabytes. The inner cone ` +
+      `is where the values are.`);
+  }
+  bits.push(`<strong>No anomaly and no depth column in live mode.</strong> The anomaly ` +
+    `is a harmonic climatology fitted over the whole tensor on training years only ` +
+    `(<code>ml/trainprobe.py</code>), not something seven pentads can produce; the 32 ` +
+    `Roemmich–Gilson depth channels exist only in the pentad holding a month's 15th, ` +
+    `so six lags in seven would be empty. Raw measurements, surface channels.`);
+  if (cones.data.liveErr) {
+    bits.push(`<strong>Some pentads could not be read</strong> (${esc(cones.data.liveErr)}) — ` +
+      `their dots are dimmed.`);
+  }
+  host.innerHTML = bits.join(" ");
+}
+
+/* The anchor's own statics: which sphere it is on (ocean · land · ice sheet ·
+ * inland water) and how high it stands. Two baked grids beside the index, so
+ * this costs no range read — and it is what turns "row 210 col 640" into a
+ * place. */
+async function coneLiveStatics() {
+  const idx = tensorState.index;
+  const a = cones.data.liveAnchor;
+  if (!idx || !a) return;
+  const [sph, elv] = await Promise.all([
+    tensorStatic(idx, "sphere").catch(() => null),
+    tensorStatic(idx, "elev").catch(() => null),
+  ]);
+  cones.data.liveSphere = sph ? gridClassLabel(sph, sampleGrid(sph, a.lon, a.lat)) : null;
+  const ev = elv ? sampleGrid(elv, a.lon, a.lat) : null;
+  cones.data.liveElev = ev == null ? null : ev;
+  conesLiveReadout();
+}
+
+/* Enter or leave live mode. The two sources share every control they can — the
+ * lag slider, the date, both clocks — and differ only in the rows that mean
+ * nothing on the other side. */
+async function conesSetSource(src) {
+  cones.data.source = src === "live" ? "live" : "anchors";
+  const live = cones.data.source === "live";
+  const sel = document.getElementById("cn-source");
+  if (sel && sel.value !== cones.data.source) sel.value = cones.data.source;
+  document.getElementById("cn-anchor-row")?.classList.toggle("hidden", live);
+  document.getElementById("cn-anom-row")?.classList.toggle("hidden", live);
+  cones.data.pick = null;
+  if (!live) {
+    // Coming BACK to the exported anchors: load one if this session has never
+    // had one, or the tab would fall through to the bare geometry.
+    if (cones.data.on && !cones.data.sample) {
+      const m = await loadConeManifest();
+      if (m && (m.anchors || []).length) {
+        await conesUseAnchor(cones.data.anchorId ||
+                             coneNearestAnchor(cones.lat, cones.lon).id);
+        return;
+      }
+    }
+    conesDataFillSelectors(); coneDataLagRange(); conesDraw();
+    return;
+  }
+  const idx = await loadTensorIndex();
+  if (!idx) {
+    const host = document.getElementById("cn-data-hint");
+    if (host) {
+      host.innerHTML = `<strong>The global tensor's index is not available</strong> — ` +
+        `<code>data/family7_index.json</code> is written by ` +
+        `<code>ml/publish_family7_index.py</code> once the build lands on the Hub. ` +
+        `The exported anchors above still work. ` +
+        `<a href="https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY7_GLOBE.md" ` +
+        `target="_blank" rel="noopener">what this is</a>.`;
+    }
+    cones.data.source = "anchors";
+    if (sel) sel.value = "anchors";
+    document.getElementById("cn-anchor-row")?.classList.remove("hidden");
+    document.getElementById("cn-anom-row")?.classList.remove("hidden");
+    return;
+  }
+  cones.bin = Math.max(idx.bin_first, Math.min(idx.bin_last, cones.bin));
+  const dateIn = document.getElementById("cn-date");
+  if (dateIn) dateIn.value = coneDateOfBin(cones.bin);
+  if (!cones.data.liveChan) {
+    const list = coneLiveChannels();
+    cones.data.liveChan = list.length ? list[0].key : null;
+  }
+  coneLiveSetAnchor(cones.lat, cones.lon);
+  conesDataFillSelectors();
+  coneDataLagRange();
+  conesDraw();
+  coneLiveStatics();
+  coneLiveFetch();
+}
+
+/* Everything a tap on the globe does in live mode, in one call — so the tests
+ * drive the same path a finger does (a Cesium pick on a software GL stack is
+ * not something a test can rely on; CLAUDE.md §4). */
+function conesLiveAnchorAt(lat, lon) {
+  if (!coneLiveOn()) return;
+  coneLiveSetAnchor(lat, lon);
+  conesDraw();
+  coneLiveStatics();
+  return coneLiveFetch();
+}
+
+/* The globe layer switched channel. In live mode that is worth a redraw and
+ * nothing more: the cone keeps its own channel (they answer different
+ * questions), but the LRU may now hold slabs it can use for free. */
+function conesOnTensorChannel() {
+  if (coneLiveOn()) conesDraw();
+}
+
 /* The sweep is a rAF loop that cancels its own predecessor and stops itself
  * the moment nobody is looking (another tab, or Stop) — the same shape the
  * tide clock uses, for the same reason: a loop nothing can stop is a loop
@@ -10876,7 +12183,7 @@ function conesSetLag(k) {
   // In data mode the slider's stops are the stencil's own lags, so a value
   // between two exported outer lags has to land on one of them or the ring
   // drawn would not be the ring the slider says.
-  if (coneDataOn() && cones.data.stencil === "stage2") {
+  if (coneDataOn() && !coneLiveOn() && cones.data.stencil === "stage2") {
     const L = cones.data.sample.outer.lags;
     let best = L[0];
     for (const l of L) if (Math.abs(l - cones.lag) < Math.abs(best - cones.lag)) best = l;
@@ -10886,6 +12193,9 @@ function conesSetLag(k) {
   const s = document.getElementById("cn-lag");
   if (s && +s.value !== cones.lag) s.value = String(cones.lag);
   conesDraw();
+  // A bigger lag is more pentads: lag k needs bin b−k, which the LRU may not
+  // hold yet. Same fetch the globe layer uses, so nothing is downloaded twice.
+  if (coneLiveOn()) coneLiveFetch();
   conesFollowDate();
 }
 
@@ -10929,6 +12239,7 @@ function conesSetBin(b, opts = {}) {
   const iso = coneDateOfBin(cones.bin);
   if (input && !opts.keepInput && input.value !== iso) input.value = iso;
   conesDraw();
+  if (coneLiveOn()) coneLiveFetch();   // a new anchor date is seven new pentads
   conesFollowDate();
 }
 
@@ -10994,9 +12305,29 @@ function conesHide() {
   viewer.scene.requestRender();
 }
 
+/* The family list comes from the EXPORTED geometry, not from a list in
+ * index.html: `data/cone_geometry.json` is the definition of which families
+ * exist, and family L (land: snow, soil moisture, soil temperature) arrives
+ * there with the next export. A hard-coded `<option>` set would be a second
+ * definition, and the second definition is the one that goes stale. */
+function conesFillFamilySelect() {
+  const sel = document.getElementById("cn-family");
+  if (!sel || !coneGeo) return;
+  const keys = [...Object.keys(coneFamilyTable()), "rg"];
+  const want = keys.map((k) =>
+    `<option value="${k}">${esc(CONE_FAMILY_LABELS[k] || `${k} · family ${k}`)}</option>`)
+    .join("");
+  if (sel.innerHTML === want) return;
+  const keep = cones.fam;
+  sel.innerHTML = want;
+  sel.value = keys.includes(keep) ? keep : keys[0];
+  cones.fam = sel.value;
+}
+
 let conesUiWired = false;
 async function loadCones() {
   await loadConeGeometry();
+  conesFillFamilySelect();
   conesEntities();
   if (!conesUiWired) {
     conesUiWired = true;
@@ -11053,14 +12384,27 @@ async function loadCones() {
     document.getElementById("cn-data-anchor").addEventListener("change", (ev) => {
       conesUseAnchor(ev.target.value);
     });
+    document.getElementById("cn-source").addEventListener("change", (ev) => {
+      conesSetSource(ev.target.value);
+    });
     document.getElementById("cn-stencil").addEventListener("change", (ev) => {
       cones.data.stencil = ev.target.value;
       cones.data.pick = null;
       conesDataFillSelectors();
       coneDataLagRange();
       conesDraw();
+      if (coneLiveOn()) coneLiveFetch();
     });
     document.getElementById("cn-channel").addEventListener("change", (ev) => {
+      if (cones.data.source === "live") {
+        // A live channel may live in the other GROUP, which is a different
+        // file and therefore a different set of slabs — hence the refetch.
+        cones.data.liveChan = ev.target.value;
+        cones.data.pick = null;
+        conesDraw();
+        coneLiveFetch();
+        return;
+      }
       const i = +ev.target.value;
       if (cones.data.stencil === "codec") cones.data.chan = i;
       else cones.data.outerChan = i;
@@ -11085,7 +12429,8 @@ async function loadCones() {
         for (const o of document.querySelectorAll("#cn-presets button")) {
           o.classList.toggle("active", o === b);
         }
-        conesSetAnchor(+b.dataset.lat, +b.dataset.lon);
+        if (coneLiveOn()) conesLiveAnchorAt(+b.dataset.lat, +b.dataset.lon);
+        else conesSetAnchor(+b.dataset.lat, +b.dataset.lon);
         // Inner lags are a few hundred km across; the outer cone is thousands.
         // One height cannot frame both, so the flight follows the lag.
         viewer.camera.flyTo({
@@ -11175,6 +12520,16 @@ conesClickHandler.setInputAction((c) => {
     const g0 = Cesium.Cartographic.fromCartesian(cart0);
     const lat = Cesium.Math.toDegrees(g0.latitude);
     const lon = Cesium.Math.toDegrees(g0.longitude);
+    /* LIVE mode: ANY cell is an anchor. That is the whole point of reading the
+     * global tensor rather than five exported North Atlantic files — tap the
+     * Ross Sea, the Sahara or the middle of the Pacific and the cone is there. */
+    if (coneLiveOn()) {
+      coneLiveSetAnchor(lat, lon);
+      conesDraw();
+      coneLiveStatics();
+      coneLiveFetch();
+      return;
+    }
     const near = coneNearestAnchor(lat, lon);
     if (!near) return;
     if (near.id !== cones.data.anchorId) {
@@ -11229,6 +12584,22 @@ function coneState() {
     // data mode (the exported samples)
     data: {
       on: cones.data.on, ready: coneDataOn(), error: cones.data.error,
+      source: cones.data.source,
+      live: coneLiveOn(),
+      liveChan: cones.data.liveChan,
+      liveAnchor: cones.data.liveAnchor ? { ...cones.data.liveAnchor } : null,
+      liveFamily: coneGeo && coneLiveOn() ? coneLiveFamily() : null,
+      liveSphere: cones.data.liveSphere, liveElev: cones.data.liveElev,
+      liveErr: cones.data.liveErr,
+      liveValued: coneLiveOn()
+        ? cones.data.dots.filter((d) => d.obs).length : 0,
+      // how many dots crossed the dateline — the number that is zero on the
+      // North Atlantic window and is the whole point of a global geometry
+      liveWrapped: coneLiveOn() && cones.data.liveAnchor
+        ? cones.data.dots.filter((d) => {
+            const raw = cones.data.liveAnchor.col + d.dx;
+            return raw < 0 || raw >= coneGlobalGrid().nx;
+          }).length : 0,
       anchorId: cones.data.anchorId, stencil: cones.data.stencil,
       channel: coneDataOn() ? coneDataChannelName() : null,
       anomaly: cones.data.anomaly,
@@ -11245,8 +12616,10 @@ function coneState() {
       pick: cones.data.pick ? {
         lag: cones.data.pick.lag, date: coneDateOfBin(cones.data.pick.bin),
         raw: cones.data.pick.raw, anom: cones.data.pick.anom,
+        z: cones.data.pick.z ?? null,
         obs: cones.data.pick.obs, valid: cones.data.pick.valid,
         row: cones.data.pick.row, col: cones.data.pick.col,
+        srcCell: cones.data.pick.srcCell || null,
       } : null,
     },
   };
@@ -11343,7 +12716,8 @@ const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
  * date-independent, so it neither sets the cadence nor changes between frames. */
 function playbackLayers() {
   return Object.values(state.layers).filter(
-    (e) => (e.layer || e.suppressed) && (e.cfg.timed || e.cfg.monthlyGrid));
+    (e) => (e.layer || e.suppressed) &&
+           (e.cfg.timed || e.cfg.monthlyGrid || e.cfg.pentadGrid));
 }
 
 // Stable identity of the CURRENT layer set, so a toggle mid-play is detectable
@@ -11359,6 +12733,7 @@ function playbackStepOf(cfg) {
   if (cfg.annual) return "1y";
   if (cfg.monthly) return "1mo";
   if (cfg.snap5d) return "5d";
+  if (cfg.pentadGrid) return "5d";       // fixed five-day bins, so five-day frames
   if (cfg.monthlyGrid) {
     // keyLen 10 = day-keyed (the GFS forecast grids); anything else is monthly.
     const g = gridsLoaded.get(cfg.id);
@@ -11413,7 +12788,12 @@ function playbackSignature(dateStr, layers) {
   const parts = [];
   for (const e of layers) {
     const cfg = e.cfg;
-    if (cfg.grid) {
+    if (cfg.pentadGrid) {
+      // The bin, not the date: the signature dedupe is what collapses the four
+      // days in five that request nothing new into one frame.
+      const idx = tensorState.index;
+      if (idx) parts.push(`${cfg.id}=${tensorBinOfDate(idx, dateStr)}`);
+    } else if (cfg.grid) {
       const g = gridsLoaded.get(cfg.id);
       if (g) parts.push(`${cfg.id}=${resolveGridMonth(g, dateStr)}`);
     } else {
@@ -11551,6 +12931,7 @@ async function playbackShowFrame(i) {
   const promoted = playbackPromote(state.date);
   if (!promoted) refreshTimedLayers({ hold: true, keepPreload: true });
   await refreshMonthlyGrids();
+  await refreshTensorGrids();
   await refreshYearlyLayers();
   if (sstEnsembleLayer) updateEnsembleLayer();
   playbackRender();
@@ -12429,4 +13810,25 @@ window.__earth = {
   get coneSample() { return cones.data.sample; },
   get coneSampleManifest() { return coneManifest; },
   get coneDataDots() { return cones.data.dots; },
+  // live mode (family 7): the tests drive the source switch and the anchor
+  // through these, because a tap on the globe is a pick the software GL stack
+  // makes unreliable (CLAUDE.md §4).
+  conesSetSource,
+  conesLiveAnchorAt,
+  coneLiveSetAnchor,
+  coneLiveFetch,
+  coneGlobalGrid,
+  coneWrapCol,
+  coneLiveCells,
+  // the global tensor layer (family 7)
+  loadTensorIndex,
+  ensureTensorGrid,
+  tensorSwitchChannel,
+  tensorChannelList,
+  tensorBinOfDate,
+  tensorPentadLabel,
+  tensorF16,
+  tensorLayerState,
+  tensorSampleAt,
+  get tensorIndex() { return tensorState.index; },
 };

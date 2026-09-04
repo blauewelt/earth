@@ -54,12 +54,27 @@ Output is one compact JSON per anchor: columnar arrays, values rounded to four
 significant digits, `null` for NaN, keys sorted — so a regeneration is a no-op
 diff and a reader can diff two runs.
 
+FAMILY 7 (E-070/E-071 Phase E). `--tensor <stem>.npz` reads the three-group
+GLOBAL tensor instead: `tensor_io.load_tensor` memory-maps each group (no npz
+streaming — the sidecar layout exists precisely so a 46 GB group need not be
+decompressed), the anomaly is `ml/trainprobe.py::anomaly_transform` itself on
+a writable copy of each group, the anchor list grows from five North Atlantic
+points to twelve global ones, and the exported JSON gains `meta.groups`,
+`meta.channel_group`, `meta.grid`, `meta.recipe` and the anchor's `sphere` and
+`elev` — every existing key unchanged, so a reader of the family-4 files reads
+these too. The outer stencil is computed on the global grid WITH THE WRAP, so
+an anchor on the dateline has a whole cone rather than half of one.
+
 Run (toy):
     python3 ml/export_cone_sample.py --smoke --out /tmp/cone_samples
 Run (production, streaming the release npz):
     python3 ml/export_cone_sample.py \
         --stream-npz /path/family4_na025_pentad_r3_fa460837fa.npz \
         --out data_out/cone_samples --anomaly trainer
+Run (family 7, on the box beside the tensor):
+    python3 ml/export_cone_sample.py \
+        --tensor ml/cache/family7/family7_global025_pentad_l0.npz \
+        --anomaly trainer --outer-stride 2 --out "$RUNNER_TEMP/cone_out"
 """
 import argparse
 import datetime as _dt
@@ -90,6 +105,11 @@ GEOMETRY = os.path.join(ROOT, "data", "cone_geometry.json")
 # `per_channel` carries these eight names and no others.
 SCOREABLE = ("cur_speed", "log_mld", "ssh", "tau_x", "tau_y",
              "tau_x_std", "tau_y_std", "sst")
+# Family 7 carries `sst` under its own name. E-070 B4 briefly merged it into a
+# `skin_t` channel spanning both surfaces; E-071 section 6.1's correction of
+# 4 Sep split it back out (a channel is shared only when the measurand AND the
+# instrument match on both sides), so the scoreable set needs no renaming.
+SCOREABLE_F7 = SCOREABLE
 
 # What one number MEANS, for the read-out. A value without its unit is a
 # number the reader cannot check against anything (root CLAUDE.md §2.4).
@@ -111,12 +131,15 @@ UNITS = {
 # put the unit back. The ANOMALY is a further transform ON TOP of `raw` — the
 # calendar-month climatology removed and re-standardised — which is why the two
 # columns differ even though both are dimensionless.
-RAW_NOTE = ("the tensor's own stored value, which ml/build_family4.py z-scored "
-            "per channel: it is in standard deviations, not in the channel's "
-            "unit")
+RAW_NOTE = ("the tensor's own stored value, which the builder "
+            "(ml/build_family4.py, ml/build_family7.py) z-scored per channel: "
+            "it is in standard deviations, not in the channel's unit")
 PHYSICAL_NOTE = ("the value in the channel's own unit is "
                  "raw * tensor_norm[c][1] + tensor_norm[c][0] "
-                 "(tensor_norm is the npz's `norm` key: mean, std per channel)")
+                 "(tensor_norm is the npz's `norm` key: mean, std per "
+                 "channel; on family 7 it is keyed by GROUP — norm_g025, "
+                 "norm_g100, norm_rg100 — and indexed within the group, "
+                 "which meta.channel_group names)")
 
 # The development holdout (ml/plans/E059_holdout_window.md — the run that fixed
 # a training pool which had been teacher-forcing those years into the weights)
@@ -144,6 +167,42 @@ ANCHORS = [
 SMOKE_ANCHORS = [
     dict(id="smoke_mid", name="toy centre", lat=34.75, lon=-34.0),
     dict(id="smoke_edge", name="toy east edge", lat=34.75, lon=-28.5),
+]
+
+# ---------------------------------------------------------------------------
+# THE GLOBAL ANCHOR LIST (family 7). The five North Atlantic anchors above are
+# kept unchanged so the two tensors can be compared at the same points, and
+# seven more are added, each chosen for a SURFACE or an EDGE the North
+# Atlantic window does not contain — which is the whole reason the global
+# tensor was built.
+GLOBAL_ANCHORS = ANCHORS + [
+    dict(id="antarctica_ice", name="Antarctic ice sheet", lat=-80.0, lon=60.0,
+         note="an ice-sheet anchor: `sphere` = 2 and no ocean channel is "
+              "observed at all, so what the cone reads here is the SHARED "
+              "land/ice channels — skin temperature, 2 m air, wind, pressure, "
+              "precipitation, snow, the turbulent fluxes. Under family 4 this "
+              "cell did not exist; under E-070's 681-row draft it was still "
+              "below the grid's floor (E-071 §1)."),
+    dict(id="sahara", name="Sahara", lat=23.0, lon=10.0,
+         note="land, and the driest of it: soil moisture and snow are the "
+              "channels with something to say, and every ocean channel is a "
+              "miss token."),
+    dict(id="greenland", name="Greenland ice sheet", lat=72.0, lon=-40.0,
+         note="the second ice sheet, and the one whose meltwater the AMOC "
+              "labels are about."),
+    dict(id="kuroshio", name="Kuroshio", lat=35.0, lon=145.0,
+         note="the Pacific's western boundary current — the Gulf Stream's "
+              "twin, and the first strong current in this project's input "
+              "that is not in the Atlantic."),
+    dict(id="acc", name="Antarctic Circumpolar Current", lat=-55.0, lon=60.0,
+         note="the only current that closes on itself around the planet, "
+              "which is exactly the geometry a wrapping sampler is for."),
+    dict(id="nino34", name="Niño 3.4", lat=0.0, lon=-150.0,
+         note="the equatorial Pacific box ENSO is defined on."),
+    dict(id="dateline", name="Dateline (0 N, 179.75 E)", lat=0.0, lon=179.75,
+         note="the last column of the tensor. Every dot east of it wraps to "
+              "the first columns; on the North Atlantic window the same "
+              "anchor would have had a cone that was 50 % invalid."),
 ]
 
 
@@ -422,21 +481,26 @@ def _cell_latlon(y, x, win):
 def build_sample(*, raw, anom, obs_arr, lats, lons, chan_names, anchor,
                  bins_local, bins_abs, win, geo, L_in=6, future_lags=(1, 2),
                  outer_lags, outer_n_pts, scoreable, t_hold_full,
-                 value_space, extra_meta):
+                 value_space, extra_meta, groups=None, statics=None):
     """Everything one anchor's file carries, as plain Python.
 
-    `raw` / `anom` / `obs_arr` are [Tslab, H, W, C] over the SAME local bin
-    axis `bins_local` indexes; `bins_abs` are the corresponding bins of the
-    real tensor and are what every date in the output is computed from.
+    `raw` / `anom` are [Tslab, H, W, C] arrays over the SAME local bin axis
+    `bins_local` indexes — or, for a family-7 tensor, two
+    `cone_sampler.GroupSet`s over the same axis, in which case `obs_arr` is
+    None and each group carries its own mask. `bins_abs` are the corresponding
+    bins of the real tensor and are what every date in the output is computed
+    from.
 
     A dot's `row` / `col` are UNCLAMPED cell indices and may fall outside the
     tensor — that is what `valid = 0` means. Its `lat` / `lon` are then `null`,
     because those fields answer "where in the tensor is this", and off the
     tensor there is no answer. Where the dot sits on the EARTH is a different
     question and the page derives it from (row, col) itself, so it can draw an
-    off-window dot hollow in the right place.
+    off-window dot hollow in the right place. ON A GLOBAL TENSOR the column is
+    WRAPPED instead (`ConeSampler.wrap`), so a dot east of the dateline is a
+    real cell with a real value and `valid = 1`; only latitude and the time
+    axis can still put a dot outside.
     """
-    H, W, C = raw.shape[1], raw.shape[2], raw.shape[3]
     y, x = _grid_of(anchor["lat"], anchor["lon"], win)
     alat, alon = _cell_latlon(y, x, win)
 
@@ -445,6 +509,8 @@ def build_sample(*, raw, anom, obs_arr, lats, lons, chan_names, anchor,
                           dlat_deg=win["dlat"], future_lags=future_lags)
     sam_anom = ConeSampler(anom, obs_arr, lats, lons, chan_names, L_in=L_in,
                            dlat_deg=win["dlat"], future_lags=future_lags)
+    H, W, C, wrap = sam_raw.H, sam_raw.W, sam_raw.C, sam_raw.wrap
+    Tslab = sam_raw.T
     anchors = np.array([[t, y, x] for t in bins_local], np.int64)
     S = sam_raw.sample(anchors)
     A = sam_anom.sample(anchors)
@@ -464,6 +530,8 @@ def build_sample(*, raw, anom, obs_arr, lats, lons, chan_names, anchor,
     n = R["n"]
     dot_y = y + R["dy"]
     dot_x = x + R["dx"]
+    if wrap:
+        dot_x = np.mod(dot_x, W)
     on_grid = (dot_y >= 0) & (dot_y < H) & (dot_x >= 0) & (dot_x < W)
     dot_lat = win["lat0"] + dot_y * win["dlat"]
     dot_lon = win["lon0"] + dot_x * win["dlat"]
@@ -524,6 +592,8 @@ def build_sample(*, raw, anom, obs_arr, lats, lons, chan_names, anchor,
                 f"assumes one dot count per lag")
         for dy, dx in sp:
             yy, xx = y + dy, x + dx
+            if wrap:
+                xx %= W
             ok = 0 <= yy < H and 0 <= xx < W
             ykm, xkm = cone.ground_km(float(dy), float(dx), float(alat),
                                       win["dlat"])
@@ -537,23 +607,34 @@ def build_sample(*, raw, anom, obs_arr, lats, lons, chan_names, anchor,
             o_dxkm.append(sig(xkm))
             o_valid.append(ok)
 
+    # The values, read through the SAMPLER (`read_cells`) rather than indexed
+    # out of an array here: on a family-7 tensor the array a channel lives in
+    # depends on the channel, and a second copy of that routing in the
+    # exporter is exactly what this file's opening rule forbids. One call per
+    # date, shaped [lag, dot, chan].
     nK, nD, nC = len(outer_lags), per_lag, len(ci)
+    ci_arr = np.array(ci, np.int64)
+    o_row_a = np.array(o_row, np.int64).reshape(nK, nD)
+    o_col_a = np.array(o_col, np.int64).reshape(nK, nD)
+    o_val_a = np.array(o_valid, bool).reshape(nK, nD)
+    lag_a = np.array([int(k) for k in outer_lags], np.int64)[:, None]
     o_raw = np.full((len(bins_local), nK, nD, nC), np.nan, np.float32)
     o_anom = np.full_like(o_raw, np.nan)
     o_obs = np.zeros(o_raw.shape, bool)
     for ti, tl in enumerate(bins_local):
-        for kk, k in enumerate(outer_lags):
-            tb = tl - int(k)
-            if not (0 <= tb < raw.shape[0]):
-                continue                        # off the slab: stays NaN
-            for dd in range(nD):
-                idx = kk * nD + dd
-                if not o_valid[idx]:
-                    continue
-                yy, xx = o_row[idx], o_col[idx]
-                o_raw[ti, kk, dd] = raw[tb, yy, xx][ci]
-                o_anom[ti, kk, dd] = anom[tb, yy, xx][ci]
-                o_obs[ti, kk, dd] = obs_arr[tb, yy, xx][ci]
+        tb = tl - lag_a                                        # [nK, 1]
+        here = o_val_a & (tb >= 0) & (tb < Tslab)              # [nK, nD]
+        if not here.any():
+            continue
+        tc = np.clip(np.broadcast_to(tb, (nK, nD)), 0, Tslab - 1)
+        vr, orr = sam_raw.read_cells(tc[..., None], o_row_a[..., None],
+                                     o_col_a[..., None], ci_arr)
+        va, _ = sam_anom.read_cells(tc[..., None], o_row_a[..., None],
+                                    o_col_a[..., None], ci_arr)
+        keep = here[..., None]
+        o_raw[ti] = np.where(keep, vr, np.nan)
+        o_anom[ti] = np.where(keep, va, np.nan)
+        o_obs[ti] = orr & keep
 
     outer = dict(
         dims=["date", "lag", "dot", "chan"],
@@ -574,13 +655,31 @@ def build_sample(*, raw, anom, obs_arr, lats, lons, chan_names, anchor,
     meta = dict(
         anchor=dict(id=anchor["id"], name=anchor["name"],
                     lat_asked=anchor["lat"], lon_asked=anchor["lon"],
-                    lat=sig(alat, 6), lon=sig(alon, 6), row=y, col=x),
+                    lat=sig(alat, 6), lon=sig(alon, 6), row=y, col=x,
+                    note=anchor.get("note")),
         bins=[int(b) for b in bins_abs],
         dates=[date_of_bin(b) for b in bins_abs],
         admissible=adm,
         n_inadmissible=int(sum(1 for a in adm if not a)),
         channels=list(chan_names),
         channel_family={c: cone.channel_family(c) for c in chan_names},
+        # WHICH ARRAY each channel came out of, and at what resolution. On a
+        # single-array tensor every channel answers `null`; on family 7 this
+        # is the difference between a value that was measured at this 0.25
+        # degree cell and one that was measured at the 1 degree cell
+        # containing it, which a reader of the page must be able to tell.
+        groups=groups,
+        channel_group=({c: g for g, names in (groups or {}).get(
+            "channels", {}).items() for c in names} if groups else
+            {c: None for c in chan_names}),
+        grid=dict(ny=int(H), nx=int(W), lat0=float(win["lat0"]),
+                  lon0=float(win["lon0"]), step=float(win["dlat"]),
+                  wrap=bool(wrap)),
+        sphere_at_anchor=(None if statics is None or "sphere" not in statics
+                          else int(statics["sphere"][y, x])),
+        elev_at_anchor=(None if statics is None or "elev" not in statics
+                        else sig(float(statics["elev"][y, x]), 6)),
+        recipe=(None if statics is None else statics.get("recipe")),
         depth_channels=[c for c in chan_names if cone.is_depth_channel(c)],
         units={c: UNITS.get(c, "dbar-level (°C / PSU)") for c in chan_names},
         scoreable_channels=list(scoreable),
@@ -705,10 +804,206 @@ def smoke_tensor(seed=0, T=200, H=40, W=48, C=None, chans=None):
     return X, chans
 
 
+def _anomaly_transform():
+    """`ml/trainprobe.py::anomaly_transform`, THE one transform, whether or not
+    torch is importable.
+
+    On the box the plain import works. In the sandbox (and in the test suite)
+    `ml/trainprobe.py` pulls torch at module scope, so the function's own
+    source is lifted out by `ast` and exec'd — `ml/cone.py`'s trick for the
+    spiral, for its reason: the function under use must be THE function, byte
+    for byte, and a second copy is what
+    `tests/test_one_anomaly_transform.py` exists to forbid.
+    """
+    try:                                              # pragma: no cover - box
+        from trainprobe import anomaly_transform
+        return anomaly_transform
+    except Exception:
+        import ast
+        import warnings
+        src = open(os.path.join(HERE, "trainprobe.py"),
+                   encoding="utf-8").read()
+        keep = [n for n in ast.parse(src).body
+                if isinstance(n, ast.FunctionDef)
+                and n.name == "anomaly_transform"]
+        if not keep:
+            raise ImportError(
+                "ml/trainprobe.py no longer defines anomaly_transform at "
+                "module scope — ml/export_cone_sample.py lifts it from source "
+                "so the exported anomaly cannot drift from the trainer's. Fix "
+                "the lift, never copy the function.")
+        ns = {"np": np, "warnings": warnings}
+        exec(compile(ast.Module(body=keep, type_ignores=[]), "trainprobe.py",
+                     "exec"), ns)
+        return ns["anomaly_transform"]
+
+
+def _open_family7(a, win):
+    """Open a family-7 tensor and put both value spaces on the same axis.
+
+    Returns everything `build_sample` needs, in the same shape the streaming
+    family-4 path returns it: (raw, anom, obs, chan, lats, lons, win,
+    bins_abs, bins_local, t_hold, value_space, tensor_meta, groups_meta,
+    statics).
+
+    Two things differ from the family-4 path and both are consequences of the
+    layout, not choices.
+
+    NO STREAMING. The sidecar layout (`ml/tensor_io.py`) exists exactly so a
+    46 GB group can be MEMORY-MAPPED instead of decompressed, so `load_tensor`
+    is the whole reader and `_NpzMemberStream` is not used at all. There is
+    also no slab: `bins_local` ARE master rows, and the samplers index the
+    full time axis lazily.
+
+    THE ANOMALY IS THE REAL FUNCTION, on a writable copy per group.
+    `streaming_anomaly` was written for a box with 30 GB of disk and one
+    array; this runs beside the tensor on the 300 GB box, where the honest
+    thing is to call `anomaly_transform` itself — no second implementation to
+    keep in step, and `tests/test_export_cone_sample.py`'s bit-for-bit
+    comparison of the streaming copy stays exactly as it is for the family-4
+    path. Each group gets its own months (`cone_sampler.group_time`), because
+    `rg100`'s rows are one per month and charging them to the master's
+    calendar would put every profile in the wrong climatology.
+    """
+    from tensor_io import (anomaly_chunk, anomaly_peak_bytes, load_tensor,
+                           writable_copy)
+    from cone_sampler import GroupSet, group_time
+
+    d = load_tensor(a.tensor, allow_pickle=False)
+    gnames = [str(g) for g in getattr(d, "groups", []) if str(g) != "X"]
+    if not gnames:
+        raise SystemExit(
+            f"{a.tensor}: no `groups` — this is a single-array tensor. Use "
+            f"--stream-npz for those; --tensor is the multi-group reader.")
+    raw = GroupSet.from_tensor(d)
+    m = raw.master
+    lats, lons = np.asarray(d["lats"]), np.asarray(d["lons"])
+    step = float(lats[1] - lats[0])
+    win = dict(win, lat0=float(lats[0]), lon0=float(lons[0]), dlat=step,
+               ny=int(m.H), nx=int(m.W), lat1=float(lats[-1]),
+               lon1=float(lons[-1]))
+    chan = list(raw.chan)
+    months = [str(x) for x in d["months"]]
+    bin_index = (np.asarray(d["bin_index"], np.int64) if "bin_index" in d
+                 else np.arange(m.T, np.int64))
+    print(f"family 7: {raw.names} · master [T={m.T} H={m.H} W={m.W}] · "
+          f"{len(chan)} channels · lon axis {lons[0]:g}..{lons[-1]:g} "
+          f"(wrap {'yes' if abs(m.W * step - 360) < 1e-6 else 'no'})",
+          flush=True)
+
+    # Which rows to export. The npz's `bin_index` is ABSOLUTE (bins counted
+    # from 1982-01-01) and the rows are not, so the start date is resolved
+    # against the axis rather than assumed to be row = bin.
+    b0 = first_bin_on_or_after(a.start)
+    r0 = int(np.searchsorted(bin_index, b0))
+    if r0 >= m.T or int(bin_index[r0]) != b0:
+        raise SystemExit(
+            f"--start {a.start} is pentad bin {b0}, which is not on this "
+            f"tensor's axis (bins {int(bin_index[0])}..{int(bin_index[-1])})")
+    bins_local = list(range(r0, min(r0 + a.n_dates, m.T)))
+    if len(bins_local) < a.n_dates:
+        raise SystemExit(
+            f"--n-dates {a.n_dates} from {a.start} runs past the end of the "
+            f"tensor ({m.T} bins)")
+    bins_abs = [int(bin_index[r]) for r in bins_local]
+
+    moy = np.array([int(x[5:7]) - 1 for x in months])
+    t_hold = np.array([int(x[:4]) in HOLDOUT_YEARS for x in months])
+    print(f"held-out bins {int(t_hold.sum())}/{m.T} · exporting rows "
+          f"{bins_local[0]}..{bins_local[-1]} "
+          f"({date_of_bin(bins_abs[0])} .. {date_of_bin(bins_abs[-1])})",
+          flush=True)
+
+    if a.anomaly == "trainer":
+        transform = _anomaly_transform()
+        scratch_dir = a.scratch or os.path.dirname(os.path.abspath(a.tensor))
+        os.makedirs(scratch_dir, exist_ok=True)
+        arrays, dynamic = {}, {}
+        for g in raw.groups:
+            dst = os.path.join(
+                scratch_dir,
+                os.path.basename(a.tensor)[:-4] + f"_cone_anom_{g.name}.npy")
+            print(f"  {g.name}: writable copy -> {dst}", flush=True)
+            A = writable_copy(g.X, dst)
+            gmoy, ghold = group_time(g, moy, t_hold)
+            ch = anomaly_chunk(A.shape, np.dtype(A.dtype).itemsize)
+            peak = anomaly_peak_bytes(A.shape, ch,
+                                      np.dtype(A.dtype).itemsize) / 1e9
+            print(f"  {g.name}: anomaly_transform chunk {ch} "
+                  f"(peak ~{peak:.1f} GB)", flush=True)
+            A, dyn = transform(A, gmoy, ghold, np.zeros(g.W, bool), chunk=ch)
+            arrays[g.name] = A
+            dynamic[g.name] = [int(c) for c in dyn]
+        anom = GroupSet.from_tensor(d, arrays=arrays)
+        value_space = dict(
+            raw=RAW_NOTE, physical=PHYSICAL_NOTE, anomaly="trainer",
+            anomaly_note=(
+                "computed the way ml/train_cone.py does and BY THE SAME "
+                "FUNCTION (ml/trainprobe.py::anomaly_transform, called on a "
+                "writable copy of each group): departure from a "
+                "per-calendar-month climatology built on TRAINING YEARS ONLY, "
+                "then z-scored per channel over the training pool. Each group "
+                "is transformed with ITS OWN months — rg100 holds one row per "
+                "month, so the master's calendar would be the wrong one."),
+            dynamic_channels_by_group=dynamic,
+            tensor_norm={g: np.asarray(d[f"norm_{g}"]).tolist()
+                         for g in raw.names if f"norm_{g}" in d})
+    else:
+        anom = raw
+        value_space = dict(
+            raw=RAW_NOTE, physical=PHYSICAL_NOTE,
+            anomaly="none — `anom` repeats `raw`; the page can standardise "
+                    "with tensor_norm (mean, std) per channel",
+            tensor_norm={g: np.asarray(d[f"norm_{g}"]).tolist()
+                         for g in raw.names if f"norm_{g}" in d})
+
+    groups_meta = dict(
+        names=list(raw.names),
+        channels={g.name: list(g.chan) for g in raw.groups},
+        shape={g.name: [int(v) for v in g.X.shape] for g in raw.groups},
+        step={g.name: float(g.lats[1] - g.lats[0]) for g in raw.groups},
+        coarse_factor={g.name: int(g.factor) for g in raw.groups},
+        live_bins={g.name: (None if g.bin_index is None
+                            else int((np.asarray(g.bin_index) >= 0).sum()))
+                   for g in raw.groups},
+        lookup=("a channel in a coarse group is read at "
+                "y1 = min(floor(y/f + 0.5), ny_g - 1), "
+                "x1 = floor(x/f + 0.5) mod nx_g, f the ratio of the two "
+                "latitude steps (E-070 §1); the lag-0 3x3 therefore serves "
+                "the same coarse cell nine times (E-070 D3). A channel in a "
+                "live-bins group is a MISS token at every bin the group did "
+                "not write."))
+    statics = {}
+    for k in ("sphere", "elev"):
+        if k in d:
+            statics[k] = np.asarray(d[k])
+    statics["recipe"] = str(d["recipe"]) if "recipe" in d else None
+
+    tensor_meta = dict(
+        name=os.path.basename(a.tensor).replace(".npz", ""),
+        sha256=_sha256(a.tensor),
+        groups={g.name: [int(v) for v in g.X.shape] for g in raw.groups},
+        shape=[int(v) for v in raw.shape],
+        dtype=str(np.dtype(m.X.dtype)),
+        epoch=str(PENTAD_EPOCH), pentad_days=int(PENTAD_DAYS),
+        months_first=months[0], months_last=months[-1],
+        recipe=statics.get("recipe"),
+        window=(str(d["window"]) if "window" in d else None))
+    return (raw, anom, None, chan, lats, lons, win, bins_abs, bins_local,
+            t_hold, value_space, tensor_meta, groups_meta, statics)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--stream-npz", help="the production tensor (.npz); its "
                                          "X member is streamed, never loaded")
+    ap.add_argument("--tensor", help="a MULTI-GROUP tensor stem (family 7's "
+                                     "<stem>.npz beside its _X_<group>.npy "
+                                     "sidecars). Read with "
+                                     "tensor_io.load_tensor as memmaps — no "
+                                     "npz streaming is needed, because the "
+                                     "sidecar layout exists so a 46 GB group "
+                                     "can be mapped rather than decompressed")
     ap.add_argument("--smoke", action="store_true",
                     help="run on a synthetic tensor instead")
     ap.add_argument("--out", default=os.path.join(ROOT, "data_out",
@@ -738,17 +1033,23 @@ def main(argv=None):
     outer_n_pts = geo["constants"]["OUTER_N_PTS"]
     outer_lags = list(range(L_in + 1, K_outer, max(1, a.outer_stride)))
 
-    anchors = ANCHORS
+    pool = GLOBAL_ANCHORS if a.tensor else ANCHORS
+    anchors = pool
     if a.anchors:
         want = set(a.anchors.split(","))
-        anchors = [x for x in ANCHORS if x["id"] in want]
+        anchors = [x for x in pool if x["id"] in want]
         if not anchors:
             raise SystemExit(f"--anchors {a.anchors!r} matched none of "
-                             f"{[x['id'] for x in ANCHORS]}")
+                             f"{[x['id'] for x in pool]}")
 
     os.makedirs(a.out, exist_ok=True)
+    groups_meta = statics = None
 
-    if a.smoke:
+    if a.tensor:
+        (raw, anom, obs, chan, lats, lons, win, bins_abs, bins_local, t_hold,
+         value_space, tensor_meta, groups_meta, statics) = \
+            _open_family7(a, win)
+    elif a.smoke:
         X, chan = smoke_tensor()
         T, H, W, C = X.shape
         win = dict(win, lat0=30.0, lon0=-40.0, ny=H, nx=W,
@@ -770,7 +1071,9 @@ def main(argv=None):
                            shape=[int(v) for v in X.shape])
     else:
         if not a.stream_npz:
-            raise SystemExit("--stream-npz PATH is required without --smoke")
+            raise SystemExit("--stream-npz PATH (family 2-6) or --tensor PATH "
+                             "(a multi-group family-7 stem) is required "
+                             "without --smoke")
         stream = _NpzMemberStream(a.stream_npz)
         meta_npz = np.load(a.stream_npz, allow_pickle=False)
         chan = [str(c) for c in meta_npz["chan"]]
@@ -871,8 +1174,10 @@ def main(argv=None):
             chan_names=chan, anchor=anc, bins_local=bins_local,
             bins_abs=bins_abs, win=win, geo=geo, L_in=L_in,
             outer_lags=outer_lags, outer_n_pts=outer_n_pts,
-            scoreable=[c for c in SCOREABLE if c in chan],
-            t_hold_full=t_hold, value_space=value_space, extra_meta=extra)
+            scoreable=[c for c in (SCOREABLE_F7 if groups_meta else SCOREABLE)
+                       if c in chan],
+            t_hold_full=t_hold, value_space=value_space, extra_meta=extra,
+            groups=groups_meta, statics=statics)
         path = os.path.join(a.out, f"{anc['id']}.json")
         text = dumps(s)
         with open(path, "w", encoding="utf-8") as fh:

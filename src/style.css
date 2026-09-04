@@ -214,6 +214,10 @@ nav { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--b
 .alpha-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 0 24px; }
 .alpha-row input[type="range"] { flex: 1; width: auto; margin-top: 0; }
 .alpha-label { font-size: 10px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+/* The family-7 channel picker: one layer paints twenty-three quantities, so
+   the choice of which lives in the layer's own row, beside its opacity. */
+.chan-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 0 24px; }
+.chan-row select { flex: 1; min-width: 0; font-size: 11px; padding: 2px 4px; }
 .alpha-val { font-size: 10.5px; color: var(--fg-dim); min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
 .alpha-half {
   background: none; border: 1px solid var(--border); color: var(--fg-dim);

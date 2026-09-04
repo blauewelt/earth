@@ -89,11 +89,14 @@ first global input tensor, extended to the poles and to land, as ONE resumable
 job · params none (a data build, nothing trains) · stage data · data
 `family7_global025_pentad_l0` (recipe `f7l0`) · arch three channel groups at
 native resolution — `g025` [3142, 721, 1440, 7] float16 (`cur_speed`,
-`log_mld`, `ssh`, `cur_u`, `cur_v`, `skin_t`, `sea_ice`; GLORYS12 + OISST
-v2.1 SST and sea-ice), `g100` [3142, 181, 360, 14] (`tau_x`, `tau_y`,
+`log_mld`, `ssh`, `cur_u`, `cur_v`, `sst`, `sea_ice`; GLORYS12 + OISST
+v2.1 SST and sea-ice), `g100` [3142, 181, 360, 15] (`tau_x`, `tau_y`,
 `tau_x_std`, `tau_y_std`, `t2m`, `u10`, `v10`, `sp`, `log_prate`, `log_swe`,
-`soilw`, `tsoil`, `lhtfl`, `shtfl`; NCEP/NCAR R1 gaussian, the key-free
-stand-in for ERA5 until the CDS account exists), `rg100` [n_live, 181, 360, 32]
+`soilw`, `tsoil`, `lhtfl`, `shtfl`, `skt`; NCEP/NCAR R1 gaussian, the key-free
+stand-in for ERA5 until the CDS account exists — `skt` is the SHARED surface
+temperature over land, sea and ice, and `sst` stays the OBSERVED OISST field,
+because a channel is shared only when the measurand AND the instrument match
+on both sides, E-071 §6.1's correction of 4 Sep), `rg100` [n_live, 181, 360, 32]
 (the Roemmich–Gilson depth column, live bins only) + statics `sphere`
 (ocean/land/ice-sheet/inland-water from OISST ∪ GLORYS coverage and Natural
 Earth glaciated areas and lakes) and `elev` (ETOPO 2022 surface, block-mean)
