@@ -1767,9 +1767,21 @@ def truth_files(ctx):
                 continue
             try:
                 p = hub_get(ctx, f"truth/{name}", root)
-                print(f"  pulled truth/{name} from the Hub -> {p}")
+                # hf_hub_download keeps the repo's own `truth/` folder under
+                # local_dir, so the file lands at <root>/truth/<name> — one
+                # level below where the builder (and family 4) read it. Run 2
+                # of the real build (2026-09-04) pulled both files and then
+                # refused on exactly this. Move it up, and ASSERT the path the
+                # caller will read rather than trusting the download's return.
+                dest = os.path.join(root, name)
+                if os.path.abspath(p) != os.path.abspath(dest):
+                    os.replace(p, dest)
+                if not os.path.exists(dest):
+                    raise FileNotFoundError(dest)
+                print(f"  pulled truth/{name} from the Hub -> {dest}")
             except Exception as e:                            # noqa: BLE001
                 print(f"  ::warning:: truth/{name}: {str(e)[:140]}")
+        shutil.rmtree(os.path.join(root, "truth"), ignore_errors=True)
         shutil.rmtree(os.path.join(root, ".cache"), ignore_errors=True)
     return os.path.join(root, "truth_pentad.npz")
 
