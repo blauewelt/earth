@@ -1,0 +1,800 @@
+# sources.yaml — THE registry for the polite parallel import (E-073).
+#
+# Two tables and nothing else:
+#
+#   hosts:    one row per upstream SERVER. `max_lanes` is the maximum number
+#             of simultaneous connections that server will ever see from us;
+#             `min_gap_s` is the minimum sleep between two requests inside one
+#             lane. These numbers are copied from DESIGN.md §2 and are the ONLY
+#             place a connection budget is written down. Never raise one.
+#
+#   sources:  one row per dataset. Every source names a host, so a new source
+#             can never invent a new connection budget by accident.
+#
+# A source row is expanded into WORK ITEMS by beam_import/manifest.py. The
+# `chunk` field says how:
+#
+#   year      one item per year                 id: <source>/<year>
+#   month     one item per calendar month       id: <source>/<YYYY-MM>
+#   var_year  one item per (variable, year)     id: <source>/<var>/<year>
+#   var_month one item per (variable, month)    id: <source>/<var>/<YYYY-MM>
+#   file      one item per entry in `files`     id: <source>/<filename>
+#   scrape_month  like `month`, but the month list is SCRAPED from an index
+#                 page; falls back to `months` if the scrape fails
+#
+# `mode` is `fetch` (download it, put it on the Hub) or `verify` (it is already
+# on the Hub; only check that it is there).
+#
+# `unverified_url: true` marks a URL pattern that has NOT been confirmed by a
+# request. Those items are still listed by the manifest — flagged — so a human
+# can see what would be attempted.
+
+version: 1
+
+hub:
+  # The Hugging Face dataset repository the mirror lives in. The namespace is
+  # the USER `chfrank` — `blauewelt` is the GitHub organisation and does not
+  # exist on the Hub. publish.py resolves it from whoami() and warns if this
+  # value disagrees.
+  repo_id: chfrank/earth-tensors
+  repo_type: dataset
+  # The Hub enforces an hourly commit quota. The pipeline as a whole stays
+  # under this many commits per hour; each lane gets an equal share.
+  commit_budget_per_hour: 60
+
+# ---------------------------------------------------------------------------
+# HOSTS — DESIGN.md §2, copied. Change a number here and nowhere else.
+# ---------------------------------------------------------------------------
+hosts:
+
+  cmems:
+    max_lanes: 4
+    min_gap_s: 2
+    serves: >-
+      Copernicus Marine via the `copernicusmarine` toolbox
+      (GLORYS12, DUACS, GREP, OSTIA, statics)
+    evidence: >-
+      Phase A ran four lanes for a day at one day-request each without a
+      refusal; the toolbox reads from ARCO object storage built for parallel
+      access.
+
+  psl:
+    max_lanes: 1
+    min_gap_s: 20
+    serves: >-
+      downloads.psl.noaa.gov + the THREDDS mirror
+      (NCEP R1, OISST yearly fallback, GODAS, OLR)
+    evidence: >-
+      measured 2026-08-18: 504 + ~15 min of silence after two back-to-back
+      477 MB files. PACE_S = 20 and a 900 s HEAD-poll are what worked.
+    # PSL-specific: after a 5xx, HEAD-poll the URL for up to this long before
+    # giving up on the item. See fetchers.http_fetch.
+    head_poll_s: 900
+
+  ncei:
+    max_lanes: 6
+    min_gap_s: 0.5
+    serves: www.ncei.noaa.gov OISST per-day files (sst + ice in one file)
+    evidence: >-
+      measured: 12 threads did a year in under a minute; 6 leaves headroom for
+      other users.
+
+  scripps:
+    max_lanes: 1
+    min_gap_s: 10
+    serves: sio-argo.ucsd.edu (Roemmich-Gilson Argo climatology)
+    evidence: "a small academic server: ~0.7-2 GB base files."
+
+  rapid:
+    max_lanes: 1
+    min_gap_s: 10
+    serves: rapid.ac.uk (RAPID 26.5N overturning transport)
+    evidence: one file.
+
+  aoml:
+    max_lanes: 1
+    min_gap_s: 5
+    serves: aoml.noaa.gov (Florida Current cable transport, SAMBA)
+    evidence: small files.
+
+  ncei_etopo:
+    max_lanes: 1
+    min_gap_s: 5
+    serves: ngdc.noaa.gov THREDDS (ETOPO 2022 global relief)
+    evidence: one ~450 MB file.
+
+  github_raw:
+    max_lanes: 2
+    min_gap_s: 1
+    serves: raw.githubusercontent.com (Natural Earth GeoJSON)
+    evidence: a CDN.
+
+  pmel:
+    max_lanes: 1
+    min_gap_s: 5
+    serves: pmel.noaa.gov (equatorial Pacific warm-water volume, TAO)
+    evidence: tiny files.
+
+  cpc:
+    max_lanes: 1
+    min_gap_s: 5
+    serves: origin.cpc.ncep.noaa.gov (the ONI El Nino index)
+    evidence: tiny text files.
+
+  bom:
+    max_lanes: 1
+    min_gap_s: 5
+    serves: bom.gov.au (the RMM index of the Madden-Julian Oscillation)
+    evidence: tiny text files.
+
+  metoffice:
+    max_lanes: 1
+    min_gap_s: 10
+    serves: metoffice.gov.uk/hadobs (EN4 subsurface analyses)
+    evidence: ~30 MB zips.
+
+  cds:
+    max_lanes: 2
+    min_gap_s: 5
+    serves: "Copernicus Climate Data Store (ERA5, ORAS5) - BLOCKED on the account"
+    evidence: >-
+      CDS queues requests server-side; two in flight is the polite maximum for
+      one user.
+
+  ceda:
+    max_lanes: 2
+    min_gap_s: 5
+    serves: ESA CCI soil moisture (needs free registration)
+    evidence: "-"
+
+  # --- ADDED here, not in DESIGN.md §2 -------------------------------------
+  # DESIGN's host table has no row for the two single-file label sources
+  # below. They are given the most conservative budget that exists (one lane),
+  # so nothing is raised; see BUILD_NOTES.md.
+  gatech:
+    max_lanes: 1
+    min_gap_s: 5
+    serves: repository.gatech.edu (the OSNAP overturning time series)
+    evidence: "ADDED (not in DESIGN.md §2): one file; one lane is the floor."
+
+  ndbc:
+    max_lanes: 1
+    min_gap_s: 5
+    serves: dods.ndbc.noaa.gov THREDDS (the MOVE volume-transport series)
+    evidence: "ADDED (not in DESIGN.md §2): one file; one lane is the floor."
+
+# ---------------------------------------------------------------------------
+# SOURCES
+# ---------------------------------------------------------------------------
+sources:
+
+  # ======================= TIER 0 =========================================
+
+  - name: glorys
+    tier: 0
+    host: cmems
+    mode: verify                 # already on the Hub: only presence is checked
+    fetcher: cmems
+    chunk: month
+    months: ["1993-01", "2024-12"]
+    expected_items: 384
+    dataset_id: cmems_mod_glo_phy_my_0.083deg_P1D-m
+    variables: [uo, vo, mlotst, zos]
+    bbox: {lon_min: -180, lon_max: 180, lat_min: -80, lat_max: 90}
+    depth: {min: 0, max: 1}
+    subset_by: day               # ONE DAY per subset request; never a month
+    transform: bin025
+    # NOTE the Hub path for GLORYS is NOT under sources/ - the global daily
+    # chunks are a family-7 input with their own provenance and stay put.
+    hub_path: daily025_global/glorys025_global_{ym}.nc
+    batch_files: 1
+    bytes_wire: 2294968320       # 2188 MB measured per month
+    bytes_stored: 269484032      # 257 MB measured per month
+    notes:
+      - "VERIFY-ONLY. These 384 files are already on the Hub; the pipeline
+         reports `present` or `missing` and never re-fetches them."
+      - "Measured per month: 2188 MB wire, 257 MB stored, 411 s."
+      - "A whole month in ONE subset request needs 5.95 GB of RAM and is
+         OOM-killed on a 7 GB machine. One day per request, always."
+
+  - name: oisst
+    tier: 0
+    host: ncei
+    mode: fetch
+    fetcher: ncei_oisst_year
+    chunk: year
+    years: [1981, 2024]
+    start_month: "1981-09"       # the record begins 1981-09-01
+    expected_items: 44
+    url: >-
+      https://www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/{ym}/oisst-avhrr-v02r01.{ymd}.nc
+    url_preliminary: >-
+      https://www.ncei.noaa.gov/data/sea-surface-temperature-optimum-interpolation/v2.1/access/avhrr/{ym}/oisst-avhrr-v02r01.{ymd}_preliminary.nc
+    filename: oisst_daily_{year}.nc
+    hub_prefix: oisst
+    transform: oisst_year_fold
+    batch_files: 1
+    bytes_wire: 520000000        # ~365 daily files, ~1.4 MB each, sst + ice
+    bytes_stored: 500000000      # ~477 MB for sst, ice smaller, one file
+    notes:
+      - "One work item = ONE YEAR = 365 (or 366) per-day NCEI files folded into
+         a single NetCDF holding sst and ice."
+      - "A gap in the MIDDLE of a year is fatal (the item fails). A missing
+         TAIL is legal - the current year is simply not finished."
+      - "The tail of the record is served as `..._preliminary.nc`; try the
+         plain name first, then the preliminary one."
+      - "TRAP: the `icec` variable declares units \"percent\" but its
+         valid_range is 0..1. Trust the RANGE, not the units string."
+      - "TRAP: OISST latitudes and longitudes are CELL CENTRES (0.125, 0.375,
+         ...), not our point grid. Store the file NATIVE. Do NOT regrid here -
+         the tensor build decides how to sample it."
+      - "TRAP: a truncated transfer raised no exception. 477,350,790 bytes came
+         back short and the only symptom was `NetCDF: HDF error` much later.
+         ALWAYS HEAD for Content-Length and compare the bytes on disk."
+      - "FALLBACK: if NCEI cannot serve a year, do NOT fall back inside this
+         lane - PSL is a different host with a much stricter budget. Enable the
+         `oisst_psl` source below and run it as its own invocation."
+
+  - name: oisst_psl
+    tier: 0
+    host: psl
+    mode: fetch
+    fetcher: psl_fallback
+    chunk: var_year
+    vars: [sst.day.mean, icec.day.mean]
+    years: [1981, 2024]
+    enabled: false
+    expected_items: 88
+    url: https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2.highres/{var}.{year}.nc
+    mirrors:
+      - https://psl.noaa.gov/thredds/fileServer/Datasets/noaa.oisst.v2.highres/{var}.{year}.nc
+    filename: "{var}.{year}.nc"
+    hub_prefix: oisst_psl
+    transform: passthrough
+    batch_files: 1
+    bytes_wire: 477350790                   # the measured sst year file
+    bytes_stored: 477350790
+    notes:
+      - "OFF by default. This is the FALLBACK for `oisst` and it lives on the
+         PSL host, so it uses PSL's one lane and its 20 s gap rather than
+         borrowing NCEI's six. Enable it only for the years NCEI could not
+         serve, with `--only oisst_psl`."
+      - "These are the PSL YEARLY files, one variable per file - not the same
+         layout as the NCEI-folded years. The tensor build must be told which
+         layout it is reading."
+
+  - name: ncep
+    tier: 0
+    host: psl
+    mode: fetch
+    fetcher: http
+    chunk: var_year
+    vars:
+      - uflx.sfc.gauss
+      - vflx.sfc.gauss
+      - air.2m.gauss
+      - uwnd.10m.gauss
+      - vwnd.10m.gauss
+      - pres.sfc.gauss
+      - prate.sfc.gauss
+      - weasd.sfc.gauss
+      - soilw.0-10cm.gauss
+      - tmp.0-10cm.gauss
+      - lhtfl.sfc.gauss
+      - shtfl.sfc.gauss
+      - skt.sfc.gauss
+    years: [1982, 2024]
+    extra_files: [land.sfc.gauss.nc]     # the static land/sea mask
+    expected_items: 560                  # 13 vars x 43 years + 1 static
+    url: https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis/surface_gauss/{file}
+    mirrors:
+      - https://psl.noaa.gov/thredds/fileServer/Datasets/ncep.reanalysis/surface_gauss/{file}
+    filename: "{var}.{year}.nc"
+    hub_prefix: ncep
+    transform: passthrough
+    batch_files: 8
+    bytes_wire: 42000000
+    bytes_stored: 42000000
+    notes:
+      - "DESIGN.md §3 says 14 variables and 603 files. The repository's own
+         NCEP_FILES table (ml/build_family7.py) has THIRTEEN stems, so this
+         registry declares 13 x 43 + 1 = 560 and the manifest prints the real
+         count. The registry is the truth."
+      - "TRAP: these are the 4x-DAILY files (1464 time steps in a leap year),
+         not daily means, despite the directory name."
+      - "TRAP: the grid is T62 gaussian, 192 x 94, latitude DESCENDING,
+         longitude 0 .. 358.125."
+      - "The archive has been FROZEN since March 2026 - no more updates ever.
+         This mirror is its last chance."
+      - "PSL is the strictest host: 1 lane, 20 s between requests, and a 900 s
+         HEAD-poll after a 5xx before the item is given up on."
+
+  - name: rg
+    tier: 0
+    host: scripps
+    mode: fetch
+    fetcher: http
+    chunk: scrape_month
+    files:                                  # the two base climatology files
+      - RG_ArgoClim_Temperature_2019.nc.gz
+      - RG_ArgoClim_Salinity_2019.nc.gz
+    scrape_url: https://sio-argo.ucsd.edu/RG_Climatology.html
+    scrape_re: 'RG_ArgoClim_(\d{6})_2019\.nc\.gz'
+    months: ["2019-01", "2025-12"]          # fallback range if the scrape fails
+    month_filename: RG_ArgoClim_{ym}_2019.nc.gz
+    url: https://sio-argo.ucsd.edu/pub/www-argo/RG/{file}
+    filename: "{file}"
+    hub_prefix: rg
+    transform: passthrough
+    expected_items: null                    # scraped; the manifest prints it
+    batch_files: 1
+    bytes_wire: 700000000                   # the base files; measured 695 MB
+    bytes_stored: 700000000
+    notes:
+      - "The two base files are ~0.7 GB each (HEAD 2026-09-04:
+         RG_ArgoClim_Temperature_2019.nc.gz = 695,480,508 bytes)."
+      - "The monthly extension list is SCRAPED from the climatology page with
+         the regex above - the same one ml/fetch_rg_channels.py uses."
+      - "If the scrape fails, the fallback range 2019-01 .. 2025-12 is used and
+         a month the server does not have marks the item `absent`, never
+         `failed`."
+
+  - name: rapid
+    tier: 0
+    host: rapid
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [moc_transports.nc]
+    url: https://rapid.ac.uk/sites/default/files/rapid_data/{file}
+    filename: "{file}"
+    hub_prefix: labels/rapid
+    transform: passthrough
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 1182284                     # HEAD 2026-09-04
+    bytes_stored: 1182284
+    notes: ["The headline AMOC label: overturning transport at 26.5 N."]
+
+  - name: florida_cable
+    tier: 0
+    host: aoml
+    mode: fetch
+    fetcher: http
+    chunk: year
+    years: [1982, 2024]
+    expected_items: 43
+    url: https://www.aoml.noaa.gov/ftp/phod/WBTS/cable/FC_cable_transport_{year}_v3.dat
+    fallback_urls:
+      - https://www.aoml.noaa.gov/ftp/phod/WBTS/cable/FC_cable_transport_{year}_v2.dat
+      - https://www.aoml.noaa.gov/ftp/phod/WBTS/cable/FC_cable_transport_{year}.dat
+    filename: FC_cable_transport_{year}.dat
+    hub_prefix: labels/florida_cable
+    transform: passthrough
+    batch_files: 8
+    bytes_wire: 20000
+    bytes_stored: 20000
+    notes:
+      - "Try _v3, then _v2, then the bare name. A year none of the three has is
+         `absent` (the cable has real gaps), never `failed`."
+
+  - name: osnap
+    tier: 0
+    host: gatech
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [OSNAP_Streamfunction_201408_202006.nc]
+    url: >-
+      https://repository.gatech.edu/server/api/core/bitstreams/597db471-e2ea-4109-b1a1-b94451f1b884/content
+    filename: "{file}"
+    hub_prefix: labels/osnap
+    transform: passthrough
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 30000000
+    bytes_stored: 30000000
+    notes:
+      - "The URL is an opaque bitstream id, so the local filename is ours to
+         choose; it is fixed here so the Hub path is stable."
+
+  - name: move
+    tier: 0
+    host: ndbc
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [OS_MOVE_20000206-20221014_DPR_VOLUMETRANSPORT.nc]
+    url: >-
+      https://dods.ndbc.noaa.gov/thredds/fileServer/oceansites/DATA_GRIDDED/MOVE/{file}
+    filename: "{file}"
+    hub_prefix: labels/move
+    transform: passthrough
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 172492                      # HEAD 2026-09-04
+    bytes_stored: 172492
+    notes: ["The MOVE array at 16 N, from the OceanSITES gridded archive."]
+
+  - name: samba
+    tier: 0
+    host: aoml
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [MOC_TotalAnomaly_and_constituents.asc]
+    url: https://www.aoml.noaa.gov/phod/SAMOC_international/documents/{file}
+    filename: "{file}"
+    hub_prefix: labels/samba
+    transform: passthrough
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 400000
+    bytes_stored: 400000
+    notes: ["The South Atlantic MOC anomaly at 34.5 S."]
+
+  - name: etopo
+    tier: 0
+    host: ncei_etopo
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [ETOPO_2022_v1_60s_N90W180_surface.nc]
+    url: >-
+      https://www.ngdc.noaa.gov/thredds/fileServer/global/ETOPO2022/60s/60s_surface_elev_netcdf/{file}
+    filename: "{file}"
+    hub_prefix: statics/etopo
+    transform: passthrough
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 470000000
+    bytes_stored: 470000000
+    notes:
+      - "60 arc-second ICE-SURFACE elevation. Cell-registered, latitude
+         descending (GeoTransform -180 1/60 0 90 0 -1/60, node_offset 1)."
+      - "This THREDDS endpoint sends no Content-Length on HEAD; the size check
+         falls back to 'the file must be non-empty and readable'."
+
+  - name: natural_earth
+    tier: 0
+    host: github_raw
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files:
+      - ne_10m_glaciated_areas.geojson
+      - ne_10m_lakes.geojson
+    url: >-
+      https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/{file}
+    filename: "{file}"
+    hub_prefix: statics/natural_earth
+    transform: passthrough
+    expected_items: 2
+    batch_files: 2
+    bytes_wire: 1600000
+    bytes_stored: 1600000
+    notes: ["Public domain. The glaciated-areas and lakes masks."]
+
+  # ======================= TIER 1 =========================================
+
+  - name: duacs
+    tier: 1
+    host: cmems
+    mode: fetch
+    fetcher: cmems
+    chunk: month
+    months: ["1993-01", "2024-12"]
+    expected_items: 384
+    dataset_id: cmems_obs-sl_glo_phy-ssh_my_allsat-l4-duacs-0.125deg_P1D
+    product_id: SEALEVEL_GLO_PHY_L4_MY_008_047
+    resolve_dataset_id: true       # ask `copernicusmarine describe` first
+    unverified_url: true
+    variables: [sla, adt, ugos, vgos, err_sla]
+    bbox: {lon_min: -180, lon_max: 180, lat_min: -90, lat_max: 90}
+    subset_by: day
+    transform: bin025
+    hub_path: sources/duacs025/duacs025_global_{ym}.nc
+    batch_files: 1
+    bytes_wire: 2900000000         # ~1.1 TB over 384 months
+    bytes_stored: 250000000        # ~95 GB over 384 months
+    notes:
+      - "The dataset_id above is a BEST GUESS. Resolve it for real with
+         `copernicusmarine describe --product-id SEALEVEL_GLO_PHY_L4_MY_008_047`
+         and paste the answer here before running. Do not hardcode a guess."
+      - "The long one: ~1.1 TB on the wire. At four CMEMS lanes expect 2-3
+         days. Run it as its own invocation (`--only duacs`); it is resumable."
+      - "Delayed-time DUACS uses a CENTRED +/- 6-week processing window, so the
+         last ~6 weeks of the record are not available in this product."
+      - "Fetched one DAY per request and binned to 0.25 deg, exactly like
+         GLORYS, for exactly the same RAM reason."
+
+  - name: cmems_static
+    tier: 1
+    host: cmems
+    mode: fetch
+    fetcher: cmems
+    chunk: file
+    files: [glorys12_static.nc]
+    dataset_id: cmems_mod_glo_phy_my_0.083deg_static
+    resolve_dataset_id: true
+    unverified_url: true
+    variables: [deptho, mask]
+    bbox: {lon_min: -180, lon_max: 180, lat_min: -80, lat_max: 90}
+    transform: passthrough
+    hub_prefix: statics/cmems
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 200000000
+    bytes_stored: 200000000
+    notes:
+      - "The bathymetry and land mask ON THE GLORYS GRID. Resolve the real
+         dataset id with `copernicusmarine describe` - the variable names
+         differ between static products."
+
+  - name: rapid_extra
+    tier: 1
+    host: rapid
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [moc_vertical.nc, ts_gridded.nc]
+    url: https://rapid.ac.uk/sites/default/files/rapid_data/{file}
+    filename: "{file}"
+    hub_prefix: labels/rapid
+    transform: passthrough
+    unverified_url: true
+    expected_items: 2
+    batch_files: 2
+    bytes_wire: 20000000
+    bytes_stored: 20000000
+    notes:
+      - "URL pattern ASSUMED to sit in the same directory as moc_transports.nc.
+         VERIFY with one HEAD before running."
+
+  - name: en4
+    tier: 1
+    host: metoffice
+    mode: fetch
+    fetcher: http
+    chunk: year
+    years: [1900, 2025]
+    expected_items: 126
+    url: https://www.metoffice.gov.uk/hadobs/en4/data/en4-2-2/EN.4.2.2.analyses.g10.{year}.zip
+    filename: EN.4.2.2.analyses.g10.{year}.zip
+    hub_prefix: en4
+    transform: passthrough
+    unverified_url: true
+    batch_files: 8
+    bytes_wire: 30000000
+    bytes_stored: 30000000
+    notes:
+      - "VERIFY THE PATTERN. A HEAD on the 2020 file returned 404 on
+         2026-09-04, so this exact path is wrong or has moved. Open
+         https://www.metoffice.gov.uk/hadobs/en4/download-en4-2-2.html and
+         copy the real one in before enabling."
+
+  - name: pmel_wwv
+    tier: 1
+    host: pmel
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [wwv.dat]
+    url: https://www.pmel.noaa.gov/tao/wwv/data/{file}
+    filename: "{file}"
+    hub_prefix: indices/wwv
+    transform: passthrough
+    unverified_url: true
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 100000
+    bytes_stored: 100000
+    notes:
+      - "https://www.pmel.noaa.gov/tao/wwv/data/ is an INDEX PAGE (HEAD 200,
+         799 bytes of HTML on 2026-09-04). Open it, pick the file, and put its
+         real name in `files:` before enabling."
+
+  - name: olr
+    tier: 1
+    host: psl
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [olr.day.mean.nc]
+    url: https://downloads.psl.noaa.gov/Datasets/interp_OLR/{file}
+    filename: "{file}"
+    hub_prefix: olr
+    transform: passthrough
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 400000000
+    bytes_stored: 400000000
+    notes: ["NOAA interpolated outgoing longwave radiation, one whole-record
+             file. Shares the PSL budget with NCEP."]
+
+  - name: godas
+    tier: 1
+    host: psl
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [godas_pentad_index.html]
+    url: https://downloads.psl.noaa.gov/Datasets/godas/pentad/
+    filename: "{file}"
+    hub_prefix: godas
+    transform: passthrough
+    unverified_url: true
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 50000
+    bytes_stored: 50000
+    notes:
+      - "VERIFY. This is a DIRECTORY, not a file. Open it, decide which
+         variables and years are wanted, then rewrite this row as a var_year
+         source before enabling."
+
+  - name: oni
+    tier: 1
+    host: cpc
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [ONI_v5.php]
+    url: https://origin.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/{file}
+    filename: oni_v5.txt
+    hub_prefix: indices/oni
+    transform: passthrough
+    unverified_url: true
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 20000
+    bytes_stored: 20000
+    notes:
+      - "The Oceanic Nino Index as a plain-text table inside an HTML page.
+         VERIFY: the sandbox proxy refused this host on 2026-09-04."
+
+  - name: mei
+    tier: 1
+    host: psl
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [meiv2.data]
+    url: https://psl.noaa.gov/enso/mei/data/{file}
+    filename: "{file}"
+    hub_prefix: indices/mei
+    transform: passthrough
+    unverified_url: true
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 20000
+    bytes_stored: 20000
+    notes: ["The Multivariate ENSO Index version 2. VERIFY the pattern."]
+
+  - name: rmm
+    tier: 1
+    host: bom
+    mode: fetch
+    fetcher: http
+    chunk: file
+    files: [rmm.74toRealtime.txt]
+    url: https://www.bom.gov.au/climate/mjo/graphics/{file}
+    filename: "{file}"
+    hub_prefix: indices/rmm
+    transform: passthrough
+    unverified_url: true
+    expected_items: 1
+    batch_files: 1
+    bytes_wire: 2000000
+    bytes_stored: 2000000
+    notes:
+      - "The Real-time Multivariate MJO index. VERIFY: a HEAD returned 403 on
+         2026-09-04, which usually means the host wants a browser-like
+         User-Agent. fetchers.py already sends one; if 403 persists, this
+         source needs a human."
+
+  # ======================= TIER 2 (gated) ==================================
+
+  - name: era5
+    tier: 2
+    host: cds
+    mode: fetch
+    fetcher: cds
+    chunk: var_month
+    vars: [metss, mntss, u10, v10, msnswrf, msnlwrf, msshf, mslhf,
+           mer, mtpr, skt, t2m, sp, tp]
+    months: ["1982-01", "2024-12"]
+    expected_items: 7224           # 14 variables x 516 months
+    dataset_id: derived-era5-single-levels-daily-statistics
+    filename: era5_{var}_{ym}.nc
+    hub_prefix: era5
+    transform: passthrough
+    requires_env: [CDSAPI_URL, CDSAPI_KEY]
+    batch_files: 8
+    bytes_wire: 12000000
+    bytes_stored: 12000000
+    notes:
+      - "BLOCKED on the free CDS (Climate Data Store) account only Chris can
+         create. Without CDSAPI_KEY every item is reported `blocked` with a
+         one-line explanation and NOTHING is requested."
+      - "One request per (variable, month). The CDS queues server-side, so two
+         in flight is the polite maximum for one user."
+      - "The variable names above are ERA5 SHORT names; the CDS API wants the
+         long ones for some datasets. Check the dataset's own form once the
+         account exists."
+
+  - name: cci_sm
+    tier: 2
+    host: ceda
+    mode: fetch
+    fetcher: http
+    chunk: year
+    years: [1991, 2023]
+    enabled: false
+    unverified_url: true
+    url: https://dap.ceda.ac.uk/neodc/esacci/soil_moisture/data/daily_files/COMBINED/v09.1/{year}/
+    filename: esacci_sm_v09.1_{year}.tar
+    hub_prefix: cci_sm
+    transform: passthrough
+    expected_items: 33
+    batch_files: 1
+    bytes_wire: 2000000000
+    bytes_stored: 2000000000
+    notes:
+      - "ESA CCI soil moisture, v09.1 COMBINED, daily, 0.25 deg."
+      - "OFF by default: needs a free CEDA registration AND the real path
+         pattern, which can only be read after logging in. Verify the pattern,
+         put it here, then set enabled: true."
+
+  - name: ostia
+    tier: 2
+    host: cmems
+    mode: fetch
+    fetcher: cmems
+    chunk: month
+    months: ["1982-01", "2024-12"]
+    enabled: false
+    dataset_id: SST_GLO_SST_L4_REP_OBSERVATIONS_010_011
+    resolve_dataset_id: true
+    unverified_url: true
+    variables: [analysed_sst, sea_ice_fraction]
+    bbox: {lon_min: -180, lon_max: 180, lat_min: -90, lat_max: 90}
+    subset_by: day
+    transform: bin025
+    hub_path: sources/ostia025/ostia025_global_{ym}.nc
+    expected_items: 516
+    batch_files: 1
+    bytes_wire: 6000000000
+    bytes_stored: 250000000
+    notes:
+      - "OFF by default. ~3 TB on the wire at 0.05 deg, for a sea-ice fraction
+         that OISST already supplies. Turn it on only with a reason."
+
+  - name: grep3d
+    tier: 2
+    host: cmems
+    mode: fetch
+    fetcher: cmems
+    chunk: month
+    months: ["1993-01", "2024-12"]
+    enabled: false
+    dataset_id: cmems_mod_glo_phy-all_my_0.25deg_P1D-m
+    resolve_dataset_id: true
+    unverified_url: true
+    variables: [thetao, so, uo, vo]
+    bbox: {lon_min: -180, lon_max: 180, lat_min: -90, lat_max: 90}
+    bbox_na_option: {lon_min: -100, lon_max: 20, lat_min: 0, lat_max: 70}
+    subset_by: day
+    transform: bin025
+    hub_path: sources/grep3d/grep3d_global_{ym}.nc
+    expected_items: 384
+    batch_files: 1
+    bytes_wire: 3000000000
+    bytes_stored: 520000000
+    notes:
+      - "OFF by default. ~200 GB stored globally; E-070 §6 says the streaming
+         loader comes first."
+      - "The DEPTH LEVELS are read from the first served file. Do NOT hardcode
+         a level list here."
+      - "A North-Atlantic window is available as `bbox_na_option` if a smaller
+         version is wanted; swap it into `bbox` deliberately."

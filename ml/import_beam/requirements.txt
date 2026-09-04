@@ -1,0 +1,27 @@
+# Pinned to what this package was built and tested against (2026-09-04).
+#
+# setuptools MUST be < 70 BEFORE these are installed. Three of apache-beam's
+# dependencies (crcmod, dill 0.3.1.1, hdfs) still ship as source distributions
+# that call setuptools APIs removed in 70; with a newer setuptools the install
+# fails part-way and leaves a venv that imports beam but cannot run a pipeline.
+# setup_env.sh does this in the right order — use it rather than a bare
+# `pip install -r requirements.txt` into a fresh venv.
+
+setuptools<70
+wheel
+
+apache-beam==2.68.0
+huggingface_hub==1.30.0
+netCDF4==1.7.4
+numpy==2.2.6
+PyYAML==6.0.3
+requests==2.34.2
+xarray==2026.7.0
+copernicusmarine==2.4.1
+
+# Tier 2 only — ERA5 through the Climate Data Store. Harmless to install now;
+# the fetcher refuses politely until CDSAPI_KEY exists.
+cdsapi
+
+# tests
+pytest==9.1.1
