@@ -181,6 +181,23 @@ the un-z-scored bytes. The twelve-anchor cone export
 (`family7-export-cones.yml`, run 33899148032) was dispatched on the same box
 at 17:10Z.
 
+**The exported anchors landed 17:35Z** (run 33899148032, export 25 min,
+publish 28 s; box 49102182 stopped after it). Twelve global cells sampled
+by the production sampler against the box-local tensor — the Antarctic ice
+sheet (80° S 60° E, 3,700 m up), the Sahara, Greenland, the Kuroshio, the
+Antarctic Circumpolar Current, Niño 3.4, a cell on the dateline (0° N
+179.75° E, whose lag dots wrap across ±180°), and the five North Atlantic
+cells family 4 has — 64.1 MB on the Hub under `cone_samples_f7/`, each
+with its sha256, zero inadmissible dots, anomaly included (the exporter
+runs `ml/trainprobe.py::anomaly_transform` per group). Index
+`data/cone_samples_f7.json` (`f1437ab`); the Cones tab reads it as a third
+source, "exported anchors (family 7, global)" — 54 channels grouped by
+tensor group, the drawing on the sample's own wrapping grid, the
+physical-value read-out through the group-keyed norm (`96fb43c`,
+`8f9d34c`, live). Verified on the deployed tree with the real
+`antarctica_ice.json` bytes: 12 anchors, 3 channel groups, the read-out
+standing on 80° S 60° E (a window clamp had printed 0° N 20° E — fixed).
+
 <a id="e-069"></a>
 ## E-069 · Two stencils, one cone — the cone-native codec, ocean physics first — Phase A DONE 2026-09-03, Phase B wired, #537 DISPATCHED after #536 died at its first CUDA eval (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")
 
