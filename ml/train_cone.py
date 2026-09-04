@@ -91,6 +91,29 @@ def parse(argv=None):
                         "ablation: no dots, the lag-0 patch only.")
     p.add_argument("--future-lags", default="1,2")
     p.add_argument("--n-dot-queries", type=int, default=256)
+    # ---- E-069b, the masking plan. Every default is today's behaviour. -----
+    p.add_argument("--chan-drop-scope", default="all",
+                   choices=("all", "lag0"),
+                   help="how far a channel drop reaches. 'all' (default, and "
+                        "what every archived cone number was trained under) "
+                        "hides the channel at lag 0 AND at every dot; 'lag0' "
+                        "hides its lag-0 patch only and leaves its dots "
+                        "visible, so a hidden dot is never a dot of a channel "
+                        "the encoder cannot see at all.")
+    p.add_argument("--lag-band-p", type=float, default=0.3,
+                   help="probability a batch element has every dot at lag <= "
+                        "l0 (l0 uniform on 1..3 pentads) hidden — the "
+                        "forward-stepping scheme.")
+    p.add_argument("--sector-p", type=float, default=0.3,
+                   help="probability a batch element has a 90-degree bearing "
+                        "sector of its dots hidden — the interpolate-across-"
+                        "bearings scheme.")
+    p.add_argument("--anchor-hidden-only", action="store_true",
+                   help="score the anchor-reconstruction family only on the "
+                        "channels that were dropped for that batch element. "
+                        "Off by default: under the default plan 69% of the "
+                        "anchor family's weight sits on channels whose target "
+                        "is visible in the input as the patch centre.")
     p.add_argument("--aux-latent-w", type=float, default=0.25,
                    help="weight of the auxiliary loss through the decoder's "
                         "FULL memory ([z-token] + latents). The headline "
@@ -423,7 +446,8 @@ def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
     p["generator"] = g
     model.eval()
     nll = mse = w = tgt = 0.0
-    fam = {k: {"nll": 0.0, "mse": 0.0, "wsum": 0.0, "n_targets": 0.0}
+    fam = {k: {"nll": 0.0, "mse": 0.0, "msebar": 0.0, "wsum": 0.0,
+               "n_targets": 0.0}
            for k in QUERY_FAMILIES}
     with torch.no_grad():
         for i in range(0, len(anchors), batch):
@@ -440,6 +464,7 @@ def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
                     continue
                 fam[k]["nll"] += f["nll"] * f["wsum"]
                 fam[k]["mse"] += f["mse"] * f["wsum"]
+                fam[k]["msebar"] += f.get("msebar", 0.0) * f["wsum"]
                 fam[k]["wsum"] += f["wsum"]
                 fam[k]["n_targets"] += f["n_targets"]
     model.train()
@@ -452,6 +477,7 @@ def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
         den = f["wsum"] if f["wsum"] > 0.0 else 1.0
         f["nll"] /= den
         f["mse"] /= den
+        f["msebar"] /= den
     return nll / w, mse / w, tgt, fam
 
 
@@ -466,10 +492,16 @@ def fam_record(fam):
     """
     rec = {}
     for k in QUERY_FAMILIES:
-        f = fam.get(k) or {"nll": 0.0, "mse": 0.0, "wsum": 0.0,
-                           "n_targets": 0.0}
+        f = fam.get(k) or {"nll": 0.0, "mse": 0.0, "msebar": 0.0,
+                           "wsum": 0.0, "n_targets": 0.0}
         rec[f"held_out_nll_{k}"] = round(float(f["nll"]), 5)
         rec[f"held_out_mse_{k}"] = round(float(f["mse"]), 5)
+        # THE PREDICT-ZERO BAR for the same family, on the same weights: the
+        # weighted mean of the squared target. `mse` alone cannot say whether
+        # a family was learnt — the targets are standardised per channel, so
+        # a family sitting AT its msebar is predicting the mean, which is what
+        # #539's hidden-dot 1.001 turned out to be.
+        rec[f"held_out_msebar_{k}"] = round(float(f.get("msebar", 0.0)), 5)
         rec[f"held_out_targets_{k}"] = int(f["n_targets"])
         # The WEIGHT is what the two means above divide by, and it is what
         # lets a reader put the headline back together (the family weights of
@@ -533,8 +565,14 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
 
     chan_depth = torch.as_tensor([channel_depth_dbar(n) for n in chan],
                                  dtype=torch.float32, device=device)
+    # The masking plan. Both arms — the cone and its L_in=0 snapshot twin —
+    # are built from the same `a`, so the twin masks under exactly the plan
+    # the cone arm does; that is what makes the two comparable at all.
     plan = default_plan(chan, n_dot_queries=a.n_dot_queries,
                         aux_latent_w=a.aux_latent_w, future_lags=fut,
+                        lag_band_p=a.lag_band_p, sector_p=a.sector_p,
+                        chan_drop_scope=a.chan_drop_scope,
+                        anchor_hidden_only=a.anchor_hidden_only,
                         device=device)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=0.01)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=a.steps)
@@ -575,15 +613,31 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
                 "trainer": "cone", "arm": tag, "L_in": int(L_in),
                 "n_latents": a.n_latents, "n_dot_tokens": int(n_dots),
                 "future_lags": list(fut), "aux_latent_w": a.aux_latent_w,
+                # E-069b's masking plan. Recorded because this record is
+                # sometimes the only surviving account of what ran, and two
+                # runs that differ only here produce completely different
+                # loss splits.
+                "chan_drop_scope": a.chan_drop_scope,
+                "lag_band_p": a.lag_band_p, "sector_p": a.sector_p,
+                "anchor_hidden_only": bool(a.anchor_hidden_only),
                 "holdout_scope": a.holdout_scope,
                 "holdout_years": a.holdout_years,
                 "lr": a.lr, "seed": a.seed,
             }}) + "\n")
 
     def save(step):
+        # `args` carries the whole CLI, so the four E-069b plan knobs are in
+        # it by construction; they are restated beside `L_in` for the same
+        # reason `L_in` is — a reader opening a checkpoint asks what stencil
+        # and what masking plan produced these weights, and should not have
+        # to know which argparse dest spells them.
         blob = {"args": vars(a), "model": model.state_dict(),
                 "chan_names": chan, "norm": D["norm"], "step": int(step),
-                "arm": tag, "L_in": int(L_in), "params": params}
+                "arm": tag, "L_in": int(L_in), "params": params,
+                "chan_drop_scope": a.chan_drop_scope,
+                "lag_band_p": float(a.lag_band_p),
+                "sector_p": float(a.sector_p),
+                "anchor_hidden_only": bool(a.anchor_hidden_only)}
         torch.save(blob, os.path.join(out_dir, ckpt_name))
 
     loss_every = max(1, a.steps // 200)

@@ -396,22 +396,57 @@ class ConeMAE(nn.Module):
         Four schemes, mixed per batch ELEMENT (plan §3): channel drop, lag-band
         drop, sector drop, and (always) the anchor reconstruction, which is not
         a mask at all — it is a query.
+
+        `chan_drop_scope` (E-069b) decides HOW FAR a channel drop reaches:
+
+          "all"  — the historical behaviour and the default: the channel is
+                   hidden at lag 0 AND at every one of its dots, so the
+                   encoder holds no value of it anywhere.
+          "lag0" — the channel's lag-0 patch only; its dots stay VISIBLE. The
+                   hidden-dot queries are then drawn from the lag-band and
+                   sector schemes alone, which is what E-069b needs: under
+                   "all", ~80% of hidden-dot queries belong to a channel with
+                   no value anywhere in the input, so the decoder's best
+                   answer is the channel mean and #539 measured exactly that
+                   (hidden-dot MSE 1.001 on 64% of the loss weight).
+
+        THE RNG IS CONSUMED IDENTICALLY IN BOTH SCOPES — same `rand` calls, in
+        the same order, of the same shapes — so a seeded eval under "all" is
+        bit-identical to every archived cone number and the scope cannot be
+        the thing that moved a curve. The scope changes only what `dot_mask`
+        is BUILT from, never what is drawn (`tests/test_cone_mask_scope.py`
+        pins the identity, and `tests/test_cone_smoke.py`'s trajectory
+        fingerprint would catch it anyway).
         """
         dev = b["vals"].device
         B, N = b["vals"].shape
         C = self.n_chan
         g = plan.get("generator")
+        scope = plan.get("chan_drop_scope", "all")
+        if scope not in ("all", "lag0"):
+            raise ValueError(
+                f"chan_drop_scope {scope!r}: only 'all' (hide the channel "
+                f"everywhere) and 'lag0' (hide its lag-0 patch, keep its "
+                f"dots) exist. Refusing rather than falling back to a "
+                f"default, because a masking plan that silently means "
+                f"something else is a run that answers a question nobody "
+                f"asked (ml/CLAUDE.md §1).")
 
         def rand(*shape):
             return torch.rand(*shape, device=dev, generator=g)
 
-        # (i) channel drop — hide a whole channel, at lag 0 AND at every dot.
-        # `cur_*` at 0.5 (H1's target: the codec must reconstruct the current
-        # from the motion of everything else), the rest at 0.3.
+        # (i) channel drop — hide a whole channel, at lag 0 AND (scope "all")
+        # at every dot. `cur_*` at 0.5 (H1's target: the codec must
+        # reconstruct the current from the motion of everything else), the
+        # rest at 0.3.
         p = plan["chan_drop_p"].to(dev)[None].expand(B, -1)
         chan_mask = rand(B, C) < p
 
-        dot_mask = chan_mask.gather(1, b["chan"].long())          # [B, N]
+        # Under "lag0" the channel drop contributes NOTHING to `dot_mask`:
+        # the dots of a dropped channel stay visible and are what the encoder
+        # is meant to read the hidden present-day patch out of.
+        dot_mask = (chan_mask.gather(1, b["chan"].long()) if scope == "all"
+                    else torch.zeros(B, N, dtype=torch.bool, device=dev))
 
         # (ii) lag-band drop — hide every dot at lag <= l0 and predict them
         # from the older lags. Forecasting inside pretraining: this is the
@@ -466,7 +501,7 @@ class ConeMAE(nn.Module):
         sel = score.gather(1, idx) >= 0.0
         return idx, sel
 
-    def _query_sets(self, b, plan, dot_mask, dot_idx=None):
+    def _query_sets(self, b, plan, dot_mask, dot_idx=None, chan_mask=None):
         """Assemble (chan, dy, dx, lag, depth, target, weight) for every query.
 
         Three families of query, concatenated along Q so the decoder runs once:
@@ -488,6 +523,17 @@ class ConeMAE(nn.Module):
         the JAX twin both take. Left None (what `forward` passes) the draw
         happens here, at the same point in the generator's stream as it always
         has.
+
+        `chan_mask` [B, C] is needed only by `anchor_hidden_only` (E-069b),
+        which zeroes family A's weight on every channel this batch element did
+        NOT drop. Under the default plan the anchor family scores every
+        channel, and 69% of its weight then sits on channels whose target is
+        VISIBLE in the input as the patch centre — a copy, not a
+        reconstruction. With the flag on, the anchor family asks only what H1
+        asks: reconstruct the channels the encoder could not see at lag 0. A
+        batch element that happened to drop nothing contributes weight zero,
+        which the family split reports as a zero WEIGHT rather than a NaN
+        (ml/CLAUDE.md §5.22).
         """
         dev = b["vals"].device
         dt = b["vals"].dtype
@@ -506,7 +552,16 @@ class ConeMAE(nn.Module):
             dys.append(z), dxs.append(z), lags.append(z)
             deps.append(depth_c[None].expand(B, -1))
             tgts.append(b["patch_vals"][..., 4].to(dt))
-            ws.append(b["patch_obs"][..., 4].to(dt) * cw[None])
+            aw = b["patch_obs"][..., 4].to(dt) * cw[None]
+            if plan.get("anchor_hidden_only", False):
+                if chan_mask is None:
+                    raise ValueError(
+                        "anchor_hidden_only needs the batch's chan_mask to "
+                        "know which channels were dropped; _query_sets was "
+                        "called without one. `_loss_from` passes it — a "
+                        "direct caller must too.")
+                aw = aw * chan_mask.to(dt)
+            ws.append(aw)
 
         # ---- B. future queries --------------------------------------------
         fut = b.get("fut_vals")
@@ -623,7 +678,7 @@ class ConeMAE(nn.Module):
         z, lat = self.encode(bb)
 
         chan, dy, dx, lag, dep, tgt, w = self._query_sets(b, plan, dot_mask,
-                                                          dot_idx)
+                                                          dot_idx, chan_mask)
         q = self.query_tokens(chan, dy, dx, lag, dep)
         mu, logvar = self.decode_from_z(z, q)
 
@@ -646,20 +701,29 @@ class ConeMAE(nn.Module):
         #   nll == sum_f nll_f * wsum_f / sum_f wsum_f
         # A family with no target at all (the snapshot twin has no dots) gets
         # ZEROS and a zero weight, never a NaN — ml/CLAUDE.md §5.22.
+        #
+        # `msebar` is the PREDICT-ZERO MSE: the same weighted mean, of the
+        # squared TARGET instead of the squared error. It is what makes an
+        # `mse` readable without a second run — the targets are standardised,
+        # so a family whose mse equals its msebar has learnt nothing beyond
+        # the channel mean, which is exactly what #539's hidden-dot 1.001
+        # was. It is LOGGED and adds nothing to the loss (ml/CLAUDE.md §4.3).
         families = {}
         with torch.no_grad():
             ell_d, sq_d, w_d = ell.detach(), sq.detach(), w.detach()
+            sqt_d = (tgt.detach() ** 2) * w_d
             for name, (lo, hi) in self.query_family_spans(
                     b, plan, w.shape[1]).items():
                 if hi <= lo:
-                    families[name] = {"nll": 0.0, "mse": 0.0, "wsum": 0.0,
-                                      "n_targets": 0.0}
+                    families[name] = {"nll": 0.0, "mse": 0.0, "msebar": 0.0,
+                                      "wsum": 0.0, "n_targets": 0.0}
                     continue
                 ws = float(w_d[:, lo:hi].sum())
                 den = ws if ws > 0.0 else 1.0
                 families[name] = {
                     "nll": float(ell_d[:, lo:hi].sum()) / den,
                     "mse": float(sq_d[:, lo:hi].sum()) / den,
+                    "msebar": float(sqt_d[:, lo:hi].sum()) / den,
                     "wsum": ws,
                     "n_targets": float((w_d[:, lo:hi] > 0).sum())}
 
@@ -687,13 +751,33 @@ class ConeMAE(nn.Module):
 def default_plan(chan_names, cur_drop=0.5, other_drop=0.3, lag_band_p=0.3,
                  sector_p=0.3, future=True, anchor_recon=True,
                  n_dot_queries=256, aux_latent_w=0.25, future_lags=(1, 2),
+                 chan_drop_scope="all", anchor_hidden_only=False,
                  generator=None, device=None):
     """The masking plan of plan §3, as a dict of plain tensors.
 
     `cur_*` at 0.5 and everything else at 0.3 is the plan's channel-drop
     schedule; the lag-band and sector drops fire on 30% of batch elements
     each, independently, so a given anchor can be hit by all three.
+
+    E-069b adds two knobs, both DEFAULTING TO TODAY'S BEHAVIOUR so every
+    archived number and the bit-identity baseline stand:
+
+      `chan_drop_scope` — "all" (a dropped channel is hidden at lag 0 and at
+        every dot) or "lag0" (hidden at lag 0 only; its dots stay visible).
+        See `ConeMAE._masks`.
+      `anchor_hidden_only` — score the anchor family only on the channels this
+        batch element actually dropped, instead of on all C. See
+        `ConeMAE._query_sets`.
+
+    Together they are the E-069b plan: no target is a copy of a visible input
+    (the anchor asks only about hidden channels), and no dot target belongs to
+    a channel that is absent from the input (the dots come from the lag-band
+    and sector schemes, which hide dots of channels the encoder can still see
+    at lag 0 and at other lags).
     """
+    if chan_drop_scope not in ("all", "lag0"):
+        raise ValueError(
+            f"chan_drop_scope {chan_drop_scope!r}: expected 'all' or 'lag0'.")
     p = torch.tensor([cur_drop if n.startswith("cur_") else other_drop
                       for n in chan_names], dtype=torch.float32, device=device)
     return {
@@ -706,6 +790,8 @@ def default_plan(chan_names, cur_drop=0.5, other_drop=0.3, lag_band_p=0.3,
         "anchor_recon": bool(anchor_recon),
         "n_dot_queries": int(n_dot_queries),
         "aux_latent_w": float(aux_latent_w),
+        "chan_drop_scope": str(chan_drop_scope),
+        "anchor_hidden_only": bool(anchor_hidden_only),
         "future_lags": torch.tensor(list(future_lags), dtype=torch.float32,
                                     device=device),
         "generator": generator,

@@ -359,6 +359,114 @@ def test_c2_loss():
     print("  C2 forward_given vs loss_given (tol 1e-5) · " + " · ".join(lines))
 
 
+# ---- C2b: the E-069b masking plan ------------------------------------------
+def test_c2b_e069b_plan():
+    """C2 again under `chan_drop_scope="lag0"` + `anchor_hidden_only=True`.
+
+    E-069b changes WHICH targets the loss scores — a dropped channel keeps its
+    dots, and the anchor family scores only dropped channels — and both halves
+    live on the two sides of the port: the scope in the numpy host draw
+    (`jaxport/train_cone.py::draw_masks_np`), the anchor rule in
+    `ConeMAEJax.query_sets_given`. A port that mirrored one and not the other
+    would still produce a plausible falling curve on a TPU while scoring a
+    different question than the torch run it is meant to replicate, so the
+    parity is asserted on a SHARED draw exactly as C2 does it.
+
+    Three things, in the order that makes a failure legible: the numpy draw
+    mirrors the scope (and spends the same random numbers either way, which is
+    what keeps a "all"-scope JAX run bit-comparable with its own history);
+    the two frameworks' anchor WEIGHTS agree; and the loss, z and every term
+    agree at C2's tolerance.
+
+    This gate appends to FAILURES like every other one AND asserts at the end:
+    `main()` collects, pytest needs a raise.
+    """
+    from jaxport.train_cone import draw_masks_np, plan_to_np
+    f = fixture()
+    tm, jm, b, jb, chan = f["tm"], f["jm"], f["b"], f["jb"], f["chan"]
+    n0 = len(FAILURES)
+
+    plan = default_plan(chan, n_dot_queries=16, aux_latent_w=0.25,
+                        future_lags=(1, 2), lag_band_p=0.5, sector_p=0.5,
+                        chan_drop_scope="lag0", anchor_hidden_only=True)
+
+    # (a) the HOST draw mirrors the scope, and spends the same randomness.
+    quiet = dict(plan, lag_band_p=0.0, sector_p=0.0)
+    np_all = plan_to_np(dict(quiet, chan_drop_scope="all"))
+    np_l0 = plan_to_np(quiet)
+    cm_a, dm_a, _ = draw_masks_np(
+        {k: v.numpy() for k, v in b.items()}, np_all,
+        np.random.default_rng(2024))
+    cm_l, dm_l, _ = draw_masks_np(
+        {k: v.numpy() for k, v in b.items()}, np_l0,
+        np.random.default_rng(2024))
+    if not np.array_equal(cm_a, cm_l):
+        FAILURES.append("C2b: draw_masks_np's channel draw depends on the "
+                        "scope — the scope changed WHAT is drawn")
+    if dm_l.any():
+        FAILURES.append(f"C2b: draw_masks_np hid {int(dm_l.sum())} dots under "
+                        f"scope 'lag0' with the other two schemes off")
+    if not dm_a.any():
+        FAILURES.append("C2b: the 'all' draw hid no dot — the comparison is "
+                        "vacuous on this batch")
+
+    # (b) + (c) the shared-draw parity, torch against JAX.
+    g = torch.Generator().manual_seed(4321)
+    plan["generator"] = g
+    chan_mask, dot_mask = tm._masks(b, plan)
+    dot_idx = tm.draw_dot_queries(b, plan, dot_mask)
+    if not chan_mask.any() or chan_mask.all():
+        FAILURES.append("C2b: the channel drop is degenerate on this batch — "
+                        "anchor_hidden_only would be untested")
+    with torch.no_grad():
+        out = tm.forward_given(b, plan, chan_mask, dot_mask, dot_idx)
+        t_w = tm._query_sets(b, plan, dot_mask, dot_idx, chan_mask)[-1]
+    j_cm, j_dm, j_di = jax_masks(chan_mask, dot_mask, dot_idx)
+    jplan = jcm.plan_to_jax(plan)
+    j_w = jm.query_sets_given(jb, jplan, j_dm, j_di, j_cm)[-1]
+    d_w = check("C2b anchor-family weights", t_w, j_w, 1e-6)
+
+    # the anchor half of that weight vector is zero exactly off the drop
+    C = tm.n_chan
+    aw = np.asarray(j_w)[:, :C]
+    cmn = chan_mask.numpy()
+    if aw[~cmn].any():
+        FAILURES.append("C2b: the JAX anchor weight is non-zero on a channel "
+                        "that was not dropped — anchor_hidden_only is not "
+                        "mirrored")
+    if not aw[cmn].any():
+        FAILURES.append("C2b: the JAX anchor weight is zero everywhere — the "
+                        "family scores nothing at all")
+
+    j_loss, j_z, j_terms = jm.loss_given(jb, jplan, j_cm, j_dm, j_di)
+    d = check("C2b loss", out["loss"].detach(), j_loss, 1e-5)
+    d = max(d, check("C2b z", out["z"].detach(), j_z, 1e-5))
+    if set(out["terms"]) != set(j_terms):
+        FAILURES.append(f"C2b: terms keys differ — torch "
+                        f"{sorted(out['terms'])} vs jax {sorted(j_terms)}")
+    worst, worst_k = 0.0, ""
+    for k in sorted(set(out["terms"]) & set(j_terms)):
+        dk = abs(float(out["terms"][k]) - float(j_terms[k]))
+        if dk > worst:
+            worst, worst_k = dk, k
+        if not (dk < 1e-5):
+            FAILURES.append(f"C2b terms[{k}]: |Δ| {dk:.3e} >= 1e-5")
+
+    # the plan is not a no-op: some dot IS scored, from the lag-band and
+    # sector schemes alone, and the anchor family lost weight to the flag
+    if not bool(dot_mask.any()):
+        FAILURES.append("C2b: no dot is hidden under the E-069b plan — the "
+                        "hidden-dot family would be empty")
+    frac = float(np.asarray(aw > 0).mean())
+    print(f"  C2b E-069b plan (scope lag0 + anchor_hidden_only) · host draw "
+          f"mirrors the scope, same randomness · anchor weights {d_w:.2e} "
+          f"(scored on {frac:.0%} of the anchor family, "
+          f"{float(chan_mask.float().mean()):.0%} of channels dropped) · "
+          f"loss/z {d:.2e}, worst of {len(out['terms'])} terms {worst:.2e} "
+          f"({worst_k})")
+    assert FAILURES[n0:] == [], FAILURES[n0:]
+
+
 # ---- C5: the round trip ----------------------------------------------------
 def test_c5_round_trip():
     f = fixture()
@@ -914,7 +1022,8 @@ def test_c8_resume():
 def main():
     print("tests/test_jaxport_cone.py — E-069 cone codec: torch vs "
           "ml/jaxport, CPU, fp32, eval mode\n")
-    for fn in (test_c1_forward, test_c2_loss, test_c3_one_step,
+    for fn in (test_c1_forward, test_c2_loss, test_c2b_e069b_plan,
+               test_c3_one_step,
                test_c5_round_trip, test_c6_refusal, test_c7_invalid_dot,
                test_c9_forward_unchanged, test_c10_production_geometry,
                test_c8_resume, test_c4_band):
@@ -924,8 +1033,8 @@ def main():
         for x in FAILURES:
             print("  -", x)
         return 1
-    print("\ntests/test_jaxport_cone.py: gates C1, C2, C3, C4, C5, C6, C7, "
-          "C8, C9, C10 passed")
+    print("\ntests/test_jaxport_cone.py: gates C1, C2, C2b, C3, C4, C5, C6, "
+          "C7, C8, C9, C10 passed")
     return 0
 
 

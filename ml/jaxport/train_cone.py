@@ -133,6 +133,21 @@ def parse(argv=None):
                         "ablation: no dots, the lag-0 patch only.")
     p.add_argument("--future-lags", default="1,2")
     p.add_argument("--n-dot-queries", type=int, default=256)
+    # ---- E-069b's masking plan, mirroring ml/train_cone.py flag for flag ---
+    # The docstring's contract is that a flag which cannot be honoured is
+    # REFUSED, never ignored — so these are here BECAUSE the host draw and
+    # the anchor-weight rule are both mirrored (draw_masks_np, and
+    # ConeMAEJax.query_sets_given). Every default is today's behaviour.
+    p.add_argument("--chan-drop-scope", default="all",
+                   choices=("all", "lag0"),
+                   help="how far a channel drop reaches: 'all' hides the "
+                        "channel at lag 0 and at every dot, 'lag0' hides its "
+                        "lag-0 patch only and leaves its dots visible.")
+    p.add_argument("--lag-band-p", type=float, default=0.3)
+    p.add_argument("--sector-p", type=float, default=0.3)
+    p.add_argument("--anchor-hidden-only", action="store_true",
+                   help="score the anchor family only on the channels that "
+                        "were dropped for that batch element.")
     p.add_argument("--aux-latent-w", type=float, default=0.25,
                    help="weight of the auxiliary loss through the decoder's "
                         "FULL memory ([z-token] + latents).")
@@ -265,6 +280,14 @@ def plan_to_np(plan):
     return {"chan_drop_p": np.asarray(plan["chan_drop_p"], np.float64),
             "lag_band_p": float(plan.get("lag_band_p", 0.0)),
             "sector_p": float(plan.get("sector_p", 0.0)),
+            # E-069b. Mirrored here because the masks are drawn on the HOST:
+            # a scope the numpy draw did not know about would silently keep
+            # hiding every dot of a dropped channel while the torch twin
+            # stopped, and the parity gate would be the only thing that saw
+            # it. `anchor_hidden_only` is NOT here — it is read by
+            # `ConeMAEJax.query_sets_given` out of the jax plan, not by the
+            # draw.
+            "chan_drop_scope": str(plan.get("chan_drop_scope", "all")),
             "n_dot_queries": int(plan.get("n_dot_queries", 0))}
 
 
@@ -274,8 +297,12 @@ def draw_masks_np(b_np, plan_np, rng):
     `ConeMAE._masks` and `ConeMAE.draw_dot_queries`, DISTRIBUTION for
     distribution, on a `np.random.default_rng`:
 
-      * channel drop — `rng.random((B, C)) < chan_drop_p`, then
-        `dot_mask = chan_mask[b, chan]` (torch's `gather(1, chan)`);
+      * channel drop — `rng.random((B, C)) < chan_drop_p`, then, under
+        `chan_drop_scope == "all"`, `dot_mask = chan_mask[b, chan]` (torch's
+        `gather(1, chan)`). Under `"lag0"` the channel drop contributes
+        NOTHING to `dot_mask` — the dropped channel's dots stay visible —
+        and, exactly as on the torch side, the same random numbers are drawn
+        either way;
       * lag band — on with probability `lag_band_p`, `l0` uniform on {1, 2, 3},
         hiding every dot with `lag_days <= 5 * l0`;
       * sector — on with probability `sector_p`, `th0 ~ U(0, 2*pi)`, hiding
@@ -297,8 +324,12 @@ def draw_masks_np(b_np, plan_np, rng):
     C = int(p.shape[0])
     chan_mask = rng.random((B, C)) < p[None, :]
     chan = np.asarray(b_np["chan"]).astype(np.int64)
-    dot_mask = (np.take_along_axis(chan_mask, chan, axis=1) if N
-                else np.zeros((B, 0), bool))
+    scope = str(plan_np.get("chan_drop_scope", "all"))
+    if scope not in ("all", "lag0"):
+        raise ValueError(f"chan_drop_scope {scope!r}: expected 'all' or "
+                         f"'lag0' (ml/cone_codec.py::ConeMAE._masks).")
+    dot_mask = (np.take_along_axis(chan_mask, chan, axis=1)
+                if (N and scope == "all") else np.zeros((B, N), bool))
 
     lag_band_p = float(plan_np.get("lag_band_p", 0.0))
     if lag_band_p > 0.0:
@@ -627,6 +658,9 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, npz_name, tag,
     chan_depth = np.array([channel_depth_dbar(n) for n in chan], np.float32)
     plan = default_plan(chan, n_dot_queries=a.n_dot_queries,
                         aux_latent_w=a.aux_latent_w, future_lags=fut,
+                        lag_band_p=a.lag_band_p, sector_p=a.sector_p,
+                        chan_drop_scope=a.chan_drop_scope,
+                        anchor_hidden_only=a.anchor_hidden_only,
                         device="cpu")
     plan_j = plan_to_jax(plan)
     plan_np = plan_to_np(plan)
@@ -732,6 +766,10 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, npz_name, tag,
         "trainer": "cone", "arm": tag, "L_in": int(L_in),
         "n_latents": a.n_latents, "n_dot_tokens": int(n_dots),
         "future_lags": list(fut), "aux_latent_w": a.aux_latent_w,
+        # E-069b's masking plan, the same keys the torch trainer records.
+        "chan_drop_scope": a.chan_drop_scope,
+        "lag_band_p": a.lag_band_p, "sector_p": a.sector_p,
+        "anchor_hidden_only": bool(a.anchor_hidden_only),
         "holdout_scope": a.holdout_scope,
         "holdout_years": a.holdout_years,
         "lr": a.lr, "seed": a.seed,

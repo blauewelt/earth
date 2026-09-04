@@ -293,7 +293,7 @@ def test_per_family_terms_reassemble_the_headline():
     fam = out["families"]
     assert set(fam) == set(QUERY_FAMILIES)
     for k, f in fam.items():
-        for key in ("nll", "mse", "wsum", "n_targets"):
+        for key in ("nll", "mse", "msebar", "wsum", "n_targets"):
             assert np.isfinite(f[key]), f"{k}.{key} is not finite"
         assert f["wsum"] > 0, f"{k} scored nothing — the split is degenerate"
     den = sum(f["wsum"] for f in fam.values())
@@ -336,7 +336,8 @@ def test_empty_family_is_zeros_not_nan():
     with torch.no_grad():
         out = m(b, default_plan(CHANS, n_dot_queries=8))
     d = out["families"]["dots"]
-    assert d == {"nll": 0.0, "mse": 0.0, "wsum": 0.0, "n_targets": 0.0}, d
+    assert d == {"nll": 0.0, "mse": 0.0, "msebar": 0.0, "wsum": 0.0,
+                 "n_targets": 0.0}, d
     for f in out["families"].values():
         assert all(np.isfinite(v) for v in f.values())
     # the headline still reassembles with the empty family in the sum

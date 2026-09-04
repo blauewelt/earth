@@ -301,6 +301,26 @@ on:
 #       headline term always goes through z alone; ConeMAE.decode's docstring
 #       has the degeneracy this split closes.
 #   recipe-only: cone_dot_queries     -> ml/train_cone.py --n-dot-queries (256)
+#   recipe-only: cone_chan_drop_scope -> ml/train_cone.py --chan-drop-scope (all)
+#       E-069b. How far a channel drop reaches: "all" hides the channel at
+#       lag 0 AND at every one of its dots (what every archived cone number
+#       was trained under); "lag0" hides its lag-0 patch only and leaves its
+#       dots visible. #539 measured hidden-dot MSE 1.001 — predict-the-mean —
+#       on 64% of the loss weight, because under "all" ~80% of hidden-dot
+#       queries belong to a channel with no value anywhere in the input.
+#   recipe-only: cone_lag_band_p      -> ml/train_cone.py --lag-band-p    (0.3)
+#       Probability a batch element has every dot at lag <= l0 hidden (l0
+#       uniform on 1..3 pentads) — the only scheme that asks the codec to
+#       step time forward from the cone it can still see.
+#   recipe-only: cone_sector_p        -> ml/train_cone.py --sector-p      (0.3)
+#       Probability a batch element has a 90-degree bearing sector of its
+#       dots hidden — interpolation across bearings rather than radii.
+#   recipe-only: cone_anchor_hidden_only -> ml/train_cone.py --anchor-hidden-only (false)
+#       Score the anchor-reconstruction family ONLY on the channels dropped
+#       for that batch element. Off by default, and the default is the
+#       problem E-069b names: 69% of that family's weight otherwise sits on
+#       channels whose target is visible in the input as the patch centre.
+#       Any value but "true" omits the flag.
 #   recipe-only: cone_future_lags     -> ml/train_cone.py --future-lags   ("1,2")
 #       Comma list, passed in the =VALUE form for the same reason
 #       --holdout-years is.
@@ -1387,6 +1407,10 @@ jobs:
               --dec-layers "${RECIPE_CONE_DEC_LAYERS:-2}" \
               --aux-latent-w "${RECIPE_CONE_AUX_W:-0.25}" \
               --n-dot-queries "${RECIPE_CONE_DOT_QUERIES:-256}" \
+              --chan-drop-scope "${RECIPE_CONE_CHAN_DROP_SCOPE:-all}" \
+              --lag-band-p "${RECIPE_CONE_LAG_BAND_P:-0.3}" \
+              --sector-p "${RECIPE_CONE_SECTOR_P:-0.3}" \
+              $([ "${RECIPE_CONE_ANCHOR_HIDDEN_ONLY:-false}" = "true" ] && echo --anchor-hidden-only) \
               --future-lags="${RECIPE_CONE_FUTURE_LAGS:-1,2}" \
               --eval-every "${RECIPE_CONE_EVAL_EVERY:-1000}" \
               $([ "${RECIPE_CONE_VELOCITY_PROBE:-true}" = "true" ] && echo --velocity-probe) \

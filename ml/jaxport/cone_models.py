@@ -380,13 +380,18 @@ class ConeMAEJax(nnx.Module):
         return self._run_dec(mem, queries)
 
     # -------------------------------------------------------------- queries --
-    def query_sets_given(self, b, plan, dot_mask, dot_idx):
+    def query_sets_given(self, b, plan, dot_mask, dot_idx, chan_mask=None):
         """`ml/cone_codec.py:_query_sets` with the hidden-dot draw HANDED IN.
 
         Deterministic by construction — there is no RNG on this side at all.
         `dot_idx` is `(idx [B, k] int, sel [B, k] bool)` from torch's
         `ConeMAE.draw_dot_queries` (or the trainer's numpy equivalent), and
         `torch.gather(dim=1)` is `jnp.take_along_axis(..., axis=1)`.
+
+        `chan_mask` [B, C] is read only by `plan["anchor_hidden_only"]`
+        (E-069b), which zeroes family A's weight on every channel this batch
+        element did NOT drop — the torch twin does exactly this, and the
+        parity gate compares the two on a SHARED draw under that plan.
 
         Returns `(chan, dy, dx, lag, depth, target, weight)`, each [B, Q],
         concatenated in the SAME order the torch method concatenates them —
@@ -410,7 +415,15 @@ class ConeMAEJax(nnx.Module):
             dys.append(z), dxs.append(z), lags.append(z)
             deps.append(jnp.broadcast_to(depth_c[None], (B, C)))
             tgts.append(jnp.asarray(b["patch_vals"])[..., 4].astype(dt))
-            ws.append(jnp.asarray(b["patch_obs"])[..., 4].astype(dt) * cw[None])
+            aw = jnp.asarray(b["patch_obs"])[..., 4].astype(dt) * cw[None]
+            if plan.get("anchor_hidden_only", False):
+                if chan_mask is None:
+                    raise ValueError(
+                        "anchor_hidden_only needs the batch's chan_mask; "
+                        "query_sets_given was called without one. "
+                        "`loss_given` passes it.")
+                aw = aw * jnp.asarray(chan_mask).astype(dt)
+            ws.append(aw)
 
         # ---- B. future queries --------------------------------------------
         fut = b.get("fut_vals")
@@ -469,7 +482,7 @@ class ConeMAEJax(nnx.Module):
         z, lat = self.encode(bb)
 
         chan, dy, dx, lag, dep, tgt, w = self.query_sets_given(
-            b, plan, dot_mask, dot_idx)
+            b, plan, dot_mask, dot_idx, chan_mask)
         q = self.query_tokens(chan, dy, dx, lag, dep)
         mu, logvar = self.decode_from_z(z, q)
 
