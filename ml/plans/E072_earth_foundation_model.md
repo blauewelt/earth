@@ -179,7 +179,7 @@ TFLOP/s at the same utilisation. Four epochs, the data-constrained limit
 
 Rules of the ladder: **each rung is bought only on the previous rung's
 read-out, under the frozen protocol, with the null ladder beside it**
-(§4.6); a rung whose held-out minimum arrives inside 2,000 steps at full
+(§4.7); a rung whose held-out minimum arrives inside 2,000 steps at full
 data is over-parameterised and the next rung is not bought; the width
 ladder result (flat 7.6 M → 206 M) is re-measured at L2 before L3 exists,
 because it is the one measurement that can tell a data-limited rung from a
@@ -260,7 +260,67 @@ pentads, or a relative-position attention bias, tested at L1 on the
 synthetic advection field (`tests/test_cone_advection.py`) before any
 scale is spent on it.
 
-### 4.6 · The null ladder every rung reports
+### 4.6 · Making the cone learnable — and what AlphaEarth's STP does and does not offer
+
+Chris, 4 Sep: *"If we want to make the cone depths / widths learnable, should
+we do something specific, for example include the parameterized STP approach
+from AlphaEarth?"*
+
+What STP is (survey deck slides 4–8, SURVEY_NOTES §AlphaEarth): three
+operators on the same 1.28 km frame at three FIXED resolutions — spatial
+attention at L/16, time-axial attention at L/8 with continuous timecodes
+carrying each observation's valid period, 3×3 convolutions at L/2 —
+re-synchronised after every block by a learned Laplacian pyramid. Nothing
+in it learns a reach: the envelope is the frame, and the temporal reach is
+the whole input sequence. What is learned is the *mixing* across scales and
+the attention over times. So STP is not a learnable cone; it is a
+multi-resolution stencil with a fixed envelope and learned weights inside
+it — which is also, structurally, what ConeMAE's cross-attention over dots
+already is. Three things are worth taking, in this order:
+
+1. **A learnable cone inside a fixed envelope — a physically parameterised
+   relative-position bias.** Sample the WIDE envelope (E-071 §4's maximum
+   × 1.5) and add to every attention logit a bias
+   b(ℓ, r) = −α · softplus( (r − v·Δt·(1 + ℓ)) / L ), with the speed v, the
+   correlation length L and the sharpness α learnable per family and per
+   head, initialised at E-071's design values. Gradients then move the
+   cone's effective width and depth; the envelope guarantees causality and
+   the holdout shadow (learned parameters live inside admissibility, never
+   the other way round); and the model *reports* the cone it uses — v per
+   family per head is a number the log can print, and E-071's speeds become
+   initialisations rather than decisions. This is the cheapest and the most
+   interpretable form, and it is what "per-octave attention mass" in §5
+   measures. It cannot grow past the envelope, which is exactly why the
+   envelope must be generous.
+2. **Learnable sampling — deformable offsets over a dense local crop.**
+   Deformable attention (Deformable DETR's mechanism) makes the sampling
+   LOCATIONS a function of the query: offsets = the sunflower × a learned
+   per-lag scale + a learned displacement, read by bilinear interpolation,
+   so the gradient flows into where the dots are, not only into what they
+   weigh. It needs the field on-device as a local crop of the envelope's
+   radius rather than scattered memmap reads, which the per-location token
+   change (§6.4 of E-071) makes affordable. This is the literal "learnable
+   width", and it is also the displacement primitive H1 lacked: a learned
+   offset conditioned on the anchor's history IS a flow estimate. Test it on
+   the synthetic advection field first (§4.5).
+3. **The STP pyramid itself — dense multi-resolution crops instead of
+   dots.** Replace the sunflower with the local field at 1, 1/4 and 1/16
+   resolution over the envelope, convolutions at the fine scale and
+   attention at the coarse, learned Laplacian exchange between them. It
+   solves the starved near field of E-071 §4.4 by density rather than by
+   log-radial placement, at a cost: a 2,333 km envelope at lag 0 is a
+   168 × 168 crop per channel per lag. Buy it only if the H2 read-out says
+   near-field density is what is missing. AlphaEarth's "precision" pathway
+   is about 10 m detail and has its analogue in the kilometre-rung patch
+   encoder (§2.1), not in the cone.
+
+Two rules for any of the three. The learned geometry may never sample
+outside the data-admissible envelope (future bins, held-out bins, the
+antipode cap); and a learnable width needs a reason to shrink — attention's
+implicit sparsity gives one in (1), the offset clamp in (2); without it a
+model uses everything and reports nothing.
+
+### 4.7 · The null ladder every rung reports
 
 Climatology · persistence · damped persistence · the LIM at K = 200 in
 pixel space and in the rung's embedding space · nearest-analogue retrieval
