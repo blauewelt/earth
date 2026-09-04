@@ -127,6 +127,22 @@ coarse groups are filled in float32 and cast at the z-score pass. Expected
 ~5 h and ~$1.5; the run number is in the overview stamp and below when it
 lands.
 
+**Run 1 — family7-build #1 (run 33868347482, the build as first specified,
+with `skin_t` = OISST merged with NCEP skin temperature) — CANCELLED at
+13:41Z at NCEP year 3/43**, deliberately: the cone-v2 session's handoff
+carries Chris's correction that a channel is shared only when measurand
+AND instrument match on both sides, so the merge was wrong. Its GLORYS
+stage (~40 min) and OISST stage (75 min, 43/43 years, 703,902 of 1,038,240
+cells observed at least once) were complete and are exactly the corrected
+`sst` channel. On plan for a ~15:30Z landing — the Vast telemetry (0 % CPU,
+disk unchanged) was stale, not the box. **Run 2 — family7-build #2 (run
+33883190801, the corrected layout: `sst` observed in g025, `skt` shared in
+g100 as its 15th channel), dispatched 14:20Z on the same box with the same
+work directory — resumes past the two finished stages** (each stage now
+records a spec hash and discards only its own state on a mismatch; the
+NCEP stage opens with a repair that NaNs `sst` wherever OISST never
+observed, forged and tested). Expected ~1.5 h.
+
 <a id="e-069"></a>
 ## E-069 · Two stencils, one cone — the cone-native codec, ocean physics first — Phase A DONE 2026-09-03, Phase B wired, #537 DISPATCHED after #536 died at its first CUDA eval (Chris: "implement the first version of this. Start by preparing the data, then the cones logic … a stencil for the codec and then a stencil for stage 2")
 
