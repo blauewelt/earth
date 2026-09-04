@@ -30,10 +30,22 @@ const vast = (p) => fetch(`https://console.vast.ai/api/v1${p}`, {
 // six busy boxes read as IDLE BURN (their runs were older than the 15
 // newest) and this script printed "stop it" for boxes mid-job. 100 is the
 // API max; live runs are bounded by fleet size + queue depth, far below it.
-const [inst, runners, runs] = await Promise.all([
+//
+// ALL workflows, not only ml-train.yml (2026-09-04): the family-7 tensor
+// build runs on a box through `family7-build.yml`, and a check that lists
+// ml-train.yml's runs alone reads that box as IDLE BURN and stops it
+// mid-build. Live runs are asked for by status across the whole repo
+// (`/actions/runs?status=…` is repo-wide); the ml-train list is kept so the
+// QUEUE STALL rule still sees a queued training run's pin.
+const [inst, runners, runsMl, runsInProg, runsQueued] = await Promise.all([
   vast("/instances/"), gh("/actions/runners?per_page=100"),
   gh("/actions/workflows/ml-train.yml/runs?per_page=100"),
+  gh("/actions/runs?per_page=100&status=in_progress"),
+  gh("/actions/runs?per_page=100&status=queued"),
 ]);
+const runs = { workflow_runs: [...new Map(
+  [...(runsMl.workflow_runs || []), ...(runsInProg.workflow_runs || []),
+   ...(runsQueued.workflow_runs || [])].map((r) => [r.id, r])).values()] };
 
 // DEAD TELEMETRY FRAMES (2026-08-15, run #310): /instances/ intermittently
 // returns a GPU frame of ALL zeros — gpu_util 0, gpu_temp 0, vmem_usage 0 —
@@ -67,6 +79,12 @@ const live = (runs.workflow_runs || []).filter((r) => r.status !== "completed");
 const jobs = await Promise.all(live.map((r) =>
   gh(`/actions/runs/${r.id}/jobs`).then((j) => ({ run: r, job: (j.jobs || [])[0] }))));
 const busyRunners = new Set(jobs.filter((x) => x.job?.runner_name).map((x) => x.job.runner_name));
+// A box whose job is NOT a training run (a data build such as
+// family7-build.yml) is CPU-bound by design — gpu 0 %, cpu high is the
+// healthy state there, not the §2f wrong-device failure.
+const cpuJobRunners = new Set(jobs
+  .filter((x) => x.job?.runner_name && !/ml-train\.yml$/.test(x.run.path || ""))
+  .map((x) => x.job.runner_name));
 
 const problems = [];
 for (const i of instances) {
@@ -79,7 +97,7 @@ for (const i of instances) {
   if (!running) problems.push(`IDLE BURN   ${tag} is running with no job on it`);
   else if (deadFrame(i))
     problems.push(`TELEMETRY   ${tag} GPU stats read all-zero for ~60s — CPU-BOUND check is blind; verify via the run's ml-live branch before acting`);
-  else if (gpu < 5 && cpu > 20)
+  else if (gpu < 5 && cpu > 20 && !cpuJobRunners.has(name))
     problems.push(`CPU-BOUND   ${tag} has a job but gpu_util=${gpu}% cpu_util=${cpu.toFixed(0)}%`);
   if (diskPct > 90) problems.push(`DISK        ${tag} at ${diskPct.toFixed(0)}% — a full disk takes a runner offline`);
   console.log(`  ${tag.padEnd(46)} job=${running ? "yes" : "NO "} gpu=${String(gpu).padStart(3)}% cpu=${cpu.toFixed(0).padStart(3)}% disk=${diskPct.toFixed(0)}%`);
