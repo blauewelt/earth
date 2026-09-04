@@ -177,9 +177,14 @@ jobs:
           python3 - <<'PY'
           import os, pathlib
           dest = pathlib.Path("ml/cache/truth")
-          have = sorted(p.name for p in dest.glob("*")) if dest.is_dir() else []
-          if len(have) >= 4:
-              print(f"truth/ already on the box: {len(have)} files, {have[:4]} ...")
+          # Count the files the builder READS, not any files: the box already
+          # held 47 fc_*.dat files under ml/cache/truth, so a "≥ 4 files"
+          # guard passed on run #2 (2026-09-04) while truth_pentad.npz was
+          # absent (the 15:30Z fleet check's finding).
+          need = ["truth_pentad.npz", "truth_daily.npz"]
+          have = [n for n in need if (dest / n).is_file()]
+          if len(have) == len(need):
+              print(f"truth/ already on the box: {have}")
               raise SystemExit(0)
           from huggingface_hub import HfApi, hf_hub_download
           api = HfApi(token=os.environ["HF_TOKEN"])
