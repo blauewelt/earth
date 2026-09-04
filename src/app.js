@@ -10849,6 +10849,23 @@ function coneFmtKm(r) {
   return String(Math.round(r * 10) / 10);
 }
 
+/* The anchor the tiles and the read-out line are computed AT. The geometry
+ * mode's anchor is a cell of the North Atlantic window, so it is clamped to
+ * that window; a live anchor or an exported global sample stands on the whole
+ * globe, and clamping it would print the window's edge (0° N 20° E) under an
+ * Antarctic cone and count that latitude's dots instead of the real one's. */
+function coneStatsAnchor() {
+  if (coneLiveOn() && cones.data.liveAnchor) {
+    return { lat: cones.data.liveAnchor.lat, lon: cones.data.liveAnchor.lon };
+  }
+  const S = coneDataOn() && cones.data.sample;
+  if (S && S.meta && S.meta.grid) {
+    return { lat: S.meta.anchor.lat, lon: S.meta.anchor.lon };
+  }
+  const gg = coneGridOf(cones.lat, cones.lon);
+  return coneCellLatLon(gg.y, gg.x);
+}
+
 function conesStats() {
   const K = coneGeo.constants, P = coneParams, k = cones.lag;
   // In live mode the family follows the CHANNEL (family 7's channels carry
@@ -10868,8 +10885,7 @@ function conesStats() {
    * this tab must not tell. At the defaults they reproduce the export exactly
    * (80 dots per family-B channel, 706 dot tokens, 748 in total) — the reset
    * test pins that. */
-  const gg = coneGridOf(cones.lat, cones.lon);
-  const a = coneCellLatLon(gg.y, gg.x);
+  const a = coneStatsAnchor();
   const per = coneInnerDots(a.lat, fam).length;
   const budget = coneBudget(a.lat);
   cones.dotsPerChannel = per;
@@ -11780,8 +11796,20 @@ async function conesUseAnchor(id, src) {
     cones.data.sampleSource = key;
     // The anchor IS the exported cell, so the geometry mode's anchor moves
     // with it — a data mode standing somewhere else would be two claims.
+    const moved = Math.abs(cones.lat - S.meta.anchor.lat) > 2 ||
+                  Math.abs(cones.lon - S.meta.anchor.lon) > 2;
     cones.lat = S.meta.anchor.lat;
     cones.lon = S.meta.anchor.lon;
+    // A global set's anchors are continents apart: picking "Antarctic ice
+    // sheet" while the camera hangs over the Atlantic would draw a cone on
+    // the far side of the planet, so the camera follows a real move.
+    if (moved && typeof viewer !== "undefined" && viewer && viewer.camera) {
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(cones.lon, cones.lat,
+          cones.lag >= coneParams.L_IN + 1 ? 7.0e6 : 2.5e6),
+        duration: 1.2,
+      });
+    }
     if (!S.meta.bins.includes(cones.bin)) cones.bin = S.meta.bins[0];
     const input = document.getElementById("cn-date");
     if (input) input.value = coneDateOfBin(cones.bin);
