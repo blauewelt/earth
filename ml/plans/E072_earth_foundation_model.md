@@ -265,6 +265,39 @@ pathology directly: the fraction of targets whose σ grew over training
 while their MSE did not fall — the "explained-away" fraction — logged per
 family beside the bar.
 
+**Amendment, 5 Sep — β-NLL or the decoupled loss? Both cure the pathology;
+they differ in one dial, and the dial is an experiment.** The other
+implementing agent prefers the *decoupled* (faithful) form,
+
+    L = L_mean(μ, y)  +  ½ · e^(−s) · (y − sg[μ])²  +  ½ · s,     s = log σ²,
+
+i.e. plain MSE on the mean, and the Gaussian NLL on the log-variance with
+the mean detached (Stirn et al. 2023, "Faithful heteroscedastic regression",
+arXiv 2212.09184). β-NLL (Seitzer et al. 2022) multiplies the ordinary NLL
+by sg(σ²)^β; at β = 1 its mean gradient is the same unweighted MSE gradient
+as the decoupled form (the σ gradient differs by a factor σ², a
+learning-rate-like scaling), and at β = 0.5 the mean gradient is weighted
+by 1/σ — noisy targets count less. So the two proposals agree on
+everything except whether the *mean* should be down-weighted on noisy
+targets. Arguments for decoupled: the mean is provably the MSE-optimal
+one — "faithful" — and MSE against the bar is this programme's verdict
+metric, so the codec then optimises exactly what it is scored on; and it
+has one fewer hyper-parameter. Arguments for β = 0.5: with ~65 channels of
+very different predictability sharing one encoder, an unweighted mean loss
+lets the unpredictable channels take capacity from the predictable ones,
+and 1/σ weighting is the automatic remedy — but that is a capacity-
+allocation *hypothesis*, and under stop-gradient both estimators converge
+to the conditional mean wherever the model has capacity, so the difference
+shows up only under misspecification. **Decision rule:** the decoupled form
+is the default for the codec (the stage-2 forecaster consumes the mean, the
+verdict is MSE, faithfulness is a property one can test by identity —
+train the μ head alone with MSE and compare), and β = 0.5 is one arm at L1,
+read on per-family held-out MSE/bar for the *predictable* families (SST,
+SSH, the future family) plus coverage. If the arm does not move those
+families beyond the seed spread, the dial is closed. Either way the
+explicit per-channel-group weighting stays in the loss as a stated
+choice, not as a side effect of σ.
+
 **The autoencoder itself — what to build for "predict the individual
 channels at a point".** Keep the shape E-069 already has and change three
 things. (1) *Encoder*: a transformer over the ~300 per-location tokens.
