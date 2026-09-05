@@ -5572,8 +5572,11 @@ test("Cones tab draws the E-069 cone and answers its two controls", async ({ pag
   // family B at lag 1 reads 259.2 km, and 80 dots per channel over lags 1–6
   await expect(page.locator("#cn-reach .stat-value")).toHaveText("259.2 km");
   await expect(page.locator("#cn-dots .stat-value")).toHaveText("80");
-  // 36° N 70° W sits well inside the tensor, so nothing falls off it
-  await expect(page.locator("#cn-dots .stat-sub")).not.toContainText("off window");
+  // 36° N 70° W is an ordinary cell of the globe, so nothing falls off it
+  await expect(page.locator("#cn-dots .stat-sub")).not.toContainText("off the grid");
+  // and the DEFAULT grid is the globe, so the dashed North Atlantic box that
+  // family 4 needs is not on the globe at all
+  expect(await page.evaluate(() => window.__earth.coneState().windowShown)).toBe(false);
 
   // the lag slider: past lag 6 the reach is stage 2's envelope, 129.6 × 21 km
   await page.evaluate(() => {
@@ -5585,19 +5588,43 @@ test("Cones tab draws the E-069 cone and answers its two controls", async ({ pag
   await expect(read).toContainText("lag 20 · 100 days back");
   const st = await page.evaluate(() => window.__earth.coneState());
   expect(st.reachKm).toBeCloseTo(2721.6, 6);
-  expect(st.y).toBe(144);        // 36° N  → 0.25° row 144
-  expect(st.x).toBe(120);        // 70° W  → 0.25° column 120
+  // the GLOBAL grid: 721 × 1440 from the South Pole at −180°, not family 4's
+  // North Atlantic window (which put this same anchor at row 144, column 120)
+  expect(st.y).toBe(504);        // 36° N   → (36 + 90) / 0.25
+  expect(st.x).toBe(440);        // 70° W   → (−70 + 180) / 0.25
   // 80 inner dots (lags 1–6) plus fourteen outer spirals of 24 = the whole
   // cone the model reads at lag 20
   expect(st.drawn).toBe(80 + 14 * 24);
   expect(st.offWindow).toBe(0);
 
-  // the equator anchor pushes part of the cone off the tensor's southern edge —
-  // those dots are drawn hollow and COUNTED, because the model reads them as
-  // missing rather than wrapping around
+  /* OFF THE GRID, on a grid that is the whole planet. The equator used to be
+   * the off-window case — it pushed the cone past family 4's southern edge —
+   * and on the globe it is simply an ordinary cell, which is the point of this
+   * change. The only way left to leave the grid is a POLE: at 88° N a cone
+   * whose reach is thousands of kilometres puts rows past 90°, and those are
+   * counted and drawn hollow exactly as the window's edge used to be. */
+  await page.evaluate(() => window.__earth.conesSetAnchor(88, 0));
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-lag");
+    s.value = "40";
+    s.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const pole = await page.evaluate(() => window.__earth.coneState());
+  expect(pole.offWindow).toBeGreaterThan(0);
+  expect(pole.offLabel).toBe("off the grid");
+  expect(pole.windowShown).toBe(false);
+  // and the tile says it in the globe's words, not the window's
+  await expect(page.locator("#cn-dots .stat-sub")).toContainText("off the grid");
+  await expect(page.locator("#cn-dots .stat-sub")).not.toContainText("off window");
+  // the equator, by contrast, is now entirely on the grid
   await tap('#cn-presets button[data-lat="0"]');
-  await expect(page.locator("#cn-dots .stat-sub")).toContainText("off window");
-  expect(await page.evaluate(() => window.__earth.coneState().offWindow)).toBeGreaterThan(0);
+  await page.evaluate(() => {
+    const s = document.getElementById("cn-lag");
+    s.value = "1";
+    s.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(await page.evaluate(() => window.__earth.coneState().offWindow)).toBe(0);
+  await page.evaluate(() => window.__earth.conesSetAnchor(36, -70));
 
   // the depth column is the one family with no disc: six tokens, no sunflower
   await page.evaluate(() => {
@@ -5844,10 +5871,15 @@ test("Cones data mode: the dots carry values and the read-out prints one with it
   // the block is hidden until the switch is on — the geometry is the default
   await expect(page.locator("#cn-data-block")).toBeHidden();
 
+  /* FAMILY 4 is no longer the default — the tab opens on the global family-7
+   * anchors — so this test, which is about the North Atlantic fixture, asks
+   * for that source explicitly before switching data mode on. */
+  await page.evaluate(() => window.__earth.conesSetSource("anchors"));
   await page.evaluate(() => window.__earth.conesSetDataMode(true));
   await expect(page.locator("#cn-data-block")).toBeVisible();
   const st = await page.evaluate(() => window.__earth.coneState());
   expect(st.data.ready).toBe(true);
+  expect(st.data.sampleSource).toBe("anchors");
   expect(st.data.error).toBe(null);
   expect(st.data.stencil).toBe("codec");
   // the anchor moved to the exported cell, and the date to an exported pentad
@@ -5909,6 +5941,10 @@ test("Cones data mode: the stencil toggle switches the lag range and the dot set
   const fx = await serveConeFixture(page);
   await page.click("#tab-cones");
   await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  /* FAMILY 4 is no longer the default — the tab opens on the global family-7
+   * anchors — so this test, which is about the North Atlantic fixture, asks
+   * for that source explicitly before switching data mode on. */
+  await page.evaluate(() => window.__earth.conesSetSource("anchors"));
   await page.evaluate(() => window.__earth.conesSetDataMode(true));
 
   const lag = page.locator("#cn-lag");
@@ -5977,6 +6013,10 @@ test("Cones data mode: the cone's date follows the app's date, and says when it 
   const fx = await serveConeFixture(page);
   await page.click("#tab-cones");
   await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  /* FAMILY 4 is no longer the default — the tab opens on the global family-7
+   * anchors — so this test, which is about the North Atlantic fixture, asks
+   * for that source explicitly before switching data mode on. */
+  await page.evaluate(() => window.__earth.conesSetSource("anchors"));
   await page.evaluate(() => window.__earth.conesSetDataMode(true));
   const first = await page.evaluate(() => window.__earth.coneState());
   expect(first.data.date).toBe(fx.meta.dates[0]);
@@ -6013,11 +6053,12 @@ test("Cones data mode: the cone's date follows the app's date, and says when it 
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
 
-/* THE THIRD SOURCE: the anchors exported from FAMILY 7 — the tensor that covers
- * the whole globe at 0.25° rather than only the North Atlantic window. It is
- * the same exporter, the same production sampler and the same file schema, so
- * the tab reuses every control; three things are genuinely different and this
- * test is about all three.
+/* THE DEFAULT SOURCE: the anchors exported from FAMILY 7 — the tensor that
+ * covers the whole globe at 0.25° rather than only the North Atlantic window.
+ * It is the same exporter, the same production sampler and the same file
+ * schema, so the tab reuses every control; three things are genuinely
+ * different from the family-4 comparison set and this test is about all
+ * three.
  *
  *   1. TWELVE anchors instead of five, and they are global — the Antarctic
  *      Circumpolar Current, the Sahara, the dateline.
@@ -6041,17 +6082,11 @@ test("Cones data mode: the family-7 anchors are global, grouped by channel block
   await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
   await page.evaluate(() => window.__earth.conesSetDataMode(true));
 
-  // the North Atlantic set is the default, and it is five anchors in a flat list
-  const naAnchors = await page.locator("#cn-data-anchor option").allTextContents();
-  expect(naAnchors.length).toBe(5);
-  const naChannels = await page.locator("#cn-channel option").count();
-  expect(naChannels).toBe(42);
-  expect(await page.locator("#cn-channel optgroup").count()).toBe(0);
-
-  // ---- switch to the global set
-  await page.evaluate(() => window.__earth.conesSetSource("anchors_f7"));
+  // the GLOBAL set is the default now — no switch is needed to get here, and
+  // the state says which tensor answered
   await expect.poll(() => page.evaluate(
-    () => window.__earth.coneState().data.sampleSource)).toBe("anchors_f7");
+    () => window.__earth.coneState().data.sampleSource), { timeout: 30000 })
+    .toBe("anchors_f7");
 
   // TWELVE anchors, in the index's own order
   await expect(page.locator("#cn-data-anchor option")).toHaveCount(12);
@@ -6060,8 +6095,8 @@ test("Cones data mode: the family-7 anchors are global, grouped by channel block
   expect(ids).toContain("dateline");
   expect(ids).toContain("acc");
   expect(ids).toContain("sahara");
-  // the switch kept the reader's place: the Gulf Stream anchor of the North
-  // Atlantic set lands on the Gulf Stream anchor of the global one
+  // the default landing is the global anchor nearest wherever the reader
+  // already is — the tab opens over the Gulf Stream, so that is the one
   expect(await page.evaluate(() => window.__earth.coneState().data.anchorId))
     .toBe("gulf_stream");
 
@@ -6221,17 +6256,22 @@ test("Cones data mode: the family-7 anchors are global, grouped by channel block
   expect(await page.locator("#cn-channel option").allTextContents())
     .toContain("Skin temperature (NCEP reanalysis, every surface) — skt · °C");
 
-  // ---- and back to the North Atlantic set: its own five anchors return
+  /* ---- and DELIBERATELY to the family-4 comparison: its own five North
+   * Atlantic anchors return, in a flat list of 42 channels, and the dashed
+   * window box comes back on the globe with them — that box is a fact about
+   * that tensor and about nothing else. */
   await page.evaluate(() => window.__earth.conesSetSource("anchors"));
   await expect.poll(() => page.evaluate(
     () => window.__earth.coneState().data.sampleSource)).toBe("anchors");
   await expect(page.locator("#cn-data-anchor option")).toHaveCount(5);
-  expect(await page.locator("#cn-data-anchor option").allTextContents())
-    .toEqual(naAnchors);
+  const naIds = await page.locator("#cn-data-anchor option")
+    .evaluateAll((os) => os.map((o) => o.value).sort());
+  expect(naIds).toEqual(["equator", "gulf_stream", "ionian_edge", "labrador", "rapid"]);
   expect(await page.locator("#cn-channel optgroup").count()).toBe(0);
-  expect(await page.locator("#cn-channel option").count()).toBe(naChannels);
+  expect(await page.locator("#cn-channel option").count()).toBe(42);
   expect(await page.evaluate(() => window.__earth.coneState().data.nChannels))
     .toBe(42);
+  expect(await page.evaluate(() => window.__earth.coneState().windowShown)).toBe(true);
 
   // ---- data mode OFF hands the family back: the select is a control again,
   // at whatever the geometry mode had it set to.
@@ -6241,6 +6281,69 @@ test("Cones data mode: the family-7 anchors are global, grouped by channel block
   await expect(famSel).toHaveValue(
     await page.evaluate(() => window.__earth.coneState().fam));
 
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* THE DEFAULT, asserted on its own. The test above proves family 7 works; this
+ * one proves it is what a reader who touches nothing else gets — the whole
+ * point of the change, and the assertion that would fail first if the default
+ * ever slid back to the North Atlantic window. */
+test("Cones data mode: family 7 is the default source, twelve anchors, no switch",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  await serveConeFixtureF7(page);
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+
+  // the select itself opens on the global set, before anything is switched on
+  await expect(page.locator("#cn-source")).toHaveValue("anchors_f7");
+
+  await page.evaluate(() => window.__earth.conesSetDataMode(true));
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.sampleSource), { timeout: 60000 })
+    .toBe("anchors_f7");
+  const st = await page.evaluate(() => window.__earth.coneState());
+  expect(st.data.source).toBe("anchors_f7");
+  expect(st.data.ready).toBe(true);
+  expect(st.data.error).toBe(null);
+  // twelve exported cells, and no dashed North Atlantic box anywhere
+  await expect(page.locator("#cn-data-anchor option")).toHaveCount(12);
+  expect(st.windowShown).toBe(false);
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* THE PRESETS, in data mode. Every preset is an exported family-7 anchor, so a
+ * preset click must SELECT one rather than move a geometry anchor the dots do
+ * not follow — the bug the family select had, one control over. Kuroshio is
+ * the case that could not be faked: it is nowhere near where the tab opens, so
+ * only a real anchor change puts it in the state. */
+test("Cones data mode: a preset selects the exported family-7 anchor it stands on",
+     async ({ page }) => {
+  test.setTimeout(180000);
+  await serveConeFixtureF7(page);
+  await page.click("#tab-cones");
+  await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  await page.evaluate(() => window.__earth.conesSetDataMode(true));
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.anchorId), { timeout: 60000 })
+    .toBe("gulf_stream");
+
+  // dispatched in-page: a preset flies the camera, and on the software GL
+  // stack the render loop starves Playwright's actionability check (§4)
+  await page.evaluate(() =>
+    document.querySelector('#cn-presets button[data-lat="35"]').click());
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.anchorId), { timeout: 60000 })
+    .toBe("kuroshio");
+
+  await page.evaluate(() =>
+    document.querySelector('#cn-presets button[data-lat="-80"]').click());
+  await expect.poll(() => page.evaluate(
+    () => window.__earth.coneState().data.anchorId), { timeout: 60000 })
+    .toBe("antarctica_ice");
+
+  // the anchor SELECT moved with it — one anchor, not two disagreeing controls
+  await expect(page.locator("#cn-data-anchor")).toHaveValue("antarctica_ice");
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
 
@@ -6751,9 +6854,13 @@ test("Cones live mode: the source switch leaves the exported anchors untouched",
   await serveFamily7(page);
   await page.click("#tab-cones");
   await expect(page.locator("#cn-reach .stat-value")).not.toHaveText("–", { timeout: 20000 });
+  /* FAMILY 4 is no longer the default — the tab opens on the global family-7
+   * anchors — so this test, which is about the North Atlantic fixture, asks
+   * for that source explicitly before switching data mode on. */
+  await page.evaluate(() => window.__earth.conesSetSource("anchors"));
   await page.evaluate(() => window.__earth.conesSetDataMode(true));
 
-  // the DEFAULT is still the exported anchors — today's behaviour, untouched
+  // the family-4 set, asked for explicitly, behaves exactly as it always did
   const first = await page.evaluate(() => window.__earth.coneState());
   expect(first.data.source).toBe("anchors");
   expect(first.data.ready).toBe(true);

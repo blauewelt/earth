@@ -10384,6 +10384,13 @@ document.getElementById("tidelive-alpha").addEventListener("input", (e) => {
 
 let coneGeo = null;                       // the exported geometry (lazy)
 let coneGeoPromise = null;
+/* THE TAB'S DEFAULT SOURCE, in one place. Family 7 — the 0.25° pentad tensor
+ * that covers the WHOLE PLANET — is what the tab opens on, in every mode: the
+ * geometry grid it snaps an anchor to, the exported set data mode loads, and
+ * the value any "unknown source" falls back to. Family 4 (the North Atlantic
+ * window) is still there, as the deliberately chosen comparison. Written once
+ * so a fallback and a default can never disagree. */
+const CONE_DEFAULT_SOURCE = "anchors_f7";
 const cones = {
   lat: 36, lon: -70, fam: "B", lag: 1,
   playing: false, raf: 0, t0: 0,
@@ -10402,16 +10409,18 @@ const cones = {
     stencil: "codec", chan: 0, outerChan: 0, anomaly: true,
     dateIdx: 0, lagIdx: 0, snapped: false,
     dots: [], lo: 0, hi: 1, pick: null, ramp: "anom", diverging: true,
-    /* THE SOURCE. Three values: "anchors" (the five exported North Atlantic
-     * cells of family 4), "anchors_f7" (the twelve exported global cells of
-     * family 7) and "live" (family 7 read out of the Hub by the byte).
+    /* THE SOURCE. Three values: "anchors_f7" (the twelve exported global
+     * cells of family 7, THE DEFAULT — see CONE_DEFAULT_SOURCE), "anchors"
+     * (the five exported North Atlantic cells of family 4, kept as the
+     * earlier tensor to compare against) and "live" (family 7 read out of the
+     * Hub by the byte).
      *
      * LIVE MODE's own state is the rest of this line and is only meaningful
      * while `source` reads "live". The anchor is a CELL of the global grid
      * rather than one of the exported ones, so it is kept as (row, col) and
      * the lat/lon are derived — the tensor's index is what a dot's date and
      * value are looked up by. */
-    source: "anchors", liveChan: null, liveAnchor: null, liveSeq: 0,
+    source: CONE_DEFAULT_SOURCE, liveChan: null, liveAnchor: null, liveSeq: 0,
     liveLoading: 0, liveErr: null, liveSphere: null, liveElev: null,
   },
 };
@@ -10665,25 +10674,57 @@ function coneLagColor(t) {
     Math.round(a[2] + (b[2] - a[2]) * u));
 }
 
-/* The tensor's grid is POINT-aligned at 0.25°, so an anchor is a (y, x) pair
- * and every offset is a whole number of cells from it. A dot outside the
- * window is invalid — the model zeroes it, it is never wrapped — which is why
- * `valid` travels with every position rather than being filtered out here. */
-function coneGridOf(lat, lon) {
-  const w = coneGeo.window;
-  const y = Math.round((lat - w.lat0) / w.dlat);
-  const x = Math.round((lon - w.lon0) / w.dlat);
-  return { y: Math.max(0, Math.min(w.ny - 1, y)),
-           x: Math.max(0, Math.min(w.nx - 1, x)) };
+/* WHICH GRID the tab is standing on. The default is the GLOBE — family 7's
+ * 721 × 1440 cells from pole to pole, whose columns close — and the North
+ * Atlantic window is what appears only when a family-4 sample is deliberately
+ * loaded, because that tensor's cells are indices into a box with edges.
+ *
+ *   a loaded sample   its own grid (`coneSampleGrid`: family 7 ships
+ *                     `meta.grid`, family 4 ships none and falls back to
+ *                     `coneGeo.window`)
+ *   everything else   the global grid — live mode and plain geometry mode
+ *                     alike, because the tab is about the planet now. */
+function coneBaseGrid() {
+  const S = coneDataOn() && !coneLiveOn() ? cones.data.sample : null;
+  if (S) return coneSampleGrid(S);
+  return coneGlobalGrid();
 }
-function coneCellLatLon(y, x) {
-  const w = coneGeo.window;
-  return { lat: w.lat0 + y * w.dlat, lon: w.lon0 + x * w.dlat };
+
+/* The tensor's grid is POINT-aligned at 0.25°, so an anchor is a (y, x) pair
+ * and every offset is a whole number of cells from it. What "outside" means
+ * depends on the grid: on the WINDOW a cell past any edge is invalid — the
+ * model zeroes it, it is never wrapped — while on the GLOBE the columns close
+ * (`coneWrapCol`) and only a row past a pole has left the grid. Both take an
+ * optional grid so a caller that already has one does not resolve it twice. */
+function coneGridOf(lat, lon, grid) {
+  const g = grid || coneBaseGrid();
+  const y = Math.round((lat - g.lat0) / g.step);
+  const x = Math.round((lon - g.lon0) / g.step);
+  return { y: Math.max(0, Math.min(g.ny - 1, y)),
+           x: g.wrap ? coneWrapCol(x, g.nx, true)
+                     : Math.max(0, Math.min(g.nx - 1, x)) };
+}
+function coneCellLatLon(y, x, grid) {
+  const g = grid || coneBaseGrid();
+  const lat = g.lat0 + y * g.step;
+  // The same arithmetic `coneDataDots` uses: a wrapped column is a real cell,
+  // and its longitude belongs in [−180, 180) rather than past the dateline.
+  let lon = g.lon0 + coneWrapCol(x, g.nx, g.wrap) * g.step;
+  if (g.wrap) lon = ((lon + 180) % 360 + 360) % 360 - 180;
+  return { lat, lon };
+}
+
+/* What a hollow dot IS, in the words the grid on screen makes true. On the
+ * globe a dot can only be lost past a pole; on the North Atlantic window it
+ * falls off an edge. Both counters keep the name `offWindow` — every read-out
+ * downstream is keyed on it — but the label a reader sees is this. */
+function coneOffLabel(grid) {
+  return (grid || coneBaseGrid()).wrap ? "off the grid" : "off window";
 }
 
 function conesEntities() {
   if (cones.ents) return cones.ents;
-  const w = coneGeo.window;
+  const w = coneGeo.window;                 // family 4's box; see `win` below
   const anchor = viewer.entities.add({
     show: false,
     point: {
@@ -10692,8 +10733,11 @@ function conesEntities() {
       outlineWidth: 3, disableDepthTestDistance: Number.POSITIVE_INFINITY,
     },
   });
-  // The tensor's own window, as a rhumb box: its edges follow parallels and
-  // meridians, which is what "0–70° N, 100° W–20° E" actually means.
+  /* FAMILY 4's window, as a rhumb box: its edges follow parallels and
+   * meridians, which is what "0–70° N, 100° W–20° E" actually means. It is
+   * shown only while that tensor is the subject — on the global grid there is
+   * no window to draw, and a box round the globe would claim an edge that is
+   * not there. */
   const win = viewer.entities.add({
     show: false,
     polyline: {
@@ -10745,8 +10789,10 @@ function coneDot(i, lat, lon, color, size, hollow) {
   const p = i < col.length ? col.get(i)
     : col.add({ position: Cesium.Cartesian3.fromDegrees(0, 0) });
   p.position = Cesium.Cartesian3.fromDegrees(lon, lat);
-  // Hollow = off the tensor window. The model reads those as missing, so they
-  // are drawn as an outline with nothing inside it — visibly not data.
+  // Hollow = off the grid the cone stands on — past a pole on the globe, or
+  // off an edge on family 4's North Atlantic window. The model reads those as
+  // missing, so they are drawn as an outline with nothing inside it —
+  // visibly not data.
   p.color = hollow ? Cesium.Color.TRANSPARENT : color;
   p.outlineColor = hollow ? color.withAlpha(0.9) : color.withAlpha(0.0);
   p.outlineWidth = hollow ? 1.6 : 0;
@@ -10763,33 +10809,46 @@ function conesDraw() {
   // draws.
   if (coneLiveOn()) { conesDrawLive(); conesStats(); conesSection(); return; }
   if (coneDataOn()) { conesDrawData(); conesStats(); conesSection(); return; }
-  const e = cones.ents, K = coneGeo.constants, P = coneParams, w = coneGeo.window;
-  const g = coneGridOf(cones.lat, cones.lon);
-  const a = coneCellLatLon(g.y, g.x);
+  const e = cones.ents, K = coneGeo.constants, P = coneParams;
+  /* THE GRID THE CONE STANDS ON — the globe by default, family 4's North
+   * Atlantic window only while that tensor's sample is loaded. Everything
+   * below reads `grid`, so the two cases are one code path. */
+  const grid = coneBaseGrid();
+  const g = coneGridOf(cones.lat, cones.lon, grid);
+  const a = coneCellLatLon(g.y, g.x, grid);
   const k = cones.lag;
-  const inWin = (y, x) => y >= 0 && y < w.ny && x >= 0 && x < w.nx;
+  /* On a CLOSING grid a column is never off it — column −1 is column nx−1 —
+   * so validity is a question about the row alone: past a pole is off the
+   * earth. On the window both axes have edges, which is today's rule kept. */
+  const inWin = grid.wrap
+    ? (y) => y >= 0 && y < grid.ny
+    : (y, x) => y >= 0 && y < grid.ny && x >= 0 && x < grid.nx;
 
   e.anchor.position = Cesium.Cartesian3.fromDegrees(a.lon, a.lat);
   e.anchor.show = true;
-  e.win.show = true;
-  const half = w.dlat / 2;
+  // The dashed box is a fact about family 4's window; the globe has no edge
+  // to draw, so it appears only on the non-wrapping grid.
+  e.win.show = !grid.wrap;
+  const half = grid.step / 2;
   for (let i = 0; i < 9; i++) {
     const dy = Math.floor(i / 3) - 1, dx = (i % 3) - 1;
-    const c = coneCellLatLon(g.y + dy, g.x + dx);
+    const c = coneCellLatLon(g.y + dy, g.x + dx, grid);
     e.patch[i].rectangle.coordinates = Cesium.Rectangle.fromDegrees(
       c.lon - half, c.lat - half, c.lon + half, c.lat + half);
     e.patch[i].show = inWin(g.y + dy, g.x + dx);
   }
 
   let n = 0, off = 0;
-  /* A dot's cell may lie off the tensor window (drawn hollow, and counted —
-   * the model reads it as missing) and, far enough out at high latitude, off
-   * the SPHERE's coordinate range too: 4,444 km east of 70° N is 117° of
-   * longitude. Those cannot be placed at all without wrapping them round the
-   * globe, which is exactly the thing this tab says the model never does — so
-   * they are counted and not drawn, never drawn somewhere they are not. */
+  /* A dot's cell may lie off the grid (drawn hollow, and counted — the model
+   * reads it as missing): past a pole on the globe, or off any edge on the
+   * North Atlantic window. It may also have no place on the SPHERE at all —
+   * on the window, 4,444 km east of 70° N is 117° of longitude and lands past
+   * ±180°, which is exactly the wrap that tensor never does. Those are
+   * counted and not drawn, never drawn somewhere they are not. On the global
+   * grid a wrapped longitude is always in range, so in practice only rows
+   * past a pole are skipped here — and those are the invalid ones. */
   const place = (dy, dx, col, size) => {
-    const c = coneCellLatLon(g.y + dy, g.x + dx);
+    const c = coneCellLatLon(g.y + dy, g.x + dx, grid);
     const hollow = !inWin(g.y + dy, g.x + dx);
     if (hollow) off++;
     if (Math.abs(c.lon) > 180 || Math.abs(c.lat) > 90) return;
@@ -10850,10 +10909,11 @@ function coneFmtKm(r) {
 }
 
 /* The anchor the tiles and the read-out line are computed AT. The geometry
- * mode's anchor is a cell of the North Atlantic window, so it is clamped to
- * that window; a live anchor or an exported global sample stands on the whole
- * globe, and clamping it would print the window's edge (0° N 20° E) under an
- * Antarctic cone and count that latitude's dots instead of the real one's. */
+ * mode's anchor is a cell of whatever grid is in force — the globe by
+ * default, so an Antarctic anchor is simply an Antarctic cell; only while a
+ * family-4 sample is loaded is it clamped into that tensor's window. A live
+ * anchor or an exported global sample carries its own lat/lon, which is read
+ * straight off the sample rather than snapped a second time. */
 function coneStatsAnchor() {
   if (coneLiveOn() && cones.data.liveAnchor) {
     return { lat: cones.data.liveAnchor.lat, lon: cones.data.liveAnchor.lon };
@@ -10956,7 +11016,8 @@ function conesStats() {
   dots.querySelector(".stat-value").textContent = String(per);
   dots.querySelector(".stat-sub").textContent = fam === "rg"
     ? "anchor column only (rg)"
-    : `dots per channel${cones.nOffInner ? ` · ${cones.nOffInner} off window` : ""}`;
+    : `dots per channel${cones.nOffInner
+        ? ` · ${cones.nOffInner} ${coneOffLabel()}` : ""}`;
 
   const tok = document.getElementById("cn-tokens");
   tok.querySelector(".stat-value").textContent = String(budget.total);
@@ -11085,11 +11146,12 @@ function conesSection() {
  * mode, never to a broken tab. */
 /* TWO exported sets, and they are two different tensors, so everything below
  * is keyed by which one is on screen:
- *   `anchors`     family 4 — the North Atlantic window at 0.25°, 42 channels,
- *                 five anchors, a grid with EDGES a dot can fall off.
- *   `anchors_f7`  family 7 — the same 0.25° step over the whole globe, 54
+ *   `anchors_f7`  family 7, THE DEFAULT — 0.25° over the whole globe, 54
  *                 channels in three groups, twelve anchors, and a grid that
  *                 CLOSES: column 1439's neighbour is column 0.
+ *   `anchors`     family 4 — the earlier tensor, the North Atlantic window at
+ *                 0.25°, 42 channels, five anchors, a grid with EDGES a dot
+ *                 can fall off. Chosen deliberately, to compare against.
  * The third source, `live`, is not in this map — it reads family 7 out of the
  * Hub by the byte and has no index of exported files at all. */
 const CONE_SAMPLES_INDEX = {
@@ -11100,12 +11162,14 @@ const coneManifests = new Map();        // source -> index object (or null)
 const coneManifestPromises = new Map(); // source -> Promise<index|null>
 const coneSampleCaches = new Map();     // source -> Map(anchor id -> Promise)
 
-/* Which exported set a call is about. `live` has no exported set, so a lookup
- * made while live mode is on falls back to family 4's — that is the set the
- * tab returns to, and it is what `coneNearestAnchor` should answer about. */
+/* Which exported set a call is about, explicitly: family 4 only when family 4
+ * is asked for, and CONE_DEFAULT_SOURCE — family 7, the globe — for everything
+ * else. `live` has no exported set of its own, so a lookup made while live
+ * mode is on answers about the global anchors: that is the set the tab
+ * returns to, and it is what `coneNearestAnchor` should answer about. */
 function coneSourceKey(src) {
   const s = src || cones.data.source;
-  return s === "anchors_f7" ? "anchors_f7" : "anchors";
+  return s === "anchors" ? "anchors" : CONE_DEFAULT_SOURCE;
 }
 function coneManifestOf(src) {
   return coneManifests.get(coneSourceKey(src)) || null;
@@ -11519,12 +11583,13 @@ function coneDataColor(v) {
 
 /* Three states, three ways of drawing, and they are different KINDS of fact:
  *   valid + observed  a measurement — filled with its value's colour
- *   valid + missing   inside the window, never observed (cloud, land, a float
+ *   valid + missing   on the grid, never observed (cloud, land, a float
  *                     that did not profile) — dimmed, so it reads as a real
  *                     token carrying no value, which is what `miss_tok` is
- *   invalid           off the tensor window; the model reads it as missing and
- *                     never wraps it — hollow, exactly as the geometry mode
- *                     already draws it */
+ *   invalid           off the grid the sample stands on — past a pole on the
+ *                     globe, off an edge on family 4's window; the model
+ *                     reads it as missing and never wraps it — hollow,
+ *                     exactly as the geometry mode already draws it */
 function coneDataDot(i, d, size) {
   const p = i < cones.dots.length ? cones.dots.get(i)
     : cones.dots.add({ position: Cesium.Cartesian3.fromDegrees(0, 0) });
@@ -11657,12 +11722,19 @@ function conesDataReadout() {
   const held = CONE_HOLDOUT_YEARS.includes(Number(date.slice(0, 4)));
   const ns = (v, suffix) => (v === null ? "–"
     : `${Math.abs(v).toFixed(0)} km ${v >= 0 ? suffix[0] : suffix[1]}`);
+  /* What "off" means is a fact about the SAMPLE's grid: family 7's columns
+   * close, so a dot can only be lost past a pole; family 4's window has edges
+   * a dot falls off, and the model never wraps it round. */
+  const sg = coneSampleGrid(S);
   const state = !d.valid
-    ? `<span class="cn-ro-inval">off the tensor window — the model reads this as ` +
-      `missing and never wraps it round the globe</span>`
+    ? `<span class="cn-ro-inval">${sg.wrap
+        ? "off the grid — past the pole, where the tensor stops; the model " +
+          "reads this as missing"
+        : "off the tensor window — the model reads this as missing and never " +
+          "wraps it round the globe"}</span>`
     : d.obs
       ? `observed`
-      : `<span class="cn-ro-miss">inside the window but never observed here — ` +
+      : `<span class="cn-ro-miss">on the grid but never observed here — ` +
         `the model gets a "missing" token, not a zero</span>`;
   host.innerHTML =
     `<strong>lag ${d.lag}</strong> · ${d.lag * 5} days back · <strong>${date}</strong>` +
@@ -12522,10 +12594,13 @@ async function coneLiveStatics() {
  * lag slider, the date, both clocks — and differ only in the rows that mean
  * nothing on the other side. */
 async function conesSetSource(src) {
-  /* Three values, and anything else is family 4 — a stale URL or a hand-edited
-   * setting must not leave the tab pointing at a source that does not exist. */
+  /* Three values, and anything else is the DEFAULT (family 7, the globe) — a
+   * stale URL or a hand-edited setting must not leave the tab pointing at a
+   * source that does not exist, and must not silently demote it to the North
+   * Atlantic window either. */
   cones.data.source =
-    src === "live" || src === "anchors_f7" || src === "anchors" ? src : "anchors";
+    src === "live" || src === "anchors_f7" || src === "anchors"
+      ? src : CONE_DEFAULT_SOURCE;
   const live = cones.data.source === "live";
   const sel = document.getElementById("cn-source");
   if (sel && sel.value !== cones.data.source) sel.value = cones.data.source;
@@ -12574,10 +12649,10 @@ async function conesSetSource(src) {
         `<a href="https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY7_GLOBE.md" ` +
         `target="_blank" rel="noopener">what this is</a>.`;
     }
-    // Back to whichever exported set the tab was last reading, not always
-    // family 4 — dropping a reader from the global anchors into the North
-    // Atlantic ones because a THIRD source failed would be a silent move.
-    cones.data.source = cones.data.sampleSource || "anchors";
+    // Back to whichever exported set the tab was last reading, and otherwise
+    // the default global one — dropping a reader into the North Atlantic
+    // window because a THIRD source failed would be a silent move.
+    cones.data.source = cones.data.sampleSource || CONE_DEFAULT_SOURCE;
     if (sel) sel.value = cones.data.source;
     document.getElementById("cn-anchor-row")?.classList.remove("hidden");
     document.getElementById("cn-anom-row")?.classList.remove("hidden");
@@ -12740,13 +12815,17 @@ function conesTimeButtons() {
   if (b) b.classList.toggle("playing", cones.timePlaying);
 }
 
-/* The anchor is a CELL of the tensor, so a tap anywhere snaps to the nearest
- * grid point — and one outside the window snaps to its edge rather than being
- * refused, because "nothing happened" is the one answer a tap must never give.
- * The dashed box on the globe is what says where the window actually is. */
+/* The anchor is a CELL of the grid the cone stands on, so a tap anywhere
+ * snaps to the nearest grid point. On the GLOBE — the default — every tap on
+ * Earth lands on a real cell: the columns close, so there is no edge to be
+ * pushed against, and only a pole clamps the row. While family 4's sample is
+ * loaded the old rule holds and a tap outside its window snaps to the edge
+ * rather than being refused, because "nothing happened" is the one answer a
+ * tap must never give; the dashed box is what says where that window is. */
 function conesSetAnchor(lat, lon) {
-  const g = coneGridOf(lat, lon);
-  const a = coneCellLatLon(g.y, g.x);
+  const grid = coneBaseGrid();
+  const g = coneGridOf(lat, lon, grid);
+  const a = coneCellLatLon(g.y, g.x, grid);
   cones.lat = a.lat; cones.lon = a.lon;
   conesDraw();
 }
@@ -12890,8 +12969,21 @@ async function loadCones() {
         for (const o of document.querySelectorAll("#cn-presets button")) {
           o.classList.toggle("active", o === b);
         }
-        if (coneLiveOn()) conesLiveAnchorAt(+b.dataset.lat, +b.dataset.lon);
-        else conesSetAnchor(+b.dataset.lat, +b.dataset.lon);
+        /* THREE modes, three meanings of "go there", and the middle one is
+         * the bug this replaced: in exported-anchor data mode moving the
+         * geometry anchor left the DOTS on the loaded sample, so the button
+         * appeared to do nothing. Every preset below is an exported family-7
+         * anchor, so in data mode it SELECTS one. */
+        const plat = +b.dataset.lat, plon = +b.dataset.lon;
+        if (coneLiveOn()) {
+          conesLiveAnchorAt(plat, plon);
+        } else if (coneDataOn()) {
+          const near = coneNearestAnchor(plat, plon, cones.data.source);
+          if (near) conesUseAnchor(near.id, cones.data.source);
+          else conesSetAnchor(plat, plon);
+        } else {
+          conesSetAnchor(plat, plon);
+        }
         // Inner lags are a few hundred km across; the outer cone is thousands.
         // One height cannot frame both, so the flight follows the lag.
         viewer.camera.flyTo({
@@ -13028,8 +13120,15 @@ function coneState() {
     // is disabled there rather than accepting changes it cannot honour.
     activeFamily: coneGeo ? coneActiveFamily() : cones.fam,
     familyLocked: coneDataOn(),
+    /* `offWindow` keeps its name — every read-out downstream is keyed on it —
+     * but what it counts is "off the grid the cone stands on": past a pole on
+     * the globe, off an edge on family 4's window. `offLabel` is the word the
+     * UI shows for it, and `windowShown` is whether the dashed North Atlantic
+     * box is on the globe at all (it is not, on the global default). */
     y: g.y, x: g.x, drawn: cones.nDrawn, offWindow: cones.nOff,
     offWindowInner: cones.nOffInner, playing: cones.playing,
+    offLabel: coneGeo ? coneOffLabel() : null,
+    windowShown: !!(cones.ents && cones.ents.win.show),
     reachKm: coneGeo
       ? (cones.lag <= coneParams.L_IN
           ? coneReachKm(cones.fam, cones.lag) : coneOuterReachKm(cones.lag))
@@ -14289,6 +14388,8 @@ window.__earth = {
   coneLiveSetAnchor,
   coneLiveFetch,
   coneGlobalGrid,
+  coneBaseGrid,
+  coneOffLabel,
   coneWrapCol,
   coneLiveCells,
   // the global tensor layer (family 7)

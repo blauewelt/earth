@@ -754,9 +754,13 @@ footer a { color: var(--fg-dim); }
 #cn-lag-read {
   font-variant-numeric: tabular-nums; color: var(--fg); font-size: 12.5px; margin: 2px 0 6px;
 }
+/* Six presets now — the globe's, not one basin's — and six do not fit across a
+ * 380 px sidebar. A 30% basis puts three on a row and wraps the rest, so the
+ * block is two even rows at any sidebar width rather than one row that
+ * overflows or a ragged five-plus-one. */
 #cn-presets { gap: 4px; flex-wrap: wrap; margin-top: -2px; }
 #cn-presets button {
-  flex: 1 1 0; background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
+  flex: 1 1 30%; min-width: 0; background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
   border-radius: 6px; padding: 4px 2px; font-size: 11px; white-space: nowrap; cursor: pointer;
 }
 #cn-presets button:hover { background: #30363d; }

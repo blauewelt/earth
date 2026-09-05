@@ -1782,13 +1782,21 @@ published dataset** (the first being the AMOC eval-mask layer above). It draws
 the dependency cone on the globe: pick an anchor cell by tapping, and the tab
 shows what the forecaster reads to predict that pixel — the lag-0 3x3 patch as
 nine real cells, the inner sunflower for lags 1-6 coloured by lag, stage 2's
-outer spirals cumulative to lag 143, a dashed reach ellipse (zonal semi-axis =
-the reach, meridional 0.71 of it), and the tensor's own window as a dashed
-rhumb box. Dots that fall outside that window are drawn HOLLOW and counted,
-because the model reads them as missing and never wraps them. A family select
-(A wind stress / B currents & SSH / C SST & mixed layer / rg depth column), a
-0-143 lag slider with an 8-second sweep, and four preset anchors (Gulf Stream,
-RAPID, Labrador Sea, Equator) are the whole control surface; a small canvas
+outer spirals cumulative to lag 143, and a dashed reach ellipse (zonal
+semi-axis = the reach, meridional 0.71 of it). **The grid it stands on is the
+GLOBE** (2026-09-05): family 7's 721 x 1440 cells pole to pole, columns closing
+at the dateline (`coneBaseGrid` -> `coneGlobalGrid`), so a tap anywhere on
+Earth is a valid anchor and the only way off the grid is past a POLE — those
+dots are drawn HOLLOW and counted ("off the grid"; the `offWindow` counters
+keep their names). Family 4's North Atlantic window survives as the dashed
+rhumb box, shown ONLY while that comparison sample is loaded (`e.win.show =
+!grid.wrap`, exposed as `coneState().windowShown`), and there "off window" is
+still the wording. A family select (A wind stress / B currents & SSH / C SST &
+mixed layer / rg depth column / L land), a 0-143 lag slider with an 8-second
+sweep, and six global preset anchors (Gulf Stream, RAPID, Labrador Sea,
+Kuroshio, Nino 3.4, Antarctic ice — each one an exported family-7 anchor, so a
+preset in data mode SELECTS that anchor rather than moving a geometry anchor
+the dots would not follow) are the whole control surface; a small canvas
 plots reach against lag on a sqrt axis so the six inner pentads stay readable
 beside 143 outer ones.
 
@@ -1867,20 +1875,22 @@ drifting definition of the cone.
 **DATA mode — the same cone with the tensor's own numbers in it** (2026-09-04,
 Chris: *"create a dataset demo … use the real code … be animated … allow for
 inspecting the actual data of the two kinds of stencils"*). A switch in the
-Cones tab layers values onto the geometry: pick one of five exported anchors,
-choose the **codec** stencil (the inner cone, lags 0–6, all 42 channels) or the
+Cones tab layers values onto the geometry: pick one of the exported anchors —
+twelve global family-7 cells by default since 2026-09-05, five North Atlantic
+family-4 ones when the comparison source is chosen — choose the **codec**
+stencil (the inner cone, lags 0–6, all of the sample's channels) or the
 **stage-2** stencil (the outer cone, lags 7–143, the eight channels the LIM —
 the linear inverse model, our reference baseline — can be scored on), pick a
 channel, and every dot on the globe is coloured by what is actually there: the
 anomaly on the app's diverging blue–red convention, or the raw measurement on
 that channel's own ramp, with a legend that states the numeric range,
-unobserved dots dimmed, off-window dots hollow as the geometry mode already
+unobserved dots dimmed, off-grid dots hollow as the geometry mode already
 draws them, and the lag-0 patch drawn as its nine real cells. Tap or hover a
 dot and the read-out names the lag, **that dot's own date** (the anchor's date
 minus its lag — for stage 2 that is up to two years earlier than the pixel it
 explains), the offset in km east and north, the value in the channel's unit AND
 as the tensor stores it, the anomaly, and whether the cell was observed,
-missing or off the window: the probe's "which pixel answered" discipline (§2.4)
+missing or off the grid: the probe's "which pixel answered" discipline (§2.4)
 and its "every value carries when" rule (§2.9), one tab over. A strip below
 shows the whole codec input at once — the 42 × 9 patch as a heat map, the two
 future targets, and the 748-token count. All of it in plain English: what a
@@ -1996,10 +2006,15 @@ the toast instead. And the two statics are ordinary baked grids beside the index
 `data/family7_elev.json` as int16 metres), because a 14.5 MB range read for a
 constant would be absurd.
 
-**The Cones tab gained a source switch.** "exported anchors (family 4, North
-Atlantic)" is the previous behaviour, untouched; "live from the global tensor
-(family 7)" reads the same slabs through the same LRU, so moving the layer's
-date and moving the cone's anchor pay for each other's fetches. In live mode
+**The Cones tab gained a source switch.** Since 2026-09-05 it opens on
+"exported anchors (family 7, global — 12 cells)" — `CONE_DEFAULT_SOURCE`, the
+single constant every "unknown value falls back to X" site reads (`coneSourceKey`
+maps `"anchors"` to itself and everything else to it). "live from the global
+tensor (family 7)" reads the same slabs through the same LRU, so moving the
+layer's date and moving the cone's anchor pay for each other's fetches;
+"exported anchors (family 4, North Atlantic — the earlier tensor, for
+comparison)" is last, and is the only thing that brings the dashed window box
+back. In live mode
 ANY cell is an anchor — Antarctica included — and the dots WRAP across the
 dateline: the JS sunflower port gained `coneWrapCol`, and `tests/data.spec.js`
 replays it against `data/cone_geometry.json`'s new `global` block (its

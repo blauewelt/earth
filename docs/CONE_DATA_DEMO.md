@@ -6,6 +6,13 @@ pixel. Until now it drew the cone's **shape** — which cells, how far away, how
 long ago. **Data** mode puts the cone's **values** in it: the real numbers,
 out of the real training tensor, gathered by the real code.
 
+This page is about the **family-4** export — the five North Atlantic anchors
+the demo started from. That set is now the *comparison* source, last in the
+tab's `source` select and labelled as the earlier tensor; the tab **opens on
+the family-7 global anchors** instead, in geometry mode as well as data mode
+(see [FAMILY7_GLOBE.md](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY7_GLOBE.md)).
+Everything below still describes what you get when family 4 is chosen.
+
 This page says what those files are and how to make them again.
 
 ---
@@ -33,19 +40,22 @@ A few words first, because none of them are ordinary English.
   climatology — and then divided by the channel's spread over the training
   pool. The anomaly is what the model is actually given, which is why it runs
   about −3…+3 rather than 15 °C.
-- **Hollow** dot: the cell is outside the tensor's window (0–70° N,
-  100° W–20° E). The model reads it as missing and never wraps it round the
-  globe — this window is a basin, not a planet, so a wrap would put the Iberian
-  shelf one cell west of Florida.
-- **Dimmed** dot: inside the window, but never observed there — land, cloud, or
+- **Hollow** dot: the cell is off the grid the cone stands on. On **family 4**
+  that means outside its window (0–70° N, 100° W–20° E), and the **dashed box**
+  on the globe is exactly that window — the model reads such a cell as missing
+  and never wraps it round the globe, because this window is a basin, not a
+  planet, so a wrap would put the Iberian shelf one cell west of Florida. On
+  the global default there is no box and no edge: the columns close at the
+  dateline, and the only way off the grid is past a pole.
+- **Dimmed** dot: on the grid, but never observed there — land, cloud, or
   an Argo float that did not profile that pentad. The model gets a "missing"
   token, not a zero.
 
 Tap a dot and the read-out names the lag, **that dot's own date** (the anchor's
 date minus its lag — for stage 2 that can be two years earlier than the pixel
 being explained), the offset in kilometres east and north, the raw value with
-its unit, the anomaly, and whether the cell was observed, missing or off the
-window.
+its unit, the anomaly, and whether the cell was observed, missing, or off the
+grid (off the window, on family 4).
 
 ---
 
@@ -121,8 +131,12 @@ tab can say what it is showing.
 
 ### The anchors
 
-Four are the presets the tab already had; the fifth exists so the page can show
-what an unreadable neighbour looks like.
+Three of these were the North Atlantic presets the tab had when this set was
+the default; `equator` and `ionian_edge` exist so the page can show what an
+unreadable neighbour looks like. The tab's presets are now the six *global*
+ones (Gulf Stream, RAPID, Labrador Sea, Kuroshio, Niño 3.4, Antarctic ice),
+each an exported family-7 anchor, so a preset in family-4 mode lands on this
+set's nearest cell rather than on one of its own names.
 
 | id | where | why |
 |---|---|---|

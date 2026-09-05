@@ -145,6 +145,9 @@ Data mode has a second source: **live from the global tensor**. It reads the
 same slabs through the same cache, so moving the layer's date and moving the
 cone's anchor pay for each other's fetches.
 
+(The tab is global by default in every mode — see *Exported family-7 anchors*
+below, which is what the source select opens on.)
+
 What it gains: **any cell on the planet is an anchor** — Antarctica, the
 Sahara, the middle of the Pacific — and the dots **wrap across the dateline**,
 because on a globe there is no eastern edge. What it gives up, and the hint in
@@ -170,10 +173,26 @@ including the global block's wrapped ones — in `tests/data.spec.js`.
 
 ## Exported family-7 anchors
 
-The Cones tab's Data mode has a **third** source, between the two above:
-**exported anchors (family 7, global — 12 cells)**. These are pre-sampled files
-rather than a live read, so they carry everything live mode has to give up —
-above all the **anomaly** — while still covering the whole globe.
+**Exported anchors (family 7, global — 12 cells)** is the source the Cones tab
+**opens on**, in every mode. These are pre-sampled files rather than a live
+read, so they carry everything live mode has to give up — above all the
+**anomaly** — while still covering the whole globe.
+
+Because family 7 is the default, the tab's *geometry* mode stands on the global
+grid too: 721 × 1440 cells from pole to pole, columns closing at the dateline.
+A tap anywhere on Earth is a valid anchor, and the only way a dot can leave the
+grid is by reaching **past a pole** — those few are drawn hollow and counted as
+"off the grid". The **dashed box** on the globe is *not* part of this picture:
+it is family 4's North Atlantic window (0–70 °N, 100 °W–20 °E), and it appears
+only when the family-4 comparison source is chosen. The six presets under the
+cone (Gulf Stream, RAPID, Labrador Sea, Kuroshio, Niño 3.4, Antarctic ice) are
+each one of the twelve anchors below, so in data mode a preset **selects** that
+anchor rather than moving a geometry anchor the dots would not follow.
+
+The earlier family-4 set — **exported anchors (family 4, North Atlantic — the
+earlier tensor, for comparison)** — is still there, last in the select. It is
+the same exporter and the same schema over the 0.25° North Atlantic window: 42
+channels, five anchors, and a grid with edges a dot falls off.
 
 The twelve anchors, in the index's order:
 
