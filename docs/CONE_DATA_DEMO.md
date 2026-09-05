@@ -155,6 +155,24 @@ with no network at all.
 
 ---
 
+## The family select is a geometry-mode control
+
+The **family** select (A wind stress · B currents and sea-surface height ·
+C sea-surface temperature and mixed layer · L land · rg the Argo depth column)
+picks which cone shape is *drawn* while the tab is showing geometry. In data
+mode it decides nothing: the dots come from the sample, and which family's
+stencil they were sampled with is a property of the **channel** — `tau_x` was
+read with the wind cone whatever a select says, `cur_speed` with the ocean one.
+
+So in data mode the select is **disabled** and simply reports the family in
+force, the tiles above it count that family's dots (8 for a wind-stress
+channel, 80 for a current, 81 for a surface-temperature one, 6 for a depth
+level), and the hint names it in words. Change the **channel**, not the family.
+Before 2026-09-05 the select stayed live there and changed nothing at all,
+which reads exactly like a broken page.
+
+---
+
 ## Related
 
 - [The E-069 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_cone_codec.md)

@@ -6034,7 +6034,7 @@ test("Cones data mode: the cone's date follows the app's date, and says when it 
  * whose schema `tests/data.spec.js` pins against the index. */
 test("Cones data mode: the family-7 anchors are global, grouped by channel block, and wrap the dateline",
      async ({ page }) => {
-  test.setTimeout(120000);
+  test.setTimeout(300000);   // twelve anchors, five channel switches, two source swaps — slow under software GL
   await serveConeFixture(page);
   const f7 = await serveConeFixtureF7(page);
   await page.click("#tab-cones");
@@ -6082,8 +6082,10 @@ test("Cones data mode: the family-7 anchors are global, grouped by channel block
     s.value = "dateline";
     s.dispatchEvent(new Event("change", { bubbles: true }));
   });
+  // The switch flies the camera and re-fills two selects; on the software-GL
+  // sandbox that can outlast expect.poll's 5 s default.
   await expect.poll(() => page.evaluate(
-    () => window.__earth.coneState().data.anchorId)).toBe("dateline");
+    () => window.__earth.coneState().data.anchorId), { timeout: 30000 }).toBe("dateline");
 
   const st = await page.evaluate(() => window.__earth.coneState());
   expect(st.data.ready).toBe(true);
@@ -6144,6 +6146,81 @@ test("Cones data mode: the family-7 anchors are global, grouped by channel block
   expect(picked.hi).toBeLessThan(10);
   await expect(page.locator("#cn-readout")).toContainText("row ");
 
+  /* ---- THE FAMILY SELECT FOLLOWS THE CHANNEL, and says so.
+   *
+   * In geometry mode `#cn-family` picks the cone's shape. In data mode it
+   * cannot: the dots come from the sample and the CHANNEL decides which
+   * family's stencil was sampled, so a reader who changed A/B/C there saw
+   * nothing move and concluded the demo was broken. The select is therefore
+   * disabled in data mode and mirrors what is actually drawn, and the tiles
+   * count the channel's own dots rather than the select's family.
+   *
+   * The fixture carries one channel of every family the page can select —
+   * cur_speed (B), sst and skt (C), tau_x (A), rg_t10 (the depth column) —
+   * which is what makes this assertable at all. */
+  const famSel = page.locator("#cn-family");
+  await expect(famSel).toBeDisabled();
+  await expect(page.locator("#cn-family-note")).toBeVisible();
+  await expect(page.locator("#cn-family-note"))
+    .toContainText("the family follows the channel you pick below");
+
+  const pickChannel = async (name) => {
+    const i = f7.meta.channels.indexOf(name);
+    expect(i, `${name} is in the fixture`).toBeGreaterThanOrEqual(0);
+    await page.evaluate((v) => {
+      const s = document.getElementById("cn-channel");
+      s.value = v;
+      s.dispatchEvent(new Event("change", { bubbles: true }));
+    }, String(i));
+    await expect.poll(() => page.evaluate(
+      () => window.__earth.coneState().data.channel)).toBe(name);
+  };
+  const dotsTile = page.locator("#cn-dots .stat-value");
+
+  await pickChannel("skt");
+  await expect(famSel).toHaveValue("C");
+  await expect(dotsTile).toHaveText("81");
+  await expect(page.locator("#cn-data-hint")).toContainText("family-C channel");
+
+  await pickChannel("tau_x");
+  await expect(famSel).toHaveValue("A");
+  await expect(dotsTile).toHaveText("8");            // wind stress: lags 0-1
+  await expect(page.locator("#cn-data-hint")).toContainText("family-A channel");
+  await expect(page.locator("#cn-data-hint")).toContainText("8 dots");
+
+  await pickChannel("cur_speed");
+  await expect(famSel).toHaveValue("B");
+  await expect(dotsTile).toHaveText("80");
+  await expect(page.locator("#cn-data-hint")).toContainText("family-B channel");
+  await expect(page.locator("#cn-data-hint")).toContainText("80 dots");
+  await expect(page.locator("#cn-data-hint")).toContainText("lags 1–6");
+
+  await pickChannel("rg_t10");                       // the Argo depth column
+  await expect(famSel).toHaveValue("rg");
+  await expect(dotsTile).toHaveText("6");
+  await expect(page.locator("#cn-data-hint")).toContainText("anchor column only");
+
+  /* ---- and the UNIT is the channel's own. Every family-7 anchor on the Hub
+   * was exported while `meta.units`'s fallback was the Argo depth column's
+   * composite string, so the file itself says skin temperature is measured in
+   * "dbar-level (°C / PSU)". The page reads `data/family7_index.json` — the
+   * producer's own vocabulary — for a family-7 sample, so the read-out prints
+   * °C. The fixture has been regenerated with the corrected units too; this
+   * checks the RENDERED string, which is what a reader is misled by. */
+  await pickChannel("skt");
+  await page.evaluate(() => {
+    const dots = window.__earth.coneDataDots;
+    const i = dots.findIndex((d) => d.valid && d.obs && Number.isFinite(d.raw));
+    window.__earth.conesPickDot(i);
+  });
+  const readout = page.locator("#cn-readout");
+  await expect(readout).toContainText("°C");
+  await expect(readout).not.toContainText("dbar");
+  await expect(page.locator("#cn-legend")).not.toContainText("dbar");
+  // and the option text is readable rather than a bare key
+  expect(await page.locator("#cn-channel option").allTextContents())
+    .toContain("Skin temperature (NCEP reanalysis, every surface) — skt · °C");
+
   // ---- and back to the North Atlantic set: its own five anchors return
   await page.evaluate(() => window.__earth.conesSetSource("anchors"));
   await expect.poll(() => page.evaluate(
@@ -6155,6 +6232,14 @@ test("Cones data mode: the family-7 anchors are global, grouped by channel block
   expect(await page.locator("#cn-channel option").count()).toBe(naChannels);
   expect(await page.evaluate(() => window.__earth.coneState().data.nChannels))
     .toBe(42);
+
+  // ---- data mode OFF hands the family back: the select is a control again,
+  // at whatever the geometry mode had it set to.
+  await page.evaluate(() => window.__earth.conesSetDataMode(false));
+  await expect(famSel).toBeEnabled();
+  await expect(page.locator("#cn-family-note")).toBeHidden();
+  await expect(famSel).toHaveValue(
+    await page.evaluate(() => window.__earth.coneState().fam));
 
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });

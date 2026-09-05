@@ -10866,11 +10866,71 @@ function coneStatsAnchor() {
   return coneCellLatLon(gg.y, gg.x);
 }
 
+/* WHICH CONE FAMILY the picture on screen is actually drawn with — the one
+ * question the tab used to answer differently in three places.
+ *
+ * In GEOMETRY mode the reader picks it: `#cn-family` writes `cones.fam` and
+ * the sunflower follows. In DATA mode nothing of the sort happens. The dots
+ * come from the exported sample (or, live, from the archive) and the CHANNEL
+ * select decides which of them are coloured — and a channel carries its own
+ * family, because the family is a property of the physics, not of a control.
+ * So `#cn-family` moved and the globe did not, which is what made the demo
+ * look broken (Chris, 2026-09-05: he changed A/B/C and saw nothing happen).
+ *
+ * The family in force is therefore:
+ *   live          the live channel's, `coneLiveFamily()`
+ *   exported set  the SELECTED channel's, out of the file's own
+ *                 `channel_family` — with a depth channel resolved to `rg`,
+ *                 the same override `coneBudget` applies, because the codec
+ *                 keeps the anchor column for those and nothing else
+ *   otherwise     `cones.fam`, the select's own value
+ * Everything that describes the cone — the reach tile, the dots-per-channel
+ * tile, the cross-section's highlighted curve, the family select itself —
+ * reads this and not `cones.fam`. */
+function coneSampleChannelFamily(S, name) {
+  if (!S || !S.meta || !name) return null;
+  const depth = S.meta.depth_channels;
+  if (Array.isArray(depth) && depth.includes(name)) return "rg";
+  const table = S.meta.channel_family;
+  return (table && table[name]) || null;
+}
+
+function coneActiveFamily() {
+  if (coneLiveOn()) return coneLiveFamily().fam;
+  if (coneDataOn()) {
+    // `coneDataChannelName` already answers for BOTH stencils — the codec's
+    // channel list and stage 2's shorter one — so the outer stencil's family
+    // is found by the same lookup rather than by a second branch.
+    const fam = coneSampleChannelFamily(cones.data.sample, coneDataChannelName());
+    if (fam) return fam;
+  }
+  return cones.fam;                    // no `channel_family` in the file
+}
+
+/* The family select in data mode: DISABLED, and mirroring what is actually
+ * being drawn. Leaving it live was the whole bug — a control that accepts a
+ * change and changes nothing teaches the reader that the page is broken. It
+ * still shows the family, because the reader wants to know which one they are
+ * looking at; it just no longer pretends to choose it. A family the select
+ * does not offer (the geometry file predates `L`, say) leaves the control's
+ * value alone rather than being coerced into a wrong one. */
+function conesSyncFamilySelect() {
+  const sel = document.getElementById("cn-family");
+  if (!sel) return;
+  const note = document.getElementById("cn-family-note");
+  const locked = coneDataOn();
+  sel.disabled = locked;
+  if (note) note.classList.toggle("hidden", !locked);
+  const want = locked ? coneActiveFamily() : cones.fam;
+  if ([...sel.options].some((o) => o.value === want)) sel.value = want;
+}
+
 function conesStats() {
   const K = coneGeo.constants, P = coneParams, k = cones.lag;
-  // In live mode the family follows the CHANNEL (family 7's channels carry
-  // their family in the exported geometry), not the geometry-mode select.
-  const fam = coneLiveOn() ? coneLiveFamily().fam : cones.fam;
+  // The family the DRAWING is using — the channel's in data mode, the
+  // select's in geometry mode. See `coneActiveFamily`.
+  const fam = coneActiveFamily();
+  conesSyncFamilySelect();
   const r = k <= P.L_IN ? coneReachKm(fam, k) : coneOuterReachKm(k);
   const reach = document.getElementById("cn-reach");
   reach.querySelector(".stat-value").textContent = r > 0 ? `${coneFmtKm(r)} km` : "none";
@@ -10978,7 +11038,7 @@ function conesSection() {
   // adds; anything the export invents later falls back to grey rather than
   // vanishing from the cross-section
   const cols = { A: "#f85149", B: "#4493f8", C: "#3fb950", L: "#d29922" };
-  const curFam = coneLiveOn() ? coneLiveFamily().fam : cones.fam;
+  const curFam = coneActiveFamily();
   for (const f of Object.keys(coneFamilyTable())) {
     const cur = (curFam === "rg" ? "B" : curFam) === f;
     ctx.strokeStyle = cols[f] || "#8b949e"; ctx.lineWidth = cur ? 2.6 : 1.4;
@@ -11133,6 +11193,62 @@ function coneDataChannelName() {
   return cones.data.stencil === "codec"
     ? S.meta.channels[cones.data.chan]
     : S.outer.channels[cones.data.outerChan];
+}
+
+/* ---- what a channel is CALLED and what its numbers are IN --------------
+ *
+ * `meta.units` in an exported sample is the exporter's own table, and until
+ * 2026-09-05 that table knew ten channel names and handed every other one the
+ * Argo depth column's composite unit — so every family-7 anchor on the Hub
+ * says air temperature at 2 m, skin temperature, surface pressure and sea-ice
+ * concentration are measured in "dbar-level (°C / PSU)". The exporter is
+ * fixed (`ml/export_cone_sample.py::channel_unit`), but the files already
+ * published are not, and re-exporting twelve 5 MB anchors off a 46 GB tensor
+ * is not something a bug in a caption should cost.
+ *
+ * So for a FAMILY-7 sample the page reads the producer's own vocabulary
+ * instead: `data/family7_index.json`, written by
+ * `ml/publish_family7_index.py` — the same table the globe layer's channel
+ * picker already uses, which is why the two now agree word for word. The
+ * sample's `meta.units` remains the fallback, and family 4 is untouched: it
+ * has no index, and its own units were always right for its own channels. */
+function coneSampleIsF7(S) {
+  const m = S && S.meta;
+  if (!m) return false;
+  return String(m.recipe || "").startsWith("f7")
+    || String((m.tensor && m.tensor.name) || "").startsWith("family7");
+}
+
+/* The index's row for one channel NAME, across all three groups — including
+ * `rg100`, which `tensorChannelList` deliberately leaves out (the globe cannot
+ * paint a monthly depth level) and the cone's read-out very much needs. */
+function coneIndexChannel(name) {
+  const idx = tensorState.index;
+  if (!idx || !idx.groups || !name) return null;
+  for (const g of Object.values(idx.groups)) {
+    if (!g || !Array.isArray(g.chans) || !g.chans.includes(name)) continue;
+    return {
+      label: (g.labels && g.labels[name]) || null,
+      units: g.units && g.units[name] !== undefined ? g.units[name] : null,
+    };
+  }
+  return null;
+}
+
+function coneChannelUnit(S, name) {
+  if (coneSampleIsF7(S)) {
+    const c = coneIndexChannel(name);
+    if (c && c.units !== null) return c.units;
+  }
+  return (S && S.meta && S.meta.units && S.meta.units[name]) || "";
+}
+
+function coneChannelLabel(S, name) {
+  if (coneSampleIsF7(S)) {
+    const c = coneIndexChannel(name);
+    if (c && c.label) return c.label;
+  }
+  return name;
 }
 
 /* The exported date nearest the anchor bin on screen. The tab's clock is free
@@ -11512,7 +11628,7 @@ function conesDataLegend() {
   const name = coneDataChannelName();
   const unit = cones.data.anomaly
     ? "anomaly, z-scored (0 = the calendar month's own average)"
-    : `${S.meta.units[name] || ""} (the measurement, not the anomaly)`;
+    : `${coneChannelUnit(S, name)} (the measurement, not the anomaly)`;
   host.innerHTML =
     `<div class="cn-bar" style="background:linear-gradient(90deg,${stops.join(",")})"></div>` +
     `<div class="cn-scale"><span>${coneFmtVal(lo)}</span>` +
@@ -11536,7 +11652,7 @@ function conesDataReadout() {
     return;
   }
   const name = coneDataChannelName();
-  const unit = S.meta.units[name] || "";
+  const unit = coneChannelUnit(S, name);
   const date = coneDateOfBin(d.bin);
   const held = CONE_HOLDOUT_YEARS.includes(Number(date.slice(0, 4)));
   const ns = (v, suffix) => (v === null ? "–"
@@ -11656,6 +11772,63 @@ function conesDataStrip() {
                `${S.meta.geometry.counts.dot_tokens} dots`, fx, gridY + 90);
 }
 
+/* WHICH FAMILY the chosen channel is read through, and what that does to the
+ * picture — the sentence that was missing while `#cn-family` sat there looking
+ * like the control that decides it. The COUNTS come out of the sample (how
+ * many of its inner dots belong to this channel, over which lags), never out
+ * of a table here, so a file exported with a different geometry describes
+ * itself correctly; the family's own constants — its correlation length, its
+ * drift speed — come from `data/cone_geometry.json`, which is where the cone's
+ * shape is defined. */
+function coneDataChannelSentence(S) {
+  if (!S || !coneGeo) return "";
+  const name = coneDataChannelName();
+  if (!name) return "";
+  const fam = coneActiveFamily();
+  const [key, words] =
+    (CONE_FAMILY_LABELS[fam] || `${fam} · family ${fam}`).split(" · ");
+
+  // The channel's index into the CODEC's list — stage 2's own list is shorter,
+  // and `chan_index` is the pointer the file itself provides back into it.
+  const ci = cones.data.stencil === "codec"
+    ? cones.data.chan
+    : (S.outer && Array.isArray(S.outer.chan_index)
+        ? S.outer.chan_index[cones.data.outerChan] : -1);
+  const inner = S.inner || {};
+  const chans = Array.isArray(inner.chan) ? inner.chan : [];
+  const lags = [];
+  let n = 0;
+  for (let j = 0; j < chans.length; j++) {
+    if (chans[j] !== ci) continue;
+    n++;
+    const lg = inner.lag ? inner.lag[j] : null;
+    if (lg !== null && lg !== undefined && !lags.includes(lg)) lags.push(lg);
+  }
+  lags.sort((a, b) => a - b);
+
+  const spec = coneFamilyTable()[fam === "rg" ? "B" : fam] || null;
+  const il = (spec && spec.inner_lags) || [];
+  const dots = `${n} dot${n === 1 ? "" : "s"}`;
+  let detail;
+  if (fam === "rg") {
+    detail = `the anchor column only (${dots})`;
+  } else if (fam === "A") {
+    detail = `${dots}, lags ${il.length ? `${il[0]}–${il[il.length - 1]}` : "0–1"} ` +
+             `only, ${coneFmtKm(coneReachKm("A", 1))} km`;
+  } else if (fam === "C") {
+    detail = `${dots}, the L-shaped stencil — its first two lags reach as far ` +
+             `as the wind's before the ocean's own drift takes over`;
+  } else if (spec && spec.v_ms === 0) {
+    detail = `${dots}, ${coneFmtKm(spec.L_corr_km)} km flat — this family does ` +
+             `not advect, so the reach is the same at every lag`;
+  } else {
+    detail = `${dots}${lags.length ? ` over lags ${lags[0]}–${lags[lags.length - 1]}` : ""}` +
+             `${spec && spec.v_ms ? `, drifting at ${spec.v_ms} m/s` : ""}`;
+  }
+  return `<code>${esc(name)}</code> is a family-${esc(key)} channel ` +
+         `(${esc(words || key)}): ${detail}.`;
+}
+
 function conesDataHint() {
   const host = document.getElementById("cn-data-hint");
   const S = cones.data.sample;
@@ -11671,6 +11844,8 @@ function conesDataHint() {
             `${S.meta.dates[S.meta.dates.length - 1]}, ` +
             `${S.meta.channels.length} channels, read out of ${fam.gloss} ` +
             `(<code>${esc(S.meta.tensor.name)}</code>).`);
+  const chanSentence = coneDataChannelSentence(S);
+  if (chanSentence) bits.push(chanSentence);
   /* The anchor's own statics, when the exporter baked them in: which surface
    * the cell stands on and how high it is. Family 4's files predate both, so
    * this sentence simply is not there for them. */
@@ -11745,8 +11920,10 @@ function conesDataFillSelectors() {
   const csel = document.getElementById("cn-channel");
   if (csel && S) {
     const list = cones.data.stencil === "codec" ? S.meta.channels : S.outer.channels;
-    const want = cones.data.stencil === "codec"
-      ? coneChannelOptions(S, list) : coneChannelOptions(null, list);
+    // Stage 2's shorter list is NOT grouped (eight channels are a choice, not
+    // a scroll) but it is still described from the same vocabulary.
+    const want = coneChannelOptions(S, list,
+      { grouped: cones.data.stencil === "codec" });
     if (csel.innerHTML !== want) csel.innerHTML = want;
     csel.value = String(cones.data.stencil === "codec"
       ? cones.data.chan : cones.data.outerChan);
@@ -11765,9 +11942,24 @@ const CONE_GROUP_LABEL = {
   g100: "1° atmosphere & land",
   rg100: "1° Argo depth column (monthly)",
 };
-function coneChannelOptions(S, list) {
-  const opt = (c, i) => `<option value="${i}">${esc(c)}</option>`;
-  const byName = S && S.meta && S.meta.channel_group;
+/* What one option SAYS. Family 4's 42 names are the tensor's own and the tab
+ * has always shown them bare. Family 7 has 54 across three grids, and a bare
+ * `log_prate` or `shtfl` is not a choice a reader can make — so its options
+ * read "Air temperature at 2 m — t2m · °C": the plain-English label from the
+ * producer's vocabulary, the key (because that is what the read-out prints
+ * and what the docs call it), and the unit. */
+function coneChannelOptionText(S, c) {
+  if (!coneSampleIsF7(S)) return c;
+  const label = coneChannelLabel(S, c), unit = coneChannelUnit(S, c);
+  if (label === c && !unit) return c;         // the index has not landed
+  return `${label} — ${c}${unit ? ` · ${unit}` : ""}`;
+}
+
+function coneChannelOptions(S, list, opts) {
+  const grouped = !opts || opts.grouped !== false;
+  const opt = (c, i) =>
+    `<option value="${i}">${esc(coneChannelOptionText(S, c))}</option>`;
+  const byName = grouped && S && S.meta && S.meta.channel_group;
   const names = S && S.meta && S.meta.groups && S.meta.groups.names;
   if (!byName || !names || !names.length) return list.map(opt).join("");
   const buckets = new Map();
@@ -11815,6 +12007,16 @@ async function conesUseAnchor(id, src) {
     if (input) input.value = coneDateOfBin(cones.bin);
     if (cones.data.chan >= S.meta.channels.length) cones.data.chan = 0;
     if (cones.data.outerChan >= S.outer.channels.length) cones.data.outerChan = 0;
+    /* A family-7 sample is DESCRIBED from the global tensor's own index — the
+     * labels and units `ml/publish_family7_index.py` publishes, rather than
+     * the wrong ones baked into the anchors already on the Hub (see
+     * `coneChannelUnit`). The fetch is ~30 kB, cached for the session and
+     * shared with the globe layer, and it is awaited BEFORE the selectors are
+     * filled so the options are never written twice. A failure is a nicety
+     * lost, never a broken tab: the sample's own `meta.units` answers. */
+    if (coneSampleIsF7(S)) {
+      try { await loadTensorIndex(); } catch { /* fall back to meta.units */ }
+    }
     conesDataFillSelectors();
     coneDataLagRange();
   } catch (err) {
@@ -11841,6 +12043,7 @@ async function conesSetDataMode(on) {
     cones.data.pick = null;
     const s = document.getElementById("cn-lag");     // give the slider its
     if (s) { s.min = "0"; s.max = "143"; s.step = "1"; }   // full span back
+    conesSyncFamilySelect();   // hand the family back, at whatever it was
     conesDraw();
     return;
   }
@@ -12820,6 +13023,11 @@ function coneState() {
   const lagBin = cones.bin - cones.lag;
   return {
     lat: cones.lat, lon: cones.lon, fam: cones.fam, lag: cones.lag,
+    // `fam` is the SELECT's value; `activeFamily` is what is being drawn — in
+    // data mode that is the selected CHANNEL's family, which is why the select
+    // is disabled there rather than accepting changes it cannot honour.
+    activeFamily: coneGeo ? coneActiveFamily() : cones.fam,
+    familyLocked: coneDataOn(),
     y: g.y, x: g.x, drawn: cones.nDrawn, offWindow: cones.nOff,
     offWindowInner: cones.nOffInner, playing: cones.playing,
     reachKm: coneGeo

@@ -414,7 +414,74 @@ def test_trim_sample_keeps_the_schema_and_the_values(tmp_path):
     assert len(full["meta"]["dates"]) == 24
 
 
-# --------------------------------------------------------------- 6. the sig() --
+# ------------------------------------------------------------------ 6. units --
+#
+# WHAT WENT WRONG. `meta.units` used to be built with a composite fallback —
+# `UNITS.get(c, "dbar-level (°C / PSU)")` — over a ten-name table that knew
+# only family 4's surface channels. On family 4 the fallback caught the 32
+# Roemmich–Gilson depth channels and read as a description of them. On family
+# 7 it caught t2m, u10, v10, sp, log_prate, log_swe, soilw, tsoil, lhtfl,
+# shtfl, skt, sea_ice and every rg_* as well, so every exported global anchor
+# on the Hub says air temperature at 2 m is measured in dbar-levels.
+#
+# The fix is that there is now ONE vocabulary — `ml/publish_family7_index.py`'s
+# `CHANNELS`, the same table the globe's channel picker and read-out use — and
+# these tests are what keeps it one. They would still fail if someone re-typed
+# the table here rather than importing it, which is the point.
+def test_units_agree_with_the_family7_index_for_every_channel():
+    from publish_family7_index import CHANNELS as IDX
+
+    assert IDX, "the index's channel vocabulary is empty"
+    for name, (_label, unit, _sign, _ramp) in IDX.items():
+        assert X.channel_unit(name) == unit, name
+        assert X.UNITS[name] == unit, name
+
+
+def test_depth_channels_carry_their_own_unit_not_the_composite():
+    for depth in ("rg_t10", "rg_t900", "rg_t1900"):
+        assert X.channel_unit(depth) == "°C", depth
+    for depth in ("rg_s10", "rg_s500", "rg_s1900"):
+        assert X.channel_unit(depth) == "PSU", depth
+    # and no channel of either family is ever ANSWERED with the composite
+    # string, whatever the exporter's prose still says about why it was removed
+    names = set(GEO["channel_family"]) | set(GEO.get("depth_channels") or [])
+    for c in sorted(names):
+        assert "dbar-level" not in X.channel_unit(c), c
+
+
+def test_an_unknown_channel_gets_no_unit_rather_than_a_wrong_one():
+    assert X.channel_unit("no_such_channel") == ""
+
+
+def test_trim_recomputes_the_units_of_the_channels_it_keeps(tmp_path):
+    """A fixture is cut from a file an OLDER exporter wrote, and the family-7
+    anchors on the Hub were all written while the composite fallback was still
+    in place. Trimming one therefore has to correct its vocabulary, or the
+    browser fixture would pin the bug the exporter just stopped making."""
+    _, written = export_toy(tmp_path)
+    full = json.loads(written[0][2])
+    full["meta"]["units"] = {c: "dbar-level (°C / PSU)"
+                             for c in full["meta"]["channels"]}
+    fx = X.trim_sample(full, n_dates=2, want_lags=(7, 36, 143))
+    assert set(fx["meta"]["units"]) == set(fx["meta"]["channels"])
+    for c, u in fx["meta"]["units"].items():
+        assert u == X.channel_unit(c), c
+        assert "dbar-level" not in u, c
+
+
+def test_the_shipped_family7_fixture_has_the_corrected_units():
+    path = os.path.join(ROOT, "data", "cone_samples_f7", "fixture.json")
+    fx = json.load(open(path, encoding="utf-8"))
+    units = fx["meta"]["units"]
+    assert set(units) == set(fx["meta"]["channels"])
+    for c, u in units.items():
+        assert u == X.channel_unit(c), c
+    assert units["skt"] == "°C"
+    assert units["tau_x"] == "N/m²"
+    assert units["rg_t10"] == "°C"
+
+
+# --------------------------------------------------------------- 7. the sig() --
 def test_sig_rounds_and_nulls():
     assert X.sig(None) is None
     assert X.sig(float("nan")) is None

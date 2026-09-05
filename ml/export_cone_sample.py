@@ -95,6 +95,14 @@ if HERE not in sys.path:
 
 import cone                                                        # noqa: E402
 from cone_sampler import ConeSampler, PENTAD_EPOCH, PENTAD_DAYS    # noqa: E402
+# The channel VOCABULARY — plain-English label and unit for every channel of
+# the global tensor — is defined once, in the script that publishes the
+# globe's own index, and imported here rather than copied. Two tables would
+# drift, and the drift is exactly the bug this import closes: the family-7
+# samples shipped with `dbar-level (°C / PSU)` on t2m, skt, sea_ice and every
+# other channel the exporter's own short list did not know.
+from publish_family7_index import (                                # noqa: E402
+    CHANNELS as F7_CHANNELS, describe as f7_describe)
 
 GEOMETRY = os.path.join(ROOT, "data", "cone_geometry.json")
 
@@ -113,13 +121,31 @@ SCOREABLE_F7 = SCOREABLE
 
 # What one number MEANS, for the read-out. A value without its unit is a
 # number the reader cannot check against anything (root CLAUDE.md §2.4).
-UNITS = {
-    "cur_speed": "m/s", "cur_u": "m/s", "cur_v": "m/s",
-    "log_mld": "log10(m)", "ssh": "m",
-    "tau_x": "N/m²", "tau_y": "N/m²",
-    "tau_x_std": "N/m²", "tau_y_std": "N/m²",
-    "sst": "°C",
-}
+#
+# The table is `ml/publish_family7_index.py::CHANNELS` — the SAME strings the
+# globe's channel picker and its read-out already use — rather than a second
+# list here. It covers family 4's ten surface channels as well, because every
+# one of them is also a family-7 channel; the Roemmich-Gilson depth channels
+# (`rg_t900`, `rg_s150`, …) are answered by `f7_describe`'s own `rg_` rule,
+# which is °C for a temperature level and PSU for a salinity one.
+UNITS = {name: spec[1] for name, spec in F7_CHANNELS.items()}
+
+
+def channel_unit(name):
+    """The unit for one channel, or "" when nothing knows it.
+
+    There used to be a composite fallback here — `"dbar-level (°C / PSU)"`,
+    the Argo depth column's unit — applied to EVERY channel the short list
+    above did not carry. On family 4 that was only the depth channels and it
+    read as a description of them; on family 7 it landed on t2m, u10, v10, sp,
+    log_prate, log_swe, soilw, tsoil, lhtfl, shtfl, skt and sea_ice, so the
+    exported files told a reader that air temperature is measured in
+    dbar-levels. An unknown channel now gets an EMPTY unit: no unit is honest,
+    a wrong one is not.
+    """
+    if name in UNITS:
+        return UNITS[name]
+    return f7_describe(name)[1]
 
 # WHAT `raw` IS, and it is not what the word suggests on its own.
 # `ml/build_family4.py` stores the tensor Z-SCORED — its last pass writes
@@ -681,7 +707,7 @@ def build_sample(*, raw, anom, obs_arr, lats, lons, chan_names, anchor,
                         else sig(float(statics["elev"][y, x]), 6)),
         recipe=(None if statics is None else statics.get("recipe")),
         depth_channels=[c for c in chan_names if cone.is_depth_channel(c)],
-        units={c: UNITS.get(c, "dbar-level (°C / PSU)") for c in chan_names},
+        units={c: channel_unit(c) for c in chan_names},
         scoreable_channels=list(scoreable),
         holdout_years=list(HOLDOUT_YEARS),
         terminal_train_last_year=TERMINAL_TRAIN_LAST_YEAR,
@@ -898,6 +924,12 @@ def trim_sample(s, n_dates=3, want_lags=(7, 36, 143), keep_chans=None):
     o["obs"] = "".join(o["obs"][((t * nK0 + i) * nD + d) * nCo
                                 : ((t * nK0 + i) * nD + d + 1) * nCo]
                        for t in range(nT) for i in keep for d in range(nD))
+    # The UNITS are recomputed rather than carried over. A fixture is cut from
+    # a file produced by an older exporter, and the family-7 anchors on the Hub
+    # were written while the fallback above still said "dbar-level (°C / PSU)"
+    # for every channel this script did not know — so trimming one of them has
+    # to correct the vocabulary, or the browser tests would pin the bug.
+    s["meta"]["units"] = {c: channel_unit(c) for c in s["meta"]["channels"]}
     return s
 
 
@@ -1154,9 +1186,11 @@ def main(argv=None):
     ap.add_argument("--fixture-channels", default="",
                     help="comma-separated channel INDICES to keep in the "
                          "fixture; default all. Family 7's fixture is "
-                         "0,5,21,22 — cur_speed, sst, skt, rg_t10: one channel "
-                         "from each of the three groups plus a second ocean "
-                         "one, which is the whole schema in 4 of 54 channels")
+                         "0,5,7,21,22 — cur_speed, sst, tau_x, skt, rg_t10: "
+                         "one channel from each of the three groups, a second "
+                         "ocean one, and one channel of every CONE FAMILY the "
+                         "page can select (B, C, A, C, rg) — which is the "
+                         "whole schema in 5 of 54 channels")
     ap.add_argument("--fixture-dates", type=int, default=3,
                     help="how many pentads the fixture keeps")
     ap.add_argument("--trim-file", default="",
@@ -1170,7 +1204,7 @@ def main(argv=None):
                          "  python3 ml/export_cone_sample.py \\\n"
                          "    --trim-file dateline.json \\\n"
                          "    --fixture data/cone_samples_f7/fixture.json \\\n"
-                         "    --fixture-channels 0,5,21,22 --fixture-dates 2")
+                         "    --fixture-channels 0,5,7,21,22 --fixture-dates 2")
     a = ap.parse_args(argv)
 
     fixture_chans = ([int(x) for x in a.fixture_channels.split(",") if x.strip()]

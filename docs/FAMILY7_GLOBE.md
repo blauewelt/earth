@@ -197,15 +197,27 @@ tensor's sha256, the exporter's commit, the grid block and the three channel
 groups); the files themselves are ~5 MB each on the Hugging Face Hub under
 `cone_samples_f7/`, read one anchor at a time. `data/cone_samples_f7/fixture.json`
 is the trimmed in-repo copy the browser tests run against with no network — the
-dateline anchor cut to two dates and four channels (one per group plus a second
-ocean one), rebuilt from a downloaded anchor with:
+dateline anchor cut to two dates and five channels — one per group, a second
+ocean one, and one channel of every **cone family** the Cones tab can select
+(`cur_speed` B, `sst` and `skt` C, `tau_x` A, `rg_t10` the depth column), so a
+browser test can check that the family select really does follow the channel.
+Rebuilt from a downloaded anchor with:
 
 ```bash
 python3 ml/export_cone_sample.py \
     --trim-file dateline.json \
     --fixture data/cone_samples_f7/fixture.json \
-    --fixture-channels 0,5,21,22 --fixture-dates 2
+    --fixture-channels 0,5,7,21,22 --fixture-dates 2
 ```
+
+The trim also **recomputes `meta.units`**. Every anchor on the Hub was exported
+while the exporter's unit table knew only family 4's ten surface channels and
+gave everything else the Argo depth column's composite string, so those files
+say air temperature at 2 m is measured in `dbar-level (°C / PSU)`. The exporter
+now takes its vocabulary from `ml/publish_family7_index.py::CHANNELS` — the
+same table this index publishes — and the page reads that index for a family-7
+sample rather than the file's own `meta.units`, so a reader gets `°C` without
+re-exporting twelve 5 MB anchors off a 46 GB tensor.
 
 **They come out of the production sampler, not out of this page.** Each file is
 written by `ml/export_cone_sample.py --tensor …` — the same script that made

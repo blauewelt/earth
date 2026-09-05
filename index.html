@@ -759,6 +759,13 @@
           <option value="rg">rg · depth column</option>
         </select>
       </div>
+      <!-- Data mode does not use this select at all: the dots come from the
+           sample and the CHANNEL decides which family's cone is drawn, so the
+           select is disabled there and merely reports what is in force. It
+           used to stay live and change nothing, which reads as a broken
+           page. -->
+      <p class="hint hidden" id="cn-family-note">In data mode the family follows
+        the channel you pick below — change the channel, not the family.</p>
       <div class="control-row">
         <label for="cn-lag">lag</label>
         <input type="range" id="cn-lag" min="0" max="143" step="1" value="1" />
@@ -1105,7 +1112,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">11c181ab</code></p>
+      <p class="build-line">Build <code id="build-id">856fedb3</code></p>
     </section>
 
     <footer>
@@ -1161,6 +1168,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=11c181ab"></script>
+  <script src="src/app.js?v=856fedb3"></script>
 </body>
 </html>

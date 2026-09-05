@@ -1684,8 +1684,15 @@ test.describe("cone_samples_f7.json + the fixture (family 7, the global anchors)
     expect(fx.outer.lags[0]).toBe(7);
     expect(fx.outer.lags).toHaveLength(3);
 
-    // the four kept channels are a subset of the real list, one per group
-    expect(fx.meta.channels).toEqual(["cur_speed", "sst", "skt", "rg_t10"]);
+    // the five kept channels are a subset of the real list: one per group, a
+    // second ocean one, and one channel of every CONE FAMILY the page can
+    // select — B (cur_speed), C (sst, skt), A (tau_x) and rg (rg_t10), which
+    // is what lets the browser test check that the family select follows the
+    // channel in data mode
+    expect(fx.meta.channels).toEqual(
+      ["cur_speed", "sst", "tau_x", "skt", "rg_t10"]);
+    expect([...new Set(fx.meta.channels.map((c) => fx.meta.channel_family[c]))]
+      .sort()).toEqual(["A", "B", "C"]);
     for (const c of fx.meta.channels) expect(idx.channels).toContain(c);
     expect(fx.meta.groups.names).toEqual(["g025", "g100", "rg100"]);
     expect([...fx.meta.groups.channels.g025, ...fx.meta.groups.channels.g100,
@@ -1709,7 +1716,16 @@ test.describe("cone_samples_f7.json + the fixture (family 7, the global anchors)
       expect(fx.meta.groups.names).toContain(fx.meta.channel_group[c]);
       expect(fx.meta.channel_family[c]).toBeTruthy();
       expect(typeof fx.meta.units[c]).toBe("string");
+      // and the unit is the CHANNEL'S own. The exporter's fallback used to be
+      // the Argo depth column's composite unit, applied to everything it did
+      // not recognise, so the file said air and skin temperature were measured
+      // in dbar-levels — the one thing a unit must never do is describe a
+      // different quantity.
+      expect(fx.meta.units[c], `${c} unit`).not.toContain("dbar-level");
     }
+    expect(fx.meta.units.skt).toBe("°C");
+    expect(fx.meta.units.tau_x).toBe("N/m²");
+    expect(fx.meta.units.rg_t10).toBe("°C");
 
     // the anchor's own statics — which surface it stands on and how high
     expect(fx.meta.anchor.id).toBe("dateline");
@@ -1727,7 +1743,7 @@ test.describe("cone_samples_f7.json + the fixture (family 7, the global anchors)
     expect(fx.inner.valid).toHaveLength(nT * nD);
     expect(/^[01]+$/.test(fx.inner.obs)).toBe(true);
     expect([...new Set(fx.inner.chan)].sort((a, b) => a - b))
-      .toEqual([0, 1, 2, 3]);
+      .toEqual([0, 1, 2, 3, 4]);
     expect(fx.patch.shape).toEqual([nT, nC, 9]);
     expect(fx.patch.raw).toHaveLength(nT * nC * 9);
     expect(fx.future.raw).toHaveLength(nT * nC * fx.future.lags.length);
