@@ -6,6 +6,13 @@ is the alternative path, so two alternatives: continuous embeddings → MSE loss
 loss → autoregressive prediction? can you put these two side by side
 considering our rather ambitious el-nino or amoc or … prediction goals?"*
 
+**Reviewed 2026-09-05 (Fable) against the record, after being drafted under
+Opus 5 the same afternoon: two factual corrections, both marked in place —
+the token-versus-continuous forecast comparison in §4 (the draft cited a
+retired number and had the sign wrong) and the external-precedent sentence in
+§3 (FGN and AIFS-CRPS are one-pass heads, not flow matching). The review also
+surfaced an unharvested result, #534, now read into §4.**
+
 **This document is written to be handed to an agent or a person with no prior
 context.** Every abbreviation is expanded on first use and there is a glossary
 in §9. Nothing here is dispatched. Every number is either measured in this
@@ -117,8 +124,13 @@ at a time.
 - Unlimited precision: the output is a real number, with no bins.
 - Naturally parallel over space — a single integration produces all 1,038,240
   cells, so field size is not a sequence-length problem.
-- Strong external precedent for exactly this problem class: GenCast, ECMWF's
-  CRPS-trained AIFS, and FGN itself are all in this family.
+- External precedent for *continuous probabilistic* weather heads is strong,
+  but be precise about which axis it supports: GenCast is the direct precedent
+  for iterative refinement (a diffusion sampler); FGN and ECMWF's CRPS-trained
+  AIFS ensemble are **one-pass** heads, so they are precedent for axis B (a
+  continuous *sampled* output) and explicitly *not* for axis C. An earlier
+  draft of this document listed all three as "in this family"; only GenCast
+  is.
 - Represents arbitrary distributions, including multi-humped ones, without
   choosing a vocabulary.
 
@@ -177,13 +189,31 @@ the two unbounded end bins are the one exception.
 - **Precision is capped by bin width.** Root-mean-square error cannot go below
   `Δ/√12` for a bin of width Δ. Fine digits buy it back; the floor must be
   computed per channel up front so nobody mistakes it for model error.
-- **Quantization has a measured cost in this programme.** Compressing the
-  bottleneck to a 16-bit code cost about 18 % of reconstruction loss (0.270
-  against the continuous parent's 0.229, E-050 / run #485), and the token-based
-  head forecast worse than its continuous control at a matched noise dose
-  (0.539 against 0.506, E-056a / run #504 with its clean twin). Those
-  measurements are on *bottleneck* quantization, not per-channel input
-  quantization, so they bound the risk rather than settle it.
+- **Quantization has a measured RECONSTRUCTION cost in this programme — and,
+  on the one clean comparison that exists, no forecasting cost.** Compressing
+  the bottleneck to a 16-bit code cost about 18 % of reconstruction loss
+  (0.270 against the continuous parent's 0.229, E-050 / run #485). The
+  forecasting side is the opposite of what an earlier draft of this document
+  said. The often-quoted 0.539-versus-0.506 (E-056a, run #504) is a
+  **retired** number: it was trained under the contaminated endpoint pool, and
+  #504 ran at ~5.8× the intended noise dose besides — the log itself marks it
+  "not a verdict"; its dose-matched twin #507 read 0.510, a tie. The clean-pool
+  pair is E-064: **#528 (the 7.6 M head on the 16-bit token)** reached a
+  held-out one-step ratio of **0.564 at its minimum and 0.669 at 20 k**, while
+  **#534 (the identical head on the continuous d_z-32 embedding)** reached
+  **0.617 and 0.696**, each against its own persistence, dose-matched at 0.151
+  relative noise, n = 1 each (`run-528.jsonl`, `run-534.jsonl` on
+  `ml-metrics`; #534's curve is complete but its probe ladder never ran — the
+  archive holds no `temporal.json` — so this is the one-step read-out only, and
+  it was **unharvested in the log until this review, 2026-09-05**). By E-064's
+  pre-registered criterion — within 0.02 means the token is a competitive
+  substrate — the token is not merely competitive, it is ahead. Two cautions
+  travel with that: a ratio against one's own persistence in a 6-dimensional
+  quantized space is not the same quantity as one in a 32-dimensional
+  continuous space, and one seed each is a direction, never a level (§3b of
+  `ml/CLAUDE.md`). These measurements are on *bottleneck* quantization, not
+  per-channel input quantization, so they bound the risk rather than settle
+  it — but the sign of the bound is favourable, not unfavourable.
 - **The sequence-length problem, which is the serious one.** See §5.
 - **Essentially no external precedent** for token-autoregression on a global
   geophysical field.
@@ -201,8 +231,10 @@ what made it attractive:
 1. **Compress spatially first, then quantize the embedding.** But then the
    digits sit on learned coordinates, not on physical channels, and the
    per-channel-distribution argument — the strongest part of the idea —
-   evaporates. This is also the road already measured, with the two costs
-   quoted in §4.
+   evaporates. This is also the road already measured (§4): a reconstruction
+   tax of ~18 %, and — on the one clean pair — a one-step forecast that is
+   not worse, so the cost of this option is the lost argument, not a lost
+   number.
 2. **Decode in parallel with masking** (predict a subset of tokens, condition
    on them, predict more — the MaskGIT / discrete-diffusion pattern). This is
    iterative refinement in discrete clothing: it is axis C again, with axis C's
@@ -337,8 +369,9 @@ a physical value at a long lead. Our 54 channels are fewer and duller, but we
 must predict each one back in its own unit with an honest spread.
 
 **Quantization: post-hoc, for storage, not a modelling device.** Embeddings
-are 64 bytes; the 32-bit floats are quantized to 8 bits *"resulting in a 4x
-reduction in storage with negligible impact on performance."* That is a
+are 64-dimensional and are shipped as 64 bytes — the 32-bit floats are
+quantized to 8 bits after training, *"resulting in a 4x reduction in storage
+with negligible impact on performance."* That is a
 shipping decision taken after training, not a representation decision taken
 before it. Read against our fork: it is mild evidence that quantization is
 not needed as a modelling device — but only mild, because they never forecast,

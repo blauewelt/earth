@@ -674,7 +674,7 @@ ladder — and PAST the box's 24 h token by nothing, but the probe ladder tail
 sits near the edge: harvest by hand if the archive step is silent.
 
 <a id="e-064"></a>
-## E-064 · The 16-bit token as a forecasting substrate, under the clean pool — #528 (E-064a, token) DONE: min 0.564@3,200, 0.6685@20k · #529 (E-064b, twin) DIED at its first monitor (OOM) → #534, 2026-09-02 18:2xZ (Chris: "can you run FSQ and add those results?")
+## E-064 · The 16-bit token as a forecasting substrate, under the clean pool — #528 (E-064a, token) DONE: min 0.564@3,200, 0.6685@20k · #534 (E-064b, continuous twin) LANDED (harvested 09-05): min 0.617@1,200, 0.696@20k — the token is AHEAD on the pre-registered one-step read-out, n = 1 each; #529 DIED at its first monitor (OOM) (Chris: "can you run FSQ and add those results?")
 
 TL;DR — does a pixel-bin compressed to one 16-bit code (E-050's warm-started
 FSQ codec, d_z 6 through [8,8,8,5,5,5]) forecast as well as the continuous
@@ -774,6 +774,42 @@ as the fgn branch already was (row-wise forward ⇒ bit-identical result).
 RE-DISPATCHED as #534 (E-064b, identical inputs) on the restarted Norway box at 18:2xZ.** Cost of
 #529: 57 min of the $0.401/h box, ~$0.4, and the certificate lines above,
 which are its only measurement.
+
+**#534 (E-064b, the continuous d_z-32 twin) LANDED — training curve complete
+to step 20,000, probe ladder NEVER RAN; harvested 2026-09-05 during the E-075
+review, three days after it finished.** `run-534.jsonl` on `ml-metrics`
+carries all 100 monitor records (`val_persistence` 21.4462, relative noise
+0.1512 — the dose-matched twin of #528's 0.1507); the archive holds only
+`probe_sequence.json` and `provenance.json`, no `temporal.json` and no
+`stage2_result` record, so the trainer or the ladder died after the last
+monitor and before the result step (§7's green-with-no-`temporal.json`
+signature, on the eval tail rather than the training). **The one-step
+read-out E-064 pre-registered is therefore available; the probe read-out is
+not.**
+
+| arm | held-out one-step ratio, MIN (step) | at 20,000 | relative noise |
+|---|---|---|---|
+| **#528** E-064a · 16-bit token (run-485, d_z 6) | **0.5640** (3,200) | **0.6685** | 0.1507 |
+| **#534** E-064b · continuous d_z-32 (run-415) | **0.6170** (1,200) | **0.6956** | 0.1512 |
+| E-060a · the JAX twin of #534 (for trainer comparability) | 0.6095 (1,200) | 0.692 | — |
+
+Two readings, both by the pre-registered criteria. **(1) The trainers agree:**
+#534 is within 0.008 of E-060a at the minimum and 0.004 at 20 k, inside the
+0.02 comparability bar, so the torch and JAX stage-2 trainers are
+interchangeable at this tier and a torch checkpoint of the early minimum is a
+legitimate object for the reboot plan's roll. **(2) The token is a competitive
+substrate — and on this pair it is ahead**, by 0.053 at the minimum and 0.027
+at 20 k, against a criterion of "within 0.02". This is the OPPOSITE sign from
+the retired E-056a numbers (0.539 / 0.510 vs 0.506, endpoint pool), which are
+superseded. Cautions that must travel with it: n = 1 per arm, so a direction
+and not a level (§3b — a new tensor/codec tier buys its own pair); each ratio
+is against its own persistence in its own space, and beating persistence by
+more in a 6-dimensional quantized space is not identical to forecasting the
+world better; and the probe side (#534 has none) is where §3 says pentad
+numbers are least trusted anyway. What it licenses: the token road does NOT
+close at this lattice, and E-075's discrete-output proposal starts from a
+substrate that has not lost on the one clean comparison that exists.
+Cost of #534: ~2.5 h of the $0.321/h box, ~$0.8.
 
 <a id="e-062"></a>
 ## E-062 · The first honest roll, and the terminal holdout — R0 COMPLETE #516, 2026-08-31 ~07:5xZ · R0b (the 7.6M arm) COMPLETE #520, 2026-09-02 13:5xZ (after #518/#519 died on a full disk) — width null: mean acc 0.103 vs 0.105 · R0c (the 40.4M arm) COMPLETE #523, 2026-09-02 16:27Z — ladder flat: mean acc 0.103 / 0.104 / 0.105 across 27×
