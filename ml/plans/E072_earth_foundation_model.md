@@ -227,6 +227,71 @@ For the forecaster: the same NLL on the next embedding, with the fair-CRPS
 functional-generative head (E-052/E-057, FGN) as the probabilistic option
 once the deterministic level exists.
 
+**MSE or NLL — settled, with the fix that makes NLL safe (Chris, 5 Sep,
+"with another agent we're debating MSE vs NLL").** Train with the
+heteroscedastic Gaussian negative log-likelihood, report mean-squared error
+against the predict-the-mean bar. The reasons are specific to this data:
+(i) a location token carries ~65 channels whose predictability differs by
+orders of magnitude (SST persistence vs a wind-stress standard deviation vs
+a one-in-six Argo level), and plain MSE on standardised targets weights them
+all equally, so the loss is dominated by the unpredictable ones unless
+per-channel weights are hand-tuned — NLL learns the weighting as σ, per
+target; (ii) the forecaster is scored by CRPS and by amplitude-calibrated
+MSSS (E-062's −0.439 that was +0.019 calibrated), and a distributional head
+is the minimal thing that gives it a calibrated spread and a
+mean-that-shrinks-when-it-does-not-know; (iii) the read-outs need "the
+model does not know here" as a number, for land, hollow dots and held-out
+regimes. What the debate is right about: heteroscedastic NLL has a known
+pathology — the σ head can *explain away* a hard target instead of the μ
+head learning it, because the μ gradient is scaled by 1/σ², and early in
+training it is unstable. The fix is standard and cheap: **β-NLL** (Seitzer
+et al. 2022, arXiv 2203.09168 — multiply each target's NLL by
+stop-gradient(σ²)^β with β = 0.5, which restores an MSE-like gradient on μ
+while keeping the learned σ), a floor on σ (the existing log-variance clamp
+to [−8, 8] in `ml/cone_codec.py::nll_gauss`), and a **warm start at fixed
+σ = 1 for the first 1–2 k steps**, which is exactly MSE. MSE stays the
+*reporting* metric — `held_out_mse_*` against `msebar` per family is what
+says which family carries signal — plus a calibration check (coverage of
+the ±1σ and ±2σ bands on held-out targets, ~68 % and ~95 % if σ is honest).
+Two refinements the 65-channel token needs: the likelihood is
+**per channel group**, not one Gaussian for all — Gaussian on standardised
+anomalies for the continuous fields; Gaussian in log space for the
+log-normal ones (mixed-layer depth already is `log_mld`; chlorophyll,
+precipitation amount); a hurdle model (Bernoulli wet/dry × log-Gaussian
+amount) for zero-inflated precipitation; a logit-Gaussian or Beta for
+bounded fractions (sea ice, snow, cloud); a Student-t (learned ν) where
+tails are heavy (wind-stress σ channels). And a diagnostic that guards the
+pathology directly: the fraction of targets whose σ grew over training
+while their MSE did not fall — the "explained-away" fraction — logged per
+family beside the bar.
+
+**The autoencoder itself — what to build for "predict the individual
+channels at a point".** Keep the shape E-069 already has and change three
+things. (1) *Encoder*: a transformer over the ~300 per-location tokens.
+With the token count this small the Perceiver's latent bottleneck (64
+latents) is no longer needed for cost; keep it only if the fixed-size
+latent set is wanted as the interface to stage 2, otherwise a plain encoder
+with a learned attention-pool to z is simpler and loses nothing. Masked
+autoencoder discipline (He et al. 2021): the encoder sees only the
+*visible* tokens and channels; masked ones never enter it. (2) *The
+bottleneck*: E-069's z of 32 numbers was the compression constraint and its
+diagnostics showed capacity fights inside it (the anchor patch under-fit
+while the dots took the budget). Widen z to 128–256 for the foundation
+model and let the forecaster, not the codec, decide how much of it to use —
+the "attendability" argument is about the token count, not the width.
+(3) *Decoder*: query-based, as now — a query is (coordinates, channel id,
+sphere code, depth or height, time offset), it cross-attends to z alone for
+the headline loss (the closed [z + latents] degeneracy stays closed; the
+latents path stays an auxiliary at 0.25), and its head is the per-channel-
+group likelihood above. Because the query carries the channel id, "predict
+channel c at point p at lag ℓ" is one query, and the same decoder answers a
+station, a float profile and a grid cell. Ablation worth one run at L1: a
+latent-prediction objective (I-JEPA style — predict the *encoding* of the
+masked tokens, not their values) beside the reconstruction one, because a
+large share of this data's variance is irreducible at 0.25° × 5 d and
+reconstruction spends capacity modelling it; the read-out heads then need
+the decoder retrained, which is why it is an ablation and not the default.
+
 ### 4.3 · Optimiser and schedule
 
 AdamW, β₁ 0.9, β₂ 0.95, weight decay 0.1, gradient clip 1.0 on standardised
