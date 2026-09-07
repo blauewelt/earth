@@ -44,6 +44,66 @@ low-pass).
 
 ---
 
+<a id="e-076a"></a>
+## E-076a · Does a sparse channel carried as "the k nearest measurements, with distance" beat the same channel as a grid cell that is mostly empty? — DISPATCHED 2026-09-07 21:0xZ as #546 / #547 / #548
+
+TL;DR — the ablation that decides whether family 8 is built. Two arms of
+the same 7 M-parameter cone codec (the encoder that reads a 30-day cone of
+past measurements around a pixel, E-069's ConeMAE, recipe geometry of
+`f4r3-cone-7M-lag0drop`) are trained on the family-7 global tensor and differ
+in ONE thing: how the Argo ocean interior enters the cone. The **twin** reads
+it as today — the gridded monthly 1° column (`rg100`), live one pentad in six,
+a miss token otherwise. The **family-8 arm** never reads that grid; each
+anchor carries its five nearest real float profiles as dot tokens with their
+own offset east/north, age, depth, local density and footprint. Both are
+scored on the same held-out target: the nearest real profile's temperature
+and salinity at 16 levels, in °C and PSU.
+
+**Dispatch (three runs, one box each, fresh 250 GB RTX 4090 rentals; the
+family-7 tensor is pulled from the Hub with sha256 refusal).**
+- **#546** · E-076a control (the twin), seed 0 · `params` 7.05 M (64 latents × 256 × 6,
+  d_z 32) · `stage` encoder · `data` family7_global025_pentad_l0 + the
+  family-8 store attached with k = 0 (never read as input; needed only to
+  score the target) · `arch` inner cone lags 0–6, three groups · `steps×batch`
+  20,000 × 256 · `resume` none · recipe `f7l0-cone-7M-twin`.
+- **#548** · the same twin at seed 1 — the twin's own seed pair, owed because
+  this is the first cone codec on family 7 (a new tensor and a new read-out;
+  ml/CLAUDE.md §3b: the first result at a tier buys its own replication).
+- **#547** · E-076a family-8 arm, seed 0 · identical, recipe
+  `f7l0-cone-7M-f8argo`: `cone_argo_store family8_argo_l0`, k = 5 within
+  30 days and 1,000 km, the nearest profile withheld from the input with
+  probability 0.5 per training anchor and reconstructed as a dot query.
+
+**Read-out, pre-registered** (`profile_target` record, every 2,000 steps and
+at the end): over 2,048 fixed held-out anchors (ocean, n_R ≥ 2) the per-level
+RMSE of the decoder's answer at the nearest profile's own coordinates, in
+raw units, against two bars computed on the identical anchors — the
+**climatology** (predict zero anomaly) and **persistence** (copy the
+nearest OTHER profile). Reported split by held-out class: the terminal
+years 2021–2024 and the interspersed 2008–09 / 2016–17. The summary number
+is `skill` = mean over levels of RMSE / climatology-RMSE (1.0 = no better
+than climatology; lower is better).
+
+**Hypothesis and falsifier.** H: the family-8 arm's temperature skill on
+the terminal years is below the twin's by more than the twin's seed spread
+(|skill(#546) − skill(#548)|), and both arms beat persistence.
+FALSIFIED if #547's skill is not below the twin's by more than that spread —
+then distance-as-a-feature bought nothing at this size and budget, and
+family 8 stops at the store (which stands on its own as a data product).
+Also registered: if NEITHER arm beats climatology on the interior
+(skill ≥ 1.0), the read-out is uninformative at 7 M parameters and 20 k
+steps and the comparison is void, not a null. Secondary, no decision
+attached: the E-069 velocity probe and the held-out dot/anchor losses, for
+continuity with E-069's numbers.
+
+**Cost.** Three boxes at ≈ $0.33/h; per run a 53 GB pull (~10 min at the
+boxes' 850–920 Mbps), the anomaly transform's scratch copies, and ~1.7 h of
+training as measured on E-069's 4090s — ≈ $1 per run, ≈ $3–4 in all
+including the pulls. The boxes are destroyed after harvest; nothing on
+them is needed once `profile_target.json` and the metrics are archived.
+Two false starts before this dispatch cost nothing: a 56 Mbps box was
+destroyed before use (the pull alone would have taken two hours).
+
 <a id="e-076"></a>
 ## E-076 · Family 8, the Argo observation store — BUILT AND PUBLISHED 2026-09-07 19:27Z (`family8-build #3`): **2,678,439 profiles, every pentad 2004–2024 live, all four registered read-outs pass**
 
