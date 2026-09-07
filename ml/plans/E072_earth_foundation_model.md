@@ -102,7 +102,7 @@ programme's stated Chinchilla anchor, and it IS a ceiling (§1, last row).
 | rung of data | observed values | tokens (÷ 65) | ceiling, values / 20 | what it takes |
 |---|---|---|---|---|
 | North Atlantic ocean pentads, r3 — today | 2.5 B | 0.04 B | 0.12 B params | exists |
-| global ocean pentads, family 7 | 20 B | 0.31 B | 1.0 B | E-070 Phases B–F (pull done; the tensor is not built) |
+| global pentads, family 7 — **BUILT 2026-09-04, measured 13.8 B** (the 20 B estimate assumed ocean channels 1982→; GLORYS starts 1993 and the shared channels live at 1°) | 13.8 B | 0.21 B | 0.7 B | on the Hub: 7 ocean channels at 0.25°, 15 NCEP atmosphere/land channels at 1° (Phase L0 of row 3, with NCEP standing in for ERA5), the Argo column at 1° monthly |
 | + the shared 20 and land-only 5 channels of E-071 §6 | 91 B | 1.4 B | 4.5 B | ERA5 (needs the CDS account), MODIS, ASCAT, SMAP, GRACE, OSI SAF, CCI soil moisture: ~170 GB |
 | daily cadence, all spheres | 455 B | 7.0 B | 23 B | the daily global tensor is 1.3 TB (E-070 §8); the streaming loader E-033 Phase 3 deferred |
 | 1 km daily, all spheres (rung 3 radiometers) | 350,000 B | 5,400 B | 17,000 B | not a tensor: a patch-encoder feed (§2.1); compute-bound for the first time |
