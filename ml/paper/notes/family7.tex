@@ -113,7 +113,26 @@ reanalysis: sea-surface temperature from OISST v2.1 \cite{oisst}, bilinearly
 interpolated to the point grid and averaged over the pentad, present from
 1982; and sea-ice concentration from the same product's \code{icec} field.
 The sea-surface temperature channel is deliberately \emph{not} filled over
-land or ice from any model (\S6).
+land or ice from any model (\S6). Table~\ref{tab:g025} lists the group.
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}rl>{\raggedright\arraybackslash}p{1.6cm}>{\raggedright\arraybackslash}p{2.6cm}>{\raggedright\arraybackslash}p{5.0cm}rr@{}}
+\toprule
+\# & channel & unit & source & processing rule & $\mu$ & $\sigma$ \\
+\midrule
+0 & \code{cur\_speed} & m\,s$^{-1}$ & GLORYS12 \code{uo},\code{vo} & pentad mean of daily $\sqrt{u^2+v^2}$; $\geq3$ days & 0.1580 & 0.1594 \\
+1 & \code{log\_mld} & $\log_{10}$\,m & GLORYS12 \code{mlotst} & $\log_{10}$ of mixed-layer depth where $>0$ & 1.4785 & 0.3587 \\
+2 & \code{ssh} & m & GLORYS12 \code{zos} & pentad mean of sea-surface height above geoid & $-$0.1668 & 0.7129 \\
+3 & \code{cur\_u} & m\,s$^{-1}$ & GLORYS12 \code{uo} & pentad mean, eastward; same pass as speed & $-$0.0007 & 0.1793 \\
+4 & \code{cur\_v} & m\,s$^{-1}$ & GLORYS12 \code{vo} & pentad mean, northward & 0.0059 & 0.1349 \\
+5 & \code{sst} & $^\circ$C & OISST v2.1 \code{sst} & bilinear to point grid, pentad mean, $\geq3$ days; observed, never filled & 13.6150 & 11.6230 \\
+6 & \code{sea\_ice} & fraction & OISST v2.1 \code{icec} & bilinear, pentad mean; valid range 0--1 trusted over the file's ``percent'' & 0.8271 & 0.2392 \\
+\bottomrule
+\end{tabular}
+\caption{Group \code{g025}: seven ocean-surface channels at $0.25^\circ$, shape $[3142,721,1440,7]$. $\mu$ and $\sigma$ are the standardisation constants, in the channel's unit, computed over every finite value in every bin. GLORYS channels are absent south of $80^\circ$\,S and before 1993; sea ice is present only where concentration $\geq0.15$.}
+\label{tab:g025}
+\end{table}
 
 \subsection{Atmosphere and land, \code{g100}}
 
@@ -127,7 +146,35 @@ each stored as $\log(1+x)$; volumetric soil moisture and soil temperature in
 the top 10\,cm, masked to land \emph{before} regridding so the coastal
 interpolation renormalises correctly; latent and sensible heat flux with the
 reanalysis sign convention (positive upward); and skin temperature, defined
-over every surface.
+over every surface. Table~\ref{tab:g100} lists the group.
+
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}rl>{\raggedright\arraybackslash}p{2.2cm}>{\raggedright\arraybackslash}p{2.4cm}>{\raggedright\arraybackslash}p{5.0cm}rr@{}}
+\toprule
+\# & channel & unit & NCEP R1 file & processing rule & $\mu$ & $\sigma$ \\
+\midrule
+0 & \code{tau\_x} & N\,m$^{-2}$ & \code{uflx.sfc} & sign-flipped: stress on the surface, eastward & 0.0103 & 0.1246 \\
+1 & \code{tau\_y} & N\,m$^{-2}$ & \code{vflx.sfc} & sign-flipped, northward & 0.0042 & 0.0951 \\
+2 & \code{tau\_x\_std} & N\,m$^{-2}$ & \code{uflx.sfc} & within-pentad population $\sigma$ of daily $\tau_x$ & 0.0825 & 0.0724 \\
+3 & \code{tau\_y\_std} & N\,m$^{-2}$ & \code{vflx.sfc} & same, northward & 0.0808 & 0.0721 \\
+4 & \code{t2m} & $^\circ$C & \code{air.2m} & K $\to$ $^\circ$C & 4.8070 & 21.9986 \\
+5 & \code{u10} & m\,s$^{-1}$ & \code{uwnd.10m} & eastward wind at 10\,m & 0.0027 & 4.3680 \\
+6 & \code{v10} & m\,s$^{-1}$ & \code{vwnd.10m} & northward wind at 10\,m & 0.1557 & 3.1669 \\
+7 & \code{sp} & hPa & \code{pres.sfc} & Pa $\to$ hPa & 965.0467 & 94.7640 \\
+8 & \code{log\_prate} & $\log(1{+}x)$, mm\,d$^{-1}$ & \code{prate.sfc} & kg\,m$^{-2}$\,s$^{-1}\times86400$, then $\log(1+x)$ & 0.8662 & 0.7683 \\
+9 & \code{log\_swe} & $\log(1{+}x)$, mm & \code{weasd.sfc} & snow water equivalent, $\log(1+x)$ & 2.0701 & 3.5659 \\
+10 & \code{soilw} & fraction & \code{soilw.0-10cm} & volumetric; land-masked before regridding & 0.3040 & 0.0827 \\
+11 & \code{tsoil} & $^\circ$C & \code{tmp.0-10cm} & K $\to$ $^\circ$C; land-masked before regridding & $-$9.6838 & 33.6608 \\
+12 & \code{lhtfl} & W\,m$^{-2}$ & \code{lhtfl.sfc} & latent heat flux, positive upward & 62.3015 & 62.6118 \\
+13 & \code{shtfl} & W\,m$^{-2}$ & \code{shtfl.sfc} & sensible heat flux, positive upward & 5.7186 & 40.1517 \\
+14 & \code{skt} & $^\circ$C & \code{skt.sfc} & K $\to$ $^\circ$C; every surface, no mask, no splice & 5.0877 & 22.7194 \\
+\bottomrule
+\end{tabular}
+\caption{Group \code{g100}: fifteen atmosphere-and-land channels at $1^\circ$, shape $[3142,181,360,15]$, all from NCEP/NCAR Reanalysis~1 daily Gaussian-grid files (T62), bilinearly interpolated to the $1^\circ$ point grid and averaged over the pentad with at least three days present, from 1982. Soil channels are absent over sea; every other channel is defined over every surface. The large $\sigma$ of \code{tsoil} and the low $\mu$ reflect that the $1^\circ$ land mask includes Antarctica and Greenland.}
+\label{tab:g100}
+\end{table}
 
 \subsection{Ocean interior, \code{rg100}}
 
@@ -135,7 +182,37 @@ Thirty-two channels are the Roemmich--Gilson Argo product \cite{rg}:
 temperature and salinity at sixteen pressure levels from 10 to 1900\,dbar,
 bilinearly interpolated from the product's $1^\circ$ cell-centred grid and
 set to missing outside its latitude band (about $64.5^\circ$\,S to
-$79.5^\circ$\,N) rather than extrapolated toward the poles.
+$79.5^\circ$\,N) rather than extrapolated toward the poles. Table~\ref{tab:rg100}
+lists the levels.
+
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{5pt}\footnotesize
+\begin{tabular}{@{}rrrrrr@{}}
+\toprule
+level (dbar) & \code{rg\_t} $\mu$ ($^\circ$C) & $\sigma$ & \code{rg\_s} $\mu$ (PSU) & $\sigma$ & channel \# (t, s) \\
+\midrule
+10 & 17.867 & 9.804 & 34.818 & 1.058 & 0, 16 \\
+30 & 17.519 & 9.679 & 34.864 & 1.032 & 1, 17 \\
+50 & 16.797 & 9.408 & 34.919 & 1.014 & 2, 18 \\
+100 & 14.731 & 8.363 & 35.004 & 0.961 & 3, 19 \\
+150 & 13.032 & 7.113 & 35.013 & 0.867 & 4, 20 \\
+200 & 11.704 & 6.022 & 34.962 & 0.777 & 5, 21 \\
+300 & 9.825 & 4.693 & 34.838 & 0.661 & 6, 22 \\
+400 & 8.436 & 3.884 & 34.739 & 0.595 & 7, 23 \\
+500 & 7.340 & 3.339 & 34.668 & 0.551 & 8, 24 \\
+700 & 5.792 & 2.609 & 34.604 & 0.488 & 9, 25 \\
+900 & 4.704 & 2.082 & 34.603 & 0.452 & 10, 26 \\
+1100 & 4.011 & 1.694 & 34.628 & 0.433 & 11, 27 \\
+1300 & 3.408 & 1.235 & 34.639 & 0.219 & 12, 28 \\
+1500 & 3.005 & 1.030 & 34.672 & 0.179 & 13, 29 \\
+1700 & 2.689 & 0.888 & 34.697 & 0.149 & 14, 30 \\
+1900 & 2.445 & 0.806 & 34.714 & 0.130 & 15, 31 \\
+\bottomrule
+\end{tabular}
+\caption{Group \code{rg100}: the Roemmich--Gilson Argo product, temperature (\code{rg\_t}, channels 0--15) and salinity (\code{rg\_s}, channels 16--31) at sixteen pressure levels, shape $[252,181,360,32]$. One row per month from 2004-01 to 2024-12, each assigned to the pentad containing that month's 15th; bilinear from the product's $1^\circ$ cell-centred grid to the $1^\circ$ point grid; absent outside roughly $64.5^\circ$\,S--$79.5^\circ$\,N rather than extrapolated. Salinity $\sigma$ falls from 1.06 at 10\,dbar to 0.13 at 1900\,dbar, the widest scale range of any channel group.}
+\label{tab:rg100}
+\end{table}
 
 \subsection{Normalisation}
 
