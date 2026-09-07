@@ -225,7 +225,7 @@ answers whether the model uses them.
 | piece | form | size | state |
 |---|---|---|---|
 | the dense groups `g025`, `g100` | unchanged from family 7 | 51.8 GB | **exists** |
-| the observation store | one table per sparse channel family: `(bin, lat, lon, depth_level, value, source_id)`, float16 values, sorted by bin, with a per-bin offset index | Argo 2004–2024 at 16 levels × T/S: ≈ 2.5 M profiles × 32 values ≈ **0.2 GB** | not built |
+| the observation store | one table per sparse channel family: `(bin, lat, lon, depth_level, value, source_id)`, float16 values, sorted by bin, with a per-bin offset index | Argo 2004–2024 at 16 levels × T/S: 2,678,439 profiles × 32 values = **234 MB** on the Hub (`tensors/family8_argo_l0/`) | **built 2026-09-07** (§3.1) |
 | the neighbour index | per anchor set and per sparse channel: `k` observation ids + the four offset features, precomputed once with a per-bin KD-tree over `(x, y)` on the sphere and a bin range for `T_max` | for 2,048 anchors × 3,142 bins × k = 5 × 5 features × float16 ≈ 0.3 GB; for every cell, computed lazily inside the sampler instead | not built |
 | `rg100` | **retired** in family 8 — the gridded, mapped monthly product is replaced by the raw profiles it was mapped from | −1.05 GB | — |
 
@@ -242,7 +242,7 @@ sixteen Roemmich–Gilson pressure levels from 2004 onward is a one-off pull;
 the index alone answers the density arithmetic of §2.3 exactly rather than by
 the Poisson estimate, and is the first thing to fetch.
 
-### 3.1 · Build status (2026-09-07) — the store builder exists; the index has been measured
+### 3.1 · Build status (2026-09-07) — **the store is built and on the Hub** (`family8-build #3`: 2,678,439 profiles, all 1,535 pentads 2004–2024 live, minimum 395 per pentad; result in [EXPERIMENTS.md#e-076](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-076)); the index has been measured
 
 `ml/build_family8_argo.py` (stages `index | profiles | publish`, resumable per
 year, streaming so the box never holds more than eight daily files),
@@ -324,9 +324,45 @@ identical to the continuous twin. `params` ConeMAE 7.05 M · `stage` encoder ·
   ≈ 1.7 h on an RTX 4090 at ≈ $0.33/h.
 
 What it needs first, in order: the Argo index and profile extraction
-(§3); the sparse gather path in `ml/cone_sampler.py` with a test that pins
-the dense path's digest unchanged; the k-nearest index builder with a test on
-a synthetic float field where the true nearest neighbours are known.
+(§3 — **done, §3.1**); the sparse gather path in `ml/cone_sampler.py` with a
+test that pins the dense path's digest unchanged; the k-nearest search
+(`ml/family8_store.py::knearest`, done) wired into that path.
+
+### 5.1 · The common target (amendment 2026-09-07) — what "hidden interior channels" means once `rg100` is gone
+
+The falsifier above was written while family 8 still had a gridded interior
+to hide. With `rg100` retired the two arms no longer share a target unless
+one is chosen for them, so the comparison is fixed here, before anything
+trains:
+
+**Target: the nearest real profile.** For every anchor in the held-out
+years, the target is the T/S vector (16 + 16 levels, raw units, NaN where
+the profile has no level) of the profile nearest to the anchor in the
+space–time metric within `(R_max, T_max)`, one-sided in time — the first row
+`knearest` returns. Anchors with no profile in range are skipped in BOTH
+arms. This is a measurement, not a mapped product, and it is the same
+measurement for both arms.
+
+**What each arm sees.** The family-7 twin keeps its `rg100` context (the
+gridded column at the anchor and in the sunflower, live one pentad in six)
+and predicts the target from it. The family-8 arm sees the k − 1 REMAINING
+profiles as tokens (the target profile is withheld from its own input — a
+masked-token reconstruction, exactly the codec's existing objective applied
+to one more token family) plus the identical dense cone, and predicts the
+same target. Both arms read out through the same head shape (32 outputs from
+the anchor token) and are scored by per-level RMSE in °C and PSU on the
+filled levels, plus the predict-the-mean bar.
+
+**Why this is fair to both.** The gridded twin is not handicapped: the
+Roemmich–Gilson field IS an optimal interpolation of those same profiles, so
+if a mapped interior is all the model needs, the twin wins or ties. The
+family-8 arm is not handed the answer: the target profile is never in its
+input, and the nearest remaining profile is typically 100–150 km away (§3.1).
+The falsifier therefore reads: **family 8 is built if its per-level RMSE on
+the nearest-profile target beats the twin's at the same seed by more than
+the twin's own seed spread** (measured first — two seeds of the twin, the
+cheapest pair in the programme); otherwise distance-as-a-feature bought
+nothing at this size and the plan stops at the store.
 
 ---
 

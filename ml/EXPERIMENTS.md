@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-076"></a>
-## E-076 · Family 8, the Argo observation store — BUILD DISPATCHED 2026-09-07 17:10Z as `family8-build #1`
+## E-076 · Family 8, the Argo observation store — BUILT AND PUBLISHED 2026-09-07 19:27Z (`family8-build #3`): **2,678,439 profiles, every pentad 2004–2024 live, all four registered read-outs pass**
 
 TL;DR — family 8 is the input representation in which a sparse channel is
 never empty, only far away: instead of the gridded Argo column (`rg100`, a
@@ -88,6 +88,41 @@ box at $0.33/h ≈ $1–2. The index stage ran in the sandbox first ($0): its
 measurement of the observing system — mean nearest neighbour 194.6 km in a
 pentad, 33.9 km in 30 days, fifth neighbour at 150 km — is in E-076 §3.1 and
 supersedes the plan's Poisson estimate.
+
+**RESULT (`family8-build #3`, 18:11–19:27Z, main `30aafcc`).** The store is on
+the Hub at `tensors/family8_argo_l0/` (13 files, 234 MB, every file
+downloaded back and sha256-matched inside the job) — the E-076 §3 estimate of
+0.2 GB was right. **2,678,439 profiles kept** of 3,000,564 in the daily files
+(89.3 %; the plan's 3.37 M index also counts 1997–2003 and position-less
+profiles). Drops: 145,455 on time-stamp quality, 60,993 on position quality,
+115,677 with fewer than two good levels in both temperature and salinity; zero
+duplicates across basin boundaries; **0 of 23,013 day-files missing**.
+**Every one of the 1,535 pentads from 2004-01-01 is live**: minimum 395
+profiles in a pentad (bin 1624, spring 2004), median 2,020, maximum 2,642;
+the post-2007 minimum is 446 — above the registered 300. Kept profiles per
+year rise from 36,128 (2004) to a 160–167 k plateau from 2015. Temperature is
+filled at all 16 levels for 1,402,053 profiles (52 %) and salinity for
+1,280,247 (48 %); 105,774 profiles carry no usable temperature level and
+308,519 no usable salinity level (kept because the other variable is good —
+the policy scores them independently). Against the falsifiers registered at
+dispatch: kept fraction 89 % (bar 50 %) ✓ · no empty post-2007 pentad ✓ ·
+restore-verified publish ✓ · per-year counts agree with the day-files'
+own profile counts to the drop rate ✓.
+
+**Cost.** 185.8 GB streamed at 44 MB/s (12 concurrent downloads from the S3
+mirror), 70 minutes for the pull, ~6 for assembly and publish; ≈ $0.7 of box
+time including the cancelled #2. Two dispatches were spent learning the
+throughput lesson: #1 was queued against 49102182, whose host stayed
+`resources_unavailable` for 30 minutes (a fresh German box was rented and
+destroyed afterwards — the store needs no local tensor); #2 ran 25 minutes at
+~2 MB/s because the pipeline blocked on the head download before handing
+finished ones to the parser, fixed in `30aafcc` together with a live
+`ml-live-f8-<run>` progress branch so the next long build is not blind.
+
+**What it licenses.** E-076a can now be built: the sparse gather in
+`ml/cone_sampler.py` reading `ml/family8_store.py::knearest`, and the common
+nearest-profile target of E-076 §5.1. It does not license any claim about
+whether the model can use distance — that is what E-076a measures.
 
 **Fleet, same day.** 18 parked Vast boxes destroyed after a backup check
 (every artefact they held is on a release, the Hub or `ml-metrics`; the one
