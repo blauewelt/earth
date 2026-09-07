@@ -1,0 +1,233 @@
+# E-076: build FAMILY 8's ARGO OBSERVATION STORE -- the raw float profiles the
+# k-nearest cone reads instead of a gridded, mostly-empty depth column.
+#
+# WHAT IT BUILDS. `ml/build_family8_argo.py` streams the Argo GDAC daily geo
+# files into ONE small table, recipe `f8argo_l0`, stem `family8_argo_l0`:
+# roughly 2.5 M quality-controlled temperature and salinity profiles,
+# interpolated onto the same sixteen Roemmich-Gilson pressure levels families 3
+# and 7 use, each carrying its own position, its own instant and its own
+# five-day bin, sorted by (bin, time) with a CSR per-bin index -- about 0.2 GB
+# in total. Nothing in `ml/build_family7.py`, `ml/cone_sampler.py` or the
+# family-7 tensor is touched: family 8 is family 7's dense groups, unchanged
+# and already on the Hub, PLUS this store. The whole specification is
+# ml/plans/E076_family8_nearest_observations.md, rendered for a phone at
+# https://blauewelt.github.io/earth/docs.html?f=ml/plans/E076_family8_nearest_observations.md
+#
+# WHY IT EXISTS. Family 7 asks each cone dot "is there a value at this cell and
+# this bin", and for the Argo interior the answer is "no" at 92 % of bins --
+# the group is 80 % of the tensor's bytes and most of it is the ABSENCE of a
+# measurement. Family 8 asks "what are the k nearest measurements, and how far
+# away are they", so the channel is never empty and the measurement is just far
+# away. That question needs raw profiles, which is what this job extracts.
+#
+# WHY A BOX AND NOT A HOSTED RUNNER. The sources are ~23 MB/day across the
+# three basins (measured 2015-01-03: Atlantic 6.3 MB / 106 profiles, Pacific
+# 12.6 MB, Indian 4.1 MB), i.e. 180-250 GB over 2004-2024 -- far past a hosted
+# runner's ~14 GB of disk and its six-hour limit, even though the RESULT is
+# 0.2 GB. The builder streams: at most 8 daily files exist on disk at any
+# moment, a bounded download-ahead feeds a process pool that parses the netCDF,
+# and each file is deleted as soon as its profiles are extracted. The default
+# box `gpu-box-31299601` is the 300 GB Ontario machine; its `/opt/earth-cache`
+# is persistent across jobs, which is what makes the resume below real.
+#
+# RESUMABILITY IS THE CONTRACT. Every year flushes its extract to
+# `<work>/profiles/<year>.npz` and THEN writes `<work>/profiles/<year>.done`
+# (ml/CLAUDE.md 5.21: a marker may only under-claim), and each stage writes its
+# own marker after the data it describes. So a job that hits the timeout, loses
+# its box or is cancelled is resumed by re-dispatching this workflow WITH THE
+# SAME `work` VALUE: finished stages are skipped and the interrupted stage
+# restarts at the YEAR it lost, not at 2004. That is the only thing `work` is
+# for -- pointing it somewhere new starts a fresh build.
+#
+# A MISSING DAY IS NOT A FAILURE. A 404 from every mirror is a legitimately
+# empty day; it is counted into progress.json and store.json and the build
+# continues. Any OTHER HTTP error retries three times and then fails the year,
+# loudly (ml/CLAUDE.md 4.6 -- a step that can fail silently will).
+#
+# WHY THE LAST STEP EXISTS. A dead job must still tell its story (ml/CLAUDE.md
+# 5.25/5.26): the final step runs `if: always()` and uploads `progress.json`,
+# `index_stats.json`, `store.json`, every `.done` marker and the last 200 lines
+# of the build log as an Actions artifact, so a timeout at hour 23 is
+# diagnosable without the box.
+#
+# SECURITY. `workflow_dispatch` ONLY. ml/CLAUDE.md 6: self-hosted runners on a
+# public repo are safe here for exactly one reason -- dispatch requires repo
+# write access. NEVER add `pull_request`, `issue_comment`, `workflow_run` or
+# `schedule` to this file; any of them would hand code execution on a rented
+# box, plus the job token, to anyone who opens a PR. HF_TOKEN reaches the
+# builder as an ENV VAR and never as a command-line argument (argv is world
+# readable on the box, and the box's host has root).
+name: Family 8 build (Argo observation store)
+run-name: family8 ${{ github.event.inputs.stage || 'all' }} -> ${{ github.event.inputs.work || 'ml/cache/family8' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "runner label. A Vast box's runner NAME is an implicit label; the default is the 300 GB Ontario box, whose /opt/earth-cache persists across jobs and makes the per-year resume real"
+        default: "gpu-box-31299601"
+      stage:
+        description: "all | index | profiles | publish. Order is fixed (profiles needs the index's cross-check; publish needs the store) -- a single stage is for resuming or re-running one, never for building out of order"
+        default: "all"
+      work:
+        description: "the build directory. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages and finished years are skipped by their .done markers. A different path is a different build"
+        default: "ml/cache/family8"
+      extra_args:
+        description: "extra flags for ml/build_family8_argo.py, e.g. --start 2004-01-01, --jobs 4, --source-dir <dir> or --smoke. Word-split deliberately; leave empty for a real build"
+        default: ""
+
+permissions:
+  contents: read          # the store is published to Hugging Face, not here
+
+concurrency:
+  # ONE BUILD AT A TIME, and never cancelled in flight. Two concurrent builds
+  # would write the same per-year extracts, the same store and the same .done
+  # markers from two boxes and produce a store neither of them describes. And
+  # cancel-in-progress stays false: a running build holds hours of streamed
+  # sources whose only durable record is its own markers.
+  group: family8-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ${{ github.event.inputs.runner }}
+    timeout-minutes: 1440         # 24 h; a full 2004-2024 pull is download-bound
+    steps:
+      - uses: actions/checkout@v4
+
+      # The persistent cache, in ml-train.yml's and family7-build.yml's exact
+      # form. /opt/earth-cache survives a job and a stop/start, which is what
+      # makes `work` under ml/cache/ a resumable location rather than scratch
+      # that dies with the runner's workspace cleanup.
+      - name: Persistent data cache (self-hosted box)
+        run: |
+          mkdir -p /opt/earth-cache
+          rm -rf ml/cache
+          ln -s /opt/earth-cache ml/cache
+
+      # Check the preconditions while the inputs are all they have cost
+      # (ml/CLAUDE.md 0.3). Both are DEFINITE answers and may therefore be
+      # fatal (5.17): a build without a token cannot publish what it spends
+      # hours computing, and a build without disk cannot compute it. Over 90 %
+      # used is unusable, not a warning (7) -- a full box computes fine and
+      # reports nothing, because every metrics write, every log append and
+      # every progress.json rewrite fails behind its own best-effort guard.
+      - name: Preflight
+        id: preflight
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family8' }}
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::HF_TOKEN secret is not set. The build publishes the"
+            echo "store to the Hub and verifies the restore; without it the job"
+            echo "would spend hours and have nowhere to put the result. Set it"
+            echo "at Settings -> Secrets and variables -> Actions; the value is"
+            echo "in the claude.ai project doc claude/huggingface-access.md."
+            exit 1
+          fi
+          mkdir -p "${WORK}"
+          echo "cache mount, as the build will see it:"
+          df -h ml/cache
+          line=$(df -P ml/cache | tail -1)
+          use=$(printf '%s\n' "${line}" | awk '{print $5}' | tr -d '%')
+          free_gb=$(printf '%s\n' "${line}" | awk '{print int($4 / 1048576)}')
+          echo "usage ${use}% · ${free_gb} GB free on $(printf '%s\n' "${line}" | awk '{print $6}')"
+          if [ "${use}" -ge 90 ]; then
+            echo "::error::cache mount is ${use}% full (>= 90 %). Over 90 % is"
+            echo "unusable, not a warning (ml/CLAUDE.md 7): the box computes and"
+            echo "silently reports nothing. Free space (scripts/disk_hygiene.sh,"
+            echo "or drop an old build directory) and re-dispatch with the same"
+            echo "work value -- the finished years will be skipped."
+            exit 1
+          fi
+          # 10 GB: the RESULT is ~0.2 GB and the per-year extracts another
+          # ~0.2 GB, but the index is a 58 MB gz that parses to ~150 MB, the
+          # streaming pipeline holds up to 8 daily files (~200 MB) and the
+          # publish verify downloads every file back. The builder's own
+          # disk_guard asks for the same headroom before it streams anything;
+          # this is the free version of that check (ml/CLAUDE.md 0.3).
+          if [ "${free_gb}" -lt 10 ]; then
+            echo "::error::only ${free_gb} GB free on the cache mount; this"
+            echo "build needs ~1 GB of artefacts plus 2 GB of headroom plus"
+            echo "the streamed daily files. Free space, then re-dispatch with"
+            echo "the same work value to resume."
+            exit 1
+          fi
+          echo "preflight ok: token present, ${free_gb} GB free, ${use}% used"
+
+      # The builder is stdlib + these three. netCDF4 reads the daily profile
+      # files, numpy is the store, huggingface_hub publishes it and verifies
+      # the restore. No xarray and no shapely: family 8 reads no gridded
+      # product and rasterises no polygon. If the builder grows a dependency it
+      # is added HERE in the same commit -- a box has no requirements file, and
+      # an ImportError four hours into a download-bound job is the expensive
+      # way to learn about one.
+      - name: Install
+        run: pip install --quiet numpy netCDF4 huggingface_hub
+
+      # HF_TOKEN in env, never on the command line: argv is readable by every
+      # process on the box and the box's host has root (ml/CLAUDE.md 6).
+      # $EXTRA is deliberately unquoted -- it carries whole flags and has to
+      # word-split. pipefail because the log is teed: without it `tee`'s exit
+      # code (always 0) would become the step's, and a failed build would
+      # report success (ml/CLAUDE.md 0.2, and the `| tail` incident in the root
+      # CLAUDE.md 1).
+      - name: Build
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family8' }}
+          STAGE: ${{ github.event.inputs.stage || 'all' }}
+          EXTRA: ${{ github.event.inputs.extra_args }}
+        run: |
+          set -o pipefail
+          mkdir -p "${WORK}"
+          python3 -u ml/build_family8_argo.py \
+              --work "${WORK}" --stage "${STAGE}" ${EXTRA} \
+              2>&1 | tee "${WORK}/build.log"
+
+      # A dead job still tells its story. Everything here is small; the store's
+      # .npy columns are not collected and never should be -- they go to the
+      # Hub, verified by restore, and an Actions artifact expires.
+      - name: Collect progress and the log tail
+        if: always() && steps.preflight.outcome == 'success'
+        env:
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family8' }}
+        run: |
+          out="${RUNNER_TEMP}/family8-story"
+          rm -rf "${out}"; mkdir -p "${out}"
+          [ -f "${WORK}/progress.json" ] && cp "${WORK}/progress.json" "${out}/" \
+            || echo "::warning::no ${WORK}/progress.json -- the build did not reach its first phase boundary"
+          [ -f "${WORK}/index_stats.json" ] && cp "${WORK}/index_stats.json" "${out}/" \
+            || echo "::warning::no ${WORK}/index_stats.json -- the index stage did not finish"
+          [ -f "${WORK}/family8_argo_l0/store.json" ] && cp "${WORK}/family8_argo_l0/store.json" "${out}/" \
+            || echo "::warning::no store.json -- the profiles stage did not assemble the store"
+          [ -f "${WORK}/manifest.json" ] && cp "${WORK}/manifest.json" "${out}/" \
+            || echo "no manifest.json (the publish stage has not run)"
+          n=0
+          for f in "${WORK}"/*.done "${WORK}"/profiles/*.done; do
+            [ -e "${f}" ] || continue
+            cp "${f}" "${out}/$(basename "$(dirname "${f}")")_$(basename "${f}")"
+            n=$((n + 1))
+          done
+          echo "${n} marker(s) collected"
+          if [ -f "${WORK}/build.log" ]; then
+            tail -n 200 "${WORK}/build.log" > "${out}/build.log.tail"
+            echo "--- last 200 lines of the build log ---"
+            cat "${out}/build.log.tail"
+          else
+            echo "::warning::no ${WORK}/build.log"
+          fi
+          ls -la "${WORK}" || true
+          ls -la "${WORK}/family8_argo_l0" || true
+          echo "--- disk after the build ---"
+          df -h ml/cache
+
+      - name: Upload the story
+        if: always() && steps.preflight.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: family8-progress-${{ github.run_number }}
+          path: ${{ runner.temp }}/family8-story
+          if-no-files-found: warn
+          retention-days: 30
