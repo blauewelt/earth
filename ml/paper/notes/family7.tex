@@ -1,0 +1,345 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=2.6cm]{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\definecolor{ink2}{HTML}{6F6E66}
+\setlength{\parskip}{2pt}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{Family 7: a global, three-resolution input tensor\\
+\large for a forward model of the Earth's surface state}
+\author{blauewelt/earth --- design note}
+\date{7 September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Family 7 is the first input tensor in this programme to cover the whole
+planet. It records the ocean, atmosphere, land and ice surface on a
+$0.25^\circ$ latitude--longitude grid from pole to pole, in fixed five-day
+bins from 1982 to the end of 2024, in 54 channels drawn from six public
+sources. Its distinguishing design choice is that channels are stored at
+their native resolution in three separate groups rather than in one dense
+array, and are read at a common $0.25^\circ$ position by a nearest-cell
+lookup: a $1.9^\circ$ reanalysis field stored at $0.25^\circ$ would be sixty
+copies of every number. The tensor holds $1.38\times10^{10}$ observed values
+against the $2.5\times10^{9}$ of its North Atlantic predecessor, occupies
+52.9\,GB, and is published with a per-file hash. On the sub-block it shares
+with that predecessor the two agree to float16 precision on 99.2--99.5\% of
+cells. We state the grid, the channels and their processing rules, the
+missing-value semantics, the validation, and the decisions that shaped it,
+so that a reader can load and interpret the files without further
+documentation.
+\end{abstract}
+
+\section{Purpose}
+
+The programme builds a forward model of the Earth's surface state: encode
+what is observed at each grid cell into a compact vector, predict that vector
+forward in time, and read out quantities of interest --- Atlantic
+overturning transport, the El Ni\~no index, sea ice --- from the predicted
+state. Its earlier tensors (families 3--5) covered a North Atlantic window,
+$0$--$70^\circ$\,N and $100^\circ$\,W--$20^\circ$\,E, at monthly, five-day
+and daily cadence. Two arguments drove the move to a global tensor. First,
+the model size is set by the data rather than by compute at this scale: on
+the North Atlantic the rolled forecast skill was flat from 7.6\,M to
+206.66\,M parameters, and the remedy is more independent samples, which new
+regimes supply and a longer record cannot. Second, a window edge is a
+boundary the model must learn as if it were physics; on a sphere there is
+none.
+
+\section{Grid and time axis}
+
+The horizontal grid is point-aligned at $0.25^\circ$: latitudes
+$-90 + 0.25\,i$ for $i = 0,\dots,720$ (south first, 721 rows) and longitudes
+$-180 + 0.25\,j$ for $j = 0,\dots,1439$ (1,440 columns), giving 1,038,240
+cells. Longitude wraps: column 1439 ($179.75^\circ$\,E) is adjacent to column
+0. A coarse $1^\circ$ grid of $181\times360$ points is defined the same way.
+Every fourth $0.25^\circ$ point is a $1^\circ$ point, and a coarse channel is
+read at a fine position $(y,x)$ by
+\begin{equation}
+y_1 = \min\!\big(\lfloor y/4 + \tfrac12\rfloor,\,180\big),\qquad
+x_1 = \lfloor x/4 + \tfrac12\rfloor \bmod 360 ,
+\end{equation}
+so the two fine points on either side of a coarse point round to it and the
+last two columns wrap to $-180^\circ$.
+
+Time is a fixed five-day bin, a \emph{pentad}, counted from the epoch
+1982-01-01: bin $b$ covers days $[5b,\,5b+5)$ after the epoch. There are
+3,142 bins, the last opening on 2024-12-31. Bins are calendar-free --- they
+do not align with months or years, and a year holds 73 of them --- which is
+deliberate: a bin is an averaging window, not a date, and a model should not
+be handed a calendar it can memorise.
+
+\section{Channels}
+
+Channels are stored in three groups, each an array of shape
+$[T, H, W, C]$ in little-endian float16, C order, with a 128-byte NumPy
+header. One time step of one group is therefore a contiguous byte range and
+can be fetched on its own; the programme's web front end paints a global
+frame from a single HTTP range read of 14.5\,MB.
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{@{}llrrl@{}}
+\toprule
+group & grid & shape & size & content \\
+\midrule
+\code{g025} & $0.25^\circ$ & $[3142, 721, 1440, 7]$ & 45.67\,GB & ocean surface \\
+\code{g100} & $1^\circ$ & $[3142, 181, 360, 15]$ & 6.14\,GB & atmosphere and land, every surface \\
+\code{rg100} & $1^\circ$, monthly & $[252, 181, 360, 32]$ & 1.05\,GB & ocean interior, Argo \\
+\bottomrule
+\end{tabular}
+\caption{The three channel groups. \code{rg100} has one row per month
+(2004-01 to 2024-12); each is assigned to the pentad containing that month's
+15th, and the list of live bins ships with the tensor.}
+\end{table}
+
+\subsection{Ocean surface, \code{g025}}
+
+Five channels come from the GLORYS12 ocean reanalysis \cite{glorys}: current
+speed, eastward and northward current, sea-surface height and the
+$\log_{10}$ of mixed-layer depth, each a pentad mean of daily fields with at
+least three days present. Speed and the two components are written in one
+pass so that $\sqrt{u^2+v^2}$ equals the stored speed exactly. GLORYS covers
+$80^\circ$\,S northward and begins in 1993, so rows 0--39 and bins 0--802 of
+these channels are absent. Two channels are observations rather than
+reanalysis: sea-surface temperature from OISST v2.1 \cite{oisst}, bilinearly
+interpolated to the point grid and averaged over the pentad, present from
+1982; and sea-ice concentration from the same product's \code{icec} field.
+The sea-surface temperature channel is deliberately \emph{not} filled over
+land or ice from any model (\S6).
+
+\subsection{Atmosphere and land, \code{g100}}
+
+Fifteen channels come from NCEP/NCAR Reanalysis~1 \cite{ncep} on its T62
+Gaussian grid ($\approx1.9^\circ$), bilinearly interpolated to the $1^\circ$
+point grid and averaged over the pentad: wind stress on the surface
+(eastward and northward, sign-flipped from the file's momentum flux) and the
+within-pentad standard deviation of each; 2\,m air temperature; 10\,m wind
+components; surface pressure; precipitation rate and snow water equivalent,
+each stored as $\log(1+x)$; volumetric soil moisture and soil temperature in
+the top 10\,cm, masked to land \emph{before} regridding so the coastal
+interpolation renormalises correctly; latent and sensible heat flux with the
+reanalysis sign convention (positive upward); and skin temperature, defined
+over every surface.
+
+\subsection{Ocean interior, \code{rg100}}
+
+Thirty-two channels are the Roemmich--Gilson Argo product \cite{rg}:
+temperature and salinity at sixteen pressure levels from 10 to 1900\,dbar,
+bilinearly interpolated from the product's $1^\circ$ cell-centred grid and
+set to missing outside its latitude band (about $64.5^\circ$\,S to
+$79.5^\circ$\,N) rather than extrapolated toward the poles.
+
+\subsection{Normalisation}
+
+Every channel is standardised before the float16 write, $x' = (x-\mu)/\sigma$
+with $(\mu,\sigma)$ computed over all finite values in all bins, and the pairs
+are stored per group. A stored value is therefore in standard deviations, not
+in the channel's unit; float16 resolves a standardised value near 1 to about
+$10^{-3}\,\sigma$, which is $0.01^\circ$C for sea-surface temperature and
+$2\times10^{-4}$\,m\,s$^{-1}$ for currents. Anomalies are not stored: the
+training code derives them at load time from a training-years-only
+climatology.
+
+\section{Missing values}
+
+\code{NaN} means ``not observed here at this time'' and is information
+rather than damage. The pattern is systematic. Ocean channels are absent over
+land; GLORYS channels are absent south of $80^\circ$\,S and before 1993; soil
+channels are absent over sea; the Argo group is absent outside 2004--2024,
+outside its latitude band, and in any bin not on its monthly list. One case
+is easy to misread: \textbf{sea-ice concentration is absent wherever it is
+below 15\%}, because that is how the source reports ice. Measured on the
+published bytes for the bin opening 2015-01-03, 155,141 of 1,038,240 cells
+are finite, every one in $[0.150, 1.000]$, none zero; a mid-Atlantic cell
+reads a sea-surface temperature of $21.3^\circ$C and no ice value. A
+consumer wanting zeros on open water sets the channel to zero where
+sea-surface temperature is finite and ice is not. Overall, $1.069\times10^{10}$
+of the ocean group's $2.28\times10^{10}$ slots are finite; the three groups
+together hold $1.38\times10^{10}$ observed values.
+
+\section{Statics and truth series}
+
+Two static fields ship with the tensor. A surface class per $0.25^\circ$
+cell --- 0 ocean (702,642 cells), 1 land (226,495), 2 ice sheet or glacier
+(107,074, from Natural Earth's glaciated-area polygons \cite{ne}), 3 inland
+water (2,029, from its lake polygons) --- with ice taking precedence over
+ocean where both apply, because the surface an instrument sees on an ice
+shelf is ice. And elevation in metres from ETOPO~2022 \cite{etopo}, averaged
+over the cell, negative under the sea. Two truth series are carried as
+(bin, value) pairs: the RAPID array's overturning transport at
+$26.5^\circ$\,N in Sverdrups, 1,459 pentads from 2004 to 2024, and the Florida
+Current cable transport, 2,490 pentads from 1982. Both are Atlantic; they
+exist so that a global model is scored on the same instrument as its
+predecessors.
+
+\section{Design decisions}
+
+\paragraph{Native resolution, three groups.} The alternative, one dense
+$[3142, 721, 1440, C]$ array, would store each $1.9^\circ$ reanalysis value
+about sixty times and reach 425\,GB at the channel count the next phase
+needs. The cost of the chosen layout is a lookup at read time; the
+programme's samplers already read coarse channels at the nearest coarse cell,
+so the lag-0 $3\times3$ patch of a fine position serves the same coarse value
+nine times, which is the model's honest view of a coarse field rather than a
+rounding artefact.
+
+\paragraph{Two temperatures, split by instrument.} An earlier build merged
+observed sea-surface temperature with reanalysis skin temperature into one
+channel. The merge was reversed: it spliced an infrared--microwave analysis
+over the sea onto a reanalysis everywhere else at the coastline, which the
+model would have had to learn as an instrument boundary. The rule adopted is
+that a channel is shared across surfaces only when both the measurand and the
+instrument match. Sea-surface temperature therefore stays observed and
+absent over land; skin temperature is reanalysis everywhere. The two are
+different measurements and are stored as such.
+
+\paragraph{Sea ice and snow stay separate.} A fraction and a water mass
+cannot be merged into a ``frozen fraction'' without an invented constant.
+
+\paragraph{The atmosphere source is a stand-in.} NCEP/NCAR Reanalysis~1 was
+chosen over ERA5 because it needs no account; ERA5 replaces the
+\code{g100} fetch in a later phase with no change of layout.
+
+\paragraph{Resumable, hash-verified publication.} The build runs as one job
+resumable per stage, with a per-stage specification digest so that a changed
+stage discards only its own state, and publishes to a public dataset
+repository with a per-file SHA-256 that is verified by downloading each file
+back. Three runs were needed --- the first cancelled for the temperature
+merge above, the second failed on a path error in the truth stage --- at a
+total cost of about \$1.9.
+
+\section{Validation}
+
+Ten assertions run before the tensor is trusted, on a CPU with no network:
+row 0 is the South Pole, asserted on the bytes; $\sqrt{u^2+v^2}$ equals the
+stored speed; the absence pattern south of $80^\circ$\,S; the sea-ice unit
+(the source declares ``percent'' but its valid range is 0--1, and the reader
+trusts the range); the surface-class counts; normalisation shapes; truth
+keys; and resumability across a simulated interruption.
+
+The tensor is not bit-identical to its North Atlantic predecessor, and was
+not expected to be. On the shared sub-block at the bin opening 2015-01-03,
+over the 86,698 common ocean cells, currents, sea-surface height and
+mixed-layer depth agree to two float16 quanta on 99.2--99.5\% of cells
+(correlation $\geq 0.99995$, median absolute difference $10^{-5}$\,m\,s$^{-1}$),
+with a tail of about 1\% differing by up to 0.19\,m\,s$^{-1}$ because the
+daily fields were binned in a different order at partially masked coastal
+blocks. Sea-surface temperature agrees to $0.03^\circ$C. The global tensor
+observes 1,756 more coastal cells than the window did, because its
+regridding renormalises at the coast rather than leaving a masked neighbour
+empty.
+
+\section{Limitations}
+
+Three limitations are stated rather than hidden. The atmosphere and land
+channels are a $1.9^\circ$ reanalysis, the coarsest source in the tensor.
+Subsurface ocean structure is a monthly climatological product at sixteen
+levels, present only from 2004 and only within the Argo latitude band. And
+the record is 43 years: no data source shortens that constraint, and it is
+the reason the programme's models are small.
+
+\section{Next steps: the data ladder}
+
+The programme's stated aim is a model of $10^9$--$10^{10}$ parameters. At the
+programme's Chinchilla anchor of one parameter per twenty observed values,
+that size is earned by $2\times10^{10}$--$2\times10^{11}$ values, against the
+$1.38\times10^{10}$ family 7 holds. The question is therefore which data to
+add, in what order, and the answer is set by a measurement rather than by
+taste: a $0.25^\circ$ cell is correlated with its neighbours over roughly
+300\,km and over two to six months at the surface, so the raw value count
+overstates the independent sample count by about two orders of magnitude,
+and the flatness of rolled skill from 7.6\,M to 206.66\,M parameters on the
+North Atlantic is the symptom. Data that adds \emph{new regimes} or
+\emph{new physics} is worth its face value; data that adds the same sample
+five times is not. That ordering is: other spheres first, then depth, then
+cadence, and horizontal resolution last.
+
+\begin{table}[h]
+\centering
+\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.5cm}>{\raggedright\arraybackslash}p{5.9cm}>{\raggedright\arraybackslash}p{1.9cm}>{\raggedright\arraybackslash}p{1.2cm}>{\raggedright\arraybackslash}p{3.0cm}@{}}
+\toprule
+rung & what is added & values & cost & prerequisite \\
+\midrule
+7 (today) & the global surface at $0.25^\circ$, atmosphere and land at $1^\circ$ & $1.4\times10^{10}$ & 53\,GB & --- \\
+\addlinespace
+L1: the other spheres, properly & ERA5 replacing the NCEP channels at the same layout; observed land-surface temperature (MODIS); scatterometer winds (ASCAT); soil moisture (SMAP, CCI); terrestrial water storage (GRACE); sea-ice concentration and drift (OSI SAF) & $\approx9\times10^{10}$ & $\approx$170\,GB & a Copernicus Climate Data Store account, which only the project owner can create \\
+\addlinespace
+depth & GREP three-dimensional ocean reanalysis at $0.25^\circ$: four variables at eight levels, subsurface velocity and abyssal levels the tensor has never had, eleven extra years over Argo & $+20$\,\% & $+20$\,GB & existing credentials \\
+\addlinespace
+observed surface overturning & DUACS altimetry (absolute dynamic topography, geostrophic currents) and OSTIA foundation SST, both taken at $0.25^\circ$ & small & $+4.7$\,GB & existing credentials \\
+\addlinespace
+daily cadence & every group at one-day bins & $\times5$ raw, $\approx{\times}1.5$ indep. & 1.3\,TB & a streaming loader; no tensor fits a box \\
+\addlinespace
+the kilometre rung & 1\,km daily radiometry, fed to a patch encoder rather than stored as a tensor & $3.5\times10^{14}$ & --- & the first rung that is compute-bound \\
+\bottomrule
+\end{tabular}
+\caption{The data ladder above family 7, in the order the programme intends
+to climb it. Values are observed values; ``independent'' applies the
+correlation correction of the text.}
+\end{table}
+
+\paragraph{Why the spheres come first.} The L1 rung multiplies the observed
+values by about 4.5 at 170\,GB, and every value it adds is new physics: land
+does not advect, the atmosphere decorrelates in days, ice has its own
+seasonal cycle. Family 7 already carries the first phase of this rung --- the
+fifteen NCEP channels are the L0 set, with a reanalysis standing in for ERA5
+until an account exists --- so the layout, the lookup and the loader are in
+place and the upgrade is a change of source, not of shape. It is also the
+rung that unlocks the read-outs the programme has promised beyond the
+Atlantic: a sea-ice head and a land-water head need the observed channels,
+not the reanalysis ones.
+
+\paragraph{Why depth comes before pixels.} The overturning is a vertical
+circulation, and the tensor's only view below the surface is a monthly
+climatological product. A daily three-dimensional reanalysis at eight levels
+adds the subsurface velocity field for 20\,GB on credentials the programme
+already holds, and reaches back to 1993 where Argo begins in 2004. It is
+ranked first in the programme's own data-ladder document on the ratio of new
+physics to new risk.
+
+\paragraph{Why resolution comes last.} A $1/12^\circ$ basin would cost
+305\,GB for the present channels and, by the correlation argument above, add
+far fewer independent samples than bytes. The experiment that should precede
+any such regrid is small: a single $1/12^\circ$ strip across the RAPID
+section, $23$--$30^\circ$\,N, 18\,GB for forty channels, asking whether
+resolution at the section changes the transport read-out at all. If it does
+not, the basin regrid is never bought. Kilometre-scale radiometry is a
+different object altogether --- $3.5\times10^{14}$ values cannot be a tensor
+--- and enters, when it enters, as a patch-encoder input in the style of
+AlphaEarth's per-source encoders.
+
+\paragraph{Two cheap items that precede all of the above.} The 2025--2026
+continuation of every source adds 4.5\% of end-bins nearly for free and lets
+the terminal holdout run to 2026 instead of 2024. And the static fields the
+programme downloads but does not yet use --- bathymetric slope, the Coriolis
+parameter and its gradient, distance to coast --- are megabytes with the
+highest information per byte of anything on this list.
+
+\begin{thebibliography}{9}\small
+\bibitem{glorys} Lellouche, J.-M.\ et al.\ (2021). The Copernicus Global
+$1/12^\circ$ Oceanic and Sea Ice GLORYS12 Reanalysis. \emph{Front.\ Earth
+Sci.}\ 9:698876.
+\bibitem{oisst} Huang, B.\ et al.\ (2021). Improvements of the Daily Optimum
+Interpolation Sea Surface Temperature (DOISST) Version 2.1. \emph{J.\
+Climate} 34, 2923--2939.
+\bibitem{ncep} Kalnay, E.\ et al.\ (1996). The NCEP/NCAR 40-Year Reanalysis
+Project. \emph{Bull.\ Amer.\ Meteor.\ Soc.}\ 77, 437--471.
+\bibitem{rg} Roemmich, D.\ and Gilson, J.\ (2009). The 2004--2008 mean and
+annual cycle of temperature, salinity, and steric height in the global ocean
+from the Argo Program. \emph{Prog.\ Oceanogr.}\ 82, 81--100.
+\bibitem{etopo} NOAA National Centers for Environmental Information (2022).
+ETOPO 2022 15 Arc-Second Global Relief Model.
+\bibitem{ne} Natural Earth, version 5.1.1, 1:10m physical vectors
+(glaciated areas; lakes). Public domain.
+\end{thebibliography}
+
+\end{document}
