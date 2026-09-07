@@ -44,6 +44,58 @@ low-pass).
 
 ---
 
+<a id="e-076"></a>
+## E-076 · Family 8, the Argo observation store — BUILD DISPATCHED 2026-09-07 17:10Z as `family8-build #1`
+
+TL;DR — family 8 is the input representation in which a sparse channel is
+never empty, only far away: instead of the gridded Argo column (`rg100`, a
+1° mapped product live one pentad in six, upsampled to 27 GB carrying
+~0.3 GB of information) the cone will carry the k nearest raw float
+profiles with their distance, age, local density and footprint. This entry
+is the DATA half: extract every Argo profile 2004–2024 from the Global Data
+Assembly Centre onto the sixteen Roemmich–Gilson pressure levels and publish
+it as a store the sampler can search. Nothing trains here. The model half —
+the sparse gather in `ml/cone_sampler.py` and the E-076a ablation — waits on
+this store.
+
+**Dispatch.** `family8-build #1` · builds the family-8 Argo observation store
+(`f8argo_l0`) from the GDAC daily geo files · `params` none · `stage` data
+build · `data` Argo GDAC 2004-01-01 → 2024-12-31, three basins · `arch` none ·
+`steps×batch` none (7,670 days × 3 files, streamed) · `resume` none (fresh
+`ml/cache/family8`, per-year `.done` markers make a re-dispatch resume).
+Runner `gpu-box-31299601` (Vast 49102182, the 300 GB box that holds the
+family-7 tensor — the store does not need it, but the box is the one kept);
+the run was queued before the box came up (ml/CLAUDE.md §0e ordering).
+Plan: [E-076 §3–§3.1](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E076_family8_nearest_observations.md).
+
+**Hypothesis at dispatch, and what would falsify it.** The store comes out
+at 2.4–2.8 M profiles (the index stage counted 3,366,575 placed profiles in
+the archive; the QC policy and the 2004 start should keep 70–85 %), every
+pentad from 2004 live, no pentad below 300 kept profiles, temperature filled
+at 16/16 levels for the majority of profiles and the fill fraction falling
+with depth (most floats park at 1,000 dbar and profile to 2,000; the deep
+levels 1,700 and 1,900 will be the least filled). FALSIFIED if the kept
+fraction is below 50 % (the QC policy is too strict or the parser wrong), if
+any post-2007 pentad is empty (the day-file layout or the bin arithmetic is
+wrong), or if the restore-verified publish does not complete (the store is
+not durable, which under §5.26 means the job did nothing). Pre-registered
+read-out: the `store.json` per-year counts against the index stage's per-year
+counts — they must agree to within the QC drop rate, day by day where a day
+is missing.
+
+**Cost.** ≈ 180–250 GB of download, deleted as it goes; ~3–5 h on an RTX 4090
+box at $0.33/h ≈ $1–2. The index stage ran in the sandbox first ($0): its
+measurement of the observing system — mean nearest neighbour 194.6 km in a
+pentad, 33.9 km in 30 days, fifth neighbour at 150 km — is in E-076 §3.1 and
+supersedes the plan's Poisson estimate.
+
+**Fleet, same day.** 18 parked Vast boxes destroyed after a backup check
+(every artefact they held is on a release, the Hub or `ml-metrics`; the one
+exception, the withdrawn E-057 seed-1 partial head on 48937793, was let go on
+Chris's word). Parked storage falls from $435 to $17 per month; two boxes
+remain — 49102182 (family 7 local) and 47913006 (the only copy of the 213 GB
+daily family-5 tensor).
+
 <a id="e-074"></a>
 ## E-074 · Hierarchical channel quantization — E-074a (the ladder bake-off, data only) RUN 2026-09-07: **the quantile ladder (α = 1) is REFUTED on three of four pre-registered read-outs; uniform-on-a-fitted-range (α = 0) wins on predictability and tails, and the digit factorisation holds except on zero-inflated channels**
 

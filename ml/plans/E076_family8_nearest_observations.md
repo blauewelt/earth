@@ -242,6 +242,38 @@ sixteen Roemmich–Gilson pressure levels from 2004 onward is a one-off pull;
 the index alone answers the density arithmetic of §2.3 exactly rather than by
 the Poisson estimate, and is the first thing to fetch.
 
+### 3.1 · Build status (2026-09-07) — the store builder exists; the index has been measured
+
+`ml/build_family8_argo.py` (stages `index | profiles | publish`, resumable per
+year, streaming so the box never holds more than eight daily files),
+`ml/family8_store.py` (the reader, with `knearest()` — one-sided in time as a
+hard constraint of the search, bounded, miss tokens, `n_R`, and the two
+footprint fields of §2.6 as Argo constants) and 22 CPU tests landed in
+`5aa054b`; the workflow is `.github/workflows/family8-build.yml`, the first
+run is `family8-build #1` on the 300 GB box. The source is the GDAC daily geo
+files (three basins × 7,670 days, ≈ 23 MB/day) with the QC policy fixed in the
+builder's docstring: adjusted variables for delayed/adjusted modes, raw for
+real-time; flags 1–2 only; temperature and salinity independent; a level is
+filled only when bracketed within 25/50/100 dbar; the surface level may take
+a sample within 20 dbar of it, as is, never extrapolated.
+
+**The index stage replaces §2.3's Poisson estimate with a measurement** (run
+in the sandbox on the 2026-09-07 global profile index, 3,366,575 placed
+profiles; 1.06 % of the archive carries no position). Per pentad 2004–2024:
+min 469, median 2,190, max 2,757, no empty bin. Mean nearest neighbour
+**194.6 km within one pentad** (estimated 210) and **33.9 km within a 30-day
+window** (estimated 87 — the estimate assumed uniform coverage; the array is
+denser than uniform where it is dense). The k-th neighbour in a 30-day window,
+2,000 anchors drawn from the catalogue (so ocean by construction, but
+density-weighted): k = 3 at 114 km, **k = 5 at 150 km**, k = 7 at 200 km; for
+anchors drawn uniformly over the sphere (land included) 514 / 572 / 617 km.
+So k = 5 with T_max = 30 d puts the fifth neighbour at ¾ of a surface
+correlation length where the array is, and beyond one where it is not — the
+choice of §2.3 stands, and the density feature `n_R` is what tells the model
+which regime it is in. One real day (2015-01-03, three basins) extracted 391
+of 435 profiles; the drops were 29 on time-stamp quality, 8 on position, 7
+with too few good levels.
+
 ---
 
 ## 4 · What it buys, and what it risks
