@@ -9,9 +9,10 @@ version is slides 55–56 of the representation survey; this is the plan with
 the numbers, the rules, the storage design, and the one ablation that decides
 whether family 8 is built.
 
-This is a PLAN. Nothing is dispatched, nothing is downloaded, no box is
-rented. Every number is measured in this programme and cited, taken from a
-named source, or arithmetic shown in place.
+Status 2026-09-07: **the observation store (§3) is built and on the Hub** —
+see §3.1 — and the model half (§5, E-076a) is not yet dispatched. Every
+number is measured in this programme and cited, taken from a named source,
+or arithmetic shown in place.
 
 Read with:
 [E-070 · the family-7 build spec](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E070_family7_build.md)
