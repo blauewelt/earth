@@ -1,0 +1,80 @@
+
+  ...ly8_argo_l0/time_days.npy: 100%|█████████▉| 10.7MB / 10.7MB            [A[A
+
+  ...ly8_argo_l0/time_days.npy: 100%|█████████▉| 10.7MB / 10.7MB            [A[A
+
+  ...ly8_argo_l0/time_days.npy: 100%|█████████▉| 10.7MB / 10.7MB            [A[A
+
+  ...ly8_argo_l0/time_days.npy: 100%|██████████| 10.7MB / 10.7MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 10.7MB / 10.7MB,  868kB/s  
+New Data Upload               : 100%|██████████| 10.7MB / 10.7MB,  868kB/s  [A
+
+  ...ly8_argo_l0/time_days.npy: 100%|██████████| 10.7MB / 10.7MB            [A[A
+
+  ...ly8_argo_l0/time_days.npy: 100%|██████████| 10.7MB / 10.7MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 10.7MB / 10.7MB,  858kB/s  
+New Data Upload               : 100%|██████████| 10.7MB / 10.7MB,  858kB/s  
+  ...ly8_argo_l0/time_days.npy: 100%|██████████| 10.7MB / 10.7MB            
+  [publish] time_days.npy  11/13  300.0s
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...8/family8_argo_l0/wmo.npy:   7%|▋         |  765kB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy:   7%|▋         |  765kB / 10.7MB            [A[AProcessing Files (0 / 1)      :   7%|▋         |  765kB / 10.7MB, 66.8kB/s  
+New Data Upload               :   7%|▋         |  765kB / 10.7MB, 66.8kB/s  [A
+
+  ...8/family8_argo_l0/wmo.npy:   7%|▋         |  765kB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy:   7%|▋         |  765kB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy:  14%|█▍        | 1.53MB / 10.7MB            [A[AProcessing Files (0 / 1)      :  14%|█▍        | 1.53MB / 10.7MB,  132kB/s  
+New Data Upload               :  14%|█▍        | 1.53MB / 10.7MB,  132kB/s  [A
+
+  ...8/family8_argo_l0/wmo.npy:  36%|███▌      | 3.82MB / 10.7MB            [A[AProcessing Files (0 / 1)      :  36%|███▌      | 3.82MB / 10.7MB,  330kB/s  
+New Data Upload               :  36%|███▌      | 3.82MB / 10.7MB,  330kB/s  [A
+
+  ...8/family8_argo_l0/wmo.npy:  50%|████▉     | 5.35MB / 10.7MB            [A[AProcessing Files (0 / 1)      :  50%|████▉     | 5.35MB / 10.7MB,  459kB/s  
+New Data Upload               :  50%|████▉     | 5.35MB / 10.7MB,  459kB/s  [A
+
+  ...8/family8_argo_l0/wmo.npy:  50%|████▉     | 5.35MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy:  50%|████▉     | 5.35MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy:  79%|███████▊  | 8.41MB / 10.7MB            [A[AProcessing Files (0 / 1)      :  79%|███████▊  | 8.41MB / 10.7MB,  711kB/s  
+New Data Upload               :  79%|███████▊  | 8.41MB / 10.7MB,  711kB/s  [A
+
+  ...8/family8_argo_l0/wmo.npy:  79%|███████▊  | 8.41MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy:  79%|███████▊  | 8.41MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy:  93%|█████████▎| 9.94MB / 10.7MB            [A[AProcessing Files (0 / 1)      :  93%|█████████▎| 9.94MB / 10.7MB,  824kB/s  
+New Data Upload               :  93%|█████████▎| 9.94MB / 10.7MB,  824kB/s  [A
+
+  ...8/family8_argo_l0/wmo.npy:  93%|█████████▎| 9.94MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy:  93%|█████████▎| 9.94MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy: 100%|█████████▉| 10.7MB / 10.7MB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 10.7MB / 10.7MB,  869kB/s  
+New Data Upload               : 100%|█████████▉| 10.7MB / 10.7MB,  869kB/s  [A
+
+  ...8/family8_argo_l0/wmo.npy: 100%|█████████▉| 10.7MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy: 100%|█████████▉| 10.7MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy: 100%|█████████▉| 10.7MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy: 100%|█████████▉| 10.7MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy: 100%|█████████▉| 10.7MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy: 100%|██████████| 10.7MB / 10.7MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 10.7MB / 10.7MB,  825kB/s  
+New Data Upload               : 100%|██████████| 10.7MB / 10.7MB,  825kB/s  [A
+
+  ...8/family8_argo_l0/wmo.npy: 100%|██████████| 10.7MB / 10.7MB            [A[A
+
+  ...8/family8_argo_l0/wmo.npy: 100%|██████████| 10.7MB / 10.7MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 10.7MB / 10.7MB,  814kB/s  
+New Data Upload               : 100%|██████████| 10.7MB / 10.7MB,  814kB/s  
+  ...8/family8_argo_l0/wmo.npy: 100%|██████████| 10.7MB / 10.7MB            
+  [publish] wmo.npy  12/13  325.8s
+  [publish] store.json  13/13  327.1s
+  publish: 13 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family8_argo_l0
+=== stage publish done in 333.6s ===
